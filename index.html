@@ -1012,21 +1012,19 @@
   async function fetchTodaysContent() {
     if (!db) return null;
     try {
-      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-      const dailySnap = await db.collection("daily_sets").doc(today)
-        .collection("questions").orderBy("__name__").get();
-
-      const bonusSnap = await db.collection("bonus_pool")
-        .orderBy("added_at", "desc").limit(5).get();
-
-      const questions = dailySnap.docs.map(d => d.data());
-      const bonus = bonusSnap.docs.map(d => d.data());
-
-      if (questions.length === 0) {
-        console.warn("No daily set found in Firestore for", today, "— using sample data.");
-        return null;
-      }
-      return { questions, bonus };
+      const today = new Date().toISOString().split('T')[0];
+      const timeout = new Promise(resolve => setTimeout(() => resolve(null), 3000));
+      const fetch = async () => {
+        const dailySnap = await db.collection("daily_sets").doc(today)
+          .collection("questions").orderBy("__name__").get();
+        const bonusSnap = await db.collection("bonus_pool")
+          .orderBy("added_at", "desc").limit(5).get();
+        const questions = dailySnap.docs.map(d => d.data());
+        const bonus = bonusSnap.docs.map(d => d.data());
+        if (questions.length === 0) return null;
+        return { questions, bonus };
+      };
+      return await Promise.race([fetch(), timeout]);
     } catch (e) {
       console.warn("Firestore fetch failed — using sample data.", e.message);
       return null;
