@@ -1,0 +1,1968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chaupaal — A News App with Social Discovery</title>
+<link rel="icon" type="image/png" href="icon.png">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream:#FFF8EE;
+    --white:#FFFFFF;
+    --red:#E63946;
+    --red-deep:#C72E3A;
+    --gold:#FFC93C;
+    --ink:#2B2730;
+    --muted:#9A9099;
+    --green:#33C481;
+    --card:#FFFFFF;
+    --line:#F1E6D8;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    font-family:'Inter',sans-serif;
+    background:var(--ink);
+    color:var(--ink);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:100vh;
+    overflow:hidden;
+  }
+  .device{
+    width:100%;
+    max-width:430px;
+    height:100vh;
+    max-height:900px;
+    background:var(--cream);
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+
+  /* ===== HEADER ===== */
+  .topbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:18px 20px 10px;
+    flex-shrink:0;
+    position:relative;
+    z-index:5;
+  }
+  .brand{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:22px;
+    letter-spacing:-0.02em;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    color:var(--ink);
+  }
+  .brand-block{
+    display:flex;
+    flex-direction:column;
+    gap:1px;
+  }
+  .brand-tagline{
+    font-size:10px;
+    color:var(--muted);
+    font-weight:600;
+    letter-spacing:0.04em;
+    margin-left:42px;
+    text-transform:uppercase;
+  }
+  .logo{ display:block; flex-shrink:0; }
+  .icon-btn{
+    width:36px; height:36px;
+    border-radius:999px;
+    border:2px solid var(--line);
+    background:var(--white);
+    font-size:16px;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+  }
+  .streak{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    background:var(--white);
+    border:2px solid var(--gold);
+    border-radius:999px;
+    padding:6px 14px;
+    font-size:14px;
+    font-weight:700;
+    font-family:'Space Grotesk',sans-serif;
+  }
+  .streak .flame{ color:var(--red); }
+
+  /* progress dots */
+  .progress{
+    display:flex;
+    gap:5px;
+    padding:0 20px 12px;
+    flex-shrink:0;
+    position:relative;
+    z-index:5;
+  }
+  .progress .seg{
+    flex:1;
+    height:4px;
+    border-radius:4px;
+    background:var(--line);
+    overflow:hidden;
+  }
+  .progress .seg.fill{ background:var(--red); }
+  .progress .seg.current{ background: linear-gradient(90deg, var(--red) 50%, var(--line) 50%); }
+
+  /* ===== SCROLL STAGE (reel style) ===== */
+  .stage{
+    flex:1;
+    overflow-y:scroll;
+    scroll-snap-type:y mandatory;
+    scroll-behavior:smooth;
+    position:relative;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-y:contain;
+  }
+  .stage::-webkit-scrollbar{ display:none; }
+
+  .card{
+    scroll-snap-align:center;
+    scroll-snap-stop:always;
+    height:100%;
+    width:100%;
+    padding:0 20px 20px;
+    display:flex;
+    flex-direction:column;
+    position:relative;
+  }
+  .card-inner{
+    background:var(--card);
+    border-radius:24px;
+    padding:26px 22px;
+    display:flex;
+    flex-direction:column;
+    flex:1;
+    box-shadow:0 8px 24px rgba(43,39,48,0.06);
+    position:relative;
+    overflow:hidden;
+    transform:scale(0.94);
+    opacity:0.55;
+    transition: transform .28s cubic-bezier(.2,.8,.2,1), opacity .28s ease;
+  }
+  .card-inner.active{
+    transform:scale(1);
+    opacity:1;
+  }
+  .tag{
+    display:inline-flex;
+    align-self:flex-start;
+    background:rgba(230,57,70,0.08);
+    color:var(--red);
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:12px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    padding:6px 12px;
+    border-radius:999px;
+    margin-bottom:18px;
+  }
+  .question{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:22px;
+    font-weight:700;
+    line-height:1.35;
+    margin-bottom:24px;
+    color:var(--ink);
+  }
+  .options{
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    margin-top:auto;
+  }
+  .opt{
+    background:var(--cream);
+    border:2px solid var(--line);
+    color:var(--ink);
+    text-align:left;
+    padding:16px 18px;
+    border-radius:14px;
+    font-size:15px;
+    font-weight:600;
+    font-family:'Inter',sans-serif;
+    cursor:pointer;
+    transition: all .18s ease;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .opt:active{ transform:scale(0.98); }
+  .opt.correct{
+    background:rgba(51,196,129,0.1);
+    border-color:var(--green);
+    color:var(--green);
+  }
+  .opt.wrong{
+    background:rgba(230,57,70,0.08);
+    border-color:var(--red);
+    color:var(--red);
+  }
+  .opt.dim{ opacity:0.35; }
+  .opt .mark{ font-size:18px; }
+
+  .social-proof{
+    font-size:13px;
+    color:var(--muted);
+    margin-top:14px;
+    font-weight:600;
+  }
+
+  /* flag link */
+  .flag-row{
+    margin-top:10px;
+    text-align:right;
+  }
+  .flag-row button{
+    background:none;
+    border:none;
+    color:var(--muted);
+    font-size:12px;
+    font-family:'Inter',sans-serif;
+    cursor:pointer;
+    text-decoration:underline;
+  }
+  .flag-row button.flagged{ color:var(--red); }
+
+  .hint{
+    margin-top:16px;
+    text-align:center;
+    font-size:12px;
+    color:var(--muted);
+    font-weight:600;
+  }
+  .hint.show{ opacity:1; }
+  .hint{ opacity:0; transition:opacity .3s ease; }
+
+  /* news summary view */
+  .news-view{ display:flex; flex-direction:column; height:100%; }
+  .news-view .headline{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:20px;
+    font-weight:700;
+    margin-bottom:12px;
+    line-height:1.3;
+    color:var(--ink);
+  }
+  .news-view .body{
+    font-size:14.5px;
+    line-height:1.65;
+    color:#5C5560;
+    flex:1;
+  }
+  .explain-box{
+    background:rgba(255,201,60,0.15);
+    border:1px solid var(--gold);
+    border-radius:12px;
+    padding:10px 14px;
+    font-size:13px;
+    line-height:1.5;
+    margin-bottom:14px;
+    color:#6B5400;
+  }
+  .news-view .read-more{
+    margin-top:14px;
+    font-size:13px;
+    font-weight:700;
+    color:var(--red);
+    text-decoration:none;
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+  }
+  .news-view .source{
+    font-size:12px;
+    color:var(--muted);
+    margin-top:10px;
+  }
+
+  /* floating feedback emojis */
+  .float-layer{
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    overflow:hidden;
+    border-radius:24px;
+    z-index:10;
+  }
+  .float-emoji{
+    position:absolute;
+    font-size:28px;
+    animation: floatUp 1.2s ease-out forwards;
+    opacity:0;
+  }
+  @keyframes floatUp{
+    0%{ opacity:0; transform:translateY(20px) scale(0.6) rotate(0deg);}
+    15%{ opacity:1; }
+    100%{ opacity:0; transform:translateY(-280px) scale(1.15) rotate(20deg);}
+  }
+
+  /* ===== RESULTS / INFOGRAPHIC ===== */
+  .results-card{
+    background:linear-gradient(160deg, var(--red) 0%, var(--red-deep) 100%);
+    border-radius:24px;
+    padding:28px 24px;
+    position:relative;
+    overflow:hidden;
+    color:var(--white);
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    transform:scale(0.94);
+    opacity:0.55;
+    transition: transform .28s cubic-bezier(.2,.8,.2,1), opacity .28s ease;
+  }
+  .results-card.active{
+    transform:scale(1);
+    opacity:1;
+  }
+  .results-card::before{
+    content:'';
+    position:absolute;
+    top:-60px; right:-60px;
+    width:180px; height:180px;
+    background:var(--gold);
+    opacity:0.18;
+    border-radius:50%;
+  }
+  .results-brand{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:16px;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    margin-bottom:22px;
+  }
+  .results-brand .bolt{ color:var(--gold); }
+  .results-date{
+    font-size:12px;
+    color:rgba(255,255,255,0.7);
+    margin-left:auto;
+    font-weight:600;
+  }
+  .score-big{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:54px;
+    font-weight:700;
+    line-height:1;
+    margin-bottom:4px;
+  }
+  .score-big span{ font-size:22px; color:rgba(255,255,255,0.6); font-weight:600; }
+  .score-label{
+    font-size:13px;
+    color:rgba(255,255,255,0.7);
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    margin-bottom:22px;
+  }
+  .breakdown{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    margin-bottom:22px;
+  }
+  .breakdown-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-size:13px;
+    font-weight:600;
+  }
+  .breakdown-row .cat{ width:78px; flex-shrink:0; }
+  .bar-track{
+    flex:1;
+    height:8px;
+    background:rgba(255,255,255,0.18);
+    border-radius:8px;
+    overflow:hidden;
+  }
+  .bar-fill{
+    height:100%;
+    border-radius:8px;
+    background:var(--gold);
+  }
+  .breakdown-row .pct{ width:38px; text-align:right; color:rgba(255,255,255,0.7); }
+
+  .streak-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    border-top:1px solid rgba(255,255,255,0.18);
+    padding-top:18px;
+    margin-top:auto;
+  }
+  .streak-pill{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:18px;
+  }
+  .streak-pill .flame{ color:var(--gold); font-size:22px; }
+  .badge-pill{
+    background:rgba(255,201,60,0.2);
+    color:var(--gold);
+    font-size:12px;
+    font-weight:700;
+    padding:6px 12px;
+    border-radius:999px;
+    font-family:'Space Grotesk',sans-serif;
+  }
+
+  .share-btn{
+    margin-top:16px;
+    background:var(--white);
+    color:var(--red);
+    border:none;
+    width:100%;
+    padding:16px;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:15px;
+    border-radius:14px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+  }
+  .share-options{
+    margin-top:10px;
+    display:flex;
+    gap:10px;
+  }
+  .share-opt{
+    flex:1;
+    border:none;
+    padding:14px;
+    border-radius:14px;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:14px;
+    cursor:pointer;
+  }
+  .share-opt.whatsapp{ background:#25D366; color:#fff; }
+  .share-opt.instagram{ background:linear-gradient(45deg,#F58529,#DD2A7B,#8134AF,#515BD4); color:#fff; }
+
+  .hidden{ display:none !important; }
+
+  .breaking-toast{
+    position:absolute;
+    top:78px;
+    left:20px;
+    right:20px;
+    background:var(--ink);
+    color:var(--white);
+    padding:12px 16px;
+    border-radius:14px;
+    font-size:13px;
+    font-weight:700;
+    text-align:center;
+    z-index:60;
+    opacity:0;
+    transform:translateY(-12px);
+    transition: opacity .3s ease, transform .3s ease;
+  }
+  .breaking-toast.show{
+    opacity:1;
+    transform:translateY(0);
+  }
+
+  /* ===== SETTINGS MODAL ===== */
+  .modal-backdrop{
+    position:absolute;
+    inset:0;
+    background:rgba(43,39,48,0.45);
+    display:flex;
+    align-items:flex-end;
+    z-index:50;
+  }
+  .modal{
+    background:var(--white);
+    width:100%;
+    border-radius:24px 24px 0 0;
+    padding:22px 22px 28px;
+  }
+  .modal-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:6px;
+  }
+  .modal-title{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:18px;
+  }
+  .modal-sub{
+    font-size:13px;
+    color:var(--muted);
+    margin-bottom:18px;
+  }
+  .toggle-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:14px 0;
+    border-bottom:1px solid var(--line);
+    gap:14px;
+  }
+  .toggle-label{ font-size:14px; font-weight:700; }
+  .toggle-desc{ font-size:12px; color:var(--muted); margin-top:2px; }
+  .switch{
+    position:relative;
+    display:inline-block;
+    width:46px; height:28px;
+    flex-shrink:0;
+  }
+  .switch input{ opacity:0; width:0; height:0; }
+  .slider{
+    position:absolute;
+    cursor:pointer;
+    inset:0;
+    background:var(--line);
+    border-radius:999px;
+    transition:.2s;
+  }
+  .slider::before{
+    content:'';
+    position:absolute;
+    height:22px; width:22px;
+    left:3px; bottom:3px;
+    background:var(--white);
+    border-radius:50%;
+    transition:.2s;
+    box-shadow:0 1px 3px rgba(0,0,0,0.2);
+  }
+  .switch input:checked + .slider{ background:var(--red); }
+  .switch input:checked + .slider::before{ transform:translateX(18px); }
+  .continue-modal{
+    margin-top:16px;
+    background:var(--red);
+    color:var(--white);
+    border:none;
+    width:100%;
+    padding:15px;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:15px;
+    border-radius:14px;
+    cursor:pointer;
+  }
+
+  /* ===== FLASH DUEL ===== */
+  .duel-screen{
+    background:var(--cream);
+    width:100%;
+    height:100%;
+    display:flex;
+    flex-direction:column;
+    padding:22px 20px;
+  }
+  .duel-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:18px;
+  }
+  .duel-title{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:18px;
+  }
+  .duel-close{
+    background:var(--white);
+    border:2px solid var(--line);
+    border-radius:999px;
+    width:34px; height:34px;
+    font-size:14px;
+    cursor:pointer;
+  }
+  .duel-center{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    gap:18px;
+  }
+  .duel-bolt{
+    font-size:54px;
+    animation:pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse{
+    0%,100%{ transform:scale(1); opacity:1; }
+    50%{ transform:scale(1.15); opacity:0.7; }
+  }
+  .duel-status{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:17px;
+  }
+  .duel-sub{ font-size:13px; color:var(--muted); }
+  .duel-config{
+    width:100%;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+    margin-top:10px;
+  }
+  .config-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    background:var(--white);
+    border-radius:14px;
+    padding:14px 16px;
+    font-size:14px;
+    font-weight:600;
+  }
+  .config-row select{
+    border:2px solid var(--line);
+    border-radius:10px;
+    padding:6px 10px;
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:13px;
+    background:var(--cream);
+    color:var(--ink);
+  }
+  .duel-primary-btn{
+    background:var(--red);
+    color:var(--white);
+    border:none;
+    width:100%;
+    padding:16px;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:15px;
+    border-radius:14px;
+    cursor:pointer;
+    margin-top:auto;
+  }
+
+  /* live duel */
+  .vs-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:16px;
+  }
+  .player-chip{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    background:var(--white);
+    border-radius:999px;
+    padding:8px 14px;
+    font-weight:700;
+    font-size:14px;
+    font-family:'Space Grotesk',sans-serif;
+  }
+  .player-chip.me{ border:2px solid var(--red); color:var(--red); }
+  .player-chip.opp{ border:2px solid var(--gold); color:#A8780E; }
+  .vs-label{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    color:var(--muted);
+    font-size:13px;
+  }
+  .duel-timer{
+    text-align:center;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:34px;
+    margin-bottom:14px;
+    color:var(--red);
+  }
+  .duel-card{
+    background:var(--white);
+    border-radius:24px;
+    padding:24px 20px;
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    box-shadow:0 8px 24px rgba(43,39,48,0.06);
+  }
+  .opp-indicator{
+    font-size:12px;
+    color:var(--muted);
+    margin-top:14px;
+    text-align:center;
+    font-weight:600;
+  }
+  .duel-result-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    background:var(--white);
+    border-radius:14px;
+    padding:14px 18px;
+    margin-bottom:10px;
+    font-weight:700;
+    font-family:'Space Grotesk',sans-serif;
+  }
+  .duel-tabs{
+    display:flex;
+    gap:8px;
+    margin-bottom:16px;
+  }
+  .duel-tab{
+    flex:1;
+    background:var(--white);
+    border:2px solid var(--line);
+    border-radius:12px;
+    padding:10px;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:13px;
+    color:var(--muted);
+    cursor:pointer;
+  }
+  .duel-tab.active{
+    border-color:var(--red);
+    color:var(--red);
+    background:rgba(230,57,70,0.06);
+  }
+  #friendInputRow input{
+    color:var(--ink);
+  }
+  #friendInputRow input::placeholder{ color:var(--muted); }
+  .duel-result-row.win{ border:2px solid var(--green); color:var(--green); }
+  .duel-result-row.loss{ border:2px solid var(--red); color:var(--red); }
+
+  /* ===== CHAT ===== */
+  .chat-messages{
+    flex:1;
+    overflow-y:auto;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    padding:6px 2px 14px;
+  }
+  .chat-bubble{
+    max-width:75%;
+    padding:10px 14px;
+    border-radius:16px;
+    font-size:14px;
+    line-height:1.4;
+  }
+  .chat-bubble.them{
+    background:var(--white);
+    align-self:flex-start;
+    border-bottom-left-radius:4px;
+    box-shadow:0 2px 8px rgba(43,39,48,0.05);
+  }
+  .chat-bubble.me{
+    background:var(--red);
+    color:var(--white);
+    align-self:flex-end;
+    border-bottom-right-radius:4px;
+  }
+  .chat-input-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    background:var(--white);
+    border-radius:999px;
+    padding:6px 6px 6px 16px;
+    margin-top:auto;
+  }
+  .chat-input-row input{
+    flex:1;
+    border:none;
+    outline:none;
+    font:inherit;
+    background:transparent;
+    color:var(--ink);
+    font-size:14px;
+  }
+  .chat-input-row input::placeholder{ color:var(--muted); }
+  .chat-icon-btn, .chat-send-btn{
+    border:none;
+    background:var(--cream);
+    width:38px; height:38px;
+    border-radius:50%;
+    font-size:16px;
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+  }
+  .chat-send-btn{ background:var(--red); color:var(--white); }
+
+  /* ===== SPLASH SCREEN ===== */
+  .splash{
+    position:absolute;
+    inset:0;
+    z-index:100;
+    background:var(--ink);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+    transition: opacity .5s ease;
+  }
+  .splash img{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    position:absolute;
+    inset:0;
+    opacity:0.92;
+  }
+  .splash-brand{
+    position:relative;
+    z-index:1;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    background:rgba(21,25,46,0.55);
+    backdrop-filter:blur(4px);
+    padding:14px 22px;
+    border-radius:18px;
+    margin-top:auto;
+    margin-bottom:60px;
+  }
+  .splash-title{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:24px;
+    color:var(--white);
+  }
+  .splash-tagline{
+    font-size:11px;
+    color:rgba(255,255,255,0.75);
+    font-weight:600;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    margin-top:2px;
+  }
+  .splash.hide{
+    opacity:0;
+    pointer-events:none;
+  }
+</style>
+</head>
+<body>
+<div class="device">
+
+  <!-- SPLASH SCREEN -->
+  <div class="splash" id="splash">
+    <img src="splash.png" alt="Chaupaal">
+    <div class="splash-brand">
+      <svg width="40" height="40" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="34" height="34" rx="9" fill="#E63946"/>
+        <rect x="6" y="14" width="22" height="3.5" rx="1.5" fill="#FFC93C"/>
+        <path d="M9 17.5 V8 M12.5 17.5 V8 M16 17.5 V8.5 M19.5 17.5 V8 M23 17.5 V8" stroke="#FFFFFF" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/>
+        <path d="M7 8 H27" stroke="#FFC93C" stroke-width="1.4" stroke-linecap="round"/>
+        <path d="M9.5 17.5 L7.5 25 M24.5 17.5 L26.5 25" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <div>
+        <div class="splash-title">Chaupaal</div>
+        <div class="splash-tagline">News with Social Discovery</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HEADER -->
+  <div class="topbar">
+    <div class="brand-block">
+      <div class="brand">
+        <svg class="logo" width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="34" height="34" rx="9" fill="#E63946"/>
+          <!-- Mancha: woven cot on four legs, minimalist -->
+          <rect x="6" y="14" width="22" height="3.5" rx="1.5" fill="#FFC93C"/>
+          <path d="M9 17.5 V8 M12.5 17.5 V8 M16 17.5 V8.5 M19.5 17.5 V8 M23 17.5 V8" stroke="#FFFFFF" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/>
+          <path d="M7 8 H27" stroke="#FFC93C" stroke-width="1.4" stroke-linecap="round"/>
+          <!-- legs -->
+          <path d="M9.5 17.5 L7.5 25 M24.5 17.5 L26.5 25" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        Chaupaal
+      </div>
+      <div class="brand-tagline">News with Social Discovery</div>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <button class="icon-btn" id="duelBtn" title="News Duel" aria-label="News Duel">⚔️</button>
+      <button class="icon-btn" id="settingsBtn" title="Sharing settings" aria-label="Sharing settings">⚙️</button>
+      <div class="streak"><span class="flame">🔥</span><span id="streakNum">12</span></div>
+    </div>
+  </div>
+
+  <!-- PROGRESS -->
+  <div class="progress" id="progress"></div>
+
+  <!-- SCROLL STAGE -->
+  <div class="stage" id="stage"></div>
+
+  <!-- SHARING SETTINGS MODAL -->
+  <div class="modal-backdrop hidden" id="settingsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Share with friends</div>
+        <button class="icon-btn" id="closeSettings">✕</button>
+      </div>
+      <div class="modal-sub">Friends only see fun facts you turn on here. Off by default.</div>
+
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Birthday</div>
+          <div class="toggle-desc">Friends get a quiz card on your birthday</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="toggleBirthday" checked><span class="slider"></span></label>
+      </div>
+
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Current trip / location</div>
+          <div class="toggle-desc">e.g. "Riya is in Manali right now"</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="toggleTrip"><span class="slider"></span></label>
+      </div>
+
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Anniversaries</div>
+          <div class="toggle-desc">Work anniversaries, milestones, etc.</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="toggleAnniversary"><span class="slider"></span></label>
+      </div>
+
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Streak & rank stats</div>
+          <div class="toggle-desc">Your streak length and category ranks</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="toggleStats" checked><span class="slider"></span></label>
+      </div>
+
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Background music</div>
+          <div class="toggle-desc">Soft ambient score while you play<br><span style="font-size:11px;">"Wholesome" by Kevin MacLeod (incompetech.com), CC BY 3.0</span></div>
+        </div>
+        <label class="switch"><input type="checkbox" id="toggleMusic"><span class="slider"></span></label>
+      </div>
+
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Quiet mode</div>
+          <div class="toggle-desc">Turn off sounds, voice & floating emojis</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="toggleQuiet"><span class="slider"></span></label>
+      </div>
+
+      <button class="continue-modal" id="saveSettings">Done</button>
+    </div>
+  </div>
+
+  <!-- FLASH DUEL OVERLAY -->
+  <div class="modal-backdrop hidden" id="duelOverlay" style="align-items:stretch;">
+    <div class="duel-screen" id="duelScreen"></div>
+  </div>
+
+</div>
+
+<!-- Firebase (Firestore) — for live daily content from the pipeline -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+  // Firebase config for Chaupaal
+  const firebaseConfig = {
+    apiKey: "AIzaSyA1JtxTBu3_4OOBrT7NUTH7zy43ROioCcA",
+    authDomain: "chaupaal-chaupaal.firebaseapp.com",
+    databaseURL: "https://chaupaal-chaupaal-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "chaupaal-chaupaal",
+    storageBucket: "chaupaal-chaupaal.firebasestorage.app",
+    messagingSenderId: "484819939341",
+    appId: "1:484819939341:web:81429b809fbe3b1733e544"
+  };
+
+  let db = null;
+  try {
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+  } catch (e) {
+    console.warn("Firebase init error — using sample data.", e.message);
+  }
+
+  // Fetches today's 15-question set + bonus pool from Firestore.
+  // Returns null (triggering SAMPLE_* fallback) if Firestore isn't set up,
+  // the daily job hasn't run yet, or any error occurs.
+  async function fetchTodaysContent() {
+    if (!db) return null;
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const timeout = new Promise(resolve => setTimeout(() => resolve(null), 3000));
+      const fetch = async () => {
+        const dailySnap = await db.collection("daily_sets").doc(today)
+          .collection("questions").orderBy("__name__").get();
+        const bonusSnap = await db.collection("bonus_pool")
+          .orderBy("added_at", "desc").limit(5).get();
+        const questions = dailySnap.docs.map(d => d.data());
+        const bonus = bonusSnap.docs.map(d => d.data());
+        if (questions.length === 0) return null;
+        return { questions, bonus };
+      };
+      return await Promise.race([fetch(), timeout]);
+    } catch (e) {
+      console.warn("Firestore fetch failed — using sample data.", e.message);
+      return null;
+    }
+  }
+</script>
+
+<script>
+// Fallback sample data — used if Firestore is unreachable or empty (e.g. local testing)
+const SAMPLE_QUESTIONS = [
+  {
+    category: "Sports",
+    sound: "default",
+    q: "The FIFA World Cup 2026 kicked off this week with the opening match between Mexico and which other team?",
+    options: ["South Africa", "Brazil", "Canada", "Argentina"],
+    correct: 0,
+    proof: 71,
+    headline: "FIFA World Cup 2026 opens in Mexico City",
+    news: "The 2026 FIFA World Cup began with hosts Mexico facing South Africa in Group A at the Estadio Azteca. The expanded 48-team format introduces 12 groups, with the top two from each group plus the eight best third-placed sides advancing to a new Round of 32.",
+    link: "https://www.sentinelassam.com/sports-news/fifa-world-cup-2026-dd-sports-to-telecast-matches-free-in-india-when-and-where-to-watch",
+    explain: "South Africa — they faced host nation Mexico in the tournament's opening Group A match."
+  },
+  {
+    category: "GK",
+    sound: "default",
+    q: "A Nipah virus case was confirmed this week in which Kerala district?",
+    options: ["Wayanad", "Ernakulam", "Kozhikode", "Thrissur"],
+    correct: 2,
+    proof: 52,
+    headline: "Nipah virus case confirmed in Kozhikode",
+    news: "A 43-year-old from Ramanattukara was confirmed positive for Nipah virus and admitted to Kozhikode Medical College. Kerala's health department has been urged to treat the outbreak with the seriousness it warrants and step up containment measures.",
+    link: "https://www.news9live.com/india/breaking-news-headlines-today-13-06-2026-live-updates-in-english-india-world-politics-crime-israel-us-iran-war-donald-trump-2979700",
+    explain: "Kozhikode — the case was traced to a patient from nearby Ramanattukara."
+  },
+  {
+    category: "India",
+    sound: "default",
+    q: "What weather alert has the IMD issued for Delhi today amid an advancing monsoon and a western disturbance?",
+    options: ["Red alert", "Orange alert", "Yellow alert", "No alert"],
+    correct: 2,
+    proof: 60,
+    headline: "Yellow alert for Delhi as monsoon advances",
+    news: "The IMD issued a yellow alert for Delhi on June 13, forecasting thunderstorms, gusty winds up to 50 kmph and spells of rain. The southwest monsoon has advanced into southern and eastern India, while a western disturbance is set to bring widespread rain to the northwest.",
+    link: "https://www.india.com/news/india/delhi-weather-national-capital-13-june-2026-weather-update-noida-ghaziabad-faridabad-gurugram-greater-noida-rainfall-thunderstorm-cyclone-8444880/",
+    explain: "Yellow alert — signalling thunderstorms and strong winds rather than the more severe orange/red."
+  },
+  {
+    category: "Sports",
+    sound: "default",
+    q: "The 2026 Rugby Premier League's second season kicks off on June 16 in which city?",
+    options: ["Chennai", "Mumbai", "Hyderabad", "Bengaluru"],
+    correct: 2,
+    proof: 45,
+    headline: "Rugby Premier League returns to Hyderabad",
+    news: "The second season of the HSBC Rugby Premier League runs from June 16-28 at Hyderabad's Gachibowli Stadium. In a first, four women's franchises join the men's competition, with defending champions Chennai Bulls looking to retain their title.",
+    link: "https://en.wikipedia.org/wiki/2026_Rugby_Premier_League",
+    explain: "Hyderabad — the tournament is hosted at the Gachibowli Stadium."
+  },
+  {
+    category: "India",
+    sound: "default",
+    q: "The Centre took physical possession of which historic ground in Delhi's Race Course area this week?",
+    options: ["Talkatora Stadium", "Jaipur Polo Ground", "Delhi Golf Club", "Chanakyapuri Grounds"],
+    correct: 1,
+    proof: 38,
+    headline: "Centre takes over Jaipur Polo Ground in Delhi",
+    news: "The Land and Development Office took physical possession of Jaipur Polo Ground, declaring it government property, a day after a Delhi court declined to stay the eviction order against the Indian Polo Association.",
+    link: "https://www.news9live.com/india/breaking-news-headlines-today-13-06-2026-live-updates-in-english-india-world-politics-crime-israel-us-iran-war-donald-trump-2979700",
+    explain: "Jaipur Polo Ground — possession was taken after courts declined to stay its eviction order."
+  },
+  {
+    category: "Personal",
+    personal: true,
+    sound: "birthday",
+    q: "When is Riya Sharma's birthday?",
+    options: ["Today 🎂", "Tomorrow", "Next week", "Last month"],
+    correct: 0,
+    proof: null,
+    headline: "🎉 It's Riya's birthday today!",
+    news: "Riya's on a 24-day streak and ranks in the top 5% for Sports this month. Her favourite category is Sports — maybe send her a quiz challenge to celebrate?",
+    link: null
+  },
+  {
+    category: "Personal",
+    personal: true,
+    sound: "default",
+    q: "Which city is Arjun currently visiting on his trip?",
+    options: ["Manali", "Goa", "Jaipur", "Ooty"],
+    correct: 0,
+    proof: null,
+    headline: "🏔️ Arjun's in Manali right now",
+    news: "Arjun checked in from Manali this morning — looks like a snowy getaway. Drop him a message and ask how the trip's going!",
+    link: null
+  }
+];
+
+// Fallback bonus pool — used if Firestore bonus_pool is unreachable or empty
+const SAMPLE_BONUS_QUESTIONS = [
+  {
+    category: "GK",
+    sound: "default",
+    q: "Which river is known as the 'Sorrow of Bihar' due to frequent flooding?",
+    options: ["Kosi", "Son", "Gandak", "Ganga"],
+    correct: 0,
+    proof: 58,
+    headline: "Kosi river flood-control project gets fresh funding",
+    news: "The Kosi, notorious for shifting course and causing devastating floods, is the focus of a renewed embankment and flood-control initiative aimed at protecting north Bihar's farmland and villages.",
+    link: "https://www.thehindu.com",
+    explain: "Kosi — its frequent course changes have earned it this nickname for centuries."
+  },
+  {
+    category: "Sports",
+    sound: "cheer",
+    breaking: true,
+    q: "In a first for the 2026 Rugby Premier League, how many women's franchises join the competition this season?",
+    options: ["2", "4", "6", "8"],
+    correct: 1,
+    proof: 41,
+    headline: "🔴 Just in: Women's teams join Rugby Premier League",
+    news: "Season two of the Rugby Premier League, starting June 16 in Hyderabad, introduces four women's franchises for the first time — competing alongside six men's city-based teams in the rugby sevens format.",
+    link: "https://en.wikipedia.org/wiki/2026_Rugby_Premier_League",
+    explain: "4 — alongside the existing 6 men's franchises, in a landmark expansion."
+  }
+];
+
+// ===================== APP BOOTSTRAP =====================
+// Everything below runs once we have today's content — either from
+// Firestore (live pipeline output) or the SAMPLE_* fallback above.
+function buildApp(QUESTIONS, BONUS_QUESTIONS) {
+
+let current = 0;
+let score = 0;
+let maxUnlocked = 0;
+let quietMode = false;
+const categoryScores = {};
+const totalRounds = QUESTIONS.length;
+const TOTAL_CARDS = totalRounds + 1; // + results card
+
+// ===================== SOUND LIBRARY =====================
+// Lightweight Web Audio synth-based sound library + speech feedback.
+const SoundLib = (() => {
+  let ctx;
+  function getCtx(){
+    if(!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+    return ctx;
+  }
+  function tone(freq, start, dur, type='sine', gainVal=0.18){
+    const c = getCtx();
+    const osc = c.createOscillator();
+    const gain = c.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.value = 0;
+    osc.connect(gain);
+    gain.connect(c.destination);
+    const t0 = c.currentTime + start;
+    gain.gain.linearRampToValueAtTime(gainVal, t0 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.05);
+  }
+
+  function correctChime(){
+    // gentle ascending two-note chime
+    tone(523.25, 0, 0.25, 'triangle');
+    tone(784, 0.08, 0.35, 'triangle');
+  }
+  function wrongTone(){
+    // soft descending tone, not harsh
+    tone(330, 0, 0.3, 'sine', 0.12);
+    tone(220, 0.12, 0.4, 'sine', 0.10);
+  }
+  function cheer(){
+    // celebratory ascending arpeggio - "India win" energy
+    [523.25, 659.25, 783.99, 1046.5].forEach((f,i)=> tone(f, i*0.08, 0.3, 'triangle', 0.16));
+    tone(1046.5, 0.32, 0.5, 'triangle', 0.14);
+  }
+  function birthdayJingle(){
+    // simple "happy tune" motif
+    [392,392,440,392,523,494].forEach((f,i)=> tone(f, i*0.15, 0.22, 'triangle', 0.15));
+  }
+
+  // ===== Background score (ambient, looping) =====
+  let bgGain, bgNodes = [], bgPlaying = false;
+  // Background score sourced from a free royalty-free library (Incompetech, by Kevin
+  // MacLeod — CC BY 3.0, attribution required: "Wholesome" by Kevin MacLeod,
+  // incompetech.com, licensed under Creative Commons: By Attribution 3.0).
+  // If this URL ever breaks, swap for another CC-licensed track of your choice.
+  const bgMusicUrl = "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Wholesome.mp3";
+
+  function startBackgroundScore(){
+    if(bgPlaying) return;
+    bgPlaying = true;
+    const c = getCtx();
+    if(bgMusicUrl){
+      const audio = new Audio(bgMusicUrl);
+      audio.loop = true;
+      audio.volume = 0.25;
+      audio.play().catch(()=>{});
+      bgNodes.push({ stop: () => audio.pause() });
+      return;
+    }
+    // generative ambient fallback
+    bgGain = c.createGain();
+    bgGain.gain.value = 0.05;
+    bgGain.connect(c.destination);
+    [196, 246.94, 293.66].forEach((freq, i) => {
+      const osc = c.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const lfo = c.createOscillator();
+      const lfoGain = c.createGain();
+      lfo.frequency.value = 0.05 + i*0.02;
+      lfoGain.gain.value = 0.02;
+      lfo.connect(lfoGain);
+      lfoGain.connect(osc.frequency);
+      osc.connect(bgGain);
+      osc.start(); lfo.start();
+      bgNodes.push(osc, lfo);
+    });
+  }
+  function stopBackgroundScore(){
+    bgPlaying = false;
+    bgNodes.forEach(n => { try{ n.stop ? n.stop() : null; }catch(e){} });
+    bgNodes = [];
+  }
+  function setBackgroundVolume(v){
+    if(bgGain) bgGain.gain.value = v;
+  }
+
+  function playFeedback(isCorrect, soundTag){
+    if(isCorrect){
+      if(soundTag === 'cheer') cheer();
+      else if(soundTag === 'birthday') birthdayJingle();
+      else correctChime();
+    } else {
+      wrongTone();
+    }
+  }
+
+  // ===== Voice feedback (female, soothing) =====
+  let voices = [];
+  function loadVoices(){
+    voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+  }
+  if(window.speechSynthesis){
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+  }
+  function pickFemaleVoice(){
+    const preferredNames = ['Samantha','Google US English','Microsoft Zira','Female'];
+    let v = voices.find(v => preferredNames.some(p => v.name.includes(p)));
+    if(!v) v = voices.find(v => /female/i.test(v.name));
+    return v || voices[0];
+  }
+  function speak(text){
+    if(!window.speechSynthesis) return;
+    const utter = new SpeechSynthesisUtterance(text);
+    const v = pickFemaleVoice();
+    if(v) utter.voice = v;
+    utter.pitch = 1.15;
+    utter.rate = 0.95;
+    utter.volume = 0.8;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utter);
+  }
+
+  return { playFeedback, speak, startBackgroundScore, stopBackgroundScore, setBackgroundVolume };
+})();
+
+// ===================== INIT PROGRESS BAR =====================
+const progressEl = document.getElementById('progress');
+QUESTIONS.forEach((_, i) => {
+  const seg = document.createElement('div');
+  seg.className = 'seg';
+  progressEl.appendChild(seg);
+});
+
+function updateProgress(){
+  document.querySelectorAll('.seg').forEach((seg, i) => {
+    seg.classList.toggle('fill', i < current);
+    seg.classList.toggle('current', i === current);
+  });
+}
+
+// ===================== BUILD ALL CARDS (reel scroll) =====================
+const stage = document.getElementById('stage');
+
+QUESTIONS.forEach((data, idx) => {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.dataset.index = idx;
+  card.innerHTML = `<div class="card-inner" id="inner-${idx}"></div>`;
+  stage.appendChild(card);
+  renderQuestionInner(card.querySelector('.card-inner'), data, idx);
+});
+
+// results card
+const resultsCard = document.createElement('div');
+resultsCard.className = 'card';
+resultsCard.dataset.index = totalRounds;
+resultsCard.innerHTML = `
+  <div class="results-card">
+    <div class="results-brand">
+      <span class="bolt">⚡</span> Chaupaal — Daily Recap
+      <span class="results-date" id="resultDate">Jun 13</span>
+    </div>
+    <div class="score-big" id="scoreBig">0<span>/${totalRounds}</span></div>
+    <div class="score-label">Questions answered correctly</div>
+    <div class="breakdown" id="breakdown"></div>
+    <div class="streak-row">
+      <div class="streak-pill"><span class="flame">🔥</span><span id="streakBig">13</span> day streak</div>
+      <div class="badge-pill" id="badgeText">🏅 New Badge</div>
+    </div>
+  </div>
+  <button class="share-btn" id="shareBtn">📤 Share to Instagram / WhatsApp</button>
+  <div class="share-options hidden" id="shareOptions">
+    <button class="share-opt whatsapp" id="shareWhatsapp">💬 WhatsApp</button>
+    <button class="share-opt instagram" id="shareInstagram">📸 Instagram Story</button>
+  </div>
+`;
+stage.appendChild(resultsCard);
+
+// ===================== BONUS POOL (incl. simulated real-time "Breaking") =====================
+const bonusSection = document.createElement('div');
+bonusSection.className = 'card';
+bonusSection.innerHTML = `
+  <div class="card-inner" id="bonusIntro" style="align-items:center; justify-content:center; text-align:center; gap:10px;">
+    <div style="font-size:40px;">🎁</div>
+    <div class="question" style="margin:0;">Bonus Round</div>
+    <div class="duel-sub">A couple more, on the house — keeps your streak unaffected</div>
+    <div class="hint show" style="margin-top:10px;">Scroll up ↑</div>
+  </div>
+`;
+stage.appendChild(bonusSection);
+
+BONUS_QUESTIONS.forEach((data, i) => {
+  const idx = totalRounds + 1 + i; // unique index for DOM ids
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `<div class="card-inner" id="inner-${idx}"></div>`;
+  stage.appendChild(card);
+  const inner = card.querySelector('.card-inner');
+  renderQuestionInner(inner, data, idx);
+  // hide breaking badge initially; reveal via simulated push
+  if(data.breaking){
+    const tag = inner.querySelector('.tag');
+    tag.dataset.breakingFor = idx;
+    tag.classList.add('hidden');
+  }
+});
+
+updateProgress();
+
+// Instagram-style active-card scaling
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    entry.target.classList.toggle('active', entry.intersectionRatio > 0.6);
+  });
+}, { root: stage, threshold: [0, 0.6, 1] });
+
+document.querySelectorAll('.card-inner, .results-card').forEach(el => observer.observe(el));
+
+// ===================== SIMULATED REAL-TIME BREAKING NEWS =====================
+// In production: event-driven pipeline pushes a new verified question
+// into the bonus pool the moment a source article clears Stage 0-3.
+setTimeout(() => {
+  document.querySelectorAll('.tag[data-breaking-for]').forEach(tag => {
+    tag.classList.remove('hidden');
+    tag.textContent = '🔴 Breaking';
+    tag.style.background = 'rgba(230,57,70,0.1)';
+    tag.style.color = 'var(--red)';
+  });
+  showBreakingToast();
+}, 6000);
+
+function showBreakingToast(){
+  const toast = document.createElement('div');
+  toast.className = 'breaking-toast';
+  toast.textContent = '🔴 New Khabar just dropped — tap to view';
+  document.querySelector('.device').appendChild(toast);
+  setTimeout(() => toast.classList.add('show'), 50);
+  setTimeout(() => toast.remove(), 4000);
+}
+
+// ===================== RENDER A QUESTION CARD =====================
+function renderQuestionInner(inner, data, idx){
+  inner.innerHTML = `
+    <div class="tag">${data.category}</div>
+    <div class="question">${data.q}</div>
+    <div class="options">
+      ${data.options.map((opt,i) => `<button class="opt" data-i="${i}"><span>${opt}</span><span class="mark"></span></button>`).join('')}
+    </div>
+    <div class="social-proof hidden" id="proof-${idx}"></div>
+    <div class="flag-row hidden" id="flagRow-${idx}"><button id="flagBtn-${idx}">⚑ Flag this question</button></div>
+    <div class="hint" id="hint-${idx}">Scroll up for next ↑</div>
+    <div class="float-layer" id="floatLayer-${idx}"></div>
+  `;
+
+  const optButtons = inner.querySelectorAll('.opt');
+  optButtons.forEach(btn => {
+    btn.addEventListener('click', () => handleAnswer(inner, btn, data, optButtons, idx));
+  });
+}
+
+function handleAnswer(inner, btn, data, optButtons, idx){
+  if(inner.dataset.answered) return;
+  inner.dataset.answered = "true";
+  const chosen = parseInt(btn.dataset.i);
+  const isCorrect = chosen === data.correct;
+  inner.dataset.wasCorrect = isCorrect ? "true" : "false";
+
+  optButtons.forEach(b => b.disabled = true);
+  optButtons.forEach((b,i) => {
+    if(i === data.correct){
+      b.classList.add('correct');
+      b.querySelector('.mark').textContent = '✓';
+    } else if(i === chosen && !isCorrect){
+      b.classList.add('wrong');
+      b.querySelector('.mark').textContent = '✕';
+    } else {
+      b.classList.add('dim');
+    }
+  });
+
+  // sound + voice feedback
+  if(!quietMode){
+    SoundLib.playFeedback(isCorrect, data.sound);
+    SoundLib.speak(isCorrect ? "Correct!" : "Not quite!");
+  }
+
+  // floating emojis
+  const layer = inner.querySelector(`#floatLayer-${idx}`);
+  if(!quietMode){
+    let emojiPool = [isCorrect ? '😄' : '😢'];
+    if(data.sound === 'cheer' && isCorrect) emojiPool = ['🎉','🇮🇳','🙌','🔥'];
+    if(data.personal && isCorrect) emojiPool = ['🎉','🎂','🎈','✨'];
+    for(let k=0;k<8;k++){
+      const e = document.createElement('div');
+      e.className = 'float-emoji';
+      e.textContent = emojiPool[k % emojiPool.length];
+      e.style.left = (10 + Math.random()*80) + '%';
+      e.style.bottom = (Math.random()*30) + 'px';
+      e.style.animationDelay = (Math.random()*0.3) + 's';
+      layer.appendChild(e);
+    }
+  }
+
+  // score tracking
+  if(!categoryScores[data.category]) categoryScores[data.category] = {correct:0, total:0};
+  categoryScores[data.category].total++;
+  if(isCorrect){
+    score++;
+    categoryScores[data.category].correct++;
+  }
+
+  // social proof
+  if(data.proof !== null){
+    const proof = inner.querySelector(`#proof-${idx}`);
+    proof.textContent = `${data.proof}% of players got this right`;
+    proof.classList.remove('hidden');
+  }
+
+  // flag row
+  if(!data.personal){
+    const flagRow = inner.querySelector(`#flagRow-${idx}`);
+    flagRow.classList.remove('hidden');
+    const flagBtn = inner.querySelector(`#flagBtn-${idx}`);
+    flagBtn.addEventListener('click', () => {
+      flagBtn.classList.toggle('flagged');
+      flagBtn.textContent = flagBtn.classList.contains('flagged') ? '✓ Flagged — thanks!' : '⚑ Flag this question';
+    });
+  }
+
+  // unlock next card
+  maxUnlocked = Math.max(maxUnlocked, idx + 1);
+
+  // after delay, swap to news summary
+  setTimeout(() => {
+    showNews(inner, data, idx);
+  }, 1500);
+}
+
+function showNews(inner, data, idx){
+  const linkHtml = data.link
+    ? `<a class="read-more" href="${data.link}" target="_blank" rel="noopener">Read full article →</a>`
+    : '';
+  const sourceLine = data.personal
+    ? `<div class="source">Shared because Riya opted in to share fun stats with friends</div>`
+    : `<div class="source">Source: aggregated news · ${new Date().toDateString()}</div>`;
+  const explainHtml = (inner.dataset.wasCorrect === "false" && data.explain)
+    ? `<div class="explain-box">💡 <strong>Why:</strong> ${data.explain}</div>`
+    : '';
+
+  inner.innerHTML = `
+    <div class="news-view">
+      <div class="tag">${data.category}</div>
+      <div class="headline">${data.headline}</div>
+      ${explainHtml}
+      <div class="body">${data.news}</div>
+      ${linkHtml}
+      ${sourceLine}
+      <div class="hint show">${idx === totalRounds-1 ? 'Scroll up for your recap ↑' : 'Scroll up for next ↑'}</div>
+    </div>
+  `;
+
+  if(idx === totalRounds - 1){
+    populateResults();
+  }
+}
+
+// ===================== RESULTS POPULATION =====================
+function populateResults(){
+  document.getElementById('scoreBig').innerHTML = `${score}<span>/${totalRounds}</span>`;
+  document.getElementById('resultDate').textContent = new Date().toLocaleDateString('en-IN', {day:'numeric', month:'short'});
+
+  const breakdown = document.getElementById('breakdown');
+  breakdown.innerHTML = '';
+  Object.entries(categoryScores).forEach(([cat, val]) => {
+    const pct = Math.round((val.correct/val.total)*100);
+    const row = document.createElement('div');
+    row.className = 'breakdown-row';
+    row.innerHTML = `
+      <div class="cat">${cat}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+      <div class="pct">${pct}%</div>
+    `;
+    breakdown.appendChild(row);
+  });
+
+  const badgeEl = document.getElementById('badgeText');
+  if(score === totalRounds) badgeEl.textContent = '🏅 Perfect Score!';
+  else if(score >= totalRounds * 0.7) badgeEl.textContent = '⭐ Sharp Reader';
+  else badgeEl.textContent = '🔥 Streak Kept';
+
+  document.getElementById('streakBig').textContent = parseInt(document.getElementById('streakNum').textContent) + 1;
+}
+
+// ===================== SCROLL NAV (reel style, with lock) =====================
+let isSnapping = false;
+stage.addEventListener('scroll', () => {
+  if(isSnapping) return;
+  const idx = Math.round(stage.scrollTop / stage.clientHeight);
+
+  if(idx > maxUnlocked){
+    // lock: snap back to last unlocked card
+    isSnapping = true;
+    stage.scrollTo({ top: maxUnlocked * stage.clientHeight, behavior:'smooth' });
+    setTimeout(() => isSnapping = false, 400);
+    return;
+  }
+
+  current = Math.min(idx, totalRounds - 1);
+  updateProgress();
+});
+
+// ===================== SHARE FUNCTIONALITY =====================
+function buildShareText(){
+  return `⚡ I scored ${score}/${totalRounds} on today's Chaupaal news quiz! 🔥 ${parseInt(document.getElementById('streakNum').textContent)+1}-day streak. Think you can beat me?`;
+}
+
+document.getElementById('shareBtn').addEventListener('click', () => {
+  document.getElementById('shareOptions').classList.toggle('hidden');
+});
+
+document.getElementById('shareWhatsapp').addEventListener('click', () => {
+  const text = encodeURIComponent(buildShareText());
+  window.open(`https://wa.me/?text=${text}`, '_blank');
+});
+
+document.getElementById('shareInstagram').addEventListener('click', async () => {
+  const text = buildShareText();
+  if(navigator.share){
+    try{
+      await navigator.share({ text, title: 'Chaupaal — Daily Recap' });
+    }catch(e){ /* user cancelled */ }
+  } else {
+    // fallback: copy text, Instagram doesn't support direct web share of text to Stories
+    await navigator.clipboard.writeText(text);
+    alert('Recap copied! Open Instagram and paste it into your Story.');
+  }
+});
+
+// ===================== SHARING SETTINGS MODAL =====================
+const settingsModal = document.getElementById('settingsModal');
+document.getElementById('settingsBtn').addEventListener('click', () => settingsModal.classList.remove('hidden'));
+document.getElementById('closeSettings').addEventListener('click', () => settingsModal.classList.add('hidden'));
+document.getElementById('saveSettings').addEventListener('click', () => settingsModal.classList.add('hidden'));
+document.getElementById('toggleQuiet').addEventListener('change', (e) => {
+  quietMode = e.target.checked;
+  if(quietMode){ SoundLib.stopBackgroundScore(); document.getElementById('toggleMusic').checked = false; }
+});
+document.getElementById('toggleMusic').addEventListener('change', (e) => {
+  if(e.target.checked && !quietMode) SoundLib.startBackgroundScore();
+  else SoundLib.stopBackgroundScore();
+});
+
+// ===================== FLASH DUEL =====================
+const DUEL_QUESTIONS = [
+  { q:"Who is the current Vice-President of India?", options:["Jagdeep Dhankhar","M. Venkaiah Naidu","Ram Nath Kovind","Droupadi Murmu"], correct:0 },
+  { q:"Which planet is known as the Red Planet?", options:["Venus","Mars","Jupiter","Mercury"], correct:1 },
+  { q:"The Sun Temple at Konark is located in which state?", options:["Odisha","Tamil Nadu","Kerala","Bihar"], correct:0 },
+  { q:"Which gas do plants absorb from the atmosphere for photosynthesis?", options:["Oxygen","Nitrogen","Carbon dioxide","Hydrogen"], correct:2 },
+  { q:"Who wrote the Indian national anthem 'Jana Gana Mana'?", options:["Bankim Chandra","Rabindranath Tagore","Subhas Chandra Bose","Sarojini Naidu"], correct:1 },
+  { q:"What is the capital of Australia?", options:["Sydney","Melbourne","Canberra","Perth"], correct:2 },
+  { q:"Which Indian festival is known as the 'Festival of Lights'?", options:["Holi","Diwali","Navratri","Onam"], correct:1 },
+  { q:"The Great Barrier Reef is located near which country?", options:["Brazil","Australia","Indonesia","South Africa"], correct:1 },
+  { q:"Who was the first Prime Minister of India?", options:["Mahatma Gandhi","Sardar Patel","Jawaharlal Nehru","Dr. Rajendra Prasad"], correct:2 },
+  { q:"Which is the longest river in India?", options:["Yamuna","Godavari","Brahmaputra","Ganga"], correct:3 }
+];
+
+const duelOverlay = document.getElementById('duelOverlay');
+const duelScreen = document.getElementById('duelScreen');
+let duelTimerInterval = null;
+
+document.getElementById('duelBtn').addEventListener('click', () => {
+  duelOverlay.classList.remove('hidden');
+  showDuelConfig();
+});
+
+function closeDuel(){
+  clearInterval(duelTimerInterval);
+  duelOverlay.classList.add('hidden');
+}
+
+function showDuelConfig(){
+  duelScreen.innerHTML = `
+    <div class="duel-header">
+      <div class="duel-title">⚡ News Duel</div>
+      <button class="duel-close" id="duelCloseBtn">✕</button>
+    </div>
+    <div class="duel-tabs">
+      <button class="duel-tab active" id="tabRandom">🔎 New Duel</button>
+      <button class="duel-tab" id="tabFriend">👤 Play a Friend</button>
+    </div>
+    <div class="duel-center" style="flex:0; margin-bottom:10px;">
+      <div class="duel-bolt" style="font-size:40px; animation:none;">⚔️</div>
+      <div class="duel-status" id="duelConfigStatus">Challenge a random player</div>
+      <div class="duel-sub" id="duelConfigSub">Get matched live with someone near your rank</div>
+    </div>
+    <div id="friendInputRow" class="config-row hidden" style="margin-bottom:14px;">
+      <input type="text" id="friendUsername" placeholder="Enter friend's username" style="border:none; background:transparent; font:inherit; flex:1; outline:none;">
+    </div>
+    <div class="duel-config">
+      <div class="config-row">
+        Questions
+        <select id="cfgCount">
+          <option value="5">5</option>
+          <option value="10" selected>10</option>
+          <option value="15">15</option>
+        </select>
+      </div>
+      <div class="config-row">
+        Time per question
+        <select id="cfgTimer">
+          <option value="10">10s</option>
+          <option value="15" selected>15s</option>
+          <option value="20">20s</option>
+        </select>
+      </div>
+      <div class="config-row">
+        Category
+        <select id="cfgCategory">
+          <option value="GK" selected>General Knowledge</option>
+          <option value="Sports">Sports</option>
+          <option value="Tech">Tech</option>
+          <option value="Mixed">Mixed</option>
+        </select>
+      </div>
+    </div>
+    <button class="duel-primary-btn" id="findMatchBtn">🔎 Find live opponent</button>
+  `;
+  document.getElementById('duelCloseBtn').addEventListener('click', closeDuel);
+  document.getElementById('findMatchBtn').addEventListener('click', startMatchmaking);
+
+  const tabRandom = document.getElementById('tabRandom');
+  const tabFriend = document.getElementById('tabFriend');
+  const friendRow = document.getElementById('friendInputRow');
+  const statusEl = document.getElementById('duelConfigStatus');
+  const subEl = document.getElementById('duelConfigSub');
+  const findBtn = document.getElementById('findMatchBtn');
+
+  tabRandom.addEventListener('click', () => {
+    tabRandom.classList.add('active');
+    tabFriend.classList.remove('active');
+    friendRow.classList.add('hidden');
+    statusEl.textContent = 'Challenge a random player';
+    subEl.textContent = 'Get matched live with someone near your rank';
+    findBtn.textContent = '🔎 Find live opponent';
+  });
+  tabFriend.addEventListener('click', () => {
+    tabFriend.classList.add('active');
+    tabRandom.classList.remove('active');
+    friendRow.classList.remove('hidden');
+    statusEl.textContent = 'Challenge a friend';
+    subEl.textContent = "They'll get a notification to join live";
+    findBtn.textContent = '📨 Send challenge';
+  });
+}
+
+function startMatchmaking(){
+  const count = parseInt(document.getElementById('cfgCount').value);
+  const timer = parseInt(document.getElementById('cfgTimer').value);
+  const category = document.getElementById('cfgCategory').value;
+  const isFriendMode = document.getElementById('tabFriend').classList.contains('active');
+  const friendName = document.getElementById('friendUsername').value.trim();
+
+  if(isFriendMode && !friendName){
+    document.getElementById('friendUsername').focus();
+    return;
+  }
+  const opponentName = isFriendMode ? friendName : null;
+
+  duelScreen.innerHTML = `
+    <div class="duel-header">
+      <div class="duel-title">⚡ News Duel</div>
+      <button class="duel-close" id="duelCloseBtn">✕</button>
+    </div>
+    <div class="duel-center">
+      <div class="duel-bolt">⚡</div>
+      <div class="duel-status">${isFriendMode ? `Sending challenge to ${friendName}…` : 'Finding a live opponent…'}</div>
+      <div class="duel-sub">${category} · ${count} questions · ${timer}s each</div>
+    </div>
+  `;
+  document.getElementById('duelCloseBtn').addEventListener('click', closeDuel);
+
+  if(isFriendMode){
+    // simulate sending invite + waiting for friend to come online & accept
+    setTimeout(() => {
+      duelScreen.querySelector('.duel-status').textContent = `Waiting for ${friendName} to accept…`;
+      duelScreen.querySelector('.duel-sub').textContent = "They'll get a notification on their phone";
+    }, 1200);
+    setTimeout(() => {
+      duelScreen.querySelector('.duel-status').textContent = `${friendName} accepted! 🎯`;
+      duelScreen.querySelector('.duel-sub').textContent = "Starting duel…";
+      setTimeout(() => startDuel(count, timer, friendName), 900);
+    }, 3000);
+  } else {
+    // simulate random matchmaking delay
+    setTimeout(() => {
+      duelScreen.querySelector('.duel-status').textContent = "Opponent found! 🎯";
+      duelScreen.querySelector('.duel-sub').textContent = "Priya_29 · Rank: Topper";
+      setTimeout(() => startDuel(count, timer, "Priya_29"), 900);
+    }, 1800);
+  }
+}
+
+function startDuel(count, timer, opponentName){
+  const questions = [...DUEL_QUESTIONS].sort(() => Math.random()-0.5).slice(0, count);
+  let qIndex = 0;
+  let myScore = 0;
+  let oppScore = 0;
+
+  function renderDuelQuestion(){
+    if(qIndex >= questions.length){
+      return showDuelResults(myScore, oppScore, opponentName);
+    }
+    const data = questions[qIndex];
+    let timeLeft = timer;
+    let answered = false;
+
+    duelScreen.innerHTML = `
+      <div class="duel-header">
+        <div class="duel-title">⚡ News Duel · Q${qIndex+1}/${questions.length}</div>
+        <button class="duel-close" id="duelCloseBtn">✕</button>
+      </div>
+      <div class="vs-row">
+        <div class="player-chip me">🧑 You — ${myScore}</div>
+        <div class="vs-label">VS</div>
+        <div class="player-chip opp">🎯 ${opponentName} — ${oppScore}</div>
+      </div>
+      <div class="duel-timer" id="duelTimer">${timeLeft}</div>
+      <div class="duel-card">
+        <div class="tag">${data === questions[qIndex] ? 'GK' : ''}</div>
+        <div class="question">${data.q}</div>
+        <div class="options" id="duelOptions">
+          ${data.options.map((opt,i) => `<button class="opt" data-i="${i}"><span>${opt}</span><span class="mark"></span></button>`).join('')}
+        </div>
+        <div class="opp-indicator" id="oppIndicator">${opponentName} is thinking…</div>
+      </div>
+    `;
+    document.getElementById('duelCloseBtn').addEventListener('click', closeDuel);
+
+    const optButtons = duelScreen.querySelectorAll('.opt');
+    optButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if(answered) return;
+        answered = true;
+        const chosen = parseInt(btn.dataset.i);
+        const isCorrect = chosen === data.correct;
+        if(isCorrect){
+          myScore++;
+          if(!quietMode) SoundLib.playFeedback(true, 'default');
+        } else {
+          if(!quietMode) SoundLib.playFeedback(false, 'default');
+        }
+        optButtons.forEach((b,i) => {
+          b.disabled = true;
+          if(i === data.correct){ b.classList.add('correct'); b.querySelector('.mark').textContent='✓'; }
+          else if(i === chosen){ b.classList.add('wrong'); b.querySelector('.mark').textContent='✕'; }
+          else b.classList.add('dim');
+        });
+      });
+    });
+
+    // simulated opponent answer
+    const oppDelay = 1000 + Math.random()*(timer*1000-1000);
+    const oppCorrect = Math.random() < 0.65;
+    setTimeout(() => {
+      document.getElementById('oppIndicator').textContent = oppCorrect
+        ? `${opponentName} answered correctly ✓`
+        : `${opponentName} answered ✕`;
+      if(oppCorrect) oppScore++;
+    }, oppDelay);
+
+    // timer countdown
+    duelTimerInterval = setInterval(() => {
+      timeLeft--;
+      const t = document.getElementById('duelTimer');
+      if(t) t.textContent = timeLeft;
+      if(timeLeft <= 0){
+        clearInterval(duelTimerInterval);
+        if(!answered){
+          optButtons.forEach((b,i) => {
+            b.disabled = true;
+            if(i === data.correct){ b.classList.add('correct'); b.querySelector('.mark').textContent='✓'; }
+            else b.classList.add('dim');
+          });
+        }
+        setTimeout(() => { qIndex++; renderDuelQuestion(); }, 900);
+      }
+    }, 1000);
+  }
+
+  renderDuelQuestion();
+}
+
+function showDuelResults(myScore, oppScore, opponentName){
+  clearInterval(duelTimerInterval);
+  const won = myScore > oppScore;
+  const tie = myScore === oppScore;
+  duelScreen.innerHTML = `
+    <div class="duel-header">
+      <div class="duel-title">⚡ News Duel · Result</div>
+      <button class="duel-close" id="duelCloseBtn">✕</button>
+    </div>
+    <div class="duel-center" style="flex:0;">
+      <div class="duel-bolt" style="animation:none; font-size:48px;">${tie ? '🤝' : (won ? '🏆' : '😅')}</div>
+      <div class="duel-status">${tie ? "It's a tie!" : (won ? "You won!" : `${opponentName} won this time`)}</div>
+    </div>
+    <div class="duel-result-row ${won ? 'win' : (tie ? '' : 'loss')}">
+      <span>🧑 You</span><span>${myScore}</span>
+    </div>
+    <div class="duel-result-row">
+      <span>🎯 ${opponentName}</span><span>${oppScore}</span>
+    </div>
+    <button class="duel-primary-btn" id="rematchBtn">🔁 Rematch</button>
+    <button class="duel-primary-btn" id="chatBtn" style="background:var(--gold); color:var(--ink); margin-top:8px;">💬 Chat with ${opponentName}</button>
+    <button class="duel-primary-btn" id="duelDoneBtn" style="background:var(--white); color:var(--ink); border:2px solid var(--line); margin-top:8px;">Done</button>
+  `;
+  document.getElementById('duelCloseBtn').addEventListener('click', closeDuel);
+  document.getElementById('duelDoneBtn').addEventListener('click', closeDuel);
+  document.getElementById('rematchBtn').addEventListener('click', showDuelConfig);
+  document.getElementById('chatBtn').addEventListener('click', () => openChat(opponentName));
+}
+
+// ===================== OPEN CHAT (post-duel social layer) =====================
+const SAMPLE_CHAT_MESSAGES = {
+  default: [
+    { from: 'them', text: "Good game! Didn't expect that Rugby question 😅" },
+    { from: 'me', text: "Haha same, lucky guess on my end!" },
+    { from: 'them', text: "You're pretty sharp on Sports though. Rematch tomorrow?" },
+  ]
+};
+
+function openChat(opponentName){
+  duelScreen.innerHTML = `
+    <div class="duel-header">
+      <div class="duel-title">💬 ${opponentName}</div>
+      <button class="duel-close" id="chatCloseBtn">✕</button>
+    </div>
+    <div class="chat-messages" id="chatMessages"></div>
+    <div class="chat-input-row">
+      <button class="chat-icon-btn" id="chatImageBtn" title="Send image">🖼️</button>
+      <input type="text" id="chatInput" placeholder="Type a message…">
+      <button class="chat-send-btn" id="chatSendBtn">➤</button>
+    </div>
+  `;
+  document.getElementById('chatCloseBtn').addEventListener('click', closeDuel);
+
+  const msgContainer = document.getElementById('chatMessages');
+  (SAMPLE_CHAT_MESSAGES.default).forEach(m => addChatBubble(msgContainer, m.from, m.text));
+
+  document.getElementById('chatSendBtn').addEventListener('click', () => sendChatMessage(msgContainer));
+  document.getElementById('chatInput').addEventListener('keypress', (e) => {
+    if(e.key === 'Enter') sendChatMessage(msgContainer);
+  });
+  document.getElementById('chatImageBtn').addEventListener('click', () => {
+    addChatBubble(msgContainer, 'me', '📷 [Image shared]');
+    msgContainer.scrollTop = msgContainer.scrollHeight;
+  });
+}
+
+function sendChatMessage(container){
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if(!text) return;
+  addChatBubble(container, 'me', text);
+  input.value = '';
+  container.scrollTop = container.scrollHeight;
+  // simulated reply
+  setTimeout(() => {
+    addChatBubble(container, 'them', "👍");
+    container.scrollTop = container.scrollHeight;
+  }, 900);
+}
+
+function addChatBubble(container, from, text){
+  const bubble = document.createElement('div');
+  bubble.className = `chat-bubble ${from}`;
+  bubble.textContent = text;
+  container.appendChild(bubble);
+}
+
+} // ===== end buildApp =====
+
+// ===================== LOAD TODAY'S CONTENT & START APP =====================
+(async () => {
+  const live = await fetchTodaysContent();
+  buildApp(
+    (live && live.questions && live.questions.length) ? live.questions : SAMPLE_QUESTIONS,
+    (live && live.bonus && live.bonus.length) ? live.bonus : SAMPLE_BONUS_QUESTIONS
+  );
+  // fade out splash once content is ready
+  setTimeout(() => {
+    document.getElementById('splash').classList.add('hide');
+  }, 1200);
+})();
+</script>
+</body>
+</html>
