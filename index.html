@@ -2255,6 +2255,71 @@ input:focus, textarea:focus, select:focus {
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:var(--line);border-radius:var(--r-full);}
 
+
+/* ============================================================
+   AUTH SCREEN v2
+   ============================================================ */
+.auth-overlay{position:absolute;inset:0;z-index:300;display:flex;flex-direction:column;background:var(--cream);}
+.auth-overlay.hidden{display:none!important;}
+.auth-screen{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.auth-hero-screen{flex:1;display:flex;flex-direction:column;position:relative;overflow:hidden;}
+.auth-hero-bg{position:absolute;inset:0;background:linear-gradient(160deg,#E63946 0%,#8134AF 55%,#3D52D5 100%);}
+.auth-hero-content{flex:1;display:flex;flex-direction:column;justify-content:center;padding:48px 28px 24px;position:relative;z-index:1;}
+.auth-hero-logo{display:flex;align-items:center;gap:10px;margin-bottom:28px;}
+.auth-hero-icon{width:48px;height:48px;background:rgba(255,255,255,0.15);border-radius:14px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.25);}
+.auth-hero-wordmark{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:26px;color:#fff;letter-spacing:-0.03em;}
+.auth-hero-headline{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:clamp(30px,9vw,44px);color:#fff;letter-spacing:-0.03em;line-height:1.1;margin-bottom:12px;}
+.auth-hero-headline em{font-style:normal;color:var(--gold);}
+.auth-hero-sub{font-size:15px;color:rgba(255,255,255,0.75);line-height:1.6;margin-bottom:20px;}
+.auth-social-proof{display:flex;align-items:center;gap:10px;margin-bottom:18px;}
+.auth-proof-avatars{display:flex;}
+.auth-proof-avatars span{width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.2);border:2px solid rgba(255,255,255,0.5);display:flex;align-items:center;justify-content:center;font-size:14px;margin-right:-8px;}
+.auth-proof-text{font-size:12px;color:rgba(255,255,255,0.8);margin-left:16px;}
+.auth-proof-text strong{color:#fff;}
+.auth-feature-pills{display:flex;flex-wrap:wrap;gap:7px;}
+.auth-pill{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:600;color:#fff;}
+.auth-hero-actions{padding:20px 24px 32px;background:var(--white);border-radius:28px 28px 0 0;position:relative;z-index:1;box-shadow:0 -8px 32px rgba(43,39,48,0.12);}
+.auth-hero-cta{width:100%;padding:16px;background:var(--grad-brand);color:#fff;border:none;border-radius:16px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:16px;cursor:pointer;margin-bottom:12px;box-shadow:0 4px 16px rgba(230,57,70,0.35);transition:transform .15s var(--ease-spring);}
+.auth-hero-cta:active{transform:scale(0.97);}
+.auth-hero-login{width:100%;padding:13px;background:var(--cream);border:2px solid var(--line);border-radius:16px;font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:600;cursor:pointer;color:var(--ink);margin-bottom:10px;}
+.auth-guest-btn{width:100%;padding:10px;background:none;border:none;font-size:13px;color:var(--muted);cursor:pointer;margin-bottom:6px;}
+.auth-legal{font-size:10px;color:var(--muted);text-align:center;line-height:1.5;}
+.auth-form-screen{flex:1;display:flex;flex-direction:column;animation:authSlideIn .3s var(--ease-out);}
+.auth-form-screen.hidden{display:none!important;}
+@keyframes authSlideIn{from{opacity:0;transform:translateX(20px);}to{opacity:1;transform:translateX(0);}}
+.auth-form-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--white);border-bottom:1px solid var(--line);flex-shrink:0;}
+.auth-back-btn{background:var(--cream);border:none;border-radius:50%;width:36px;height:36px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .15s var(--ease-spring);}
+.auth-back-btn:active{transform:scale(0.88);}
+.auth-form-title{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:17px;text-align:center;}
+.auth-step-badge{background:var(--cream);border-radius:999px;padding:4px 10px;font-size:11px;font-weight:700;color:var(--muted);}
+.auth-step-bar{height:3px;background:var(--line);flex-shrink:0;}
+.auth-step-fill{height:100%;background:var(--grad-brand);border-radius:0 999px 999px 0;transition:width .5s var(--ease-smooth);}
+.auth-form-body{flex:1;overflow-y:auto;padding:20px 20px 40px;display:flex;flex-direction:column;}
+.auth-form-body::-webkit-scrollbar{display:none;}
+.auth-input-group{margin-bottom:16px;}
+.auth-input-label{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;}
+.auth-required{color:var(--red);}
+.auth-input{width:100%;padding:13px 14px;border:2px solid var(--line);border-radius:14px;font-family:'Inter',sans-serif;font-size:15px;background:var(--cream);color:var(--ink);outline:none;box-sizing:border-box;transition:border-color .15s,box-shadow .15s,background .15s;}
+.auth-input:focus{border-color:var(--red);background:var(--white);box-shadow:0 0 0 4px rgba(230,57,70,0.08);}
+.auth-input-hint{font-size:11px;color:var(--muted);margin-top:5px;}
+.auth-error{color:var(--red);font-size:12px;font-weight:600;min-height:16px;margin-bottom:4px;}
+.auth-photo-preview{width:80px;height:80px;border-radius:50%;background:var(--cream);border:3px dashed var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;}
+.auth-photo-upload-btn{display:inline-block;padding:8px 18px;background:var(--red);color:#fff;border-radius:999px;font-weight:700;font-size:13px;cursor:pointer;}
+.auth-gender-chip{padding:9px 16px;border:2px solid var(--line);border-radius:999px;font-size:13px;font-weight:600;cursor:pointer;background:var(--cream);transition:all .15s;color:var(--ink);}
+.auth-gender-chip.active{border-color:var(--red);color:var(--red);background:rgba(230,57,70,0.07);}
+.auth-gender-chip:active{transform:scale(0.94);}
+.auth-intent-chip{padding:7px 13px;border:2px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;background:var(--cream);transition:all .15s;color:var(--ink);}
+.auth-intent-chip.active{border-color:var(--red);color:var(--red);background:rgba(230,57,70,0.07);}
+.auth-pwd-strength{display:flex;align-items:center;gap:8px;margin-top:8px;}
+.auth-pwd-bar{flex:1;height:4px;background:var(--line);border-radius:999px;overflow:hidden;}
+.auth-btn{width:100%;padding:15px;background:var(--grad-brand);color:#fff;border:none;border-radius:14px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-top:8px;box-shadow:0 4px 14px rgba(230,57,70,0.3);transition:transform .15s var(--ease-spring);}
+.auth-btn:active{transform:scale(0.97);}
+.auth-btn:disabled{opacity:0.5;cursor:default;transform:none;}
+.auth-forgot{background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;text-align:right;padding:4px 0;align-self:flex-end;}
+.auth-divider{display:flex;align-items:center;gap:12px;margin:12px 0;color:var(--muted);font-size:12px;}
+.auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--line);}
+.auth-switch-btn{background:none;border:none;font-size:14px;color:var(--muted);cursor:pointer;text-align:center;padding:8px;}
+.auth-switch-btn strong{color:var(--red);}
 </style>
 </head>
 <body>
@@ -2277,64 +2342,213 @@ input:focus, textarea:focus, select:focus {
 
   <!-- AUTH -->
   <div class="auth-overlay hidden" id="authOverlay">
-    <div class="auth-logo">
-      <svg width="36" height="36" viewBox="0 0 34 34" fill="none"><rect width="34" height="34" rx="9" fill="#E63946"/><rect x="6" y="14" width="22" height="3.5" rx="1.5" fill="#FFC93C"/><path d="M9 17.5V8M12.5 17.5V8M16 17.5V8.5M19.5 17.5V8M23 17.5V8" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity=".85"/><path d="M7 8H27" stroke="#FFC93C" stroke-width="1.4" stroke-linecap="round"/><path d="M9.5 17.5L7.5 25M24.5 17.5L26.5 25" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
-      <div><div class="auth-logo-text">Chaupaal</div></div>
-    </div>
-    <div class="auth-tabs">
-      <button class="auth-tab active" id="tabLogin">Log in</button>
-      <button class="auth-tab" id="tabRegister">Sign up</button>
-    </div>
-    <!-- Login -->
-    <div id="loginForm">
-      <input class="auth-input" type="email" id="loginEmail" placeholder="Email address">
-      <input class="auth-input" type="password" id="loginPassword" placeholder="Password">
-      <div class="auth-error" id="loginError"></div>
-      <button class="auth-btn" id="loginBtn">Log in</button>
-    </div>
-    <!-- Register -->
-    <div id="registerForm" class="hidden">
-      <div class="auth-section-label">Your photo (real photo required)</div>
-      <div class="auth-photo-row">
-        <div class="auth-photo-preview" id="photoPreview">📷</div>
-        <label class="auth-photo-btn">
-          Upload photo
-          <input type="file" id="photoInput" accept="image/*" style="display:none">
-        </label>
+    <!-- Auth state machine: hero → login | hero → register step 1 → step 2 → step 3 -->
+    <div class="auth-screen" id="authScreen">
+
+      <!-- ===== HERO SCREEN ===== -->
+      <div class="auth-hero-screen" id="authHeroScreen">
+        <div class="auth-hero-bg">
+          <div class="auth-hero-gradient"></div>
+          <div class="auth-hero-noise"></div>
+        </div>
+        <div class="auth-hero-content">
+          <div class="auth-hero-logo">
+            <div class="auth-hero-icon">
+              <svg width="36" height="36" viewBox="0 0 34 34" fill="none"><rect x="4" y="12" width="26" height="3" rx="1.5" fill="#FFC93C"/><path d="M8 15V7M12 15V7M17 15V7.5M22 15V7M27 15V7" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><path d="M8.5 15L6.5 27M26.5 15L28.5 27" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>
+            </div>
+            <span class="auth-hero-wordmark">Chaupaal</span>
+          </div>
+          <div class="auth-hero-headline">India's digital<br><em>chaupaal</em> 🪑</div>
+          <div class="auth-hero-sub">Where real people discuss real things — news, life, games, and each other.</div>
+          <div class="auth-social-proof">
+            <div class="auth-proof-avatars">
+              <span>😊</span><span>🧔</span><span>👩</span><span>👦</span><span>🧕</span>
+            </div>
+            <div class="auth-proof-text">Join <strong>10,000+</strong> people already on Chaupaal</div>
+          </div>
+          <div class="auth-feature-pills">
+            <span class="auth-pill">📰 Daily news quiz</span>
+            <span class="auth-pill">🌳 Real discussions</span>
+            <span class="auth-pill">⚔️ Games & duels</span>
+            <span class="auth-pill">🤝 Make friends</span>
+          </div>
+        </div>
+        <div class="auth-hero-actions">
+          <button class="auth-hero-cta" id="heroSignupBtn">Create free account</button>
+          <button class="auth-hero-login" id="heroLoginBtn">Already have an account? <strong>Log in</strong></button>
+          <button class="auth-guest-btn" id="authSkip">Explore as guest →</button>
+          <div class="auth-legal">By signing up you agree to our <u>Terms</u> and <u>Privacy Policy</u>. Real identity required.</div>
+        </div>
       </div>
-      <input class="auth-input" type="text" id="regName" placeholder="Full name (real name)">
-      <input class="auth-input" type="text" id="regUsername" placeholder="Username e.g. garvit_29" autocapitalize="none">
-      <input class="auth-input" type="email" id="regEmail" placeholder="Email address">
-      <input class="auth-input" type="tel" id="regPhone" placeholder="Mobile number (optional)">
-      <input class="auth-input" type="text" id="regCity" placeholder="Your city">
-      <div class="auth-section-label">Preferred language</div>
-      <select class="auth-input" id="regLanguage">
-        <option value="en">English</option>
-        <option value="hi">हिंदी (Hindi)</option>
-        <option value="bn">বাংলা (Bengali)</option>
-        <option value="te">తెలుగు (Telugu)</option>
-        <option value="ta">தமிழ் (Tamil)</option>
-        <option value="mr">मराठी (Marathi)</option>
-        <option value="gu">ગુજરાતી (Gujarati)</option>
-        <option value="kn">ಕನ್ನಡ (Kannada)</option>
-        <option value="ml">മലയാളം (Malayalam)</option>
-        <option value="pa">ਪੰਜਾਬੀ (Punjabi)</option>
-        <option value="or">ଓଡ଼ିଆ (Odia)</option>
-        <option value="ur">اردو (Urdu)</option>
-        <option value="ar">العربية (Arabic)</option>
-        <option value="es">Español (Spanish)</option>
-        <option value="fr">Français (French)</option>
-        <option value="pt">Português (Portuguese)</option>
-        <option value="de">Deutsch (German)</option>
-        <option value="ja">日本語 (Japanese)</option>
-        <option value="zh">中文 (Chinese)</option>
-        <option value="ru">Русский (Russian)</option>
-      </select>
-      <input class="auth-input" type="password" id="regPassword" placeholder="Password (min 6 chars)" style="margin-top:10px;">
-      <div class="auth-error" id="registerError"></div>
-      <button class="auth-btn" id="registerBtn">Create account</button>
-    </div>
-    <button class="auth-skip" id="authSkip">Continue as guest →</button>
+
+      <!-- ===== LOGIN SCREEN ===== -->
+      <div class="auth-form-screen hidden" id="authLoginScreen">
+        <div class="auth-form-header">
+          <button class="auth-back-btn" id="loginBackBtn">←</button>
+          <div class="auth-form-title">Welcome back 👋</div>
+          <div style="width:36px;"></div>
+        </div>
+        <div class="auth-form-body">
+          <div class="auth-input-group">
+            <label class="auth-input-label">Email</label>
+            <input class="auth-input" type="email" id="loginEmail" placeholder="your@email.com" autocomplete="email">
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-input-label">Password</label>
+            <div style="position:relative;">
+              <input class="auth-input" type="password" id="loginPassword" placeholder="Your password" style="padding-right:44px;" autocomplete="current-password">
+              <button id="toggleLoginPwd" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--muted);">👁</button>
+            </div>
+          </div>
+          <button class="auth-forgot" id="forgotPasswordBtn">Forgot password?</button>
+          <div class="auth-error" id="loginError"></div>
+          <button class="auth-btn" id="loginBtn">Log in →</button>
+          <div class="auth-divider"><span>or</span></div>
+          <button class="auth-switch-btn" id="loginToSignup">Don't have an account? <strong>Sign up</strong></button>
+        </div>
+      </div>
+
+      <!-- ===== REGISTER: STEP 1 — Identity ===== -->
+      <div class="auth-form-screen hidden" id="authRegStep1">
+        <div class="auth-form-header">
+          <button class="auth-back-btn" id="reg1BackBtn">←</button>
+          <div class="auth-form-title">Who are you? 👤</div>
+          <div class="auth-step-badge">1 / 3</div>
+        </div>
+        <div class="auth-step-bar"><div class="auth-step-fill" style="width:33%"></div></div>
+        <div class="auth-form-body">
+          <div style="text-align:center;margin-bottom:20px;">
+            <div class="auth-photo-preview" id="photoPreview" style="margin:0 auto 10px;">
+              <span style="font-size:32px;">📷</span>
+            </div>
+            <label class="auth-photo-upload-btn">
+              Upload your real photo
+              <input type="file" id="photoInput" accept="image/*" style="display:none">
+            </label>
+            <div style="font-size:11px;color:var(--muted);margin-top:6px;">Real photo required · helps build trust in the community</div>
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-input-label">Full name <span class="auth-required">*</span></label>
+            <input class="auth-input" type="text" id="regName" placeholder="Your real full name" autocomplete="name">
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-input-label">Username <span class="auth-required">*</span></label>
+            <div style="position:relative;">
+              <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:15px;">@</span>
+              <input class="auth-input" type="text" id="regUsername" placeholder="your_handle" autocapitalize="none" style="padding-left:32px;" autocomplete="username">
+            </div>
+            <div class="auth-input-hint" id="usernameHint">Letters, numbers and underscores only</div>
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-input-label">Gender</label>
+            <div style="display:flex;gap:8px;">
+              <button class="auth-gender-chip" data-val="male">👨 Male</button>
+              <button class="auth-gender-chip" data-val="female">👩 Female</button>
+              <button class="auth-gender-chip" data-val="other">⚧ Other</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;">
+            <div class="auth-input-group" style="flex:1;">
+              <label class="auth-input-label">Date of birth <span class="auth-required">*</span></label>
+              <input class="auth-input" type="date" id="regDob">
+            </div>
+          </div>
+          <div class="auth-error" id="reg1Error"></div>
+          <button class="auth-btn" id="reg1Next">Continue →</button>
+        </div>
+      </div>
+
+      <!-- ===== REGISTER: STEP 2 — Contact & Location ===== -->
+      <div class="auth-form-screen hidden" id="authRegStep2">
+        <div class="auth-form-header">
+          <button class="auth-back-btn" id="reg2BackBtn">←</button>
+          <div class="auth-form-title">Contact & location 📍</div>
+          <div class="auth-step-badge">2 / 3</div>
+        </div>
+        <div class="auth-step-bar"><div class="auth-step-fill" style="width:66%"></div></div>
+        <div class="auth-form-body">
+          <div class="auth-input-group">
+            <label class="auth-input-label">Email <span class="auth-required">*</span></label>
+            <input class="auth-input" type="email" id="regEmail" placeholder="your@email.com" autocomplete="email">
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-input-label">Mobile number</label>
+            <input class="auth-input" type="tel" id="regPhone" placeholder="+91 98765 43210" autocomplete="tel">
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-input-label">Current city <span class="auth-required">*</span></label>
+            <input class="auth-input" type="text" id="regCity" placeholder="e.g. Mumbai, Delhi, Bengaluru">
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-input-label">Preferred language</label>
+            <select class="auth-input" id="regLanguage">
+              <option value="en">🇬🇧 English</option>
+              <option value="hi">🇮🇳 हिंदी</option>
+              <option value="bn">বাংলা</option>
+              <option value="te">తెలుగు</option>
+              <option value="ta">தமிழ்</option>
+              <option value="mr">मराठी</option>
+              <option value="gu">ગુજરાતી</option>
+              <option value="kn">ಕನ್ನಡ</option>
+              <option value="ml">മലയാളം</option>
+              <option value="pa">ਪੰਜਾਬੀ</option>
+            </select>
+          </div>
+          <div class="auth-error" id="reg2Error"></div>
+          <button class="auth-btn" id="reg2Next">Continue →</button>
+        </div>
+      </div>
+
+      <!-- ===== REGISTER: STEP 3 — Password & Interests ===== -->
+      <div class="auth-form-screen hidden" id="authRegStep3">
+        <div class="auth-form-header">
+          <button class="auth-back-btn" id="reg3BackBtn">←</button>
+          <div class="auth-form-title">Almost there! 🎉</div>
+          <div class="auth-step-badge">3 / 3</div>
+        </div>
+        <div class="auth-step-bar"><div class="auth-step-fill" style="width:100%"></div></div>
+        <div class="auth-form-body">
+          <div class="auth-input-group">
+            <label class="auth-input-label">Password <span class="auth-required">*</span></label>
+            <div style="position:relative;">
+              <input class="auth-input" type="password" id="regPassword" placeholder="Min 8 characters" style="padding-right:44px;" autocomplete="new-password">
+              <button id="toggleRegPwd" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--muted);">👁</button>
+            </div>
+            <div class="auth-pwd-strength" id="pwdStrength" style="display:none;">
+              <div class="auth-pwd-bar"><div id="pwdStrengthFill" style="height:100%;border-radius:99px;transition:all .3s;"></div></div>
+              <span id="pwdStrengthLabel" style="font-size:11px;font-weight:700;"></span>
+            </div>
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-input-label">What are you here for? <span style="font-size:11px;font-weight:400;color:var(--muted);">(pick all that apply)</span></label>
+            <div style="display:flex;flex-wrap:wrap;gap:7px;" id="intentChips">
+              ${['📰 Stay informed','🤝 Make friends','💬 Discuss topics','⚔️ Play games','❤️ Meet someone','💼 Network','✈️ Find travel buddies','🎵 Bond over interests'].map(t=>`<button class="auth-intent-chip" data-val="${t}">${t}</button>`).join('')}
+            </div>
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-input-label">Open to meeting new people?</label>
+            <div style="display:flex;gap:8px;">
+              <button class="auth-gender-chip active" data-val="yes" id="openToMeetYes">✅ Yes, show my profile</button>
+              <button class="auth-gender-chip" data-val="no" id="openToMeetNo">🔒 Not right now</button>
+            </div>
+          </div>
+          <div class="auth-error" id="registerError"></div>
+          <button class="auth-btn" id="registerBtn">🎉 Create my account</button>
+          <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:10px;line-height:1.6;">By creating an account you confirm you're 16+ and agree to our Terms & Privacy Policy</div>
+        </div>
+      </div>
+
+      <!-- ===== SUCCESS SCREEN ===== -->
+      <div class="auth-form-screen hidden" id="authSuccessScreen">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center;">
+          <div style="font-size:72px;margin-bottom:20px;" id="authSuccessEmoji">🎉</div>
+          <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:26px;margin-bottom:10px;" id="authSuccessTitle">Welcome to Chaupaal!</div>
+          <div style="font-size:15px;color:var(--muted);line-height:1.6;margin-bottom:32px;" id="authSuccessDesc">Your account is ready. Let's explore what's happening today.</div>
+          <button class="auth-btn" id="authSuccessCta" style="width:100%;max-width:280px;">Let's go 🚀</button>
+        </div>
+      </div>
+
+    </div><!-- end auth-screen -->
   </div>
 
   <!-- TOP BAR -->
@@ -2597,9 +2811,28 @@ input:focus, textarea:focus, select:focus {
         <label class="switch"><input type="checkbox" id="toggleAnniversary"><span class="slider"></span></label>
       </div>
       <div class="settings-section">Discovery</div>
-      <div class="toggle-row">
-        <div><div class="toggle-label">Open to meeting new people</div><div class="toggle-desc">Show your profile in Peepal discovery section</div></div>
-        <label class="switch"><input type="checkbox" id="toggleOpenToMeet" checked><span class="slider"></span></label>
+      <div class="toggle-row" style="flex-wrap:wrap;gap:10px;">
+        <div style="flex:1;min-width:0;">
+          <div class="toggle-label">Open to meeting new people</div>
+          <div class="toggle-desc">Show your profile in Peepal discovery & AI search</div>
+        </div>
+        <select id="toggleOpenToMeet" style="padding:8px 12px;border:2px solid var(--line);border-radius:10px;font-size:13px;font-weight:700;background:var(--white);color:var(--ink);cursor:pointer;">
+          <option value="off">🚫 Off</option>
+          <option value="on" selected>✅ On</option>
+        </select>
+      </div>
+      <div id="strangerLimitRow" style="padding:10px 0;border-bottom:1px solid var(--line);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <div>
+            <div class="toggle-label">Max strangers per day</div>
+            <div class="toggle-desc">Limit how many new people can message you daily</div>
+          </div>
+          <span style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;color:var(--red);" id="strangerLimitDisplay">10</span>
+        </div>
+        <input type="range" id="strangerLimitSlider" min="0" max="10" value="10" style="width:100%;accent-color:var(--red);">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:3px;">
+          <span>0 (private)</span><span>5</span><span>10 (open)</span>
+        </div>
       </div>
       <div class="settings-section">Sound</div>
       <div class="toggle-row">
@@ -2793,7 +3026,19 @@ document.getElementById('saveSettings').addEventListener('click',()=>{
   document.getElementById('settingsModal').classList.add('hidden');
   showToast(t('settings_saved'));
 });
-document.getElementById('toggleOpenToMeet').addEventListener('change',e=>{handleOpenToMeetToggle(e.target.checked);});
+document.getElementById('toggleOpenToMeet').addEventListener('change',e=>{
+  const isOn=e.target.value==='on';
+  handleOpenToMeetToggle(isOn);
+  const limitRow=document.getElementById('strangerLimitRow');
+  if(limitRow){limitRow.style.opacity=isOn?'1':'0.4';limitRow.style.pointerEvents=isOn?'':'none';}
+});
+document.getElementById('strangerLimitSlider')?.addEventListener('input',e=>{
+  const val=parseInt(e.target.value);
+  document.getElementById('strangerLimitDisplay').textContent=val;
+  strangerDailyLimit=val;
+  try{localStorage.setItem('chaupaal_stranger_limit',val);}catch(err){}
+  if(db&&currentUser)db.collection('users').doc(currentUser.uid).update({strangerDailyLimit:val}).catch(()=>{});
+});
 
 
 
@@ -2850,64 +3095,7 @@ async function loadFriends(){
 function showAuth(){document.getElementById('authOverlay').classList.remove('hidden');}
 function hideAuth(){document.getElementById('authOverlay').classList.add('hidden');}
 
-document.getElementById('tabLogin').addEventListener('click',()=>{
-  document.getElementById('tabLogin').classList.add('active');document.getElementById('tabRegister').classList.remove('active');
-  document.getElementById('loginForm').classList.remove('hidden');document.getElementById('registerForm').classList.add('hidden');
-});
-document.getElementById('tabRegister').addEventListener('click',()=>{
-  document.getElementById('tabRegister').classList.add('active');document.getElementById('tabLogin').classList.remove('active');
-  document.getElementById('registerForm').classList.remove('hidden');document.getElementById('loginForm').classList.add('hidden');
-});
-document.getElementById('authSkip').addEventListener('click',hideAuth);
-
-// Photo preview
-let photoFile=null;
-document.getElementById('photoInput').addEventListener('change',e=>{
-  photoFile=e.target.files[0];
-  if(photoFile){const r=new FileReader();r.onload=ev=>{const p=document.getElementById('photoPreview');p.style.backgroundImage=`url(${ev.target.result})`;p.style.backgroundSize='cover';p.textContent='';};r.readAsDataURL(photoFile);}
-});
-
-document.getElementById('registerBtn').addEventListener('click',async()=>{
-  const name=document.getElementById('regName').value.trim();
-  const username=document.getElementById('regUsername').value.trim().toLowerCase();
-  const email=document.getElementById('regEmail').value.trim();
-  const phone=document.getElementById('regPhone').value.trim();
-  const city=document.getElementById('regCity').value.trim();
-  const lang=document.getElementById('regLanguage').value;
-  const password=document.getElementById('regPassword').value;
-  const errEl=document.getElementById('registerError');errEl.style.display='none';
-  if(!name||!username||!email||!password){errEl.textContent='Please fill in name, username, email and password.';errEl.style.display='block';return;}
-  if(!/^[a-z0-9_]{3,}$/.test(username)){errEl.textContent='Username: 3+ chars, letters/numbers/underscore only.';errEl.style.display='block';return;}
-  if(password.length<6){errEl.textContent='Password must be at least 6 characters.';errEl.style.display='block';return;}
-  document.getElementById('registerBtn').textContent='Creating account…';
-  try{
-    if(db){const ex=await db.collection('usernames').doc(username).get();if(ex.exists){errEl.textContent='Username taken — try another.';errEl.style.display='block';document.getElementById('registerBtn').textContent='Create account';return;}}
-    const cred=await auth.createUserWithEmailAndPassword(email,password);
-    let photoURL='';
-    if(photoFile&&storage){
-      const ref=storage.ref(`profile_photos/${cred.user.uid}`);
-      await ref.put(photoFile);photoURL=await ref.getDownloadURL();
-    }
-    await cred.user.updateProfile({displayName:name,photoURL});
-    const profile={name,username,email,phone,city,lang,uid:cred.user.uid,photoURL,streak:0,eloRapid:1200,eloBlitz:1200,eloBullet:1200,eloClassical:1200,friends:[],createdAt:firebase.firestore.FieldValue.serverTimestamp()};
-    if(db){await db.collection('users').doc(cred.user.uid).set(profile);await db.collection('usernames').doc(username).set({uid:cred.user.uid});}
-    currentUser=cred.user;userProfile=profile;currentLang=lang;
-    document.getElementById('langSelect').value=lang;
-    updateProfileBtn();hideAuth();showToast(`Welcome ${name.split(' ')[0]}! 🎉`);
-  }catch(e){errEl.textContent=e.message;errEl.style.display='block';document.getElementById('registerBtn').textContent='Create account';}
-});
-
-document.getElementById('loginBtn').addEventListener('click',async()=>{
-  const email=document.getElementById('loginEmail').value.trim();
-  const password=document.getElementById('loginPassword').value;
-  const errEl=document.getElementById('loginError');errEl.style.display='none';
-  document.getElementById('loginBtn').textContent='Logging in…';
-  try{
-    const cred=await auth.signInWithEmailAndPassword(email,password);
-    if(db){const snap=await db.collection('users').doc(cred.user.uid).get();if(snap.exists)userProfile=snap.data();if(userProfile?.lang){currentLang=userProfile.lang;document.getElementById('langSelect').value=currentLang;}}
-    currentUser=cred.user;updateProfileBtn();hideAuth();showToast(`Welcome back! 🙏`);
-  }catch(e){errEl.textContent='Wrong email or password.';errEl.style.display='block';document.getElementById('loginBtn').textContent='Log in';}
-});
+// Auth v2 — listeners wired in auth_js.js
 
 function updateProfileBtn(){
   // Mobile profile button
@@ -5729,10 +5917,11 @@ function renderPeepalFeed(){
       : '';
     card.innerHTML=`
       <div class="peepal-card-header">
-        <div class="peepal-user-avatar">${q.user.avatar}</div>
-        <div style="flex:1;">
+        <div class="peepal-user-avatar" style="cursor:pointer;" onclick="event.stopPropagation();">${q.user.photoURL?`<img src="${q.user.photoURL}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:(q.user.avatar||'👤')}</div>
+        <div style="flex:1;min-width:0;">
           <div class="peepal-user-name">${q.user.name}</div>
-          <div class="peepal-user-meta">${q.user.city} · ${q.timeAgo}</div>
+          <div class="peepal-user-meta">${[q.user.city,q.timeAgo].filter(Boolean).join(' · ')}</div>
+          ${q.user.bio?`<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">"${q.user.bio}"</div>`:''}
         </div>
         <button class="peepal-speak-btn" data-text="${q.question.replace(/"/g,'&quot;')}" title="Listen to this post">🔊</button>
       </div>
@@ -5758,12 +5947,29 @@ function renderPeepalFeed(){
 }
 
 function renderPeepalOptions(q){
+  const typingSection=(promptText)=>`
+    <div class="peepal-typing-section" id="typing_${q.id}" style="${q.answered===false?'display:none;':''}margin-top:10px;border-top:1px solid var(--line);padding-top:10px;">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;">💭 Want to add your thoughts? (optional)</div>
+      <div style="display:flex;gap:6px;">
+        <input class="peepal-open-input" style="flex:1;margin:0;" placeholder="${promptText||'Share more about your answer...'}" id="typing_input_${q.id}">
+        <button onclick="submitPeepalTyping('${q.id}',event)" style="padding:8px 12px;background:var(--red);color:#fff;border:none;border-radius:10px;font-weight:700;font-size:12px;cursor:pointer;flex-shrink:0;">→</button>
+      </div>
+    </div>
+  `;
+
   if(q.format==='open'){
-    if(q.answered)return`<div style="font-size:13px;color:var(--muted);">You shared your response ✓ · ${q.totalResponses} responses</div>`;
-    return`<input class="peepal-open-input" placeholder="Share your thoughts..." id="open_${q.id}"><button class="peepal-submit-btn" onclick="submitPeepalOpen('${q.id}')">Share</button>`;
+    if(q.answered)return`
+      <div style="font-size:13px;color:var(--muted);padding:4px 0;">You shared your response ✓ · ${q.totalResponses} responses</div>
+      ${q.myTypedAnswer?`<div style="font-size:13px;color:var(--ink);background:var(--cream);border-radius:10px;padding:8px 12px;margin-top:6px;border-left:3px solid var(--red);">"${q.myTypedAnswer}"</div>`:''}
+    `;
+    return`
+      <textarea class="peepal-open-input" placeholder="Share your thoughts..." id="open_${q.id}" rows="2" style="resize:none;min-height:60px;"></textarea>
+      <button class="peepal-submit-btn" onclick="submitPeepalOpen('${q.id}')">Share</button>
+    `;
   }
+
   const total=q.responses.reduce((a,b)=>a+b,0)||1;
-  return`<div class="peepal-options">${q.options.map((o,i)=>{
+  const optionsHtml=`<div class="peepal-options">${q.options.map((o,i)=>{
     const pct=Math.round((q.responses[i]/total)*100);
     const isTop=q.responses[i]===Math.max(...q.responses);
     const isAnswered=q.answered===i;
@@ -5772,15 +5978,59 @@ function renderPeepalOptions(q){
       ${q.answered!==false?`<span class="peepal-pct">${pct}%</span>`:''}
     </button>${q.answered!==false?`<div class="peepal-opt-bar"><div class="peepal-opt-bar-fill" style="width:${pct}%"></div></div>`:''}`;
   }).join('')}</div>`;
+
+  // Typing prompt varies by question content
+  const typingPrompt=q.format==='binary'?'Tell us why you chose this...':'Add your perspective...';
+  return optionsHtml + typingSection(typingPrompt);
 }
+
+function submitPeepalTyping(id, e){
+  if(e)e.stopPropagation();
+  const input=document.getElementById(`typing_input_${id}`);
+  if(!input||!input.value.trim())return;
+  const q=peepalQuestions.find(q=>q.id===id);if(!q)return;
+  q.myTypedAnswer=input.value.trim();
+  input.value='';
+  showToast('Your perspective added! ✓');
+  // Feed to personality engine for matchmaking
+  updatePersonalityFromPeepalAnswer(q, q.myTypedAnswer);
+  renderPeepalFeed();
+}
+
+async function updatePersonalityFromPeepalAnswer(q, typedAnswer){
+  // Run async Haiku analysis on typed answer
+  try{
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-haiku-4-5-20251001',max_tokens:150,
+        system:'Extract personality signals from a user\'s typed answer to a community question. Return ONLY JSON: {"traits":["list of 1-3 personality traits"],"interests":["topics they care about"],"vibe":"1-word social vibe: intellectual|adventurous|creative|empathetic|humorous|ambitious"}. Be concise.',
+        messages:[{role:'user',content:`Question: "${q.question}"\nAnswer: "${typedAnswer}"`}]
+      })
+    });
+    const data=await resp.json();
+    const analysis=JSON.parse((data.content?.[0]?.text||'{}').replace(/```json|```/g,'').trim());
+    // Merge into personality profile
+    if(analysis.traits) personalityProfile.traits=[...new Set([...(personalityProfile.traits||[]),...analysis.traits])].slice(0,10);
+    if(analysis.interests) personalityProfile.interests=[...new Set([...(personalityProfile.interests||[]),...analysis.interests])].slice(0,15);
+    if(analysis.vibe) personalityProfile.lifestyle=analysis.vibe;
+    try{localStorage.setItem('chaupaal_personality',JSON.stringify(personalityProfile));}catch(e){}
+    if(db&&currentUser) db.collection('users').doc(currentUser.uid).update({personalityProfile}).catch(()=>{});
+  }catch(e){}
+}
+
 
 function answerPeepal(id,optIdx,e){
   e.stopPropagation();
   const q=peepalQuestions.find(q=>q.id===id);if(!q||q.answered!==false)return;
   q.answered=optIdx;q.responses[optIdx]++;q.totalResponses++;
   renderPeepalFeed();
-  // show spark nudge after a short delay
-  setTimeout(()=>showToast('See who else thinks like you in the comments! 💬'),800);
+  // Show typing section with a slight delay
+  setTimeout(()=>{
+    const typingEl=document.getElementById(`typing_${id}`);
+    if(typingEl){typingEl.style.display='block';document.getElementById(`typing_input_${id}`)?.focus();}
+    showToast('See who else thinks like you in the comments! 💬');
+  },300);
 }
 
 function submitPeepalOpen(id){
@@ -10286,6 +10536,742 @@ window.initPeepal=async function(){
   setTimeout(animateDiscoveryCards,300);
 };
 
+
+
+// ===================== FAIRNESS ALGORITHM + FEEDBACK SYSTEM =====================
+
+// ---- Stranger limit system ----
+let strangerDailyLimit = parseInt(localStorage.getItem('chaupaal_stranger_limit') || '10');
+
+function getTodayKey(){ return new Date().toISOString().split('T')[0]; }
+
+function getStrangerCountToday(uid){
+  const key = `chaupaal_stranger_msgs_${uid}_${getTodayKey()}`;
+  return parseInt(localStorage.getItem(key) || '0');
+}
+
+function incrementStrangerCount(targetUid){
+  const key = `chaupaal_stranger_msgs_${targetUid}_${getTodayKey()}`;
+  const n = getStrangerCountToday(targetUid) + 1;
+  localStorage.setItem(key, n);
+  // Also update Firestore
+  if(db) db.collection('stranger_counts').doc(`${targetUid}_${getTodayKey()}`).set({
+    uid: targetUid, date: getTodayKey(),
+    count: n, updatedAt: Date.now()
+  }, {merge: true}).catch(()=>{});
+  return n;
+}
+
+function canMessageStranger(targetUid, targetLimit){
+  const limit = targetLimit ?? 10;
+  if(limit === 0) return false;
+  return getStrangerCountToday(targetUid) < limit;
+}
+
+// ---- Profile popularity score (for de-prioritisation) ----
+function getProfilePopularityPenalty(user){
+  const uid = user.uid || user.id || '';
+  if(!uid) return 0;
+  const todayCount = getStrangerCountToday(uid);
+  const userLimit = user.strangerDailyLimit ?? 10;
+  if(userLimit === 0) return 999; // completely private
+  const fillRate = todayCount / userLimit; // 0 to 1+
+  // Penalty increases non-linearly as they approach their limit
+  // 0% fill = 0 penalty, 50% fill = 5 penalty, 90% fill = 25 penalty, 100% fill = 999
+  if(fillRate >= 1) return 999; // at limit — don't show
+  if(fillRate >= 0.9) return 25;
+  if(fillRate >= 0.7) return 15;
+  if(fillRate >= 0.5) return 8;
+  if(fillRate >= 0.3) return 3;
+  return 0;
+}
+
+// ---- Response rate tracking ----
+function recordMessageSent(toUid){
+  const key = `chaupaal_msgs_sent_${toUid}`;
+  const data = JSON.parse(localStorage.getItem(key) || '{"sent":0,"replied":0}');
+  data.sent++;
+  localStorage.setItem(key, JSON.stringify(data));
+}
+
+function recordReply(fromUid){
+  const key = `chaupaal_msgs_sent_${fromUid}`;
+  const data = JSON.parse(localStorage.getItem(key) || '{"sent":0,"replied":0}');
+  data.replied++;
+  localStorage.setItem(key, JSON.stringify(data));
+}
+
+function getResponseRate(uid){
+  const key = `chaupaal_msgs_sent_${uid}`;
+  const data = JSON.parse(localStorage.getItem(key) || '{"sent":0,"replied":0}');
+  if(data.sent < 3) return 1; // not enough data — assume good
+  return data.replied / data.sent; // 0 to 1
+}
+
+// ---- Enhanced scoreMatch with fairness ----
+const _origScoreMatch = scoreMatch;
+function scoreMatch(user){
+  const base = _origScoreMatch(user);
+  // Subtract popularity penalty (fairness — give others a chance)
+  const penalty = getProfilePopularityPenalty(user);
+  // Subtract response rate penalty (low responders shown less)
+  const responseRate = getResponseRate(user.uid);
+  const responsePenalty = responseRate < 0.3 ? 20 : responseRate < 0.6 ? 8 : 0;
+  return {
+    ...base,
+    score: Math.max(0, base.score - penalty - responsePenalty),
+    fairnessPenalty: penalty + responsePenalty
+  };
+}
+
+// Wire into "Say hi" button to increment count and check limit
+const _origPeepalAiChatBtn = openChatScreen;
+function interceptStrangerMessage(targetUid, targetName, targetLimit, onProceed){
+  if(!canMessageStranger(targetUid, targetLimit)){
+    showToast(`${targetName} is taking a break from new connections today. Try again tomorrow!`);
+    return;
+  }
+  incrementStrangerCount(targetUid);
+  recordMessageSent(targetUid);
+  onProceed();
+}
+
+// ===================== MATCHMAKING FEEDBACK SYSTEM =====================
+
+// ---- Signal 1: Emoji reaction on AI search results ----
+function addSearchFeedback(resultsEl, query, resultCount){
+  if(!resultsEl || resultCount === 0) return;
+  const feedbackEl = document.createElement('div');
+  feedbackEl.style.cssText = 'background:var(--cream);border-radius:16px;padding:12px 16px;margin-top:14px;text-align:center;';
+  feedbackEl.innerHTML = `
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">How were these results?</div>
+    <div style="display:flex;justify-content:center;gap:12px;">
+      ${[['🎯','Spot on',5],['✨','Pretty good',4],['🤔','Okay',3],['😕','Not great',2]].map(([emoji,label,score])=>`
+        <button data-score="${score}" data-label="${label}" style="display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;padding:6px 8px;border-radius:10px;transition:background .15s;">
+          <span style="font-size:22px;">${emoji}</span>
+          <span style="font-size:9px;font-weight:700;color:var(--muted);">${label}</span>
+        </button>
+      `).join('')}
+    </div>
+  `;
+  feedbackEl.querySelectorAll('[data-score]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const score=parseInt(btn.dataset.score);
+      const label=btn.dataset.label;
+      recordSearchFeedback(query, resultCount, score, label);
+      feedbackEl.innerHTML=`<div style="font-size:13px;color:var(--muted);padding:4px;">Thanks for the feedback! 🙏 We'll keep improving.</div>`;
+    });
+  });
+  resultsEl.appendChild(feedbackEl);
+}
+
+function recordSearchFeedback(query, resultCount, score, label){
+  // Save locally
+  const history = JSON.parse(localStorage.getItem('chaupaal_search_feedback')||'[]');
+  history.push({query, resultCount, score, label, ts:Date.now()});
+  localStorage.setItem('chaupaal_search_feedback', JSON.stringify(history.slice(-50)));
+  // Save to Firestore
+  if(db&&currentUser) db.collection('search_feedback').add({
+    uid: currentUser.uid, query, resultCount, score, label,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(()=>{});
+}
+
+// ---- Signal 2: Conversation outcome (48h after "Say hi") ----
+function scheduleOutcomeCheck(matchUid, matchName){
+  const key = `chaupaal_outcome_${matchUid}`;
+  if(localStorage.getItem(key)) return; // already scheduled
+  localStorage.setItem(key, JSON.stringify({matchUid, matchName, scheduledAt: Date.now()}));
+  setTimeout(()=>{
+    const data = JSON.parse(localStorage.getItem(key)||'{}');
+    if(!data.matchUid) return;
+    localStorage.removeItem(key);
+    // Silently check if a conversation happened (chat in SAMPLE_CHATS?)
+    const chatted = SAMPLE_CHATS.some(c=>c.id?.includes(data.matchUid)&&c.lastMessage);
+    recordMatchOutcome(data.matchUid, chatted ? 'connected' : 'ghosted');
+  }, 48*3600000); // 48h
+}
+
+function recordMatchOutcome(matchUid, outcome){
+  if(db&&currentUser) db.collection('match_outcomes').add({
+    uid: currentUser.uid, matchUid, outcome,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(()=>{});
+  // If ghosted, quietly reduce that profile's response rate signal
+  if(outcome === 'ghosted'){
+    const key = `chaupaal_msgs_sent_${matchUid}`;
+    const data = JSON.parse(localStorage.getItem(key)||'{"sent":1,"replied":0}');
+    localStorage.setItem(key, JSON.stringify(data)); // already recorded as sent
+  } else {
+    recordReply(matchUid);
+  }
+}
+
+// ---- Signal 3: Discovery card reactions (❤️ strong interest) ----
+const _discoveryInterest = {};
+function recordDiscoveryInterest(uid, isStrong){
+  _discoveryInterest[uid] = isStrong ? 'strong' : 'dismissed';
+  if(db&&currentUser) db.collection('discovery_reactions').add({
+    uid: currentUser.uid, targetUid: uid,
+    reaction: isStrong ? 'interested' : 'dismissed',
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(()=>{});
+}
+
+// ---- Signal 4: Weekly Peepal check-in (non-intrusive) ----
+function maybeShowPeepalCheckIn(){
+  const key = `chaupaal_peepal_checkin_${new Date().toISOString().slice(0,7)}`; // monthly
+  if(localStorage.getItem(key)) return;
+  // Only show if user has done 3+ searches this month
+  const feedback = JSON.parse(localStorage.getItem('chaupaal_search_feedback')||'[]');
+  const recentSearches = feedback.filter(f=>Date.now()-f.ts < 30*86400000);
+  if(recentSearches.length < 2) return; // not enough usage
+  localStorage.setItem(key,'shown');
+  // Show as a gentle nudge in Peepal feed (not a pop-up)
+  setTimeout(()=>{
+    const feed = document.getElementById('peepalFeed');
+    if(!feed) return;
+    const nudge = document.createElement('div');
+    nudge.style.cssText='background:linear-gradient(135deg,var(--navy),#2A3158);border-radius:16px;padding:14px 16px;margin-bottom:12px;color:#fff;display:flex;align-items:center;gap:12px;';
+    nudge.innerHTML=`
+      <div style="font-size:28px;">🌳</div>
+      <div style="flex:1;">
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;">How's Peepal working for you?</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.6);margin-top:2px;">Quick 1-tap — helps us improve your matches</div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        ${[['🔥','Great'],['👍','Good'],['😕','Meh']].map(([e,l])=>`<button data-r="${l}" style="background:rgba(255,255,255,0.15);border:none;color:#fff;border-radius:10px;padding:8px;font-size:18px;cursor:pointer;">${e}</button>`).join('')}
+      </div>
+    `;
+    nudge.querySelectorAll('[data-r]').forEach(btn=>btn.addEventListener('click',()=>{
+      recordSearchFeedback('peepal_monthly_checkin',0,{'Great':5,'Good':4,'Meh':2}[btn.dataset.r]||3,btn.dataset.r);
+      nudge.remove();
+      showToast('Thanks! Your feedback shapes Peepal 🙏');
+    }));
+    feed.insertBefore(nudge, feed.firstChild);
+  }, 3000);
+}
+
+// ---- Patch AI search to add feedback widget ----
+const _origRunPeepalAiSearch = runPeepalAiSearch;
+window.runPeepalAiSearch = async function(){
+  await _origRunPeepalAiSearch();
+  const query = document.getElementById('peepalAiSearchInput')?.value || '';
+  const resultsEl = document.getElementById('peepalAiSearchResults');
+  const count = resultsEl?.querySelectorAll('.peepal-ai-result-card').length || 0;
+  if(count > 0) addSearchFeedback(resultsEl, query, count);
+};
+
+// ---- Patch "Say hi" in AI search to intercept + schedule outcome check ----
+// This patches the dynamically created buttons in runPeepalAiSearch
+// We observe DOM for new .peepal-ai-chat-btn buttons
+const _chatBtnObserver = new MutationObserver(mutations=>{
+  mutations.forEach(m=>{
+    m.addedNodes.forEach(node=>{
+      if(node.nodeType!==1)return;
+      node.querySelectorAll?.('.peepal-ai-chat-btn').forEach(btn=>{
+        if(btn.dataset.intercepted)return;
+        btn.dataset.intercepted='1';
+        const origClick = btn.onclick;
+        const uid = btn.dataset.uid;
+        const name = btn.dataset.name;
+        btn.addEventListener('click',e=>{
+          e.stopImmediatePropagation();
+          interceptStrangerMessage(uid, name, 10, ()=>{
+            scheduleOutcomeCheck(uid, name);
+            // Find the original click handler and call it
+            btn.dispatchEvent(new MouseEvent('click_original',{bubbles:false}));
+          });
+        }, true);
+      });
+      // Add ❤️ strong interest button to discovery cards
+      node.querySelectorAll?.('.discovery-card').forEach(card=>{
+        const uid=card.dataset.uid;
+        if(!uid||card.dataset.reactWired)return;
+        card.dataset.reactWired='1';
+        const viewBtn=card.querySelector('.discovery-view-btn');
+        if(viewBtn){
+          const heartBtn=document.createElement('button');
+          heartBtn.innerHTML='❤️';
+          heartBtn.title='Strong interest — show me more like this';
+          heartBtn.style.cssText='background:none;border:none;font-size:18px;cursor:pointer;padding:4px;flex-shrink:0;';
+          heartBtn.addEventListener('click',e=>{
+            e.stopPropagation();
+            recordDiscoveryInterest(uid,true);
+            heartBtn.innerHTML='❤️';heartBtn.style.animation='heartPop 0.3s ease';
+            showToast('Noted! We\'ll show you more like this ❤️');
+          });
+          viewBtn.parentElement?.insertBefore(heartBtn, viewBtn);
+        }
+      });
+    });
+  });
+});
+const _deviceEl = document.querySelector('.device');
+if(_deviceEl) _chatBtnObserver.observe(_deviceEl, {childList:true, subtree:true});
+
+// ---- Run monthly Peepal check-in check ----
+setTimeout(maybeShowPeepalCheckIn, 5000);
+
+
+// ===================== RICH MEDIA PROFILE =====================
+
+// Override the Photos section in profile Social tab to include video + voice
+function renderProfileMediaSection(el){
+  const mediaItems = JSON.parse(localStorage.getItem('chaupaal_profile_media')||'[]');
+  const section = document.createElement('div');
+  section.style.cssText='margin-top:16px;border-top:1px solid var(--line);padding-top:16px;';
+  section.innerHTML=`
+    <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;margin-bottom:12px;">📸 Media & Voice</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5;">
+      Add photos, short videos (≤60s), or voice introductions. Only visible based on your privacy settings.
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+      <label style="display:flex;align-items:center;gap:6px;padding:10px 14px;background:var(--cream);border:2px solid var(--line);border-radius:12px;cursor:pointer;font-weight:600;font-size:13px;">
+        📷 Photo<input type="file" accept="image/*" id="profileMediaPhoto" style="display:none;" multiple>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;padding:10px 14px;background:var(--cream);border:2px solid var(--line);border-radius:12px;cursor:pointer;font-weight:600;font-size:13px;">
+        🎬 Video<input type="file" accept="video/*" id="profileMediaVideo" style="display:none;">
+      </label>
+      <button id="profileVoiceBtn" style="padding:10px 14px;background:var(--cream);border:2px solid var(--line);border-radius:12px;font-weight:600;font-size:13px;cursor:pointer;">🎙️ Voice note</button>
+    </div>
+    <div id="profileMediaGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;"></div>
+    <div id="voiceRecorder" style="display:none;background:rgba(230,57,70,0.05);border:2px solid rgba(230,57,70,0.2);border-radius:14px;padding:14px;margin-top:10px;">
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px;">🎙️ Record a voice introduction</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Max 60 seconds. Tell people about yourself in your own voice.</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button id="voiceRecordStart" style="padding:10px 16px;background:var(--red);color:#fff;border:none;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;">⏺ Record</button>
+        <button id="voiceRecordStop" style="padding:10px 16px;background:var(--cream);border:2px solid var(--line);border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;display:none;">⏹ Stop</button>
+        <div id="voiceTimer" style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;color:var(--red);display:none;">0:00</div>
+      </div>
+      <audio id="voicePreview" style="width:100%;margin-top:10px;display:none;" controls></audio>
+      <button id="voiceSave" style="display:none;width:100%;padding:10px;background:var(--red);color:#fff;border:none;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;margin-top:8px;">✓ Save voice note</button>
+    </div>
+  `;
+  el.appendChild(section);
+
+  // Render existing media
+  renderMediaGrid(mediaItems, section.querySelector('#profileMediaGrid'));
+
+  // Photo upload
+  section.querySelector('#profileMediaPhoto').addEventListener('change',e=>{
+    [...e.target.files].slice(0,9-mediaItems.length).forEach(file=>{
+      const reader=new FileReader();
+      reader.onload=ev=>{
+        const item={type:'photo',src:ev.target.result,ts:Date.now()};
+        mediaItems.push(item);
+        saveProfileMedia(mediaItems);
+        renderMediaGrid(mediaItems, section.querySelector('#profileMediaGrid'));
+      };reader.readAsDataURL(file);
+    });
+  });
+
+  // Video upload
+  section.querySelector('#profileMediaVideo').addEventListener('change',e=>{
+    const file=e.target.files[0];if(!file)return;
+    if(file.size>50*1024*1024){showToast('Video must be under 50MB');return;}
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const item={type:'video',src:ev.target.result,ts:Date.now()};
+      mediaItems.push(item);
+      saveProfileMedia(mediaItems);
+      renderMediaGrid(mediaItems, section.querySelector('#profileMediaGrid'));
+    };reader.readAsDataURL(file);
+  });
+
+  // Voice recorder
+  section.querySelector('#profileVoiceBtn').addEventListener('click',()=>{
+    const vr=section.querySelector('#voiceRecorder');
+    vr.style.display=vr.style.display==='none'?'block':'none';
+  });
+
+  let mediaRecorder=null,audioChunks=[],voiceTimerInterval=null,voiceSecs=0;
+
+  section.querySelector('#voiceRecordStart').addEventListener('click',async()=>{
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      mediaRecorder=new MediaRecorder(stream);audioChunks=[];
+      mediaRecorder.ondataavailable=e=>audioChunks.push(e.data);
+      mediaRecorder.onstop=()=>{
+        const blob=new Blob(audioChunks,{type:'audio/webm'});
+        const url=URL.createObjectURL(blob);
+        const preview=section.querySelector('#voicePreview');
+        preview.src=url;preview.style.display='block';
+        section.querySelector('#voiceSave').style.display='block';
+        section.querySelector('#voiceSave').onclick=()=>{
+          const reader=new FileReader();
+          reader.onload=ev=>{
+            const item={type:'voice',src:ev.target.result,ts:Date.now(),duration:voiceSecs};
+            mediaItems.push(item);
+            saveProfileMedia(mediaItems);
+            renderMediaGrid(mediaItems,section.querySelector('#profileMediaGrid'));
+            section.querySelector('#voiceRecorder').style.display='none';
+            showToast('Voice note saved! 🎙️');
+          };reader.readAsDataURL(blob);
+        };
+        stream.getTracks().forEach(t=>t.stop());
+      };
+      mediaRecorder.start();
+      section.querySelector('#voiceRecordStart').style.display='none';
+      section.querySelector('#voiceRecordStop').style.display='block';
+      section.querySelector('#voiceTimer').style.display='block';
+      voiceSecs=0;
+      voiceTimerInterval=setInterval(()=>{
+        voiceSecs++;
+        const m=Math.floor(voiceSecs/60),s=voiceSecs%60;
+        section.querySelector('#voiceTimer').textContent=`${m}:${s<10?'0':''}${s}`;
+        if(voiceSecs>=60){clearInterval(voiceTimerInterval);mediaRecorder?.stop();section.querySelector('#voiceRecordStop').click();}
+      },1000);
+    }catch(e){showToast('Microphone access needed for voice notes');}
+  });
+
+  section.querySelector('#voiceRecordStop').addEventListener('click',()=>{
+    clearInterval(voiceTimerInterval);
+    mediaRecorder?.stop();
+    section.querySelector('#voiceRecordStart').style.display='block';
+    section.querySelector('#voiceRecordStop').style.display='none';
+    section.querySelector('#voiceTimer').style.display='none';
+  });
+}
+
+function renderMediaGrid(items, gridEl){
+  if(!gridEl)return;
+  gridEl.innerHTML=items.map((item,i)=>{
+    if(item.type==='photo') return`<div style="aspect-ratio:1;border-radius:10px;overflow:hidden;position:relative;background:var(--line);">
+      <img src="${item.src}" style="width:100%;height:100%;object-fit:cover;">
+      <button onclick="removeProfileMedia(${i})" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.5);border:none;color:#fff;border-radius:50%;width:22px;height:22px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+    </div>`;
+    if(item.type==='video') return`<div style="aspect-ratio:1;border-radius:10px;overflow:hidden;position:relative;background:#000;">
+      <video src="${item.src}" style="width:100%;height:100%;object-fit:cover;" muted></video>
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
+        <div style="background:rgba(0,0,0,0.5);border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;">▶</div>
+      </div>
+      <button onclick="removeProfileMedia(${i})" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.5);border:none;color:#fff;border-radius:50%;width:22px;height:22px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+    </div>`;
+    if(item.type==='voice') return`<div style="aspect-ratio:1;border-radius:10px;background:linear-gradient(135deg,var(--red),#8134AF);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;position:relative;cursor:pointer;" onclick="playVoiceNote('${item.src}')">
+      <span style="font-size:28px;">🎙️</span>
+      <span style="font-size:10px;font-weight:700;color:#fff;">${item.duration?Math.floor(item.duration/60)+':'+(item.duration%60<10?'0':'')+(item.duration%60)+'':'Voice'}</span>
+      <button onclick="event.stopPropagation();removeProfileMedia(${i})" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.5);border:none;color:#fff;border-radius:50%;width:22px;height:22px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+    </div>`;
+    return'';
+  }).join('');
+  // Add "add more" cell if space
+  if(items.length<9) gridEl.innerHTML+=`<label style="aspect-ratio:1;border-radius:10px;border:2px dashed var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:24px;color:var(--muted);">＋<input type="file" accept="image/*,video/*" style="display:none;" onchange="handleProfileMediaAdd(event)"></label>`;
+}
+
+function saveProfileMedia(items){
+  try{localStorage.setItem('chaupaal_profile_media',JSON.stringify(items));}catch(e){}
+}
+
+window.removeProfileMedia=function(idx){
+  const items=JSON.parse(localStorage.getItem('chaupaal_profile_media')||'[]');
+  items.splice(idx,1);saveProfileMedia(items);
+  renderProfileModal();
+};
+
+window.playVoiceNote=function(src){
+  const existing=document.getElementById('globalVoicePlayer');
+  if(existing)existing.remove();
+  const audio=document.createElement('audio');
+  audio.id='globalVoicePlayer';audio.src=src;audio.controls=true;audio.autoplay=true;
+  audio.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:999;border-radius:999px;box-shadow:0 4px 16px rgba(0,0,0,0.3);width:80%;max-width:300px;';
+  document.querySelector('.device').appendChild(audio);
+  audio.onended=()=>audio.remove();
+};
+
+window.handleProfileMediaAdd=function(e){
+  const file=e.target.files[0];if(!file)return;
+  const items=JSON.parse(localStorage.getItem('chaupaal_profile_media')||'[]');
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    items.push({type:file.type.startsWith('video')?'video':'photo',src:ev.target.result,ts:Date.now()});
+    saveProfileMedia(items);renderProfileModal();
+  };reader.readAsDataURL(file);
+};
+
+// Patch renderSection to add media section to Personal tab
+const _origRenderSection = window.renderSection;
+// Since renderSection is defined inside renderProfileModal closure, we patch via MutationObserver
+// Instead, we hook into the saveSettings/profile flow
+const _profileMediaObserver = new MutationObserver(()=>{
+  const personalTab = document.querySelector('.profile-section-tab[data-sec="Personal"].active');
+  const content = document.getElementById('profileSectionContent');
+  if(personalTab && content && !content.querySelector('#profileMediaGrid')){
+    renderProfileMediaSection(content);
+  }
+});
+const _profileContent = document.getElementById('profileContent');
+if(_profileContent) _profileMediaObserver.observe(_profileContent, {childList:true, subtree:true});
+
+
+// ===================== AUTH STATE MACHINE v2 =====================
+
+// Collected registration data across steps
+let regData = {name:'',username:'',gender:'',dob:'',email:'',phone:'',city:'',lang:'en',password:'',intents:[],openToMeet:true,photoFile:null};
+
+function showAuthScreen(screenId, direction='forward'){
+  const screens = ['authHeroScreen','authLoginScreen','authRegStep1','authRegStep2','authRegStep3','authSuccessScreen'];
+  screens.forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(id === screenId){
+      el.classList.remove('hidden');
+      el.style.animation = direction==='back' ? 'authSlideBack .3s var(--ease-out)' : 'authSlideIn .3s var(--ease-out)';
+    } else {
+      el.classList.add('hidden');
+    }
+  });
+}
+
+function showAuth(){
+  document.getElementById('authOverlay')?.classList.remove('hidden');
+  showAuthScreen('authHeroScreen');
+  regData = {name:'',username:'',gender:'',dob:'',email:'',phone:'',city:'',lang:'en',password:'',intents:[],openToMeet:true,photoFile:null};
+  wireAuthEvents();
+}
+
+function hideAuth(){
+  document.getElementById('authOverlay')?.classList.add('hidden');
+}
+
+function wireAuthEvents(){
+  // ---- Hero ----
+  document.getElementById('heroSignupBtn')?.addEventListener('click',()=>showAuthScreen('authRegStep1'));
+  document.getElementById('heroLoginBtn')?.addEventListener('click',()=>showAuthScreen('authLoginScreen'));
+  document.getElementById('authSkip')?.addEventListener('click',hideAuth);
+
+  // ---- Login ----
+  document.getElementById('loginBackBtn')?.addEventListener('click',()=>showAuthScreen('authHeroScreen','back'));
+  document.getElementById('loginToSignup')?.addEventListener('click',()=>showAuthScreen('authRegStep1'));
+  document.getElementById('toggleLoginPwd')?.addEventListener('click',()=>{
+    const inp=document.getElementById('loginPassword');
+    inp.type=inp.type==='password'?'text':'password';
+  });
+  document.getElementById('forgotPasswordBtn')?.addEventListener('click',()=>{
+    const email=document.getElementById('loginEmail')?.value.trim();
+    if(!email){document.getElementById('loginError').textContent='Enter your email first';return;}
+    if(auth) auth.sendPasswordResetEmail(email).then(()=>showToast('Reset link sent! Check your email 📧')).catch(e=>showToast('Error: '+e.message));
+  });
+  document.getElementById('loginBtn')?.addEventListener('click',async()=>{
+    const email=document.getElementById('loginEmail')?.value.trim();
+    const pwd=document.getElementById('loginPassword')?.value;
+    const errEl=document.getElementById('loginError');
+    if(!email||!pwd){errEl.textContent='Please fill in all fields';return;}
+    const btn=document.getElementById('loginBtn');
+    btn.textContent='Logging in...';btn.disabled=true;
+    try{
+      if(auth){await auth.signInWithEmailAndPassword(email,pwd);}
+      hideAuth();
+      updateProfileBtn();
+      loadStreak();
+      initActivityStatus();
+      showToast(`Welcome back! 🙏`);
+    }catch(e){
+      errEl.textContent=e.code==='auth/wrong-password'?'Wrong password. Try again or reset it.':e.code==='auth/user-not-found'?'No account found with this email.':'Login failed: '+e.message;
+    }finally{btn.textContent='Log in →';btn.disabled=false;}
+  });
+  document.getElementById('loginEmail')?.addEventListener('keypress',e=>{if(e.key==='Enter')document.getElementById('loginPassword')?.focus();});
+  document.getElementById('loginPassword')?.addEventListener('keypress',e=>{if(e.key==='Enter')document.getElementById('loginBtn')?.click();});
+
+  // ---- Step 1: Identity ----
+  document.getElementById('reg1BackBtn')?.addEventListener('click',()=>showAuthScreen('authHeroScreen','back'));
+  
+  const photoInput=document.getElementById('photoInput');
+  const photoPreview=document.getElementById('photoPreview');
+  photoInput?.addEventListener('change',e=>{
+    const file=e.target.files[0];if(!file)return;
+    regData.photoFile=file;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      photoPreview.innerHTML=`<img src="${ev.target.result}" style="width:100%;height:100%;object-fit:cover;">`;
+    };reader.readAsDataURL(file);
+  });
+  photoPreview?.addEventListener('click',()=>photoInput?.click());
+
+  // Gender chips
+  document.querySelectorAll('.auth-gender-chip[data-val]').forEach(chip=>{
+    chip.addEventListener('click',()=>{
+      const parent=chip.closest('.auth-form-body')||chip.parentElement;
+      if(chip.closest('#authRegStep1')){
+        chip.closest('.auth-input-group')?.querySelectorAll('.auth-gender-chip').forEach(c=>c.classList.remove('active'));
+        chip.classList.add('active');
+        regData.gender=chip.dataset.val;
+      } else if(chip.id==='openToMeetYes'||chip.id==='openToMeetNo'){
+        document.getElementById('openToMeetYes')?.classList.toggle('active',chip.id==='openToMeetYes');
+        document.getElementById('openToMeetNo')?.classList.toggle('active',chip.id==='openToMeetNo');
+        regData.openToMeet=chip.dataset.val==='yes';
+      }
+    });
+  });
+
+  // Username validation
+  document.getElementById('regUsername')?.addEventListener('input',e=>{
+    const val=e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,'');
+    e.target.value=val;
+    const hint=document.getElementById('usernameHint');
+    if(val.length<3){hint.textContent='At least 3 characters';hint.style.color='var(--red)';}
+    else if(val.length>20){hint.textContent='Max 20 characters';hint.style.color='var(--red)';}
+    else{hint.textContent='✓ Looks good!';hint.style.color='#2ECC71';}
+  });
+
+  document.getElementById('reg1Next')?.addEventListener('click',()=>{
+    const name=document.getElementById('regName')?.value.trim();
+    const username=document.getElementById('regUsername')?.value.trim();
+    const dob=document.getElementById('regDob')?.value;
+    const errEl=document.getElementById('reg1Error');
+    if(!name){errEl.textContent='Please enter your full name';return;}
+    if(!username||username.length<3){errEl.textContent='Username must be at least 3 characters';return;}
+    if(!dob){errEl.textContent='Date of birth required';return;}
+    const age=Math.floor((Date.now()-new Date(dob))/(365.25*86400000));
+    if(age<16){errEl.textContent='You must be 16 or older to join';return;}
+    errEl.textContent='';
+    regData.name=name;regData.username=username.toLowerCase();regData.dob=dob;
+    showAuthScreen('authRegStep2');
+  });
+
+  // ---- Step 2: Contact ----
+  document.getElementById('reg2BackBtn')?.addEventListener('click',()=>showAuthScreen('authRegStep1','back'));
+  document.getElementById('reg2Next')?.addEventListener('click',()=>{
+    const email=document.getElementById('regEmail')?.value.trim();
+    const city=document.getElementById('regCity')?.value.trim();
+    const errEl=document.getElementById('reg2Error');
+    if(!email||!/\S+@\S+\.\S+/.test(email)){errEl.textContent='Valid email required';return;}
+    if(!city){errEl.textContent='City is required';return;}
+    errEl.textContent='';
+    regData.email=email;
+    regData.phone=document.getElementById('regPhone')?.value.trim();
+    regData.city=city;
+    regData.lang=document.getElementById('regLanguage')?.value||'en';
+    showAuthScreen('authRegStep3');
+  });
+
+  // ---- Step 3: Password & Interests ----
+  document.getElementById('reg3BackBtn')?.addEventListener('click',()=>showAuthScreen('authRegStep2','back'));
+
+  // Password strength
+  document.getElementById('regPassword')?.addEventListener('input',e=>{
+    const pwd=e.target.value;
+    const strengthEl=document.getElementById('pwdStrength');
+    const fillEl=document.getElementById('pwdStrengthFill');
+    const labelEl=document.getElementById('pwdStrengthLabel');
+    if(!pwd){strengthEl.style.display='none';return;}
+    strengthEl.style.display='flex';
+    let score=0;
+    if(pwd.length>=8)score++;if(pwd.length>=12)score++;
+    if(/[A-Z]/.test(pwd))score++;if(/[0-9]/.test(pwd))score++;
+    if(/[^A-Za-z0-9]/.test(pwd))score++;
+    const levels=[
+      {pct:20,color:'#E74C3C',label:'Weak'},
+      {pct:40,color:'#E67E22',label:'Fair'},
+      {pct:65,color:'#F1C40F',label:'Good'},
+      {pct:85,color:'#2ECC71',label:'Strong'},
+      {pct:100,color:'#27AE60',label:'Very strong'},
+    ];
+    const lv=levels[Math.min(score,4)];
+    fillEl.style.width=lv.pct+'%';fillEl.style.background=lv.color;
+    labelEl.textContent=lv.label;labelEl.style.color=lv.color;
+  });
+
+  document.getElementById('toggleRegPwd')?.addEventListener('click',()=>{
+    const inp=document.getElementById('regPassword');
+    inp.type=inp.type==='password'?'text':'password';
+  });
+
+  // Intent chips
+  document.querySelectorAll('.auth-intent-chip').forEach(chip=>{
+    chip.addEventListener('click',()=>{
+      chip.classList.toggle('active');
+      const val=chip.dataset.val;
+      if(chip.classList.contains('active'))regData.intents.push(val);
+      else regData.intents=regData.intents.filter(v=>v!==val);
+    });
+  });
+
+  // Open to meet buttons (in step 3)
+  document.getElementById('openToMeetYes')?.addEventListener('click',()=>{
+    document.getElementById('openToMeetYes')?.classList.add('active');
+    document.getElementById('openToMeetNo')?.classList.remove('active');
+    regData.openToMeet=true;
+  });
+  document.getElementById('openToMeetNo')?.addEventListener('click',()=>{
+    document.getElementById('openToMeetNo')?.classList.add('active');
+    document.getElementById('openToMeetYes')?.classList.remove('active');
+    regData.openToMeet=false;
+  });
+
+  // ---- Register submit ----
+  document.getElementById('registerBtn')?.addEventListener('click',async()=>{
+    const pwd=document.getElementById('regPassword')?.value;
+    const errEl=document.getElementById('registerError');
+    if(!pwd||pwd.length<8){errEl.textContent='Password must be at least 8 characters';return;}
+    regData.password=pwd;
+    const btn=document.getElementById('registerBtn');
+    btn.textContent='Creating account...';btn.disabled=true;
+
+    try{
+      let photoURL='';
+      if(regData.photoFile&&auth){
+        // Upload photo if storage available
+        try{
+          const reader=new FileReader();
+          photoURL=await new Promise(res=>{reader.onload=ev=>res(ev.target.result);reader.readAsDataURL(regData.photoFile);});
+        }catch(e){}
+      }
+
+      if(auth){
+        const cred=await auth.createUserWithEmailAndPassword(regData.email,regData.password);
+        await cred.user.updateProfile({displayName:regData.name,photoURL});
+        currentUser=cred.user;
+
+        // Save profile to Firestore
+        const profile={
+          name:regData.name,username:regData.username,email:regData.email,
+          phone:regData.phone,city:regData.city,lang:regData.lang,
+          gender:regData.gender,dob:regData.dob,photoURL,
+          openToMeet:regData.openToMeet,strangerDailyLimit:10,
+          intents:regData.intents,streak:0,lastPlayed:'',
+          streakFreezes:0,categoryRatings:{},gameRatings:{},
+          createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+          uid:cred.user.uid
+        };
+        if(db){
+          await db.collection('users').doc(cred.user.uid).set(profile);
+          await db.collection('usernames').doc(regData.username).set({uid:cred.user.uid});
+        }
+        userProfile=profile;
+        digitalProfile.currentCity=regData.city;
+        digitalProfile.gender=regData.gender;
+
+        // Init digital profile
+        try{localStorage.setItem('chaupaal_digital_profile',JSON.stringify(digitalProfile));}catch(e){}
+        if(regData.openToMeet){openToMeet=true;try{localStorage.setItem('chaupaal_open_to_meet','true');}catch(e){}}
+      }
+
+      // Show success screen
+      showAuthScreen('authSuccessScreen');
+      const firstName=regData.name.split(' ')[0];
+      document.getElementById('authSuccessTitle').textContent=`Welcome, ${firstName}! 🎉`;
+      document.getElementById('authSuccessDesc').textContent=regData.intents.length?`You're here to: ${regData.intents.slice(0,2).map(i=>i.split(' ').slice(1).join(' ')).join(' & ')}. Let's find your people.`:'Your account is ready. Let\'s explore what\'s happening today.';
+      launchConfetti({x:50,y:40},80);
+
+      document.getElementById('authSuccessCta')?.addEventListener('click',()=>{
+        hideAuth();
+        updateProfileBtn();
+        loadStreak();
+        initActivityStatus();
+        // Open onboarding if not done
+        if(!onboardingDone)showOnboarding();
+        showToast(`Welcome to the Chaupaal, ${firstName}! 🙏`);
+      });
+
+    }catch(e){
+      errEl.textContent=e.code==='auth/email-already-in-use'?'An account with this email already exists. Try logging in.':e.code==='auth/weak-password'?'Password is too weak.':'Sign up failed: '+e.message;
+    }finally{btn.textContent='🎉 Create my account';btn.disabled=false;}
+  });
+}
+
+// Wire on load
+document.addEventListener('DOMContentLoaded',()=>wireAuthEvents());
 
 </script>
 </body>
