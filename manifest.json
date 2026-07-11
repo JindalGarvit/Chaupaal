@@ -1,0 +1,21 @@
+{
+  "name": "Chaupaal",
+  "short_name": "Chaupaal",
+  "description": "News with Social Discovery — India's digital chaupaal",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFF8EE",
+  "theme_color": "#E63946",
+  "orientation": "portrait-primary",
+  "icons": [
+    {"src": "icon.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+    {"src": "icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ],
+  "categories": ["news", "social", "education"],
+  "lang": "en-IN",
+  "screenshots": [],
+  "shortcuts": [
+    {"name": "Akhbaar", "short_name": "Akhbaar", "description": "Today's news quiz", "url": "/?tab=akhbaar", "icons": [{"src": "icon.png", "sizes": "192x192"}]},
+    {"name": "Peepal", "short_name": "Peepal", "description": "Community questions", "url": "/?tab=peepal", "icons": [{"src": "icon.png", "sizes": "192x192"}]}
+  ]
+}
