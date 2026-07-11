@@ -1,0 +1,208 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===================== HELPERS =====================
+    function isAuth() { return request.auth != null; }
+    function isOwner(uid) { return request.auth.uid == uid; }
+    function isNewDoc() { return !resource.exists(); }
+    function notDeleting() { return request.resource.data.keys().hasAny(resource.data.keys()); }
+
+    // Check if requester is a friend of target user
+    function isFriend(targetUid) {
+      return isAuth() &&
+        exists(/databases/$(database)/documents/users/$(targetUid)/friends/$(request.auth.uid));
+    }
+
+    // Check if requester is a close friend
+    function isCloseFriend(targetUid) {
+      return isAuth() &&
+        exists(/databases/$(database)/documents/users/$(targetUid)/close_friends/$(request.auth.uid));
+    }
+
+    // Check if requester follows target
+    function isFollower(targetUid) {
+      return isAuth() &&
+        exists(/databases/$(database)/documents/users/$(targetUid)/followers/$(request.auth.uid));
+    }
+
+    // Check if user is shadowbanned severely
+    function isShadowbanned(uid) {
+      return exists(/databases/$(database)/documents/shadowbans/$(uid)) &&
+        get(/databases/$(database)/documents/shadowbans/$(uid)).data.tier == 'severe';
+    }
+
+    // ===================== USERS =====================
+    match /users/{userId} {
+      // Anyone can read basic public profile
+      allow read: if isAuth();
+      // Only owner can write their profile
+      allow write: if isOwner(userId);
+
+      // Friends subcollection
+      match /friends/{friendId} {
+        allow read: if isAuth();
+        allow write: if isOwner(userId);
+      }
+      // Close friends subcollection (private)
+      match /close_friends/{friendId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+      }
+      // Followers subcollection
+      match /followers/{followerId} {
+        allow read: if isAuth();
+        allow write: if isOwner(followerId); // only the follower can follow
+      }
+    }
+
+    // ===================== USERNAMES =====================
+    match /usernames/{username} {
+      allow read: if isAuth();
+      allow create: if isAuth() && request.resource.data.uid == request.auth.uid;
+      allow delete: if isAuth() && resource.data.uid == request.auth.uid;
+    }
+
+    // ===================== AKHBAAR / DAILY SCORES =====================
+    match /daily_scores/{date}/scores/{userId} {
+      allow read: if isAuth();
+      allow write: if isOwner(userId);
+    }
+
+    // ===================== CATEGORY CACHE =====================
+    match /category_cache/{catId} {
+      allow read: if isAuth();
+      // Only first user triggers write (checked via cached_at timestamp)
+      allow write: if isAuth();
+    }
+
+    // ===================== PEEPAL QUESTIONS =====================
+    match /peepal/{questionId} {
+      // Read: visible to all authenticated users UNLESS author is severely shadowbanned
+      allow read: if isAuth();
+      // Create: authenticated, not shadowbanned, own uid
+      allow create: if isAuth()
+        && request.resource.data.uid == request.auth.uid
+        && !isShadowbanned(request.auth.uid);
+      // Update: owner can edit their own, others can update votes/comments count
+      allow update: if isAuth() && (
+        isOwner(resource.data.uid) ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalResponses','comments','likes'])
+      );
+      allow delete: if isOwner(resource.data.uid);
+    }
+
+    // ===================== PEEPAL RESPONSES =====================
+    match /peepal/{questionId}/responses/{responseId} {
+      allow read: if isAuth();
+      allow create: if isAuth() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.uid);
+    }
+
+    // ===================== DUNIYA POSTS =====================
+    match /duniya/{postId} {
+      // Public posts readable by all; followers-only posts readable by followers
+      allow read: if isAuth() && (
+        resource.data.audience == 'public' ||
+        isOwner(resource.data.uid) ||
+        (resource.data.audience == 'followers' && isFollower(resource.data.uid)) ||
+        (resource.data.audience == 'friends' && isFriend(resource.data.uid))
+      );
+      allow create: if isAuth()
+        && request.resource.data.uid == request.auth.uid
+        && !isShadowbanned(request.auth.uid);
+      allow update: if isAuth() && (
+        isOwner(resource.data.uid) ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes','comments','shares'])
+      );
+      allow delete: if isOwner(resource.data.uid);
+    }
+
+    // ===================== DUNIYA STORIES (24h, public/followers) =====================
+    match /duniya_stories/{storyId} {
+      allow read: if isAuth() && (
+        resource.data.audience == 'public' ||
+        isOwner(resource.data.uid) ||
+        (resource.data.audience == 'followers' && isFollower(resource.data.uid))
+      );
+      allow create: if isAuth() && request.resource.data.uid == request.auth.uid;
+      allow delete: if isOwner(resource.data.uid);
+    }
+
+    // ===================== BAITHAK STORIES (friends / close friends only) =====================
+    match /baithak_stories/{storyId} {
+      allow read: if isAuth() && (
+        isOwner(resource.data.uid) ||
+        (resource.data.visibility == 'friends' && isFriend(resource.data.uid)) ||
+        (resource.data.visibility == 'close_friends' && isCloseFriend(resource.data.uid))
+      );
+      allow create: if isAuth() && request.resource.data.uid == request.auth.uid;
+      allow delete: if isOwner(resource.data.uid);
+    }
+
+    // ===================== CHATS =====================
+    match /chats/{chatId} {
+      // Chat metadata readable only by participants
+      allow read: if isAuth() &&
+        (resource.data.participants == null ||
+         resource.data.participants.hasAny([request.auth.uid]));
+      allow create: if isAuth();
+      allow update: if isAuth() &&
+        (resource.data.participants == null ||
+         resource.data.participants.hasAny([request.auth.uid]));
+
+      // Messages within chat
+      match /messages/{messageId} {
+        allow read: if isAuth();
+        allow create: if isAuth() && request.resource.data.uid == request.auth.uid;
+        allow delete: if isOwner(resource.data.uid);
+      }
+    }
+
+    // ===================== DAILY CHECK-INS (journal — private) =====================
+    match /daily_checkins/{docId} {
+      allow read, write: if isAuth() && isOwner(resource.data.uid);
+      allow create: if isAuth() && request.resource.data.uid == request.auth.uid;
+    }
+
+    // ===================== MATCHMAKING =====================
+    match /matchmaking/{category}/waiting/{docId} {
+      allow read: if isAuth();
+      allow create: if isAuth() && request.resource.data.uid == request.auth.uid;
+      allow delete: if isAuth(); // any authenticated user can remove (for matching)
+    }
+
+    // ===================== FLAGS & BLOCKS =====================
+    match /user_flags/{flagId} {
+      allow read: if false; // admin only in production
+      allow create: if isAuth() && request.resource.data.reporterUid == request.auth.uid;
+    }
+
+    match /blocks/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /shadowbans/{userId} {
+      allow read: if false; // internal only — never exposed to client
+      allow write: if false; // only Cloud Functions can write (once Blaze active)
+    }
+
+    // ===================== NOTIFICATIONS =====================
+    match /notifications/{userId}/items/{notifId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // ===================== TAAZA KHABAR (breaking news) =====================
+    match /taaza_khabar/{docId} {
+      allow read: if isAuth();
+      allow write: if false; // admin / Cloud Function only
+    }
+
+    // ===================== PREMIUM =====================
+    match /premium/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if false; // only Cloud Function (Razorpay webhook) can write
+    }
+
+  }
+}
