@@ -1,0 +1,275 @@
+// ===================== PROFILE MODAL — FULL DIGITAL PROFILE =====================
+function renderProfileModal(){
+  const el=document.getElementById('profileContent');
+  if(!currentUser){
+    el.innerHTML=`<p style="color:var(--muted);font-size:14px;margin-bottom:16px;">Sign in to see your profile, add friends and challenge people.</p><button class="auth-btn" onclick="document.getElementById('profileModal').classList.add('hidden');showAuth()">Sign in / Sign up</button>`;
+    return;
+  }
+  const p=userProfile||{};
+  const dp=digitalProfile;
+
+  // Completeness (shared Phase 3 helper)
+  const stats=typeof calcProfileCompletion==='function'?calcProfileCompletion(dp):{pct:0,missing:[]};
+  const pct=stats.pct;
+
+  el.innerHTML=`
+    <!-- Profile header -->
+    <div style="display:flex;align-items:center;gap:14px;padding:16px 0 14px;">
+      <div style="position:relative;flex-shrink:0;">
+        <div style="width:72px;height:72px;border-radius:50%;background:var(--line);overflow:hidden;border:3px solid var(--red);display:flex;align-items:center;justify-content:center;font-size:32px;">
+          ${p.photoURL?`<img src="${p.photoURL}" style="width:100%;height:100%;object-fit:cover;">`:'🪑'}
+        </div>
+        <label style="position:absolute;bottom:0;right:0;background:var(--red);width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #fff;font-size:11px;color:#fff;">
+          ✎<input type="file" accept="image/*" id="profilePhotoInput" style="display:none;">
+        </label>
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;">${dp.displayName||p.name||'Your Name'}</div>
+        <div style="font-size:12px;color:var(--muted);">@${p.username||'username'}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">${[dp.currentCity,dp.occupation].filter(Boolean).join(' · ')||'Add your city & job'}</div>
+      </div>
+    </div>
+    <!-- Completeness bar -->
+    <div style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;">
+        <span>Profile completeness</span><span data-ui="profile-completion-pct" style="color:${pct>=80?'var(--green)':'var(--red)'};">${pct}%</span>
+      </div>
+      <div style="height:5px;background:var(--line);border-radius:99px;overflow:hidden;">
+        <div data-ui="profile-completion-bar" style="height:100%;width:${pct}%;background:${pct>=80?'#2ECC71':'var(--red)'};border-radius:99px;transition:width .5s ease;"></div>
+      </div>
+      <div data-ui="profile-completion-hint" style="font-size:11px;color:var(--muted);margin-top:5px;${pct<60?'':'display:none;'}">${stats.missing?.length?`Add ${stats.missing.slice(0,3).join(', ')} to improve discovery ✨`:'Complete your profile to appear in more Peepal discoveries ✨'}</div>
+    </div>
+    <!-- Section tabs -->
+    <div style="display:flex;gap:0;border-bottom:2px solid var(--line);margin-bottom:0;overflow-x:auto;flex-shrink:0;" id="profileSectionTabs">
+      ${['Personal','Career','Lifestyle','Relationships','Social'].map((s,i)=>`<button class="profile-section-tab${i===0?' active':''}" data-sec="${s}" style="padding:10px 14px;border:none;background:none;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;color:${i===0?'var(--red)':'var(--muted)'};border-bottom:${i===0?'2px solid var(--red)':'none'};margin-bottom:-2px;">${s}</button>`).join('')}
+    </div>
+    <div id="profileSectionContent" style="padding:16px 0;"></div>
+    <!-- Actions -->
+    <div style="border-top:1px solid var(--line);padding-top:14px;margin-top:4px;">
+      <div class="friends-title">Friends</div>
+      <div class="friend-add-row">
+        <input class="friend-add-input" type="text" id="addFriendInput" placeholder="Enter username" autocapitalize="none">
+        <button class="friend-add-btn" id="addFriendBtn">Add</button>
+      </div>
+      <div id="friendsList" class="ui-skeleton-stack" aria-busy="true">${typeof skeletonHtml==='function'?skeletonHtml('list',2):'<div style="color:var(--muted);font-size:13px;">Loading friends…</div>'}</div>
+      <button class="modal-btn" style="margin-top:12px;" onclick="showMonthlyWrap()">📊 Monthly Wrap</button>
+      <button class="modal-btn" style="margin-top:8px;background:linear-gradient(135deg,var(--navy),#2A3158);color:#fff;" onclick="openArchive()">🗄️ My Archive</button>
+      <button class="modal-btn" style="margin-top:8px;" onclick="typeof openRecoveryBin==='function'&&openRecoveryBin()">🗑️ Recently deleted</button>
+      <button class="modal-btn" style="margin-top:8px;" onclick="typeof openSessionsSheet==='function'&&openSessionsSheet()">💻 Devices & sessions</button>
+      <button class="modal-btn" style="margin-top:8px;" onclick="typeof openBlockedUsersSheet==='function'&&openBlockedUsersSheet()">🚫 Blocked users</button>
+      <button class="modal-btn" style="margin-top:8px;background:linear-gradient(135deg,#C9A227,#8134AF);color:#fff;" onclick="openPremiumSheet()">⭐ Go Premium</button>
+      <button class="logout-btn" id="logoutBtn">Log out</button>
+    </div>
+  `;
+
+  // Section rendering
+  const SECTIONS={
+    Personal:()=>`
+      ${profileField('Name','displayName','text','Your full name')}
+      ${profileField('Bio','bio','textarea','A short bio about yourself...')}
+      ${profileField('Gender','gender','select','',['','Male','Female','Non-binary','Prefer not to say'])}
+      ${profileField('Pronouns','pronouns','select','',['','He/Him','She/Her','They/Them','Any'])}
+      ${profileField('Date of Birth','dateOfBirth','date','')}
+      ${profileField('Birthplace','birthplace','text','City, Country')}
+      ${profileField('Hometown','hometown','text','Where you grew up')}
+      ${profileField('Current City','currentCity','text','Where you live now')}
+      ${profileField('Nationality','nationality','text','Your nationality')}
+      ${profileField('Languages spoken','languages','chips','Add languages',['Hindi','English','Tamil','Telugu','Marathi','Bengali','Gujarati','Kannada','Malayalam','Punjabi','Urdu','Odia','Assamese','Konkani'])}
+      ${profileField('Height','height','select','',['','Under 5ft','5ft','5ft 1in','5ft 2in','5ft 3in','5ft 4in','5ft 5in','5ft 6in','5ft 7in','5ft 8in','5ft 9in','5ft 10in','5ft 11in','6ft','6ft 1in','6ft 2in','6ft+'])}
+      ${profileField('Blood Group','bloodGroup','select','',['','A+','A-','B+','B-','AB+','AB-','O+','O-','Don\'t know'])}
+      ${profileField('Religion','religion','select','',['','Hindu','Muslim','Christian','Sikh','Buddhist','Jain','Jewish','Parsi','Atheist','Agnostic','Spiritual but not religious','Prefer not to say'])}
+    `,
+    Career:()=>`
+      ${profileField('Occupation / Job title','occupation','text','What do you do?')}
+      ${profileField('Company / Organisation','company','text','Where do you work?')}
+      ${profileField('Industry','industry','select','',['','Technology','Finance & Banking','Healthcare','Education','Media & Entertainment','Government','Legal','Real Estate','Retail','Manufacturing','Agriculture','Hospitality','Consulting','NGO / Non-profit','Student','Freelancer','Entrepreneur','Other'])}
+      ${profileField('Work mode','workMode','select','',['','In-office','Remote','Hybrid','Freelance','Between jobs'])}
+      ${profileField('Career level','careerLevel','select','',['','Student / Intern','Entry level (0-2 yrs)','Mid level (3-6 yrs)','Senior (7-10 yrs)','Lead / Manager','Director / VP','C-Suite / Founder','Retired'])}
+      ${profileField('Annual income (optional)','annualIncome','select','',['','Prefer not to say','Under ₹3L','₹3L-6L','₹6L-10L','₹10L-20L','₹20L-40L','₹40L-75L','₹75L-1Cr','Above ₹1Cr'])}
+      ${profileField('Highest education','highestEducation','select','',['','High school','Diploma','Bachelor\'s','Master\'s','PhD / Doctorate','Professional degree (CA/CS/MBBS etc)','Other'])}
+      ${profileField('College / University','college','text','Where did you study?')}
+      ${profileField('Degree / Major','degree','text','Your field of study')}
+      ${profileField('Graduation year','graduationYear','text','e.g. 2020')}
+      ${profileField('Skills','skills','chips','Add skills',['Leadership','Public speaking','Writing','Coding','Design','Data analysis','Marketing','Sales','Finance','Research','Teaching','Management','Strategy','Product','Operations'])}
+    `,
+    Lifestyle:()=>`
+      ${profileField('Diet','diet','select','',['','Omnivore','Vegetarian','Eggetarian','Vegan','Jain','Keto','Gluten-free','Other'])}
+      ${profileField('Drinking','drinking','select','',['','Never','Socially','Occasionally','Regularly','Prefer not to say'])}
+      ${profileField('Smoking','smoking','select','',['','Never','Occasionally','Regularly','Trying to quit','Prefer not to say'])}
+      ${profileField('Fitness','fitness','select','',['','Very active (daily workout)','Active (3-4x/week)','Moderately active','Occasionally active','Not into fitness'])}
+      ${profileField('Sleep schedule','sleepSchedule','select','',['','Early bird (before 10pm)','Regular (10pm-12am)','Night owl (12am-2am)','Very late (2am+)','Varies'])}
+      ${profileField('Personality type (MBTI)','mbti','select','',['','INTJ','INTP','ENTJ','ENTP','INFJ','INFP','ENFJ','ENFP','ISTJ','ISFJ','ESTJ','ESFJ','ISTP','ISFP','ESTP','ESFP','Don\'t know'])}
+      ${profileField('Zodiac','zodiac','select','',['','Aries','Taurus','Gemini','Cancer','Leo','Virgo','Libra','Scorpio','Sagittarius','Capricorn','Aquarius','Pisces'])}
+      ${profileField('Political views','politics','select','',['','Progressive','Liberal','Centrist','Conservative','Libertarian','Apolitical','Prefer not to say'])}
+      ${profileField('Spirituality','spirituality','select','',['','Deeply religious','Religious','Somewhat spiritual','Agnostic','Atheist','Exploring'])}
+      ${profileField('Hobbies','hobbies','chips','Add hobbies',['Reading','Writing','Photography','Cooking','Gaming','Gardening','DIY/Crafts','Collecting','Podcasting','Blogging','Volunteering','Meditation','Yoga','Hiking','Cycling','Swimming','Dancing','Painting','Singing','Playing music'])}
+      ${profileField('Sports','sports','chips','Add sports',['Cricket','Football','Badminton','Tennis','Chess','Table Tennis','Basketball','Volleyball','Athletics','Swimming','Cycling','Golf','Boxing','Wrestling','Kabaddi','Kho Kho'])}
+      ${profileField('Music taste','music','chips','Add genres',['Bollywood','Punjabi','Classical','Jazz','Rock','Pop','Hip-hop','Electronic','Folk','Indie','R&B','Metal'])}
+      ${profileField('Movies / Shows','movies','chips','Add genres',['Bollywood','Hollywood','South Indian','Thriller','Comedy','Drama','Sci-fi','Horror','Documentary','Animation','Romance','Action'])}
+      ${profileField('Dream destination','dreamDestination','text','Where do you most want to visit?')}
+      ${profileField('Life goals','lifeGoals','textarea','What are you working towards?')}
+      ${profileField('Core values','coreValues','chips','Add values',['Family','Ambition','Freedom','Creativity','Loyalty','Honesty','Adventure','Security','Faith','Growth','Humour','Independence','Empathy','Justice'])}
+    `,
+    Relationships:()=>`
+      ${profileField('Relationship status','relationshipStatus','select','',['','Single','Single — not open to dating','Single — open to friendship only','Single — open to casual dating','Single — open to serious relationship only','Single — only open to marriage','In a relationship','Married','Separated','Divorced','Widowed','In an open relationship','It\'s complicated','Prefer not to say'])}
+      ${profileField('Looking for','lookingFor','select','',['','Friendship','Casual dating','Serious relationship','Marriage','Networking / Professional connections','Activity partner','Travel buddy','Nothing specific','Open to anything'])}
+      ${profileField('Do you have children?','haveChildren','select','',['','No','Yes — live with me','Yes — don\'t live with me','Prefer not to say'])}
+      ${profileField('Want children?','wantChildren','select','',['','Yes','No','Open to it','Already have enough','Prefer not to say'])}
+      ${profileField('Living situation','livingSituation','select','',['','Live alone','With family','With roommates','With partner','In hostel/PG','In college dorm','Other'])}
+      ${profileField('Family type (grew up in)','familyType','select','',['','Nuclear family','Joint family','Single parent','Extended family','Foster/adopted','Other'])}
+      ${profileField('Siblings','siblings','select','',['','Only child','1 sibling','2 siblings','3+ siblings','Prefer not to say'])}
+      ${profileField('Open to long distance?','longDistance','select','',['','Yes','No','Depends','Prefer not to say'])}
+      ${profileField('Marital history','maritalHistory','select','',['','Never married','Divorced','Widowed','Prefer not to say'])}
+    `,
+    Social:()=>`
+      ${profileField('Instagram','instagram','text','@username')}
+      ${profileField('Twitter / X','twitter','text','@username')}
+      ${profileField('LinkedIn','linkedin','text','Profile URL or username')}
+      ${profileField('YouTube','youtube','text','Channel name')}
+      ${profileField('Personal website','website','text','https://')}
+      <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:16px;">
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;margin-bottom:12px;">Privacy settings</div>
+        ${profileToggle('Show age publicly','showAge')}
+        ${profileToggle('Show location publicly','showLocation')}
+        ${profileToggle('Show relationship status','showRelationship')}
+        ${profileToggle('Show income range','showIncome')}
+        ${profileToggle('Show religion','showReligion')}
+        ${profileField('Profile visibility','profileVisibility','select','',['public','Friends only','Private'])}
+      </div>
+      <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:16px;">
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;margin-bottom:8px;">Chaupaal ratings</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          ${NEWS_CATEGORIES.map(cat=>`<div style="background:var(--cream);border-radius:10px;padding:10px;text-align:center;"><div style="font-size:11px;color:var(--muted);">${CATEGORY_ICONS[cat]} ${cat}</div><div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;color:var(--red);">${(userProfile?.categoryRatings||{})[cat]||1200}</div></div>`).join('')}
+        </div>
+      </div>
+    `,
+  };
+
+  function profileField(label,key,type,placeholder,options){
+    const val=dp[key];
+    if(type==='select'){
+      return`<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">${label}</div><select class="dp-field" data-key="${key}" style="width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;background:var(--white);color:var(--ink);outline:none;cursor:pointer;">${(options||[]).map(o=>`<option value="${o}" ${val===o?'selected':''}>${o||'Select...'}</option>`).join('')}</select></div>`;
+    }
+    if(type==='textarea'){
+      return`<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">${label}</div><textarea class="dp-field" data-key="${key}" placeholder="${placeholder}" style="width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;background:var(--white);outline:none;resize:none;min-height:80px;box-sizing:border-box;line-height:1.5;">${val||''}</textarea></div>`;
+    }
+    if(type==='chips'){
+      const selected=Array.isArray(val)?val:[];
+      return`<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">${label}</div><div class="dp-chips" data-key="${key}" style="display:flex;flex-wrap:wrap;gap:6px;">${(options||[]).map(o=>`<button class="dp-chip${selected.includes(o)?' active':''}" data-val="${o}" style="padding:6px 12px;border-radius:999px;border:2px solid ${selected.includes(o)?'var(--red)':'var(--line)'};background:${selected.includes(o)?'rgba(230,57,70,0.08)':'var(--white)'};color:${selected.includes(o)?'var(--red)':'var(--ink)'};font-size:12px;font-weight:600;cursor:pointer;">${o}</button>`).join('')}</div></div>`;
+    }
+    return`<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">${label}</div><input class="dp-field" data-key="${key}" type="${type}" value="${val||''}" placeholder="${placeholder}" style="width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;background:var(--white);outline:none;box-sizing:border-box;"></div>`;
+  }
+
+  function profileToggle(label,key){
+    return`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);"><span style="font-size:14px;">${label}</span><label class="switch"><input type="checkbox" class="dp-toggle" data-key="${key}" ${dp[key]?'checked':''}><span class="slider"></span></label></div>`;
+  }
+
+  function renderSection(sec){
+    const content=document.getElementById('profileSectionContent');
+    if(content) content.innerHTML=`<div style="padding:0;">${(SECTIONS[sec]||SECTIONS.Personal)()}</div>`;
+    // Wire events
+    content.querySelectorAll('.dp-field').forEach(f=>{
+      f.addEventListener('change',()=>saveProfileField(f.dataset.key, f.value));
+      f.addEventListener('blur',()=>saveProfileField(f.dataset.key, f.value));
+    });
+    content.querySelectorAll('.dp-toggle').forEach(t=>{
+      t.addEventListener('change',()=>saveProfileField(t.dataset.key, t.checked));
+    });
+    content.querySelectorAll('.dp-chip').forEach(chip=>{
+      chip.addEventListener('click',()=>{
+        const key=chip.closest('.dp-chips').dataset.key;
+        let arr=Array.isArray(dp[key])?[...dp[key]]:[];
+        const val=chip.dataset.val;
+        if(arr.includes(val)) arr=arr.filter(x=>x!==val);
+        else arr.push(val);
+        saveProfileField(key, arr);
+        chip.classList.toggle('active', arr.includes(val));
+        chip.style.borderColor=arr.includes(val)?'var(--red)':'var(--line)';
+        chip.style.background=arr.includes(val)?'rgba(230,57,70,0.08)':'var(--white)';
+        chip.style.color=arr.includes(val)?'var(--red)':'var(--ink)';
+      });
+    });
+  }
+
+  // Tab switching
+  setTimeout(()=>{
+    document.getElementById('profileSectionTabs')?.querySelectorAll('.profile-section-tab').forEach(tab=>{
+      tab.addEventListener('click',()=>{
+        document.querySelectorAll('.profile-section-tab').forEach(t=>{t.style.color='var(--muted)';t.style.borderBottom='none';});
+        tab.style.color='var(--red)';tab.style.borderBottom='2px solid var(--red)';
+        renderSection(tab.dataset.sec);
+      });
+    });
+    renderSection('Personal');
+    document.getElementById('logoutBtn')?.addEventListener('click',async()=>{
+      if(typeof endCurrentSessionQuietly==='function') endCurrentSessionQuietly();
+      await auth.signOut();currentUser=null;userProfile=null;
+      document.getElementById('profileModal').classList.add('hidden');
+      showToast('See you next time! 🙏');
+    });
+    document.getElementById('addFriendBtn')?.addEventListener('click',()=>addFriend());
+    document.getElementById('profilePhotoInput')?.addEventListener('change',async e=>{
+      const file=e.target.files[0];if(!file||!file.type.startsWith('image/'))return;
+      try{
+        showToast('Updating photo…');
+        let photoURL='';
+        let thumbURL='';
+        if(typeof uploadOptimizedImage==='function'&&currentUser&&(typeof isMediaUploadReady!=='function'||await isMediaUploadReady())){
+          const up=await uploadOptimizedImage(file,{folder:'avatars'});
+          photoURL=up.media;
+          thumbURL=up.thumb;
+        } else {
+          photoURL=URL.createObjectURL(file);
+          thumbURL=photoURL;
+        }
+        if(auth?.currentUser) await auth.currentUser.updateProfile({photoURL});
+        if(userProfile){
+          userProfile.photoURL=photoURL;
+          userProfile.photoThumb=thumbURL;
+        }
+        if(db&&currentUser){
+          db.collection('users').doc(currentUser.uid).update({photoURL,photoThumb:thumbURL||null}).catch(()=>{});
+        }
+        renderProfileModal();
+        if(typeof updateProfileBtn==='function') updateProfileBtn();
+        showToast('Photo updated ✓');
+      }catch(err){
+        showToast(typeof friendlyError==='function'?friendlyError(err):(err.message||'Photo update failed'));
+      }
+    });
+    loadFriends();
+    const el2=document.getElementById('profileContent');
+    if(el2)renderFriendDiscovery(el2);
+  },50);
+}
+
+function saveProfileField(key, value){
+  digitalProfile[key]=value;
+  try{localStorage.setItem('chaupaal_digital_profile',JSON.stringify(digitalProfile));}catch(e){}
+  if(db&&currentUser){db.collection('users').doc(currentUser.uid).update({[`profile.${key}`]:value}).catch(()=>{});}
+  if(typeof refreshProfileCompletionUI==='function') refreshProfileCompletionUI();
+}
+
+
+// Wire chip fields inside the profile modal (event delegation since content regenerates)
+document.getElementById('profileModal').addEventListener('click',(e)=>{
+  const chip=e.target.closest('.dp-chip');
+  if(!chip)return;
+  const singleRow=chip.closest('[data-field]');
+  const multiRow=chip.closest('[data-field-multi]');
+  if(singleRow){
+    const field=singleRow.dataset.field;
+    digitalProfile[field]=chip.dataset.val;
+    singleRow.querySelectorAll('.dp-chip').forEach(c=>c.classList.remove('selected'));
+    chip.classList.add('selected');
+    saveProfileField(field, digitalProfile[field]);
+  } else if(multiRow){
+    const field=multiRow.dataset.fieldMulti;
+    digitalProfile[field]=digitalProfile[field]||[];
+    const val=chip.dataset.val;
+    const idx=digitalProfile[field].indexOf(val);
+    if(idx>-1){digitalProfile[field].splice(idx,1);chip.classList.remove('selected');}
+    else{digitalProfile[field].push(val);chip.classList.add('selected');}
+    saveProfileField(field, digitalProfile[field]);
+  }
+});

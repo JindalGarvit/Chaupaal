@@ -54,6 +54,14 @@ service cloud.firestore {
         allow read: if isAuth();
         allow write: if isOwner(followerId); // only the follower can follow
       }
+      // Compose drafts (Phase 2) — owner only
+      match /drafts/{draftId} {
+        allow read, write: if isOwner(userId);
+      }
+      // Device sessions (Phase 3)
+      match /sessions/{sessionId} {
+        allow read, write: if isOwner(userId);
+      }
     }
 
     // ===================== USERNAMES =====================
@@ -70,21 +78,26 @@ service cloud.firestore {
     }
 
     // ===================== CATEGORY CACHE =====================
+    // Written by Vercel Cron (Admin SDK) every ~6h; clients read.
+    // Authenticated clients may still write on rare live-fallback.
     match /category_cache/{catId} {
       allow read: if isAuth();
-      // Only first user triggers write (checked via cached_at timestamp)
       allow write: if isAuth();
     }
 
     // ===================== PEEPAL QUESTIONS =====================
     match /peepal/{questionId} {
-      // Read: visible to all authenticated users UNLESS author is severely shadowbanned
-      allow read: if isAuth();
+      // Soft-deleted posts: author can still read (recovery bin); others cannot.
+      allow read: if isAuth() && (
+        !('deleted' in resource.data) ||
+        resource.data.deleted == false ||
+        isOwner(resource.data.uid)
+      );
       // Create: authenticated, not shadowbanned, own uid
       allow create: if isAuth()
         && request.resource.data.uid == request.auth.uid
         && !isShadowbanned(request.auth.uid);
-      // Update: owner can edit their own, others can update votes/comments count
+      // Update: owner can edit / soft-delete; others can bump vote/comment counts only
       allow update: if isAuth() && (
         isOwner(resource.data.uid) ||
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalResponses','comments','likes'])
@@ -101,8 +114,10 @@ service cloud.firestore {
 
     // ===================== DUNIYA POSTS =====================
     match /duniya/{postId} {
-      // Public posts readable by all; followers-only posts readable by followers
+      // Public/followers/friends visibility, plus soft-delete: only owner sees deleted
       allow read: if isAuth() && (
+        (!('deleted' in resource.data) || resource.data.deleted == false || isOwner(resource.data.uid))
+      ) && (
         resource.data.audience == 'public' ||
         isOwner(resource.data.uid) ||
         (resource.data.audience == 'followers' && isFollower(resource.data.uid)) ||
@@ -202,6 +217,79 @@ service cloud.firestore {
     match /premium/{userId} {
       allow read: if isOwner(userId);
       allow write: if false; // only Cloud Function (Razorpay webhook) can write
+    }
+
+    // ===================== DAILY_SETS (Akhbaar reel — server-authored) =====================
+    // Client: fetchTodaysContent() reads only. Writes via Admin / Console.
+    // Public read: boot runs before auth and falls back to samples if denied.
+    match /daily_sets/{date}/questions/{qid} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ===================== BONUS_POOL (Akhbaar bonus — server-authored) =====================
+    match /bonus_pool/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ===================== USER_STATUS (presence) =====================
+    // Client: initActivityStatus writes own doc; getUserStatus reads others.
+    match /user_status/{userId} {
+      allow read: if isAuth();
+      allow create, update: if isAuth() && isOwner(userId)
+        && request.resource.data.uid == request.auth.uid;
+      allow delete: if isOwner(userId);
+    }
+
+    // ===================== STRANGER_COUNTS (rate-limit sync) =====================
+    // Client: any authed user may merge-increment a target's daily count
+    // (doc id = `${targetUid}_${YYYY-MM-DD}`; primary enforcement is still local).
+    match /stranger_counts/{docId} {
+      allow read: if isAuth();
+      allow create, update: if isAuth()
+        && request.resource.data.keys().hasAll(['uid','date','count'])
+        && request.resource.data.uid is string
+        && request.resource.data.date is string
+        && request.resource.data.count is int
+        && request.resource.data.count >= 0
+        && request.resource.data.count <= 1000
+        && docId == request.resource.data.uid + '_' + request.resource.data.date;
+      allow delete: if false;
+    }
+
+    // ===================== SEARCH_FEEDBACK (analytics write-only) =====================
+    match /search_feedback/{docId} {
+      allow read: if false;
+      allow create: if isAuth()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasAll(['uid','query','score','label']);
+      allow update, delete: if false;
+    }
+
+    // ===================== MATCH_OUTCOMES (analytics write-only) =====================
+    match /match_outcomes/{docId} {
+      allow read: if false;
+      allow create: if isAuth()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasAll(['uid','matchUid','outcome']);
+      allow update, delete: if false;
+    }
+
+    // ===================== DISCOVERY_REACTIONS (analytics write-only) =====================
+    match /discovery_reactions/{docId} {
+      allow read: if false;
+      allow create: if isAuth()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasAll(['uid','targetUid','reaction']);
+      allow update, delete: if false;
+    }
+
+    // ===================== FEATURE FLAGS (Phase 4) =====================
+    // Clients may read; writes are console/Admin only (no client write rule).
+    match /feature_flags/{flagId} {
+      allow read: if isAuth();
+      allow write: if false;
     }
 
   }

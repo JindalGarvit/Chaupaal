@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Chaupaal — News with Social Discovery</title>
+<link rel="icon" type="image/png" href="/icon.png">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#E63946">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Chaupaal">
+<link rel="apple-touch-icon" href="/icon.png">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/styles/tokens.css">
+  <link rel="stylesheet" href="/src/styles/layout.css">
+  <link rel="stylesheet" href="/src/styles/akhbaar.css">
+  <link rel="stylesheet" href="/src/styles/dangal.css">
+  <link rel="stylesheet" href="/src/styles/baithak.css">
+  <link rel="stylesheet" href="/src/styles/peepal.css">
+  <link rel="stylesheet" href="/src/styles/duniya.css">
+  <link rel="stylesheet" href="/src/styles/components.css">
+</head>
+<body>
+<div class="device">
+
+  <!-- SPLASH -->
+  <div class="splash" id="splash">
+    <img src="splash.png" alt="Chaupaal">
+    <div class="splash-brand">
+      <svg width="42" height="42" viewBox="0 0 34 34" fill="none">
+        <rect width="34" height="34" rx="9" fill="#E63946"/>
+        <rect x="6" y="14" width="22" height="3.5" rx="1.5" fill="#FFC93C"/>
+        <path d="M9 17.5V8M12.5 17.5V8M16 17.5V8.5M19.5 17.5V8M23 17.5V8" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity=".85"/>
+        <path d="M7 8H27" stroke="#FFC93C" stroke-width="1.4" stroke-linecap="round"/>
+        <path d="M9.5 17.5L7.5 25M24.5 17.5L26.5 25" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <div><div class="splash-title">Chaupaal</div></div>
+    </div>
+  </div>
+
+  <!-- AUTH -->
+  <div class="auth-overlay hidden" id="authOverlay">
+    <!-- Auth state machine: hero → login | hero → register step 1 → step 2 → step 3 -->
+    <div class="auth-screen" id="authScreen">
+
+      <!-- ===== HERO SCREEN ===== -->
+      <div class="auth-hero-screen" id="authHeroScreen">
+        <div class="auth-hero-bg">
+          <div class="auth-hero-gradient"></div>
+          <div class="auth-hero-noise"></div>
+        </div>
+        <div class="auth-hero-content">
+          <div class="auth-hero-logo">
+            <div class="auth-hero-icon">
+              <svg width="36" height="36" viewBox="0 0 34 34" fill="none"><rect x="4" y="12" width="26" height="3" rx="1.5" fill="#FFC93C"/><path d="M8 15V7M12 15V7M17 15V7.5M22 15V7M27 15V7" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><path d="M8.5 15L6.5 27M26.5 15L28.5 27" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>
+            </div>
+            <span class="auth-hero-wordmark">Chaupaal</span>
+          </div>
+          <div class="auth-hero-headline">India's digital<br><em>chaupaal</em> 🪑</div>
+          <div class="auth-hero-sub">Where real people discuss real things — news, life, games, and each other.</div>
+          <div class="auth-social-proof">
+            <div class="auth-proof-avatars">
+              <span>😊</span><span>🧔</span><span>👩</span><span>👦</span><span>🧕</span>
+            </div>
+            <div class="auth-proof-text">Join <strong>10,000+</strong> people already on Chaupaal</div>
+          </div>
+          <div class="auth-feature-pills">
+            <span class="auth-pill">📰 Daily news quiz</span>
+            <span class="auth-pill">🌳 Real discussions</span>
+            <span class="auth-pill">⚔️ Games & duels</span>
+            <span class="auth-pill">🤝 Make friends</span>
+          </div>
+        </div>
+        <div class="auth-hero-actions">
+          <button class="auth-hero-cta" id="heroSignupBtn">Create free account</button>
+          <button class="auth-hero-login" id="heroLoginBtn">Already have an account? <strong>Log in</strong></button>
+          <button class="auth-guest-btn" id="authSkip">Explore as guest →</button>
+          <div class="auth-legal">By signing up you agree to our <u>Terms</u> and <u>Privacy Policy</u>. Real identity required.</div>
+        </div>
+      </div>
+
+      <!-- ===== LOGIN SCREEN ===== -->
+      <div class="auth-form-screen hidden" id="authLoginScreen">
+        <div class="auth-form-header">
+          <button class="auth-back-btn" id="loginBackBtn">←</button>
+          <div class="auth-form-title">Welcome back 👋</div>
+          <div style="width:36px;"></div>
+        </div>
+        <div class="auth-form-body">
+          <div class="auth-input-group">
+            <label class="auth-input-label">Email</label>
+            <input class="auth-input" type="email" id="loginEmail" placeholder="your@email.com" autocomplete="email">
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-input-label">Password</label>
+            <div style="position:relative;">
+              <input class="auth-input" type="password" id="loginPassword" placeholder="Your password" style="padding-right:44px;" autocomplete="current-password">
+              <button id="toggleLoginPwd" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--muted);">👁</button>
+            </div>
+          </div>
+          <button class="auth-forgot" id="forgotPasswordBtn">Forgot password?</button>
+          <div class="auth-error" id="loginError"></div>
+          <button class="auth-btn" id="loginBtn">Log in →</button>
+          <div class="auth-divider"><span>or</span></div>
+          <button class="auth-switch-btn" id="loginToSignup">Don't have an account? <strong>Sign up</strong></button>
+        </div>
+      </div>
+
+      <!-- ===== REGISTER: STEP 1 — Identity ===== -->
+      <div class="auth-form-screen hidden" id="authRegStep1">
+        <div class="auth-form-header">
+          <button class="auth-back-btn" id="reg1BackBtn">←</button>
+          <div class="auth-form-title">Who are you? 👤</div>
+          <div class="auth-step-badge">1 / 3</div>
+        </div>
+        <div class="auth-step-bar"><div class="auth-step-fill" style="width:33%"></div></div>
+        <div class="auth-form-body">
+          <div style="text-align:center;margin-bottom:20px;">
+            <div class="auth-photo-preview" id="photoPreview" style="margin:0 auto 10px;">
+              <span style="font-size:32px;">📷</span>
+            </div>
+            <label class="auth-photo-upload-btn">
+              Upload your real photo
+              <input type="file" id="photoInput" accept="image/*" style="display:none">
+            </label>
+            <div style="font-size:11px;color:var(--muted);margin-top:6px;">Real photo required · helps build trust in the community</div>
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-input-label">Full name <span class="auth-required">*</span></label>
+            <input class="auth-input" type="text" id="regName" placeholder="Your real full name" autocomplete="name">
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-input-label">Username <span class="auth-required">*</span></label>
+            <div style="position:relative;">
+              <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:15px;">@</span>
+              <input class="auth-input" type="text" id="regUsername" placeholder="your_handle" autocapitalize="none" style="padding-left:32px;" autocomplete="username">
+            </div>
+            <div class="auth-input-hint" id="usernameHint">Letters, numbers and underscores only</div>
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-input-label">Gender</label>
+            <div style="display:flex;gap:8px;">
+              <button class="auth-gender-chip" data-val="male">👨 Male</button>
+              <button class="auth-gender-chip" data-val="female">👩 Female</button>
+              <button class="auth-gender-chip" data-val="other">⚧ Other</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;">
+            <div class="auth-input-group" style="flex:1;">
+              <label class="auth-input-label">Date of birth <span class="auth-required">*</span></label>
+              <input class="auth-input" type="date" id="regDob">
+            </div>
+          </div>
+          <div class="auth-error" id="reg1Error"></div>
+          <button class="auth-btn" id="reg1Next">Continue →</button>
+        </div>
+      </div>
+
+      <!-- ===== REGISTER: STEP 2 — Contact & Location ===== -->
+      <div class="auth-form-screen hidden" id="authRegStep2">
+        <div class="auth-form-header">
+          <button class="auth-back-btn" id="reg2BackBtn">←</button>
+          <div class="auth-form-title">Contact & location 📍</div>
+          <div class="auth-step-badge">2 / 3</div>
+        </div>
+        <div class="auth-step-bar"><div class="auth-step-fill" style="width:66%"></div></div>
+        <div class="auth-form-body">
+          <div class="auth-input-group">
+            <label class="auth-input-label">Email <span class="auth-required">*</span></label>
+            <input class="auth-input" type="email" id="regEmail" placeholder="your@email.com" autocomplete="email">
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-input-label">Mobile number</label>
+            <input class="auth-input" type="tel" id="regPhone" placeholder="+91 98765 43210" autocomplete="tel">
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-input-label">Current city <span class="auth-required">*</span></label>
+            <input class="auth-input" type="text" id="regCity" placeholder="e.g. Mumbai, Delhi, Bengaluru">
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-input-label">Preferred language</label>
+            <select class="auth-input" id="regLanguage">
+              <option value="en">🇬🇧 English</option>
+              <option value="hi">🇮🇳 हिंदी</option>
+              <option value="bn">বাংলা</option>
+              <option value="te">తెలుగు</option>
+              <option value="ta">தமிழ்</option>
+              <option value="mr">मराठी</option>
+              <option value="gu">ગુજરાતી</option>
+              <option value="kn">ಕನ್ನಡ</option>
+              <option value="ml">മലയാളം</option>
+              <option value="pa">ਪੰਜਾਬੀ</option>
+            </select>
+          </div>
+          <div class="auth-error" id="reg2Error"></div>
+          <button class="auth-btn" id="reg2Next">Continue →</button>
+        </div>
+      </div>
+
+      <!-- ===== REGISTER: STEP 3 — Password & Interests ===== -->
+      <div class="auth-form-screen hidden" id="authRegStep3">
+        <div class="auth-form-header">
+          <button class="auth-back-btn" id="reg3BackBtn">←</button>
+          <div class="auth-form-title">Almost there! 🎉</div>
+          <div class="auth-step-badge">3 / 3</div>
+        </div>
+        <div class="auth-step-bar"><div class="auth-step-fill" style="width:100%"></div></div>
+        <div class="auth-form-body">
+          <div class="auth-input-group">
+            <label class="auth-input-label">Password <span class="auth-required">*</span></label>
+            <div style="position:relative;">
+              <input class="auth-input" type="password" id="regPassword" placeholder="Min 8 characters" style="padding-right:44px;" autocomplete="new-password">
+              <button id="toggleRegPwd" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--muted);">👁</button>
+            </div>
+            <div class="auth-pwd-strength" id="pwdStrength" style="display:none;">
+              <div class="auth-pwd-bar"><div id="pwdStrengthFill" style="height:100%;border-radius:99px;transition:all .3s;"></div></div>
+              <span id="pwdStrengthLabel" style="font-size:11px;font-weight:700;"></span>
+            </div>
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-input-label">What are you here for? <span style="font-size:11px;font-weight:400;color:var(--muted);">(pick all that apply)</span></label>
+            <div style="display:flex;flex-wrap:wrap;gap:7px;" id="intentChips">
+              ${['📰 Stay informed','🤝 Make friends','💬 Discuss topics','⚔️ Play games','❤️ Meet someone','💼 Network','✈️ Find travel buddies','🎵 Bond over interests'].map(t=>`<button class="auth-intent-chip" data-val="${t}">${t}</button>`).join('')}
+            </div>
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-input-label">Open to meeting new people?</label>
+            <div style="display:flex;gap:8px;">
+              <button class="auth-gender-chip active" data-val="yes" id="openToMeetYes">✅ Yes, show my profile</button>
+              <button class="auth-gender-chip" data-val="no" id="openToMeetNo">🔒 Not right now</button>
+            </div>
+          </div>
+          <div class="auth-error" id="registerError"></div>
+          <button class="auth-btn" id="registerBtn">🎉 Create my account</button>
+          <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:10px;line-height:1.6;">By creating an account you confirm you're 16+ and agree to our Terms & Privacy Policy</div>
+        </div>
+      </div>
+
+      <!-- ===== SUCCESS SCREEN ===== -->
+      <div class="auth-form-screen hidden" id="authSuccessScreen">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center;">
+          <div style="font-size:72px;margin-bottom:20px;" id="authSuccessEmoji">🎉</div>
+          <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:26px;margin-bottom:10px;" id="authSuccessTitle">Welcome to Chaupaal!</div>
+          <div style="font-size:15px;color:var(--muted);line-height:1.6;margin-bottom:32px;" id="authSuccessDesc">Your account is ready. Let's explore what's happening today.</div>
+          <button class="auth-btn" id="authSuccessCta" style="width:100%;max-width:280px;">Let's go 🚀</button>
+        </div>
+      </div>
+
+    </div><!-- end auth-screen -->
+  </div>
+
+  <!-- TOP BAR -->
+  <div class="topbar" id="topbar">
+    <div class="brand-block">
+      <div class="brand" style="display:flex;align-items:center;gap:8px;">
+        <div style="background:var(--grad-brand);border-radius:10px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(230,57,70,0.35);flex-shrink:0;">
+          <svg width="20" height="20" viewBox="0 0 34 34" fill="none"><rect x="4" y="12" width="26" height="3" rx="1.5" fill="#FFC93C"/><path d="M8 15V7M12 15V7M17 15V7.5M22 15V7M27 15V7" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><path d="M8.5 15L6.5 27M26.5 15L28.5 27" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </div>
+        <span style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:18px;letter-spacing:-0.02em;background:var(--grad-brand);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">Chaupaal</span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="streak-pill" id="streakPill" style="cursor:pointer;" title="Tap to manage streak">
+        <span style="color:var(--red)">🔥</span><span id="streakNum">0</span>
+        <span style="font-size:10px;color:var(--muted);margin-left:2px;">❄️<span id="streakFreezeCount">0</span></span>
+      </div>
+      <button class="icon-btn" id="notifBtn" style="position:relative;background:var(--cream);border-radius:50%;width:36px;height:36px;font-size:16px;">🔔<span class="notif-dot hidden" id="notifDot"></span></button>
+      <button class="icon-btn" id="settingsBtn" style="background:var(--cream);border-radius:50%;width:36px;height:36px;font-size:16px;">⚙️</button>
+      <button class="profile-btn" id="profileBtn" title="Profile" style="box-shadow:0 2px 8px rgba(43,39,48,0.15);">
+        <span id="profileBtnInner">🪑</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- CONTENT AREA -->
+  <div class="content-area">
+    <!-- Progress bar (Akhbaar only) -->
+    <div class="progress-bar" id="progressBar"></div>
+
+    <!-- TAB PANELS -->
+    <div class="tab-panel" id="panel-akhbaar">
+      <!-- Category bar inside Akhbaar -->
+      <div class="akhbaar-cat-bar" id="akhbaarCatBar">
+        <button class="akhbaar-cat-chip active" data-cat="all">🏠 All</button>
+        <button class="akhbaar-cat-chip" data-cat="GK">🧠 GK</button>
+        <button class="akhbaar-cat-chip" data-cat="Sports">🏏 Sports</button>
+        <button class="akhbaar-cat-chip" data-cat="Tech">💻 Tech</button>
+        <button class="akhbaar-cat-chip" data-cat="Business">📈 Business</button>
+        <button class="akhbaar-cat-chip" data-cat="India">🇮🇳 India</button>
+        <button class="akhbaar-cat-chip" data-cat="World">🌍 World</button>
+        <button class="akhbaar-cat-chip" id="akhbaarAddCat" data-cat="add">＋ Add</button>
+      </div>
+      <div class="reel-stage" id="reelStage"></div>
+    </div>
+
+    <!-- DUNIYA PANEL -->
+    <div class="tab-panel" id="panel-duniya">
+      <div class="duniya-screen" id="duniyaScreen">
+        <div class="duniya-header">
+          <div class="duniya-title">🌍 Duniya</div>
+          <div style="display:flex;gap:8px;">
+            <button class="icon-btn" id="duniyaSearchBtn">🔍</button>
+            <button class="icon-btn" id="duniyaPostBtn">＋</button>
+          </div>
+        </div>
+        <div class="duniya-stories-row" id="duniyaStoriesRow"></div>
+        <div class="duniya-feed" id="duniyaFeed"></div>
+      </div>
+      <div class="duniya-post-sheet hidden" id="duniyaPostSheet"></div>
+      <div class="duniya-post-detail hidden" id="duniyaPostDetail"></div>
+    </div>
+
+    <div class="tab-panel" id="panel-baithak">
+    <!-- STORIES ROW -->
+    <div class="stories-row" id="storiesRow">
+      <div class="story-add-btn" id="addStoryBtn">
+        <div class="story-add-icon">＋</div>
+        <div class="story-label">Aapki</div>
+      </div>
+      <!-- stories injected here -->
+    </div>
+
+    <!-- SEARCH -->
+    <div class="baithak-search-row">
+      <input class="baithak-search" id="baithakSearch" placeholder="🔍 Dhoondho..." type="text">
+      <button class="new-chat-btn" id="newChatBtn">✏️</button>
+    </div>
+
+    <!-- CHAT LIST -->
+    <div class="chat-list" id="chatList"></div>
+
+    <!-- FAB -->
+    <button class="baithak-fab" id="baithakFab">＋</button>
+  </div>
+
+  <div class="tab-panel" id="panel-dangal">
+    <div class="dangal-screen" id="dangalScreen">
+      <div class="dangal-header-card">
+        <div class="dangal-title">⚔️ Dangal</div>
+        <div class="dangal-sub">Quiz duels & games with players across India</div>
+        <div class="dangal-overall-rating" id="dangalOverallRating"></div>
+      </div>
+      <div class="dangal-games-label">Choose how to play</div>
+      <div class="dangal-games-grid" id="dangalGamesGrid"></div>
+    </div>
+    <div class="muqabala-overlay hidden" id="muqabalaOverlay"></div>
+    <div class="ai-finder-overlay hidden" id="aiFinder"></div>
+    <div class="quiz-category-sheet hidden" id="quizCategorySheet"></div>
+  </div>
+
+  <div class="tab-panel" id="panel-peepal">
+    <div class="peepal-screen" id="peepalScreen">
+      <div class="peepal-header">
+        <div class="peepal-title">🌳 Peepal</div>
+        <div style="display:flex;gap:8px;">
+          <button class="icon-btn" id="peepalSearchBtn" title="Find people with AI">🔍</button>
+          <button class="peepal-ask-btn" id="peepalAskBtn">+ Ask</button>
+        </div>
+      </div>
+      <!-- AI People Search -->
+      <div class="peepal-ai-search hidden" id="peepalAiSearch">
+        <div class="peepal-ai-search-inner">
+          <div class="peepal-ai-search-label">✨ Find people on Peepal</div>
+      <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:8px;" id="peepalSearchNudges">
+        ${(typeof PEEPAL_SEARCH_NUDGES!=='undefined'?PEEPAL_SEARCH_NUDGES:[
+          {emoji:'❤️',text:'Dating',hint:'someone to date around my age'},
+          {emoji:'🤝',text:'Friendship',hint:'make new friends with similar interests'},
+          {emoji:'💼',text:'Networking',hint:'professionals in tech or business'},
+          {emoji:'✈️',text:'Travel buddy',hint:'travel companion for upcoming trip'},
+          {emoji:'🎮',text:'Gaming',hint:'someone to play games with'},
+          {emoji:'🎵',text:'Music',hint:'music lover with similar taste'},
+          {emoji:'📚',text:'Book club',hint:'avid reader who loves non-fiction'},
+          {emoji:'🚀',text:'Co-founder',hint:'startup-minded person to collaborate'},
+        ]).map(n=>`<button class="peepal-nudge-chip" data-hint="${n.hint}" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;">${n.emoji} ${n.text}</button>`).join('')}
+      </div>
+          <div style="position:relative;">
+            <textarea class="peepal-ai-search-input" id="peepalAiSearchInput" placeholder="Describe who you're looking for... e.g. 'someone into cricket and startups around my age' or 'a travel buddy from Mumbai who loves food'" rows="3"></textarea>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px;">
+            <button class="peepal-ai-search-btn" id="peepalAiSearchGo">🔍 Find People</button>
+            <button style="padding:10px 14px;background:none;border:2px solid var(--line);border-radius:12px;font-size:13px;cursor:pointer;" id="peepalAiSearchClose">Cancel</button>
+          </div>
+          <div id="peepalAiSearchResults" style="margin-top:14px;"></div>
+        </div>
+      </div>
+      <div class="peepal-feed" id="peepalFeed"></div>
+    </div>
+    <div class="peepal-ask-sheet hidden" id="peepalAskSheet"></div>
+    <div class="peepal-detail hidden" id="peepalDetail"></div>
+  </div>
+
+  </div><!-- end content-area -->
+
+  <!-- RIGHT PANEL (desktop only) -->
+  <div class="right-panel" id="rightPanel">
+    <div class="rp-section-label">Today's streak</div>
+    <div class="rp-stat-card">
+      <div class="rp-stat-num" id="rpStreakNum">0 🔥</div>
+      <div class="rp-stat-label">days in a row</div>
+    </div>
+    <div class="rp-section-label" style="margin-top:16px;">Top readers today</div>
+    <div id="rpLeaderboard" class="ui-skeleton-stack" aria-busy="true">
+      <div class="skeleton-wrap skeleton-list" style="display:flex;gap:12px;align-items:center;padding:12px 0;">
+        <div class="skeleton" style="width:36px;height:36px;border-radius:50%;flex-shrink:0;"></div>
+        <div style="flex:1;">
+          <div class="skeleton" style="height:11px;width:55%;margin-bottom:8px;"></div>
+          <div class="skeleton" style="height:10px;width:30%;"></div>
+        </div>
+      </div>
+      <div class="skeleton-wrap skeleton-list" style="display:flex;gap:12px;align-items:center;padding:12px 0;">
+        <div class="skeleton" style="width:36px;height:36px;border-radius:50%;flex-shrink:0;"></div>
+        <div style="flex:1;">
+          <div class="skeleton" style="height:11px;width:48%;margin-bottom:8px;"></div>
+          <div class="skeleton" style="height:10px;width:28%;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="rp-section-label" style="margin-top:16px;">Dangal ratings</div>
+    <div id="rpRatings"></div>
+  </div>
+
+  <!-- BOTTOM TABS / SIDEBAR -->
+  <div class="bottom-tabs">
+    <!-- Sidebar logo (desktop only) -->
+    <div class="sidebar-logo">
+      <svg width="28" height="28" viewBox="0 0 34 34" fill="none"><rect width="34" height="34" rx="9" fill="#E63946"/><rect x="6" y="14" width="22" height="3.5" rx="1.5" fill="#FFC93C"/><path d="M9 17.5V8M12.5 17.5V8M16 17.5V8.5M19.5 17.5V8M23 17.5V8" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity=".85"/><path d="M9.5 17.5L7.5 25M24.5 17.5L26.5 25" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+      Chaupaal
+      <button class="icon-btn" id="notifBtnDesktop" style="margin-left:auto;width:30px;height:30px;font-size:14px;position:relative;">🔔<span class="notif-dot hidden" id="notifDotDesktop"></span></button>
+    </div>
+
+    <button class="tab-btn" data-tab="akhbaar">
+      <span class="tab-icon">📰</span>
+      <span class="tab-label">Akhbaar</span>
+    </button>
+    <button class="tab-btn" data-tab="duniya">
+      <span class="tab-icon">🌍</span>
+      <span class="tab-label">Duniya</span>
+    </button>
+    <button class="tab-btn active" data-tab="peepal">
+      <span class="tab-icon">🌳</span>
+      <span class="tab-label">Peepal</span>
+    </button>
+    <button class="tab-btn" data-tab="baithak">
+      <span class="tab-icon">🏠</span>
+      <span class="tab-label">Baithak</span>
+    </button>
+    <button class="tab-btn" data-tab="dangal">
+      <span class="tab-icon">⚔️</span>
+      <span class="tab-label">Dangal</span>
+    </button>
+
+    <!-- Sidebar bottom (desktop only) -->
+    <div class="sidebar-streak">
+      🔥 <span id="sidebarStreak">0</span> day streak
+    </div>
+    <div class="sidebar-profile" id="sidebarProfile">
+      <div class="profile-btn" style="width:32px;height:32px;font-size:14px;flex-shrink:0;">
+        <span id="sidebarProfileIcon">🪑</span>
+      </div>
+      <div class="sidebar-profile-name" id="sidebarProfileName">Sign in</div>
+      <span style="color:var(--muted);font-size:12px;">⚙️</span>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
+
+  <!-- SETTINGS MODAL -->
+  <div class="modal-backdrop hidden" id="settingsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Settings</div>
+        <button class="icon-btn" id="closeSettings">✕</button>
+      </div>
+      <div class="settings-section">Language</div>
+      <select class="modal-select" id="langSelect">
+        <option value="en">English</option>
+        <option value="hi">हिंदी (Hindi)</option>
+        <option value="bn">বাংলা (Bengali)</option>
+        <option value="te">తెలుగు (Telugu)</option>
+        <option value="ta">தமிழ் (Tamil)</option>
+        <option value="mr">मराठी (Marathi)</option>
+        <option value="gu">ગુજરાતી (Gujarati)</option>
+        <option value="kn">ಕನ್ನಡ (Kannada)</option>
+        <option value="ml">മലയാളം (Malayalam)</option>
+        <option value="pa">ਪੰਜਾਬੀ (Punjabi)</option>
+        <option value="or">ଓଡ଼ିଆ (Odia)</option>
+        <option value="ur">اردو (Urdu)</option>
+        <option value="ar">العربية (Arabic)</option>
+        <option value="es">Español</option>
+        <option value="fr">Français</option>
+        <option value="pt">Português</option>
+        <option value="de">Deutsch</option>
+        <option value="ja">日本語</option>
+        <option value="zh">中文</option>
+        <option value="ru">Русский</option>
+      </select>
+      <div class="settings-section">Notifications</div>
+      <div class="toggle-row">
+        <div><div class="toggle-label">Daily Akhbaar reminder</div><div class="toggle-desc">Morning nudge in your language</div></div>
+        <label class="switch"><input type="checkbox" id="notifAkhbaar" checked><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div><div class="toggle-label">Taaza Khabar alerts</div><div class="toggle-desc">Breaking news notifications</div></div>
+        <label class="switch"><input type="checkbox" id="notifBreaking" checked><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div><div class="toggle-label">Friend activity</div><div class="toggle-desc">When friends play or connect</div></div>
+        <label class="switch"><input type="checkbox" id="notifFriends" checked><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div><div class="toggle-label">Messages</div><div class="toggle-desc">New Baithak chats & replies</div></div>
+        <label class="switch"><input type="checkbox" id="notifMessages" checked><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div><div class="toggle-label">Comments</div><div class="toggle-desc">Replies on your Peepal & Duniya posts</div></div>
+        <label class="switch"><input type="checkbox" id="notifComments" checked><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div><div class="toggle-label">Duels & challenges</div><div class="toggle-desc">Muqabala invites and results</div></div>
+        <label class="switch"><input type="checkbox" id="notifDuels" checked><span class="slider"></span></label>
+      </div>
+      <div class="settings-section">Safety & account</div>
+      <button type="button" class="modal-btn" id="settingsSessionsBtn" style="width:100%;margin-bottom:8px;">💻 Devices & sessions</button>
+      <button type="button" class="modal-btn" id="settingsBlockedBtn" style="width:100%;margin-bottom:12px;">🚫 Blocked users</button>
+      <div class="settings-section">Share with Friends</div>
+      <div class="toggle-row">
+        <div><div class="toggle-label">Birthday</div><div class="toggle-desc">Friends get a fun question on your birthday</div></div>
+        <label class="switch"><input type="checkbox" id="toggleBirthday" checked><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div><div class="toggle-label">Current trip / location</div><div class="toggle-desc">Where you're travelling right now</div></div>
+        <label class="switch"><input type="checkbox" id="toggleTrip"><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div><div class="toggle-label">Anniversaries</div><div class="toggle-desc">Work, personal milestones</div></div>
+        <label class="switch"><input type="checkbox" id="toggleAnniversary"><span class="slider"></span></label>
+      </div>
+      <div class="settings-section">Discovery</div>
+      <div class="toggle-row" style="flex-wrap:wrap;gap:10px;">
+        <div style="flex:1;min-width:0;">
+          <div class="toggle-label">Open to meeting new people</div>
+          <div class="toggle-desc">Show your profile in Peepal discovery & AI search</div>
+        </div>
+        <select id="toggleOpenToMeet" style="padding:8px 12px;border:2px solid var(--line);border-radius:10px;font-size:13px;font-weight:700;background:var(--white);color:var(--ink);cursor:pointer;">
+          <option value="off">🚫 Off</option>
+          <option value="on" selected>✅ On</option>
+        </select>
+      </div>
+      <div id="strangerLimitRow" style="padding:10px 0;border-bottom:1px solid var(--line);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <div>
+            <div class="toggle-label">Max strangers per day</div>
+            <div class="toggle-desc">Limit how many new people can message you daily</div>
+          </div>
+          <span style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;color:var(--red);" id="strangerLimitDisplay">10</span>
+        </div>
+        <input type="range" id="strangerLimitSlider" min="0" max="10" value="10" style="width:100%;accent-color:var(--red);">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:3px;">
+          <span>0 (private)</span><span>5</span><span>10 (open)</span>
+        </div>
+      </div>
+      <div class="settings-section">Sound</div>
+      <div class="toggle-row">
+        <div><div class="toggle-label">Quiet mode</div><div class="toggle-desc">Mute sounds, voice & animations</div></div>
+        <label class="switch"><input type="checkbox" id="toggleQuiet"><span class="slider"></span></label>
+      </div>
+      <div class="dp-field-row" style="margin-top:10px;">
+        <div class="dp-field-label">🔊 Voice for "Listen to post"</div>
+        <select class="modal-select" id="voiceSelect"></select>
+      </div>
+      <button class="modal-btn" id="saveSettings">Done</button>
+    </div>
+  </div>
+
+  <!-- PROFILE MODAL -->
+  <div class="modal-backdrop hidden" id="profileModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Profile</div>
+        <button class="icon-btn" id="closeProfile">✕</button>
+      </div>
+      <div id="profileContent"></div>
+    </div>
+  </div>
+
+  <!-- NOTIFICATION CENTER -->
+  <div class="modal-backdrop hidden" id="notifModal">
+    <div class="modal" style="max-height:80vh;">
+      <div class="modal-header">
+        <div class="modal-title">🔔 Notifications</div>
+        <button class="icon-btn" id="closeNotif">✕</button>
+      </div>
+      <div id="notifList"></div>
+    </div>
+  </div>
+
+</div><!-- end device -->
+
+
+<!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics-compat.js"></script>
+  <script src="/src/js/config/firebase.js"></script>
+  <script src="/src/js/core/api-client.js"></script>
+  <script src="/src/js/core/analytics.js"></script>
+  <script src="/src/js/ai/anthropic.js"></script>
+  <script src="/src/js/data/samples.js"></script>
+  <script src="/src/js/core/state.js"></script>
+  <script src="/src/js/core/ui-states.js"></script>
+  <script src="/src/js/core/firestore-page.js"></script>
+  <script src="/src/js/core/drafts.js"></script>
+  <script src="/src/js/core/soft-delete.js"></script>
+  <script src="/src/js/core/image-pipeline.js"></script>
+  <script src="/src/js/core/profile-completion.js"></script>
+  <script src="/src/js/core/sessions.js"></script>
+  <script src="/src/js/core/safety.js"></script>
+  <script src="/src/js/core/notif-prefs.js"></script>
+  <script src="/src/js/core/feature-flags.js"></script>
+  <script src="/src/js/core/search.js"></script>
+  <script src="/src/js/core/deeplinks.js"></script>
+  <script src="/src/js/core/rate-limit-client.js"></script>
+  <script src="/src/js/core/theme.js"></script>
+  <script src="/src/js/core/discovery-core.js"></script>
+  <script src="/src/js/core/profile-btn.js"></script>
+  <script src="/src/js/auth/auth-ui.js"></script>
+  <script src="/src/js/features/akhbaar.js"></script>
+  <script src="/src/js/features/dangal.js"></script>
+  <script src="/src/js/features/dangal-ratings.js"></script>
+  <script src="/src/js/features/baithak-data.js"></script>
+  <script src="/src/js/features/baithak-chat.js"></script>
+  <script src="/src/js/features/baithak.js"></script>
+  <script src="/src/js/features/profile.js"></script>
+  <script src="/src/js/core/i18n.js"></script>
+  <script src="/src/js/features/categories.js"></script>
+  <script src="/src/js/features/peepal.js"></script>
+  <script src="/src/js/features/onboarding.js"></script>
+  <script src="/src/js/core/service-worker.js"></script>
+  <script src="/src/js/features/streak.js"></script>
+  <script src="/src/js/features/wraps.js"></script>
+  <script src="/src/js/games/engines.js"></script>
+  <script src="/src/js/main.js"></script>
+  <script src="/src/js/features/akhbaar-catbar.js"></script>
+  <script src="/src/js/features/duniya.js"></script>
+  <script src="/src/js/features/premium.js"></script>
+  <script src="/src/js/features/settings-extra.js"></script>
+  <script src="/src/js/games/board-games.js"></script>
+  <script src="/src/js/features/discovery.js"></script>
+  <script src="/src/js/games/arcade.js"></script>
+  <script src="/src/js/core/polish.js"></script>
+  <script src="/src/js/features/fairness.js"></script>
+  <script src="/src/js/features/media-profile.js"></script>
+  <script src="/src/js/auth/auth-events.js"></script>
+</body>
+</html>

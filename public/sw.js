@@ -1,4 +1,4 @@
-const CACHE = 'chaupaal-v1';
+const CACHE = 'chaupaal-v2';
 const ASSETS = ['/', '/index.html', '/icon.png', '/splash.png',
   'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap'];
 
@@ -14,7 +14,17 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if(e.request.method !== 'GET') return;
-  if(e.request.url.includes('api.anthropic.com') || e.request.url.includes('firebase')) return;
+  if(e.request.url.includes('/api/') || e.request.url.includes('firebase')) return;
+
+  // Deep links / PWA navigations: always serve the SPA shell
+  if(e.request.mode === 'navigate'){
+    e.respondWith(
+      fetch('/index.html').then(res => res.ok ? res : caches.match('/index.html'))
+        .catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
+
   e.respondWith(
     caches.match(e.request).then(cached => {
       if(cached) return cached;

@@ -1,0 +1,24 @@
+{
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [
+        { "key": "Service-Worker-Allowed", "value": "/" },
+        { "key": "Cache-Control", "value": "no-cache" }
+      ]
+    }
+  ],
+  "rewrites": [
+    { "source": "/profile/(.*)", "destination": "/index.html" },
+    { "source": "/post/(.*)", "destination": "/index.html" },
+    { "source": "/chat/(.*)", "destination": "/index.html" },
+    { "source": "/u/(.*)", "destination": "/index.html" },
+    { "source": "/p/(.*)", "destination": "/index.html" },
+    { "source": "/c/(.*)", "destination": "/index.html" }
+  ],
+  "functions": {
+    "api/refresh-category-cache.js": {
+      "maxDuration": 300
+    }
+  }
+}

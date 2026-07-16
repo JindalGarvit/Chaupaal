@@ -1,0 +1,15 @@
+:root{
+  --red:#E63946; --red-deep:#C72E3A; --gold:#FFC93C;
+  --cream:#FFF8EE; --white:#FFFFFF; --ink:#2B2730;
+  --muted:#9A9099; --green:#33C481; --line:#F1E6D8;
+  --card:#FFFFFF; --navy:#15192E;
+  --tab-h:60px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{
+  height:100%;font-family:'Inter',sans-serif;
+  background:var(--cream);margin:0;padding:0;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+}
+
