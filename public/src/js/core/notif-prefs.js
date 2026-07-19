@@ -12,6 +12,7 @@
     messages: true,
     comments: true,
     duels: true,
+    chatPresence: true,
   };
 
   const TYPE_TO_CATEGORY = {
@@ -86,6 +87,7 @@
       notifMessages: 'messages',
       notifComments: 'comments',
       notifDuels: 'duels',
+      notifChatPresence: 'chatPresence',
     };
     Object.entries(map).forEach(([id, key]) => {
       const el = document.getElementById(id);
@@ -107,6 +109,9 @@
       duels: document.getElementById('notifDuels')
         ? !!document.getElementById('notifDuels').checked
         : notifPrefs.duels,
+      chatPresence: document.getElementById('notifChatPresence')
+        ? !!document.getElementById('notifChatPresence').checked
+        : notifPrefs.chatPresence !== false,
     };
   }
 

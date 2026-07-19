@@ -40,6 +40,7 @@
       }
 
       if (envelope.httpStatus === 429 || envelope.error?.code === 'RATE_LIMITED') {
+        if (typeof SoundLib !== 'undefined' && SoundLib.rateLimited) SoundLib.rateLimited();
         return {
           ok: false,
           remaining: envelope.error?.details?.remaining ?? envelope.data?.remaining,

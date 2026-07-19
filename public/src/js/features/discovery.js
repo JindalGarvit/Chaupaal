@@ -51,10 +51,17 @@ async function runPeepalAiSearch(){
       if(queryLower.includes(intent)){quickCriteria = {...criteria, detectedIntent: intent};break;}
     }
 
-    // Step 2: Full Sonnet understanding for nuanced queries
-    const parseData = await callAnthropic({
-        model:'claude-haiku-4-5-20251001', max_tokens:500,
-        system:`You are an expert people-matching AI for Chaupaal, India's social discovery app. Understand what kind of person the user wants to meet — go beyond literal words to understand real intent.
+    // Step 2: LLM intent parse (skipped when master AI kill-switch is off — use local INTENT_MAP)
+    let criteria = {interests:[],ageRange:{min:null,max:null},gender:'any',city:null,personality:null,searchIntent:'any',vibe:'',conversationStarter:''};
+    if(quickCriteria){
+      criteria = {...criteria, ...quickCriteria, searchIntent: quickCriteria.detectedIntent || 'any'};
+    }
+    const aiOn = typeof isAiFeaturesEnabled === 'function' ? await isAiFeaturesEnabled() : false;
+    if(aiOn){
+      try{
+        const parseData = await callAI({
+          tier:'fast', max_tokens:500, feature:'peepal_ai_search',
+          system:`You are an expert people-matching AI for Chaupaal, India's social discovery app. Understand what kind of person the user wants to meet — go beyond literal words to understand real intent.
 
 INTENT EXAMPLES:
 - "dating" / "someone special" / "romantic" → searchIntent: dating, prioritize opposite gender, similar age
@@ -81,27 +88,38 @@ Return ONLY valid JSON:
   "vibe": "one line describing ideal match",
   "conversationStarter": "a natural opening message they could send to match"
 }`,
-        messages:[{role:'user', content: query}]
-      });
-    let criteria = {interests:[],ageRange:{min:null,max:null},gender:'any',city:null,personality:null,searchIntent:'any',vibe:'',conversationStarter:''};
-    try{
-      const raw = parseData.content?.[0]?.text || '{}';
-      const parsed = JSON.parse(raw.replace(/```json|```/g,'').trim());
-      criteria = {...criteria, ...parsed};
-      // Merge with quick criteria if found
-      if(quickCriteria){
-        criteria.interests = [...new Set([...criteria.interests,...(quickCriteria.interests||[])])];
-        if(!criteria.personality && quickCriteria.personality) criteria.personality = quickCriteria.personality;
-        if(criteria.searchIntent==='any' && quickCriteria.detectedIntent) criteria.searchIntent = quickCriteria.detectedIntent;
-      }
-    }catch(e){}
+          messages:[{role:'user', content: query}]
+        });
+        try{
+          const raw = parseData.content?.[0]?.text || parseData.text || '{}';
+          const parsed = JSON.parse(raw.replace(/```json|```/g,'').trim());
+          criteria = {...criteria, ...parsed};
+          if(quickCriteria){
+            criteria.interests = [...new Set([...(criteria.interests||[]),...(quickCriteria.interests||[])])];
+            if(!criteria.personality && quickCriteria.personality) criteria.personality = quickCriteria.personality;
+            if(criteria.searchIntent==='any' && quickCriteria.detectedIntent) criteria.searchIntent = quickCriteria.detectedIntent;
+          }
+        }catch(e){}
+      }catch(e){ /* kill-switch / network — keep local criteria */ }
+    }
 
     // Step 3: Score all available profiles
     const pool = [...SAMPLE_DISCOVERY_POOL];
     if(db && currentUser){
       try{
         const snap = await db.collection('users').where('openToMeet','==',true).limit(40).get();
-        snap.docs.forEach(d=>{const u=d.data();if(u.uid!==currentUser.uid&&u.name)pool.push(u);});
+        snap.docs.forEach(d=>{
+          const u=d.data();
+          if((u.uid||d.id)!==currentUser.uid&&u.name){
+            pool.push({
+              ...u,
+              uid:u.uid||d.id,
+              icebreakers: typeof resolveIcebreakersFromUser==='function'
+                ? resolveIcebreakersFromUser(u)
+                : (u.icebreakers||u.profile?.icebreakers||[]),
+            });
+          }
+        });
       }catch(e){}
     }
 
@@ -199,20 +217,22 @@ Return ONLY valid JSON:
       return;
     }
 
-    // Step 4: Generate personalised conversation starters with Haiku
+    // Step 4: Generate personalised conversation starters (no-op when AI off)
     const summaries = scored.slice(0,5).map(m=>`${m.user.name}: ${m.user.age||'?'}y, ${m.user.city||'India'}, ${(m.user.interests||[]).join('/')}, ${m.user.bio||''}`).join('\n');
     let starters = {};
-    try{
-      const sd = await callAnthropic({
-          model:'claude-haiku-4-5-20251001', max_tokens:350,
+    if(aiOn){
+      try{
+        const sd = await callAI({
+          tier:'fast', max_tokens:350, feature:'peepal_ai_starters',
           system:'Return ONLY a JSON object mapping name → {reason: "why they match in 1 sentence", starter: "natural first message to send, max 15 words, warm and specific"}. No generic messages.',
           messages:[{role:'user', content:`Search: "${query}"
 Intent: ${criteria.searchIntent}
 Profiles:
 ${summaries}`}]
         });
-      starters = JSON.parse((sd.content?.[0]?.text||'{}').replace(/```json|```/g,'').trim());
-    }catch(e){}
+        starters = JSON.parse((sd.content?.[0]?.text||sd.text||'{}').replace(/```json|```/g,'').trim());
+      }catch(e){}
+    }
 
     // Render
     resultsEl.innerHTML = `
@@ -226,6 +246,10 @@ ${summaries}`}]
       const info = starters[user.name] || {};
       const reason = info.reason || reasons.join(' · ') || criteria.vibe || 'Shares your interests';
       const starter = info.starter || criteria.conversationStarter || `Hey! Found you on Peepal 👋`;
+      const ib = typeof pickIcebreakerSnippet==='function'
+        ? pickIcebreakerSnippet(typeof resolveIcebreakersFromUser==='function'?resolveIcebreakersFromUser(user):user.icebreakers)
+        : null;
+      const theirIb = typeof resolveIcebreakersFromUser==='function'?resolveIcebreakersFromUser(user):(user.icebreakers||[]);
 
       const card = document.createElement('div');
       card.className = 'peepal-ai-result-card';
@@ -242,7 +266,8 @@ ${summaries}`}]
           <div style="background:rgba(230,57,70,0.1);color:var(--red);border-radius:999px;padding:5px 11px;font-size:12px;font-weight:700;flex-shrink:0;">${matchPct}%</div>
         </div>
         ${(user.interests||[]).length?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">${(user.interests||[]).slice(0,4).map(i=>`<span style="background:rgba(230,57,70,0.07);color:var(--red);border-radius:999px;padding:3px 9px;font-size:11px;font-weight:600;">📌 ${i}</span>`).join('')}</div>`:''}
-        <div class="ai-match-reason">"${reason}"</div>
+        <div class="ai-match-reason">"${(typeof interestOverlapReason==='function' && interestOverlapReason(user)) || reason}"</div>
+        ${ib?`<div class="discovery-icebreaker"><div class="discovery-icebreaker-label">Conversation starter</div><div class="discovery-icebreaker-text">"${ib.answer}"</div></div>`:''}
         <div style="background:rgba(43,39,48,0.04);border-radius:10px;padding:8px 12px;font-size:12px;color:var(--muted);margin-top:6px;margin-bottom:10px;">
           💬 Suggested opener: <span style="color:var(--ink);font-style:italic;">"${starter}"</span>
         </div>
@@ -255,15 +280,24 @@ ${summaries}`}]
       card.querySelector('.peepal-ai-chat-btn').addEventListener('click', e=>{
         const name = e.currentTarget.dataset.name;
         const suggestedStarter = e.currentTarget.dataset.starter;
-        const newChat = {id:`chat_ai_${user.uid}`,type:'dm',name,avatar:user.avatar||'👤',preview:'Found through Peepal AI search',time:'now',unread:0,duelStreak:0};
-        if(!SAMPLE_CHATS.find(c=>c.id===newChat.id)) SAMPLE_CHATS.unshift(newChat);
         document.getElementById('peepalAiSearch')?.classList.add('hidden');
+        if(typeof openDmWithSharedHello==='function'){
+          openDmWithSharedHello({
+            uid: user.uid,
+            name,
+            avatar: user.avatar||'👤',
+            theirIcebreakers: theirIb,
+            starterText: suggestedStarter,
+          });
+          return;
+        }
+        const newChat = {id:`chat_ai_${user.uid}`,type:'dm',name,avatar:user.avatar||'👤',preview:'Found through Peepal AI search',time:'now',unread:0,duelStreak:0,theirIcebreakers:theirIb,icebreakers:theirIb};
+        if(!SAMPLE_CHATS.find(c=>c.id===newChat.id)) SAMPLE_CHATS.unshift(newChat);
         document.querySelectorAll('.tab-btn').forEach(b=>{if(b.dataset.tab==='baithak')b.click();});
         setTimeout(()=>{
           initBaithak();
           setTimeout(()=>{
             openChatScreen(newChat);
-            // Pre-fill the suggested opener
             setTimeout(()=>{
               const msgInput = document.getElementById('chatMsgInput');
               if(msgInput) msgInput.value = suggestedStarter;
@@ -395,7 +429,7 @@ function openPeepalAskSheet(){
     <div class="ask-header">
       <button id="closeAsk" style="background:none;border:none;font-size:22px;cursor:pointer;">✕</button>
       <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">Ask Peepal</div>
-      <button class="peepal-ask-publish-btn" id="peepalPublishBtn">Post</button>
+      <button class="btn btn--primary btn--sm peepal-ask-publish-btn" id="peepalPublishBtn">Post</button>
     </div>
     <div style="padding:16px;">
       <!-- Anonymous toggle -->
@@ -485,6 +519,9 @@ function openPeepalAskSheet(){
     if(!text){showToast('Please write your question first');return;}
     const unlock=typeof beginClientMutation==='function'?beginClientMutation('peepal_post'):()=>{};
     if(unlock===false){ showToast('Post already submitting…'); return; }
+    const pubBtn=document.getElementById('peepalPublishBtn');
+    const pubLabel=pubBtn?pubBtn.textContent:'';
+    if(pubBtn){ pubBtn.disabled=true; pubBtn.textContent='Posting…'; }
     try{
     if(typeof checkRateLimit==='function'){
       const rl=await checkRateLimit('post');
@@ -505,7 +542,15 @@ function openPeepalAskSheet(){
       try{
         if(typeof uploadOptimizedImage==='function'&&currentUser&&(typeof isMediaUploadReady!=='function'||await isMediaUploadReady())){
           const up=await uploadOptimizedImage(pendingPeepalAttachment.file,{folder:'peepal'});
-          q.attachment={type:'image',data:up.media,thumb:up.thumb,mediaPath:up.mediaPath,thumbPath:up.thumbPath};
+          q.attachment={
+            type:'image',
+            data:up.media,
+            thumb:up.thumb,
+            mediaPath:up.mediaPath,
+            thumbPath:up.thumbPath,
+            width:Number(up.width)||null,
+            height:Number(up.height)||null,
+          };
         } else if(pendingPeepalAttachment.data){
           q.attachment={type:'image',data:pendingPeepalAttachment.data};
         }
@@ -528,7 +573,13 @@ function openPeepalAskSheet(){
           totalResponses:0,comments:0,tag:q.tag,user:q.user,anonymous:false,
           uid:currentUser.uid,deleted:false,
           attachment: q.attachment?.type==='image'
-            ? {type:'image',data:q.attachment.data,thumb:q.attachment.thumb||null}
+            ? {
+                type:'image',
+                data:q.attachment.data,
+                thumb:q.attachment.thumb||null,
+                width:q.attachment.width||null,
+                height:q.attachment.height||null,
+              }
             : (q.attachment?.type==='link'?q.attachment:null),
           createdAt:firebase.firestore.FieldValue.serverTimestamp(),ts:Date.now(),
         });
@@ -540,9 +591,11 @@ function openPeepalAskSheet(){
     saveToArchive({type:'peepal_post',...q});
     sheet.classList.remove('open');setTimeout(()=>sheet.remove(),350);
     renderPeepalFeed();
-    if(typeof trackPostCreated==='function') trackPostCreated(isAnon?'peepal_anon':'peepal');
-    showToast(isAnon?'Posted anonymously 🎭':'Question posted to Peepal! 🌳');
+      if(typeof trackPostCreated==='function') trackPostCreated(isAnon?'peepal_anon':'peepal');
+      if(typeof SoundLib!=='undefined'&&SoundLib.postPublish) SoundLib.postPublish();
+      showToast(isAnon?'Posted anonymously 🎭':'Question posted to Peepal! 🌳');
     }finally{
+      if(pubBtn){ pubBtn.disabled=false; pubBtn.textContent=pubLabel; }
       if(typeof unlock==='function') unlock();
     }
   });

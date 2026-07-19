@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Chaupaal — News with Social Discovery</title>
 <link rel="icon" type="image/png" href="/icon.png">
 <link rel="manifest" href="/manifest.json">
@@ -15,11 +15,11 @@
   <link rel="stylesheet" href="/src/styles/tokens.css">
   <link rel="stylesheet" href="/src/styles/layout.css">
   <link rel="stylesheet" href="/src/styles/akhbaar.css">
-  <link rel="stylesheet" href="/src/styles/dangal.css">
-  <link rel="stylesheet" href="/src/styles/baithak.css">
-  <link rel="stylesheet" href="/src/styles/peepal.css">
-  <link rel="stylesheet" href="/src/styles/duniya.css">
-  <link rel="stylesheet" href="/src/styles/components.css">
+  <link rel="stylesheet" href="/src/styles/dangal.css?v=20">
+  <link rel="stylesheet" href="/src/styles/baithak.css?v=20">
+  <link rel="stylesheet" href="/src/styles/peepal.css?v=18">
+  <link rel="stylesheet" href="/src/styles/duniya.css?v=18">
+  <link rel="stylesheet" href="/src/styles/components.css?v=20">
 </head>
 <body>
 <div class="device">
@@ -101,7 +101,7 @@
           </div>
           <button class="auth-forgot" id="forgotPasswordBtn">Forgot password?</button>
           <div class="auth-error" id="loginError"></div>
-          <button class="auth-btn" id="loginBtn">Log in →</button>
+          <button class="btn btn--primary btn--block btn--lg auth-btn" id="loginBtn">Log in →</button>
           <div class="auth-divider"><span>or</span></div>
           <button class="auth-switch-btn" id="loginToSignup">Don't have an account? <strong>Sign up</strong></button>
         </div>
@@ -153,7 +153,7 @@
             </div>
           </div>
           <div class="auth-error" id="reg1Error"></div>
-          <button class="auth-btn" id="reg1Next">Continue →</button>
+          <button class="btn btn--primary btn--block btn--lg auth-btn" id="reg1Next">Continue →</button>
         </div>
       </div>
 
@@ -194,7 +194,7 @@
             </select>
           </div>
           <div class="auth-error" id="reg2Error"></div>
-          <button class="auth-btn" id="reg2Next">Continue →</button>
+          <button class="btn btn--primary btn--block btn--lg auth-btn" id="reg2Next">Continue →</button>
         </div>
       </div>
 
@@ -232,7 +232,7 @@
             </div>
           </div>
           <div class="auth-error" id="registerError"></div>
-          <button class="auth-btn" id="registerBtn">🎉 Create my account</button>
+          <button class="btn btn--primary btn--block btn--lg auth-btn" id="registerBtn">🎉 Create my account</button>
           <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:10px;line-height:1.6;">By creating an account you confirm you're 16+ and agree to our Terms & Privacy Policy</div>
         </div>
       </div>
@@ -243,7 +243,7 @@
           <div style="font-size:72px;margin-bottom:20px;" id="authSuccessEmoji">🎉</div>
           <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:26px;margin-bottom:10px;" id="authSuccessTitle">Welcome to Chaupaal!</div>
           <div style="font-size:15px;color:var(--muted);line-height:1.6;margin-bottom:32px;" id="authSuccessDesc">Your account is ready. Let's explore what's happening today.</div>
-          <button class="auth-btn" id="authSuccessCta" style="width:100%;max-width:280px;">Let's go 🚀</button>
+          <button class="btn btn--primary btn--block btn--lg auth-btn" id="authSuccessCta" style="width:100%;max-width:280px;">Let's go 🚀</button>
         </div>
       </div>
 
@@ -265,9 +265,9 @@
         <span style="color:var(--red)">🔥</span><span id="streakNum">0</span>
         <span style="font-size:10px;color:var(--muted);margin-left:2px;">❄️<span id="streakFreezeCount">0</span></span>
       </div>
-      <button class="icon-btn" id="notifBtn" style="position:relative;background:var(--cream);border-radius:50%;width:36px;height:36px;font-size:16px;">🔔<span class="notif-dot hidden" id="notifDot"></span></button>
-      <button class="icon-btn" id="settingsBtn" style="background:var(--cream);border-radius:50%;width:36px;height:36px;font-size:16px;">⚙️</button>
-      <button class="profile-btn" id="profileBtn" title="Profile" style="box-shadow:0 2px 8px rgba(43,39,48,0.15);">
+      <button class="icon-btn" id="notifBtn" aria-label="Notifications" title="Notifications" style="position:relative;background:var(--cream);border-radius:50%;width:36px;height:36px;font-size:16px;">🔔<span class="notif-dot hidden" id="notifDot"></span></button>
+      <button class="icon-btn" id="settingsBtn" aria-label="Settings" title="Settings" style="background:var(--cream);border-radius:50%;width:36px;height:36px;font-size:16px;">⚙️</button>
+      <button class="profile-btn" id="profileBtn" aria-label="Profile" title="Profile" style="box-shadow:0 2px 8px rgba(43,39,48,0.15);">
         <span id="profileBtnInner">🪑</span>
       </button>
     </div>
@@ -300,8 +300,8 @@
         <div class="duniya-header">
           <div class="duniya-title">🌍 Duniya</div>
           <div style="display:flex;gap:8px;">
-            <button class="icon-btn" id="duniyaSearchBtn">🔍</button>
-            <button class="icon-btn" id="duniyaPostBtn">＋</button>
+            <button class="icon-btn" id="duniyaSearchBtn" aria-label="Search people" title="Search">🔍</button>
+            <button class="icon-btn" id="duniyaPostBtn" aria-label="Create post" title="New post">＋</button>
           </div>
         </div>
         <div class="duniya-stories-row" id="duniyaStoriesRow"></div>
@@ -313,17 +313,18 @@
 
     <div class="tab-panel" id="panel-baithak">
     <!-- STORIES ROW -->
+    <!-- FUTURE_I18N: story label / search placeholder should come from a localization layer -->
     <div class="stories-row" id="storiesRow">
       <div class="story-add-btn" id="addStoryBtn">
         <div class="story-add-icon">＋</div>
-        <div class="story-label">Aapki</div>
+        <div class="story-label">Your story</div>
       </div>
       <!-- stories injected here -->
     </div>
 
     <!-- SEARCH -->
     <div class="baithak-search-row">
-      <input class="baithak-search" id="baithakSearch" placeholder="🔍 Dhoondho..." type="text">
+      <input class="baithak-search" id="baithakSearch" placeholder="🔍 Search..." type="text">
       <button class="new-chat-btn" id="newChatBtn">✏️</button>
     </div>
 
@@ -514,6 +515,10 @@
         <label class="switch"><input type="checkbox" id="notifMessages" checked><span class="slider"></span></label>
       </div>
       <div class="toggle-row">
+        <div><div class="toggle-label">Read receipts & typing</div><div class="toggle-desc">Show when others type or have seen your messages (1:1)</div></div>
+        <label class="switch"><input type="checkbox" id="notifChatPresence" checked><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
         <div><div class="toggle-label">Comments</div><div class="toggle-desc">Replies on your Peepal & Duniya posts</div></div>
         <label class="switch"><input type="checkbox" id="notifComments" checked><span class="slider"></span></label>
       </div>
@@ -522,8 +527,8 @@
         <label class="switch"><input type="checkbox" id="notifDuels" checked><span class="slider"></span></label>
       </div>
       <div class="settings-section">Safety & account</div>
-      <button type="button" class="modal-btn" id="settingsSessionsBtn" style="width:100%;margin-bottom:8px;">💻 Devices & sessions</button>
-      <button type="button" class="modal-btn" id="settingsBlockedBtn" style="width:100%;margin-bottom:12px;">🚫 Blocked users</button>
+      <button type="button" class="btn btn--primary btn--block modal-btn" id="settingsSessionsBtn" style="width:100%;margin-bottom:8px;">💻 Devices & sessions</button>
+      <button type="button" class="btn btn--primary btn--block modal-btn" id="settingsBlockedBtn" style="width:100%;margin-bottom:12px;">🚫 Blocked users</button>
       <div class="settings-section">Share with Friends</div>
       <div class="toggle-row">
         <div><div class="toggle-label">Birthday</div><div class="toggle-desc">Friends get a fun question on your birthday</div></div>
@@ -570,7 +575,7 @@
         <div class="dp-field-label">🔊 Voice for "Listen to post"</div>
         <select class="modal-select" id="voiceSelect"></select>
       </div>
-      <button class="modal-btn" id="saveSettings">Done</button>
+      <button class="btn btn--primary btn--block modal-btn" id="saveSettings">Done</button>
     </div>
   </div>
 
@@ -610,49 +615,75 @@
   <script src="/src/js/config/firebase.js"></script>
   <script src="/src/js/core/api-client.js"></script>
   <script src="/src/js/core/analytics.js"></script>
-  <script src="/src/js/ai/anthropic.js"></script>
   <script src="/src/js/data/samples.js"></script>
   <script src="/src/js/core/state.js"></script>
   <script src="/src/js/core/ui-states.js"></script>
   <script src="/src/js/core/firestore-page.js"></script>
   <script src="/src/js/core/drafts.js"></script>
   <script src="/src/js/core/soft-delete.js"></script>
+  <script src="/src/js/core/optimistic.js"></script>
+  <script src="/src/js/core/comments.js"></script>
+  <script src="/src/js/core/social-persistence.js?v=19"></script>
+  <script src="/src/js/core/relationships.js?v=20"></script>
+  <script src="/src/js/core/chat-presence.js"></script>
   <script src="/src/js/core/image-pipeline.js"></script>
   <script src="/src/js/core/profile-completion.js"></script>
+  <script src="/src/js/core/profile-facts.js"></script>
+  <script src="/src/js/core/profile-rewards.js"></script>
+  <script src="/src/js/core/icebreakers.js"></script>
+  <script src="/src/js/core/chaupaal-activity.js?v=15"></script>
+  <script src="/src/js/core/chaupaal-events.js?v=15"></script>
+  <script src="/src/js/core/chaupaal-founder.js?v=15"></script>
+  <script src="/src/js/core/profile-type.js"></script>
   <script src="/src/js/core/sessions.js"></script>
-  <script src="/src/js/core/safety.js"></script>
+  <script src="/src/js/core/safety.js?v=20"></script>
   <script src="/src/js/core/notif-prefs.js"></script>
   <script src="/src/js/core/feature-flags.js"></script>
+  <script src="/src/js/core/overlay-scope.js"></script>
+  <script src="/src/js/core/touch.js"></script>
+  <script src="/src/js/ai/ai-config.js"></script>
+  <script src="/src/js/ai/markdown.js"></script>
+  <script src="/src/js/ai/call-ai.js"></script>
+  <script src="/src/js/ai/anthropic.js"></script>
   <script src="/src/js/core/search.js"></script>
-  <script src="/src/js/core/deeplinks.js"></script>
+  <script src="/src/js/core/deeplinks.js?v=20"></script>
   <script src="/src/js/core/rate-limit-client.js"></script>
   <script src="/src/js/core/theme.js"></script>
-  <script src="/src/js/core/discovery-core.js"></script>
-  <script src="/src/js/core/profile-btn.js"></script>
+  <script src="/src/js/core/discovery-core.js?v=20"></script>
+  <script src="/src/js/core/profile-btn.js?v=20"></script>
   <script src="/src/js/auth/auth-ui.js"></script>
   <script src="/src/js/features/akhbaar.js"></script>
-  <script src="/src/js/features/dangal.js"></script>
+  <script src="/src/js/features/dangal.js?v=20"></script>
   <script src="/src/js/features/dangal-ratings.js"></script>
-  <script src="/src/js/features/baithak-data.js"></script>
-  <script src="/src/js/features/baithak-chat.js"></script>
+  <script src="/src/js/features/baithak-data.js?v=20"></script>
+  <script src="/src/js/features/self-chat.js"></script>
+  <script src="/src/js/features/chaupaal-chat.js?v=17"></script>
+  <script src="/src/js/features/baithak-chat.js?v=20"></script>
+  <script src="/src/js/core/stories.js?v=20"></script>
   <script src="/src/js/features/baithak.js"></script>
-  <script src="/src/js/features/profile.js"></script>
+  <script src="/src/js/features/profile-preview.js"></script>
+  <script src="/src/js/features/profile.js?v=20"></script>
   <script src="/src/js/core/i18n.js"></script>
-  <script src="/src/js/features/categories.js"></script>
+  <script src="/src/js/features/categories.js?v=21"></script>
   <script src="/src/js/features/peepal.js"></script>
-  <script src="/src/js/features/onboarding.js"></script>
+  <script src="/src/js/features/onboarding.js?v=20"></script>
   <script src="/src/js/core/service-worker.js"></script>
-  <script src="/src/js/features/streak.js"></script>
+  <script src="/src/js/features/streak.js?v=17"></script>
   <script src="/src/js/features/wraps.js"></script>
-  <script src="/src/js/games/engines.js"></script>
+  <script src="/vendor/chess.js?v=14"></script>
+  <script src="/src/js/games/game-runtime.js?v=14"></script>
+  <script src="/src/js/games/game-ui.js?v=20"></script>
+  <script src="/src/js/games/game-registry.js?v=14"></script>
+  <script src="/src/js/games/ank-jod.js?v=20"></script>
+  <script src="/src/js/games/engines.js?v=20"></script>
+  <script src="/src/js/games/board-games.js?v=20"></script>
+  <script src="/src/js/games/arcade.js?v=20"></script>
   <script src="/src/js/main.js"></script>
   <script src="/src/js/features/akhbaar-catbar.js"></script>
-  <script src="/src/js/features/duniya.js"></script>
+  <script src="/src/js/features/duniya.js?v=20"></script>
   <script src="/src/js/features/premium.js"></script>
   <script src="/src/js/features/settings-extra.js"></script>
-  <script src="/src/js/games/board-games.js"></script>
   <script src="/src/js/features/discovery.js"></script>
-  <script src="/src/js/games/arcade.js"></script>
   <script src="/src/js/core/polish.js"></script>
   <script src="/src/js/features/fairness.js"></script>
   <script src="/src/js/features/media-profile.js"></script>

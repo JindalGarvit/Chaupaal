@@ -74,6 +74,14 @@
     search_v1: { enabled: true, percent: 100, allowList: [], denyList: [], note: 'Universal search UI' },
     deeplinks_v1: { enabled: true, percent: 100, allowList: [], denyList: [], note: 'Shareable profile/post/chat URLs' },
     rate_limit_client: { enabled: true, percent: 100, allowList: [], denyList: [], note: 'Client calls /api/check-rate before writes' },
+    /** Master AI kill-switch — keep enabled:false until launch checklist in CONTENT.md is done. */
+    ai_features: {
+      enabled: false,
+      percent: 0,
+      allowList: [],
+      denyList: [],
+      note: 'Master AI gate. Server also requires AI_FEATURES_ENABLED=true. Granular: CAT_LIVE_AI_PAUSED, CATEGORY_CRON_PAUSED.',
+    },
   };
 
   window.isFeatureEnabled = isFeatureEnabled;

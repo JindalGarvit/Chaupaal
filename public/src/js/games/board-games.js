@@ -5,9 +5,27 @@ function openFiveInRowGame(chat){
   let myTurn=true;let gameOver=false;let winLine=null;
   const FIR_SECS=15;let firTimer=FIR_SECS;let firInterval=null;
 
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:absolute;inset:0;background:#1a1a2e;z-index:80;display:flex;flex-direction:column;';
+  const begin=typeof beginGameOverlaySession==='function'?beginGameOverlaySession:null;
+  const gs=begin?begin({
+    type:'fiveinrow',title:'Five in a Row',mode:'1v1',chat,overlay,
+    cleanup(){stopFirTimer();},
+  }):null;
+  if(begin&&(!gs||!gs.alive()))return;
+  if(!begin){
+    const device=document.querySelector('.device');
+    if(!device){if(typeof showToast==='function')showToast('Game container not found');return;}
+    device.appendChild(overlay);
+  }
+  const alive=()=>gs?gs.alive():true;
+  const schedule=(fn,ms)=>gs?gs.schedule(fn,ms):setTimeout(fn,ms);
+  const close=()=>{if(gs)gs.close();else{stopFirTimer();overlay.remove();}};
+
   function startFirTimer(){
     clearInterval(firInterval);firTimer=FIR_SECS;
     firInterval=setInterval(()=>{
+      if(!alive()){clearInterval(firInterval);return;}
       firTimer--;
       const el=document.getElementById('firTimerEl');
       if(el){el.textContent=firTimer+'s';el.style.color=firTimer<=5?'#E74C3C':'rgba(255,255,255,0.5)';}
@@ -19,7 +37,7 @@ function openFiveInRowGame(chat){
       }
     },1000);
   }
-  function stopFirTimer(){clearInterval(firInterval);}
+  function stopFirTimer(){clearInterval(firInterval);firInterval=null;}
 
   function checkFiveWin(r,c,sym){
     const dirs=[[0,1],[1,0],[1,1],[1,-1]];
@@ -33,7 +51,6 @@ function openFiveInRowGame(chat){
   }
 
   function getAIMoveFIR(){
-    // Find best move: block opponent's near-wins or extend own
     let best=null,bestScore=-1;
     for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
       if(board[r][c])continue;
@@ -58,41 +75,50 @@ function openFiveInRowGame(chat){
   }
 
   function playMove(r,c,who){
-    if(board[r][c]||gameOver)return;
+    if(!alive()||board[r][c]||gameOver)return;
     const sym=who==='me'?'X':'O';
     board[r][c]=sym;
+    if(typeof gameFeedback==='function')gameFeedback(who==='me'?'place':'move');
     const win=checkFiveWin(r,c,sym);
-    if(win){gameOver=true;winLine=win;recordGameResult('fiveinrow',who==='me');stopFirTimer();render();return;}
-    if(board.every(row=>row.every(Boolean))){gameOver=true;recordGameResult('fiveinrow',false,true);stopFirTimer();render();return;}
+    if(win){
+      gameOver=true;winLine=win;stopFirTimer();
+      if(gs)gs.setOutcome(who==='me'?'won':'lost');
+      if(typeof recordGameResult==='function')recordGameResult('fiveinrow',who==='me');
+      render();return;
+    }
+    if(board.every(row=>row.every(Boolean))){
+      gameOver=true;stopFirTimer();
+      if(gs)gs.setOutcome('draw');
+      if(typeof recordGameResult==='function')recordGameResult('fiveinrow',false,true);
+      render();return;
+    }
     myTurn=who!=='me';
     if(myTurn)startFirTimer();else stopFirTimer();
     render();
-    if(!myTurn&&!gameOver)setTimeout(()=>{const[ar,ac]=getAIMoveFIR();playMove(ar,ac,'opp');},700);
+    if(!myTurn&&!gameOver)schedule(()=>{if(!alive())return;const[ar,ac]=getAIMoveFIR();playMove(ar,ac,'opp');},700);
   }
 
-  const overlay=document.createElement('div');
-  overlay.style.cssText='position:absolute;inset:0;background:#1a1a2e;z-index:80;display:flex;flex-direction:column;';
-
   function render(){
+    if(!alive())return;
     overlay.innerHTML=`
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:#15192e;flex-shrink:0;">
-        <button id="firBack" style="background:rgba(255,255,255,0.1);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer;">←</button>
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;color:#fff;">🔵 Five in a Row</div>
-        <div style="width:36px;"></div>
-      </div>
+      ${gameChromeHtml({title:'Five in a Row',backId:'firBack'})}
       <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;flex-shrink:0;">
-        <div style="color:#E74C3C;font-size:13px;font-weight:700;">⚫ You</div>
+        <div style="color:#E74C3C;font-size:13px;font-weight:700;">● You (Black)</div>
         ${!gameOver?`<span id="firTimerEl" style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;color:rgba(255,255,255,0.5);">${firTimer}s</span>`:''}
-        <div style="color:#3498DB;font-size:13px;font-weight:700;">⚪ ${chat.name}</div>
+        <div style="color:#3498DB;font-size:13px;font-weight:700;">○ ${chat.name} (White)</div>
       </div>
       <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:8px;overflow:auto;">
-        <div id="firBoard" style="display:grid;grid-template-columns:repeat(${SIZE},1fr);gap:1px;background:#3a2817;padding:4px;border-radius:8px;width:min(360px,94vw);aspect-ratio:1;"></div>
+        <div id="firBoard" style="display:grid;grid-template-columns:repeat(${SIZE},1fr);gap:1px;background:#3a2817;padding:4px;border-radius:var(--game-board-radius,8px);width:min(360px,94vw);aspect-ratio:1;" role="grid" aria-label="Five in a Row board"></div>
       </div>
-      <div style="padding:10px 16px;text-align:center;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;color:${gameOver?'var(--gold)':'#fff'};flex-shrink:0;">
-        ${gameOver?(winLine?(myTurn===false&&board[winLine[0][0]][winLine[0][1]]==='X'?'🎉 You won!':board[winLine[0][0]][winLine[0][1]]==='X'?'🎉 You won!':chat.name+' won!'):"It's a draw!"):(myTurn?'Your turn':chat.name+' thinking...')}
-      </div>
+      ${typeof gameTurnBannerHtml==='function'
+        ? gameTurnBannerHtml({
+            mode: gameOver?'over':myTurn?'yours':'theirs',
+            label: gameOver?(winLine?(board[winLine[0][0]][winLine[0][1]]==='X'?'You won!':chat.name+' won!'):"It's a draw!"):(myTurn?'Your turn':chat.name+' thinking…'),
+            pulse: !gameOver && myTurn,
+          })
+        : `<div style="padding:10px 16px;text-align:center;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;color:${gameOver?'var(--gold)':'#fff'};flex-shrink:0;">${gameOver?(winLine?(board[winLine[0][0]][winLine[0][1]]==='X'?'🎉 You won!':chat.name+' won!'):"It's a draw!"):(myTurn?'Your turn':chat.name+' thinking...')}</div>`}
     `;
-    document.getElementById('firBack').addEventListener('click',()=>{stopFirTimer();overlay.remove();});
+    document.getElementById('firBack').addEventListener('click',()=>close());
     const boardEl=document.getElementById('firBoard');
     const winSet=new Set((winLine||[]).map(([r,c])=>r+'_'+c));
     for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
@@ -108,24 +134,24 @@ function openFiveInRowGame(chat){
       boardEl.appendChild(sq);
     }
   }
-  document.querySelector('.device').appendChild(overlay);render();startFirTimer();
+  render();startFirTimer();
 }
 
-// ===================== BUSINESS (Monopoly-style) =====================
+// ===================== BUSINESS (property trading) =====================
 function openBusinessGame(chat,playerCount){
   playerCount=Math.min(Math.max(playerCount||2,2),6);
   const PLAYER_COLORS=['#E74C3C','#3498DB','#2ECC71','#F1C40F','#9B59B6','#1ABC9C'];
   const NAMES=['You',chat.name,...(playerCount>2?['Player 3','Player 4','Player 5','Player 6'].slice(0,playerCount-2):[])];
 
   const BOARD=[
-    {name:'GO',type:'go'},
+    {name:'Start',type:'go'},
     {name:'Connaught Place',type:'property',price:600,rent:[20,100,300,750,925,1100],color:'#955436',group:0},
-    {name:'Community Chest',type:'chest'},
+    {name:'Community Fund',type:'chest'},
     {name:'Karol Bagh',type:'property',price:600,rent:[40,200,600,1400,1700,2000],color:'#955436',group:0},
     {name:'Income Tax',type:'tax',amount:200},
     {name:'Railway Station 1',type:'railway',price:2000,group:'rail'},
     {name:'Lajpat Nagar',type:'property',price:1000,rent:[60,300,900,1600,2000,2500],color:'#aae0fa',group:1},
-    {name:'Chance',type:'chance'},
+    {name:'Twist',type:'chance'},
     {name:'Saket',type:'property',price:1000,rent:[60,300,900,1600,2000,2500],color:'#aae0fa',group:1},
     {name:'Hauz Khas',type:'property',price:1200,rent:[80,400,1000,2000,2400,2800],color:'#aae0fa',group:1},
     {name:'Jail',type:'jail'},
@@ -135,12 +161,12 @@ function openBusinessGame(chat,playerCount){
     {name:'Powai',type:'property',price:1600,rent:[120,600,1800,5000,7000,9000],color:'#d93a96',group:2},
     {name:'Railway Station 2',type:'railway',price:2000,group:'rail'},
     {name:'Koramangala',type:'property',price:1800,rent:[140,700,2000,5500,7500,9500],color:'#f7941d',group:3},
-    {name:'Community Chest',type:'chest'},
+    {name:'Community Fund',type:'chest'},
     {name:'Indiranagar',type:'property',price:1800,rent:[140,700,2000,5500,7500,9500],color:'#f7941d',group:3},
     {name:'Whitefield',type:'property',price:2000,rent:[160,800,2200,6000,8000,10000],color:'#f7941d',group:3},
-    {name:'Free Parking',type:'parking'},
+    {name:'Rest Stop',type:'parking'},
     {name:'Salt Lake',type:'property',price:2200,rent:[180,900,2500,7000,8750,10500],color:'#ed1b24',group:4},
-    {name:'Chance',type:'chance'},
+    {name:'Twist',type:'chance'},
     {name:'Park Street',type:'property',price:2200,rent:[180,900,2500,7000,8750,10500],color:'#ed1b24',group:4},
     {name:'New Town',type:'property',price:2400,rent:[200,1000,3000,7500,9250,11000],color:'#ed1b24',group:4},
     {name:'Railway Station 3',type:'railway',price:2000,group:'rail'},
@@ -151,10 +177,10 @@ function openBusinessGame(chat,playerCount){
     {name:'Go To Jail',type:'gotojail'},
     {name:'Jubilee Hills',type:'property',price:3000,rent:[260,1300,3900,9000,11000,12750],color:'#1fb25a',group:6},
     {name:'Banjara Hills',type:'property',price:3000,rent:[260,1300,3900,9000,11000,12750],color:'#1fb25a',group:6},
-    {name:'Chance',type:'chance'},
+    {name:'Twist',type:'chance'},
     {name:'Gachibowli',type:'property',price:3200,rent:[280,1500,4500,10000,12000,14000],color:'#1fb25a',group:6},
     {name:'Railway Station 4',type:'railway',price:2000,group:'rail'},
-    {name:'Community Chest',type:'chest'},
+    {name:'Community Fund',type:'chest'},
     {name:'Sector 17',type:'property',price:3500,rent:[350,1750,5000,11000,13000,15000],color:'#0072bb',group:7},
     {name:'Luxury Tax',type:'tax',amount:1000},
     {name:'Golf Course Road',type:'property',price:4000,rent:[500,2000,6000,14000,17000,20000],color:'#0072bb',group:7},
@@ -162,26 +188,46 @@ function openBusinessGame(chat,playerCount){
 
   let players=NAMES.map((name,i)=>({name,pos:0,money:15000,properties:[],jailed:0,bankrupt:false,color:PLAYER_COLORS[i]}));
   let currentPlayer=0;let diceVal=[1,1];let rolling=false;let gameOver=false;let message='';
-  const BUS_SECS=20;let busTimer=BUS_SECS;let busInterval=null;
+  const BUS_SECS=20;let busTimer=BUS_SECS;let busInterval=null;let diceIv=null;
+
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:absolute;inset:0;background:#1a1a2e;z-index:80;display:flex;flex-direction:column;';
+  const begin=typeof beginGameOverlaySession==='function'?beginGameOverlaySession:null;
+  const gs=begin?begin({
+    type:'business',title:'Business',mode:playerCount>2?'group':'1v1',chat,overlay,
+    cleanup(){stopBusTimer();if(diceIv){clearInterval(diceIv);diceIv=null;}},
+  }):null;
+  if(begin&&(!gs||!gs.alive()))return;
+  if(!begin){
+    const device=document.querySelector('.device');
+    if(!device){if(typeof showToast==='function')showToast('Game container not found');return;}
+    device.appendChild(overlay);
+  }
+  const alive=()=>gs?gs.alive():true;
+  const schedule=(fn,ms)=>gs?gs.schedule(fn,ms):setTimeout(fn,ms);
+  const close=()=>{if(gs)gs.close();else{stopBusTimer();if(diceIv)clearInterval(diceIv);overlay.remove();}};
 
   function startBusTimer(){
-    if(currentPlayer!==0)return;
+    if(currentPlayer!==0||!alive())return;
     clearInterval(busInterval);busTimer=BUS_SECS;
     busInterval=setInterval(()=>{
+      if(!alive()){clearInterval(busInterval);return;}
       busTimer--;
       const el=document.getElementById('busTimerEl');
       if(el)el.textContent=busTimer+'s';
       if(busTimer<=0){clearInterval(busInterval);if(!rolling&&!gameOver)rollBusDice();}
     },1000);
   }
-  function stopBusTimer(){clearInterval(busInterval);}
+  function stopBusTimer(){clearInterval(busInterval);busInterval=null;}
 
   function rollBusDice(){
-    if(rolling||gameOver)return;
+    if(!alive()||rolling||gameOver)return;
     stopBusTimer();rolling=true;let ticks=0;
-    const iv=setInterval(()=>{
+    if(diceIv)clearInterval(diceIv);
+    diceIv=setInterval(()=>{
+      if(!alive()){clearInterval(diceIv);diceIv=null;return;}
       diceVal=[Math.floor(Math.random()*6)+1,Math.floor(Math.random()*6)+1];render();ticks++;
-      if(ticks>8){clearInterval(iv);rolling=false;movePlayerToken(diceVal[0]+diceVal[1]);}
+      if(ticks>8){clearInterval(diceIv);diceIv=null;rolling=false;movePlayerToken(diceVal[0]+diceVal[1]);}
     },80);
   }
 
@@ -190,7 +236,7 @@ function openBusinessGame(chat,playerCount){
     p.pos=(p.pos+steps)%BOARD.length;
     const tile=BOARD[p.pos];
     message='';
-    if(tile.type==='go'){p.money+=2000;message='Passed GO! +₹2000';}
+    if(tile.type==='go'){p.money+=2000;message='Passed Start! +₹2000';}
     else if(tile.type==='tax'){p.money-=tile.amount;message=`Paid ₹${tile.amount} tax`;}
     else if(tile.type==='gotojail'){p.pos=10;p.jailed=2;message='Sent to Jail! 🚔';}
     else if(tile.type==='chance'||tile.type==='chest'){
@@ -236,18 +282,22 @@ function openBusinessGame(chat,playerCount){
   }
 
   function endBusTurn(){
+    if(!alive())return;
     const p=players[currentPlayer];
     if(p.money<0){p.bankrupt=true;message=`${p.name} went bankrupt! 💸`;}
     const active=players.filter(pl=>!pl.bankrupt);
-    if(active.length===1){gameOver=true;recordGameResult('business',active[0].name==='You');render();return;}
+    if(active.length===1){
+      gameOver=true;
+      const won=active[0].name==='You';
+      if(gs)gs.setOutcome(won?'won':'lost');
+      if(typeof recordGameResult==='function')recordGameResult('business',won);
+      render();return;
+    }
     do{currentPlayer=(currentPlayer+1)%playerCount;}while(players[currentPlayer].bankrupt);
     render();
     if(currentPlayer===0)startBusTimer();
-    else setTimeout(rollBusDice,900);
+    else schedule(rollBusDice,900);
   }
-
-  const overlay=document.createElement('div');
-  overlay.style.cssText='position:absolute;inset:0;background:#1a1a2e;z-index:80;display:flex;flex-direction:column;';
 
   function getTilePos(idx){
     const perSide=Math.ceil(BOARD.length/4);
@@ -258,12 +308,9 @@ function openBusinessGame(chat,playerCount){
   }
 
   function render(){
+    if(!alive())return;
     overlay.innerHTML=`
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:#15192e;flex-shrink:0;">
-        <button id="busBack" style="background:rgba(255,255,255,0.1);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer;">←</button>
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;color:#fff;">🏙️ Business</div>
-        ${currentPlayer===0&&!gameOver?`<span id="busTimerEl" style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;color:rgba(255,255,255,0.6);">${busTimer}s</span>`:'<div style="width:36px;"></div>'}
-      </div>
+      ${gameChromeHtml({title:'Business',backId:'busBack',rightHtml:currentPlayer===0&&!gameOver?`<span id="busTimerEl" class="game-chrome-metric">${busTimer}s</span>`:undefined})}
       <div style="display:flex;gap:6px;padding:8px 10px;overflow-x:auto;flex-shrink:0;">
         ${players.map((p,i)=>`<div style="flex:1;min-width:70px;background:${currentPlayer===i?p.color+'33':'rgba(255,255,255,0.05)'};border:2px solid ${currentPlayer===i?p.color:'transparent'};border-radius:10px;padding:6px;text-align:center;opacity:${p.bankrupt?0.3:1};"><div style="color:${p.color};font-size:10px;font-weight:700;">${p.name}</div><div style="font-size:11px;color:#fff;font-weight:700;">₹${p.money}</div><div style="font-size:9px;color:rgba(255,255,255,0.4);">${p.properties.length} props</div></div>`).join('')}
       </div>
@@ -288,10 +335,10 @@ function openBusinessGame(chat,playerCount){
         </button>
       </div>
     `;
-    document.getElementById('busBack').addEventListener('click',()=>{stopBusTimer();overlay.remove();});
+    document.getElementById('busBack').addEventListener('click',()=>close());
     document.getElementById('busRollBtn').addEventListener('click',()=>{if(currentPlayer===0&&!rolling&&!gameOver)rollBusDice();});
   }
-  document.querySelector('.device').appendChild(overlay);render();startBusTimer();
+  render();startBusTimer();
 }
 
 // ===================== SCRIBBLE (draw & guess) =====================
@@ -306,39 +353,58 @@ function openScribbleGame(chat,playerList){
   let scores={};players.forEach(p=>scores[p.name]=0);
   let roundTimer=60;let roundInterval=null;let guessedCorrectly=new Set();
   let strokes=[];let isDrawing=false;let currentColor='#1a1a2e';let currentSize=4;
+  let aiDrawIv=null;
 
   const overlay=document.createElement('div');
   overlay.style.cssText='position:absolute;inset:0;background:var(--cream);z-index:80;display:flex;flex-direction:column;';
+  const begin=typeof beginGameOverlaySession==='function'?beginGameOverlaySession:null;
+  const gs=begin?begin({
+    type:'scribble',title:'Scribble',mode:players.length>2?'group':'1v1',chat,overlay,
+    cleanup(){
+      clearInterval(roundInterval);roundInterval=null;
+      if(aiDrawIv){clearInterval(aiDrawIv);aiDrawIv=null;}
+    },
+  }):null;
+  if(begin&&(!gs||!gs.alive()))return;
+  if(!begin){
+    const device=document.querySelector('.device');
+    if(!device){if(typeof showToast==='function')showToast('Game container not found');return;}
+    device.appendChild(overlay);
+  }
+  const alive=()=>gs?gs.alive():true;
+  const schedule=(fn,ms)=>gs?gs.schedule(fn,ms):setTimeout(fn,ms);
+  const close=(result)=>{
+    clearInterval(roundInterval);roundInterval=null;
+    if(aiDrawIv){clearInterval(aiDrawIv);aiDrawIv=null;}
+    if(gs)gs.close(result);else overlay.remove();
+  };
 
   function pickWord(){return SCRIBBLE_WORDS[Math.floor(Math.random()*SCRIBBLE_WORDS.length)];}
 
   function startRound(){
+    if(!alive())return;
     currentWord=pickWord();roundTimer=60;guessedCorrectly.clear();strokes=[];
     const isMyTurn=players[currentDrawerIdx].isMe;
     render();
     clearInterval(roundInterval);
     roundInterval=setInterval(()=>{
+      if(!alive()){clearInterval(roundInterval);return;}
       roundTimer--;
       const el=document.getElementById('scribbleTimer');if(el)el.textContent=roundTimer+'s';
-      if(roundTimer<=15&&!isMyTurn){
-        // Reveal a letter hint for non-drawers as time runs low
-      }
       if(roundTimer<=0){clearInterval(roundInterval);nextTurn();}
     },1000);
-    // Simulate AI guessing/drawing
     if(!isMyTurn){
-      setTimeout(()=>simulateAIDrawing(),500);
+      schedule(()=>simulateAIDrawing(),500);
     } else {
-      // Simulate other players guessing correctly at random times
       players.forEach((p,i)=>{
         if(i!==currentDrawerIdx&&!p.isMe){
-          setTimeout(()=>{
-            if(!guessedCorrectly.has(p.name)&&Math.random()<0.7){
-              guessedCorrectly.add(p.name);scores[p.name]=(scores[p.name]||0)+Math.max(10,roundTimer);
-              scores[players[currentDrawerIdx].name]=(scores[players[currentDrawerIdx].name]||0)+5;
-              addScribbleMessage(`${p.name} guessed correctly! 🎉`,true);
-              render();
-            }
+          schedule(()=>{
+            if(!alive())return;
+            if(guessedCorrectly.has(p.name)||Math.random()>=0.7)return;
+            guessedCorrectly.add(p.name);scores[p.name]=(scores[p.name]||0)+Math.max(10,roundTimer);
+            scores[players[currentDrawerIdx].name]=(scores[players[currentDrawerIdx].name]||0)+5;
+            addScribbleMessage(`${p.name} guessed correctly! 🎉`,true);
+            render();
           },3000+Math.random()*30000);
         }
       });
@@ -346,17 +412,20 @@ function openScribbleGame(chat,playerList){
   }
 
   function simulateAIDrawing(){
-    // Fake "drawing" by showing dots progressively
+    if(!alive())return;
     let i=0;
-    const iv=setInterval(()=>{
-      if(i>15||roundTimer<=0){clearInterval(iv);return;}
+    if(aiDrawIv)clearInterval(aiDrawIv);
+    aiDrawIv=setInterval(()=>{
+      if(!alive()||i>15||roundTimer<=0){clearInterval(aiDrawIv);aiDrawIv=null;return;}
       strokes.push({x:30+Math.random()*240,y:30+Math.random()*180,color:'#1a1a2e',size:4,newStroke:i===0});
       renderCanvas();i++;
     },800);
   }
 
   function nextTurn(){
+    if(!alive())return;
     clearInterval(roundInterval);
+    if(aiDrawIv){clearInterval(aiDrawIv);aiDrawIv=null;}
     currentDrawerIdx++;
     if(currentDrawerIdx>=players.length){currentDrawerIdx=0;round++;}
     if(round>maxRounds){endScribbleGame();return;}
@@ -364,10 +433,12 @@ function openScribbleGame(chat,playerList){
   }
 
   function endScribbleGame(){
-    clearInterval(roundInterval);
+    clearInterval(roundInterval);roundInterval=null;
+    if(aiDrawIv){clearInterval(aiDrawIv);aiDrawIv=null;}
     const sorted=Object.entries(scores).sort((a,b)=>b[1]-a[1]);
     const won=sorted[0]?.[0]==='You';
-    recordGameResult('scribble',won);
+    if(gs)gs.setOutcome(won?'won':'lost');
+    if(typeof recordGameResult==='function')recordGameResult('scribble',won);
     overlay.innerHTML=`
       <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:16px;">
         <div style="font-size:52px;">🏆</div>
@@ -378,7 +449,7 @@ function openScribbleGame(chat,playerList){
         <button id="scribbleClose" style="padding:12px 32px;background:var(--red);color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;cursor:pointer;">Done</button>
       </div>
     `;
-    document.getElementById('scribbleClose').addEventListener('click',()=>overlay.remove());
+    document.getElementById('scribbleClose').addEventListener('click',()=>close(won?'won':'lost'));
   }
 
   function addScribbleMessage(text,isCorrect){
@@ -390,13 +461,10 @@ function openScribbleGame(chat,playerList){
   }
 
   function render(){
+    if(!alive())return;
     const isMyTurn=players[currentDrawerIdx].isMe;
     overlay.innerHTML=`
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--white);border-bottom:1px solid var(--line);flex-shrink:0;">
-        <button id="scribbleBack" style="background:none;border:none;font-size:20px;cursor:pointer;">←</button>
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;">🎨 Scribble · Round ${round}/${maxRounds}</div>
-        <div id="scribbleTimer" style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;color:var(--red);">${roundTimer}s</div>
-      </div>
+      ${gameChromeHtml({title:'Scribble',subtitle:`Round ${round}/${maxRounds}`,backId:'scribbleBack',rightHtml:`<span id="scribbleTimer" class="game-chrome-metric">${roundTimer}s</span>`})}
       <div style="padding:8px 16px;text-align:center;background:${isMyTurn?'rgba(230,57,70,0.06)':'var(--cream)'};border-bottom:1px solid var(--line);flex-shrink:0;">
         ${isMyTurn?`<div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;color:var(--red);">Your word: ${currentWord}</div>`
         :`<div style="font-weight:700;font-size:14px;">${players[currentDrawerIdx].name} is drawing: ${currentWord.replace(/[a-z]/gi,'_ ')}</div>`}
@@ -414,7 +482,7 @@ function openScribbleGame(chat,playerList){
         ${!isMyTurn?`<div style="display:flex;gap:6px;padding:6px 12px;"><input id="scribbleGuessInput" placeholder="Type your guess..." style="flex:1;padding:8px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:13px;outline:none;"><button id="scribbleGuessBtn" style="background:var(--red);color:#fff;border:none;border-radius:10px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;">Guess</button></div>`:''}
       </div>
     `;
-    document.getElementById('scribbleBack').addEventListener('click',()=>{clearInterval(roundInterval);overlay.remove();});
+    document.getElementById('scribbleBack').addEventListener('click',()=>close());
     wireCanvas();
     if(!isMyTurn){
       document.getElementById('scribbleGuessBtn')?.addEventListener('click',submitGuess);
@@ -471,60 +539,9 @@ function openScribbleGame(chat,playerList){
     });
   }
 
-  document.querySelector('.device').appendChild(overlay);startRound();
+  startRound();
 }
 
-
-// ===================== CHESS TIME CONTROL PICKER (replaces openChessGame entry) =====================
-// Store original chess engine as _startChessEngine, wrap with picker
-const _startChessEngine = openChessGame;
-
-function openChessGame(chat){
-  const TC=[
-    {label:'Bullet',time:'1+0',min:1,inc:0,icon:'⚡'},
-    {label:'Bullet',time:'2+1',min:2,inc:1,icon:'⚡'},
-    {label:'Blitz',time:'3+0',min:3,inc:0,icon:'🔥'},
-    {label:'Blitz',time:'3+2',min:3,inc:2,icon:'🔥'},
-    {label:'Blitz',time:'5+0',min:5,inc:0,icon:'🔥'},
-    {label:'Blitz',time:'5+3',min:5,inc:3,icon:'🔥'},
-    {label:'Rapid',time:'10+0',min:10,inc:0,icon:'⏱️'},
-    {label:'Rapid',time:'15+10',min:15,inc:10,icon:'⏱️'},
-    {label:'Classical',time:'30+0',min:30,inc:0,icon:'🏆'},
-    {label:'Classical',time:'30+20',min:30,inc:20,icon:'🏆'},
-    {label:'No limit',time:'∞',min:0,inc:0,icon:'♾️'},
-  ];
-  const CATS=['Bullet','Blitz','Rapid','Classical','No limit'];
-
-  const sheet=document.createElement('div');
-  sheet.style.cssText='position:absolute;inset:0;background:#15192e;z-index:100;display:flex;flex-direction:column;overflow-y:auto;';
-  sheet.innerHTML=`
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;flex-shrink:0;">
-      <button id="chessPickBack" style="background:rgba(255,255,255,0.1);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer;">←</button>
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;color:#fff;">♟ Choose Time Control</div>
-      <div style="width:36px;"></div>
-    </div>
-    <div style="padding:0 16px 24px;">
-      ${CATS.map(cat=>{
-        const options=TC.filter(t=>t.label===cat);
-        if(!options.length)return'';
-        return`<div style="margin-bottom:18px;">
-          <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">${options[0].icon} ${cat}</div>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
-            ${options.map((t,i)=>`<button data-min="${t.min}" data-inc="${t.inc}" style="padding:14px 8px;background:rgba(255,255,255,0.07);border:2px solid rgba(255,255,255,0.1);border-radius:14px;color:#fff;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;">${t.time}</button>`).join('')}
-          </div>
-        </div>`;
-      }).join('')}
-    </div>
-  `;
-  document.querySelector('.device').appendChild(sheet);
-  document.getElementById('chessPickBack').addEventListener('click',()=>sheet.remove());
-  sheet.querySelectorAll('[data-min]').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      sheet.remove();
-      _startChessEngine({...chat,_tc:{min:parseInt(btn.dataset.min),inc:parseInt(btn.dataset.inc)}});
-    });
-  });
-}
 
 // ===================== GROUP GAME SETUP — PLAYER SELECTOR =====================
 function openGroupGameSetup(groupChat, gameId){
@@ -597,40 +614,50 @@ function openGroupGameSetup(groupChat, gameId){
   render();
 }
 
-// ===================== FIXED GROUP GAME PICKER =====================
-// Override openGamePicker to correctly split 1:1 vs group
-function openGamePicker(chat, isGroup){
-  const sheet=document.createElement('div');
-  sheet.style.cssText='position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:20px;z-index:100;max-height:85vh;overflow-y:auto;';
+// openGamePicker is provided by game-registry.js
 
-  const SINGLE_GAMES=[
-    {emoji:'♟',name:'Chess',desc:'Bullet · Blitz · Rapid · Classical',fn:()=>openChessGame(chat)},
-    {emoji:'🐍',name:'Snakes & Ladders',desc:'5 versions — random pick',fn:()=>openSnakesVersionPicker(chat)},
-    {emoji:'⭕',name:'Tic-Tac-Toe',desc:'Perfect minimax AI',fn:()=>openTicTacToe(chat)},
-    {emoji:'📝',name:'Word Guess',desc:'Wordle — 5-letter words',fn:()=>openWordGuess(chat)},
-    {emoji:'🔵',name:'Five in a Row',desc:'Gomoku — connect 5',fn:()=>openFiveInRowGame(chat)},
-  ];
-
-  const MULTI_GAMES=[
-    {emoji:'🎯',name:'Ludo',desc:'2–4 players',fn:()=>openGroupGameSetup(chat,'ludo')},
-    {emoji:'🃏',name:'Oh, No! Cards',desc:'2–6 players · Classic, Double Sided, Blaze',fn:()=>openGroupGameSetup(chat,'uno')},
-    {emoji:'🏙️',name:'Business',desc:'2–6 players · Monopoly-style',fn:()=>openGroupGameSetup(chat,'business')},
-    {emoji:'🎨',name:'Scribble',desc:'Any players · draw & guess',fn:()=>openGroupGameSetup(chat,'scribble')},
-  ];
-
-  const games=isGroup?MULTI_GAMES:SINGLE_GAMES;
-
-  sheet.innerHTML=`
-    <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;margin-bottom:4px;">🎮 ${isGroup?'Group games':'Play a game'}</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">${isGroup?'Select a game — you\'ll pick players next':'Just you and '+chat.name}</div>
-    ${games.map((g,i)=>`
-      <button data-i="${i}" style="width:100%;padding:13px 14px;background:var(--cream);border:2px solid var(--line);border-radius:14px;margin-bottom:8px;text-align:left;display:flex;align-items:center;gap:12px;cursor:pointer;">
-        <span style="font-size:26px;flex-shrink:0;">${g.emoji}</span>
-        <div><div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;">${g.name}</div><div style="font-size:11px;color:var(--muted);margin-top:1px;">${g.desc}</div></div>
-      </button>`).join('')}
-    <button id="closeGP" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;margin-top:4px;">Cancel</button>
-  `;
-  document.querySelector('.device').appendChild(sheet);
-  games.forEach((g,i)=>sheet.querySelector(`[data-i="${i}"]`).addEventListener('click',()=>{sheet.remove();g.fn();}));
-  document.getElementById('closeGP').addEventListener('click',()=>sheet.remove());
+// --- Game registry self-registration (board-games.js) ---
+if (typeof registerGame === 'function') {
+  registerGame({
+    id: 'fiveinrow',
+    name: 'Five in a Row',
+    desc: 'Gomoku — connect 5',
+    icon: '🔵',
+    ratingKey: 'fiveinrow',
+    gameType: 'dual',
+    chat1v1: true,
+    selfChat: true,
+    order: 70,
+    launch(ctx) { openFiveInRowGame(ctx.chat); },
+  });
+  registerGame({
+    id: 'business',
+    name: 'Business',
+    desc: 'Buy, build & bankrupt — 2-6 players',
+    icon: '🏙️',
+    ratingKey: 'business',
+    gameType: 'multiplayer',
+    chat1v1: true,
+    chatGroup: true,
+    order: 80,
+    launch(ctx) {
+      if (ctx.isGroup) openGroupGameSetup(ctx.chat, 'business');
+      else openBusinessGame(ctx.chat, 2);
+    },
+  });
+  registerGame({
+    id: 'scribble',
+    name: 'Scribble',
+    desc: 'Draw & guess — any number of players',
+    icon: '🎨',
+    ratingKey: 'scribble',
+    gameType: 'multiplayer',
+    chat1v1: true,
+    chatGroup: true,
+    order: 90,
+    launch(ctx) {
+      if (ctx.isGroup) openGroupGameSetup(ctx.chat, 'scribble');
+      else openScribbleGame(ctx.chat, [{ name: ctx.chat?.name || 'Friend' }]);
+    },
+  });
 }

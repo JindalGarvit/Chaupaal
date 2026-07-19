@@ -43,6 +43,10 @@
 
   async function blockUser(uid, name) {
     if (!uid) return;
+    if (typeof currentUser !== 'undefined' && currentUser && uid === currentUser.uid) {
+      if (typeof showToast === 'function') showToast("You can't block yourself");
+      return;
+    }
     if (typeof dismissedUids !== 'undefined') dismissedUids.add(uid);
     try {
       localStorage.setItem('chaupaal_dismissed_uids', JSON.stringify([...getBlockedSet()]));
@@ -62,6 +66,9 @@
         .doc(currentUser.uid)
         .set({ blocked: firebase.firestore.FieldValue.arrayUnion(uid) }, { merge: true })
         .catch(() => {});
+      // Blocking immediately breaks mutual friendship and removes both Close
+      // Friends memberships through the canonical unfollow path.
+      if (typeof setFollowing === 'function') await setFollowing(uid, false, 'block').catch(() => {});
     }
   }
 
@@ -123,6 +130,8 @@
           customText: customText || null,
           targetType: opts.targetType || 'user',
           postId: opts.postId || null,
+          commentId: opts.commentId || null,
+          icebreakerQuestion: opts.icebreakerQuestion || null,
           ts: Date.now(),
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         })
@@ -147,7 +156,7 @@
       ).join('')}
       <div id="flagCustomWrap" class="hidden" style="margin:8px 0 12px;">
         <textarea id="flagCustomText" placeholder="Tell us what happened…" style="width:100%;min-height:72px;border:2px solid var(--line);border-radius:12px;padding:10px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
-        <button type="button" class="ui-state-btn ui-state-btn-primary" id="flagCustomSubmit" style="width:100%;margin-top:8px;">Submit report</button>
+        <button type="button" class="btn btn--primary btn--block ui-state-btn ui-state-btn-primary" id="flagCustomSubmit" style="width:100%;margin-top:8px;">Submit report</button>
       </div>
       <div class="flag-option" data-block="1" style="color:var(--red);">🚫 Block ${user.name || 'user'}</div>
       <button id="closeFlagSheet" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;margin-top:8px;">Cancel</button>
@@ -215,7 +224,7 @@
       .map(
         (u) => `<div class="recovery-row">
         <div class="recovery-preview">${u.name}${u.username ? ` · @${u.username}` : ''}</div>
-        <button type="button" class="ui-state-btn" data-unblock="${u.uid}" data-name="${u.name}">Unblock</button>
+        <button type="button" class="btn btn--secondary ui-state-btn" data-unblock="${u.uid}" data-name="${u.name}">Unblock</button>
       </div>`
       )
       .join('');

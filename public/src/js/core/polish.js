@@ -87,6 +87,7 @@ function animateTabSwitch(incoming, outgoing){
 const _origTabBtnListener=document.querySelector('.tab-btn');
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click',()=>{
+    if(typeof SoundLib!=='undefined'&&SoundLib.tap) SoundLib.tap();
     wireRipples();
     // Add data attributes to peepal cards for color coding
     setTimeout(wirePeepalCardTypes,100);
@@ -177,7 +178,7 @@ function styleDangalTiles(){
     ttt:['#2980B9','#fff'],wordguess:['#8E44AD','#fff'],
     business:['#F39C12','#fff'],scribble:['#16A085','#fff'],
     fiveinrow:['#2C3E50','#3498DB'],rushrunner:['#E67E22','#fff'],
-    candyburst:['#9B59B6','#FF6B9D'],quiz:null
+    tiptap:['#9B59B6','#FF6B9D'],quiz:null
   };
   document.querySelectorAll('.dangal-game-tile[data-game]').forEach(tile=>{
     const game=tile.dataset.game;

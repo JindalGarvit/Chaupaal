@@ -67,6 +67,21 @@
   }
 
   /**
+   * Game analytics helper — game_started / game_completed with shared params.
+   * @param {'game_started'|'game_completed'} name
+   * @param {{ game_type: string, mode?: string, result?: string, time_spent_ms?: number }} params
+   */
+  function trackGameEvent(name, params) {
+    const p = params || {};
+    trackEvent(name, {
+      game_type: p.game_type || 'unknown',
+      ...(p.mode != null ? { mode: p.mode } : {}),
+      ...(p.result != null ? { result: p.result } : {}),
+      ...(p.time_spent_ms != null ? { time_spent_ms: p.time_spent_ms } : {}),
+    });
+  }
+
+  /**
    * Short-lived client mutation lock to prevent double-submit (posts, payments later).
    * @returns {false|function} unlock fn, or false if already in flight
    */
@@ -93,6 +108,7 @@
   window.trackProfileCompletion = trackProfileCompletion;
   window.trackPostCreated = trackPostCreated;
   window.trackMessageSent = trackMessageSent;
+  window.trackGameEvent = trackGameEvent;
   window.beginClientMutation = beginClientMutation;
   window.newIdempotencyKey = newIdempotencyKey;
 })();

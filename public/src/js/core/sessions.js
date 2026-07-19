@@ -189,7 +189,7 @@
       <div style="padding:12px 16px;font-size:12px;color:var(--muted);">Sign out a single device, or everywhere at once.</div>
       <div id="sessionsList" style="flex:1;overflow:auto;padding:0 16px 24px;"></div>
       <div style="padding:12px 16px 24px;">
-        <button type="button" class="ui-state-btn ui-state-btn-primary" id="logoutAllDevices" style="width:100%;">Log out of all devices</button>
+        <button type="button" class="btn btn--primary btn--block ui-state-btn ui-state-btn-primary" id="logoutAllDevices" style="width:100%;">Log out of all devices</button>
       </div>`;
     document.querySelector('.device')?.appendChild(overlay);
     overlay.querySelector('#sessionsBack')?.addEventListener('click', () => overlay.remove());
@@ -218,7 +218,7 @@
           return `<div class="recovery-row">
             <div class="recovery-preview">${s.label}${s.current ? ' · <strong>This device</strong>' : ''}${s.revoked ? ' · revoked' : ''}</div>
             <div class="recovery-meta">Active ${when}</div>
-            ${s.revoked ? '' : `<button type="button" class="ui-state-btn" data-sid="${s.id}">${s.current ? 'Log out here' : 'Log out device'}</button>`}
+            ${s.revoked ? '' : `<button type="button" class="btn btn--secondary ui-state-btn" data-sid="${s.id}">${s.current ? 'Log out here' : 'Log out device'}</button>`}
           </div>`;
         })
         .join('');

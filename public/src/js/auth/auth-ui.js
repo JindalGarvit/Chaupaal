@@ -33,4 +33,4 @@ function updateSidebarStreak(n){
   const rpEl=document.getElementById('rpStreakNum');if(rpEl)rpEl.textContent=`${n} 🔥`;
 }
 
-if(auth){auth.onAuthStateChanged(async user=>{if(user){currentUser=user;if(db){const s=await db.collection('users').doc(user.uid).get();if(s.exists){userProfile=s.data();if(userProfile.lang){currentLang=userProfile.lang;document.getElementById('langSelect').value=currentLang;}}}updateProfileBtn();}});}
+if(auth){auth.onAuthStateChanged(async user=>{if(user){currentUser=user;if(db){const s=await db.collection('users').doc(user.uid).get();if(s.exists){userProfile=s.data();if(userProfile.lang){currentLang=userProfile.lang;document.getElementById('langSelect').value=currentLang;}if(typeof hydrateIcebreakersFromUserDoc==='function')hydrateIcebreakersFromUserDoc(userProfile);if(typeof hydrateProfileTypeFromUserDoc==='function')hydrateProfileTypeFromUserDoc(userProfile);}}updateProfileBtn();}});}

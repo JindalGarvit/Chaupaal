@@ -9,6 +9,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/api/ai", "destination": "/api/anthropic" },
     { "source": "/profile/(.*)", "destination": "/index.html" },
     { "source": "/post/(.*)", "destination": "/index.html" },
     { "source": "/chat/(.*)", "destination": "/index.html" },
@@ -19,6 +20,15 @@
   "functions": {
     "api/refresh-category-cache.js": {
       "maxDuration": 300
+    },
+    "api/chaupaal-scheduler.js": {
+      "maxDuration": 120
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/chaupaal-scheduler",
+      "schedule": "0 15 * * *"
+    }
+  ]
 }

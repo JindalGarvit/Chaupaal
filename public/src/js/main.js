@@ -38,6 +38,8 @@
             persistProfileCompletion(calcProfileCompletion());
           }
           if(typeof installNotifGate==='function') installNotifGate();
+          // Refresh Baithak so Message Yourself is pinned after auth resolves
+          if(typeof initBaithak==='function') initBaithak();
           // Backfill search denorms for older accounts (Phase 4)
           if(db&&userProfile){
             const patch={};
@@ -51,7 +53,6 @@
         }
       });
     } else {setTimeout(()=>{showOnboarding();setTimeout(showAuth,8000);},600);}
-    document.addEventListener('click',()=>{if(!quietMode)SoundLib.startBg();},{once:true});
     requestNotificationPermission();scheduleLocalNudge();scheduleEveningCheckIn();
     setTimeout(checkBreakingNews,3000);
   },1400);

@@ -8,13 +8,15 @@
  *   FIREBASE_SERVICE_ACCOUNT_JSON  — stringified service-account JSON
  */
 const admin = require('firebase-admin');
-const { CACHE_VERSION, generateCatNewsGrounded, generateCatMCQGrounded } = require('./lib/cat-content');
-const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('./lib/http');
-const { requireCronSecret } = require('./lib/auth');
-const { asInt } = require('./lib/validate');
+const { CACHE_VERSION, generateCatNewsGrounded, generateCatMCQGrounded } = require('../server-lib/cat-content');
+const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
+const { requireCronSecret } = require('../server-lib/auth');
+const { asInt } = require('../server-lib/validate');
 
 // Flip to false when ready to spend Anthropic credits again (also re-add cron in vercel.json).
+// Also gated by master AI_FEATURES_ENABLED (must be "true" in env) via callAI().
 const CATEGORY_CRON_PAUSED = true;
+const { isAiFeaturesEnabled } = require('../server-lib/ai-config');
 
 // Align with client CAT_CACHE_TTL_MS.
 // Hobby Vercel: daily cron. Pro/external: change schedule to 0 */6 * * * and set to 6h.
@@ -160,6 +162,16 @@ module.exports = async function handler(req, res) {
       503,
       'CRON_PAUSED',
       'Category cache refresh is paused — no Anthropic spend until explicitly re-enabled',
+      { paused: true }
+    );
+  }
+
+  if (!isAiFeaturesEnabled()) {
+    return sendError(
+      res,
+      503,
+      'AI_DISABLED',
+      'Master AI kill-switch is off (set AI_FEATURES_ENABLED=true)',
       { paused: true }
     );
   }

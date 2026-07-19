@@ -1,33 +1,25 @@
 /**
- * Anthropic Messages proxy — standardized envelope + auth + validation (Phase 5).
+ * Unified AI proxy — provider-agnostic.
+ * Route: POST /api/anthropic (legacy path kept; also reachable as /api/ai via vercel rewrite).
  *
- * Success data is the upstream Anthropic JSON (client unwraps via callAnthropic).
- * Requires signed-in user. Supports Idempotency-Key for accidental double-submits.
+ * Body: { model|tier, messages, system?, max_tokens?, enableWebSearch?, feature? }
+ * Success: { ok: true, data } where data keeps Anthropic-compatible { content, ... }
+ *           plus { text } for convenience.
+ *
+ * Master kill-switch: AI_FEATURES_ENABLED env must be "true" (default OFF).
  */
-const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
-const ANTHROPIC_VERSION = '2023-06-01';
-
-const WEB_SEARCH_TOOL = {
-  type: 'web_search_20250305',
-  name: 'web_search',
-  max_uses: 2,
-  user_location: {
-    type: 'approximate',
-    country: 'IN',
-    timezone: 'Asia/Kolkata',
-  },
-};
-
-const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('./lib/http');
-const { verifyBearer } = require('./lib/auth');
-const { validateAnthropicBody, asBoolean } = require('./lib/validate');
 const crypto = require('crypto');
+const { sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
+const { verifyBearer } = require('../server-lib/auth');
+const { validateAnthropicBody } = require('../server-lib/validate');
 const {
   getIdempotencyKey,
   beginIdempotent,
   completeIdempotent,
   abortIdempotent,
-} = require('./lib/idempotency');
+} = require('../server-lib/idempotency');
+const { callAI, AiDisabledError } = require('../server-lib/ai');
+const { isAiFeaturesEnabled, resolveModel } = require('../server-lib/ai-config');
 
 function guestId(req) {
   const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
@@ -37,7 +29,15 @@ function guestId(req) {
 module.exports = async function handler(req, res) {
   if (!requireMethod(req, res, 'POST')) return;
 
-  // Prefer signed-in user; allow guest (onboarding / pre-auth AI) with IP-bound identity
+  if (!isAiFeaturesEnabled()) {
+    return sendError(
+      res,
+      503,
+      'AI_DISABLED',
+      'AI features are temporarily paused. Set AI_FEATURES_ENABLED=true and enable feature_flags/ai_features when ready.'
+    );
+  }
+
   let user;
   try {
     user = await verifyBearer(req);
@@ -53,18 +53,19 @@ module.exports = async function handler(req, res) {
     return sendError(res, 400, 'INVALID_JSON', 'Invalid JSON body');
   }
 
-  const checked = validateAnthropicBody(incoming);
+  const model = resolveModel({
+    model: incoming.model,
+    tier: incoming.tier,
+  });
+  const toValidate = { ...incoming, model };
+
+  const checked = validateAnthropicBody(toValidate);
   if (!checked.ok) {
     return sendError(res, 400, 'VALIDATION_ERROR', checked.message);
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.Anthropic_API_key;
-  if (!apiKey) {
-    return sendError(res, 503, 'AI_NOT_CONFIGURED', 'ANTHROPIC_API_KEY is not configured');
-  }
-
   const idKey = getIdempotencyKey(req);
-  const idem = beginIdempotent('anthropic', user.uid, idKey);
+  const idem = beginIdempotent('ai', user.uid, idKey);
   if (idem?.conflict) {
     return sendError(res, 409, 'DUPLICATE_REQUEST', 'Identical AI request already in flight');
   }
@@ -73,44 +74,38 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const enableWebSearch = incoming.enableWebSearch === true;
-    const { enableWebSearch: _drop, tools: _ignoreTools, ...rest } = checked.value;
-    const payload = { ...rest };
-    if (enableWebSearch) {
-      payload.tools = [WEB_SEARCH_TOOL];
-    }
-
-    const upstream = await fetch(ANTHROPIC_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': ANTHROPIC_VERSION,
-      },
-      body: JSON.stringify(payload),
+    const result = await callAI({
+      model: checked.value.model,
+      messages: checked.value.messages,
+      system: checked.value.system,
+      max_tokens: checked.value.max_tokens,
+      enableWebSearch: incoming.enableWebSearch === true,
+      feature: typeof incoming.feature === 'string' ? incoming.feature.slice(0, 64) : null,
     });
 
-    const data = await upstream.json();
-    if (!upstream.ok) {
-      const msg = data?.error?.message || 'Anthropic request failed';
-      const envelope = {
-        ok: false,
-        error: {
-          code: 'UPSTREAM_ERROR',
-          message: msg,
-          details: { status: upstream.status },
-        },
-      };
-      abortIdempotent(idem);
-      return res.status(upstream.status >= 400 && upstream.status < 600 ? upstream.status : 502).json(envelope);
-    }
-
+    const data = {
+      ...(result.raw || {}),
+      content: result.content,
+      text: result.text,
+    };
     const envelope = { ok: true, data };
     completeIdempotent(idem, 200, envelope);
     return res.status(200).json(envelope);
   } catch (err) {
     abortIdempotent(idem);
-    return sendError(res, 502, 'UPSTREAM_UNREACHABLE', 'Failed to reach Anthropic API', {
+    if (err instanceof AiDisabledError || err.code === 'AI_DISABLED') {
+      return sendError(res, 503, 'AI_DISABLED', err.message);
+    }
+    if (err.code === 'AI_NOT_CONFIGURED') {
+      return sendError(res, 503, 'AI_NOT_CONFIGURED', err.message);
+    }
+    if (err.code === 'UPSTREAM_ERROR') {
+      const status = err.status >= 400 && err.status < 600 ? err.status : 502;
+      return sendError(res, status, 'UPSTREAM_ERROR', err.message, {
+        status: err.status,
+      });
+    }
+    return sendError(res, 502, 'UPSTREAM_UNREACHABLE', 'Failed to reach AI provider', {
       detail: err.message,
     });
   }

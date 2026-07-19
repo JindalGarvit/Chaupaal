@@ -180,6 +180,9 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
       ensureLoadMoreButton(wrap,{
         label:'Load earlier messages',
         onLoadMore:async()=>{
+          // Guard: if the initial snapshot hasn't landed yet, a null cursor would
+          // refetch the newest page and duplicate bubbles already on screen.
+          if(!oldestDoc) return;
           const page=await fetchOlderMessages(chatId,{beforeDoc:oldestDoc,pageSize:30});
           if(!page.items.length){ if(typeof setLoadMoreVisible==='function') setLoadMoreVisible(wrap,false); return; }
           oldestDoc=page.firstDoc;

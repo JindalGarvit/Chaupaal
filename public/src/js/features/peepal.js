@@ -34,7 +34,7 @@ function showOnboarding(){
             </div>
           </div>
         `:''}
-        <button class="onboarding-next-btn" id="onboardNext" style="${s.type==='sample_q'?'display:none;':''}">${step===steps.length-1?"Let's go! 🚀":"Continue →"}</button>
+        <button class="btn btn--primary btn--block btn--lg onboarding-next-btn" id="onboardNext" style="${s.type==='sample_q'?'display:none;':''}">${step===steps.length-1?"Let's go! 🚀":"Continue →"}</button>
         <button class="onboarding-skip" id="onboardSkip">Skip</button>
       </div>
     `;

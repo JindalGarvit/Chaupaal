@@ -16,7 +16,10 @@ function openCategoryDetail(cat){
     </div>
     <div class="cat-detail-body" id="catDetailBody"></div>
   `;
-  document.getElementById('catDetailBack').addEventListener('click',()=>detail.classList.add('hidden'));
+  document.getElementById('catDetailBack').addEventListener('click',()=>{
+    if(typeof closeAiKeyboard==='function') closeAiKeyboard();
+    detail.classList.add('hidden');
+  });
   detail.querySelectorAll('.cat-detail-tab').forEach(tab=>{
     tab.addEventListener('click',()=>{
       detail.querySelectorAll('.cat-detail-tab').forEach(t=>t.classList.remove('active'));
@@ -366,13 +369,15 @@ function catMCQLooksGrounded(items){
   return true;
 }
 
-async function callCatAIWithSearch({model, max_tokens, system, user}){
-  return callAnthropic({
+async function callCatAIWithSearch({model, tier, max_tokens, system, user}){
+  return callAI({
     enableWebSearch: true,
     model,
+    tier: tier || (model ? undefined : 'fast'),
     max_tokens,
     system,
     messages: [{role:'user', content:user}],
+    feature: 'category_khabar_sawaal',
   });
 }
 
@@ -387,10 +392,10 @@ Produce exactly 3 items.`;
 
   const user = `Search the web for recent news in category "${cat.name}", then return 3 grounded news items as JSON.`;
 
-  let data = await callCatAIWithSearch({model:CAT_HAIKU, max_tokens:2000, system, user});
+  let data = await callCatAIWithSearch({tier:'fast', max_tokens:2000, system, user});
   let items = parseJsonArrayLoose(extractAnthropicText(data));
   if(!catNewsLooksGrounded(items)){
-    data = await callCatAIWithSearch({model:CAT_SONNET, max_tokens:2500, system, user});
+    data = await callCatAIWithSearch({tier:'balanced', max_tokens:2500, system, user});
     items = parseJsonArrayLoose(extractAnthropicText(data));
   }
   return items;
@@ -416,10 +421,10 @@ Produce exactly 5 questions.`;
 
   const user = `Search the web for recent "${cat.name}" news, then return 5 grounded MCQ questions as JSON.`;
 
-  let data = await callCatAIWithSearch({model:CAT_HAIKU, max_tokens:3000, system, user});
+  let data = await callCatAIWithSearch({tier:'fast', max_tokens:3000, system, user});
   let items = parseJsonArrayLoose(extractAnthropicText(data));
   if(!catMCQLooksGrounded(items)){
-    data = await callCatAIWithSearch({model:CAT_SONNET, max_tokens:3500, system, user});
+    data = await callCatAIWithSearch({tier:'balanced', max_tokens:3500, system, user});
     items = parseJsonArrayLoose(extractAnthropicText(data));
   }
   return items;
@@ -462,13 +467,14 @@ function updatePersonalityFromAurSunao(questionText, answerText){
 
 async function analyseEveningCheckIn(text){
   if(!text||text.length<10)return;
+  if(typeof isAiFeaturesEnabled==='function' && !(await isAiFeaturesEnabled())) return;
   try{
-    const data = await callAnthropic({
-        model:"claude-haiku-4-5-20251001",max_tokens:300,
+    const data = await callAI({
+        tier:'fast', max_tokens:300, feature:'evening_checkin',
         system:`You are a private AI journal assistant for Chaupaal app. Analyse this daily check-in entry and return ONLY JSON: {"mood":"happy|neutral|stressed|excited|tired|curious","topics":["topic1","topic2"],"interests":["interest1"],"personality_signal":"one word trait"}. No markdown.`,
         messages:[{role:"user",content:text}]
       });
-    const raw=data.content?.map(b=>b.text||'').join('')||'{}';
+    const raw=data.text||data.content?.map(b=>b.text||'').join('')||'{}';
     const analysis=JSON.parse(raw.replace(/```json|```/g,'').trim());
     if(analysis.mood) personalityProfile.mood=analysis.mood;
     if(analysis.topics?.length) personalityProfile.recentTopics=analysis.topics;
@@ -510,28 +516,29 @@ function renderPersonalityProfile(body){
           <span class="match-pct">${val}%</span>
         </div>
       `).join('')}
-      <div style="font-size:12px;color:var(--muted);margin-top:10px;">Yeh signals samay ke saath aur behtar honge 📈</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:10px;">These signals get better over time 📈</div>
     </div>
     <div style="background:var(--white);border-radius:16px;padding:16px;margin-bottom:12px;">
-      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Friends se aapke baare mein sawaal</div>
+      <!-- FUTURE_I18N: friend-about-you prompts -->
+      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Questions friends might see about you</div>
       ${generateFriendQuestionsAboutUser().map(q=>`<div style="padding:10px 0;border-bottom:1px solid var(--line);font-size:14px;color:var(--ink);">🤔 ${q}</div>`).join('')}
-      <div style="font-size:12px;color:var(--muted);margin-top:10px;">Yeh sawaal aapke doston ke Akhbaar mein dikhenge (aapki consent ke saath)</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:10px;">These can appear in friends' Akhbaar (with your consent)</div>
     </div>
   `;
 }
 
 function generateFriendQuestionsAboutUser(){
-  const name=(userProfile?.name||'Aapka dost').split(' ')[0];
+  const name=(userProfile?.name||'Your friend').split(' ')[0];
   const lifestyle=personalityProfile.lifestyle;
   const mood=personalityProfile.mood;
   const base=[
-    `${name} ka favourite weekend activity kya hai?`,
-    `${name} ko kaunsi news category sabse zyada pasand hai?`,
+    `What's ${name}'s favourite weekend activity?`,
+    `Which news category does ${name} enjoy most?`,
     `How many days is ${name}'s current streak?`,
   ];
-  if(lifestyle==='outdoorsy') base.push(`${name} ka next trek kahan ka plan hai?`);
-  if(lifestyle==='cinephile') base.push(`${name} ne pichli baar kaunsi movie dekhi?`);
-  if(mood==='stressed') base.push(`${name} ko aajkal kya cheez thoda pareshaan kar rahi hai?`);
+  if(lifestyle==='outdoorsy') base.push(`Where is ${name}'s next trek planned?`);
+  if(lifestyle==='cinephile') base.push(`What was the last movie ${name} watched?`);
+  if(mood==='stressed') base.push(`What's been on ${name}'s mind lately?`);
   return base.slice(0,3);
 }
 
@@ -599,6 +606,7 @@ dayCheckModal.querySelector('.day-check-send').addEventListener('click',async()=
   if(db&&currentUser){
     try{await db.collection('daily_checkins').add({uid:currentUser.uid,text,date:new Date().toISOString(),analysed:false,createdAt:firebase.firestore.FieldValue.serverTimestamp()});}catch(e){}
   }
+  try{ if(typeof onChaupaalJournalCompleted==='function') await onChaupaalJournalCompleted(); }catch(e){}
 });
 dayCheckModal.querySelector('.day-check-skip').addEventListener('click',()=>dayCheckModal.classList.remove('open'));
 
@@ -611,10 +619,20 @@ const SAMPLE_PEEPAL=[
 ];
 
 const SAMPLE_COMMENTS=[
-  {user:{name:'Riya Sharma',avatar:'😊'},text:'Such a thought-provoking question! I think morning news sets the tone for the whole day.',time:'1h',shared:false},
-  {user:{name:'Dev Sharma',avatar:'👨'},text:'Completely agree — especially with a good cup of chai.',time:'2h',shared:false},
-  {user:{name:'Priya Nair',avatar:'👩'},text:'Night owls unite! I always read before bed 😄',time:'3h',shared:false},
+  {id:'pc1',parentId:null,user:{name:'Riya Sharma',avatar:'😊'},text:'Such a thought-provoking question! I think morning news sets the tone for the whole day.',time:'1h'},
+  {id:'pc2',parentId:'pc1',user:{name:'Dev Sharma',avatar:'👨'},text:'Completely agree — especially with a good cup of chai.',time:'45m'},
+  {id:'pc3',parentId:'pc1',user:{name:'Asha',avatar:'🌸'},text:'Same here — morning chai + Akhbaar is the ritual.',time:'30m'},
+  {id:'pc4',parentId:null,user:{name:'Priya Nair',avatar:'👩'},text:'Night owls unite! I always read before bed 😄',time:'3h'},
+  {id:'pc5',parentId:'pc4',user:{name:'Vikram',avatar:'🧑'},text:'Night crew checking in 🌙',time:'2h'},
 ];
+
+// ⚠️ PRE-LAUNCH TODO: turn this OFF (and delete the seed_peepal_* docs) before
+// real users arrive so they never see placeholder content. While true, the
+// client seeds dummy Peepal posts via /api/peepal-reactions {action:'seed'}
+// and shows them in the feed; while false, any leftover isSeedContent docs are
+// filtered out. Seed definitions live in server-lib/peepal-seeds.js.
+const PEEPAL_SEED_CONTENT_ENABLED=true;
+let peepalSeedEnsured=false;
 
 let peepalQuestions=[...SAMPLE_PEEPAL];
 let weeklyQuestionCount=0;
@@ -622,6 +640,19 @@ let peepalPageCursor=null;
 let peepalHasMore=true;
 let peepalFeedLoading=false;
 let peepalLiveMode=false;
+
+// ⚠️ PRE-LAUNCH TODO (see PEEPAL_SEED_CONTENT_ENABLED): remove this seeding path.
+async function ensurePeepalSeedContent(){
+  if(!PEEPAL_SEED_CONTENT_ENABLED||peepalSeedEnsured) return;
+  if(!currentUser||typeof apiFetch!=='function') return;
+  peepalSeedEnsured=true;
+  try{
+    await apiFetch('/api/peepal-reactions',{method:'POST',needAuth:true,body:{action:'seed'}});
+  }catch(e){
+    peepalSeedEnsured=false;
+    console.warn('[peepal] seed content ensure failed',e);
+  }
+}
 
 function mapPeepalDoc(raw){
   const created=raw.createdAt?.toMillis?.()||raw.createdAt?.toDate?.()?.getTime?.()||raw.ts||null;
@@ -643,7 +674,22 @@ function mapPeepalDoc(raw){
     deleted: !!raw.deleted,
     uid: raw.uid,
     attachment: raw.attachment||null,
+    isSeedContent: raw.isSeedContent===true,
   };
+}
+
+async function hydratePeepalSocial(items){
+  const live=(items||[]).filter(q=>q?.firestoreId);
+  const work=[];
+  if(typeof hydratePeepalReactions==='function') work.push(hydratePeepalReactions(live));
+  if(typeof loadContentComments==='function'){
+    live.forEach(q=>work.push(
+      loadContentComments('peepal',q,{limit:12})
+        .then(comments=>{ if(Array.isArray(comments)) q._comments=comments; })
+        .catch(()=>{})
+    ));
+  }
+  await Promise.all(work);
 }
 
 async function loadPeepalPage({reset=false}={}){
@@ -661,7 +707,11 @@ async function loadPeepalPage({reset=false}={}){
       cursor: reset?null:peepalPageCursor,
       excludeDeleted:true,
     });
-    const mapped=page.items.map(mapPeepalDoc).filter(q=>!(typeof isSoftDeleted==='function'?isSoftDeleted(q):q.deleted));
+    // Seed docs are shown for pre-launch testing while PEEPAL_SEED_CONTENT_ENABLED
+    // is on; once it is turned off, any leftover seed docs are filtered out so
+    // real users never see placeholder content.
+    const mapped=page.items.map(mapPeepalDoc).filter(q=>(PEEPAL_SEED_CONTENT_ENABLED||!q.isSeedContent)&&!(typeof isSoftDeleted==='function'?isSoftDeleted(q):q.deleted));
+    await hydratePeepalSocial(mapped);
     if(reset&&mapped.length){
       peepalLiveMode=true;
       peepalQuestions=mapped;
@@ -721,6 +771,9 @@ async function initPeepal(){
 
   try{
     const profiles=await getDiscoveryProfiles();
+    if(typeof hydrateRelationships==='function'){
+      await hydrateRelationships(profiles.map(p=>p.user?.uid).filter(Boolean)).catch(()=>{});
+    }
     discoveryPreviousSet=[...discoveryCurrentSet];
     discoveryCurrentSet=profiles;
     loadingEl.remove();
@@ -742,6 +795,7 @@ async function initPeepal(){
     feed.dataset.loaded='1';
     if(db&&currentUser&&typeof loadPeepalPage==='function'){
       if(typeof renderSkeleton==='function') renderSkeleton(feed,{variant:'card',count:2});
+      await ensurePeepalSeedContent();
       await loadPeepalPage({reset:true});
     }
     renderPeepalFeed();
@@ -756,7 +810,9 @@ function peepalScore(q){
   const personalityMatch=matchPersonalityToQuestion(q);
   const recency=Math.max(0,100-ageHours*3);
   const randomBoost=Math.random()*30; // 30% random factor for stranger discovery
-  return engagementVelocity*0.35 + personalityMatch*0.25 + recency*0.1 + randomBoost*0.3;
+  // Immediate client ranking uses the same private signal sent to the backend.
+  const reactionBoost=q.myReaction==='up'?18:q.myReaction==='down'?-24:0;
+  return engagementVelocity*0.35 + personalityMatch*0.25 + recency*0.1 + randomBoost*0.3 + reactionBoost;
 }
 
 function matchPersonalityToQuestion(q){
@@ -767,6 +823,125 @@ function matchPersonalityToQuestion(q){
   if(q.format==='open'&&personalityProfile.social==='introvert')score-=10;
   if(q.format==='mcq'&&myCategories.some(c=>q.tag?.toLowerCase().includes(c.name.toLowerCase())))score+=20;
   return Math.min(score,100);
+}
+
+function isPeepalPostOwner(q){
+  return !!(currentUser?.uid&&(q?.uid===currentUser.uid||q?.user?.uid===currentUser.uid));
+}
+
+function peepalReceptionSummary(summary){
+  const up=Math.max(0,Number(summary?.up)||0);
+  const down=Math.max(0,Number(summary?.down)||0);
+  const total=up+down;
+  if(!total) return 'No reactions yet — check back after people respond.';
+  const ratio=up/total;
+  if(ratio>=.8) return 'Overwhelmingly positive reception so far.';
+  if(ratio>=.62) return 'Mostly positive reception so far.';
+  if(ratio>.42) return 'A mixed reception so far.';
+  if(ratio>.2) return 'Mostly critical reception so far.';
+  return 'Strongly critical reception so far.';
+}
+
+function renderPeepalReactionBar(q){
+  const mine=q.myReaction||null;
+  const owner=isPeepalPostOwner(q);
+  const summary=q.reactionSummary||{up:0,down:0};
+  return`
+    <div class="peepal-reaction-area" data-peepal-reactions="${q.id}">
+      <div class="peepal-reaction-buttons" role="group" aria-label="Your private reaction">
+        <button type="button" class="peepal-reaction-btn ${mine==='up'?'selected':''}" data-reaction="up" aria-pressed="${mine==='up'}" title="Helpful or positive">👍 <span>Up</span></button>
+        <button type="button" class="peepal-reaction-btn ${mine==='down'?'selected':''}" data-reaction="down" aria-pressed="${mine==='down'}" title="Not useful or negative">👎 <span>Down</span></button>
+        <span class="peepal-reaction-private">Only you see your reaction</span>
+      </div>
+      ${owner?`
+        <div class="peepal-owner-reception">
+          <strong>${summary.up} up · ${summary.down} down</strong>
+          <span>${peepalReceptionSummary(summary)}</span>
+          <small>Visible only to you as the poster</small>
+        </div>`:''}
+    </div>`;
+}
+
+function renderPeepalCommentStrip(q){
+  const comments=(q._comments||[]).filter(c=>!c.parentId&&!c.deleted).slice(0,8);
+  if(!comments.length){
+    return`<div class="peepal-comment-strip peepal-comment-strip--empty">
+      <button type="button" class="peepal-start-comment">💬 Start the conversation</button>
+    </div>`;
+  }
+  return`<div class="peepal-comments-preview">
+    <div class="peepal-comments-preview-head"><strong>Conversation</strong><span>Swipe to read · tap to expand</span></div>
+    <div class="peepal-comment-strip">
+      ${comments.map(c=>`
+        <article class="peepal-comment-chip" data-comment-id="${c.id}" tabindex="0">
+          <div class="peepal-comment-chip-author">${c.user?.avatar||'👤'} ${c.user?.name||'User'}</div>
+          <div class="peepal-comment-chip-text">${typeof formatCommentText==='function'?formatCommentText(c.text):c.text}</div>
+          <button type="button" class="peepal-quick-reply" data-reply-id="${c.id}">Reply</button>
+          <form class="peepal-inline-reply-form hidden" data-reply-form="${c.id}">
+            <input maxlength="2000" aria-label="Quick reply to ${c.user?.name||'comment'}" placeholder="Write a quick reply…">
+            <button type="submit">Send</button>
+          </form>
+        </article>`).join('')}
+    </div>
+  </div>`;
+}
+
+async function setPeepalCardReaction(q,type){
+  const previous=q.myReaction||null;
+  const next=previous===type?null:type;
+  const previousSummary={...(q.reactionSummary||{up:0,down:0})};
+  q.myReaction=next;
+  if(isPeepalPostOwner(q)){
+    const summary={...previousSummary};
+    if(previous==='up') summary.up=Math.max(0,summary.up-1);
+    if(previous==='down') summary.down=Math.max(0,summary.down-1);
+    if(next==='up') summary.up++;
+    if(next==='down') summary.down++;
+    q.reactionSummary=summary;
+  }
+  renderPeepalFeed();
+  try{
+    if(typeof setPeepalReaction==='function'){
+      const saved=await setPeepalReaction(q,next);
+      q.myReaction=saved.myReaction||null;
+      if(saved.summary) q.reactionSummary=saved.summary;
+    }
+  }catch(e){
+    q.myReaction=previous;
+    q.reactionSummary=previousSummary;
+    if(typeof showToast==='function') showToast(typeof friendlyError==='function'?friendlyError(e):'Couldn’t save reaction');
+  }
+  renderPeepalFeed();
+}
+
+async function submitPeepalInlineReply(q,parentId,text){
+  const clean=String(text||'').trim();
+  if(!clean) return;
+  if(!Array.isArray(q._comments)) q._comments=[];
+  const comment={
+    id:typeof newCommentId==='function'?newCommentId():'c_'+Date.now(),
+    parentId,
+    user:typeof currentCommentUser==='function'?currentCommentUser():{name:'You',avatar:'🪑',uid:currentUser?.uid},
+    text:clean,
+    time:'just now',
+    pending:true,
+  };
+  q._comments.push(comment);
+  q.comments=(q.comments||0)+1;
+  renderPeepalFeed();
+  try{
+    if(typeof persistContentComment==='function'){
+      const saved=await persistContentComment('peepal',q,comment);
+      if(saved.persisted&&Number.isFinite(saved.comments)) q.comments=saved.comments;
+    }
+    comment.pending=false;
+    if(typeof showToast==='function') showToast('Reply posted');
+  }catch(e){
+    q._comments=q._comments.filter(c=>c.id!==comment.id);
+    q.comments=Math.max(0,(q.comments||1)-1);
+    if(typeof showToast==='function') showToast(typeof friendlyError==='function'?friendlyError(e):'Couldn’t post reply');
+  }
+  renderPeepalFeed();
 }
 
 function renderPeepalFeed(){
@@ -789,8 +964,13 @@ function renderPeepalFeed(){
   }
   sorted.forEach(q=>{
     const card=document.createElement('div');card.className='peepal-card';
+    const attachmentWidth=Number(q.attachment?.width)||0;
+    const attachmentHeight=Number(q.attachment?.height)||0;
+    const attachmentHasSize=attachmentWidth>0&&attachmentHeight>0;
+    const attachmentWrapAttrs=attachmentHasSize?` data-has-ratio="1" style="--media-ratio:${attachmentWidth}/${attachmentHeight};"`:'';
+    const attachmentSizeAttrs=attachmentHasSize?` width="${attachmentWidth}" height="${attachmentHeight}" style="aspect-ratio:${attachmentWidth}/${attachmentHeight};"`:'';
     const mediaHtml = q.attachment?.type==='image'
-      ? `<div class="peepal-media"><img src="${typeof mediaUrlFor==='function'?mediaUrlFor({media:q.attachment.data,thumb:q.attachment.thumb},'list'):(q.attachment.thumb||q.attachment.data)}" loading="lazy" alt=""></div>`
+      ? `<div class="peepal-media"${attachmentWrapAttrs}><img src="${typeof mediaUrlFor==='function'?mediaUrlFor({media:q.attachment.data,thumb:q.attachment.thumb},'list'):(q.attachment.thumb||q.attachment.data)}" loading="lazy" decoding="async" alt=""${attachmentSizeAttrs}></div>`
       : q.attachment?.type==='link'
       ? `<a class="peepal-link-card" href="${q.attachment.url}" target="_blank" onclick="event.stopPropagation()"><div class="peepal-link-thumb">🔗</div><div class="peepal-link-info"><div class="peepal-link-title">${q.attachment.title}</div><div class="peepal-link-url">${q.attachment.url}</div></div></a>`
       : '';
@@ -810,9 +990,11 @@ function renderPeepalFeed(){
         <div class="peepal-question-text">${q.question}</div>
         ${mediaHtml}
         ${renderPeepalOptions(q)}
+        ${renderPeepalReactionBar(q)}
+        ${renderPeepalCommentStrip(q)}
       </div>
       <div class="peepal-card-footer">
-        <span class="peepal-footer-stat">💬 ${q.comments}</span>
+        <button type="button" class="peepal-footer-stat peepal-open-comments">💬 ${q.comments} comments</button>
         <span class="peepal-footer-stat">👥 ${q.totalResponses} responses</span>
         <button class="peepal-footer-stat" onclick="event.stopPropagation();openShareSheet({id:'${q.id}',caption:'${q.question.replace(/'/g,"\'")}',user:{name:'${q.user.name}'}})" style="background:none;border:none;cursor:pointer;">↗️ Share</button>
         <span class="peepal-tag">${q.tag}</span>
@@ -822,6 +1004,33 @@ function renderPeepalFeed(){
       e.stopPropagation();
       speakText(e.currentTarget.dataset.text, e.currentTarget);
     });
+    card.querySelectorAll('.peepal-reaction-btn').forEach(btn=>btn.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      if(btn.disabled)return;
+      btn.disabled=true;
+      setPeepalCardReaction(q,btn.dataset.reaction);
+    }));
+    card.querySelector('.peepal-open-comments')?.addEventListener('click',(e)=>{e.stopPropagation();openPeepalDetail(q);});
+    card.querySelector('.peepal-start-comment')?.addEventListener('click',(e)=>{e.stopPropagation();openPeepalDetail(q,{focusComposer:true});});
+    card.querySelectorAll('.peepal-comment-chip').forEach(chip=>{
+      const open=()=>openPeepalDetail(q,{focusCommentId:chip.dataset.commentId});
+      chip.addEventListener('click',(e)=>{
+        if(e.target.closest('.peepal-quick-reply,.peepal-inline-reply-form'))return;
+        e.stopPropagation();open();
+      });
+      chip.addEventListener('keydown',(e)=>{if(e.key==='Enter'){e.preventDefault();e.stopPropagation();open();}});
+    });
+    card.querySelectorAll('.peepal-quick-reply').forEach(btn=>btn.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      const form=card.querySelector(`[data-reply-form="${btn.dataset.replyId}"]`);
+      form?.classList.toggle('hidden');
+      form?.querySelector('input')?.focus();
+    }));
+    card.querySelectorAll('.peepal-inline-reply-form').forEach(form=>form.addEventListener('submit',(e)=>{
+      e.preventDefault();e.stopPropagation();
+      const input=form.querySelector('input');
+      submitPeepalInlineReply(q,form.dataset.replyForm,input?.value);
+    }));
     card.querySelector('.peepal-delete-btn')?.addEventListener('click',(e)=>{
       e.stopPropagation();
       if(typeof softDeleteContent!=='function') return;
@@ -835,7 +1044,10 @@ function renderPeepalFeed(){
         label:'Question deleted',
       });
     });
-    card.addEventListener('click',()=>openPeepalDetail(q));
+    card.addEventListener('click',(e)=>{
+      if(e.target.closest('button,input,textarea,a,form'))return;
+      openPeepalDetail(q);
+    });
     feed.appendChild(card);
   });
   if(peepalLiveMode&&peepalHasMore&&typeof ensureLoadMoreButton==='function'){
@@ -901,14 +1113,15 @@ function submitPeepalTyping(id, e){
 }
 
 async function updatePersonalityFromPeepalAnswer(q, typedAnswer){
-  // Run async Haiku analysis on typed answer
+  // Run async analysis on typed answer (no-op when master AI off)
+  if(typeof isAiFeaturesEnabled==='function' && !(await isAiFeaturesEnabled())) return;
   try{
-    const data = await callAnthropic({
-        model:'claude-haiku-4-5-20251001',max_tokens:150,
+    const data = await callAI({
+        tier:'fast', max_tokens:150, feature:'peepal_personality',
         system:'Extract personality signals from a user\'s typed answer to a community question. Return ONLY JSON: {"traits":["list of 1-3 personality traits"],"interests":["topics they care about"],"vibe":"1-word social vibe: intellectual|adventurous|creative|empathetic|humorous|ambitious"}. Be concise.',
         messages:[{role:'user',content:`Question: "${q.question}"\nAnswer: "${typedAnswer}"`}]
       });
-    const analysis=JSON.parse((data.content?.[0]?.text||'{}').replace(/```json|```/g,'').trim());
+    const analysis=JSON.parse((data.content?.[0]?.text||data.text||'{}').replace(/```json|```/g,'').trim());
     // Merge into personality profile
     if(analysis.traits) personalityProfile.traits=[...new Set([...(personalityProfile.traits||[]),...analysis.traits])].slice(0,10);
     if(analysis.interests) personalityProfile.interests=[...new Set([...(personalityProfile.interests||[]),...analysis.interests])].slice(0,15);
@@ -941,13 +1154,22 @@ function submitPeepalOpen(id){
   showToast('Your response is in! 🙌');
 }
 
-function openPeepalDetail(q){
+function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
   const detail=document.getElementById('peepalDetail');
   detail.classList.remove('hidden');
   requestAnimationFrame(()=>detail.classList.add('open'));
+  const canLoadPersistentComments = typeof socialContentCanPersist === 'function' && socialContentCanPersist('peepal', q);
+  if(!Array.isArray(q._comments)) q._comments = canLoadPersistentComments ? [] : SAMPLE_COMMENTS.map(c=>({...c}));
+  const comments = q._comments;
+  const attachmentWidth=Number(q.attachment?.width)||0;
+  const attachmentHeight=Number(q.attachment?.height)||0;
+  const attachmentHasSize=attachmentWidth>0&&attachmentHeight>0;
+  const attachmentWrapAttrs=attachmentHasSize?` data-has-ratio="1" style="margin:12px 0;--media-ratio:${attachmentWidth}/${attachmentHeight};"`:' style="margin:12px 0;"';
+  const attachmentSizeAttrs=attachmentHasSize?` width="${attachmentWidth}" height="${attachmentHeight}" style="width:100%;aspect-ratio:${attachmentWidth}/${attachmentHeight};border-radius:12px;"`:' style="width:100%;border-radius:12px;"';
+  let replyTo = null;
   detail.innerHTML=`
     <div class="peepal-detail-header">
-      <button class="peepal-detail-back" id="peepalDetailBack">←</button>
+      <button class="peepal-detail-back cp-tap-target" id="peepalDetailBack">←</button>
       <div class="peepal-detail-title">🌳 Peepal</div>
     </div>
     <div class="peepal-detail-body">
@@ -959,31 +1181,27 @@ function openPeepalDetail(q){
         </div>
       </div>
       <div class="peepal-question-text">${q.question}</div>
-      ${q.attachment?.type==='image'?`<div class="peepal-media" style="margin:12px 0;"><img src="${typeof mediaUrlFor==='function'?mediaUrlFor({media:q.attachment.data,thumb:q.attachment.thumb},'detail'):(q.attachment.data||q.attachment.thumb)}" alt="" style="width:100%;border-radius:12px;"></div>`:''}
+      ${q.attachment?.type==='image'?`<div class="peepal-media"${attachmentWrapAttrs}><img src="${typeof mediaUrlFor==='function'?mediaUrlFor({media:q.attachment.data,thumb:q.attachment.thumb},'detail'):(q.attachment.data||q.attachment.thumb)}" alt="" decoding="async"${attachmentSizeAttrs}></div>`:''}
       ${renderPeepalOptions(q)}
+      ${renderPeepalReactionBar(q)}
       <div style="height:16px;"></div>
       <div class="spark-nudge">
         <div class="spark-nudge-text">👋 <strong>${q.user.name.split(' ')[0]}</strong> would love to hear your thoughts! Start a conversation.</div>
         <button class="spark-nudge-btn" onclick="showToast('Message sent! Check Baithak 🏠')">Say hi</button>
       </div>
       <div style="font-size:13px;font-weight:700;margin-bottom:12px;">Comments (${q.comments})</div>
-      ${SAMPLE_COMMENTS.map(c=>`
-        <div class="comment-item">
-          <div class="comment-avatar">${c.user.avatar}</div>
-          <div class="comment-body">
-            <div class="comment-name">${c.user.name}</div>
-            <div class="comment-text">${c.text}</div>
-            <div class="comment-time">${c.time} ago</div>
-          </div>
-        </div>
-      `).join('')}
+      <div id="peepalCommentsList" class="comments-list">
+        ${typeof renderCommentsHtml==='function'?renderCommentsHtml(comments):''}
+      </div>
     </div>
+    <div id="peepalReplyHint" class="comment-reply-hint hidden"></div>
     <div class="comment-input-bar">
       <input class="comment-input" id="commentInput" placeholder="Add a comment...">
-      <button class="comment-send" id="commentSend">Post</button>
+      <button class="btn btn--primary comment-send cp-tap-target" id="commentSend">Post</button>
     </div>
   `;
   document.getElementById('peepalDetailBack').addEventListener('click',()=>{
+    if(typeof closeAiKeyboard==='function') closeAiKeyboard();
     detail.classList.remove('open');setTimeout(()=>detail.classList.add('hidden'),300);
     try{ history.pushState({},'', '/'); }catch(e){}
   });
@@ -991,22 +1209,133 @@ function openPeepalDetail(q){
     const pid=q.firestoreId||q.id;
     if(pid&&typeof buildDeepLink==='function') history.pushState({chaupaalDeep:true},'',buildDeepLink('post',pid));
   }catch(e){}
-  document.getElementById('commentSend').addEventListener('click',async()=>{
-    const input=document.getElementById('commentInput');
-    if(!input.value.trim())return;
-    if(typeof checkRateLimit==='function'){
-      const rl=await checkRateLimit('comment');
-      if(!rl.ok){ if(typeof showToast==='function') showToast(rl.message||'Slow down'); return; }
+
+  const listEl = document.getElementById('peepalCommentsList');
+  const hint = document.getElementById('peepalReplyHint');
+  const input = document.getElementById('commentInput');
+  const commentSend = document.getElementById('commentSend');
+  const commentActions=typeof createCommentActionHandlers==='function'
+    ? createCommentActionHandlers({collection:'peepal',content:q,comments,refresh:refreshComments})
+    : {};
+  detail.querySelectorAll('.peepal-reaction-btn').forEach(btn=>btn.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    detail.classList.remove('open');
+    setTimeout(()=>detail.classList.add('hidden'),300);
+    setPeepalCardReaction(q,btn.dataset.reaction);
+  }));
+
+  function refreshComments() {
+    if (!listEl) return;
+    listEl.innerHTML = typeof renderCommentsHtml === 'function' ? renderCommentsHtml(comments) : '';
+    if (typeof wireCommentsList === 'function') {
+      wireCommentsList(listEl, comments, {
+        ...commentActions,
+        onReply(parentId) {
+          replyTo = parentId;
+          const parent = comments.find((c) => c.id === parentId);
+          if (hint) {
+            hint.classList.remove('hidden');
+            hint.innerHTML = `Replying to <strong>${parent?.user?.name || 'comment'}</strong> <button type="button" id="cancelPeepalReply">Cancel</button>`;
+            hint.querySelector('#cancelPeepalReply')?.addEventListener('click', () => {
+              replyTo = null;
+              hint.classList.add('hidden');
+              hint.innerHTML = '';
+            });
+          }
+          input?.focus();
+        },
+      });
     }
-    const div=document.createElement('div');div.className='comment-item';
-    div.innerHTML=`<div class="comment-avatar">${userProfile?.photoURL?`<img src="${userProfile.photoURL}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;">`:'🪑'}</div><div class="comment-body"><div class="comment-name">${userProfile?.name||'You'}</div><div class="comment-text">${input.value}</div><div class="comment-time">just now</div></div>`;
-    document.querySelector('.peepal-detail-body')?.appendChild(div);
-    input.value='';q.comments++;
+  }
+  refreshComments();
+  if (canLoadPersistentComments && typeof loadContentComments === 'function') {
+    if (commentSend) commentSend.disabled = true;
+    if (typeof renderSkeleton === 'function') renderSkeleton(listEl, { variant: 'list', count: 3 });
+    loadContentComments('peepal', q)
+      .then((loaded) => {
+        if (!Array.isArray(loaded)) return;
+        comments.splice(0, comments.length, ...loaded);
+        q._comments = comments;
+        refreshComments();
+      })
+      .catch((err) => {
+        if (typeof renderErrorState === 'function') {
+          renderErrorState(listEl, {
+            title: 'Couldn’t load comments',
+            message: typeof friendlyError === 'function' ? friendlyError(err) : 'Please try again.',
+            onRetry: () => openPeepalDetail(q),
+          });
+        }
+      })
+      .finally(() => {
+        if (commentSend) commentSend.disabled = false;
+        if(focusCommentId){
+          listEl?.querySelector(`[data-cid="${focusCommentId}"]`)?.scrollIntoView({behavior:'smooth',block:'center'});
+        }
+      });
+  }
+
+  commentSend.addEventListener('click', async () => {
+    if (!input.value.trim()) return;
+    const txt = input.value.trim();
+    const id = typeof newCommentId === 'function' ? newCommentId() : 'c_' + Date.now();
+    const c = {
+      id,
+      parentId: replyTo || null,
+      user: typeof currentCommentUser === 'function' ? currentCommentUser() : { name: userProfile?.name || 'You', avatar: '🪑' },
+      text: txt,
+      time: 'just now',
+      pending: true,
+    };
+    const apply = () => {
+      comments.push(c);
+      q.comments = (q.comments || 0) + 1;
+      input.value = '';
+      replyTo = null;
+      if (hint) {
+        hint.classList.add('hidden');
+        hint.innerHTML = '';
+      }
+      const title = detail.querySelector('.peepal-detail-body > div[style*="font-weight:700"]');
+      // refresh count label roughly
+      detail.querySelectorAll('.peepal-detail-body > div').forEach((el) => {
+        if (el.textContent && el.textContent.startsWith('Comments')) el.textContent = `Comments (${q.comments})`;
+      });
+      refreshComments();
+    };
+    const revert = () => {
+      const i = comments.findIndex((x) => x.id === id);
+      if (i >= 0) comments.splice(i, 1);
+      q.comments = Math.max(0, (q.comments || 1) - 1);
+      refreshComments();
+    };
+    if (typeof runOptimistic === 'function') {
+      await runOptimistic({
+        apply,
+        revert,
+        commit: async () => {
+          if (typeof assertRateLimit === 'function') await assertRateLimit('comment');
+          if (typeof persistContentComment === 'function') {
+            const saved = await persistContentComment('peepal', q, c);
+            if (saved.persisted) {
+              c.persisted = true;
+              if (Number.isFinite(saved.comments)) q.comments = saved.comments;
+            }
+          }
+          c.pending = false;
+          refreshComments();
+        },
+      });
+    } else {
+      apply();
+      c.pending = false;
+    }
   });
-  // Wire AI keyboard to comment input
   setTimeout(()=>{
     const ci=document.getElementById('commentInput');
     if(ci) wireAiKbToInput(ci,`Peepal question: "${q.question.slice(0,80)}"`);
+    if(focusComposer) ci?.focus();
+    if(focusCommentId) listEl?.querySelector(`[data-cid="${focusCommentId}"]`)?.scrollIntoView({behavior:'smooth',block:'center'});
   },100);
 }
 

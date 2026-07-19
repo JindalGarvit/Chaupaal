@@ -1,30 +1,114 @@
 // ===================== CHAT SCREEN =====================
 let activeChatScreen = null;
+/** @type {SpeechRecognition|null} */
+let activeChatRecognition = null;
+/** @type {((e: MouseEvent) => void)|null} */
+let activeChatAttachDocClick = null;
+
+/**
+ * Single cleanup path for chat close (← button, history back, replace chat, Muqabala handoff).
+ * Closes nested overlays (AI keyboard, games, challenge creator, ritual, pickers) and
+ * tears down listeners / realtime / mic / suggestion timers.
+ */
+function closeChatScreen(opts = {}) {
+  const { updateHistory = true, animate = true } = opts;
+
+  if (typeof stopChatPresence === 'function') stopChatPresence();
+
+  if (typeof endOverlayScope === 'function') {
+    endOverlayScope(typeof OVERLAY_SCOPE_CHAT === 'string' ? OVERLAY_SCOPE_CHAT : 'chat');
+  } else if (typeof closeAiKeyboard === 'function') {
+    closeAiKeyboard();
+  }
+
+  if (typeof aiSuggestTimeout !== 'undefined' && aiSuggestTimeout) {
+    clearTimeout(aiSuggestTimeout);
+    aiSuggestTimeout = null;
+  }
+
+  try {
+    activeChatRecognition?.stop?.();
+  } catch (e) {}
+  activeChatRecognition = null;
+
+  if (activeChatAttachDocClick) {
+    document.removeEventListener('click', activeChatAttachDocClick);
+    activeChatAttachDocClick = null;
+  }
+
+  if (typeof activeChatListener !== 'undefined' && activeChatListener) {
+    try {
+      activeChatListener();
+    } catch (e) {}
+    activeChatListener = null;
+  }
+
+  const screen = activeChatScreen || document.getElementById('activeChatScreen');
+  activeChatScreen = null;
+
+  if (screen) {
+    const finish = () => {
+      try {
+        screen.remove();
+      } catch (e) {}
+    };
+    if (animate && screen.classList.contains('open')) {
+      screen.classList.remove('open');
+      setTimeout(finish, 300);
+    } else {
+      finish();
+    }
+  }
+
+  if (updateHistory) {
+    try {
+      if (location.pathname && location.pathname !== '/' && !opts.fromHistory) {
+        history.pushState({}, '', '/');
+      }
+    } catch (e) {}
+  }
+}
 
 function openChatScreen(chat){
-  const existing = document.getElementById('activeChatScreen');
-  if(existing) existing.remove();
+  // Replace any existing chat with full cleanup (nested panels included)
+  if (activeChatScreen || document.getElementById('activeChatScreen')) {
+    closeChatScreen({ updateHistory: false, animate: false });
+  }
 
   const screen = document.createElement('div');
   screen.id = 'activeChatScreen';
   screen.className = 'chat-screen';
   const msgs = SAMPLE_MESSAGES[chat.id] || [];
+  const isSelf = typeof isSelfChat==='function' && isSelfChat(chat);
+  const isChaupaal = typeof isChaupaalChat==='function' && isChaupaalChat(chat);
   const isGroup = chat.type === 'group';
-  const hasDuelStreak = !isGroup && chat.duelStreak;
+  const hasDuelStreak = !isGroup && !isSelf && !isChaupaal && chat.duelStreak;
+  screen.dataset.chatId = chat.firestoreId || chat.id || '';
+  if (isChaupaal) screen.dataset.chaupaal = '1';
+  window.currentOpenChat = chat;
+
+  const statusLine = isChaupaal
+    ? 'Your space with Chaupaal'
+    : (isSelf ? 'Notes to self · testing space' : 'Checking activity…');
+  const placeholder = isChaupaal
+    ? 'Talk with Chaupaal…'
+    : (isSelf ? 'Write a note to yourself...' : 'Type a message...');
 
   screen.innerHTML = `
     <div class="chat-screen-header">
-      <button class="chat-back" id="chatBack">←</button>
+      <button class="chat-back" id="chatBack" aria-label="Back">←</button>
       <div class="chat-header-avatar">${chat.avatar}</div>
       <div>
         <div class="chat-header-name">${chat.name}</div>
-        <div id="chatActivityStatus" style="font-size:11px;color:var(--muted);">Checking activity…</div>
+        <div id="chatActivityStatus" style="font-size:11px;color:var(--muted);">${statusLine}</div>
       </div>
       <div class="chat-header-actions">
-        <button class="chat-header-btn" id="chatChallengeBtn" title="Create challenge">🎯</button>
-        ${!isGroup?`<button class="chat-header-btn" id="chatMuqabalaBtn" title="Muqabala">⚔️</button>`:''}
+        ${!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatChallengeBtn" title="Create challenge">🎯</button>`:''}
+        ${!isGroup&&!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatMuqabalaBtn" title="Muqabala">⚔️</button>`:''}
+        ${isGroup?`<button class="chat-header-btn" id="chatLeaveGroupBtn" title="Leave group">🚪</button>`:''}
       </div>
     </div>
+    <div id="chatTypingStatus" class="chat-typing-status hidden" aria-live="polite"></div>
     ${hasDuelStreak?`
     <div class="duel-ritual-bar" id="duelRitualBar">
       <div>
@@ -56,10 +140,10 @@ function openChatScreen(chat){
       </div>
     </div>
     <div class="chat-input-bar">
-      <button class="chat-action-btn" id="chatPlusBtn">＋</button>
-      <input type="text" id="chatMsgInput" placeholder="Type a message..." autocomplete="off" autocorrect="off" spellcheck="false">
-      <button class="chat-action-btn mic-btn" id="chatMicBtn" title="Voice typing">🎙️</button>
-      <button class="chat-action-btn chat-send-btn" id="chatSendBtn">➤</button>
+      <button class="chat-action-btn" id="chatPlusBtn" aria-label="Attach">＋</button>
+      <input type="text" id="chatMsgInput" placeholder="${placeholder}" autocomplete="off" autocorrect="off" spellcheck="false">
+      <button class="chat-action-btn mic-btn" id="chatMicBtn" title="Voice typing" aria-label="Voice typing">🎙️</button>
+      <button class="chat-action-btn chat-send-btn" id="chatSendBtn" aria-label="Send message">➤</button>
     </div>
     <input type="file" id="chatPhotoInput" accept="image/*" style="display:none">
     <input type="file" id="chatFileInput" style="display:none">
@@ -69,30 +153,53 @@ function openChatScreen(chat){
   requestAnimationFrame(() => screen.classList.add('open'));
   activeChatScreen = screen;
 
+  if (typeof beginOverlayScope === 'function') {
+    beginOverlayScope(typeof OVERLAY_SCOPE_CHAT === 'string' ? OVERLAY_SCOPE_CHAT : 'chat', screen);
+  }
+  if (typeof enableSwipeBack === 'function') {
+    enableSwipeBack(screen, () => closeChatScreen({ updateHistory: true, animate: true }));
+  }
+  if (typeof bindZoomableImages === 'function') bindZoomableImages(screen);
+
+  if(!isSelf && !isChaupaal && typeof mountIcebreakerBanner==='function') mountIcebreakerBanner(screen, chat);
+  if(!isSelf && !isChaupaal && typeof mountConversationRepairChips==='function') {
+    try { mountConversationRepairChips(screen, chat); } catch (e) {}
+  }
+
   try{
     const cid=chat.firestoreId||chat.id;
     if(cid&&typeof buildDeepLink==='function') history.pushState({chaupaalDeep:true},'',buildDeepLink('chat',cid));
   }catch(e){}
 
   document.getElementById('chatBack').addEventListener('click', () => {
-    screen.classList.remove('open');
-    setTimeout(() => screen.remove(), 300);
-    try{ history.pushState({},'', '/'); }catch(e){}
+    closeChatScreen({ updateHistory: true, animate: true });
   });
 
   document.getElementById('chatSendBtn').addEventListener('click', () => sendMsg(chat));
   const msgInput = document.getElementById('chatMsgInput');
-  msgInput.addEventListener('keypress', e => {if(e.key==='Enter')sendMsg(chat);});
-  msgInput.addEventListener('input', () => updateAiSuggestions(msgInput.value));
+  msgInput?.addEventListener('keypress', e => {if(e.key==='Enter')sendMsg(chat);});
+  msgInput?.addEventListener('input', () => {
+    if (!isChaupaal) updateAiSuggestions(msgInput.value);
+    if (!isChaupaal && typeof signalChatTyping === 'function') signalChatTyping(chat.firestoreId || chat.id);
+  });
+  if (!isChaupaal && typeof startChatPresence === 'function') startChatPresence(chat);
+  if (isChaupaal) {
+    try { if (typeof ensureChaupaalChatDoc === 'function') ensureChaupaalChatDoc(); } catch (e) {}
+    try { if (typeof hydrateChaupaalQuietState === 'function') hydrateChaupaalQuietState(screen); } catch (e) {}
+    // Hide attach game / challenge affordances for system chat
+    document.getElementById('attachGame')?.classList.add('hidden');
+  }
+  document.getElementById('chatLeaveGroupBtn')?.addEventListener('click', () => leaveGroupChat(chat));
 
   // Attach menu toggle
   const attachMenu = document.getElementById('chatAttachMenu');
   document.getElementById('chatPlusBtn').addEventListener('click', (e)=>{
     e.stopPropagation();attachMenu.classList.toggle('show');
   });
-  document.addEventListener('click', (e)=>{
+  activeChatAttachDocClick = (e)=>{
     if(!e.target.closest('#chatAttachMenu')&&!e.target.closest('#chatPlusBtn')) attachMenu.classList.remove('show');
-  });
+  };
+  document.addEventListener('click', activeChatAttachDocClick);
 
   document.getElementById('attachPhoto').addEventListener('click',()=>{
     attachMenu.classList.remove('show');
@@ -101,15 +208,18 @@ function openChatScreen(chat){
   document.getElementById('chatPhotoInput').addEventListener('change', async e=>{
     const file=e.target.files[0];if(!file)return;
     try{
-      let src='';
+      let src='', mediaWidth=0, mediaHeight=0;
       if(typeof processAndUploadMedia==='function'&&currentUser&&file.type.startsWith('image/')&&(typeof isMediaUploadReady!=='function'||await isMediaUploadReady())){
         showToast('Uploading photo…');
         const up=await processAndUploadMedia(file,{folder:'chat'});
         src=up.media;
+        mediaWidth=Number(up.width)||0;
+        mediaHeight=Number(up.height)||0;
       } else {
         src=URL.createObjectURL(file);
       }
-      addMsgBubble({from:'me',text:`<img class="chat-img-msg" src="${src}">`,time:'now'}, isGroup);
+      const sizeAttrs=mediaWidth&&mediaHeight?` width="${mediaWidth}" height="${mediaHeight}" style="aspect-ratio:${mediaWidth}/${mediaHeight};"`:'';
+      addMsgBubble({from:'me',text:`<img class="chat-img-msg" src="${src}" decoding="async"${sizeAttrs}>`,time:'now'}, isGroup);
       if(typeof sendRealtimeMessage==='function') sendRealtimeMessage(chat.id, `[photo] ${src}`, isGroup);
     }catch(err){
       showToast(typeof friendlyError==='function'?friendlyError(err):(err.message||'Photo failed'));
@@ -133,32 +243,31 @@ function openChatScreen(chat){
   });
 
   // Voice typing (mic)
-  let recognition=null;
   const micBtn=document.getElementById('chatMicBtn');
   micBtn.addEventListener('click', ()=>{
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if(!SR){showToast('Voice typing not supported on this browser');return;}
     if(micBtn.classList.contains('recording')){
-      recognition?.stop();return;
+      activeChatRecognition?.stop();return;
     }
-    recognition = new SR();
-    recognition.lang = currentLang==='hi'?'hi-IN':'en-IN';
-    recognition.interimResults = false;
-    recognition.onstart = () => micBtn.classList.add('recording');
-    recognition.onend = () => micBtn.classList.remove('recording');
-    recognition.onresult = (e) => {
+    activeChatRecognition = new SR();
+    activeChatRecognition.lang = currentLang==='hi'?'hi-IN':'en-IN';
+    activeChatRecognition.interimResults = false;
+    activeChatRecognition.onstart = () => micBtn.classList.add('recording');
+    activeChatRecognition.onend = () => micBtn.classList.remove('recording');
+    activeChatRecognition.onresult = (e) => {
       const transcript = e.results[0][0].transcript;
       msgInput.value = (msgInput.value + ' ' + transcript).trim();
       updateAiSuggestions(msgInput.value);
     };
-    recognition.onerror = () => micBtn.classList.remove('recording');
-    recognition.start();
+    activeChatRecognition.onerror = () => micBtn.classList.remove('recording');
+    activeChatRecognition.start();
   });
 
-  document.getElementById('chatChallengeBtn').addEventListener('click', () => openChallengeCreator(chat));
-  if(!isGroup) document.getElementById('chatMuqabalaBtn')?.addEventListener('click', () => {
-    screen.classList.remove('open');
-    setTimeout(() => {screen.remove(); startMuqabala(chat.name,'GK');}, 300);
+  document.getElementById('chatChallengeBtn')?.addEventListener('click', () => openChallengeCreator(chat));
+  if(!isGroup&&!isSelf) document.getElementById('chatMuqabalaBtn')?.addEventListener('click', () => {
+    closeChatScreen({ updateHistory: true, animate: true });
+    setTimeout(() => startMuqabala(chat.name,'GK'), 320);
   });
 
   if(hasDuelStreak) document.getElementById('startRitualBtn')?.addEventListener('click', () => startDailyDuelRitual(chat));
@@ -167,12 +276,15 @@ function openChatScreen(chat){
     const area = document.getElementById('chatMsgsArea');
     if(area) area.scrollTop = area.scrollHeight;
     // Load real messages from Firestore
-    loadRealtimeMessages(chat.id, area, isGroup);
-    // Load activity status for DMs
-    if(!isGroup&&chat.uid) injectChatActivityStatus(chat.uid);
+    loadRealtimeMessages(chat.firestoreId || chat.id, area, isGroup);
+    // Load activity status for DMs (never for self/Chaupaal — system chats keep their own subtitle)
+    if(isSelf||isChaupaal){ /* keep notes / quiet subtitle */ }
+    else if(!isGroup&&chat.uid) injectChatActivityStatus(chat.uid);
     else if(!isGroup){ const el=document.getElementById('chatActivityStatus'); if(el) el.textContent=''; }
   }, 100);
 }
+
+window.closeChatScreen = closeChatScreen;
 
 // ===================== AI SUGGESTION BAR (no autocorrect, smart next-word/emoji) =====================
 const QUICK_PHRASES = ["Sounds good!","On my way","Let's do it","Haha 😄","I agree","Not sure yet","Talk later?","Great idea!"];
@@ -223,7 +335,7 @@ function renderMsgBubble(m, isGroup){
       ${!isMe?`<div class="msg-avatar-small">${m.avatar||'👤'}</div>`:''}
       <div>
         ${(isGroup&&!isMe&&m.name)?`<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px;">${m.name}</div>`:''}
-        <div class="msg-bubble ${isMe?'me':'them'}">${m.text}</div>
+        <div class="msg-bubble ${isMe?'me':'them'}" data-msg-text="${String(m.text||'').replace(/"/g,'&quot;')}">${m.text}</div>
         <div style="font-size:10px;color:var(--muted);margin-top:3px;${isMe?'text-align:right':''};">${m.time||''}</div>
       </div>
     </div>
@@ -242,23 +354,114 @@ function addMsgBubble(msg, isGroup){
 async function sendMsg(chat){
   const input=document.getElementById('chatMsgInput');
   const text=input?.value.trim();if(!text)return;
-  if(typeof checkRateLimit==='function'){
-    const rl=await checkRateLimit('message');
-    if(!rl.ok){ if(typeof showToast==='function') showToast(rl.message||'Slow down'); return; }
-  }
-  const unlock=typeof beginClientMutation==='function'?beginClientMutation(`msg_${chat.id}`):()=>{};
-  if(unlock===false){ if(typeof showToast==='function') showToast('Sending…'); return; }
-  try{
-    addMsgBubble({from:'me',text,time:'now'},chat.type==='group');
+  const isGroup=chat.type==='group';
+  const isChaupaal = typeof isChaupaalChat==='function' && isChaupaalChat(chat);
+  const tempId='local_'+Date.now();
+  const bubble={from:'me',text,time:'now',_tempId:tempId,pending:true};
+  const prevValue=input.value;
+
+  const apply=()=>{
+    addMsgBubble(bubble,isGroup);
     input.value='';
     document.getElementById('aiSuggestionBar')?.classList.add('hidden');
-    sendRealtimeMessage(chat.id,text,chat.type==='group');
-    if(typeof trackMessageSent==='function') trackMessageSent({ chat_type: chat.type||'dm' });
-    if(!db||!currentUser) setTimeout(()=>{
-      const replies=["Haha 😄","Totally agree!","Really?!","Let's talk later 🙏","Muqabala tomorrow? ⚔️","👍","What's the plan?"];
-      addMsgBubble({from:'them',text:replies[Math.floor(Math.random()*replies.length)],time:'now',avatar:chat.avatar},chat.type==='group');
-    },1200);
-  }finally{ if(typeof unlock==='function') unlock(); }
+    if(typeof SoundLib!=='undefined'&&SoundLib.send) SoundLib.send();
+  };
+  const revert=()=>{
+    const area=document.getElementById('chatMsgsArea');
+    const rows=area?.querySelectorAll('.msg-row.me');
+    if(rows&&rows.length){
+      // remove last pending me bubble matching text
+      for(let i=rows.length-1;i>=0;i--){
+        const b=rows[i].querySelector('.msg-bubble');
+        if(b&&b.textContent===text){ rows[i].remove(); break; }
+      }
+    }
+    input.value=prevValue;
+  };
+
+  const unlock=typeof beginClientMutation==='function'?beginClientMutation(`msg_${chat.id}`):()=>{};
+  if(unlock===false){ if(typeof showToast==='function') showToast('Sending…'); return; }
+
+  const sendBtn=document.getElementById('chatSendBtn');
+  if(sendBtn) sendBtn.disabled=true;
+  try{
+    if(typeof runOptimistic==='function'){
+      await runOptimistic({
+        apply,
+        revert,
+        commit:async()=>{
+          if(typeof assertRateLimit==='function') await assertRateLimit('message');
+          if(isChaupaal && typeof sendChaupaalMessage==='function'){
+            const area=document.getElementById('chatMsgsArea');
+            const hist=[];
+            area?.querySelectorAll('.msg-row')?.forEach(row=>{
+              const t=row.querySelector('.msg-bubble')?.textContent||'';
+              if(!t) return;
+              hist.push({ role: row.classList.contains('me') ? 'user' : 'assistant', content: t });
+            });
+            const data = await sendChaupaalMessage(text, hist.slice(-12));
+            if(data?.quiet){
+              // In-voice "back soon" bubble — never a silent failure or error state
+              if(typeof applyChaupaalQuietComposer==='function'){
+                applyChaupaalQuietComposer(document.getElementById('activeChatScreen'), true);
+              }
+              addMsgBubble({from:'them',text:data.message||"Chaupaal is resting right now — back soon. 🌙",time:'now',avatar:'🏠'}, false);
+              return;
+            }
+            if(data?.reply){
+              addMsgBubble({from:'them',text:data.reply,time:'now',avatar:'🏠'}, false);
+            }
+            if(typeof trackMessageSent==='function') trackMessageSent({ chat_type: 'chaupaal' });
+            return;
+          }
+          if(typeof sendRealtimeMessage==='function'){
+            await sendRealtimeMessage(chat.firestoreId||chat.id,text,isGroup);
+          }
+          if(typeof trackMessageSent==='function') trackMessageSent({ chat_type: chat.type||'dm' });
+          if(typeof publishChatTyping==='function') publishChatTyping(chat.firestoreId||chat.id,false);
+          if(typeof demoMarkSeenSoon==='function') demoMarkSeenSoon();
+          if(!isChaupaal && (!db||!currentUser)) setTimeout(()=>{
+            const replies=["Haha 😄","Totally agree!","Really?!","Let's talk later 🙏","Muqabala tomorrow? ⚔️","👍","What's the plan?"];
+            if(typeof startChatPresence==='function'){ /* typing already demoed */ }
+            addMsgBubble({from:'them',text:replies[Math.floor(Math.random()*replies.length)],time:'now',avatar:chat.avatar},isGroup);
+            if(typeof demoMarkSeenSoon==='function') demoMarkSeenSoon();
+          },1200);
+        },
+        errorToast:'Message not sent — undone',
+      });
+    }else{
+      apply();
+      if(isChaupaal && typeof sendChaupaalMessage==='function'){
+        const data = await sendChaupaalMessage(text, []);
+        if(data?.reply) addMsgBubble({from:'them',text:data.reply,time:'now',avatar:'🏠'}, false);
+      } else if(typeof sendRealtimeMessage==='function') {
+        sendRealtimeMessage(chat.firestoreId||chat.id,text,isGroup);
+      }
+    }
+  }finally{ if(sendBtn) sendBtn.disabled=false; if(typeof unlock==='function') unlock(); }
+}
+
+function leaveGroupChat(chat){
+  if(!chat||chat.type!=='group') return;
+  if(typeof baithakChats==='undefined'||!Array.isArray(baithakChats)) return;
+  const idx=baithakChats.findIndex(c=>c.id===chat.id||c.firestoreId===chat.firestoreId);
+  if(idx<0) return;
+  const item=baithakChats[idx];
+  baithakChats.splice(idx,1);
+  closeChatScreen({ updateHistory:true, animate:true });
+  if(typeof renderChatList==='function') renderChatList(baithakChats);
+  if(typeof showUndoToast==='function'){
+    showUndoToast({
+      message:`Left ${chat.name||'group'}`,
+      onUndo:()=>{
+        baithakChats.splice(idx,0,item);
+        if(typeof renderChatList==='function') renderChatList(baithakChats);
+        if(typeof showToast==='function') showToast('Back in the group');
+      },
+    });
+  } else if(typeof showToast==='function'){
+    showToast(`Left ${chat.name||'group'}`);
+  }
 }
 
 // ===================== DAILY DUEL RITUAL =====================
@@ -365,6 +568,10 @@ function startDailyDuelRitual(chat){
 }
 
 // ===================== STORY VIEWER =====================
+function safeStoryText(value){
+  return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
 function openStoryViewer(story, allStories){
   const stories=allStories||[story];
   let currentIdx=stories.indexOf(story);if(currentIdx<0)currentIdx=0;
@@ -374,6 +581,9 @@ function openStoryViewer(story, allStories){
   viewer.className='story-viewer';
   viewer.style.cssText='position:absolute;inset:0;background:#000;z-index:200;display:flex;flex-direction:column;';
   document.querySelector('.device').appendChild(viewer);
+  viewer.addEventListener('chaupaal:dismiss', () => {
+    clearInterval(progressInterval);
+  });
 
   function renderStory(idx){
     clearInterval(progressInterval);
@@ -382,8 +592,9 @@ function openStoryViewer(story, allStories){
     const isScore=s.type==='score';
     const isBirthday=s.type==='birthday';
     const isDuel=s.type==='duel';
-    const timeAgo=s.ts?timeAgoStr(s.ts):'now';
-    const visIcon=s.visibility==='close_friends'?'⭐ Close friends':'👥 Friends';
+    const timeAgo=(s.ts||s.createdAt)?timeAgoStr(s.ts||s.createdAt):'now';
+    const destinationLabel=s.destination==='duniya'?'Duniya':s.destination==='baithak'?'Baithak':'';
+    const ownerAudience=s.own&&s.visibility==='close_friends'?' · Close Friends':'';
 
     viewer.innerHTML=`
       <!-- Progress bars -->
@@ -392,12 +603,12 @@ function openStoryViewer(story, allStories){
       </div>
       <!-- Header -->
       <div style="display:flex;align-items:center;gap:10px;padding:4px 14px 10px;position:relative;z-index:2;">
-        <div style="width:36px;height:36px;border-radius:50%;background:${s.visibility==='close_friends'?'linear-gradient(45deg,var(--gold),#FF9A3C)':'linear-gradient(45deg,#E63946,#8134AF)'};padding:2px;flex-shrink:0;">
-          <div style="width:100%;height:100%;border-radius:50%;background:#222;display:flex;align-items:center;justify-content:center;font-size:16px;">${s.photoURL?`<img src="${s.photoURL}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:s.avatar}</div>
+        <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(45deg,#E63946,#8134AF);padding:2px;flex-shrink:0;">
+          <div style="width:100%;height:100%;border-radius:50%;background:#222;display:flex;align-items:center;justify-content:center;font-size:16px;">${s.photoURL||/^https:/.test(s.avatar||'')?`<img src="${s.photoURL||s.avatar}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:s.avatar}</div>
         </div>
         <div style="flex:1;">
           <div style="color:#fff;font-weight:700;font-size:14px;">${s.name}</div>
-          <div style="color:rgba(255,255,255,0.6);font-size:11px;">${timeAgo} · ${s.visibility?visIcon:''}</div>
+          <div style="color:rgba(255,255,255,0.6);font-size:11px;">${timeAgo}${destinationLabel?` · <span class="story-destination-tag story-destination-tag--${s.destination}">${destinationLabel}${ownerAudience}</span>`:''}</div>
         </div>
         ${s.deletable?`<button id="storyDelete" style="background:none;border:none;color:rgba(255,255,255,0.7);font-size:18px;cursor:pointer;">🗑️</button>`:''}
         <button id="storyClose" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;padding:4px;">✕</button>
@@ -407,7 +618,7 @@ function openStoryViewer(story, allStories){
         ${isMedia&&s.media?(
           s.mediaType==='video'
             ?`<video src="${s.media}" autoplay loop muted playsinline style="width:100%;height:100%;object-fit:cover;"></video>`
-            :`<img src="${s.media}" style="width:100%;height:100%;object-fit:cover;">`
+            :`<img src="${s.media}" style="width:100%;height:100%;object-fit:${s.rotation?'contain':'cover'};transform:rotate(${Number(s.rotation)||0}deg);">`
         ):isScore?`
           <div style="background:linear-gradient(160deg,var(--navy),#E63946);width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;">
             <div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:16px;">⚡ Today's Akhbaar</div>
@@ -430,30 +641,93 @@ function openStoryViewer(story, allStories){
             <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:22px;color:#fff;">${s.text||'Duel result'}</div>
           </div>
         `:`<div style="width:100%;height:100%;background:#111;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.3);font-size:14px;">Story</div>`}
+        ${s.text?`<div class="story-viewer-text">${safeStoryText(s.text)}</div>`:''}
+        ${s.sharedGameId?`<button type="button" class="story-game-card" id="storyGameCard">Play ${safeStoryText(typeof getGame==='function'?(getGame(s.sharedGameId)?.name||'game'):'game')}</button>`:''}
         <!-- Tap zones -->
         <div id="tapPrev" style="position:absolute;left:0;top:0;width:35%;height:100%;cursor:pointer;"></div>
         <div id="tapNext" style="position:absolute;right:0;top:0;width:35%;height:100%;cursor:pointer;"></div>
       </div>
-      <!-- Reply bar (for others' stories) -->
-      ${s.name!=='You'&&!s.deletable?`
+      ${s.id&&s.destination?`
+      <div class="story-interactions">
+        <div class="story-interaction-actions">
+          <button type="button" id="storyLike" aria-label="Like story">♡ <span id="storyLikeCount">0</span></button>
+          <button type="button" id="storyCommentsToggle">Comments</button>
+        </div>
+        <div id="storyComments" class="story-comments hidden"></div>
+        <div class="story-comment-compose">
+          <input id="storyReplyInput" maxlength="500" placeholder="Comment on this story…">
+          <button type="button" id="storyReplySend">↑</button>
+        </div>
+      </div>`:(s.name!=='You'&&!s.deletable?`
       <div style="display:flex;gap:8px;padding:12px 14px;flex-shrink:0;">
         <input id="storyReplyInput" placeholder="Reply to ${s.name}..." style="flex:1;padding:10px 14px;border-radius:999px;border:none;background:rgba(255,255,255,0.12);color:#fff;font-size:14px;outline:none;">
         <button id="storyReplySend" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;">↑</button>
-      </div>`:''}
+      </div>`:'')}
     `;
 
     document.getElementById('storyClose').addEventListener('click',()=>{clearInterval(progressInterval);viewer.remove();});
-    document.getElementById('storyDelete')?.addEventListener('click',()=>{clearInterval(progressInterval);viewer.remove();showToast('Story deleted');});
+    document.getElementById('storyDelete')?.addEventListener('click',async()=>{
+      clearInterval(progressInterval);
+      if(s.id&&s.destination&&typeof deletePlatformStory==='function'){
+        try{await deletePlatformStory(s);showToast('Story removed from live view');}
+        catch(error){showToast(error?.message||'Could not delete story');return;}
+      }
+      viewer.remove();
+      if(typeof renderLiveBaithakStories==='function') renderLiveBaithakStories();
+    });
     document.getElementById('tapPrev').addEventListener('click',()=>{if(idx>0){clearInterval(progressInterval);renderStory(idx-1);}else{clearInterval(progressInterval);viewer.remove();}});
     document.getElementById('tapNext').addEventListener('click',()=>{if(idx<stories.length-1){clearInterval(progressInterval);renderStory(idx+1);}else{clearInterval(progressInterval);viewer.remove();}});
-    document.getElementById('storyReplySend')?.addEventListener('click',()=>{
+    document.getElementById('storyReplySend')?.addEventListener('click',async()=>{
       const txt=document.getElementById('storyReplyInput')?.value.trim();
       if(!txt)return;
+      if(s.id&&s.destination&&typeof commentPlatformStory==='function'){
+        try{
+          await commentPlatformStory(s,txt);
+          document.getElementById('storyReplyInput').value='';
+          await hydrateStoryInteractions();
+          document.getElementById('storyComments')?.classList.remove('hidden');
+        }catch(error){showToast(error?.message||'Comment could not be sent');}
+        return;
+      }
       const chat=SAMPLE_CHATS.find(c=>c.name===s.name)||{id:'r_'+s.name,name:s.name,avatar:s.avatar||'👤',type:'dm'};
       clearInterval(progressInterval);viewer.remove();
       document.querySelectorAll('.tab-btn').forEach(b=>{if(b.dataset.tab==='baithak')b.click();});
       setTimeout(()=>{initBaithak();setTimeout(()=>openChatScreen(chat),300);},200);
     });
+
+    let storyLiked=false;
+    async function hydrateStoryInteractions(){
+      if(!s.id||!s.destination||typeof getStoryInteractions!=='function')return;
+      try{
+        const info=await getStoryInteractions(s);
+        storyLiked=!!info.liked;
+        const like=document.getElementById('storyLike');
+        if(like) like.firstChild.textContent=storyLiked?'♥ ':'♡ ';
+        const count=document.getElementById('storyLikeCount');
+        if(count) count.textContent=info.likeCount||0;
+        const comments=document.getElementById('storyComments');
+        if(comments) comments.innerHTML=info.comments?.length
+          ?info.comments.map(c=>`<div class="story-comment"><strong>${safeStoryText(c.name)}</strong><span>${safeStoryText(c.text)}</span></div>`).join('')
+          :'<div class="story-comment-empty">No comments yet.</div>';
+      }catch(error){}
+    }
+    document.getElementById('storyLike')?.addEventListener('click',async()=>{
+      const next=!storyLiked;
+      try{await likePlatformStory(s,next);storyLiked=next;await hydrateStoryInteractions();}
+      catch(error){showToast(error?.message||'Like could not be saved');}
+    });
+    document.getElementById('storyCommentsToggle')?.addEventListener('click',()=>{
+      clearInterval(progressInterval);
+      document.getElementById('storyComments')?.classList.toggle('hidden');
+    });
+    document.getElementById('storyReplyInput')?.addEventListener('focus',()=>clearInterval(progressInterval));
+    document.getElementById('storyGameCard')?.addEventListener('click',()=>{
+      clearInterval(progressInterval);
+      const game=typeof getGame==='function'?getGame(s.sharedGameId):null;
+      if(game){viewer.remove();game.launch({source:'story'});}
+      else showToast('Game unavailable');
+    });
+    hydrateStoryInteractions();
 
     // Animate progress bar
     const fill=document.getElementById(`sp_${idx}`);
@@ -486,89 +760,158 @@ function openDuniyaStoryViewer(userItem){
 }
 
 function showAddStoryOptions(){
-  const sheet=document.createElement('div');
-  sheet.style.cssText='position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:20px;z-index:100;';
-  sheet.innerHTML=`
-    <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;margin-bottom:4px;">Add a Story</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">Baithak stories disappear in 24 hours</div>
-    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Visible to</div>
-    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
-      <label style="display:flex;align-items:center;gap:12px;padding:13px;background:var(--cream);border-radius:12px;cursor:pointer;">
-        <input type="radio" name="storyVis" value="friends" checked style="accent-color:var(--red);">
-        <div><div style="font-weight:700;font-size:14px;">👥 Friends only</div><div style="font-size:12px;color:var(--muted);">All your Chaupaal friends</div></div>
-      </label>
-      <label style="display:flex;align-items:center;gap:12px;padding:13px;background:var(--cream);border-radius:12px;cursor:pointer;">
-        <input type="radio" name="storyVis" value="close_friends" style="accent-color:var(--red);">
-        <div><div style="font-weight:700;font-size:14px;">🌟 Close friends only</div><div style="font-size:12px;color:var(--muted);">Only people you've marked as close friends</div></div>
-      </label>
-    </div>
-    <div style="display:flex;gap:8px;margin-bottom:10px;">
-      <label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:13px;background:var(--cream);border:2px solid var(--line);border-radius:14px;cursor:pointer;font-weight:600;font-size:14px;">
-        📷 Photo/Video<input type="file" accept="image/*,video/*" id="baithakStoryMedia" style="display:none;">
-      </label>
-      <button id="baithakStoryScore" style="flex:1;padding:13px;background:var(--cream);border:2px solid var(--line);border-radius:14px;font-weight:600;font-size:14px;cursor:pointer;">📊 Share score</button>
-    </div>
-    <button id="closeBaithakStory" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>
-  `;
-  document.querySelector('.device').appendChild(sheet);
-  document.getElementById('closeBaithakStory').addEventListener('click',()=>sheet.remove());
-  document.getElementById('baithakStoryScore').addEventListener('click',()=>{
-    const vis=sheet.querySelector('[name="storyVis"]:checked')?.value||'friends';
-    sheet.remove();
-    shareAkhbaarScore(vis);
-  });
-  document.getElementById('baithakStoryMedia').addEventListener('change',async e=>{
-    const file=e.target.files[0];if(!file)return;
-    const vis=sheet.querySelector('[name="storyVis"]:checked')?.value||'friends';
-    sheet.remove();
-    try{
-      showToast('Uploading story…');
-      let media=null, thumb=null;
-      if(typeof processAndUploadMedia==='function'&&currentUser&&(typeof isMediaUploadReady!=='function'||await isMediaUploadReady())){
+  showBaithakShareMenu();
+}
+
+async function addBaithakStory(story){
+  if(typeof createPlatformStory!=='function')throw new Error('Story service unavailable');
+  const created=await createPlatformStory({destination:'baithak',kind:'story',...story});
+  if(typeof renderLiveBaithakStories==='function')renderLiveBaithakStories();
+  return created;
+}
+
+async function shareAkhbaarScore(visibility='friends'){
+  try{
+    const created=await addBaithakStory({
+      type:'score',visibility,
+      score,total:QUESTIONS.length,
+      streak:parseInt(document.getElementById('streakNum').textContent)||0,
+    });
+    openStoryViewer(created,[created]);
+  }catch(error){showToast(error?.message||'Score story could not be shared');}
+}
+
+// ===================== BAITHAK STORY CREATION =====================
+function showBaithakShareMenu(){
+  if(typeof showActionSheet!=='function') return openBaithakStoryComposer('camera');
+  showActionSheet('Share in Baithak',[
+    {label:'⚡ Instant',fn:openBaithakInstantCamera},
+    {label:'📷 Create a story',fn:()=>openBaithakStoryComposer('camera')},
+    {label:'🖼️ Upload a story',fn:()=>openBaithakStoryComposer('gallery')},
+  ]);
+}
+
+function chooseBaithakMedia(mode,onFile){
+  const input=document.createElement('input');
+  input.type='file';
+  input.accept='image/*,video/*';
+  if(mode==='camera'){
+    input.accept='image/*';
+    input.setAttribute('capture','environment');
+  }
+  input.addEventListener('change',()=>{
+    const file=input.files?.[0];
+    if(file) onFile(file);
+  },{once:true});
+  input.click();
+}
+
+function openBaithakInstantCamera(){
+  if(!currentUser){showToast('Sign in to share an Instant');return;}
+  chooseBaithakMedia('camera',(file)=>{
+    const preview=URL.createObjectURL(file);
+    const pending=document.createElement('div');
+    pending.className='instant-pending';
+    pending.innerHTML=`<img src="${preview}" alt=""><div><strong>Instant ready</strong><span>Sharing in 5 seconds…</span></div><button type="button">Undo</button>`;
+    document.querySelector('.device')?.appendChild(pending);
+    let cancelled=false;
+    const timer=setTimeout(async()=>{
+      if(cancelled)return;
+      pending.querySelector('span').textContent='Sharing…';
+      try{
+        if(typeof processAndUploadMedia!=='function') throw new Error('Media upload unavailable');
         const up=await processAndUploadMedia(file,{folder:'stories'});
-        media=up.media; thumb=up.thumb;
-      } else {
-        media=URL.createObjectURL(file);
+        await createPlatformStory({
+          destination:'baithak',kind:'instant',visibility:'friends',
+          type:'media',media:up.media,thumb:up.thumb,
+          mediaType:file.type.startsWith('video')?'video':'image',
+        });
+        pending.remove();
+        URL.revokeObjectURL(preview);
+        renderLiveBaithakStories();
+        showToast('Instant shared with Friends');
+      }catch(error){
+        pending.remove();
+        URL.revokeObjectURL(preview);
+        showToast(error?.message||'Instant could not be shared');
       }
-      const story={name:userProfile?.name||'You',avatar:userProfile?.photoURL||'🪑',type:'media',media,thumb,mediaType:file.type.startsWith('video')?'video':'image',seen:false,auto:false,deletable:true,visibility:vis,ts:Date.now()};
-      addBaithakStory(story);
-    }catch(err){
-      showToast(typeof friendlyError==='function'?friendlyError(err):(err.message||'Story upload failed'));
+    },5000);
+    pending.querySelector('button').addEventListener('click',()=>{
+      cancelled=true;clearTimeout(timer);pending.remove();URL.revokeObjectURL(preview);
+      showToast('Instant undone');
+    });
+  });
+}
+
+function openBaithakStoryComposer(mode){
+  if(!currentUser){showToast('Sign in to create a story');return;}
+  chooseBaithakMedia(mode,(file)=>showBaithakStoryEditor(file,mode));
+}
+
+function showBaithakStoryEditor(file,mode){
+  const preview=URL.createObjectURL(file);
+  const editor=document.createElement('div');
+  editor.className='story-editor';
+  let rotation=0;
+  editor.innerHTML=`
+    <div class="story-editor-header">
+      <button type="button" data-story-cancel>←</button>
+      <strong>${mode==='camera'?'Create a story':'Upload a story'}</strong>
+      <button type="button" data-story-share>Share</button>
+    </div>
+    <div class="story-editor-preview" data-story-preview>
+      ${file.type.startsWith('video')?`<video src="${preview}" controls playsinline></video>`:`<img src="${preview}" alt="">`}
+      <div data-story-overlay></div>
+    </div>
+    <div class="story-editor-tools">
+      <label>Text <input type="text" maxlength="160" placeholder="Add text to your story" data-story-text></label>
+      ${file.type.startsWith('image')?'<button type="button" data-story-rotate>↻ Rotate</button>':''}
+      <label>Audience
+        <select data-story-audience>
+          <option value="friends">Friends</option>
+          <option value="close_friends">Close Friends</option>
+        </select>
+      </label>
+      <label>Game card
+        <select data-story-game>
+          <option value="">No game attached</option>
+          ${typeof getGames==='function'?getGames({dangal:true}).map(game=>`<option value="${game.id}">${game.icon} ${game.name}</option>`).join(''):''}
+        </select>
+      </label>
+      <div class="story-editor-future">Music and more creation tools can be added here later.</div>
+    </div>`;
+  document.querySelector('.device')?.appendChild(editor);
+  const cleanup=()=>{editor.remove();URL.revokeObjectURL(preview);};
+  editor.querySelector('[data-story-cancel]').addEventListener('click',cleanup);
+  editor.querySelector('[data-story-text]').addEventListener('input',(event)=>{
+    editor.querySelector('[data-story-overlay]').textContent=event.target.value;
+  });
+  editor.querySelector('[data-story-rotate]')?.addEventListener('click',()=>{
+    rotation=(rotation+90)%360;
+    editor.querySelector('img').style.transform=`rotate(${rotation}deg)`;
+  });
+  editor.querySelector('[data-story-share]').addEventListener('click',async(buttonEvent)=>{
+    const button=buttonEvent.currentTarget;
+    button.disabled=true;button.textContent='Sharing…';
+    try{
+      if(typeof processAndUploadMedia!=='function') throw new Error('Media upload unavailable');
+      const up=await processAndUploadMedia(file,{folder:'stories'});
+      await createPlatformStory({
+        destination:'baithak',kind:'story',
+        visibility:editor.querySelector('[data-story-audience]').value,
+        type:'media',media:up.media,thumb:up.thumb,
+        mediaType:file.type.startsWith('video')?'video':'image',
+        rotation,
+        text:editor.querySelector('[data-story-text]').value,
+        sharedGameId:editor.querySelector('[data-story-game]').value,
+      });
+      cleanup();
+      renderLiveBaithakStories();
+      showToast('Story shared in Baithak');
+    }catch(error){
+      button.disabled=false;button.textContent='Share';
+      showToast(error?.message||'Story could not be shared');
     }
   });
-}
-
-function addBaithakStory(story){
-  saveToArchive({type:'baithak_story',...story,media:story.media&&String(story.media).startsWith('http')?story.media:null,archivedAt:new Date().toISOString()});
-  if(db&&currentUser){
-    db.collection('baithak_stories').add({
-      name:story.name,avatar:story.avatar,type:story.type,
-      media: story.media&&String(story.media).startsWith('http')?story.media:null,
-      thumb: story.thumb&&String(story.thumb).startsWith('http')?story.thumb:null,
-      mediaType:story.mediaType,visibility:story.visibility,
-      uid:currentUser.uid,
-      createdAt:firebase.firestore.FieldValue.serverTimestamp(),
-      expiresAt:new Date(Date.now()+86400000),
-    }).catch(()=>{});
-  }
-  showToast(story.visibility==='close_friends'?'Story shared with close friends 🌟':'Story shared with your friends 👥');
-}
-
-function shareAkhbaarScore(visibility='friends'){
-  openStoryViewer({name:userProfile?.name||'You',avatar:'🪑',type:'score',score,total:QUESTIONS.length,streak:parseInt(document.getElementById('streakNum').textContent),seen:false,auto:false,deletable:true,visibility});
-  addBaithakStory({name:userProfile?.name||'You',avatar:'🪑',type:'score',seen:false,deletable:true,visibility});
-}
-
-function isCloseFriend(uid){
-  const cf=JSON.parse(localStorage.getItem('chaupaal_close_friends')||'[]');
-  return cf.includes(uid);
-}
-
-function toggleCloseFriend(uid,name){
-  const cf=JSON.parse(localStorage.getItem('chaupaal_close_friends')||'[]');
-  const idx=cf.indexOf(uid);
-  if(idx>=0){cf.splice(idx,1);showToast(`${name} removed from close friends`);}
-  else{cf.push(uid);showToast(`${name} added to close friends 🌟`);}
-  localStorage.setItem('chaupaal_close_friends',JSON.stringify(cf));
 }
 

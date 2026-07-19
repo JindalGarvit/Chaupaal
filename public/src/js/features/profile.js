@@ -2,21 +2,35 @@
 function renderProfileModal(){
   const el=document.getElementById('profileContent');
   if(!currentUser){
-    el.innerHTML=`<p style="color:var(--muted);font-size:14px;margin-bottom:16px;">Sign in to see your profile, add friends and challenge people.</p><button class="auth-btn" onclick="document.getElementById('profileModal').classList.add('hidden');showAuth()">Sign in / Sign up</button>`;
+    el.innerHTML=`<p style="color:var(--muted);font-size:14px;margin-bottom:16px;">Sign in to see your profile, add friends and challenge people.</p><button class="btn btn--primary btn--block btn--lg auth-btn" onclick="document.getElementById('profileModal').classList.add('hidden');showAuth()">Sign in / Sign up</button>`;
     return;
   }
   const p=userProfile||{};
   const dp=digitalProfile;
+
+  // Preview as others see it — strictly read-only, privacy-aware
+  if(typeof isProfilePreviewMode==='function' && isProfilePreviewMode()){
+    el.innerHTML = typeof renderStrangerPreviewHtml==='function'
+      ? renderStrangerPreviewHtml(dp, p)
+      : '<p style="color:var(--muted);">Preview unavailable</p>';
+    setTimeout(()=>{
+      if(typeof wirePreviewToggle==='function'){
+        wirePreviewToggle(el, ()=>renderProfileModal());
+      }
+    },0);
+    return;
+  }
 
   // Completeness (shared Phase 3 helper)
   const stats=typeof calcProfileCompletion==='function'?calcProfileCompletion(dp):{pct:0,missing:[]};
   const pct=stats.pct;
 
   el.innerHTML=`
+    ${typeof renderPreviewToggleHtml==='function'?renderPreviewToggleHtml():''}
     <!-- Profile header -->
     <div style="display:flex;align-items:center;gap:14px;padding:16px 0 14px;">
       <div style="position:relative;flex-shrink:0;">
-        <div style="width:72px;height:72px;border-radius:50%;background:var(--line);overflow:hidden;border:3px solid var(--red);display:flex;align-items:center;justify-content:center;font-size:32px;">
+        <div id="ownProfileStoryAvatar" style="width:72px;height:72px;border-radius:50%;background:var(--line);overflow:hidden;border:3px solid var(--red);display:flex;align-items:center;justify-content:center;font-size:32px;cursor:pointer;">
           ${p.photoURL?`<img src="${p.photoURL}" style="width:100%;height:100%;object-fit:cover;">`:'🪑'}
         </div>
         <label style="position:absolute;bottom:0;right:0;background:var(--red);width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #fff;font-size:11px;color:#fff;">
@@ -46,18 +60,16 @@ function renderProfileModal(){
     <div id="profileSectionContent" style="padding:16px 0;"></div>
     <!-- Actions -->
     <div style="border-top:1px solid var(--line);padding-top:14px;margin-top:4px;">
-      <div class="friends-title">Friends</div>
-      <div class="friend-add-row">
-        <input class="friend-add-input" type="text" id="addFriendInput" placeholder="Enter username" autocapitalize="none">
-        <button class="friend-add-btn" id="addFriendBtn">Add</button>
-      </div>
-      <div id="friendsList" class="ui-skeleton-stack" aria-busy="true">${typeof skeletonHtml==='function'?skeletonHtml('list',2):'<div style="color:var(--muted);font-size:13px;">Loading friends…</div>'}</div>
-      <button class="modal-btn" style="margin-top:12px;" onclick="showMonthlyWrap()">📊 Monthly Wrap</button>
-      <button class="modal-btn" style="margin-top:8px;background:linear-gradient(135deg,var(--navy),#2A3158);color:#fff;" onclick="openArchive()">🗄️ My Archive</button>
-      <button class="modal-btn" style="margin-top:8px;" onclick="typeof openRecoveryBin==='function'&&openRecoveryBin()">🗑️ Recently deleted</button>
-      <button class="modal-btn" style="margin-top:8px;" onclick="typeof openSessionsSheet==='function'&&openSessionsSheet()">💻 Devices & sessions</button>
-      <button class="modal-btn" style="margin-top:8px;" onclick="typeof openBlockedUsersSheet==='function'&&openBlockedUsersSheet()">🚫 Blocked users</button>
-      <button class="modal-btn" style="margin-top:8px;background:linear-gradient(135deg,#C9A227,#8134AF);color:#fff;" onclick="openPremiumSheet()">⭐ Go Premium</button>
+      <div data-profile-relationship-counts class="relationship-counts-loading">Loading relationships…</div>
+      <div data-friend-requests></div>
+      <button class="btn btn--primary btn--block modal-btn" id="manageCloseFriendsBtn" style="margin-top:12px;background:var(--navy);">Close Friends</button>
+      <button class="btn btn--primary btn--block modal-btn" style="margin-top:12px;" onclick="showMonthlyWrap()">📊 Monthly Wrap</button>
+      <button class="btn btn--primary btn--block modal-btn" style="margin-top:8px;background:linear-gradient(135deg,var(--navy),#2A3158);color:#fff;" onclick="openArchive()">🗄️ My Archive</button>
+      <button class="btn btn--primary btn--block modal-btn" style="margin-top:8px;background:var(--navy);color:#fff;" onclick="openStoryArchive()">Story Archive</button>
+      <button class="btn btn--primary btn--block modal-btn" style="margin-top:8px;" onclick="typeof openRecoveryBin==='function'&&openRecoveryBin()">🗑️ Recently deleted</button>
+      <button class="btn btn--primary btn--block modal-btn" style="margin-top:8px;" onclick="typeof openSessionsSheet==='function'&&openSessionsSheet()">💻 Devices & sessions</button>
+      <button class="btn btn--primary btn--block modal-btn" style="margin-top:8px;" onclick="typeof openBlockedUsersSheet==='function'&&openBlockedUsersSheet()">🚫 Blocked users</button>
+      <button class="btn btn--primary btn--block modal-btn" style="margin-top:8px;background:linear-gradient(135deg,#C9A227,#8134AF);color:#fff;" onclick="openPremiumSheet()">⭐ Go Premium</button>
       <button class="logout-btn" id="logoutBtn">Log out</button>
     </div>
   `;
@@ -75,6 +87,7 @@ function renderProfileModal(){
       ${profileField('Current City','currentCity','text','Where you live now')}
       ${profileField('Nationality','nationality','text','Your nationality')}
       ${profileField('Languages spoken','languages','chips','Add languages',['Hindi','English','Tamil','Telugu','Marathi','Bengali','Gujarati','Kannada','Malayalam','Punjabi','Urdu','Odia','Assamese','Konkani'])}
+      ${typeof renderProfileIcebreakerBlock==='function'?renderProfileIcebreakerBlock():''}
       ${profileField('Height','height','select','',['','Under 5ft','5ft','5ft 1in','5ft 2in','5ft 3in','5ft 4in','5ft 5in','5ft 6in','5ft 7in','5ft 8in','5ft 9in','5ft 10in','5ft 11in','6ft','6ft 1in','6ft 2in','6ft+'])}
       ${profileField('Blood Group','bloodGroup','select','',['','A+','A-','B+','B-','AB+','AB-','O+','O-','Don\'t know'])}
       ${profileField('Religion','religion','select','',['','Hindu','Muslim','Christian','Sikh','Buddhist','Jain','Jewish','Parsi','Atheist','Agnostic','Spiritual but not religious','Prefer not to say'])}
@@ -122,6 +135,7 @@ function renderProfileModal(){
       ${profileField('Marital history','maritalHistory','select','',['','Never married','Divorced','Widowed','Prefer not to say'])}
     `,
     Social:()=>`
+      ${typeof renderProfileTypeToggleHtml==='function'?renderProfileTypeToggleHtml():''}
       ${profileField('Instagram','instagram','text','@username')}
       ${profileField('Twitter / X','twitter','text','@username')}
       ${profileField('LinkedIn','linkedin','text','Profile URL or username')}
@@ -148,7 +162,20 @@ function renderProfileModal(){
   function profileField(label,key,type,placeholder,options){
     const val=dp[key];
     if(type==='select'){
-      return`<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">${label}</div><select class="dp-field" data-key="${key}" style="width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;background:var(--white);color:var(--ink);outline:none;cursor:pointer;">${(options||[]).map(o=>`<option value="${o}" ${val===o?'selected':''}>${o||'Select...'}</option>`).join('')}</select></div>`;
+      const OTHER='__dp_other__';
+      const opts=Array.isArray(options)?options.slice():[];
+      const presets=opts.filter(o=>o!==OTHER);
+      const isCustom=!!(val && !presets.includes(val));
+      const selectVal=isCustom?OTHER:(val??'');
+      const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+      return`<div class="dp-select-wrap" data-key="${key}" style="margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">${label}</div>
+        <select class="dp-field dp-select" data-key="${key}" data-has-other="1" style="width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;background:var(--white);color:var(--ink);outline:none;cursor:pointer;">
+          ${presets.map(o=>`<option value="${esc(o)}" ${selectVal===o?'selected':''}>${o||'Select...'}</option>`).join('')}
+          <option value="${OTHER}" ${selectVal===OTHER?'selected':''}>Other (type your own)</option>
+        </select>
+        <input class="dp-other-input" data-key="${key}" type="text" maxlength="120" value="${isCustom?esc(val):''}" placeholder="Type your own…" style="width:100%;margin-top:8px;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;background:var(--white);outline:none;box-sizing:border-box;${isCustom?'':'display:none;'}">
+      </div>`;
     }
     if(type==='textarea'){
       return`<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">${label}</div><textarea class="dp-field" data-key="${key}" placeholder="${placeholder}" style="width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;background:var(--white);outline:none;resize:none;min-height:80px;box-sizing:border-box;line-height:1.5;">${val||''}</textarea></div>`;
@@ -167,10 +194,39 @@ function renderProfileModal(){
   function renderSection(sec){
     const content=document.getElementById('profileSectionContent');
     if(content) content.innerHTML=`<div style="padding:0;">${(SECTIONS[sec]||SECTIONS.Personal)()}</div>`;
-    // Wire events
+    const OTHER='__dp_other__';
+    // Wire events — selects with "Other" handled separately so we never persist the sentinel
     content.querySelectorAll('.dp-field').forEach(f=>{
+      if(f.dataset.hasOther) return;
       f.addEventListener('change',()=>saveProfileField(f.dataset.key, f.value));
       f.addEventListener('blur',()=>saveProfileField(f.dataset.key, f.value));
+    });
+    content.querySelectorAll('select.dp-select[data-has-other]').forEach(sel=>{
+      const wrap=sel.closest('.dp-select-wrap');
+      const other=wrap?.querySelector('.dp-other-input');
+      const apply=()=>{
+        if(sel.value===OTHER){
+          if(other){ other.style.display='block'; other.focus(); }
+          const typed=(other?.value||'').trim();
+          if(typed) saveProfileField(sel.dataset.key, typed);
+        } else {
+          if(other){ other.style.display='none'; other.value=''; }
+          saveProfileField(sel.dataset.key, sel.value);
+        }
+      };
+      sel.addEventListener('change', apply);
+      other?.addEventListener('change',()=>{
+        if(sel.value===OTHER){
+          const typed=(other.value||'').trim();
+          if(typed) saveProfileField(sel.dataset.key, typed);
+        }
+      });
+      other?.addEventListener('blur',()=>{
+        if(sel.value===OTHER){
+          const typed=(other.value||'').trim();
+          if(typed) saveProfileField(sel.dataset.key, typed);
+        }
+      });
     });
     content.querySelectorAll('.dp-toggle').forEach(t=>{
       t.addEventListener('change',()=>saveProfileField(t.dataset.key, t.checked));
@@ -189,10 +245,15 @@ function renderProfileModal(){
         chip.style.color=arr.includes(val)?'var(--red)':'var(--ink)';
       });
     });
+    if(typeof wireProfileIcebreakerBlock==='function') wireProfileIcebreakerBlock(content);
+    if(typeof wireProfileTypeToggle==='function') wireProfileTypeToggle(content);
   }
 
   // Tab switching
   setTimeout(()=>{
+    if(typeof wirePreviewToggle==='function'){
+      wirePreviewToggle(el, ()=>renderProfileModal());
+    }
     document.getElementById('profileSectionTabs')?.querySelectorAll('.profile-section-tab').forEach(tab=>{
       tab.addEventListener('click',()=>{
         document.querySelectorAll('.profile-section-tab').forEach(t=>{t.style.color='var(--muted)';t.style.borderBottom='none';});
@@ -207,7 +268,8 @@ function renderProfileModal(){
       document.getElementById('profileModal').classList.add('hidden');
       showToast('See you next time! 🙏');
     });
-    document.getElementById('addFriendBtn')?.addEventListener('click',()=>addFriend());
+    document.getElementById('manageCloseFriendsBtn')?.addEventListener('click',()=>openCloseFriendsManager());
+    document.getElementById('ownProfileStoryAvatar')?.addEventListener('click',()=>openProfileStories(currentUser.uid));
     document.getElementById('profilePhotoInput')?.addEventListener('change',async e=>{
       const file=e.target.files[0];if(!file||!file.type.startsWith('image/'))return;
       try{
@@ -230,6 +292,13 @@ function renderProfileModal(){
         if(db&&currentUser){
           db.collection('users').doc(currentUser.uid).update({photoURL,photoThumb:thumbURL||null}).catch(()=>{});
         }
+        const prevPhotos=Array.isArray(digitalProfile.photos)?[...digitalProfile.photos]:[];
+        if(!prevPhotos.length){
+          digitalProfile.photos=[photoURL];
+          try{localStorage.setItem('chaupaal_digital_profile',JSON.stringify(digitalProfile));}catch(e){}
+          if(typeof onProfileFieldSaved==='function') onProfileFieldSaved('photos', digitalProfile.photos, {photos:[]});
+          else if(typeof refreshProfileCompletionUI==='function') refreshProfileCompletionUI();
+        } else if(typeof refreshProfileCompletionUI==='function') refreshProfileCompletionUI();
         renderProfileModal();
         if(typeof updateProfileBtn==='function') updateProfileBtn();
         showToast('Photo updated ✓');
@@ -237,17 +306,19 @@ function renderProfileModal(){
         showToast(typeof friendlyError==='function'?friendlyError(err):(err.message||'Photo update failed'));
       }
     });
-    loadFriends();
+    if(typeof mountOwnRelationshipPanel==='function') mountOwnRelationshipPanel(document.getElementById('profileContent'));
     const el2=document.getElementById('profileContent');
     if(el2)renderFriendDiscovery(el2);
   },50);
 }
 
 function saveProfileField(key, value){
+  const prev=typeof digitalProfile==='object'?JSON.parse(JSON.stringify(digitalProfile)):{};
   digitalProfile[key]=value;
   try{localStorage.setItem('chaupaal_digital_profile',JSON.stringify(digitalProfile));}catch(e){}
   if(db&&currentUser){db.collection('users').doc(currentUser.uid).update({[`profile.${key}`]:value}).catch(()=>{});}
   if(typeof refreshProfileCompletionUI==='function') refreshProfileCompletionUI();
+  if(typeof onProfileFieldSaved==='function') onProfileFieldSaved(key, value, prev);
 }
 
 

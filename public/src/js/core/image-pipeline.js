@@ -231,6 +231,8 @@
       thumb,
       mediaPath: uploaded.public_id || null,
       thumbPath: uploaded.public_id || null,
+      width: uploaded.width || null,
+      height: uploaded.height || null,
       previewUrl: URL.createObjectURL(file),
       mime: file.type,
       provider: 'cloudinary',

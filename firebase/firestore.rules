@@ -8,28 +8,105 @@ service cloud.firestore {
     function isNewDoc() { return !resource.exists(); }
     function notDeleting() { return request.resource.data.keys().hasAny(resource.data.keys()); }
 
-    // Check if requester is a friend of target user
+    // Friend is derived: requester follows target AND target follows requester.
     function isFriend(targetUid) {
       return isAuth() &&
-        exists(/databases/$(database)/documents/users/$(targetUid)/friends/$(request.auth.uid));
-    }
-
-    // Check if requester is a close friend
-    function isCloseFriend(targetUid) {
-      return isAuth() &&
-        exists(/databases/$(database)/documents/users/$(targetUid)/close_friends/$(request.auth.uid));
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)/following/$(targetUid)) &&
+        exists(/databases/$(database)/documents/users/$(targetUid)/following/$(request.auth.uid));
     }
 
     // Check if requester follows target
     function isFollower(targetUid) {
       return isAuth() &&
-        exists(/databases/$(database)/documents/users/$(targetUid)/followers/$(request.auth.uid));
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)/following/$(targetUid));
     }
 
     // Check if user is shadowbanned severely
     function isShadowbanned(uid) {
       return exists(/databases/$(database)/documents/shadowbans/$(uid)) &&
         get(/databases/$(database)/documents/shadowbans/$(uid)).data.tier == 'severe';
+    }
+
+    function canReadPeepal(questionId) {
+      return isAuth() &&
+        exists(/databases/$(database)/documents/peepal/$(questionId)) &&
+        (
+          !('deleted' in get(/databases/$(database)/documents/peepal/$(questionId)).data) ||
+          get(/databases/$(database)/documents/peepal/$(questionId)).data.deleted == false ||
+          isOwner(get(/databases/$(database)/documents/peepal/$(questionId)).data.uid)
+        );
+    }
+
+    function canReadDuniya(postId) {
+      let post = get(/databases/$(database)/documents/duniya/$(postId)).data;
+      return isAuth() &&
+        exists(/databases/$(database)/documents/duniya/$(postId)) &&
+        (!('deleted' in post) || post.deleted == false || isOwner(post.uid)) &&
+        (
+          post.audience == 'public' ||
+          isOwner(post.uid) ||
+          (post.audience == 'followers' && isFollower(post.uid)) ||
+          (post.audience == 'friends' && isFriend(post.uid))
+        );
+    }
+
+    function validDuniyaLikeMutation(postId) {
+      let oldCount = 'likes' in resource.data ? resource.data.likes : 0;
+      let likePath = /databases/$(database)/documents/duniya/$(postId)/likes/$(request.auth.uid);
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'likeMutationUid']) &&
+        request.resource.data.likeMutationUid == request.auth.uid &&
+        request.resource.data.likes is int &&
+        request.resource.data.likes >= 0 &&
+        (
+          (request.resource.data.likes == oldCount + 1 && !exists(likePath) && existsAfter(likePath)) ||
+          (request.resource.data.likes == oldCount - 1 && exists(likePath) && !existsAfter(likePath))
+        );
+    }
+
+    function validPeepalCommentMutation(questionId) {
+      let oldCount = 'comments' in resource.data ? resource.data.comments : 0;
+      let commentId = request.resource.data.commentMutationId;
+      let commentPath = /databases/$(database)/documents/peepal/$(questionId)/comments/$(commentId);
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['comments', 'commentMutationId']) &&
+        commentId is string &&
+        request.resource.data.comments is int &&
+        request.resource.data.comments >= 0 &&
+        (
+          (request.resource.data.comments == oldCount + 1 && !exists(commentPath) && existsAfter(commentPath)) ||
+          (request.resource.data.comments == oldCount - 1 && exists(commentPath) && !existsAfter(commentPath))
+        );
+    }
+
+    function validDuniyaShareMutation(postId) {
+      let oldCount = 'shares' in resource.data ? resource.data.shares : 0;
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['shares', 'shareMutationUid']) &&
+        request.resource.data.shareMutationUid == request.auth.uid &&
+        request.resource.data.shares is int &&
+        request.resource.data.shares == oldCount + 1;
+    }
+
+    function validDuniyaCommentMutation(postId) {
+      let oldCount = 'comments' in resource.data ? resource.data.comments : 0;
+      let commentId = request.resource.data.commentMutationId;
+      let commentPath = /databases/$(database)/documents/duniya/$(postId)/comments/$(commentId);
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['comments', 'commentMutationId']) &&
+        commentId is string &&
+        request.resource.data.comments is int &&
+        request.resource.data.comments >= 0 &&
+        (
+          (request.resource.data.comments == oldCount + 1 && !exists(commentPath) && existsAfter(commentPath)) ||
+          (request.resource.data.comments == oldCount - 1 && exists(commentPath) && !existsAfter(commentPath))
+        );
+    }
+
+    function validCommentCreate() {
+      return request.resource.data.keys().hasOnly(['uid', 'user', 'text', 'parentId', 'createdAt', 'editedAt']) &&
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.user.uid == request.auth.uid &&
+        request.resource.data.text is string &&
+        request.resource.data.text.size() > 0 &&
+        request.resource.data.text.size() <= 2000 &&
+        (request.resource.data.parentId == null || request.resource.data.parentId is string);
     }
 
     // ===================== USERS =====================
@@ -39,20 +116,43 @@ service cloud.firestore {
       // Only owner can write their profile
       allow write: if isOwner(userId);
 
-      // Friends subcollection
+      // Legacy friends index is retired. Friendship is reciprocal following.
       match /friends/{friendId} {
-        allow read: if isAuth();
-        allow write: if isOwner(userId);
+        allow read, write: if false;
       }
-      // Close friends subcollection (private)
+      // Close Friends is owner-private and server-mediated.
       match /close_friends/{friendId} {
         allow read: if isOwner(userId);
-        allow write: if isOwner(userId);
+        allow write: if false;
       }
-      // Followers subcollection
+      // Canonical directional edge mirrors. Authenticated profiles can inspect
+      // follow lists/counts; only the Admin-backed relationship API writes.
       match /followers/{followerId} {
         allow read: if isAuth();
-        allow write: if isOwner(followerId); // only the follower can follow
+        allow write: if false;
+      }
+      match /following/{targetId} {
+        allow read: if isAuth();
+        allow write: if false;
+      }
+      // Explicit friend requests are private to sender/recipient.
+      match /friendRequests/{requesterId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+      match /sentFriendRequests/{targetId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+      // Story delivery metadata is private. The story API fans out and revokes
+      // inbox entries; clients can only read their own delivery inbox.
+      match /storyInbox/{deliveryId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+      match /storyDeliveryManifests/{storyId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
       }
       // Compose drafts (Phase 2) — owner only
       match /drafts/{draftId} {
@@ -61,6 +161,20 @@ service cloud.firestore {
       // Device sessions (Phase 3)
       match /sessions/{sessionId} {
         allow read, write: if isOwner(userId);
+      }
+      // Chaupaal proactive events — server-authored; client dismiss/engage only
+      match /chaupaalEvents/{eventId} {
+        allow read: if isOwner(userId);
+        allow create: if false;
+        allow update: if isOwner(userId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['dismissed', 'dismissedAt', 'engaged', 'engagedAt', 'fastDismiss']);
+        allow delete: if false;
+      }
+      // Private recommendation inputs written by trusted server endpoints.
+      match /recommendationSignals/{signalId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
       }
     }
 
@@ -97,12 +211,53 @@ service cloud.firestore {
       allow create: if isAuth()
         && request.resource.data.uid == request.auth.uid
         && !isShadowbanned(request.auth.uid);
-      // Update: owner can edit / soft-delete; others can bump vote/comment counts only
+      // Update: owner can edit / soft-delete; others can bump vote/comment counts only.
+      // Peepal reactions never touch this publicly readable parent document.
       allow update: if isAuth() && (
         isOwner(resource.data.uid) ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalResponses','comments','likes'])
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalResponses']) ||
+        validPeepalCommentMutation(questionId)
       );
       allow delete: if isOwner(resource.data.uid);
+
+      match /likes/{userId} {
+        // Legacy Peepal likes are disabled. Peepal now uses private reactions.
+        allow read, write: if false;
+      }
+
+      match /reactions/{userId} {
+        // A viewer may see only their own reaction. Server endpoints perform
+        // writes so aggregate integrity cannot be bypassed by clients.
+        allow read: if canReadPeepal(questionId) && isOwner(userId);
+        allow write: if false;
+      }
+
+      match /comments/{commentId} {
+        allow read: if canReadPeepal(questionId);
+        allow create: if canReadPeepal(questionId) && validCommentCreate();
+        allow update: if isAuth() &&
+          resource.data.uid == request.auth.uid &&
+          request.resource.data.uid == resource.data.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt', 'deleted']) &&
+          request.resource.data.text is string &&
+          request.resource.data.text.size() <= 2000 &&
+          (!('deleted' in request.resource.data) || request.resource.data.deleted is bool) &&
+          (
+            request.resource.data.text.size() > 0 ||
+            ('deleted' in request.resource.data && request.resource.data.deleted == true)
+          );
+        allow delete: if isAuth() && (
+          resource.data.uid == request.auth.uid ||
+          get(/databases/$(database)/documents/peepal/$(questionId)).data.uid == request.auth.uid
+        );
+      }
+    }
+
+    // Counts are physically separate from public Peepal documents. Only the
+    // post author can read both raw counts; Admin SDK is the sole writer.
+    match /peepalReactionSummaries/{questionId} {
+      allow read: if isAuth() && resource.data.ownerUid == request.auth.uid;
+      allow write: if false;
     }
 
     // ===================== PEEPAL RESPONSES =====================
@@ -128,50 +283,117 @@ service cloud.firestore {
         && !isShadowbanned(request.auth.uid);
       allow update: if isAuth() && (
         isOwner(resource.data.uid) ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes','comments','shares'])
+        validDuniyaShareMutation(postId) ||
+        validDuniyaLikeMutation(postId) ||
+        validDuniyaCommentMutation(postId)
       );
       allow delete: if isOwner(resource.data.uid);
+
+      match /likes/{userId} {
+        allow read: if canReadDuniya(postId) && isOwner(userId);
+        allow create: if canReadDuniya(postId) &&
+          isOwner(userId) &&
+          request.resource.data.keys().hasOnly(['uid', 'createdAt']) &&
+          request.resource.data.uid == request.auth.uid;
+        allow update: if false;
+        allow delete: if isOwner(userId);
+      }
+
+      match /comments/{commentId} {
+        allow read: if canReadDuniya(postId);
+        allow create: if canReadDuniya(postId) && validCommentCreate();
+        allow update: if isAuth() &&
+          resource.data.uid == request.auth.uid &&
+          request.resource.data.uid == resource.data.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt', 'deleted']) &&
+          request.resource.data.text is string &&
+          request.resource.data.text.size() <= 2000 &&
+          (!('deleted' in request.resource.data) || request.resource.data.deleted is bool) &&
+          (
+            request.resource.data.text.size() > 0 ||
+            ('deleted' in request.resource.data && request.resource.data.deleted == true)
+          );
+        allow delete: if isAuth() && (
+          resource.data.uid == request.auth.uid ||
+          get(/databases/$(database)/documents/duniya/$(postId)).data.uid == request.auth.uid
+        );
+      }
     }
 
     // ===================== DUNIYA STORIES (24h, public/followers) =====================
     match /duniya_stories/{storyId} {
-      allow read: if isAuth() && (
-        resource.data.audience == 'public' ||
-        isOwner(resource.data.uid) ||
-        (resource.data.audience == 'followers' && isFollower(resource.data.uid))
-      );
-      allow create: if isAuth() && request.resource.data.uid == request.auth.uid;
-      allow delete: if isOwner(resource.data.uid);
+      // Server-mediated to keep expiry, archive and interactions consistent.
+      allow read, write: if false;
+      match /likes/{userId} {
+        allow read, write: if false;
+      }
+      match /comments/{commentId} {
+        allow read, write: if false;
+      }
     }
 
     // ===================== BAITHAK STORIES (friends / close friends only) =====================
     match /baithak_stories/{storyId} {
-      allow read: if isAuth() && (
-        isOwner(resource.data.uid) ||
-        (resource.data.visibility == 'friends' && isFriend(resource.data.uid)) ||
-        (resource.data.visibility == 'close_friends' && isCloseFriend(resource.data.uid))
-      );
-      allow create: if isAuth() && request.resource.data.uid == request.auth.uid;
-      allow delete: if isOwner(resource.data.uid);
+      // No audience list is readable from the client. The story API checks
+      // reciprocal friendship/Close Friends membership on every access.
+      allow read, write: if false;
+      match /likes/{userId} {
+        allow read, write: if false;
+      }
+      match /comments/{commentId} {
+        allow read, write: if false;
+      }
     }
 
     // ===================== CHATS =====================
+    function isChatParticipant() {
+      return isAuth() &&
+        resource.data.participants != null &&
+        resource.data.participants.hasAny([request.auth.uid]);
+    }
     match /chats/{chatId} {
       // Chat metadata readable only by participants
-      allow read: if isAuth() &&
-        (resource.data.participants == null ||
-         resource.data.participants.hasAny([request.auth.uid]));
-      allow create: if isAuth();
-      allow update: if isAuth() &&
-        (resource.data.participants == null ||
-         resource.data.participants.hasAny([request.auth.uid]));
+      allow read: if isChatParticipant() ||
+        (isAuth() && resource.data.participants == null);
+      allow create: if isAuth()
+        && request.resource.data.participants.hasAny([request.auth.uid])
+        && (
+          !(request.resource.data.keys().hasAny(['type'])) ||
+          request.resource.data.type != 'chaupaal' ||
+          chatId == 'chat_chaupaal_' + request.auth.uid
+        );
+      allow update: if isChatParticipant();
 
-      // Messages within chat
+      // Messages: participant-scoped reads; clients may only author their own uid.
+      // Chaupaal / server messages are written via Admin SDK (bypasses rules).
       match /messages/{messageId} {
-        allow read: if isAuth();
-        allow create: if isAuth() && request.resource.data.uid == request.auth.uid;
+        allow read: if isAuth() &&
+          get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]);
+        allow create: if isAuth()
+          && request.resource.data.uid == request.auth.uid
+          && get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid])
+          && !(request.resource.data.keys().hasAny(['serverOwned']) && request.resource.data.serverOwned == true);
+        allow update: if false;
         allow delete: if isOwner(resource.data.uid);
       }
+    }
+
+    // ===================== CHAUPAAL SERVER STATE / FEEDBACK =====================
+    // Activity + cadence state — Admin SDK only (client mirrors via API)
+    match /chaupaalUserState/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+    }
+    match /chaupaalFeedback/{docId} {
+      allow read: if false;
+      allow write: if false;
+    }
+    match /chaupaalFeedbackSummaries/{date} {
+      allow read: if false;
+      allow write: if false;
+    }
+    match /chaupaalMeta/{docId} {
+      allow read, write: if false;
     }
 
     // ===================== DAILY CHECK-INS (journal — private) =====================

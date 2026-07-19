@@ -10,8 +10,7 @@
 .elo-card{background:rgba(255,255,255,0.08);border-radius:14px;padding:12px 14px;}
 .elo-mode{font-size:11px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.05em;}
 .elo-rating{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:24px;color:var(--gold);}
-.dangal-action-btn{width:100%;padding:16px;background:var(--red);color:#fff;border:none;border-radius:14px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;}
-.dangal-secondary-btn{width:100%;padding:14px;background:var(--white);color:var(--ink);border:2px solid var(--line);border-radius:14px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;cursor:pointer;}
+.dangal-action-btn{margin-bottom:10px;}
 
 /* ===== BAITHAK TAB (placeholder) ===== */
 .baithak-screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;gap:12px;}
@@ -21,7 +20,7 @@
 
 /* ===== MODALS ===== */
 .modal-backdrop{position:absolute;inset:0;background:rgba(43,39,48,0.45);display:flex;align-items:flex-end;z-index:100;}
-.modal{background:var(--white);width:100%;border-radius:24px 24px 0 0;padding:22px 22px 32px;max-height:85vh;overflow-y:auto;}
+.modal{background:var(--white);width:100%;border-radius:var(--r-sheet) var(--r-sheet) 0 0;padding:22px 22px 32px;max-height:85vh;overflow-y:auto;}
 .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
 .modal-title{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:18px;}
 .modal-sub{font-size:13px;color:var(--muted);margin-bottom:16px;}
@@ -30,12 +29,12 @@
 .toggle-desc{font-size:12px;color:var(--muted);margin-top:2px;}
 .switch{position:relative;display:inline-block;width:44px;height:26px;flex-shrink:0;}
 .switch input{opacity:0;width:0;height:0;}
-.slider{position:absolute;cursor:pointer;inset:0;background:var(--line);border-radius:999px;transition:.2s;}
-.slider::before{content:'';position:absolute;height:20px;width:20px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);}
+.slider{position:absolute;cursor:pointer;inset:0;background:var(--line);border-radius:var(--r-full);transition:var(--duration-ui);}
+.slider::before{content:'';position:absolute;height:20px;width:20px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:var(--duration-ui);box-shadow:0 1px 3px rgba(0,0,0,0.2);}
 .switch input:checked + .slider{background:var(--red);}
 .switch input:checked + .slider::before{transform:translateX(18px);}
 .modal-select{width:100%;padding:10px 14px;border:2px solid var(--line);border-radius:10px;font-family:'Inter',sans-serif;font-weight:600;font-size:14px;background:var(--cream);color:var(--ink);margin-top:6px;}
-.modal-btn{margin-top:16px;background:var(--red);color:#fff;border:none;width:100%;padding:14px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;border-radius:14px;cursor:pointer;}
+.modal-btn{margin-top:16px;}
 
 /* ===== PROFILE MODAL ===== */
 .profile-header{display:flex;align-items:center;gap:14px;margin-bottom:20px;}
@@ -60,7 +59,7 @@
 .logout-btn{margin-top:16px;width:100%;background:var(--cream);color:var(--muted);border:2px solid var(--line);border-radius:12px;padding:12px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;cursor:pointer;}
 
 /* ===== TOAST ===== */
-.toast{position:absolute;top:72px;left:16px;right:16px;background:var(--ink);color:#fff;padding:12px 16px;border-radius:14px;font-size:13px;font-weight:700;text-align:center;z-index:150;opacity:0;transform:translateY(-10px);transition:opacity .3s ease,transform .3s ease;pointer-events:none;}
+.toast{position:absolute;top:72px;left:16px;right:16px;background:var(--ink);color:#fff;padding:12px 16px;border-radius:var(--r-md);font-size:13px;font-weight:700;text-align:center;z-index:150;opacity:0;transform:translateY(-10px);transition:opacity var(--duration-panel) ease,transform var(--duration-panel) ease;pointer-events:none;}
 .toast.show{opacity:1;transform:translateY(0);}
 
 /* ===== MUQABALA (in Dangal) ===== */

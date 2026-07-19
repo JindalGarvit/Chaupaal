@@ -4,27 +4,59 @@ let score=0,maxUnlocked=0,categoryScores={};
 let QUESTIONS=[],BONUS_QUESTIONS=[];
 
 // ===================== SOUND LIBRARY =====================
+// Short UI cues only (Web Audio oscillators). No looped / ambient background music.
 const SoundLib=(()=>{
-  let ctx,bgGain,bgNodes=[],bgPlaying=false;
-  const bgMusicUrl="https://incompetech.com/music/royalty-free/mp3-royaltyfree/Wholesome.mp3";
+  let ctx;
   function getCtx(){if(!ctx)ctx=new(window.AudioContext||window.webkitAudioContext)();return ctx;}
   function tone(freq,start,dur,type='sine',gainVal=0.15){
     const c=getCtx(),osc=c.createOscillator(),gain=c.createGain();
     osc.type=type;osc.frequency.value=freq;gain.gain.value=0;
     osc.connect(gain);gain.connect(c.destination);
     const t0=c.currentTime+start;
-    gain.gain.linearRampToValueAtTime(gainVal,t0+0.02);
+    gain.gain.linearRampToValueAtTime(gainVal,t0+0.01);
     gain.gain.exponentialRampToValueAtTime(0.001,t0+dur);
-    osc.start(t0);osc.stop(t0+dur+0.05);
+    osc.start(t0);osc.stop(t0+dur+0.04);
   }
   function correctChime(){tone(523.25,0,0.25,'triangle');tone(784,0.08,0.35,'triangle');}
   function wrongTone(){tone(330,0,0.3,'sine',0.1);tone(220,0.12,0.4,'sine',0.08);}
   function cheer(){[523.25,659.25,783.99,1046.5].forEach((f,i)=>tone(f,i*0.08,0.3,'triangle',0.14));tone(1046.5,0.32,0.5,'triangle',0.12);}
   function birthdayJingle(){[392,392,440,392,523,494].forEach((f,i)=>tone(f,i*0.15,0.22,'triangle',0.13));}
+  /** ~0.08s — subtle UI tap / nav */
+  function tap(){tone(880,0,0.07,'sine',0.045);}
+  /** ~0.2s — like */
+  function like(){tone(660,0,0.12,'triangle',0.1);tone(990,0.06,0.14,'triangle',0.08);}
+  /** ~0.25s — message send */
+  function send(){tone(520,0,0.1,'sine',0.09);tone(780,0.08,0.16,'triangle',0.1);}
+  /** ~0.4s — publish post */
+  function postPublish(){tone(392,0,0.12,'triangle',0.1);tone(523,0.1,0.14,'triangle',0.11);tone(784,0.22,0.2,'triangle',0.1);}
+  /** ~0.3s — follow / friend */
+  function follow(){tone(494,0,0.14,'sine',0.09);tone(740,0.1,0.2,'triangle',0.11);}
+  /** ~0.3s — incoming notification */
+  function notification(){tone(880,0,0.1,'sine',0.08);tone(1175,0.12,0.16,'sine',0.07);}
+  /** ~0.3s — error / rate limit (soft, not harsh) */
+  function error(){tone(280,0,0.16,'triangle',0.08);tone(220,0.1,0.2,'sine',0.07);}
+  const rateLimited=error;
+  /** ~0.55s — profile section filled */
+  function sectionComplete(){tone(523,0,0.14,'triangle',0.1);tone(659,0.12,0.16,'triangle',0.11);tone(784,0.28,0.28,'triangle',0.1);}
+  /** ~0.9s — milestone (extended cheer) */
+  function milestone(){
+    [523.25,659.25,783.99,1046.5].forEach((f,i)=>tone(f,i*0.09,0.28,'triangle',0.13));
+    tone(1318.5,0.4,0.35,'triangle',0.11);
+    tone(1046.5,0.55,0.4,'triangle',0.1);
+  }
   function playFeedback(isCorrect,soundTag){
     if(quietMode)return;
-    if(isCorrect){if(soundTag==='cheer')cheer();else if(soundTag==='birthday')birthdayJingle();else correctChime();}
+    if(isCorrect){if(soundTag==='cheer')cheer();else if(soundTag==='birthday')birthdayJingle();else if(soundTag==='milestone')milestone();else correctChime();}
     else wrongTone();
+  }
+  function play(name){
+    if(quietMode)return;
+    const map={
+      tap,like,send,postPublish,follow,notification,error,rateLimited,
+      sectionComplete,milestone,correctChime,wrongTone,cheer,birthdayJingle,
+    };
+    const fn=map[name];
+    if(typeof fn==='function') fn();
   }
   let voices=[];
   function loadVoices(){voices=window.speechSynthesis?window.speechSynthesis.getVoices():[];}
@@ -36,23 +68,15 @@ const SoundLib=(()=>{
     if(v)utter.voice=v;utter.pitch=1.15;utter.rate=0.95;utter.volume=0.8;
     window.speechSynthesis.cancel();window.speechSynthesis.speak(utter);
   }
-  function startBg(){
-    if(bgPlaying||quietMode)return;bgPlaying=true;
-    if(bgMusicUrl){const a=new Audio(bgMusicUrl);a.loop=true;a.volume=0.2;a.play().catch(()=>{});bgNodes.push({stop:()=>a.pause()});return;}
-    bgGain=getCtx().createGain();bgGain.gain.value=0.04;bgGain.connect(getCtx().destination);
-    [196,246.94,293.66].forEach((freq,i)=>{
-      const osc=getCtx().createOscillator(),lfo=getCtx().createOscillator(),lg=getCtx().createGain();
-      osc.type='sine';osc.frequency.value=freq;lfo.frequency.value=0.05+i*0.02;lg.gain.value=0.02;
-      lfo.connect(lg);lg.connect(osc.frequency);osc.connect(bgGain);osc.start();lfo.start();bgNodes.push(osc,lfo);
-    });
-  }
-  function stopBg(){bgPlaying=false;bgNodes.forEach(n=>{try{n.stop?n.stop():null;}catch(e){}});bgNodes=[];}
-  return{playFeedback,speak,startBg,stopBg};
+  // startBg/stopBg removed — no continuous / looped audio in the app.
+  return{play,playFeedback,speak,tap,like,send,postPublish,follow,notification,error,rateLimited,sectionComplete,milestone};
 })();
 
 // ===================== TOAST =====================
 function showToast(msg,dur=3000){
-  const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+  const t=document.getElementById('toast');
+  if(t&&!t.getAttribute('role')){t.setAttribute('role','status');t.setAttribute('aria-live','polite');}
+  t.textContent=msg;t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'),dur);
 }
 
@@ -109,5 +133,5 @@ document.getElementById('strangerLimitSlider')?.addEventListener('input',e=>{
 
 document.getElementById('toggleQuiet').addEventListener('change',e=>{
   quietMode=e.target.checked;
-  if(quietMode)SoundLib.stopBg();else SoundLib.startBg();
+  // Quiet mode only gates cues/TTS — no background music to restart.
 });

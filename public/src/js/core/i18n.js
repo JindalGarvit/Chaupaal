@@ -133,13 +133,14 @@ async function translateContent(text, targetLang){
   if(translationCache[cacheKey]) return translationCache[cacheKey];
   const lsCached = readCache('translate', cacheKey);
   if(lsCached){ translationCache[cacheKey]=lsCached; return lsCached; }
+  if(typeof isAiFeaturesEnabled==='function' && !(await isAiFeaturesEnabled())) return text;
   try{
-    const data = await callAnthropic({
-        model:"claude-haiku-4-5-20251001",max_tokens:500,
+    const data = await callAI({
+        tier:'fast', max_tokens:500, feature:'i18n_translate',
         system:`Translate the following text to ${targetLang}. Return ONLY the translated text, nothing else.`,
         messages:[{role:"user",content:text}]
       });
-    const result = data.content?.map(b=>b.text||'').join('')||text;
+    const result = data.text||data.content?.map(b=>b.text||'').join('')||text;
     translationCache[cacheKey] = result;
     writeCache('translate', cacheKey, result);
     return result;

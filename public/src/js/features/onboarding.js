@@ -51,7 +51,13 @@ function renderFriendDiscovery(container){
     showToast('Searching...');
     if(db){
       const snap=await db.collection('users').where('phone','==',phone).get().catch(()=>null);
-      if(snap&&!snap.empty){const u=snap.docs[0].data();showToast(`Found: ${u.name}! Adding...`);if(currentUser){db.collection('users').doc(currentUser.uid).update({friends:firebase.firestore.FieldValue.arrayUnion(u.uid)}).then(()=>showToast(`${u.name} added! 🎉`));}}
+      if(snap&&!snap.empty){
+        const doc=snap.docs[0],u=doc.data();
+        showToast(`Found: ${u.name}`);
+        if(currentUser&&typeof requestFriend==='function'){
+          requestFriend(doc.id).then(()=>showToast(`Friend request sent to ${u.name}`)).catch(err=>showToast(err?.message||'Could not send request'));
+        }
+      }
       else showToast('No user found with that number');
     }else showToast('Sign in to search by phone number');
   });
@@ -130,6 +136,7 @@ function addNotification(type,icon,text){
   const n={id,type,icon,text,time:'now',ts:Date.now(),read:false};
   notifications.unshift(n);
   saveNotifications();updateNotifDot();
+  if(typeof SoundLib!=='undefined'&&SoundLib.notification) SoundLib.notification();
   // Mirror to Firestore so inbox can paginate across devices
   if(db&&currentUser){
     db.collection('notifications').doc(currentUser.uid).collection('items').doc(id).set({
@@ -351,6 +358,8 @@ let digitalProfile = {
   // Privacy
   profileVisibility:'public', showAge:true, showLocation:true, showRelationship:true,
   showIncome:false, showReligion:true,
+  // Foundation only — see profile-type.js (personal | professional); no feature branching yet
+  profileType:'personal',
   ...JSON.parse(localStorage.getItem('chaupaal_digital_profile')||'{}')
 };
 digitalProfile.photos = digitalProfile.photos || [];
@@ -451,6 +460,10 @@ function renderFamilyList(){
 let aiKbHistory=[];
 
 function openAiKeyboard(targetInput,context=''){
+  if(typeof isAiFeaturesEnabledSync==='function' && !isAiFeaturesEnabledSync()){
+    if(typeof showToast==='function') showToast(typeof AI_DISABLED_MSG==='string'?AI_DISABLED_MSG:'AI is temporarily paused.');
+    return;
+  }
   if(aiKbLimitReached()){
     showToast(`Free AI limit reached (${AI_KB_LIMIT}/day). More queries coming with Premium! 🌟`);
     return;
@@ -478,6 +491,10 @@ function openAiKeyboard(targetInput,context=''){
   const sendQuery=async()=>{
     const inp=document.getElementById('aiKbInput');
     const query=inp?.value.trim();if(!query)return;
+    if(typeof isAiFeaturesEnabled==='function' && !(await isAiFeaturesEnabled())){
+      if(typeof showToast==='function') showToast(typeof AI_DISABLED_MSG==='string'?AI_DISABLED_MSG:'AI is temporarily paused.');
+      return;
+    }
     inp.value='';
     const msgs=document.getElementById('aiKbMessages');
     const userMsg=document.createElement('div');userMsg.className='ai-kb-msg user';userMsg.textContent=query;msgs.appendChild(userMsg);
@@ -487,14 +504,19 @@ function openAiKeyboard(targetInput,context=''){
       aiKbHistory.push({role:'user',content:query});
       if(aiKbHistory.length>10)aiKbHistory=aiKbHistory.slice(-10);
       incrementAiKbUsage();
-      const data = await callAnthropic({model:'claude-sonnet-4-6',max_tokens:600,
-          system:`You are Chaupaal AI, an intelligent assistant in Chaupaal — India's social news and discovery app. Help users search for information, summarise news, write replies, explain topics, or answer anything. ${context?`Context: ${context}.`:''}Be concise, friendly, conversational. Never mention Claude or Anthropic — you are Chaupaal AI.`,
-          messages:aiKbHistory});
-      const text=data.content?.map(b=>b.text||'').join('')||'Sorry, I couldn\'t get a response right now.';
+      const data = await callAI({
+        tier:'balanced',
+        max_tokens:600,
+        feature:'assistant_keyboard',
+        system:`You are Chaupaal AI, an intelligent assistant in Chaupaal — India's social news and discovery app. Help users search for information, summarise news, write replies, explain topics, or answer anything. ${context?`Context: ${context}.`:''}Be concise, friendly, conversational. Never mention Claude or Anthropic — you are Chaupaal AI. Use light markdown (headings, bold, lists) when it helps readability.`,
+        messages:aiKbHistory
+      });
+      const text=data.text||data.content?.map(b=>b.text||'').join('')||'Sorry, I couldn\'t get a response right now.';
       aiKbHistory.push({role:'assistant',content:text});
       typing.remove();
       const aiMsg=document.createElement('div');aiMsg.className='ai-kb-msg ai';
-      aiMsg.innerHTML=`<div class="ai-kb-label">Chaupaal AI</div>${text.replace(/\n/g,'<br>')}`;
+      const bodyHtml=typeof renderMarkdown==='function'?renderMarkdown(text):text.replace(/\n/g,'<br>');
+      aiMsg.innerHTML=`<div class="ai-kb-label">Chaupaal AI</div><div class="ai-md">${bodyHtml}</div>`;
       if(targetInput){
         const insertBtn=document.createElement('button');insertBtn.className='ai-kb-insert-btn';insertBtn.textContent='↑ Insert into message';
         insertBtn.addEventListener('click',()=>{targetInput.value=text;targetInput.focus();kb.classList.remove('open');setTimeout(()=>kb.remove(),300);});
@@ -503,7 +525,9 @@ function openAiKeyboard(targetInput,context=''){
       msgs.appendChild(aiMsg);
     }catch(e){
       typing.remove();
-      const err=document.createElement('div');err.className='ai-kb-msg ai';err.textContent='Connection error. Please try again.';msgs.appendChild(err);
+      const err=document.createElement('div');err.className='ai-kb-msg ai';
+      err.textContent=(e&&e.code==='AI_DISABLED')?(typeof AI_DISABLED_MSG==='string'?AI_DISABLED_MSG:e.message):'Connection error. Please try again.';
+      msgs.appendChild(err);
     }
     msgs.scrollTop=msgs.scrollHeight;
   };

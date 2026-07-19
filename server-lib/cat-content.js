@@ -4,8 +4,6 @@
  */
 const { callAnthropicServer } = require('./anthropic-server');
 
-const CAT_HAIKU = 'claude-haiku-4-5-20251001';
-const CAT_SONNET = 'claude-sonnet-4-6';
 const CACHE_VERSION = 'v2';
 
 function extractAnthropicText(data) {
@@ -95,13 +93,15 @@ function catMCQLooksGrounded(items) {
   return true;
 }
 
-async function callCatAIWithSearch({ model, max_tokens, system, user }) {
+async function callCatAIWithSearch({ model, tier, max_tokens, system, user }) {
   return callAnthropicServer({
     enableWebSearch: true,
     model,
+    tier,
     max_tokens,
     system,
     messages: [{ role: 'user', content: user }],
+    feature: 'category_cron',
   });
 }
 
@@ -116,10 +116,10 @@ Produce exactly 3 items.`;
 
   const user = `Search the web for recent news in category "${catName}", then return 3 grounded news items as JSON.`;
 
-  let data = await callCatAIWithSearch({ model: CAT_HAIKU, max_tokens: 2000, system, user });
+  let data = await callCatAIWithSearch({ tier: 'fast', max_tokens: 2000, system, user });
   let items = parseJsonArrayLoose(extractAnthropicText(data));
   if (!catNewsLooksGrounded(items)) {
-    data = await callCatAIWithSearch({ model: CAT_SONNET, max_tokens: 2500, system, user });
+    data = await callCatAIWithSearch({ tier: 'balanced', max_tokens: 2500, system, user });
     items = parseJsonArrayLoose(extractAnthropicText(data));
   }
   return sanitizeCatNewsItems(items);
@@ -144,10 +144,10 @@ Produce exactly 5 questions.`;
 
   const user = `Search the web for recent "${catName}" news, then return 5 grounded MCQ questions as JSON.`;
 
-  let data = await callCatAIWithSearch({ model: CAT_HAIKU, max_tokens: 3000, system, user });
+  let data = await callCatAIWithSearch({ tier: 'fast', max_tokens: 3000, system, user });
   let items = parseJsonArrayLoose(extractAnthropicText(data));
   if (!catMCQLooksGrounded(items)) {
-    data = await callCatAIWithSearch({ model: CAT_SONNET, max_tokens: 3500, system, user });
+    data = await callCatAIWithSearch({ tier: 'balanced', max_tokens: 3500, system, user });
     items = parseJsonArrayLoose(extractAnthropicText(data));
   }
   return sanitizeCatMCQItems(items);

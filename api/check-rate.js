@@ -3,10 +3,10 @@
  * Body: { action: 'like'|'follow'|'message'|'comment'|'post' }
  * Auth: Bearer Firebase ID token
  */
-const { LIMITS, checkActionRateLimit } = require('./lib/rate-limit');
-const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('./lib/http');
-const { requireUser } = require('./lib/auth');
-const { asEnum } = require('./lib/validate');
+const { LIMITS, checkActionRateLimit } = require('../server-lib/rate-limit');
+const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
+const { requireUser } = require('../server-lib/auth');
+const { asEnum } = require('../server-lib/validate');
 
 module.exports = async function handler(req, res) {
   if (!requireMethod(req, res, 'POST')) return;

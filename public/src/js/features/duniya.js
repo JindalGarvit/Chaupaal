@@ -36,6 +36,8 @@ function mapDuniyaDoc(raw){
     thumb: raw.thumb||null,
     mediaPath: raw.mediaPath||null,
     thumbPath: raw.thumbPath||null,
+    mediaWidth: Number(raw.mediaWidth||raw.width)||null,
+    mediaHeight: Number(raw.mediaHeight||raw.height)||null,
     caption: raw.caption||'',
     likes: raw.likes||0,
     comments: raw.comments||0,
@@ -67,6 +69,15 @@ async function loadDuniyaPage({reset=false}={}){
       excludeDeleted:true,
     });
     const mapped=page.items.map(mapDuniyaDoc).filter(p=>!p.deleted&&!(typeof isSoftDeleted==='function'&&isSoftDeleted(p)));
+    if(typeof hydrateContentLikes==='function') await hydrateContentLikes('duniya',mapped);
+    if(typeof hydrateRelationships==='function'){
+      const states=await hydrateRelationships(mapped.map(p=>p.user?.uid).filter(Boolean));
+      mapped.forEach(p=>{
+        p.followed=!!states[p.user?.uid]?.following;
+        if(p.followed) followingSet.add(p.user.uid);
+        else followingSet.delete(p.user.uid);
+      });
+    }
     if(reset&&mapped.length){
       duniyaLiveMode=true;
       duniyaPosts=mapped;
@@ -118,14 +129,30 @@ function initDuniya(){
   });
 }
 
-function renderDuniyaStories(){
+async function renderDuniyaStories(){
   const row=document.getElementById('duniyaStoriesRow');if(!row)return;
-  const storyUsers=[{name:'Your story',avatar:'＋',self:true},...SAMPLE_DUNIYA.map(p=>p.user)];
-  row.innerHTML=storyUsers.map(u=>`
-    <div class="duniya-story-item" data-uid="${u.uid||'self'}">
+  let stories=[];
+  if(currentUser&&typeof loadStoryFeed==='function'){
+    try{stories=await loadStoryFeed('duniya');}catch(error){console.warn('[stories] Duniya feed',error);}
+  }
+  if(stories.length&&typeof hydrateRelationships==='function'){
+    const states=await hydrateRelationships(stories.map(story=>story.uid)).catch(()=>({}));
+    stories.sort((a,b)=>{
+      const followDelta=Number(!!states[b.uid]?.following)-Number(!!states[a.uid]?.following);
+      return followDelta||b.createdAt-a.createdAt;
+    });
+  }
+  const groups=new Map();
+  stories.forEach(story=>{
+    if(!groups.has(story.uid))groups.set(story.uid,[]);
+    groups.get(story.uid).push(story);
+  });
+  const storyUsers=[{name:'Your story',avatar:'＋',self:true},...[...groups.values()].map(group=>({...group[0],stories:group}))];
+  row.innerHTML=storyUsers.map((u,index)=>`
+    <div class="duniya-story-item" data-story-index="${index}">
       <div class="duniya-story-ring" style="${u.self?'background:var(--line);':''}">
         <div class="duniya-story-avatar" style="${u.self?'border:2px dashed var(--muted);':''}">
-          ${u.self?'<span style="font-size:24px;color:var(--muted);">＋</span>':u.photoURL?`<img src="${u.photoURL}">`:`<span>${u.avatar}</span>`}
+          ${u.self?'<span style="font-size:24px;color:var(--muted);">＋</span>':u.avatar&&/^https:/.test(u.avatar)?`<img src="${u.avatar}">`:`<span>${u.avatar||'👤'}</span>`}
         </div>
       </div>
       <div class="duniya-story-name">${u.self?'Add story':u.name.split(' ')[0]}</div>
@@ -133,60 +160,40 @@ function renderDuniyaStories(){
   `).join('');
   row.querySelectorAll('.duniya-story-item').forEach(item=>{
     item.addEventListener('click',()=>{
-      if(item.dataset.uid==='self'){
-        // Duniya stories are public/followers — show audience picker
+      const u=storyUsers[Number(item.dataset.storyIndex)];
+      if(u.self){
         const s=document.createElement('div');
         s.style.cssText='position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:20px;z-index:100;';
         s.innerHTML=`
           <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;margin-bottom:4px;">Add to Duniya Story</div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">Duniya stories are visible publicly — they appear in followers' feeds</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">Duniya Stories are public and discoverable.</div>
           <label style="display:flex;align-items:center;gap:12px;padding:13px;background:var(--cream);border-radius:14px;cursor:pointer;margin-bottom:10px;font-weight:600;font-size:14px;">
             📷 Add photo or video<input type="file" accept="image/*,video/*" id="duniyaStoryFile" style="display:none;">
           </label>
-          <div style="display:flex;gap:8px;">
-            <select id="duniyaStoryAudience" style="flex:1;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:13px;">
-              <option value="public">🌍 Everyone</option>
-              <option value="followers">👥 Followers only</option>
-            </select>
-          </div>
           <button id="closeDuniyaStorySheet" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;margin-top:10px;">Cancel</button>
         `;
         document.querySelector('.device').appendChild(s);
+        if(typeof enableSwipeDismiss==='function') enableSwipeDismiss(s,()=>s.remove());
         document.getElementById('closeDuniyaStorySheet').addEventListener('click',()=>s.remove());
         document.getElementById('duniyaStoryFile').addEventListener('change',async e=>{
           const file=e.target.files[0];if(!file)return;
-          const audience=document.getElementById('duniyaStoryAudience').value;
           s.remove();
           showToast('Preparing story…');
           try{
-            let media=null, thumb=null;
-            if(typeof processAndUploadMedia==='function'&&currentUser&&(typeof isMediaUploadReady!=='function'||await isMediaUploadReady())){
-              const up=await processAndUploadMedia(file,{folder:'stories'});
-              media=up.media; thumb=up.thumb;
-            } else {
-              media=URL.createObjectURL(file);
-            }
-            const story={name:userProfile?.name||'You',avatar:userProfile?.photoURL||'🪑',type:'duniya_story',media,thumb,mediaType:file.type.startsWith('video')?'video':'image',audience,ts:Date.now()};
-            saveToArchive({type:'duniya_story',...story});
-            if(db&&currentUser){
-              db.collection('duniya_stories').add({
-                name:story.name,avatar:story.avatar,type:story.type,
-                media: media&&String(media).startsWith('http')?media:null,
-                thumb: thumb&&String(thumb).startsWith('http')?thumb:null,
-                mediaType:story.mediaType,audience,
-                uid:currentUser.uid,
-                createdAt:firebase.firestore.FieldValue.serverTimestamp(),
-                expiresAt:new Date(Date.now()+86400000),
-              }).catch(()=>{});
-            }
-            showToast(audience==='public'?'Story shared publicly on Duniya 🌍':'Story shared with your followers 👥');
+            if(typeof processAndUploadMedia!=='function')throw new Error('Media upload unavailable');
+            const up=await processAndUploadMedia(file,{folder:'stories'});
+            await createPlatformStory({
+              destination:'duniya',kind:'story',type:'media',
+              media:up.media,thumb:up.thumb,
+              mediaType:file.type.startsWith('video')?'video':'image',
+            });
+            await renderDuniyaStories();
+            showToast('Story shared publicly on Duniya');
           }catch(err){
             showToast(typeof friendlyError==='function'?friendlyError(err):(err.message||'Story upload failed'));
           }
         });
-      }
-      else showToast('Story viewer — tap to watch 👆');
-      openDuniyaStoryViewer({name:u.name,avatar:u.avatar||'👤'});
+      }else openStoryViewer(u.stories[0],u.stories);
     });
   });
 }
@@ -222,11 +229,20 @@ function renderDuniyaFeed(){
   }
 }
 
+function duniyaHeartIcon(){
+  return`<svg class="duniya-heart-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.2-4.35-9.55-8.55C.5 8.95 2.35 4.5 6.4 4.5c2.25 0 3.75 1.3 4.6 2.55.85-1.25 2.35-2.55 4.6-2.55 4.05 0 5.9 4.45 3.95 7.95C19.2 16.65 12 21 12 21Z"/></svg>`;
+}
+
 function createDuniyaPost(post, {variant='list'}={}){
   const el=document.createElement('div');el.className='duniya-post';el.dataset.id=post.id;
   const isFollowing=followingSet.has(post.user.uid);
   const caption=post.caption.replace(/@(\w+)/g,'<span class="duniya-post-tag">@$1</span>').replace(/#(\w+)/g,'<span style="color:var(--red);cursor:pointer;">#$1</span>');
   const imgSrc=typeof mediaUrlFor==='function'?mediaUrlFor(post, variant): (post.thumb||post.media);
+  const mediaWidth=Number(post.mediaWidth||post.width)||0;
+  const mediaHeight=Number(post.mediaHeight||post.height)||0;
+  const hasMediaSize=mediaWidth>0&&mediaHeight>0;
+  const mediaSizeAttrs=hasMediaSize?` width="${mediaWidth}" height="${mediaHeight}" style="aspect-ratio:${mediaWidth}/${mediaHeight};"`:'';
+  const mediaWrapAttrs=hasMediaSize?` data-has-ratio="1" style="--media-ratio:${mediaWidth}/${mediaHeight};"`:'';
   el.innerHTML=`
     <div class="duniya-post-header">
       <div class="duniya-post-avatar">${post.user.photoURL?`<img src="${post.user.photoURL}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:`<span>${post.user.avatar}</span>`}</div>
@@ -234,62 +250,218 @@ function createDuniyaPost(post, {variant='list'}={}){
         <div class="duniya-post-name">${post.user.name}</div>
         <div class="duniya-post-meta">${typeof formatRelativeTime==='function'?formatRelativeTime(post.ts||post.timestamp):post.timestamp} · 🌍 Public</div>
       </div>
-      <button class="duniya-follow-btn ${isFollowing?'following':''}" data-uid="${post.user.uid}">${isFollowing?'Following':'Follow'}</button>
-      ${(currentUser&&(post.user?.uid===currentUser.uid||post.uid===currentUser.uid))?`<button type="button" class="duniya-delete-btn" title="Delete" style="background:none;border:none;font-size:16px;cursor:pointer;color:var(--muted);padding:4px;">🗑️</button>`:''}
-      <button style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);padding:4px;" class="duniya-more-btn">⋯</button>
+      <button class="duniya-follow-btn ${isFollowing?'following':''}" data-uid="${post.user.uid}" aria-label="${isFollowing?'Unfollow':'Follow'} ${post.user.name}">${isFollowing?'Following':'Follow'}</button>
+      ${(currentUser&&(post.user?.uid===currentUser.uid||post.uid===currentUser.uid))?`<button type="button" class="duniya-delete-btn" title="Delete" aria-label="Delete post" style="background:none;border:none;font-size:16px;cursor:pointer;color:var(--muted);padding:4px;">🗑️</button>`:''}
+      <button style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);padding:4px;" class="duniya-more-btn" aria-label="More options">⋯</button>
     </div>
-    <div class="duniya-post-media">
+    <div class="duniya-post-media"${mediaWrapAttrs}>
       ${post.type==='video'
         ?(post.media
           ?`<video src="${post.media}" controls playsinline preload="none"></video>`
           :`<div class="duniya-post-media-placeholder">🎬<div style="font-size:14px;color:rgba(255,255,255,0.6);margin-top:8px;">Video</div></div>`)
         :(imgSrc
-          ?`<img src="${imgSrc}" loading="lazy" alt="" ${variant==='list'&&post.media&&post.media!==imgSrc?`data-full="${post.media}"`:''}>`
+          ?`<img data-no-zoom="1" src="${imgSrc}" loading="lazy" decoding="async" alt="Post by ${post.user.name}"${mediaSizeAttrs} ${variant==='list'&&post.media&&post.media!==imgSrc?`data-full="${post.media}"`:''}>
+             <button type="button" class="duniya-expand-media cp-tap-target" aria-label="Open image full screen">⛶</button>`
           :`<div class="duniya-post-media-placeholder">📷</div>`)
       }
     </div>
     <div class="duniya-post-actions">
-      <button class="duniya-action-btn like-btn ${post.likedByMe?'liked':''}" data-id="${post.id}">${post.likedByMe?'❤️':'🤍'}</button>
-      <button class="duniya-action-btn comment-btn" data-id="${post.id}">💬</button>
-      <button class="duniya-action-btn share-btn" data-id="${post.id}">↗️</button>
-      <button class="duniya-action-btn" style="margin-left:auto;" data-id="${post.id}">🔖</button>
+      <button class="duniya-action-btn like-btn ${post.likedByMe?'liked':''}" data-id="${post.id}" aria-label="Like this post" aria-pressed="${post.likedByMe?'true':'false'}">${duniyaHeartIcon()}</button>
+      <button class="duniya-action-btn comment-btn" data-id="${post.id}" aria-label="Open comments"><span aria-hidden="true">💬</span></button>
+      <button class="duniya-action-btn share-btn" data-id="${post.id}" aria-label="Share post"><span aria-hidden="true">↗</span></button>
+      <button class="duniya-action-btn duniya-bookmark-btn" data-id="${post.id}" aria-label="Bookmark"><span aria-hidden="true">🔖</span></button>
     </div>
     <div class="duniya-post-likes">${formatCount(post.likedByMe?post.likes:post.likes)} likes</div>
     <div class="duniya-post-caption"><strong class="duniya-post-name">${post.user.name}</strong> ${caption}</div>
     ${post.comments>0?`<div class="duniya-view-comments">View all ${post.comments} comments</div>`:''}
   `;
-
-  // Like (rate-limited)
-  el.querySelector('.like-btn').addEventListener('click',async e=>{
-    const btn=e.currentTarget;
-    if(btn.dataset.busy)return;
-    btn.dataset.busy='1';
-    try{
-      if(typeof checkRateLimit==='function'){
-        const rl=await checkRateLimit('like');
-        if(!rl.ok){ if(typeof showToast==='function') showToast(rl.message||'Slow down'); return; }
-      }
-      const p=duniyaPosts.find(x=>x.id===post.id);if(!p)return;
-      p.likedByMe=!p.likedByMe;p.likes+=p.likedByMe?1:-1;post.likedByMe=p.likedByMe;post.likes=p.likes;
-      btn.textContent=p.likedByMe?'❤️':'🤍';btn.classList.toggle('liked',p.likedByMe);
-      el.querySelector('.duniya-post-likes').textContent=`${formatCount(p.likes)} likes`;
-    }finally{ delete btn.dataset.busy; }
+  const postAvatar=el.querySelector('.duniya-post-avatar');
+  if(typeof bindProfileLongPress==='function') bindProfileLongPress(postAvatar,post.user);
+  postAvatar?.addEventListener('click',()=>{
+    if(typeof openPublicProfile==='function') openPublicProfile(post.user,{uid:post.user.uid,username:post.user.username,context:'duniya'});
   });
 
-  // Follow (rate-limited)
-  el.querySelector('.duniya-follow-btn').addEventListener('click',async e=>{
-    const btn=e.currentTarget;
-    const uid=btn.dataset.uid;
-    if(btn.dataset.busy)return;
-    btn.dataset.busy='1';
-    try{
-      if(!followingSet.has(uid)&&typeof checkRateLimit==='function'){
-        const rl=await checkRateLimit('follow');
-        if(!rl.ok){ if(typeof showToast==='function') showToast(rl.message||'Slow down'); return; }
+  // Like — optimistic (UI first, rate-limit/persist after)
+  const likeBtn=el.querySelector('.like-btn');
+  likeBtn.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    if (btn.dataset.busy) return;
+    btn.dataset.busy = '1';
+    const p = duniyaPosts.find((x) => x.id === post.id);
+    if (!p) {
+      delete btn.dataset.busy;
+      return;
+    }
+    const prevLiked = !!p.likedByMe;
+    const prevLikes = p.likes;
+    const apply = () => {
+      p.likedByMe = !prevLiked;
+      p.likes = prevLikes + (p.likedByMe ? 1 : -1);
+      post.likedByMe = p.likedByMe;
+      post.likes = p.likes;
+      btn.classList.toggle('liked', p.likedByMe);
+      btn.setAttribute('aria-pressed', p.likedByMe ? 'true' : 'false');
+      el.querySelector('.duniya-post-likes').textContent = `${formatCount(p.likes)} likes`;
+      if (p.likedByMe && typeof SoundLib !== 'undefined' && SoundLib.like) SoundLib.like();
+    };
+    const revert = () => {
+      p.likedByMe = prevLiked;
+      p.likes = prevLikes;
+      post.likedByMe = prevLiked;
+      post.likes = prevLikes;
+      btn.classList.toggle('liked', prevLiked);
+      btn.setAttribute('aria-pressed', prevLiked ? 'true' : 'false');
+      el.querySelector('.duniya-post-likes').textContent = `${formatCount(prevLikes)} likes`;
+    };
+    try {
+      if (typeof runOptimistic === 'function') {
+        await runOptimistic({
+          apply,
+          revert,
+          commit: async () => {
+            if (typeof assertRateLimit === 'function') await assertRateLimit('like');
+            if (typeof toggleContentLike === 'function') {
+              const saved = await toggleContentLike('duniya', p);
+              if (saved.persisted) {
+                p.likedByMe = saved.liked;
+                p.likes = saved.likes;
+                post.likedByMe = saved.liked;
+                post.likes = saved.likes;
+                btn.classList.toggle('liked', saved.liked);
+                btn.setAttribute('aria-pressed', saved.liked ? 'true' : 'false');
+                el.querySelector('.duniya-post-likes').textContent = `${formatCount(saved.likes)} likes`;
+              }
+            }
+          },
+        });
+      } else {
+        apply();
       }
-      if(followingSet.has(uid)){followingSet.delete(uid);btn.textContent='Follow';btn.classList.remove('following');}
-      else{followingSet.add(uid);btn.textContent='Following';btn.classList.add('following');showToast('Following! Their posts will appear in your feed 🌍');}
-    }finally{ delete btn.dataset.busy; }
+    } finally {
+      delete btn.dataset.busy;
+    }
+  });
+
+  // Feed media: double-tap/double-click likes; a dedicated button opens viewer.
+  const mediaImg=el.querySelector('.duniya-post-media img');
+  const expandBtn=el.querySelector('.duniya-expand-media');
+  if(mediaImg&&expandBtn){
+    mediaImg.setAttribute('data-no-zoom','1');
+    mediaImg.classList.remove('cp-zoomable');
+    delete mediaImg.dataset.zoomBound;
+    expandBtn.addEventListener('click',(e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      if(typeof openImageViewer==='function'){
+        openImageViewer(mediaImg.dataset.full||post.media||mediaImg.currentSrc||mediaImg.src,{alt:mediaImg.alt});
+      }
+    });
+    if(variant==='list'){
+      let lastTouchTap=0;
+      const likeFromMedia=()=>{
+        if(!post.likedByMe&&!likeBtn.dataset.busy) likeBtn.click();
+        el.querySelector('.duniya-double-like-heart')?.remove();
+        const heart=document.createElement('div');
+        heart.className='duniya-double-like-heart';
+        heart.setAttribute('aria-hidden','true');
+        heart.textContent='♥';
+        el.querySelector('.duniya-post-media')?.appendChild(heart);
+        setTimeout(()=>heart.remove(),650);
+      };
+      // Swallow single clicks so leftover zoom binders cannot open the viewer.
+      mediaImg.addEventListener('click',(e)=>{
+        e.preventDefault();
+        e.stopPropagation();
+      });
+      mediaImg.addEventListener('pointerup',(e)=>{
+        if(e.pointerType!=='touch') return;
+        const now=Date.now();
+        if(now-lastTouchTap<300){
+          e.preventDefault();
+          e.stopPropagation();
+          lastTouchTap=0;
+          likeFromMedia();
+        }else lastTouchTap=now;
+      });
+      mediaImg.addEventListener('dblclick',(e)=>{
+        e.preventDefault();
+        e.stopPropagation();
+        likeFromMedia();
+      });
+    }
+  }
+
+  // Follow / unfollow — optimistic; unfollow uses Undo toast
+  el.querySelector('.duniya-follow-btn').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const uid = btn.dataset.uid;
+    if (btn.dataset.busy) return;
+    btn.dataset.busy = '1';
+    btn.disabled = true;
+    const wasFollowing = followingSet.has(uid);
+    const name = post.user?.name || 'user';
+    try {
+      if (wasFollowing) {
+        followingSet.delete(uid);
+        btn.textContent = 'Follow';
+        btn.classList.remove('following');
+        if(typeof setFollowing==='function'){
+          try{ await setFollowing(uid,false,'duniya_post'); }
+          catch(err){
+            followingSet.add(uid);
+            btn.textContent='Following';
+            btn.classList.add('following');
+            throw err;
+          }
+        }
+        if (typeof showUndoToast === 'function') {
+          showUndoToast({
+            message: `Unfollowed ${name}`,
+            onUndo: async () => {
+              followingSet.add(uid);
+              btn.textContent = 'Following';
+              btn.classList.add('following');
+              if(typeof setFollowing==='function'){
+                try{ await setFollowing(uid,true,'undo_unfollow'); }catch(err){}
+              }
+              if (typeof showToast === 'function') showToast('Following again');
+            },
+          });
+        }
+      } else {
+        const apply = () => {
+          followingSet.add(uid);
+          btn.textContent = 'Following';
+          btn.classList.add('following');
+          if (typeof SoundLib !== 'undefined' && SoundLib.follow) SoundLib.follow();
+        };
+        const revert = () => {
+          followingSet.delete(uid);
+          btn.textContent = 'Follow';
+          btn.classList.remove('following');
+        };
+        if (typeof runOptimistic === 'function') {
+          await runOptimistic({
+            apply,
+            revert,
+            commit: async () => {
+              if (typeof assertRateLimit === 'function') await assertRateLimit('follow');
+              if (typeof setFollowing === 'function') await setFollowing(uid, true, 'duniya_post');
+            },
+            errorToast: 'Couldn’t follow — undone',
+          });
+        } else {
+          apply();
+        }
+        if (followingSet.has(uid) && typeof showToast === 'function') {
+          showToast('Following! Their posts will appear in your feed 🌍');
+        }
+      }
+    } finally {
+      delete btn.dataset.busy;
+      btn.disabled = false;
+      btn.setAttribute('aria-label', `${followingSet.has(uid) ? 'Unfollow' : 'Follow'} ${name}`);
+    }
   });
 
   // Share
@@ -321,28 +493,96 @@ function createDuniyaPost(post, {variant='list'}={}){
 
 function formatCount(n){return n>=1000?(n/1000).toFixed(1)+'K':String(n);}
 
-// ===================== DUNIYA POST DETAIL (comments) =====================
+function syncDuniyaPostUI(post){
+  if(!post) return;
+  const id=String(post.id||'');
+  document.querySelectorAll(`.duniya-post[data-id="${id}"]`).forEach((card)=>{
+    const likesEl=card.querySelector('.duniya-post-likes');
+    if(likesEl) likesEl.textContent=`${formatCount(post.likes||0)} likes`;
+    const likeBtn=card.querySelector('.like-btn');
+    if(likeBtn){
+      likeBtn.classList.toggle('liked', !!post.likedByMe);
+      likeBtn.setAttribute('aria-pressed', post.likedByMe?'true':'false');
+    }
+    let view=card.querySelector('.duniya-view-comments');
+    const count=Math.max(0, Number(post.comments)||0);
+    if(count>0){
+      if(!view){
+        view=document.createElement('div');
+        view.className='duniya-view-comments';
+        view.addEventListener('click',()=>openDuniyaDetail(post));
+        card.appendChild(view);
+      }
+      view.textContent=`View all ${count} comments`;
+    }else if(view){
+      view.remove();
+    }
+  });
+  const detail=document.getElementById('duniyaPostDetail');
+  const subtitle=detail?.querySelector('.duniya-comments-subtitle');
+  if(subtitle && detail?.classList.contains('open')){
+    subtitle.textContent=`${post.comments||0} on ${post.user?.name||'this post'}`;
+  }
+}
+
+// ===================== DUNIYA POST DETAIL (threaded comments) =====================
+function getDuniyaComments(post) {
+  // Only seed demo comments once. An empty array means "loaded, none yet".
+  if (Array.isArray(post._comments)) return post._comments;
+  const seed = [
+    { id: 'dc1', parentId: null, user: { name: 'Asha', avatar: '😊' }, text: 'Great post! 🔥', time: '2h' },
+    { id: 'dc2', parentId: 'dc1', user: { name: post.user?.name?.split(' ')[0] || 'Author', avatar: post.user?.avatar || '👤' }, text: 'Thanks for reading!', time: '1h' },
+    { id: 'dc3', parentId: null, user: { name: 'Vikram', avatar: '🧑' }, text: 'Really insightful, thanks for sharing', time: '3h' },
+    { id: 'dc4', parentId: 'dc3', user: { name: 'Neha', avatar: '👩' }, text: 'Totally agree with this perspective', time: '2h' },
+    { id: 'dc5', parentId: 'dc3', user: { name: 'Sam', avatar: '🧔' }, text: `@${(post.user?.name || 'you').split(' ')[0]} this is amazing!`, time: '1h' },
+  ];
+  post._comments = seed;
+  post.comments = seed.length;
+  return post._comments;
+}
+
 function openDuniyaDetail(post){
   const detail=document.getElementById('duniyaPostDetail');
   detail.classList.remove('hidden');requestAnimationFrame(()=>detail.classList.add('open'));
+  const canLoadPersistentComments = typeof socialContentCanPersist === 'function' && socialContentCanPersist('duniya', post);
+  const comments = canLoadPersistentComments
+    ? (Array.isArray(post._comments) ? post._comments : [])
+    : getDuniyaComments(post);
+  let replyTo = null;
   detail.innerHTML=`
-    <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;background:var(--white);border-bottom:1px solid var(--line);flex-shrink:0;">
-      <button id="duniyaDetailBack" style="background:none;border:none;font-size:22px;cursor:pointer;">←</button>
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;">Post</div>
+    <div class="duniya-comments-handle" aria-hidden="true"></div>
+    <div class="duniya-comments-header">
+      <div>
+        <div class="duniya-comments-title">Comments</div>
+        <div class="duniya-comments-subtitle">${post.comments||0} on ${post.user?.name||'this post'}</div>
+      </div>
+      <button id="duniyaDetailBack" class="cp-tap-target duniya-comments-close" aria-label="Close comments">✕</button>
     </div>
-    <div style="flex:1;overflow-y:auto;padding:16px;">
-      ${createDuniyaPost(post, {variant:'detail'}).outerHTML}
-      <div style="font-size:13px;font-weight:700;margin:12px 0 8px;">Comments</div>
-      <div id="duniyaCommentsList">
-        ${['Great post! 🔥','Really insightful, thanks for sharing','Totally agree with this perspective','@${post.user.name.split(" ")[0]} this is amazing!'].map(c=>`<div style="display:flex;gap:10px;margin-bottom:12px;"><div style="width:32px;height:32px;border-radius:50%;background:var(--line);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">👤</div><div><div style="font-weight:700;font-size:13px;">User</div><div style="font-size:13px;">${c}</div></div></div>`).join('')}
+    <div class="duniya-comments-body">
+      <div class="duniya-comments-post-context">
+        <strong>${post.user?.name||'Post'}</strong>
+        <span>${String(post.caption||'').slice(0,150)}</span>
+      </div>
+      <div id="duniyaCommentsList" class="comments-list">
+        ${typeof renderCommentsHtml==='function'?renderCommentsHtml(comments):''}
       </div>
     </div>
-    <div style="display:flex;gap:8px;padding:12px 16px;background:var(--white);border-top:1px solid var(--line);">
-      <input id="duniyaCommentInput" style="flex:1;padding:10px 14px;border:2px solid var(--line);border-radius:12px;font-family:Inter,sans-serif;font-size:14px;outline:none;" placeholder="Add a comment... @mention someone">
-      <button id="duniyaCommentSend" style="background:var(--red);color:#fff;border:none;border-radius:12px;padding:10px 16px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;cursor:pointer;">Post</button>
+    <div id="duniyaReplyHint" class="comment-reply-hint hidden"></div>
+    <div class="duniya-comments-composer">
+      <input id="duniyaCommentInput" style="flex:1;padding:10px 14px;border:2px solid var(--line);border-radius:12px;font-family:Inter,sans-serif;font-size:14px;outline:none;min-height:44px;" placeholder="Add a comment... @mention someone">
+      <button id="duniyaCommentSend" class="cp-tap-target" style="background:var(--red);color:#fff;border:none;border-radius:12px;padding:10px 16px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;cursor:pointer;min-height:44px;">Post</button>
     </div>
   `;
+  detail.querySelector('.duniya-expand-media')?.addEventListener('click',(e)=>{
+    e.preventDefault();
+    e.stopPropagation();
+    const img=detail.querySelector('.duniya-post-media img');
+    if(img&&typeof openImageViewer==='function'){
+      openImageViewer(img.dataset.full||post.media||img.currentSrc||img.src,{alt:img.alt});
+    }
+  });
   document.getElementById('duniyaDetailBack').addEventListener('click',()=>{
+    if(typeof closeAiKeyboard==='function') closeAiKeyboard();
     detail.classList.remove('open');setTimeout(()=>detail.classList.add('hidden'),300);
     try{ history.pushState({},'', '/'); }catch(e){}
   });
@@ -350,18 +590,122 @@ function openDuniyaDetail(post){
     const pid=post.firestoreId||post.id;
     if(pid&&typeof buildDeepLink==='function') history.pushState({chaupaalDeep:true},'',buildDeepLink('post',pid));
   }catch(e){}
+
+  const listEl = document.getElementById('duniyaCommentsList');
+  const hint = document.getElementById('duniyaReplyHint');
   const commentInput=document.getElementById('duniyaCommentInput');
-  document.getElementById('duniyaCommentSend').addEventListener('click',async()=>{
-    const txt=commentInput.value.trim();if(!txt)return;
-    if(typeof checkRateLimit==='function'){
-      const rl=await checkRateLimit('comment');
-      if(!rl.ok){ if(typeof showToast==='function') showToast(rl.message||'Slow down'); return; }
+  const commentSend=document.getElementById('duniyaCommentSend');
+  const commentActions=typeof createCommentActionHandlers==='function'
+    ? createCommentActionHandlers({collection:'duniya',content:post,comments,refresh:refreshComments})
+    : {};
+
+  function refreshComments() {
+    if (!listEl) return;
+    listEl.innerHTML = typeof renderCommentsHtml === 'function' ? renderCommentsHtml(comments) : '';
+    syncDuniyaPostUI(post);
+    if (typeof wireCommentsList === 'function') {
+      wireCommentsList(listEl, comments, {
+        ...commentActions,
+        onReply(parentId) {
+          replyTo = parentId;
+          const parent = comments.find((c) => c.id === parentId);
+          if (hint) {
+            hint.classList.remove('hidden');
+            hint.innerHTML = `Replying to <strong>${parent?.user?.name || 'comment'}</strong> <button type="button" id="cancelDuniyaReply">Cancel</button>`;
+            hint.querySelector('#cancelDuniyaReply')?.addEventListener('click', () => {
+              replyTo = null;
+              hint.classList.add('hidden');
+              hint.innerHTML = '';
+            });
+          }
+          commentInput?.focus();
+        },
+      });
     }
-    const div=document.createElement('div');div.style.cssText='display:flex;gap:10px;margin-bottom:12px;';
-    div.innerHTML=`<div style="width:32px;height:32px;border-radius:50%;background:var(--line);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">🪑</div><div><div style="font-weight:700;font-size:13px;">You</div><div style="font-size:13px;">${txt.replace(/@(\w+)/g,'<span style="color:var(--red);">@$1</span>')}</div></div>`;
-    document.getElementById('duniyaCommentsList').appendChild(div);
-    commentInput.value='';post.comments++;
-    saveToArchive({type:'comment',content:txt,postId:post.id,ts:new Date().toISOString()});
+  }
+  refreshComments();
+  if (canLoadPersistentComments && typeof loadContentComments === 'function') {
+    if (commentSend) commentSend.disabled = true;
+    if (typeof renderSkeleton === 'function') renderSkeleton(listEl, { variant: 'list', count: 3 });
+    loadContentComments('duniya', post)
+      .then((loaded) => {
+        if (!Array.isArray(loaded)) return;
+        comments.splice(0, comments.length, ...loaded);
+        post._comments = comments;
+        refreshComments();
+      })
+      .catch((err) => {
+        if (typeof renderErrorState === 'function') {
+          renderErrorState(listEl, {
+            title: 'Couldn’t load comments',
+            message: typeof friendlyError === 'function' ? friendlyError(err) : 'Please try again.',
+            onRetry: () => openDuniyaDetail(post),
+          });
+        }
+      })
+      .finally(() => {
+        if (commentSend) commentSend.disabled = false;
+      });
+  }
+
+  commentSend.addEventListener('click', async () => {
+    const txt = commentInput.value.trim();
+    if (!txt) return;
+    const id = typeof newCommentId === 'function' ? newCommentId() : 'c_' + Date.now();
+    const c = {
+      id,
+      parentId: replyTo || null,
+      user: typeof currentCommentUser === 'function' ? currentCommentUser() : { name: 'You', avatar: '🪑' },
+      text: txt,
+      time: 'just now',
+      pending: true,
+    };
+    const apply = () => {
+      comments.push(c);
+      post.comments = (post.comments || 0) + 1;
+      commentInput.value = '';
+      replyTo = null;
+      if (hint) {
+        hint.classList.add('hidden');
+        hint.innerHTML = '';
+      }
+      refreshComments();
+    };
+    const revert = () => {
+      const i = comments.findIndex((x) => x.id === id);
+      if (i >= 0) comments.splice(i, 1);
+      post.comments = Math.max(0, (post.comments || 1) - 1);
+      refreshComments();
+    };
+    if (typeof runOptimistic === 'function') {
+      await runOptimistic({
+        apply,
+        revert,
+        commit: async () => {
+          if (typeof assertRateLimit === 'function') await assertRateLimit('comment');
+          if (typeof persistContentComment === 'function') {
+            const saved = await persistContentComment('duniya', post, c);
+            if (saved.persisted) {
+              c.persisted = true;
+              if (Number.isFinite(saved.comments)) post.comments = saved.comments;
+              if (typeof saveToArchive === 'function') {
+                saveToArchive({ type: 'comment', content: txt, postId: post.id, parentId: c.parentId, ts: new Date().toISOString() });
+              }
+            }
+          } else if (typeof saveToArchive === 'function') {
+            saveToArchive({ type: 'comment', content: txt, postId: post.id, parentId: c.parentId, ts: new Date().toISOString() });
+          }
+          c.pending = false;
+          refreshComments();
+        },
+      });
+    } else {
+      apply();
+      c.pending = false;
+      if (typeof saveToArchive === 'function') {
+        saveToArchive({ type: 'comment', content: txt, postId: post.id, parentId: c.parentId, ts: new Date().toISOString() });
+      }
+    }
   });
   wireTagging(commentInput);
 }
@@ -454,7 +798,7 @@ function openDuniyaPostSheet(mode='post'){
       }
     }
 
-    let mediaUrl=null, thumbUrl=null, mediaPath=null, thumbPath=null, mediaType=mediaEl?.tagName==='VIDEO'?'video':'image';
+    let mediaUrl=null, thumbUrl=null, mediaPath=null, thumbPath=null, mediaWidth=null, mediaHeight=null, mediaType=mediaEl?.tagName==='VIDEO'?'video':'image';
     try{
       if(pendingMediaFile&&typeof processAndUploadMedia==='function'&&currentUser&&(typeof isMediaUploadReady!=='function'||await isMediaUploadReady())){
         shareBtn.textContent='Uploading…';
@@ -466,6 +810,8 @@ function openDuniyaPostSheet(mode='post'){
         thumbUrl=uploaded.thumb;
         mediaPath=uploaded.mediaPath;
         thumbPath=uploaded.thumbPath;
+        mediaWidth=Number(uploaded.width)||null;
+        mediaHeight=Number(uploaded.height)||null;
         mediaType=pendingMediaFile.type.startsWith('video')?'video':'image';
       } else if(mediaEl?.src && mediaEl.src.startsWith('http')){
         mediaUrl=mediaEl.src;
@@ -490,6 +836,7 @@ function openDuniyaPostSheet(mode='post'){
       media:mediaUrl,
       thumb:thumbUrl,
       mediaPath, thumbPath,
+      mediaWidth, mediaHeight,
       caption:caption||'Just posted on Duniya 🌍',
       likes:0,comments:0,shares:0,
       timestamp:'now',ts:Date.now(),tags:[],followed:false,likedByMe:false,
@@ -503,6 +850,8 @@ function openDuniyaPostSheet(mode='post'){
       thumb: thumbUrl && String(thumbUrl).startsWith('http') ? thumbUrl : null,
       mediaPath: mediaPath||null,
       thumbPath: thumbPath||null,
+      mediaWidth: mediaWidth||null,
+      mediaHeight: mediaHeight||null,
       caption:newPost.caption,
       likes:0,comments:0,shares:0,
       tags:newPost.tags,
@@ -517,6 +866,7 @@ function openDuniyaPostSheet(mode='post'){
     sheet.classList.remove('open');setTimeout(()=>sheet.classList.add('hidden'),350);
     renderDuniyaFeed();showToast('Posted to Duniya! 🌍');
     if(typeof trackPostCreated==='function') trackPostCreated('duniya');
+    if(typeof SoundLib!=='undefined'&&SoundLib.postPublish) SoundLib.postPublish();
     if(db&&currentUser){
       try{
         if(typeof assertOwnUid==='function'&&!assertOwnUid(currentUser.uid)) throw new Error('Not authorized');
@@ -533,13 +883,34 @@ function openDuniyaPostSheet(mode='post'){
 }
 
 // ===================== SHARE SHEET =====================
+async function recordDuniyaShare(post){
+  const target = duniyaPosts.find((x) => x.id === post.id) || post;
+  const previous = Math.max(0, Number(target.shares) || 0);
+  try{
+    if(typeof incrementContentShares==='function'){
+      const saved=await incrementContentShares('duniya', target);
+      if(Number.isFinite(saved.shares)){
+        target.shares=saved.shares;
+        post.shares=saved.shares;
+      }
+    }else{
+      target.shares=previous+1;
+      post.shares=target.shares;
+    }
+  }catch(e){
+    target.shares=previous;
+    post.shares=previous;
+  }
+}
+
 function openShareSheet(post){
   const sheet=document.createElement('div');sheet.className='share-sheet';
+  const shareText=`${(post.caption||post.question||'').slice(0,100)} — via Chaupaal`;
   const platforms=[
-    {icon:'💬',label:'WhatsApp',color:'#25D366',fn:()=>window.open(`https://wa.me/?text=${encodeURIComponent((post.caption||'').slice(0,100)+' — via Chaupaal')}`)},
-    {icon:'📸',label:'Instagram',color:'linear-gradient(45deg,#F58529,#DD2A7B)',fn:()=>{navigator.clipboard.writeText(post.caption||'');showToast('Caption copied for Instagram!');}},
-    {icon:'🐦',label:'Twitter/X',color:'#1DA1F2',fn:()=>window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent((post.caption||'').slice(0,200))}`)},
-    {icon:'📧',label:'Email',color:'#EA4335',fn:()=>window.open(`mailto:?body=${encodeURIComponent(post.caption||'')}`)},
+    {icon:'💬',label:'WhatsApp',color:'#25D366',fn:()=>window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`)},
+    {icon:'📸',label:'Instagram',color:'linear-gradient(45deg,#F58529,#DD2A7B)',fn:()=>{navigator.clipboard.writeText(post.caption||post.question||'');showToast('Caption copied for Instagram!');}},
+    {icon:'🐦',label:'Twitter/X',color:'#1DA1F2',fn:()=>window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent((post.caption||post.question||'').slice(0,200))}`)},
+    {icon:'📧',label:'Email',color:'#EA4335',fn:()=>window.open(`mailto:?body=${encodeURIComponent(post.caption||post.question||'')}`)},
     {icon:'🔗',label:'Copy link',color:'#666',fn:()=>{
       const id=post.firestoreId||post.id;
       const url=typeof shareUrl==='function'?shareUrl('post',id):`${location.origin}/post/${encodeURIComponent(id)}`;
@@ -558,8 +929,25 @@ function openShareSheet(post){
     <button id="closeShareSheet" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>
   `;
   document.querySelector('.device').appendChild(sheet);
-  sheet.querySelectorAll('[data-pi]').forEach(el=>el.addEventListener('click',()=>{platforms[parseInt(el.dataset.pi)].fn();sheet.remove();}));
-  sheet.querySelectorAll('[data-cid]').forEach(el=>el.addEventListener('click',()=>{const chat=SAMPLE_CHATS.find(c=>c.id===el.dataset.cid);if(chat){sheet.remove();openChatScreen(chat);setTimeout(()=>sendMsg(chat),400);};}));
+  sheet.querySelectorAll('[data-pi]').forEach(el=>el.addEventListener('click',async()=>{
+    platforms[parseInt(el.dataset.pi)].fn();
+    sheet.remove();
+    await recordDuniyaShare(post);
+  }));
+  sheet.querySelectorAll('[data-cid]').forEach(el=>el.addEventListener('click',async()=>{
+    const chat=SAMPLE_CHATS.find(c=>c.id===el.dataset.cid);
+    if(!chat) return;
+    sheet.remove();
+    openChatScreen(chat);
+    setTimeout(()=>{
+      const input=document.getElementById('chatMsgInput');
+      if(input){
+        input.value=shareText;
+        if(typeof sendMsg==='function') sendMsg(chat);
+      }
+    },400);
+    await recordDuniyaShare(post);
+  }));
   document.getElementById('closeShareSheet').addEventListener('click',()=>sheet.remove());
 }
 
@@ -570,14 +958,15 @@ let userFlags={};
 
 async function reviewShadowbans(){
   if(!db)return;
+  if(typeof isAiFeaturesEnabled==='function' && !(await isAiFeaturesEnabled())) return;
   try{
     const snap=await db.collection('shadowbans').where('reviewedAt','==',null).limit(10).get();
     for(const doc of snap.docs){
       const data=doc.data();
-      const d = await callAnthropic({model:'claude-haiku-4-5-20251001',max_tokens:100,
+      const d = await callAI({tier:'fast',max_tokens:100,feature:'moderation_shadowban',
           system:'You are a content moderation AI. Given flag count and tier, respond with JSON {"verdict":"uphold"|"lift","reason":"..."}. Uphold if count>=3 with clear pattern, lift if likely false reports.',
           messages:[{role:'user',content:`User has ${data.count} flags. Current tier: ${data.tier}. Verdict?`}]});
-      const verdict=JSON.parse(d.content?.[0]?.text||'{"verdict":"uphold"}');
+      const verdict=JSON.parse(d.text||d.content?.[0]?.text||'{"verdict":"uphold"}');
       await doc.ref.update({reviewedAt:Date.now(),verdict:verdict.verdict,reviewReason:verdict.reason,tier:verdict.verdict==='lift'?'none':data.tier});
     }
   }catch(e){}

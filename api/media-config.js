@@ -2,7 +2,7 @@
  * Public Cloudinary config for client uploads.
  * Only expose cloud name + unsigned upload preset — never the API secret.
  */
-const { sendSuccess, sendError, requireMethod } = require('./lib/http');
+const { sendSuccess, sendError, requireMethod } = require('../server-lib/http');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Cache-Control', 'public, max-age=300');

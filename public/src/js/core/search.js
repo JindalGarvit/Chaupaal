@@ -18,6 +18,36 @@
 (function () {
   /** @type {Record<string, (query: string, opts: object) => Promise<object[]>>} */
   const providers = {};
+  const SEARCH_HISTORY_KEY = 'chaupaal_search_history';
+  const SEARCH_HISTORY_LIMIT = 8;
+
+  function loadSearchHistory() {
+    try {
+      const value = JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || '[]');
+      return Array.isArray(value) ? value.filter((q) => typeof q === 'string' && q.trim()).slice(0, SEARCH_HISTORY_LIMIT) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function rememberSearch(query) {
+    const q = String(query || '').trim();
+    if (!q) return;
+    const next = [q, ...loadSearchHistory().filter((item) => item.toLowerCase() !== q.toLowerCase())].slice(0, SEARCH_HISTORY_LIMIT);
+    try { localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(next)); } catch (e) {}
+  }
+
+  function clearSearchHistory() {
+    try { localStorage.removeItem(SEARCH_HISTORY_KEY); } catch (e) {}
+  }
+
+  function escapeSearchHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
 
   function registerSearchProvider(type, fn) {
     if (typeof fn === 'function') providers[type] = fn;
@@ -206,15 +236,26 @@
       </div>
       <div id="usResults" style="flex:1;overflow:auto;padding:0 16px 24px;"></div>`;
     document.querySelector('.device')?.appendChild(overlay);
-    overlay.querySelector('#usBack')?.addEventListener('click', () => overlay.remove());
+    const closeSearch = () => {
+      clearTimeout(timer);
+      overlay.remove();
+    };
+    overlay.querySelector('#usBack')?.addEventListener('click', closeSearch);
+    overlay.addEventListener('chaupaal:dismiss', () => clearTimeout(timer));
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeSearch();
+      }
+    });
 
     const input = overlay.querySelector('#usInput');
     const resultsEl = overlay.querySelector('#usResults');
     let timer = null;
 
-    async function run() {
-      const q = input.value.trim();
-      if (!q) {
+    function renderSearchStart() {
+      const history = loadSearchHistory();
+      if (!history.length) {
         if (typeof renderEmptyState === 'function') {
           renderEmptyState(resultsEl, {
             icon: '🔍',
@@ -224,6 +265,30 @@
         } else resultsEl.innerHTML = '';
         return;
       }
+      resultsEl.innerHTML = `
+        <div class="search-history-head"><span>Recent searches</span><button type="button" data-clear-search-history>Clear</button></div>
+        <div class="search-history-list">
+          ${history.map((q) => `<button type="button" class="search-history-chip" data-history-query="${escapeSearchHtml(q)}">↗ ${escapeSearchHtml(q)}</button>`).join('')}
+        </div>`;
+      resultsEl.querySelector('[data-clear-search-history]')?.addEventListener('click', () => {
+        clearSearchHistory();
+        renderSearchStart();
+      });
+      resultsEl.querySelectorAll('[data-history-query]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          input.value = btn.dataset.historyQuery || '';
+          run({ remember: true });
+        });
+      });
+    }
+
+    async function run({ remember = false } = {}) {
+      const q = input.value.trim();
+      if (!q) {
+        renderSearchStart();
+        return;
+      }
+      if (remember) rememberSearch(q);
       if (typeof renderSkeleton === 'function') renderSkeleton(resultsEl, { variant: 'list', count: 3 });
       const { results } = await universalSearch(q, { types, limit: 20 });
       if (!results.length) {
@@ -254,6 +319,7 @@
 
       resultsEl.querySelectorAll('.us-result').forEach((btn) => {
         btn.addEventListener('click', () => {
+          rememberSearch(input.value);
           overlay.remove();
           const username = btn.dataset.username;
           if (username && typeof navigateToDeepLink === 'function') {
@@ -272,12 +338,13 @@
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         clearTimeout(timer);
-        run();
+        run({ remember: true });
       }
     });
     setTimeout(() => {
       input.focus();
-      if (initialQuery) run();
+      if (initialQuery) run({ remember: true });
+      else renderSearchStart();
     }, 50);
   }
 

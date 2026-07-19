@@ -10,6 +10,7 @@ function openRushRunner(){
   let hitFlash=0,shield=false,shieldTimer=0;
   let bestScore=parseInt(localStorage.getItem('rushrunner_best')||'0');
   let raf=null,lastTime=0;
+  let resizeObs=null;
   
   const PLAYER_SKINS=['🏃','🧑‍🦱','👩','🧔','👦'];
   let skin=PLAYER_SKINS[0];
@@ -20,13 +21,29 @@ function openRushRunner(){
     {name:'Jaipur Fort',bg:'#F72585',ground:'#B5179E',sky:'#560BAD',obstacle:'🏛️',coin:'🪙',power:'🌟'},
   ];
   let theme=THEMES[Math.floor(Math.random()*THEMES.length)];
+
+  function stopLoop(){
+    if(raf){cancelAnimationFrame(raf);raf=null;}
+    if(resizeObs){try{resizeObs.disconnect();}catch(e){}resizeObs=null;}
+  }
+
+  const begin=typeof beginGameOverlaySession==='function'?beginGameOverlaySession:null;
+  const gs=begin?begin({
+    type:'rushrunner',title:'Rush Runner',mode:'solo',overlay,
+    cleanup(){stopLoop();},
+  }):null;
+  if(begin&&(!gs||!gs.alive()))return;
+  if(!begin){
+    const device=document.querySelector('.device');
+    if(!device){if(typeof showToast==='function')showToast('Game container not found');return;}
+    device.appendChild(overlay);
+  }
+  const alive=()=>gs?gs.alive():true;
+  const schedule=(fn,ms)=>gs?gs.schedule(fn,ms):setTimeout(fn,ms);
+  const close=()=>{stopLoop();if(gs)gs.close();else overlay.remove();};
   
   overlay.innerHTML=`
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:rgba(0,0,0,0.3);flex-shrink:0;">
-      <button id="rrBack" style="background:rgba(255,255,255,0.15);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer;">←</button>
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;color:#fff;">🏃 Rush Runner · ${theme.name}</div>
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;color:var(--gold);" id="rrScore">0</div>
-    </div>
+    ${gameChromeHtml({title:'Rush Runner',subtitle:theme.name,backId:'rrBack',rightHtml:'<span class="game-chrome-metric" id="rrScore">0</span>'})}
     <div style="flex:1;position:relative;overflow:hidden;" id="rrGame">
       <canvas id="rrCanvas" style="width:100%;height:100%;display:block;"></canvas>
       <div id="rrOverlay" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;">
@@ -45,13 +62,17 @@ function openRushRunner(){
       <button id="rrRight" style="background:rgba(255,255,255,0.15);border:none;color:#fff;border-radius:12px;padding:12px 24px;font-size:20px;cursor:pointer;">▶</button>
     </div>
   `;
-  document.querySelector('.device').appendChild(overlay);
 
   const canvas=document.getElementById('rrCanvas');
+  if(!canvas){if(typeof showToast==='function')showToast('Could not start Rush Runner');close();return;}
   const ctx=canvas.getContext('2d');
   
-  function resize(){canvas.width=canvas.offsetWidth;canvas.height=canvas.offsetHeight;}
-  resize();new ResizeObserver(resize).observe(canvas);
+  function resize(){if(!alive()||!canvas)return;canvas.width=canvas.offsetWidth;canvas.height=canvas.offsetHeight;}
+  resize();
+  if(typeof ResizeObserver==='function'){
+    resizeObs=new ResizeObserver(resize);
+    resizeObs.observe(canvas);
+  }
 
   const GH=()=>canvas.height*0.75; // ground height
 
@@ -62,7 +83,6 @@ function openRushRunner(){
   }
   function spawnCoin(){
     const l=Math.floor(Math.random()*LANES);
-    const row=Math.floor(Math.random()*3);
     for(let i=0;i<3;i++) coinItems.push({lane:l,y:-60-i*40,collected:false});
   }
   function spawnPowerup(){
@@ -72,16 +92,12 @@ function openRushRunner(){
   function laneX(l){return (l+0.5)*(canvas.width/LANES);}
   
   function drawBackground(){
-    // Sky gradient
     const grad=ctx.createLinearGradient(0,0,0,GH());
     grad.addColorStop(0,theme.sky);grad.addColorStop(1,theme.bg);
     ctx.fillStyle=grad;ctx.fillRect(0,0,canvas.width,GH());
-    // Buildings
     ctx.fillStyle='rgba(0,0,0,0.2)';
     for(let i=0;i<8;i++){const bw=40+Math.random()*30;const bh=50+Math.random()*80;ctx.fillRect(i*70+(frame*0.5%(70)),GH()-bh,bw,bh);}
-    // Ground
     ctx.fillStyle=theme.ground;ctx.fillRect(0,GH(),canvas.width,canvas.height-GH());
-    // Lane markers
     ctx.strokeStyle='rgba(255,255,255,0.15)';ctx.lineWidth=2;ctx.setLineDash([20,15]);
     for(let i=1;i<LANES;i++){const x=i*(canvas.width/LANES);ctx.beginPath();ctx.moveTo(x,GH());ctx.lineTo(x,canvas.height);ctx.stroke();}
     ctx.setLineDash([]);
@@ -101,7 +117,6 @@ function openRushRunner(){
   function drawObstacles(){
     obstacles.forEach(o=>{
       const x=laneX(o.lane);
-      const y=GH()-o.h+o.y*(canvas.height/600);
       ctx.font='36px serif';ctx.textAlign='center';ctx.textBaseline='bottom';
       ctx.fillText(o.emoji,x,GH()+o.y*(canvas.height/600));
     });
@@ -130,33 +145,29 @@ function openRushRunner(){
   }
 
   function update(ts){
-    if(gameOver||!started)return;
+    if(!alive()||gameOver||!started)return;
     const dt=Math.min((ts-lastTime)/16,3);lastTime=ts;
     frame++;score=Math.floor(frame*speed*0.1);
     speed=4+score*0.003;
-    document.getElementById('rrScore').textContent=score+'m';
+    const scoreEl=document.getElementById('rrScore');
+    if(scoreEl)scoreEl.textContent=score+'m';
 
-    // Jump physics
     if(jumping){playerY+=jumpV*dt;jumpV+=1.5*dt;if(playerY>=0){playerY=0;jumping=false;jumpV=0;}}
     if(shieldTimer>0){shieldTimer-=dt;if(shieldTimer<=0)shield=false;}
 
-    // Move obstacles
     const spd=speed*(canvas.height/600)*dt;
     obstacles.forEach(o=>o.y+=spd);
     coinItems.forEach(c=>c.y+=spd);
     powerups.forEach(p=>p.y+=spd);
 
-    // Cleanup
     obstacles=obstacles.filter(o=>o.y<canvas.height);
     coinItems=coinItems.filter(c=>c.y<canvas.height);
     powerups=powerups.filter(p=>p.y<canvas.height);
 
-    // Spawn
     if(frame%Math.max(30,60-Math.floor(score/100))===0)spawnObstacle();
     if(frame%45===0)spawnCoin();
     if(frame%200===0)spawnPowerup();
 
-    // Collision
     const px=laneX(lane),py=GH()-40+playerY,pr=30;
     obstacles.forEach(o=>{
       if(o.lane!==lane)return;
@@ -183,10 +194,13 @@ function openRushRunner(){
   }
 
   function endGame(){
-    gameOver=true;cancelAnimationFrame(raf);
+    if(gameOver)return;
+    gameOver=true;cancelAnimationFrame(raf);raf=null;
     if(score>bestScore){bestScore=score;localStorage.setItem('rushrunner_best',score);}
-    recordGameResult('rushrunner',false);
+    if(gs)gs.setOutcome('lost');
+    if(typeof recordGameResult==='function')recordGameResult('rushrunner',false);
     const div=document.getElementById('rrOverlay');
+    if(!div)return;
     div.style.display='flex';div.style.background='rgba(0,0,0,0.7)';
     div.innerHTML=`
       <div style="font-size:52px;margin-bottom:12px;">💥</div>
@@ -196,44 +210,45 @@ function openRushRunner(){
       <button id="rrRestart" style="background:var(--red);color:#fff;border:none;border-radius:14px;padding:13px 32px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;">🔄 Run again</button>
       <button id="rrShare" style="background:rgba(255,255,255,0.15);color:#fff;border:none;border-radius:14px;padding:11px 28px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;cursor:pointer;">📤 Share score</button>
     `;
-    document.getElementById('rrRestart').addEventListener('click',()=>{overlay.remove();openRushRunner();});
+    document.getElementById('rrRestart').addEventListener('click',()=>{close();openRushRunner();});
     document.getElementById('rrShare').addEventListener('click',()=>{const t=`I ran ${score}m on Chaupaal Rush Runner! 🏃 Can you beat me? chaupaal-chaupaal.web.app`;navigator.share?navigator.share({text:t}):(navigator.clipboard.writeText(t),showToast('Copied!'));});
   }
 
   function startGame(){
+    if(!alive())return;
     document.getElementById('rrOverlay').style.display='none';
     started=true;lastTime=performance.now();
     raf=requestAnimationFrame(update);
   }
 
-  // Controls
-  document.getElementById('rrBack').addEventListener('click',()=>{cancelAnimationFrame(raf);overlay.remove();});
+  document.getElementById('rrBack').addEventListener('click',()=>close());
   document.getElementById('rrStart').addEventListener('click',startGame);
   document.getElementById('rrLeft').addEventListener('click',()=>{if(lane>0)lane--;});
   document.getElementById('rrRight').addEventListener('click',()=>{if(lane<LANES-1)lane++;});
   document.getElementById('rrJump').addEventListener('click',()=>{if(!jumping&&!gameOver&&started){jumping=true;jumpV=-18;}});
-  document.getElementById('rrSlide').addEventListener('click',()=>{if(!gameOver&&started){sliding=true;setTimeout(()=>sliding=false,600);}});
+  document.getElementById('rrSlide').addEventListener('click',()=>{if(!gameOver&&started){sliding=true;schedule(()=>{if(alive())sliding=false;},600);}});
 
-  // Swipe controls
   let tx=0,ty=0;
   canvas.addEventListener('touchstart',e=>{tx=e.touches[0].clientX;ty=e.touches[0].clientY;},{passive:true});
   canvas.addEventListener('touchend',e=>{
+    if(!alive()||gameOver)return;
     const dx=e.changedTouches[0].clientX-tx,dy=e.changedTouches[0].clientY-ty;
     if(Math.abs(dx)>Math.abs(dy)){if(dx<-30&&lane>0)lane--;else if(dx>30&&lane<LANES-1)lane++;}
-    else{if(dy<-30&&!jumping){jumping=true;jumpV=-18;}else if(dy>30){sliding=true;setTimeout(()=>sliding=false,600);}}
+    else{if(dy<-30&&!jumping){jumping=true;jumpV=-18;}else if(dy>30){sliding=true;schedule(()=>{if(alive())sliding=false;},600);}}
   },{passive:true});
 }
 
-// ===================== CANDY BURST (Match-3 — Candy Crush style) =====================
-function openCandyBurst(){
+// ===================== TIP TAP (Match-3) =====================
+function openTipTap(){
   const COLS=8,ROWS=8;
   const COLORS=['🔴','🟡','🔵','🟢','🟣','🟠'];
   const SPECIALS={bomb:'💣',rainbow:'🌈',lightning:'⚡'};
   
-  let level=parseInt(localStorage.getItem('candyburst_level')||'1');
+  let level=parseInt(localStorage.getItem('tiptap_level')||localStorage.getItem('candyburst_level')||'1');
   let board=[],score=0,moves=0,targetScore=0,maxMoves=0;
   let selected=null,animating=false,gameOver=false;
   let combo=0;
+  let cascadeTimer=null;
 
   const LEVELS=Array.from({length:100},(_,i)=>({
     level:i+1,
@@ -242,7 +257,32 @@ function openCandyBurst(){
     board:ROWS,
   }));
 
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:absolute;inset:0;background:#7B2FBE;z-index:80;display:flex;flex-direction:column;';
+
+  const begin=typeof beginGameOverlaySession==='function'?beginGameOverlaySession:null;
+  const gs=begin?begin({
+    type:'tiptap',title:'Tip Tap',mode:'solo',overlay,
+    cleanup(){if(cascadeTimer){clearTimeout(cascadeTimer);cascadeTimer=null;}},
+  }):null;
+  if(begin&&(!gs||!gs.alive()))return;
+  if(!begin){
+    const device=document.querySelector('.device');
+    if(!device){if(typeof showToast==='function')showToast('Game container not found');return;}
+    device.appendChild(overlay);
+  }
+  const alive=()=>gs?gs.alive():true;
+  const schedule=(fn,ms)=>{
+    if(gs)return gs.schedule(fn,ms);
+    return setTimeout(fn,ms);
+  };
+  const close=()=>{
+    if(cascadeTimer){clearTimeout(cascadeTimer);cascadeTimer=null;}
+    if(gs)gs.close();else overlay.remove();
+  };
+
   function startLevel(lvl){
+    if(!alive())return;
     const cfg=LEVELS[Math.min(lvl-1,LEVELS.length-1)];
     targetScore=cfg.target;maxMoves=cfg.moves;moves=cfg.moves;score=0;combo=0;gameOver=false;
     board=Array(ROWS).fill(null).map(()=>Array(COLS).fill(null).map(()=>randomPiece()));
@@ -257,7 +297,6 @@ function openCandyBurst(){
 
   function findMatches(){
     const matches=new Set();
-    // Horizontal
     for(let r=0;r<ROWS;r++) for(let c=0;c<COLS-2;c++){
       const p=board[r][c];if(!p?.color)continue;
       if(board[r][c+1]?.color===p.color&&board[r][c+2]?.color===p.color){
@@ -265,7 +304,6 @@ function openCandyBurst(){
         for(let i=0;i<len;i++)matches.add(`${r},${c+i}`);
       }
     }
-    // Vertical
     for(let c=0;c<COLS;c++) for(let r=0;r<ROWS-2;r++){
       const p=board[r][c];if(!p?.color)continue;
       if(board[r+1][c]?.color===p.color&&board[r+2][c]?.color===p.color){
@@ -277,9 +315,9 @@ function openCandyBurst(){
   }
 
   function clearMatches(matches){
+    if(!alive())return;
     combo++;
     const pts=matches.length*10*combo;score+=pts;moves--;
-    // Create specials for big matches
     if(matches.length>=5&&matches.length<8){
       const m=matches[0];board[m.r][m.c]={color:null,special:SPECIALS.bomb};
     } else if(matches.length>=8){
@@ -287,7 +325,6 @@ function openCandyBurst(){
     } else {
       matches.forEach(({r,c})=>board[r][c]=null);
     }
-    // Trigger specials
     matches.forEach(({r,c})=>{
       const p=board[r][c];
       if(p?.special===SPECIALS.bomb){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){if(board[r+dr]?.[c+dc])board[r+dr][c+dc]=null;}}
@@ -299,6 +336,7 @@ function openCandyBurst(){
   }
 
   function dropPieces(){
+    if(!alive())return;
     for(let c=0;c<COLS;c++){
       let empty=ROWS-1;
       for(let r=ROWS-1;r>=0;r--){
@@ -307,13 +345,16 @@ function openCandyBurst(){
       for(let r=empty;r>=0;r--)board[r][c]=randomPiece(true);
     }
     const newMatches=findMatches();
-    if(newMatches.length){setTimeout(()=>clearMatches(newMatches),300);}
+    if(newMatches.length){
+      if(cascadeTimer)clearTimeout(cascadeTimer);
+      cascadeTimer=schedule(()=>{cascadeTimer=null;clearMatches(newMatches);},300);
+    }
     else{combo=0;checkGameOver();}
     render();
   }
 
   function trySwap(r1,c1,r2,c2){
-    if(animating||gameOver)return;
+    if(!alive()||animating||gameOver)return;
     if(Math.abs(r1-r2)+Math.abs(c1-c2)!==1)return;
     animating=true;
     const tmp=board[r1][c1];board[r1][c1]=board[r2][c2];board[r2][c2]=tmp;
@@ -330,8 +371,10 @@ function openCandyBurst(){
 
   function showLevelComplete(){
     gameOver=true;
-    localStorage.setItem('candyburst_level',level+1);
-    const div=document.getElementById('cbOverlay');div.style.display='flex';
+    localStorage.setItem('tiptap_level',level+1);
+    if(gs)gs.setOutcome('won');
+    if(typeof recordGameResult==='function')recordGameResult('tiptap',true);
+    const div=document.getElementById('cbOverlay');if(!div)return;div.style.display='flex';
     div.innerHTML=`
       <div style="background:var(--white);border-radius:24px;padding:32px 24px;text-align:center;max-width:280px;margin:20px;">
         <div style="font-size:56px;margin-bottom:12px;">🎉</div>
@@ -346,7 +389,9 @@ function openCandyBurst(){
 
   function showGameOver(){
     gameOver=true;
-    const div=document.getElementById('cbOverlay');div.style.display='flex';
+    if(gs)gs.setOutcome('lost');
+    if(typeof recordGameResult==='function')recordGameResult('tiptap',false);
+    const div=document.getElementById('cbOverlay');if(!div)return;div.style.display='flex';
     div.innerHTML=`
       <div style="background:var(--white);border-radius:24px;padding:32px 24px;text-align:center;max-width:280px;margin:20px;">
         <div style="font-size:52px;margin-bottom:12px;">😢</div>
@@ -360,6 +405,7 @@ function openCandyBurst(){
   }
 
   function render(){
+    if(!alive())return;
     const grid=document.getElementById('cbGrid');if(!grid)return;
     const scoreEl=document.getElementById('cbScore');if(scoreEl)scoreEl.textContent=score.toLocaleString();
     const movesEl=document.getElementById('cbMoves');if(movesEl)movesEl.textContent=moves;
@@ -384,14 +430,8 @@ function openCandyBurst(){
   }
 
   overlay.innerHTML=`
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:linear-gradient(135deg,#FF6B9D,#C44DFF);flex-shrink:0;">
-      <button id="cbBack" style="background:rgba(255,255,255,0.2);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer;">←</button>
-      <div style="text-align:center;">
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;color:#fff;">🍬 Candy Burst · Level ${level}</div>
-      </div>
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;color:#fff;" id="cbScore">0</div>
-    </div>
-    <div style="padding:8px 16px;background:linear-gradient(135deg,#FF6B9D,#C44DFF);flex-shrink:0;">
+    ${gameChromeHtml({title:'Tip Tap',subtitle:`Level ${level}`,backId:'cbBack',rightHtml:'<span class="game-chrome-metric" id="cbScore">0</span>'})}
+    <div style="padding:8px 16px;background:rgba(0,0,0,0.18);flex-shrink:0;">
       <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:rgba(255,255,255,0.8);margin-bottom:6px;">
         <span>Target: ${LEVELS[Math.min(level-1,99)].target.toLocaleString()}</span>
         <span>Moves: <span id="cbMoves">${LEVELS[Math.min(level-1,99)].moves}</span></span>
@@ -400,13 +440,39 @@ function openCandyBurst(){
         <div id="cbProgress" style="height:100%;width:0%;background:#fff;border-radius:99px;transition:width .4s;"></div>
       </div>
     </div>
-    <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:10px;background:linear-gradient(180deg,#C44DFF,#7B2FBE);">
+    <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:10px;background:var(--game-bg-dark,#1a1a2e);">
       <div id="cbGrid" style="display:grid;grid-template-columns:repeat(${COLS},1fr);gap:4px;width:min(360px,94vw);"></div>
     </div>
     <div id="cbOverlay" style="position:absolute;inset:0;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;z-index:10;"></div>
   `;
-  document.querySelector('.device').appendChild(overlay);
-  document.getElementById('cbBack').addEventListener('click',()=>overlay.remove());
+  document.getElementById('cbBack').addEventListener('click',()=>close());
   startLevel(level);
 }
 
+// --- Game registry self-registration (arcade.js) ---
+if (typeof registerGame === 'function') {
+  registerGame({
+    id: 'rushrunner',
+    name: 'Rush Runner',
+    desc: 'Endless runner · dodge & collect',
+    icon: '🏃',
+    ratingKey: 'rushrunner',
+    gameType: 'solo',
+    solo: true,
+    selfChat: true,
+    order: 100,
+    launch() { openRushRunner(); },
+  });
+  registerGame({
+    id: 'tiptap',
+    name: 'Tip Tap',
+    desc: 'Match-3 · 100 levels',
+    icon: '✨',
+    ratingKey: 'tiptap',
+    gameType: 'solo',
+    solo: true,
+    selfChat: true,
+    order: 110,
+    launch() { openTipTap(); },
+  });
+}

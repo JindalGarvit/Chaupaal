@@ -154,7 +154,7 @@
         <div class="ui-state-icon">${icon}</div>
         <div class="ui-state-title">${title}</div>
         ${message ? `<div class="ui-state-msg">${message}</div>` : ''}
-        ${actionLabel ? `<button type="button" class="ui-state-btn" data-ui-action="empty">${actionLabel}</button>` : ''}
+        ${actionLabel ? `<button type="button" class="btn btn--secondary ui-state-btn" data-ui-action="empty">${actionLabel}</button>` : ''}
       </div>`;
     if (actionLabel && typeof onAction === 'function') {
       container.querySelector('[data-ui-action="empty"]')?.addEventListener('click', onAction);
@@ -168,7 +168,7 @@
         <div class="ui-state-icon">${icon}</div>
         <div class="ui-state-title">${title}</div>
         <div class="ui-state-msg">${message}</div>
-        ${onRetry ? `<button type="button" class="ui-state-btn ui-state-btn-primary" data-ui-action="retry">${retryLabel}</button>` : ''}
+        ${onRetry ? `<button type="button" class="btn btn--primary ui-state-btn ui-state-btn-primary" data-ui-action="retry">${retryLabel}</button>` : ''}
       </div>`;
     if (typeof onRetry === 'function') {
       container.querySelector('[data-ui-action="retry"]')?.addEventListener('click', onRetry);

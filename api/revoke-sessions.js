@@ -3,14 +3,14 @@
  * Auth required; only acts on the verified caller's uid (authorization).
  * Idempotency-Key supported to prevent double-submit races.
  */
-const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('./lib/http');
-const { requireUser, initAdmin, assertSameUser } = require('./lib/auth');
+const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
+const { requireUser, initAdmin, assertSameUser } = require('../server-lib/auth');
 const {
   getIdempotencyKey,
   beginIdempotent,
   completeIdempotent,
   abortIdempotent,
-} = require('./lib/idempotency');
+} = require('../server-lib/idempotency');
 
 module.exports = async function handler(req, res) {
   if (!requireMethod(req, res, 'POST')) return;

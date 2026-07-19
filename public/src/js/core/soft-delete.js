@@ -227,7 +227,7 @@
                       ? formatRelativeTime(it.deletedAtMs)
                       : 'recently'
                   }</div>
-              <button type="button" class="ui-state-btn ui-state-btn-primary recovery-restore" data-i="${i}">Restore</button>
+              <button type="button" class="btn btn--primary ui-state-btn ui-state-btn-primary recovery-restore" data-i="${i}">Restore</button>
             </div>`
                 )
                 .join('')

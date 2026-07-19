@@ -66,19 +66,35 @@ function renderLeaderboardUI(entries,el,{hasMore=false}={}){
   }
 }
 
-const GAME_LIBRARY=[
-  {id:'quiz',name:'Quiz Muqabala',desc:'GK, Sports, Tech & more — pick a category',icon:'🧠',featured:true,ratingKey:null},
-  {id:'chess',name:'Chess',desc:'Classic strategy, AI opponent',icon:'♟',ratingKey:'chess'},
-  {id:'snakes',name:'Snakes & Ladders',desc:'5 versions, picked at random',icon:'🐍',ratingKey:'snakes'},
-  {id:'ludo',name:'Ludo',desc:'2, 3 or 4 players',icon:'🎯',ratingKey:'ludo'},
-  {id:'uno',name:'Oh, No! Cards',desc:'Classic · Double Sided · Blaze Mode',icon:'🃏',ratingKey:'uno'},
-  {id:'business',name:'Business',desc:'Buy, build & bankrupt — 2-6 players',icon:'🏙️',ratingKey:'business'},
-  {id:'scribble',name:'Scribble',desc:'Draw & guess — any number of players',icon:'🎨',ratingKey:'scribble'},
-  {id:'rushrunner',name:'Rush Runner',desc:'Endless runner · dodge & collect',icon:'🏃',ratingKey:'rushrunner',solo:true},
-  {id:'candyburst',name:'Candy Burst',desc:'Match-3 · 100 levels',icon:'🍬',ratingKey:'candyburst',solo:true},
-  {id:'ttt',name:'Tic-Tac-Toe',desc:'Quick & unbeatable AI',icon:'⭕',ratingKey:'ttt'},
-  {id:'wordguess',name:'Word Guess',desc:'5-letter daily puzzle',icon:'📝',ratingKey:'wordguess'},
-];
+function renderDangalGamesGrid(){
+  const grid=document.getElementById('dangalGamesGrid');if(!grid)return;
+  const overall=document.getElementById('dangalOverallRating');
+  if(overall){
+    const quizRatings=userProfile?.categoryRatings||{};
+    const avgQuiz=Math.round(NEWS_CATEGORIES.reduce((s,c)=>s+(quizRatings[c]||1200),0)/NEWS_CATEGORIES.length);
+    overall.innerHTML=`<span class="dor-label">🧠 Quiz Rating</span><span class="dor-val">${avgQuiz}</span>`;
+  }
+  const library=typeof getGames==='function'?getGames({dangal:true}):[];
+  grid.innerHTML=library.map(g=>{
+    const rating=getGameRating(g.ratingKey);
+    const soloTag=g.solo?'<span style="font-size:9px;font-weight:700;background:rgba(255,201,60,0.2);color:var(--gold);border-radius:4px;padding:2px 6px;margin-left:4px;vertical-align:middle;">SOLO</span>':'';
+    return`<div class="dangal-game-tile ${g.featured?'featured':''}" data-game="${g.id}">
+      <div class="dangal-game-icon">${g.icon}</div>
+      <div>
+        <div class="dangal-game-name">${g.name}${soloTag}</div>
+        <div class="dangal-game-desc">${g.desc}</div>
+        ${rating?`<div class="dangal-game-rating-pill">⭐ ${rating}</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  grid.querySelectorAll('[data-game]').forEach(tile=>{
+    tile.addEventListener('click',()=>{
+      if(typeof handleDangalGameTap==='function')handleDangalGameTap(tile.dataset.game);
+    });
+  });
+}
+
+// handleDangalGameTap is provided by game-registry.js
 
 function getGameRating(key){
   if(!key)return null;
@@ -95,62 +111,6 @@ function recordGameResult(key,won,drew){
   ratings[key+'_lastPlayed']=Date.now();
   localStorage.setItem('chaupaal_game_ratings',JSON.stringify(ratings));
   if(db&&currentUser)db.collection('users').doc(currentUser.uid).update({[`gameRatings.${key}`]:ratings[key]}).catch(()=>{});
-}
-
-function renderDangalGamesGrid(){
-  const grid=document.getElementById('dangalGamesGrid');if(!grid)return;
-  const overall=document.getElementById('dangalOverallRating');
-  if(overall){
-    const quizRatings=userProfile?.categoryRatings||{};
-    const avgQuiz=Math.round(NEWS_CATEGORIES.reduce((s,c)=>s+(quizRatings[c]||1200),0)/NEWS_CATEGORIES.length);
-    overall.innerHTML=`<span class="dor-label">🧠 Quiz Rating</span><span class="dor-val">${avgQuiz}</span>`;
-  }
-  grid.innerHTML=GAME_LIBRARY.map(g=>{
-    const rating=getGameRating(g.ratingKey);
-    const soloTag=g.solo?'<span style="font-size:9px;font-weight:700;background:rgba(255,201,60,0.2);color:var(--gold);border-radius:4px;padding:2px 6px;margin-left:4px;vertical-align:middle;">SOLO</span>':'';
-    return`<div class="dangal-game-tile ${g.featured?'featured':''}" data-game="${g.id}">
-      <div class="dangal-game-icon">${g.icon}</div>
-      <div>
-        <div class="dangal-game-name">${g.name}${soloTag}</div>
-        <div class="dangal-game-desc">${g.desc}</div>
-        ${rating?`<div class="dangal-game-rating-pill">⭐ ${rating}</div>`:''}
-      </div>
-    </div>`;
-  }).join('');
-  grid.querySelectorAll('[data-game]').forEach(tile=>{
-    tile.addEventListener('click',()=>handleDangalGameTap(tile.dataset.game));
-  });
-}
-
-function handleDangalGameTap(gameId){
-  if(gameId==='quiz'){openQuizCategorySheet();return;}
-  if(gameId==='rushrunner'){openRushRunner();return;}
-  if(gameId==='candyburst'){openCandyBurst();return;}
-  if(gameId==='uno'){openUnoVariantPicker({name:'AI Opponent',id:'ai'});return;}
-  if(gameId==='ludo'){
-    const s=document.createElement('div');s.style.cssText='position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:20px;z-index:100;';
-    s.innerHTML=`<div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;margin-bottom:14px;">🎯 Ludo — How many players?</div>
-      ${[2,3,4].map(n=>`<button data-n="${n}" style="width:100%;padding:13px;background:var(--cream);border:2px solid var(--line);border-radius:14px;margin-bottom:8px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;cursor:pointer;">${n} Players</button>`).join('')}
-      <button id="closeLudoPick" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>`;
-    document.querySelector('.device').appendChild(s);
-    s.querySelectorAll('[data-n]').forEach(btn=>btn.addEventListener('click',()=>{s.remove();openLudoGame({name:'AI Opponent',id:'ai'},parseInt(btn.dataset.n));}));
-    document.getElementById('closeLudoPick').addEventListener('click',()=>s.remove());
-    return;
-  }
-  const sheet=document.createElement('div');
-  sheet.style.cssText='position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:22px;z-index:100;';
-  const game=GAME_LIBRARY.find(g=>g.id===gameId)||{icon:'🎮',name:gameId};
-  sheet.innerHTML=`
-    <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;margin-bottom:14px;">${game.icon} ${game.name}</div>
-    <button id="dgRandomOpp" style="width:100%;padding:14px;background:var(--red);color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;">🎯 Find a random opponent</button>
-    <button id="dgFriendOpp" style="width:100%;padding:14px;background:var(--cream);border:2px solid var(--line);border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;">👤 Challenge a friend</button>
-    <button id="dgCancelGame" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>
-  `;
-  document.querySelector('.device').appendChild(sheet);
-  document.getElementById('dgCancelGame').addEventListener('click',()=>sheet.remove());
-  const launchGame=(chat)=>{sheet.remove();const fns={chess:openChessGame,snakes:openSnakesVersionPicker,ludo:c=>openLudoGame(c,2),uno:c=>openUnoVariantPicker(c),ttt:openTicTacToe,wordguess:openWordGuess,business:c=>openBusinessGame(c,2),scribble:c=>openScribbleGame(c,[{name:c.name}]),fiveinrow:openFiveInRowGame};fns[gameId]?.(chat);};
-  document.getElementById('dgRandomOpp').addEventListener('click',()=>launchGame({name:'Priya_29',id:'random'}));
-  document.getElementById('dgFriendOpp').addEventListener('click',()=>{const name=prompt('Enter your friend username:');if(name)launchGame({name,id:'friend_'+name});});
 }
 
 function openQuizCategorySheet(){
@@ -175,7 +135,7 @@ function openQuizCategorySheet(){
       <div class="dangal-limit-info"><span>🎯 Random Muqabala today</span><span class="dangal-limit-count" id="dangalLimitCount">3 / 3 remaining</span></div>
       <div class="dangal-limit-track"><div class="dangal-limit-fill" id="dangalLimitFill" style="width:100%"></div></div>
     </div>
-    <button class="dangal-action-btn" id="aiFindMuqabalaBtn" style="background:linear-gradient(135deg,var(--navy),#2A3158);width:100%;">🤖 Find with AI (any category)</button>
+    <button class="btn btn--primary btn--block btn--lg dangal-action-btn" id="aiFindMuqabalaBtn" style="background:linear-gradient(135deg,var(--navy),#2A3158);width:100%;">🤖 Find with AI (any category)</button>
   `;
   sheet.classList.remove('hidden');requestAnimationFrame(()=>sheet.classList.add('open'));
   document.getElementById('closeQuizCatSheet').addEventListener('click',()=>{sheet.classList.remove('open');setTimeout(()=>sheet.classList.add('hidden'),350);});
@@ -184,7 +144,8 @@ function openQuizCategorySheet(){
       const cat=card.dataset.cat;
       sheet.classList.remove('open');setTimeout(()=>sheet.classList.add('hidden'),350);
       if(dailyMuqabalaCount>=DAILY_MUQABALA_LIMIT){showToast('Daily limit reached! Try AI finder or a friend challenge instead 🎯');return;}
-      useMuqabalaCredit();startMuqabala(null,cat);
+      // Credit applied once inside startMuqabala when match confirms (cancel = no charge)
+      startMuqabala(null,cat);
     });
   });
   document.getElementById('aiFindMuqabalaBtn').addEventListener('click',()=>{

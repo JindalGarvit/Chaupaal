@@ -111,26 +111,34 @@ function openAIFinder(){
     const text = input?.value.trim();
     if(!text) return;
     const responseEl = document.getElementById('aiChatResponse');
+    if(typeof isAiFeaturesEnabledSync==='function' && !isAiFeaturesEnabledSync()){
+      if(responseEl) responseEl.innerHTML = `<div class="ai-chatbot-response"><div class="ai-label">AI</div>${typeof AI_DISABLED_MSG==='string'?AI_DISABLED_MSG:'AI is temporarily paused. Use the filter chips below.'}</div>`;
+      return;
+    }
     if(responseEl) responseEl.innerHTML = `<div class="ai-chatbot-response"><div class="ai-label">AI thinking...</div>Analysing your description...</div>`;
 
     try{
-      const data = await callAnthropic({
-          model:"claude-haiku-4-5-20251001",max_tokens:300,
+      const data = await callAI({
+          tier:'fast', max_tokens:300, feature:'dangal_matchmaking',
           system:`You are a matchmaking assistant for Chaupaal, an Indian news quiz app. A user describes their ideal Muqabala opponent. Extract filters and return ONLY JSON: {"region":"...","country":"...","gender":"...","age":"...","category":"...","level":"...","summary":"one friendly sentence about who we will find"}. Use these options - region: ${AI_FILTERS.region.join('/')}, gender: ${AI_FILTERS.gender.join('/')}, age: ${AI_FILTERS.age.join('/')}, category: ${AI_FILTERS.category.join('/')}, level: ${AI_FILTERS.level.join('/')}. If not mentioned use "Any" or "Similar to me".`,
           messages:[{role:"user",content:text}]
         });
-      const raw = data.content?.map(b=>b.text||'').join('')||'{}';
+      const raw = data.text||data.content?.map(b=>b.text||'').join('')||'{}';
       const parsed = JSON.parse(raw.replace(/```json|```/g,'').trim());
-      // Apply extracted filters
       Object.entries(parsed).forEach(([k,v])=>{if(k!=='summary'&&AI_FILTERS[k])selectedFilters[k]=v;});
-      if(responseEl) responseEl.innerHTML = `<div class="ai-chatbot-response"><div class="ai-label">🤖 AI understood</div>${parsed.summary||'Looking for your ideal opponent...'}</div>`;
-      // Refresh chips
+      const summaryHtml = typeof renderMarkdown==='function'
+        ? renderMarkdown(parsed.summary||'Looking for your ideal opponent...')
+        : (parsed.summary||'Looking for your ideal opponent...');
+      if(responseEl) responseEl.innerHTML = `<div class="ai-chatbot-response"><div class="ai-label">🤖 AI understood</div><div class="ai-md">${summaryHtml}</div></div>`;
       overlay.querySelectorAll('.ai-filter-chip').forEach(chip=>{
         const {key,val}=chip.dataset;
         chip.classList.toggle('active',selectedFilters[key]===val);
       });
     }catch(e){
-      if(responseEl) responseEl.innerHTML = `<div class="ai-chatbot-response"><div class="ai-label">AI</div>Got it — I'll search with your description as a guide.</div>`;
+      const msg = (e&&e.code==='AI_DISABLED')
+        ? (typeof AI_DISABLED_MSG==='string'?AI_DISABLED_MSG:e.message)
+        : "Got it — I'll search with your description as a guide.";
+      if(responseEl) responseEl.innerHTML = `<div class="ai-chatbot-response"><div class="ai-label">AI</div>${msg}</div>`;
     }
   };
 
@@ -312,80 +320,301 @@ function wirePeepalAskAiTarget(){
     const resultEl = document.getElementById('peepalAiTargetResult');
     if(!resultEl)return;
     resultEl.classList.remove('hidden');
+    if(typeof isAiFeaturesEnabled==='function' && !(await isAiFeaturesEnabled())){
+      resultEl.textContent = typeof AI_DISABLED_MSG==='string'?AI_DISABLED_MSG:'AI is temporarily paused.';
+      return;
+    }
     resultEl.textContent = '🤖 Thinking...';
     try{
-      const data = await callAnthropic({
-          model:"claude-haiku-4-5-20251001",max_tokens:200,
-          system:`You are a content targeting assistant for Chaupaal, an Indian social news app. Given a question, suggest the most relevant target audience in 1-2 sentences. Be specific and friendly. Consider Indian demographics.`,
+      const data = await callAI({
+          tier:'fast', max_tokens:200, feature:'peepal_ai_target',
+          system:`You are a content targeting assistant for Chaupaal, an Indian social news app. Given a question, suggest the most relevant target audience in 1-2 sentences. Be specific and friendly. Consider Indian demographics. Light markdown is OK.`,
           messages:[{role:"user",content:`Question: "${qText||'general question'}". Who should this reach?`}]
         });
-      resultEl.textContent = '🤖 ' + (data.content?.map(b=>b.text||'').join('')||'Best for general audience.');
-    }catch(e){ resultEl.textContent = '🤖 Best for general audience on Chaupaal.'; }
+      const text = data.text||data.content?.map(b=>b.text||'').join('')||'Best for general audience.';
+      if(typeof renderMarkdown==='function'){
+        resultEl.innerHTML = '🤖 <span class="ai-md">'+renderMarkdown(text)+'</span>';
+      } else {
+        resultEl.textContent = '🤖 ' + text;
+      }
+    }catch(e){
+      resultEl.textContent = (e&&e.code==='AI_DISABLED')
+        ? (typeof AI_DISABLED_MSG==='string'?AI_DISABLED_MSG:e.message)
+        : '🤖 Best for general audience on Chaupaal.';
+    }
   });
 }
 
 // init limit UI on load
 updateLimitUI();
 
-function startMuqabala(opponentName,mode){
-  const overlay=document.getElementById('muqabalaOverlay');
-  overlay.classList.remove('hidden');
-  let matchFound=false; // track whether we found a match before user cancels
+// ===================== MUQABALA ENGINE (unified content sources) =====================
+const MUQABALA_TIMER_OPTIONS = [10, 15, 20, 30];
+const MUQABALA_DEFAULT_TIMER = 20;
+/** @type {Record<string, {questions: object[], timerSeconds: number, opponent: string, mode: string, source: string}>} */
+window.__pendingMuqabalaChallenges = window.__pendingMuqabalaChallenges || {};
 
-  overlay.innerHTML=`
-    <div class="muqabala-header">
-      <div class="muqabala-title">⚔️ Muqabala — ${mode}</div>
-      <button class="icon-btn" id="closeMuqabala">✕</button>
-    </div>
+function normalizeMuqabalaOptions(opts){
+  const o = opts && typeof opts === 'object' ? opts : {};
+  let timer = Number(o.timerSeconds);
+  if(!MUQABALA_TIMER_OPTIONS.includes(timer)) timer = MUQABALA_DEFAULT_TIMER;
+  const questions = Array.isArray(o.questions) && o.questions.length
+    ? o.questions.map(normalizeMuqabalaQuestion).filter(q=>q.q && q.options.length>=2)
+    : null;
+  return {
+    questions,
+    timerSeconds: timer,
+    source: o.source || (questions ? 'manual' : 'bank'),
+    skipMatchmaking: !!o.skipMatchmaking,
+    skipCredit: !!o.skipCredit,
+  };
+}
+
+function normalizeMuqabalaQuestion(q){
+  if(!q || typeof q !== 'object') return { q:'', options:[], correct:null, philosophical:false };
+  const options = Array.isArray(q.options)
+    ? q.options.map(x=>String(x==null?'':x)).filter(Boolean).slice(0,4)
+    : [];
+  let correct = q.correct;
+  if(correct != null){
+    correct = parseInt(correct, 10);
+    if(Number.isNaN(correct) || correct < 0 || correct >= options.length) correct = null;
+  } else {
+    correct = null;
+  }
+  return {
+    q: String(q.q || q.text || '').trim(),
+    options,
+    correct,
+    philosophical: !!q.philosophical,
+  };
+}
+
+/** Category/static bank — prefer SAMPLE_* by category, fill from MUQABALA_QUESTIONS. */
+function pickMuqabalaQuestions(mode, count){
+  const n = Math.max(1, Math.min(20, count || 10));
+  const cat = mode && !['Mixed','Rapid','Custom','AI'].includes(mode) ? mode : null;
+  let pool = [];
+  const pushCat = (arr)=>{
+    if(!Array.isArray(arr)) return;
+    arr.forEach(q=>{
+      if(q.personal) return;
+      if(cat && q.category && q.category !== cat) return;
+      pool.push(q);
+    });
+  };
+  if(typeof SAMPLE_QUESTIONS !== 'undefined') pushCat(SAMPLE_QUESTIONS);
+  if(typeof SAMPLE_BONUS !== 'undefined') pushCat(SAMPLE_BONUS);
+  const bank = typeof MUQABALA_QUESTIONS !== 'undefined' ? MUQABALA_QUESTIONS : [];
+  if(pool.length < n) pool = pool.concat(bank);
+  if(!pool.length) pool = bank.slice();
+  return [...pool].sort(()=>Math.random()-0.5).slice(0,n).map(normalizeMuqabalaQuestion);
+}
+
+/**
+ * AI quiz generation for Muqabala. Returns null when AI is disabled (never throws for kill-switch).
+ * @returns {Promise<object[]|null>}
+ */
+async function generateMuqabalaQuestionsAI({ category, count } = {}){
+  const n = Math.max(1, Math.min(10, count || 5));
+  const cat = category || 'GK';
+  const aiOn = typeof isAiFeaturesEnabled === 'function'
+    ? await isAiFeaturesEnabled()
+    : (typeof isAiFeaturesEnabledSync === 'function' ? isAiFeaturesEnabledSync() : false);
+  if(!aiOn) return null;
+  if(typeof callAI !== 'function') return null;
+
+  try{
+    const data = await callAI({
+      tier: 'fast',
+      max_tokens: 1400,
+      feature: 'muqabala_quiz_gen',
+      system: `You generate multiple-choice quiz questions for Chaupaal Muqabala (Indian social news quiz). Return ONLY a JSON array of ${n} objects: [{"q":"question text","options":["A","B","C","D"],"correct":0}] where correct is the 0-based index of the right answer. Category focus: ${cat}. Keep options short. No markdown fences.`,
+      messages: [{ role: 'user', content: `Generate ${n} ${cat} MCQ questions for a friendly Muqabala duel.` }],
+    });
+    const raw = (data.text || data.content?.map(b=>b.text||'').join('') || '').replace(/```json|```/g,'').trim();
+    const start = raw.indexOf('[');
+    const end = raw.lastIndexOf(']');
+    const jsonStr = start >= 0 && end > start ? raw.slice(start, end + 1) : raw;
+    const parsed = JSON.parse(jsonStr);
+    if(!Array.isArray(parsed)) return null;
+    const normalized = parsed.map(normalizeMuqabalaQuestion).filter(q=>q.q && q.options.length >= 2 && q.correct != null);
+    return normalized.length ? normalized.slice(0, n) : null;
+  }catch(e){
+    if(e && e.code === 'AI_DISABLED') return null;
+    console.warn('[muqabala] AI quiz gen failed', e);
+    return null;
+  }
+}
+
+/**
+ * @param {string|null} opponentName
+ * @param {string} mode - category / Custom / AI label
+ * @param {object} [opts] - { questions, timerSeconds, source, skipMatchmaking, skipCredit }
+ */
+function startMuqabala(opponentName, mode, opts){
+  const overlay = document.getElementById('muqabalaOverlay');
+  if(!overlay){ showToast('Muqabala unavailable'); return; }
+  if(typeof prepareGameOverlay==='function') prepareGameOverlay(overlay,{theme:'light',gameId:'muqabala'});
+  const options = normalizeMuqabalaOptions(opts);
+  const label = mode || 'GK';
+  const qCount = options.questions ? options.questions.length : 10;
+  overlay.classList.remove('hidden');
+  let matchFound = false;
+  let cancelled = false;
+  let searchTimer = null;
+  let startTimer = null;
+  let unregisterSearchOverlay = null;
+
+  const clearSearchTimers = ()=>{
+    if(searchTimer){ clearTimeout(searchTimer); searchTimer = null; }
+    if(startTimer){ clearTimeout(startTimer); startTimer = null; }
+  };
+  const releaseSearchScope = ()=>{
+    if(!unregisterSearchOverlay) return;
+    try{ unregisterSearchOverlay(); }catch(e){}
+    unregisterSearchOverlay = null;
+  };
+  const cancelSearch = ()=>{
+    cancelled = true;
+    clearSearchTimers();
+    releaseSearchScope();
+    overlay.classList.add('hidden');
+  };
+  if(typeof registerScopedOverlay === 'function'){
+    unregisterSearchOverlay = registerScopedOverlay(
+      typeof OVERLAY_SCOPE_CHAT !== 'undefined' ? OVERLAY_SCOPE_CHAT : 'chat',
+      overlay,
+      cancelSearch
+    );
+  }
+
+  const beginRun = (opp)=>{
+    if(cancelled) return;
+    matchFound = true;
+    // Random/category: credit once at match confirm. Friend/custom challenges: unlimited.
+    if(!opponentName && !options.skipCredit) useMuqabalaCredit();
+    startTimer = setTimeout(()=>{
+      if(cancelled) return;
+      releaseSearchScope();
+      runMuqabala(overlay, opp, label, options);
+    }, options.skipMatchmaking ? 400 : 900);
+  };
+
+  if(options.skipMatchmaking){
+    overlay.innerHTML = `
+      ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:label,backId:'closeMuqabala'}):`<div class="muqabala-header"><div class="muqabala-title">Muqabala — ${label}</div><button class="icon-btn" id="closeMuqabala">←</button></div>`}
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;">
+        <div style="font-size:48px;">🎯</div>
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">${opponentName ? `Challenge vs ${opponentName}` : 'Starting…'}</div>
+        <div style="font-size:13px;color:var(--muted);">${label} · ${qCount} questions · ${options.timerSeconds}s each</div>
+      </div>
+    `;
+    document.getElementById('closeMuqabala').addEventListener('click',()=>{
+      cancelSearch();
+    });
+    beginRun(opponentName || 'Priya_29');
+    return;
+  }
+
+  overlay.innerHTML = `
+    ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:label,backId:'closeMuqabala'}):`<div class="muqabala-header"><div class="muqabala-title">Muqabala — ${label}</div><button class="icon-btn" id="closeMuqabala">←</button></div>`}
     <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;">
       <div style="font-size:48px;animation:pulse 1s ease-in-out infinite;">⚡</div>
       <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">${opponentName?`Sending challenge to ${opponentName}…`:'Finding a worthy opponent…'}</div>
-      <div style="font-size:13px;color:var(--muted);">${mode} · 10 questions · 15s each</div>
+      <div style="font-size:13px;color:var(--muted);">${label} · ${qCount} questions · ${options.timerSeconds}s each</div>
     </div>
   `;
-  // Cancel during search = no credit used
   document.getElementById('closeMuqabala').addEventListener('click',()=>{
+    cancelSearch();
     if(!matchFound) showToast('Search cancelled — no Muqabala used 👍');
-    overlay.classList.add('hidden');
   });
 
-  const delay=opponentName?2800:1800;
-  setTimeout(()=>{
-    const opp=opponentName||'Priya_29';
-    overlay.querySelector('div:nth-child(2)').innerHTML=`
-      <div style="font-size:48px;">🎯</div>
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">${opponentName?`${opp} accepted!`:`${opp} found!`}</div>
-      <div style="font-size:13px;color:var(--muted);">Starting now…</div>
-    `;
-    // Credit used HERE — match confirmed, game about to start
-    matchFound=true;
-    if(!opponentName) useMuqabalaCredit(); // only for random, not friend challenges
-    setTimeout(()=>runMuqabala(overlay,opp,mode),900);
-  },delay);
+  const delay = opponentName ? 2800 : 1800;
+  searchTimer = setTimeout(()=>{
+    if(cancelled) return;
+    const opp = opponentName || 'Priya_29';
+    const body = overlay.children[1];
+    if(body){
+      body.innerHTML = `
+        <div style="font-size:48px;">🎯</div>
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">${opponentName?`${opp} accepted!`:`${opp} found!`}</div>
+        <div style="font-size:13px;color:var(--muted);">Starting now…</div>
+      `;
+    }
+    beginRun(opp);
+  }, delay);
 }
 
-function runMuqabala(overlay,oppName,mode){
-  const questions=[...MUQABALA_QUESTIONS].sort(()=>Math.random()-0.5).slice(0,10);
-  let qIdx=0,myScore=0,oppScore=0,timerInterval=null;
-  const philosophicalAnswers=[];
+function runMuqabala(overlay, oppName, mode, opts){
+  const options = normalizeMuqabalaOptions(opts);
+  const questions = options.questions && options.questions.length
+    ? options.questions
+    : pickMuqabalaQuestions(mode, 10);
+  const timerSeconds = options.timerSeconds;
+  const totalQ = questions.length;
+  let qIdx = 0, myScore = 0, oppScore = 0, timerInterval = null;
+  const philosophicalAnswers = [];
+  let sessionEnded = false;
+  let sessionResult = null;
+
+  let session = null;
+  if(typeof createGameSession === 'function'){
+    session = createGameSession({
+      id: 'muqabala_' + Date.now(),
+      type: 'quiz',
+      title: 'Muqabala',
+      mode: String(mode || 'GK'),
+      context: {
+        opponent: oppName,
+        source: options.source,
+        timerSeconds,
+        overlayScope: typeof OVERLAY_SCOPE_CHAT !== 'undefined' ? OVERLAY_SCOPE_CHAT : 'chat',
+      },
+      mount(){
+        return overlay;
+      },
+      removeOnCleanup: false,
+      end(result){
+        sessionResult = result;
+      },
+      cleanup(){
+        if(timerInterval){ clearInterval(timerInterval); timerInterval = null; }
+        if(['dismissed','aborted','quit','error'].includes(sessionResult)){
+          overlay.classList.add('hidden');
+        }
+      },
+    });
+    try{ session.init(); }catch(e){ console.warn('[muqabala] session init', e); }
+  }
+
+  function endSession(result){
+    if(sessionEnded) return;
+    sessionEnded = true;
+    if(timerInterval){ clearInterval(timerInterval); timerInterval = null; }
+    if(session && typeof session.end === 'function'){
+      try{ session.end(result); }catch(e){}
+      session = null;
+    }
+  }
+
+  function closeOverlay(result){
+    endSession(result || 'dismissed');
+    overlay.classList.add('hidden');
+  }
 
   function renderQ(){
-    if(qIdx>=questions.length)return showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalAnswers);
-    const data=questions[qIdx];
-    let timeLeft=data.philosophical?999:15; // no countdown for philosophical
-    let answered=false;
-    let timerPaused=false;
+    if(qIdx >= questions.length){
+      return showMuqabalaResult(overlay, myScore, oppScore, oppName, mode, philosophicalAnswers, options, endSession);
+    }
+    const data = questions[qIdx];
+    let timeLeft = data.philosophical ? 999 : timerSeconds;
+    let answered = false;
+    let timerPaused = false;
 
-    overlay.innerHTML=`
-      <div class="muqabala-header">
-        <div class="muqabala-title">Q${qIdx+1}/10 · ${mode}</div>
-        <button class="icon-btn" id="closeMuqabala2">✕</button>
-      </div>
-      <div class="vs-row">
-        <div class="player-chip me">🧑 ${t('you')||'You'} — ${myScore}</div>
-        <div class="vs-label">${t('vs')}</div>
-        <div class="player-chip opp">🎯 ${oppName} — ${oppScore}</div>
-      </div>
+    overlay.innerHTML = `
+      ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:`Q${qIdx+1}/${totalQ} · ${mode}`,backId:'closeMuqabala2'}):`<div class="muqabala-header"><div class="muqabala-title">Q${qIdx+1}/${totalQ} · ${mode}</div><button class="icon-btn" id="closeMuqabala2">←</button></div>`}
+      ${typeof gameScoreHtml==='function'?gameScoreHtml({label:t('you')||'You',score:myScore},{label:oppName,score:oppScore}):`<div class="vs-row"><div class="player-chip me">${t('you')||'You'} — ${myScore}</div><div class="player-chip opp">${oppName} — ${oppScore}</div></div>`}
       <div class="muqabala-timer" id="mTimer" style="${data.philosophical?'font-size:14px;color:var(--gold);':''}">
         ${data.philosophical?t('philosophical_label'):`${timeLeft}`}
       </div>
@@ -406,26 +635,24 @@ function runMuqabala(overlay,oppName,mode){
       </div>
     `;
 
-    document.getElementById('closeMuqabala2').addEventListener('click',()=>{clearInterval(timerInterval);overlay.classList.add('hidden');});
+    document.getElementById('closeMuqabala2').addEventListener('click',()=>closeOverlay('dismissed'));
 
-    const optBtns=overlay.querySelectorAll('.opt');
+    const optBtns = overlay.querySelectorAll('.opt');
 
-    // Philosophical: all options go green, record answer, feed personality
     if(data.philosophical){
       optBtns.forEach(btn=>btn.addEventListener('click',()=>{
         if(answered)return; answered=true; clearInterval(timerInterval);
-        const chosen=parseInt(btn.dataset.i);
+        const chosen=parseInt(btn.dataset.i,10);
         const chosenText=data.options[chosen];
         philosophicalAnswers.push({q:data.q,answer:chosenText});
-        updatePersonalityFromAurSunao(data.q,chosenText);
+        if(typeof updatePersonalityFromAurSunao==='function') updatePersonalityFromAurSunao(data.q,chosenText);
         optBtns.forEach(b=>{b.disabled=true;b.classList.add('correct');b.querySelector('.mark').textContent='✓';});
-        if(!quietMode)SoundLib.playFeedback(true,'default');
+        if(!quietMode && typeof SoundLib!=='undefined') SoundLib.playFeedback(true,'default');
         const oi=overlay.querySelector('#oppInd');if(oi)oi.textContent=t('opp_correct',{name:oppName});
-        myScore++; // philosophical always scores
+        myScore++;
         setTimeout(()=>{qIdx++;renderQ();},1400);
       }));
 
-      // Type-in option: pause timer, collect text
       const typeInput=overlay.querySelector('#philoTypeInput');
       const sendBtn=overlay.querySelector('#philoSendBtn');
       if(typeInput){
@@ -440,18 +667,17 @@ function runMuqabala(overlay,oppName,mode){
           if(!typed)return;
           if(!answered){ answered=true; clearInterval(timerInterval); }
           philosophicalAnswers.push({q:data.q,answer:typed,typed:true});
-          updatePersonalityFromAurSunao(data.q,typed);
+          if(typeof updatePersonalityFromAurSunao==='function') updatePersonalityFromAurSunao(data.q,typed);
           optBtns.forEach(b=>{b.disabled=true;b.classList.add('dim');});
-          if(!quietMode)SoundLib.playFeedback(true,'default');
+          if(!quietMode && typeof SoundLib!=='undefined') SoundLib.playFeedback(true,'default');
           myScore++;
           setTimeout(()=>{qIdx++;renderQ();},1400);
         });
       }
     } else {
-      // Regular question
       optBtns.forEach(btn=>btn.addEventListener('click',()=>{
         if(answered)return; answered=true; clearInterval(timerInterval);
-        const chosen=parseInt(btn.dataset.i);
+        const chosen=parseInt(btn.dataset.i,10);
         const isCorrect=data.correct!==null&&chosen===data.correct;
         if(isCorrect)myScore++;
         optBtns.forEach(b=>b.disabled=true);
@@ -460,7 +686,7 @@ function runMuqabala(overlay,oppName,mode){
           else if(i===chosen&&!isCorrect){b.classList.add('wrong');b.querySelector('.mark').textContent='✕';}
           else b.classList.add('dim');
         });
-        if(!quietMode)SoundLib.playFeedback(isCorrect,'default');
+        if(!quietMode && typeof SoundLib!=='undefined') SoundLib.playFeedback(isCorrect,'default');
         const oi=overlay.querySelector('#oppInd');
         const oppCorrectLocal=Math.random()<0.62;
         if(oi)oi.textContent=oppCorrectLocal?t('opp_correct',{name:oppName}):t('opp_wrong',{name:oppName});
@@ -468,12 +694,15 @@ function runMuqabala(overlay,oppName,mode){
         setTimeout(()=>{qIdx++;renderQ();},900);
       }));
 
-      // Simulated opponent for non-philosophical
-      const oppDelay=1200+Math.random()*10000;
+      const oppCapMs = Math.max(2000, (timerSeconds - 2) * 1000);
+      const oppDelay=1200+Math.random()*Math.max(1000, oppCapMs - 1200);
       const oppCorrect=Math.random()<0.62;
-      setTimeout(()=>{const oi=overlay.querySelector('#oppInd');if(oi&&!answered)oi.textContent=oppCorrect?t('opp_correct',{name:oppName}):t('opp_wrong',{name:oppName});if(oppCorrect)oppScore++;},Math.min(oppDelay,13000));
+      setTimeout(()=>{
+        const oi=overlay.querySelector('#oppInd');
+        if(oi&&!answered)oi.textContent=oppCorrect?t('opp_correct',{name:oppName}):t('opp_wrong',{name:oppName});
+        if(oppCorrect && !answered) oppScore++;
+      }, Math.min(oppDelay, oppCapMs));
 
-      // Countdown timer — pauses while user types
       timerInterval=setInterval(()=>{
         if(timerPaused)return;
         timeLeft--;
@@ -494,33 +723,55 @@ function runMuqabala(overlay,oppName,mode){
   renderQ();
 }
 
-function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalAnswers){
+function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalAnswers,opts,endSession){
+  const options = normalizeMuqabalaOptions(opts);
   const won=myScore>oppScore,tie=myScore===oppScore;
-  const nudge=philosophicalAnswers.length>0?NUDGES_POST_MUQABALA[Math.floor(Math.random()*NUDGES_POST_MUQABALA.length)].replace('{answer}',philosophicalAnswers[0].answer):'Ek acha muqabala tha! Kuch aur baatein karein? 😊';
+  const resultKey = tie ? 'draw' : (won ? 'win' : 'loss');
+  if(typeof endSession === 'function') endSession(resultKey);
+
+  const nudge=philosophicalAnswers.length>0 && typeof NUDGES_POST_MUQABALA!=='undefined'
+    ? NUDGES_POST_MUQABALA[Math.floor(Math.random()*NUDGES_POST_MUQABALA.length)].replace('{answer}',philosophicalAnswers[0].answer)
+    : 'Ek acha muqabala tha! Kuch aur baatein karein? 😊';
   overlay.innerHTML=`
-    <div class="muqabala-header">
-      <div class="muqabala-title">⚔️ Muqabala khatam!</div>
-      <button class="icon-btn" id="closeMuqabala3">✕</button>
-    </div>
+    ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:'Game over',backId:'closeMuqabala3'}):`<div class="muqabala-header"><div class="muqabala-title">Muqabala over!</div><button class="icon-btn" id="closeMuqabala3">←</button></div>`}
     <div class="muqabala-result">
       <div style="text-align:center;font-size:48px;">${tie?'🤝':won?'🏆':'😅'}</div>
       <div style="text-align:center;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;">${tie?"It's a tie!":(won?"You won!":`${oppName} won this time`)}</div>
-      <div class="result-row ${won?'win':tie?'':'loss'}"><span>🧑 Aap</span><span>${myScore}</span></div>
-      <div class="result-row"><span>🎯 ${oppName}</span><span>${oppScore}</span></div>
+      ${typeof gameScoreHtml==='function'?gameScoreHtml({label:'You',score:myScore},{label:oppName,score:oppScore}):`<div class="result-row"><span>You</span><span>${myScore}</span></div><div class="result-row"><span>${oppName}</span><span>${oppScore}</span></div>`}
       ${philosophicalAnswers.length>0?`<div class="nudge-box"><div class="nudge-label">💬 Baithak mein baat karein</div><div class="nudge-text">${nudge}</div></div>`:''}
       <button class="chat-start-btn" id="startChatBtn">💬 Chat with ${oppName}</button>
       <button style="margin-top:8px;width:100%;padding:13px;background:var(--red);color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;cursor:pointer;" id="rematchBtn">🔁 Rematch</button>
     </div>
   `;
   document.getElementById('closeMuqabala3').addEventListener('click',()=>overlay.classList.add('hidden'));
-  document.getElementById('rematchBtn').addEventListener('click',()=>startMuqabala(oppName,mode));
+  document.getElementById('rematchBtn').addEventListener('click',()=>{
+    startMuqabala(oppName, mode, {
+      questions: options.questions || undefined,
+      timerSeconds: options.timerSeconds,
+      source: options.source,
+      skipMatchmaking: options.source === 'manual' || options.source === 'ai',
+    });
+  });
   document.getElementById('startChatBtn').addEventListener('click',()=>{overlay.classList.add('hidden');showToast('Check Baithak for your chat! 🏠');});
-  // Viral challenge link
   const shareBtn=document.createElement('button');
   shareBtn.style.cssText='margin-top:8px;width:100%;padding:13px;background:var(--cream);color:var(--ink);border:2px solid var(--line);border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;cursor:pointer;';
   shareBtn.textContent='🔗 Challenge others to beat your score';
   shareBtn.addEventListener('click',()=>generateChallengeLink(myScore,mode));
   overlay.querySelector('.muqabala-result').appendChild(shareBtn);
-  // Broadcast to groups
-  if(myScore>0) setTimeout(()=>broadcastDuelResult(oppName,myScore,oppScore),600);
+  if(myScore>0 && typeof broadcastDuelResult==='function') setTimeout(()=>broadcastDuelResult(oppName,myScore,oppScore),600);
+}
+
+/** Launch a stored custom challenge by id (chat bubble Answer button). */
+function launchPendingMuqabalaChallenge(challengeId){
+  const payload = window.__pendingMuqabalaChallenges && window.__pendingMuqabalaChallenges[challengeId];
+  if(!payload || !payload.questions || !payload.questions.length){
+    showToast('Challenge expired — create a new one');
+    return;
+  }
+  startMuqabala(payload.opponent || null, payload.mode || 'Custom', {
+    questions: payload.questions,
+    timerSeconds: payload.timerSeconds,
+    source: payload.source || 'manual',
+    skipMatchmaking: true,
+  });
 }
