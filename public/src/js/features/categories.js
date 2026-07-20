@@ -599,16 +599,38 @@ document.addEventListener('click',e=>{
 dayCheckModal.querySelector('.day-check-send').addEventListener('click',async()=>{
   const text=dayCheckModal.querySelector('#dayCheckText')?.value?.trim();
   if(!text)return;
+  // Act-based celebration only (4B) — never surface content-reactive copy about what they wrote.
+  if(typeof playJournalFinishAnimation==='function') playJournalFinishAnimation();
+  else showToast('Entry saved');
   dayCheckModal.classList.remove('open');
-  showToast('Saved to your Archive 🗄️');
   saveToArchive({type:'journal_entry',content:text,ts:new Date().toISOString()});
-  await analyseEveningCheckIn(text);
+  // Internal analysis may still run when AI is on — do not show mood/topics UI from it.
+  try{ await analyseEveningCheckIn(text); }catch(e){}
   if(db&&currentUser){
     try{await db.collection('daily_checkins').add({uid:currentUser.uid,text,date:new Date().toISOString(),analysed:false,createdAt:firebase.firestore.FieldValue.serverTimestamp()});}catch(e){}
   }
   try{ if(typeof onChaupaalJournalCompleted==='function') await onChaupaalJournalCompleted(); }catch(e){}
+  try{
+    const streak=Number(localStorage.getItem('chaupaal_journal_day_streak')||'0')+1;
+    localStorage.setItem('chaupaal_journal_day_streak',String(streak));
+    if(typeof updateJournalGrowthMotif==='function') updateJournalGrowthMotif(streak);
+  }catch(e){}
 });
 dayCheckModal.querySelector('.day-check-skip').addEventListener('click',()=>dayCheckModal.classList.remove('open'));
+
+// Typing-rhythm ambient particles (act-based, ignores content)
+(function wireJournalTypingAmbient(){
+  const ta=dayCheckModal?.querySelector?.('#dayCheckText');
+  if(!ta||ta.dataset.journalAmbient) return;
+  ta.dataset.journalAmbient='1';
+  let last=0;
+  ta.addEventListener('input',()=>{
+    const now=Date.now();
+    if(now-last<90) return;
+    last=now;
+    if(typeof pulseJournalAmbient==='function') pulseJournalAmbient();
+  });
+})();
 
 // ===================== PEEPAL =====================
 const SAMPLE_PEEPAL=[

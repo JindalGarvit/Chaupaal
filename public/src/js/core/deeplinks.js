@@ -70,27 +70,74 @@
     const sheet = document.createElement('div');
     sheet.id = 'publicProfileSheet';
     sheet.className = 'archive-overlay';
-    const interests = [...new Set([...(u.interests || []), u.topCat].filter(Boolean))];
+    const profile = u.profile || {};
+    const interests = [
+      ...new Set([...(profile.interests || u.interests || []), ...(profile.hobbies || []).slice(0, 4), u.topCat].filter(Boolean)),
+    ];
+    const prompts = Array.isArray(profile.prompts) ? profile.prompts : Array.isArray(u.prompts) ? u.prompts : [];
+    const media = Array.isArray(profile.profileMedia) ? profile.profileMedia : Array.isArray(u.profileMedia) ? u.profileMedia : [];
+    const bio = profile.bio || u.bio || '';
     sheet.innerHTML = `
       <div class="archive-header">
         <button type="button" data-public-profile-close aria-label="Back" style="background:none;border:none;font-size:22px;cursor:pointer;">←</button>
         <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">Profile</div>
         ${uname ? '<button type="button" data-public-profile-share aria-label="Share profile" style="background:none;border:none;font-size:18px;cursor:pointer;">↗</button>' : ''}
       </div>
-      <div style="padding:24px 16px;text-align:center;overflow-y:auto;">
-        <div data-public-profile-avatar style="width:88px;height:88px;border-radius:50%;margin:0 auto 12px;background:var(--line);overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:40px;cursor:pointer;">
-          ${u.photoURL ? `<img src="${u.photoURL}" alt="" style="width:100%;height:100%;object-fit:cover;">` : (u.avatar || '👤')}
+      <div class="public-profile-scroll">
+        <div class="public-profile-hero">
+          <div data-public-profile-avatar class="public-profile-avatar">
+            ${u.photoURL ? `<img src="${u.photoURL}" alt="">` : (u.avatar || '👤')}
+          </div>
+          <div class="public-profile-name">${u.name || profile.displayName || uname || 'Chaupaal member'}</div>
+          ${uname ? `<div class="public-profile-uname">@${uname}</div>` : ''}
+          ${bio ? `<p class="public-profile-bio">${bio}</p>` : ''}
+          ${
+            prompts.length
+              ? `<div class="public-profile-prompts">${prompts
+                  .slice(0, 3)
+                  .map((a) => `<div class="public-profile-prompt"><span>${(a.customQuestion || 'Prompt')}</span><p>${a.answer || ''}</p></div>`)
+                  .join('')}</div>`
+              : ''
+          }
+          ${
+            interests.length
+              ? `<div class="public-profile-interests">${interests
+                  .slice(0, 8)
+                  .map((i) => `<span>${i}</span>`)
+                  .join('')}</div>`
+              : ''
+          }
+          <div data-public-profile-counts class="relationship-counts-loading">Loading relationships…</div>
+          <div class="public-profile-highlights" data-public-highlights>
+            <div class="public-profile-highlights-label">Highlights</div>
+            <div class="public-profile-highlights-row" data-highlights-row>Loading…</div>
+          </div>
+          <div class="public-profile-actions" data-rel-actions>
+            <button class="btn btn--primary" data-rel-primary type="button">Connect</button>
+            <button class="btn" data-rel-more type="button" aria-label="More relationship options">▾</button>
+            <button class="btn" data-public-profile-hi type="button">Say hi</button>
+          </div>
         </div>
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:20px;">${u.name || uname || 'Chaupaal member'}</div>
-        ${uname ? `<div style="color:var(--muted);font-size:13px;margin-bottom:8px;">@${uname}</div>` : ''}
-        <div style="font-size:13px;color:var(--muted);">${[u.city || u.profile?.currentCity, u.personality].filter(Boolean).join(' · ')}</div>
-        <div style="font-size:14px;margin-top:14px;line-height:1.5;">${u.profile?.bio || u.bio || 'Open to a good conversation.'}</div>
-        ${interests.length ? `<div style="display:flex;justify-content:center;flex-wrap:wrap;gap:6px;margin-top:16px;">${interests.slice(0,6).map((i) => `<span class="discovery-shared-tag">📌 ${i}</span>`).join('')}</div>` : ''}
-        <div data-public-profile-counts class="relationship-counts-loading">Loading relationships…</div>
-        <div class="public-profile-actions" data-rel-actions>
-          <button class="btn btn--primary" data-rel-primary type="button">Connect</button>
-          <button class="btn" data-rel-more type="button" aria-label="More relationship options">▾</button>
-          <button class="btn" data-public-profile-hi type="button">💬 Say hi</button>
+        ${
+          media.length
+            ? `<div class="public-profile-media-strip">${media
+                .slice(0, 9)
+                .map((m) => {
+                  const src = m.url || m.src || m.thumb || '';
+                  if (m.type === 'voice') return `<button type="button" class="ppm-voice" data-voice="${src}">🎙️</button>`;
+                  if (m.type === 'video') return `<video src="${src}" muted playsinline></video>`;
+                  return `<img src="${src}" alt="">`;
+                })
+                .join('')}</div>`
+            : ''
+        }
+        <div class="public-profile-section">
+          <h3>Duniya</h3>
+          <div data-public-duniya-posts class="public-profile-posts">Loading posts…</div>
+        </div>
+        <div class="public-profile-section">
+          <h3>Peepal</h3>
+          <div data-public-peepal-posts class="public-profile-posts">Loading posts…</div>
         </div>
       </div>`;
     document.querySelector('.device')?.appendChild(sheet);
@@ -100,39 +147,133 @@
       if (navigator.share) navigator.share({ title: `@${uname} on Chaupaal`, url });
       else navigator.clipboard?.writeText(url).then(() => showToast('Link copied'));
     });
-    const avatarEl=sheet.querySelector('[data-public-profile-avatar]');
-    if(profileUid&&typeof bindProfileLongPress==='function') bindProfileLongPress(avatarEl,{...u,uid:profileUid});
-    if(profileUid&&typeof openProfileStories==='function') avatarEl?.addEventListener('click',()=>openProfileStories(profileUid));
-    if(profileUid&&typeof storyCall==='function'){
-      storyCall('profile',{targetUid:profileUid}).then(data=>{
-        const count=(data.stories?.duniya?.length||0)+(data.stories?.baithak?.length||0);
-        avatarEl?.classList.toggle('profile-avatar-has-story',count>0);
-      }).catch(()=>{});
-    }
-    if(profileUid&&typeof loadRelationshipProfile==='function'){
-      loadRelationshipProfile(profileUid).then((data)=>{
-        const counts=sheet.querySelector('[data-public-profile-counts]');
-        if(counts){
-          counts.innerHTML=relationshipCountsHtml(data.counts);
-          if(typeof wireRelationshipCountButtons==='function'){
-            wireRelationshipCountButtons(counts,{targetUid:profileUid});
+    sheet.querySelectorAll('[data-voice]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (typeof playVoiceNote === 'function') playVoiceNote(btn.dataset.voice);
+      });
+    });
+    const avatarEl = sheet.querySelector('[data-public-profile-avatar]');
+    if (profileUid && typeof bindProfileLongPress === 'function') bindProfileLongPress(avatarEl, { ...u, uid: profileUid });
+    if (profileUid && typeof openProfileStories === 'function') avatarEl?.addEventListener('click', () => openProfileStories(profileUid));
+    if (profileUid && typeof storyCall === 'function') {
+      storyCall('profile', { targetUid: profileUid })
+        .then((data) => {
+          const count = (data.stories?.duniya?.length || 0) + (data.stories?.baithak?.length || 0);
+          avatarEl?.classList.toggle('profile-avatar-has-story', count > 0);
+        })
+        .catch(() => {});
+      storyCall('list_highlights', { targetUid: profileUid })
+        .then((data) => {
+          const row = sheet.querySelector('[data-highlights-row]');
+          const highlights = data.highlights || [];
+          if (!row) return;
+          if (!highlights.length) {
+            row.innerHTML = '<span class="public-profile-highlights-empty">No highlights yet</span>';
+            return;
           }
-        }
-        const profile={
-          ...u,
-          uid:profileUid,
-          profileType:data.profile?.profileType||u.profileType||u.profile?.profileType||'personal',
-          name:data.profile?.name||u.name||uname||'Chaupaal member',
-        };
-        // Explicit profile visit (context=profile): personal → Friend primary, professional → Follow.
-        // Peepal/Duniya context still wins when opened from those surfaces.
-        const visitContext = context === 'peepal' || context === 'duniya' ? context : 'profile';
-        if (typeof wireProfileRelationshipActions === 'function') {
-          wireProfileRelationshipActions(sheet.querySelector('[data-rel-actions]'), profile, {
-            context: visitContext,
+          row.innerHTML = highlights
+            .map(
+              (h) =>
+                `<button type="button" class="highlight-circle" data-highlight-id="${h.id}" title="${h.title}">
+                  ${h.coverUrl ? `<img src="${h.coverUrl}" alt="">` : '<span>◎</span>'}
+                  <small>${h.title}</small>
+                </button>`
+            )
+            .join('');
+          row.querySelectorAll('[data-highlight-id]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              try {
+                const open = await storyCall('open_highlight', {
+                  targetUid: profileUid,
+                  highlightId: btn.dataset.highlightId,
+                });
+                const stories = open.stories || [];
+                if (stories[0] && typeof openStoryViewer === 'function') openStoryViewer(stories[0], stories);
+                else if (typeof showToast === 'function') showToast('Empty highlight');
+              } catch (e) {
+                if (typeof showToast === 'function') showToast('Could not open highlight');
+              }
+            });
           });
-        }
-      }).catch(()=>{});
+        })
+        .catch(() => {
+          const row = sheet.querySelector('[data-highlights-row]');
+          if (row) row.innerHTML = '<span class="public-profile-highlights-empty">Highlights unavailable</span>';
+        });
+    }
+    if (profileUid && db) {
+      const duniyaEl = sheet.querySelector('[data-public-duniya-posts]');
+      const peepalEl = sheet.querySelector('[data-public-peepal-posts]');
+      db.collection('duniya')
+        .where('uid', '==', profileUid)
+        .limit(24)
+        .get()
+        .then((snap) => {
+          const posts = snap.docs
+            .map((d) => ({ id: d.id, ...d.data() }))
+            .filter((p) => !p.deleted && p.archived !== true);
+          if (!duniyaEl) return;
+          if (!posts.length) {
+            duniyaEl.innerHTML = '<div class="public-profile-posts-empty">No public Duniya posts</div>';
+            return;
+          }
+          duniyaEl.innerHTML = posts
+            .slice(0, 12)
+            .map((p) => {
+              const media = p.thumb || p.media || '';
+              return `<div class="public-profile-post-cell">${media ? `<img src="${media}" alt="">` : `<span>${(p.caption || '').slice(0, 40)}</span>`}</div>`;
+            })
+            .join('');
+        })
+        .catch(() => {
+          if (duniyaEl) duniyaEl.innerHTML = '<div class="public-profile-posts-empty">Posts unavailable</div>';
+        });
+      db.collection('peepal')
+        .where('uid', '==', profileUid)
+        .limit(24)
+        .get()
+        .then((snap) => {
+          const posts = snap.docs
+            .map((d) => ({ id: d.id, ...d.data() }))
+            .filter((p) => !p.deleted && p.archived !== true);
+          if (!peepalEl) return;
+          if (!posts.length) {
+            peepalEl.innerHTML = '<div class="public-profile-posts-empty">No public Peepal posts</div>';
+            return;
+          }
+          peepalEl.innerHTML = posts
+            .slice(0, 8)
+            .map((p) => `<div class="public-profile-peepal-card"><strong>${p.tag || 'Peepal'}</strong><p>${(p.question || '').slice(0, 120)}</p></div>`)
+            .join('');
+        })
+        .catch(() => {
+          if (peepalEl) peepalEl.innerHTML = '<div class="public-profile-posts-empty">Posts unavailable</div>';
+        });
+    }
+    if (profileUid && typeof loadRelationshipProfile === 'function') {
+      loadRelationshipProfile(profileUid)
+        .then((data) => {
+          const counts = sheet.querySelector('[data-public-profile-counts]');
+          if (counts) {
+            counts.innerHTML = relationshipCountsHtml(data.counts);
+            if (typeof wireRelationshipCountButtons === 'function') {
+              wireRelationshipCountButtons(counts, { targetUid: profileUid });
+            }
+          }
+          const relProfile = {
+            ...u,
+            uid: profileUid,
+            profileType: data.profile?.profileType || u.profileType || u.profile?.profileType || 'personal',
+            name: data.profile?.name || u.name || uname || 'Chaupaal member',
+          };
+          const visitContext = context === 'peepal' || context === 'duniya' ? context : 'profile';
+          if (typeof wireProfileRelationshipActions === 'function') {
+            wireProfileRelationshipActions(sheet.querySelector('[data-rel-actions]'), relProfile, {
+              context: visitContext,
+            });
+          }
+        })
+        .catch(() => {});
     }
     sheet.querySelector('[data-public-profile-hi]')?.addEventListener('click', () => {
       sheet.remove();

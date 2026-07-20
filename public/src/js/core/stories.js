@@ -217,6 +217,35 @@
         overlay.remove();
         openStoryViewer(stories[idx], stories);
       });
+      if (typeof onLongPress === 'function') {
+        onLongPress(button, async () => {
+          const story = stories[Number(button.dataset.storyIndex)];
+          if (!story || typeof storyCall !== 'function') return;
+          const title = prompt('Add to Highlight — name a new one, or leave blank to pick later');
+          try {
+            let highlightId = '';
+            if (title) {
+              const created = await storyCall('create_highlight', { title });
+              highlightId = created.id;
+            } else {
+              const list = await storyCall('list_highlights', {});
+              highlightId = list.highlights?.[0]?.id || '';
+              if (!highlightId) {
+                const created = await storyCall('create_highlight', { title: 'Favorites' });
+                highlightId = created.id;
+              }
+            }
+            await storyCall('add_highlight_story', {
+              highlightId,
+              destination: story.destination,
+              storyId: story.id,
+            });
+            if (typeof showToast === 'function') showToast('Added to Highlight');
+          } catch (e) {
+            if (typeof showToast === 'function') showToast('Could not add to Highlight');
+          }
+        });
+      }
     });
   }
 

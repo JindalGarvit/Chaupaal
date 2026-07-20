@@ -318,14 +318,106 @@ async function feedDuniya(db, uid) {
 async function profileStories(db, uid, targetUid) {
   const destinations = ['duniya', 'baithak'];
   const result = { duniya: [], baithak: [] };
+  const now = Date.now();
   for (const destination of destinations) {
     const snap = await db.collection(COLLECTIONS[destination]).where('uid', '==', targetUid).limit(100).get();
     for (const story of snap.docs) {
+      const data = story.data() || {};
+      const expires = data.expiresAt?.toMillis?.() || data.expiresAt || 0;
+      // Live ring only — expired stories are archived by default (hidden unless Highlighted).
+      if (expires && expires <= now) continue;
       if (await canView(db, story, uid, false)) result[destination].push(serializeStory(story, uid));
     }
     result[destination].sort((a, b) => a.createdAt - b.createdAt);
   }
   return result;
+}
+
+async function listHighlights(db, uid, targetUid) {
+  const ownerUid = targetUid || uid;
+  const snap = await db.collection('users').doc(ownerUid).collection('story_highlights').limit(40).get();
+  return snap.docs
+    .map((doc) => {
+      const d = doc.data() || {};
+      return {
+        id: doc.id,
+        title: d.title || 'Highlight',
+        coverUrl: d.coverUrl || '',
+        storyCount: Array.isArray(d.storyRefs) ? d.storyRefs.length : 0,
+        storyRefs: d.storyRefs || [],
+        updatedAt: d.updatedAt?.toMillis?.() || 0,
+      };
+    })
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+async function createHighlight(db, admin, uid, body) {
+  const title = cleanText(body.title, 40) || 'Highlight';
+  const ref = db.collection('users').doc(uid).collection('story_highlights').doc();
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  await ref.set({
+    title,
+    coverUrl: cleanText(body.coverUrl, 500) || '',
+    storyRefs: [],
+    createdAt: now,
+    updatedAt: now,
+  });
+  return { id: ref.id, title };
+}
+
+async function mutateHighlightStories(db, admin, uid, body, mode) {
+  const highlightId = cleanText(body.highlightId, 180);
+  const destination = cleanDestination(body.destination);
+  const storyId = cleanText(body.storyId, 180);
+  if (!highlightId || !destination || !storyId) throw new Error('INVALID_HIGHLIGHT');
+  const href = db.collection('users').doc(uid).collection('story_highlights').doc(highlightId);
+  const story = await getStory(db, destination, storyId);
+  if (!story || story.data().uid !== uid) throw new Error('STORY_NOT_FOUND');
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(href);
+    if (!snap.exists) throw new Error('HIGHLIGHT_NOT_FOUND');
+    const refs = Array.isArray(snap.data()?.storyRefs) ? [...snap.data().storyRefs] : [];
+    const key = `${destination}:${storyId}`;
+    const filtered = refs.filter((r) => `${r.destination}:${r.storyId}` !== key);
+    if (mode === 'add') {
+      filtered.unshift({
+        destination,
+        storyId,
+        thumb: story.data().thumb || story.data().media || '',
+        addedAt: Date.now(),
+      });
+    }
+    const coverUrl =
+      mode === 'add'
+        ? story.data().thumb || story.data().media || snap.data()?.coverUrl || ''
+        : snap.data()?.coverUrl || '';
+    tx.set(
+      href,
+      {
+        storyRefs: filtered.slice(0, 50),
+        coverUrl,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+  });
+  return { ok: true };
+}
+
+async function highlightStories(db, uid, highlightId, viewerUid) {
+  const href = db.collection('users').doc(uid).collection('story_highlights').doc(highlightId);
+  const snap = await href.get();
+  if (!snap.exists) throw new Error('HIGHLIGHT_NOT_FOUND');
+  const data = snap.data() || {};
+  const stories = [];
+  for (const ref of data.storyRefs || []) {
+    const story = await getStory(db, ref.destination, ref.storyId);
+    if (!story) continue;
+    if (await canView(db, story, viewerUid, false)) {
+      stories.push(serializeStory(story, viewerUid));
+    }
+  }
+  return { highlight: { id: snap.id, title: data.title, coverUrl: data.coverUrl }, stories };
 }
 
 async function deleteStory(db, admin, uid, destination, storyId) {
@@ -480,6 +572,24 @@ module.exports = async function handler(req, res) {
       });
     }
     if (action === 'archive') return sendSuccess(res, { stories: await archive(db, user.uid) });
+    if (action === 'list_highlights') {
+      const targetUid = cleanUid(body.targetUid) || user.uid;
+      return sendSuccess(res, { highlights: await listHighlights(db, user.uid, targetUid) });
+    }
+    if (action === 'create_highlight') {
+      return sendSuccess(res, await createHighlight(db, admin, user.uid, body));
+    }
+    if (action === 'add_highlight_story') {
+      return sendSuccess(res, await mutateHighlightStories(db, admin, user.uid, body, 'add'));
+    }
+    if (action === 'remove_highlight_story') {
+      return sendSuccess(res, await mutateHighlightStories(db, admin, user.uid, body, 'remove'));
+    }
+    if (action === 'open_highlight') {
+      const ownerUid = cleanUid(body.targetUid) || user.uid;
+      const highlightId = cleanText(body.highlightId, 180);
+      return sendSuccess(res, await highlightStories(db, ownerUid, highlightId, user.uid));
+    }
     return sendError(res, 400, 'VALIDATION_ERROR', 'Unknown story action');
   } catch (error) {
     const known = {
@@ -489,6 +599,8 @@ module.exports = async function handler(req, res) {
       EMPTY_COMMENT: [400, 'VALIDATION_ERROR', 'Comment cannot be empty'],
       INVALID_INTERACTION: [400, 'VALIDATION_ERROR', 'Invalid story interaction'],
       STORY_NOT_FOUND: [404, 'NOT_FOUND', 'Story unavailable'],
+      HIGHLIGHT_NOT_FOUND: [404, 'NOT_FOUND', 'Highlight not found'],
+      INVALID_HIGHLIGHT: [400, 'VALIDATION_ERROR', 'Highlight id / story required'],
       NO_CLOSE_FRIENDS: [400, 'NO_CLOSE_FRIENDS', 'Add at least one Friend to Close Friends before sharing'],
     }[error?.message];
     if (known) return sendError(res, known[0], known[1], known[2]);

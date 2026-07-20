@@ -206,7 +206,7 @@ async function renderDuniyaStories(){
 
 function renderDuniyaFeed(){
   const feed=document.getElementById('duniyaFeed');if(!feed)return;
-  const visible=duniyaPosts.filter(p=>!(typeof isSoftDeleted==='function'?isSoftDeleted(p):p.deleted));
+  const visible=duniyaPosts.filter(p=>!(typeof isSoftDeleted==='function'?isSoftDeleted(p):p.deleted)).filter(p=>p.archived!==true);
   feed.innerHTML='';
   if(!visible.length){
     if(typeof renderEmptyState==='function'){
@@ -1120,3 +1120,78 @@ function toggleOpenToMeet(){
   try{localStorage.setItem('chaupaal_open_to_meet',JSON.stringify(openToMeet));}catch(e){}
   showToast(openToMeet?'You\'re now open to meeting new people 👋':'Discovery turned off. You can re-enable in Settings.');
 }
+
+// ===================== LEHAR (Section 8) — vertical short-form video only =====================
+(function initLeharMode() {
+  let mode = 'general';
+  function isVideoPost(p) {
+    const media = p.media || p.video || '';
+    const type = String(p.mediaType || p.type || '').toLowerCase();
+    if (type.includes('video')) return true;
+    return /\.(mp4|webm|mov)(\?|$)/i.test(media) || /\/video\//i.test(media);
+  }
+  function renderLeharFeed() {
+    const feed = document.getElementById('leharFeed');
+    if (!feed) return;
+    const videos = (duniyaPosts || [])
+      .filter((p) => !(typeof isSoftDeleted === 'function' ? isSoftDeleted(p) : p.deleted))
+      .filter((p) => p.archived !== true)
+      .filter(isVideoPost);
+    if (!videos.length) {
+      feed.innerHTML =
+        '<div class="lehar-empty"><strong>Lehar</strong><p>Short videos from Duniya will wave through here. Post a clip to start the scroll.</p></div>';
+      return;
+    }
+    feed.innerHTML = videos
+      .map((p, i) => {
+        const src = p.media || p.video;
+        const name = p.user?.name || 'Member';
+        return `<section class="lehar-slide" data-lehar-i="${i}">
+          <video src="${src}" playsinline loop muted preload="metadata"></video>
+          <div class="lehar-meta"><strong>${name}</strong><p>${(p.caption || '').slice(0, 100)}</p></div>
+        </section>`;
+      })
+      .join('');
+    const slides = [...feed.querySelectorAll('.lehar-slide')];
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((en) => {
+          const v = en.target.querySelector('video');
+          if (!v) return;
+          if (en.isIntersecting && en.intersectionRatio > 0.6) {
+            v.muted = false;
+            v.play().catch(() => {
+              v.muted = true;
+              v.play().catch(() => {});
+            });
+          } else {
+            v.pause();
+          }
+        });
+      },
+      { root: feed, threshold: [0.6] }
+    );
+    slides.forEach((s) => io.observe(s));
+  }
+  function setDuniyaMode(next) {
+    mode = next === 'lehar' ? 'lehar' : 'general';
+    document.querySelectorAll('[data-duniya-mode]').forEach((btn) => {
+      const on = btn.dataset.duniyaMode === mode;
+      btn.classList.toggle('active', on);
+      btn.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    document.getElementById('duniyaFeed')?.classList.toggle('hidden', mode === 'lehar');
+    document.getElementById('duniyaStoriesRow')?.classList.toggle('hidden', mode === 'lehar');
+    const lehar = document.getElementById('leharFeed');
+    lehar?.classList.toggle('hidden', mode !== 'lehar');
+    if (mode === 'lehar') renderLeharFeed();
+  }
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-duniya-mode]');
+    if (!btn) return;
+    setDuniyaMode(btn.dataset.duniyaMode);
+  });
+  window.setDuniyaMode = setDuniyaMode;
+  window.renderLeharFeed = renderLeharFeed;
+})();
+

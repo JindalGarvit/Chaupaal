@@ -148,6 +148,16 @@ service cloud.firestore {
         allow read: if isOwner(userId);
         allow write: if false;
       }
+      // Story Highlights (named circles) — NOT the same as post archive.
+      // Stories expire/archive by default; highlights opt expired stories back onto the profile.
+      match /story_highlights/{highlightId} {
+        allow read: if isAuth();
+        allow write: if false; // stories API (Admin) only
+      }
+      // Archive hub custom folders for Duniya/Peepal posts (separate from Highlights).
+      match /archive_categories/{categoryId} {
+        allow read, write: if isOwner(userId);
+      }
       // Story delivery metadata is private. The story API fans out and revokes
       // inbox entries; clients can only read their own delivery inbox.
       match /storyInbox/{deliveryId} {
@@ -403,9 +413,16 @@ service cloud.firestore {
     }
 
     // ===================== DAILY CHECK-INS (journal — private) =====================
+    // Genuine access boundary: only the owning uid may read/write. Never expose via
+    // list queries to other clients. Content analysis (if any) must stay server-side
+    // and must never drive user-visible reactive copy (Section 7 / 4B).
     match /daily_checkins/{docId} {
-      allow read, write: if isAuth() && isOwner(resource.data.uid);
-      allow create: if isAuth() && request.resource.data.uid == request.auth.uid;
+      allow read: if isAuth() && resource.data.uid == request.auth.uid;
+      allow update, delete: if isAuth() && resource.data.uid == request.auth.uid;
+      allow create: if isAuth()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasAll(['uid', 'text']);
+      allow list: if false;
     }
 
     // ===================== MATCHMAKING =====================

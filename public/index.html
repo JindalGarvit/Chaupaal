@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="/src/styles/baithak.css?v=20">
   <link rel="stylesheet" href="/src/styles/peepal.css?v=18">
   <link rel="stylesheet" href="/src/styles/duniya.css?v=18">
-  <link rel="stylesheet" href="/src/styles/components.css?v=25">
+  <link rel="stylesheet" href="/src/styles/components.css?v=26">
 </head>
 <body>
 <div class="device">
@@ -311,7 +311,10 @@
     <div class="tab-panel" id="panel-duniya">
       <div class="duniya-screen" id="duniyaScreen">
         <div class="duniya-header">
-          <div class="duniya-title">🌍 Duniya</div>
+          <div class="duniya-mode-switch" role="tablist" aria-label="Duniya mode">
+            <button type="button" class="duniya-mode-btn active" data-duniya-mode="general" role="tab" aria-selected="true">General</button>
+            <button type="button" class="duniya-mode-btn" data-duniya-mode="lehar" role="tab" aria-selected="false">Lehar</button>
+          </div>
           <div style="display:flex;gap:8px;">
             <button class="icon-btn" id="duniyaSearchBtn" aria-label="Search people" title="Search">🔍</button>
             <button class="icon-btn" id="duniyaPostBtn" aria-label="Create post" title="New post">＋</button>
@@ -319,6 +322,7 @@
         </div>
         <div class="duniya-stories-row" id="duniyaStoriesRow"></div>
         <div class="duniya-feed" id="duniyaFeed"></div>
+        <div class="lehar-feed hidden" id="leharFeed" aria-label="Lehar video feed"></div>
       </div>
       <div class="duniya-post-sheet hidden" id="duniyaPostSheet"></div>
       <div class="duniya-post-detail hidden" id="duniyaPostDetail"></div>
@@ -660,7 +664,7 @@
   <script src="/src/js/ai/call-ai.js"></script>
   <script src="/src/js/ai/anthropic.js"></script>
   <script src="/src/js/core/search.js"></script>
-  <script src="/src/js/core/deeplinks.js?v=22"></script>
+  <script src="/src/js/core/deeplinks.js?v=23"></script>
   <script src="/src/js/core/rate-limit-client.js"></script>
   <script src="/src/js/core/theme.js"></script>
   <script src="/src/js/core/discovery-core.js?v=20"></script>
@@ -673,7 +677,9 @@
   <script src="/src/js/features/self-chat.js"></script>
   <script src="/src/js/features/chaupaal-chat.js?v=17"></script>
   <script src="/src/js/features/baithak-chat.js?v=23"></script>
-  <script src="/src/js/core/stories.js?v=21"></script>
+  <script src="/src/js/core/stories.js?v=22"></script>
+  <script src="/src/js/core/archive-hub.js?v=1"></script>
+  <script src="/src/js/core/journal-anim.js?v=1"></script>
   <script src="/src/js/features/baithak.js"></script>
   <script src="/src/js/features/profile-preview.js"></script>
   <script src="/src/js/features/profile.js?v=20"></script>
@@ -694,7 +700,7 @@
   <script src="/src/js/games/arcade.js?v=21"></script>
   <script src="/src/js/main.js"></script>
   <script src="/src/js/features/akhbaar-catbar.js"></script>
-  <script src="/src/js/features/duniya.js?v=23"></script>
+  <script src="/src/js/features/duniya.js?v=24"></script>
   <script src="/src/js/features/premium.js"></script>
   <script src="/src/js/features/settings-extra.js"></script>
   <script src="/src/js/features/discovery.js"></script>
