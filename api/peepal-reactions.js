@@ -8,9 +8,17 @@
 const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
 const { requireUser, initAdmin } = require('../server-lib/auth');
 const { SEED_AUTHOR, PEEPAL_SEED_POSTS, personalSeedPost } = require('../server-lib/peepal-seeds');
+const {
+  buildSemanticText,
+  embedText,
+  passesStructuredFilters,
+  rankPersonalMatches,
+  normalizeProfileType,
+} = require('../server-lib/matchmaking');
 
 const VALID_REACTIONS = new Set(['up', 'down']);
 const MAX_HYDRATE_IDS = 20;
+const MATCH_POOL = 80;
 
 function cleanPostId(value) {
   const id = String(value || '').trim();
@@ -180,6 +188,111 @@ async function seed(db, admin, user) {
   };
 }
 
+async function refreshEmbedding(db, admin, uid) {
+  const ref = db.collection('users').doc(uid);
+  const snap = await ref.get();
+  if (!snap.exists) throw new Error('USER_NOT_FOUND');
+  const data = { uid, ...snap.data() };
+  const text = buildSemanticText(data);
+  if (!text.trim()) {
+    return { ok: false, reason: 'empty_profile_text', textLength: 0 };
+  }
+  const vector = await embedText(text);
+  const payload = {
+    profileEmbedding: {
+      vector,
+      model: process.env.GEMINI_EMBED_MODEL || 'text-embedding-004',
+      textHash: String(text.length) + '_' + text.slice(0, 40),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      // Future 3C: mediaTranscriptsHash — unused while embeddings are text-only
+      mediaExcluded: true,
+    },
+  };
+  await ref.set(payload, { merge: true });
+  return { ok: true, dims: vector.length, textLength: text.length };
+}
+
+async function personalMatch(db, admin, user, body) {
+  const viewerSnap = await db.collection('users').doc(user.uid).get();
+  if (!viewerSnap.exists) throw new Error('USER_NOT_FOUND');
+  const viewer = { uid: user.uid, ...viewerSnap.data() };
+
+  if (normalizeProfileType(viewer.profileType || viewer.profile?.profileType) !== 'personal') {
+    return { matches: [], mode: 'skipped_professional', note: 'Personal matching only' };
+  }
+
+  // Ensure viewer embedding exists (best-effort)
+  if (!viewer.profileEmbedding?.vector?.length) {
+    try {
+      await refreshEmbedding(db, admin, user.uid);
+      const again = await db.collection('users').doc(user.uid).get();
+      Object.assign(viewer, again.data() || {});
+    } catch (e) {
+      // Fall through — ranker will score 0 cosine and still apply filters/boosts weakly
+    }
+  }
+
+  const filters = {
+    minAge: body.minAge != null ? Number(body.minAge) : null,
+    maxAge: body.maxAge != null ? Number(body.maxAge) : null,
+    city: body.sameCity ? viewer.profile?.currentCity || viewer.city || '' : body.city || '',
+    language: body.language || '',
+    intent: body.intent || '',
+  };
+
+  const snap = await db.collection('users').where('openToMeet', '==', true).limit(MATCH_POOL).get();
+  const candidates = [];
+  snap.docs.forEach((d) => {
+    const data = { uid: d.id, ...d.data() };
+    if (data.uid === user.uid) return;
+    if (!passesStructuredFilters(viewer, data, filters)) return;
+    candidates.push(data);
+  });
+
+  // Edge hints for mutual weighting (sample)
+  const edgeMap = {};
+  await Promise.all(
+    candidates.slice(0, 40).map(async (c) => {
+      const [theyFollow, iFollow] = await Promise.all([
+        db.collection('users').doc(c.uid).collection('following').doc(user.uid).get(),
+        db.collection('users').doc(user.uid).collection('following').doc(c.uid).get(),
+      ]);
+      edgeMap[c.uid] = {
+        theyFollowViewer: theyFollow.exists,
+        viewerFollowsThem: iFollow.exists,
+      };
+    })
+  );
+
+  const ranked = rankPersonalMatches({
+    viewer,
+    candidates,
+    edgeMap,
+    limit: Math.min(12, Number(body.limit) || 8),
+  });
+
+  return {
+    mode: 'personal_hybrid',
+    matches: ranked.map((m) => ({
+      uid: m.uid,
+      score: Math.round(m.score * 100),
+      cosine: Math.round((m.cosine || 0) * 1000) / 1000,
+      mutualStable: !!m.mutualStable,
+      signals: m.signals || [],
+      name: m.user?.name || m.user?.profile?.displayName || 'Member',
+      username: m.user?.username || '',
+      photoURL: m.user?.photoURL || m.user?.photoThumb || '',
+      city: m.user?.profile?.currentCity || m.user?.city || '',
+      age: m.user?.age || null,
+      bio: m.user?.profile?.bio || m.user?.bio || '',
+      interests: m.user?.profile?.interests || m.user?.interests || [],
+      prompts: m.user?.profile?.prompts || m.user?.prompts || [],
+      icebreakers: m.user?.icebreakers || m.user?.profile?.icebreakers || [],
+      profileType: 'personal',
+    })),
+  };
+}
+
 module.exports = async function handler(req, res) {
   if (!requireMethod(req, res, 'POST')) return;
   const user = await requireUser(req, res, { allowWeak: false });
@@ -204,6 +317,14 @@ module.exports = async function handler(req, res) {
       // ⚠️ PRE-LAUNCH REMOVAL REQUIRED — see ensureSeedPost above.
       return sendSuccess(res, await seed(db, admin, user));
     }
+    if (body.action === 'refresh_embedding') {
+      const result = await refreshEmbedding(db, admin, user.uid);
+      return sendSuccess(res, result);
+    }
+    if (body.action === 'personal_match') {
+      const result = await personalMatch(db, admin, user, body || {});
+      return sendSuccess(res, result);
+    }
 
     const postId = cleanPostId(body.postId);
     const reaction = body.reaction == null || body.reaction === '' ? null : String(body.reaction);
@@ -215,6 +336,12 @@ module.exports = async function handler(req, res) {
   } catch (error) {
     if (error?.message === 'POST_NOT_FOUND') {
       return sendError(res, 404, 'NOT_FOUND', 'Peepal post not found');
+    }
+    if (error?.message === 'USER_NOT_FOUND') {
+      return sendError(res, 404, 'NOT_FOUND', 'User not found');
+    }
+    if (error?.code === 'NO_GEMINI') {
+      return sendError(res, 503, 'GEMINI_NOT_CONFIGURED', 'Set GEMINI_API_KEY for embeddings');
     }
     console.error('[peepal-reactions]', error?.message || error);
     return sendError(res, 500, 'PEEPAL_REACTION_FAILED', 'Could not save reaction');

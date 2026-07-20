@@ -286,4 +286,20 @@
   window.buildSemanticProfileText = buildSemanticProfileText;
   window.renderProfilePromptsBlock = renderProfilePromptsBlock;
   window.wireProfilePromptsBlock = wireProfilePromptsBlock;
+
+  let embedTimer = null;
+  function scheduleProfileEmbeddingRefresh(reason) {
+    clearTimeout(embedTimer);
+    embedTimer = setTimeout(async () => {
+      if (typeof apiFetch !== 'function' || typeof currentUser === 'undefined' || !currentUser) return;
+      try {
+        await apiFetch('/api/peepal-reactions', {
+          method: 'POST',
+          needAuth: true,
+          body: { action: 'refresh_embedding', reason: reason || 'edit' },
+        });
+      } catch (e) {}
+    }, 1800);
+  }
+  window.scheduleProfileEmbeddingRefresh = scheduleProfileEmbeddingRefresh;
 })();

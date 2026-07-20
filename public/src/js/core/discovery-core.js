@@ -38,6 +38,57 @@ function saveDiscoveryFilters() {
 }
 
 async function getDiscoveryProfiles(){
+  // Personal hybrid matchmaking (filters + embeddings + Gale-Shapley) when account is personal
+  if (
+    typeof currentUser !== 'undefined' &&
+    currentUser &&
+    typeof apiFetch === 'function' &&
+    typeof getProfileType === 'function' &&
+    getProfileType() === 'personal'
+  ) {
+    try {
+      const envelope = await apiFetch('/api/peepal-reactions', {
+        method: 'POST',
+        needAuth: true,
+        body: {
+          action: 'personal_match',
+          sameCity: !!discoveryFilters.sameCity,
+          intent: discoveryFilters.interest && discoveryFilters.interest !== 'any' ? discoveryFilters.interest : '',
+          limit: 5,
+        },
+      });
+      const matches = envelope?.data?.matches || [];
+      if (matches.length) {
+        return matches
+          .filter((m) => m?.uid && !dismissedUids.has(m.uid))
+          .filter((m) => !discoveryFilters.recentlyJoined || isRecentlyJoined(m))
+          .map((m) => ({
+            user: {
+              uid: m.uid,
+              name: m.name,
+              username: m.username,
+              photoURL: m.photoURL,
+              city: m.city,
+              age: m.age,
+              bio: m.bio,
+              interests: m.interests || [],
+              icebreakers: m.icebreakers || [],
+              prompts: m.prompts || [],
+              openToMeet: true,
+              _isNew: isRecentlyJoined(m),
+              _mutualStable: m.mutualStable,
+            },
+            score: m.score || 50,
+            matchPct: Math.min(98, Math.max(42, m.score || 50)),
+            reasons: (m.signals || []).slice(0, 3),
+            reason: (m.signals || []).slice(0, 2).join(' · ') || m.bio || 'Someone you might enjoy talking to on Peepal',
+          }));
+      }
+    } catch (e) {
+      // Fall back to local heuristics
+    }
+  }
+
   const pool = [...SAMPLE_DISCOVERY_POOL];
   if(db && currentUser){
     try{
@@ -71,6 +122,7 @@ async function getDiscoveryProfiles(){
 
   const myInterests = new Set([
     ...(personalityProfile?.interests||[]),
+    ...(typeof digitalProfile!=='undefined'&&digitalProfile?.interests||[]),
     ...(myCategories||[]).map(c=>c.name),
   ].map(i=>String(i).toLowerCase()));
 
@@ -78,17 +130,17 @@ async function getDiscoveryProfiles(){
   return pool
     .filter(u => {
       if(!u||!u.uid||dismissedUids.has(u.uid)||u.openToMeet===false) return false;
-      if(discoveryFilters.sameCity&&myCity&&String(u.city||'').trim().toLowerCase()!==myCity) return false;
+      if(discoveryFilters.sameCity&&myCity&&String(u.city||u.profile?.currentCity||'').trim().toLowerCase()!==myCity) return false;
       if(discoveryFilters.recentlyJoined&&!isRecentlyJoined(u)) return false;
       if(discoveryFilters.interest&&discoveryFilters.interest!=='any'){
         const wanted=discoveryFilters.interest.toLowerCase();
-        const theirs=[...(u.interests||[]),u.topCat].filter(Boolean).map(i=>String(i).toLowerCase());
+        const theirs=[...(u.interests||[]),...(u.profile?.interests||[]),u.topCat].filter(Boolean).map(i=>String(i).toLowerCase());
         if(!theirs.some(i=>i===wanted||i.includes(wanted)||wanted.includes(i))) return false;
       }
       return true;
     })
     .map(u=>{
-      const their = [...(u.interests||[]), u.topCat].filter(Boolean).map(i=>String(i).toLowerCase());
+      const their = [...(u.interests||[]),...(u.profile?.interests||[]), u.topCat].filter(Boolean).map(i=>String(i).toLowerCase());
       const shared = their.filter(i => [...myInterests].some(m => m.includes(i) || i.includes(m)));
       let score = 40 + Math.random()*25;
       if(shared.length) score += shared.length * 12;
@@ -128,11 +180,11 @@ function renderDiscoverySection(profiles){
     return el;
   }
   el.innerHTML = `
-    <div class="discovery-ai-label">✨ AI suggestions</div>
+    <div class="discovery-ai-label">Compatibility picks</div>
     <div class="peepal-discovery-header">
       <div>
         <div class="peepal-discovery-title">You might enjoy talking to</div>
-        <div class="peepal-discovery-subtitle">Based on your interests & Peepal activity</div>
+        <div class="peepal-discovery-subtitle">Filters + profile prompts · weighted for mutual interest</div>
       </div>
       <button class="peepal-undo-btn" id="discoveryUndoBtn" ${discoveryPreviousSet.length?'':'disabled'}>↩ Undo</button>
     </div>

@@ -336,6 +336,9 @@ function saveProfileField(key, value){
   if(db&&currentUser){db.collection('users').doc(currentUser.uid).update({[`profile.${key}`]:value}).catch(()=>{});}
   if(typeof refreshProfileCompletionUI==='function') refreshProfileCompletionUI();
   if(typeof onProfileFieldSaved==='function') onProfileFieldSaved(key, value, prev);
+  if(['bio','interests','hobbies','prompts','occupation','currentCity','lookingFor'].includes(key)&&typeof scheduleProfileEmbeddingRefresh==='function'){
+    scheduleProfileEmbeddingRefresh(key);
+  }
 }
 
 
