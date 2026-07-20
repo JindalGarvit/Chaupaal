@@ -208,7 +208,21 @@
     document.getElementById('dgRandomOpp').addEventListener('click', () =>
       launchGame({ name: 'Priya_29', id: 'random' })
     );
-    document.getElementById('dgFriendOpp').addEventListener('click', () => {
+    document.getElementById('dgFriendOpp').addEventListener('click', async () => {
+      if (typeof openFriendPickerSheet === 'function') {
+        sheet.remove();
+        const friend = await openFriendPickerSheet({
+          title: `Challenge · ${game.name}`,
+          subtitle: 'Pick a friend to play',
+        });
+        if (friend) {
+          game.launch({
+            chat: { name: friend.name, id: friend.id || 'friend_' + friend.name, uid: friend.uid },
+            source: 'dangal',
+          });
+        }
+        return;
+      }
       const name = prompt('Enter your friend username:');
       if (name) launchGame({ name, id: 'friend_' + name });
     });

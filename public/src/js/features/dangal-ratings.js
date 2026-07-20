@@ -1,4 +1,4 @@
-// ===================== CATEGORY RATINGS =====================
+// ===================== CATEGORY RATINGS + DANGAL GRID =====================
 const NEWS_CATEGORIES = ['GK','Sports','Tech','Business','India','World'];
 const CATEGORY_ICONS = {GK:'🧠',Sports:'🏏',Tech:'💻',Business:'📈',India:'🇮🇳',World:'🌍'};
 
@@ -53,7 +53,6 @@ function renderLeaderboardUI(entries,el,{hasMore=false}={}){
       <div class="rp-score">${e.score}</div>
     </div>
   `).join('');
-  // Add current user's score
   const myScore=document.getElementById('rpYourScore')?.textContent;
   if(myScore&&myScore!=='—'){
     el.innerHTML+=`<div class="rp-leaderboard-item" style="border-top:1px solid var(--line);margin-top:4px;padding-top:8px;"><div class="rp-rank">You</div><div class="rp-name">${userProfile?.name?.split(' ')[0]||'You'}</div><div class="rp-score" id="rpYourScore">${myScore}</div></div>`;
@@ -66,35 +65,138 @@ function renderLeaderboardUI(entries,el,{hasMore=false}={}){
   }
 }
 
+function dangalTileHtml(g){
+  const rating=typeof getGameRating==='function'?getGameRating(g.ratingKey):null;
+  const soloTag=g.solo||g.gameType==='solo'?'<span class="dangal-solo-tag">SOLO</span>':'';
+  const accent=(typeof GAME_ACCENTS!=='undefined'&&GAME_ACCENTS[g.id])||'var(--red)';
+  return`<div class="dangal-game-tile ${g.featured?'featured':''}" data-game="${g.id}" style="--tile-accent:${accent}">
+    <div class="dangal-game-icon">${g.icon}</div>
+    <div>
+      <div class="dangal-game-name">${g.name}${soloTag}</div>
+      <div class="dangal-game-desc">${g.desc}</div>
+      ${rating?`<div class="dangal-game-rating-pill">★ ${rating}</div>`:''}
+    </div>
+  </div>`;
+}
+
+function wireDangalTiles(root){
+  (root||document).querySelectorAll('[data-game]').forEach(tile=>{
+    tile.addEventListener('click',()=>{
+      if(typeof markGamePlayed==='function') markGamePlayed(tile.dataset.game);
+      if(typeof handleDangalGameTap==='function')handleDangalGameTap(tile.dataset.game);
+    });
+  });
+}
+
+function renderDangalContinueAndChips(host){
+  if(!host) return;
+  // Challenge-from-chat / viral challenge chip
+  let challengeChip='';
+  const pending=typeof consumeBeatScoreChallenge==='function'?consumeBeatScoreChallenge():null;
+  if(pending&&pending.challenger){
+    const gName=(typeof getGame==='function'&&getGame(pending.game)?.name)||pending.game;
+    challengeChip=`<button type="button" class="dangal-challenge-chip" id="dangalChallengeChip">
+      <div><strong>${pending.challenger} challenged you</strong><span>Beat ${pending.score!=null?pending.score:'their score'} on ${gName}</span></div>
+      <span>Play →</span>
+    </button>`;
+  }
+
+  // Continue / last played
+  let continueChip='';
+  const last=typeof getLastPlayedGame==='function'?getLastPlayedGame():null;
+  if(last&&last.id&&typeof getGame==='function'){
+    const g=getGame(last.id==='muqabala'?'quiz':last.id);
+    if(g){
+      continueChip=`<button type="button" class="dangal-continue-chip" id="dangalContinueChip" data-game="${g.id}">
+        <div><strong>Continue · ${g.icon} ${g.name}</strong><span>Pick up where you left off</span></div>
+        <span>→</span>
+      </button>`;
+    }
+  }
+
+  // Daily spotlight
+  let spotlightChip='';
+  const spotId=typeof getDailySpotlightGameId==='function'?getDailySpotlightGameId():'quiz';
+  const spot=typeof getGame==='function'?getGame(spotId):null;
+  if(spot){
+    spotlightChip=`<button type="button" class="dangal-spotlight-chip" id="dangalSpotlightChip" data-game="${spot.id}">
+      <div><strong>Today's spotlight · ${spot.icon} ${spot.name}</strong><span>${spot.desc}</span></div>
+      <span>Play →</span>
+    </button>`;
+  }
+
+  const wrap=document.createElement('div');
+  wrap.className='dangal-chips';
+  wrap.innerHTML=challengeChip+continueChip+spotlightChip;
+  host.appendChild(wrap);
+
+  wrap.querySelector('#dangalChallengeChip')?.addEventListener('click',()=>{
+    if(!pending)return;
+    if(pending.game==='quiz'||pending.game==='muqabala'){
+      if(typeof startMuqabala==='function') startMuqabala(pending.challenger, pending.cat||'GK');
+    } else if(typeof getGame==='function'){
+      const g=getGame(pending.game);
+      if(g) g.launch({source:'challenge', beatScore:pending.score, challenger:pending.challenger});
+    }
+  });
+  wrap.querySelector('#dangalContinueChip')?.addEventListener('click',(e)=>{
+    const id=e.currentTarget.dataset.game;
+    if(typeof handleDangalGameTap==='function') handleDangalGameTap(id);
+  });
+  wrap.querySelector('#dangalSpotlightChip')?.addEventListener('click',(e)=>{
+    const id=e.currentTarget.dataset.game;
+    if(typeof markGamePlayed==='function') markGamePlayed(id);
+    if(typeof handleDangalGameTap==='function') handleDangalGameTap(id);
+  });
+}
+
 function renderDangalGamesGrid(){
   const grid=document.getElementById('dangalGamesGrid');if(!grid)return;
   const overall=document.getElementById('dangalOverallRating');
   if(overall){
     const quizRatings=userProfile?.categoryRatings||{};
     const avgQuiz=Math.round(NEWS_CATEGORIES.reduce((s,c)=>s+(quizRatings[c]||1200),0)/NEWS_CATEGORIES.length);
-    overall.innerHTML=`<span class="dor-label">🧠 Quiz Rating</span><span class="dor-val">${avgQuiz}</span>`;
+    overall.innerHTML=`<span class="dor-label">Quiz Rating</span><span class="dor-val">${avgQuiz}</span>`;
   }
-  const library=typeof getGames==='function'?getGames({dangal:true}):[];
-  grid.innerHTML=library.map(g=>{
-    const rating=getGameRating(g.ratingKey);
-    const soloTag=g.solo?'<span style="font-size:9px;font-weight:700;background:rgba(255,201,60,0.2);color:var(--gold);border-radius:4px;padding:2px 6px;margin-left:4px;vertical-align:middle;">SOLO</span>':'';
-    return`<div class="dangal-game-tile ${g.featured?'featured':''}" data-game="${g.id}">
-      <div class="dangal-game-icon">${g.icon}</div>
-      <div>
-        <div class="dangal-game-name">${g.name}${soloTag}</div>
-        <div class="dangal-game-desc">${g.desc}</div>
-        ${rating?`<div class="dangal-game-rating-pill">⭐ ${rating}</div>`:''}
-      </div>
-    </div>`;
-  }).join('');
-  grid.querySelectorAll('[data-game]').forEach(tile=>{
-    tile.addEventListener('click',()=>{
-      if(typeof handleDangalGameTap==='function')handleDangalGameTap(tile.dataset.game);
-    });
-  });
-}
 
-// handleDangalGameTap is provided by game-registry.js
+  const library=typeof getGames==='function'?getGames({dangal:true}):[];
+  const featured=library.filter(g=>g.featured);
+  const solos=library.filter(g=>(g.solo||g.gameType==='solo')&&!g.featured);
+  const vsFriend=library.filter(g=>!g.featured&&!(g.solo||g.gameType==='solo'));
+
+  grid.innerHTML='';
+  renderDangalContinueAndChips(grid);
+
+  const sections=[
+    {label:'Featured', items:featured, featured:true},
+    {label:'Quick solos', items:solos},
+    {label:'Vs friend', items:vsFriend},
+  ];
+  sections.forEach(sec=>{
+    if(!sec.items.length) return;
+    const section=document.createElement('div');
+    section.className='dangal-section';
+    section.innerHTML=`<div class="dangal-section-label">${sec.label}</div>
+      <div class="dangal-section-grid${sec.featured?' dangal-section-grid--featured':''}">
+        ${sec.items.map(dangalTileHtml).join('')}
+      </div>`;
+    grid.appendChild(section);
+  });
+  wireDangalTiles(grid);
+
+  // Weekly friends board (best-effort from readable gameRatings)
+  const boardHost=document.createElement('div');
+  boardHost.id='dangalFriendsBoardHost';
+  grid.appendChild(boardHost);
+  if(typeof buildWeeklyFriendsBoard==='function'){
+    buildWeeklyFriendsBoard('chess').then(rows=>{
+      if(!rows||rows.length<2||!boardHost.isConnected) return;
+      if(typeof weeklyFriendsBoardHtml==='function'){
+        boardHost.innerHTML=weeklyFriendsBoardHtml(rows);
+      }
+    }).catch(()=>{});
+  }
+}
 
 function getGameRating(key){
   if(!key)return null;
@@ -111,6 +213,7 @@ function recordGameResult(key,won,drew){
   ratings[key+'_lastPlayed']=Date.now();
   localStorage.setItem('chaupaal_game_ratings',JSON.stringify(ratings));
   if(db&&currentUser)db.collection('users').doc(currentUser.uid).update({[`gameRatings.${key}`]:ratings[key]}).catch(()=>{});
+  if(typeof markGamePlayed==='function') markGamePlayed(key==='wordguess'?'wordguess':key);
 }
 
 function openQuizCategorySheet(){
@@ -118,7 +221,7 @@ function openQuizCategorySheet(){
   const ratings=userProfile?.categoryRatings||{};
   sheet.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;">🧠 Choose a Quiz Category</div>
+      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;">Choose a Quiz Category</div>
       <button id="closeQuizCatSheet" style="background:none;border:none;font-size:22px;cursor:pointer;">✕</button>
     </div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Pick a topic for your Muqabala</div>
@@ -127,15 +230,15 @@ function openQuizCategorySheet(){
         <div class="quiz-cat-card" data-cat="${cat}">
           <div class="quiz-cat-icon">${CATEGORY_ICONS[cat]}</div>
           <div class="quiz-cat-name">${cat}</div>
-          <div class="quiz-cat-rating">⭐ ${ratings[cat]||1200}</div>
+          <div class="quiz-cat-rating">★ ${ratings[cat]||1200}</div>
         </div>
       `).join('')}
     </div>
     <div class="dangal-limit-bar" id="dangalLimitBar" style="margin:4px 0 14px;">
-      <div class="dangal-limit-info"><span>🎯 Random Muqabala today</span><span class="dangal-limit-count" id="dangalLimitCount">3 / 3 remaining</span></div>
+      <div class="dangal-limit-info"><span>Random Muqabala today</span><span class="dangal-limit-count" id="dangalLimitCount">3 / 3 remaining</span></div>
       <div class="dangal-limit-track"><div class="dangal-limit-fill" id="dangalLimitFill" style="width:100%"></div></div>
     </div>
-    <button class="btn btn--primary btn--block btn--lg dangal-action-btn" id="aiFindMuqabalaBtn" style="background:linear-gradient(135deg,var(--navy),#2A3158);width:100%;">🤖 Find with AI (any category)</button>
+    <button class="btn btn--primary btn--block btn--lg dangal-action-btn" id="aiFindMuqabalaBtn" style="background:linear-gradient(135deg,var(--navy),#2A3158);width:100%;">Find with AI (any category)</button>
   `;
   sheet.classList.remove('hidden');requestAnimationFrame(()=>sheet.classList.add('open'));
   document.getElementById('closeQuizCatSheet').addEventListener('click',()=>{sheet.classList.remove('open');setTimeout(()=>sheet.classList.add('hidden'),350);});
@@ -143,14 +246,13 @@ function openQuizCategorySheet(){
     card.addEventListener('click',()=>{
       const cat=card.dataset.cat;
       sheet.classList.remove('open');setTimeout(()=>sheet.classList.add('hidden'),350);
-      if(dailyMuqabalaCount>=DAILY_MUQABALA_LIMIT){showToast('Daily limit reached! Try AI finder or a friend challenge instead 🎯');return;}
-      // Credit applied once inside startMuqabala when match confirms (cancel = no charge)
+      if(dailyMuqabalaCount>=DAILY_MUQABALA_LIMIT){showToast('Daily limit reached! Try AI finder or a friend challenge instead');return;}
       startMuqabala(null,cat);
     });
   });
   document.getElementById('aiFindMuqabalaBtn').addEventListener('click',()=>{
     sheet.classList.remove('open');setTimeout(()=>sheet.classList.add('hidden'),350);
-    if(dailyMuqabalaCount>=DAILY_MUQABALA_LIMIT){showToast('Daily limit reached! Friend challenges are still unlimited 🎯');return;}
+    if(dailyMuqabalaCount>=DAILY_MUQABALA_LIMIT){showToast('Daily limit reached! Friend challenges are still unlimited');return;}
     openAIFinder();
   });
   updateLimitUI();

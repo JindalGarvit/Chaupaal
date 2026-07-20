@@ -866,12 +866,49 @@ function openSnakesVersion(chat, version){
   function finishMove(who){
     if(!gs.alive())return;
     if(pos[who]>=SQUARES){
-      gameOver=true;message=who==='me'?'🎉 You win!':chat.name+' wins!';
+      gameOver=true;message=who==='me'?'You win!':chat.name+' wins!';
       gs.setOutcome(who==='me'?'won':'lost');
       if(typeof recordGameResult==='function')recordGameResult('snakes',who==='me');
-      updateHud();return;
+      if(typeof recordDuelStreak==='function') recordDuelStreak(chat.id||chat.name, who==='me', false);
+      if(typeof gameFeedback==='function') gameFeedback(who==='me'?'win':'lose');
+      updateHud();
+      showSnakesResult(who==='me');
+      return;
     }
     endTurn(who);
+  }
+
+  function showSnakesResult(won){
+    const host=overlay.querySelector('#slResultHost')||(()=>{
+      const d=document.createElement('div');d.id='slResultHost';d.style.cssText='padding:8px 12px 16px;flex-shrink:0;';overlay.appendChild(d);return d;
+    })();
+    const duel=typeof getDuelStreak==='function'?getDuelStreak(chat.id||chat.name):null;
+    const shareStats={scoreLine:won?'Win':'Loss',meta:version.name+(duel&&duel.streak?` · streak ${duel.streak}`:''),vs:`You vs ${chat.name}`};
+    host.innerHTML=typeof gameResultHtml==='function'?gameResultHtml({
+      glyph:won?'✓':'·',
+      title:won?'You win':'Defeat',
+      subtitle:version.name+(duel&&duel.streak>1?` · Duel streak ${duel.streak}`:''),
+      shareCardHtml: typeof buildGameShareCard==='function'?buildGameShareCard('snakes',shareStats):'',
+      actions:[
+        {label:'Rematch',primary:true,id:'again'},
+        {label:'Share',primary:false,id:'share'},
+        {label:'Challenge friend',primary:false,id:'challenge'},
+      ],
+    }):`<button type="button" id="slRematch">Rematch</button>`;
+    if(typeof wireGameResultActions==='function'){
+      wireGameResultActions(host,{
+        again:()=>{gs.close('restart');openSnakesVersion(chat, version);},
+        share:()=>{if(typeof shareGameResult==='function')shareGameResult('snakes',shareStats);},
+        challenge:async()=>{
+          if(typeof openFriendPickerSheet==='function'){
+            const f=await openFriendPickerSheet({title:'Challenge · Snakes'});
+            if(f){gs.close();openSnakesVersion({name:f.name,id:f.id||f.uid}, version);}
+          }
+        },
+      });
+    } else {
+      host.querySelector('#slRematch')?.addEventListener('click',()=>{gs.close('restart');openSnakesVersion(chat, version);});
+    }
   }
 
   function endTurn(who){
@@ -1188,10 +1225,14 @@ function openLudoGame(chat, playerCount){
       placeTokens();
       const allFinished=pieces[color].every(x=>x.finished);
       if(allFinished){
-        gameOver=true;message=`🎉 ${NAMES[currentPlayer]} wins!`;
+        gameOver=true;message=`${NAMES[currentPlayer]} wins!`;
         gs.setOutcome(currentPlayer===0?'won':'lost');
         if(typeof recordGameResult==='function')recordGameResult('ludo',currentPlayer===0);
-        phase='roll';updateHud();return;
+        if(typeof recordDuelStreak==='function') recordDuelStreak(chat.id||chat.name, currentPlayer===0, false);
+        if(typeof gameFeedback==='function') gameFeedback(currentPlayer===0?'win':'lose');
+        phase='roll';updateHud();
+        showLudoResult(currentPlayer===0);
+        return;
       }
       phase='roll';
       if(diceVal===6){message=`🎲 ${NAMES[currentPlayer]} rolls again!`;updateHud();return;}
@@ -1204,6 +1245,39 @@ function openLudoGame(chat, playerCount){
     currentPlayer=(currentPlayer+1)%playerCount;phase='roll';moveableSet.clear();
     updateHud();placeTokens();
     if(currentPlayer!==0)gs.schedule(aiMove,900);
+  }
+
+  function showLudoResult(won){
+    const host=overlay.querySelector('#ludoResultHost')||(()=>{
+      const d=document.createElement('div');d.id='ludoResultHost';d.style.cssText='padding:8px 12px 16px;flex-shrink:0;';overlay.appendChild(d);return d;
+    })();
+    const duel=typeof getDuelStreak==='function'?getDuelStreak(chat.id||chat.name):null;
+    const shareStats={scoreLine:won?'Win':'Loss',meta:`${playerCount} players`+(duel&&duel.streak?` · streak ${duel.streak}`:''),vs:`vs ${chat.name}`};
+    host.innerHTML=typeof gameResultHtml==='function'?gameResultHtml({
+      glyph:won?'✓':'·',
+      title:won?'You win':'Defeat',
+      subtitle:duel&&duel.streak>1?`Duel streak · ${duel.streak}`:`${playerCount}-player Ludo`,
+      shareCardHtml: typeof buildGameShareCard==='function'?buildGameShareCard('ludo',shareStats):'',
+      actions:[
+        {label:'Rematch',primary:true,id:'again'},
+        {label:'Share',primary:false,id:'share'},
+        {label:'Challenge friend',primary:false,id:'challenge'},
+      ],
+    }):`<button type="button" id="ludoRematch">Rematch</button>`;
+    if(typeof wireGameResultActions==='function'){
+      wireGameResultActions(host,{
+        again:()=>{gs.close('restart');openLudoGame(chat, playerCount);},
+        share:()=>{if(typeof shareGameResult==='function')shareGameResult('ludo',shareStats);},
+        challenge:async()=>{
+          if(typeof openFriendPickerSheet==='function'){
+            const f=await openFriendPickerSheet({title:'Challenge · Ludo'});
+            if(f){gs.close();openLudoGame({name:f.name,id:f.id||f.uid}, playerCount);}
+          }
+        },
+      });
+    } else {
+      host.querySelector('#ludoRematch')?.addEventListener('click',()=>{gs.close('restart');openLudoGame(chat, playerCount);});
+    }
   }
 
   function aiMove(){
@@ -1668,13 +1742,18 @@ function render(){
   const resultBlock=showResult&&typeof gameResultHtml==='function'
     ? gameResultHtml({
         title: winLine?(board[winLine[0]]==='X'?'You win!':`${chat.name} wins`):"It's a draw",
-        subtitle: DIFF_LABEL,
+        subtitle: DIFF_LABEL+(typeof getDuelStreak==='function'&&getDuelStreak(chat.id||chat.name)?.streak>1?` · Streak ${getDuelStreak(chat.id||chat.name).streak}`:''),
         you: scores.me,
         opp: scores.opp,
         youLabel: 'You',
         oppLabel: chat.name.split(' ')[0],
         glyph: winLine?(board[winLine[0]]==='X'?'✕':'⭕'):'—',
-        actions: [{label:'Play again',primary:true},{label:'Close'}],
+        shareCardHtml: typeof buildGameShareCard==='function'?buildGameShareCard('ttt',{scoreLine:`${scores.me}–${scores.opp}`,vs:`vs ${chat.name}`,meta:DIFF_LABEL}):'',
+        actions: [
+          {label:'Play again',primary:true,id:'again'},
+          {label:'Share',primary:false,id:'share'},
+          {label:'Challenge friend',primary:false,id:'challenge'},
+        ],
       })
     : '';
   overlay.innerHTML=`
@@ -1694,12 +1773,29 @@ function render(){
   const newBtn=document.getElementById('tttNew');
   if(newBtn)newBtn.addEventListener('click',()=>{board=Array(9).fill(null);myTurn=true;gameOver=false;winLine=null;showResult=false;render();});
   if(showResult){
-    overlay.querySelectorAll('[data-result-action]').forEach(btn=>{
-      btn.addEventListener('click',()=>{
-        if(btn.dataset.resultAction==='0'){board=Array(9).fill(null);myTurn=true;gameOver=false;winLine=null;showResult=false;render();}
-        else gs.close();
+    if(typeof wireGameResultActions==='function'){
+      wireGameResultActions(overlay,{
+        again:()=>{board=Array(9).fill(null);myTurn=true;gameOver=false;winLine=null;showResult=false;render();},
+        share:()=>{
+          if(typeof shareGameResult==='function'){
+            shareGameResult('ttt',{scoreLine:`${scores.me}–${scores.opp}`,vs:`vs ${chat.name}`,meta:DIFF_LABEL});
+          }
+        },
+        challenge:async()=>{
+          if(typeof openFriendPickerSheet==='function'){
+            const f=await openFriendPickerSheet({title:'Challenge · Tic-Tac-Toe'});
+            if(f){gs.close();openTicTacToe({name:f.name,id:f.id||f.uid});}
+          }
+        },
       });
-    });
+    } else {
+      overlay.querySelectorAll('[data-result-action]').forEach(btn=>{
+        btn.addEventListener('click',()=>{
+          if(btn.dataset.resultAction==='0'){board=Array(9).fill(null);myTurn=true;gameOver=false;winLine=null;showResult=false;render();}
+          else gs.close();
+        });
+      });
+    }
   }
   const boardEl=document.getElementById('tttBoard');
   board.forEach((cell,i)=>{
@@ -1716,8 +1812,8 @@ function render(){
       if(typeof gameFeedback==='function')gameFeedback('place');
       board[i]='X';
       const w2=checkWin(board,'X');
-      if(w2){winLine=w2;gameOver=true;scores.me++;if(typeof recordGameResult==='function')recordGameResult('ttt',true);endRound('won');return;}
-      if(board.every(Boolean)){gameOver=true;scores.draw++;if(typeof recordGameResult==='function')recordGameResult('ttt',false,true);endRound('draw');return;}
+      if(w2){winLine=w2;gameOver=true;scores.me++;if(typeof recordGameResult==='function')recordGameResult('ttt',true);if(typeof recordDuelStreak==='function')recordDuelStreak(chat.id||chat.name,true,false);endRound('won');return;}
+      if(board.every(Boolean)){gameOver=true;scores.draw++;if(typeof recordGameResult==='function')recordGameResult('ttt',false,true);if(typeof recordDuelStreak==='function')recordDuelStreak(chat.id||chat.name,false,true);endRound('draw');return;}
       myTurn=false;render();
       if(typeof gameFeedback==='function')gameFeedback('turn');
       gs.schedule(()=>{
@@ -1725,8 +1821,8 @@ function render(){
         const m=getAiMove();if(m==null)return;board[m]='O';
         if(typeof gameFeedback==='function')gameFeedback('place');
         const w3=checkWin(board,'O');
-        if(w3){winLine=w3;gameOver=true;scores.opp++;if(typeof recordGameResult==='function')recordGameResult('ttt',false);endRound('lost');return;}
-        if(board.every(Boolean)){gameOver=true;scores.draw++;if(typeof recordGameResult==='function')recordGameResult('ttt',false,true);endRound('draw');return;}
+        if(w3){winLine=w3;gameOver=true;scores.opp++;if(typeof recordGameResult==='function')recordGameResult('ttt',false);if(typeof recordDuelStreak==='function')recordDuelStreak(chat.id||chat.name,false,false);endRound('lost');return;}
+        if(board.every(Boolean)){gameOver=true;scores.draw++;if(typeof recordGameResult==='function')recordGameResult('ttt',false,true);if(typeof recordDuelStreak==='function')recordDuelStreak(chat.id||chat.name,false,true);endRound('draw');return;}
         myTurn=true;render();
       },450);
     });
@@ -1779,6 +1875,8 @@ const gs=beginGameOverlaySession({
   cleanup(){document.removeEventListener('keydown',kbHandler);},
 });
 if(!gs.alive())return;
+if(typeof prepareGameOverlay==='function') prepareGameOverlay(overlay,{theme:'dark',gameId:'wordguess'});
+if(typeof markGamePlayed==='function') markGamePlayed('wordguess');
 
 function getTileState(guess,pos){
   const letter=guess[pos];
@@ -1809,16 +1907,79 @@ function letterHaptic(kind){
 function render(){
   if(!gs.alive())return;
   const dayLabel=useDaily?`Daily · ${shabdDailySeed()}`:'Practice';
+  const streak=typeof getShabdStreak==='function'?getShabdStreak():null;
+  const streakBit=useDaily&&streak&&streak.streak?` · Streak ${streak.streak}`:'';
+  const won=gameOver&&guesses[guesses.length-1]===target;
+  const shareCard=gameOver&&typeof buildGameShareCard==='function'
+    ? buildGameShareCard('wordguess',{
+        scoreLine: won?`${guesses.length}/6`:'X/6',
+        meta: dayLabel+(streak&&streak.streak?` · streak ${streak.streak}`:''),
+      })
+    : '';
+  const resultBlock=gameOver&&typeof gameResultHtml==='function'
+    ? gameResultHtml({
+        glyph: won?'✓':'·',
+        title: won?'Brilliant!':'Nice try',
+        subtitle: won?`Solved in ${guesses.length}`:`Word was ${target}`,
+        vsBest: (typeof formatVsBest==='function'&&won)?formatVsBest('wordguess', guesses.length):undefined,
+        shareCardHtml: shareCard,
+        actions: [
+          {label:'Share',primary:true,id:'share'},
+          {label:'Play again',primary:false,id:'again'},
+          {label:'Challenge friend',primary:false,id:'challenge'},
+          {label:'Post to story',primary:false,id:'story'},
+        ],
+      })
+    : '';
+  const hud=typeof gameHudHtml==='function'&&!gameOver
+    ? gameHudHtml([
+        {label:'Guess',value:`${guesses.length+1}/6`},
+        useDaily&&streak?{label:'Streak',value:String(streak.streak||0)}:null,
+      ])
+    : '';
   overlay.innerHTML=`
-    ${gameChromeHtml({title:'Shabd Five',subtitle:dayLabel,backId:'wgBack',rightHtml:'<button id="wgNew" class="game-chrome-action">New</button>'})}
+    ${gameChromeHtml({title:'Shabd Five',subtitle:dayLabel+streakBit,backId:'wgBack',rightHtml:'<button id="wgNew" class="game-chrome-action">New</button>'})}
+    ${hud}
     <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:10px;" id="wgGrid"></div>
-    ${gameOver?`<div style="text-align:center;padding:8px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;color:${guesses[guesses.length-1]===target?'#538D4E':'#B59F3B'};flex-shrink:0;">${guesses[guesses.length-1]===target?'🎉 Brilliant!':'The word was '+target}</div>`:''}
-    <div style="flex-shrink:0;padding:8px;padding-bottom:max(8px,env(safe-area-inset-bottom));" id="wgKeyboard"></div>
+    ${resultBlock||(gameOver?`<div style="text-align:center;padding:8px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;color:${won?'#538D4E':'#B59F3B'};flex-shrink:0;">${won?'Brilliant!':'The word was '+target}</div>`:'')}
+    ${gameOver?'':`<div style="flex-shrink:0;padding:8px;padding-bottom:max(8px,env(safe-area-inset-bottom));" id="wgKeyboard"></div>`}
   `;
   document.getElementById('wgBack').addEventListener('click',()=>gs.close());
-  document.getElementById('wgNew').addEventListener('click',()=>{gs.close('restart');openWordGuess(chat,{daily:false});});
+  document.getElementById('wgNew')?.addEventListener('click',()=>{gs.close('restart');openWordGuess(chat,{daily:false});});
+
+  if(gameOver&&typeof wireGameResultActions==='function'){
+    const gridText=typeof buildShabdGridShare==='function'?buildShabdGridShare(guesses,target):`Chaupaal Shabd Five ${guesses.length}/6`;
+    const shareStats={
+      scoreLine: won?`${guesses.length}/6`:'X/6',
+      score: won?guesses.length:6,
+      meta: dayLabel,
+      text: gridText+`\n\nPlay on Chaupaal`,
+      includeImage: false,
+    };
+    wireGameResultActions(overlay,{
+      again:()=>{gs.close('restart');openWordGuess(chat,{daily:useDaily});},
+      share:()=>{
+        if(typeof shareGameResult==='function') shareGameResult('wordguess', shareStats);
+        else if(navigator.clipboard) navigator.clipboard.writeText(gridText);
+      },
+      challenge:async()=>{
+        if(typeof openFriendPickerSheet==='function'){
+          const f=await openFriendPickerSheet({title:'Challenge · Shabd Five'});
+          if(f&&typeof shareGameResult==='function'){
+            shareGameResult('wordguess',{...shareStats,text:`Hey ${f.name}!\n\n${gridText}`});
+          }
+        } else if(typeof shareGameResult==='function') shareGameResult('wordguess', shareStats);
+      },
+      story:()=>{
+        if(typeof postGameScoreStory==='function'){
+          postGameScoreStory('wordguess',{score:won?guesses.length:0,total:6,streak:streak?.streak,scoreLine:shareStats.scoreLine,text:gridText});
+        }
+      },
+    });
+  }
 
   const grid=document.getElementById('wgGrid');
+  if(!grid)return;
   for(let r=0;r<6;r++){
     const row=document.createElement('div');row.style.cssText='display:flex;gap:5px;';
     for(let c=0;c<5;c++){
@@ -1847,6 +2008,7 @@ function render(){
   }
 
   const kb=document.getElementById('wgKeyboard');
+  if(!kb)return;
   const rows=['QWERTYUIOP','ASDFGHJKL','↵ZXCVBNM⌫'];
   rows.forEach(rowStr=>{
     const rowEl=document.createElement('div');rowEl.style.cssText='display:flex;justify-content:center;gap:4px;margin-bottom:4px;';
@@ -1894,8 +2056,8 @@ function handleInput(k){
     try{if(typeof haptic==='function')haptic('light');}catch(e){}
   }
   else if(k==='↵'||k==='Enter'){
-    if(currentGuess.length!==5){shake=true;if(typeof gameFeedback==='function')gameFeedback('invalid');render();gs.schedule(()=>{shake=false;render();},500);return;}
-    if(!VALID_WORDS.includes(currentGuess)){showToast('Not in word list');shake=true;if(typeof gameFeedback==='function')gameFeedback('invalid');render();gs.schedule(()=>{shake=false;render();},500);return;}
+    if(currentGuess.length!==5){shake=true;if(typeof shakeInvalidMove==='function')shakeInvalidMove(document.getElementById('wgGrid'));else if(typeof gameFeedback==='function')gameFeedback('invalid');render();gs.schedule(()=>{shake=false;render();},500);return;}
+    if(!VALID_WORDS.includes(currentGuess)){if(typeof shakeInvalidMove==='function')shakeInvalidMove(document.getElementById('wgGrid'),{toast:'Not in word list'});else{showToast('Not in word list');if(typeof gameFeedback==='function')gameFeedback('invalid');}shake=true;render();gs.schedule(()=>{shake=false;render();},500);return;}
     const guess=currentGuess;
     guesses.push(guess);currentGuess='';
     staggerReveal(guess,()=>{
@@ -1905,6 +2067,8 @@ function handleInput(k){
         gs.setOutcome(won?'won':'lost');
         if(typeof recordGameResult==='function')recordGameResult('wordguess',won);
         if(typeof gameFeedback==='function')gameFeedback(won?'win':'lose');
+        if(useDaily&&typeof recordShabdDailyResult==='function') recordShabdDailyResult(won);
+        if(won&&typeof setGamePB==='function') setGamePB('wordguess', guesses.length);
       }
     });
     return;

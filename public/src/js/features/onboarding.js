@@ -1,23 +1,38 @@
 // ===================== VIRAL GUEST MUQABALA =====================
 function checkViralLink(){
   const params=new URLSearchParams(window.location.search);
-  const challenger=params.get('challenge');const category=params.get('cat')||'GK';const target=params.get('score');
+  const challenger=params.get('challenge');
   if(!challenger)return;
+  const category=params.get('cat')||'GK';
+  const target=params.get('score');
+  const game=params.get('game')||'quiz';
+  const gName=(typeof getGame==='function'&&getGame(game)?.name)||(game==='quiz'?'Muqabala':game);
   // Show guest banner
   const banner=document.createElement('div');banner.className='guest-banner';
-  banner.innerHTML=`<div><strong>${challenger}</strong> challenged you! Beat their score of ${target||'?'}/10 in ${category}</div><button class="guest-signup-btn" id="guestSignupBtn">Sign up to keep score!</button>`;
-  document.getElementById('topbar').after(banner);
+  banner.innerHTML=`<div><strong>${decodeURIComponent(challenger)}</strong> challenged you! Beat their score${target!=null?` of ${target}`:''} on ${gName}</div><button class="guest-signup-btn" id="guestSignupBtn">Sign up to keep score!</button>`;
+  document.getElementById('topbar')?.after(banner);
   document.getElementById('guestSignupBtn')?.addEventListener('click',()=>{banner.remove();showAuth();});
-  // Auto-start Muqabala as guest
+  // Auto-start on Dangal
   document.querySelectorAll('.tab-btn').forEach(b=>{if(b.dataset.tab==='dangal')b.click();});
-  setTimeout(()=>startMuqabala(challenger,category),500);
+  setTimeout(()=>{
+    if(game==='quiz'||game==='muqabala'){
+      if(typeof startMuqabala==='function') startMuqabala(decodeURIComponent(challenger),category);
+    } else if(typeof getGame==='function'){
+      const g=getGame(game);
+      if(g) g.launch({source:'challenge',beatScore:target!=null?Number(target):null,challenger:decodeURIComponent(challenger)});
+      else if(typeof startMuqabala==='function') startMuqabala(decodeURIComponent(challenger),category);
+    }
+  },500);
 }
 
-function generateChallengeLink(score,category){
+function generateChallengeLink(score,category,gameId){
   const name=encodeURIComponent(userProfile?.name||'Someone');
-  const url=`${window.location.origin}${window.location.pathname}?challenge=${name}&cat=${category}&score=${score}`;
-  if(navigator.share){navigator.share({title:'Beat my score on Chaupaal!',text:`Can you beat my score of ${score}/10 on ${category}? Play now!`,url});}
-  else{navigator.clipboard.writeText(url).then(()=>showToast('Challenge link copied! Share it anywhere 🔗'));}
+  const gid=gameId||'quiz';
+  const url=typeof buildBeatScoreLink==='function'
+    ? buildBeatScoreLink(gid, score, {cat: category||'GK'})
+    : `${window.location.origin}${window.location.pathname}?challenge=${name}&cat=${category||'GK'}&score=${score}&game=${gid}`;
+  if(navigator.share){navigator.share({title:'Beat my score on Chaupaal!',text:`Can you beat my score of ${score} on Chaupaal? Play now!`,url});}
+  else{navigator.clipboard.writeText(url).then(()=>showToast('Challenge link copied! Share it anywhere'));}
 }
 
 // ===================== FRIEND DISCOVERY =====================
@@ -76,13 +91,20 @@ function renderFriendDiscovery(container){
 function broadcastDuelResult(friendName,myScore,theirScore,groupIds=[]){
   const won=myScore>theirScore;const userName=userProfile?.name?.split(' ')[0]||'You';
   const friendFirst=friendName.split(' ')[0];
-  const text=won?`${userName} beat ${friendFirst} ${myScore}-${theirScore} in the Daily Ritual! 🔥`:myScore===theirScore?`${userName} and ${friendFirst} tied ${myScore}-${theirScore}! 🤝`:`${friendFirst} beat ${userName} ${theirScore}-${myScore} today 😅`;
-  // Add as a story
-  SAMPLE_STORIES.unshift({id:`ds_${Date.now()}`,name:'Ritual result',avatar:'⚔️',type:'duel',text,seen:false,auto:true,deletable:true});
-  if(SAMPLE_CHATS.find(c=>c.type==='group')){
+  const text=won?`${userName} beat ${friendFirst} ${myScore}-${theirScore} in Muqabala`:myScore===theirScore?`${userName} and ${friendFirst} tied ${myScore}-${theirScore}`:`${friendFirst} beat ${userName} ${theirScore}-${myScore}`;
+  // Local sample feed (offline / demo)
+  if(typeof SAMPLE_STORIES!=='undefined'&&Array.isArray(SAMPLE_STORIES)){
+    SAMPLE_STORIES.unshift({id:`ds_${Date.now()}`,name:'Duel result',avatar:'🪑',type:'score',score:myScore,total:theirScore,text,seen:false,auto:true,deletable:true,sharedGameId:'quiz'});
+  }
+  if(typeof SAMPLE_CHATS!=='undefined'&&SAMPLE_CHATS.find(c=>c.type==='group')){
     const grp=SAMPLE_CHATS.find(c=>c.type==='group');grp.preview=text;grp.time='just now';
   }
-  showToast('Result shared to your groups! 👥');
+  // Real Baithak story when signed in
+  if(typeof postGameScoreStory==='function'){
+    postGameScoreStory('quiz',{score:myScore,total:10,scoreLine:`${myScore}–${theirScore}`,text,meta:'Muqabala'});
+  } else if(typeof showToast==='function'){
+    showToast('Result shared');
+  }
 }
 
 // ===================== TAAZA KHABAR — BREAKING NEWS FEED =====================

@@ -2209,6 +2209,104 @@ select:focus-visible,
 .game-result-btn{min-height:44px;border-radius:14px;border:1px solid var(--line);background:var(--cream);color:var(--ink);font:700 13px 'Space Grotesk',sans-serif;cursor:pointer;}
 .game-overlay--dark .game-result-btn{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.12);color:#fff;}
 .game-result-btn--primary{background:var(--game-accent,#E63946);border-color:transparent;color:#fff;}
+.game-result-brand{margin-bottom:2px;opacity:.72;}
+.game-result-pb{margin:0;font:600 12px/1.4 'Space Grotesk',sans-serif;color:var(--game-accent,#E63946);}
+.game-overlay--dark .game-result-pb{color:color-mix(in srgb,var(--game-accent,#E63946) 85%,#fff);}
+
+/* Subtle Chaupaal brand mark — chrome / results / share */
+.game-brand-mark{display:inline-flex;align-items:center;gap:4px;font:600 9px/1 'Space Grotesk',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);opacity:.85;}
+.game-brand-mark--compact .game-brand-word{font-size:8px;}
+.game-brand-chair{font-size:10px;line-height:1;opacity:.9;filter:grayscale(.2);}
+.game-chrome-brand{display:flex;justify-content:center;margin-bottom:1px;}
+.game-overlay--dark .game-brand-mark{color:rgba(255,255,255,.45);}
+
+/* Unified share card (all games) */
+.game-share-card{margin:4px 0 8px;padding:16px 14px;border-radius:16px;background:linear-gradient(145deg,#1F2542,#2A3158);color:#fff;text-align:center;width:min(100%,300px);box-shadow:0 8px 22px rgba(31,37,66,.22);}
+.game-share-brand{font:700 10px/1.2 'Space Grotesk',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--gold,#FFC93C);margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;}
+.game-share-brand .game-brand-mark{color:var(--gold,#FFC93C);opacity:1;}
+.game-share-score{font:700 32px/1 'Space Grotesk',sans-serif;margin-bottom:6px;}
+.game-share-meta{font-size:12px;opacity:.78;margin-bottom:4px;}
+.game-share-vs{font:700 13px 'Space Grotesk',sans-serif;}
+
+/* Invalid-move shake */
+@keyframes gameInvalidShake{
+  0%,100%{transform:translateX(0)}
+  20%{transform:translateX(-5px)}
+  40%{transform:translateX(5px)}
+  60%{transform:translateX(-3px)}
+  80%{transform:translateX(3px)}
+}
+.game-invalid-shake{animation:gameInvalidShake .45s ease;}
+
+/* First-run coach */
+.game-coach{position:absolute;inset:0;z-index:40;display:flex;align-items:flex-end;justify-content:center;padding:16px;background:rgba(15,18,28,.45);backdrop-filter:blur(2px);}
+.game-coach-card{width:min(100%,340px);background:var(--white,#fff);color:var(--ink,#1A1714);border-radius:18px;padding:18px 16px 14px;box-shadow:0 12px 32px rgba(0,0,0,.2);}
+.game-overlay--dark .game-coach-card{background:#1c2033;color:#fff;}
+.game-coach-brand{margin-bottom:6px;}
+.game-coach-title{font:700 16px 'Space Grotesk',sans-serif;margin-bottom:8px;}
+.game-coach-tips{margin:0 0 14px;padding-left:18px;font:400 13px/1.45 Inter,sans-serif;color:var(--muted);}
+.game-overlay--dark .game-coach-tips{color:rgba(255,255,255,.6);}
+.game-coach-tips li{margin-bottom:4px;}
+
+/* Contextual HUD strip */
+.game-hud{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;padding:0 12px 8px;}
+.game-hud-item{display:flex;flex-direction:column;align-items:center;min-width:64px;padding:6px 10px;border-radius:10px;background:rgba(0,0,0,.04);}
+.game-overlay--dark .game-hud-item{background:rgba(255,255,255,.06);}
+.game-hud-label{font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);}
+.game-overlay--dark .game-hud-label{color:rgba(255,255,255,.45);}
+.game-hud-value{font:700 14px 'Space Grotesk',sans-serif;color:var(--game-accent,#E63946);}
+
+/* Friend picker sheet */
+.game-friend-sheet{position:absolute;inset:0;z-index:120;display:flex;align-items:flex-end;justify-content:center;}
+.game-friend-backdrop{position:absolute;inset:0;background:rgba(20,22,30,.4);}
+.game-friend-card{position:relative;width:100%;max-height:78vh;overflow:auto;background:var(--white);border-radius:22px 22px 0 0;padding:18px 16px 12px;box-shadow:0 -8px 28px rgba(0,0,0,.12);}
+.game-friend-title{font:700 17px 'Space Grotesk',sans-serif;}
+.game-friend-sub{font-size:12px;color:var(--muted);margin:4px 0 12px;}
+.game-friend-list{display:flex;flex-direction:column;gap:6px;max-height:48vh;overflow:auto;}
+.game-friend-row{display:flex;align-items:center;gap:12px;width:100%;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--cream,#F7F4EF);cursor:pointer;text-align:left;}
+.game-friend-avatar{font-size:22px;width:36px;text-align:center;}
+.game-friend-info{display:flex;flex-direction:column;min-width:0;}
+.game-friend-name{font:700 14px 'Space Grotesk',sans-serif;}
+.game-friend-meta{font-size:11px;color:var(--muted);}
+.game-friend-cancel{width:100%;margin-top:10px;padding:12px;border:0;background:none;color:var(--muted);font-size:14px;cursor:pointer;}
+.game-friend-loading,.game-friend-empty{font-size:13px;color:var(--muted);padding:12px 4px;line-height:1.45;}
+
+/* Dangal sections */
+.dangal-section{margin:0 0 8px;}
+.dangal-section-label{padding:10px 16px 6px;font:700 11px/1 'Space Grotesk',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}
+.dangal-section-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 16px 8px;}
+.dangal-section-grid--featured{grid-template-columns:1fr;}
+.dangal-continue-chip,.dangal-challenge-chip,.dangal-spotlight-chip{
+  margin:0 16px 10px;padding:12px 14px;border-radius:14px;background:var(--white);border:1px solid var(--line);
+  display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;
+  box-shadow:var(--shadow-sm,0 2px 8px rgba(0,0,0,.04));
+}
+.dangal-continue-chip strong,.dangal-challenge-chip strong,.dangal-spotlight-chip strong{font:700 13px 'Space Grotesk',sans-serif;}
+.dangal-continue-chip span,.dangal-challenge-chip span,.dangal-spotlight-chip span{font-size:11px;color:var(--muted);}
+.dangal-spotlight-chip{background:linear-gradient(135deg,rgba(230,57,70,.06),rgba(31,37,66,.04));}
+.dangal-friends-board{margin:8px 16px 16px;padding:12px 14px;border-radius:14px;background:var(--white);border:1px solid var(--line);}
+.dangal-friends-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px;}
+.dangal-friends-row:last-child{border-bottom:0;}
+.dangal-friends-row.is-you{font-weight:700;}
+.dangal-friends-rank{width:20px;color:var(--muted);font-weight:700;font-size:11px;}
+.dangal-friends-name{flex:1;}
+.dangal-friends-rating{font:700 13px 'Space Grotesk',sans-serif;color:var(--red,#E63946);}
+
+/* Unified tile treatment (Muqabala + others) */
+.dangal-game-tile .dangal-game-icon{
+  width:44px;height:44px;border-radius:12px;display:grid;place-items:center;
+  background:color-mix(in srgb,var(--tile-accent,var(--red)) 12%,transparent);
+  font-size:22px !important;margin-bottom:10px !important;
+}
+.dangal-game-tile.featured .dangal-game-icon{
+  background:rgba(255,255,255,.12);width:52px;height:52px;font-size:28px !important;
+}
+.dangal-game-rating-pill{
+  display:inline-flex;align-items:center;gap:4px;border-radius:999px;
+  background:rgba(0,0,0,.04);color:var(--ink);font-weight:700;
+}
+.dangal-game-tile.featured .dangal-game-rating-pill{background:rgba(255,201,60,.15);color:var(--gold);}
+.dangal-solo-tag{font-size:9px;font-weight:700;background:rgba(255,201,60,.2);color:var(--gold);border-radius:4px;padding:2px 6px;margin-left:4px;vertical-align:middle;}
 .story-destination-tag{font-weight:700;letter-spacing:.02em;}
 .story-destination-tag--baithak{color:#FFE66D;}
 .story-destination-tag--duniya{color:#7DD3C0;}

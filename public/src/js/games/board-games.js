@@ -416,11 +416,24 @@ function openBusinessGame(chat,playerCount){
           glyph:winner&&winner.name==='You'?'✓':'·',
           title:winner?(winner.name==='You'?'You win':`${winner.name} wins`):'Game over',
           subtitle:players.map(p=>`${p.name}: ₹${Math.max(0,p.money)} · ${p.properties.length} props`).join(' · '),
-          actions:[{label:'Done',primary:true}],
+          shareCardHtml: typeof buildGameShareCard==='function'?buildGameShareCard('business',{scoreLine:winner?`${winner.name} wins`:'Over',meta:'Business'}):'',
+          actions:[
+            {label:'Play again',primary:true,id:'again'},
+            {label:'Share',primary:false,id:'share'},
+            {label:'Done',primary:false,id:'done'},
+          ],
         }):`<div style="padding:24px;text-align:center;color:#fff;">${winner?.name||'Someone'} wins</div>`}
       `;
       document.getElementById('busBack')?.addEventListener('click',()=>close());
-      overlay.querySelector('[data-result-action]')?.addEventListener('click',()=>close());
+      if(typeof wireGameResultActions==='function'){
+        wireGameResultActions(overlay,{
+          again:()=>{close();openBusinessGame(chat);},
+          share:()=>{if(typeof shareGameResult==='function')shareGameResult('business',{scoreLine:winner?`${winner.name} wins`:'Over'});},
+          done:()=>close(),
+        });
+      } else {
+        overlay.querySelector('[data-result-action]')?.addEventListener('click',()=>close());
+      }
       return;
     }
     overlay.innerHTML=`
@@ -577,12 +590,25 @@ function openScribbleGame(chat,playerList,opts){
         subtitle:practiceMode
           ?`Word was “${currentWord}” · keep those brush skills sharp`
           :sorted.map(([name,score],i)=>`${i+1}. ${name} · ${score} pts`).join(' · '),
-        actions:[{label:'Done',primary:true}],
+        shareCardHtml: typeof buildGameShareCard==='function'?buildGameShareCard('scribble',{scoreLine:practiceMode?'Practice':`${sorted[0]?.[0]} wins`,meta:currentWord}):'',
+        actions:[
+          {label:'Play again',primary:true,id:'again'},
+          {label:'Share',primary:false,id:'share'},
+          {label:'Done',primary:false,id:'done'},
+        ],
       }):`<div style="padding:24px;text-align:center;"><div>${practiceMode?'Practice done':sorted[0]?.[0]+' wins!'}</div><button id="scribbleClose">Done</button></div>`}
     `;
     const done=()=>close(practiceMode?'complete':(won?'won':'lost'));
     document.getElementById('scribbleClose')?.addEventListener('click',done);
-    overlay.querySelector('[data-result-action]')?.addEventListener('click',done);
+    if(typeof wireGameResultActions==='function'){
+      wireGameResultActions(overlay,{
+        again:()=>{close();openScribbleGame(chat,playerList,opts);},
+        share:()=>{if(typeof shareGameResult==='function')shareGameResult('scribble',{scoreLine:practiceMode?'Practice':`${sorted[0]?.[0]} wins`,meta:currentWord});},
+        done,
+      });
+    } else {
+      overlay.querySelector('[data-result-action]')?.addEventListener('click',done);
+    }
   }
 
   function addScribbleMessage(text,isCorrect){

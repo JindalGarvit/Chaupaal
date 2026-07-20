@@ -17,7 +17,7 @@ function openRushRunner(){
   let obstacles=[],coinItems=[],powerups=[],particles=[];
   let jumping=false,sliding=false,jumpT=0,slideT=0,squash=1;
   let hitFlash=0,shield=false,shieldTimer=0,magnet=false,magnetTimer=0;
-  let bestScore=parseInt(localStorage.getItem('rushrunner_best')||'0',10)||0;
+  let bestScore=(typeof getGamePB==='function'?getGamePB('rushrunner'):null) ?? (parseInt(localStorage.getItem('rushrunner_best')||'0',10)||0);
   let raf=null,lastTime=0,spawnAcc=0,coinAcc=0,powerAcc=0,scroll=0;
   let resizeObs=null,cssW=320,cssH=480,shake=0;
   let keyHandler=null;
@@ -336,7 +336,9 @@ function openRushRunner(){
     gameOver=true;cancelAnimationFrame(raf);raf=null;
     if(keyHandler){window.removeEventListener('keydown',keyHandler);keyHandler=null;}
     const final=Math.floor(dist);
-    if(final>bestScore){bestScore=final;localStorage.setItem('rushrunner_best',String(bestScore));}
+    if(typeof setGamePB==='function') bestScore=setGamePB('rushrunner', final) ?? Math.max(bestScore, final);
+    else if(final>bestScore){bestScore=final;localStorage.setItem('rushrunner_best',String(bestScore));}
+    const vsBest=typeof formatVsBest==='function'?formatVsBest('rushrunner', final):`Best ${bestScore}m`;
     if(gs)gs.setOutcome('lost');
     if(typeof recordGameResult==='function')recordGameResult('rushrunner',false);
     buzz('lose');
@@ -344,21 +346,41 @@ function openRushRunner(){
     if(!div)return;
     div.className='rr-start rr-start--over';
     div.style.display='flex';
+    const shareStats={scoreLine:`${final}m`,score:final,meta:`${coins} coins · ${vsBest}`,text:`I ran ${final}m on Chaupaal Rush Runner! Can you beat me?`};
+    const shareCard=typeof buildGameShareCard==='function'?buildGameShareCard('rushrunner',shareStats):'';
     div.innerHTML=`
       ${typeof gameResultHtml==='function'?gameResultHtml({
         glyph:'·',
         title:`${final}m run`,
-        subtitle:`${coins} coins · Best ${bestScore}m`,
-        actions:[{label:'Run again',primary:true},{label:'Share score',primary:false}],
+        subtitle:`${coins} coins`,
+        vsBest,
+        shareCardHtml:shareCard,
+        actions:[
+          {label:'Play again',primary:true,id:'again'},
+          {label:'Share',primary:false,id:'share'},
+          {label:'Challenge friend',primary:false,id:'challenge'},
+          {label:'Post to story',primary:false,id:'story'},
+        ],
       }):`<div style="color:#fff;text-align:center;"><div>${final}m</div><button type="button" id="rrRestart">Run again</button></div>`}
     `;
-    const actions=div.querySelectorAll('[data-result-action]');
-    (actions[0]||document.getElementById('rrRestart'))?.addEventListener('click',()=>{close();openRushRunner();});
-    (actions[1])?.addEventListener('click',()=>{
-      const t=`I ran ${final}m on Chaupaal Rush Runner! Can you beat me?`;
-      if(navigator.share)navigator.share({text:t}).catch(()=>{});
-      else if(navigator.clipboard){navigator.clipboard.writeText(t);if(typeof showToast==='function')showToast('Copied!');}
-    });
+    if(typeof wireGameResultActions==='function'){
+      wireGameResultActions(div,{
+        again:()=>{close();openRushRunner();},
+        share:()=>{if(typeof shareGameResult==='function')shareGameResult('rushrunner',shareStats);},
+        challenge:async()=>{
+          if(typeof openFriendPickerSheet==='function'){
+            const f=await openFriendPickerSheet({title:'Beat my Rush score',subtitle:`Challenge with ${final}m`});
+            if(f&&typeof shareGameResult==='function'){
+              shareGameResult('rushrunner',{...shareStats,text:`Hey ${f.name} — beat my ${final}m on Rush Runner!`});
+            }
+          } else if(typeof shareGameResult==='function') shareGameResult('rushrunner',shareStats);
+        },
+        story:()=>{if(typeof postGameScoreStory==='function')postGameScoreStory('rushrunner',{score:final,scoreLine:`${final}m`,meta:vsBest});},
+      });
+    } else {
+      const actions=div.querySelectorAll('[data-result-action]');
+      (actions[0]||document.getElementById('rrRestart'))?.addEventListener('click',()=>{close();openRushRunner();});
+    }
   }
 
   function update(ts){
@@ -743,8 +765,9 @@ function openTipTap(){
         const t2=board[r1][c1];board[r1][c1]=board[r2][c2];board[r2][c2]=t2;
         render({swap:[[r1,c1],[r2,c2]]});
         animating=false;selected=null;
-        buzz('invalid');
-        if(typeof showToast==='function')showToast('No match');
+        const grid=document.getElementById('cbGrid');
+        if(typeof shakeInvalidMove==='function') shakeInvalidMove(grid,{toast:'No match'});
+        else {buzz('invalid');if(typeof showToast==='function')showToast('No match');}
       },180);
     }
   }
@@ -757,40 +780,86 @@ function openTipTap(){
   function showLevelComplete(){
     gameOver=true;
     localStorage.setItem('tiptap_level',String(level+1));
+    if(typeof setGamePB==='function') setGamePB('tiptap', score);
+    const vsBest=typeof formatVsBest==='function'?formatVsBest('tiptap', score):'';
     if(gs)gs.setOutcome('won');
     if(typeof recordGameResult==='function')recordGameResult('tiptap',true);
     buzz('complete');
     const div=document.getElementById('cbOverlay');if(!div)return;div.style.display='flex';
+    const shareStats={scoreLine:score.toLocaleString(),score,meta:`Level ${level} · ${vsBest||''}`,text:`Cleared Tip Tap level ${level} with ${score.toLocaleString()} on Chaupaal!`};
+    const shareCard=typeof buildGameShareCard==='function'?buildGameShareCard('tiptap',shareStats):'';
     div.innerHTML=`
       ${typeof gameResultHtml==='function'?gameResultHtml({
         glyph:'✓',
         title:`Level ${level} complete`,
         subtitle:`Score ${score.toLocaleString()}`,
-        actions:[{label:`Level ${level+1}`,primary:true}],
+        vsBest:vsBest||undefined,
+        shareCardHtml:shareCard,
+        actions:[
+          {label:`Level ${level+1}`,primary:true,id:'again'},
+          {label:'Share',primary:false,id:'share'},
+          {label:'Challenge friend',primary:false,id:'challenge'},
+        ],
       }):`<div><button type="button" id="cbNext">Next</button></div>`}
     `;
-    (div.querySelector('[data-result-action]')||document.getElementById('cbNext'))?.addEventListener('click',()=>{
-      level++;startLevel(level);document.getElementById('cbOverlay').style.display='none';
-    });
+    if(typeof wireGameResultActions==='function'){
+      wireGameResultActions(div,{
+        again:()=>{level++;startLevel(level);document.getElementById('cbOverlay').style.display='none';},
+        share:()=>{if(typeof shareGameResult==='function')shareGameResult('tiptap',shareStats);},
+        challenge:async()=>{
+          if(typeof openFriendPickerSheet==='function'){
+            const f=await openFriendPickerSheet({title:'Challenge · Tip Tap'});
+            if(f&&typeof shareGameResult==='function') shareGameResult('tiptap',{...shareStats,text:`Hey ${f.name} — beat my Tip Tap score!`});
+          } else if(typeof shareGameResult==='function') shareGameResult('tiptap',shareStats);
+        },
+      });
+    } else {
+      (div.querySelector('[data-result-action]')||document.getElementById('cbNext'))?.addEventListener('click',()=>{
+        level++;startLevel(level);document.getElementById('cbOverlay').style.display='none';
+      });
+    }
   }
 
   function showGameOver(){
     gameOver=true;
+    if(typeof setGamePB==='function') setGamePB('tiptap', score);
+    const vsBest=typeof formatVsBest==='function'?formatVsBest('tiptap', score):'';
     if(gs)gs.setOutcome('lost');
     if(typeof recordGameResult==='function')recordGameResult('tiptap',false);
     buzz('lose');
     const div=document.getElementById('cbOverlay');if(!div)return;div.style.display='flex';
+    const shareStats={scoreLine:score.toLocaleString(),score,meta:`Level ${level} · ${vsBest||''}`,text:`Scored ${score.toLocaleString()} on Tip Tap (Chaupaal). Can you beat me?`};
+    const shareCard=typeof buildGameShareCard==='function'?buildGameShareCard('tiptap',shareStats):'';
     div.innerHTML=`
       ${typeof gameResultHtml==='function'?gameResultHtml({
         glyph:'·',
         title:'Out of moves',
         subtitle:`Score ${score.toLocaleString()} / ${targetScore.toLocaleString()} · Level ${level}`,
-        actions:[{label:'Try again',primary:true}],
+        vsBest:vsBest||undefined,
+        shareCardHtml:shareCard,
+        actions:[
+          {label:'Play again',primary:true,id:'again'},
+          {label:'Share',primary:false,id:'share'},
+          {label:'Challenge friend',primary:false,id:'challenge'},
+        ],
       }):`<div><button type="button" id="cbRetry">Retry</button></div>`}
     `;
-    (div.querySelector('[data-result-action]')||document.getElementById('cbRetry'))?.addEventListener('click',()=>{
-      startLevel(level);document.getElementById('cbOverlay').style.display='none';
-    });
+    if(typeof wireGameResultActions==='function'){
+      wireGameResultActions(div,{
+        again:()=>{startLevel(level);document.getElementById('cbOverlay').style.display='none';},
+        share:()=>{if(typeof shareGameResult==='function')shareGameResult('tiptap',shareStats);},
+        challenge:async()=>{
+          if(typeof openFriendPickerSheet==='function'){
+            const f=await openFriendPickerSheet({title:'Challenge · Tip Tap'});
+            if(f&&typeof shareGameResult==='function') shareGameResult('tiptap',{...shareStats,text:`Hey ${f.name} — beat my Tip Tap score!`});
+          } else if(typeof shareGameResult==='function') shareGameResult('tiptap',shareStats);
+        },
+      });
+    } else {
+      (div.querySelector('[data-result-action]')||document.getElementById('cbRetry'))?.addEventListener('click',()=>{
+        startLevel(level);document.getElementById('cbOverlay').style.display='none';
+      });
+    }
   }
 
   function pieceHtml(p){

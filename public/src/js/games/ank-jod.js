@@ -1222,6 +1222,14 @@
     function paintWinResult() {
       const elapsed = session ? session.getElapsedMs() : 0;
       const diffMeta = DIFFS.find((d) => d.id === puzzle.difficulty) || DIFFS[0];
+      const secs = Math.round(elapsed / 1000);
+      if (typeof setGamePB === 'function') setGamePB('ankjod', secs);
+      const vsBest = typeof formatVsBest === 'function' ? formatVsBest('ankjod', secs) : '';
+      const shareStats = {
+        scoreLine: formatTime(elapsed),
+        score: secs,
+        meta: `${diffMeta.label}${vsBest ? ` · ${vsBest}` : ''}`,
+      };
       root.innerHTML = `
         ${gameChromeHtml({ title: 'Ank Jod', subtitle: diffMeta.label, backId: 'kkBack' })}
         ${
@@ -1230,9 +1238,12 @@
                 glyph: '✓',
                 title: 'Puzzle solved',
                 subtitle: `${diffMeta.label} · ${formatTime(elapsed)}`,
+                vsBest: vsBest || undefined,
+                shareCardHtml: typeof buildGameShareCard === 'function' ? buildGameShareCard('ankjod', shareStats) : '',
                 actions: [
-                  { label: 'Play again', primary: true },
-                  { label: 'Done', primary: false },
+                  { label: 'Play again', primary: true, id: 'again' },
+                  { label: 'Share', primary: false, id: 'share' },
+                  { label: 'Done', primary: false, id: 'done' },
                 ],
               })
             : `<div class="kk-board-area"><div class="kk-status kk-status--won">Puzzle solved!</div></div>`
@@ -1240,14 +1251,29 @@
       root.querySelector('#kkBack')?.addEventListener('click', () => {
         if (session) session.end('won');
       });
-      const actions = root.querySelectorAll('[data-result-action]');
-      actions[0]?.addEventListener('click', () => {
-        if (session) session.end('restart');
-        openDifficultyPicker(ctx);
-      });
-      actions[1]?.addEventListener('click', () => {
-        if (session) session.end('won');
-      });
+      if (typeof wireGameResultActions === 'function') {
+        wireGameResultActions(root, {
+          again: () => {
+            if (session) session.end('restart');
+            openDifficultyPicker(ctx);
+          },
+          share: () => {
+            if (typeof shareGameResult === 'function') shareGameResult('ankjod', shareStats);
+          },
+          done: () => {
+            if (session) session.end('won');
+          },
+        });
+      } else {
+        const actions = root.querySelectorAll('[data-result-action]');
+        actions[0]?.addEventListener('click', () => {
+          if (session) session.end('restart');
+          openDifficultyPicker(ctx);
+        });
+        actions[1]?.addEventListener('click', () => {
+          if (session) session.end('won');
+        });
+      }
     }
 
     function placeDigit(n) {

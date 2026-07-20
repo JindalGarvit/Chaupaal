@@ -779,59 +779,79 @@ function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalA
   const resultKey = tie ? 'draw' : (won ? 'win' : 'loss');
   if(typeof endSession === 'function') endSession(resultKey);
   if(typeof gameFeedback === 'function') gameFeedback(tie?'draw':(won?'win':'lose'));
+  if(typeof setGamePB==='function') setGamePB('quiz', myScore);
+  const vsBest = typeof formatVsBest==='function'?formatVsBest('quiz', myScore):'';
+  const duel = typeof recordDuelStreak==='function'?recordDuelStreak(oppName, won, tie):null;
+  const duelLine = duel && duel.streak > 1 ? `Duel streak · ${duel.streak}` : '';
 
   const nudge=philosophicalAnswers.length>0 && typeof NUDGES_POST_MUQABALA!=='undefined'
     ? NUDGES_POST_MUQABALA[Math.floor(Math.random()*NUDGES_POST_MUQABALA.length)].replace('{answer}',philosophicalAnswers[0].answer)
     : 'Ek acha muqabala tha! Kuch aur baatein karein?';
-  const streakLine = stats.bestStreak > 1 ? `Best streak · ${stats.bestStreak}` : '';
-  const shareText = `Chaupaal Muqabala (${mode}): ${myScore}–${oppScore} vs ${oppName}${stats.bestStreak>1?` · streak ${stats.bestStreak}`:''}${won?' · I won!':tie?' · Draw':''}`;
+  const streakLine = [stats.bestStreak > 1 ? `Best combo · ${stats.bestStreak}` : '', duelLine].filter(Boolean).join(' · ');
+  const shareStats = {
+    scoreLine: `${myScore} – ${oppScore}`,
+    score: myScore,
+    meta: `${won?'Victory':tie?'Draw':'Close fight'} · ${mode}${streakLine?` · ${streakLine}`:''}`,
+    vs: `You vs ${oppName}`,
+    cat: mode,
+    text: `Chaupaal Muqabala (${mode}): ${myScore}–${oppScore} vs ${oppName}${stats.bestStreak>1?` · streak ${stats.bestStreak}`:''}${won?' · I won!':tie?' · Draw':''}`,
+  };
+  const shareCard = typeof buildGameShareCard==='function'
+    ? buildGameShareCard('quiz', shareStats)
+    : '';
 
   overlay.innerHTML=`
     ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:'Game over',backId:'closeMuqabala3'}):`<div class="muqabala-header"><div class="muqabala-title">Muqabala over!</div><button class="icon-btn" id="closeMuqabala3">←</button></div>`}
-    <div class="muqabala-share-card" id="muqabalaShareCard">
-      <div class="muqabala-share-brand">Chaupaal · Muqabala</div>
-      <div class="muqabala-share-score">${myScore} – ${oppScore}</div>
-      <div class="muqabala-share-meta">${won?'Victory':tie?'Draw':'Close fight'} · ${mode}${streakLine?` · ${streakLine}`:''}</div>
-      <div class="muqabala-share-vs">You vs ${oppName}</div>
-    </div>
     ${typeof gameResultHtml==='function'?gameResultHtml({
       glyph:tie?'=':won?'✓':'·',
       title:tie?"It's a tie":(won?'You won':`${oppName} won`),
       subtitle:streakLine||undefined,
+      vsBest: vsBest||undefined,
       you:myScore,opp:oppScore,oppLabel:oppName,
+      shareCardHtml: shareCard,
       actions:[
-        {label:'Share result',primary:true},
-        {label:`Chat with ${oppName}`,primary:false},
-        {label:'Rematch',primary:false},
-        {label:'Challenge others',primary:false},
+        {label:'Play again',primary:true,id:'again'},
+        {label:'Share',primary:false,id:'share'},
+        {label:'Challenge friend',primary:false,id:'challenge'},
+        {label:'Post to story',primary:false,id:'story'},
+        {label:`Chat with ${oppName}`,primary:false,id:'chat'},
       ],
     }):`<div class="muqabala-result"><div>${tie?"It's a tie!":(won?'You won!':`${oppName} won`)}</div></div>`}
     ${philosophicalAnswers.length>0?`<div class="nudge-box" style="margin:0 16px 16px;"><div class="nudge-label">Baithak mein baat karein</div><div class="nudge-text">${nudge}</div></div>`:''}
   `;
   document.getElementById('closeMuqabala3').addEventListener('click',()=>overlay.classList.add('hidden'));
-  const actionBtns=overlay.querySelectorAll('[data-result-action]');
-  actionBtns[0]?.addEventListener('click',()=>{
-    const url = `${window.location.origin}${window.location.pathname}`;
-    if(navigator.share){
-      navigator.share({title:'Chaupaal Muqabala',text:shareText,url}).catch(()=>{});
-    } else if(navigator.clipboard&&navigator.clipboard.writeText){
-      navigator.clipboard.writeText(`${shareText}\n${url}`).then(()=>{
-        if(typeof showToast==='function')showToast('Result copied — share anywhere');
-      });
-    } else if(typeof generateChallengeLink==='function'){
-      generateChallengeLink(myScore,mode);
-    }
-  });
-  actionBtns[1]?.addEventListener('click',()=>{overlay.classList.add('hidden');showToast('Check Baithak for your chat!');});
-  actionBtns[2]?.addEventListener('click',()=>{
-    startMuqabala(oppName, mode, {
-      questions: options.questions || undefined,
-      timerSeconds: options.timerSeconds,
-      source: options.source,
-      skipMatchmaking: options.source === 'manual' || options.source === 'ai',
+  if(typeof wireGameResultActions==='function'){
+    wireGameResultActions(overlay,{
+      again:()=>{
+        startMuqabala(oppName, mode, {
+          questions: options.questions || undefined,
+          timerSeconds: options.timerSeconds,
+          source: options.source,
+          skipMatchmaking: options.source === 'manual' || options.source === 'ai',
+        });
+      },
+      share:()=>{
+        if(typeof shareGameResult==='function') shareGameResult('quiz', shareStats);
+        else if(typeof generateChallengeLink==='function') generateChallengeLink(myScore,mode);
+      },
+      challenge: async ()=>{
+        if(typeof openFriendPickerSheet==='function'){
+          const friend=await openFriendPickerSheet({title:'Challenge a friend',subtitle:'Start a Muqabala'});
+          if(friend){
+            startMuqabala(friend.name, mode, {skipMatchmaking:true, source:'friend'});
+          }
+        } else if(typeof generateChallengeLink==='function'){
+          generateChallengeLink(myScore,mode);
+        }
+      },
+      story:()=>{
+        if(typeof postGameScoreStory==='function'){
+          postGameScoreStory('quiz',{score:myScore,total:10,scoreLine:`${myScore}–${oppScore}`,meta:mode,text:shareStats.text});
+        }
+      },
+      chat:()=>{overlay.classList.add('hidden');showToast('Check Baithak for your chat!');},
     });
-  });
-  actionBtns[3]?.addEventListener('click',()=>generateChallengeLink(myScore,mode));
+  }
   if(myScore>0 && typeof broadcastDuelResult==='function') setTimeout(()=>broadcastDuelResult(oppName,myScore,oppScore),600);
 }
 
