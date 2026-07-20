@@ -87,6 +87,8 @@ function renderProfileModal(){
       ${profileField('Current City','currentCity','text','Where you live now')}
       ${profileField('Nationality','nationality','text','Your nationality')}
       ${profileField('Languages spoken','languages','chips','Add languages',['Hindi','English','Tamil','Telugu','Marathi','Bengali','Gujarati','Kannada','Malayalam','Punjabi','Urdu','Odia','Assamese','Konkani'])}
+      ${profileField('Things that excite me','interests','chips','Add interests',['Travel','Food','Startups','Films','Music','Fitness','Books','Politics','Tech','Fashion','Art','Animals','Nature','Spirituality','Comedy','Sports','Gaming','Photography','Cooking','Volunteer work'])}
+      ${typeof renderProfilePromptsBlock==='function'?renderProfilePromptsBlock():''}
       ${typeof renderProfileIcebreakerBlock==='function'?renderProfileIcebreakerBlock():''}
       ${profileField('Height','height','select','',['','Under 5ft','5ft','5ft 1in','5ft 2in','5ft 3in','5ft 4in','5ft 5in','5ft 6in','5ft 7in','5ft 8in','5ft 9in','5ft 10in','5ft 11in','6ft','6ft 1in','6ft 2in','6ft+'])}
       ${profileField('Blood Group','bloodGroup','select','',['','A+','A-','B+','B-','AB+','AB-','O+','O-','Don\'t know'])}
@@ -182,7 +184,9 @@ function renderProfileModal(){
     }
     if(type==='chips'){
       const selected=Array.isArray(val)?val:[];
-      return`<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">${label}</div><div class="dp-chips" data-key="${key}" style="display:flex;flex-wrap:wrap;gap:6px;">${(options||[]).map(o=>`<button class="dp-chip${selected.includes(o)?' active':''}" data-val="${o}" style="padding:6px 12px;border-radius:999px;border:2px solid ${selected.includes(o)?'var(--red)':'var(--line)'};background:${selected.includes(o)?'rgba(230,57,70,0.08)':'var(--white)'};color:${selected.includes(o)?'var(--red)':'var(--ink)'};font-size:12px;font-weight:600;cursor:pointer;">${o}</button>`).join('')}</div></div>`;
+      const presets=options||[];
+      const customOnly=selected.filter(s=>!presets.includes(s));
+      return`<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">${label}</div><div class="dp-chips" data-key="${key}" style="display:flex;flex-wrap:wrap;gap:6px;">${presets.map(o=>`<button type="button" class="dp-chip${selected.includes(o)?' active':''}" data-val="${o}" style="padding:6px 12px;border-radius:999px;border:2px solid ${selected.includes(o)?'var(--red)':'var(--line)'};background:${selected.includes(o)?'rgba(230,57,70,0.08)':'var(--white)'};color:${selected.includes(o)?'var(--red)':'var(--ink)'};font-size:12px;font-weight:600;cursor:pointer;">${o}</button>`).join('')}${customOnly.map(o=>`<button type="button" class="dp-chip active" data-val="${String(o).replace(/"/g,'&quot;')}" style="padding:6px 12px;border-radius:999px;border:2px solid var(--red);background:rgba(230,57,70,0.08);color:var(--red);font-size:12px;font-weight:600;cursor:pointer;">${o} ✕</button>`).join('')}</div><div class="dp-chip-custom" data-key="${key}" style="display:flex;gap:8px;margin-top:8px;"><input type="text" maxlength="40" placeholder="Write your own…" style="flex:1;padding:8px 12px;border:2px solid var(--line);border-radius:10px;font-size:13px;"><button type="button" class="dp-chip-add" style="padding:8px 12px;border:0;border-radius:10px;background:var(--cream);font-weight:700;font-size:12px;cursor:pointer;">Add</button></div></div>`;
     }
     return`<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">${label}</div><input class="dp-field" data-key="${key}" type="${type}" value="${val||''}" placeholder="${placeholder}" style="width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;background:var(--white);outline:none;box-sizing:border-box;"></div>`;
   }
@@ -239,12 +243,25 @@ function renderProfileModal(){
         if(arr.includes(val)) arr=arr.filter(x=>x!==val);
         else arr.push(val);
         saveProfileField(key, arr);
-        chip.classList.toggle('active', arr.includes(val));
-        chip.style.borderColor=arr.includes(val)?'var(--red)':'var(--line)';
-        chip.style.background=arr.includes(val)?'rgba(230,57,70,0.08)':'var(--white)';
-        chip.style.color=arr.includes(val)?'var(--red)':'var(--ink)';
+        renderSection(sec);
       });
     });
+    content.querySelectorAll('.dp-chip-custom').forEach(row=>{
+      const key=row.dataset.key;
+      const input=row.querySelector('input');
+      const add=()=>{
+        const typed=(input?.value||'').trim();
+        if(!typed) return;
+        let arr=Array.isArray(dp[key])?[...dp[key]]:[];
+        if(!arr.includes(typed)) arr.push(typed);
+        saveProfileField(key, arr);
+        input.value='';
+        renderSection(sec);
+      };
+      row.querySelector('.dp-chip-add')?.addEventListener('click', add);
+      input?.addEventListener('keydown',(e)=>{ if(e.key==='Enter'){ e.preventDefault(); add(); }});
+    });
+    if(typeof wireProfilePromptsBlock==='function') wireProfilePromptsBlock(content);
     if(typeof wireProfileIcebreakerBlock==='function') wireProfileIcebreakerBlock(content);
     if(typeof wireProfileTypeToggle==='function') wireProfileTypeToggle(content);
   }

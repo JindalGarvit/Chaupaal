@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="/src/styles/baithak.css?v=20">
   <link rel="stylesheet" href="/src/styles/peepal.css?v=18">
   <link rel="stylesheet" href="/src/styles/duniya.css?v=18">
-  <link rel="stylesheet" href="/src/styles/components.css?v=24">
+  <link rel="stylesheet" href="/src/styles/components.css?v=25">
 </head>
 <body>
 <div class="device">
@@ -107,24 +107,27 @@
         </div>
       </div>
 
-      <!-- ===== REGISTER: STEP 1 — Identity ===== -->
+      <!-- ===== REGISTER: STEP 1 — Account type + identity ===== -->
       <div class="auth-form-screen hidden" id="authRegStep1">
         <div class="auth-form-header">
           <button class="auth-back-btn" id="reg1BackBtn">←</button>
-          <div class="auth-form-title">Who are you? 👤</div>
-          <div class="auth-step-badge">1 / 3</div>
+          <div class="auth-form-title">Join Chaupaal</div>
+          <div class="auth-step-badge">1 / 2</div>
         </div>
-        <div class="auth-step-bar"><div class="auth-step-fill" style="width:33%"></div></div>
+        <div class="auth-step-bar"><div class="auth-step-fill" style="width:50%"></div></div>
         <div class="auth-form-body">
-          <div style="text-align:center;margin-bottom:20px;">
-            <div class="auth-photo-preview" id="photoPreview" style="margin:0 auto 10px;">
-              <span style="font-size:32px;">📷</span>
+          <div class="auth-input-group">
+            <label class="auth-input-label">I'm joining as <span class="auth-required">*</span></label>
+            <div style="display:flex;gap:8px;" id="regProfileTypeRow">
+              <button type="button" class="auth-type-chip active" data-profile-type="personal" id="regTypePersonal">
+                <strong>Personal</strong>
+                <span>Friends, dating, community</span>
+              </button>
+              <button type="button" class="auth-type-chip" data-profile-type="professional" id="regTypeProfessional">
+                <strong>Professional</strong>
+                <span>Business, creator, public figure</span>
+              </button>
             </div>
-            <label class="auth-photo-upload-btn">
-              Upload your real photo
-              <input type="file" id="photoInput" accept="image/*" style="display:none">
-            </label>
-            <div style="font-size:11px;color:var(--muted);margin-top:6px;">Real photo required · helps build trust in the community</div>
           </div>
           <div class="auth-input-group">
             <label class="auth-input-label">Full name <span class="auth-required">*</span></label>
@@ -136,106 +139,116 @@
               <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:15px;">@</span>
               <input class="auth-input" type="text" id="regUsername" placeholder="your_handle" autocapitalize="none" style="padding-left:32px;" autocomplete="username">
             </div>
-            <div class="auth-input-hint" id="usernameHint">Letters, numbers and underscores only</div>
+            <div class="auth-input-hint" id="usernameHint">Letters, numbers and underscores · checked live</div>
           </div>
           <div class="auth-input-group">
-            <label class="auth-input-label">Gender</label>
-            <div style="display:flex;gap:8px;">
-              <button class="auth-gender-chip" data-val="male">👨 Male</button>
-              <button class="auth-gender-chip" data-val="female">👩 Female</button>
-              <button class="auth-gender-chip" data-val="other">⚧ Other</button>
-            </div>
+            <label class="auth-input-label">Date of birth <span class="auth-required">*</span></label>
+            <input class="auth-input" type="date" id="regDob">
+            <div class="auth-input-hint">Must be 16+</div>
           </div>
-          <div style="display:flex;gap:10px;">
-            <div class="auth-input-group" style="flex:1;">
-              <label class="auth-input-label">Date of birth <span class="auth-required">*</span></label>
-              <input class="auth-input" type="date" id="regDob">
+          <div class="auth-input-group" id="regGenderGroup">
+            <label class="auth-input-label">Gender <span class="auth-required" id="regGenderRequired">*</span></label>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;" id="regGenderChips">
+              <button type="button" class="auth-gender-chip" data-val="Male">Male</button>
+              <button type="button" class="auth-gender-chip" data-val="Female">Female</button>
+              <button type="button" class="auth-gender-chip" data-val="Non-binary">Non-binary</button>
+              <button type="button" class="auth-gender-chip" data-val="Prefer not to say">Prefer not to say</button>
             </div>
+            <div class="auth-input-hint" id="regGenderHint">Required for Personal accounts</div>
           </div>
           <div class="auth-error" id="reg1Error"></div>
           <button class="btn btn--primary btn--block btn--lg auth-btn" id="reg1Next">Continue →</button>
+          <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:12px;line-height:1.5;">Photo, bio, and more come later — signup stays quick.</div>
         </div>
       </div>
 
-      <!-- ===== REGISTER: STEP 2 — Contact & Location ===== -->
+      <!-- ===== REGISTER: STEP 2 — Account credentials (+ optional extras) ===== -->
       <div class="auth-form-screen hidden" id="authRegStep2">
         <div class="auth-form-header">
           <button class="auth-back-btn" id="reg2BackBtn">←</button>
-          <div class="auth-form-title">Contact & location 📍</div>
-          <div class="auth-step-badge">2 / 3</div>
+          <div class="auth-form-title">Create your account</div>
+          <div class="auth-step-badge">2 / 2</div>
         </div>
-        <div class="auth-step-bar"><div class="auth-step-fill" style="width:66%"></div></div>
+        <div class="auth-step-bar"><div class="auth-step-fill" style="width:100%"></div></div>
         <div class="auth-form-body">
           <div class="auth-input-group">
             <label class="auth-input-label">Email <span class="auth-required">*</span></label>
             <input class="auth-input" type="email" id="regEmail" placeholder="your@email.com" autocomplete="email">
           </div>
           <div class="auth-input-group">
-            <label class="auth-input-label">Mobile number</label>
-            <input class="auth-input" type="tel" id="regPhone" placeholder="+91 98765 43210" autocomplete="tel">
-          </div>
-          <div class="auth-input-group">
-            <label class="auth-input-label">Current city <span class="auth-required">*</span></label>
-            <input class="auth-input" type="text" id="regCity" placeholder="e.g. Mumbai, Delhi, Bengaluru">
-          </div>
-          <div class="auth-input-group">
-            <label class="auth-input-label">Preferred language</label>
-            <select class="auth-input" id="regLanguage">
-              <option value="en">🇬🇧 English</option>
-              <option value="hi">🇮🇳 हिंदी</option>
-              <option value="bn">বাংলা</option>
-              <option value="te">తెలుగు</option>
-              <option value="ta">தமிழ்</option>
-              <option value="mr">मराठी</option>
-              <option value="gu">ગુજરાતી</option>
-              <option value="kn">ಕನ್ನಡ</option>
-              <option value="ml">മലയാളം</option>
-              <option value="pa">ਪੰਜਾਬੀ</option>
-            </select>
-          </div>
-          <div class="auth-error" id="reg2Error"></div>
-          <button class="btn btn--primary btn--block btn--lg auth-btn" id="reg2Next">Continue →</button>
-        </div>
-      </div>
-
-      <!-- ===== REGISTER: STEP 3 — Password & Interests ===== -->
-      <div class="auth-form-screen hidden" id="authRegStep3">
-        <div class="auth-form-header">
-          <button class="auth-back-btn" id="reg3BackBtn">←</button>
-          <div class="auth-form-title">Almost there! 🎉</div>
-          <div class="auth-step-badge">3 / 3</div>
-        </div>
-        <div class="auth-step-bar"><div class="auth-step-fill" style="width:100%"></div></div>
-        <div class="auth-form-body">
-          <div class="auth-input-group">
             <label class="auth-input-label">Password <span class="auth-required">*</span></label>
             <div style="position:relative;">
               <input class="auth-input" type="password" id="regPassword" placeholder="Min 8 characters" style="padding-right:44px;" autocomplete="new-password">
-              <button id="toggleRegPwd" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--muted);">👁</button>
+              <button type="button" id="toggleRegPwd" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--muted);">👁</button>
             </div>
             <div class="auth-pwd-strength" id="pwdStrength" style="display:none;">
               <div class="auth-pwd-bar"><div id="pwdStrengthFill" style="height:100%;border-radius:99px;transition:all .3s;"></div></div>
               <span id="pwdStrengthLabel" style="font-size:11px;font-weight:700;"></span>
             </div>
           </div>
-          <div class="auth-input-group">
-            <label class="auth-input-label">What are you here for? <span style="font-size:11px;font-weight:400;color:var(--muted);">(pick all that apply)</span></label>
-            <div style="display:flex;flex-wrap:wrap;gap:7px;" id="intentChips">
-              ${['📰 Stay informed','🤝 Make friends','💬 Discuss topics','⚔️ Play games','❤️ Meet someone','💼 Network','✈️ Find travel buddies','🎵 Bond over interests'].map(t=>`<button class="auth-intent-chip" data-val="${t}">${t}</button>`).join('')}
+          <div class="auth-optional-block">
+            <div class="auth-optional-label">Optional — add now or later</div>
+            <div style="text-align:center;margin-bottom:14px;">
+              <div class="auth-photo-preview" id="photoPreview" style="margin:0 auto 10px;">
+                <span style="font-size:28px;">📷</span>
+              </div>
+              <label class="auth-photo-upload-btn">
+                Add a photo
+                <input type="file" id="photoInput" accept="image/*" style="display:none">
+              </label>
             </div>
-          </div>
-          <div class="auth-input-group">
-            <label class="auth-input-label">Open to meeting new people?</label>
-            <div style="display:flex;gap:8px;">
-              <button class="auth-gender-chip active" data-val="yes" id="openToMeetYes">✅ Yes, show my profile</button>
-              <button class="auth-gender-chip" data-val="no" id="openToMeetNo">🔒 Not right now</button>
+            <div class="auth-input-group">
+              <label class="auth-input-label">Mobile number</label>
+              <input class="auth-input" type="tel" id="regPhone" placeholder="+91 98765 43210" autocomplete="tel">
+            </div>
+            <div class="auth-input-group">
+              <label class="auth-input-label">Current city</label>
+              <input class="auth-input" type="text" id="regCity" placeholder="e.g. Mumbai, Delhi, Bengaluru">
+            </div>
+            <div class="auth-input-group">
+              <label class="auth-input-label">Preferred language</label>
+              <select class="auth-input" id="regLanguage">
+                <option value="en">English</option>
+                <option value="hi">हिंदी</option>
+                <option value="bn">বাংলা</option>
+                <option value="te">తెలుగు</option>
+                <option value="ta">தமிழ்</option>
+                <option value="mr">मराठी</option>
+                <option value="gu">ગુજરાતી</option>
+                <option value="kn">ಕನ್ನಡ</option>
+                <option value="ml">മലയാളം</option>
+                <option value="pa">ਪੰਜਾਬੀ</option>
+              </select>
+            </div>
+            <div class="auth-input-group">
+              <label class="auth-input-label">What are you here for?</label>
+              <div style="display:flex;flex-wrap:wrap;gap:7px;" id="intentChips">
+                <button type="button" class="auth-intent-chip" data-val="Stay informed">Stay informed</button>
+                <button type="button" class="auth-intent-chip" data-val="Make friends">Make friends</button>
+                <button type="button" class="auth-intent-chip" data-val="Discuss topics">Discuss topics</button>
+                <button type="button" class="auth-intent-chip" data-val="Play games">Play games</button>
+                <button type="button" class="auth-intent-chip" data-val="Meet someone">Meet someone</button>
+                <button type="button" class="auth-intent-chip" data-val="Network">Network</button>
+                <button type="button" class="auth-intent-chip" data-val="Travel buddies">Travel buddies</button>
+                <button type="button" class="auth-intent-chip" data-val="Bond over interests">Bond over interests</button>
+              </div>
+            </div>
+            <div class="auth-input-group">
+              <label class="auth-input-label">Open to meeting new people?</label>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button type="button" class="auth-gender-chip active" data-val="yes" id="openToMeetYes">Yes, show my profile</button>
+                <button type="button" class="auth-gender-chip" data-val="no" id="openToMeetNo">Not right now</button>
+              </div>
             </div>
           </div>
           <div class="auth-error" id="registerError"></div>
-          <button class="btn btn--primary btn--block btn--lg auth-btn" id="registerBtn">🎉 Create my account</button>
+          <button class="btn btn--primary btn--block btn--lg auth-btn" id="registerBtn">Create my account</button>
           <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:10px;line-height:1.6;">By creating an account you confirm you're 16+ and agree to our Terms & Privacy Policy</div>
         </div>
       </div>
+
+      <!-- Legacy step 3 shell kept hidden for any deep-links; unused in new flow -->
+      <div class="auth-form-screen hidden" id="authRegStep3" aria-hidden="true"></div>
 
       <!-- ===== SUCCESS SCREEN ===== -->
       <div class="auth-form-screen hidden" id="authSuccessScreen">
@@ -631,6 +644,7 @@
   <script src="/src/js/core/profile-facts.js"></script>
   <script src="/src/js/core/profile-rewards.js"></script>
   <script src="/src/js/core/icebreakers.js"></script>
+  <script src="/src/js/core/profile-prompts.js"></script>
   <script src="/src/js/core/chaupaal-activity.js?v=15"></script>
   <script src="/src/js/core/chaupaal-events.js?v=15"></script>
   <script src="/src/js/core/chaupaal-founder.js?v=15"></script>

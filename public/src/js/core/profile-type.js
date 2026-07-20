@@ -84,12 +84,82 @@
       </div>`;
   }
 
+  function needsPersonalGender() {
+    const g =
+      (typeof digitalProfile !== 'undefined' && digitalProfile.gender) ||
+      (typeof userProfile !== 'undefined' && (userProfile.gender || userProfile.profile?.gender)) ||
+      '';
+    return !String(g || '').trim();
+  }
+
+  function promptPersonalGenderIfNeeded() {
+    if (typeof getProfileType === 'function' && getProfileType() !== 'personal') return;
+    if (!needsPersonalGender()) return;
+    const existing = document.getElementById('profileGenderPrompt');
+    if (existing) return;
+
+    const host =
+      document.getElementById('profileTypeBlock')?.parentElement ||
+      document.getElementById('profileContent') ||
+      document.querySelector('.device');
+    if (!host) {
+      if (typeof showToast === 'function') {
+        showToast('One quick thing — add your gender so Personal matching works well.');
+      }
+      return;
+    }
+
+    const banner = document.createElement('div');
+    banner.id = 'profileGenderPrompt';
+    banner.className = 'profile-gender-prompt';
+    banner.innerHTML = `
+      <div class="profile-gender-prompt-copy">
+        <strong>Welcome to Personal</strong>
+        <span>Gender helps people find the right connections. Add it when you’re ready — no rush.</span>
+      </div>
+      <div class="profile-gender-prompt-chips">
+        ${['Male', 'Female', 'Non-binary', 'Prefer not to say']
+          .map((g) => `<button type="button" data-gender="${g}">${g}</button>`)
+          .join('')}
+      </div>
+      <button type="button" class="profile-gender-prompt-later" data-later>Later</button>`;
+    host.insertBefore(banner, host.firstChild);
+
+    banner.querySelectorAll('[data-gender]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const gender = btn.dataset.gender;
+        if (typeof digitalProfile !== 'undefined') digitalProfile.gender = gender;
+        if (typeof userProfile !== 'undefined' && userProfile) {
+          userProfile.gender = gender;
+          userProfile.profile = userProfile.profile || {};
+          userProfile.profile.gender = gender;
+        }
+        try {
+          if (typeof digitalProfile !== 'undefined') {
+            localStorage.setItem('chaupaal_digital_profile', JSON.stringify(digitalProfile));
+          }
+        } catch (e) {}
+        if (typeof db !== 'undefined' && db && typeof currentUser !== 'undefined' && currentUser) {
+          db.collection('users')
+            .doc(currentUser.uid)
+            .update({ gender, 'profile.gender': gender })
+            .catch(() => {});
+        }
+        if (typeof onProfileFieldSaved === 'function') onProfileFieldSaved('gender', '', gender);
+        banner.remove();
+        if (typeof showToast === 'function') showToast('Got it — thanks');
+      });
+    });
+    banner.querySelector('[data-later]')?.addEventListener('click', () => banner.remove());
+  }
+
   function wireProfileTypeToggle(root) {
     const block = root?.querySelector?.('#profileTypeBlock') || document.getElementById('profileTypeBlock');
     if (!block || block.dataset.wired) return;
     block.dataset.wired = '1';
     block.querySelectorAll('[data-profile-type]').forEach((btn) => {
       btn.addEventListener('click', () => {
+        const prev = getProfileType();
         const next = saveProfileType(btn.dataset.profileType);
         block.querySelectorAll('[data-profile-type]').forEach((b) => {
           const on = b.dataset.profileType === next;
@@ -101,6 +171,9 @@
         if (typeof showToast === 'function') {
           showToast(next === 'professional' ? 'Switched to Professional account' : 'Switched to Personal account');
         }
+        if (prev !== 'personal' && next === 'personal') {
+          promptPersonalGenderIfNeeded();
+        }
       });
     });
   }
@@ -110,4 +183,5 @@
   window.hydrateProfileTypeFromUserDoc = hydrateProfileTypeFromUserDoc;
   window.renderProfileTypeToggleHtml = renderProfileTypeToggleHtml;
   window.wireProfileTypeToggle = wireProfileTypeToggle;
+  window.promptPersonalGenderIfNeeded = promptPersonalGenderIfNeeded;
 })();

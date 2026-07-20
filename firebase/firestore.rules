@@ -183,8 +183,10 @@ service cloud.firestore {
     }
 
     // ===================== USERNAMES =====================
+    // Public get (not list) so signup can live-check availability before Auth.
     match /usernames/{username} {
-      allow read: if isAuth();
+      allow get: if true;
+      allow list: if false;
       allow create: if isAuth() && request.resource.data.uid == request.auth.uid;
       allow delete: if isAuth() && resource.data.uid == request.auth.uid;
     }

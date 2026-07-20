@@ -260,6 +260,7 @@
   window.compressImageFile = compressImageFile;
   window.uploadOptimizedImage = uploadOptimizedImage;
   window.uploadVideoFile = uploadVideoFile;
+  window.uploadToCloudinary = uploadToCloudinary;
   window.processAndUploadMedia = processAndUploadMedia;
   window.mediaUrlFor = mediaUrlFor;
   window.isImageFile = isImageFile;

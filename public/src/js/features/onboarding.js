@@ -357,6 +357,10 @@ let digitalProfile = {
   zodiac:'', mbti:'', politics:'', religion2:'', spirituality:'',
   // Interests & Hobbies
   hobbies:[], sports:[], music:[], movies:[], books:[], travel:[], food:[], art:[],
+  interests:[],
+  prompts:[],
+  // Schema hook for future A/V transcription into embeddings (3C later) — unused for matching now
+  mediaCaptions:[],
   // Social & Online
   instagram:'', twitter:'', linkedin:'', youtube:'', website:'',
   // Dreams & Values

@@ -441,7 +441,7 @@
     return `
       <div class="icebreaker-profile-block" id="icebreakerProfileBlock">
         <h4>Icebreakers</h4>
-        <div class="icebreaker-hint">Optional · up to ${MAX_ANSWERS}. Matches see these so “hi” isn’t the only opener. Your own questions stay personal — not added to the shared bank.</div>
+        <div class="icebreaker-hint">Optional chat openers · up to ${MAX_ANSWERS}. Peepal matches see these so “hi” isn’t the only start. Separate from profile Prompts (used for matching).</div>
         ${
           suggest
             ? `<div class="icebreaker-suggest" data-prompt-id="${suggest.id}">

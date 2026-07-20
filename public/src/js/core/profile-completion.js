@@ -20,9 +20,11 @@
     { key: 'relationshipStatus', weight: 1, label: 'Relationship' },
     { key: 'diet', weight: 0.5, label: 'Diet' },
     { key: 'hobbies', weight: 1.5, label: 'Hobbies' },
+    { key: 'interests', weight: 1.5, label: 'Interests' },
     { key: 'lifeGoals', weight: 1, label: 'Goals', aliases: ['dreams'] },
     { key: 'mbti', weight: 0.5, label: 'Personality' },
     { key: 'languages', weight: 1, label: 'Languages' },
+    { key: 'prompts', weight: 1.5, label: 'Prompts' },
   ];
 
   function fieldValue(dp, def) {
@@ -50,11 +52,18 @@
       if (isFilled(fieldValue(dp, def))) earned += def.weight;
       else missing.push(def.label);
     });
-    // Bonus slots: photo + family details
-    total += 2;
+    // Bonus slots: photo + family + profile media strip
+    total += 3;
     if (dp.photos?.length > 0 || (typeof userProfile !== 'undefined' && userProfile?.photoURL)) earned += 1;
     else missing.push('Photo');
     if (dp.family?.length > 0) earned += 1;
+    try {
+      const media = JSON.parse(localStorage.getItem('chaupaal_profile_media') || '[]');
+      if (media.length > 0 || (dp.profileMedia && dp.profileMedia.length > 0)) earned += 1;
+      else missing.push('Profile media');
+    } catch (e) {
+      missing.push('Profile media');
+    }
 
     const pct = Math.round((earned / total) * 100);
     return {
