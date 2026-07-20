@@ -88,6 +88,7 @@ const _origTabBtnListener=document.querySelector('.tab-btn');
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click',()=>{
     if(typeof SoundLib!=='undefined'&&SoundLib.tap) SoundLib.tap();
+    try{haptic('light');}catch(e){}
     wireRipples();
     // Add data attributes to peepal cards for color coding
     setTimeout(wirePeepalCardTypes,100);
@@ -121,6 +122,28 @@ function haptic(type='light'){
   navigator.vibrate(patterns[type]||10);
 }
 
+/** Toggle button loading spinner + aria-busy for submit flows. */
+function setButtonLoading(btn, loading, busyLabel){
+  if(!btn) return;
+  if(loading){
+    if(!btn.dataset.labelCache) btn.dataset.labelCache = btn.textContent || '';
+    btn.classList.add('is-loading');
+    btn.setAttribute('aria-busy','true');
+    btn.disabled = true;
+    if(busyLabel) btn.setAttribute('aria-label', busyLabel);
+  } else {
+    btn.classList.remove('is-loading');
+    btn.removeAttribute('aria-busy');
+    btn.removeAttribute('aria-label');
+    btn.disabled = false;
+    if(btn.dataset.labelCache != null){
+      btn.textContent = btn.dataset.labelCache;
+      delete btn.dataset.labelCache;
+    }
+  }
+}
+window.setButtonLoading=setButtonLoading;
+
 /** In-app name sheet — replaces native prompt() for Highlights etc. */
 function promptNameSheet(opts={}){
   const {
@@ -129,9 +152,12 @@ function promptNameSheet(opts={}){
     confirmLabel='Save',
     allowBlank=false,
     initial='',
+    inputMode='',
+    maxlength=40,
   }=opts;
   return new Promise((resolve)=>{
     document.getElementById('promptNameSheet')?.remove();
+    try{haptic('light');}catch(e){}
     const sheet=document.createElement('div');
     sheet.id='promptNameSheet';
     sheet.className='name-prompt-sheet';
@@ -139,7 +165,7 @@ function promptNameSheet(opts={}){
       <div class="name-prompt-backdrop" data-np-cancel></div>
       <div class="name-prompt-card" role="dialog" aria-modal="true" aria-label="${title}">
         <div class="name-prompt-title">${title}</div>
-        <input class="auth-input name-prompt-input" type="text" maxlength="40" placeholder="${placeholder}" value="${String(initial||'').replace(/"/g,'&quot;')}" data-np-input>
+        <input class="auth-input name-prompt-input" type="text" maxlength="${maxlength}" placeholder="${placeholder}" value="${String(initial||'').replace(/"/g,'&quot;')}" data-np-input${inputMode?` inputmode="${inputMode}"`:''}>
         <div class="name-prompt-actions">
           <button type="button" class="btn" data-np-cancel>Cancel</button>
           <button type="button" class="btn btn--primary" data-np-ok>${confirmLabel}</button>
@@ -162,6 +188,40 @@ function promptNameSheet(opts={}){
   });
 }
 window.promptNameSheet=promptNameSheet;
+
+/** In-app confirm sheet — replaces native confirm(). */
+function confirmSheet(opts={}){
+  const {
+    title='Confirm',
+    message='',
+    confirmLabel='Confirm',
+    cancelLabel='Cancel',
+    danger=false,
+  }=opts;
+  return new Promise((resolve)=>{
+    document.getElementById('confirmSheet')?.remove();
+    try{haptic('light');}catch(e){}
+    const sheet=document.createElement('div');
+    sheet.id='confirmSheet';
+    sheet.className='name-prompt-sheet confirm-prompt-sheet';
+    sheet.innerHTML=`
+      <div class="name-prompt-backdrop" data-cf-cancel></div>
+      <div class="name-prompt-card" role="dialog" aria-modal="true" aria-label="${title}">
+        <div class="name-prompt-title">${title}</div>
+        ${message?`<div class="confirm-prompt-msg">${message}</div>`:''}
+        <div class="name-prompt-actions">
+          <button type="button" class="btn" data-cf-cancel>${cancelLabel}</button>
+          <button type="button" class="btn btn--primary${danger?' btn--danger':''}" data-cf-ok>${confirmLabel}</button>
+        </div>
+      </div>`;
+    document.querySelector('.device')?.appendChild(sheet);
+    const finish=(val)=>{sheet.remove();resolve(!!val);};
+    sheet.querySelectorAll('[data-cf-cancel]').forEach(el=>el.addEventListener('click',()=>finish(false)));
+    sheet.querySelector('[data-cf-ok]')?.addEventListener('click',()=>finish(true));
+    sheet.addEventListener('keydown',(e)=>{ if(e.key==='Escape') finish(false); });
+  });
+}
+window.confirmSheet=confirmSheet;
 
 // ---- Enhanced streak milestone with confetti ----
 const _origShowStreakMilestone=showStreakMilestone;

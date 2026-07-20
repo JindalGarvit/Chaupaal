@@ -223,7 +223,14 @@
         }
         return;
       }
-      const name = prompt('Enter your friend username:');
+      const name =
+        typeof promptNameSheet === 'function'
+          ? await promptNameSheet({
+              title: 'Friend username',
+              placeholder: 'Enter username',
+              confirmLabel: 'Challenge',
+            })
+          : null;
       if (name) launchGame({ name, id: 'friend_' + name });
     });
   }

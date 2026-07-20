@@ -194,7 +194,16 @@
     document.querySelector('.device')?.appendChild(overlay);
     overlay.querySelector('#sessionsBack')?.addEventListener('click', () => overlay.remove());
     overlay.querySelector('#logoutAllDevices')?.addEventListener('click', async () => {
-      if (!confirm('Sign out of Chaupaal on every device?')) return;
+      const ok =
+        typeof confirmSheet === 'function'
+          ? await confirmSheet({
+              title: 'Log out everywhere?',
+              message: 'Sign out of Chaupaal on every device?',
+              confirmLabel: 'Log out all',
+              danger: true,
+            })
+          : false;
+      if (!ok) return;
       overlay.remove();
       await logoutAllSessions();
     });

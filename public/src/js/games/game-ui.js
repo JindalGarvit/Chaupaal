@@ -229,10 +229,28 @@
   }
 
   /** Apply shared shell classes + entry motion to a game overlay element. */
+  function unlockGameOrientation() {
+    try {
+      if (screen.orientation && typeof screen.orientation.unlock === 'function') {
+        screen.orientation.unlock();
+      }
+    } catch (e) {}
+  }
+
+  function lockPortraitOrientation() {
+    try {
+      if (screen.orientation && typeof screen.orientation.lock === 'function') {
+        const p = screen.orientation.lock('portrait');
+        if (p && typeof p.catch === 'function') p.catch(() => {});
+      }
+    } catch (e) {}
+  }
+
   function prepareGameOverlay(overlay, opts) {
     const o = opts || {};
     if (!overlay) return overlay;
     overlay.classList.add('game-overlay');
+    overlay.classList.add('game-landscape-ok');
     if (o.theme === 'dark') overlay.classList.add('game-overlay--dark');
     else if (o.theme === 'light') overlay.classList.add('game-overlay--light');
     overlay.classList.add('game-overlay--entering');
@@ -241,6 +259,7 @@
       overlay.dataset.gameId = gameId;
       overlay.style.setProperty('--game-accent', o.accent || GAME_ACCENTS[gameId] || '#E63946');
     }
+    unlockGameOrientation();
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         overlay.classList.remove('game-overlay--entering');
@@ -254,6 +273,7 @@
   /** Exit motion then callback (default removes node via caller). */
   function animateGameExit(overlay, done) {
     if (!overlay || !overlay.isConnected) {
+      lockPortraitOrientation();
       if (typeof done === 'function') done();
       return;
     }
@@ -264,6 +284,7 @@
         parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--game-exit-ms'))) ||
       220;
     setTimeout(() => {
+      lockPortraitOrientation();
       if (typeof done === 'function') done();
     }, Math.max(160, ms || 220));
   }
@@ -560,17 +581,15 @@
           <button type="button" class="game-result-btn game-result-btn--primary" data-fp-manual>Enter username</button>`;
         listEl.querySelector('[data-fp-manual]')?.addEventListener('click', async () => {
           sheet.remove();
-          if (typeof promptNameSheet === 'function') {
-            const name = await promptNameSheet({
-              title: 'Friend username',
-              placeholder: 'Enter username',
-              confirmLabel: 'Challenge',
-            });
-            finish(name ? { name, id: 'friend_' + name } : null);
-          } else {
-            const name = window.prompt('Enter your friend username:');
-            finish(name ? { name, id: 'friend_' + name } : null);
-          }
+          const name =
+            typeof promptNameSheet === 'function'
+              ? await promptNameSheet({
+                  title: 'Friend username',
+                  placeholder: 'Enter username',
+                  confirmLabel: 'Challenge',
+                })
+              : null;
+          finish(name ? { name, id: 'friend_' + name } : null);
         });
         return;
       }

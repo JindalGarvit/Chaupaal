@@ -184,8 +184,11 @@ function wireAuthEvents() {
       return;
     }
     const btn = document.getElementById('loginBtn');
-    btn.textContent = 'Logging in...';
-    btn.disabled = true;
+    if (typeof setButtonLoading === 'function') setButtonLoading(btn, true, 'Logging in');
+    else {
+      btn.textContent = 'Logging in...';
+      btn.disabled = true;
+    }
     try {
       if (auth) await auth.signInWithEmailAndPassword(email, pwd);
       if (typeof trackLogin === 'function') trackLogin();
@@ -202,8 +205,11 @@ function wireAuthEvents() {
             ? 'No account found with this email.'
             : 'Login failed: ' + e.message;
     } finally {
-      btn.textContent = 'Log in →';
-      btn.disabled = false;
+      if (typeof setButtonLoading === 'function') setButtonLoading(btn, false);
+      else {
+        btn.textContent = 'Log in →';
+        btn.disabled = false;
+      }
     }
   });
   document
@@ -386,8 +392,11 @@ function wireAuthEvents() {
     regData.lang = document.getElementById('regLanguage')?.value || 'en';
 
     const btn = document.getElementById('registerBtn');
-    btn.textContent = 'Creating account...';
-    btn.disabled = true;
+    if (typeof setButtonLoading === 'function') setButtonLoading(btn, true, 'Creating account');
+    else {
+      btn.textContent = 'Creating account...';
+      btn.disabled = true;
+    }
 
     try {
       let photoURL = '';
@@ -529,8 +538,11 @@ function wireAuthEvents() {
               : 'Sign up failed: ' + e.message;
       }
     } finally {
-      btn.textContent = 'Create my account';
-      btn.disabled = false;
+      if (typeof setButtonLoading === 'function') setButtonLoading(btn, false);
+      else {
+        btn.textContent = 'Create my account';
+        btn.disabled = false;
+      }
     }
   });
 }

@@ -793,13 +793,14 @@ function openDuniyaPostSheet(mode='post'){
     const mediaEl=document.getElementById('duniyaMediaPreview').querySelector('img,video');
     const unlock=typeof beginClientMutation==='function'?beginClientMutation('duniya_post'):()=>{};
     if(unlock===false){ showToast('Post already submitting…'); return; }
-    shareBtn.disabled=true;
-    shareBtn.textContent='…';
+    if(typeof setButtonLoading==='function') setButtonLoading(shareBtn,true,'Sharing');
+    else { shareBtn.disabled=true; shareBtn.textContent='…'; }
 
     if(typeof checkRateLimit==='function'){
       const rl=await checkRateLimit('post');
       if(!rl.ok){
-        shareBtn.disabled=false;shareBtn.textContent='Share';
+        if(typeof setButtonLoading==='function') setButtonLoading(shareBtn,false);
+        else { shareBtn.disabled=false;shareBtn.textContent='Share'; }
         if(typeof unlock==='function') unlock();
         if(typeof showToast==='function') showToast(rl.message||'Slow down');
         return;
@@ -809,6 +810,8 @@ function openDuniyaPostSheet(mode='post'){
     let mediaUrl=null, thumbUrl=null, mediaPath=null, thumbPath=null, mediaWidth=null, mediaHeight=null, mediaType=mediaEl?.tagName==='VIDEO'?'video':'image';
     try{
       if(pendingMediaFile&&typeof processAndUploadMedia==='function'&&currentUser&&(typeof isMediaUploadReady!=='function'||await isMediaUploadReady())){
+        shareBtn.classList.remove('is-loading');
+        shareBtn.removeAttribute('aria-busy');
         shareBtn.textContent='Uploading…';
         const uploaded=await processAndUploadMedia(pendingMediaFile,{
           folder: pendingMediaFile.type.startsWith('video')?'videos':'posts',
@@ -830,8 +833,8 @@ function openDuniyaPostSheet(mode='post'){
         thumbUrl=mediaEl.src;
       }
     }catch(err){
-      shareBtn.disabled=false;
-      shareBtn.textContent='Share';
+      if(typeof setButtonLoading==='function') setButtonLoading(shareBtn,false);
+      else { shareBtn.disabled=false; shareBtn.textContent='Share'; }
       if(typeof unlock==='function') unlock();
       showToast(typeof friendlyError==='function'?friendlyError(err):(err.message||'Upload failed'));
       return;
@@ -884,8 +887,8 @@ function openDuniyaPostSheet(mode='post'){
         showToast(typeof friendlyError==='function'?friendlyError(e):'Post saved locally; sync failed');
       }
     }
-    shareBtn.disabled=false;
-    shareBtn.textContent='Share';
+    if(typeof setButtonLoading==='function') setButtonLoading(shareBtn,false);
+    else { shareBtn.disabled=false; shareBtn.textContent='Share'; }
     if(typeof haptic==='function') haptic('success');
     if(typeof unlock==='function') unlock();
   });

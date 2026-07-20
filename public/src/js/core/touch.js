@@ -42,6 +42,7 @@
         <button type="button" class="cp-action-item cp-action-cancel" data-dismiss="1">Cancel</button>
       </div>`;
     deviceRoot().appendChild(sheet);
+    hapticLight();
     requestAnimationFrame(() => sheet.classList.add('cp-action-sheet--open'));
     const close = () => {
       sheet.classList.remove('cp-action-sheet--open');
@@ -333,10 +334,27 @@
   }
 
   // ─── Pull to refresh ──────────────────────────────────────────────────────
+  function isInsideHorizontalScroll(target, boundary) {
+    let n = target;
+    while (n && n !== boundary && n !== document.body) {
+      if (n.nodeType === 1) {
+        if (n.matches && n.matches('[data-h-scroll]')) return true;
+        try {
+          const style = window.getComputedStyle(n);
+          const ox = style.overflowX;
+          if ((ox === 'auto' || ox === 'scroll') && n.scrollWidth > n.clientWidth + 4) return true;
+        } catch (e) {}
+      }
+      n = n.parentElement || n.parentNode;
+    }
+    return false;
+  }
+
   function enablePullToRefresh(scrollEl, onRefresh) {
     if (!scrollEl || scrollEl.dataset.ptr === '1') return;
     scrollEl.dataset.ptr = '1';
     let startY = 0;
+    let startX = 0;
     let pulling = false;
     let dy = 0;
     const indicator = document.createElement('div');
@@ -348,7 +366,9 @@
       'touchstart',
       (e) => {
         if (scrollEl.scrollTop > 2) return;
+        if (isInsideHorizontalScroll(e.target, scrollEl)) return;
         startY = e.touches[0].clientY;
+        startX = e.touches[0].clientX;
         pulling = true;
         dy = 0;
       },
@@ -364,7 +384,17 @@
           indicator.style.height = '0';
           return;
         }
-        dy = Math.max(0, e.touches[0].clientY - startY);
+        const t = e.touches[0];
+        const adx = Math.abs(t.clientX - startX);
+        const rawDy = t.clientY - startY;
+        // Angle gate: abort when gesture is mostly horizontal
+        if (adx > 12 && adx > Math.abs(rawDy) * 0.65) {
+          pulling = false;
+          indicator.style.height = '0';
+          dy = 0;
+          return;
+        }
+        dy = Math.max(0, rawDy);
         if (dy > 8) {
           indicator.style.height = Math.min(64, dy * 0.45) + 'px';
           indicator.textContent = dy > 70 ? 'Release to refresh' : 'Pull to refresh';
@@ -439,6 +469,9 @@
   }
 
   // ─── Keyboard avoidance ───────────────────────────────────────────────────
+  const COMPOSER_SEL =
+    '.chat-input-bar, .cp-composer, .comment-compose, .story-comment-compose, .scribble-guess-row, .peepal-typing-wrap, .peepal-answer-box, .day-check-modal, .name-prompt-card, [data-composer], form';
+
   function setupKeyboardAvoidance() {
     if (!window.visualViewport) return;
     const vv = window.visualViewport;
@@ -451,7 +484,8 @@
         try {
           focused.scrollIntoView({ block: 'center', behavior: 'smooth' });
         } catch (e) {}
-        const bar = focused.closest('.chat-input-bar, .cp-composer, form');
+        document.querySelectorAll('.cp-kb-lift').forEach((el) => el.classList.remove('cp-kb-lift'));
+        const bar = focused.closest(COMPOSER_SEL);
         if (bar) bar.classList.add('cp-kb-lift');
       }
     };
@@ -667,7 +701,7 @@
     });
   }
 
-  // ─── Image enhancements: async decode + lazy-load ──────────────────────────
+  // ─── Image enhancements: async decode + lazy-load + CLS aspect boxes ───────
   function enhanceImages(root) {
     const scope = root || document;
     scope.querySelectorAll('img:not([data-img-enh])').forEach((img) => {
@@ -677,6 +711,28 @@
       if (!img.getAttribute('loading') && !img.complete && img.dataset.eager !== '1') {
         img.setAttribute('loading', 'lazy');
       }
+      if (
+        img.closest('.img-aspect-box, .cp-image-viewer, .splash, .snakes-token, .uno-hand') ||
+        img.dataset.noAspect === '1' ||
+        img.classList.contains('cp-image-img')
+      ) {
+        return;
+      }
+      const mediaHost = img.closest(
+        '.duniya-post-media, .peepal-attach-preview, .auth-photo-preview, .story-slide-media, .public-profile-highlights-row'
+      );
+      if (!mediaHost) return;
+      const parent = img.parentElement;
+      if (!parent || parent.classList.contains('img-aspect-box')) return;
+      const box = document.createElement('span');
+      box.className = 'img-aspect-box';
+      const w = parseInt(img.getAttribute('width'), 10);
+      const h = parseInt(img.getAttribute('height'), 10);
+      if (w > 0 && h > 0) box.style.aspectRatio = w + ' / ' + h;
+      else if (mediaHost.classList.contains('duniya-post-media')) box.style.aspectRatio = '1';
+      else box.style.aspectRatio = '4 / 3';
+      parent.insertBefore(box, img);
+      box.appendChild(img);
     });
   }
 

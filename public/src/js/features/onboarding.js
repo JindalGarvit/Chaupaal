@@ -353,10 +353,22 @@ function wirePeepalAttachments(sheet){
     previewArea.innerHTML=`<div class="peepal-attach-preview"><img src="${pendingPeepalAttachment.data}"><button class="peepal-attach-remove" id="removeAttach">✕</button><div style="font-size:11px;color:var(--muted);padding:4px 0;">Will compress & upload on Post</div></div>`;
     document.getElementById('removeAttach').addEventListener('click',()=>{pendingPeepalAttachment=null;previewArea.innerHTML='';});
   });
-  document.getElementById('peepalAttachLink').addEventListener('click',()=>{
-    const url=prompt('Paste a link to share:');
+  document.getElementById('peepalAttachLink').addEventListener('click', async ()=>{
+    const url =
+      typeof promptNameSheet === 'function'
+        ? await promptNameSheet({
+            title: 'Share a link',
+            placeholder: 'https://…',
+            confirmLabel: 'Attach',
+            maxlength: 500,
+          })
+        : null;
     if(!url)return;
-    pendingPeepalAttachment={type:'link',url,title:new URL(url.startsWith('http')?url:'https://'+url).hostname};
+    try{
+      pendingPeepalAttachment={type:'link',url,title:new URL(url.startsWith('http')?url:'https://'+url).hostname};
+    }catch(e){
+      pendingPeepalAttachment={type:'link',url,title:url};
+    }
     previewArea.innerHTML=`<a class="peepal-link-card" href="${url}" target="_blank"><div class="peepal-link-thumb">🔗</div><div class="peepal-link-info"><div class="peepal-link-title">${pendingPeepalAttachment.title}</div><div class="peepal-link-url">${url}</div></div></a><button class="peepal-attach-remove" style="position:relative;top:-44px;left:auto;margin-left:auto;display:block;" id="removeAttach">✕</button>`;
     document.getElementById('removeAttach').addEventListener('click',()=>{pendingPeepalAttachment=null;previewArea.innerHTML='';});
   });

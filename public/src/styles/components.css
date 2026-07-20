@@ -572,18 +572,22 @@ input:focus, textarea:focus, select:focus {
 }
 .ui-state-msg { font-size: 13px; max-width: 280px; margin-bottom: 14px; }
 .offline-banner {
-  position: sticky;
+  position: absolute;
+  left: 0;
+  right: 0;
   top: 0;
-  z-index: 200;
+  z-index: 220;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   padding: 8px 12px;
+  padding-top: calc(8px + var(--safe-top, env(safe-area-inset-top, 0px)));
   background: #2A3158;
   color: #fff;
   font-size: 12px;
   font-weight: 600;
+  pointer-events: none;
 }
 .offline-banner.hidden { display: none !important; }
 .offline-banner-dot {
@@ -646,7 +650,7 @@ html.is-offline .device { filter: saturate(0.92); }
   position: absolute;
   left: 12px;
   right: 12px;
-  bottom: 78px;
+  bottom: calc(var(--tab-h, 60px) + var(--safe-bottom) + 12px);
   z-index: 180;
   display: flex;
   align-items: center;
@@ -1769,6 +1773,17 @@ button.cp-tap-target,
 .chat-input-bar.cp-kb-lift {
   padding-bottom: max(12px, var(--kb-inset)) !important;
 }
+.comment-compose.cp-kb-lift,
+.story-comment-compose.cp-kb-lift,
+.scribble-guess-row.cp-kb-lift,
+.peepal-typing-wrap.cp-kb-lift,
+.peepal-answer-box.cp-kb-lift,
+.name-prompt-card.cp-kb-lift,
+[data-composer].cp-kb-lift,
+form.cp-kb-lift {
+  padding-bottom: max(12px, calc(var(--safe-bottom) + var(--kb-inset))) !important;
+  transition: padding-bottom 160ms var(--ease-smooth, ease);
+}
 .bottom-tabs {
   padding-left: var(--safe-left);
   padding-right: var(--safe-right);
@@ -2578,4 +2593,165 @@ select:focus-visible,
 /* Prefer wrapping long strings in chat/game HUDs over horizontal bleed */
 .msg-bubble,.game-turn-label{
   overflow-wrap:anywhere;word-break:break-word;
+}
+
+/* ===== Mobile polish batch (inputs, taps, sheets, safe-area) ===== */
+html, body, .device{
+  touch-action:manipulation;
+}
+input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]),
+textarea,
+select,
+.auth-input,
+.baithak-search,
+.chat-input-bar input,
+.friend-add-input,
+.modal-select,
+.day-check-textarea,
+.challenge-q-input,
+.challenge-opt-input,
+.scribble-guess-row input,
+.comment-compose input,
+.story-comment-compose input,
+.name-prompt-input,
+.dp-field,
+.dp-other-input{
+  font-size:16px!important;
+  touch-action:manipulation;
+}
+.icon-btn,
+.topbar .icon-btn,
+.wrap-close,
+.new-chat-btn,
+.chat-back,
+.modal-header .icon-btn{
+  width:var(--tap-min)!important;
+  height:var(--tap-min)!important;
+  min-width:var(--tap-min);
+  min-height:var(--tap-min);
+  touch-action:manipulation;
+  box-sizing:border-box;
+}
+button,
+a,
+.tab-btn,
+.dangal-game-tile,
+.cp-action-item,
+.game-result-btn,
+.game-back-btn,
+.chat-send-btn,
+.duniya-action-btn{
+  touch-action:manipulation;
+}
+.sheet-drag-handle{
+  width:40px;height:4px;border-radius:99px;background:var(--line);
+  margin:4px auto 12px;flex-shrink:0;
+}
+.cp-action-panel::before,
+.share-sheet::before,
+.quiz-category-sheet::before,
+.name-prompt-card::before,
+.day-check-modal::before,
+.game-friend-card::before{
+  content:'';display:block;width:40px;height:4px;border-radius:99px;
+  background:var(--line);margin:2px auto 12px;
+}
+.share-sheet,
+.quiz-category-sheet,
+.name-prompt-card,
+.day-check-modal,
+.premium-sheet,
+.flag-sheet,
+.game-friend-card{
+  padding-bottom:calc(16px + var(--safe-bottom))!important;
+}
+.archive-header,
+.chat-screen-header,
+.peepal-header{
+  padding-top:max(10px, var(--safe-top));
+}
+.topbar{
+  padding-top:max(14px, var(--safe-top));
+}
+.offline-banner{
+  position:absolute;
+  left:0;right:0;top:0;
+  padding-top:calc(8px + var(--safe-top));
+  z-index:220;
+}
+html.is-offline .topbar,
+html.is-offline .peepal-header,
+html.is-offline .archive-header{
+  z-index:10;
+}
+.soft-delete-undo-bar{
+  bottom:calc(var(--tab-h,60px) + var(--safe-bottom) + 12px)!important;
+}
+html.kb-open .soft-delete-undo-bar{
+  bottom:calc(12px + var(--kb-inset,0px) + var(--safe-bottom))!important;
+}
+[data-h-scroll],
+.baithak-stories-row,
+.baithak-instants-row,
+.duniya-stories,
+.public-profile-highlights-row,
+.story-editor-filters,
+.uno-hand,
+#unoHand,
+.profile-section-tabs,
+.lehar-stage,
+.akhbaar-filters{
+  overscroll-behavior-x:contain;
+  -webkit-overflow-scrolling:touch;
+}
+.btn.is-loading,
+button.is-loading,
+[aria-busy="true"].btn,
+button[aria-busy="true"]{
+  position:relative;
+  color:transparent!important;
+  pointer-events:none;
+}
+.btn.is-loading::after,
+button.is-loading::after,
+[aria-busy="true"].btn::after,
+button[aria-busy="true"]::after{
+  content:'';position:absolute;inset:0;margin:auto;
+  width:18px;height:18px;border-radius:50%;
+  border:2px solid rgba(43,39,48,.25);border-top-color:var(--red,#E63946);
+  animation:uiInfiniteSpin .7s linear infinite;
+}
+.btn--primary.is-loading::after,
+.btn--primary[aria-busy="true"]::after{
+  border-color:rgba(255,255,255,.35);border-top-color:#fff;
+}
+.confirm-prompt-msg{
+  font-size:14px;color:var(--muted);line-height:1.45;margin:0 0 16px;
+}
+.btn--danger{background:var(--red)!important;color:#fff!important;border-color:var(--red)!important;}
+.img-aspect-box{
+  display:block;background:var(--line);overflow:hidden;
+  aspect-ratio:1;position:relative;width:100%;
+}
+.img-aspect-box img{width:100%;height:100%;object-fit:cover;display:block;}
+.game-overlay.game-landscape-ok{
+  max-height:100dvh;
+}
+@media (orientation:landscape) and (max-height:500px){
+  .game-overlay.game-landscape-ok{
+    padding-left:max(var(--safe-left),8px);
+    padding-right:max(var(--safe-right),8px);
+  }
+  .game-overlay .game-chrome{
+    min-height:44px;padding:6px 10px;
+    padding-left:max(10px, var(--safe-left));
+    padding-right:max(10px, var(--safe-right));
+  }
+  .game-overlay .game-chrome-title{font-size:13px;}
+  .game-overlay .game-skeleton-body,
+  .game-overlay .game-board-wrap,
+  .game-overlay .snakes-board,
+  .game-overlay .ludo-board{
+    max-height:calc(100dvh - 56px);
+  }
 }

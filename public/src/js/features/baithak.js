@@ -205,11 +205,22 @@ function openChallengeCreator(chat){
     });
 
     creator.querySelectorAll('.q-count-chip[data-n]').forEach(chip=>{
-      chip.addEventListener('click',()=>{
+      chip.addEventListener('click',async ()=>{
         syncFromDom();
         const n = chip.dataset.n;
         if(n === 'Custom'){
-          const c = parseInt(prompt('How many questions? (1-20)', '5'), 10);
+          const raw =
+            typeof promptNameSheet === 'function'
+              ? await promptNameSheet({
+                  title: 'How many questions?',
+                  placeholder: '1–20',
+                  confirmLabel: 'Set',
+                  initial: String(qCount || 5),
+                  inputMode: 'numeric',
+                  maxlength: 2,
+                })
+              : null;
+          const c = parseInt(raw, 10);
           if(c && c > 0 && c <= 20) qCount = c;
         } else qCount = parseInt(n, 10);
         while(questions.length < qCount) questions.push(createBlankQuestion());
