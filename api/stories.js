@@ -147,9 +147,26 @@ async function createStory(db, admin, uid, body) {
   const media = cleanMedia(body.media);
   const text = cleanText(body.text, 1200);
   if (!media && !text && body.type !== 'score') throw new Error('EMPTY_STORY');
-  const visibility =
-    destination === 'baithak' && body.visibility === 'close_friends' ? 'close_friends' : destination === 'baithak' ? 'friends' : 'public';
   const kind = destination === 'baithak' && body.kind === 'instant' ? 'instant' : 'story';
+  // Instants go to Close Friends by default (decision 9). If the list is empty,
+  // fall back to Friends so the share still works — caller sees audienceFallback.
+  let visibility =
+    destination === 'baithak' && body.visibility === 'close_friends'
+      ? 'close_friends'
+      : destination === 'baithak'
+        ? 'friends'
+        : 'public';
+  if (kind === 'instant' && destination === 'baithak') {
+    visibility = 'close_friends';
+  }
+  let audienceFallback = null;
+  if (destination === 'baithak' && visibility === 'close_friends') {
+    const cfRecipients = await recipientIds(db, uid, 'close_friends');
+    if (!cfRecipients.length) {
+      visibility = 'friends';
+      audienceFallback = 'friends';
+    }
+  }
   const collection = db.collection(COLLECTIONS[destination]);
   const clientId = cleanClientId(body.clientId);
   const ref = clientId ? collection.doc(`${uid}_${clientId}`) : collection.doc();
@@ -253,7 +270,9 @@ async function createStory(db, admin, uid, body) {
     ),
   ];
   await commitChunks(db, writes);
-  return serializeStory({ id: ref.id, data: () => story }, uid);
+  const serialized = serializeStory({ id: ref.id, data: () => story }, uid);
+  if (audienceFallback) serialized.audienceFallback = audienceFallback;
+  return serialized;
 }
 
 async function getStory(db, destination, storyId) {
@@ -286,6 +305,8 @@ async function feedBaithak(db, uid) {
 }
 
 async function feedDuniya(db, uid) {
+  // Decision 2C for now: public signed-in feed. Prefer followers + discovery (2B)
+  // when ranking signals are wired — keep this path collection-separate from Baithak.
   const snap = await db.collection('duniya_stories').where('expiresAt', '>', new Date()).limit(100).get();
   const output = [];
   for (const story of snap.docs) {

@@ -113,8 +113,12 @@ service cloud.firestore {
     match /users/{userId} {
       // Anyone can read basic public profile
       allow read: if isAuth();
-      // Only owner can write their profile
-      allow write: if isOwner(userId);
+      // Owner may write profile fields, but relationshipCounts is Admin-only
+      // (maintained by /api/relationships) to prevent client tampering.
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['relationshipCounts']);
+      allow delete: if isOwner(userId);
 
       // Legacy friends index is retired. Friendship is reciprocal following.
       match /friends/{friendId} {

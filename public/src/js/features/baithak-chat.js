@@ -603,7 +603,7 @@ function openStoryViewer(story, allStories){
       </div>
       <!-- Header -->
       <div style="display:flex;align-items:center;gap:10px;padding:4px 14px 10px;position:relative;z-index:2;">
-        <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(45deg,#E63946,#8134AF);padding:2px;flex-shrink:0;">
+        <div class="story-viewer-avatar" style="width:36px;height:36px;border-radius:50%;background:linear-gradient(45deg,#E63946,#8134AF);padding:2px;flex-shrink:0;">
           <div style="width:100%;height:100%;border-radius:50%;background:#222;display:flex;align-items:center;justify-content:center;font-size:16px;">${s.photoURL||/^https:/.test(s.avatar||'')?`<img src="${s.photoURL||s.avatar}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:s.avatar}</div>
         </div>
         <div style="flex:1;">
@@ -666,6 +666,12 @@ function openStoryViewer(story, allStories){
     `;
 
     document.getElementById('storyClose').addEventListener('click',()=>{clearInterval(progressInterval);viewer.remove();});
+    if(!s.own&&s.uid&&typeof bindProfileLongPress==='function'){
+      bindProfileLongPress(viewer.querySelector('.story-viewer-avatar'),{
+        uid:s.uid,name:s.name,avatar:s.avatar,
+        photoURL:s.photoURL||(/^https:/.test(s.avatar||'')?s.avatar:''),
+      });
+    }
     document.getElementById('storyDelete')?.addEventListener('click',async()=>{
       clearInterval(progressInterval);
       if(s.id&&s.destination&&typeof deletePlatformStory==='function'){
@@ -785,9 +791,9 @@ async function shareAkhbaarScore(visibility='friends'){
 function showBaithakShareMenu(){
   if(typeof showActionSheet!=='function') return openBaithakStoryComposer('camera');
   showActionSheet('Share in Baithak',[
-    {label:'⚡ Instant',fn:openBaithakInstantCamera},
-    {label:'📷 Create a story',fn:()=>openBaithakStoryComposer('camera')},
-    {label:'🖼️ Upload a story',fn:()=>openBaithakStoryComposer('gallery')},
+    {label:'⚡ Instant',hint:'Snaps to Close Friends (or Friends if that list is empty). No editing — short undo window.',fn:openBaithakInstantCamera},
+    {label:'📷 Create a story',hint:'Camera with text, stickers, games, and audience controls.',fn:()=>openBaithakStoryComposer('camera')},
+    {label:'🖼️ Upload a story',hint:'Pick from gallery, then edit before sharing with Friends or Close Friends.',fn:()=>openBaithakStoryComposer('gallery')},
   ]);
 }
 
@@ -806,13 +812,77 @@ function chooseBaithakMedia(mode,onFile){
   input.click();
 }
 
+/** In-app camera capture when getUserMedia is available; falls back to file input. */
+function openInAppCamera({onCapture,facingMode='environment'}={}){
+  if(!navigator.mediaDevices?.getUserMedia){
+    chooseBaithakMedia('camera',onCapture);
+    return;
+  }
+  const overlay=document.createElement('div');
+  overlay.className='story-camera';
+  overlay.innerHTML=`
+    <video class="story-camera-video" playsinline autoplay muted></video>
+    <canvas class="story-camera-canvas hidden"></canvas>
+    <div class="story-camera-chrome">
+      <button type="button" data-cam-close aria-label="Close">✕</button>
+      <div class="story-camera-hint">Instant · Close Friends</div>
+      <button type="button" data-cam-flip aria-label="Flip camera">↻</button>
+    </div>
+    <button type="button" class="story-camera-shutter" data-cam-shutter aria-label="Capture"></button>`;
+  document.querySelector('.device')?.appendChild(overlay);
+  let stream=null;
+  let facing=facingMode;
+  const video=overlay.querySelector('video');
+  const canvas=overlay.querySelector('canvas');
+
+  const stop=()=>{
+    stream?.getTracks?.().forEach(t=>t.stop());
+    stream=null;
+    overlay.remove();
+  };
+
+  const start=async()=>{
+    try{
+      stream?.getTracks?.().forEach(t=>t.stop());
+      stream=await navigator.mediaDevices.getUserMedia({
+        audio:false,
+        video:{facingMode:facing,width:{ideal:1280},height:{ideal:720}},
+      });
+      video.srcObject=stream;
+      await video.play();
+    }catch(e){
+      stop();
+      chooseBaithakMedia('camera',onCapture);
+    }
+  };
+
+  overlay.querySelector('[data-cam-close]').addEventListener('click',stop);
+  overlay.querySelector('[data-cam-flip]').addEventListener('click',()=>{
+    facing=facing==='environment'?'user':'environment';
+    start();
+  });
+  overlay.querySelector('[data-cam-shutter]').addEventListener('click',()=>{
+    if(!video.videoWidth)return;
+    canvas.width=video.videoWidth;
+    canvas.height=video.videoHeight;
+    canvas.getContext('2d').drawImage(video,0,0);
+    canvas.toBlob((blob)=>{
+      if(!blob)return;
+      const file=new File([blob],`instant_${Date.now()}.jpg`,{type:'image/jpeg'});
+      stop();
+      onCapture(file);
+    },'image/jpeg',0.92);
+  });
+  start();
+}
+
 function openBaithakInstantCamera(){
   if(!currentUser){showToast('Sign in to share an Instant');return;}
-  chooseBaithakMedia('camera',(file)=>{
+  openInAppCamera({onCapture:(file)=>{
     const preview=URL.createObjectURL(file);
     const pending=document.createElement('div');
     pending.className='instant-pending';
-    pending.innerHTML=`<img src="${preview}" alt=""><div><strong>Instant ready</strong><span>Sharing in 5 seconds…</span></div><button type="button">Undo</button>`;
+    pending.innerHTML=`<img src="${preview}" alt=""><div><strong>Instant ready</strong><span>Sharing to Close Friends in 5s…</span><small>If your Close Friends list is empty, Friends will see it instead.</small></div><button type="button">Undo</button>`;
     document.querySelector('.device')?.appendChild(pending);
     let cancelled=false;
     const timer=setTimeout(async()=>{
@@ -821,15 +891,19 @@ function openBaithakInstantCamera(){
       try{
         if(typeof processAndUploadMedia!=='function') throw new Error('Media upload unavailable');
         const up=await processAndUploadMedia(file,{folder:'stories'});
-        await createPlatformStory({
-          destination:'baithak',kind:'instant',visibility:'friends',
+        const created=await createPlatformStory({
+          destination:'baithak',kind:'instant',visibility:'close_friends',
           type:'media',media:up.media,thumb:up.thumb,
           mediaType:file.type.startsWith('video')?'video':'image',
         });
         pending.remove();
         URL.revokeObjectURL(preview);
         renderLiveBaithakStories();
-        showToast('Instant shared with Friends');
+        if(created?.audienceFallback==='friends'){
+          showToast('Instant shared with Friends — add Close Friends for a private list');
+        }else{
+          showToast('Instant shared with Close Friends');
+        }
       }catch(error){
         pending.remove();
         URL.revokeObjectURL(preview);
@@ -840,11 +914,17 @@ function openBaithakInstantCamera(){
       cancelled=true;clearTimeout(timer);pending.remove();URL.revokeObjectURL(preview);
       showToast('Instant undone');
     });
-  });
+  }});
 }
 
 function openBaithakStoryComposer(mode){
   if(!currentUser){showToast('Sign in to create a story');return;}
+  if(mode==='camera'){
+    openInAppCamera({
+      onCapture:(file)=>showBaithakStoryEditor(file,'camera'),
+    });
+    return;
+  }
   chooseBaithakMedia(mode,(file)=>showBaithakStoryEditor(file,mode));
 }
 
@@ -853,6 +933,8 @@ function showBaithakStoryEditor(file,mode){
   const editor=document.createElement('div');
   editor.className='story-editor';
   let rotation=0;
+  let filter='none';
+  let textColor='#ffffff';
   editor.innerHTML=`
     <div class="story-editor-header">
       <button type="button" data-story-cancel>←</button>
@@ -860,43 +942,82 @@ function showBaithakStoryEditor(file,mode){
       <button type="button" data-story-share>Share</button>
     </div>
     <div class="story-editor-preview" data-story-preview>
-      ${file.type.startsWith('video')?`<video src="${preview}" controls playsinline></video>`:`<img src="${preview}" alt="">`}
-      <div data-story-overlay></div>
+      ${file.type.startsWith('video')?`<video src="${preview}" controls playsinline></video>`:`<img src="${preview}" alt="" data-story-img>`}
+      <div data-story-overlay class="story-viewer-text"></div>
     </div>
     <div class="story-editor-tools">
-      <label>Text <input type="text" maxlength="160" placeholder="Add text to your story" data-story-text></label>
-      ${file.type.startsWith('image')?'<button type="button" data-story-rotate>↻ Rotate</button>':''}
-      <label>Audience
+      <div class="story-editor-tool-row">
+        <label class="story-editor-field">Text
+          <input maxlength="160" placeholder="Add text" data-story-text>
+        </label>
+        <button type="button" data-story-text-color title="Text colour">Aa</button>
+        ${file.type.startsWith('image')?'<button type="button" data-story-rotate>↻</button>':''}
+      </div>
+      <div class="story-editor-filters" data-story-filters>
+        ${[['none','Original'],['warm','Warm'],['cool','Cool'],['mono','Mono'],['vivid','Vivid']].map(([id,label])=>
+          `<button type="button" data-filter="${id}" class="${id==='none'?'is-active':''}">${label}</button>`
+        ).join('')}
+      </div>
+      <label class="story-editor-field">Audience
         <select data-story-audience>
-          <option value="friends">Friends</option>
-          <option value="close_friends">Close Friends</option>
+          <option value="friends">Friends — mutual connections only</option>
+          <option value="close_friends">Close Friends — private list (only you manage it)</option>
         </select>
       </label>
-      <label>Game card
+      <p class="story-editor-note">Close Friends is invisible to others — recipients never see that a selective list exists.</p>
+      <label class="story-editor-field">Game card
         <select data-story-game>
           <option value="">No game attached</option>
           ${typeof getGames==='function'?getGames({dangal:true}).map(game=>`<option value="${game.id}">${game.icon} ${game.name}</option>`).join(''):''}
         </select>
       </label>
-      <div class="story-editor-future">Music and more creation tools can be added here later.</div>
+      <div class="story-editor-future">Music stickers and drawing tools can plug in here later.</div>
+      <div class="story-editor-plus-row">
+        <button type="button" class="story-plus-btn" data-story-plus aria-label="Add more">＋</button>
+        <span>Tap for camera · long-press for Instant / Create / Upload</span>
+      </div>
     </div>`;
   document.querySelector('.device')?.appendChild(editor);
+  const img=editor.querySelector('[data-story-img]');
+  const applyFilter=()=>{
+    if(!img)return;
+    const map={none:'none',warm:'sepia(.35) saturate(1.2)',cool:'hue-rotate(20deg) saturate(1.1)',mono:'grayscale(1)',vivid:'contrast(1.2) saturate(1.35)'};
+    img.style.filter=map[filter]||'none';
+  };
   const cleanup=()=>{editor.remove();URL.revokeObjectURL(preview);};
   editor.querySelector('[data-story-cancel]').addEventListener('click',cleanup);
   editor.querySelector('[data-story-text]').addEventListener('input',(event)=>{
     editor.querySelector('[data-story-overlay]').textContent=event.target.value;
+    editor.querySelector('[data-story-overlay]').style.color=textColor;
+  });
+  editor.querySelector('[data-story-text-color]')?.addEventListener('click',()=>{
+    const colors=['#ffffff','#FFE66D','#E63946','#2A9D8F','#000000'];
+    textColor=colors[(colors.indexOf(textColor)+1)%colors.length];
+    editor.querySelector('[data-story-overlay]').style.color=textColor;
   });
   editor.querySelector('[data-story-rotate]')?.addEventListener('click',()=>{
     rotation=(rotation+90)%360;
-    editor.querySelector('img').style.transform=`rotate(${rotation}deg)`;
+    if(img) img.style.transform=`rotate(${rotation}deg)`;
   });
+  editor.querySelectorAll('[data-filter]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      filter=btn.dataset.filter;
+      editor.querySelectorAll('[data-filter]').forEach(b=>b.classList.toggle('is-active',b===btn));
+      applyFilter();
+    });
+  });
+  const plus=editor.querySelector('[data-story-plus]');
+  plus?.addEventListener('click',()=>{cleanup();openBaithakStoryComposer('camera');});
+  if(typeof onLongPress==='function'&&plus){
+    onLongPress(plus,()=>{cleanup();showBaithakShareMenu();});
+  }
   editor.querySelector('[data-story-share]').addEventListener('click',async(buttonEvent)=>{
     const button=buttonEvent.currentTarget;
     button.disabled=true;button.textContent='Sharing…';
     try{
       if(typeof processAndUploadMedia!=='function') throw new Error('Media upload unavailable');
       const up=await processAndUploadMedia(file,{folder:'stories'});
-      await createPlatformStory({
+      const created=await createPlatformStory({
         destination:'baithak',kind:'story',
         visibility:editor.querySelector('[data-story-audience]').value,
         type:'media',media:up.media,thumb:up.thumb,
@@ -907,7 +1028,13 @@ function showBaithakStoryEditor(file,mode){
       });
       cleanup();
       renderLiveBaithakStories();
-      showToast('Story shared in Baithak');
+      if(created?.audienceFallback==='friends'){
+        showToast('Shared with Friends — your Close Friends list was empty');
+      }else if(editor.querySelector('[data-story-audience]').value==='close_friends'){
+        showToast('Story shared with Close Friends');
+      }else{
+        showToast('Story shared with Friends');
+      }
     }catch(error){
       button.disabled=false;button.textContent='Share';
       showToast(error?.message||'Story could not be shared');

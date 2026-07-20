@@ -1,5 +1,10 @@
 const assert = require('assert');
-const { deriveRelationshipState, canViewStory } = require('../server-lib/social-model');
+const {
+  deriveRelationshipState,
+  canViewStory,
+  primaryRelationshipMode,
+  countDeltasForFollowChange,
+} = require('../server-lib/social-model');
 
 function test(name, fn) {
   fn();
@@ -20,6 +25,62 @@ test('reciprocal follows derive friendship', () => {
 
 test('removing either edge immediately removes friendship', () => {
   assert.equal(deriveRelationshipState({ following: false, followsYou: true }).friend, false);
+});
+
+test('Peepal surface prefers Friend CTA', () => {
+  assert.equal(primaryRelationshipMode({ context: 'peepal', profileType: 'professional' }), 'friend');
+});
+
+test('Duniya surface prefers Follow CTA', () => {
+  assert.equal(primaryRelationshipMode({ context: 'duniya', profileType: 'personal' }), 'follow');
+});
+
+test('explicit personal profile prefers Friend CTA', () => {
+  assert.equal(primaryRelationshipMode({ context: 'profile', profileType: 'personal' }), 'friend');
+});
+
+test('explicit professional profile prefers Follow CTA', () => {
+  assert.equal(primaryRelationshipMode({ context: 'profile', profileType: 'professional' }), 'follow');
+});
+
+test('follow into mutual increments friends on both sides', () => {
+  assert.deepStrictEqual(
+    countDeltasForFollowChange({ alreadyFollowing: false, reverseExists: true, follow: true }),
+    {
+      from: { friends: 1, followers: 0, following: 1 },
+      to: { friends: 1, followers: 1, following: 0 },
+    }
+  );
+});
+
+test('one-way follow does not increment friends', () => {
+  assert.deepStrictEqual(
+    countDeltasForFollowChange({ alreadyFollowing: false, reverseExists: false, follow: true }),
+    {
+      from: { friends: 0, followers: 0, following: 1 },
+      to: { friends: 0, followers: 1, following: 0 },
+    }
+  );
+});
+
+test('unfollow from mutual decrements friends', () => {
+  assert.deepStrictEqual(
+    countDeltasForFollowChange({ alreadyFollowing: true, reverseExists: true, follow: false }),
+    {
+      from: { friends: -1, followers: 0, following: -1 },
+      to: { friends: -1, followers: -1, following: 0 },
+    }
+  );
+});
+
+test('idempotent follow is a no-op for counts', () => {
+  assert.deepStrictEqual(
+    countDeltasForFollowChange({ alreadyFollowing: true, reverseExists: false, follow: true }),
+    {
+      from: { friends: 0, followers: 0, following: 0 },
+      to: { friends: 0, followers: 0, following: 0 },
+    }
+  );
 });
 
 test('strangers can see active public Duniya stories', () => {

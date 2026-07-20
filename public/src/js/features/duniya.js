@@ -159,9 +159,15 @@ async function renderDuniyaStories(){
     </div>
   `).join('');
   row.querySelectorAll('.duniya-story-item').forEach(item=>{
+    const u=storyUsers[Number(item.dataset.storyIndex)];
+    if(!u.self&&u.uid&&typeof bindProfileLongPress==='function'){
+      bindProfileLongPress(item.querySelector('.duniya-story-avatar'),{
+        uid:u.uid,name:u.name,avatar:u.avatar,photoURL:/^https:/.test(u.avatar||'')?u.avatar:'',
+      });
+    }
     item.addEventListener('click',()=>{
-      const u=storyUsers[Number(item.dataset.storyIndex)];
-      if(u.self){
+      const storyUser=storyUsers[Number(item.dataset.storyIndex)];
+      if(storyUser.self){
         const s=document.createElement('div');
         s.style.cssText='position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:20px;z-index:100;';
         s.innerHTML=`
@@ -193,7 +199,7 @@ async function renderDuniyaStories(){
             showToast(typeof friendlyError==='function'?friendlyError(err):(err.message||'Story upload failed'));
           }
         });
-      }else openStoryViewer(u.stories[0],u.stories);
+      }else openStoryViewer(storyUser.stories[0],storyUser.stories);
     });
   });
 }

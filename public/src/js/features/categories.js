@@ -1004,6 +1004,14 @@ function renderPeepalFeed(){
       e.stopPropagation();
       speakText(e.currentTarget.dataset.text, e.currentTarget);
     });
+    const peepalAvatar=card.querySelector('.peepal-user-avatar');
+    if(peepalAvatar&&q.user?.uid&&q.user.uid!==currentUser?.uid){
+      if(typeof bindProfileLongPress==='function') bindProfileLongPress(peepalAvatar,q.user);
+      peepalAvatar.addEventListener('click',(e)=>{
+        e.stopPropagation();
+        if(typeof openPublicProfile==='function') openPublicProfile(q.user,{uid:q.user.uid,username:q.user.username,context:'peepal'});
+      });
+    }
     card.querySelectorAll('.peepal-reaction-btn').forEach(btn=>btn.addEventListener('click',(e)=>{
       e.stopPropagation();
       if(btn.disabled)return;

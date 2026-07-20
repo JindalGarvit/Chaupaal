@@ -440,16 +440,17 @@ function openScribbleGame(chat,playerList){
     if(gs)gs.setOutcome(won?'won':'lost');
     if(typeof recordGameResult==='function')recordGameResult('scribble',won);
     overlay.innerHTML=`
-      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:16px;">
-        <div style="font-size:52px;">🏆</div>
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:22px;">${sorted[0]?.[0]} wins!</div>
-        <div style="width:100%;max-width:280px;">
-          ${sorted.map(([name,score],i)=>`<div style="display:flex;justify-content:space-between;padding:10px 14px;background:var(--white);border-radius:12px;margin-bottom:8px;"><span style="font-weight:700;">${i+1}. ${name}</span><span style="font-family:Space Grotesk,sans-serif;font-weight:700;color:var(--red);">${score} pts</span></div>`).join('')}
-        </div>
-        <button id="scribbleClose" style="padding:12px 32px;background:var(--red);color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;cursor:pointer;">Done</button>
-      </div>
+      ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Scribble',subtitle:'Results',backId:'scribbleClose'}):''}
+      ${typeof gameResultHtml==='function'?gameResultHtml({
+        glyph:'✓',
+        title:`${sorted[0]?.[0]||'Someone'} wins`,
+        subtitle:sorted.map(([name,score],i)=>`${i+1}. ${name} · ${score} pts`).join(' · '),
+        actions:[{label:'Done',primary:true}],
+      }):`<div style="padding:24px;text-align:center;"><div>${sorted[0]?.[0]} wins!</div><button id="scribbleClose">Done</button></div>`}
     `;
-    document.getElementById('scribbleClose').addEventListener('click',()=>close(won?'won':'lost'));
+    const done=()=>close(won?'won':'lost');
+    document.getElementById('scribbleClose')?.addEventListener('click',done);
+    overlay.querySelector('[data-result-action]')?.addEventListener('click',done);
   }
 
   function addScribbleMessage(text,isCorrect){

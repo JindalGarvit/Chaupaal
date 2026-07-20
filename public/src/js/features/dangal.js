@@ -734,17 +734,22 @@ function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalA
     : 'Ek acha muqabala tha! Kuch aur baatein karein? 😊';
   overlay.innerHTML=`
     ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:'Game over',backId:'closeMuqabala3'}):`<div class="muqabala-header"><div class="muqabala-title">Muqabala over!</div><button class="icon-btn" id="closeMuqabala3">←</button></div>`}
-    <div class="muqabala-result">
-      <div style="text-align:center;font-size:48px;">${tie?'🤝':won?'🏆':'😅'}</div>
-      <div style="text-align:center;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;">${tie?"It's a tie!":(won?"You won!":`${oppName} won this time`)}</div>
-      ${typeof gameScoreHtml==='function'?gameScoreHtml({label:'You',score:myScore},{label:oppName,score:oppScore}):`<div class="result-row"><span>You</span><span>${myScore}</span></div><div class="result-row"><span>${oppName}</span><span>${oppScore}</span></div>`}
-      ${philosophicalAnswers.length>0?`<div class="nudge-box"><div class="nudge-label">💬 Baithak mein baat karein</div><div class="nudge-text">${nudge}</div></div>`:''}
-      <button class="chat-start-btn" id="startChatBtn">💬 Chat with ${oppName}</button>
-      <button style="margin-top:8px;width:100%;padding:13px;background:var(--red);color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;cursor:pointer;" id="rematchBtn">🔁 Rematch</button>
-    </div>
+    ${typeof gameResultHtml==='function'?gameResultHtml({
+      glyph:tie?'🤝':won?'✓':'·',
+      title:tie?"It's a tie":(won?'You won':`${oppName} won`),
+      you:myScore,opp:oppScore,oppLabel:oppName,
+      actions:[
+        {label:`Chat with ${oppName}`,primary:false},
+        {label:'Rematch',primary:true},
+        {label:'Challenge others',primary:false},
+      ],
+    }):`<div class="muqabala-result"><div>${tie?"It's a tie!":(won?'You won!':`${oppName} won`)}</div></div>`}
+    ${philosophicalAnswers.length>0?`<div class="nudge-box" style="margin:0 16px 16px;"><div class="nudge-label">Baithak mein baat karein</div><div class="nudge-text">${nudge}</div></div>`:''}
   `;
   document.getElementById('closeMuqabala3').addEventListener('click',()=>overlay.classList.add('hidden'));
-  document.getElementById('rematchBtn').addEventListener('click',()=>{
+  const actionBtns=overlay.querySelectorAll('[data-result-action]');
+  actionBtns[0]?.addEventListener('click',()=>{overlay.classList.add('hidden');showToast('Check Baithak for your chat!');});
+  actionBtns[1]?.addEventListener('click',()=>{
     startMuqabala(oppName, mode, {
       questions: options.questions || undefined,
       timerSeconds: options.timerSeconds,
@@ -752,12 +757,7 @@ function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalA
       skipMatchmaking: options.source === 'manual' || options.source === 'ai',
     });
   });
-  document.getElementById('startChatBtn').addEventListener('click',()=>{overlay.classList.add('hidden');showToast('Check Baithak for your chat! 🏠');});
-  const shareBtn=document.createElement('button');
-  shareBtn.style.cssText='margin-top:8px;width:100%;padding:13px;background:var(--cream);color:var(--ink);border:2px solid var(--line);border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;cursor:pointer;';
-  shareBtn.textContent='🔗 Challenge others to beat your score';
-  shareBtn.addEventListener('click',()=>generateChallengeLink(myScore,mode));
-  overlay.querySelector('.muqabala-result').appendChild(shareBtn);
+  actionBtns[2]?.addEventListener('click',()=>generateChallengeLink(myScore,mode));
   if(myScore>0 && typeof broadcastDuelResult==='function') setTimeout(()=>broadcastDuelResult(oppName,myScore,oppScore),600);
 }
 

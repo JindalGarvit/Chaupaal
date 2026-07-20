@@ -34,7 +34,9 @@
         ${(actions || [])
           .map(
             (a, i) =>
-              `<button type="button" class="cp-action-item ${a.danger ? 'cp-action-item--danger' : ''}" data-i="${i}">${a.label}</button>`
+              `<button type="button" class="cp-action-item ${a.danger ? 'cp-action-item--danger' : ''}" data-i="${i}"><span class="cp-action-label">${a.label}</span>${
+                a.hint ? `<span class="cp-action-hint">${a.hint}</span>` : ''
+              }</button>`
           )
           .join('')}
         <button type="button" class="cp-action-item cp-action-cancel" data-dismiss="1">Cancel</button>

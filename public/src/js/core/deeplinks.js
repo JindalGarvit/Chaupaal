@@ -61,7 +61,7 @@
     });
   }
 
-  function openPublicProfile(user, { uid, username, context = 'duniya' } = {}) {
+  function openPublicProfile(user, { uid, username, context = 'profile' } = {}) {
     const u = user || {};
     const profileUid = uid || u.uid || '';
     const uname = String(username || u.username || '').replace(/^@/, '');
@@ -87,11 +87,10 @@
         <div style="font-size:14px;margin-top:14px;line-height:1.5;">${u.profile?.bio || u.bio || 'Open to a good conversation.'}</div>
         ${interests.length ? `<div style="display:flex;justify-content:center;flex-wrap:wrap;gap:6px;margin-top:16px;">${interests.slice(0,6).map((i) => `<span class="discovery-shared-tag">📌 ${i}</span>`).join('')}</div>` : ''}
         <div data-public-profile-counts class="relationship-counts-loading">Loading relationships…</div>
-        <div class="public-profile-actions">
-          ${context==='peepal'
-            ?'<button class="btn btn--primary" data-public-profile-friend>Add Friend</button><button class="btn" data-public-profile-follow>Follow</button>'
-            :'<button class="btn btn--primary" data-public-profile-follow>Follow</button><button class="btn" data-public-profile-friend>Add Friend</button>'}
-          <button class="btn" data-public-profile-hi>💬 Say hi</button>
+        <div class="public-profile-actions" data-rel-actions>
+          <button class="btn btn--primary" data-rel-primary type="button">Connect</button>
+          <button class="btn" data-rel-more type="button" aria-label="More relationship options">▾</button>
+          <button class="btn" data-public-profile-hi type="button">💬 Say hi</button>
         </div>
       </div>`;
     document.querySelector('.device')?.appendChild(sheet);
@@ -113,20 +112,26 @@
     if(profileUid&&typeof loadRelationshipProfile==='function'){
       loadRelationshipProfile(profileUid).then((data)=>{
         const counts=sheet.querySelector('[data-public-profile-counts]');
-        if(counts) counts.innerHTML=relationshipCountsHtml(data.counts);
-        const follow=sheet.querySelector('[data-public-profile-follow]');
-        const paintFollow=()=>{
-          const state=relationshipState(profileUid);
-          follow.textContent=state.following?'Following':'Follow';
-          follow.classList.toggle('is-connected',state.following);
+        if(counts){
+          counts.innerHTML=relationshipCountsHtml(data.counts);
+          if(typeof wireRelationshipCountButtons==='function'){
+            wireRelationshipCountButtons(counts,{targetUid:profileUid});
+          }
+        }
+        const profile={
+          ...u,
+          uid:profileUid,
+          profileType:data.profile?.profileType||u.profileType||u.profile?.profileType||'personal',
+          name:data.profile?.name||u.name||uname||'Chaupaal member',
         };
-        paintFollow();
-        follow?.addEventListener('click',async()=>{
-          follow.disabled=true;
-          try{await setFollowing(profileUid,!relationshipState(profileUid).following,'public_profile');paintFollow();}
-          finally{follow.disabled=false;}
-        });
-        wireFriendAction(sheet.querySelector('[data-public-profile-friend]'),profileUid);
+        // Explicit profile visit (context=profile): personal → Friend primary, professional → Follow.
+        // Peepal/Duniya context still wins when opened from those surfaces.
+        const visitContext = context === 'peepal' || context === 'duniya' ? context : 'profile';
+        if (typeof wireProfileRelationshipActions === 'function') {
+          wireProfileRelationshipActions(sheet.querySelector('[data-rel-actions]'), profile, {
+            context: visitContext,
+          });
+        }
       }).catch(()=>{});
     }
     sheet.querySelector('[data-public-profile-hi]')?.addEventListener('click', () => {

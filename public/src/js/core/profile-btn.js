@@ -38,7 +38,7 @@ async function loadFriends(){
       }
       return;
     }
-    // Friends live as a UID array on the user doc (not a cursor query).
+    // Friendship is derived from reciprocal following edges via /api/relationships.
     // Page the UI + profile fetches in chunks to avoid N+1 storms.
     const PAGE=12;
     let offset=0;

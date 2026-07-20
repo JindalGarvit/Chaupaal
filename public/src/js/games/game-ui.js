@@ -59,6 +59,7 @@
     ludo: '#4C75D9',
     uno: '#E05252',
     tictactoe: '#8134AF',
+    ttt: '#8134AF',
     wordguess: '#D97745',
     fiveinrow: '#3D86C6',
     business: '#B98932',
@@ -66,6 +67,7 @@
     rushrunner: '#E8663D',
     tiptap: '#2F9C95',
     ankjod: '#9A6BCE',
+    kakuro: '#9A6BCE',
   };
 
   function safe(value) {
@@ -95,6 +97,32 @@
       <div class="game-score-side"><span>${safe(a.label || 'You')}</span><strong>${safe(a.score ?? 0)}</strong></div>
       <div class="game-score-divider">–</div>
       <div class="game-score-side game-score-side--right"><span>${safe(b.label || 'Opponent')}</span><strong>${safe(b.score ?? 0)}</strong></div>
+    </div>`;
+  }
+
+  /** Calm shared results shell — Muqabala-derived, emoji optional and small. */
+  function gameResultHtml(opts) {
+    const o = opts || {};
+    const title = safe(o.title || 'Game over');
+    const subtitle = o.subtitle ? `<p class="game-result-sub">${safe(o.subtitle)}</p>` : '';
+    const glyph = o.glyph ? `<div class="game-result-glyph" aria-hidden="true">${safe(o.glyph)}</div>` : '';
+    const score =
+      o.scoreHtml ||
+      (o.you != null || o.opp != null
+        ? gameScoreHtml({ label: o.youLabel || 'You', score: o.you ?? 0 }, { label: o.oppLabel || 'Opponent', score: o.opp ?? 0 })
+        : '');
+    const actions = (o.actions || [])
+      .map(
+        (a, i) =>
+          `<button type="button" class="game-result-btn ${a.primary ? 'game-result-btn--primary' : ''}" data-result-action="${i}">${safe(a.label)}</button>`
+      )
+      .join('');
+    return `<div class="game-result" role="status">
+      ${glyph}
+      <h2 class="game-result-title">${title}</h2>
+      ${subtitle}
+      ${score}
+      <div class="game-result-actions">${actions}</div>
     </div>`;
   }
 
@@ -194,6 +222,7 @@
   window.gameTurnBannerHtml = gameTurnBannerHtml;
   window.gameChromeHtml = gameChromeHtml;
   window.gameScoreHtml = gameScoreHtml;
+  window.gameResultHtml = gameResultHtml;
   window.setGameTurnBanner = setGameTurnBanner;
   window.gameSkeletonHtml = gameSkeletonHtml;
   window.prepareGameOverlay = prepareGameOverlay;
