@@ -52,6 +52,11 @@ async function loadFriends(){
         if(!f)continue;
         const row=document.createElement('div');row.className='friend-item';
         row.innerHTML=`<img class="friend-avatar" src="${f.photoThumb||f.photoURL||'icon.png'}" onerror="this.style.fontSize='16px';this.src='icon.png'"><div class="friend-info"><div class="friend-name">${f.name}</div><div class="friend-username">@${f.username}</div></div><button class="friend-duel-btn" data-uname="${f.username}">⚔️ Muqabala</button>`;
+        if(typeof bindProfileLongPress==='function'&&f.uid){
+          bindProfileLongPress(row.querySelector('.friend-avatar'),{
+            uid:f.uid,name:f.name,username:f.username,photoURL:f.photoThumb||f.photoURL||'',
+          });
+        }
         row.querySelector('.friend-duel-btn').addEventListener('click',()=>{
           document.getElementById('profileModal').classList.add('hidden');
           document.querySelectorAll('.tab-btn').forEach(b=>{if(b.dataset.tab==='dangal')b.click();});

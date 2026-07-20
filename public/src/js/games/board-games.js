@@ -272,7 +272,7 @@ function openBusinessGame(chat,playerCount){
       <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;margin-bottom:8px;">${tile.name}</div>
       <div style="color:var(--muted);font-size:13px;margin-bottom:16px;">Buy for ₹${tile.price}?</div>
       <div style="display:flex;gap:8px;">
-        <button id="busBuyYes" style="flex:1;padding:12px;background:var(--red);color:#fff;border:none;border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;cursor:pointer;">Buy</button>
+        <button id="busBuyYes" class="game-tap-target" style="flex:1;padding:12px;background:var(--game-accent,var(--red));color:#fff;border:none;border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;cursor:pointer;">Buy</button>
         <button id="busBuyNo" style="flex:1;padding:12px;background:var(--cream);border:2px solid var(--line);border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;cursor:pointer;">Skip</button>
       </div>
     </div>`;
@@ -330,7 +330,7 @@ function openBusinessGame(chat,playerCount){
         </div>
       </div>
       <div style="padding:10px 16px;flex-shrink:0;">
-        <button id="busRollBtn" style="width:100%;padding:13px;background:${currentPlayer===0&&!rolling&&!gameOver?'var(--red)':'rgba(255,255,255,0.1)'};color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:${currentPlayer===0&&!gameOver?'pointer':'default'};">
+        <button id="busRollBtn" class="game-tap-target" style="width:100%;padding:13px;background:${currentPlayer===0&&!rolling&&!gameOver?'var(--game-accent,var(--red))':'rgba(255,255,255,0.1)'};color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:${currentPlayer===0&&!gameOver?'pointer':'default'};">
           ${gameOver?(players.find(p=>!p.bankrupt)?.name+' wins! 🏆'):currentPlayer===0?'🎲 Roll Dice':players[currentPlayer].name+' playing...'}
         </button>
       </div>
@@ -467,7 +467,7 @@ function openScribbleGame(chat,playerList){
     overlay.innerHTML=`
       ${gameChromeHtml({title:'Scribble',subtitle:`Round ${round}/${maxRounds}`,backId:'scribbleBack',rightHtml:`<span id="scribbleTimer" class="game-chrome-metric">${roundTimer}s</span>`})}
       <div style="padding:8px 16px;text-align:center;background:${isMyTurn?'rgba(230,57,70,0.06)':'var(--cream)'};border-bottom:1px solid var(--line);flex-shrink:0;">
-        ${isMyTurn?`<div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;color:var(--red);">Your word: ${currentWord}</div>`
+        ${isMyTurn?`<div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;color:var(--game-accent,var(--red));">Your word: ${currentWord}</div>`
         :`<div style="font-weight:700;font-size:14px;">${players[currentDrawerIdx].name} is drawing: ${currentWord.replace(/[a-z]/gi,'_ ')}</div>`}
       </div>
       <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
@@ -480,7 +480,7 @@ function openScribbleGame(chat,playerList){
       </div>
       <div style="height:100px;border-top:1px solid var(--line);background:var(--white);display:flex;flex-direction:column;flex-shrink:0;">
         <div id="scribbleChatList" style="flex:1;overflow-y:auto;padding:6px 12px;"></div>
-        ${!isMyTurn?`<div style="display:flex;gap:6px;padding:6px 12px;"><input id="scribbleGuessInput" placeholder="Type your guess..." style="flex:1;padding:8px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:13px;outline:none;"><button id="scribbleGuessBtn" style="background:var(--red);color:#fff;border:none;border-radius:10px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;">Guess</button></div>`:''}
+        ${!isMyTurn?`<div style="display:flex;gap:6px;padding:6px 12px;"><input id="scribbleGuessInput" placeholder="Type your guess..." style="flex:1;padding:8px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:13px;outline:none;"><button id="scribbleGuessBtn" class="game-tap-target" style="background:var(--game-accent,var(--red));color:#fff;border:none;border-radius:10px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;">Guess</button></div>`:''}
       </div>
     `;
     document.getElementById('scribbleBack').addEventListener('click',()=>close());

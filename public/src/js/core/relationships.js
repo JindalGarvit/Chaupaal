@@ -578,6 +578,8 @@
     const countsHost = root.querySelector('[data-profile-relationship-counts]');
     const requestsHost = root.querySelector('[data-friend-requests]');
     try {
+      // Keep denormalized counters honest during pre-launch testing.
+      await callRelationship('recompute_counts').catch(() => null);
       const data = await loadRelationshipProfile();
       if (countsHost) {
         countsHost.innerHTML = relationshipCountsHtml(data.counts);

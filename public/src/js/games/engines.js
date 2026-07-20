@@ -703,7 +703,7 @@ function openSnakesVersion(chat, version){
     overlay.innerHTML=`
       ${gameChromeHtml({title:version.name,subtitle:version.desc,backId:'slBack'})}
       <div style="display:flex;gap:8px;padding:8px 12px;flex-shrink:0;">
-        <div style="flex:1;background:${myTurn&&!gameOver?'rgba(230,57,70,0.3)':'rgba(255,255,255,0.05)'};border:2px solid ${myTurn&&!gameOver?'var(--red)':'transparent'};border-radius:12px;padding:8px;text-align:center;">
+        <div style="flex:1;background:${myTurn&&!gameOver?'color-mix(in srgb,var(--game-accent,var(--red)) 28%,transparent)':'rgba(255,255,255,0.05)'};border:2px solid ${myTurn&&!gameOver?'var(--game-accent,var(--red))':'transparent'};border-radius:12px;padding:8px;text-align:center;">
           <div style="color:#ccc;font-size:11px;font-weight:700;">🔴 You</div>
           <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:22px;color:var(--gold);">${pos.me}</div>
         </div>
@@ -721,7 +721,7 @@ function openSnakesVersion(chat, version){
       </div>
       ${message?`<div style="padding:8px 16px;text-align:center;color:var(--gold);font-weight:700;font-size:13px;background:rgba(255,201,60,0.1);border-top:1px solid rgba(255,201,60,0.2);flex-shrink:0;">${message}</div>`:''}
       <div style="padding:10px 12px;flex-shrink:0;">
-        <button id="rollBtn" style="width:100%;padding:13px;background:${myTurn&&!gameOver?'var(--red)':'rgba(255,255,255,0.1)'};color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:${myTurn&&!gameOver?'pointer':'default'};">
+        <button id="rollBtn" class="game-tap-target" style="width:100%;padding:13px;background:${myTurn&&!gameOver?'var(--game-accent,var(--red))':'rgba(255,255,255,0.1)'};color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:${myTurn&&!gameOver?'pointer':'default'};">
           ${gameOver?'Game Over!':(myTurn?`🎲 Roll${doubleRoll?' Again!':''}`:chat.name.split(' ')[0]+' rolling...')}
         </button>
       </div>
@@ -1159,22 +1159,21 @@ function getBestMove(){
 function render(){
   if(!gs.alive())return;
   const w=winLine;
-  const statusText=gameOver?(winLine?(board[winLine[0]]==='X'?'You won! 🎉':`${chat.name} wins!`):"It's a draw!"):(myTurn?'Your turn (✕)':'Thinking…');
+  const statusText=gameOver?(winLine?(board[winLine[0]]==='X'?'You won':`${chat.name} wins`):"It's a draw"):(myTurn?'Your turn (✕)':'Thinking…');
   const turnMode=gameOver?'over':myTurn?'yours':'theirs';
   const turnBanner=typeof gameTurnBannerHtml==='function'
     ? gameTurnBannerHtml({ mode: turnMode, label: statusText, pulse: turnMode==='yours' })
     : `<div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;color:#fff;">${statusText}</div>`;
   overlay.innerHTML=`
     ${gameChromeHtml({title:'Tic-Tac-Toe',backId:'tttBack'})}
-    <div style="display:flex;gap:20px;">
-      <div style="text-align:center;color:#fff;"><div style="font-size:11px;color:rgba(255,255,255,0.5);">You (X)</div><div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:24px;color:var(--red);">${scores.me}</div></div>
-      <div style="text-align:center;color:#fff;"><div style="font-size:11px;color:rgba(255,255,255,0.5);">Draw</div><div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:24px;color:#888;">${scores.draw}</div></div>
-      <div style="text-align:center;color:#fff;"><div style="font-size:11px;color:rgba(255,255,255,0.5);">${chat.name} (O)</div><div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:24px;color:#5BA3D9;">${scores.opp}</div></div>
-    </div>
+    ${typeof gameScoreHtml==='function'
+      ? `${gameScoreHtml({label:'You (X)',score:scores.me},{label:`${chat.name} (O)`,score:scores.opp})}<div style="text-align:center;color:rgba(255,255,255,.55);font-size:12px;margin:-4px 0 8px;">Draws ${scores.draw}</div>`
+      : `<div style="display:flex;gap:20px;"><div>You ${scores.me}</div><div>Draw ${scores.draw}</div><div>${chat.name} ${scores.opp}</div></div>`}
     <div id="tttBoard" style="display:grid;grid-template-columns:repeat(3,1fr);gap:var(--game-gap,8px);width:min(280px,82vw);" role="grid" aria-label="Tic-Tac-Toe board"></div>
     ${turnBanner}
-    <button id="tttNew" class="game-tap-target" style="padding:12px 32px;background:${gameOver?'var(--red)':'rgba(255,255,255,0.1)'};color:#fff;border:none;border-radius:var(--game-btn-radius,14px);font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;cursor:pointer;min-height:44px;">New game</button>
+    <button id="tttNew" class="game-tap-target" style="padding:12px 32px;background:${gameOver?'var(--game-accent,var(--red))':'rgba(255,255,255,0.1)'};color:#fff;border:none;border-radius:var(--game-btn-radius,14px);font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;cursor:pointer;min-height:44px;">New game</button>
   `;
+  if(typeof prepareGameOverlay==='function') prepareGameOverlay(overlay,{theme:'dark',gameId:'ttt'});
   document.getElementById('tttBack').addEventListener('click',()=>gs.close());
   document.getElementById('tttNew').addEventListener('click',()=>{board=Array(9).fill(null);myTurn=true;gameOver=false;winLine=null;render();});
   const boardEl=document.getElementById('tttBoard');
@@ -1185,7 +1184,7 @@ function render(){
     sq.style.cssText=`aspect-ratio:1;min-height:44px;background:${isWin?'rgba(255,201,60,0.2)':'rgba(255,255,255,0.07)'};border:2px solid ${isWin?'var(--gold)':'rgba(255,255,255,0.1)'};border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:48px;cursor:${!cell&&myTurn&&!gameOver?'pointer':'default'};transition:transform var(--duration-fast,150ms) var(--ease-spring,cubic-bezier(0.34,1.56,0.64,1));`;
     sq.textContent=cell==='X'?'✕':cell==='O'?'⭕':'';
     sq.setAttribute('aria-label', cell==='X'?'X':cell==='O'?'O':`Empty cell ${i+1}`);
-    if(cell==='X')sq.style.color='#e74c3c';
+    if(cell==='X')sq.style.color='var(--game-accent,#e74c3c)';
     if(cell==='O')sq.style.color='#5BA3D9';
     if(!cell&&myTurn&&!gameOver)sq.addEventListener('click',()=>{
       if(typeof pulseGameEl==='function')pulseGameEl(sq);

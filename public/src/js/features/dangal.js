@@ -270,6 +270,18 @@ document.getElementById('peepalUserInput')?.addEventListener('input', async (e)=
         else showToast(`@${btn.dataset.uname||btn.dataset.name}`);
       });
     });
+    results.querySelectorAll('.peepal-us-card').forEach(card=>{
+      const btn=card.querySelector('.pu-add');
+      const avatar=card.querySelector('.pu-avatar');
+      if(avatar&&btn?.dataset.uid&&typeof bindProfileLongPress==='function'){
+        bindProfileLongPress(avatar,{
+          uid:btn.dataset.uid,
+          name:btn.dataset.name||btn.dataset.uname,
+          username:btn.dataset.uname,
+          photoURL:avatar.querySelector('img')?.src||'',
+        });
+      }
+    });
     return;
   }
 

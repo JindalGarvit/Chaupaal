@@ -52,7 +52,7 @@ function openRushRunner(){
         <div style="font-size:13px;color:rgba(255,255,255,0.7);margin-bottom:8px;">${theme.name}</div>
         <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:24px;">Best: ${bestScore}</div>
         <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:20px;">Swipe left/right to switch lanes<br>Swipe up to jump · Swipe down to slide</div>
-        <button id="rrStart" style="background:var(--red);color:#fff;border:none;border-radius:16px;padding:14px 36px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;cursor:pointer;">▶ Start Running</button>
+        <button id="rrStart" class="game-tap-target" style="background:var(--game-accent,var(--red));color:#fff;border:none;border-radius:16px;padding:14px 36px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;cursor:pointer;">Start running</button>
       </div>
     </div>
     <div style="display:flex;justify-content:space-around;padding:10px 0;background:rgba(0,0,0,0.3);flex-shrink:0;">
@@ -203,15 +203,16 @@ function openRushRunner(){
     if(!div)return;
     div.style.display='flex';div.style.background='rgba(0,0,0,0.7)';
     div.innerHTML=`
-      <div style="font-size:52px;margin-bottom:12px;">💥</div>
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:24px;color:#fff;margin-bottom:8px;">${score}m Run!</div>
-      <div style="font-size:14px;color:rgba(255,255,255,0.7);margin-bottom:6px;">${theme.coin} ${coins} coins collected</div>
-      <div style="font-size:13px;color:var(--gold);margin-bottom:24px;">Best: ${bestScore}m</div>
-      <button id="rrRestart" style="background:var(--red);color:#fff;border:none;border-radius:14px;padding:13px 32px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;">🔄 Run again</button>
-      <button id="rrShare" style="background:rgba(255,255,255,0.15);color:#fff;border:none;border-radius:14px;padding:11px 28px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;cursor:pointer;">📤 Share score</button>
+      ${typeof gameResultHtml==='function'?gameResultHtml({
+        glyph:'·',
+        title:`${score}m run`,
+        subtitle:`${coins} coins · Best ${bestScore}m`,
+        actions:[{label:'Run again',primary:true},{label:'Share score',primary:false}],
+      }):`<div style="color:#fff;text-align:center;"><div>${score}m</div><button id="rrRestart">Run again</button></div>`}
     `;
-    document.getElementById('rrRestart').addEventListener('click',()=>{close();openRushRunner();});
-    document.getElementById('rrShare').addEventListener('click',()=>{const t=`I ran ${score}m on Chaupaal Rush Runner! 🏃 Can you beat me? chaupaal-chaupaal.web.app`;navigator.share?navigator.share({text:t}):(navigator.clipboard.writeText(t),showToast('Copied!'));});
+    const actions=div.querySelectorAll('[data-result-action]');
+    (actions[0]||document.getElementById('rrRestart'))?.addEventListener('click',()=>{close();openRushRunner();});
+    (actions[1]||document.getElementById('rrShare'))?.addEventListener('click',()=>{const t=`I ran ${score}m on Chaupaal Rush Runner! Can you beat me?`;navigator.share?navigator.share({text:t}):(navigator.clipboard.writeText(t),showToast('Copied!'));});
   }
 
   function startGame(){
@@ -376,15 +377,14 @@ function openTipTap(){
     if(typeof recordGameResult==='function')recordGameResult('tiptap',true);
     const div=document.getElementById('cbOverlay');if(!div)return;div.style.display='flex';
     div.innerHTML=`
-      <div style="background:var(--white);border-radius:24px;padding:32px 24px;text-align:center;max-width:280px;margin:20px;">
-        <div style="font-size:56px;margin-bottom:12px;">🎉</div>
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:22px;margin-bottom:8px;">Level ${level} Complete!</div>
-        <div style="font-size:15px;color:var(--muted);margin-bottom:20px;">Score: ${score.toLocaleString()}</div>
-        <div style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">${'⭐'.repeat(score>=targetScore*1.5?3:score>=targetScore*1.1?2:1)}</div>
-        <button id="cbNext" style="width:100%;padding:14px;background:var(--red);color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;">Level ${level+1} →</button>
-      </div>
+      ${typeof gameResultHtml==='function'?gameResultHtml({
+        glyph:'✓',
+        title:`Level ${level} complete`,
+        subtitle:`Score ${score.toLocaleString()}`,
+        actions:[{label:`Level ${level+1}`,primary:true}],
+      }):`<div><button id="cbNext">Next</button></div>`}
     `;
-    document.getElementById('cbNext').addEventListener('click',()=>{level++;startLevel(level);document.getElementById('cbOverlay').style.display='none';});
+    (div.querySelector('[data-result-action]')||document.getElementById('cbNext'))?.addEventListener('click',()=>{level++;startLevel(level);document.getElementById('cbOverlay').style.display='none';});
   }
 
   function showGameOver(){
@@ -393,15 +393,14 @@ function openTipTap(){
     if(typeof recordGameResult==='function')recordGameResult('tiptap',false);
     const div=document.getElementById('cbOverlay');if(!div)return;div.style.display='flex';
     div.innerHTML=`
-      <div style="background:var(--white);border-radius:24px;padding:32px 24px;text-align:center;max-width:280px;margin:20px;">
-        <div style="font-size:52px;margin-bottom:12px;">😢</div>
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:22px;margin-bottom:8px;">Out of moves!</div>
-        <div style="font-size:14px;color:var(--muted);margin-bottom:6px;">Score: ${score.toLocaleString()} / ${targetScore.toLocaleString()}</div>
-        <div style="font-size:13px;color:var(--muted);margin-bottom:20px;">Level ${level}</div>
-        <button id="cbRetry" style="width:100%;padding:14px;background:var(--red);color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:8px;">🔄 Try again</button>
-      </div>
+      ${typeof gameResultHtml==='function'?gameResultHtml({
+        glyph:'·',
+        title:'Out of moves',
+        subtitle:`Score ${score.toLocaleString()} / ${targetScore.toLocaleString()} · Level ${level}`,
+        actions:[{label:'Try again',primary:true}],
+      }):`<div><button id="cbRetry">Retry</button></div>`}
     `;
-    document.getElementById('cbRetry').addEventListener('click',()=>{startLevel(level);document.getElementById('cbOverlay').style.display='none';});
+    (div.querySelector('[data-result-action]')||document.getElementById('cbRetry'))?.addEventListener('click',()=>{startLevel(level);document.getElementById('cbOverlay').style.display='none';});
   }
 
   function render(){

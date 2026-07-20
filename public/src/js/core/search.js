@@ -304,9 +304,9 @@
       resultsEl.innerHTML = results
         .map(
           (r) => `
-        <button type="button" class="us-result" data-type="${r.type}" data-uid="${r.uid || ''}" data-username="${r.username || ''}"
+        <button type="button" class="us-result" data-type="${r.type}" data-uid="${r.uid || ''}" data-username="${r.username || ''}" data-name="${(r.name || r.username || '').replace(/"/g, '&quot;')}"
           style="display:flex;align-items:center;gap:12px;width:100%;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--white);margin-bottom:8px;cursor:pointer;text-align:left;">
-          <div style="width:44px;height:44px;border-radius:50%;background:var(--line);overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;">
+          <div class="us-result-avatar" style="width:44px;height:44px;border-radius:50%;background:var(--line);overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;">
             ${r.photoURL ? `<img src="${r.photoURL}" style="width:100%;height:100%;object-fit:cover;">` : '👤'}
           </div>
           <div style="min-width:0;flex:1;">
@@ -318,6 +318,15 @@
         .join('');
 
       resultsEl.querySelectorAll('.us-result').forEach((btn) => {
+        const avatar = btn.querySelector('.us-result-avatar');
+        if (avatar && btn.dataset.uid && typeof bindProfileLongPress === 'function') {
+          bindProfileLongPress(avatar, {
+            uid: btn.dataset.uid,
+            name: btn.dataset.name || btn.dataset.username,
+            username: btn.dataset.username,
+            photoURL: avatar.querySelector('img')?.src || '',
+          });
+        }
         btn.addEventListener('click', () => {
           rememberSearch(input.value);
           overlay.remove();

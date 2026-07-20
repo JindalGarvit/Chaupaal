@@ -175,6 +175,20 @@ function openChatScreen(chat){
     closeChatScreen({ updateHistory: true, animate: true });
   });
 
+  if (!isSelf && !isChaupaal && typeof bindProfileLongPress === 'function') {
+    const headerAvatar = screen.querySelector('.chat-header-avatar');
+    const profile = {
+      uid: chat.uid || chat.otherUid || chat.peerUid || chat.id?.replace?.(/^chat_profile_|^dm_|^chat_/, '') || '',
+      name: chat.name,
+      avatar: chat.avatar,
+      photoURL: chat.photoURL || (/^https:/.test(chat.avatar || '') ? chat.avatar : ''),
+    };
+    if (profile.uid && profile.uid !== currentUser?.uid) {
+      bindProfileLongPress(headerAvatar, profile);
+    }
+    bindMsgAvatarLongPress(screen, profile);
+  }
+
   document.getElementById('chatSendBtn').addEventListener('click', () => sendMsg(chat));
   const msgInput = document.getElementById('chatMsgInput');
   msgInput?.addEventListener('keypress', e => {if(e.key==='Enter')sendMsg(chat);});
@@ -330,8 +344,10 @@ function wireSuggestionChips(bar){
 
 function renderMsgBubble(m, isGroup){
   const isMe = m.from === 'me';
+  const uid = m.uid || m.user?.uid || '';
+  const name = m.name || m.user?.name || '';
   return `
-    <div class="msg-row ${isMe?'me':''}">
+    <div class="msg-row ${isMe?'me':''}" data-uid="${uid}" data-name="${String(name).replace(/"/g,'&quot;')}">
       ${!isMe?`<div class="msg-avatar-small">${m.avatar||'👤'}</div>`:''}
       <div>
         ${(isGroup&&!isMe&&m.name)?`<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px;">${m.name}</div>`:''}
@@ -342,12 +358,30 @@ function renderMsgBubble(m, isGroup){
   `;
 }
 
+function bindMsgAvatarLongPress(root, fallbackProfile){
+  if(typeof bindProfileLongPress!=='function'||!root) return;
+  root.querySelectorAll('.msg-avatar-small').forEach((el)=>{
+    if(el.dataset.lpBound) return;
+    const row=el.closest('.msg-row');
+    const uid=row?.dataset?.uid||fallbackProfile?.uid||'';
+    if(!uid||uid===currentUser?.uid) return;
+    el.dataset.lpBound='1';
+    bindProfileLongPress(el,{
+      uid,
+      name:row?.dataset?.name||fallbackProfile?.name||'Member',
+      avatar:el.textContent?.trim()||fallbackProfile?.avatar||'👤',
+    });
+  });
+}
+
 function addMsgBubble(msg, isGroup){
   const area = document.getElementById('chatMsgsArea');
   if(!area) return;
   const div = document.createElement('div');
   div.innerHTML = renderMsgBubble(msg, isGroup);
-  area.appendChild(div.firstElementChild);
+  const node=div.firstElementChild;
+  area.appendChild(node);
+  bindMsgAvatarLongPress(node);
   area.scrollTop = area.scrollHeight;
 }
 

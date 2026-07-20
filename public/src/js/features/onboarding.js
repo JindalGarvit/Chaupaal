@@ -37,7 +37,7 @@ function renderFriendDiscovery(container){
     </div>
     <div class="friend-discover-label">People you might know</div>
     ${SAMPLE_NEARBY.map(u=>`
-      <div class="discover-user-card">
+      <div class="discover-user-card" data-uid="${u.uid}" data-name="${u.name}">
         <div class="discover-avatar">${u.avatar}</div>
         <div class="discover-info"><div class="discover-name">${u.name}</div><div class="discover-meta">${u.meta}</div></div>
         <button class="discover-add-btn" data-uid="${u.uid}" data-name="${u.name}">+ Add</button>
@@ -45,6 +45,12 @@ function renderFriendDiscovery(container){
     `).join('')}
   `;
   container.appendChild(section);
+  section.querySelectorAll('.discover-avatar').forEach((avatar)=>{
+    const card=avatar.closest('.discover-user-card');
+    if(card?.dataset.uid&&typeof bindProfileLongPress==='function'){
+      bindProfileLongPress(avatar,{uid:card.dataset.uid,name:card.dataset.name||'Person',avatar:avatar.textContent?.trim()||'👤'});
+    }
+  });
   document.getElementById('phoneSearchBtn')?.addEventListener('click',async()=>{
     const phone=document.getElementById('phoneSearchInput')?.value.trim();
     if(!phone){showToast('Enter a phone number');return;}

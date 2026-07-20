@@ -131,6 +131,7 @@
           if (rootEl && typeof prepareGameOverlay === 'function') {
             prepareGameOverlay(rootEl, {
               theme: config.theme || (rootEl.classList.contains('game-overlay--light') ? 'light' : 'dark'),
+              gameId: config.gameId || gameType,
             });
           } else if (rootEl && rootEl.classList) {
             rootEl.classList.add('game-overlay', 'game-overlay--ready');

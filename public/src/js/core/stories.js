@@ -166,11 +166,58 @@
   async function openStoryArchive() {
     const data = await storyCall('archive');
     const stories = data.stories || [];
-    if (!stories.length) {
-      showToast('Your story archive is empty');
-      return;
-    }
-    openStoryViewer(stories[0], stories);
+    document.getElementById('storyArchiveSheet')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'storyArchiveSheet';
+    overlay.className = 'archive-overlay';
+    const baithak = stories.filter((s) => s.destination === 'baithak');
+    const duniya = stories.filter((s) => s.destination === 'duniya');
+    const live = stories.filter((s) => !s.expiresAt || s.expiresAt > Date.now());
+    const expired = stories.filter((s) => s.expiresAt && s.expiresAt <= Date.now());
+
+    const cell = (story, index) => `
+      <button type="button" class="story-archive-cell" data-story-index="${index}">
+        ${story.thumb || story.media
+          ? `<img src="${story.thumb || story.media}" alt="">`
+          : `<span class="story-archive-fallback">${story.kind === 'instant' ? '⚡' : story.type === 'score' ? '🎯' : '📖'}</span>`}
+        <span class="story-archive-meta">
+          <strong>${story.destination === 'duniya' ? 'Duniya' : 'Baithak'}${story.kind === 'instant' ? ' · Instant' : ''}</strong>
+          <small>${story.visibility === 'close_friends' ? 'Close Friends' : story.destination === 'duniya' ? 'Public' : 'Friends'}${
+            story.expiresAt && story.expiresAt > Date.now() ? ' · live' : ' · archived'
+          }</small>
+        </span>
+      </button>`;
+
+    overlay.innerHTML = `
+      <div class="archive-header">
+        <button type="button" data-archive-back aria-label="Back">←</button>
+        <div style="flex:1">
+          <strong>Story Archive</strong>
+          <div class="relationship-private-note">Only you see this. Live items still show likes & comments when opened.</div>
+        </div>
+      </div>
+      <div class="story-archive-body">
+        <div class="story-archive-stats">
+          <span><strong>${live.length}</strong> live</span>
+          <span><strong>${baithak.length}</strong> Baithak</span>
+          <span><strong>${duniya.length}</strong> Duniya</span>
+          <span><strong>${expired.length}</strong> expired</span>
+        </div>
+        ${
+          stories.length
+            ? `<div class="story-archive-grid">${stories.map((s, i) => cell(s, i)).join('')}</div>`
+            : `<div class="comments-empty">No stories yet. Instants and stories you share will land here for testing.</div>`
+        }
+      </div>`;
+    document.querySelector('.device')?.appendChild(overlay);
+    overlay.querySelector('[data-archive-back]')?.addEventListener('click', () => overlay.remove());
+    overlay.querySelectorAll('[data-story-index]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const idx = Number(button.dataset.storyIndex);
+        overlay.remove();
+        openStoryViewer(stories[idx], stories);
+      });
+    });
   }
 
   window.storyCall = storyCall;
