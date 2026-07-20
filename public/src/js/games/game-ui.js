@@ -217,6 +217,34 @@
     el.classList.add('game-tap-target');
   }
 
+  /**
+   * Size a canvas to its CSS box with devicePixelRatio so draws stay sharp on phones.
+   * @param {HTMLCanvasElement} canvas
+   * @param {{ maxDpr?: number }} [opts]
+   * @returns {{ w: number, h: number, dpr: number }}
+   */
+  function setupGameCanvas(canvas, opts) {
+    const o = opts || {};
+    if (!canvas) return { w: 0, h: 0, dpr: 1 };
+    const dpr = Math.min(o.maxDpr || 2.5, Math.max(1, window.devicePixelRatio || 1));
+    const rect = canvas.getBoundingClientRect();
+    const cssW = Math.max(1, Math.floor(rect.width || canvas.clientWidth || canvas.offsetWidth || 1));
+    const cssH = Math.max(1, Math.floor(rect.height || canvas.clientHeight || canvas.offsetHeight || 1));
+    const bw = Math.round(cssW * dpr);
+    const bh = Math.round(cssH * dpr);
+    if (canvas.width !== bw || canvas.height !== bh) {
+      canvas.width = bw;
+      canvas.height = bh;
+    }
+    canvas.style.width = cssW + 'px';
+    canvas.style.height = cssH + 'px';
+    const ctx = canvas.getContext('2d');
+    if (ctx && typeof ctx.setTransform === 'function') {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    return { w: cssW, h: cssH, dpr };
+  }
+
   window.GameFeedback = gameFeedback;
   window.gameFeedback = gameFeedback;
   window.gameTurnBannerHtml = gameTurnBannerHtml;
@@ -229,4 +257,5 @@
   window.animateGameExit = animateGameExit;
   window.pulseGameEl = pulseGameEl;
   window.ensureGameTapTarget = ensureGameTapTarget;
+  window.setupGameCanvas = setupGameCanvas;
 })();

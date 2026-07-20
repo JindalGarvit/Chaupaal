@@ -70,7 +70,18 @@
 .player-chip{display:flex;align-items:center;gap:6px;background:var(--white);border-radius:999px;padding:7px 14px;font-weight:700;font-size:13px;font-family:'Space Grotesk',sans-serif;}
 .player-chip.me{border:2px solid var(--red);color:var(--red);}
 .player-chip.opp{border:2px solid var(--gold);color:#A8780E;}
-.muqabala-timer{text-align:center;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:32px;color:var(--red);margin-bottom:10px;}
+.muqabala-timer{text-align:center;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:32px;color:var(--red);margin-bottom:10px;transition:color .2s ease,transform .2s ease;}
+.muqabala-timer--urgent{color:#E63946;transform:scale(1.06);}
+.muqabala-timer--critical{animation:muqabalaUrgent .55s ease infinite;color:#B71C1C;}
+@keyframes muqabalaUrgent{50%{transform:scale(1.12);opacity:.75}}
+.muqabala-combo{text-align:center;font:700 13px 'Space Grotesk',sans-serif;color:var(--gold,#C9A227);min-height:18px;margin-bottom:6px;}
+.muqabala-combo--pop{animation:muqabalaComboPop .35s cubic-bezier(.34,1.56,.64,1);}
+@keyframes muqabalaComboPop{from{transform:scale(.7);opacity:0}to{transform:none;opacity:1}}
+.muqabala-share-card{margin:8px 16px 0;padding:18px 16px;border-radius:18px;background:linear-gradient(145deg,#1F2542,#2A3158);color:#fff;text-align:center;box-shadow:0 10px 28px rgba(31,37,66,.28);}
+.muqabala-share-brand{font:700 10px/1 'Space Grotesk',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--gold,#FFC93C);margin-bottom:8px;}
+.muqabala-share-score{font:700 36px/1 'Space Grotesk',sans-serif;margin-bottom:6px;}
+.muqabala-share-meta{font-size:12px;opacity:.8;margin-bottom:4px;}
+.muqabala-share-vs{font:700 13px 'Space Grotesk',sans-serif;}
 .muqabala-card{background:var(--white);border-radius:20px;padding:22px 18px;flex:1;display:flex;flex-direction:column;box-shadow:0 6px 20px rgba(43,39,48,0.06);}
 .opp-indicator{font-size:12px;color:var(--muted);margin-top:12px;text-align:center;font-weight:600;}
 .muqabala-result{flex:1;display:flex;flex-direction:column;gap:12px;}

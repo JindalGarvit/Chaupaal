@@ -1122,118 +1122,177 @@
     const rows = board.length;
     const cols = board[0].length;
     let values = emptyValues(rows, cols);
+    let pencil = Array.from({ length: rows }, () => Array.from({ length: cols }, () => new Set()));
     let selected = null; // [r,c]
     let showMistakes = false;
+    let pencilMode = false;
     let statusMsg = '';
     let won = false;
+    let winShown = false;
     let timerId = null;
     let session = null;
 
     const root = document.createElement('div');
     root.style.cssText =
       'position:absolute;inset:0;background:var(--cream,#F7F3EC);z-index:80;display:flex;flex-direction:column;';
+    if (typeof prepareGameOverlay === 'function') prepareGameOverlay(root, { theme: 'light', gameId: 'ankjod' });
+
+    function computeCellSize() {
+      const availW = Math.max(240, (root.clientWidth || 360) - 28);
+      const availH = Math.max(200, (root.clientHeight || 640) - 280);
+      const byW = Math.floor(availW / Math.max(cols, 1));
+      const byH = Math.floor(availH / Math.max(rows, 1));
+      return Math.max(28, Math.min(52, byW, byH));
+    }
 
     function paint() {
+      if (won && winShown) {
+        paintWinResult();
+        return;
+      }
       const analysis = analyzeMistakes(board, values);
       const bad = showMistakes || won ? analysis.bad : new Set();
       const elapsed = session ? session.getElapsedMs() : 0;
       const diffMeta = DIFFS.find((d) => d.id === puzzle.difficulty) || DIFFS[0];
-
-      const cellSize = Math.min(44, Math.floor(320 / Math.max(cols, rows)));
+      const cellSize = computeCellSize();
+      const clueFs = Math.max(8, Math.floor(cellSize * 0.26));
+      const digitFs = Math.max(14, Math.floor(cellSize * 0.42));
+      const pencilFs = Math.max(7, Math.floor(cellSize * 0.22));
 
       let gridHtml = '';
       for (let r = 0; r < rows; r++) {
-        gridHtml += '<div style="display:flex;">';
+        gridHtml += '<div class="kk-row">';
         for (let c = 0; c < cols; c++) {
           const cell = board[r][c];
           const key = r + ',' + c;
           if (cell.kind === 'wall') {
-            gridHtml += `<div style="width:${cellSize}px;height:${cellSize}px;background:#2C2A28;border:1px solid #1a1918;box-sizing:border-box;"></div>`;
+            gridHtml += `<div class="kk-cell kk-cell--wall" style="width:${cellSize}px;height:${cellSize}px;"></div>`;
           } else if (cell.kind === 'clue') {
             const lab = clueLabel(cell);
-            gridHtml += `<div style="width:${cellSize}px;height:${cellSize}px;background:#2C2A28;border:1px solid #1a1918;box-sizing:border-box;position:relative;overflow:hidden;">
-              <svg width="100%" height="100%" viewBox="0 0 40 40" preserveAspectRatio="none" style="position:absolute;inset:0;">
+            gridHtml += `<div class="kk-cell kk-cell--clue" style="width:${cellSize}px;height:${cellSize}px;font-size:${clueFs}px;">
+              <svg width="100%" height="100%" viewBox="0 0 40 40" preserveAspectRatio="none" aria-hidden="true">
                 <line x1="0" y1="0" x2="40" y2="40" stroke="#5A5348" stroke-width="1"/>
               </svg>
-              ${lab.d ? `<span style="position:absolute;top:2px;left:3px;font-size:${Math.max(9, cellSize * 0.28)}px;font-family:Space Grotesk,sans-serif;font-weight:700;color:#F5EFE4;line-height:1;">${lab.d}</span>` : ''}
-              ${lab.a ? `<span style="position:absolute;bottom:2px;right:3px;font-size:${Math.max(9, cellSize * 0.28)}px;font-family:Space Grotesk,sans-serif;font-weight:700;color:#F5EFE4;line-height:1;">${lab.a}</span>` : ''}
+              ${lab.d ? `<span class="kk-clue-d">${lab.d}</span>` : ''}
+              ${lab.a ? `<span class="kk-clue-a">${lab.a}</span>` : ''}
             </div>`;
           } else {
             const v = values[r][c];
+            const marks = [...(pencil[r][c] || [])].sort((a, b) => a - b);
             const isSel = selected && selected[0] === r && selected[1] === c;
             const isBad = bad.has(key);
-            let bg = '#FFFDF8';
-            let border = isSel ? '2px solid var(--game-accent,var(--red,#C62828))' : '1px solid #C9BFAE';
-            let color = '#1A1714';
-            if (isBad) {
-              bg = '#FDE8E6';
-              color = '#B71C1C';
-            }
-            if (won) {
-              bg = '#E7F6EA';
-              color = '#1B5E20';
-              border = '1px solid #A5D6A7';
-            }
-            gridHtml += `<button data-r="${r}" data-c="${c}" class="kk-cell" style="width:${cellSize}px;height:${cellSize}px;background:${bg};border:${border};box-sizing:border-box;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:${Math.max(16, cellSize * 0.45)}px;color:${color};cursor:pointer;padding:0;border-radius:0;">${v || ''}</button>`;
+            const markHtml =
+              !v && marks.length
+                ? `<span class="kk-pencil" style="font-size:${pencilFs}px;">${[1, 2, 3, 4, 5, 6, 7, 8, 9]
+                    .map((n) => `<i>${marks.includes(n) ? n : ''}</i>`)
+                    .join('')}</span>`
+                : '';
+            gridHtml += `<button type="button" data-r="${r}" data-c="${c}" class="kk-cell kk-cell--play${isSel ? ' is-selected' : ''}${isBad ? ' is-bad' : ''}${won ? ' is-won' : ''}" style="width:${cellSize}px;height:${cellSize}px;font-size:${digitFs}px;">${v || markHtml}</button>`;
           }
         }
         gridHtml += '</div>';
       }
 
       const padBtns = [1, 2, 3, 4, 5, 6, 7, 8, 9]
-        .map(
-          (n) =>
-            `<button data-n="${n}" class="kk-num" style="flex:1;min-width:0;aspect-ratio:1;max-height:48px;background:var(--white,#fff);border:2px solid var(--line,#E8E0D4);border-radius:10px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;cursor:pointer;color:#1A1714;">${n}</button>`
-        )
+        .map((n) => `<button type="button" data-n="${n}" class="kk-num game-tap-target">${n}</button>`)
         .join('');
 
       root.innerHTML = `
-        ${gameChromeHtml({title:'Ank Jod',subtitle:diffMeta.label,backId:'kkBack',rightHtml:`<button id="kkNew" class="game-chrome-action">New</button>`})}
+        ${gameChromeHtml({ title: 'Ank Jod', subtitle: diffMeta.label, backId: 'kkBack', rightHtml: `<button id="kkNew" class="game-chrome-action">New</button>` })}
         <div id="kkTimer" class="game-turn game-turn--waiting">${formatTime(elapsed)}</div>
-        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px;gap:10px;overflow:auto;">
-          <div id="kkStatus" style="min-height:20px;font-size:13px;font-weight:600;color:${won ? '#1B5E20' : 'var(--muted,#8A7F72)'};text-align:center;">${
-            won ? '🎉 Puzzle solved!' : statusMsg || 'Tap a cell, then a digit'
+        <div class="kk-board-area">
+          <div id="kkStatus" class="kk-status${won ? ' kk-status--won' : ''}">${
+            won ? 'Puzzle solved!' : statusMsg || (pencilMode ? 'Pencil mode — tap digits for notes' : 'Tap a cell, then a digit')
           }</div>
-          ${
-            won
-              ? `<div style="display:flex;gap:8px;margin-bottom:4px;">
-            <button id="kkAgain" style="padding:10px 16px;background:var(--game-accent,var(--red,#C62828));color:#fff;border:none;border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;cursor:pointer;">Play again</button>
-            <button id="kkDone" style="padding:10px 16px;background:var(--cream,#F7F3EC);border:2px solid var(--line,#E8E0D4);border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;cursor:pointer;">Done</button>
-          </div>`
-              : ''
-          }
-          <div id="kkGrid" style="display:inline-block;box-shadow:0 4px 20px rgba(0,0,0,0.08);border:2px solid #1a1918;border-radius:4px;overflow:hidden;line-height:0;">${gridHtml}</div>
+          <div id="kkGrid" class="kk-grid">${gridHtml}</div>
         </div>
-        <div style="flex-shrink:0;padding:10px 12px 14px;background:var(--white,#fff);border-top:1px solid var(--line,#E8E0D4);">
-          <div style="display:flex;gap:6px;margin-bottom:10px;">${padBtns}</div>
-          <div style="display:flex;gap:8px;">
-            <button id="kkClear" style="flex:1;padding:12px;background:var(--cream,#F7F3EC);border:2px solid var(--line,#E8E0D4);border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;cursor:pointer;">Clear</button>
-            <button id="kkErase" style="flex:1;padding:12px;background:var(--cream,#F7F3EC);border:2px solid var(--line,#E8E0D4);border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;cursor:pointer;">Erase</button>
-            <button id="kkCheck" style="flex:1;padding:12px;background:var(--game-accent,var(--red,#C62828));color:#fff;border:none;border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;cursor:pointer;">Check</button>
+        <div class="kk-keypad">
+          <div class="kk-num-row">${padBtns}</div>
+          <div class="kk-action-row">
+            <button type="button" id="kkPencil" class="kk-action game-tap-target${pencilMode ? ' is-active' : ''}">${pencilMode ? 'Pencil on' : 'Pencil'}</button>
+            <button type="button" id="kkClear" class="kk-action game-tap-target">Clear</button>
+            <button type="button" id="kkErase" class="kk-action game-tap-target">Erase</button>
+            <button type="button" id="kkCheck" class="kk-action kk-action--primary game-tap-target">Check</button>
           </div>
         </div>`;
 
-      root.querySelector('#kkBack').addEventListener('click', () => {
-        if (session) session.end(won ? 'won' : 'quit');
+      wirePaintHandlers();
+    }
+
+    function paintWinResult() {
+      const elapsed = session ? session.getElapsedMs() : 0;
+      const diffMeta = DIFFS.find((d) => d.id === puzzle.difficulty) || DIFFS[0];
+      root.innerHTML = `
+        ${gameChromeHtml({ title: 'Ank Jod', subtitle: diffMeta.label, backId: 'kkBack' })}
+        ${
+          typeof gameResultHtml === 'function'
+            ? gameResultHtml({
+                glyph: '✓',
+                title: 'Puzzle solved',
+                subtitle: `${diffMeta.label} · ${formatTime(elapsed)}`,
+                actions: [
+                  { label: 'Play again', primary: true },
+                  { label: 'Done', primary: false },
+                ],
+              })
+            : `<div class="kk-board-area"><div class="kk-status kk-status--won">Puzzle solved!</div></div>`
+        }`;
+      root.querySelector('#kkBack')?.addEventListener('click', () => {
+        if (session) session.end('won');
       });
-      root.querySelector('#kkNew').addEventListener('click', () => {
+      const actions = root.querySelectorAll('[data-result-action]');
+      actions[0]?.addEventListener('click', () => {
         if (session) session.end('restart');
         openDifficultyPicker(ctx);
       });
-      const againBtn = root.querySelector('#kkAgain');
-      if (againBtn) {
-        againBtn.addEventListener('click', () => {
-          if (session) session.end('restart');
-          openDifficultyPicker(ctx);
-        });
+      actions[1]?.addEventListener('click', () => {
+        if (session) session.end('won');
+      });
+    }
+
+    function placeDigit(n) {
+      if (won || !selected) return;
+      const [r, c] = selected;
+      if (pencilMode) {
+        values[r][c] = 0;
+        const set = pencil[r][c];
+        if (set.has(n)) set.delete(n);
+        else set.add(n);
+        showMistakes = false;
+        statusMsg = '';
+        if (typeof gameFeedback === 'function') gameFeedback('select');
+        paint();
+        return;
       }
-      const doneBtn = root.querySelector('#kkDone');
-      if (doneBtn) {
-        doneBtn.addEventListener('click', () => {
-          if (session) session.end('won');
-        });
-      }
-      root.querySelectorAll('.kk-cell').forEach((btn) => {
+      values[r][c] = n;
+      pencil[r][c].clear();
+      showMistakes = false;
+      statusMsg = '';
+      if (typeof gameFeedback === 'function') gameFeedback('place');
+      const a = analyzeMistakes(board, values);
+      if (a.won) finishWin();
+      else paint();
+    }
+
+    function eraseCell() {
+      if (won || !selected) return;
+      const [r, c] = selected;
+      values[r][c] = 0;
+      pencil[r][c].clear();
+      showMistakes = false;
+      statusMsg = '';
+      paint();
+    }
+
+    function wirePaintHandlers() {
+      root.querySelector('#kkBack')?.addEventListener('click', () => {
+        if (session) session.end(won ? 'won' : 'quit');
+      });
+      root.querySelector('#kkNew')?.addEventListener('click', () => {
+        if (session) session.end('restart');
+        openDifficultyPicker(ctx);
+      });
+      root.querySelectorAll('.kk-cell--play').forEach((btn) => {
         btn.addEventListener('click', () => {
           if (won) return;
           selected = [+btn.getAttribute('data-r'), +btn.getAttribute('data-c')];
@@ -1242,32 +1301,23 @@
         });
       });
       root.querySelectorAll('.kk-num').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          if (won || !selected) return;
-          const n = +btn.getAttribute('data-n');
-          values[selected[0]][selected[1]] = n;
-          showMistakes = false;
-          statusMsg = '';
-          const a = analyzeMistakes(board, values);
-          if (a.won) finishWin();
-          else paint();
-        });
+        btn.addEventListener('click', () => placeDigit(+btn.getAttribute('data-n')));
       });
-      root.querySelector('#kkErase').addEventListener('click', () => {
-        if (won || !selected) return;
-        values[selected[0]][selected[1]] = 0;
-        showMistakes = false;
-        statusMsg = '';
-        paint();
-      });
-      root.querySelector('#kkClear').addEventListener('click', () => {
+      root.querySelector('#kkErase')?.addEventListener('click', eraseCell);
+      root.querySelector('#kkClear')?.addEventListener('click', () => {
         if (won) return;
         values = emptyValues(rows, cols);
+        pencil = Array.from({ length: rows }, () => Array.from({ length: cols }, () => new Set()));
         showMistakes = false;
         statusMsg = 'Board cleared';
         paint();
       });
-      root.querySelector('#kkCheck').addEventListener('click', () => {
+      root.querySelector('#kkPencil')?.addEventListener('click', () => {
+        pencilMode = !pencilMode;
+        statusMsg = pencilMode ? 'Pencil mode on' : 'Digit mode';
+        paint();
+      });
+      root.querySelector('#kkCheck')?.addEventListener('click', () => {
         if (won) return;
         const a = analyzeMistakes(board, values);
         showMistakes = true;
@@ -1285,8 +1335,9 @@
     function finishWin() {
       if (won) return;
       won = true;
+      winShown = true;
       showMistakes = false;
-      statusMsg = '🎉 Puzzle solved!';
+      statusMsg = 'Puzzle solved!';
       paint();
       if (typeof gameFeedback === 'function') gameFeedback('complete');
       if (typeof recordGameResult === 'function') {
@@ -1299,13 +1350,11 @@
     function onKey(e) {
       if (won) return;
       if (e.key >= '1' && e.key <= '9' && selected) {
-        values[selected[0]][selected[1]] = +e.key;
-        showMistakes = false;
-        const a = analyzeMistakes(board, values);
-        if (a.won) finishWin();
-        else paint();
+        placeDigit(+e.key);
       } else if ((e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') && selected) {
-        values[selected[0]][selected[1]] = 0;
+        eraseCell();
+      } else if (e.key === 'p' || e.key === 'P') {
+        pencilMode = !pencilMode;
         paint();
       } else if (e.key === 'ArrowUp' && selected) {
         moveSel(-1, 0);

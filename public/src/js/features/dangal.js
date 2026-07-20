@@ -566,6 +566,7 @@ function runMuqabala(overlay, oppName, mode, opts){
   const timerSeconds = options.timerSeconds;
   const totalQ = questions.length;
   let qIdx = 0, myScore = 0, oppScore = 0, timerInterval = null;
+  let streak = 0, bestStreak = 0, comboFlash = '';
   const philosophicalAnswers = [];
   let sessionEnded = false;
   let sessionResult = null;
@@ -615,21 +616,41 @@ function runMuqabala(overlay, oppName, mode, opts){
     overlay.classList.add('hidden');
   }
 
+  function noteAnswer(correct){
+    if(correct){
+      streak++;
+      if(streak > bestStreak) bestStreak = streak;
+      if(streak >= 2){
+        comboFlash = streak >= 4 ? `${streak}× streak!` : `Combo ×${streak}`;
+        if(typeof gameFeedback === 'function') gameFeedback(streak >= 3 ? 'place' : 'valid');
+      } else {
+        comboFlash = '';
+        if(typeof gameFeedback === 'function') gameFeedback('valid');
+      }
+    } else {
+      streak = 0;
+      comboFlash = '';
+      if(typeof gameFeedback === 'function') gameFeedback('invalid');
+    }
+  }
+
   function renderQ(){
     if(qIdx >= questions.length){
-      return showMuqabalaResult(overlay, myScore, oppScore, oppName, mode, philosophicalAnswers, options, endSession);
+      return showMuqabalaResult(overlay, myScore, oppScore, oppName, mode, philosophicalAnswers, options, endSession, { bestStreak });
     }
     const data = questions[qIdx];
     let timeLeft = data.philosophical ? 999 : timerSeconds;
     let answered = false;
     let timerPaused = false;
+    const urgencyAt = Math.max(3, Math.ceil(timerSeconds * 0.35));
 
     overlay.innerHTML = `
       ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:`Q${qIdx+1}/${totalQ} · ${mode}`,backId:'closeMuqabala2'}):`<div class="muqabala-header"><div class="muqabala-title">Q${qIdx+1}/${totalQ} · ${mode}</div><button class="icon-btn" id="closeMuqabala2">←</button></div>`}
       ${typeof gameScoreHtml==='function'?gameScoreHtml({label:t('you')||'You',score:myScore},{label:oppName,score:oppScore}):`<div class="vs-row"><div class="player-chip me">${t('you')||'You'} — ${myScore}</div><div class="player-chip opp">${oppName} — ${oppScore}</div></div>`}
-      <div class="muqabala-timer" id="mTimer" style="${data.philosophical?'font-size:14px;color:var(--gold);':''}">
+      <div class="muqabala-timer${data.philosophical?'':' muqabala-timer--live'}" id="mTimer" style="${data.philosophical?'font-size:14px;color:var(--gold);':''}">
         ${data.philosophical?t('philosophical_label'):`${timeLeft}`}
       </div>
+      <div class="muqabala-combo" id="mCombo"${comboFlash?'':' hidden'}>${comboFlash||''}</div>
       <div class="muqabala-card">
         <div class="q-text">${data.q}</div>
         <div class="options" id="mOpts">
@@ -650,6 +671,13 @@ function runMuqabala(overlay, oppName, mode, opts){
     document.getElementById('closeMuqabala2').addEventListener('click',()=>closeOverlay('dismissed'));
 
     const optBtns = overlay.querySelectorAll('.opt');
+    const tickTimerUi = ()=>{
+      const tmr = overlay.querySelector('#mTimer');
+      if(!tmr || data.philosophical) return;
+      tmr.textContent = timeLeft;
+      tmr.classList.toggle('muqabala-timer--urgent', timeLeft <= urgencyAt);
+      tmr.classList.toggle('muqabala-timer--critical', timeLeft <= 3);
+    };
 
     if(data.philosophical){
       optBtns.forEach(btn=>btn.addEventListener('click',()=>{
@@ -659,6 +687,7 @@ function runMuqabala(overlay, oppName, mode, opts){
         philosophicalAnswers.push({q:data.q,answer:chosenText});
         if(typeof updatePersonalityFromAurSunao==='function') updatePersonalityFromAurSunao(data.q,chosenText);
         optBtns.forEach(b=>{b.disabled=true;b.classList.add('correct');b.querySelector('.mark').textContent='✓';});
+        noteAnswer(true);
         if(!quietMode && typeof SoundLib!=='undefined') SoundLib.playFeedback(true,'default');
         const oi=overlay.querySelector('#oppInd');if(oi)oi.textContent=t('opp_correct',{name:oppName});
         myScore++;
@@ -681,6 +710,7 @@ function runMuqabala(overlay, oppName, mode, opts){
           philosophicalAnswers.push({q:data.q,answer:typed,typed:true});
           if(typeof updatePersonalityFromAurSunao==='function') updatePersonalityFromAurSunao(data.q,typed);
           optBtns.forEach(b=>{b.disabled=true;b.classList.add('dim');});
+          noteAnswer(true);
           if(!quietMode && typeof SoundLib!=='undefined') SoundLib.playFeedback(true,'default');
           myScore++;
           setTimeout(()=>{qIdx++;renderQ();},1400);
@@ -692,6 +722,7 @@ function runMuqabala(overlay, oppName, mode, opts){
         const chosen=parseInt(btn.dataset.i,10);
         const isCorrect=data.correct!==null&&chosen===data.correct;
         if(isCorrect)myScore++;
+        noteAnswer(isCorrect);
         optBtns.forEach(b=>b.disabled=true);
         optBtns.forEach((b,i)=>{
           if(i===data.correct){b.classList.add('correct');b.querySelector('.mark').textContent='✓';}
@@ -699,6 +730,11 @@ function runMuqabala(overlay, oppName, mode, opts){
           else b.classList.add('dim');
         });
         if(!quietMode && typeof SoundLib!=='undefined') SoundLib.playFeedback(isCorrect,'default');
+        const comboEl=overlay.querySelector('#mCombo');
+        if(comboEl){
+          if(comboFlash){comboEl.hidden=false;comboEl.textContent=comboFlash;comboEl.classList.add('muqabala-combo--pop');}
+          else {comboEl.hidden=true;comboEl.textContent='';}
+        }
         const oi=overlay.querySelector('#oppInd');
         const oppCorrectLocal=Math.random()<0.62;
         if(oi)oi.textContent=oppCorrectLocal?t('opp_correct',{name:oppName}):t('opp_wrong',{name:oppName});
@@ -715,15 +751,16 @@ function runMuqabala(overlay, oppName, mode, opts){
         if(oppCorrect && !answered) oppScore++;
       }, Math.min(oppDelay, oppCapMs));
 
+      tickTimerUi();
       timerInterval=setInterval(()=>{
         if(timerPaused)return;
         timeLeft--;
-        const tmr=overlay.querySelector('#mTimer');
-        if(tmr)tmr.textContent=timeLeft;
+        tickTimerUi();
         if(timeLeft<=0){
           clearInterval(timerInterval);
           if(!answered){
             answered=true;
+            noteAnswer(false);
             optBtns.forEach(b=>{b.disabled=true;b.classList.add('dim');});
             if(data.correct!==null){const c=optBtns[data.correct];if(c){c.classList.remove('dim');c.classList.add('correct');c.querySelector('.mark').textContent='✓';}}
           }
@@ -735,24 +772,37 @@ function runMuqabala(overlay, oppName, mode, opts){
   renderQ();
 }
 
-function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalAnswers,opts,endSession){
+function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalAnswers,opts,endSession,extra){
   const options = normalizeMuqabalaOptions(opts);
+  const stats = extra || {};
   const won=myScore>oppScore,tie=myScore===oppScore;
   const resultKey = tie ? 'draw' : (won ? 'win' : 'loss');
   if(typeof endSession === 'function') endSession(resultKey);
+  if(typeof gameFeedback === 'function') gameFeedback(tie?'draw':(won?'win':'lose'));
 
   const nudge=philosophicalAnswers.length>0 && typeof NUDGES_POST_MUQABALA!=='undefined'
     ? NUDGES_POST_MUQABALA[Math.floor(Math.random()*NUDGES_POST_MUQABALA.length)].replace('{answer}',philosophicalAnswers[0].answer)
-    : 'Ek acha muqabala tha! Kuch aur baatein karein? 😊';
+    : 'Ek acha muqabala tha! Kuch aur baatein karein?';
+  const streakLine = stats.bestStreak > 1 ? `Best streak · ${stats.bestStreak}` : '';
+  const shareText = `Chaupaal Muqabala (${mode}): ${myScore}–${oppScore} vs ${oppName}${stats.bestStreak>1?` · streak ${stats.bestStreak}`:''}${won?' · I won!':tie?' · Draw':''}`;
+
   overlay.innerHTML=`
     ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:'Game over',backId:'closeMuqabala3'}):`<div class="muqabala-header"><div class="muqabala-title">Muqabala over!</div><button class="icon-btn" id="closeMuqabala3">←</button></div>`}
+    <div class="muqabala-share-card" id="muqabalaShareCard">
+      <div class="muqabala-share-brand">Chaupaal · Muqabala</div>
+      <div class="muqabala-share-score">${myScore} – ${oppScore}</div>
+      <div class="muqabala-share-meta">${won?'Victory':tie?'Draw':'Close fight'} · ${mode}${streakLine?` · ${streakLine}`:''}</div>
+      <div class="muqabala-share-vs">You vs ${oppName}</div>
+    </div>
     ${typeof gameResultHtml==='function'?gameResultHtml({
-      glyph:tie?'🤝':won?'✓':'·',
+      glyph:tie?'=':won?'✓':'·',
       title:tie?"It's a tie":(won?'You won':`${oppName} won`),
+      subtitle:streakLine||undefined,
       you:myScore,opp:oppScore,oppLabel:oppName,
       actions:[
+        {label:'Share result',primary:true},
         {label:`Chat with ${oppName}`,primary:false},
-        {label:'Rematch',primary:true},
+        {label:'Rematch',primary:false},
         {label:'Challenge others',primary:false},
       ],
     }):`<div class="muqabala-result"><div>${tie?"It's a tie!":(won?'You won!':`${oppName} won`)}</div></div>`}
@@ -760,8 +810,20 @@ function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalA
   `;
   document.getElementById('closeMuqabala3').addEventListener('click',()=>overlay.classList.add('hidden'));
   const actionBtns=overlay.querySelectorAll('[data-result-action]');
-  actionBtns[0]?.addEventListener('click',()=>{overlay.classList.add('hidden');showToast('Check Baithak for your chat!');});
-  actionBtns[1]?.addEventListener('click',()=>{
+  actionBtns[0]?.addEventListener('click',()=>{
+    const url = `${window.location.origin}${window.location.pathname}`;
+    if(navigator.share){
+      navigator.share({title:'Chaupaal Muqabala',text:shareText,url}).catch(()=>{});
+    } else if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(`${shareText}\n${url}`).then(()=>{
+        if(typeof showToast==='function')showToast('Result copied — share anywhere');
+      });
+    } else if(typeof generateChallengeLink==='function'){
+      generateChallengeLink(myScore,mode);
+    }
+  });
+  actionBtns[1]?.addEventListener('click',()=>{overlay.classList.add('hidden');showToast('Check Baithak for your chat!');});
+  actionBtns[2]?.addEventListener('click',()=>{
     startMuqabala(oppName, mode, {
       questions: options.questions || undefined,
       timerSeconds: options.timerSeconds,
@@ -769,7 +831,7 @@ function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalA
       skipMatchmaking: options.source === 'manual' || options.source === 'ai',
     });
   });
-  actionBtns[2]?.addEventListener('click',()=>generateChallengeLink(myScore,mode));
+  actionBtns[3]?.addEventListener('click',()=>generateChallengeLink(myScore,mode));
   if(myScore>0 && typeof broadcastDuelResult==='function') setTimeout(()=>broadcastDuelResult(oppName,myScore,oppScore),600);
 }
 
