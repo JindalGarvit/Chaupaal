@@ -1163,7 +1163,7 @@
             const isSel = selected && selected[0] === r && selected[1] === c;
             const isBad = bad.has(key);
             let bg = '#FFFDF8';
-            let border = isSel ? '2px solid var(--red,#C62828)' : '1px solid #C9BFAE';
+            let border = isSel ? '2px solid var(--game-accent,var(--red,#C62828))' : '1px solid #C9BFAE';
             let color = '#1A1714';
             if (isBad) {
               bg = '#FDE8E6';
@@ -1197,7 +1197,7 @@
           ${
             won
               ? `<div style="display:flex;gap:8px;margin-bottom:4px;">
-            <button id="kkAgain" style="padding:10px 16px;background:var(--red,#C62828);color:#fff;border:none;border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;cursor:pointer;">Play again</button>
+            <button id="kkAgain" style="padding:10px 16px;background:var(--game-accent,var(--red,#C62828));color:#fff;border:none;border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;cursor:pointer;">Play again</button>
             <button id="kkDone" style="padding:10px 16px;background:var(--cream,#F7F3EC);border:2px solid var(--line,#E8E0D4);border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;cursor:pointer;">Done</button>
           </div>`
               : ''
@@ -1209,7 +1209,7 @@
           <div style="display:flex;gap:8px;">
             <button id="kkClear" style="flex:1;padding:12px;background:var(--cream,#F7F3EC);border:2px solid var(--line,#E8E0D4);border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;cursor:pointer;">Clear</button>
             <button id="kkErase" style="flex:1;padding:12px;background:var(--cream,#F7F3EC);border:2px solid var(--line,#E8E0D4);border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;cursor:pointer;">Erase</button>
-            <button id="kkCheck" style="flex:1;padding:12px;background:var(--red,#C62828);color:#fff;border:none;border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;cursor:pointer;">Check</button>
+            <button id="kkCheck" style="flex:1;padding:12px;background:var(--game-accent,var(--red,#C62828));color:#fff;border:none;border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;cursor:pointer;">Check</button>
           </div>
         </div>`;
 

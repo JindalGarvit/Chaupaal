@@ -107,10 +107,16 @@
                   .join('')}</div>`
               : ''
           }
-          <div data-public-profile-counts class="relationship-counts-loading">Loading relationships…</div>
+          <div data-public-profile-counts class="relationship-counts-loading public-profile-chrome-slot">
+            <span class="public-profile-chrome-label">Connections</span>
+            <span>Loading…</span>
+          </div>
           <div class="public-profile-highlights" data-public-highlights>
             <div class="public-profile-highlights-label">Highlights</div>
-            <div class="public-profile-highlights-row" data-highlights-row>Loading…</div>
+            <div class="public-profile-highlights-row public-profile-chrome-slot" data-highlights-row>
+              <span class="public-profile-chrome-label">Story Highlights</span>
+              <span>Loading…</span>
+            </div>
           </div>
           <div class="public-profile-actions" data-rel-actions>
             <button class="btn btn--primary" data-rel-primary type="button">Connect</button>
@@ -124,20 +130,28 @@
                 .slice(0, 9)
                 .map((m) => {
                   const src = m.url || m.src || m.thumb || '';
-                  if (m.type === 'voice') return `<button type="button" class="ppm-voice" data-voice="${src}">🎙️</button>`;
-                  if (m.type === 'video') return `<video src="${src}" muted playsinline></video>`;
+                  if (m.type === 'voice')
+                    return `<button type="button" class="ppm-voice ppm-media-cell" data-voice="${src}" aria-label="Play voice note"><span class="ppm-play">▶</span><span>Voice</span></button>`;
+                  if (m.type === 'video')
+                    return `<button type="button" class="ppm-video ppm-media-cell" data-ppm-video="${src}" aria-label="Play video"><video src="${src}" muted playsinline></video><span class="ppm-play">▶</span></button>`;
                   return `<img src="${src}" alt="">`;
                 })
                 .join('')}</div>`
-            : ''
+            : `<div class="public-profile-media-strip public-profile-media-strip--empty public-profile-chrome-slot"><span class="public-profile-chrome-label">Photos & clips</span><span>None yet</span></div>`
         }
         <div class="public-profile-section">
           <h3>Duniya</h3>
-          <div data-public-duniya-posts class="public-profile-posts">Loading posts…</div>
+          <div data-public-duniya-posts class="public-profile-posts public-profile-chrome-slot">
+            <span class="public-profile-chrome-label">Public posts</span>
+            <span>Loading…</span>
+          </div>
         </div>
         <div class="public-profile-section">
           <h3>Peepal</h3>
-          <div data-public-peepal-posts class="public-profile-posts">Loading posts…</div>
+          <div data-public-peepal-posts class="public-profile-posts public-profile-chrome-slot">
+            <span class="public-profile-chrome-label">Questions</span>
+            <span>Loading…</span>
+          </div>
         </div>
       </div>`;
     document.querySelector('.device')?.appendChild(sheet);
@@ -150,6 +164,20 @@
     sheet.querySelectorAll('[data-voice]').forEach((btn) => {
       btn.addEventListener('click', () => {
         if (typeof playVoiceNote === 'function') playVoiceNote(btn.dataset.voice);
+      });
+    });
+    sheet.querySelectorAll('[data-ppm-video]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const v = btn.querySelector('video');
+        if (!v) return;
+        if (v.paused) {
+          v.muted = false;
+          v.play().catch(() => {});
+          btn.classList.add('is-playing');
+        } else {
+          v.pause();
+          btn.classList.remove('is-playing');
+        }
       });
     });
     const avatarEl = sheet.querySelector('[data-public-profile-avatar]');

@@ -53,7 +53,13 @@ async function getDiscoveryProfiles(){
         body: {
           action: 'personal_match',
           sameCity: !!discoveryFilters.sameCity,
-          intent: discoveryFilters.interest && discoveryFilters.interest !== 'any' ? discoveryFilters.interest : '',
+          intent:
+            (discoveryFilters.interest && discoveryFilters.interest !== 'any'
+              ? discoveryFilters.interest
+              : '') ||
+            userProfile?.lookingFor ||
+            digitalProfile?.lookingFor ||
+            '',
           limit: 5,
         },
       });
@@ -127,6 +133,8 @@ async function getDiscoveryProfiles(){
   ].map(i=>String(i).toLowerCase()));
 
   const myCity=String(userProfile?.city||digitalProfile?.currentCity||'').trim().toLowerCase();
+  const myLooking = String(userProfile?.lookingFor || digitalProfile?.lookingFor || discoveryFilters.interest || '').toLowerCase();
+  const myIntents = Array.isArray(userProfile?.intents) ? userProfile.intents.map((i) => String(i).toLowerCase()) : [];
   return pool
     .filter(u => {
       if(!u||!u.uid||dismissedUids.has(u.uid)||u.openToMeet===false) return false;
@@ -145,18 +153,34 @@ async function getDiscoveryProfiles(){
       let score = 40 + Math.random()*25;
       if(shared.length) score += shared.length * 12;
       if(u.city && (userProfile?.city||digitalProfile?.currentCity||'').toLowerCase().includes(String(u.city).toLowerCase())) score += 15;
+      const theirLooking = String(u.lookingFor || u.profile?.lookingFor || '').toLowerCase();
+      const reasons = [];
+      if (myLooking.includes('dat') || myLooking.includes('relationship') || myIntents.some((i) => i.includes('dat'))) {
+        if (theirLooking.includes('dat') || theirLooking.includes('relationship')) { score += 18; reasons.push('Both open to dating'); }
+        if (u.age && userProfile?.age && Math.abs(Number(u.age) - Number(userProfile.age)) <= 6) { score += 10; reasons.push('Similar age'); }
+      } else if (myLooking.includes('friend') || myIntents.some((i) => i.includes('friend'))) {
+        if (shared.length) { score += 10; reasons.push(`Shared: ${shared[0]}`); }
+        reasons.push('Friendship overlap');
+      } else if (myLooking.includes('network') || myLooking.includes('professional') || myIntents.some((i) => i.includes('recruit') || i.includes('career'))) {
+        if (u.occupation || u.profile?.occupation) { score += 14; reasons.push('Career / networking'); }
+        if (u.city && myCity && String(u.city).toLowerCase() === myCity) { score += 8; reasons.push('Same city'); }
+      }
+      shared.slice(0, 2).forEach((s) => {
+        const label = s.charAt(0).toUpperCase() + s.slice(1);
+        if (!reasons.includes(label) && !reasons.some((r) => r.includes(label))) reasons.push(label);
+      });
+      if (!reasons.length && (u.interests || []).length) reasons.push(...(u.interests || []).slice(0, 2));
       const matchPct = Math.min(98, Math.max(42, Math.round(score)));
-      const reasons = shared.length
-        ? shared.slice(0,3).map(s=>s.charAt(0).toUpperCase()+s.slice(1))
-        : (u.interests||[]).slice(0,2);
       return {
         user:{...u,_isNew:isRecentlyJoined(u)},
         score,
         matchPct,
-        reasons,
-        reason: shared.length
-          ? `You both care about ${shared.slice(0,2).join(' & ')}`
-          : (u.bio || 'Someone you might enjoy talking to on Peepal'),
+        reasons: reasons.slice(0, 3),
+        reason: reasons[0]
+          ? reasons.slice(0, 2).join(' · ')
+          : shared.length
+            ? `You both care about ${shared.slice(0,2).join(' & ')}`
+            : (u.bio || 'Someone you might enjoy talking to on Peepal'),
       };
     })
     .sort((a,b)=>b.score-a.score)
@@ -217,8 +241,9 @@ function renderDiscoverySection(profiles){
             </div>
             <button class="discovery-dismiss" data-uid="${user.uid}" title="Not interested">✕</button>
           </div>
-          ${(reasons||[]).length?`<div class="discovery-shared">${reasons.slice(0,4).map(r=>`<span class="discovery-shared-tag">📌 ${r}</span>`).join('')}</div>`:''}
+          ${(reasons||[]).length?`<div class="discovery-shared">${reasons.slice(0,4).map(r=>`<span class="discovery-shared-tag">${String(r).startsWith('📌')?r:`📌 ${r}`}</span>`).join('')}</div>`:''}
           <div class="discovery-reason">"${(typeof interestOverlapReason==='function' && interestOverlapReason(user)) || reason||'Shared interests on Chaupaal'}"</div>
+          <div class="discovery-transparency" style="font-size:11px;color:var(--muted);margin:4px 0 8px;">Why this pick: ${(reasons||[]).slice(0,2).join(' · ') || 'compatibility signals'}</div>
           ${ib?`<div class="discovery-icebreaker"><div class="discovery-icebreaker-label">Conversation starter</div><div class="discovery-icebreaker-text">"${ib.answer}"</div></div>`:''}
           <div class="discovery-actions">
             <button class="discovery-view-btn" data-uid="${user.uid}">View profile</button>
@@ -234,10 +259,16 @@ function renderDiscoverySection(profiles){
     btn.addEventListener('click',e=>{
       e.stopPropagation();
       const uid=btn.dataset.uid;
+      const card=btn.closest('.discovery-card');
       dismissedUids.add(uid);
       try{localStorage.setItem('chaupaal_dismissed_uids',JSON.stringify([...dismissedUids]));}catch(err){}
-      btn.closest('.discovery-card')?.remove();
-      showToast('Got it — fewer like this');
+      if(card){
+        card.classList.add('discovery-card--exit');
+        setTimeout(()=>{
+          card.remove();
+          if(typeof showToast==='function') showToast('Got it — fewer like this');
+        },280);
+      } else if(typeof showToast==='function') showToast('Got it — fewer like this');
     });
   });
 
@@ -302,7 +333,14 @@ function renderDiscoverySection(profiles){
     const feed=document.getElementById('peepalFeed');
     document.getElementById('peepalDiscovery')?.remove();
     discoveryCurrentSet=[...discoveryPreviousSet];
-    if(feed?.parentElement) feed.parentElement.insertBefore(renderDiscoverySection(discoveryCurrentSet),feed);
+    if(feed?.parentElement){
+      const section=renderDiscoverySection(discoveryCurrentSet);
+      section.querySelectorAll('.discovery-card').forEach((c,i)=>{
+        c.classList.add('discovery-card--enter');
+        c.style.animationDelay=`${i*40}ms`;
+      });
+      feed.parentElement.insertBefore(section,feed);
+    }
   });
 
   return el;

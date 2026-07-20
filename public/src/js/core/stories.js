@@ -64,6 +64,7 @@
       type: 'like',
       enabled: !!enabled,
     });
+    if (enabled && typeof haptic === 'function') haptic('light');
   }
 
   async function commentPlatformStory(story, text) {
@@ -221,7 +222,16 @@
         onLongPress(button, async () => {
           const story = stories[Number(button.dataset.storyIndex)];
           if (!story || typeof storyCall !== 'function') return;
-          const title = prompt('Add to Highlight — name a new one, or leave blank to pick later');
+          const title =
+            typeof promptNameSheet === 'function'
+              ? await promptNameSheet({
+                  title: 'Add to Highlight',
+                  placeholder: 'Name a new Highlight (blank = Favorites)',
+                  confirmLabel: 'Add',
+                  allowBlank: true,
+                })
+              : 'Favorites';
+          if (title === null) return;
           try {
             let highlightId = '';
             if (title) {

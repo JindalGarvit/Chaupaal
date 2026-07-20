@@ -68,7 +68,7 @@ function renderFriendDiscovery(container){
     }else showToast('Sign in to search by phone number');
   });
   section.querySelectorAll('.discover-add-btn').forEach(btn=>{
-    btn.addEventListener('click',()=>{btn.textContent='Added ✓';btn.style.background='rgba(51,196,129,0.1)';btn.style.color='var(--green)';showToast(`${btn.dataset.name} added! 🎉`);});
+    btn.addEventListener('click',()=>{btn.textContent='Added ✓';btn.style.background='rgba(51,196,129,0.1)';btn.style.color='var(--green)';showToast(`${btn.dataset.name} added`);});
   });
 }
 

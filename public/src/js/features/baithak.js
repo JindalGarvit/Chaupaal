@@ -325,8 +325,8 @@ function showNewChatOptions(){
   // FUTURE_I18N: new-chat sheet copy
   sheet.innerHTML=`
     <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;margin-bottom:14px;">New chat</div>
-    <button id="newDm" style="width:100%;padding:14px;background:var(--cream);border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;text-align:left;margin-bottom:8px;">?? New DM</button>
-    <button id="newGroup" style="width:100%;padding:14px;background:var(--cream);border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;text-align:left;margin-bottom:8px;">?? Create group</button>
+    <button id="newDm" style="width:100%;padding:14px;background:var(--cream);border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;text-align:left;margin-bottom:8px;">💬 New DM</button>
+    <button id="newGroup" style="width:100%;padding:14px;background:var(--cream);border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;text-align:left;margin-bottom:8px;">👥 Create group</button>
     <button id="closeSheet2" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>
   `;
   document.querySelector('.device').appendChild(sheet);
@@ -340,21 +340,21 @@ function showCreateGroup(){
   sheet.style.cssText='position:absolute;inset:0;background:var(--cream);z-index:100;display:flex;flex-direction:column;padding:24px;';
   sheet.innerHTML=`
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
-      <button id="closeGrp" style="background:none;border:none;font-size:22px;cursor:pointer;">?</button>
+      <button id="closeGrp" style="background:none;border:none;font-size:22px;cursor:pointer;">←</button>
       <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;">New group</div>
     </div>
     <input class="auth-input" placeholder="Group name" id="grpName">
     <input class="auth-input" placeholder="Description (optional)" id="grpDesc">
-    <div style="font-size:13px;font-weight:600;color:var(--muted);margin:8px 0;">Share the group link so others can join ??</div>
+    <div style="font-size:13px;font-weight:600;color:var(--muted);margin:8px 0;">Share the group link so others can join →</div>
     <div style="background:var(--white);border-radius:12px;padding:14px;font-size:13px;color:var(--red);font-weight:600;">chaupaal.app/join/abc123 <span style="color:var(--muted);font-weight:400;">(auto-generated)</span></div>
-    <button style="margin-top:auto;width:100%;padding:15px;background:var(--red);color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;" id="createGrpBtn">Create group ?</button>
+    <button style="margin-top:auto;width:100%;padding:15px;background:var(--red);color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;" id="createGrpBtn">Create group</button>
   `;
   document.querySelector('.device').appendChild(sheet);
   document.getElementById('closeGrp').addEventListener('click',()=>sheet.remove());
   document.getElementById('createGrpBtn').addEventListener('click',()=>{
     const name=document.getElementById('grpName').value.trim();
     if(!name){showToast('Enter a group name');return;}
-    sheet.remove();showToast(`"${name}" group created! ??`);
+    sheet.remove();showToast(`"${name}" group created`);
   });
 }
 
@@ -363,18 +363,18 @@ function showMonthlyWrap(){
   const wrap=document.createElement('div');wrap.className='wrap-overlay';
   const now=new Date();const monthName=now.toLocaleString('en-IN',{month:'long'});
   const pages=[
-    {bg:'linear-gradient(160deg,#E63946,#C72E3A)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">${monthName} wrap</div><div class="wrap-headline" style="color:#fff;">How much did you learn this month? ??</div><div style="color:rgba(255,255,255,0.7);font-size:14px;">Scroll to see your journey ?</div>`},
+    {bg:'linear-gradient(160deg,#E63946,#C72E3A)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">${monthName} wrap</div><div class="wrap-headline" style="color:#fff;">How much did you learn this month?</div><div style="color:rgba(255,255,255,0.7);font-size:14px;">Tap to see your journey →</div>`},
     {bg:'linear-gradient(160deg,var(--navy),#2A3158)',content:`<div class="wrap-label" style="color:var(--gold);">Questions answered</div><div class="wrap-big-num" style="color:#fff;">${Math.floor(Math.random()*200+100)}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.7);">questions you answered</div>`},
-    {bg:'linear-gradient(160deg,#5FBA7D,#2E8B57)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">Top Category</div><div class="wrap-headline" style="color:#fff;font-size:40px;">?? Sports</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">You practised Sports the most</div>`},
-    {bg:'linear-gradient(160deg,#FF9A3C,#FF6B35)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">Longest Streak</div><div class="wrap-big-num" style="color:#fff;">?? 24</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">days reading Akhbaar in a row</div>`},
-    {bg:'linear-gradient(160deg,#8134AF,#515BD4)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">Muqabala Record</div><div class="wrap-headline" style="color:#fff;">7W ? 3L</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">You're climbing the Dangal ranks! ??</div><button class="wrap-share-btn" id="wrapShareBtn">?? Share</button>`},
+    {bg:'linear-gradient(160deg,#5FBA7D,#2E8B57)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">Top Category</div><div class="wrap-headline" style="color:#fff;font-size:40px;">🏆 Sports</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">You practised Sports the most</div>`},
+    {bg:'linear-gradient(160deg,#FF9A3C,#FF6B35)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">Longest Streak</div><div class="wrap-big-num" style="color:#fff;">🔥 24</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">days reading Akhbaar in a row</div>`},
+    {bg:'linear-gradient(160deg,#8134AF,#515BD4)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">Muqabala Record</div><div class="wrap-headline" style="color:#fff;">7W · 3L</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">You're climbing the Dangal ranks!</div><button class="wrap-share-btn" id="wrapShareBtn">Share wrap</button>`},
   ];
   let pageIdx=0;
   function renderPage(){
     const p=pages[pageIdx];
-    wrap.innerHTML=`<div class="wrap-page" style="background:${p.bg};">${p.content}<button class="wrap-close" onclick="this.closest('.wrap-overlay').remove()">?</button></div>`;
+    wrap.innerHTML=`<div class="wrap-page" style="background:${p.bg};">${p.content}<button class="wrap-close" onclick="this.closest('.wrap-overlay').remove()">✕</button></div>`;
     const shareBtn=wrap.querySelector('#wrapShareBtn');
-    if(shareBtn)shareBtn.addEventListener('click',()=>{if(navigator.share)navigator.share({text:`My ${monthName} Chaupaal Wrap: 7W-3L Dangal, 24-day streak! ?? chaupaal-chaupaal.web.app`});else showToast('Wrap copied!');});
+    if(shareBtn)shareBtn.addEventListener('click',()=>{if(navigator.share)navigator.share({text:`My ${monthName} Chaupaal Wrap: 7W-3L Dangal, 24-day streak! chaupaal-chaupaal.web.app`});else showToast('Wrap copied!');});
     wrap.querySelector('.wrap-page').addEventListener('click',e=>{
       if(e.target.closest('button'))return;
       pageIdx++;if(pageIdx>=pages.length){wrap.remove();}else renderPage();
@@ -386,26 +386,26 @@ function showMonthlyWrap(){
 function showYearlyWrap(){
   const now=new Date();
   const isUnlocked=(now.getMonth()===11&&now.getDate()>=25)||now.getMonth()===0;
-  if(!isUnlocked){showToast('?? Yearly Wrap unlocks on December 25th for everyone!');return;}
+  if(!isUnlocked){showToast('Yearly Wrap unlocks on December 25th for everyone');return;}
   const d=buildWrapData();
   const year=now.getFullYear()-(now.getMonth()===0?1:0);
   const totalSessions=JSON.parse(localStorage.getItem('chaupaal_play_history')||'[]').length;
   const wrap=document.createElement('div');wrap.className='wrap-overlay';
   const pages=[
-    {bg:'linear-gradient(160deg,#0F0C29,#302B63,#24243e)',content:`<div style="font-size:56px;margin-bottom:16px;">??</div><div class="wrap-label" style="color:rgba(255,255,255,0.6);">${year} on Chaupaal</div><div class="wrap-headline" style="color:#fff;">Your year in review</div><div class="wrap-sub" style="color:rgba(255,255,255,0.6);">Tap to explore ?</div>`},
-    {bg:'linear-gradient(160deg,#E63946,#C72E3A)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">You showed up</div><div class="wrap-big-num" style="color:#fff;">${totalSessions}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">days you played Akhbaar this year ??</div>`},
-    {bg:'linear-gradient(160deg,var(--navy),#2A3158)',content:`<div class="wrap-label" style="color:var(--gold);">Your biggest obsession</div><div style="font-size:64px;margin:8px 0;">${CATEGORY_ICONS[d.topCat]||'??'}</div><div class="wrap-headline" style="color:#fff;">${d.topCat}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.7);">You dominated this all year</div>`},
+    {bg:'linear-gradient(160deg,#0F0C29,#302B63,#24243e)',content:`<div style="font-size:56px;margin-bottom:16px;">✨</div><div class="wrap-label" style="color:rgba(255,255,255,0.6);">${year} on Chaupaal</div><div class="wrap-headline" style="color:#fff;">Your year in review</div><div class="wrap-sub" style="color:rgba(255,255,255,0.6);">Tap to explore →</div>`},
+    {bg:'linear-gradient(160deg,#E63946,#C72E3A)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">You showed up</div><div class="wrap-big-num" style="color:#fff;">${totalSessions}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">days you played Akhbaar this year</div>`},
+    {bg:'linear-gradient(160deg,var(--navy),#2A3158)',content:`<div class="wrap-label" style="color:var(--gold);">Your biggest obsession</div><div style="font-size:64px;margin:8px 0;">${CATEGORY_ICONS[d.topCat]||'🏆'}</div><div class="wrap-headline" style="color:#fff;">${d.topCat}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.7);">You dominated this all year</div>`},
     {bg:'linear-gradient(160deg,#2A9D8F,#1A6B64)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">Accuracy</div><div class="wrap-big-num" style="color:#fff;">${d.accuracy}%</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">${d.totalCorrect} correct out of ${d.totalQ}</div>`},
-    {bg:'linear-gradient(160deg,#FF9A3C,#E63946)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">Longest streak</div><div class="wrap-big-num" style="color:#fff;">?? ${d.streak}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">consecutive days this year</div>`},
-    {bg:'linear-gradient(160deg,#8134AF,#515BD4)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">Your personality</div><div style="font-size:48px;margin:12px 0;">${personalityProfile.lifestyle==='outdoorsy'?'???':personalityProfile.lifestyle==='intellectual'?'??':personalityProfile.lifestyle==='cinephile'?'??':'??'}</div><div class="wrap-headline" style="color:#fff;font-size:28px;">${personalityProfile.lifestyle?personalityProfile.lifestyle.charAt(0).toUpperCase()+personalityProfile.lifestyle.slice(1):'Curious Explorer'}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.7);">From your Aur Sunao answers & daily reflections</div>`},
-    {bg:'linear-gradient(160deg,#C9A227,#B7791F)',content:`<div style="font-size:56px;margin-bottom:16px;">??</div><div class="wrap-headline" style="color:#fff;">Here's to ${year+1}!</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">Keep reading, keep playing. The Chaupaal is always open. ??</div><button class="wrap-share-btn" id="wrapYearShare">?? Share your ${year} Wrap</button>`},
+    {bg:'linear-gradient(160deg,#FF9A3C,#E63946)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">Longest streak</div><div class="wrap-big-num" style="color:#fff;">🔥 ${d.streak}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">consecutive days this year</div>`},
+    {bg:'linear-gradient(160deg,#8134AF,#515BD4)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">Your personality</div><div style="font-size:48px;margin:12px 0;">${personalityProfile.lifestyle==='outdoorsy'?'🌿':personalityProfile.lifestyle==='intellectual'?'📚':personalityProfile.lifestyle==='cinephile'?'🎬':'🧭'}</div><div class="wrap-headline" style="color:#fff;font-size:28px;">${personalityProfile.lifestyle?personalityProfile.lifestyle.charAt(0).toUpperCase()+personalityProfile.lifestyle.slice(1):'Curious Explorer'}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.7);">From your Aur Sunao answers & daily reflections</div>`},
+    {bg:'linear-gradient(160deg,#C9A227,#B7791F)',content:`<div style="font-size:56px;margin-bottom:16px;">🥂</div><div class="wrap-headline" style="color:#fff;">Here's to ${year+1}!</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">Keep reading, keep playing. The Chaupaal is always open.</div><button class="wrap-share-btn" id="wrapYearShare">Share your ${year} Wrap</button>`},
   ];
   let idx=0;
   function renderPage(){
     const p=pages[idx];
-    wrap.innerHTML=`<div class="wrap-page" style="background:${p.bg};">${p.content}<button class="wrap-close" onclick="this.closest('.wrap-overlay').remove()">?</button></div>`;
+    wrap.innerHTML=`<div class="wrap-page" style="background:${p.bg};">${p.content}<button class="wrap-close" onclick="this.closest('.wrap-overlay').remove()">✕</button></div>`;
     wrap.querySelector('#wrapYearShare')?.addEventListener('click',()=>{
-      const text=`My ${year} Chaupaal Wrap ??\n?? ${totalSessions} days � ?? ${d.accuracy}% accuracy � ?? ${d.streak}-day streak � ? ${d.topCat}\nchaupaal-chaupaal.web.app`;
+      const text=`My ${year} Chaupaal Wrap\n${totalSessions} days · ${d.accuracy}% accuracy · ${d.streak}-day streak · ${d.topCat}\nchaupaal-chaupaal.web.app`;
       if(navigator.share)navigator.share({text});else{navigator.clipboard.writeText(text);showToast('Copied!');}
     });
     wrap.querySelector('.wrap-page').addEventListener('click',e=>{if(e.target.closest('button'))return;idx++;if(idx>=pages.length)wrap.remove();else renderPage();});
@@ -416,10 +416,10 @@ function showYearlyWrap(){
 // ===================== HOW WAS YOUR DAY (10 PM) =====================
 const dayCheckModal=document.createElement('div');dayCheckModal.className='day-check-modal';
 dayCheckModal.innerHTML=`
-  <div class="day-check-title">How was your day? ??</div>
-  <div class="day-check-sub">Write what's on your mind ? saved privately to your Archive, only you can see it</div>
+  <div class="day-check-title">How was your day?</div>
+  <div class="day-check-sub">Write what's on your mind — saved privately to your Archive, only you can see it</div>
   <textarea class="day-check-textarea" id="dayCheckText" placeholder="Anything interesting happen today? Something on your mind? Just write..."></textarea>
-  <button class="btn btn--primary btn--block day-check-send" id="dayCheckSend">Save to Journal ??</button>
+  <button class="btn btn--primary btn--block day-check-send" id="dayCheckSend">Save to Journal</button>
   <button class="day-check-skip" id="dayCheckSkip">Not today, maybe tomorrow</button>
 `;
 document.querySelector('.device').appendChild(dayCheckModal);
@@ -427,7 +427,7 @@ document.querySelector('.device').appendChild(dayCheckModal);
 function showDayCheck(){
   dayCheckModal.classList.add('open');
   if(!localStorage.getItem('chaupaal_journal_intro_seen')){
-    setTimeout(()=>showToast('?? Your journal entries are saved privately in your Archive ? only you can see them'),400);
+    setTimeout(()=>showToast('Journal entries stay private in your Archive — only you can see them'),400);
     localStorage.setItem('chaupaal_journal_intro_seen','1');
   }
   setTimeout(()=>{

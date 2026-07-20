@@ -583,7 +583,7 @@ function openSnakesVersionPicker(chat){
   sheet.innerHTML = `
     <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;margin-bottom:4px;">🐍 Choose a version</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">Or tap "Random" to let fate decide!</div>
-    <button style="width:100%;padding:14px;background:linear-gradient(135deg,var(--red),#8134AF);color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:12px;" id="randomSL">🎲 Random version</button>
+    <button style="width:100%;padding:14px;background:linear-gradient(135deg,var(--game-accent,var(--red)),#8134AF);color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:12px;" id="randomSL">🎲 Random version</button>
     ${SL_VERSIONS.map((v,i)=>`
       <button data-i="${i}" style="width:100%;padding:14px;background:var(--cream);border:2px solid var(--line);border-radius:14px;font-size:14px;font-weight:600;cursor:pointer;text-align:left;margin-bottom:8px;display:flex;align-items:center;gap:12px;">
         <span style="font-size:28px;">${v.emoji}</span>

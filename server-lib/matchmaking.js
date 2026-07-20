@@ -155,7 +155,7 @@ function passesStructuredFilters(viewer, cand, filters = {}) {
   return true;
 }
 
-function asymmetricBoost(viewer, cand, edges = {}) {
+function asymmetricBoost(viewer, cand, edges = {}, intentHint = '') {
   let b = 1;
   if (edges.theyFollowViewer) b += 0.12;
   if (edges.viewerFollowsThem) b += 0.04;
@@ -166,6 +166,38 @@ function asymmetricBoost(viewer, cand, edges = {}) {
   const vLf = lookingForOf(viewer);
   const cLf = lookingForOf(cand);
   if (vLf && cLf && (vLf.includes(cLf.slice(0, 6)) || cLf.includes(vLf.slice(0, 6)))) b += 0.05;
+
+  const intent = String(intentHint || vLf || '')
+    .trim()
+    .toLowerCase();
+  const candLooking = cLf;
+  const candIntents = (cand.intents || []).map((i) => String(i).toLowerCase());
+  const gender = String(cand.gender || cand.profile?.gender || '').toLowerCase();
+  const vGender = String(viewer.gender || viewer.profile?.gender || '').toLowerCase();
+  const ageV = ageOf(viewer);
+  const ageC = ageOf(cand);
+
+  if (intent.includes('dat') || intent.includes('relationship') || intent.includes('marriage') || intent.includes('romantic')) {
+    if (candLooking && (candLooking.includes('dat') || candLooking.includes('relationship') || candLooking.includes('marriage'))) b += 0.14;
+    if (ageV != null && ageC != null && Math.abs(ageV - ageC) <= 6) b += 0.1;
+    if (vGender && gender && vGender !== gender) b += 0.06;
+    if (intersectInterests(viewer, cand).length) b += 0.04;
+  } else if (intent.includes('friend') || intent.includes('hobby') || intent.includes('activity')) {
+    const shared = intersectInterests(viewer, cand);
+    if (shared.length) b += 0.08 + Math.min(0.12, shared.length * 0.04);
+    if (candLooking.includes('friend') || candIntents.some((i) => i.includes('friend'))) b += 0.08;
+    if (vCity && cCity && vCity === cCity) b += 0.04;
+  } else if (intent.includes('recruit') || intent.includes('hir') || intent.includes('job') || intent.includes('network') || intent.includes('professional')) {
+    const occV = String(viewer.profile?.occupation || viewer.occupation || '').toLowerCase();
+    const occC = String(cand.profile?.occupation || cand.occupation || '').toLowerCase();
+    if (occV && occC) b += 0.1;
+    if (candLooking.includes('network') || candLooking.includes('professional') || candIntents.some((i) => i.includes('network') || i.includes('career'))) b += 0.12;
+    if (vCity && cCity && vCity === cCity) b += 0.05;
+  } else if (intent) {
+    // personal / custom intents — soft boost when candidate signals overlap the phrase
+    if (candLooking.includes(intent.slice(0, 8)) || candIntents.some((i) => i.includes(intent.slice(0, 8)))) b += 0.1;
+    if (intersectInterests(viewer, cand).length) b += 0.06;
+  }
   return b;
 }
 
@@ -235,23 +267,41 @@ function galeShapley(ids, prefs) {
  * Rank candidates for viewer using cosine * asymmetric boost, then GS among top pool.
  * Returns ordered matches with signals for transparency UI.
  */
-function rankPersonalMatches({ viewer, candidates, edgeMap = {}, limit = 10 }) {
+function rankPersonalMatches({ viewer, candidates, edgeMap = {}, limit = 10, intent = '' }) {
   const vEmbed = viewer.profileEmbedding?.vector || viewer.profileEmbedding;
+  const intentHint = String(intent || lookingForOf(viewer) || '').trim();
   const scored = [];
 
   for (const cand of candidates) {
     const cEmbed = cand.profileEmbedding?.vector || cand.profileEmbedding;
     const cos = cosineSimilarity(vEmbed, cEmbed);
     const edges = edgeMap[cand.uid] || {};
-    const boost = asymmetricBoost(viewer, cand, edges);
+    const boost = asymmetricBoost(viewer, cand, edges, intentHint);
     const score = Math.max(0, Math.min(1, cos * boost));
     const signals = [];
+    const sharedInterests = intersectInterests(viewer, cand).slice(0, 3);
+    const intentL = intentHint.toLowerCase();
+    if (intentL.includes('dat') || intentL.includes('relationship') || intentL.includes('marriage')) {
+      const ageV = ageOf(viewer);
+      const ageC = ageOf(cand);
+      if (ageV != null && ageC != null && Math.abs(ageV - ageC) <= 6) signals.push('Similar age for dating');
+      if (lookingForOf(cand).includes('dat') || lookingForOf(cand).includes('relationship')) signals.push('Also open to dating');
+    } else if (intentL.includes('friend') || intentL.includes('hobby')) {
+      if (sharedInterests.length) signals.push(`Shared: ${sharedInterests[0]}`);
+      signals.push('Friendship-friendly overlap');
+    } else if (intentL.includes('recruit') || intentL.includes('hir') || intentL.includes('network') || intentL.includes('professional')) {
+      if (cand.profile?.occupation || cand.occupation) signals.push('Career / networking fit');
+      if (cityOf(viewer) && cityOf(viewer) === cityOf(cand)) signals.push('Same city for meetups');
+    }
     if (cos >= 0.35) signals.push('Similar interests & prompts');
     if (edges.theyFollowViewer) signals.push('Already follows you');
-    if (cityOf(viewer) && cityOf(viewer) === cityOf(cand)) signals.push('Same city');
-    const sharedInterests = intersectInterests(viewer, cand).slice(0, 3);
-    sharedInterests.forEach((t) => signals.push(t));
-    if (lookingForOf(viewer) && lookingForOf(cand)) signals.push('Aligned intent');
+    if (cityOf(viewer) && cityOf(viewer) === cityOf(cand) && !signals.some((s) => s.includes('city'))) signals.push('Same city');
+    sharedInterests.forEach((t) => {
+      if (!signals.some((s) => s.toLowerCase().includes(t.toLowerCase()))) signals.push(t);
+    });
+    if (lookingForOf(viewer) && lookingForOf(cand) && !signals.some((s) => s.includes('intent') || s.includes('dating') || s.includes('Friend'))) {
+      signals.push('Aligned intent');
+    }
     scored.push({
       uid: cand.uid,
       score,
@@ -285,7 +335,7 @@ function rankPersonalMatches({ viewer, candidates, edgeMap = {}, limit = 10 }) {
         theyFollowViewer: edges.viewerFollowsThem,
         viewerFollowsThem: edges.theyFollowViewer,
         reactedUp: edges.reactedUp,
-      });
+      }, intentHint);
       return Math.max(0, Math.min(1, cos * revBoost));
     }
     const a = byUid[aUid];

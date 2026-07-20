@@ -53,7 +53,9 @@
     const el = document.getElementById('chatTypingStatus');
     if (!el) return;
     if (on && presenceEnabled()) {
-      el.textContent = (name || 'Someone') + ' is typing…';
+      el.innerHTML =
+        `<span class="chat-typing-dots" aria-hidden="true"><i></i><i></i><i></i></span>` +
+        `<span>${(name || 'Someone')} is typing</span>`;
       el.classList.remove('hidden');
     } else {
       el.textContent = '';
@@ -72,11 +74,13 @@
       area.appendChild(el);
     }
     if (label && presenceEnabled()) {
-      el.textContent = label;
+      el.textContent = label === 'Seen' ? 'Seen · just now' : label;
       el.classList.remove('hidden');
+      el.classList.add('chat-read-receipt--soft');
     } else {
       el.textContent = '';
       el.classList.add('hidden');
+      el.classList.remove('chat-read-receipt--soft');
     }
     area.scrollTop = area.scrollHeight;
   }

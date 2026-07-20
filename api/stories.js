@@ -305,14 +305,26 @@ async function feedBaithak(db, uid) {
 }
 
 async function feedDuniya(db, uid) {
-  // Decision 2C for now: public signed-in feed. Prefer followers + discovery (2B)
-  // when ranking signals are wired — keep this path collection-separate from Baithak.
+  // Decision 2B: prefer people you follow + discovery ranking over pure recency (2C).
+  // Keep collection-separate from Baithak.
   const snap = await db.collection('duniya_stories').where('expiresAt', '>', new Date()).limit(100).get();
+  const followingSnap = await db.collection('users').doc(uid).collection('following').limit(200).get();
+  const following = new Set(followingSnap.docs.map((d) => d.id));
   const output = [];
   for (const story of snap.docs) {
-    if (await canView(db, story, uid, false)) output.push(serializeStory(story, uid));
+    if (await canView(db, story, uid, false)) {
+      const serialized = serializeStory(story, uid);
+      const owner = serialized.uid;
+      let rank = serialized.createdAt || 0;
+      if (owner === uid) rank += 1e13; // own stories first
+      else if (following.has(owner)) rank += 5e12; // followed creators
+      else rank += Math.min(2e11, (serialized.score || 0) * 1e9); // light discovery signal
+      output.push({ ...serialized, _rank: rank });
+    }
   }
-  return output.sort((a, b) => b.createdAt - a.createdAt);
+  return output
+    .sort((a, b) => b._rank - a._rank || b.createdAt - a.createdAt)
+    .map(({ _rank, ...rest }) => rest);
 }
 
 async function profileStories(db, uid, targetUid) {

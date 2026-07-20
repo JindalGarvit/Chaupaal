@@ -399,6 +399,7 @@ async function sendMsg(chat){
     input.value='';
     document.getElementById('aiSuggestionBar')?.classList.add('hidden');
     if(typeof SoundLib!=='undefined'&&SoundLib.send) SoundLib.send();
+    if(typeof haptic==='function') haptic('light');
   };
   const revert=()=>{
     const area=document.getElementById('chatMsgsArea');
@@ -977,6 +978,8 @@ function showBaithakStoryEditor(file,mode){
     </div>
     <div class="story-editor-preview" data-story-preview>
       ${file.type.startsWith('video')?`<video src="${preview}" controls playsinline></video>`:`<img src="${preview}" alt="" data-story-img>`}
+      <canvas class="story-draw-canvas" data-story-draw></canvas>
+      <div class="story-sticker-layer" data-story-stickers></div>
       <div data-story-overlay class="story-viewer-text"></div>
     </div>
     <div class="story-editor-tools">
@@ -992,6 +995,14 @@ function showBaithakStoryEditor(file,mode){
           `<button type="button" data-filter="${id}" class="${id==='none'?'is-active':''}">${label}</button>`
         ).join('')}
       </div>
+      <div class="story-sticker-pack" data-story-sticker-pack aria-label="Stickers">
+        ${['🔥','✨','❤️','😂','🙏','☕','🏏','🎵'].map(s=>`<button type="button" class="story-sticker-btn" data-sticker="${s}">${s}</button>`).join('')}
+      </div>
+      <div class="story-draw-row">
+        <button type="button" class="btn" data-story-draw-toggle>Draw</button>
+        <button type="button" class="btn" data-story-draw-clear>Clear draw</button>
+        <span style="font-size:11px;color:var(--muted);">Light doodle on top of media</span>
+      </div>
       <label class="story-editor-field">Audience
         <select data-story-audience>
           <option value="friends">Friends — mutual connections only</option>
@@ -1005,7 +1016,6 @@ function showBaithakStoryEditor(file,mode){
           ${typeof getGames==='function'?getGames({dangal:true}).map(game=>`<option value="${game.id}">${game.icon} ${game.name}</option>`).join(''):''}
         </select>
       </label>
-      <div class="story-editor-future">Music stickers and drawing tools can plug in here later.</div>
       <div class="story-editor-plus-row">
         <button type="button" class="story-plus-btn" data-story-plus aria-label="Add more">＋</button>
         <span>Tap for camera · long-press for Instant / Create / Upload</span>
@@ -1013,6 +1023,61 @@ function showBaithakStoryEditor(file,mode){
     </div>`;
   document.querySelector('.device')?.appendChild(editor);
   const img=editor.querySelector('[data-story-img]');
+  const stickerLayer=editor.querySelector('[data-story-stickers]');
+  const drawCanvas=editor.querySelector('[data-story-draw]');
+  const previewBox=editor.querySelector('[data-story-preview]');
+  let drawing=false;
+  let drawOn=false;
+  const stickersPlaced=[];
+  const sizeCanvas=()=>{
+    if(!drawCanvas||!previewBox)return;
+    const r=previewBox.getBoundingClientRect();
+    drawCanvas.width=Math.max(1,Math.floor(r.width));
+    drawCanvas.height=Math.max(1,Math.floor(r.height));
+  };
+  sizeCanvas();
+  const ctx=drawCanvas?.getContext('2d');
+  if(ctx){ctx.strokeStyle='#FFE66D';ctx.lineWidth=3;ctx.lineCap='round';}
+  const pointerPos=(e)=>{
+    const r=drawCanvas.getBoundingClientRect();
+    const t=e.touches?.[0]||e;
+    return {x:t.clientX-r.left,y:t.clientY-r.top};
+  };
+  const startDraw=(e)=>{if(!drawOn||!ctx)return;drawing=true;const p=pointerPos(e);ctx.beginPath();ctx.moveTo(p.x,p.y);e.preventDefault();};
+  const moveDraw=(e)=>{if(!drawing||!ctx)return;const p=pointerPos(e);ctx.lineTo(p.x,p.y);ctx.stroke();e.preventDefault();};
+  const endDraw=()=>{drawing=false;};
+  drawCanvas?.addEventListener('mousedown',startDraw);
+  drawCanvas?.addEventListener('mousemove',moveDraw);
+  drawCanvas?.addEventListener('mouseup',endDraw);
+  drawCanvas?.addEventListener('mouseleave',endDraw);
+  drawCanvas?.addEventListener('touchstart',startDraw,{passive:false});
+  drawCanvas?.addEventListener('touchmove',moveDraw,{passive:false});
+  drawCanvas?.addEventListener('touchend',endDraw);
+  editor.querySelector('[data-story-draw-toggle]')?.addEventListener('click',(e)=>{
+    drawOn=!drawOn;
+    drawCanvas?.classList.toggle('is-drawing',drawOn);
+    e.currentTarget.textContent=drawOn?'Drawing…':'Draw';
+    e.currentTarget.classList.toggle('btn--primary',drawOn);
+  });
+  editor.querySelector('[data-story-draw-clear]')?.addEventListener('click',()=>{
+    if(ctx&&drawCanvas)ctx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
+  });
+  editor.querySelectorAll('[data-sticker]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const emoji=btn.dataset.sticker;
+      const x=30+Math.random()*40;
+      const y=30+Math.random()*40;
+      stickersPlaced.push({emoji,x,y});
+      const el=document.createElement('span');
+      el.className='story-sticker-float';
+      el.textContent=emoji;
+      el.style.left=x+'%';
+      el.style.top=y+'%';
+      stickerLayer?.appendChild(el);
+      btn.classList.add('is-active');
+      setTimeout(()=>btn.classList.remove('is-active'),200);
+    });
+  });
   const applyFilter=()=>{
     if(!img)return;
     const map={none:'none',warm:'sepia(.35) saturate(1.2)',cool:'hue-rotate(20deg) saturate(1.1)',mono:'grayscale(1)',vivid:'contrast(1.2) saturate(1.35)'};
@@ -1051,17 +1116,20 @@ function showBaithakStoryEditor(file,mode){
     try{
       if(typeof processAndUploadMedia!=='function') throw new Error('Media upload unavailable');
       const up=await processAndUploadMedia(file,{folder:'stories'});
+      const stickerNote=stickersPlaced.map(s=>s.emoji).join('');
+      const baseText=editor.querySelector('[data-story-text]').value||'';
       const created=await createPlatformStory({
         destination:'baithak',kind:'story',
         visibility:editor.querySelector('[data-story-audience]').value,
         type:'media',media:up.media,thumb:up.thumb,
         mediaType:file.type.startsWith('video')?'video':'image',
         rotation,
-        text:editor.querySelector('[data-story-text]').value,
+        text:stickerNote?`${baseText}${baseText?' ':''}${stickerNote}`.trim():baseText,
         sharedGameId:editor.querySelector('[data-story-game]').value,
       });
       cleanup();
       renderLiveBaithakStories();
+      if(typeof haptic==='function') haptic('success');
       if(created?.audienceFallback==='friends'){
         showToast('Shared with Friends — your Close Friends list was empty');
       }else if(editor.querySelector('[data-story-audience]').value==='close_friends'){

@@ -212,9 +212,10 @@
         <button type="button" data-remove-media="${i}" aria-label="Remove">✕</button>
       </div>`;
         if (item.type === 'video')
-          return `<div class="profile-media-cell profile-media-cell--video" data-i="${i}">
-        <video src="${src}" muted playsinline></video>
+          return `<div class="profile-media-cell profile-media-cell--video" data-i="${i}" data-play-video="${src}">
+        <video src="${src}" muted playsinline preload="metadata"></video>
         <span class="profile-media-badge">▶</span>
+        <span class="profile-media-scrub" aria-hidden="true"><i></i></span>
         <button type="button" data-remove-media="${i}" aria-label="Remove">✕</button>
       </div>`;
         if (item.type === 'voice') {
@@ -223,6 +224,7 @@
           return `<div class="profile-media-cell profile-media-cell--voice" data-i="${i}" data-play-voice="${src}">
         <span class="profile-media-voice-icon">🎙️</span>
         <span class="profile-media-voice-label">${label}</span>
+        <span class="profile-media-badge profile-media-play">▶</span>
         <button type="button" data-remove-media="${i}" aria-label="Remove">✕</button>
       </div>`;
         }
@@ -277,6 +279,37 @@
         cell.addEventListener('click', (e) => {
           if (e.target.closest('[data-remove-media]')) return;
           playVoiceNote(cell.dataset.playVoice);
+        });
+      });
+      grid.querySelectorAll('[data-play-video]').forEach((cell) => {
+        cell.addEventListener('click', (e) => {
+          if (e.target.closest('[data-remove-media]')) return;
+          const v = cell.querySelector('video');
+          const scrub = cell.querySelector('.profile-media-scrub > i');
+          if (!v) return;
+          if (v.paused) {
+            grid.querySelectorAll('[data-play-video] video').forEach((other) => {
+              if (other !== v) {
+                other.pause();
+                other.closest('.profile-media-cell')?.classList.remove('is-playing');
+              }
+            });
+            v.muted = false;
+            v.play().catch(() => {});
+            cell.classList.add('is-playing');
+            const tick = () => {
+              if (scrub && v.duration) scrub.style.width = `${(v.currentTime / v.duration) * 100}%`;
+              if (!v.paused) requestAnimationFrame(tick);
+            };
+            requestAnimationFrame(tick);
+            v.onended = () => {
+              cell.classList.remove('is-playing');
+              if (scrub) scrub.style.width = '0%';
+            };
+          } else {
+            v.pause();
+            cell.classList.remove('is-playing');
+          }
         });
       });
     };

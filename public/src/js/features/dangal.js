@@ -305,7 +305,7 @@ document.getElementById('peepalUserInput')?.addEventListener('input', async (e)=
   results.querySelectorAll('.pu-add').forEach(btn=>{
     btn.addEventListener('click',()=>{
       btn.textContent='Added ✓';btn.style.background='rgba(51,196,129,0.1)';btn.style.color='var(--green)';
-      showToast(`${btn.dataset.name} added as friend! 🎉`);
+      showToast(`${btn.dataset.name} added as friend`);
     });
   });
 });

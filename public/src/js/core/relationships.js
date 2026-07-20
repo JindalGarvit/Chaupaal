@@ -73,6 +73,7 @@
       source: source || 'profile',
     });
     cache.set(targetUid, data.state || defaultState());
+    if (enabled && typeof haptic === 'function') haptic('success');
     document.dispatchEvent(
       new CustomEvent('chaupaal:relationship-changed', {
         detail: { targetUid, state: relationshipState(targetUid) },

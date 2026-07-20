@@ -269,6 +269,7 @@ async function personalMatch(db, admin, user, body) {
     candidates,
     edgeMap,
     limit: Math.min(12, Number(body.limit) || 8),
+    intent: body.intent || viewer.profile?.lookingFor || viewer.lookingFor || '',
   });
 
   return {

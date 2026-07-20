@@ -121,6 +121,48 @@ function haptic(type='light'){
   navigator.vibrate(patterns[type]||10);
 }
 
+/** In-app name sheet — replaces native prompt() for Highlights etc. */
+function promptNameSheet(opts={}){
+  const {
+    title='Name',
+    placeholder='Enter a name',
+    confirmLabel='Save',
+    allowBlank=false,
+    initial='',
+  }=opts;
+  return new Promise((resolve)=>{
+    document.getElementById('promptNameSheet')?.remove();
+    const sheet=document.createElement('div');
+    sheet.id='promptNameSheet';
+    sheet.className='name-prompt-sheet';
+    sheet.innerHTML=`
+      <div class="name-prompt-backdrop" data-np-cancel></div>
+      <div class="name-prompt-card" role="dialog" aria-modal="true" aria-label="${title}">
+        <div class="name-prompt-title">${title}</div>
+        <input class="auth-input name-prompt-input" type="text" maxlength="40" placeholder="${placeholder}" value="${String(initial||'').replace(/"/g,'&quot;')}" data-np-input>
+        <div class="name-prompt-actions">
+          <button type="button" class="btn" data-np-cancel>Cancel</button>
+          <button type="button" class="btn btn--primary" data-np-ok>${confirmLabel}</button>
+        </div>
+      </div>`;
+    document.querySelector('.device')?.appendChild(sheet);
+    const input=sheet.querySelector('[data-np-input]');
+    const finish=(val)=>{sheet.remove();resolve(val);};
+    sheet.querySelectorAll('[data-np-cancel]').forEach(el=>el.addEventListener('click',()=>finish(null)));
+    sheet.querySelector('[data-np-ok]')?.addEventListener('click',()=>{
+      const v=(input?.value||'').trim();
+      if(!v&&!allowBlank){if(typeof showToast==='function')showToast('Enter a name');return;}
+      finish(v);
+    });
+    input?.addEventListener('keydown',(e)=>{
+      if(e.key==='Enter'){e.preventDefault();sheet.querySelector('[data-np-ok]')?.click();}
+      if(e.key==='Escape')finish(null);
+    });
+    setTimeout(()=>input?.focus(),50);
+  });
+}
+window.promptNameSheet=promptNameSheet;
+
 // ---- Enhanced streak milestone with confetti ----
 const _origShowStreakMilestone=showStreakMilestone;
 window.showStreakMilestone=function(streak){

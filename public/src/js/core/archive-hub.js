@@ -57,10 +57,10 @@
         </div>
       </div>
       <div class="archive-hub-tabs">
-        <button type="button" data-ah-tab="posts" class="active">Posts</button>
-        <button type="button" data-ah-tab="stories">Stories & Highlights</button>
-        <button type="button" data-ah-tab="journal">Journal</button>
-        <button type="button" data-ah-tab="preview">View as others</button>
+        <button type="button" data-ah-tab="posts" class="active">Your posts</button>
+        <button type="button" data-ah-tab="stories">Story Highlights</button>
+        <button type="button" data-ah-tab="journal">Private journal</button>
+        <button type="button" data-ah-tab="preview">Visitor preview</button>
       </div>
       <div class="archive-hub-body" data-ah-body>Loading…</div>`;
     document.querySelector('.device')?.appendChild(overlay);
@@ -104,7 +104,14 @@
           if (typeof openStoryArchive === 'function') openStoryArchive();
         });
         body.querySelector('[data-ah-new-highlight]')?.addEventListener('click', async () => {
-          const title = prompt('Highlight name');
+          const title =
+            typeof promptNameSheet === 'function'
+              ? await promptNameSheet({
+                  title: 'New Highlight',
+                  placeholder: 'e.g. Travel, Wins, Favorites',
+                  confirmLabel: 'Create',
+                })
+              : null;
           if (!title || typeof storyCall !== 'function') return;
           try {
             await storyCall('create_highlight', { title });
