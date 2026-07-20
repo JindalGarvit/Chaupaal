@@ -708,6 +708,14 @@
   function initEscapeToClose() {
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
+      if (typeof hasNavLayers === 'function' && hasNavLayers()) {
+        try {
+          history.back();
+        } catch (err) {
+          if (typeof dismissTopNavLayer === 'function') dismissTopNavLayer();
+        }
+        return;
+      }
       const viewer = document.getElementById('cpImageViewer');
       if (viewer) {
         viewer.querySelector('.cp-image-close')?.click();

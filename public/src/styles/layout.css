@@ -1,10 +1,17 @@
 /* ===== APP SHELL ===== */
+html,body{
+  overscroll-behavior:none;
+  width:100%;
+  max-width:100%;
+  overflow-x:hidden;
+}
 .device{
   width:100%;min-height:100vh;height:100vh;
   height:100dvh;
   background:var(--cream);
   position:relative;display:flex;flex-direction:column;
   overflow:hidden;
+  overscroll-behavior: none;
   padding-left:env(safe-area-inset-left,0px);
   padding-right:env(safe-area-inset-right,0px);
 }

@@ -2528,3 +2528,54 @@ select:focus-visible,
 @keyframes chessCheckPulse{50%{filter:brightness(1.15)}}
 @keyframes shabdFlip{0%{transform:scaleY(.05)}100%{transform:scaleY(1)}}
 @keyframes shakeRow{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+
+/* ===== Mobile UX: overflow, scrims, readable chrome ===== */
+.cp-sheet-scrim{
+  position:absolute;inset:0;z-index:99;
+  background:rgba(43,39,48,.42);
+  -webkit-tap-highlight-color:transparent;
+}
+.modal-backdrop{cursor:pointer;}
+.modal-backdrop .modal{cursor:default;max-width:100%;box-sizing:border-box;}
+.modal-title,.modal-header .modal-title{
+  min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px;
+}
+.modal-header{display:flex;align-items:center;gap:10px;min-width:0;}
+.game-chrome-title,.game-chrome-heading{
+  min-width:0!important;overflow:hidden;text-overflow:ellipsis;
+}
+.game-chrome-title{white-space:nowrap;max-width:100%;}
+.game-chrome-subtitle{
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;
+}
+.game-result-title,.game-result-sub,.game-result-pb{
+  max-width:100%;overflow-wrap:anywhere;word-break:break-word;padding-inline:4px;box-sizing:border-box;
+}
+.game-result-actions{width:min(100%,280px);max-width:100%;box-sizing:border-box;}
+.game-share-card,.game-share-score,.game-share-meta,.game-share-vs,.game-share-brand{
+  max-width:100%;overflow-wrap:anywhere;word-break:break-word;box-sizing:border-box;
+}
+.dangal-game-name,.dangal-game-desc{
+  overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;
+}
+.dangal-game-name{-webkit-line-clamp:2;line-clamp:2;}
+.dangal-game-desc{-webkit-line-clamp:3;line-clamp:3;}
+.dangal-section-label,.dangal-games-label{
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:12px;
+}
+.game-coach-card{max-width:min(100%,340px);box-sizing:border-box;}
+.game-coach-title,.game-coach-tips{overflow-wrap:anywhere;}
+.archive-header strong,.archive-header{
+  min-width:0;
+}
+.archive-header strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;}
+.topbar .brand,.tab-label{
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;
+}
+.public-profile-name,.discover-name,.friend-name{
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;
+}
+/* Prefer wrapping long strings in chat/game HUDs over horizontal bleed */
+.msg-bubble,.game-turn-label{
+  overflow-wrap:anywhere;word-break:break-word;
+}

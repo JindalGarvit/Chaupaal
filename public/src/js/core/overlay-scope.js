@@ -65,6 +65,9 @@
   function dismissOverlay(el) {
     if (!el || !el.isConnected) return;
     try {
+      if (typeof window.removeNavLayer === 'function') window.removeNavLayer(el);
+    } catch (e) {}
+    try {
       el.dispatchEvent(new CustomEvent('chaupaal:dismiss', { bubbles: false }));
     } catch (e) {}
     const btn = el.querySelector && el.querySelector(DISMISS_SELECTORS);
