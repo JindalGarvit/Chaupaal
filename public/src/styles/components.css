@@ -2286,6 +2286,11 @@ select:focus-visible,
 .game-friend-cancel{width:100%;margin-top:10px;padding:12px;border:0;background:none;color:var(--muted);font-size:14px;cursor:pointer;}
 .game-friend-loading,.game-friend-empty{font-size:13px;color:var(--muted);padding:12px 4px;line-height:1.45;}
 
+/* Unified score/share sheet (Akhbaar, wraps, streaks) */
+.chaupaal-share-sheet .chaupaal-share-preview{display:flex;justify-content:center;margin:4px 0 12px;}
+.chaupaal-share-sheet .chaupaal-share-preview .game-share-card{width:100%;max-width:100%;}
+.chaupaal-share-actions{width:100%;max-width:none;margin-top:0;}
+
 /* Dangal sections */
 .dangal-section{margin:0 0 8px;}
 .dangal-section-label{padding:10px 16px 6px;font:700 11px/1 'Space Grotesk',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}

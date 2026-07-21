@@ -26,8 +26,21 @@ function checkViralLink(){
 }
 
 function generateChallengeLink(score,category,gameId){
-  const name=encodeURIComponent(userProfile?.name||'Someone');
   const gid=gameId||'quiz';
+  const stats=typeof buildShareStats==='function'
+    ? buildShareStats({
+        scoreLine:String(score),
+        score,
+        meta:category||'GK',
+        cat:category||'GK',
+        text:`Can you beat my score of ${score} on Chaupaal? Play now!`,
+      })
+    : {scoreLine:String(score),score,meta:category||'GK',cat:category||'GK',text:`Can you beat my score of ${score} on Chaupaal? Play now!`};
+  if(typeof shareGameResult==='function'){
+    shareGameResult(gid, stats);
+    return;
+  }
+  const name=encodeURIComponent(userProfile?.name||'Someone');
   const url=typeof buildBeatScoreLink==='function'
     ? buildBeatScoreLink(gid, score, {cat: category||'GK'})
     : `${window.location.origin}${window.location.pathname}?challenge=${name}&cat=${category||'GK'}&score=${score}&game=${gid}`;

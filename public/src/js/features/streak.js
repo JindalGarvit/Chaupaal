@@ -126,8 +126,20 @@ function showStreakMilestone(streak){
   document.querySelector('.device').appendChild(overlay);
   document.getElementById('closeMilestone').addEventListener('click',()=>overlay.remove());
   document.getElementById('shareMilestone').addEventListener('click',()=>{
-    const text=`🔥 I'm on a ${streak}-day streak on Chaupaal! Can you beat me? chaupaal-chaupaal.web.app`;
-    if(navigator.share)navigator.share({text});else{navigator.clipboard.writeText(text);showToast('Copied!');}
+    const streakStats=typeof buildShareStats==='function'
+      ? buildShareStats({
+          scoreLine:`${streak}-day streak`,
+          score:streak,
+          meta:'Consistency on Chaupaal',
+          text:`I'm on a ${streak}-day streak on Chaupaal! Can you beat me?`,
+        })
+      : {scoreLine:`${streak}-day streak`,score:streak,text:`I'm on a ${streak}-day streak on Chaupaal! Can you beat me?`};
+    if(typeof openUnifiedShareSheet==='function'){
+      openUnifiedShareSheet({gameId:'akhbaar',title:'Share your streak',stats:streakStats});
+    } else {
+      const text=`🔥 I'm on a ${streak}-day streak on Chaupaal! Can you beat me? chaupaal-chaupaal.web.app`;
+      if(navigator.share)navigator.share({text});else{navigator.clipboard.writeText(text);showToast('Copied!');}
+    }
   });
 }
 
@@ -323,8 +335,19 @@ function showMonthlyWrap(){
     const p=pages[pageIdx];
     wrap.innerHTML=`<div class="wrap-page" style="background:${p.bg};">${p.content}<button class="wrap-close" onclick="this.closest('.wrap-overlay').remove()">✕</button></div>`;
     wrap.querySelector('#wrapShareBtn')?.addEventListener('click',()=>{
-      const text=`My ${d.month} Chaupaal Wrap: ${d.totalQ} questions, ${d.accuracy}% accuracy, ${d.streak}-day streak! 🔥 chaupaal-chaupaal.web.app`;
-      if(navigator.share) navigator.share({text}); else{navigator.clipboard.writeText(text);showToast('Copied!');}
+      const wrapStats=typeof buildShareStats==='function'
+        ? buildShareStats({
+            scoreLine:`${d.accuracy}%`,
+            meta:`${d.totalQ} questions · ${d.streak}-day streak`,
+            text:`My ${d.month} Chaupaal Wrap: ${d.totalQ} questions, ${d.accuracy}% accuracy, ${d.streak}-day streak!`,
+          })
+        : {scoreLine:`${d.accuracy}%`,meta:d.month,text:`My ${d.month} Chaupaal Wrap`};
+      if(typeof openUnifiedShareSheet==='function'){
+        openUnifiedShareSheet({gameId:'wrap',title:`Share ${d.month} Wrap`,stats:wrapStats});
+      } else {
+        const text=`My ${d.month} Chaupaal Wrap: ${d.totalQ} questions, ${d.accuracy}% accuracy, ${d.streak}-day streak! 🔥 chaupaal-chaupaal.web.app`;
+        if(navigator.share) navigator.share({text}); else{navigator.clipboard.writeText(text);showToast('Copied!');}
+      }
     });
     wrap.querySelector('.wrap-page').addEventListener('click',e=>{
       if(e.target.closest('button'))return;

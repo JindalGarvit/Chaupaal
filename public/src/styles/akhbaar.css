@@ -89,9 +89,12 @@
 .streak-row{display:flex;align-items:center;justify-content:space-between;border-top:1px solid rgba(255,255,255,0.15);padding-top:16px;margin-top:auto;}
 .streak-pill-big{display:flex;align-items:center;gap:7px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:17px;}
 .badge-pill{background:rgba(255,201,60,0.2);color:var(--gold);font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;font-family:'Space Grotesk',sans-serif;}
-.share-btn{margin-top:14px;background:var(--white);color:var(--red);border:none;width:100%;padding:14px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;border-radius:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;}
-.share-options{margin-top:8px;display:flex;gap:8px;}
-.share-opt{flex:1;border:none;padding:12px;border-radius:13px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px;cursor:pointer;}
-.share-opt.whatsapp{background:#25D366;color:#fff;}
-.share-opt.instagram{background:linear-gradient(45deg,#F58529,#DD2A7B,#8134AF);color:#fff;}
-
+.akhbaar-share-mount{margin-top:14px;display:flex;flex-direction:column;align-items:center;gap:10px;width:100%;}
+.akhbaar-share-mount .game-share-card{width:100%;max-width:100%;box-shadow:0 8px 22px rgba(0,0,0,.18);}
+.akhbaar-share-actions{width:100%;max-width:100%;margin-top:0;}
+.akhbaar-share-actions .game-result-btn{
+  background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.22);color:#fff;
+}
+.akhbaar-share-actions .game-result-btn--primary{
+  background:#fff;color:var(--red);border-color:transparent;
+}

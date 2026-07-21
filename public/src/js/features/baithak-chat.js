@@ -813,12 +813,27 @@ async function addBaithakStory(story){
 
 async function shareAkhbaarScore(visibility='friends'){
   try{
+    const stats=typeof getAkhbaarShareStats==='function'?getAkhbaarShareStats():{
+      score,total:QUESTIONS.length,
+      streak:parseInt(document.getElementById('streakNum')?.textContent,10)||0,
+      scoreLine:`${score}/${QUESTIONS.length}`,
+    };
+    if(typeof postGameScoreStory==='function'){
+      const created=await postGameScoreStory('akhbaar',{
+        ...stats,
+        destination:'baithak',
+        visibility,
+      });
+      if(created&&typeof openStoryViewer==='function') openStoryViewer(created,[created]);
+      return created;
+    }
     const created=await addBaithakStory({
       type:'score',visibility,
       score,total:QUESTIONS.length,
-      streak:parseInt(document.getElementById('streakNum').textContent)||0,
+      streak:parseInt(document.getElementById('streakNum')?.textContent,10)||0,
     });
     openStoryViewer(created,[created]);
+    return created;
   }catch(error){showToast(error?.message||'Score story could not be shared');}
 }
 

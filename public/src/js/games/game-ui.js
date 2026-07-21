@@ -23,6 +23,7 @@
   const GAME_ACCENTS = {
     muqabala: '#E63946',
     quiz: '#E63946',
+    akhbaar: '#E63946',
     chess: '#C9A227',
     snakes: '#33C481',
     ludo: '#4C75D9',
@@ -37,11 +38,13 @@
     tiptap: '#2F9C95',
     ankjod: '#9A6BCE',
     kakuro: '#9A6BCE',
+    wrap: '#8134AF',
   };
 
   const GAME_LABELS = {
     quiz: 'Muqabala',
     muqabala: 'Muqabala',
+    akhbaar: 'Akhbaar',
     chess: 'Chess',
     snakes: 'Snakes & Ladders',
     ludo: 'Ludo',
@@ -55,6 +58,7 @@
     tiptap: 'Tip Tap',
     ankjod: 'Ank Jod',
     kakuro: 'Ank Jod',
+    wrap: 'Monthly Wrap',
   };
 
   const COACH_TIPS = {
@@ -820,6 +824,96 @@
     });
   }
 
+  /**
+   * Unified share sheet — same shell as Dangal results (card + Share / friend / story / copy).
+   * Use for surfaces that aren't already inside gameResultHtml (Akhbaar, wraps, profile scores).
+   * @param {{gameId?:string,title?:string,subtitle?:string,stats?:object,friend?:boolean,story?:boolean,friendLabel?:string,onFriend?:Function}} opts
+   */
+  function openUnifiedShareSheet(opts) {
+    const o = opts || {};
+    const gameId = o.gameId || 'quiz';
+    const stats = Object.assign({}, o.stats || {});
+    document.getElementById('chaupaalShareSheet')?.remove();
+    const sheet = document.createElement('div');
+    sheet.id = 'chaupaalShareSheet';
+    sheet.className = 'game-friend-sheet chaupaal-share-sheet';
+    const cardHtml = buildGameShareCard(gameId, stats);
+    const showFriend = o.friend !== false;
+    const showStory = o.story !== false;
+    sheet.innerHTML = `
+      <div class="game-friend-backdrop" data-cs-close></div>
+      <div class="game-friend-card" role="dialog" aria-modal="true" aria-label="${safe(o.title || 'Share')}">
+        <div class="game-friend-title">${safe(o.title || 'Share')}</div>
+        ${o.subtitle ? `<div class="game-friend-sub">${safe(o.subtitle)}</div>` : ''}
+        <div class="chaupaal-share-preview">${cardHtml}</div>
+        <div class="game-result-actions chaupaal-share-actions">
+          <button type="button" class="game-result-btn game-result-btn--primary" data-cs="share">Share</button>
+          ${showFriend ? `<button type="button" class="game-result-btn" data-cs="friend">${safe(o.friendLabel || 'Share with friend')}</button>` : ''}
+          ${showStory ? `<button type="button" class="game-result-btn" data-cs="story">Post to story</button>` : ''}
+          <button type="button" class="game-result-btn" data-cs="copy">Copy link</button>
+        </div>
+        <button type="button" class="game-friend-cancel" data-cs-close>Cancel</button>
+      </div>`;
+    const host = document.querySelector('.device') || document.body;
+    host.appendChild(sheet);
+    const close = () => sheet.remove();
+    sheet.querySelectorAll('[data-cs-close]').forEach((el) => el.addEventListener('click', close));
+
+    sheet.querySelector('[data-cs="share"]')?.addEventListener('click', async () => {
+      close();
+      await shareGameResult(gameId, stats);
+    });
+    sheet.querySelector('[data-cs="friend"]')?.addEventListener('click', async () => {
+      close();
+      if (typeof o.onFriend === 'function') {
+        await o.onFriend(stats);
+        return;
+      }
+      const friend = await openFriendPickerSheet({
+        title: o.friendTitle || 'Share with a friend',
+        subtitle: o.friendSubtitle || 'Pick someone from your friends',
+      });
+      if (!friend) return;
+      const personalized = {
+        ...stats,
+        text:
+          stats.friendText ||
+          `Hey ${friend.name} — ${stats.text || `check out my Chaupaal ${gameDisplayName(gameId)} score!`}`,
+      };
+      await shareGameResult(gameId, personalized);
+    });
+    sheet.querySelector('[data-cs="story"]')?.addEventListener('click', async () => {
+      close();
+      await postGameScoreStory(gameId, stats);
+    });
+    sheet.querySelector('[data-cs="copy"]')?.addEventListener('click', async () => {
+      const url = stats.url || buildBeatScoreLink(gameId, stats.score, { cat: stats.cat, extra: stats.linkExtra });
+      const text = `${stats.text || `Chaupaal ${gameDisplayName(gameId)}`}\n${url}`;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text);
+          if (typeof showToast === 'function') showToast('Link copied — share anywhere');
+        } else if (typeof showToast === 'function') showToast(url);
+      } catch (e) {
+        if (typeof showToast === 'function') showToast(url);
+      }
+      close();
+    });
+    return sheet;
+  }
+
+  /** Build share-stats payload helpers can reuse (Akhbaar, wraps, etc.). */
+  function buildShareStats(partial) {
+    return Object.assign(
+      {
+        scoreLine: '',
+        meta: '',
+        text: '',
+      },
+      partial || {}
+    );
+  }
+
   /* ── Last played / continue helpers ── */
   function markGamePlayed(gameId) {
     if (!gameId) return;
@@ -937,6 +1031,8 @@
   window.shareGameResult = shareGameResult;
   window.exportShareCardImage = exportShareCardImage;
   window.openFriendPickerSheet = openFriendPickerSheet;
+  window.openUnifiedShareSheet = openUnifiedShareSheet;
+  window.buildShareStats = buildShareStats;
   window.maybeShowGameCoach = maybeShowGameCoach;
   window.resetGameCoach = resetGameCoach;
   window.gameHudHtml = gameHudHtml;

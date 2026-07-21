@@ -34,11 +34,7 @@ function buildAkhbaar(QUESTIONS,BONUS_QUESTIONS){
     <div class="score-label">Questions answered correctly</div>
     <div class="breakdown" id="breakdown"></div>
     <div class="streak-row"><div class="streak-pill-big">🔥 <span id="streakBig">1</span> day streak</div><div class="badge-pill" id="badgePill">🏅 Badge</div></div>
-    <button class="share-btn" id="shareBtn">📤 Share your Akhbaar score</button>
-    <div class="share-options hidden" id="shareOptions">
-      <button class="share-opt whatsapp" id="shareWA">💬 WhatsApp</button>
-      <button class="share-opt instagram" id="shareIG">📸 Instagram</button>
-    </div>
+    <div class="akhbaar-share-mount" id="akhbaarShareMount"></div>
   `;
   resultsCard.appendChild(rc);stage.appendChild(resultsCard);
   observer.observe(rc);
@@ -89,16 +85,8 @@ function buildAkhbaar(QUESTIONS,BONUS_QUESTIONS){
     updateProgress();
   });
 
-  // Share buttons
-  setTimeout(()=>{
-    document.getElementById('shareBtn')?.addEventListener('click',()=>document.getElementById('shareOptions').classList.toggle('hidden'));
-    document.getElementById('shareWA')?.addEventListener('click',()=>window.open(`https://wa.me/?text=${encodeURIComponent(`🎯 Aaj ke Akhbaar mein maine ${score}/${QUESTIONS.length} sahi jawab diye! Chaupaal pe milte hain 🔥 chaupaal-chaupaal.web.app`)}`,'_blank'));
-    document.getElementById('shareIG')?.addEventListener('click',async()=>{
-      const text=`🎯 Aaj ke Akhbaar mein maine ${score}/${QUESTIONS.length} sahi jawab diye! Chaupaal pe milte hain 🔥`;
-      if(navigator.share)try{await navigator.share({text,title:'Chaupaal Akhbaar'});}catch(e){}
-      else{await navigator.clipboard.writeText(text);showToast('Copied! Instagram mein paste karo 📋');}
-    });
-  },1000);
+  // Share wired in populateResults via Dangal share helpers
+  // (buildGameShareCard / shareGameResult / openFriendPickerSheet / postGameScoreStory)
 
   // Simulated breaking news after 6s
   setTimeout(()=>{
@@ -226,4 +214,87 @@ function populateResults(){
       ts:firebase.firestore.FieldValue.serverTimestamp()
     }).catch(()=>{});
   }
+  wireAkhbaarShare();
+}
+
+/** Dangal-style share shell on Akhbaar results (card + Share / friend / story). */
+function getAkhbaarShareStats(){
+  const total=typeof QUESTIONS!=='undefined'?QUESTIONS.length:0;
+  const streak=parseInt(document.getElementById('streakNum')?.textContent,10)||0;
+  const dateLabel=new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+  return typeof buildShareStats==='function'
+    ? buildShareStats({
+        scoreLine:`${score}/${total}`,
+        score,
+        total,
+        streak,
+        meta:`Aaj ka Akhbaar · ${dateLabel}${streak?` · ${streak}-day streak`:''}`,
+        cat:'Akhbaar',
+        text:`Aaj ke Akhbaar mein maine ${score}/${total} sahi jawab diye! Chaupaal pe milte hain.`,
+        url: typeof buildBeatScoreLink==='function'
+          ? buildBeatScoreLink('akhbaar', score, {cat:'Akhbaar'})
+          : `${location.origin}${location.pathname}?challenge=${encodeURIComponent(userProfile?.name||'Someone')}&game=akhbaar&score=${score}`,
+      })
+    : {
+        scoreLine:`${score}/${total}`,
+        score,
+        total,
+        streak,
+        meta:`Aaj ka Akhbaar · ${dateLabel}`,
+        text:`Aaj ke Akhbaar mein maine ${score}/${total} sahi jawab diye! Chaupaal pe milte hain.`,
+      };
+}
+
+function wireAkhbaarShare(){
+  const mount=document.getElementById('akhbaarShareMount');
+  if(!mount) return;
+  const shareStats=getAkhbaarShareStats();
+  const cardHtml=typeof buildGameShareCard==='function'
+    ? buildGameShareCard('akhbaar', shareStats)
+    : '';
+  mount.innerHTML=`
+    ${cardHtml}
+    <div class="game-result-actions akhbaar-share-actions" id="akhbaarShareActions">
+      <button type="button" class="game-result-btn game-result-btn--primary" data-akh-share="share">Share</button>
+      <button type="button" class="game-result-btn" data-akh-share="friend">Share with friend</button>
+      <button type="button" class="game-result-btn" data-akh-share="story">Post to story</button>
+    </div>`;
+
+  const actions=mount.querySelector('#akhbaarShareActions');
+  if(!actions) return;
+
+  actions.querySelector('[data-akh-share="share"]')?.addEventListener('click',()=>{
+    if(typeof shareGameResult==='function') shareGameResult('akhbaar', shareStats);
+    else if(typeof openUnifiedShareSheet==='function') openUnifiedShareSheet({gameId:'akhbaar',title:'Share Akhbaar score',stats:shareStats});
+  });
+
+  actions.querySelector('[data-akh-share="friend"]')?.addEventListener('click',async()=>{
+    if(typeof openFriendPickerSheet!=='function'){
+      if(typeof shareGameResult==='function') shareGameResult('akhbaar', shareStats);
+      return;
+    }
+    const friend=await openFriendPickerSheet({
+      title:'Share with a friend',
+      subtitle:'Send your Akhbaar score',
+    });
+    if(!friend) return;
+    if(typeof shareGameResult==='function'){
+      shareGameResult('akhbaar',{
+        ...shareStats,
+        text:`Hey ${friend.name} — aaj ke Akhbaar mein maine ${shareStats.scoreLine} sahi kiye. Beat me on Chaupaal!`,
+      });
+    }
+  });
+
+  actions.querySelector('[data-akh-share="story"]')?.addEventListener('click',()=>{
+    if(typeof postGameScoreStory==='function'){
+      postGameScoreStory('akhbaar',{
+        ...shareStats,
+        destination:'baithak',
+        visibility:'friends',
+      });
+    } else if(typeof shareAkhbaarScore==='function'){
+      shareAkhbaarScore('friends');
+    }
+  });
 }

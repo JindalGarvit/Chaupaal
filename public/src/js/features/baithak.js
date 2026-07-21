@@ -385,7 +385,20 @@ function showMonthlyWrap(){
     const p=pages[pageIdx];
     wrap.innerHTML=`<div class="wrap-page" style="background:${p.bg};">${p.content}<button class="wrap-close" onclick="this.closest('.wrap-overlay').remove()">✕</button></div>`;
     const shareBtn=wrap.querySelector('#wrapShareBtn');
-    if(shareBtn)shareBtn.addEventListener('click',()=>{if(navigator.share)navigator.share({text:`My ${monthName} Chaupaal Wrap: 7W-3L Dangal, 24-day streak! chaupaal-chaupaal.web.app`});else showToast('Wrap copied!');});
+    if(shareBtn)shareBtn.addEventListener('click',()=>{
+      const wrapStats=typeof buildShareStats==='function'
+        ? buildShareStats({
+            scoreLine:'7W · 3L',
+            meta:`${monthName} · 24-day streak`,
+            text:`My ${monthName} Chaupaal Wrap: 7W-3L Dangal, 24-day streak!`,
+          })
+        : {scoreLine:'7W · 3L',meta:`${monthName}`,text:`My ${monthName} Chaupaal Wrap: 7W-3L Dangal, 24-day streak!`};
+      if(typeof openUnifiedShareSheet==='function'){
+        openUnifiedShareSheet({gameId:'wrap',title:`Share ${monthName} Wrap`,subtitle:'Your month on Chaupaal',stats:wrapStats});
+      } else if(navigator.share){
+        navigator.share({text:`My ${monthName} Chaupaal Wrap: 7W-3L Dangal, 24-day streak! chaupaal-chaupaal.web.app`});
+      } else showToast('Wrap copied!');
+    });
     wrap.querySelector('.wrap-page').addEventListener('click',e=>{
       if(e.target.closest('button'))return;
       pageIdx++;if(pageIdx>=pages.length){wrap.remove();}else renderPage();
@@ -416,8 +429,19 @@ function showYearlyWrap(){
     const p=pages[idx];
     wrap.innerHTML=`<div class="wrap-page" style="background:${p.bg};">${p.content}<button class="wrap-close" onclick="this.closest('.wrap-overlay').remove()">✕</button></div>`;
     wrap.querySelector('#wrapYearShare')?.addEventListener('click',()=>{
-      const text=`My ${year} Chaupaal Wrap\n${totalSessions} days · ${d.accuracy}% accuracy · ${d.streak}-day streak · ${d.topCat}\nchaupaal-chaupaal.web.app`;
-      if(navigator.share)navigator.share({text});else{navigator.clipboard.writeText(text);showToast('Copied!');}
+      const wrapStats=typeof buildShareStats==='function'
+        ? buildShareStats({
+            scoreLine:`${d.accuracy}%`,
+            meta:`${totalSessions} days · ${d.streak}-day streak · ${d.topCat}`,
+            text:`My ${year} Chaupaal Wrap\n${totalSessions} days · ${d.accuracy}% accuracy · ${d.streak}-day streak · ${d.topCat}`,
+          })
+        : {scoreLine:`${d.accuracy}%`,meta:`${year}`,text:`My ${year} Chaupaal Wrap`};
+      if(typeof openUnifiedShareSheet==='function'){
+        openUnifiedShareSheet({gameId:'wrap',title:`Share ${year} Wrap`,subtitle:'Your year on Chaupaal',stats:wrapStats});
+      } else {
+        const text=`My ${year} Chaupaal Wrap\n${totalSessions} days · ${d.accuracy}% accuracy · ${d.streak}-day streak · ${d.topCat}\nchaupaal-chaupaal.web.app`;
+        if(navigator.share)navigator.share({text});else{navigator.clipboard.writeText(text);showToast('Copied!');}
+      }
     });
     wrap.querySelector('.wrap-page').addEventListener('click',e=>{if(e.target.closest('button'))return;idx++;if(idx>=pages.length)wrap.remove();else renderPage();});
   }
