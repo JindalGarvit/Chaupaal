@@ -23,10 +23,22 @@
     '#cpActionSheet',
     '#storyArchiveSheet',
     '#relationshipListSheet',
+    '#closeFriendsManager',
     '#closeFriendsSheet',
     '#gameFriendPicker',
     '#gameShareSheet',
     '.auth-overlay:not(.hidden)',
+    '.day-check-modal.open',
+    '.chaupaal-graphic-card',
+    '.chaupaal-inline-bubble',
+    '.chaupaal-dropdown-nudge',
+    '.name-prompt-sheet',
+    '.confirm-prompt-sheet',
+    '.music-picker-sheet',
+    '.wrap-overlay',
+    '.ai-keyboard',
+    '#aiKeyboardEl',
+    '.streak-milestone-overlay',
   ].join(',');
 
   function dismissEl(el) {
@@ -130,6 +142,16 @@
       if (el.classList.contains('game-overlay') && !e.target.classList.contains('game-coach')) return;
       if (el.classList.contains('game-coach')) {
         el.remove();
+        removeLayerForEl(el);
+        return;
+      }
+      // Graphic cards / name sheets: outer is the scrim
+      if (
+        el.classList.contains('chaupaal-graphic-card') ||
+        el.classList.contains('name-prompt-sheet') ||
+        el.classList.contains('day-check-modal')
+      ) {
+        dismissEl(el);
         removeLayerForEl(el);
         return;
       }
@@ -256,6 +278,23 @@
       });
       mo.observe(el, { attributes: true, attributeFilter: ['class'] });
     });
+
+    // Journal day-check uses .open instead of .hidden
+    const day = document.querySelector('.day-check-modal');
+    if (day && day.dataset.navWatch !== '1') {
+      day.dataset.navWatch = '1';
+      day.id = day.id || 'dayCheckModal';
+      const mo = new MutationObserver(() => {
+        if (day.classList.contains('open')) {
+          wireBackdrop(day);
+          pushLayer(day, () => {
+            day.classList.remove('open');
+            if (typeof removeNavLayer === 'function') removeNavLayer(day);
+          });
+        } else removeLayerForEl(day);
+      });
+      mo.observe(day, { attributes: true, attributeFilter: ['class'] });
+    }
   }
 
   function onPopState(e) {

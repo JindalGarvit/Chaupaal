@@ -37,7 +37,12 @@
     '#closeLudoPick',
     '#storyClose',
     '#closeBaithakStory',
+    '#dayCheckSkip',
+    '#dayCheckSnooze',
     '[data-overlay-dismiss]',
+    '[data-np-cancel]',
+    '[data-cf-cancel]',
+    '[data-music-picker-close]',
   ].join(',');
 
   const IGNORE_IDS = new Set([
@@ -50,7 +55,6 @@
     'catDetail',
     'duniyaPostDetail',
     'duniyaDetail',
-    'dayCheckModal',
   ]);
 
   function shouldTrack(node, scopeRoot) {

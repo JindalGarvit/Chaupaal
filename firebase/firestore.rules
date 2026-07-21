@@ -382,8 +382,7 @@ service cloud.firestore {
 
       // Messages: participant-scoped reads; clients may only author their own uid.
       // Chaupaal / server messages are written via Admin SDK (bypasses rules).
-      // Optional `music` map (title/artist/thumbnail/previewUrl/source) is allowed
-      // for inline song shares — clients must not set serverOwned.
+      // Optional `music` map and/or `attachment` map for rich bubbles (photo/file/location/challenge).
       match /messages/{messageId} {
         allow read: if isAuth() &&
           get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]);
@@ -401,6 +400,15 @@ service cloud.firestore {
               && request.resource.data.music.title.size() > 0
               && request.resource.data.music.title.size() <= 160
               && request.resource.data.music.artist.size() <= 160
+            )
+          )
+          && (
+            !('attachment' in request.resource.data) ||
+            (
+              request.resource.data.attachment is map
+              && request.resource.data.attachment.type is string
+              && request.resource.data.attachment.type.size() > 0
+              && request.resource.data.attachment.type.size() <= 40
             )
           );
         allow update: if false;

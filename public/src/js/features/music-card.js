@@ -24,15 +24,25 @@
       sharedAudio.addEventListener('timeupdate', () => {
         if (!activeCardEl) return;
         const bar = activeCardEl.querySelector('[data-music-progress]');
-        if (!bar || !sharedAudio.duration) return;
-        const pct = Math.min(100, (sharedAudio.currentTime / sharedAudio.duration) * 100);
-        bar.style.width = pct + '%';
+        if (bar && sharedAudio.duration) {
+          const pct = Math.min(100, (sharedAudio.currentTime / sharedAudio.duration) * 100);
+          bar.style.width = pct + '%';
+        }
       });
       sharedAudio.addEventListener('error', () => {
         if (activeCardEl) handlePreviewError(activeCardEl);
       });
     }
     return sharedAudio;
+  }
+
+  function ensureCardMediaControls(card) {
+    const host = card.querySelector('[data-music-extra-controls]');
+    if (!host || host.dataset.bound === '1') return;
+    host.dataset.bound = '1';
+    if (typeof bindMediaControls === 'function') {
+      bindMediaControls(getSharedAudio(), host);
+    }
   }
 
   function syncActiveCard(playing) {
@@ -98,7 +108,8 @@
       : `<div class="music-card-art music-card-art--empty" aria-hidden="true">♪</div>`;
     const controls = playable
       ? `<button type="button" class="music-card-play" data-music-play aria-label="Play song">${playIcon()}</button>
-         <div class="music-card-progress-track" aria-hidden="true"><div class="music-card-progress-bar" data-music-progress></div></div>`
+         <div class="music-card-progress-track" aria-hidden="true"><div class="music-card-progress-bar" data-music-progress></div></div>
+         <div data-music-extra-controls></div>`
       : `<span class="music-card-unavailable">Preview not available</span>`;
 
     return `<div class="music-card music-card--${variant}${playable ? '' : ' music-card--static'}"
@@ -175,6 +186,7 @@
       return;
     }
     const audio = getSharedAudio();
+    ensureCardMediaControls(card);
     if (activeCardEl === card && !audio.paused) {
       audio.pause();
       syncActiveCard(false);
@@ -200,6 +212,7 @@
   function bindCard(card) {
     if (!card || card.dataset.musicBound === '1') return;
     card.dataset.musicBound = '1';
+    ensureCardMediaControls(card);
     card.querySelector('[data-music-play]')?.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -271,12 +284,19 @@
     const resultsEl = sheet.querySelector('[data-music-picker-results]');
     let debounceTimer = null;
     let searchSeq = 0;
+    let closed = false;
 
     const close = () => {
+      if (closed) return;
+      closed = true;
       clearTimeout(debounceTimer);
+      if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
       sheet.classList.remove('is-open');
       setTimeout(() => sheet.remove(), 220);
     };
+    if (typeof pushNavLayer === 'function') {
+      pushNavLayer(sheet, () => close());
+    }
 
     sheet.querySelector('[data-music-picker-close]')?.addEventListener('click', close);
     if (typeof enableSwipeDismiss === 'function') {

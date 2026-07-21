@@ -238,8 +238,12 @@ function openChatScreen(chat){
         src=URL.createObjectURL(file);
       }
       const sizeAttrs=mediaWidth&&mediaHeight?` width="${mediaWidth}" height="${mediaHeight}" style="aspect-ratio:${mediaWidth}/${mediaHeight};"`:'';
-      addMsgBubble({from:'me',text:`<img class="chat-img-msg" src="${src}" decoding="async"${sizeAttrs}>`,time:'now'}, isGroup);
-      if(typeof sendRealtimeMessage==='function') sendRealtimeMessage(chat.id, `[photo] ${src}`, isGroup);
+      addMsgBubble({from:'me',text:`📷 Photo`,attachment:{type:'photo',url:src,width:mediaWidth,height:mediaHeight},time:'now',pending:true}, isGroup);
+      if(typeof sendRealtimeMessage==='function'){
+        sendRealtimeMessage(chat.firestoreId||chat.id, '📷 Photo', isGroup, null, {
+          type:'photo', url:src, width:mediaWidth||null, height:mediaHeight||null,
+        });
+      }
     }catch(err){
       showToast(typeof friendlyError==='function'?friendlyError(err):(err.message||'Photo failed'));
     }
@@ -250,7 +254,11 @@ function openChatScreen(chat){
   });
   document.getElementById('chatFileInput').addEventListener('change', e=>{
     const file=e.target.files[0];if(!file)return;
-    addMsgBubble({from:'me',text:`<div class="chat-file-msg">📄 ${file.name}</div>`,time:'now'}, isGroup);
+    const name=file.name||'File';
+    addMsgBubble({from:'me',text:`📄 ${name}`,attachment:{type:'file',name},time:'now',pending:true}, isGroup);
+    if(typeof sendRealtimeMessage==='function'){
+      sendRealtimeMessage(chat.firestoreId||chat.id, `📄 ${name}`, isGroup, null, { type:'file', name });
+    }
   });
   document.getElementById('attachGame').addEventListener('click',()=>{
     attachMenu.classList.remove('show');
@@ -263,10 +271,7 @@ function openChatScreen(chat){
       title:'Share a song',
       onSelect:(music)=>{
         try{
-          const cardHtml=typeof renderMusicCard==='function'?renderMusicCard(music,{variant:'chat'}):'';
-          addMsgBubble({from:'me',text:cardHtml||`🎵 ${music.title}`,music,time:'now'}, isGroup);
-          const area=document.getElementById('chatMsgsArea');
-          if(area&&typeof mountMusicCards==='function') mountMusicCards(area);
+          addMsgBubble({from:'me',text:music.title?`🎵 ${music.title}`:'🎵 Song',music,time:'now',pending:true}, isGroup);
           if(typeof sendRealtimeMessage==='function'){
             sendRealtimeMessage(chat.firestoreId||chat.id, music.title?`🎵 ${music.title}`:'🎵 Song', isGroup, music);
           }
@@ -278,7 +283,10 @@ function openChatScreen(chat){
   });
   document.getElementById('attachLocation').addEventListener('click',()=>{
     attachMenu.classList.remove('show');
-    addMsgBubble({from:'me',text:'📍 Location shared',time:'now'}, isGroup);
+    addMsgBubble({from:'me',text:'📍 Location shared',attachment:{type:'location',label:'Location shared'},time:'now',pending:true}, isGroup);
+    if(typeof sendRealtimeMessage==='function'){
+      sendRealtimeMessage(chat.firestoreId||chat.id, '📍 Location shared', isGroup, null, { type:'location', label:'Location shared' });
+    }
   });
 
   // Voice typing (mic)
@@ -372,22 +380,71 @@ function renderMsgBubble(m, isGroup){
   const uid = m.uid || m.user?.uid || '';
   const name = m.name || m.user?.name || '';
   let body = m.text || '';
+  const att = m.attachment || null;
+
+  // Legacy photo encoding
+  if(!att && typeof body==='string' && body.startsWith('[photo] ')){
+    const url=body.slice(8).trim();
+    if(url) body=`<img class="chat-img-msg" src="${url.replace(/"/g,'&quot;')}" decoding="async" alt="">`;
+  }
+
   if(m.music && typeof renderMusicCard==='function'){
     const card=renderMusicCard(m.music,{variant:'chat'});
     const caption=(typeof m.text==='string' && m.text && !m.text.includes('data-music-card') && !/^🎵\s/.test(m.text))?`<div class="music-card-caption">${m.text}</div>`:'';
     body=card+(caption||'');
+  } else if(att && att.type==='photo' && att.url){
+    const sizeAttrs=att.width&&att.height?` width="${att.width}" height="${att.height}" style="aspect-ratio:${att.width}/${att.height};"`:'';
+    body=`<img class="chat-img-msg" src="${String(att.url).replace(/"/g,'&quot;')}" decoding="async" alt=""${sizeAttrs}>`;
+  } else if(att && att.type==='file'){
+    body=`<div class="chat-file-msg">📄 ${String(att.name||'File').replace(/</g,'&lt;')}</div>`;
+  } else if(att && att.type==='location'){
+    body=`<div class="chat-location-msg">📍 ${String(att.label||'Location shared').replace(/</g,'&lt;')}</div>`;
+  } else if(att && att.type==='muqabala_challenge'){
+    const n=Array.isArray(att.questions)?att.questions.length:0;
+    const secs=att.timerSeconds||60;
+    const cid=String(att.challengeId||'').replace(/"/g,'&quot;');
+    if(cid && Array.isArray(att.questions) && att.questions.length){
+      window.__pendingMuqabalaChallenges = window.__pendingMuqabalaChallenges || {};
+      window.__pendingMuqabalaChallenges[att.challengeId] = {
+        questions: att.questions,
+        timerSeconds: secs,
+        mode: 'Custom',
+        source: 'manual',
+      };
+      try{ localStorage.setItem('chaupaal_challenge_'+att.challengeId, JSON.stringify(window.__pendingMuqabalaChallenges[att.challengeId])); }catch(e){}
+    }
+    body=`<div class="msg-bubble-challenge-inner challenge"><div class="challenge-label">⚔️ Custom Challenge</div><div class="challenge-title">${n} questions · ${secs}s</div><button class="challenge-btn" type="button" data-muqabala-challenge="${cid}">Answer →</button></div>`;
   }
+
+  // Strip raw HTML from plain text unless we intentionally set rich body above
+  if(!m.music && !att && typeof body==='string' && !body.startsWith('<') && body.includes('<')){
+    body=body.replace(/</g,'&lt;');
+  }
+
   return `
-    <div class="msg-row ${isMe?'me':''}" data-uid="${uid}" data-name="${String(name).replace(/"/g,'&quot;')}">
+    <div class="msg-row ${isMe?'me':''}" data-uid="${uid}" data-name="${String(name).replace(/"/g,'&quot;')}"${m.pending?' data-pending="1"':''}>
       ${!isMe?`<div class="msg-avatar-small">${m.avatar||'👤'}</div>`:''}
       <div>
         ${(isGroup&&!isMe&&m.name)?`<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px;">${m.name}</div>`:''}
-        <div class="msg-bubble ${isMe?'me':'them'}" data-msg-text="${String(m.text||'').replace(/"/g,'&quot;')}">${body}</div>
+        <div class="msg-bubble ${isMe?'me':'them'}${att&&att.type==='muqabala_challenge'?' challenge':''}" data-msg-text="${String(m.text||'').replace(/"/g,'&quot;')}">${body}</div>
         <div style="font-size:10px;color:var(--muted);margin-top:3px;${isMe?'text-align:right':''};">${m.time||''}</div>
       </div>
     </div>
   `;
 }
+
+function wireChallengeBubble(root){
+  root?.querySelectorAll?.('[data-muqabala-challenge]').forEach((btn)=>{
+    if(btn.dataset.wired==='1') return;
+    btn.dataset.wired='1';
+    btn.addEventListener('click',()=>{
+      const id=btn.dataset.muqabalaChallenge;
+      if(typeof launchPendingMuqabalaChallenge==='function') launchPendingMuqabalaChallenge(id);
+      else if(typeof showToast==='function') showToast('Challenge unavailable');
+    });
+  });
+}
+window.wireChallengeBubble=wireChallengeBubble;
 
 function bindMsgAvatarLongPress(root, fallbackProfile){
   if(typeof bindProfileLongPress!=='function'||!root) return;
@@ -414,6 +471,7 @@ function addMsgBubble(msg, isGroup){
   area.appendChild(node);
   bindMsgAvatarLongPress(node);
   if(typeof mountMusicCards==='function') mountMusicCards(node);
+  if(typeof wireChallengeBubble==='function') wireChallengeBubble(node);
   area.scrollTop = area.scrollHeight;
 }
 
@@ -760,6 +818,7 @@ function openStoryViewer(story, allStories){
     document.getElementById('tapPrev').addEventListener('click',()=>{if(idx>0){clearInterval(progressInterval);renderStory(idx-1);}else{clearInterval(progressInterval);if(typeof pauseAllMusic==='function')pauseAllMusic();viewer.remove();}});
     document.getElementById('tapNext').addEventListener('click',()=>{if(idx<stories.length-1){clearInterval(progressInterval);renderStory(idx+1);}else{clearInterval(progressInterval);if(typeof pauseAllMusic==='function')pauseAllMusic();viewer.remove();}});
     if(typeof mountMusicCards==='function') mountMusicCards(viewer);
+    if(typeof enhanceMediaIn==='function') enhanceMediaIn(viewer);
     document.getElementById('storyReplySend')?.addEventListener('click',async()=>{
       const txt=document.getElementById('storyReplyInput')?.value.trim();
       if(!txt)return;

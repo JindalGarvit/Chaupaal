@@ -223,6 +223,7 @@ function renderDuniyaFeed(){
     return;
   }
   visible.forEach(post=>feed.appendChild(createDuniyaPost(post)));
+  if(typeof enhanceMediaIn==='function') enhanceMediaIn(feed);
   if(duniyaLiveMode&&duniyaHasMore&&typeof ensureLoadMoreButton==='function'){
     ensureLoadMoreButton(feed,{
       label:'Load more posts',
@@ -1164,6 +1165,7 @@ function toggleOpenToMeet(){
         </section>`;
       })
       .join('');
+    if (typeof enhanceMediaIn === 'function') enhanceMediaIn(feed);
     let mutedPref = true;
     try { mutedPref = localStorage.getItem('chaupaal_lehar_muted') !== '0'; } catch (e) {}
     const slides = [...feed.querySelectorAll('.lehar-slide')];

@@ -858,11 +858,25 @@ function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalA
 
 /** Launch a stored custom challenge by id (chat bubble Answer button). */
 function launchPendingMuqabalaChallenge(challengeId){
-  const payload = window.__pendingMuqabalaChallenges && window.__pendingMuqabalaChallenges[challengeId];
+  window.__pendingMuqabalaChallenges = window.__pendingMuqabalaChallenges || {};
+  let payload = window.__pendingMuqabalaChallenges[challengeId];
+  if(!payload){
+    try{
+      const raw=localStorage.getItem('chaupaal_challenge_'+challengeId);
+      if(raw) payload=JSON.parse(raw);
+    }catch(e){}
+  }
+  // Recover from Firestore-backed attachment on the button's bubble if needed
+  if((!payload || !payload.questions) && typeof document!=='undefined'){
+    const btn=document.querySelector(`[data-muqabala-challenge="${challengeId}"]`);
+    const row=btn?.closest('.msg-row');
+    // Questions may be on a data attribute via rehydrate below — handled in wireChallengeBubble path
+  }
   if(!payload || !payload.questions || !payload.questions.length){
     showToast('Challenge expired — create a new one');
     return;
   }
+  window.__pendingMuqabalaChallenges[challengeId]=payload;
   startMuqabala(payload.opponent || null, payload.mode || 'Custom', {
     questions: payload.questions,
     timerSeconds: payload.timerSeconds,

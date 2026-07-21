@@ -400,14 +400,25 @@
 
   function playVoiceNote(src) {
     document.getElementById('globalVoicePlayer')?.remove();
+    const wrap = document.createElement('div');
+    wrap.id = 'globalVoicePlayer';
+    wrap.className = 'profile-voice-player-wrap';
+    wrap.style.cssText = 'position:absolute;left:12px;right:12px;bottom:80px;z-index:130;background:var(--white);border:1px solid var(--line);border-radius:16px;padding:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);';
     const audio = document.createElement('audio');
-    audio.id = 'globalVoicePlayer';
     audio.src = src;
-    audio.controls = true;
     audio.autoplay = true;
     audio.className = 'profile-voice-player';
-    document.querySelector('.device')?.appendChild(audio);
-    audio.onended = () => audio.remove();
+    wrap.appendChild(audio);
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = 'Close';
+    close.style.cssText = 'margin-top:8px;width:100%;padding:10px;border:none;background:var(--cream);border-radius:10px;font-weight:700;cursor:pointer;';
+    close.addEventListener('click', () => wrap.remove());
+    wrap.appendChild(close);
+    document.querySelector('.device')?.appendChild(wrap);
+    if (typeof bindMediaControls === 'function') bindMediaControls(audio, wrap);
+    if (typeof pushNavLayer === 'function') pushNavLayer(wrap, () => wrap.remove());
+    audio.onended = () => {};
   }
 
   window.renderProfileMediaSection = renderProfileMediaSection;

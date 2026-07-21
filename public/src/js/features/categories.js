@@ -603,6 +603,8 @@ dayCheckModal.querySelector('.day-check-send').addEventListener('click',async()=
   if(typeof playJournalFinishAnimation==='function') playJournalFinishAnimation();
   else showToast('Entry saved');
   dayCheckModal.classList.remove('open');
+  if(typeof removeNavLayer==='function') removeNavLayer(dayCheckModal);
+  if(typeof markJournalDoneToday==='function') markJournalDoneToday();
   saveToArchive({type:'journal_entry',content:text,ts:new Date().toISOString()});
   // Internal analysis may still run when AI is on — do not show mood/topics UI from it.
   try{ await analyseEveningCheckIn(text); }catch(e){}
@@ -616,7 +618,30 @@ dayCheckModal.querySelector('.day-check-send').addEventListener('click',async()=
     if(typeof updateJournalGrowthMotif==='function') updateJournalGrowthMotif(streak);
   }catch(e){}
 });
-dayCheckModal.querySelector('.day-check-skip').addEventListener('click',()=>dayCheckModal.classList.remove('open'));
+dayCheckModal.querySelector('.day-check-skip').addEventListener('click',()=>{
+  dayCheckModal.classList.remove('open');
+  if(typeof removeNavLayer==='function') removeNavLayer(dayCheckModal);
+  if(typeof markJournalDismissedToday==='function') markJournalDismissedToday();
+  // Dismiss open goodnight event so it won't reappear on reload
+  try{
+    if(typeof dismissOpenJournalEvent==='function') dismissOpenJournalEvent();
+  }catch(e){}
+});
+dayCheckModal.querySelector('#dayCheckSnooze')?.addEventListener('click',()=>{
+  dayCheckModal.classList.remove('open');
+  if(typeof removeNavLayer==='function') removeNavLayer(dayCheckModal);
+  const until=typeof snoozeJournalPrompt==='function'?snoozeJournalPrompt(3):Date.now()+3*3600*1000;
+  try{ if(typeof snoozeOpenJournalEvent==='function') snoozeOpenJournalEvent(until); }catch(e){}
+  if(typeof showToast==='function') showToast('Okay — I\'ll nudge you later tonight');
+});
+
+// Prevent clicks inside panel from dismissing via backdrop
+dayCheckModal.querySelector('.day-check-panel')?.addEventListener('click',(e)=>e.stopPropagation());
+dayCheckModal.addEventListener('click',(e)=>{
+  if(e.target!==dayCheckModal) return;
+  dayCheckModal.classList.remove('open');
+  if(typeof removeNavLayer==='function') removeNavLayer(dayCheckModal);
+});
 
 // Typing-rhythm ambient particles (act-based, ignores content)
 (function wireJournalTypingAmbient(){

@@ -159,30 +159,73 @@ async function buyStreakFreeze(){
 let activeChatListener=null;
 
 async function loadRealtimeMessages(chatId, msgsArea, isGroup){
-  if(!db||!currentUser) return;
+  if(!db||!currentUser||!msgsArea) return;
   if(activeChatListener){ activeChatListener(); activeChatListener=null; }
   let oldestDoc=null;
+  let primed=false;
+  const rendered=new Set();
+
+  function appendFromDoc(doc, prepend){
+    if(rendered.has(doc.id)) return;
+    rendered.add(doc.id);
+    const m=doc.data()||{};
+    const mine=m.uid===currentUser.uid;
+    const div=document.createElement('div');
+    div.innerHTML=renderMsgBubble({
+      from:mine?'me':'them',
+      text:m.text,
+      time:m.ts?.toDate?new Date(m.ts.toDate()).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'',
+      avatar:m.avatar||'👤',
+      name:m.name,
+      music:m.music||null,
+      attachment:m.attachment||null,
+      uid:m.uid,
+    },isGroup);
+    const node=div.firstElementChild;
+    if(!node) return;
+    node.dataset.msgId=doc.id;
+    if(typeof mountMusicCards==='function') mountMusicCards(node);
+    if(typeof wireChallengeBubble==='function') wireChallengeBubble(node);
+    if(prepend) msgsArea.insertBefore(node, msgsArea.firstChild);
+    else msgsArea.appendChild(node);
+  }
+
   try{
-    // Initial window: newest 50 via limitToLast. Older history uses startAfter-style paging in reverse (fetchOlderMessages).
     activeChatListener=db.collection('chats').doc(chatId).collection('messages')
       .orderBy('ts','asc').limitToLast(50)
       .onSnapshot(snap=>{
         if(!oldestDoc && snap.docs.length) oldestDoc=snap.docs[0];
-        snap.docChanges().forEach(change=>{
-          if(change.type==='added'){
-            const m=change.doc.data();
-            if(m.uid===currentUser.uid) return; // own messages already shown optimistically
-            const div=document.createElement('div');
-            div.innerHTML=renderMsgBubble({from:'them',text:m.text,time:new Date(m.ts?.toDate()).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}),avatar:m.avatar||'👤',name:m.name,music:m.music||null,uid:m.uid},isGroup);
-            const node=div.firstElementChild;
-            msgsArea.appendChild(node);
-            if(typeof mountMusicCards==='function') mountMusicCards(node);
-            msgsArea.scrollTop=msgsArea.scrollHeight;
+        if(!primed){
+          // Full hydrate including own messages — fixes music/photo/challenge on reopen
+          msgsArea.querySelectorAll('.msg-row[data-pending="1"]').forEach((el)=>el.remove());
+          // Clear optimistic/demo seed when we have Firestore history
+          if(snap.docs.length){
+            msgsArea.innerHTML='';
+            rendered.clear();
           }
+          snap.docs.forEach((doc)=>appendFromDoc(doc,false));
+          primed=true;
+          msgsArea.scrollTop=msgsArea.scrollHeight;
+          return;
+        }
+        snap.docChanges().forEach(change=>{
+          if(change.type!=='added') return;
+          if(rendered.has(change.doc.id)) return;
+          const m=change.doc.data()||{};
+          // Drop matching optimistic pending bubble for own sends
+          if(m.uid===currentUser.uid){
+            const pending=[...msgsArea.querySelectorAll('.msg-row.me[data-pending="1"]')];
+            const match=pending.reverse().find((row)=>{
+              const t=row.querySelector('.msg-bubble')?.getAttribute('data-msg-text')||'';
+              return t && m.text && t.slice(0,80)===String(m.text).slice(0,80);
+            });
+            match?.remove();
+          }
+          appendFromDoc(change.doc,false);
+          msgsArea.scrollTop=msgsArea.scrollHeight;
         });
       });
 
-    // Load-older control at top of thread
     if(typeof ensureLoadMoreButton==='function' && typeof fetchOlderMessages==='function'){
       let wrap=msgsArea.parentElement?.querySelector('[data-ui="chat-history-bar"]');
       if(!wrap){
@@ -194,14 +237,14 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
       ensureLoadMoreButton(wrap,{
         label:'Load earlier messages',
         onLoadMore:async()=>{
-          // Guard: if the initial snapshot hasn't landed yet, a null cursor would
-          // refetch the newest page and duplicate bubbles already on screen.
           if(!oldestDoc) return;
           const page=await fetchOlderMessages(chatId,{beforeDoc:oldestDoc,pageSize:30});
           if(!page.items.length){ if(typeof setLoadMoreVisible==='function') setLoadMoreVisible(wrap,false); return; }
           oldestDoc=page.firstDoc;
           const frag=document.createDocumentFragment();
           page.items.forEach(m=>{
+            const docId=m.id||m._docId;
+            if(docId && rendered.has(docId)) return;
             const div=document.createElement('div');
             const mine=m.uid===currentUser.uid;
             div.innerHTML=renderMsgBubble({
@@ -211,10 +254,13 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
               avatar:m.avatar||'👤',
               name:m.name,
               music:m.music||null,
+              attachment:m.attachment||null,
               uid:m.uid,
             },isGroup);
             if(div.firstElementChild){
+              if(docId){ div.firstElementChild.dataset.msgId=docId; rendered.add(docId); }
               if(typeof mountMusicCards==='function') mountMusicCards(div.firstElementChild);
+              if(typeof wireChallengeBubble==='function') wireChallengeBubble(div.firstElementChild);
               frag.appendChild(div.firstElementChild);
             }
           });
@@ -228,11 +274,14 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
   }catch(e){}
 }
 
-async function sendRealtimeMessage(chatId, text, isGroup, music){
-  if(!db||!currentUser||!text.trim()) return;
+async function sendRealtimeMessage(chatId, text, isGroup, music, attachment){
+  if(!db||!currentUser) return;
+  const body=String(text||'').trim();
+  if(!body && !(music&&music.title) && !attachment) return;
   try{
     const payload={
-      text, uid:currentUser.uid,
+      text:body||(music?.title?`🎵 ${music.title}`:(attachment?.type==='photo'?'📷 Photo':attachment?.type==='file'?'📄 File':attachment?.type==='location'?'📍 Location':attachment?.type==='muqabala_challenge'?'⚔️ Challenge':'')),
+      uid:currentUser.uid,
       name:userProfile?.name||currentUser.displayName||'You',
       avatar:currentUser.photoURL||'',
       ts:firebase.firestore.FieldValue.serverTimestamp()
@@ -246,8 +295,21 @@ async function sendRealtimeMessage(chatId, text, isGroup, music){
         source:['jiosaavn','itunes','none'].includes(music.source)?music.source:(music.previewUrl?'jiosaavn':'none'),
       };
     }
+    if(attachment && typeof attachment==='object' && attachment.type){
+      payload.attachment={
+        type:String(attachment.type).slice(0,40),
+        url:attachment.url?String(attachment.url).slice(0,2048):null,
+        name:attachment.name?String(attachment.name).slice(0,160):null,
+        width:Number(attachment.width)||null,
+        height:Number(attachment.height)||null,
+        challengeId:attachment.challengeId?String(attachment.challengeId).slice(0,80):null,
+        questions:Array.isArray(attachment.questions)?attachment.questions.slice(0,20):null,
+        timerSeconds:Number(attachment.timerSeconds)||null,
+        label:attachment.label?String(attachment.label).slice(0,120):null,
+      };
+    }
     await db.collection('chats').doc(chatId).collection('messages').add(payload);
-  }catch(e){}
+  }catch(e){ console.warn('[chat] send failed', e?.message||e); }
 }
 
 // ===================== REAL MATCHMAKING (Firestore waiting room) =====================

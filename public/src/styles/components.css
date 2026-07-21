@@ -2657,7 +2657,6 @@ a,
 .share-sheet::before,
 .quiz-category-sheet::before,
 .name-prompt-card::before,
-.day-check-modal::before,
 .game-friend-card::before{
   content:'';display:block;width:40px;height:4px;border-radius:99px;
   background:var(--line);margin:2px auto 12px;
@@ -2665,7 +2664,6 @@ a,
 .share-sheet,
 .quiz-category-sheet,
 .name-prompt-card,
-.day-check-modal,
 .premium-sheet,
 .flag-sheet,
 .game-friend-card{

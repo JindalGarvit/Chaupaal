@@ -173,7 +173,17 @@ function promptNameSheet(opts={}){
       </div>`;
     document.querySelector('.device')?.appendChild(sheet);
     const input=sheet.querySelector('[data-np-input]');
-    const finish=(val)=>{sheet.remove();resolve(val);};
+    let settled=false;
+    const finish=(val)=>{
+      if(settled) return;
+      settled=true;
+      if(typeof removeNavLayer==='function') removeNavLayer(sheet);
+      sheet.remove();
+      resolve(val);
+    };
+    if (typeof pushNavLayer === 'function') {
+      pushNavLayer(sheet, () => finish(null));
+    }
     sheet.querySelectorAll('[data-np-cancel]').forEach(el=>el.addEventListener('click',()=>finish(null)));
     sheet.querySelector('[data-np-ok]')?.addEventListener('click',()=>{
       const v=(input?.value||'').trim();
@@ -215,7 +225,15 @@ function confirmSheet(opts={}){
         </div>
       </div>`;
     document.querySelector('.device')?.appendChild(sheet);
-    const finish=(val)=>{sheet.remove();resolve(!!val);};
+    let settled=false;
+    const finish=(val)=>{
+      if(settled) return;
+      settled=true;
+      if(typeof removeNavLayer==='function') removeNavLayer(sheet);
+      sheet.remove();
+      resolve(!!val);
+    };
+    if (typeof pushNavLayer === 'function') pushNavLayer(sheet, () => finish(false));
     sheet.querySelectorAll('[data-cf-cancel]').forEach(el=>el.addEventListener('click',()=>finish(false)));
     sheet.querySelector('[data-cf-ok]')?.addEventListener('click',()=>finish(true));
     sheet.addEventListener('keydown',(e)=>{ if(e.key==='Escape') finish(false); });

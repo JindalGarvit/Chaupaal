@@ -115,7 +115,7 @@ module.exports = async function handler(req, res) {
       return sendSuccess(res, { ok: true });
     }
 
-    if (action === 'dismiss' || action === 'engage') {
+    if (action === 'dismiss' || action === 'engage' || action === 'snooze') {
       const eventId = String(body.eventId || '');
       if (!eventId) return sendError(res, 400, 'VALIDATION_ERROR', 'eventId required');
       const eref = eventsCol.doc(eventId);
@@ -125,18 +125,37 @@ module.exports = async function handler(req, res) {
       const isJournal = ev.type === 'journal' || ev.type === 'goodnight_journal';
       const { ref: stateRef, data: state } = await getState(db, user.uid);
 
+      if (action === 'snooze') {
+        // Single snooze window — replaces prior snooze; does not mark dismissed
+        let untilMs = Number(body.until);
+        if (!Number.isFinite(untilMs) || untilMs < Date.now()) {
+          untilMs = Date.now() + 3 * 60 * 60 * 1000;
+        }
+        // Cap same calendar day (~23:59 IST)
+        const maxUntil = Date.now() + 12 * 60 * 60 * 1000;
+        if (untilMs > maxUntil) untilMs = maxUntil;
+        await eref.set(
+          {
+            snoozedUntil: new Date(untilMs),
+            snoozeCount: (Number(ev.snoozeCount) || 0) + 1,
+          },
+          { merge: true }
+        );
+        return sendSuccess(res, { ok: true, action: 'snooze', until: untilMs });
+      }
+
       if (action === 'dismiss') {
         const created = ev.createdAt?.toDate ? ev.createdAt.toDate() : ev.createdAt ? new Date(ev.createdAt) : null;
         const fast = created ? Date.now() - created.getTime() < 5000 : false;
         await eref.set(
-          { dismissed: true, dismissedAt: new Date(), fastDismiss: fast },
+          { dismissed: true, dismissedAt: new Date(), fastDismiss: fast, snoozedUntil: null },
           { merge: true }
         );
         await stateRef.set(applyDismiss(state, { fast, isJournal }), { merge: true });
         return sendSuccess(res, { ok: true, action: 'dismiss', fast });
       }
 
-      await eref.set({ engaged: true, engagedAt: new Date() }, { merge: true });
+      await eref.set({ engaged: true, engagedAt: new Date(), snoozedUntil: null }, { merge: true });
       await stateRef.set(applyEngage(state, { isJournal }), { merge: true });
       return sendSuccess(res, { ok: true, action: 'engage' });
     }
