@@ -61,10 +61,13 @@ function closeChatScreen(opts = {}) {
     }
   }
 
-  if (updateHistory) {
+  if (updateHistory && !opts.fromHistory) {
     try {
-      if (location.pathname && location.pathname !== '/' && !opts.fromHistory) {
-        history.pushState({}, '', '/');
+      const onDeepRoute =
+        history.state?.chaupaalDeep ||
+        (location.pathname && location.pathname !== '/' && /\/(?:chat|c)\//.test(location.pathname));
+      if (onDeepRoute) {
+        history.back();
       }
     } catch (e) {}
   }
@@ -98,15 +101,14 @@ function openChatScreen(chat){
   screen.innerHTML = `
     <div class="chat-screen-header">
       <button class="chat-back" id="chatBack" aria-label="Back">←</button>
-      <div class="chat-header-avatar">${chat.avatar}</div>
-      <div>
+      <div class="chat-header-avatar${isGroup?' chat-header-tappable':''}" ${isGroup?'data-open-group-info':''} role="${isGroup?'button':''}">${chat.avatar}</div>
+      <div class="chat-header-info${isGroup?' chat-header-tappable':''}" ${isGroup?'data-open-group-info':''} role="${isGroup?'button':''}">
         <div class="chat-header-name">${chat.name}</div>
         <div id="chatActivityStatus" style="font-size:11px;color:var(--muted);">${statusLine}</div>
       </div>
       <div class="chat-header-actions">
         ${!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatChallengeBtn" title="Create challenge">🎯</button>`:''}
         ${!isGroup&&!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatMuqabalaBtn" title="Muqabala">⚔️</button>`:''}
-        ${isGroup?`<button class="chat-header-btn" id="chatLeaveGroupBtn" title="Leave group">🚪</button>`:''}
       </div>
     </div>
     <div id="chatTypingStatus" class="chat-typing-status hidden" aria-live="polite"></div>
@@ -180,6 +182,18 @@ function openChatScreen(chat){
     closeChatScreen({ updateHistory: true, animate: true });
   });
 
+  if (isGroup && typeof openGroupInfo === 'function') {
+    screen.querySelectorAll('[data-open-group-info]').forEach((el) => {
+      el.addEventListener('click', () => openGroupInfo(chat));
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openGroupInfo(chat);
+        }
+      });
+    });
+  }
+
   if (!isSelf && !isChaupaal && typeof bindProfileLongPress === 'function') {
     const headerAvatar = screen.querySelector('.chat-header-avatar');
     const profile = {
@@ -208,8 +222,6 @@ function openChatScreen(chat){
     // Hide attach game / challenge affordances for system chat
     document.getElementById('attachGame')?.classList.add('hidden');
   }
-  document.getElementById('chatLeaveGroupBtn')?.addEventListener('click', () => leaveGroupChat(chat));
-
   // Attach menu toggle
   const attachMenu = document.getElementById('chatAttachMenu');
   document.getElementById('chatPlusBtn').addEventListener('click', (e)=>{

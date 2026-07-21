@@ -17,6 +17,7 @@
     { name: 'profile', re: /^\/(?:profile|u)\/([^/?#]+)\/?$/i },
     { name: 'post', re: /^\/(?:post|p)\/([^/?#]+)\/?$/i },
     { name: 'chat', re: /^\/(?:chat|c)\/([^/?#]+)\/?$/i },
+    { name: 'join', re: /^\/(?:join|g)\/([^/?#]+)\/?$/i },
   ];
 
   function parseDeepLink(pathname = location.pathname) {
@@ -32,6 +33,9 @@
       return { name: 'profile', id: params.get('user') || params.get('profile') };
     }
     if (params.get('chat')) return { name: 'chat', id: params.get('chat') };
+    if (params.get('join') || params.get('groupInvite')) {
+      return { name: 'join', id: params.get('join') || params.get('groupInvite') };
+    }
     return null;
   }
 
@@ -40,6 +44,7 @@
     if (name === 'profile') return `/profile/${safe}`;
     if (name === 'post') return `/post/${safe}`;
     if (name === 'chat') return `/chat/${safe}`;
+    if (name === 'join') return `/join/g/${safe}`;
     return '/';
   }
 
@@ -518,16 +523,35 @@
     }, 100);
   }
 
+  async function openGroupInvite(token) {
+    if (!token || typeof joinGroupByInviteToken !== 'function') return;
+    switchTab('baithak');
+    setTimeout(async () => {
+      if (typeof initBaithak === 'function') initBaithak();
+      const result = await joinGroupByInviteToken(token);
+      if (result?.pending && typeof showToast === 'function') {
+        showToast('Join request sent — waiting for admin approval');
+      } else if (result?.ok && result.chat && typeof openChatScreen === 'function') {
+        openChatScreen(result.chat);
+        if (typeof showToast === 'function') showToast(result.already ? 'Already in this group' : 'Joined group');
+      } else if (typeof showToast === 'function') {
+        showToast('Invite link invalid or expired');
+      }
+    }, 200);
+  }
+
   async function handleDeepLink(route) {
     if (!route) return false;
     if (route.name === 'profile') await openProfileByUsername(route.id);
     else if (route.name === 'post') await openPostById(route.id);
     else if (route.name === 'chat') await openChatById(route.id);
+    else if (route.name === 'join') await openGroupInvite(route.id);
     return true;
   }
 
   function initDeepLinks() {
     window.addEventListener('popstate', () => {
+      if (typeof hasNavLayers === 'function' && hasNavLayers()) return;
       const route = parseDeepLink(location.pathname);
       if (route) {
         handleDeepLink(route);

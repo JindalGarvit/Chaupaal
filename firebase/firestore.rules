@@ -370,7 +370,11 @@ service cloud.firestore {
     match /chats/{chatId} {
       // Chat metadata readable only by participants
       allow read: if isChatParticipant() ||
-        (isAuth() && resource.data.participants == null);
+        (isAuth() && resource.data.participants == null) ||
+        (isAuth() &&
+          resource.data.invite != null &&
+          resource.data.invite.enabled == true &&
+          resource.data.invite.token is string);
       allow create: if isAuth()
         && request.resource.data.participants.hasAny([request.auth.uid])
         && (
@@ -379,6 +383,20 @@ service cloud.firestore {
           chatId == 'chat_chaupaal_' + request.auth.uid
         );
       allow update: if isChatParticipant();
+
+      match /joinRequests/{requestUid} {
+        allow read: if isAuth() &&
+          get(/databases/$(database)/documents/chats/$(chatId)).data.admins.hasAny([request.auth.uid]);
+        allow create: if isAuth()
+          && requestUid == request.auth.uid
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.status == 'pending';
+        allow update: if isAuth() &&
+          get(/databases/$(database)/documents/chats/$(chatId)).data.admins.hasAny([request.auth.uid]);
+        allow delete: if isAuth() &&
+          (requestUid == request.auth.uid ||
+           get(/databases/$(database)/documents/chats/$(chatId)).data.admins.hasAny([request.auth.uid]));
+      }
 
       // Messages: participant-scoped reads; clients may only author their own uid.
       // Chaupaal / server messages are written via Admin SDK (bypasses rules).

@@ -1,9 +1,14 @@
 /**
  * Shared in-app media player controls — seek, ±10s, elapsed/remaining, buffering.
  * Bind to any HTMLMediaElement (audio/video). Used by music cards, voice notes, story/duniya video.
+ *
+ * CONTRACT (see CONVENTIONS.md): play/pause/seek/volume must NEVER touch navigation history.
+ * Only one app-wide audio preview at a time (music-card.js owns shared Audio); video nodes are local.
  */
 (function () {
   'use strict';
+
+  const boundCleanups = new WeakMap();
 
   function formatTime(sec) {
     if (!Number.isFinite(sec) || sec < 0) return '0:00';
@@ -36,6 +41,7 @@
       const wrap = document.createElement('div');
       wrap.innerHTML = controlsHtml();
       box = wrap.firstElementChild;
+      box.dataset.navIgnore = '1';
       if (opts.insert === 'prepend' && hostEl.firstChild) hostEl.insertBefore(box, hostEl.firstChild);
       else hostEl.appendChild(box);
     }
@@ -83,27 +89,43 @@
       sync();
     };
 
+    const onWaiting = () => setBuffering(true);
+    const onPlaying = () => setBuffering(false);
+    const onCanPlay = () => setBuffering(false);
+    const onSeeking = () => setBuffering(true);
+    const onSeeked = () => setBuffering(false);
+
     box.addEventListener('click', onSkip);
     seek?.addEventListener('input', onSeekInput);
     seek?.addEventListener('change', onSeekChange);
     media.addEventListener('timeupdate', sync);
     media.addEventListener('loadedmetadata', sync);
     media.addEventListener('durationchange', sync);
-    media.addEventListener('waiting', () => setBuffering(true));
-    media.addEventListener('playing', () => setBuffering(false));
-    media.addEventListener('canplay', () => setBuffering(false));
-    media.addEventListener('seeking', () => setBuffering(true));
-    media.addEventListener('seeked', () => setBuffering(false));
+    media.addEventListener('waiting', onWaiting);
+    media.addEventListener('playing', onPlaying);
+    media.addEventListener('canplay', onCanPlay);
+    media.addEventListener('seeking', onSeeking);
+    media.addEventListener('seeked', onSeeked);
     sync();
 
-    return () => {
+    const cleanup = () => {
       box.removeEventListener('click', onSkip);
       seek?.removeEventListener('input', onSeekInput);
       seek?.removeEventListener('change', onSeekChange);
       media.removeEventListener('timeupdate', sync);
       media.removeEventListener('loadedmetadata', sync);
       media.removeEventListener('durationchange', sync);
+      media.removeEventListener('waiting', onWaiting);
+      media.removeEventListener('playing', onPlaying);
+      media.removeEventListener('canplay', onCanPlay);
+      media.removeEventListener('seeking', onSeeking);
+      media.removeEventListener('seeked', onSeeked);
+      boundCleanups.delete(media);
     };
+    const prev = boundCleanups.get(media);
+    if (prev) prev();
+    boundCleanups.set(media, cleanup);
+    return cleanup;
   }
 
   /** Enhance existing <video>/<audio> nodes under root (skip if already bound). */

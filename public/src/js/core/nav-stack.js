@@ -2,7 +2,9 @@
  * Nav stack — professional mobile navigation:
  * - System / gesture back closes the top overlay instead of leaving the app
  * - Backdrop (scrim) tap dismisses modals & sheets
- * - Keeps a short history sentinel while layers are open
+ * - One history.pushState({ chaupaalLayer }) per real overlay layer
+ *
+ * @see CONVENTIONS.md — navigation/overlay contract
  */
 (function () {
   'use strict';
@@ -12,6 +14,8 @@
   let seq = 0;
   let suppressingPop = false;
   let wired = false;
+  /** Layers we pushed onto history (source of truth for sync). */
+  let layerHistoryDepth = 0;
 
   const LAYER_SELECTORS = [
     '.game-overlay',
@@ -35,6 +39,8 @@
     '.name-prompt-sheet',
     '.confirm-prompt-sheet',
     '.music-picker-sheet',
+    '.loc-share-sheet',
+    '.group-info-overlay',
     '.wrap-overlay',
     '.ai-keyboard',
     '#aiKeyboardEl',
@@ -48,7 +54,7 @@
       return;
     }
     const btn = el.querySelector(
-      '[data-overlay-dismiss],[data-dismiss],.sheet-close,.icon-btn,.game-back-btn,#chatBack,.chat-back'
+      '[data-overlay-dismiss],[data-dismiss],.sheet-close,.icon-btn,.game-back-btn,#chatBack,.chat-back,[data-music-picker-close],[data-loc-share-close],[data-group-info-close]'
     );
     if (btn) {
       try {
@@ -70,14 +76,46 @@
       if (!stack[i].el || !stack[i].el.isConnected) stack.splice(i, 1);
       else if (stack[i].el.classList?.contains('hidden') && stack[i].el.classList.contains('modal-backdrop')) {
         stack.splice(i, 1);
+      } else if (
+        stack[i].el.classList?.contains('day-check-modal') &&
+        !stack[i].el.classList.contains('open')
+      ) {
+        stack.splice(i, 1);
       }
     }
   }
 
+  function syncLayerHistoryDepth() {
+    layerHistoryDepth = Math.max(0, Math.min(layerHistoryDepth, stack.length));
+  }
+
+  /** Reset stack + history when UI diverged — last resort so back never bricks the app. */
+  function recoverNavStack(reason) {
+    console.warn('[nav-stack] recover', reason || 'desync');
+    pruneDead();
+    while (stack.length) {
+      const top = stack.pop();
+      try {
+        top.dismiss();
+      } catch (e) {
+        dismissEl(top.el);
+      }
+    }
+    layerHistoryDepth = 0;
+    try {
+      if (history.state?.chaupaalLayer) {
+        history.replaceState(history.state?.chaupaalDeep ? { chaupaalDeep: true } : {}, '', location.pathname);
+      }
+    } catch (e) {}
+    if (typeof pauseAllMusic === 'function') pauseAllMusic();
+  }
+
   function pushLayer(el, dismissFn) {
     if (!el || !el.isConnected) return;
+    if (el.dataset.navIgnore === '1') return;
     pruneDead();
     if (stack.some((s) => s.el === el)) return;
+
     const key = `layer_${++seq}`;
     el.dataset.navLayer = key;
     const dismiss =
@@ -89,16 +127,16 @@
     stack.push({ el, dismiss, key });
     try {
       history.pushState({ chaupaalLayer: true, key }, '');
+      layerHistoryDepth = stack.length;
     } catch (e) {}
   }
 
-  function removeLayerForEl(el) {
-    const idx = stack.findIndex((s) => s.el === el);
-    if (idx < 0) return;
-    stack.splice(idx, 1);
-    // Keep history aligned when closed via ✕ / backdrop / swipe (not system back)
+  function popHistoryForLayer() {
+    if (layerHistoryDepth <= 0) return;
+    layerHistoryDepth--;
+    if (suppressingPop) return;
     try {
-      if (!suppressingPop && history.state && history.state.chaupaalLayer) {
+      if (history.state?.chaupaalLayer) {
         suppressingPop = true;
         history.back();
         setTimeout(() => {
@@ -110,16 +148,26 @@
     }
   }
 
+  function removeLayerForEl(el) {
+    const idx = stack.findIndex((s) => s.el === el);
+    if (idx < 0) return;
+    stack.splice(idx, 1);
+    syncLayerHistoryDepth();
+    popHistoryForLayer();
+  }
+
   function dismissTopLayer() {
     pruneDead();
     if (!stack.length) return false;
     const top = stack.pop();
+    syncLayerHistoryDepth();
     suppressingPop = true;
     try {
       top.dismiss();
     } catch (e) {
       dismissEl(top.el);
     }
+    popHistoryForLayer();
     setTimeout(() => {
       suppressingPop = false;
     }, 80);
@@ -135,17 +183,14 @@
     if (!el || el.dataset.backdropWired === '1') return;
     el.dataset.backdropWired = '1';
 
-    // Full-screen scrims: click empty area closes
     el.addEventListener('click', (e) => {
       if (e.target !== el) return;
-      // Don't dismiss game play surface by accident — only coach / share scrims
       if (el.classList.contains('game-overlay') && !e.target.classList.contains('game-coach')) return;
       if (el.classList.contains('game-coach')) {
         el.remove();
         removeLayerForEl(el);
         return;
       }
-      // Graphic cards / name sheets: outer is the scrim
       if (
         el.classList.contains('chaupaal-graphic-card') ||
         el.classList.contains('name-prompt-sheet') ||
@@ -159,7 +204,6 @@
       removeLayerForEl(el);
     });
 
-    // Modal backdrop: click dimmed area (not .modal panel)
     if (el.classList.contains('modal-backdrop')) {
       el.addEventListener('click', (e) => {
         if (e.target !== el) return;
@@ -175,18 +219,17 @@
   function wireSheetPanel(panel) {
     if (!panel || panel.dataset.sheetWired === '1') return;
     panel.dataset.sheetWired = '1';
-    // Stop clicks inside panel from bubbling to backdrop
     panel.addEventListener('click', (e) => e.stopPropagation());
   }
 
   function ensureScrimForSheet(panel) {
     if (!panel || panel.dataset.hasScrim === '1') return null;
+    if (panel.dataset.navManaged === '1') return null;
     const st = panel.getAttribute('style') || '';
     const looksSheet =
       panel.classList.contains('cp-sheet-panel') ||
       panel.classList.contains('premium-sheet') ||
       (/bottom:\s*0/.test(st) && /border-radius:\s*24px/.test(st));
-    // Common game pickers / sheets mounted on .device as bottom panels
     const isBottomPanel =
       panel.parentElement?.classList?.contains('device') &&
       (st.includes('bottom:0') || st.includes('bottom: 0')) &&
@@ -199,6 +242,7 @@
     panel.dataset.hasScrim = '1';
     const scrim = document.createElement('div');
     scrim.className = 'cp-sheet-scrim';
+    scrim.dataset.navIgnore = '1';
     scrim.setAttribute('aria-hidden', 'true');
     panel.parentElement?.insertBefore(scrim, panel);
     const close = () => {
@@ -227,9 +271,10 @@
   function considerElement(el) {
     if (!el || el.nodeType !== 1) return;
     if (el.dataset.navIgnore === '1') return;
+    if (el.dataset.navManaged === '1') return;
     if (el.classList?.contains('cp-sheet-scrim')) return;
+    if (el.closest?.('[data-nav-ignore="1"]')) return;
 
-    // Modal backdrops when shown
     if (el.classList?.contains('modal-backdrop') && !el.classList.contains('hidden')) {
       wireBackdrop(el);
       const modal = el.querySelector('.modal');
@@ -249,6 +294,7 @@
     }
 
     if (el.matches?.(LAYER_SELECTORS) || el.classList?.contains('game-overlay') || el.classList?.contains('archive-overlay')) {
+      if (el.classList.contains('day-check-modal') && !el.classList.contains('open')) return;
       wireBackdrop(el);
       const panel = el.querySelector('.modal,.cp-sheet-panel,[data-sheet-panel]');
       if (panel) wireSheetPanel(panel);
@@ -278,39 +324,35 @@
       });
       mo.observe(el, { attributes: true, attributeFilter: ['class'] });
     });
-
-    // Journal day-check uses .open instead of .hidden
-    const day = document.querySelector('.day-check-modal');
-    if (day && day.dataset.navWatch !== '1') {
-      day.dataset.navWatch = '1';
-      day.id = day.id || 'dayCheckModal';
-      const mo = new MutationObserver(() => {
-        if (day.classList.contains('open')) {
-          wireBackdrop(day);
-          pushLayer(day, () => {
-            day.classList.remove('open');
-            if (typeof removeNavLayer === 'function') removeNavLayer(day);
-          });
-        } else removeLayerForEl(day);
-      });
-      mo.observe(day, { attributes: true, attributeFilter: ['class'] });
-    }
   }
 
   function onPopState(e) {
     if (suppressingPop) return;
     pruneDead();
-    if (stack.length) {
-      // System / gesture back — dismiss top Chaupaal layer only
-      const top = stack.pop();
-      try {
-        top.dismiss();
-      } catch (err) {
-        dismissEl(top.el);
+
+    if (history.state?.chaupaalLayer) {
+      if (stack.length) {
+        const top = stack.pop();
+        syncLayerHistoryDepth();
+        suppressingPop = true;
+        try {
+          top.dismiss();
+        } catch (err) {
+          dismissEl(top.el);
+        }
+        setTimeout(() => {
+          suppressingPop = false;
+        }, 80);
+        e.stopImmediatePropagation?.();
+        return;
       }
-      // Stop deeplink handler from also tearing down parent views in the same tick
+      recoverNavStack('popstate-layer-without-stack');
       e.stopImmediatePropagation?.();
       return;
+    }
+
+    if (stack.length > 0) {
+      recoverNavStack('stack-without-layer-state');
     }
   }
 
@@ -320,6 +362,8 @@
       mutations.forEach((m) => {
         m.addedNodes.forEach((n) => {
           if (n.nodeType !== 1) return;
+          if (n.classList?.contains('cp-media-controls') || n.dataset?.cpMediaControls != null) return;
+          if (n.closest?.('[data-music-card],[data-cp-media-controls]')) return;
           considerElement(n);
           n.querySelectorAll?.(LAYER_SELECTORS).forEach(considerElement);
         });
@@ -334,18 +378,14 @@
   function initNavStack() {
     if (wired) return;
     wired = true;
-    // Capture phase so we run before deeplinks popstate and can claim the event
     window.addEventListener('popstate', onPopState, true);
     watchModals();
     observeDevice();
-    // Existing visible layers (rare)
     document.querySelectorAll(LAYER_SELECTORS).forEach(considerElement);
 
-    // Escape / Android-style: also expose for touch.js
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && hasLayers()) {
         e.preventDefault();
-        // Prefer history.back so stack stays consistent
         try {
           history.back();
         } catch (err) {
@@ -359,6 +399,7 @@
   window.removeNavLayer = removeLayerForEl;
   window.dismissTopNavLayer = dismissTopLayer;
   window.hasNavLayers = hasLayers;
+  window.recoverNavStack = recoverNavStack;
   window.initNavStack = initNavStack;
 
   if (document.readyState === 'loading') {

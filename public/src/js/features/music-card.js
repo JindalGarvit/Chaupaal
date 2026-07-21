@@ -259,6 +259,7 @@
 
     const sheet = document.createElement('div');
     sheet.className = 'music-picker-sheet';
+    sheet.dataset.navManaged = '1';
     sheet.setAttribute('role', 'dialog');
     sheet.setAttribute('aria-label', title || 'Share a song');
     sheet.innerHTML = `

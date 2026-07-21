@@ -233,6 +233,13 @@ function mapChatDoc(raw){
     duelStreak: raw.duelStreak||0,
     members: raw.members||null,
     participants: raw.participants||[],
+    admins: raw.admins||[],
+    memberProfiles: raw.memberProfiles||{},
+    permissions: raw.permissions||null,
+    invite: raw.invite||null,
+    createdBy: raw.createdBy||null,
+    description: raw.description||'',
+    photoURL: raw.photoURL||null,
   };
 }
 

@@ -373,10 +373,22 @@ function showCreateGroup(){
   `;
   document.querySelector('.device').appendChild(sheet);
   document.getElementById('closeGrp').addEventListener('click',()=>sheet.remove());
-  document.getElementById('createGrpBtn').addEventListener('click',()=>{
+  if(typeof pushNavLayer==='function'){
+    sheet.dataset.navManaged='1';
+    pushNavLayer(sheet,()=>sheet.remove());
+  }
+  document.getElementById('createGrpBtn').addEventListener('click',async()=>{
     const name=document.getElementById('grpName').value.trim();
     if(!name){showToast('Enter a group name');return;}
-    sheet.remove();showToast(`"${name}" group created`);
+    const desc=document.getElementById('grpDesc')?.value?.trim()||'';
+    sheet.remove();
+    if(typeof createGroupInFirestore==='function'){
+      const chat=await createGroupInFirestore({name,description:desc});
+      if(chat){
+        showToast(`"${name}" group created`);
+        if(typeof openChatScreen==='function') openChatScreen(chat);
+      }
+    } else showToast(`"${name}" group created`);
   });
 }
 
@@ -494,8 +506,12 @@ function showDayCheck(opts){
   const force=!!(opts&&opts.force);
   if(!force && !canShowJournalPrompt()) return false;
   dayCheckModal.classList.add('open');
-  if(typeof pushNavLayer==='function'){
-    pushNavLayer(dayCheckModal,()=>{ dayCheckModal.classList.remove('open'); });
+  if (typeof pushNavLayer === 'function' && !dayCheckModal.dataset.navLayer) {
+    dayCheckModal.dataset.navManaged = '1';
+    pushNavLayer(dayCheckModal, () => {
+      dayCheckModal.classList.remove('open');
+      if (typeof removeNavLayer === 'function') removeNavLayer(dayCheckModal);
+    });
   }
   if(!localStorage.getItem('chaupaal_journal_intro_seen')){
     setTimeout(()=>showToast('Journal entries stay private in your Archive — only you can see them'),400);
