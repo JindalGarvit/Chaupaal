@@ -173,8 +173,10 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
             const m=change.doc.data();
             if(m.uid===currentUser.uid) return; // own messages already shown optimistically
             const div=document.createElement('div');
-            div.innerHTML=renderMsgBubble({from:'them',text:m.text,time:new Date(m.ts?.toDate()).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}),avatar:m.avatar||'👤',name:m.name},isGroup);
-            msgsArea.appendChild(div.firstElementChild);
+            div.innerHTML=renderMsgBubble({from:'them',text:m.text,time:new Date(m.ts?.toDate()).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}),avatar:m.avatar||'👤',name:m.name,music:m.music||null,uid:m.uid},isGroup);
+            const node=div.firstElementChild;
+            msgsArea.appendChild(node);
+            if(typeof mountMusicCards==='function') mountMusicCards(node);
             msgsArea.scrollTop=msgsArea.scrollHeight;
           }
         });
@@ -208,8 +210,13 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
               time:m.ts?.toDate?new Date(m.ts.toDate()).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'',
               avatar:m.avatar||'👤',
               name:m.name,
+              music:m.music||null,
+              uid:m.uid,
             },isGroup);
-            if(div.firstElementChild) frag.appendChild(div.firstElementChild);
+            if(div.firstElementChild){
+              if(typeof mountMusicCards==='function') mountMusicCards(div.firstElementChild);
+              frag.appendChild(div.firstElementChild);
+            }
           });
           const prevHeight=msgsArea.scrollHeight;
           msgsArea.insertBefore(frag, msgsArea.firstChild);
@@ -221,15 +228,25 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
   }catch(e){}
 }
 
-async function sendRealtimeMessage(chatId, text, isGroup){
+async function sendRealtimeMessage(chatId, text, isGroup, music){
   if(!db||!currentUser||!text.trim()) return;
   try{
-    await db.collection('chats').doc(chatId).collection('messages').add({
+    const payload={
       text, uid:currentUser.uid,
       name:userProfile?.name||currentUser.displayName||'You',
       avatar:currentUser.photoURL||'',
       ts:firebase.firestore.FieldValue.serverTimestamp()
-    });
+    };
+    if(music && typeof music==='object' && music.title){
+      payload.music={
+        title:String(music.title||'').slice(0,160),
+        artist:String(music.artist||'Unknown artist').slice(0,160),
+        thumbnail:String(music.thumbnail||'').slice(0,2048),
+        previewUrl:music.previewUrl?String(music.previewUrl).slice(0,2048):null,
+        source:['jiosaavn','itunes','none'].includes(music.source)?music.source:(music.previewUrl?'jiosaavn':'none'),
+      };
+    }
+    await db.collection('chats').doc(chatId).collection('messages').add(payload);
   }catch(e){}
 }
 

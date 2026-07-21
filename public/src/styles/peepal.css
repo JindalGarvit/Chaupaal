@@ -464,6 +464,7 @@
   background:var(--white);border-radius:16px;
   box-shadow:0 8px 24px rgba(43,39,48,0.15);
   padding:10px;display:none;gap:10px;z-index:30;
+  flex-wrap:wrap;max-width:calc(100% - 28px);
 }
 .chat-attach-menu.show{display:flex;}
 .chat-attach-option{

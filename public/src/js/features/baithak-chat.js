@@ -13,6 +13,7 @@ let activeChatAttachDocClick = null;
 function closeChatScreen(opts = {}) {
   const { updateHistory = true, animate = true } = opts;
 
+  if (typeof pauseAllMusic === 'function') pauseAllMusic();
   if (typeof stopChatPresence === 'function') stopChatPresence();
 
   if (typeof endOverlayScope === 'function') {
@@ -134,6 +135,10 @@ function openChatScreen(chat){
         <div class="chat-attach-icon" style="background:#10B981;">🎮</div>
         <div class="chat-attach-label">Game</div>
       </div>
+      <div class="chat-attach-option" id="attachSong">
+        <div class="chat-attach-icon" style="background:#E63946;">🎵</div>
+        <div class="chat-attach-label">Song</div>
+      </div>
       <div class="chat-attach-option" id="attachLocation">
         <div class="chat-attach-icon" style="background:#F59E0B;">📍</div>
         <div class="chat-attach-label">Location</div>
@@ -251,6 +256,26 @@ function openChatScreen(chat){
     attachMenu.classList.remove('show');
     openGamePicker(chat, isGroup);
   });
+  document.getElementById('attachSong')?.addEventListener('click',()=>{
+    attachMenu.classList.remove('show');
+    if(typeof openSongPicker!=='function'){showToast('Song sharing unavailable');return;}
+    openSongPicker({
+      title:'Share a song',
+      onSelect:(music)=>{
+        try{
+          const cardHtml=typeof renderMusicCard==='function'?renderMusicCard(music,{variant:'chat'}):'';
+          addMsgBubble({from:'me',text:cardHtml||`🎵 ${music.title}`,music,time:'now'}, isGroup);
+          const area=document.getElementById('chatMsgsArea');
+          if(area&&typeof mountMusicCards==='function') mountMusicCards(area);
+          if(typeof sendRealtimeMessage==='function'){
+            sendRealtimeMessage(chat.firestoreId||chat.id, music.title?`🎵 ${music.title}`:'🎵 Song', isGroup, music);
+          }
+        }catch(e){
+          showToast('Could not share song');
+        }
+      },
+    });
+  });
   document.getElementById('attachLocation').addEventListener('click',()=>{
     attachMenu.classList.remove('show');
     addMsgBubble({from:'me',text:'📍 Location shared',time:'now'}, isGroup);
@@ -346,12 +371,18 @@ function renderMsgBubble(m, isGroup){
   const isMe = m.from === 'me';
   const uid = m.uid || m.user?.uid || '';
   const name = m.name || m.user?.name || '';
+  let body = m.text || '';
+  if(m.music && typeof renderMusicCard==='function'){
+    const card=renderMusicCard(m.music,{variant:'chat'});
+    const caption=(typeof m.text==='string' && m.text && !m.text.includes('data-music-card') && !/^🎵\s/.test(m.text))?`<div class="music-card-caption">${m.text}</div>`:'';
+    body=card+(caption||'');
+  }
   return `
     <div class="msg-row ${isMe?'me':''}" data-uid="${uid}" data-name="${String(name).replace(/"/g,'&quot;')}">
       ${!isMe?`<div class="msg-avatar-small">${m.avatar||'👤'}</div>`:''}
       <div>
         ${(isGroup&&!isMe&&m.name)?`<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px;">${m.name}</div>`:''}
-        <div class="msg-bubble ${isMe?'me':'them'}" data-msg-text="${String(m.text||'').replace(/"/g,'&quot;')}">${m.text}</div>
+        <div class="msg-bubble ${isMe?'me':'them'}" data-msg-text="${String(m.text||'').replace(/"/g,'&quot;')}">${body}</div>
         <div style="font-size:10px;color:var(--muted);margin-top:3px;${isMe?'text-align:right':''};">${m.time||''}</div>
       </div>
     </div>
@@ -382,6 +413,7 @@ function addMsgBubble(msg, isGroup){
   const node=div.firstElementChild;
   area.appendChild(node);
   bindMsgAvatarLongPress(node);
+  if(typeof mountMusicCards==='function') mountMusicCards(node);
   area.scrollTop = area.scrollHeight;
 }
 
@@ -618,18 +650,25 @@ function openStoryViewer(story, allStories){
   document.querySelector('.device').appendChild(viewer);
   viewer.addEventListener('chaupaal:dismiss', () => {
     clearInterval(progressInterval);
+    if(typeof pauseAllMusic==='function') pauseAllMusic();
   });
 
   function renderStory(idx){
     clearInterval(progressInterval);
+    if(typeof pauseAllMusic==='function') pauseAllMusic();
     const s=stories[idx];s.seen=true;
     const isMedia=s.type==='media'||s.type==='duniya_story';
     const isScore=s.type==='score';
     const isBirthday=s.type==='birthday';
     const isDuel=s.type==='duel';
+    const hasMusic=!!(s.music&&s.music.title);
+    const musicOnly=hasMusic&&!(isMedia&&s.media);
     const timeAgo=(s.ts||s.createdAt)?timeAgoStr(s.ts||s.createdAt):'now';
     const destinationLabel=s.destination==='duniya'?'Duniya':s.destination==='baithak'?'Baithak':'';
     const ownerAudience=s.own&&s.visibility==='close_friends'?' · Close Friends':'';
+    const musicOverlay=hasMusic&&typeof renderMusicCard==='function'
+      ?renderMusicCard(s.music,{variant:'story'})
+      :'';
 
     viewer.innerHTML=`
       <!-- Progress bars -->
@@ -650,7 +689,8 @@ function openStoryViewer(story, allStories){
       </div>
       <!-- Content -->
       <div style="flex:1;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;" id="storyContent">
-        ${isMedia&&s.media?(
+        ${musicOnly?`<div class="story-music-backdrop" aria-hidden="true"></div>`:
+          isMedia&&s.media?(
           s.mediaType==='video'
             ?`<video src="${s.media}" autoplay loop muted playsinline style="width:100%;height:100%;object-fit:cover;"></video>`
             :`<img src="${s.media}" style="width:100%;height:100%;object-fit:${s.rotation?'contain':'cover'};transform:rotate(${Number(s.rotation)||0}deg);">`
@@ -677,6 +717,7 @@ function openStoryViewer(story, allStories){
           </div>
         `:`<div style="width:100%;height:100%;background:#111;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.3);font-size:14px;">Story</div>`}
         ${s.text?`<div class="story-viewer-text">${safeStoryText(s.text)}</div>`:''}
+        ${musicOverlay}
         ${s.sharedGameId?`<button type="button" class="story-game-card" id="storyGameCard">Play ${safeStoryText(typeof getGame==='function'?(getGame(s.sharedGameId)?.name||'game'):'game')}</button>`:''}
         <!-- Tap zones -->
         <div id="tapPrev" style="position:absolute;left:0;top:0;width:35%;height:100%;cursor:pointer;"></div>
@@ -700,7 +741,7 @@ function openStoryViewer(story, allStories){
       </div>`:'')}
     `;
 
-    document.getElementById('storyClose').addEventListener('click',()=>{clearInterval(progressInterval);viewer.remove();});
+    document.getElementById('storyClose').addEventListener('click',()=>{clearInterval(progressInterval);if(typeof pauseAllMusic==='function')pauseAllMusic();viewer.remove();});
     if(!s.own&&s.uid&&typeof bindProfileLongPress==='function'){
       bindProfileLongPress(viewer.querySelector('.story-viewer-avatar'),{
         uid:s.uid,name:s.name,avatar:s.avatar,
@@ -716,8 +757,9 @@ function openStoryViewer(story, allStories){
       viewer.remove();
       if(typeof renderLiveBaithakStories==='function') renderLiveBaithakStories();
     });
-    document.getElementById('tapPrev').addEventListener('click',()=>{if(idx>0){clearInterval(progressInterval);renderStory(idx-1);}else{clearInterval(progressInterval);viewer.remove();}});
-    document.getElementById('tapNext').addEventListener('click',()=>{if(idx<stories.length-1){clearInterval(progressInterval);renderStory(idx+1);}else{clearInterval(progressInterval);viewer.remove();}});
+    document.getElementById('tapPrev').addEventListener('click',()=>{if(idx>0){clearInterval(progressInterval);renderStory(idx-1);}else{clearInterval(progressInterval);if(typeof pauseAllMusic==='function')pauseAllMusic();viewer.remove();}});
+    document.getElementById('tapNext').addEventListener('click',()=>{if(idx<stories.length-1){clearInterval(progressInterval);renderStory(idx+1);}else{clearInterval(progressInterval);if(typeof pauseAllMusic==='function')pauseAllMusic();viewer.remove();}});
+    if(typeof mountMusicCards==='function') mountMusicCards(viewer);
     document.getElementById('storyReplySend')?.addEventListener('click',async()=>{
       const txt=document.getElementById('storyReplyInput')?.value.trim();
       if(!txt)return;
@@ -844,7 +886,34 @@ function showBaithakShareMenu(){
     {label:'⚡ Instant',hint:'Snaps to Close Friends (or Friends if that list is empty). No editing — short undo window.',fn:openBaithakInstantCamera},
     {label:'📷 Create a story',hint:'Camera with text, stickers, games, and audience controls.',fn:()=>openBaithakStoryComposer('camera')},
     {label:'🖼️ Upload a story',hint:'Pick from gallery, then edit before sharing with Friends or Close Friends.',fn:()=>openBaithakStoryComposer('gallery')},
+    {label:'🎵 Share a song',hint:'In-app music card — searchable, playable preview. No external apps.',fn:shareBaithakSongStory},
   ]);
+}
+
+async function shareBaithakSongStory(){
+  if(typeof openSongPicker!=='function'){showToast('Song sharing unavailable');return;}
+  openSongPicker({
+    title:'Share a song to Stories',
+    onSelect:async(music)=>{
+      try{
+        showToast('Sharing song…');
+        const created=await createPlatformStory({
+          destination:'baithak',
+          kind:'story',
+          visibility:'friends',
+          type:'media',
+          text:'',
+          music,
+        });
+        if(typeof renderLiveBaithakStories==='function') renderLiveBaithakStories();
+        if(typeof haptic==='function') haptic('success');
+        showToast('Song shared with Friends');
+        if(created&&typeof openStoryViewer==='function') openStoryViewer(created,[created]);
+      }catch(error){
+        showToast(error?.message||'Could not share song');
+      }
+    },
+  });
 }
 
 function chooseBaithakMedia(mode,onFile){
@@ -1031,12 +1100,43 @@ function showBaithakStoryEditor(file,mode){
           ${typeof getGames==='function'?getGames({dangal:true}).map(game=>`<option value="${game.id}">${game.icon} ${game.name}</option>`).join(''):''}
         </select>
       </label>
+      <div class="story-editor-tool-row" style="align-items:center;gap:10px;">
+        <button type="button" class="btn" data-story-song aria-label="Share a song">🎵 Song</button>
+        <span data-story-song-label style="font-size:12px;color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">No song attached</span>
+        <button type="button" class="btn hidden" data-story-song-clear aria-label="Remove song">✕</button>
+      </div>
       <div class="story-editor-plus-row">
         <button type="button" class="story-plus-btn" data-story-plus aria-label="Add more">＋</button>
         <span>Tap for camera · long-press for Instant / Create / Upload</span>
       </div>
     </div>`;
   document.querySelector('.device')?.appendChild(editor);
+  let selectedMusic=null;
+  const songLabel=editor.querySelector('[data-story-song-label]');
+  const songClear=editor.querySelector('[data-story-song-clear]');
+  const updateSongLabel=()=>{
+    if(selectedMusic){
+      songLabel.textContent=`${selectedMusic.title} · ${selectedMusic.artist}`;
+      songClear?.classList.remove('hidden');
+    }else{
+      songLabel.textContent='No song attached';
+      songClear?.classList.add('hidden');
+    }
+  };
+  editor.querySelector('[data-story-song]')?.addEventListener('click',()=>{
+    if(typeof openSongPicker!=='function'){showToast('Song sharing unavailable');return;}
+    openSongPicker({
+      title:'Attach a song',
+      onSelect:(music)=>{
+        selectedMusic=music;
+        updateSongLabel();
+      },
+    });
+  });
+  songClear?.addEventListener('click',()=>{
+    selectedMusic=null;
+    updateSongLabel();
+  });
   const img=editor.querySelector('[data-story-img]');
   const stickerLayer=editor.querySelector('[data-story-stickers]');
   const drawCanvas=editor.querySelector('[data-story-draw]');
@@ -1141,6 +1241,7 @@ function showBaithakStoryEditor(file,mode){
         rotation,
         text:stickerNote?`${baseText}${baseText?' ':''}${stickerNote}`.trim():baseText,
         sharedGameId:editor.querySelector('[data-story-game]').value,
+        music:selectedMusic||undefined,
       });
       cleanup();
       renderLiveBaithakStories();

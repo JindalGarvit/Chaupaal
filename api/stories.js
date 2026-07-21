@@ -37,6 +37,31 @@ function cleanClientId(value) {
   return /^[A-Za-z0-9_-]{8,100}$/.test(id) ? id : '';
 }
 
+const MUSIC_SOURCES = new Set(['jiosaavn', 'itunes', 'none']);
+
+/** Sanitize optional inline music metadata for stories (no external link-outs). */
+function cleanMusic(value) {
+  if (!value || typeof value !== 'object') return null;
+  const title = cleanText(value.title, 160);
+  if (!title) return null;
+  const artist = cleanText(value.artist, 160) || 'Unknown artist';
+  const thumbnail = cleanMedia(value.thumbnail);
+  const previewRaw = String(value.previewUrl || '').trim();
+  const previewUrl = /^https:\/\//i.test(previewRaw) ? previewRaw.slice(0, 2048) : '';
+  const source = MUSIC_SOURCES.has(String(value.source || '').toLowerCase())
+    ? String(value.source).toLowerCase()
+    : previewUrl
+      ? 'jiosaavn'
+      : 'none';
+  return {
+    title,
+    artist,
+    thumbnail,
+    previewUrl: previewUrl || null,
+    source: previewUrl ? source : 'none',
+  };
+}
+
 async function isFriend(db, a, b) {
   if (!a || !b || a === b) return false;
   const [ab, ba] = await db.getAll(
@@ -103,6 +128,7 @@ function serializeStory(doc, viewerUid) {
     rotation: [90, 180, 270].includes(Number(data.rotation)) ? Number(data.rotation) : 0,
     text: data.text || '',
     sharedGameId: data.sharedGameId || '',
+    music: data.music || null,
     score: data.score || 0,
     total: data.total || 0,
     streak: data.streak || 0,
@@ -146,7 +172,8 @@ async function createStory(db, admin, uid, body) {
   if (!destination) throw new Error('INVALID_DESTINATION');
   const media = cleanMedia(body.media);
   const text = cleanText(body.text, 1200);
-  if (!media && !text && body.type !== 'score') throw new Error('EMPTY_STORY');
+  const music = cleanMusic(body.music);
+  if (!media && !text && !music && body.type !== 'score') throw new Error('EMPTY_STORY');
   const kind = destination === 'baithak' && body.kind === 'instant' ? 'instant' : 'story';
   // Instants go to Close Friends by default (decision 9). If the list is empty,
   // fall back to Friends so the share still works — caller sees audienceFallback.
@@ -232,6 +259,7 @@ async function createStory(db, admin, uid, body) {
     rotation: [90, 180, 270].includes(Number(body.rotation)) ? Number(body.rotation) : 0,
     text,
     sharedGameId: cleanText(body.sharedGameId, 50),
+    music: music || null,
     score: body.type === 'score' ? Math.max(0, Number(body.score) || 0) : null,
     total: body.type === 'score' ? Math.max(0, Number(body.total) || 0) : null,
     streak: body.type === 'score' ? Math.max(0, Number(body.streak) || 0) : null,
