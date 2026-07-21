@@ -893,6 +893,7 @@ function openSnakesVersion(chat, version){
         {label:'Rematch',primary:true,id:'again'},
         {label:'Share',primary:false,id:'share'},
         {label:'Challenge friend',primary:false,id:'challenge'},
+        {label:'Post to story',primary:false,id:'story'},
       ],
     }):`<button type="button" id="slRematch">Rematch</button>`;
     if(typeof wireGameResultActions==='function'){
@@ -905,6 +906,7 @@ function openSnakesVersion(chat, version){
             if(f){gs.close();openSnakesVersion({name:f.name,id:f.id||f.uid}, version);}
           }
         },
+        story:()=>{if(typeof postGameScoreStory==='function')postGameScoreStory('snakes',shareStats);},
       });
     } else {
       host.querySelector('#slRematch')?.addEventListener('click',()=>{gs.close('restart');openSnakesVersion(chat, version);});
@@ -1262,6 +1264,7 @@ function openLudoGame(chat, playerCount){
         {label:'Rematch',primary:true,id:'again'},
         {label:'Share',primary:false,id:'share'},
         {label:'Challenge friend',primary:false,id:'challenge'},
+        {label:'Post to story',primary:false,id:'story'},
       ],
     }):`<button type="button" id="ludoRematch">Rematch</button>`;
     if(typeof wireGameResultActions==='function'){
@@ -1274,6 +1277,7 @@ function openLudoGame(chat, playerCount){
             if(f){gs.close();openLudoGame({name:f.name,id:f.id||f.uid}, playerCount);}
           }
         },
+        story:()=>{if(typeof postGameScoreStory==='function')postGameScoreStory('ludo',shareStats);},
       });
     } else {
       host.querySelector('#ludoRematch')?.addEventListener('click',()=>{gs.close('restart');openLudoGame(chat, playerCount);});
@@ -1753,6 +1757,7 @@ function render(){
           {label:'Play again',primary:true,id:'again'},
           {label:'Share',primary:false,id:'share'},
           {label:'Challenge friend',primary:false,id:'challenge'},
+          {label:'Post to story',primary:false,id:'story'},
         ],
       })
     : '';
@@ -1774,11 +1779,12 @@ function render(){
   if(newBtn)newBtn.addEventListener('click',()=>{board=Array(9).fill(null);myTurn=true;gameOver=false;winLine=null;showResult=false;render();});
   if(showResult){
     if(typeof wireGameResultActions==='function'){
+      const tttShare={scoreLine:`${scores.me}–${scores.opp}`,vs:`vs ${chat.name}`,meta:DIFF_LABEL};
       wireGameResultActions(overlay,{
         again:()=>{board=Array(9).fill(null);myTurn=true;gameOver=false;winLine=null;showResult=false;render();},
         share:()=>{
           if(typeof shareGameResult==='function'){
-            shareGameResult('ttt',{scoreLine:`${scores.me}–${scores.opp}`,vs:`vs ${chat.name}`,meta:DIFF_LABEL});
+            shareGameResult('ttt',tttShare);
           }
         },
         challenge:async()=>{
@@ -1787,6 +1793,7 @@ function render(){
             if(f){gs.close();openTicTacToe({name:f.name,id:f.id||f.uid});}
           }
         },
+        story:()=>{if(typeof postGameScoreStory==='function')postGameScoreStory('ttt',tttShare);},
       });
     } else {
       overlay.querySelectorAll('[data-result-action]').forEach(btn=>{

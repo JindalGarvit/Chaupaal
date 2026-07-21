@@ -39,6 +39,9 @@
     ankjod: '#9A6BCE',
     kakuro: '#9A6BCE',
     wrap: '#8134AF',
+    duniya: '#E63946',
+    peepal: '#2A9D8F',
+    profile: '#C9A227',
   };
 
   const GAME_LABELS = {
@@ -59,7 +62,16 @@
     ankjod: 'Ank Jod',
     kakuro: 'Ank Jod',
     wrap: 'Monthly Wrap',
+    duniya: 'Duniya',
+    peepal: 'Peepal',
+    profile: 'Profile',
   };
+
+  function trackShareEvent(name, params) {
+    try {
+      if (typeof trackEvent === 'function') trackEvent(name, params || {});
+    } catch (e) {}
+  }
 
   const COACH_TIPS = {
     quiz: ['Answer before the timer runs out', 'Combos build when you stay correct', 'Friend challenges skip the daily limit'],
@@ -405,13 +417,14 @@
   function buildGameShareCard(gameId, stats) {
     const s = stats || {};
     const name = safe(s.title || gameDisplayName(gameId));
-    const scoreLine = safe(s.scoreLine || (s.score != null ? String(s.score) : '—'));
+    const rawScore = s.scoreLine || (s.score != null ? String(s.score) : s.caption || '—');
+    const scoreLine = safe(String(rawScore).length > 90 ? String(rawScore).slice(0, 87) + '…' : rawScore);
     const meta = safe(s.meta || '');
     const vs = s.vs ? safe(s.vs) : '';
     const accent = GAME_ACCENTS[gameId] || GAME_ACCENTS.quiz;
     return `<div class="game-share-card" data-game-share="${safe(gameId)}" style="--share-accent:${accent}">
       <div class="game-share-brand">${gameBrandMarkHtml(false)} · ${name}</div>
-      <div class="game-share-score">${scoreLine}</div>
+      <div class="game-share-score${String(rawScore).length > 40 ? ' game-share-score--caption' : ''}">${scoreLine}</div>
       ${meta ? `<div class="game-share-meta">${meta}</div>` : ''}
       ${vs ? `<div class="game-share-vs">${vs}</div>` : ''}
     </div>`;
@@ -450,6 +463,7 @@
           file = new File([blob], `chaupaal-${gameId || 'game'}.png`, { type: 'image/png' });
           if (navigator.canShare({ files: [file] })) {
             await navigator.share({ ...payload, files: [file] });
+            trackShareEvent('share_method', { surface: gameId || 'unknown', method: 'share-file' });
             return { ok: true, method: 'share-file' };
           }
         }
@@ -459,6 +473,7 @@
     try {
       if (navigator.share) {
         await navigator.share(payload);
+        trackShareEvent('share_method', { surface: gameId || 'unknown', method: 'share' });
         return { ok: true, method: 'share' };
       }
     } catch (e) {
@@ -468,11 +483,40 @@
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(`${text}\n${url}`);
         if (typeof showToast === 'function') showToast('Link copied — share anywhere');
+        trackShareEvent('share_method', { surface: gameId || 'unknown', method: 'clipboard' });
         return { ok: true, method: 'clipboard' };
       }
     } catch (e) {}
     if (typeof showToast === 'function') showToast(url);
     return { ok: false, method: 'fallback' };
+  }
+
+  /** Wrap long caption lines for canvas share cards. */
+  function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight, maxLines) {
+    const words = String(text || '').split(/\s+/).filter(Boolean);
+    let line = '';
+    let cy = y;
+    let lines = 0;
+    const limit = maxLines || 6;
+    for (let i = 0; i < words.length; i++) {
+      const test = line ? `${line} ${words[i]}` : words[i];
+      if (ctx.measureText(test).width > maxWidth && line) {
+        ctx.fillText(line, x, cy);
+        line = words[i];
+        cy += lineHeight;
+        lines++;
+        if (lines >= limit - 1) {
+          const rest = words.slice(i).join(' ');
+          const ellipsis = rest.length > 40 ? rest.slice(0, 37) + '…' : rest;
+          ctx.fillText(ellipsis, x, cy);
+          return cy + lineHeight;
+        }
+      } else {
+        line = test;
+      }
+    }
+    if (line) ctx.fillText(line, x, cy);
+    return cy + lineHeight;
   }
 
   /** Client-side share card → PNG via canvas (no deps). */
@@ -488,6 +532,7 @@
         const ctx = canvas.getContext('2d');
         if (!ctx) return resolve(null);
         const accent = GAME_ACCENTS[gameId] || '#E63946';
+        const isContent = !!(s.caption || gameId === 'duniya' || gameId === 'peepal' || gameId === 'profile');
         // Background
         const grad = ctx.createLinearGradient(0, 0, w, h);
         grad.addColorStop(0, '#1F2542');
@@ -504,24 +549,36 @@
         ctx.fillStyle = 'rgba(255,255,255,0.7)';
         ctx.font = '600 18px "Space Grotesk", sans-serif';
         ctx.fillText(gameDisplayName(gameId), 48, 112);
-        // Score
-        ctx.fillStyle = '#fff';
-        ctx.font = '700 72px "Space Grotesk", sans-serif';
-        const scoreLine = String(s.scoreLine || s.score || '—');
-        ctx.fillText(scoreLine, 48, 280);
-        // Meta
-        ctx.fillStyle = 'rgba(255,255,255,0.75)';
-        ctx.font = '500 24px Inter, sans-serif';
-        if (s.meta) ctx.fillText(String(s.meta).slice(0, 48), 48, 340);
-        if (s.vs) {
-          ctx.font = '700 26px "Space Grotesk", sans-serif';
+        if (isContent) {
           ctx.fillStyle = '#fff';
-          ctx.fillText(String(s.vs).slice(0, 40), 48, 400);
+          ctx.font = '600 36px "Space Grotesk", sans-serif';
+          const body = String(s.caption || s.scoreLine || s.text || '').slice(0, 220);
+          wrapCanvasText(ctx, body, 48, 220, w - 96, 44, 7);
+          if (s.meta) {
+            ctx.fillStyle = 'rgba(255,255,255,0.7)';
+            ctx.font = '500 22px Inter, sans-serif';
+            ctx.fillText(String(s.meta).slice(0, 48), 48, h - 120);
+          }
+        } else {
+          // Score
+          ctx.fillStyle = '#fff';
+          ctx.font = '700 72px "Space Grotesk", sans-serif';
+          const scoreLine = String(s.scoreLine || s.score || '—');
+          ctx.fillText(scoreLine.slice(0, 28), 48, 280);
+          // Meta
+          ctx.fillStyle = 'rgba(255,255,255,0.75)';
+          ctx.font = '500 24px Inter, sans-serif';
+          if (s.meta) ctx.fillText(String(s.meta).slice(0, 48), 48, 340);
+          if (s.vs) {
+            ctx.font = '700 26px "Space Grotesk", sans-serif';
+            ctx.fillStyle = '#fff';
+            ctx.fillText(String(s.vs).slice(0, 40), 48, 400);
+          }
         }
         // Footer
         ctx.fillStyle = 'rgba(255,255,255,0.45)';
         ctx.font = '500 18px Inter, sans-serif';
-        ctx.fillText('Play on Chaupaal', 48, h - 56);
+        ctx.fillText(isContent ? 'On Chaupaal' : 'Play on Chaupaal', 48, h - 56);
         canvas.toBlob((blob) => resolve(blob), 'image/png', 0.92);
       } catch (e) {
         resolve(null);
@@ -775,6 +832,23 @@
     return `Chaupaal Shabd Five ${day} ${guesses.length}/6\n\n${lines.join('\n')}`;
   }
 
+  /** Upload share-card PNG when Cloudinary is available (for story media). */
+  async function uploadShareCardMedia(gameId, stats) {
+    try {
+      if (typeof uploadToCloudinary !== 'function') return '';
+      const blob = await exportShareCardImage(gameId, stats);
+      if (!blob) return '';
+      const up = await uploadToCloudinary(blob, {
+        resourceType: 'image',
+        folder: 'story-shares',
+        filename: `chaupaal-${gameId || 'share'}.png`,
+      });
+      return up?.secure_url || up?.url || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
   /* ── Post score to Baithak / Duniya story ── */
   async function postGameScoreStory(gameId, stats) {
     const s = stats || {};
@@ -786,6 +860,10 @@
     const text =
       s.text ||
       `${name}${s.scoreLine ? `: ${s.scoreLine}` : s.score != null ? `: ${s.score}` : ''}${s.meta ? ` · ${s.meta}` : ''}`;
+    let media = s.media || '';
+    if (!media && s.attachCard !== false) {
+      media = await uploadShareCardMedia(gameId, s);
+    }
     try {
       const story = await createPlatformStory({
         destination: s.destination || 'baithak',
@@ -793,17 +871,108 @@
         kind: 'story',
         type: 'score',
         text,
+        media: media || undefined,
+        mediaType: media ? 'image' : undefined,
         score: s.score != null ? Number(s.score) : undefined,
         total: s.total != null ? Number(s.total) : undefined,
         streak: s.streak != null ? Number(s.streak) : undefined,
         sharedGameId: gameId === 'muqabala' ? 'quiz' : gameId,
       });
+      trackShareEvent('share_method', { surface: gameId || 'unknown', method: 'story' });
       if (typeof showToast === 'function') showToast('Posted to story');
       return story;
     } catch (e) {
       if (typeof showToast === 'function') showToast(e?.message || 'Could not post story');
       return null;
     }
+  }
+
+  /** Prefill Baithak DM after friend pick (optional path alongside OS share). */
+  function sendShareInBaithak(friend, gameId, stats) {
+    if (!friend) return;
+    const s = stats || {};
+    const url = s.url || buildBeatScoreLink(gameId, s.score, { cat: s.cat, extra: s.linkExtra });
+    const body =
+      s.friendText ||
+      s.text ||
+      `Hey ${friend.name} — check out my Chaupaal ${gameDisplayName(gameId)} score!`;
+    const text = `${body}${url ? `\n${url}` : ''}`;
+    const chat = {
+      id: friend.uid || friend.id || 'friend_' + (friend.name || 'dm'),
+      type: 'dm',
+      name: friend.name || 'Friend',
+      avatar: friend.avatar || '👤',
+      preview: text.slice(0, 48),
+      time: 'now',
+      unread: 0,
+      peerUid: friend.uid || friend.id,
+    };
+    try {
+      if (typeof baithakChats !== 'undefined' && Array.isArray(baithakChats)) {
+        if (!baithakChats.find((c) => c.id === chat.id)) baithakChats.unshift(chat);
+      }
+    } catch (e) {}
+    document.querySelectorAll('.tab-btn').forEach((b) => {
+      if (b.dataset.tab === 'baithak') b.click();
+    });
+    setTimeout(() => {
+      if (typeof openChatScreen === 'function') openChatScreen(chat);
+      setTimeout(() => {
+        const input = document.getElementById('chatMsgInput');
+        if (input) {
+          input.value = text;
+          input.focus();
+          try {
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+          } catch (e) {}
+        }
+        if (typeof showToast === 'function') showToast('Message ready — tap send');
+      }, 350);
+    }, 250);
+    trackShareEvent('share_method', { surface: gameId || 'unknown', method: 'baithak' });
+  }
+
+  /** After friend picker: Send in Baithak or OS share. */
+  function openFriendShareFollowup(friend, gameId, stats) {
+    return new Promise((resolve) => {
+      document.getElementById('chaupaalFriendShareFollowup')?.remove();
+      const sheet = document.createElement('div');
+      sheet.id = 'chaupaalFriendShareFollowup';
+      sheet.className = 'game-friend-sheet';
+      sheet.innerHTML = `
+        <div class="game-friend-backdrop" data-fsf-close></div>
+        <div class="game-friend-card" role="dialog" aria-modal="true" aria-label="Share with ${safe(friend.name)}">
+          <div class="game-friend-title">Share with ${safe(friend.name)}</div>
+          <div class="game-friend-sub">Send in Baithak chat, or share the card externally</div>
+          <div class="game-result-actions chaupaal-share-actions">
+            <button type="button" class="game-result-btn game-result-btn--primary" data-fsf="baithak">Send in Baithak</button>
+            <button type="button" class="game-result-btn" data-fsf="os">Share card / link</button>
+          </div>
+          <button type="button" class="game-friend-cancel" data-fsf-close>Cancel</button>
+        </div>`;
+      const host = document.querySelector('.device') || document.body;
+      host.appendChild(sheet);
+      const finish = (val) => {
+        sheet.remove();
+        resolve(val);
+      };
+      sheet.querySelectorAll('[data-fsf-close]').forEach((el) => el.addEventListener('click', () => finish(null)));
+      sheet.querySelector('[data-fsf="baithak"]')?.addEventListener('click', () => {
+        sendShareInBaithak(friend, gameId, stats);
+        finish('baithak');
+      });
+      sheet.querySelector('[data-fsf="os"]')?.addEventListener('click', async () => {
+        const personalized = {
+          ...stats,
+          text:
+            stats.friendText ||
+            `Hey ${friend.name} — ${stats.text || `check out my Chaupaal ${gameDisplayName(gameId)} score!`}`,
+        };
+        await shareGameResult(gameId, personalized);
+        trackShareEvent('share_method', { surface: gameId || 'unknown', method: 'friend_os' });
+        finish('os');
+      });
+    });
   }
 
   /* ── Wire standard result buttons (again / share / challenge / story) ── */
@@ -826,8 +995,8 @@
 
   /**
    * Unified share sheet — same shell as Dangal results (card + Share / friend / story / copy).
-   * Use for surfaces that aren't already inside gameResultHtml (Akhbaar, wraps, profile scores).
-   * @param {{gameId?:string,title?:string,subtitle?:string,stats?:object,friend?:boolean,story?:boolean,friendLabel?:string,onFriend?:Function}} opts
+   * Use for surfaces that aren't already inside gameResultHtml (Akhbaar, wraps, profile, Duniya, Peepal).
+   * @param {{gameId?:string,title?:string,subtitle?:string,stats?:object,friend?:boolean,story?:boolean,friendLabel?:string,onFriend?:Function,onShared?:Function}} opts
    */
   function openUnifiedShareSheet(opts) {
     const o = opts || {};
@@ -856,14 +1025,34 @@
       </div>`;
     const host = document.querySelector('.device') || document.body;
     host.appendChild(sheet);
+    trackShareEvent('share_opened', { surface: gameId, method: 'sheet' });
     const close = () => sheet.remove();
     sheet.querySelectorAll('[data-cs-close]').forEach((el) => el.addEventListener('click', close));
 
+    const pulseShareCard = () => {
+      try {
+        if (typeof haptic === 'function') haptic('light');
+      } catch (e) {}
+      const card = sheet.querySelector('.game-share-card');
+      if (card && typeof pulseGameEl === 'function') pulseGameEl(card);
+      else if (card) {
+        card.classList.remove('game-pulse');
+        void card.offsetWidth;
+        card.classList.add('game-pulse');
+      }
+    };
+
     sheet.querySelector('[data-cs="share"]')?.addEventListener('click', async () => {
-      close();
-      await shareGameResult(gameId, stats);
+      pulseShareCard();
+      trackShareEvent('share_method', { surface: gameId, method: 'share' });
+      setTimeout(async () => {
+        close();
+        const result = await shareGameResult(gameId, stats);
+        if (typeof o.onShared === 'function') o.onShared(result || { method: 'share' });
+      }, 160);
     });
     sheet.querySelector('[data-cs="friend"]')?.addEventListener('click', async () => {
+      pulseShareCard();
       close();
       if (typeof o.onFriend === 'function') {
         await o.onFriend(stats);
@@ -874,19 +1063,18 @@
         subtitle: o.friendSubtitle || 'Pick someone from your friends',
       });
       if (!friend) return;
-      const personalized = {
-        ...stats,
-        text:
-          stats.friendText ||
-          `Hey ${friend.name} — ${stats.text || `check out my Chaupaal ${gameDisplayName(gameId)} score!`}`,
-      };
-      await shareGameResult(gameId, personalized);
+      trackShareEvent('share_method', { surface: gameId, method: 'friend' });
+      await openFriendShareFollowup(friend, gameId, stats);
+      if (typeof o.onShared === 'function') o.onShared({ method: 'friend' });
     });
     sheet.querySelector('[data-cs="story"]')?.addEventListener('click', async () => {
+      pulseShareCard();
       close();
       await postGameScoreStory(gameId, stats);
+      if (typeof o.onShared === 'function') o.onShared({ method: 'story' });
     });
     sheet.querySelector('[data-cs="copy"]')?.addEventListener('click', async () => {
+      pulseShareCard();
       const url = stats.url || buildBeatScoreLink(gameId, stats.score, { cat: stats.cat, extra: stats.linkExtra });
       const text = `${stats.text || `Chaupaal ${gameDisplayName(gameId)}`}\n${url}`;
       try {
@@ -897,6 +1085,8 @@
       } catch (e) {
         if (typeof showToast === 'function') showToast(url);
       }
+      trackShareEvent('share_method', { surface: gameId, method: 'copy' });
+      if (typeof o.onShared === 'function') o.onShared({ method: 'copy' });
       close();
     });
     return sheet;
@@ -1033,6 +1223,9 @@
   window.openFriendPickerSheet = openFriendPickerSheet;
   window.openUnifiedShareSheet = openUnifiedShareSheet;
   window.buildShareStats = buildShareStats;
+  window.sendShareInBaithak = sendShareInBaithak;
+  window.openFriendShareFollowup = openFriendShareFollowup;
+  window.uploadShareCardMedia = uploadShareCardMedia;
   window.maybeShowGameCoach = maybeShowGameCoach;
   window.resetGameCoach = resetGameCoach;
   window.gameHudHtml = gameHudHtml;

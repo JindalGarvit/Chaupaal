@@ -2237,6 +2237,7 @@ select:focus-visible,
 
 /* Unified share card (all games) */
 .game-share-card{margin:4px 0 8px;padding:16px 14px;border-radius:16px;background:linear-gradient(145deg,#1F2542,#2A3158);color:#fff;text-align:center;width:min(100%,300px);box-shadow:0 8px 22px rgba(31,37,66,.22);}
+.game-share-score--caption{font-size:18px;line-height:1.35;font-weight:600;}
 .game-share-brand{font:700 10px/1.2 'Space Grotesk',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--gold,#FFC93C);margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;}
 .game-share-brand .game-brand-mark{color:var(--gold,#FFC93C);opacity:1;}
 .game-share-score{font:700 32px/1 'Space Grotesk',sans-serif;margin-bottom:6px;}

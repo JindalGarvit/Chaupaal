@@ -6,12 +6,25 @@ function checkViralLink(){
   const category=params.get('cat')||'GK';
   const target=params.get('score');
   const game=params.get('game')||'quiz';
-  const gName=(typeof getGame==='function'&&getGame(game)?.name)||(game==='quiz'?'Muqabala':game);
+  const gName=(typeof getGame==='function'&&getGame(game)?.name)||(game==='quiz'?'Muqabala':game==='akhbaar'?'Akhbaar':game);
   // Show guest banner
   const banner=document.createElement('div');banner.className='guest-banner';
   banner.innerHTML=`<div><strong>${decodeURIComponent(challenger)}</strong> challenged you! Beat their score${target!=null?` of ${target}`:''} on ${gName}</div><button class="guest-signup-btn" id="guestSignupBtn">Sign up to keep score!</button>`;
   document.getElementById('topbar')?.after(banner);
   document.getElementById('guestSignupBtn')?.addEventListener('click',()=>{banner.remove();showAuth();});
+
+  if(game==='akhbaar'){
+    window.__akhbaarBeatChallenge={
+      challenger:decodeURIComponent(challenger),
+      score:target!=null?Number(target):null,
+    };
+    document.querySelectorAll('.tab-btn').forEach(b=>{if(b.dataset.tab==='akhbaar')b.click();});
+    setTimeout(()=>{
+      if(typeof applyAkhbaarBeatBanner==='function') applyAkhbaarBeatBanner();
+    },400);
+    return;
+  }
+
   // Auto-start on Dangal
   document.querySelectorAll('.tab-btn').forEach(b=>{if(b.dataset.tab==='dangal')b.click();});
   setTimeout(()=>{

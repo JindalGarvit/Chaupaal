@@ -420,15 +420,18 @@ function openBusinessGame(chat,playerCount){
           actions:[
             {label:'Play again',primary:true,id:'again'},
             {label:'Share',primary:false,id:'share'},
+            {label:'Post to story',primary:false,id:'story'},
             {label:'Done',primary:false,id:'done'},
           ],
         }):`<div style="padding:24px;text-align:center;color:#fff;">${winner?.name||'Someone'} wins</div>`}
       `;
       document.getElementById('busBack')?.addEventListener('click',()=>close());
       if(typeof wireGameResultActions==='function'){
+        const shareStats={scoreLine:winner?`${winner.name} wins`:'Over',meta:'Business'};
         wireGameResultActions(overlay,{
           again:()=>{close();openBusinessGame(chat);},
-          share:()=>{if(typeof shareGameResult==='function')shareGameResult('business',{scoreLine:winner?`${winner.name} wins`:'Over'});},
+          share:()=>{if(typeof shareGameResult==='function')shareGameResult('business',shareStats);},
+          story:()=>{if(typeof postGameScoreStory==='function')postGameScoreStory('business',shareStats);},
           done:()=>close(),
         });
       } else {
@@ -594,6 +597,7 @@ function openScribbleGame(chat,playerList,opts){
         actions:[
           {label:'Play again',primary:true,id:'again'},
           {label:'Share',primary:false,id:'share'},
+          {label:'Post to story',primary:false,id:'story'},
           {label:'Done',primary:false,id:'done'},
         ],
       }):`<div style="padding:24px;text-align:center;"><div>${practiceMode?'Practice done':sorted[0]?.[0]+' wins!'}</div><button id="scribbleClose">Done</button></div>`}
@@ -601,9 +605,11 @@ function openScribbleGame(chat,playerList,opts){
     const done=()=>close(practiceMode?'complete':(won?'won':'lost'));
     document.getElementById('scribbleClose')?.addEventListener('click',done);
     if(typeof wireGameResultActions==='function'){
+      const shareStats={scoreLine:practiceMode?'Practice':`${sorted[0]?.[0]} wins`,meta:currentWord};
       wireGameResultActions(overlay,{
         again:()=>{close();openScribbleGame(chat,playerList,opts);},
-        share:()=>{if(typeof shareGameResult==='function')shareGameResult('scribble',{scoreLine:practiceMode?'Practice':`${sorted[0]?.[0]} wins`,meta:currentWord});},
+        share:()=>{if(typeof shareGameResult==='function')shareGameResult('scribble',shareStats);},
+        story:()=>{if(typeof postGameScoreStory==='function')postGameScoreStory('scribble',shareStats);},
         done,
       });
     } else {

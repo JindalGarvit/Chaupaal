@@ -94,7 +94,9 @@ function renderDangalContinueAndChips(host){
   let challengeChip='';
   const pending=typeof consumeBeatScoreChallenge==='function'?consumeBeatScoreChallenge():null;
   if(pending&&pending.challenger){
-    const gName=(typeof getGame==='function'&&getGame(pending.game)?.name)||pending.game;
+    const gName=pending.game==='akhbaar'
+      ? 'Akhbaar'
+      : ((typeof getGame==='function'&&getGame(pending.game)?.name)||pending.game);
     challengeChip=`<button type="button" class="dangal-challenge-chip" id="dangalChallengeChip">
       <div><strong>${pending.challenger} challenged you</strong><span>Beat ${pending.score!=null?pending.score:'their score'} on ${gName}</span></div>
       <span>Play →</span>
@@ -132,6 +134,12 @@ function renderDangalContinueAndChips(host){
 
   wrap.querySelector('#dangalChallengeChip')?.addEventListener('click',()=>{
     if(!pending)return;
+    if(pending.game==='akhbaar'){
+      window.__akhbaarBeatChallenge={challenger:pending.challenger,score:pending.score};
+      document.querySelectorAll('.tab-btn').forEach(b=>{if(b.dataset.tab==='akhbaar')b.click();});
+      setTimeout(()=>{if(typeof applyAkhbaarBeatBanner==='function')applyAkhbaarBeatBanner();},300);
+      return;
+    }
     if(pending.game==='quiz'||pending.game==='muqabala'){
       if(typeof startMuqabala==='function') startMuqabala(pending.challenger, pending.cat||'GK');
     } else if(typeof getGame==='function'){

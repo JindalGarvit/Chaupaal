@@ -916,51 +916,54 @@ async function recordDuniyaShare(post){
 }
 
 function openShareSheet(post){
-  const sheet=document.createElement('div');sheet.className='share-sheet';
-  const shareText=`${(post.caption||post.question||'').slice(0,100)} — via Chaupaal`;
-  const platforms=[
-    {icon:'💬',label:'WhatsApp',color:'#25D366',fn:()=>window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`)},
-    {icon:'📸',label:'Instagram',color:'linear-gradient(45deg,#F58529,#DD2A7B)',fn:()=>{navigator.clipboard.writeText(post.caption||post.question||'');showToast('Caption copied for Instagram!');}},
-    {icon:'🐦',label:'Twitter/X',color:'#1DA1F2',fn:()=>window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent((post.caption||post.question||'').slice(0,200))}`)},
-    {icon:'📧',label:'Email',color:'#EA4335',fn:()=>window.open(`mailto:?body=${encodeURIComponent(post.caption||post.question||'')}`)},
-    {icon:'🔗',label:'Copy link',color:'#666',fn:()=>{
-      const id=post.firestoreId||post.id;
-      const url=typeof shareUrl==='function'?shareUrl('post',id):`${location.origin}/post/${encodeURIComponent(id)}`;
-      navigator.clipboard.writeText(url);showToast('Link copied!');
-    }},
-  ];
-  const friends=SAMPLE_CHATS.slice(0,5);
-  sheet.innerHTML=`
-    <div class="share-sheet-title">Share</div>
-    <div class="share-users-row">
-      ${friends.map(f=>`<div class="share-user-chip" data-cid="${f.id}"><div class="share-user-chip-avatar">${f.avatar}</div><div class="share-user-chip-name">${f.name.split(' ')[0]}</div></div>`).join('')}
-    </div>
-    <div class="share-platform-row">
-      ${platforms.map((p,i)=>`<div class="share-platform" data-pi="${i}"><div class="share-platform-icon" style="background:${p.color};">${p.icon}</div><div class="share-platform-label">${p.label}</div></div>`).join('')}
-    </div>
-    <button id="closeShareSheet" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>
-  `;
-  document.querySelector('.device').appendChild(sheet);
-  sheet.querySelectorAll('[data-pi]').forEach(el=>el.addEventListener('click',async()=>{
-    platforms[parseInt(el.dataset.pi)].fn();
-    sheet.remove();
-    await recordDuniyaShare(post);
-  }));
-  sheet.querySelectorAll('[data-cid]').forEach(el=>el.addEventListener('click',async()=>{
-    const chat=SAMPLE_CHATS.find(c=>c.id===el.dataset.cid);
-    if(!chat) return;
-    sheet.remove();
-    openChatScreen(chat);
-    setTimeout(()=>{
-      const input=document.getElementById('chatMsgInput');
-      if(input){
-        input.value=shareText;
-        if(typeof sendMsg==='function') sendMsg(chat);
-      }
-    },400);
-    await recordDuniyaShare(post);
-  }));
-  document.getElementById('closeShareSheet').addEventListener('click',()=>sheet.remove());
+  const caption=String(post.caption||post.question||'').trim();
+  const preview=caption.slice(0,140);
+  const id=post.firestoreId||post.id;
+  const url=typeof shareUrl==='function'?shareUrl('post',id):`${location.origin}/post/${encodeURIComponent(id||'')}`;
+  const isPeepal=!!(post.question&&!post.caption);
+  const gameId=isPeepal?'peepal':'duniya';
+  const author=post.user?.name?`by ${post.user.name}`:'';
+  const stats=typeof buildShareStats==='function'
+    ? buildShareStats({
+        scoreLine:preview||(isPeepal?'Peepal':'Duniya'),
+        caption:preview,
+        meta:author,
+        text:`${caption.slice(0,200)}${caption.length>200?'…':''} — via Chaupaal`,
+        url,
+      })
+    : {
+        scoreLine:preview||'Chaupaal',
+        caption:preview,
+        meta:author,
+        text:`${caption.slice(0,200)} — via Chaupaal`,
+        url,
+      };
+
+  const afterShare=async()=>{
+    if(!isPeepal) await recordDuniyaShare(post);
+  };
+
+  if(typeof openUnifiedShareSheet==='function'){
+    openUnifiedShareSheet({
+      gameId,
+      title:'Share',
+      subtitle:preview?preview.slice(0,72):undefined,
+      stats,
+      onShared:afterShare,
+    });
+    return;
+  }
+
+  // Fallback without unified sheet
+  if(typeof shareGameResult==='function'){
+    shareGameResult(gameId,stats).then(afterShare);
+    return;
+  }
+  if(navigator.share){
+    navigator.share({title:'Chaupaal',text:stats.text,url}).then(afterShare).catch(()=>{});
+  }else if(navigator.clipboard){
+    navigator.clipboard.writeText(`${stats.text}\n${url}`).then(()=>{showToast('Link copied!');afterShare();});
+  }
 }
 
 // ===================== FLAG / BLOCK =====================

@@ -87,12 +87,42 @@ function buildAkhbaar(QUESTIONS,BONUS_QUESTIONS){
 
   // Share wired in populateResults via Dangal share helpers
   // (buildGameShareCard / shareGameResult / openFriendPickerSheet / postGameScoreStory)
+  if(typeof applyAkhbaarBeatBanner==='function') applyAkhbaarBeatBanner();
 
   // Simulated breaking news after 6s
   setTimeout(()=>{
     stage.querySelectorAll('[data-breaking]').forEach(tag=>{tag.classList.remove('hidden');});
     showToast('🔴 A Taaza Khabar just dropped!');
   },6000);
+}
+
+/** Beat-my-score banner for `?game=akhbaar&challenge=…&score=…` deep links. */
+function applyAkhbaarBeatBanner(){
+  const pending=window.__akhbaarBeatChallenge;
+  if(!pending||!pending.challenger) return;
+  document.getElementById('akhbaarBeatBanner')?.remove();
+  const panel=document.getElementById('panel-akhbaar')||document.getElementById('reelStage')?.parentElement;
+  if(!panel) return;
+  const banner=document.createElement('div');
+  banner.id='akhbaarBeatBanner';
+  banner.className='akhbaar-beat-banner';
+  banner.innerHTML=`
+    <div class="akhbaar-beat-copy">
+      <strong>${pending.challenger} challenged you</strong>
+      <span>Beat ${pending.score!=null?pending.score:'their score'} on today's Akhbaar</span>
+    </div>
+    <button type="button" class="akhbaar-beat-dismiss" aria-label="Dismiss">✕</button>`;
+  const reel=document.getElementById('reelStage');
+  if(reel&&reel.parentElement) reel.parentElement.insertBefore(banner, reel);
+  else panel.prepend(banner);
+  banner.querySelector('.akhbaar-beat-dismiss')?.addEventListener('click',()=>banner.remove());
+}
+
+function consumeAkhbaarBeatChallenge(){
+  const pending=window.__akhbaarBeatChallenge||null;
+  window.__akhbaarBeatChallenge=null;
+  document.getElementById('akhbaarBeatBanner')?.remove();
+  return pending;
 }
 
 function renderQuestion(inner,data,idx,updateProgress){
@@ -197,6 +227,31 @@ function populateResults(){
   if(score===QUESTIONS.length)bp.textContent='🏅 Perfect Score!';
   else if(score>=QUESTIONS.length*.7)bp.textContent='⭐ Kaafi Tez!';
   else bp.textContent='🔥 Streak Kept';
+
+  // Play-to-beat challenge outcome
+  const beat=typeof consumeAkhbaarBeatChallenge==='function'
+    ? consumeAkhbaarBeatChallenge()
+    : null;
+  if(beat&&beat.challenger){
+    const target=beat.score!=null?Number(beat.score):null;
+    let beatLine='';
+    if(target!=null){
+      if(score>target) beatLine=`You beat ${beat.challenger} (${score} vs ${target})!`;
+      else if(score===target) beatLine=`Tied with ${beat.challenger} at ${score}`;
+      else beatLine=`${beat.challenger} leads ${target}–${score} — try again tomorrow`;
+    } else {
+      beatLine=`Challenge from ${beat.challenger} complete`;
+    }
+    const mount=document.getElementById('akhbaarShareMount');
+    if(mount){
+      const note=document.createElement('div');
+      note.className='akhbaar-beat-result';
+      note.textContent=beatLine;
+      mount.before(note);
+    }
+    if(typeof showToast==='function') showToast(beatLine);
+  }
+
   const newStreak=parseInt(document.getElementById('streakNum').textContent)+1;
   document.getElementById('streakBig').textContent=newStreak;
   document.getElementById('streakNum').textContent=newStreak;
@@ -264,6 +319,9 @@ function wireAkhbaarShare(){
   if(!actions) return;
 
   actions.querySelector('[data-akh-share="share"]')?.addEventListener('click',()=>{
+    try{if(typeof haptic==='function')haptic('light');}catch(e){}
+    const card=mount.querySelector('.game-share-card');
+    if(card&&typeof pulseGameEl==='function') pulseGameEl(card);
     if(typeof shareGameResult==='function') shareGameResult('akhbaar', shareStats);
     else if(typeof openUnifiedShareSheet==='function') openUnifiedShareSheet({gameId:'akhbaar',title:'Share Akhbaar score',stats:shareStats});
   });
@@ -278,11 +336,15 @@ function wireAkhbaarShare(){
       subtitle:'Send your Akhbaar score',
     });
     if(!friend) return;
-    if(typeof shareGameResult==='function'){
-      shareGameResult('akhbaar',{
-        ...shareStats,
-        text:`Hey ${friend.name} — aaj ke Akhbaar mein maine ${shareStats.scoreLine} sahi kiye. Beat me on Chaupaal!`,
-      });
+    const personalized={
+      ...shareStats,
+      friendText:`Hey ${friend.name} — aaj ke Akhbaar mein maine ${shareStats.scoreLine} sahi kiye. Beat me on Chaupaal!`,
+      text:`Hey ${friend.name} — aaj ke Akhbaar mein maine ${shareStats.scoreLine} sahi kiye. Beat me on Chaupaal!`,
+    };
+    if(typeof openFriendShareFollowup==='function'){
+      await openFriendShareFollowup(friend,'akhbaar',personalized);
+    } else if(typeof shareGameResult==='function'){
+      shareGameResult('akhbaar',personalized);
     }
   });
 

@@ -370,43 +370,7 @@ function showCreateGroup(){
 }
 
 // ===================== MONTHLY/YEARLY WRAP =====================
-function showMonthlyWrap(){
-  const wrap=document.createElement('div');wrap.className='wrap-overlay';
-  const now=new Date();const monthName=now.toLocaleString('en-IN',{month:'long'});
-  const pages=[
-    {bg:'linear-gradient(160deg,#E63946,#C72E3A)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">${monthName} wrap</div><div class="wrap-headline" style="color:#fff;">How much did you learn this month?</div><div style="color:rgba(255,255,255,0.7);font-size:14px;">Tap to see your journey →</div>`},
-    {bg:'linear-gradient(160deg,var(--navy),#2A3158)',content:`<div class="wrap-label" style="color:var(--gold);">Questions answered</div><div class="wrap-big-num" style="color:#fff;">${Math.floor(Math.random()*200+100)}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.7);">questions you answered</div>`},
-    {bg:'linear-gradient(160deg,#5FBA7D,#2E8B57)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">Top Category</div><div class="wrap-headline" style="color:#fff;font-size:40px;">🏆 Sports</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">You practised Sports the most</div>`},
-    {bg:'linear-gradient(160deg,#FF9A3C,#FF6B35)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">Longest Streak</div><div class="wrap-big-num" style="color:#fff;">🔥 24</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">days reading Akhbaar in a row</div>`},
-    {bg:'linear-gradient(160deg,#8134AF,#515BD4)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">Muqabala Record</div><div class="wrap-headline" style="color:#fff;">7W · 3L</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">You're climbing the Dangal ranks!</div><button class="wrap-share-btn" id="wrapShareBtn">Share wrap</button>`},
-  ];
-  let pageIdx=0;
-  function renderPage(){
-    const p=pages[pageIdx];
-    wrap.innerHTML=`<div class="wrap-page" style="background:${p.bg};">${p.content}<button class="wrap-close" onclick="this.closest('.wrap-overlay').remove()">✕</button></div>`;
-    const shareBtn=wrap.querySelector('#wrapShareBtn');
-    if(shareBtn)shareBtn.addEventListener('click',()=>{
-      const wrapStats=typeof buildShareStats==='function'
-        ? buildShareStats({
-            scoreLine:'7W · 3L',
-            meta:`${monthName} · 24-day streak`,
-            text:`My ${monthName} Chaupaal Wrap: 7W-3L Dangal, 24-day streak!`,
-          })
-        : {scoreLine:'7W · 3L',meta:`${monthName}`,text:`My ${monthName} Chaupaal Wrap: 7W-3L Dangal, 24-day streak!`};
-      if(typeof openUnifiedShareSheet==='function'){
-        openUnifiedShareSheet({gameId:'wrap',title:`Share ${monthName} Wrap`,subtitle:'Your month on Chaupaal',stats:wrapStats});
-      } else if(navigator.share){
-        navigator.share({text:`My ${monthName} Chaupaal Wrap: 7W-3L Dangal, 24-day streak! chaupaal-chaupaal.web.app`});
-      } else showToast('Wrap copied!');
-    });
-    wrap.querySelector('.wrap-page').addEventListener('click',e=>{
-      if(e.target.closest('button'))return;
-      pageIdx++;if(pageIdx>=pages.length){wrap.remove();}else renderPage();
-    });
-  }
-  document.querySelector('.device').appendChild(wrap);renderPage();
-}
-
+// Monthly wrap lives in streak.js (buildWrapData + showMonthlyWrap). Do not redefine here.
 function showYearlyWrap(){
   const now=new Date();
   const isUnlocked=(now.getMonth()===11&&now.getDate()>=25)||now.getMonth()===0;

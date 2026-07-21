@@ -799,6 +799,7 @@ function openTipTap(){
           {label:`Level ${level+1}`,primary:true,id:'again'},
           {label:'Share',primary:false,id:'share'},
           {label:'Challenge friend',primary:false,id:'challenge'},
+          {label:'Post to story',primary:false,id:'story'},
         ],
       }):`<div><button type="button" id="cbNext">Next</button></div>`}
     `;
@@ -809,9 +810,14 @@ function openTipTap(){
         challenge:async()=>{
           if(typeof openFriendPickerSheet==='function'){
             const f=await openFriendPickerSheet({title:'Challenge · Tip Tap'});
-            if(f&&typeof shareGameResult==='function') shareGameResult('tiptap',{...shareStats,text:`Hey ${f.name} — beat my Tip Tap score!`});
+            if(f&&typeof openFriendShareFollowup==='function'){
+              await openFriendShareFollowup(f,'tiptap',{...shareStats,friendText:`Hey ${f.name} — beat my Tip Tap score!`});
+            } else if(f&&typeof shareGameResult==='function'){
+              shareGameResult('tiptap',{...shareStats,text:`Hey ${f.name} — beat my Tip Tap score!`});
+            } else if(typeof shareGameResult==='function') shareGameResult('tiptap',shareStats);
           } else if(typeof shareGameResult==='function') shareGameResult('tiptap',shareStats);
         },
+        story:()=>{if(typeof postGameScoreStory==='function')postGameScoreStory('tiptap',{...shareStats,score});},
       });
     } else {
       (div.querySelector('[data-result-action]')||document.getElementById('cbNext'))?.addEventListener('click',()=>{
@@ -841,6 +847,7 @@ function openTipTap(){
           {label:'Play again',primary:true,id:'again'},
           {label:'Share',primary:false,id:'share'},
           {label:'Challenge friend',primary:false,id:'challenge'},
+          {label:'Post to story',primary:false,id:'story'},
         ],
       }):`<div><button type="button" id="cbRetry">Retry</button></div>`}
     `;
@@ -851,9 +858,12 @@ function openTipTap(){
         challenge:async()=>{
           if(typeof openFriendPickerSheet==='function'){
             const f=await openFriendPickerSheet({title:'Challenge · Tip Tap'});
-            if(f&&typeof shareGameResult==='function') shareGameResult('tiptap',{...shareStats,text:`Hey ${f.name} — beat my Tip Tap score!`});
+            if(f&&typeof openFriendShareFollowup==='function'){
+              await openFriendShareFollowup(f,'tiptap',{...shareStats,friendText:`Hey ${f.name} — beat my Tip Tap score!`});
+            } else if(f&&typeof shareGameResult==='function') shareGameResult('tiptap',{...shareStats,text:`Hey ${f.name} — beat my Tip Tap score!`});
           } else if(typeof shareGameResult==='function') shareGameResult('tiptap',shareStats);
         },
+        story:()=>{if(typeof postGameScoreStory==='function')postGameScoreStory('tiptap',{...shareStats,score});},
       });
     } else {
       (div.querySelector('[data-result-action]')||document.getElementById('cbRetry'))?.addEventListener('click',()=>{

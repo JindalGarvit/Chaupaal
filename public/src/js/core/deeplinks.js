@@ -158,8 +158,35 @@
     sheet.querySelector('[data-public-profile-close]')?.addEventListener('click', () => sheet.remove());
     sheet.querySelector('[data-public-profile-share]')?.addEventListener('click', () => {
       const url = shareUrl('profile', uname);
-      if (navigator.share) navigator.share({ title: `@${uname} on Chaupaal`, url });
-      else navigator.clipboard?.writeText(url).then(() => showToast('Link copied'));
+      const display = u.name || uname;
+      const stats =
+        typeof buildShareStats === 'function'
+          ? buildShareStats({
+              scoreLine: `@${uname}`,
+              caption: display,
+              meta: bio ? String(bio).slice(0, 60) : 'on Chaupaal',
+              text: `Check out @${uname} on Chaupaal`,
+              url,
+            })
+          : {
+              scoreLine: `@${uname}`,
+              caption: display,
+              meta: 'on Chaupaal',
+              text: `Check out @${uname} on Chaupaal`,
+              url,
+            };
+      if (typeof openUnifiedShareSheet === 'function') {
+        openUnifiedShareSheet({
+          gameId: 'profile',
+          title: 'Share profile',
+          subtitle: `@${uname}`,
+          stats,
+        });
+      } else if (navigator.share) {
+        navigator.share({ title: `@${uname} on Chaupaal`, url });
+      } else {
+        navigator.clipboard?.writeText(url).then(() => showToast('Link copied'));
+      }
     });
     sheet.querySelectorAll('[data-voice]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -372,8 +399,35 @@
       });
       sheet.querySelector('#dlProfShare')?.addEventListener('click', () => {
         const url = shareUrl('profile', uname);
-        if (navigator.share) navigator.share({ title: `@${uname} on Chaupaal`, url });
-        else navigator.clipboard.writeText(url).then(() => showToast('Link copied'));
+        const display = u.name || uname;
+        const stats =
+          typeof buildShareStats === 'function'
+            ? buildShareStats({
+                scoreLine: `@${uname}`,
+                caption: display,
+                meta: (u.profile?.bio || u.bio || 'on Chaupaal').toString().slice(0, 60),
+                text: `Check out @${uname} on Chaupaal`,
+                url,
+              })
+            : {
+                scoreLine: `@${uname}`,
+                caption: display,
+                meta: 'on Chaupaal',
+                text: `Check out @${uname} on Chaupaal`,
+                url,
+              };
+        if (typeof openUnifiedShareSheet === 'function') {
+          openUnifiedShareSheet({
+            gameId: 'profile',
+            title: 'Share profile',
+            subtitle: `@${uname}`,
+            stats,
+          });
+        } else if (navigator.share) {
+          navigator.share({ title: `@${uname} on Chaupaal`, url });
+        } else {
+          navigator.clipboard.writeText(url).then(() => showToast('Link copied'));
+        }
       });
       sheet.querySelector('#dlSayHi')?.addEventListener('click', () => {
         sheet.remove();
