@@ -1,7 +1,11 @@
 // ===================== BOOTSTRAP =====================
 (async()=>{
   const live=await fetchTodaysContent();
-  QUESTIONS=(live?.questions?.length)?live.questions:SAMPLE_QUESTIONS;
+  const offlineBank=[
+    ...(typeof SAMPLE_QUESTIONS!=='undefined'?SAMPLE_QUESTIONS:[]),
+    ...(typeof AKHBAAR_BANK!=='undefined'?AKHBAAR_BANK:[]),
+  ];
+  QUESTIONS=(live?.questions?.length)?live.questions:offlineBank;
   BONUS_QUESTIONS=(live?.bonus?.length)?live.bonus:SAMPLE_BONUS;
   QUESTIONS=QUESTIONS.sort(()=>Math.random()-0.5);
   buildAkhbaar(QUESTIONS,BONUS_QUESTIONS);

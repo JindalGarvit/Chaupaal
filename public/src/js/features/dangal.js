@@ -417,6 +417,7 @@ function pickMuqabalaQuestions(mode, count){
   };
   if(typeof SAMPLE_QUESTIONS !== 'undefined') pushCat(SAMPLE_QUESTIONS);
   if(typeof SAMPLE_BONUS !== 'undefined') pushCat(SAMPLE_BONUS);
+  if(typeof AKHBAAR_BANK !== 'undefined') pushCat(AKHBAAR_BANK);
   const bank = typeof MUQABALA_QUESTIONS !== 'undefined' ? MUQABALA_QUESTIONS : [];
   if(pool.length < n) pool = pool.concat(bank);
   if(!pool.length) pool = bank.slice();
