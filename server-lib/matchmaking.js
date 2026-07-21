@@ -155,6 +155,80 @@ function passesStructuredFilters(viewer, cand, filters = {}) {
   return true;
 }
 
+function intersectInterests(a, b) {
+  const setA = new Set(
+    [...(a.profile?.interests || a.interests || []), ...(a.profile?.hobbies || a.hobbies || [])].map((x) =>
+      String(x).toLowerCase()
+    )
+  );
+  const listB = [...(b.profile?.interests || b.interests || []), ...(b.profile?.hobbies || b.hobbies || [])].map((x) =>
+    String(x).toLowerCase()
+  );
+  return listB.filter((x) => setA.has(x)).map((x) => x.replace(/^\w/, (c) => c.toUpperCase()));
+}
+
+/**
+ * Per-signal scores already used in Peepal personal matching (0..1).
+ * Weighting only recombines these — does not invent new signal types.
+ */
+function computeSignalScores(viewer, cand, edges = {}) {
+  const vEmbed = viewer.profileEmbedding?.vector || viewer.profileEmbedding;
+  const cEmbed = cand.profileEmbedding?.vector || cand.profileEmbedding;
+  const embeddingSimilarity = Math.max(0, Math.min(1, cosineSimilarity(vEmbed, cEmbed)));
+
+  const shared = intersectInterests(viewer, cand);
+  const interestOverlap = Math.max(0, Math.min(1, shared.length / 3));
+
+  const ageV = ageOf(viewer);
+  const ageC = ageOf(cand);
+  let ageProximity = 0.5;
+  if (ageV != null && ageC != null) {
+    const diff = Math.abs(ageV - ageC);
+    ageProximity = Math.max(0, Math.min(1, 1 - diff / 20));
+  }
+
+  const vCity = cityOf(viewer);
+  const cCity = cityOf(cand);
+  const locationProximity = vCity && cCity && vCity === cCity ? 1 : 0;
+
+  const vLf = lookingForOf(viewer);
+  const cLf = lookingForOf(cand);
+  const candIntents = (cand.intents || []).map((i) => String(i).toLowerCase());
+  let lookingForAlignment = 0;
+  if (vLf && cLf && (vLf.includes(cLf.slice(0, 6)) || cLf.includes(vLf.slice(0, 6)))) lookingForAlignment = 0.85;
+  else if (vLf && candIntents.some((i) => i.includes(vLf.slice(0, 6)) || vLf.includes(i.slice(0, 6)))) lookingForAlignment = 0.7;
+  else if (vLf || cLf) lookingForAlignment = 0.25;
+
+  let followAffinity = 0;
+  if (edges.theyFollowViewer) followAffinity += 0.7;
+  if (edges.viewerFollowsThem) followAffinity += 0.3;
+  if (edges.reactedUp) followAffinity = Math.min(1, followAffinity + 0.2);
+  followAffinity = Math.min(1, followAffinity);
+
+  const occV = String(viewer.profile?.occupation || viewer.occupation || '').trim();
+  const occC = String(cand.profile?.occupation || cand.occupation || '').trim();
+  const occupationSignal = occV && occC ? 1 : occC || occV ? 0.35 : 0;
+
+  const gender = String(cand.gender || cand.profile?.gender || '').toLowerCase();
+  const vGender = String(viewer.gender || viewer.profile?.gender || '').toLowerCase();
+  const genderComplement = vGender && gender && vGender !== gender ? 1 : vGender && gender ? 0.15 : 0.4;
+
+  return {
+    embeddingSimilarity,
+    interestOverlap,
+    ageProximity,
+    locationProximity,
+    lookingForAlignment,
+    followAffinity,
+    occupationSignal,
+    genderComplement,
+  };
+}
+
+/**
+ * @deprecated Prefer computeSignalScores + intent weight profiles.
+ * Kept as fallback when no weights are provided.
+ */
 function asymmetricBoost(viewer, cand, edges = {}, intentHint = '') {
   let b = 1;
   if (edges.theyFollowViewer) b += 0.12;
@@ -194,7 +268,6 @@ function asymmetricBoost(viewer, cand, edges = {}, intentHint = '') {
     if (candLooking.includes('network') || candLooking.includes('professional') || candIntents.some((i) => i.includes('network') || i.includes('career'))) b += 0.12;
     if (vCity && cCity && vCity === cCity) b += 0.05;
   } else if (intent) {
-    // personal / custom intents — soft boost when candidate signals overlap the phrase
     if (candLooking.includes(intent.slice(0, 8)) || candIntents.some((i) => i.includes(intent.slice(0, 8)))) b += 0.1;
     if (intersectInterests(viewer, cand).length) b += 0.06;
   }
@@ -264,20 +337,20 @@ function galeShapley(ids, prefs) {
 }
 
 /**
- * Rank candidates for viewer using cosine * asymmetric boost, then GS among top pool.
- * Returns ordered matches with signals for transparency UI.
+ * Rank candidates for viewer using intent-weighted signal sum, then GS among top pool.
+ * Retrieval/shortlist pool is unchanged — only the score recombination uses weights.
  */
-function rankPersonalMatches({ viewer, candidates, edgeMap = {}, limit = 10, intent = '' }) {
-  const vEmbed = viewer.profileEmbedding?.vector || viewer.profileEmbedding;
+function rankPersonalMatches({ viewer, candidates, edgeMap = {}, limit = 10, intent = '', weights = null }) {
+  const { weightedScore, defaultWeights } = require('./intent-weights');
   const intentHint = String(intent || lookingForOf(viewer) || '').trim();
+  const w = weights || defaultWeights();
   const scored = [];
 
   for (const cand of candidates) {
-    const cEmbed = cand.profileEmbedding?.vector || cand.profileEmbedding;
-    const cos = cosineSimilarity(vEmbed, cEmbed);
     const edges = edgeMap[cand.uid] || {};
-    const boost = asymmetricBoost(viewer, cand, edges, intentHint);
-    const score = Math.max(0, Math.min(1, cos * boost));
+    const signalScores = computeSignalScores(viewer, cand, edges);
+    const score = weightedScore(signalScores, w);
+    const cos = signalScores.embeddingSimilarity;
     const signals = [];
     const sharedInterests = intersectInterests(viewer, cand).slice(0, 3);
     const intentL = intentHint.toLowerCase();
@@ -286,12 +359,14 @@ function rankPersonalMatches({ viewer, candidates, edgeMap = {}, limit = 10, int
       const ageC = ageOf(cand);
       if (ageV != null && ageC != null && Math.abs(ageV - ageC) <= 6) signals.push('Similar age for dating');
       if (lookingForOf(cand).includes('dat') || lookingForOf(cand).includes('relationship')) signals.push('Also open to dating');
-    } else if (intentL.includes('friend') || intentL.includes('hobby')) {
+    } else if (intentL.includes('friend') || intentL.includes('hobby') || intentL.includes('study') || intentL.includes('workout')) {
       if (sharedInterests.length) signals.push(`Shared: ${sharedInterests[0]}`);
       signals.push('Friendship-friendly overlap');
-    } else if (intentL.includes('recruit') || intentL.includes('hir') || intentL.includes('network') || intentL.includes('professional')) {
+    } else if (intentL.includes('recruit') || intentL.includes('hir') || intentL.includes('network') || intentL.includes('professional') || intentL.includes('co-founder') || intentL.includes('mentor')) {
       if (cand.profile?.occupation || cand.occupation) signals.push('Career / networking fit');
       if (cityOf(viewer) && cityOf(viewer) === cityOf(cand)) signals.push('Same city for meetups');
+    } else if (intentL.includes('flatmate') || intentL.includes('roommate')) {
+      if (cityOf(viewer) && cityOf(viewer) === cityOf(cand)) signals.push('Same city for housing');
     }
     if (cos >= 0.35) signals.push('Similar interests & prompts');
     if (edges.theyFollowViewer) signals.push('Already follows you');
@@ -306,7 +381,7 @@ function rankPersonalMatches({ viewer, candidates, edgeMap = {}, limit = 10, int
       uid: cand.uid,
       score,
       cosine: cos,
-      boost,
+      signalScores,
       signals: signals.slice(0, 3),
       user: cand,
     });
@@ -316,7 +391,6 @@ function rankPersonalMatches({ viewer, candidates, edgeMap = {}, limit = 10, int
   const pool = scored.slice(0, Math.min(24, Math.max(limit * 2, scored.length)));
   const ids = [viewer.uid, ...pool.map((p) => p.uid)];
 
-  // Preference lists: viewer by score; each candidate ranks others by cosine*boost toward them
   const byUid = { [viewer.uid]: viewer };
   pool.forEach((p) => {
     byUid[p.uid] = p.user;
@@ -328,15 +402,13 @@ function rankPersonalMatches({ viewer, candidates, edgeMap = {}, limit = 10, int
     }
     if (bUid === viewer.uid) {
       const row = pool.find((p) => p.uid === aUid);
-      // mutual: how much they'd like viewer — reuse cosine * their asymmetric toward viewer
-      const cos = row?.cosine || 0;
       const edges = edgeMap[aUid] || {};
-      const revBoost = asymmetricBoost(byUid[aUid], viewer, {
+      const revSignals = computeSignalScores(byUid[aUid], viewer, {
         theyFollowViewer: edges.viewerFollowsThem,
         viewerFollowsThem: edges.theyFollowViewer,
         reactedUp: edges.reactedUp,
-      }, intentHint);
-      return Math.max(0, Math.min(1, cos * revBoost));
+      });
+      return weightedScore(revSignals, w);
     }
     const a = byUid[aUid];
     const b = byUid[bUid];
@@ -359,7 +431,6 @@ function rankPersonalMatches({ viewer, candidates, edgeMap = {}, limit = 10, int
   const partners = galeShapley(ids, prefs);
   const stablePartner = partners[viewer.uid];
 
-  // Order: stable partner first, then remaining by score
   const ordered = [];
   const seen = new Set();
   if (stablePartner) {
@@ -376,18 +447,6 @@ function rankPersonalMatches({ viewer, candidates, edgeMap = {}, limit = 10, int
   return ordered.slice(0, limit);
 }
 
-function intersectInterests(a, b) {
-  const setA = new Set(
-    [...(a.profile?.interests || a.interests || []), ...(a.profile?.hobbies || a.hobbies || [])].map((x) =>
-      String(x).toLowerCase()
-    )
-  );
-  const listB = [...(b.profile?.interests || b.interests || []), ...(b.profile?.hobbies || b.hobbies || [])].map((x) =>
-    String(x).toLowerCase()
-  );
-  return listB.filter((x) => setA.has(x)).map((x) => x.replace(/^\w/, (c) => c.toUpperCase()));
-}
-
 module.exports = {
   buildSemanticText,
   cosineSimilarity,
@@ -397,5 +456,7 @@ module.exports = {
   galeShapley,
   normalizeProfileType,
   ageOf,
+  computeSignalScores,
+  asymmetricBoost,
   EMBED_MODEL,
 };

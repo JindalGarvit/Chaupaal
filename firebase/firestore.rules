@@ -426,6 +426,14 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Peepal intent weight profiles + engagement — Admin SDK only
+    match /intentWeightProfiles/{profileId} {
+      allow read, write: if false;
+    }
+    match /matchEngagementEvents/{eventId} {
+      allow read, write: if false;
+    }
+
     // ===================== DAILY CHECK-INS (journal — private) =====================
     // Genuine access boundary: only the owning uid may read/write. Never expose via
     // list queries to other clients. Content analysis (if any) must stay server-side

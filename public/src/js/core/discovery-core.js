@@ -18,11 +18,65 @@ let discoveryPreviousSet = [];
 const DISCOVERY_FILTER_KEY = 'chaupaal_discovery_filters';
 let discoveryFilters = (() => {
   try {
-    return { interest: 'any', sameCity: false, recentlyJoined: false, ...JSON.parse(localStorage.getItem(DISCOVERY_FILTER_KEY) || '{}') };
+    return {
+      interest: 'any',
+      matchIntent: '',
+      sameCity: false,
+      recentlyJoined: false,
+      ...JSON.parse(localStorage.getItem(DISCOVERY_FILTER_KEY) || '{}'),
+    };
   } catch (e) {
-    return { interest: 'any', sameCity: false, recentlyJoined: false };
+    return { interest: 'any', matchIntent: '', sameCity: false, recentlyJoined: false };
   }
 })();
+
+const PEEPAL_MATCH_INTENTS = [
+  'Friendship',
+  'Dating',
+  'Marriage',
+  'Co-founder / Collaborator',
+  'Study buddy',
+  'Workout buddy',
+  'Mentorship',
+  'Language exchange',
+  'Flatmate / Roommate',
+  'Networking / Professional connections',
+  'Job hunt',
+  'Travel buddies',
+];
+
+let discoveryMatchMeta = {
+  intentProfileId: null,
+  intentText: '',
+  byUid: {},
+};
+let discoveryImpressionTimers = {};
+
+function logDiscoveryEngagement(candidateUid, outcome) {
+  if (typeof apiFetch !== 'function' || !discoveryMatchMeta.intentProfileId || !candidateUid) return;
+  const meta = discoveryMatchMeta.byUid[candidateUid] || {};
+  apiFetch('/api/peepal-reactions', {
+    method: 'POST',
+    needAuth: true,
+    body: {
+      action: 'log_match_engagement',
+      intentProfileId: discoveryMatchMeta.intentProfileId,
+      intentText: discoveryMatchMeta.intentText,
+      candidateUid,
+      signalScores: meta.signalScores || {},
+      outcome,
+    },
+  }).catch(() => {});
+}
+
+function scheduleDiscoveryIgnored(uid) {
+  if (!uid || discoveryImpressionTimers[uid]) return;
+  discoveryImpressionTimers[uid] = setTimeout(() => {
+    delete discoveryImpressionTimers[uid];
+    if (dismissedUids.has(uid)) return;
+    logDiscoveryEngagement(uid, 'ignored');
+  }, 45000);
+}
 
 function discoveryJoinedAt(user) {
   return user?.createdAt?.toMillis?.() || user?.createdAt?.toDate?.()?.getTime?.() || Number(user?.createdAt || user?.joinedAt || 0) || 0;
@@ -47,23 +101,35 @@ async function getDiscoveryProfiles(){
     getProfileType() === 'personal'
   ) {
     try {
+      const intentText =
+        (discoveryFilters.matchIntent && String(discoveryFilters.matchIntent).trim()) ||
+        userProfile?.matchIntent ||
+        userProfile?.lookingFor ||
+        digitalProfile?.lookingFor ||
+        '';
       const envelope = await apiFetch('/api/peepal-reactions', {
         method: 'POST',
         needAuth: true,
         body: {
           action: 'personal_match',
           sameCity: !!discoveryFilters.sameCity,
-          intent:
-            (discoveryFilters.interest && discoveryFilters.interest !== 'any'
-              ? discoveryFilters.interest
-              : '') ||
-            userProfile?.lookingFor ||
-            digitalProfile?.lookingFor ||
-            '',
+          intent: intentText,
           limit: 5,
         },
       });
       const matches = envelope?.data?.matches || [];
+      discoveryMatchMeta = {
+        intentProfileId: envelope?.data?.intentProfileId || null,
+        intentText: envelope?.data?.intentText || intentText,
+        byUid: {},
+      };
+      matches.forEach((m) => {
+        if (!m?.uid) return;
+        discoveryMatchMeta.byUid[m.uid] = {
+          signalScores: m.signalScores || {},
+        };
+        scheduleDiscoveryIgnored(m.uid);
+      });
       if (matches.length) {
         return matches
           .filter((m) => m?.uid && !dismissedUids.has(m.uid))
@@ -213,6 +279,11 @@ function renderDiscoverySection(profiles){
       <button class="peepal-undo-btn" id="discoveryUndoBtn" ${discoveryPreviousSet.length?'':'disabled'}>↩ Undo</button>
     </div>
     <div class="discovery-filters" aria-label="Discovery filters">
+      <select data-discovery-filter="matchIntent" aria-label="Match intent">
+        <option value="">Intent: profile default</option>
+        ${PEEPAL_MATCH_INTENTS.map((i) => `<option value="${i}" ${discoveryFilters.matchIntent === i ? 'selected' : ''}>${i}</option>`).join('')}
+        <option value="__custom__" ${discoveryFilters.matchIntent && !PEEPAL_MATCH_INTENTS.includes(discoveryFilters.matchIntent) ? 'selected' : ''}>Something else…</option>
+      </select>
       <select data-discovery-filter="interest" aria-label="Filter by interest">
         <option value="any">All interests</option>
         ${['Sports','Tech','Business','Music','Food','Travel','Movies','GK','India','World'].map(i=>`<option value="${i}" ${discoveryFilters.interest===i?'selected':''}>${i}</option>`).join('')}
@@ -260,6 +331,11 @@ function renderDiscoverySection(profiles){
       e.stopPropagation();
       const uid=btn.dataset.uid;
       const card=btn.closest('.discovery-card');
+      if (discoveryImpressionTimers[uid]) {
+        clearTimeout(discoveryImpressionTimers[uid]);
+        delete discoveryImpressionTimers[uid];
+      }
+      logDiscoveryEngagement(uid, 'rejected');
       dismissedUids.add(uid);
       try{localStorage.setItem('chaupaal_dismissed_uids',JSON.stringify([...dismissedUids]));}catch(err){}
       if(card){
@@ -275,7 +351,15 @@ function renderDiscoverySection(profiles){
   el.querySelectorAll('[data-discovery-filter]').forEach(control=>{
     control.addEventListener('change',async()=>{
       const key=control.dataset.discoveryFilter;
-      discoveryFilters[key]=control.type==='checkbox'?control.checked:control.value;
+      if (key === 'matchIntent' && control.value === '__custom__') {
+        const typed = typeof promptNameSheet === 'function'
+          ? await promptNameSheet({ title: 'Match intent', placeholder: 'What are you looking for?', confirmLabel: 'Use' })
+          : window.prompt('What are you looking for?');
+        if (!typed) return;
+        discoveryFilters.matchIntent = String(typed).trim().slice(0, 80);
+      } else {
+        discoveryFilters[key]=control.type==='checkbox'?control.checked:control.value;
+      }
       saveDiscoveryFilters();
       const feed=document.getElementById('peepalFeed');
       const current=document.getElementById('peepalDiscovery');
@@ -298,6 +382,14 @@ function renderDiscoverySection(profiles){
   });
 
   el.querySelectorAll('[data-friend-uid]').forEach(btn=>{
+    btn.addEventListener('click', () => {
+      const uid = btn.dataset.friendUid;
+      if (discoveryImpressionTimers[uid]) {
+        clearTimeout(discoveryImpressionTimers[uid]);
+        delete discoveryImpressionTimers[uid];
+      }
+      logDiscoveryEngagement(uid, 'accepted');
+    }, { capture: true });
     if(typeof wireFriendAction==='function') wireFriendAction(btn,btn.dataset.friendUid);
   });
 
@@ -312,6 +404,11 @@ function renderDiscoverySection(profiles){
       const name=btn.dataset.name;
       const avatar=btn.dataset.avatar;
       const uid=btn.dataset.uid;
+      if (discoveryImpressionTimers[uid]) {
+        clearTimeout(discoveryImpressionTimers[uid]);
+        delete discoveryImpressionTimers[uid];
+      }
+      logDiscoveryEngagement(uid, 'accepted');
       let theirIcebreakers=[];
       try{ theirIcebreakers=JSON.parse(decodeURIComponent(btn.dataset.icebreakers||'%5B%5D')); }catch(e){}
       if(typeof openDmWithSharedHello==='function'){

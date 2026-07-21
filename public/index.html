@@ -223,15 +223,21 @@
             <div class="auth-input-group">
               <label class="auth-input-label">What are you here for?</label>
               <div style="display:flex;flex-wrap:wrap;gap:7px;" id="intentChips">
-                <button type="button" class="auth-intent-chip" data-val="Stay informed">Stay informed</button>
-                <button type="button" class="auth-intent-chip" data-val="Make friends">Make friends</button>
-                <button type="button" class="auth-intent-chip" data-val="Discuss topics">Discuss topics</button>
-                <button type="button" class="auth-intent-chip" data-val="Play games">Play games</button>
-                <button type="button" class="auth-intent-chip" data-val="Meet someone">Meet someone</button>
-                <button type="button" class="auth-intent-chip" data-val="Network">Network</button>
+                <button type="button" class="auth-intent-chip" data-val="Friendship">Friendship</button>
+                <button type="button" class="auth-intent-chip" data-val="Dating">Dating</button>
+                <button type="button" class="auth-intent-chip" data-val="Marriage">Marriage</button>
+                <button type="button" class="auth-intent-chip" data-val="Co-founder / Collaborator">Co-founder</button>
+                <button type="button" class="auth-intent-chip" data-val="Study buddy">Study buddy</button>
+                <button type="button" class="auth-intent-chip" data-val="Workout buddy">Workout buddy</button>
+                <button type="button" class="auth-intent-chip" data-val="Mentorship">Mentorship</button>
+                <button type="button" class="auth-intent-chip" data-val="Language exchange">Language exchange</button>
+                <button type="button" class="auth-intent-chip" data-val="Flatmate / Roommate">Flatmate</button>
+                <button type="button" class="auth-intent-chip" data-val="Networking / Professional connections">Network</button>
+                <button type="button" class="auth-intent-chip" data-val="Job hunt">Job hunt</button>
                 <button type="button" class="auth-intent-chip" data-val="Travel buddies">Travel buddies</button>
-                <button type="button" class="auth-intent-chip" data-val="Bond over interests">Bond over interests</button>
+                <button type="button" class="auth-intent-chip" data-val="Something else">Something else</button>
               </div>
+              <input type="text" class="auth-input hidden" id="intentCustomInput" maxlength="80" placeholder="Describe what you're looking for…" style="margin-top:8px;">
             </div>
             <div class="auth-input-group">
               <label class="auth-input-label">Open to meeting new people?</label>
@@ -669,7 +675,7 @@
   <script src="/src/js/core/deeplinks.js?v=25"></script>
   <script src="/src/js/core/rate-limit-client.js"></script>
   <script src="/src/js/core/theme.js"></script>
-  <script src="/src/js/core/discovery-core.js?v=21"></script>
+  <script src="/src/js/core/discovery-core.js?v=22"></script>
   <script src="/src/js/core/profile-btn.js?v=20"></script>
   <script src="/src/js/auth/auth-ui.js"></script>
   <script src="/src/js/features/akhbaar.js?v=3"></script>
@@ -685,7 +691,7 @@
   <script src="/src/js/core/journal-anim.js?v=2"></script>
   <script src="/src/js/features/baithak.js?v=5"></script>
   <script src="/src/js/features/profile-preview.js"></script>
-  <script src="/src/js/features/profile.js?v=20"></script>
+  <script src="/src/js/features/profile.js?v=21"></script>
   <script src="/src/js/core/i18n.js"></script>
   <script src="/src/js/features/categories.js?v=23"></script>
   <script src="/src/js/features/peepal.js"></script>
@@ -710,6 +716,6 @@
   <script src="/src/js/core/polish.js?v=3"></script>
   <script src="/src/js/features/fairness.js"></script>
   <script src="/src/js/features/media-profile.js?v=2"></script>
-  <script src="/src/js/auth/auth-events.js?v=2"></script>
+  <script src="/src/js/auth/auth-events.js?v=3"></script>
 </body>
 </html>

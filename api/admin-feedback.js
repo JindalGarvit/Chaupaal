@@ -1,9 +1,17 @@
 /**
- * Admin-only feedback log + daily summaries.
+ * Admin-only feedback log + daily summaries + Peepal intent weight profiles.
  * Requires Firebase ID token with custom claim admin === true.
+ *
+ * GET  ?view=log|summary|intent_weights
+ * POST { action: 'revert_intent_weights', profileId }  (intent weights only)
  */
-const { sendSuccess, sendError, requireMethod } = require('../server-lib/http');
+const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
 const { requireUser, initAdmin } = require('../server-lib/auth');
+const {
+  COLLECTION,
+  revertIntentWeights,
+  SIGNAL_NAMES,
+} = require('../server-lib/intent-weights');
 
 async function requireAdmin(req, res) {
   const user = await requireUser(req, res, { allowWeak: false });
@@ -16,8 +24,6 @@ async function requireAdmin(req, res) {
 }
 
 module.exports = async function handler(req, res) {
-  if (!requireMethod(req, res, 'GET')) return;
-
   const user = await requireAdmin(req, res);
   if (!user) return;
 
@@ -26,14 +32,62 @@ module.exports = async function handler(req, res) {
     return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Firebase Admin not configured');
   }
   const db = admin.firestore();
-  const view = String(req.query?.view || 'log');
 
   try {
+    if (req.method === 'POST') {
+      let body;
+      try {
+        body = parseJsonBody(req);
+      } catch {
+        return sendError(res, 400, 'INVALID_JSON', 'Invalid JSON body');
+      }
+      if (body.action === 'revert_intent_weights') {
+        const profileId = String(body.profileId || '').trim();
+        if (!profileId) return sendError(res, 400, 'VALIDATION_ERROR', 'profileId required');
+        try {
+          const result = await revertIntentWeights(db, profileId);
+          return sendSuccess(res, result);
+        } catch (e) {
+          if (e?.message === 'NOT_FOUND') return sendError(res, 404, 'NOT_FOUND', 'Profile not found');
+          if (e?.message === 'NO_PREVIOUS') return sendError(res, 400, 'NO_PREVIOUS', 'No previousWeights to revert');
+          throw e;
+        }
+      }
+      return sendError(res, 400, 'UNKNOWN_ACTION', 'Unknown action');
+    }
+
+    if (!requireMethod(req, res, 'GET')) return;
+
+    const view = String(req.query?.view || 'log');
+
+    if (view === 'intent_weights') {
+      const limit = Math.min(100, Math.max(1, Number(req.query?.limit) || 50));
+      const snap = await db.collection(COLLECTION).limit(limit).get();
+      const items = snap.docs
+        .map((d) => {
+          const data = d.data() || {};
+          return {
+            id: d.id,
+            canonicalIntentText: data.canonicalIntentText || '',
+            aliasIntentTexts: data.aliasIntentTexts || [],
+            weights: data.weights || {},
+            previousWeights: data.previousWeights || null,
+            rationale: data.rationale || '',
+            version: data.version || 1,
+            usageCount: data.usageCount || 0,
+            sampleCountSinceRefresh: data.sampleCountSinceRefresh || 0,
+            createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
+            lastRefreshedAt: data.lastRefreshedAt?.toDate?.()?.toISOString?.() || null,
+          };
+        })
+        .sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0));
+      return sendSuccess(res, { items, signalNames: SIGNAL_NAMES });
+    }
+
     if (view === 'summary') {
       const date = String(req.query?.date || new Date().toISOString().slice(0, 10));
       const snap = await db.collection('chaupaalFeedbackSummaries').doc(date).get();
       if (!snap.exists) {
-        // Return latest few
         const recent = await db
           .collection('chaupaalFeedbackSummaries')
           .orderBy('date', 'desc')

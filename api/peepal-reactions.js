@@ -15,6 +15,12 @@ const {
   rankPersonalMatches,
   normalizeProfileType,
 } = require('../server-lib/matchmaking');
+const {
+  resolveIntentWeightProfile,
+  logMatchEngagement,
+  defaultWeights,
+  normalizeWeights,
+} = require('../server-lib/intent-weights');
 
 const VALID_REACTIONS = new Set(['up', 'down']);
 const MAX_HYDRATE_IDS = 20;
@@ -232,12 +238,31 @@ async function personalMatch(db, admin, user, body) {
     }
   }
 
+  const intentText = String(
+    body.intent || viewer.matchIntent || viewer.profile?.lookingFor || viewer.lookingFor || ''
+  ).trim();
+
+  let intentProfileId = null;
+  let weights = defaultWeights();
+  if (intentText) {
+    try {
+      const resolved = await resolveIntentWeightProfile(db, admin, {
+        uid: user.uid,
+        intentText,
+      });
+      intentProfileId = resolved.profileId || null;
+      if (resolved.profile?.weights) weights = normalizeWeights(resolved.profile.weights);
+    } catch (e) {
+      console.warn('[personal_match] intent resolve', e?.message || e);
+    }
+  }
+
   const filters = {
     minAge: body.minAge != null ? Number(body.minAge) : null,
     maxAge: body.maxAge != null ? Number(body.maxAge) : null,
     city: body.sameCity ? viewer.profile?.currentCity || viewer.city || '' : body.city || '',
     language: body.language || '',
-    intent: body.intent || '',
+    intent: intentText,
   };
 
   const snap = await db.collection('users').where('openToMeet', '==', true).limit(MATCH_POOL).get();
@@ -269,17 +294,28 @@ async function personalMatch(db, admin, user, body) {
     candidates,
     edgeMap,
     limit: Math.min(12, Number(body.limit) || 8),
-    intent: body.intent || viewer.profile?.lookingFor || viewer.lookingFor || '',
+    intent: intentText,
+    weights,
   });
+
+  // Persist impression context for ignored-window tracking (client may later log ignored)
+  const matchBatch = ranked.map((m) => ({
+    uid: m.uid,
+    signalScores: m.signalScores || {},
+  }));
 
   return {
     mode: 'personal_hybrid',
+    intentText,
+    intentProfileId,
     matches: ranked.map((m) => ({
       uid: m.uid,
       score: Math.round(m.score * 100),
       cosine: Math.round((m.cosine || 0) * 1000) / 1000,
       mutualStable: !!m.mutualStable,
       signals: m.signals || [],
+      signalScores: m.signalScores || {},
+      intentProfileId,
       name: m.user?.name || m.user?.profile?.displayName || 'Member',
       username: m.user?.username || '',
       photoURL: m.user?.photoURL || m.user?.photoThumb || '',
@@ -291,6 +327,7 @@ async function personalMatch(db, admin, user, body) {
       icebreakers: m.user?.icebreakers || m.user?.profile?.icebreakers || [],
       profileType: 'personal',
     })),
+    matchBatch,
   };
 }
 
@@ -324,6 +361,17 @@ module.exports = async function handler(req, res) {
     }
     if (body.action === 'personal_match') {
       const result = await personalMatch(db, admin, user, body || {});
+      return sendSuccess(res, result);
+    }
+    if (body.action === 'log_match_engagement') {
+      const result = await logMatchEngagement(db, admin, {
+        uid: user.uid,
+        intentProfileId: body.intentProfileId,
+        candidateUid: body.candidateUid,
+        signalScores: body.signalScores || {},
+        outcome: body.outcome,
+        intentText: body.intentText || '',
+      });
       return sendSuccess(res, result);
     }
 

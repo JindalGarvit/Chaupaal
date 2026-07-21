@@ -13,6 +13,7 @@ const {
   recordEventSent,
   localDateKey,
 } = require('../server-lib/chaupaal-cadence');
+const { runWeeklyIntentWeightRefresh } = require('../server-lib/intent-weights');
 
 const BATCH = 40;
 
@@ -300,7 +301,19 @@ module.exports = async function handler(req, res) {
     // Once per run attempt daily summary (idempotent by date doc)
     const summary = await maybeWriteDailyFeedbackSummary(db);
 
-    return sendSuccess(res, { ...results, summary });
+    // Weekly intent-weight refresh (Sundays UTC) — only profiles with ≥50 samples
+    let intentWeights = { skipped: true, reason: 'not_sunday' };
+    try {
+      const wd = new Date().getUTCDay(); // 0 = Sunday
+      if (wd === 0) {
+        intentWeights = await runWeeklyIntentWeightRefresh(db, admin);
+      }
+    } catch (e) {
+      intentWeights = { error: e?.message || String(e) };
+      console.warn('[scheduler] intent weights', e?.message || e);
+    }
+
+    return sendSuccess(res, { ...results, summary, intentWeights });
   } catch (e) {
     console.error('[chaupaal-scheduler]', e?.message || e);
     return sendError(res, 500, 'SCHEDULER_FAILED', e?.message || 'Scheduler failed');

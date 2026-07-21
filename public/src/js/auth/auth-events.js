@@ -14,6 +14,7 @@ let regData = {
   lang: 'en',
   password: '',
   intents: [],
+  customIntent: '',
   openToMeet: true,
   photoFile: null,
   usernameAvailable: false,
@@ -36,6 +37,7 @@ function emptyRegData() {
     lang: 'en',
     password: '',
     intents: [],
+    customIntent: '',
     openToMeet: true,
     photoFile: null,
     usernameAvailable: false,
@@ -346,12 +348,29 @@ function wireAuthEvents() {
     chip.addEventListener('click', () => {
       chip.classList.toggle('active');
       const val = chip.dataset.val;
+      const customInp = document.getElementById('intentCustomInput');
+      if (val === 'Something else') {
+        if (chip.classList.contains('active')) {
+          customInp?.classList.remove('hidden');
+          customInp?.focus();
+          if (!regData.intents.includes('Something else')) regData.intents.push('Something else');
+        } else {
+          customInp?.classList.add('hidden');
+          regData.intents = regData.intents.filter((v) => v !== 'Something else' && v !== regData.customIntent);
+          regData.customIntent = '';
+          if (customInp) customInp.value = '';
+        }
+        return;
+      }
       if (chip.classList.contains('active')) {
         if (!regData.intents.includes(val)) regData.intents.push(val);
       } else {
         regData.intents = regData.intents.filter((v) => v !== val);
       }
     });
+  });
+  document.getElementById('intentCustomInput')?.addEventListener('input', (e) => {
+    regData.customIntent = String(e.target.value || '').trim().slice(0, 80);
   });
 
   document.getElementById('openToMeetYes')?.addEventListener('click', () => {
@@ -430,6 +449,13 @@ function wireAuthEvents() {
         await cred.user.updateProfile({ displayName: regData.name, photoURL: photoURL || undefined });
 
         const profileType = regData.profileType === 'professional' ? 'professional' : 'personal';
+        const intentList = [...regData.intents];
+        if (regData.customIntent) {
+          const idx = intentList.indexOf('Something else');
+          if (idx >= 0) intentList[idx] = regData.customIntent;
+          else if (!intentList.includes(regData.customIntent)) intentList.push(regData.customIntent);
+        }
+        const primaryIntent = intentList.find((i) => i && i !== 'Something else') || '';
         const profile = {
           name: regData.name,
           username: regData.username,
@@ -446,7 +472,9 @@ function wireAuthEvents() {
           profileType,
           openToMeet: regData.openToMeet,
           strangerDailyLimit: 10,
-          intents: regData.intents,
+          intents: intentList,
+          matchIntent: primaryIntent,
+          lookingFor: primaryIntent,
           streak: 0,
           lastPlayed: '',
           streakFreezes: 0,
@@ -468,6 +496,7 @@ function wireAuthEvents() {
             dateOfBirth: regData.dob,
             age: regData.age,
             currentCity: regData.city || '',
+            lookingFor: primaryIntent,
           },
         };
 
@@ -490,6 +519,7 @@ function wireAuthEvents() {
           digitalProfile.dateOfBirth = regData.dob;
           digitalProfile.age = regData.age;
           digitalProfile.profileType = profileType;
+          digitalProfile.lookingFor = primaryIntent;
           try {
             localStorage.setItem('chaupaal_digital_profile', JSON.stringify(digitalProfile));
           } catch (e) {}

@@ -127,7 +127,7 @@ function renderProfileModal(){
     `,
     Relationships:()=>`
       ${profileField('Relationship status','relationshipStatus','select','',['','Single','Single — not open to dating','Single — open to friendship only','Single — open to casual dating','Single — open to serious relationship only','Single — only open to marriage','In a relationship','Married','Separated','Divorced','Widowed','In an open relationship','It\'s complicated','Prefer not to say'])}
-      ${profileField('Looking for','lookingFor','select','',['','Friendship','Casual dating','Serious relationship','Marriage','Networking / Professional connections','Activity partner','Travel buddy','Nothing specific','Open to anything'])}
+      ${profileField('Looking for','lookingFor','select','',['','Friendship','Dating','Marriage','Co-founder / Collaborator','Study buddy','Workout buddy','Mentorship','Language exchange','Flatmate / Roommate','Networking / Professional connections','Job hunt','Casual dating','Serious relationship','Activity partner','Travel buddy','Nothing specific','Open to anything'])}
       ${profileField('Do you have children?','haveChildren','select','',['','No','Yes — live with me','Yes — don\'t live with me','Prefer not to say'])}
       ${profileField('Want children?','wantChildren','select','',['','Yes','No','Open to it','Already have enough','Prefer not to say'])}
       ${profileField('Living situation','livingSituation','select','',['','Live alone','With family','With roommates','With partner','In hostel/PG','In college dorm','Other'])}
@@ -333,7 +333,13 @@ function saveProfileField(key, value){
   const prev=typeof digitalProfile==='object'?JSON.parse(JSON.stringify(digitalProfile)):{};
   digitalProfile[key]=value;
   try{localStorage.setItem('chaupaal_digital_profile',JSON.stringify(digitalProfile));}catch(e){}
-  if(db&&currentUser){db.collection('users').doc(currentUser.uid).update({[`profile.${key}`]:value}).catch(()=>{});}
+  if(db&&currentUser){
+    const patch={[`profile.${key}`]:value};
+    if(key==='lookingFor') patch.matchIntent=String(value||'').trim();
+    db.collection('users').doc(currentUser.uid).update(patch).catch(()=>{
+      db.collection('users').doc(currentUser.uid).set(patch,{merge:true}).catch(()=>{});
+    });
+  }
   if(typeof refreshProfileCompletionUI==='function') refreshProfileCompletionUI();
   if(typeof onProfileFieldSaved==='function') onProfileFieldSaved(key, value, prev);
   if(['bio','interests','hobbies','prompts','occupation','currentCity','lookingFor'].includes(key)&&typeof scheduleProfileEmbeddingRefresh==='function'){
