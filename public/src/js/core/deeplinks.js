@@ -509,6 +509,11 @@
 
   async function openChatById(id) {
     if (!id) return;
+    // Already open on this chat — do not pushState / remount (breaks Back after overlays/music)
+    const open = document.getElementById('activeChatScreen');
+    const openId = open?.dataset?.chatId || window.currentOpenChat?.firestoreId || window.currentOpenChat?.id;
+    if (open && openId && String(openId) === String(id)) return;
+
     switchTab('baithak');
     const local =
       typeof baithakChats !== 'undefined'
@@ -519,6 +524,10 @@
     setTimeout(() => {
       if (typeof initBaithak === 'function') initBaithak();
       const chat = local || { id, type: 'dm', name: 'Chat', avatar: '💬', preview: '', time: '', unread: 0 };
+      // Re-check after delay — user may have closed meanwhile
+      const still = document.getElementById('activeChatScreen');
+      const stillId = still?.dataset?.chatId;
+      if (still && stillId && String(stillId) === String(id)) return;
       setTimeout(() => openChatScreen?.(chat), 250);
     }, 100);
   }
@@ -552,13 +561,26 @@
   function initDeepLinks() {
     window.addEventListener('popstate', () => {
       if (typeof hasNavLayers === 'function' && hasNavLayers()) return;
+
       const route = parseDeepLink(location.pathname);
+      const chatOpen = !!document.getElementById('activeChatScreen');
+
+      // Still on /chat/… after dismissing a layer (e.g. music seek UI desync) —
+      // do NOT reopen; wait for the next Back to leave the deep route.
+      if (route?.name === 'chat' && chatOpen) {
+        const openId =
+          document.getElementById('activeChatScreen')?.dataset?.chatId ||
+          window.currentOpenChat?.firestoreId ||
+          window.currentOpenChat?.id;
+        if (openId && String(openId) === String(route.id)) return;
+      }
+
       if (route) {
         handleDeepLink(route);
         return;
       }
       // Left a deep route (browser/phone back) — same cleanup as explicit close
-      if (typeof closeChatScreen === 'function' && document.getElementById('activeChatScreen')) {
+      if (typeof closeChatScreen === 'function' && chatOpen) {
         closeChatScreen({ fromHistory: true, updateHistory: false, animate: true });
       }
       if (typeof closeAiKeyboard === 'function') closeAiKeyboard();

@@ -75,6 +75,12 @@ Any message, attachment, story card, or rich bubble type must **render identical
 
 All paid features must go through `server-lib/payments.js` and write to `chaupaalTransactions` with a `purpose` tag (`boost_post`, `premium_subscription`, `companion_gift`, …). Do not invent per-feature payment ledgers. Gate live charging with `PAYMENTS_ENABLED` (default off). Never simulate a successful charge while the kill switch is off.
 
-## 6. Companion / proactive messaging
+## 7. Auth & identity
 
-Proactive companion notes (festival, birthday, check-in, feedback) are additive to Goodnight journal — do not change journal once-daily cadence. Gate with `AI_FEATURES_ENABLED` + per-user `companionOptOut`. Messages must never guilt-trip; always label as a Chaupaal app feature.
+See `.cursor/rules/auth-identity.mdc`.
+
+- One Firebase Auth user (email **or** phone, verified) → many profiles, no hard create cap; switcher uses `activeProfileId`.
+- Verify email/phone with OTP (or Firebase email/phone verification) before treating them as registered.
+- Persist login on device until explicit logout.
+- Username unique; rename frees the old name immediately.
+- Soft reset OK for pre-launch (re-register).

@@ -164,7 +164,17 @@ function openChatScreen(chat){
     beginOverlayScope(typeof OVERLAY_SCOPE_CHAT === 'string' ? OVERLAY_SCOPE_CHAT : 'chat', screen);
   }
   if (typeof enableSwipeBack === 'function') {
-    enableSwipeBack(screen, () => closeChatScreen({ updateHistory: true, animate: true }));
+    enableSwipeBack(screen, () => {
+      if (typeof hasNavLayers === 'function' && hasNavLayers()) {
+        try {
+          history.back();
+        } catch (e) {
+          if (typeof dismissTopNavLayer === 'function') dismissTopNavLayer();
+        }
+        return;
+      }
+      closeChatScreen({ updateHistory: true, animate: true });
+    });
   }
   if (typeof bindZoomableImages === 'function') bindZoomableImages(screen);
 
@@ -179,6 +189,15 @@ function openChatScreen(chat){
   }catch(e){}
 
   document.getElementById('chatBack').addEventListener('click', () => {
+    // Dismiss overlays (song picker, sheets) before leaving chat — one Back = one layer
+    if (typeof hasNavLayers === 'function' && hasNavLayers()) {
+      try {
+        history.back();
+      } catch (e) {
+        if (typeof dismissTopNavLayer === 'function') dismissTopNavLayer();
+      }
+      return;
+    }
     closeChatScreen({ updateHistory: true, animate: true });
   });
 

@@ -1,5 +1,5 @@
-// ===================== AUTH STATE MACHINE v3 =====================
-// Signup: Personal/Professional → identity (live username) → email/password (+ optional extras)
+﻿// ===================== AUTH STATE MACHINE v3 =====================
+// Signup: Personal/Professional â†’ identity (live username) â†’ email/password (+ optional extras)
 
 let regData = {
   profileType: 'personal',
@@ -96,7 +96,7 @@ function syncRegProfileTypeUi() {
     genderHint.textContent =
       type === 'personal'
         ? 'Required for Personal accounts'
-        : 'Optional for Professional accounts — you can add it later';
+        : 'Optional for Professional accounts â€” you can add it later';
   }
 }
 
@@ -115,18 +115,18 @@ async function checkUsernameAvailability(username) {
     regData.usernameAvailable = false;
     return false;
   }
-  hint.textContent = 'Checking availability…';
+  hint.textContent = 'Checking availabilityâ€¦';
   hint.style.color = 'var(--muted)';
   try {
     if (!db) {
-      hint.textContent = 'Looks okay — we’ll confirm on create';
+      hint.textContent = 'Looks okay â€” weâ€™ll confirm on create';
       hint.style.color = '#2ECC71';
       regData.usernameAvailable = true;
       return true;
     }
     const snap = await db.collection('usernames').doc(username).get();
     if (snap.exists) {
-      hint.textContent = 'Taken — try another';
+      hint.textContent = 'Taken â€” try another';
       hint.style.color = 'var(--red)';
       regData.usernameAvailable = false;
       return false;
@@ -136,7 +136,7 @@ async function checkUsernameAvailability(username) {
     regData.usernameAvailable = true;
     return true;
   } catch (e) {
-    hint.textContent = 'Couldn’t check right now — we’ll retry on create';
+    hint.textContent = 'Couldnâ€™t check right now â€” weâ€™ll retry on create';
     hint.style.color = 'var(--muted)';
     regData.usernameAvailable = true;
     return true;
@@ -177,6 +177,170 @@ function wireAuthEvents() {
         .then(() => showToast('Reset link sent! Check your email'))
         .catch((e) => showToast('Error: ' + e.message));
   });
+
+  // ---- Google / Phone (verified contact required) ----
+  let loginConfirmation = null;
+  let regConfirmation = null;
+  let regPhoneVerified = '';
+  let loginRecaptcha = null;
+  let regRecaptcha = null;
+
+  function toE164India(raw) {
+    const digits = String(raw || '').replace(/\D/g, '');
+    if (digits.length === 10) return '+91' + digits;
+    if (digits.length === 12 && digits.startsWith('91')) return '+' + digits;
+    if (String(raw || '').startsWith('+') && digits.length >= 10) return '+' + digits.replace(/^\+/, '');
+    return null;
+  }
+
+  async function finishAuthSession(welcomeMsg) {
+    if (typeof trackLogin === 'function') trackLogin();
+    hideAuth();
+    updateProfileBtn();
+    if (typeof loadStreak === 'function') loadStreak();
+    if (typeof initActivityStatus === 'function') initActivityStatus();
+    showToast(welcomeMsg || 'Welcome!');
+  }
+
+  async function ensureUserDocAfterSocial(user, extras = {}) {
+    if (!db || !user) return;
+    const ref = db.collection('users').doc(user.uid);
+    const snap = await ref.get();
+    if (snap.exists) {
+      if (typeof AuthProfiles !== 'undefined' && AuthProfiles.hydrateActiveProfile) {
+        await AuthProfiles.hydrateActiveProfile(user.uid, snap.data());
+      }
+      return snap.data();
+    }
+    currentUser = user;
+    regData.email = user.email || extras.email || '';
+    regData.phone = user.phoneNumber || extras.phone || '';
+    regData.name = user.displayName || '';
+    showAuthScreen('authRegStep1');
+    showToast('Choose a username to finish signing up');
+    return null;
+  }
+
+  document.getElementById('loginGoogleBtn')?.addEventListener('click', async () => {
+    const errEl = document.getElementById('loginError');
+    try {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      const cred = await auth.signInWithPopup(provider);
+      currentUser = cred.user;
+      const doc = await ensureUserDocAfterSocial(cred.user);
+      if (doc) await finishAuthSession('Welcome back!');
+    } catch (e) {
+      if (errEl)
+        errEl.textContent =
+          e.code === 'auth/popup-closed-by-user' ? 'Google sign-in cancelled' : e.message || 'Google sign-in failed';
+    }
+  });
+
+  document.getElementById('loginPhoneBtn')?.addEventListener('click', () => {
+    document.getElementById('authPhonePanel')?.classList.toggle('hidden');
+  });
+  document.getElementById('regPhoneBtn')?.addEventListener('click', () => {
+    document.getElementById('regPhonePanel')?.classList.toggle('hidden');
+  });
+  document.getElementById('regGoogleBtn')?.addEventListener('click', async () => {
+    const errEl = document.getElementById('reg2Error') || document.getElementById('reg1Error');
+    try {
+      if (!regData.username || !regData.usernameAvailable) {
+        if (errEl) errEl.textContent = 'Finish step 1 (username) first';
+        showAuthScreen('authRegStep1', 'back');
+        return;
+      }
+      const provider = new firebase.auth.GoogleAuthProvider();
+      const cred = await auth.signInWithPopup(provider);
+      currentUser = cred.user;
+      regData.email = cred.user.email || '';
+      const emailEl = document.getElementById('regEmail');
+      if (emailEl) emailEl.value = regData.email;
+      document.getElementById('registerBtn')?.click();
+    } catch (e) {
+      if (errEl) errEl.textContent = e.message || 'Google sign-up failed';
+    }
+  });
+
+  document.getElementById('loginPhoneSendOtp')?.addEventListener('click', async () => {
+    const errEl = document.getElementById('loginError');
+    const phone = toE164India(document.getElementById('loginPhone')?.value);
+    if (!phone) {
+      if (errEl) errEl.textContent = 'Enter a valid 10-digit Indian mobile number';
+      return;
+    }
+    try {
+      if (!loginRecaptcha) {
+        loginRecaptcha = new firebase.auth.RecaptchaVerifier('recaptcha-container', { size: 'invisible' });
+      }
+      loginConfirmation = await auth.signInWithPhoneNumber(phone, loginRecaptcha);
+      showToast('OTP sent');
+    } catch (e) {
+      if (errEl) errEl.textContent = e.message || 'Could not send OTP';
+    }
+  });
+
+  document.getElementById('loginPhoneVerifyOtp')?.addEventListener('click', async () => {
+    const errEl = document.getElementById('loginError');
+    const code = document.getElementById('loginPhoneOtp')?.value.trim();
+    if (!loginConfirmation || !code) {
+      if (errEl) errEl.textContent = 'Send OTP first, then enter the code';
+      return;
+    }
+    try {
+      const cred = await loginConfirmation.confirm(code);
+      currentUser = cred.user;
+      const doc = await ensureUserDocAfterSocial(cred.user, { phone: cred.user.phoneNumber });
+      if (doc) await finishAuthSession('Welcome back!');
+    } catch (e) {
+      if (errEl) errEl.textContent = e.message || 'Invalid OTP';
+    }
+  });
+
+  document.getElementById('regPhoneSendOtp')?.addEventListener('click', async () => {
+    const errEl = document.getElementById('reg2Error');
+    const phone = toE164India(
+      document.getElementById('regPhoneOtpInput')?.value || document.getElementById('regPhone')?.value
+    );
+    if (!phone) {
+      if (errEl) errEl.textContent = 'Enter a valid 10-digit Indian mobile number';
+      return;
+    }
+    try {
+      if (!regRecaptcha) {
+        regRecaptcha = new firebase.auth.RecaptchaVerifier('recaptcha-container-reg', { size: 'invisible' });
+      }
+      regConfirmation = await auth.signInWithPhoneNumber(phone, regRecaptcha);
+      showToast('OTP sent');
+    } catch (e) {
+      if (errEl) errEl.textContent = e.message || 'Could not send OTP';
+    }
+  });
+
+  document.getElementById('regPhoneVerifyOtp')?.addEventListener('click', async () => {
+    const errEl = document.getElementById('reg2Error');
+    const code = document.getElementById('regPhoneOtpCode')?.value.trim();
+    if (!regConfirmation || !code) {
+      if (errEl) errEl.textContent = 'Send OTP first, then enter the code';
+      return;
+    }
+    try {
+      const cred = await regConfirmation.confirm(code);
+      currentUser = cred.user;
+      regPhoneVerified = cred.user.phoneNumber || '';
+      regData.phone = regPhoneVerified;
+      const hint = document.getElementById('regPhoneVerifiedHint');
+      if (hint) {
+        hint.style.display = 'block';
+        hint.textContent = `Phone verified âœ“ ${regPhoneVerified}`;
+      }
+      showToast('Phone verified');
+    } catch (e) {
+      if (errEl) errEl.textContent = e.message || 'Invalid OTP';
+    }
+  });
+
   document.getElementById('loginBtn')?.addEventListener('click', async () => {
     const email = document.getElementById('loginEmail')?.value.trim();
     const pwd = document.getElementById('loginPassword')?.value;
@@ -209,7 +373,7 @@ function wireAuthEvents() {
     } finally {
       if (typeof setButtonLoading === 'function') setButtonLoading(btn, false);
       else {
-        btn.textContent = 'Log in →';
+        btn.textContent = 'Log in â†’';
         btn.disabled = false;
       }
     }
@@ -278,10 +442,10 @@ function wireAuthEvents() {
       errEl.textContent = 'Please choose a gender for your Personal account';
       return;
     }
-    errEl.textContent = 'Checking username…';
+    errEl.textContent = 'Checking usernameâ€¦';
     const available = await checkUsernameAvailability(username);
     if (!available) {
-      errEl.textContent = 'That username is taken — pick another';
+      errEl.textContent = 'That username is taken â€” pick another';
       return;
     }
     errEl.textContent = '';
@@ -387,26 +551,30 @@ function wireAuthEvents() {
   document.getElementById('registerBtn')?.addEventListener('click', async () => {
     const email = document.getElementById('regEmail')?.value.trim();
     const pwd = document.getElementById('regPassword')?.value;
-    const errEl = document.getElementById('registerError');
-    if (!email || !/\S+@\S+\.\S+/.test(email)) {
-      errEl.textContent = 'Valid email required';
+    const errEl = document.getElementById('registerError') || document.getElementById('reg2Error');
+    const phoneOk = !!(regPhoneVerified || (auth?.currentUser?.phoneNumber));
+    const googleOk = !!(auth?.currentUser?.email && auth.currentUser.providerData?.some((p) => p.providerId === 'google.com'));
+    const emailOk = email && /\S+@\S+\.\S+/.test(email) && pwd && pwd.length >= 8;
+
+    if (!emailOk && !phoneOk && !googleOk) {
+      errEl.textContent = 'Verify email+password, Google, or phone OTP to create an account';
       return;
     }
-    if (!pwd || pwd.length < 8) {
+    if (emailOk && !phoneOk && !googleOk && (!pwd || pwd.length < 8)) {
       errEl.textContent = 'Password must be at least 8 characters';
       return;
     }
     if (!regData.usernameAvailable) {
       const ok = await checkUsernameAvailability(regData.username);
       if (!ok) {
-        errEl.textContent = 'Username is no longer available — go back and pick another';
+        errEl.textContent = 'Username is no longer available â€” go back and pick another';
         return;
       }
     }
 
-    regData.email = email;
-    regData.password = pwd;
-    regData.phone = document.getElementById('regPhone')?.value.trim() || '';
+    regData.email = email || auth?.currentUser?.email || '';
+    regData.password = pwd || '';
+    regData.phone = regPhoneVerified || document.getElementById('regPhone')?.value.trim() || auth?.currentUser?.phoneNumber || '';
     regData.city = document.getElementById('regCity')?.value.trim() || '';
     regData.lang = document.getElementById('regLanguage')?.value || 'en';
 
@@ -422,8 +590,16 @@ function wireAuthEvents() {
       let photoThumb = '';
 
       if (auth) {
-        const cred = await auth.createUserWithEmailAndPassword(regData.email, regData.password);
-        currentUser = cred.user;
+        let credUser = auth.currentUser;
+        if (!credUser && emailOk) {
+          const cred = await auth.createUserWithEmailAndPassword(regData.email, regData.password);
+          credUser = cred.user;
+          try {
+            await credUser.sendEmailVerification();
+          } catch (e) {}
+        }
+        if (!credUser) throw new Error('Sign in with Google or verify phone first');
+        currentUser = credUser;
 
         if (regData.photoFile && typeof uploadOptimizedImage === 'function') {
           try {
@@ -446,7 +622,7 @@ function wireAuthEvents() {
           }
         }
 
-        await cred.user.updateProfile({ displayName: regData.name, photoURL: photoURL || undefined });
+        await credUser.updateProfile({ displayName: regData.name, photoURL: photoURL || undefined });
 
         const profileType = regData.profileType === 'professional' ? 'professional' : 'personal';
         const intentList = [...regData.intents];
@@ -459,8 +635,10 @@ function wireAuthEvents() {
         const profile = {
           name: regData.name,
           username: regData.username,
-          email: regData.email,
-          phone: regData.phone,
+          email: regData.email || credUser.email || '',
+          phone: regData.phone || credUser.phoneNumber || '',
+          emailVerified: !!credUser.emailVerified || googleOk,
+          phoneVerified: !!(regPhoneVerified || credUser.phoneNumber),
           city: regData.city,
           lang: regData.lang,
           gender: regData.gender || '',
@@ -487,7 +665,8 @@ function wireAuthEvents() {
             .toLowerCase()
             .trim(),
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-          uid: cred.user.uid,
+          uid: credUser.uid,
+          activeProfileId: 'primary',
           profile: {
             profileType,
             displayName: regData.name,
@@ -501,16 +680,39 @@ function wireAuthEvents() {
         };
 
         if (db) {
-          const unameRef = db.collection('usernames').doc(regData.username);
-          const existing = await unameRef.get();
-          if (existing.exists) {
-            throw Object.assign(new Error('USERNAME_TAKEN'), { code: 'username-taken' });
+          const existingUser = await db.collection('users').doc(credUser.uid).get();
+          if (existingUser.exists && existingUser.data()?.username) {
+            throw Object.assign(new Error('ACCOUNT_EXISTS'), { code: 'account-exists' });
           }
-          await db.collection('users').doc(cred.user.uid).set(profile);
-          await unameRef.set({ uid: cred.user.uid });
+          if (typeof AuthProfiles !== 'undefined' && AuthProfiles.createProfile) {
+            await AuthProfiles.createProfile(credUser.uid, {
+              id: 'primary',
+              username: regData.username,
+              name: regData.name,
+              photoURL,
+              photoThumb,
+              profileType,
+              gender: regData.gender,
+              dob: regData.dob,
+              age: regData.age,
+              city: regData.city,
+            });
+          } else {
+            const unameRef = db.collection('usernames').doc(regData.username);
+            const existing = await unameRef.get();
+            if (existing.exists) {
+              throw Object.assign(new Error('USERNAME_TAKEN'), { code: 'username-taken' });
+            }
+            await unameRef.set({ uid: credUser.uid, profileId: 'primary' });
+          }
+          await db.collection('users').doc(credUser.uid).set(profile, { merge: true });
         }
 
         userProfile = profile;
+        window.activeProfileId = 'primary';
+        try {
+          localStorage.setItem('chaupaal_active_profile_id', 'primary');
+        } catch (e) {}
         if (typeof digitalProfile !== 'undefined') {
           digitalProfile.displayName = regData.name;
           digitalProfile.username = regData.username;
@@ -539,9 +741,11 @@ function wireAuthEvents() {
       const firstName = regData.name.split(' ')[0];
       const typeLabel = regData.profileType === 'professional' ? 'Professional' : 'Personal';
       document.getElementById('authSuccessTitle').textContent = `Welcome, ${firstName}!`;
+      let desc = `${typeLabel} account ready.`;
+      if (emailOk && !googleOk) desc += ' Check your email to verify your address.';
       document.getElementById('authSuccessDesc').textContent = regData.intents.length
-        ? `${typeLabel} account ready. You're here to: ${regData.intents.slice(0, 2).join(' & ')}. Finish your profile anytime for better matches.`
-        : `${typeLabel} account ready. Add a bio and prompts anytime — signup stays light on purpose.`;
+        ? `${desc} You're here to: ${regData.intents.slice(0, 2).join(' & ')}.`
+        : `${desc} Add a bio and prompts anytime.`;
       if (typeof launchConfetti === 'function') launchConfetti({ x: 50, y: 40 }, 80);
 
       const cta = document.getElementById('authSuccessCta');
@@ -550,27 +754,21 @@ function wireAuthEvents() {
         cta.addEventListener('click', () => {
           hideAuth();
           updateProfileBtn();
-          loadStreak();
-          initActivityStatus();
-          if (!onboardingDone) showOnboarding();
-          showToast(`Welcome to Chaupaal, ${firstName}!`);
+          if (typeof loadStreak === 'function') loadStreak();
         });
       }
     } catch (e) {
-      if (e.code === 'username-taken' || e.message === 'USERNAME_TAKEN') {
-        errEl.textContent = 'Username was just taken — go back and pick another';
-      } else {
-        errEl.textContent =
-          e.code === 'auth/email-already-in-use'
-            ? 'An account with this email already exists. Try logging in.'
-            : e.code === 'auth/weak-password'
-              ? 'Password is too weak.'
-              : 'Sign up failed: ' + e.message;
-      }
+      console.warn('[auth] register', e);
+      errEl.textContent =
+        e.code === 'username-taken' || e.code === 'auth/email-already-in-use'
+          ? 'That email or username is already taken'
+          : e.code === 'account-exists'
+            ? 'Account already exists â€” log in instead'
+            : e.message || 'Could not create account';
     } finally {
       if (typeof setButtonLoading === 'function') setButtonLoading(btn, false);
-      else {
-        btn.textContent = 'Create my account';
+      else if (btn) {
+        btn.textContent = 'Create account';
         btn.disabled = false;
       }
     }

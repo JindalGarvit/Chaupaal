@@ -103,6 +103,21 @@
           <div class="auth-error" id="loginError"></div>
           <button class="btn btn--primary btn--block btn--lg auth-btn" id="loginBtn">Log in →</button>
           <div class="auth-divider"><span>or</span></div>
+          <button type="button" class="btn btn--block auth-btn" id="loginGoogleBtn" style="background:var(--cream);color:var(--ink);border:1.5px solid var(--line);margin-bottom:8px;">Continue with Google</button>
+          <button type="button" class="btn btn--block auth-btn" id="loginPhoneBtn" style="background:var(--cream);color:var(--ink);border:1.5px solid var(--line);margin-bottom:8px;">Continue with phone</button>
+          <div id="authPhonePanel" class="hidden" style="margin-bottom:12px;">
+            <div class="auth-input-group">
+              <label class="auth-input-label">Phone (India +91)</label>
+              <input class="auth-input" type="tel" id="loginPhone" placeholder="10-digit mobile" autocomplete="tel">
+            </div>
+            <div id="recaptcha-container"></div>
+            <button type="button" class="btn btn--primary btn--block" id="loginPhoneSendOtp">Send OTP</button>
+            <div class="auth-input-group" style="margin-top:10px;">
+              <label class="auth-input-label">OTP</label>
+              <input class="auth-input" type="text" id="loginPhoneOtp" placeholder="6-digit code" inputmode="numeric" autocomplete="one-time-code">
+            </div>
+            <button type="button" class="btn btn--primary btn--block" id="loginPhoneVerifyOtp">Verify &amp; log in</button>
+          </div>
           <button class="auth-switch-btn" id="loginToSignup">Don't have an account? <strong>Sign up</strong></button>
         </div>
       </div>
@@ -172,7 +187,7 @@
         <div class="auth-step-bar"><div class="auth-step-fill" style="width:100%"></div></div>
         <div class="auth-form-body">
           <div class="auth-input-group">
-            <label class="auth-input-label">Email <span class="auth-required">*</span></label>
+            <label class="auth-input-label">Email <span class="auth-required">*</span> <span style="font-weight:500;color:var(--muted);text-transform:none;letter-spacing:0;">(or use phone below)</span></label>
             <input class="auth-input" type="email" id="regEmail" placeholder="your@email.com" autocomplete="email">
           </div>
           <div class="auth-input-group">
@@ -185,6 +200,24 @@
               <div class="auth-pwd-bar"><div id="pwdStrengthFill" style="height:100%;border-radius:99px;transition:all .3s;"></div></div>
               <span id="pwdStrengthLabel" style="font-size:11px;font-weight:700;"></span>
             </div>
+            <div class="auth-input-hint">Required for email signup. We'll send a verification link.</div>
+          </div>
+          <div class="auth-divider"><span>or sign up with</span></div>
+          <button type="button" class="btn btn--block auth-btn" id="regGoogleBtn" style="background:var(--cream);color:var(--ink);border:1.5px solid var(--line);margin-bottom:8px;">Continue with Google</button>
+          <button type="button" class="btn btn--block auth-btn" id="regPhoneBtn" style="background:var(--cream);color:var(--ink);border:1.5px solid var(--line);margin-bottom:8px;">Continue with phone OTP</button>
+          <div id="regPhonePanel" class="hidden" style="margin-bottom:12px;">
+            <div class="auth-input-group">
+              <label class="auth-input-label">Phone (verify with OTP) <span class="auth-required">*</span></label>
+              <input class="auth-input" type="tel" id="regPhoneOtpInput" placeholder="10-digit mobile" autocomplete="tel">
+            </div>
+            <div id="recaptcha-container-reg"></div>
+            <button type="button" class="btn btn--primary btn--block" id="regPhoneSendOtp">Send OTP</button>
+            <div class="auth-input-group" style="margin-top:10px;">
+              <label class="auth-input-label">OTP</label>
+              <input class="auth-input" type="text" id="regPhoneOtpCode" placeholder="6-digit code" inputmode="numeric">
+            </div>
+            <button type="button" class="btn btn--primary btn--block" id="regPhoneVerifyOtp">Verify phone</button>
+            <div class="auth-input-hint" id="regPhoneVerifiedHint" style="display:none;color:var(--red);">Phone verified ✓</div>
           </div>
           <div class="auth-optional-block">
             <div class="auth-optional-label">Optional — add now or later</div>
@@ -679,19 +712,20 @@
   <script src="/src/js/ai/call-ai.js"></script>
   <script src="/src/js/ai/anthropic.js"></script>
   <script src="/src/js/core/search.js"></script>
-  <script src="/src/js/core/deeplinks.js?v=26"></script>
+  <script src="/src/js/core/deeplinks.js?v=27"></script>
   <script src="/src/js/core/rate-limit-client.js"></script>
   <script src="/src/js/core/theme.js"></script>
   <script src="/src/js/core/discovery-core.js?v=22"></script>
   <script src="/src/js/core/profile-btn.js?v=20"></script>
   <script src="/src/js/auth/auth-ui.js"></script>
+  <script src="/src/js/auth/auth-profiles.js?v=1"></script>
   <script src="/src/js/features/akhbaar.js?v=3"></script>
   <script src="/src/js/features/dangal.js?v=28"></script>
   <script src="/src/js/features/dangal-ratings.js?v=3"></script>
   <script src="/src/js/features/baithak-data.js?v=21"></script>
   <script src="/src/js/features/self-chat.js"></script>
   <script src="/src/js/features/chaupaal-chat.js?v=17"></script>
-  <script src="/src/js/features/baithak-chat.js?v=29"></script>
+  <script src="/src/js/features/baithak-chat.js?v=30"></script>
   <script src="/src/js/features/music-card.js?v=3"></script>
   <script src="/src/js/features/group-info.js?v=1"></script>
   <script src="/src/js/core/stories.js?v=24"></script>
@@ -699,7 +733,7 @@
   <script src="/src/js/core/journal-anim.js?v=2"></script>
   <script src="/src/js/features/baithak.js?v=7"></script>
   <script src="/src/js/features/profile-preview.js"></script>
-  <script src="/src/js/features/profile.js?v=22"></script>
+  <script src="/src/js/features/profile.js?v=23"></script>
   <script src="/src/js/core/i18n.js"></script>
   <script src="/src/js/features/categories.js?v=25"></script>
   <script src="/src/js/features/peepal.js"></script>
@@ -720,10 +754,10 @@
   <script src="/src/js/features/duniya.js?v=28"></script>
   <script src="/src/js/features/premium.js?v=2"></script>
   <script src="/src/js/features/settings-extra.js"></script>
-  <script src="/src/js/features/discovery.js?v=2"></script>
+  <script src="/src/js/features/discovery.js?v=3"></script>
   <script src="/src/js/core/polish.js?v=4"></script>
   <script src="/src/js/features/fairness.js"></script>
   <script src="/src/js/features/media-profile.js?v=3"></script>
-  <script src="/src/js/auth/auth-events.js?v=3"></script>
+  <script src="/src/js/auth/auth-events.js?v=4"></script>
 </body>
 </html>

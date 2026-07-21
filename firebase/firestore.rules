@@ -118,6 +118,12 @@ service cloud.firestore {
       allow create: if isOwner(userId);
       allow update: if isOwner(userId)
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['relationshipCounts']);
+
+      // Instagram-style multi-profile under one auth identity
+      match /profiles/{profileId} {
+        allow read: if isAuth();
+        allow create, update, delete: if isOwner(userId);
+      }
       allow delete: if isOwner(userId);
 
       // Legacy friends index is retired. Friendship is reciprocal following.

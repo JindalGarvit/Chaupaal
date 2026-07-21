@@ -66,7 +66,7 @@ function buildAudienceSegments(opts = {}) {
   const mode = opts.responseLimitMode || 'algorithm';
   const defaultCap = resolveCap(mode, opts.customCap);
   const drafts = Array.isArray(opts.segments) && opts.segments.length
-    ? opts.segments.slice(0, 5)
+    ? opts.segments.slice(0, 15)
     : [
         {
           criteria: {

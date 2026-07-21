@@ -14,6 +14,10 @@ try{
   firebase.initializeApp(firebaseConfig);
   db=firebase.firestore();
   auth=firebase.auth();
+  // Stay signed in across restarts until explicit logout (Instagram-style persistence)
+  try{
+    auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+  }catch(e){ console.warn('[auth] setPersistence', e?.message||e); }
   rtdb=firebase.database();
   storage=firebase.storage();
   // Analytics initialized lazily in core/analytics.js (Phase 5)

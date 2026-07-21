@@ -476,7 +476,7 @@ function openPeepalAskSheet(){
           <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;">Audience segments (cascade)</div>
           <button type="button" id="peepalAddSegment" style="background:none;border:none;color:var(--red);font-weight:700;font-size:12px;cursor:pointer;">+ Add</button>
         </div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.35;">Segment 1 fills first. When it hits its cap or engagement stalls, Segment 2 starts automatically — no prompt.</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.35;">Segment 1 fills first. When it hits its cap or engagement stalls, the next segment starts automatically — no prompt. Add as many as you need (soft limit 15).</div>
         <div id="peepalSegmentsList"></div>
       </div>
       <!-- Nudge templates -->
@@ -540,7 +540,7 @@ function openPeepalAskSheet(){
   }
   renderSegments();
   document.getElementById('peepalAddSegment')?.addEventListener('click',()=>{
-    if(segmentDrafts.length>=5){ showToast('Max 5 segments'); return; }
+    if(segmentDrafts.length>=15){ showToast('Soft limit · 15 segments'); return; }
     segmentDrafts.push({label:`Segment ${segmentDrafts.length+1}`,city:'',gender:'any',intent:'any',capMode:'inherit'});
     renderSegments();
   });

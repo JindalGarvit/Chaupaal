@@ -1,0 +1,35 @@
+---
+description: Auth identity, multi-profile, session persistence, and contact verification
+alwaysApply: true
+---
+
+# Auth & identity (Chaupaal)
+
+## Model (Instagram-style)
+
+- **One Firebase Auth identity** per email **or** phone signup (password and/or Google).
+- **Many Chaupaal profiles** under that identity — **no hard profile-create cap** (Instagram: unlimited owned; their “5” is simultaneous device logins of separate credentials, not our profile model).
+- App uses **active profile** (`activeProfileId`) for posts, chats, display name, username.
+- Account switcher lists all profiles under the signed-in identity.
+
+## Signup / contact
+
+- Signup requires **verified email (Gmail/Google or email+password)** **or** **verified phone** (OTP).
+- When a user adds email or phone at any stage, **verify with OTP / Firebase verification before treating it as registered**.
+- Phone is for signup and recovery/linking; OTP required when phone is used.
+
+## Username
+
+- Globally unique handle; **one profile per username**.
+- Rename allowed; **old username freed immediately** (Rename A).
+
+## Session persistence
+
+- Stay signed in on the device across app restarts (**Firebase Auth local persistence**).
+- Clear session **only** on explicit logout (or remote session revoke).
+- Soft reset for pre-launch: re-register OK; do not build legacy migration this pass.
+
+## Passwords
+
+- Email + password + Google + forgot-password (email reset).
+- Do not invent separate payment/auth stacks per feature.

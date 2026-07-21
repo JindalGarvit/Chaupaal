@@ -70,6 +70,7 @@ function renderProfileModal(){
       <button class="btn btn--primary btn--block modal-btn" style="margin-top:8px;" onclick="typeof openSessionsSheet==='function'&&openSessionsSheet()">💻 Devices & sessions</button>
       <button class="btn btn--primary btn--block modal-btn" style="margin-top:8px;" onclick="typeof openBlockedUsersSheet==='function'&&openBlockedUsersSheet()">🚫 Blocked users</button>
       <button class="btn btn--primary btn--block modal-btn" style="margin-top:8px;background:linear-gradient(135deg,#C9A227,#8134AF);color:#fff;" onclick="openPremiumSheet()">⭐ Go Premium</button>
+      <button type="button" class="btn btn--primary btn--block modal-btn" id="switchProfileBtn" style="width:100%;margin-bottom:8px;">👤 Switch / add profile</button>
       <button class="logout-btn" id="logoutBtn">Log out</button>
     </div>
   `;
@@ -288,6 +289,10 @@ function renderProfileModal(){
       });
     });
     renderSection('Personal');
+    document.getElementById('switchProfileBtn')?.addEventListener('click',()=>{
+      if(typeof openProfileSwitcher==='function') openProfileSwitcher();
+      else if(typeof showToast==='function') showToast('Profile switcher loading…');
+    });
     document.getElementById('logoutBtn')?.addEventListener('click',async()=>{
       if(typeof endCurrentSessionQuietly==='function') endCurrentSessionQuietly();
       await auth.signOut();currentUser=null;userProfile=null;
