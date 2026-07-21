@@ -458,6 +458,27 @@ function openPeepalAskSheet(){
           <option value="ai">🤖 AI decides</option>
         </select>
       </div>
+      <!-- Response limits -->
+      <div style="margin-top:12px;">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Responses wanted</div>
+        <select id="peepalResponseCap" style="width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;background:var(--white);outline:none;">
+          <option value="algorithm">Let the algorithm decide</option>
+          <option value="10">10 responses</option>
+          <option value="50">50 responses</option>
+          <option value="100">100 responses</option>
+          <option value="custom">Custom number…</option>
+        </select>
+        <input id="peepalCustomCap" type="number" min="1" max="5000" placeholder="Custom cap" style="display:none;width:100%;margin-top:8px;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;box-sizing:border-box;background:var(--white);">
+      </div>
+      <!-- Cascading audience segments -->
+      <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;">Audience segments (cascade)</div>
+          <button type="button" id="peepalAddSegment" style="background:none;border:none;color:var(--red);font-weight:700;font-size:12px;cursor:pointer;">+ Add</button>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.35;">Segment 1 fills first. When it hits its cap or engagement stalls, Segment 2 starts automatically — no prompt.</div>
+        <div id="peepalSegmentsList"></div>
+      </div>
       <!-- Nudge templates -->
       <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px;">
         <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:8px;">✨ Quick templates</div>
@@ -469,6 +490,64 @@ function openPeepalAskSheet(){
   `;
   document.querySelector('.device').appendChild(sheet);
   requestAnimationFrame(()=>sheet.classList.add('open'));
+  if(typeof pushNavLayer==='function'){
+    sheet.dataset.navManaged='1';
+    pushNavLayer(sheet,()=>{ sheet.classList.remove('open'); setTimeout(()=>sheet.remove(),350); });
+  }
+
+  // Segment builder state
+  let segmentDrafts=[{label:'Segment 1',city:'',gender:'any',intent:'any',capMode:'inherit'}];
+  const segList=document.getElementById('peepalSegmentsList');
+  function renderSegments(){
+    if(!segList) return;
+    segList.innerHTML=segmentDrafts.map((s,i)=>`
+      <div class="peepal-seg-row" data-seg="${i}" style="background:var(--cream);border-radius:12px;padding:10px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <strong style="font-size:12px;">${i+1}. ${s.label||'Segment'}</strong>
+          ${segmentDrafts.length>1?`<button type="button" data-seg-remove="${i}" style="border:none;background:none;color:var(--muted);cursor:pointer;">✕</button>`:''}
+        </div>
+        <input data-seg-city="${i}" placeholder="City (optional)" value="${(s.city||'').replace(/"/g,'&quot;')}" style="width:100%;padding:8px 10px;border:1.5px solid var(--line);border-radius:10px;font-size:12px;margin-bottom:6px;box-sizing:border-box;">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <select data-seg-gender="${i}" style="flex:1;min-width:90px;padding:8px;border-radius:10px;border:1.5px solid var(--line);font-size:12px;">
+            <option value="any" ${s.gender==='any'?'selected':''}>Any gender</option>
+            <option value="female" ${s.gender==='female'?'selected':''}>Female</option>
+            <option value="male" ${s.gender==='male'?'selected':''}>Male</option>
+          </select>
+          <select data-seg-intent="${i}" style="flex:1;min-width:90px;padding:8px;border-radius:10px;border:1.5px solid var(--line);font-size:12px;">
+            <option value="any">Any intent</option>
+            <option value="dating" ${s.intent==='dating'?'selected':''}>Dating</option>
+            <option value="friendship" ${s.intent==='friendship'?'selected':''}>Friendship</option>
+            <option value="hobby" ${s.intent==='hobby'?'selected':''}>Hobby</option>
+            <option value="travel" ${s.intent==='travel'?'selected':''}>Travel</option>
+            <option value="gaming" ${s.intent==='gaming'?'selected':''}>Gaming</option>
+          </select>
+          <select data-seg-cap="${i}" style="flex:1;min-width:90px;padding:8px;border-radius:10px;border:1.5px solid var(--line);font-size:12px;">
+            <option value="inherit">Same as post</option>
+            <option value="10" ${s.capMode==='10'?'selected':''}>Cap 10</option>
+            <option value="50" ${s.capMode==='50'?'selected':''}>Cap 50</option>
+            <option value="100" ${s.capMode==='100'?'selected':''}>Cap 100</option>
+          </select>
+        </div>
+      </div>`).join('');
+    segList.querySelectorAll('[data-seg-remove]').forEach(btn=>btn.addEventListener('click',()=>{
+      segmentDrafts.splice(Number(btn.dataset.segRemove),1);
+      renderSegments();
+    }));
+    segList.querySelectorAll('[data-seg-city]').forEach(el=>el.addEventListener('input',()=>{ segmentDrafts[Number(el.dataset.segCity)].city=el.value; }));
+    segList.querySelectorAll('[data-seg-gender]').forEach(el=>el.addEventListener('change',()=>{ segmentDrafts[Number(el.dataset.segGender)].gender=el.value; }));
+    segList.querySelectorAll('[data-seg-intent]').forEach(el=>el.addEventListener('change',()=>{ segmentDrafts[Number(el.dataset.segIntent)].intent=el.value; }));
+    segList.querySelectorAll('[data-seg-cap]').forEach(el=>el.addEventListener('change',()=>{ segmentDrafts[Number(el.dataset.segCap)].capMode=el.value; }));
+  }
+  renderSegments();
+  document.getElementById('peepalAddSegment')?.addEventListener('click',()=>{
+    if(segmentDrafts.length>=5){ showToast('Max 5 segments'); return; }
+    segmentDrafts.push({label:`Segment ${segmentDrafts.length+1}`,city:'',gender:'any',intent:'any',capMode:'inherit'});
+    renderSegments();
+  });
+  document.getElementById('peepalResponseCap')?.addEventListener('change',(e)=>{
+    const custom=document.getElementById('peepalCustomCap');
+    if(custom) custom.style.display=e.target.value==='custom'?'block':'none';
+  });
 
   // Wire template chips
   sheet.querySelectorAll('.peepal-template-chip').forEach(chip=>{
@@ -533,7 +612,42 @@ function openPeepalAskSheet(){
     if(isAnon) markAnonUsed();
     const fmt=sheet.querySelector('.peepal-format-chip.active')?.dataset.fmt||'open';
     const opts=fmt==='mcq'||fmt==='poll'?[1,2,3,4].map(i=>document.getElementById(`mcqOpt${i}`)?.value||'').filter(Boolean):[];
+    const audience=document.getElementById('peepalAudience')?.value||'everyone';
+    const responseLimitMode=document.getElementById('peepalResponseCap')?.value||'algorithm';
+    const customCap=Number(document.getElementById('peepalCustomCap')?.value)||null;
+    const resolveCapLocal=(mode,custom)=>{
+      if(mode==='algorithm') return null;
+      if(mode==='custom') return Math.max(1,Math.min(5000,Number(custom)||50));
+      const n=Number(mode); return Number.isFinite(n)?n:null;
+    };
+    const postCap=resolveCapLocal(responseLimitMode, customCap);
+    const audienceSegments=segmentDrafts.map((s,i)=>({
+      id:`seg_${i+1}`,
+      order:i,
+      label:s.label||`Segment ${i+1}`,
+      criteria:{
+        city:s.city||null,
+        gender:s.gender||'any',
+        searchIntent:s.intent||'any',
+        interests:[],
+        ageRange:{min:null,max:null},
+        personality:null,
+        vibe:'',
+      },
+      cap:s.capMode==='inherit'?postCap:resolveCapLocal(s.capMode,null),
+      fulfilledCount:0,
+      viewsShown:0,
+      responsesInWindow:0,
+      windowStartedAt:null,
+      status:i===0?'active':'pending',
+      activatedAt:i===0?Date.now():null,
+      completedAt:null,
+      stallReason:null,
+    }));
     const q={id:`q_${Date.now()}`,question:text,format:fmt,options:opts,responses:opts.map(()=>0),totalResponses:0,comments:0,timeAgo:'just now',ts:Date.now(),tag:fmt.toUpperCase(),answered:false,deleted:false,
+      audience, responseLimitMode, responseCap:postCap, audienceSegments,
+      segmentDistributionActive:audienceSegments.some(s=>s.status==='active'),
+      activeSegmentIndex:0,
       user:isAnon?{name:'Anonymous',avatar:'🎭',uid:'anon'}:{name:userProfile?.name||'You',avatar:userProfile?.photoURL||'🪑',uid:currentUser?.uid||'me'},
       anonymous:isAnon,uid:currentUser?.uid||'me'};
 
@@ -572,6 +686,12 @@ function openPeepalAskSheet(){
           question:q.question,format:q.format,options:q.options,responses:q.responses,
           totalResponses:0,comments:0,tag:q.tag,user:q.user,anonymous:false,
           uid:currentUser.uid,deleted:false,
+          audience:q.audience||'everyone',
+          responseLimitMode:q.responseLimitMode||'algorithm',
+          responseCap:q.responseCap??null,
+          audienceSegments:q.audienceSegments||[],
+          segmentDistributionActive:!!q.segmentDistributionActive,
+          activeSegmentIndex:0,
           attachment: q.attachment?.type==='image'
             ? {
                 type:'image',

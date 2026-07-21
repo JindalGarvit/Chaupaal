@@ -68,3 +68,13 @@ Any message, attachment, story card, or rich bubble type must **render identical
 - [ ] Media does not touch history; listeners cleaned up on dismiss
 - [ ] Firestore payload includes all fields needed to re-render after reload
 - [ ] Tap-outside and back dismiss work without custom one-offs
+
+---
+
+## 5. Payments contract
+
+All paid features must go through `server-lib/payments.js` and write to `chaupaalTransactions` with a `purpose` tag (`boost_post`, `premium_subscription`, `companion_gift`, …). Do not invent per-feature payment ledgers. Gate live charging with `PAYMENTS_ENABLED` (default off). Never simulate a successful charge while the kill switch is off.
+
+## 6. Companion / proactive messaging
+
+Proactive companion notes (festival, birthday, check-in, feedback) are additive to Goodnight journal — do not change journal once-daily cadence. Gate with `AI_FEATURES_ENABLED` + per-user `companionOptOut`. Messages must never guilt-trip; always label as a Chaupaal app feature.

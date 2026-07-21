@@ -15,6 +15,8 @@ const {
 } = require('../server-lib/chaupaal-cadence');
 const { runWeeklyIntentWeightRefresh } = require('../server-lib/intent-weights');
 const { expireLiveLocationShares } = require('../server-lib/live-location');
+const { advanceStalledPeepalSegments } = require('../server-lib/peepal-segments');
+const { processCompanionOutreach } = require('../server-lib/companion-outreach');
 
 const BATCH = 40;
 
@@ -268,7 +270,13 @@ module.exports = async function handler(req, res) {
     if (lastUid) q = q.startAfter(lastUid);
 
     const snap = await q.get();
-    const results = { journal: 0, recommendation: 0, skipped: 0, users: snap.size };
+    const results = {
+      journal: 0,
+      recommendation: 0,
+      companion: 0,
+      skipped: 0,
+      users: snap.size,
+    };
 
     for (const doc of snap.docs) {
       const uid = doc.id;
@@ -284,10 +292,19 @@ module.exports = async function handler(req, res) {
       if (j.sent) results.journal++;
       else results.skipped++;
 
-      // Refresh state after journal
-      const fresh = (await stateRef.get()).data() || state;
+      // Refresh state after journal — do NOT alter journal cadence
+      let fresh = (await stateRef.get()).data() || state;
       const r = await processRecommendation(db, uid, fresh, stateRef);
       if (r.sent) results.recommendation++;
+
+      // Companion outreach (festival / birthday / check-in / feedback) — additive
+      fresh = (await stateRef.get()).data() || fresh;
+      try {
+        const c = await processCompanionOutreach(db, uid, fresh, stateRef);
+        if (c.sent) results.companion++;
+      } catch (e) {
+        console.warn('[scheduler] companion', uid, e?.message || e);
+      }
     }
 
     if (snap.empty || snap.size < BATCH) {
@@ -323,7 +340,16 @@ module.exports = async function handler(req, res) {
       console.warn('[scheduler] live location expire', e?.message || e);
     }
 
-    return sendSuccess(res, { ...results, summary, intentWeights, liveLoc });
+    // Advance stalled Peepal audience segments (cascade to next segment)
+    let peepalSegments = { skipped: true };
+    try {
+      peepalSegments = await advanceStalledPeepalSegments(db, { limit: 30 });
+    } catch (e) {
+      peepalSegments = { error: e?.message || String(e) };
+      console.warn('[scheduler] peepal segments', e?.message || e);
+    }
+
+    return sendSuccess(res, { ...results, summary, intentWeights, liveLoc, peepalSegments });
   } catch (e) {
     console.error('[chaupaal-scheduler]', e?.message || e);
     return sendError(res, 500, 'SCHEDULER_FAILED', e?.message || 'Scheduler failed');

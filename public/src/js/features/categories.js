@@ -722,6 +722,12 @@ function mapPeepalDoc(raw){
     uid: raw.uid,
     attachment: raw.attachment||null,
     isSeedContent: raw.isSeedContent===true,
+    audience: raw.audience||'everyone',
+    responseLimitMode: raw.responseLimitMode||'algorithm',
+    responseCap: raw.responseCap??null,
+    audienceSegments: Array.isArray(raw.audienceSegments)?raw.audienceSegments:[],
+    segmentDistributionActive: !!raw.segmentDistributionActive,
+    activeSegmentIndex: Number.isFinite(raw.activeSegmentIndex)?raw.activeSegmentIndex:0,
   };
 }
 
@@ -1043,6 +1049,7 @@ function renderPeepalFeed(){
       <div class="peepal-card-footer">
         <button type="button" class="peepal-footer-stat peepal-open-comments">💬 ${q.comments} comments</button>
         <span class="peepal-footer-stat">👥 ${q.totalResponses} responses</span>
+        ${canDelete?`<button type="button" class="peepal-footer-stat peepal-boost-btn" data-boost-post title="Boost this post">🚀 Boost</button>`:''}
         <button class="peepal-footer-stat" onclick="event.stopPropagation();openShareSheet({id:'${q.id}',caption:'${q.question.replace(/'/g,"\'")}',user:{name:'${q.user.name}'}})" style="background:none;border:none;cursor:pointer;">↗️ Share</button>
         <span class="peepal-tag">${q.tag}</span>
       </div>
@@ -1066,6 +1073,11 @@ function renderPeepalFeed(){
       setPeepalCardReaction(q,btn.dataset.reaction);
     }));
     card.querySelector('.peepal-open-comments')?.addEventListener('click',(e)=>{e.stopPropagation();openPeepalDetail(q);});
+    card.querySelector('.peepal-boost-btn')?.addEventListener('click',async(e)=>{
+      e.stopPropagation();
+      if(typeof openPeepalBoostComingSoon==='function') openPeepalBoostComingSoon(q);
+      else if(typeof showToast==='function') showToast('Boost coming soon — nothing will be charged.');
+    });
     card.querySelector('.peepal-start-comment')?.addEventListener('click',(e)=>{e.stopPropagation();openPeepalDetail(q,{focusComposer:true});});
     card.querySelectorAll('.peepal-comment-chip').forEach(chip=>{
       const open=()=>openPeepalDetail(q,{focusCommentId:chip.dataset.commentId});
@@ -1191,6 +1203,7 @@ function answerPeepal(id,optIdx,e){
   e.stopPropagation();
   const q=peepalQuestions.find(q=>q.id===id);if(!q||q.answered!==false)return;
   q.answered=optIdx;q.responses[optIdx]++;q.totalResponses++;
+  if(typeof recordPeepalSegmentResponse==='function') recordPeepalSegmentResponse(q);
   renderPeepalFeed();
   // Show typing section with a slight delay
   setTimeout(()=>{
@@ -1205,9 +1218,50 @@ function submitPeepalOpen(id){
   if(!input||!input.value.trim())return;
   const q=peepalQuestions.find(q=>q.id===id);if(!q)return;
   q.answered=true;q.totalResponses++;
+  if(typeof recordPeepalSegmentResponse==='function') recordPeepalSegmentResponse(q);
   renderPeepalFeed();
   showToast('Your response is in! 🙌');
 }
+
+/** Persist segment fulfilled count via payments/reactions API (cascade tracking). */
+async function recordPeepalSegmentResponse(q){
+  const postId=q?.firestoreId||q?.id;
+  if(!postId||!q?.audienceSegments?.length) return;
+  if(typeof apiFetch!=='function') return;
+  try{
+    await apiFetch('/api/peepal-reactions',{
+      method:'POST', needAuth:true,
+      body:{ action:'record_segment_response', postId },
+    });
+  }catch(e){}
+}
+
+/** Poster-only Boost — honest coming-soon via unified payments scaffold. Never fakes a charge. */
+async function openPeepalBoostComingSoon(q){
+  const postId=q?.firestoreId||q?.id;
+  if(!postId){ showToast('Boost coming soon'); return; }
+  if(typeof showToast==='function') showToast('Checking boost…');
+  try{
+    if(typeof apiFetch!=='function'){
+      showToast('Boost coming soon — payments not live yet. Nothing was charged.');
+      return;
+    }
+    const envelope=await apiFetch('/api/peepal-reactions',{
+      method:'POST', needAuth:true,
+      body:{ action:'boost_post', postId, amountPaise:9900, label:'Boost Peepal post' },
+    });
+    const data=envelope?.data||envelope||{};
+    if(data.comingSoon || data.status==='coming_soon'){
+      showToast('Boost coming soon — nothing was charged.');
+      return;
+    }
+    showToast(data.message||'Boost unavailable right now — nothing was charged.');
+  }catch(e){
+    showToast('Boost coming soon — nothing was charged.');
+  }
+}
+window.openPeepalBoostComingSoon=openPeepalBoostComingSoon;
+window.recordPeepalSegmentResponse=recordPeepalSegmentResponse;
 
 function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
   const detail=document.getElementById('peepalDetail');

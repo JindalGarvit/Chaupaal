@@ -228,7 +228,7 @@ service cloud.firestore {
         && request.resource.data.uid == request.auth.uid
         && !isShadowbanned(request.auth.uid);
       // Update: owner can edit / soft-delete; others can bump vote/comment counts only.
-      // Peepal reactions never touch this publicly readable parent document.
+      // Segment cascade fields are Admin SDK only (peepal-reactions / scheduler).
       allow update: if isAuth() && (
         isOwner(resource.data.uid) ||
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalResponses']) ||
@@ -522,6 +522,24 @@ service cloud.firestore {
     match /premium/{userId} {
       allow read: if isOwner(userId);
       allow write: if false; // only Cloud Function (Razorpay webhook) can write
+    }
+
+    // ===================== UNIFIED PAYMENTS LEDGER =====================
+    // Written via Admin SDK (server-lib/payments.js). Clients may read own rows.
+    match /chaupaalTransactions/{txId} {
+      allow read: if isAuth() && resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+
+    // Companion product feedback (separate from chat / chaupaalFeedback)
+    match /companionProductFeedback/{docId} {
+      allow create: if isAuth()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 2000;
+      allow read: if false; // Garvit / Admin SDK review only
+      allow update, delete: if false;
     }
 
     // ===================== DAILY_SETS (Akhbaar reel — server-authored) =====================

@@ -216,6 +216,17 @@
       if (isJournal || p.action === 'open_journal') {
         if (typeof showDayCheck === 'function') showDayCheck({ force: true });
         else if (typeof showToast === 'function') showToast('Open your journal from Baithak anytime');
+      } else if (p.action === 'open_chaupaal_chat') {
+        try {
+          if (typeof openChaupaalChat === 'function') openChaupaalChat();
+          else if (typeof switchTab === 'function') {
+            document.querySelector('.tab-btn[data-tab="baithak"]')?.click();
+          }
+        } catch (e) {}
+        if (typeof showToast === 'function') showToast('Open your Chaupaal chat to reply — optional');
+      } else if (p.action === 'companion_feedback' || ev.type === 'companion_feedback') {
+        if (typeof openCompanionFeedbackSheet === 'function') openCompanionFeedbackSheet(ev);
+        else if (typeof showToast === 'function') showToast('Thanks — share feedback anytime in Chaupaal chat');
       } else if (typeof showToast === 'function') {
         showToast('Noted — enjoy exploring');
       }
@@ -293,6 +304,55 @@
     document.getElementById('chaupaalGraphicCard')?.remove();
   }
 
+  /**
+   * Product feedback from companion ask — stored in companionProductFeedback
+   * (separate from regular chat / chaupaalFeedback chat tags).
+   */
+  function openCompanionFeedbackSheet(ev) {
+    document.getElementById('companionFeedbackSheet')?.remove();
+    const sheet = document.createElement('div');
+    sheet.id = 'companionFeedbackSheet';
+    sheet.className = 'name-prompt-sheet';
+    sheet.dataset.navManaged = '1';
+    sheet.innerHTML = `
+      <div class="cp-sheet-panel" style="padding:18px;">
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;margin-bottom:6px;">What would you enjoy more?</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Optional product feedback for Garvit — not a chat message. No pressure.</div>
+        <textarea id="companionFeedbackText" rows="4" placeholder="One honest line…" style="width:100%;box-sizing:border-box;padding:12px;border-radius:12px;border:1.5px solid var(--line);font-size:14px;resize:vertical;"></textarea>
+        <button type="button" class="btn btn--primary btn--block" id="companionFeedbackSend" style="margin-top:10px;">Send feedback</button>
+        <button type="button" data-cf-skip style="width:100%;margin-top:8px;border:none;background:none;color:var(--muted);padding:10px;cursor:pointer;">Skip</button>
+      </div>`;
+    host().appendChild(sheet);
+    const close = () => {
+      if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
+      sheet.remove();
+    };
+    if (typeof pushNavLayer === 'function') pushNavLayer(sheet, close);
+    sheet.querySelector('[data-cf-skip]')?.addEventListener('click', close);
+    sheet.querySelector('#companionFeedbackSend')?.addEventListener('click', async () => {
+      const text = sheet.querySelector('#companionFeedbackText')?.value?.trim();
+      if (!text) {
+        if (typeof showToast === 'function') showToast('Write a short note, or skip');
+        return;
+      }
+      try {
+        if (db && currentUser) {
+          await db.collection('companionProductFeedback').add({
+            uid: currentUser.uid,
+            message: text.slice(0, 2000),
+            eventId: ev?.id || null,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            source: 'companion_feedback_ask',
+          });
+        }
+        if (typeof showToast === 'function') showToast('Thanks — noted for the product team');
+      } catch (e) {
+        if (typeof showToast === 'function') showToast('Could not save — try again later');
+      }
+      close();
+    });
+  }
+
   window.renderChaupaalEvent = renderEvent;
   window.dismissChaupaalEvent = dismissEvent;
   window.engageChaupaalEvent = engageEvent;
@@ -300,6 +360,7 @@
   window.stopChaupaalEventListener = stopChaupaalEventListener;
   window.dismissOpenJournalEvent = dismissOpenJournalEvent;
   window.snoozeOpenJournalEvent = snoozeOpenJournalEvent;
+  window.openCompanionFeedbackSheet = openCompanionFeedbackSheet;
 
   document.addEventListener('chaupaal:auth', () => {
     try {

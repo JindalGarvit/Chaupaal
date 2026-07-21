@@ -7,6 +7,12 @@
  */
 const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
 const { requireUser, initAdmin } = require('../server-lib/auth');
+const {
+  createPaymentIntent,
+  getPaymentStatus,
+  isPaymentsEnabled,
+} = require('../server-lib/payments');
+const { recordSegmentResponse } = require('../server-lib/peepal-segments');
 const { SEED_AUTHOR, PEEPAL_SEED_POSTS, personalSeedPost } = require('../server-lib/peepal-seeds');
 const {
   buildSemanticText,
@@ -373,6 +379,62 @@ module.exports = async function handler(req, res) {
         intentText: body.intentText || '',
       });
       return sendSuccess(res, result);
+    }
+
+    // ── Unified payments scaffold (folded here — Hobby function cap) ──
+    if (body.action === 'payment_create' || body.action === 'boost_post') {
+      const purpose =
+        body.action === 'boost_post' ? 'boost_post' : String(body.purpose || 'boost_post').slice(0, 64);
+      const postId = body.postId ? String(body.postId).slice(0, 80) : null;
+      if (body.action === 'boost_post' && postId) {
+        const postSnap = await db.collection('peepal').doc(postId).get();
+        if (!postSnap.exists || postSnap.data()?.uid !== user.uid) {
+          return sendError(res, 403, 'FORBIDDEN', 'Only the poster can boost this post');
+        }
+      }
+      const result = await createPaymentIntent({
+        uid: user.uid,
+        purpose,
+        amountPaise: Number(body.amountPaise) || 9900,
+        currency: body.currency || 'INR',
+        meta: {
+          postId,
+          label: body.label || 'Boost Peepal post',
+          paymentsEnabled: isPaymentsEnabled(),
+        },
+      });
+      // Never claim a charge succeeded while scaffold/coming_soon
+      return sendSuccess(res, result);
+    }
+    if (body.action === 'payment_status') {
+      const result = await getPaymentStatus({ paymentId: body.paymentId });
+      return sendSuccess(res, result);
+    }
+
+    // Record a response against the active audience segment (cascade tracking)
+    if (body.action === 'record_segment_response') {
+      const postId = cleanPostId(body.postId);
+      if (!postId) return sendError(res, 400, 'VALIDATION_ERROR', 'postId required');
+      const ref = db.collection('peepal').doc(postId);
+      const snap = await ref.get();
+      if (!snap.exists) return sendError(res, 404, 'NOT_FOUND', 'Post not found');
+      const data = snap.data() || {};
+      if (!Array.isArray(data.audienceSegments) || !data.audienceSegments.length) {
+        return sendSuccess(res, { ok: true, skipped: true });
+      }
+      const result = recordSegmentResponse(data.audienceSegments);
+      const stillActive = result.segments.some((s) => s.status === 'active');
+      await ref.set(
+        {
+          audienceSegments: result.segments,
+          segmentDistributionActive: stillActive,
+          activeSegmentIndex: result.segments.findIndex((s) => s.status === 'active'),
+          totalResponses: Number(data.totalResponses || 0) + 1,
+          segmentUpdatedAt: Date.now(),
+        },
+        { merge: true }
+      );
+      return sendSuccess(res, { ok: true, advanced: !!result.advanced, finished: !!result.finished });
     }
 
     const postId = cleanPostId(body.postId);

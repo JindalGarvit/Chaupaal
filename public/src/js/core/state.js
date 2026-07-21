@@ -86,6 +86,20 @@ document.getElementById('settingsBtn').addEventListener('click',()=>{
   populateVoiceDropdown();
   if(typeof applyNotifPrefsToSettingsUI==='function') applyNotifPrefsToSettingsUI();
   if(typeof hydrateNotifPrefsFromFirestore==='function') hydrateNotifPrefsFromFirestore();
+  // Companion opt-out: checked = outreach ON (optOut false)
+  try{
+    const el=document.getElementById('toggleCompanionOutreach');
+    if(el){
+      const localOut=localStorage.getItem('chaupaal_companion_opt_out')==='1';
+      el.checked=!localOut;
+      if(db&&currentUser){
+        db.collection('users').doc(currentUser.uid).get().then(snap=>{
+          if(snap.exists && snap.data()?.companionOptOut===true) el.checked=false;
+          else if(snap.exists && snap.data()?.companionOptOut===false) el.checked=true;
+        }).catch(()=>{});
+      }
+    }
+  }catch(e){}
 });
 document.getElementById('closeSettings').addEventListener('click',()=>document.getElementById('settingsModal').classList.add('hidden'));
 document.getElementById('saveSettings').addEventListener('click',()=>{
@@ -100,6 +114,14 @@ document.getElementById('saveSettings').addEventListener('click',()=>{
       trip:!!document.getElementById('toggleTrip')?.checked,
       anniversary:!!document.getElementById('toggleAnniversary')?.checked,
     }));
+  }catch(e){}
+  // Companion outreach opt-out (persisted on user doc — disables proactive companion only)
+  try{
+    const companionOn=!!document.getElementById('toggleCompanionOutreach')?.checked;
+    localStorage.setItem('chaupaal_companion_opt_out', companionOn?'0':'1');
+    if(db&&currentUser){
+      db.collection('users').doc(currentUser.uid).set({ companionOptOut: !companionOn }, { merge:true }).catch(()=>{});
+    }
   }catch(e){}
   document.getElementById('settingsModal').classList.add('hidden');
   showToast(t('settings_saved'));
