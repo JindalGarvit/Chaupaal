@@ -62,6 +62,40 @@ function cleanMusic(value) {
   };
 }
 
+/** Sanitize optional location attachment for stories (Leaflet / live share metadata). */
+function cleanLocation(value) {
+  if (!value || typeof value !== 'object') return null;
+  const lat = Number(value.lat);
+  const lng = Number(value.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  const mode = ['current', 'place', 'pin', 'live'].includes(String(value.mode || ''))
+    ? String(value.mode)
+    : 'pin';
+  const placeName = cleanText(value.placeName || value.name, 120) || null;
+  const address = cleanText(value.address, 240) || null;
+  const label =
+    cleanText(
+      value.label || placeName || address || (mode === 'live' ? 'Live location' : 'Location'),
+      160
+    ) || 'Location';
+  const expiresAt = value.expiresAt != null ? Number(value.expiresAt) : null;
+  const startedAt = value.startedAt != null ? Number(value.startedAt) : null;
+  return {
+    type: 'location',
+    mode,
+    lat,
+    lng,
+    placeName,
+    address,
+    label,
+    liveShareId: cleanText(value.liveShareId, 80) || null,
+    expiresAt: Number.isFinite(expiresAt) ? expiresAt : null,
+    durationMs: Number(value.durationMs) || null,
+    startedAt: Number.isFinite(startedAt) ? startedAt : null,
+  };
+}
+
 async function isFriend(db, a, b) {
   if (!a || !b || a === b) return false;
   const [ab, ba] = await db.getAll(
@@ -129,6 +163,7 @@ function serializeStory(doc, viewerUid) {
     text: data.text || '',
     sharedGameId: data.sharedGameId || '',
     music: data.music || null,
+    location: data.location || null,
     score: data.score || 0,
     total: data.total || 0,
     streak: data.streak || 0,
@@ -173,7 +208,8 @@ async function createStory(db, admin, uid, body) {
   const media = cleanMedia(body.media);
   const text = cleanText(body.text, 1200);
   const music = cleanMusic(body.music);
-  if (!media && !text && !music && body.type !== 'score') throw new Error('EMPTY_STORY');
+  const location = cleanLocation(body.location);
+  if (!media && !text && !music && !location && body.type !== 'score') throw new Error('EMPTY_STORY');
   const kind = destination === 'baithak' && body.kind === 'instant' ? 'instant' : 'story';
   // Instants go to Close Friends by default (decision 9). If the list is empty,
   // fall back to Friends so the share still works — caller sees audienceFallback.
@@ -260,6 +296,7 @@ async function createStory(db, admin, uid, body) {
     text,
     sharedGameId: cleanText(body.sharedGameId, 50),
     music: music || null,
+    location: location || null,
     score: body.type === 'score' ? Math.max(0, Number(body.score) || 0) : null,
     total: body.type === 'score' ? Math.max(0, Number(body.total) || 0) : null,
     streak: body.type === 'score' ? Math.max(0, Number(body.streak) || 0) : null,

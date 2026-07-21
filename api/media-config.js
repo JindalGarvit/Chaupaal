@@ -7,8 +7,9 @@
  * Music lives here (not a new api/*.js) to stay under the Hobby 12-function cap.
  */
 const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
-const { requireUser } = require('../server-lib/auth');
+const { requireUser, initAdmin } = require('../server-lib/auth');
 const { callMusicProvider, resolveMusicPreview } = require('../server-lib/music');
+const { searchPlaces } = require('../server-lib/geocode');
 
 async function handleGet(req, res) {
   res.setHeader('Cache-Control', 'public, max-age=300');
@@ -90,8 +91,47 @@ async function handlePost(req, res) {
     }
   }
 
+  if (action === 'geocode_search') {
+    // Nominatim proxy — identifying User-Agent set server-side (browsers cannot).
+    // Free-tier appropriate; consider self-hosted Nominatim / LocationIQ at scale.
+    const query = String(body.query || '').trim();
+    if (query.length < 2) {
+      return sendSuccess(res, { results: [] });
+    }
+    if (query.length > 120) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'query too long');
+    }
+    try {
+      const result = await searchPlaces(query, body.limit);
+      return sendSuccess(res, result);
+    } catch (e) {
+      console.warn('[media-config] geocode_search:', e?.message || e);
+      return sendSuccess(res, { results: [] });
+    }
+  }
+
+  if (action === 'live_location_stop') {
+    const shareId = String(body.shareId || '').trim();
+    if (!shareId) return sendError(res, 400, 'VALIDATION_ERROR', 'shareId required');
+    const admin = initAdmin();
+    if (!admin) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    const ref = admin.firestore().collection('liveLocationShares').doc(shareId);
+    const snap = await ref.get();
+    if (!snap.exists) return sendError(res, 404, 'NOT_FOUND', 'Share not found');
+    if (snap.data()?.uid !== user.uid) return sendError(res, 403, 'FORBIDDEN', 'Not your share');
+    await ref.set(
+      {
+        active: false,
+        stoppedAt: admin.firestore.FieldValue.serverTimestamp(),
+        stopReason: 'user_stopped',
+      },
+      { merge: true }
+    );
+    return sendSuccess(res, { ok: true });
+  }
+
   return sendError(res, 400, 'VALIDATION_ERROR', 'Unknown media action', {
-    allowed: ['music_search', 'music_resolve'],
+    allowed: ['music_search', 'music_resolve', 'geocode_search', 'live_location_stop'],
   });
 }
 

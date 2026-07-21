@@ -283,10 +283,21 @@ function openChatScreen(chat){
   });
   document.getElementById('attachLocation').addEventListener('click',()=>{
     attachMenu.classList.remove('show');
-    addMsgBubble({from:'me',text:'📍 Location shared',attachment:{type:'location',label:'Location shared'},time:'now',pending:true}, isGroup);
-    if(typeof sendRealtimeMessage==='function'){
-      sendRealtimeMessage(chat.firestoreId||chat.id, '📍 Location shared', isGroup, null, { type:'location', label:'Location shared' });
-    }
+    if(typeof openLocationComposer!=='function'){showToast('Location sharing unavailable');return;}
+    openLocationComposer({
+      title:'Share location',
+      onSelect:(loc)=>{
+        try{
+          const label=loc.label||loc.placeName||'Location';
+          addMsgBubble({from:'me',text:`📍 ${label}`,attachment:loc,time:'now',pending:true}, isGroup);
+          if(typeof sendRealtimeMessage==='function'){
+            sendRealtimeMessage(chat.firestoreId||chat.id, `📍 ${label}`, isGroup, null, loc);
+          }
+        }catch(e){
+          showToast('Could not share location');
+        }
+      },
+    });
   });
 
   // Voice typing (mic)
@@ -398,7 +409,9 @@ function renderMsgBubble(m, isGroup){
   } else if(att && att.type==='file'){
     body=`<div class="chat-file-msg">📄 ${String(att.name||'File').replace(/</g,'&lt;')}</div>`;
   } else if(att && att.type==='location'){
-    body=`<div class="chat-location-msg">📍 ${String(att.label||'Location shared').replace(/</g,'&lt;')}</div>`;
+    body=typeof renderLocationCard==='function'
+      ?renderLocationCard(att,{variant:'chat'})
+      :`<div class="chat-location-msg">📍 ${String(att.label||att.placeName||'Location shared').replace(/</g,'&lt;')}</div>`;
   } else if(att && att.type==='muqabala_challenge'){
     const n=Array.isArray(att.questions)?att.questions.length:0;
     const secs=att.timerSeconds||60;
@@ -471,6 +484,7 @@ function addMsgBubble(msg, isGroup){
   area.appendChild(node);
   bindMsgAvatarLongPress(node);
   if(typeof mountMusicCards==='function') mountMusicCards(node);
+  if(typeof mountLocationCards==='function') mountLocationCards(node);
   if(typeof wireChallengeBubble==='function') wireChallengeBubble(node);
   area.scrollTop = area.scrollHeight;
 }
@@ -720,12 +734,17 @@ function openStoryViewer(story, allStories){
     const isBirthday=s.type==='birthday';
     const isDuel=s.type==='duel';
     const hasMusic=!!(s.music&&s.music.title);
-    const musicOnly=hasMusic&&!(isMedia&&s.media);
+    const hasLocation=!!(s.location&&Number.isFinite(Number(s.location.lat))&&Number.isFinite(Number(s.location.lng)));
+    const musicOnly=hasMusic&&!(isMedia&&s.media)&&!hasLocation;
+    const locationOnly=hasLocation&&!(isMedia&&s.media)&&!hasMusic;
     const timeAgo=(s.ts||s.createdAt)?timeAgoStr(s.ts||s.createdAt):'now';
     const destinationLabel=s.destination==='duniya'?'Duniya':s.destination==='baithak'?'Baithak':'';
     const ownerAudience=s.own&&s.visibility==='close_friends'?' · Close Friends':'';
     const musicOverlay=hasMusic&&typeof renderMusicCard==='function'
       ?renderMusicCard(s.music,{variant:'story'})
+      :'';
+    const locationOverlay=hasLocation&&typeof renderLocationCard==='function'
+      ?renderLocationCard(s.location,{variant:'story'})
       :'';
 
     viewer.innerHTML=`
@@ -747,7 +766,7 @@ function openStoryViewer(story, allStories){
       </div>
       <!-- Content -->
       <div style="flex:1;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;" id="storyContent">
-        ${musicOnly?`<div class="story-music-backdrop" aria-hidden="true"></div>`:
+        ${musicOnly||locationOnly?`<div class="story-music-backdrop" aria-hidden="true"></div>`:
           isMedia&&s.media?(
           s.mediaType==='video'
             ?`<video src="${s.media}" autoplay loop muted playsinline style="width:100%;height:100%;object-fit:cover;"></video>`
@@ -776,6 +795,7 @@ function openStoryViewer(story, allStories){
         `:`<div style="width:100%;height:100%;background:#111;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.3);font-size:14px;">Story</div>`}
         ${s.text?`<div class="story-viewer-text">${safeStoryText(s.text)}</div>`:''}
         ${musicOverlay}
+        ${locationOverlay}
         ${s.sharedGameId?`<button type="button" class="story-game-card" id="storyGameCard">Play ${safeStoryText(typeof getGame==='function'?(getGame(s.sharedGameId)?.name||'game'):'game')}</button>`:''}
         <!-- Tap zones -->
         <div id="tapPrev" style="position:absolute;left:0;top:0;width:35%;height:100%;cursor:pointer;"></div>
@@ -818,6 +838,7 @@ function openStoryViewer(story, allStories){
     document.getElementById('tapPrev').addEventListener('click',()=>{if(idx>0){clearInterval(progressInterval);renderStory(idx-1);}else{clearInterval(progressInterval);if(typeof pauseAllMusic==='function')pauseAllMusic();viewer.remove();}});
     document.getElementById('tapNext').addEventListener('click',()=>{if(idx<stories.length-1){clearInterval(progressInterval);renderStory(idx+1);}else{clearInterval(progressInterval);if(typeof pauseAllMusic==='function')pauseAllMusic();viewer.remove();}});
     if(typeof mountMusicCards==='function') mountMusicCards(viewer);
+    if(typeof mountLocationCards==='function') mountLocationCards(viewer);
     if(typeof enhanceMediaIn==='function') enhanceMediaIn(viewer);
     document.getElementById('storyReplySend')?.addEventListener('click',async()=>{
       const txt=document.getElementById('storyReplyInput')?.value.trim();
@@ -946,6 +967,7 @@ function showBaithakShareMenu(){
     {label:'📷 Create a story',hint:'Camera with text, stickers, games, and audience controls.',fn:()=>openBaithakStoryComposer('camera')},
     {label:'🖼️ Upload a story',hint:'Pick from gallery, then edit before sharing with Friends or Close Friends.',fn:()=>openBaithakStoryComposer('gallery')},
     {label:'🎵 Share a song',hint:'In-app music card — searchable, playable preview. No external apps.',fn:shareBaithakSongStory},
+    {label:'📍 Share a location',hint:'Current place, search, pin drop, or live share — map card in Stories.',fn:shareBaithakLocationStory},
   ]);
 }
 
@@ -970,6 +992,32 @@ async function shareBaithakSongStory(){
         if(created&&typeof openStoryViewer==='function') openStoryViewer(created,[created]);
       }catch(error){
         showToast(error?.message||'Could not share song');
+      }
+    },
+  });
+}
+
+async function shareBaithakLocationStory(){
+  if(typeof openLocationComposer!=='function'){showToast('Location sharing unavailable');return;}
+  openLocationComposer({
+    title:'Share location to Stories',
+    onSelect:async(location)=>{
+      try{
+        showToast('Sharing location…');
+        const created=await createPlatformStory({
+          destination:'baithak',
+          kind:'story',
+          visibility:'friends',
+          type:'media',
+          text:'',
+          location,
+        });
+        if(typeof renderLiveBaithakStories==='function') renderLiveBaithakStories();
+        if(typeof haptic==='function') haptic('success');
+        showToast('Location shared with Friends');
+        if(created&&typeof openStoryViewer==='function') openStoryViewer(created,[created]);
+      }catch(error){
+        showToast(error?.message||'Could not share location');
       }
     },
   });
@@ -1164,6 +1212,11 @@ function showBaithakStoryEditor(file,mode){
         <span data-story-song-label style="font-size:12px;color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">No song attached</span>
         <button type="button" class="btn hidden" data-story-song-clear aria-label="Remove song">✕</button>
       </div>
+      <div class="story-editor-tool-row" style="align-items:center;gap:10px;">
+        <button type="button" class="btn" data-story-location aria-label="Share a location">📍 Location</button>
+        <span data-story-location-label style="font-size:12px;color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">No location attached</span>
+        <button type="button" class="btn hidden" data-story-location-clear aria-label="Remove location">✕</button>
+      </div>
       <div class="story-editor-plus-row">
         <button type="button" class="story-plus-btn" data-story-plus aria-label="Add more">＋</button>
         <span>Tap for camera · long-press for Instant / Create / Upload</span>
@@ -1171,8 +1224,11 @@ function showBaithakStoryEditor(file,mode){
     </div>`;
   document.querySelector('.device')?.appendChild(editor);
   let selectedMusic=null;
+  let selectedLocation=null;
   const songLabel=editor.querySelector('[data-story-song-label]');
   const songClear=editor.querySelector('[data-story-song-clear]');
+  const locLabel=editor.querySelector('[data-story-location-label]');
+  const locClear=editor.querySelector('[data-story-location-clear]');
   const updateSongLabel=()=>{
     if(selectedMusic){
       songLabel.textContent=`${selectedMusic.title} · ${selectedMusic.artist}`;
@@ -1180,6 +1236,15 @@ function showBaithakStoryEditor(file,mode){
     }else{
       songLabel.textContent='No song attached';
       songClear?.classList.add('hidden');
+    }
+  };
+  const updateLocLabel=()=>{
+    if(selectedLocation){
+      locLabel.textContent=selectedLocation.placeName||selectedLocation.label||'Location';
+      locClear?.classList.remove('hidden');
+    }else{
+      locLabel.textContent='No location attached';
+      locClear?.classList.add('hidden');
     }
   };
   editor.querySelector('[data-story-song]')?.addEventListener('click',()=>{
@@ -1195,6 +1260,20 @@ function showBaithakStoryEditor(file,mode){
   songClear?.addEventListener('click',()=>{
     selectedMusic=null;
     updateSongLabel();
+  });
+  editor.querySelector('[data-story-location]')?.addEventListener('click',()=>{
+    if(typeof openLocationComposer!=='function'){showToast('Location sharing unavailable');return;}
+    openLocationComposer({
+      title:'Attach a location',
+      onSelect:(loc)=>{
+        selectedLocation=loc;
+        updateLocLabel();
+      },
+    });
+  });
+  locClear?.addEventListener('click',()=>{
+    selectedLocation=null;
+    updateLocLabel();
   });
   const img=editor.querySelector('[data-story-img]');
   const stickerLayer=editor.querySelector('[data-story-stickers]');
@@ -1301,6 +1380,7 @@ function showBaithakStoryEditor(file,mode){
         text:stickerNote?`${baseText}${baseText?' ':''}${stickerNote}`.trim():baseText,
         sharedGameId:editor.querySelector('[data-story-game]').value,
         music:selectedMusic||undefined,
+        location:selectedLocation||undefined,
       });
       cleanup();
       renderLiveBaithakStories();

@@ -185,6 +185,7 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
     if(!node) return;
     node.dataset.msgId=doc.id;
     if(typeof mountMusicCards==='function') mountMusicCards(node);
+    if(typeof mountLocationCards==='function') mountLocationCards(node);
     if(typeof wireChallengeBubble==='function') wireChallengeBubble(node);
     if(prepend) msgsArea.insertBefore(node, msgsArea.firstChild);
     else msgsArea.appendChild(node);
@@ -260,6 +261,7 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
             if(div.firstElementChild){
               if(docId){ div.firstElementChild.dataset.msgId=docId; rendered.add(docId); }
               if(typeof mountMusicCards==='function') mountMusicCards(div.firstElementChild);
+              if(typeof mountLocationCards==='function') mountLocationCards(div.firstElementChild);
               if(typeof wireChallengeBubble==='function') wireChallengeBubble(div.firstElementChild);
               frag.appendChild(div.firstElementChild);
             }
@@ -296,17 +298,39 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment){
       };
     }
     if(attachment && typeof attachment==='object' && attachment.type){
-      payload.attachment={
-        type:String(attachment.type).slice(0,40),
-        url:attachment.url?String(attachment.url).slice(0,2048):null,
-        name:attachment.name?String(attachment.name).slice(0,160):null,
-        width:Number(attachment.width)||null,
-        height:Number(attachment.height)||null,
-        challengeId:attachment.challengeId?String(attachment.challengeId).slice(0,80):null,
-        questions:Array.isArray(attachment.questions)?attachment.questions.slice(0,20):null,
-        timerSeconds:Number(attachment.timerSeconds)||null,
-        label:attachment.label?String(attachment.label).slice(0,120):null,
-      };
+      if(attachment.type==='location' && typeof normalizeLocationAttachment==='function'){
+        const loc=normalizeLocationAttachment(attachment);
+        if(loc) payload.attachment=loc;
+      } else if(attachment.type==='location'){
+        const lat=Number(attachment.lat);
+        const lng=Number(attachment.lng);
+        if(Number.isFinite(lat) && Number.isFinite(lng)){
+          payload.attachment={
+            type:'location',
+            mode:['current','place','pin','live'].includes(attachment.mode)?attachment.mode:'pin',
+            lat, lng,
+            placeName:attachment.placeName?String(attachment.placeName).slice(0,120):null,
+            address:attachment.address?String(attachment.address).slice(0,240):null,
+            label:attachment.label?String(attachment.label).slice(0,160):'Location',
+            liveShareId:attachment.liveShareId?String(attachment.liveShareId).slice(0,80):null,
+            expiresAt:attachment.expiresAt!=null?(Number(attachment.expiresAt)||null):null,
+            durationMs:Number(attachment.durationMs)||null,
+            startedAt:attachment.startedAt!=null?(Number(attachment.startedAt)||null):null,
+          };
+        }
+      } else {
+        payload.attachment={
+          type:String(attachment.type).slice(0,40),
+          url:attachment.url?String(attachment.url).slice(0,2048):null,
+          name:attachment.name?String(attachment.name).slice(0,160):null,
+          width:Number(attachment.width)||null,
+          height:Number(attachment.height)||null,
+          challengeId:attachment.challengeId?String(attachment.challengeId).slice(0,80):null,
+          questions:Array.isArray(attachment.questions)?attachment.questions.slice(0,20):null,
+          timerSeconds:Number(attachment.timerSeconds)||null,
+          label:attachment.label?String(attachment.label).slice(0,120):null,
+        };
+      }
     }
     await db.collection('chats').doc(chatId).collection('messages').add(payload);
   }catch(e){ console.warn('[chat] send failed', e?.message||e); }

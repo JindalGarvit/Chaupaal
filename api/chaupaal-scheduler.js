@@ -14,6 +14,7 @@ const {
   localDateKey,
 } = require('../server-lib/chaupaal-cadence');
 const { runWeeklyIntentWeightRefresh } = require('../server-lib/intent-weights');
+const { expireLiveLocationShares } = require('../server-lib/live-location');
 
 const BATCH = 40;
 
@@ -313,7 +314,16 @@ module.exports = async function handler(req, res) {
       console.warn('[scheduler] intent weights', e?.message || e);
     }
 
-    return sendSuccess(res, { ...results, summary, intentWeights });
+    // Expire live location shares past duration (independent of sender client)
+    let liveLoc = { skipped: true };
+    try {
+      liveLoc = await expireLiveLocationShares(db, admin, { limit: 40 });
+    } catch (e) {
+      liveLoc = { error: e?.message || String(e) };
+      console.warn('[scheduler] live location expire', e?.message || e);
+    }
+
+    return sendSuccess(res, { ...results, summary, intentWeights, liveLoc });
   } catch (e) {
     console.error('[chaupaal-scheduler]', e?.message || e);
     return sendError(res, 500, 'SCHEDULER_FAILED', e?.message || 'Scheduler failed');

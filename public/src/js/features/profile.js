@@ -153,6 +153,11 @@ function renderProfileModal(){
         ${profileField('Profile visibility','profileVisibility','select','',['public','Friends only','Private'])}
       </div>
       <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:16px;">
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;margin-bottom:6px;">Nearby matching</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.4;">Optional GPS for Peepal proximity. Never required — only used when you opt in.</div>
+        <button type="button" class="btn btn--block" id="setMatchLocationBtn">📍 Set my location for matching</button>
+      </div>
+      <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:16px;">
         <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;margin-bottom:8px;">Chaupaal ratings</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
           ${NEWS_CATEGORIES.map(cat=>`<div style="background:var(--cream);border-radius:10px;padding:10px;text-align:center;"><div style="font-size:11px;color:var(--muted);">${CATEGORY_ICONS[cat]} ${cat}</div><div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;color:var(--red);">${(userProfile?.categoryRatings||{})[cat]||1200}</div></div>`).join('')}
@@ -264,6 +269,10 @@ function renderProfileModal(){
     if(typeof wireProfilePromptsBlock==='function') wireProfilePromptsBlock(content);
     if(typeof wireProfileIcebreakerBlock==='function') wireProfileIcebreakerBlock(content);
     if(typeof wireProfileTypeToggle==='function') wireProfileTypeToggle(content);
+    content.querySelector('#setMatchLocationBtn')?.addEventListener('click',()=>{
+      if(typeof promptMatchLocation==='function') promptMatchLocation();
+      else if(typeof showToast==='function') showToast('Location sharing unavailable');
+    });
   }
 
   // Tab switching

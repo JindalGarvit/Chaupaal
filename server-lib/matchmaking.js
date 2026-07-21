@@ -116,6 +116,29 @@ function lookingForOf(user) {
     .toLowerCase();
 }
 
+function coordsOf(user) {
+  const g = user.matchLocation || user.profile?.matchLocation || user.profile?.geo || user.geo;
+  if (!g || typeof g !== 'object') return null;
+  const lat = Number(g.lat);
+  const lng = Number(g.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return { lat, lng };
+}
+
+/** Great-circle distance in km. */
+function haversineKm(a, b) {
+  const toRad = (d) => (d * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const la1 = toRad(a.lat);
+  const la2 = toRad(b.lat);
+  const h =
+    Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
 /**
  * Structured gate for personal matching pool.
  * @param {object} viewer
@@ -189,7 +212,17 @@ function computeSignalScores(viewer, cand, edges = {}) {
 
   const vCity = cityOf(viewer);
   const cCity = cityOf(cand);
-  const locationProximity = vCity && cCity && vCity === cCity ? 1 : 0;
+  // Prefer real coordinates (matchLocation) when both users have them; else city match.
+  let locationProximity = 0;
+  const vGeo = coordsOf(viewer);
+  const cGeo = coordsOf(cand);
+  if (vGeo && cGeo) {
+    const km = haversineKm(vGeo, cGeo);
+    // 0 km → 1, ~50 km → 0, farther → 0 (same 0..1 range as city boolean signal)
+    locationProximity = Math.max(0, Math.min(1, 1 - km / 50));
+  } else if (vCity && cCity && vCity === cCity) {
+    locationProximity = 1;
+  }
 
   const vLf = lookingForOf(viewer);
   const cLf = lookingForOf(cand);

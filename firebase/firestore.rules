@@ -383,6 +383,7 @@ service cloud.firestore {
       // Messages: participant-scoped reads; clients may only author their own uid.
       // Chaupaal / server messages are written via Admin SDK (bypasses rules).
       // Optional `music` map and/or `attachment` map for rich bubbles (photo/file/location/challenge).
+      // Location attachments may include lat, lng, mode, placeName, address, liveShareId, expiresAt, durationMs, label.
       match /messages/{messageId} {
         allow read: if isAuth() &&
           get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]);
@@ -409,6 +410,17 @@ service cloud.firestore {
               && request.resource.data.attachment.type is string
               && request.resource.data.attachment.type.size() > 0
               && request.resource.data.attachment.type.size() <= 40
+              && (
+                request.resource.data.attachment.type != 'location'
+                || (
+                  request.resource.data.attachment.lat is number
+                  && request.resource.data.attachment.lng is number
+                  && request.resource.data.attachment.lat >= -90
+                  && request.resource.data.attachment.lat <= 90
+                  && request.resource.data.attachment.lng >= -180
+                  && request.resource.data.attachment.lng <= 180
+                )
+              )
             )
           );
         allow update: if false;
@@ -558,6 +570,21 @@ service cloud.firestore {
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.keys().hasAll(['uid','targetUid','reaction']);
       allow update, delete: if false;
+    }
+
+    // ===================== LIVE LOCATION SHARES =====================
+    // Share ids only appear in messages participants can already read.
+    // Owner creates/updates/stops; any authenticated user may get-by-id.
+    match /liveLocationShares/{shareId} {
+      allow get: if isAuth();
+      allow list: if false;
+      allow create: if isAuth()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasAll(['uid', 'lat', 'lng', 'active']);
+      allow update: if isAuth()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid;
+      allow delete: if isAuth() && resource.data.uid == request.auth.uid;
     }
 
     // ===================== FEATURE FLAGS (Phase 4) =====================
