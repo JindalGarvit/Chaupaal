@@ -21,6 +21,8 @@ const {
   deriveRelationshipState,
   countDeltasForFollowChange,
 } = require('../server-lib/social-model');
+const { applyFlagSignal, applyBlockSignal } = require('../server-lib/shadowban');
+const { logMatchEngagement } = require('../server-lib/intent-weights');
 
 const MAX_TARGETS = 30;
 const MAX_LIST = 100;
@@ -56,11 +58,13 @@ function normalizeCounts(raw) {
 function applyCountDelta(tx, db, admin, uid, delta) {
   if (!delta || (!delta.friends && !delta.followers && !delta.following)) return;
   const path = db.collection('users').doc(uid);
+  const publicPath = db.collection('users_public').doc(uid);
   const patch = {};
   if (delta.friends) patch['relationshipCounts.friends'] = admin.firestore.FieldValue.increment(delta.friends);
   if (delta.followers) patch['relationshipCounts.followers'] = admin.firestore.FieldValue.increment(delta.followers);
   if (delta.following) patch['relationshipCounts.following'] = admin.firestore.FieldValue.increment(delta.following);
   tx.set(path, patch, { merge: true });
+  tx.set(publicPath, patch, { merge: true });
 }
 
 async function ensureTarget(db, uid) {
@@ -208,12 +212,22 @@ async function profileCounts(db, profileUid) {
     .doc(profileUid)
     .set({ relationshipCounts: scanned }, { merge: true })
     .catch(() => {});
+  await db
+    .collection('users_public')
+    .doc(profileUid)
+    .set({ relationshipCounts: scanned }, { merge: true })
+    .catch(() => {});
   return scanned;
 }
 
 async function recomputeCounts(db, profileUid) {
   const scanned = await scanCounts(db, profileUid);
   await db.collection('users').doc(profileUid).set({ relationshipCounts: scanned }, { merge: true });
+  await db
+    .collection('users_public')
+    .doc(profileUid)
+    .set({ relationshipCounts: scanned }, { merge: true })
+    .catch(() => {});
   return scanned;
 }
 
@@ -552,6 +566,79 @@ module.exports = async function handler(req, res) {
     }
     if (action === 'search_users') {
       return sendSuccess(res, { profiles: await searchUsers(db, user.uid, body.query) });
+    }
+    if (action === 'flag_user') {
+      if (!targetUid) return sendError(res, 400, 'VALIDATION_ERROR', 'targetUid required');
+      const reasonCode = String(body.reasonCode || 'custom').slice(0, 40);
+      const reasonLabel = String(body.reason || body.reasonLabel || reasonCode).slice(0, 120);
+      await db.collection('user_flags').add({
+        reportedUid: targetUid,
+        reporterUid: user.uid,
+        reason: reasonLabel,
+        reasonCode,
+        customText: body.customText ? String(body.customText).slice(0, 500) : null,
+        targetType: String(body.targetType || 'user').slice(0, 40),
+        postId: body.postId ? String(body.postId).slice(0, 80) : null,
+        chatId: body.chatId ? String(body.chatId).slice(0, 80) : null,
+        ts: Date.now(),
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      const ban = await applyFlagSignal(db, admin, {
+        reportedUid: targetUid,
+        reporterUid: user.uid,
+        reasonCode,
+        chatId: body.chatId,
+      });
+      return sendSuccess(res, { flagged: true, shadowban: ban });
+    }
+    if (action === 'block_signal') {
+      if (!targetUid) return sendError(res, 400, 'VALIDATION_ERROR', 'targetUid required');
+      const ban = await applyBlockSignal(db, admin, {
+        blockedUid: targetUid,
+        blockerUid: user.uid,
+      });
+      return sendSuccess(res, { shadowban: ban });
+    }
+    if (action === 'chat_rating') {
+      if (!targetUid) return sendError(res, 400, 'VALIDATION_ERROR', 'targetUid required');
+      const score = Math.max(1, Math.min(10, Number(body.score) || 0));
+      if (!score) return sendError(res, 400, 'VALIDATION_ERROR', 'score 1–10 required');
+      const chatId = body.chatId ? String(body.chatId).slice(0, 80) : null;
+      const ratingRef = db.collection('chatRatings').doc();
+      await ratingRef.set({
+        raterUid: user.uid,
+        peerUid: targetUid,
+        chatId,
+        score,
+        discoveryOrigin: body.discoveryOrigin ? String(body.discoveryOrigin).slice(0, 40) : null,
+        intentProfileId: body.intentProfileId ? String(body.intentProfileId).slice(0, 80) : null,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      // Consistently low → reduce future surfacing; high → modest accepted signal
+      const intentProfileId = body.intentProfileId ? String(body.intentProfileId).slice(0, 80) : null;
+      if (intentProfileId && body.signalScores) {
+        const outcome = score <= 4 ? 'rated_low' : score >= 8 ? 'rated_high' : null;
+        if (outcome) {
+          await logMatchEngagement(db, admin, {
+            uid: user.uid,
+            intentProfileId,
+            candidateUid: targetUid,
+            signalScores: body.signalScores || {},
+            outcome,
+            intentText: body.intentText || '',
+          });
+        }
+      }
+      // Very low scores also nudge shadowban soft path
+      if (score <= 2) {
+        await applyFlagSignal(db, admin, {
+          reportedUid: targetUid,
+          reporterUid: user.uid,
+          reasonCode: 'low_chat_rating',
+          chatId,
+        });
+      }
+      return sendSuccess(res, { rated: true, score, id: ratingRef.id });
     }
     return sendError(res, 400, 'VALIDATION_ERROR', 'Unknown relationship action');
   } catch (error) {

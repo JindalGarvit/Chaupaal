@@ -47,12 +47,23 @@
   /**
    * Create / open a DM and persist a shared first-hello card for both sides.
    */
-  async function openDmWithSharedHello({ uid, name, avatar, theirIcebreakers, starterText }) {
+  async function openDmWithSharedHello({
+    uid,
+    name,
+    avatar,
+    theirIcebreakers,
+    starterText,
+    origin,
+    peerProfileType,
+    matchMeta,
+  }) {
     const chatId =
       currentUser?.uid && uid
         ? [currentUser.uid, uid].sort().join('_')
         : `chat_disc_${uid || Date.now()}`;
     const hello = pickSharedHello();
+    const discoveryOrigin = origin === 'ai_discovery' ? 'ai_discovery' : origin || null;
+    const peerType = peerProfileType || 'personal';
     const newChat = {
       id: chatId,
       firestoreId: chatId,
@@ -67,6 +78,11 @@
       icebreakers: theirIcebreakers || [],
       sharedFirstHello: hello,
       participants: currentUser?.uid && uid ? [currentUser.uid, uid].sort() : undefined,
+      discoveryOrigin,
+      peerProfileType: peerType,
+      profileType: peerType,
+      openedBy: typeof currentUser !== 'undefined' ? currentUser?.uid : null,
+      matchMeta: matchMeta || null,
     };
 
     if (typeof SAMPLE_CHATS !== 'undefined' && !SAMPLE_CHATS.find((c) => c.id === newChat.id)) {
@@ -90,8 +106,18 @@
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
             sharedFirstHello: hello,
             preview: hello,
+            openedBy: currentUser.uid,
+            createdBy: currentUser.uid,
+            firstMessageAt: Date.now(),
+            lastMessageAt: Date.now(),
+            ...(discoveryOrigin
+              ? { discoveryOrigin, peerProfileType: peerType, origin: discoveryOrigin }
+              : {}),
+            ...(matchMeta && typeof matchMeta === 'object' ? { matchMeta } : {}),
           });
-          // Neutral card authored by the opener; both participants see the same prompt text.
+          newChat.openedBy = currentUser.uid;
+          newChat.createdBy = currentUser.uid;
+          if (matchMeta) newChat.matchMeta = matchMeta;
           await ref.collection('messages').add({
             text: `Shared starter for both of you:\n"${hello}"`,
             uid: currentUser.uid,
@@ -101,10 +127,22 @@
             kind: 'shared_first_hello',
             ts: firebase.firestore.FieldValue.serverTimestamp(),
           });
-        } else if (!snap.data()?.sharedFirstHello) {
-          await ref.set({ sharedFirstHello: hello }, { merge: true });
         } else {
-          newChat.sharedFirstHello = snap.data().sharedFirstHello;
+          const data = snap.data() || {};
+          if (!data.sharedFirstHello) {
+            await ref.set({ sharedFirstHello: hello }, { merge: true });
+          } else {
+            newChat.sharedFirstHello = data.sharedFirstHello;
+          }
+          if (discoveryOrigin && !data.discoveryOrigin) {
+            await ref.set(
+              { discoveryOrigin, peerProfileType: peerType, origin: discoveryOrigin },
+              { merge: true }
+            );
+          } else if (data.discoveryOrigin) {
+            newChat.discoveryOrigin = data.discoveryOrigin;
+            newChat.peerProfileType = data.peerProfileType || peerType;
+          }
         }
       } catch (e) {
         console.warn('[founder] shared hello', e);

@@ -111,20 +111,23 @@ service cloud.firestore {
 
     // ===================== USERS =====================
     match /users/{userId} {
-      // Anyone can read basic public profile
-      allow read: if isAuth();
-      // Owner may write profile fields, but relationshipCounts is Admin-only
-      // (maintained by /api/relationships) to prevent client tampering.
+      // Private document — owner only (email/phone/DOB/prefs). Others use users_public.
+      allow read: if isOwner(userId);
       allow create: if isOwner(userId);
       allow update: if isOwner(userId)
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['relationshipCounts']);
 
       // Instagram-style multi-profile under one auth identity
       match /profiles/{profileId} {
-        allow read: if isAuth();
+        allow read: if isOwner(userId);
         allow create, update, delete: if isOwner(userId);
       }
       allow delete: if isOwner(userId);
+
+      // Policy usage (anon posts, AI Discovery messaging) — owner only
+      match /policyUsage/{featureId} {
+        allow read, write: if isOwner(userId);
+      }
 
       // Legacy friends index is retired. Friendship is reciprocal following.
       match /friends/{friendId} {
@@ -198,13 +201,35 @@ service cloud.firestore {
       }
     }
 
+    // ===================== USERS_PUBLIC (cross-user reads) =====================
+    match /users_public/{userId} {
+      allow read: if isAuth();
+      allow create, update: if isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
+
     // ===================== USERNAMES =====================
-    // Public get (not list) so signup can live-check availability before Auth.
+    // Authenticated get only (uid mapping must not be world-readable).
+    // Pre-auth availability checks go through POST /api/media-config { action: 'username_check' }.
     match /usernames/{username} {
-      allow get: if true;
+      allow get: if isAuth();
       allow list: if false;
       allow create: if isAuth() && request.resource.data.uid == request.auth.uid;
       allow delete: if isAuth() && resource.data.uid == request.auth.uid;
+    }
+
+    // Invite tokens keyed by token string — get by id only (no token harvest via chat list).
+    match /groupInvites/{token} {
+      allow get: if isAuth();
+      allow list: if false;
+      allow create: if isAuth()
+        && request.resource.data.chatId is string
+        && request.resource.data.chatId.size() > 0
+        && request.resource.data.chatId.size() <= 128
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update, delete: if isAuth()
+        && resource.data.chatId is string
+        && get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.admins.hasAny([request.auth.uid]);
     }
 
     // ===================== AKHBAAR / DAILY SCORES =====================
@@ -214,11 +239,10 @@ service cloud.firestore {
     }
 
     // ===================== CATEGORY CACHE =====================
-    // Written by Vercel Cron (Admin SDK) every ~6h; clients read.
-    // Authenticated clients may still write on rare live-fallback.
+    // Written by Vercel Cron (Admin SDK) every ~6h; clients read only.
     match /category_cache/{catId} {
       allow read: if isAuth();
-      allow write: if isAuth();
+      allow write: if false;
     }
 
     // ===================== PEEPAL QUESTIONS =====================
@@ -373,22 +397,61 @@ service cloud.firestore {
         resource.data.participants != null &&
         resource.data.participants.hasAny([request.auth.uid]);
     }
+    function isChatAdmin() {
+      return isAuth() &&
+        resource.data.admins != null &&
+        resource.data.admins.hasAny([request.auth.uid]);
+    }
+    // Non-member may only arrayUnion themselves (+ memberProfiles / updatedAt) when invite is enabled.
+    function validInviteSelfJoin() {
+      return isAuth()
+        && resource.data.invite != null
+        && resource.data.invite.enabled == true
+        && resource.data.invite.token is string
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['participants', 'memberProfiles', 'updatedAt'])
+        && request.resource.data.participants.hasAll(resource.data.participants)
+        && request.resource.data.participants.hasAny([request.auth.uid])
+        && !(resource.data.participants.hasAny([request.auth.uid]));
+    }
+    // Audited client writers: group-info, chat-presence, founder DM, self/chaupaal ensure.
+    function chatMetadataUpdateAllowed() {
+      let keys = request.resource.data.diff(resource.data).affectedKeys();
+      let allowed = keys.hasOnly([
+    // Allowlisted chat metadata keys also include rating/match plumbing
+        'typing', 'reads', 'updatedAt', 'preview', 'lastMessageAt', 'sharedFirstHello',
+        'participants', 'memberProfiles', 'discoveryOrigin', 'peerProfileType', 'origin',
+        'name', 'description', 'avatar', 'photoURL', 'admins', 'permissions', 'invite',
+        'openedBy', 'createdBy', 'firstMessageAt', 'matchMeta',
+        'isPublic', 'nameLower', 'memberCount', 'discoverableNoticeAck'
+      ]);
+      let adminOnly = keys.hasAny(['admins', 'permissions', 'invite', 'isPublic', 'discoverableNoticeAck']);
+      let infoKeys = keys.hasAny(['name', 'description', 'avatar', 'photoURL', 'nameLower']);
+      let canEditInfo = isChatAdmin() ||
+        (resource.data.permissions != null && resource.data.permissions.editInfo == 'all');
+      return isChatParticipant()
+        && allowed
+        && (!adminOnly || isChatAdmin())
+        && (!infoKeys || canEditInfo);
+    }
     match /chats/{chatId} {
-      // Chat metadata readable only by participants
-      allow read: if isChatParticipant() ||
-        (isAuth() && resource.data.participants == null) ||
-        (isAuth() &&
-          resource.data.invite != null &&
-          resource.data.invite.enabled == true &&
-          resource.data.invite.token is string);
+      // Participants always; public groups readable for global search (Phase 3.2).
+      allow get: if isChatParticipant()
+        || (resource.data.type == 'group' && resource.data.isPublic == true);
+      allow list: if isChatParticipant()
+        || (resource.data.type == 'group' && resource.data.isPublic == true);
       allow create: if isAuth()
         && request.resource.data.participants.hasAny([request.auth.uid])
         && (
           !(request.resource.data.keys().hasAny(['type'])) ||
-          request.resource.data.type != 'chaupaal' ||
-          chatId == 'chat_chaupaal_' + request.auth.uid
+          (
+            request.resource.data.type != 'chaupaal' &&
+            request.resource.data.type != 'self'
+          ) ||
+          (request.resource.data.type == 'chaupaal' && chatId == 'chat_chaupaal_' + request.auth.uid) ||
+          (request.resource.data.type == 'self' && chatId == 'chat_self_' + request.auth.uid)
         );
-      allow update: if isChatParticipant();
+      allow update: if validInviteSelfJoin() || chatMetadataUpdateAllowed();
 
       match /joinRequests/{requestUid} {
         allow read: if isAuth() &&
@@ -495,7 +558,9 @@ service cloud.firestore {
     match /matchmaking/{category}/waiting/{docId} {
       allow read: if isAuth();
       allow create: if isAuth() && request.resource.data.uid == request.auth.uid;
-      allow delete: if isAuth(); // any authenticated user can remove (for matching)
+      // Client-side matcher deletes the opponent's waiting row (findRealOpponent).
+      // Tightening to owner-only requires a server-side matcher — deferred (flagged in Phase 0.2).
+      allow delete: if isAuth();
     }
 
     // ===================== FLAGS & BLOCKS =====================
@@ -510,7 +575,19 @@ service cloud.firestore {
 
     match /shadowbans/{userId} {
       allow read: if false; // internal only — never exposed to client
-      allow write: if false; // only Cloud Functions can write (once Blaze active)
+      allow write: if false; // Admin SDK /api/relationships flag_user|block_signal
+    }
+
+    // Post-chat ratings — rater can create; no client reads (intent weights via Admin)
+    match /chatRatings/{ratingId} {
+      allow read: if false;
+      allow create: if isAuth()
+        && request.resource.data.raterUid == request.auth.uid
+        && request.resource.data.peerUid is string
+        && request.resource.data.score is int
+        && request.resource.data.score >= 1
+        && request.resource.data.score <= 10;
+      allow update, delete: if false;
     }
 
     // ===================== NOTIFICATIONS =====================

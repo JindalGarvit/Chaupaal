@@ -95,18 +95,8 @@ function renderFriendDiscovery(container){
   document.getElementById('phoneSearchBtn')?.addEventListener('click',async()=>{
     const phone=document.getElementById('phoneSearchInput')?.value.trim();
     if(!phone){showToast('Enter a phone number');return;}
-    showToast('Searching...');
-    if(db){
-      const snap=await db.collection('users').where('phone','==',phone).get().catch(()=>null);
-      if(snap&&!snap.empty){
-        const doc=snap.docs[0],u=doc.data();
-        showToast(`Found: ${u.name}`);
-        if(currentUser&&typeof requestFriend==='function'){
-          requestFriend(doc.id).then(()=>showToast(`Friend request sent to ${u.name}`)).catch(err=>showToast(err?.message||'Could not send request'));
-        }
-      }
-      else showToast('No user found with that number');
-    }else showToast('Sign in to search by phone number');
+    // Phone is private on users/ — client-side phone equality search removed (PII split).
+    showToast('Search by username instead — phone lookup is private');
   });
   section.querySelectorAll('.discover-add-btn').forEach(btn=>{
     btn.addEventListener('click',()=>{btn.textContent='Added ✓';btn.style.background='rgba(51,196,129,0.1)';btn.style.color='var(--green)';showToast(`${btn.dataset.name} added`);});

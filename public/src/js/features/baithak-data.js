@@ -66,13 +66,17 @@ function renderStories(){
 function isSelfChatRow(chat){
   if(!chat) return false;
   if(typeof isSelfChat==='function') return isSelfChat(chat);
-  return !!(chat.isSelf || chat.type==='self' || chat.id==='chat_self' || chat.firestoreId==='chat_self');
+  const id=chat.firestoreId||chat.id;
+  return !!(chat.isSelf || chat.type==='self' || id==='chat_self' || (typeof id==='string' && id.startsWith('chat_self')));
 }
 
 function buildSelfChatRow(){
   if(typeof getSelfChat==='function') return getSelfChat();
+  const id=(typeof selfChatId==='function'&&typeof currentUser!=='undefined'&&currentUser?.uid)
+    ? selfChatId(currentUser.uid)
+    : 'chat_self';
   return {
-    id:'chat_self', type:'self', isSelf:true, pinned:true, undeletable:true,
+    id, firestoreId:id, type:'self', isSelf:true, pinned:true, undeletable:true,
     name:'Me (You)', avatar:'📝',
     preview:'Notes to self · try games & features here',
     time:'Pinned', unread:0, duelStreak:0,
@@ -255,6 +259,16 @@ function mapChatDoc(raw){
     photoURL: raw.photoURL||null,
     uid: peerUid||raw.peerUid||null,
     profileType: raw.profileType||raw.peerProfileType||peerProfile?.profileType||null,
+    discoveryOrigin: raw.discoveryOrigin||raw.origin||null,
+    origin: raw.origin||raw.discoveryOrigin||null,
+    sharedFirstHello: raw.sharedFirstHello||null,
+    peerProfileType: raw.peerProfileType||raw.profileType||peerProfile?.profileType||null,
+    openedBy: raw.openedBy||raw.createdBy||null,
+    createdBy: raw.createdBy||null,
+    firstMessageAt: raw.firstMessageAt?.toMillis?.()||raw.firstMessageAt||null,
+    lastMessageAt: raw.lastMessageAt?.toMillis?.()||raw.lastMessageAt||null,
+    matchMeta: raw.matchMeta||null,
+    createdAt: raw.createdAt?.toMillis?.()||raw.createdAt||null,
   };
 }
 

@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="/src/styles/baithak.css?v=22">
   <link rel="stylesheet" href="/src/styles/peepal.css?v=21">
   <link rel="stylesheet" href="/src/styles/duniya.css?v=19">
-  <link rel="stylesheet" href="/src/styles/components.css?v=39">
+  <link rel="stylesheet" href="/src/styles/components.css?v=40">
 </head>
 <body>
 <div class="device">
@@ -313,6 +313,7 @@
       </div>
     </div>
     <div class="topbar-right">
+      <button class="icon-btn" id="globalSearchBtn" aria-label="Search Chaupaal" title="Search">🔍</button>
       <div class="streak-pill" id="streakPill" style="cursor:pointer;" title="Tap to manage streak">
         <span style="color:var(--red)">🔥</span><span id="streakNum">0</span>
         <span style="font-size:10px;color:var(--muted);margin-left:2px;">❄️<span id="streakFreezeCount">0</span></span>
@@ -489,7 +490,8 @@
     <div class="sidebar-logo">
       <svg width="28" height="28" viewBox="0 0 34 34" fill="none"><rect width="34" height="34" rx="9" fill="#E63946"/><rect x="6" y="14" width="22" height="3.5" rx="1.5" fill="#FFC93C"/><path d="M9 17.5V8M12.5 17.5V8M16 17.5V8.5M19.5 17.5V8M23 17.5V8" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity=".85"/><path d="M9.5 17.5L7.5 25M24.5 17.5L26.5 25" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
       Chaupaal
-      <button class="icon-btn" id="notifBtnDesktop" style="margin-left:auto;width:30px;height:30px;font-size:14px;position:relative;">🔔<span class="notif-dot hidden" id="notifDotDesktop"></span></button>
+      <button class="icon-btn" id="globalSearchBtnDesktop" aria-label="Search Chaupaal" title="Search" style="margin-left:auto;width:30px;height:30px;font-size:14px;">🔍</button>
+      <button class="icon-btn" id="notifBtnDesktop" style="width:30px;height:30px;font-size:14px;position:relative;">🔔<span class="notif-dot hidden" id="notifDotDesktop"></span></button>
     </div>
 
     <button class="tab-btn" data-tab="akhbaar">
@@ -734,7 +736,7 @@
   <script src="/src/js/ai/markdown.js"></script>
   <script src="/src/js/ai/call-ai.js"></script>
   <script src="/src/js/ai/anthropic.js"></script>
-  <script src="/src/js/core/search.js?v=3"></script>
+  <script src="/src/js/core/search.js?v=4"></script>
   <script src="/src/js/core/deeplinks.js?v=28"></script>
   <script src="/src/js/core/rate-limit-client.js"></script>
   <script src="/src/js/core/theme.js"></script>
@@ -751,7 +753,7 @@
   <script src="/src/js/features/chat-rating.js"></script>
   <script src="/src/js/features/baithak-chat.js?v=35"></script>
   <script src="/src/js/features/music-card.js?v=3"></script>
-  <script src="/src/js/features/group-info.js?v=3"></script>
+  <script src="/src/js/features/group-info.js?v=4"></script>
   <script src="/src/js/core/stories.js?v=27"></script>
   <script src="/src/js/core/archive-hub.js?v=3"></script>
   <script src="/src/js/core/journal-anim.js?v=2"></script>

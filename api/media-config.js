@@ -13,7 +13,10 @@ const { searchPlaces } = require('../server-lib/geocode');
 const { checkUrlWithWebRisk } = require('../server-lib/url-safety');
 
 async function handleGet(req, res) {
-  res.setHeader('Cache-Control', 'public, max-age=300');
+  const user = await requireUser(req, res, { allowWeak: false });
+  if (!user) return;
+
+  res.setHeader('Cache-Control', 'private, max-age=60');
   const cloudName =
     typeof process.env.CLOUDINARY_CLOUD_NAME === 'string'
       ? process.env.CLOUDINARY_CLOUD_NAME.trim()
@@ -41,10 +44,30 @@ async function handleGet(req, res) {
   });
 }
 
-async function handlePost(req, res) {
-  const user = await requireUser(req, res, { allowWeak: true });
-  if (!user) return;
+/** Pre-auth username availability — returns only { available }, never uid. */
+async function handleUsernameCheck(req, res, body) {
+  const username = String(body.username || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '');
+  if (username.length < 3 || username.length > 20) {
+    return sendSuccess(res, { available: false, reason: 'invalid' });
+  }
+  const app = initAdmin();
+  if (!app) {
+    // Soft allow when Admin isn't configured (local/dev) — claim still races safely on create.
+    return sendSuccess(res, { available: true, degraded: true });
+  }
+  try {
+    const snap = await app.firestore().collection('usernames').doc(username).get();
+    return sendSuccess(res, { available: !snap.exists });
+  } catch (e) {
+    console.warn('[media-config] username_check', e?.message || e);
+    return sendSuccess(res, { available: true, degraded: true });
+  }
+}
 
+async function handlePost(req, res) {
   let body;
   try {
     body = parseJsonBody(req);
@@ -53,6 +76,14 @@ async function handlePost(req, res) {
   }
 
   const action = String(body.action || '').trim();
+
+  // Pre-auth signup only — no Bearer required; never returns uid.
+  if (action === 'username_check') {
+    return handleUsernameCheck(req, res, body);
+  }
+
+  const user = await requireUser(req, res, { allowWeak: false });
+  if (!user) return;
 
   if (action === 'music_search') {
     const query = String(body.query || '').trim();

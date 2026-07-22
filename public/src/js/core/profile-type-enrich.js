@@ -97,7 +97,7 @@
       for (let i = 0; i < missingUids.length; i += BATCH) {
         const chunk = missingUids.slice(i, i + BATCH);
         const snap = await db
-          .collection('users')
+          .collection('users_public')
           .where(firebase.firestore.FieldPath.documentId(), 'in', chunk)
           .get();
         const found = new Set();

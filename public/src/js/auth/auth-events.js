@@ -115,18 +115,22 @@ async function checkUsernameAvailability(username) {
     regData.usernameAvailable = false;
     return false;
   }
-  hint.textContent = 'Checking availabilityâ€¦';
+  hint.textContent = 'Checking availability…';
   hint.style.color = 'var(--muted)';
   try {
-    if (!db) {
-      hint.textContent = 'Looks okay â€” weâ€™ll confirm on create';
-      hint.style.color = '#2ECC71';
-      regData.usernameAvailable = true;
-      return true;
+    let available = true;
+    if (typeof apiFetch === 'function') {
+      const envelope = await apiFetch('/api/media-config', {
+        method: 'POST',
+        body: { action: 'username_check', username },
+      });
+      if (envelope?.ok && envelope.data && envelope.data.available === false) available = false;
+    } else if (db && auth?.currentUser) {
+      const snap = await db.collection('usernames').doc(username).get();
+      available = !snap.exists;
     }
-    const snap = await db.collection('usernames').doc(username).get();
-    if (snap.exists) {
-      hint.textContent = 'Taken â€” try another';
+    if (!available) {
+      hint.textContent = 'Taken — try another';
       hint.style.color = 'var(--red)';
       regData.usernameAvailable = false;
       return false;
@@ -136,11 +140,34 @@ async function checkUsernameAvailability(username) {
     regData.usernameAvailable = true;
     return true;
   } catch (e) {
-    hint.textContent = 'Couldnâ€™t check right now â€” weâ€™ll retry on create';
+    hint.textContent = 'Couldn’t check right now — we’ll retry on create';
     hint.style.color = 'var(--muted)';
     regData.usernameAvailable = true;
     return true;
   }
+}
+
+/** Common disposable / throwaway email domains — keep short; expand later if needed. */
+const DISPOSABLE_EMAIL_DOMAINS = new Set([
+  'mailinator.com','guerrillamail.com','guerrillamail.net','sharklasers.com','grr.la',
+  'tempmail.com','temp-mail.org','throwaway.email','yopmail.com','yopmail.fr',
+  'trashmail.com','discard.email','10minutemail.com','getnada.com','maildrop.cc',
+  'mailnesia.com','fakeinbox.com','tempail.com','emailondeck.com','moakt.com',
+]);
+
+function isDisposableEmail(email) {
+  const domain = String(email || '').trim().toLowerCase().split('@')[1] || '';
+  return !!(domain && DISPOSABLE_EMAIL_DOMAINS.has(domain));
+}
+
+/** Email/password accounts must verify; Google + verified phone count as verified contact. */
+function hasVerifiedContact(user) {
+  if (!user) return false;
+  if (user.emailVerified) return true;
+  if (user.phoneNumber) return true;
+  const providers = user.providerData || [];
+  if (providers.some((p) => p.providerId === 'google.com')) return true;
+  return false;
 }
 
 function wireAuthEvents() {
@@ -357,6 +384,17 @@ function wireAuthEvents() {
     }
     try {
       if (auth) await auth.signInWithEmailAndPassword(email, pwd);
+      const u = auth?.currentUser;
+      if (u && !hasVerifiedContact(u)) {
+        try {
+          await u.sendEmailVerification();
+        } catch (e) {}
+        errEl.textContent = 'Verify your email first — we sent a fresh link. Then log in again.';
+        try {
+          await auth.signOut();
+        } catch (e) {}
+        return;
+      }
       if (typeof trackLogin === 'function') trackLogin();
       hideAuth();
       updateProfileBtn();
@@ -560,6 +598,10 @@ function wireAuthEvents() {
       errEl.textContent = 'Verify email+password, Google, or phone OTP to create an account';
       return;
     }
+    if (emailOk && isDisposableEmail(email)) {
+      errEl.textContent = 'Please use a permanent email address (not a temporary inbox)';
+      return;
+    }
     if (emailOk && !phoneOk && !googleOk && (!pwd || pwd.length < 8)) {
       errEl.textContent = 'Password must be at least 8 characters';
       return;
@@ -706,6 +748,11 @@ function wireAuthEvents() {
             await unameRef.set({ uid: credUser.uid, profileId: 'primary' });
           }
           await db.collection('users').doc(credUser.uid).set(profile, { merge: true });
+          try {
+            if (typeof UsersPublic?.syncPublicProfile === 'function') {
+              await UsersPublic.syncPublicProfile(credUser.uid, profile);
+            }
+          } catch (e) {}
         }
 
         userProfile = profile;
@@ -741,21 +788,39 @@ function wireAuthEvents() {
       const firstName = regData.name.split(' ')[0];
       const typeLabel = regData.profileType === 'professional' ? 'Professional' : 'Personal';
       document.getElementById('authSuccessTitle').textContent = `Welcome, ${firstName}!`;
+      const needsEmailVerify = !!(emailOk && !googleOk && !phoneOk && auth?.currentUser && !auth.currentUser.emailVerified);
       let desc = `${typeLabel} account ready.`;
-      if (emailOk && !googleOk) desc += ' Check your email to verify your address.';
+      if (needsEmailVerify) desc = `${typeLabel} account created — verify your email to continue.`;
+      else if (emailOk && !googleOk) desc += ' Check your email to verify your address.';
       document.getElementById('authSuccessDesc').textContent = regData.intents.length
         ? `${desc} You're here to: ${regData.intents.slice(0, 2).join(' & ')}.`
         : `${desc} Add a bio and prompts anytime.`;
       if (typeof launchConfetti === 'function') launchConfetti({ x: 50, y: 40 }, 80);
 
       const cta = document.getElementById('authSuccessCta');
-      if (cta && !cta.dataset.wired) {
-        cta.dataset.wired = '1';
-        cta.addEventListener('click', () => {
-          hideAuth();
-          updateProfileBtn();
-          if (typeof loadStreak === 'function') loadStreak();
-        });
+      if (cta) {
+        cta.textContent = needsEmailVerify ? 'I’ve verified — continue' : 'Enter Chaupaal';
+        if (!cta.dataset.wired) {
+          cta.dataset.wired = '1';
+          cta.addEventListener('click', async () => {
+            try {
+              if (auth?.currentUser) await auth.currentUser.reload();
+            } catch (e) {}
+            const u = auth?.currentUser;
+            if (u && !hasVerifiedContact(u)) {
+              try {
+                await u.sendEmailVerification();
+              } catch (e) {}
+              if (typeof showToast === 'function') {
+                showToast('Open the link in your email, then tap continue');
+              }
+              return;
+            }
+            hideAuth();
+            updateProfileBtn();
+            if (typeof loadStreak === 'function') loadStreak();
+          });
+        }
       }
     } catch (e) {
       console.warn('[auth] register', e);

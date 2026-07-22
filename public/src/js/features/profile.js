@@ -362,7 +362,11 @@ function renderProfileModal(){
           userProfile.photoThumb=thumbURL;
         }
         if(db&&currentUser){
-          db.collection('users').doc(currentUser.uid).update({photoURL,photoThumb:thumbURL||null}).catch(()=>{});
+          db.collection('users').doc(currentUser.uid).update({photoURL,photoThumb:thumbURL||null}).then(()=>{
+            if(typeof UsersPublic?.syncPublicProfile==='function'){
+              UsersPublic.syncPublicProfile(currentUser.uid, {...(userProfile||{}), photoURL, photoThumb:thumbURL||null});
+            }
+          }).catch(()=>{});
         }
         const prevPhotos=Array.isArray(digitalProfile.photos)?[...digitalProfile.photos]:[];
         if(!prevPhotos.length){
@@ -391,8 +395,15 @@ function saveProfileField(key, value){
   if(db&&currentUser){
     const patch={[`profile.${key}`]:value};
     if(key==='lookingFor') patch.matchIntent=String(value||'').trim();
-    db.collection('users').doc(currentUser.uid).update(patch).catch(()=>{
-      db.collection('users').doc(currentUser.uid).set(patch,{merge:true}).catch(()=>{});
+    const after=()=>{
+      if(typeof UsersPublic?.syncPublicProfile==='function'){
+        const merged={...(userProfile||{}), profile:{...(userProfile?.profile||{}), ...digitalProfile, [key]:value}};
+        if(key==='lookingFor') merged.matchIntent=String(value||'').trim();
+        UsersPublic.syncPublicProfile(currentUser.uid, merged);
+      }
+    };
+    db.collection('users').doc(currentUser.uid).update(patch).then(after).catch(()=>{
+      db.collection('users').doc(currentUser.uid).set(patch,{merge:true}).then(after).catch(()=>{});
     });
   }
   if(typeof refreshProfileCompletionUI==='function') refreshProfileCompletionUI();

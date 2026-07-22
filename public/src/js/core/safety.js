@@ -69,6 +69,13 @@
       // Blocking immediately breaks mutual friendship and removes both Close
       // Friends memberships through the canonical unfollow path.
       if (typeof setFollowing === 'function') await setFollowing(uid, false, 'block').catch(() => {});
+      if (typeof apiFetch === 'function') {
+        apiFetch('/api/relationships', {
+          method: 'POST',
+          needAuth: true,
+          body: { action: 'block_signal', targetUid: uid },
+        }).catch(() => {});
+      }
     }
   }
 
@@ -95,13 +102,15 @@
     const out = [];
     for (const uid of ids.slice(0, 40)) {
       try {
-        const snap = await db.collection('users').doc(uid).get();
-        const d = snap.data();
+        const p =
+          typeof UsersPublic?.getPublicProfile === 'function'
+            ? await UsersPublic.getPublicProfile(uid)
+            : null;
         out.push({
           uid,
-          name: d?.name || 'User',
-          username: d?.username || '',
-          profileType: d?.profileType || d?.profile?.profileType || 'personal',
+          name: p?.name || 'User',
+          username: p?.username || '',
+          profileType: p?.profileType || p?.profile?.profileType || 'personal',
         });
       } catch (e) {
         out.push({ uid, name: 'User' });
@@ -124,7 +133,43 @@
 
     if (reasonCode === 'custom' && !customText) customText = reasonLabel;
 
-    if (db && currentUser) {
+    if (db && currentUser && typeof apiFetch === 'function') {
+      try {
+        await apiFetch('/api/relationships', {
+          method: 'POST',
+          needAuth: true,
+          body: {
+            action: 'flag_user',
+            targetUid: uid,
+            reasonCode,
+            reason: reasonLabel,
+            customText: customText || null,
+            targetType: opts.targetType || 'user',
+            postId: opts.postId || null,
+            chatId: opts.chatId || null,
+          },
+        });
+      } catch (e) {
+        // Fallback local flag if API down
+        await db
+          .collection('user_flags')
+          .add({
+            reportedUid: uid,
+            reporterUid: currentUser.uid,
+            reason: reasonLabel,
+            reasonCode,
+            customText: customText || null,
+            targetType: opts.targetType || 'user',
+            postId: opts.postId || null,
+            commentId: opts.commentId || null,
+            icebreakerQuestion: opts.icebreakerQuestion || null,
+            chatId: opts.chatId || null,
+            ts: Date.now(),
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          })
+          .catch(() => {});
+      }
+    } else if (db && currentUser) {
       await db
         .collection('user_flags')
         .add({
@@ -137,6 +182,7 @@
           postId: opts.postId || null,
           commentId: opts.commentId || null,
           icebreakerQuestion: opts.icebreakerQuestion || null,
+          chatId: opts.chatId || null,
           ts: Date.now(),
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         })

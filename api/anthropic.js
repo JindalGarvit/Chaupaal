@@ -8,7 +8,6 @@
  *
  * Master kill-switch: AI_FEATURES_ENABLED env must be "true" (default OFF).
  */
-const crypto = require('crypto');
 const { sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
 const { verifyBearer } = require('../server-lib/auth');
 const { validateAnthropicBody } = require('../server-lib/validate');
@@ -20,11 +19,6 @@ const {
 } = require('../server-lib/idempotency');
 const { callAI, AiDisabledError } = require('../server-lib/ai');
 const { isAiFeaturesEnabled, resolveModel } = require('../server-lib/ai-config');
-
-function guestId(req) {
-  const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
-  return 'guest_' + crypto.createHash('sha256').update(ip).digest('hex').slice(0, 16);
-}
 
 module.exports = async function handler(req, res) {
   if (!requireMethod(req, res, 'POST')) return;
@@ -44,7 +38,9 @@ module.exports = async function handler(req, res) {
   } catch {
     return sendError(res, 401, 'UNAUTHORIZED', 'Invalid or expired auth token');
   }
-  if (!user) user = { uid: guestId(req), weak: true };
+  if (!user || user.weak) {
+    return sendError(res, 401, 'UNAUTHORIZED', 'Signed-in Firebase auth required for AI');
+  }
 
   let incoming;
   try {

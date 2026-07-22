@@ -19,15 +19,50 @@
     return 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
 
+  /** Public by default (missing/undefined counts as public — Phase 3.2 retroactive). */
+  function isGroupPublic(chat) {
+    if (!chat) return true;
+    return chat.isPublic !== false;
+  }
+
+  function groupNameLower(name) {
+    return String(name || '')
+      .toLowerCase()
+      .trim()
+      .slice(0, 80);
+  }
+
+  /** Longest-standing = earliest joinedAt; fall back to createdBy, then any participant. */
+  function pickLongestStandingSuccessor(chat, excludeUid) {
+    const participants = (chat.participants || []).filter((u) => u && u !== excludeUid);
+    if (!participants.length) return null;
+    const profiles = chat.memberProfiles || {};
+    const ranked = participants
+      .map((uid) => ({
+        uid,
+        joinedAt: Number(profiles[uid]?.joinedAt) || Number.MAX_SAFE_INTEGER,
+      }))
+      .sort((a, b) => a.joinedAt - b.joinedAt || String(a.uid).localeCompare(String(b.uid)));
+    if (chat.createdBy && chat.createdBy !== excludeUid && participants.includes(chat.createdBy)) {
+      const creator = ranked.find((r) => r.uid === chat.createdBy);
+      if (creator && creator.joinedAt === ranked[0].joinedAt) return creator.uid;
+    }
+    return ranked[0]?.uid || null;
+  }
+
   function normalizeGroupChat(raw) {
     if (!raw || raw.type !== 'group') return raw;
     const admins = Array.isArray(raw.admins) ? raw.admins : [];
     const perms = raw.permissions || {};
     const invite = raw.invite || {};
     const memberProfiles = raw.memberProfiles || {};
+    const participants = Array.isArray(raw.participants) ? raw.participants : [];
     return {
       ...raw,
       admins,
+      isPublic: raw.isPublic !== false,
+      nameLower: raw.nameLower || groupNameLower(raw.name),
+      memberCount: typeof raw.memberCount === 'number' ? raw.memberCount : participants.length,
       permissions: {
         addMembers: perms.addMembers === 'admin' ? 'admin' : 'all',
         editInfo: perms.editInfo === 'all' ? 'all' : 'admin',
@@ -154,6 +189,7 @@
     const doc = {
       type: 'group',
       name: trimmed.slice(0, 80),
+      nameLower: groupNameLower(trimmed),
       description: String(description || '').slice(0, 200),
       avatar: '👥',
       photoURL: null,
@@ -161,6 +197,8 @@
       admins: [uid],
       createdBy: uid,
       memberProfiles,
+      memberCount: 1,
+      isPublic: true,
       permissions: { addMembers: 'all', editInfo: 'admin' },
       invite: { token, mode: 'instant', enabled: true },
       preview: 'Group created',
@@ -168,6 +206,18 @@
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     };
     const ref = await db.collection('chats').add(doc);
+    try {
+      await db.collection('groupInvites').doc(token).set({
+        chatId: ref.id,
+        mode: 'instant',
+        enabled: true,
+        name: trimmed.slice(0, 80),
+        createdBy: uid,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      console.warn('[group] invite index', e?.message || e);
+    }
     const chat = normalizeGroupChat({
       id: ref.id,
       firestoreId: ref.id,
@@ -202,8 +252,8 @@
       joinedAt: Date.now(),
     };
     const participants = [...(chat.participants || []), uid];
-    await patchGroupDoc(chatId, { participants, memberProfiles });
-    mergeChatLocal(chatId, { participants, memberProfiles });
+    await patchGroupDoc(chatId, { participants, memberProfiles, memberCount: participants.length });
+    mergeChatLocal(chatId, { participants, memberProfiles, memberCount: participants.length });
     return true;
   }
 
@@ -214,12 +264,21 @@
     const memberProfiles = { ...(chat.memberProfiles || {}) };
     delete memberProfiles[targetUid];
     let admins = (chat.admins || []).filter((u) => u !== targetUid);
+    // Never leave an active group with zero admins — promote longest-standing remaining member.
     if (!admins.length && participants.length) {
-      admins = [participants.sort()[0]];
-      if (memberProfiles[admins[0]]) memberProfiles[admins[0]].role = 'admin';
+      const successor = pickLongestStandingSuccessor({ ...chat, participants, memberProfiles }, targetUid);
+      if (successor) {
+        admins = [successor];
+        if (memberProfiles[successor]) memberProfiles[successor].role = 'admin';
+      }
     }
-    await patchGroupDoc(chatId, { participants, memberProfiles, admins });
-    mergeChatLocal(chatId, { participants, memberProfiles, admins });
+    await patchGroupDoc(chatId, {
+      participants,
+      memberProfiles,
+      admins,
+      memberCount: participants.length,
+    });
+    mergeChatLocal(chatId, { participants, memberProfiles, admins, memberCount: participants.length });
     return true;
   }
 
@@ -243,12 +302,16 @@
     return true;
   }
 
-  async function updateGroupDetails(chat, { name, photoURL, avatar }) {
+  async function updateGroupDetails(chat, { name, photoURL, avatar, isPublic }) {
     const chatId = chat.firestoreId || chat.id;
     const patch = {};
-    if (name != null) patch.name = String(name).slice(0, 80);
+    if (name != null) {
+      patch.name = String(name).slice(0, 80);
+      patch.nameLower = groupNameLower(patch.name);
+    }
     if (photoURL != null) patch.photoURL = photoURL;
     if (avatar != null) patch.avatar = avatar;
+    if (typeof isPublic === 'boolean') patch.isPublic = isPublic;
     await patchGroupDoc(chatId, patch);
     mergeChatLocal(chatId, patch);
     const headerName = document.querySelector('#activeChatScreen .chat-header-name');
@@ -268,22 +331,13 @@
     if (!chatId || !uid) return false;
     const admins = chat.admins || [];
     const participants = chat.participants || [];
+    // Sole admin leaving: auto-promote longest-standing remaining member (never zero admins).
     if (admins.length === 1 && admins[0] === uid && participants.length > 1) {
-      const others = participants.filter((u) => u !== uid);
-      const sorted = memberListFromChat(chat).filter((m) => m.uid !== uid);
-      const pick = sorted[0]?.uid || others[0];
-      if (pick && typeof promptNameSheet !== 'function') {
-        await setMemberAdmin(chat, pick, true);
-      } else if (pick) {
-        const ok = await promptNameSheet({
-          title: 'Assign new admin',
-          message: 'You are the only admin. Promote someone before leaving?',
-          confirmLabel: 'Promote & leave',
-          cancelLabel: 'Stay',
-          defaultValue: sorted[0]?.name || '',
-        });
-        if (!ok) return false;
-        await setMemberAdmin(chat, pick, true);
+      const successor = pickLongestStandingSuccessor(chat, uid);
+      if (successor) {
+        await setMemberAdmin(chat, successor, true);
+        const name = chat.memberProfiles?.[successor]?.name || 'a member';
+        if (typeof showToast === 'function') showToast(`${name} is now admin`);
       }
     }
     await removeMemberFromGroup(chat, uid);
@@ -315,19 +369,21 @@
     await ref.set({ status: accept ? 'accepted' : 'rejected', resolvedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
   }
 
-  /** Join via invite token (instant or request). */
+  /** Join via invite token (instant or request). Uses groupInvites/{token} — never lists chats by invite. */
   async function joinGroupByInviteToken(token) {
     if (!db || !currentUser || !token) return { ok: false, reason: 'auth' };
     const uid = currentUser.uid;
     try {
-      const snap = await db.collection('chats').where('invite.token', '==', token).limit(1).get();
-      if (snap.empty) return { ok: false, reason: 'not_found' };
-      const doc = snap.docs[0];
-      const data = normalizeGroupChat({ id: doc.id, firestoreId: doc.id, ...doc.data() });
-      if (!data.invite?.enabled) return { ok: false, reason: 'disabled' };
-      if ((data.participants || []).includes(uid)) return { ok: true, chat: data, already: true };
-      if (data.invite.mode === 'approval') {
-        await doc.ref.collection('joinRequests').doc(uid).set({
+      const inviteSnap = await db.collection('groupInvites').doc(token).get();
+      if (!inviteSnap.exists) return { ok: false, reason: 'not_found' };
+      const inviteMeta = inviteSnap.data() || {};
+      if (inviteMeta.enabled === false) return { ok: false, reason: 'disabled' };
+      const chatId = inviteMeta.chatId;
+      if (!chatId) return { ok: false, reason: 'not_found' };
+      const mode = inviteMeta.mode === 'approval' ? 'approval' : 'instant';
+
+      if (mode === 'approval') {
+        await db.collection('chats').doc(chatId).collection('joinRequests').doc(uid).set({
           uid,
           name: userProfile?.name || currentUser.displayName || 'Member',
           avatar: userProfile?.avatar || '👤',
@@ -341,25 +397,42 @@
           status: 'pending',
           requestedAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
-        return { ok: true, pending: true, chat: data };
+        return {
+          ok: true,
+          pending: true,
+          chat: { id: chatId, firestoreId: chatId, type: 'group', name: inviteMeta.name || 'Group' },
+        };
       }
-      const memberProfiles = { ...(data.memberProfiles || {}) };
-      memberProfiles[uid] = {
-        name: userProfile?.name || currentUser.displayName || 'Member',
-        avatar: userProfile?.avatar || '👤',
-        photoURL: currentUser.photoURL || '',
-        role: 'member',
-        profileType:
-          typeof ownProfileType === 'function'
-            ? ownProfileType()
-            : typeof getProfileType === 'function'
-              ? getProfileType()
-              : 'personal',
-        joinedAt: Date.now(),
-      };
-      const participants = [...(data.participants || []), uid];
-      await doc.ref.set({ participants, memberProfiles, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
-      const chat = normalizeGroupChat({ ...data, participants, memberProfiles });
+
+      await db
+        .collection('chats')
+        .doc(chatId)
+        .update({
+          participants: firebase.firestore.FieldValue.arrayUnion(uid),
+          [`memberProfiles.${uid}`]: {
+            name: userProfile?.name || currentUser.displayName || 'Member',
+            avatar: userProfile?.avatar || '👤',
+            photoURL: currentUser.photoURL || '',
+            role: 'member',
+            profileType:
+              typeof ownProfileType === 'function'
+                ? ownProfileType()
+                : typeof getProfileType === 'function'
+                  ? getProfileType()
+                  : 'personal',
+            joinedAt: Date.now(),
+          },
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+
+      const data = await fetchGroupDoc(chatId);
+      const chat = data || normalizeGroupChat({
+        id: chatId,
+        firestoreId: chatId,
+        type: 'group',
+        name: inviteMeta.name || 'Group',
+        participants: [uid],
+      });
       if (typeof baithakChats !== 'undefined') {
         baithakChats.unshift(chat);
         if (typeof pinSelfChat === 'function') baithakChats = pinSelfChat(baithakChats);
@@ -387,6 +460,12 @@
       <div class="group-info-scroll" data-gi-scroll>
         <div class="group-info-hero" data-gi-hero></div>
         <div class="group-info-section" data-gi-requests hidden></div>
+        <div class="group-info-notice" data-gi-public-notice hidden></div>
+        <div class="group-info-section" data-gi-privacy hidden>
+          <div class="group-info-section-head">Discoverability</div>
+          <label class="group-info-toggle"><span>Public — appear in Chaupaal search</span><input type="checkbox" data-gi-public-toggle></label>
+          <div class="group-info-muted" style="font-size:12px;margin-top:6px;">Private groups stay invite-only and never show in global search for non-members.</div>
+        </div>
         <div class="group-info-section">
           <div class="group-info-section-head">Members <span data-gi-count></span></div>
           <div class="group-info-members" data-gi-members></div>
@@ -435,6 +514,24 @@
     async function render() {
       const uid = currentUser?.uid;
       const admin = isGroupAdmin(chat, uid);
+      const chatId = chat.firestoreId || chat.id;
+      // Lazy migrate: missing isPublic → public (retroactive) + denorm fields for search.
+      if (admin && chatId && db) {
+        try {
+          const snap = await db.collection('chats').doc(chatId).get();
+          const data = snap.exists ? snap.data() || {} : {};
+          const migrate = {};
+          if (!('isPublic' in data)) migrate.isPublic = true;
+          if (!data.nameLower && chat.name) migrate.nameLower = groupNameLower(chat.name);
+          if (typeof data.memberCount !== 'number') migrate.memberCount = (chat.participants || []).length;
+          if (Object.keys(migrate).length) {
+            await patchGroupDoc(chatId, migrate);
+            Object.assign(chat, migrate);
+            mergeChatLocal(chatId, migrate);
+          }
+        } catch (e) {}
+      }
+
       const members = memberListFromChat(chat);
       if (typeof enrichUsersWithProfileType === 'function') {
         await enrichUsersWithProfileType(members);
@@ -450,6 +547,54 @@
           ${canEditInfo(chat, uid) ? `<button type="button" class="group-info-edit-name" data-gi-edit-name aria-label="Edit name">✎</button>` : ''}
         </div>
         ${chat.description ? `<div class="group-info-desc">${esc(chat.description)}</div>` : ''}`;
+
+      // One-time admin notice: groups are discoverable by default.
+      const noticeEl = overlay.querySelector('[data-gi-public-notice]');
+      const noticeKey = `chaupaal_group_public_notice_${chatId}`;
+      let noticeSeen = false;
+      try {
+        noticeSeen = localStorage.getItem(noticeKey) === '1' || !!chat.discoverableNoticeAck;
+      } catch (e) {}
+      if (admin && isGroupPublic(chat) && !noticeSeen) {
+        noticeEl.hidden = false;
+        noticeEl.innerHTML = `
+          <div style="background:rgba(230,57,70,0.08);border:1px solid rgba(230,57,70,0.2);border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.45;color:var(--ink);">
+            <strong>Now discoverable in search</strong>
+            <div style="margin-top:4px;color:var(--muted);">Baithak groups are public by default so people can find them in Chaupaal search. You can switch this group to Private anytime below.</div>
+            <button type="button" data-gi-ack-notice style="margin-top:10px;border:none;background:var(--red);color:#fff;font-weight:700;font-size:12px;padding:8px 12px;border-radius:10px;cursor:pointer;">Got it</button>
+          </div>`;
+        noticeEl.querySelector('[data-gi-ack-notice]')?.addEventListener('click', async () => {
+          try {
+            localStorage.setItem(noticeKey, '1');
+          } catch (e) {}
+          try {
+            await patchGroupDoc(chatId, { discoverableNoticeAck: true });
+            chat.discoverableNoticeAck = true;
+          } catch (e) {}
+          noticeEl.hidden = true;
+        });
+      } else {
+        noticeEl.hidden = true;
+        noticeEl.innerHTML = '';
+      }
+
+      const privacyEl = overlay.querySelector('[data-gi-privacy]');
+      if (admin) {
+        privacyEl.hidden = false;
+        const pubToggle = overlay.querySelector('[data-gi-public-toggle]');
+        pubToggle.checked = isGroupPublic(chat);
+        pubToggle.onchange = async () => {
+          const next = !!pubToggle.checked;
+          await updateGroupDetails(chat, { isPublic: next });
+          chat.isPublic = next;
+          if (typeof showToast === 'function') {
+            showToast(next ? 'Group is public in search' : 'Group is private');
+          }
+          if (!next) {
+            noticeEl.hidden = true;
+          }
+        };
+      } else privacyEl.hidden = true;
 
       overlay.querySelector('[data-gi-count]').textContent = `(${members.length})`;
       const listEl = overlay.querySelector('[data-gi-members]');
@@ -474,6 +619,19 @@
       const inv = chat.invite || {};
       const row = overlay.querySelector('[data-gi-invite-row]');
       if (admin && inv.token) {
+        try {
+          await db.collection('groupInvites').doc(inv.token).set(
+            {
+              chatId: chat.firestoreId || chat.id,
+              mode: inv.mode === 'approval' ? 'approval' : 'instant',
+              enabled: inv.enabled !== false,
+              name: String(chat.name || 'Group').slice(0, 80),
+              createdBy: chat.createdBy || uid,
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          );
+        } catch (e) {}
         const url = inviteUrl(inv.token);
         row.innerHTML = `
           <input class="group-info-invite-input" readonly value="${esc(url)}">
@@ -498,6 +656,11 @@
           const mode = toggle.checked ? 'approval' : 'instant';
           await patchGroupDoc(chat.firestoreId || chat.id, { invite: { ...inv, mode } });
           chat.invite = { ...inv, mode };
+          if (inv.token) {
+            try {
+              await db.collection('groupInvites').doc(inv.token).set({ mode, enabled: inv.enabled !== false }, { merge: true });
+            } catch (e) {}
+          }
           if (typeof showToast === 'function') showToast(mode === 'approval' ? 'Join requests require approval' : 'Anyone with link can join');
         };
       } else {
@@ -681,4 +844,5 @@
   window.joinGroupByInviteToken = joinGroupByInviteToken;
   window.normalizeGroupChat = normalizeGroupChat;
   window.isGroupAdmin = isGroupAdmin;
+  window.isGroupPublic = isGroupPublic;
 })();

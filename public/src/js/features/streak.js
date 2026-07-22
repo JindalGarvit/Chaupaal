@@ -198,6 +198,7 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
       .onSnapshot(snap=>{
         if(!oldestDoc && snap.docs.length) oldestDoc=snap.docs[0];
         if(!primed){
+          primed=true; // set sync so overlapping snapshots don't double-clear
           // Full hydrate including own messages — fixes music/photo/challenge on reopen
           msgsArea.querySelectorAll('.msg-row[data-pending="1"]').forEach((el)=>el.remove());
           // Clear optimistic/demo seed when we have Firestore history
@@ -208,10 +209,9 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
           const batch=snap.docs.map((doc)=>({uid:(doc.data()||{}).uid,profileType:(doc.data()||{}).profileType||null}));
           const enrichThen=()=>snap.docs.forEach((doc)=>appendFromDoc(doc,false));
           if(typeof enrichUsersWithProfileType==='function'){
-            enrichUsersWithProfileType(batch).finally(()=>{enrichThen();primed=true;msgsArea.scrollTop=msgsArea.scrollHeight;});
+            enrichUsersWithProfileType(batch).finally(()=>{enrichThen();msgsArea.scrollTop=msgsArea.scrollHeight;});
           } else {
             enrichThen();
-            primed=true;
             msgsArea.scrollTop=msgsArea.scrollHeight;
           }
           return;
@@ -285,64 +285,99 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
 }
 
 async function sendRealtimeMessage(chatId, text, isGroup, music, attachment){
-  if(!db||!currentUser) return;
+  if(!db||!currentUser) throw new Error('Not signed in');
+  const id=String(chatId||'');
+  if(!id || id==='chat_self' || /^chat_(riya|arjun)/.test(id) || id.startsWith('grp_')){
+    throw new Error('This chat is not synced yet — open a real conversation');
+  }
+  if(id.startsWith('chat_self_') && typeof ensureSelfChatDoc==='function'){
+    await ensureSelfChatDoc();
+  }
+  if(id.startsWith('chat_chaupaal_') && typeof ensureChaupaalChatDoc==='function'){
+    await ensureChaupaalChatDoc();
+  }
   const body=String(text||'').trim();
   if(!body && !(music&&music.title) && !attachment) return;
-  try{
-    const payload={
-      text:body||(music?.title?`🎵 ${music.title}`:(attachment?.type==='photo'?'📷 Photo':attachment?.type==='file'?'📄 File':attachment?.type==='location'?'📍 Location':attachment?.type==='muqabala_challenge'?'⚔️ Challenge':'')),
-      uid:currentUser.uid,
-      name:userProfile?.name||currentUser.displayName||'You',
-      avatar:currentUser.photoURL||'',
-      profileType:(typeof ownProfileType==='function'?ownProfileType():(typeof getProfileType==='function'?getProfileType():'personal')),
-      ts:firebase.firestore.FieldValue.serverTimestamp()
+  const payload={
+    text:body||(music?.title?`🎵 ${music.title}`:(attachment?.type==='photo'?'📷 Photo':attachment?.type==='file'?'📄 File':attachment?.type==='location'?'📍 Location':attachment?.type==='muqabala_challenge'?'⚔️ Challenge':'')),
+    uid:currentUser.uid,
+    name:userProfile?.name||currentUser.displayName||'You',
+    avatar:currentUser.photoURL||'',
+    profileType:(typeof ownProfileType==='function'?ownProfileType():(typeof getProfileType==='function'?getProfileType():'personal')),
+    ts:firebase.firestore.FieldValue.serverTimestamp()
+  };
+  if(music && typeof music==='object' && music.title){
+    payload.music={
+      title:String(music.title||'').slice(0,160),
+      artist:String(music.artist||'Unknown artist').slice(0,160),
+      thumbnail:String(music.thumbnail||'').slice(0,2048),
+      previewUrl:music.previewUrl?String(music.previewUrl).slice(0,2048):null,
+      source:['jiosaavn','itunes','none'].includes(music.source)?music.source:(music.previewUrl?'jiosaavn':'none'),
     };
-    if(music && typeof music==='object' && music.title){
-      payload.music={
-        title:String(music.title||'').slice(0,160),
-        artist:String(music.artist||'Unknown artist').slice(0,160),
-        thumbnail:String(music.thumbnail||'').slice(0,2048),
-        previewUrl:music.previewUrl?String(music.previewUrl).slice(0,2048):null,
-        source:['jiosaavn','itunes','none'].includes(music.source)?music.source:(music.previewUrl?'jiosaavn':'none'),
-      };
-    }
-    if(attachment && typeof attachment==='object' && attachment.type){
-      if(attachment.type==='location' && typeof normalizeLocationAttachment==='function'){
-        const loc=normalizeLocationAttachment(attachment);
-        if(loc) payload.attachment=loc;
-      } else if(attachment.type==='location'){
-        const lat=Number(attachment.lat);
-        const lng=Number(attachment.lng);
-        if(Number.isFinite(lat) && Number.isFinite(lng)){
-          payload.attachment={
-            type:'location',
-            mode:['current','place','pin','live'].includes(attachment.mode)?attachment.mode:'pin',
-            lat, lng,
-            placeName:attachment.placeName?String(attachment.placeName).slice(0,120):null,
-            address:attachment.address?String(attachment.address).slice(0,240):null,
-            label:attachment.label?String(attachment.label).slice(0,160):'Location',
-            liveShareId:attachment.liveShareId?String(attachment.liveShareId).slice(0,80):null,
-            expiresAt:attachment.expiresAt!=null?(Number(attachment.expiresAt)||null):null,
-            durationMs:Number(attachment.durationMs)||null,
-            startedAt:attachment.startedAt!=null?(Number(attachment.startedAt)||null):null,
-          };
-        }
-      } else {
+  }
+  if(attachment && typeof attachment==='object' && attachment.type){
+    if(attachment.type==='location' && typeof normalizeLocationAttachment==='function'){
+      const loc=normalizeLocationAttachment(attachment);
+      if(loc) payload.attachment=loc;
+    } else if(attachment.type==='location'){
+      const lat=Number(attachment.lat);
+      const lng=Number(attachment.lng);
+      if(Number.isFinite(lat) && Number.isFinite(lng)){
         payload.attachment={
-          type:String(attachment.type).slice(0,40),
-          url:attachment.url?String(attachment.url).slice(0,2048):null,
-          name:attachment.name?String(attachment.name).slice(0,160):null,
-          width:Number(attachment.width)||null,
-          height:Number(attachment.height)||null,
-          challengeId:attachment.challengeId?String(attachment.challengeId).slice(0,80):null,
-          questions:Array.isArray(attachment.questions)?attachment.questions.slice(0,20):null,
-          timerSeconds:Number(attachment.timerSeconds)||null,
-          label:attachment.label?String(attachment.label).slice(0,120):null,
+          type:'location',
+          mode:['current','place','pin','live'].includes(attachment.mode)?attachment.mode:'pin',
+          lat, lng,
+          placeName:attachment.placeName?String(attachment.placeName).slice(0,120):null,
+          address:attachment.address?String(attachment.address).slice(0,240):null,
+          label:attachment.label?String(attachment.label).slice(0,160):'Location',
+          liveShareId:attachment.liveShareId?String(attachment.liveShareId).slice(0,80):null,
+          expiresAt:attachment.expiresAt!=null?(Number(attachment.expiresAt)||null):null,
+          durationMs:Number(attachment.durationMs)||null,
+          startedAt:attachment.startedAt!=null?(Number(attachment.startedAt)||null):null,
         };
       }
+    } else {
+      payload.attachment={
+        type:String(attachment.type).slice(0,40),
+        url:attachment.url?String(attachment.url).slice(0,2048):null,
+        name:attachment.name?String(attachment.name).slice(0,160):null,
+        width:Number(attachment.width)||null,
+        height:Number(attachment.height)||null,
+        challengeId:attachment.challengeId?String(attachment.challengeId).slice(0,80):null,
+        questions:Array.isArray(attachment.questions)?attachment.questions.slice(0,20):null,
+        timerSeconds:Number(attachment.timerSeconds)||null,
+        label:attachment.label?String(attachment.label).slice(0,120):null,
+      };
     }
+  }
+  try{
     await db.collection('chats').doc(chatId).collection('messages').add(payload);
-  }catch(e){ console.warn('[chat] send failed', e?.message||e); }
+    const nowMs = Date.now();
+    const previewText = String(payload.text || '').slice(0, 120);
+    const chatPatch = {
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      preview: previewText,
+      lastMessageAt: nowMs,
+    };
+    // firstMessageAt set-once via merge only if we can read — use set merge with sentinel
+    try {
+      const cref = db.collection('chats').doc(chatId);
+      const csnap = await cref.get();
+      if (csnap.exists && !csnap.data()?.firstMessageAt) chatPatch.firstMessageAt = nowMs;
+      await cref.set(chatPatch, { merge: true });
+    } catch (e2) {
+      await db.collection('chats').doc(chatId).set(chatPatch, { merge: true }).catch(() => {});
+    }
+    if (window.currentOpenChat && (window.currentOpenChat.firestoreId === chatId || window.currentOpenChat.id === chatId)) {
+      window.currentOpenChat.lastMessageAt = nowMs;
+      if (!window.currentOpenChat.firstMessageAt) window.currentOpenChat.firstMessageAt = nowMs;
+      window.currentOpenChat.updatedAt = nowMs;
+      window.currentOpenChat.preview = previewText;
+    }
+  }catch(e){
+    console.warn('[chat] send failed', e?.message||e);
+    throw e;
+  }
 }
 
 // ===================== REAL MATCHMAKING (Firestore waiting room) =====================

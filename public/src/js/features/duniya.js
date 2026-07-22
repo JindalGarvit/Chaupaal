@@ -984,25 +984,10 @@ function openShareSheet(post){
 }
 
 // ===================== FLAG / BLOCK =====================
-// Implemented in core/safety.js (Phase 3) — keeps openFlagSheet / blockUser / flagUser as globals.
-// Local shadowban review helper retained for ops tooling.
+// Implemented in core/safety.js — openFlagSheet / blockUser / flagUser.
+// Shadowban writes are Admin-only via /api/relationships { action: 'flag_user'|'block_signal' }.
+// Dead client reviewShadowbans removed (rules deny client read/write on shadowbans).
 let userFlags={};
-
-async function reviewShadowbans(){
-  if(!db)return;
-  if(typeof isAiFeaturesEnabled==='function' && !(await isAiFeaturesEnabled())) return;
-  try{
-    const snap=await db.collection('shadowbans').where('reviewedAt','==',null).limit(10).get();
-    for(const doc of snap.docs){
-      const data=doc.data();
-      const d = await callAI({tier:'fast',max_tokens:100,feature:'moderation_shadowban',
-          system:'You are a content moderation AI. Given flag count and tier, respond with JSON {"verdict":"uphold"|"lift","reason":"..."}. Uphold if count>=3 with clear pattern, lift if likely false reports.',
-          messages:[{role:'user',content:`User has ${data.count} flags. Current tier: ${data.tier}. Verdict?`}]});
-      const verdict=JSON.parse(d.text||d.content?.[0]?.text||'{"verdict":"uphold"}');
-      await doc.ref.update({reviewedAt:Date.now(),verdict:verdict.verdict,reviewReason:verdict.reason,tier:verdict.verdict==='lift'?'none':data.tier});
-    }
-  }catch(e){}
-}
 
 // ===================== @TAGGING SYSTEM =====================
 const ALL_TAGGABLE_USERS=SAMPLE_DISCOVERY_POOL.map(u=>({name:u.name,username:u.name.toLowerCase().replace(/\s+/g,'_')}));

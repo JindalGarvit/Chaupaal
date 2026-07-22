@@ -355,8 +355,10 @@
         return;
       }
       const uid = snap.data().uid;
-      const userSnap = await db.collection('users').doc(uid).get();
-      const u = userSnap.data() || {};
+      const u =
+        (typeof UsersPublic?.getPublicProfile === 'function'
+          ? await UsersPublic.getPublicProfile(uid)
+          : null) || {};
       openPublicProfile({ ...u, uid }, { uid, username: uname });
       return;
       // Lightweight profile sheet (full public profile UI can expand later)

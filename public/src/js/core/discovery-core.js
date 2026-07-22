@@ -169,10 +169,11 @@ async function getDiscoveryProfiles(){
   const pool = [...SAMPLE_DISCOVERY_POOL];
   if(db && currentUser){
     try{
-      const snap = await db.collection('users').where('openToMeet','==',true).limit(40).get();
+      const snap = await db.collection('users_public').where('openToMeet','==',true).limit(40).get();
       snap.docs.forEach(d=>{
         const u=d.data();
         const uid=u.uid||d.id;
+        if(u.hiddenFromDiscovery) return;
         if(uid!==currentUser.uid && u.name && !pool.find(p=>p.uid===uid)){
           pool.push({
             ...u,
@@ -187,10 +188,11 @@ async function getDiscoveryProfiles(){
     // Merge a small newest-user window so "New here" is not dependent on the
     // arbitrary first 40 open profiles. No location permission is involved.
     try{
-      const recentSnap=await db.collection('users').orderBy('createdAt','desc').limit(12).get();
+      const recentSnap=await db.collection('users_public').orderBy('createdAt','desc').limit(12).get();
       recentSnap.docs.forEach(d=>{
         const u=d.data()||{};
         const uid=u.uid||d.id;
+        if(u.hiddenFromDiscovery) return;
         if(uid===currentUser.uid||u.openToMeet===false||!u.name||pool.find(p=>p.uid===uid)) return;
         pool.push({...u,uid});
       });
@@ -421,7 +423,14 @@ function renderDiscoverySection(profiles){
       let theirIcebreakers=[];
       try{ theirIcebreakers=JSON.parse(decodeURIComponent(btn.dataset.icebreakers||'%5B%5D')); }catch(e){}
       if(typeof openDmWithSharedHello==='function'){
-        openDmWithSharedHello({ uid, name, avatar, theirIcebreakers });
+        openDmWithSharedHello({
+          uid,
+          name,
+          avatar,
+          theirIcebreakers,
+          origin: 'peepal_discovery',
+          peerProfileType: (profiles.find((p) => p.user?.uid === uid)?.user?.profileType) || 'personal',
+        });
         return;
       }
       const newChat={id:`chat_disc_${uid}`,type:'dm',name,avatar,preview:'Found through Peepal discovery',time:'now',unread:0,duelStreak:0,theirIcebreakers,icebreakers:theirIcebreakers};

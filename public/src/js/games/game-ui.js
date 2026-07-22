@@ -1164,13 +1164,8 @@
     try {
       const profiles = await loadFriendProfilesForPicker();
       for (const p of profiles.slice(0, 12)) {
-        let rating = p.gameRatings?.[key];
-        if (rating == null && typeof db !== 'undefined' && db && (p.uid || p.id)) {
-          try {
-            const snap = await db.collection('users').doc(p.uid || p.id).get();
-            rating = snap.data()?.gameRatings?.[key];
-          } catch (e) {}
-        }
+        // gameRatings stay private on users/ — only use ratings already on the friend picker blob
+        const rating = p.gameRatings?.[key];
         if (rating != null) {
           rows.push({
             name: (p.name || 'Friend').split(' ')[0],

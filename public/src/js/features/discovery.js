@@ -107,9 +107,10 @@ Return ONLY valid JSON:
     const pool = [...SAMPLE_DISCOVERY_POOL];
     if(db && currentUser){
       try{
-        const snap = await db.collection('users').where('openToMeet','==',true).limit(40).get();
+        const snap = await db.collection('users_public').where('openToMeet','==',true).limit(40).get();
         snap.docs.forEach(d=>{
           const u=d.data();
+          if(u.hiddenFromDiscovery) return;
           if((u.uid||d.id)!==currentUser.uid&&u.name){
             pool.push({
               ...u,
@@ -235,12 +236,30 @@ ${summaries}`}]
     }
 
     // Render
+    let aiMsgLimit = null;
+    try {
+      if (typeof PolicyUsage?.getRemaining === 'function') {
+        aiMsgLimit = await PolicyUsage.getRemaining('aiDiscoveryMsg');
+      }
+    } catch (e) {}
+    const aiCollapsed = !!(aiMsgLimit && aiMsgLimit.exhausted);
+    if (typeof AiDiscoveryMeter?.injectStyles === 'function') AiDiscoveryMeter.injectStyles();
+
     resultsEl.innerHTML = `
+      ${aiCollapsed ? `<div class="peepal-ai-limit-banner">${aiMsgLimit.unlock || 'AI Discovery messaging limit reached.'} Manual filters below stay available. Professional profiles found here stay unlimited.</div>` : ''}
+      <div id="peepalAiMeterHost"></div>
+      <div class="${aiCollapsed ? 'peepal-ai-results-collapsed' : ''}" id="peepalAiResultsBody">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
         <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Top ${scored.length} matches</div>
         <div style="font-size:11px;color:var(--muted);">${criteria.vibe?`"${criteria.vibe.slice(0,40)}"`:''}</div>
       </div>
+      </div>
     `;
+    const bodyEl = document.getElementById('peepalAiResultsBody') || resultsEl;
+    const meterHost = document.getElementById('peepalAiMeterHost');
+    if (meterHost && typeof AiDiscoveryMeter?.mountMeter === 'function') {
+      AiDiscoveryMeter.mountMeter(meterHost);
+    }
 
     scored.forEach(({user, score, reasons, matchPct})=>{
       const info = starters[user.name] || {};
@@ -288,6 +307,8 @@ ${summaries}`}]
             avatar: user.avatar||'👤',
             theirIcebreakers: theirIb,
             starterText: suggestedStarter,
+            origin: 'ai_discovery',
+            peerProfileType: user.profileType || user.profile?.profileType || 'personal',
           });
           return;
         }
@@ -306,7 +327,7 @@ ${summaries}`}]
         },200);
       });
 
-      resultsEl.appendChild(card);
+      bodyEl.appendChild(card);
     });
 
     // Serendipity note at bottom
@@ -314,7 +335,11 @@ ${summaries}`}]
       const note = document.createElement('div');
       note.style.cssText='text-align:center;padding:14px;font-size:12px;color:var(--muted);';
       note.innerHTML='✨ 1 in 5 results is a surprise pick — sometimes the best connections are unexpected';
-      resultsEl.appendChild(note);
+      bodyEl.appendChild(note);
+    }
+    // Close collapsed wrapper if used
+    if (bodyEl !== resultsEl && bodyEl.parentElement === resultsEl) {
+      /* already nested */
     }
 
   }catch(err){
@@ -393,7 +418,11 @@ function filterOpenToMeetProfiles(profiles){
 function handleOpenToMeetToggle(newValue){
   openToMeet = newValue;
   try{localStorage.setItem('chaupaal_open_to_meet', JSON.stringify(openToMeet));}catch(e){}
-  if(db&&currentUser) db.collection('users').doc(currentUser.uid).update({openToMeet}).catch(()=>{});
+  if(db&&currentUser) db.collection('users').doc(currentUser.uid).update({openToMeet}).then(()=>{
+    if(typeof UsersPublic?.syncPublicProfile==='function'){
+      UsersPublic.syncPublicProfile(currentUser.uid, {...(userProfile||{}), openToMeet});
+    }
+  }).catch(()=>{});
 
   if(newValue){
     // Show what it means
@@ -417,14 +446,26 @@ function handleOpenToMeetToggle(newValue){
 }
 
 // ===================== ANONYMOUS QUESTIONS IN PEEPAL =====================
-const ANON_Q_KEY = `chaupaal_anon_q_${new Date().toISOString().split('T')[0]}`;
-function hasUsedAnonToday(){ return !!localStorage.getItem(ANON_Q_KEY); }
-function markAnonUsed(){ localStorage.setItem(ANON_Q_KEY,'1'); }
+async function getAnonRemaining() {
+  if (typeof PolicyUsage?.getRemaining === 'function') {
+    return PolicyUsage.getRemaining('anon');
+  }
+  const lim = window.PolicyLimits?.ANON_POSTS || { perDay: 2, perWeek: 7 };
+  return {
+    remaining: lim.perDay,
+    dayLeft: lim.perDay,
+    weekLeft: lim.perWeek,
+    perDay: lim.perDay,
+    perWeek: lim.perWeek,
+    exhausted: false,
+    unlock: '',
+  };
+}
 
 function openPeepalAskSheet(){
-  const hasAnon = !hasUsedAnonToday();
   const sheet = document.createElement('div');
   sheet.className = 'peepal-ask-sheet';
+  const lim = window.PolicyLimits?.ANON_POSTS || { perDay: 2, perWeek: 7 };
   sheet.innerHTML=`
     <div class="ask-header">
       <button id="closeAsk" style="background:none;border:none;font-size:22px;cursor:pointer;">✕</button>
@@ -432,13 +473,13 @@ function openPeepalAskSheet(){
       <button class="btn btn--primary btn--sm peepal-ask-publish-btn" id="peepalPublishBtn">Post</button>
     </div>
     <div style="padding:16px;">
-      <!-- Anonymous toggle -->
-      <div style="background:${hasAnon?'rgba(230,57,70,0.05)':'var(--line)'};border:2px solid ${hasAnon?'var(--red)':'var(--line)'};border-radius:14px;padding:12px;margin-bottom:16px;display:flex;align-items:center;gap:12px;${!hasAnon?'opacity:0.5':''}">
+      <!-- Anonymous toggle (filled after quota load) -->
+      <div id="anonToggleRow" style="background:var(--line);border:2px solid var(--line);border-radius:14px;padding:12px;margin-bottom:16px;display:flex;align-items:center;gap:12px;opacity:0.5;">
         <div style="flex:1;">
           <div style="font-weight:700;font-size:14px;">🎭 Post anonymously</div>
-          <div style="font-size:11px;color:var(--muted);">${hasAnon?'1 anonymous question per day — you have 1 left':'You\'ve used your anonymous question today. Come back tomorrow!'}</div>
+          <div id="anonToggleHint" style="font-size:11px;color:var(--muted);">Checking availability…</div>
         </div>
-        <label class="switch" style="${!hasAnon?'pointer-events:none;':''}"><input type="checkbox" id="anonToggle" ${!hasAnon?'disabled':''}><span class="slider"></span></label>
+        <label class="switch" id="anonToggleLabel" style="pointer-events:none;"><input type="checkbox" id="anonToggle" disabled><span class="slider"></span></label>
       </div>
       <!-- Format -->
       <div style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;">
@@ -495,6 +536,35 @@ function openPeepalAskSheet(){
     sheet.dataset.navManaged='1';
     pushNavLayer(sheet,()=>{ sheet.classList.remove('open'); setTimeout(()=>sheet.remove(),350); });
   }
+
+  let anonQuota = { exhausted: true, remaining: 0, dayLeft: 0, weekLeft: lim.perWeek, unlock: '' };
+  (async () => {
+    try {
+      anonQuota = await getAnonRemaining();
+    } catch (e) {}
+    const row = document.getElementById('anonToggleRow');
+    const hint = document.getElementById('anonToggleHint');
+    const label = document.getElementById('anonToggleLabel');
+    const toggle = document.getElementById('anonToggle');
+    if (!row || !hint || !toggle) return;
+    const available = !anonQuota.exhausted && anonQuota.remaining > 0;
+    if (available) {
+      row.style.background = 'rgba(230,57,70,0.05)';
+      row.style.borderColor = 'var(--red)';
+      row.style.opacity = '1';
+      hint.textContent = `${anonQuota.dayLeft} anonymous left today · ${anonQuota.weekLeft} this week (max ${lim.perDay}/day, ${lim.perWeek}/week)`;
+      label.style.pointerEvents = '';
+      toggle.disabled = false;
+    } else {
+      row.style.background = 'var(--line)';
+      row.style.borderColor = 'var(--line)';
+      row.style.opacity = '0.5';
+      hint.textContent = anonQuota.unlock || 'Anonymous posting unavailable right now.';
+      label.style.pointerEvents = 'none';
+      toggle.disabled = true;
+      toggle.checked = false;
+    }
+  })();
 
   // Segment builder state
   let segmentDrafts=[{label:'Segment 1',city:'',gender:'any',intent:'any',capMode:'inherit'}];
@@ -609,8 +679,24 @@ function openPeepalAskSheet(){
     }
     const quota=await checkPeepalQuota();
     if(!quota.ok){showToast('Weekly limit reached (5/week). Upgrade to Premium for more!');return;}
-    const isAnon=document.getElementById('anonToggle').checked&&hasAnon&&!hasUsedAnonToday();
-    if(isAnon) markAnonUsed();
+    const wantsAnon=!!document.getElementById('anonToggle')?.checked;
+    let isAnon=false;
+    if(wantsAnon){
+      try{
+        anonQuota = await getAnonRemaining();
+        if(anonQuota.exhausted){
+          showToast(anonQuota.unlock||'Anonymous limit reached');
+          return;
+        }
+        await PolicyUsage.consume('anon');
+        isAnon=true;
+      }catch(e){
+        showToast(e?.code==='DAILY_LIMIT'||e?.code==='WEEKLY_LIMIT'
+          ?(anonQuota.unlock||'Anonymous limit reached')
+          :'Could not use anonymous post right now');
+        return;
+      }
+    }
     const fmt=sheet.querySelector('.peepal-format-chip.active')?.dataset.fmt||'open';
     const opts=fmt==='mcq'||fmt==='poll'?[1,2,3,4].map(i=>document.getElementById(`mcqOpt${i}`)?.value||'').filter(Boolean):[];
     const audience=document.getElementById('peepalAudience')?.value||'everyone';
@@ -683,12 +769,12 @@ function openPeepalAskSheet(){
 
     if(!saveOnly) peepalQuestions.unshift(q);
     peepalDraft?.clear?.();
-    if(db&&currentUser&&!isAnon){
+    if(db&&currentUser){
       try{
         if(typeof assertOwnUid==='function'&&!assertOwnUid(currentUser.uid)) throw new Error('Not authorized');
         const ref=await db.collection('peepal').add({
           question:q.question,format:q.format,options:q.options,responses:q.responses,
-          totalResponses:0,comments:0,tag:q.tag,user:q.user,anonymous:false,
+          totalResponses:0,comments:0,tag:q.tag,user:q.user,anonymous:!!isAnon,
           uid:currentUser.uid,deleted:false,
           audience:q.audience||'everyone',
           responseLimitMode:q.responseLimitMode||'algorithm',

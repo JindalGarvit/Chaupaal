@@ -265,9 +265,12 @@ async function logMatchEngagement(db, admin, payload) {
     outcome,
     intentText,
   } = payload || {};
-  if (!uid || !intentProfileId || !['accepted', 'ignored', 'rejected'].includes(outcome)) {
+  if (!uid || !intentProfileId || !['accepted', 'ignored', 'rejected', 'rated_high', 'rated_low'].includes(outcome)) {
     return { ok: false };
   }
+  // Map chat ratings into accepted/other buckets for weight refresh.
+  const storedOutcome =
+    outcome === 'rated_high' ? 'accepted' : outcome === 'rated_low' ? 'rejected' : outcome;
   const ref = db.collection(ENGAGEMENT_COLLECTION).doc();
   await ref.set({
     uid,
@@ -275,7 +278,8 @@ async function logMatchEngagement(db, admin, payload) {
     candidateUid: candidateUid || null,
     intentText: String(intentText || '').slice(0, 160),
     signalScores: signalScores || {},
-    outcome,
+    outcome: storedOutcome,
+    rawOutcome: outcome,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
   // Fire-and-forget sample counter bump

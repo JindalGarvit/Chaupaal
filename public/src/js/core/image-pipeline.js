@@ -46,15 +46,23 @@
       return cachedConfig;
     }
     if (!configPromise) {
-      configPromise = fetch('/api/media-config')
-        .then(async (r) => {
-          const json = await r.json().catch(() => null);
-          // Phase 5 envelope or legacy flat shape
-          const data = json?.ok === true ? json.data : json;
-          return { ok: r.ok, data };
-        })
-        .then(({ ok, data }) => {
-          if (ok && data?.cloudName && data?.uploadPreset) {
+      configPromise = (async () => {
+        try {
+          let data = null;
+          if (typeof apiFetch === 'function') {
+            const envelope = await apiFetch('/api/media-config', { method: 'GET', needAuth: true });
+            data = envelope?.ok ? envelope.data : null;
+          } else {
+            const headers = {};
+            try {
+              const u = typeof auth !== 'undefined' ? auth.currentUser : null;
+              if (u) headers.Authorization = `Bearer ${await u.getIdToken()}`;
+            } catch (e) {}
+            const r = await fetch('/api/media-config', { headers });
+            const json = await r.json().catch(() => null);
+            data = r.ok && json?.ok === true ? json.data : r.ok ? json : null;
+          }
+          if (data?.cloudName && data?.uploadPreset) {
             cachedConfig = {
               provider: 'cloudinary',
               cloudName: data.cloudName,
@@ -64,11 +72,11 @@
             cachedConfig = null;
           }
           return cachedConfig;
-        })
-        .catch(() => {
+        } catch (e) {
           cachedConfig = null;
           return null;
-        });
+        }
+      })();
     }
     return configPromise;
   }
