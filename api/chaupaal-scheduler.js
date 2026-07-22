@@ -349,7 +349,17 @@ module.exports = async function handler(req, res) {
       console.warn('[scheduler] peepal segments', e?.message || e);
     }
 
-    return sendSuccess(res, { ...results, summary, intentWeights, liveLoc, peepalSegments });
+    // Phase 3 denorm backfill (groups isPublic/nameLower + users_public) — idempotent paging
+    let denormBackfill = { skipped: true };
+    try {
+      const { runDenormBackfillPage } = require('../server-lib/backfill-denorms');
+      denormBackfill = await runDenormBackfillPage(db);
+    } catch (e) {
+      denormBackfill = { error: e?.message || String(e) };
+      console.warn('[scheduler] denorm backfill', e?.message || e);
+    }
+
+    return sendSuccess(res, { ...results, summary, intentWeights, liveLoc, peepalSegments, denormBackfill });
   } catch (e) {
     console.error('[chaupaal-scheduler]', e?.message || e);
     return sendError(res, 500, 'SCHEDULER_FAILED', e?.message || 'Scheduler failed');
