@@ -276,6 +276,8 @@ async function createStory(db, admin, uid, body) {
       return serializeStory(existing, uid);
     }
   }
+  const saveOnly = body.saveOnly === true || body.visibility === 'archive_only';
+  const highlightId = saveOnly ? cleanText(body.highlightId, 180) : '';
   const userSnap = await db.collection('users').doc(uid).get();
   const user = userSnap.data() || {};
   const now = admin.firestore.Timestamp.now();
@@ -284,7 +286,7 @@ async function createStory(db, admin, uid, body) {
     uid,
     destination,
     audience: destination === 'duniya' ? 'public' : null,
-    visibility,
+    visibility: saveOnly ? 'archive_only' : visibility,
     kind,
     type: cleanText(body.type, 30) || 'media',
     name: cleanText(user.name || user.displayName || user.username, 100) || 'Chaupaal member',
@@ -300,14 +302,45 @@ async function createStory(db, admin, uid, body) {
     score: body.type === 'score' ? Math.max(0, Number(body.score) || 0) : null,
     total: body.type === 'score' ? Math.max(0, Number(body.total) || 0) : null,
     streak: body.type === 'score' ? Math.max(0, Number(body.streak) || 0) : null,
-    active: true,
+    active: saveOnly ? false : true,
+    archived: !!saveOnly,
+    archivedAt: saveOnly ? now : null,
+    saveOnly: !!saveOnly,
     createdAt: now,
-    expiresAt,
+    expiresAt: saveOnly ? now : expiresAt,
   };
 
-  if (destination === 'duniya') {
+  if (saveOnly || destination === 'duniya') {
     await ref.set(story);
-    return serializeStory({ id: ref.id, data: () => story }, uid);
+    if (saveOnly && highlightId) {
+      try {
+        const href = db.collection('users').doc(uid).collection('story_highlights').doc(highlightId);
+        const hsnap = await href.get();
+        if (hsnap.exists) {
+          const refs = Array.isArray(hsnap.data().storyRefs) ? [...hsnap.data().storyRefs] : [];
+          refs.unshift({
+            destination,
+            storyId: ref.id,
+            thumb: story.thumb || story.media || '',
+            addedAt: Date.now(),
+          });
+          await href.set(
+            {
+              storyRefs: refs.slice(0, 50),
+              coverUrl: story.thumb || story.media || hsnap.data().coverUrl || '',
+              updatedAt: now,
+            },
+            { merge: true }
+          );
+        }
+      } catch (e) {
+        console.warn('[stories] highlight add after saveOnly failed', e?.message || e);
+      }
+    }
+    const serialized = serializeStory({ id: ref.id, data: () => story }, uid);
+    if (saveOnly) serialized.audienceFallback = 'archive_only';
+    else if (audienceFallback) serialized.audienceFallback = audienceFallback;
+    return serialized;
   }
 
   const recipients = await recipientIds(db, uid, visibility);
@@ -325,7 +358,7 @@ async function createStory(db, admin, uid, body) {
       }),
     ...recipients.map(
       (recipientUid) => (batch) =>
-        batch.set(db.collection('users').doc(recipientUid).collection('storyInbox').doc(`baithak_${ref.id}`), {
+        batch.set(db.collection('users').doc(recipientUid).collection('storyInbox').doc('baithak_' + ref.id), {
           storyId: ref.id,
           ownerUid: uid,
           destination: 'baithak',
@@ -401,7 +434,8 @@ async function profileStories(db, uid, targetUid) {
     for (const story of snap.docs) {
       const data = story.data() || {};
       const expires = data.expiresAt?.toMillis?.() || data.expiresAt || 0;
-      // Live ring only — expired stories are archived by default (hidden unless Highlighted).
+      // Live ring only — expired / save-only / archived stories stay out of the live ring.
+      if (data.active === false || data.archived === true || data.saveOnly === true) continue;
       if (expires && expires <= now) continue;
       if (await canView(db, story, uid, false)) result[destination].push(serializeStory(story, uid));
     }

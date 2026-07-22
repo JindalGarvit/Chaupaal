@@ -8,15 +8,26 @@ function renderProfileModal(){
   const p=userProfile||{};
   const dp=digitalProfile;
 
-  // Preview as others see it — strictly read-only, privacy-aware
+  // Preview as others see it — visitor chrome, no edit affordances
   if(typeof isProfilePreviewMode==='function' && isProfilePreviewMode()){
-    el.innerHTML = typeof renderStrangerPreviewHtml==='function'
-      ? renderStrangerPreviewHtml(dp, p)
-      : '<p style="color:var(--muted);">Preview unavailable</p>';
+    el.innerHTML = typeof renderOwnPreviewChromeHtml==='function'
+      ? renderOwnPreviewChromeHtml(dp, p)
+      : (typeof renderStrangerPreviewHtml==='function'
+        ? renderStrangerPreviewHtml(dp, p)
+        : '<p style="color:var(--muted);">Preview unavailable</p>');
     setTimeout(()=>{
       if(typeof wirePreviewToggle==='function'){
         wirePreviewToggle(el, ()=>renderProfileModal());
       }
+      if(typeof mountOwnProfileSections==='function'){
+        mountOwnProfileSections(el.querySelector('[data-own-preview-sections]'), {
+          editable:false,
+          isOwner:true,
+          includeArchived:true,
+        });
+      }
+      if(typeof wireTabNotificationButtons==='function') wireTabNotificationButtons();
+      if(typeof updateSectionNotifDots==='function') updateSectionNotifDots();
     },0);
     return;
   }
@@ -24,25 +35,37 @@ function renderProfileModal(){
   // Completeness (shared Phase 3 helper)
   const stats=typeof calcProfileCompletion==='function'?calcProfileCompletion(dp):{pct:0,missing:[]};
   const pct=stats.pct;
+  const displayName=dp.displayName||p.name||'Your Name';
+  const nameHtml=typeof formatDisplayNameHtml==='function'
+    ? formatDisplayNameHtml(displayName, typeof getProfileType==='function'?getProfileType():dp.profileType)
+    : displayName;
 
   el.innerHTML=`
     ${typeof renderPreviewToggleHtml==='function'?renderPreviewToggleHtml():''}
+    <div class="own-profile-edit-toolbar">
+      <button type="button" class="icon-btn profile-agg-notif" data-open-notif="all" aria-label="All notifications" title="Notifications" style="position:relative;">
+        🔔<span class="notif-dot hidden" data-notif-dot="all"></span>
+      </button>
+      <button type="button" class="btn" id="profileOpenArchiveBtn">Archive</button>
+      <button type="button" class="btn btn--primary" id="profileAddSectionBtn" title="Add section">＋</button>
+    </div>
     <!-- Profile header -->
     <div style="display:flex;align-items:center;gap:14px;padding:16px 0 14px;">
       <div style="position:relative;flex-shrink:0;">
         <div id="ownProfileStoryAvatar" style="width:72px;height:72px;border-radius:50%;background:var(--line);overflow:hidden;border:3px solid var(--red);display:flex;align-items:center;justify-content:center;font-size:32px;cursor:pointer;">
           ${p.photoURL?`<img src="${p.photoURL}" style="width:100%;height:100%;object-fit:cover;">`:'🪑'}
         </div>
-        <label style="position:absolute;bottom:0;right:0;background:var(--red);width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #fff;font-size:11px;color:#fff;">
+        <label style="position:absolute;bottom:0;right:0;background:var(--red);width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid var(--white);font-size:11px;color:#fff;">
           ✎<input type="file" accept="image/*" id="profilePhotoInput" style="display:none;">
         </label>
       </div>
       <div style="flex:1;min-width:0;">
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;">${dp.displayName||p.name||'Your Name'}</div>
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;" data-pro-badge-self data-pro-badge-name="${(displayName||'').replace(/"/g,'&quot;')}">${nameHtml}</div>
         <div style="font-size:12px;color:var(--muted);">@${p.username||'username'}</div>
         <div style="font-size:11px;color:var(--muted);margin-top:2px;">${[dp.currentCity,dp.occupation].filter(Boolean).join(' · ')||'Add your city & job'}</div>
       </div>
     </div>
+    <div class="own-edit-sections" data-own-edit-sections></div>
     <!-- Completeness bar -->
     <div style="margin-bottom:14px;">
       <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;">
@@ -281,6 +304,24 @@ function renderProfileModal(){
     if(typeof wirePreviewToggle==='function'){
       wirePreviewToggle(el, ()=>renderProfileModal());
     }
+    if(typeof mountOwnProfileSections==='function'){
+      mountOwnProfileSections(el.querySelector('[data-own-edit-sections]'), {
+        editable:true,
+        isOwner:true,
+        includeArchived:true,
+      });
+    }
+    document.getElementById('profileOpenArchiveBtn')?.addEventListener('click',()=>{
+      if(typeof openArchiveHub==='function') openArchiveHub('posts');
+      else if(typeof openArchive==='function') openArchive();
+    });
+    document.getElementById('profileAddSectionBtn')?.addEventListener('click',()=>{
+      if(typeof openAddProfileSectionSheet==='function'){
+        openAddProfileSectionSheet(()=>renderProfileModal());
+      }
+    });
+    if(typeof wireTabNotificationButtons==='function') wireTabNotificationButtons();
+    if(typeof updateSectionNotifDots==='function') updateSectionNotifDots();
     document.getElementById('profileSectionTabs')?.querySelectorAll('.profile-section-tab').forEach(tab=>{
       tab.addEventListener('click',()=>{
         document.querySelectorAll('.profile-section-tab').forEach(t=>{t.style.color='var(--muted)';t.style.borderBottom='none';});

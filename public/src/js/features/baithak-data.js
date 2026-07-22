@@ -161,7 +161,7 @@ function renderChatList(chats){
       ? formatRelativeTime(chat.ts || chat.updatedAt || chat.time)
       : chat.time);
     item.innerHTML = `
-      <div class="chat-avatar ${chat.type==='group'?'group':''}${self?' self':''}">${chat.avatar||'📝'}
+      <div class="chat-avatar ${chat.type==='group'?'group':''}${self?' self':''}" ${self?'data-self-pin-avatar="1" title="Open your profile"':''}>${chat.avatar||'📝'}
         ${chat.duelStreak?`<div class="streak-badge">🔥${chat.duelStreak}</div>`:''}
       </div>
       <div class="chat-info">
@@ -176,6 +176,16 @@ function renderChatList(chats){
     if(self){
       item.style.background='rgba(230,57,70,0.04)';
       item.style.borderBottom='1px solid var(--line)';
+      const avatar=item.querySelector('[data-self-pin-avatar]');
+      avatar?.addEventListener('click',(e)=>{
+        e.stopPropagation();
+        if(typeof openOwnProfilePreview==='function') openOwnProfilePreview();
+        else {
+          if(typeof setProfilePreviewMode==='function') setProfilePreviewMode(true);
+          if(typeof renderProfileModal==='function') renderProfileModal();
+          document.getElementById('profileModal')?.classList.remove('hidden');
+        }
+      });
     }
     item.addEventListener('click', () => openChatScreen(chat));
     list.appendChild(item);

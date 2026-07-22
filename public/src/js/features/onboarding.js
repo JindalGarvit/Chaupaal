@@ -185,16 +185,32 @@ let notifLoading=false;
 
 function saveNotifications(){try{localStorage.setItem('chaupaal_notifications',JSON.stringify(notifications.slice(0,100)));}catch(e){}}
 
-function addNotification(type,icon,text){
+function addNotification(type,icon,text,extra){
+  // Supports addNotification(type, icon, text) or addNotification({ type, icon, text, section, deepLink })
+  let section=null, deepLink=null;
+  if(type && typeof type==='object' && !Array.isArray(type)){
+    const o=type;
+    type=o.type||'info';
+    icon=o.icon||'🔔';
+    text=o.text||'';
+    section=o.section||null;
+    deepLink=o.deepLink||o.link||null;
+    extra=o;
+  } else if(extra && typeof extra==='object'){
+    section=extra.section||null;
+    deepLink=extra.deepLink||extra.link||null;
+  }
   const id=`n_${Date.now()}`;
-  const n={id,type,icon,text,time:'now',ts:Date.now(),read:false};
+  const n={id,type,icon,text,time:'now',ts:Date.now(),read:false,section:section||null,deepLink:deepLink||null};
   notifications.unshift(n);
   saveNotifications();updateNotifDot();
+  if(typeof updateSectionNotifDots==='function') updateSectionNotifDots();
   if(typeof SoundLib!=='undefined'&&SoundLib.notification) SoundLib.notification();
-  // Mirror to Firestore so inbox can paginate across devices
   if(db&&currentUser){
     db.collection('notifications').doc(currentUser.uid).collection('items').doc(id).set({
       type,icon,text,read:false,ts:Date.now(),
+      section:section||null,
+      deepLink:deepLink||null,
       createdAt:firebase.firestore.FieldValue.serverTimestamp(),
     }).catch(()=>{});
   }
@@ -204,6 +220,10 @@ function updateNotifDot(){
   const hasUnread=notifications.some(n=>!n.read);
   document.getElementById('notifDot')?.classList.toggle('hidden',!hasUnread);
   document.getElementById('notifDotDesktop')?.classList.toggle('hidden',!hasUnread);
+  document.querySelectorAll('[data-notif-dot="all"]').forEach(dot=>{
+    dot.classList.toggle('hidden',!hasUnread);
+  });
+  if(typeof updateSectionNotifDots==='function') updateSectionNotifDots();
 }
 
 async function loadNotificationsPage({reset=false}={}){
@@ -229,6 +249,8 @@ async function loadNotificationsPage({reset=false}={}){
       time: raw.time,
       ts: raw.createdAt?.toMillis?.()||raw.ts||Date.now(),
       read: !!raw.read,
+      section: raw.section||null,
+      deepLink: raw.deepLink||raw.link||null,
     }));
     if(reset&&mapped.length){
       notifLiveMode=true;
@@ -251,6 +273,10 @@ async function loadNotificationsPage({reset=false}={}){
 }
 
 function renderNotifications(){
+  // Legacy #notifModal list — prefer shared panel when available
+  if(typeof openNotificationPanel==='function' && !document.getElementById('notifList')){
+    return;
+  }
   const list=document.getElementById('notifList');
   if(!list)return;
   if(!notifications.length){
@@ -265,30 +291,44 @@ function renderNotifications(){
     const when = typeof formatRelativeTime==='function'
       ? formatRelativeTime(n.ts || n.time)
       : `${n.time} ago`;
+    const text = typeof linkifyText==='function' ? linkifyText(n.text||'') : n.text;
     return `
-    <div class="notif-item ${n.read?'':'unread'}" data-id="${n.id}">
+    <div class="notif-item ${n.read?'is-read':'unread'}" data-id="${n.id}">
       <div class="notif-icon">${n.icon}</div>
       <div class="notif-body">
-        <div class="notif-text">${n.text}</div>
+        <div class="notif-text">${text}</div>
         <div class="notif-time">${when}</div>
       </div>
+      ${n.read?'':'<span class="notif-unread-pip" aria-hidden="true"></span>'}
     </div>`;
   }).join('');
   list.querySelectorAll('.notif-item').forEach(item=>{
     item.addEventListener('click',()=>{
       const n=notifications.find(x=>x.id===item.dataset.id);
       if(n){
-        n.read=true;saveNotifications();item.classList.remove('unread');updateNotifDot();
+        n.read=true;saveNotifications();item.classList.remove('unread');item.classList.add('is-read');updateNotifDot();
         if(db&&currentUser){
           db.collection('notifications').doc(currentUser.uid).collection('items').doc(n.id)
             .set({read:true},{merge:true}).catch(()=>{});
         }
+        if(typeof openNotificationPanel==='function' && n.deepLink){
+          // deep-link via shared helper when panel module loaded
+        }
       }
     });
   });
+  const markAll=document.getElementById('notifMarkAll');
+  if(markAll && !markAll.dataset.wired){
+    markAll.dataset.wired='1';
+    markAll.addEventListener('click',async()=>{
+      if(typeof markAllNotificationsRead==='function') await markAllNotificationsRead('all');
+      else { notifications.forEach(n=>{n.read=true;}); saveNotifications(); updateNotifDot(); }
+      renderNotifications();
+    });
+  }
   if(notifLiveMode&&notifHasMore&&typeof ensureLoadMoreButton==='function'){
     ensureLoadMoreButton(list,{
-      label:'Load older notifications',
+      label:'View more',
       onLoadMore:async()=>{
         await loadNotificationsPage({reset:false});
         renderNotifications();
@@ -297,9 +337,14 @@ function renderNotifications(){
   }
 }
 
+// Top-bar global notif removed — keep desktop/sidebar hooks opening shared panel
 [document.getElementById('notifBtn'),document.getElementById('notifBtnDesktop')].forEach(btn=>{
   btn?.addEventListener('click',async()=>{
-    document.getElementById('notifModal').classList.remove('hidden');
+    if(typeof openNotificationPanel==='function'){
+      openNotificationPanel('all');
+      return;
+    }
+    document.getElementById('notifModal')?.classList.remove('hidden');
     if(db&&currentUser&&typeof loadNotificationsPage==='function'){
       const list=document.getElementById('notifList');
       if(typeof renderSkeleton==='function'&&list) renderSkeleton(list,{variant:'list',count:3});
@@ -308,7 +353,7 @@ function renderNotifications(){
     renderNotifications();
   });
 });
-document.getElementById('closeNotif').addEventListener('click',()=>document.getElementById('notifModal').classList.add('hidden'));
+document.getElementById('closeNotif')?.addEventListener('click',()=>document.getElementById('notifModal')?.classList.add('hidden'));
 updateNotifDot();
 
 // ===================== TEXT-TO-SPEECH (Listen to Post) =====================

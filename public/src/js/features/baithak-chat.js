@@ -1229,9 +1229,16 @@ function showBaithakStoryEditor(file,mode){
         <select data-story-audience>
           <option value="friends">Friends — mutual connections only</option>
           <option value="close_friends">Close Friends — private list (only you manage it)</option>
+          <option value="save_only">💾 Save without posting</option>
+          <option value="highlights_only">◎ Add directly to Highlights</option>
         </select>
       </label>
-      <p class="story-editor-note">Close Friends is invisible to others — recipients never see that a selective list exists.</p>
+      <div class="story-editor-field hidden" data-story-highlight-wrap>
+        <label>Highlight collection
+          <select data-story-highlight></select>
+        </label>
+      </div>
+      <p class="story-editor-note">Close Friends is invisible to others — recipients never see that a selective list exists. Save without posting / Highlights never appear as a live story.</p>
       <label class="story-editor-field">Game card
         <select data-story-game>
           <option value="">No game attached</option>
@@ -1402,9 +1409,18 @@ function showBaithakStoryEditor(file,mode){
       const up=await processAndUploadMedia(file,{folder:'stories'});
       const stickerNote=stickersPlaced.map(s=>s.emoji).join('');
       const baseText=editor.querySelector('[data-story-text]').value||'';
+      const audience=editor.querySelector('[data-story-audience]').value;
+      const saveOnly=audience==='save_only'||audience==='highlights_only';
+      let highlightId=editor.querySelector('[data-story-highlight]')?.value||'';
+      if(audience==='highlights_only' && !highlightId && typeof storyCall==='function'){
+        const createdHl=await storyCall('create_highlight',{title:'Favorites'});
+        highlightId=createdHl?.id||createdHl?.highlight?.id||'';
+      }
       const created=await createPlatformStory({
         destination:'baithak',kind:'story',
-        visibility:editor.querySelector('[data-story-audience]').value,
+        visibility:saveOnly?'archive_only':audience,
+        saveOnly,
+        highlightId:audience==='highlights_only'?highlightId:undefined,
         type:'media',media:up.media,thumb:up.thumb,
         mediaType:file.type.startsWith('video')?'video':'image',
         rotation,
@@ -1416,9 +1432,11 @@ function showBaithakStoryEditor(file,mode){
       cleanup();
       renderLiveBaithakStories();
       if(typeof haptic==='function') haptic('success');
-      if(created?.audienceFallback==='friends'){
+      if(saveOnly){
+        showToast(audience==='highlights_only'?'Added to Highlights (private until shared)':'Saved privately to Archive');
+      }else if(created?.audienceFallback==='friends'){
         showToast('Shared with Friends — your Close Friends list was empty');
-      }else if(editor.querySelector('[data-story-audience]').value==='close_friends'){
+      }else if(audience==='close_friends'){
         showToast('Story shared with Close Friends');
       }else{
         showToast('Story shared with Friends');
@@ -1427,6 +1445,26 @@ function showBaithakStoryEditor(file,mode){
       button.disabled=false;button.textContent='Share';
       showToast(error?.message||'Story could not be shared');
     }
+  });
+  const audSel=editor.querySelector('[data-story-audience]');
+  const hlWrap=editor.querySelector('[data-story-highlight-wrap]');
+  const hlSel=editor.querySelector('[data-story-highlight]');
+  const refreshHl=async()=>{
+    if(!hlSel||typeof storyCall!=='function') return;
+    try{
+      const data=await storyCall('list_highlights',{});
+      const list=data.highlights||[];
+      hlSel.innerHTML=list.length
+        ? list.map(h=>`<option value="${h.id}">${h.title}</option>`).join('')
+        : '<option value=\"\">Create on share</option>';
+    }catch(e){
+      hlSel.innerHTML='<option value=\"\">Create on share</option>';
+    }
+  };
+  audSel?.addEventListener('change',()=>{
+    const show=audSel.value==='highlights_only';
+    hlWrap?.classList.toggle('hidden',!show);
+    if(show) refreshHl();
   });
 }
 

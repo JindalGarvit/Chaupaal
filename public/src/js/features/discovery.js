@@ -456,6 +456,7 @@ function openPeepalAskSheet(){
           <option value="everyone">🌍 Everyone</option>
           <option value="friends">👥 Friends only</option>
           <option value="ai">🤖 AI decides</option>
+          <option value="save_only">💾 Save without posting</option>
         </select>
       </div>
       <!-- Response limits -->
@@ -613,6 +614,7 @@ function openPeepalAskSheet(){
     const fmt=sheet.querySelector('.peepal-format-chip.active')?.dataset.fmt||'open';
     const opts=fmt==='mcq'||fmt==='poll'?[1,2,3,4].map(i=>document.getElementById(`mcqOpt${i}`)?.value||'').filter(Boolean):[];
     const audience=document.getElementById('peepalAudience')?.value||'everyone';
+    const saveOnly=audience==='save_only';
     const responseLimitMode=document.getElementById('peepalResponseCap')?.value||'algorithm';
     const customCap=Number(document.getElementById('peepalCustomCap')?.value)||null;
     const resolveCapLocal=(mode,custom)=>{
@@ -645,9 +647,11 @@ function openPeepalAskSheet(){
       stallReason:null,
     }));
     const q={id:`q_${Date.now()}`,question:text,format:fmt,options:opts,responses:opts.map(()=>0),totalResponses:0,comments:0,timeAgo:'just now',ts:Date.now(),tag:fmt.toUpperCase(),answered:false,deleted:false,
-      audience, responseLimitMode, responseCap:postCap, audienceSegments,
-      segmentDistributionActive:audienceSegments.some(s=>s.status==='active'),
+      audience:saveOnly?'private':audience, responseLimitMode, responseCap:postCap, audienceSegments:saveOnly?[]:audienceSegments,
+      segmentDistributionActive:!saveOnly && audienceSegments.some(s=>s.status==='active'),
       activeSegmentIndex:0,
+      archived:!!saveOnly,
+      saveOnly:!!saveOnly,
       user:isAnon?{name:'Anonymous',avatar:'🎭',uid:'anon'}:{name:userProfile?.name||'You',avatar:userProfile?.photoURL||'🪑',uid:currentUser?.uid||'me'},
       anonymous:isAnon,uid:currentUser?.uid||'me'};
 
@@ -677,7 +681,7 @@ function openPeepalAskSheet(){
       pendingPeepalAttachment=null;
     }
 
-    peepalQuestions.unshift(q);
+    if(!saveOnly) peepalQuestions.unshift(q);
     peepalDraft?.clear?.();
     if(db&&currentUser&&!isAnon){
       try{
@@ -692,6 +696,9 @@ function openPeepalAskSheet(){
           audienceSegments:q.audienceSegments||[],
           segmentDistributionActive:!!q.segmentDistributionActive,
           activeSegmentIndex:0,
+          archived:!!saveOnly,
+          archivedAt:saveOnly?firebase.firestore.FieldValue.serverTimestamp():null,
+          saveOnly:!!saveOnly,
           attachment: q.attachment?.type==='image'
             ? {
                 type:'image',
@@ -713,7 +720,7 @@ function openPeepalAskSheet(){
     renderPeepalFeed();
       if(typeof trackPostCreated==='function') trackPostCreated(isAnon?'peepal_anon':'peepal');
       if(typeof SoundLib!=='undefined'&&SoundLib.postPublish) SoundLib.postPublish();
-      showToast(isAnon?'Posted anonymously 🎭':'Question posted to Peepal! 🌳');
+      showToast(saveOnly?'Saved privately to Archive':(isAnon?'Posted anonymously 🎭':'Question posted to Peepal! 🌳'));
     }finally{
       if(pubBtn){ pubBtn.disabled=false; pubBtn.textContent=pubLabel; }
       if(typeof unlock==='function') unlock();

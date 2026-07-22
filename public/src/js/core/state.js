@@ -86,6 +86,11 @@ document.getElementById('settingsBtn').addEventListener('click',()=>{
   populateVoiceDropdown();
   if(typeof applyNotifPrefsToSettingsUI==='function') applyNotifPrefsToSettingsUI();
   if(typeof hydrateNotifPrefsFromFirestore==='function') hydrateNotifPrefsFromFirestore();
+  const typeHost=document.getElementById('settingsProfileTypeHost');
+  if(typeHost && typeof renderProfileTypeToggleHtml==='function'){
+    typeHost.innerHTML=renderProfileTypeToggleHtml();
+    if(typeof wireProfileTypeToggle==='function') wireProfileTypeToggle(typeHost);
+  }
   // Companion opt-out: checked = outreach ON (optOut false)
   try{
     const el=document.getElementById('toggleCompanionOutreach');
@@ -100,6 +105,11 @@ document.getElementById('settingsBtn').addEventListener('click',()=>{
       }
     }
   }catch(e){}
+});
+document.getElementById('settingsArchiveBtn')?.addEventListener('click',()=>{
+  document.getElementById('settingsModal')?.classList.add('hidden');
+  if(typeof openArchiveHub==='function') openArchiveHub('stories');
+  else if(typeof openArchive==='function') openArchive();
 });
 document.getElementById('closeSettings').addEventListener('click',()=>document.getElementById('settingsModal').classList.add('hidden'));
 document.getElementById('saveSettings').addEventListener('click',()=>{

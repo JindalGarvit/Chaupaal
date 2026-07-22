@@ -68,7 +68,7 @@ async function loadDuniyaPage({reset=false}={}){
       cursor: reset?null:duniyaPageCursor,
       excludeDeleted:true,
     });
-    const mapped=page.items.map(mapDuniyaDoc).filter(p=>!p.deleted&&!(typeof isSoftDeleted==='function'&&isSoftDeleted(p)));
+    const mapped=page.items.map(mapDuniyaDoc).filter(p=>!p.deleted&&p.archived!==true&&!(typeof isSoftDeleted==='function'&&isSoftDeleted(p)));
     if(typeof hydrateContentLikes==='function') await hydrateContentLikes('duniya',mapped);
     if(typeof hydrateRelationships==='function'){
       const states=await hydrateRelationships(mapped.map(p=>p.user?.uid).filter(Boolean));
@@ -738,6 +738,7 @@ function openDuniyaPostSheet(mode='post'){
             <option value="followers">👥 Followers only</option>
             <option value="ai">🤖 AI decides</option>
             <option value="friends">🤝 Friends only</option>
+            <option value="save_only">💾 Save without posting</option>
           </select>
         </div>
       </div>
@@ -791,10 +792,11 @@ function openDuniyaPostSheet(mode='post'){
     const shareBtn=document.getElementById('duniyaSharePost');
     const caption=captionEl.value.trim();
     const audience=audienceEl?.value||'public';
+    const saveOnly=audience==='save_only';
     const mediaEl=document.getElementById('duniyaMediaPreview').querySelector('img,video');
     const unlock=typeof beginClientMutation==='function'?beginClientMutation('duniya_post'):()=>{};
     if(unlock===false){ showToast('Post already submitting…'); return; }
-    if(typeof setButtonLoading==='function') setButtonLoading(shareBtn,true,'Sharing');
+    if(typeof setButtonLoading==='function') setButtonLoading(shareBtn,true,saveOnly?'Saving':'Sharing');
     else { shareBtn.disabled=true; shareBtn.textContent='…'; }
 
     if(typeof checkRateLimit==='function'){
@@ -852,7 +854,8 @@ function openDuniyaPostSheet(mode='post'){
       caption:caption||'Just posted on Duniya 🌍',
       likes:0,comments:0,shares:0,
       timestamp:'now',ts:Date.now(),tags:[],followed:false,likedByMe:false,
-      audience, deleted:false, uid:currentUser?.uid||'me',
+      audience:saveOnly?'private':audience, deleted:false, uid:currentUser?.uid||'me',
+      archived:!!saveOnly,
     };
     const firestorePayload={
       uid:currentUser?.uid,
@@ -867,17 +870,21 @@ function openDuniyaPostSheet(mode='post'){
       caption:newPost.caption,
       likes:0,comments:0,shares:0,
       tags:newPost.tags,
-      audience,
+      audience:saveOnly?'private':audience,
+      archived:!!saveOnly,
+      archivedAt:saveOnly?firebase.firestore.FieldValue.serverTimestamp():null,
+      saveOnly:!!saveOnly,
       deleted:false,
       createdAt:firebase.firestore.FieldValue.serverTimestamp(),
       ts:Date.now(),
     };
-    duniyaPosts.unshift(newPost);
+    if(!saveOnly) duniyaPosts.unshift(newPost);
     saveToArchive({type:'duniya_post',...newPost,media:firestorePayload.media,thumb:firestorePayload.thumb});
     duniyaDraft?.clear?.();
     sheet.classList.remove('open');setTimeout(()=>sheet.classList.add('hidden'),350);
-    renderDuniyaFeed();showToast('Posted to Duniya! 🌍');
-    if(typeof trackPostCreated==='function') trackPostCreated('duniya');
+    if(!saveOnly) renderDuniyaFeed();
+    showToast(saveOnly?'Saved privately to Archive':'Posted to Duniya! 🌍');
+    if(typeof trackPostCreated==='function' && !saveOnly) trackPostCreated('duniya');
     if(typeof SoundLib!=='undefined'&&SoundLib.postPublish) SoundLib.postPublish();
     if(db&&currentUser){
       try{

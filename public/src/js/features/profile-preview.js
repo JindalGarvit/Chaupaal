@@ -1,9 +1,9 @@
 /**
- * Own-profile preview: "My view" (editable) vs "Preview as others see it" (read-only).
- * Applies the same privacy/visibility rules a stranger would get.
+ * Own-profile preview: "Preview" (visitor view) vs "Edit my profile".
+ * Default when opening own profile is Preview.
  */
 (function () {
-  let profilePreviewMode = false; // false = my view, true = stranger preview
+  let profilePreviewMode = true; // Preview by default for own profile
 
   function isProfilePreviewMode() {
     return !!profilePreviewMode;
@@ -34,6 +34,7 @@
           ? 'Private profile'
           : 'Friends only'
         : 'Public',
+      profileType: p.profileType || meta.profileType || 'personal',
     };
 
     if (isLocked) {
@@ -67,7 +68,6 @@
     push('Instagram', p.instagram);
     push('Website', p.website);
 
-    // Icebreakers visible to matches (answers only, like discovery)
     const ice = Array.isArray(p.icebreakers) ? p.icebreakers : [];
     ice.slice(0, 3).forEach((a) => {
       const prompt =
@@ -83,51 +83,56 @@
   function renderPreviewToggleHtml() {
     const on = profilePreviewMode;
     return `
-      <div id="profilePreviewToggle" style="display:flex;gap:6px;padding:4px;background:var(--cream);border-radius:12px;margin-bottom:12px;border:1px solid var(--line);">
-        <button type="button" data-preview="0" style="flex:1;padding:8px 10px;border:none;border-radius:10px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;cursor:pointer;background:${!on ? 'var(--white)' : 'transparent'};color:${!on ? 'var(--red)' : 'var(--muted)'};box-shadow:${!on ? '0 1px 3px rgba(0,0,0,0.06)' : 'none'};">My view</button>
-        <button type="button" data-preview="1" style="flex:1;padding:8px 10px;border:none;border-radius:10px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;cursor:pointer;background:${on ? 'var(--white)' : 'transparent'};color:${on ? 'var(--red)' : 'var(--muted)'};box-shadow:${on ? '0 1px 3px rgba(0,0,0,0.06)' : 'none'};">Preview as others see it</button>
+      <div id="profilePreviewToggle" class="profile-mode-toggle" role="tablist" aria-label="Profile mode">
+        <button type="button" data-preview="1" role="tab" aria-selected="${on ? 'true' : 'false'}" class="${on ? 'is-active' : ''}">Preview</button>
+        <button type="button" data-preview="0" role="tab" aria-selected="${!on ? 'true' : 'false'}" class="${!on ? 'is-active' : ''}">Edit my profile</button>
       </div>`;
   }
 
-  function renderStrangerPreviewHtml(dp, userMeta) {
+  function renderOwnPreviewChromeHtml(dp, userMeta) {
     const view = getPublicVisibleProfile(dp, userMeta);
-    const esc = (s) =>
-      String(s || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/"/g, '&quot;');
+    const esc =
+      typeof escapeHtmlText === 'function'
+        ? escapeHtmlText
+        : (s) =>
+            String(s || '')
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/"/g, '&quot;');
+    const nameHtml =
+      typeof formatDisplayNameHtml === 'function'
+        ? formatDisplayNameHtml(view.displayName, view.profileType)
+        : esc(view.displayName);
+    const bioHtml =
+      view.bio && !view.locked
+        ? typeof linkifyText === 'function'
+          ? linkifyText(view.bio)
+          : esc(view.bio)
+        : '';
     return `
       ${renderPreviewToggleHtml()}
-      <div style="text-align:center;padding:8px 0 16px;">
-        <div style="width:88px;height:88px;border-radius:50%;margin:0 auto 12px;background:var(--line);overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:40px;border:3px solid var(--line);">
-          ${view.photoURL ? `<img src="${esc(view.photoURL)}" style="width:100%;height:100%;object-fit:cover;">` : '👤'}
-        </div>
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:20px;">${esc(view.displayName)}</div>
-        <div style="color:var(--muted);font-size:13px;margin-bottom:6px;">@${esc(view.username)}</div>
-        <div style="display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted);background:var(--cream);border:1px solid var(--line);border-radius:999px;padding:4px 10px;">${esc(view.visibilityLabel)} · read-only preview</div>
-        ${view.bio && !view.locked ? `<div style="font-size:14px;margin-top:14px;line-height:1.5;text-align:left;padding:0 4px;">${esc(view.bio)}</div>` : ''}
+      <div class="own-profile-preview-toolbar">
+        <button type="button" class="icon-btn profile-agg-notif" data-open-notif="all" aria-label="All notifications" title="Notifications" style="position:relative;">
+          🔔<span class="notif-dot hidden" data-notif-dot="all"></span>
+        </button>
+        <button type="button" class="btn" data-open-archive-from-preview>Archive</button>
       </div>
-      ${
-        view.locked
-          ? `<div style="padding:20px 14px;text-align:center;color:var(--muted);font-size:13px;line-height:1.5;border:1px dashed var(--line);border-radius:14px;">
-              This is what a stranger sees — profile details are hidden (${esc(view.visibilityLabel).toLowerCase()}).
-            </div>`
-          : view.fields.length
-            ? `<div style="display:flex;flex-direction:column;gap:10px;">
-                ${view.fields
-                  .map(
-                    (f) => `
-                  <div style="padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--white);">
-                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted);margin-bottom:4px;">${esc(f.label)}</div>
-                    <div style="font-size:14px;line-height:1.4;">${esc(f.value)}</div>
-                  </div>`
-                  )
-                  .join('')}
-              </div>`
-            : `<div style="padding:16px;text-align:center;color:var(--muted);font-size:13px;">Not much is public yet — fill your profile and check privacy toggles.</div>`
-      }
-      <p style="font-size:11px;color:var(--muted);margin-top:16px;text-align:center;line-height:1.4;">No edit controls in preview — this matches a stranger’s view.</p>
+      <div class="public-profile-hero own-preview-hero">
+        <div class="public-profile-avatar" data-own-preview-avatar>
+          ${view.photoURL ? `<img src="${esc(view.photoURL)}" alt="">` : '👤'}
+        </div>
+        <div class="public-profile-name" data-pro-badge-self data-pro-badge-name="${esc(view.displayName)}">${nameHtml}</div>
+        <div class="public-profile-uname">@${esc(view.username)}</div>
+        <div class="own-preview-chip">${esc(view.visibilityLabel)} · how others see you</div>
+        ${bioHtml ? `<p class="public-profile-bio">${bioHtml}</p>` : ''}
+      </div>
+      <div class="own-preview-sections" data-own-preview-sections></div>
+      <p class="own-preview-footnote">No edit controls in Preview — switch to Edit my profile to rearrange sections, add custom blocks, or archive.</p>
     `;
+  }
+
+  function renderStrangerPreviewHtml(dp, userMeta) {
+    return renderOwnPreviewChromeHtml(dp, userMeta);
   }
 
   function wirePreviewToggle(root, onSwitch) {
@@ -141,6 +146,11 @@
         if (typeof onSwitch === 'function') onSwitch(next);
       });
     });
+    root?.querySelector?.('[data-open-archive-from-preview]')?.addEventListener('click', () => {
+      if (typeof openArchiveHub === 'function') openArchiveHub('posts');
+      else if (typeof openArchive === 'function') openArchive();
+    });
+    if (typeof wireTabNotificationButtons === 'function') wireTabNotificationButtons();
   }
 
   window.isProfilePreviewMode = isProfilePreviewMode;
@@ -148,5 +158,6 @@
   window.getPublicVisibleProfile = getPublicVisibleProfile;
   window.renderPreviewToggleHtml = renderPreviewToggleHtml;
   window.renderStrangerPreviewHtml = renderStrangerPreviewHtml;
+  window.renderOwnPreviewChromeHtml = renderOwnPreviewChromeHtml;
   window.wirePreviewToggle = wirePreviewToggle;
 })();

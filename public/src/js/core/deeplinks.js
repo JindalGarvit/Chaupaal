@@ -93,9 +93,9 @@
           <div data-public-profile-avatar class="public-profile-avatar">
             ${u.photoURL ? `<img src="${u.photoURL}" alt="">` : (u.avatar || '👤')}
           </div>
-          <div class="public-profile-name">${u.name || profile.displayName || uname || 'Chaupaal member'}</div>
+          <div class="public-profile-name">${typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml(u.name || profile.displayName || uname || 'Chaupaal member', u.profileType || profile.profileType) : (u.name || profile.displayName || uname || 'Chaupaal member')}</div>
           ${uname ? `<div class="public-profile-uname">@${uname}</div>` : ''}
-          ${bio ? `<p class="public-profile-bio">${bio}</p>` : ''}
+          ${bio ? `<p class="public-profile-bio">${typeof linkifyText === 'function' ? linkifyText(bio) : bio}</p>` : ''}
           ${
             prompts.length
               ? `<div class="public-profile-prompts">${prompts
@@ -116,50 +116,31 @@
             <span class="public-profile-chrome-label">Connections</span>
             <span>Loading…</span>
           </div>
-          <div class="public-profile-highlights" data-public-highlights>
-            <div class="public-profile-highlights-label">Highlights</div>
-            <div class="public-profile-highlights-row public-profile-chrome-slot" data-highlights-row>
-              <span class="public-profile-chrome-label">Story Highlights</span>
-              <span>Loading…</span>
-            </div>
-          </div>
           <div class="public-profile-actions" data-rel-actions>
             <button class="btn btn--primary" data-rel-primary type="button">Connect</button>
             <button class="btn" data-rel-more type="button" aria-label="More relationship options">▾</button>
             <button class="btn" data-public-profile-hi type="button">Say hi</button>
           </div>
         </div>
-        ${
-          media.length
-            ? `<div class="public-profile-media-strip">${media
-                .slice(0, 9)
-                .map((m) => {
-                  const src = m.url || m.src || m.thumb || '';
-                  if (m.type === 'voice')
-                    return `<button type="button" class="ppm-voice ppm-media-cell" data-voice="${src}" aria-label="Play voice note"><span class="ppm-play">▶</span><span>Voice</span></button>`;
-                  if (m.type === 'video')
-                    return `<button type="button" class="ppm-video ppm-media-cell" data-ppm-video="${src}" aria-label="Play video"><video src="${src}" muted playsinline></video><span class="ppm-play">▶</span></button>`;
-                  return `<img src="${src}" alt="">`;
-                })
-                .join('')}</div>`
-            : `<div class="public-profile-media-strip public-profile-media-strip--empty public-profile-chrome-slot"><span class="public-profile-chrome-label">Photos & clips</span><span>None yet</span></div>`
-        }
-        <div class="public-profile-section">
-          <h3>Duniya</h3>
-          <div data-public-duniya-posts class="public-profile-posts public-profile-chrome-slot">
-            <span class="public-profile-chrome-label">Public posts</span>
-            <span>Loading…</span>
-          </div>
-        </div>
-        <div class="public-profile-section">
-          <h3>Peepal</h3>
-          <div data-public-peepal-posts class="public-profile-posts public-profile-chrome-slot">
-            <span class="public-profile-chrome-label">Questions</span>
-            <span>Loading…</span>
-          </div>
-        </div>
+        <div class="public-profile-ordered-sections" data-public-ordered-sections></div>
       </div>`;
     document.querySelector('.device')?.appendChild(sheet);
+    if (typeof mountOwnProfileSections === 'function' && profileUid) {
+      const sectionProfile = {
+        ...(profile || {}),
+        sectionOrder: profile.sectionOrder || u.sectionOrder,
+        customSections: profile.customSections || u.customSections,
+        profileMedia: media,
+      };
+      mountOwnProfileSections(sheet.querySelector('[data-public-ordered-sections]'), {
+        uid: profileUid,
+        profile: sectionProfile,
+        editable: false,
+        isOwner: !!(currentUser && currentUser.uid === profileUid),
+        includeArchived: !!(currentUser && currentUser.uid === profileUid),
+      });
+    }
+
     sheet.querySelector('[data-public-profile-close]')?.addEventListener('click', () => sheet.remove());
     sheet.querySelector('[data-public-profile-share]')?.addEventListener('click', () => {
       const url = shareUrl('profile', uname);

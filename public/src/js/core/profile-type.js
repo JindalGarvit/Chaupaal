@@ -50,6 +50,8 @@
         .update({ profileType: type, 'profile.profileType': type })
         .catch(() => {});
     }
+    document.dispatchEvent(new CustomEvent('chaupaal:profile-type-changed', { detail: { type } }));
+    if (typeof refreshProfessionalBadges === 'function') refreshProfessionalBadges();
     return type;
   }
 
