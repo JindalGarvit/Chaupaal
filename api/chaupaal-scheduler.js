@@ -353,7 +353,17 @@ module.exports = async function handler(req, res) {
     let denormBackfill = { skipped: true };
     try {
       const { runDenormBackfillPage } = require('../server-lib/backfill-denorms');
-      denormBackfill = await runDenormBackfillPage(db);
+      const pages = [];
+      // Extra pages when ?denorm=1 so a manual cron hit can finish faster
+      const extra = String(req.query?.denorm || '') === '1' ? 8 : 1;
+      for (let i = 0; i < extra; i++) {
+        const page = await runDenormBackfillPage(db);
+        pages.push(page);
+        const gDone = !!(page.groups?.done || page.groups?.skipped);
+        const uDone = !!(page.usersPublic?.done || page.usersPublic?.skipped);
+        if (gDone && uDone) break;
+      }
+      denormBackfill = { pages };
     } catch (e) {
       denormBackfill = { error: e?.message || String(e) };
       console.warn('[scheduler] denorm backfill', e?.message || e);
