@@ -66,7 +66,7 @@
 
   window.addEventListener('load', () => {
     navigator.serviceWorker
-      .register('/sw.js')
+      .register('/sw.js?v=48')
       .then((reg) => {
         console.log('SW registered');
         if (reg.waiting) showUpdateBanner();

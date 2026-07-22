@@ -47,7 +47,10 @@
         if (count > 0) dot.setAttribute('data-count', String(Math.min(count, 99)));
       });
     });
-    if (typeof updateNotifDot === 'function') updateNotifDot();
+    // Legacy top-bar dots — do NOT call updateNotifDot() (it calls us → stack overflow).
+    const allUnread = unreadCount('all') > 0;
+    document.getElementById('notifDot')?.classList.toggle('hidden', !allUnread);
+    document.getElementById('notifDotDesktop')?.classList.toggle('hidden', !allUnread);
   }
 
   async function markNotificationRead(id) {

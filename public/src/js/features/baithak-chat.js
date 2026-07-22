@@ -15,6 +15,7 @@ function closeChatScreen(opts = {}) {
 
   if (typeof pauseAllMusic === 'function') pauseAllMusic();
   if (typeof stopChatPresence === 'function') stopChatPresence();
+  if (typeof ChatRating?.stopPolling === 'function') ChatRating.stopPolling();
 
   if (typeof endOverlayScope === 'function') {
     endOverlayScope(typeof OVERLAY_SCOPE_CHAT === 'string' ? OVERLAY_SCOPE_CHAT : 'chat');
@@ -82,10 +83,10 @@ function openChatScreen(chat){
   const screen = document.createElement('div');
   screen.id = 'activeChatScreen';
   screen.className = 'chat-screen';
-  const msgs = SAMPLE_MESSAGES[chat.id] || [];
   const isSelf = typeof isSelfChat==='function' && isSelfChat(chat);
   const isChaupaal = typeof isChaupaalChat==='function' && isChaupaalChat(chat);
   const isGroup = chat.type === 'group';
+  const msgs = SAMPLE_MESSAGES[chat.id] || SAMPLE_MESSAGES[chat.firestoreId] || (isSelf ? SAMPLE_MESSAGES.chat_self : null) || [];
   const hasDuelStreak = !isGroup && !isSelf && !isChaupaal && chat.duelStreak;
   screen.dataset.chatId = chat.firestoreId || chat.id || '';
   if (isChaupaal) screen.dataset.chaupaal = '1';
@@ -182,6 +183,12 @@ function openChatScreen(chat){
   if(!isSelf && !isChaupaal && typeof mountConversationRepairChips==='function') {
     try { mountConversationRepairChips(screen, chat); } catch (e) {}
   }
+  if (!isSelf && !isChaupaal && typeof ChatRating?.startPolling === 'function') {
+    try {
+      ChatRating.startPolling();
+      setTimeout(() => ChatRating.scheduleFromOpenChat?.(), 800);
+    } catch (e) {}
+  }
 
   try{
     const cid=chat.firestoreId||chat.id;
@@ -241,6 +248,26 @@ function openChatScreen(chat){
     // Hide attach game / challenge affordances for system chat
     document.getElementById('attachGame')?.classList.add('hidden');
   }
+  if (isSelf) {
+    try { if (typeof ensureSelfChatDoc === 'function') ensureSelfChatDoc(); } catch (e) {}
+  }
+  // AI Discovery mindful meter (Personal peers only)
+  if (
+    !isGroup &&
+    !isChaupaal &&
+    !isSelf &&
+    (chat.discoveryOrigin === 'ai_discovery' || chat.origin === 'ai_discovery') &&
+    String(chat.peerProfileType || chat.profileType || 'personal').toLowerCase() !== 'professional'
+  ) {
+    try {
+      const host = document.createElement('div');
+      host.id = 'chatAiDiscMeter';
+      host.setAttribute('data-nav-ignore', '1');
+      const area = document.getElementById('chatMsgsArea');
+      area?.parentElement?.insertBefore(host, area);
+      if (typeof AiDiscoveryMeter?.mountMeter === 'function') AiDiscoveryMeter.mountMeter(host);
+    } catch (e) {}
+  }
   // Attach menu toggle
   const attachMenu = document.getElementById('chatAttachMenu');
   document.getElementById('chatPlusBtn').addEventListener('click', (e)=>{
@@ -269,11 +296,16 @@ function openChatScreen(chat){
         src=URL.createObjectURL(file);
       }
       const sizeAttrs=mediaWidth&&mediaHeight?` width="${mediaWidth}" height="${mediaHeight}" style="aspect-ratio:${mediaWidth}/${mediaHeight};"`:'';
-      addMsgBubble({from:'me',text:`📷 Photo`,attachment:{type:'photo',url:src,width:mediaWidth,height:mediaHeight},time:'now',pending:true}, isGroup);
+      const pendingPhoto=addMsgBubble({from:'me',text:`📷 Photo`,attachment:{type:'photo',url:src,width:mediaWidth,height:mediaHeight},time:'now',pending:true}, isGroup);
       if(typeof sendRealtimeMessage==='function'){
-        sendRealtimeMessage(chat.firestoreId||chat.id, '📷 Photo', isGroup, null, {
-          type:'photo', url:src, width:mediaWidth||null, height:mediaHeight||null,
-        });
+        try{
+          await sendRealtimeMessage(chat.firestoreId||chat.id, '📷 Photo', isGroup, null, {
+            type:'photo', url:src, width:mediaWidth||null, height:mediaHeight||null,
+          });
+        }catch(sendErr){
+          pendingPhoto?.remove?.();
+          showToast(typeof friendlyError==='function'?friendlyError(sendErr):(sendErr.message||'Photo failed'));
+        }
       }
     }catch(err){
       showToast(typeof friendlyError==='function'?friendlyError(err):(err.message||'Photo failed'));
@@ -300,14 +332,15 @@ function openChatScreen(chat){
     if(typeof openSongPicker!=='function'){showToast('Song sharing unavailable');return;}
     openSongPicker({
       title:'Share a song',
-      onSelect:(music)=>{
+      onSelect:async (music)=>{
+        if(!music) return;
+        const pendingRow=addMsgBubble({from:'me',text:music.title?`🎵 ${music.title}`:'🎵 Song',music,time:'now',pending:true}, isGroup);
+        if(typeof sendRealtimeMessage!=='function') return;
         try{
-          addMsgBubble({from:'me',text:music.title?`🎵 ${music.title}`:'🎵 Song',music,time:'now',pending:true}, isGroup);
-          if(typeof sendRealtimeMessage==='function'){
-            sendRealtimeMessage(chat.firestoreId||chat.id, music.title?`🎵 ${music.title}`:'🎵 Song', isGroup, music);
-          }
+          await sendRealtimeMessage(chat.firestoreId||chat.id, music.title?`🎵 ${music.title}`:'🎵 Song', isGroup, music);
         }catch(e){
-          showToast('Could not share song');
+          pendingRow?.remove?.();
+          showToast(typeof friendlyError==='function'?friendlyError(e):'Could not share song');
         }
       },
     });
@@ -317,12 +350,17 @@ function openChatScreen(chat){
     if(typeof openLocationComposer!=='function'){showToast('Location sharing unavailable');return;}
     openLocationComposer({
       title:'Share location',
-      onSelect:(loc)=>{
+      onSelect:async (loc)=>{
         try{
           const label=loc.label||loc.placeName||'Location';
-          addMsgBubble({from:'me',text:`📍 ${label}`,attachment:loc,time:'now',pending:true}, isGroup);
+          const pendingRow=addMsgBubble({from:'me',text:`📍 ${label}`,attachment:loc,time:'now',pending:true}, isGroup);
           if(typeof sendRealtimeMessage==='function'){
-            sendRealtimeMessage(chat.firestoreId||chat.id, `📍 ${label}`, isGroup, null, loc);
+            try{
+              await sendRealtimeMessage(chat.firestoreId||chat.id, `📍 ${label}`, isGroup, null, loc);
+            }catch(err){
+              pendingRow?.remove?.();
+              showToast(typeof friendlyError==='function'?friendlyError(err):'Could not share location');
+            }
           }
         }catch(e){
           showToast('Could not share location');
@@ -508,16 +546,18 @@ function bindMsgAvatarLongPress(root, fallbackProfile){
 
 function addMsgBubble(msg, isGroup){
   const area = document.getElementById('chatMsgsArea');
-  if(!area) return;
+  if(!area) return null;
   const div = document.createElement('div');
   div.innerHTML = renderMsgBubble(msg, isGroup);
   const node=div.firstElementChild;
+  if(!node) return null;
   area.appendChild(node);
   bindMsgAvatarLongPress(node);
   if(typeof mountMusicCards==='function') mountMusicCards(node);
   if(typeof mountLocationCards==='function') mountLocationCards(node);
   if(typeof wireChallengeBubble==='function') wireChallengeBubble(node);
   area.scrollTop = area.scrollHeight;
+  return node;
 }
 
 async function sendMsg(chat){
@@ -585,6 +625,20 @@ async function sendMsg(chat){
             return;
           }
           if(typeof sendRealtimeMessage==='function'){
+            // Count AI Discovery → Personal sends only (Professional uncapped).
+            const origin = chat.discoveryOrigin || chat.origin;
+            const peerType = (chat.peerProfileType || chat.profileType || 'personal').toLowerCase();
+            if (origin === 'ai_discovery' && peerType !== 'professional' && typeof PolicyUsage?.consume === 'function') {
+              try {
+                await PolicyUsage.consume('aiDiscoveryMsg');
+              } catch (limErr) {
+                const rem = await PolicyUsage.getRemaining('aiDiscoveryMsg').catch(() => null);
+                throw Object.assign(
+                  new Error(rem?.unlock || 'AI Discovery message limit reached'),
+                  { code: limErr?.code || 'AI_DISC_LIMIT' }
+                );
+              }
+            }
             await sendRealtimeMessage(chat.firestoreId||chat.id,text,isGroup);
           }
           if(typeof trackMessageSent==='function') trackMessageSent({ chat_type: chat.type||'dm' });

@@ -1,4 +1,4 @@
-const CACHE = 'chaupaal-v46';
+const CACHE = 'chaupaal-v48';
 const ASSETS = [
   '/index.html',
   '/icon.png',
@@ -43,7 +43,7 @@ self.addEventListener('activate', (e) => {
   e.waitUntil(
     (async () => {
       const keys = await caches.keys();
-      // Drop every cache that is not this version (v43/v44/v45/etc).
+      // Drop every cache that is not this version (v43–v46/etc).
       await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
       await self.clients.claim();
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
@@ -53,7 +53,7 @@ self.addEventListener('activate', (e) => {
             client.postMessage({ type: 'SW_ACTIVATED', cache: CACHE });
           } catch (err) {}
           // Force re-navigation so installs that never got the update banner still
-          // pick up a fresh HTML shell (covers pre-v46 clients with no message listener).
+          // pick up a fresh HTML shell (covers pre-v47 clients with no message listener).
           if (typeof client.navigate === 'function') {
             try {
               await client.navigate(client.url);
