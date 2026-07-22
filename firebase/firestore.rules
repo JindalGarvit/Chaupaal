@@ -202,9 +202,17 @@ service cloud.firestore {
     }
 
     // ===================== USERS_PUBLIC (cross-user reads) =====================
+    // Owner may sync public fields, but cannot clear server-set discovery bans.
     match /users_public/{userId} {
       allow read: if isAuth();
-      allow create, update: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && !('hiddenFromDiscovery' in request.resource.data
+             && request.resource.data.hiddenFromDiscovery == true);
+      allow update: if isOwner(userId)
+        && (
+          !('hiddenFromDiscovery' in resource.data)
+          || request.resource.data.hiddenFromDiscovery == resource.data.hiddenFromDiscovery
+        );
       allow delete: if isOwner(userId);
     }
 
@@ -409,7 +417,7 @@ service cloud.firestore {
         && resource.data.invite.enabled == true
         && resource.data.invite.token is string
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['participants', 'memberProfiles', 'updatedAt'])
+          .hasOnly(['participants', 'memberProfiles', 'updatedAt', 'memberCount'])
         && request.resource.data.participants.hasAll(resource.data.participants)
         && request.resource.data.participants.hasAny([request.auth.uid])
         && !(resource.data.participants.hasAny([request.auth.uid]));

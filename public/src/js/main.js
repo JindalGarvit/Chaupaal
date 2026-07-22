@@ -54,7 +54,7 @@
             if(typeof initBaithak==='function'){
               try{initBaithak();}catch(e){console.warn('[boot] initBaithak auth',e);}
             }
-            // Backfill search denorms for older accounts (Phase 4)
+            // Backfill search denorms for older accounts → users + users_public
             if(db&&userProfile){
               const patch={};
               if(!userProfile.nameLower&&userProfile.name) patch.nameLower=String(userProfile.name).toLowerCase().trim();
@@ -62,6 +62,11 @@
               if(Object.keys(patch).length){
                 db.collection('users').doc(user.uid).set(patch,{merge:true}).catch(()=>{});
                 Object.assign(userProfile,patch);
+                try{
+                  if(typeof UsersPublic!=='undefined'&&UsersPublic.syncPublicProfile){
+                    UsersPublic.syncPublicProfile(user.uid,{...userProfile,...patch});
+                  }
+                }catch(e){}
               }
             }
           }

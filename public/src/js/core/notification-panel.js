@@ -102,13 +102,19 @@
         openPublicProfile({ uid: link.uid, username: link.username, name: link.name }, { uid: link.uid });
         return;
       }
-      if (link.postId && link.collection === 'duniya') {
-        document.querySelector('.tab-btn[data-tab="duniya"]')?.click();
-        return;
-      }
-      if (link.postId && link.collection === 'peepal') {
-        document.querySelector('.tab-btn[data-tab="peepal"]')?.click();
-        return;
+      if (link.postId) {
+        if (typeof navigateToDeepLink === 'function') {
+          navigateToDeepLink(`/post/${link.postId}`);
+          return;
+        }
+        if (link.collection === 'duniya') {
+          document.querySelector('.tab-btn[data-tab="duniya"]')?.click();
+          return;
+        }
+        if (link.collection === 'peepal') {
+          document.querySelector('.tab-btn[data-tab="peepal"]')?.click();
+          return;
+        }
       }
       if (type.includes('duel') || type.includes('dangal') || type.includes('muqabala')) {
         document.querySelector('.tab-btn[data-tab="dangal"]')?.click();
@@ -200,7 +206,11 @@
       </div>
       <div class="notif-panel-list" data-notif-panel-list></div>`;
     document.querySelector('.device')?.appendChild(sheet);
-    if (typeof pushNavLayer === 'function') pushNavLayer(sheet, { onPop: () => sheet.remove() });
+    const closePanel = () => {
+      if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
+      sheet.remove();
+    };
+    if (typeof pushNavLayer === 'function') pushNavLayer(sheet, closePanel);
 
     const listEl = sheet.querySelector('[data-notif-panel-list]');
     let localCursorDone = false;
@@ -230,10 +240,7 @@
       });
     };
 
-    sheet.querySelector('[data-overlay-dismiss]')?.addEventListener('click', () => {
-      if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
-      else sheet.remove();
-    });
+    sheet.querySelector('[data-overlay-dismiss]')?.addEventListener('click', closePanel);
     sheet.querySelector('[data-mark-all]')?.addEventListener('click', async () => {
       await markAllNotificationsRead(section);
       paint();

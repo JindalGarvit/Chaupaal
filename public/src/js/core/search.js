@@ -436,9 +436,10 @@
     groups: { label: 'Baithak groups', empty: 'No public groups matched' },
   };
 
-  function openResult(r, overlay) {
+  function openResult(r, closeSearch) {
     rememberSearch(document.getElementById('usInput')?.value || '');
-    overlay.remove();
+    if (typeof closeSearch === 'function') closeSearch();
+    else document.getElementById('universalSearchOverlay')?.remove();
     if (r.type === 'user' || r.category === 'users') {
       const username = r.username;
       if (username && typeof navigateToDeepLink === 'function') navigateToDeepLink(`/profile/${username}`);
@@ -448,16 +449,16 @@
     }
     if (r.type === 'duniya' || r.category === 'duniya') {
       if (typeof navigateToDeepLink === 'function') navigateToDeepLink(`/post/${r.postId || r.id}`);
-      else if (typeof openDuniyaPost === 'function') openDuniyaPost(r.raw || r);
+      else if (typeof openDuniyaDetail === 'function') openDuniyaDetail(r.raw || r);
       return;
     }
     if (r.type === 'peepal' || r.category === 'peepal') {
       if (typeof navigateToDeepLink === 'function') navigateToDeepLink(`/post/${r.postId || r.id}`);
-      else if (typeof openPeepalPost === 'function') openPeepalPost(r.raw || r);
+      else if (typeof openPeepalDetail === 'function') openPeepalDetail(r.raw || r);
       return;
     }
     if (r.type === 'group' || r.category === 'groups') {
-      const chat = r.chat || { id: r.chatId, firestoreId: r.chatId, type: 'group', name: r.name };
+      const chat = r.chat || { id: r.chatId, firestoreId: r.chatId, type: 'group', name: r.name, participants: r.chat?.participants };
       if (r.isMember && typeof openChatScreen === 'function') openChatScreen(chat);
       else if (typeof openGroupInfo === 'function') openGroupInfo(chat);
       else if (typeof showToast === 'function') showToast(r.name || 'Group');
@@ -532,6 +533,7 @@
       expanded[t] = false;
     });
     let lastByCategory = {};
+    let runId = 0;
 
     const closeSearch = () => {
       clearTimeout(timer);
@@ -596,7 +598,7 @@
           <section class="us-category" data-us-cat="${type}">
             <div class="us-category-head">${escapeSearchHtml(meta.label)}</div>
             ${slice.map(renderResultRow).join('')}
-            ${moreLeft ? `<button type="button" class="us-see-more" data-see-more="${type}">See more (${Math.min(all.length, SEE_MORE_LIMIT) - CATEGORY_PREVIEW}+)</button>` : ''}
+            ${moreLeft ? `<button type="button" class="us-see-more" data-see-more="${type}">Show all (${Math.min(all.length, SEE_MORE_LIMIT)})</button>` : ''}
           </section>`);
       });
       if (!any) {
@@ -639,7 +641,7 @@
           });
         }
         btn.addEventListener('click', () => {
-          if (r) openResult(r, overlay);
+          if (r) openResult(r, closeSearch);
         });
       });
     }
@@ -654,16 +656,19 @@
       GLOBAL_TYPES.forEach((t) => {
         expanded[t] = false;
       });
+      const myRun = ++runId;
       if (typeof renderSkeleton === 'function') renderSkeleton(resultsEl, { variant: 'list', count: 4 });
       const limits = {};
       types.forEach((t) => {
         limits[t] = SEE_MORE_LIMIT;
       });
       const { byCategory } = await universalSearch(q, { types, limits });
+      if (myRun !== runId) return; // stale response
       lastByCategory = byCategory;
       if (typeof enrichUsersWithProfileType === 'function' && byCategory.users?.length) {
         await enrichUsersWithProfileType(byCategory.users);
       }
+      if (myRun !== runId) return;
       paintCategories();
     }
 

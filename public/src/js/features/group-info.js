@@ -422,6 +422,7 @@
                   : 'personal',
             joinedAt: Date.now(),
           },
+          memberCount: firebase.firestore.FieldValue.increment(1),
           updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
 
@@ -484,6 +485,7 @@
           <label class="group-info-toggle"><span>Any member can add people</span><input type="checkbox" data-gi-perm-add></label>
           <label class="group-info-toggle"><span>Any member can edit group info</span><input type="checkbox" data-gi-perm-edit></label>
         </div>
+        <button type="button" class="group-info-join" data-gi-join hidden>Join group</button>
         <button type="button" class="group-info-leave" data-gi-leave>Leave group</button>
       </div>`;
 
@@ -689,6 +691,15 @@
         };
       } else permsEl.hidden = true;
 
+      const isMember = !!(uid && (chat.participants || []).includes(uid));
+      const leaveBtn = overlay.querySelector('[data-gi-leave]');
+      const joinBtn = overlay.querySelector('[data-gi-join]');
+      if (leaveBtn) leaveBtn.hidden = !isMember;
+      if (joinBtn) {
+        joinBtn.hidden = isMember || !isGroupPublic(chat);
+        joinBtn.textContent = chat.invite?.mode === 'approval' ? 'Request to join' : 'Join group';
+      }
+
       listEl.querySelectorAll('[data-member-menu]').forEach((btn) => {
         btn.addEventListener('click', () => {
           const row = btn.closest('[data-member-uid]');
@@ -798,6 +809,67 @@
         close();
         if (typeof closeChatScreen === 'function') closeChatScreen({ updateHistory: true, animate: true });
         if (typeof showToast === 'function') showToast('Left group');
+      }
+    });
+
+    overlay.querySelector('[data-gi-join]')?.addEventListener('click', async () => {
+      const uid = currentUser?.uid;
+      const chatId = chat.firestoreId || chat.id;
+      if (!uid || !chatId || !db) {
+        if (typeof showToast === 'function') showToast('Sign in to join');
+        return;
+      }
+      if ((chat.participants || []).includes(uid)) return;
+      try {
+        if (chat.invite?.mode === 'approval') {
+          await db.collection('chats').doc(chatId).collection('joinRequests').doc(uid).set({
+            uid,
+            name: userProfile?.name || currentUser.displayName || 'Member',
+            avatar: userProfile?.avatar || '👤',
+            photoURL: currentUser.photoURL || '',
+            status: 'pending',
+            requestedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+          if (typeof showToast === 'function') showToast('Join request sent');
+          return;
+        }
+        // Public instant join (participant self-add via invite token path when available)
+        if (chat.invite?.token && typeof joinGroupByInviteToken === 'function') {
+          const res = await joinGroupByInviteToken(chat.invite.token);
+          if (res?.ok) {
+            if (typeof showToast === 'function') showToast(res.pending ? 'Request sent' : 'Joined group');
+            if (res.chat && !res.pending && typeof openChatScreen === 'function') {
+              close();
+              openChatScreen(res.chat);
+              return;
+            }
+            await refresh();
+            return;
+          }
+        }
+        // Fallback: arrayUnion when public (rules: participant or public get; update needs invite self-join or metadata)
+        await db.collection('chats').doc(chatId).update({
+          participants: firebase.firestore.FieldValue.arrayUnion(uid),
+          [`memberProfiles.${uid}`]: {
+            name: userProfile?.name || currentUser.displayName || 'Member',
+            avatar: userProfile?.avatar || '👤',
+            photoURL: currentUser.photoURL || '',
+            role: 'member',
+            joinedAt: Date.now(),
+          },
+          memberCount: firebase.firestore.FieldValue.increment(1),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        if (typeof showToast === 'function') showToast('Joined group');
+        await refresh();
+        const live = await fetchGroupDoc(chatId);
+        if (live && typeof openChatScreen === 'function') {
+          close();
+          openChatScreen(live);
+        }
+      } catch (e) {
+        console.warn('[group] join public', e?.message || e);
+        if (typeof showToast === 'function') showToast('Could not join — ask for an invite link');
       }
     });
 
