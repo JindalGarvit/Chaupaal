@@ -266,6 +266,7 @@ function populateResults(){
     db.collection('daily_scores').doc(today).collection('scores').doc(currentUser.uid).set({
       name:userProfile?.name||currentUser.displayName||'Anonymous',
       score,total:QUESTIONS.length,uid:currentUser.uid,
+      profileType:typeof ownProfileType==='function'?ownProfileType():(typeof getProfileType==='function'?getProfileType():'personal'),
       ts:firebase.firestore.FieldValue.serverTimestamp()
     }).catch(()=>{});
   }

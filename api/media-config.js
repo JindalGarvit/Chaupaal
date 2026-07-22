@@ -10,7 +10,7 @@ const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../ser
 const { requireUser, initAdmin } = require('../server-lib/auth');
 const { callMusicProvider, resolveMusicPreview } = require('../server-lib/music');
 const { searchPlaces } = require('../server-lib/geocode');
-const { checkUrlWithSafeBrowsing } = require('../server-lib/url-safety');
+const { checkUrlWithWebRisk } = require('../server-lib/url-safety');
 
 async function handleGet(req, res) {
   res.setHeader('Cache-Control', 'public, max-age=300');
@@ -137,7 +137,7 @@ async function handlePost(req, res) {
       return sendError(res, 400, 'VALIDATION_ERROR', 'url required');
     }
     try {
-      const result = await checkUrlWithSafeBrowsing(url);
+      const result = await checkUrlWithWebRisk(url);
       return sendSuccess(res, result);
     } catch (e) {
       console.warn('[media-config] check_url:', e?.message || e);

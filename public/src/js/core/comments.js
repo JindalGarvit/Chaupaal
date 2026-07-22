@@ -41,7 +41,7 @@
       <div class="comment-item ${isReply ? 'comment-item--reply' : ''} ${c.pending ? 'comment-item--pending' : ''} ${c.deleted ? 'comment-item--deleted' : ''}" data-cid="${escapeHtml(c.id)}" ${c.parentId ? `data-parent="${escapeHtml(c.parentId)}"` : ''}>
         <div class="comment-avatar">${avatar}</div>
         <div class="comment-body">
-          <div class="comment-name">${escapeHtml((c.user && c.user.name) || 'User')}</div>
+          <div class="comment-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml((c.user&&c.user.name)||'User',c.user):escapeHtml((c.user && c.user.name) || 'User')}</div>
           <div class="comment-text">${c.deleted ? 'Comment deleted' : formatCommentText(c.text)}</div>
           <div class="comment-meta">
             <span class="comment-time">${escapeHtml(c.time || 'just now')}${c.editedAt ? ' · edited' : ''}</span>
@@ -202,11 +202,18 @@
   }
 
   function currentCommentUser() {
+    const profileType =
+      typeof ownProfileType === 'function'
+        ? ownProfileType()
+        : typeof getProfileType === 'function'
+          ? getProfileType()
+          : 'personal';
     return {
       name: (typeof userProfile !== 'undefined' && userProfile?.name) || (typeof currentUser !== 'undefined' && currentUser?.displayName) || 'You',
       avatar: '🪑',
       photoURL: (typeof userProfile !== 'undefined' && userProfile?.photoURL) || (typeof currentUser !== 'undefined' && currentUser?.photoURL) || '',
       uid: (typeof currentUser !== 'undefined' && currentUser?.uid) || 'me',
+      profileType,
     };
   }
 

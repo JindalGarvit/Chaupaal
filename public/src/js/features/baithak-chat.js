@@ -103,7 +103,7 @@ function openChatScreen(chat){
       <button class="chat-back" id="chatBack" aria-label="Back">←</button>
       <div class="chat-header-avatar${isGroup?' chat-header-tappable':''}" ${isGroup?'data-open-group-info':''} role="${isGroup?'button':''}">${chat.avatar}</div>
       <div class="chat-header-info${isGroup?' chat-header-tappable':''}" ${isGroup?'data-open-group-info':''} role="${isGroup?'button':''}">
-        <div class="chat-header-name">${chat.name}</div>
+        <div class="chat-header-name">${(chat.type==='group'||chat.type==='self')?chat.name:(typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(chat.name,chat):chat.name)}</div>
         <div id="chatActivityStatus" style="font-size:11px;color:var(--muted);">${statusLine}</div>
       </div>
       <div class="chat-header-actions">
@@ -469,7 +469,7 @@ function renderMsgBubble(m, isGroup){
     <div class="msg-row ${isMe?'me':''}" data-uid="${uid}" data-name="${String(name).replace(/"/g,'&quot;')}"${m.pending?' data-pending="1"':''}>
       ${!isMe?`<div class="msg-avatar-small">${m.avatar||'👤'}</div>`:''}
       <div>
-        ${(isGroup&&!isMe&&m.name)?`<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px;">${m.name}</div>`:''}
+        ${(isGroup&&!isMe&&m.name)?`<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px;">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(m.name,m):m.name}</div>`:''}
         <div class="msg-bubble ${isMe?'me':'them'}${att&&att.type==='muqabala_challenge'?' challenge':''}" data-msg-text="${String(m.text||'').replace(/"/g,'&quot;')}">${body}</div>
         <div style="font-size:10px;color:var(--muted);margin-top:3px;${isMe?'text-align:right':''};">${m.time||''}</div>
       </div>
@@ -789,7 +789,7 @@ function openStoryViewer(story, allStories){
           <div style="width:100%;height:100%;border-radius:50%;background:#222;display:flex;align-items:center;justify-content:center;font-size:16px;">${s.photoURL||/^https:/.test(s.avatar||'')?`<img src="${s.photoURL||s.avatar}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:s.avatar}</div>
         </div>
         <div style="flex:1;">
-          <div style="color:#fff;font-weight:700;font-size:14px;">${s.name}</div>
+          <div style="color:#fff;font-weight:700;font-size:14px;">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(s.name,s):s.name}</div>
           <div style="color:rgba(255,255,255,0.6);font-size:11px;">${timeAgo}${destinationLabel?` · <span class="story-destination-tag story-destination-tag--${s.destination}">${destinationLabel}${ownerAudience}</span>`:''}</div>
         </div>
         ${s.deletable?`<button id="storyDelete" style="background:none;border:none;color:rgba(255,255,255,0.7);font-size:18px;cursor:pointer;">🗑️</button>`:''}
@@ -900,8 +900,11 @@ function openStoryViewer(story, allStories){
         const count=document.getElementById('storyLikeCount');
         if(count) count.textContent=info.likeCount||0;
         const comments=document.getElementById('storyComments');
+        if(info.comments?.length && typeof enrichUsersWithProfileType==='function'){
+          await enrichUsersWithProfileType(info.comments);
+        }
         if(comments) comments.innerHTML=info.comments?.length
-          ?info.comments.map(c=>`<div class="story-comment"><strong>${safeStoryText(c.name)}</strong><span>${safeStoryText(c.text)}</span></div>`).join('')
+          ?info.comments.map(c=>`<div class="story-comment"><strong>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(c.name,c):safeStoryText(c.name)}</strong><span>${safeStoryText(c.text)}</span></div>`).join('')
           :'<div class="story-comment-empty">No comments yet.</div>';
       }catch(error){}
     }

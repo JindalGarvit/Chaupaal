@@ -97,7 +97,12 @@
       try {
         const snap = await db.collection('users').doc(uid).get();
         const d = snap.data();
-        out.push({ uid, name: d?.name || 'User', username: d?.username || '' });
+        out.push({
+          uid,
+          name: d?.name || 'User',
+          username: d?.username || '',
+          profileType: d?.profileType || d?.profile?.profileType || 'personal',
+        });
       } catch (e) {
         out.push({ uid, name: 'User' });
       }
@@ -150,7 +155,7 @@
     sheet.className = 'flag-sheet';
     sheet.innerHTML = `
       <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;margin-bottom:4px;">Report or Block</div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">${user.name || 'User'}</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(user.name||'User',user):(user.name||'User')}</div>
       ${REPORT_REASONS.map(
         (r) => `<div class="flag-option" data-code="${r.code}">⚑ ${r.label}</div>`
       ).join('')}
@@ -223,7 +228,7 @@
     list.innerHTML = rows
       .map(
         (u) => `<div class="recovery-row">
-        <div class="recovery-preview">${u.name}${u.username ? ` · @${u.username}` : ''}</div>
+        <div class="recovery-preview">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(u.name,u):u.name}${u.username ? ` · @${u.username}` : ''}</div>
         <button type="button" class="btn btn--secondary ui-state-btn" data-unblock="${u.uid}" data-name="${u.name}">Unblock</button>
       </div>`
       )

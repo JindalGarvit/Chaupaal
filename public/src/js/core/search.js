@@ -89,6 +89,7 @@
           name: u.name,
           photoURL: u.photoURL || null,
           city: u.city || '',
+          profileType: u.profileType || u.profile?.profileType || 'personal',
           subtitle: [u.city, (u.interests || []).slice(0, 2).join(', ')].filter(Boolean).join(' · '),
         }));
     }
@@ -110,6 +111,7 @@
             name: u.name || q,
             photoURL: u.photoURL || u.photoThumb || null,
             city: u.city || u.profile?.currentCity || '',
+            profileType: u.profileType || u.profile?.profileType || 'personal',
             subtitle: u.city || '',
           });
         }
@@ -139,6 +141,7 @@
           name: u.name || doc.id,
           photoURL: u.photoURL || u.photoThumb || null,
           city: u.city || u.profile?.currentCity || '',
+          profileType: u.profileType || u.profile?.profileType || 'personal',
           subtitle: u.city || '',
         });
         if (results.length >= limit) break;
@@ -170,6 +173,7 @@
             name: u.name || '',
             photoURL: u.photoURL || u.photoThumb || null,
             city: u.city || '',
+            profileType: u.profileType || u.profile?.profileType || 'personal',
             subtitle: u.city || '',
           });
         });
@@ -301,6 +305,9 @@
         } else resultsEl.innerHTML = '<div style="padding:24px;color:var(--muted);text-align:center;">No matches</div>';
         return;
       }
+      if (typeof enrichUsersWithProfileType === 'function') {
+        await enrichUsersWithProfileType(results);
+      }
       resultsEl.innerHTML = results
         .map(
           (r) => `
@@ -310,7 +317,7 @@
             ${r.photoURL ? `<img src="${r.photoURL}" style="width:100%;height:100%;object-fit:cover;">` : '👤'}
           </div>
           <div style="min-width:0;flex:1;">
-            <div style="font-weight:700;font-size:14px;">${r.name || r.username}</div>
+            <div style="font-weight:700;font-size:14px;">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(r.name||r.username,r):(r.name||r.username)}</div>
             <div style="font-size:12px;color:var(--muted);">@${r.username || 'user'}${r.subtitle ? ' · ' + r.subtitle : ''}</div>
           </div>
         </button>`

@@ -2,8 +2,8 @@
 const SAMPLE_CHATS = [
   // Pinned locally too — ensureSelfChatPinned / pinSelfChat always re-assert this at render time
   {id:'chat_self',type:'self',isSelf:true,pinned:true,undeletable:true,name:'Me (You)',avatar:'📝',preview:'Notes to self · try games & features here',time:'Pinned',unread:0,duelStreak:0},
-  {id:'chat_riya',type:'dm',name:'Riya Sharma',avatar:'😊',preview:'Ready for tomorrow\'s Muqabala? 😤',time:'2m',unread:2,streak:7,duelStreak:12,theirIcebreakers:[{promptId:'ib14',answer:'Cutting chai, extra adrak — non-negotiable after the local.'}],icebreakers:[{promptId:'ib14',answer:'Cutting chai, extra adrak — non-negotiable after the local.'}]},
-  {id:'chat_arjun',type:'dm',name:'Arjun Mehta',avatar:'🏔️',preview:'That Sports question was wrong though',time:'18m',unread:0,streak:3,duelStreak:5,theirIcebreakers:[{promptId:'ib18',answer:'Road trip — windows down, random dhabas, no timetable.'}],icebreakers:[{promptId:'ib18',answer:'Road trip — windows down, random dhabas, no timetable.'}]},
+  {id:'chat_riya',type:'dm',name:'Riya Sharma',avatar:'😊',preview:'Ready for tomorrow\'s Muqabala? 😤',time:'2m',unread:2,streak:7,duelStreak:12,profileType:'personal',theirIcebreakers:[{promptId:'ib14',answer:'Cutting chai, extra adrak — non-negotiable after the local.'}],icebreakers:[{promptId:'ib14',answer:'Cutting chai, extra adrak — non-negotiable after the local.'}]},
+  {id:'chat_arjun',type:'dm',name:'Arjun Mehta',avatar:'🏔️',preview:'That Sports question was wrong though',time:'18m',unread:0,streak:3,duelStreak:5,profileType:'personal',theirIcebreakers:[{promptId:'ib18',answer:'Road trip — windows down, random dhabas, no timetable.'}],icebreakers:[{promptId:'ib18',answer:'Road trip — windows down, random dhabas, no timetable.'}]},
   {id:'grp_tech',type:'group',name:'Tech Geeks 💻',avatar:'💻',preview:'Someone: Did you read the AirTrunk news?',time:'1h',unread:5,members:12},
   {id:'grp_news',type:'group',name:'Daily Akhbaar Club',avatar:'📰',preview:'Today\'s score 13/20 😮‍💨',time:'3h',unread:0,members:8},
 ];
@@ -55,7 +55,7 @@ function renderStories(){
       <div class="story-ring ${s.seen?'seen':''} ${s.auto?'auto':''}">
         <div class="story-avatar">${s.avatar}</div>
       </div>
-      <div class="story-label">${s.name}</div>
+      <div class="story-label">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(s.name,s):s.name}</div>
     `;
     item.addEventListener('click',()=>openStoryViewer(s));
     if(typeof bindProfileLongPress==='function') bindProfileLongPress(item.querySelector('.story-avatar'),s);
@@ -165,7 +165,7 @@ function renderChatList(chats){
         ${chat.duelStreak?`<div class="streak-badge">🔥${chat.duelStreak}</div>`:''}
       </div>
       <div class="chat-info">
-        <div class="chat-name">${chat.name||'Chat'}${self?` <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">· you</span>`:''}${chat.members?` <span style="font-size:11px;color:var(--muted);font-weight:400;">${chat.members} members</span>`:''}</div>
+        <div class="chat-name">${(self||chat.type==='group'||chat.type==='self')?(chat.name||'Chat'):(typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(chat.name||'Chat',chat):(chat.name||'Chat'))}${self?` <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">· you</span>`:''}${chat.members?` <span style="font-size:11px;color:var(--muted);font-weight:400;">${chat.members} members</span>`:''}</div>
         <div class="chat-preview">${chat.preview||''}</div>
       </div>
       <div class="chat-meta">
@@ -228,6 +228,9 @@ let baithakChatLoading=false;
 
 function mapChatDoc(raw){
   const updated=raw.updatedAt?.toMillis?.()||raw.updatedAt?.toDate?.()?.getTime?.()||raw.ts||null;
+  const profiles=raw.memberProfiles&&typeof raw.memberProfiles==='object'?raw.memberProfiles:{};
+  const peerUid=(raw.participants||[]).find?.(uid=>typeof currentUser!=='undefined'&&uid!==currentUser?.uid);
+  const peerProfile=peerUid?profiles[peerUid]:null;
   return {
     id: raw.id,
     firestoreId: raw.id,
@@ -244,12 +247,14 @@ function mapChatDoc(raw){
     members: raw.members||null,
     participants: raw.participants||[],
     admins: raw.admins||[],
-    memberProfiles: raw.memberProfiles||{},
+    memberProfiles: profiles,
     permissions: raw.permissions||null,
     invite: raw.invite||null,
     createdBy: raw.createdBy||null,
     description: raw.description||'',
     photoURL: raw.photoURL||null,
+    uid: peerUid||raw.peerUid||null,
+    profileType: raw.profileType||raw.peerProfileType||peerProfile?.profileType||null,
   };
 }
 
@@ -270,6 +275,7 @@ async function loadBaithakChatsPage({reset=false}={}){
       excludeDeleted:false,
     });
     const mapped=page.items.map(mapChatDoc);
+    if(typeof enrichUsersWithProfileType==='function') await enrichUsersWithProfileType(mapped);
     if(reset&&mapped.length){
       baithakChatLiveMode=true;
       baithakChats=pinSelfChat(mapped);

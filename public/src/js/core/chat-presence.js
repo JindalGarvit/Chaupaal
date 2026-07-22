@@ -49,17 +49,20 @@
     setSeenUi(null);
   }
 
-  function setTypingUi(on, name) {
+  function setTypingUi(on, name, profileType) {
     const el = document.getElementById('chatTypingStatus');
     if (!el) return;
     if (on && presenceEnabled()) {
+      if (profileType) el.dataset.typerProfileType = profileType;
+      else delete el.dataset.typerProfileType;
       el.innerHTML =
         `<span class="chat-typing-dots" aria-hidden="true"><i></i><i></i><i></i></span>` +
-        `<span>${(name || 'Someone')} is typing</span>`;
+        `<span>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(name||'Someone',{profileType:el.dataset.typerProfileType||profileType||'personal'}):(name||'Someone')} is typing</span>`;
       el.classList.remove('hidden');
     } else {
       el.textContent = '';
       el.classList.add('hidden');
+      delete el.dataset.typerProfileType;
     }
   }
 
@@ -93,7 +96,16 @@
       if (typeof rtdb !== 'undefined' && rtdb) {
         const ref = rtdb.ref('typing/' + chatId + '/' + uid);
         if (isTyping) {
-          ref.set({ at: Date.now(), name: (typeof userProfile !== 'undefined' && userProfile?.name) || 'You' });
+          ref.set({
+            at: Date.now(),
+            name: (typeof userProfile !== 'undefined' && userProfile?.name) || 'You',
+            profileType:
+              typeof ownProfileType === 'function'
+                ? ownProfileType()
+                : typeof getProfileType === 'function'
+                  ? getProfileType()
+                  : 'personal',
+          });
           ref.onDisconnect().remove();
         } else {
           ref.remove();
@@ -105,7 +117,16 @@
       if (typeof db !== 'undefined' && db) {
         const payload = {};
         payload['typing.' + uid] = isTyping
-          ? { at: Date.now(), name: (typeof userProfile !== 'undefined' && userProfile?.name) || 'You' }
+          ? {
+              at: Date.now(),
+              name: (typeof userProfile !== 'undefined' && userProfile?.name) || 'You',
+              profileType:
+                typeof ownProfileType === 'function'
+                  ? ownProfileType()
+                  : typeof getProfileType === 'function'
+                    ? getProfileType()
+                    : 'personal',
+            }
           : firebase.firestore.FieldValue.delete();
         db.collection('chats').doc(chatId).set(payload, { merge: true }).catch(() => {});
       }
@@ -154,11 +175,15 @@
         const handler = (snap) => {
           const val = snap.val() || {};
           let someone = null;
+          let someoneType = null;
           Object.keys(val).forEach((uid) => {
             if (uid === myUid) return;
-            if (val[uid] && Date.now() - (val[uid].at || 0) < 4000) someone = val[uid].name || otherName;
+            if (val[uid] && Date.now() - (val[uid].at || 0) < 4000) {
+              someone = val[uid].name || otherName;
+              someoneType = val[uid].profileType || chat.profileType || null;
+            }
           });
-          setTypingUi(!!someone, someone || otherName);
+          setTypingUi(!!someone, someone || otherName, someoneType);
         };
         ref.on('value', handler);
         typingUnsub = () => ref.off('value', handler);
@@ -169,12 +194,16 @@
           .onSnapshot((doc) => {
             const typing = (doc.data() && doc.data().typing) || {};
             let someone = null;
+            let someoneType = null;
             Object.keys(typing).forEach((uid) => {
               if (uid === myUid) return;
               const t = typing[uid];
-              if (t && Date.now() - (t.at || 0) < 4000) someone = t.name || otherName;
+              if (t && Date.now() - (t.at || 0) < 4000) {
+                someone = t.name || otherName;
+                someoneType = t.profileType || chat.profileType || null;
+              }
             });
-            setTypingUi(!!someone, someone || otherName);
+            setTypingUi(!!someone, someone || otherName, someoneType);
           });
       }
     } catch (e) {}

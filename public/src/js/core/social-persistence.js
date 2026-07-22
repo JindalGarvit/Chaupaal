@@ -43,11 +43,17 @@
 
   function safeCommentUser(user) {
     const source = user || {};
+    const profileType =
+      source.profileType ||
+      source.profile?.profileType ||
+      (typeof ownProfileType === 'function' ? ownProfileType() : null) ||
+      (typeof getProfileType === 'function' ? getProfileType() : 'personal');
     return {
       uid: currentUser.uid,
       name: String(source.name || currentUser.displayName || 'You').slice(0, 80),
       avatar: String(source.avatar || '🪑').slice(0, 16),
       photoURL: String(source.photoURL || currentUser.photoURL || '').slice(0, 1000),
+      profileType: String(profileType || 'personal').toLowerCase() === 'professional' ? 'professional' : 'personal',
     };
   }
 

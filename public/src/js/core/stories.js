@@ -110,6 +110,9 @@
       console.warn('[stories] Baithak feed', error);
       return;
     }
+    if (typeof enrichUsersWithProfileType === 'function') {
+      await enrichUsersWithProfileType(stories);
+    }
     row.querySelectorAll('.story-item:not(.story-add)').forEach((node) => node.remove());
     groupByOwner(stories, 'story').forEach((group) => {
       const first = group[0];
@@ -119,7 +122,7 @@
         <div class="story-ring ${first.seen ? 'seen' : ''}">
           <div class="story-avatar">${first.avatar && /^https:/.test(first.avatar) ? `<img src="${first.avatar}" alt="">` : first.avatar || '👤'}</div>
         </div>
-        <div class="story-label">${first.own ? 'Your story' : safe(first.name)}</div>`;
+        <div class="story-label">${first.own ? 'Your story' : (typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(first.name,first):safe(first.name))}</div>`;
       item.addEventListener('click', () => openStoryViewer(first, group));
       if (!first.own && typeof bindProfileLongPress === 'function') {
         bindProfileLongPress(item.querySelector('.story-avatar'), {

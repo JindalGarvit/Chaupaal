@@ -7,7 +7,7 @@ let lbCursor=null;
 let lbHasMore=false;
 let lbEntries=[];
 let lbLoading=false;
-const LB_SAMPLE=[{name:'Riya S.',score:'15/15'},{name:'Dev K.',score:'14/15'},{name:'Priya N.',score:'13/15'},{name:'Arjun M.',score:'12/15'}];
+const LB_SAMPLE=[{name:'Riya S.',score:'15/15',profileType:'personal'},{name:'Dev K.',score:'14/15',profileType:'personal'},{name:'Priya N.',score:'13/15',profileType:'professional'},{name:'Arjun M.',score:'12/15',profileType:'personal'}];
 
 async function loadLeaderboard(){
   lbCursor=null; lbHasMore=true; lbEntries=[];
@@ -28,14 +28,20 @@ async function loadLeaderboardPage({reset=false}={}){
     q=q.limit(LEADERBOARD_PAGE);
     const snap=await q.get();
     if(reset&&snap.empty){renderLeaderboardUI(LB_SAMPLE,el,{hasMore:false});lbLoading=false;return;}
-    const page=snap.docs.map(d=>({
-      name:d.data().name?.split(' ')[0]||'Player',
-      score:`${d.data().score}/${d.data().total||15}`,
-      __doc:d,
-    }));
+    const page=snap.docs.map(d=>{
+      const data=d.data()||{};
+      return {
+        name:data.name?.split(' ')[0]||'Player',
+        score:`${data.score}/${data.total||15}`,
+        profileType:data.profileType||null,
+        uid:d.id,
+        __doc:d,
+      };
+    });
     if(reset) lbEntries=page; else lbEntries=lbEntries.concat(page);
     lbCursor=snap.docs.length?snap.docs[snap.docs.length-1]:null;
     lbHasMore=snap.docs.length>=LEADERBOARD_PAGE;
+    if(typeof enrichUsersWithProfileType==='function') await enrichUsersWithProfileType(lbEntries);
     renderLeaderboardUI(lbEntries,el,{hasMore:lbHasMore});
   }catch(e){
     if(reset) renderLeaderboardUI(LB_SAMPLE,el,{hasMore:false});
@@ -49,7 +55,7 @@ function renderLeaderboardUI(entries,el,{hasMore=false}={}){
   el.innerHTML=entries.map((e,i)=>`
     <div class="rp-leaderboard-item">
       <div class="rp-rank ${i===0?'gold':''}">${medals[i]||i+1}</div>
-      <div class="rp-name">${e.name}</div>
+      <div class="rp-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(e.name,e):e.name}</div>
       <div class="rp-score">${e.score}</div>
     </div>
   `).join('');

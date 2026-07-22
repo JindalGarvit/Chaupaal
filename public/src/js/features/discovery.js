@@ -259,7 +259,7 @@ ${summaries}`}]
             ${user.photoURL?`<img src="${user.photoURL}" style="width:100%;height:100%;object-fit:cover;">`:user.avatar||'👤'}
           </div>
           <div style="flex:1;min-width:0;">
-            <div style="font-weight:700;font-size:15px;">${user.name}</div>
+            <div style="font-weight:700;font-size:15px;">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(user.name,user):user.name}</div>
             <div style="font-size:11px;color:var(--muted);">${[user.city,user.age?user.age+'y':'',user.personality||''].filter(Boolean).join(' · ')}</div>
             ${user.bio?`<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:2px;">"${user.bio}"</div>`:''}
           </div>
@@ -652,7 +652,7 @@ function openPeepalAskSheet(){
       activeSegmentIndex:0,
       archived:!!saveOnly,
       saveOnly:!!saveOnly,
-      user:isAnon?{name:'Anonymous',avatar:'🎭',uid:'anon'}:{name:userProfile?.name||'You',avatar:userProfile?.photoURL||'🪑',uid:currentUser?.uid||'me'},
+      user:isAnon?{name:'Anonymous',avatar:'🎭',uid:'anon',profileType:'personal'}:{name:userProfile?.name||'You',avatar:userProfile?.photoURL||'🪑',uid:currentUser?.uid||'me',profileType:(typeof ownProfileType==='function'?ownProfileType():(typeof getProfileType==='function'?getProfileType():'personal'))},
       anonymous:isAnon,uid:currentUser?.uid||'me'};
 
     // Optional image attachment (compressed to Storage)

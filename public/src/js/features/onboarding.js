@@ -63,9 +63,9 @@ function generateChallengeLink(score,category,gameId){
 
 // ===================== FRIEND DISCOVERY =====================
 const SAMPLE_NEARBY=[
-  {name:'Kavya Reddy',avatar:'👩‍💼',meta:'Mumbai · Loves Tech & Cricket',uid:'u1'},
-  {name:'Rohan Kapoor',avatar:'👨‍💻',meta:'Mumbai · Sports enthusiast',uid:'u2'},
-  {name:'Sneha Joshi',avatar:'👩',meta:'Mumbai · World news follower',uid:'u3'},
+  {name:'Kavya Reddy',avatar:'👩‍💼',meta:'Mumbai · Loves Tech & Cricket',uid:'u1',profileType:'professional'},
+  {name:'Rohan Kapoor',avatar:'👨‍💻',meta:'Mumbai · Sports enthusiast',uid:'u2',profileType:'professional'},
+  {name:'Sneha Joshi',avatar:'👩',meta:'Mumbai · World news follower',uid:'u3',profileType:'personal'},
 ];
 
 function renderFriendDiscovery(container){
@@ -80,7 +80,7 @@ function renderFriendDiscovery(container){
     ${SAMPLE_NEARBY.map(u=>`
       <div class="discover-user-card" data-uid="${u.uid}" data-name="${u.name}">
         <div class="discover-avatar">${u.avatar}</div>
-        <div class="discover-info"><div class="discover-name">${u.name}</div><div class="discover-meta">${u.meta}</div></div>
+        <div class="discover-info"><div class="discover-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(u.name,u):u.name}</div><div class="discover-meta">${u.meta}</div></div>
         <button class="discover-add-btn" data-uid="${u.uid}" data-name="${u.name}">+ Add</button>
       </div>
     `).join('')}

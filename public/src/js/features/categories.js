@@ -659,18 +659,18 @@ dayCheckModal.addEventListener('click',(e)=>{
 
 // ===================== PEEPAL =====================
 const SAMPLE_PEEPAL=[
-  {id:'p1',user:{name:'Riya Sharma',avatar:'😊',city:'Mumbai'},question:'If you could only read one news category for the rest of your life, what would it be?',format:'mcq',options:['Sports 🏏','Tech 💻','World 🌍','Business 📈'],responses:[42,38,15,5],totalResponses:100,comments:12,timeAgo:'2h',tag:'Lifestyle',answered:false},
-  {id:'p2',user:{name:'Arjun Mehta',avatar:'🏔️',city:'Delhi'},question:'Do you think AI-generated news should be labeled differently from human-written news?',format:'binary',options:['Yes, always','No, quality is all that matters'],responses:[68,32],totalResponses:100,comments:28,timeAgo:'4h',tag:'Tech',answered:false},
-  {id:'p3',user:{name:'Priya Nair',avatar:'👩',city:'Bengaluru'},question:'What time do you usually read the news?',format:'mcq',options:['Morning with chai ☕','During lunch 🍛','Evening commute 🚇','Before bed 🌙'],responses:[55,18,20,7],totalResponses:100,comments:8,timeAgo:'6h',tag:'Habits',answered:false},
-  {id:'p4',user:{name:'Dev Sharma',avatar:'👨',city:'Pune'},question:'Tell us — what news story has affected you the most personally this year?',format:'open',totalResponses:47,comments:15,timeAgo:'1d',tag:'Personal',answered:false},
+  {id:'p1',user:{name:'Riya Sharma',avatar:'😊',city:'Mumbai',profileType:'personal'},question:'If you could only read one news category for the rest of your life, what would it be?',format:'mcq',options:['Sports 🏏','Tech 💻','World 🌍','Business 📈'],responses:[42,38,15,5],totalResponses:100,comments:12,timeAgo:'2h',tag:'Lifestyle',answered:false},
+  {id:'p2',user:{name:'Arjun Mehta',avatar:'🏔️',city:'Delhi',profileType:'personal'},question:'Do you think AI-generated news should be labeled differently from human-written news?',format:'binary',options:['Yes, always','No, quality is all that matters'],responses:[68,32],totalResponses:100,comments:28,timeAgo:'4h',tag:'Tech',answered:false},
+  {id:'p3',user:{name:'Priya Nair',avatar:'👩',city:'Bengaluru',profileType:'professional'},question:'What time do you usually read the news?',format:'mcq',options:['Morning with chai ☕','During lunch 🍛','Evening commute 🚇','Before bed 🌙'],responses:[55,18,20,7],totalResponses:100,comments:8,timeAgo:'6h',tag:'Habits',answered:false},
+  {id:'p4',user:{name:'Dev Sharma',avatar:'👨',city:'Pune',profileType:'personal'},question:'Tell us — what news story has affected you the most personally this year?',format:'open',totalResponses:47,comments:15,timeAgo:'1d',tag:'Personal',answered:false},
 ];
 
 const SAMPLE_COMMENTS=[
-  {id:'pc1',parentId:null,user:{name:'Riya Sharma',avatar:'😊'},text:'Such a thought-provoking question! I think morning news sets the tone for the whole day.',time:'1h'},
-  {id:'pc2',parentId:'pc1',user:{name:'Dev Sharma',avatar:'👨'},text:'Completely agree — especially with a good cup of chai.',time:'45m'},
-  {id:'pc3',parentId:'pc1',user:{name:'Asha',avatar:'🌸'},text:'Same here — morning chai + Akhbaar is the ritual.',time:'30m'},
-  {id:'pc4',parentId:null,user:{name:'Priya Nair',avatar:'👩'},text:'Night owls unite! I always read before bed 😄',time:'3h'},
-  {id:'pc5',parentId:'pc4',user:{name:'Vikram',avatar:'🧑'},text:'Night crew checking in 🌙',time:'2h'},
+  {id:'pc1',parentId:null,user:{name:'Riya Sharma',avatar:'😊',profileType:'personal'},text:'Such a thought-provoking question! I think morning news sets the tone for the whole day.',time:'1h'},
+  {id:'pc2',parentId:'pc1',user:{name:'Dev Sharma',avatar:'👨',profileType:'personal'},text:'Completely agree — especially with a good cup of chai.',time:'45m'},
+  {id:'pc3',parentId:'pc1',user:{name:'Asha',avatar:'🌸',profileType:'personal'},text:'Same here — morning chai + Akhbaar is the ritual.',time:'30m'},
+  {id:'pc4',parentId:null,user:{name:'Priya Nair',avatar:'👩',profileType:'professional'},text:'Night owls unite! I always read before bed 😄',time:'3h'},
+  {id:'pc5',parentId:'pc4',user:{name:'Vikram',avatar:'🧑',profileType:'personal'},text:'Night crew checking in 🌙',time:'2h'},
 ];
 
 // ⚠️ PRE-LAUNCH TODO: turn this OFF (and delete the seed_peepal_* docs) before
@@ -738,7 +738,13 @@ async function hydratePeepalSocial(items){
   if(typeof loadContentComments==='function'){
     live.forEach(q=>work.push(
       loadContentComments('peepal',q,{limit:12})
-        .then(comments=>{ if(Array.isArray(comments)) q._comments=comments; })
+        .then(async comments=>{
+          if(!Array.isArray(comments)) return;
+          if(typeof enrichUsersWithProfileType==='function'){
+            await enrichUsersWithProfileType(comments.map(c=>c.user).filter(Boolean));
+          }
+          q._comments=comments;
+        })
         .catch(()=>{})
     ));
   }
@@ -764,6 +770,9 @@ async function loadPeepalPage({reset=false}={}){
     // is on; once it is turned off, any leftover seed docs are filtered out so
     // real users never see placeholder content.
     const mapped=page.items.map(mapPeepalDoc).filter(q=>(PEEPAL_SEED_CONTENT_ENABLED||!q.isSeedContent)&&!(typeof isSoftDeleted==='function'?isSoftDeleted(q):q.deleted));
+    if(typeof enrichUsersWithProfileType==='function'){
+      await enrichUsersWithProfileType(mapped.map(q=>q.user).filter(Boolean));
+    }
     await hydratePeepalSocial(mapped);
     if(reset&&mapped.length){
       peepalLiveMode=true;
@@ -927,7 +936,7 @@ function renderPeepalCommentStrip(q){
     <div class="peepal-comment-strip">
       ${comments.map(c=>`
         <article class="peepal-comment-chip" data-comment-id="${c.id}" tabindex="0">
-          <div class="peepal-comment-chip-author">${c.user?.avatar||'👤'} ${c.user?.name||'User'}</div>
+          <div class="peepal-comment-chip-author">${c.user?.avatar||'👤'} ${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(c.user?.name||'User',c.user):(c.user?.name||'User')}</div>
           <div class="peepal-comment-chip-text">${typeof formatCommentText==='function'?formatCommentText(c.text):c.text}</div>
           <button type="button" class="peepal-quick-reply" data-reply-id="${c.id}">Reply</button>
           <form class="peepal-inline-reply-form hidden" data-reply-form="${c.id}">
@@ -1032,7 +1041,7 @@ function renderPeepalFeed(){
       <div class="peepal-card-header">
         <div class="peepal-user-avatar" style="cursor:pointer;" onclick="event.stopPropagation();">${q.user.photoURL?`<img src="${q.user.photoURL}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:(q.user.avatar||'👤')}</div>
         <div style="flex:1;min-width:0;">
-          <div class="peepal-user-name">${q.user.name}</div>
+          <div class="peepal-user-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(q.user.name,q.user):q.user.name}</div>
           <div class="peepal-user-meta">${[q.user.city, typeof formatRelativeTime==='function'?formatRelativeTime(q.timeAgo||q.ts):q.timeAgo].filter(Boolean).join(' · ')}</div>
           ${q.user.bio?`<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">"${q.user.bio}"</div>`:''}
         </div>
@@ -1285,7 +1294,7 @@ function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
       <div class="peepal-card-header" style="padding:0 0 12px;">
         <div class="peepal-user-avatar">${q.user.avatar}</div>
         <div>
-          <div class="peepal-user-name">${q.user.name}</div>
+          <div class="peepal-user-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(q.user.name,q.user):q.user.name}</div>
           <div class="peepal-user-meta">${q.user.city} · ${typeof formatRelativeTime==='function'?formatRelativeTime(q.timeAgo||q.ts):q.timeAgo}</div>
         </div>
       </div>
@@ -1344,7 +1353,7 @@ function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
           const parent = comments.find((c) => c.id === parentId);
           if (hint) {
             hint.classList.remove('hidden');
-            hint.innerHTML = `Replying to <strong>${parent?.user?.name || 'comment'}</strong> <button type="button" id="cancelPeepalReply">Cancel</button>`;
+            hint.innerHTML = `Replying to <strong>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(parent?.user?.name||'comment',parent?.user):(parent?.user?.name||'comment')}</strong> <button type="button" id="cancelPeepalReply">Cancel</button>`;
             hint.querySelector('#cancelPeepalReply')?.addEventListener('click', () => {
               replyTo = null;
               hint.classList.add('hidden');
@@ -1361,10 +1370,13 @@ function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
     if (commentSend) commentSend.disabled = true;
     if (typeof renderSkeleton === 'function') renderSkeleton(listEl, { variant: 'list', count: 3 });
     loadContentComments('peepal', q)
-      .then((loaded) => {
+      .then(async (loaded) => {
         if (!Array.isArray(loaded)) return;
         comments.splice(0, comments.length, ...loaded);
         q._comments = comments;
+        if (typeof enrichUsersWithProfileType === 'function') {
+          await enrichUsersWithProfileType(comments.map((c) => c.user).filter(Boolean));
+        }
         refreshComments();
       })
       .catch((err) => {

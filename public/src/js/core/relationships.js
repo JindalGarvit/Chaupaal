@@ -450,7 +450,7 @@
           (profile) => `
         <div class="close-friends-row" data-uid="${profile.uid}">
           <div class="close-friends-avatar">${profile.photoURL ? `<img src="${profile.photoURL}" alt="">` : '👤'}</div>
-          <div class="close-friends-person"><strong>${safe(profile.name)}</strong><span>${safe(
+          <div class="close-friends-person"><strong>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(profile.name,profile):safe(profile.name)}</strong><span>${safe(
             profile.username ? '@' + profile.username : profile.city || ''
           )}</span></div>
           <button type="button" data-rel-open>View</button>
@@ -505,7 +505,7 @@
     const row = (profile, selected) => `
       <div class="close-friends-row" data-uid="${profile.uid}">
         <div class="close-friends-avatar">${profile.photoURL ? `<img src="${profile.photoURL}" alt="">` : '👤'}</div>
-        <div class="close-friends-person"><strong>${safe(profile.name || profile.username || 'Member')}</strong><span>${safe(profile.username ? '@' + profile.username : profile.city || '')}</span></div>
+        <div class="close-friends-person"><strong>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(profile.name || profile.username || 'Member',profile):safe(profile.name || profile.username || 'Member')}</strong><span>${safe(profile.username ? '@' + profile.username : profile.city || '')}</span></div>
         <button type="button" data-close-toggle="${selected ? 'remove' : 'add'}">${selected ? 'Remove' : 'Add'}</button>
       </div>`;
 
@@ -599,7 +599,7 @@
                 (profile) => `
               <div class="close-friends-row" data-request-uid="${profile.uid}">
                 <div class="close-friends-avatar">${profile.photoURL ? `<img src="${profile.photoURL}" alt="">` : '👤'}</div>
-                <div class="close-friends-person"><strong>${safe(profile.name)}</strong><span>${safe(profile.username ? '@' + profile.username : '')}</span></div>
+                <div class="close-friends-person"><strong>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(profile.name,profile):safe(profile.name)}</strong><span>${safe(profile.username ? '@' + profile.username : '')}</span></div>
                 <button type="button" data-request-accept>Accept</button>
                 <button type="button" data-request-decline class="relationship-decline">Decline</button>
               </div>`

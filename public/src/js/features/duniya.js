@@ -1,10 +1,10 @@
 // ===================== DUNIYA DATA =====================
 const SAMPLE_DUNIYA=[
-  {id:'d1',user:{name:'India Today',avatar:'📺',uid:'it'},type:'image',media:'https://picsum.photos/seed/news1/600/400',caption:'Breaking: Major policy announcement from Union Cabinet. #IndiaToday #News',likes:2847,comments:142,shares:389,timestamp:'2h',tags:[],followed:false,likedByMe:false},
-  {id:'d2',user:{name:'Priya Krishnan',avatar:'👩‍🎨',uid:'pk'},type:'image',media:'https://picsum.photos/seed/art2/600/600',caption:'My latest artwork inspired by the monsoons 🌧️ What do you think? @ArtLovers #Art #Monsoon',likes:934,comments:67,shares:28,timestamp:'4h',tags:['ArtLovers'],followed:false,likedByMe:false},
-  {id:'d3',user:{name:'StartupIndia',avatar:'🚀',uid:'si'},type:'video',media:null,caption:'5 Indian startups that are changing the world 🌏 Watch till the end! #Startup #India',likes:5201,comments:321,shares:1204,timestamp:'6h',tags:[],followed:false,likedByMe:false},
-  {id:'d4',user:{name:'Chef Rahul',avatar:'👨‍🍳',uid:'cr'},type:'image',media:'https://picsum.photos/seed/food4/600/500',caption:'Dal makhani recipe that took me 10 years to perfect. Recipe in comments! 🍛 #Food #Recipe',likes:3102,comments:892,shares:1567,timestamp:'8h',tags:[],followed:false,likedByMe:false},
-  {id:'d5',user:{name:'Riya Sharma',avatar:'😊',uid:'rs'},type:'image',media:'https://picsum.photos/seed/travel5/600/700',caption:'Ladakh calling 🏔️ Nothing compares to this. @Dev_travels #Travel #Ladakh',likes:1204,comments:89,shares:45,timestamp:'1d',tags:['Dev_travels'],followed:true,likedByMe:true},
+  {id:'d1',user:{name:'India Today',avatar:'📺',uid:'it',profileType:'professional'},type:'image',media:'https://picsum.photos/seed/news1/600/400',caption:'Breaking: Major policy announcement from Union Cabinet. #IndiaToday #News',likes:2847,comments:142,shares:389,timestamp:'2h',tags:[],followed:false,likedByMe:false},
+  {id:'d2',user:{name:'Priya Krishnan',avatar:'👩‍🎨',uid:'pk',profileType:'personal'},type:'image',media:'https://picsum.photos/seed/art2/600/600',caption:'My latest artwork inspired by the monsoons 🌧️ What do you think? @ArtLovers #Art #Monsoon',likes:934,comments:67,shares:28,timestamp:'4h',tags:['ArtLovers'],followed:false,likedByMe:false},
+  {id:'d3',user:{name:'StartupIndia',avatar:'🚀',uid:'si',profileType:'professional'},type:'video',media:null,caption:'5 Indian startups that are changing the world 🌏 Watch till the end! #Startup #India',likes:5201,comments:321,shares:1204,timestamp:'6h',tags:[],followed:false,likedByMe:false},
+  {id:'d4',user:{name:'Chef Rahul',avatar:'👨‍🍳',uid:'cr',profileType:'professional'},type:'image',media:'https://picsum.photos/seed/food4/600/500',caption:'Dal makhani recipe that took me 10 years to perfect. Recipe in comments! 🍛 #Food #Recipe',likes:3102,comments:892,shares:1567,timestamp:'8h',tags:[],followed:false,likedByMe:false},
+  {id:'d5',user:{name:'Riya Sharma',avatar:'😊',uid:'rs',profileType:'personal'},type:'image',media:'https://picsum.photos/seed/travel5/600/700',caption:'Ladakh calling 🏔️ Nothing compares to this. @Dev_travels #Travel #Ladakh',likes:1204,comments:89,shares:45,timestamp:'1d',tags:['Dev_travels'],followed:true,likedByMe:true},
 ];
 
 let duniyaPosts=[...SAMPLE_DUNIYA];
@@ -69,6 +69,9 @@ async function loadDuniyaPage({reset=false}={}){
       excludeDeleted:true,
     });
     const mapped=page.items.map(mapDuniyaDoc).filter(p=>!p.deleted&&p.archived!==true&&!(typeof isSoftDeleted==='function'&&isSoftDeleted(p)));
+    if(typeof enrichUsersWithProfileType==='function'){
+      await enrichUsersWithProfileType(mapped.map(p=>p.user).filter(Boolean));
+    }
     if(typeof hydrateContentLikes==='function') await hydrateContentLikes('duniya',mapped);
     if(typeof hydrateRelationships==='function'){
       const states=await hydrateRelationships(mapped.map(p=>p.user?.uid).filter(Boolean));
@@ -134,6 +137,9 @@ async function renderDuniyaStories(){
   let stories=[];
   if(currentUser&&typeof loadStoryFeed==='function'){
     try{stories=await loadStoryFeed('duniya');}catch(error){console.warn('[stories] Duniya feed',error);}
+  }
+  if(stories.length&&typeof enrichUsersWithProfileType==='function'){
+    await enrichUsersWithProfileType(stories);
   }
   if(stories.length&&typeof hydrateRelationships==='function'){
     const states=await hydrateRelationships(stories.map(story=>story.uid)).catch(()=>({}));
@@ -254,7 +260,7 @@ function createDuniyaPost(post, {variant='list'}={}){
     <div class="duniya-post-header">
       <div class="duniya-post-avatar">${post.user.photoURL?`<img src="${post.user.photoURL}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:`<span>${post.user.avatar}</span>`}</div>
       <div class="duniya-post-user">
-        <div class="duniya-post-name">${post.user.name}</div>
+        <div class="duniya-post-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(post.user.name,post.user):post.user.name}</div>
         <div class="duniya-post-meta">${typeof formatRelativeTime==='function'?formatRelativeTime(post.ts||post.timestamp):post.timestamp} · 🌍 Public</div>
       </div>
       <button class="duniya-follow-btn ${isFollowing?'following':''}" data-uid="${post.user.uid}" aria-label="${isFollowing?'Unfollow':'Follow'} ${post.user.name}">${isFollowing?'Following':'Follow'}</button>
@@ -279,7 +285,7 @@ function createDuniyaPost(post, {variant='list'}={}){
       <button class="duniya-action-btn duniya-bookmark-btn" data-id="${post.id}" aria-label="Bookmark"><span aria-hidden="true">🔖</span></button>
     </div>
     <div class="duniya-post-likes">${formatCount(post.likedByMe?post.likes:post.likes)} likes</div>
-    <div class="duniya-post-caption"><strong class="duniya-post-name">${post.user.name}</strong> ${caption}</div>
+    <div class="duniya-post-caption"><strong class="duniya-post-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(post.user.name,post.user):post.user.name}</strong> ${caption}</div>
     ${post.comments>0?`<div class="duniya-view-comments">View all ${post.comments} comments</div>`:''}
   `;
   const postAvatar=el.querySelector('.duniya-post-avatar');
@@ -569,7 +575,7 @@ function openDuniyaDetail(post){
     </div>
     <div class="duniya-comments-body">
       <div class="duniya-comments-post-context">
-        <strong>${post.user?.name||'Post'}</strong>
+        <strong>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(post.user?.name||'Post',post.user):(post.user?.name||'Post')}</strong>
         <span>${String(post.caption||'').slice(0,150)}</span>
       </div>
       <div id="duniyaCommentsList" class="comments-list">
@@ -620,7 +626,7 @@ function openDuniyaDetail(post){
           const parent = comments.find((c) => c.id === parentId);
           if (hint) {
             hint.classList.remove('hidden');
-            hint.innerHTML = `Replying to <strong>${parent?.user?.name || 'comment'}</strong> <button type="button" id="cancelDuniyaReply">Cancel</button>`;
+            hint.innerHTML = `Replying to <strong>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(parent?.user?.name||'comment',parent?.user):(parent?.user?.name||'comment')}</strong> <button type="button" id="cancelDuniyaReply">Cancel</button>`;
             hint.querySelector('#cancelDuniyaReply')?.addEventListener('click', () => {
               replyTo = null;
               hint.classList.add('hidden');
@@ -637,10 +643,13 @@ function openDuniyaDetail(post){
     if (commentSend) commentSend.disabled = true;
     if (typeof renderSkeleton === 'function') renderSkeleton(listEl, { variant: 'list', count: 3 });
     loadContentComments('duniya', post)
-      .then((loaded) => {
+      .then(async (loaded) => {
         if (!Array.isArray(loaded)) return;
         comments.splice(0, comments.length, ...loaded);
         post._comments = comments;
+        if (typeof enrichUsersWithProfileType === 'function') {
+          await enrichUsersWithProfileType(comments.map((c) => c.user).filter(Boolean));
+        }
         refreshComments();
       })
       .catch((err) => {
@@ -845,7 +854,7 @@ function openDuniyaPostSheet(mode='post'){
 
     const newPost={
       id:`d_${Date.now()}`,
-      user:{name:userProfile?.name||'You',avatar:'🪑',uid:currentUser?.uid||'me',photoURL:userProfile?.photoURL||null},
+      user:{name:userProfile?.name||'You',avatar:'🪑',uid:currentUser?.uid||'me',photoURL:userProfile?.photoURL||null,profileType:(typeof ownProfileType==='function'?ownProfileType():(typeof getProfileType==='function'?getProfileType():'personal'))},
       type:mediaType,
       media:mediaUrl,
       thumb:thumbUrl,
@@ -859,7 +868,7 @@ function openDuniyaPostSheet(mode='post'){
     };
     const firestorePayload={
       uid:currentUser?.uid,
-      user:{name:newPost.user.name,avatar:newPost.user.avatar,uid:newPost.user.uid,photoURL:userProfile?.photoURL||null},
+      user:{name:newPost.user.name,avatar:newPost.user.avatar,uid:newPost.user.uid,photoURL:userProfile?.photoURL||null,profileType:newPost.user.profileType||'personal'},
       type:newPost.type,
       media: mediaUrl && String(mediaUrl).startsWith('http') ? mediaUrl : null,
       thumb: thumbUrl && String(thumbUrl).startsWith('http') ? thumbUrl : null,

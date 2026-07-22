@@ -62,6 +62,7 @@
         name: p.name || 'Member',
         avatar: p.avatar || p.photoURL || '👤',
         photoURL: p.photoURL || '',
+        profileType: p.profileType || null,
         role: chat.admins?.includes(uid) ? 'admin' : p.role === 'admin' ? 'admin' : 'member',
         joinedAt: p.joinedAt || null,
       };
@@ -142,6 +143,12 @@
       avatar: userProfile?.avatar || '👤',
       photoURL: currentUser.photoURL || userProfile?.photoURL || '',
       role: 'admin',
+      profileType:
+        typeof ownProfileType === 'function'
+          ? ownProfileType()
+          : typeof getProfileType === 'function'
+            ? getProfileType()
+            : 'personal',
       joinedAt: Date.now(),
     };
     const doc = {
@@ -191,6 +198,7 @@
       avatar: friend.avatar || '👤',
       photoURL: friend.photoURL || '',
       role: 'member',
+      profileType: friend.profileType || friend.profile?.profileType || 'personal',
       joinedAt: Date.now(),
     };
     const participants = [...(chat.participants || []), uid];
@@ -324,6 +332,12 @@
           name: userProfile?.name || currentUser.displayName || 'Member',
           avatar: userProfile?.avatar || '👤',
           photoURL: currentUser.photoURL || '',
+          profileType:
+            typeof ownProfileType === 'function'
+              ? ownProfileType()
+              : typeof getProfileType === 'function'
+                ? getProfileType()
+                : 'personal',
           status: 'pending',
           requestedAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
@@ -335,6 +349,12 @@
         avatar: userProfile?.avatar || '👤',
         photoURL: currentUser.photoURL || '',
         role: 'member',
+        profileType:
+          typeof ownProfileType === 'function'
+            ? ownProfileType()
+            : typeof getProfileType === 'function'
+              ? getProfileType()
+              : 'personal',
         joinedAt: Date.now(),
       };
       const participants = [...(data.participants || []), uid];
@@ -409,13 +429,16 @@
     async function refresh() {
       const live = await fetchGroupDoc(chat.firestoreId || chat.id);
       if (live) chat = live;
-      render();
+      await render();
     }
 
-    function render() {
+    async function render() {
       const uid = currentUser?.uid;
       const admin = isGroupAdmin(chat, uid);
       const members = memberListFromChat(chat);
+      if (typeof enrichUsersWithProfileType === 'function') {
+        await enrichUsersWithProfileType(members);
+      }
       const hero = overlay.querySelector('[data-gi-hero]');
       const photo = chat.photoURL || (/^https:/.test(chat.avatar || '') ? chat.avatar : '');
       hero.innerHTML = `
@@ -437,7 +460,7 @@
           const av = m.photoURL || m.avatar;
           return `<div class="group-info-member" data-member-uid="${esc(m.uid)}">
             <div class="group-info-member-av">${/^https:/.test(av) ? `<img src="${esc(av)}" alt="">` : esc(m.avatar || '👤')}</div>
-            <div class="group-info-member-meta"><div class="group-info-member-name">${esc(m.name)}${isMe ? ' (You)' : ''}</div>${badge}</div>
+            <div class="group-info-member-meta"><div class="group-info-member-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(m.name,m):esc(m.name)}${isMe ? ' (You)' : ''}</div>${badge}</div>
             ${admin && !isMe ? `<button type="button" class="group-info-member-menu" data-member-menu aria-label="Member options">⋯</button>` : ''}
           </div>`;
         })
@@ -530,7 +553,7 @@
           .map(
             (r) => `<div class="group-info-request" data-req-uid="${esc(r.uid)}">
           <div class="group-info-member-av">${esc(r.avatar || '👤')}</div>
-          <div class="group-info-member-name">${esc(r.name || 'Member')}</div>
+          <div class="group-info-member-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(r.name || 'Member',r):esc(r.name || 'Member')}</div>
           <button type="button" class="group-info-accept" data-req-accept>Accept</button>
           <button type="button" class="group-info-reject" data-req-reject>Decline</button>
         </div>`
@@ -564,7 +587,7 @@
       const isAd = member.role === 'admin';
       sheet.innerHTML = `
         <div class="cp-sheet-panel">
-          <div class="group-info-sheet-title">${esc(member.name)}</div>
+          <div class="group-info-sheet-title">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(member.name,member):esc(member.name)}</div>
           <button type="button" data-act-promote>${isAd ? 'Remove admin' : 'Make admin'}</button>
           <button type="button" data-act-remove class="danger">Remove from group</button>
           <button type="button" data-act-cancel>Cancel</button>
@@ -624,7 +647,7 @@
         if (name) {
           await updateGroupDetails(chat, { name: String(name).trim() });
           chat.name = String(name).trim();
-          render();
+          await render();
         }
       }
       if (e.target.closest('[data-gi-edit-photo]') && canEditInfo(chat, currentUser?.uid)) {
@@ -644,7 +667,7 @@
           }
           await updateGroupDetails(chat, { photoURL, avatar: photoURL });
           chat.photoURL = photoURL;
-          render();
+          await render();
         };
         input.click();
       }

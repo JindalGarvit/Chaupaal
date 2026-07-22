@@ -221,7 +221,17 @@ function openBusinessGame(chat,playerCount){
     {name:'Golf Course Road',type:'property',price:4000,rent:[500,2000,6000,14000,17000,20000],color:'#0072bb',group:7},
   ];
 
-  let players=NAMES.map((name,i)=>({name,pos:0,money:15000,properties:[],jailed:0,bankrupt:false,color:PLAYER_COLORS[i]}));
+  const ownType=typeof ownProfileType==='function'?ownProfileType():(typeof getProfileType==='function'?getProfileType():'personal');
+  let players=NAMES.map((name,i)=>({
+    name,
+    pos:0,
+    money:15000,
+    properties:[],
+    jailed:0,
+    bankrupt:false,
+    color:PLAYER_COLORS[i],
+    profileType:i===0?ownType:(i===1?(chat?.profileType||null):null),
+  }));
   let currentPlayer=0;let diceVal=[1,1];let rolling=false;let gameOver=false;let message='';
   let awaitingBuy=false;let focusPos=0;
   const BUS_SECS=20;let busTimer=BUS_SECS;let busInterval=null;let diceIv=null;
@@ -443,7 +453,7 @@ function openBusinessGame(chat,playerCount){
       ${gameChromeHtml({title:'Business',backId:'busBack',rightHtml:currentPlayer===0&&!awaitingBuy?`<span id="busTimerEl" class="game-chrome-metric">${busTimer}s</span>`:undefined})}
       <div class="bus-players">
         ${players.map((p,i)=>`<div class="bus-player${currentPlayer===i?' is-active':''}${p.bankrupt?' is-out':''}" style="--pc:${p.color}">
-          <div class="bus-player-name">${p.name}</div>
+          <div class="bus-player-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(p.name,p):p.name}</div>
           <div class="bus-player-cash">₹${p.money}</div>
           <div class="bus-player-props">${p.properties.length} props</div>
         </div>`).join('')}
@@ -473,8 +483,8 @@ function openScribbleGame(chat,playerList,opts){
   const options=opts||{};
   const list=(playerList||[]).filter(p=>p&&p.name!==undefined);
   const practiceMode=!!options.practice || list.length===0 || !!(chat&&(chat.self||chat.isSelf||chat.id==='self'||chat.id==='practice'));
-  const players=[{name:'You',isMe:true},...list.map(p=>({name:p.name||(chat&&chat.name)||'Friend',isMe:false}))];
-  if(!practiceMode&&players.length<2)players.push({name:(chat&&chat.name)||'Friend',isMe:false});
+  const players=[{name:'You',isMe:true,profileType:typeof ownProfileType==='function'?ownProfileType():'personal'},...list.map(p=>({name:p.name||(chat&&chat.name)||'Friend',isMe:false,profileType:p.profileType||chat?.profileType||null}))];
+  if(!practiceMode&&players.length<2)players.push({name:(chat&&chat.name)||'Friend',isMe:false,profileType:chat?.profileType||null});
 
   let round=1;const maxRounds=practiceMode?1:3;let currentDrawerIdx=0;let currentWord='';
   let scores={};players.forEach(p=>scores[p.name]=0);
@@ -750,7 +760,7 @@ function openScribbleGame(chat,playerList,opts){
 // ===================== GROUP GAME SETUP — PLAYER SELECTOR =====================
 function openGroupGameSetup(groupChat, gameId){
   // groupChat.members should be an array of {name, uid, avatar}
-  const members=(groupChat.members||[{name:'Player 2',avatar:'👤'},{name:'Player 3',avatar:'👤'},{name:'Player 4',avatar:'👤'}]);
+  let members=(groupChat.members||[{name:'Player 2',avatar:'👤'},{name:'Player 3',avatar:'👤'},{name:'Player 4',avatar:'👤'}]);
   const multiGames={
     ludo:{name:'🎯 Ludo',min:2,max:4},
     scribble:{name:'🎨 Scribble',min:2,max:10},
@@ -780,7 +790,7 @@ function openGroupGameSetup(groupChat, gameId){
           const sel=selectedPlayers.has(m.name);
           return`<div class="group-player-row" data-name="${m.name}" style="display:flex;align-items:center;gap:10px;padding:14px;background:var(--white);border-radius:14px;margin-bottom:8px;border:2px solid ${sel?'var(--game-accent,var(--red))':'var(--line)'};cursor:pointer;">
             <div style="width:40px;height:40px;border-radius:50%;background:var(--line);display:flex;align-items:center;justify-content:center;font-size:18px;">${m.avatar||'👤'}</div>
-            <div style="flex:1;"><div style="font-weight:700;">${m.name}</div><div style="font-size:11px;color:var(--muted);">Tap to ${sel?'remove':'add'}</div></div>
+            <div style="flex:1;"><div style="font-weight:700;">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(m.name,m):m.name}</div><div style="font-size:11px;color:var(--muted);">Tap to ${sel?'remove':'add'}</div></div>
             <div style="width:24px;height:24px;border-radius:50%;background:${sel?'var(--game-accent,var(--red))':'var(--line)'};display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;">${sel?'✓':''}</div>
           </div>`;
         }).join('')}
@@ -805,9 +815,10 @@ function openGroupGameSetup(groupChat, gameId){
     document.getElementById('startGroupGame').addEventListener('click',()=>{
       if(selectedPlayers.size+1<cfg.min)return;
       sheet.remove();
-      const playerList=[{name:'You',isMe:true},...[...selectedPlayers].map(n=>{const m=members.find(x=>x.name===n);return{name:n,avatar:m?.avatar||'👤',isMe:false};})];
+      const ownType=typeof ownProfileType==='function'?ownProfileType():'personal';
+      const playerList=[{name:'You',isMe:true,profileType:ownType},...[...selectedPlayers].map(n=>{const m=members.find(x=>x.name===n);return{name:n,avatar:m?.avatar||'👤',isMe:false,profileType:m?.profileType||null,uid:m?.uid||null};})];
       const playerCount=playerList.length;
-      const fakeChat={name:playerList[1]?.name||'Opponent',id:'group_game'};
+      const fakeChat={name:playerList[1]?.name||'Opponent',id:'group_game',profileType:playerList[1]?.profileType||null};
       if(gameId==='ludo')openLudoGame(fakeChat,playerCount);
       else if(gameId==='scribble')openScribbleGame(fakeChat,playerList.slice(1));
       else if(gameId==='business')openBusinessGame(fakeChat,playerCount);
@@ -815,7 +826,11 @@ function openGroupGameSetup(groupChat, gameId){
     });
   }
   document.querySelector('.device').appendChild(sheet);
-  render();
+  if(typeof enrichUsersWithProfileType==='function'){
+    enrichUsersWithProfileType(members).finally(()=>render());
+  } else {
+    render();
+  }
 }
 
 // openGamePicker is provided by game-registry.js

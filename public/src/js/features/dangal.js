@@ -256,11 +256,12 @@ document.getElementById('peepalUserInput')?.addEventListener('input', async (e)=
 
   if(typeof universalSearch==='function'){
     const { results: hits } = await universalSearch(q, { types:['users'], limit: 6 });
+    if(typeof enrichUsersWithProfileType==='function') await enrichUsersWithProfileType(hits);
     results.innerHTML = hits.length
       ? hits.map(u=>`
         <div class="peepal-us-card">
           <div class="pu-avatar">${u.photoURL?`<img src="${u.photoURL}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:'👤'}</div>
-          <div class="pu-info"><div class="pu-name">${u.name||u.username}</div><div class="pu-meta">@${u.username||'user'}${u.city?' · '+u.city:''}</div></div>
+          <div class="pu-info"><div class="pu-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(u.name||u.username,u):(u.name||u.username)}</div><div class="pu-meta">@${u.username||'user'}${u.city?' · '+u.city:''}</div></div>
           <button class="pu-add" data-uid="${u.uid||''}" data-uname="${u.username||''}" data-name="${u.name||''}">View</button>
         </div>`).join('')
       : '<div style="color:var(--muted);font-size:13px;padding:4px 0;">No users found</div>';
@@ -287,17 +288,17 @@ document.getElementById('peepalUserInput')?.addEventListener('input', async (e)=
 
   // Offline fallback samples
   const sampleUsers=[
-    {name:'Riya Sharma',avatar:'😊',city:'Mumbai',username:'riya_s'},
-    {name:'Arjun Mehta',avatar:'🏔️',city:'Delhi',username:'arjun_m'},
-    {name:'Priya Nair',avatar:'👩',city:'Bengaluru',username:'priya_n'},
-    {name:'Dev Sharma',avatar:'👨',city:'Pune',username:'dev_s'},
-    {name:'Kavya Reddy',avatar:'👩‍💼',city:'Hyderabad',username:'kavya_r'},
+    {name:'Riya Sharma',avatar:'😊',city:'Mumbai',username:'riya_s',profileType:'personal'},
+    {name:'Arjun Mehta',avatar:'🏔️',city:'Delhi',username:'arjun_m',profileType:'personal'},
+    {name:'Priya Nair',avatar:'👩',city:'Bengaluru',username:'priya_n',profileType:'professional'},
+    {name:'Dev Sharma',avatar:'👨',city:'Pune',username:'dev_s',profileType:'personal'},
+    {name:'Kavya Reddy',avatar:'👩‍💼',city:'Hyderabad',username:'kavya_r',profileType:'professional'},
   ].filter(u=>u.name.toLowerCase().includes(q.toLowerCase())||u.username.toLowerCase().includes(q.toLowerCase()));
 
   results.innerHTML = sampleUsers.slice(0,4).map(u=>`
     <div class="peepal-us-card">
       <div class="pu-avatar">${u.avatar}</div>
-      <div class="pu-info"><div class="pu-name">${u.name}</div><div class="pu-meta">@${u.username} · ${u.city}</div></div>
+      <div class="pu-info"><div class="pu-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(u.name,u):u.name}</div><div class="pu-meta">@${u.username} · ${u.city}</div></div>
       <button class="pu-add" data-uname="${u.username}" data-name="${u.name}">+ Add</button>
     </div>
   `).join('') || '<div style="color:var(--muted);font-size:13px;padding:4px 0;">No users found</div>';

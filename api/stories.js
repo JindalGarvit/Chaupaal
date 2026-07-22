@@ -156,6 +156,7 @@ function serializeStory(doc, viewerUid) {
     type: data.type || 'media',
     name: data.name || 'Chaupaal member',
     avatar: data.avatar || '',
+    profileType: data.profileType || 'personal',
     media: data.media || '',
     thumb: data.thumb || '',
     mediaType: data.mediaType || 'image',
@@ -291,6 +292,10 @@ async function createStory(db, admin, uid, body) {
     type: cleanText(body.type, 30) || 'media',
     name: cleanText(user.name || user.displayName || user.username, 100) || 'Chaupaal member',
     avatar: cleanMedia(user.photoThumb || user.photoURL) || cleanText(body.avatar, 12),
+    profileType:
+      String(user.profileType || user.profile?.profileType || 'personal').toLowerCase() === 'professional'
+        ? 'professional'
+        : 'personal',
     media,
     thumb: cleanMedia(body.thumb),
     mediaType: body.mediaType === 'video' ? 'video' : 'image',
@@ -594,6 +599,7 @@ async function interactions(db, uid, destination, storyId) {
         uid: data.uid,
         name: profiles[data.uid]?.name || 'Chaupaal member',
         avatar: profiles[data.uid]?.photoURL || '',
+        profileType: profiles[data.uid]?.profileType || 'personal',
         text: data.text,
         createdAt: data.createdAt?.toMillis?.() || 0,
       };
@@ -613,6 +619,11 @@ async function profilesMap(db, ids) {
         {
           name: data.name || data.displayName || data.username || 'Chaupaal member',
           photoURL: data.photoThumb || data.photoURL || '',
+          profileType:
+            String(data.profileType || data.profile?.profileType || 'personal').toLowerCase() ===
+            'professional'
+              ? 'professional'
+              : 'personal',
         },
       ];
     })

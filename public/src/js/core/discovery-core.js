@@ -1,15 +1,15 @@
 // ===================== SAMPLE DISCOVERY POOL =====================
 const SAMPLE_DISCOVERY_POOL = [
-  {uid:'u_riya',name:'Riya Sharma',avatar:'😊',photoURL:null,city:'Mumbai',age:24,gender:'female',personality:'social',openToMeet:true,interests:['Sports','Tech','Music'],bio:'Cricket on weekends, startups on weekdays',questions:12,icebreakers:[{promptId:'ib14',answer:'Cutting chai, extra adrak — non-negotiable after the local.'}]},
-  {uid:'u_arjun',name:'Arjun Mehta',avatar:'🏔️',photoURL:null,city:'Delhi',age:27,gender:'male',personality:'outdoorsy',openToMeet:true,interests:['Sports','Travel','World'],bio:'Always planning the next trek',questions:8,icebreakers:[{promptId:'ib18',answer:'Road trip — windows down, random dhabas, no timetable.'}]},
-  {uid:'u_priya',name:'Priya Nair',avatar:'👩',photoURL:null,city:'Bengaluru',age:25,gender:'female',personality:'intellectual',openToMeet:true,interests:['Tech','Business','GK'],bio:'Product manager who loves quizzes',questions:20,icebreakers:[{promptId:'ib05',answer:'Filter coffee forever. Tea is lovely; coffee is a personality.'},{promptId:'ib15',answer:'Church Street walk, then that tiny dosa place before traffic wakes up.'}]},
-  {uid:'u_dev',name:'Dev Sharma',avatar:'👨',photoURL:null,city:'Pune',age:29,gender:'male',personality:'intellectual',openToMeet:true,interests:['Business','World','GK'],bio:'Reading non-fiction and debating',questions:15,icebreakers:[{promptId:'ib10',answer:'A stranger returned my dropped metro card. Tiny, but it stuck.'}]},
-  {uid:'u_ananya',name:'Ananya Iyer',avatar:'🎨',photoURL:null,city:'Chennai',age:23,gender:'female',personality:'cinephile',openToMeet:true,interests:['Movies','Music','Food'],bio:'Film festivals + filter coffee',questions:6,icebreakers:[{promptId:'ib16',answer:'Pongal — the kolam, the sugarcane, the slow morning with family.'}]},
-  {uid:'u_kabir',name:'Kabir Singh',avatar:'🎮',photoURL:null,city:'Hyderabad',age:26,gender:'male',personality:'social',openToMeet:true,interests:['Tech','Sports','Music'],bio:'Gamer, coder, chai addict',questions:10,icebreakers:[{promptId:'ib14',answer:'Irani chai + Osmania biscuit. Hilltop debates optional.'}]},
-  {uid:'u_meera',name:'Meera Kapoor',avatar:'📚',photoURL:null,city:'Jaipur',age:28,gender:'female',personality:'intellectual',openToMeet:true,interests:['GK','World','Travel'],bio:'History nerd who loves museums',questions:18,icebreakers:[{promptId:'ib17',answer:'"Khamma ghani" — say it once and the city softens.'}]},
-  {uid:'u_rohan',name:'Rohan Kapoor',avatar:'👨‍💻',photoURL:null,city:'Mumbai',age:30,gender:'male',personality:'intellectual',openToMeet:true,interests:['Tech','Business','Sports'],bio:'Building something new',questions:9,icebreakers:[{promptId:'ib19',answer:'Pottery on weekends. Hands full of clay, brain finally quiet.'}]},
-  {uid:'u_sneha',name:'Sneha Joshi',avatar:'🌱',photoURL:null,city:'Mumbai',age:22,gender:'female',personality:'outdoorsy',openToMeet:true,interests:['Travel','Food','World'],bio:'Looking for travel buddies',questions:5,icebreakers:[{promptId:'ib15',answer:'Sunset at Bandra bandstand, then whatever stall smells best.'}]},
-  {uid:'u_vikram',name:'Vikram Rao',avatar:'🏏',photoURL:null,city:'Ahmedabad',age:31,gender:'male',personality:'social',openToMeet:true,interests:['Sports','Business','India'],bio:'IPL nights and chai debates',questions:14,icebreakers:[{promptId:'ib14',answer:'Cutting chai with extra sugar — fight me.'}]},
+  {uid:'u_riya',name:'Riya Sharma',avatar:'😊',photoURL:null,city:'Mumbai',age:24,gender:'female',personality:'social',openToMeet:true,profileType:'personal',interests:['Sports','Tech','Music'],bio:'Cricket on weekends, startups on weekdays',questions:12,icebreakers:[{promptId:'ib14',answer:'Cutting chai, extra adrak — non-negotiable after the local.'}]},
+  {uid:'u_arjun',name:'Arjun Mehta',avatar:'🏔️',photoURL:null,city:'Delhi',age:27,gender:'male',personality:'outdoorsy',openToMeet:true,profileType:'personal',interests:['Sports','Travel','World'],bio:'Always planning the next trek',questions:8,icebreakers:[{promptId:'ib18',answer:'Road trip — windows down, random dhabas, no timetable.'}]},
+  {uid:'u_priya',name:'Priya Nair',avatar:'👩',photoURL:null,city:'Bengaluru',age:25,gender:'female',personality:'intellectual',openToMeet:true,profileType:'professional',interests:['Tech','Business','GK'],bio:'Product manager who loves quizzes',questions:20,icebreakers:[{promptId:'ib05',answer:'Filter coffee forever. Tea is lovely; coffee is a personality.'},{promptId:'ib15',answer:'Church Street walk, then that tiny dosa place before traffic wakes up.'}]},
+  {uid:'u_dev',name:'Dev Sharma',avatar:'👨',photoURL:null,city:'Pune',age:29,gender:'male',personality:'intellectual',openToMeet:true,profileType:'personal',interests:['Business','World','GK'],bio:'Reading non-fiction and debating',questions:15,icebreakers:[{promptId:'ib10',answer:'A stranger returned my dropped metro card. Tiny, but it stuck.'}]},
+  {uid:'u_ananya',name:'Ananya Iyer',avatar:'🎨',photoURL:null,city:'Chennai',age:23,gender:'female',personality:'cinephile',openToMeet:true,profileType:'personal',interests:['Movies','Music','Food'],bio:'Film festivals + filter coffee',questions:6,icebreakers:[{promptId:'ib16',answer:'Pongal — the kolam, the sugarcane, the slow morning with family.'}]},
+  {uid:'u_kabir',name:'Kabir Singh',avatar:'🎮',photoURL:null,city:'Hyderabad',age:26,gender:'male',personality:'social',openToMeet:true,profileType:'personal',interests:['Tech','Sports','Music'],bio:'Gamer, coder, chai addict',questions:10,icebreakers:[{promptId:'ib14',answer:'Irani chai + Osmania biscuit. Hilltop debates optional.'}]},
+  {uid:'u_meera',name:'Meera Kapoor',avatar:'📚',photoURL:null,city:'Jaipur',age:28,gender:'female',personality:'intellectual',openToMeet:true,profileType:'professional',interests:['GK','World','Travel'],bio:'History nerd who loves museums',questions:18,icebreakers:[{promptId:'ib17',answer:'"Khamma ghani" — say it once and the city softens.'}]},
+  {uid:'u_rohan',name:'Rohan Kapoor',avatar:'👨‍💻',photoURL:null,city:'Mumbai',age:30,gender:'male',personality:'intellectual',openToMeet:true,profileType:'professional',interests:['Tech','Business','Sports'],bio:'Building something new',questions:9,icebreakers:[{promptId:'ib19',answer:'Pottery on weekends. Hands full of clay, brain finally quiet.'}]},
+  {uid:'u_sneha',name:'Sneha Joshi',avatar:'🌱',photoURL:null,city:'Mumbai',age:22,gender:'female',personality:'outdoorsy',openToMeet:true,profileType:'personal',interests:['Travel','Food','World'],bio:'Looking for travel buddies',questions:5,icebreakers:[{promptId:'ib15',answer:'Sunset at Bandra bandstand, then whatever stall smells best.'}]},
+  {uid:'u_vikram',name:'Vikram Rao',avatar:'🏏',photoURL:null,city:'Ahmedabad',age:31,gender:'male',personality:'social',openToMeet:true,profileType:'personal',interests:['Sports','Business','India'],bio:'IPL nights and chai debates',questions:14,icebreakers:[{promptId:'ib14',answer:'Cutting chai with extra sugar — fight me.'}]},
 ];
 
 let dismissedUids = new Set(JSON.parse(localStorage.getItem('chaupaal_dismissed_uids')||'[]'));
@@ -131,7 +131,7 @@ async function getDiscoveryProfiles(){
         scheduleDiscoveryIgnored(m.uid);
       });
       if (matches.length) {
-        return matches
+        const out = matches
           .filter((m) => m?.uid && !dismissedUids.has(m.uid))
           .filter((m) => !discoveryFilters.recentlyJoined || isRecentlyJoined(m))
           .map((m) => ({
@@ -147,6 +147,7 @@ async function getDiscoveryProfiles(){
               icebreakers: m.icebreakers || [],
               prompts: m.prompts || [],
               openToMeet: true,
+              profileType: m.profileType || m.profile?.profileType || 'personal',
               _isNew: isRecentlyJoined(m),
               _mutualStable: m.mutualStable,
             },
@@ -155,6 +156,10 @@ async function getDiscoveryProfiles(){
             reasons: (m.signals || []).slice(0, 3),
             reason: (m.signals || []).slice(0, 2).join(' · ') || m.bio || 'Someone you might enjoy talking to on Peepal',
           }));
+        if (typeof enrichUsersWithProfileType === 'function') {
+          await enrichUsersWithProfileType(out.map((p) => p.user).filter(Boolean));
+        }
+        return out;
       }
     } catch (e) {
       // Fall back to local heuristics
@@ -201,7 +206,7 @@ async function getDiscoveryProfiles(){
   const myCity=String(userProfile?.city||digitalProfile?.currentCity||'').trim().toLowerCase();
   const myLooking = String(userProfile?.lookingFor || digitalProfile?.lookingFor || discoveryFilters.interest || '').toLowerCase();
   const myIntents = Array.isArray(userProfile?.intents) ? userProfile.intents.map((i) => String(i).toLowerCase()) : [];
-  return pool
+  const out = pool
     .filter(u => {
       if(!u||!u.uid||dismissedUids.has(u.uid)||u.openToMeet===false) return false;
       if(discoveryFilters.sameCity&&myCity&&String(u.city||u.profile?.currentCity||'').trim().toLowerCase()!==myCity) return false;
@@ -251,6 +256,10 @@ async function getDiscoveryProfiles(){
     })
     .sort((a,b)=>b.score-a.score)
     .slice(0,5);
+  if (typeof enrichUsersWithProfileType === 'function') {
+    await enrichUsersWithProfileType(out.map((p) => p.user).filter(Boolean));
+  }
+  return out;
 }
 
 function renderDiscoverySection(profiles){
@@ -307,7 +316,7 @@ function renderDiscoverySection(profiles){
               <div class="discovery-match-badge">${matchPct||'?'}%</div>
             </div>
             <div class="discovery-info">
-              <div class="discovery-name">${user.name}</div>
+              <div class="discovery-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(user.name,user):user.name}</div>
               <div class="discovery-meta">${[user.city,user.age?user.age+'y':'',user.personality||''].filter(Boolean).join(' · ')}${user._isNew?' · <span class="discovery-new-badge">New here</span>':''}</div>
             </div>
             <button class="discovery-dismiss" data-uid="${user.uid}" title="Not interested">✕</button>

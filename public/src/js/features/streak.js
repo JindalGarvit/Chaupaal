@@ -177,6 +177,7 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
       time:m.ts?.toDate?new Date(m.ts.toDate()).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'',
       avatar:m.avatar||'👤',
       name:m.name,
+      profileType:m.profileType||null,
       music:m.music||null,
       attachment:m.attachment||null,
       uid:m.uid,
@@ -204,9 +205,15 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
             msgsArea.innerHTML='';
             rendered.clear();
           }
-          snap.docs.forEach((doc)=>appendFromDoc(doc,false));
-          primed=true;
-          msgsArea.scrollTop=msgsArea.scrollHeight;
+          const batch=snap.docs.map((doc)=>({uid:(doc.data()||{}).uid,profileType:(doc.data()||{}).profileType||null}));
+          const enrichThen=()=>snap.docs.forEach((doc)=>appendFromDoc(doc,false));
+          if(typeof enrichUsersWithProfileType==='function'){
+            enrichUsersWithProfileType(batch).finally(()=>{enrichThen();primed=true;msgsArea.scrollTop=msgsArea.scrollHeight;});
+          } else {
+            enrichThen();
+            primed=true;
+            msgsArea.scrollTop=msgsArea.scrollHeight;
+          }
           return;
         }
         snap.docChanges().forEach(change=>{
@@ -254,6 +261,7 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
               time:m.ts?.toDate?new Date(m.ts.toDate()).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'',
               avatar:m.avatar||'👤',
               name:m.name,
+              profileType:m.profileType||null,
               music:m.music||null,
               attachment:m.attachment||null,
               uid:m.uid,
@@ -286,6 +294,7 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment){
       uid:currentUser.uid,
       name:userProfile?.name||currentUser.displayName||'You',
       avatar:currentUser.photoURL||'',
+      profileType:(typeof ownProfileType==='function'?ownProfileType():(typeof getProfileType==='function'?getProfileType():'personal')),
       ts:firebase.firestore.FieldValue.serverTimestamp()
     };
     if(music && typeof music==='object' && music.title){

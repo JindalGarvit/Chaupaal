@@ -637,6 +637,9 @@
 
       const listEl = sheet.querySelector('[data-fp-list]');
       const profiles = await loadFriendProfilesForPicker();
+      if (typeof enrichUsersWithProfileType === 'function') {
+        await enrichUsersWithProfileType(profiles);
+      }
       if (!profiles.length) {
         listEl.innerHTML = `<div class="game-friend-empty">No friends yet. Add friends in Baithak, or enter a username.</div>
           <button type="button" class="game-result-btn game-result-btn--primary" data-fp-manual>Enter username</button>`;
@@ -656,7 +659,11 @@
       }
       listEl.innerHTML = profiles
         .map((p, i) => {
-          const name = safe(p.name || p.username || p.displayName || 'Friend');
+          const rawName = p.name || p.username || p.displayName || 'Friend';
+          const name =
+            typeof formatDisplayNameHtml === 'function'
+              ? formatDisplayNameHtml(rawName, p)
+              : safe(rawName);
           const meta = safe(p.username || p.meta || '');
           const avatar = safe(p.avatar || '👤');
           return `<button type="button" class="game-friend-row" data-fp-i="${i}">
@@ -674,6 +681,7 @@
             id: p.uid || p.id || 'friend_' + (p.username || p.name),
             uid: p.uid || p.id,
             avatar: p.avatar,
+            profileType: p.profileType || null,
           });
         });
       });
@@ -1143,6 +1151,13 @@
         name: (typeof userProfile !== 'undefined' && userProfile?.name?.split(' ')[0]) || 'You',
         rating: mine,
         you: true,
+        profileType:
+          typeof ownProfileType === 'function'
+            ? ownProfileType()
+            : typeof getProfileType === 'function'
+              ? getProfileType()
+              : userProfile?.profileType || 'personal',
+        uid: typeof currentUser !== 'undefined' ? currentUser?.uid : null,
       });
     } catch (e) {}
     // Friends — only if profile docs expose gameRatings (no new endpoints)
@@ -1157,11 +1172,20 @@
           } catch (e) {}
         }
         if (rating != null) {
-          rows.push({ name: (p.name || 'Friend').split(' ')[0], rating: Number(rating), you: false });
+          rows.push({
+            name: (p.name || 'Friend').split(' ')[0],
+            rating: Number(rating),
+            you: false,
+            profileType: p.profileType || null,
+            uid: p.uid || p.id || null,
+          });
         }
       }
     } catch (e) {}
     rows.sort((a, b) => b.rating - a.rating);
+    if (typeof enrichUsersWithProfileType === 'function') {
+      await enrichUsersWithProfileType(rows);
+    }
     return rows.slice(0, 8);
   }
 
@@ -1172,7 +1196,7 @@
       ${rows
         .map(
           (r, i) =>
-            `<div class="dangal-friends-row${r.you ? ' is-you' : ''}"><span class="dangal-friends-rank">${i + 1}</span><span class="dangal-friends-name">${safe(r.name)}</span><span class="dangal-friends-rating">${safe(r.rating)}</span></div>`
+            `<div class="dangal-friends-row${r.you ? ' is-you' : ''}"><span class="dangal-friends-rank">${i + 1}</span><span class="dangal-friends-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(r.name,r):safe(r.name)}</span><span class="dangal-friends-rating">${safe(r.rating)}</span></div>`
         )
         .join('')}
     </div>`;

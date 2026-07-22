@@ -15,8 +15,11 @@
 
   function isProfessionalType(typeOrUser) {
     if (typeOrUser && typeof typeOrUser === 'object') {
-      const t = typeOrUser.profileType || typeOrUser.profile?.profileType;
-      return String(t || '').toLowerCase() === 'professional';
+      const resolved =
+        typeof resolveProfileTypeForDisplay === 'function'
+          ? resolveProfileTypeForDisplay(typeOrUser)
+          : typeOrUser.profileType || typeOrUser.profile?.profileType;
+      return String(resolved || '').toLowerCase() === 'professional';
     }
     return String(typeOrUser || '').toLowerCase() === 'professional';
   }
