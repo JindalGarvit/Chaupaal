@@ -230,6 +230,31 @@
 .music-card--story .cp-media-times{color:rgba(255,255,255,.75);}
 .profile-voice-player{width:min(320px,90%);margin:12px auto;display:block;}
 
+/* Persistent mini-player (Phase 6) */
+.cp-mini-player{
+  position:absolute;left:8px;right:8px;bottom:calc(var(--tab-h,60px) + env(safe-area-inset-bottom,0px) + 8px);
+  z-index:40;display:flex;align-items:center;gap:10px;
+  padding:10px 12px;border-radius:16px;
+  background:rgba(27,31,59,.94);color:#fff;
+  box-shadow:0 10px 28px rgba(0,0,0,.28);
+  backdrop-filter:blur(10px);
+}
+.cp-mini-player.hidden{display:none!important;}
+.cp-mini-art{
+  width:44px;height:44px;border-radius:10px;border:none;background:rgba(255,255,255,.12);
+  color:#fff;font-size:18px;flex-shrink:0;
+}
+.cp-mini-meta{flex:1;min-width:0;}
+.cp-mini-title{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cp-mini-artist{font-size:11px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cp-mini-seek{width:100%;margin-top:4px;accent-color:var(--red,#E63946);height:22px;}
+.cp-mini-actions{display:flex;gap:4px;flex-shrink:0;}
+.cp-mini-actions button{
+  width:36px;height:36px;border:none;border-radius:10px;background:rgba(255,255,255,.1);
+  color:#fff;cursor:pointer;font-size:12px;
+}
+html.kb-open .cp-mini-player{bottom:12px;}
+
 /* ===== DANGAL RATINGS GRID ===== */
 .dangal-ratings-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px;}
 

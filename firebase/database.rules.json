@@ -10,6 +10,27 @@
           ".validate": "newData.hasChildren(['at']) || !newData.exists()"
         }
       }
+    },
+    "mehfil": {
+      "$chatId": {
+        ".read": "auth != null",
+        "participants": {
+          "$uid": {
+            ".write": "auth != null && auth.uid == $uid",
+            ".validate": "newData.hasChildren(['at']) || !newData.exists()"
+          }
+        },
+        "media": {
+          ".write": "auth != null",
+          ".validate": "newData.hasChildren(['by', 'at']) && newData.child('by').val() == auth.uid"
+        },
+        "reactions": {
+          ".write": "auth != null",
+          "$rid": {
+            ".validate": "newData.hasChildren(['emoji', 'by', 'at']) && newData.child('by').val() == auth.uid"
+          }
+        }
+      }
     }
   }
 }

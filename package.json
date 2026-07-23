@@ -9,6 +9,7 @@
   "dependencies": {
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.0",
+    "agora-access-token": "^2.0.4",
     "chess.js": "^1.4.0",
     "firebase-admin": "^13.4.0"
   }

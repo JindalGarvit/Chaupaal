@@ -1029,6 +1029,12 @@ body.theme-dawn,
   --line:#D0E2EA;
 }
 
+/* Phase 7 registry aliases */
+.theme-clearDay{ --cream:#F7F1E8; --white:#FFFcf7; --ink:#2B2730; --muted:#7A7480; --line:#E8DFD4; }
+.theme-overcast{ --cream:#E8EEF2; --white:#F5F7FA; --ink:#243040; --muted:#6B7785; --line:#D5DCE3; }
+.theme-rainy{ --cream:#D9E4EC; --white:#EEF3F7; --ink:#1E2A36; --muted:#5E6D7A; --line:#C5D0D9; }
+.theme-goldenHour{ --cream:#F5E0C8; --white:#FFF6EB; --ink:#3A2A1F; --muted:#8A6E55; --line:#E8D2B8; }
+
 /* ============================================================
    SCROLLBARS ? minimal
    ============================================================ */

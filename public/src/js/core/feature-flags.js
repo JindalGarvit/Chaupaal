@@ -82,6 +82,13 @@
       denyList: [],
       note: 'Master AI gate. Server also requires AI_FEATURES_ENABLED=true. Granular: CAT_LIVE_AI_PAUSED, CATEGORY_CRON_PAUSED.',
     },
+    mehfil: {
+      enabled: false,
+      percent: 0,
+      allowList: [],
+      denyList: [],
+      note: 'Mehfil A/V rooms. Requires AGORA_APP_ID + AGORA_APP_CERTIFICATE. Enable after keys are live.',
+    },
   };
 
   window.isFeatureEnabled = isFeatureEnabled;

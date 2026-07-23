@@ -108,6 +108,7 @@ function openChatScreen(chat){
         <div id="chatActivityStatus" style="font-size:11px;color:var(--muted);">${statusLine}</div>
       </div>
       <div class="chat-header-actions">
+        ${!isChaupaal?`<button class="chat-header-btn" id="chatMehfilBtn" title="Mehfil">🏠</button>`:''}
         ${!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatChallengeBtn" title="Create challenge">🎯</button>`:''}
         ${!isGroup&&!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatMuqabalaBtn" title="Muqabala">⚔️</button>`:''}
       </div>
@@ -391,6 +392,10 @@ function openChatScreen(chat){
     activeChatRecognition.start();
   });
 
+  document.getElementById('chatMehfilBtn')?.addEventListener('click', () => {
+    if (typeof openMehfil === 'function') openMehfil(chat);
+    else if (typeof showToast === 'function') showToast('Mehfil loading…');
+  });
   document.getElementById('chatChallengeBtn')?.addEventListener('click', () => openChallengeCreator(chat));
   if(!isGroup&&!isSelf) document.getElementById('chatMuqabalaBtn')?.addEventListener('click', () => {
     closeChatScreen({ updateHistory: true, animate: true });

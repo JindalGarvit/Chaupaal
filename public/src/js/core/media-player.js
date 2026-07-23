@@ -1,14 +1,16 @@
 /**
- * Shared in-app media player controls — seek, ±10s, elapsed/remaining, buffering.
- * Bind to any HTMLMediaElement (audio/video). Used by music cards, voice notes, story/duniya video.
- *
- * CONTRACT (see CONVENTIONS.md): play/pause/seek/volume must NEVER touch navigation history.
- * Only one app-wide audio preview at a time (music-card.js owns shared Audio); video nodes are local.
+ * Shared in-app media player — seek, ±10s, buffering, mini-player, simple queue.
+ * CONTRACT (CONVENTIONS.md): never touch navigation history.
+ * music-card.js owns the shared Audio element; this module owns chrome + queue UI.
  */
 (function () {
   'use strict';
 
   const boundCleanups = new WeakMap();
+  /** @type {{ title: string, artist?: string, previewUrl: string, thumb?: string }[]} */
+  let queue = [];
+  let queueIndex = -1;
+  let miniBound = false;
 
   function formatTime(sec) {
     if (!Number.isFinite(sec) || sec < 0) return '0:00';
@@ -18,7 +20,7 @@
   }
 
   function controlsHtml() {
-    return `<div class="cp-media-controls" data-cp-media-controls>
+    return `<div class="cp-media-controls" data-cp-media-controls data-nav-ignore="1">
       <button type="button" class="cp-media-skip" data-cp-skip="-10" aria-label="Back 10 seconds">−10</button>
       <div class="cp-media-times"><span data-cp-elapsed>0:00</span><span data-cp-remain>−0:00</span></div>
       <button type="button" class="cp-media-skip" data-cp-skip="10" aria-label="Forward 10 seconds">+10</button>
@@ -29,13 +31,135 @@
     </div>`;
   }
 
+  function ensureMiniPlayer() {
+    let bar = document.getElementById('cpMiniPlayer');
+    if (bar) return bar;
+    const device = document.querySelector('.device') || document.body;
+    bar = document.createElement('div');
+    bar.id = 'cpMiniPlayer';
+    bar.className = 'cp-mini-player hidden';
+    bar.dataset.navIgnore = '1';
+    bar.innerHTML = `
+      <button type="button" class="cp-mini-art" data-cp-mini-art aria-hidden="true">♪</button>
+      <div class="cp-mini-meta">
+        <div class="cp-mini-title" data-cp-mini-title>Now playing</div>
+        <div class="cp-mini-artist" data-cp-mini-artist></div>
+        <input type="range" class="cp-mini-seek" data-cp-mini-seek min="0" max="1000" value="0" step="1" aria-label="Seek">
+      </div>
+      <div class="cp-mini-actions">
+        <button type="button" data-cp-mini-prev aria-label="Previous">⏮</button>
+        <button type="button" data-cp-mini-play aria-label="Play">▶</button>
+        <button type="button" data-cp-mini-next aria-label="Next">⏭</button>
+        <button type="button" data-cp-mini-close aria-label="Close">✕</button>
+      </div>`;
+    device.appendChild(bar);
+    return bar;
+  }
+
+  function getSharedAudio() {
+    if (typeof MusicCard !== 'undefined' && MusicCard) {
+      // music-card keeps private sharedAudio — use document query or window hook
+    }
+    return window.__chaupaalSharedAudio || null;
+  }
+
+  function setSharedAudioRef(audio) {
+    window.__chaupaalSharedAudio = audio;
+  }
+
+  function syncMiniFromMedia(media) {
+    const bar = ensureMiniPlayer();
+    if (!media || media.paused || !media.src) {
+      // Keep visible if queue has items
+      if (!queue.length) bar.classList.add('hidden');
+      return;
+    }
+    bar.classList.remove('hidden');
+    const title = media.dataset.cpTitle || document.querySelector('.music-card.is-playing .music-card-title')?.textContent || 'Now playing';
+    const artist = media.dataset.cpArtist || document.querySelector('.music-card.is-playing .music-card-artist')?.textContent || '';
+    bar.querySelector('[data-cp-mini-title]').textContent = title;
+    bar.querySelector('[data-cp-mini-artist]').textContent = artist;
+    const playBtn = bar.querySelector('[data-cp-mini-play]');
+    if (playBtn) playBtn.textContent = media.paused ? '▶' : '⏸';
+    const seek = bar.querySelector('[data-cp-mini-seek]');
+    const d = media.duration;
+    if (seek && Number.isFinite(d) && d > 0) {
+      seek.value = String(Math.round(((media.currentTime || 0) / d) * 1000));
+    }
+  }
+
+  function bindMiniOnce(media) {
+    if (!media || miniBound) return;
+    miniBound = true;
+    setSharedAudioRef(media);
+    const bar = ensureMiniPlayer();
+    bar.querySelector('[data-cp-mini-play]')?.addEventListener('click', () => {
+      if (media.paused) media.play().catch(() => {});
+      else media.pause();
+    });
+    bar.querySelector('[data-cp-mini-close]')?.addEventListener('click', () => {
+      try {
+        media.pause();
+      } catch (e) {}
+      if (typeof pauseAllMusic === 'function') pauseAllMusic();
+      bar.classList.add('hidden');
+      queue = [];
+      queueIndex = -1;
+    });
+    bar.querySelector('[data-cp-mini-prev]')?.addEventListener('click', () => playQueueIndex(queueIndex - 1));
+    bar.querySelector('[data-cp-mini-next]')?.addEventListener('click', () => playQueueIndex(queueIndex + 1));
+    let seeking = false;
+    const seek = bar.querySelector('[data-cp-mini-seek]');
+    seek?.addEventListener('input', () => {
+      seeking = true;
+    });
+    seek?.addEventListener('change', () => {
+      seeking = false;
+      const d = media.duration;
+      if (!Number.isFinite(d) || d <= 0) return;
+      media.currentTime = (Number(seek.value) / 1000) * d;
+    });
+    media.addEventListener('timeupdate', () => {
+      if (!seeking) syncMiniFromMedia(media);
+    });
+    media.addEventListener('play', () => syncMiniFromMedia(media));
+    media.addEventListener('pause', () => syncMiniFromMedia(media));
+    media.addEventListener('ended', () => playQueueIndex(queueIndex + 1));
+  }
+
+  function playQueueIndex(i) {
+    if (!queue.length) return;
+    if (i < 0 || i >= queue.length) return;
+    queueIndex = i;
+    const item = queue[i];
+    if (typeof MusicCard !== 'undefined' && item) {
+      // Best-effort: set audio src via a synthetic card play path
+    }
+    const audio = getSharedAudio() || window.__chaupaalSharedAudio;
+    if (!audio || !item?.previewUrl) return;
+    audio.dataset.cpTitle = item.title || 'Track';
+    audio.dataset.cpArtist = item.artist || '';
+    audio.src = item.previewUrl;
+    audio.play().catch(() => {});
+    syncMiniFromMedia(audio);
+  }
+
   /**
-   * @param {HTMLMediaElement} media
-   * @param {Element} hostEl - container to append/find controls
-   * @param {{ insert?: 'append'|'prepend'|'replace' }} [opts]
+   * Enqueue tracks for mini-player next/prev (does not auto-start).
+   * @param {{ title: string, artist?: string, previewUrl: string }[]} tracks
+   * @param {{ startIndex?: number, play?: boolean }} [opts]
    */
+  function setMediaQueue(tracks, opts = {}) {
+    queue = Array.isArray(tracks) ? tracks.filter((t) => t && t.previewUrl) : [];
+    queueIndex = typeof opts.startIndex === 'number' ? opts.startIndex : 0;
+    if (opts.play && queue[queueIndex]) playQueueIndex(queueIndex);
+  }
+
   function bindMediaControls(media, hostEl, opts = {}) {
     if (!media || !hostEl) return () => {};
+    setSharedAudioRef(media);
+    bindMiniOnce(media);
+
     let box = hostEl.querySelector('[data-cp-media-controls]');
     if (!box) {
       const wrap = document.createElement('div');
@@ -61,6 +185,7 @@
       if (seek && Number.isFinite(d) && d > 0 && !seeking) {
         seek.value = String(Math.round((t / d) * 1000));
       }
+      syncMiniFromMedia(media);
     };
 
     const setBuffering = (on) => {
@@ -90,7 +215,10 @@
     };
 
     const onWaiting = () => setBuffering(true);
-    const onPlaying = () => setBuffering(false);
+    const onPlaying = () => {
+      setBuffering(false);
+      syncMiniFromMedia(media);
+    };
     const onCanPlay = () => setBuffering(false);
     const onSeeking = () => setBuffering(true);
     const onSeeked = () => setBuffering(false);
@@ -128,7 +256,6 @@
     return cleanup;
   }
 
-  /** Enhance existing <video>/<audio> nodes under root (skip if already bound). */
   function enhanceMediaIn(root) {
     if (!root) return;
     root.querySelectorAll('video, audio').forEach((media) => {
@@ -138,13 +265,29 @@
         media.closest('.music-card, .story-media, .lehar-item, .duniya-post-media, .ppm-cell, .profile-media-cell') ||
         media.parentElement;
       if (!host) return;
-      // Avoid doubling native controls UI clutter — keep native play if present, add seek row
       bindMediaControls(media, host);
     });
   }
+
+  // Expose shared audio from music-card when it creates one
+  const origDesc = Object.getOwnPropertyDescriptor(window, '__chaupaalSharedAudio');
+  document.addEventListener(
+    'play',
+    (e) => {
+      const t = e.target;
+      if (t && (t.tagName === 'AUDIO' || t.tagName === 'VIDEO')) {
+        setSharedAudioRef(t);
+        bindMiniOnce(t);
+        syncMiniFromMedia(t);
+      }
+    },
+    true
+  );
 
   window.formatMediaTime = formatTime;
   window.mediaControlsHtml = controlsHtml;
   window.bindMediaControls = bindMediaControls;
   window.enhanceMediaIn = enhanceMediaIn;
+  window.setMediaQueue = setMediaQueue;
+  window.syncMiniPlayer = syncMiniFromMedia;
 })();

@@ -20,6 +20,7 @@
     if (!sharedAudio) {
       sharedAudio = new Audio();
       sharedAudio.preload = 'none';
+      window.__chaupaalSharedAudio = sharedAudio;
       sharedAudio.addEventListener('ended', () => syncActiveCard(false));
       sharedAudio.addEventListener('timeupdate', () => {
         if (!activeCardEl) return;
@@ -28,11 +29,20 @@
           const pct = Math.min(100, (sharedAudio.currentTime / sharedAudio.duration) * 100);
           bar.style.width = pct + '%';
         }
+        if (typeof syncMiniPlayer === 'function') syncMiniPlayer(sharedAudio);
       });
       sharedAudio.addEventListener('error', () => {
         if (activeCardEl) handlePreviewError(activeCardEl);
       });
+      sharedAudio.addEventListener('play', () => {
+        if (activeCardEl) {
+          sharedAudio.dataset.cpTitle = activeCardEl.dataset.musicTitle || '';
+          sharedAudio.dataset.cpArtist = activeCardEl.dataset.musicArtist || '';
+        }
+        if (typeof syncMiniPlayer === 'function') syncMiniPlayer(sharedAudio);
+      });
     }
+    window.__chaupaalSharedAudio = sharedAudio;
     return sharedAudio;
   }
 

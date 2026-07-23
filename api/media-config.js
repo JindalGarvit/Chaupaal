@@ -176,8 +176,27 @@ async function handlePost(req, res) {
     }
   }
 
+  if (action === 'agora_token') {
+    const { mintAgoraToken } = require('../server-lib/agora-token');
+    const result = mintAgoraToken({
+      channel: body.channel,
+      uid: body.uid || user.uid,
+    });
+    if (result.error === 'channel_required') {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'channel required');
+    }
+    return sendSuccess(res, result);
+  }
+
   return sendError(res, 400, 'VALIDATION_ERROR', 'Unknown media action', {
-    allowed: ['music_search', 'music_resolve', 'geocode_search', 'live_location_stop', 'check_url'],
+    allowed: [
+      'music_search',
+      'music_resolve',
+      'geocode_search',
+      'live_location_stop',
+      'check_url',
+      'agora_token',
+    ],
   });
 }
 
