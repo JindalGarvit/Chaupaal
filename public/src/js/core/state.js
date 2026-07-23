@@ -101,6 +101,11 @@ document.getElementById('settingsBtn').addEventListener('click',()=>{
         db.collection('users').doc(currentUser.uid).get().then(snap=>{
           if(snap.exists && snap.data()?.companionOptOut===true) el.checked=false;
           else if(snap.exists && snap.data()?.companionOptOut===false) el.checked=true;
+          const appear=document.getElementById('toggleAkhbaarAppearInFriends');
+          if(appear){
+            if(snap.exists && snap.data()?.akhbaarAppearInFriendsPrompts===false) appear.checked=false;
+            else appear.checked=true;
+          }
         }).catch(()=>{});
       }
     }
@@ -131,6 +136,13 @@ document.getElementById('saveSettings').addEventListener('click',()=>{
     localStorage.setItem('chaupaal_companion_opt_out', companionOn?'0':'1');
     if(db&&currentUser){
       db.collection('users').doc(currentUser.uid).set({ companionOptOut: !companionOn }, { merge:true }).catch(()=>{});
+    }
+  }catch(e){}
+  // Appear in friends' personalized Akhbaar prompts (default on)
+  try{
+    const appearOn=!!document.getElementById('toggleAkhbaarAppearInFriends')?.checked;
+    if(db&&currentUser){
+      db.collection('users').doc(currentUser.uid).set({ akhbaarAppearInFriendsPrompts: appearOn }, { merge:true }).catch(()=>{});
     }
   }catch(e){}
   document.getElementById('settingsModal').classList.add('hidden');

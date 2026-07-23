@@ -598,6 +598,10 @@
         <div><div class="toggle-label">Proactive companion notes</div><div class="toggle-desc">Festival wishes, optional check-ins, and feedback asks from Chaupaal (app feature). Journal Goodnight is separate.</div></div>
         <label class="switch"><input type="checkbox" id="toggleCompanionOutreach" checked><span class="slider"></span></label>
       </div>
+      <div class="toggle-row">
+        <div><div class="toggle-label">Appear in friends’ Akhbaar prompts</div><div class="toggle-desc">Allow birthday / update / shared-interest prompts about you to show to Close Friends. Uses only what you put on your profile.</div></div>
+        <label class="switch"><input type="checkbox" id="toggleAkhbaarAppearInFriends" checked><span class="slider"></span></label>
+      </div>
       <div class="settings-section">Archive</div>
       <button type="button" class="btn btn--primary btn--block modal-btn" id="settingsArchiveBtn" style="width:100%;margin-bottom:12px;">🗄️ Open Archive</button>
       <div class="settings-section">Account type</div>
@@ -701,7 +705,7 @@
   <script src="/src/js/core/runtime-guard.js?v=1"></script>
   <script src="/src/js/data/samples.js?v=1"></script>
   <script src="/src/js/data/akhbaar-bank.js?v=1"></script>
-  <script src="/src/js/core/state.js?v=3"></script>
+  <script src="/src/js/core/state.js?v=4"></script>
   <script src="/src/js/core/ui-states.js?v=1"></script>
   <script src="/src/js/core/firestore-page.js?v=1"></script>
   <script src="/src/js/core/drafts.js?v=1"></script>
@@ -718,7 +722,7 @@
   <script src="/src/js/core/icebreakers.js?v=1"></script>
   <script src="/src/js/core/profile-prompts.js?v=1"></script>
   <script src="/src/js/core/chaupaal-activity.js?v=15"></script>
-  <script src="/src/js/core/chaupaal-events.js?v=17"></script>
+  <script src="/src/js/core/chaupaal-events.js?v=18"></script>
   <script src="/src/js/core/chaupaal-founder.js?v=15"></script>
   <script src="/src/js/core/profile-type.js?v=2"></script>
   <script src="/src/js/core/profile-type-enrich.js?v=1"></script>
@@ -755,7 +759,7 @@
   <script src="/src/js/features/self-chat.js?v=1"></script>
   <script src="/src/js/features/chaupaal-chat.js?v=17"></script>
   <script src="/src/js/features/chat-rating.js?v=1"></script>
-  <script src="/src/js/features/baithak-chat.js?v=35"></script>
+  <script src="/src/js/features/baithak-chat.js?v=36"></script>
   <script src="/src/js/features/music-card.js?v=4"></script>
   <script src="/src/js/features/group-info.js?v=5"></script>
   <script src="/src/js/core/stories.js?v=27"></script>
@@ -763,11 +767,11 @@
   <script src="/src/js/core/journal-anim.js?v=2"></script>
   <script src="/src/js/features/baithak.js?v=7"></script>
   <script src="/src/js/features/profile-preview.js?v=2"></script>
-  <script src="/src/js/features/profile.js?v=24"></script>
+  <script src="/src/js/features/profile.js?v=25"></script>
   <script src="/src/js/core/i18n.js?v=1"></script>
   <script src="/src/js/features/categories.js?v=28"></script>
   <script src="/src/js/features/peepal.js?v=1"></script>
-  <script src="/src/js/features/onboarding.js?v=29"></script>
+  <script src="/src/js/features/onboarding.js?v=30"></script>
   <script src="/src/js/core/service-worker.js?v=3"></script>
   <script src="/src/js/features/streak.js?v=22"></script>
   <script src="/src/js/features/wraps.js?v=1"></script>

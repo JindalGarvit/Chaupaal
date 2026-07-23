@@ -112,6 +112,8 @@ function renderProfileModal(){
       ${profileField('Nationality','nationality','text','Your nationality')}
       ${profileField('Languages spoken','languages','chips','Add languages',['Hindi','English','Tamil','Telugu','Marathi','Bengali','Gujarati','Kannada','Malayalam','Punjabi','Urdu','Odia','Assamese','Konkani'])}
       ${profileField('Things that excite me','interests','chips','Add interests',['Travel','Food','Startups','Films','Music','Fitness','Books','Politics','Tech','Fashion','Art','Animals','Nature','Spirituality','Comedy','Sports','Gaming','Photography','Cooking','Volunteer work'])}
+      ${profileField('Interests in your words','interestsFreeText','textarea','Free-text interests — whatever you care about, in your own words')}
+      <div class="dp-ask-chaupaal" data-for="interestsFreeText" style="margin:-6px 0 14px;"></div>
       ${typeof renderProfilePromptsBlock==='function'?renderProfilePromptsBlock():''}
       ${typeof renderProfileIcebreakerBlock==='function'?renderProfileIcebreakerBlock():''}
       ${profileField('Height','height','select','',['','Under 5ft','5ft','5ft 1in','5ft 2in','5ft 3in','5ft 4in','5ft 5in','5ft 6in','5ft 7in','5ft 8in','5ft 9in','5ft 10in','5ft 11in','6ft','6ft 1in','6ft 2in','6ft+'])}
@@ -120,6 +122,7 @@ function renderProfileModal(){
     `,
     Career:()=>`
       ${profileField('Occupation / Job title','occupation','text','What do you do?')}
+      <div class="dp-ask-chaupaal" data-for="occupation" style="margin:-6px 0 14px;"></div>
       ${profileField('Company / Organisation','company','text','Where do you work?')}
       ${profileField('Industry','industry','select','',['','Technology','Finance & Banking','Healthcare','Education','Media & Entertainment','Government','Legal','Real Estate','Retail','Manufacturing','Agriculture','Hospitality','Consulting','NGO / Non-profit','Student','Freelancer','Entrepreneur','Other'])}
       ${profileField('Work mode','workMode','select','',['','In-office','Remote','Hybrid','Freelance','Between jobs'])}
@@ -142,6 +145,8 @@ function renderProfileModal(){
       ${profileField('Political views','politics','select','',['','Progressive','Liberal','Centrist','Conservative','Libertarian','Apolitical','Prefer not to say'])}
       ${profileField('Spirituality','spirituality','select','',['','Deeply religious','Religious','Somewhat spiritual','Agnostic','Atheist','Exploring'])}
       ${profileField('Hobbies','hobbies','chips','Add hobbies',['Reading','Writing','Photography','Cooking','Gaming','Gardening','DIY/Crafts','Collecting','Podcasting','Blogging','Volunteering','Meditation','Yoga','Hiking','Cycling','Swimming','Dancing','Painting','Singing','Playing music'])}
+      ${profileField('Hobbies in your words','hobbiesFreeText','textarea','Free-text hobbies — simple sentences are fine')}
+      <div class="dp-ask-chaupaal" data-for="hobbiesFreeText" style="margin:-6px 0 14px;"></div>
       ${profileField('Sports','sports','chips','Add sports',['Cricket','Football','Badminton','Tennis','Chess','Table Tennis','Basketball','Volleyball','Athletics','Swimming','Cycling','Golf','Boxing','Wrestling','Kabaddi','Kho Kho'])}
       ${profileField('Music taste','music','chips','Add genres',['Bollywood','Punjabi','Classical','Jazz','Rock','Pop','Hip-hop','Electronic','Folk','Indie','R&B','Metal'])}
       ${profileField('Movies / Shows','movies','chips','Add genres',['Bollywood','Hollywood','South Indian','Thriller','Comedy','Drama','Sci-fi','Horror','Documentary','Animation','Romance','Action'])}
@@ -224,10 +229,63 @@ function renderProfileModal(){
     return`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);"><span style="font-size:14px;">${label}</span><label class="switch"><input type="checkbox" class="dp-toggle" data-key="${key}" ${dp[key]?'checked':''}><span class="slider"></span></label></div>`;
   }
 
+  async function askChaupaalForField(fieldKey, hostEl){
+    if(typeof isAiFeaturesEnabledSync==='function' && !isAiFeaturesEnabledSync()){
+      if(typeof showToast==='function') showToast('Ask Chaupaal is paused right now');
+      return;
+    }
+    if(typeof callAI!=='function'){
+      if(typeof showToast==='function') showToast('Ask Chaupaal unavailable');
+      return;
+    }
+    const btn=hostEl?.querySelector('button');
+    if(btn){ btn.disabled=true; btn.textContent='Thinking…'; }
+    try{
+      const mine={
+        interests: dp.interests, hobbies: dp.hobbies,
+        interestsFreeText: dp.interestsFreeText, hobbiesFreeText: dp.hobbiesFreeText,
+        occupation: dp.occupation, bio: dp.bio, lookingFor: dp.lookingFor, currentCity: dp.currentCity,
+      };
+      const result=await callAI({
+        feature:'profile_icebreakers',
+        tier:'fast',
+        max_tokens:220,
+        system:'You help fill Chaupaal profile fields. Return JSON {"suggestions":["...","...","..."]} — short conversation-starter style phrases the user can paste. Use only provided profile facts.',
+        messages:[{role:'user',content:JSON.stringify({field:fieldKey,profile:mine})}],
+      });
+      const raw=String(result?.text||result||'');
+      const start=raw.indexOf('{'); const end=raw.lastIndexOf('}');
+      let suggestions=[];
+      if(start>=0){
+        try{ suggestions=JSON.parse(raw.slice(start,end+1)).suggestions||[]; }catch(e){}
+      }
+      if(!suggestions.length){
+        if(typeof showToast==='function') showToast('No suggestions — try again later');
+        return;
+      }
+      const pick=suggestions[0];
+      const field=document.querySelector(`#profileSectionContent .dp-field[data-key="${fieldKey}"]`);
+      if(field){
+        field.value=(field.value?field.value.trim()+' ':'')+pick;
+        saveProfileField(fieldKey, field.value);
+      }
+      if(typeof showToast==='function') showToast('Suggestion added — edit freely');
+    }catch(e){
+      if(typeof showToast==='function') showToast('Ask Chaupaal failed');
+    }finally{
+      if(btn){ btn.disabled=false; btn.textContent='✨ Take help from Chaupaal'; }
+    }
+  }
+
   function renderSection(sec){
     const content=document.getElementById('profileSectionContent');
     if(content) content.innerHTML=`<div style="padding:0;">${(SECTIONS[sec]||SECTIONS.Personal)()}</div>`;
     const OTHER='__dp_other__';
+    content.querySelectorAll('.dp-ask-chaupaal').forEach(host=>{
+      const key=host.dataset.for;
+      host.innerHTML=`<button type="button" class="ai-kb-trigger" style="margin:0;font-size:12px;">✨ Take help from Chaupaal</button>`;
+      host.querySelector('button')?.addEventListener('click',()=>askChaupaalForField(key, host));
+    });
     // Wire events — selects with "Other" handled separately so we never persist the sentinel
     content.querySelectorAll('.dp-field').forEach(f=>{
       if(f.dataset.hasOther) return;

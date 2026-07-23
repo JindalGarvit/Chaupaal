@@ -89,10 +89,12 @@ async function userAllowsCompanion(db, uid) {
 
 function birthdayMatch(profile, tz) {
   const b =
+    profile?.dateOfBirth ||
     profile?.birthday ||
     profile?.profile?.birthday ||
     profile?.dob ||
     profile?.profile?.dob ||
+    profile?.profile?.dateOfBirth ||
     null;
   if (!b) return false;
   // Only if user explicitly shared — expect YYYY-MM-DD or MM-DD

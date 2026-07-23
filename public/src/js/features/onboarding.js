@@ -645,7 +645,7 @@ function wireAiKbToInput(inputEl,contextLabel){
   if(!inputEl)return;
   const trigger=document.createElement('button');
   trigger.className='ai-kb-trigger';trigger.style.cssText='margin-bottom:6px;display:inline-flex;';
-  trigger.innerHTML='✨ Ask AI';
+  trigger.innerHTML='✨ Ask Chaupaal';
   trigger.addEventListener('click',()=>openAiKeyboard(inputEl,contextLabel));
   inputEl.parentElement?.insertBefore(trigger,inputEl);
 }

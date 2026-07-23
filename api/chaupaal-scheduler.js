@@ -320,6 +320,7 @@ module.exports = async function handler(req, res) {
       journal: 0,
       recommendation: 0,
       companion: 0,
+      akhbaarPersonal: 0,
       skipped: 0,
       users: snap.size,
     };
@@ -350,6 +351,16 @@ module.exports = async function handler(req, res) {
         if (c.sent) results.companion++;
       } catch (e) {
         console.warn('[scheduler] companion', uid, e?.message || e);
+      }
+
+      // Akhbaar personalization (friend prompts, weather, digest) — AI gated
+      fresh = (await stateRef.get()).data() || fresh;
+      try {
+        const { processAkhbaarPersonalization } = require('../server-lib/akhbaar-personalize');
+        const a = await processAkhbaarPersonalization(db, uid, fresh, stateRef);
+        if (a.sent) results.akhbaarPersonal = (results.akhbaarPersonal || 0) + 1;
+      } catch (e) {
+        console.warn('[scheduler] akhbaar personalize', uid, e?.message || e);
       }
     }
 

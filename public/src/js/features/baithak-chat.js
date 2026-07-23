@@ -426,7 +426,7 @@ function updateAiSuggestions(text,targetInput){
   const bar=document.getElementById('aiSuggestionBar');
   if(!bar)return;
   const inp=targetInput||document.getElementById('chatMsgInput');
-  const aiChip=`<button class="ai-kb-trigger" onclick="openAiKeyboard(document.getElementById('chatMsgInput'))">✨ Ask AI</button>`;
+  const aiChip=`<button class="ai-kb-trigger" onclick="openAiKeyboard(document.getElementById('chatMsgInput'))">✨ Ask Chaupaal</button>`;
   if(!text.trim()){
     bar.innerHTML=aiChip+QUICK_PHRASES.slice(0,4).map(p=>`<button class="ai-suggestion-chip" data-val="${p}">${p}</button>`).join('');
     bar.classList.remove('hidden');wireSuggestionChips(bar);return;

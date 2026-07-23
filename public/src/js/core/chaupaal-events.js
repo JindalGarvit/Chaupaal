@@ -227,6 +227,37 @@
       } else if (p.action === 'companion_feedback' || ev.type === 'companion_feedback') {
         if (typeof openCompanionFeedbackSheet === 'function') openCompanionFeedbackSheet(ev);
         else if (typeof showToast === 'function') showToast('Thanks — share feedback anytime in Chaupaal chat');
+      } else if (p.action === 'wish_friend' || p.action === 'open_friend_dm') {
+        const friendUid = p.friendUid;
+        const prefill = p.prefill || (p.action === 'wish_friend' ? `Happy birthday, ${p.friendName || 'friend'}! 🎂` : '');
+        try {
+          document.querySelector('.tab-btn[data-tab="baithak"]')?.click();
+          if (friendUid && typeof openChatById === 'function') {
+            // Prefer direct chat id patterns; deeplink helper may resolve uid chats
+            await openChatById(friendUid);
+          } else if (friendUid && typeof startOrOpenDm === 'function') {
+            await startOrOpenDm(friendUid, { prefill });
+          } else if (friendUid && typeof openProfilePreview === 'function') {
+            openProfilePreview(friendUid);
+          }
+          if (prefill && typeof document !== 'undefined') {
+            setTimeout(() => {
+              const input = document.getElementById('chatMsgInput');
+              if (input && !input.value) {
+                input.value = prefill;
+                input.focus();
+              }
+            }, 400);
+          }
+        } catch (e) {
+          if (typeof showToast === 'function') showToast('Open Baithak to message them');
+        }
+      } else if (p.action === 'open_akhbaar') {
+        document.querySelector('.tab-btn[data-tab="akhbaar"]')?.click();
+      } else if (p.action === 'open_duniya') {
+        document.querySelector('.tab-btn[data-tab="duniya"]')?.click();
+      } else if (p.action === 'open_baithak') {
+        document.querySelector('.tab-btn[data-tab="baithak"]')?.click();
       } else if (typeof showToast === 'function') {
         showToast('Noted — enjoy exploring');
       }
