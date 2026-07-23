@@ -187,9 +187,50 @@ async function maybeWriteDailyFeedbackSummary(db) {
   const today = new Date().toISOString().slice(0, 10);
   const sumRef = db.collection('chaupaalFeedbackSummaries').doc(today);
   const existing = await sumRef.get();
-  if (existing.exists) return { skipped: 'summary_exists' };
 
   const since = new Date(Date.now() - 26 * 60 * 60 * 1000);
+  let errSnap = { docs: [], size: 0 };
+  try {
+    errSnap = await db
+      .collection('clientErrorReports')
+      .where('createdAt', '>=', since)
+      .limit(200)
+      .get();
+  } catch (e) {
+    console.warn('[scheduler] clientErrorReports query', e?.message || e);
+  }
+  const byFeature = {};
+  const bySurface = {};
+  const errorSamples = [];
+  errSnap.docs.forEach((d) => {
+    const data = d.data() || {};
+    const feature = String(data.feature || 'unknown').slice(0, 80);
+    const surface = String(data.surface || 'unknown').slice(0, 40);
+    byFeature[feature] = (byFeature[feature] || 0) + 1;
+    bySurface[surface] = (bySurface[surface] || 0) + 1;
+    if (errorSamples.length < 12) {
+      errorSamples.push({
+        feature,
+        surface,
+        message: String(data.message || '').slice(0, 200),
+        uid: data.uid || null,
+      });
+    }
+  });
+  const clientErrors = {
+    count: errSnap.size,
+    byFeature,
+    bySurface,
+    samples: errorSamples,
+    updatedAt: new Date(),
+  };
+
+  // Always refresh clientErrors (even if feedback summary already exists)
+  if (existing.exists) {
+    await sumRef.set({ clientErrors }, { merge: true });
+    return { updated_errors: today, errorCount: errSnap.size };
+  }
+
   const snap = await db
     .collection('chaupaalFeedback')
     .where('timestamp', '>=', since)
@@ -211,17 +252,21 @@ async function maybeWriteDailyFeedbackSummary(db) {
   });
 
   let narrative = `${snap.size} feedback items in the last day.`;
-  if (isAiFeaturesEnabled() && snap.size) {
+  if (errSnap.size) {
+    narrative += ` ${errSnap.size} client errors reported.`;
+  }
+  if (isAiFeaturesEnabled() && (snap.size || errSnap.size)) {
     try {
       const result = await callAI({
         tier: 'fast',
         feature: 'chaupaal_feedback_summary',
-        max_tokens: 300,
-        system: 'Summarize product feedback for an internal admin. 3–5 bullets. Neutral tone. JSON: {"summary":"..."}',
+        max_tokens: 360,
+        system:
+          'Summarize product feedback AND client runtime errors for an internal admin. 3–6 bullets. Neutral tone. JSON: {"summary":"..."}',
         messages: [
           {
             role: 'user',
-            content: JSON.stringify({ tags, samples }),
+            content: JSON.stringify({ tags, samples, clientErrors }),
           },
         ],
       });
@@ -242,10 +287,11 @@ async function maybeWriteDailyFeedbackSummary(db) {
     count: snap.size,
     tags,
     samples,
+    clientErrors,
     summary: narrative,
     createdAt: new Date(),
   });
-  return { wrote: today, count: snap.size };
+  return { wrote: today, count: snap.size, errorCount: errSnap.size };
 }
 
 module.exports = async function handler(req, res) {

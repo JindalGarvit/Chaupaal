@@ -107,6 +107,8 @@ async function callMusicProvider(opts = {}) {
   let results = [];
   let fallbackUsed = false;
 
+  const itunesPromise = searchItunes(query, limit);
+
   try {
     const provider = getProvider();
     providerId = provider.id;
@@ -121,12 +123,48 @@ async function callMusicProvider(opts = {}) {
     results = [];
   }
 
-  if (!results.length) {
-    const itunes = await searchItunes(query, limit);
-    if (itunes.length) {
+  const itunes = await itunesPromise;
+
+  // Browser-friendly previews: prefer iTunes previewUrl (CORS / mobile playable).
+  // Keep JioSaavn metadata when present; swap preview to iTunes when titles match.
+  if (itunes.length) {
+    const norm = (s) =>
+      String(s || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\u0900-\u097f]+/g, ' ')
+        .trim();
+    if (!results.length) {
       results = itunes;
       fallbackUsed = true;
       providerId = 'itunes';
+    } else {
+      let swapped = 0;
+      results = results.map((track) => {
+        if (!track) return track;
+        const tTitle = norm(track.title);
+        const tArtist = norm(track.artist);
+        const match =
+          itunes.find(
+            (it) =>
+              it.previewUrl &&
+              tTitle &&
+              norm(it.title).includes(tTitle.slice(0, 18)) &&
+              (!tArtist || norm(it.artist).includes(tArtist.slice(0, 12)) || tArtist.includes(norm(it.artist).slice(0, 12)))
+          ) ||
+          itunes.find((it) => it.previewUrl && tTitle && norm(it.title).includes(tTitle.slice(0, 12))) ||
+          null;
+        if (match?.previewUrl) {
+          swapped++;
+          return {
+            ...track,
+            previewUrl: match.previewUrl,
+            source: 'itunes',
+            thumbnail: track.thumbnail || match.thumbnail || '',
+          };
+        }
+        return track;
+      });
+      if (swapped) fallbackUsed = true;
     }
   }
 

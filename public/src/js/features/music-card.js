@@ -154,35 +154,75 @@
     }
   }
 
-  async function handlePreviewError(card) {
-    const resolved = await resolvePreview(card);
-    if (resolved?.previewUrl) {
-      card.dataset.musicPreview = resolved.previewUrl;
-      card.dataset.musicSource = resolved.source || 'itunes';
-      card.classList.remove('music-card--static');
-      const unavail = card.querySelector('.music-card-unavailable');
-      if (unavail) {
-        unavail.outerHTML = `<button type="button" class="music-card-play" data-music-play aria-label="Play song">${playIcon()}</button>
-          <div class="music-card-progress-track" aria-hidden="true"><div class="music-card-progress-bar" data-music-progress></div></div>`;
-        bindCard(card);
-      }
-      return playCard(card);
+  function markPreviewReady(card, resolved) {
+    if (!resolved?.previewUrl || !card) return;
+    card.dataset.musicPreview = resolved.previewUrl;
+    card.dataset.musicSource = resolved.source || 'itunes';
+    card.classList.remove('music-card--static');
+    const unavail = card.querySelector('.music-card-unavailable');
+    if (unavail) {
+      unavail.outerHTML = `<button type="button" class="music-card-play" data-music-play aria-label="Play song">${playIcon()}</button>
+        <div class="music-card-progress-track" aria-hidden="true"><div class="music-card-progress-bar" data-music-progress></div></div>
+        <div data-music-extra-controls></div>`;
+      card.dataset.musicBound = '0';
+      bindCard(card);
     }
-    // Static fallback — no play, no link-out
+  }
+
+  function markPreviewUnavailable(card) {
     pauseAllMusic();
     card.classList.add('music-card--static');
     card.dataset.musicPreview = '';
     card.dataset.musicSource = 'none';
     const play = card.querySelector('[data-music-play]');
     const track = card.querySelector('.music-card-progress-track');
-    if (play) play.replaceWith(Object.assign(document.createElement('span'), { className: 'music-card-unavailable', textContent: 'Preview not available' }));
+    const extra = card.querySelector('[data-music-extra-controls]');
+    if (play) {
+      play.replaceWith(
+        Object.assign(document.createElement('span'), {
+          className: 'music-card-unavailable',
+          textContent: 'Preview not available',
+        })
+      );
+    }
     track?.remove();
+    extra?.remove();
+  }
+
+  /**
+   * After async resolve, auto-play() usually fails on mobile (gesture lost).
+   * Swap to a playable URL and ask for a fresh tap instead of auto-playing.
+   */
+  async function handlePreviewError(card, opts) {
+    const fromUserGesture = !!opts?.fromUserGesture;
+    const resolved = await resolvePreview(card);
+    if (resolved?.previewUrl) {
+      markPreviewReady(card, resolved);
+      if (fromUserGesture) {
+        // Still inside the original click stack only if resolve was sync — usually not.
+        // Prefer a second tap on iOS/Android rather than a NotAllowedError loop.
+        if (typeof showToast === 'function') showToast('Tap play to listen');
+        syncActiveCard(false);
+        return;
+      }
+      if (typeof showToast === 'function') showToast('Tap play to listen');
+      syncActiveCard(false);
+      return;
+    }
+    markPreviewUnavailable(card);
+    if (typeof reportClientError === 'function') {
+      reportClientError({
+        feature: 'music_preview',
+        message: 'Preview resolve failed',
+      });
+    }
   }
 
   async function playCard(card) {
     const url = card.dataset.musicPreview || '';
+    // Never await network resolve before audio.play() — that drops the mobile user-gesture.
     if (!url) {
-      await handlePreviewError(card);
+      await handlePreviewError(card, { fromUserGesture: true });
       return;
     }
     const audio = getSharedAudio();
@@ -205,7 +245,14 @@
       await audio.play();
       syncActiveCard(true);
     } catch (e) {
-      await handlePreviewError(card);
+      const name = e?.name || '';
+      if (name === 'NotAllowedError') {
+        syncActiveCard(false);
+        if (typeof showToast === 'function') showToast('Tap play again to start the song');
+        return;
+      }
+      // Media/network error — resolve alternate preview; do NOT auto-play after await
+      await handlePreviewError(card, { fromUserGesture: false });
     }
   }
 
@@ -256,6 +303,11 @@
   function openSongPicker({ onSelect, title } = {}) {
     const existing = document.querySelector('.music-picker-sheet');
     existing?.remove();
+    document.querySelector('.music-picker-scrim')?.remove();
+
+    const scrim = document.createElement('div');
+    scrim.className = 'music-picker-scrim';
+    scrim.dataset.navIgnore = '1';
 
     const sheet = document.createElement('div');
     sheet.className = 'music-picker-sheet';
@@ -278,8 +330,12 @@
 
     const device = document.querySelector('.device');
     if (!device) return;
+    device.appendChild(scrim);
     device.appendChild(sheet);
-    requestAnimationFrame(() => sheet.classList.add('is-open'));
+    requestAnimationFrame(() => {
+      scrim.classList.add('is-open');
+      sheet.classList.add('is-open');
+    });
 
     const input = sheet.querySelector('.music-picker-input');
     const resultsEl = sheet.querySelector('[data-music-picker-results]');
@@ -291,17 +347,59 @@
       if (closed) return;
       closed = true;
       clearTimeout(debounceTimer);
+      try {
+        input?.blur();
+      } catch (e) {}
+      if (typeof clearKeyboardInset === 'function') clearKeyboardInset();
+      else {
+        document.documentElement.classList.remove('kb-open');
+        document.documentElement.style.setProperty('--kb-inset', '0px');
+      }
+      if (typeof clearShellGlitches === 'function') clearShellGlitches('music-picker-close');
       if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
       sheet.classList.remove('is-open');
-      setTimeout(() => sheet.remove(), 220);
+      scrim.classList.remove('is-open');
+      sheet.dataset.guardStale = '1';
+      setTimeout(() => {
+        try {
+          sheet.remove();
+        } catch (e) {}
+        try {
+          scrim.remove();
+        } catch (e) {}
+        if (typeof clearKeyboardInset === 'function') clearKeyboardInset();
+      }, 220);
     };
     if (typeof pushNavLayer === 'function') {
       pushNavLayer(sheet, () => close());
     }
 
     sheet.querySelector('[data-music-picker-close]')?.addEventListener('click', close);
+    scrim.addEventListener('click', close);
     if (typeof enableSwipeDismiss === 'function') {
       enableSwipeDismiss(sheet, close);
+    }
+
+    async function preferPlayablePreview(music) {
+      if (!music) return music;
+      if (music.source === 'itunes' && music.previewUrl) return music;
+      if (!music.title || typeof apiFetch !== 'function') return music;
+      try {
+        const envelope = await apiFetch('/api/media-config', {
+          method: 'POST',
+          needAuth: true,
+          body: { action: 'music_resolve', title: music.title, artist: music.artist || '' },
+        });
+        if (envelope?.ok && envelope.data?.previewUrl) {
+          return {
+            ...music,
+            previewUrl: envelope.data.previewUrl,
+            source: envelope.data.source || 'itunes',
+            thumbnail: music.thumbnail || envelope.data.song?.thumbnail || '',
+          };
+        }
+      } catch (e) {}
+      return music;
     }
 
     const renderResults = (list, emptyMsg) => {
@@ -324,10 +422,10 @@
         })
         .join('');
       resultsEl.querySelectorAll('[data-i]').forEach((btn) => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', async () => {
           const song = list[Number(btn.dataset.i)];
           if (!song) return;
-          const music = normalizeMusic(song) || {
+          let music = normalizeMusic(song) || {
             title: song.title,
             artist: song.artist || 'Unknown artist',
             thumbnail: song.thumbnail || '',
@@ -335,10 +433,16 @@
             source: song.previewUrl ? song.source || 'jiosaavn' : 'none',
           };
           if (!music.previewUrl) music.source = 'none';
+          btn.disabled = true;
+          music = await preferPlayablePreview(music);
           close();
           try {
             onSelect?.(music);
-          } catch (e) {}
+          } catch (e) {
+            if (typeof reportClientError === 'function') {
+              reportClientError({ feature: 'music_picker_select', message: e?.message || String(e) });
+            }
+          }
         });
       });
     };

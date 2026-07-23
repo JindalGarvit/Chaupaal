@@ -831,8 +831,25 @@ async function initPeepal(){
   else loadingEl.innerHTML=`<div class="discovery-loading">Finding people who think like you...</div>`;
   feed.parentElement.insertBefore(loadingEl,feed);
 
+  const withTimeout=(promise,ms)=>{
+    let timer;
+    return Promise.race([
+      promise,
+      new Promise((_,reject)=>{
+        timer=setTimeout(()=>{
+          const err=new Error('Discovery timed out');
+          err.code='DISCOVERY_TIMEOUT';
+          reject(err);
+        },ms);
+      }),
+    ]).finally(()=>clearTimeout(timer));
+  };
+
   try{
-    const profiles=await getDiscoveryProfiles();
+    const profiles=await withTimeout(
+      typeof getDiscoveryProfiles==='function'?getDiscoveryProfiles():Promise.resolve([]),
+      9000
+    );
     if(typeof hydrateRelationships==='function'){
       await hydrateRelationships(profiles.map(p=>p.user?.uid).filter(Boolean)).catch(()=>{});
     }
@@ -841,6 +858,9 @@ async function initPeepal(){
     loadingEl.remove();
     feed.parentElement.insertBefore(renderDiscoverySection(profiles),feed);
   }catch(e){
+    if(typeof reportClientError==='function'){
+      reportClientError({feature:'peepal_discovery',message:e?.message||String(e)});
+    }
     if(typeof renderErrorState==='function'){
       renderErrorState(loadingEl, {
         title:'Couldn’t load suggestions',
@@ -857,8 +877,30 @@ async function initPeepal(){
     feed.dataset.loaded='1';
     if(db&&currentUser&&typeof loadPeepalPage==='function'){
       if(typeof renderSkeleton==='function') renderSkeleton(feed,{variant:'card',count:2});
-      await ensurePeepalSeedContent();
-      await loadPeepalPage({reset:true});
+      const feedWatch=setTimeout(()=>{
+        // Never leave Peepal looking like a permanent skeleton shell
+        if(feed.querySelector('.skeleton-wrap,.skeleton')&&!feed.querySelector('.peepal-card,.peepal-q')){
+          if(typeof renderErrorState==='function'){
+            renderErrorState(feed,{
+              title:'Still loading Peepal',
+              message:'Pull to refresh or try again.',
+              onRetry:()=>{ delete feed.dataset.loaded; initPeepal(); },
+            });
+          } else {
+            feed.innerHTML='<div class="discovery-loading">Taking longer than usual — tap Peepal again.</div>';
+          }
+        }
+      },10000);
+      try{
+        await ensurePeepalSeedContent();
+        await loadPeepalPage({reset:true});
+      }catch(e){
+        if(typeof reportClientError==='function'){
+          reportClientError({feature:'peepal_feed',message:e?.message||String(e)});
+        }
+      }finally{
+        clearTimeout(feedWatch);
+      }
     }
     renderPeepalFeed();
     renderPeepalNudges();

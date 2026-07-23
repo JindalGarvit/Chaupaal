@@ -537,6 +537,17 @@ service cloud.firestore {
       allow read: if false;
       allow write: if false;
     }
+    // Client runtime errors (music/nav/shell) — create-only; daily summary via Admin SDK
+    match /clientErrorReports/{docId} {
+      allow create: if isAuth()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 500
+        && request.resource.data.feature is string
+        && request.resource.data.feature.size() <= 80;
+      allow read, update, delete: if false;
+    }
     match /chaupaalMeta/{docId} {
       allow read, write: if false;
     }

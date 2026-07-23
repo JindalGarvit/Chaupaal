@@ -1947,6 +1947,8 @@ form.cp-kb-lift {
   .peepal-feed { gap: 12px; padding: 16px; }
 }
 
+/* Collapse tab bar only while a text field is focused AND keyboard is open.
+   Stuck html.kb-open used to leave a blank bottom forever — touch.js + runtime-guard clear it. */
 html.kb-open .bottom-tabs {
   visibility: hidden;
   pointer-events: none;
@@ -2842,10 +2844,15 @@ button[aria-busy="true"]::after{
 }
 .msg-bubble .music-card{margin:0;}
 
+.music-picker-scrim{
+  position:absolute;inset:0;z-index:115;background:rgba(15,18,24,.42);
+  opacity:0;pointer-events:none;transition:opacity .2s ease;
+}
+.music-picker-scrim.is-open{opacity:1;pointer-events:auto;}
 .music-picker-sheet{
   position:absolute;bottom:0;left:0;right:0;z-index:120;
   background:var(--white);border-radius:24px 24px 0 0;
-  padding:10px 16px 20px;max-height:85vh;display:flex;flex-direction:column;
+  padding:10px 16px calc(20px + env(safe-area-inset-bottom,0px));max-height:85vh;display:flex;flex-direction:column;
   box-shadow:0 -8px 32px rgba(43,39,48,.18);
   transform:translateY(110%);transition:transform var(--duration-sheet,280ms) var(--ease-sheet,ease);
 }

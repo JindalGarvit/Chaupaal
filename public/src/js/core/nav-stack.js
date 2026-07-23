@@ -108,6 +108,8 @@
       }
     } catch (e) {}
     if (typeof pauseAllMusic === 'function') pauseAllMusic();
+    if (typeof clearShellGlitches === 'function') clearShellGlitches('recoverNavStack');
+    else if (typeof clearKeyboardInset === 'function') clearKeyboardInset();
   }
 
   function pushLayer(el, dismissFn) {

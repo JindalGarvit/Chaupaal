@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Chaupaal — News with Social Discovery</title>
 <link rel="icon" type="image/png" href="/icon.png">
+<link rel="manifest" href="/manifest.json">
 <meta name="chaupaal-recaptcha-site-key" content="6Lfv8WAtAAAAAFSsXosQpDyqG6o1oAziDyh3XwQ8">
 <meta name="theme-color" content="#E63946">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -19,7 +20,7 @@
   <link rel="stylesheet" href="/src/styles/baithak.css?v=22">
   <link rel="stylesheet" href="/src/styles/peepal.css?v=21">
   <link rel="stylesheet" href="/src/styles/duniya.css?v=19">
-  <link rel="stylesheet" href="/src/styles/components.css?v=41">
+  <link rel="stylesheet" href="/src/styles/components.css?v=42">
 </head>
 <body>
 <div class="device">
@@ -427,16 +428,14 @@
         <div class="peepal-ai-search-inner">
           <div class="peepal-ai-search-label">✨ Find people on Peepal</div>
       <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:8px;" id="peepalSearchNudges">
-        ${(typeof PEEPAL_SEARCH_NUDGES!=='undefined'?PEEPAL_SEARCH_NUDGES:[
-          {emoji:'❤️',text:'Dating',hint:'someone to date around my age'},
-          {emoji:'🤝',text:'Friendship',hint:'make new friends with similar interests'},
-          {emoji:'💼',text:'Networking',hint:'professionals in tech or business'},
-          {emoji:'✈️',text:'Travel buddy',hint:'travel companion for upcoming trip'},
-          {emoji:'🎮',text:'Gaming',hint:'someone to play games with'},
-          {emoji:'🎵',text:'Music',hint:'music lover with similar taste'},
-          {emoji:'📚',text:'Book club',hint:'avid reader who loves non-fiction'},
-          {emoji:'🚀',text:'Co-founder',hint:'startup-minded person to collaborate'},
-        ]).map(n=>`<button class="peepal-nudge-chip" data-hint="${n.hint}" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;">${n.emoji} ${n.text}</button>`).join('')}
+        <button type="button" class="peepal-nudge-chip" data-hint="someone to date around my age" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;">❤️ Dating</button>
+        <button type="button" class="peepal-nudge-chip" data-hint="make new friends with similar interests" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;">🤝 Friendship</button>
+        <button type="button" class="peepal-nudge-chip" data-hint="professionals in tech or business" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;">💼 Networking</button>
+        <button type="button" class="peepal-nudge-chip" data-hint="travel companion for upcoming trip" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;">✈️ Travel buddy</button>
+        <button type="button" class="peepal-nudge-chip" data-hint="someone to play games with" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;">🎮 Gaming</button>
+        <button type="button" class="peepal-nudge-chip" data-hint="music lover with similar taste" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;">🎵 Music</button>
+        <button type="button" class="peepal-nudge-chip" data-hint="avid reader who loves non-fiction" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;">📚 Book club</button>
+        <button type="button" class="peepal-nudge-chip" data-hint="startup-minded person to collaborate" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;">🚀 Co-founder</button>
       </div>
           <div style="position:relative;">
             <textarea class="peepal-ai-search-input" id="peepalAiSearchInput" placeholder="Describe who you're looking for... e.g. 'someone into cricket and startups around my age' or 'a travel buddy from Mumbai who loves food'" rows="3"></textarea>
@@ -699,6 +698,7 @@
   <script src="/src/js/core/ai-discovery-meter.js?v=1"></script>
   <script src="/src/js/core/api-client.js?v=1"></script>
   <script src="/src/js/core/analytics.js?v=1"></script>
+  <script src="/src/js/core/runtime-guard.js?v=1"></script>
   <script src="/src/js/data/samples.js?v=1"></script>
   <script src="/src/js/data/akhbaar-bank.js?v=1"></script>
   <script src="/src/js/core/state.js?v=3"></script>
@@ -735,7 +735,7 @@
   <script src="/src/js/core/nav-stack.js?v=3"></script>
   <script src="/src/js/core/media-player.js?v=2"></script>
   <script src="/src/js/features/location-share.js?v=1"></script>
-  <script src="/src/js/core/touch.js?v=24"></script>
+  <script src="/src/js/core/touch.js?v=25"></script>
   <script src="/src/js/ai/ai-config.js?v=1"></script>
   <script src="/src/js/ai/markdown.js?v=1"></script>
   <script src="/src/js/ai/call-ai.js?v=1"></script>
@@ -756,7 +756,7 @@
   <script src="/src/js/features/chaupaal-chat.js?v=17"></script>
   <script src="/src/js/features/chat-rating.js?v=1"></script>
   <script src="/src/js/features/baithak-chat.js?v=35"></script>
-  <script src="/src/js/features/music-card.js?v=3"></script>
+  <script src="/src/js/features/music-card.js?v=4"></script>
   <script src="/src/js/features/group-info.js?v=5"></script>
   <script src="/src/js/core/stories.js?v=27"></script>
   <script src="/src/js/core/archive-hub.js?v=3"></script>
@@ -765,7 +765,7 @@
   <script src="/src/js/features/profile-preview.js?v=2"></script>
   <script src="/src/js/features/profile.js?v=24"></script>
   <script src="/src/js/core/i18n.js?v=1"></script>
-  <script src="/src/js/features/categories.js?v=27"></script>
+  <script src="/src/js/features/categories.js?v=28"></script>
   <script src="/src/js/features/peepal.js?v=1"></script>
   <script src="/src/js/features/onboarding.js?v=29"></script>
   <script src="/src/js/core/service-worker.js?v=3"></script>

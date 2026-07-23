@@ -68,6 +68,18 @@ Any message, attachment, story card, or rich bubble type must **render identical
 - [ ] Media does not touch history; listeners cleaned up on dismiss
 - [ ] Firestore payload includes all fields needed to re-render after reload
 - [ ] Tap-outside and back dismiss work without custom one-offs
+- [ ] Closing the feature clears keyboard inset / never leaves `html.kb-open` stuck
+- [ ] Failures call `reportClientError` (or are caught by `safeFeature`) and recover the shell
+
+---
+
+## 4b. Runtime resilience & daily error summary
+
+- `public/src/js/core/runtime-guard.js` owns shell recovery (`clearShellGlitches`) and client error reporting.
+- Prefer `safeFeature(name, fn)` for risky entrypoints. On failure: report → clear keyboard/nav glitches → toast → optional `recoverNavStack`.
+- Client errors write to `clientErrorReports` (auth create-only). The hourly scheduler merges a `clientErrors` block into `chaupaalFeedbackSummaries/{date}`.
+- Admin: `GET /api/admin-feedback?view=errors` (admin claim) for today’s rollup + recent rows.
+- Surfaces tagged as `pwa` | `mobile_web` | `desktop` so we can see where breakage clusters.
 
 ---
 

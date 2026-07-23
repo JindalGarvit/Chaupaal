@@ -2,7 +2,7 @@
  * Admin-only feedback log + daily summaries + Peepal intent weight profiles.
  * Requires Firebase ID token with custom claim admin === true.
  *
- * GET  ?view=log|summary|intent_weights
+ * GET  ?view=log|summary|errors|intent_weights
  * POST { action: 'revert_intent_weights', profileId }  (intent weights only)
  */
 const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
@@ -100,6 +100,34 @@ module.exports = async function handler(req, res) {
         });
       }
       return sendSuccess(res, { date, current: { id: snap.id, ...snap.data() }, recent: [] });
+    }
+
+    if (view === 'errors') {
+      const date = String(req.query?.date || new Date().toISOString().slice(0, 10));
+      const sumSnap = await db.collection('chaupaalFeedbackSummaries').doc(date).get();
+      const limit = Math.min(100, Math.max(1, Number(req.query?.limit) || 50));
+      const recent = await db
+        .collection('clientErrorReports')
+        .orderBy('createdAt', 'desc')
+        .limit(limit)
+        .get();
+      return sendSuccess(res, {
+        date,
+        summary: sumSnap.exists ? sumSnap.data()?.clientErrors || null : null,
+        narrative: sumSnap.exists ? sumSnap.data()?.summary || null : null,
+        recent: recent.docs.map((d) => {
+          const data = d.data() || {};
+          return {
+            id: d.id,
+            uid: data.uid || null,
+            feature: data.feature || 'unknown',
+            message: data.message || '',
+            surface: data.surface || 'unknown',
+            url: data.url || '',
+            createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
+          };
+        }),
+      });
     }
 
     const limit = Math.min(100, Math.max(1, Number(req.query?.limit) || 50));

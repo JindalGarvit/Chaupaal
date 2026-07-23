@@ -472,15 +472,34 @@
   const COMPOSER_SEL =
     '.chat-input-bar, .cp-composer, .comment-compose, .story-comment-compose, .scribble-guess-row, .peepal-typing-wrap, .peepal-answer-box, .day-check-modal, .name-prompt-card, [data-composer], form';
 
+  function clearKeyboardInset() {
+    document.documentElement.style.setProperty('--kb-inset', '0px');
+    document.documentElement.classList.remove('kb-open');
+    document.querySelectorAll('.cp-kb-lift').forEach((el) => el.classList.remove('cp-kb-lift'));
+  }
+
+  function isTextField(el) {
+    if (!el || el === document.body || el === document.documentElement) return false;
+    const tag = el.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable === true;
+  }
+
   function setupKeyboardAvoidance() {
     if (!window.visualViewport) return;
     const vv = window.visualViewport;
     const apply = () => {
       const offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      document.documentElement.style.setProperty('--kb-inset', offset + 'px');
-      document.documentElement.classList.toggle('kb-open', offset > 80);
       const focused = document.activeElement;
-      if (focused && (focused.tagName === 'INPUT' || focused.tagName === 'TEXTAREA') && offset > 40) {
+      const inputFocused = isTextField(focused);
+      // If keyboard is gone (or never opened) and nothing is focused, always clear —
+      // stuck html.kb-open collapses .bottom-tabs to height:0 (blank bottom / dead nav).
+      if (offset <= 40 && !inputFocused) {
+        clearKeyboardInset();
+        return;
+      }
+      document.documentElement.style.setProperty('--kb-inset', offset + 'px');
+      document.documentElement.classList.toggle('kb-open', offset > 80 && inputFocused);
+      if (inputFocused && offset > 40) {
         try {
           focused.scrollIntoView({ block: 'center', behavior: 'smooth' });
         } catch (e) {}
@@ -492,20 +511,27 @@
     vv.addEventListener('resize', apply);
     vv.addEventListener('scroll', apply);
     document.addEventListener('focusin', (e) => {
-      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+      if (isTextField(e.target)) {
         setTimeout(apply, 50);
         setTimeout(apply, 300);
       }
     });
     document.addEventListener('focusout', () => {
       setTimeout(() => {
-        if (!document.activeElement || (document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA')) {
-          document.documentElement.style.setProperty('--kb-inset', '0px');
-          document.documentElement.classList.remove('kb-open');
-          document.querySelectorAll('.cp-kb-lift').forEach((el) => el.classList.remove('cp-kb-lift'));
+        if (!isTextField(document.activeElement)) {
+          clearKeyboardInset();
+          // Re-check viewport in case iOS reports lagging inset after blur
+          setTimeout(apply, 120);
         }
       }, 80);
     });
+    window.addEventListener('orientationchange', () => {
+      setTimeout(() => {
+        clearKeyboardInset();
+        apply();
+      }, 200);
+    });
+    window.clearKeyboardInset = clearKeyboardInset;
   }
 
   // ─── Message / post long-press menus ──────────────────────────────────────
