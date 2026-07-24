@@ -1,7 +1,7 @@
 /**
- * Firebase App Check (reCAPTCHA v3) — scaffold only.
- * Inactive unless window.CHAUPAAL_RECAPTCHA_SITE_KEY (or meta) is a non-empty string.
- * Do NOT enable Console enforcement until this key is live in production.
+ * Firebase App Check (reCAPTCHA v3).
+ * Site key from meta[name="chaupaal-recaptcha-site-key"] or window.CHAUPAAL_RECAPTCHA_SITE_KEY.
+ * Console enforcement is ON for Firestore / RTDB — activate before any data calls.
  */
 (function () {
   'use strict';
@@ -21,7 +21,7 @@
   function initAppCheck() {
     const siteKey = resolveSiteKey();
     if (!siteKey) {
-      console.info('[app-check] skipped — no RECAPTCHA site key (set CHAUPAAL_RECAPTCHA_SITE_KEY when ready)');
+      console.warn('[app-check] missing RECAPTCHA site key — Firestore/RTDB will fail under enforcement');
       return null;
     }
     if (typeof firebase === 'undefined' || !firebase.appCheck) {
@@ -30,21 +30,35 @@
     }
     try {
       const appCheck = firebase.appCheck();
-      appCheck.activate(siteKey, true /* isTokenAutoRefreshEnabled */);
+      // Prefer ReCaptchaV3Provider when the SDK exposes it (compat 10+)
+      const provider =
+        firebase.appCheck.ReCaptchaV3Provider
+          ? new firebase.appCheck.ReCaptchaV3Provider(siteKey)
+          : siteKey;
+      appCheck.activate(provider, true /* isTokenAutoRefreshEnabled */);
       window.__chaupaalAppCheck = appCheck;
-      console.info('[app-check] activated (ensure Console enforcement is still OFF until verified)');
+      console.info('[app-check] activated');
       return appCheck;
     } catch (e) {
       console.warn('[app-check] activate failed', e?.message || e);
+      if (typeof reportClientError === 'function') {
+        try {
+          reportClientError({
+            feature: 'app_check',
+            message: e?.message || String(e),
+            stack: e?.stack || '',
+          });
+        } catch (err) {}
+      }
       return null;
     }
   }
 
-  // Run after firebase compat app-check script + firebase.js init
+  // Must run immediately after firebase.js — before auth/Firestore usage.
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initAppCheck);
   } else {
-    setTimeout(initAppCheck, 0);
+    initAppCheck();
   }
 
   window.initChaupaalAppCheck = initAppCheck;

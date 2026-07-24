@@ -163,6 +163,9 @@
     pruneDead();
     while (stack.length) {
       const top = stack.pop();
+      try {
+        if (typeof releaseFocus === 'function') releaseFocus(top.el);
+      } catch (e) {}
       safeDismissLayer(top);
     }
     layerHistoryDepth = 0;
@@ -201,6 +204,10 @@
       // History push failed — keep stack entry but don't claim a history depth bump
       syncLayerHistoryDepth();
     }
+    // Focus trap + dialog semantics (CONVENTIONS / Phase D a11y)
+    try {
+      if (typeof trapFocus === 'function') trapFocus(el);
+    } catch (e) {}
   }
 
   function popHistoryForLayer() {
@@ -235,6 +242,9 @@
       if (!stack.length && !suppressingPop) clearOrphanLayerHistory();
       return;
     }
+    try {
+      if (typeof releaseFocus === 'function') releaseFocus(el);
+    } catch (e) {}
     const isTop = idx === stack.length - 1;
     stack.splice(idx, 1);
     // CRITICAL: do NOT syncLayerHistoryDepth() before popHistoryForLayer.
@@ -258,6 +268,9 @@
     const top = stack.pop();
     // Suppress during dismiss so close()→removeNavLayer does not scrub/back mid-flight
     suppressingPop = true;
+    try {
+      if (typeof releaseFocus === 'function') releaseFocus(top.el);
+    } catch (e) {}
     safeDismissLayer(top);
     suppressingPop = false;
     // Consume the matching history entry (depth still reflects pre-pop until here)

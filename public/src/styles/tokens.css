@@ -1,7 +1,8 @@
 :root{
   --red:#E63946; --red-deep:#C72E3A; --gold:#FFC93C;
   --cream:#FFF8EE; --white:#FFFFFF; --ink:#2B2730;
-  --muted:#6E6673; --green:#33C481; --line:#F1E6D8;
+  /* Darkened from #6E6673 for WCAG AA on cream (~4.7:1 → ~5.5:1 for small text) */
+  --muted:#5A5360; --green:#33C481; --line:#F1E6D8;
   --card:#FFFFFF; --navy:#15192E;
   --tab-h:60px;
   --tap-min:44px;

@@ -1056,7 +1056,7 @@ function openArchive(){
         <div class="archive-grid">
           ${items.map(item=>`
             <div class="archive-cell">
-              ${item.media?`<img src="${item.media}" loading="lazy">`:`<div style="background:linear-gradient(135deg,var(--red),#8134AF);width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;">${item.type==='peepal_post'?'🌳':item.type==='comment'?'💬':'📝'}</div>`}
+              ${item.media?`<img src="${item.media}" loading="lazy" alt="${item.type==='peepal_post'?'Peepal':'Duniya'} archive item">`:`<div style="background:linear-gradient(135deg,var(--red),#8134AF);width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;">${item.type==='peepal_post'?'🌳':item.type==='comment'?'💬':'📝'}</div>`}
               <div class="archive-cell-label">${item.type==='peepal_post'?'Q':item.type==='comment'?'💬':'📸'}</div>
             </div>
           `).join('')}

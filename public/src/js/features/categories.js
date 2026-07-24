@@ -1089,7 +1089,7 @@ function renderPeepalFeed(){
     const attachmentWrapAttrs=attachmentHasSize?` data-has-ratio="1" style="--media-ratio:${attachmentWidth}/${attachmentHeight};"`:'';
     const attachmentSizeAttrs=attachmentHasSize?` width="${attachmentWidth}" height="${attachmentHeight}" style="aspect-ratio:${attachmentWidth}/${attachmentHeight};"`:'';
     const mediaHtml = q.attachment?.type==='image'
-      ? `<div class="peepal-media"${attachmentWrapAttrs}><img src="${typeof mediaUrlFor==='function'?mediaUrlFor({media:q.attachment.data,thumb:q.attachment.thumb},'list'):(q.attachment.thumb||q.attachment.data)}" loading="lazy" decoding="async" alt=""${attachmentSizeAttrs}></div>`
+      ? `<div class="peepal-media"${attachmentWrapAttrs}><img src="${typeof mediaUrlFor==='function'?mediaUrlFor({media:q.attachment.data,thumb:q.attachment.thumb},'list'):(q.attachment.thumb||q.attachment.data)}" loading="lazy" decoding="async" alt="Image for ${escPeepalText(q.user?.name||'Peepal')} post"${attachmentSizeAttrs}></div>`
       : q.attachment?.type==='link'
       ? `<a class="peepal-link-card" href="${/^https?:\/\//i.test(q.attachment.url||'')?escPeepalText(q.attachment.url):'#'}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()"><div class="peepal-link-thumb">🔗</div><div class="peepal-link-info"><div class="peepal-link-title">${escPeepalText(q.attachment.title)}</div><div class="peepal-link-url">${escPeepalText(q.attachment.url)}</div></div></a>`
       : '';
@@ -1103,7 +1103,7 @@ function renderPeepalFeed(){
           ${q.user.bio?`<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">"${escPeepalText(q.user.bio)}"</div>`:''}
         </div>
         ${canDelete?`<button class="peepal-delete-btn" title="Delete" aria-label="Delete" style="background:none;border:none;cursor:pointer;color:var(--muted);">${typeof iconHtml==='function'?iconHtml('trash',{size:16}):'🗑️'}</button>`:''}
-        <button class="peepal-speak-btn" data-text="${escPeepalText(q.question)}" title="Listen to this post">🔊</button>
+        <button class="peepal-speak-btn" data-text="${escPeepalText(q.question)}" title="Listen to this post" aria-label="Listen to this post">${typeof iconHtml==='function'?iconHtml('mic',{size:16}):'🔊'}</button>
       </div>
       <div class="peepal-card-body">
         <div class="peepal-question-text">${escPeepalText(q.question)}</div>
@@ -1408,7 +1408,7 @@ function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
         </div>
       </div>
       <div class="peepal-question-text">${escPeepalText(q.question)}</div>
-      ${q.attachment?.type==='image'?`<div class="peepal-media"${attachmentWrapAttrs}><img src="${typeof mediaUrlFor==='function'?mediaUrlFor({media:q.attachment.data,thumb:q.attachment.thumb},'detail'):(q.attachment.data||q.attachment.thumb)}" alt="" decoding="async"${attachmentSizeAttrs}></div>`:''}
+      ${q.attachment?.type==='image'?`<div class="peepal-media"${attachmentWrapAttrs}><img src="${typeof mediaUrlFor==='function'?mediaUrlFor({media:q.attachment.data,thumb:q.attachment.thumb},'detail'):(q.attachment.data||q.attachment.thumb)}" alt="Image for ${escPeepalText(q.user?.name||'Peepal')} post" decoding="async"${attachmentSizeAttrs}></div>`:''}
       ${renderPeepalOptions(q)}
       ${renderPeepalReactionBar(q)}
       <div style="height:16px;"></div>
