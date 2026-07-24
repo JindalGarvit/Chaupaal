@@ -106,6 +106,35 @@ module.exports = async function handler(req, res) {
       const date = String(req.query?.date || new Date().toISOString().slice(0, 10));
       const sumSnap = await db.collection('chaupaalFeedbackSummaries').doc(date).get();
       const limit = Math.min(100, Math.max(1, Number(req.query?.limit) || 50));
+
+      // Prefer aggregated counters (cheap glanceable view)
+      let counters = [];
+      try {
+        const counterSnap = await db
+          .collection('clientErrorCounters')
+          .where('day', '==', date)
+          .limit(limit)
+          .get();
+        counters = counterSnap.docs
+          .map((d) => {
+            const data = d.data() || {};
+            return {
+              id: d.id,
+              day: data.day || date,
+              feature: data.feature || 'unknown',
+              screen: data.screen || 'unknown',
+              surface: data.surface || 'unknown',
+              message: data.message || '',
+              count: Number(data.count) || 0,
+              signature: data.signature || '',
+              updatedAt: data.updatedAt?.toDate?.()?.toISOString?.() || null,
+            };
+          })
+          .sort((a, b) => (b.count || 0) - (a.count || 0));
+      } catch (e) {
+        console.warn('[admin-feedback] counters', e?.message || e);
+      }
+
       const recent = await db
         .collection('clientErrorReports')
         .orderBy('createdAt', 'desc')
@@ -115,15 +144,19 @@ module.exports = async function handler(req, res) {
         date,
         summary: sumSnap.exists ? sumSnap.data()?.clientErrors || null : null,
         narrative: sumSnap.exists ? sumSnap.data()?.summary || null : null,
+        counters,
         recent: recent.docs.map((d) => {
           const data = d.data() || {};
           return {
             id: d.id,
+            // uid kept for admin triage only — never shown in user app
             uid: data.uid || null,
             feature: data.feature || 'unknown',
+            screen: data.screen || 'unknown',
             message: data.message || '',
             surface: data.surface || 'unknown',
             url: data.url || '',
+            count: data.count || 1,
             createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
           };
         }),

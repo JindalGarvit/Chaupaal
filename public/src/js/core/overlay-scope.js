@@ -68,6 +68,7 @@
 
   function dismissOverlay(el) {
     if (!el || !el.isConnected) return;
+    // Isolate each step: a throwing feature close must never abort nav/history cleanup
     try {
       if (typeof window.removeNavLayer === 'function') window.removeNavLayer(el);
     } catch (e) {}
@@ -80,10 +81,17 @@
         btn.click();
         // If click only animated-closed and left the node, force-remove shortly after
         setTimeout(() => {
-          if (el.isConnected) el.remove();
+          try {
+            if (el.isConnected) el.remove();
+          } catch (err) {}
         }, 400);
         return;
-      } catch (e) {}
+      } catch (e) {
+        try {
+          el.remove();
+        } catch (err) {}
+        return;
+      }
     }
     try {
       el.remove();
@@ -142,14 +150,33 @@
         entry.observer?.disconnect();
       } catch (e) {}
       if (!silent) {
-        [...entry.tracked].forEach((el) => dismissOverlay(el));
+        // Per-overlay isolation: one bad dismiss cannot skip the rest or freeze nav
+        [...entry.tracked].forEach((el) => {
+          try {
+            dismissOverlay(el);
+          } catch (e) {
+            try {
+              el.remove();
+            } catch (err) {}
+          }
+        });
       }
       scopes.delete(scopeId);
     }
     if (!silent) {
-      document.querySelectorAll(`[data-overlay-scope="${scopeId}"]`).forEach((el) => dismissOverlay(el));
+      document.querySelectorAll(`[data-overlay-scope="${scopeId}"]`).forEach((el) => {
+        try {
+          dismissOverlay(el);
+        } catch (e) {
+          try {
+            el.remove();
+          } catch (err) {}
+        }
+      });
       // AI keyboard is the most common orphan when not tracked yet
-      if (scopeId === 'chat') closeAiKeyboard();
+      try {
+        if (scopeId === 'chat') closeAiKeyboard();
+      } catch (e) {}
     }
   }
 

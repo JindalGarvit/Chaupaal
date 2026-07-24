@@ -2861,8 +2861,10 @@ button[aria-busy="true"]::after{
   padding:10px 16px calc(20px + env(safe-area-inset-bottom,0px));max-height:85vh;display:flex;flex-direction:column;
   box-shadow:0 -8px 32px rgba(43,39,48,.18);
   transform:translateY(110%);transition:transform var(--duration-sheet,280ms) var(--ease-sheet,ease);
+  /* Closed sheet must never steal taps from chat/nav underneath */
+  pointer-events:none;visibility:hidden;
 }
-.music-picker-sheet.is-open{transform:translateY(0);}
+.music-picker-sheet.is-open{transform:translateY(0);pointer-events:auto;visibility:visible;}
 .music-picker-handle{
   width:36px;height:4px;border-radius:99px;background:var(--line);
   margin:4px auto 10px;

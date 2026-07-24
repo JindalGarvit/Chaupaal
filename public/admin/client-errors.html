@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chaupaal · Client errors</title>
+  <style>
+    :root { --ink:#2B2730; --cream:#FFF8F0; --red:#E63946; --line:#E8DFD4; --muted:#7A7280; --navy:#1B1F3B; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, Segoe UI, sans-serif; background:var(--cream); color:var(--ink); }
+    header { background:var(--navy); color:#fff; padding:16px 20px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+    h1 { font-size:18px; margin:0; }
+    main { max-width:960px; margin:0 auto; padding:20px; }
+    .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:16px; }
+    .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+    button { border:none; border-radius:10px; padding:10px 14px; font-weight:700; cursor:pointer; background:var(--red); color:#fff; }
+    button.secondary { background:transparent; color:var(--ink); border:1px solid var(--line); }
+    input { border:1px solid var(--line); border-radius:10px; padding:10px 12px; min-width:160px; }
+    .meta { font-size:12px; color:var(--muted); margin-bottom:4px; }
+    .err { color:var(--red); font-weight:600; }
+    .item { border-top:1px solid var(--line); padding:12px 0; }
+    .item:first-child { border-top:none; }
+    .tag { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; background:rgba(230,57,70,.1); color:var(--red); margin-right:4px; }
+    .count { font-weight:800; font-size:18px; color:var(--navy); }
+    a.nav { color:#fff; font-size:13px; text-decoration:none; opacity:.9; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-top:10px; }
+    .stat { background:var(--cream); border-radius:12px; padding:12px; }
+    .stat .label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Client errors</h1>
+    <div class="row" style="margin:0">
+      <a class="nav" href="/admin/feedback.html">Feedback</a>
+      <a class="nav" href="/admin/intent-weights.html">Intent weights</a>
+      <button type="button" id="btnLogin" class="secondary" style="color:#fff;border-color:rgba(255,255,255,.3)">Sign in</button>
+      <button type="button" id="btnRefresh">Refresh</button>
+    </div>
+  </header>
+  <main>
+    <div class="card">
+      <p>Aggregated client errors (signature × day), sorted by frequency. Requires Firebase claim <code>admin: true</code>. No chat/user PII is stored in counters.</p>
+      <div id="authStatus" class="meta">Not signed in</div>
+      <div class="row" style="margin-top:12px">
+        <input type="date" id="dayInput" />
+        <button type="button" id="btnLoad" class="secondary">Load day</button>
+      </div>
+    </div>
+    <div class="card">
+      <strong>By feature / screen</strong>
+      <div id="rollupBox" class="grid"></div>
+    </div>
+    <div class="card">
+      <strong>Top signatures</strong>
+      <div id="listBox" style="margin-top:10px"><em class="meta">Sign in as admin to load.</em></div>
+    </div>
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="/src/js/config/firebase.js"></script>
+  <script>
+    const statusEl = document.getElementById('authStatus');
+    const listBox = document.getElementById('listBox');
+    const rollupBox = document.getElementById('rollupBox');
+    const dayInput = document.getElementById('dayInput');
+    dayInput.value = new Date().toISOString().slice(0, 10);
+
+    async function token() {
+      const u = firebase.auth().currentUser;
+      if (!u) return null;
+      return u.getIdToken(true);
+    }
+
+    async function api(path) {
+      const t = await token();
+      if (!t) throw new Error('Sign in required');
+      const res = await fetch(path, { headers: { Authorization: 'Bearer ' + t } });
+      const json = await res.json();
+      if (!json.ok) {
+        const err = new Error(json.error?.message || 'Request failed');
+        err.code = json.error?.code;
+        throw err;
+      }
+      return json.data;
+    }
+
+    function esc(s) {
+      return String(s || '').replace(/</g, '&lt;').replace(/&/g, '&amp;');
+    }
+
+    function render(data) {
+      const counters = data.counters || [];
+      const byFeature = {};
+      const byScreen = {};
+      counters.forEach((c) => {
+        byFeature[c.feature] = (byFeature[c.feature] || 0) + (c.count || 0);
+        byScreen[c.screen] = (byScreen[c.screen] || 0) + (c.count || 0);
+      });
+      const rollupBits = [
+        ...Object.entries(byFeature).map(([k, v]) => ({ label: 'feature · ' + k, count: v })),
+        ...Object.entries(byScreen).map(([k, v]) => ({ label: 'screen · ' + k, count: v })),
+      ].sort((a, b) => b.count - a.count).slice(0, 12);
+
+      rollupBox.innerHTML = rollupBits.length
+        ? rollupBits.map((r) => `<div class="stat"><div class="label">${esc(r.label)}</div><div class="count">${r.count}</div></div>`).join('')
+        : '<em class="meta">No counter rows for this day.</em>';
+
+      if (!counters.length) {
+        const recent = data.recent || [];
+        listBox.innerHTML = recent.length
+          ? `<em class="meta">No counters yet — showing recent sample reports:</em>` +
+            recent.map((it) => `
+              <div class="item">
+                <div class="meta"><span class="tag">${esc(it.feature)}</span><span class="tag">${esc(it.screen || '—')}</span> · ${esc(it.createdAt || '')}</div>
+                <div>${esc(it.message)}</div>
+              </div>`).join('')
+          : '<em class="meta">No errors for this day.</em>';
+        return;
+      }
+
+      listBox.innerHTML = counters.map((it) => `
+        <div class="item">
+          <div class="meta">
+            <span class="count">${it.count || 0}</span>
+            <span class="tag">${esc(it.feature)}</span>
+            <span class="tag">${esc(it.screen)}</span>
+            <span class="tag">${esc(it.surface)}</span>
+            · ${esc(it.updatedAt || it.day || '')}
+          </div>
+          <div>${esc(it.message)}</div>
+        </div>
+      `).join('');
+    }
+
+    async function refresh() {
+      try {
+        const day = dayInput.value || new Date().toISOString().slice(0, 10);
+        const data = await api('/api/admin-feedback?view=errors&date=' + encodeURIComponent(day) + '&limit=80');
+        render(data);
+      } catch (e) {
+        listBox.innerHTML = `<div class="err">${esc(e.message)}${e.code ? ' (' + e.code + ')' : ''}</div>`;
+      }
+    }
+
+    document.getElementById('btnRefresh').addEventListener('click', refresh);
+    document.getElementById('btnLoad').addEventListener('click', refresh);
+    document.getElementById('btnLogin').addEventListener('click', async () => {
+      try {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        await firebase.auth().signInWithPopup(provider);
+      } catch (e) {
+        statusEl.textContent = e.message || 'Sign-in failed';
+      }
+    });
+
+    firebase.auth().onAuthStateChanged((u) => {
+      statusEl.textContent = u ? `Signed in as ${u.email || u.uid}` : 'Not signed in';
+      if (u) refresh();
+    });
+  </script>
+</body>
+</html>

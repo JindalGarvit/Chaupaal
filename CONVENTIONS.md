@@ -75,11 +75,32 @@ Any message, attachment, story card, or rich bubble type must **render identical
 
 ## 4b. Runtime resilience & daily error summary
 
-- `public/src/js/core/runtime-guard.js` owns shell recovery (`clearShellGlitches`) and client error reporting.
-- Prefer `safeFeature(name, fn)` for risky entrypoints. On failure: report → clear keyboard/nav glitches → toast → optional `recoverNavStack`.
-- Client errors write to `clientErrorReports` (auth create-only). The hourly scheduler merges a `clientErrors` block into `chaupaalFeedbackSummaries/{date}`.
-- Admin: `GET /api/admin-feedback?view=errors` (admin claim) for today’s rollup + recent rows.
-- Surfaces tagged as `pwa` | `mobile_web` | `desktop` so we can see where breakage clusters.
+- `public/src/js/core/runtime-guard.js` owns shell recovery (`clearShellGlitches`), scoped recovery chip (`showRecoveryChip`), and client error reporting.
+- Prefer `safeFeature(name, fn)` for risky entrypoints. On failure: report → clear keyboard/nav glitches → recovery chip → optional `recoverNavStack`.
+- Global `window.onerror` / `unhandledrejection` always **console.error** and may show a small “tap to continue” chip — never a full-page takeover that hides the real error.
+- Client errors: session write-cap + client dedup → `clientErrorCounters/{day_hash}` (increment) and occasional `clientErrorReports` samples. No chat/user PII fields.
+- Admin glance view: `/admin/client-errors.html` via `GET /api/admin-feedback?view=errors` (admin claim).
+- Surfaces tagged as `pwa` | `mobile_web` | `desktop`; screens coarse (`chat`, `peepal`, …).
+
+---
+
+## 4c. Defensive coding for integrations & dynamic lists
+
+Any code that touches an **external integration** or renders a **long/dynamic list** must degrade gracefully. An uncaught exception there must **never** escape into the shared overlay / nav-stack system.
+
+**Integrations in scope:** JioSaavn / iTunes (music), Agora (Mehfil), YouTube embeds, weather / events APIs, AI (`callAI` / media-config actions), maps/geocoding, and similar third-party fetches.
+
+**Dynamic lists in scope:** Peepal options, chat message history, search results, story carousels, infinite feeds — anything whose length or item shape comes from the network or user content.
+
+**Required pattern:**
+
+1. **Catch at the feature boundary** — `try/catch` (and `.catch` on promises) around the integration call and around the HTML/DOM render for that feature. Prefer `safeFeature('name', fn)` for entrypoints.
+2. **Scoped empty/error UI** — on failure show an inline empty or error state *inside that feature* (`showFeatureError(host)`, “No results”, “Preview unavailable”). Do not blank the whole shell.
+3. **Never throw through dismiss / nav** — dismiss callbacks, `onSelect` handlers, and overlay close paths must swallow/report errors. Nav-stack / overlay-scope isolate dismiss with `safeDismissLayer` / per-overlay try/catch; do not rely on that alone — still wrap your own feature code.
+4. **Sanitize / normalize list items** — escape text before `innerHTML`; pad/align parallel arrays (e.g. options vs response counts); avoid `Math.max(...hugeArray)` and other spread-of-unbounded-arrays.
+5. **Report, don’t hide** — call `reportClientError({ feature, message, stack })` (or let `safeFeature` do it). Recovery UI is a safety net for users; logs/Firestore counters are for you.
+
+Point future Cursor sessions at this section before adding a new provider, picker, or feed renderer.
 
 ---
 

@@ -21,13 +21,15 @@
     .item:first-child { border-top:none; }
     .weights { font-family: ui-monospace, monospace; font-size:12px; line-height:1.5; background:var(--cream); padding:10px; border-radius:10px; margin:8px 0; }
     .alias { display:inline-block; margin:2px 4px 2px 0; padding:2px 8px; border-radius:999px; background:rgba(230,57,70,.08); font-size:11px; }
+    a.nav { color:#fff; font-size:13px; text-decoration:none; opacity:.9; }
   </style>
 </head>
 <body>
   <header>
     <h1>Peepal intent weights</h1>
     <div class="row" style="margin:0">
-      <a href="/admin/feedback.html" style="color:#fff;font-size:13px;">Feedback admin</a>
+      <a class="nav" href="/admin/client-errors.html">Client errors</a>
+      <a class="nav" href="/admin/feedback.html">Feedback</a>
       <button type="button" id="btnLogin" class="secondary" style="color:#fff;border-color:rgba(255,255,255,.3)">Sign in</button>
       <button type="button" id="btnRefresh">Refresh</button>
     </div>

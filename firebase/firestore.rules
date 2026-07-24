@@ -548,6 +548,25 @@ service cloud.firestore {
         && request.resource.data.feature.size() <= 80;
       allow read, update, delete: if false;
     }
+    // Aggregated error counters (signature × day) — client increment/merge only; admin reads via API
+    match /clientErrorCounters/{docId} {
+      allow create, update: if isAuth()
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 500
+        && request.resource.data.feature is string
+        && request.resource.data.feature.size() <= 80
+        && request.resource.data.day is string
+        && request.resource.data.day.size() == 10
+        && request.resource.data.signature is string
+        && request.resource.data.signature.size() <= 240
+        && (!('uid' in request.resource.data))
+        && (!('email' in request.resource.data))
+        && (!('phone' in request.resource.data))
+        && (!('chatId' in request.resource.data))
+        && (!('text' in request.resource.data));
+      allow read, delete: if false;
+    }
     match /chaupaalMeta/{docId} {
       allow read, write: if false;
     }

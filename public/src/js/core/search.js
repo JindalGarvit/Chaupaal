@@ -407,8 +407,9 @@
    */
   async function universalSearch(query, { types = GLOBAL_TYPES, limit = SEE_MORE_LIMIT, limits } = {}) {
     const q = normalizeQuery(query);
-    if (!q) return { query: q, byCategory: {}, results: [] };
+    if (!q) return { query: q, byCategory: {}, results: [], errors: {} };
     const byCategory = {};
+    const errors = {};
     await Promise.all(
       types.map(async (type) => {
         const fn = providers[type];
@@ -422,11 +423,20 @@
         } catch (e) {
           console.warn('[search]', type, e);
           byCategory[type] = [];
+          errors[type] = e?.message || 'Search failed';
+          if (typeof reportClientError === 'function') {
+            reportClientError({
+              feature: 'global_search',
+              message: `${type}: ${e?.message || e}`,
+              stack: e?.stack || '',
+              screen: 'search',
+            });
+          }
         }
       })
     );
     const results = types.flatMap((t) => byCategory[t] || []);
-    return { query: q, byCategory, results };
+    return { query: q, byCategory, results, errors };
   }
 
   const CATEGORY_META = {
@@ -533,6 +543,7 @@
       expanded[t] = false;
     });
     let lastByCategory = {};
+    let lastErrors = {};
     let runId = 0;
 
     const closeSearch = () => {
@@ -586,11 +597,21 @@
     function paintCategories() {
       const sections = [];
       let any = false;
+      const errTypes = Object.keys(lastErrors || {});
       types.forEach((type) => {
         const all = lastByCategory[type] || [];
-        if (!all.length) return;
+        const failed = !!(lastErrors && lastErrors[type]);
+        if (!all.length && !failed) return;
         any = true;
         const meta = CATEGORY_META[type] || { label: type };
+        if (failed && !all.length) {
+          sections.push(`
+            <section class="us-category" data-us-cat="${type}">
+              <div class="us-category-head">${escapeSearchHtml(meta.label)}</div>
+              <div class="cp-feature-error" role="status">Couldn't search ${escapeSearchHtml(meta.label)} — try again.</div>
+            </section>`);
+          return;
+        }
         const showAll = expanded[type];
         const slice = showAll ? all.slice(0, SEE_MORE_LIMIT) : all.slice(0, CATEGORY_PREVIEW);
         const moreLeft = all.length > CATEGORY_PREVIEW && !showAll;
@@ -602,14 +623,19 @@
           </section>`);
       });
       if (!any) {
+        const allFailed = errTypes.length > 0 && errTypes.length >= types.length;
         if (typeof renderEmptyState === 'function') {
           renderEmptyState(resultsEl, {
-            icon: '🌳',
-            title: 'No matches',
-            message: 'Try another spelling or a shorter prefix.',
+            icon: allFailed ? '⚠️' : '🌳',
+            title: allFailed ? 'Search unavailable' : 'No matches',
+            message: allFailed
+              ? 'Something went wrong loading results. Try again in a moment.'
+              : 'Try another spelling or a shorter prefix.',
           });
         } else {
-          resultsEl.innerHTML = '<div style="padding:24px;color:var(--muted);text-align:center;">No matches</div>';
+          resultsEl.innerHTML = `<div style="padding:24px;color:var(--muted);text-align:center;">${
+            allFailed ? 'Search unavailable — try again' : 'No matches'
+          }</div>`;
         }
         return;
       }
@@ -662,9 +688,10 @@
       types.forEach((t) => {
         limits[t] = SEE_MORE_LIMIT;
       });
-      const { byCategory } = await universalSearch(q, { types, limits });
+      const { byCategory, errors } = await universalSearch(q, { types, limits });
       if (myRun !== runId) return; // stale response
       lastByCategory = byCategory;
+      lastErrors = errors || {};
       if (typeof enrichUsersWithProfileType === 'function' && byCategory.users?.length) {
         await enrichUsersWithProfileType(byCategory.users);
       }

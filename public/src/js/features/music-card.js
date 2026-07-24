@@ -283,17 +283,20 @@
   }
 
   async function searchSongs(query) {
-    if (typeof apiFetch !== 'function') return [];
+    if (typeof apiFetch !== 'function') return { results: [], error: 'unavailable' };
     try {
       const envelope = await apiFetch('/api/media-config', {
         method: 'POST',
         needAuth: true,
         body: { action: 'music_search', query, limit: 12 },
       });
-      if (!envelope?.ok) return [];
-      return Array.isArray(envelope.data?.results) ? envelope.data.results : [];
-    } catch {
-      return [];
+      if (!envelope?.ok) return { results: [], error: envelope?.error?.message || 'search_failed' };
+      return {
+        results: Array.isArray(envelope.data?.results) ? envelope.data.results : [],
+        error: null,
+      };
+    } catch (e) {
+      return { results: [], error: e?.message || 'search_failed' };
     }
   }
 
@@ -360,16 +363,31 @@
       try {
         input?.blur();
       } catch (e) {}
-      if (typeof clearKeyboardInset === 'function') clearKeyboardInset();
-      else {
-        document.documentElement.classList.remove('kb-open');
-        document.documentElement.style.setProperty('--kb-inset', '0px');
-      }
-      if (typeof clearShellGlitches === 'function') clearShellGlitches('music-picker-close');
-      if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
+      try {
+        if (typeof clearKeyboardInset === 'function') clearKeyboardInset();
+        else {
+          document.documentElement.classList.remove('kb-open');
+          document.documentElement.style.setProperty('--kb-inset', '0px');
+        }
+      } catch (e) {}
+      try {
+        if (typeof clearShellGlitches === 'function') clearShellGlitches('music-picker-close');
+      } catch (e) {}
+      // Clear swipe inline transform so a half-drag cannot leave a hit-target over the shell
+      try {
+        sheet.style.transform = '';
+        sheet.style.transition = '';
+      } catch (e) {}
       sheet.classList.remove('is-open');
       scrim.classList.remove('is-open');
       sheet.dataset.guardStale = '1';
+      try {
+        if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
+      } catch (e) {
+        try {
+          sheet.remove();
+        } catch (err) {}
+      }
       setTimeout(() => {
         try {
           sheet.remove();
@@ -377,7 +395,9 @@
         try {
           scrim.remove();
         } catch (e) {}
-        if (typeof clearKeyboardInset === 'function') clearKeyboardInset();
+        try {
+          if (typeof clearKeyboardInset === 'function') clearKeyboardInset();
+        } catch (e) {}
       }, 220);
     };
     if (typeof pushNavLayer === 'function') {
@@ -434,7 +454,7 @@
       resultsEl.querySelectorAll('[data-i]').forEach((btn) => {
         btn.addEventListener('click', async () => {
           const song = list[Number(btn.dataset.i)];
-          if (!song) return;
+          if (!song || closed) return;
           let music = normalizeMusic(song) || {
             title: song.title,
             artist: song.artist || 'Unknown artist',
@@ -444,14 +464,36 @@
           };
           if (!music.previewUrl) music.source = 'none';
           btn.disabled = true;
-          music = await preferPlayablePreview(music);
-          close();
           try {
-            onSelect?.(music);
+            music = await preferPlayablePreview(music);
+          } catch (e) {
+            // Keep original music — never block picker close on resolve failure
+          }
+          close();
+          // Close nav layer BEFORE onSelect; contain select errors (sync + async)
+          try {
+            const ret = onSelect?.(music);
+            if (ret && typeof ret.then === 'function') {
+              ret.catch((e) => {
+                if (typeof reportClientError === 'function') {
+                  reportClientError({
+                    feature: 'music_picker_select',
+                    message: e?.message || String(e),
+                    stack: e?.stack || '',
+                  });
+                }
+                if (typeof clearShellGlitches === 'function') clearShellGlitches('music_picker_select');
+              });
+            }
           } catch (e) {
             if (typeof reportClientError === 'function') {
-              reportClientError({ feature: 'music_picker_select', message: e?.message || String(e) });
+              reportClientError({
+                feature: 'music_picker_select',
+                message: e?.message || String(e),
+                stack: e?.stack || '',
+              });
             }
+            if (typeof clearShellGlitches === 'function') clearShellGlitches('music_picker_select');
           }
         });
       });
@@ -465,8 +507,14 @@
         return;
       }
       resultsEl.innerHTML = skeletonRows(5);
-      const list = await searchSongs(query);
+      const packed = await searchSongs(query);
+      const list = Array.isArray(packed) ? packed : packed?.results || [];
+      const err = Array.isArray(packed) ? null : packed?.error;
       if (seq !== searchSeq) return;
+      if (err && !list.length) {
+        renderResults([], 'Couldn’t search songs — try again');
+        return;
+      }
       renderResults(list, 'No results');
     };
 
@@ -489,7 +537,10 @@
     pauseAll: pauseAllMusic,
     openPicker: openSongPicker,
     normalize: normalizeMusic,
-    search: searchSongs,
+    search: async (q) => {
+      const packed = await searchSongs(q);
+      return Array.isArray(packed) ? packed : packed?.results || [];
+    },
   };
   window.openSongPicker = openSongPicker;
   window.pauseAllMusic = pauseAllMusic;

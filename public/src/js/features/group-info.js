@@ -774,18 +774,32 @@
       if (typeof pushNavLayer === 'function') pushNavLayer(sheet, done);
       sheet.querySelector('[data-act-cancel]')?.addEventListener('click', done);
       sheet.querySelector('[data-act-promote]')?.addEventListener('click', async () => {
-        await setMemberAdmin(chat, member.uid, !isAd);
-        await refresh();
-        done();
+        try {
+          await setMemberAdmin(chat, member.uid, !isAd);
+          await refresh();
+          done();
+        } catch (e) {
+          if (typeof reportClientError === 'function') {
+            reportClientError({ feature: 'group_promote', message: e?.message || String(e) });
+          }
+          if (typeof showToast === 'function') showToast('Couldn’t update admin');
+        }
       });
       sheet.querySelector('[data-act-remove]')?.addEventListener('click', async () => {
-        if ((chat.admins || []).length === 1 && chat.admins[0] === member.uid) {
-          if (typeof showToast === 'function') showToast('Promote another admin first');
-          return;
+        try {
+          if ((chat.admins || []).length === 1 && chat.admins[0] === member.uid) {
+            if (typeof showToast === 'function') showToast('Promote another admin first');
+            return;
+          }
+          await removeMemberFromGroup(chat, member.uid);
+          await refresh();
+          done();
+        } catch (e) {
+          if (typeof reportClientError === 'function') {
+            reportClientError({ feature: 'group_remove', message: e?.message || String(e) });
+          }
+          if (typeof showToast === 'function') showToast('Couldn’t remove member');
         }
-        await removeMemberFromGroup(chat, member.uid);
-        await refresh();
-        done();
       });
     }
 

@@ -287,14 +287,18 @@ function openChatScreen(chat){
     const file=e.target.files[0];if(!file)return;
     try{
       let src='', mediaWidth=0, mediaHeight=0;
-      if(typeof processAndUploadMedia==='function'&&currentUser&&file.type.startsWith('image/')&&(typeof isMediaUploadReady!=='function'||await isMediaUploadReady())){
+      const uploadReady=typeof isMediaUploadReady!=='function'||await isMediaUploadReady();
+      if(typeof processAndUploadMedia==='function'&&currentUser&&file.type.startsWith('image/')&&uploadReady){
         showToast('Uploading photo…');
         const up=await processAndUploadMedia(file,{folder:'chat'});
         src=up.media;
         mediaWidth=Number(up.width)||0;
         mediaHeight=Number(up.height)||0;
       } else {
-        src=URL.createObjectURL(file);
+        // Never persist blob: URLs — they die on reopen and look like a missing attachment
+        showToast(uploadReady?'Photo upload unavailable':'Photo upload not ready — try again shortly');
+        e.target.value='';
+        return;
       }
       const sizeAttrs=mediaWidth&&mediaHeight?` width="${mediaWidth}" height="${mediaHeight}" style="aspect-ratio:${mediaWidth}/${mediaHeight};"`:'';
       const pendingPhoto=addMsgBubble({from:'me',text:`📷 Photo`,attachment:{type:'photo',url:src,width:mediaWidth,height:mediaHeight},time:'now',pending:true}, isGroup);

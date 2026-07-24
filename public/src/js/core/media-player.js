@@ -77,8 +77,10 @@
     bar.classList.remove('hidden');
     const title = media.dataset.cpTitle || document.querySelector('.music-card.is-playing .music-card-title')?.textContent || 'Now playing';
     const artist = media.dataset.cpArtist || document.querySelector('.music-card.is-playing .music-card-artist')?.textContent || '';
-    bar.querySelector('[data-cp-mini-title]').textContent = title;
-    bar.querySelector('[data-cp-mini-artist]').textContent = artist;
+    const titleEl = bar.querySelector('[data-cp-mini-title]');
+    const artistEl = bar.querySelector('[data-cp-mini-artist]');
+    if (titleEl) titleEl.textContent = title;
+    if (artistEl) artistEl.textContent = artist;
     const playBtn = bar.querySelector('[data-cp-mini-play]');
     if (playBtn) playBtn.textContent = media.paused ? '▶' : '⏸';
     const seek = bar.querySelector('[data-cp-mini-seek]');

@@ -1067,6 +1067,7 @@ function renderPeepalFeed(){
     return;
   }
   sorted.forEach(q=>{
+   try{
     const card=document.createElement('div');card.className='peepal-card';
     const attachmentWidth=Number(q.attachment?.width)||0;
     const attachmentHeight=Number(q.attachment?.height)||0;
@@ -1105,7 +1106,14 @@ function renderPeepalFeed(){
         <span class="peepal-tag">${q.tag}</span>
       </div>
     `;
-    card.querySelector('.peepal-speak-btn').addEventListener('click',(e)=>{
+    card.querySelectorAll('[data-peepal-opt]').forEach(btn=>{
+      btn.addEventListener('click',(e)=>{
+        e.stopPropagation();
+        const idx=Number(btn.getAttribute('data-peepal-opt'));
+        if(Number.isFinite(idx)) answerPeepal(q.id, idx, e);
+      });
+    });
+    card.querySelector('.peepal-speak-btn')?.addEventListener('click',(e)=>{
       e.stopPropagation();
       speakText(e.currentTarget.dataset.text, e.currentTarget);
     });
@@ -1167,6 +1175,18 @@ function renderPeepalFeed(){
       openPeepalDetail(q);
     });
     feed.appendChild(card);
+   }catch(cardErr){
+      console.warn('[peepal] card render failed', q?.id, cardErr);
+      if(typeof reportClientError==='function'){
+        reportClientError({feature:'peepal_card',message:cardErr?.message||String(cardErr),stack:cardErr?.stack||''});
+      }
+      try{
+        const fallback=document.createElement('div');
+        fallback.className='peepal-card';
+        fallback.innerHTML='<div class="cp-feature-error" role="status">Couldn\'t show this post.</div>';
+        feed.appendChild(fallback);
+      }catch(e){}
+   }
   });
   if(peepalLiveMode&&peepalHasMore&&typeof ensureLoadMoreButton==='function'){
     ensureLoadMoreButton(feed,{
@@ -1180,41 +1200,66 @@ function renderPeepalFeed(){
 }
 
 function renderPeepalOptions(q){
-  const typingSection=(promptText)=>`
-    <div class="peepal-typing-section" id="typing_${q.id}" style="${q.answered===false?'display:none;':''}margin-top:10px;border-top:1px solid var(--line);padding-top:10px;">
-      <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;">💭 Want to add your thoughts? (optional)</div>
-      <div style="display:flex;gap:6px;">
-        <input class="peepal-open-input" style="flex:1;margin:0;" placeholder="${promptText||'Share more about your answer...'}" id="typing_input_${q.id}">
-        <button onclick="submitPeepalTyping('${q.id}',event)" style="padding:8px 12px;background:var(--red);color:#fff;border:none;border-radius:10px;font-weight:700;font-size:12px;cursor:pointer;flex-shrink:0;">→</button>
+  try{
+    const typingSection=(promptText)=>`
+      <div class="peepal-typing-section" id="typing_${q.id}" style="${q.answered===false?'display:none;':''}margin-top:10px;border-top:1px solid var(--line);padding-top:10px;">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;">💭 Want to add your thoughts? (optional)</div>
+        <div style="display:flex;gap:6px;">
+          <input class="peepal-open-input" style="flex:1;margin:0;" placeholder="${promptText||'Share more about your answer...'}" id="typing_input_${q.id}">
+          <button onclick="submitPeepalTyping('${q.id}',event)" style="padding:8px 12px;background:var(--red);color:#fff;border:none;border-radius:10px;font-weight:700;font-size:12px;cursor:pointer;flex-shrink:0;">→</button>
+        </div>
       </div>
-    </div>
-  `;
+    `;
 
-  if(q.format==='open'){
-    if(q.answered)return`
-      <div style="font-size:13px;color:var(--muted);padding:4px 0;">You shared your response ✓ · ${q.totalResponses} responses</div>
-      ${q.myTypedAnswer?`<div style="font-size:13px;color:var(--ink);background:var(--cream);border-radius:10px;padding:8px 12px;margin-top:6px;border-left:3px solid var(--red);">"${q.myTypedAnswer}"</div>`:''}
-    `;
-    return`
-      <textarea class="peepal-open-input" placeholder="Share your thoughts..." id="open_${q.id}" rows="2" style="resize:none;min-height:60px;"></textarea>
-      <button class="peepal-submit-btn" onclick="submitPeepalOpen('${q.id}')">Share</button>
-    `;
+    if(q.format==='open'){
+      if(q.answered)return`
+        <div style="font-size:13px;color:var(--muted);padding:4px 0;">You shared your response ✓ · ${q.totalResponses||0} responses</div>
+        ${q.myTypedAnswer?`<div style="font-size:13px;color:var(--ink);background:var(--cream);border-radius:10px;padding:8px 12px;margin-top:6px;border-left:3px solid var(--red);">${escPeepalText('"'+q.myTypedAnswer+'"')}</div>`:''}
+      `;
+      return`
+        <textarea class="peepal-open-input" placeholder="Share your thoughts..." id="open_${q.id}" rows="2" style="resize:none;min-height:60px;"></textarea>
+        <button class="peepal-submit-btn" onclick="submitPeepalOpen('${q.id}')">Share</button>
+      `;
+    }
+
+    const options=Array.isArray(q.options)?q.options:[];
+    if(!options.length){
+      return`<div class="cp-feature-error" role="status">No response options for this post.</div>`;
+    }
+    // Align responses length to options — never assume parallel arrays match
+    const responses=options.map((_,i)=>Number(Array.isArray(q.responses)?q.responses[i]:0)||0);
+    const total=responses.reduce((a,b)=>a+b,0)||1;
+    // Avoid Math.max(...arr) — large option lists can throw RangeError and abort the whole feed
+    let maxResp=0;
+    for(let i=0;i<responses.length;i++) if(responses[i]>maxResp) maxResp=responses[i];
+
+    const optionsHtml=`<div class="peepal-options">${options.map((o,i)=>{
+      const pct=Math.round((responses[i]/total)*100);
+      const isTop=responses[i]===maxResp && maxResp>0;
+      const isAnswered=q.answered===i;
+      const label=escPeepalText(o);
+      return`<button type="button" class="peepal-opt ${isAnswered?'answered':''} ${isTop&&q.answered!==false?'top':''}" data-peepal-opt="${i}">
+        <span>${label}</span>
+        ${q.answered!==false?`<span class="peepal-pct">${pct}%</span>`:''}
+      </button>${q.answered!==false?`<div class="peepal-opt-bar"><div class="peepal-opt-bar-fill" style="width:${pct}%"></div></div>`:''}`;
+    }).join('')}</div>`;
+
+    const typingPrompt=q.format==='binary'?'Tell us why you chose this...':'Add your perspective...';
+    return optionsHtml + typingSection(typingPrompt);
+  }catch(e){
+    if(typeof reportClientError==='function'){
+      reportClientError({feature:'peepal_options',message:e?.message||String(e),stack:e?.stack||''});
+    }
+    return`<div class="cp-feature-error" role="status">Couldn't show options — try again.</div>`;
   }
+}
 
-  const total=q.responses.reduce((a,b)=>a+b,0)||1;
-  const optionsHtml=`<div class="peepal-options">${q.options.map((o,i)=>{
-    const pct=Math.round((q.responses[i]/total)*100);
-    const isTop=q.responses[i]===Math.max(...q.responses);
-    const isAnswered=q.answered===i;
-    return`<button class="peepal-opt ${isAnswered?'answered':''} ${isTop&&q.answered!==false?'top':''}" onclick="answerPeepal('${q.id}',${i},event)">
-      <span>${o}</span>
-      ${q.answered!==false?`<span class="peepal-pct">${pct}%</span>`:''}
-    </button>${q.answered!==false?`<div class="peepal-opt-bar"><div class="peepal-opt-bar-fill" style="width:${pct}%"></div></div>`:''}`;
-  }).join('')}</div>`;
-
-  // Typing prompt varies by question content
-  const typingPrompt=q.format==='binary'?'Tell us why you chose this...':'Add your perspective...';
-  return optionsHtml + typingSection(typingPrompt);
+function escPeepalText(s){
+  return String(s??'')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
 }
 
 function submitPeepalTyping(id, e){
@@ -1364,6 +1409,13 @@ function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
     if(typeof closeAiKeyboard==='function') closeAiKeyboard();
     detail.classList.remove('open');setTimeout(()=>detail.classList.add('hidden'),300);
     try{ history.pushState({},'', '/'); }catch(e){}
+  });
+  detail.querySelectorAll('[data-peepal-opt]').forEach(btn=>{
+    btn.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      const idx=Number(btn.getAttribute('data-peepal-opt'));
+      if(Number.isFinite(idx)) answerPeepal(q.id, idx, e);
+    });
   });
   try{
     const pid=q.firestoreId||q.id;

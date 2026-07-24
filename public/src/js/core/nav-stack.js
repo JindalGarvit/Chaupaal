@@ -89,17 +89,49 @@
     layerHistoryDepth = Math.max(0, Math.min(layerHistoryDepth, stack.length));
   }
 
+  /** Clear orphan {chaupaalLayer} history when the JS stack is already empty. */
+  function clearOrphanLayerHistory() {
+    try {
+      if (!stack.length && history.state?.chaupaalLayer) {
+        const next = history.state?.chaupaalDeep ? { chaupaalDeep: true } : {};
+        history.replaceState(next, '', location.pathname + location.search + location.hash);
+        layerHistoryDepth = 0;
+      }
+    } catch (e) {}
+  }
+
+  /**
+   * Run a layer dismiss callback without letting feature errors corrupt the stack.
+   * Always best-effort remove the DOM node if dismiss throws.
+   */
+  function safeDismissLayer(entry) {
+    if (!entry) return;
+    try {
+      if (typeof entry.dismiss === 'function') entry.dismiss();
+    } catch (e) {
+      console.warn('[nav-stack] dismiss threw', e?.message || e);
+      try {
+        dismissEl(entry.el);
+      } catch (err) {}
+      if (typeof reportClientError === 'function') {
+        try {
+          reportClientError({
+            feature: 'nav_layer_dismiss',
+            message: e?.message || String(e),
+            stack: e?.stack || '',
+          });
+        } catch (err) {}
+      }
+    }
+  }
+
   /** Reset stack + history when UI diverged — last resort so back never bricks the app. */
   function recoverNavStack(reason) {
     console.warn('[nav-stack] recover', reason || 'desync');
     pruneDead();
     while (stack.length) {
       const top = stack.pop();
-      try {
-        top.dismiss();
-      } catch (e) {
-        dismissEl(top.el);
-      }
+      safeDismissLayer(top);
     }
     layerHistoryDepth = 0;
     try {
@@ -107,7 +139,9 @@
         history.replaceState(history.state?.chaupaalDeep ? { chaupaalDeep: true } : {}, '', location.pathname);
       }
     } catch (e) {}
-    if (typeof pauseAllMusic === 'function') pauseAllMusic();
+    try {
+      if (typeof pauseAllMusic === 'function') pauseAllMusic();
+    } catch (e) {}
     if (typeof clearShellGlitches === 'function') clearShellGlitches('recoverNavStack');
     else if (typeof clearKeyboardInset === 'function') clearKeyboardInset();
   }
@@ -116,6 +150,7 @@
     if (!el || !el.isConnected) return;
     if (el.dataset.navIgnore === '1') return;
     pruneDead();
+    clearOrphanLayerHistory();
     if (stack.some((s) => s.el === el)) return;
 
     const key = `layer_${++seq}`;
@@ -130,11 +165,17 @@
     try {
       history.pushState({ chaupaalLayer: true, key }, '');
       layerHistoryDepth = stack.length;
-    } catch (e) {}
+    } catch (e) {
+      // History push failed — keep stack entry but don't claim a history depth bump
+      syncLayerHistoryDepth();
+    }
   }
 
   function popHistoryForLayer() {
-    if (layerHistoryDepth <= 0) return;
+    if (layerHistoryDepth <= 0) {
+      if (!suppressingPop) clearOrphanLayerHistory();
+      return;
+    }
     layerHistoryDepth--;
     if (suppressingPop) return;
     try {
@@ -143,36 +184,53 @@
         history.back();
         setTimeout(() => {
           suppressingPop = false;
+          // Only scrub after back settles — never replaceState mid-flight
+          if (!stack.length) clearOrphanLayerHistory();
         }, 120);
+      } else {
+        syncLayerHistoryDepth();
       }
     } catch (e) {
       suppressingPop = false;
+      syncLayerHistoryDepth();
     }
   }
 
   function removeLayerForEl(el) {
     const idx = stack.findIndex((s) => s.el === el);
-    if (idx < 0) return;
+    if (idx < 0) {
+      // Stale close while back is in flight — do not replaceState
+      if (!stack.length && !suppressingPop) clearOrphanLayerHistory();
+      return;
+    }
+    const isTop = idx === stack.length - 1;
     stack.splice(idx, 1);
-    syncLayerHistoryDepth();
-    popHistoryForLayer();
+    // CRITICAL: do NOT syncLayerHistoryDepth() before popHistoryForLayer.
+    // Syncing first clamps depth to the new (smaller) stack length and skips
+    // history.back(), leaving an orphan {chaupaalLayer} entry — that desyncs
+    // chat back / deeplinks and freezes navigation after song-picker close.
+    if (isTop) {
+      popHistoryForLayer();
+    } else {
+      syncLayerHistoryDepth();
+      if (!stack.length && !suppressingPop) clearOrphanLayerHistory();
+    }
   }
 
   function dismissTopLayer() {
     pruneDead();
-    if (!stack.length) return false;
-    const top = stack.pop();
-    syncLayerHistoryDepth();
-    suppressingPop = true;
-    try {
-      top.dismiss();
-    } catch (e) {
-      dismissEl(top.el);
+    if (!stack.length) {
+      if (!suppressingPop) clearOrphanLayerHistory();
+      return false;
     }
+    const top = stack.pop();
+    // Suppress during dismiss so close()→removeNavLayer does not scrub/back mid-flight
+    suppressingPop = true;
+    safeDismissLayer(top);
+    suppressingPop = false;
+    // Consume the matching history entry (depth still reflects pre-pop until here)
     popHistoryForLayer();
-    setTimeout(() => {
-      suppressingPop = false;
-    }, 80);
+    syncLayerHistoryDepth();
     return true;
   }
 
@@ -332,29 +390,25 @@
     if (suppressingPop) return;
     pruneDead();
 
-    if (history.state?.chaupaalLayer) {
-      if (stack.length) {
-        const top = stack.pop();
-        syncLayerHistoryDepth();
-        suppressingPop = true;
-        try {
-          top.dismiss();
-        } catch (err) {
-          dismissEl(top.el);
-        }
-        setTimeout(() => {
-          suppressingPop = false;
-        }, 80);
-        e.stopImmediatePropagation?.();
-        return;
-      }
-      recoverNavStack('popstate-layer-without-stack');
+    // Browser already consumed one history entry. If our JS stack still has a layer,
+    // dismiss it here WITHOUT calling history.back() again (that would pop chat/deep routes).
+    if (stack.length > 0) {
+      const top = stack.pop();
+      layerHistoryDepth = Math.max(0, layerHistoryDepth - 1);
+      syncLayerHistoryDepth();
+      suppressingPop = true;
+      safeDismissLayer(top);
+      setTimeout(() => {
+        suppressingPop = false;
+      }, 80);
       e.stopImmediatePropagation?.();
       return;
     }
 
-    if (stack.length > 0) {
-      recoverNavStack('stack-without-layer-state');
+    // Empty stack — scrub any orphan chaupaalLayer flag left by a buggy close path
+    if (history.state?.chaupaalLayer) {
+      clearOrphanLayerHistory();
+      e.stopImmediatePropagation?.();
     }
   }
 
