@@ -461,7 +461,11 @@ function saveProfileField(key, value){
       }
     };
     db.collection('users').doc(currentUser.uid).update(patch).then(after).catch(()=>{
-      db.collection('users').doc(currentUser.uid).set(patch,{merge:true}).then(after).catch(()=>{});
+      db.collection('users').doc(currentUser.uid).set(patch,{merge:true}).then(after).catch((e)=>{
+        // Both write paths failed — the edit the user just made is NOT saved.
+        if(typeof reportClientError==='function') reportClientError({feature:'profile_save',message:`${key}: ${e?.message||e}`});
+        if(typeof showToast==='function') showToast('Couldn’t save — check your connection');
+      });
     });
   }
   if(typeof refreshProfileCompletionUI==='function') refreshProfileCompletionUI();

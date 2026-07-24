@@ -1269,6 +1269,11 @@ function toggleOpenToMeet(){
     setDuniyaMode(btn.dataset.duniyaMode);
   });
   window.setDuniyaMode = setDuniyaMode;
-  window.renderLeharFeed = renderLeharFeed;
+  window.renderLeharFeed = typeof safeFeature === 'function'
+    ? safeFeature('lehar_feed', renderLeharFeed)
+    : renderLeharFeed;
 })();
+
+// Feed-render boundary (CONVENTIONS 4c) — dynamic list from network content
+if (typeof safeFeature === 'function') renderDuniyaFeed = safeFeature('duniya_feed', renderDuniyaFeed);
 

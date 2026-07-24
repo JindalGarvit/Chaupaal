@@ -1,0 +1,29 @@
+# Minimal CI — syntax-check every shipped JS file + existing server-lib unit tests.
+# No bundler / linter yet (manual ?v= cache busting). Expand later with ESLint.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Syntax-check client + API + server-lib
+        run: node scripts/syntax-check.js
+
+      - name: Unit tests (server-lib)
+        run: npm test

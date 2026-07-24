@@ -268,7 +268,10 @@ function populateResults(){
       score,total:QUESTIONS.length,uid:currentUser.uid,
       profileType:typeof ownProfileType==='function'?ownProfileType():(typeof getProfileType==='function'?getProfileType():'personal'),
       ts:firebase.firestore.FieldValue.serverTimestamp()
-    }).catch(()=>{});
+    }).catch((e)=>{
+      // Score missing from the leaderboard is user-visible — report, don't hide
+      if(typeof reportClientError==='function') reportClientError({feature:'akhbaar_score',message:e?.message||String(e)});
+    });
   }
   wireAkhbaarShare();
 }
@@ -361,3 +364,6 @@ function wireAkhbaarShare(){
     }
   });
 }
+
+// Reel-build boundary (CONVENTIONS 4c) — question set comes from the network
+if (typeof safeFeature === 'function') buildAkhbaar = safeFeature('akhbaar_build', buildAkhbaar);

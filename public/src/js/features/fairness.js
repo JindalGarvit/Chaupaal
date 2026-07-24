@@ -230,6 +230,8 @@ window.runPeepalAiSearch = async function(){
   const count = resultsEl?.querySelectorAll('.peepal-ai-result-card').length || 0;
   if(count > 0) addSearchFeedback(resultsEl, query, count);
 };
+// AI-integration boundary (CONVENTIONS 4c)
+if (typeof safeFeature === 'function') window.runPeepalAiSearch = safeFeature('peepal_ai_search', window.runPeepalAiSearch);
 
 // ---- Patch "Say hi" in AI search to intercept + schedule outcome check ----
 // This patches the dynamically created buttons in runPeepalAiSearch

@@ -46,6 +46,13 @@
     '.ai-keyboard',
     '#aiKeyboardEl',
     '.streak-milestone-overlay',
+    // Full-screen surfaces that previously bypassed the stack (system back
+    // left the app / desynced history): onboarding, challenge creator,
+    // story viewer, daily duel ritual.
+    '.onboarding-overlay',
+    '.challenge-creator',
+    '.story-viewer',
+    '.duel-ritual-overlay',
   ].join(',');
 
   function dismissEl(el) {

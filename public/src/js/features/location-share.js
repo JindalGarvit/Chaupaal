@@ -641,10 +641,13 @@
     }
   }
 
+  // Leaflet/geolocation integration boundary (CONVENTIONS 4c); renderLocationCard
+  // returns HTML consumed in template strings, so it stays unwrapped.
+  const guardLoc = typeof safeFeature === 'function' ? safeFeature : (n, f) => f;
   window.ensureLeaflet = ensureLeaflet;
-  window.openLocationComposer = openLocationComposer;
+  window.openLocationComposer = guardLoc('location_composer', openLocationComposer);
   window.renderLocationCard = renderLocationCard;
-  window.mountLocationCards = mountLocationCards;
+  window.mountLocationCards = guardLoc('location_mount', mountLocationCards);
   window.normalizeLocationAttachment = normalizeLocation;
   window.stopLiveShare = stopLiveShare;
   window.promptMatchLocation = promptMatchLocation;

@@ -550,8 +550,12 @@
       return Array.isArray(packed) ? packed : packed?.results || [];
     },
   };
-  window.openSongPicker = openSongPicker;
+  // JioSaavn/iTunes integration boundary (CONVENTIONS 4c). renderMusicCard is
+  // NOT wrapped — callers concatenate its return into HTML, so a null from the
+  // guard would render the literal text "null".
+  const guardMusic = typeof safeFeature === 'function' ? safeFeature : (n, f) => f;
+  window.openSongPicker = guardMusic('music_picker', openSongPicker);
   window.pauseAllMusic = pauseAllMusic;
   window.renderMusicCard = renderMusicCard;
-  window.mountMusicCards = mountMusicCards;
+  window.mountMusicCards = guardMusic('music_mount', mountMusicCards);
 })();

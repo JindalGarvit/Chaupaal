@@ -37,6 +37,7 @@
     '#closeLudoPick',
     '#storyClose',
     '#closeBaithakStory',
+    '#onboardSkip',
     '#dayCheckSkip',
     '#dayCheckSnooze',
     '[data-overlay-dismiss]',

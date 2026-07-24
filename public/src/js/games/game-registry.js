@@ -293,7 +293,9 @@
   window.registerGame = registerGame;
   window.getGames = getGames;
   window.getGame = getGame;
-  window.openGamePicker = openGamePicker;
-  window.handleDangalGameTap = handleDangalGameTap;
-  window.launchDangalWithOpponent = launchDangalWithOpponent;
+  // Game-launch boundary (CONVENTIONS 4c) — a broken engine must not blank the shell
+  const guardGame = typeof safeFeature === 'function' ? safeFeature : (n, f) => f;
+  window.openGamePicker = guardGame('game_picker', openGamePicker);
+  window.handleDangalGameTap = guardGame('game_launch', handleDangalGameTap);
+  window.launchDangalWithOpponent = guardGame('game_launch_vs', launchDangalWithOpponent);
 })();

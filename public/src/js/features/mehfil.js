@@ -515,6 +515,8 @@
     }
   }
 
-  window.openMehfil = openMehfil;
-  window.leaveMehfil = leaveMehfil;
+  // Agora integration boundary — failures report + recover shell (CONVENTIONS 4c)
+  const guardMehfil = typeof safeFeature === 'function' ? safeFeature : (n, f) => f;
+  window.openMehfil = guardMehfil('mehfil_open', openMehfil);
+  window.leaveMehfil = guardMehfil('mehfil_leave', leaveMehfil);
 })();

@@ -462,7 +462,7 @@ function updatePersonalityFromAurSunao(questionText, answerText){
   }
   personalityProfile.lastUpdated=new Date().toISOString();
   try{localStorage.setItem('chaupaal_personality',JSON.stringify(personalityProfile));}catch(e){}
-  if(db&&currentUser){db.collection('users').doc(currentUser.uid).update({personalityProfile}).catch(()=>{});}
+  if(db&&currentUser){db.collection('users').doc(currentUser.uid).update({personalityProfile}).catch((e)=>{if(typeof reportClientError==='function')reportClientError({feature:'personality_save',message:e?.message||String(e)});});}
 }
 
 async function analyseEveningCheckIn(text){
@@ -489,7 +489,7 @@ async function analyseEveningCheckIn(text){
       });
     }
     try{localStorage.setItem('chaupaal_personality',JSON.stringify(personalityProfile));}catch(e){}
-    if(db&&currentUser){db.collection('users').doc(currentUser.uid).update({personalityProfile,lastCheckIn:{text,analysis,date:new Date().toISOString()}}).catch(()=>{});}
+    if(db&&currentUser){db.collection('users').doc(currentUser.uid).update({personalityProfile,lastCheckIn:{text,analysis,date:new Date().toISOString()}}).catch((e)=>{if(typeof reportClientError==='function')reportClientError({feature:'personality_save',message:e?.message||String(e)});});}
   }catch(e){}
 }
 
@@ -1296,7 +1296,7 @@ async function updatePersonalityFromPeepalAnswer(q, typedAnswer){
     if(analysis.interests) personalityProfile.interests=[...new Set([...(personalityProfile.interests||[]),...analysis.interests])].slice(0,15);
     if(analysis.vibe) personalityProfile.lifestyle=analysis.vibe;
     try{localStorage.setItem('chaupaal_personality',JSON.stringify(personalityProfile));}catch(e){}
-    if(db&&currentUser) db.collection('users').doc(currentUser.uid).update({personalityProfile}).catch(()=>{});
+    if(db&&currentUser) db.collection('users').doc(currentUser.uid).update({personalityProfile}).catch((e)=>{if(typeof reportClientError==='function')reportClientError({feature:'personality_save',message:e?.message||String(e)});});
   }catch(e){}
 }
 
@@ -1364,6 +1364,8 @@ async function openPeepalBoostComingSoon(q){
 }
 window.openPeepalBoostComingSoon=openPeepalBoostComingSoon;
 window.recordPeepalSegmentResponse=recordPeepalSegmentResponse;
+// Feed-render boundary (CONVENTIONS 4c) — dynamic list from network content
+if (typeof safeFeature === 'function') renderPeepalFeed = safeFeature('peepal_feed', renderPeepalFeed);
 
 function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
   const detail=document.getElementById('peepalDetail');

@@ -4,7 +4,9 @@
   "private": true,
   "description": "Chaupaal — News with Social Discovery",
   "scripts": {
-    "test": "node scripts/test-social-model.js && node scripts/test-chaupaal.js && node scripts/test-crisis-detector.js && node scripts/test-matchmaking.js"
+    "test": "node scripts/test-social-model.js && node scripts/test-chaupaal.js && node scripts/test-crisis-detector.js && node scripts/test-matchmaking.js",
+    "syntax-check": "node scripts/syntax-check.js",
+    "ci": "npm run syntax-check && npm test"
   },
   "dependencies": {
     "@upstash/ratelimit": "^2.0.8",

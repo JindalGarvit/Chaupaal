@@ -421,6 +421,11 @@ function openChatScreen(chat){
 }
 
 window.closeChatScreen = closeChatScreen;
+// Chat-open boundary (CONVENTIONS 4c): message-history render is a dynamic
+// list — a bad message doc must not blank the shell. Rebinding the top-level
+// declaration guards in-file and cross-file callers alike.
+if (typeof safeFeature === 'function') openChatScreen = safeFeature('chat_open', openChatScreen);
+window.openChatScreen = openChatScreen;
 
 // ===================== AI SUGGESTION BAR (no autocorrect, smart next-word/emoji) =====================
 const QUICK_PHRASES = ["Sounds good!","On my way","Let's do it","Haha 😄","I agree","Not sure yet","Talk later?","Great idea!"];
@@ -725,6 +730,8 @@ function startDailyDuelRitual(chat){
   let qIdx = 0, myAnswers = [], theirAnswers = [];
 
   const overlay = document.createElement('div');
+  // Class is the nav-stack registration hook (LAYER_SELECTORS) — styling stays inline
+  overlay.className = 'duel-ritual-overlay';
   overlay.style.cssText = 'position:absolute;inset:0;background:var(--cream);z-index:90;display:flex;flex-direction:column;padding:16px;';
 
   function renderRitualQ(){

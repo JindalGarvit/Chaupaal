@@ -366,7 +366,9 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment){
       if (csnap.exists && !csnap.data()?.firstMessageAt) chatPatch.firstMessageAt = nowMs;
       await cref.set(chatPatch, { merge: true });
     } catch (e2) {
-      await db.collection('chats').doc(chatId).set(chatPatch, { merge: true }).catch(() => {});
+      await db.collection('chats').doc(chatId).set(chatPatch, { merge: true }).catch((e3) => {
+        if (typeof reportClientError === 'function') reportClientError({ feature: 'streak_patch', message: e3?.message || String(e3) });
+      });
     }
     if (window.currentOpenChat && (window.currentOpenChat.firestoreId === chatId || window.currentOpenChat.id === chatId)) {
       window.currentOpenChat.lastMessageAt = nowMs;

@@ -729,7 +729,10 @@
 
   window.registerSearchProvider = registerSearchProvider;
   window.universalSearch = universalSearch;
-  window.openUniversalSearch = openUniversalSearch;
+  // Dynamic-list boundary (CONVENTIONS 4c): search UI renders provider results
+  window.openUniversalSearch = typeof safeFeature === 'function'
+    ? safeFeature('search_open', openUniversalSearch)
+    : openUniversalSearch;
   window.normalizeSearchQuery = normalizeQuery;
   window.SEARCH_CATEGORY_PREVIEW = CATEGORY_PREVIEW;
   window.SEARCH_SEE_MORE_LIMIT = SEE_MORE_LIMIT;
