@@ -468,7 +468,7 @@ function openPeepalAskSheet(){
   const lim = window.PolicyLimits?.ANON_POSTS || { perDay: 2, perWeek: 7 };
   sheet.innerHTML=`
     <div class="ask-header">
-      <button id="closeAsk" style="background:none;border:none;font-size:22px;cursor:pointer;">✕</button>
+      <button id="closeAsk" aria-label="Close" style="background:none;border:none;cursor:pointer;padding:8px;color:var(--ink);">${typeof iconHtml==='function'?iconHtml('x',{size:22}):'✕'}</button>
       <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">Ask Peepal</div>
       <button class="btn btn--primary btn--sm peepal-ask-publish-btn" id="peepalPublishBtn">Post</button>
     </div>
@@ -683,6 +683,8 @@ function openPeepalAskSheet(){
     if(!quota.ok){showToast('Weekly limit reached (5/week). Upgrade to Premium for more!');return;}
     const wantsAnon=!!document.getElementById('anonToggle')?.checked;
     let isAnon=false;
+    // Check anon quota before build/write, but consume ONLY after Firestore
+    // succeeds — otherwise a denied write still burns a scarce slot.
     if(wantsAnon){
       try{
         anonQuota = await getAnonRemaining();
@@ -690,14 +692,9 @@ function openPeepalAskSheet(){
           showToast(anonQuota.unlock||'Anonymous limit reached');
           return;
         }
-        await PolicyUsage.consume('anon');
         isAnon=true;
       }catch(e){
-        showToast(e?.code==='DAILY_LIMIT'||e?.code==='WEEKLY_LIMIT'
-          ?(anonQuota.unlock||'Anonymous limit reached')
-          :e?.code==='QUOTA_UNAVAILABLE'
-          ?'Couldn’t verify your limit — try again shortly'
-          :'Could not use anonymous post right now');
+        showToast('Couldn’t verify your anonymous limit — try again shortly');
         return;
       }
     }
@@ -736,14 +733,20 @@ function openPeepalAskSheet(){
       completedAt:null,
       stallReason:null,
     }));
+    // SECURITY: even anonymous posts must carry the real auth uid on user.uid —
+    // Firestore create rules require user.uid == auth.uid (Phase A). Display
+    // name/avatar stay anonymous; only the public label changes.
+    const ownUid=currentUser?.uid||'me';
     const q={id:`q_${Date.now()}`,question:text,format:fmt,options:opts,responses:opts.map(()=>0),totalResponses:0,comments:0,timeAgo:'just now',ts:Date.now(),tag:fmt.toUpperCase(),answered:false,deleted:false,
       audience:saveOnly?'private':audience, responseLimitMode, responseCap:postCap, audienceSegments:saveOnly?[]:audienceSegments,
       segmentDistributionActive:!saveOnly && audienceSegments.some(s=>s.status==='active'),
       activeSegmentIndex:0,
       archived:!!saveOnly,
       saveOnly:!!saveOnly,
-      user:isAnon?{name:'Anonymous',avatar:'🎭',uid:'anon',profileType:'personal'}:{name:userProfile?.name||'You',avatar:userProfile?.photoURL||'🪑',uid:currentUser?.uid||'me',profileType:(typeof ownProfileType==='function'?ownProfileType():(typeof getProfileType==='function'?getProfileType():'personal'))},
-      anonymous:isAnon,uid:currentUser?.uid||'me'};
+      user:isAnon
+        ?{name:'Anonymous',avatar:'🎭',uid:ownUid,profileType:'personal'}
+        :{name:userProfile?.name||'You',avatar:userProfile?.photoURL||'🪑',uid:ownUid,photoURL:userProfile?.photoURL||null,profileType:(typeof ownProfileType==='function'?ownProfileType():(typeof getProfileType==='function'?getProfileType():'personal'))},
+      anonymous:isAnon,uid:ownUid};
 
     // Optional image attachment (compressed to Storage)
     if(typeof pendingPeepalAttachment!=='undefined'&&pendingPeepalAttachment?.type==='image'&&pendingPeepalAttachment.file&&!isAnon){
@@ -771,8 +774,6 @@ function openPeepalAskSheet(){
       pendingPeepalAttachment=null;
     }
 
-    if(!saveOnly) peepalQuestions.unshift(q);
-    peepalDraft?.clear?.();
     if(db&&currentUser){
       try{
         if(typeof assertOwnUid==='function'&&!assertOwnUid(currentUser.uid)) throw new Error('Not authorized');
@@ -801,16 +802,40 @@ function openPeepalAskSheet(){
           createdAt:firebase.firestore.FieldValue.serverTimestamp(),ts:Date.now(),
         });
         q.firestoreId=ref.id;
+        // Consume after successful write so a rules/network failure never burns a slot
+        if(isAnon){
+          try{ await PolicyUsage.consume('anon'); }
+          catch(qe){
+            if(typeof reportClientError==='function'){
+              reportClientError({feature:'peepal_anon_consume',message:qe?.message||String(qe)});
+            }
+          }
+        }
       }catch(e){
-        showToast(typeof friendlyError==='function'?friendlyError(e):'Saved locally; sync failed');
+        if(typeof reportClientError==='function'){
+          reportClientError({feature:'peepal_create',message:e?.message||String(e),stack:e?.stack||''});
+        }
+        showToast(
+          e?.code==='DAILY_LIMIT'||e?.code==='WEEKLY_LIMIT'
+            ?(anonQuota?.unlock||'Anonymous limit reached')
+            :e?.code==='QUOTA_UNAVAILABLE'
+            ?'Couldn’t verify your limit — try again shortly'
+            :(typeof friendlyError==='function'?friendlyError(e):'Couldn’t post — check your connection')
+        );
+        return;
       }
+    } else if(!db||!currentUser){
+      showToast('Sign in to post on Peepal');
+      return;
     }
+    if(!saveOnly) peepalQuestions.unshift(q);
+    peepalDraft?.clear?.();
     saveToArchive({type:'peepal_post',...q});
     sheet.classList.remove('open');setTimeout(()=>sheet.remove(),350);
     renderPeepalFeed();
       if(typeof trackPostCreated==='function') trackPostCreated(isAnon?'peepal_anon':'peepal');
       if(typeof SoundLib!=='undefined'&&SoundLib.postPublish) SoundLib.postPublish();
-      showToast(saveOnly?'Saved privately to Archive':(isAnon?'Posted anonymously 🎭':'Question posted to Peepal! 🌳'));
+      showToast(saveOnly?'Saved privately to Archive':(isAnon?'Posted anonymously':'Question posted to Peepal'));
     }finally{
       if(pubBtn){ pubBtn.disabled=false; pubBtn.textContent=pubLabel; }
       if(typeof unlock==='function') unlock();

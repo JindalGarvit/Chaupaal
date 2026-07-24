@@ -1,7 +1,9 @@
 /* ===== PEEPAL ===== */
-.peepal-screen{flex:1;overflow-y:auto;display:flex;flex-direction:column;}
+/* Single scroll owner: the screen. Feed must NOT also overflow-y:auto —
+   nested scroll made posts feel unreachable and fought the bottom tabs. */
+.peepal-screen{flex:1;overflow-y:auto;display:flex;flex-direction:column;min-height:0;}
 .peepal-screen::-webkit-scrollbar{display:none;}
-.peepal-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px 10px;flex-shrink:0;background:var(--white);border-bottom:1px solid var(--line);}
+.peepal-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px 10px;flex-shrink:0;background:var(--white);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:2;}
 .peepal-title{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:20px;}
 .peepal-ask-btn{background:var(--red);color:#fff;border:none;border-radius:999px;padding:8px 18px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px;cursor:pointer;}
 
@@ -15,7 +17,15 @@
 .peepal-ai-result-card{background:var(--cream);border-radius:14px;padding:14px;margin-bottom:10px;border:1.5px solid var(--line);}
 .peepal-ai-result-card .ai-match-reason{font-size:12px;color:var(--muted);font-style:italic;margin-top:6px;line-height:1.5;}
 .peepal-ai-thinking{display:flex;align-items:center;gap:10px;padding:14px;color:var(--muted);font-size:13px;}
-.peepal-feed{flex:1;padding:14px 16px;overflow-y:auto;display:flex;flex-direction:column;gap:14px;}
+.peepal-feed{
+  flex:none;
+  padding:14px 16px;
+  padding-bottom:calc(var(--tab-h,64px) + env(safe-area-inset-bottom,0px) + 20px);
+  overflow:visible;
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
 .peepal-feed::-webkit-scrollbar{display:none;}
 
 /* ===== PEEPAL DISCOVERY SECTION ===== */

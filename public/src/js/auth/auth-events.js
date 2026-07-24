@@ -190,7 +190,15 @@ function wireAuthEvents() {
   });
   document.getElementById('toggleLoginPwd')?.addEventListener('click', () => {
     const inp = document.getElementById('loginPassword');
-    if (inp) inp.type = inp.type === 'password' ? 'text' : 'password';
+    const btn = document.getElementById('toggleLoginPwd');
+    if (!inp) return;
+    const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    if (btn && typeof iconHtml === 'function') {
+      btn.innerHTML = iconHtml(show ? 'eye-off' : 'eye', { size: 18 });
+      btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      btn.dataset.iconHydrated = '1';
+    }
   });
   document.getElementById('forgotPasswordBtn')?.addEventListener('click', () => {
     const email = document.getElementById('loginEmail')?.value.trim();
@@ -543,7 +551,15 @@ function wireAuthEvents() {
 
   document.getElementById('toggleRegPwd')?.addEventListener('click', () => {
     const inp = document.getElementById('regPassword');
-    if (inp) inp.type = inp.type === 'password' ? 'text' : 'password';
+    const btn = document.getElementById('toggleRegPwd');
+    if (!inp) return;
+    const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    if (btn && typeof iconHtml === 'function') {
+      btn.innerHTML = iconHtml(show ? 'eye-off' : 'eye', { size: 18 });
+      btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      btn.dataset.iconHydrated = '1';
+    }
   });
 
   document.querySelectorAll('#intentChips .auth-intent-chip').forEach((chip) => {

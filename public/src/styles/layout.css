@@ -97,10 +97,11 @@ html,body{
     display:grid!important;
     grid-template-columns:1fr 1fr;
     gap:16px;padding:20px 24px;
-    align-items:start;overflow-y:auto;
+    padding-bottom:calc(var(--tab-h,64px) + 24px);
+    align-items:start;overflow:visible;
   }
   .peepal-feed::-webkit-scrollbar{display:none;}
-  .peepal-screen{overflow-y:auto;}
+  .peepal-screen{overflow-y:auto;min-height:0;}
 }
 
 @media(min-width:1024px){

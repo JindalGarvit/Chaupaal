@@ -1,0 +1,108 @@
+/* Chaupaal icon system */
+.cp-icon{
+  display:inline-block;
+  vertical-align:middle;
+  flex-shrink:0;
+  width:1.25em;
+  height:1.25em;
+  stroke:currentColor;
+  fill:none;
+  pointer-events:none;
+}
+.cp-icon--empty{
+  width:40px;
+  height:40px;
+  opacity:0.55;
+  color:var(--muted);
+}
+.icon-btn .cp-icon,
+.tab-icon .cp-icon,
+.profile-btn .cp-icon{
+  width:20px;
+  height:20px;
+}
+.tab-btn .tab-icon{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  line-height:0;
+  font-size:0; /* hide leftover emoji text if any */
+}
+.tab-btn .tab-icon .cp-icon{
+  width:22px;
+  height:22px;
+}
+.bottom-tabs .tab-btn.active .cp-icon{
+  color:var(--red);
+}
+.sidebar-streak{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.peepal-footer-stat .cp-icon,
+.duniya-action-btn .cp-icon{
+  width:18px;
+  height:18px;
+}
+.peepal-delete-btn .cp-icon,
+.duniya-delete-btn .cp-icon{
+  width:16px;
+  height:16px;
+}
+/* Close / back buttons that used ✕ ← as text */
+.cp-icon-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  background:none;
+  border:none;
+  cursor:pointer;
+  color:var(--ink);
+  padding:8px;
+  min-width:44px;
+  min-height:44px;
+}
+.cp-icon-btn .cp-icon{ width:22px; height:22px; }
+
+/* Inline icon + label chips */
+.akhbaar-cat-chip,
+.peepal-nudge-chip,
+.auth-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+}
+.akhbaar-cat-chip .cp-icon,
+.peepal-nudge-chip .cp-icon{ width:14px; height:14px; flex-shrink:0; }
+.auth-pill .cp-icon{ width:14px; height:14px; flex-shrink:0; }
+.auth-proof-avatars{
+  display:flex;
+  align-items:center;
+}
+.auth-proof-avatars .auth-proof-avatar{
+  width:28px;height:28px;border-radius:50%;
+  background:var(--cream);border:2px solid var(--white);
+  display:inline-flex;align-items:center;justify-content:center;
+  margin-left:-8px;color:var(--muted);
+}
+.auth-proof-avatars .auth-proof-avatar:first-child{ margin-left:0; }
+.auth-proof-avatars .cp-icon{ width:14px; height:14px; }
+.modal-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+}
+.modal-btn .cp-icon{ width:16px; height:16px; }
+.modal-title{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.story-add-icon{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.story-add-icon .cp-icon{ width:20px; height:20px; }

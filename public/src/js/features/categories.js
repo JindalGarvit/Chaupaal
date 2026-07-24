@@ -769,14 +769,21 @@ async function loadPeepalPage({reset=false}={}){
     // Seed docs are shown for pre-launch testing while PEEPAL_SEED_CONTENT_ENABLED
     // is on; once it is turned off, any leftover seed docs are filtered out so
     // real users never see placeholder content.
-    const mapped=page.items.map(mapPeepalDoc).filter(q=>(PEEPAL_SEED_CONTENT_ENABLED||!q.isSeedContent)&&!(typeof isSoftDeleted==='function'?isSoftDeleted(q):q.deleted));
+    const mapped=page.items.map(mapPeepalDoc).filter(q=>(PEEPAL_SEED_CONTENT_ENABLED||!q.isSeedContent)&&!(typeof isSoftDeleted==='function'?isSoftDeleted(q):q.deleted)&&!(q.archived===true||q.saveOnly===true));
     if(typeof enrichUsersWithProfileType==='function'){
       await enrichUsersWithProfileType(mapped.map(q=>q.user).filter(Boolean));
     }
     await hydratePeepalSocial(mapped);
     if(reset&&mapped.length){
       peepalLiveMode=true;
-      peepalQuestions=mapped;
+      // Keep any own posts just published that the query hasn't returned yet
+      const pending=(peepalQuestions||[]).filter(q=>{
+        const id=q.firestoreId||q.id;
+        if(!id||!(q.uid===currentUser?.uid||q.user?.uid===currentUser?.uid)) return false;
+        if(q.archived||q.saveOnly) return false;
+        return !mapped.some(m=>(m.firestoreId||m.id)===id);
+      });
+      peepalQuestions=[...pending,...mapped];
     } else if(mapped.length){
       const seen=new Set(peepalQuestions.map(q=>q.firestoreId||q.id));
       mapped.forEach(q=>{ if(!seen.has(q.firestoreId||q.id)) peepalQuestions.push(q); });
@@ -908,15 +915,21 @@ async function initPeepal(){
 }
 
 function peepalScore(q){
-  // Trending algorithm: engagement velocity + personality match + recency
-  const ageHours=parseInt(q.timeAgo)||1;
-  const engagementVelocity=(q.totalResponses+q.comments*2)/ageHours;
+  // Trending: engagement + personality + recency. Own brand-new posts pin to
+  // the top so create → feed always shows the post the user just published.
+  const own=currentUser?.uid&&(q.uid===currentUser.uid||q.user?.uid===currentUser.uid);
+  const ageMs=Math.max(0, Date.now()-(Number(q.ts)||Date.now()));
+  if(own && ageMs < 10*60*1000) return 1e9 - ageMs; // newest own first
+  const ageHours=Math.max(ageMs/(1000*60*60), 1/60);
+  const engagementVelocity=(Number(q.totalResponses)||0)+(Number(q.comments)||0)*2;
   const personalityMatch=matchPersonalityToQuestion(q);
   const recency=Math.max(0,100-ageHours*3);
-  const randomBoost=Math.random()*30; // 30% random factor for stranger discovery
-  // Immediate client ranking uses the same private signal sent to the backend.
+  // Stable per-id jitter (not Math.random each render) so scroll position stays put
+  const idSeed=String(q.firestoreId||q.id||'');
+  let h=0; for(let i=0;i<idSeed.length;i++) h=(h*31+idSeed.charCodeAt(i))|0;
+  const randomBoost=(Math.abs(h)%30);
   const reactionBoost=q.myReaction==='up'?18:q.myReaction==='down'?-24:0;
-  return engagementVelocity*0.35 + personalityMatch*0.25 + recency*0.1 + randomBoost*0.3 + reactionBoost;
+  return (engagementVelocity/ageHours)*0.35 + personalityMatch*0.25 + recency*0.1 + randomBoost*0.3 + reactionBoost;
 }
 
 function matchPersonalityToQuestion(q){
@@ -1052,12 +1065,13 @@ function renderPeepalFeed(){
   const feed=document.getElementById('peepalFeed');if(!feed)return;
   const sorted=[...peepalQuestions]
     .filter(q=>!(typeof isSoftDeleted==='function'?isSoftDeleted(q):q.deleted))
+    .filter(q=>!(q.archived===true||q.saveOnly===true))
     .sort((a,b)=>peepalScore(b)-peepalScore(a));
   feed.innerHTML='';
   if(!sorted.length){
     if(typeof renderEmptyState==='function'){
       renderEmptyState(feed, {
-        icon:'🌳',
+        icon: typeof iconHtml==='function'?iconHtml('tree',{size:40,className:'cp-icon--empty'}):'🌳',
         title:'No questions yet',
         message:'Be the first to ask the Peepal community something.',
         actionLabel:'Ask a question',
@@ -1088,7 +1102,7 @@ function renderPeepalFeed(){
           <div class="peepal-user-meta">${escPeepalText([q.user.city, typeof formatRelativeTime==='function'?formatRelativeTime(q.timeAgo||q.ts):q.timeAgo].filter(Boolean).join(' · '))}</div>
           ${q.user.bio?`<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">"${escPeepalText(q.user.bio)}"</div>`:''}
         </div>
-        ${canDelete?`<button class="peepal-delete-btn" title="Delete" style="background:none;border:none;cursor:pointer;font-size:15px;color:var(--muted);">🗑️</button>`:''}
+        ${canDelete?`<button class="peepal-delete-btn" title="Delete" aria-label="Delete" style="background:none;border:none;cursor:pointer;color:var(--muted);">${typeof iconHtml==='function'?iconHtml('trash',{size:16}):'🗑️'}</button>`:''}
         <button class="peepal-speak-btn" data-text="${escPeepalText(q.question)}" title="Listen to this post">🔊</button>
       </div>
       <div class="peepal-card-body">
@@ -1099,10 +1113,10 @@ function renderPeepalFeed(){
         ${renderPeepalCommentStrip(q)}
       </div>
       <div class="peepal-card-footer">
-        <button type="button" class="peepal-footer-stat peepal-open-comments">💬 ${q.comments} comments</button>
-        <span class="peepal-footer-stat">👥 ${q.totalResponses} responses</span>
-        ${canDelete?`<button type="button" class="peepal-footer-stat peepal-boost-btn" data-boost-post title="Boost this post">🚀 Boost</button>`:''}
-        <button type="button" class="peepal-footer-stat peepal-share-btn" style="background:none;border:none;cursor:pointer;">↗️ Share</button>
+        <button type="button" class="peepal-footer-stat peepal-open-comments">${typeof iconHtml==='function'?iconHtml('message-circle',{size:14}):'💬'} ${q.comments} comments</button>
+        <span class="peepal-footer-stat">${typeof iconHtml==='function'?iconHtml('users',{size:14}):'👥'} ${q.totalResponses} responses</span>
+        ${canDelete?`<button type="button" class="peepal-footer-stat peepal-boost-btn" data-boost-post title="Boost this post">${typeof iconHtml==='function'?iconHtml('rocket',{size:14}):'🚀'} Boost</button>`:''}
+        <button type="button" class="peepal-footer-stat peepal-share-btn" style="background:none;border:none;cursor:pointer;">${typeof iconHtml==='function'?iconHtml('share',{size:14}):'↗️'} Share</button>
         <span class="peepal-tag">${escPeepalText(q.tag)}</span>
       </div>
     `;
@@ -1382,8 +1396,8 @@ function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
   let replyTo = null;
   detail.innerHTML=`
     <div class="peepal-detail-header">
-      <button class="peepal-detail-back cp-tap-target" id="peepalDetailBack">←</button>
-      <div class="peepal-detail-title">🌳 Peepal</div>
+      <button class="peepal-detail-back cp-tap-target" id="peepalDetailBack" aria-label="Back">${typeof iconHtml==='function'?iconHtml('arrow-left',{size:22}):'←'}</button>
+      <div class="peepal-detail-title" style="display:flex;align-items:center;gap:8px;">${typeof iconHtml==='function'?iconHtml('tree',{size:20}):'🌳'} Peepal</div>
     </div>
     <div class="peepal-detail-body">
       <div class="peepal-card-header" style="padding:0 0 12px;">

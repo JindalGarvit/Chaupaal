@@ -14,11 +14,12 @@
 <link rel="apple-touch-icon" href="/icon.png">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/src/styles/tokens.css">
-  <link rel="stylesheet" href="/src/styles/layout.css?v=5">
+  <link rel="stylesheet" href="/src/styles/icons.css?v=2">
+  <link rel="stylesheet" href="/src/styles/layout.css?v=6">
   <link rel="stylesheet" href="/src/styles/akhbaar.css?v=3">
   <link rel="stylesheet" href="/src/styles/dangal.css?v=23">
-  <link rel="stylesheet" href="/src/styles/baithak.css?v=22">
-  <link rel="stylesheet" href="/src/styles/peepal.css?v=21">
+  <link rel="stylesheet" href="/src/styles/baithak.css?v=23">
+  <link rel="stylesheet" href="/src/styles/peepal.css?v=22">
   <link rel="stylesheet" href="/src/styles/duniya.css?v=20">
   <link rel="stylesheet" href="/src/styles/components.css?v=43">
 </head>
@@ -58,19 +59,23 @@
             </div>
             <span class="auth-hero-wordmark">Chaupaal</span>
           </div>
-          <div class="auth-hero-headline">India's digital<br><em>chaupaal</em> 🪑</div>
+          <div class="auth-hero-headline">India's digital<br><em>chaupaal</em> <span data-icon="armchair" data-icon-size="28" style="display:inline-flex;vertical-align:middle;color:var(--red);"></span></div>
           <div class="auth-hero-sub">Where real people discuss real things — news, life, games, and each other.</div>
           <div class="auth-social-proof">
             <div class="auth-proof-avatars">
-              <span>😊</span><span>🧔</span><span>👩</span><span>👦</span><span>🧕</span>
+              <span class="auth-proof-avatar" data-icon="user" data-icon-size="14"></span>
+              <span class="auth-proof-avatar" data-icon="user" data-icon-size="14"></span>
+              <span class="auth-proof-avatar" data-icon="user" data-icon-size="14"></span>
+              <span class="auth-proof-avatar" data-icon="user" data-icon-size="14"></span>
+              <span class="auth-proof-avatar" data-icon="user" data-icon-size="14"></span>
             </div>
             <div class="auth-proof-text">Join <strong>10,000+</strong> people already on Chaupaal</div>
           </div>
           <div class="auth-feature-pills">
-            <span class="auth-pill">📰 Daily news quiz</span>
-            <span class="auth-pill">🌳 Real discussions</span>
-            <span class="auth-pill">⚔️ Games & duels</span>
-            <span class="auth-pill">🤝 Make friends</span>
+            <span class="auth-pill"><span data-icon="newspaper" data-icon-size="14"></span> Daily news quiz</span>
+            <span class="auth-pill"><span data-icon="tree" data-icon-size="14"></span> Real discussions</span>
+            <span class="auth-pill"><span data-icon="swords" data-icon-size="14"></span> Games &amp; duels</span>
+            <span class="auth-pill"><span data-icon="handshake" data-icon-size="14"></span> Make friends</span>
           </div>
         </div>
         <div class="auth-hero-actions">
@@ -84,8 +89,8 @@
       <!-- ===== LOGIN SCREEN ===== -->
       <div class="auth-form-screen hidden" id="authLoginScreen">
         <div class="auth-form-header">
-          <button class="auth-back-btn" id="loginBackBtn">←</button>
-          <div class="auth-form-title">Welcome back 👋</div>
+          <button class="auth-back-btn" id="loginBackBtn" data-icon="arrow-left"></button>
+          <div class="auth-form-title">Welcome back</div>
           <div style="width:36px;"></div>
         </div>
         <div class="auth-form-body">
@@ -97,7 +102,7 @@
             <label class="auth-input-label">Password</label>
             <div style="position:relative;">
               <input class="auth-input" type="password" id="loginPassword" placeholder="Your password" style="padding-right:44px;" autocomplete="current-password">
-              <button id="toggleLoginPwd" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--muted);">👁</button>
+              <button id="toggleLoginPwd" type="button" aria-label="Show password" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--muted);padding:4px;" data-icon="eye" data-icon-size="18"></button>
             </div>
           </div>
           <button class="auth-forgot" id="forgotPasswordBtn">Forgot password?</button>
@@ -126,7 +131,7 @@
       <!-- ===== REGISTER: STEP 1 — Account type + identity ===== -->
       <div class="auth-form-screen hidden" id="authRegStep1">
         <div class="auth-form-header">
-          <button class="auth-back-btn" id="reg1BackBtn">←</button>
+          <button class="auth-back-btn" id="reg1BackBtn" data-icon="arrow-left"></button>
           <div class="auth-form-title">Join Chaupaal</div>
           <div class="auth-step-badge">1 / 2</div>
         </div>
@@ -181,7 +186,7 @@
       <!-- ===== REGISTER: STEP 2 — Account credentials (+ optional extras) ===== -->
       <div class="auth-form-screen hidden" id="authRegStep2">
         <div class="auth-form-header">
-          <button class="auth-back-btn" id="reg2BackBtn">←</button>
+          <button class="auth-back-btn" id="reg2BackBtn" data-icon="arrow-left"></button>
           <div class="auth-form-title">Create your account</div>
           <div class="auth-step-badge">2 / 2</div>
         </div>
@@ -195,7 +200,7 @@
             <label class="auth-input-label">Password <span class="auth-required">*</span></label>
             <div style="position:relative;">
               <input class="auth-input" type="password" id="regPassword" placeholder="Min 8 characters" style="padding-right:44px;" autocomplete="new-password">
-              <button type="button" id="toggleRegPwd" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--muted);">👁</button>
+              <button type="button" id="toggleRegPwd" aria-label="Show password" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--muted);padding:4px;" data-icon="eye" data-icon-size="18"></button>
             </div>
             <div class="auth-pwd-strength" id="pwdStrength" style="display:none;">
               <div class="auth-pwd-bar"><div id="pwdStrengthFill" style="height:100%;border-radius:99px;transition:all .3s;"></div></div>
@@ -224,7 +229,7 @@
             <div class="auth-optional-label">Optional — add now or later</div>
             <div style="text-align:center;margin-bottom:14px;">
               <div class="auth-photo-preview" id="photoPreview" style="margin:0 auto 10px;">
-                <span style="font-size:28px;">📷</span>
+                <span data-icon="camera" data-icon-size="28" style="color:var(--muted);"></span>
               </div>
               <label class="auth-photo-upload-btn">
                 Add a photo
@@ -293,10 +298,10 @@
       <!-- ===== SUCCESS SCREEN ===== -->
       <div class="auth-form-screen hidden" id="authSuccessScreen">
         <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center;">
-          <div style="font-size:72px;margin-bottom:20px;" id="authSuccessEmoji">🎉</div>
+          <div style="margin-bottom:20px;color:var(--red);" id="authSuccessEmoji" data-icon="party" data-icon-size="64"></div>
           <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:26px;margin-bottom:10px;" id="authSuccessTitle">Welcome to Chaupaal!</div>
           <div style="font-size:15px;color:var(--muted);line-height:1.6;margin-bottom:32px;" id="authSuccessDesc">Your account is ready. Let's explore what's happening today.</div>
-          <button class="btn btn--primary btn--block btn--lg auth-btn" id="authSuccessCta" style="width:100%;max-width:280px;">Let's go 🚀</button>
+          <button class="btn btn--primary btn--block btn--lg auth-btn" id="authSuccessCta" style="width:100%;max-width:280px;display:inline-flex;align-items:center;justify-content:center;gap:8px;">Let's go <span data-icon="rocket" data-icon-size="18"></span></button>
         </div>
       </div>
 
@@ -314,14 +319,14 @@
       </div>
     </div>
     <div class="topbar-right">
-      <button class="icon-btn" id="globalSearchBtn" aria-label="Search Chaupaal" title="Search">🔍</button>
+      <button class="icon-btn" id="globalSearchBtn" aria-label="Search Chaupaal" title="Search" data-icon="search"></button>
       <div class="streak-pill" id="streakPill" style="cursor:pointer;" title="Tap to manage streak">
-        <span style="color:var(--red)">🔥</span><span id="streakNum">0</span>
-        <span style="font-size:10px;color:var(--muted);margin-left:2px;">❄️<span id="streakFreezeCount">0</span></span>
+        <span style="color:var(--red)" data-icon="flame" data-icon-size="14"></span><span id="streakNum">0</span>
+        <span style="font-size:10px;color:var(--muted);margin-left:2px;"><span data-icon="snowflake" data-icon-size="12" style="display:inline-flex;vertical-align:middle;"></span><span id="streakFreezeCount">0</span></span>
       </div>
-      <button class="icon-btn" id="settingsBtn" aria-label="Settings" title="Settings" style="background:var(--cream);border-radius:50%;width:36px;height:36px;font-size:16px;">⚙️</button>
+      <button class="icon-btn" id="settingsBtn" aria-label="Settings" title="Settings" style="background:var(--cream);border-radius:50%;width:36px;height:36px;font-size:16px;" data-icon="settings"></button>
       <button class="profile-btn" id="profileBtn" aria-label="Profile" title="Profile" style="box-shadow:0 2px 8px rgba(43,39,48,0.15);">
-        <span id="profileBtnInner">🪑</span>
+        <span id="profileBtnInner" data-icon="armchair" data-icon-size="18"></span>
       </button>
     </div>
   </div>
@@ -335,14 +340,14 @@
     <div class="tab-panel" id="panel-akhbaar">
       <!-- Category bar inside Akhbaar -->
       <div class="akhbaar-cat-bar" id="akhbaarCatBar">
-        <button class="akhbaar-cat-chip active" data-cat="all">🏠 All</button>
-        <button class="akhbaar-cat-chip" data-cat="GK">🧠 GK</button>
-        <button class="akhbaar-cat-chip" data-cat="Sports">🏏 Sports</button>
-        <button class="akhbaar-cat-chip" data-cat="Tech">💻 Tech</button>
-        <button class="akhbaar-cat-chip" data-cat="Business">📈 Business</button>
-        <button class="akhbaar-cat-chip" data-cat="India">🇮🇳 India</button>
-        <button class="akhbaar-cat-chip" data-cat="World">🌍 World</button>
-        <button class="akhbaar-cat-chip" id="akhbaarAddCat" data-cat="add">＋ Add</button>
+        <button class="akhbaar-cat-chip active" data-cat="all"><span data-icon="home" data-icon-size="14"></span> All</button>
+        <button class="akhbaar-cat-chip" data-cat="GK"><span data-icon="brain" data-icon-size="14"></span> GK</button>
+        <button class="akhbaar-cat-chip" data-cat="Sports"><span data-icon="trophy" data-icon-size="14"></span> Sports</button>
+        <button class="akhbaar-cat-chip" data-cat="Tech"><span data-icon="laptop" data-icon-size="14"></span> Tech</button>
+        <button class="akhbaar-cat-chip" data-cat="Business"><span data-icon="trending-up" data-icon-size="14"></span> Business</button>
+        <button class="akhbaar-cat-chip" data-cat="India"><span data-icon="landmark" data-icon-size="14"></span> India</button>
+        <button class="akhbaar-cat-chip" data-cat="World"><span data-icon="globe" data-icon-size="14"></span> World</button>
+        <button class="akhbaar-cat-chip" id="akhbaarAddCat" data-cat="add"><span data-icon="plus" data-icon-size="14"></span> Add</button>
       </div>
       <div class="reel-stage" id="reelStage"></div>
     </div>
@@ -356,9 +361,9 @@
             <button type="button" class="duniya-mode-btn" data-duniya-mode="lehar" role="tab" aria-selected="false">Lehar</button>
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
-            <button class="icon-btn" data-open-notif="duniya" aria-label="Duniya notifications" title="Notifications" style="position:relative;">🔔<span class="notif-dot hidden" data-notif-dot="duniya"></span></button>
-            <button class="icon-btn" id="duniyaSearchBtn" aria-label="Search people" title="Search">🔍</button>
-            <button class="icon-btn" id="duniyaPostBtn" aria-label="Create post" title="New post">＋</button>
+            <button class="icon-btn" data-open-notif="duniya" aria-label="Duniya notifications" title="Notifications" style="position:relative;" data-icon="bell"><span class="notif-dot hidden" data-notif-dot="duniya"></span></button>
+            <button class="icon-btn" id="duniyaSearchBtn" aria-label="Search people" title="Search" data-icon="search"></button>
+            <button class="icon-btn" id="duniyaPostBtn" aria-label="Create post" title="New post" data-icon="plus"></button>
           </div>
         </div>
         <div class="duniya-stories-row" id="duniyaStoriesRow"></div>
@@ -374,7 +379,7 @@
     <!-- FUTURE_I18N: story label / search placeholder should come from a localization layer -->
     <div class="stories-row" id="storiesRow">
       <div class="story-add-btn" id="addStoryBtn">
-        <div class="story-add-icon">＋</div>
+        <div class="story-add-icon" data-icon="plus" data-icon-size="20"></div>
         <div class="story-label">Your story</div>
       </div>
       <!-- stories injected here -->
@@ -382,15 +387,15 @@
 
     <!-- SEARCH -->
     <div class="baithak-search-row">
-      <input class="baithak-search" id="baithakSearch" placeholder="🔍 Search..." type="text">
-      <button class="new-chat-btn" id="newChatBtn">✏️</button>
+      <input class="baithak-search" id="baithakSearch" placeholder="Search..." type="text">
+      <button class="new-chat-btn" id="newChatBtn" aria-label="New chat" data-icon="pen"></button>
     </div>
 
     <!-- CHAT LIST -->
     <div class="chat-list" id="chatList"></div>
 
     <!-- FAB -->
-    <button class="baithak-fab" id="baithakFab">＋</button>
+    <button class="baithak-fab" id="baithakFab" aria-label="New chat" data-icon="plus"></button>
   </div>
 
   <div class="tab-panel" id="panel-dangal">
@@ -401,7 +406,7 @@
             <div class="dangal-title">Dangal</div>
             <div class="dangal-sub">Games inside Chaupaal — solos, duels & Muqabala</div>
           </div>
-          <button class="icon-btn" data-open-notif="dangal" aria-label="Dangal notifications" title="Notifications" style="position:relative;flex-shrink:0;">🔔<span class="notif-dot hidden" data-notif-dot="dangal"></span></button>
+          <button class="icon-btn" data-open-notif="dangal" aria-label="Dangal notifications" title="Notifications" style="position:relative;flex-shrink:0;" data-icon="bell"><span class="notif-dot hidden" data-notif-dot="dangal"></span></button>
         </div>
         <div class="dangal-overall-rating" id="dangalOverallRating"></div>
       </div>
@@ -416,32 +421,32 @@
   <div class="tab-panel" id="panel-peepal">
     <div class="peepal-screen" id="peepalScreen">
       <div class="peepal-header">
-        <div class="peepal-title">🌳 Peepal</div>
+        <div class="peepal-title" style="display:flex;align-items:center;gap:8px;"><span data-icon="tree" data-icon-size="22"></span> Peepal</div>
         <div style="display:flex;gap:8px;align-items:center;">
-          <button class="icon-btn" data-open-notif="peepal" aria-label="Peepal notifications" title="Notifications" style="position:relative;">🔔<span class="notif-dot hidden" data-notif-dot="peepal"></span></button>
-          <button class="icon-btn" id="peepalSearchBtn" title="Find people with AI">🔍</button>
+          <button class="icon-btn" data-open-notif="peepal" aria-label="Peepal notifications" title="Notifications" style="position:relative;" data-icon="bell"><span class="notif-dot hidden" data-notif-dot="peepal"></span></button>
+          <button class="icon-btn" id="peepalSearchBtn" title="Find people with AI" aria-label="Find people" data-icon="search"></button>
           <button class="peepal-ask-btn" id="peepalAskBtn">+ Ask</button>
         </div>
       </div>
       <!-- AI People Search -->
       <div class="peepal-ai-search hidden" id="peepalAiSearch">
         <div class="peepal-ai-search-inner">
-          <div class="peepal-ai-search-label">✨ Find people on Peepal</div>
+          <div class="peepal-ai-search-label" style="display:flex;align-items:center;gap:6px;"><span data-icon="sparkles" data-icon-size="14"></span> Find people on Peepal</div>
       <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:8px;" id="peepalSearchNudges">
-        <button type="button" class="peepal-nudge-chip" data-hint="someone to date around my age" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;">❤️ Dating</button>
-        <button type="button" class="peepal-nudge-chip" data-hint="make new friends with similar interests" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;">🤝 Friendship</button>
-        <button type="button" class="peepal-nudge-chip" data-hint="professionals in tech or business" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;">💼 Networking</button>
-        <button type="button" class="peepal-nudge-chip" data-hint="travel companion for upcoming trip" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;">✈️ Travel buddy</button>
-        <button type="button" class="peepal-nudge-chip" data-hint="someone to play games with" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;">🎮 Gaming</button>
-        <button type="button" class="peepal-nudge-chip" data-hint="music lover with similar taste" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;">🎵 Music</button>
-        <button type="button" class="peepal-nudge-chip" data-hint="avid reader who loves non-fiction" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;">📚 Book club</button>
-        <button type="button" class="peepal-nudge-chip" data-hint="startup-minded person to collaborate" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;">🚀 Co-founder</button>
+        <button type="button" class="peepal-nudge-chip" data-hint="someone to date around my age" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;"><span data-icon="heart" data-icon-size="14"></span> Dating</button>
+        <button type="button" class="peepal-nudge-chip" data-hint="make new friends with similar interests" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;"><span data-icon="handshake" data-icon-size="14"></span> Friendship</button>
+        <button type="button" class="peepal-nudge-chip" data-hint="professionals in tech or business" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;"><span data-icon="briefcase" data-icon-size="14"></span> Networking</button>
+        <button type="button" class="peepal-nudge-chip" data-hint="travel companion for upcoming trip" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;"><span data-icon="plane" data-icon-size="14"></span> Travel buddy</button>
+        <button type="button" class="peepal-nudge-chip" data-hint="someone to play games with" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;"><span data-icon="gamepad" data-icon-size="14"></span> Gaming</button>
+        <button type="button" class="peepal-nudge-chip" data-hint="music lover with similar taste" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;"><span data-icon="music" data-icon-size="14"></span> Music</button>
+        <button type="button" class="peepal-nudge-chip" data-hint="avid reader who loves non-fiction" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;"><span data-icon="book" data-icon-size="14"></span> Book club</button>
+        <button type="button" class="peepal-nudge-chip" data-hint="startup-minded person to collaborate" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;"><span data-icon="rocket" data-icon-size="14"></span> Co-founder</button>
       </div>
           <div style="position:relative;">
             <textarea class="peepal-ai-search-input" id="peepalAiSearchInput" placeholder="Describe who you're looking for... e.g. 'someone into cricket and startups around my age' or 'a travel buddy from Mumbai who loves food'" rows="3"></textarea>
           </div>
           <div style="display:flex;gap:8px;margin-top:10px;">
-            <button class="peepal-ai-search-btn" id="peepalAiSearchGo">🔍 Find People</button>
+            <button class="peepal-ai-search-btn" id="peepalAiSearchGo"><span data-icon="search" data-icon-size="16" style="margin-right:6px;"></span> Find People</button>
             <button style="padding:10px 14px;background:none;border:2px solid var(--line);border-radius:12px;font-size:13px;cursor:pointer;" id="peepalAiSearchClose">Cancel</button>
           </div>
           <div id="peepalAiSearchResults" style="margin-top:14px;"></div>
@@ -459,7 +464,7 @@
   <div class="right-panel" id="rightPanel">
     <div class="rp-section-label">Today's streak</div>
     <div class="rp-stat-card">
-      <div class="rp-stat-num" id="rpStreakNum">0 🔥</div>
+      <div class="rp-stat-num" id="rpStreakNum" style="display:flex;align-items:center;gap:6px;"><span id="rpStreakCount">0</span> <span data-icon="flame" data-icon-size="22" style="color:var(--red);"></span></div>
       <div class="rp-stat-label">days in a row</div>
     </div>
     <div class="rp-section-label" style="margin-top:16px;">Top readers today</div>
@@ -492,42 +497,42 @@
         <span>Chaupaal</span>
       </div>
       <div class="sidebar-logo-actions">
-        <button class="icon-btn" id="globalSearchBtnDesktop" aria-label="Search Chaupaal" title="Search">🔍</button>
-        <button class="icon-btn" id="notifBtnDesktop" aria-label="Notifications" title="Notifications" style="position:relative;">🔔<span class="notif-dot hidden" id="notifDotDesktop"></span></button>
+        <button class="icon-btn" id="globalSearchBtnDesktop" aria-label="Search Chaupaal" title="Search" data-icon="search"></button>
+        <button class="icon-btn" id="notifBtnDesktop" aria-label="Notifications" title="Notifications" style="position:relative;" data-icon="bell"><span class="notif-dot hidden" id="notifDotDesktop"></span></button>
       </div>
     </div>
 
     <button class="tab-btn" data-tab="akhbaar">
-      <span class="tab-icon">📰</span>
+      <span class="tab-icon" data-icon="newspaper" data-icon-size="22"></span>
       <span class="tab-label">Akhbaar</span>
     </button>
     <button class="tab-btn" data-tab="duniya">
-      <span class="tab-icon">🌍</span>
+      <span class="tab-icon" data-icon="globe" data-icon-size="22"></span>
       <span class="tab-label">Duniya</span>
     </button>
     <button class="tab-btn active" data-tab="peepal">
-      <span class="tab-icon">🌳</span>
+      <span class="tab-icon" data-icon="tree" data-icon-size="22"></span>
       <span class="tab-label">Peepal</span>
     </button>
     <button class="tab-btn" data-tab="baithak">
-      <span class="tab-icon">🏠</span>
+      <span class="tab-icon" data-icon="home" data-icon-size="22"></span>
       <span class="tab-label">Baithak</span>
     </button>
     <button class="tab-btn" data-tab="dangal">
-      <span class="tab-icon">⚔️</span>
+      <span class="tab-icon" data-icon="swords" data-icon-size="22"></span>
       <span class="tab-label">Dangal</span>
     </button>
 
     <!-- Sidebar bottom (desktop only) -->
     <div class="sidebar-streak">
-      🔥 <span id="sidebarStreak">0</span> day streak
+      <span data-icon="flame" data-icon-size="14"></span> <span id="sidebarStreak">0</span> day streak
     </div>
     <div class="sidebar-profile" id="sidebarProfile">
       <div class="profile-btn" style="width:32px;height:32px;font-size:14px;flex-shrink:0;">
-        <span id="sidebarProfileIcon">🪑</span>
+        <span id="sidebarProfileIcon" data-icon="armchair" data-icon-size="16"></span>
       </div>
       <div class="sidebar-profile-name" id="sidebarProfileName">Sign in</div>
-      <span style="color:var(--muted);font-size:12px;">⚙️</span>
+      <span style="color:var(--muted);font-size:12px;" data-icon="settings" data-icon-size="14"></span>
     </div>
   </div>
 
@@ -539,7 +544,7 @@
     <div class="modal">
       <div class="modal-header">
         <div class="modal-title">Settings</div>
-        <button class="icon-btn" id="closeSettings">✕</button>
+        <button class="icon-btn" id="closeSettings" aria-label="Close" data-icon="x"></button>
       </div>
       <div class="settings-section">Language</div>
       <select class="modal-select" id="langSelect">
@@ -603,12 +608,12 @@
         <label class="switch"><input type="checkbox" id="toggleAkhbaarAppearInFriends" checked><span class="slider"></span></label>
       </div>
       <div class="settings-section">Archive</div>
-      <button type="button" class="btn btn--primary btn--block modal-btn" id="settingsArchiveBtn" style="width:100%;margin-bottom:12px;">🗄️ Open Archive</button>
+      <button type="button" class="btn btn--primary btn--block modal-btn" id="settingsArchiveBtn" style="width:100%;margin-bottom:12px;"><span data-icon="archive" data-icon-size="16"></span> Open Archive</button>
       <div class="settings-section">Account type</div>
       <div id="settingsProfileTypeHost" style="margin-bottom:12px;"></div>
       <div class="settings-section">Safety & account</div>
-      <button type="button" class="btn btn--primary btn--block modal-btn" id="settingsSessionsBtn" style="width:100%;margin-bottom:8px;">💻 Devices & sessions</button>
-      <button type="button" class="btn btn--primary btn--block modal-btn" id="settingsBlockedBtn" style="width:100%;margin-bottom:12px;">🚫 Blocked users</button>
+      <button type="button" class="btn btn--primary btn--block modal-btn" id="settingsSessionsBtn" style="width:100%;margin-bottom:8px;"><span data-icon="monitor" data-icon-size="16"></span> Devices &amp; sessions</button>
+      <button type="button" class="btn btn--primary btn--block modal-btn" id="settingsBlockedBtn" style="width:100%;margin-bottom:12px;"><span data-icon="ban" data-icon-size="16"></span> Blocked users</button>
       <div class="settings-section">Share with Friends</div>
       <div class="toggle-row">
         <div><div class="toggle-label">Birthday</div><div class="toggle-desc">Friends get a fun question on your birthday</div></div>
@@ -629,8 +634,8 @@
           <div class="toggle-desc">Show your profile in Peepal discovery & AI search</div>
         </div>
         <select id="toggleOpenToMeet" style="padding:8px 12px;border:2px solid var(--line);border-radius:10px;font-size:13px;font-weight:700;background:var(--white);color:var(--ink);cursor:pointer;">
-          <option value="off">🚫 Off</option>
-          <option value="on" selected>✅ On</option>
+          <option value="off">Off</option>
+          <option value="on" selected>On</option>
         </select>
       </div>
       <div id="strangerLimitRow" style="padding:10px 0;border-bottom:1px solid var(--line);">
@@ -652,7 +657,7 @@
         <label class="switch"><input type="checkbox" id="toggleQuiet"><span class="slider"></span></label>
       </div>
       <div class="dp-field-row" style="margin-top:10px;">
-        <div class="dp-field-label">🔊 Voice for "Listen to post"</div>
+        <div class="dp-field-label" style="display:flex;align-items:center;gap:6px;"><span data-icon="mic" data-icon-size="14"></span> Voice for "Listen to post"</div>
         <select class="modal-select" id="voiceSelect"></select>
       </div>
       <button class="btn btn--primary btn--block modal-btn" id="saveSettings">Done</button>
@@ -664,7 +669,7 @@
     <div class="modal">
       <div class="modal-header">
         <div class="modal-title">Profile</div>
-        <button class="icon-btn" id="closeProfile">✕</button>
+        <button class="icon-btn" id="closeProfile" aria-label="Close" data-icon="x"></button>
       </div>
       <div id="profileContent"></div>
     </div>
@@ -674,9 +679,9 @@
   <div class="modal-backdrop hidden" id="notifModal">
     <div class="modal" style="max-height:80vh;">
       <div class="modal-header">
-        <div class="modal-title">🔔 Notifications</div>
+        <div class="modal-title"><span data-icon="bell" data-icon-size="18"></span> Notifications</div>
         <button type="button" class="notif-mark-all" id="notifMarkAll">Mark all read</button>
-        <button class="icon-btn" id="closeNotif">✕</button>
+        <button class="icon-btn" id="closeNotif" aria-label="Close" data-icon="x"></button>
       </div>
       <div id="notifList"></div>
     </div>
@@ -697,6 +702,7 @@
   <script src="/src/js/config/firebase.js?v=1"></script>
   <script src="/src/js/config/app-check.js?v=1"></script>
   <script src="/src/js/core/environment.js?v=1"></script>
+  <script src="/src/js/core/icons.js?v=2"></script>
   <script src="/src/js/config/policy-limits.js?v=1"></script>
   <script src="/src/js/core/users-public.js?v=1"></script>
   <script src="/src/js/core/policy-usage.js?v=3"></script>
@@ -751,7 +757,7 @@
   <script src="/src/js/core/theme.js?v=2"></script>
   <script src="/src/js/core/discovery-core.js?v=24"></script>
   <script src="/src/js/core/profile-btn.js?v=21"></script>
-  <script src="/src/js/auth/auth-ui.js?v=2"></script>
+  <script src="/src/js/auth/auth-ui.js?v=3"></script>
   <script src="/src/js/auth/auth-profiles.js?v=1"></script>
   <script src="/src/js/features/akhbaar.js?v=5"></script>
   <script src="/src/js/features/dangal.js?v=31"></script>
@@ -760,7 +766,7 @@
   <script src="/src/js/features/self-chat.js?v=1"></script>
   <script src="/src/js/features/chaupaal-chat.js?v=17"></script>
   <script src="/src/js/features/chat-rating.js?v=1"></script>
-  <script src="/src/js/features/baithak-chat.js?v=42"></script>
+  <script src="/src/js/features/baithak-chat.js?v=43"></script>
   <script src="/src/js/features/mehfil.js?v=2"></script>
   <script src="/src/js/features/music-card.js?v=10"></script>
   <script src="/src/js/features/group-info.js?v=6"></script>
@@ -771,7 +777,7 @@
   <script src="/src/js/features/profile-preview.js?v=2"></script>
   <script src="/src/js/features/profile.js?v=26"></script>
   <script src="/src/js/core/i18n.js?v=1"></script>
-  <script src="/src/js/features/categories.js?v=31"></script>
+  <script src="/src/js/features/categories.js?v=33"></script>
   <script src="/src/js/features/peepal.js?v=1"></script>
   <script src="/src/js/features/onboarding.js?v=30"></script>
   <script src="/src/js/core/service-worker.js?v=5"></script>
@@ -786,12 +792,12 @@
   <script src="/src/js/games/arcade.js?v=24"></script>
   <script src="/src/js/main.js?v=3"></script>
   <script src="/src/js/features/akhbaar-catbar.js?v=1"></script>
-  <script src="/src/js/features/duniya.js?v=33"></script>
+  <script src="/src/js/features/duniya.js?v=35"></script>
   <script src="/src/js/features/premium.js?v=2"></script>
-  <script src="/src/js/features/discovery.js?v=7"></script>
+  <script src="/src/js/features/discovery.js?v=9"></script>
   <script src="/src/js/core/polish.js?v=4"></script>
   <script src="/src/js/features/fairness.js?v=2"></script>
   <script src="/src/js/features/media-profile.js?v=3"></script>
-  <script src="/src/js/auth/auth-events.js?v=4"></script>
+  <script src="/src/js/auth/auth-events.js?v=5"></script>
 </body>
 </html>

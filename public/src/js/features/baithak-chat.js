@@ -101,16 +101,16 @@ function openChatScreen(chat){
 
   screen.innerHTML = `
     <div class="chat-screen-header">
-      <button class="chat-back" id="chatBack" aria-label="Back">←</button>
+      <button class="chat-back" id="chatBack" aria-label="Back">${typeof iconHtml==='function'?iconHtml('arrow-left',{size:22}):'←'}</button>
       <div class="chat-header-avatar${isGroup?' chat-header-tappable':''}" ${isGroup?'data-open-group-info':''} role="${isGroup?'button':''}">${chat.avatar}</div>
       <div class="chat-header-info${isGroup?' chat-header-tappable':''}" ${isGroup?'data-open-group-info':''} role="${isGroup?'button':''}">
         <div class="chat-header-name">${(chat.type==='group'||chat.type==='self')?chat.name:(typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(chat.name,chat):chat.name)}</div>
         <div id="chatActivityStatus" style="font-size:11px;color:var(--muted);">${statusLine}</div>
       </div>
       <div class="chat-header-actions">
-        ${!isChaupaal?`<button class="chat-header-btn" id="chatMehfilBtn" title="Mehfil">🏠</button>`:''}
-        ${!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatChallengeBtn" title="Create challenge">🎯</button>`:''}
-        ${!isGroup&&!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatMuqabalaBtn" title="Muqabala">⚔️</button>`:''}
+        ${!isChaupaal?`<button class="chat-header-btn" id="chatMehfilBtn" title="Mehfil" aria-label="Mehfil">${typeof iconHtml==='function'?iconHtml('home',{size:18}):'🏠'}</button>`:''}
+        ${!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatChallengeBtn" title="Create challenge" aria-label="Create challenge">${typeof iconHtml==='function'?iconHtml('target',{size:18}):'🎯'}</button>`:''}
+        ${!isGroup&&!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatMuqabalaBtn" title="Muqabala" aria-label="Muqabala">${typeof iconHtml==='function'?iconHtml('swords',{size:18}):'⚔️'}</button>`:''}
       </div>
     </div>
     <div id="chatTypingStatus" class="chat-typing-status hidden" aria-live="polite"></div>

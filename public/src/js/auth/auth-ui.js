@@ -30,7 +30,12 @@ function updateProfileBtn(){
 
 function updateSidebarStreak(n){
   const el=document.getElementById('sidebarStreak');if(el)el.textContent=n;
-  const rpEl=document.getElementById('rpStreakNum');if(rpEl)rpEl.textContent=`${n} 🔥`;
+  const count=document.getElementById('rpStreakCount');
+  if(count) count.textContent=String(n);
+  else {
+    const rpEl=document.getElementById('rpStreakNum');
+    if(rpEl) rpEl.textContent=String(n);
+  }
 }
 
 if (auth) {

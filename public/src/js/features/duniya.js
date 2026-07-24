@@ -217,7 +217,7 @@ function renderDuniyaFeed(){
   if(!visible.length){
     if(typeof renderEmptyState==='function'){
       renderEmptyState(feed, {
-        icon:'🌍',
+        icon: typeof iconHtml==='function'?iconHtml('globe',{size:40,className:'cp-icon--empty'}):'🌍',
         title:'No posts yet',
         message:'Be the first to share something with Duniya.',
         actionLabel:'Create a post',
@@ -269,7 +269,7 @@ function createDuniyaPost(post, {variant='list'}={}){
         <div class="duniya-post-meta">${duniyaEsc(typeof formatRelativeTime==='function'?formatRelativeTime(post.ts||post.timestamp):post.timestamp)} · 🌍 Public</div>
       </div>
       <button class="duniya-follow-btn ${isFollowing?'following':''}" data-uid="${duniyaEsc(post.user.uid)}" aria-label="${isFollowing?'Unfollow':'Follow'} ${duniyaEsc(post.user.name)}">${isFollowing?'Following':'Follow'}</button>
-      ${(currentUser&&(post.user?.uid===currentUser.uid||post.uid===currentUser.uid))?`<button type="button" class="duniya-delete-btn" title="Delete" aria-label="Delete post" style="background:none;border:none;font-size:16px;cursor:pointer;color:var(--muted);padding:4px;">🗑️</button>`:''}
+      ${(currentUser&&(post.user?.uid===currentUser.uid||post.uid===currentUser.uid))?`<button type="button" class="duniya-delete-btn" title="Delete" aria-label="Delete post" style="background:none;border:none;cursor:pointer;color:var(--muted);padding:4px;">${typeof iconHtml==='function'?iconHtml('trash',{size:16}):'🗑️'}</button>`:''}
       <button style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);padding:4px;" class="duniya-more-btn" aria-label="More options">⋯</button>
     </div>
     <div class="duniya-post-media"${mediaWrapAttrs}>
@@ -285,9 +285,9 @@ function createDuniyaPost(post, {variant='list'}={}){
     </div>
     <div class="duniya-post-actions">
       <button class="duniya-action-btn like-btn ${post.likedByMe?'liked':''}" data-id="${post.id}" aria-label="Like this post" aria-pressed="${post.likedByMe?'true':'false'}">${duniyaHeartIcon()}</button>
-      <button class="duniya-action-btn comment-btn" data-id="${post.id}" aria-label="Open comments"><span aria-hidden="true">💬</span></button>
-      <button class="duniya-action-btn share-btn" data-id="${post.id}" aria-label="Share post"><span aria-hidden="true">↗</span></button>
-      <button class="duniya-action-btn duniya-bookmark-btn" data-id="${post.id}" aria-label="Bookmark"><span aria-hidden="true">🔖</span></button>
+      <button class="duniya-action-btn comment-btn" data-id="${post.id}" aria-label="Open comments">${typeof iconHtml==='function'?iconHtml('message-circle',{size:22}):'<span aria-hidden="true">💬</span>'}</button>
+      <button class="duniya-action-btn share-btn" data-id="${post.id}" aria-label="Share post">${typeof iconHtml==='function'?iconHtml('share',{size:22}):'<span aria-hidden="true">↗</span>'}</button>
+      <button class="duniya-action-btn duniya-bookmark-btn" data-id="${post.id}" aria-label="Bookmark">${typeof iconHtml==='function'?iconHtml('bookmark',{size:22}):'<span aria-hidden="true">🔖</span>'}</button>
     </div>
     <div class="duniya-post-likes">${formatCount(post.likedByMe?post.likes:post.likes)} likes</div>
     <div class="duniya-post-caption"><strong class="duniya-post-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(post.user.name,post.user):duniyaEsc(post.user.name)}</strong> ${caption}</div>
@@ -1088,12 +1088,14 @@ const PEEPAL_NUDGES=[
 
 function renderPeepalNudges(){
   const feed=document.getElementById('peepalFeed');if(!feed)return;
+  // One banner per visit — wipe prior nudge chrome so tab re-entry doesn't stack
+  feed.parentElement?.querySelectorAll?.('.peepal-nudge-banner,.peepal-nudge-between').forEach(el=>el.remove());
 
   // Rotating banner at top
   const nudge=PEEPAL_NUDGES[Math.floor(Math.random()*PEEPAL_NUDGES.length)];
   const banner=document.createElement('div');banner.className='peepal-nudge-banner';
   banner.innerHTML=`
-    <div class="peepal-nudge-label">💡 Try this on Peepal</div>
+    <div class="peepal-nudge-label">Try this on Peepal</div>
     <div class="peepal-nudge-text">${nudge.icon} ${nudge.label}</div>
     <div class="peepal-nudge-sub">${nudge.sub}</div>
     <button class="peepal-nudge-cta" id="nudgeCta">Ask this →</button>
@@ -1112,6 +1114,7 @@ function renderPeepalNudges(){
   if(cards.length>=3){
     const prompt=PEEPAL_NUDGES[Math.floor(Math.random()*PEEPAL_NUDGES.length)];
     const promptEl=document.createElement('div');
+    promptEl.className='peepal-nudge-between';
     promptEl.style.cssText='background:rgba(230,57,70,0.05);border:1.5px dashed rgba(230,57,70,0.3);border-radius:16px;padding:14px;text-align:center;cursor:pointer;';
     promptEl.innerHTML=`<div style="font-size:22px;margin-bottom:6px;">${prompt.icon}</div><div style="font-weight:700;font-size:14px;">${prompt.text}</div><div style="font-size:12px;color:var(--muted);margin-top:4px;">Tap to ask the community →</div>`;
     promptEl.addEventListener('click',()=>{openPeepalAskSheet();setTimeout(()=>{const qt=document.getElementById('peepalQText');if(qt)qt.value=prompt.template;},500);});
