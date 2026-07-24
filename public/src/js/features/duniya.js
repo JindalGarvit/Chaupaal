@@ -242,6 +242,10 @@ function renderDuniyaFeed(){
   }
 }
 
+function duniyaEsc(s){
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 function duniyaHeartIcon(){
   return`<svg class="duniya-heart-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.2-4.35-9.55-8.55C.5 8.95 2.35 4.5 6.4 4.5c2.25 0 3.75 1.3 4.6 2.55.85-1.25 2.35-2.55 4.6-2.55 4.05 0 5.9 4.45 3.95 7.95C19.2 16.65 12 21 12 21Z"/></svg>`;
 }
@@ -249,7 +253,8 @@ function duniyaHeartIcon(){
 function createDuniyaPost(post, {variant='list'}={}){
   const el=document.createElement('div');el.className='duniya-post';el.dataset.id=post.id;
   const isFollowing=followingSet.has(post.user.uid);
-  const caption=post.caption.replace(/@(\w+)/g,'<span class="duniya-post-tag">@$1</span>').replace(/#(\w+)/g,'<span style="color:var(--red);cursor:pointer;">#$1</span>');
+  // Escape BEFORE decorating @/# so caption text can never carry raw HTML
+  const caption=duniyaEsc(post.caption||'').replace(/@(\w+)/g,'<span class="duniya-post-tag">@$1</span>').replace(/#(\w+)/g,'<span style="color:var(--red);cursor:pointer;">#$1</span>');
   const imgSrc=typeof mediaUrlFor==='function'?mediaUrlFor(post, variant): (post.thumb||post.media);
   const mediaWidth=Number(post.mediaWidth||post.width)||0;
   const mediaHeight=Number(post.mediaHeight||post.height)||0;
@@ -258,22 +263,22 @@ function createDuniyaPost(post, {variant='list'}={}){
   const mediaWrapAttrs=hasMediaSize?` data-has-ratio="1" style="--media-ratio:${mediaWidth}/${mediaHeight};"`:'';
   el.innerHTML=`
     <div class="duniya-post-header">
-      <div class="duniya-post-avatar">${post.user.photoURL?`<img src="${post.user.photoURL}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:`<span>${post.user.avatar}</span>`}</div>
+      <div class="duniya-post-avatar">${post.user.photoURL?`<img src="${duniyaEsc(post.user.photoURL)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:`<span>${duniyaEsc(post.user.avatar||'👤')}</span>`}</div>
       <div class="duniya-post-user">
-        <div class="duniya-post-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(post.user.name,post.user):post.user.name}</div>
-        <div class="duniya-post-meta">${typeof formatRelativeTime==='function'?formatRelativeTime(post.ts||post.timestamp):post.timestamp} · 🌍 Public</div>
+        <div class="duniya-post-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(post.user.name,post.user):duniyaEsc(post.user.name)}</div>
+        <div class="duniya-post-meta">${duniyaEsc(typeof formatRelativeTime==='function'?formatRelativeTime(post.ts||post.timestamp):post.timestamp)} · 🌍 Public</div>
       </div>
-      <button class="duniya-follow-btn ${isFollowing?'following':''}" data-uid="${post.user.uid}" aria-label="${isFollowing?'Unfollow':'Follow'} ${post.user.name}">${isFollowing?'Following':'Follow'}</button>
+      <button class="duniya-follow-btn ${isFollowing?'following':''}" data-uid="${duniyaEsc(post.user.uid)}" aria-label="${isFollowing?'Unfollow':'Follow'} ${duniyaEsc(post.user.name)}">${isFollowing?'Following':'Follow'}</button>
       ${(currentUser&&(post.user?.uid===currentUser.uid||post.uid===currentUser.uid))?`<button type="button" class="duniya-delete-btn" title="Delete" aria-label="Delete post" style="background:none;border:none;font-size:16px;cursor:pointer;color:var(--muted);padding:4px;">🗑️</button>`:''}
       <button style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);padding:4px;" class="duniya-more-btn" aria-label="More options">⋯</button>
     </div>
     <div class="duniya-post-media"${mediaWrapAttrs}>
       ${post.type==='video'
         ?(post.media
-          ?`<video src="${post.media}" controls playsinline preload="none"></video>`
+          ?`<video src="${duniyaEsc(post.media)}" controls playsinline preload="none"></video>`
           :`<div class="duniya-post-media-placeholder">🎬<div style="font-size:14px;color:rgba(255,255,255,0.6);margin-top:8px;">Video</div></div>`)
         :(imgSrc
-          ?`<img data-no-zoom="1" src="${imgSrc}" loading="lazy" decoding="async" alt="Post by ${post.user.name}"${mediaSizeAttrs} ${variant==='list'&&post.media&&post.media!==imgSrc?`data-full="${post.media}"`:''}>
+          ?`<img data-no-zoom="1" src="${duniyaEsc(imgSrc)}" loading="lazy" decoding="async" alt="Post by ${duniyaEsc(post.user.name)}"${mediaSizeAttrs} ${variant==='list'&&post.media&&post.media!==imgSrc?`data-full="${duniyaEsc(post.media)}"`:''}>
              <button type="button" class="duniya-expand-media cp-tap-target" aria-label="Open image full screen">⛶</button>`
           :`<div class="duniya-post-media-placeholder">📷</div>`)
       }
@@ -285,7 +290,7 @@ function createDuniyaPost(post, {variant='list'}={}){
       <button class="duniya-action-btn duniya-bookmark-btn" data-id="${post.id}" aria-label="Bookmark"><span aria-hidden="true">🔖</span></button>
     </div>
     <div class="duniya-post-likes">${formatCount(post.likedByMe?post.likes:post.likes)} likes</div>
-    <div class="duniya-post-caption"><strong class="duniya-post-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(post.user.name,post.user):post.user.name}</strong> ${caption}</div>
+    <div class="duniya-post-caption"><strong class="duniya-post-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(post.user.name,post.user):duniyaEsc(post.user.name)}</strong> ${caption}</div>
     ${post.comments>0?`<div class="duniya-view-comments">View all ${post.comments} comments</div>`:''}
   `;
   const postAvatar=el.querySelector('.duniya-post-avatar');
@@ -1158,11 +1163,11 @@ function toggleOpenToMeet(){
         const src = p.media || p.video;
         const name = p.user?.name || 'Member';
         const postId = p.id || '';
-        return `<section class="lehar-slide" data-lehar-i="${i}" data-lehar-id="${postId}">
-          <video src="${src}" playsinline loop muted preload="metadata"></video>
+        return `<section class="lehar-slide" data-lehar-i="${i}" data-lehar-id="${duniyaEsc(postId)}">
+          <video src="${duniyaEsc(src)}" playsinline loop muted preload="metadata"></video>
           <button type="button" class="lehar-mute-btn" aria-label="Toggle mute" data-lehar-mute>🔇</button>
           <div class="lehar-double-heart" aria-hidden="true">♥</div>
-          <div class="lehar-meta"><strong>${name}</strong><p>${(p.caption || '').slice(0, 100)}</p></div>
+          <div class="lehar-meta"><strong>${duniyaEsc(name)}</strong><p>${duniyaEsc((p.caption || '').slice(0, 100))}</p></div>
         </section>`;
       })
       .join('');

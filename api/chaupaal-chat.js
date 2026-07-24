@@ -69,6 +69,16 @@ module.exports = async function handler(req, res) {
   const user = await requireUser(req, res, { allowWeak: false });
   if (!user) return;
 
+  try {
+    const { checkActionRateLimit } = require('../server-lib/rate-limit');
+    const rate = await checkActionRateLimit(user.uid, 'ai');
+    if (!rate.ok) {
+      return sendError(res, 429, 'RATE_LIMITED', 'Too many messages. Try again shortly.');
+    }
+  } catch (e) {
+    console.warn('[chaupaal-chat] rate-limit check failed', e?.message || e);
+  }
+
   let body = {};
   try {
     body = parseJsonBody(req);

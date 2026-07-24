@@ -977,12 +977,12 @@ function renderPeepalCommentStrip(q){
     <div class="peepal-comments-preview-head"><strong>Conversation</strong><span>Swipe to read · tap to expand</span></div>
     <div class="peepal-comment-strip">
       ${comments.map(c=>`
-        <article class="peepal-comment-chip" data-comment-id="${c.id}" tabindex="0">
-          <div class="peepal-comment-chip-author">${c.user?.avatar||'👤'} ${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(c.user?.name||'User',c.user):(c.user?.name||'User')}</div>
-          <div class="peepal-comment-chip-text">${typeof formatCommentText==='function'?formatCommentText(c.text):c.text}</div>
-          <button type="button" class="peepal-quick-reply" data-reply-id="${c.id}">Reply</button>
-          <form class="peepal-inline-reply-form hidden" data-reply-form="${c.id}">
-            <input maxlength="2000" aria-label="Quick reply to ${c.user?.name||'comment'}" placeholder="Write a quick reply…">
+        <article class="peepal-comment-chip" data-comment-id="${escPeepalText(c.id)}" tabindex="0">
+          <div class="peepal-comment-chip-author">${escPeepalText(c.user?.avatar||'👤')} ${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(c.user?.name||'User',c.user):escPeepalText(c.user?.name||'User')}</div>
+          <div class="peepal-comment-chip-text">${typeof formatCommentText==='function'?formatCommentText(c.text):escPeepalText(c.text)}</div>
+          <button type="button" class="peepal-quick-reply" data-reply-id="${escPeepalText(c.id)}">Reply</button>
+          <form class="peepal-inline-reply-form hidden" data-reply-form="${escPeepalText(c.id)}">
+            <input maxlength="2000" aria-label="Quick reply to ${escPeepalText(c.user?.name||'comment')}" placeholder="Write a quick reply…">
             <button type="submit">Send</button>
           </form>
         </article>`).join('')}
@@ -1077,22 +1077,22 @@ function renderPeepalFeed(){
     const mediaHtml = q.attachment?.type==='image'
       ? `<div class="peepal-media"${attachmentWrapAttrs}><img src="${typeof mediaUrlFor==='function'?mediaUrlFor({media:q.attachment.data,thumb:q.attachment.thumb},'list'):(q.attachment.thumb||q.attachment.data)}" loading="lazy" decoding="async" alt=""${attachmentSizeAttrs}></div>`
       : q.attachment?.type==='link'
-      ? `<a class="peepal-link-card" href="${q.attachment.url}" target="_blank" onclick="event.stopPropagation()"><div class="peepal-link-thumb">🔗</div><div class="peepal-link-info"><div class="peepal-link-title">${q.attachment.title}</div><div class="peepal-link-url">${q.attachment.url}</div></div></a>`
+      ? `<a class="peepal-link-card" href="${/^https?:\/\//i.test(q.attachment.url||'')?escPeepalText(q.attachment.url):'#'}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()"><div class="peepal-link-thumb">🔗</div><div class="peepal-link-info"><div class="peepal-link-title">${escPeepalText(q.attachment.title)}</div><div class="peepal-link-url">${escPeepalText(q.attachment.url)}</div></div></a>`
       : '';
     const canDelete=currentUser&&(q.user?.uid===currentUser.uid||q.uid===currentUser.uid)&&!q.anonymous;
     card.innerHTML=`
       <div class="peepal-card-header">
-        <div class="peepal-user-avatar" style="cursor:pointer;" onclick="event.stopPropagation();">${q.user.photoURL?`<img src="${q.user.photoURL}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:(q.user.avatar||'👤')}</div>
+        <div class="peepal-user-avatar" style="cursor:pointer;" onclick="event.stopPropagation();">${q.user.photoURL?`<img src="${escPeepalText(q.user.photoURL)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:escPeepalText(q.user.avatar||'👤')}</div>
         <div style="flex:1;min-width:0;">
-          <div class="peepal-user-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(q.user.name,q.user):q.user.name}</div>
-          <div class="peepal-user-meta">${[q.user.city, typeof formatRelativeTime==='function'?formatRelativeTime(q.timeAgo||q.ts):q.timeAgo].filter(Boolean).join(' · ')}</div>
-          ${q.user.bio?`<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">"${q.user.bio}"</div>`:''}
+          <div class="peepal-user-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(q.user.name,q.user):escPeepalText(q.user.name)}</div>
+          <div class="peepal-user-meta">${escPeepalText([q.user.city, typeof formatRelativeTime==='function'?formatRelativeTime(q.timeAgo||q.ts):q.timeAgo].filter(Boolean).join(' · '))}</div>
+          ${q.user.bio?`<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">"${escPeepalText(q.user.bio)}"</div>`:''}
         </div>
         ${canDelete?`<button class="peepal-delete-btn" title="Delete" style="background:none;border:none;cursor:pointer;font-size:15px;color:var(--muted);">🗑️</button>`:''}
-        <button class="peepal-speak-btn" data-text="${q.question.replace(/"/g,'&quot;')}" title="Listen to this post">🔊</button>
+        <button class="peepal-speak-btn" data-text="${escPeepalText(q.question)}" title="Listen to this post">🔊</button>
       </div>
       <div class="peepal-card-body">
-        <div class="peepal-question-text">${q.question}</div>
+        <div class="peepal-question-text">${escPeepalText(q.question)}</div>
         ${mediaHtml}
         ${renderPeepalOptions(q)}
         ${renderPeepalReactionBar(q)}
@@ -1102,8 +1102,8 @@ function renderPeepalFeed(){
         <button type="button" class="peepal-footer-stat peepal-open-comments">💬 ${q.comments} comments</button>
         <span class="peepal-footer-stat">👥 ${q.totalResponses} responses</span>
         ${canDelete?`<button type="button" class="peepal-footer-stat peepal-boost-btn" data-boost-post title="Boost this post">🚀 Boost</button>`:''}
-        <button class="peepal-footer-stat" onclick="event.stopPropagation();openShareSheet({id:'${q.id}',caption:'${q.question.replace(/'/g,"\'")}',user:{name:'${q.user.name}'}})" style="background:none;border:none;cursor:pointer;">↗️ Share</button>
-        <span class="peepal-tag">${q.tag}</span>
+        <button type="button" class="peepal-footer-stat peepal-share-btn" style="background:none;border:none;cursor:pointer;">↗️ Share</button>
+        <span class="peepal-tag">${escPeepalText(q.tag)}</span>
       </div>
     `;
     card.querySelectorAll('[data-peepal-opt]').forEach(btn=>{
@@ -1116,6 +1116,12 @@ function renderPeepalFeed(){
     card.querySelector('.peepal-speak-btn')?.addEventListener('click',(e)=>{
       e.stopPropagation();
       speakText(e.currentTarget.dataset.text, e.currentTarget);
+    });
+    // Wired via listener (not inline onclick) so question text can't break out
+    // of an attribute-embedded JS string.
+    card.querySelector('.peepal-share-btn')?.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      if(typeof openShareSheet==='function') openShareSheet(q);
     });
     const peepalAvatar=card.querySelector('.peepal-user-avatar');
     if(peepalAvatar&&q.user?.uid&&q.user.uid!==currentUser?.uid){
@@ -1379,19 +1385,19 @@ function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
     </div>
     <div class="peepal-detail-body">
       <div class="peepal-card-header" style="padding:0 0 12px;">
-        <div class="peepal-user-avatar">${q.user.avatar}</div>
+        <div class="peepal-user-avatar">${escPeepalText(q.user.avatar||'👤')}</div>
         <div>
-          <div class="peepal-user-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(q.user.name,q.user):q.user.name}</div>
-          <div class="peepal-user-meta">${q.user.city} · ${typeof formatRelativeTime==='function'?formatRelativeTime(q.timeAgo||q.ts):q.timeAgo}</div>
+          <div class="peepal-user-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(q.user.name,q.user):escPeepalText(q.user.name)}</div>
+          <div class="peepal-user-meta">${escPeepalText(q.user.city||'')} · ${escPeepalText(typeof formatRelativeTime==='function'?formatRelativeTime(q.timeAgo||q.ts):q.timeAgo)}</div>
         </div>
       </div>
-      <div class="peepal-question-text">${q.question}</div>
+      <div class="peepal-question-text">${escPeepalText(q.question)}</div>
       ${q.attachment?.type==='image'?`<div class="peepal-media"${attachmentWrapAttrs}><img src="${typeof mediaUrlFor==='function'?mediaUrlFor({media:q.attachment.data,thumb:q.attachment.thumb},'detail'):(q.attachment.data||q.attachment.thumb)}" alt="" decoding="async"${attachmentSizeAttrs}></div>`:''}
       ${renderPeepalOptions(q)}
       ${renderPeepalReactionBar(q)}
       <div style="height:16px;"></div>
       <div class="spark-nudge">
-        <div class="spark-nudge-text">👋 <strong>${q.user.name.split(' ')[0]}</strong> would love to hear your thoughts! Start a conversation.</div>
+        <div class="spark-nudge-text">👋 <strong>${escPeepalText((q.user.name||'').split(' ')[0])}</strong> would love to hear your thoughts! Start a conversation.</div>
         <button class="spark-nudge-btn" onclick="showToast('Message sent! Check Baithak 🏠')">Say hi</button>
       </div>
       <div style="font-size:13px;font-weight:700;margin-bottom:12px;">Comments (${q.comments})</div>

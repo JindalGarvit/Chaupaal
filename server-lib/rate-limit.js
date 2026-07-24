@@ -28,6 +28,10 @@ const LIMITS = {
   message: { minute: 40, hour: 400 },
   comment: { minute: 20, hour: 150 },
   post: { minute: 6, hour: 40 },
+  // AI calls (Anthropic / Chaupaal chat) — expensive per request
+  ai: { minute: 10, hour: 120 },
+  // Music search/resolve, geocode, URL safety — third-party lookups
+  media_lookup: { minute: 40, hour: 400 },
 };
 
 let redis = null;

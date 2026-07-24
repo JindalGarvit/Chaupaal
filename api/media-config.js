@@ -85,6 +85,25 @@ async function handlePost(req, res) {
   const user = await requireUser(req, res, { allowWeak: false });
   if (!user) return;
 
+  // Third-party lookups (music/geocode/URL safety) get a per-uid rate cap so a
+  // scripted caller can't burn provider quota with a valid token.
+  if (
+    action === 'music_search' ||
+    action === 'music_resolve' ||
+    action === 'geocode_search' ||
+    action === 'check_url'
+  ) {
+    try {
+      const { checkActionRateLimit } = require('../server-lib/rate-limit');
+      const rate = await checkActionRateLimit(user.uid, 'media_lookup');
+      if (!rate.ok) {
+        return sendError(res, 429, 'RATE_LIMITED', 'Too many lookups. Try again shortly.');
+      }
+    } catch (e) {
+      console.warn('[media-config] rate-limit check failed', e?.message || e);
+    }
+  }
+
   if (action === 'music_search') {
     const query = String(body.query || '').trim();
     if (query.length < 1) {
@@ -178,12 +197,34 @@ async function handlePost(req, res) {
 
   if (action === 'agora_token') {
     const { mintAgoraToken } = require('../server-lib/agora-token');
+    // Always mint for the VERIFIED uid — accepting body.uid let a caller mint
+    // publisher tokens for arbitrary Agora identities.
     const result = mintAgoraToken({
       channel: body.channel,
-      uid: body.uid || user.uid,
+      uid: user.uid,
     });
     if (result.error === 'channel_required') {
       return sendError(res, 400, 'VALIDATION_ERROR', 'channel required');
+    }
+    return sendSuccess(res, result);
+  }
+
+  if (action === 'policy_consume') {
+    // Server-authoritative quota consume (anon posts / AI Discovery messages).
+    // Firestore rules make policyUsage client-read-only; this is the only writer.
+    const feature = String(body.feature || '').trim();
+    if (feature !== 'anon' && feature !== 'aiDiscoveryMsg') {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'invalid feature');
+    }
+    const adminNs = initAdmin();
+    if (!adminNs) {
+      return sendError(res, 503, 'QUOTA_UNAVAILABLE', 'Quota service not configured');
+    }
+    const { consumePolicyUsage } = require('../server-lib/policy-usage');
+    const result = await consumePolicyUsage(adminNs, user.uid, feature);
+    if (!result.ok) {
+      const status = result.code === 'DAILY_LIMIT' || result.code === 'WEEKLY_LIMIT' ? 429 : 503;
+      return sendError(res, status, result.code || 'QUOTA_UNAVAILABLE', 'Quota not available');
     }
     return sendSuccess(res, result);
   }
@@ -196,6 +237,7 @@ async function handlePost(req, res) {
       'live_location_stop',
       'check_url',
       'agora_token',
+      'policy_consume',
     ],
   });
 }

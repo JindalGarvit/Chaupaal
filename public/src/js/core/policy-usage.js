@@ -115,67 +115,52 @@
     };
   }
 
+  /**
+   * Consume one quota unit via the server (POST /api/media-config
+   * policy_consume). policyUsage docs are client-read-only in rules, so this
+   * is the only legitimate write path — quotas can't be reset client-side.
+   * Fail closed: any failure other than an explicit limit throws
+   * QUOTA_UNAVAILABLE (never a free send).
+   */
   async function consume(feature) {
-    if (!db || !currentUser) {
+    if (!currentUser) {
       const err = new Error('Not signed in');
       err.code = 'AUTH_REQUIRED';
       throw err;
     }
-    const lim = limitsFor(feature);
-    const ref = db
-      .collection('users')
-      .doc(currentUser.uid)
-      .collection('policyUsage')
-      .doc(feature);
-    const P = window.PolicyLimits;
-    const today = P.dayKey();
-    const week = P.weekKeyMonday();
-
-    try {
-      await db.runTransaction(async (tx) => {
-        const snap = await tx.get(ref);
-        const cur = normalize(snap.exists ? snap.data() : null);
-        if (cur.dayCount >= lim.perDay) {
-          const err = new Error('DAILY_LIMIT');
-          err.code = 'DAILY_LIMIT';
-          throw err;
-        }
-        if (cur.weekCount >= lim.perWeek) {
-          const err = new Error('WEEKLY_LIMIT');
-          err.code = 'WEEKLY_LIMIT';
-          throw err;
-        }
-        tx.set(
-          ref,
-          {
-            dayKey: today,
-            dayCount: cur.dayCount + 1,
-            weekKey: week,
-            weekCount: cur.weekCount + 1,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-          },
-          { merge: true }
-        );
-      });
-    } catch (e) {
-      if (e?.code === 'DAILY_LIMIT' || e?.code === 'WEEKLY_LIMIT' || e?.code === 'AUTH_REQUIRED') {
-        throw e;
-      }
-      // Transaction / network failure — fail closed (do not grant a free send)
-      if (typeof reportClientError === 'function') {
-        reportClientError({
-          feature: 'policy_usage_consume',
-          message: `${feature}: ${e?.message || e}`,
-          stack: e?.stack || '',
-          screen: feature,
-        });
-      }
+    if (typeof apiFetch !== 'function') {
       const err = new Error('QUOTA_UNAVAILABLE');
       err.code = 'QUOTA_UNAVAILABLE';
-      err.cause = e;
       throw err;
     }
-    return getRemaining(feature);
+    let envelope = null;
+    try {
+      envelope = await apiFetch('/api/media-config', {
+        method: 'POST',
+        needAuth: true,
+        body: { action: 'policy_consume', feature },
+      });
+    } catch (e) {
+      envelope = null;
+    }
+    if (envelope?.ok) return getRemaining(feature);
+
+    const code = envelope?.error?.code || '';
+    if (code === 'DAILY_LIMIT' || code === 'WEEKLY_LIMIT') {
+      const err = new Error(code);
+      err.code = code;
+      throw err;
+    }
+    if (typeof reportClientError === 'function') {
+      reportClientError({
+        feature: 'policy_usage_consume',
+        message: `${feature}: ${code || envelope?.error?.message || 'request failed'}`,
+        screen: feature,
+      });
+    }
+    const err = new Error('QUOTA_UNAVAILABLE');
+    err.code = 'QUOTA_UNAVAILABLE';
+    throw err;
   }
 
   window.PolicyUsage = {

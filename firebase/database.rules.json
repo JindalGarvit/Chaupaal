@@ -21,11 +21,11 @@
           }
         },
         "media": {
-          ".write": "auth != null",
+          ".write": "auth != null && root.child('mehfil').child($chatId).child('participants').child(auth.uid).exists()",
           ".validate": "newData.hasChildren(['by', 'at']) && newData.child('by').val() == auth.uid"
         },
         "reactions": {
-          ".write": "auth != null",
+          ".write": "auth != null && root.child('mehfil').child($chatId).child('participants').child(auth.uid).exists()",
           "$rid": {
             ".validate": "newData.hasChildren(['emoji', 'by', 'at']) && newData.child('by').val() == auth.uid"
           }

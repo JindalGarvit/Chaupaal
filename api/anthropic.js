@@ -42,6 +42,17 @@ module.exports = async function handler(req, res) {
     return sendError(res, 401, 'UNAUTHORIZED', 'Signed-in Firebase auth required for AI');
   }
 
+  try {
+    const { checkActionRateLimit } = require('../server-lib/rate-limit');
+    const rate = await checkActionRateLimit(user.uid, 'ai');
+    if (!rate.ok) {
+      return sendError(res, 429, 'RATE_LIMITED', 'Too many AI requests. Try again shortly.');
+    }
+  } catch (e) {
+    // Rate limiter failure must not take AI down — degraded open, same as stories
+    console.warn('[anthropic] rate-limit check failed', e?.message || e);
+  }
+
   let incoming;
   try {
     incoming = parseJsonBody(req);

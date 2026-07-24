@@ -464,36 +464,49 @@ function wireSuggestionChips(bar){
   });
 }
 
+function chatEsc(s){
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 function renderMsgBubble(m, isGroup){
   const isMe = m.from === 'me';
   const uid = m.uid || m.user?.uid || '';
   const name = m.name || m.user?.name || '';
   let body = m.text || '';
   const att = m.attachment || null;
+  // SECURITY: `rich` is set ONLY when body is built from structured fields
+  // below. Anything else is plain text and gets fully escaped — message text
+  // must never carry raw HTML (stored XSS). The old check skipped escaping for
+  // text starting with '<', which let `<img onerror=…>` through.
+  let rich = false;
 
   // Legacy photo encoding
   if(!att && typeof body==='string' && body.startsWith('[photo] ')){
     const url=body.slice(8).trim();
-    if(url) body=`<img class="chat-img-msg" src="${url.replace(/"/g,'&quot;')}" decoding="async" alt="">`;
+    if(url){ body=`<img class="chat-img-msg" src="${chatEsc(url)}" decoding="async" alt="">`; rich=true; }
   }
 
   if(m.music && typeof renderMusicCard==='function'){
     const card=renderMusicCard(m.music,{variant:'chat'});
-    const caption=(typeof m.text==='string' && m.text && !m.text.includes('data-music-card') && !/^🎵\s/.test(m.text))?`<div class="music-card-caption">${m.text}</div>`:'';
+    const caption=(typeof m.text==='string' && m.text && !m.text.includes('data-music-card') && !/^🎵\s/.test(m.text))?`<div class="music-card-caption">${chatEsc(m.text)}</div>`:'';
     body=card+(caption||'');
+    rich=true;
   } else if(att && att.type==='photo' && att.url){
-    const sizeAttrs=att.width&&att.height?` width="${att.width}" height="${att.height}" style="aspect-ratio:${att.width}/${att.height};"`:'';
-    body=`<img class="chat-img-msg" src="${String(att.url).replace(/"/g,'&quot;')}" decoding="async" alt=""${sizeAttrs}>`;
+    const sizeAttrs=att.width&&att.height?` width="${Number(att.width)||0}" height="${Number(att.height)||0}" style="aspect-ratio:${Number(att.width)||1}/${Number(att.height)||1};"`:'';
+    body=`<img class="chat-img-msg" src="${chatEsc(att.url)}" decoding="async" alt=""${sizeAttrs}>`;
+    rich=true;
   } else if(att && att.type==='file'){
-    body=`<div class="chat-file-msg">📄 ${String(att.name||'File').replace(/</g,'&lt;')}</div>`;
+    body=`<div class="chat-file-msg">📄 ${chatEsc(att.name||'File')}</div>`;
+    rich=true;
   } else if(att && att.type==='location'){
     body=typeof renderLocationCard==='function'
       ?renderLocationCard(att,{variant:'chat'})
-      :`<div class="chat-location-msg">📍 ${String(att.label||att.placeName||'Location shared').replace(/</g,'&lt;')}</div>`;
+      :`<div class="chat-location-msg">📍 ${chatEsc(att.label||att.placeName||'Location shared')}</div>`;
+    rich=true;
   } else if(att && att.type==='muqabala_challenge'){
     const n=Array.isArray(att.questions)?att.questions.length:0;
-    const secs=att.timerSeconds||60;
-    const cid=String(att.challengeId||'').replace(/"/g,'&quot;');
+    const secs=Number(att.timerSeconds)||60;
+    const cid=chatEsc(att.challengeId||'');
     if(cid && Array.isArray(att.questions) && att.questions.length){
       window.__pendingMuqabalaChallenges = window.__pendingMuqabalaChallenges || {};
       window.__pendingMuqabalaChallenges[att.challengeId] = {
@@ -505,20 +518,18 @@ function renderMsgBubble(m, isGroup){
       try{ localStorage.setItem('chaupaal_challenge_'+att.challengeId, JSON.stringify(window.__pendingMuqabalaChallenges[att.challengeId])); }catch(e){}
     }
     body=`<div class="msg-bubble-challenge-inner challenge"><div class="challenge-label">⚔️ Custom Challenge</div><div class="challenge-title">${n} questions · ${secs}s</div><button class="challenge-btn" type="button" data-muqabala-challenge="${cid}">Answer →</button></div>`;
+    rich=true;
   }
 
-  // Strip raw HTML from plain text unless we intentionally set rich body above
-  if(!m.music && !att && typeof body==='string' && !body.startsWith('<') && body.includes('<')){
-    body=body.replace(/</g,'&lt;');
-  }
+  if(!rich) body=chatEsc(body);
 
   return `
-    <div class="msg-row ${isMe?'me':''}" data-uid="${uid}" data-name="${String(name).replace(/"/g,'&quot;')}"${m.pending?' data-pending="1"':''}>
-      ${!isMe?`<div class="msg-avatar-small">${m.avatar||'👤'}</div>`:''}
+    <div class="msg-row ${isMe?'me':''}" data-uid="${chatEsc(uid)}" data-name="${chatEsc(name)}"${m.pending?' data-pending="1"':''}>
+      ${!isMe?`<div class="msg-avatar-small">${chatEsc(m.avatar||'👤')}</div>`:''}
       <div>
-        ${(isGroup&&!isMe&&m.name)?`<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px;">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(m.name,m):m.name}</div>`:''}
-        <div class="msg-bubble ${isMe?'me':'them'}${att&&att.type==='muqabala_challenge'?' challenge':''}" data-msg-text="${String(m.text||'').replace(/"/g,'&quot;')}">${body}</div>
-        <div style="font-size:10px;color:var(--muted);margin-top:3px;${isMe?'text-align:right':''};">${m.time||''}</div>
+        ${(isGroup&&!isMe&&m.name)?`<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px;">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(m.name,m):chatEsc(m.name)}</div>`:''}
+        <div class="msg-bubble ${isMe?'me':'them'}${att&&att.type==='muqabala_challenge'?' challenge':''}" data-msg-text="${chatEsc(m.text||'')}">${body}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:3px;${isMe?'text-align:right':''};">${chatEsc(m.time||'')}</div>
       </div>
     </div>
   `;
