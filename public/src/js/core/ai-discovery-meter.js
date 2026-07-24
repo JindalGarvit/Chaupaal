@@ -11,8 +11,10 @@
     const dayFrac = Math.max(0, Math.min(1, dayLeft / lim.perDay));
     const weekFrac = Math.max(0, Math.min(1, weekLeft / lim.perWeek));
     const deg = Math.round(dayFrac * 270); // arc fill
-    const exhausted = !!state?.exhausted;
-    const unlock = state?.unlock || '';
+    const exhausted = !!state?.exhausted || !!state?.readFailed;
+    const unlock = state?.readFailed
+      ? state.unlock || 'Couldn’t verify your limit — try again shortly.'
+      : state?.unlock || '';
     return `
       <div class="ai-disc-meter" data-nav-ignore="1" title="AI Discovery messages to Personal profiles">
         <div class="ai-disc-meter-dial" style="--meter-deg:${deg}deg;${exhausted ? 'opacity:0.55;' : ''}">
@@ -22,9 +24,9 @@
           </div>
         </div>
         <div class="ai-disc-meter-copy">
-          <div class="ai-disc-meter-title">${exhausted ? 'Limit reached' : 'AI Discovery messages'}</div>
-          <div class="ai-disc-meter-bar" aria-hidden="true"><i style="width:${Math.round(weekFrac * 100)}%"></i></div>
-          <div class="ai-disc-meter-meta">${weekLeft} of ${lim.perWeek} left this week</div>
+          <div class="ai-disc-meter-title">${state?.readFailed ? 'Limit unavailable' : exhausted ? 'Limit reached' : 'AI Discovery messages'}</div>
+          <div class="ai-disc-meter-bar" aria-hidden="true"><i style="width:${exhausted ? 0 : Math.round(weekFrac * 100)}%"></i></div>
+          <div class="ai-disc-meter-meta">${exhausted ? '—' : `${weekLeft} of ${lim.perWeek} left this week`}</div>
           ${exhausted && unlock ? `<div class="ai-disc-meter-unlock">${unlock}</div>` : ''}
           ${
             disclosePro

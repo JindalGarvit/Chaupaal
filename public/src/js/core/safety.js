@@ -196,10 +196,33 @@
    * @param {object} [opts] - { postId, targetType }
    */
   function openFlagSheet(target, opts = {}) {
+    // Tear down any prior flag sheet via nav-stack so history depth stays honest
+    const prevSheet = document.querySelector('.flag-sheet');
+    if (prevSheet) {
+      try {
+        if (typeof removeNavLayer === 'function') removeNavLayer(prevSheet);
+      } catch (e) {}
+      try {
+        prevSheet.remove();
+      } catch (e) {}
+    }
+    try {
+      document.querySelector('.flag-sheet-scrim')?.remove();
+    } catch (e) {}
+
     const user = target || {};
+    const scrim = document.createElement('div');
+    scrim.className = 'flag-sheet-scrim';
+    scrim.dataset.navIgnore = '1';
+    scrim.setAttribute('aria-hidden', 'true');
+
     const sheet = document.createElement('div');
     sheet.className = 'flag-sheet';
+    sheet.dataset.navManaged = '1';
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-label', 'Report or block');
     sheet.innerHTML = `
+      <div class="flag-sheet-handle" aria-hidden="true"></div>
       <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;margin-bottom:4px;">Report or Block</div>
       <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(user.name||'User',user):(user.name||'User')}</div>
       ${REPORT_REASONS.map(
@@ -210,9 +233,45 @@
         <button type="button" class="btn btn--primary btn--block ui-state-btn ui-state-btn-primary" id="flagCustomSubmit" style="width:100%;margin-top:8px;">Submit report</button>
       </div>
       <div class="flag-option" data-block="1" style="color:var(--red);">🚫 Block ${user.name || 'user'}</div>
-      <button id="closeFlagSheet" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;margin-top:8px;">Cancel</button>
+      <button type="button" id="closeFlagSheet" data-overlay-dismiss style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;margin-top:8px;">Cancel</button>
     `;
-    document.querySelector('.device')?.appendChild(sheet);
+
+    const device = document.querySelector('.device');
+    if (!device) return;
+    device.appendChild(scrim);
+    device.appendChild(sheet);
+    requestAnimationFrame(() => {
+      scrim.classList.add('is-open');
+      sheet.classList.add('is-open');
+    });
+
+    let closed = false;
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      try {
+        if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
+      } catch (e) {}
+      sheet.classList.remove('is-open');
+      scrim.classList.remove('is-open');
+      setTimeout(() => {
+        try {
+          sheet.remove();
+        } catch (e) {}
+        try {
+          scrim.remove();
+        } catch (e) {}
+      }, 200);
+    };
+
+    if (typeof pushNavLayer === 'function') {
+      pushNavLayer(sheet, close);
+    }
+    if (typeof enableSwipeDismiss === 'function') {
+      enableSwipeDismiss(sheet, close);
+    }
+    scrim.addEventListener('click', close);
+    sheet.querySelector('#closeFlagSheet')?.addEventListener('click', close);
 
     sheet.querySelectorAll('[data-code]').forEach((el) => {
       el.addEventListener('click', async () => {
@@ -222,9 +281,13 @@
           sheet.querySelector('#flagCustomText')?.focus();
           return;
         }
-        await flagUser(user.uid, code, opts);
-        sheet.remove();
-        if (typeof showToast === 'function') showToast("Report submitted. We'll review it. 🙏");
+        try {
+          await flagUser(user.uid, code, opts);
+          close();
+          if (typeof showToast === 'function') showToast("Report submitted. We'll review it. 🙏");
+        } catch (e) {
+          if (typeof showToast === 'function') showToast('Couldn’t submit report — try again');
+        }
       });
     });
 
@@ -234,16 +297,23 @@
         if (typeof showToast === 'function') showToast('Please enter a reason');
         return;
       }
-      await flagUser(user.uid, 'custom', { ...opts, customText: text });
-      sheet.remove();
-      if (typeof showToast === 'function') showToast("Report submitted. We'll review it. 🙏");
+      try {
+        await flagUser(user.uid, 'custom', { ...opts, customText: text });
+        close();
+        if (typeof showToast === 'function') showToast("Report submitted. We'll review it. 🙏");
+      } catch (e) {
+        if (typeof showToast === 'function') showToast('Couldn’t submit report — try again');
+      }
     });
 
     sheet.querySelector('[data-block]')?.addEventListener('click', async () => {
-      await blockUser(user.uid, user.name);
-      sheet.remove();
+      try {
+        await blockUser(user.uid, user.name);
+        close();
+      } catch (e) {
+        if (typeof showToast === 'function') showToast('Couldn’t block — try again');
+      }
     });
-    sheet.querySelector('#closeFlagSheet')?.addEventListener('click', () => sheet.remove());
   }
 
   async function openBlockedUsersSheet() {

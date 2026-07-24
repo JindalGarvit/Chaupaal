@@ -642,10 +642,13 @@ async function sendMsg(chat){
                 await PolicyUsage.consume('aiDiscoveryMsg');
               } catch (limErr) {
                 const rem = await PolicyUsage.getRemaining('aiDiscoveryMsg').catch(() => null);
-                throw Object.assign(
-                  new Error(rem?.unlock || 'AI Discovery message limit reached'),
-                  { code: limErr?.code || 'AI_DISC_LIMIT' }
-                );
+                const msg =
+                  limErr?.code === 'QUOTA_UNAVAILABLE'
+                    ? 'Couldn’t verify your message limit — try again shortly'
+                    : rem?.unlock || limErr?.message || 'AI Discovery message limit reached';
+                throw Object.assign(new Error(msg), {
+                  code: limErr?.code || 'AI_DISC_LIMIT',
+                });
               }
             }
             await sendRealtimeMessage(chat.firestoreId||chat.id,text,isGroup);

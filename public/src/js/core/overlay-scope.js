@@ -43,6 +43,7 @@
     '[data-np-cancel]',
     '[data-cf-cancel]',
     '[data-music-picker-close]',
+    '#closeFlagSheet',
   ].join(',');
 
   const IGNORE_IDS = new Set([

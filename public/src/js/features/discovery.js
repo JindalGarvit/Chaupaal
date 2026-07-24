@@ -547,7 +547,7 @@ function openPeepalAskSheet(){
     const label = document.getElementById('anonToggleLabel');
     const toggle = document.getElementById('anonToggle');
     if (!row || !hint || !toggle) return;
-    const available = !anonQuota.exhausted && anonQuota.remaining > 0;
+    const available = !anonQuota.exhausted && anonQuota.remaining > 0 && !anonQuota.readFailed;
     if (available) {
       row.style.background = 'rgba(230,57,70,0.05)';
       row.style.borderColor = 'var(--red)';
@@ -559,7 +559,9 @@ function openPeepalAskSheet(){
       row.style.background = 'var(--line)';
       row.style.borderColor = 'var(--line)';
       row.style.opacity = '0.5';
-      hint.textContent = anonQuota.unlock || 'Anonymous posting unavailable right now.';
+      hint.textContent = anonQuota.readFailed
+        ? (anonQuota.unlock || 'Couldn’t verify anonymous limit — try again shortly.')
+        : (anonQuota.unlock || 'Anonymous posting unavailable right now.');
       label.style.pointerEvents = 'none';
       toggle.disabled = true;
       toggle.checked = false;
@@ -684,7 +686,7 @@ function openPeepalAskSheet(){
     if(wantsAnon){
       try{
         anonQuota = await getAnonRemaining();
-        if(anonQuota.exhausted){
+        if(anonQuota.exhausted || anonQuota.readFailed){
           showToast(anonQuota.unlock||'Anonymous limit reached');
           return;
         }
@@ -693,6 +695,8 @@ function openPeepalAskSheet(){
       }catch(e){
         showToast(e?.code==='DAILY_LIMIT'||e?.code==='WEEKLY_LIMIT'
           ?(anonQuota.unlock||'Anonymous limit reached')
+          :e?.code==='QUOTA_UNAVAILABLE'
+          ?'Couldn’t verify your limit — try again shortly'
           :'Could not use anonymous post right now');
         return;
       }
