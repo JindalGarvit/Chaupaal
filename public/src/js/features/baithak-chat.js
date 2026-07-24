@@ -891,9 +891,9 @@ function openStoryViewer(story, allStories){
         ${musicOverlay}
         ${locationOverlay}
         ${s.sharedGameId?`<button type="button" class="story-game-card" id="storyGameCard">Play ${safeStoryText(typeof getGame==='function'?(getGame(s.sharedGameId)?.name||'game'):'game')}</button>`:''}
-        <!-- Tap zones -->
-        <div id="tapPrev" style="position:absolute;left:0;top:0;width:35%;height:100%;cursor:pointer;"></div>
-        <div id="tapNext" style="position:absolute;right:0;top:0;width:35%;height:100%;cursor:pointer;"></div>
+        <!-- Tap zones (below music/location cards — z-index 1 vs card z-index 3) -->
+        <div id="tapPrev" style="position:absolute;left:0;top:0;width:35%;height:100%;cursor:pointer;z-index:1;"></div>
+        <div id="tapNext" style="position:absolute;right:0;top:0;width:35%;height:100%;cursor:pointer;z-index:1;"></div>
       </div>
       ${s.id&&s.destination?`
       <div class="story-interactions">

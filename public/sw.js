@@ -1,4 +1,4 @@
-const CACHE = 'chaupaal-v52';
+const CACHE = 'chaupaal-v53';
 const ASSETS = [
   '/index.html',
   '/icon.png',
@@ -68,6 +68,19 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   if (e.request.url.includes('/api/') || e.request.url.includes('firebase')) return;
+  // Never intercept media — SW re-fetch breaks cross-origin <audio>/<video> on some browsers
+  const dest = e.request.destination;
+  if (dest === 'audio' || dest === 'video' || dest === 'track' || dest === 'mediastream') return;
+  try {
+    const host = new URL(e.request.url).hostname;
+    if (
+      host.endsWith('saavncdn.com') ||
+      host.endsWith('itunes.apple.com') ||
+      host.endsWith('mzstatic.com')
+    ) {
+      return;
+    }
+  } catch (err) {}
 
   // HTML shell: always network-first (cache only as offline fallback).
   // Cache-first here leaves PWAs on a stale index.html that points at old ?v= assets.

@@ -125,47 +125,45 @@ async function callMusicProvider(opts = {}) {
 
   const itunes = await itunesPromise;
 
-  // Browser-friendly previews: prefer iTunes previewUrl (CORS / mobile playable).
-  // Keep JioSaavn metadata when present; swap preview to iTunes when titles match.
-  if (itunes.length) {
-    const norm = (s) =>
-      String(s || '')
+  // Playable URL policy: keep JioSaavn downloadUrl when present (audio/mp4, broadly
+  // playable). Use iTunes preview only as fallback when primary has no URL.
+  // (Earlier code swapped TO iTunes for "CORS" — that forced audio/x-m4p previews
+  // and broke playback on clients that won't decode them in <audio>.)
+  if (!results.length && itunes.length) {
+    results = itunes;
+    fallbackUsed = true;
+    providerId = 'itunes';
+  } else if (results.length) {
+    let filled = 0;
+    results = results.map((track) => {
+      if (!track) return track;
+      if (track.previewUrl) return track;
+      const tTitle = String(track.title || '')
         .toLowerCase()
         .replace(/[^a-z0-9\u0900-\u097f]+/g, ' ')
         .trim();
-    if (!results.length) {
-      results = itunes;
-      fallbackUsed = true;
-      providerId = 'itunes';
-    } else {
-      let swapped = 0;
-      results = results.map((track) => {
-        if (!track) return track;
-        const tTitle = norm(track.title);
-        const tArtist = norm(track.artist);
-        const match =
-          itunes.find(
-            (it) =>
-              it.previewUrl &&
-              tTitle &&
-              norm(it.title).includes(tTitle.slice(0, 18)) &&
-              (!tArtist || norm(it.artist).includes(tArtist.slice(0, 12)) || tArtist.includes(norm(it.artist).slice(0, 12)))
-          ) ||
-          itunes.find((it) => it.previewUrl && tTitle && norm(it.title).includes(tTitle.slice(0, 12))) ||
-          null;
-        if (match?.previewUrl) {
-          swapped++;
-          return {
-            ...track,
-            previewUrl: match.previewUrl,
-            source: 'itunes',
-            thumbnail: track.thumbnail || match.thumbnail || '',
-          };
-        }
-        return track;
-      });
-      if (swapped) fallbackUsed = true;
-    }
+      const match =
+        itunes.find(
+          (it) =>
+            it.previewUrl &&
+            tTitle &&
+            String(it.title || '')
+              .toLowerCase()
+              .replace(/[^a-z0-9\u0900-\u097f]+/g, ' ')
+              .includes(tTitle.slice(0, 18))
+        ) || itunes.find((it) => it.previewUrl) || null;
+      if (match?.previewUrl) {
+        filled++;
+        return {
+          ...track,
+          previewUrl: match.previewUrl,
+          source: 'itunes',
+          thumbnail: track.thumbnail || match.thumbnail || '',
+        };
+      }
+      return track;
+    });
+    if (filled) fallbackUsed = true;
   }
 
   return {

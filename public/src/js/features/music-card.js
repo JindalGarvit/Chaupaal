@@ -19,7 +19,14 @@
   function getSharedAudio() {
     if (!sharedAudio) {
       sharedAudio = new Audio();
-      sharedAudio.preload = 'none';
+      sharedAudio.preload = 'auto';
+      sharedAudio.setAttribute('playsinline', '');
+      sharedAudio.setAttribute('webkit-playsinline', '');
+      // Keep element in DOM — some mobile WebViews won't decode detached Audio nodes
+      try {
+        sharedAudio.style.cssText = 'position:fixed;width:0;height:0;opacity:0;pointer-events:none;left:-9999px;';
+        (document.querySelector('.device') || document.body).appendChild(sharedAudio);
+      } catch (e) {}
       window.__chaupaalSharedAudio = sharedAudio;
       sharedAudio.addEventListener('ended', () => syncActiveCard(false));
       sharedAudio.addEventListener('timeupdate', () => {
@@ -32,7 +39,16 @@
         if (typeof syncMiniPlayer === 'function') syncMiniPlayer(sharedAudio);
       });
       sharedAudio.addEventListener('error', () => {
-        if (activeCardEl) handlePreviewError(activeCardEl);
+        if (!activeCardEl) return;
+        const code = sharedAudio.error?.code;
+        // MEDIA_ERR_ABORTED (1) fires when we intentionally change src — ignore
+        if (code === 1) return;
+        const expected = activeCardEl.dataset.musicPreview || '';
+        const failed = sharedAudio.currentSrc || sharedAudio.src || '';
+        if (expected && failed && failed.indexOf(expected.slice(0, 48)) === -1 && expected.indexOf(failed.slice(0, 48)) === -1) {
+          return;
+        }
+        handlePreviewError(activeCardEl, { fromUserGesture: false });
       });
       sharedAudio.addEventListener('play', () => {
         if (activeCardEl) {
@@ -229,7 +245,7 @@
   }
 
   async function playCard(card) {
-    const url = card.dataset.musicPreview || '';
+    const url = String(card.dataset.musicPreview || '').trim();
     // Never await network resolve before audio.play() — that drops the mobile user-gesture.
     if (!url) {
       await handlePreviewError(card, { fromUserGesture: true });
@@ -237,7 +253,7 @@
     }
     const audio = getSharedAudio();
     ensureCardMediaControls(card);
-    if (activeCardEl === card && !audio.paused) {
+    if (activeCardEl === card && !audio.paused && !audio.ended) {
       audio.pause();
       syncActiveCard(false);
       return;
@@ -249,8 +265,15 @@
     const bar = card.querySelector('[data-music-progress]');
     if (bar) bar.style.width = '0%';
     try {
-      if (audio.src !== url) {
+      audio.dataset.cpTitle = card.dataset.musicTitle || '';
+      audio.dataset.cpArtist = card.dataset.musicArtist || '';
+      // Always re-assign + load when switching tracks or recovering from error
+      const current = audio.currentSrc || audio.src || '';
+      if (current !== url && !current.endsWith(url) && current.indexOf(url) === -1) {
         audio.src = url;
+        try {
+          audio.load();
+        } catch (e) {}
       }
       await audio.play();
       syncActiveCard(true);
@@ -412,7 +435,9 @@
 
     async function preferPlayablePreview(music) {
       if (!music) return music;
-      if (music.source === 'itunes' && music.previewUrl) return music;
+      // Already have a URL (typically JioSaavn mp4) — do NOT replace with iTunes.
+      // iTunes is resolve-only fallback when preview is missing or playback errors.
+      if (music.previewUrl) return music;
       if (!music.title || typeof apiFetch !== 'function') return music;
       try {
         const envelope = await apiFetch('/api/media-config', {

@@ -68,19 +68,43 @@
       el.classList.add('hidden');
       return;
     }
+    // Permanent shell overlays — hide, never remove from DOM
+    if (
+      el.id === 'muqabalaOverlay' ||
+      el.classList.contains('muqabala-overlay') ||
+      el.classList.contains('auth-overlay')
+    ) {
+      el.classList.add('hidden');
+      return;
+    }
     el.remove();
   }
 
   function pruneDead() {
     for (let i = stack.length - 1; i >= 0; i--) {
-      if (!stack[i].el || !stack[i].el.isConnected) stack.splice(i, 1);
-      else if (stack[i].el.classList?.contains('hidden') && stack[i].el.classList.contains('modal-backdrop')) {
+      const el = stack[i].el;
+      if (!el || !el.isConnected) {
         stack.splice(i, 1);
-      } else if (
-        stack[i].el.classList?.contains('day-check-modal') &&
-        !stack[i].el.classList.contains('open')
+        continue;
+      }
+      // Persistent shell overlays that live in index.html must not stay on the
+      // stack while .hidden — otherwise hasNavLayers() is always true and Back
+      // / song-picker history desync (seen with #muqabalaOverlay).
+      if (el.classList?.contains('hidden')) {
+        stack.splice(i, 1);
+        try {
+          delete el.dataset.navLayer;
+        } catch (e) {}
+        continue;
+      }
+      if (
+        el.classList?.contains('day-check-modal') &&
+        !el.classList.contains('open')
       ) {
         stack.splice(i, 1);
+        try {
+          delete el.dataset.navLayer;
+        } catch (e) {}
       }
     }
   }
@@ -334,6 +358,9 @@
     if (el.dataset.navManaged === '1') return;
     if (el.classList?.contains('cp-sheet-scrim')) return;
     if (el.closest?.('[data-nav-ignore="1"]')) return;
+    // Never register closed/hidden shell overlays (muqabala, auth, etc.)
+    if (el.classList?.contains('hidden')) return;
+    if (el.classList?.contains('day-check-modal') && !el.classList.contains('open')) return;
 
     if (el.classList?.contains('modal-backdrop') && !el.classList.contains('hidden')) {
       wireBackdrop(el);
@@ -374,7 +401,7 @@
   }
 
   function watchModals() {
-    ['settingsModal', 'profileModal', 'notifModal'].forEach((id) => {
+    ['settingsModal', 'profileModal', 'notifModal', 'muqabalaOverlay'].forEach((id) => {
       const el = document.getElementById(id);
       if (!el || el.dataset.navWatch === '1') return;
       el.dataset.navWatch = '1';
