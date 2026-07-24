@@ -635,6 +635,7 @@ function wireAuthEvents() {
     regData.phone = regPhoneVerified || document.getElementById('regPhone')?.value.trim() || auth?.currentUser?.phoneNumber || '';
     regData.city = document.getElementById('regCity')?.value.trim() || '';
     regData.lang = document.getElementById('regLanguage')?.value || 'en';
+    if (typeof setAppLanguage === 'function') setAppLanguage(regData.lang, { persistRemote: false });
 
     const btn = document.getElementById('registerBtn');
     if (typeof setButtonLoading === 'function') setButtonLoading(btn, true, 'Creating account');

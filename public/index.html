@@ -13,15 +13,15 @@
 <meta name="apple-mobile-web-app-title" content="Chaupaal">
 <link rel="apple-touch-icon" href="/icon.png">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/src/styles/tokens.css?v=2">
-  <link rel="stylesheet" href="/src/styles/icons.css?v=2">
-  <link rel="stylesheet" href="/src/styles/layout.css?v=7">
-  <link rel="stylesheet" href="/src/styles/akhbaar.css?v=3">
-  <link rel="stylesheet" href="/src/styles/dangal.css?v=23">
-  <link rel="stylesheet" href="/src/styles/baithak.css?v=23">
-  <link rel="stylesheet" href="/src/styles/peepal.css?v=22">
-  <link rel="stylesheet" href="/src/styles/duniya.css?v=20">
-  <link rel="stylesheet" href="/src/styles/components.css?v=44">
+  <link rel="stylesheet" href="/src/styles/tokens.css?v=1a54046c">
+  <link rel="stylesheet" href="/src/styles/icons.css?v=152a1d7b">
+  <link rel="stylesheet" href="/src/styles/layout.css?v=eb712c97">
+  <link rel="stylesheet" href="/src/styles/akhbaar.css?v=c92f22a2">
+  <link rel="stylesheet" href="/src/styles/dangal.css?v=cf112dc8">
+  <link rel="stylesheet" href="/src/styles/baithak.css?v=2aaa464c">
+  <link rel="stylesheet" href="/src/styles/peepal.css?v=6951c05a">
+  <link rel="stylesheet" href="/src/styles/duniya.css?v=756b8545">
+  <link rel="stylesheet" href="/src/styles/components.css?v=ab4438a7">
 </head>
 <body>
 <div class="device">
@@ -357,8 +357,8 @@
       <div class="duniya-screen" id="duniyaScreen">
         <div class="duniya-header">
           <div class="duniya-mode-switch" role="tablist" aria-label="Duniya mode">
-            <button type="button" class="duniya-mode-btn active" data-duniya-mode="general" role="tab" aria-selected="true">General</button>
-            <button type="button" class="duniya-mode-btn" data-duniya-mode="lehar" role="tab" aria-selected="false">Lehar</button>
+            <button type="button" class="duniya-mode-btn active" data-duniya-mode="general" role="tab" aria-selected="true" data-i18n="duniya_general">General</button>
+            <button type="button" class="duniya-mode-btn" data-duniya-mode="lehar" role="tab" aria-selected="false" data-i18n="duniya_lehar">Lehar</button>
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
             <button class="icon-btn" data-open-notif="duniya" aria-label="Duniya notifications" title="Notifications" style="position:relative;" data-icon="bell"><span class="notif-dot hidden" data-notif-dot="duniya"></span></button>
@@ -376,18 +376,17 @@
 
     <div class="tab-panel" id="panel-baithak">
     <!-- STORIES ROW -->
-    <!-- FUTURE_I18N: story label / search placeholder should come from a localization layer -->
     <div class="stories-row" id="storiesRow">
       <div class="story-add-btn" id="addStoryBtn">
         <div class="story-add-icon" data-icon="plus" data-icon-size="20"></div>
-        <div class="story-label">Your story</div>
+        <div class="story-label" data-i18n="your_story">Your story</div>
       </div>
       <!-- stories injected here -->
     </div>
 
     <!-- SEARCH -->
     <div class="baithak-search-row">
-      <input class="baithak-search" id="baithakSearch" placeholder="Search..." type="text">
+      <input class="baithak-search" id="baithakSearch" placeholder="Search..." type="text" data-i18n-placeholder="baithak_search">
       <button class="new-chat-btn" id="newChatBtn" aria-label="New chat" data-icon="pen"></button>
     </div>
 
@@ -403,14 +402,14 @@
       <div class="dangal-header-card">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
           <div>
-            <div class="dangal-title">Dangal</div>
-            <div class="dangal-sub">Games inside Chaupaal — solos, duels & Muqabala</div>
+            <div class="dangal-title" data-i18n="dangal_title">Dangal</div>
+            <div class="dangal-sub" data-i18n="dangal_sub">Games inside Chaupaal — solos, duels & Muqabala</div>
           </div>
           <button class="icon-btn" data-open-notif="dangal" aria-label="Dangal notifications" title="Notifications" style="position:relative;flex-shrink:0;" data-icon="bell"><span class="notif-dot hidden" data-notif-dot="dangal"></span></button>
         </div>
         <div class="dangal-overall-rating" id="dangalOverallRating"></div>
       </div>
-      <div class="dangal-games-label">Choose how to play</div>
+      <div class="dangal-games-label" data-i18n="dangal_choose">Choose how to play</div>
       <div class="dangal-games-grid" id="dangalGamesGrid"></div>
     </div>
     <div class="muqabala-overlay hidden" id="muqabalaOverlay"></div>
@@ -425,13 +424,13 @@
         <div style="display:flex;gap:8px;align-items:center;">
           <button class="icon-btn" data-open-notif="peepal" aria-label="Peepal notifications" title="Notifications" style="position:relative;" data-icon="bell"><span class="notif-dot hidden" data-notif-dot="peepal"></span></button>
           <button class="icon-btn" id="peepalSearchBtn" title="Find people with AI" aria-label="Find people" data-icon="search"></button>
-          <button class="peepal-ask-btn" id="peepalAskBtn">+ Ask</button>
+          <button class="peepal-ask-btn" id="peepalAskBtn" data-i18n="peepal_ask">+ Ask</button>
         </div>
       </div>
       <!-- AI People Search -->
       <div class="peepal-ai-search hidden" id="peepalAiSearch">
         <div class="peepal-ai-search-inner">
-          <div class="peepal-ai-search-label" style="display:flex;align-items:center;gap:6px;"><span data-icon="sparkles" data-icon-size="14"></span> Find people on Peepal</div>
+          <div class="peepal-ai-search-label" style="display:flex;align-items:center;gap:6px;"><span data-icon="sparkles" data-icon-size="14"></span> <span data-i18n="peepal_find_label">Find people on Peepal</span></div>
       <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:8px;" id="peepalSearchNudges">
         <button type="button" class="peepal-nudge-chip" data-hint="someone to date around my age" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;"><span data-icon="heart" data-icon-size="14"></span> Dating</button>
         <button type="button" class="peepal-nudge-chip" data-hint="make new friends with similar interests" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;"><span data-icon="handshake" data-icon-size="14"></span> Friendship</button>
@@ -443,11 +442,11 @@
         <button type="button" class="peepal-nudge-chip" data-hint="startup-minded person to collaborate" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;"><span data-icon="rocket" data-icon-size="14"></span> Co-founder</button>
       </div>
           <div style="position:relative;">
-            <textarea class="peepal-ai-search-input" id="peepalAiSearchInput" placeholder="Describe who you're looking for... e.g. 'someone into cricket and startups around my age' or 'a travel buddy from Mumbai who loves food'" rows="3"></textarea>
+            <textarea class="peepal-ai-search-input" id="peepalAiSearchInput" placeholder="Describe who you're looking for... e.g. 'someone into cricket and startups around my age' or 'a travel buddy from Mumbai who loves food'" rows="3" data-i18n-placeholder="peepal_find_ph"></textarea>
           </div>
           <div style="display:flex;gap:8px;margin-top:10px;">
-            <button class="peepal-ai-search-btn" id="peepalAiSearchGo"><span data-icon="search" data-icon-size="16" style="margin-right:6px;"></span> Find People</button>
-            <button style="padding:10px 14px;background:none;border:2px solid var(--line);border-radius:12px;font-size:13px;cursor:pointer;" id="peepalAiSearchClose">Cancel</button>
+            <button class="peepal-ai-search-btn" id="peepalAiSearchGo"><span data-icon="search" data-icon-size="16" style="margin-right:6px;"></span> <span data-i18n="peepal_find_btn">Find People</span></button>
+            <button style="padding:10px 14px;background:none;border:2px solid var(--line);border-radius:12px;font-size:13px;cursor:pointer;" id="peepalAiSearchClose" data-i18n="cancel">Cancel</button>
           </div>
           <div id="peepalAiSearchResults" style="margin-top:14px;"></div>
         </div>
@@ -462,13 +461,13 @@
 
   <!-- RIGHT PANEL (desktop only) -->
   <div class="right-panel" id="rightPanel">
-    <div class="rp-section-label">Today's streak</div>
+    <div class="rp-section-label" data-i18n="rp_streak_today">Today's streak</div>
     <div class="rp-stat-card">
-      <div class="rp-stat-num" id="rpStreakNum" style="display:flex;align-items:center;gap:6px;"><span id="rpStreakCount">0</span> <span data-icon="flame" data-icon-size="22" style="color:var(--red);"></span></div>
-      <div class="rp-stat-label">days in a row</div>
+      <div class="rp-stat-num" id="rpStreakNum"><span id="rpStreakCount">0</span> <span data-icon="flame" data-icon-size="22" class="rp-flame"></span></div>
+      <div class="rp-stat-label" data-i18n="rp_days_row">days in a row</div>
     </div>
-    <div class="rp-section-label" style="margin-top:16px;">Top readers today</div>
-    <div id="rpLeaderboard" class="ui-skeleton-stack" aria-busy="true">
+    <div class="rp-section-label" data-i18n="rp_top_readers">Top readers today</div>
+    <div id="rpLeaderboard" class="rp-leaderboard ui-skeleton-stack" aria-busy="true">
       <div class="skeleton-wrap skeleton-list" style="display:flex;gap:12px;align-items:center;padding:12px 0;">
         <div class="skeleton" style="width:36px;height:36px;border-radius:50%;flex-shrink:0;"></div>
         <div style="flex:1;">
@@ -484,8 +483,11 @@
         </div>
       </div>
     </div>
-    <div class="rp-section-label" style="margin-top:16px;">Dangal ratings</div>
-    <div id="rpRatings"></div>
+    <div class="rp-section-label" data-i18n="rp_your_score">Your score today</div>
+    <div class="rp-your-score" id="rpYourScore">—</div>
+    <div class="rp-section-label" data-i18n="rp_dangal_ratings">Dangal ratings</div>
+    <div id="rpRatings" class="rp-ratings"></div>
+    <button type="button" class="rp-action-btn" id="rpOpenAkhbaar" data-i18n="rp_play_akhbaar">Play today's Akhbaar</button>
   </div>
 
   <!-- BOTTOM TABS / SIDEBAR -->
@@ -525,7 +527,7 @@
 
     <!-- Sidebar bottom (desktop only) -->
     <div class="sidebar-streak">
-      <span data-icon="flame" data-icon-size="14"></span> <span id="sidebarStreak">0</span> day streak
+      <span data-icon="flame" data-icon-size="14"></span> <span id="sidebarStreak">0</span> <span data-i18n="streak_suffix">day streak</span>
     </div>
     <div class="sidebar-profile" id="sidebarProfile">
       <div class="profile-btn" style="width:32px;height:32px;font-size:14px;flex-shrink:0;">
@@ -543,10 +545,10 @@
   <div class="modal-backdrop hidden" id="settingsModal">
     <div class="modal">
       <div class="modal-header">
-        <div class="modal-title">Settings</div>
+        <div class="modal-title" data-i18n="settings_title">Settings</div>
         <button class="icon-btn" id="closeSettings" aria-label="Close" data-icon="x"></button>
       </div>
-      <div class="settings-section">Language</div>
+      <div class="settings-section" data-i18n="settings_language">Language</div>
       <select class="modal-select" id="langSelect">
         <option value="en">English</option>
         <option value="hi">हिंदी (Hindi)</option>
@@ -569,21 +571,21 @@
         <option value="zh">中文</option>
         <option value="ru">Русский</option>
       </select>
-      <div class="settings-section">Notifications</div>
+      <div class="settings-section" data-i18n="settings_notifications">Notifications</div>
       <div class="toggle-row">
-        <div><div class="toggle-label">Daily Akhbaar reminder</div><div class="toggle-desc">Morning nudge in your language</div></div>
+        <div><div class="toggle-label" data-i18n="notif_akhbaar_label">Daily Akhbaar reminder</div><div class="toggle-desc" data-i18n="notif_akhbaar_desc">Morning nudge in your language</div></div>
         <label class="switch"><input type="checkbox" id="notifAkhbaar" checked><span class="slider"></span></label>
       </div>
       <div class="toggle-row">
-        <div><div class="toggle-label">Taaza Khabar alerts</div><div class="toggle-desc">Breaking news notifications</div></div>
+        <div><div class="toggle-label" data-i18n="notif_breaking_label">Taaza Khabar alerts</div><div class="toggle-desc" data-i18n="notif_breaking_desc">Breaking news notifications</div></div>
         <label class="switch"><input type="checkbox" id="notifBreaking" checked><span class="slider"></span></label>
       </div>
       <div class="toggle-row">
-        <div><div class="toggle-label">Friend activity</div><div class="toggle-desc">When friends play or connect</div></div>
+        <div><div class="toggle-label" data-i18n="notif_friends_label">Friend activity</div><div class="toggle-desc" data-i18n="notif_friends_desc">When friends play or connect</div></div>
         <label class="switch"><input type="checkbox" id="notifFriends" checked><span class="slider"></span></label>
       </div>
       <div class="toggle-row">
-        <div><div class="toggle-label">Messages</div><div class="toggle-desc">New Baithak chats & replies</div></div>
+        <div><div class="toggle-label" data-i18n="notif_messages_label">Messages</div><div class="toggle-desc" data-i18n="notif_messages_desc">New Baithak chats & replies</div></div>
         <label class="switch"><input type="checkbox" id="notifMessages" checked><span class="slider"></span></label>
       </div>
       <div class="toggle-row">
@@ -591,14 +593,14 @@
         <label class="switch"><input type="checkbox" id="notifChatPresence" checked><span class="slider"></span></label>
       </div>
       <div class="toggle-row">
-        <div><div class="toggle-label">Comments</div><div class="toggle-desc">Replies on your Peepal & Duniya posts</div></div>
+        <div><div class="toggle-label" data-i18n="notif_comments_label">Comments</div><div class="toggle-desc" data-i18n="notif_comments_desc">Replies on your Peepal & Duniya posts</div></div>
         <label class="switch"><input type="checkbox" id="notifComments" checked><span class="slider"></span></label>
       </div>
       <div class="toggle-row">
-        <div><div class="toggle-label">Duels & challenges</div><div class="toggle-desc">Muqabala invites and results</div></div>
+        <div><div class="toggle-label" data-i18n="notif_duels_label">Duels & challenges</div><div class="toggle-desc" data-i18n="notif_duels_desc">Muqabala invites and results</div></div>
         <label class="switch"><input type="checkbox" id="notifDuels" checked><span class="slider"></span></label>
       </div>
-      <div class="settings-section">Chaupaal companion</div>
+      <div class="settings-section" data-i18n="settings_companion">Chaupaal companion</div>
       <div class="toggle-row">
         <div><div class="toggle-label">Proactive companion notes</div><div class="toggle-desc">Festival wishes, optional check-ins, and feedback asks from Chaupaal (app feature). Journal Goodnight is separate.</div></div>
         <label class="switch"><input type="checkbox" id="toggleCompanionOutreach" checked><span class="slider"></span></label>
@@ -660,7 +662,7 @@
         <div class="dp-field-label" style="display:flex;align-items:center;gap:6px;"><span data-icon="mic" data-icon-size="14"></span> Voice for "Listen to post"</div>
         <select class="modal-select" id="voiceSelect"></select>
       </div>
-      <button class="btn btn--primary btn--block modal-btn" id="saveSettings">Done</button>
+      <button class="btn btn--primary btn--block modal-btn" id="saveSettings" data-i18n="settings_save">Done</button>
     </div>
   </div>
 
@@ -699,106 +701,107 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check-compat.js"></script>
-  <script src="/src/js/config/firebase.js?v=1"></script>
-  <script src="/src/js/config/app-check.js?v=2"></script>
-  <script src="/src/js/core/environment.js?v=1"></script>
-  <script src="/src/js/core/icons.js?v=2"></script>
-  <script src="/src/js/config/policy-limits.js?v=1"></script>
-  <script src="/src/js/core/users-public.js?v=1"></script>
-  <script src="/src/js/core/policy-usage.js?v=3"></script>
-  <script src="/src/js/core/ai-discovery-meter.js?v=2"></script>
-  <script src="/src/js/core/api-client.js?v=2"></script>
-  <script src="/src/js/core/analytics.js?v=1"></script>
-  <script src="/src/js/core/runtime-guard.js?v=3"></script>
-  <script src="/src/js/data/samples.js?v=1"></script>
-  <script src="/src/js/data/akhbaar-bank.js?v=1"></script>
-  <script src="/src/js/core/state.js?v=4"></script>
-  <script src="/src/js/core/ui-states.js?v=1"></script>
-  <script src="/src/js/core/firestore-page.js?v=1"></script>
-  <script src="/src/js/core/drafts.js?v=1"></script>
-  <script src="/src/js/core/soft-delete.js?v=1"></script>
-  <script src="/src/js/core/optimistic.js?v=1"></script>
-  <script src="/src/js/core/comments.js?v=3"></script>
-  <script src="/src/js/core/social-persistence.js?v=20"></script>
-  <script src="/src/js/core/relationships.js?v=24"></script>
-  <script src="/src/js/core/chat-presence.js?v=4"></script>
-  <script src="/src/js/core/image-pipeline.js?v=1"></script>
-  <script src="/src/js/core/profile-completion.js?v=1"></script>
-  <script src="/src/js/core/profile-facts.js?v=1"></script>
-  <script src="/src/js/core/profile-rewards.js?v=1"></script>
-  <script src="/src/js/core/icebreakers.js?v=1"></script>
-  <script src="/src/js/core/profile-prompts.js?v=1"></script>
-  <script src="/src/js/core/chaupaal-activity.js?v=15"></script>
-  <script src="/src/js/core/chaupaal-events.js?v=18"></script>
-  <script src="/src/js/core/chaupaal-founder.js?v=15"></script>
-  <script src="/src/js/core/profile-type.js?v=2"></script>
-  <script src="/src/js/core/profile-type-enrich.js?v=1"></script>
-  <script src="/src/js/core/professional-badge.js?v=2"></script>
-  <script src="/src/js/core/linkify.js?v=1"></script>
-  <script src="/src/js/core/profile-sections.js?v=1"></script>
-  <script src="/src/js/core/profile-section-mount.js?v=1"></script>
-  <script src="/src/js/core/notification-panel.js?v=3"></script>
-  <script src="/src/js/core/sessions.js?v=2"></script>
-  <script src="/src/js/core/safety.js?v=24"></script>
-  <script src="/src/js/core/notif-prefs.js?v=1"></script>
-  <script src="/src/js/core/feature-flags.js?v=1"></script>
-  <script src="/src/js/core/overlay-scope.js?v=4"></script>
-  <script src="/src/js/core/a11y.js?v=1"></script>
-  <script src="/src/js/core/nav-stack.js?v=8"></script>
-  <script src="/src/js/core/media-player.js?v=5"></script>
-  <script src="/src/js/features/location-share.js?v=2"></script>
-  <script src="/src/js/core/touch.js?v=25"></script>
-  <script src="/src/js/ai/ai-config.js?v=1"></script>
-  <script src="/src/js/ai/markdown.js?v=1"></script>
-  <script src="/src/js/ai/call-ai.js?v=1"></script>
-  <script src="/src/js/ai/anthropic.js?v=1"></script>
-  <script src="/src/js/core/search.js?v=7"></script>
-  <script src="/src/js/core/deeplinks.js?v=28"></script>
-  <script src="/src/js/core/rate-limit-client.js?v=1"></script>
-  <script src="/src/js/core/theme.js?v=2"></script>
-  <script src="/src/js/core/discovery-core.js?v=24"></script>
-  <script src="/src/js/core/profile-btn.js?v=21"></script>
-  <script src="/src/js/auth/auth-ui.js?v=3"></script>
-  <script src="/src/js/auth/auth-profiles.js?v=1"></script>
-  <script src="/src/js/features/akhbaar.js?v=5"></script>
-  <script src="/src/js/features/dangal.js?v=31"></script>
-  <script src="/src/js/features/dangal-ratings.js?v=5"></script>
-  <script src="/src/js/features/baithak-data.js?v=24"></script>
-  <script src="/src/js/features/self-chat.js?v=1"></script>
-  <script src="/src/js/features/chaupaal-chat.js?v=17"></script>
-  <script src="/src/js/features/chat-rating.js?v=1"></script>
-  <script src="/src/js/features/baithak-chat.js?v=43"></script>
-  <script src="/src/js/features/mehfil.js?v=2"></script>
-  <script src="/src/js/features/music-card.js?v=10"></script>
-  <script src="/src/js/features/group-info.js?v=6"></script>
-  <script src="/src/js/core/stories.js?v=27"></script>
-  <script src="/src/js/core/archive-hub.js?v=3"></script>
-  <script src="/src/js/core/journal-anim.js?v=2"></script>
-  <script src="/src/js/features/baithak.js?v=7"></script>
-  <script src="/src/js/features/profile-preview.js?v=2"></script>
-  <script src="/src/js/features/profile.js?v=26"></script>
-  <script src="/src/js/core/i18n.js?v=1"></script>
-  <script src="/src/js/features/categories.js?v=34"></script>
-  <script src="/src/js/features/peepal.js?v=1"></script>
-  <script src="/src/js/features/onboarding.js?v=30"></script>
-  <script src="/src/js/core/service-worker.js?v=5"></script>
-  <script src="/src/js/features/streak.js?v=23"></script>
-  <script src="/vendor/chess.js?v=14"></script>
-  <script src="/src/js/games/game-runtime.js?v=14"></script>
-  <script src="/src/js/games/game-ui.js?v=30"></script>
-  <script src="/src/js/games/game-registry.js?v=18"></script>
-  <script src="/src/js/games/ank-jod.js?v=23"></script>
-  <script src="/src/js/games/engines.js?v=25"></script>
-  <script src="/src/js/games/board-games.js?v=30"></script>
-  <script src="/src/js/games/arcade.js?v=24"></script>
-  <script src="/src/js/main.js?v=3"></script>
-  <script src="/src/js/features/akhbaar-catbar.js?v=1"></script>
-  <script src="/src/js/features/duniya.js?v=36"></script>
-  <script src="/src/js/features/premium.js?v=2"></script>
-  <script src="/src/js/features/discovery.js?v=9"></script>
-  <script src="/src/js/core/polish.js?v=4"></script>
-  <script src="/src/js/features/fairness.js?v=2"></script>
-  <script src="/src/js/features/media-profile.js?v=3"></script>
-  <script src="/src/js/auth/auth-events.js?v=5"></script>
+  <script src="/src/js/config/firebase.js?v=ba98f667"></script>
+  <script src="/src/js/config/app-check.js?v=56b0af7d"></script>
+  <script src="/src/js/core/environment.js?v=da69109f"></script>
+  <script src="/src/js/core/storage.js?v=0fb0e244"></script>
+  <script src="/src/js/core/icons.js?v=82ba103f"></script>
+  <script src="/src/js/config/policy-limits.js?v=53eb2345"></script>
+  <script src="/src/js/core/users-public.js?v=56c0234e"></script>
+  <script src="/src/js/core/policy-usage.js?v=39b21b67"></script>
+  <script src="/src/js/core/ai-discovery-meter.js?v=afe775c4"></script>
+  <script src="/src/js/core/api-client.js?v=60149417"></script>
+  <script src="/src/js/core/analytics.js?v=f5e1c409"></script>
+  <script src="/src/js/core/runtime-guard.js?v=bbad8147"></script>
+  <script src="/src/js/data/samples.js?v=e109e543"></script>
+  <script src="/src/js/data/akhbaar-bank.js?v=e8c7e2d1"></script>
+  <script src="/src/js/core/state.js?v=51776ab7"></script>
+  <script src="/src/js/core/ui-states.js?v=572fae96"></script>
+  <script src="/src/js/core/firestore-page.js?v=3d7e5828"></script>
+  <script src="/src/js/core/drafts.js?v=e672a449"></script>
+  <script src="/src/js/core/soft-delete.js?v=6947a077"></script>
+  <script src="/src/js/core/optimistic.js?v=03f440fa"></script>
+  <script src="/src/js/core/comments.js?v=e63b3a20"></script>
+  <script src="/src/js/core/social-persistence.js?v=9955bca9"></script>
+  <script src="/src/js/core/relationships.js?v=13c46c21"></script>
+  <script src="/src/js/core/chat-presence.js?v=7542e278"></script>
+  <script src="/src/js/core/image-pipeline.js?v=ac09e26b"></script>
+  <script src="/src/js/core/profile-completion.js?v=a746ffb4"></script>
+  <script src="/src/js/core/profile-facts.js?v=a637d891"></script>
+  <script src="/src/js/core/profile-rewards.js?v=84193613"></script>
+  <script src="/src/js/core/icebreakers.js?v=e5a2c7c6"></script>
+  <script src="/src/js/core/profile-prompts.js?v=57b49dba"></script>
+  <script src="/src/js/core/chaupaal-activity.js?v=1f132625"></script>
+  <script src="/src/js/core/chaupaal-events.js?v=44a8947f"></script>
+  <script src="/src/js/core/chaupaal-founder.js?v=90a6aa2a"></script>
+  <script src="/src/js/core/profile-type.js?v=cad15660"></script>
+  <script src="/src/js/core/profile-type-enrich.js?v=7378ff81"></script>
+  <script src="/src/js/core/professional-badge.js?v=f416384d"></script>
+  <script src="/src/js/core/linkify.js?v=531b1edf"></script>
+  <script src="/src/js/core/profile-sections.js?v=183016b8"></script>
+  <script src="/src/js/core/profile-section-mount.js?v=c8852662"></script>
+  <script src="/src/js/core/notification-panel.js?v=e1177ba7"></script>
+  <script src="/src/js/core/sessions.js?v=7297d5b6"></script>
+  <script src="/src/js/core/safety.js?v=c8721224"></script>
+  <script src="/src/js/core/notif-prefs.js?v=19bbe844"></script>
+  <script src="/src/js/core/feature-flags.js?v=de211403"></script>
+  <script src="/src/js/core/overlay-scope.js?v=b83a34fe"></script>
+  <script src="/src/js/core/a11y.js?v=c13f075d"></script>
+  <script src="/src/js/core/nav-stack.js?v=c2bba88c"></script>
+  <script src="/src/js/core/media-player.js?v=a142cf3a"></script>
+  <script src="/src/js/features/location-share.js?v=e7889772"></script>
+  <script src="/src/js/core/touch.js?v=32d6e079"></script>
+  <script src="/src/js/ai/ai-config.js?v=b15d85db"></script>
+  <script src="/src/js/ai/markdown.js?v=32d3b778"></script>
+  <script src="/src/js/ai/call-ai.js?v=59e15380"></script>
+  <script src="/src/js/ai/anthropic.js?v=ee230737"></script>
+  <script src="/src/js/core/search.js?v=c0a48631"></script>
+  <script src="/src/js/core/deeplinks.js?v=4249245b"></script>
+  <script src="/src/js/core/rate-limit-client.js?v=2696fc7d"></script>
+  <script src="/src/js/core/theme.js?v=64b98c86"></script>
+  <script src="/src/js/core/discovery-core.js?v=9a58f62e"></script>
+  <script src="/src/js/core/profile-btn.js?v=4810294d"></script>
+  <script src="/src/js/auth/auth-ui.js?v=28509ae5"></script>
+  <script src="/src/js/auth/auth-profiles.js?v=ec3b5e5c"></script>
+  <script src="/src/js/features/akhbaar.js?v=339e5bb2"></script>
+  <script src="/src/js/features/dangal.js?v=cff7ac5a"></script>
+  <script src="/src/js/features/dangal-ratings.js?v=c4519ffb"></script>
+  <script src="/src/js/features/baithak-data.js?v=dfdb3c2f"></script>
+  <script src="/src/js/features/self-chat.js?v=0a492367"></script>
+  <script src="/src/js/features/chaupaal-chat.js?v=7feaea06"></script>
+  <script src="/src/js/features/chat-rating.js?v=19d676d2"></script>
+  <script src="/src/js/features/baithak-chat.js?v=60813524"></script>
+  <script src="/src/js/features/mehfil.js?v=67f09a01"></script>
+  <script src="/src/js/features/music-card.js?v=73661300"></script>
+  <script src="/src/js/features/group-info.js?v=8253f254"></script>
+  <script src="/src/js/core/stories.js?v=fa8c017d"></script>
+  <script src="/src/js/core/archive-hub.js?v=ddcb3816"></script>
+  <script src="/src/js/core/journal-anim.js?v=f2658ae2"></script>
+  <script src="/src/js/features/baithak.js?v=dcdab73f"></script>
+  <script src="/src/js/features/profile-preview.js?v=10860c1d"></script>
+  <script src="/src/js/features/profile.js?v=68600527"></script>
+  <script src="/src/js/core/i18n.js?v=704fb785"></script>
+  <script src="/src/js/features/categories.js?v=c18fb189"></script>
+  <script src="/src/js/features/peepal.js?v=f0b8bb10"></script>
+  <script src="/src/js/features/onboarding.js?v=e0d24460"></script>
+  <script src="/src/js/core/service-worker.js?v=f46c7d29"></script>
+  <script src="/src/js/features/streak.js?v=206743f3"></script>
+  <script src="/vendor/chess.js?v=434826c8"></script>
+  <script src="/src/js/games/game-runtime.js?v=9d6492c3"></script>
+  <script src="/src/js/games/game-ui.js?v=0b003ab8"></script>
+  <script src="/src/js/games/game-registry.js?v=2a348dfb"></script>
+  <script src="/src/js/games/ank-jod.js?v=7dee5639"></script>
+  <script src="/src/js/games/engines.js?v=08d5fd8b"></script>
+  <script src="/src/js/games/board-games.js?v=98a9bab8"></script>
+  <script src="/src/js/games/arcade.js?v=46c5964c"></script>
+  <script src="/src/js/main.js?v=5d90fe2c"></script>
+  <script src="/src/js/features/akhbaar-catbar.js?v=dddafeef"></script>
+  <script src="/src/js/features/duniya.js?v=842bb3bf"></script>
+  <script src="/src/js/features/premium.js?v=95d177b4"></script>
+  <script src="/src/js/features/discovery.js?v=fdd29368"></script>
+  <script src="/src/js/core/polish.js?v=9ae02fe4"></script>
+  <script src="/src/js/features/fairness.js?v=4fc5b152"></script>
+  <script src="/src/js/features/media-profile.js?v=d8fe1026"></script>
+  <script src="/src/js/auth/auth-events.js?v=9dc60800"></script>
 </body>
 </html>

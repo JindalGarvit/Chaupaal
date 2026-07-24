@@ -44,6 +44,20 @@
     return !isMobile();
   }
 
+  /** CSS-friendly shell mode: mobile (&lt;768) | tablet (768–1023) | desktop (≥1024). */
+  function layoutMode() {
+    const w = window.innerWidth || document.documentElement.clientWidth || 0;
+    if (w < 768) return 'mobile';
+    if (w < 1024) return 'tablet';
+    return 'desktop';
+  }
+
+  function applyLayoutMode() {
+    try {
+      document.documentElement.setAttribute('data-layout', layoutMode());
+    } catch (e) {}
+  }
+
   function isIOS() {
     return (
       /iphone|ipad|ipod/i.test(navigator.userAgent || '') ||
@@ -91,6 +105,7 @@
     }
     document.documentElement.classList.toggle('is-standalone', isStandalone());
     document.documentElement.classList.toggle('is-mobile', isMobile());
+    applyLayoutMode();
   }
   function scheduleViewport() {
     if (rafId) return;
@@ -151,12 +166,15 @@
     initViewport();
   }
 
+  applyLayoutMode();
+
   window.ChaupaalEnv = {
     isStandalone,
     isMobile,
     isDesktop,
     isIOS,
     isCoarsePointer,
+    layoutMode,
     surface,
     needsAudioGesture,
     safeAreaInsets,

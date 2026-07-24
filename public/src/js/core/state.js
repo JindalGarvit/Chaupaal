@@ -118,7 +118,9 @@ document.getElementById('settingsArchiveBtn')?.addEventListener('click',()=>{
 });
 document.getElementById('closeSettings').addEventListener('click',()=>document.getElementById('settingsModal').classList.add('hidden'));
 document.getElementById('saveSettings').addEventListener('click',()=>{
-  currentLang=document.getElementById('langSelect').value;
+  const langVal=document.getElementById('langSelect')?.value||'en';
+  if(typeof setAppLanguage==='function') setAppLanguage(langVal,{persistRemote:true});
+  else currentLang=langVal;
   if(typeof readNotifPrefsFromSettingsUI==='function'&&typeof saveNotifPrefs==='function'){
     saveNotifPrefs(readNotifPrefsFromSettingsUI());
   }

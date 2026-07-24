@@ -60,9 +60,12 @@ if (auth) {
         } catch (e) {}
       }
       if (userProfile.lang) {
-        currentLang = userProfile.lang;
-        const langSelect = document.getElementById('langSelect');
-        if (langSelect) langSelect.value = currentLang;
+        if (typeof setAppLanguage === 'function') setAppLanguage(userProfile.lang, { persistRemote: false });
+        else {
+          currentLang = userProfile.lang;
+          const langSelect = document.getElementById('langSelect');
+          if (langSelect) langSelect.value = currentLang;
+        }
       }
       if (typeof hydrateIcebreakersFromUserDoc === 'function') hydrateIcebreakersFromUserDoc(userProfile);
       if (typeof hydratePromptsFromUserDoc === 'function') hydratePromptsFromUserDoc(userProfile);

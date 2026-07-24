@@ -1,5 +1,5 @@
 # Minimal CI — syntax-check every shipped JS file + existing server-lib unit tests.
-# No bundler / linter yet (manual ?v= cache busting). Expand later with ESLint.
+# Cache busting: run `npm run bust` after client asset changes (hashes ?v= + SW cache).
 name: ci
 
 on:

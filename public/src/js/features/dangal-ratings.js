@@ -22,12 +22,17 @@ async function loadLeaderboardPage({reset=false}={}){
   if(reset&&typeof renderSkeleton==='function') renderSkeleton(el, {variant:'list', count:4});
   const today=new Date().toISOString().split('T')[0];
   try{
-    if(!db){renderLeaderboardUI(LB_SAMPLE,el,{hasMore:false});lbLoading=false;return;}
+    if(!db){
+      // Offline demo only — never pretend sample rows are live scores.
+      renderLeaderboardUI(LB_SAMPLE,el,{hasMore:false,demo:true});
+      lbLoading=false;
+      return;
+    }
     let q=db.collection('daily_scores').doc(today).collection('scores').orderBy('score','desc');
     if(lbCursor) q=q.startAfter(lbCursor);
     q=q.limit(LEADERBOARD_PAGE);
     const snap=await q.get();
-    if(reset&&snap.empty){renderLeaderboardUI(LB_SAMPLE,el,{hasMore:false});lbLoading=false;return;}
+    if(reset&&snap.empty){renderLeaderboardEmpty(el);lbLoading=false;return;}
     const page=snap.docs.map(d=>{
       const data=d.data()||{};
       return {
@@ -44,28 +49,40 @@ async function loadLeaderboardPage({reset=false}={}){
     if(typeof enrichUsersWithProfileType==='function') await enrichUsersWithProfileType(lbEntries);
     renderLeaderboardUI(lbEntries,el,{hasMore:lbHasMore});
   }catch(e){
-    if(reset) renderLeaderboardUI(LB_SAMPLE,el,{hasMore:false});
+    if(reset) renderLeaderboardEmpty(el);
   }finally{
     lbLoading=false;
   }
 }
 
-function renderLeaderboardUI(entries,el,{hasMore=false}={}){
+function renderLeaderboardEmpty(el){
+  if(!el) return;
+  el.removeAttribute('aria-busy');
+  el.classList.remove('ui-skeleton-stack');
+  const msg=typeof t==='function'?t('rp_lb_empty'):'No scores yet today — play Akhbaar to climb the board.';
+  el.innerHTML=`<div class="rp-empty">${msg}</div>`;
+}
+
+function renderLeaderboardUI(entries,el,{hasMore=false,demo=false}={}){
   const medals=['🥇','🥈','🥉'];
-  el.innerHTML=entries.map((e,i)=>`
+  el.removeAttribute('aria-busy');
+  el.classList.remove('ui-skeleton-stack');
+  const youLabel=typeof t==='function'?t('rp_you'):'You';
+  el.innerHTML=(demo?`<div class="rp-demo-hint">Demo</div>`:'')+entries.map((e,i)=>`
     <div class="rp-leaderboard-item">
       <div class="rp-rank ${i===0?'gold':''}">${medals[i]||i+1}</div>
       <div class="rp-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(e.name,e):e.name}</div>
       <div class="rp-score">${e.score}</div>
     </div>
   `).join('');
-  const myScore=document.getElementById('rpYourScore')?.textContent;
+  const yourEl=document.getElementById('rpYourScore');
+  const myScore=yourEl?.textContent;
   if(myScore&&myScore!=='—'){
-    el.innerHTML+=`<div class="rp-leaderboard-item" style="border-top:1px solid var(--line);margin-top:4px;padding-top:8px;"><div class="rp-rank">You</div><div class="rp-name">${userProfile?.name?.split(' ')[0]||'You'}</div><div class="rp-score" id="rpYourScore">${myScore}</div></div>`;
+    el.innerHTML+=`<div class="rp-leaderboard-item rp-leaderboard-you"><div class="rp-rank">${youLabel}</div><div class="rp-name">${userProfile?.name?.split(' ')[0]||youLabel}</div><div class="rp-score">${myScore}</div></div>`;
   }
   if(hasMore&&typeof ensureLoadMoreButton==='function'){
     ensureLoadMoreButton(el,{
-      label:'Show more',
+      label:typeof t==='function'?t('rp_show_more'):'Show more',
       onLoadMore:()=>loadLeaderboardPage({reset:false}),
     });
   }
@@ -278,14 +295,20 @@ function initCategoryRatings(){
   const ratings=userProfile?.categoryRatings||{};
   if(rpRatings){
     rpRatings.innerHTML=NEWS_CATEGORIES.map(cat=>`
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);">
-        <span style="font-size:13px;">${CATEGORY_ICONS[cat]} ${cat}</span>
-        <span style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;color:var(--red);">${ratings[cat]||1200}</span>
+      <div class="rp-rating-row">
+        <span class="rp-rating-cat">${CATEGORY_ICONS[cat]} ${cat}</span>
+        <span class="rp-rating-val">${ratings[cat]||1200}</span>
       </div>
     `).join('');
   }
   loadLeaderboard();
 }
+
+document.getElementById('rpOpenAkhbaar')?.addEventListener('click',()=>{
+  const tab=document.querySelector('.tab-btn[data-tab="akhbaar"]');
+  if(tab) tab.click();
+  else if(typeof switchTab==='function') switchTab('akhbaar');
+});
 
 document.getElementById('sidebarProfile')?.addEventListener('click',()=>{
   renderProfileModal();

@@ -37,6 +37,47 @@ const I18N = {
     remove_cat:'Remove', cat_added:'"{{name}}" added! AI is generating content… ✨',
     cat_exists:'"{{name}}" already exists! 😊',
     settings_saved:'Settings saved ✓',
+    // —— Chrome / shell ——
+    settings_title:'Settings',
+    settings_language:'Language',
+    settings_notifications:'Notifications',
+    settings_companion:'Chaupaal companion',
+    settings_save:'Save',
+    your_story:'Your story',
+    baithak_search:'Search...',
+    dangal_title:'Dangal',
+    dangal_sub:'Games inside Chaupaal — solos, duels & Muqabala',
+    dangal_choose:'Choose how to play',
+    peepal_ask:'+ Ask',
+    peepal_find_label:'Find people on Peepal',
+    peepal_find_btn:'Find People',
+    peepal_find_ph:"Describe who you're looking for...",
+    cancel:'Cancel',
+    duniya_general:'General',
+    duniya_lehar:'Lehar',
+    sidebar_sign_in:'Sign in',
+    streak_suffix:'day streak',
+    rp_streak_today:"Today's streak",
+    rp_days_row:'days in a row',
+    rp_top_readers:'Top readers today',
+    rp_your_score:'Your score today',
+    rp_dangal_ratings:'Dangal ratings',
+    rp_lb_empty:'No scores yet today — play Akhbaar to climb the board.',
+    rp_show_more:'Show more',
+    rp_play_akhbaar:"Play today's Akhbaar",
+    rp_you:'You',
+    notif_akhbaar_label:'Daily Akhbaar reminder',
+    notif_akhbaar_desc:'Morning nudge in your language',
+    notif_breaking_label:'Taaza Khabar alerts',
+    notif_breaking_desc:'Breaking news notifications',
+    notif_friends_label:'Friend activity',
+    notif_friends_desc:'When friends play or connect',
+    notif_messages_label:'Messages',
+    notif_messages_desc:'New Baithak chats & replies',
+    notif_comments_label:'Comments',
+    notif_comments_desc:'Replies on your Peepal & Duniya posts',
+    notif_duels_label:'Duels & challenges',
+    notif_duels_desc:'Muqabala invites and results',
   },
   hi:{
     correct:'Sahi!', wrong:'Galat!', scroll_next:'Aage badhne ke liye scroll karein ↑',
@@ -75,6 +116,46 @@ const I18N = {
     remove_cat:'Hatayein', cat_added:'"{{name}}" add ho gayi! ✨',
     cat_exists:'"{{name}}" pehle se hai! 😊',
     settings_saved:'Settings save ho gayi ✓',
+    settings_title:'Settings',
+    settings_language:'Bhasha',
+    settings_notifications:'Notifications',
+    settings_companion:'Chaupaal companion',
+    settings_save:'Save karein',
+    your_story:'Aapki story',
+    baithak_search:'Dhoondhein...',
+    dangal_title:'Dangal',
+    dangal_sub:'Chaupaal ke andar games — solo, duel aur Muqabala',
+    dangal_choose:'Kaise khelein',
+    peepal_ask:'+ Poochein',
+    peepal_find_label:'Peepal par log dhundhein',
+    peepal_find_btn:'Log dhundhein',
+    peepal_find_ph:'Batayein aap kisko dhoondh rahe hain...',
+    cancel:'Cancel',
+    duniya_general:'General',
+    duniya_lehar:'Lehar',
+    sidebar_sign_in:'Sign in',
+    streak_suffix:'din ki streak',
+    rp_streak_today:'Aaj ki streak',
+    rp_days_row:'lagataar din',
+    rp_top_readers:'Aaj ke top readers',
+    rp_your_score:'Aaj aapka score',
+    rp_dangal_ratings:'Dangal ratings',
+    rp_lb_empty:'Aaj abhi koi score nahi — board pe aane ke liye Akhbaar khelein.',
+    rp_show_more:'Aur dikhayein',
+    rp_play_akhbaar:'Aaj ka Akhbaar khelein',
+    rp_you:'Aap',
+    notif_akhbaar_label:'Rozana Akhbaar yaad',
+    notif_akhbaar_desc:'Subah aapki bhasha mein nudge',
+    notif_breaking_label:'Taaza Khabar alerts',
+    notif_breaking_desc:'Breaking news notifications',
+    notif_friends_label:'Doston ki activity',
+    notif_friends_desc:'Jab dost khelein ya connect karein',
+    notif_messages_label:'Messages',
+    notif_messages_desc:'Naye Baithak chats aur replies',
+    notif_comments_label:'Comments',
+    notif_comments_desc:'Peepal aur Duniya par replies',
+    notif_duels_label:'Duels aur challenges',
+    notif_duels_desc:'Muqabala invites aur results',
   },
   ta:{
     correct:'Seri!', wrong:'Thevaiyilla!', scroll_next:'Mele scroll seyyungal ↑',
@@ -113,8 +194,100 @@ const I18N = {
     remove_cat:'Neekku', cat_added:'"{{name}}" serkkappattadu! ✨',
     cat_exists:'"{{name}}" munbe irukkiradu! 😊',
     settings_saved:'Settings semiththaadu ✓',
+    settings_title:'Settings',
+    settings_language:'Mozhi',
+    settings_notifications:'Notifications',
+    settings_companion:'Chaupaal companion',
+    settings_save:'Save seyyungal',
+    your_story:'Ungal story',
+    baithak_search:'Thedu...',
+    dangal_title:'Dangal',
+    dangal_sub:'Chaupaal-il vilayaattugal — solo, duel & Muqabala',
+    dangal_choose:'Eppadi vilayaada',
+    peepal_ask:'+ Kelungal',
+    peepal_find_label:'Peepal-il peyargalai thedungal',
+    peepal_find_btn:'Peyargalai thedu',
+    peepal_find_ph:'Neenga yaarai thedukirom endru ezhuthungal...',
+    cancel:'Cancel',
+    duniya_general:'General',
+    duniya_lehar:'Lehar',
+    sidebar_sign_in:'Sign in',
+    streak_suffix:'naal streak',
+    rp_streak_today:'Indraya streak',
+    rp_days_row:'thodarchiyaana naatkal',
+    rp_top_readers:'Indraya top readers',
+    rp_your_score:'Indraya ungal score',
+    rp_dangal_ratings:'Dangal ratings',
+    rp_lb_empty:'Indru score illai — board-ukku Akhbaar vilayaadungal.',
+    rp_show_more:'Innum kaattu',
+    rp_play_akhbaar:'Indraya Akhbaar vilayaadu',
+    rp_you:'Neenga',
+    notif_akhbaar_label:'Daily Akhbaar ninaivu',
+    notif_akhbaar_desc:'Kaalai ungal mozhiyil nudge',
+    notif_breaking_label:'Taaza Khabar alerts',
+    notif_breaking_desc:'Breaking news notifications',
+    notif_friends_label:'Nanpar activity',
+    notif_friends_desc:'Nanpargal vilayaadum / connect seyyum pothu',
+    notif_messages_label:'Messages',
+    notif_messages_desc:'Puthiya Baithak chats & replies',
+    notif_comments_label:'Comments',
+    notif_comments_desc:'Peepal & Duniya replies',
+    notif_duels_label:'Duels & challenges',
+    notif_duels_desc:'Muqabala invites and results',
   },
 };
+
+/** Persist + apply language preference (localStorage, optional Firestore). */
+function setAppLanguage(lang, {persistRemote=false}={}){
+  const next=(lang&&String(lang).trim())||'en';
+  currentLang=next;
+  try{localStorage.setItem('chaupaal_lang',next);}catch(e){}
+  const sel=document.getElementById('langSelect');
+  if(sel&&sel.value!==next) sel.value=next;
+  document.documentElement.lang=next;
+  if(persistRemote&&typeof db!=='undefined'&&db&&typeof currentUser!=='undefined'&&currentUser){
+    db.collection('users').doc(currentUser.uid).set({lang:next},{merge:true}).catch(()=>{});
+  }
+  if(typeof applyChromeI18n==='function') applyChromeI18n();
+}
+
+function bootLanguagePreference(){
+  let lang='en';
+  try{
+    const stored=localStorage.getItem('chaupaal_lang');
+    if(stored) lang=stored;
+  }catch(e){}
+  setAppLanguage(lang,{persistRemote:false});
+}
+
+/**
+ * Apply chrome strings marked in HTML:
+ *   data-i18n="key"              → textContent
+ *   data-i18n-placeholder="key"  → placeholder
+ *   data-i18n-aria="key"         → aria-label
+ *   data-i18n-title="key"        → title
+ */
+function applyChromeI18n(){
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const key=el.getAttribute('data-i18n');
+    if(!key) return;
+    const vars={};
+    if(el.hasAttribute('data-i18n-n')) vars.n=el.getAttribute('data-i18n-n');
+    el.textContent=t(key,vars);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el=>{
+    const key=el.getAttribute('data-i18n-placeholder');
+    if(key) el.setAttribute('placeholder',t(key));
+  });
+  document.querySelectorAll('[data-i18n-aria]').forEach(el=>{
+    const key=el.getAttribute('data-i18n-aria');
+    if(key) el.setAttribute('aria-label',t(key));
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(el=>{
+    const key=el.getAttribute('data-i18n-title');
+    if(key) el.setAttribute('title',t(key));
+  });
+}
 
 // Fallback to English for unlisted languages
 function t(key, vars={}){
@@ -124,6 +297,9 @@ function t(key, vars={}){
   Object.entries(vars).forEach(([k,v])=>{ str=str.replace(`{{${k}}}`,v); });
   return str;
 }
+
+// Boot chrome as soon as this script loads (DOM already parsed — scripts are at end of body).
+try{bootLanguagePreference();}catch(e){}
 
 // Translate question text + options via Claude API (cached per session)
 const translationCache = {}; // also backed by localStorage via readCache/writeCache
