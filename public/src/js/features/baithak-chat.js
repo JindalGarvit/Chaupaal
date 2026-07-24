@@ -289,14 +289,14 @@ function openChatScreen(chat){
       let src='', mediaWidth=0, mediaHeight=0;
       const uploadReady=typeof isMediaUploadReady!=='function'||await isMediaUploadReady();
       if(typeof processAndUploadMedia==='function'&&currentUser&&file.type.startsWith('image/')&&uploadReady){
-        showToast('Uploading photo…');
+        showToast(t('baithak_uploading_photo'));
         const up=await processAndUploadMedia(file,{folder:'chat'});
         src=up.media;
         mediaWidth=Number(up.width)||0;
         mediaHeight=Number(up.height)||0;
       } else {
         // Never persist blob: URLs — they die on reopen and look like a missing attachment
-        showToast(uploadReady?'Photo upload unavailable':'Photo upload not ready — try again shortly');
+        showToast(uploadReady?t('baithak_photo_unavailable'):t('baithak_photo_not_ready'));
         e.target.value='';
         return;
       }
@@ -309,11 +309,11 @@ function openChatScreen(chat){
           });
         }catch(sendErr){
           pendingPhoto?.remove?.();
-          showToast(typeof friendlyError==='function'?friendlyError(sendErr):(sendErr.message||'Photo failed'));
+          showToast(typeof friendlyError==='function'?friendlyError(sendErr):(sendErr.message||t('baithak_photo_fail')));
         }
       }
     }catch(err){
-      showToast(typeof friendlyError==='function'?friendlyError(err):(err.message||'Photo failed'));
+      showToast(typeof friendlyError==='function'?friendlyError(err):(err.message||t('baithak_photo_fail')));
     }
   });
   document.getElementById('attachFile').addEventListener('click',()=>{
@@ -334,7 +334,7 @@ function openChatScreen(chat){
   });
   document.getElementById('attachSong')?.addEventListener('click',()=>{
     attachMenu.classList.remove('show');
-    if(typeof openSongPicker!=='function'){showToast('Song sharing unavailable');return;}
+    if(typeof openSongPicker!=='function'){showToast(t('baithak_song_unavailable'));return;}
     openSongPicker({
       title:'Share a song',
       onSelect:async (music)=>{
@@ -352,7 +352,7 @@ function openChatScreen(chat){
   });
   document.getElementById('attachLocation').addEventListener('click',()=>{
     attachMenu.classList.remove('show');
-    if(typeof openLocationComposer!=='function'){showToast('Location sharing unavailable');return;}
+    if(typeof openLocationComposer!=='function'){showToast(t('baithak_loc_unavailable'));return;}
     openLocationComposer({
       title:'Share location',
       onSelect:async (loc)=>{
@@ -378,7 +378,7 @@ function openChatScreen(chat){
   const micBtn=document.getElementById('chatMicBtn');
   micBtn.addEventListener('click', ()=>{
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if(!SR){showToast('Voice typing not supported on this browser');return;}
+    if(!SR){showToast(t('baithak_voice_unsupported'));return;}
     if(micBtn.classList.contains('recording')){
       activeChatRecognition?.stop();return;
     }
@@ -547,7 +547,7 @@ function wireChallengeBubble(root){
     btn.addEventListener('click',()=>{
       const id=btn.dataset.muqabalaChallenge;
       if(typeof launchPendingMuqabalaChallenge==='function') launchPendingMuqabalaChallenge(id);
-      else if(typeof showToast==='function') showToast('Challenge unavailable');
+      else if(typeof showToast==='function') showToast(t('baithak_challenge_unavailable'));
     });
   });
 }
@@ -615,7 +615,7 @@ async function sendMsg(chat){
   };
 
   const unlock=typeof beginClientMutation==='function'?beginClientMutation(`msg_${chat.id}`):()=>{};
-  if(unlock===false){ if(typeof showToast==='function') showToast('Sending…'); return; }
+  if(unlock===false){ if(typeof showToast==='function') showToast(t('baithak_sending')); return; }
 
   const sendBtn=document.getElementById('chatSendBtn');
   if(sendBtn) sendBtn.disabled=true;
@@ -708,11 +708,11 @@ function leaveGroupChat(chat){
       onUndo:()=>{
         baithakChats.splice(idx,0,item);
         if(typeof renderChatList==='function') renderChatList(baithakChats);
-        if(typeof showToast==='function') showToast('Back in the group');
+        if(typeof showToast==='function') showToast(t('baithak_back_group'));
       },
     });
   } else if(typeof showToast==='function'){
-    showToast(`Left ${chat.name||'group'}`);
+    showToast(t('baithak_left_group',{name:chat.name||'group'}));
   }
 }
 
@@ -1006,7 +1006,7 @@ function openStoryViewer(story, allStories){
       clearInterval(progressInterval);
       const game=typeof getGame==='function'?getGame(s.sharedGameId):null;
       if(game){viewer.remove();game.launch({source:'story'});}
-      else showToast('Game unavailable');
+      else showToast(t('baithak_game_unavailable'));
     });
     hydrateStoryInteractions();
 
@@ -1090,7 +1090,7 @@ function showBaithakShareMenu(){
 }
 
 async function shareBaithakSongStory(){
-  if(typeof openSongPicker!=='function'){showToast('Song sharing unavailable');return;}
+  if(typeof openSongPicker!=='function'){showToast(t('baithak_song_unavailable'));return;}
   openSongPicker({
     title:'Share a song to Stories',
     onSelect:async(music)=>{
@@ -1106,7 +1106,7 @@ async function shareBaithakSongStory(){
         });
         if(typeof renderLiveBaithakStories==='function') renderLiveBaithakStories();
         if(typeof haptic==='function') haptic('success');
-        showToast('Song shared with Friends');
+        showToast(t('baithak_song_shared'));
         if(created&&typeof openStoryViewer==='function') openStoryViewer(created,[created]);
       }catch(error){
         showToast(error?.message||'Could not share song');
@@ -1116,7 +1116,7 @@ async function shareBaithakSongStory(){
 }
 
 async function shareBaithakLocationStory(){
-  if(typeof openLocationComposer!=='function'){showToast('Location sharing unavailable');return;}
+  if(typeof openLocationComposer!=='function'){showToast(t('baithak_loc_unavailable'));return;}
   openLocationComposer({
     title:'Share location to Stories',
     onSelect:async(location)=>{
@@ -1132,7 +1132,7 @@ async function shareBaithakLocationStory(){
         });
         if(typeof renderLiveBaithakStories==='function') renderLiveBaithakStories();
         if(typeof haptic==='function') haptic('success');
-        showToast('Location shared with Friends');
+        showToast(t('baithak_loc_shared'));
         if(created&&typeof openStoryViewer==='function') openStoryViewer(created,[created]);
       }catch(error){
         showToast(error?.message||'Could not share location');
@@ -1221,7 +1221,7 @@ function openInAppCamera({onCapture,facingMode='environment'}={}){
 }
 
 function openBaithakInstantCamera(){
-  if(!currentUser){showToast('Sign in to share an Instant');return;}
+  if(!currentUser){showToast(t('baithak_sign_in_instant'));return;}
   openInAppCamera({onCapture:(file)=>{
     const preview=URL.createObjectURL(file);
     const pending=document.createElement('div');
@@ -1262,7 +1262,7 @@ function openBaithakInstantCamera(){
 }
 
 function openBaithakStoryComposer(mode){
-  if(!currentUser){showToast('Sign in to create a story');return;}
+  if(!currentUser){showToast(t('baithak_sign_in_story'));return;}
   if(mode==='camera'){
     openInAppCamera({
       onCapture:(file)=>showBaithakStoryEditor(file,'camera'),
@@ -1373,7 +1373,7 @@ function showBaithakStoryEditor(file,mode){
     }
   };
   editor.querySelector('[data-story-song]')?.addEventListener('click',()=>{
-    if(typeof openSongPicker!=='function'){showToast('Song sharing unavailable');return;}
+    if(typeof openSongPicker!=='function'){showToast(t('baithak_song_unavailable'));return;}
     openSongPicker({
       title:'Attach a song',
       onSelect:(music)=>{
@@ -1387,7 +1387,7 @@ function showBaithakStoryEditor(file,mode){
     updateSongLabel();
   });
   editor.querySelector('[data-story-location]')?.addEventListener('click',()=>{
-    if(typeof openLocationComposer!=='function'){showToast('Location sharing unavailable');return;}
+    if(typeof openLocationComposer!=='function'){showToast(t('baithak_loc_unavailable'));return;}
     openLocationComposer({
       title:'Attach a location',
       onSelect:(loc)=>{
@@ -1524,13 +1524,13 @@ function showBaithakStoryEditor(file,mode){
       }else if(created?.audienceFallback==='friends'){
         showToast('Shared with Friends — your Close Friends list was empty');
       }else if(audience==='close_friends'){
-        showToast('Story shared with Close Friends');
+        showToast(t('baithak_story_cf'));
       }else{
-        showToast('Story shared with Friends');
+        showToast(t('baithak_story_friends'));
       }
     }catch(error){
       button.disabled=false;button.textContent='Share';
-      showToast(error?.message||'Story could not be shared');
+      showToast(error?.message||t('baithak_story_fail'));
     }
   });
   const audSel=editor.querySelector('[data-story-audience]');

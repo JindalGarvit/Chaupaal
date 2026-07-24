@@ -182,7 +182,7 @@
 
   async function switchProfile(uid, pid) {
     const p = await applyActiveProfileToUserDoc(uid, pid);
-    if (typeof showToast === 'function') showToast(`Switched to @${p?.username || 'profile'}`);
+    if (typeof showToast === 'function') showToast(t('auth_switched_profile',{username:p?.username||'profile'}));
     return p;
   }
 
@@ -281,10 +281,10 @@
         const created = await createProfile(currentUser.uid, { name: String(name).trim(), username: uname });
         await switchProfile(currentUser.uid, created.id);
         close();
-        if (typeof showToast === 'function') showToast(`Created @${created.username}`);
+        if (typeof showToast === 'function') showToast(t('auth_created_profile',{username:created.username}));
       } catch (e) {
         if (typeof showToast === 'function') {
-          showToast(e.code === 'username-taken' ? 'Username taken' : 'Could not create profile');
+          showToast(e.code === 'username-taken' ? t('auth_username_taken') : t('auth_profile_create_fail'));
         }
       }
     });

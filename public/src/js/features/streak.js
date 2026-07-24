@@ -389,13 +389,31 @@ async function findRealOpponent(filters, onFound, onCancel){
   if(!db||!currentUser){ onFound({name:'Priya_29',simulated:true}); return; }
   const category=filters.category||'GK';
   const waitingRef=db.collection('matchmaking').doc(category).collection('waiting');
+  const claimWaitingDoc=async (docSnap)=>{
+    const opponent=docSnap.data()||{};
+    await db.runTransaction(async (tx)=>{
+      const fresh=await tx.get(docSnap.ref);
+      if(!fresh.exists) throw new Error('gone');
+      const d=fresh.data()||{};
+      if(d.claimedBy) throw new Error('claimed');
+      tx.update(docSnap.ref,{
+        claimedBy:currentUser.uid,
+        claimerName:userProfile?.name||currentUser.displayName||'You',
+        claimedAt:firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    });
+    try{ await docSnap.ref.delete(); }catch(e){}
+    onFound({name:opponent.name||'Your opponent',uid:opponent.uid,simulated:false});
+  };
   try{
-    // Check if someone is already waiting
+    // Check if someone is already waiting — claim instead of open delete
     const snap=await waitingRef.where('uid','!=',currentUser.uid).limit(1).get();
     if(!snap.empty){
-      const opponent=snap.docs[0].data();
-      await snap.docs[0].ref.delete(); // remove them from waiting room
-      onFound({name:opponent.name,uid:opponent.uid,simulated:false});
+      try{
+        await claimWaitingDoc(snap.docs[0]);
+      }catch(e){
+        onFound({name:'Priya_29',simulated:true});
+      }
       return;
     }
     // Add self to waiting room
@@ -405,11 +423,18 @@ async function findRealOpponent(filters, onFound, onCancel){
       category, filters,
       ts:firebase.firestore.FieldValue.serverTimestamp()
     });
-    // Listen for a match
+    // Listen for a match (claimer sets claimedBy, then may delete)
     matchmakingListener=myRef.onSnapshot(async snap=>{
-      if(!snap.exists){ // we were matched (deleted by opponent)
+      if(!snap.exists){
         if(matchmakingListener){matchmakingListener();matchmakingListener=null;}
         onFound({name:'Your opponent',simulated:false});
+        return;
+      }
+      const d=snap.data()||{};
+      if(d.claimedBy && d.claimedBy!==currentUser.uid){
+        if(matchmakingListener){matchmakingListener();matchmakingListener=null;}
+        onFound({name:d.claimerName||'Your opponent',uid:d.claimedBy,simulated:false});
+        try{await myRef.delete();}catch(e){}
       }
     });
     // Timeout after 20s — fall back to simulated

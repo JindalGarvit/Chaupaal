@@ -209,8 +209,8 @@ function wireAuthEvents() {
     if (auth)
       auth
         .sendPasswordResetEmail(email)
-        .then(() => showToast('Reset link sent! Check your email'))
-        .catch((e) => showToast('Error: ' + e.message));
+        .then(() => showToast(t('auth_reset_sent')))
+        .catch((e) => showToast(t('auth_error_prefix', { msg: e.message })));
   });
 
   // ---- Google / Phone (verified contact required) ----
@@ -234,7 +234,7 @@ function wireAuthEvents() {
     updateProfileBtn();
     if (typeof loadStreak === 'function') loadStreak();
     if (typeof initActivityStatus === 'function') initActivityStatus();
-    showToast(welcomeMsg || 'Welcome!');
+    showToast(welcomeMsg || t('auth_welcome'));
   }
 
   async function ensureUserDocAfterSocial(user, extras = {}) {
@@ -252,7 +252,7 @@ function wireAuthEvents() {
     regData.phone = user.phoneNumber || extras.phone || '';
     regData.name = user.displayName || '';
     showAuthScreen('authRegStep1');
-    showToast('Choose a username to finish signing up');
+    showToast(t('auth_choose_username'));
     return null;
   }
 
@@ -264,7 +264,7 @@ function wireAuthEvents() {
       const cred = await auth.signInWithPopup(provider);
       currentUser = cred.user;
       const doc = await ensureUserDocAfterSocial(cred.user);
-      if (doc) await finishAuthSession('Welcome back!');
+      if (doc) await finishAuthSession(t('auth_welcome_back'));
     } catch (e) {
       if (errEl)
         errEl.textContent =
@@ -310,7 +310,7 @@ function wireAuthEvents() {
         loginRecaptcha = new firebase.auth.RecaptchaVerifier('recaptcha-container', { size: 'invisible' });
       }
       loginConfirmation = await auth.signInWithPhoneNumber(phone, loginRecaptcha);
-      showToast('OTP sent');
+      showToast(t('auth_otp_sent'));
     } catch (e) {
       if (errEl) errEl.textContent = e.message || 'Could not send OTP';
     }
@@ -327,7 +327,7 @@ function wireAuthEvents() {
       const cred = await loginConfirmation.confirm(code);
       currentUser = cred.user;
       const doc = await ensureUserDocAfterSocial(cred.user, { phone: cred.user.phoneNumber });
-      if (doc) await finishAuthSession('Welcome back!');
+      if (doc) await finishAuthSession(t('auth_welcome_back'));
     } catch (e) {
       if (errEl) errEl.textContent = e.message || 'Invalid OTP';
     }
@@ -347,7 +347,7 @@ function wireAuthEvents() {
         regRecaptcha = new firebase.auth.RecaptchaVerifier('recaptcha-container-reg', { size: 'invisible' });
       }
       regConfirmation = await auth.signInWithPhoneNumber(phone, regRecaptcha);
-      showToast('OTP sent');
+      showToast(t('auth_otp_sent'));
     } catch (e) {
       if (errEl) errEl.textContent = e.message || 'Could not send OTP';
     }
@@ -370,7 +370,7 @@ function wireAuthEvents() {
         hint.style.display = 'block';
         hint.textContent = `Phone verified âœ“ ${regPhoneVerified}`;
       }
-      showToast('Phone verified');
+      showToast(t('auth_phone_verified'));
     } catch (e) {
       if (errEl) errEl.textContent = e.message || 'Invalid OTP';
     }
@@ -408,7 +408,7 @@ function wireAuthEvents() {
       updateProfileBtn();
       loadStreak();
       initActivityStatus();
-      showToast('Welcome back!');
+      showToast(t('auth_welcome_back'));
     } catch (e) {
       errEl.textContent =
         e.code === 'auth/wrong-password'
@@ -829,7 +829,7 @@ function wireAuthEvents() {
                 await u.sendEmailVerification();
               } catch (e) {}
               if (typeof showToast === 'function') {
-                showToast('Open the link in your email, then tap continue');
+                showToast(t('auth_email_link_continue'));
               }
               return;
             }

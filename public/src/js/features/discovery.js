@@ -441,7 +441,7 @@ function handleOpenToMeetToggle(newValue){
     document.querySelector('.device').appendChild(sheet);
     document.getElementById('closeOpenToMeetSheet').addEventListener('click',()=>sheet.remove());
   } else {
-    showToast('Discovery turned off. You won\'t appear in others\' Peepal suggestions.');
+    showToast(t('peepal_discovery_off'));
   }
 }
 
@@ -613,7 +613,7 @@ function openPeepalAskSheet(){
   }
   renderSegments();
   document.getElementById('peepalAddSegment')?.addEventListener('click',()=>{
-    if(segmentDrafts.length>=15){ showToast('Soft limit · 15 segments'); return; }
+    if(segmentDrafts.length>=15){ showToast(t('peepal_segment_limit')); return; }
     segmentDrafts.push({label:`Segment ${segmentDrafts.length+1}`,city:'',gender:'any',intent:'any',capMode:'inherit'});
     renderSegments();
   });
@@ -668,19 +668,19 @@ function openPeepalAskSheet(){
 
   document.getElementById('peepalPublishBtn').addEventListener('click',async()=>{
     const text=qText.value.trim();
-    if(!text){showToast('Please write your question first');return;}
+    if(!text){showToast(t('peepal_write_question'));return;}
     const unlock=typeof beginClientMutation==='function'?beginClientMutation('peepal_post'):()=>{};
-    if(unlock===false){ showToast('Post already submitting…'); return; }
+    if(unlock===false){ showToast(t('peepal_post_submitting')); return; }
     const pubBtn=document.getElementById('peepalPublishBtn');
     const pubLabel=pubBtn?pubBtn.textContent:'';
     if(pubBtn){ pubBtn.disabled=true; pubBtn.textContent='Posting…'; }
     try{
     if(typeof checkRateLimit==='function'){
       const rl=await checkRateLimit('post');
-      if(!rl.ok){ if(typeof showToast==='function') showToast(rl.message||'Slow down'); return; }
+      if(!rl.ok){ if(typeof showToast==='function') showToast(rl.message||t('peepal_slow_down')); return; }
     }
     const quota=await checkPeepalQuota();
-    if(!quota.ok){showToast('Weekly limit reached (5/week). Upgrade to Premium for more!');return;}
+    if(!quota.ok){showToast(t('peepal_weekly_limit'));return;}
     const wantsAnon=!!document.getElementById('anonToggle')?.checked;
     let isAnon=false;
     // Check anon quota before build/write, but consume ONLY after Firestore
@@ -689,12 +689,12 @@ function openPeepalAskSheet(){
       try{
         anonQuota = await getAnonRemaining();
         if(anonQuota.exhausted || anonQuota.readFailed){
-          showToast(anonQuota.unlock||'Anonymous limit reached');
+          showToast(anonQuota.unlock||t('peepal_anon_limit'));
           return;
         }
         isAnon=true;
       }catch(e){
-        showToast('Couldn’t verify your anonymous limit — try again shortly');
+        showToast(t('peepal_anon_verify_fail'));
         return;
       }
     }
@@ -766,7 +766,7 @@ function openPeepalAskSheet(){
           q.attachment={type:'image',data:pendingPeepalAttachment.data};
         }
       }catch(e){
-        showToast(typeof friendlyError==='function'?friendlyError(e):'Image upload failed — posting without photo');
+        showToast(typeof friendlyError==='function'?friendlyError(e):t('peepal_image_fail'));
       }
       pendingPeepalAttachment=null;
     } else if(typeof pendingPeepalAttachment!=='undefined'&&pendingPeepalAttachment?.type==='link'){
@@ -817,15 +817,15 @@ function openPeepalAskSheet(){
         }
         showToast(
           e?.code==='DAILY_LIMIT'||e?.code==='WEEKLY_LIMIT'
-            ?(anonQuota?.unlock||'Anonymous limit reached')
+            ?(anonQuota?.unlock||t('peepal_anon_limit'))
             :e?.code==='QUOTA_UNAVAILABLE'
-            ?'Couldn’t verify your limit — try again shortly'
-            :(typeof friendlyError==='function'?friendlyError(e):'Couldn’t post — check your connection')
+            ?t('peepal_quota_verify_fail')
+            :(typeof friendlyError==='function'?friendlyError(e):t('peepal_post_fail'))
         );
         return;
       }
     } else if(!db||!currentUser){
-      showToast('Sign in to post on Peepal');
+      showToast(t('peepal_sign_in_post'));
       return;
     }
     if(!saveOnly) peepalQuestions.unshift(q);
@@ -835,7 +835,7 @@ function openPeepalAskSheet(){
     renderPeepalFeed();
       if(typeof trackPostCreated==='function') trackPostCreated(isAnon?'peepal_anon':'peepal');
       if(typeof SoundLib!=='undefined'&&SoundLib.postPublish) SoundLib.postPublish();
-      showToast(saveOnly?'Saved privately to Archive':(isAnon?'Posted anonymously':'Question posted to Peepal'));
+      showToast(saveOnly?t('peepal_saved_archive'):(isAnon?t('peepal_posted_anon'):t('peepal_posted')));
     }finally{
       if(pubBtn){ pubBtn.disabled=false; pubBtn.textContent=pubLabel; }
       if(typeof unlock==='function') unlock();

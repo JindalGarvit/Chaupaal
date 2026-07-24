@@ -43,7 +43,7 @@
   function requireRelationshipUser() {
     if (currentUser) return true;
     if (typeof showAuth === 'function') showAuth();
-    else if (typeof showToast === 'function') showToast('Sign in to connect with people');
+    else if (typeof showToast === 'function') showToast(t('rel_sign_in'));
     return false;
   }
 
@@ -167,11 +167,7 @@
         hint: 'Close Friends is private — only you see this list. Unfollowing also removes them.',
         fn: async () => {
           const next = await setCloseFriend(profile.uid, !state.closeFriend);
-          showToast(
-            next.closeFriend
-              ? `${name} added to Close Friends (private to you)`
-              : `${name} removed from Close Friends`
-          );
+          showToast(next.closeFriend?t('rel_cf_added',{name}):t('rel_cf_removed',{name}));
           await refresh();
         },
       });
@@ -181,7 +177,7 @@
         hint: 'Removes your follow. They may still follow you.',
         fn: async () => {
           await setFollowing(profile.uid, false, 'unfriend');
-          showToast(`You’re no longer Friends with ${name}`);
+          showToast(t('rel_unfriended',{name}));
           await refresh();
         },
       });
@@ -190,7 +186,7 @@
         label: 'Accept friend request',
         fn: async () => {
           await respondFriend(profile.uid, true);
-          showToast(`You and ${name} are now Friends`);
+          showToast(t('rel_now_friends_with',{name}));
           await refresh();
         },
       });
@@ -207,7 +203,7 @@
         label: 'Cancel friend request',
         fn: async () => {
           await cancelFriendRequest(profile.uid);
-          showToast('Friend request cancelled');
+          showToast(t('rel_request_cancelled'));
           await refresh();
         },
       });
@@ -220,9 +216,9 @@
         fn: async () => {
           const result = await requestFriend(profile.uid);
           if (result.autoAccepted || result.accepted) {
-            showToast(result.autoAccepted ? `You’re now Friends with ${name}` : `You’re now Friends with ${name}`);
+            showToast(t('rel_now_friends_named',{name}));
           } else {
-            showToast('Friend request sent');
+            showToast(t('rel_request_sent'));
           }
           await refresh();
         },
@@ -235,7 +231,7 @@
         hint: 'One-way follow. If they follow you back, you become Friends automatically.',
         fn: async () => {
           const next = await setFollowing(profile.uid, true, 'profile_menu');
-          showToast(next.friend ? `You’re now Friends with ${name}` : `Following ${name}`);
+          showToast(next.friend?t('rel_now_friends_named',{name}):t('rel_following_named',{name}));
           await refresh();
         },
       });
@@ -244,7 +240,7 @@
         label: 'Unfollow',
         fn: async () => {
           await setFollowing(profile.uid, false, 'profile_menu');
-          showToast(`Unfollowed ${name}`);
+          showToast(t('rel_unfollowed',{name}));
           await refresh();
         },
       });
@@ -257,7 +253,7 @@
         hint: 'Stops them following you. Your follow of them (if any) stays.',
         fn: async () => {
           await removeFollower(profile.uid);
-          showToast(`Removed ${name} as a follower`);
+          showToast(t('rel_removed_follower',{name}));
           await refresh();
         },
       });
@@ -276,7 +272,7 @@
         showActionSheet(title || 'Connect', actions);
       }
     };
-    run().catch((error) => showToast(error?.message || 'Could not load actions'));
+    run().catch((error) => showToast(error?.message || t('rel_actions_fail')));
   }
 
   async function wireFriendAction(button, targetUid) {
@@ -312,11 +308,11 @@
       try {
         const result = await requestFriend(targetUid);
         paint();
-        if (result.autoAccepted || result.accepted) showToast('You’re now Friends');
-        else showToast('Friend request sent');
+        if (result.autoAccepted || result.accepted) showToast(t('rel_now_friends'));
+        else showToast(t('rel_request_sent'));
       } catch (error) {
         button.disabled = false;
-        showToast(error?.message || 'Could not send request');
+        showToast(error?.message || t('rel_request_fail'));
       }
     });
   }
@@ -366,8 +362,8 @@
           }
           const result = await requestFriend(profile.uid);
           paint();
-          if (result.autoAccepted || result.accepted) showToast('You’re now Friends');
-          else showToast('Friend request sent');
+          if (result.autoAccepted || result.accepted) showToast(t('rel_now_friends'));
+          else showToast(t('rel_request_sent'));
         } else {
           if (state.following) {
             openRelationshipMenu(profile, { title: 'Following' });
@@ -375,10 +371,10 @@
           }
           const next = await setFollowing(profile.uid, true, context || 'profile');
           paint();
-          showToast(next.friend ? 'You’re now Friends' : 'Following');
+          showToast(next.friend?t('rel_now_friends'):t('rel_following'));
         }
       } catch (error) {
-        showToast(error?.message || 'Could not update');
+        showToast(error?.message || t('rel_update_fail'));
       }
     });
 
@@ -521,7 +517,7 @@
             renderSearch(overlay.querySelector('input')?.value || '');
           } catch (error) {
             button.disabled = false;
-            showToast(error?.message || 'Could not update Close Friends');
+            showToast(error?.message || t('rel_cf_fail'));
           }
         });
       });

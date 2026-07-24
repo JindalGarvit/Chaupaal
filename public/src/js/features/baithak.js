@@ -296,7 +296,7 @@ function openChallengeCreator(chat){
       // Friend challenges are unlimited — no daily credit.
       postChallengeBubble(engineQs, source);
       closeCreator();
-      showToast(`Challenge sent to ${chat.name}!`);
+      showToast(t('baithak_challenge_sent',{name:chat.name}));
       launchEngine(engineQs, source);
     });
 
@@ -352,7 +352,7 @@ function showNewChatOptions(){
     <button id="closeSheet2" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>
   `;
   document.querySelector('.device').appendChild(sheet);
-  document.getElementById('newDm').addEventListener('click',()=>{sheet.remove();showToast("Enter a friend's username");});
+  document.getElementById('newDm').addEventListener('click',()=>{sheet.remove();showToast(t('baithak_enter_username'));});
   document.getElementById('newGroup').addEventListener('click',()=>{sheet.remove();showCreateGroup();});
   document.getElementById('closeSheet2').addEventListener('click',()=>sheet.remove());
 }
@@ -379,16 +379,16 @@ function showCreateGroup(){
   }
   document.getElementById('createGrpBtn').addEventListener('click',async()=>{
     const name=document.getElementById('grpName').value.trim();
-    if(!name){showToast('Enter a group name');return;}
+    if(!name){showToast(t('baithak_enter_group'));return;}
     const desc=document.getElementById('grpDesc')?.value?.trim()||'';
     sheet.remove();
     if(typeof createGroupInFirestore==='function'){
       const chat=await createGroupInFirestore({name,description:desc});
       if(chat){
-        showToast(`"${name}" group created`);
+        showToast(t('baithak_group_created',{name}));
         if(typeof openChatScreen==='function') openChatScreen(chat);
       }
-    } else showToast(`"${name}" group created`);
+    } else showToast(t('baithak_group_created',{name}));
   });
 }
 
@@ -427,7 +427,7 @@ function showYearlyWrap(){
         openUnifiedShareSheet({gameId:'wrap',title:`Share ${year} Wrap`,subtitle:'Your year on Chaupaal',stats:wrapStats});
       } else {
         const text=`My ${year} Chaupaal Wrap\n${totalSessions} days · ${d.accuracy}% accuracy · ${d.streak}-day streak · ${d.topCat}\nchaupaal-chaupaal.web.app`;
-        if(navigator.share)navigator.share({text});else{navigator.clipboard.writeText(text);showToast('Copied!');}
+        if(navigator.share)navigator.share({text});else{navigator.clipboard.writeText(text);showToast(t('baithak_copied'));}
       }
     });
     wrap.querySelector('.wrap-page').addEventListener('click',e=>{if(e.target.closest('button'))return;idx++;if(idx>=pages.length)wrap.remove();else renderPage();});

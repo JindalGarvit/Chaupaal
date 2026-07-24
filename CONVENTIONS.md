@@ -137,17 +137,24 @@ See `.cursor/rules/auth-identity.mdc`.
 - HTML shell (`/`, `/index.html`, navigations, `destination=document`) is **network-first**; never cache-first. Do not return `index.html` as a fallback for failed JS/CSS fetches.
 - Client (`service-worker.js`) shows a tap-to-reload banner on updates and reloads once when the SW cache version changes.
 
-## 10. Firebase App Check (scaffold — enforcement off until key set)
+## 10. Firebase App Check
 
-App Check is **scaffolded but not enforced** until you add a reCAPTCHA v3 site key.
-
-1. Firebase Console → **App Check** → register the web app → **reCAPTCHA v3** provider → copy the **site key**.
-2. Set Vercel (or local) env: `RECAPTCHA_SITE_KEY=<site key>` (and optionally expose to client as `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` / inject `window.CHAUPAAL_RECAPTCHA_SITE_KEY` at build — see `public/src/js/config/app-check.js`).
-3. In Firebase Console → App Check → **APIs** → turn enforcement **on** for Firestore, Storage, and Realtime Database only after the client is shipping with the key and you have verified tokens in debug mode.
-4. Until the env key is non-empty, the client **must not** initialize App Check (avoids locking everyone out). Rules do not require `request.app` checks yet for the same reason.
+Enforcement is **ON** for Firestore / RTDB (and Storage if enabled). Client uses reCAPTCHA v3 via `public/src/js/config/app-check.js`. See README for ops notes.
 
 ## 11. Public vs private user profiles
 
 - Full `users/{uid}` — **owner read/write** (plus Admin SDK). Contains email, phone, DOB, prefs, etc.
 - `users_public/{uid}` — what other signed-in clients may read. Owner syncs via `UsersPublic.syncPublicProfile` on profile save / login.
 - Cross-user UI must use `users_public` (or denormalized blobs / server projections), never the private user doc.
+
+## 12. Globals & module surface
+
+The client still loads classic non-module scripts (`<script src>`), so top-level `function` / `let` and many `window.X =` exports are intentional for cross-file calls.
+
+**Do not** rewrite existing globals in bulk — that breaks games, chat, and `typeof foo === 'function'` guards.
+
+**For new code:**
+- Prefer an IIFE / block scope; export only what other files need.
+- Attach new public APIs under `window.ChaupaalNS` (or an existing feature namespace like `AuthProfiles`, `UsersPublic`) instead of adding bare `window.foo`.
+- Reuse existing entry points (`showToast`, `t`, `pushNavLayer`, `safeFeature`) rather than inventing parallel globals.
+- User-facing strings go through `t('key')` with keys in `i18n.js` (`en` / `hi` / `ta`).

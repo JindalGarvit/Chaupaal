@@ -58,7 +58,7 @@ function generateChallengeLink(score,category,gameId){
     ? buildBeatScoreLink(gid, score, {cat: category||'GK'})
     : `${window.location.origin}${window.location.pathname}?challenge=${name}&cat=${category||'GK'}&score=${score}&game=${gid}`;
   if(navigator.share){navigator.share({title:'Beat my score on Chaupaal!',text:`Can you beat my score of ${score} on Chaupaal? Play now!`,url});}
-  else{navigator.clipboard.writeText(url).then(()=>showToast('Challenge link copied! Share it anywhere'));}
+  else{navigator.clipboard.writeText(url).then(()=>showToast(t('onboard_challenge_copied')));}
 }
 
 // ===================== FRIEND DISCOVERY =====================
@@ -94,12 +94,12 @@ function renderFriendDiscovery(container){
   });
   document.getElementById('phoneSearchBtn')?.addEventListener('click',async()=>{
     const phone=document.getElementById('phoneSearchInput')?.value.trim();
-    if(!phone){showToast('Enter a phone number');return;}
+    if(!phone){showToast(t('onboard_enter_phone'));return;}
     // Phone is private on users/ — client-side phone equality search removed (PII split).
-    showToast('Search by username instead — phone lookup is private');
+    showToast(t('onboard_phone_private'));
   });
   section.querySelectorAll('.discover-add-btn').forEach(btn=>{
-    btn.addEventListener('click',()=>{btn.textContent='Added ✓';btn.style.background='rgba(51,196,129,0.1)';btn.style.color='var(--green)';showToast(`${btn.dataset.name} added`);});
+    btn.addEventListener('click',()=>{btn.textContent='Added ✓';btn.style.background='rgba(51,196,129,0.1)';btn.style.color='var(--green)';showToast(t('onboard_added',{name:btn.dataset.name}));});
   });
 }
 
@@ -119,7 +119,7 @@ function broadcastDuelResult(friendName,myScore,theirScore,groupIds=[]){
   if(typeof postGameScoreStory==='function'){
     postGameScoreStory('quiz',{score:myScore,total:10,scoreLine:`${myScore}–${theirScore}`,text,meta:'Muqabala'});
   } else if(typeof showToast==='function'){
-    showToast('Result shared');
+    showToast(t('onboard_result_shared'));
   }
 }
 
@@ -382,7 +382,7 @@ function populateVoiceDropdown(){
   loadVoiceList();
   const saved=localStorage.getItem('chaupaal_voice');
   select.innerHTML=availableVoices.map(v=>`<option value="${v.name}" ${v.name===saved?'selected':''}>${v.name} (${v.lang})</option>`).join('')||'<option>Loading voices...</option>';
-  select.addEventListener('change',()=>{localStorage.setItem('chaupaal_voice',select.value);showToast('Voice updated! 🔊');});
+  select.addEventListener('change',()=>{localStorage.setItem('chaupaal_voice',select.value);showToast(t('onboard_voice_updated'));});
 }
 setTimeout(populateVoiceDropdown,800);
 
@@ -669,7 +669,7 @@ async function requestNotificationPermission(){
   if(!('Notification' in window))return;
   if(Notification.permission==='default'){
     const p=await Notification.requestPermission();
-    if(p==='granted')showToast(t('notifications_on')||'Notifications on! 🔔');
+    if(p==='granted')showToast(t('notifications_on'));
   }
 }
 function scheduleLocalNudge(){

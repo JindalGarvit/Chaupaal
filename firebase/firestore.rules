@@ -653,10 +653,22 @@ service cloud.firestore {
     // ===================== MATCHMAKING =====================
     match /matchmaking/{category}/waiting/{docId} {
       allow read: if isAuth();
-      allow create: if isAuth() && request.resource.data.uid == request.auth.uid;
-      // Client-side matcher deletes the opponent's waiting row (findRealOpponent).
-      // Tightening to owner-only requires a server-side matcher — deferred (flagged in Phase 0.2).
-      allow delete: if isAuth();
+      allow create: if isAuth()
+        && request.resource.data.uid == request.auth.uid
+        && !('claimedBy' in request.resource.data);
+      // Claimer may set claimedBy once; cannot rewrite uid / other fields.
+      allow update: if isAuth()
+        && resource.data.uid != request.auth.uid
+        && !('claimedBy' in resource.data)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.claimedBy == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['claimedBy', 'claimerName', 'claimedAt']);
+      // Owner or successful claimer may delete (clears the room).
+      allow delete: if isAuth() && (
+        resource.data.uid == request.auth.uid
+        || resource.data.claimedBy == request.auth.uid
+      );
     }
 
     // ===================== FLAGS & BLOCKS =====================
