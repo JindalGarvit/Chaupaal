@@ -21,6 +21,10 @@
   const dedupMap = new Map();
 
   function detectSurface() {
+    // Prefer the shared environment layer (single source of truth).
+    try {
+      if (window.ChaupaalEnv?.surface) return window.ChaupaalEnv.surface();
+    } catch (e) {}
     try {
       const standalone =
         window.matchMedia('(display-mode: standalone)').matches ||

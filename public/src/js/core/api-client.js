@@ -34,7 +34,14 @@
     if (body != null) headers['Content-Type'] = 'application/json';
     if (needAuth) {
       try {
-        const u = typeof auth !== 'undefined' ? auth.currentUser : null;
+        let u = typeof auth !== 'undefined' ? auth.currentUser : null;
+        // Auth-timing race: on slower mobile connections the request can fire
+        // before Firebase auth finishes initialising, sending no token → 401
+        // (previously showed as "no music results" on mobile). Wait for the
+        // shared readiness gate before giving up on a token.
+        if (!u && window.ChaupaalEnv?.whenAuthReady) {
+          u = await window.ChaupaalEnv.whenAuthReady();
+        }
         if (u) headers.Authorization = `Bearer ${await u.getIdToken()}`;
       } catch (e) {}
     }

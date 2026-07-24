@@ -286,10 +286,54 @@
     true
   );
 
+  /**
+   * SINGLE resolve path for "give me a playable preview URL for this track".
+   * Used by chat music cards, the mini-player/queue, and Mehfil in-call music
+   * so the JioSaavn-vs-iTunes preference logic lives in exactly one place.
+   *
+   * Rule (matches server-lib/music.js): keep an existing/JioSaavn preview if we
+   * already have one; only hit music_resolve (iTunes) when there is no URL.
+   *
+   * @param {{ title?: string, artist?: string, previewUrl?: string|null,
+   *   thumbnail?: string, source?: string }} track
+   * @returns {Promise<object>} track with best-effort previewUrl/source
+   */
+  async function resolvePlayableUrl(track) {
+    if (!track) return track;
+    if (track.previewUrl) return track;
+    if (!track.title || typeof apiFetch !== 'function') return track;
+    try {
+      const envelope = await apiFetch('/api/media-config', {
+        method: 'POST',
+        needAuth: true,
+        body: { action: 'music_resolve', title: track.title, artist: track.artist || '' },
+      });
+      if (envelope?.ok && envelope.data?.previewUrl) {
+        return {
+          ...track,
+          previewUrl: envelope.data.previewUrl,
+          source: envelope.data.source || 'itunes',
+          thumbnail: track.thumbnail || envelope.data.song?.thumbnail || '',
+        };
+      }
+    } catch (e) {
+      if (typeof reportClientError === 'function') {
+        reportClientError({
+          feature: 'music_resolve',
+          message: e?.message || String(e),
+          stack: e?.stack || '',
+        });
+      }
+    }
+    return track;
+  }
+
   window.formatMediaTime = formatTime;
   window.mediaControlsHtml = controlsHtml;
   window.bindMediaControls = bindMediaControls;
   window.enhanceMediaIn = enhanceMediaIn;
   window.setMediaQueue = setMediaQueue;
   window.syncMiniPlayer = syncMiniFromMedia;
+  window.resolvePlayableUrl = resolvePlayableUrl;
+  window.MediaPlayback = { resolvePlayableUrl, setMediaQueue };
 })();

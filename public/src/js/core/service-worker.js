@@ -119,7 +119,7 @@
     });
 
     navigator.serviceWorker
-      .register('/sw.js?v=53')
+      .register('/sw.js?v=54')
       .then((reg) => {
         console.log('SW registered');
         hideOfflineBanner();

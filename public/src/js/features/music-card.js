@@ -434,26 +434,9 @@
     }
 
     async function preferPlayablePreview(music) {
-      if (!music) return music;
-      // Already have a URL (typically JioSaavn mp4) — do NOT replace with iTunes.
-      // iTunes is resolve-only fallback when preview is missing or playback errors.
-      if (music.previewUrl) return music;
-      if (!music.title || typeof apiFetch !== 'function') return music;
-      try {
-        const envelope = await apiFetch('/api/media-config', {
-          method: 'POST',
-          needAuth: true,
-          body: { action: 'music_resolve', title: music.title, artist: music.artist || '' },
-        });
-        if (envelope?.ok && envelope.data?.previewUrl) {
-          return {
-            ...music,
-            previewUrl: envelope.data.previewUrl,
-            source: envelope.data.source || 'itunes',
-            thumbnail: music.thumbnail || envelope.data.song?.thumbnail || '',
-          };
-        }
-      } catch (e) {}
+      // Single shared resolve path (media-player.js) — keeps JioSaavn-vs-iTunes
+      // preference logic in one place across cards, mini-player, and Mehfil.
+      if (typeof resolvePlayableUrl === 'function') return resolvePlayableUrl(music);
       return music;
     }
 
