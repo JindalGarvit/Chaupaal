@@ -680,7 +680,7 @@ function openPeepalAskSheet(){
       if(!rl.ok){ if(typeof showToast==='function') showToast(rl.message||t('peepal_slow_down')); return; }
     }
     const quota=await checkPeepalQuota();
-    if(!quota.ok){showToast(t('peepal_weekly_limit'));return;}
+    if(!quota.ok){showToast(quota.unlock||t('peepal_weekly_limit'));return;}
     const wantsAnon=!!document.getElementById('anonToggle')?.checked;
     let isAnon=false;
     // Check anon quota before build/write, but consume ONLY after Firestore
@@ -803,6 +803,14 @@ function openPeepalAskSheet(){
         });
         q.firestoreId=ref.id;
         // Consume after successful write so a rules/network failure never burns a slot
+        if(!saveOnly && typeof PolicyUsage?.consume==='function'){
+          try{ await PolicyUsage.consume('peepalPost'); }
+          catch(qe){
+            if(typeof reportClientError==='function'){
+              reportClientError({feature:'peepal_post_consume',message:qe?.message||String(qe)});
+            }
+          }
+        }
         if(isAnon){
           try{ await PolicyUsage.consume('anon'); }
           catch(qe){

@@ -385,84 +385,126 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment){
 // ===================== REAL MATCHMAKING (Firestore waiting room) =====================
 let matchmakingListener=null;
 
-async function findRealOpponent(filters, onFound, onCancel){
-  if(!db||!currentUser){ onFound({name:'Priya_29',simulated:true}); return; }
-  const category=filters.category||'GK';
-  const waitingRef=db.collection('matchmaking').doc(category).collection('waiting');
-  const claimWaitingDoc=async (docSnap)=>{
-    const opponent=docSnap.data()||{};
-    await db.runTransaction(async (tx)=>{
-      const fresh=await tx.get(docSnap.ref);
-      if(!fresh.exists) throw new Error('gone');
-      const d=fresh.data()||{};
-      if(d.claimedBy) throw new Error('claimed');
-      tx.update(docSnap.ref,{
-        claimedBy:currentUser.uid,
-        claimerName:userProfile?.name||currentUser.displayName||'You',
-        claimedAt:firebase.firestore.FieldValue.serverTimestamp(),
-      });
-    });
-    try{ await docSnap.ref.delete(); }catch(e){}
-    onFound({name:opponent.name||'Your opponent',uid:opponent.uid,simulated:false});
-  };
-  try{
-    // Check if someone is already waiting — claim instead of open delete
-    const snap=await waitingRef.where('uid','!=',currentUser.uid).limit(1).get();
-    if(!snap.empty){
-      try{
-        await claimWaitingDoc(snap.docs[0]);
-      }catch(e){
-        onFound({name:'Priya_29',simulated:true});
-      }
-      return;
+/**
+ * Find a live opponent via waiting room. Returns { cancel } immediately.
+ * onFound({ name, uid?, simulated }) — simulated=true on timeout / error / offline.
+ */
+function findRealOpponent(filters, onFound, onCancel){
+  let settled=false;
+  let timeoutId=null;
+  let myRef=null;
+
+  const finish=(payload)=>{
+    if(settled) return;
+    settled=true;
+    if(timeoutId){ clearTimeout(timeoutId); timeoutId=null; }
+    if(matchmakingListener){
+      try{ matchmakingListener(); }catch(e){}
+      matchmakingListener=null;
     }
-    // Add self to waiting room
-    const myRef=await waitingRef.add({
-      uid:currentUser.uid,
-      name:userProfile?.name||'You',
-      category, filters,
-      ts:firebase.firestore.FieldValue.serverTimestamp()
-    });
-    // Listen for a match (claimer sets claimedBy, then may delete)
-    matchmakingListener=myRef.onSnapshot(async snap=>{
-      if(!snap.exists){
-        if(matchmakingListener){matchmakingListener();matchmakingListener=null;}
-        onFound({name:'Your opponent',simulated:false});
+    try{ onFound(payload); }catch(e){}
+  };
+
+  const cancel=async()=>{
+    if(settled) return;
+    settled=true;
+    if(timeoutId){ clearTimeout(timeoutId); timeoutId=null; }
+    if(matchmakingListener){
+      try{ matchmakingListener(); }catch(e){}
+      matchmakingListener=null;
+    }
+    if(myRef){ try{ await myRef.delete(); }catch(e){} }
+    try{ if(typeof onCancel==='function') onCancel(); }catch(e){}
+  };
+
+  (async()=>{
+    if(!db||!currentUser){ finish({name:'Priya_29',simulated:true}); return; }
+    const category=filters.category||'GK';
+    const waitingRef=db.collection('matchmaking').doc(category).collection('waiting');
+    const claimWaitingDoc=async (docSnap)=>{
+      const opponent=docSnap.data()||{};
+      await db.runTransaction(async (tx)=>{
+        const fresh=await tx.get(docSnap.ref);
+        if(!fresh.exists) throw new Error('gone');
+        const d=fresh.data()||{};
+        if(d.claimedBy) throw new Error('claimed');
+        tx.update(docSnap.ref,{
+          claimedBy:currentUser.uid,
+          claimerName:userProfile?.name||currentUser.displayName||'You',
+          claimedAt:firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      });
+      try{ await docSnap.ref.delete(); }catch(e){}
+      finish({name:opponent.name||'Your opponent',uid:opponent.uid,simulated:false});
+    };
+    try{
+      const snap=await waitingRef.where('uid','!=',currentUser.uid).limit(1).get();
+      if(settled) return;
+      if(!snap.empty){
+        try{
+          await claimWaitingDoc(snap.docs[0]);
+        }catch(e){
+          finish({name:'Priya_29',simulated:true});
+        }
         return;
       }
-      const d=snap.data()||{};
-      if(d.claimedBy && d.claimedBy!==currentUser.uid){
-        if(matchmakingListener){matchmakingListener();matchmakingListener=null;}
-        onFound({name:d.claimerName||'Your opponent',uid:d.claimedBy,simulated:false});
-        try{await myRef.delete();}catch(e){}
+      myRef=await waitingRef.add({
+        uid:currentUser.uid,
+        name:userProfile?.name||'You',
+        category, filters,
+        ts:firebase.firestore.FieldValue.serverTimestamp()
+      });
+      if(settled){
+        try{ await myRef.delete(); }catch(e){}
+        return;
       }
-    });
-    // Timeout after 20s — fall back to simulated
-    setTimeout(async()=>{
-      if(matchmakingListener){
-        matchmakingListener();matchmakingListener=null;
-        try{await myRef.delete();}catch(e){}
-        onFound({name:'Priya_29',simulated:true});
-      }
-    },20000);
-  }catch(e){ onFound({name:'Priya_29',simulated:true}); }
+      matchmakingListener=myRef.onSnapshot(async snap=>{
+        if(settled) return;
+        if(!snap.exists){
+          finish({name:'Your opponent',simulated:false});
+          return;
+        }
+        const d=snap.data()||{};
+        if(d.claimedBy && d.claimedBy!==currentUser.uid){
+          finish({name:d.claimerName||'Your opponent',uid:d.claimedBy,simulated:false});
+          try{ await myRef.delete(); }catch(e){}
+        }
+      });
+      timeoutId=setTimeout(async()=>{
+        if(settled) return;
+        if(matchmakingListener){
+          try{ matchmakingListener(); }catch(e){}
+          matchmakingListener=null;
+        }
+        if(myRef){ try{ await myRef.delete(); }catch(e){} }
+        finish({name:'Priya_29',simulated:true});
+      },20000);
+    }catch(e){
+      finish({name:'Priya_29',simulated:true});
+    }
+  })();
+
+  return { cancel };
 }
 
-// ===================== PEEPAL QUOTA ENFORCEMENT (Firestore) =====================
+// ===================== PEEPAL QUOTA (server policyUsage peepalPost) =====================
 async function checkPeepalQuota(){
-  if(!db||!currentUser) return {weekly:weeklyQuestionCount,ok:weeklyQuestionCount<5};
-  try{
-    const now=new Date();
-    const weekStart=new Date(now); weekStart.setDate(now.getDate()-now.getDay());
-    weekStart.setHours(0,0,0,0);
-    const snap=await db.collection('peepal')
-      .where('uid','==',currentUser.uid)
-      .where('createdAt','>=',firebase.firestore.Timestamp.fromDate(weekStart))
-      .limit(6) // only need to know if over weekly cap (5)
-      .get();
-    weeklyQuestionCount=snap.size;
-    return {weekly:snap.size, ok:snap.size<5};
-  }catch(e){ return {weekly:weeklyQuestionCount, ok:weeklyQuestionCount<5}; }
+  const lim=typeof PolicyLimits!=='undefined'?PolicyLimits.PEEPAL_POST:{perWeek:5};
+  if(typeof PolicyUsage?.getRemaining==='function'){
+    try{
+      const rem=await PolicyUsage.getRemaining('peepalPost');
+      weeklyQuestionCount=Math.max(0,(lim.perWeek||5)-(rem.weekLeft||0));
+      return {
+        weekly:weeklyQuestionCount,
+        ok:!rem.exhausted,
+        remaining:rem,
+        unlock:rem.unlock||'',
+      };
+    }catch(e){
+      return {weekly:weeklyQuestionCount, ok:false, unlock:'Couldn’t verify your limit — try again shortly'};
+    }
+  }
+  return {weekly:weeklyQuestionCount, ok:false, unlock:'Couldn’t verify your limit — try again shortly'};
 }
 
 // ===================== WRAPS WITH REAL DATA =====================

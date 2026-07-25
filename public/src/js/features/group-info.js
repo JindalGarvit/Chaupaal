@@ -165,7 +165,7 @@
   /** Create a new group in Firestore and local inbox. */
   async function createGroupInFirestore({ name, description }) {
     if (!db || !currentUser) {
-      if (typeof showToast === 'function') showToast('Sign in to create a group');
+      if (typeof showToast === 'function') showToast(t('group_sign_in_create'));
       return null;
     }
     const trimmed = String(name || '').trim();
@@ -239,7 +239,7 @@
     const uid = friend.uid || friend.id;
     if (!uid || !chatId) return false;
     if ((chat.participants || []).includes(uid)) {
-      if (typeof showToast === 'function') showToast('Already in the group');
+      if (typeof showToast === 'function') showToast(t('group_already_in'));
       return false;
     }
     const memberProfiles = { ...(chat.memberProfiles || {}) };
@@ -291,7 +291,7 @@
       if (memberProfiles[targetUid]) memberProfiles[targetUid].role = 'admin';
     } else {
       if (admins.length <= 1 && admins.includes(targetUid)) {
-        if (typeof showToast === 'function') showToast('Promote another admin first');
+        if (typeof showToast === 'function') showToast(t('group_promote_other'));
         return false;
       }
       admins = admins.filter((u) => u !== targetUid);
@@ -337,7 +337,7 @@
       if (successor) {
         await setMemberAdmin(chat, successor, true);
         const name = chat.memberProfiles?.[successor]?.name || 'a member';
-        if (typeof showToast === 'function') showToast(`${name} is now admin`);
+        if (typeof showToast === 'function') showToast(t('group_now_admin',{name}));
       }
     }
     await removeMemberFromGroup(chat, uid);
@@ -590,7 +590,7 @@
           await updateGroupDetails(chat, { isPublic: next });
           chat.isPublic = next;
           if (typeof showToast === 'function') {
-            showToast(next ? 'Group is public in search' : 'Group is private');
+            showToast(next?t('group_public'):t('group_private'));
           }
           if (!next) {
             noticeEl.hidden = true;
@@ -641,13 +641,13 @@
           <button type="button" class="group-info-share" data-gi-share>Share</button>`;
         row.querySelector('[data-gi-copy]')?.addEventListener('click', () => {
           navigator.clipboard?.writeText(url);
-          if (typeof showToast === 'function') showToast('Link copied');
+          if (typeof showToast === 'function') showToast(t('group_link_copied'));
         });
         row.querySelector('[data-gi-share]')?.addEventListener('click', () => {
           if (navigator.share) navigator.share({ title: chat.name, url });
           else {
             navigator.clipboard?.writeText(url);
-            if (typeof showToast === 'function') showToast('Link copied');
+            if (typeof showToast === 'function') showToast(t('group_link_copied'));
           }
         });
         const modeEl = overlay.querySelector('[data-gi-invite-mode]');
@@ -663,7 +663,7 @@
               await db.collection('groupInvites').doc(inv.token).set({ mode, enabled: inv.enabled !== false }, { merge: true });
             } catch (e) {}
           }
-          if (typeof showToast === 'function') showToast(mode === 'approval' ? 'Join requests require approval' : 'Anyone with link can join');
+          if (typeof showToast === 'function') showToast(mode==='approval'?t('group_join_approval'):t('group_join_anyone'));
         };
       } else {
         row.innerHTML = `<div class="group-info-muted">Invite link available to admins</div>`;
@@ -740,7 +740,7 @@
           if (!req) return;
           await resolveJoinRequest(chat, req, true);
           await refresh();
-          if (typeof showToast === 'function') showToast('Member added');
+          if (typeof showToast === 'function') showToast(t('group_member_added'));
         });
       });
       box.querySelectorAll('[data-req-reject]').forEach((btn) => {
@@ -782,13 +782,13 @@
           if (typeof reportClientError === 'function') {
             reportClientError({ feature: 'group_promote', message: e?.message || String(e) });
           }
-          if (typeof showToast === 'function') showToast('Couldn’t update admin');
+          if (typeof showToast === 'function') showToast(t('group_admin_fail'));
         }
       });
       sheet.querySelector('[data-act-remove]')?.addEventListener('click', async () => {
         try {
           if ((chat.admins || []).length === 1 && chat.admins[0] === member.uid) {
-            if (typeof showToast === 'function') showToast('Promote another admin first');
+            if (typeof showToast === 'function') showToast(t('group_promote_other'));
             return;
           }
           await removeMemberFromGroup(chat, member.uid);
@@ -798,14 +798,14 @@
           if (typeof reportClientError === 'function') {
             reportClientError({ feature: 'group_remove', message: e?.message || String(e) });
           }
-          if (typeof showToast === 'function') showToast('Couldn’t remove member');
+          if (typeof showToast === 'function') showToast(t('group_remove_fail'));
         }
       });
     }
 
     overlay.querySelector('[data-gi-add-member]')?.addEventListener('click', async () => {
       if (typeof openFriendPickerSheet !== 'function') {
-        if (typeof showToast === 'function') showToast('Friend list not available');
+        if (typeof showToast === 'function') showToast(t('group_friends_unavailable'));
         return;
       }
       const friend = await openFriendPickerSheet({ title: 'Add to group', subtitle: chat.name });
@@ -813,7 +813,7 @@
       const ok = await addMemberToGroup(chat, friend);
       if (ok) {
         await refresh();
-        if (typeof showToast === 'function') showToast(`${friend.name} added`);
+        if (typeof showToast === 'function') showToast(t('group_friend_added',{name:friend.name}));
       }
     });
 
@@ -822,7 +822,7 @@
       if (ok) {
         close();
         if (typeof closeChatScreen === 'function') closeChatScreen({ updateHistory: true, animate: true });
-        if (typeof showToast === 'function') showToast('Left group');
+        if (typeof showToast === 'function') showToast(t('group_left'));
       }
     });
 
@@ -830,7 +830,7 @@
       const uid = currentUser?.uid;
       const chatId = chat.firestoreId || chat.id;
       if (!uid || !chatId || !db) {
-        if (typeof showToast === 'function') showToast('Sign in to join');
+        if (typeof showToast === 'function') showToast(t('group_sign_in_join'));
         return;
       }
       if ((chat.participants || []).includes(uid)) return;
@@ -844,14 +844,14 @@
             status: 'pending',
             requestedAt: firebase.firestore.FieldValue.serverTimestamp(),
           });
-          if (typeof showToast === 'function') showToast('Join request sent');
+          if (typeof showToast === 'function') showToast(t('group_request_sent'));
           return;
         }
         // Public instant join (participant self-add via invite token path when available)
         if (chat.invite?.token && typeof joinGroupByInviteToken === 'function') {
           const res = await joinGroupByInviteToken(chat.invite.token);
           if (res?.ok) {
-            if (typeof showToast === 'function') showToast(res.pending ? 'Request sent' : 'Joined group');
+            if (typeof showToast === 'function') showToast(res.pending?t('group_request_or_joined'):t('group_joined'));
             if (res.chat && !res.pending && typeof openChatScreen === 'function') {
               close();
               openChatScreen(res.chat);
@@ -874,7 +874,7 @@
           memberCount: firebase.firestore.FieldValue.increment(1),
           updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
-        if (typeof showToast === 'function') showToast('Joined group');
+        if (typeof showToast === 'function') showToast(t('group_joined'));
         await refresh();
         const live = await fetchGroupDoc(chatId);
         if (live && typeof openChatScreen === 'function') {
@@ -883,7 +883,7 @@
         }
       } catch (e) {
         console.warn('[group] join public', e?.message || e);
-        if (typeof showToast === 'function') showToast('Could not join — ask for an invite link');
+        if (typeof showToast === 'function') showToast(t('group_join_fail'));
       }
     });
 
@@ -906,7 +906,7 @@
         input.onchange = async () => {
           const file = input.files?.[0];
           if (!file) return;
-          if (typeof showToast === 'function') showToast('Uploading…');
+          if (typeof showToast === 'function') showToast(t('group_uploading'));
           let photoURL = '';
           if (typeof uploadOptimizedImage === 'function' && (typeof isMediaUploadReady !== 'function' || (await isMediaUploadReady()))) {
             const up = await uploadOptimizedImage(file, { folder: 'group-avatars' });

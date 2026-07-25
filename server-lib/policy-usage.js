@@ -13,6 +13,10 @@
 const LIMITS = Object.freeze({
   anon: Object.freeze({ perDay: 2, perWeek: 7 }),
   aiDiscoveryMsg: Object.freeze({ perDay: 3, perWeek: 10 }),
+  // Peepal posts (non-anon weekly scarcity). Anon still uses `anon` separately.
+  peepalPost: Object.freeze({ perDay: 5, perWeek: 5 }),
+  // Chaupaal AI keyboard free tier (was localStorage-only).
+  aiKb: Object.freeze({ perDay: 5, perWeek: 35 }),
 });
 
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
@@ -39,7 +43,7 @@ function weekKeyMondayIST(now = new Date()) {
  * Atomically consume one unit of a feature quota for a user.
  * @param {object} admin firebase-admin namespace (from initAdmin())
  * @param {string} uid verified auth uid
- * @param {string} feature 'anon' | 'aiDiscoveryMsg'
+ * @param {string} feature 'anon' | 'aiDiscoveryMsg' | 'peepalPost' | 'aiKb'
  * @returns {Promise<{ok:boolean, code?:string, dayLeft?:number, weekLeft?:number, perDay?:number, perWeek?:number}>}
  */
 async function consumePolicyUsage(admin, uid, feature) {

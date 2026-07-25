@@ -23,8 +23,8 @@ After changing CSS/JS under `public/`, run:
 npm run bust
 ```
 
-This fingerprints `?v=` query strings in `public/index.html` from file contents and bumps the service worker cache name in `public/sw.js`. No bundler — multi-script load stays as-is.
+This fingerprints `?v=` query strings in `public/index.html` from file contents and bumps the service worker cache name in `public/sw.js`. No bundler yet — multi-script load stays as-is while we are still pre-launch / building. A real bundler can wait until the feature surface freezes.
 
 ### i18n
 
-Shell copy uses `t()` / `data-i18n*` markers. Full chrome dicts ship for `en`, `hi`, and `ta`; other language codes fall back to English. Preference is stored in `localStorage` (`chaupaal_lang`) and on the user doc (`lang`).
+Shell copy uses `t()` / `data-i18n*` markers. Full chrome dicts ship for `en`, `hi`, and `ta`; other language codes fall back to English. Preference is stored in `localStorage` (`chaupaal_lang`) and on the user doc (`lang`). High-traffic toasts (auth, Peepal, Baithak, relationships, groups, profile, Duniya, categories, Dangal) also use `t()`.

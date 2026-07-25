@@ -564,13 +564,13 @@ function renderFamilyList(){
 // ===================== AI KEYBOARD (global assistant) =====================
 let aiKbHistory=[];
 
-function openAiKeyboard(targetInput,context=''){
+async function openAiKeyboard(targetInput,context=''){
   if(typeof isAiFeaturesEnabledSync==='function' && !isAiFeaturesEnabledSync()){
     if(typeof showToast==='function') showToast(typeof AI_DISABLED_MSG==='string'?AI_DISABLED_MSG:'AI is temporarily paused.');
     return;
   }
-  if(aiKbLimitReached()){
-    showToast(`Free AI limit reached (${AI_KB_LIMIT}/day). More queries coming with Premium! 🌟`);
+  if(await aiKbLimitReached()){
+    showToast(typeof t==='function'?t('ai_kb_limit',{n:AI_KB_LIMIT}):`Free AI limit reached (${AI_KB_LIMIT}/day). More queries coming with Premium! 🌟`);
     return;
   }
   document.getElementById('aiKeyboardEl')?.remove();
@@ -608,7 +608,15 @@ function openAiKeyboard(targetInput,context=''){
     try{
       aiKbHistory.push({role:'user',content:query});
       if(aiKbHistory.length>10)aiKbHistory=aiKbHistory.slice(-10);
-      incrementAiKbUsage();
+      try{ await consumeAiKbSlot(); }catch(qe){
+        typing.remove();
+        const err=document.createElement('div');err.className='ai-kb-msg ai';
+        err.textContent=qe?.code==='DAILY_LIMIT'||qe?.code==='WEEKLY_LIMIT'
+          ?(typeof t==='function'?t('ai_kb_limit',{n:AI_KB_LIMIT}):`Free AI limit reached (${AI_KB_LIMIT}/day).`)
+          :'Couldn’t verify AI limit — try again shortly';
+        msgs.appendChild(err);
+        return;
+      }
       const data = await callAI({
         tier:'balanced',
         max_tokens:600,

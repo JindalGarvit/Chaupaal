@@ -151,9 +151,7 @@ function openAIFinder(){
   });
 }
 
-// ===================== SMART MATCHMAKING WITH PROGRESSIVE FILTER DROPPING =====================
-const FILTER_PRIORITY = ['level','age','gender','region','country','category'];
-
+// ===================== SMART MATCHMAKING =====================
 function startSmartMatchmaking(filters){
   const panel = document.getElementById('panel-dangal');
   const statusEl = document.createElement('div');
@@ -162,83 +160,76 @@ function startSmartMatchmaking(filters){
   panel.appendChild(statusEl);
 
   let activeFilters = {...filters};
-  let filtersToTry = FILTER_PRIORITY.filter(f=>activeFilters[f]&&activeFilters[f]!=='Any'&&activeFilters[f]!=='Similar to me'&&activeFilters[f]!=='Mixed');
-  let attempt = 0;
   let cancelled = false;
+  let mmHandle = null;
 
-  function renderStatus(dropping=null){
+  function renderStatus(hint){
     const filterSummary = Object.entries(activeFilters)
       .filter(([k,v])=>v&&v!=='Any'&&v!=='Similar to me'&&v!=='Mixed')
       .map(([k,v])=>`<span style="background:rgba(230,57,70,0.08);color:var(--red);padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;">${v}</span>`)
       .join(' ');
 
-    // Skeleton (not a bare spinner) keeps the status area content-shaped while we search.
     statusEl.innerHTML = `
       ${typeof skeletonHtml==='function'?skeletonHtml('match',1):'<div class="mm-spinner"></div>'}
-      <div class="mm-title">Finding your opponent...</div>
+      <div class="mm-title">${typeof t==='function'?t('matchmaking'):'Finding your opponent...'}</div>
       <div class="mm-sub">Searching with: ${filterSummary||'all filters'}</div>
-      ${dropping?`<div class="mm-filter-drop">⚠️ Hard to find — dropping "<strong>${dropping}</strong>" filter to widen search</div>`:''}
+      ${hint?`<div class="mm-filter-drop">${hint}</div>`:''}
       <button class="mm-cancel-btn" id="mmCancelBtn">Cancel</button>
     `;
     document.getElementById('mmCancelBtn').addEventListener('click',()=>{
-      cancelled=true;statusEl.remove();
+      cancelled=true;
+      try{ mmHandle?.cancel?.(); }catch(e){}
+      statusEl.remove();
     });
   }
 
-  async function tryMatch(){
-    if(cancelled)return;
-    renderStatus();
-
-    // Simulate search delay (in production: real Firestore query with filters)
-    await new Promise(r=>setTimeout(r,2000 + Math.random()*1000));
-    if(cancelled)return;
-
-    // Simulate: harder filters = lower match chance
-    const matchChance = Math.max(0.3, 1 - (filtersToTry.length * 0.15));
-    const found = Math.random() < matchChance || filtersToTry.length === 0;
-
-    if(found){
-      // Found — generate opponent name based on filters
-      const regionNames = {
-        'South India':['Priya','Arjun','Deepa','Kiran','Ananya'],
-        'North India':['Rahul','Priyanka','Vikram','Neha','Amit'],
-        'East India':['Sourav','Ritika','Debashish','Puja','Aritra'],
-        'West India':['Riya','Dev','Sneha','Rohan','Kavya'],
-      };
-      const pool = regionNames[activeFilters.region]||['Priya','Arjun','Riya','Dev','Neha'];
-      const oppName = pool[Math.floor(Math.random()*pool.length)] + '_' + Math.floor(Math.random()*99);
-
-      statusEl.innerHTML = `
-        <div style="font-size:52px;">🎯</div>
-        <div class="mm-title">Opponent found!</div>
-        <div class="mm-sub">${oppName} · ${activeFilters.region||'India'} · ${activeFilters.category||'GK'}</div>
-      `;
-      useMuqabalaCredit();
-      setTimeout(()=>{ statusEl.remove(); startMuqabala(oppName, activeFilters.category||'GK'); }, 900);
-    } else {
-      // Drop lowest-priority active filter
-      if(filtersToTry.length>0){
-        const toDrop = filtersToTry[filtersToTry.length-1];
-        filtersToTry.pop();
-        delete activeFilters[toDrop];
-        renderStatus(toDrop);
-        await new Promise(r=>setTimeout(r,1500));
-        attempt++;
-        tryMatch();
-      } else {
-        // No more filters to drop — found with defaults
-        statusEl.innerHTML = `
-          <div style="font-size:52px;">🎯</div>
-          <div class="mm-title">Found a match!</div>
-          <div class="mm-sub">Best available opponent based on your preferences</div>
-        `;
-        useMuqabalaCredit();
-        setTimeout(()=>{ statusEl.remove(); startMuqabala('Priya_29','GK'); }, 900);
-      }
-    }
+  function simNameFromFilters(){
+    const regionNames = {
+      'South India':['Priya','Arjun','Deepa','Kiran','Ananya'],
+      'North India':['Rahul','Priyanka','Vikram','Neha','Amit'],
+      'East India':['Sourav','Ritika','Debashish','Puja','Aritra'],
+      'West India':['Riya','Dev','Sneha','Rohan','Kavya'],
+    };
+    const pool = regionNames[activeFilters.region]||['Priya','Arjun','Riya','Dev','Neha'];
+    return pool[Math.floor(Math.random()*pool.length)] + '_' + Math.floor(Math.random()*99);
   }
 
-  tryMatch();
+  function launchFound(opp){
+    if(cancelled) return;
+    const name = opp?.name || simNameFromFilters();
+    const label = opp?.simulated
+      ? `${name} · ${activeFilters.region||'India'} · ${activeFilters.category||'GK'}`
+      : `${name} · ${activeFilters.category||'GK'}`;
+    statusEl.innerHTML = `
+      <div style="font-size:52px;">🎯</div>
+      <div class="mm-title">${typeof t==='function'?t('found'):'Opponent found!'}</div>
+      <div class="mm-sub">${label}</div>
+    `;
+    useMuqabalaCredit();
+    setTimeout(()=>{
+      statusEl.remove();
+      startMuqabala(name, activeFilters.category||'GK', {opponentUid:opp?.uid||null, simulated:!!opp?.simulated});
+    }, 900);
+  }
+
+  renderStatus();
+  if(typeof findRealOpponent!=='function'){
+    launchFound({name:simNameFromFilters(),simulated:true});
+    return;
+  }
+  mmHandle = findRealOpponent(activeFilters, (opp)=>{
+    if(cancelled) return;
+    if(opp?.simulated){
+      // Soften with progressive copy, then simulated name from filters
+      renderStatus('Widening search — pairing with best available');
+      setTimeout(()=>{
+        if(cancelled) return;
+        launchFound({name:simNameFromFilters(),simulated:true});
+      }, 600);
+      return;
+    }
+    launchFound(opp);
+  }, ()=>{ cancelled=true; });
 }
 
 // ===== PEEPAL AI TARGET GROUP =====
@@ -398,7 +389,7 @@ async function generateMuqabalaQuestionsAI({ category, count } = {}){
  */
 function startMuqabala(opponentName, mode, opts){
   const overlay = document.getElementById('muqabalaOverlay');
-  if(!overlay){ showToast('Muqabala unavailable'); return; }
+  if(!overlay){ showToast(t('muqabala_unavailable')); return; }
   if(typeof prepareGameOverlay==='function') prepareGameOverlay(overlay,{theme:'light',gameId:'muqabala'});
   const options = normalizeMuqabalaOptions(opts);
   const label = mode || 'GK';
@@ -471,23 +462,51 @@ function startMuqabala(opponentName, mode, opts){
   `;
   document.getElementById('closeMuqabala').addEventListener('click',()=>{
     cancelSearch();
-    if(!matchFound) showToast('Search cancelled — no Muqabala used 👍');
+    try{ mmHandle?.cancel?.(); }catch(e){}
+    if(!matchFound) showToast(typeof t==='function'?t('muqabala_search_cancelled'):'Search cancelled — no Muqabala used 👍');
   });
 
-  const delay = opponentName ? 2800 : 1800;
-  searchTimer = setTimeout(()=>{
-    if(cancelled) return;
-    const opp = opponentName || 'Priya_29';
-    const body = overlay.children[1];
-    if(body){
-      body.innerHTML = `
-        <div style="font-size:48px;">🎯</div>
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">${opponentName?`${opp} accepted!`:`${opp} found!`}</div>
-        <div style="font-size:13px;color:var(--muted);">Starting now…</div>
-      `;
-    }
-    beginRun(opp);
-  }, delay);
+  let mmHandle = null;
+  if(opponentName){
+    const delay = 2800;
+    searchTimer = setTimeout(()=>{
+      if(cancelled) return;
+      const opp = opponentName;
+      const body = overlay.children[1];
+      if(body){
+        body.innerHTML = `
+          <div style="font-size:48px;">🎯</div>
+          <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">${opp} accepted!</div>
+          <div style="font-size:13px;color:var(--muted);">Starting now…</div>
+        `;
+      }
+      beginRun(opp);
+    }, delay);
+    return;
+  }
+
+  // Live waiting-room match; simulated fallback inside findRealOpponent
+  if(typeof findRealOpponent==='function'){
+    mmHandle = findRealOpponent({category: mode||'GK'}, (opp)=>{
+      if(cancelled) return;
+      matchFound = true;
+      const name = opp?.name || 'Priya_29';
+      const body = overlay.children[1];
+      if(body){
+        body.innerHTML = `
+          <div style="font-size:48px;">🎯</div>
+          <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">${name} found!</div>
+          <div style="font-size:13px;color:var(--muted);">Starting now…</div>
+        `;
+      }
+      beginRun(name);
+    }, ()=>{ cancelled=true; });
+  } else {
+    searchTimer = setTimeout(()=>{
+      if(cancelled) return;
+      beginRun('Priya_29');
+    }, 1800);
+  }
 }
 
 function runMuqabala(overlay, oppName, mode, opts){
@@ -781,7 +800,7 @@ function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalA
           postGameScoreStory('quiz',{score:myScore,total:10,scoreLine:`${myScore}–${oppScore}`,meta:mode,text:shareStats.text});
         }
       },
-      chat:()=>{overlay.classList.add('hidden');showToast('Check Baithak for your chat!');},
+      chat:()=>{overlay.classList.add('hidden');showToast(t('muqabala_check_baithak'));},
     });
   }
   if(myScore>0 && typeof broadcastDuelResult==='function') setTimeout(()=>broadcastDuelResult(oppName,myScore,oppScore),600);
@@ -804,7 +823,7 @@ function launchPendingMuqabalaChallenge(challengeId){
     // Questions may be on a data attribute via rehydrate below — handled in wireChallengeBubble path
   }
   if(!payload || !payload.questions || !payload.questions.length){
-    showToast('Challenge expired — create a new one');
+    showToast(t('muqabala_challenge_expired'));
     return;
   }
   window.__pendingMuqabalaChallenges[challengeId]=payload;

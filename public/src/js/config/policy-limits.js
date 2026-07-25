@@ -18,6 +18,16 @@
     perWeek: 10,
   });
 
+  const PEEPAL_POST = Object.freeze({
+    perDay: 5,
+    perWeek: 5,
+  });
+
+  const AI_KB = Object.freeze({
+    perDay: 5,
+    perWeek: 35,
+  });
+
   /** Local calendar date key YYYY-MM-DD */
   function dayKey(d = new Date()) {
     const y = d.getFullYear();
@@ -60,6 +70,8 @@
   window.PolicyLimits = {
     ANON_POSTS,
     AI_DISCOVERY_MSG,
+    PEEPAL_POST,
+    AI_KB,
     dayKey,
     weekKeyMonday,
     nextMondayLabel,

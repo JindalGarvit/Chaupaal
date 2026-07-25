@@ -231,11 +231,11 @@ function renderProfileModal(){
 
   async function askChaupaalForField(fieldKey, hostEl){
     if(typeof isAiFeaturesEnabledSync==='function' && !isAiFeaturesEnabledSync()){
-      if(typeof showToast==='function') showToast('Ask Chaupaal is paused right now');
+      if(typeof showToast==='function') showToast(t('profile_ask_paused'));
       return;
     }
     if(typeof callAI!=='function'){
-      if(typeof showToast==='function') showToast('Ask Chaupaal unavailable');
+      if(typeof showToast==='function') showToast(t('profile_ask_unavailable'));
       return;
     }
     const btn=hostEl?.querySelector('button');
@@ -260,7 +260,7 @@ function renderProfileModal(){
         try{ suggestions=JSON.parse(raw.slice(start,end+1)).suggestions||[]; }catch(e){}
       }
       if(!suggestions.length){
-        if(typeof showToast==='function') showToast('No suggestions — try again later');
+        if(typeof showToast==='function') showToast(t('profile_no_suggestions'));
         return;
       }
       const pick=suggestions[0];
@@ -269,9 +269,9 @@ function renderProfileModal(){
         field.value=(field.value?field.value.trim()+' ':'')+pick;
         saveProfileField(fieldKey, field.value);
       }
-      if(typeof showToast==='function') showToast('Suggestion added — edit freely');
+      if(typeof showToast==='function') showToast(t('profile_suggestion_added'));
     }catch(e){
-      if(typeof showToast==='function') showToast('Ask Chaupaal failed');
+      if(typeof showToast==='function') showToast(t('profile_ask_failed'));
     }finally{
       if(btn){ btn.disabled=false; btn.textContent='✨ Take help from Chaupaal'; }
     }
@@ -353,7 +353,7 @@ function renderProfileModal(){
     if(typeof wireProfileTypeToggle==='function') wireProfileTypeToggle(content);
     content.querySelector('#setMatchLocationBtn')?.addEventListener('click',()=>{
       if(typeof promptMatchLocation==='function') promptMatchLocation();
-      else if(typeof showToast==='function') showToast('Location sharing unavailable');
+      else if(typeof showToast==='function') showToast(t('profile_loc_unavailable'));
     });
   }
 
@@ -390,20 +390,20 @@ function renderProfileModal(){
     renderSection('Personal');
     document.getElementById('switchProfileBtn')?.addEventListener('click',()=>{
       if(typeof openProfileSwitcher==='function') openProfileSwitcher();
-      else if(typeof showToast==='function') showToast('Profile switcher loading…');
+      else if(typeof showToast==='function') showToast(t('profile_switcher_loading'));
     });
     document.getElementById('logoutBtn')?.addEventListener('click',async()=>{
       if(typeof endCurrentSessionQuietly==='function') endCurrentSessionQuietly();
       await auth.signOut();currentUser=null;userProfile=null;
       document.getElementById('profileModal').classList.add('hidden');
-      showToast('See you next time! 🙏');
+      showToast(t('profile_see_you'));
     });
     document.getElementById('manageCloseFriendsBtn')?.addEventListener('click',()=>openCloseFriendsManager());
     document.getElementById('ownProfileStoryAvatar')?.addEventListener('click',()=>openProfileStories(currentUser.uid));
     document.getElementById('profilePhotoInput')?.addEventListener('change',async e=>{
       const file=e.target.files[0];if(!file||!file.type.startsWith('image/'))return;
       try{
-        showToast('Updating photo…');
+        showToast(t('profile_updating_photo'));
         let photoURL='';
         let thumbURL='';
         if(typeof uploadOptimizedImage==='function'&&currentUser&&(typeof isMediaUploadReady!=='function'||await isMediaUploadReady())){
@@ -435,9 +435,9 @@ function renderProfileModal(){
         } else if(typeof refreshProfileCompletionUI==='function') refreshProfileCompletionUI();
         renderProfileModal();
         if(typeof updateProfileBtn==='function') updateProfileBtn();
-        showToast('Photo updated ✓');
+        showToast(t('profile_photo_updated'));
       }catch(err){
-        showToast(typeof friendlyError==='function'?friendlyError(err):(err.message||'Photo update failed'));
+        showToast(typeof friendlyError==='function'?friendlyError(err):(err.message||t('profile_photo_fail')));
       }
     });
     if(typeof mountOwnRelationshipPanel==='function') mountOwnRelationshipPanel(document.getElementById('profileContent'));
@@ -464,7 +464,7 @@ function saveProfileField(key, value){
       db.collection('users').doc(currentUser.uid).set(patch,{merge:true}).then(after).catch((e)=>{
         // Both write paths failed — the edit the user just made is NOT saved.
         if(typeof reportClientError==='function') reportClientError({feature:'profile_save',message:`${key}: ${e?.message||e}`});
-        if(typeof showToast==='function') showToast('Couldn’t save — check your connection');
+        if(typeof showToast==='function') showToast(t('profile_save_fail'));
       });
     });
   }

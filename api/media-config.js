@@ -213,7 +213,7 @@ async function handlePost(req, res) {
     // Server-authoritative quota consume (anon posts / AI Discovery messages).
     // Firestore rules make policyUsage client-read-only; this is the only writer.
     const feature = String(body.feature || '').trim();
-    if (feature !== 'anon' && feature !== 'aiDiscoveryMsg') {
+    if (feature !== 'anon' && feature !== 'aiDiscoveryMsg' && feature !== 'peepalPost' && feature !== 'aiKb') {
       return sendError(res, 400, 'VALIDATION_ERROR', 'invalid feature');
     }
     const adminNs = initAdmin();

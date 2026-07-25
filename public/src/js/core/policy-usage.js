@@ -13,6 +13,8 @@
     if (!P) return { perDay: 0, perWeek: 0 };
     if (feature === 'anon') return P.ANON_POSTS;
     if (feature === 'aiDiscoveryMsg') return P.AI_DISCOVERY_MSG;
+    if (feature === 'peepalPost') return P.PEEPAL_POST;
+    if (feature === 'aiKb') return P.AI_KB;
     return { perDay: 0, perWeek: 0 };
   }
 

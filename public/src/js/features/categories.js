@@ -114,11 +114,27 @@ function persistCategoryCacheDoc(catName, patch){
 }
 
 // AI Keyboard daily limit
-const AI_KB_LIMIT = 5;
+const AI_KB_LIMIT = (typeof PolicyLimits!=='undefined'&&PolicyLimits.AI_KB?.perDay)||5;
+/** @deprecated local hint only — enforcement is PolicyUsage 'aiKb' */
 const AI_KB_KEY = `chaupaal_ai_kb_${new Date().toISOString().split('T')[0]}`;
 function getAiKbUsage(){ return parseInt(localStorage.getItem(AI_KB_KEY)||'0'); }
 function incrementAiKbUsage(){ localStorage.setItem(AI_KB_KEY, getAiKbUsage()+1); }
-function aiKbLimitReached(){ return getAiKbUsage() >= AI_KB_LIMIT; }
+async function aiKbLimitReached(){
+  if(typeof PolicyUsage?.getRemaining==='function'){
+    try{
+      const rem=await PolicyUsage.getRemaining('aiKb');
+      return !!rem.exhausted;
+    }catch(e){ return true; }
+  }
+  return getAiKbUsage() >= AI_KB_LIMIT;
+}
+async function consumeAiKbSlot(){
+  if(typeof PolicyUsage?.consume==='function'){
+    await PolicyUsage.consume('aiKb');
+    return;
+  }
+  incrementAiKbUsage();
+}
 
 async function loadCatDetailTab(cat, tab){
   const body=document.getElementById('catDetailBody');
@@ -601,7 +617,7 @@ dayCheckModal.querySelector('.day-check-send').addEventListener('click',async()=
   if(!text)return;
   // Act-based celebration only (4B) — never surface content-reactive copy about what they wrote.
   if(typeof playJournalFinishAnimation==='function') playJournalFinishAnimation();
-  else showToast('Entry saved');
+  else showToast(t('cat_entry_saved'));
   dayCheckModal.classList.remove('open');
   if(typeof removeNavLayer==='function') removeNavLayer(dayCheckModal);
   if(typeof markJournalDoneToday==='function') markJournalDoneToday();
@@ -632,7 +648,7 @@ dayCheckModal.querySelector('#dayCheckSnooze')?.addEventListener('click',()=>{
   if(typeof removeNavLayer==='function') removeNavLayer(dayCheckModal);
   const until=typeof snoozeJournalPrompt==='function'?snoozeJournalPrompt(3):Date.now()+3*3600*1000;
   try{ if(typeof snoozeOpenJournalEvent==='function') snoozeOpenJournalEvent(until); }catch(e){}
-  if(typeof showToast==='function') showToast('Okay — I\'ll nudge you later tonight');
+  if(typeof showToast==='function') showToast(t('cat_nudge_later'));
 });
 
 // Prevent clicks inside panel from dismissing via backdrop
@@ -1026,7 +1042,7 @@ async function setPeepalCardReaction(q,type){
   }catch(e){
     q.myReaction=previous;
     q.reactionSummary=previousSummary;
-    if(typeof showToast==='function') showToast(typeof friendlyError==='function'?friendlyError(e):'Couldn’t save reaction');
+    if(typeof showToast==='function') showToast(typeof friendlyError==='function'?friendlyError(e):t('cat_reaction_fail'));
   }
   renderPeepalFeed();
 }
@@ -1052,11 +1068,11 @@ async function submitPeepalInlineReply(q,parentId,text){
       if(saved.persisted&&Number.isFinite(saved.comments)) q.comments=saved.comments;
     }
     comment.pending=false;
-    if(typeof showToast==='function') showToast('Reply posted');
+    if(typeof showToast==='function') showToast(t('cat_reply_posted'));
   }catch(e){
     q._comments=q._comments.filter(c=>c.id!==comment.id);
     q.comments=Math.max(0,(q.comments||1)-1);
-    if(typeof showToast==='function') showToast(typeof friendlyError==='function'?friendlyError(e):'Couldn’t post reply');
+    if(typeof showToast==='function') showToast(typeof friendlyError==='function'?friendlyError(e):t('cat_reply_fail'));
   }
   renderPeepalFeed();
 }
@@ -1155,7 +1171,7 @@ function renderPeepalFeed(){
     card.querySelector('.peepal-boost-btn')?.addEventListener('click',async(e)=>{
       e.stopPropagation();
       if(typeof openPeepalBoostComingSoon==='function') openPeepalBoostComingSoon(q);
-      else if(typeof showToast==='function') showToast('Boost coming soon — nothing will be charged.');
+      else if(typeof showToast==='function') showToast(t('cat_boost_soon'));
     });
     card.querySelector('.peepal-start-comment')?.addEventListener('click',(e)=>{e.stopPropagation();openPeepalDetail(q,{focusComposer:true});});
     card.querySelectorAll('.peepal-comment-chip').forEach(chip=>{
@@ -1289,7 +1305,7 @@ function submitPeepalTyping(id, e){
   const q=peepalQuestions.find(q=>q.id===id);if(!q)return;
   q.myTypedAnswer=input.value.trim();
   input.value='';
-  showToast('Your perspective added! ✓');
+  showToast(t('cat_perspective_added'));
   // Feed to personality engine for matchmaking
   updatePersonalityFromPeepalAnswer(q, q.myTypedAnswer);
   renderPeepalFeed();
@@ -1325,7 +1341,7 @@ function answerPeepal(id,optIdx,e){
   setTimeout(()=>{
     const typingEl=document.getElementById(`typing_${id}`);
     if(typingEl){typingEl.style.display='block';document.getElementById(`typing_input_${id}`)?.focus();}
-    showToast('See who else thinks like you in the comments! 💬');
+    showToast(t('cat_see_comments'));
   },300);
 }
 
@@ -1336,7 +1352,7 @@ function submitPeepalOpen(id){
   q.answered=true;q.totalResponses++;
   if(typeof recordPeepalSegmentResponse==='function') recordPeepalSegmentResponse(q);
   renderPeepalFeed();
-  showToast('Your response is in! 🙌');
+  showToast(t('cat_response_in'));
 }
 
 /** Persist segment fulfilled count via payments/reactions API (cascade tracking). */
@@ -1355,11 +1371,11 @@ async function recordPeepalSegmentResponse(q){
 /** Poster-only Boost — honest coming-soon via unified payments scaffold. Never fakes a charge. */
 async function openPeepalBoostComingSoon(q){
   const postId=q?.firestoreId||q?.id;
-  if(!postId){ showToast('Boost coming soon'); return; }
-  if(typeof showToast==='function') showToast('Checking boost…');
+  if(!postId){ showToast(t('cat_boost_soon_short')); return; }
+  if(typeof showToast==='function') showToast(t('cat_boost_checking'));
   try{
     if(typeof apiFetch!=='function'){
-      showToast('Boost coming soon — payments not live yet. Nothing was charged.');
+      showToast(t('cat_boost_not_live'));
       return;
     }
     const envelope=await apiFetch('/api/peepal-reactions',{
@@ -1368,12 +1384,12 @@ async function openPeepalBoostComingSoon(q){
     });
     const data=envelope?.data||envelope||{};
     if(data.comingSoon || data.status==='coming_soon'){
-      showToast('Boost coming soon — nothing was charged.');
+      showToast(t('cat_boost_nothing'));
       return;
     }
     showToast(data.message||'Boost unavailable right now — nothing was charged.');
   }catch(e){
-    showToast('Boost coming soon — nothing was charged.');
+    showToast(t('cat_boost_nothing'));
   }
 }
 window.openPeepalBoostComingSoon=openPeepalBoostComingSoon;
@@ -1414,7 +1430,7 @@ function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
       <div style="height:16px;"></div>
       <div class="spark-nudge">
         <div class="spark-nudge-text">👋 <strong>${escPeepalText((q.user.name||'').split(' ')[0])}</strong> would love to hear your thoughts! Start a conversation.</div>
-        <button class="spark-nudge-btn" onclick="showToast('Message sent! Check Baithak 🏠')">Say hi</button>
+        <button class="spark-nudge-btn" onclick="showToast(t('cat_message_sent'))">Say hi</button>
       </div>
       <div style="font-size:13px;font-weight:700;margin-bottom:12px;">Comments (${q.comments})</div>
       <div id="peepalCommentsList" class="comments-list">
