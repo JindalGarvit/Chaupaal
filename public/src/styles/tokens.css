@@ -70,6 +70,20 @@
   /* Empty / loading */
   --empty-icon-size:40px;
   --empty-max-width:280px;
+  /* Call / Mehfil chrome (dark stage — extends action hierarchy) */
+  --call-bg:#0F1117;
+  --call-surface:#161922;
+  --call-tile:#1B1F3B;
+  --call-chrome-fg:#FFFFFF;
+  --call-chrome-muted:rgba(255,255,255,0.62);
+  --call-ctrl-bg:rgba(255,255,255,0.10);
+  --call-ctrl-live:var(--green);
+  --call-ctrl-muted:rgba(255,255,255,0.14);
+  --call-hangup-bg:var(--red);
+  --call-hangup-fg:#fff;
+  --call-speaking:var(--gold);
+  --call-ctrl-size:52px;
+  --call-chrome-fade:0.22;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{

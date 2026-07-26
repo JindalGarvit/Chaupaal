@@ -15,11 +15,17 @@
   let client = null;
   let localAudio = null;
   let localVideo = null;
+  let localScreen = null;
+  let localUid = null;
+  let camWanted = false;
   let activeChatId = null;
   let rtdbUnsubs = [];
   let ytPlayer = null;
   let mediaHost = false;
   let overlayEl = null;
+  let chromeTimer = null;
+  const CHROME_DIM_MS = 3500;
+  const SPEAK_LEVEL = 8;
 
   function esc(s) {
     return String(s || '')
@@ -54,38 +60,171 @@
     return window.AgoraRTC;
   }
 
-  function ensureStyles() {
-    if (document.getElementById('mehfilStyles')) return;
-    const s = document.createElement('style');
-    s.id = 'mehfilStyles';
-    s.textContent = `
-      .mehfil-overlay{position:absolute;inset:0;z-index:130;background:#0F1117;color:#fff;display:flex;flex-direction:column;font-family:Inter,sans-serif;}
-      .mehfil-top{display:flex;align-items:center;gap:10px;padding:12px 14px;padding-top:calc(12px + env(safe-area-inset-top,0px));border-bottom:1px solid rgba(255,255,255,.08);}
-      .mehfil-title{flex:1;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;}
-      .mehfil-leave{border:none;background:rgba(230,57,70,.9);color:#fff;border-radius:10px;padding:8px 12px;font-weight:700;cursor:pointer;}
-      .mehfil-stage{flex:1;min-height:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;padding:10px;overflow:auto;}
-      .mehfil-tile{position:relative;background:#1B1F3B;border-radius:14px;overflow:hidden;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;}
-      .mehfil-tile video{width:100%;height:100%;object-fit:cover;}
-      .mehfil-tile-label{position:absolute;left:8px;bottom:8px;font-size:11px;background:rgba(0,0,0,.5);padding:3px 8px;border-radius:8px;}
-      .mehfil-media{padding:8px 12px;border-top:1px solid rgba(255,255,255,.08);background:#12141c;}
-      .mehfil-media-search{display:flex;gap:8px;margin-bottom:8px;}
-      .mehfil-media-search input{flex:1;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:#1B1F3B;color:#fff;padding:10px 12px;font-size:14px;}
-      .mehfil-media-search button{border:none;border-radius:10px;background:var(--red,#E63946);color:#fff;font-weight:700;padding:0 12px;cursor:pointer;}
-      .mehfil-yt{width:100%;aspect-ratio:16/9;border:0;border-radius:12px;background:#000;margin-bottom:8px;}
-      .mehfil-now{font-size:12px;opacity:.85;margin-bottom:6px;}
-      .mehfil-dock{display:flex;align-items:center;justify-content:center;gap:10px;padding:12px;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid rgba(255,255,255,.08);}
-      .mehfil-dock button{width:48px;height:48px;border-radius:50%;border:none;background:#1B1F3B;color:#fff;font-size:18px;cursor:pointer;}
-      .mehfil-dock button.is-on{background:var(--red,#E63946);}
-      .mehfil-ask{background:linear-gradient(135deg,#E63946,#F4A261)!important;}
-      .mehfil-react-tray,.mehfil-sticker-tray{display:none;flex-wrap:wrap;gap:6px;justify-content:center;padding:8px 12px;background:#12141c;}
-      .mehfil-react-tray.is-open,.mehfil-sticker-tray.is-open{display:flex;}
-      .mehfil-react-tray button,.mehfil-sticker-tray button{font-size:22px;border:none;background:transparent;cursor:pointer;padding:4px;}
-      .mehfil-float-react{position:absolute;left:50%;bottom:100px;transform:translateX(-50%);font-size:36px;animation:mehfilPop .9s ease forwards;pointer-events:none;z-index:5;}
-      @keyframes mehfilPop{0%{opacity:0;transform:translate(-50%,10px) scale(.6)}30%{opacity:1}100%{opacity:0;transform:translate(-50%,-40px) scale(1.2)}}
-      .mehfil-ai-mark{width:22px;height:22px;border-radius:6px;background:#E63946;display:inline-flex;align-items:center;justify-content:center;font-size:12px;box-shadow:0 0 0 2px rgba(255,255,255,.15);}
-      .mehfil-disabled{padding:24px;text-align:center;line-height:1.5;}
-    `;
-    document.head.appendChild(s);
+  /** Styles live in /src/styles/mehfil.css (token-driven). Keep a no-op for older call sites. */
+  function ensureStyles() {}
+
+  function setMehfilStatus(text, tone) {
+    const status = overlayEl?.querySelector('[data-mehfil-status]');
+    if (!status) return;
+    status.textContent = text || '';
+    status.classList.toggle('is-live', tone === 'live');
+    status.classList.toggle('is-warn', tone === 'warn');
+  }
+
+  function updateWaitingState() {
+    if (!overlayEl) return;
+    const stage = overlayEl.querySelector('[data-mehfil-stage]');
+    const waiting = overlayEl.querySelector('[data-mehfil-waiting]');
+    if (!stage || !waiting) return;
+    const remotes = stage.querySelectorAll('.mehfil-tile:not(.mehfil-tile--self)').length;
+    const blocked = !!stage.querySelector('.mehfil-disabled');
+    waiting.hidden = blocked || remotes > 0;
+  }
+
+  function syncSheetOpenClass() {
+    if (!overlayEl) return;
+    const open = !!overlayEl.querySelector('.mehfil-sheet.is-open, .mehfil-more-menu.is-open');
+    overlayEl.classList.toggle('mehfil-sheet-open', open);
+    if (open) {
+      overlayEl.classList.remove('mehfil-chrome-dim');
+      clearTimeout(chromeTimer);
+      chromeTimer = null;
+    } else {
+      pokeChrome();
+    }
+  }
+
+  function pokeChrome() {
+    if (!overlayEl) return;
+    overlayEl.classList.remove('mehfil-chrome-dim');
+    clearTimeout(chromeTimer);
+    chromeTimer = null;
+    if (overlayEl.classList.contains('mehfil-sheet-open')) return;
+    chromeTimer = setTimeout(() => {
+      overlayEl?.classList.add('mehfil-chrome-dim');
+    }, CHROME_DIM_MS);
+  }
+
+  function closeCallSheets(except) {
+    if (!overlayEl) return;
+    const map = {
+      media: '[data-mehfil-media]',
+      reacts: '[data-mehfil-reacts]',
+      stickers: '[data-mehfil-stickers]',
+      more: '[data-mehfil-more]',
+    };
+    Object.entries(map).forEach(([key, sel]) => {
+      if (key === except) return;
+      overlayEl.querySelector(sel)?.classList.remove('is-open');
+    });
+    overlayEl.querySelector('[data-mehfil-more-btn]')?.classList.toggle('is-open', except === 'more');
+    syncSheetOpenClass();
+  }
+
+  function toggleCallSheet(which) {
+    if (!overlayEl) return;
+    const sel =
+      which === 'media'
+        ? '[data-mehfil-media]'
+        : which === 'reacts'
+          ? '[data-mehfil-reacts]'
+          : which === 'stickers'
+            ? '[data-mehfil-stickers]'
+            : '[data-mehfil-more]';
+    const panel = overlayEl.querySelector(sel);
+    if (!panel) return;
+    const willOpen = !panel.classList.contains('is-open');
+    closeCallSheets(willOpen ? which : null);
+    if (willOpen) panel.classList.add('is-open');
+    overlayEl.querySelector('[data-mehfil-more-btn]')?.classList.toggle('is-open', which === 'more' && willOpen);
+    syncSheetOpenClass();
+    pokeChrome();
+  }
+
+  function setMicUi(live) {
+    const btn = overlayEl?.querySelector('[data-mehfil-mic]');
+    btn?.classList.toggle('is-live', live);
+    btn?.classList.toggle('is-muted', !live);
+  }
+
+  function setCamUi(live) {
+    const btn = overlayEl?.querySelector('[data-mehfil-cam]');
+    btn?.classList.toggle('is-live', live);
+    btn?.classList.toggle('is-off', !live);
+    const tile = overlayEl?.querySelector('[data-mehfil-local-video]');
+    tile?.classList.toggle('is-cam-off', !live && !localScreen);
+  }
+
+  function setShareUi(sharing) {
+    const btn = overlayEl?.querySelector('[data-mehfil-share]');
+    btn?.classList.toggle('is-live', sharing);
+    const label = btn?.querySelector('[data-mehfil-share-label]');
+    if (label) label.textContent = sharing ? 'Stop share' : 'Share';
+    overlayEl?.querySelector('[data-mehfil-local-video]')?.classList.toggle('is-screen', sharing);
+  }
+
+  function renderLocalPlaceholder(text) {
+    const tile = overlayEl?.querySelector('[data-mehfil-local-video]');
+    if (!tile) return;
+    tile.classList.remove('is-screen');
+    tile.innerHTML = `<span class="mehfil-tile-placeholder">${esc(
+      text || 'Camera off'
+    )}</span><div class="mehfil-tile-label">You</div>`;
+  }
+
+  function playLocalOnTile(track, label) {
+    const tile = overlayEl?.querySelector('[data-mehfil-local-video]');
+    if (!tile || !track) return;
+    tile.innerHTML = `<div class="mehfil-tile-label">${esc(label || 'You')}</div>`;
+    track.play(tile);
+  }
+
+  function applyVolumeIndicators(volumes) {
+    if (!overlayEl || !Array.isArray(volumes)) return;
+    const byUid = new Map(volumes.map((v) => [String(v.uid), Number(v.level) || 0]));
+    overlayEl.querySelectorAll('.mehfil-tile').forEach((tile) => {
+      let level = 0;
+      if (tile.classList.contains('mehfil-tile--self')) {
+        if (localUid != null) level = byUid.get(String(localUid)) || 0;
+      } else if (tile.dataset.uid != null) {
+        level = byUid.get(String(tile.dataset.uid)) || 0;
+      }
+      tile.classList.toggle('is-speaking', level >= SPEAK_LEVEL);
+    });
+  }
+
+  async function closeCameraTrack() {
+    if (!localVideo) return;
+    try {
+      await client?.unpublish([localVideo]);
+    } catch (e) {}
+    try {
+      localVideo.close();
+    } catch (e) {}
+    localVideo = null;
+  }
+
+  async function closeScreenTrack() {
+    if (!localScreen) return;
+    try {
+      await client?.unpublish([localScreen]);
+    } catch (e) {}
+    try {
+      localScreen.close();
+    } catch (e) {}
+    localScreen = null;
+    setShareUi(false);
+  }
+
+  async function publishCamera() {
+    if (!client || !window.AgoraRTC) return;
+    await closeScreenTrack();
+    if (!localVideo) {
+      localVideo = await window.AgoraRTC.createCameraVideoTrack();
+      await client.publish([localVideo]);
+    }
+    playLocalOnTile(localVideo, 'You');
+    setCamUi(true);
   }
 
   function rtdbRef(path) {
@@ -163,6 +302,12 @@
         if (m.playing !== false) a.play().catch(() => {});
         window.__mehfilSharedAudio = a;
       } catch (e) {}
+    }
+    // Media lives in overflow — surface the sheet when someone else starts playback
+    if (overlayEl && !overlayEl.querySelector('[data-mehfil-media]')?.classList.contains('is-open')) {
+      closeCallSheets('media');
+      overlayEl.querySelector('[data-mehfil-media]')?.classList.add('is-open');
+      syncSheetOpenClass();
     }
   }
 
@@ -247,6 +392,8 @@
   }
 
   async function leaveMehfil() {
+    clearTimeout(chromeTimer);
+    chromeTimer = null;
     try {
       if (localAudio) {
         localAudio.close();
@@ -255,6 +402,10 @@
       if (localVideo) {
         localVideo.close();
         localVideo = null;
+      }
+      if (localScreen) {
+        localScreen.close();
+        localScreen = null;
       }
       if (client) {
         await client.leave();
@@ -275,6 +426,8 @@
       } catch (e) {}
     }
     activeChatId = null;
+    localUid = null;
+    camWanted = false;
     if (overlayEl) {
       if (typeof removeNavLayer === 'function') removeNavLayer(overlayEl);
       overlayEl.remove();
@@ -285,45 +438,134 @@
   async function toggleMic() {
     if (!localAudio || !client) return;
     const track = localAudio;
-    const enabled = track.enabled !== false ? track.enabled !== false : true;
     // Agora local track: setEnabled
     const next = !(track.isPlaying || track.enabled !== false);
     try {
       await track.setEnabled(next);
-      overlayEl?.querySelector('[data-mehfil-mic]')?.classList.toggle('is-on', next);
+      setMicUi(next);
     } catch (e) {
       try {
         if (next) await client.publish([track]);
         else await client.unpublish([track]);
-        overlayEl?.querySelector('[data-mehfil-mic]')?.classList.toggle('is-on', next);
+        setMicUi(next);
       } catch (err) {}
     }
+    pokeChrome();
   }
 
   async function toggleCam() {
     if (!client || !window.AgoraRTC) return;
-    const btn = overlayEl?.querySelector('[data-mehfil-cam]');
     try {
+      if (localScreen) {
+        if (typeof showToast === 'function') showToast('Stop screen share to use camera');
+        pokeChrome();
+        return;
+      }
       if (!localVideo) {
-        localVideo = await window.AgoraRTC.createCameraVideoTrack();
-        await client.publish([localVideo]);
-        const tile = overlayEl?.querySelector('[data-mehfil-local-video]');
-        if (tile) {
-          tile.innerHTML = '';
-          localVideo.play(tile);
-        }
-        btn?.classList.add('is-on');
+        camWanted = true;
+        await publishCamera();
       } else {
-        await client.unpublish([localVideo]);
-        localVideo.close();
-        localVideo = null;
-        const tile = overlayEl?.querySelector('[data-mehfil-local-video]');
-        if (tile) tile.innerHTML = '<span style="opacity:.5">Camera off</span>';
-        btn?.classList.remove('is-on');
+        camWanted = false;
+        await closeCameraTrack();
+        renderLocalPlaceholder('Camera off');
+        setCamUi(false);
       }
     } catch (e) {
       if (typeof showToast === 'function') showToast('Camera unavailable');
     }
+    pokeChrome();
+  }
+
+  async function flipCamera() {
+    if (!client || !window.AgoraRTC) return;
+    closeCallSheets(null);
+    if (localScreen) {
+      if (typeof showToast === 'function') showToast('Stop screen share to flip camera');
+      return;
+    }
+    if (!localVideo) {
+      if (typeof showToast === 'function') showToast('Turn camera on to flip');
+      return;
+    }
+    try {
+      const cams = await window.AgoraRTC.getCameras();
+      if (!cams || cams.length < 2) {
+        if (typeof showToast === 'function') showToast('No other camera found');
+        return;
+      }
+      const curId = localVideo.getMediaStreamTrack?.()?.getSettings?.()?.deviceId;
+      const idx = Math.max(
+        0,
+        cams.findIndex((c) => c.deviceId === curId)
+      );
+      const next = cams[(idx + 1) % cams.length];
+      await localVideo.setDevice(next.deviceId);
+      if (typeof showToast === 'function') showToast('Camera flipped');
+    } catch (e) {
+      if (typeof showToast === 'function') showToast('Couldn’t flip camera');
+    }
+    pokeChrome();
+  }
+
+  async function toggleScreenShare() {
+    if (!client || !window.AgoraRTC) return;
+    closeCallSheets(null);
+    try {
+      if (localScreen) {
+        await closeScreenTrack();
+        if (camWanted) {
+          await publishCamera();
+        } else {
+          renderLocalPlaceholder('Camera off');
+          setCamUi(false);
+        }
+        pokeChrome();
+        return;
+      }
+      // Agora: one published video track — replace camera with screen (video only)
+      await closeCameraTrack();
+      setCamUi(false);
+      const trackOrPair = await window.AgoraRTC.createScreenVideoTrack(
+        { encoderConfig: '1080p_1' },
+        'disable'
+      );
+      localScreen = Array.isArray(trackOrPair) ? trackOrPair[0] : trackOrPair;
+      localScreen.on?.('track-ended', () => {
+        (async () => {
+          if (!localScreen) return;
+          await closeScreenTrack();
+          if (camWanted) {
+            try {
+              await publishCamera();
+            } catch (err) {}
+          } else {
+            renderLocalPlaceholder('Camera off');
+            setCamUi(false);
+          }
+        })().catch(() => {});
+      });
+      await client.publish([localScreen]);
+      playLocalOnTile(localScreen, 'You · screen');
+      setShareUi(true);
+      if (typeof showToast === 'function') showToast('Sharing screen');
+    } catch (e) {
+      localScreen = null;
+      setShareUi(false);
+      if (camWanted) {
+        try {
+          await publishCamera();
+        } catch (err) {}
+      } else {
+        renderLocalPlaceholder('Camera off');
+        setCamUi(false);
+      }
+      const msg =
+        e?.code === 'PERMISSION_DENIED' || /Permission|NotAllowed|cancelled|canceled/i.test(String(e?.message || e))
+          ? 'Screen share cancelled'
+          : 'Screen share unavailable on this device';
+      if (typeof showToast === 'function') showToast(msg);
+    }
+    pokeChrome();
   }
 
   async function openMehfil(chat) {
@@ -352,12 +594,19 @@
     el.innerHTML = `
       <div class="mehfil-top">
         <div class="mehfil-title">Mehfil · ${esc(chat.name || 'Chat')}</div>
-        <button type="button" class="mehfil-leave" data-mehfil-leave>Leave</button>
+        <div class="mehfil-status" data-mehfil-status>Joining…</div>
       </div>
       <div class="mehfil-stage" data-mehfil-stage>
-        <div class="mehfil-tile" data-mehfil-local-video><span style="opacity:.5">Camera off</span><div class="mehfil-tile-label">You</div></div>
+        <div class="mehfil-tile mehfil-tile--self is-cam-off" data-mehfil-local-video>
+          <span class="mehfil-tile-placeholder">Camera off</span>
+          <div class="mehfil-tile-label">You</div>
+        </div>
+        <div class="mehfil-waiting" data-mehfil-waiting>
+          <div class="mehfil-waiting-title">Waiting to start</div>
+          <div class="mehfil-waiting-msg">Others will appear here when they join this Mehfil.</div>
+        </div>
       </div>
-      <div class="mehfil-media">
+      <div class="mehfil-sheet mehfil-media-sheet" data-mehfil-media>
         <div class="mehfil-now" data-mehfil-now>Search a song or paste a YouTube link</div>
         <div id="mehfilYtHost" class="mehfil-yt" data-mehfil-yt></div>
         <div class="mehfil-media-search">
@@ -365,34 +614,72 @@
           <button type="button" data-mehfil-play>Play</button>
         </div>
       </div>
-      <div class="mehfil-react-tray" data-mehfil-reacts>
+      <div class="mehfil-sheet mehfil-react-tray" data-mehfil-reacts>
         ${REACTIONS.map((e) => `<button type="button" data-emoji="${e}">${e}</button>`).join('')}
       </div>
-      <div class="mehfil-sticker-tray" data-mehfil-stickers>
+      <div class="mehfil-sheet mehfil-sticker-tray" data-mehfil-stickers>
         ${STICKERS.map((e) => `<button type="button" data-emoji="${e}">${e}</button>`).join('')}
       </div>
+      <div class="mehfil-more-menu" data-mehfil-more>
+        <button type="button" class="mehfil-more-item" data-mehfil-react-btn>
+          <span class="icon" aria-hidden="true">😀</span>
+          Reactions
+        </button>
+        <button type="button" class="mehfil-more-item" data-mehfil-sticker-btn>
+          <span class="icon" aria-hidden="true">🪷</span>
+          Stickers
+        </button>
+        <button type="button" class="mehfil-more-item" data-mehfil-media-btn>
+          <span class="icon" aria-hidden="true">🎵</span>
+          Music
+        </button>
+        <button type="button" class="mehfil-more-item" data-mehfil-flip title="Flip camera">
+          <span class="icon" aria-hidden="true">🔄</span>
+          Flip
+        </button>
+        <button type="button" class="mehfil-more-item" data-mehfil-share title="Share screen">
+          <span class="icon" aria-hidden="true">🖥️</span>
+          <span data-mehfil-share-label>Share</span>
+        </button>
+        <button type="button" class="mehfil-more-item" data-mehfil-ask title="Ask Chaupaal">
+          <span class="icon" aria-hidden="true"><span class="mehfil-ai-mark">🏠</span></span>
+          Ask
+        </button>
+      </div>
       <div class="mehfil-dock">
-        <button type="button" data-mehfil-mic title="Mic (off by default)">🎤</button>
-        <button type="button" data-mehfil-cam title="Camera (off by default)">📷</button>
-        <button type="button" data-mehfil-react-btn title="Reactions">😀</button>
-        <button type="button" data-mehfil-sticker-btn title="Stickers">🪷</button>
-        <button type="button" class="mehfil-ask" data-mehfil-ask title="Ask Chaupaal"><span class="mehfil-ai-mark" aria-hidden="true">🏠</span></button>
+        <div class="mehfil-dock-primary">
+          <button type="button" class="mehfil-ctrl is-muted" data-mehfil-mic title="Mic (off by default)" aria-label="Toggle microphone">🎤</button>
+          <button type="button" class="mehfil-ctrl is-off" data-mehfil-cam title="Camera (off by default)" aria-label="Toggle camera">📷</button>
+          <button type="button" class="mehfil-ctrl" data-mehfil-more-btn title="More" aria-label="More call actions" aria-haspopup="true">⋯</button>
+        </div>
+        <button type="button" class="mehfil-leave" data-mehfil-leave title="Leave call" aria-label="Leave call">Leave</button>
       </div>`;
     device.appendChild(el);
     overlayEl = el;
     if (typeof pushNavLayer === 'function') pushNavLayer(el, () => leaveMehfil());
 
+    el.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('.mehfil-dock, .mehfil-sheet, .mehfil-more-menu, .mehfil-top')) {
+        pokeChrome();
+        return;
+      }
+      if (el.classList.contains('mehfil-chrome-dim')) {
+        pokeChrome();
+        return;
+      }
+      pokeChrome();
+    });
+    pokeChrome();
+
     el.querySelector('[data-mehfil-leave]')?.addEventListener('click', leaveMehfil);
     el.querySelector('[data-mehfil-mic]')?.addEventListener('click', toggleMic);
     el.querySelector('[data-mehfil-cam]')?.addEventListener('click', toggleCam);
-    el.querySelector('[data-mehfil-react-btn]')?.addEventListener('click', () => {
-      el.querySelector('[data-mehfil-reacts]')?.classList.toggle('is-open');
-      el.querySelector('[data-mehfil-stickers]')?.classList.remove('is-open');
-    });
-    el.querySelector('[data-mehfil-sticker-btn]')?.addEventListener('click', () => {
-      el.querySelector('[data-mehfil-stickers]')?.classList.toggle('is-open');
-      el.querySelector('[data-mehfil-reacts]')?.classList.remove('is-open');
-    });
+    el.querySelector('[data-mehfil-more-btn]')?.addEventListener('click', () => toggleCallSheet('more'));
+    el.querySelector('[data-mehfil-react-btn]')?.addEventListener('click', () => toggleCallSheet('reacts'));
+    el.querySelector('[data-mehfil-sticker-btn]')?.addEventListener('click', () => toggleCallSheet('stickers'));
+    el.querySelector('[data-mehfil-media-btn]')?.addEventListener('click', () => toggleCallSheet('media'));
+    el.querySelector('[data-mehfil-flip]')?.addEventListener('click', flipCamera);
+    el.querySelector('[data-mehfil-share]')?.addEventListener('click', toggleScreenShare);
     el.querySelectorAll('[data-mehfil-reacts] button, [data-mehfil-stickers] button').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const emoji = btn.dataset.emoji;
@@ -406,6 +693,7 @@
             });
           } catch (e) {}
         }
+        pokeChrome();
       });
     });
     el.querySelector('[data-mehfil-play]')?.addEventListener('click', () => {
@@ -418,6 +706,7 @@
       }
     });
     el.querySelector('[data-mehfil-ask]')?.addEventListener('click', () => {
+      closeCallSheets(null);
       // Chaupaal AI mark: red rounded square with charpai house — reviewable design choice
       if (typeof openAiKeyboard === 'function') {
         const fake = document.createElement('textarea');
@@ -437,6 +726,7 @@
       if (stage) {
         stage.innerHTML = `<div class="mehfil-disabled">Mehfil is ready to join once Agora is configured and the <code>mehfil</code> feature flag is on.<br><br>Synced media, reactions, and Ask Chaupaal work in this room preview.</div>`;
       }
+      setMehfilStatus('Preview', 'warn');
       activeChatId = chatId;
       bindMediaSync();
       return;
@@ -464,6 +754,7 @@
       if (stage) {
         stage.innerHTML = `<div class="mehfil-disabled">Agora isn’t configured yet. Add <code>AGORA_APP_ID</code> and <code>AGORA_APP_CERTIFICATE</code> on Vercel, then reopen Mehfil.<br><br>You can still search synced media in this room.</div>`;
       }
+      setMehfilStatus('Setup needed', 'warn');
       activeChatId = chatId;
       bindMediaSync();
       return;
@@ -473,6 +764,17 @@
       if (typeof pauseAllMusic === 'function') pauseAllMusic();
       const AgoraRTC = await ensureAgora();
       client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+      camWanted = false;
+      localUid = tokenPayload.uid != null ? tokenPayload.uid : null;
+
+      client.on('connection-state-change', (cur) => {
+        if (cur === 'RECONNECTING' || cur === 'DISCONNECTING') {
+          setMehfilStatus('Reconnecting…', 'warn');
+        } else if (cur === 'CONNECTED') {
+          setMehfilStatus('In call', 'live');
+        }
+      });
+
       client.on('user-published', async (user, mediaType) => {
         await client.subscribe(user, mediaType);
         if (mediaType === 'video') {
@@ -486,14 +788,53 @@
             stage.appendChild(tile);
           }
           user.videoTrack?.play(tile);
+          updateWaitingState();
+          setMehfilStatus('In call', 'live');
         }
         if (mediaType === 'audio') user.audioTrack?.play();
       });
+
+      client.on('user-unpublished', (user, mediaType) => {
+        if (mediaType !== 'video') return;
+        const tile = el.querySelector(`[data-uid="${user.uid}"]`);
+        if (tile && !user.hasAudio) {
+          tile.remove();
+        } else if (tile) {
+          tile.querySelector('video')?.remove();
+          if (!tile.querySelector('.mehfil-tile-placeholder')) {
+            const ph = document.createElement('span');
+            ph.className = 'mehfil-tile-placeholder';
+            ph.textContent = 'Camera off';
+            tile.prepend(ph);
+          }
+        }
+        updateWaitingState();
+      });
+
+      client.on('user-left', (user) => {
+        el.querySelector(`[data-uid="${user.uid}"]`)?.remove();
+        updateWaitingState();
+        const remotes = el.querySelectorAll('.mehfil-tile:not(.mehfil-tile--self)').length;
+        if (!remotes) setMehfilStatus('Connected', 'live');
+      });
+
+      client.on('volume-indicator', (volumes) => applyVolumeIndicators(volumes));
+
       await client.join(tokenPayload.appId, tokenPayload.channel, tokenPayload.token, tokenPayload.uid);
+      if (localUid == null) localUid = client.uid;
+      try {
+        client.enableAudioVolumeIndicator();
+      } catch (e) {}
+
       // Mic/cam OFF by default — create mic track muted
       localAudio = await AgoraRTC.createMicrophoneAudioTrack();
       await localAudio.setEnabled(false);
       await client.publish([localAudio]);
+      setMicUi(false);
+      setCamUi(false);
+      setShareUi(false);
+      setMehfilStatus('Connected', 'live');
+      updateWaitingState();
       activeChatId = chatId;
       try {
         await rtdbRef(`mehfil/${chatId}/participants/${currentUser.uid}`)?.set({
@@ -510,6 +851,7 @@
         reportClientError({ feature: 'mehfil_join', message: e?.message || String(e) });
       }
       if (typeof showToast === 'function') showToast('Couldn’t join Mehfil');
+      setMehfilStatus('Couldn’t join', 'warn');
       activeChatId = chatId;
       bindMediaSync();
     }
