@@ -894,5 +894,22 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ===================== DANGAL GAMES (Game of the Day counters) =====================
+    // Counters + flags are Admin SDK only (/api/media-config). Clients may read
+    // active game stats for display; never trust client-supplied counts.
+    match /games/{gameId} {
+      allow read: if isAuth();
+      allow write: if false;
+    }
+
+    match /meta/{docId} {
+      allow read: if isAuth() && docId == 'gameOfDay';
+      allow write: if false;
+    }
+
+    match /gameLikes/{likeId} {
+      allow read, write: if false;
+    }
+
   }
 }

@@ -1,10 +1,10 @@
 /**
- * Media config + music search (folded into one serverless function).
+ * Media config + music search + Dangal Game of the Day (folded into one serverless function).
  *
  * GET  → Cloudinary unsigned upload config (existing)
- * POST → { action: 'music_search' | 'music_resolve', … }
+ * POST → { action: 'music_search' | 'music_resolve' | 'get_game_of_day' | … }
  *
- * Music lives here (not a new api/*.js) to stay under the Hobby 12-function cap.
+ * Music + GOTD live here (not a new api/*.js) to stay under the Hobby 12-function cap.
  */
 const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
 const { requireUser, initAdmin } = require('../server-lib/auth');
@@ -290,6 +290,62 @@ async function handlePost(req, res) {
     return sendSuccess(res, result);
   }
 
+  // Dangal Game of the Day + engagement counters (no new serverless function).
+  if (action === 'get_game_of_day') {
+    const adminNs = initAdmin();
+    if (!adminNs) {
+      return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    }
+    try {
+      const { getOrComputeGameOfDay } = require('../server-lib/game-of-day');
+      const result = await getOrComputeGameOfDay(adminNs);
+      return sendSuccess(res, result);
+    } catch (e) {
+      console.warn('[media-config] get_game_of_day:', e?.message || e);
+      return sendError(res, 500, 'GOTD_FAILED', 'Could not resolve Game of the Day');
+    }
+  }
+
+  if (action === 'record_game_play') {
+    const adminNs = initAdmin();
+    if (!adminNs) {
+      return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    }
+    const { recordGamePlaySafe } = require('../server-lib/game-of-day');
+    const result = await recordGamePlaySafe(adminNs, body.gameId);
+    if (!result.ok) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'Invalid gameId');
+    }
+    return sendSuccess(res, result);
+  }
+
+  if (action === 'record_game_like') {
+    const adminNs = initAdmin();
+    if (!adminNs) {
+      return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    }
+    const { recordGameLike } = require('../server-lib/game-of-day');
+    const result = await recordGameLike(adminNs, user.uid, body.gameId);
+    if (!result.ok) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'Invalid gameId');
+    }
+    return sendSuccess(res, result);
+  }
+
+  if (action === 'list_games_health') {
+    if (!user.decoded || user.decoded.admin !== true) {
+      return sendError(res, 403, 'FORBIDDEN', 'Admin claim required');
+    }
+    const adminNs = initAdmin();
+    if (!adminNs) {
+      return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    }
+    const flaggedOnly = body.flaggedOnly !== false;
+    const { listGamesHealth } = require('../server-lib/game-of-day');
+    const result = await listGamesHealth(adminNs, { flaggedOnly });
+    return sendSuccess(res, result);
+  }
+
   return sendError(res, 400, 'VALIDATION_ERROR', 'Unknown media action', {
     allowed: [
       'music_search',
@@ -301,6 +357,10 @@ async function handlePost(req, res) {
       'policy_consume',
       'username_check',
       'resolve_identifier',
+      'get_game_of_day',
+      'record_game_play',
+      'record_game_like',
+      'list_games_health',
     ],
   });
 }

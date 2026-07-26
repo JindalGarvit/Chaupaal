@@ -345,20 +345,79 @@ html.kb-open .cp-mini-player{bottom:12px;}
 .dangal-overall-rating .dor-label{font-size:11px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.05em;}
 .dangal-overall-rating .dor-val{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:24px;color:var(--gold);margin-left:auto;}
 .dangal-games-label{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;padding:16px 16px 10px;}
-.dangal-games-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px 16px;}
-.dangal-game-tile{background:var(--white);border-radius:var(--r-bubble);padding:16px;cursor:pointer;box-shadow:0 3px 12px rgba(43,39,48,0.06);border:2px solid transparent;transition:border-color var(--duration-fast);}
-.dangal-game-tile:active{border-color:var(--red);}
-.dangal-game-tile.featured{grid-column:1/-1;display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,var(--navy),#2A3158);color:#fff;}
-.dangal-game-icon{font-size:32px;margin-bottom:8px;}
-.dangal-game-tile.featured .dangal-game-icon{font-size:36px;margin-bottom:0;}
-.dangal-game-name{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;}
-.dangal-game-desc{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.4;}
-.dangal-game-tile.featured .dangal-game-desc{color:rgba(255,255,255,0.65);}
-.dangal-game-rating-pill{display:inline-flex;align-items:center;gap:4px;background:rgba(230,57,70,0.08);color:var(--red);border-radius:999px;padding:3px 9px;font-size:11px;font-weight:700;margin-top:8px;}
-.dangal-game-tile.featured .dangal-game-rating-pill{background:rgba(255,201,60,0.15);color:var(--gold);}
+/* Host is a vertical stack — NOT a 2-col grid (chips/sections were breaking mobile tiles). */
+.dangal-games-grid{
+  display:flex;
+  flex-direction:column;
+  gap:var(--space-3);
+  padding:0 var(--space-4) var(--space-4);
+}
+.dangal-game-tile{
+  background:var(--white);
+  border-radius:var(--r-card);
+  padding:var(--space-4);
+  cursor:pointer;
+  box-shadow:var(--shadow-md);
+  border:1px solid var(--line);
+  transition:transform var(--duration-fast) var(--ease-smooth), box-shadow var(--duration-fast);
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:var(--space-2);
+}
+.dangal-game-tile:active{transform:scale(0.97);box-shadow:var(--shadow-sm);}
+.dangal-game-icon{font-size:32px;margin-bottom:0;}
+.dangal-game-name{font-family:var(--font-display);font-weight:700;font-size:var(--text-base);}
+.dangal-game-desc{font-size:var(--text-xs);color:var(--muted);margin-top:3px;line-height:1.4;}
+.dangal-game-rating-pill{display:inline-flex;align-items:center;gap:4px;background:rgba(230,57,70,0.08);color:var(--red);border-radius:var(--r-full);padding:3px 9px;font-size:11px;font-weight:700;margin-top:var(--space-2);}
+.dangal-game-like{
+  margin-top:auto;
+  align-self:flex-start;
+  border:0;
+  background:rgba(0,0,0,.04);
+  color:var(--ink);
+  border-radius:var(--r-full);
+  padding:4px 10px;
+  font-size:11px;
+  font-weight:700;
+  cursor:pointer;
+}
+.dangal-game-like.is-liked{background:rgba(230,57,70,.12);color:var(--red);}
+
+/* Game of the Day — single featured banner above equal tiles */
+.dangal-gotd{
+  margin:0;
+  padding:var(--space-4) var(--space-5);
+  border-radius:var(--r-lg);
+  background:var(--grad-navy);
+  color:#fff;
+  border:none;
+  box-shadow:var(--shadow-lg);
+  cursor:pointer;
+  text-align:left;
+  display:flex;
+  align-items:center;
+  gap:var(--space-4);
+  width:100%;
+  box-sizing:border-box;
+}
+.dangal-gotd-badge{
+  font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--gold);margin-bottom:4px;
+}
+.dangal-gotd-icon{font-size:40px;flex-shrink:0;line-height:1;}
+.dangal-gotd-name{font-family:var(--font-display);font-weight:700;font-size:var(--text-xl);}
+.dangal-gotd-desc{font-size:var(--text-sm);color:rgba(255,255,255,.7);margin-top:4px;line-height:1.4;}
+.dangal-gotd-actions{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0;}
+.dangal-gotd-play{font-size:12px;font-weight:700;opacity:.9;}
+.dangal-gotd-like{
+  border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.1);color:#fff;
+  border-radius:var(--r-full);padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;
+}
 
 /* Quiz category sheet (shown only after tapping Quiz Muqabala) */
-.quiz-category-sheet{position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:var(--r-sheet) var(--r-sheet) 0 0;padding:22px;z-index:90;max-height:85vh;overflow-y:auto;transform:translateY(100%);transition:transform var(--duration-sheet) var(--ease-sheet);}
+.quiz-category-sheet{position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:var(--r-sheet) var(--r-sheet) 0 0;padding:22px;z-index:90;max-height:calc(var(--app-height, 100dvh) * 0.85);overflow-y:auto;transform:translateY(100%);transition:transform var(--duration-sheet) var(--ease-sheet);}
 .quiz-category-sheet.open{transform:translateY(0);}
 .quiz-cat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0;}
 .quiz-cat-card{background:var(--cream);border:2px solid var(--line);border-radius:14px;padding:14px;text-align:center;cursor:pointer;}

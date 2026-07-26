@@ -268,7 +268,6 @@
     name: 'Quiz Muqabala',
     desc: 'GK, Sports, Tech & more — pick a category',
     icon: '🧠',
-    featured: true,
     gameType: 'dual',
     ratingKey: null,
     dangal: true,

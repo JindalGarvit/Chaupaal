@@ -187,16 +187,20 @@
    DANGAL GAME TILES ? rich, game-hub feel
    ============================================================ */
 .dangal-games-grid {
-  padding: 0 16px 24px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: var(--space-3);
+  padding: 0 var(--space-4) var(--space-6) !important;
+  grid-template-columns: unset !important;
 }
 .dangal-game-tile {
-  border-radius: var(--r-lg) !important;
+  border-radius: var(--r-card) !important;
   overflow: hidden;
   position: relative;
-  border: none !important;
+  border: 1px solid var(--line) !important;
   background: var(--white) !important;
   box-shadow: var(--shadow-md) !important;
-  padding: 18px 16px !important;
+  padding: var(--space-4) !important;
   transition: transform var(--duration-normal) var(--ease-spring),
               box-shadow var(--duration-normal) var(--ease-smooth) !important;
 }
@@ -210,15 +214,10 @@
   transition: opacity var(--duration-fast);
 }
 .dangal-game-tile:active {
-  transform: scale(0.94) !important;
+  transform: scale(0.97) !important;
   box-shadow: var(--shadow-sm) !important;
 }
 .dangal-game-tile:active::before { opacity: 1; }
-.dangal-game-tile.featured {
-  background: var(--grad-hero) !important;
-  box-shadow: 0 8px 24px rgba(230,57,70,0.3) !important;
-}
-.dangal-game-tile.featured::before { display: none; }
 .dangal-game-icon {
   font-size: 36px !important;
   margin-bottom: 10px !important;
@@ -2458,41 +2457,42 @@ select:focus-visible,
 .chaupaal-share-actions{width:100%;max-width:none;margin-top:0;}
 
 /* Dangal sections */
-.dangal-section{margin:0 0 8px;}
-.dangal-section-label{padding:10px 16px 6px;font:700 11px/1 'Space Grotesk',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}
-.dangal-section-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 16px 8px;}
-.dangal-section-grid--featured{grid-template-columns:1fr;}
-.dangal-continue-chip,.dangal-challenge-chip,.dangal-spotlight-chip{
-  margin:0 16px 10px;padding:12px 14px;border-radius:14px;background:var(--white);border:1px solid var(--line);
-  display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;
-  box-shadow:var(--shadow-sm,0 2px 8px rgba(0,0,0,.04));
+.dangal-section{margin:0 0 var(--space-2);}
+.dangal-section-label{padding:10px 0 6px;font:700 11px/1 var(--font-display);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}
+.dangal-section-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));
+  gap:var(--space-3);
+  padding:0;
 }
-.dangal-continue-chip strong,.dangal-challenge-chip strong,.dangal-spotlight-chip strong{font:700 13px 'Space Grotesk',sans-serif;}
-.dangal-continue-chip span,.dangal-challenge-chip span,.dangal-spotlight-chip span{font-size:11px;color:var(--muted);}
-.dangal-spotlight-chip{background:linear-gradient(135deg,rgba(230,57,70,.06),rgba(31,37,66,.04));}
-.dangal-friends-board{margin:8px 16px 16px;padding:12px 14px;border-radius:14px;background:var(--white);border:1px solid var(--line);}
+.dangal-continue-chip,.dangal-challenge-chip{
+  margin:0 0 var(--space-3);padding:12px 14px;border-radius:var(--r-md);background:var(--white);border:1px solid var(--line);
+  display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;
+  box-shadow:var(--shadow-sm);
+  width:100%;box-sizing:border-box;text-align:left;
+}
+.dangal-continue-chip strong,.dangal-challenge-chip strong{font:700 13px var(--font-display);}
+.dangal-continue-chip span,.dangal-challenge-chip span{font-size:11px;color:var(--muted);}
+.dangal-chips{display:flex;flex-direction:column;gap:0;width:100%;}
+.dangal-friends-board{margin:var(--space-2) 0 var(--space-4);padding:12px 14px;border-radius:var(--r-md);background:var(--white);border:1px solid var(--line);}
 .dangal-friends-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px;}
 .dangal-friends-row:last-child{border-bottom:0;}
 .dangal-friends-row.is-you{font-weight:700;}
 .dangal-friends-rank{width:20px;color:var(--muted);font-weight:700;font-size:11px;}
 .dangal-friends-name{flex:1;}
-.dangal-friends-rating{font:700 13px 'Space Grotesk',sans-serif;color:var(--red,#E63946);}
+.dangal-friends-rating{font:700 13px var(--font-display);color:var(--red);}
 
 /* Unified tile treatment (Muqabala + others) */
 .dangal-game-tile .dangal-game-icon{
-  width:44px;height:44px;border-radius:12px;display:grid;place-items:center;
+  width:44px;height:44px;border-radius:var(--r-control);display:grid;place-items:center;
   background:color-mix(in srgb,var(--tile-accent,var(--red)) 12%,transparent);
   font-size:22px !important;margin-bottom:10px !important;
 }
-.dangal-game-tile.featured .dangal-game-icon{
-  background:rgba(255,255,255,.12);width:52px;height:52px;font-size:28px !important;
-}
 .dangal-game-rating-pill{
-  display:inline-flex;align-items:center;gap:4px;border-radius:999px;
+  display:inline-flex;align-items:center;gap:4px;border-radius:var(--r-full);
   background:rgba(0,0,0,.04);color:var(--ink);font-weight:700;
 }
-.dangal-game-tile.featured .dangal-game-rating-pill{background:rgba(255,201,60,.15);color:var(--gold);}
-.dangal-solo-tag{font-size:9px;font-weight:700;background:rgba(255,201,60,.2);color:var(--gold);border-radius:4px;padding:2px 6px;margin-left:4px;vertical-align:middle;}
+.dangal-solo-tag{font-size:9px;font-weight:700;background:rgba(255,201,60,.2);color:var(--gold);border-radius:var(--r-xs);padding:2px 6px;margin-left:4px;vertical-align:middle;}
 .story-destination-tag{font-weight:700;letter-spacing:.02em;}
 .story-destination-tag--baithak{color:#FFE66D;}
 .story-destination-tag--duniya{color:#7DD3C0;}
@@ -2904,7 +2904,7 @@ button[aria-busy="true"]::after{
 }
 .img-aspect-box img{width:100%;height:100%;object-fit:cover;display:block;}
 .game-overlay.game-landscape-ok{
-  max-height:100dvh;
+  max-height:var(--app-height, 100dvh);
 }
 @media (orientation:landscape) and (max-height:500px){
   .game-overlay.game-landscape-ok{
@@ -2921,7 +2921,7 @@ button[aria-busy="true"]::after{
   .game-overlay .game-board-wrap,
   .game-overlay .snakes-board,
   .game-overlay .ludo-board{
-    max-height:calc(100dvh - 56px);
+    max-height:calc(var(--app-height, 100dvh) - 56px);
   }
 }
 

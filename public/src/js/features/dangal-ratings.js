@@ -88,144 +88,253 @@ function renderLeaderboardUI(entries,el,{hasMore=false,demo=false}={}){
   }
 }
 
-function dangalTileHtml(g){
-  const rating=typeof getGameRating==='function'?getGameRating(g.ratingKey):null;
-  const soloTag=g.solo||g.gameType==='solo'?'<span class="dangal-solo-tag">SOLO</span>':'';
-  const accent=(typeof GAME_ACCENTS!=='undefined'&&GAME_ACCENTS[g.id])||'var(--red)';
-  return`<div class="dangal-game-tile ${g.featured?'featured':''}" data-game="${g.id}" style="--tile-accent:${accent}">
+let _dangalGotdCache = null;
+
+function dangalCalendarDateIST() {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+  } catch (e) {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+async function fetchGameOfTheDay() {
+  const today = dangalCalendarDateIST();
+  if (_dangalGotdCache && _dangalGotdCache.date === today && _dangalGotdCache.gameId) {
+    return _dangalGotdCache;
+  }
+  if (typeof apiFetch !== 'function') return null;
+  try {
+    const envelope = await apiFetch('/api/media-config', {
+      method: 'POST',
+      needAuth: true,
+      body: { action: 'get_game_of_day' },
+    });
+    if (envelope?.ok && envelope.data?.gameId) {
+      _dangalGotdCache = {
+        gameId: envelope.data.gameId,
+        date: envelope.data.date || today,
+      };
+      return _dangalGotdCache;
+    }
+  } catch (e) {}
+  return null;
+}
+
+async function recordDangalGameLike(gameId, btn) {
+  if (!gameId || typeof apiFetch !== 'function') return;
+  try {
+    const envelope = await apiFetch('/api/media-config', {
+      method: 'POST',
+      needAuth: true,
+      body: { action: 'record_game_like', gameId },
+    });
+    if (envelope?.ok && btn) {
+      btn.classList.add('is-liked');
+      btn.setAttribute('aria-pressed', 'true');
+      if (envelope.data?.alreadyLiked) {
+        if (typeof showToast === 'function') showToast('Already liked');
+      } else if (typeof showToast === 'function') {
+        showToast('Liked');
+      }
+    }
+  } catch (e) {
+    if (typeof showToast === 'function') showToast('Could not like — try again');
+  }
+}
+
+function dangalTileHtml(g) {
+  const rating = typeof getGameRating === 'function' ? getGameRating(g.ratingKey) : null;
+  const soloTag = g.solo || g.gameType === 'solo' ? '<span class="dangal-solo-tag">SOLO</span>' : '';
+  const accent = (typeof GAME_ACCENTS !== 'undefined' && GAME_ACCENTS[g.id]) || 'var(--red)';
+  return `<div class="dangal-game-tile" data-game="${g.id}" style="--tile-accent:${accent}">
     <div class="dangal-game-icon">${g.icon}</div>
     <div>
       <div class="dangal-game-name">${g.name}${soloTag}</div>
       <div class="dangal-game-desc">${g.desc}</div>
-      ${rating?`<div class="dangal-game-rating-pill">★ ${rating}</div>`:''}
+      ${rating ? `<div class="dangal-game-rating-pill">★ ${rating}</div>` : ''}
     </div>
+    <button type="button" class="dangal-game-like" data-like-game="${g.id}" aria-label="Like ${g.name}">♥ Like</button>
   </div>`;
 }
 
-function wireDangalTiles(root){
-  (root||document).querySelectorAll('[data-game]').forEach(tile=>{
-    tile.addEventListener('click',()=>{
-      if(typeof markGamePlayed==='function') markGamePlayed(tile.dataset.game);
-      if(typeof handleDangalGameTap==='function')handleDangalGameTap(tile.dataset.game);
+function wireDangalTiles(root) {
+  (root || document).querySelectorAll('[data-game]').forEach((tile) => {
+    tile.addEventListener('click', (e) => {
+      if (e.target.closest('[data-like-game]')) return;
+      if (typeof markGamePlayed === 'function') markGamePlayed(tile.dataset.game);
+      if (typeof handleDangalGameTap === 'function') handleDangalGameTap(tile.dataset.game);
+    });
+  });
+  (root || document).querySelectorAll('[data-like-game]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      recordDangalGameLike(btn.dataset.likeGame, btn);
     });
   });
 }
 
-function renderDangalContinueAndChips(host){
-  if(!host) return;
-  // Challenge-from-chat / viral challenge chip
-  let challengeChip='';
-  const pending=typeof consumeBeatScoreChallenge==='function'?consumeBeatScoreChallenge():null;
-  if(pending&&pending.challenger){
-    const gName=pending.game==='akhbaar'
-      ? 'Akhbaar'
-      : ((typeof getGame==='function'&&getGame(pending.game)?.name)||pending.game);
-    challengeChip=`<button type="button" class="dangal-challenge-chip" id="dangalChallengeChip">
-      <div><strong>${pending.challenger} challenged you</strong><span>Beat ${pending.score!=null?pending.score:'their score'} on ${gName}</span></div>
+function renderDangalContinueAndChips(host) {
+  if (!host) return;
+  let challengeChip = '';
+  const pending = typeof consumeBeatScoreChallenge === 'function' ? consumeBeatScoreChallenge() : null;
+  if (pending && pending.challenger) {
+    const gName =
+      pending.game === 'akhbaar'
+        ? 'Akhbaar'
+        : ((typeof getGame === 'function' && getGame(pending.game)?.name) || pending.game);
+    challengeChip = `<button type="button" class="dangal-challenge-chip" id="dangalChallengeChip">
+      <div><strong>${pending.challenger} challenged you</strong><span>Beat ${pending.score != null ? pending.score : 'their score'} on ${gName}</span></div>
       <span>Play →</span>
     </button>`;
   }
 
-  // Continue / last played
-  let continueChip='';
-  const last=typeof getLastPlayedGame==='function'?getLastPlayedGame():null;
-  if(last&&last.id&&typeof getGame==='function'){
-    const g=getGame(last.id==='muqabala'?'quiz':last.id);
-    if(g){
-      continueChip=`<button type="button" class="dangal-continue-chip" id="dangalContinueChip" data-game="${g.id}">
+  let continueChip = '';
+  const last = typeof getLastPlayedGame === 'function' ? getLastPlayedGame() : null;
+  if (last && last.id && typeof getGame === 'function') {
+    const g = getGame(last.id === 'muqabala' ? 'quiz' : last.id);
+    if (g) {
+      continueChip = `<button type="button" class="dangal-continue-chip" id="dangalContinueChip" data-game="${g.id}">
         <div><strong>Continue · ${g.icon} ${g.name}</strong><span>Pick up where you left off</span></div>
         <span>→</span>
       </button>`;
     }
   }
 
-  // Daily spotlight
-  let spotlightChip='';
-  const spotId=typeof getDailySpotlightGameId==='function'?getDailySpotlightGameId():'quiz';
-  const spot=typeof getGame==='function'?getGame(spotId):null;
-  if(spot){
-    spotlightChip=`<button type="button" class="dangal-spotlight-chip" id="dangalSpotlightChip" data-game="${spot.id}">
-      <div><strong>Today's spotlight · ${spot.icon} ${spot.name}</strong><span>${spot.desc}</span></div>
-      <span>Play →</span>
-    </button>`;
-  }
-
-  const wrap=document.createElement('div');
-  wrap.className='dangal-chips';
-  wrap.innerHTML=challengeChip+continueChip+spotlightChip;
+  const wrap = document.createElement('div');
+  wrap.className = 'dangal-chips';
+  wrap.innerHTML = challengeChip + continueChip;
   host.appendChild(wrap);
 
-  wrap.querySelector('#dangalChallengeChip')?.addEventListener('click',()=>{
-    if(!pending)return;
-    if(pending.game==='akhbaar'){
-      window.__akhbaarBeatChallenge={challenger:pending.challenger,score:pending.score};
-      document.querySelectorAll('.tab-btn').forEach(b=>{if(b.dataset.tab==='akhbaar')b.click();});
-      setTimeout(()=>{if(typeof applyAkhbaarBeatBanner==='function')applyAkhbaarBeatBanner();},300);
+  wrap.querySelector('#dangalChallengeChip')?.addEventListener('click', () => {
+    if (!pending) return;
+    if (pending.game === 'akhbaar') {
+      window.__akhbaarBeatChallenge = { challenger: pending.challenger, score: pending.score };
+      document.querySelectorAll('.tab-btn').forEach((b) => {
+        if (b.dataset.tab === 'akhbaar') b.click();
+      });
+      setTimeout(() => {
+        if (typeof applyAkhbaarBeatBanner === 'function') applyAkhbaarBeatBanner();
+      }, 300);
       return;
     }
-    if(pending.game==='quiz'||pending.game==='muqabala'){
-      if(typeof startMuqabala==='function') startMuqabala(pending.challenger, pending.cat||'GK');
-    } else if(typeof getGame==='function'){
-      const g=getGame(pending.game);
-      if(g) g.launch({source:'challenge', beatScore:pending.score, challenger:pending.challenger});
+    if (pending.game === 'quiz' || pending.game === 'muqabala') {
+      if (typeof startMuqabala === 'function') startMuqabala(pending.challenger, pending.cat || 'GK');
+    } else if (typeof getGame === 'function') {
+      const g = getGame(pending.game);
+      if (g) g.launch({ source: 'challenge', beatScore: pending.score, challenger: pending.challenger });
     }
   });
-  wrap.querySelector('#dangalContinueChip')?.addEventListener('click',(e)=>{
-    const id=e.currentTarget.dataset.game;
-    if(typeof handleDangalGameTap==='function') handleDangalGameTap(id);
-  });
-  wrap.querySelector('#dangalSpotlightChip')?.addEventListener('click',(e)=>{
-    const id=e.currentTarget.dataset.game;
-    if(typeof markGamePlayed==='function') markGamePlayed(id);
-    if(typeof handleDangalGameTap==='function') handleDangalGameTap(id);
+  wrap.querySelector('#dangalContinueChip')?.addEventListener('click', (e) => {
+    const id = e.currentTarget.dataset.game;
+    if (typeof handleDangalGameTap === 'function') handleDangalGameTap(id);
   });
 }
 
-function renderDangalGamesGrid(){
-  const grid=document.getElementById('dangalGamesGrid');if(!grid)return;
-  const overall=document.getElementById('dangalOverallRating');
-  if(overall){
-    const quizRatings=userProfile?.categoryRatings||{};
-    const avgQuiz=Math.round(NEWS_CATEGORIES.reduce((s,c)=>s+(quizRatings[c]||1200),0)/NEWS_CATEGORIES.length);
-    overall.innerHTML=`<span class="dor-label">Quiz Rating</span><span class="dor-val">${avgQuiz}</span>`;
+function renderDangalGotdSlot(host, gotd) {
+  if (!host || !gotd?.gameId || typeof getGame !== 'function') return;
+  const g = getGame(gotd.gameId);
+  if (!g) return;
+  const card = document.createElement('div');
+  card.className = 'dangal-gotd';
+  card.dataset.game = g.id;
+  card.setAttribute('role', 'button');
+  card.tabIndex = 0;
+  card.innerHTML = `
+    <div class="dangal-gotd-icon">${g.icon}</div>
+    <div>
+      <div class="dangal-gotd-badge">Game of the Day</div>
+      <div class="dangal-gotd-name">${g.name}</div>
+      <div class="dangal-gotd-desc">${g.desc}</div>
+    </div>
+    <div class="dangal-gotd-actions">
+      <span class="dangal-gotd-play">Play →</span>
+      <button type="button" class="dangal-gotd-like" data-like-game="${g.id}" aria-label="Like ${g.name}">♥ Like</button>
+    </div>`;
+  const launch = () => {
+    if (typeof markGamePlayed === 'function') markGamePlayed(g.id);
+    if (typeof handleDangalGameTap === 'function') handleDangalGameTap(g.id);
+  };
+  card.addEventListener('click', (e) => {
+    if (e.target.closest('[data-like-game]')) return;
+    launch();
+  });
+  card.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      launch();
+    }
+  });
+  card.querySelector('[data-like-game]')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    recordDangalGameLike(g.id, e.currentTarget);
+  });
+  host.appendChild(card);
+}
+
+function renderDangalGamesGrid() {
+  const grid = document.getElementById('dangalGamesGrid');
+  if (!grid) return;
+  const overall = document.getElementById('dangalOverallRating');
+  if (overall) {
+    const quizRatings = userProfile?.categoryRatings || {};
+    const avgQuiz = Math.round(
+      NEWS_CATEGORIES.reduce((s, c) => s + (quizRatings[c] || 1200), 0) / NEWS_CATEGORIES.length
+    );
+    overall.innerHTML = `<span class="dor-label">Quiz Rating</span><span class="dor-val">${avgQuiz}</span>`;
   }
 
-  const library=typeof getGames==='function'?getGames({dangal:true}):[];
-  const featured=library.filter(g=>g.featured);
-  const solos=library.filter(g=>(g.solo||g.gameType==='solo')&&!g.featured);
-  const vsFriend=library.filter(g=>!g.featured&&!(g.solo||g.gameType==='solo'));
+  const library = typeof getGames === 'function' ? getGames({ dangal: true }) : [];
+  const solos = library.filter((g) => g.solo || g.gameType === 'solo');
+  const vsFriend = library.filter((g) => !(g.solo || g.gameType === 'solo'));
 
-  grid.innerHTML='';
+  grid.innerHTML = '';
   renderDangalContinueAndChips(grid);
 
-  const sections=[
-    {label:'Featured', items:featured, featured:true},
-    {label:'Quick solos', items:solos},
-    {label:'Vs friend', items:vsFriend},
+  const gotdHost = document.createElement('div');
+  gotdHost.id = 'dangalGotdHost';
+  grid.appendChild(gotdHost);
+  fetchGameOfTheDay().then((gotd) => {
+    if (!gotdHost.isConnected) return;
+    gotdHost.innerHTML = '';
+    renderDangalGotdSlot(gotdHost, gotd);
+  });
+
+  const sections = [
+    { label: 'Quick solos', items: solos },
+    { label: 'Vs friend', items: vsFriend },
   ];
-  sections.forEach(sec=>{
-    if(!sec.items.length) return;
-    const section=document.createElement('div');
-    section.className='dangal-section';
-    section.innerHTML=`<div class="dangal-section-label">${sec.label}</div>
-      <div class="dangal-section-grid${sec.featured?' dangal-section-grid--featured':''}">
+  sections.forEach((sec) => {
+    if (!sec.items.length) return;
+    const section = document.createElement('div');
+    section.className = 'dangal-section';
+    section.innerHTML = `<div class="dangal-section-label">${sec.label}</div>
+      <div class="dangal-section-grid">
         ${sec.items.map(dangalTileHtml).join('')}
       </div>`;
     grid.appendChild(section);
   });
   wireDangalTiles(grid);
 
-  // Weekly friends board (best-effort from readable gameRatings)
-  const boardHost=document.createElement('div');
-  boardHost.id='dangalFriendsBoardHost';
+  const boardHost = document.createElement('div');
+  boardHost.id = 'dangalFriendsBoardHost';
   grid.appendChild(boardHost);
-  if(typeof buildWeeklyFriendsBoard==='function'){
-    buildWeeklyFriendsBoard('chess').then(rows=>{
-      if(!rows||rows.length<2||!boardHost.isConnected) return;
-      if(typeof weeklyFriendsBoardHtml==='function'){
-        boardHost.innerHTML=weeklyFriendsBoardHtml(rows);
-      }
-    }).catch(()=>{});
+  if (typeof buildWeeklyFriendsBoard === 'function') {
+    buildWeeklyFriendsBoard('chess')
+      .then((rows) => {
+        if (!rows || rows.length < 2 || !boardHost.isConnected) return;
+        if (typeof weeklyFriendsBoardHtml === 'function') {
+          boardHost.innerHTML = weeklyFriendsBoardHtml(rows);
+        }
+      })
+      .catch(() => {});
   }
 }
 
@@ -235,7 +344,7 @@ function getGameRating(key){
   return ratings[key]||1200;
 }
 
-function recordGameResult(key,won,drew){
+async function recordGameResult(key,won,drew){
   if(!key)return;
   const ratings=JSON.parse(localStorage.getItem('chaupaal_game_ratings')||'{}');
   const cur=ratings[key]||1200;
@@ -243,7 +352,15 @@ function recordGameResult(key,won,drew){
   ratings[key]=Math.max(800,cur+delta);
   ratings[key+'_lastPlayed']=Date.now();
   localStorage.setItem('chaupaal_game_ratings',JSON.stringify(ratings));
-  if(db&&currentUser)db.collection('users').doc(currentUser.uid).update({[`gameRatings.${key}`]:ratings[key]}).catch(()=>{});
+  try{
+    let u=typeof currentUser!=='undefined'?currentUser:null;
+    if(!u&&window.ChaupaalEnv?.whenAuthReady){
+      u=await window.ChaupaalEnv.whenAuthReady(10000);
+    }
+    if(db&&u){
+      await db.collection('users').doc(u.uid).update({[`gameRatings.${key}`]:ratings[key]});
+    }
+  }catch(e){}
   if(typeof markGamePlayed==='function') markGamePlayed(key==='wordguess'?'wordguess':key);
 }
 

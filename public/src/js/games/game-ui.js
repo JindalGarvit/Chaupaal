@@ -1118,6 +1118,14 @@
     try {
       localStorage.setItem('chaupaal_last_game', JSON.stringify({ id: gameId, at: Date.now() }));
     } catch (e) {}
+    // Server play counter (Game of the Day popularity) — best-effort; apiFetch waits for auth.
+    if (typeof apiFetch === 'function') {
+      apiFetch('/api/media-config', {
+        method: 'POST',
+        needAuth: true,
+        body: { action: 'record_game_play', gameId },
+      }).catch(() => {});
+    }
   }
 
   function getLastPlayedGame() {

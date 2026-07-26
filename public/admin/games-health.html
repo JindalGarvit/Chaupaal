@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chaupaal · Games health</title>
+  <style>
+    :root { --ink:#2B2730; --cream:#FFF8F0; --red:#E63946; --line:#E8DFD4; --muted:#7A7280; --navy:#1B1F3B; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, Segoe UI, sans-serif; background:var(--cream); color:var(--ink); }
+    header { background:var(--navy); color:#fff; padding:16px 20px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+    h1 { font-size:18px; margin:0; }
+    main { max-width:960px; margin:0 auto; padding:20px; }
+    .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:16px; }
+    .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+    button, .btn { border:none; border-radius:10px; padding:10px 14px; font-weight:700; cursor:pointer; background:var(--red); color:#fff; }
+    button.secondary { background:transparent; color:var(--ink); border:1px solid var(--line); }
+    .meta { font-size:12px; color:var(--muted); margin-bottom:4px; }
+    .err { color:var(--red); font-weight:600; }
+    table { width:100%; border-collapse:collapse; font-size:14px; }
+    th, td { text-align:left; padding:10px 8px; border-bottom:1px solid var(--line); }
+    th { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+    .tag { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; background:rgba(230,57,70,.1); color:var(--red); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Dangal · Games health</h1>
+    <div class="row" style="margin:0">
+      <a href="/admin/feedback.html" style="color:#fff;font-size:13px;">Feedback</a>
+      <button type="button" id="btnLogin" class="secondary" style="color:#fff;border-color:rgba(255,255,255,.3)">Sign in</button>
+      <button type="button" id="btnRefresh">Refresh</button>
+    </div>
+  </header>
+  <main>
+    <div class="card" id="authCard">
+      <p>Lists games flagged for low engagement (play floor + minimum age). Requires Firebase custom claim <code>admin: true</code>. Flagging is informational — retirement stays manual.</p>
+      <div id="authStatus" class="meta">Not signed in</div>
+      <div id="thresholds" class="meta"></div>
+    </div>
+    <div class="card">
+      <div class="row">
+        <label><input type="checkbox" id="flaggedOnly" checked /> Flagged only</label>
+      </div>
+      <div id="listHost"><p class="meta">Sign in to load.</p></div>
+    </div>
+  </main>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="/src/js/config/firebase.js"></script>
+  <script>
+    const statusEl = document.getElementById('authStatus');
+    const listHost = document.getElementById('listHost');
+    const thresholdsEl = document.getElementById('thresholds');
+
+    async function apiPost(body) {
+      const u = firebase.auth().currentUser;
+      if (!u) throw new Error('Not signed in');
+      const token = await u.getIdToken();
+      const res = await fetch('/api/media-config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + token,
+        },
+        body: JSON.stringify(body),
+      });
+      return res.json();
+    }
+
+    function renderItems(items) {
+      if (!items || !items.length) {
+        listHost.innerHTML = '<p class="meta">No flagged games — either engagement is healthy or the daily compute has not run yet.</p>';
+        return;
+      }
+      listHost.innerHTML = `<table>
+        <thead><tr>
+          <th>Game</th><th>Plays</th><th>Likes</th><th>Featured</th><th>Age (days)</th><th>Status</th>
+        </tr></thead>
+        <tbody>
+          ${items.map((g) => `<tr>
+            <td><strong>${g.id}</strong></td>
+            <td>${g.playCount}</td>
+            <td>${g.likeCount}</td>
+            <td>${g.featuredCount}</td>
+            <td>${g.ageDays}</td>
+            <td>${g.flaggedLowEngagement ? '<span class="tag">low engagement</span>' : (g.active ? 'active' : 'retired')}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+    }
+
+    async function refresh() {
+      listHost.innerHTML = '<p class="meta">Loading…</p>';
+      try {
+        const flaggedOnly = document.getElementById('flaggedOnly').checked;
+        const envelope = await apiPost({ action: 'list_games_health', flaggedOnly });
+        if (!envelope?.ok) {
+          listHost.innerHTML = `<p class="err">${envelope?.error?.message || 'Failed'}</p>`;
+          return;
+        }
+        const data = envelope.data || {};
+        if (data.thresholds) {
+          thresholdsEl.textContent =
+            `Thresholds: max plays ≤ ${data.thresholds.LOW_ENGAGEMENT_MAX_PLAYS}, min age ≥ ${data.thresholds.LOW_ENGAGEMENT_MIN_AGE_DAYS} days`;
+        }
+        renderItems(data.items || []);
+      } catch (e) {
+        listHost.innerHTML = `<p class="err">${e.message || e}</p>`;
+      }
+    }
+
+    document.getElementById('btnLogin').addEventListener('click', async () => {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      await firebase.auth().signInWithPopup(provider);
+    });
+    document.getElementById('btnRefresh').addEventListener('click', refresh);
+    document.getElementById('flaggedOnly').addEventListener('change', refresh);
+
+    firebase.auth().onAuthStateChanged(async (u) => {
+      if (!u) {
+        statusEl.textContent = 'Not signed in';
+        return;
+      }
+      const t = await u.getIdTokenResult(true);
+      const isAdmin = t.claims?.admin === true;
+      statusEl.textContent = isAdmin
+        ? `Signed in as ${u.email || u.uid} (admin)`
+        : `Signed in as ${u.email || u.uid} — missing admin claim`;
+      if (isAdmin) refresh();
+    });
+  </script>
+</body>
+</html>

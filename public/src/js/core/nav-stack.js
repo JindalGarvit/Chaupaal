@@ -53,6 +53,12 @@
     '.challenge-creator',
     '.story-viewer',
     '.duel-ritual-overlay',
+    // Dangal launch surfaces (quiz category + AI finder) — permanent DOM
+    // toggles; without these, Android back leaves the app instead of closing.
+    '#quizCategorySheet',
+    '.quiz-category-sheet',
+    '#aiFinder',
+    '.ai-finder-overlay',
   ].join(',');
 
   function dismissEl(el) {
@@ -80,8 +86,13 @@
     if (
       el.id === 'muqabalaOverlay' ||
       el.classList.contains('muqabala-overlay') ||
-      el.classList.contains('auth-overlay')
+      el.classList.contains('auth-overlay') ||
+      el.id === 'quizCategorySheet' ||
+      el.classList.contains('quiz-category-sheet') ||
+      el.id === 'aiFinder' ||
+      el.classList.contains('ai-finder-overlay')
     ) {
+      el.classList.remove('open');
       el.classList.add('hidden');
       return;
     }
@@ -422,7 +433,7 @@
   }
 
   function watchModals() {
-    ['settingsModal', 'profileModal', 'notifModal', 'muqabalaOverlay'].forEach((id) => {
+    ['settingsModal', 'profileModal', 'notifModal', 'muqabalaOverlay', 'quizCategorySheet', 'aiFinder'].forEach((id) => {
       const el = document.getElementById(id);
       if (!el || el.dataset.navWatch === '1') return;
       el.dataset.navWatch = '1';
