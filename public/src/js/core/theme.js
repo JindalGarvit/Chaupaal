@@ -121,12 +121,11 @@
   }
 
   function applyTheme(themeKey) {
-    if (window.ChaupaalTheme?.isSensoryEnabled?.()) {
-      // Engine owns continuous application; optional snap hint for QA
-      if (THEME_KEYS.includes(themeKey)) {
-        try {
-          localStorage.setItem('chaupaal_theme', themeKey);
-        } catch (e) {}
+    // Prefer engine — respects Display Light/Dark/Night/Auto
+    if (window.ChaupaalTheme?.recompute) {
+      if (themeKey === 'light' || themeKey === 'dark' || themeKey === 'night' || themeKey === 'auto') {
+        ChaupaalTheme.setDisplayMode(themeKey);
+        return;
       }
       ChaupaalTheme.recompute('applyTheme');
       return;
@@ -210,22 +209,20 @@
 
   async function refreshWeatherTheme() {
     try {
+      const mode = window.ChaupaalTheme?.getDisplayMode?.() || 'auto';
+      // Manual Light/Dark/Night — weather must not override
+      if (mode !== 'auto') {
+        window.ChaupaalTheme?.recompute?.('weather_skip');
+        return;
+      }
+
       const coords = await resolveThemeCoords();
       if (!coords) {
-        // Clock-only fallback — still fluid when sensory is on
         window.ChaupaalTheme?.setWeatherContext?.({
           bucket: null,
           cloudCover: null,
           precipitation: null,
         });
-        if (!window.ChaupaalTheme?.isSensoryEnabled?.()) {
-          let locked = null;
-          try {
-            locked = localStorage.getItem('chaupaal_theme');
-          } catch (e) {}
-          if (locked && THEME_KEYS.includes(locked)) return;
-          applyThemeDiscrete(pickThemeFromContext({}));
-        }
         return;
       }
 
@@ -248,54 +245,19 @@
         sunrise,
         sunset,
       });
-
-      if (window.ChaupaalTheme?.isSensoryEnabled?.()) return;
-
-      let locked = null;
-      try {
-        locked = localStorage.getItem('chaupaal_theme');
-      } catch (e) {}
-      if (locked && THEME_KEYS.includes(locked)) return;
-      applyThemeDiscrete(pickThemeFromContext({ weather: weatherBucket }));
     } catch (e) {
       /* offline / blocked — keep time-based theme */
     }
   }
 
   async function initDynamicTheme() {
-    // Start engine (reads flags; discrete until sensory_theme on)
     if (window.ChaupaalTheme?.start) {
       await ChaupaalTheme.start();
+    } else {
+      applyThemeDiscrete(pickThemeFromContext({}));
     }
-
-    if (window.ChaupaalTheme?.isSensoryEnabled?.()) {
-      // Continuous path — weather upgrades precipitation/clouds
-      setTimeout(() => refreshWeatherTheme(), 800);
-      setInterval(() => refreshWeatherTheme(), 15 * 60 * 1000);
-      return;
-    }
-
-    // Discrete fallback (original behavior)
-    let key = null;
-    try {
-      const saved = localStorage.getItem('chaupaal_theme');
-      if (THEME_KEYS.includes(saved)) key = saved;
-      if (saved === 'rain') key = 'rainy';
-      if (saved === 'default' || saved === 'hot' || saved === 'cold') key = null;
-      // Ignore light/dark/night display presets when flag off
-      if (saved === 'light') key = 'clearDay';
-      if (saved === 'dark' || saved === 'night') key = 'night';
-    } catch (e) {}
-    if (!key) key = pickThemeFromContext({});
-    applyThemeDiscrete(key);
     setTimeout(() => refreshWeatherTheme(), 800);
-    setInterval(() => {
-      try {
-        const locked = localStorage.getItem('chaupaal_theme');
-        if (locked && THEME_KEYS.includes(locked)) return;
-        applyThemeDiscrete(pickThemeFromContext({ weather: weatherBucket }));
-      } catch (e) {}
-    }, 15 * 60 * 1000);
+    setInterval(() => refreshWeatherTheme(), 15 * 60 * 1000);
   }
 
   window.THEME_REGISTRY = THEME_REGISTRY;

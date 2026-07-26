@@ -99,6 +99,8 @@ document.getElementById('settingsBtn').addEventListener('click',()=>{
     const amb=document.getElementById('toggleAmbientSound');
     if(amb) amb.checked=!!(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.isAmbientUserOn&&ChaupaalTheme.isAmbientUserOn());
     if(typeof updateThemeGeoStatusUI==='function') updateThemeGeoStatusUI();
+    const quiet=document.getElementById('toggleQuiet');
+    if(quiet) quiet.checked=!!quietMode || localStorage.getItem('chaupaal_quiet')==='1';
   }catch(e){}
   // Companion opt-out: checked = outreach ON (optOut false)
   try{
@@ -205,6 +207,28 @@ document.getElementById('toggleQuiet').addEventListener('change',e=>{
   quietMode=e.target.checked;
   try{localStorage.setItem('chaupaal_quiet', quietMode?'1':'0');}catch(err){}
   if(typeof ChaupaalAmbient!=='undefined'&&ChaupaalAmbient.sync) ChaupaalAmbient.sync();
+});
+
+// Apply display mode immediately when tapped (don't wait for Done)
+document.querySelectorAll('input[name="displayMode"]').forEach((el)=>{
+  el.addEventListener('change',()=>{
+    const mode=el.value||'auto';
+    if(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.setDisplayMode){
+      ChaupaalTheme.setDisplayMode(mode);
+    }else if(typeof applyTheme==='function'){
+      applyTheme(mode==='light'?'clearDay':'night');
+    }
+  });
+});
+document.getElementById('toggleAmbientSound')?.addEventListener('change',(e)=>{
+  if(e.target.checked){
+    if(typeof ChaupaalAmbient!=='undefined'&&ChaupaalAmbient.enableFromUserGesture) ChaupaalAmbient.enableFromUserGesture();
+    else if(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.setAmbientUserOn) ChaupaalTheme.setAmbientUserOn(true);
+  }else if(typeof ChaupaalAmbient!=='undefined'&&ChaupaalAmbient.disable){
+    ChaupaalAmbient.disable();
+  }else if(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.setAmbientUserOn){
+    ChaupaalTheme.setAmbientUserOn(false);
+  }
 });
 
 function updateThemeGeoStatusUI(){

@@ -378,8 +378,9 @@
     const m = mode === 'light' || mode === 'dark' || mode === 'night' ? mode : 'auto';
     try {
       localStorage.setItem(STORAGE_MODE, m);
-      // Clear legacy discrete lock when using sensory display modes
-      if (m !== 'auto') localStorage.setItem('chaupaal_theme', m === 'light' ? 'clearDay' : 'night');
+      // Keep legacy key in sync so old discrete locks don't fight Light/Dark/Night
+      if (m === 'light') localStorage.setItem('chaupaal_theme', 'clearDay');
+      else if (m === 'dark' || m === 'night') localStorage.setItem('chaupaal_theme', 'night');
       else localStorage.removeItem('chaupaal_theme');
     } catch (e) {}
     recompute('display_mode');
@@ -447,33 +448,43 @@
     };
   }
 
+  function buildDiscreteAutoState() {
+    const h = new Date().getHours();
+    const w = weatherCtx.bucket || 'unknown';
+    let key = 'clearDay';
+    if (h >= 21 || h < 5) key = 'night';
+    else if (h >= 5 && h < 8) key = 'dawn';
+    else if (h >= 17 && h < 19) key = 'goldenHour';
+    else if (w === 'rain' || w === 'storm') key = 'rainy';
+    else if (w === 'overcast' || w === 'fog' || w === 'partly_cloudy') key = 'overcast';
+    else if (w === 'clear' || (h >= 8 && h < 17)) key = 'clearDay';
+    else key = 'goldenHour';
+    const A = ANCHORS[key] || ANCHORS.clearDay;
+    return {
+      isDay: key !== 'night',
+      lightTemp: A.lightTemp,
+      brightness: A.brightness,
+      precipitation: A.precipitation,
+      cloudCover: A.cloudCover,
+      motionIntensity: A.motionIntensity,
+      soundKey: null,
+      soundVolume: 0,
+      anchor: key,
+      vars: A.vars,
+      metaThemeColor: A.metaThemeColor,
+    };
+  }
+
   function buildState() {
-    if (!sensoryEnabled) {
-      // Discrete fallback — nearest anchor snap (theme.js still owns class application)
-      const tb = timeBlend(new Date());
-      const key = tb.t < 0.5 ? tb.a : tb.b;
-      const A = ANCHORS[key] || ANCHORS.clearDay;
-      return {
-        isDay: key !== 'night',
-        lightTemp: A.lightTemp,
-        brightness: A.brightness,
-        precipitation: A.precipitation,
-        cloudCover: A.cloudCover,
-        motionIntensity: A.motionIntensity,
-        soundKey: null,
-        soundVolume: 0,
-        anchor: key,
-        vars: A.vars,
-        metaThemeColor: A.metaThemeColor,
-        discrete: true,
-      };
-    }
     const mode = getDisplayMode();
+    // Manual presets always win — independent of sensory_theme flag
     if (mode !== 'auto' && PRESETS[mode]) {
-      const p = PRESETS[mode];
-      return { ...p, discrete: false, mode };
+      return { ...PRESETS[mode], discrete: true, mode };
     }
-    return { ...buildAutoState(), discrete: false, mode: 'auto' };
+    if (sensoryEnabled) {
+      return { ...buildAutoState(), discrete: false, mode: 'auto' };
+    }
+    return { ...buildDiscreteAutoState(), discrete: true, mode: 'auto' };
   }
 
   function writeCss(s) {
@@ -483,25 +494,26 @@
       root.style.setProperty(prop, val);
       device?.style.setProperty(prop, val);
     };
-    set('--theme-light-temp', String(s.lightTemp.toFixed(3)));
-    set('--theme-brightness', String(s.brightness.toFixed(3)));
-    set('--theme-precipitation', String(s.precipitation.toFixed(3)));
-    set('--theme-cloud-cover', String(s.cloudCover.toFixed(3)));
-    set('--theme-motion', String(s.motionIntensity.toFixed(3)));
+    set('--theme-light-temp', String(Number(s.lightTemp || 0).toFixed(3)));
+    set('--theme-brightness', String(Number(s.brightness || 0).toFixed(3)));
+    set('--theme-precipitation', String(Number(s.precipitation || 0).toFixed(3)));
+    set('--theme-cloud-cover', String(Number(s.cloudCover || 0).toFixed(3)));
+    set('--theme-motion', String(Number(s.motionIntensity || 0).toFixed(3)));
     set('--theme-is-day', s.isDay ? '1' : '0');
 
     Object.entries(s.vars || {}).forEach(([prop, val]) => set(prop, val));
 
-    // Soft filter for warmth/brightness without fighting component colors too hard
-    const warm = s.lightTemp;
-    const bright = s.brightness;
-    set('--theme-overlay', `rgba(${Math.round(255 * warm)}, ${Math.round(180 * warm)}, ${Math.round(80 * warm)}, ${(0.08 * warm).toFixed(3)})`);
+    const warm = Number(s.lightTemp) || 0;
+    const bright = Number(s.brightness) || 0;
+    set(
+      '--theme-overlay',
+      `rgba(${Math.round(255 * warm)}, ${Math.round(180 * warm)}, ${Math.round(80 * warm)}, ${(0.08 * warm).toFixed(3)})`
+    );
     set('--theme-dim', String((1 - bright) * 0.35));
 
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta && s.metaThemeColor) meta.setAttribute('content', s.metaThemeColor);
 
-    // Theme classes for existing CSS (nearest anchor) — gradual vars carry the fluid feel
     const key = s.anchor || 'clearDay';
     const keys = Object.keys(ANCHORS);
     keys.forEach((k) => {
@@ -510,6 +522,7 @@
       device?.classList.remove('theme-' + k);
     });
     root.classList.remove('theme-default', 'theme-rain', 'theme-hot', 'theme-cold');
+    ['auto', 'light', 'dark', 'night'].forEach((m) => root.classList.remove('theme-preset-' + m));
     root.classList.add('theme-' + key);
     document.body?.classList.add('theme-' + key);
     device?.classList.add('theme-' + key);
@@ -517,10 +530,13 @@
       root.classList.add('theme-rain');
       document.body?.classList.add('theme-rain');
     }
-    root.classList.toggle('theme-sensory', !!sensoryEnabled);
-    root.classList.toggle('theme-preset-' + (s.mode || getDisplayMode()), sensoryEnabled);
+    root.classList.toggle('theme-sensory', !!sensoryEnabled && (s.mode || getDisplayMode()) === 'auto');
+    root.classList.add('theme-preset-' + (s.mode || getDisplayMode()));
+    try {
+      root.style.colorScheme = s.isDay ? 'light' : 'dark';
+    } catch (e) {}
 
-    ensureRainOverlay(s.precipitation);
+    ensureRainOverlay(s.precipitation || 0);
     window.__chaupaalTheme = key;
     window.__chaupaalThemeState = s;
   }
@@ -540,14 +556,8 @@
 
   function recompute(reason) {
     const now = Date.now();
-    // Throttle rapid calls but always allow mode / weather / visibility
     if (reason === 'tick' && now - lastWriteAt < RECOMPUTE_MS * 0.8) return;
     state = buildState();
-    if (!sensoryEnabled) {
-      // Discrete 6-state path stays in theme.js — do not overwrite
-      lastWriteAt = now;
-      return;
-    }
     writeCss(state);
     lastWriteAt = now;
     listeners.forEach((fn) => {
@@ -606,10 +616,7 @@
   async function start() {
     await refreshFlags();
     started = true;
-    if (!sensoryEnabled) {
-      // Safe drop-in: no continuous writes; theme.js keeps discrete behavior
-      return;
-    }
+    // Always apply display mode (Light/Dark/Night/Auto) — sensory flag only affects Auto interpolation
     recompute('start');
     startPolling();
     if (getDisplayMode() === 'auto') {

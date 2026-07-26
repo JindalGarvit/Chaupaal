@@ -1023,6 +1023,36 @@ html.theme-sensory .device{position:relative;}
 .display-mode-option input{margin-top:3px;accent-color:var(--red);}
 .display-mode-option strong{display:block;font-family:var(--font-display,'Space Grotesk',sans-serif);font-size:13px;font-weight:700;}
 .display-mode-option small{display:block;font-size:11px;color:var(--muted);line-height:1.35;margin-top:2px;}
+.settings-modal{overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.settings-cat{
+  border:1.5px solid var(--line);
+  border-radius:14px;
+  background:var(--cream);
+  margin:0 0 10px;
+  overflow:hidden;
+}
+.settings-cat-summary{
+  list-style:none;
+  cursor:pointer;
+  padding:12px 14px;
+  font-family:var(--font-display,'Space Grotesk',sans-serif);
+  font-weight:700;
+  font-size:14px;
+  color:var(--ink);
+  display:flex;align-items:center;justify-content:space-between;
+  user-select:none;
+}
+.settings-cat-summary::-webkit-details-marker{display:none;}
+.settings-cat-summary::after{
+  content:'▸';
+  color:var(--muted);
+  font-size:12px;
+  transition:transform .15s ease;
+}
+.settings-cat[open] > .settings-cat-summary::after{transform:rotate(90deg);}
+.settings-cat-body{padding:0 12px 12px;}
+.settings-cat .settings-section{margin-top:4px;margin-bottom:8px;font-size:11px;}
+.settings-cat .modal-select{margin-bottom:0;}
 
 .theme-night{
   --cream:#12141C;
