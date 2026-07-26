@@ -42,6 +42,7 @@ function renderProfileModal(){
 
   el.innerHTML=`
     ${typeof renderPreviewToggleHtml==='function'?renderPreviewToggleHtml():''}
+    ${p.needsEmailForPasswordLogin?`<div class="profile-password-login-note" style="margin:0 0 12px;padding:12px 14px;border-radius:12px;background:rgba(230,57,70,0.08);border:1.5px solid rgba(230,57,70,0.22);font-size:12px;line-height:1.45;color:var(--ink);">Add an email to enable password login with your phone number.</div>`:''}
     <div class="own-profile-edit-toolbar">
       <button type="button" class="icon-btn profile-agg-notif" data-open-notif="all" aria-label="All notifications" title="Notifications" style="position:relative;">
         🔔<span class="notif-dot hidden" data-notif-dot="all"></span>

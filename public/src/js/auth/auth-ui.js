@@ -88,5 +88,6 @@ if (auth) {
       }
     }
     updateProfileBtn();
+    if (typeof syncEmailVerifyBanner === 'function') syncEmailVerifyBanner();
   });
 }

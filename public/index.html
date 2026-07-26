@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="/src/styles/baithak.css?v=d85de842">
   <link rel="stylesheet" href="/src/styles/peepal.css?v=c3530dde">
   <link rel="stylesheet" href="/src/styles/duniya.css?v=2df526a6">
-  <link rel="stylesheet" href="/src/styles/components.css?v=3d817d32">
+  <link rel="stylesheet" href="/src/styles/components.css?v=a737e1eb">
   <link rel="stylesheet" href="/src/styles/mehfil.css?v=bf556c72">
 </head>
 <body>
@@ -96,8 +96,8 @@
         </div>
         <div class="auth-form-body">
           <div class="auth-input-group">
-            <label class="auth-input-label">Email</label>
-            <input class="auth-input" type="email" id="loginEmail" placeholder="your@email.com" autocomplete="email">
+            <label class="auth-input-label">Username, email, or phone</label>
+            <input class="auth-input" type="text" id="loginIdentifier" placeholder="Username, email, or phone" autocomplete="username" autocapitalize="none" spellcheck="false">
           </div>
           <div class="auth-input-group">
             <label class="auth-input-label">Password</label>
@@ -129,6 +129,29 @@
         </div>
       </div>
 
+      <!-- ===== PASSWORD LINK NUDGE (phone-only → password) ===== -->
+      <div class="auth-form-screen hidden" id="authPasswordNudgeScreen">
+        <div class="auth-form-header">
+          <div style="width:36px;"></div>
+          <div class="auth-form-title">Faster next time</div>
+          <div style="width:36px;"></div>
+        </div>
+        <div class="auth-form-body">
+          <p style="font-size:14px;color:var(--muted);line-height:1.5;margin-bottom:16px;">Set a password so you can log in with your phone number (or email) without waiting for an OTP.</p>
+          <div class="auth-input-group" id="nudgeEmailGroup">
+            <label class="auth-input-label">Email <span class="auth-required">*</span></label>
+            <input class="auth-input" type="email" id="nudgeEmail" placeholder="your@email.com" autocomplete="email">
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-input-label">Password <span class="auth-required">*</span></label>
+            <input class="auth-input" type="password" id="nudgePassword" placeholder="Min 8 characters" autocomplete="new-password">
+          </div>
+          <div class="auth-error" id="nudgeError"></div>
+          <button class="btn btn--primary btn--block btn--lg auth-btn" id="nudgePasswordSave">Save &amp; continue</button>
+          <button type="button" class="auth-guest-btn" id="nudgePasswordLater" style="margin-top:8px;">Maybe later</button>
+        </div>
+      </div>
+
       <!-- ===== REGISTER: STEP 1 — Account type + identity ===== -->
       <div class="auth-form-screen hidden" id="authRegStep1">
         <div class="auth-form-header">
@@ -139,17 +162,12 @@
         <div class="auth-step-bar"><div class="auth-step-fill" style="width:50%"></div></div>
         <div class="auth-form-body">
           <div class="auth-input-group">
-            <label class="auth-input-label">I'm joining as <span class="auth-required">*</span></label>
-            <div style="display:flex;gap:8px;" id="regProfileTypeRow">
-              <button type="button" class="auth-type-chip active" data-profile-type="personal" id="regTypePersonal">
-                <strong>Personal</strong>
-                <span>Friends, dating, community</span>
-              </button>
-              <button type="button" class="auth-type-chip" data-profile-type="professional" id="regTypeProfessional">
-                <strong>Professional</strong>
-                <span>Business, creator, public figure</span>
-              </button>
+            <label class="auth-input-label">Account type</label>
+            <div class="auth-type-toggle" id="regProfileTypeRow" role="group" aria-label="Account type">
+              <button type="button" class="auth-type-pill active" data-profile-type="personal" id="regTypePersonal">Personal</button>
+              <button type="button" class="auth-type-pill" data-profile-type="professional" id="regTypeProfessional">Professional</button>
             </div>
+            <div class="auth-input-hint">Personal by default. Switch to Professional for optional industry &amp; purpose.</div>
           </div>
           <div class="auth-input-group">
             <label class="auth-input-label">Full name <span class="auth-required">*</span></label>
@@ -175,8 +193,22 @@
               <button type="button" class="auth-gender-chip" data-val="Female">Female</button>
               <button type="button" class="auth-gender-chip" data-val="Non-binary">Non-binary</button>
               <button type="button" class="auth-gender-chip" data-val="Prefer not to say">Prefer not to say</button>
+              <button type="button" class="auth-gender-chip" data-val="self_describe">Prefer to self-describe</button>
             </div>
+            <input type="text" class="auth-input hidden" id="regGenderCustom" maxlength="40" placeholder="How do you describe your gender?" style="margin-top:8px;" autocomplete="sex">
             <div class="auth-input-hint" id="regGenderHint">Required for Personal accounts</div>
+          </div>
+          <div id="regProFields" class="hidden">
+            <div class="auth-input-group">
+              <label class="auth-input-label">Industry <span style="font-weight:500;color:var(--muted);text-transform:none;letter-spacing:0;">(optional)</span></label>
+              <div class="auth-picklist" id="regIndustryPicklist"></div>
+              <input type="text" class="auth-input hidden" id="regIndustryOther" maxlength="80" placeholder="Type your industry" style="margin-top:8px;">
+            </div>
+            <div class="auth-input-group">
+              <label class="auth-input-label">Purpose <span style="font-weight:500;color:var(--muted);text-transform:none;letter-spacing:0;">(optional)</span></label>
+              <div class="auth-picklist" id="regPurposePicklist"></div>
+              <input type="text" class="auth-input hidden" id="regPurposeOther" maxlength="80" placeholder="Type your purpose" style="margin-top:8px;">
+            </div>
           </div>
           <div class="auth-error" id="reg1Error"></div>
           <button class="btn btn--primary btn--block btn--lg auth-btn" id="reg1Next">Continue →</button>
@@ -775,7 +807,7 @@
   <script src="/src/js/core/theme.js?v=64b98c86"></script>
   <script src="/src/js/core/discovery-core.js?v=9a58f62e"></script>
   <script src="/src/js/core/profile-btn.js?v=4810294d"></script>
-  <script src="/src/js/auth/auth-ui.js?v=28509ae5"></script>
+  <script src="/src/js/auth/auth-ui.js?v=b1b6baee"></script>
   <script src="/src/js/auth/auth-profiles.js?v=56ea484f"></script>
   <script src="/src/js/features/akhbaar.js?v=afe52ecf"></script>
   <script src="/src/js/features/dangal.js?v=8f52f079"></script>
@@ -793,7 +825,7 @@
   <script src="/src/js/core/journal-anim.js?v=f2658ae2"></script>
   <script src="/src/js/features/baithak.js?v=004ef293"></script>
   <script src="/src/js/features/profile-preview.js?v=10860c1d"></script>
-  <script src="/src/js/features/profile.js?v=be4f0856"></script>
+  <script src="/src/js/features/profile.js?v=34c90847"></script>
   <script src="/src/js/core/i18n.js?v=324d43be"></script>
   <script src="/src/js/features/categories.js?v=2d627153"></script>
   <script src="/src/js/features/peepal.js?v=f0b8bb10"></script>
@@ -816,6 +848,6 @@
   <script src="/src/js/core/polish.js?v=9ae02fe4"></script>
   <script src="/src/js/features/fairness.js?v=4fc5b152"></script>
   <script src="/src/js/features/media-profile.js?v=d8fe1026"></script>
-  <script src="/src/js/auth/auth-events.js?v=93545edf"></script>
+  <script src="/src/js/auth/auth-events.js?v=a46dfda4"></script>
 </body>
 </html>

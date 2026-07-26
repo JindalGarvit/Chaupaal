@@ -17,11 +17,32 @@ alwaysApply: true
 - Signup requires **verified email (Gmail/Google or email+password)** **or** **verified phone** (OTP).
 - When a user adds email or phone at any stage, **verify with OTP / Firebase verification before treating it as registered**.
 - Phone is for signup and recovery/linking; OTP required when phone is used.
+- Unverified email/password users **stay signed in** after login; show a persistent, dismissible-but-recurring **verify-email banner** (resend CTA). Do **not** sign them out / kick back to login. Keep `hasVerifiedContact` as the gate for flows that truly require verification.
+
+## Login (unified identifier)
+
+- Password login accepts **username, email, or phone** in one field (`loginIdentifier`).
+- Email → `signInWithEmailAndPassword` directly.
+- Username / phone → pre-auth `POST /api/media-config` `{ action: 'resolve_identifier' }` → `{ email }` or generic `{ notFound: true }` (no enumeration details).
+- Same generic error for not-found and wrong password: “Incorrect username/email/phone or password”.
+- `phoneIndex/{e164}` stores `{ uid, email }` when a phone is verified/linked so phone can resolve to an email for password login.
+
+## Phone + password
+
+- After phone OTP (signup or later), prefer **linking** `EmailAuthProvider.credential(email, password)` onto the Firebase user so the account is password-resolvable.
+- If no email is available, skip linking and surface a profile note: add email to enable password login with phone.
+- Existing phone-only accounts (no `password` provider): on next successful phone-OTP login, show a **skippable interstitial** to set email+password (`linkWithCredential`); re-prompt next login if still missing (same dismiss/reappear idea as the verify-email banner — not a separate reminder system).
 
 ## Username
 
 - Globally unique handle; **one profile per username**.
 - Rename allowed; **old username freed immediately** (Rename A).
+
+## Profile type (signup)
+
+- Default **Personal**. UI is a small Personal / Professional **toggle**, not a forked flow.
+- Professional optionally collects **Industry** and **Purpose** (top-N from `industryStats` / `purposeStats` + “Other — type your own”). Both optional; counters increment on register (`FieldValue.increment`).
+- Gender remains **mandatory for Personal** (optional for Professional). Include **Prefer to self-describe** + required free-text when selected.
 
 ## Session persistence
 
@@ -31,5 +52,5 @@ alwaysApply: true
 
 ## Passwords
 
-- Email + password + Google + forgot-password (email reset).
+- Email + password + Google + forgot-password (email reset; resolve identifier → email when needed).
 - Do not invent separate payment/auth stacks per feature.

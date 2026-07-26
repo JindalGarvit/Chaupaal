@@ -1,27 +1,38 @@
-﻿// ===================== AUTH STATE MACHINE v3 =====================
-// Signup: Personal/Professional â†’ identity (live username) â†’ email/password (+ optional extras)
+﻿// ===================== AUTH STATE MACHINE v4 =====================
+// Signup: Personal-default / Pro toggle → identity → email/password or phone (+ optional)
+// Login: username | email | phone + password (resolve_identifier) · verify banner (no kickback)
 
-let regData = {
-  profileType: 'personal',
-  name: '',
-  username: '',
-  gender: '',
-  dob: '',
-  age: 0,
-  email: '',
-  phone: '',
-  city: '',
-  lang: 'en',
-  password: '',
-  intents: [],
-  customIntent: '',
-  openToMeet: true,
-  photoFile: null,
-  usernameAvailable: false,
-};
+let regData = emptyRegData();
 
 let usernameCheckTimer = null;
 let authEventsWired = false;
+let industryStatsCache = null;
+let purposeStatsCache = null;
+let pendingPasswordNudgeContinue = null;
+
+const FALLBACK_INDUSTRIES = [
+  'Technology',
+  'Media & Entertainment',
+  'Education',
+  'Healthcare',
+  'Finance',
+  'Retail',
+  'Government',
+  'Creative / Design',
+];
+const FALLBACK_PURPOSES = [
+  'Grow my business',
+  'Find clients',
+  'Hire talent',
+  'Content & audience',
+  'Networking',
+  'Fundraising',
+  'Partnerships',
+  'Brand building',
+];
+
+const LOGIN_GENERIC_ERR = 'Incorrect username/email/phone or password';
+const EMAIL_VERIFY_DISMISS_KEY = 'chaupaal_email_verify_banner_dismissed';
 
 function emptyRegData() {
   return {
@@ -29,6 +40,7 @@ function emptyRegData() {
     name: '',
     username: '',
     gender: '',
+    genderSelfDescribe: false,
     dob: '',
     age: 0,
     email: '',
@@ -36,6 +48,8 @@ function emptyRegData() {
     city: '',
     lang: 'en',
     password: '',
+    industry: '',
+    purpose: '',
     intents: [],
     customIntent: '',
     openToMeet: true,
@@ -48,6 +62,7 @@ function showAuthScreen(screenId, direction = 'forward') {
   const screens = [
     'authHeroScreen',
     'authLoginScreen',
+    'authPasswordNudgeScreen',
     'authRegStep1',
     'authRegStep2',
     'authRegStep3',
@@ -83,6 +98,84 @@ function ageFromDob(dob) {
   return Math.floor((Date.now() - new Date(dob).getTime()) / (365.25 * 86400000));
 }
 
+function looksLikeEmail(raw) {
+  return /\S+@\S+\.\S+/.test(String(raw || '').trim());
+}
+
+function normalizeStatKey(label) {
+  return String(label || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .slice(0, 80);
+}
+
+async function fetchTopStats(collectionName, fallback) {
+  if (!db) return fallback.map((label) => ({ label, key: normalizeStatKey(label) }));
+  try {
+    const snap = await db.collection(collectionName).orderBy('count', 'desc').limit(8).get();
+    if (snap.empty) return fallback.map((label) => ({ label, key: normalizeStatKey(label) }));
+    return snap.docs.map((d) => ({
+      key: d.id,
+      label: d.data()?.label || d.id,
+      count: d.data()?.count || 0,
+    }));
+  } catch (e) {
+    return fallback.map((label) => ({ label, key: normalizeStatKey(label) }));
+  }
+}
+
+function renderPicklist(hostId, items, field, otherInputId) {
+  const host = document.getElementById(hostId);
+  const other = document.getElementById(otherInputId);
+  if (!host) return;
+  const selected = regData[field] || '';
+  const isOther =
+    selected && !items.some((it) => it.label === selected || it.key === normalizeStatKey(selected));
+  host.innerHTML =
+    items
+      .map((it) => {
+        const on = selected === it.label;
+        return `<button type="button" class="auth-pick-chip${on ? ' active' : ''}" data-val="${String(it.label).replace(/"/g, '&quot;')}">${it.label}</button>`;
+      })
+      .join('') +
+    `<button type="button" class="auth-pick-chip${isOther ? ' active' : ''}" data-val="__other__">Other — type your own</button>`;
+  if (other) {
+    other.classList.toggle('hidden', !isOther);
+    if (isOther) other.value = selected;
+  }
+  host.querySelectorAll('.auth-pick-chip').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const val = btn.dataset.val;
+      if (val === '__other__') {
+        regData[field] = other?.value?.trim() || '';
+        if (other) {
+          other.classList.remove('hidden');
+          other.focus();
+        }
+      } else {
+        regData[field] = val;
+        if (other) {
+          other.classList.add('hidden');
+          other.value = '';
+        }
+      }
+      renderPicklist(hostId, items, field, otherInputId);
+    });
+  });
+}
+
+async function ensureProPicklists() {
+  if (!industryStatsCache) {
+    industryStatsCache = await fetchTopStats('industryStats', FALLBACK_INDUSTRIES);
+  }
+  if (!purposeStatsCache) {
+    purposeStatsCache = await fetchTopStats('purposeStats', FALLBACK_PURPOSES);
+  }
+  renderPicklist('regIndustryPicklist', industryStatsCache, 'industry', 'regIndustryOther');
+  renderPicklist('regPurposePicklist', purposeStatsCache, 'purpose', 'regPurposeOther');
+}
+
 function syncRegProfileTypeUi() {
   const type = regData.profileType === 'professional' ? 'professional' : 'personal';
   document.querySelectorAll('#regProfileTypeRow [data-profile-type]').forEach((btn) => {
@@ -96,8 +189,25 @@ function syncRegProfileTypeUi() {
     genderHint.textContent =
       type === 'personal'
         ? 'Required for Personal accounts'
-        : 'Optional for Professional accounts â€” you can add it later';
+        : 'Optional for Professional accounts — you can add it later';
   }
+  const pro = document.getElementById('regProFields');
+  if (pro) {
+    pro.classList.toggle('hidden', type !== 'professional');
+    if (type === 'professional') ensureProPicklists();
+  }
+  const custom = document.getElementById('regGenderCustom');
+  if (custom) custom.classList.toggle('hidden', !regData.genderSelfDescribe);
+}
+
+function syncGenderUi() {
+  document.querySelectorAll('#regGenderChips .auth-gender-chip').forEach((c) => {
+    const val = c.dataset.val || '';
+    const on = regData.genderSelfDescribe ? val === 'self_describe' : val === regData.gender;
+    c.classList.toggle('active', on);
+  });
+  const custom = document.getElementById('regGenderCustom');
+  if (custom) custom.classList.toggle('hidden', !regData.genderSelfDescribe);
 }
 
 async function checkUsernameAvailability(username) {
@@ -170,6 +280,128 @@ function hasVerifiedContact(user) {
   return false;
 }
 
+function userHasPasswordProvider(user) {
+  return !!(user?.providerData || []).some((p) => p.providerId === 'password');
+}
+
+async function writePhoneIndex(user, email) {
+  if (!db || !user?.uid || !user.phoneNumber) return;
+  try {
+    await db
+      .collection('phoneIndex')
+      .doc(user.phoneNumber)
+      .set(
+        {
+          uid: user.uid,
+          email: String(email || user.email || '').trim().toLowerCase(),
+        },
+        { merge: true }
+      );
+  } catch (e) {
+    console.warn('[auth] phoneIndex', e);
+  }
+}
+
+async function bumpStat(collectionName, label) {
+  const key = normalizeStatKey(label);
+  if (!db || !key || !auth?.currentUser) return;
+  try {
+    await db
+      .collection(collectionName)
+      .doc(key)
+      .set(
+        {
+          count: firebase.firestore.FieldValue.increment(1),
+          label: String(label).trim().slice(0, 80),
+        },
+        { merge: true }
+      );
+  } catch (e) {
+    console.warn('[auth] bumpStat', collectionName, e);
+  }
+}
+
+async function linkEmailPassword(user, email, password) {
+  if (!user || !email || !password) throw new Error('Email and password required');
+  if (isDisposableEmail(email)) throw new Error('Please use a permanent email address');
+  const cred = firebase.auth.EmailAuthProvider.credential(email, password);
+  await user.linkWithCredential(cred);
+  try {
+    await user.sendEmailVerification();
+  } catch (e) {}
+  if (db) {
+    await db.collection('users').doc(user.uid).set(
+      {
+        email,
+        needsEmailForPasswordLogin: false,
+      },
+      { merge: true }
+    );
+  }
+  await writePhoneIndex(user, email);
+}
+
+/** Persistent verify banner — dismissible for this session, returns on next load if still unverified. */
+function syncEmailVerifyBanner() {
+  const u = auth?.currentUser;
+  const existing = document.getElementById('emailVerifyBanner');
+  if (!u || hasVerifiedContact(u)) {
+    existing?.remove();
+    return;
+  }
+  try {
+    if (sessionStorage.getItem(EMAIL_VERIFY_DISMISS_KEY) === u.uid) {
+      existing?.remove();
+      return;
+    }
+  } catch (e) {}
+
+  let el = existing;
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'emailVerifyBanner';
+    el.className = 'email-verify-banner';
+    el.setAttribute('role', 'status');
+    el.innerHTML = `
+      <div class="email-verify-banner-text">
+        <strong>Verify your email</strong>
+        <span>Confirm your address to keep your account secure.</span>
+      </div>
+      <div class="email-verify-banner-actions">
+        <button type="button" class="btn btn--primary" data-verify-resend>Resend verification email</button>
+        <button type="button" class="email-verify-banner-dismiss" data-verify-dismiss aria-label="Dismiss">✕</button>
+      </div>`;
+    const host = document.querySelector('.device') || document.body;
+    const topbar = document.getElementById('topbar');
+    if (topbar?.parentNode) topbar.parentNode.insertBefore(el, topbar.nextSibling);
+    else host.insertBefore(el, host.firstChild);
+
+    el.querySelector('[data-verify-resend]')?.addEventListener('click', async () => {
+      try {
+        await auth.currentUser?.reload();
+        if (hasVerifiedContact(auth.currentUser)) {
+          syncEmailVerifyBanner();
+          if (typeof showToast === 'function') showToast('Email verified — thank you!');
+          return;
+        }
+        await auth.currentUser.sendEmailVerification();
+        if (typeof showToast === 'function') showToast('Verification email sent');
+      } catch (e) {
+        if (typeof showToast === 'function') showToast(e.message || 'Could not send email');
+      }
+    });
+    el.querySelector('[data-verify-dismiss]')?.addEventListener('click', () => {
+      try {
+        sessionStorage.setItem(EMAIL_VERIFY_DISMISS_KEY, u.uid);
+      } catch (e) {}
+      el.remove();
+    });
+  }
+}
+
+window.syncEmailVerifyBanner = syncEmailVerifyBanner;
+window.hasVerifiedContact = hasVerifiedContact;
+
 function wireAuthEvents() {
   if (authEventsWired) return;
   authEventsWired = true;
@@ -177,6 +409,7 @@ function wireAuthEvents() {
   document.getElementById('heroSignupBtn')?.addEventListener('click', () => {
     regData = emptyRegData();
     syncRegProfileTypeUi();
+    syncGenderUi();
     showAuthScreen('authRegStep1');
   });
   document.getElementById('heroLoginBtn')?.addEventListener('click', () => showAuthScreen('authLoginScreen'));
@@ -186,6 +419,7 @@ function wireAuthEvents() {
   document.getElementById('loginToSignup')?.addEventListener('click', () => {
     regData = emptyRegData();
     syncRegProfileTypeUi();
+    syncGenderUi();
     showAuthScreen('authRegStep1');
   });
   document.getElementById('toggleLoginPwd')?.addEventListener('click', () => {
@@ -200,10 +434,25 @@ function wireAuthEvents() {
       btn.dataset.iconHydrated = '1';
     }
   });
-  document.getElementById('forgotPasswordBtn')?.addEventListener('click', () => {
-    const email = document.getElementById('loginEmail')?.value.trim();
+  document.getElementById('forgotPasswordBtn')?.addEventListener('click', async () => {
+    const raw = document.getElementById('loginIdentifier')?.value.trim();
+    const errEl = document.getElementById('loginError');
+    if (!raw) {
+      if (errEl) errEl.textContent = 'Enter your username, email, or phone first';
+      return;
+    }
+    let email = looksLikeEmail(raw) ? raw.toLowerCase() : '';
+    if (!email && typeof apiFetch === 'function') {
+      try {
+        const envelope = await apiFetch('/api/media-config', {
+          method: 'POST',
+          body: { action: 'resolve_identifier', identifier: raw },
+        });
+        email = envelope?.data?.email || '';
+      } catch (e) {}
+    }
     if (!email) {
-      document.getElementById('loginError').textContent = 'Enter your email first';
+      if (errEl) errEl.textContent = 'Enter the email on your account to reset your password';
       return;
     }
     if (auth)
@@ -234,7 +483,25 @@ function wireAuthEvents() {
     updateProfileBtn();
     if (typeof loadStreak === 'function') loadStreak();
     if (typeof initActivityStatus === 'function') initActivityStatus();
+    syncEmailVerifyBanner();
     showToast(welcomeMsg || t('auth_welcome'));
+  }
+
+  function showPasswordNudge(thenContinue) {
+    pendingPasswordNudgeContinue = thenContinue;
+    const u = auth?.currentUser;
+    const emailGroup = document.getElementById('nudgeEmailGroup');
+    const emailInp = document.getElementById('nudgeEmail');
+    if (u?.email) {
+      if (emailGroup) emailGroup.classList.add('hidden');
+      if (emailInp) emailInp.value = u.email;
+    } else {
+      if (emailGroup) emailGroup.classList.remove('hidden');
+      if (emailInp) emailInp.value = '';
+    }
+    const err = document.getElementById('nudgeError');
+    if (err) err.textContent = '';
+    showAuthScreen('authPasswordNudgeScreen');
   }
 
   async function ensureUserDocAfterSocial(user, extras = {}) {
@@ -326,15 +593,56 @@ function wireAuthEvents() {
     try {
       const cred = await loginConfirmation.confirm(code);
       currentUser = cred.user;
+      await writePhoneIndex(cred.user, cred.user.email || '');
       const doc = await ensureUserDocAfterSocial(cred.user, { phone: cred.user.phoneNumber });
-      if (doc) await finishAuthSession(t('auth_welcome_back'));
+      if (!doc) return;
+      if (!userHasPasswordProvider(cred.user)) {
+        showPasswordNudge(() => finishAuthSession(t('auth_welcome_back')));
+        return;
+      }
+      await finishAuthSession(t('auth_welcome_back'));
     } catch (e) {
       if (errEl) errEl.textContent = e.message || 'Invalid OTP';
     }
   });
 
+  document.getElementById('nudgePasswordSave')?.addEventListener('click', async () => {
+    const errEl = document.getElementById('nudgeError');
+    const u = auth?.currentUser;
+    if (!u) return;
+    const email = (document.getElementById('nudgeEmail')?.value || u.email || '').trim().toLowerCase();
+    const pwd = document.getElementById('nudgePassword')?.value || '';
+    if (!email || !looksLikeEmail(email)) {
+      if (errEl) errEl.textContent = 'Enter a valid email';
+      return;
+    }
+    if (!pwd || pwd.length < 8) {
+      if (errEl) errEl.textContent = 'Password must be at least 8 characters';
+      return;
+    }
+    try {
+      await linkEmailPassword(u, email, pwd);
+      const cont = pendingPasswordNudgeContinue;
+      pendingPasswordNudgeContinue = null;
+      if (cont) await cont();
+      else await finishAuthSession(t('auth_welcome_back'));
+    } catch (e) {
+      if (errEl)
+        errEl.textContent =
+          e.code === 'auth/email-already-in-use'
+            ? 'That email is already linked to another account'
+            : e.message || 'Could not save password';
+    }
+  });
+  document.getElementById('nudgePasswordLater')?.addEventListener('click', async () => {
+    const cont = pendingPasswordNudgeContinue;
+    pendingPasswordNudgeContinue = null;
+    if (cont) await cont();
+    else await finishAuthSession(t('auth_welcome_back'));
+  });
+
   document.getElementById('regPhoneSendOtp')?.addEventListener('click', async () => {
-    const errEl = document.getElementById('reg2Error');
+    const errEl = document.getElementById('reg2Error') || document.getElementById('registerError');
     const phone = toE164India(
       document.getElementById('regPhoneOtpInput')?.value || document.getElementById('regPhone')?.value
     );
@@ -354,7 +662,7 @@ function wireAuthEvents() {
   });
 
   document.getElementById('regPhoneVerifyOtp')?.addEventListener('click', async () => {
-    const errEl = document.getElementById('reg2Error');
+    const errEl = document.getElementById('reg2Error') || document.getElementById('registerError');
     const code = document.getElementById('regPhoneOtpCode')?.value.trim();
     if (!regConfirmation || !code) {
       if (errEl) errEl.textContent = 'Send OTP first, then enter the code';
@@ -365,10 +673,17 @@ function wireAuthEvents() {
       currentUser = cred.user;
       regPhoneVerified = cred.user.phoneNumber || '';
       regData.phone = regPhoneVerified;
+      await writePhoneIndex(cred.user, cred.user.email || document.getElementById('regEmail')?.value || '');
       const hint = document.getElementById('regPhoneVerifiedHint');
       if (hint) {
         hint.style.display = 'block';
-        hint.textContent = `Phone verified âœ“ ${regPhoneVerified}`;
+        hint.textContent = `Phone verified ✓ ${regPhoneVerified}`;
+      }
+      // Surface password + email so phone accounts can use identifier login later
+      const pwdHint = document.getElementById('regPassword')?.closest('.auth-input-group')?.querySelector('.auth-input-hint');
+      if (pwdHint) {
+        pwdHint.textContent =
+          'Recommended after phone verify — set email + password to log in without OTP next time.';
       }
       showToast(t('auth_phone_verified'));
     } catch (e) {
@@ -377,10 +692,10 @@ function wireAuthEvents() {
   });
 
   document.getElementById('loginBtn')?.addEventListener('click', async () => {
-    const email = document.getElementById('loginEmail')?.value.trim();
+    const identifier = document.getElementById('loginIdentifier')?.value.trim();
     const pwd = document.getElementById('loginPassword')?.value;
     const errEl = document.getElementById('loginError');
-    if (!email || !pwd) {
+    if (!identifier || !pwd) {
       errEl.textContent = 'Please fill in all fields';
       return;
     }
@@ -391,49 +706,53 @@ function wireAuthEvents() {
       btn.disabled = true;
     }
     try {
-      if (auth) await auth.signInWithEmailAndPassword(email, pwd);
+      let email = looksLikeEmail(identifier) ? identifier.toLowerCase() : '';
+      if (!email) {
+        if (typeof apiFetch !== 'function') throw Object.assign(new Error('resolve_unavailable'), { code: 'resolve' });
+        const envelope = await apiFetch('/api/media-config', {
+          method: 'POST',
+          body: { action: 'resolve_identifier', identifier },
+        });
+        email = envelope?.data?.email || '';
+        if (!email || envelope?.data?.notFound) {
+          errEl.textContent = LOGIN_GENERIC_ERR;
+          return;
+        }
+      }
+      await auth.signInWithEmailAndPassword(email, pwd);
       const u = auth?.currentUser;
+      currentUser = u;
+      // Do NOT sign out when email unverified — enter app + banner
+      await finishAuthSession(t('auth_welcome_back'));
       if (u && !hasVerifiedContact(u)) {
         try {
           await u.sendEmailVerification();
         } catch (e) {}
-        errEl.textContent = 'Verify your email first — we sent a fresh link. Then log in again.';
-        try {
-          await auth.signOut();
-        } catch (e) {}
-        return;
+        syncEmailVerifyBanner();
       }
-      if (typeof trackLogin === 'function') trackLogin();
-      hideAuth();
-      updateProfileBtn();
-      loadStreak();
-      initActivityStatus();
-      showToast(t('auth_welcome_back'));
     } catch (e) {
       errEl.textContent =
-        e.code === 'auth/wrong-password'
-          ? 'Wrong password. Try again or reset it.'
-          : e.code === 'auth/user-not-found'
-            ? 'No account found with this email.'
-            : 'Login failed: ' + e.message;
+        e.code === 'auth/wrong-password' ||
+        e.code === 'auth/user-not-found' ||
+        e.code === 'auth/invalid-credential' ||
+        e.code === 'auth/invalid-email' ||
+        e.code === 'resolve'
+          ? LOGIN_GENERIC_ERR
+          : LOGIN_GENERIC_ERR;
     } finally {
       if (typeof setButtonLoading === 'function') setButtonLoading(btn, false);
       else {
-        btn.textContent = 'Log in â†’';
+        btn.textContent = 'Log in →';
         btn.disabled = false;
       }
     }
   });
-  document
-    .getElementById('loginEmail')
-    ?.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') document.getElementById('loginPassword')?.focus();
-    });
-  document
-    .getElementById('loginPassword')
-    ?.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') document.getElementById('loginBtn')?.click();
-    });
+  document.getElementById('loginIdentifier')?.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') document.getElementById('loginPassword')?.focus();
+  });
+  document.getElementById('loginPassword')?.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') document.getElementById('loginBtn')?.click();
+  });
 
   // ---- Step 1 ----
   document.getElementById('reg1BackBtn')?.addEventListener('click', () => showAuthScreen('authHeroScreen', 'back'));
@@ -447,10 +766,27 @@ function wireAuthEvents() {
 
   document.querySelectorAll('#regGenderChips .auth-gender-chip').forEach((chip) => {
     chip.addEventListener('click', () => {
-      document.querySelectorAll('#regGenderChips .auth-gender-chip').forEach((c) => c.classList.remove('active'));
-      chip.classList.add('active');
-      regData.gender = chip.dataset.val || '';
+      const val = chip.dataset.val || '';
+      if (val === 'self_describe') {
+        regData.genderSelfDescribe = true;
+        regData.gender = document.getElementById('regGenderCustom')?.value.trim() || '';
+      } else {
+        regData.genderSelfDescribe = false;
+        regData.gender = val;
+        const custom = document.getElementById('regGenderCustom');
+        if (custom) custom.value = '';
+      }
+      syncGenderUi();
     });
+  });
+  document.getElementById('regGenderCustom')?.addEventListener('input', (e) => {
+    if (regData.genderSelfDescribe) regData.gender = String(e.target.value || '').trim().slice(0, 40);
+  });
+  document.getElementById('regIndustryOther')?.addEventListener('input', (e) => {
+    regData.industry = String(e.target.value || '').trim().slice(0, 80);
+  });
+  document.getElementById('regPurposeOther')?.addEventListener('input', (e) => {
+    regData.purpose = String(e.target.value || '').trim().slice(0, 80);
   });
 
   document.getElementById('regUsername')?.addEventListener('input', (e) => {
@@ -467,6 +803,9 @@ function wireAuthEvents() {
     const username = document.getElementById('regUsername')?.value.trim().toLowerCase();
     const dob = document.getElementById('regDob')?.value;
     const errEl = document.getElementById('reg1Error');
+    if (regData.genderSelfDescribe) {
+      regData.gender = document.getElementById('regGenderCustom')?.value.trim() || '';
+    }
     if (!name) {
       errEl.textContent = 'Please enter your full name';
       return;
@@ -485,13 +824,15 @@ function wireAuthEvents() {
       return;
     }
     if (regData.profileType === 'personal' && !regData.gender) {
-      errEl.textContent = 'Please choose a gender for your Personal account';
+      errEl.textContent = regData.genderSelfDescribe
+        ? 'Please describe your gender'
+        : 'Please choose a gender for your Personal account';
       return;
     }
-    errEl.textContent = 'Checking usernameâ€¦';
+    errEl.textContent = 'Checking username…';
     const available = await checkUsernameAvailability(username);
     if (!available) {
-      errEl.textContent = 'That username is taken â€” pick another';
+      errEl.textContent = 'That username is taken — pick another';
       return;
     }
     errEl.textContent = '';
@@ -499,6 +840,19 @@ function wireAuthEvents() {
     regData.username = username;
     regData.dob = dob;
     regData.age = age;
+    if (regData.profileType === 'professional') {
+      const indOther = document.getElementById('regIndustryOther');
+      const purOther = document.getElementById('regPurposeOther');
+      if (indOther && !indOther.classList.contains('hidden')) {
+        regData.industry = indOther.value.trim();
+      }
+      if (purOther && !purOther.classList.contains('hidden')) {
+        regData.purpose = purOther.value.trim();
+      }
+    } else {
+      regData.industry = '';
+      regData.purpose = '';
+    }
     showAuthScreen('authRegStep2');
   });
 
@@ -606,13 +960,26 @@ function wireAuthEvents() {
     const email = document.getElementById('regEmail')?.value.trim();
     const pwd = document.getElementById('regPassword')?.value;
     const errEl = document.getElementById('registerError') || document.getElementById('reg2Error');
-    const phoneOk = !!(regPhoneVerified || (auth?.currentUser?.phoneNumber));
-    const googleOk = !!(auth?.currentUser?.email && auth.currentUser.providerData?.some((p) => p.providerId === 'google.com'));
-    const emailOk = email && /\S+@\S+\.\S+/.test(email) && pwd && pwd.length >= 8;
+    const phoneOk = !!(regPhoneVerified || auth?.currentUser?.phoneNumber);
+    const googleOk = !!(
+      auth?.currentUser?.email && auth.currentUser.providerData?.some((p) => p.providerId === 'google.com')
+    );
+    const emailOk = email && looksLikeEmail(email) && pwd && pwd.length >= 8;
 
     if (!emailOk && !phoneOk && !googleOk) {
       errEl.textContent = 'Verify email+password, Google, or phone OTP to create an account';
       return;
+    }
+    // Phone path: if email entered, password is required to link for identifier login
+    if (phoneOk && !googleOk && !userHasPasswordProvider(auth?.currentUser)) {
+      if (email && (!pwd || pwd.length < 8)) {
+        errEl.textContent = 'Set a password (min 8 characters) with your email, or leave email blank for now';
+        return;
+      }
+      if (pwd && !email) {
+        errEl.textContent = 'Enter an email to pair with your password, or leave both blank';
+        return;
+      }
     }
     if (emailOk && isDisposableEmail(email)) {
       errEl.textContent = 'Please use a permanent email address (not a temporary inbox)';
@@ -625,14 +992,15 @@ function wireAuthEvents() {
     if (!regData.usernameAvailable) {
       const ok = await checkUsernameAvailability(regData.username);
       if (!ok) {
-        errEl.textContent = 'Username is no longer available â€” go back and pick another';
+        errEl.textContent = 'Username is no longer available — go back and pick another';
         return;
       }
     }
 
     regData.email = email || auth?.currentUser?.email || '';
     regData.password = pwd || '';
-    regData.phone = regPhoneVerified || document.getElementById('regPhone')?.value.trim() || auth?.currentUser?.phoneNumber || '';
+    regData.phone =
+      regPhoneVerified || document.getElementById('regPhone')?.value.trim() || auth?.currentUser?.phoneNumber || '';
     regData.city = document.getElementById('regCity')?.value.trim() || '';
     regData.lang = document.getElementById('regLanguage')?.value || 'en';
     if (typeof setAppLanguage === 'function') setAppLanguage(regData.lang, { persistRemote: false });
@@ -659,6 +1027,20 @@ function wireAuthEvents() {
         }
         if (!credUser) throw new Error('Sign in with Google or verify phone first');
         currentUser = credUser;
+
+        // Phone-only signup: link email+password when provided
+        if (phoneOk && emailOk && !userHasPasswordProvider(credUser)) {
+          try {
+            await linkEmailPassword(credUser, regData.email, regData.password);
+          } catch (e) {
+            if (e.code === 'auth/email-already-in-use') {
+              throw Object.assign(new Error('That email is already in use'), { code: 'auth/email-already-in-use' });
+            }
+            throw e;
+          }
+        } else if (phoneOk && credUser.phoneNumber) {
+          await writePhoneIndex(credUser, regData.email || credUser.email || '');
+        }
 
         if (regData.photoFile && typeof uploadOptimizedImage === 'function') {
           try {
@@ -691,6 +1073,11 @@ function wireAuthEvents() {
           else if (!intentList.includes(regData.customIntent)) intentList.push(regData.customIntent);
         }
         const primaryIntent = intentList.find((i) => i && i !== 'Something else') || '';
+        const needsEmailForPasswordLogin = !!(
+          phoneOk &&
+          !userHasPasswordProvider(credUser) &&
+          !regData.email
+        );
         const profile = {
           name: regData.name,
           username: regData.username,
@@ -707,6 +1094,9 @@ function wireAuthEvents() {
           photoURL,
           photoThumb: photoThumb || null,
           profileType,
+          industry: profileType === 'professional' ? regData.industry || '' : '',
+          purpose: profileType === 'professional' ? regData.purpose || '' : '',
+          needsEmailForPasswordLogin,
           openToMeet: regData.openToMeet,
           strangerDailyLimit: 10,
           intents: intentList,
@@ -735,6 +1125,8 @@ function wireAuthEvents() {
             age: regData.age,
             currentCity: regData.city || '',
             lookingFor: primaryIntent,
+            industry: profileType === 'professional' ? regData.industry || '' : '',
+            purpose: profileType === 'professional' ? regData.purpose || '' : '',
           },
         };
 
@@ -765,6 +1157,10 @@ function wireAuthEvents() {
             await unameRef.set({ uid: credUser.uid, profileId: 'primary' });
           }
           await db.collection('users').doc(credUser.uid).set(profile, { merge: true });
+          if (profileType === 'professional') {
+            if (regData.industry) await bumpStat('industryStats', regData.industry);
+            if (regData.purpose) await bumpStat('purposeStats', regData.purpose);
+          }
           try {
             if (typeof UsersPublic?.syncPublicProfile === 'function') {
               await UsersPublic.syncPublicProfile(credUser.uid, profile);
@@ -805,9 +1201,17 @@ function wireAuthEvents() {
       const firstName = regData.name.split(' ')[0];
       const typeLabel = regData.profileType === 'professional' ? 'Professional' : 'Personal';
       document.getElementById('authSuccessTitle').textContent = `Welcome, ${firstName}!`;
-      const needsEmailVerify = !!(emailOk && !googleOk && !phoneOk && auth?.currentUser && !auth.currentUser.emailVerified);
+      const needsEmailVerify = !!(
+        emailOk &&
+        !googleOk &&
+        !phoneOk &&
+        auth?.currentUser &&
+        !auth.currentUser.emailVerified
+      );
       let desc = `${typeLabel} account ready.`;
-      if (needsEmailVerify) desc = `${typeLabel} account created — verify your email to continue.`;
+      if (needsEmailVerify) desc = `${typeLabel} account created — verify your email when you can.`;
+      else if (phoneOk && !regData.email)
+        desc += ' Add an email in your profile to enable password login with your phone number.';
       else if (emailOk && !googleOk) desc += ' Check your email to verify your address.';
       document.getElementById('authSuccessDesc').textContent = regData.intents.length
         ? `${desc} You're here to: ${regData.intents.slice(0, 2).join(' & ')}.`
@@ -816,26 +1220,17 @@ function wireAuthEvents() {
 
       const cta = document.getElementById('authSuccessCta');
       if (cta) {
-        cta.textContent = needsEmailVerify ? 'I’ve verified — continue' : 'Enter Chaupaal';
+        cta.textContent = 'Enter Chaupaal';
         if (!cta.dataset.wired) {
           cta.dataset.wired = '1';
           cta.addEventListener('click', async () => {
             try {
               if (auth?.currentUser) await auth.currentUser.reload();
             } catch (e) {}
-            const u = auth?.currentUser;
-            if (u && !hasVerifiedContact(u)) {
-              try {
-                await u.sendEmailVerification();
-              } catch (e) {}
-              if (typeof showToast === 'function') {
-                showToast(t('auth_email_link_continue'));
-              }
-              return;
-            }
             hideAuth();
             updateProfileBtn();
             if (typeof loadStreak === 'function') loadStreak();
+            syncEmailVerifyBanner();
           });
         }
       }
@@ -845,12 +1240,12 @@ function wireAuthEvents() {
         e.code === 'username-taken' || e.code === 'auth/email-already-in-use'
           ? 'That email or username is already taken'
           : e.code === 'account-exists'
-            ? 'Account already exists â€” log in instead'
+            ? 'Account already exists — log in instead'
             : e.message || 'Could not create account';
     } finally {
       if (typeof setButtonLoading === 'function') setButtonLoading(btn, false);
       else if (btn) {
-        btn.textContent = 'Create account';
+        btn.textContent = 'Create my account';
         btn.disabled = false;
       }
     }

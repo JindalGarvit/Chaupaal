@@ -67,6 +67,64 @@ async function handleUsernameCheck(req, res, body) {
   }
 }
 
+function normalizePhoneE164(raw) {
+  const s = String(raw || '').trim();
+  const digits = s.replace(/\D/g, '');
+  if (digits.length === 10) return '+91' + digits;
+  if (digits.length === 12 && digits.startsWith('91')) return '+' + digits;
+  if (s.startsWith('+') && digits.length >= 10) return '+' + digits;
+  return null;
+}
+
+/**
+ * Pre-auth login helper — returns { email } or generic { notFound: true }.
+ * Never reveals whether username/phone existed without an email (enumeration-safe).
+ */
+async function handleResolveIdentifier(req, res, body) {
+  const raw = String(body.identifier || '').trim();
+  if (!raw || raw.length > 128) {
+    return sendSuccess(res, { notFound: true });
+  }
+  // Email identifiers skip lookup on the client; if called here, pass through normalized.
+  if (/\S+@\S+\.\S+/.test(raw)) {
+    return sendSuccess(res, { email: raw.toLowerCase() });
+  }
+
+  const app = initAdmin();
+  if (!app) {
+    return sendSuccess(res, { notFound: true, degraded: true });
+  }
+
+  const phone = normalizePhoneE164(raw);
+  try {
+    if (phone) {
+      const snap = await app.firestore().collection('phoneIndex').doc(phone).get();
+      const email = String(snap.data()?.email || '').trim().toLowerCase();
+      if (!snap.exists || !email) return sendSuccess(res, { notFound: true });
+      return sendSuccess(res, { email });
+    }
+
+    const username = raw
+      .toLowerCase()
+      .replace(/^@/, '')
+      .replace(/[^a-z0-9_]/g, '');
+    if (username.length < 3 || username.length > 20) {
+      return sendSuccess(res, { notFound: true });
+    }
+    const unameSnap = await app.firestore().collection('usernames').doc(username).get();
+    if (!unameSnap.exists) return sendSuccess(res, { notFound: true });
+    const uid = unameSnap.data()?.uid;
+    if (!uid) return sendSuccess(res, { notFound: true });
+    const userSnap = await app.firestore().collection('users').doc(uid).get();
+    const email = String(userSnap.data()?.email || '').trim().toLowerCase();
+    if (!email) return sendSuccess(res, { notFound: true });
+    return sendSuccess(res, { email });
+  } catch (e) {
+    console.warn('[media-config] resolve_identifier', e?.message || e);
+    return sendSuccess(res, { notFound: true });
+  }
+}
+
 async function handlePost(req, res) {
   let body;
   try {
@@ -77,9 +135,12 @@ async function handlePost(req, res) {
 
   const action = String(body.action || '').trim();
 
-  // Pre-auth signup only — no Bearer required; never returns uid.
+  // Pre-auth signup/login only — no Bearer required; never returns uid.
   if (action === 'username_check') {
     return handleUsernameCheck(req, res, body);
+  }
+  if (action === 'resolve_identifier') {
+    return handleResolveIdentifier(req, res, body);
   }
 
   const user = await requireUser(req, res, { allowWeak: false });
@@ -238,6 +299,8 @@ async function handlePost(req, res) {
       'check_url',
       'agora_token',
       'policy_consume',
+      'username_check',
+      'resolve_identifier',
     ],
   });
 }

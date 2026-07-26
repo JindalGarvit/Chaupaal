@@ -250,6 +250,49 @@ service cloud.firestore {
       allow delete: if isAuth() && resource.data.uid == request.auth.uid;
     }
 
+    // Phone → uid/email index for unified identifier login.
+    // Client writes only for own verified phone; lookups go through resolve_identifier (Admin).
+    match /phoneIndex/{phone} {
+      allow get, list: if false;
+      allow create, update: if isAuth()
+        && request.resource.data.uid == request.auth.uid
+        && request.auth.token.phone_number == phone
+        && (!('email' in request.resource.data) || request.resource.data.email is string);
+      allow delete: if isAuth() && resource.data.uid == request.auth.uid;
+    }
+
+    // Professional signup picklists — public read (label + count only); auth increments.
+    match /industryStats/{value} {
+      allow read: if true;
+      allow create: if isAuth()
+        && request.resource.data.keys().hasOnly(['count', 'label'])
+        && request.resource.data.count is int
+        && request.resource.data.count == 1
+        && request.resource.data.label is string
+        && request.resource.data.label.size() > 0
+        && request.resource.data.label.size() <= 80;
+      allow update: if isAuth()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['count', 'label'])
+        && request.resource.data.count is int
+        && request.resource.data.count == resource.data.count + 1;
+      allow delete: if false;
+    }
+    match /purposeStats/{value} {
+      allow read: if true;
+      allow create: if isAuth()
+        && request.resource.data.keys().hasOnly(['count', 'label'])
+        && request.resource.data.count is int
+        && request.resource.data.count == 1
+        && request.resource.data.label is string
+        && request.resource.data.label.size() > 0
+        && request.resource.data.label.size() <= 80;
+      allow update: if isAuth()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['count', 'label'])
+        && request.resource.data.count is int
+        && request.resource.data.count == resource.data.count + 1;
+      allow delete: if false;
+    }
+
     // Invite tokens keyed by token string — get by id only (no token harvest via chat list).
     match /groupInvites/{token} {
       allow get: if isAuth();

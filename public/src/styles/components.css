@@ -1190,6 +1190,22 @@ body.theme-dawn,
 .auth-type-chip span{font-size:11px;color:var(--muted);line-height:1.35;}
 .auth-type-chip.active{border-color:var(--red);background:rgba(230,57,70,0.07);color:var(--red);}
 .auth-type-chip.active span{color:rgba(230,57,70,0.75);}
+.auth-type-toggle{display:inline-flex;gap:4px;padding:4px;border-radius:999px;background:var(--cream);border:1.5px solid var(--line);}
+.auth-type-pill{border:none;background:transparent;border-radius:999px;padding:8px 16px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px;color:var(--muted);cursor:pointer;}
+.auth-type-pill.active{background:var(--white);color:var(--red);box-shadow:0 1px 4px rgba(43,39,48,0.08);}
+.auth-picklist{display:flex;flex-wrap:wrap;gap:7px;}
+.auth-pick-chip{padding:8px 12px;border:2px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;background:var(--cream);color:var(--ink);}
+.auth-pick-chip.active{border-color:var(--red);color:var(--red);background:rgba(230,57,70,0.07);}
+.email-verify-banner{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  padding:10px 14px;background:rgba(230,57,70,0.1);border-bottom:1px solid rgba(230,57,70,0.25);
+  flex-shrink:0;z-index:40;
+}
+.email-verify-banner-text{display:flex;flex-direction:column;gap:2px;font-size:12px;line-height:1.4;color:var(--ink);min-width:0;}
+.email-verify-banner-text strong{font-family:'Space Grotesk',sans-serif;font-size:13px;}
+.email-verify-banner-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.email-verify-banner-actions .btn{padding:8px 12px;font-size:12px;border-radius:10px;}
+.email-verify-banner-dismiss{border:none;background:transparent;color:var(--muted);font-size:16px;cursor:pointer;padding:4px 6px;}
 .auth-optional-block{margin-top:8px;padding-top:14px;border-top:1px dashed var(--line);}
 .auth-optional-label{font:700 11px 'Space Grotesk',sans-serif;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px;}
 .profile-gender-prompt{margin:0 0 14px;padding:14px;border-radius:14px;border:1px solid var(--line);background:linear-gradient(180deg,#fff,#FBF6F0);}
