@@ -173,6 +173,7 @@ Visual hierarchy tokens live in `public/src/styles/tokens.css` (`:root`). **Pref
 | Actions | `--btn-primary-*`, `--btn-secondary-*`, `--btn-tertiary-*`, `--icon-*` | Primary CTA dominant; secondary/tertiary quieter |
 | Feed | `--feed-card-pad`, `--feed-avatar`, `--feed-action-gap` | Shared Peepal/Duniya/Lehar card anatomy |
 | Call / Mehfil | `--call-bg`, `--call-surface`, `--call-tile`, `--call-ctrl-*`, `--call-hangup-*`, `--call-speaking`, `--call-chrome-fade` | In-call stage, dock states (muted/live), hang-up, chrome dim |
+| Sensory theme | `--theme-light-temp`, `--theme-brightness`, `--theme-precipitation`, `--theme-cloud-cover`, `--theme-motion`, `--theme-overlay`, `--theme-dim` | Continuous look from `theme-engine.js` (anchors + interpolation) |
 
 Chat polish (bubbles, composer, typing) lives mainly in `baithak.css`. Media cards use the same action hierarchy in `components.css` (`.music-card`). Empty/loading/error shells use `ui-states.js` + `.cp-empty` / `.cp-state` in `components.css`. Mehfil call chrome lives in `mehfil.css` (linked from `index.html`); do not reinject call styles from JS.
 

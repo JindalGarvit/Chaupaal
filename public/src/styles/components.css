@@ -989,8 +989,41 @@ html.is-offline .device { filter: saturate(0.92); }
 
 /* ============================================================
    DYNAMIC THEMES (time-of-day shell)
-   Class is set on html/body/.device by applyTheme()
+   Class is set on html/body/.device by applyTheme() / ChaupaalTheme
    ============================================================ */
+.theme-rain-overlay{
+  pointer-events:none;position:absolute;inset:0;z-index:3;
+  opacity:0;transition:opacity 1.2s var(--ease-smooth,ease);
+  background:repeating-linear-gradient(
+    -12deg,
+    transparent 0,
+    transparent 8px,
+    rgba(120,150,180,calc(0.04 + var(--theme-precipitation,0) * 0.06)) 8px,
+    rgba(120,150,180,calc(0.04 + var(--theme-precipitation,0) * 0.06)) 10px
+  );
+  animation:themeRainDrift 1.6s linear infinite;
+  mix-blend-mode:multiply;
+}
+html.theme-sensory .device{position:relative;}
+@keyframes themeRainDrift{
+  from{background-position:0 0;}
+  to{background-position:12px 28px;}
+}
+@media (prefers-reduced-motion:reduce){
+  .theme-rain-overlay{animation:none;}
+}
+.display-mode-group{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
+.display-mode-option{
+  display:flex;align-items:flex-start;gap:10px;padding:10px 12px;
+  border:2px solid var(--line);border-radius:12px;cursor:pointer;background:var(--cream);
+}
+.display-mode-option:has(input:checked){
+  border-color:var(--red);background:rgba(230,57,70,0.07);
+}
+.display-mode-option input{margin-top:3px;accent-color:var(--red);}
+.display-mode-option strong{display:block;font-family:var(--font-display,'Space Grotesk',sans-serif);font-size:13px;font-weight:700;}
+.display-mode-option small{display:block;font-size:11px;color:var(--muted);line-height:1.35;margin-top:2px;}
+
 .theme-night{
   --cream:#12141C;
   --white:#1A1D27;

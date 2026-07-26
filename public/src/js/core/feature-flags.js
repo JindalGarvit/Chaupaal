@@ -89,6 +89,20 @@
       denyList: [],
       note: 'Mehfil A/V rooms. Requires AGORA_APP_ID + AGORA_APP_CERTIFICATE. Enable after keys are live.',
     },
+    sensory_theme: {
+      enabled: false,
+      percent: 0,
+      allowList: [],
+      denyList: [],
+      note: 'Continuous sensory theming (time + weather interpolation). Off = discrete 6-state themes.',
+    },
+    ambient_sound: {
+      enabled: false,
+      percent: 0,
+      allowList: [],
+      denyList: [],
+      note: 'Ambient sound pads for sensory theme. Independent of sensory_theme; off by default for users too.',
+    },
   };
 
   window.isFeatureEnabled = isFeatureEnabled;

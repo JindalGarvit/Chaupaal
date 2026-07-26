@@ -84,6 +84,15 @@
   --call-speaking:var(--gold);
   --call-ctrl-size:52px;
   --call-chrome-fade:0.22;
+  /* Sensory theme engine — written by theme-engine.js; surfaces opt in via these vars */
+  --theme-light-temp:0.45;
+  --theme-brightness:0.88;
+  --theme-precipitation:0;
+  --theme-cloud-cover:0.15;
+  --theme-motion:0.3;
+  --theme-is-day:1;
+  --theme-overlay:rgba(0,0,0,0);
+  --theme-dim:0;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{

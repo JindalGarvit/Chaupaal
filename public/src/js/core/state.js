@@ -91,6 +91,15 @@ document.getElementById('settingsBtn').addEventListener('click',()=>{
     typeHost.innerHTML=renderProfileTypeToggleHtml();
     if(typeof wireProfileTypeToggle==='function') wireProfileTypeToggle(typeHost);
   }
+  // Display / sensory theme
+  try{
+    const mode=(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.getDisplayMode)?ChaupaalTheme.getDisplayMode():'auto';
+    const radio=document.querySelector(`input[name="displayMode"][value="${mode}"]`);
+    if(radio) radio.checked=true;
+    const amb=document.getElementById('toggleAmbientSound');
+    if(amb) amb.checked=!!(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.isAmbientUserOn&&ChaupaalTheme.isAmbientUserOn());
+    if(typeof updateThemeGeoStatusUI==='function') updateThemeGeoStatusUI();
+  }catch(e){}
   // Companion opt-out: checked = outreach ON (optOut false)
   try{
     const el=document.getElementById('toggleCompanionOutreach');
@@ -147,6 +156,21 @@ document.getElementById('saveSettings').addEventListener('click',()=>{
       db.collection('users').doc(currentUser.uid).set({ akhbaarAppearInFriendsPrompts: appearOn }, { merge:true }).catch(()=>{});
     }
   }catch(e){}
+  // Display mode + ambient sound
+  try{
+    const modeEl=document.querySelector('input[name="displayMode"]:checked');
+    const mode=modeEl?.value||'auto';
+    if(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.setDisplayMode) ChaupaalTheme.setDisplayMode(mode);
+    const ambOn=!!document.getElementById('toggleAmbientSound')?.checked;
+    if(ambOn){
+      if(typeof ChaupaalAmbient!=='undefined'&&ChaupaalAmbient.enableFromUserGesture) ChaupaalAmbient.enableFromUserGesture();
+      else if(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.setAmbientUserOn) ChaupaalTheme.setAmbientUserOn(true);
+    }else if(typeof ChaupaalAmbient!=='undefined'&&ChaupaalAmbient.disable){
+      ChaupaalAmbient.disable();
+    }else if(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.setAmbientUserOn){
+      ChaupaalTheme.setAmbientUserOn(false);
+    }
+  }catch(e){}
   document.getElementById('settingsModal').classList.add('hidden');
   showToast(t('settings_saved'));
 });
@@ -179,5 +203,92 @@ document.getElementById('strangerLimitSlider')?.addEventListener('input',e=>{
 
 document.getElementById('toggleQuiet').addEventListener('change',e=>{
   quietMode=e.target.checked;
-  // Quiet mode only gates cues/TTS — no background music to restart.
+  try{localStorage.setItem('chaupaal_quiet', quietMode?'1':'0');}catch(err){}
+  if(typeof ChaupaalAmbient!=='undefined'&&ChaupaalAmbient.sync) ChaupaalAmbient.sync();
+});
+
+function updateThemeGeoStatusUI(){
+  const statusEl=document.getElementById('themeGeoStatus');
+  const btn=document.getElementById('themeGeoEnableBtn');
+  if(!statusEl) return;
+  const consent=(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.getGeoConsent)?ChaupaalTheme.getGeoConsent():'unknown';
+  const key=consent==='granted'?'display_geo_status_granted':consent==='denied'?'display_geo_status_denied':'display_geo_status_unknown';
+  statusEl.textContent=typeof t==='function'?t(key):key;
+  if(btn){
+    const show=consent!=='granted';
+    btn.style.display=show?'block':'none';
+  }
+}
+
+async function promptThemeGeoConsent(){
+  return new Promise((resolve)=>{
+    const existing=document.getElementById('themeGeoConsentModal');
+    existing?.remove();
+    const wrap=document.createElement('div');
+    wrap.id='themeGeoConsentModal';
+    wrap.className='modal-backdrop';
+    wrap.innerHTML=`
+      <div class="modal" style="max-width:340px;">
+        <div class="modal-header"><div class="modal-title">${typeof t==='function'?t('display_geo_prompt_title'):'Match Chaupaal to your sky?'}</div></div>
+        <p style="font-size:14px;color:var(--muted);line-height:1.5;margin:0 0 16px;">${typeof t==='function'?t('display_geo_prompt_body'):''}</p>
+        <button type="button" class="btn btn--primary btn--block" data-allow style="margin-bottom:8px;">${typeof t==='function'?t('display_geo_prompt_allow'):'Continue'}</button>
+        <button type="button" class="btn btn--block" data-deny>${typeof t==='function'?t('display_geo_prompt_deny'):'Not now'}</button>
+      </div>`;
+    document.body.appendChild(wrap);
+    const done=(v)=>{ wrap.remove(); resolve(v); };
+    wrap.querySelector('[data-allow]')?.addEventListener('click',()=>done(true));
+    wrap.querySelector('[data-deny]')?.addEventListener('click',()=>done(false));
+    wrap.addEventListener('click',(e)=>{ if(e.target===wrap) done(false); });
+  });
+}
+
+document.getElementById('themeGeoEnableBtn')?.addEventListener('click', async ()=>{
+  const ok=await promptThemeGeoConsent();
+  if(!ok){
+    if(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.setGeoConsent) ChaupaalTheme.setGeoConsent('denied');
+    updateThemeGeoStatusUI();
+    return;
+  }
+  if(!navigator.geolocation){
+    if(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.setGeoConsent) ChaupaalTheme.setGeoConsent('denied');
+    updateThemeGeoStatusUI();
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    ()=>{
+      if(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.setGeoConsent) ChaupaalTheme.setGeoConsent('granted');
+      updateThemeGeoStatusUI();
+      if(typeof refreshWeatherTheme==='function') refreshWeatherTheme();
+      if(typeof showToast==='function') showToast(typeof t==='function'?t('display_geo_status_granted'):'Location on');
+    },
+    ()=>{
+      if(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.setGeoConsent) ChaupaalTheme.setGeoConsent('denied');
+      updateThemeGeoStatusUI();
+    },
+    { enableHighAccuracy:false, timeout:10000, maximumAge:0 }
+  );
+});
+
+// First Auto + sensory: soft-prompt for theme geo (not friend location sharing)
+document.addEventListener('DOMContentLoaded',()=>{
+  setTimeout(async ()=>{
+    try{
+      if(typeof ChaupaalTheme==='undefined') return;
+      await ChaupaalTheme.refreshFlags?.();
+      if(!ChaupaalTheme.isSensoryEnabled?.()) return;
+      if(ChaupaalTheme.getDisplayMode?.()!=='auto') return;
+      const c=ChaupaalTheme.getGeoConsent?.();
+      if(c==='granted'||c==='denied'||c==='prompted') return;
+      ChaupaalTheme.setGeoConsent('prompted');
+      const ok=await promptThemeGeoConsent();
+      if(ok&&navigator.geolocation){
+        navigator.geolocation.getCurrentPosition(
+          ()=>{ ChaupaalTheme.setGeoConsent('granted'); if(typeof refreshWeatherTheme==='function') refreshWeatherTheme(); },
+          ()=>ChaupaalTheme.setGeoConsent('denied')
+        );
+      }else{
+        ChaupaalTheme.setGeoConsent(ok?'denied':'denied');
+      }
+    }catch(e){}
+  },2500);
 });
