@@ -76,21 +76,37 @@
     if (!db || !currentUser) return null;
     const id = chaupaalChatId(currentUser.uid);
     const ref = db.collection('chats').doc(id);
+    const createPayload = {
+      participants: [currentUser.uid],
+      type: 'chaupaal',
+      pinned: true,
+      name: 'Chaupaal',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      preview: 'Talk with Chaupaal',
+    };
+    const repairPayload = {
+      participants: [currentUser.uid],
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
     try {
       const snap = await ref.get();
       if (!snap.exists) {
-        await ref.set({
-          participants: [currentUser.uid],
-          type: 'chaupaal',
-          pinned: true,
-          name: 'Chaupaal',
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-          preview: 'Talk with Chaupaal',
-        });
+        await ref.set(createPayload);
+      } else if (!Array.isArray(snap.data()?.participants) || !snap.data().participants.includes(currentUser.uid)) {
+        await ref.set(repairPayload, { merge: true });
       }
     } catch (e) {
-      console.warn('[chaupaal-chat] ensure doc', e);
+      console.warn('[chaupaal-chat] ensure doc get/create', e?.code || e?.message || e);
+      try {
+        await ref.set(createPayload);
+      } catch (e2) {
+        try {
+          await ref.set(repairPayload, { merge: true });
+        } catch (e3) {
+          console.warn('[chaupaal-chat] ensure doc set', e3?.code || e3?.message || e3);
+        }
+      }
     }
     return id;
   }

@@ -66,21 +66,38 @@
     if (!db || !currentUser) return null;
     const id = selfChatId(currentUser.uid);
     const ref = db.collection('chats').doc(id);
+    const createPayload = {
+      participants: [currentUser.uid],
+      type: 'self',
+      pinned: true,
+      name: 'Message Yourself',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      preview: 'Notes to self',
+    };
+    const repairPayload = {
+      participants: [currentUser.uid],
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
     try {
       const snap = await ref.get();
       if (!snap.exists) {
-        await ref.set({
-          participants: [currentUser.uid],
-          type: 'self',
-          pinned: true,
-          name: 'Message Yourself',
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-          preview: 'Notes to self',
-        });
+        await ref.set(createPayload);
+      } else if (!Array.isArray(snap.data()?.participants) || !snap.data().participants.includes(currentUser.uid)) {
+        // participants is on the chat metadata allowlist; do not rewrite type/pinned here
+        await ref.set(repairPayload, { merge: true });
       }
     } catch (e) {
-      console.warn('[self-chat] ensure doc', e?.message || e);
+      console.warn('[self-chat] ensure doc get/create', e?.code || e?.message || e);
+      try {
+        await ref.set(createPayload);
+      } catch (e2) {
+        try {
+          await ref.set(repairPayload, { merge: true });
+        } catch (e3) {
+          console.warn('[self-chat] ensure doc set', e3?.code || e3?.message || e3);
+        }
+      }
     }
     return id;
   }

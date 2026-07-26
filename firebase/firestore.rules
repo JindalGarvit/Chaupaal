@@ -457,6 +457,16 @@ service cloud.firestore {
     }
 
     // ===================== CHATS =====================
+    // Per-user system threads (Message Yourself / Chaupaal). Id encodes owner uid.
+    function isOwnSystemChatId(chatId) {
+      return isAuth() && (
+        chatId == 'chat_self_' + request.auth.uid ||
+        chatId == 'chat_chaupaal_' + request.auth.uid
+      );
+    }
+    function chatDocExists(chatId) {
+      return exists(/databases/$(database)/documents/chats/$(chatId));
+    }
     function isChatParticipant() {
       return isAuth() &&
         resource.data.participants != null &&
@@ -501,7 +511,12 @@ service cloud.firestore {
     }
     match /chats/{chatId} {
       // Participants always; public groups readable for global search (Phase 3.2).
-      allow get: if isChatParticipant()
+      // Own system chat ids are gettable even when the doc is missing so
+      // ensureSelfChatDoc / ensureChaupaalChatDoc can .get() then .set() —
+      // isChatParticipant() alone denies missing docs (resource.data N/A),
+      // which left chat_self_{uid} uncreated and blocked message listeners.
+      allow get: if isOwnSystemChatId(chatId)
+        || isChatParticipant()
         || (resource.data.type == 'group' && resource.data.isPublic == true);
       allow list: if isChatParticipant()
         || (resource.data.type == 'group' && resource.data.isPublic == true);
@@ -537,10 +552,12 @@ service cloud.firestore {
       // Optional `music` map and/or `attachment` map for rich bubbles (photo/file/location/challenge).
       // Location attachments may include lat, lng, mode, placeName, address, liveShareId, expiresAt, durationMs, label.
       match /messages/{messageId} {
-        allow read: if isAuth() &&
-          get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]);
+        allow read: if isAuth()
+          && chatDocExists(chatId)
+          && get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]);
         allow create: if isAuth()
           && request.resource.data.uid == request.auth.uid
+          && chatDocExists(chatId)
           && get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid])
           && !(request.resource.data.keys().hasAny(['serverOwned']) && request.resource.data.serverOwned == true)
           && (!('text' in request.resource.data) || (
