@@ -1,4 +1,4 @@
-const CACHE = 'chaupaal-v10365f';
+const CACHE = 'chaupaal-v09203e';
 const ASSETS = [
   '/index.html',
   '/icon.png',
@@ -76,7 +76,9 @@ self.addEventListener('fetch', (e) => {
     if (
       host.endsWith('saavncdn.com') ||
       host.endsWith('itunes.apple.com') ||
-      host.endsWith('mzstatic.com')
+      host.endsWith('mzstatic.com') ||
+      host.includes('saavncdn') ||
+      host.includes('itunes-assets')
     ) {
       return;
     }

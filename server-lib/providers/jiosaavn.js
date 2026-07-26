@@ -38,7 +38,10 @@ function pickPreviewUrl(downloadUrl) {
     downloadUrl.find((d) => d.quality === '160kbps') ||
     downloadUrl.find((d) => d.quality === '48kbps');
   const pick = mid || downloadUrl[downloadUrl.length - 1] || downloadUrl[0];
-  return String(pick?.url || '').trim();
+  let url = String(pick?.url || '').trim();
+  // CSP media-src is https-only — never hand the client an http:// stream.
+  if (url.startsWith('http://')) url = 'https://' + url.slice(7);
+  return url;
 }
 
 function artistNames(song) {

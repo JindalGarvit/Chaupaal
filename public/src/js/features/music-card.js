@@ -16,12 +16,23 @@
       .replace(/"/g, '&quot;');
   }
 
+  function ensureHttpsUrl(u) {
+    const s = String(u || '').trim();
+    if (!s) return '';
+    if (s.startsWith('http://')) return 'https://' + s.slice(7);
+    return s;
+  }
+
   function getSharedAudio() {
     if (!sharedAudio) {
       sharedAudio = new Audio();
       sharedAudio.preload = 'auto';
       sharedAudio.setAttribute('playsinline', '');
       sharedAudio.setAttribute('webkit-playsinline', '');
+      // Avoid CDN hotlink / Referrer-Policy quirks (Saavn / iTunes).
+      try {
+        sharedAudio.referrerPolicy = 'no-referrer';
+      } catch (e) {}
       // Keep element in DOM — some mobile WebViews won't decode detached Audio nodes
       try {
         sharedAudio.style.cssText = 'position:fixed;width:0;height:0;opacity:0;pointer-events:none;left:-9999px;';
@@ -48,7 +59,7 @@
         if (expected && failed && failed.indexOf(expected.slice(0, 48)) === -1 && expected.indexOf(failed.slice(0, 48)) === -1) {
           return;
         }
-        handlePreviewError(activeCardEl, { fromUserGesture: false });
+        Promise.resolve(handlePreviewError(activeCardEl, { fromUserGesture: false })).catch(() => {});
       });
       sharedAudio.addEventListener('play', () => {
         if (activeCardEl) {
@@ -114,12 +125,13 @@
     if (!m || typeof m !== 'object') return null;
     const title = String(m.title || '').trim();
     if (!title) return null;
+    const previewUrl = m.previewUrl ? ensureHttpsUrl(m.previewUrl) : null;
     return {
       title,
       artist: String(m.artist || 'Unknown artist').trim(),
-      thumbnail: String(m.thumbnail || '').trim(),
-      previewUrl: m.previewUrl ? String(m.previewUrl).trim() : null,
-      source: m.source || (m.previewUrl ? 'jiosaavn' : 'none'),
+      thumbnail: ensureHttpsUrl(m.thumbnail || '') || String(m.thumbnail || '').trim(),
+      previewUrl: previewUrl || null,
+      source: m.source || (previewUrl ? 'jiosaavn' : 'none'),
     };
   }
 
@@ -182,7 +194,8 @@
 
   function markPreviewReady(card, resolved) {
     if (!resolved?.previewUrl || !card) return;
-    card.dataset.musicPreview = resolved.previewUrl;
+    const url = ensureHttpsUrl(resolved.previewUrl);
+    card.dataset.musicPreview = url;
     card.dataset.musicSource = resolved.source || 'itunes';
     card.classList.remove('music-card--static');
     const unavail = card.querySelector('.music-card-unavailable');
@@ -245,7 +258,7 @@
   }
 
   async function playCard(card) {
-    const url = String(card.dataset.musicPreview || '').trim();
+    const url = ensureHttpsUrl(card.dataset.musicPreview || '');
     // Never await network resolve before audio.play() — that drops the mobile user-gesture.
     if (!url) {
       await handlePreviewError(card, { fromUserGesture: true });
@@ -253,7 +266,7 @@
     }
     const audio = getSharedAudio();
     ensureCardMediaControls(card);
-    if (activeCardEl === card && !audio.paused && !audio.ended) {
+    if (activeCardEl === card && !audio.paused && !audio.ended && !audio.error) {
       audio.pause();
       syncActiveCard(false);
       return;
@@ -267,9 +280,17 @@
     try {
       audio.dataset.cpTitle = card.dataset.musicTitle || '';
       audio.dataset.cpArtist = card.dataset.musicArtist || '';
-      // Always re-assign + load when switching tracks or recovering from error
+      // Re-assign when switching tracks OR when the element is in an error state
+      // (same src after MEDIA_ERR_* will otherwise fail play() forever).
       const current = audio.currentSrc || audio.src || '';
-      if (current !== url && !current.endsWith(url) && current.indexOf(url) === -1) {
+      const needsSrc =
+        !!audio.error ||
+        (current !== url && !current.endsWith(url) && current.indexOf(url) === -1);
+      if (needsSrc) {
+        try {
+          audio.removeAttribute('src');
+          audio.load();
+        } catch (e) {}
         audio.src = url;
         try {
           audio.load();
