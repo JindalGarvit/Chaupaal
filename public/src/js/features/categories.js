@@ -820,8 +820,6 @@ async function loadPeepalPage({reset=false}={}){
 
 async function initPeepal(){
   const feed=document.getElementById('peepalFeed');if(!feed)return;
-  // Remove old discovery section (refresh on every open)
-  document.getElementById('peepalDiscovery')?.remove();
   delete feed.dataset.loaded;
 
   // Wire buttons (once only)
@@ -847,12 +845,28 @@ async function initPeepal(){
     document.getElementById('peepalAiSearchInput')?.addEventListener('keypress',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();runPeepalAiSearch();}});
   }
 
-  // Show loading placeholder
-  const loadingEl=document.createElement('div');
-  loadingEl.className='peepal-discovery';loadingEl.id='peepalDiscovery';
-  if(typeof renderSkeleton==='function') renderSkeleton(loadingEl, {variant:'card', count:2});
-  else loadingEl.innerHTML=`<div class="discovery-loading">Finding people who think like you...</div>`;
-  feed.parentElement.insertBefore(loadingEl,feed);
+  // Reuse static HTML shell (keeps LCP title/subtitle in place) or create a loading host
+  let loadingEl=document.getElementById('peepalDiscovery');
+  if(loadingEl?.dataset.peepalShell){
+    delete loadingEl.dataset.peepalShell;
+    loadingEl.classList.remove('peepal-discovery--shell');
+    const cards=loadingEl.querySelector('.discovery-cards');
+    if(cards&&typeof renderSkeleton==='function'){
+      cards.innerHTML='';
+      renderSkeleton(cards,{variant:'card',count:2});
+    }
+  } else if(loadingEl){
+    // Tab re-open: keep reserved box, swap to skeleton without removing (less CLS)
+    loadingEl.innerHTML='';
+    if(typeof renderSkeleton==='function') renderSkeleton(loadingEl,{variant:'card',count:2});
+    else loadingEl.innerHTML=`<div class="discovery-loading">Finding people who think like you...</div>`;
+  } else {
+    loadingEl=document.createElement('div');
+    loadingEl.className='peepal-discovery';loadingEl.id='peepalDiscovery';
+    if(typeof renderSkeleton==='function') renderSkeleton(loadingEl,{variant:'card',count:2});
+    else loadingEl.innerHTML=`<div class="discovery-loading">Finding people who think like you...</div>`;
+    feed.parentElement.insertBefore(loadingEl,feed);
+  }
 
   const withTimeout=(promise,ms)=>{
     let timer;
@@ -878,8 +892,9 @@ async function initPeepal(){
     }
     discoveryPreviousSet=[...discoveryCurrentSet];
     discoveryCurrentSet=profiles;
-    loadingEl.remove();
-    feed.parentElement.insertBefore(renderDiscoverySection(profiles),feed);
+    const next=renderDiscoverySection(profiles);
+    if(loadingEl?.parentNode) loadingEl.replaceWith(next);
+    else feed.parentElement.insertBefore(next,feed);
   }catch(e){
     if(typeof reportClientError==='function'){
       reportClientError({feature:'peepal_discovery',message:e?.message||String(e)});

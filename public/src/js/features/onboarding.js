@@ -669,7 +669,10 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     if(btn.dataset.tab==='baithak')initBaithak();
     if(btn.dataset.tab==='dangal')initCategoryRatings();
     if(btn.dataset.tab==='duniya')initDuniya();
-    if(btn.dataset.tab==='akhbaar')initAkhbaarCatBar();
+    if(btn.dataset.tab==='akhbaar'){
+      initAkhbaarCatBar();
+      if(typeof window.ensureAkhbaarBuilt==='function') window.ensureAkhbaarBuilt();
+    }
     if(btn.dataset.tab==='peepal')initPeepal();
   });
 });

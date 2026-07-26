@@ -2,6 +2,9 @@
  * Firebase App Check (reCAPTCHA v3).
  * Site key from meta[name="chaupaal-recaptcha-site-key"] or window.CHAUPAAL_RECAPTCHA_SITE_KEY.
  * Console enforcement is ON for Firestore / RTDB — activate before any data calls.
+ *
+ * Timing: yield two animation frames so the static Peepal discovery shell can paint
+ * (LCP) before reCAPTCHA evaluation blocks the main thread.
  */
 (function () {
   'use strict';
@@ -30,7 +33,6 @@
     }
     try {
       const appCheck = firebase.appCheck();
-      // Prefer ReCaptchaV3Provider when the SDK exposes it (compat 10+)
       const provider =
         firebase.appCheck.ReCaptchaV3Provider
           ? new firebase.appCheck.ReCaptchaV3Provider(siteKey)
@@ -54,12 +56,26 @@
     }
   }
 
-  // Must run immediately after firebase.js — before auth/Firestore usage.
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initAppCheck);
-  } else {
-    initAppCheck();
+  function afterFirstPaint(fn) {
+    requestAnimationFrame(() => requestAnimationFrame(fn));
   }
+
+  window.chaupaalAppCheckReady = new Promise((resolve) => {
+    const start = () => {
+      afterFirstPaint(() => {
+        try {
+          resolve(initAppCheck());
+        } catch (e) {
+          resolve(null);
+        }
+      });
+    };
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', start, { once: true });
+    } else {
+      start();
+    }
+  });
 
   window.initChaupaalAppCheck = initAppCheck;
 })();

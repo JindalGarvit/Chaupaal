@@ -33,6 +33,26 @@
   background:var(--white);border-radius:var(--r-lg);
   padding:16px;margin-bottom:4px;
   box-shadow:0 4px 14px rgba(43,39,48,0.07);
+  /* Reserve space before async discovery hydrate (CLS) */
+  min-height:220px;
+  contain:layout style;
+}
+.peepal-discovery--shell .peepal-discovery-subtitle{
+  /* Early LCP text — keep readable size stable */
+  min-height:1.2em;
+}
+.discovery-card--skel{
+  min-height:96px;
+  background:linear-gradient(90deg,var(--cream) 25%,var(--line) 50%,var(--cream) 75%);
+  background-size:200% 100%;
+  animation:peepalSkelShine 1.2s ease-in-out infinite;
+  border:1.5px solid var(--line);
+  border-radius:var(--r-card);
+  pointer-events:none;
+}
+@keyframes peepalSkelShine{
+  0%{background-position:200% 0;}
+  100%{background-position:-200% 0;}
 }
 .peepal-discovery-header{
   display:flex;align-items:center;justify-content:space-between;

@@ -4,10 +4,24 @@
 .progress-bar .seg.fill{background:var(--red);}
 .progress-bar .seg.current{background:linear-gradient(90deg,var(--red) 50%,var(--line) 50%);}
 
-.reel-stage{flex:1;overflow-y:scroll;scroll-snap-type:y mandatory;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;}
+.reel-stage{
+  flex:1;overflow-y:scroll;scroll-snap-type:y mandatory;scroll-behavior:smooth;
+  -webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;
+  /* Hold viewport height so deferred reel cards don't collapse the panel */
+  min-height:0;contain:layout;
+}
 .reel-stage::-webkit-scrollbar{display:none;}
+.reel-stage:empty{
+  min-height:min(70vh,560px);
+  background:var(--cream);
+}
 
-.reel-card{scroll-snap-align:center;scroll-snap-stop:always;height:100%;width:100%;padding:0 16px 16px;display:flex;flex-direction:column;}
+.reel-card{
+  scroll-snap-align:center;scroll-snap-stop:always;
+  height:100%;min-height:min(70vh,560px);width:100%;
+  padding:0 16px 16px;display:flex;flex-direction:column;
+  contain:layout;
+}
 .card-inner{
   background:var(--card);border-radius:22px;padding:22px 20px;
   display:flex;flex-direction:column;flex:1;

@@ -3,29 +3,72 @@ const observer=new IntersectionObserver(entries=>{
   entries.forEach(e=>e.target.classList.toggle('active',e.intersectionRatio>0.6));
 },{root:document.getElementById('reelStage'),threshold:[0,0.6,1]});
 
-function buildAkhbaar(QUESTIONS,BONUS_QUESTIONS){
+let _akhbaarBuilt=false;
+let _akhbaarBuilding=null;
+let _akhbaarScrollWired=false;
+let _akhbaarUpdateProgress=null;
+
+function _akhbaarYield(){
+  return new Promise(resolve=>{
+    if(typeof requestIdleCallback==='function'){
+      requestIdleCallback(()=>resolve(),{timeout:48});
+    } else {
+      requestAnimationFrame(()=>resolve());
+    }
+  });
+}
+
+function _resolveAkhbaarQuestionSet(qs,bonus){
+  let questions=Array.isArray(qs)?qs:[];
+  let bonusQs=Array.isArray(bonus)?bonus:[];
+  if(!questions.length){
+    const offline=[
+      ...(typeof SAMPLE_QUESTIONS!=='undefined'?SAMPLE_QUESTIONS:[]),
+      ...(typeof AKHBAAR_BANK!=='undefined'?AKHBAAR_BANK:[]),
+    ];
+    questions=offline.slice().sort(()=>Math.random()-0.5);
+    if(typeof QUESTIONS!=='undefined') QUESTIONS=questions;
+  }
+  if(!bonusQs.length&&typeof SAMPLE_BONUS!=='undefined'){
+    bonusQs=SAMPLE_BONUS;
+    if(typeof BONUS_QUESTIONS!=='undefined') BONUS_QUESTIONS=bonusQs;
+  }
+  return {questions,bonusQs};
+}
+
+/** Lazy + chunked reel DOM — keep off Peepal LCP path. */
+async function buildAkhbaar(QUESTIONS_IN,BONUS_QUESTIONS_IN){
+  const {questions:QUESTIONS,bonusQs:BONUS_QUESTIONS}=_resolveAkhbaarQuestionSet(QUESTIONS_IN,BONUS_QUESTIONS_IN);
   const stage=document.getElementById('reelStage');
+  if(!stage||!QUESTIONS.length) return;
   stage.innerHTML='';score=0;maxUnlocked=0;categoryScores={};
 
-  // Build progress bar
   const pb=document.getElementById('progressBar');
-  pb.innerHTML='';
-  QUESTIONS.forEach((_,i)=>{const s=document.createElement('div');s.className='seg';s.dataset.i=i;pb.appendChild(s);});
-
-  function updateProgress(){
-    pb.querySelectorAll('.seg').forEach((s,i)=>{s.classList.toggle('fill',i<maxUnlocked);});
+  if(pb){
+    pb.innerHTML='';
+    const frag=document.createDocumentFragment();
+    QUESTIONS.forEach((_,i)=>{const s=document.createElement('div');s.className='seg';s.dataset.i=i;frag.appendChild(s);});
+    pb.appendChild(frag);
   }
 
-  // Question cards
-  QUESTIONS.forEach((data,idx)=>{
+  function updateProgress(){
+    pb?.querySelectorAll('.seg').forEach((s,i)=>{s.classList.toggle('fill',i<maxUnlocked);});
+  }
+  _akhbaarUpdateProgress=updateProgress;
+
+  const appendQuestionCard=(data,idx,onProgress)=>{
     const card=document.createElement('div');card.className='reel-card';
     const inner=document.createElement('div');inner.className='card-inner';inner.id=`inner-${idx}`;
     card.appendChild(inner);stage.appendChild(card);
-    renderQuestion(inner,data,idx,updateProgress);
+    renderQuestion(inner,data,idx,onProgress);
     observer.observe(inner);
-  });
+  };
 
-  // Results card
+  for(let idx=0;idx<QUESTIONS.length;idx++){
+    appendQuestionCard(QUESTIONS[idx],idx,updateProgress);
+    if(idx%2===1) await _akhbaarYield();
+  }
+
   const resultsCard=document.createElement('div');resultsCard.className='reel-card';
   const rc=document.createElement('div');rc.className='results-card';rc.id='resultsCard';
   rc.innerHTML=`
@@ -38,8 +81,8 @@ function buildAkhbaar(QUESTIONS,BONUS_QUESTIONS){
   `;
   resultsCard.appendChild(rc);stage.appendChild(resultsCard);
   observer.observe(rc);
+  await _akhbaarYield();
 
-  // Aur Sunao card
   const asCard=document.createElement('div');asCard.className='reel-card';
   const asInner=document.createElement('div');asInner.className='aur-sunao-card';
   const asQ=AUR_SUNAO_QUESTIONS[Math.floor(Math.random()*AUR_SUNAO_QUESTIONS.length)];
@@ -57,44 +100,72 @@ function buildAkhbaar(QUESTIONS,BONUS_QUESTIONS){
   }));
   observer.observe(asInner);
 
-  // Bonus pool cards
   if(BONUS_QUESTIONS.length){
     const bonusIntro=document.createElement('div');bonusIntro.className='reel-card';
     const bi=document.createElement('div');bi.className='card-inner';bi.style.cssText='align-items:center;justify-content:center;text-align:center;gap:10px;';
     bi.innerHTML=`<div style="font-size:36px;">🎁</div><div class="q-text" style="margin:0;">Aur Khabar</div><div style="font-size:13px;color:var(--muted);">Bonus questions — streak par asar nahi padega</div>`;
     bonusIntro.appendChild(bi);stage.appendChild(bonusIntro);observer.observe(bi);
-    BONUS_QUESTIONS.forEach((data,i)=>{
+    for(let i=0;i<BONUS_QUESTIONS.length;i++){
       const idx=QUESTIONS.length+1+i;
-      const card=document.createElement('div');card.className='reel-card';
-      const inner=document.createElement('div');inner.className='card-inner';inner.id=`inner-${idx}`;
-      card.appendChild(inner);stage.appendChild(card);
-      renderQuestion(inner,data,idx,()=>{});observer.observe(inner);
+      appendQuestionCard(BONUS_QUESTIONS[i],idx,()=>{});
+      if(i%2===1) await _akhbaarYield();
+    }
+  }
+
+  if(!_akhbaarScrollWired){
+    _akhbaarScrollWired=true;
+    let isSnapping=false;
+    stage.addEventListener('scroll',()=>{
+      if(isSnapping)return;
+      const idx=Math.round(stage.scrollTop/stage.clientHeight);
+      if(idx>maxUnlocked&&idx<QUESTIONS.length){
+        isSnapping=true;stage.scrollTo({top:maxUnlocked*stage.clientHeight,behavior:'smooth'});
+        setTimeout(()=>isSnapping=false,400);return;
+      }
+      if(typeof _akhbaarUpdateProgress==='function') _akhbaarUpdateProgress();
     });
   }
 
-  // Scroll observer for progress + unlock
-  const reelStage=document.getElementById('reelStage');
-  let isSnapping=false;
-  reelStage.addEventListener('scroll',()=>{
-    if(isSnapping)return;
-    const idx=Math.round(reelStage.scrollTop/reelStage.clientHeight);
-    if(idx>maxUnlocked&&idx<QUESTIONS.length){
-      isSnapping=true;reelStage.scrollTo({top:maxUnlocked*reelStage.clientHeight,behavior:'smooth'});
-      setTimeout(()=>isSnapping=false,400);return;
-    }
-    updateProgress();
-  });
-
-  // Share wired in populateResults via Dangal share helpers
-  // (buildGameShareCard / shareGameResult / openFriendPickerSheet / postGameScoreStory)
   if(typeof applyAkhbaarBeatBanner==='function') applyAkhbaarBeatBanner();
 
-  // Simulated breaking news after 6s
+  // Breaking tags only when Akhbaar is visible — avoid toast work on Peepal boot
   setTimeout(()=>{
+    const onAkhbaar=document.getElementById('panel-akhbaar')?.classList.contains('active');
+    if(!onAkhbaar) return;
     stage.querySelectorAll('[data-breaking]').forEach(tag=>{tag.classList.remove('hidden');});
     showToast('🔴 A Taaza Khabar just dropped!');
   },6000);
+
+  _akhbaarBuilt=true;
 }
+
+/**
+ * Build reel when needed (first Akhbaar open or idle prefetch).
+ * Safe to call repeatedly.
+ */
+function ensureAkhbaarBuilt(){
+  if(_akhbaarBuilt) return Promise.resolve();
+  if(_akhbaarBuilding) return _akhbaarBuilding;
+  _akhbaarBuilding=(async()=>{
+    try{
+      const empty=!(typeof QUESTIONS!=='undefined'&&QUESTIONS.length);
+      if(empty&&window.chaupaalAkhbaarContentReady){
+        await Promise.race([
+          window.chaupaalAkhbaarContentReady,
+          new Promise(r=>setTimeout(r,1200)),
+        ]);
+      }
+      const qs=typeof QUESTIONS!=='undefined'?QUESTIONS:[];
+      const bonus=typeof BONUS_QUESTIONS!=='undefined'?BONUS_QUESTIONS:[];
+      await buildAkhbaar(qs,bonus);
+    }catch(e){
+      console.warn('[akhbaar] build failed',e);
+      _akhbaarBuilt=false;
+    }
+  })().finally(()=>{_akhbaarBuilding=null;});
+  return _akhbaarBuilding;
+}
+window.ensureAkhbaarBuilt=ensureAkhbaarBuilt;
 
 /** Beat-my-score banner for `?game=akhbaar&challenge=…&score=…` deep links. */
 function applyAkhbaarBeatBanner(){
