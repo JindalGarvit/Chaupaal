@@ -119,9 +119,8 @@
     });
 
     navigator.serviceWorker
-      .register('/sw.js?v=55')
+      .register('/sw.js?v=56')
       .then((reg) => {
-        console.log('SW registered');
         hideOfflineBanner();
         if (reg.waiting) showUpdateBanner();
         reg.addEventListener('updatefound', () => {

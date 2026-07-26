@@ -39,7 +39,6 @@
           : siteKey;
       appCheck.activate(provider, true /* isTokenAutoRefreshEnabled */);
       window.__chaupaalAppCheck = appCheck;
-      console.info('[app-check] activated');
       return appCheck;
     } catch (e) {
       console.warn('[app-check] activate failed', e?.message || e);

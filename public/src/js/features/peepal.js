@@ -41,8 +41,24 @@ function showOnboarding(){
     // Category chips
     if(s.type==='categories'){
       overlay.querySelectorAll('.onboarding-chip').forEach(chip=>{
-        chip.addEventListener('click',()=>{chip.classList.toggle('selected');const name=chip.dataset.name;const idx=selectedCategories.indexOf(name);if(idx>-1)selectedCategories.splice(idx,1);else selectedCategories.push(name);});
+        chip.addEventListener('click',()=>{
+          chip.classList.toggle('selected');
+          const name=chip.dataset.name;
+          const idx=selectedCategories.indexOf(name);
+          if(idx>-1) selectedCategories.splice(idx,1);
+          else selectedCategories.push(name);
+          const next=document.getElementById('onboardNext');
+          if(next){
+            next.disabled=selectedCategories.length<2;
+            next.style.opacity=selectedCategories.length<2?'0.45':'1';
+          }
+        });
       });
+      const nextInit=document.getElementById('onboardNext');
+      if(nextInit){
+        nextInit.disabled=selectedCategories.length<2;
+        nextInit.style.opacity=selectedCategories.length<2?'0.45':'1';
+      }
     }
     // Aur Sunao chips
     if(s.type==='aur_sunao'){
@@ -73,7 +89,13 @@ function showOnboarding(){
       }));
     }
     document.getElementById('onboardNext').addEventListener('click',()=>{
-      if(s.type==='categories'&&selectedCategories.length>0){selectedCategories.forEach(name=>addCategory(name,getCategoryEmoji(name)));}
+      if(s.type==='categories'){
+        if(selectedCategories.length<2){
+          if(typeof showToast==='function') showToast('Pick at least 2 topics to continue');
+          return;
+        }
+        selectedCategories.forEach(name=>addCategory(name,getCategoryEmoji(name)));
+      }
       if(s.type==='aur_sunao'&&aurSunaoAnswer){updatePersonalityFromAurSunao(s.q,aurSunaoAnswer);}
       step++;
       if(step>=steps.length){finishOnboarding(overlay);}else renderStep();
@@ -86,4 +108,77 @@ function showOnboarding(){
 function finishOnboarding(overlay){
   onboardingDone=true;try{localStorage.setItem('chaupaal_onboarded','true');}catch(e){}
   overlay.style.opacity='0';overlay.style.transition='opacity .4s ease';setTimeout(()=>overlay.remove(),400);
+  // Soft banner only — never force auth overlay after guest onboarding.
+  if(typeof currentUser==='undefined'||!currentUser){
+    if(typeof showGuestSignInBanner==='function') showGuestSignInBanner();
+  }
 }
+
+function showComingSoonModal(kind){
+  const title=kind==='privacy'?'Privacy Policy':'Terms of Service';
+  const existing=document.getElementById('comingSoonModal');
+  if(existing) existing.remove();
+  const backdrop=document.createElement('div');
+  backdrop.id='comingSoonModal';
+  backdrop.className='modal-backdrop';
+  backdrop.innerHTML=`
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="comingSoonTitle">
+      <div class="modal-header">
+        <div class="modal-title" id="comingSoonTitle">${title}</div>
+        <button type="button" class="icon-btn" data-dismiss="coming-soon" aria-label="Close">✕</button>
+      </div>
+      <p class="modal-sub">Coming soon — we're drafting the full ${title.toLowerCase()}. Thanks for your patience.</p>
+      <button type="button" class="btn btn--primary btn--block modal-btn" data-dismiss="coming-soon">Got it</button>
+    </div>`;
+  document.querySelector('.device')?.appendChild(backdrop);
+  const close=()=>backdrop.remove();
+  backdrop.addEventListener('click',(e)=>{ if(e.target===backdrop) close(); });
+  backdrop.querySelectorAll('[data-dismiss="coming-soon"]').forEach(btn=>btn.addEventListener('click',close));
+  if(typeof pushNavLayer==='function'){
+    backdrop.dataset.navManaged='1';
+    pushNavLayer(backdrop,close);
+  }
+}
+
+function showGuestSignInBanner(){
+  if(typeof currentUser!=='undefined'&&currentUser) return;
+  let bar=document.getElementById('guestSignInBanner');
+  if(bar){ bar.classList.remove('hidden'); return; }
+  bar=document.createElement('div');
+  bar.id='guestSignInBanner';
+  bar.className='guest-signin-banner';
+  bar.innerHTML=`
+    <div class="guest-signin-copy"><strong>Sign in to save progress</strong><span>Keep streaks, chats, and categories across devices.</span></div>
+    <div class="guest-signin-actions">
+      <button type="button" class="btn btn--primary" data-guest-auth="signup">Create account</button>
+      <button type="button" class="btn btn--secondary" data-guest-auth="login">Log in</button>
+      <button type="button" class="guest-signin-dismiss" aria-label="Dismiss">✕</button>
+    </div>`;
+  const device=document.querySelector('.device')||document.body;
+  device.appendChild(bar);
+  bar.querySelector('[data-guest-auth="signup"]')?.addEventListener('click',()=>{
+    if(typeof showAuth==='function') showAuth();
+    setTimeout(()=>document.getElementById('heroSignupBtn')?.click(),80);
+  });
+  bar.querySelector('[data-guest-auth="login"]')?.addEventListener('click',()=>{
+    if(typeof showAuth==='function') showAuth();
+    setTimeout(()=>document.getElementById('heroLoginBtn')?.click(),80);
+  });
+  bar.querySelector('.guest-signin-dismiss')?.addEventListener('click',()=>bar.classList.add('hidden'));
+}
+
+function hideGuestSignInBanner(){
+  document.getElementById('guestSignInBanner')?.classList.add('hidden');
+}
+
+window.showComingSoonModal=showComingSoonModal;
+window.showGuestSignInBanner=showGuestSignInBanner;
+window.hideGuestSignInBanner=hideGuestSignInBanner;
+
+document.addEventListener('click',(e)=>{
+  const link=e.target.closest?.('.auth-legal-link,[data-legal]');
+  if(!link) return;
+  e.preventDefault();
+  const kind=link.getAttribute('data-legal')||'terms';
+  showComingSoonModal(kind);
+});

@@ -122,17 +122,6 @@ function pinSelfChat(chats){
     });
     out = [buildSelfChatRow(), ...out.filter(c => !isSelfChatRow(c))];
   }
-  try{
-    console.info('[self-chat] pinSelfChat', {
-      uid: (typeof currentUser!=='undefined' && currentUser) ? currentUser.uid : null,
-      inCount: input.length,
-      outCount: out.length,
-      firstId: out[0]&&out[0].id,
-      firstName: out[0]&&out[0].name,
-      hasEnsure: typeof ensureSelfChatPinned==='function',
-      hasChaupaal: typeof ensureChaupaalPinned==='function',
-    });
-  }catch(e){}
   return out;
 }
 
@@ -144,18 +133,8 @@ function renderChatList(chats){
   }
   list.innerHTML = '';
   const pinned = pinSelfChat(chats||[]);
-  if(!pinned.length){
-    if(typeof renderEmptyState==='function'){
-      renderEmptyState(list, {
-        icon:'💬',
-        title:'No chats yet',
-        message:'Start a conversation from Peepal discovery or Duniya.',
-      });
-    } else {
-      list.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted);font-size:14px;">No chats found 🤔</div>';
-    }
-    return;
-  }
+  // Only Self + Chaupaal means the social inbox is empty — show CTA under pins.
+  const socialOnly = pinned.filter(c => !isSelfChatRow(c) && !isChaupaalChatRow(c));
   pinned.forEach(chat => {
     const item = document.createElement('div');
     const self = isSelfChatRow(chat);
@@ -195,14 +174,35 @@ function renderChatList(chats){
     item.addEventListener('click', () => openChatScreen(chat));
     list.appendChild(item);
   });
+  if(!socialOnly.length){
+    const emptyHost=document.createElement('div');
+    emptyHost.className='baithak-inbox-empty';
+    list.appendChild(emptyHost);
+    if(baithakChatLoadError && typeof renderErrorState==='function'){
+      renderErrorState(emptyHost, {
+        title:'Couldn’t load chats',
+        message:'Check your connection and try again.',
+        onRetry:async()=>{
+          baithakChatLoadError=false;
+          if(typeof loadBaithakChatsPage==='function'){
+            await loadBaithakChatsPage({reset:true});
+          }
+          renderChatList(baithakChats);
+        },
+      });
+    } else if(typeof renderEmptyState==='function'){
+      renderEmptyState(emptyHost, {
+        icon:'💬',
+        title:'No conversations yet',
+        message:'Find people on Peepal or start a new chat.',
+        actionLabel:'New chat',
+        onAction:()=>{ if(typeof showNewChatOptions==='function') showNewChatOptions(); },
+      });
+    }
+  }
   const selfEl = list.querySelector('[data-self-chat="1"]');
-  console.info('[self-chat] renderChatList DOM', {
-    totalRows: list.querySelectorAll('.chat-item').length,
-    selfPresent: !!selfEl,
-    firstRowText: list.querySelector('.chat-item .chat-name')?.textContent?.trim() || null,
-  });
   if(!selfEl){
-    console.error('[self-chat] Message Yourself missing from DOM after render — injecting fallback row');
+    console.warn('[self-chat] Message Yourself missing from DOM after render — injecting fallback row');
     const fallback = buildSelfChatRow();
     const item = document.createElement('div');
     item.className = 'chat-item chat-item-self';
@@ -224,12 +224,13 @@ function renderChatList(chats){
   }
 }
 
-/** Cursor-paginated chat inbox. Falls back to SAMPLE_CHATS when offline / empty. */
-let baithakChats = pinSelfChat([...SAMPLE_CHATS]);
+/** Cursor-paginated chat inbox. Never seed SAMPLE_CHATS into the live list. */
+let baithakChats = typeof pinSelfChat==='function' ? pinSelfChat([]) : [];
 let baithakChatCursor=null;
 let baithakChatHasMore=false;
 let baithakChatLiveMode=false;
 let baithakChatLoading=false;
+let baithakChatLoadError=false;
 
 function mapChatDoc(raw){
   const updated=raw.updatedAt?.toMillis?.()||raw.updatedAt?.toDate?.()?.getTime?.()||raw.ts||null;
@@ -303,6 +304,7 @@ async function loadBaithakChatsPage({reset=false}={}){
     if(typeof enrichUsersWithProfileType==='function') await enrichUsersWithProfileType(mapped);
     if(reset&&mapped.length){
       baithakChatLiveMode=true;
+      baithakChatLoadError=false;
       baithakChats=pinSelfChat(mapped);
       // Do NOT merge SAMPLE demo rows into a live inbox — sticky unread badges
       // and intentionally-blocked sends looked like product bugs.
@@ -311,15 +313,21 @@ async function loadBaithakChatsPage({reset=false}={}){
       mapped.forEach(c=>{ if(!seen.has(c.firestoreId||c.id)) baithakChats.push(c); });
       baithakChats=pinSelfChat(baithakChats);
     } else if(reset){
-      baithakChatLiveMode=false;
-      baithakChats=pinSelfChat([...SAMPLE_CHATS]);
+      baithakChatLiveMode=true;
+      baithakChatLoadError=false;
+      baithakChats=pinSelfChat([]);
     }
     baithakChatCursor=page.lastDoc;
     baithakChatHasMore=page.hasMore;
     return {loaded:mapped.length};
   }catch(e){
-    console.warn('[baithak] chat page failed — using samples', e?.message||e);
-    if(reset){ baithakChatLiveMode=false; baithakChats=pinSelfChat([...SAMPLE_CHATS]); }
+    console.warn('[baithak] chat page failed', e?.message||e);
+    if(reset){
+      baithakChatLiveMode=false;
+      baithakChatLoadError=true;
+      // Keep Self + Chaupaal pins only — never SAMPLE_CHATS.
+      baithakChats=pinSelfChat([]);
+    }
     return {loaded:0,error:e};
   }finally{
     baithakChatLoading=false;

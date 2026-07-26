@@ -1445,7 +1445,7 @@ function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
       <div style="height:16px;"></div>
       <div class="spark-nudge">
         <div class="spark-nudge-text">👋 <strong>${escPeepalText((q.user.name||'').split(' ')[0])}</strong> would love to hear your thoughts! Start a conversation.</div>
-        <button class="spark-nudge-btn" onclick="showToast(t('cat_message_sent'))">Say hi</button>
+        <button type="button" class="spark-nudge-btn" data-say-hi>Say hi</button>
       </div>
       <div style="font-size:13px;font-weight:700;margin-bottom:12px;">Comments (${q.comments})</div>
       <div id="peepalCommentsList" class="comments-list">
@@ -1462,6 +1462,42 @@ function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
     if(typeof closeAiKeyboard==='function') closeAiKeyboard();
     detail.classList.remove('open');setTimeout(()=>detail.classList.add('hidden'),300);
     try{ history.pushState({},'', '/'); }catch(e){}
+  });
+  detail.querySelector('[data-say-hi]')?.addEventListener('click',async(e)=>{
+    e.preventDefault();
+    e.stopPropagation();
+    const author=q.user||{};
+    const uid=author.uid||author.id||null;
+    if(!currentUser){
+      if(typeof showGuestSignInBanner==='function') showGuestSignInBanner();
+      if(typeof showAuth==='function') showAuth();
+      else if(typeof showToast==='function') showToast('Sign in to say hi');
+      return;
+    }
+    if(!uid){
+      if(typeof showToast==='function') showToast("Can't message this person yet");
+      return;
+    }
+    if(uid===currentUser.uid){
+      if(typeof showToast==='function') showToast("That's your own post");
+      return;
+    }
+    if(typeof dismissedUids!=='undefined'&&dismissedUids instanceof Set&&dismissedUids.has(uid)){
+      if(typeof showToast==='function') showToast("You've blocked this person");
+      return;
+    }
+    if(typeof openDmWithSharedHello==='function'){
+      await openDmWithSharedHello({
+        uid,
+        name:author.name||'Friend',
+        avatar:author.avatar||'👤',
+        starterText:'Hi!',
+        origin:'peepal_say_hi',
+        peerProfileType:author.profileType||null,
+      });
+    } else if(typeof showToast==='function'){
+      showToast('Messaging unavailable');
+    }
   });
   detail.querySelectorAll('[data-peepal-opt]').forEach(btn=>{
     btn.addEventListener('click',(e)=>{

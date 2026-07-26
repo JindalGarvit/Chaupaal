@@ -12,12 +12,6 @@
 .elo-rating{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:24px;color:var(--gold);}
 .dangal-action-btn{margin-bottom:10px;}
 
-/* ===== BAITHAK TAB (placeholder) ===== */
-.baithak-screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;gap:12px;}
-.coming-soon-icon{font-size:56px;}
-.coming-soon-title{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:22px;color:var(--ink);}
-.coming-soon-sub{font-size:14px;color:var(--muted);line-height:1.6;}
-
 /* ===== MODALS ===== */
 .modal-backdrop{position:absolute;inset:0;background:rgba(43,39,48,0.45);display:flex;align-items:flex-end;z-index:100;}
 .modal{background:var(--white);width:100%;border-radius:var(--r-sheet) var(--r-sheet) 0 0;padding:22px 22px 32px;max-height:calc(var(--app-height, 100dvh) * 0.85);overflow-y:auto;}

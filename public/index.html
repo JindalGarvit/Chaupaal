@@ -4,9 +4,21 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Chaupaal — News with Social Discovery</title>
+<meta name="description" content="News with Social Discovery — India's digital chaupaal. Daily news quiz, real discussions, games, and friends.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Chaupaal">
+<meta property="og:title" content="Chaupaal — News with Social Discovery">
+<meta property="og:description" content="News with Social Discovery — India's digital chaupaal. Daily news quiz, real discussions, games, and friends.">
+<meta property="og:image" content="/icon.png">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Chaupaal — News with Social Discovery">
+<meta name="twitter:description" content="News with Social Discovery — India's digital chaupaal.">
+<meta name="twitter:image" content="/icon.png">
 <link rel="icon" type="image/png" href="/icon.png">
 <link rel="manifest" href="/manifest.json">
 <meta name="chaupaal-recaptcha-site-key" content="6Lfv8WAtAAAAAFSsXosQpDyqG6o1oAziDyh3XwQ8">
+<!-- Optional: Tenor API key for live GIF search. Leave REPLACE_ME to use the local curated pack. -->
+<meta name="chaupaal-tenor-key" content="REPLACE_ME">
 <meta name="theme-color" content="#E63946">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -17,11 +29,11 @@
   <link rel="stylesheet" href="/src/styles/icons.css?v=152a1d7b">
   <link rel="stylesheet" href="/src/styles/layout.css?v=eb712c97">
   <link rel="stylesheet" href="/src/styles/akhbaar.css?v=b924fec3">
-  <link rel="stylesheet" href="/src/styles/dangal.css?v=904e8cbf">
+  <link rel="stylesheet" href="/src/styles/dangal.css?v=1806b1a8">
   <link rel="stylesheet" href="/src/styles/baithak.css?v=9592314c">
   <link rel="stylesheet" href="/src/styles/peepal.css?v=c3530dde">
   <link rel="stylesheet" href="/src/styles/duniya.css?v=2df526a6">
-  <link rel="stylesheet" href="/src/styles/components.css?v=7571c042">
+  <link rel="stylesheet" href="/src/styles/components.css?v=31feabc7">
   <link rel="stylesheet" href="/src/styles/mehfil.css?v=bf556c72">
 </head>
 <body>
@@ -62,16 +74,6 @@
           </div>
           <div class="auth-hero-headline">India's digital<br><em>chaupaal</em> <span data-icon="armchair" data-icon-size="28" style="display:inline-flex;vertical-align:middle;color:var(--red);"></span></div>
           <div class="auth-hero-sub">Where real people discuss real things — news, life, games, and each other.</div>
-          <div class="auth-social-proof">
-            <div class="auth-proof-avatars">
-              <span class="auth-proof-avatar" data-icon="user" data-icon-size="14"></span>
-              <span class="auth-proof-avatar" data-icon="user" data-icon-size="14"></span>
-              <span class="auth-proof-avatar" data-icon="user" data-icon-size="14"></span>
-              <span class="auth-proof-avatar" data-icon="user" data-icon-size="14"></span>
-              <span class="auth-proof-avatar" data-icon="user" data-icon-size="14"></span>
-            </div>
-            <div class="auth-proof-text">Join <strong>10,000+</strong> people already on Chaupaal</div>
-          </div>
           <div class="auth-feature-pills">
             <span class="auth-pill"><span data-icon="newspaper" data-icon-size="14"></span> Daily news quiz</span>
             <span class="auth-pill"><span data-icon="tree" data-icon-size="14"></span> Real discussions</span>
@@ -83,7 +85,7 @@
           <button class="auth-hero-cta" id="heroSignupBtn">Create free account</button>
           <button class="auth-hero-login" id="heroLoginBtn">Already have an account? <strong>Log in</strong></button>
           <button class="auth-guest-btn" id="authSkip">Explore as guest →</button>
-          <div class="auth-legal">By signing up you agree to our <u>Terms</u> and <u>Privacy Policy</u>. Real identity required.</div>
+          <div class="auth-legal">By signing up you agree to our <button type="button" class="auth-legal-link" data-legal="terms">Terms</button> and <button type="button" class="auth-legal-link" data-legal="privacy">Privacy Policy</button>. Real identity required.</div>
         </div>
       </div>
 
@@ -321,7 +323,7 @@
           </div>
           <div class="auth-error" id="registerError"></div>
           <button class="btn btn--primary btn--block btn--lg auth-btn" id="registerBtn">Create my account</button>
-          <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:10px;line-height:1.6;">By creating an account you confirm you're 16+ and agree to our Terms & Privacy Policy</div>
+          <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:10px;line-height:1.6;">By creating an account you confirm you're 16+ and agree to our <button type="button" class="auth-legal-link" data-legal="terms">Terms</button> &amp; <button type="button" class="auth-legal-link" data-legal="privacy">Privacy Policy</button></div>
         </div>
       </div>
 
@@ -420,7 +422,6 @@
     <!-- SEARCH -->
     <div class="baithak-search-row">
       <input class="baithak-search" id="baithakSearch" placeholder="Search..." type="text" data-i18n-placeholder="baithak_search">
-      <button class="new-chat-btn" id="newChatBtn" aria-label="New chat" data-icon="pen"></button>
     </div>
 
     <!-- CHAT LIST -->
@@ -817,7 +818,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check-compat.js"></script>
   <script src="/src/js/config/firebase.js?v=ba98f667"></script>
-  <script src="/src/js/config/app-check.js?v=b1448320"></script>
+  <script src="/src/js/config/app-check.js?v=c74ed63b"></script>
   <script src="/src/js/core/environment.js?v=4dc6dd81"></script>
   <script src="/src/js/core/storage.js?v=0fb0e244"></script>
   <script src="/src/js/core/icons.js?v=82ba103f"></script>
@@ -872,7 +873,7 @@
   <script src="/src/js/ai/markdown.js?v=32d3b778"></script>
   <script src="/src/js/ai/call-ai.js?v=59e15380"></script>
   <script src="/src/js/ai/anthropic.js?v=ee230737"></script>
-  <script src="/src/js/core/search.js?v=c0a48631"></script>
+  <script src="/src/js/core/search.js?v=ca68319b"></script>
   <script src="/src/js/core/deeplinks.js?v=4249245b"></script>
   <script src="/src/js/core/rate-limit-client.js?v=2696fc7d"></script>
   <script src="/src/js/core/theme.js?v=437f3494"></script>
@@ -883,7 +884,7 @@
   <script src="/src/js/features/akhbaar.js?v=afe52ecf"></script>
   <script src="/src/js/features/dangal.js?v=8f52f079"></script>
   <script src="/src/js/features/dangal-ratings.js?v=d7b80059"></script>
-  <script src="/src/js/features/baithak-data.js?v=e653a018"></script>
+  <script src="/src/js/features/baithak-data.js?v=9e68e609"></script>
   <script src="/src/js/features/self-chat.js?v=9dfd834b"></script>
   <script src="/src/js/features/chaupaal-chat.js?v=843094a0"></script>
   <script src="/src/js/features/chat-rating.js?v=19d676d2"></script>
@@ -894,14 +895,14 @@
   <script src="/src/js/core/stories.js?v=fa8c017d"></script>
   <script src="/src/js/core/archive-hub.js?v=ddcb3816"></script>
   <script src="/src/js/core/journal-anim.js?v=f2658ae2"></script>
-  <script src="/src/js/features/baithak.js?v=004ef293"></script>
+  <script src="/src/js/features/baithak.js?v=a242969e"></script>
   <script src="/src/js/features/profile-preview.js?v=10860c1d"></script>
   <script src="/src/js/features/profile.js?v=34c90847"></script>
   <script src="/src/js/core/i18n.js?v=ed179bf5"></script>
-  <script src="/src/js/features/categories.js?v=2d627153"></script>
-  <script src="/src/js/features/peepal.js?v=f0b8bb10"></script>
-  <script src="/src/js/features/onboarding.js?v=2b4c6a4d"></script>
-  <script src="/src/js/core/service-worker.js?v=0b52691e"></script>
+  <script src="/src/js/features/categories.js?v=060f6a5d"></script>
+  <script src="/src/js/features/peepal.js?v=7ec67d45"></script>
+  <script src="/src/js/features/onboarding.js?v=f1b83b21"></script>
+  <script src="/src/js/core/service-worker.js?v=9ffe9136"></script>
   <script src="/src/js/features/streak.js?v=766abb34"></script>
   <script src="/vendor/chess.js?v=434826c8"></script>
   <script src="/src/js/games/game-runtime.js?v=9d6492c3"></script>
@@ -911,9 +912,10 @@
   <script src="/src/js/games/engines.js?v=08d5fd8b"></script>
   <script src="/src/js/games/board-games.js?v=98a9bab8"></script>
   <script src="/src/js/games/arcade.js?v=46c5964c"></script>
-  <script src="/src/js/main.js?v=02261936"></script>
+  <script src="/src/js/main.js?v=3ff0e06e"></script>
   <script src="/src/js/features/akhbaar-catbar.js?v=dddafeef"></script>
-  <script src="/src/js/features/duniya.js?v=e836e5cc"></script>
+  <script src="/src/js/features/duniya.js?v=6b74d87b"></script>
+  <script src="/src/js/features/media-picker.js?v=a5cbb12c"></script>
   <script src="/src/js/features/premium.js?v=95d177b4"></script>
   <script src="/src/js/features/discovery.js?v=a8d3ad37"></script>
   <script src="/src/js/core/polish.js?v=9ae02fe4"></script>

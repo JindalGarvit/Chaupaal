@@ -112,9 +112,15 @@
       const row = mapUserResult(uid, u, usernameFallback);
       const hay = textHaystack(row.name, row.username, row.bio, row.city, ...(u.interests || []));
       let score = scoreBoost || 0;
-      if (row.username === q) score += 100;
-      else if (row.username.startsWith(q)) score += 60;
-      if (String(row.name || '').toLowerCase().startsWith(q)) score += 40;
+      const uname = String(row.username || '').toLowerCase();
+      const dname = String(row.name || '').toLowerCase();
+      // Exact / strong identity matches always win ranking.
+      if (uname === q) score += 500;
+      else if (uname.startsWith(q)) score += 200;
+      else if (uname.includes(q)) score += 80;
+      if (dname === q) score += 450;
+      else if (dname.startsWith(q)) score += 160;
+      else if (dname.includes(q)) score += 50;
       if (hay.includes(q)) score += 15;
       // Soft signal from discovery / openToMeet when present
       if (u.openToMeet) score += 5;
@@ -130,10 +136,25 @@
           const un = String(u.username || u.name || '')
             .toLowerCase()
             .replace(/\s+/g, '_');
-          return un.includes(q) || String(u.name || '').toLowerCase().includes(q);
+          const nm = String(u.name || '').toLowerCase();
+          return un.includes(q) || nm.includes(q);
         })
-        .slice(0, limit)
-        .map((u) => mapUserResult(u.uid, u));
+        .map((u) => {
+          const row = mapUserResult(u.uid, u);
+          const uname = String(row.username || '').toLowerCase();
+          const dname = String(row.name || '').toLowerCase();
+          let score = 0;
+          if (uname === q) score += 500;
+          else if (uname.startsWith(q)) score += 200;
+          else if (uname.includes(q)) score += 80;
+          if (dname === q) score += 450;
+          else if (dname.startsWith(q)) score += 160;
+          else if (dname.includes(q)) score += 50;
+          row.score = score;
+          return row;
+        })
+        .sort((a, b) => (b.score || 0) - (a.score || 0))
+        .slice(0, limit);
     }
 
     // 1) Exact username (usernames list is denied by rules — get-by-id only)
@@ -729,6 +750,7 @@
 
   window.registerSearchProvider = registerSearchProvider;
   window.universalSearch = universalSearch;
+  window.searchUsersProvider = searchUsersProvider;
   // Dynamic-list boundary (CONVENTIONS 4c): search UI renders provider results
   window.openUniversalSearch = typeof safeFeature === 'function'
     ? safeFeature('search_open', openUniversalSearch)

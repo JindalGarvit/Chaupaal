@@ -5,7 +5,6 @@ function initBaithak(){
   if(!storiesRow.dataset.wired){
     storiesRow.dataset.wired='1';
     document.getElementById('baithakFab')?.addEventListener('click',showNewChatOptions);
-    document.getElementById('newChatBtn')?.addEventListener('click',showNewChatOptions);
     const addStoryBtn=document.getElementById('addStoryBtn');
     addStoryBtn?.addEventListener('click',()=>{
       if(addStoryBtn.dataset.suppressClick==='1'){
@@ -23,26 +22,25 @@ function initBaithak(){
     }
     document.getElementById('baithakSearch')?.addEventListener('input',e=>{
       const q=e.target.value.toLowerCase();
-      // @prefix ? people search (Phase 4 universal search)
       if(q.startsWith('@')&&q.length>1&&typeof openUniversalSearch==='function'){
         openUniversalSearch({initialQuery:q.slice(1),types:['users']});
         e.target.value='';
         return;
       }
-      renderChatList(typeof getBaithakChatsForSearch==='function'?getBaithakChatsForSearch(q):(SAMPLE_CHATS.filter(c=>c.name.toLowerCase().includes(q))));
+      renderChatList(typeof getBaithakChatsForSearch==='function'?getBaithakChatsForSearch(q):(typeof pinSelfChat==='function'?pinSelfChat([]):[]));
     });
   }
   if(currentUser&&typeof renderLiveBaithakStories==='function') renderLiveBaithakStories();
   else renderStories();
-  // Always paint inbox (Message Yourself is pinned inside renderChatList / pinSelfChat).
-  // Do NOT replace the list with a full-page skeleton ? that was wiping the self-chat row
-  // when Firestore hydration was slow or hung.
   if(typeof baithakChats!=='undefined') baithakChats = typeof pinSelfChat==='function' ? pinSelfChat(baithakChats) : baithakChats;
-  renderChatList(typeof baithakChats!=='undefined'?baithakChats:SAMPLE_CHATS);
+  renderChatList(typeof baithakChats!=='undefined'?baithakChats:(typeof pinSelfChat==='function'?pinSelfChat([]):[]));
   if(db&&currentUser&&typeof loadBaithakChatsPage==='function'){
     loadBaithakChatsPage({reset:true})
       .then(()=>{ if(typeof baithakChats!=='undefined') baithakChats = pinSelfChat(baithakChats); renderChatList(baithakChats); })
-      .catch(()=>renderChatList(typeof baithakChats!=='undefined'?pinSelfChat(baithakChats):SAMPLE_CHATS));
+      .catch(()=>{
+        if(typeof baithakChatLoadError!=='undefined') baithakChatLoadError=true;
+        renderChatList(typeof baithakChats!=='undefined'?pinSelfChat(baithakChats):(typeof pinSelfChat==='function'?pinSelfChat([]):[]));
+      });
   }
 }
 
@@ -341,10 +339,93 @@ function openChallengeCreator(chat){
   render();
 }
 
+function showNewDmSearchSheet(){
+  if(typeof currentUser==='undefined'||!currentUser){
+    if(typeof showGuestSignInBanner==='function') showGuestSignInBanner();
+    if(typeof showAuth==='function') showAuth();
+    else if(typeof showToast==='function') showToast('Sign in to message people');
+    return;
+  }
+  const sheet=document.createElement('div');
+  sheet.className='new-dm-sheet';
+  sheet.style.cssText='position:absolute;inset:0;background:var(--cream);z-index:100;display:flex;flex-direction:column;';
+  sheet.innerHTML=`
+    <div style="display:flex;align-items:center;gap:10px;padding:16px;background:var(--white);border-bottom:1px solid var(--line);">
+      <button type="button" id="closeNewDm" style="background:none;border:none;font-size:22px;cursor:pointer;">←</button>
+      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">New message</div>
+    </div>
+    <div style="padding:12px 16px;">
+      <input id="newDmSearch" type="search" autocomplete="off" placeholder="Search name or @username"
+        style="width:100%;padding:12px 14px;border:2px solid var(--line);border-radius:14px;font-size:15px;box-sizing:border-box;outline:none;">
+    </div>
+    <div id="newDmResults" style="flex:1;overflow:auto;padding:0 16px 24px;"></div>`;
+  document.querySelector('.device')?.appendChild(sheet);
+  const close=()=>sheet.remove();
+  sheet.querySelector('#closeNewDm')?.addEventListener('click',close);
+  if(typeof pushNavLayer==='function'){ sheet.dataset.navManaged='1'; pushNavLayer(sheet,close); }
+  const input=sheet.querySelector('#newDmSearch');
+  const results=sheet.querySelector('#newDmResults');
+  let timer=null;
+  async function runSearch(q){
+    results.innerHTML='<div style="padding:16px;color:var(--muted);font-size:13px;">Searching…</div>';
+    try{
+      const rows=typeof searchUsersProvider==='function'
+        ? await searchUsersProvider(q,{limit:20})
+        : [];
+      if(!rows.length){
+        results.innerHTML='<div style="padding:16px;color:var(--muted);font-size:13px;">No people found</div>';
+        return;
+      }
+      results.innerHTML=rows.map(r=>`
+        <button type="button" class="new-dm-row" data-uid="${r.uid||''}" data-name="${(r.name||r.username||'').replace(/"/g,'&quot;')}" data-avatar="${(r.avatar||'👤').replace(/"/g,'&quot;')}"
+          style="width:100%;display:flex;align-items:center;gap:12px;padding:12px 0;border:0;border-bottom:1px solid var(--line);background:transparent;cursor:pointer;text-align:left;">
+          <div style="width:40px;height:40px;border-radius:50%;background:var(--white);display:grid;place-items:center;overflow:hidden;">${r.photoURL?`<img src="${r.photoURL}" style="width:100%;height:100%;object-fit:cover;">`:'👤'}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:700;font-size:14px;">${r.name||r.username||'User'}</div>
+            <div style="font-size:12px;color:var(--muted);">@${r.username||'user'}</div>
+          </div>
+          <span style="font-size:12px;font-weight:700;color:var(--red);">Message</span>
+        </button>`).join('');
+      results.querySelectorAll('.new-dm-row').forEach(btn=>{
+        btn.addEventListener('click',async()=>{
+          const uid=btn.dataset.uid;
+          if(!uid) return;
+          if(uid===currentUser?.uid){
+            if(typeof showToast==='function') showToast("That's you");
+            return;
+          }
+          if(typeof dismissedUids!=='undefined'&&dismissedUids instanceof Set&&dismissedUids.has(uid)){
+            if(typeof showToast==='function') showToast("You've blocked this person");
+            return;
+          }
+          close();
+          if(typeof openDmWithSharedHello==='function'){
+            await openDmWithSharedHello({
+              uid,
+              name:btn.dataset.name||'Friend',
+              avatar:btn.dataset.avatar||'👤',
+              starterText:'Hi!',
+              origin:'new_dm',
+            });
+          }
+        });
+      });
+    }catch(e){
+      results.innerHTML='<div style="padding:16px;color:var(--red);font-size:13px;">Search failed — try again</div>';
+    }
+  }
+  input?.addEventListener('input',()=>{
+    clearTimeout(timer);
+    const q=input.value.trim();
+    if(q.length<1){ results.innerHTML=''; return; }
+    timer=setTimeout(()=>runSearch(q),280);
+  });
+  setTimeout(()=>input?.focus(),100);
+}
+
 function showNewChatOptions(){
   const sheet=document.createElement('div');
   sheet.style.cssText='position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:22px;z-index:100;';
-  // FUTURE_I18N: new-chat sheet copy
   sheet.innerHTML=`
     <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;margin-bottom:14px;">New chat</div>
     <button id="newDm" style="width:100%;padding:14px;background:var(--cream);border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;text-align:left;margin-bottom:8px;">💬 New DM</button>
@@ -352,7 +433,7 @@ function showNewChatOptions(){
     <button id="closeSheet2" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>
   `;
   document.querySelector('.device').appendChild(sheet);
-  document.getElementById('newDm').addEventListener('click',()=>{sheet.remove();showToast(t('baithak_enter_username'));});
+  document.getElementById('newDm').addEventListener('click',()=>{sheet.remove();showNewDmSearchSheet();});
   document.getElementById('newGroup').addEventListener('click',()=>{sheet.remove();showCreateGroup();});
   document.getElementById('closeSheet2').addEventListener('click',()=>sheet.remove());
 }
@@ -367,8 +448,7 @@ function showCreateGroup(){
     </div>
     <input class="auth-input" placeholder="Group name" id="grpName">
     <input class="auth-input" placeholder="Description (optional)" id="grpDesc">
-    <div style="font-size:13px;font-weight:600;color:var(--muted);margin:8px 0;">Share the group link so others can join →</div>
-    <div style="background:var(--white);border-radius:12px;padding:14px;font-size:13px;color:var(--red);font-weight:600;">chaupaal.app/join/abc123 <span style="color:var(--muted);font-weight:400;">(auto-generated)</span></div>
+    <div style="font-size:13px;color:var(--muted);margin:12px 0 8px;line-height:1.45;">After you create the group, you can copy a real invite link from group info.</div>
     <button style="margin-top:auto;width:100%;padding:15px;background:var(--red);color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;" id="createGrpBtn">Create group</button>
   `;
   document.querySelector('.device').appendChild(sheet);

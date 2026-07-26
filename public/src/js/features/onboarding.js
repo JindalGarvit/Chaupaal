@@ -71,35 +71,68 @@ const SAMPLE_NEARBY=[
 function renderFriendDiscovery(container){
   const section=document.createElement('div');section.className='friend-discover-section';
   section.innerHTML=`
-    <div class="friend-discover-label">Find by phone number</div>
+    <div class="friend-discover-label">Find by username</div>
     <div class="phone-search-row">
-      <input class="phone-search-input" type="tel" id="phoneSearchInput" placeholder="Enter mobile number">
-      <button class="phone-search-btn" id="phoneSearchBtn">Search</button>
+      <input class="phone-search-input" type="search" id="friendDiscoverSearch" placeholder="Name or @username" autocomplete="off">
+      <button class="phone-search-btn" id="friendDiscoverSearchBtn">Search</button>
     </div>
-    <div class="friend-discover-label">People you might know</div>
-    ${SAMPLE_NEARBY.map(u=>`
-      <div class="discover-user-card" data-uid="${u.uid}" data-name="${u.name}">
-        <div class="discover-avatar">${u.avatar}</div>
-        <div class="discover-info"><div class="discover-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(u.name,u):u.name}</div><div class="discover-meta">${u.meta}</div></div>
-        <button class="discover-add-btn" data-uid="${u.uid}" data-name="${u.name}">+ Add</button>
-      </div>
-    `).join('')}
+    <div class="friend-discover-label" style="margin-top:8px;">Phone numbers</div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.45;margin-bottom:12px;">Phone lookup stays private on Chaupaal — search by username instead, or ask a friend to share theirs.</div>
+    <div class="friend-discover-label">Results</div>
+    <div id="friendDiscoverResults"></div>
   `;
   container.appendChild(section);
-  section.querySelectorAll('.discover-avatar').forEach((avatar)=>{
-    const card=avatar.closest('.discover-user-card');
-    if(card?.dataset.uid&&typeof bindProfileLongPress==='function'){
-      bindProfileLongPress(avatar,{uid:card.dataset.uid,name:card.dataset.name||'Person',avatar:avatar.textContent?.trim()||'👤'});
+  const resultsEl=section.querySelector('#friendDiscoverResults');
+  async function runDiscoverSearch(){
+    const q=section.querySelector('#friendDiscoverSearch')?.value.trim()||'';
+    if(!q){ if(typeof showToast==='function') showToast('Enter a name or username'); return; }
+    if(!currentUser){
+      if(typeof showAuth==='function') showAuth();
+      else if(typeof showToast==='function') showToast('Sign in to add friends');
+      return;
     }
-  });
-  document.getElementById('phoneSearchBtn')?.addEventListener('click',async()=>{
-    const phone=document.getElementById('phoneSearchInput')?.value.trim();
-    if(!phone){showToast(t('onboard_enter_phone'));return;}
-    // Phone is private on users/ — client-side phone equality search removed (PII split).
-    showToast(t('onboard_phone_private'));
-  });
-  section.querySelectorAll('.discover-add-btn').forEach(btn=>{
-    btn.addEventListener('click',()=>{btn.textContent='Added ✓';btn.style.background='rgba(51,196,129,0.1)';btn.style.color='var(--green)';showToast(t('onboard_added',{name:btn.dataset.name}));});
+    resultsEl.innerHTML='<div style="padding:10px;color:var(--muted);font-size:13px;">Searching…</div>';
+    try{
+      const rows=typeof searchUsersProvider==='function'?await searchUsersProvider(q,{limit:12}):[];
+      if(!rows.length){
+        resultsEl.innerHTML='<div style="padding:10px;color:var(--muted);font-size:13px;">No people found</div>';
+        return;
+      }
+      resultsEl.innerHTML=rows.map(u=>`
+        <div class="discover-user-card" data-uid="${u.uid}" data-name="${(u.name||u.username||'').replace(/"/g,'&quot;')}">
+          <div class="discover-avatar">${u.photoURL?`<img src="${u.photoURL}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:'👤'}</div>
+          <div class="discover-info"><div class="discover-name">${u.name||u.username||'User'}</div><div class="discover-meta">@${u.username||'user'}</div></div>
+          <button class="discover-add-btn" data-uid="${u.uid}" data-name="${(u.name||u.username||'').replace(/"/g,'&quot;')}">+ Add</button>
+        </div>`).join('');
+      resultsEl.querySelectorAll('.discover-add-btn').forEach(btn=>{
+        btn.addEventListener('click',async()=>{
+          const uid=btn.dataset.uid;
+          if(!uid||uid===currentUser?.uid){ if(typeof showToast==='function') showToast("That's you"); return; }
+          if(typeof requestFriend!=='function'){ if(typeof showToast==='function') showToast('Friend requests unavailable'); return; }
+          btn.disabled=true;
+          try{
+            const result=await requestFriend(uid);
+            btn.textContent=result?.autoAccepted||result?.accepted?'Friends ✓':'Requested';
+            btn.style.background='rgba(51,196,129,0.1)';
+            btn.style.color='var(--green)';
+            if(typeof showToast==='function'){
+              showToast(result?.autoAccepted||result?.accepted
+                ? `You're now friends with ${btn.dataset.name}`
+                : `Friend request sent to ${btn.dataset.name}`);
+            }
+          }catch(e){
+            btn.disabled=false;
+            if(typeof showToast==='function') showToast(e?.message||'Could not add friend');
+          }
+        });
+      });
+    }catch(e){
+      resultsEl.innerHTML='<div style="padding:10px;color:var(--red);font-size:13px;">Search failed</div>';
+    }
+  }
+  section.querySelector('#friendDiscoverSearchBtn')?.addEventListener('click',runDiscoverSearch);
+  section.querySelector('#friendDiscoverSearch')?.addEventListener('keydown',(e)=>{
+    if(e.key==='Enter'){ e.preventDefault(); runDiscoverSearch(); }
   });
 }
 

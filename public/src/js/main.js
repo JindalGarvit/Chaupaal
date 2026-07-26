@@ -91,8 +91,17 @@
       if(auth){
         auth.onAuthStateChanged(user=>{
           if(!user){
-            setTimeout(()=>{showOnboarding();setTimeout(showAuth,onboardingDone?600:8000);},600);
+            // Guests: onboarding only — never auto-stack auth mid-onboarding.
+            // Soft "Sign in to save" banner appears after onboarding finishes.
+            setTimeout(()=>{
+              if(typeof showOnboarding==='function') showOnboarding();
+              else if(typeof showGuestSignInBanner==='function') showGuestSignInBanner();
+              if(typeof onboardingDone!=='undefined'&&onboardingDone&&typeof showGuestSignInBanner==='function'){
+                showGuestSignInBanner();
+              }
+            },600);
           } else {
+            if(typeof hideGuestSignInBanner==='function') hideGuestSignInBanner();
             updateProfileBtn();
             scheduleIdle(()=>{try{initCategoryRatings();}catch(e){}},1000);
             if(!onboardingDone)showOnboarding();
@@ -124,7 +133,14 @@
             }
           }
         });
-      } else {setTimeout(()=>{showOnboarding();setTimeout(showAuth,8000);},600);}
+      } else {
+        setTimeout(()=>{
+          if(typeof showOnboarding==='function') showOnboarding();
+          if(typeof onboardingDone!=='undefined'&&onboardingDone&&typeof showGuestSignInBanner==='function'){
+            showGuestSignInBanner();
+          }
+        },600);
+      }
       // Push permission / nudges are non-critical — wait longer
       scheduleIdle(()=>{
         try{requestNotificationPermission();}catch(e){}

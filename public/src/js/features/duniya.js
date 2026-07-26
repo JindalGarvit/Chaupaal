@@ -763,12 +763,21 @@ function openDuniyaPostSheet(mode='post'){
         <label style="display:flex;align-items:center;gap:6px;padding:10px 14px;background:var(--cream);border-radius:12px;cursor:pointer;font-size:13px;font-weight:600;">
           📷 Photo/Video<input type="file" id="duniyaMediaInput" accept="image/*,video/*" style="display:none;">
         </label>
-        <button onclick="showToast(t('duniya_gif_soon'))" style="padding:10px 14px;background:var(--cream);border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;">🎭 GIF</button>
-        <button onclick="showToast(t('duniya_sticker_soon'))" style="padding:10px 14px;background:var(--cream);border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;">😄 Sticker</button>
+        <button type="button" id="duniyaGifBtn" style="padding:10px 14px;background:var(--cream);border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;">🎭 GIF</button>
+        <button type="button" id="duniyaStickerBtn" style="padding:10px 14px;background:var(--cream);border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;">😄 Sticker</button>
       </div>
     </div>
   `;
   sheet.classList.remove('hidden');requestAnimationFrame(()=>sheet.classList.add('open'));
+  window.__duniyaPendingGif=null;
+  document.getElementById('duniyaGifBtn')?.addEventListener('click',()=>{
+    if(typeof openGifPicker==='function') openGifPicker();
+    else if(typeof showToast==='function') showToast('GIF picker unavailable');
+  });
+  document.getElementById('duniyaStickerBtn')?.addEventListener('click',()=>{
+    if(typeof openStickerPicker==='function') openStickerPicker();
+    else if(typeof showToast==='function') showToast('Sticker picker unavailable');
+  });
   const captionEl=document.getElementById('duniyaCaptionInput');
   const audienceEl=document.getElementById('duniyaAudience');
   let duniyaDraft=null;
@@ -794,6 +803,7 @@ function openDuniyaPostSheet(mode='post'){
   document.getElementById('duniyaMediaInput').addEventListener('change',e=>{
     const file=e.target.files[0];if(!file)return;
     pendingMediaFile=file;
+    window.__duniyaPendingGif=null;
     const preview=document.getElementById('duniyaMediaPreview');
     const localUrl=URL.createObjectURL(file);
     if(file.type.startsWith('video')){
@@ -826,7 +836,11 @@ function openDuniyaPostSheet(mode='post'){
 
     let mediaUrl=null, thumbUrl=null, mediaPath=null, thumbPath=null, mediaWidth=null, mediaHeight=null, mediaType=mediaEl?.tagName==='VIDEO'?'video':'image';
     try{
-      if(pendingMediaFile&&typeof processAndUploadMedia==='function'&&currentUser&&(typeof isMediaUploadReady!=='function'||await isMediaUploadReady())){
+      if(window.__duniyaPendingGif?.url && !pendingMediaFile){
+        mediaUrl=window.__duniyaPendingGif.url;
+        thumbUrl=mediaUrl;
+        mediaType='gif';
+      } else if(pendingMediaFile&&typeof processAndUploadMedia==='function'&&currentUser&&(typeof isMediaUploadReady!=='function'||await isMediaUploadReady())){
         shareBtn.classList.remove('is-loading');
         shareBtn.removeAttribute('aria-busy');
         shareBtn.textContent='Uploading…';
