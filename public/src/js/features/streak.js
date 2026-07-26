@@ -185,6 +185,7 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
     const node=div.firstElementChild;
     if(!node) return;
     node.dataset.msgId=doc.id;
+    node.setAttribute('data-msg-id', doc.id);
     if(typeof mountMusicCards==='function') mountMusicCards(node);
     if(typeof mountLocationCards==='function') mountLocationCards(node);
     if(typeof wireChallengeBubble==='function') wireChallengeBubble(node);
@@ -217,6 +218,12 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
           return;
         }
         snap.docChanges().forEach(change=>{
+          if(change.type==='removed'){
+            rendered.delete(change.doc.id);
+            msgsArea.querySelector(`.msg-row[data-msg-id="${change.doc.id}"]`)?.remove();
+            // dataset uses msgId → data-msg-id in HTML? we set node.dataset.msgId which is data-msg-id
+            return;
+          }
           if(change.type!=='added') return;
           if(rendered.has(change.doc.id)) return;
           const m=change.doc.data()||{};
@@ -232,6 +239,11 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
           appendFromDoc(change.doc,false);
           msgsArea.scrollTop=msgsArea.scrollHeight;
         });
+      }, (err)=>{
+        console.warn('[chat] messages listener', err?.code||err?.message||err);
+        if(typeof reportClientError==='function'){
+          reportClientError({feature:'chat_listener',message:err?.message||String(err)});
+        }
       });
 
     if(typeof ensureLoadMoreButton==='function' && typeof fetchOlderMessages==='function'){

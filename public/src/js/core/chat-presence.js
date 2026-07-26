@@ -140,20 +140,41 @@
     typingTimer = setTimeout(() => publishTyping(chatId, false), 1800);
   }
 
+  function clearChatUnreadBadge(chatId) {
+    if (!chatId) return;
+    try {
+      if (typeof baithakChats !== 'undefined' && Array.isArray(baithakChats)) {
+        baithakChats.forEach((c) => {
+          if ((c.firestoreId || c.id) === chatId || c.id === chatId) c.unread = 0;
+        });
+      }
+      if (typeof window.currentOpenChat !== 'undefined' && window.currentOpenChat) {
+        const oc = window.currentOpenChat;
+        if ((oc.firestoreId || oc.id) === chatId) oc.unread = 0;
+      }
+      document.querySelectorAll('.chat-item').forEach((item) => {
+        if (item.dataset.chatId === chatId) item.querySelector('.chat-badge')?.remove();
+      });
+    } catch (e) {}
+  }
+
   function markChatRead(chatId) {
-    if (!presenceEnabled() || !chatId) return;
+    if (!chatId) return;
+    // Always clear local badge UI — even when presence/RTDB is off or chat is self
+    clearChatUnreadBadge(chatId);
     const uid = typeof currentUser !== 'undefined' && currentUser?.uid;
     if (!uid) return;
     const now = Date.now();
+    try {
+      localStorage.setItem('chaupaal_read_' + chatId, String(now));
+    } catch (e) {}
+    if (!presenceEnabled()) return;
     try {
       if (typeof db !== 'undefined' && db) {
         const payload = {};
         payload['reads.' + uid] = now;
         db.collection('chats').doc(chatId).set(payload, { merge: true }).catch(() => {});
       }
-    } catch (e) {}
-    try {
-      localStorage.setItem('chaupaal_read_' + chatId, String(now));
     } catch (e) {}
   }
 
@@ -254,6 +275,7 @@
   window.stopChatPresence = stopPresence;
   window.startChatPresence = listenPresence;
   window.markChatRead = markChatRead;
+  window.clearChatUnreadBadge = clearChatUnreadBadge;
   window.demoMarkSeenSoon = demoMarkSeenSoon;
   window.publishChatTyping = publishTyping;
 })();

@@ -40,10 +40,20 @@
         // (previously showed as "no music results" on mobile). Wait for the
         // shared readiness gate before giving up on a token.
         if (!u && window.ChaupaalEnv?.whenAuthReady) {
-          u = await window.ChaupaalEnv.whenAuthReady();
+          u = await window.ChaupaalEnv.whenAuthReady(10000);
         }
-        if (u) headers.Authorization = `Bearer ${await u.getIdToken()}`;
-      } catch (e) {}
+        if (!u) {
+          const err = new Error('Sign in required');
+          err.code = 'AUTH_REQUIRED';
+          throw err;
+        }
+        headers.Authorization = `Bearer ${await u.getIdToken()}`;
+      } catch (e) {
+        if (e?.code === 'AUTH_REQUIRED') throw e;
+        const err = new Error(e?.message || 'Sign in required');
+        err.code = e?.code || 'AUTH_REQUIRED';
+        throw err;
+      }
     }
     if (idempotencyKey) headers['Idempotency-Key'] = String(idempotencyKey).slice(0, 128);
     const res = await fetch(path, {

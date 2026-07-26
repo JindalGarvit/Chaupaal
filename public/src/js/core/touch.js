@@ -538,6 +538,12 @@
   function messageActions(bubble) {
     const text = (bubble.textContent || '').trim();
     const isMe = bubble.classList.contains('me');
+    const row = bubble.closest('.msg-row');
+    const msgId = row?.dataset?.msgId || '';
+    const chatId =
+      (typeof window.currentOpenChat !== 'undefined' &&
+        (window.currentOpenChat?.firestoreId || window.currentOpenChat?.id)) ||
+      '';
     const actions = [
       {
         label: 'Copy',
@@ -561,10 +567,41 @@
       actions.push({
         label: 'Delete',
         danger: true,
-        fn: () => {
-          const row = bubble.closest('.msg-row');
-          if (row) row.remove();
-          if (typeof showToast === 'function') showToast('Message removed');
+        fn: async () => {
+          // Persist delete for text + music/photo/location — never optimistic-only
+          if (!msgId || !chatId || chatId === 'chat_self' || /^chat_(riya|arjun)/.test(chatId) || chatId.startsWith('grp_')) {
+            if (typeof showToast === 'function') {
+              showToast('This message is not synced — open a real conversation to delete');
+            }
+            return;
+          }
+          if (typeof db === 'undefined' || !db || typeof currentUser === 'undefined' || !currentUser) {
+            if (typeof showToast === 'function') showToast('Sign in to delete messages');
+            return;
+          }
+          row?.classList.add('msg-row--deleting');
+          try {
+            await db.collection('chats').doc(chatId).collection('messages').doc(msgId).delete();
+            row?.remove();
+            if (typeof showToast === 'function') showToast('Message deleted');
+          } catch (e) {
+            row?.classList.remove('msg-row--deleting');
+            if (typeof reportClientError === 'function') {
+              reportClientError({
+                feature: 'chat_msg_delete',
+                message: e?.message || String(e),
+              });
+            }
+            if (typeof showToast === 'function') {
+              showToast(
+                typeof friendlyError === 'function'
+                  ? friendlyError(e)
+                  : e?.code === 'permission-denied'
+                    ? 'Couldn’t delete — permission denied'
+                    : 'Couldn’t delete message'
+              );
+            }
+          }
         },
       });
     }

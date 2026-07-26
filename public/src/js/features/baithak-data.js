@@ -2,10 +2,11 @@
 const SAMPLE_CHATS = [
   // Pinned locally too — ensureSelfChatPinned / pinSelfChat always re-assert this at render time
   {id:'chat_self',type:'self',isSelf:true,pinned:true,undeletable:true,name:'Me (You)',avatar:'📝',preview:'Notes to self · try games & features here',time:'Pinned',unread:0,duelStreak:0},
-  {id:'chat_riya',type:'dm',name:'Riya Sharma',avatar:'😊',preview:'Ready for tomorrow\'s Muqabala? 😤',time:'2m',unread:2,streak:7,duelStreak:12,profileType:'personal',theirIcebreakers:[{promptId:'ib14',answer:'Cutting chai, extra adrak — non-negotiable after the local.'}],icebreakers:[{promptId:'ib14',answer:'Cutting chai, extra adrak — non-negotiable after the local.'}]},
-  {id:'chat_arjun',type:'dm',name:'Arjun Mehta',avatar:'🏔️',preview:'That Sports question was wrong though',time:'18m',unread:0,streak:3,duelStreak:5,profileType:'personal',theirIcebreakers:[{promptId:'ib18',answer:'Road trip — windows down, random dhabas, no timetable.'}],icebreakers:[{promptId:'ib18',answer:'Road trip — windows down, random dhabas, no timetable.'}]},
-  {id:'grp_tech',type:'group',name:'Tech Geeks 💻',avatar:'💻',preview:'Someone: Did you read the AirTrunk news?',time:'1h',unread:5,members:12},
-  {id:'grp_news',type:'group',name:'Daily Akhbaar Club',avatar:'📰',preview:'Today\'s score 13/20 😮‍💨',time:'3h',unread:0,members:8},
+  // Demo rows (offline only) — unread 0 so they never look like real notifications
+  {id:'chat_riya',type:'dm',name:'Riya Sharma',avatar:'😊',preview:'Ready for tomorrow\'s Muqabala? 😤',time:'2m',unread:0,streak:7,duelStreak:12,isSample:true,profileType:'personal',theirIcebreakers:[{promptId:'ib14',answer:'Cutting chai, extra adrak — non-negotiable after the local.'}],icebreakers:[{promptId:'ib14',answer:'Cutting chai, extra adrak — non-negotiable after the local.'}]},
+  {id:'chat_arjun',type:'dm',name:'Arjun Mehta',avatar:'🏔️',preview:'That Sports question was wrong though',time:'18m',unread:0,streak:3,duelStreak:5,isSample:true,profileType:'personal',theirIcebreakers:[{promptId:'ib18',answer:'Road trip — windows down, random dhabas, no timetable.'}],icebreakers:[{promptId:'ib18',answer:'Road trip — windows down, random dhabas, no timetable.'}]},
+  {id:'grp_tech',type:'group',name:'Tech Geeks 💻',avatar:'💻',preview:'Someone: Did you read the AirTrunk news?',time:'1h',unread:0,members:12,isSample:true},
+  {id:'grp_news',type:'group',name:'Daily Akhbaar Club',avatar:'📰',preview:'Today\'s score 13/20 😮‍💨',time:'3h',unread:0,members:8,isSample:true},
 ];
 
 const SAMPLE_MESSAGES = {
@@ -245,7 +246,17 @@ function mapChatDoc(raw){
     time: updated?undefined:raw.time,
     ts: updated||raw.ts||Date.now(),
     updatedAt: updated,
-    unread: raw.unread||0,
+    unread: (()=>{
+      const last=raw.lastMessageAt?.toMillis?.()||raw.lastMessageAt||updated||0;
+      const myUid=typeof currentUser!=='undefined'?currentUser?.uid:null;
+      const myRead=myUid&&raw.reads&&typeof raw.reads==='object'?Number(raw.reads[myUid])||0:0;
+      if(myRead&&last&&myRead>=Number(last)) return 0;
+      try{
+        const ls=Number(localStorage.getItem('chaupaal_read_'+(raw.id||''))||0);
+        if(ls&&last&&ls>=Number(last)) return 0;
+      }catch(e){}
+      return Number(raw.unread)||0;
+    })(),
     streak: raw.streak||0,
     duelStreak: raw.duelStreak||0,
     members: raw.members||null,
@@ -293,10 +304,8 @@ async function loadBaithakChatsPage({reset=false}={}){
     if(reset&&mapped.length){
       baithakChatLiveMode=true;
       baithakChats=pinSelfChat(mapped);
-      // Keep inbox interactive: merge any local-only SAMPLE ids not yet in Firestore
-      const seen=new Set(baithakChats.map(c=>c.id));
-      SAMPLE_CHATS.forEach(s=>{ if(!seen.has(s.id) && !isSelfChatRow(s)) baithakChats.push(s); });
-      baithakChats=pinSelfChat(baithakChats);
+      // Do NOT merge SAMPLE demo rows into a live inbox — sticky unread badges
+      // and intentionally-blocked sends looked like product bugs.
     } else if(mapped.length){
       const seen=new Set(baithakChats.map(c=>c.firestoreId||c.id));
       mapped.forEach(c=>{ if(!seen.has(c.firestoreId||c.id)) baithakChats.push(c); });

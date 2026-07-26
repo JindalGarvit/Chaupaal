@@ -158,3 +158,21 @@ The client still loads classic non-module scripts (`<script src>`), so top-level
 - Attach new public APIs under `window.ChaupaalNS` (or an existing feature namespace like `AuthProfiles`, `UsersPublic`) instead of adding bare `window.foo`.
 - Reuse existing entry points (`showToast`, `t`, `pushNavLayer`, `safeFeature`) rather than inventing parallel globals.
 - User-facing strings go through `t('key')` with keys in `i18n.js` (`en` / `hi` / `ta`).
+
+## 13. Design tokens (UI polish)
+
+Visual hierarchy tokens live in `public/src/styles/tokens.css` (`:root`). **Prefer these over one-off hex/px in feature CSS.**
+
+| Token group | Examples | Use for |
+|---|---|---|
+| Color | `--red`, `--cream`, `--ink`, `--muted`, `--bubble-me-bg` | Brand, surfaces, chat bubbles |
+| Type | `--text-sm`…`--text-2xl`, `--font-display`, `--weight-*` | Labels vs body vs titles |
+| Space | `--space-1`…`--space-8` | Padding/gaps (not arbitrary 7px/11px) |
+| Radius | `--r-sm`…`--r-sheet`, `--r-bubble` | Controls, cards, sheets |
+| Elevation | `--shadow-sm`…`--shadow-xl` | Cards, sheets, FABs |
+| Actions | `--btn-primary-*`, `--btn-secondary-*`, `--btn-tertiary-*`, `--icon-*` | Primary CTA dominant; secondary/tertiary quieter |
+| Feed | `--feed-card-pad`, `--feed-avatar`, `--feed-action-gap` | Shared Peepal/Duniya/Lehar card anatomy |
+
+Chat polish (bubbles, composer, typing) lives mainly in `baithak.css`. Media cards use the same action hierarchy in `components.css` (`.music-card`). Empty/loading/error shells use `ui-states.js` + `.cp-empty` / `.cp-state` in `components.css`.
+
+Do not invent a second palette per screen. If a new surface needs a value, add a token first.

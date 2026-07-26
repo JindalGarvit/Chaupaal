@@ -340,7 +340,11 @@
         error: null,
       };
     } catch (e) {
-      return { results: [], error: e?.message || 'search_failed' };
+      const authFail = e?.code === 'AUTH_REQUIRED' || /sign in/i.test(e?.message || '');
+      return {
+        results: [],
+        error: authFail ? 'Sign in to search songs' : e?.message || 'search_failed',
+      };
     }
   }
 
@@ -541,7 +545,7 @@
       const err = Array.isArray(packed) ? null : packed?.error;
       if (seq !== searchSeq) return;
       if (err && !list.length) {
-        renderResults([], 'Couldn’t search songs — try again');
+        renderResults([], /sign in/i.test(String(err)) ? String(err) : 'Couldn’t search songs — try again');
         return;
       }
       renderResults(list, 'No results');

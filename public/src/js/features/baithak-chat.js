@@ -150,7 +150,7 @@ function openChatScreen(chat){
     </div>
     <div class="chat-input-bar">
       <button class="chat-action-btn" id="chatPlusBtn" aria-label="Attach">＋</button>
-      <input type="text" id="chatMsgInput" placeholder="${placeholder}" autocomplete="off" autocorrect="off" spellcheck="false">
+      <textarea id="chatMsgInput" rows="1" placeholder="${placeholder}" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
       <button class="chat-action-btn mic-btn" id="chatMicBtn" title="Voice typing" aria-label="Voice typing">🎙️</button>
       <button class="chat-action-btn chat-send-btn" id="chatSendBtn" aria-label="Send message">➤</button>
     </div>
@@ -237,21 +237,57 @@ function openChatScreen(chat){
 
   document.getElementById('chatSendBtn').addEventListener('click', () => sendMsg(chat));
   const msgInput = document.getElementById('chatMsgInput');
-  msgInput?.addEventListener('keypress', e => {if(e.key==='Enter')sendMsg(chat);});
+  const sendBtn = document.getElementById('chatSendBtn');
+  const syncSendIdle = () => {
+    const empty = !(msgInput?.value || '').trim();
+    sendBtn?.classList.toggle('is-idle', empty);
+    if (sendBtn) sendBtn.disabled = empty;
+  };
+  const growComposer = () => {
+    if (!msgInput || msgInput.tagName !== 'TEXTAREA') return;
+    msgInput.style.height = 'auto';
+    msgInput.style.height = Math.min(120, msgInput.scrollHeight) + 'px';
+  };
+  msgInput?.addEventListener('keypress', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMsg(chat);
+    }
+  });
   msgInput?.addEventListener('input', () => {
+    growComposer();
+    syncSendIdle();
     if (!isChaupaal) updateAiSuggestions(msgInput.value);
     if (!isChaupaal && typeof signalChatTyping === 'function') signalChatTyping(chat.firestoreId || chat.id);
   });
+  syncSendIdle();
+  // Relative ↔ absolute time on tap
+  screen.addEventListener('click', (e) => {
+    const t = e.target.closest?.('.msg-time[data-abs]');
+    if (!t) return;
+    const showingAbs = t.dataset.mode === 'abs';
+    if (showingAbs) {
+      t.textContent = t.dataset.rel || t.textContent;
+      t.dataset.mode = 'rel';
+    } else {
+      t.textContent = t.dataset.abs || t.textContent;
+      t.dataset.mode = 'abs';
+    }
+  });
   if (!isChaupaal && typeof startChatPresence === 'function') startChatPresence(chat);
+  // Clear unread + write reads (startChatPresence skips self-chat before markChatRead)
+  if (typeof markChatRead === 'function') {
+    markChatRead(chat.firestoreId || chat.id);
+  } else if (typeof clearChatUnreadBadge === 'function') {
+    clearChatUnreadBadge(chat.firestoreId || chat.id);
+  }
   if (isChaupaal) {
     try { if (typeof ensureChaupaalChatDoc === 'function') ensureChaupaalChatDoc(); } catch (e) {}
     try { if (typeof hydrateChaupaalQuietState === 'function') hydrateChaupaalQuietState(screen); } catch (e) {}
     // Hide attach game / challenge affordances for system chat
     document.getElementById('attachGame')?.classList.add('hidden');
   }
-  if (isSelf) {
-    try { if (typeof ensureSelfChatDoc === 'function') ensureSelfChatDoc(); } catch (e) {}
-  }
+  // Self-chat ensure is awaited in the listener bootstrap below — do not fire-and-forget here.
   // AI Discovery mindful meter (Personal peers only)
   if (
     !isGroup &&
@@ -408,11 +444,38 @@ function openChatScreen(chat){
 
   if(hasDuelStreak) document.getElementById('startRitualBtn')?.addEventListener('click', () => startDailyDuelRitual(chat));
 
-  setTimeout(() => {
+  setTimeout(async () => {
     const area = document.getElementById('chatMsgsArea');
     if(area) area.scrollTop = area.scrollHeight;
-    // Load real messages from Firestore
-    loadRealtimeMessages(chat.firestoreId || chat.id, area, isGroup);
+    let chatId = chat.firestoreId || chat.id;
+    try {
+      if (isSelf && typeof ensureSelfChatDoc === 'function') {
+        const id = await ensureSelfChatDoc();
+        if (id) {
+          chatId = id;
+          chat.firestoreId = id;
+          chat.id = id;
+          window.currentOpenChat = chat;
+        }
+      } else if (isChaupaal && typeof ensureChaupaalChatDoc === 'function') {
+        const id = await ensureChaupaalChatDoc();
+        if (id) {
+          chatId = id;
+          chat.firestoreId = id;
+          chat.id = id;
+          window.currentOpenChat = chat;
+        }
+      }
+      // Never listen on legacy sample self id
+      if (chatId === 'chat_self' && typeof selfChatId === 'function' && currentUser?.uid) {
+        chatId = selfChatId(currentUser.uid);
+        chat.firestoreId = chatId;
+        chat.id = chatId;
+      }
+    } catch (e) {
+      console.warn('[chat] ensure before listen', e?.message || e);
+    }
+    loadRealtimeMessages(chatId, area, isGroup);
     // Load activity status for DMs (never for self/Chaupaal — system chats keep their own subtitle)
     if(isSelf||isChaupaal){ /* keep notes / quiet subtitle */ }
     else if(!isGroup&&chat.uid) injectChatActivityStatus(chat.uid);
@@ -528,13 +591,24 @@ function renderMsgBubble(m, isGroup){
 
   if(!rich) body=chatEsc(body);
 
+  const absTime = m.time || '';
+  const relTime = (typeof formatRelativeTime === 'function' && (m.ts || m.time))
+    ? formatRelativeTime(m.ts || m.time)
+    : absTime;
+  const statusHtml = isMe
+    ? `<span class="msg-status${m.pending ? '' : ' is-sent'}" aria-hidden="true">${m.pending ? '○' : '✓'}</span>`
+    : '';
+
   return `
     <div class="msg-row ${isMe?'me':''}" data-uid="${chatEsc(uid)}" data-name="${chatEsc(name)}"${m.pending?' data-pending="1"':''}>
       ${!isMe?`<div class="msg-avatar-small">${chatEsc(m.avatar||'👤')}</div>`:''}
       <div>
         ${(isGroup&&!isMe&&m.name)?`<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px;">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(m.name,m):chatEsc(m.name)}</div>`:''}
         <div class="msg-bubble ${isMe?'me':'them'}${att&&att.type==='muqabala_challenge'?' challenge':''}" data-msg-text="${chatEsc(m.text||'')}">${body}</div>
-        <div style="font-size:10px;color:var(--muted);margin-top:3px;${isMe?'text-align:right':''};">${chatEsc(m.time||'')}</div>
+        <div class="msg-meta">
+          <span class="msg-time" data-rel="${chatEsc(relTime||'')}" data-abs="${chatEsc(absTime||relTime||'')}" title="Tap for time">${chatEsc(relTime||absTime||'')}</span>
+          ${statusHtml}
+        </div>
       </div>
     </div>
   `;

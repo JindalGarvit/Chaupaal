@@ -126,13 +126,23 @@
 
   // ---- Auth readiness gate ----------------------------------------------
   let authReadyPromise = null;
-  function whenAuthReady(timeoutMs = 6000) {
+  function whenAuthReady(timeoutMs = 8000) {
+    try {
+      const a = typeof auth !== 'undefined' ? auth : null;
+      if (a && a.currentUser) return Promise.resolve(a.currentUser);
+    } catch (e) {}
     if (authReadyPromise) return authReadyPromise;
     authReadyPromise = new Promise((resolve) => {
       let done = false;
       const finish = (user) => {
         if (done) return;
         done = true;
+        if (user) {
+          authReadyPromise = Promise.resolve(user);
+        } else {
+          // Timed out / no user — allow a later retry once auth finishes
+          authReadyPromise = null;
+        }
         resolve(user || null);
       };
       try {

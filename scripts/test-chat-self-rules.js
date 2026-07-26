@@ -182,7 +182,20 @@ async function main() {
       })
     );
 
-    console.log('PASS: self-chat get/create, text+music self/dm/group, inbox list, spoof denied');
+    // Owner can delete own message (text / music / attachment)
+    const msgRef = await aliceDb.collection(`chats/${selfId}/messages`).add({
+      text: 'delete me',
+      uid,
+      name: 'Alice',
+      ts: Date.now(),
+      music: { title: 'Del Song', artist: 'Z', source: 'none' },
+    });
+    await rut.assertSucceeds(msgRef.delete());
+    await rut.assertFails(
+      bobDb.doc(`chats/${selfId}/messages/${msgRef.id}`).delete()
+    );
+
+    console.log('PASS: self-chat get/create, text+music self/dm/group, inbox list, spoof denied, owner delete');
   } finally {
     await testEnv.cleanup();
   }
