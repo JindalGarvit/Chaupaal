@@ -69,20 +69,38 @@
 
   function syncMiniFromMedia(media) {
     const bar = ensureMiniPlayer();
-    if (!media || media.paused || !media.src) {
-      // Keep visible if queue has items
+    if (!media || (media.paused && !queue.length) || (!media.src && !queue.length)) {
       if (!queue.length) bar.classList.add('hidden');
       return;
     }
-    bar.classList.remove('hidden');
-    const title = media.dataset.cpTitle || document.querySelector('.music-card.is-playing .music-card-title')?.textContent || 'Now playing';
-    const artist = media.dataset.cpArtist || document.querySelector('.music-card.is-playing .music-card-artist')?.textContent || '';
+    if (!media.paused || queue.length) bar.classList.remove('hidden');
+    if (media.paused && !media.src) return;
+
+    const qItem = queueIndex >= 0 && queue[queueIndex] ? queue[queueIndex] : null;
+    const title =
+      media.dataset.cpTitle ||
+      qItem?.title ||
+      document.querySelector('.music-card.is-playing .music-card-title')?.textContent ||
+      'Now playing';
+    let artist =
+      media.dataset.cpArtist ||
+      qItem?.artist ||
+      document.querySelector('.music-card.is-playing .music-card-artist')?.textContent ||
+      '';
+    if (queue.length > 1 && queueIndex >= 0) {
+      const pos = `${queueIndex + 1}/${queue.length}`;
+      artist = artist ? `${artist} · ${pos}` : pos;
+    }
     const titleEl = bar.querySelector('[data-cp-mini-title]');
     const artistEl = bar.querySelector('[data-cp-mini-artist]');
     if (titleEl) titleEl.textContent = title;
     if (artistEl) artistEl.textContent = artist;
     const playBtn = bar.querySelector('[data-cp-mini-play]');
     if (playBtn) playBtn.textContent = media.paused ? '▶' : '⏸';
+    const prevBtn = bar.querySelector('[data-cp-mini-prev]');
+    const nextBtn = bar.querySelector('[data-cp-mini-next]');
+    if (prevBtn) prevBtn.disabled = !(queue.length > 1 && queueIndex > 0);
+    if (nextBtn) nextBtn.disabled = !(queue.length > 1 && queueIndex < queue.length - 1);
     const seek = bar.querySelector('[data-cp-mini-seek]');
     const d = media.duration;
     if (seek && Number.isFinite(d) && d > 0) {
@@ -134,27 +152,46 @@
     if (i < 0 || i >= queue.length) return;
     queueIndex = i;
     const item = queue[i];
-    if (typeof MusicCard !== 'undefined' && item) {
-      // Best-effort: set audio src via a synthetic card play path
+    if (!item?.previewUrl) return;
+
+    if (typeof pauseAllMusic === 'function') {
+      try {
+        pauseAllMusic();
+      } catch (e) {}
     }
+
     const audio = getSharedAudio() || window.__chaupaalSharedAudio;
-    if (!audio || !item?.previewUrl) return;
+    if (!audio) return;
+
     audio.dataset.cpTitle = item.title || 'Track';
     audio.dataset.cpArtist = item.artist || '';
+    try {
+      audio.removeAttribute('src');
+      audio.load();
+    } catch (e) {}
     audio.src = item.previewUrl;
+    try {
+      audio.load();
+    } catch (e) {}
     audio.play().catch(() => {});
+    ensureMiniPlayer().classList.remove('hidden');
     syncMiniFromMedia(audio);
   }
 
   /**
-   * Enqueue tracks for mini-player next/prev (does not auto-start).
+   * Enqueue tracks for mini-player next/prev (does not auto-start unless opts.play).
    * @param {{ title: string, artist?: string, previewUrl: string }[]} tracks
    * @param {{ startIndex?: number, play?: boolean }} [opts]
    */
   function setMediaQueue(tracks, opts = {}) {
     queue = Array.isArray(tracks) ? tracks.filter((t) => t && t.previewUrl) : [];
     queueIndex = typeof opts.startIndex === 'number' ? opts.startIndex : 0;
+    if (queueIndex < 0 || queueIndex >= queue.length) queueIndex = queue.length ? 0 : -1;
     if (opts.play && queue[queueIndex]) playQueueIndex(queueIndex);
+    else {
+      const audio = getSharedAudio() || window.__chaupaalSharedAudio;
+      if (audio) syncMiniFromMedia(audio);
+    }
   }
 
   function bindMediaControls(media, hostEl, opts = {}) {

@@ -257,6 +257,22 @@
     }
   }
 
+  function enqueueVisibleMusicCards(startCard) {
+    if (typeof setMediaQueue !== 'function') return;
+    const cards = Array.from(document.querySelectorAll('[data-music-card][data-music-preview]')).filter(
+      (c) => ensureHttpsUrl(c.dataset.musicPreview || '')
+    );
+    if (!cards.length) return;
+    const tracks = cards.map((c) => ({
+      title: c.dataset.musicTitle || 'Track',
+      artist: c.dataset.musicArtist || '',
+      previewUrl: ensureHttpsUrl(c.dataset.musicPreview || ''),
+    }));
+    let startIndex = cards.indexOf(startCard);
+    if (startIndex < 0) startIndex = 0;
+    setMediaQueue(tracks, { startIndex, play: false });
+  }
+
   async function playCard(card) {
     const url = ensureHttpsUrl(card.dataset.musicPreview || '');
     // Never await network resolve before audio.play() — that drops the mobile user-gesture.
@@ -280,6 +296,7 @@
     try {
       audio.dataset.cpTitle = card.dataset.musicTitle || '';
       audio.dataset.cpArtist = card.dataset.musicArtist || '';
+      enqueueVisibleMusicCards(card);
       // Re-assign when switching tracks OR when the element is in an error state
       // (same src after MEDIA_ERR_* will otherwise fail play() forever).
       const current = audio.currentSrc || audio.src || '';
@@ -298,6 +315,7 @@
       }
       await audio.play();
       syncActiveCard(true);
+      if (typeof syncMiniPlayer === 'function') syncMiniPlayer(audio);
     } catch (e) {
       const name = e?.name || '';
       if (name === 'NotAllowedError') {

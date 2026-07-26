@@ -167,7 +167,28 @@ module.exports = async function handler(req, res) {
       const sessionId = String(body.sessionId || '').slice(0, 80);
       if (!sessionId) return sendError(res, 400, 'VALIDATION_ERROR', 'sessionId required');
 
-      const { ref: stateRef, data: state } = await getState(db, user.uid);
+      let { ref: stateRef, data: state } = await getState(db, user.uid);
+
+      // On-session personalization (Phase 4) — prefer a friend/digest card over a
+      // generic welcome when cadence allows. Still one proactive send per pass.
+      try {
+        const { processAkhbaarPersonalization } = require('../server-lib/akhbaar-personalize');
+        const personalized = await processAkhbaarPersonalization(db, user.uid, { ...state }, stateRef);
+        if (personalized?.sent) {
+          const snap = await eventsCol.doc(personalized.sent).get();
+          const payload = snap.exists ? { id: snap.id, ...snap.data() } : { id: personalized.sent };
+          return sendSuccess(res, {
+            event: payload,
+            personalized: true,
+            kind: personalized.kind || null,
+          });
+        }
+        // Refresh cadence state after a no-op personalize pass
+        ({ ref: stateRef, data: state } = await getState(db, user.uid));
+      } catch (e) {
+        console.warn('[chaupaal-events] personalize on session', e?.message || e);
+      }
+
       const gate = canSendProactive(state, { type: 'session_nudge', sessionId });
       if (!gate.ok) return sendSuccess(res, { skipped: true, reason: gate.reason });
 
@@ -208,6 +229,26 @@ module.exports = async function handler(req, res) {
       });
       await stateRef.set(next, { merge: true });
       return sendSuccess(res, { event: { id: created.id, ...doc } });
+    }
+
+    if (action === 'akhbaar_personalize') {
+      // Explicit on-session / client-triggered personalization pass (no welcome nudge).
+      if (!isAiFeaturesEnabled()) {
+        return sendSuccess(res, { skipped: true, reason: 'ai_disabled' });
+      }
+      const { ref: stateRef, data: state } = await getState(db, user.uid);
+      const { processAkhbaarPersonalization } = require('../server-lib/akhbaar-personalize');
+      const personalized = await processAkhbaarPersonalization(db, user.uid, { ...state }, stateRef);
+      if (!personalized?.sent) {
+        return sendSuccess(res, { skipped: true, reason: personalized?.skipped || 'nothing_to_send' });
+      }
+      const snap = await eventsCol.doc(personalized.sent).get();
+      const payload = snap.exists ? { id: snap.id, ...snap.data() } : { id: personalized.sent };
+      return sendSuccess(res, {
+        event: payload,
+        personalized: true,
+        kind: personalized.kind || null,
+      });
     }
 
     return sendError(res, 400, 'UNKNOWN_ACTION', `Unknown action: ${action}`);

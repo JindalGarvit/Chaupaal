@@ -68,7 +68,7 @@ Turning on the master switch enables every path that goes through `callAI` / `PO
 
 
 
-1. **Chaupaal AI assistant / AI keyboard** — Baithak "Ask AI", peepal/journal compose helpers (Sonnet / `tier:balanced`)
+1. **Chaupaal AI assistant / AI keyboard** — Baithak "Ask Chaupaal", peepal/journal compose helpers (Sonnet / `tier:balanced`)
 
 2. **Peepal AI search** — intent parse + conversation starters (Haiku / `tier:fast`); local INTENT_MAP still works when off
 

@@ -79,6 +79,26 @@
     } catch (e) {}
   }
 
+  let personalizedSession = false;
+
+  async function requestAkhbaarPersonalize() {
+    if (personalizedSession) return;
+    if (!currentUser || typeof apiFetch !== 'function') return;
+    if (typeof isAiFeaturesEnabledSync === 'function' && !isAiFeaturesEnabledSync()) return;
+    personalizedSession = true;
+    try {
+      const envelope = await apiFetch('/api/chaupaal-events', {
+        method: 'POST',
+        needAuth: true,
+        body: { action: 'akhbaar_personalize', sessionId: getSessionId() },
+      });
+      const ev = envelope?.data?.event;
+      if (ev && typeof renderChaupaalEvent === 'function') {
+        renderChaupaalEvent(ev);
+      }
+    } catch (e) {}
+  }
+
   async function requestSessionNudge(reason) {
     if (nudgeInFlight || lullSuppressed()) return;
     if (!currentUser || typeof apiFetch !== 'function') return;
@@ -142,6 +162,8 @@
     bindActivitySignals();
     startLullWatch();
     postActivityBucket();
+    // On-session personalization (Phase 4) — once per browser session, cadence-gated server-side.
+    setTimeout(() => requestAkhbaarPersonalize(), 2800);
   }
 
   window.getChaupaalSessionId = getSessionId;
