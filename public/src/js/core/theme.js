@@ -153,6 +153,7 @@
     if (c >= 1 && c <= 3) return 'partly_cloudy';
     if (c === 45 || c === 48) return 'fog';
     if ((c >= 51 && c <= 67) || (c >= 80 && c <= 82)) return 'rain';
+    if ((c >= 71 && c <= 77) || (c >= 85 && c <= 86)) return 'snow';
     if (c >= 95) return 'storm';
     return 'overcast';
   }

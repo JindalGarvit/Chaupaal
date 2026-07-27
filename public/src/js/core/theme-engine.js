@@ -320,7 +320,9 @@
           ? 1
           : bucket === 'rain'
             ? 0.7
-            : 0;
+            : bucket === 'snow'
+              ? 0.55
+              : 0;
     const cloud =
       weatherCtx.cloudCover != null
         ? clamp01(weatherCtx.cloudCover / 100)
@@ -328,40 +330,46 @@
           ? 0.85
           : bucket === 'partly_cloudy'
             ? 0.45
-            : bucket === 'rain' || bucket === 'storm'
+            : bucket === 'rain' || bucket === 'storm' || bucket === 'snow'
               ? 0.9
               : 0.15;
 
-    if (precip > 0.05) {
-      const rainy = mixAnchor(out.anchor, 'rainy', clamp01(precip));
-      // Preserve time-based warmth somewhat
+    // Keep weather influence gentle so UI text stays primary
+    const weatherMix = 0.38;
+
+    if (precip > 0.05 || bucket === 'snow') {
+      const rainy = mixAnchor(out.anchor, 'rainy', clamp01(precip) * weatherMix);
+      const snowy = bucket === 'snow';
       out = {
         ...rainy,
-        lightTemp: lerp(out.lightTemp, rainy.lightTemp, precip * 0.85),
-        brightness: lerp(out.brightness, rainy.brightness, precip * 0.85),
+        lightTemp: lerp(out.lightTemp, rainy.lightTemp, precip * weatherMix),
+        brightness: lerp(out.brightness, rainy.brightness, precip * weatherMix),
         precipitation: Math.max(out.precipitation, precip),
         cloudCover: Math.max(out.cloudCover, cloud),
-        motionIntensity: lerp(out.motionIntensity, rainy.motionIntensity, precip),
-        vars: mixVars(out.vars, ANCHORS.rainy.vars, precip * 0.85),
-        soundKey: precip > 0.35 ? 'rain_soft' : out.soundKey,
+        motionIntensity: lerp(out.motionIntensity, rainy.motionIntensity, precip * 0.5),
+        vars: mixVars(out.vars, ANCHORS.rainy.vars, precip * weatherMix),
+        soundKey: snowy ? 'snow_soft' : precip > 0.28 ? 'rain_soft' : out.soundKey,
         soundKeyA: out.soundKeyA || out.soundKey,
-        soundKeyB: 'rain_soft',
+        soundKeyB: snowy ? 'snow_soft' : 'rain_soft',
         soundBlend: precip,
-        anchor: precip > 0.5 ? 'rainy' : out.anchor,
+        anchor: precip > 0.65 ? 'rainy' : out.anchor,
+        weatherBucket: bucket || (snowy ? 'snow' : 'rain'),
       };
     } else if (cloud > 0.4) {
       const over = mixAnchor(out.anchor === 'night' ? 'night' : out.anchor, 'overcast', (cloud - 0.4) / 0.6);
       out = {
         ...out,
-        lightTemp: lerp(out.lightTemp, over.lightTemp, 0.5),
-        brightness: lerp(out.brightness, over.brightness, 0.55),
+        lightTemp: lerp(out.lightTemp, over.lightTemp, 0.28),
+        brightness: lerp(out.brightness, over.brightness, 0.32),
         cloudCover: cloud,
-        vars: mixVars(out.vars, ANCHORS.overcast.vars, (cloud - 0.4) / 0.6 * 0.7),
-        anchor: cloud > 0.7 && out.anchor === 'clearDay' ? 'overcast' : out.anchor,
+        vars: mixVars(out.vars, ANCHORS.overcast.vars, ((cloud - 0.4) / 0.6) * 0.4),
+        anchor: cloud > 0.85 && out.anchor === 'clearDay' ? 'overcast' : out.anchor,
+        weatherBucket: bucket || 'overcast',
       };
     } else {
       out.cloudCover = cloud;
       out.precipitation = precip;
+      out.weatherBucket = bucket || 'clear';
     }
     return out;
   }
@@ -417,6 +425,7 @@
 
   function quietModeOn() {
     try {
+      if (typeof quietMode !== 'undefined' && quietMode) return true;
       return !!document.getElementById('toggleQuiet')?.checked || localStorage.getItem('chaupaal_quiet') === '1';
     } catch {
       return false;
@@ -437,11 +446,12 @@
       precipitation: clamp01(mixed.precipitation),
       cloudCover: clamp01(mixed.cloudCover),
       motionIntensity: clamp01(mixed.motionIntensity),
+      weatherBucket: mixed.weatherBucket || weatherCtx.bucket || null,
       soundKey: ambientOn ? mixed.soundKey : null,
       soundKeyA: mixed.soundKeyA || mixed.soundKey,
       soundKeyB: mixed.soundKeyB || mixed.soundKey,
       soundBlend: mixed.soundBlend != null ? mixed.soundBlend : 0,
-      soundVolume: ambientOn ? 0.16 : 0,
+      soundVolume: ambientOn ? 0.12 : 0,
       anchor: mixed.anchor,
       vars: mixed.vars,
       metaThemeColor: mixed.metaThemeColor,
@@ -505,11 +515,12 @@
 
     const warm = Number(s.lightTemp) || 0;
     const bright = Number(s.brightness) || 0;
+    // Whisper-level wash — perceptible only if you look for it
     set(
       '--theme-overlay',
-      `rgba(${Math.round(255 * warm)}, ${Math.round(180 * warm)}, ${Math.round(80 * warm)}, ${(0.08 * warm).toFixed(3)})`
+      `rgba(${Math.round(255 * warm)}, ${Math.round(190 * warm)}, ${Math.round(100 * warm)}, ${(0.028 * warm).toFixed(3)})`
     );
-    set('--theme-dim', String((1 - bright) * 0.35));
+    set('--theme-dim', String((1 - bright) * 0.1));
 
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta && s.metaThemeColor) meta.setAttribute('content', s.metaThemeColor);
@@ -536,22 +547,78 @@
       root.style.colorScheme = s.isDay ? 'light' : 'dark';
     } catch (e) {}
 
-    ensureRainOverlay(s.precipitation || 0);
+    ensureWeatherAtmosphere(s.precipitation || 0, s.weatherBucket || weatherCtx.bucket);
     window.__chaupaalTheme = key;
     window.__chaupaalThemeState = s;
   }
 
-  function ensureRainOverlay(precip) {
+  function prefersReducedMotion() {
+    try {
+      return !!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /** Subtle rain streaks / snowflakes — always behind UI (z-index 0). */
+  function ensureWeatherAtmosphere(precip, bucket) {
+    const device = document.querySelector('.device') || document.body;
     let el = document.getElementById('themeRainOverlay');
     if (!el) {
       el = document.createElement('div');
       el.id = 'themeRainOverlay';
-      el.className = 'theme-rain-overlay';
       el.setAttribute('aria-hidden', 'true');
-      (document.querySelector('.device') || document.body).appendChild(el);
+      // Insert first so paint order stays under chrome even without z-index help
+      if (device.firstChild) device.insertBefore(el, device.firstChild);
+      else device.appendChild(el);
     }
-    el.style.opacity = String(clamp01(precip) * 0.55);
-    el.style.animationDuration = `${Math.max(0.6, 2.2 - precip * 1.2)}s`;
+    el.className = 'theme-weather-overlay';
+
+    const p = clamp01(precip);
+    const isSnow = bucket === 'snow';
+    const showRain = !isSnow && p > 0.06;
+    const showSnow = isSnow && p > 0.04;
+    const reduced = prefersReducedMotion();
+
+    el.classList.toggle('is-rain', showRain);
+    el.classList.toggle('is-snow', showSnow);
+
+    // Cap opacity low — ambient hint, not a filter over text
+    const maxOp = isSnow ? 0.2 : 0.16;
+    el.style.opacity = String(showRain || showSnow ? Math.min(maxOp, 0.04 + p * maxOp) : 0);
+
+    if (reduced || (!showRain && !showSnow)) {
+      el.innerHTML = '';
+      return;
+    }
+
+    const mode = showSnow ? 'snow' : 'rain';
+    if (el.dataset.wxMode === mode && el.childElementCount) return;
+
+    el.dataset.wxMode = mode;
+    const count = showSnow ? Math.round(10 + p * 14) : Math.round(8 + p * 12);
+    const bits = [];
+    for (let i = 0; i < count; i++) {
+      const left = (i * 37 + 11) % 100;
+      const delay = ((i * 0.37) % 4).toFixed(2);
+      const dur = showSnow ? (7 + (i % 5) * 1.4).toFixed(1) : (1.6 + (i % 4) * 0.35).toFixed(2);
+      const size = showSnow ? 2 + (i % 3) : 1;
+      if (showSnow) {
+        bits.push(
+          `<span class="wx-flake" style="left:${left}%;width:${size}px;height:${size}px;animation-delay:-${delay}s;animation-duration:${dur}s"></span>`
+        );
+      } else {
+        bits.push(
+          `<span class="wx-drop" style="left:${left}%;animation-delay:-${delay}s;animation-duration:${dur}s;opacity:${(0.15 + (i % 5) * 0.04).toFixed(2)}"></span>`
+        );
+      }
+    }
+    el.innerHTML = bits.join('');
+  }
+
+  // Back-compat alias
+  function ensureRainOverlay(precip) {
+    ensureWeatherAtmosphere(precip, weatherCtx.bucket);
   }
 
   function recompute(reason) {

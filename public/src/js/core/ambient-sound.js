@@ -3,7 +3,7 @@
  * Separate AudioContext pads (not the music shared element) — gated by:
  *   - ambient_sound feature flag
  *   - user Settings toggle (off by default)
- *   - quiet mode
+ *   - quiet mode (kills ambient + respects SoundLib quiet)
  *   - media-player / Mehfil active audio
  *   - needsAudioGesture() unlock on first enable
  */
@@ -28,6 +28,7 @@
 
   function quietOn() {
     try {
+      if (typeof quietMode !== 'undefined' && quietMode) return true;
       return !!document.getElementById('toggleQuiet')?.checked || localStorage.getItem('chaupaal_quiet') === '1';
     } catch {
       return false;
@@ -59,7 +60,7 @@
     return ctx;
   }
 
-  /** Soft filtered noise / drone pad keyed by soundKey — no binary assets required for v1. */
+  /** Soft filtered noise / drone pad keyed by soundKey — richer but still quiet. */
   function makePad(soundKey) {
     const c = ensureCtx();
     if (!c) return null;
@@ -90,33 +91,78 @@
     const oscGain = c.createGain();
     oscGain.gain.value = 0.04;
 
-    // Timbre by key
+    // Soft shimmer (second sine, very quiet)
+    const osc2 = c.createOscillator();
+    osc2.type = 'sine';
+    const osc2Gain = c.createGain();
+    osc2Gain.gain.value = 0.012;
+
+    // High air layer for rain/snow
+    const airFilter = c.createBiquadFilter();
+    airFilter.type = 'bandpass';
+    airFilter.Q.value = 0.6;
+    const airGain = c.createGain();
+    airGain.gain.value = 0;
+
     if (soundKey === 'rain_soft') {
-      filter.frequency.value = 1200;
-      osc.frequency.value = 110;
-      oscGain.gain.value = 0.015;
-    } else if (soundKey === 'night_quiet') {
-      filter.frequency.value = 400;
+      filter.frequency.value = 1600;
       osc.frequency.value = 98;
-      oscGain.gain.value = 0.03;
-    } else if (soundKey === 'golden_hour_wind') {
-      filter.frequency.value = 800;
-      osc.frequency.value = 146;
-      oscGain.gain.value = 0.025;
-    } else {
-      // day_ambient
+      oscGain.gain.value = 0.01;
+      osc2.frequency.value = 196;
+      osc2Gain.gain.value = 0.006;
+      airFilter.frequency.value = 2800;
+      airGain.gain.value = 0.045;
+    } else if (soundKey === 'snow_soft') {
       filter.frequency.value = 900;
-      osc.frequency.value = 174;
-      oscGain.gain.value = 0.02;
+      osc.frequency.value = 82;
+      oscGain.gain.value = 0.012;
+      osc2.frequency.value = 164;
+      osc2Gain.gain.value = 0.008;
+      airFilter.frequency.value = 4200;
+      airFilter.Q.value = 0.4;
+      airGain.gain.value = 0.028;
+    } else if (soundKey === 'night_quiet') {
+      filter.frequency.value = 380;
+      osc.frequency.value = 73;
+      oscGain.gain.value = 0.028;
+      osc2.frequency.value = 110;
+      osc2Gain.gain.value = 0.01;
+      airGain.gain.value = 0.008;
+      airFilter.frequency.value = 600;
+    } else if (soundKey === 'golden_hour_wind') {
+      filter.frequency.value = 780;
+      osc.frequency.value = 131;
+      oscGain.gain.value = 0.022;
+      osc2.frequency.value = 196;
+      osc2Gain.gain.value = 0.014;
+      airFilter.frequency.value = 1100;
+      airGain.gain.value = 0.02;
+    } else {
+      // day_ambient — soft open-air pad
+      filter.frequency.value = 1000;
+      osc.frequency.value = 164;
+      oscGain.gain.value = 0.018;
+      osc2.frequency.value = 246;
+      osc2Gain.gain.value = 0.01;
+      airFilter.frequency.value = 1800;
+      airGain.gain.value = 0.015;
     }
 
     src.connect(filter);
     filter.connect(gain);
+    // Parallel air layer from the same noise
+    src.connect(airFilter);
+    airFilter.connect(airGain);
+    airGain.connect(gain);
+
     osc.connect(oscGain);
     oscGain.connect(gain);
+    osc2.connect(osc2Gain);
+    osc2Gain.connect(gain);
     try {
       src.start();
       osc.start();
+      osc2.start();
     } catch (e) {}
 
     return {
@@ -126,6 +172,7 @@
         try {
           src.stop();
           osc.stop();
+          osc2.stop();
         } catch (e) {}
         try {
           gain.disconnect();
@@ -150,17 +197,21 @@
   }
 
   function shouldPlay() {
+    if (quietOn()) return false;
     if (!window.ChaupaalTheme?.isAmbientFlagEnabled?.()) return false;
     if (!window.ChaupaalTheme?.isAmbientUserOn?.()) return false;
     if (!window.ChaupaalTheme?.isSensoryEnabled?.()) return false;
     if (window.ChaupaalTheme.getDisplayMode?.() !== 'auto') return false;
-    if (quietOn()) return false;
     if (isMediaOrCallActive()) return false;
     if (needsGesture() && !unlocked) return false;
     return true;
   }
 
   function sync(state) {
+    if (quietOn()) {
+      hardStop(180);
+      return;
+    }
     const s = state || window.ChaupaalTheme?.getState?.();
     if (!shouldPlay() || !s?.soundKey) {
       fadeTo(master, 0, 400);
@@ -184,10 +235,18 @@
       padB = keyB !== keyA ? makePad(keyB) : null;
       lastKeys = sig;
     }
-    const vol = Math.min(0.22, Number(s.soundVolume) || 0.16);
-    fadeTo(master, vol, 600);
-    if (padA) fadeTo(padA.gain, padB ? 1 - blend : 1, 800);
-    if (padB) fadeTo(padB.gain, blend, 800);
+    // Pleasant but not nagging — stay under UI cues
+    const vol = Math.min(0.14, Number(s.soundVolume) || 0.12);
+    fadeTo(master, vol, 700);
+    if (padA) fadeTo(padA.gain, padB ? 1 - blend : 1, 900);
+    if (padB) fadeTo(padB.gain, blend, 900);
+  }
+
+  function hardStop(ms) {
+    fadeTo(master, 0, ms || 200);
+    try {
+      if (ctx && ctx.state === 'running') ctx.suspend().catch(() => {});
+    } catch (e) {}
   }
 
   function startWatch() {
@@ -210,6 +269,7 @@
   }
 
   function enableFromUserGesture() {
+    if (quietOn()) return;
     unlockFromGesture();
     if (window.ChaupaalTheme) ChaupaalTheme.setAmbientUserOn(true);
     startWatch();
@@ -225,12 +285,13 @@
     sync,
     enableFromUserGesture,
     disable,
+    hardStop,
     unlockFromGesture,
     startWatch,
     isMediaOrCallActive,
+    quietOn,
   };
 
-  // Hook pauseAllMusic so ambient resumes after music stops
   document.addEventListener('DOMContentLoaded', () => {
     startWatch();
     const orig = window.pauseAllMusic;

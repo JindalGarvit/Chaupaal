@@ -987,29 +987,80 @@ html.is-offline .device { filter: saturate(0.92); }
 }
 
 /* ============================================================
-   DYNAMIC THEMES (time-of-day shell)
-   Class is set on html/body/.device by applyTheme() / ChaupaalTheme
+   DYNAMIC THEMES (time-of-day shell) — atmosphere stays BEHIND UI
    ============================================================ */
+.theme-weather-overlay,
 .theme-rain-overlay{
-  pointer-events:none;position:absolute;inset:0;z-index:3;
-  opacity:0;transition:opacity 1.2s var(--ease-smooth,ease);
-  background:repeating-linear-gradient(
-    -12deg,
-    transparent 0,
-    transparent 8px,
-    rgba(120,150,180,calc(0.04 + var(--theme-precipitation,0) * 0.06)) 8px,
-    rgba(120,150,180,calc(0.04 + var(--theme-precipitation,0) * 0.06)) 10px
-  );
-  animation:themeRainDrift 1.6s linear infinite;
-  mix-blend-mode:multiply;
+  pointer-events:none;
+  position:absolute;
+  inset:0;
+  z-index:0; /* under content — never over text */
+  opacity:0;
+  transition:opacity 1.4s var(--ease-smooth,ease);
+  overflow:hidden;
+  mix-blend-mode:normal;
 }
 html.theme-sensory .device{position:relative;}
+/* Keep chrome + panels above the atmosphere layer */
+html.theme-sensory .device > .topbar,
+html.theme-sensory .device > .bottom-tabs,
+html.theme-sensory .device > .content-area,
+html.theme-sensory .device > .tab-panel,
+html.theme-sensory .device > .right-panel{
+  position:relative;
+  z-index:2;
+}
+html.theme-sensory .device > .topbar,
+html.theme-sensory .device > .bottom-tabs{z-index:10;}
+
+.theme-weather-overlay.is-rain{
+  background:repeating-linear-gradient(
+    -18deg,
+    transparent 0,
+    transparent 14px,
+    rgba(110,140,175,calc(0.015 + var(--theme-precipitation,0) * 0.03)) 14px,
+    rgba(110,140,175,calc(0.015 + var(--theme-precipitation,0) * 0.03)) 15px
+  );
+  animation:themeRainDrift 2.4s linear infinite;
+}
+.theme-weather-overlay.is-snow{
+  background:transparent;
+}
+.theme-weather-overlay .wx-flake{
+  position:absolute;
+  top:-8%;
+  border-radius:50%;
+  background:rgba(255,255,255,0.55);
+  box-shadow:0 0 2px rgba(200,220,255,0.35);
+  animation:themeSnowFall linear infinite;
+  opacity:0.35;
+}
+.theme-weather-overlay.is-rain .wx-drop{
+  position:absolute;
+  top:-10%;
+  width:1px;
+  height:14px;
+  border-radius:1px;
+  background:rgba(130,160,200,0.28);
+  animation:themeRainFall linear infinite;
+}
 @keyframes themeRainDrift{
   from{background-position:0 0;}
-  to{background-position:12px 28px;}
+  to{background-position:8px 22px;}
+}
+@keyframes themeRainFall{
+  from{transform:translateY(0);}
+  to{transform:translateY(110vh);}
+}
+@keyframes themeSnowFall{
+  0%{transform:translate3d(0,0,0) rotate(0deg);opacity:0;}
+  12%{opacity:0.4;}
+  100%{transform:translate3d(12px,110vh,0) rotate(180deg);opacity:0;}
 }
 @media (prefers-reduced-motion:reduce){
-  .theme-rain-overlay{animation:none;}
+  .theme-weather-overlay.is-rain,
+  .theme-weather-overlay .wx-flake,
+  .theme-weather-overlay .wx-drop{animation:none!important;}
 }
 .display-mode-group{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
 .display-mode-option{

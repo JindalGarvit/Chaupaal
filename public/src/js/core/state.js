@@ -1,5 +1,6 @@
 // ===================== STATE =====================
 let quietMode=false,currentLang='en';
+try{ quietMode = localStorage.getItem('chaupaal_quiet')==='1'; }catch(e){}
 let score=0,maxUnlocked=0,categoryScores={};
 let QUESTIONS=[],BONUS_QUESTIONS=[];
 
@@ -216,7 +217,15 @@ document.getElementById('strangerLimitSlider')?.addEventListener('input',e=>{
 document.getElementById('toggleQuiet').addEventListener('change',e=>{
   quietMode=e.target.checked;
   try{localStorage.setItem('chaupaal_quiet', quietMode?'1':'0');}catch(err){}
-  if(typeof ChaupaalAmbient!=='undefined'&&ChaupaalAmbient.sync) ChaupaalAmbient.sync();
+  // Quiet kills ambient + voice + UI cues (SoundLib/Micro already check quietMode)
+  try{ if(window.speechSynthesis) window.speechSynthesis.cancel(); }catch(err){}
+  if(quietMode){
+    if(typeof ChaupaalAmbient!=='undefined'&&ChaupaalAmbient.hardStop) ChaupaalAmbient.hardStop(120);
+    else if(typeof ChaupaalAmbient!=='undefined'&&ChaupaalAmbient.sync) ChaupaalAmbient.sync();
+  }else if(typeof ChaupaalAmbient!=='undefined'&&ChaupaalAmbient.sync){
+    ChaupaalAmbient.sync();
+  }
+  if(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.recompute) ChaupaalTheme.recompute('quiet');
 });
 document.getElementById('toggleUiSounds')?.addEventListener('change',(e)=>{
   try{localStorage.setItem('chaupaal_ui_sounds', e.target.checked?'1':'0');}catch(err){}
