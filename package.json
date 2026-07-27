@@ -4,7 +4,7 @@
   "private": true,
   "description": "Chaupaal — News with Social Discovery",
   "scripts": {
-    "test": "node scripts/test-social-model.js && node scripts/test-chaupaal.js && node scripts/test-crisis-detector.js && node scripts/test-matchmaking.js",
+    "test": "node scripts/test-social-model.js && node scripts/test-chaupaal.js && node scripts/test-crisis-detector.js && node scripts/test-matchmaking.js && node scripts/test-xss-escape.js",
     "syntax-check": "node scripts/syntax-check.js",
     "bust": "node scripts/bust-assets.js",
     "ci": "npm run syntax-check && npm test"

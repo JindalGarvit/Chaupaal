@@ -125,6 +125,16 @@ async function fetchTopStats(collectionName, fallback) {
   }
 }
 
+function escAuthHtml(s) {
+  if (typeof escapeHtmlText === 'function') return escapeHtmlText(s);
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function renderPicklist(hostId, items, field, otherInputId) {
   const host = document.getElementById(hostId);
   const other = document.getElementById(otherInputId);
@@ -132,11 +142,13 @@ function renderPicklist(hostId, items, field, otherInputId) {
   const selected = regData[field] || '';
   const isOther =
     selected && !items.some((it) => it.label === selected || it.key === normalizeStatKey(selected));
+  // industryStats/purposeStats labels are client-writable — escape before innerHTML.
   host.innerHTML =
     items
       .map((it) => {
         const on = selected === it.label;
-        return `<button type="button" class="auth-pick-chip${on ? ' active' : ''}" data-val="${String(it.label).replace(/"/g, '&quot;')}">${it.label}</button>`;
+        const label = String(it.label || '');
+        return `<button type="button" class="auth-pick-chip${on ? ' active' : ''}" data-val="${escAuthHtml(label)}">${escAuthHtml(label)}</button>`;
       })
       .join('') +
     `<button type="button" class="auth-pick-chip${isOther ? ' active' : ''}" data-val="__other__">Other — type your own</button>`;
