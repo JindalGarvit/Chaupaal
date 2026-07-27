@@ -1,12 +1,14 @@
 /**
- * Duniya GIF + Sticker pickers (first-session trust pass).
+ * Duniya GIF + Sticker pickers.
  *
- * GIF source order:
- * 1) Tenor v2 search when a key is present (meta[name="chaupaal-tenor-key"] or
- *    window.CHAUPAAL_TENOR_KEY). Replace the demo/empty key in production.
- * 2) LOCAL_GIF_PACK — curated public CDN URLs (no key required).
+ * GIF source order (graceful degradation, no user-facing errors unless empty):
+ * 1) Live Klipy via POST /api/media-config { action: 'gif_search' }
+ *    when feature flag `gif_live_search` is on and server reports configured.
+ * 2) Server cached/trending results (same action, source: trending|cache).
+ * 3) LOCAL_GIF_PACK — curated Giphy CDN URLs (always available).
  *
- * Stickers: fixed local emoji pack (no network).
+ * Stickers: fixed local emoji pack (no network). GIF bytes are never re-hosted —
+ * attachments store the CDN URL only (same pattern as music).
  */
 (function () {
   'use strict';
@@ -32,16 +34,14 @@
     '🥳', '💬', '🏆', '🌸', '☀️', '🌧️', '🌙', '🚀',
   ];
 
-  function resolveTenorKey() {
-    if (typeof window.CHAUPAAL_TENOR_KEY === 'string' && window.CHAUPAAL_TENOR_KEY.trim()) {
-      return window.CHAUPAAL_TENOR_KEY.trim();
-    }
+  function tt(key, fallback) {
     try {
-      const meta = document.querySelector('meta[name="chaupaal-tenor-key"]');
-      const v = meta?.getAttribute('content');
-      if (v && v.trim() && v.trim() !== 'REPLACE_ME') return v.trim();
+      if (typeof t === 'function') {
+        const v = t(key);
+        if (v && v !== key) return v;
+      }
     } catch (e) {}
-    return '';
+    return fallback;
   }
 
   function openPickerSheet({ title, bodyHtml, onMount }) {
@@ -70,22 +70,54 @@
     return sheet;
   }
 
-  async function fetchTenorGifs(query) {
-    const key = resolveTenorKey();
-    if (!key) return null;
-    const q = encodeURIComponent(query || 'hello');
-    const url = `https://tenor.googleapis.com/v2/search?q=${q}&key=${encodeURIComponent(key)}&limit=24&media_filter=gif,tinygif&client_key=chaupaal_web`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Tenor ' + res.status);
-    const data = await res.json();
-    return (data.results || [])
-      .map((r) => {
-        const media = r.media_formats || {};
-        const gif = media.gif || media.tinygif || media.nanogif;
-        if (!gif?.url) return null;
-        return { id: r.id, title: r.content_description || 'GIF', url: gif.url, preview: media.tinygif?.url || gif.url };
-      })
-      .filter(Boolean);
+  function filterLocalPack(q) {
+    const ql = String(q || '').toLowerCase().trim();
+    if (!ql) return LOCAL_GIF_PACK.slice();
+    const filtered = LOCAL_GIF_PACK.filter(
+      (g) => g.title.toLowerCase().includes(ql) || g.id.includes(ql)
+    );
+    return filtered.length ? filtered : LOCAL_GIF_PACK.slice();
+  }
+
+  /**
+   * Server GIF search. Returns null when live path should not run / is unavailable.
+   * @returns {Promise<{ items: object[], source: string, configured: boolean }|null>}
+   */
+  async function fetchServerGifs(query) {
+    if (typeof isFeatureEnabled === 'function') {
+      const live = await isFeatureEnabled('gif_live_search', { defaultValue: false });
+      if (!live) return null;
+    } else {
+      return null;
+    }
+    if (typeof apiFetch !== 'function') return null;
+    try {
+      const envelope = await apiFetch('/api/media-config', {
+        method: 'POST',
+        needAuth: true,
+        body: { action: 'gif_search', query: query || '', limit: 24 },
+      });
+      if (!envelope?.ok) return { items: [], source: 'error', configured: false };
+      const data = envelope.data || {};
+      const items = Array.isArray(data.results)
+        ? data.results.map((r) => ({
+            id: r.id,
+            title: r.title || 'GIF',
+            url: r.url,
+            preview: r.previewUrl || r.url,
+            width: r.width,
+            height: r.height,
+          }))
+        : [];
+      return {
+        items,
+        source: String(data.source || ''),
+        configured: data.configured !== false,
+      };
+    } catch (e) {
+      console.warn('[gif] server search unavailable', e?.message || e);
+      return { items: [], source: 'error', configured: false };
+    }
   }
 
   function insertIntoComposer(payload) {
@@ -114,17 +146,17 @@
         preview.innerHTML = '';
       });
       if (caption && !caption.value.trim()) {
-        caption.placeholder = 'Add a caption for your GIF…';
+        caption.placeholder = tt('gif_caption_placeholder', 'Add a caption for your GIF…');
       }
     }
   }
 
   function openGifPicker() {
     openPickerSheet({
-      title: 'Pick a GIF',
+      title: tt('gif_picker_title', 'Pick a GIF'),
       bodyHtml: `
         <div class="media-picker-search-row">
-          <input type="search" id="gifSearchInput" placeholder="Search GIFs…" autocomplete="off">
+          <input type="search" id="gifSearchInput" placeholder="${tt('gif_search_placeholder', 'Search GIFs…')}" autocomplete="off">
         </div>
         <div class="media-picker-hint" id="gifSourceHint"></div>
         <div class="media-picker-grid" id="gifGrid"></div>`,
@@ -132,16 +164,12 @@
         const grid = sheet.querySelector('#gifGrid');
         const hint = sheet.querySelector('#gifSourceHint');
         const input = sheet.querySelector('#gifSearchInput');
-        const key = resolveTenorKey();
-        hint.textContent = key
-          ? 'Powered by Tenor'
-          : 'Local pack — set meta chaupaal-tenor-key for live Tenor search';
 
         function paint(items) {
           grid.innerHTML = (items || [])
             .map(
               (g) =>
-                `<button type="button" class="media-picker-cell" data-gif-url="${g.url}" data-gif-title="${(g.title || 'GIF').replace(/"/g, '&quot;')}" title="${g.title || 'GIF'}">
+                `<button type="button" class="media-picker-cell" data-gif-url="${g.url}" data-gif-title="${String(g.title || 'GIF').replace(/"/g, '&quot;')}" title="${g.title || 'GIF'}">
                   <img src="${g.preview || g.url}" alt="${g.title || 'GIF'}" loading="lazy">
                 </button>`
             )
@@ -154,22 +182,33 @@
           });
         }
 
+        function paintLocal(q) {
+          hint.textContent = tt('gif_hint_local', 'Curated pack');
+          paint(filterLocalPack(q));
+        }
+
         async function run(q) {
-          grid.innerHTML = '<div class="media-picker-loading">Loading…</div>';
-          try {
-            const remote = await fetchTenorGifs(q || 'hello');
-            if (remote && remote.length) {
-              paint(remote);
-              return;
-            }
-          } catch (e) {
-            console.warn('[gif] Tenor unavailable — using local pack', e?.message || e);
+          grid.innerHTML = `<div class="media-picker-loading cp-state" role="status">${tt('gif_loading', 'Loading…')}</div>`;
+          const remote = await fetchServerGifs(q);
+          if (!remote) {
+            paintLocal(q);
+            return;
           }
-          const ql = String(q || '').toLowerCase();
-          const local = ql
-            ? LOCAL_GIF_PACK.filter((g) => g.title.toLowerCase().includes(ql) || g.id.includes(ql))
-            : LOCAL_GIF_PACK;
-          paint(local.length ? local : LOCAL_GIF_PACK);
+          if (remote.items && remote.items.length) {
+            if (remote.source === 'trending' || (!q && remote.source !== 'klipy')) {
+              hint.textContent = tt('gif_hint_trending', 'Trending');
+            } else if (remote.source === 'cache') {
+              hint.textContent = tt('gif_hint_results', 'Results');
+            } else if (remote.configured) {
+              hint.textContent = tt('gif_hint_klipy', 'Powered by KLIPY');
+            } else {
+              hint.textContent = tt('gif_hint_local', 'Curated pack');
+            }
+            paint(remote.items);
+            return;
+          }
+          // Unconfigured / empty / error → local pack (never break the picker)
+          paintLocal(q);
         }
 
         let timer = null;
@@ -185,7 +224,7 @@
 
   function openStickerPicker() {
     openPickerSheet({
-      title: 'Stickers',
+      title: tt('sticker_picker_title', 'Stickers'),
       bodyHtml: `<div class="media-picker-sticker-grid" id="stickerGrid"></div>`,
       onMount(sheet, close) {
         const grid = sheet.querySelector('#stickerGrid');

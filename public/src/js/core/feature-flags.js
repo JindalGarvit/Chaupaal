@@ -103,6 +103,13 @@
       denyList: [],
       note: 'Ambient sound pads for sensory theme. Independent of sensory_theme; off by default for users too.',
     },
+    gif_live_search: {
+      enabled: false,
+      percent: 0,
+      allowList: [],
+      denyList: [],
+      note: 'Live Klipy GIF search via POST /api/media-config gif_search. Needs KLIPY_API_KEY. Off = local Giphy pack.',
+    },
   };
 
   window.isFeatureEnabled = isFeatureEnabled;

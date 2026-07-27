@@ -88,7 +88,7 @@ Any message, attachment, story card, or rich bubble type must **render identical
 
 Any code that touches an **external integration** or renders a **long/dynamic list** must degrade gracefully. An uncaught exception there must **never** escape into the shared overlay / nav-stack system.
 
-**Integrations in scope:** JioSaavn / iTunes (music), Agora (Mehfil), YouTube embeds, weather / events APIs, AI (`callAI` / media-config actions), maps/geocoding, and similar third-party fetches.
+**Integrations in scope:** JioSaavn / iTunes (music), Agora (Mehfil), Klipy GIFs (`gif_search` on media-config; local Giphy CDN pack as fallback), YouTube embeds, weather / events APIs, AI (`callAI` / media-config actions), maps/geocoding, and similar third-party fetches.
 
 **Dynamic lists in scope:** Peepal options, chat message history, search results, story carousels, infinite feeds — anything whose length or item shape comes from the network or user content.
 

@@ -32,6 +32,8 @@ const LIMITS = {
   ai: { minute: 10, hour: 120 },
   // Music search/resolve, geocode, URL safety — third-party lookups
   media_lookup: { minute: 40, hour: 400 },
+  // GIF search (Klipy proxy) — typing debounce still fires often
+  gif_search: { minute: 30, hour: 300 },
 };
 
 let redis = null;

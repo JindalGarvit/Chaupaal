@@ -911,5 +911,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Klipy GIF search cache (Admin SDK /api/media-config gif_search only)
+    match /gifCache/{docId} {
+      allow read, write: if false;
+    }
+
   }
 }

@@ -2,15 +2,16 @@
  * Media config + music search + Dangal Game of the Day (folded into one serverless function).
  *
  * GET  → Cloudinary unsigned upload config (existing)
- * POST → { action: 'music_search' | 'music_resolve' | 'get_game_of_day' | … }
+ * POST → { action: 'music_search' | 'music_resolve' | 'gif_search' | 'get_game_of_day' | … }
  *
- * Music + GOTD live here (not a new api/*.js) to stay under the Hobby 12-function cap.
+ * Music + GIF + GOTD live here (not a new api/*.js) to stay under the Hobby 12-function cap.
  */
 const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
 const { requireUser, initAdmin } = require('../server-lib/auth');
 const { callMusicProvider, resolveMusicPreview } = require('../server-lib/music');
 const { searchPlaces } = require('../server-lib/geocode');
 const { checkUrlWithWebRisk } = require('../server-lib/url-safety');
+const { searchGifs } = require('../server-lib/gif-search');
 
 async function handleGet(req, res) {
   const user = await requireUser(req, res, { allowWeak: false });
@@ -162,6 +163,18 @@ async function handlePost(req, res) {
       }
     } catch (e) {
       console.warn('[media-config] rate-limit check failed', e?.message || e);
+    }
+  }
+
+  if (action === 'gif_search') {
+    try {
+      const { checkActionRateLimit } = require('../server-lib/rate-limit');
+      const rate = await checkActionRateLimit(user.uid, 'gif_search');
+      if (!rate.ok) {
+        return sendError(res, 429, 'RATE_LIMITED', 'Too many GIF searches. Try again shortly.');
+      }
+    } catch (e) {
+      console.warn('[media-config] gif_search rate-limit check failed', e?.message || e);
     }
   }
 
@@ -346,6 +359,26 @@ async function handlePost(req, res) {
     return sendSuccess(res, result);
   }
 
+  if (action === 'gif_search') {
+    const adminApp = initAdmin();
+    try {
+      const result = await searchGifs(adminApp, {
+        query: body.query,
+        limit: body.limit,
+      });
+      return sendSuccess(res, result);
+    } catch (e) {
+      console.warn('[media-config] gif_search', e?.message || e);
+      // Soft degrade — never 500 for an optional GIF dependency
+      return sendSuccess(res, {
+        results: [],
+        source: 'error',
+        configured: !!process.env.KLIPY_API_KEY,
+        query: String(body.query || '').trim().toLowerCase(),
+      });
+    }
+  }
+
   return sendError(res, 400, 'VALIDATION_ERROR', 'Unknown media action', {
     allowed: [
       'music_search',
@@ -361,6 +394,7 @@ async function handlePost(req, res) {
       'record_game_play',
       'record_game_like',
       'list_games_health',
+      'gif_search',
     ],
   });
 }
