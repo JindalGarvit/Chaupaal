@@ -59,13 +59,16 @@ test('allowsAppearInFriendsPrompts defaults true, honors explicit false', () => 
 test('interestsList merges arrays, CSV, and free text (deduped)', () => {
   const list = interestsList({
     interests: ['Travel', 'Chess'],
-    interestsFreeText: 'music, chess, go',
+    interestsFreeText: 'music, chess, hiking, Travel',
   });
   assert.ok(list.includes('Travel'));
   assert.ok(list.includes('Chess'));
   assert.ok(list.includes('music'));
-  assert.ok(list.includes('go'));
-  assert.strictEqual(list.filter((x) => x.toLowerCase() === 'chess').length, 1);
+  assert.ok(list.includes('hiking'));
+  // Exact-string Set dedupe (case-sensitive): duplicate "Travel" collapsed
+  assert.strictEqual(list.filter((x) => x === 'Travel').length, 1);
+  // Tokens of length ≤2 from free text are ignored by design
+  assert.ok(!interestsList({ interestsFreeText: 'go ai' }).includes('go'));
 });
 
 test('interestsList parses string hobbies', () => {
