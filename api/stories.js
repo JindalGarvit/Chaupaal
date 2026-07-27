@@ -559,6 +559,7 @@ async function interact(db, admin, uid, body) {
   const story = await getStory(db, destination, cleanText(body.storyId, 180));
   if (!story || !(await canView(db, story, uid, false))) throw new Error('STORY_NOT_FOUND');
   const type = body.type;
+  const ownerUid = story.data()?.uid || null;
   if (type === 'like') {
     const ref = story.ref.collection('likes').doc(uid);
     if (body.enabled === false) await ref.delete();
@@ -575,6 +576,33 @@ async function interact(db, admin, uid, body) {
     });
   } else {
     throw new Error('INVALID_INTERACTION');
+  }
+  // Fan-out to story owner (skip self)
+  if (ownerUid && ownerUid !== uid && body.enabled !== false) {
+    try {
+      const { upsertNotification, resolveActor } = require('../server-lib/notifications');
+      const actor = await resolveActor(admin, uid);
+      const storyId = cleanText(body.storyId, 180);
+      if (type === 'like') {
+        await upsertNotification(admin, ownerUid, {
+          type: 'story_like',
+          refId: storyId,
+          actor,
+          preview: 'liked your story',
+          deepLink: { section: 'baithak', storyId, destination },
+        });
+      } else if (type === 'comment') {
+        await upsertNotification(admin, ownerUid, {
+          type: 'story_comment',
+          refId: storyId,
+          actor,
+          preview: String(body.text || '').slice(0, 120) || 'commented on your story',
+          deepLink: { section: 'baithak', storyId, destination },
+        });
+      }
+    } catch (e) {
+      console.warn('[stories] notif interact', e?.message || e);
+    }
   }
 }
 

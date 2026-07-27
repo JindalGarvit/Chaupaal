@@ -102,6 +102,8 @@
     try {
       if (auth) await auth.signOut();
     } catch (e) {}
+    if (typeof stopNotifInbox === 'function') stopNotifInbox();
+    if (typeof stopChatPresence === 'function') stopChatPresence();
     currentUser = null;
     userProfile = null;
     if (typeof showToast === 'function') showToast(msg || 'Signed out');

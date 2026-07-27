@@ -516,11 +516,42 @@ module.exports = async function handler(req, res) {
     if (action === 'follow' || action === 'unfollow') {
       if (!targetUid) return sendError(res, 400, 'VALIDATION_ERROR', 'targetUid required');
       await setFollow(db, admin, user.uid, targetUid, action === 'follow', body.source);
+      if (action === 'follow') {
+        try {
+          const { upsertNotification, resolveActor } = require('../server-lib/notifications');
+          const actor = await resolveActor(admin, user.uid);
+          await upsertNotification(admin, targetUid, {
+            type: 'follow',
+            refId: user.uid,
+            actor,
+            preview: 'started following you',
+            deepLink: { uid: user.uid },
+          });
+        } catch (e) {
+          console.warn('[relationships] notif follow', e?.message || e);
+        }
+      }
       return sendSuccess(res, { state: await relationshipState(db, user.uid, targetUid) });
     }
     if (action === 'request_friend') {
       if (!targetUid) return sendError(res, 400, 'VALIDATION_ERROR', 'targetUid required');
-      return sendSuccess(res, await requestFriend(db, admin, user.uid, targetUid));
+      const out = await requestFriend(db, admin, user.uid, targetUid);
+      if (!out.accepted && out.state?.requestSent) {
+        try {
+          const { upsertNotification, resolveActor } = require('../server-lib/notifications');
+          const actor = await resolveActor(admin, user.uid);
+          await upsertNotification(admin, targetUid, {
+            type: 'friend_request',
+            refId: user.uid,
+            actor,
+            preview: 'sent you a friend request',
+            deepLink: { uid: user.uid },
+          });
+        } catch (e) {
+          console.warn('[relationships] notif friend_request', e?.message || e);
+        }
+      }
+      return sendSuccess(res, out);
     }
     if (action === 'cancel_friend_request') {
       if (!targetUid) return sendError(res, 400, 'VALIDATION_ERROR', 'targetUid required');
@@ -530,9 +561,30 @@ module.exports = async function handler(req, res) {
       if (!targetUid || typeof body.accept !== 'boolean') {
         return sendError(res, 400, 'VALIDATION_ERROR', 'requester targetUid and accept required');
       }
-      return sendSuccess(res, {
-        state: await respondFriend(db, admin, user.uid, targetUid, body.accept),
-      });
+      const state = await respondFriend(db, admin, user.uid, targetUid, body.accept);
+      if (body.accept) {
+        try {
+          const { upsertNotification, resolveActor, markNotificationRead, makeBundleId } = require('../server-lib/notifications');
+          const actor = await resolveActor(admin, user.uid);
+          await upsertNotification(admin, targetUid, {
+            type: 'friend_accept',
+            refId: user.uid,
+            actor,
+            preview: 'accepted your friend request',
+            deepLink: { uid: user.uid },
+          });
+          // Soft-clear the request bundle on accepter's inbox
+          await markNotificationRead(admin, user.uid, makeBundleId('friend_request', targetUid));
+        } catch (e) {
+          console.warn('[relationships] notif friend_accept', e?.message || e);
+        }
+      } else {
+        try {
+          const { markNotificationRead, makeBundleId } = require('../server-lib/notifications');
+          await markNotificationRead(admin, user.uid, makeBundleId('friend_request', targetUid));
+        } catch (e) {}
+      }
+      return sendSuccess(res, { state });
     }
     if (action === 'remove_follower') {
       if (!targetUid) return sendError(res, 400, 'VALIDATION_ERROR', 'targetUid required');

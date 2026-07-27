@@ -123,6 +123,8 @@ async function mutate(db, admin, uid, postId, nextReaction) {
     );
     return {
       myReaction: nextReaction,
+      ownerUid: post.uid || null,
+      previous,
       summary: post.uid === uid ? counts : undefined,
     };
   });
@@ -443,6 +445,22 @@ module.exports = async function handler(req, res) {
       return sendError(res, 400, 'VALIDATION_ERROR', 'Valid postId and reaction (up, down, or null) required');
     }
     const result = await mutate(db, admin, user.uid, postId, reaction);
+    // Notify post owner on new upvote (not self, not clearing/down)
+    if (reaction === 'up' && result.previous !== 'up' && result.ownerUid && result.ownerUid !== user.uid) {
+      try {
+        const { upsertNotification, resolveActor } = require('../server-lib/notifications');
+        const actor = await resolveActor(admin, user.uid);
+        await upsertNotification(admin, result.ownerUid, {
+          type: 'peepal_reaction',
+          refId: postId,
+          actor,
+          preview: 'reacted to your Peepal',
+          deepLink: { section: 'peepal', postId },
+        });
+      } catch (e) {
+        console.warn('[peepal-reactions] notif', e?.message || e);
+      }
+    }
     return sendSuccess(res, result);
   } catch (error) {
     if (error?.message === 'POST_NOT_FOUND') {

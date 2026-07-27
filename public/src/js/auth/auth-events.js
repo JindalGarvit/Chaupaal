@@ -483,6 +483,7 @@ function wireAuthEvents() {
     updateProfileBtn();
     if (typeof loadStreak === 'function') loadStreak();
     if (typeof initActivityStatus === 'function') initActivityStatus();
+    if (typeof startNotifInbox === 'function') startNotifInbox();
     syncEmailVerifyBanner();
     showToast(welcomeMsg || t('auth_welcome'));
   }

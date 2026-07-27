@@ -78,6 +78,34 @@
     return items;
   }
 
+  async function emitSocialNotif(collection, content, type, preview) {
+    try {
+      const ownerUid = content?.uid || content?.user?.uid || content?.ownerUid;
+      const id = contentId(content);
+      if (!ownerUid || !id || !currentUser || ownerUid === currentUser.uid) return;
+      if (typeof apiFetch !== 'function') return;
+      apiFetch('/api/media-config', {
+        method: 'POST',
+        needAuth: true,
+        body: {
+          action: 'notif_emit',
+          type,
+          refId: id,
+          recipientUid: ownerUid,
+          collection,
+          preview: String(preview || '').slice(0, 280),
+          deepLink: {
+            postId: id,
+            collection,
+            section: collection === 'peepal' ? 'peepal' : 'duniya',
+          },
+        },
+      }).catch(() => {});
+    } catch (e) {
+      /* best-effort */
+    }
+  }
+
   async function toggleContentLike(collection, content) {
     if (!canPersist(collection, content)) {
       return { persisted: false, liked: !!content.likedByMe, likes: Number(content.likes) || 0 };
@@ -87,7 +115,7 @@
     const parentRef = db.collection(collection).doc(id);
     const likeRef = parentRef.collection('likes').doc(uid);
 
-    return db.runTransaction(async (tx) => {
+    const result = await db.runTransaction(async (tx) => {
       const parentSnap = await tx.get(parentRef);
       if (!parentSnap.exists) throw new Error('This post is no longer available');
       const likeSnap = await tx.get(likeRef);
@@ -99,8 +127,15 @@
       else tx.set(likeRef, { uid, createdAt: serverTimestamp() });
       tx.update(parentRef, { likes: nextLikes, likeMutationUid: uid });
 
+      // Stash owner for fan-out after commit
+      content.uid = content.uid || parentSnap.data()?.uid || content.user?.uid;
+
       return { persisted: true, liked: !wasLiked, likes: nextLikes };
     });
+    if (result.liked) {
+      emitSocialNotif(collection, content, 'like', 'liked your post');
+    }
+    return result;
   }
 
   /**
@@ -209,10 +244,11 @@
       if (!parentSnap.exists) throw new Error('This post is no longer available');
       const existing = await tx.get(commentRef);
       if (existing.exists) {
-        return { persisted: true, id, comments: Math.max(0, Number(parentSnap.data()?.comments) || 0) };
+        return { persisted: true, id, comments: Math.max(0, Number(parentSnap.data()?.comments) || 0), created: false };
       }
 
       const currentCount = Math.max(0, Number(parentSnap.data()?.comments) || 0);
+      content.uid = content.uid || parentSnap.data()?.uid || content.user?.uid;
       tx.set(commentRef, {
         uid,
         user: safeCommentUser(comment.user),
@@ -225,7 +261,12 @@
         comments: currentCount + 1,
         commentMutationId: id,
       });
-      return { persisted: true, id, comments: currentCount + 1 };
+      return { persisted: true, id, comments: currentCount + 1, created: true };
+    }).then((result) => {
+      if (result.created) {
+        emitSocialNotif(collection, content, 'comment', String(text).slice(0, 120));
+      }
+      return result;
     });
   }
 

@@ -191,193 +191,133 @@ async function checkBreakingNews(){
 // Check for breaking news every 10 minutes
 setInterval(checkBreakingNews, 600000);
 
-let notifications = JSON.parse(localStorage.getItem('chaupaal_notifications')||'[]');
-if(notifications.length===0){
-  notifications=[
-    {id:'n1',type:'reply',icon:'💬',text:'<strong>Riya Sharma</strong> replied on Peepal',time:'2h',ts:Date.now()-2*3600000,read:false,section:'peepal'},
-    {id:'n2',type:'message',icon:'💬',text:'<strong>Arjun Mehta</strong> sent you a message',time:'3h',ts:Date.now()-3*3600000,read:false,section:'baithak'},
-    {id:'n3',type:'like',icon:'❤️',text:'<strong>Priya_29</strong> liked your Duniya post',time:'5h',ts:Date.now()-5*3600000,read:false,section:'duniya'},
-    {id:'n4',type:'duel',icon:'⚔️',text:'<strong>Priya_29</strong> challenged you to a Muqabala',time:'1d',ts:Date.now()-86400000,read:true,section:'dangal'},
-    {id:'n5',type:'streak',icon:'🔥',text:'Your streak needs today\'s Akhbaar',time:'1d',ts:Date.now()-90000000,read:true,section:'akhbaar'},
-  ];
-  saveNotifications();
+let notifications = (typeof window !== 'undefined' && window.notifications) || [];
+let notifPageCursor = null;
+let notifHasMore = false;
+let notifLiveMode = false;
+let notifLoading = false;
+
+function saveNotifications() {
+  /* cloud-backed — no localStorage inbox */
 }
 
-let notifPageCursor=null;
-let notifHasMore=false;
-let notifLiveMode=false;
-let notifLoading=false;
-
-function saveNotifications(){try{localStorage.setItem('chaupaal_notifications',JSON.stringify(notifications.slice(0,100)));}catch(e){}}
-
-function addNotification(type,icon,text,extra){
-  // Supports addNotification(type, icon, text) or addNotification({ type, icon, text, section, deepLink })
-  let section=null, deepLink=null;
-  if(type && typeof type==='object' && !Array.isArray(type)){
-    const o=type;
-    type=o.type||'info';
-    icon=o.icon||'🔔';
-    text=o.text||'';
-    section=o.section||null;
-    deepLink=o.deepLink||o.link||null;
-    extra=o;
-  } else if(extra && typeof extra==='object'){
-    section=extra.section||null;
-    deepLink=extra.deepLink||extra.link||null;
+function addNotification(type, icon, text, extra) {
+  if (typeof addLocalNotification === 'function') {
+    return addLocalNotification(type, icon, text, extra);
   }
-  const id=`n_${Date.now()}`;
-  if(!section && typeof inferNotifSection==='function') section=inferNotifSection(type);
-  const n={id,type,icon,text,time:'now',ts:Date.now(),read:false,section:section||null,deepLink:deepLink||null};
+  let section = null;
+  let deepLink = null;
+  if (type && typeof type === 'object' && !Array.isArray(type)) {
+    const o = type;
+    type = o.type || 'info';
+    icon = o.icon || '🔔';
+    text = o.text || '';
+    section = o.section || null;
+    deepLink = o.deepLink || o.link || null;
+  } else if (extra && typeof extra === 'object') {
+    section = extra.section || null;
+    deepLink = extra.deepLink || extra.link || null;
+  }
+  const id = 'local_' + Date.now();
+  if (!section && typeof inferNotifSection === 'function') section = inferNotifSection(type);
+  const n = {
+    id,
+    type,
+    icon,
+    text,
+    time: 'now',
+    ts: Date.now(),
+    read: false,
+    section: section || null,
+    deepLink: deepLink || null,
+    localOnly: true,
+  };
   notifications.unshift(n);
-  saveNotifications();updateNotifDot();
-  if(typeof updateSectionNotifDots==='function') updateSectionNotifDots();
-  if(typeof updateTabNotifLights==='function') updateTabNotifLights();
-  if(typeof SoundLib!=='undefined'&&SoundLib.notification) SoundLib.notification();
-  if(db&&currentUser){
-    db.collection('notifications').doc(currentUser.uid).collection('items').doc(id).set({
-      type,icon,text,read:false,ts:Date.now(),
-      section:section||null,
-      deepLink:deepLink||null,
-      createdAt:firebase.firestore.FieldValue.serverTimestamp(),
-    }).catch(()=>{});
-  }
+  window.notifications = notifications;
+  updateNotifDot();
+  if (typeof updateSectionNotifDots === 'function') updateSectionNotifDots();
+  if (typeof SoundLib !== 'undefined' && SoundLib.notification) SoundLib.notification();
+  return n;
 }
 
-function updateNotifDot(){
-  const hasUnread=notifications.some(n=>!n.read);
-  document.querySelectorAll('[data-notif-dot="all"]').forEach(dot=>{
-    dot.classList.toggle('hidden',!hasUnread);
+function updateNotifDot() {
+  const list = window.notifications || notifications || [];
+  const hasUnread = list.some((n) => !n.read);
+  document.querySelectorAll('[data-notif-dot="all"]').forEach((dot) => {
+    dot.classList.toggle('hidden', !hasUnread);
   });
-  if(typeof updateSectionNotifDots==='function') updateSectionNotifDots();
-  else if(typeof updateTabNotifLights==='function') updateTabNotifLights();
+  if (typeof updateSectionNotifDots === 'function') updateSectionNotifDots();
+  else if (typeof updateTabNotifLights === 'function') updateTabNotifLights();
 }
 
-async function loadNotificationsPage({reset=false}={}){
-  if(!db||!currentUser||typeof fetchFirestorePage!=='function') return {loaded:0};
-  if(notifLoading) return {loaded:0};
-  if(!reset&&!notifHasMore) return {loaded:0};
-  notifLoading=true;
-  try{
-    if(reset){ notifPageCursor=null; notifHasMore=true; }
-    const page=await fetchFirestorePage({
-      queryBase: db.collection('notifications').doc(currentUser.uid).collection('items'),
-      orderField:'createdAt',
-      direction:'desc',
-      pageSize:20,
-      cursor: reset?null:notifPageCursor,
-      excludeDeleted:false,
-    });
-    const mapped=page.items.map(raw=>({
-      id: raw.id,
-      type: raw.type||'info',
-      icon: raw.icon||'🔔',
-      text: raw.text||'',
-      time: raw.time,
-      ts: raw.createdAt?.toMillis?.()||raw.ts||Date.now(),
-      read: !!raw.read,
-      section: raw.section||null,
-      deepLink: raw.deepLink||raw.link||null,
-    }));
-    if(reset&&mapped.length){
-      notifLiveMode=true;
-      notifications=mapped;
-      saveNotifications();
-    } else if(mapped.length){
-      const seen=new Set(notifications.map(n=>n.id));
-      mapped.forEach(n=>{ if(!seen.has(n.id)) notifications.push(n); });
-      saveNotifications();
-    }
-    notifPageCursor=page.lastDoc;
-    notifHasMore=page.hasMore;
-    return {loaded:mapped.length};
-  }catch(e){
-    console.warn('[notif] page load failed', e?.message||e);
-    return {loaded:0,error:e};
-  }finally{
-    notifLoading=false;
-  }
+async function loadNotificationsPage() {
+  if (typeof startNotifInbox === 'function') startNotifInbox();
+  return { loaded: (window.notifications || []).length };
 }
 
-function renderNotifications(){
-  // Legacy #notifModal list — prefer shared panel when available
-  if(typeof openNotificationPanel==='function' && !document.getElementById('notifList')){
-    return;
-  }
-  const list=document.getElementById('notifList');
-  if(!list)return;
-  if(!notifications.length){
-    if(typeof renderEmptyState==='function'){
-      renderEmptyState(list, {icon:'🔔', title:'No notifications yet', message:'Duels, replies, and discoveries will show up here.'});
+function renderNotifications() {
+  if (typeof openNotificationPanel === 'function' && !document.getElementById('notifList')) return;
+  const list = document.getElementById('notifList');
+  if (!list) return;
+  const items = window.notifications || notifications || [];
+  if (!items.length) {
+    if (typeof renderEmptyState === 'function') {
+      renderEmptyState(list, {
+        icon: '🔔',
+        title: 'No notifications yet',
+        message: 'Duels, replies, and discoveries will show up here.',
+      });
     } else {
-      list.innerHTML='<div class="notif-empty">No notifications yet 🔔</div>';
+      list.innerHTML = '<div class="notif-empty">No notifications yet 🔔</div>';
     }
     return;
   }
-  list.innerHTML=notifications.map(n=>{
-    const when = typeof formatRelativeTime==='function'
-      ? formatRelativeTime(n.ts || n.time)
-      : `${n.time} ago`;
-    const text = typeof linkifyText==='function' ? linkifyText(n.text||'') : n.text;
-    return `
-    <div class="notif-item ${n.read?'is-read':'unread'}" data-id="${n.id}">
-      <div class="notif-icon">${n.icon}</div>
-      <div class="notif-body">
-        <div class="notif-text">${text}</div>
-        <div class="notif-time">${when}</div>
-      </div>
-      ${n.read?'':'<span class="notif-unread-pip" aria-hidden="true"></span>'}
-    </div>`;
-  }).join('');
-  list.querySelectorAll('.notif-item').forEach(item=>{
-    item.addEventListener('click',()=>{
-      const n=notifications.find(x=>x.id===item.dataset.id);
-      if(n){
-        n.read=true;saveNotifications();item.classList.remove('unread');item.classList.add('is-read');updateNotifDot();
-        if(db&&currentUser){
-          db.collection('notifications').doc(currentUser.uid).collection('items').doc(n.id)
-            .set({read:true},{merge:true}).catch(()=>{});
-        }
-        if(typeof openNotificationPanel==='function' && n.deepLink){
-          // deep-link via shared helper when panel module loaded
-        }
-      }
+  list.innerHTML = items
+    .map((n) => {
+      const when =
+        typeof formatRelativeTime === 'function' ? formatRelativeTime(n.ts || n.time) : (n.time || '') + ' ago';
+      const text =
+        typeof formatNotifBundledText === 'function' ? formatNotifBundledText(n) : n.text || '';
+      return (
+        '<div class="notif-item ' +
+        (n.read ? 'is-read' : 'unread') +
+        '" data-id="' +
+        n.id +
+        '">' +
+        '<div class="notif-icon">' +
+        (n.icon || '🔔') +
+        '</div>' +
+        '<div class="notif-body"><div class="notif-text">' +
+        text +
+        '</div><div class="notif-time">' +
+        when +
+        '</div></div>' +
+        (n.read ? '' : '<span class="notif-unread-pip" aria-hidden="true"></span>') +
+        '</div>'
+      );
+    })
+    .join('');
+  list.querySelectorAll('.notif-item').forEach((item) => {
+    item.addEventListener('click', async () => {
+      if (typeof markNotificationRead === 'function') await markNotificationRead(item.dataset.id);
+      item.classList.remove('unread');
+      item.classList.add('is-read');
+      updateNotifDot();
     });
   });
-  const markAll=document.getElementById('notifMarkAll');
-  if(markAll && !markAll.dataset.wired){
-    markAll.dataset.wired='1';
-    markAll.addEventListener('click',async()=>{
-      if(typeof markAllNotificationsRead==='function') await markAllNotificationsRead('all');
-      else { notifications.forEach(n=>{n.read=true;}); saveNotifications(); updateNotifDot(); }
-      renderNotifications();
-    });
-  }
-  if(notifLiveMode&&notifHasMore&&typeof ensureLoadMoreButton==='function'){
-    ensureLoadMoreButton(list,{
-      label:'View more',
-      onLoadMore:async()=>{
-        await loadNotificationsPage({reset:false});
-        renderNotifications();
-      },
-    });
-  }
 }
 
-// Profile is the only full inbox entry — legacy #notifBtn (if present) opens all
 document.getElementById('notifBtn')?.addEventListener('click', async () => {
   if (typeof openNotificationPanel === 'function') {
     openNotificationPanel('all');
     return;
   }
   document.getElementById('notifModal')?.classList.remove('hidden');
-  if (db && currentUser && typeof loadNotificationsPage === 'function') {
-    const list = document.getElementById('notifList');
-    if (typeof renderSkeleton === 'function' && list) renderSkeleton(list, { variant: 'list', count: 3 });
-    await loadNotificationsPage({ reset: true });
-  }
   renderNotifications();
 });
-document.getElementById('closeNotif')?.addEventListener('click',()=>document.getElementById('notifModal')?.classList.add('hidden'));
+document.getElementById('closeNotif')?.addEventListener('click', () =>
+  document.getElementById('notifModal')?.classList.add('hidden')
+);
 updateNotifDot();
 
 // ===================== TEXT-TO-SPEECH (Listen to Post) =====================

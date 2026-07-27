@@ -379,6 +379,122 @@ async function handlePost(req, res) {
     }
   }
 
+  // ─── Notifications (Admin writes; client reads via onSnapshot) ───────────
+  if (
+    action === 'notif_mark_read' ||
+    action === 'notif_mark_all_read' ||
+    action === 'notif_soft_clear' ||
+    action === 'notif_prune' ||
+    action === 'notif_emit' ||
+    action === 'notif_dm'
+  ) {
+    const adminApp = initAdmin();
+    if (!adminApp) {
+      return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    }
+    const notif = require('../server-lib/notifications');
+    try {
+      if (action === 'notif_mark_read') {
+        const bundleId = String(body.bundleId || body.id || '').slice(0, 200);
+        if (!bundleId) return sendError(res, 400, 'VALIDATION_ERROR', 'bundleId required');
+        return sendSuccess(res, await notif.markNotificationRead(adminApp, user.uid, bundleId));
+      }
+      if (action === 'notif_mark_all_read') {
+        return sendSuccess(
+          res,
+          await notif.markAllNotificationsRead(adminApp, user.uid, { section: body.section || null })
+        );
+      }
+      if (action === 'notif_soft_clear') {
+        return sendSuccess(
+          res,
+          await notif.softClearNotifications(adminApp, user.uid, {
+            bundleIds: body.bundleIds || (body.bundleId ? [body.bundleId] : null),
+            section: body.section || null,
+          })
+        );
+      }
+      if (action === 'notif_prune') {
+        return sendSuccess(res, await notif.pruneOldReadNotifications(adminApp, user.uid));
+      }
+      if (action === 'notif_dm') {
+        const chatId = String(body.chatId || '').slice(0, 120);
+        const recipientUid = String(body.recipientUid || '').slice(0, 128);
+        if (!chatId || !recipientUid) {
+          return sendError(res, 400, 'VALIDATION_ERROR', 'chatId and recipientUid required');
+        }
+        // Verify sender is a participant
+        const db = adminApp.firestore();
+        const chatSnap = await db.collection('chats').doc(chatId).get();
+        if (!chatSnap.exists) return sendError(res, 404, 'NOT_FOUND', 'Chat not found');
+        const members = chatSnap.data()?.participants || chatSnap.data()?.members || chatSnap.data()?.participantIds || [];
+        const memberSet = new Set(
+          Array.isArray(members) ? members.map(String) : Object.keys(members || {})
+        );
+        if (!memberSet.has(user.uid) || !memberSet.has(recipientUid)) {
+          return sendError(res, 403, 'FORBIDDEN', 'Not a chat member');
+        }
+        const actor =
+          (await notif.resolveActor(adminApp, user.uid)) ||
+          notif.normalizeActor({
+            uid: user.uid,
+            name: body.actorName || 'Someone',
+            avatar: body.actorAvatar || '👤',
+          });
+        const result = await notif.maybeNotifyDm(adminApp, {
+          chatId,
+          recipientUid,
+          actor,
+          preview: String(body.preview || 'New message').slice(0, 280),
+        });
+        return sendSuccess(res, result || { skipped: 'none' });
+      }
+      if (action === 'notif_emit') {
+        // Validated emit for content like/comment after client write — checks like/comment ownership
+        const type = String(body.type || '').slice(0, 40);
+        const refId = String(body.refId || '').slice(0, 180);
+        const recipientUid = String(body.recipientUid || '').slice(0, 128);
+        const collection = String(body.collection || 'duniya').slice(0, 20);
+        if (!type || !refId || !recipientUid) {
+          return sendError(res, 400, 'VALIDATION_ERROR', 'type, refId, recipientUid required');
+        }
+        if (recipientUid === user.uid) return sendSuccess(res, { skipped: 'self' });
+        const db = adminApp.firestore();
+        if (type === 'like' || type === 'duniya_like' || type === 'peepal_like') {
+          const likeSnap = await db.collection(collection).doc(refId).collection('likes').doc(user.uid).get();
+          if (!likeSnap.exists) return sendError(res, 403, 'FORBIDDEN', 'Like not found');
+          const postSnap = await db.collection(collection).doc(refId).get();
+          if (!postSnap.exists || postSnap.data()?.uid !== recipientUid) {
+            return sendError(res, 403, 'FORBIDDEN', 'Recipient mismatch');
+          }
+        } else if (type === 'comment' || type === 'duniya_comment' || type === 'peepal_comment') {
+          const postSnap = await db.collection(collection).doc(refId).get();
+          if (!postSnap.exists || postSnap.data()?.uid !== recipientUid) {
+            return sendError(res, 403, 'FORBIDDEN', 'Recipient mismatch');
+          }
+        } else if (type === 'challenge' || type === 'duel') {
+          // Best-effort; chat membership checked if chatId in deepLink
+        } else {
+          return sendError(res, 400, 'VALIDATION_ERROR', 'Unsupported emit type');
+        }
+        const actor = await notif.resolveActor(adminApp, user.uid);
+        const result = await notif.upsertNotification(adminApp, recipientUid, {
+          type: type.includes('like') ? 'like' : type.includes('comment') ? 'comment' : type,
+          refId,
+          actor,
+          preview: String(body.preview || '').slice(0, 280),
+          deepLink: body.deepLink || { postId: refId, collection },
+        });
+        // Opportunistic prune for recipient
+        notif.pruneOldReadNotifications(adminApp, recipientUid).catch(() => {});
+        return sendSuccess(res, result || {});
+      }
+    } catch (e) {
+      console.warn('[media-config] notif', action, e?.message || e);
+      return sendError(res, 500, 'NOTIF_ERROR', e?.message || 'Notification failed');
+    }
+  }
+
   return sendError(res, 400, 'VALIDATION_ERROR', 'Unknown media action', {
     allowed: [
       'music_search',
@@ -395,6 +511,12 @@ async function handlePost(req, res) {
       'record_game_like',
       'list_games_health',
       'gif_search',
+      'notif_mark_read',
+      'notif_mark_all_read',
+      'notif_soft_clear',
+      'notif_prune',
+      'notif_emit',
+      'notif_dm',
     ],
   });
 }

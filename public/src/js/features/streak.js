@@ -372,10 +372,14 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment){
       lastMessageAt: nowMs,
     };
     // firstMessageAt set-once via merge only if we can read — use set merge with sentinel
+    let participants = [];
     try {
       const cref = db.collection('chats').doc(chatId);
       const csnap = await cref.get();
-      if (csnap.exists && !csnap.data()?.firstMessageAt) chatPatch.firstMessageAt = nowMs;
+      if (csnap.exists) {
+        if (!csnap.data()?.firstMessageAt) chatPatch.firstMessageAt = nowMs;
+        participants = Array.isArray(csnap.data()?.participants) ? csnap.data().participants : [];
+      }
       await cref.set(chatPatch, { merge: true });
     } catch (e2) {
       await db.collection('chats').doc(chatId).set(chatPatch, { merge: true }).catch((e3) => {
@@ -387,6 +391,26 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment){
       if (!window.currentOpenChat.firstMessageAt) window.currentOpenChat.firstMessageAt = nowMs;
       window.currentOpenChat.updatedAt = nowMs;
       window.currentOpenChat.preview = previewText;
+    }
+    // 1:1 DM fan-out only (skip groups / self / Chaupaal system — avoid spam)
+    const isSystem =
+      id.startsWith('chat_self_') ||
+      id.startsWith('chat_chaupaal_') ||
+      id === 'chat_self';
+    const others = participants.map(String).filter((u) => u && u !== currentUser.uid);
+    if (!isSystem && others.length === 1 && typeof apiFetch === 'function') {
+      apiFetch('/api/media-config', {
+        method: 'POST',
+        needAuth: true,
+        body: {
+          action: 'notif_dm',
+          chatId: id,
+          recipientUid: others[0],
+          preview: previewText || 'New message',
+          actorName: payload.name,
+          actorAvatar: payload.avatar || '👤',
+        },
+      }).catch(() => {});
     }
   }catch(e){
     console.warn('[chat] send failed', e?.message||e);

@@ -23,8 +23,22 @@
     return true;
   }
 
+  function publishActiveChatId(chatIdOrNull) {
+    try {
+      if (typeof db === 'undefined' || !db) return;
+      const uid = typeof currentUser !== 'undefined' && currentUser?.uid;
+      if (!uid) return;
+      const patch = {
+        uid,
+        activeChatId: chatIdOrNull ? String(chatIdOrNull).slice(0, 120) : firebase.firestore.FieldValue.delete(),
+      };
+      db.collection('user_status').doc(uid).set(patch, { merge: true }).catch(() => {});
+    } catch (e) {}
+  }
+
   function stopPresence() {
     activeChatId = null;
+    publishActiveChatId(null);
     if (typingTimer) {
       clearTimeout(typingTimer);
       typingTimer = null;
@@ -182,10 +196,15 @@
     stopPresence();
     if (!chat || chat.type === 'group') return;
     if (typeof isSelfChat === 'function' && isSelfChat(chat)) return;
-    if (!presenceEnabled()) return;
 
     activeChatId = chat.id;
     const chatId = chat.firestoreId || chat.id;
+    // Always publish for DM notif skip — independent of typing/presence prefs
+    publishActiveChatId(chatId);
+    markChatRead(chatId);
+
+    if (!presenceEnabled()) return;
+
     const myUid = typeof currentUser !== 'undefined' && currentUser?.uid;
     const otherName = chat.name || 'Them';
 
@@ -239,16 +258,12 @@
             const reads = (doc.data() && doc.data().reads) || {};
             const peerUid = Object.keys(reads).find((u) => u !== myUid);
             const peerRead = peerUid ? reads[peerUid] : null;
-            const myRead = reads[myUid];
-            // Demo / local: if no peer, soft-show Seen shortly after send
             if (peerRead && Number(peerRead) > 0) {
               setSeenUi('Seen');
             }
           });
       }
     } catch (e) {}
-
-    markChatRead(chatId);
 
     // Offline / sample chat demo: fake typing then Seen after local send simulation
     if ((!db || !currentUser) && opts && opts.demo !== false) {

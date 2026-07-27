@@ -759,8 +759,10 @@ service cloud.firestore {
     }
 
     // ===================== NOTIFICATIONS =====================
+    // Clients may read own inbox; all writes via Admin SDK (api/media-config + relationships hooks).
     match /notifications/{userId}/items/{notifId} {
-      allow read, write: if isOwner(userId);
+      allow read: if isOwner(userId);
+      allow write: if false;
     }
 
     // ===================== TAAZA KHABAR (breaking news) =====================

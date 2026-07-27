@@ -89,5 +89,6 @@ if (auth) {
     }
     updateProfileBtn();
     if (typeof syncEmailVerifyBanner === 'function') syncEmailVerifyBanner();
+    if (typeof startNotifInbox === 'function') startNotifInbox();
   });
 }

@@ -396,6 +396,8 @@ function renderProfileModal(){
     });
     document.getElementById('logoutBtn')?.addEventListener('click',async()=>{
       if(typeof endCurrentSessionQuietly==='function') endCurrentSessionQuietly();
+      if(typeof stopNotifInbox==='function') stopNotifInbox();
+      if(typeof stopChatPresence==='function') stopChatPresence();
       await auth.signOut();currentUser=null;userProfile=null;
       document.getElementById('profileModal').classList.add('hidden');
       showToast(t('profile_see_you'));
