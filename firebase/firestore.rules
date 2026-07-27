@@ -262,6 +262,7 @@ service cloud.firestore {
     }
 
     // Professional signup picklists — public read (label + count only); auth increments.
+    // Labels reject angle brackets so client-writable stats can't seed HTML into signup UI.
     match /industryStats/{value} {
       allow read: if true;
       allow create: if isAuth()
@@ -270,11 +271,16 @@ service cloud.firestore {
         && request.resource.data.count == 1
         && request.resource.data.label is string
         && request.resource.data.label.size() > 0
-        && request.resource.data.label.size() <= 80;
+        && request.resource.data.label.size() <= 80
+        && !request.resource.data.label.matches('.*[<>].*');
       allow update: if isAuth()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['count', 'label'])
         && request.resource.data.count is int
-        && request.resource.data.count == resource.data.count + 1;
+        && request.resource.data.count == resource.data.count + 1
+        && request.resource.data.label is string
+        && request.resource.data.label.size() > 0
+        && request.resource.data.label.size() <= 80
+        && !request.resource.data.label.matches('.*[<>].*');
       allow delete: if false;
     }
     match /purposeStats/{value} {
@@ -285,11 +291,16 @@ service cloud.firestore {
         && request.resource.data.count == 1
         && request.resource.data.label is string
         && request.resource.data.label.size() > 0
-        && request.resource.data.label.size() <= 80;
+        && request.resource.data.label.size() <= 80
+        && !request.resource.data.label.matches('.*[<>].*');
       allow update: if isAuth()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['count', 'label'])
         && request.resource.data.count is int
-        && request.resource.data.count == resource.data.count + 1;
+        && request.resource.data.count == resource.data.count + 1
+        && request.resource.data.label is string
+        && request.resource.data.label.size() > 0
+        && request.resource.data.label.size() <= 80
+        && !request.resource.data.label.matches('.*[<>].*');
       allow delete: if false;
     }
 

@@ -68,6 +68,28 @@ const SAMPLE_NEARBY=[
   {name:'Sneha Joshi',avatar:'👩',meta:'Mumbai · World news follower',uid:'u3',profileType:'personal'},
 ];
 
+function escDiscoverText(s){
+  if(typeof escapeHtmlText==='function') return escapeHtmlText(s);
+  return String(s??'')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+
+function safeDiscoverPhotoUrl(raw){
+  const u=String(raw||'').trim();
+  if(!u) return '';
+  try{
+    const parsed=new URL(u, location.origin);
+    if(parsed.protocol!=='http:'&&parsed.protocol!=='https:') return '';
+    return parsed.href;
+  }catch(e){
+    return '';
+  }
+}
+
 function renderFriendDiscovery(container){
   const section=document.createElement('div');section.className='friend-discover-section';
   section.innerHTML=`
@@ -98,12 +120,22 @@ function renderFriendDiscovery(container){
         resultsEl.innerHTML='<div style="padding:10px;color:var(--muted);font-size:13px;">No people found</div>';
         return;
       }
-      resultsEl.innerHTML=rows.map(u=>`
-        <div class="discover-user-card" data-uid="${u.uid}" data-name="${(u.name||u.username||'').replace(/"/g,'&quot;')}">
-          <div class="discover-avatar">${u.photoURL?`<img src="${u.photoURL}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:'👤'}</div>
-          <div class="discover-info"><div class="discover-name">${u.name||u.username||'User'}</div><div class="discover-meta">@${u.username||'user'}</div></div>
-          <button class="discover-add-btn" data-uid="${u.uid}" data-name="${(u.name||u.username||'').replace(/"/g,'&quot;')}">+ Add</button>
-        </div>`).join('');
+      // Escape name/username/photoURL — profiles are attacker-controlled (stored XSS).
+      resultsEl.innerHTML=rows.map(u=>{
+        const uid=escDiscoverText(u.uid||'');
+        const display=escDiscoverText(u.name||u.username||'User');
+        const uname=escDiscoverText(u.username||'user');
+        const photo=safeDiscoverPhotoUrl(u.photoURL);
+        const avatar=photo
+          ?`<img src="${escDiscoverText(photo)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" alt="">`
+          :'👤';
+        return `
+        <div class="discover-user-card" data-uid="${uid}" data-name="${display}">
+          <div class="discover-avatar">${avatar}</div>
+          <div class="discover-info"><div class="discover-name">${display}</div><div class="discover-meta">@${uname}</div></div>
+          <button type="button" class="discover-add-btn" data-uid="${uid}" data-name="${display}">+ Add</button>
+        </div>`;
+      }).join('');
       resultsEl.querySelectorAll('.discover-add-btn').forEach(btn=>{
         btn.addEventListener('click',async()=>{
           const uid=btn.dataset.uid;
