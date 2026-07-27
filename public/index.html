@@ -23,7 +23,7 @@
 <meta name="apple-mobile-web-app-title" content="Chaupaal">
 <link rel="apple-touch-icon" href="/icon.png">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/src/styles/tokens.css?v=4aed1b13">
+  <link rel="stylesheet" href="/src/styles/tokens.css?v=5bb3b1d3">
   <link rel="stylesheet" href="/src/styles/icons.css?v=152a1d7b">
   <link rel="stylesheet" href="/src/styles/layout.css?v=eb712c97">
   <link rel="stylesheet" href="/src/styles/akhbaar.css?v=b924fec3">
@@ -31,7 +31,7 @@
   <link rel="stylesheet" href="/src/styles/baithak.css?v=9592314c">
   <link rel="stylesheet" href="/src/styles/peepal.css?v=c3530dde">
   <link rel="stylesheet" href="/src/styles/duniya.css?v=2df526a6">
-  <link rel="stylesheet" href="/src/styles/components.css?v=31feabc7">
+  <link rel="stylesheet" href="/src/styles/components.css?v=50aea90a">
   <link rel="stylesheet" href="/src/styles/mehfil.css?v=bf556c72">
 </head>
 <body>
@@ -394,7 +394,6 @@
             <button type="button" class="duniya-mode-btn" data-duniya-mode="lehar" role="tab" aria-selected="false" data-i18n="duniya_lehar">Lehar</button>
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
-            <button class="icon-btn" data-open-notif="duniya" aria-label="Duniya notifications" title="Notifications" style="position:relative;" data-icon="bell"><span class="notif-dot hidden" data-notif-dot="duniya"></span></button>
             <button class="icon-btn" id="duniyaSearchBtn" aria-label="Search people" title="Search" data-icon="search"></button>
             <button class="icon-btn" id="duniyaPostBtn" aria-label="Create post" title="New post" data-icon="plus"></button>
           </div>
@@ -437,7 +436,6 @@
             <div class="dangal-title" data-i18n="dangal_title">Dangal</div>
             <div class="dangal-sub" data-i18n="dangal_sub">Games inside Chaupaal — solos, duels & Muqabala</div>
           </div>
-          <button class="icon-btn" data-open-notif="dangal" aria-label="Dangal notifications" title="Notifications" style="position:relative;flex-shrink:0;" data-icon="bell"><span class="notif-dot hidden" data-notif-dot="dangal"></span></button>
         </div>
         <div class="dangal-overall-rating" id="dangalOverallRating"></div>
       </div>
@@ -454,7 +452,6 @@
       <div class="peepal-header">
         <div class="peepal-title" style="display:flex;align-items:center;gap:8px;"><span data-icon="tree" data-icon-size="22"></span> Peepal</div>
         <div style="display:flex;gap:8px;align-items:center;">
-          <button class="icon-btn" data-open-notif="peepal" aria-label="Peepal notifications" title="Notifications" style="position:relative;" data-icon="bell"><span class="notif-dot hidden" data-notif-dot="peepal"></span></button>
           <button class="icon-btn" id="peepalSearchBtn" title="Find people with AI" aria-label="Find people" data-icon="search"></button>
           <button class="peepal-ask-btn" id="peepalAskBtn" data-i18n="peepal_ask">+ Ask</button>
         </div>
@@ -545,7 +542,6 @@
       </div>
       <div class="sidebar-logo-actions">
         <button class="icon-btn" id="globalSearchBtnDesktop" aria-label="Search Chaupaal" title="Search" data-icon="search"></button>
-        <button class="icon-btn" id="notifBtnDesktop" aria-label="Notifications" title="Notifications" style="position:relative;" data-icon="bell"><span class="notif-dot hidden" id="notifDotDesktop"></span></button>
       </div>
     </div>
 
@@ -639,6 +635,13 @@
           <div class="toggle-row">
             <div><div class="toggle-label">Quiet mode</div><div class="toggle-desc">Mute sounds, voice &amp; animations</div></div>
             <label class="switch"><input type="checkbox" id="toggleQuiet"><span class="slider"></span></label>
+          </div>
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label" data-i18n="settings_ui_sounds">UI sounds</div>
+              <div class="toggle-desc" data-i18n="settings_ui_sounds_desc">Light taps on buttons and tabs (off when Quiet)</div>
+            </div>
+            <label class="switch"><input type="checkbox" id="toggleUiSounds" checked><span class="slider"></span></label>
           </div>
           <div class="dp-field-row" style="margin-top:10px;">
             <div class="dp-field-label" style="display:flex;align-items:center;gap:6px;"><span data-icon="mic" data-icon-size="14"></span> Voice for "Listen to post"</div>
@@ -829,7 +832,7 @@
   <script src="/src/js/core/runtime-guard.js?v=bbad8147"></script>
   <script src="/src/js/data/samples.js?v=e109e543"></script>
   <script src="/src/js/data/akhbaar-bank.js?v=e8c7e2d1"></script>
-  <script src="/src/js/core/state.js?v=5b22c3f7"></script>
+  <script src="/src/js/core/state.js?v=069a8b4e"></script>
   <script src="/src/js/core/ui-states.js?v=572fae96"></script>
   <script src="/src/js/core/firestore-page.js?v=3d7e5828"></script>
   <script src="/src/js/core/drafts.js?v=e672a449"></script>
@@ -854,7 +857,9 @@
   <script src="/src/js/core/linkify.js?v=531b1edf"></script>
   <script src="/src/js/core/profile-sections.js?v=183016b8"></script>
   <script src="/src/js/core/profile-section-mount.js?v=c8852662"></script>
-  <script src="/src/js/core/notification-panel.js?v=e1177ba7"></script>
+  <script src="/src/js/core/notification-panel.js?v=5f40617b"></script>
+  <script src="/src/js/core/micro.js?v=9b654649"></script>
+  <script src="/src/js/core/tab-gestures.js?v=eb864101"></script>
   <script src="/src/js/core/sessions.js?v=7297d5b6"></script>
   <script src="/src/js/core/safety.js?v=c8721224"></script>
   <script src="/src/js/core/notif-prefs.js?v=19bbe844"></script>
@@ -894,12 +899,12 @@
   <script src="/src/js/core/archive-hub.js?v=ddcb3816"></script>
   <script src="/src/js/core/journal-anim.js?v=f2658ae2"></script>
   <script src="/src/js/features/baithak.js?v=a242969e"></script>
-  <script src="/src/js/features/profile-preview.js?v=10860c1d"></script>
-  <script src="/src/js/features/profile.js?v=34c90847"></script>
-  <script src="/src/js/core/i18n.js?v=3a9ea08d"></script>
+  <script src="/src/js/features/profile-preview.js?v=a35bfc54"></script>
+  <script src="/src/js/features/profile.js?v=2fe6357f"></script>
+  <script src="/src/js/core/i18n.js?v=7da14c2a"></script>
   <script src="/src/js/features/categories.js?v=060f6a5d"></script>
   <script src="/src/js/features/peepal.js?v=7ec67d45"></script>
-  <script src="/src/js/features/onboarding.js?v=f1b83b21"></script>
+  <script src="/src/js/features/onboarding.js?v=05600457"></script>
   <script src="/src/js/core/service-worker.js?v=9ffe9136"></script>
   <script src="/src/js/features/streak.js?v=766abb34"></script>
   <script src="/vendor/chess.js?v=434826c8"></script>
@@ -916,7 +921,7 @@
   <script src="/src/js/features/media-picker.js?v=0d1a4caa"></script>
   <script src="/src/js/features/premium.js?v=95d177b4"></script>
   <script src="/src/js/features/discovery.js?v=a8d3ad37"></script>
-  <script src="/src/js/core/polish.js?v=9ae02fe4"></script>
+  <script src="/src/js/core/polish.js?v=f24ef3d2"></script>
   <script src="/src/js/features/fairness.js?v=4fc5b152"></script>
   <script src="/src/js/features/media-profile.js?v=d8fe1026"></script>
   <script src="/src/js/auth/auth-events.js?v=a46dfda4"></script>

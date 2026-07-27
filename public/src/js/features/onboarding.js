@@ -180,8 +180,9 @@ async function checkBreakingNews(){
   if(!newItems.length)return;
   // Add to notification center
   newItems.forEach(item=>{
-    addNotification('breaking','🔴',`<strong>Taaza Khabar:</strong> ${item.headline}`);
+    addNotification({type:'breaking',icon:'🔴',text:`<strong>Taaza Khabar:</strong> ${item.headline}`,section:'akhbaar'});
   });
+  try{localStorage.setItem('chaupaal_taaza_cache',JSON.stringify(newItems[0]));}catch(e){}
   localStorage.setItem('chaupaal_taaza_seen',String(Date.now()));
   // Show toast for latest
   showToast(`🔴 Taaza Khabar: ${newItems[0].headline.replace('🔴 ','').slice(0,50)}...`);
@@ -193,10 +194,11 @@ setInterval(checkBreakingNews, 600000);
 let notifications = JSON.parse(localStorage.getItem('chaupaal_notifications')||'[]');
 if(notifications.length===0){
   notifications=[
-    {id:'n1',type:'comment',icon:'💬',text:'<strong>Riya Sharma</strong> commented on your Peepal question',time:'2h',ts:Date.now()-2*3600000,read:false},
-    {id:'n2',type:'friend',icon:'👋',text:'<strong>Arjun Mehta</strong> accepted your friend request',time:'5h',ts:Date.now()-5*3600000,read:false},
-    {id:'n3',type:'duel',icon:'⚔️',text:'<strong>Priya_29</strong> challenged you to a Muqabala',time:'1d',ts:Date.now()-86400000,read:true},
-    {id:'n4',type:'streak',icon:'🔥',text:'Your 12-day streak is about to end! Play today\'s Akhbaar',time:'1d',ts:Date.now()-90000000,read:true},
+    {id:'n1',type:'reply',icon:'💬',text:'<strong>Riya Sharma</strong> replied on Peepal',time:'2h',ts:Date.now()-2*3600000,read:false,section:'peepal'},
+    {id:'n2',type:'message',icon:'💬',text:'<strong>Arjun Mehta</strong> sent you a message',time:'3h',ts:Date.now()-3*3600000,read:false,section:'baithak'},
+    {id:'n3',type:'like',icon:'❤️',text:'<strong>Priya_29</strong> liked your Duniya post',time:'5h',ts:Date.now()-5*3600000,read:false,section:'duniya'},
+    {id:'n4',type:'duel',icon:'⚔️',text:'<strong>Priya_29</strong> challenged you to a Muqabala',time:'1d',ts:Date.now()-86400000,read:true,section:'dangal'},
+    {id:'n5',type:'streak',icon:'🔥',text:'Your streak needs today\'s Akhbaar',time:'1d',ts:Date.now()-90000000,read:true,section:'akhbaar'},
   ];
   saveNotifications();
 }
@@ -224,10 +226,12 @@ function addNotification(type,icon,text,extra){
     deepLink=extra.deepLink||extra.link||null;
   }
   const id=`n_${Date.now()}`;
+  if(!section && typeof inferNotifSection==='function') section=inferNotifSection(type);
   const n={id,type,icon,text,time:'now',ts:Date.now(),read:false,section:section||null,deepLink:deepLink||null};
   notifications.unshift(n);
   saveNotifications();updateNotifDot();
   if(typeof updateSectionNotifDots==='function') updateSectionNotifDots();
+  if(typeof updateTabNotifLights==='function') updateTabNotifLights();
   if(typeof SoundLib!=='undefined'&&SoundLib.notification) SoundLib.notification();
   if(db&&currentUser){
     db.collection('notifications').doc(currentUser.uid).collection('items').doc(id).set({
@@ -241,12 +245,11 @@ function addNotification(type,icon,text,extra){
 
 function updateNotifDot(){
   const hasUnread=notifications.some(n=>!n.read);
-  document.getElementById('notifDot')?.classList.toggle('hidden',!hasUnread);
-  document.getElementById('notifDotDesktop')?.classList.toggle('hidden',!hasUnread);
   document.querySelectorAll('[data-notif-dot="all"]').forEach(dot=>{
     dot.classList.toggle('hidden',!hasUnread);
   });
   if(typeof updateSectionNotifDots==='function') updateSectionNotifDots();
+  else if(typeof updateTabNotifLights==='function') updateTabNotifLights();
 }
 
 async function loadNotificationsPage({reset=false}={}){
@@ -360,21 +363,19 @@ function renderNotifications(){
   }
 }
 
-// Top-bar global notif removed — keep desktop/sidebar hooks opening shared panel
-[document.getElementById('notifBtn'),document.getElementById('notifBtnDesktop')].forEach(btn=>{
-  btn?.addEventListener('click',async()=>{
-    if(typeof openNotificationPanel==='function'){
-      openNotificationPanel('all');
-      return;
-    }
-    document.getElementById('notifModal')?.classList.remove('hidden');
-    if(db&&currentUser&&typeof loadNotificationsPage==='function'){
-      const list=document.getElementById('notifList');
-      if(typeof renderSkeleton==='function'&&list) renderSkeleton(list,{variant:'list',count:3});
-      await loadNotificationsPage({reset:true});
-    }
-    renderNotifications();
-  });
+// Profile is the only full inbox entry — legacy #notifBtn (if present) opens all
+document.getElementById('notifBtn')?.addEventListener('click', async () => {
+  if (typeof openNotificationPanel === 'function') {
+    openNotificationPanel('all');
+    return;
+  }
+  document.getElementById('notifModal')?.classList.remove('hidden');
+  if (db && currentUser && typeof loadNotificationsPage === 'function') {
+    const list = document.getElementById('notifList');
+    if (typeof renderSkeleton === 'function' && list) renderSkeleton(list, { variant: 'list', count: 3 });
+    await loadNotificationsPage({ reset: true });
+  }
+  renderNotifications();
 });
 document.getElementById('closeNotif')?.addEventListener('click',()=>document.getElementById('notifModal')?.classList.add('hidden'));
 updateNotifDot();

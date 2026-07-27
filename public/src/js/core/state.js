@@ -22,7 +22,10 @@ const SoundLib=(()=>{
   function cheer(){[523.25,659.25,783.99,1046.5].forEach((f,i)=>tone(f,i*0.08,0.3,'triangle',0.14));tone(1046.5,0.32,0.5,'triangle',0.12);}
   function birthdayJingle(){[392,392,440,392,523,494].forEach((f,i)=>tone(f,i*0.15,0.22,'triangle',0.13));}
   /** ~0.08s — subtle UI tap / nav */
-  function tap(){tone(880,0,0.07,'sine',0.045);}
+  function tap(){
+    try{ if(localStorage.getItem('chaupaal_ui_sounds')==='0') return; }catch(e){}
+    tone(880,0,0.07,'sine',0.045);
+  }
   /** ~0.2s — like */
   function like(){tone(660,0,0.12,'triangle',0.1);tone(990,0.06,0.14,'triangle',0.08);}
   /** ~0.25s — message send */
@@ -51,6 +54,11 @@ const SoundLib=(()=>{
   }
   function play(name){
     if(quietMode)return;
+    // Optional UI click layer (taps) can be muted independently of Quiet
+    if((name==='tap') && typeof Micro!=='undefined' && Micro.uiSoundsOn && !Micro.uiSoundsOn()) return;
+    if(name==='tap'){
+      try{ if(localStorage.getItem('chaupaal_ui_sounds')==='0') return; }catch(e){}
+    }
     const map={
       tap,like,send,postPublish,follow,notification,error,rateLimited,
       sectionComplete,milestone,correctChime,wrongTone,cheer,birthdayJingle,
@@ -101,6 +109,8 @@ document.getElementById('settingsBtn').addEventListener('click',()=>{
     if(typeof updateThemeGeoStatusUI==='function') updateThemeGeoStatusUI();
     const quiet=document.getElementById('toggleQuiet');
     if(quiet) quiet.checked=!!quietMode || localStorage.getItem('chaupaal_quiet')==='1';
+    const uiSnd=document.getElementById('toggleUiSounds');
+    if(uiSnd) uiSnd.checked=localStorage.getItem('chaupaal_ui_sounds')!=='0';
   }catch(e){}
   // Companion opt-out: checked = outreach ON (optOut false)
   try{
@@ -207,6 +217,9 @@ document.getElementById('toggleQuiet').addEventListener('change',e=>{
   quietMode=e.target.checked;
   try{localStorage.setItem('chaupaal_quiet', quietMode?'1':'0');}catch(err){}
   if(typeof ChaupaalAmbient!=='undefined'&&ChaupaalAmbient.sync) ChaupaalAmbient.sync();
+});
+document.getElementById('toggleUiSounds')?.addEventListener('change',(e)=>{
+  try{localStorage.setItem('chaupaal_ui_sounds', e.target.checked?'1':'0');}catch(err){}
 });
 
 // Apply display mode immediately when tapped (don't wait for Done)

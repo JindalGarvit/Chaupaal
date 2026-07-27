@@ -87,12 +87,9 @@ function animateTabSwitch(incoming, outgoing){
 const _origTabBtnListener=document.querySelector('.tab-btn');
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click',()=>{
-    if(typeof SoundLib!=='undefined'&&SoundLib.tap) SoundLib.tap();
-    try{haptic('light');}catch(e){}
+    // Sound/haptic via Micro + tab-gestures
     wireRipples();
-    // Add data attributes to peepal cards for color coding
     setTimeout(wirePeepalCardTypes,100);
-    // Animate streak number on akhbaar tab
     if(btn.dataset.tab==='akhbaar'){
       const el=document.getElementById('streakNum');
       if(el){const v=parseInt(el.textContent)||0;animateCount(el,Math.max(0,v-3),v,600);}

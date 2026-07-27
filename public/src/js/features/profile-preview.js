@@ -112,8 +112,9 @@
     return `
       ${renderPreviewToggleHtml()}
       <div class="own-profile-preview-toolbar">
-        <button type="button" class="icon-btn profile-agg-notif" data-open-notif="all" aria-label="All notifications" title="Notifications" style="position:relative;">
-          🔔<span class="notif-dot hidden" data-notif-dot="all"></span>
+        <button type="button" class="btn profile-notif-entry" data-open-notif="all" aria-label="Notifications">
+          <span>Notifications</span>
+          <span class="notif-dot hidden" data-notif-dot="all" aria-hidden="true"></span>
         </button>
         <button type="button" class="btn" data-open-archive-from-preview>Archive</button>
       </div>
