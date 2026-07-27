@@ -11,6 +11,7 @@ const { requireUser, initAdmin } = require('../server-lib/auth');
 const { callMusicProvider, resolveMusicPreview } = require('../server-lib/music');
 const { searchPlaces } = require('../server-lib/geocode');
 const { checkUrlWithWebRisk } = require('../server-lib/url-safety');
+const { normalizePhoneE164 } = require('../server-lib/phone-e164');
 
 async function handleGet(req, res) {
   const user = await requireUser(req, res, { allowWeak: false });
@@ -65,15 +66,6 @@ async function handleUsernameCheck(req, res, body) {
     console.warn('[media-config] username_check', e?.message || e);
     return sendSuccess(res, { available: true, degraded: true });
   }
-}
-
-function normalizePhoneE164(raw) {
-  const s = String(raw || '').trim();
-  const digits = s.replace(/\D/g, '');
-  if (digits.length === 10) return '+91' + digits;
-  if (digits.length === 12 && digits.startsWith('91')) return '+' + digits;
-  if (s.startsWith('+') && digits.length >= 10) return '+' + digits;
-  return null;
 }
 
 /**
