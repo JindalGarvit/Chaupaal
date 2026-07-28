@@ -1214,11 +1214,16 @@
       const game = params.get('game') || 'quiz';
       const score = params.get('score');
       const cat = params.get('cat') || 'GK';
+      let name = String(challenger);
+      try {
+        name = decodeURIComponent(name);
+      } catch (e) {}
       return {
-        challenger: decodeURIComponent(challenger),
-        game,
-        score: score != null ? Number(score) : null,
-        cat,
+        // Plain text only — HTML sinks must escape (see dangal-ratings / akhbaar banners).
+        challenger: name.slice(0, 80),
+        game: String(game || 'quiz').slice(0, 40),
+        score: score != null && score !== '' && Number.isFinite(Number(score)) ? Number(score) : null,
+        cat: String(cat || 'GK').slice(0, 40),
       };
     } catch (e) {
       return null;

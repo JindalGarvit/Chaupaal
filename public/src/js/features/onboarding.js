@@ -1,4 +1,18 @@
 // ===================== VIRAL GUEST MUQABALA =====================
+/** Escape URL-derived challenge fields before any innerHTML sink (reflected XSS). */
+function escChallengeHtml(s){
+  if(typeof escapeHtmlText==='function') return escapeHtmlText(s);
+  return String(s??'')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+function decodeChallengeParam(raw){
+  const s=String(raw||'');
+  try{ return decodeURIComponent(s); }catch(e){ return s; }
+}
 function checkViralLink(){
   const params=new URLSearchParams(window.location.search);
   const challenger=params.get('challenge');
@@ -6,16 +20,18 @@ function checkViralLink(){
   const category=params.get('cat')||'GK';
   const target=params.get('score');
   const game=params.get('game')||'quiz';
-  const gName=(typeof getGame==='function'&&getGame(game)?.name)||(game==='quiz'?'Muqabala':game==='akhbaar'?'Akhbaar':game);
-  // Show guest banner
+  const challengerName=decodeChallengeParam(challenger).slice(0,80);
+  const gName=(typeof getGame==='function'&&getGame(game)?.name)||(game==='quiz'?'Muqabala':game==='akhbaar'?'Akhbaar':String(game||'quiz').slice(0,40));
+  // Show guest banner — challenger/score/game come from the URL (attacker-controlled).
   const banner=document.createElement('div');banner.className='guest-banner';
-  banner.innerHTML=`<div><strong>${decodeURIComponent(challenger)}</strong> challenged you! Beat their score${target!=null?` of ${target}`:''} on ${gName}</div><button class="guest-signup-btn" id="guestSignupBtn">Sign up to keep score!</button>`;
+  const scoreHtml=target!=null?` of ${escChallengeHtml(String(target).slice(0,12))}`:'';
+  banner.innerHTML=`<div><strong>${escChallengeHtml(challengerName)}</strong> challenged you! Beat their score${scoreHtml} on ${escChallengeHtml(gName)}</div><button class="guest-signup-btn" id="guestSignupBtn">Sign up to keep score!</button>`;
   document.getElementById('topbar')?.after(banner);
   document.getElementById('guestSignupBtn')?.addEventListener('click',()=>{banner.remove();showAuth();});
 
   if(game==='akhbaar'){
     window.__akhbaarBeatChallenge={
-      challenger:decodeURIComponent(challenger),
+      challenger:challengerName,
       score:target!=null?Number(target):null,
     };
     document.querySelectorAll('.tab-btn').forEach(b=>{if(b.dataset.tab==='akhbaar')b.click();});
@@ -29,11 +45,11 @@ function checkViralLink(){
   document.querySelectorAll('.tab-btn').forEach(b=>{if(b.dataset.tab==='dangal')b.click();});
   setTimeout(()=>{
     if(game==='quiz'||game==='muqabala'){
-      if(typeof startMuqabala==='function') startMuqabala(decodeURIComponent(challenger),category);
+      if(typeof startMuqabala==='function') startMuqabala(challengerName,category);
     } else if(typeof getGame==='function'){
       const g=getGame(game);
-      if(g) g.launch({source:'challenge',beatScore:target!=null?Number(target):null,challenger:decodeURIComponent(challenger)});
-      else if(typeof startMuqabala==='function') startMuqabala(decodeURIComponent(challenger),category);
+      if(g) g.launch({source:'challenge',beatScore:target!=null?Number(target):null,challenger:challengerName});
+      else if(typeof startMuqabala==='function') startMuqabala(challengerName,category);
     }
   },500);
 }
