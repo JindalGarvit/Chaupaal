@@ -32,7 +32,8 @@ test('resolveCap presets and custom bounds', () => {
   assert.strictEqual(resolveCap('algorithm'), null);
   assert.strictEqual(resolveCap(''), null);
   assert.strictEqual(resolveCap('custom', 25), 25);
-  assert.strictEqual(resolveCap('custom', 0), 50); // fallback
+  assert.strictEqual(resolveCap('custom', 0), 1); // clamps to min 1
+  assert.strictEqual(resolveCap('custom', NaN), 50); // non-finite → fallback
   assert.strictEqual(resolveCap('custom', 99999), 5000);
 });
 
