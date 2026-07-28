@@ -185,12 +185,26 @@ function renderDangalContinueAndChips(host) {
   let challengeChip = '';
   const pending = typeof consumeBeatScoreChallenge === 'function' ? consumeBeatScoreChallenge() : null;
   if (pending && pending.challenger) {
+    const esc =
+      typeof escapeHtmlText === 'function'
+        ? escapeHtmlText
+        : (s) =>
+            String(s ?? '')
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;');
     const gName =
       pending.game === 'akhbaar'
         ? 'Akhbaar'
-        : ((typeof getGame === 'function' && getGame(pending.game)?.name) || pending.game);
+        : ((typeof getGame === 'function' && getGame(pending.game)?.name) || String(pending.game || 'quiz').slice(0, 40));
+    const who = esc(String(pending.challenger).slice(0, 80));
+    const scoreLabel =
+      pending.score != null && Number.isFinite(Number(pending.score))
+        ? String(Number(pending.score))
+        : 'their score';
     challengeChip = `<button type="button" class="dangal-challenge-chip" id="dangalChallengeChip">
-      <div><strong>${pending.challenger} challenged you</strong><span>Beat ${pending.score != null ? pending.score : 'their score'} on ${gName}</span></div>
+      <div><strong>${who} challenged you</strong><span>Beat ${esc(scoreLabel)} on ${esc(gName)}</span></div>
       <span>Play →</span>
     </button>`;
   }

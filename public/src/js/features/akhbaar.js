@@ -174,13 +174,19 @@ function applyAkhbaarBeatBanner(){
   document.getElementById('akhbaarBeatBanner')?.remove();
   const panel=document.getElementById('panel-akhbaar')||document.getElementById('reelStage')?.parentElement;
   if(!panel) return;
+  const esc=
+    typeof escapeHtmlText==='function'
+      ? escapeHtmlText
+      : (s)=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const who=esc(String(pending.challenger).slice(0,80));
+  const scoreLabel=pending.score!=null&&Number.isFinite(Number(pending.score))?String(Number(pending.score)):'their score';
   const banner=document.createElement('div');
   banner.id='akhbaarBeatBanner';
   banner.className='akhbaar-beat-banner';
   banner.innerHTML=`
     <div class="akhbaar-beat-copy">
-      <strong>${pending.challenger} challenged you</strong>
-      <span>Beat ${pending.score!=null?pending.score:'their score'} on today's Akhbaar</span>
+      <strong>${who} challenged you</strong>
+      <span>Beat ${esc(scoreLabel)} on today's Akhbaar</span>
     </div>
     <button type="button" class="akhbaar-beat-dismiss" aria-label="Dismiss">✕</button>`;
   const reel=document.getElementById('reelStage');
