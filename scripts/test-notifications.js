@@ -8,8 +8,11 @@ const {
   mergeBundleActors,
   shouldPruneReadBundle,
   sectionForType,
+  normalizeActor,
+  shouldThrottleDmBundle,
   ACTOR_STORE_MAX,
   PRUNE_AGE_MS,
+  DM_THROTTLE_MS,
 } = require('../server-lib/notifications');
 
 async function test(name, fn) {
@@ -79,6 +82,29 @@ async function main() {
     assert.equal(shouldPruneReadBundle({ read: false, updatedAtMs: now - PRUNE_AGE_MS * 2 }, now), false);
     assert.equal(shouldPruneReadBundle({ read: true, updatedAtMs: now - 1000 }, now), false);
     assert.equal(shouldPruneReadBundle({ read: true, updatedAtMs: now - PRUNE_AGE_MS - 1 }, now), true);
+  });
+
+  await test('normalizeActor rejects empty / oversized uid', () => {
+    assert.equal(normalizeActor(null), null);
+    assert.equal(normalizeActor({ uid: '' }), null);
+    assert.equal(normalizeActor({ uid: 'x'.repeat(129) }), null);
+    assert.equal(normalizeActor({ uid: 'u1', name: 'A' }).uid, 'u1');
+  });
+
+  await test('shouldThrottleDmBundle gates same-actor spam within window', () => {
+    const now = 1_000_000;
+    const unread = {
+      read: false,
+      updatedAtMs: now - 30_000,
+      actors: [{ uid: 'u1' }],
+    };
+    assert.equal(shouldThrottleDmBundle(unread, 'u1', now, DM_THROTTLE_MS), true);
+    assert.equal(shouldThrottleDmBundle(unread, 'u2', now, DM_THROTTLE_MS), false);
+    assert.equal(shouldThrottleDmBundle({ ...unread, read: true }, 'u1', now, DM_THROTTLE_MS), false);
+    assert.equal(
+      shouldThrottleDmBundle({ ...unread, updatedAtMs: now - DM_THROTTLE_MS - 1 }, 'u1', now, DM_THROTTLE_MS),
+      false
+    );
   });
 
   console.log('\nAll notification tests passed.');

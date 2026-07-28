@@ -257,6 +257,17 @@ async function pruneOldReadNotifications(adminApp, uid, { limit = 40 } = {}) {
 }
 
 /**
+ * Pure DM throttle gate — unread bundle, same lead actor, within window.
+ * Used by maybeNotifyDm + unit tests (no Firestore).
+ */
+function shouldThrottleDmBundle(data, actorUid, nowMs = Date.now(), throttleMs = DM_THROTTLE_MS) {
+  if (!data || data.read) return false;
+  const updatedMs = Number(data.updatedAtMs) || 0;
+  const sameActor = Array.isArray(data.actors) && data.actors[0]?.uid === actorUid;
+  return !!(sameActor && updatedMs && nowMs - updatedMs < throttleMs);
+}
+
+/**
  * DM notify — skip if recipient is viewing this chat, or throttled.
  */
 async function maybeNotifyDm(adminApp, { chatId, recipientUid, actor, preview }) {
@@ -275,13 +286,8 @@ async function maybeNotifyDm(adminApp, { chatId, recipientUid, actor, preview })
   const bundleId = makeBundleId('message', chatId);
   try {
     const existing = await itemsRef(db, recipientUid).doc(bundleId).get();
-    if (existing.exists) {
-      const d = existing.data() || {};
-      const updatedMs = Number(d.updatedAtMs) || 0;
-      const sameActor = Array.isArray(d.actors) && d.actors[0]?.uid === actor?.uid;
-      if (!d.read && sameActor && updatedMs && Date.now() - updatedMs < DM_THROTTLE_MS) {
-        return { skipped: 'throttle' };
-      }
+    if (existing.exists && shouldThrottleDmBundle(existing.data() || {}, actor?.uid)) {
+      return { skipped: 'throttle' };
     }
   } catch (e) {}
 
@@ -332,6 +338,7 @@ module.exports = {
   markAllNotificationsRead,
   softClearNotifications,
   pruneOldReadNotifications,
+  shouldThrottleDmBundle,
   maybeNotifyDm,
   resolveActor,
 };
