@@ -312,4 +312,6 @@ module.exports = {
   listGamesHealth,
   fairnessScore,
   popularityScores,
+  isLowEngagement,
+  daysSince,
 };

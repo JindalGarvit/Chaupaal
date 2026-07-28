@@ -6,6 +6,24 @@ const SOFT_THRESHOLD = 2;
 const SEVERE_THRESHOLD = 5;
 const IMMEDIATE_SEVERE = new Set(['harassment', 'impersonation']);
 
+/** Pure tier math for a new report (count already includes this signal). */
+function tierAfterFlag({ prevTier = 'none', count, reasonCode } = {}) {
+  const n = Number(count) || 0;
+  let tier = prevTier === 'severe' ? 'severe' : prevTier === 'soft' ? 'soft' : 'none';
+  if (IMMEDIATE_SEVERE.has(String(reasonCode || ''))) tier = 'severe';
+  else if (n >= SEVERE_THRESHOLD) tier = 'severe';
+  else if (n >= SOFT_THRESHOLD) tier = tier === 'severe' ? 'severe' : 'soft';
+  return tier;
+}
+
+/** Pure tier math for a block signal — at least soft, never downgrades severe. */
+function tierAfterBlock({ prevTier = 'none', prevCount = 0 } = {}) {
+  const count = Math.max(Number(prevCount) || 0, SOFT_THRESHOLD);
+  let tier = prevTier === 'severe' ? 'severe' : 'soft';
+  if (count >= SEVERE_THRESHOLD) tier = 'severe';
+  return { tier, count };
+}
+
 async function setDiscoveryHidden(db, uid, hidden) {
   if (!uid) return;
   const pub = { hiddenFromDiscovery: !!hidden };
@@ -32,12 +50,8 @@ async function applyFlagSignal(db, admin, { reportedUid, reporterUid, reasonCode
     const snap = await tx.get(ref);
     const data = snap.exists ? snap.data() || {} : {};
     const count = (Number(data.count) || 0) + 1;
-    let tier = data.tier === 'severe' ? 'severe' : data.tier === 'soft' ? 'soft' : 'none';
-    if (IMMEDIATE_SEVERE.has(String(reasonCode || ''))) tier = 'severe';
-    else if (count >= SEVERE_THRESHOLD) tier = 'severe';
-    else if (count >= SOFT_THRESHOLD) tier = tier === 'severe' ? 'severe' : 'soft';
-
     const prevTier = data.tier || 'none';
+    const tier = tierAfterFlag({ prevTier, count, reasonCode });
     next = { tier, count, escalated: tier !== prevTier && tier !== 'none' };
 
     tx.set(
@@ -74,15 +88,12 @@ async function applyBlockSignal(db, admin, { blockedUid, blockerUid }) {
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const data = snap.exists ? snap.data() || {} : {};
-    const count = Math.max(Number(data.count) || 0, SOFT_THRESHOLD);
-    let tier = data.tier === 'severe' ? 'severe' : 'soft';
-    if (count >= SEVERE_THRESHOLD) tier = 'severe';
-    next = { tier, count };
+    next = tierAfterBlock({ prevTier: data.tier || 'none', prevCount: data.count });
     tx.set(
       ref,
       {
-        count,
-        tier,
+        count: next.count,
+        tier: next.tier,
         lastReasonCode: 'block',
         lastReporterUid: blockerUid,
         updatedAt: now,
@@ -101,6 +112,9 @@ module.exports = {
   applyFlagSignal,
   applyBlockSignal,
   setDiscoveryHidden,
+  tierAfterFlag,
+  tierAfterBlock,
   SOFT_THRESHOLD,
   SEVERE_THRESHOLD,
+  IMMEDIATE_SEVERE,
 };
