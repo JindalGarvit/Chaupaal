@@ -271,16 +271,74 @@ async function handlePost(req, res) {
 
   if (action === 'agora_token') {
     const { mintAgoraToken } = require('../server-lib/agora-token');
+    const {
+      cleanChatId,
+      chatIdFromChannel,
+      channelForChat,
+      assertChatParticipant,
+    } = require('../server-lib/mehfil-access');
     // Always mint for the VERIFIED uid — accepting body.uid let a caller mint
     // publisher tokens for arbitrary Agora identities.
+    // Mehfil channels (mh_*) also require Firestore chat membership.
+    const chatId = cleanChatId(body.chatId) || chatIdFromChannel(body.channel);
+    if (chatId || String(body.channel || '').startsWith('mh_')) {
+      if (!chatId) {
+        return sendError(res, 400, 'VALIDATION_ERROR', 'chatId required for Mehfil channels');
+      }
+      const adminApp = initAdmin();
+      if (!adminApp) {
+        return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+      }
+      const gate = await assertChatParticipant(adminApp, user.uid, chatId);
+      if (!gate.ok) {
+        return sendError(res, 403, 'FORBIDDEN', 'Not a chat member');
+      }
+    }
     const result = mintAgoraToken({
-      channel: body.channel,
+      channel: body.channel || (chatId ? channelForChat(chatId) : ''),
       uid: user.uid,
     });
     if (result.error === 'channel_required') {
       return sendError(res, 400, 'VALIDATION_ERROR', 'channel required');
     }
     return sendSuccess(res, result);
+  }
+
+  // Mehfil room join — Admin writes RTDB participant after Firestore membership check.
+  // Clients cannot create participants (RTDB rules allow only self-delete / leave).
+  if (action === 'mehfil_join') {
+    const adminApp = initAdmin();
+    if (!adminApp) {
+      return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    }
+    const {
+      cleanChatId,
+      assertChatParticipant,
+      ensureMehfilParticipantAdmin,
+      channelForChat,
+    } = require('../server-lib/mehfil-access');
+    const chatId = cleanChatId(body.chatId);
+    if (!chatId) return sendError(res, 400, 'VALIDATION_ERROR', 'chatId required');
+    try {
+      const gate = await assertChatParticipant(adminApp, user.uid, chatId);
+      if (!gate.ok) {
+        const status = gate.error === 'CHAT_NOT_FOUND' ? 404 : 403;
+        return sendError(
+          res,
+          status,
+          gate.error === 'CHAT_NOT_FOUND' ? 'NOT_FOUND' : 'FORBIDDEN',
+          gate.error === 'CHAT_NOT_FOUND' ? 'Chat not found' : 'Not a chat member'
+        );
+      }
+      const out = await ensureMehfilParticipantAdmin(adminApp, chatId, user.uid, {
+        name: body.name,
+      });
+      if (!out.ok) return sendError(res, 500, 'MEHFIL_JOIN_FAILED', 'Could not join room');
+      return sendSuccess(res, { chatId, channel: channelForChat(chatId) });
+    } catch (e) {
+      console.warn('[media-config] mehfil_join', e?.message || e);
+      return sendError(res, 500, 'MEHFIL_JOIN_FAILED', e?.message || 'Could not join room');
+    }
   }
 
   if (action === 'policy_consume') {
@@ -528,6 +586,7 @@ async function handlePost(req, res) {
       'live_location_stop',
       'check_url',
       'agora_token',
+      'mehfil_join',
       'policy_consume',
       'username_check',
       'resolve_identifier',

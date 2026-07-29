@@ -24,6 +24,25 @@ const checks = [
       return false;
     }
   })()],
+  ['database.rules.json gates mehfil read to participants', (() => {
+    try {
+      const raw = fs.readFileSync(path.join(root, 'firebase/database.rules.json'), 'utf8');
+      return (
+        raw.includes("data.child('participants').child(auth.uid).exists()") &&
+        raw.includes('!newData.exists()')
+      );
+    } catch (e) {
+      return false;
+    }
+  })()],
+  ['mehfil_join action in media-config', (() => {
+    try {
+      const raw = fs.readFileSync(path.join(root, 'api/media-config.js'), 'utf8');
+      return raw.includes("action === 'mehfil_join'") && raw.includes('assertChatParticipant');
+    } catch (e) {
+      return false;
+    }
+  })()],
   ['teen-mode assertCanMessage', (() => {
     try {
       const raw = fs.readFileSync(path.join(root, 'public/src/js/core/teen-mode.js'), 'utf8');
@@ -61,8 +80,9 @@ Teen Mode
   [ ] DOB edit to under-18 triggers Teen Mode / consent
 
 Ops
-  [ ] firebase deploy --only database
+  [ ] firebase deploy --only database   # REQUIRED after this security fix
   [ ] Vercel env: AGORA_APP_ID, AGORA_APP_CERTIFICATE
+  [ ] Optional: FIREBASE_DATABASE_URL (defaults to asia-southeast1 RTDB)
   [ ] Optional: node scripts/seed-feature-flags.js (seeds mehfil on)
 `);
 

@@ -36,18 +36,36 @@
   }
 
   function channelForChat(chatId) {
-    return ('mh_' + String(chatId || '').replace(/[^a-zA-Z0-9_-]/g, '')).slice(0, 64);
+    const id = String(chatId || '')
+      .replace(/[^a-zA-Z0-9_-]/g, '')
+      .slice(0, 61);
+    return id ? 'mh_' + id : '';
   }
 
+  /**
+   * Server-gated join: Admin writes RTDB participant after Firestore chat membership check.
+   * Client may only remove itself (leave / onDisconnect) per database.rules.json.
+   * @returns {Promise<boolean>}
+   */
   async function ensureMehfilParticipant(chatId) {
-    if (!chatId || !currentUser?.uid) return;
+    if (!chatId || !currentUser?.uid) return false;
     try {
-      await rtdbRef(`mehfil/${chatId}/participants/${currentUser.uid}`)?.set({
-        at: Date.now(),
-        name: userProfile?.name || digitalProfile?.displayName || 'Member',
+      if (typeof apiFetch !== 'function') return false;
+      const envelope = await apiFetch('/api/media-config', {
+        method: 'POST',
+        needAuth: true,
+        body: {
+          action: 'mehfil_join',
+          chatId,
+          name: userProfile?.name || digitalProfile?.displayName || 'Member',
+        },
       });
+      if (!envelope?.ok) return false;
       rtdbRef(`mehfil/${chatId}/participants/${currentUser.uid}`)?.onDisconnect()?.remove();
-    } catch (e) {}
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 
   function bindMembersList(chatId) {
@@ -830,8 +848,17 @@
       }
     });
 
-    // Room presence + chat/media before Agora (text channel always works)
-    await ensureMehfilParticipant(chatId);
+    // Room presence + chat/media before Agora (membership-gated via mehfil_join)
+    const joined = await ensureMehfilParticipant(chatId);
+    if (!joined) {
+      const stage = el.querySelector('[data-mehfil-stage]');
+      if (stage) {
+        stage.innerHTML = `<div class="mehfil-disabled">You need to be a member of this chat to join Mehfil.</div>`;
+      }
+      setMehfilStatus('Not a member', 'warn');
+      if (typeof showToast === 'function') showToast('Join the chat first to open Mehfil');
+      return;
+    }
     bindMembersList(chatId);
     bindMediaSync();
 
@@ -855,7 +882,7 @@
       const envelope = await apiFetch('/api/media-config', {
         method: 'POST',
         needAuth: true,
-        body: { action: 'agora_token', channel: channelForChat(chatId) },
+        body: { action: 'agora_token', channel: channelForChat(chatId), chatId },
       });
       tokenPayload = envelope?.data;
     } catch (e) {
