@@ -1363,6 +1363,11 @@ body.theme-dawn,
 .public-profile-name{font:700 20px 'Space Grotesk',sans-serif;}
 .public-profile-uname{color:var(--muted);font-size:13px;margin-bottom:8px;}
 .public-profile-bio{font-size:14px;line-height:1.5;margin:12px 0 0;text-align:left;}
+.public-profile-about{margin:14px 0 0;text-align:left;display:grid;gap:8px;}
+.public-profile-about-row{display:grid;grid-template-columns:96px 1fr;gap:8px;font-size:13px;line-height:1.35;}
+.public-profile-about-row dt{color:var(--muted);font-weight:600;margin:0;}
+.public-profile-about-row dd{margin:0;word-break:break-word;}
+.public-profile-locked-note{margin:12px 0 0;font-size:13px;color:var(--muted);text-align:center;}
 .public-profile-prompts{display:grid;gap:8px;margin-top:14px;text-align:left;}
 .public-profile-prompt{background:var(--cream);border:1px solid var(--line);border-radius:12px;padding:10px 12px;}
 .public-profile-prompt span{display:block;font-size:11px;color:var(--muted);margin-bottom:4px;}

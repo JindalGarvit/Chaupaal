@@ -2,7 +2,7 @@
  * Mehfil — in-chat audio/video room (Part 2 Phase 5).
  * Silent join (Teams-like), cam/mic OFF by default, synced media via RTDB.
  * Agora token from /api/media-config action agora_token.
- * Feature flag: mehfil (default off until configured).
+ * Feature flag: mehfil (default on; Firestore enabled:false is kill-switch. Needs Agora for voice).
  */
 (function () {
   'use strict';
@@ -37,6 +37,36 @@
 
   function channelForChat(chatId) {
     return ('mh_' + String(chatId || '').replace(/[^a-zA-Z0-9_-]/g, '')).slice(0, 64);
+  }
+
+  async function ensureMehfilParticipant(chatId) {
+    if (!chatId || !currentUser?.uid) return;
+    try {
+      await rtdbRef(`mehfil/${chatId}/participants/${currentUser.uid}`)?.set({
+        at: Date.now(),
+        name: userProfile?.name || digitalProfile?.displayName || 'Member',
+      });
+      rtdbRef(`mehfil/${chatId}/participants/${currentUser.uid}`)?.onDisconnect()?.remove();
+    } catch (e) {}
+  }
+
+  function bindMembersList(chatId) {
+    const host = overlayEl?.querySelector('[data-mehfil-members]');
+    const ref = rtdbRef(`mehfil/${chatId}/participants`);
+    if (!host || !ref) return;
+    const paint = (snap) => {
+      const val = snap.val() || {};
+      const rows = Object.entries(val).map(([uid, meta]) => {
+        const name = meta?.name || 'Member';
+        const me = uid === currentUser?.uid;
+        return `<div class="mehfil-member${me ? ' is-me' : ''}"><span class="mehfil-member-dot"></span>${esc(name)}${me ? ' · you' : ''}</div>`;
+      });
+      host.innerHTML = rows.length
+        ? rows.join('')
+        : '<div class="mehfil-member is-empty">No one here yet</div>';
+    };
+    ref.on('value', paint);
+    rtdbUnsubs.push(() => ref.off('value', paint));
   }
 
   function loadScript(src) {
@@ -252,6 +282,7 @@
 
   async function publishMediaState(patch) {
     if (!activeChatId || !currentUser?.uid) return;
+    await ensureMehfilParticipant(activeChatId);
     const ref = rtdbRef(`mehfil/${activeChatId}/media`);
     if (!ref) return;
     await ref.update({
@@ -605,11 +636,11 @@
     const chatId = chat.firestoreId || chat.id;
     if (!chatId) return;
 
-    // Feature flag — default off until Agora configured / rolled out
-    let enabled = false;
+    // Kill-switch only: missing Firestore doc defaults ON (needs Agora for voice).
+    let flagAllows = true;
     try {
       if (typeof isFeatureEnabled === 'function') {
-        enabled = await isFeatureEnabled('mehfil', { defaultValue: false });
+        flagAllows = await isFeatureEnabled('mehfil', { defaultValue: true });
       }
     } catch (e) {}
 
@@ -624,8 +655,15 @@
       <div class="mehfil-layout">
         <aside class="mehfil-sidebar" data-mehfil-sidebar>
           <div class="mehfil-sidebar-head">
-            <strong>Room chat</strong>
-            <button type="button" class="mehfil-sidebar-toggle" data-mehfil-sidebar-hide aria-label="Hide chat">‹</button>
+            <div>
+              <div class="mehfil-channel-label"># voice</div>
+              <strong>${esc(chat.name || 'Mehfil')}</strong>
+            </div>
+            <button type="button" class="mehfil-sidebar-toggle" data-mehfil-sidebar-hide aria-label="Hide sidebar">‹</button>
+          </div>
+          <div class="mehfil-members-block">
+            <div class="mehfil-members-title">In the room</div>
+            <div class="mehfil-members" data-mehfil-members></div>
           </div>
           <div class="mehfil-sidebar-msgs" data-mehfil-chat-msgs></div>
           <form class="mehfil-sidebar-compose" data-mehfil-chat-form>
@@ -645,8 +683,8 @@
               <div class="mehfil-tile-label">You</div>
             </div>
             <div class="mehfil-waiting" data-mehfil-waiting>
-              <div class="mehfil-waiting-title">Waiting to start</div>
-              <div class="mehfil-waiting-msg">Others will appear here when they join this Mehfil.</div>
+              <div class="mehfil-waiting-title">Waiting for friends</div>
+              <div class="mehfil-waiting-msg">Mic and camera stay off until you turn them on. Share YouTube or chat in the sidebar.</div>
             </div>
           </div>
           <div class="mehfil-sheet mehfil-media-sheet" data-mehfil-media>
@@ -730,13 +768,16 @@
       if (!text || !activeChatId) return;
       input.value = '';
       try {
+        await ensureMehfilParticipant(activeChatId);
         await rtdbRef(`mehfil/${activeChatId}/chat`)?.push({
           text: text.slice(0, 500),
           by: currentUser?.uid || null,
           name: userProfile?.name || userProfile?.username || 'You',
           at: Date.now(),
         });
-      } catch (err) {}
+      } catch (err) {
+        if (typeof showToast === 'function') showToast('Could not send');
+      }
     });
 
     el.querySelector('[data-mehfil-leave]')?.addEventListener('click', leaveMehfil);
@@ -754,6 +795,7 @@
         showReactionBurst(emoji);
         if (activeChatId) {
           try {
+            await ensureMehfilParticipant(activeChatId);
             await rtdbRef(`mehfil/${activeChatId}/reactions`)?.push({
               emoji,
               by: currentUser?.uid || null,
@@ -788,20 +830,23 @@
       }
     });
 
-    if (!enabled) {
-      // Still show shell so UX exists; join blocked until flag + Agora env
+    // Room presence + chat/media before Agora (text channel always works)
+    await ensureMehfilParticipant(chatId);
+    bindMembersList(chatId);
+    bindMediaSync();
+
+    if (!flagAllows) {
       const stage = el.querySelector('[data-mehfil-stage]');
       if (stage) {
-        stage.innerHTML = `<div class="mehfil-disabled">Mehfil is ready to join once Agora is configured and the <code>mehfil</code> feature flag is on.<br><br>Synced media, reactions, and Ask Chaupaal work in this room preview.</div>`;
+        stage.innerHTML = `<div class="mehfil-disabled">Mehfil voice is paused right now. Room chat and YouTube sync still work — try again later.</div>`;
       }
-      setMehfilStatus('Preview', 'warn');
-      activeChatId = chatId;
-      bindMediaSync();
+      setMehfilStatus('Chat only', 'warn');
       return;
     }
 
     if (typeof apiFetch !== 'function') {
       if (typeof showToast === 'function') showToast('Mehfil unavailable');
+      setMehfilStatus('Unavailable', 'warn');
       return;
     }
 
@@ -810,7 +855,7 @@
       const envelope = await apiFetch('/api/media-config', {
         method: 'POST',
         needAuth: true,
-        body: { action: 'agora_token', channel: channelForChat(chatId), uid: currentUser?.uid },
+        body: { action: 'agora_token', channel: channelForChat(chatId) },
       });
       tokenPayload = envelope?.data;
     } catch (e) {
@@ -820,11 +865,9 @@
     if (!tokenPayload?.configured || !tokenPayload.token) {
       const stage = el.querySelector('[data-mehfil-stage]');
       if (stage) {
-        stage.innerHTML = `<div class="mehfil-disabled">Agora isn’t configured yet. Add <code>AGORA_APP_ID</code> and <code>AGORA_APP_CERTIFICATE</code> on Vercel, then reopen Mehfil.<br><br>You can still search synced media in this room.</div>`;
+        stage.innerHTML = `<div class="mehfil-disabled">Voice isn’t live yet — add <code>AGORA_APP_ID</code> and <code>AGORA_APP_CERTIFICATE</code> on Vercel.<br><br>You can still use room chat and watch YouTube together.</div>`;
       }
-      setMehfilStatus('Setup needed', 'warn');
-      activeChatId = chatId;
-      bindMediaSync();
+      setMehfilStatus('Chat + media', 'warn');
       return;
     }
 
@@ -903,25 +946,15 @@
       setShareUi(false);
       setMehfilStatus('Connected', 'live');
       updateWaitingState();
-      activeChatId = chatId;
-      try {
-        await rtdbRef(`mehfil/${chatId}/participants/${currentUser.uid}`)?.set({
-          at: Date.now(),
-          name: userProfile?.name || digitalProfile?.displayName || 'Member',
-        });
-        rtdbRef(`mehfil/${chatId}/participants/${currentUser.uid}`)?.onDisconnect()?.remove();
-      } catch (e) {}
-      bindMediaSync();
+      await ensureMehfilParticipant(chatId);
       if (typeof showToast === 'function') showToast('Joined Mehfil — mic & camera off');
     } catch (e) {
       console.warn('[mehfil] join', e);
       if (typeof reportClientError === 'function') {
         reportClientError({ feature: 'mehfil_join', message: e?.message || String(e) });
       }
-      if (typeof showToast === 'function') showToast('Couldn’t join Mehfil');
-      setMehfilStatus('Couldn’t join', 'warn');
-      activeChatId = chatId;
-      bindMediaSync();
+      if (typeof showToast === 'function') showToast('Voice join failed — chat still works');
+      setMehfilStatus('Chat + media', 'warn');
     }
   }
 

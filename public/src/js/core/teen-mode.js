@@ -121,6 +121,62 @@
     return { ok: true };
   }
 
+  function teenMessageBlockedToast(reason) {
+    if (typeof showToast !== 'function') return;
+    showToast(
+      reason === 'teen_adult_stranger'
+        ? 'Teen Mode: message friends (or other teens) only'
+        : 'This teen can only be messaged by friends'
+    );
+  }
+
+  /**
+   * Gate DM / Say hi before creating a chat.
+   * @returns {Promise<boolean>} true if messaging is allowed
+   */
+  async function assertCanMessage(targetUserOrUid) {
+    if (typeof canMessageTarget !== 'function') return true;
+    const target =
+      typeof targetUserOrUid === 'string'
+        ? { uid: targetUserOrUid }
+        : targetUserOrUid || {};
+    const uid = target.uid;
+    if (!uid) return true;
+    let rel = { friend: !!target.isFriend };
+    try {
+      if (typeof hydrateRelationships === 'function') {
+        const states = await hydrateRelationships([uid]).catch(() => ({}));
+        if (states?.[uid]) rel = states[uid];
+      } else if (typeof relationshipState === 'function') {
+        rel = relationshipState(uid) || rel;
+      }
+    } catch (e) {}
+    // Enrich teen flags from users_public when possible
+    let peer = { ...target };
+    try {
+      if (typeof db !== 'undefined' && db && (!peer.teenMode && peer.age == null && !peer.dob)) {
+        const snap = await db.collection('users_public').doc(uid).get();
+        if (snap.exists) {
+          const d = snap.data() || {};
+          peer = {
+            ...peer,
+            teenMode: d.teenMode,
+            isMinor: d.isMinor,
+            age: d.age,
+            dob: d.dob || d.dateOfBirth,
+            parentalConsent: d.parentalConsent,
+          };
+        }
+      }
+    } catch (e) {}
+    const gate = canMessageTarget(peer, rel);
+    if (!gate.ok) {
+      teenMessageBlockedToast(gate.reason);
+      return false;
+    }
+    return true;
+  }
+
   /** Location never visible to non-friends (app-wide). */
   function canSeeLocation(relationshipState) {
     return !!(relationshipState?.friend);
@@ -167,6 +223,8 @@
   window.isTeenModeUser = isTeenModeUser;
   window.needsParentalConsent = needsParentalConsent;
   window.canMessageTarget = canMessageTarget;
+  window.assertCanMessage = assertCanMessage;
+  window.teenMessageBlockedToast = teenMessageBlockedToast;
   window.canSeeLocation = canSeeLocation;
   window.teenAiSystemHint = teenAiSystemHint;
   window.filterPeepalSearchNudges = filterPeepalSearchNudges;

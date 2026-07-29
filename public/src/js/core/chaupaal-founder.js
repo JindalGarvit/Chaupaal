@@ -57,6 +57,17 @@
     peerProfileType,
     matchMeta,
   }) {
+    if (typeof assertCanMessage === 'function') {
+      const ok = await assertCanMessage({
+        uid,
+        name,
+        teenMode: matchMeta?.teenMode,
+        isMinor: matchMeta?.isMinor,
+        age: matchMeta?.age,
+        profileType: peerProfileType,
+      });
+      if (!ok) return null;
+    }
     const chatId =
       currentUser?.uid && uid
         ? [currentUser.uid, uid].sort().join('_')

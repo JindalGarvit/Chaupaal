@@ -83,11 +83,11 @@
       note: 'Master AI gate. Server also requires AI_FEATURES_ENABLED=true. Granular: CAT_LIVE_AI_PAUSED, CATEGORY_CRON_PAUSED.',
     },
     mehfil: {
-      enabled: false,
-      percent: 0,
+      enabled: true,
+      percent: 100,
       allowList: [],
       denyList: [],
-      note: 'Mehfil A/V rooms. Requires AGORA_APP_ID + AGORA_APP_CERTIFICATE. Enable after keys are live.',
+      note: 'Mehfil A/V rooms. Voice needs AGORA_APP_ID + AGORA_APP_CERTIFICATE. Client defaults on; set enabled:false to kill-switch.',
     },
     sensory_theme: {
       enabled: false,

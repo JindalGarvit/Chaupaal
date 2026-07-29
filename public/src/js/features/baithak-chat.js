@@ -426,6 +426,9 @@ function openChatScreen(chat){
     if(typeof openLocationComposer!=='function'){showToast(t('baithak_loc_unavailable'));return;}
     openLocationComposer({
       title:'Share location',
+      peerUid: !isGroup && !isSelf && !isChaupaal
+        ? (chat.uid || chat.peerUid || (chat.participants || []).find((u) => u !== currentUser?.uid) || null)
+        : null,
       onSelect:async (loc)=>{
         try{
           const label=loc.label||loc.placeName||'Location';

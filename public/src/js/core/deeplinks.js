@@ -75,13 +75,78 @@
     const sheet = document.createElement('div');
     sheet.id = 'publicProfileSheet';
     sheet.className = 'archive-overlay';
-    const profile = u.profile || {};
-    const interests = [
-      ...new Set([...(profile.interests || u.interests || []), ...(profile.hobbies || []).slice(0, 4), u.topCat].filter(Boolean)),
-    ];
-    const prompts = Array.isArray(profile.prompts) ? profile.prompts : Array.isArray(u.prompts) ? u.prompts : [];
-    const media = Array.isArray(profile.profileMedia) ? profile.profileMedia : Array.isArray(u.profileMedia) ? u.profileMedia : [];
-    const bio = profile.bio || u.bio || '';
+    const profile = { ...(u.profile || {}) };
+    // Flatten so visibility helpers see profile.* fields at top level
+    const dp = {
+      ...profile,
+      displayName: u.profile?.displayName || u.name || u.displayName,
+      username: uname,
+      bio: u.profile?.bio || u.bio || '',
+      profileType: u.profileType || u.profile?.profileType,
+      profileVisibility: u.profile?.profileVisibility || u.profileVisibility,
+      icebreakers: u.profile?.icebreakers || u.icebreakers,
+      interests: u.profile?.interests || u.interests,
+      hobbies: u.profile?.hobbies || u.hobbies,
+    };
+    const view =
+      typeof getPublicVisibleProfile === 'function'
+        ? getPublicVisibleProfile(dp, {
+            name: u.name || dp.displayName,
+            username: uname,
+            photoURL: u.photoURL || null,
+            profileType: dp.profileType,
+          })
+        : {
+            displayName: u.name || dp.displayName || uname || 'Chaupaal member',
+            username: uname,
+            photoURL: u.photoURL || null,
+            bio: dp.bio || '',
+            locked: false,
+            fields: [],
+            profileType: dp.profileType || 'personal',
+          };
+    const esc =
+      typeof escapeHtmlText === 'function'
+        ? escapeHtmlText
+        : (s) =>
+            String(s || '')
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/"/g, '&quot;');
+    const media = Array.isArray(u.profile?.profileMedia)
+      ? u.profile.profileMedia
+      : Array.isArray(u.profileMedia)
+        ? u.profileMedia
+        : [];
+    const interests = view.locked
+      ? []
+      : [...new Set([...(dp.interests || []), ...(Array.isArray(dp.hobbies) ? dp.hobbies : String(dp.hobbies || '').split(',').map((x) => x.trim())), u.topCat].filter(Boolean))];
+    const ice = view.locked
+      ? []
+      : (Array.isArray(dp.icebreakers) ? dp.icebreakers : []).filter((a) => a?.answer).slice(0, 2);
+    const nameHtml =
+      typeof formatDisplayNameHtml === 'function'
+        ? formatDisplayNameHtml(view.displayName || uname || 'Chaupaal member', view.profileType)
+        : esc(view.displayName || uname || 'Chaupaal member');
+    const bioHtml =
+      view.bio && !view.locked
+        ? typeof linkifyText === 'function'
+          ? linkifyText(view.bio)
+          : esc(view.bio)
+        : '';
+    const aboutHtml =
+      !view.locked && view.fields?.length
+        ? `<dl class="public-profile-about">${view.fields
+            .filter((f) => f.label !== 'Icebreaker' && f.label !== 'Conversation starter')
+            .slice(0, 8)
+            .map(
+              (f) =>
+                `<div class="public-profile-about-row"><dt>${esc(f.label)}</dt><dd>${esc(f.value)}</dd></div>`
+            )
+            .join('')}</dl>`
+        : view.locked
+          ? `<p class="public-profile-locked-note">${esc(view.visibilityLabel || 'Private profile')} — limited details</p>`
+          : '';
     sheet.innerHTML = `
       <div class="archive-header">
         <button type="button" data-public-profile-close aria-label="Back" style="background:none;border:none;font-size:22px;cursor:pointer;">←</button>
@@ -91,24 +156,32 @@
       <div class="public-profile-scroll">
         <div class="public-profile-hero">
           <div data-public-profile-avatar class="public-profile-avatar">
-            ${u.photoURL ? `<img src="${u.photoURL}" alt="">` : (u.avatar || '👤')}
+            ${view.photoURL || u.photoURL ? `<img src="${esc(view.photoURL || u.photoURL)}" alt="">` : esc(u.avatar || '👤')}
           </div>
-          <div class="public-profile-name">${typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml(u.name || profile.displayName || uname || 'Chaupaal member', u.profileType || profile.profileType) : (u.name || profile.displayName || uname || 'Chaupaal member')}</div>
-          ${uname ? `<div class="public-profile-uname">@${uname}</div>` : ''}
-          ${bio ? `<p class="public-profile-bio">${typeof linkifyText === 'function' ? linkifyText(bio) : bio}</p>` : ''}
+          <div class="public-profile-name">${nameHtml}</div>
+          ${uname ? `<div class="public-profile-uname">@${esc(uname)}</div>` : ''}
+          ${bioHtml ? `<p class="public-profile-bio">${bioHtml}</p>` : ''}
+          ${aboutHtml}
           ${
-            prompts.length
-              ? `<div class="public-profile-prompts">${prompts
-                  .slice(0, 3)
-                  .map((a) => `<div class="public-profile-prompt"><span>${(a.customQuestion || 'Prompt')}</span><p>${a.answer || ''}</p></div>`)
+            ice.length
+              ? `<div class="public-profile-prompts">${ice
+                  .map((a) => {
+                    const q =
+                      a.customQuestion ||
+                      (typeof getIcebreakerPromptById === 'function'
+                        ? getIcebreakerPromptById(a.promptId)?.text
+                        : null) ||
+                      'Icebreaker';
+                    return `<div class="public-profile-prompt"><span>${esc(q)}</span><p>${esc(a.answer)}</p></div>`;
+                  })
                   .join('')}</div>`
               : ''
           }
           ${
             interests.length
               ? `<div class="public-profile-interests">${interests
-                  .slice(0, 8)
-                  .map((i) => `<span>${i}</span>`)
+                  .slice(0, 6)
+                  .map((i) => `<span>${esc(i)}</span>`)
                   .join('')}</div>`
               : ''
           }
@@ -125,11 +198,11 @@
         <div class="public-profile-ordered-sections" data-public-ordered-sections></div>
       </div>`;
     document.querySelector('.device')?.appendChild(sheet);
-    if (typeof mountOwnProfileSections === 'function' && profileUid) {
+    if (typeof mountOwnProfileSections === 'function' && profileUid && !view.locked) {
       const sectionProfile = {
-        ...(profile || {}),
-        sectionOrder: profile.sectionOrder || u.sectionOrder,
-        customSections: profile.customSections || u.customSections,
+        ...(u.profile || {}),
+        sectionOrder: u.profile?.sectionOrder || u.sectionOrder,
+        customSections: u.profile?.customSections || u.customSections,
         profileMedia: media,
       };
       mountOwnProfileSections(sheet.querySelector('[data-public-ordered-sections]'), {
@@ -139,6 +212,9 @@
         isOwner: !!(currentUser && currentUser.uid === profileUid),
         includeArchived: !!(currentUser && currentUser.uid === profileUid),
       });
+    } else if (view.locked) {
+      const host = sheet.querySelector('[data-public-ordered-sections]');
+      if (host) host.innerHTML = '';
     }
 
     sheet.querySelector('[data-public-profile-close]')?.addEventListener('click', () => sheet.remove());
@@ -150,7 +226,7 @@
           ? buildShareStats({
               scoreLine: `@${uname}`,
               caption: display,
-              meta: bio ? String(bio).slice(0, 60) : 'on Chaupaal',
+              meta: view.bio ? String(view.bio).slice(0, 60) : 'on Chaupaal',
               text: `Check out @${uname} on Chaupaal`,
               url,
             })
@@ -316,17 +392,33 @@
         })
         .catch(() => {});
     }
-    sheet.querySelector('[data-public-profile-hi]')?.addEventListener('click', () => {
+    sheet.querySelector('[data-public-profile-hi]')?.addEventListener('click', async () => {
+      if (typeof assertCanMessage === 'function') {
+        const ok = await assertCanMessage({
+          uid: profileUid,
+          name: u.name || uname,
+          teenMode: u.teenMode,
+          isMinor: u.isMinor,
+          age: u.age,
+          dob: u.dob || u.dateOfBirth,
+        });
+        if (!ok) return;
+      }
       sheet.remove();
       const chat = {
         id: `chat_profile_${profileUid || uname}`,
         type: 'dm',
         name: u.name || uname || 'Chaupaal member',
         avatar: u.avatar || '👤',
+        uid: profileUid,
+        peerUid: profileUid,
         preview: 'Opened from discovery',
         time: 'now',
         unread: 0,
         theirIcebreakers: u.icebreakers || [],
+        teenMode: u.teenMode,
+        isMinor: u.isMinor,
+        age: u.age,
       };
       if (typeof SAMPLE_CHATS !== 'undefined' && !SAMPLE_CHATS.find((c) => c.id === chat.id)) SAMPLE_CHATS.unshift(chat);
       switchTab('baithak');

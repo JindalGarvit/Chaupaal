@@ -8,6 +8,13 @@ const SEEDS = {
   search_v1: { enabled: true, percent: 100, allowList: [], denyList: [], note: 'Universal search UI' },
   deeplinks_v1: { enabled: true, percent: 100, allowList: [], denyList: [], note: 'Shareable profile/post/chat URLs' },
   rate_limit_client: { enabled: true, percent: 100, allowList: [], denyList: [], note: 'Client calls /api/check-rate before writes' },
+  mehfil: {
+    enabled: true,
+    percent: 100,
+    allowList: [],
+    denyList: [],
+    note: 'Mehfil rooms. Voice needs AGORA_APP_ID + AGORA_APP_CERTIFICATE on Vercel.',
+  },
 };
 
 async function main() {

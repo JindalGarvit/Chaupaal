@@ -29,6 +29,12 @@
           "$rid": {
             ".validate": "newData.hasChildren(['emoji', 'by', 'at']) && newData.child('by').val() == auth.uid"
           }
+        },
+        "chat": {
+          ".write": "auth != null && root.child('mehfil').child($chatId).child('participants').child(auth.uid).exists()",
+          "$mid": {
+            ".validate": "newData.hasChildren(['text', 'by', 'at']) && newData.child('by').val() == auth.uid && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 500"
+          }
         }
       }
     }
