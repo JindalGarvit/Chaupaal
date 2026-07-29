@@ -189,6 +189,10 @@
       (o.you != null || o.opp != null
         ? gameScoreHtml({ label: o.youLabel || 'You', score: o.you ?? 0 }, { label: o.oppLabel || 'Opponent', score: o.opp ?? 0 })
         : '');
+    const statsStrip =
+      o.statsHtml ||
+      (o.hideStats ? '' : o.gameId ? gamePersonalStatsHtml(o.gameId) : '');
+    const missionHint = o.missionHtml || (o.hideMissions ? '' : o.gameId ? dangalMissionNudgeHtml(o.gameId) : '');
     const actions = defaultResultActions(o)
       .map(
         (a, i) =>
@@ -203,6 +207,8 @@
       ${subtitle}
       ${pbLine}
       ${score}
+      ${statsStrip}
+      ${missionHint}
       <div class="game-result-actions">${actions}</div>
     </div>`;
   }
@@ -1112,11 +1118,401 @@
     );
   }
 
+  /* ── Dangal progress · stats · soft weekly missions (local, per active profile) ── */
+  const SCORE_FOCUS_GAMES = { rushrunner: true, tiptap: true, ankjod: true, wordguess: true };
+  const HIGHER_BETTER_SCORE = { rushrunner: true, tiptap: true, quiz: true };
+  const LOWER_BETTER_SCORE = { wordguess: true, ankjod: true };
+
+  function normalizeDangalGameId(gameId) {
+    const id = String(gameId || '').toLowerCase();
+    if (id === 'muqabala' || id === 'quiz') return 'quiz';
+    if (id === 'kakuro') return 'ankjod';
+    if (id === 'tictactoe') return 'ttt';
+    return id;
+  }
+
+  function dangalProgressProfileId() {
+    try {
+      if (typeof window !== 'undefined' && window.activeProfileId) return String(window.activeProfileId);
+      if (typeof userProfile !== 'undefined' && userProfile?.activeProfileId) return String(userProfile.activeProfileId);
+    } catch (e) {}
+    return 'primary';
+  }
+
+  function dangalProgressStorageKey() {
+    return `chaupaal_dangal_progress_${dangalProgressProfileId()}`;
+  }
+
+  function dangalCalendarDay() {
+    try {
+      return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date());
+    } catch (e) {
+      return new Date().toISOString().slice(0, 10);
+    }
+  }
+
+  function dangalWeekKey(dayStr) {
+    const d = new Date((dayStr || dangalCalendarDay()) + 'T12:00:00');
+    const day = (d.getDay() + 6) % 7; // Mon=0
+    d.setDate(d.getDate() - day);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function emptyDangalGameStats() {
+    return {
+      played: 0,
+      wins: 0,
+      losses: 0,
+      draws: 0,
+      streak: 0,
+      bestStreak: 0,
+      bestScore: null,
+      lastAt: 0,
+    };
+  }
+
+  function emptyDangalWeek(weekKey) {
+    return {
+      key: weekKey || dangalWeekKey(),
+      plays: 0,
+      unique: [],
+      wins: 0,
+      gotd: false,
+      shabd: false,
+      celebrated: {},
+    };
+  }
+
+  function emptyDangalProgress() {
+    return {
+      v: 1,
+      games: {},
+      softDayStreak: 0,
+      lastPlayDay: '',
+      week: emptyDangalWeek(),
+      panelCollapsed: false,
+      hideMissionsUntil: '',
+    };
+  }
+
+  function getDangalProgress() {
+    let data = emptyDangalProgress();
+    try {
+      const raw = localStorage.getItem(dangalProgressStorageKey());
+      if (raw) data = Object.assign(emptyDangalProgress(), JSON.parse(raw) || {});
+    } catch (e) {}
+    const weekKey = dangalWeekKey();
+    if (!data.week || data.week.key !== weekKey) {
+      data.week = emptyDangalWeek(weekKey);
+    }
+    if (!data.games || typeof data.games !== 'object') data.games = {};
+    return data;
+  }
+
+  function saveDangalProgress(data) {
+    try {
+      localStorage.setItem(dangalProgressStorageKey(), JSON.stringify(data));
+    } catch (e) {}
+    return data;
+  }
+
+  function getDangalGameStats(gameId) {
+    const id = normalizeDangalGameId(gameId);
+    const progress = getDangalProgress();
+    return Object.assign(emptyDangalGameStats(), progress.games[id] || {});
+  }
+
+  /**
+   * Record a finished session. Soft streaks + weekly mission progress.
+   * @param {string} gameId
+   * @param {{ won?: boolean, drew?: boolean, score?: number, scoreOnly?: boolean, gotd?: boolean }} [opts]
+   */
+  function recordDangalSession(gameId, opts) {
+    const id = normalizeDangalGameId(gameId);
+    if (!id) return getDangalProgress();
+    const o = opts || {};
+    const data = getDangalProgress();
+    const g = Object.assign(emptyDangalGameStats(), data.games[id] || {});
+    g.played += 1;
+    g.lastAt = Date.now();
+
+    // Score-only runs (e.g. Rush) skip W/L unless caller passes an explicit clear (won===true)
+    const scoreOnly =
+      o.scoreOnly === true || (SCORE_FOCUS_GAMES[id] && o.won == null && o.drew == null && o.score != null);
+    if (scoreOnly) {
+      if (o.won === true) {
+        g.wins += 1;
+        g.streak += 1;
+        g.bestStreak = Math.max(g.bestStreak, g.streak);
+      }
+    } else if (o.drew) {
+      g.draws += 1;
+    } else if (o.won === true) {
+      g.wins += 1;
+      g.streak += 1;
+      g.bestStreak = Math.max(g.bestStreak, g.streak);
+    } else if (o.won === false) {
+      g.losses += 1;
+      g.streak = 0;
+    }
+
+    if (o.score != null && Number.isFinite(Number(o.score))) {
+      const next = Number(o.score);
+      const prev = g.bestScore;
+      let better = prev == null;
+      if (!better) {
+        if (LOWER_BETTER_SCORE[id]) better = next < prev;
+        else better = next > prev;
+      }
+      if (better) g.bestScore = next;
+    }
+    data.games[id] = g;
+
+    const today = dangalCalendarDay();
+    if (data.lastPlayDay !== today) {
+      const y = new Date(today + 'T12:00:00');
+      y.setDate(y.getDate() - 1);
+      data.softDayStreak =
+        data.lastPlayDay === y.toISOString().slice(0, 10) ? (data.softDayStreak || 0) + 1 : 1;
+      data.lastPlayDay = today;
+    }
+
+    const week = data.week || emptyDangalWeek();
+    week.plays += 1;
+    if (!Array.isArray(week.unique)) week.unique = [];
+    if (!week.unique.includes(id)) week.unique.push(id);
+    if (o.won === true) week.wins += 1;
+    if (o.gotd) week.gotd = true;
+    if (id === 'wordguess') week.shabd = true;
+    data.week = week;
+
+    saveDangalProgress(data);
+    maybeCelebrateMissions(data);
+    return data;
+  }
+
+  function getDangalMissions(progress) {
+    const p = progress || getDangalProgress();
+    const week = p.week || emptyDangalWeek();
+    const uniqueCount = Array.isArray(week.unique) ? week.unique.length : 0;
+    return [
+      {
+        id: 'play3',
+        label: 'Play 3 sessions',
+        hint: 'Any games count',
+        progress: Math.min(week.plays || 0, 3),
+        target: 3,
+      },
+      {
+        id: 'variety',
+        label: 'Try 2 different games',
+        hint: 'Mix solos & duels',
+        progress: Math.min(uniqueCount, 2),
+        target: 2,
+      },
+      {
+        id: 'win1',
+        label: 'Win one match',
+        hint: 'Optional — no pressure',
+        progress: Math.min(week.wins || 0, 1),
+        target: 1,
+      },
+      {
+        id: 'shabd',
+        label: 'Finish today\'s Shabd',
+        hint: 'Daily 5-letter word',
+        progress: week.shabd ? 1 : 0,
+        target: 1,
+        gameId: 'wordguess',
+      },
+      {
+        id: 'gotd',
+        label: 'Play Game of the Day',
+        hint: 'Featured on the hub',
+        progress: week.gotd ? 1 : 0,
+        target: 1,
+      },
+    ];
+  }
+
+  function maybeCelebrateMissions(progress) {
+    const p = progress || getDangalProgress();
+    if (!p.week.celebrated) p.week.celebrated = {};
+    const newly = [];
+    getDangalMissions(p).forEach((m) => {
+      if (m.progress >= m.target && !p.week.celebrated[m.id]) {
+        p.week.celebrated[m.id] = true;
+        newly.push(m);
+      }
+    });
+    if (newly.length) {
+      saveDangalProgress(p);
+      const first = newly[0];
+      try {
+        if (typeof showToast === 'function') {
+          showToast(newly.length > 1 ? `Weekly goals · ${newly.length} done` : `Goal done · ${first.label}`);
+        }
+      } catch (e) {}
+    }
+  }
+
+  function getDangalHubSummary() {
+    const p = getDangalProgress();
+    const missions = getDangalMissions(p);
+    const done = missions.filter((m) => m.progress >= m.target).length;
+    const matches = Object.values(p.games || {}).reduce(
+      (acc, g) => {
+        acc.played += g.played || 0;
+        acc.wins += g.wins || 0;
+        return acc;
+      },
+      { played: 0, wins: 0 }
+    );
+    return {
+      softDayStreak: p.softDayStreak || 0,
+      weekPlays: p.week?.plays || 0,
+      weekWins: p.week?.wins || 0,
+      missionsDone: done,
+      missionsTotal: missions.length,
+      totalPlayed: matches.played,
+      totalWins: matches.wins,
+      panelCollapsed: !!p.panelCollapsed,
+      hideMissions: p.hideMissionsUntil === dangalCalendarDay(),
+      missions,
+    };
+  }
+
+  function gamePersonalStatsHtml(gameId) {
+    const id = normalizeDangalGameId(gameId);
+    const g = getDangalGameStats(id);
+    if (!g.played) return '';
+    const decided = (g.wins || 0) + (g.losses || 0);
+    const rate = decided > 0 ? Math.round(((g.wins || 0) / decided) * 100) : null;
+    const bits = [`${g.played} play${g.played === 1 ? '' : 's'}`];
+    if (rate != null && decided >= 2) bits.push(`${rate}% wins`);
+    if (g.streak > 1) bits.push(`streak ${g.streak}`);
+    else if (g.bestStreak > 1) bits.push(`best streak ${g.bestStreak}`);
+    if (g.bestScore != null) {
+      const unit = (PB_KEYS[id] && PB_KEYS[id].label) || '';
+      bits.push(`best ${g.bestScore}${unit}`);
+    }
+    return `<div class="game-result-stats" aria-label="Your stats">${bits
+      .map((b) => `<span class="game-result-stat">${safe(b)}</span>`)
+      .join('')}</div>`;
+  }
+
+  function dangalMissionNudgeHtml(gameId) {
+    const summary = getDangalHubSummary();
+    if (summary.hideMissions) return '';
+    const open = summary.missions.find((m) => m.progress < m.target);
+    if (!open) {
+      return `<p class="game-result-mission is-done">Weekly goals complete — nice and calm</p>`;
+    }
+    return `<p class="game-result-mission">${safe(open.label)} · ${open.progress}/${open.target}</p>`;
+  }
+
+  function dangalHubProgressHtml() {
+    const summary = getDangalHubSummary();
+    const streakLabel = summary.softDayStreak > 1 ? `${summary.softDayStreak}-day play streak` : summary.softDayStreak === 1 ? 'Played today' : 'Start a soft streak';
+    const missionsHidden = summary.hideMissions;
+    const collapsed = summary.panelCollapsed;
+    const missionRows = missionsHidden
+      ? ''
+      : summary.missions
+          .map((m) => {
+            const pct = Math.round((m.progress / m.target) * 100);
+            const done = m.progress >= m.target;
+            return `<button type="button" class="dangal-mission${done ? ' is-done' : ''}" data-mission="${safe(m.id)}"${m.gameId ? ` data-mission-game="${safe(m.gameId)}"` : ''}>
+              <div class="dangal-mission-top"><span class="dangal-mission-label">${safe(m.label)}</span><span class="dangal-mission-count">${m.progress}/${m.target}</span></div>
+              <div class="dangal-mission-track"><div class="dangal-mission-fill" style="width:${pct}%"></div></div>
+              <div class="dangal-mission-hint">${safe(m.hint)}</div>
+            </button>`;
+          })
+          .join('');
+
+    return `<div class="dangal-progress" id="dangalProgressPanel">
+      <div class="dangal-progress-summary">
+        <div class="dangal-progress-pill"><span class="dangal-progress-k">Streak</span><strong>${safe(streakLabel)}</strong></div>
+        <div class="dangal-progress-pill"><span class="dangal-progress-k">This week</span><strong>${summary.weekPlays} play${summary.weekPlays === 1 ? '' : 's'}</strong></div>
+        <div class="dangal-progress-pill"><span class="dangal-progress-k">Goals</span><strong>${summary.missionsDone}/${summary.missionsTotal}</strong></div>
+      </div>
+      <div class="dangal-progress-toolbar">
+        <button type="button" class="dangal-progress-toggle" id="dangalMissionsToggle" aria-expanded="${collapsed ? 'false' : 'true'}">${collapsed ? 'Show weekly goals' : 'Hide weekly goals'}</button>
+        ${missionsHidden ? '' : `<button type="button" class="dangal-progress-snooze" id="dangalMissionsSnooze" title="Hide goals for today">Not now</button>`}
+      </div>
+      <div class="dangal-missions${collapsed || missionsHidden ? ' is-collapsed' : ''}" id="dangalMissionsList">
+        ${missionsHidden ? `<div class="dangal-missions-snoozed">Goals tucked away for today — they’ll return tomorrow.</div>` : missionRows}
+      </div>
+    </div>`;
+  }
+
+  function wireDangalProgressPanel(root) {
+    const host = root || document;
+    const panel = host.querySelector('#dangalProgressPanel');
+    if (!panel || panel.dataset.wired) return;
+    panel.dataset.wired = '1';
+    panel.querySelector('#dangalMissionsToggle')?.addEventListener('click', () => {
+      const data = getDangalProgress();
+      data.panelCollapsed = !data.panelCollapsed;
+      saveDangalProgress(data);
+      if (typeof renderDangalGamesGrid === 'function') renderDangalGamesGrid();
+    });
+    panel.querySelector('#dangalMissionsSnooze')?.addEventListener('click', () => {
+      const data = getDangalProgress();
+      data.hideMissionsUntil = dangalCalendarDay();
+      data.panelCollapsed = true;
+      saveDangalProgress(data);
+      if (typeof showToast === 'function') showToast('Goals hidden for today');
+      if (typeof renderDangalGamesGrid === 'function') renderDangalGamesGrid();
+    });
+    panel.querySelectorAll('[data-mission-game]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const gid = btn.dataset.missionGame;
+        if (gid && typeof handleDangalGameTap === 'function') handleDangalGameTap(gid);
+      });
+    });
+  }
+
+  function tileProgressPillHtml(gameId) {
+    const g = getDangalGameStats(gameId);
+    if (!g.played) return '<div class="dangal-game-progress-pill dangal-game-progress-pill--new">Try it</div>';
+    const decided = (g.wins || 0) + (g.losses || 0);
+    if (g.streak > 1) return `<div class="dangal-game-progress-pill">Streak ${g.streak}</div>`;
+    if (decided >= 3) {
+      const rate = Math.round(((g.wins || 0) / decided) * 100);
+      return `<div class="dangal-game-progress-pill">${rate}% wins · ${g.played}</div>`;
+    }
+    if (g.bestScore != null) {
+      const unit = (PB_KEYS[normalizeDangalGameId(gameId)] && PB_KEYS[normalizeDangalGameId(gameId)].label) || '';
+      return `<div class="dangal-game-progress-pill">Best ${g.bestScore}${unit}</div>`;
+    }
+    return `<div class="dangal-game-progress-pill">${g.played} play${g.played === 1 ? '' : 's'}</div>`;
+  }
+
   /* ── Last played / continue helpers ── */
   function markGamePlayed(gameId) {
     if (!gameId) return;
     try {
       localStorage.setItem('chaupaal_last_game', JSON.stringify({ id: gameId, at: Date.now() }));
+    } catch (e) {}
+    // Mark GOTD mission when the featured game is opened
+    try {
+      const gotdId =
+        (typeof window !== 'undefined' && window.__dangalGotdId) ||
+        (typeof _dangalGotdCache !== 'undefined' && _dangalGotdCache?.gameId);
+      if (gotdId && normalizeDangalGameId(gotdId) === normalizeDangalGameId(gameId)) {
+        const data = getDangalProgress();
+        if (data.week && !data.week.gotd) {
+          data.week.gotd = true;
+          saveDangalProgress(data);
+          maybeCelebrateMissions(data);
+        }
+      }
     } catch (e) {}
     // Server play counter (Game of the Day popularity) — best-effort; apiFetch waits for auth.
     if (typeof apiFetch === 'function') {
@@ -1270,5 +1666,15 @@
   window.buildWeeklyFriendsBoard = buildWeeklyFriendsBoard;
   window.weeklyFriendsBoardHtml = weeklyFriendsBoardHtml;
   window.consumeBeatScoreChallenge = consumeBeatScoreChallenge;
+  window.recordDangalSession = recordDangalSession;
+  window.getDangalProgress = getDangalProgress;
+  window.getDangalGameStats = getDangalGameStats;
+  window.getDangalHubSummary = getDangalHubSummary;
+  window.getDangalMissions = getDangalMissions;
+  window.dangalHubProgressHtml = dangalHubProgressHtml;
+  window.wireDangalProgressPanel = wireDangalProgressPanel;
+  window.gamePersonalStatsHtml = gamePersonalStatsHtml;
+  window.tileProgressPillHtml = tileProgressPillHtml;
+  window.normalizeDangalGameId = normalizeDangalGameId;
   window.GAME_ACCENTS = GAME_ACCENTS;
 })();

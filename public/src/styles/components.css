@@ -2658,6 +2658,61 @@ select:focus-visible,
 .dangal-friends-name{flex:1;}
 .dangal-friends-rating{font:700 13px var(--font-display);color:var(--red);}
 
+/* Dangal progress · soft weekly goals */
+.dangal-progress-host{width:100%;margin:0 0 var(--space-3);}
+.dangal-progress{
+  background:var(--white);border:1px solid var(--line);border-radius:var(--r-md);
+  padding:12px 14px;box-shadow:var(--shadow-sm);
+}
+.dangal-progress-summary{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
+.dangal-progress-pill{
+  flex:1;min-width:96px;padding:8px 10px;border-radius:12px;
+  background:color-mix(in srgb,var(--red) 6%,var(--cream));
+  display:flex;flex-direction:column;gap:2px;
+}
+.dangal-progress-k{font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);}
+.dangal-progress-pill strong{font:700 12px/1.25 var(--font-display);color:var(--ink);}
+.dangal-progress-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.dangal-progress-toggle,.dangal-progress-snooze{
+  border:0;background:none;padding:0;font:700 12px var(--font-display);color:var(--red);cursor:pointer;
+}
+.dangal-progress-snooze{color:var(--muted);font-weight:600;margin-left:auto;}
+.dangal-missions{display:flex;flex-direction:column;gap:8px;}
+.dangal-missions.is-collapsed{display:none;}
+.dangal-missions-snoozed{font-size:12px;color:var(--muted);line-height:1.45;padding:4px 0 2px;}
+.dangal-mission{
+  width:100%;text-align:left;border:1px solid var(--line);border-radius:12px;
+  background:var(--cream);padding:10px 12px;cursor:default;
+}
+.dangal-mission[data-mission-game]{cursor:pointer;}
+.dangal-mission.is-done{opacity:.72;border-color:color-mix(in srgb,var(--green,#33C481) 35%,var(--line));}
+.dangal-mission-top{display:flex;justify-content:space-between;gap:8px;align-items:baseline;}
+.dangal-mission-label{font:700 13px var(--font-display);color:var(--ink);}
+.dangal-mission-count{font:700 11px var(--font-display);color:var(--muted);}
+.dangal-mission-track{height:5px;border-radius:999px;background:rgba(0,0,0,.06);overflow:hidden;margin:8px 0 6px;}
+.dangal-mission-fill{height:100%;border-radius:inherit;background:var(--red);transition:width .35s ease;}
+.dangal-mission.is-done .dangal-mission-fill{background:var(--green,#33C481);}
+.dangal-mission-hint{font-size:11px;color:var(--muted);}
+.dangal-game-progress-pill{
+  display:inline-flex;align-items:center;margin-top:6px;padding:3px 8px;border-radius:var(--r-full);
+  font:700 10px var(--font-display);background:rgba(0,0,0,.04);color:var(--muted);
+}
+.dangal-game-progress-pill--new{background:color-mix(in srgb,var(--gold) 18%,transparent);color:#A8780E;}
+.dor-main{display:flex;align-items:center;gap:10px;width:100%;}
+.dor-meta{display:block;width:100%;margin-top:8px;font-size:11px;color:rgba(255,255,255,.65);font-weight:600;}
+.game-result-stats{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:2px 0 4px;max-width:320px;}
+.game-result-stat{
+  font:600 11px/1.2 Inter,sans-serif;padding:4px 8px;border-radius:999px;
+  background:rgba(0,0,0,.05);color:var(--muted);
+}
+.game-overlay--dark .game-result-stat{background:rgba(255,255,255,.08);color:rgba(255,255,255,.65);}
+.game-result-mission{margin:0 0 4px;font:600 12px/1.35 Inter,sans-serif;color:var(--muted);max-width:300px;}
+.game-result-mission.is-done{color:var(--green,#33C481);}
+.chess-result-mount,.fir-result-mount,.uno-result-mount{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  overflow-y:auto;padding:8px 0 16px;
+}
+
 /* Unified tile treatment (Muqabala + others) */
 .dangal-game-tile .dangal-game-icon{
   width:44px;height:44px;border-radius:var(--r-control);display:grid;place-items:center;

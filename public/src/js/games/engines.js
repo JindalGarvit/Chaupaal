@@ -444,21 +444,51 @@ function capturedPieces(){
 function render(){
   syncFromChess();
   const cap=capturedPieces();
-  const statusText=state.status==='checkmate'?(state.turn==='w'?`${chat.name} wins by checkmate!`:'You won by checkmate! 🎉'):state.status==='stalemate'?'Stalemate — Draw!':state.status==='timeout'?(state.turn==='w'?`${chat.name} wins on time!`:'You won on time! 🎉'):state.check?'Check!':state.turn==='w'?'Your turn':'Opponent thinking...';
-  if((state.status==='checkmate'||state.status==='stalemate'||state.status==='timeout')&&!state.ratingRecorded){
+  const statusText=state.status==='checkmate'?(state.turn==='w'?`${chat.name} wins by checkmate!`:'You won by checkmate!'):state.status==='stalemate'?'Stalemate — Draw!':state.status==='timeout'?(state.turn==='w'?`${chat.name} wins on time!`:'You won on time!'):state.check?'Check!':state.turn==='w'?'Your turn':'Opponent thinking...';
+  const gameEnded=state.status==='checkmate'||state.status==='stalemate'||state.status==='timeout';
+  let chessWon=false,chessDrew=false;
+  if(gameEnded&&!state.ratingRecorded){
     state.ratingRecorded=true;
-    const won=state.status==='checkmate'?state.turn==='b':state.status==='timeout'?state.turn==='b':false;
-    const drew=state.status==='stalemate';
-    gs.setOutcome(drew?'draw':won?'won':'lost');
-    if(typeof recordGameResult==='function')recordGameResult('chess',won,drew);
+    chessWon=state.status==='checkmate'?state.turn==='b':state.status==='timeout'?state.turn==='b':false;
+    chessDrew=state.status==='stalemate';
+    gs.setOutcome(chessDrew?'draw':chessWon?'won':'lost');
+    if(typeof recordGameResult==='function')recordGameResult('chess',chessWon,chessDrew);
+    if(typeof recordDuelStreak==='function')recordDuelStreak(chat.id||chat.name,chessWon,chessDrew);
+  } else if(gameEnded){
+    chessWon=state.status==='checkmate'?state.turn==='b':state.status==='timeout'?state.turn==='b':false;
+    chessDrew=state.status==='stalemate';
   }
-  const turnMode=state.status!=='playing'?'over':state.check&&state.turn==='w'?'over':state.turn==='w'?'yours':'theirs';
+  const turnMode=gameEnded?'over':state.check&&state.turn==='w'?'over':state.turn==='w'?'yours':'theirs';
   const turnBanner=typeof gameTurnBannerHtml==='function'
     ? gameTurnBannerHtml({ mode: turnMode, label: statusText, pulse: turnMode==='yours' })
     : `<div style="padding:10px 16px;text-align:center;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;color:#fff;flex-shrink:0;">${statusText}</div>`;
   const kingSq=state.check?findKingSquare(state.turn):null;
+
+  let resultBlock='';
+  if(gameEnded&&typeof gameResultHtml==='function'){
+    const shareStats={
+      scoreLine:chessDrew?'Draw':(chessWon?'Win':'Loss'),
+      meta:DIFF_LABEL,
+      vs:`vs ${chat.name}`,
+      text:`Chaupaal Chess (${DIFF_LABEL}): ${chessDrew?'draw':chessWon?'I won':'tough loss'} vs ${chat.name}`,
+    };
+    resultBlock=gameResultHtml({
+      gameId:'chess',
+      glyph:chessDrew?'=':chessWon?'✓':'·',
+      title:chessDrew?'Draw':(chessWon?'You won':`${chat.name} won`),
+      subtitle:statusText,
+      shareCardHtml:typeof buildGameShareCard==='function'?buildGameShareCard('chess',shareStats):'',
+      actions:[
+        {label:'Play again',primary:true,id:'again'},
+        {label:'Share',primary:false,id:'share'},
+        {label:'Challenge friend',primary:false,id:'challenge'},
+      ],
+    });
+  }
+
   overlay.innerHTML=`
-    ${gameChromeHtml({title:'Chess',subtitle:DIFF_LABEL,backId:'chessBack',rightHtml:'<button id="chessFlip" class="game-chrome-action game-tap-target">Flip</button>'})}
+    ${gameChromeHtml({title:'Chess',subtitle:DIFF_LABEL,backId:'chessBack',rightHtml:gameEnded?'':'<button id="chessFlip" class="game-chrome-action game-tap-target">Flip</button>'})}
+    ${resultBlock?`<div class="chess-result-mount">${resultBlock}</div>`:`
     <div style="background:var(--game-panel,#1F2542);padding:8px 16px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
       <div style="color:#ccc;font-size:13px;"><span aria-hidden="true">●</span> ${chat.name} <span style="opacity:.6;font-size:11px;">(Black)</span></div>
       <div style="font-size:12px;color:var(--gold);">${cap.bCap}</div>
@@ -473,11 +503,37 @@ function render(){
       <div style="font-size:12px;color:var(--gold);">${cap.wCap}</div>
       ${HAS_TIMER?`<div id="clock_w" style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;color:${clocks.w<=10?'#E74C3C':'var(--gold)'};">${formatClock(clocks.w)}</div>`:''}
     </div>
-    ${turnBanner}
+    ${turnBanner}`}
   `;
   document.getElementById('chessBack').addEventListener('click',()=>gs.close());
-  document.getElementById('chessFlip').addEventListener('click',()=>{state.selected=null;renderFlipped=!renderFlipped;render();});
+  if(resultBlock&&typeof wireGameResultActions==='function'){
+    const rematch=()=>{
+      if(typeof openChessGame==='function'){gs.close();openChessGame(chat);}
+      else gs.close();
+    };
+    const shareStats={
+      scoreLine:chessDrew?'Draw':(chessWon?'Win':'Loss'),
+      meta:DIFF_LABEL,
+      vs:`vs ${chat.name}`,
+      text:`Chaupaal Chess (${DIFF_LABEL}): ${chessDrew?'draw':chessWon?'I won':'tough loss'} vs ${chat.name}`,
+    };
+    wireGameResultActions(overlay,{
+      again:rematch,
+      share:()=>{if(typeof shareGameResult==='function')shareGameResult('chess',shareStats);},
+      challenge:async()=>{
+        if(typeof openFriendPickerSheet==='function'){
+          const f=await openFriendPickerSheet({title:'Chess challenge',subtitle:'Pick a friend'});
+          if(f&&typeof shareGameResult==='function'){
+            shareGameResult('chess',{...shareStats,text:`Hey ${f.name} — chess on Chaupaal?`});
+          }
+        }
+      },
+    });
+    return;
+  }
+  document.getElementById('chessFlip')?.addEventListener('click',()=>{state.selected=null;renderFlipped=!renderFlipped;render();});
   const boardEl=document.getElementById('chessBoard');
+  if(!boardEl)return;
   const rows=renderFlipped?[7,6,5,4,3,2,1,0]:[0,1,2,3,4,5,6,7];
   const cols=renderFlipped?[7,6,5,4,3,2,1,0]:[0,1,2,3,4,5,6,7];
   rows.forEach(r=>cols.forEach(c=>{
@@ -885,6 +941,7 @@ function openSnakesVersion(chat, version){
     const duel=typeof getDuelStreak==='function'?getDuelStreak(chat.id||chat.name):null;
     const shareStats={scoreLine:won?'Win':'Loss',meta:version.name+(duel&&duel.streak?` · streak ${duel.streak}`:''),vs:`You vs ${chat.name}`};
     host.innerHTML=typeof gameResultHtml==='function'?gameResultHtml({
+      gameId:'snakes',
       glyph:won?'✓':'·',
       title:won?'You win':'Defeat',
       subtitle:version.name+(duel&&duel.streak>1?` · Duel streak ${duel.streak}`:''),
@@ -1256,6 +1313,7 @@ function openLudoGame(chat, playerCount){
     const duel=typeof getDuelStreak==='function'?getDuelStreak(chat.id||chat.name):null;
     const shareStats={scoreLine:won?'Win':'Loss',meta:`${playerCount} players`+(duel&&duel.streak?` · streak ${duel.streak}`:''),vs:`vs ${chat.name}`};
     host.innerHTML=typeof gameResultHtml==='function'?gameResultHtml({
+      gameId:'ludo',
       glyph:won?'✓':'·',
       title:won?'You win':'Defeat',
       subtitle:duel&&duel.streak>1?`Duel streak · ${duel.streak}`:`${playerCount}-player Ludo`,
@@ -1557,6 +1615,43 @@ function openUnoGame(chat, variant='normal'){
     const bgColor=flipped?'#2C3E50':'#1a1a2e';
     const topCard=discardPile[discardPile.length-1];
     overlay.style.background=bgColor;
+    if(gameOver&&typeof gameResultHtml==='function'){
+      const won=hands.me.length===0;
+      const shareStats={
+        scoreLine:won?'Win':'Loss',
+        vs:`vs ${chat.name}`,
+        meta:variant==='classic'?'Classic':variant==='doublesided'?'Double Sided':'Blaze',
+        text:`Chaupaal Oh, No!: ${won?'I won':'tough loss'} vs ${chat.name}`,
+      };
+      overlay.innerHTML=`
+        ${gameChromeHtml({title:'Oh, No!',subtitle:'Game over',backId:'unoBack'})}
+        <div class="uno-result-mount">${gameResultHtml({
+          gameId:'uno',
+          glyph:won?'✓':'·',
+          title:won?'You win':`${chat.name} wins`,
+          subtitle:message||undefined,
+          shareCardHtml:typeof buildGameShareCard==='function'?buildGameShareCard('uno',shareStats):'',
+          actions:[
+            {label:'Play again',primary:true,id:'again'},
+            {label:'Share',primary:false,id:'share'},
+            {label:'Challenge friend',primary:false,id:'challenge'},
+          ],
+        })}</div>`;
+      document.getElementById('unoBack')?.addEventListener('click',()=>gs.close());
+      if(typeof wireGameResultActions==='function'){
+        wireGameResultActions(overlay,{
+          again:()=>{gs.close();if(typeof openUnoVariantPicker==='function')openUnoVariantPicker(chat);else if(typeof openUnoGame==='function')openUnoGame(chat,variant);},
+          share:()=>{if(typeof shareGameResult==='function')shareGameResult('uno',shareStats);},
+          challenge:async()=>{
+            if(typeof openFriendPickerSheet==='function'){
+              const f=await openFriendPickerSheet({title:'Oh, No! challenge',subtitle:'Pick a friend'});
+              if(f&&typeof shareGameResult==='function')shareGameResult('uno',{...shareStats,text:`Hey ${f.name} — Oh, No! on Chaupaal?`});
+            }
+          },
+        });
+      }
+      return;
+    }
     overlay.innerHTML=`
       ${gameChromeHtml({title:'Oh, No!',subtitle:variant==='classic'?'Classic':variant==='doublesided'?(flipped?'Flip · Dark side':'Flip'):'Blaze Mode',backId:'unoBack',rightHtml:`<button id="unoUnoBtn" class="game-chrome-action ${unoCallWindow?'is-active':''}">Oh No!</button>`})}
 
@@ -1745,6 +1840,7 @@ function render(){
     : `<div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;color:#fff;">${statusText}</div>`;
   const resultBlock=showResult&&typeof gameResultHtml==='function'
     ? gameResultHtml({
+        gameId: 'ttt',
         title: winLine?(board[winLine[0]]==='X'?'You win!':`${chat.name} wins`):"It's a draw",
         subtitle: DIFF_LABEL+(typeof getDuelStreak==='function'&&getDuelStreak(chat.id||chat.name)?.streak>1?` · Streak ${getDuelStreak(chat.id||chat.name).streak}`:''),
         you: scores.me,
@@ -1925,6 +2021,7 @@ function render(){
     : '';
   const resultBlock=gameOver&&typeof gameResultHtml==='function'
     ? gameResultHtml({
+        gameId: 'wordguess',
         glyph: won?'✓':'·',
         title: won?'Brilliant!':'Nice try',
         subtitle: won?`Solved in ${guesses.length}`:`Word was ${target}`,

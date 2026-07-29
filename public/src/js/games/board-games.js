@@ -126,8 +126,31 @@ function openFiveInRowGame(chat){
   function render(){
     if(!alive())return;
     const timerClass=firTimer<=5?'fir-timer fir-timer--warn':'fir-timer';
+    const firWon=gameOver&&winLine&&board[winLine[0][0]][winLine[0][1]]==='X';
+    const firDrew=gameOver&&!winLine;
+    let resultBlock='';
+    if(gameOver&&typeof gameResultHtml==='function'){
+      const shareStats={
+        scoreLine:firDrew?'Draw':(firWon?'Win':'Loss'),
+        vs:`vs ${chat.name||'Opp'}`,
+        meta:'Five in a Row',
+        text:`Chaupaal Five in a Row: ${firDrew?'draw':firWon?'I won':'tough loss'} vs ${chat.name||'Opp'}`,
+      };
+      resultBlock=gameResultHtml({
+        gameId:'fiveinrow',
+        glyph:firDrew?'=':firWon?'✓':'·',
+        title:firDrew?"It's a draw":(firWon?'You won':`${chat.name||'Opponent'} won`),
+        shareCardHtml:typeof buildGameShareCard==='function'?buildGameShareCard('fiveinrow',shareStats):'',
+        actions:[
+          {label:'Play again',primary:true,id:'again'},
+          {label:'Share',primary:false,id:'share'},
+          {label:'Challenge friend',primary:false,id:'challenge'},
+        ],
+      });
+    }
     overlay.innerHTML=`
       ${gameChromeHtml({title:'Five in a Row',backId:'firBack',rightHtml:!gameOver?`<span id="firTimerEl" class="game-chrome-metric ${timerClass}">${firTimer}s</span>`:undefined})}
+      ${resultBlock?`<div class="fir-result-mount">${resultBlock}</div>`:`
       <div class="fir-hud">
         <div class="fir-hud-side fir-hud-side--you">● You</div>
         <div id="firStatusNote" class="fir-hud-note">${statusNote||(myTurn?'Place a stone':'Waiting…')}</div>
@@ -142,10 +165,30 @@ function openFiveInRowGame(chat){
             label: gameOver?(winLine?(board[winLine[0][0]][winLine[0][1]]==='X'?'You won!':(chat.name||'Opponent')+' won!'):"It's a draw!"):(myTurn?'Your turn':(chat.name||'Opponent')+' thinking…'),
             pulse: !gameOver && myTurn,
           })
-        : `<div class="fir-turn-fallback">${gameOver?(winLine?(board[winLine[0][0]][winLine[0][1]]==='X'?'You won!':chat.name+' won!'):"It's a draw!"):(myTurn?'Your turn':chat.name+' thinking…')}</div>`}
+        : `<div class="fir-turn-fallback">${gameOver?(winLine?(board[winLine[0][0]][winLine[0][1]]==='X'?'You won!':chat.name+' won!'):"It's a draw!"):(myTurn?'Your turn':chat.name+' thinking…')}</div>`}`}
     `;
     document.getElementById('firBack').addEventListener('click',()=>close());
+    if(resultBlock&&typeof wireGameResultActions==='function'){
+      const shareStats={
+        scoreLine:firDrew?'Draw':(firWon?'Win':'Loss'),
+        vs:`vs ${chat.name||'Opp'}`,
+        meta:'Five in a Row',
+        text:`Chaupaal Five in a Row: ${firDrew?'draw':firWon?'I won':'tough loss'} vs ${chat.name||'Opp'}`,
+      };
+      wireGameResultActions(overlay,{
+        again:()=>{close();if(typeof openFiveInRowGame==='function')openFiveInRowGame(chat);},
+        share:()=>{if(typeof shareGameResult==='function')shareGameResult('fiveinrow',shareStats);},
+        challenge:async()=>{
+          if(typeof openFriendPickerSheet==='function'){
+            const f=await openFriendPickerSheet({title:'Five in a Row',subtitle:'Challenge a friend'});
+            if(f&&typeof shareGameResult==='function')shareGameResult('fiveinrow',{...shareStats,text:`Hey ${f.name} — Five in a Row on Chaupaal?`});
+          }
+        },
+      });
+      return;
+    }
     const boardEl=document.getElementById('firBoard');
+    if(!boardEl)return;
     const winSet=new Set((winLine||[]).map(([r,c])=>r+'_'+c));
     const lastKey=lastMove?lastMove[0]+'_'+lastMove[1]:'';
     for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
@@ -423,6 +466,7 @@ function openBusinessGame(chat,playerCount){
       overlay.innerHTML=`
         ${gameChromeHtml({title:'Business',subtitle:'Results',backId:'busBack'})}
         ${typeof gameResultHtml==='function'?gameResultHtml({
+          gameId:'business',
           glyph:winner&&winner.name==='You'?'✓':'·',
           title:winner?(winner.name==='You'?'You win':`${winner.name} wins`):'Game over',
           subtitle:players.map(p=>`${p.name}: ₹${Math.max(0,p.money)} · ${p.properties.length} props`).join(' · '),
@@ -598,6 +642,7 @@ function openScribbleGame(chat,playerList,opts){
     overlay.innerHTML=`
       ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Scribble',subtitle:practiceMode?'Practice done':'Results',backId:'scribbleClose'}):''}
       ${typeof gameResultHtml==='function'?gameResultHtml({
+        gameId:'scribble',
         glyph:practiceMode?'✓':(won?'✓':'·'),
         title:practiceMode?'Nice practice':`${sorted[0]?.[0]||'Someone'} wins`,
         subtitle:practiceMode

@@ -340,7 +340,7 @@ function openRushRunner(){
     else if(final>bestScore){bestScore=final;localStorage.setItem('rushrunner_best',String(bestScore));}
     const vsBest=typeof formatVsBest==='function'?formatVsBest('rushrunner', final):`Best ${bestScore}m`;
     if(gs)gs.setOutcome('lost');
-    if(typeof recordGameResult==='function')recordGameResult('rushrunner',false);
+    if(typeof recordGameResult==='function')recordGameResult('rushrunner',false,false,{score:final,scoreOnly:true});
     buzz('lose');
     const div=document.getElementById('rrOverlay');
     if(!div)return;
@@ -350,6 +350,7 @@ function openRushRunner(){
     const shareCard=typeof buildGameShareCard==='function'?buildGameShareCard('rushrunner',shareStats):'';
     div.innerHTML=`
       ${typeof gameResultHtml==='function'?gameResultHtml({
+        gameId:'rushrunner',
         glyph:'·',
         title:`${final}m run`,
         subtitle:`${coins} coins`,
@@ -783,13 +784,14 @@ function openTipTap(){
     if(typeof setGamePB==='function') setGamePB('tiptap', score);
     const vsBest=typeof formatVsBest==='function'?formatVsBest('tiptap', score):'';
     if(gs)gs.setOutcome('won');
-    if(typeof recordGameResult==='function')recordGameResult('tiptap',true);
+    if(typeof recordGameResult==='function')recordGameResult('tiptap',true,false,{score});
     buzz('complete');
     const div=document.getElementById('cbOverlay');if(!div)return;div.style.display='flex';
     const shareStats={scoreLine:score.toLocaleString(),score,meta:`Level ${level} · ${vsBest||''}`,text:`Cleared Tip Tap level ${level} with ${score.toLocaleString()} on Chaupaal!`};
     const shareCard=typeof buildGameShareCard==='function'?buildGameShareCard('tiptap',shareStats):'';
     div.innerHTML=`
       ${typeof gameResultHtml==='function'?gameResultHtml({
+        gameId:'tiptap',
         glyph:'✓',
         title:`Level ${level} complete`,
         subtitle:`Score ${score.toLocaleString()}`,
@@ -831,13 +833,14 @@ function openTipTap(){
     if(typeof setGamePB==='function') setGamePB('tiptap', score);
     const vsBest=typeof formatVsBest==='function'?formatVsBest('tiptap', score):'';
     if(gs)gs.setOutcome('lost');
-    if(typeof recordGameResult==='function')recordGameResult('tiptap',false);
+    if(typeof recordGameResult==='function')recordGameResult('tiptap',false,false,{score});
     buzz('lose');
     const div=document.getElementById('cbOverlay');if(!div)return;div.style.display='flex';
     const shareStats={scoreLine:score.toLocaleString(),score,meta:`Level ${level} · ${vsBest||''}`,text:`Scored ${score.toLocaleString()} on Tip Tap (Chaupaal). Can you beat me?`};
     const shareCard=typeof buildGameShareCard==='function'?buildGameShareCard('tiptap',shareStats):'';
     div.innerHTML=`
       ${typeof gameResultHtml==='function'?gameResultHtml({
+        gameId:'tiptap',
         glyph:'·',
         title:'Out of moves',
         subtitle:`Score ${score.toLocaleString()} / ${targetScore.toLocaleString()} · Level ${level}`,

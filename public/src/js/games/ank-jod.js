@@ -1235,6 +1235,7 @@
         ${
           typeof gameResultHtml === 'function'
             ? gameResultHtml({
+                gameId: 'ankjod',
                 glyph: '✓',
                 title: 'Puzzle solved',
                 subtitle: `${diffMeta.label} · ${formatTime(elapsed)}`,

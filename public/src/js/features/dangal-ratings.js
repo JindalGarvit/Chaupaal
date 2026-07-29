@@ -152,12 +152,15 @@ function dangalTileHtml(g) {
   const rating = typeof getGameRating === 'function' ? getGameRating(g.ratingKey) : null;
   const soloTag = g.solo || g.gameType === 'solo' ? '<span class="dangal-solo-tag">SOLO</span>' : '';
   const accent = (typeof GAME_ACCENTS !== 'undefined' && GAME_ACCENTS[g.id]) || 'var(--red)';
+  const progressPill =
+    typeof tileProgressPillHtml === 'function' ? tileProgressPillHtml(g.id) : '';
   return `<div class="dangal-game-tile" data-game="${g.id}" style="--tile-accent:${accent}">
     <div class="dangal-game-icon">${g.icon}</div>
     <div>
       <div class="dangal-game-name">${g.name}${soloTag}</div>
       <div class="dangal-game-desc">${g.desc}</div>
       ${rating ? `<div class="dangal-game-rating-pill">★ ${rating}</div>` : ''}
+      ${progressPill}
     </div>
     <button type="button" class="dangal-game-like" data-like-game="${g.id}" aria-label="Like ${g.name}">♥ Like</button>
   </div>`;
@@ -288,7 +291,14 @@ function renderDangalGamesGrid() {
     const avgQuiz = Math.round(
       NEWS_CATEGORIES.reduce((s, c) => s + (quizRatings[c] || 1200), 0) / NEWS_CATEGORIES.length
     );
-    overall.innerHTML = `<span class="dor-label">Quiz Rating</span><span class="dor-val">${avgQuiz}</span>`;
+    const hub = typeof getDangalHubSummary === 'function' ? getDangalHubSummary() : null;
+    const streakBit =
+      hub && hub.softDayStreak > 0
+        ? `<span class="dor-meta">${hub.softDayStreak > 1 ? `${hub.softDayStreak}-day streak` : 'Played today'} · ${hub.weekPlays} this week</span>`
+        : hub
+          ? `<span class="dor-meta">${hub.weekPlays} play${hub.weekPlays === 1 ? '' : 's'} this week</span>`
+          : '';
+    overall.innerHTML = `<div class="dor-main"><span class="dor-label">Quiz Rating</span><span class="dor-val">${avgQuiz}</span></div>${streakBit}`;
   }
 
   const library = typeof getGames === 'function' ? getGames({ dangal: true }) : [];
@@ -298,12 +308,25 @@ function renderDangalGamesGrid() {
   grid.innerHTML = '';
   renderDangalContinueAndChips(grid);
 
+  if (typeof dangalHubProgressHtml === 'function') {
+    const progressHost = document.createElement('div');
+    progressHost.className = 'dangal-progress-host';
+    progressHost.innerHTML = dangalHubProgressHtml();
+    grid.appendChild(progressHost);
+    if (typeof wireDangalProgressPanel === 'function') wireDangalProgressPanel(progressHost);
+  }
+
   const gotdHost = document.createElement('div');
   gotdHost.id = 'dangalGotdHost';
   grid.appendChild(gotdHost);
   fetchGameOfTheDay().then((gotd) => {
     if (!gotdHost.isConnected) return;
     gotdHost.innerHTML = '';
+    if (gotd?.gameId) {
+      try {
+        window.__dangalGotdId = gotd.gameId;
+      } catch (e) {}
+    }
     renderDangalGotdSlot(gotdHost, gotd);
   });
 
@@ -387,7 +410,7 @@ function getGameRating(key){
   return ratings[key]||1200;
 }
 
-async function recordGameResult(key,won,drew){
+async function recordGameResult(key,won,drew,extra){
   if(!key)return;
   const ratings=JSON.parse(localStorage.getItem('chaupaal_game_ratings')||'{}');
   const cur=ratings[key]||1200;
@@ -404,6 +427,17 @@ async function recordGameResult(key,won,drew){
       await db.collection('users').doc(u.uid).update({[`gameRatings.${key}`]:ratings[key]});
     }
   }catch(e){}
+  if(typeof recordDangalSession==='function'){
+    const e=extra&&typeof extra==='object'?extra:{};
+    const scoreOnly=!!e.scoreOnly||key==='rushrunner';
+    recordDangalSession(key,{
+      won:scoreOnly?(won?true:undefined):!!won,
+      drew:!!drew,
+      score:e.score,
+      scoreOnly,
+      gotd:!!e.gotd,
+    });
+  }
   if(typeof markGamePlayed==='function') markGamePlayed(key==='wordguess'?'wordguess':key);
 }
 

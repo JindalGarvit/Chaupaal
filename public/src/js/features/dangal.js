@@ -731,6 +731,8 @@ function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalA
   if(typeof endSession === 'function') endSession(resultKey);
   if(typeof gameFeedback === 'function') gameFeedback(tie?'draw':(won?'win':'lose'));
   if(typeof setGamePB==='function') setGamePB('quiz', myScore);
+  if(typeof recordGameResult==='function') recordGameResult('quiz', won, tie, { score: myScore });
+  else if(typeof recordDangalSession==='function') recordDangalSession('quiz', { won, drew: tie, score: myScore });
   const vsBest = typeof formatVsBest==='function'?formatVsBest('quiz', myScore):'';
   const duel = typeof recordDuelStreak==='function'?recordDuelStreak(oppName, won, tie):null;
   const duelLine = duel && duel.streak > 1 ? `Duel streak · ${duel.streak}` : '';
@@ -754,6 +756,7 @@ function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalA
   overlay.innerHTML=`
     ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:'Game over',backId:'closeMuqabala3'}):`<div class="muqabala-header"><div class="muqabala-title">Muqabala over!</div><button class="icon-btn" id="closeMuqabala3">←</button></div>`}
     ${typeof gameResultHtml==='function'?gameResultHtml({
+      gameId:'quiz',
       glyph:tie?'=':won?'✓':'·',
       title:tie?"It's a tie":(won?'You won':`${oppName} won`),
       subtitle:streakLine||undefined,
