@@ -14,7 +14,7 @@
   const STORAGE_MODE = 'chaupaal_display_mode';
   const STORAGE_AMBIENT = 'chaupaal_ambient_sound';
   const STORAGE_GEO = 'chaupaal_theme_geo_consent';
-  const RECOMPUTE_MS = 60_000;
+  const RECOMPUTE_MS = 20 * 60_000; // Phase 7: coarser auto blend (~20 min)
 
   /** @typedef {'clearDay'|'overcast'|'rainy'|'goldenHour'|'dawn'|'night'} AnchorKey */
 
@@ -125,16 +125,25 @@
   const PRESETS = {
     light: {
       isDay: true,
-      lightTemp: 0.4,
-      brightness: 0.95,
+      lightTemp: 0.32,
+      brightness: 0.97,
       precipitation: 0,
       cloudCover: 0,
-      motionIntensity: 0.2,
+      motionIntensity: 0.15,
       soundKey: null,
       soundVolume: 0,
       anchor: 'clearDay',
-      vars: ANCHORS.clearDay.vars,
-      metaThemeColor: ANCHORS.clearDay.metaThemeColor,
+      vars: {
+        ...ANCHORS.clearDay.vars,
+        '--bg': '#F7F5F2',
+        '--cream': '#F7F5F2',
+        '--white': '#FFFEFB',
+        '--ink': '#141218',
+        '--muted': '#3a3640',
+        '--line': 'rgba(20,18,24,0.1)',
+        '--red': '#d62839',
+      },
+      metaThemeColor: '#F7F5F2',
     },
     dark: {
       // Neutral dark UI preference (cooler than Night)
@@ -335,7 +344,7 @@
               : 0.15;
 
     // Keep weather influence gentle so UI text stays primary
-    const weatherMix = 0.38;
+    const weatherMix = 0.18; // Phase 7: narrower weather blend
 
     if (precip > 0.05 || bucket === 'snow') {
       const rainy = mixAnchor(out.anchor, 'rainy', clamp01(precip) * weatherMix);

@@ -61,11 +61,13 @@ function emptyRegData() {
 function showAuthScreen(screenId, direction = 'forward') {
   const screens = [
     'authHeroScreen',
+    'authWelcomeBackScreen',
     'authLoginScreen',
     'authPasswordNudgeScreen',
     'authRegStep1',
     'authRegStep2',
     'authRegStep3',
+    'authParentalConsentScreen',
     'authSuccessScreen',
   ];
   screens.forEach((id) => {
@@ -83,10 +85,36 @@ function showAuthScreen(screenId, direction = 'forward') {
 
 function showAuth() {
   document.getElementById('authOverlay')?.classList.remove('hidden');
-  showAuthScreen('authHeroScreen');
-  regData = emptyRegData();
   wireAuthEvents();
   syncRegProfileTypeUi();
+  const last = typeof readLastUser === 'function' ? readLastUser() : null;
+  if (last?.username || last?.name) {
+    paintWelcomeBack(last);
+    showAuthScreen('authWelcomeBackScreen');
+  } else {
+    showAuthScreen('authHeroScreen');
+    regData = emptyRegData();
+  }
+}
+
+function paintWelcomeBack(last) {
+  const title = document.getElementById('welcomeBackTitle');
+  const sub = document.getElementById('welcomeBackSub');
+  const av = document.getElementById('welcomeBackAvatar');
+  const handle = last.username ? '@' + last.username : last.name || 'friend';
+  if (title) title.textContent = `Welcome back, ${handle}`;
+  if (sub) {
+    sub.textContent = auth?.currentUser
+      ? 'One tap to continue on this device'
+      : 'Sign in to continue as this person';
+  }
+  if (av) {
+    if (last.photoURL) {
+      av.innerHTML = `<img src="${String(last.photoURL).replace(/"/g, '')}" style="width:100%;height:100%;object-fit:cover;">`;
+    } else {
+      av.textContent = (last.name || last.username || '?')[0].toUpperCase();
+    }
+  }
 }
 
 function hideAuth() {
@@ -341,7 +369,43 @@ async function linkEmailPassword(user, email, password) {
   await writePhoneIndex(user, email);
 }
 
-/** Persistent verify banner — dismissible for this session, returns on next load if still unverified. */
+/** Verify banner — escalating dismiss cooldowns + resend cooldown feedback. */
+const EMAIL_VERIFY_META_KEY = 'chaupaal_email_verify_meta';
+
+function readVerifyMeta(uid) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(EMAIL_VERIFY_META_KEY) || '{}');
+    return raw && raw.uid === uid
+      ? raw
+      : { uid, dismissCount: 0, lastDismissAt: 0, lastResendAt: 0, resendCount: 0 };
+  } catch (e) {
+    return { uid, dismissCount: 0, lastDismissAt: 0, lastResendAt: 0, resendCount: 0 };
+  }
+}
+
+function writeVerifyMeta(meta) {
+  try {
+    localStorage.setItem(EMAIL_VERIFY_META_KEY, JSON.stringify(meta));
+  } catch (e) {}
+}
+
+function verifyDismissCooldownMs(dismissCount) {
+  const hours = Math.min(72, 3 * Math.pow(2, Math.max(0, dismissCount - 1)));
+  return hours * 60 * 60 * 1000;
+}
+
+function verifyResendCooldownMs(resendCount) {
+  return Math.min(15 * 60 * 1000, 45 * 1000 * Math.pow(2, Math.max(0, resendCount - 1)));
+}
+
+function formatCooldownLabel(ms) {
+  const sec = Math.max(1, Math.ceil(ms / 1000));
+  if (sec < 60) return sec + 's';
+  const m = Math.ceil(sec / 60);
+  if (m < 60) return m + 'm';
+  return Math.ceil(m / 60) + 'h';
+}
+
 function syncEmailVerifyBanner() {
   const u = auth?.currentUser;
   const existing = document.getElementById('emailVerifyBanner');
@@ -349,8 +413,21 @@ function syncEmailVerifyBanner() {
     existing?.remove();
     return;
   }
+
+  const meta = readVerifyMeta(u.uid);
+  if (meta.lastDismissAt) {
+    const wait = verifyDismissCooldownMs(meta.dismissCount || 1);
+    if (Date.now() - meta.lastDismissAt < wait) {
+      existing?.remove();
+      return;
+    }
+  }
   try {
-    if (sessionStorage.getItem(EMAIL_VERIFY_DISMISS_KEY) === u.uid) {
+    if (sessionStorage.getItem(EMAIL_VERIFY_DISMISS_KEY) === u.uid && !meta.lastDismissAt) {
+      meta.lastDismissAt = Date.now();
+      meta.dismissCount = Math.max(1, meta.dismissCount || 0);
+      writeVerifyMeta(meta);
+      sessionStorage.removeItem(EMAIL_VERIFY_DISMISS_KEY);
       existing?.remove();
       return;
     }
@@ -362,39 +439,92 @@ function syncEmailVerifyBanner() {
     el.id = 'emailVerifyBanner';
     el.className = 'email-verify-banner';
     el.setAttribute('role', 'status');
-    el.innerHTML = `
-      <div class="email-verify-banner-text">
-        <strong>Verify your email</strong>
-        <span>Confirm your address to keep your account secure.</span>
-      </div>
-      <div class="email-verify-banner-actions">
-        <button type="button" class="btn btn--primary" data-verify-resend>Resend verification email</button>
-        <button type="button" class="email-verify-banner-dismiss" data-verify-dismiss aria-label="Dismiss">✕</button>
-      </div>`;
+    el.innerHTML =
+      '<div class="email-verify-banner-text">' +
+      '<strong>Verify your email</strong>' +
+      '<span>Confirm your address to keep your account secure.</span>' +
+      '</div>' +
+      '<div class="email-verify-banner-actions">' +
+      '<button type="button" class="btn btn--primary" data-verify-resend>Resend verification email</button>' +
+      '<button type="button" class="email-verify-banner-dismiss" data-verify-dismiss aria-label="Dismiss">✕</button>' +
+      '</div>';
     const host = document.querySelector('.device') || document.body;
     const topbar = document.getElementById('topbar');
     if (topbar?.parentNode) topbar.parentNode.insertBefore(el, topbar.nextSibling);
     else host.insertBefore(el, host.firstChild);
 
-    el.querySelector('[data-verify-resend]')?.addEventListener('click', async () => {
+    const resendBtn = el.querySelector('[data-verify-resend]');
+    const paintResendState = () => {
+      if (!resendBtn) return;
+      const m = readVerifyMeta(u.uid);
+      const remain = (m.lastResendAt || 0) + verifyResendCooldownMs(m.resendCount || 1) - Date.now();
+      if (remain > 0) {
+        resendBtn.disabled = true;
+        resendBtn.textContent = 'Try again in ' + formatCooldownLabel(remain);
+      } else {
+        resendBtn.disabled = false;
+        resendBtn.textContent = 'Resend verification email';
+      }
+    };
+    paintResendState();
+    if (el._verifyResendTimer) clearInterval(el._verifyResendTimer);
+    el._verifyResendTimer = setInterval(paintResendState, 1000);
+
+    resendBtn?.addEventListener('click', async () => {
+      if (resendBtn.disabled) return;
+      resendBtn.disabled = true;
+      resendBtn.textContent = 'Sending…';
       try {
-        await auth.currentUser?.reload();
+        if (typeof ChaupaalEnv !== 'undefined' && ChaupaalEnv.whenAuthReady) {
+          await ChaupaalEnv.whenAuthReady(8000);
+        }
+        const user = auth?.currentUser;
+        if (!user) {
+          if (typeof showToast === 'function') showToast('Sign in again to resend');
+          paintResendState();
+          return;
+        }
+        await user.reload();
         if (hasVerifiedContact(auth.currentUser)) {
           syncEmailVerifyBanner();
           if (typeof showToast === 'function') showToast('Email verified — thank you!');
           return;
         }
         await auth.currentUser.sendEmailVerification();
-        if (typeof showToast === 'function') showToast('Verification email sent');
+        const m = readVerifyMeta(u.uid);
+        m.lastResendAt = Date.now();
+        m.resendCount = (m.resendCount || 0) + 1;
+        writeVerifyMeta(m);
+        if (typeof showToast === 'function') showToast('Verification email sent — check inbox & spam');
+        paintResendState();
       } catch (e) {
-        if (typeof showToast === 'function') showToast(e.message || 'Could not send email');
+        const code = e?.code || '';
+        const m = readVerifyMeta(u.uid);
+        if (code.includes('too-many-requests') || /too many|rate/i.test(e?.message || '')) {
+          m.lastResendAt = Date.now();
+          m.resendCount = Math.max(m.resendCount || 0, 2);
+          writeVerifyMeta(m);
+          if (typeof showToast === 'function') {
+            showToast(
+              'Too many requests — try again in ' + formatCooldownLabel(verifyResendCooldownMs(m.resendCount))
+            );
+          }
+        } else if (typeof showToast === 'function') {
+          showToast(e.message || 'Could not send email');
+        }
+        paintResendState();
       }
     });
     el.querySelector('[data-verify-dismiss]')?.addEventListener('click', () => {
-      try {
-        sessionStorage.setItem(EMAIL_VERIFY_DISMISS_KEY, u.uid);
-      } catch (e) {}
+      const m = readVerifyMeta(u.uid);
+      m.lastDismissAt = Date.now();
+      m.dismissCount = (m.dismissCount || 0) + 1;
+      writeVerifyMeta(m);
+      if (el._verifyResendTimer) clearInterval(el._verifyResendTimer);
       el.remove();
+      if (typeof showToast === 'function') {
+        showToast('We will remind you again in ' + formatCooldownLabel(verifyDismissCooldownMs(m.dismissCount)));
+      }
     });
   }
 }
@@ -414,6 +544,71 @@ function wireAuthEvents() {
   });
   document.getElementById('heroLoginBtn')?.addEventListener('click', () => showAuthScreen('authLoginScreen'));
   document.getElementById('authSkip')?.addEventListener('click', hideAuth);
+
+  document.getElementById('welcomeBackContinue')?.addEventListener('click', async () => {
+    if (auth?.currentUser) {
+      currentUser = auth.currentUser;
+      await finishAuthSession(t('auth_welcome_back'));
+      return;
+    }
+    const last = typeof readLastUser === 'function' ? readLastUser() : null;
+    showAuthScreen('authLoginScreen');
+    const idInp = document.getElementById('loginIdentifier');
+    if (idInp && last?.username) idInp.value = last.username;
+  });
+  document.getElementById('welcomeBackNotYou')?.addEventListener('click', () => {
+    if (typeof clearLastUser === 'function') clearLastUser();
+    showAuthScreen('authHeroScreen');
+    regData = emptyRegData();
+  });
+
+  document.getElementById('parentConsentSend')?.addEventListener('click', async () => {
+    const contact = document.getElementById('parentConsentContact')?.value?.trim();
+    const err = document.getElementById('parentConsentError');
+    if (err) err.textContent = '';
+    if (!contact) {
+      if (err) err.textContent = 'Enter a parent email or phone';
+      return;
+    }
+    try {
+      const env = await apiFetch('/api/media-config', {
+        method: 'POST',
+        needAuth: true,
+        body: { action: 'parental_consent_start', contact },
+      });
+      if (!env?.ok) throw new Error(env?.error?.message || 'Could not start consent');
+      if (env.data?.needParentSignup) {
+        if (err) err.textContent = 'No adult account found for that contact. Ask your parent to create one, then retry.';
+        if (typeof showToast === 'function') showToast('Parent needs a Chaupaal adult account first');
+        return;
+      }
+      document.getElementById('parentConsentOtpWrap')?.classList.remove('hidden');
+      if (typeof showToast === 'function') showToast('Code sent to parent');
+    } catch (e) {
+      if (err) err.textContent = e.message || 'Failed';
+    }
+  });
+  document.getElementById('parentConsentVerify')?.addEventListener('click', async () => {
+    const otp = document.getElementById('parentConsentOtp')?.value?.trim();
+    const err = document.getElementById('parentConsentError');
+    if (err) err.textContent = '';
+    try {
+      const env = await apiFetch('/api/media-config', {
+        method: 'POST',
+        needAuth: true,
+        body: { action: 'parental_consent_verify', otp },
+      });
+      if (!env?.ok) throw new Error(env?.error?.message || 'Invalid code');
+      if (userProfile) {
+        userProfile.parentalConsent = env.data?.parentalConsent || { verified: true, required: true };
+        userProfile.teenMode = true;
+      }
+      hideAuth();
+      if (typeof showToast === 'function') showToast('Parental consent saved — welcome');
+    } catch (e) {
+      if (err) err.textContent = e.message || 'Could not verify';
+    }
+  });
 
   document.getElementById('loginBackBtn')?.addEventListener('click', () => showAuthScreen('authHeroScreen', 'back'));
   document.getElementById('loginToSignup')?.addEventListener('click', () => {
@@ -484,6 +679,18 @@ function wireAuthEvents() {
     if (typeof loadStreak === 'function') loadStreak();
     if (typeof initActivityStatus === 'function') initActivityStatus();
     if (typeof startNotifInbox === 'function') startNotifInbox();
+    if (typeof rememberLastUser === 'function') {
+      rememberLastUser({
+        uid: currentUser?.uid,
+        username: userProfile?.username,
+        name: userProfile?.name || currentUser?.displayName,
+        photoURL: userProfile?.photoURL || currentUser?.photoURL,
+      });
+    }
+    if (typeof needsParentalConsent === 'function' && needsParentalConsent(userProfile)) {
+      document.getElementById('authOverlay')?.classList.remove('hidden');
+      showAuthScreen('authParentalConsentScreen');
+    }
     syncEmailVerifyBanner();
     showToast(welcomeMsg || t('auth_welcome'));
   }
@@ -820,10 +1027,13 @@ function wireAuthEvents() {
       return;
     }
     const age = ageFromDob(dob);
-    if (age < 16) {
-      errEl.textContent = 'You must be 16 or older to join';
+    if (age < 13) {
+      errEl.textContent = 'You must be 13 or older to join Chaupaal';
       return;
     }
+    regData.age = age;
+    regData.isMinor = age < 18;
+    regData.teenMode = age >= 13 && age < 18;
     if (regData.profileType === 'personal' && !regData.gender) {
       errEl.textContent = regData.genderSelfDescribe
         ? 'Please describe your gender'
@@ -1092,6 +1302,11 @@ function wireAuthEvents() {
           dob: regData.dob,
           age: regData.age,
           dateOfBirth: regData.dob,
+          teenMode: !!regData.teenMode,
+          isMinor: !!regData.isMinor,
+          parentalConsent: regData.teenMode
+            ? { verified: false, required: true, method: null, parentContact: null, verifiedAt: null }
+            : { verified: true, required: false },
           photoURL,
           photoThumb: photoThumb || null,
           profileType,

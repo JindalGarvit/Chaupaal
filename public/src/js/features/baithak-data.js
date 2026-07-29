@@ -343,3 +343,37 @@ function getBaithakChatsForSearch(q){
   return pinSelfChat(rest);
 }
 
+/** Phase 4 — Sabha / Sambhavanayein / Mitra filters (friend = reciprocal). */
+let baithakSection = 'sabha';
+async function setBaithakSection(section) {
+  baithakSection = ['sabha', 'sambhavanayein', 'mitra'].includes(section) ? section : 'sabha';
+  const all = typeof pinSelfChat === 'function' ? pinSelfChat(baithakChats) : baithakChats || [];
+  if (baithakSection === 'sabha') {
+    renderChatList(all);
+    return;
+  }
+  const dms = all.filter((c) => c.type !== 'group' && !c.isSelf && c.type !== 'self');
+  const uids = dms.map((c) => c.uid || c.peerUid || (c.participants || []).find((u) => u !== currentUser?.uid)).filter(Boolean);
+  let states = {};
+  if (typeof hydrateRelationships === 'function' && uids.length) {
+    states = await hydrateRelationships(uids).catch(() => ({}));
+  }
+  const filtered = dms.filter((c) => {
+    const uid = c.uid || c.peerUid || (c.participants || []).find((u) => u !== currentUser?.uid);
+    const st = states[uid] || {};
+    const friend = !!st.friend;
+    // Teen Mode: Sambhavanayein never surfaces adult strangers to minors
+    if (baithakSection === 'sambhavanayein') {
+      if (friend) return false;
+      if (typeof isTeenModeUser === 'function' && isTeenModeUser() && !isTeenModeUser(c)) return false;
+      return true;
+    }
+    if (baithakSection === 'mitra') return friend;
+    return true;
+  });
+  const self = all.filter((c) => c.isSelf || c.type === 'self');
+  renderChatList([...self, ...filtered]);
+}
+window.setBaithakSection = setBaithakSection;
+window.baithakSection = () => baithakSection;
+

@@ -390,6 +390,61 @@
     };
   }
 
+  function savedDocId(collection, postId) {
+    return `${collection}_${String(postId || '').slice(0, 160)}`.slice(0, 200);
+  }
+
+  async function isContentSaved(collection, content) {
+    if (!canPersist(collection, content)) return false;
+    try {
+      const snap = await db
+        .collection('users')
+        .doc(currentUser.uid)
+        .collection('saved')
+        .doc(savedDocId(collection, contentId(content)))
+        .get();
+      return snap.exists;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async function toggleContentSaved(collection, content) {
+    if (!canPersist(collection, content)) {
+      return { persisted: false, saved: !!content.savedByMe };
+    }
+    const id = contentId(content);
+    const ref = db.collection('users').doc(currentUser.uid).collection('saved').doc(savedDocId(collection, id));
+    const snap = await ref.get();
+    if (snap.exists) {
+      await ref.delete();
+      return { persisted: true, saved: false };
+    }
+    await ref.set({
+      collection,
+      postId: id,
+      savedAt: Date.now(),
+      preview: String(content.caption || content.question || '').slice(0, 160),
+      ownerUid: content.uid || content.user?.uid || null,
+    });
+    return { persisted: true, saved: true };
+  }
+
+  async function hydrateContentSaved(items, collection) {
+    const live = (items || []).filter((item) => item?.firestoreId || item?.id).slice(0, 40);
+    if (!live.length || !currentUser || typeof db === 'undefined' || !db) return items || [];
+    await Promise.all(
+      live.map(async (item) => {
+        try {
+          item.savedByMe = await isContentSaved(collection, item);
+        } catch (e) {
+          item.savedByMe = !!item.savedByMe;
+        }
+      })
+    );
+    return items;
+  }
+
   window.hydrateContentLikes = hydrateContentLikes;
   window.toggleContentLike = toggleContentLike;
   window.hydratePeepalReactions = hydratePeepalReactions;
@@ -401,4 +456,7 @@
   window.deleteContentComment = deleteContentComment;
   window.createCommentActionHandlers = createCommentActionHandlers;
   window.socialContentCanPersist = canPersist;
+  window.toggleContentSaved = toggleContentSaved;
+  window.isContentSaved = isContentSaved;
+  window.hydrateContentSaved = hydrateContentSaved;
 })();

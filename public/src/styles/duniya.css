@@ -127,7 +127,13 @@
 .premium-cta{margin:0 20px 40px;padding:16px;background:var(--gold);border:none;border-radius:16px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:16px;cursor:pointer;color:var(--ink);}
 
 /* Peepal nudges */
-.peepal-nudge-banner{background:linear-gradient(135deg,var(--navy),#2A3158);border-radius:16px;padding:14px 16px;color:#fff;cursor:pointer;margin-bottom:0;}
+.peepal-nudge-banner{background:linear-gradient(135deg,var(--navy),#2A3158);border-radius:16px;padding:14px 16px;color:#fff;cursor:pointer;margin-bottom:0;position:relative;z-index:1;grid-column:1 / -1;}
+.peepal-nudge-between{grid-column:1 / -1;position:relative;z-index:0;}
+.duniya-post-caption-row{display:flex;align-items:flex-start;gap:8px;padding:0 12px 4px;}
+.duniya-post-caption-row .duniya-post-caption{flex:1;min-width:0;}
+.duniya-caption-speak{border:0;background:transparent;color:var(--muted);padding:2px;cursor:pointer;flex-shrink:0;}
+.duniya-caption-speak.speaking,.peepal-speak-btn.speaking{color:var(--red,#e63946);}
+.duniya-bookmark-btn.saved{color:var(--red,#e63946);}
 .peepal-nudge-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--gold);margin-bottom:6px;}
 .peepal-nudge-text{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;margin-bottom:8px;}
 .peepal-nudge-sub{font-size:12px;color:rgba(255,255,255,0.7);margin-bottom:10px;}

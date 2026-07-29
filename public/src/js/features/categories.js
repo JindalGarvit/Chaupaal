@@ -826,11 +826,29 @@ async function initPeepal(){
   const askBtn=document.getElementById('peepalAskBtn');
   if(askBtn&&!askBtn.dataset.wired){askBtn.dataset.wired='1';askBtn.addEventListener('click',()=>openPeepalAskSheet());}
   const searchBtn=document.getElementById('peepalSearchBtn');
-  if(searchBtn&&!searchBtn.dataset.wired){searchBtn.dataset.wired='1';searchBtn.addEventListener('click',()=>{
+  const openPeepalFind = () => {
     const s=document.getElementById('peepalAiSearch');
-    s?.classList.toggle('hidden');
-    if(!s?.classList.contains('hidden'))document.getElementById('peepalAiSearchInput')?.focus();
-  });}
+    s?.classList.remove('hidden');
+    if(typeof filterPeepalSearchNudges==='function') filterPeepalSearchNudges(s);
+    document.getElementById('peepalAiSearchInput')?.focus();
+  };
+  if(searchBtn&&!searchBtn.dataset.wired){searchBtn.dataset.wired='1';searchBtn.addEventListener('click',openPeepalFind);}
+  const inlineSearch=document.getElementById('peepalInlineSearch');
+  if(inlineSearch&&!inlineSearch.dataset.wired){
+    inlineSearch.dataset.wired='1';
+    inlineSearch.addEventListener('focus',()=>{
+      if(typeof openUniversalSearch==='function') openUniversalSearch({types:['users','posts']});
+    });
+    inlineSearch.addEventListener('keydown',(e)=>{
+      if(e.key==='Enter'){
+        e.preventDefault();
+        openPeepalFind();
+        const inp=document.getElementById('peepalAiSearchInput');
+        if(inp) inp.value=inlineSearch.value||'';
+      }
+    });
+  }
+  if(typeof filterPeepalSearchNudges==='function') filterPeepalSearchNudges();
   document.getElementById('peepalAiSearchClose')?.addEventListener('click',()=>document.getElementById('peepalAiSearch')?.classList.add('hidden'));
   // Wire nudge chips
   document.querySelectorAll('.peepal-nudge-chip').forEach(chip=>{
@@ -1092,6 +1110,18 @@ async function submitPeepalInlineReply(q,parentId,text){
   renderPeepalFeed();
 }
 
+function peepalSpeakPayload(q){
+  const parts=[String(q.question||'').trim()];
+  if(Array.isArray(q.options)&&q.options.length){
+    parts.push('Options: '+q.options.map((o,i)=>{
+      const label=typeof o==='string'?o:(o?.text||o?.label||'');
+      return label?`${i+1}. ${label}`:'';
+    }).filter(Boolean).join('. '));
+  }
+  if(q.tag) parts.push('Tag: '+String(q.tag));
+  return parts.filter(Boolean).join('. ');
+}
+
 function renderPeepalFeed(){
   const feed=document.getElementById('peepalFeed');if(!feed)return;
   const sorted=[...peepalQuestions]
@@ -1134,7 +1164,7 @@ function renderPeepalFeed(){
           ${q.user.bio?`<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">"${escPeepalText(q.user.bio)}"</div>`:''}
         </div>
         ${canDelete?`<button class="peepal-delete-btn" title="Delete" aria-label="Delete" style="background:none;border:none;cursor:pointer;color:var(--muted);">${typeof iconHtml==='function'?iconHtml('trash',{size:16}):'🗑️'}</button>`:''}
-        <button class="peepal-speak-btn" data-text="${escPeepalText(q.question)}" title="Listen to this post" aria-label="Listen to this post">${typeof iconHtml==='function'?iconHtml('mic',{size:16}):'🔊'}</button>
+        <button class="peepal-speak-btn" data-text="${escPeepalText(peepalSpeakPayload(q))}" title="Listen to this post" aria-label="Listen to this post">${typeof iconHtml==='function'?iconHtml('volume',{size:16}):'🔊'}</button>
       </div>
       <div class="peepal-card-body">
         <div class="peepal-question-text">${escPeepalText(q.question)}</div>

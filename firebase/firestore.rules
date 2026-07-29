@@ -215,6 +215,17 @@ service cloud.firestore {
             .hasOnly(['dismissed', 'dismissedAt', 'engaged', 'engagedAt', 'fastDismiss']);
         allow delete: if false;
       }
+      // Private saved/bookmarked posts (owner only). Doc id: `{collection}_{postId}`.
+      match /saved/{savedId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && request.resource.data.keys().hasAll(['collection', 'postId', 'savedAt'])
+          && request.resource.data.collection in ['duniya', 'peepal']
+          && request.resource.data.postId is string
+          && request.resource.data.postId.size() > 0
+          && request.resource.data.postId.size() <= 180;
+        allow delete: if isOwner(userId);
+      }
       // Private recommendation inputs written by trusted server endpoints.
       match /recommendationSignals/{signalId} {
         allow read: if isOwner(userId);

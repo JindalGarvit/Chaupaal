@@ -352,10 +352,10 @@ function showNewDmSearchSheet(){
   sheet.innerHTML=`
     <div style="display:flex;align-items:center;gap:10px;padding:16px;background:var(--white);border-bottom:1px solid var(--line);">
       <button type="button" id="closeNewDm" style="background:none;border:none;font-size:22px;cursor:pointer;">←</button>
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">New message</div>
+      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">Start a new conversation</div>
     </div>
     <div style="padding:12px 16px;">
-      <input id="newDmSearch" type="search" autocomplete="off" placeholder="Search name or @username"
+      <input id="newDmSearch" type="search" autocomplete="off" placeholder="Search by name or @username"
         style="width:100%;padding:12px 14px;border:2px solid var(--line);border-radius:14px;font-size:15px;box-sizing:border-box;outline:none;">
     </div>
     <div id="newDmResults" style="flex:1;overflow:auto;padding:0 16px 24px;"></div>`;
@@ -428,8 +428,8 @@ function showNewChatOptions(){
   sheet.style.cssText='position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:22px;z-index:100;';
   sheet.innerHTML=`
     <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;margin-bottom:14px;">New chat</div>
-    <button id="newDm" style="width:100%;padding:14px;background:var(--cream);border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;text-align:left;margin-bottom:8px;">💬 New DM</button>
-    <button id="newGroup" style="width:100%;padding:14px;background:var(--cream);border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;text-align:left;margin-bottom:8px;">👥 Create group</button>
+    <button id="newDm" style="width:100%;padding:14px;background:var(--cream);border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;text-align:left;margin-bottom:8px;">💬 Start a new conversation</button>
+    <button id="newGroup" style="width:100%;padding:14px;background:var(--cream);border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;text-align:left;margin-bottom:8px;">👥 Gather a group</button>
     <button id="closeSheet2" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>
   `;
   document.querySelector('.device').appendChild(sheet);

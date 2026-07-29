@@ -179,11 +179,58 @@ html,body{
 .auth-error{color:var(--red);font-size:13px;font-weight:600;margin-bottom:8px;padding:8px 12px;background:rgba(230,57,70,0.08);border-radius:8px;display:none;}
 .auth-section-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;margin-top:4px;}
 
-/* ===== TOP BAR ===== */
-.topbar{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:14px 18px 8px;flex-shrink:0;position:relative;z-index:10;
+/* ===== Phase 3+ chrome / swipe / colorful tabs ===== */
+.topbar--retired,
+.topbar[hidden]{display:none!important;height:0!important;padding:0!important;margin:0!important;border:0!important;overflow:hidden!important;}
+.tab-inline-search{
+  flex:1;min-width:0;height:36px;border-radius:999px;border:1.5px solid var(--line);
+  background:var(--cream,#f7f5f2);padding:0 14px;font:inherit;font-size:13px;color:var(--ink);
 }
+.duniya-header,.peepal-header{display:flex;align-items:center;gap:8px;padding:10px 12px 6px;}
+.duniya-mode-hint{display:flex;gap:10px;font-size:10px;font-weight:600;color:var(--muted);letter-spacing:0.04em;text-transform:uppercase;opacity:0.7;}
+.duniya-mode-hint .is-center{color:var(--ink);opacity:1;}
+.cp-swipe-pager{position:relative;overflow:hidden;touch-action:pan-y;}
+.cp-swipe-pager-track{display:flex;width:100%;will-change:transform;transition:transform .28s cubic-bezier(.22,1,.36,1);}
+.cp-swipe-pager-page{flex:0 0 100%;min-width:100%;}
+.cp-swipe-pager-dots{display:flex;justify-content:center;gap:5px;padding:6px 0 2px;}
+.cp-swipe-pager-dot{width:5px;height:5px;border-radius:50%;background:var(--line);}
+.cp-swipe-pager-dot.is-active{background:var(--red,#e63946);}
+.k-badge{color:#2a9d8f;}
+.pro-badge.k-badge{margin-left:4px;}
+
+/* Phase 6 — colorful tab icons (intentional exception to monochrome) */
+.bottom-tabs{
+  background:linear-gradient(180deg, rgba(255,252,248,0.96), rgba(248,242,234,0.98));
+  border-top-color:rgba(0,0,0,0.06);
+}
+.tab-btn[data-tab="duniya"] .tab-icon{color:#2a6fdb;filter:drop-shadow(0 0 0 transparent);}
+.tab-btn[data-tab="peepal"] .tab-icon{color:#2f9e44;}
+.tab-btn[data-tab="baithak"] .tab-icon{color:#c47a3a;}
+.tab-btn[data-tab="dangal"] .tab-icon{color:#e85d04;}
+.tab-btn[data-tab="akhbaar"] .tab-icon{color:#7b2cbf;}
+.tab-btn.active[data-tab="duniya"] .tab-icon{animation:tabGlobeSpin 1.2s ease;}
+.tab-btn.active[data-tab="peepal"] .tab-icon{animation:tabLeafRustle .7s ease;}
+.tab-btn.active[data-tab="baithak"] .tab-icon{animation:tabSteam .9s ease;}
+.tab-btn.active[data-tab="dangal"] .tab-icon{animation:tabClash .45s ease;}
+.tab-btn.active[data-tab="akhbaar"] .tab-icon{animation:tabPaperFlip .55s ease;}
+@keyframes tabGlobeSpin{0%{transform:rotate(0)}40%{transform:rotate(18deg)}100%{transform:rotate(0)}}
+@keyframes tabLeafRustle{0%,100%{transform:rotate(0)}30%{transform:rotate(-8deg)}60%{transform:rotate(6deg)}}
+@keyframes tabSteam{0%,100%{transform:translateY(0);opacity:1}50%{transform:translateY(-2px);opacity:.85}}
+@keyframes tabClash{0%{transform:scale(1)}40%{transform:scale(1.15)}100%{transform:scale(1)}}
+@keyframes tabPaperFlip{0%{transform:rotateX(0)}50%{transform:rotateX(18deg)}100%{transform:rotateX(0)}}
+
+/* Phase 6 notif sheet half-height */
+.notif-panel-sheet.archive-overlay{
+  top:auto;bottom:0;height:52%;max-height:560px;border-radius:18px 18px 0 0;
+  box-shadow:0 -8px 32px rgba(0,0,0,0.12);
+}
+.bottom-tabs[data-morph-tab="peepal"] ~ .content-area .notif-panel-sheet,
+.notif-panel-sheet[data-tab-accent="peepal"]{border-top:3px solid #2f9e44;}
+.notif-panel-sheet[data-tab-accent="duniya"]{border-top:3px solid #2a6fdb;}
+.notif-panel-sheet[data-tab-accent="baithak"]{border-top:3px solid #c47a3a;}
+.notif-panel-sheet[data-tab-accent="dangal"]{border-top:3px solid #e85d04;}
+.notif-panel-sheet[data-tab-accent="akhbaar"]{border-top:3px solid #7b2cbf;}
+
 .brand-block{display:flex;flex-direction:column;}
 .brand{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:20px;color:var(--ink);display:flex;align-items:center;gap:7px;}
 .brand-sub{font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin-left:41px;}

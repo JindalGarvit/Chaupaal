@@ -6,7 +6,8 @@
   'use strict';
 
   const DOUBLE_MS = 300;
-  const LONG_MS = 480;
+  const LONG_MS = 340;
+  const LONG_MOVE_PX = 12;
 
   let lastTapTab = null;
   let lastTapAt = 0;
@@ -14,6 +15,8 @@
   let morphSnapshot = null;
   let longTimer = null;
   let longMoved = false;
+  let longStartX = 0;
+  let longStartY = 0;
   let suppressNextClick = false;
 
   function tt(key, fallback) {
@@ -104,77 +107,55 @@
 
   // ─── Shortcut sets ─────────────────────────────────────────────────────────
   function shortcutsFor(tab) {
+    // Phase 5: 5 slots — corners = actions, middle 3 = swipeable section names. No close icon.
     const sets = {
       peepal: [
         {
-          id: 'ask',
+          id: 'discuss',
           icon: 'pen',
-          label: tt('shortcut_peepal_ask', 'Start discussion'),
+          label: tt('shortcut_peepal_ask', 'Discuss something'),
           run: () => {
             if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
             if (typeof openPeepalAskSheet === 'function') openPeepalAskSheet();
           },
         },
         {
-          id: 'search',
+          id: 'khoj',
           icon: 'search',
-          label: tt('shortcut_peepal_search', 'Search people'),
-          run: () => {
-            if (typeof openUniversalSearch === 'function') openUniversalSearch({ types: ['users'] });
-            else document.getElementById('globalSearchBtn')?.click();
-          },
-        },
-        {
-          id: 'feed',
-          icon: 'tree',
-          label: tt('shortcut_peepal_feed', 'Peepal feed'),
-          run: () => switchTo('peepal'),
-        },
-        {
-          id: 'ai',
-          icon: 'sparkles',
-          label: tt('shortcut_peepal_ai', 'Ask Peepal'),
+          label: 'Khoj',
           run: () => {
             switchTo('peepal');
+            document.getElementById('peepalInlineSearch')?.focus();
             document.getElementById('peepalSearchBtn')?.click();
           },
         },
         {
-          id: 'close',
-          icon: 'x',
-          label: tt('shortcut_close', 'Close'),
-          run: () => exitMorph(),
+          id: 'vriksha',
+          icon: 'tree',
+          label: 'Vriksha',
+          run: () => switchTo('peepal'),
+        },
+        {
+          id: 'mashhoor',
+          icon: 'trending-up',
+          label: 'Mashhoor',
+          run: () => {
+            switchTo('peepal');
+            if (typeof showToast === 'function') showToast('Mashhoor — trending on Peepal');
+          },
+        },
+        {
+          id: 'find',
+          icon: 'users',
+          label: tt('shortcut_peepal_search', 'Find people'),
+          run: () => {
+            switchTo('peepal');
+            document.getElementById('peepalSearchBtn')?.click();
+            document.getElementById('peepalInlineSearch')?.focus();
+          },
         },
       ],
       akhbaar: [
-        {
-          id: 'quiz',
-          icon: 'newspaper',
-          label: tt('shortcut_akhbaar_quiz', "Today's quiz"),
-          run: () => {
-            switchTo('akhbaar');
-            if (typeof window.ensureAkhbaarBuilt === 'function') window.ensureAkhbaarBuilt();
-            scrollTabToTop('akhbaar');
-          },
-        },
-        {
-          id: 'streak',
-          icon: 'flame',
-          label: tt('shortcut_akhbaar_streak', 'Streak'),
-          run: () => {
-            switchTo('akhbaar');
-            document.getElementById('streakPill')?.click();
-          },
-        },
-        {
-          id: 'saved',
-          icon: 'bookmark',
-          label: tt('shortcut_akhbaar_saved', 'Saved'),
-          run: () => {
-            if (typeof openArchiveHub === 'function') openArchiveHub('duniya');
-            else if (typeof openArchive === 'function') openArchive();
-          },
-        },
         {
           id: 'today',
           icon: 'sparkles',
@@ -182,10 +163,40 @@
           run: () => openRelevantTodaySheet(),
         },
         {
-          id: 'close',
-          icon: 'x',
-          label: tt('shortcut_close', 'Close'),
-          run: () => exitMorph(),
+          id: 'surkhiya',
+          icon: 'flame',
+          label: 'Surkhiya',
+          run: () => {
+            switchTo('akhbaar');
+            if (typeof showToast === 'function') showToast('Surkhiya — today’s short digest');
+          },
+        },
+        {
+          id: 'all',
+          icon: 'home',
+          label: 'All',
+          run: () => {
+            switchTo('akhbaar');
+            document.querySelector('.akhbaar-cat-chip[data-cat="all"]')?.click();
+          },
+        },
+        {
+          id: 'gk',
+          icon: 'brain',
+          label: 'GK',
+          run: () => {
+            switchTo('akhbaar');
+            document.querySelector('.akhbaar-cat-chip[data-cat="GK"]')?.click();
+          },
+        },
+        {
+          id: 'quiz',
+          icon: 'newspaper',
+          label: tt('shortcut_akhbaar_quiz', "Today's quiz"),
+          run: () => {
+            switchTo('akhbaar');
+            if (typeof window.ensureAkhbaarBuilt === 'function') window.ensureAkhbaarBuilt();
+          },
         },
       ],
       duniya: [
@@ -197,71 +208,51 @@
             if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
             switchTo('duniya');
             if (typeof openDuniyaPostSheet === 'function') openDuniyaPostSheet('post');
-            else document.getElementById('duniyaPostBtn')?.click();
+          },
+        },
+        {
+          id: 'vishwa',
+          icon: 'globe',
+          label: 'Vishwa',
+          run: () => {
+            switchTo('duniya');
+            if (typeof setDuniyaMode === 'function') setDuniyaMode('vishwa');
+          },
+        },
+        {
+          id: 'lehar',
+          icon: 'sparkles',
+          label: 'Lehar',
+          run: () => {
+            switchTo('duniya');
+            if (typeof setDuniyaMode === 'function') setDuniyaMode('lehar');
+          },
+        },
+        {
+          id: 'prasidha',
+          icon: 'trending-up',
+          label: 'Prasidha',
+          run: () => {
+            switchTo('duniya');
+            if (typeof setDuniyaMode === 'function') setDuniyaMode('prasidha');
           },
         },
         {
           id: 'story',
           icon: 'camera',
-          label: tt('shortcut_duniya_story', 'Create story'),
+          label: tt('shortcut_duniya_story', 'Create Story'),
           run: () => {
             if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
             switchTo('duniya');
             if (typeof openDuniyaPostSheet === 'function') openDuniyaPostSheet('story');
           },
         },
-        {
-          id: 'lehar',
-          icon: 'globe',
-          label: tt('shortcut_duniya_lehar', 'Lehar'),
-          run: () => {
-            switchTo('duniya');
-            if (typeof setDuniyaMode === 'function') setDuniyaMode('lehar');
-            else document.querySelector('[data-duniya-mode="lehar"]')?.click();
-          },
-        },
-        {
-          id: 'foryou',
-          icon: 'heart',
-          label: tt('shortcut_duniya_general', 'For You'),
-          run: () => {
-            switchTo('duniya');
-            if (typeof setDuniyaMode === 'function') setDuniyaMode('general');
-            else document.querySelector('[data-duniya-mode="general"]')?.click();
-          },
-        },
-        {
-          id: 'close',
-          icon: 'x',
-          label: tt('shortcut_close', 'Close'),
-          run: () => exitMorph(),
-        },
       ],
       baithak: [
         {
-          id: 'dm',
-          icon: 'pen',
-          label: tt('shortcut_baithak_dm', 'New DM'),
-          run: () => {
-            if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
-            switchTo('baithak');
-            if (typeof showNewDmSearchSheet === 'function') showNewDmSearchSheet();
-          },
-        },
-        {
-          id: 'group',
-          icon: 'users',
-          label: tt('shortcut_baithak_group', 'New group'),
-          run: () => {
-            if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
-            switchTo('baithak');
-            if (typeof showCreateGroup === 'function') showCreateGroup();
-          },
-        },
-        {
           id: 'story',
           icon: 'camera',
-          label: tt('shortcut_baithak_story', 'Stories'),
+          label: tt('shortcut_baithak_story', 'Create story'),
           run: () => {
             if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
             switchTo('baithak');
@@ -270,64 +261,88 @@
           },
         },
         {
-          id: 'search',
-          icon: 'search',
+          id: 'sambhavanayein',
+          icon: 'sparkles',
+          label: 'Sambhavanayein',
+          run: () => {
+            switchTo('baithak');
+            if (typeof setBaithakSection === 'function') setBaithakSection('sambhavanayein');
+            else if (typeof showToast === 'function') showToast('Sambhavanayein — stranger chats');
+          },
+        },
+        {
+          id: 'sabha',
+          icon: 'message-circle',
+          label: 'Sabha',
+          run: () => {
+            switchTo('baithak');
+            if (typeof setBaithakSection === 'function') setBaithakSection('sabha');
+          },
+        },
+        {
+          id: 'mitra',
+          icon: 'handshake',
+          label: 'Mitra',
+          run: () => {
+            switchTo('baithak');
+            if (typeof setBaithakSection === 'function') setBaithakSection('mitra');
+            else if (typeof showToast === 'function') showToast('Mitra — friend chats');
+          },
+        },
+        {
+          id: 'find',
+          icon: 'users',
           label: tt('shortcut_baithak_search', 'Find people'),
           run: () => {
             if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
             if (typeof showNewDmSearchSheet === 'function') showNewDmSearchSheet();
           },
         },
-        {
-          id: 'close',
-          icon: 'x',
-          label: tt('shortcut_close', 'Close'),
-          run: () => exitMorph(),
-        },
       ],
       dangal: [
         {
-          id: 'gotd',
+          id: 'pulse',
+          icon: 'flame',
+          label: tt('shortcut_dangal_pulse', 'Progress'),
+          run: () => openDangalPulseSheet(),
+        },
+        {
+          id: 'khel',
           icon: 'trophy',
-          label: tt('shortcut_dangal_gotd', 'Game of the day'),
+          label: 'Khel',
           run: () => {
             switchTo('dangal');
-            const gotd = document.querySelector('.dangal-gotd, [data-gotd]');
-            if (gotd) gotd.click();
-            else if (typeof handleDangalGameTap === 'function') {
-              /* fall through to pulse */
-              openDangalPulseSheet();
+            if (typeof setDangalSection === 'function') setDangalSection('khel');
+            else document.querySelector('.dangal-gotd, [data-gotd]')?.click();
+          },
+        },
+        {
+          id: 'manch',
+          icon: 'swords',
+          label: 'Manch',
+          run: () => {
+            switchTo('dangal');
+            if (typeof setDangalSection === 'function') setDangalSection('manch');
+          },
+        },
+        {
+          id: 'maidan',
+          icon: 'gamepad',
+          label: 'Maidan',
+          run: () => {
+            switchTo('dangal');
+            if (typeof setDangalSection === 'function') setDangalSection('maidan');
+            else {
+              const last = typeof getLastPlayedGame === 'function' ? getLastPlayedGame() : null;
+              if (last && typeof handleDangalGameTap === 'function') handleDangalGameTap(last.id || last);
             }
           },
         },
         {
-          id: 'resume',
-          icon: 'gamepad',
-          label: tt('shortcut_dangal_resume', 'Resume'),
-          run: () => {
-            switchTo('dangal');
-            const last = typeof getLastPlayedGame === 'function' ? getLastPlayedGame() : null;
-            if (last && typeof handleDangalGameTap === 'function') handleDangalGameTap(last.id || last);
-            else document.getElementById('dangalContinueChip')?.click();
-          },
-        },
-        {
           id: 'challenge',
-          icon: 'swords',
-          label: tt('shortcut_dangal_challenge', 'Challenge friend'),
-          run: () => openDangalOpponentPicker('challenge'),
-        },
-        {
-          id: 'random',
           icon: 'target',
-          label: tt('shortcut_dangal_random', 'Random opponent'),
-          run: () => openDangalOpponentPicker('random'),
-        },
-        {
-          id: 'pulse',
-          icon: 'flame',
-          label: tt('shortcut_dangal_pulse', 'Performance'),
-          run: () => openDangalPulseSheet(),
+          label: tt('shortcut_dangal_challenge', 'Challenge'),
+          run: () => openDangalOpponentPicker('challenge'),
         },
       ],
     };
@@ -601,6 +616,8 @@
     if (!btn) return;
     if (document.querySelector('.bottom-tabs.is-shortcut-mode')) return;
     longMoved = false;
+    longStartX = e.clientX || 0;
+    longStartY = e.clientY || 0;
     clearTimeout(longTimer);
     longTimer = setTimeout(() => {
       longTimer = null;
@@ -651,13 +668,24 @@
       }
       lastTapTab = tab;
       lastTapAt = now;
-      scrollTabToTop(tab);
+      const nearTop = (() => {
+        const panel = document.getElementById('panel-' + tab);
+        const scroller = panel?.querySelector('[data-scroll-owner], .peepal-screen, .duniya-screen, .reel-stage, .baithak-list, .content-area') || panel;
+        return !scroller || (scroller.scrollTop || 0) < 24;
+      })();
+      if (nearTop) {
+        // Already at top → soft refresh hooks
+        if (tab === 'duniya' && typeof loadDuniyaPage === 'function') loadDuniyaPage({ reset: true }).then(() => typeof renderDuniyaFeed === 'function' && renderDuniyaFeed());
+        if (tab === 'peepal' && typeof renderPeepalFeed === 'function') renderPeepalFeed();
+        if (tab === 'akhbaar' && typeof window.ensureAkhbaarBuilt === 'function') window.ensureAkhbaarBuilt();
+      } else {
+        scrollTabToTop(tab);
+      }
       if (typeof Micro !== 'undefined') Micro.tabFeedback();
-      // Let existing handlers no-op re-activate; scroll already done
       return;
     }
 
-    // Switching tabs — record for possible quick retap → notifs
+    // Switching tabs — double-tap soon after switch still opens notifs
     lastTapTab = tab;
     lastTapAt = now;
     if (typeof Micro !== 'undefined') Micro.tabFeedback();
@@ -672,9 +700,14 @@
     bar.addEventListener('pointerdown', onTabPointerDown, { passive: true });
     bar.addEventListener(
       'pointermove',
-      () => {
-        longMoved = true;
-        clearLong();
+      (e) => {
+        if (!longTimer) return;
+        const dx = (e.clientX || 0) - longStartX;
+        const dy = (e.clientY || 0) - longStartY;
+        if (dx * dx + dy * dy > LONG_MOVE_PX * LONG_MOVE_PX) {
+          longMoved = true;
+          clearLong();
+        }
       },
       { passive: true }
     );

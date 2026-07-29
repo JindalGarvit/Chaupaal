@@ -25,12 +25,12 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/src/styles/tokens.css?v=5bb3b1d3">
   <link rel="stylesheet" href="/src/styles/icons.css?v=152a1d7b">
-  <link rel="stylesheet" href="/src/styles/layout.css?v=eb712c97">
+  <link rel="stylesheet" href="/src/styles/layout.css?v=44afa68e">
   <link rel="stylesheet" href="/src/styles/akhbaar.css?v=b924fec3">
   <link rel="stylesheet" href="/src/styles/dangal.css?v=1806b1a8">
   <link rel="stylesheet" href="/src/styles/baithak.css?v=9592314c">
   <link rel="stylesheet" href="/src/styles/peepal.css?v=c3530dde">
-  <link rel="stylesheet" href="/src/styles/duniya.css?v=2df526a6">
+  <link rel="stylesheet" href="/src/styles/duniya.css?v=3a83dbb8">
   <link rel="stylesheet" href="/src/styles/components.css?v=a8f1e766">
   <link rel="stylesheet" href="/src/styles/mehfil.css?v=bf556c72">
 </head>
@@ -84,6 +84,43 @@
           <button class="auth-hero-login" id="heroLoginBtn">Already have an account? <strong>Log in</strong></button>
           <button class="auth-guest-btn" id="authSkip">Explore as guest →</button>
           <div class="auth-legal">By signing up you agree to our <button type="button" class="auth-legal-link" data-legal="terms">Terms</button> and <button type="button" class="auth-legal-link" data-legal="privacy">Privacy Policy</button>. Real identity required.</div>
+        </div>
+      </div>
+
+      <!-- ===== WELCOME BACK (recognized device) ===== -->
+      <div class="auth-form-screen hidden" id="authWelcomeBackScreen">
+        <div class="auth-form-body" style="text-align:center;padding-top:48px;">
+          <div id="welcomeBackAvatar" style="width:72px;height:72px;border-radius:50%;margin:0 auto 16px;background:var(--cream);display:flex;align-items:center;justify-content:center;font-size:28px;overflow:hidden;"></div>
+          <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:22px;margin-bottom:8px;" id="welcomeBackTitle">Welcome back</div>
+          <div style="font-size:14px;color:var(--muted);margin-bottom:28px;" id="welcomeBackSub">Continue where you left off</div>
+          <button class="btn btn--primary btn--block btn--lg auth-btn" id="welcomeBackContinue" style="width:100%;max-width:280px;margin:0 auto 12px;">Continue</button>
+          <button type="button" class="auth-guest-btn" id="welcomeBackNotYou">Not you? Sign in as someone else</button>
+        </div>
+      </div>
+
+      <!-- ===== PARENTAL CONSENT (13–17) ===== -->
+      <div class="auth-form-screen hidden" id="authParentalConsentScreen">
+        <div class="auth-form-header">
+          <div style="width:36px;"></div>
+          <div class="auth-form-title">Parent / guardian consent</div>
+          <div style="width:36px;"></div>
+        </div>
+        <div class="auth-form-body">
+          <p style="font-size:14px;color:var(--muted);line-height:1.5;margin-bottom:16px;">Because you're under 18, a parent or guardian with an adult Chaupaal account needs to approve.</p>
+          <div class="auth-input-group">
+            <label class="auth-input-label">Parent's email or phone</label>
+            <input class="auth-input" type="text" id="parentConsentContact" placeholder="email@ or +91…" autocomplete="off">
+          </div>
+          <div id="parentConsentError" class="auth-error" style="margin-bottom:12px;"></div>
+          <button class="btn btn--primary btn--block" id="parentConsentSend">Send verification code</button>
+          <div id="parentConsentOtpWrap" class="hidden" style="margin-top:16px;">
+            <div class="auth-input-group">
+              <label class="auth-input-label">OTP from parent</label>
+              <input class="auth-input" type="text" id="parentConsentOtp" placeholder="6-digit code" inputmode="numeric" maxlength="6">
+            </div>
+            <button class="btn btn--primary btn--block" id="parentConsentVerify">Confirm consent</button>
+          </div>
+          <p style="font-size:12px;color:var(--muted);margin-top:16px;line-height:1.4;">If your parent doesn't have an account yet, we'll help them create a lightweight adult account — no dead ends.</p>
         </div>
       </div>
 
@@ -341,27 +378,12 @@
     </div><!-- end auth-screen -->
   </div>
 
-  <!-- TOP BAR -->
-  <div class="topbar" id="topbar">
-    <div class="brand-block">
-      <div class="brand" style="display:flex;align-items:center;gap:8px;">
-        <div style="background:var(--grad-brand);border-radius:10px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(230,57,70,0.35);flex-shrink:0;">
-          <svg width="20" height="20" viewBox="0 0 34 34" fill="none"><rect x="4" y="12" width="26" height="3" rx="1.5" fill="#FFC93C"/><path d="M8 15V7M12 15V7M17 15V7.5M22 15V7M27 15V7" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><path d="M8.5 15L6.5 27M26.5 15L28.5 27" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>
-        </div>
-        <span style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:18px;letter-spacing:-0.02em;background:var(--grad-brand);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">Chaupaal</span>
-      </div>
-    </div>
-    <div class="topbar-right">
-      <button class="icon-btn" id="globalSearchBtn" aria-label="Search Chaupaal" title="Search" data-icon="search"></button>
-      <div class="streak-pill" id="streakPill" style="cursor:pointer;" title="Tap to manage streak">
-        <span style="color:var(--red)" data-icon="flame" data-icon-size="14"></span><span id="streakNum">0</span>
-        <span style="font-size:10px;color:var(--muted);margin-left:2px;"><span data-icon="snowflake" data-icon-size="12" style="display:inline-flex;vertical-align:middle;"></span><span id="streakFreezeCount">0</span></span>
-      </div>
-      <button class="icon-btn" id="settingsBtn" aria-label="Settings" title="Settings" style="background:var(--cream);border-radius:50%;width:44px;height:44px;font-size:16px;" data-icon="settings"></button>
-      <button class="profile-btn" id="profileBtn" aria-label="Profile" title="Profile" style="box-shadow:0 2px 8px rgba(43,39,48,0.15);">
-        <span id="profileBtnInner" data-icon="armchair" data-icon-size="18"></span>
-      </button>
-    </div>
+  <!-- TOP BAR retired (Phase 3) — keep ids for JS hooks; visually hidden -->
+  <div class="topbar topbar--retired" id="topbar" hidden aria-hidden="true">
+    <button class="icon-btn" id="globalSearchBtn" aria-label="Search" data-icon="search"></button>
+    <div class="streak-pill" id="streakPill" hidden><span id="streakNum">0</span><span id="streakFreezeCount">0</span></div>
+    <button class="icon-btn" id="settingsBtn" aria-label="Settings" hidden data-icon="settings"></button>
+    <button class="profile-btn" id="profileBtn" aria-label="Profile" hidden><span id="profileBtnInner" data-icon="armchair" data-icon-size="18"></span></button>
   </div>
 
   <!-- CONTENT AREA -->
@@ -389,18 +411,15 @@
     <div class="tab-panel" id="panel-duniya">
       <div class="duniya-screen" id="duniyaScreen">
         <div class="duniya-header">
-          <div class="duniya-mode-switch" role="tablist" aria-label="Duniya mode">
-            <button type="button" class="duniya-mode-btn active" data-duniya-mode="general" role="tab" aria-selected="true" data-i18n="duniya_general">General</button>
-            <button type="button" class="duniya-mode-btn" data-duniya-mode="lehar" role="tab" aria-selected="false" data-i18n="duniya_lehar">Lehar</button>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <button class="icon-btn" id="duniyaSearchBtn" aria-label="Search people" title="Search" data-icon="search"></button>
-            <button class="icon-btn" id="duniyaPostBtn" aria-label="Create post" title="New post" data-icon="plus"></button>
-          </div>
+          <input type="search" class="tab-inline-search" id="duniyaInlineSearch" placeholder="Search Chaupaal…" autocomplete="off" enterkeyhint="search" aria-label="Search" />
+          <div class="duniya-mode-hint" aria-hidden="true"><span>Lehar</span><span class="is-center">Vishwa</span><span>Prasidha</span></div>
         </div>
-        <div class="duniya-stories-row" id="duniyaStoriesRow"></div>
-        <div class="duniya-feed" id="duniyaFeed"></div>
-        <div class="lehar-feed hidden" id="leharFeed" aria-label="Lehar video feed"></div>
+        <div class="duniya-pager" id="duniyaPager">
+          <div class="duniya-stories-row" id="duniyaStoriesRow"></div>
+          <div class="duniya-feed" id="duniyaFeed"></div>
+          <div class="lehar-feed hidden" id="leharFeed" aria-label="Lehar video feed"></div>
+          <div class="prasidha-feed hidden" id="prasidhaFeed" aria-label="Prasidha trending feed"></div>
+        </div>
       </div>
       <div class="duniya-post-sheet hidden" id="duniyaPostSheet"></div>
       <div class="duniya-post-detail hidden" id="duniyaPostDetail"></div>
@@ -450,11 +469,9 @@
   <div class="tab-panel active" id="panel-peepal">
     <div class="peepal-screen" id="peepalScreen">
       <div class="peepal-header">
-        <div class="peepal-title" style="display:flex;align-items:center;gap:8px;"><span data-icon="tree" data-icon-size="22"></span> Peepal</div>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <button class="icon-btn" id="peepalSearchBtn" title="Find people with AI" aria-label="Find people" data-icon="search"></button>
-          <button class="peepal-ask-btn" id="peepalAskBtn" data-i18n="peepal_ask">+ Ask</button>
-        </div>
+        <input type="search" class="tab-inline-search" id="peepalInlineSearch" placeholder="Search people & discussions…" autocomplete="off" enterkeyhint="search" aria-label="Search Peepal" />
+        <button class="peepal-ask-btn" id="peepalAskBtn" data-i18n="peepal_discuss">Discuss</button>
+        <button class="icon-btn" id="peepalSearchBtn" title="Find people" aria-label="Find people" data-icon="users" hidden></button>
       </div>
       <!-- AI People Search -->
       <div class="peepal-ai-search hidden" id="peepalAiSearch">
@@ -822,7 +839,7 @@
   <script src="/src/js/config/app-check.js?v=c74ed63b"></script>
   <script src="/src/js/core/environment.js?v=4dc6dd81"></script>
   <script src="/src/js/core/storage.js?v=0fb0e244"></script>
-  <script src="/src/js/core/icons.js?v=82ba103f"></script>
+  <script src="/src/js/core/icons.js?v=06a1025f"></script>
   <script src="/src/js/config/policy-limits.js?v=8f3cfeb8"></script>
   <script src="/src/js/core/users-public.js?v=56c0234e"></script>
   <script src="/src/js/core/policy-usage.js?v=fcaff522"></script>
@@ -839,7 +856,7 @@
   <script src="/src/js/core/soft-delete.js?v=6947a077"></script>
   <script src="/src/js/core/optimistic.js?v=03f440fa"></script>
   <script src="/src/js/core/comments.js?v=e63b3a20"></script>
-  <script src="/src/js/core/social-persistence.js?v=132cf485"></script>
+  <script src="/src/js/core/social-persistence.js?v=ddd04cca"></script>
   <script src="/src/js/core/relationships.js?v=49dc9a75"></script>
   <script src="/src/js/core/chat-presence.js?v=7176596d"></script>
   <script src="/src/js/core/image-pipeline.js?v=ac09e26b"></script>
@@ -853,19 +870,21 @@
   <script src="/src/js/core/chaupaal-founder.js?v=90a6aa2a"></script>
   <script src="/src/js/core/profile-type.js?v=cad15660"></script>
   <script src="/src/js/core/profile-type-enrich.js?v=7378ff81"></script>
-  <script src="/src/js/core/professional-badge.js?v=f416384d"></script>
+  <script src="/src/js/core/swipe-pager.js?v=697c830a"></script>
+  <script src="/src/js/core/teen-mode.js?v=9a4941da"></script>
+  <script src="/src/js/core/professional-badge.js?v=775a0916"></script>
   <script src="/src/js/core/linkify.js?v=531b1edf"></script>
   <script src="/src/js/core/profile-sections.js?v=183016b8"></script>
   <script src="/src/js/core/profile-section-mount.js?v=c8852662"></script>
-  <script src="/src/js/core/notification-panel.js?v=29dc97c1"></script>
+  <script src="/src/js/core/notification-panel.js?v=9ada9218"></script>
   <script src="/src/js/core/micro.js?v=9b654649"></script>
-  <script src="/src/js/core/tab-gestures.js?v=eb864101"></script>
+  <script src="/src/js/core/tab-gestures.js?v=bcd0fcd0"></script>
   <script src="/src/js/core/sessions.js?v=fafd40d3"></script>
   <script src="/src/js/core/safety.js?v=c8721224"></script>
   <script src="/src/js/core/notif-prefs.js?v=19bbe844"></script>
   <script src="/src/js/core/feature-flags.js?v=a3a86107"></script>
-  <script src="/src/js/core/theme-engine.js?v=6daaab81"></script>
-  <script src="/src/js/core/ambient-sound.js?v=fb2950b8"></script>
+  <script src="/src/js/core/theme-engine.js?v=22c08193"></script>
+  <script src="/src/js/core/ambient-sound.js?v=d6b818ff"></script>
   <script src="/src/js/core/overlay-scope.js?v=b83a34fe"></script>
   <script src="/src/js/core/a11y.js?v=c13f075d"></script>
   <script src="/src/js/core/nav-stack.js?v=30f7221e"></script>
@@ -898,13 +917,13 @@
   <script src="/src/js/core/stories.js?v=fa8c017d"></script>
   <script src="/src/js/core/archive-hub.js?v=ddcb3816"></script>
   <script src="/src/js/core/journal-anim.js?v=f2658ae2"></script>
-  <script src="/src/js/features/baithak.js?v=a242969e"></script>
+  <script src="/src/js/features/baithak.js?v=1f3f3392"></script>
   <script src="/src/js/features/profile-preview.js?v=a35bfc54"></script>
   <script src="/src/js/features/profile.js?v=4e9e29c4"></script>
   <script src="/src/js/core/i18n.js?v=174d6b8b"></script>
-  <script src="/src/js/features/categories.js?v=060f6a5d"></script>
+  <script src="/src/js/features/categories.js?v=dee8f937"></script>
   <script src="/src/js/features/peepal.js?v=7ec67d45"></script>
-  <script src="/src/js/features/onboarding.js?v=b4a3cec2"></script>
+  <script src="/src/js/features/onboarding.js?v=967cd2a6"></script>
   <script src="/src/js/core/service-worker.js?v=9ffe9136"></script>
   <script src="/src/js/features/streak.js?v=ed2789e0"></script>
   <script src="/vendor/chess.js?v=434826c8"></script>
@@ -917,13 +936,13 @@
   <script src="/src/js/games/arcade.js?v=46c5964c"></script>
   <script src="/src/js/main.js?v=3ff0e06e"></script>
   <script src="/src/js/features/akhbaar-catbar.js?v=dddafeef"></script>
-  <script src="/src/js/features/duniya.js?v=6b74d87b"></script>
+  <script src="/src/js/features/duniya.js?v=f6239213"></script>
   <script src="/src/js/features/media-picker.js?v=0d1a4caa"></script>
   <script src="/src/js/features/premium.js?v=95d177b4"></script>
   <script src="/src/js/features/discovery.js?v=a8d3ad37"></script>
   <script src="/src/js/core/polish.js?v=f24ef3d2"></script>
   <script src="/src/js/features/fairness.js?v=4fc5b152"></script>
   <script src="/src/js/features/media-profile.js?v=d8fe1026"></script>
-  <script src="/src/js/auth/auth-events.js?v=1f1cfb4a"></script>
+  <script src="/src/js/auth/auth-events.js?v=5571dee6"></script>
 </body>
 </html>

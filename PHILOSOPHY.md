@@ -26,6 +26,14 @@ Before shipping a new limit, boost, or “unlimited” bypass, ask:
 
 If a feature fights this philosophy (e.g. pay-to-spam AI Discovery), it needs an explicit product call — not a silent ship.
 
+## Design language (Phases 3–11)
+
+- **Personal / warm tone** over dashboard chrome: remove global branding bars when a tab can own the first viewport.
+- **Collapsible clarity**: profile and archive sections collapse; one job per section.
+- **Deliberate colorful exceptions**: bottom-tab icons (and matching Plus cosmetics) may use color; the rest of the icon system stays restrained monochrome.
+- **Swipeable triads** name the middle of each tab’s long-press menu; corners are actions; no close glyph — tap outside dismisses.
+- **Teen Mode** protects minors without excluding them: reciprocal friends or peer minors only for DMs; parental consent for 13–17; “K” badge mirrors the Professional seal.
+
 ## Related
 
 - Limit constants: `public/src/js/config/policy-limits.js`

@@ -341,7 +341,7 @@ function speakText(text, btnEl){
     btnEl?.classList.remove('speaking');return;
   }
   window.speechSynthesis.cancel();
-  document.querySelectorAll('.peepal-speak-btn.speaking').forEach(b=>b.classList.remove('speaking'));
+  document.querySelectorAll('.peepal-speak-btn.speaking,.duniya-caption-speak.speaking').forEach(b=>b.classList.remove('speaking'));
   const utter=new SpeechSynthesisUtterance(text);
   const v=getSelectedVoice();if(v)utter.voice=v;
   utter.rate=0.95;utter.pitch=1;

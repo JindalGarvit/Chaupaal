@@ -702,6 +702,7 @@
     sheet.id = 'notifPanelSheet';
     sheet.className = 'archive-overlay notif-panel-sheet';
     sheet.setAttribute('data-nav-managed', '1');
+    sheet.setAttribute('data-tab-accent', section === 'all' ? 'akhbaar' : section);
     sheet.innerHTML = `
       <div class="archive-header">
         <button type="button" data-overlay-dismiss aria-label="Back">←</button>

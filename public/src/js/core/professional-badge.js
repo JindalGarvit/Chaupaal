@@ -30,6 +30,22 @@
     return `<span class="pro-badge" title="Professional" role="img" aria-label="Professional account">${BADGE_SVG}</span>`;
   }
 
+  function isMinorType(typeOrUser) {
+    if (typeof isTeenModeUser === 'function') {
+      if (typeOrUser && typeof typeOrUser === 'object') return isTeenModeUser(typeOrUser);
+    }
+    if (typeOrUser && typeof typeOrUser === 'object') {
+      return !!(typeOrUser.teenMode || typeOrUser.isMinor || (typeOrUser.age > 0 && typeOrUser.age < 18));
+    }
+    return false;
+  }
+
+  function minorBadgeHtml(opts) {
+    const on = opts === true || isMinorType(opts);
+    if (!on) return '';
+    return `<span class="pro-badge k-badge" title="Under 18" role="img" aria-label="Under 18 account"><svg class="pro-badge-svg" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><text x="10" y="13.5" text-anchor="middle" font-size="9" font-weight="700" font-family="Space Grotesk,sans-serif" fill="currentColor">K</text></svg></span>`;
+  }
+
   function formatDisplayNameHtml(name, profileTypeOrUser) {
     const esc =
       typeof escapeHtmlText === 'function'
@@ -40,7 +56,7 @@
               .replace(/</g, '&lt;')
               .replace(/"/g, '&quot;');
     const label = esc(name || 'Member');
-    return `<span class="display-name-with-badge">${label}${professionalBadgeHtml(profileTypeOrUser)}</span>`;
+    return `<span class="display-name-with-badge">${label}${professionalBadgeHtml(profileTypeOrUser)}${minorBadgeHtml(profileTypeOrUser)}</span>`;
   }
 
   function refreshProfessionalBadges(root) {

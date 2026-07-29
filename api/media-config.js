@@ -495,6 +495,31 @@ async function handlePost(req, res) {
     }
   }
 
+  // ─── Parental consent (teen accounts) ────────────────────────────────────
+  if (action === 'parental_consent_start' || action === 'parental_consent_verify') {
+    const adminApp = initAdmin();
+    if (!adminApp) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    const parental = require('../server-lib/parental-consent');
+    try {
+      if (action === 'parental_consent_start') {
+        const out = await parental.startParentalConsent(adminApp, user.uid, body.contact);
+        if (!out.ok) {
+          return sendSuccess(res, {
+            needParentSignup: !!out.needParentSignup,
+            error: out.error,
+          });
+        }
+        return sendSuccess(res, out);
+      }
+      const out = await parental.verifyParentalConsent(adminApp, user.uid, body.otp);
+      if (!out.ok) return sendError(res, 400, out.error || 'INVALID_OTP', 'Could not verify consent');
+      return sendSuccess(res, out);
+    } catch (e) {
+      console.warn('[media-config] parental', e?.message || e);
+      return sendError(res, 500, 'CONSENT_ERROR', e?.message || 'Consent failed');
+    }
+  }
+
   return sendError(res, 400, 'VALIDATION_ERROR', 'Unknown media action', {
     allowed: [
       'music_search',
@@ -517,6 +542,8 @@ async function handlePost(req, res) {
       'notif_prune',
       'notif_emit',
       'notif_dm',
+      'parental_consent_start',
+      'parental_consent_verify',
     ],
   });
 }

@@ -125,10 +125,20 @@ function initDuniya(){
     if(typeof renderSkeleton==='function'&&feed) renderSkeleton(feed,{variant:'feed',count:2});
     loadDuniyaPage({reset:true}).then(()=>renderDuniyaFeed());
   }
-  document.getElementById('duniyaPostBtn').addEventListener('click',openDuniyaPostSheet);
-  document.getElementById('duniyaSearchBtn').addEventListener('click',()=>{
-    if(typeof openUniversalSearch==='function') openUniversalSearch({types:['users']});
-    else showToast(t('duniya_search_unavailable'));
+  document.getElementById('duniyaPostBtn')?.addEventListener('click',openDuniyaPostSheet);
+  const runDuniyaSearch = () => {
+    if (typeof openUniversalSearch === 'function') openUniversalSearch({ types: ['users', 'posts', 'groups'] });
+    else if (typeof showToast === 'function') showToast(t('duniya_search_unavailable'));
+  };
+  document.getElementById('duniyaSearchBtn')?.addEventListener('click', runDuniyaSearch);
+  document.getElementById('duniyaInlineSearch')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      runDuniyaSearch();
+    }
+  });
+  document.getElementById('duniyaInlineSearch')?.addEventListener('focus', () => {
+    /* keep soft — Enter opens search; focus alone doesn't steal the feed */
   });
 }
 
@@ -287,10 +297,13 @@ function createDuniyaPost(post, {variant='list'}={}){
       <button class="duniya-action-btn like-btn ${post.likedByMe?'liked':''}" data-id="${post.id}" aria-label="Like this post" aria-pressed="${post.likedByMe?'true':'false'}">${duniyaHeartIcon()}</button>
       <button class="duniya-action-btn comment-btn" data-id="${post.id}" aria-label="Open comments">${typeof iconHtml==='function'?iconHtml('message-circle',{size:22}):'<span aria-hidden="true">💬</span>'}</button>
       <button class="duniya-action-btn share-btn" data-id="${post.id}" aria-label="Share post">${typeof iconHtml==='function'?iconHtml('share',{size:22}):'<span aria-hidden="true">↗</span>'}</button>
-      <button class="duniya-action-btn duniya-bookmark-btn" data-id="${post.id}" aria-label="Bookmark">${typeof iconHtml==='function'?iconHtml('bookmark',{size:22}):'<span aria-hidden="true">🔖</span>'}</button>
+      <button class="duniya-action-btn duniya-bookmark-btn ${post.savedByMe?'saved':''}" data-id="${post.id}" aria-label="Save post" aria-pressed="${post.savedByMe?'true':'false'}">${typeof iconHtml==='function'?iconHtml('bookmark',{size:22}):'<span aria-hidden="true">🔖</span>'}</button>
     </div>
     <div class="duniya-post-likes">${formatCount(post.likedByMe?post.likes:post.likes)} likes</div>
-    <div class="duniya-post-caption"><strong class="duniya-post-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(post.user.name,post.user):duniyaEsc(post.user.name)}</strong> ${caption}</div>
+    <div class="duniya-post-caption-row">
+      <div class="duniya-post-caption"><strong class="duniya-post-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(post.user.name,post.user):duniyaEsc(post.user.name)}</strong> ${caption}</div>
+      ${post.caption?`<button type="button" class="duniya-caption-speak" title="Listen to caption" aria-label="Listen to caption">${typeof iconHtml==='function'?iconHtml('volume',{size:16}):'🔊'}</button>`:''}
+    </div>
     ${post.comments>0?`<div class="duniya-view-comments">View all ${post.comments} comments</div>`:''}
   `;
   const postAvatar=el.querySelector('.duniya-post-avatar');
@@ -359,6 +372,46 @@ function createDuniyaPost(post, {variant='list'}={}){
     } finally {
       delete btn.dataset.busy;
     }
+  });
+
+  // Save / unsave
+  const bookmarkBtn = el.querySelector('.duniya-bookmark-btn');
+  bookmarkBtn?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    if (btn.dataset.busy) return;
+    btn.dataset.busy = '1';
+    const p = duniyaPosts.find((x) => x.id === post.id) || post;
+    const prev = !!p.savedByMe;
+    btn.classList.toggle('saved', !prev);
+    btn.setAttribute('aria-pressed', !prev ? 'true' : 'false');
+    p.savedByMe = !prev;
+    post.savedByMe = !prev;
+    try {
+      if (typeof toggleContentSaved === 'function') {
+        const saved = await toggleContentSaved('duniya', p);
+        if (saved.persisted) {
+          p.savedByMe = saved.saved;
+          post.savedByMe = saved.saved;
+          btn.classList.toggle('saved', saved.saved);
+          btn.setAttribute('aria-pressed', saved.saved ? 'true' : 'false');
+          if (typeof showToast === 'function') showToast(saved.saved ? 'Saved' : 'Removed from saved');
+        }
+      }
+    } catch (err) {
+      p.savedByMe = prev;
+      post.savedByMe = prev;
+      btn.classList.toggle('saved', prev);
+      btn.setAttribute('aria-pressed', prev ? 'true' : 'false');
+      if (typeof showToast === 'function') showToast(err?.message || 'Could not save');
+    } finally {
+      delete btn.dataset.busy;
+    }
+  });
+
+  el.querySelector('.duniya-caption-speak')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const text = [post.user?.name, post.caption].filter(Boolean).join('. ');
+    if (typeof speakText === 'function') speakText(text, e.currentTarget);
   });
 
   // Feed media: double-tap/double-click likes; a dedicated button opens viewer.
@@ -1103,9 +1156,10 @@ const PEEPAL_NUDGES=[
 function renderPeepalNudges(){
   const feed=document.getElementById('peepalFeed');if(!feed)return;
   // One banner per visit — wipe prior nudge chrome so tab re-entry doesn't stack
+  feed.querySelectorAll('.peepal-nudge-banner,.peepal-nudge-between').forEach(el=>el.remove());
   feed.parentElement?.querySelectorAll?.('.peepal-nudge-banner,.peepal-nudge-between').forEach(el=>el.remove());
 
-  // Rotating banner at top
+  // Rotating banner at top — inside feed so sticky header / grid don't overlap
   const nudge=PEEPAL_NUDGES[Math.floor(Math.random()*PEEPAL_NUDGES.length)];
   const banner=document.createElement('div');banner.className='peepal-nudge-banner';
   banner.innerHTML=`
@@ -1114,7 +1168,7 @@ function renderPeepalNudges(){
     <div class="peepal-nudge-sub">${nudge.sub}</div>
     <button class="peepal-nudge-cta" id="nudgeCta">Ask this →</button>
   `;
-  feed.parentElement.insertBefore(banner,feed);
+  feed.insertBefore(banner, feed.firstChild);
   document.getElementById('nudgeCta').addEventListener('click',()=>{
     openPeepalAskSheet();
     setTimeout(()=>{
@@ -1268,27 +1322,102 @@ function toggleOpenToMeet(){
     slides.forEach((s) => io.observe(s));
   }
   function setDuniyaMode(next) {
-    mode = next === 'lehar' ? 'lehar' : 'general';
+    const map = { general: 'vishwa', vishwa: 'vishwa', lehar: 'lehar', prasidha: 'prasidha' };
+    mode = map[next] || 'vishwa';
     document.querySelectorAll('[data-duniya-mode]').forEach((btn) => {
-      const on = btn.dataset.duniyaMode === mode;
+      const key = map[btn.dataset.duniyaMode] || btn.dataset.duniyaMode;
+      const on = key === mode;
       btn.classList.toggle('active', on);
       btn.setAttribute('aria-selected', on ? 'true' : 'false');
     });
-    document.getElementById('duniyaFeed')?.classList.toggle('hidden', mode === 'lehar');
-    document.getElementById('duniyaStoriesRow')?.classList.toggle('hidden', mode === 'lehar');
-    const lehar = document.getElementById('leharFeed');
-    lehar?.classList.toggle('hidden', mode !== 'lehar');
+    document.getElementById('duniyaFeed')?.classList.toggle('hidden', mode !== 'vishwa');
+    document.getElementById('duniyaStoriesRow')?.classList.toggle('hidden', mode !== 'vishwa');
+    document.getElementById('leharFeed')?.classList.toggle('hidden', mode !== 'lehar');
+    document.getElementById('prasidhaFeed')?.classList.toggle('hidden', mode !== 'prasidha');
+    const hints = document.querySelectorAll('.duniya-mode-hint span');
+    if (hints.length >= 3) {
+      hints[0].classList.toggle('is-center', mode === 'lehar');
+      hints[1].classList.toggle('is-center', mode === 'vishwa');
+      hints[2].classList.toggle('is-center', mode === 'prasidha');
+    }
     if (mode === 'lehar') renderLeharFeed();
+    if (mode === 'prasidha') renderPrasidhaFeed();
   }
+
+  function renderPrasidhaFeed() {
+    const host = document.getElementById('prasidhaFeed');
+    if (!host) return;
+    const ranked =
+      typeof rankByVelocity === 'function'
+        ? rankByVelocity(duniyaPosts || [], {
+            friendUids: typeof followingSet !== 'undefined' ? [...followingSet] : [],
+          })
+        : [...(duniyaPosts || [])];
+    host.innerHTML = '';
+    ranked.slice(0, 40).forEach((post) => {
+      host.appendChild(createDuniyaPost(post, { variant: 'list' }));
+    });
+    if (!ranked.length && typeof renderEmptyState === 'function') {
+      renderEmptyState(host, {
+        icon: '✨',
+        title: 'Prasidha is warming up',
+        message: 'Trending posts from the last week will land here.',
+      });
+    }
+  }
+
+  // Swipe between Lehar ← Vishwa → Prasidha
+  (function wireDuniyaSwipe() {
+    const screen = document.getElementById('duniyaScreen');
+    if (!screen || screen.dataset.swipeWired) return;
+    screen.dataset.swipeWired = '1';
+    let sx = 0;
+    let sy = 0;
+    let locked = null;
+    screen.addEventListener(
+      'touchstart',
+      (e) => {
+        sx = e.touches[0].clientX;
+        sy = e.touches[0].clientY;
+        locked = null;
+      },
+      { passive: true }
+    );
+    screen.addEventListener(
+      'touchmove',
+      (e) => {
+        const dx = e.touches[0].clientX - sx;
+        const dy = e.touches[0].clientY - sy;
+        if (!locked && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+          locked = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+        }
+      },
+      { passive: true }
+    );
+    screen.addEventListener(
+      'touchend',
+      (e) => {
+        if (locked !== 'h') return;
+        const dx = (e.changedTouches[0]?.clientX || 0) - sx;
+        if (Math.abs(dx) < 56) return;
+        const order = ['lehar', 'vishwa', 'prasidha'];
+        const cur = order.indexOf(mode === 'general' ? 'vishwa' : mode);
+        const next = order[Math.max(0, Math.min(2, cur + (dx < 0 ? 1 : -1)))];
+        setDuniyaMode(next);
+      },
+      { passive: true }
+    );
+  })();
+
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-duniya-mode]');
     if (!btn) return;
     setDuniyaMode(btn.dataset.duniyaMode);
   });
   window.setDuniyaMode = setDuniyaMode;
-  window.renderLeharFeed = typeof safeFeature === 'function'
-    ? safeFeature('lehar_feed', renderLeharFeed)
-    : renderLeharFeed;
+  window.renderLeharFeed =
+    typeof safeFeature === 'function' ? safeFeature('lehar_feed', renderLeharFeed) : renderLeharFeed;
+  window.renderPrasidhaFeed = renderPrasidhaFeed;
 })();
 
 // Feed-render boundary (CONVENTIONS 4c) — dynamic list from network content

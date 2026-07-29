@@ -235,11 +235,11 @@
       padB = keyB !== keyA ? makePad(keyB) : null;
       lastKeys = sig;
     }
-    // Pleasant but not nagging — stay under UI cues
-    const vol = Math.min(0.14, Number(s.soundVolume) || 0.12);
-    fadeTo(master, vol, 700);
-    if (padA) fadeTo(padA.gain, padB ? 1 - blend : 1, 900);
-    if (padB) fadeTo(padB.gain, blend, 900);
+    // Phase 7: much quieter + longer crossfade
+    const vol = Math.min(0.045, (Number(s.soundVolume) || 0.12) * 0.35);
+    fadeTo(master, vol, 4200);
+    if (padA) fadeTo(padA.gain, padB ? 1 - blend : 1, 5200);
+    if (padB) fadeTo(padB.gain, blend, 5200);
   }
 
   function hardStop(ms) {
@@ -293,7 +293,7 @@
   };
 
   document.addEventListener('DOMContentLoaded', () => {
-    startWatch();
+    setTimeout(() => startWatch(), 4500);
     const orig = window.pauseAllMusic;
     if (typeof orig === 'function' && !orig._ambientWrapped) {
       window.pauseAllMusic = function () {
