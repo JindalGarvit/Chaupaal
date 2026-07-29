@@ -13,10 +13,10 @@
     },
     "mehfil": {
       "$chatId": {
-        ".read": "auth != null",
+        ".read": "auth != null && data.child('participants').child(auth.uid).exists()",
         "participants": {
           "$uid": {
-            ".write": "auth != null && auth.uid == $uid",
+            ".write": "auth != null && auth.uid == $uid && !newData.exists()",
             ".validate": "newData.hasChildren(['at']) || !newData.exists()"
           }
         },

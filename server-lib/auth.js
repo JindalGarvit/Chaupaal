@@ -11,7 +11,13 @@ function initAdmin() {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!raw) return null;
   const cred = typeof raw === 'string' ? JSON.parse(raw) : raw;
-  admin.initializeApp({ credential: admin.credential.cert(cred) });
+  const databaseURL =
+    process.env.FIREBASE_DATABASE_URL ||
+    'https://chaupaal-chaupaal-default-rtdb.asia-southeast1.firebasedatabase.app';
+  admin.initializeApp({
+    credential: admin.credential.cert(cred),
+    databaseURL,
+  });
   return admin;
 }
 
