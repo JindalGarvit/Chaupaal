@@ -1164,6 +1164,7 @@ function renderPeepalFeed(){
           ${q.user.bio?`<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">"${escPeepalText(q.user.bio)}"</div>`:''}
         </div>
         ${canDelete?`<button class="peepal-delete-btn" title="Delete" aria-label="Delete" style="background:none;border:none;cursor:pointer;color:var(--muted);">${typeof iconHtml==='function'?iconHtml('trash',{size:16}):'🗑️'}</button>`:''}
+        ${!canDelete&&q.user?.uid&&q.user.uid!==currentUser?.uid?`<button class="peepal-more-btn" title="More" aria-label="More options" style="background:none;border:none;cursor:pointer;color:var(--muted);padding:4px;">${typeof iconHtml==='function'?iconHtml('more-horizontal',{size:16}):'⋯'}</button>`:''}
         <button class="peepal-speak-btn" data-text="${escPeepalText(peepalSpeakPayload(q))}" title="Listen to this post" aria-label="Listen to this post">${typeof iconHtml==='function'?iconHtml('volume',{size:16}):'🔊'}</button>
       </div>
       <div class="peepal-card-body">
@@ -1192,11 +1193,19 @@ function renderPeepalFeed(){
       e.stopPropagation();
       speakText(e.currentTarget.dataset.text, e.currentTarget);
     });
+    card.querySelector('.peepal-more-btn')?.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      if(typeof openFlagSheet==='function') openFlagSheet(q.user||{uid:q.uid});
+      else if(typeof showToast==='function') showToast('Report unavailable');
+    });
     // Wired via listener (not inline onclick) so question text can't break out
     // of an attribute-embedded JS string.
     card.querySelector('.peepal-share-btn')?.addEventListener('click',(e)=>{
       e.stopPropagation();
       if(typeof openShareSheet==='function') openShareSheet(q);
+      else if(navigator.share){
+        navigator.share({title:'Chaupaal',text:String(q.question||'').slice(0,120)}).catch(()=>{});
+      }
     });
     const peepalAvatar=card.querySelector('.peepal-user-avatar');
     if(peepalAvatar&&q.user?.uid&&q.user.uid!==currentUser?.uid){

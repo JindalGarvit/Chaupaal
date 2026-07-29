@@ -223,17 +223,17 @@
     sheet.setAttribute('aria-label', 'Report or block');
     sheet.innerHTML = `
       <div class="flag-sheet-handle" aria-hidden="true"></div>
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;margin-bottom:4px;">Report or Block</div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(user.name||'User',user):(user.name||'User')}</div>
+      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;margin-bottom:4px;">Something off?</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Help keep Chaupaal kind — report ${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(user.name||'this person',user):(user.name||'this person')} or take a break from them.</div>
       ${REPORT_REASONS.map(
-        (r) => `<div class="flag-option" data-code="${r.code}">⚑ ${r.label}</div>`
+        (r) => `<div class="flag-option" data-code="${r.code}">${r.label}</div>`
       ).join('')}
       <div id="flagCustomWrap" class="hidden" style="margin:8px 0 12px;">
         <textarea id="flagCustomText" placeholder="Tell us what happened…" style="width:100%;min-height:72px;border:2px solid var(--line);border-radius:12px;padding:10px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
         <button type="button" class="btn btn--primary btn--block ui-state-btn ui-state-btn-primary" id="flagCustomSubmit" style="width:100%;margin-top:8px;">Submit report</button>
       </div>
-      <div class="flag-option" data-block="1" style="color:var(--red);">🚫 Block ${user.name || 'user'}</div>
-      <button type="button" id="closeFlagSheet" data-overlay-dismiss style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;margin-top:8px;">Cancel</button>
+      <div class="flag-option" data-block="1" style="color:var(--red);">Block ${user.name || 'user'}</div>
+      <button type="button" id="closeFlagSheet" data-overlay-dismiss style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;margin-top:8px;">Not now</button>
     `;
 
     const device = document.querySelector('.device');

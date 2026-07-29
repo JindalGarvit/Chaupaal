@@ -94,7 +94,8 @@ function renderProfileModal(){
       <button class="btn btn--primary btn--block modal-btn" style="margin-top:8px;" onclick="typeof openRecoveryBin==='function'&&openRecoveryBin()">🗑️ Recently deleted</button>
       <button class="btn btn--primary btn--block modal-btn" style="margin-top:8px;" onclick="typeof openSessionsSheet==='function'&&openSessionsSheet()">💻 Devices & sessions</button>
       <button class="btn btn--primary btn--block modal-btn" style="margin-top:8px;" onclick="typeof openBlockedUsersSheet==='function'&&openBlockedUsersSheet()">🚫 Blocked users</button>
-      <button class="btn btn--primary btn--block modal-btn" style="margin-top:8px;background:linear-gradient(135deg,#C9A227,#8134AF);color:#fff;" onclick="openPremiumSheet()">⭐ Go Premium</button>
+      <button class="btn btn--primary btn--block modal-btn" style="margin-top:8px;background:linear-gradient(135deg,#C9A227,#8134AF);color:#fff;" onclick="openPremiumSheet()">⭐ Chaupaal Plus</button>
+      <button class="btn btn--primary btn--block modal-btn" style="margin-top:8px;background:var(--navy);color:#fff;" onclick="typeof openChaupaalProfileHub==='function'&&openChaupaalProfileHub()">🏠 Chaupaal Profile</button>
       <button type="button" class="btn btn--primary btn--block modal-btn" id="switchProfileBtn" style="width:100%;margin-bottom:8px;">👤 Switch / add profile</button>
       <button class="logout-btn" id="logoutBtn">Log out</button>
     </div>
@@ -454,6 +455,39 @@ function saveProfileField(key, value){
   const prev=typeof digitalProfile==='object'?JSON.parse(JSON.stringify(digitalProfile)):{};
   digitalProfile[key]=value;
   try{localStorage.setItem('chaupaal_digital_profile',JSON.stringify(digitalProfile));}catch(e){}
+
+  // Retroactive DOB → under-18: require parental consent / teen mode
+  if(key==='dateOfBirth'||key==='dob'){
+    try{
+      const age=typeof ageFromDob==='function'?ageFromDob(value):0;
+      if(typeof isBlockedAge==='function'&&isBlockedAge(age)){
+        if(typeof showToast==='function') showToast('Chaupaal is for ages 13 and up');
+        digitalProfile[key]=prev[key];
+        return;
+      }
+      if(typeof isTeenAge==='function'&&isTeenAge(age)){
+        if(userProfile){
+          userProfile.teenMode=true;
+          userProfile.isMinor=true;
+          userProfile.age=age;
+        }
+        if(db&&currentUser){
+          db.collection('users').doc(currentUser.uid).set({
+            teenMode:true,
+            isMinor:true,
+            age,
+            [`profile.${key}`]:value,
+          },{merge:true}).catch(()=>{});
+        }
+        if(typeof needsParentalConsent==='function'&&needsParentalConsent({...userProfile,age,teenMode:true})&&typeof openParentalConsentSheet==='function'){
+          setTimeout(()=>openParentalConsentSheet(),400);
+        }else if(typeof showToast==='function'){
+          showToast('Teen Mode on — some features stay friend-only until a parent verifies');
+        }
+      }
+    }catch(e){}
+  }
+
   if(db&&currentUser){
     const patch={[`profile.${key}`]:value};
     if(key==='lookingFor') patch.matchIntent=String(value||'').trim();

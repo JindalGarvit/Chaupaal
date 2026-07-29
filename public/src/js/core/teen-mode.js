@@ -174,4 +174,20 @@
   window.rememberLastUser = rememberLastUser;
   window.readLastUser = readLastUser;
   window.clearLastUser = clearLastUser;
+
+  function openParentalConsentSheet() {
+    if (typeof showAuthScreen === 'function') {
+      showAuthScreen('authParentalConsentScreen');
+      return;
+    }
+    const el = document.getElementById('authParentalConsentScreen');
+    if (el) {
+      document.querySelectorAll('.auth-form-screen').forEach((s) => s.classList.add('hidden'));
+      el.classList.remove('hidden');
+      document.getElementById('authOverlay')?.classList.remove('hidden');
+    } else if (typeof showToast === 'function') {
+      showToast('Ask a parent to verify your account in Settings');
+    }
+  }
+  window.openParentalConsentSheet = openParentalConsentSheet;
 })();

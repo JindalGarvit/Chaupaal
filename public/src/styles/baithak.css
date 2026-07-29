@@ -21,6 +21,38 @@
 .story-add-btn{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;flex-shrink:0;}
 .story-add-icon{width:58px;height:58px;border-radius:50%;border:2px dashed var(--line);display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--muted);background:var(--cream);}
 
+/* Long-press expand under Your Story ring */
+.story-share-expand{
+  position:absolute;
+  left:16px;
+  top:78px;
+  z-index:40;
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:148px;
+  padding:6px;
+  border-radius:14px;
+  background:var(--white);
+  border:1.5px solid var(--line);
+  box-shadow:0 10px 28px rgba(0,0,0,.12);
+  opacity:0;
+  transform:translateY(-6px) scale(.96);
+  transform-origin:top left;
+  pointer-events:none;
+  transition:opacity .16s ease, transform .16s ease;
+}
+.story-share-expand.is-open{opacity:1;transform:none;pointer-events:auto;}
+.story-share-expand-item{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 12px;border:none;background:transparent;
+  border-radius:10px;cursor:pointer;text-align:left;
+  font-family:Space Grotesk,sans-serif;font-weight:600;font-size:13px;color:var(--ink);
+}
+.story-share-expand-item:active{background:var(--cream);}
+.story-share-expand-icon{width:22px;display:flex;align-items:center;justify-content:center;color:var(--muted);}
+.stories-row{position:relative;}
+
 .baithak-search-row{display:flex;gap:8px;padding:10px 16px;flex-shrink:0;}
 .baithak-search{flex:1;padding:10px 14px;border:2px solid var(--line);border-radius:12px;font-family:'Inter',sans-serif;font-size:14px;background:var(--cream);outline:none;}
 .baithak-search:focus{border-color:var(--red);}

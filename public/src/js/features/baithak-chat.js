@@ -75,6 +75,40 @@ function closeChatScreen(opts = {}) {
 }
 
 function openChatScreen(chat){
+  // Teen Mode: reciprocal friends only (or other minors) for stranger DMs
+  try {
+    const isSelfEarly = typeof isSelfChat === 'function' && isSelfChat(chat);
+    const isChaupaalEarly = typeof isChaupaalChat === 'function' && isChaupaalChat(chat);
+    const isGroupEarly = chat?.type === 'group';
+    if (!isSelfEarly && !isChaupaalEarly && !isGroupEarly && typeof canMessageTarget === 'function') {
+      const peerUid = chat.uid || chat.peerUid || (chat.participants || []).find((u) => u !== currentUser?.uid);
+      const peer = {
+        uid: peerUid,
+        age: chat.age,
+        dob: chat.dob,
+        dateOfBirth: chat.dateOfBirth,
+        teenMode: chat.teenMode,
+        isMinor: chat.isMinor,
+        parentalConsent: chat.parentalConsent,
+      };
+      const rel =
+        typeof relationshipState === 'function' && peerUid
+          ? relationshipState(peerUid)
+          : { friend: !!chat.isFriend };
+      const gate = canMessageTarget(peer, rel);
+      if (!gate.ok) {
+        if (typeof showToast === 'function') {
+          showToast(
+            gate.reason === 'teen_adult_stranger'
+              ? 'Teen Mode: message friends (or other teens) only'
+              : 'This teen can only be messaged by friends'
+          );
+        }
+        return;
+      }
+    }
+  } catch (e) {}
+
   // Replace any existing chat with full cleanup (nested panels included)
   if (activeChatScreen || document.getElementById('activeChatScreen')) {
     closeChatScreen({ updateHistory: false, animate: false });
@@ -108,7 +142,8 @@ function openChatScreen(chat){
         <div id="chatActivityStatus" style="font-size:11px;color:var(--muted);">${statusLine}</div>
       </div>
       <div class="chat-header-actions">
-        ${!isChaupaal?`<button class="chat-header-btn" id="chatMehfilBtn" title="Mehfil" aria-label="Mehfil">${typeof iconHtml==='function'?iconHtml('home',{size:18}):'🏠'}</button>`:''}
+        ${isSelf?`<button class="chat-header-btn" id="chatSelfSettingsBtn" title="Settings" aria-label="Settings">${typeof iconHtml==='function'?iconHtml('settings',{size:18}):'⚙'}</button>`
+          :(!isChaupaal?`<button class="chat-header-btn" id="chatMehfilBtn" title="Mehfil" aria-label="Mehfil">${typeof iconHtml==='function'?iconHtml('home',{size:18}):'🏠'}</button>`:'')}
         ${!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatChallengeBtn" title="Create challenge" aria-label="Create challenge">${typeof iconHtml==='function'?iconHtml('target',{size:18}):'🎯'}</button>`:''}
         ${!isGroup&&!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatMuqabalaBtn" title="Muqabala" aria-label="Muqabala">${typeof iconHtml==='function'?iconHtml('swords',{size:18}):'⚔️'}</button>`:''}
       </div>
@@ -432,6 +467,10 @@ function openChatScreen(chat){
     activeChatRecognition.start();
   });
 
+  document.getElementById('chatSelfSettingsBtn')?.addEventListener('click', () => {
+    if (typeof openSettingsModal === 'function') openSettingsModal();
+    else document.getElementById('settingsBtn')?.click();
+  });
   document.getElementById('chatMehfilBtn')?.addEventListener('click', () => {
     if (typeof openMehfil === 'function') openMehfil(chat);
     else if (typeof showToast === 'function') showToast('Mehfil loading…');
@@ -1153,14 +1192,64 @@ async function shareAkhbaarScore(visibility='friends'){
 
 // ===================== BAITHAK STORY CREATION =====================
 function showBaithakShareMenu(){
-  if(typeof showActionSheet!=='function') return openBaithakStoryComposer('camera');
-  showActionSheet('Share in Baithak',[
-    {label:'⚡ Instant',hint:'Snaps to Close Friends (or Friends if that list is empty). No editing — short undo window.',fn:openBaithakInstantCamera},
-    {label:'📷 Create a story',hint:'Camera with text, stickers, games, and audience controls.',fn:()=>openBaithakStoryComposer('camera')},
-    {label:'🖼️ Upload a story',hint:'Pick from gallery, then edit before sharing with Friends or Close Friends.',fn:()=>openBaithakStoryComposer('gallery')},
-    {label:'🎵 Share a song',hint:'In-app music card — searchable, playable preview. No external apps.',fn:shareBaithakSongStory},
-    {label:'📍 Share a location',hint:'Current place, search, pin drop, or live share — map card in Stories.',fn:shareBaithakLocationStory},
-  ]);
+  const anchor = document.getElementById('addStoryBtn');
+  const row = document.getElementById('storiesRow');
+  if (!anchor || !row) {
+    if (typeof showActionSheet === 'function') {
+      showActionSheet('Share in Baithak', [
+        {label:'⚡ Instant',hint:'Snaps to Close Friends (or Friends if that list is empty). No editing — short undo window.',fn:openBaithakInstantCamera},
+        {label:'📷 Create a story',hint:'Camera with text, stickers, games, and audience controls.',fn:()=>openBaithakStoryComposer('camera')},
+        {label:'🖼️ Upload a story',hint:'Pick from gallery, then edit before sharing with Friends or Close Friends.',fn:()=>openBaithakStoryComposer('gallery')},
+        {label:'🎵 Share a song',hint:'In-app music card — searchable, playable preview. No external apps.',fn:shareBaithakSongStory},
+        {label:'📍 Share a location',hint:'Current place, search, pin drop, or live share — map card in Stories.',fn:shareBaithakLocationStory},
+      ]);
+    } else openBaithakStoryComposer('camera');
+    return;
+  }
+
+  document.getElementById('storyShareExpand')?.remove();
+  const expand = document.createElement('div');
+  expand.id = 'storyShareExpand';
+  expand.className = 'story-share-expand';
+  expand.setAttribute('role', 'menu');
+  const items = [
+    {label:'Instant',icon:'zap',fn:openBaithakInstantCamera},
+    {label:'Create',icon:'camera',fn:()=>openBaithakStoryComposer('camera')},
+    {label:'Upload',icon:'image',fn:()=>openBaithakStoryComposer('gallery')},
+    {label:'Song',icon:'music',fn:shareBaithakSongStory},
+    {label:'Location',icon:'map-pin',fn:shareBaithakLocationStory},
+  ];
+  expand.innerHTML = items.map((it,i)=>`
+    <button type="button" class="story-share-expand-item" data-i="${i}" role="menuitem">
+      <span class="story-share-expand-icon">${typeof iconHtml==='function'?iconHtml(it.icon,{size:16}):''}</span>
+      <span>${it.label}</span>
+    </button>`).join('');
+
+  // Insert directly under the add-story ring (expand from the story)
+  if (anchor.nextSibling) row.insertBefore(expand, anchor.nextSibling);
+  else row.appendChild(expand);
+
+  requestAnimationFrame(() => expand.classList.add('is-open'));
+
+  const close = () => {
+    expand.classList.remove('is-open');
+    setTimeout(() => expand.remove(), 180);
+    document.removeEventListener('pointerdown', onOutside, true);
+  };
+  const onOutside = (e) => {
+    if (!expand.contains(e.target) && e.target !== anchor && !anchor.contains(e.target)) close();
+  };
+  setTimeout(() => document.addEventListener('pointerdown', onOutside, true), 0);
+
+  expand.querySelectorAll('.story-share-expand-item').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const idx = Number(btn.dataset.i);
+      close();
+      const fn = items[idx]?.fn;
+      if (typeof fn === 'function') setTimeout(fn, 60);
+    });
+  });
 }
 
 async function shareBaithakSongStory(){

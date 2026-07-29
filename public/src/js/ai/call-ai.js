@@ -54,6 +54,12 @@
       messages: opts.messages || [],
     };
     if (opts.system) body.system = opts.system;
+    try {
+      if (typeof teenAiSystemHint === 'function') {
+        const hint = teenAiSystemHint();
+        if (hint) body.system = (body.system || '') + hint;
+      }
+    } catch (e) {}
     if (opts.enableWebSearch === true) body.enableWebSearch = true;
     // Optional feature tag for future analytics / cost attribution
     if (opts.feature) body.feature = opts.feature;

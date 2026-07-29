@@ -1,10 +1,12 @@
 /**
  * Shadow-ban helpers (Admin SDK only).
  * Tiers: none | soft (hidden from discovery) | severe (discovery hide + content create deny).
+ * Soft bans decay after DECAY_MS with no new signals.
  */
 const SOFT_THRESHOLD = 2;
 const SEVERE_THRESHOLD = 5;
 const IMMEDIATE_SEVERE = new Set(['harassment', 'impersonation']);
+const DECAY_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
 
 async function setDiscoveryHidden(db, uid, hidden) {
   if (!uid) return;
@@ -17,6 +19,36 @@ async function setDiscoveryHidden(db, uid, hidden) {
 }
 
 /**
+ * Soften soft tier when last signal is older than DECAY_MS.
+ * @returns {{ tier, count, decayed }}
+ */
+async function maybeDecayShadowban(db, admin, uid) {
+  if (!uid) return { tier: 'none', count: 0, decayed: false };
+  const ref = db.collection('shadowbans').doc(uid);
+  const snap = await ref.get();
+  if (!snap.exists) return { tier: 'none', count: 0, decayed: false };
+  const data = snap.data() || {};
+  if (data.tier !== 'soft') return { tier: data.tier || 'none', count: Number(data.count) || 0, decayed: false };
+  const updated = data.updatedAt?.toMillis?.() || data.updatedAt || 0;
+  if (!updated || Date.now() - updated < DECAY_MS) {
+    return { tier: 'soft', count: Number(data.count) || 0, decayed: false };
+  }
+  const count = Math.max(0, (Number(data.count) || 0) - 1);
+  const tier = count >= SOFT_THRESHOLD ? 'soft' : 'none';
+  await ref.set(
+    {
+      count,
+      tier,
+      decayedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+  if (tier === 'none') await setDiscoveryHidden(db, uid, false);
+  return { tier, count, decayed: true };
+}
+
+/**
  * Apply a report signal toward shadowban.
  * @returns {{ tier, count, escalated }}
  */
@@ -24,6 +56,7 @@ async function applyFlagSignal(db, admin, { reportedUid, reporterUid, reasonCode
   if (!reportedUid || !reporterUid || reportedUid === reporterUid) {
     return { ok: false, reason: 'invalid' };
   }
+  await maybeDecayShadowban(db, admin, reportedUid).catch(() => {});
   const ref = db.collection('shadowbans').doc(reportedUid);
   const now = admin.firestore.FieldValue.serverTimestamp();
   let next = { tier: 'none', count: 0, escalated: false };
@@ -101,6 +134,8 @@ module.exports = {
   applyFlagSignal,
   applyBlockSignal,
   setDiscoveryHidden,
+  maybeDecayShadowban,
   SOFT_THRESHOLD,
   SEVERE_THRESHOLD,
+  DECAY_MS,
 };

@@ -73,6 +73,7 @@
         <button type="button" data-ah-tab="stories" class="active">Stories</button>
         <button type="button" data-ah-tab="duniya">Duniya / Lehar</button>
         <button type="button" data-ah-tab="peepal">Peepal</button>
+        <button type="button" data-ah-tab="interactions">Interactions</button>
         <button type="button" data-ah-tab="journal">Journal</button>
       </div>
       <div class="archive-hub-body" data-ah-body>Loading…</div>`;
@@ -90,17 +91,62 @@
       overlay.querySelectorAll('[data-ah-tab]').forEach((b) => b.classList.toggle('active', b.dataset.ahTab === tab));
 
       if (tab === 'journal') {
-        body.innerHTML = `<div class="archive-hub-copy">Private journal — never visible on your public profile.</div><div data-ah-journal>Loading…</div>`;
+        body.innerHTML = `<div class="archive-hub-copy">Private journal — never visible on your public profile.</div>
+          <div class="archive-journal-compose">
+            <textarea data-ah-journal-input placeholder="Quick capture — how are you today?" rows="3"></textarea>
+            <label class="archive-journal-consent"><input type="checkbox" data-ah-journal-ai> Allow soft analysis for personal insights (optional)</label>
+            <button type="button" class="btn btn--primary" data-ah-journal-save>Save entry</button>
+          </div>
+          <div data-ah-journal>Loading…</div>`;
         if (!db || !currentUser) return;
+        const saveBtn = body.querySelector('[data-ah-journal-save]');
+        saveBtn?.addEventListener('click', async () => {
+          const text = String(body.querySelector('[data-ah-journal-input]')?.value || '').trim();
+          if (!text) {
+            if (typeof showToast === 'function') showToast('Write something first');
+            return;
+          }
+          const allowAi = !!body.querySelector('[data-ah-journal-ai]')?.checked;
+          const date = new Date().toISOString().slice(0, 10);
+          try {
+            const col = db.collection('users').doc(currentUser.uid).collection('journal');
+            await col.add({
+              text: text.slice(0, 4000),
+              date,
+              allowAnalysis: allowAi,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+            if (allowAi && typeof callAI === 'function') {
+              try {
+                const hint = typeof teenAiSystemHint === 'function' ? teenAiSystemHint() : '';
+                await callAI({
+                  tier: 'fast',
+                  max_tokens: 120,
+                  feature: 'journal_analysis',
+                  system:
+                    'You summarize a private journal entry into 1 warm sentence of personal insight. No diagnosis.' +
+                    hint,
+                  messages: [{ role: 'user', content: text.slice(0, 800) }],
+                });
+              } catch (e) {}
+            }
+            if (typeof showToast === 'function') showToast('Saved to journal');
+            body.querySelector('[data-ah-journal-input]').value = '';
+            setTab('journal');
+          } catch (e) {
+            if (typeof showToast === 'function') showToast('Could not save');
+          }
+        });
         try {
           const snap = await db
-            .collection('daily_checkins')
-            .where('uid', '==', currentUser.uid)
+            .collection('users')
+            .doc(currentUser.uid)
+            .collection('journal')
             .limit(60)
             .get();
           const entries = snap.docs
             .map((d) => ({ id: d.id, ...d.data() }))
-            .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+            .sort((a, b) => String(b.date || b.createdAt || '').localeCompare(String(a.date || a.createdAt || '')));
           const host = body.querySelector('[data-ah-journal]');
           host.innerHTML = entries.length
             ? entries
@@ -113,6 +159,92 @@
         } catch (e) {
           body.querySelector('[data-ah-journal]').innerHTML = '<div class="comments-empty">Could not load journal</div>';
         }
+        return;
+      }
+
+      if (tab === 'interactions') {
+        body.innerHTML = `<div class="archive-hub-copy">Likes, comments, and saves — your activity across Chaupaal.</div>
+          <div class="archive-hub-tabs archive-hub-tabs--sub">
+            <button type="button" data-ah-ix="saved" class="active">Saved</button>
+            <button type="button" data-ah-ix="likes">Likes</button>
+            <button type="button" data-ah-ix="comments">Comments</button>
+          </div>
+          <div data-ah-ix-body>Loading…</div>`;
+        const ixBody = body.querySelector('[data-ah-ix-body]');
+        const loadIx = async (kind) => {
+          body.querySelectorAll('[data-ah-ix]').forEach((b) => b.classList.toggle('active', b.dataset.ahIx === kind));
+          if (!db || !currentUser) {
+            ixBody.innerHTML = '<div class="comments-empty">Sign in to see interactions</div>';
+            return;
+          }
+          ixBody.innerHTML = 'Loading…';
+          try {
+            if (kind === 'saved') {
+              const snap = await db
+                .collection('users')
+                .doc(currentUser.uid)
+                .collection('saved')
+                .orderBy('savedAt', 'desc')
+                .limit(50)
+                .get()
+                .catch(() =>
+                  db.collection('users').doc(currentUser.uid).collection('saved').limit(50).get()
+                );
+              const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+              ixBody.innerHTML = rows.length
+                ? rows
+                    .map(
+                      (r) =>
+                        `<div class="archive-post-row"><div class="archive-post-meta"><strong>${r.collection || 'post'}</strong><p>${String(r.preview || r.postId || '').slice(0, 100)}</p><small>Saved</small></div></div>`
+                    )
+                    .join('')
+                : '<div class="comments-empty">No saved posts yet — tap the bookmark on Duniya or Peepal</div>';
+              return;
+            }
+            if (kind === 'likes') {
+              const snap = await db
+                .collection('users')
+                .doc(currentUser.uid)
+                .collection('likes')
+                .limit(40)
+                .get()
+                .catch(() => null);
+              const rows = snap?.docs?.map((d) => ({ id: d.id, ...d.data() })) || [];
+              ixBody.innerHTML = rows.length
+                ? rows
+                    .map(
+                      (r) =>
+                        `<div class="archive-post-row"><div class="archive-post-meta"><strong>${r.collection || 'like'}</strong><p>${String(r.preview || r.postId || '').slice(0, 100)}</p></div></div>`
+                    )
+                    .join('')
+                : '<div class="comments-empty">Liked posts will show here</div>';
+              return;
+            }
+            // comments
+            const snap = await db
+              .collection('users')
+              .doc(currentUser.uid)
+              .collection('comment_activity')
+              .limit(40)
+              .get()
+              .catch(() => null);
+            const rows = snap?.docs?.map((d) => ({ id: d.id, ...d.data() })) || [];
+            ixBody.innerHTML = rows.length
+              ? rows
+                  .map(
+                    (r) =>
+                      `<div class="archive-post-row"><div class="archive-post-meta"><strong>${r.collection || 'comment'}</strong><p>${String(r.text || r.preview || '').slice(0, 120)}</p></div></div>`
+                  )
+                  .join('')
+              : '<div class="comments-empty">Your comments will gather here</div>';
+          } catch (e) {
+            ixBody.innerHTML = '<div class="comments-empty">Could not load interactions</div>';
+          }
+        };
+        body.querySelectorAll('[data-ah-ix]').forEach((btn) => {
+          btn.addEventListener('click', () => loadIx(btn.dataset.ahIx));
+        });
+        loadIx('saved');
         return;
       }
 
@@ -200,7 +332,11 @@
       btn.addEventListener('click', () => setTab(btn.dataset.ahTab));
     });
     const initial =
-      initialTab === 'posts' || initialTab === 'preview' ? 'duniya' : initialTab || 'stories';
+      initialTab === 'posts' || initialTab === 'preview'
+        ? 'duniya'
+        : initialTab === 'saved'
+          ? 'interactions'
+          : initialTab || 'stories';
     setTab(initial);
   }
 

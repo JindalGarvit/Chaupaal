@@ -442,7 +442,14 @@
     } catch (e) {}
   }
 
-  function openLocationComposer({ onSelect, title } = {}) {
+  function openLocationComposer({ onSelect, title, peerUid } = {}) {
+    // Location never visible to non-friends
+    if (peerUid && typeof canSeeLocation === 'function' && typeof relationshipState === 'function') {
+      if (!canSeeLocation(relationshipState(peerUid))) {
+        if (typeof showToast === 'function') showToast('Location is only shared with friends');
+        return;
+      }
+    }
     document.getElementById('locShareSheet')?.remove();
     const sheet = document.createElement('div');
     sheet.id = 'locShareSheet';

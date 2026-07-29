@@ -9,7 +9,7 @@ function openPremiumSheet(){
   sheet.innerHTML=`
     <div style="display:flex;justify-content:flex-end;padding:16px;"><button id="closePremium" style="background:rgba(255,255,255,0.1);border:none;color:#fff;width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;">✕</button></div>
     <div class="premium-hero">
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.65;margin-bottom:10px;">Chaupaal Premium</div>
+      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.65;margin-bottom:10px;">Chaupaal Plus</div>
       <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:26px;margin-bottom:8px;">More room to play</div>
       <div style="font-size:14px;opacity:0.7;line-height:1.5;">Unlimited freezes, smarter matches, and an ad-free Chaupaal — billed securely when payment is live.</div>
     </div>

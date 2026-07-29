@@ -308,23 +308,41 @@ function renderDangalGamesGrid() {
   });
 
   const sections = [
-    { label: 'Quick solos', items: solos },
-    { label: 'Vs friend', items: vsFriend },
+    { id: 'khel', label: 'Khel · solos', items: solos },
+    { id: 'manch', label: 'Manch · vs friend', items: vsFriend },
+    { id: 'maidan', label: 'Maidan · Muqabala & boards', items: [] },
   ];
   sections.forEach((sec) => {
-    if (!sec.items.length) return;
     const section = document.createElement('div');
     section.className = 'dangal-section';
-    section.innerHTML = `<div class="dangal-section-label">${sec.label}</div>
-      <div class="dangal-section-grid">
-        ${sec.items.map(dangalTileHtml).join('')}
-      </div>`;
+    section.dataset.dangalSection = sec.id;
+    if (sec.id === 'maidan') {
+      section.innerHTML = `<div class="dangal-section-label">${sec.label}</div>
+        <div class="dangal-section-grid dangal-maidan-actions">
+          <button type="button" class="btn btn--primary dangal-action-btn" data-dangal-maidan="muqabala">Open Muqabala</button>
+          <button type="button" class="btn dangal-action-btn" data-dangal-maidan="finder">Find opponent</button>
+        </div>`;
+    } else if (!sec.items.length) {
+      return;
+    } else {
+      section.innerHTML = `<div class="dangal-section-label">${sec.label}</div>
+        <div class="dangal-section-grid">
+          ${sec.items.map(dangalTileHtml).join('')}
+        </div>`;
+    }
     grid.appendChild(section);
   });
   wireDangalTiles(grid);
+  grid.querySelector('[data-dangal-maidan="muqabala"]')?.addEventListener('click', () => {
+    document.getElementById('aiFindMuqabalaBtn')?.click();
+  });
+  grid.querySelector('[data-dangal-maidan="finder"]')?.addEventListener('click', () => {
+    if (typeof openAIFinder === 'function') openAIFinder();
+  });
 
   const boardHost = document.createElement('div');
   boardHost.id = 'dangalFriendsBoardHost';
+  boardHost.dataset.dangalSection = 'maidan';
   grid.appendChild(boardHost);
   if (typeof buildWeeklyFriendsBoard === 'function') {
     buildWeeklyFriendsBoard('chess')
@@ -337,6 +355,31 @@ function renderDangalGamesGrid() {
       .catch(() => {});
   }
 }
+
+let dangalSection = 'khel';
+function setDangalSection(section) {
+  dangalSection = ['khel', 'manch', 'maidan'].includes(section) ? section : 'khel';
+  const grid = document.getElementById('dangalGamesGrid');
+  if (!grid) {
+    if (typeof renderDangalGamesGrid === 'function') renderDangalGamesGrid();
+  }
+  const host = document.getElementById('dangalGamesGrid') || grid;
+  if (!host) return;
+  host.querySelectorAll('[data-dangal-section]').forEach((el) => {
+    const match = el.dataset.dangalSection === dangalSection;
+    el.style.display = match ? '' : 'none';
+  });
+  // Always keep chips + GOTD visible
+  host.querySelector('#dangalGotdHost, .dangal-chips')?.closest?.('.dangal-chips');
+  host.querySelectorAll('.dangal-chips, #dangalGotdHost').forEach((el) => {
+    el.style.display = '';
+  });
+  const label = { khel: 'Khel', manch: 'Manch', maidan: 'Maidan' }[dangalSection];
+  if (typeof showToast === 'function') showToast(`${label}`);
+  const target = host.querySelector(`[data-dangal-section="${dangalSection}"]`);
+  target?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+}
+window.setDangalSection = setDangalSection;
 
 function getGameRating(key){
   if(!key)return null;

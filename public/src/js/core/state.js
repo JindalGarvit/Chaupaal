@@ -90,9 +90,11 @@ function showToast(msg,dur=3000){
 }
 
 // ===================== SETTINGS =====================
-document.getElementById('settingsBtn').addEventListener('click',()=>{
-  document.getElementById('settingsModal').classList.remove('hidden');
-  populateVoiceDropdown();
+function openSettingsModal(){
+  const modal=document.getElementById('settingsModal');
+  if(!modal) return;
+  modal.classList.remove('hidden');
+  if(typeof populateVoiceDropdown==='function') populateVoiceDropdown();
   if(typeof applyNotifPrefsToSettingsUI==='function') applyNotifPrefsToSettingsUI();
   if(typeof hydrateNotifPrefsFromFirestore==='function') hydrateNotifPrefsFromFirestore();
   const typeHost=document.getElementById('settingsProfileTypeHost');
@@ -132,7 +134,9 @@ document.getElementById('settingsBtn').addEventListener('click',()=>{
       }
     }
   }catch(e){}
-});
+}
+window.openSettingsModal = openSettingsModal;
+document.getElementById('settingsBtn')?.addEventListener('click', openSettingsModal);
 document.getElementById('settingsArchiveBtn')?.addEventListener('click',()=>{
   document.getElementById('settingsModal')?.classList.add('hidden');
   if(typeof openArchiveHub==='function') openArchiveHub('stories');

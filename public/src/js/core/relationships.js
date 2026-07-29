@@ -161,6 +161,14 @@
       if (typeof onChanged === 'function') await onChanged();
     };
 
+    actions.push({
+      label: 'View profile',
+      hint: 'Open their Chaupaal profile',
+      fn: () => {
+        if (typeof openPublicProfile === 'function') openPublicProfile(profile, { uid: profile.uid, username: profile.username });
+      },
+    });
+
     if (state.friend) {
       actions.push({
         label: state.closeFriend ? 'Remove from Close Friends' : 'Add to Close Friends',

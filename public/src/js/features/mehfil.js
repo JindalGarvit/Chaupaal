@@ -281,6 +281,22 @@
       reactRef.limitToLast(1).on('child_added', onReact);
       rtdbUnsubs.push(() => reactRef.off('child_added', onReact));
     }
+
+    const chatRef = rtdbRef(`mehfil/${activeChatId}/chat`);
+    const msgsEl = overlayEl?.querySelector('[data-mehfil-chat-msgs]');
+    if (chatRef && msgsEl) {
+      const onChat = (snap) => {
+        const v = snap.val();
+        if (!v?.text) return;
+        const row = document.createElement('div');
+        row.className = 'mehfil-chat-row' + (v.by === currentUser?.uid ? ' is-me' : '');
+        row.innerHTML = `<span class="mehfil-chat-name">${esc(v.name || 'Someone')}</span><span class="mehfil-chat-text">${esc(v.text)}</span>`;
+        msgsEl.appendChild(row);
+        msgsEl.scrollTop = msgsEl.scrollHeight;
+      };
+      chatRef.limitToLast(40).on('child_added', onChat);
+      rtdbUnsubs.push(() => chatRef.off('child_added', onChat));
+    }
   }
 
   function applyRemoteMedia(m) {
@@ -333,6 +349,19 @@
           onReady: (e) => {
             if (startAt) e.target.seekTo(startAt, true);
             if (play) e.target.playVideo();
+          },
+          onStateChange: (e) => {
+            if (!mediaHost || !activeChatId) return;
+            try {
+              const st = e.data;
+              const t = e.target.getCurrentTime?.() || 0;
+              const id = e.target.getVideoData?.()?.video_id || videoId;
+              if (st === window.YT.PlayerState.PLAYING) {
+                publishMediaState({ type: 'youtube', id, playing: true, t, title: 'YouTube' });
+              } else if (st === window.YT.PlayerState.PAUSED) {
+                publishMediaState({ type: 'youtube', id, playing: false, t, title: 'YouTube' });
+              }
+            } catch (err) {}
           },
         },
       });
@@ -592,74 +621,91 @@
     el.className = 'mehfil-overlay';
     el.dataset.navManaged = '1';
     el.innerHTML = `
-      <div class="mehfil-top">
-        <div class="mehfil-title">Mehfil · ${esc(chat.name || 'Chat')}</div>
-        <div class="mehfil-status" data-mehfil-status>Joining…</div>
-      </div>
-      <div class="mehfil-stage" data-mehfil-stage>
-        <div class="mehfil-tile mehfil-tile--self is-cam-off" data-mehfil-local-video>
-          <span class="mehfil-tile-placeholder">Camera off</span>
-          <div class="mehfil-tile-label">You</div>
+      <div class="mehfil-layout">
+        <aside class="mehfil-sidebar" data-mehfil-sidebar>
+          <div class="mehfil-sidebar-head">
+            <strong>Room chat</strong>
+            <button type="button" class="mehfil-sidebar-toggle" data-mehfil-sidebar-hide aria-label="Hide chat">‹</button>
+          </div>
+          <div class="mehfil-sidebar-msgs" data-mehfil-chat-msgs></div>
+          <form class="mehfil-sidebar-compose" data-mehfil-chat-form>
+            <input type="text" maxlength="500" placeholder="Message the room…" data-mehfil-chat-input enterkeyhint="send" autocomplete="off">
+            <button type="submit" aria-label="Send">↑</button>
+          </form>
+        </aside>
+        <div class="mehfil-main">
+          <div class="mehfil-top">
+            <button type="button" class="mehfil-sidebar-open" data-mehfil-sidebar-show aria-label="Show chat">💬</button>
+            <div class="mehfil-title">Mehfil · ${esc(chat.name || 'Chat')}</div>
+            <div class="mehfil-status" data-mehfil-status>Joining…</div>
+          </div>
+          <div class="mehfil-stage" data-mehfil-stage>
+            <div class="mehfil-tile mehfil-tile--self is-cam-off" data-mehfil-local-video>
+              <span class="mehfil-tile-placeholder">Camera off</span>
+              <div class="mehfil-tile-label">You</div>
+            </div>
+            <div class="mehfil-waiting" data-mehfil-waiting>
+              <div class="mehfil-waiting-title">Waiting to start</div>
+              <div class="mehfil-waiting-msg">Others will appear here when they join this Mehfil.</div>
+            </div>
+          </div>
+          <div class="mehfil-sheet mehfil-media-sheet" data-mehfil-media>
+            <div class="mehfil-now" data-mehfil-now>Search a song or paste a YouTube link</div>
+            <div id="mehfilYtHost" class="mehfil-yt" data-mehfil-yt></div>
+            <div class="mehfil-media-search">
+              <input type="search" placeholder="Song or YouTube link…" data-mehfil-q enterkeyhint="search">
+              <button type="button" data-mehfil-play>Play</button>
+            </div>
+          </div>
+          <div class="mehfil-sheet mehfil-react-tray" data-mehfil-reacts>
+            ${REACTIONS.map((e) => `<button type="button" data-emoji="${e}">${e}</button>`).join('')}
+          </div>
+          <div class="mehfil-sheet mehfil-sticker-tray" data-mehfil-stickers>
+            ${STICKERS.map((e) => `<button type="button" data-emoji="${e}">${e}</button>`).join('')}
+          </div>
+          <div class="mehfil-more-menu" data-mehfil-more>
+            <button type="button" class="mehfil-more-item" data-mehfil-react-btn>
+              <span class="icon" aria-hidden="true">😀</span>
+              Reactions
+            </button>
+            <button type="button" class="mehfil-more-item" data-mehfil-sticker-btn>
+              <span class="icon" aria-hidden="true">🪷</span>
+              Stickers
+            </button>
+            <button type="button" class="mehfil-more-item" data-mehfil-media-btn>
+              <span class="icon" aria-hidden="true">🎵</span>
+              Music / YouTube
+            </button>
+            <button type="button" class="mehfil-more-item" data-mehfil-flip title="Flip camera">
+              <span class="icon" aria-hidden="true">🔄</span>
+              Flip
+            </button>
+            <button type="button" class="mehfil-more-item" data-mehfil-share title="Share screen">
+              <span class="icon" aria-hidden="true">🖥️</span>
+              <span data-mehfil-share-label>Share</span>
+            </button>
+            <button type="button" class="mehfil-more-item" data-mehfil-ask title="Ask Chaupaal">
+              <span class="icon" aria-hidden="true"><span class="mehfil-ai-mark">🏠</span></span>
+              Ask
+            </button>
+          </div>
+          <div class="mehfil-dock">
+            <div class="mehfil-dock-primary">
+              <button type="button" class="mehfil-ctrl is-muted" data-mehfil-mic title="Mic (off by default)" aria-label="Toggle microphone">🎤</button>
+              <button type="button" class="mehfil-ctrl is-off" data-mehfil-cam title="Camera (off by default)" aria-label="Toggle camera">📷</button>
+              <button type="button" class="mehfil-ctrl" data-mehfil-more-btn title="More" aria-label="More call actions" aria-haspopup="true">⋯</button>
+            </div>
+            <button type="button" class="mehfil-leave" data-mehfil-leave title="Leave call" aria-label="Leave call">Leave</button>
+          </div>
         </div>
-        <div class="mehfil-waiting" data-mehfil-waiting>
-          <div class="mehfil-waiting-title">Waiting to start</div>
-          <div class="mehfil-waiting-msg">Others will appear here when they join this Mehfil.</div>
-        </div>
-      </div>
-      <div class="mehfil-sheet mehfil-media-sheet" data-mehfil-media>
-        <div class="mehfil-now" data-mehfil-now>Search a song or paste a YouTube link</div>
-        <div id="mehfilYtHost" class="mehfil-yt" data-mehfil-yt></div>
-        <div class="mehfil-media-search">
-          <input type="search" placeholder="Song or YouTube link…" data-mehfil-q enterkeyhint="search">
-          <button type="button" data-mehfil-play>Play</button>
-        </div>
-      </div>
-      <div class="mehfil-sheet mehfil-react-tray" data-mehfil-reacts>
-        ${REACTIONS.map((e) => `<button type="button" data-emoji="${e}">${e}</button>`).join('')}
-      </div>
-      <div class="mehfil-sheet mehfil-sticker-tray" data-mehfil-stickers>
-        ${STICKERS.map((e) => `<button type="button" data-emoji="${e}">${e}</button>`).join('')}
-      </div>
-      <div class="mehfil-more-menu" data-mehfil-more>
-        <button type="button" class="mehfil-more-item" data-mehfil-react-btn>
-          <span class="icon" aria-hidden="true">😀</span>
-          Reactions
-        </button>
-        <button type="button" class="mehfil-more-item" data-mehfil-sticker-btn>
-          <span class="icon" aria-hidden="true">🪷</span>
-          Stickers
-        </button>
-        <button type="button" class="mehfil-more-item" data-mehfil-media-btn>
-          <span class="icon" aria-hidden="true">🎵</span>
-          Music
-        </button>
-        <button type="button" class="mehfil-more-item" data-mehfil-flip title="Flip camera">
-          <span class="icon" aria-hidden="true">🔄</span>
-          Flip
-        </button>
-        <button type="button" class="mehfil-more-item" data-mehfil-share title="Share screen">
-          <span class="icon" aria-hidden="true">🖥️</span>
-          <span data-mehfil-share-label>Share</span>
-        </button>
-        <button type="button" class="mehfil-more-item" data-mehfil-ask title="Ask Chaupaal">
-          <span class="icon" aria-hidden="true"><span class="mehfil-ai-mark">🏠</span></span>
-          Ask
-        </button>
-      </div>
-      <div class="mehfil-dock">
-        <div class="mehfil-dock-primary">
-          <button type="button" class="mehfil-ctrl is-muted" data-mehfil-mic title="Mic (off by default)" aria-label="Toggle microphone">🎤</button>
-          <button type="button" class="mehfil-ctrl is-off" data-mehfil-cam title="Camera (off by default)" aria-label="Toggle camera">📷</button>
-          <button type="button" class="mehfil-ctrl" data-mehfil-more-btn title="More" aria-label="More call actions" aria-haspopup="true">⋯</button>
-        </div>
-        <button type="button" class="mehfil-leave" data-mehfil-leave title="Leave call" aria-label="Leave call">Leave</button>
       </div>`;
     device.appendChild(el);
     overlayEl = el;
+    activeChatId = chatId;
     if (typeof pushNavLayer === 'function') pushNavLayer(el, () => leaveMehfil());
 
     el.addEventListener('pointerdown', (e) => {
-      if (e.target.closest('.mehfil-dock, .mehfil-sheet, .mehfil-more-menu, .mehfil-top')) {
+      if (e.target.closest('.mehfil-dock, .mehfil-sheet, .mehfil-more-menu, .mehfil-top, .mehfil-sidebar')) {
         pokeChrome();
         return;
       }
@@ -670,6 +716,28 @@
       pokeChrome();
     });
     pokeChrome();
+
+    el.querySelector('[data-mehfil-sidebar-hide]')?.addEventListener('click', () => {
+      el.classList.add('mehfil-sidebar-collapsed');
+    });
+    el.querySelector('[data-mehfil-sidebar-show]')?.addEventListener('click', () => {
+      el.classList.remove('mehfil-sidebar-collapsed');
+    });
+    el.querySelector('[data-mehfil-chat-form]')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const input = el.querySelector('[data-mehfil-chat-input]');
+      const text = String(input?.value || '').trim();
+      if (!text || !activeChatId) return;
+      input.value = '';
+      try {
+        await rtdbRef(`mehfil/${activeChatId}/chat`)?.push({
+          text: text.slice(0, 500),
+          by: currentUser?.uid || null,
+          name: userProfile?.name || userProfile?.username || 'You',
+          at: Date.now(),
+        });
+      } catch (err) {}
+    });
 
     el.querySelector('[data-mehfil-leave]')?.addEventListener('click', leaveMehfil);
     el.querySelector('[data-mehfil-mic]')?.addEventListener('click', toggleMic);

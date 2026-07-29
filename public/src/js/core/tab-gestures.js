@@ -125,15 +125,21 @@
           label: 'Khoj',
           run: () => {
             switchTo('peepal');
-            document.getElementById('peepalInlineSearch')?.focus();
-            document.getElementById('peepalSearchBtn')?.click();
+            if (typeof setPeepalMode === 'function') setPeepalMode('khoj');
+            else {
+              document.getElementById('peepalInlineSearch')?.focus();
+              document.getElementById('peepalSearchBtn')?.click();
+            }
           },
         },
         {
           id: 'vriksha',
           icon: 'tree',
           label: 'Vriksha',
-          run: () => switchTo('peepal'),
+          run: () => {
+            switchTo('peepal');
+            if (typeof setPeepalMode === 'function') setPeepalMode('vriksha');
+          },
         },
         {
           id: 'mashhoor',
@@ -141,7 +147,8 @@
           label: 'Mashhoor',
           run: () => {
             switchTo('peepal');
-            if (typeof showToast === 'function') showToast('Mashhoor — trending on Peepal');
+            if (typeof setPeepalMode === 'function') setPeepalMode('mashhoor');
+            else if (typeof showToast === 'function') showToast('Mashhoor — trending on Peepal');
           },
         },
         {
@@ -168,7 +175,8 @@
           label: 'Surkhiya',
           run: () => {
             switchTo('akhbaar');
-            if (typeof showToast === 'function') showToast('Surkhiya — today’s short digest');
+            if (typeof setAkhbaarMode === 'function') setAkhbaarMode('surkhiya');
+            else if (typeof showToast === 'function') showToast('Surkhiya — today’s short digest');
           },
         },
         {
@@ -177,7 +185,8 @@
           label: 'All',
           run: () => {
             switchTo('akhbaar');
-            document.querySelector('.akhbaar-cat-chip[data-cat="all"]')?.click();
+            if (typeof setAkhbaarMode === 'function') setAkhbaarMode('all');
+            else document.querySelector('.akhbaar-cat-chip[data-cat="all"]')?.click();
           },
         },
         {
@@ -186,7 +195,8 @@
           label: 'GK',
           run: () => {
             switchTo('akhbaar');
-            document.querySelector('.akhbaar-cat-chip[data-cat="GK"]')?.click();
+            if (typeof setAkhbaarMode === 'function') setAkhbaarMode('gk');
+            else document.querySelector('.akhbaar-cat-chip[data-cat="GK"]')?.click();
           },
         },
         {
