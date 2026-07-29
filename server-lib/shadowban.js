@@ -8,6 +8,46 @@ const SEVERE_THRESHOLD = 5;
 const IMMEDIATE_SEVERE = new Set(['harassment', 'impersonation']);
 const DECAY_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
 
+/** Pure tier math for a new report (count already includes this signal). */
+function tierAfterFlag({ prevTier = 'none', count, reasonCode } = {}) {
+  const n = Number(count) || 0;
+  let tier = prevTier === 'severe' ? 'severe' : prevTier === 'soft' ? 'soft' : 'none';
+  if (IMMEDIATE_SEVERE.has(String(reasonCode || ''))) tier = 'severe';
+  else if (n >= SEVERE_THRESHOLD) tier = 'severe';
+  else if (n >= SOFT_THRESHOLD) tier = tier === 'severe' ? 'severe' : 'soft';
+  return tier;
+}
+
+/** Pure tier math for a block signal — at least soft, never downgrades severe. */
+function tierAfterBlock({ prevTier = 'none', prevCount = 0 } = {}) {
+  const count = Math.max(Number(prevCount) || 0, SOFT_THRESHOLD);
+  let tier = prevTier === 'severe' ? 'severe' : 'soft';
+  if (count >= SEVERE_THRESHOLD) tier = 'severe';
+  return { tier, count };
+}
+
+/**
+ * Pure soft-ban decay decision (no Firestore).
+ * @returns {{ decayed: false, tier: string, count: number } | { decayed: true, tier: string, count: number }}
+ */
+function softDecayNext({ tier, count, updatedAtMs, nowMs = Date.now(), decayMs = DECAY_MS } = {}) {
+  const n = Math.max(0, Number(count) || 0);
+  const t = tier || 'none';
+  if (t !== 'soft') return { decayed: false, tier: t, count: n };
+  const updated = Number(updatedAtMs) || 0;
+  if (!updated || nowMs - updated < decayMs) {
+    return { decayed: false, tier: 'soft', count: n };
+  }
+  const nextCount = Math.max(0, n - 1);
+  const nextTier = nextCount >= SOFT_THRESHOLD ? 'soft' : 'none';
+  return { decayed: true, tier: nextTier, count: nextCount };
+}
+
+function updatedAtMs(data) {
+  if (!data) return 0;
+  return data.updatedAt?.toMillis?.() || Number(data.updatedAt) || 0;
+}
+
 async function setDiscoveryHidden(db, uid, hidden) {
   if (!uid) return;
   const pub = { hiddenFromDiscovery: !!hidden };
@@ -28,24 +68,25 @@ async function maybeDecayShadowban(db, admin, uid) {
   const snap = await ref.get();
   if (!snap.exists) return { tier: 'none', count: 0, decayed: false };
   const data = snap.data() || {};
-  if (data.tier !== 'soft') return { tier: data.tier || 'none', count: Number(data.count) || 0, decayed: false };
-  const updated = data.updatedAt?.toMillis?.() || data.updatedAt || 0;
-  if (!updated || Date.now() - updated < DECAY_MS) {
-    return { tier: 'soft', count: Number(data.count) || 0, decayed: false };
+  const decision = softDecayNext({
+    tier: data.tier || 'none',
+    count: Number(data.count) || 0,
+    updatedAtMs: updatedAtMs(data),
+  });
+  if (!decision.decayed) {
+    return { tier: decision.tier, count: decision.count, decayed: false };
   }
-  const count = Math.max(0, (Number(data.count) || 0) - 1);
-  const tier = count >= SOFT_THRESHOLD ? 'soft' : 'none';
   await ref.set(
     {
-      count,
-      tier,
+      count: decision.count,
+      tier: decision.tier,
       decayedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     },
     { merge: true }
   );
-  if (tier === 'none') await setDiscoveryHidden(db, uid, false);
-  return { tier, count, decayed: true };
+  if (decision.tier === 'none') await setDiscoveryHidden(db, uid, false);
+  return { tier: decision.tier, count: decision.count, decayed: true };
 }
 
 /**
@@ -65,12 +106,8 @@ async function applyFlagSignal(db, admin, { reportedUid, reporterUid, reasonCode
     const snap = await tx.get(ref);
     const data = snap.exists ? snap.data() || {} : {};
     const count = (Number(data.count) || 0) + 1;
-    let tier = data.tier === 'severe' ? 'severe' : data.tier === 'soft' ? 'soft' : 'none';
-    if (IMMEDIATE_SEVERE.has(String(reasonCode || ''))) tier = 'severe';
-    else if (count >= SEVERE_THRESHOLD) tier = 'severe';
-    else if (count >= SOFT_THRESHOLD) tier = tier === 'severe' ? 'severe' : 'soft';
-
     const prevTier = data.tier || 'none';
+    const tier = tierAfterFlag({ prevTier, count, reasonCode });
     next = { tier, count, escalated: tier !== prevTier && tier !== 'none' };
 
     tx.set(
@@ -107,9 +144,10 @@ async function applyBlockSignal(db, admin, { blockedUid, blockerUid }) {
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const data = snap.exists ? snap.data() || {} : {};
-    const count = Math.max(Number(data.count) || 0, SOFT_THRESHOLD);
-    let tier = data.tier === 'severe' ? 'severe' : 'soft';
-    if (count >= SEVERE_THRESHOLD) tier = 'severe';
+    const { tier, count } = tierAfterBlock({
+      prevTier: data.tier || 'none',
+      prevCount: Number(data.count) || 0,
+    });
     next = { tier, count };
     tx.set(
       ref,
@@ -135,7 +173,11 @@ module.exports = {
   applyBlockSignal,
   setDiscoveryHidden,
   maybeDecayShadowban,
+  tierAfterFlag,
+  tierAfterBlock,
+  softDecayNext,
   SOFT_THRESHOLD,
   SEVERE_THRESHOLD,
+  IMMEDIATE_SEVERE,
   DECAY_MS,
 };

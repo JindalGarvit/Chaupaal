@@ -275,13 +275,8 @@ async function maybeNotifyDm(adminApp, { chatId, recipientUid, actor, preview })
   const bundleId = makeBundleId('message', chatId);
   try {
     const existing = await itemsRef(db, recipientUid).doc(bundleId).get();
-    if (existing.exists) {
-      const d = existing.data() || {};
-      const updatedMs = Number(d.updatedAtMs) || 0;
-      const sameActor = Array.isArray(d.actors) && d.actors[0]?.uid === actor?.uid;
-      if (!d.read && sameActor && updatedMs && Date.now() - updatedMs < DM_THROTTLE_MS) {
-        return { skipped: 'throttle' };
-      }
+    if (existing.exists && shouldThrottleDmBundle(existing.data() || {}, actor?.uid)) {
+      return { skipped: 'throttle' };
     }
   } catch (e) {}
 
@@ -292,6 +287,14 @@ async function maybeNotifyDm(adminApp, { chatId, recipientUid, actor, preview })
     preview: preview || 'New message',
     deepLink: { chatId },
   });
+}
+
+/** True when same-actor DM spam should skip a new bundle write. */
+function shouldThrottleDmBundle(data, actorUid, nowMs = Date.now(), throttleMs = DM_THROTTLE_MS) {
+  if (!data || data.read) return false;
+  const updatedMs = Number(data.updatedAtMs) || 0;
+  const sameActor = Array.isArray(data.actors) && data.actors[0]?.uid === actorUid;
+  return !!(sameActor && updatedMs && nowMs - updatedMs < throttleMs);
 }
 
 /**
@@ -326,6 +329,7 @@ module.exports = {
   normalizeActor,
   mergeBundleActors,
   shouldPruneReadBundle,
+  shouldThrottleDmBundle,
   sectionForType,
   upsertNotification,
   markNotificationRead,

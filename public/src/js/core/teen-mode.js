@@ -1,18 +1,17 @@
 /**
  * Teen Mode + age helpers (Phase 2).
  * Hard line: under 13 blocked. 13–17 = teen until parentalConsent verified.
+ * Pure gates live in teen-gates.js (ChaupaalTeenGates).
  */
 (function () {
   'use strict';
 
   const DEVICE_ID_KEY = 'chaupaal_device_id';
   const LAST_USER_KEY = 'chaupaal_last_user';
+  const G = typeof ChaupaalTeenGates !== 'undefined' ? ChaupaalTeenGates : null;
 
   function ageFromDob(dob) {
-    if (!dob) return 0;
-    const d = dob instanceof Date ? dob : new Date(dob);
-    if (Number.isNaN(d.getTime())) return 0;
-    return Math.floor((Date.now() - d.getTime()) / (365.25 * 86400000));
+    return G ? G.ageFromDob(dob) : 0;
   }
 
   function getOrCreateDeviceId() {
@@ -64,41 +63,30 @@
   }
 
   function isMinorAge(age) {
-    return age > 0 && age < 18;
+    return G ? G.isMinorAge(age) : age > 0 && age < 18;
   }
 
   function isBlockedAge(age) {
-    return age > 0 && age < 13;
+    return G ? G.isBlockedAge(age) : age > 0 && age < 13;
   }
 
   function isTeenAge(age) {
-    return age >= 13 && age < 18;
+    return G ? G.isTeenAge(age) : age >= 13 && age < 18;
   }
 
   function userAge(userOrProfile) {
     const u = userOrProfile || (typeof userProfile !== 'undefined' ? userProfile : null) || {};
-    if (Number.isFinite(u.age) && u.age > 0) return Number(u.age);
-    const dob = u.dob || u.dateOfBirth || u.profile?.dateOfBirth;
-    return ageFromDob(dob);
+    return G ? G.userAge(u) : 0;
   }
 
   function isTeenModeUser(userOrProfile) {
     const u = userOrProfile || (typeof userProfile !== 'undefined' ? userProfile : null);
-    if (!u) return false;
-    if (u.teenMode === true) return true;
-    if (u.isMinor === true) return true;
-    const age = userAge(u);
-    if (!isMinorAge(age)) return false;
-    // Adults who corrected DOB below 18 without consent still treated as teen-gated
-    return !u.parentalConsent?.verified;
+    return G ? G.isTeenModeUser(u) : false;
   }
 
   function needsParentalConsent(userOrProfile) {
     const u = userOrProfile || (typeof userProfile !== 'undefined' ? userProfile : null);
-    if (!u) return false;
-    const age = userAge(u);
-    if (!isTeenAge(age) && !(isMinorAge(age) && age >= 13)) return false;
-    return !u.parentalConsent?.verified;
+    return G ? G.needsParentalConsent(u) : false;
   }
 
   function teenHideDatingIntents() {
@@ -107,17 +95,8 @@
 
   /** Minors may only be messaged by other minors or reciprocal friends. */
   function canMessageTarget(targetUser, relationshipState) {
-    const meTeen = isTeenModeUser();
-    const themTeen = isTeenModeUser(targetUser);
-    if (!meTeen && !themTeen) return { ok: true };
-    if (relationshipState?.friend) return { ok: true };
-    if (meTeen && themTeen) return { ok: true };
-    if (meTeen && !themTeen) {
-      return { ok: false, reason: 'teen_adult_stranger' };
-    }
-    if (!meTeen && themTeen) {
-      return { ok: false, reason: 'adult_teen_stranger' };
-    }
+    const me = typeof userProfile !== 'undefined' ? userProfile : null;
+    if (G) return G.canMessageTarget(me, targetUser, relationshipState);
     return { ok: true };
   }
 
@@ -179,7 +158,7 @@
 
   /** Location never visible to non-friends (app-wide). */
   function canSeeLocation(relationshipState) {
-    return !!(relationshipState?.friend);
+    return G ? G.canSeeLocation(relationshipState) : !!(relationshipState?.friend);
   }
 
   function teenAiSystemHint() {

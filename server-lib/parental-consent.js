@@ -17,6 +17,29 @@ function makeOtp() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
+/** SHA-256(otp + childUid) — pure for verify tests. */
+function hashConsentOtp(otp, childUid) {
+  return crypto.createHash('sha256').update(String(otp) + String(childUid)).digest('hex');
+}
+
+/**
+ * Parent age gate: age 1–17 rejected; missing/0 age allowed (legacy adults).
+ * @returns {'ok'|'PARENT_NOT_ADULT'}
+ */
+function parentAgeStatus(age) {
+  const n = Number(age) || 0;
+  if (n > 0 && n < 18) return 'PARENT_NOT_ADULT';
+  return 'ok';
+}
+
+/** Phone index doc ids to try for a cleaned contact. */
+function phoneIndexCandidates(cleaned) {
+  const c = String(cleaned || '');
+  const phoneKey = c.replace(/\D/g, '');
+  if (phoneKey.length < 10) return [];
+  return [c, '+' + phoneKey, '+91' + phoneKey.slice(-10)];
+}
+
 async function resolveAdultByContact(adminApp, contact) {
   const db = adminApp.firestore();
   const c = cleanContact(contact);
@@ -29,8 +52,9 @@ async function resolveAdultByContact(adminApp, contact) {
       if (!user?.uid) return null;
       const snap = await db.collection('users').doc(user.uid).get();
       if (!snap.exists) return null;
-      const age = Number(snap.data()?.age) || 0;
-      if (age > 0 && age < 18) return { error: 'PARENT_NOT_ADULT' };
+      if (parentAgeStatus(snap.data()?.age) === 'PARENT_NOT_ADULT') {
+        return { error: 'PARENT_NOT_ADULT' };
+      }
       return { uid: user.uid, email: c, phone: snap.data()?.phone || null };
     } catch (e) {
       return null;
@@ -38,20 +62,18 @@ async function resolveAdultByContact(adminApp, contact) {
   }
 
   // Phone / username via indexes if present
-  const phoneKey = c.replace(/\D/g, '');
-  if (phoneKey.length >= 10) {
-    const variants = [c, '+' + phoneKey, '+91' + phoneKey.slice(-10)];
-    for (const v of variants) {
-      const idx = await db.collection('phone_index').doc(v).get().catch(() => null);
-      if (idx?.exists) {
-        const uid = idx.data()?.uid;
-        if (!uid) continue;
-        const snap = await db.collection('users').doc(uid).get();
-        if (!snap.exists) continue;
-        const age = Number(snap.data()?.age) || 0;
-        if (age > 0 && age < 18) return { error: 'PARENT_NOT_ADULT' };
-        return { uid, phone: v, email: snap.data()?.email || null };
+  const variants = phoneIndexCandidates(c);
+  for (const v of variants) {
+    const idx = await db.collection('phone_index').doc(v).get().catch(() => null);
+    if (idx?.exists) {
+      const uid = idx.data()?.uid;
+      if (!uid) continue;
+      const snap = await db.collection('users').doc(uid).get();
+      if (!snap.exists) continue;
+      if (parentAgeStatus(snap.data()?.age) === 'PARENT_NOT_ADULT') {
+        return { error: 'PARENT_NOT_ADULT' };
       }
+      return { uid, phone: v, email: snap.data()?.email || null };
     }
   }
   return null;
@@ -71,7 +93,7 @@ async function startParentalConsent(adminApp, childUid, contact) {
   }
 
   const otp = makeOtp();
-  const hash = crypto.createHash('sha256').update(otp + childUid).digest('hex');
+  const hash = hashConsentOtp(otp, childUid);
   const db = adminApp.firestore();
   await db
     .collection('users')
@@ -112,18 +134,29 @@ async function startParentalConsent(adminApp, childUid, contact) {
   };
 }
 
+/**
+ * Pure pending-OTP check (no Firestore write).
+ * @returns {{ ok: true } | { ok: false, error: string }}
+ */
+function evaluatePendingOtp({ pending, childUid, otp, nowMs = Date.now() }) {
+  if (!childUid || otp == null || otp === '') return { ok: false, error: 'MISSING' };
+  if (!pending?.otpHash) return { ok: false, error: 'NO_PENDING' };
+  if (pending.expiresAt && nowMs > pending.expiresAt) {
+    return { ok: false, error: 'EXPIRED' };
+  }
+  const hash = hashConsentOtp(otp, childUid);
+  if (hash !== pending.otpHash) return { ok: false, error: 'INVALID_OTP' };
+  return { ok: true };
+}
+
 async function verifyParentalConsent(adminApp, childUid, otp) {
   if (!adminApp || !childUid || !otp) return { ok: false, error: 'MISSING' };
   const db = adminApp.firestore();
   const snap = await db.collection('users').doc(childUid).get();
   if (!snap.exists) return { ok: false, error: 'USER_NOT_FOUND' };
   const pending = snap.data()?.parentalConsentPending;
-  if (!pending?.otpHash) return { ok: false, error: 'NO_PENDING' };
-  if (pending.expiresAt && Date.now() > pending.expiresAt) {
-    return { ok: false, error: 'EXPIRED' };
-  }
-  const hash = crypto.createHash('sha256').update(String(otp) + childUid).digest('hex');
-  if (hash !== pending.otpHash) return { ok: false, error: 'INVALID_OTP' };
+  const check = evaluatePendingOtp({ pending, childUid, otp });
+  if (!check.ok) return check;
 
   const consent = {
     verified: true,
@@ -153,4 +186,9 @@ module.exports = {
   startParentalConsent,
   verifyParentalConsent,
   resolveAdultByContact,
+  cleanContact,
+  hashConsentOtp,
+  parentAgeStatus,
+  phoneIndexCandidates,
+  evaluatePendingOtp,
 };
