@@ -43,61 +43,58 @@ function renderProfileModal(){
   el.innerHTML=`
     ${typeof renderPreviewToggleHtml==='function'?renderPreviewToggleHtml():''}
     ${p.needsEmailForPasswordLogin?`<div class="profile-password-login-note" style="margin:0 0 12px;padding:12px 14px;border-radius:12px;background:rgba(230,57,70,0.08);border:1.5px solid rgba(230,57,70,0.22);font-size:12px;line-height:1.45;color:var(--ink);">Add an email to enable password login with your phone number.</div>`:''}
-    <div class="own-profile-edit-toolbar">
+    <div class="dp-hero">
+      <div class="dp-hero-avatar-wrap">
+        <div id="ownProfileStoryAvatar" class="dp-hero-avatar">
+          ${p.photoURL?`<img src="${p.photoURL}" alt="">`:'🪑'}
+        </div>
+        <label class="dp-hero-edit" title="Change photo">
+          ✎<input type="file" accept="image/*" id="profilePhotoInput" style="display:none;">
+        </label>
+      </div>
+      <div class="dp-hero-copy">
+        <div class="dp-hero-name" data-pro-badge-self data-pro-badge-name="${(displayName||'').replace(/"/g,'&quot;')}">${nameHtml}</div>
+        <div class="dp-hero-handle">@${p.username||'username'}</div>
+        <div class="dp-hero-meta">${[dp.currentCity,dp.occupation].filter(Boolean).join(' · ')||'Add your city & job'}</div>
+        <div class="dp-hero-complete">
+          <div class="dp-hero-complete-row">
+            <span>Profile completeness</span>
+            <span data-ui="profile-completion-pct" style="color:${pct>=80?'var(--green)':'var(--red)'};">${pct}%</span>
+          </div>
+          <div class="dp-hero-complete-track">
+            <div data-ui="profile-completion-bar" style="width:${pct}%;background:${pct>=80?'#2ECC71':'var(--red)'};"></div>
+          </div>
+          <div data-ui="profile-completion-hint" class="dp-hero-complete-hint" style="${pct<60?'':'display:none;'}">${stats.missing?.length?`Add ${stats.missing.slice(0,3).join(', ')}`:'Looking good — keep discovering'}</div>
+        </div>
+      </div>
+    </div>
+    <div class="own-profile-edit-toolbar dp-toolbar">
       <button type="button" class="btn profile-notif-entry" data-open-notif="all" aria-label="Notifications">
         <span data-i18n="profile_notifications">Notifications</span>
         <span class="notif-dot hidden" data-notif-dot="all" aria-hidden="true"></span>
       </button>
-      <button type="button" class="btn" id="profileOpenArchiveBtn">Archive</button>
+      <button type="button" class="btn" data-dp-hub="archive">Archive</button>
+      <button type="button" class="btn" data-dp-hub="interactions">Activity</button>
+      <button type="button" class="btn" data-dp-hub="journal">Journal</button>
       <button type="button" class="btn btn--primary" id="profileAddSectionBtn" title="Add section">＋</button>
     </div>
-    <!-- Profile header -->
-    <div style="display:flex;align-items:center;gap:14px;padding:16px 0 14px;">
-      <div style="position:relative;flex-shrink:0;">
-        <div id="ownProfileStoryAvatar" style="width:72px;height:72px;border-radius:50%;background:var(--line);overflow:hidden;border:3px solid var(--red);display:flex;align-items:center;justify-content:center;font-size:32px;cursor:pointer;">
-          ${p.photoURL?`<img src="${p.photoURL}" style="width:100%;height:100%;object-fit:cover;">`:'🪑'}
-        </div>
-        <label style="position:absolute;bottom:0;right:0;background:var(--red);width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid var(--white);font-size:11px;color:#fff;">
-          ✎<input type="file" accept="image/*" id="profilePhotoInput" style="display:none;">
-        </label>
-      </div>
-      <div style="flex:1;min-width:0;">
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;" data-pro-badge-self data-pro-badge-name="${(displayName||'').replace(/"/g,'&quot;')}">${nameHtml}</div>
-        <div style="font-size:12px;color:var(--muted);">@${p.username||'username'}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px;">${[dp.currentCity,dp.occupation].filter(Boolean).join(' · ')||'Add your city & job'}</div>
-      </div>
-    </div>
-    <div class="own-edit-sections" data-own-edit-sections></div>
-    <!-- Completeness bar -->
-    <div style="margin-bottom:14px;">
-      <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;">
-        <span>Profile completeness</span><span data-ui="profile-completion-pct" style="color:${pct>=80?'var(--green)':'var(--red)'};">${pct}%</span>
-      </div>
-      <div style="height:5px;background:var(--line);border-radius:99px;overflow:hidden;">
-        <div data-ui="profile-completion-bar" style="height:100%;width:${pct}%;background:${pct>=80?'#2ECC71':'var(--red)'};border-radius:99px;transition:width .5s ease;"></div>
-      </div>
-      <div data-ui="profile-completion-hint" style="font-size:11px;color:var(--muted);margin-top:5px;${pct<60?'':'display:none;'}">${stats.missing?.length?`Add ${stats.missing.slice(0,3).join(', ')} to improve discovery ✨`:'Complete your profile to appear in more Peepal discoveries ✨'}</div>
-    </div>
-    <!-- Section tabs -->
-    <div style="display:flex;gap:0;border-bottom:2px solid var(--line);margin-bottom:0;overflow-x:auto;flex-shrink:0;" id="profileSectionTabs">
-      ${['Personal','Career','Lifestyle','Relationships','Social'].map((s,i)=>`<button class="profile-section-tab${i===0?' active':''}" data-sec="${s}" style="padding:10px 14px;border:none;background:none;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;color:${i===0?'var(--red)':'var(--muted)'};border-bottom:${i===0?'2px solid var(--red)':'none'};margin-bottom:-2px;">${s}</button>`).join('')}
-    </div>
-    <div id="profileSectionContent" style="padding:16px 0;"></div>
-    <!-- Actions -->
-    <div style="border-top:1px solid var(--line);padding-top:14px;margin-top:4px;">
+    <div class="dp-rel-strip">
       <div data-profile-relationship-counts class="relationship-counts-loading">Loading relationships…</div>
       <div data-friend-requests></div>
-      <button class="btn btn--primary btn--block modal-btn" id="manageCloseFriendsBtn" style="margin-top:12px;background:var(--navy);">Close Friends</button>
-      <button class="btn btn--primary btn--block modal-btn" style="margin-top:12px;" onclick="showMonthlyWrap()">📊 Monthly Wrap</button>
-      <button class="btn btn--primary btn--block modal-btn" style="margin-top:8px;background:linear-gradient(135deg,var(--navy),#2A3158);color:#fff;" onclick="openArchive()">🗄️ My Archive</button>
-      <button class="btn btn--primary btn--block modal-btn" style="margin-top:8px;background:var(--navy);color:#fff;" onclick="openStoryArchive()">Story Archive</button>
-      <button class="btn btn--primary btn--block modal-btn" style="margin-top:8px;" onclick="typeof openRecoveryBin==='function'&&openRecoveryBin()">🗑️ Recently deleted</button>
-      <button class="btn btn--primary btn--block modal-btn" style="margin-top:8px;" onclick="typeof openSessionsSheet==='function'&&openSessionsSheet()">💻 Devices & sessions</button>
-      <button class="btn btn--primary btn--block modal-btn" style="margin-top:8px;" onclick="typeof openBlockedUsersSheet==='function'&&openBlockedUsersSheet()">🚫 Blocked users</button>
-      <button class="btn btn--primary btn--block modal-btn" style="margin-top:8px;background:linear-gradient(135deg,#C9A227,#8134AF);color:#fff;" onclick="openPremiumSheet()">⭐ Chaupaal Plus</button>
-      <button class="btn btn--primary btn--block modal-btn" style="margin-top:8px;background:var(--navy);color:#fff;" onclick="typeof openChaupaalProfileHub==='function'&&openChaupaalProfileHub()">🏠 Chaupaal Profile</button>
-      <button type="button" class="btn btn--primary btn--block modal-btn" id="switchProfileBtn" style="width:100%;margin-bottom:8px;">👤 Switch / add profile</button>
-      <button class="logout-btn" id="logoutBtn">Log out</button>
+    </div>
+    <div class="own-edit-sections" data-own-edit-sections></div>
+    <p class="dp-reorder-hint">Long-press ⠿ on a section to reorder what visitors see first</p>
+    <!-- Field editor tabs -->
+    <div class="dp-field-tabs" id="profileSectionTabs">
+      ${['Personal','Career','Lifestyle','Relationships','Social'].map((s,i)=>`<button type="button" class="profile-section-tab${i===0?' active':''}" data-sec="${s}">${s}</button>`).join('')}
+    </div>
+    <div id="profileSectionContent" class="dp-field-body"></div>
+    <!-- Slim account strip — heavy stuff lives in Chaupaal Profile hub -->
+    <div class="dp-account-strip">
+      <button type="button" class="btn btn--primary btn--block" data-dp-open-hub>Chaupaal Profile · trust, Plus, devices</button>
+      <button type="button" class="btn btn--block" id="manageCloseFriendsBtn">Close Friends</button>
+      <button type="button" class="btn btn--block" id="switchProfileBtn">Switch / add profile</button>
+      <button type="button" class="logout-btn" id="logoutBtn">Log out</button>
     </div>
   `;
 
@@ -376,6 +373,17 @@ function renderProfileModal(){
       if(typeof openArchiveHub==='function') openArchiveHub('posts');
       else if(typeof openArchive==='function') openArchive();
     });
+    el.querySelectorAll('[data-dp-hub]').forEach((btn)=>{
+      btn.addEventListener('click',()=>{
+        const tab = btn.dataset.dpHub;
+        if(typeof openArchiveHub==='function'){
+          openArchiveHub(tab === 'archive' ? 'stories' : tab);
+        } else if(typeof openArchive==='function') openArchive();
+      });
+    });
+    el.querySelector('[data-dp-open-hub]')?.addEventListener('click',()=>{
+      if(typeof openChaupaalProfileHub==='function') openChaupaalProfileHub();
+    });
     document.getElementById('profileAddSectionBtn')?.addEventListener('click',()=>{
       if(typeof openAddProfileSectionSheet==='function'){
         openAddProfileSectionSheet(()=>renderProfileModal());
@@ -385,8 +393,11 @@ function renderProfileModal(){
     if(typeof updateSectionNotifDots==='function') updateSectionNotifDots();
     document.getElementById('profileSectionTabs')?.querySelectorAll('.profile-section-tab').forEach(tab=>{
       tab.addEventListener('click',()=>{
-        document.querySelectorAll('.profile-section-tab').forEach(t=>{t.style.color='var(--muted)';t.style.borderBottom='none';});
-        tab.style.color='var(--red)';tab.style.borderBottom='2px solid var(--red)';
+        document.querySelectorAll('.profile-section-tab').forEach(t=>{
+          t.classList.toggle('active', t === tab);
+          t.style.color='';
+          t.style.borderBottom='';
+        });
         renderSection(tab.dataset.sec);
       });
     });

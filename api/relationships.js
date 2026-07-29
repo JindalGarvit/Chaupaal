@@ -21,7 +21,7 @@ const {
   deriveRelationshipState,
   countDeltasForFollowChange,
 } = require('../server-lib/social-model');
-const { applyFlagSignal, applyBlockSignal } = require('../server-lib/shadowban');
+const { applyFlagSignal, applyBlockSignal, maybeDecayShadowban } = require('../server-lib/shadowban');
 const { logMatchEngagement } = require('../server-lib/intent-weights');
 
 const MAX_TARGETS = 30;
@@ -497,6 +497,15 @@ module.exports = async function handler(req, res) {
       if (!rate.ok) return sendError(res, 429, 'RATE_LIMITED', 'Too many relationship changes. Try again shortly.');
     }
     if (action === 'hydrate') {
+      await maybeDecayShadowban(db, admin, user.uid).catch(() => {});
+      const targets = Array.isArray(body.targetUids) ? body.targetUids : [];
+      await Promise.all(
+        targets
+          .map((id) => cleanUid(id))
+          .filter((id) => id && id !== user.uid)
+          .slice(0, 12)
+          .map((id) => maybeDecayShadowban(db, admin, id).catch(() => {}))
+      );
       return sendSuccess(res, { states: await hydrate(db, user.uid, body.targetUids) });
     }
     if (action === 'profile') {
@@ -645,6 +654,7 @@ module.exports = async function handler(req, res) {
     }
     if (action === 'block_signal') {
       if (!targetUid) return sendError(res, 400, 'VALIDATION_ERROR', 'targetUid required');
+      await maybeDecayShadowban(db, admin, targetUid).catch(() => {});
       const ban = await applyBlockSignal(db, admin, {
         blockedUid: targetUid,
         blockerUid: user.uid,

@@ -181,42 +181,70 @@ async function renderDuniyaStories(){
         uid:u.uid,name:u.name,avatar:u.avatar,photoURL:/^https:/.test(u.avatar||'')?u.avatar:'',
       });
     }
+    if(u.self&&typeof onLongPress==='function'){
+      onLongPress(item.querySelector('.duniya-story-avatar')||item,()=>{
+        item.dataset.suppressClick='1';
+        if(typeof openDuniyaPostSheet==='function') openDuniyaPostSheet('post');
+        else if(typeof showToast==='function') showToast('Create a post');
+      });
+    }
     item.addEventListener('click',()=>{
+      if(item.dataset.suppressClick==='1'){
+        item.dataset.suppressClick='0';
+        return;
+      }
       const storyUser=storyUsers[Number(item.dataset.storyIndex)];
       if(storyUser.self){
-        const s=document.createElement('div');
-        s.style.cssText='position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:20px;z-index:100;';
-        s.innerHTML=`
-          <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;margin-bottom:4px;">Add to Duniya Story</div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">Duniya Stories are public and discoverable.</div>
-          <label style="display:flex;align-items:center;gap:12px;padding:13px;background:var(--cream);border-radius:14px;cursor:pointer;margin-bottom:10px;font-weight:600;font-size:14px;">
-            📷 Add photo or video<input type="file" accept="image/*,video/*" id="duniyaStoryFile" style="display:none;">
-          </label>
-          <button id="closeDuniyaStorySheet" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;margin-top:10px;">Cancel</button>
-        `;
-        document.querySelector('.device').appendChild(s);
-        if(typeof enableSwipeDismiss==='function') enableSwipeDismiss(s,()=>s.remove());
-        document.getElementById('closeDuniyaStorySheet').addEventListener('click',()=>s.remove());
-        document.getElementById('duniyaStoryFile').addEventListener('change',async e=>{
-          const file=e.target.files[0];if(!file)return;
-          s.remove();
-          showToast(t('duniya_preparing_story'));
-          try{
-            if(typeof processAndUploadMedia!=='function')throw new Error('Media upload unavailable');
-            const up=await processAndUploadMedia(file,{folder:'stories'});
-            await createPlatformStory({
-              destination:'duniya',kind:'story',type:'media',
-              media:up.media,thumb:up.thumb,
-              mediaType:file.type.startsWith('video')?'video':'image',
-            });
-            await renderDuniyaStories();
-            showToast(t('duniya_story_shared'));
-          }catch(err){
-            showToast(typeof friendlyError==='function'?friendlyError(err):(err.message||t('duniya_story_fail')));
-          }
-        });
+        // Short expand: story vs create post
+        if(typeof showActionSheet==='function'){
+          showActionSheet('Share on Duniya',[
+            {label:'📷 Add story',hint:'Public story — discoverable in Duniya.',fn:()=>openDuniyaStoryAddSheet()},
+            {label:'✍️ Create a post',hint:'Photo, video, or caption for Vishwa / Lehar.',fn:()=>openDuniyaPostSheet('post')},
+          ]);
+          return;
+        }
+        openDuniyaStoryAddSheet();
       }else openStoryViewer(storyUser.stories[0],storyUser.stories);
     });
+  });
+}
+
+function openDuniyaStoryAddSheet(){
+  const s=document.createElement('div');
+  s.style.cssText='position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:20px;z-index:100;';
+  s.innerHTML=`
+    <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;margin-bottom:4px;">Add to Duniya Story</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">Duniya Stories are public and discoverable.</div>
+    <label style="display:flex;align-items:center;gap:12px;padding:13px;background:var(--cream);border-radius:14px;cursor:pointer;margin-bottom:10px;font-weight:600;font-size:14px;">
+      📷 Add photo or video<input type="file" accept="image/*,video/*" id="duniyaStoryFile" style="display:none;">
+    </label>
+    <button type="button" class="btn btn--primary btn--block" id="duniyaStoryCreatePost" style="margin-bottom:8px;">Create a post instead</button>
+    <button id="closeDuniyaStorySheet" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;margin-top:4px;">Cancel</button>
+  `;
+  document.querySelector('.device').appendChild(s);
+  if(typeof enableSwipeDismiss==='function') enableSwipeDismiss(s,()=>s.remove());
+  document.getElementById('closeDuniyaStorySheet')?.addEventListener('click',()=>s.remove());
+  document.getElementById('duniyaStoryCreatePost')?.addEventListener('click',()=>{
+    s.remove();
+    if(typeof openDuniyaPostSheet==='function') openDuniyaPostSheet('post');
+  });
+  document.getElementById('duniyaStoryFile')?.addEventListener('change',async e=>{
+    const file=e.target.files[0];if(!file)return;
+    s.remove();
+    showToast(t('duniya_preparing_story'));
+    try{
+      if(typeof processAndUploadMedia!=='function')throw new Error('Media upload unavailable');
+      const up=await processAndUploadMedia(file,{folder:'stories'});
+      await createPlatformStory({
+        destination:'duniya',kind:'story',type:'media',
+        media:up.media,thumb:up.thumb,
+        mediaType:file.type.startsWith('video')?'video':'image',
+      });
+      await renderDuniyaStories();
+      showToast(t('duniya_story_shared'));
+    }catch(err){
+      showToast(typeof friendlyError==='function'?friendlyError(err):(err.message||t('duniya_story_fail')));
+    }
   });
 }
 
@@ -1211,6 +1239,7 @@ function toggleOpenToMeet(){
 // ===================== LEHAR (Section 8) — vertical short-form video only =====================
 (function initLeharMode() {
   let mode = 'general';
+  let leharIo = null;
   function isVideoPost(p) {
     const media = p.media || p.video || '';
     const type = String(p.mediaType || p.type || '').toLowerCase();
@@ -1220,13 +1249,24 @@ function toggleOpenToMeet(){
   function renderLeharFeed() {
     const feed = document.getElementById('leharFeed');
     if (!feed) return;
+    if (leharIo) {
+      try { leharIo.disconnect(); } catch (e) {}
+      leharIo = null;
+    }
     const videos = (duniyaPosts || [])
       .filter((p) => !(typeof isSoftDeleted === 'function' ? isSoftDeleted(p) : p.deleted))
       .filter((p) => p.archived !== true)
       .filter(isVideoPost);
     if (!videos.length) {
       feed.innerHTML =
-        '<div class="lehar-empty"><strong>Lehar</strong><p>Short videos from Duniya will wave through here. Post a clip to start the scroll.</p></div>';
+        `<div class="lehar-empty">
+          <strong>Lehar</strong>
+          <p>Short videos from Duniya wave through here.</p>
+          <button type="button" class="btn btn--primary" data-lehar-create>Post a clip</button>
+        </div>`;
+      feed.querySelector('[data-lehar-create]')?.addEventListener('click', () => {
+        if (typeof openDuniyaPostSheet === 'function') openDuniyaPostSheet('post');
+      });
       return;
     }
     feed.innerHTML = videos
@@ -1234,11 +1274,33 @@ function toggleOpenToMeet(){
         const src = p.media || p.video;
         const name = p.user?.name || 'Member';
         const postId = p.id || '';
+        const likes = Number(p.likes) || 0;
+        const comments = Number(p.comments) || 0;
+        const liked = !!p.likedByMe;
+        const avatar = p.user?.photoURL || (p.user?.avatar && /^https:/.test(p.user.avatar) ? p.user.avatar : '');
         return `<section class="lehar-slide" data-lehar-i="${i}" data-lehar-id="${duniyaEsc(postId)}">
           <video src="${duniyaEsc(src)}" playsinline loop muted preload="metadata"></video>
+          <div class="lehar-progress"><i data-lehar-progress></i></div>
           <button type="button" class="lehar-mute-btn" aria-label="Toggle mute" data-lehar-mute>🔇</button>
           <div class="lehar-double-heart" aria-hidden="true">♥</div>
-          <div class="lehar-meta"><strong>${duniyaEsc(name)}</strong><p>${duniyaEsc((p.caption || '').slice(0, 100))}</p></div>
+          <div class="lehar-actions">
+            <button type="button" class="lehar-action ${liked ? 'is-liked' : ''}" data-lehar-like aria-label="Like">
+              <span aria-hidden="true">♥</span><em data-lehar-likes>${likes}</em>
+            </button>
+            <button type="button" class="lehar-action" data-lehar-comment aria-label="Comments">
+              <span aria-hidden="true">💬</span><em>${comments}</em>
+            </button>
+            <button type="button" class="lehar-action" data-lehar-share aria-label="Share">
+              <span aria-hidden="true">↗</span><em>Share</em>
+            </button>
+          </div>
+          <div class="lehar-meta">
+            <button type="button" class="lehar-author" data-lehar-author>
+              ${avatar ? `<img src="${duniyaEsc(avatar)}" alt="">` : `<span class="lehar-author-fallback">${duniyaEsc((name || '?').slice(0, 1))}</span>`}
+              <strong>${duniyaEsc(name)}</strong>
+            </button>
+            <p>${duniyaEsc((p.caption || '').slice(0, 120))}</p>
+          </div>
         </section>`;
       })
       .join('');
@@ -1250,10 +1312,25 @@ function toggleOpenToMeet(){
       const btn = slide.querySelector('[data-lehar-mute]');
       if (btn) btn.textContent = muted ? '🔇' : '🔊';
     };
+    const bindProgress = (slide) => {
+      const v = slide.querySelector('video');
+      const bar = slide.querySelector('[data-lehar-progress]');
+      if (!v || !bar) return;
+      const tick = () => {
+        if (!v.duration || !Number.isFinite(v.duration)) return;
+        bar.style.width = `${Math.min(100, (v.currentTime / v.duration) * 100)}%`;
+      };
+      v.addEventListener('timeupdate', tick);
+      v.addEventListener('ended', () => { bar.style.width = '0%'; });
+    };
     slides.forEach((s) => {
       const v = s.querySelector('video');
       if (v) v.muted = mutedPref;
       setMuteUi(s, mutedPref);
+      bindProgress(s);
+      const postId = s.dataset.leharId;
+      const post = () => (duniyaPosts || []).find((x) => x.id === postId);
+
       s.querySelector('[data-lehar-mute]')?.addEventListener('click', (e) => {
         e.stopPropagation();
         mutedPref = !mutedPref;
@@ -1264,16 +1341,15 @@ function toggleOpenToMeet(){
           setMuteUi(sl, mutedPref);
         });
       });
-      let lastTap = 0;
+
       const likeSlide = () => {
-        const id = s.dataset.leharId;
-        const post = (duniyaPosts || []).find((x) => x.id === id);
-        if (post && !post.likedByMe) {
-          const feedCard = document.querySelector(`.duniya-post[data-id="${id}"] .like-btn`);
+        const p = post();
+        if (p && !p.likedByMe) {
+          const feedCard = document.querySelector(`.duniya-post[data-id="${postId}"] .like-btn`);
           if (feedCard) feedCard.click();
           else {
-            post.likedByMe = true;
-            post.likes = (post.likes || 0) + 1;
+            p.likedByMe = true;
+            p.likes = (p.likes || 0) + 1;
             if (typeof haptic === 'function') haptic('light');
           }
         } else if (typeof haptic === 'function') haptic('light');
@@ -1283,9 +1359,41 @@ function toggleOpenToMeet(){
           void heart.offsetWidth;
           heart.classList.add('is-pop');
         }
+        const likeBtn = s.querySelector('[data-lehar-like]');
+        const likesEl = s.querySelector('[data-lehar-likes]');
+        likeBtn?.classList.add('is-liked');
+        if (likesEl && p) likesEl.textContent = String(p.likes || 0);
       };
+
+      s.querySelector('[data-lehar-like]')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        likeSlide();
+      });
+      s.querySelector('[data-lehar-comment]')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const p = post();
+        if (p && typeof openDuniyaDetail === 'function') openDuniyaDetail(p);
+      });
+      s.querySelector('[data-lehar-share]')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const p = post();
+        if (p && typeof openShareSheet === 'function') openShareSheet(p);
+        else if (p && navigator.share) {
+          navigator.share({ title: 'Chaupaal', text: String(p.caption || '').slice(0, 120) }).catch(() => {});
+        }
+      });
+      s.querySelector('[data-lehar-author]')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const p = post();
+        const u = p?.user;
+        if (u?.uid && typeof openPublicProfile === 'function') {
+          openPublicProfile(u, { uid: u.uid, username: u.username, context: 'duniya' });
+        }
+      });
+
+      let lastTap = 0;
       s.addEventListener('click', (e) => {
-        if (e.target.closest('[data-lehar-mute]')) return;
+        if (e.target.closest('[data-lehar-mute],[data-lehar-like],[data-lehar-comment],[data-lehar-share],[data-lehar-author]')) return;
         const now = Date.now();
         if (now - lastTap < 320) {
           lastTap = 0;
@@ -1293,13 +1401,13 @@ function toggleOpenToMeet(){
           return;
         }
         lastTap = now;
-        const v = s.querySelector('video');
-        if (!v) return;
-        if (v.paused) v.play().catch(() => {});
-        else v.pause();
+        const vid = s.querySelector('video');
+        if (!vid) return;
+        if (vid.paused) vid.play().catch(() => {});
+        else vid.pause();
       });
     });
-    const io = new IntersectionObserver(
+    leharIo = new IntersectionObserver(
       (entries) => {
         entries.forEach((en) => {
           const v = en.target.querySelector('video');
@@ -1317,9 +1425,9 @@ function toggleOpenToMeet(){
           }
         });
       },
-      { root: feed, threshold: [0.65] }
+      { root: feed, threshold: [0.65, 0.9] }
     );
-    slides.forEach((s) => io.observe(s));
+    slides.forEach((s) => leharIo.observe(s));
   }
   function setDuniyaMode(next) {
     const map = { general: 'vishwa', vishwa: 'vishwa', lehar: 'lehar', prasidha: 'prasidha' };
@@ -1334,6 +1442,8 @@ function toggleOpenToMeet(){
     document.getElementById('duniyaStoriesRow')?.classList.toggle('hidden', mode !== 'vishwa');
     document.getElementById('leharFeed')?.classList.toggle('hidden', mode !== 'lehar');
     document.getElementById('prasidhaFeed')?.classList.toggle('hidden', mode !== 'prasidha');
+    const panel = document.getElementById('panel-duniya') || document.getElementById('duniyaScreen');
+    panel?.classList.toggle('is-lehar', mode === 'lehar');
     const hints = document.querySelectorAll('.duniya-mode-hint span');
     if (hints.length >= 3) {
       hints[0].classList.toggle('is-center', mode === 'lehar');
