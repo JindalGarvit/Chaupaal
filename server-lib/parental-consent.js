@@ -42,7 +42,8 @@ async function resolveAdultByContact(adminApp, contact) {
   if (phoneKey.length >= 10) {
     const variants = [c, '+' + phoneKey, '+91' + phoneKey.slice(-10)];
     for (const v of variants) {
-      const idx = await db.collection('phone_index').doc(v).get().catch(() => null);
+      // Must match client writes + firestore.rules: phoneIndex/{e164}
+      const idx = await db.collection('phoneIndex').doc(v).get().catch(() => null);
       if (idx?.exists) {
         const uid = idx.data()?.uid;
         if (!uid) continue;
