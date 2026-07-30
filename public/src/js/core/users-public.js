@@ -19,6 +19,9 @@
     'city',
     'bio',
     'age',
+    // Teen safety flags — peers use these for DM gates (rules prevent clearing / age promotion)
+    'teenMode',
+    'isMinor',
     'interests',
     'hobbies',
     'topCat',

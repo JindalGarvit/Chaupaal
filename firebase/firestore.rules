@@ -126,13 +126,64 @@ service cloud.firestore {
         (request.resource.data.parentId == null || request.resource.data.parentId is string);
     }
 
+    // Teen safety: under-18 age value (0 / missing is treated as unknown, not minor).
+    function isMinorAgeValue(age) {
+      return age is int && age > 0 && age < 18;
+    }
+
+    // parentalConsent* is Admin-only after create (OTP verify via /api/media-config).
+    function parentalConsentUntouched() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['parentalConsent', 'parentalConsentPending']);
+    }
+
+    // Clients may turn Teen Mode ON (e.g. DOB edit) but cannot clear it.
+    function cannotClearTeenSafetyFlags() {
+      let keys = request.resource.data.diff(resource.data).affectedKeys();
+      let teenOk = !keys.hasAny(['teenMode'])
+        || request.resource.data.teenMode == true
+        || !('teenMode' in resource.data)
+        || resource.data.teenMode != true;
+      let minorOk = !keys.hasAny(['isMinor'])
+        || request.resource.data.isMinor == true
+        || !('isMinor' in resource.data)
+        || resource.data.isMinor != true;
+      return teenOk && minorOk;
+    }
+
+    // Once stored as under-18, client cannot self-promote into adulthood via age.
+    function cannotSelfPromoteAge() {
+      return !isMinorAgeValue(resource.data.age)
+        || isMinorAgeValue(request.resource.data.age);
+    }
+
+    // Minors cannot self-attest verified parental consent on create.
+    function minorCannotSelfVerifyConsentOnCreate() {
+      return !isMinorAgeValue(request.resource.data.age)
+        || !('parentalConsent' in request.resource.data)
+        || request.resource.data.parentalConsent.verified != true;
+    }
+
+    // Public projection must not advertise adulthood when private age is minor.
+    function publicAgeRespectsPrivateMinor(userId) {
+      let priv = /databases/$(database)/documents/users/$(userId);
+      return !exists(priv)
+        || !isMinorAgeValue(get(priv).data.age)
+        || !('age' in request.resource.data)
+        || isMinorAgeValue(request.resource.data.age);
+    }
+
     // ===================== USERS =====================
     match /users/{userId} {
       // Private document — owner only (email/phone/DOB/prefs). Others use users_public.
       allow read: if isOwner(userId);
-      allow create: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && minorCannotSelfVerifyConsentOnCreate();
       allow update: if isOwner(userId)
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['relationshipCounts']);
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['relationshipCounts'])
+        && parentalConsentUntouched()
+        && cannotClearTeenSafetyFlags()
+        && cannotSelfPromoteAge();
 
       // Instagram-style multi-profile under one auth identity
       match /profiles/{profileId} {
@@ -250,14 +301,26 @@ service cloud.firestore {
       allow create: if isOwner(userId)
         && !('hiddenFromDiscovery' in request.resource.data
              && request.resource.data.hiddenFromDiscovery == true)
-        && !request.resource.data.keys().hasAny(['email', 'phone', 'phoneNumber', 'dob', 'dateOfBirth']);
+        && !request.resource.data.keys().hasAny(['email', 'phone', 'phoneNumber', 'dob', 'dateOfBirth'])
+        // Cannot advertise adult age / clear teen flags when private profile is under 18
+        && publicAgeRespectsPrivateMinor(userId)
+        && (
+          !exists(/databases/$(database)/documents/users/$(userId))
+          || !isMinorAgeValue(get(/databases/$(database)/documents/users/$(userId)).data.age)
+          || request.resource.data.teenMode == true
+          || request.resource.data.isMinor == true
+          || isMinorAgeValue(request.resource.data.age)
+        );
       allow update: if isOwner(userId)
         && (
           !('hiddenFromDiscovery' in resource.data)
           || request.resource.data.hiddenFromDiscovery == resource.data.hiddenFromDiscovery
         )
         // PII must never land on the world-readable public doc
-        && !request.resource.data.keys().hasAny(['email', 'phone', 'phoneNumber', 'dob', 'dateOfBirth']);
+        && !request.resource.data.keys().hasAny(['email', 'phone', 'phoneNumber', 'dob', 'dateOfBirth'])
+        && cannotClearTeenSafetyFlags()
+        && cannotSelfPromoteAge()
+        && publicAgeRespectsPrivateMinor(userId);
       allow delete: if isOwner(userId);
     }
 
