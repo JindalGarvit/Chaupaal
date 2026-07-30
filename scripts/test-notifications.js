@@ -8,8 +8,12 @@ const {
   mergeBundleActors,
   shouldPruneReadBundle,
   sectionForType,
+  matchesNotificationSection,
+  shouldThrottleDmBundle,
+  normalizeActor,
   ACTOR_STORE_MAX,
   PRUNE_AGE_MS,
+  DM_THROTTLE_MS,
 } = require('../server-lib/notifications');
 
 async function test(name, fn) {
@@ -79,6 +83,36 @@ async function main() {
     assert.equal(shouldPruneReadBundle({ read: false, updatedAtMs: now - PRUNE_AGE_MS * 2 }, now), false);
     assert.equal(shouldPruneReadBundle({ read: true, updatedAtMs: now - 1000 }, now), false);
     assert.equal(shouldPruneReadBundle({ read: true, updatedAtMs: now - PRUNE_AGE_MS - 1 }, now), true);
+  });
+
+  await test('matchesNotificationSection for soft-clear filters', () => {
+    assert.equal(matchesNotificationSection({ section: 'duniya', type: 'like' }, null), true);
+    assert.equal(matchesNotificationSection({ section: 'duniya', type: 'like' }, 'all'), true);
+    assert.equal(matchesNotificationSection({ section: 'duniya', type: 'like' }, 'duniya'), true);
+    assert.equal(matchesNotificationSection({ section: 'baithak', type: 'message' }, 'duniya'), false);
+    assert.equal(matchesNotificationSection({ section: 'all', type: 'friend_request' }, 'friend'), true);
+  });
+
+  await test('shouldThrottleDmBundle same-actor unread window', () => {
+    const now = 1_000_000;
+    const existing = {
+      read: false,
+      updatedAtMs: now - 30_000,
+      actors: [{ uid: 'u1' }],
+    };
+    assert.equal(shouldThrottleDmBundle(existing, { uid: 'u1' }, now, DM_THROTTLE_MS), true);
+    assert.equal(shouldThrottleDmBundle(existing, { uid: 'u2' }, now, DM_THROTTLE_MS), false);
+    assert.equal(shouldThrottleDmBundle({ ...existing, read: true }, { uid: 'u1' }, now, DM_THROTTLE_MS), false);
+    assert.equal(
+      shouldThrottleDmBundle({ ...existing, updatedAtMs: now - DM_THROTTLE_MS - 1 }, { uid: 'u1' }, now, DM_THROTTLE_MS),
+      false
+    );
+  });
+
+  await test('normalizeActor rejects empty / oversized uid', () => {
+    assert.equal(normalizeActor(null), null);
+    assert.equal(normalizeActor({ uid: '' }), null);
+    assert.equal(normalizeActor({ uid: 'u1', name: 'A' }).uid, 'u1');
   });
 
   console.log('\nAll notification tests passed.');

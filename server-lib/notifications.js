@@ -74,6 +74,34 @@ function sectionForType(type) {
   return 'all';
 }
 
+/**
+ * Soft-clear / mark-all-read section filter (pure).
+ * When section is null/'all', every doc matches.
+ */
+function matchesNotificationSection(data, section) {
+  if (!section || section === 'all') return true;
+  if (!data || typeof data !== 'object') return false;
+  if (data.section === section) return true;
+  return String(data.type || '').includes(section);
+}
+
+/**
+ * Pure DM bundle throttle gate (same-actor unread within window).
+ * @param {{ read?: boolean, updatedAtMs?: number, actors?: Array<{uid?: string}> }|null} existing
+ * @param {{ uid?: string }|null} actor
+ * @param {number} [nowMs]
+ * @param {number} [throttleMs]
+ */
+function shouldThrottleDmBundle(existing, actor, nowMs = Date.now(), throttleMs = DM_THROTTLE_MS) {
+  if (!existing || existing.read) return false;
+  const updatedMs = Number(existing.updatedAtMs) || 0;
+  if (!updatedMs) return false;
+  const actorUid = actor && actor.uid;
+  const sameActor = Array.isArray(existing.actors) && existing.actors[0]?.uid === actorUid;
+  if (!sameActor) return false;
+  return nowMs - updatedMs < throttleMs;
+}
+
 function itemsRef(db, uid) {
   return db.collection('notifications').doc(uid).collection('items');
 }
@@ -196,7 +224,7 @@ async function markAllNotificationsRead(adminApp, uid, { section = null } = {}) 
   const batch = db.batch();
   snap.docs.forEach((doc) => {
     const data = doc.data() || {};
-    if (section && section !== 'all' && data.section !== section && !String(data.type || '').includes(section)) {
+    if (!matchesNotificationSection(data, section)) {
       return;
     }
     batch.set(
@@ -275,13 +303,8 @@ async function maybeNotifyDm(adminApp, { chatId, recipientUid, actor, preview })
   const bundleId = makeBundleId('message', chatId);
   try {
     const existing = await itemsRef(db, recipientUid).doc(bundleId).get();
-    if (existing.exists) {
-      const d = existing.data() || {};
-      const updatedMs = Number(d.updatedAtMs) || 0;
-      const sameActor = Array.isArray(d.actors) && d.actors[0]?.uid === actor?.uid;
-      if (!d.read && sameActor && updatedMs && Date.now() - updatedMs < DM_THROTTLE_MS) {
-        return { skipped: 'throttle' };
-      }
+    if (existing.exists && shouldThrottleDmBundle(existing.data() || {}, actor)) {
+      return { skipped: 'throttle' };
     }
   } catch (e) {}
 
@@ -327,6 +350,8 @@ module.exports = {
   mergeBundleActors,
   shouldPruneReadBundle,
   sectionForType,
+  matchesNotificationSection,
+  shouldThrottleDmBundle,
   upsertNotification,
   markNotificationRead,
   markAllNotificationsRead,
