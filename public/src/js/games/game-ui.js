@@ -1119,16 +1119,10 @@
   }
 
   /* ── Dangal progress · stats · soft weekly missions (local, per active profile) ── */
-  const SCORE_FOCUS_GAMES = { rushrunner: true, tiptap: true, ankjod: true, wordguess: true };
-  const HIGHER_BETTER_SCORE = { rushrunner: true, tiptap: true, quiz: true };
-  const LOWER_BETTER_SCORE = { wordguess: true, ankjod: true };
+  const DP = typeof ChaupaalDangalProgress !== 'undefined' ? ChaupaalDangalProgress : null;
 
   function normalizeDangalGameId(gameId) {
-    const id = String(gameId || '').toLowerCase();
-    if (id === 'muqabala' || id === 'quiz') return 'quiz';
-    if (id === 'kakuro') return 'ankjod';
-    if (id === 'tictactoe') return 'ttt';
-    return id;
+    return DP ? DP.normalizeDangalGameId(gameId) : String(gameId || '').toLowerCase();
   }
 
   function dangalProgressProfileId() {
@@ -1144,60 +1138,54 @@
   }
 
   function dangalCalendarDay() {
-    try {
-      return new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Asia/Kolkata',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      }).format(new Date());
-    } catch (e) {
-      return new Date().toISOString().slice(0, 10);
-    }
+    return DP ? DP.dangalCalendarDay() : new Date().toISOString().slice(0, 10);
   }
 
   function dangalWeekKey(dayStr) {
-    const d = new Date((dayStr || dangalCalendarDay()) + 'T12:00:00');
-    const day = (d.getDay() + 6) % 7; // Mon=0
-    d.setDate(d.getDate() - day);
-    return d.toISOString().slice(0, 10);
+    return DP ? DP.dangalWeekKey(dayStr) : String(dayStr || dangalCalendarDay());
   }
 
   function emptyDangalGameStats() {
-    return {
-      played: 0,
-      wins: 0,
-      losses: 0,
-      draws: 0,
-      streak: 0,
-      bestStreak: 0,
-      bestScore: null,
-      lastAt: 0,
-    };
+    return DP
+      ? DP.emptyDangalGameStats()
+      : {
+          played: 0,
+          wins: 0,
+          losses: 0,
+          draws: 0,
+          streak: 0,
+          bestStreak: 0,
+          bestScore: null,
+          lastAt: 0,
+        };
   }
 
   function emptyDangalWeek(weekKey) {
-    return {
-      key: weekKey || dangalWeekKey(),
-      plays: 0,
-      unique: [],
-      wins: 0,
-      gotd: false,
-      shabd: false,
-      celebrated: {},
-    };
+    return DP
+      ? DP.emptyDangalWeek(weekKey)
+      : {
+          key: weekKey || dangalWeekKey(),
+          plays: 0,
+          unique: [],
+          wins: 0,
+          gotd: false,
+          shabd: false,
+          celebrated: {},
+        };
   }
 
   function emptyDangalProgress() {
-    return {
-      v: 1,
-      games: {},
-      softDayStreak: 0,
-      lastPlayDay: '',
-      week: emptyDangalWeek(),
-      panelCollapsed: false,
-      hideMissionsUntil: '',
-    };
+    return DP
+      ? DP.emptyDangalProgress()
+      : {
+          v: 1,
+          games: {},
+          softDayStreak: 0,
+          lastPlayDay: '',
+          week: emptyDangalWeek(),
+          panelCollapsed: false,
+          hideMissionsUntil: '',
+        };
   }
 
   function getDangalProgress() {
@@ -1206,12 +1194,7 @@
       const raw = localStorage.getItem(dangalProgressStorageKey());
       if (raw) data = Object.assign(emptyDangalProgress(), JSON.parse(raw) || {});
     } catch (e) {}
-    const weekKey = dangalWeekKey();
-    if (!data.week || data.week.key !== weekKey) {
-      data.week = emptyDangalWeek(weekKey);
-    }
-    if (!data.games || typeof data.games !== 'object') data.games = {};
-    return data;
+    return DP ? DP.coerceDangalProgress(data, dangalCalendarDay()) : data;
   }
 
   function saveDangalProgress(data) {
@@ -1233,64 +1216,11 @@
    * @param {{ won?: boolean, drew?: boolean, score?: number, scoreOnly?: boolean, gotd?: boolean }} [opts]
    */
   function recordDangalSession(gameId, opts) {
-    const id = normalizeDangalGameId(gameId);
-    if (!id) return getDangalProgress();
-    const o = opts || {};
-    const data = getDangalProgress();
-    const g = Object.assign(emptyDangalGameStats(), data.games[id] || {});
-    g.played += 1;
-    g.lastAt = Date.now();
-
-    // Score-only runs (e.g. Rush) skip W/L unless caller passes an explicit clear (won===true)
-    const scoreOnly =
-      o.scoreOnly === true || (SCORE_FOCUS_GAMES[id] && o.won == null && o.drew == null && o.score != null);
-    if (scoreOnly) {
-      if (o.won === true) {
-        g.wins += 1;
-        g.streak += 1;
-        g.bestStreak = Math.max(g.bestStreak, g.streak);
-      }
-    } else if (o.drew) {
-      g.draws += 1;
-    } else if (o.won === true) {
-      g.wins += 1;
-      g.streak += 1;
-      g.bestStreak = Math.max(g.bestStreak, g.streak);
-    } else if (o.won === false) {
-      g.losses += 1;
-      g.streak = 0;
-    }
-
-    if (o.score != null && Number.isFinite(Number(o.score))) {
-      const next = Number(o.score);
-      const prev = g.bestScore;
-      let better = prev == null;
-      if (!better) {
-        if (LOWER_BETTER_SCORE[id]) better = next < prev;
-        else better = next > prev;
-      }
-      if (better) g.bestScore = next;
-    }
-    data.games[id] = g;
-
-    const today = dangalCalendarDay();
-    if (data.lastPlayDay !== today) {
-      const y = new Date(today + 'T12:00:00');
-      y.setDate(y.getDate() - 1);
-      data.softDayStreak =
-        data.lastPlayDay === y.toISOString().slice(0, 10) ? (data.softDayStreak || 0) + 1 : 1;
-      data.lastPlayDay = today;
-    }
-
-    const week = data.week || emptyDangalWeek();
-    week.plays += 1;
-    if (!Array.isArray(week.unique)) week.unique = [];
-    if (!week.unique.includes(id)) week.unique.push(id);
-    if (o.won === true) week.wins += 1;
-    if (o.gotd) week.gotd = true;
-    if (id === 'wordguess') week.shabd = true;
-    data.week = week;
-
+    if (!DP) return getDangalProgress();
+    const data = DP.applyDangalSession(getDangalProgress(), gameId, opts, {
+      today: dangalCalendarDay(),
+      nowMs: Date.now(),
+    });
     saveDangalProgress(data);
     maybeCelebrateMissions(data);
     return data;
@@ -1298,58 +1228,13 @@
 
   function getDangalMissions(progress) {
     const p = progress || getDangalProgress();
-    const week = p.week || emptyDangalWeek();
-    const uniqueCount = Array.isArray(week.unique) ? week.unique.length : 0;
-    return [
-      {
-        id: 'play3',
-        label: 'Play 3 sessions',
-        hint: 'Any games count',
-        progress: Math.min(week.plays || 0, 3),
-        target: 3,
-      },
-      {
-        id: 'variety',
-        label: 'Try 2 different games',
-        hint: 'Mix solos & duels',
-        progress: Math.min(uniqueCount, 2),
-        target: 2,
-      },
-      {
-        id: 'win1',
-        label: 'Win one match',
-        hint: 'Optional — no pressure',
-        progress: Math.min(week.wins || 0, 1),
-        target: 1,
-      },
-      {
-        id: 'shabd',
-        label: 'Finish today\'s Shabd',
-        hint: 'Daily 5-letter word',
-        progress: week.shabd ? 1 : 0,
-        target: 1,
-        gameId: 'wordguess',
-      },
-      {
-        id: 'gotd',
-        label: 'Play Game of the Day',
-        hint: 'Featured on the hub',
-        progress: week.gotd ? 1 : 0,
-        target: 1,
-      },
-    ];
+    return DP ? DP.getDangalMissions(p) : [];
   }
 
   function maybeCelebrateMissions(progress) {
     const p = progress || getDangalProgress();
-    if (!p.week.celebrated) p.week.celebrated = {};
-    const newly = [];
-    getDangalMissions(p).forEach((m) => {
-      if (m.progress >= m.target && !p.week.celebrated[m.id]) {
-        p.week.celebrated[m.id] = true;
-        newly.push(m);
-      }
-    });
+    if (!DP) return;
+    const newly = DP.markCelebratedMissions(p);
     if (newly.length) {
       saveDangalProgress(p);
       const first = newly[0];
@@ -1363,28 +1248,20 @@
 
   function getDangalHubSummary() {
     const p = getDangalProgress();
-    const missions = getDangalMissions(p);
-    const done = missions.filter((m) => m.progress >= m.target).length;
-    const matches = Object.values(p.games || {}).reduce(
-      (acc, g) => {
-        acc.played += g.played || 0;
-        acc.wins += g.wins || 0;
-        return acc;
-      },
-      { played: 0, wins: 0 }
-    );
-    return {
-      softDayStreak: p.softDayStreak || 0,
-      weekPlays: p.week?.plays || 0,
-      weekWins: p.week?.wins || 0,
-      missionsDone: done,
-      missionsTotal: missions.length,
-      totalPlayed: matches.played,
-      totalWins: matches.wins,
-      panelCollapsed: !!p.panelCollapsed,
-      hideMissions: p.hideMissionsUntil === dangalCalendarDay(),
-      missions,
-    };
+    return DP
+      ? DP.summarizeDangalHub(p, dangalCalendarDay())
+      : {
+          softDayStreak: 0,
+          weekPlays: 0,
+          weekWins: 0,
+          missionsDone: 0,
+          missionsTotal: 0,
+          totalPlayed: 0,
+          totalWins: 0,
+          panelCollapsed: false,
+          hideMissions: false,
+          missions: [],
+        };
   }
 
   function gamePersonalStatsHtml(gameId) {
