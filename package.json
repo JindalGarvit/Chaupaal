@@ -4,7 +4,7 @@
   "private": true,
   "description": "Chaupaal — News with Social Discovery",
   "scripts": {
-    "test": "node scripts/test-social-model.js && node scripts/test-chaupaal.js && node scripts/test-crisis-detector.js && node scripts/test-matchmaking.js && node scripts/test-gif-search.js && node scripts/test-notifications.js",
+    "test": "node scripts/test-social-model.js && node scripts/test-chaupaal.js && node scripts/test-crisis-detector.js && node scripts/test-matchmaking.js && node scripts/test-gif-search.js && node scripts/test-notifications.js && node scripts/test-dangal-progress.js && node scripts/test-auth-contact.js && node scripts/test-rate-limit.js",
     "syntax-check": "node scripts/syntax-check.js",
     "bust": "node scripts/bust-assets.js",
     "health:mehfil": "node scripts/mehfil-health.js",

@@ -127,7 +127,8 @@ function ageFromDob(dob) {
 }
 
 function looksLikeEmail(raw) {
-  return /\S+@\S+\.\S+/.test(String(raw || '').trim());
+  const AC = typeof ChaupaalAuthContact !== 'undefined' ? ChaupaalAuthContact : null;
+  return AC ? AC.looksLikeEmail(raw) : /\S+@\S+\.\S+/.test(String(raw || '').trim());
 }
 
 function normalizeStatKey(label) {
@@ -286,20 +287,43 @@ async function checkUsernameAvailability(username) {
 }
 
 /** Common disposable / throwaway email domains — keep short; expand later if needed. */
-const DISPOSABLE_EMAIL_DOMAINS = new Set([
-  'mailinator.com','guerrillamail.com','guerrillamail.net','sharklasers.com','grr.la',
-  'tempmail.com','temp-mail.org','throwaway.email','yopmail.com','yopmail.fr',
-  'trashmail.com','discard.email','10minutemail.com','getnada.com','maildrop.cc',
-  'mailnesia.com','fakeinbox.com','tempail.com','emailondeck.com','moakt.com',
-]);
+const DISPOSABLE_EMAIL_DOMAINS =
+  typeof ChaupaalAuthContact !== 'undefined' && ChaupaalAuthContact.DISPOSABLE_EMAIL_DOMAINS
+    ? new Set(Object.keys(ChaupaalAuthContact.DISPOSABLE_EMAIL_DOMAINS))
+    : new Set([
+        'mailinator.com',
+        'guerrillamail.com',
+        'guerrillamail.net',
+        'sharklasers.com',
+        'grr.la',
+        'tempmail.com',
+        'temp-mail.org',
+        'throwaway.email',
+        'yopmail.com',
+        'yopmail.fr',
+        'trashmail.com',
+        'discard.email',
+        '10minutemail.com',
+        'getnada.com',
+        'maildrop.cc',
+        'mailnesia.com',
+        'fakeinbox.com',
+        'tempail.com',
+        'emailondeck.com',
+        'moakt.com',
+      ]);
 
 function isDisposableEmail(email) {
+  const AC = typeof ChaupaalAuthContact !== 'undefined' ? ChaupaalAuthContact : null;
+  if (AC) return AC.isDisposableEmail(email);
   const domain = String(email || '').trim().toLowerCase().split('@')[1] || '';
   return !!(domain && DISPOSABLE_EMAIL_DOMAINS.has(domain));
 }
 
 /** Email/password accounts must verify; Google + verified phone count as verified contact. */
 function hasVerifiedContact(user) {
+  const AC = typeof ChaupaalAuthContact !== 'undefined' ? ChaupaalAuthContact : null;
+  if (AC) return AC.hasVerifiedContact(user);
   if (!user) return false;
   if (user.emailVerified) return true;
   if (user.phoneNumber) return true;
@@ -309,6 +333,8 @@ function hasVerifiedContact(user) {
 }
 
 function userHasPasswordProvider(user) {
+  const AC = typeof ChaupaalAuthContact !== 'undefined' ? ChaupaalAuthContact : null;
+  if (AC) return AC.userHasPasswordProvider(user);
   return !!(user?.providerData || []).some((p) => p.providerId === 'password');
 }
 
@@ -665,6 +691,8 @@ function wireAuthEvents() {
   let regRecaptcha = null;
 
   function toE164India(raw) {
+    const AC = typeof ChaupaalAuthContact !== 'undefined' ? ChaupaalAuthContact : null;
+    if (AC) return AC.normalizePhoneE164(raw);
     const digits = String(raw || '').replace(/\D/g, '');
     if (digits.length === 10) return '+91' + digits;
     if (digits.length === 12 && digits.startsWith('91')) return '+' + digits;
