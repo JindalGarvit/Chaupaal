@@ -43,14 +43,17 @@ function renderProfileModal(){
   el.innerHTML=`
     ${typeof renderPreviewToggleHtml==='function'?renderPreviewToggleHtml():''}
     ${p.needsEmailForPasswordLogin?`<div class="profile-password-login-note" style="margin:0 0 12px;padding:12px 14px;border-radius:12px;background:rgba(230,57,70,0.08);border:1.5px solid rgba(230,57,70,0.22);font-size:12px;line-height:1.45;color:var(--ink);">Add an email to enable password login with your phone number.</div>`:''}
-    <div class="dp-hero">
-      <div class="dp-hero-avatar-wrap">
-        <div id="ownProfileStoryAvatar" class="dp-hero-avatar">
-          ${p.photoURL?`<img src="${p.photoURL}" alt="">`:'🪑'}
+    <div class="dp-hero dp-hero--premium">
+      <div class="dp-hero-top">
+        <div class="dp-hero-avatar-wrap">
+          <div id="ownProfileStoryAvatar" class="dp-hero-avatar squircle-avatar">
+            ${p.photoURL?`<img src="${p.photoURL}" alt="">`:'🪑'}
+          </div>
+          <label class="dp-hero-edit" title="Change photo">
+            ✎<input type="file" accept="image/*" id="profilePhotoInput" style="display:none;">
+          </label>
         </div>
-        <label class="dp-hero-edit" title="Change photo">
-          ✎<input type="file" accept="image/*" id="profilePhotoInput" style="display:none;">
-        </label>
+        <button type="button" class="icon-btn dp-settings-gear" id="profileSettingsGear" aria-label="Settings" data-icon="settings" title="Settings"></button>
       </div>
       <div class="dp-hero-copy">
         <div class="dp-hero-name" data-pro-badge-self data-pro-badge-name="${(displayName||'').replace(/"/g,'&quot;')}">${nameHtml}</div>
@@ -68,14 +71,24 @@ function renderProfileModal(){
         </div>
       </div>
     </div>
-    <div class="own-profile-edit-toolbar dp-toolbar">
+    <button type="button" class="chaupaal-id-card" data-open-chaupaal-card aria-label="Chaupaal card">
+      <span class="chaupaal-id-card-mark" aria-hidden="true">🪑</span>
+      <span class="chaupaal-id-card-copy">
+        <strong data-i18n="chaupaal_card_title">Chaupaal card</strong>
+        <small data-i18n="chaupaal_card_sub">Shareable identity · Hub · Plus</small>
+      </span>
+      <span class="chaupaal-id-card-chev" aria-hidden="true">›</span>
+    </button>
+    <div class="own-profile-edit-toolbar dp-toolbar dp-hub-row">
       <button type="button" class="btn profile-notif-entry" data-open-notif="all" aria-label="Notifications">
-        <span data-i18n="profile_notifications">Notifications</span>
+        <span data-i18n="profile_notifications">Inbox</span>
         <span class="notif-dot hidden" data-notif-dot="all" aria-hidden="true"></span>
       </button>
       <button type="button" class="btn" data-dp-hub="archive">Archive</button>
       <button type="button" class="btn" data-dp-hub="interactions">Activity</button>
       <button type="button" class="btn" data-dp-hub="journal">Journal</button>
+      <button type="button" class="btn" data-dp-hub="stories">Highlights</button>
+      <button type="button" class="btn" data-dp-more-hub>More</button>
       <button type="button" class="btn btn--primary" id="profileAddSectionBtn" title="Add section">＋</button>
     </div>
     <div class="dp-rel-strip">
@@ -83,15 +96,13 @@ function renderProfileModal(){
       <div data-friend-requests></div>
     </div>
     <div class="own-edit-sections" data-own-edit-sections></div>
-    <p class="dp-reorder-hint">Long-press ⠿ on a section to reorder what visitors see first</p>
-    <!-- Field editor tabs -->
+    <p class="dp-reorder-hint">Long-press ⠿ to reorder · swipe section privacy on edit · tap ＋ for bio, links, grids &amp; more</p>
     <div class="dp-field-tabs" id="profileSectionTabs">
       ${['Personal','Career','Lifestyle','Relationships','Social'].map((s,i)=>`<button type="button" class="profile-section-tab${i===0?' active':''}" data-sec="${s}">${s}</button>`).join('')}
     </div>
     <div id="profileSectionContent" class="dp-field-body"></div>
-    <!-- Slim account strip — heavy stuff lives in Chaupaal Profile hub -->
     <div class="dp-account-strip">
-      <button type="button" class="btn btn--primary btn--block" data-dp-open-hub>Chaupaal Profile · trust, Plus, devices</button>
+      <button type="button" class="btn btn--primary btn--block" data-dp-open-hub>Chaupaal Hub · trust, Plus, devices</button>
       <button type="button" class="btn btn--block" id="manageCloseFriendsBtn">Close Friends</button>
       <button type="button" class="btn btn--block" id="switchProfileBtn">Switch / add profile</button>
       <button type="button" class="logout-btn" id="logoutBtn">Log out</button>
@@ -383,6 +394,24 @@ function renderProfileModal(){
     });
     el.querySelector('[data-dp-open-hub]')?.addEventListener('click',()=>{
       if(typeof openChaupaalProfileHub==='function') openChaupaalProfileHub();
+    });
+    el.querySelector('[data-open-chaupaal-card]')?.addEventListener('click',()=>{
+      if(typeof openChaupaalIdCard==='function') openChaupaalIdCard();
+      else if(typeof openChaupaalProfileHub==='function') openChaupaalProfileHub();
+    });
+    document.getElementById('profileSettingsGear')?.addEventListener('click',()=>{
+      if(typeof openSettingsModal==='function') openSettingsModal();
+    });
+    el.querySelector('[data-dp-more-hub]')?.addEventListener('click',()=>{
+      if(typeof showActionSheet==='function'){
+        showActionSheet([
+          {label:'Monthly wrap',fn:()=>{ if(typeof showMonthlyWrap==='function') showMonthlyWrap(); }},
+          {label:'Devices & sessions',fn:()=>{ if(typeof openSessionsSheet==='function') openSessionsSheet(); }},
+          {label:'Blocked users',fn:()=>{ if(typeof openBlockedUsersSheet==='function') openBlockedUsersSheet(); }},
+          {label:'Chaupaal Hub',fn:()=>{ if(typeof openChaupaalProfileHub==='function') openChaupaalProfileHub(); }},
+          {label:'Chaupaal AI profile',fn:()=>{ if(typeof openChaupaalAiProfile==='function') openChaupaalAiProfile(); }},
+        ],{title:'More on your profile'});
+      } else if(typeof openChaupaalProfileHub==='function') openChaupaalProfileHub();
     });
     document.getElementById('profileAddSectionBtn')?.addEventListener('click',()=>{
       if(typeof openAddProfileSectionSheet==='function'){

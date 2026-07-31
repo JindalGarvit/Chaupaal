@@ -272,16 +272,48 @@
           ? await promptNameSheet({
               title: 'Choose username',
               placeholder: 'unique_handle',
-              confirmLabel: 'Create',
+              confirmLabel: 'Next',
               defaultValue: String(name).toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20),
             })
           : null;
       if (!uname) return;
+      let profileType = 'personal';
       try {
-        const created = await createProfile(currentUser.uid, { name: String(name).trim(), username: uname });
+        if (typeof showActionSheet === 'function') {
+          await new Promise((resolve) => {
+            showActionSheet(
+              [
+                {
+                  label: 'Personal',
+                  hint: 'Friends-first layout · gender used for matching',
+                  fn: () => {
+                    profileType = 'personal';
+                    resolve();
+                  },
+                },
+                {
+                  label: 'Professional',
+                  hint: 'Follow-first public layout · industry optional',
+                  fn: () => {
+                    profileType = 'professional';
+                    resolve();
+                  },
+                },
+              ],
+              { title: 'Profile type', onCancel: resolve }
+            );
+          });
+        }
+      } catch (e) {}
+      try {
+        const created = await createProfile(currentUser.uid, {
+          name: String(name).trim(),
+          username: uname,
+          profileType,
+        });
         await switchProfile(currentUser.uid, created.id);
         close();
-        if (typeof showToast === 'function') showToast(t('auth_created_profile',{username:created.username}));
+        if (typeof showToast === 'function') showToast(t('auth_created_profile', { username: created.username }));
       } catch (e) {
         if (typeof showToast === 'function') {
           showToast(e.code === 'username-taken' ? t('auth_username_taken') : t('auth_profile_create_fail'));

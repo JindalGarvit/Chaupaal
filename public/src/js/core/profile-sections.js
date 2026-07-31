@@ -7,14 +7,32 @@
   'use strict';
 
   const BUILTIN = [
+    { id: 'bio', label: 'About', builtin: true },
+    { id: 'stats', label: 'Stats', builtin: true },
     { id: 'highlights', label: 'Story Highlights', builtin: true },
+    { id: 'pinned', label: 'Pinned posts', builtin: true },
     { id: 'media', label: 'Photos & clips', builtin: true },
+    { id: 'links', label: 'Links', builtin: true },
     { id: 'duniya', label: 'Duniya / Lehar', builtin: true },
     { id: 'peepal', label: 'Peepal', builtin: true },
   ];
 
-  function defaultOrder() {
-    return BUILTIN.map((s) => s.id);
+  const CUSTOM_TYPES = [
+    { id: 'grid', label: 'Photo grid', hint: 'Highlights-style thumbnails' },
+    { id: 'flexible', label: 'Text block', hint: 'Bio-style write-up' },
+    { id: 'links', label: 'Link list', hint: 'Website, social, shop' },
+    { id: 'image', label: 'Featured image', hint: 'One wide visual' },
+    { id: 'quote', label: 'Quote / prompt', hint: 'Pinned thought' },
+  ];
+
+  function defaultOrder(profileType) {
+    const type =
+      profileType ||
+      (typeof getProfileType === 'function' ? getProfileType() : 'personal');
+    if (type === 'professional') {
+      return ['bio', 'links', 'stats', 'media', 'highlights', 'duniya', 'pinned', 'peepal'];
+    }
+    return ['bio', 'highlights', 'stats', 'media', 'pinned', 'peepal', 'duniya', 'links'];
   }
 
   function getCustomSections(profile) {
@@ -26,7 +44,8 @@
     const stored = profile?.sectionOrder || digitalProfile?.sectionOrder;
     const customs = getCustomSections(profile);
     const customIds = customs.map((c) => c.id);
-    const base = Array.isArray(stored) && stored.length ? [...stored] : defaultOrder();
+    const pType = profile?.profileType || digitalProfile?.profileType;
+    const base = Array.isArray(stored) && stored.length ? [...stored] : defaultOrder(pType);
     // Ensure builtins + customs present; drop unknowns
     const known = new Set([...BUILTIN.map((b) => b.id), ...customIds]);
     const ordered = base.filter((id) => known.has(id));
@@ -256,17 +275,16 @@
           <input type="text" maxlength="40" data-sec-name placeholder="e.g. Travel, Work, Favorites">
         </label>
         <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin:14px 0 8px;">Type</div>
-        <div style="display:flex;gap:8px;">
-          <button type="button" class="btn btn--primary" data-sec-type="grid" style="flex:1;">Grid</button>
-          <button type="button" class="btn" data-sec-type="flexible" style="flex:1;">Flexible block</button>
+        <div class="add-section-types" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          ${CUSTOM_TYPES.map((t,i)=>`<button type="button" class="btn${i===0?' btn--primary':''}" data-sec-type="${t.id}" style="text-align:left;padding:10px 12px;"><strong style="display:block;font-size:13px;">${t.label}</strong><span style="font-size:11px;color:var(--muted);font-weight:500;">${t.hint}</span></button>`).join('')}
         </div>
-        <p style="font-size:12px;color:var(--muted);margin:10px 0;">Grid = Highlights-style thumbnails · Flexible = text + photo write-up</p>
+        <p style="font-size:12px;color:var(--muted);margin:10px 0;">Built-ins (About, Stats, Highlights, Pinned, Photos, Links, Duniya, Peepal) stay on by default — reorder or hide via privacy.</p>
         <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin:14px 0 8px;">Visibility</div>
         <div style="display:flex;gap:8px;">
           <button type="button" class="btn btn--primary" data-sec-privacy="public" style="flex:1;">Public</button>
           <button type="button" class="btn" data-sec-privacy="private" style="flex:1;">Private</button>
         </div>
-        <p style="font-size:12px;color:var(--muted);margin:10px 0;">Private sections are only visible to you — same guarantee as your journal.</p>
+        <p style="font-size:12px;color:var(--muted);margin:10px 0;">Private sections are only visible to you.</p>
         <button type="button" class="btn btn--primary btn--block" data-sec-create style="margin-top:16px;">Create section</button>
       </div>`;
     document.querySelector('.device')?.appendChild(sheet);
@@ -380,14 +398,36 @@
   }
 
   function renderCustomSectionBody(meta, { linkify } = {}) {
-    if (meta.type === 'flexible') {
+    if (meta.type === 'flexible' || meta.type === 'quote') {
       const text =
         typeof linkifyText === 'function' && linkify !== false
           ? linkifyText(meta.body || '')
           : (meta.body || '').replace(/</g, '&lt;');
+      const empty = meta.type === 'quote' ? 'Add a quote' : 'Empty flexible block';
       return text
-        ? `<div class="profile-flexible-block">${text}</div>`
-        : `<div class="public-profile-posts-empty">Empty flexible block</div>`;
+        ? `<div class="profile-flexible-block${meta.type === 'quote' ? ' profile-quote-block' : ''}">${text}</div>`
+        : `<div class="public-profile-posts-empty">${empty}</div>`;
+    }
+    if (meta.type === 'links') {
+      const items = meta.items || [];
+      if (!items.length && meta.body) {
+        return `<div class="profile-flexible-block">${typeof linkifyText === 'function' ? linkifyText(meta.body) : meta.body.replace(/</g, '&lt;')}</div>`;
+      }
+      if (!items.length) return `<div class="public-profile-posts-empty">No links yet</div>`;
+      return `<div class="profile-links-list">${items
+        .slice(0, 12)
+        .map((it) => {
+          const url = it.url || '#';
+          const label = (it.label || it.caption || 'Link').replace(/</g, '&lt;');
+          return `<a class="profile-link-chip" href="${String(url).replace(/"/g, '')}" data-external-link="1">${label}</a>`;
+        })
+        .join('')}</div>`;
+    }
+    if (meta.type === 'image') {
+      const src = meta.items?.[0]?.url || meta.items?.[0]?.thumb || '';
+      return src
+        ? `<div class="profile-featured-image"><img src="${src}" alt=""></div>`
+        : `<div class="public-profile-posts-empty">Add a featured image</div>`;
     }
     const items = meta.items || [];
     if (!items.length) return `<div class="public-profile-posts-empty">No items yet</div>`;
@@ -403,6 +443,7 @@
   }
 
   window.PROFILE_BUILTIN_SECTIONS = BUILTIN;
+  window.PROFILE_CUSTOM_SECTION_TYPES = CUSTOM_TYPES;
   window.getProfileSectionOrder = getSectionOrder;
   window.getCustomProfileSections = getCustomSections;
   window.visibleProfileSections = visibleSectionsForViewer;

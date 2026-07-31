@@ -161,8 +161,20 @@ function openSettingsModal(){
   const modal=document.getElementById('settingsModal');
   if(!modal) return;
   modal.classList.remove('hidden');
-  if(typeof populateVoiceDropdown==='function') populateVoiceDropdown();
   if(typeof applyNotifPrefsToSettingsUI==='function') applyNotifPrefsToSettingsUI();
+  try{
+    const share=JSON.parse(localStorage.getItem('chaupaal_share_toggles')||'null');
+    if(share){
+      const b=document.getElementById('toggleBirthday'); if(b) b.checked=share.birthday!==false;
+      const tr=document.getElementById('toggleTrip'); if(tr) tr.checked=share.trip!==false;
+      const an=document.getElementById('toggleAnniversary'); if(an) an.checked=share.anniversary!==false;
+    }else{
+      // Defaults ON (appear-in-friends / share style)
+      ['toggleBirthday','toggleTrip','toggleAnniversary'].forEach(id=>{
+        const el=document.getElementById(id); if(el) el.checked=true;
+      });
+    }
+  }catch(e){}
   if(typeof hydrateNotifPrefsFromFirestore==='function') hydrateNotifPrefsFromFirestore();
   const typeHost=document.getElementById('settingsProfileTypeHost');
   if(typeHost && typeof renderProfileTypeToggleHtml==='function'){
@@ -282,6 +294,8 @@ document.getElementById('toggleQuiet').addEventListener('change',e=>{
   if(quietMode){
     if(typeof ChaupaalAmbient!=='undefined'&&ChaupaalAmbient.hardStop) ChaupaalAmbient.hardStop(120);
     else if(typeof ChaupaalAmbient!=='undefined'&&ChaupaalAmbient.sync) ChaupaalAmbient.sync();
+    try{ if(typeof pauseAllMusic==='function') pauseAllMusic(); }catch(err){}
+    try{ window.__mehfilSharedAudio?.pause?.(); }catch(err){}
   }else if(typeof ChaupaalAmbient!=='undefined'&&ChaupaalAmbient.sync){
     ChaupaalAmbient.sync();
   }

@@ -138,18 +138,20 @@ function renderChatList(chats){
   pinned.forEach(chat => {
     const item = document.createElement('div');
     const self = isSelfChatRow(chat);
-    item.className = 'chat-item'+(self?' chat-item-self':'');
+    const chaupaal = isChaupaalChatRow(chat);
+    item.className = 'chat-item'+(self?' chat-item-self':'')+(chaupaal?' chat-item-chaupaal':'');
     item.dataset.chatId = chat.id || '';
     if(self) item.dataset.selfChat = '1';
-    const when = self ? 'Pinned' : (typeof formatRelativeTime==='function'
+    if(chaupaal) item.dataset.chaupaalChat = '1';
+    const when = self || chaupaal ? 'Pinned' : (typeof formatRelativeTime==='function'
       ? formatRelativeTime(chat.ts || chat.updatedAt || chat.time)
       : chat.time);
     item.innerHTML = `
-      <div class="chat-avatar ${chat.type==='group'?'group':''}${self?' self':''}" ${self?'data-self-pin-avatar="1" title="Open your profile"':''}>${chat.avatar||'📝'}
+      <div class="chat-avatar ${chat.type==='group'?'group':''}${self?' self':''}${chaupaal?' chaupaal':''}" ${self?'data-self-pin-avatar="1" title="Open your profile"':''}${chaupaal?'data-chaupaal-pin-avatar="1" title="Open Chaupaal profile"':''}>${chat.avatar||'📝'}
         ${chat.duelStreak?`<div class="streak-badge">🔥${chat.duelStreak}</div>`:''}
       </div>
       <div class="chat-info">
-        <div class="chat-name">${(self||chat.type==='group'||chat.type==='self')?(chat.name||'Chat'):(typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(chat.name||'Chat',chat):(chat.name||'Chat'))}${self?` <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">· you</span>`:''}${chat.members?` <span style="font-size:11px;color:var(--muted);font-weight:400;">${chat.members} members</span>`:''}</div>
+        <div class="chat-name">${(self||chaupaal||chat.type==='group'||chat.type==='self')?(chat.name||'Chat'):(typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(chat.name||'Chat',chat):(chat.name||'Chat'))}${self?` <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">· you</span>`:''}${chaupaal?` <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">· companion</span>`:''}${chat.members?` <span style="font-size:11px;color:var(--muted);font-weight:400;">${chat.members} members</span>`:''}</div>
         <div class="chat-preview">${chat.preview||''}</div>
       </div>
       <div class="chat-meta">
@@ -170,6 +172,16 @@ function renderChatList(chats){
           document.getElementById('profileModal')?.classList.remove('hidden');
         }
       });
+    }
+    if(chaupaal){
+      const avatar=item.querySelector('[data-chaupaal-pin-avatar]');
+      const openAi=(e)=>{
+        e.stopPropagation();
+        if(typeof openChaupaalAiPeek==='function') openChaupaalAiPeek();
+        else if(typeof openChaupaalAiProfile==='function') openChaupaalAiProfile();
+      };
+      avatar?.addEventListener('click', openAi);
+      item.querySelector('.chat-name')?.addEventListener('click', openAi);
     }
     item.addEventListener('click', () => openChatScreen(chat));
     list.appendChild(item);

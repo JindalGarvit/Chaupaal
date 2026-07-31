@@ -597,6 +597,15 @@ function getNotificationText(type, vars={}){
 function sendSmartNotification(type, vars={}){
   if(!('Notification' in window)||Notification.permission!=='granted')return;
   if(typeof isNotifEnabled==='function'&&!isNotifEnabled(type))return;
+  // Suppress duplicate OS push while app is focused — tab lights + inbox own it
+  if(document.visibilityState==='visible'){
+    try{
+      if(typeof addLocalNotification==='function'){
+        addLocalNotification({type,icon:'🔔',text:getNotificationText(type,vars),section:type});
+      }
+    }catch(e){}
+    return;
+  }
   const body=getNotificationText(type,vars);
   new Notification('Chaupaal 🪑',{body,icon:'icon.png'});
 }

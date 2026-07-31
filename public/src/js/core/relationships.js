@@ -163,9 +163,13 @@
 
     actions.push({
       label: 'View profile',
-      hint: 'Open their Chaupaal profile',
+      hint: 'Peek then open their Chaupaal profile',
       fn: () => {
-        if (typeof openPublicProfile === 'function') openPublicProfile(profile, { uid: profile.uid, username: profile.username });
+        if (typeof openProfilePeek === 'function') {
+          openProfilePeek(profile, { uid: profile.uid, username: profile.username });
+        } else if (typeof openPublicProfile === 'function') {
+          openPublicProfile(profile, { uid: profile.uid, username: profile.username });
+        }
       },
     });
 

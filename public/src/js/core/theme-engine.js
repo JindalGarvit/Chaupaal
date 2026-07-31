@@ -16,6 +16,7 @@
   const STORAGE_AMBIENT = 'chaupaal_ambient_sound';
   const STORAGE_GEO = 'chaupaal_theme_geo_consent';
   const RECOMPUTE_MS = 20 * 60_000;
+  const RECOMPUTE_ACTIVE_MS = 5 * 60_000;
 
   /** @typedef {'clearDay'|'overcast'|'rainy'|'goldenHour'|'dawn'|'night'} AnchorKey */
 
@@ -256,7 +257,7 @@
   /** Cap surface drift so blends never leave the Light family during day. */
   function capDaySurfaceMix(vars, towardKey, amount) {
     const cap =
-      towardKey === 'rainy' ? 0.12 : towardKey === 'overcast' ? 0.1 : towardKey === 'night' ? 1 : 0.04;
+      towardKey === 'rainy' ? 0.22 : towardKey === 'overcast' ? 0.16 : towardKey === 'night' ? 1 : 0.08;
     const t = Math.min(clamp01(amount), cap);
     if (t <= 0 || towardKey === 'goldenHour' || towardKey === 'dawn') {
       return { ...LIGHT, ...(vars || {}), '--cream': LIGHT['--cream'], '--white': LIGHT['--white'], '--ink': LIGHT['--ink'], '--muted': LIGHT['--muted'], '--line': LIGHT['--line'], '--bg': LIGHT['--bg'], '--card': LIGHT['--card'] };
@@ -365,59 +366,84 @@
         : bucket === 'storm'
           ? 1
           : bucket === 'rain'
-            ? 0.7
-            : bucket === 'snow'
-              ? 0.55
-              : 0;
+            ? 0.75
+            : bucket === 'drizzle'
+              ? 0.4
+              : bucket === 'snow'
+                ? 0.6
+                : 0;
     const cloud =
       weatherCtx.cloudCover != null
         ? clamp01(weatherCtx.cloudCover / 100)
         : bucket === 'overcast' || bucket === 'fog'
-          ? 0.85
+          ? 0.88
           : bucket === 'partly_cloudy'
             ? 0.45
-            : bucket === 'rain' || bucket === 'storm' || bucket === 'snow'
+            : bucket === 'rain' || bucket === 'storm' || bucket === 'snow' || bucket === 'drizzle'
               ? 0.9
               : 0.15;
 
-    // Whisper-level weather influence on tokens (content stays primary)
-    const weatherMix = 0.08;
+    // Noticeable but Light-first — readable surfaces stay primary
+    const weatherMix = 0.2;
 
+    // Night still carries precip particles / cloud; keep Dark surfaces
     if (out.anchor === 'night') {
       out.cloudCover = cloud;
       out.precipitation = precip;
       out.weatherBucket = bucket || 'clear';
+      if (precip > 0.08) {
+        out.motionIntensity = Math.min(0.35, lerp(out.motionIntensity, 0.28, precip));
+        out.soundKey = bucket === 'snow' ? 'snow_soft' : precip > 0.35 ? 'rain_soft' : out.soundKey;
+      }
       return out;
     }
 
-    if (precip > 0.05 || bucket === 'snow') {
+    if (bucket === 'fog') {
+      const amt = weatherMix * 0.7;
+      out = {
+        ...out,
+        lightTemp: lerp(out.lightTemp, 0.2, amt),
+        brightness: lerp(out.brightness, 0.88, amt),
+        precipitation: Math.max(out.precipitation, 0.05),
+        cloudCover: Math.max(out.cloudCover, 0.85),
+        motionIntensity: Math.min(0.2, out.motionIntensity + 0.04),
+        vars: capDaySurfaceMix(out.vars, 'overcast', amt),
+        weatherBucket: 'fog',
+        metaThemeColor: LIGHT_META,
+      };
+      return out;
+    }
+
+    if (precip > 0.05 || bucket === 'snow' || bucket === 'drizzle' || bucket === 'storm' || bucket === 'rain') {
       const snowy = bucket === 'snow';
-      const amt = clamp01(precip) * weatherMix;
+      const stormy = bucket === 'storm';
+      const amt = clamp01(Math.max(precip, stormy ? 0.85 : 0)) * weatherMix;
       out = {
         ...out,
         lightTemp: lerp(out.lightTemp, ANCHORS.rainy.lightTemp, amt),
-        brightness: lerp(out.brightness, ANCHORS.rainy.brightness, amt),
-        precipitation: Math.max(out.precipitation, precip),
+        brightness: lerp(out.brightness, ANCHORS.rainy.brightness * (stormy ? 0.92 : 1), amt),
+        precipitation: Math.max(out.precipitation, precip, stormy ? 0.9 : 0),
         cloudCover: Math.max(out.cloudCover, cloud),
-        motionIntensity: lerp(out.motionIntensity, ANCHORS.rainy.motionIntensity, precip * 0.35),
+        motionIntensity: lerp(out.motionIntensity, ANCHORS.rainy.motionIntensity, Math.max(precip, 0.35) * 0.55),
         vars: capDaySurfaceMix(out.vars, 'rainy', amt),
-        soundKey: snowy ? 'snow_soft' : precip > 0.28 ? 'rain_soft' : out.soundKey,
+        soundKey: snowy ? 'snow_soft' : precip > 0.22 || stormy ? 'rain_soft' : out.soundKey,
         soundKeyA: out.soundKeyA || out.soundKey,
         soundKeyB: snowy ? 'snow_soft' : 'rain_soft',
         soundBlend: precip,
-        anchor: precip > 0.75 ? 'rainy' : out.anchor,
+        anchor: precip > 0.45 || stormy || bucket === 'rain' ? 'rainy' : out.anchor,
         weatherBucket: bucket || (snowy ? 'snow' : 'rain'),
         metaThemeColor: LIGHT_META,
       };
-    } else if (cloud > 0.4) {
-      const amt = ((cloud - 0.4) / 0.6) * weatherMix;
+    } else if (cloud > 0.35 || bucket === 'partly_cloudy' || bucket === 'overcast') {
+      const amt = Math.max(((cloud - 0.35) / 0.65) * weatherMix, bucket === 'partly_cloudy' ? 0.06 : 0);
       out = {
         ...out,
-        lightTemp: lerp(out.lightTemp, ANCHORS.overcast.lightTemp, 0.2),
-        brightness: lerp(out.brightness, ANCHORS.overcast.brightness, 0.22),
+        lightTemp: lerp(out.lightTemp, ANCHORS.overcast.lightTemp, 0.35),
+        brightness: lerp(out.brightness, ANCHORS.overcast.brightness, 0.35),
         cloudCover: cloud,
+        precipitation: 0,
         vars: capDaySurfaceMix(out.vars, 'overcast', amt),
-        anchor: cloud > 0.9 && out.anchor === 'clearDay' ? 'overcast' : out.anchor,
+        anchor: cloud > 0.75 && out.anchor === 'clearDay' ? 'overcast' : out.anchor,
         weatherBucket: bucket || 'overcast',
         metaThemeColor: LIGHT_META,
       };
@@ -502,13 +528,13 @@
       brightness: clamp01(mixed.brightness),
       precipitation: clamp01(mixed.precipitation),
       cloudCover: clamp01(mixed.cloudCover),
-      motionIntensity: clamp01(Math.min(mixed.motionIntensity, 0.28)),
+      motionIntensity: clamp01(Math.min(mixed.motionIntensity, 0.38)),
       weatherBucket: mixed.weatherBucket || weatherCtx.bucket || null,
       soundKey: ambientOn ? mixed.soundKey : null,
       soundKeyA: mixed.soundKeyA || mixed.soundKey,
       soundKeyB: mixed.soundKeyB || mixed.soundKey,
       soundBlend: mixed.soundBlend != null ? mixed.soundBlend : 0,
-      soundVolume: ambientOn ? 0.1 : 0,
+      soundVolume: ambientOn ? 0.12 : 0,
       anchor: mixed.anchor,
       vars: mixed.vars,
       metaThemeColor: meta,
@@ -523,19 +549,26 @@
     if (h >= 21 || h < 5) key = 'night';
     else if (h >= 5 && h < 8) key = 'dawn';
     else if (h >= 17 && h < 19) key = 'goldenHour';
-    else if (w === 'rain' || w === 'storm') key = 'rainy';
+    else if (w === 'rain' || w === 'storm' || w === 'drizzle' || w === 'snow') key = 'rainy';
     else if (w === 'overcast' || w === 'fog' || w === 'partly_cloudy') key = 'overcast';
     else if (w === 'clear' || (h >= 8 && h < 17)) key = 'clearDay';
     else key = 'goldenHour';
     const A = ANCHORS[key] || ANCHORS.clearDay;
     const isDay = key !== 'night';
+    const precip =
+      weatherCtx.precipitation != null
+        ? clamp01(weatherCtx.precipitation)
+        : key === 'rainy'
+          ? A.precipitation
+          : 0;
     return {
       isDay,
       lightTemp: A.lightTemp,
       brightness: A.brightness,
-      precipitation: A.precipitation,
-      cloudCover: A.cloudCover,
-      motionIntensity: Math.min(A.motionIntensity, 0.2),
+      precipitation: precip || A.precipitation,
+      cloudCover: weatherCtx.cloudCover != null ? clamp01(weatherCtx.cloudCover / 100) : A.cloudCover,
+      motionIntensity: Math.min(A.motionIntensity, 0.32),
+      weatherBucket: weatherCtx.bucket || (key === 'rainy' ? 'rain' : null),
       soundKey: null,
       soundVolume: 0,
       anchor: key,
@@ -577,18 +610,28 @@
     const warm = atmosphereOn ? Number(s.lightTemp) || 0 : 0;
     const bright = Number(s.brightness) || 0;
     const anchor = s.anchor || 'clearDay';
-    // Faint warm edge wash only near golden hour / dawn — never peach UI
+    const bucket = s.weatherBucket || weatherCtx.bucket;
+    // Stronger warm edge wash near golden hour / dawn — still Light-first
     const warmWash =
       atmosphereOn && s.isDay && (anchor === 'goldenHour' || anchor === 'dawn' || warm > 0.5)
-        ? Math.min(0.035, 0.012 + warm * 0.028)
+        ? Math.min(0.07, 0.02 + warm * 0.055)
         : atmosphereOn && s.isDay
-          ? Math.min(0.012, warm * 0.02)
+          ? Math.min(0.025, warm * 0.035)
           : 0;
     set(
       '--theme-overlay',
       `rgba(${Math.round(255 * Math.min(1, warm + 0.15))}, ${Math.round(170 + 40 * warm)}, ${Math.round(90 + 30 * (1 - warm))}, ${warmWash.toFixed(3)})`
     );
-    set('--theme-dim', String(atmosphereOn ? (1 - bright) * 0.06 : 0));
+    // Cool dim for rain/fog; soft night dim
+    const wxDim =
+      atmosphereOn && (bucket === 'rain' || bucket === 'storm' || bucket === 'drizzle' || bucket === 'fog')
+        ? 0.04 + clamp01(s.precipitation) * 0.06
+        : atmosphereOn
+          ? (1 - bright) * 0.08
+          : 0;
+    set('--theme-dim', String(wxDim));
+    set('--theme-fog', String(atmosphereOn && bucket === 'fog' ? 0.45 : 0));
+    set('--theme-storm', String(atmosphereOn && bucket === 'storm' ? clamp01(s.precipitation || 0.8) : 0));
 
     const metaColor =
       mode === 'light'
@@ -617,17 +660,21 @@
     root.classList.add('theme-' + anchor);
     document.body?.classList.add('theme-' + anchor);
     device?.classList.add('theme-' + anchor);
-    if (atmosphereOn && anchor === 'rainy') {
+    if (atmosphereOn && (anchor === 'rainy' || bucket === 'rain' || bucket === 'storm' || bucket === 'drizzle')) {
       root.classList.add('theme-rain');
       document.body?.classList.add('theme-rain');
     }
+    root.classList.toggle('theme-fog', atmosphereOn && bucket === 'fog');
+    root.classList.toggle('theme-storm', atmosphereOn && bucket === 'storm');
+    root.classList.toggle('theme-snow', atmosphereOn && bucket === 'snow');
     root.classList.toggle('theme-sensory', !!sensoryEnabled && mode === 'auto');
     root.classList.add('theme-preset-' + mode);
     try {
       root.style.colorScheme = s.isDay ? 'light' : 'dark';
     } catch (e) {}
 
-    if (atmosphereOn && !quietModeOn()) {
+    // Atmosphere particles even in Quiet (visual only) — Quiet calms motion via prefersReduced
+    if (atmosphereOn) {
       ensureWeatherAtmosphere(s.precipitation || 0, s.weatherBucket || weatherCtx.bucket);
     } else {
       ensureWeatherAtmosphere(0, null);
@@ -644,7 +691,7 @@
     }
   }
 
-  /** Quiet rain / snow — always behind UI. Fixed Light/Dark/Night call with precip=0. */
+  /** Weather particles / wash — always behind UI. Fixed Light/Dark/Night call with precip=0. */
   function ensureWeatherAtmosphere(precip, bucket) {
     const device = document.querySelector('.device') || document.body;
     let el = document.getElementById('themeRainOverlay');
@@ -659,41 +706,66 @@
 
     const p = clamp01(precip);
     const isSnow = bucket === 'snow';
-    const showRain = !isSnow && p > 0.1;
-    const showSnow = isSnow && p > 0.08;
+    const isFog = bucket === 'fog';
+    const isStorm = bucket === 'storm';
+    const showRain = !isSnow && !isFog && (p > 0.08 || bucket === 'rain' || bucket === 'drizzle' || isStorm);
+    const showSnow = isSnow && p > 0.05;
+    const showFog = isFog;
     const reduced = prefersReducedMotion() || quietModeOn();
 
     el.classList.toggle('is-rain', showRain);
     el.classList.toggle('is-snow', showSnow);
+    el.classList.toggle('is-fog', showFog);
+    el.classList.toggle('is-storm', isStorm && showRain);
+    el.classList.toggle('is-drizzle', bucket === 'drizzle' && showRain);
 
-    // Much quieter than prior sensory pass
-    const maxOp = isSnow ? 0.1 : 0.08;
-    el.style.opacity = String(showRain || showSnow ? Math.min(maxOp, 0.02 + p * maxOp) : 0);
+    const maxOp = isSnow ? 0.28 : isFog ? 0.35 : isStorm ? 0.32 : 0.26;
+    el.style.opacity = String(
+      showRain || showSnow || showFog ? Math.min(maxOp, 0.08 + Math.max(p, showFog ? 0.4 : 0) * maxOp) : 0
+    );
 
-    if (reduced || (!showRain && !showSnow)) {
+    if (reduced) {
+      // Keep wash/opacity; drop moving particles
+      el.innerHTML = '';
+      el.dataset.wxMode = reduced ? 'static' : '';
+      return;
+    }
+
+    if (!showRain && !showSnow && !showFog) {
       el.innerHTML = '';
       el.dataset.wxMode = '';
       return;
     }
 
-    const mode = showSnow ? 'snow' : 'rain';
+    const mode = showFog ? 'fog' : showSnow ? 'snow' : isStorm ? 'storm' : bucket === 'drizzle' ? 'drizzle' : 'rain';
     if (el.dataset.wxMode === mode && el.childElementCount) return;
 
     el.dataset.wxMode = mode;
-    const count = showSnow ? Math.round(5 + p * 7) : Math.round(4 + p * 6);
+    if (showFog) {
+      el.innerHTML = '<span class="wx-fog-veil"></span><span class="wx-fog-veil wx-fog-veil--2"></span>';
+      return;
+    }
+    const count = showSnow
+      ? Math.round(14 + p * 18)
+      : isStorm
+        ? Math.round(22 + p * 20)
+        : bucket === 'drizzle'
+          ? Math.round(10 + p * 10)
+          : Math.round(16 + p * 16);
     const bits = [];
     for (let i = 0; i < count; i++) {
-      const left = (i * 41 + 13) % 100;
-      const delay = ((i * 0.45) % 5).toFixed(2);
-      const dur = showSnow ? (9 + (i % 4) * 1.6).toFixed(1) : (2.4 + (i % 4) * 0.5).toFixed(2);
-      const size = showSnow ? 2 + (i % 2) : 1;
+      const left = (i * 37 + 11) % 100;
+      const delay = ((i * 0.37) % 4.5).toFixed(2);
+      const dur = showSnow ? (7 + (i % 5) * 1.4).toFixed(1) : isStorm ? (1.4 + (i % 4) * 0.35).toFixed(2) : (2.0 + (i % 5) * 0.4).toFixed(2);
+      const size = showSnow ? 2 + (i % 3) : isStorm ? 1.5 : 1;
       if (showSnow) {
         bits.push(
           `<span class="wx-flake" style="left:${left}%;width:${size}px;height:${size}px;animation-delay:-${delay}s;animation-duration:${dur}s"></span>`
         );
       } else {
+        const h = isStorm ? 16 + (i % 5) * 3 : bucket === 'drizzle' ? 8 : 12 + (i % 3) * 2;
         bits.push(
-          `<span class="wx-drop" style="left:${left}%;animation-delay:-${delay}s;animation-duration:${dur}s;opacity:${(0.08 + (i % 4) * 0.03).toFixed(2)}"></span>`
+          `<span class="wx-drop" style="left:${left}%;height:${h}px;animation-delay:-${delay}s;animation-duration:${dur}s;opacity:${(0.2 + (i % 5) * 0.08).toFixed(2)}"></span>`
         );
       }
     }
@@ -706,7 +778,12 @@
 
   function recompute(reason) {
     const now = Date.now();
-    if (reason === 'tick' && now - lastWriteAt < RECOMPUTE_MS * 0.8) return;
+    const active =
+      (weatherCtx.bucket &&
+        ['rain', 'storm', 'snow', 'drizzle', 'fog'].includes(weatherCtx.bucket)) ||
+      (weatherCtx.precipitation != null && weatherCtx.precipitation > 0.2);
+    const throttle = (active ? RECOMPUTE_ACTIVE_MS : RECOMPUTE_MS) * 0.8;
+    if (reason === 'tick' && now - lastWriteAt < throttle) return;
     state = buildState();
     writeCss(state);
     lastWriteAt = now;
@@ -721,6 +798,7 @@
   function setWeatherContext(partial) {
     weatherCtx = { ...weatherCtx, ...partial };
     recompute('weather');
+    if (started) startPolling();
   }
 
   function getState() {
@@ -749,7 +827,11 @@
 
   function startPolling() {
     stopPolling();
-    timer = setInterval(() => recompute('tick'), RECOMPUTE_MS);
+    const active =
+      (weatherCtx.bucket &&
+        ['rain', 'storm', 'snow', 'drizzle', 'fog'].includes(weatherCtx.bucket)) ||
+      (weatherCtx.precipitation != null && weatherCtx.precipitation > 0.2);
+    timer = setInterval(() => recompute('tick'), active ? RECOMPUTE_ACTIVE_MS : RECOMPUTE_MS);
     document.addEventListener('visibilitychange', onVisibility);
   }
 

@@ -132,23 +132,20 @@
   }
 
   function renderDropdownNudge(ev) {
-    document.getElementById('chaupaalDropdownNudge')?.remove();
-    ensureStyles();
-    const el = document.createElement('div');
-    el.id = 'chaupaalDropdownNudge';
-    el.className = 'chaupaal-event chaupaal-dropdown-nudge';
-    el.dataset.eventId = ev.id;
-    el.innerHTML = `<div class="chaupaal-dropdown-inner">
-      <div style="font-weight:700;margin-bottom:4px">${esc(ev.payload?.title || 'Chaupaal')}</div>
-      <div>${esc(ev.payload?.text || '')}</div>
-      <button type="button" class="chaupaal-event-dismiss" style="margin-top:8px;color:rgba(255,255,255,.8)">Dismiss</button>
-    </div>`;
-    host().appendChild(el);
-    trackOverlay(el, () => dismissEvent(ev.id, el));
-    el.querySelector('.chaupaal-event-dismiss')?.addEventListener('click', () => dismissEvent(ev.id, el));
-    setTimeout(() => {
-      if (document.body.contains(el)) dismissEvent(ev.id, el);
-    }, 10000);
+    // Prefer inbox + tab lights — no top-of-app spam while focused
+    try {
+      if (typeof addLocalNotification === 'function') {
+        addLocalNotification({
+          type: 'companion',
+          icon: '🏠',
+          text: `<strong>${esc(ev.payload?.title || 'Chaupaal')}</strong> ${esc(ev.payload?.text || '')}`,
+          section: 'baithak',
+        });
+      }
+      dismissEvent(ev.id);
+    } catch (e) {
+      dismissEvent(ev.id);
+    }
   }
 
   function renderGraphicCard(ev) {

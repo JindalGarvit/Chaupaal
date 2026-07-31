@@ -152,7 +152,7 @@
     if (h >= 21 || h < 5) return 'night';
     if (h >= 5 && h < 8) return 'dawn';
     if (h >= 17 && h < 19) return 'goldenHour';
-    if (w === 'rain' || w === 'storm') return 'rainy';
+    if (w === 'rain' || w === 'storm' || w === 'drizzle' || w === 'snow') return 'rainy';
     if (w === 'overcast' || w === 'fog' || w === 'partly_cloudy') return 'overcast';
     if (w === 'clear') return 'clearDay';
     if (h >= 8 && h < 17) return 'clearDay';
@@ -164,16 +164,46 @@
     if (c === 0) return 'clear';
     if (c >= 1 && c <= 3) return 'partly_cloudy';
     if (c === 45 || c === 48) return 'fog';
-    if ((c >= 51 && c <= 67) || (c >= 80 && c <= 82)) return 'rain';
+    // Drizzle / rain / showers — keep light drizzle distinct for intensity
+    if (c >= 51 && c <= 55) return 'drizzle';
+    if ((c >= 56 && c <= 67) || (c >= 80 && c <= 82)) return 'rain';
     if ((c >= 71 && c <= 77) || (c >= 85 && c <= 86)) return 'snow';
     if (c >= 95) return 'storm';
     return 'overcast';
   }
 
+  /** Map Open-Meteo code + mm precip into a 0–1 intensity the engine can see. */
+  function precipIntensity(code, mm) {
+    const c = Number(code);
+    const amt = Number(mm);
+    let fromCode = 0;
+    if (c >= 95) fromCode = 1;
+    else if (c >= 80 && c <= 82) fromCode = 0.85;
+    else if (c >= 65 && c <= 67) fromCode = 0.9;
+    else if (c >= 61 && c <= 63) fromCode = 0.7;
+    else if (c >= 56 && c <= 57) fromCode = 0.55;
+    else if (c >= 51 && c <= 55) fromCode = 0.35;
+    else if (c >= 85 && c <= 86) fromCode = 0.75;
+    else if (c >= 71 && c <= 77) fromCode = 0.55;
+    // mm is often near-zero even during active rain in "current" — don't let it wipe code signal
+    const fromMm = Number.isFinite(amt) && amt > 0 ? Math.min(1, amt / 2.5) : 0;
+    return Math.max(fromCode, fromMm);
+  }
+
+  function isActiveWeather(bucket) {
+    return (
+      bucket === 'rain' ||
+      bucket === 'storm' ||
+      bucket === 'snow' ||
+      bucket === 'drizzle' ||
+      bucket === 'fog'
+    );
+  }
+
   async function fetchOpenMeteo(lat, lon) {
     const wxUrl =
       `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
-      `&current=weather_code,cloud_cover,precipitation&daily=sunrise,sunset&timezone=auto&forecast_days=1`;
+      `&current=weather_code,cloud_cover,precipitation,rain,showers,snowfall&daily=sunrise,sunset&timezone=auto&forecast_days=1`;
     const wxRes = await fetch(wxUrl);
     if (!wxRes.ok) return null;
     return wxRes.json();
@@ -220,6 +250,15 @@
     return null;
   }
 
+  let weatherPollTimer = null;
+
+  function scheduleWeatherPoll(active) {
+    if (weatherPollTimer) clearInterval(weatherPollTimer);
+    // Active precip/fog → refresh often; clear sky → slower
+    const ms = active ? 5 * 60 * 1000 : 20 * 60 * 1000;
+    weatherPollTimer = setInterval(() => refreshWeatherTheme(), ms);
+  }
+
   async function refreshWeatherTheme() {
     try {
       const mode = window.ChaupaalTheme?.getDisplayMode?.() || 'auto';
@@ -231,11 +270,13 @@
 
       const coords = await resolveThemeCoords();
       if (!coords) {
+        // No geo yet — time-of-day still drives Auto via engine
         window.ChaupaalTheme?.setWeatherContext?.({
           bucket: null,
           cloudCover: null,
           precipitation: null,
         });
+        scheduleWeatherPoll(false);
         return;
       }
 
@@ -247,17 +288,24 @@
       const code = Number(wx?.current?.weather_code);
       weatherBucket = bucketFromCode(code);
       const cloud = wx?.current?.cloud_cover;
-      const precip = wx?.current?.precipitation;
+      const rawMm = Math.max(
+        Number(wx?.current?.precipitation) || 0,
+        Number(wx?.current?.rain) || 0,
+        Number(wx?.current?.showers) || 0,
+        Number(wx?.current?.snowfall) || 0
+      );
+      const precip = precipIntensity(code, rawMm);
       const sunrise = wx?.daily?.sunrise?.[0] || null;
       const sunset = wx?.daily?.sunset?.[0] || null;
 
       window.ChaupaalTheme?.setWeatherContext?.({
         bucket: weatherBucket,
         cloudCover: cloud != null ? Number(cloud) : null,
-        precipitation: precip != null ? Math.min(1, Number(precip) / 5) : null,
+        precipitation: precip,
         sunrise,
         sunset,
       });
+      scheduleWeatherPoll(isActiveWeather(weatherBucket) || precip > 0.2);
     } catch (e) {
       /* offline / blocked — keep time-based theme */
     }
@@ -270,7 +318,7 @@
       applyThemeDiscrete(pickThemeFromContext({}));
     }
     setTimeout(() => refreshWeatherTheme(), 800);
-    setInterval(() => refreshWeatherTheme(), 15 * 60 * 1000);
+    scheduleWeatherPoll(false);
   }
 
   window.THEME_REGISTRY = THEME_REGISTRY;

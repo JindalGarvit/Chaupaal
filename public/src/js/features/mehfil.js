@@ -342,6 +342,7 @@
     if (m.type === 'youtube' && m.id) {
       ensureYtPlayer(m.id, !!m.playing, Number(m.t) || 0);
     } else if (m.type === 'music' && m.previewUrl) {
+      if (typeof quietMode !== 'undefined' && quietMode) return;
       if (typeof pauseAllMusic === 'function') pauseAllMusic();
       try {
         const a = new Audio(m.previewUrl);

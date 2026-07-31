@@ -274,6 +274,12 @@
   }
 
   async function playCard(card) {
+    if (typeof quietMode !== 'undefined' && quietMode) {
+      if (typeof showToast === 'function') {
+        showToast(typeof t === 'function' ? t('quiet_voice_muted', 'Quiet mode is on') : 'Quiet mode is on');
+      }
+      return;
+    }
     const url = ensureHttpsUrl(card.dataset.musicPreview || '');
     // Never await network resolve before audio.play() — that drops the mobile user-gesture.
     if (!url) {

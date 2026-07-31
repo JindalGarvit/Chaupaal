@@ -58,6 +58,11 @@
           <p>Unlimited freezes, deeper insights, ad-free — checkout when payments are live.</p>
           <button type="button" class="btn btn--primary" data-hub-plus>Explore Plus</button>
         </div>
+        <div class="chaupaal-hub-section">
+          <h3>Companion</h3>
+          <p>Chaupaal’s own profile — monthly summary, stats, and Plus — separate from yours.</p>
+          <button type="button" class="btn" data-hub-ai>Open Chaupaal AI profile</button>
+        </div>
       </div>`;
     document.querySelector('.device')?.appendChild(overlay);
     if (typeof pushNavLayer === 'function') {
@@ -95,6 +100,10 @@
     overlay.querySelector('[data-hub-plus]')?.addEventListener('click', () => {
       close();
       if (typeof openPremiumSheet === 'function') openPremiumSheet();
+    });
+    overlay.querySelector('[data-hub-ai]')?.addEventListener('click', () => {
+      close();
+      if (typeof openChaupaalAiProfile === 'function') openChaupaalAiProfile();
     });
   }
 

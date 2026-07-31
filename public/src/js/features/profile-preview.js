@@ -154,6 +154,66 @@
     if (typeof wireTabNotificationButtons === 'function') wireTabNotificationButtons();
   }
 
+  /**
+   * Instagram/WhatsApp-style peek sheet → View profile (full).
+   * Use for taps on name/avatar across feeds; long-press can still open actions.
+   */
+  function openProfilePeek(profile, opts = {}) {
+    if (!profile) return;
+    if (profile.isChaupaal || profile.type === 'chaupaal' || profile.uid === 'chaupaal_ai') {
+      if (typeof openChaupaalAiPeek === 'function') return openChaupaalAiPeek();
+      if (typeof openChaupaalAiProfile === 'function') return openChaupaalAiProfile();
+    }
+    const uid = opts.uid || profile.uid || profile.id;
+    const username = opts.username || profile.username;
+    const name = profile.name || profile.displayName || username || 'Member';
+    const photo = profile.photoURL || profile.photo || null;
+    const pType = profile.profileType || 'personal';
+
+    document.getElementById('profilePeekSheet')?.remove();
+    const sheet = document.createElement('div');
+    sheet.id = 'profilePeekSheet';
+    sheet.className = 'archive-overlay profile-peek-sheet';
+    sheet.setAttribute('data-nav-managed', '1');
+    const nameHtml =
+      typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml(name, pType) : String(name).replace(/</g, '&lt;');
+    sheet.innerHTML = `
+      <div class="profile-peek-inner">
+        <div class="profile-peek-avatar squircle-avatar">${photo ? `<img src="${String(photo).replace(/"/g, '')}" alt="">` : '👤'}</div>
+        <div class="profile-peek-name">${nameHtml}</div>
+        <div class="profile-peek-sub">${username ? '@' + String(username).replace(/</g, '&lt;') : ''}</div>
+        <div class="profile-peek-actions">
+          <button type="button" class="btn btn--primary" data-peek-full>${typeof t === 'function' ? t('peek_view_profile', 'View profile') : 'View profile'}</button>
+          <button type="button" class="btn" data-peek-message>${typeof t === 'function' ? t('peek_message', 'Message') : 'Message'}</button>
+          <button type="button" class="btn" data-peek-dismiss>${typeof t === 'function' ? t('cancel', 'Cancel') : 'Cancel'}</button>
+        </div>
+      </div>`;
+    document.querySelector('.device')?.appendChild(sheet);
+    const close = () => {
+      if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
+      else sheet.remove();
+    };
+    if (typeof pushNavLayer === 'function') pushNavLayer(sheet, { onPop: () => sheet.remove() });
+    sheet.addEventListener('click', (e) => {
+      if (e.target === sheet) close();
+    });
+    sheet.querySelector('[data-peek-dismiss]')?.addEventListener('click', close);
+    sheet.querySelector('[data-peek-full]')?.addEventListener('click', () => {
+      close();
+      if (typeof openPublicProfile === 'function') {
+        openPublicProfile(profile, { uid, username });
+      } else if (username && typeof openProfileByUsername === 'function') {
+        openProfileByUsername(username);
+      }
+    });
+    sheet.querySelector('[data-peek-message]')?.addEventListener('click', () => {
+      close();
+      if (typeof openDmWithSharedHello === 'function' && uid) openDmWithSharedHello({ uid, name, username });
+      else if (typeof startChatWithUser === 'function') startChatWithUser(profile);
+      else if (typeof showToast === 'function') showToast('Open Baithak to message');
+    });
+  }
+
   window.isProfilePreviewMode = isProfilePreviewMode;
   window.setProfilePreviewMode = setProfilePreviewMode;
   window.getPublicVisibleProfile = getPublicVisibleProfile;
@@ -161,4 +221,5 @@
   window.renderStrangerPreviewHtml = renderStrangerPreviewHtml;
   window.renderOwnPreviewChromeHtml = renderOwnPreviewChromeHtml;
   window.wirePreviewToggle = wirePreviewToggle;
+  window.openProfilePeek = openProfilePeek;
 })();

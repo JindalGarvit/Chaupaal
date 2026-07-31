@@ -8,6 +8,73 @@
   async function fillBuiltinBody(bodyEl, sectionId, profileUid, { isOwner, includeArchived, profileMedia } = {}) {
     if (!bodyEl || !profileUid) return;
     const opts = { isOwner, includeArchived, profileMedia };
+    const dp =
+      opts.profile ||
+      (typeof digitalProfile !== 'undefined' && profileUid === currentUser?.uid ? digitalProfile : {}) ||
+      {};
+
+    if (sectionId === 'bio') {
+      const bio = String(dp.bio || '').trim();
+      const about =
+        typeof linkifyText === 'function' && bio ? linkifyText(bio) : (bio || '').replace(/</g, '&lt;');
+      bodyEl.innerHTML = about
+        ? `<div class="profile-flexible-block">${about}</div>`
+        : `<div class="public-profile-posts-empty">${isOwner ? 'Add a short bio in Edit · Personal' : 'No bio yet'}</div>`;
+      return;
+    }
+
+    if (sectionId === 'stats') {
+      const streak =
+        (typeof getStreak === 'function' && getStreak()) ||
+        (typeof userProfile !== 'undefined' && userProfile?.streak) ||
+        0;
+      const friends = Number((typeof userProfile !== 'undefined' && userProfile?.friendsCount) || 0);
+      const posts = Number((typeof userProfile !== 'undefined' && userProfile?.postsCount) || 0);
+      bodyEl.innerHTML = `<div class="profile-stats-row">
+        <div><span>${streak || '—'}</span>streak</div>
+        <div><span>${friends || '—'}</span>friends</div>
+        <div><span>${posts || '—'}</span>posts</div>
+      </div>`;
+      return;
+    }
+
+    if (sectionId === 'links') {
+      const links = [];
+      if (dp.website) links.push({ label: 'Website', url: dp.website });
+      if (dp.instagram) links.push({ label: 'Instagram', url: 'https://instagram.com/' + String(dp.instagram).replace(/^@/, '') });
+      const custom = Array.isArray(dp.profileLinks) ? dp.profileLinks : [];
+      custom.forEach((l) => {
+        if (l?.url) links.push({ label: l.label || 'Link', url: l.url });
+      });
+      if (!links.length) {
+        bodyEl.innerHTML = `<div class="public-profile-posts-empty">${isOwner ? 'Add website or socials in Edit · Social' : 'No links'}</div>`;
+        return;
+      }
+      bodyEl.innerHTML = `<div class="profile-links-list">${links
+        .slice(0, 8)
+        .map((l) => `<a class="profile-link-chip" href="${String(l.url).replace(/"/g, '')}" data-external-link="1">${(l.label || 'Link').replace(/</g, '&lt;')}</a>`)
+        .join('')}</div>`;
+      return;
+    }
+
+    if (sectionId === 'pinned') {
+      const pinned = Array.isArray(dp.pinnedPosts) ? dp.pinnedPosts : [];
+      if (!pinned.length) {
+        bodyEl.innerHTML = `<div class="public-profile-posts-empty">${isOwner ? 'Pin posts from Archive (coming soon empty state)' : 'Nothing pinned'}</div>`;
+        return;
+      }
+      bodyEl.innerHTML = `<div class="public-profile-posts">${pinned
+        .slice(0, 6)
+        .map((it) => {
+          const src = it.thumb || it.url || '';
+          return src
+            ? `<div class="public-profile-post-cell"><img src="${src}" alt=""></div>`
+            : `<div class="public-profile-post-cell"><span>${String(it.caption || '').slice(0, 40)}</span></div>`;
+        })
+        .join('')}</div>`;
+      return;
+    }
+
     if (sectionId === 'highlights') {
       bodyEl.innerHTML = '<span class="public-profile-chrome-label">Story Highlights</span><span>Loading…</span>';
       try {

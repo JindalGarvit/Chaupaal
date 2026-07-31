@@ -353,7 +353,8 @@ function createDuniyaPost(post, {variant='list'}={}){
   const postAvatar=el.querySelector('.duniya-post-avatar');
   if(typeof bindProfileLongPress==='function') bindProfileLongPress(postAvatar,post.user);
   postAvatar?.addEventListener('click',()=>{
-    if(typeof openPublicProfile==='function') openPublicProfile(post.user,{uid:post.user.uid,username:post.user.username,context:'duniya'});
+    if(typeof openProfilePeek==='function') openProfilePeek(post.user,{uid:post.user.uid,username:post.user.username});
+    else if(typeof openPublicProfile==='function') openPublicProfile(post.user,{uid:post.user.uid,username:post.user.username,context:'duniya'});
   });
 
   // Like — optimistic (UI first, rate-limit/persist after)

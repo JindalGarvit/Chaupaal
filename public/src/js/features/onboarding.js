@@ -327,15 +327,21 @@ function loadVoiceList(){
 }
 if(window.speechSynthesis){loadVoiceList();window.speechSynthesis.onvoiceschanged=loadVoiceList;}
 
+/** Internal only — never expose a voice picker. Prefer lang match, then a calm female-ish voice. */
 function getSelectedVoice(){
-  const savedName=localStorage.getItem('chaupaal_voice');
-  if(savedName){const v=availableVoices.find(v=>v.name===savedName);if(v)return v;}
-  return availableVoices.find(v=>/female|samantha|zira/i.test(v.name))||availableVoices[0];
+  const lang=(typeof currentLang!=='undefined'&&currentLang)||'en';
+  const byLang=availableVoices.find(v=>String(v.lang||'').toLowerCase().startsWith(String(lang).toLowerCase().slice(0,2)));
+  if(byLang) return byLang;
+  return availableVoices.find(v=>/samantha|google.*en|zira|female/i.test(v.name))||availableVoices[0];
 }
 
 let currentlySpeaking=null;
 function speakText(text, btnEl){
   if(!window.speechSynthesis)return;
+  if(typeof quietMode!=='undefined'&&quietMode){
+    if(typeof showToast==='function') showToast(typeof t==='function'?t('quiet_voice_muted','Quiet mode is on'):'Quiet mode is on');
+    return;
+  }
   if(currentlySpeaking===btnEl){
     window.speechSynthesis.cancel();currentlySpeaking=null;
     btnEl?.classList.remove('speaking');return;
@@ -349,16 +355,6 @@ function speakText(text, btnEl){
   window.speechSynthesis.speak(utter);
   btnEl?.classList.add('speaking');currentlySpeaking=btnEl;
 }
-
-function populateVoiceDropdown(){
-  const select=document.getElementById('voiceSelect');
-  if(!select)return;
-  loadVoiceList();
-  const saved=localStorage.getItem('chaupaal_voice');
-  select.innerHTML=availableVoices.map(v=>`<option value="${v.name}" ${v.name===saved?'selected':''}>${v.name} (${v.lang})</option>`).join('')||'<option>Loading voices...</option>';
-  select.addEventListener('change',()=>{localStorage.setItem('chaupaal_voice',select.value);showToast(t('onboard_voice_updated'));});
-}
-setTimeout(populateVoiceDropdown,800);
 
 // ===================== UN COUNTRIES LIST =====================
 // UN_COUNTRIES defined earlier in file
@@ -658,10 +654,6 @@ async function requestNotificationPermission(){
   }
 }
 function scheduleLocalNudge(){
-  if(!('Notification' in window)||Notification.permission!=='granted')return;
-  if(typeof isNotifEnabled==='function'&&!isNotifEnabled('akhbaar'))return;
-  const nudges_en=["☕ Chai ready? Today's Akhbaar is waiting for you!","🔥 Streak danger zone! Today's Akhbaar is still pending","🎯 Your friends are already playing. When are you joining in?","📰 A Taaza Khabar just dropped — do you know what happened?"];
-  const msg=nudges_en[Math.floor(Math.random()*nudges_en.length)];
-  // For demo: show after 30s if still on page
-  setTimeout(()=>{if(document.visibilityState==='visible')new Notification('Chaupaal 🪑',{body:msg,icon:'icon.png'});},30000);
+  // No on-open / focused-app OS push spam — unread stays on tab lights + inbox
+  return;
 }
