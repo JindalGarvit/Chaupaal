@@ -125,7 +125,7 @@ function pinSelfChat(chats){
   return out;
 }
 
-function renderChatList(chats){
+function renderChatList(chats, opts){
   const list = document.getElementById('chatList');
   if(!list){
     console.warn('[self-chat] renderChatList: #chatList missing');
@@ -140,9 +140,12 @@ function renderChatList(chats){
     });
   } catch (e) {}
   list._mehfilPresenceUnsubs = [];
-  const pinned = pinSelfChat(chats||[]);
+  const section = opts?.sectionEmpty || (typeof baithakSection === 'string' ? baithakSection : 'sabha');
+  const pinPins = section === 'sabha' || !opts?.sectionEmpty;
+  const pinned = pinPins ? pinSelfChat(chats||[]) : (chats || []).filter((c) => !isSelfChatRow(c) && !isChaupaalChatRow(c));
   // Only Self + Chaupaal means the social inbox is empty — show CTA under pins.
   const socialOnly = pinned.filter(c => !isSelfChatRow(c) && !isChaupaalChatRow(c));
+  const showSectionEmpty = !!opts?.sectionEmpty && !socialOnly.length;
   pinned.forEach(chat => {
     const item = document.createElement('div');
     const self = isSelfChatRow(chat);
@@ -208,7 +211,42 @@ function renderChatList(chats){
     item.addEventListener('click', () => openChatScreen(chat));
     list.appendChild(item);
   });
-  if(!socialOnly.length){
+  if(showSectionEmpty){
+    const emptyHost=document.createElement('div');
+    emptyHost.className='baithak-inbox-empty';
+    list.appendChild(emptyHost);
+    const copy =
+      opts.sectionEmpty === 'mitra'
+        ? {
+            icon: '🤝',
+            title: typeof t === 'function' ? t('baithak_mitra_empty_title') || 'No Mitra chats yet' : 'No Mitra chats yet',
+            message:
+              typeof t === 'function'
+                ? t('baithak_mitra_empty_msg') || 'Chats with friends and people you follow land here.'
+                : 'Chats with friends and people you follow land here.',
+            actionLabel: typeof t === 'function' ? t('shortcut_baithak_search') || 'Find people' : 'Find people',
+            onAction: () => {
+              if (typeof openPeopleSearchWithContacts === 'function') openPeopleSearchWithContacts({ surface: 'baithak' });
+            },
+          }
+        : {
+            icon: '✨',
+            title:
+              typeof t === 'function'
+                ? t('baithak_sambhav_empty_title') || 'No Sambhavanayein yet'
+                : 'No Sambhavanayein yet',
+            message:
+              typeof t === 'function'
+                ? t('baithak_sambhav_empty_msg') || 'Chats with people you haven’t friended or followed yet.'
+                : 'Chats with people you haven’t friended or followed yet.',
+            actionLabel: typeof t === 'function' ? t('shortcut_baithak_search') || 'Find people' : 'Find people',
+            onAction: () => {
+              if (typeof openPeopleSearchWithContacts === 'function') openPeopleSearchWithContacts({ surface: 'baithak' });
+            },
+          };
+    if (typeof renderEmptyState === 'function') renderEmptyState(emptyHost, copy);
+    else emptyHost.textContent = copy.title;
+  } else if(!socialOnly.length){
     const emptyHost=document.createElement('div');
     emptyHost.className='baithak-inbox-empty';
     list.appendChild(emptyHost);
@@ -235,7 +273,7 @@ function renderChatList(chats){
     }
   }
   const selfEl = list.querySelector('[data-self-chat="1"]');
-  if(!selfEl){
+  if(!selfEl && pinPins){
     console.warn('[self-chat] Message Yourself missing from DOM after render — injecting fallback row');
     const fallback = buildSelfChatRow();
     const item = document.createElement('div');
@@ -377,36 +415,68 @@ function getBaithakChatsForSearch(q){
   return pinSelfChat(rest);
 }
 
-/** Phase 4 — Sabha / Sambhavanayein / Mitra filters (friend = reciprocal). */
+/** Phase 4 — Sabha / Sambhavanayein / Mitra filters.
+ * Sabha: all chats; self + Chaupaal AI ONLY here.
+ * Sambhavanayein: DMs with people who are NOT friends / not followed.
+ * Mitra: friends / following only.
+ */
 let baithakSection = 'sabha';
+
+function peerUidOfChat(c) {
+  if (!c) return null;
+  return (
+    c.uid ||
+    c.peerUid ||
+    (c.participants || []).find((u) => typeof currentUser !== 'undefined' && u !== currentUser?.uid) ||
+    null
+  );
+}
+
+function isFriendOrFollowing(st) {
+  if (!st) return false;
+  return !!(st.friend || st.following || st.closeFriend || st.status === 'friends' || st.status === 'following');
+}
+
 async function setBaithakSection(section) {
   baithakSection = ['sabha', 'sambhavanayein', 'mitra'].includes(section) ? section : 'sabha';
+  const panel = document.getElementById('panel-baithak');
+  if (panel) panel.dataset.baithakSection = baithakSection;
   const all = typeof pinSelfChat === 'function' ? pinSelfChat(baithakChats) : baithakChats || [];
+
   if (baithakSection === 'sabha') {
     renderChatList(all);
     return;
   }
-  const dms = all.filter((c) => c.type !== 'group' && !c.isSelf && c.type !== 'self');
-  const uids = dms.map((c) => c.uid || c.peerUid || (c.participants || []).find((u) => u !== currentUser?.uid)).filter(Boolean);
+
+  // Self + Chaupaal AI stay in Sabha only
+  const social = all.filter((c) => !isSelfChatRow(c) && !isChaupaalChatRow(c));
+  const dms = social.filter((c) => c.type !== 'group');
+  const groups = social.filter((c) => c.type === 'group');
+  const uids = dms.map(peerUidOfChat).filter(Boolean);
   let states = {};
   if (typeof hydrateRelationships === 'function' && uids.length) {
     states = await hydrateRelationships(uids).catch(() => ({}));
   }
-  const filtered = dms.filter((c) => {
-    const uid = c.uid || c.peerUid || (c.participants || []).find((u) => u !== currentUser?.uid);
-    const st = states[uid] || {};
-    const friend = !!st.friend;
-    // Teen Mode: Sambhavanayein never surfaces adult strangers to minors
-    if (baithakSection === 'sambhavanayein') {
-      if (friend) return false;
+
+  let filtered = [];
+  if (baithakSection === 'sambhavanayein') {
+    filtered = dms.filter((c) => {
+      const uid = peerUidOfChat(c);
+      const st = states[uid] || {};
+      if (isFriendOrFollowing(st)) return false;
       if (typeof isTeenModeUser === 'function' && isTeenModeUser() && !isTeenModeUser(c)) return false;
       return true;
-    }
-    if (baithakSection === 'mitra') return friend;
-    return true;
-  });
-  const self = all.filter((c) => c.isSelf || c.type === 'self');
-  renderChatList([...self, ...filtered]);
+    });
+  } else if (baithakSection === 'mitra') {
+    filtered = dms.filter((c) => {
+      const uid = peerUidOfChat(c);
+      return isFriendOrFollowing(states[uid] || {});
+    });
+    // Groups with friends stay in Mitra when any member is a friend (best-effort)
+    filtered = [...filtered, ...groups];
+  }
+
+  renderChatList(filtered, { sectionEmpty: baithakSection });
 }
 window.setBaithakSection = setBaithakSection;
 window.baithakSection = () => baithakSection;

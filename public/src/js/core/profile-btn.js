@@ -5,6 +5,47 @@ document.getElementById('profileBtn')?.addEventListener('click', () => {
   if (typeof renderProfileModal === 'function') renderProfileModal();
   document.getElementById('profileModal')?.classList.remove('hidden');
 });
+
+/** Long-press profile → Instagram-style account switcher */
+(function wireProfileAccountLongPress() {
+  const btn = document.getElementById('profileBtn');
+  if (!btn || btn.dataset.accountLp === '1') return;
+  btn.dataset.accountLp = '1';
+  let timer = null;
+  let fired = false;
+  const start = (e) => {
+    fired = false;
+    timer = setTimeout(() => {
+      fired = true;
+      if (typeof openAccountSwitcher === 'function') openAccountSwitcher();
+      else if (typeof openProfileSwitcher === 'function') openProfileSwitcher();
+    }, 480);
+  };
+  const clear = (e) => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    if (fired && e?.type === 'click') {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
+  btn.addEventListener('pointerdown', start);
+  btn.addEventListener('pointerup', clear);
+  btn.addEventListener('pointerleave', clear);
+  btn.addEventListener('pointercancel', clear);
+  btn.addEventListener(
+    'click',
+    (e) => {
+      if (fired) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        fired = false;
+      }
+    },
+    true
+  );
+})();
+
 document.getElementById('closeProfile')?.addEventListener('click', () => {
   if (typeof setProfilePreviewMode === 'function') setProfilePreviewMode(true);
   document.getElementById('profileModal')?.classList.add('hidden');

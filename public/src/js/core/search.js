@@ -1,11 +1,11 @@
 /**
- * Unified global search (Phase 3.1) — LinkedIn-style category sections.
+ * Unified global search — LinkedIn-style category sections.
  *
- * Categories: Profiles · Duniya · Peepal · Baithak groups (public / own).
- * Per-tab search bars stay unchanged; this is additive via the top-bar icon.
+ * Peepal morph #5 opens this omnibox (profiles · posts · Peepal · groups · games).
+ * Khoj remains intent-based people discovery only (see discovery.js / renderKhojSurface).
  *
- * Visibility: reuse existing checks (hiddenFromDiscovery, duniya audience,
- * soft-delete, peepal read rules, private groups excluded for non-members).
+ * Query path: prefer server search_query (server-lib/search-index.js) → fall back to
+ * local Firestore providers registered below.
  */
 (function () {
   /** @type {Record<string, (query: string, opts: object) => Promise<object[]>>} */
@@ -17,7 +17,7 @@
   const CATEGORY_PREVIEW = 5;
   const SEE_MORE_LIMIT = 20;
 
-  const GLOBAL_TYPES = ['users', 'duniya', 'peepal', 'groups'];
+  const GLOBAL_TYPES = ['users', 'duniya', 'peepal', 'groups', 'games'];
 
   function loadSearchHistory() {
     try {
@@ -416,6 +416,26 @@
   registerSearchProvider('duniya', searchDuniyaProvider);
   registerSearchProvider('peepal', searchPeepalProvider);
   registerSearchProvider('groups', searchGroupsProvider);
+  registerSearchProvider('games', async (query, { limit = SEE_MORE_LIMIT } = {}) => {
+    const q = normalizeQuery(query);
+    const catalog =
+      typeof getGames === 'function'
+        ? getGames({ dangal: true }).map((g) => ({
+            type: 'game',
+            category: 'games',
+            id: g.id,
+            title: g.name,
+            subtitle: g.tagline || g.desc || 'Dangal',
+            score: 70,
+          }))
+        : [
+            { type: 'game', category: 'games', id: 'quiz', title: 'Muqabala', subtitle: 'Dangal quiz', score: 70 },
+            { type: 'game', category: 'games', id: 'chess', title: 'Chess', subtitle: 'Board', score: 60 },
+          ];
+    return catalog
+      .filter((g) => textHaystack(g.title, g.subtitle).includes(q))
+      .slice(0, limit);
+  });
   // Legacy stubs kept for callers
   registerSearchProvider('interests', async () => []);
   registerSearchProvider('companies', async () => []);
@@ -429,6 +449,26 @@
   async function universalSearch(query, { types = GLOBAL_TYPES, limit = SEE_MORE_LIMIT, limits } = {}) {
     const q = normalizeQuery(query);
     if (!q) return { query: q, byCategory: {}, results: [], errors: {} };
+
+    // Server indexer first (extension point for crawl / Typesense later)
+    if (typeof apiFetch === 'function') {
+      try {
+        const envelope = await apiFetch('/api/media-config', {
+          method: 'POST',
+          needAuth: true,
+          body: { action: 'search_query', query: q, types, limit },
+        });
+        if (envelope?.ok && envelope.data?.categories && !envelope.data.degraded) {
+          const byCategory = {};
+          types.forEach((t) => {
+            byCategory[t] = envelope.data.categories[t] || [];
+          });
+          const results = types.flatMap((t) => byCategory[t] || []);
+          if (results.length) return { query: q, byCategory, results, errors: {}, source: 'api' };
+        }
+      } catch (e) {}
+    }
+
     const byCategory = {};
     const errors = {};
     await Promise.all(
@@ -457,7 +497,7 @@
       })
     );
     const results = types.flatMap((t) => byCategory[t] || []);
-    return { query: q, byCategory, results, errors };
+    return { query: q, byCategory, results, errors, source: 'client' };
   }
 
   const CATEGORY_META = {
@@ -465,6 +505,7 @@
     duniya: { label: 'Duniya', empty: 'No Duniya posts matched' },
     peepal: { label: 'Peepal', empty: 'No Peepal posts matched' },
     groups: { label: 'Baithak groups', empty: 'No public groups matched' },
+    games: { label: 'Games', empty: 'No games matched' },
   };
 
   function openResult(r, closeSearch) {
@@ -476,6 +517,11 @@
       if (username && typeof navigateToDeepLink === 'function') navigateToDeepLink(`/profile/${username}`);
       else if (r.uid && typeof openPublicProfile === 'function') openPublicProfile({ uid: r.uid, name: r.name, username });
       else if (typeof showToast === 'function') showToast(`@${username || 'user'}`);
+      return;
+    }
+    if (r.type === 'game' || r.category === 'games') {
+      document.querySelector('.bottom-tabs .tab-btn[data-tab="dangal"]')?.click();
+      if (r.id && typeof handleDangalGameTap === 'function') handleDangalGameTap(r.id);
       return;
     }
     if (r.type === 'duniya' || r.category === 'duniya') {
@@ -517,6 +563,16 @@
           <div class="us-result-meta">
             <div class="us-result-title">${escapeSearchHtml(r.title || r.name)}</div>
             <div class="us-result-sub">${escapeSearchHtml(r.subtitle || '')}</div>
+          </div>
+        </button>`;
+    }
+    if (r.category === 'games' || r.type === 'game') {
+      return `
+        <button type="button" class="us-result" data-cat="games" data-id="${escapeSearchHtml(r.id)}">
+          <div class="us-result-avatar">🎮</div>
+          <div class="us-result-meta">
+            <div class="us-result-title">${escapeSearchHtml(r.title || r.name || '')}</div>
+            <div class="us-result-sub">${escapeSearchHtml(r.subtitle || 'Dangal')}</div>
           </div>
         </button>`;
     }

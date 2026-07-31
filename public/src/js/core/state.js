@@ -164,15 +164,13 @@ function openSettingsModal(){
   if(typeof applyNotifPrefsToSettingsUI==='function') applyNotifPrefsToSettingsUI();
   try{
     const share=JSON.parse(localStorage.getItem('chaupaal_share_toggles')||'null');
-    if(share){
-      const b=document.getElementById('toggleBirthday'); if(b) b.checked=share.birthday!==false;
-      const tr=document.getElementById('toggleTrip'); if(tr) tr.checked=share.trip!==false;
-      const an=document.getElementById('toggleAnniversary'); if(an) an.checked=share.anniversary!==false;
-    }else{
-      // Defaults ON (appear-in-friends / share style)
-      ['toggleBirthday','toggleTrip','toggleAnniversary'].forEach(id=>{
-        const el=document.getElementById(id); if(el) el.checked=true;
-      });
+    const el=document.getElementById('toggleSharePersonalEvents');
+    if(el){
+      if(share && typeof share.personalEvents === 'boolean') el.checked = share.personalEvents;
+      else if(share){
+        // Migrate legacy birthday/trip/anniversary → single toggle (ON if any was on)
+        el.checked = share.birthday!==false || share.trip!==false || share.anniversary!==false;
+      }else el.checked = true;
     }
   }catch(e){}
   if(typeof hydrateNotifPrefsFromFirestore==='function') hydrateNotifPrefsFromFirestore();
@@ -225,12 +223,12 @@ document.getElementById('saveSettings').addEventListener('click',()=>{
   if(typeof readNotifPrefsFromSettingsUI==='function'&&typeof saveNotifPrefs==='function'){
     saveNotifPrefs(readNotifPrefsFromSettingsUI());
   }
-  // Share-with-friends toggles (local for now)
+  // Share personal events (single consent for Akhbaar/Surkhiya)
   try{
+    const on=!!document.getElementById('toggleSharePersonalEvents')?.checked;
     localStorage.setItem('chaupaal_share_toggles',JSON.stringify({
-      birthday:!!document.getElementById('toggleBirthday')?.checked,
-      trip:!!document.getElementById('toggleTrip')?.checked,
-      anniversary:!!document.getElementById('toggleAnniversary')?.checked,
+      personalEvents:on,
+      birthday:on, trip:on, anniversary:on, // legacy keys kept in sync for older readers
     }));
   }catch(e){}
   // Companion outreach opt-out (persisted on user doc — disables proactive companion only)

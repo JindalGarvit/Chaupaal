@@ -126,6 +126,13 @@ async function friendIds(db, uid) {
 async function recipientIds(db, uid, visibility) {
   if (visibility === 'close_friends') {
     const close = await db.collection('users').doc(uid).collection('close_friends').get();
+    // Opt-out model for Instants: empty Close Friends list ⇒ everyone (all friends) included.
+    // Once the user manages the list, only listed friends receive CF Instants.
+    if (!close.docs.length) {
+      const friends = await friendIds(db, uid);
+      const allowed = await Promise.all(friends.map(async (target) => !(await isBlockedPair(db, uid, target))));
+      return friends.filter((_, index) => allowed[index]);
+    }
     const possible = close.docs.map((doc) => doc.id);
     const checks = await Promise.all(
       possible.map(async (target) => (await isFriend(db, uid, target)) && !(await isBlockedPair(db, uid, target)))
@@ -212,8 +219,7 @@ async function createStory(db, admin, uid, body) {
   const location = cleanLocation(body.location);
   if (!media && !text && !music && !location && body.type !== 'score') throw new Error('EMPTY_STORY');
   const kind = destination === 'baithak' && body.kind === 'instant' ? 'instant' : 'story';
-  // Instants go to Close Friends by default (decision 9). If the list is empty,
-  // fall back to Friends so the share still works — caller sees audienceFallback.
+  // Instants go to Close Friends (opt-out: empty CF list = all friends).
   let visibility =
     destination === 'baithak' && body.visibility === 'close_friends'
       ? 'close_friends'
@@ -223,14 +229,7 @@ async function createStory(db, admin, uid, body) {
   if (kind === 'instant' && destination === 'baithak') {
     visibility = 'close_friends';
   }
-  let audienceFallback = null;
-  if (destination === 'baithak' && visibility === 'close_friends') {
-    const cfRecipients = await recipientIds(db, uid, 'close_friends');
-    if (!cfRecipients.length) {
-      visibility = 'friends';
-      audienceFallback = 'friends';
-    }
-  }
+  const audienceFallback = null;
   const collection = db.collection(COLLECTIONS[destination]);
   const clientId = cleanClientId(body.clientId);
   const ref = clientId ? collection.doc(`${uid}_${clientId}`) : collection.doc();
@@ -349,7 +348,10 @@ async function createStory(db, admin, uid, body) {
   }
 
   const recipients = await recipientIds(db, uid, visibility);
-  if (visibility === 'close_friends' && !recipients.length) throw new Error('NO_CLOSE_FRIENDS');
+  // Empty CF + no friends is OK for Instants (author-only / see-and-forget); still persist.
+  if (visibility === 'close_friends' && !recipients.length && kind !== 'instant') {
+    throw new Error('NO_CLOSE_FRIENDS');
+  }
   const manifest = db.collection('users').doc(uid).collection('storyDeliveryManifests').doc(ref.id);
   const writes = [
     (batch) => batch.set(ref, story),

@@ -101,70 +101,365 @@
   }
 
   async function renderLiveBaithakStories() {
-    const row = document.getElementById('storiesRow');
-    if (!row || !currentUser) return;
-    let stories = [];
-    try {
-      stories = await loadStoryFeed('baithak');
-    } catch (error) {
-      console.warn('[stories] Baithak feed', error);
-      return;
-    }
-    if (typeof enrichUsersWithProfileType === 'function') {
-      await enrichUsersWithProfileType(stories);
-    }
-    row.querySelectorAll('.story-item:not(.story-add)').forEach((node) => node.remove());
-    groupByOwner(stories, 'story').forEach((group) => {
-      const first = group[0];
-      const item = document.createElement('div');
-      item.className = 'story-item';
-      item.innerHTML = `
-        <div class="story-ring ${first.seen ? 'seen' : ''}">
-          <div class="story-avatar">${first.avatar && /^https:/.test(first.avatar) ? `<img src="${first.avatar}" alt="">` : first.avatar || '👤'}</div>
-        </div>
-        <div class="story-label">${first.own ? 'Your story' : (typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(first.name,first):safe(first.name))}</div>`;
-      item.addEventListener('click', () => openStoryViewer(first, group));
-      if (!first.own && typeof bindProfileLongPress === 'function') {
-        bindProfileLongPress(item.querySelector('.story-avatar'), {
-          uid: first.uid,
-          name: first.name,
-          photoURL: /^https:/.test(first.avatar || '') ? first.avatar : '',
-        });
-      }
-      row.appendChild(item);
-    });
-    renderInstants(stories.filter((story) => story.kind === 'instant'));
+    // Baithak no longer shows Instagram-style Stories rings — Instants only.
+    // Duniya owns Stories.
+    return renderBaithakInstants();
   }
 
-  function renderInstants(instants) {
+  async function renderBaithakInstants() {
     let strip = document.getElementById('baithakInstants');
     const chatList = document.getElementById('chatList');
-    if (!chatList) return;
+    if (!chatList && !strip) return;
     if (!strip) {
       strip = document.createElement('div');
       strip.id = 'baithakInstants';
       strip.className = 'baithak-instants';
-      chatList.parentElement?.insertBefore(strip, chatList);
+      chatList?.parentElement?.insertBefore(strip, chatList);
     }
-    if (!instants.length) {
-      strip.remove();
+    if (!currentUser) {
+      strip.innerHTML = '';
       return;
     }
-    strip.innerHTML = `<div class="baithak-instants-label">Instants</div><div class="baithak-instants-row">${instants
-      .map(
-        (story, index) => `
-        <button type="button" class="baithak-instant" data-instant-index="${index}">
-          ${story.thumb || story.media ? `<img src="${story.thumb || story.media}" alt="">` : '<span>⚡</span>'}
-          <small>${story.own ? 'You' : safe(story.name.split(' ')[0])}</small>
-        </button>`
-      )
-      .join('')}</div>`;
-    strip.querySelectorAll('[data-instant-index]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const story = instants[Number(button.dataset.instantIndex)];
-        openStoryViewer(story, [story]);
+    let stories = [];
+    try {
+      stories = await loadStoryFeed('baithak');
+    } catch (error) {
+      console.warn('[instants] Baithak feed', error);
+    }
+    const instants = stories.filter((s) => s.kind === 'instant' || s.destination === 'baithak');
+    // Prefer kind=instant; fall back to baithak feed items for migration
+    const items = stories.filter((s) => s.kind === 'instant');
+    const pool = items.length ? items : instants.filter((s) => s.kind !== 'story');
+    if (typeof enrichUsersWithProfileType === 'function') {
+      await enrichUsersWithProfileType(pool);
+    }
+    const bundles = groupByOwner(pool);
+    const own = bundles.find((g) => g[0]?.own || g[0]?.uid === currentUser?.uid);
+    const others = bundles.filter((g) => g !== own);
+
+    const tt = (k, f) => {
+      try {
+        if (typeof t === 'function') {
+          const v = t(k);
+          if (v && v !== k) return v;
+        }
+      } catch (e) {}
+      return f;
+    };
+
+    strip.innerHTML = `
+      <div class="baithak-instants-row" role="list">
+        <button type="button" class="baithak-instant baithak-instant--prompt" data-instant-compose role="listitem">
+          <span class="baithak-instant-stub">${own ? '＋' : '✎'}</span>
+          <small>${tt('instants_leave_note', 'Leave a note')}</small>
+        </button>
+        ${
+          own
+            ? `<button type="button" class="baithak-instant baithak-instant--you is-own" data-bundle="own" role="listitem">
+                <span class="baithak-instant-stub">${own[0].thumb || own[0].media ? `<img src="${safe(own[0].thumb || own[0].media)}" alt="">` : '⚡'}</span>
+                <small>${tt('instants_you', 'You')}</small>
+                ${own.length > 1 ? `<span class="baithak-instant-count">${own.length}</span>` : ''}
+              </button>`
+            : ''
+        }
+        ${others
+          .map(
+            (group, i) => `
+          <button type="button" class="baithak-instant" data-bundle="${i}" role="listitem">
+            <span class="baithak-instant-stub">${
+              group[0].thumb || group[0].media
+                ? `<img src="${safe(group[0].thumb || group[0].media)}" alt="">`
+                : escapeLiteText(group[0].text || '⚡').slice(0, 1)
+            }</span>
+            <small>${safe((group[0].name || '').split(' ')[0] || 'Friend')}</small>
+            ${group.length > 1 ? `<span class="baithak-instant-count">${group.length}</span>` : ''}
+          </button>`
+          )
+          .join('')}
+      </div>`;
+
+    strip.querySelector('[data-instant-compose]')?.addEventListener('click', () => openBaithakInstantComposer());
+    strip.querySelector('[data-bundle="own"]')?.addEventListener('click', () => {
+      if (own?.[0]) openStoryViewer(own[0], own);
+    });
+    strip.querySelectorAll('[data-bundle]:not([data-bundle="own"])').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const group = others[Number(btn.dataset.bundle)];
+        if (group?.[0]) openStoryViewer(group[0], group);
       });
     });
+  }
+
+  function escapeLiteText(s) {
+    return String(s || '').replace(/[&<>"']/g, '');
+  }
+
+  /** Instants composer — text + GIF / sticker / music / camera; Close Friends audience; shares immediately. */
+  function openBaithakInstantComposer(seedMode) {
+    if (!currentUser) {
+      if (typeof showAuth === 'function') showAuth();
+      return;
+    }
+    const tt = (k, f) => {
+      try {
+        if (typeof t === 'function') {
+          const v = t(k);
+          if (v && v !== k) return v;
+        }
+      } catch (e) {}
+      return f;
+    };
+    const bodyHtml = `
+      <textarea id="instantText" class="instant-compose-text" rows="3" maxlength="280" placeholder="${tt('instants_ph', 'Leave a quick Instant…')}"></textarea>
+      <div class="instant-compose-tools">
+        <button type="button" class="btn" data-instant-tool="gif">GIF</button>
+        <button type="button" class="btn" data-instant-tool="sticker">Sticker</button>
+        <button type="button" class="btn" data-instant-tool="music">Music</button>
+        <button type="button" class="btn" data-instant-tool="camera">Camera</button>
+      </div>
+      <div class="instant-compose-meta">${tt('instants_cf_note', 'Shared with Close Friends · disappears in ~24h')}</div>
+      <input type="file" id="instantCamera" accept="image/*,video/*" capture="environment" hidden>
+      <button type="button" class="btn btn--primary btn--block" data-instant-share style="margin-top:12px;">${tt('instants_share', 'Share Instant')}</button>`;
+
+    async function shareInstant(payload) {
+      try {
+        await createPlatformStory({
+          destination: 'baithak',
+          kind: 'instant',
+          visibility: 'close_friends',
+          text: payload.text || '',
+          media: payload.media || null,
+          thumb: payload.thumb || null,
+          type: payload.type || 'note',
+          expiresInHours: 24,
+        });
+        if (typeof showToast === 'function') showToast(tt('instants_shared', 'Instant shared'));
+        renderBaithakInstants();
+      } catch (e) {
+        if (typeof showToast === 'function') showToast(e?.message || tt('baithak_story_fail', 'Could not share'));
+      }
+    }
+
+    function wire(sheet, close) {
+      const fileInput = sheet.querySelector('#instantCamera');
+      sheet.querySelectorAll('[data-instant-tool]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const tool = btn.dataset.instantTool;
+          if (tool === 'camera') {
+            fileInput?.click();
+            return;
+          }
+          if (tool === 'gif' && typeof openGifPicker === 'function') {
+            openGifPicker({
+              onSelect: async (gif) => {
+                close();
+                await shareInstant({ text: '', media: gif?.url || gif?.mp4, thumb: gif?.preview || gif?.url, type: 'gif' });
+              },
+            });
+            return;
+          }
+          if (tool === 'music' && typeof openMusicPicker === 'function') {
+            openMusicPicker({
+              onSelect: async (song) => {
+                close();
+                await shareInstant({
+                  text: `${song?.title || 'Track'}${song?.artist ? ' — ' + song.artist : ''}`,
+                  type: 'music',
+                });
+              },
+            });
+            return;
+          }
+          if (tool === 'sticker' && typeof showToast === 'function') {
+            showToast(tt('instants_sticker_soon', 'Stickers — pick an emoji for now'));
+            const ta = sheet.querySelector('#instantText');
+            if (ta) ta.value = (ta.value || '') + '✨';
+          }
+        });
+      });
+      fileInput?.addEventListener('change', async () => {
+        const file = fileInput.files?.[0];
+        if (!file) return;
+        close();
+        try {
+          let media = null;
+          let thumb = null;
+          if (typeof processAndUploadMedia === 'function') {
+            const up = await processAndUploadMedia(file, { folder: 'instants' });
+            media = up?.url || up?.secure_url;
+            thumb = up?.thumb || media;
+          }
+          await shareInstant({ media, thumb, type: file.type.startsWith('video') ? 'video' : 'photo' });
+        } catch (e) {
+          if (typeof showToast === 'function') showToast(tt('baithak_story_fail', 'Could not share'));
+        }
+      });
+      sheet.querySelector('[data-instant-share]')?.addEventListener('click', async () => {
+        const text = sheet.querySelector('#instantText')?.value?.trim() || '';
+        if (!text) {
+          if (typeof showToast === 'function') showToast(tt('instants_need_text', 'Write something or add media'));
+          return;
+        }
+        close();
+        await shareInstant({ text, type: 'note' });
+      });
+      if (seedMode === 'camera') setTimeout(() => fileInput?.click(), 100);
+    }
+
+    if (typeof openHalfSheet === 'function') {
+      openHalfSheet({
+        id: 'baithakInstantComposer',
+        title: tt('instants_compose_title', 'New Instant'),
+        accent: 'baithak',
+        bodyHtml,
+        onMount: wire,
+      });
+      return;
+    }
+    // Fallback overlay
+    document.getElementById('baithakInstantComposer')?.remove();
+    const sheet = document.createElement('div');
+    sheet.id = 'baithakInstantComposer';
+    sheet.className = 'archive-overlay';
+    sheet.dataset.navManaged = '1';
+    sheet.innerHTML = `<div class="archive-header"><button type="button" data-overlay-dismiss>←</button><div style="flex:1"><strong>${tt('instants_compose_title', 'New Instant')}</strong></div></div><div style="padding:16px;">${bodyHtml}</div>`;
+    document.querySelector('.device')?.appendChild(sheet);
+    const close = () => {
+      if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
+      sheet.remove();
+    };
+    if (typeof pushNavLayer === 'function') pushNavLayer(sheet, close);
+    sheet.querySelector('[data-overlay-dismiss]')?.addEventListener('click', close);
+    wire(sheet, close);
+  }
+
+  /** Avatar micro-menu: Show profile · Add/Remove Close Friend · (basics). Anchored to DP — not a half-sheet. */
+  function openBaithakAvatarMenu(anchor, profile) {
+    if (!profile?.uid) return;
+    document.getElementById('baithakAvatarMenu')?.remove();
+    const menu = document.createElement('div');
+    menu.id = 'baithakAvatarMenu';
+    menu.className = 'baithak-avatar-menu';
+    menu.setAttribute('role', 'menu');
+    const tt = (k, f) => {
+      try {
+        if (typeof t === 'function') {
+          const v = t(k);
+          if (v && v !== k) return v;
+        }
+      } catch (e) {}
+      return f;
+    };
+    let isCf = !!profile.closeFriend;
+    menu.innerHTML = `
+      <button type="button" role="menuitem" data-act="profile">${tt('avatar_menu_profile', 'Show profile')}</button>
+      <button type="button" role="menuitem" data-act="cf">${isCf ? tt('avatar_menu_remove_cf', 'Remove Close Friend') : tt('avatar_menu_add_cf', 'Add Close Friend')}</button>
+      <button type="button" role="menuitem" data-act="message">${tt('avatar_menu_message', 'Message')}</button>`;
+    const host = document.querySelector('.device') || document.body;
+    host.appendChild(menu);
+    const rect = anchor.getBoundingClientRect();
+    const hostRect = host.getBoundingClientRect();
+    menu.style.top = `${Math.min(rect.bottom - hostRect.top + 4, (hostRect.height || 600) - 140)}px`;
+    menu.style.left = `${Math.max(8, Math.min(rect.left - hostRect.left, (hostRect.width || 360) - 180))}px`;
+    const close = () => {
+      document.removeEventListener('pointerdown', onOut, true);
+      menu.remove();
+    };
+    const onOut = (e) => {
+      if (!menu.contains(e.target) && e.target !== anchor) close();
+    };
+    setTimeout(() => document.addEventListener('pointerdown', onOut, true), 0);
+
+    // Hydrate CF state
+    if (typeof hydrateRelationships === 'function') {
+      hydrateRelationships([profile.uid])
+        .then((states) => {
+          isCf = !!states[profile.uid]?.closeFriend;
+          const btn = menu.querySelector('[data-act="cf"]');
+          if (btn) {
+            btn.textContent = isCf
+              ? tt('avatar_menu_remove_cf', 'Remove Close Friend')
+              : tt('avatar_menu_add_cf', 'Add Close Friend');
+          }
+        })
+        .catch(() => {});
+    }
+
+    menu.querySelectorAll('[data-act]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const act = btn.dataset.act;
+        close();
+        if (act === 'profile') {
+          if (typeof openPublicProfile === 'function') openPublicProfile(profile);
+          else if (typeof openProfilePreview === 'function') openProfilePreview(profile);
+        } else if (act === 'cf' && typeof setCloseFriend === 'function') {
+          try {
+            await setCloseFriend(profile.uid, !isCf);
+            if (typeof showToast === 'function') {
+              showToast(
+                !isCf
+                  ? tt('avatar_cf_added', 'Added to Close Friends')
+                  : tt('avatar_cf_removed', 'Removed from Close Friends')
+              );
+            }
+          } catch (e) {
+            if (typeof showToast === 'function') showToast(e?.message || 'Could not update');
+          }
+        } else if (act === 'message' && typeof openDmWithSharedHello === 'function') {
+          await openDmWithSharedHello({
+            uid: profile.uid,
+            name: profile.name || 'Friend',
+            avatar: profile.avatar || profile.photoURL || '👤',
+            starterText: '',
+            origin: 'avatar_menu',
+          });
+        }
+      });
+    });
+  }
+
+  function bindBaithakAvatarMenus() {
+    const list = document.getElementById('chatList');
+    if (!list || list.dataset.avatarMenuWired) return;
+    list.dataset.avatarMenuWired = '1';
+    if (typeof onLongPress !== 'function') return;
+    const mo = new MutationObserver(() => {
+      list.querySelectorAll('.chat-item:not([data-self-chat]):not([data-chaupaal-chat]) .chat-avatar').forEach((av) => {
+        if (av.dataset.cfMenuWired) return;
+        av.dataset.cfMenuWired = '1';
+        onLongPress(av, () => {
+          const row = av.closest('.chat-item');
+          const chatId = row?.dataset?.chatId;
+          const chat =
+            (typeof baithakChats !== 'undefined' && baithakChats?.find?.((c) => c.id === chatId || c.firestoreId === chatId)) ||
+            {};
+          const uid =
+            chat.uid ||
+            chat.peerUid ||
+            (chat.participants || []).find((u) => u !== currentUser?.uid);
+          if (!uid) return;
+          openBaithakAvatarMenu(av, {
+            uid,
+            name: chat.name,
+            photoURL: chat.photoURL,
+            avatar: chat.avatar,
+            username: chat.username,
+          });
+        });
+      });
+    });
+    mo.observe(list, { childList: true, subtree: true });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bindBaithakAvatarMenus);
+  } else {
+    bindBaithakAvatarMenus();
+  }
+
+  // Legacy name kept
+  function renderInstants() {
+    renderBaithakInstants();
   }
 
   async function openStoryArchive() {
@@ -178,6 +473,7 @@
     const duniya = stories.filter((s) => s.destination === 'duniya');
     const live = stories.filter((s) => !s.expiresAt || s.expiresAt > Date.now());
     const expired = stories.filter((s) => s.expiresAt && s.expiresAt <= Date.now());
+    const instants = stories.filter((s) => s.kind === 'instant');
 
     const cell = (story, index) => `
       <button type="button" class="story-archive-cell" data-story-index="${index}">
@@ -196,24 +492,28 @@
       <div class="archive-header">
         <button type="button" data-archive-back aria-label="Back">←</button>
         <div style="flex:1">
-          <strong>Story Archive</strong>
-          <div class="relationship-private-note">Only you see this. Live items still show likes & comments when opened.</div>
+          <strong>Archive</strong>
+          <div class="relationship-private-note">Stories (Duniya) · Instants (Baithak). Only you see this.</div>
         </div>
       </div>
       <div class="story-archive-body">
         <div class="story-archive-stats">
           <span><strong>${live.length}</strong> live</span>
-          <span><strong>${baithak.length}</strong> Baithak</span>
+          <span><strong>${instants.length}</strong> Instants</span>
           <span><strong>${duniya.length}</strong> Duniya</span>
           <span><strong>${expired.length}</strong> expired</span>
         </div>
         ${
           stories.length
             ? `<div class="story-archive-grid">${stories.map((s, i) => cell(s, i)).join('')}</div>`
-            : `<div class="comments-empty">No stories yet. Instants and stories you share will land here for testing.</div>`
+            : `<div class="comments-empty">No stories or Instants yet.</div>`
         }
       </div>`;
     document.querySelector('.device')?.appendChild(overlay);
+    if (typeof pushNavLayer === 'function') {
+      overlay.dataset.navManaged = '1';
+      pushNavLayer(overlay, () => overlay.remove());
+    }
     overlay.querySelector('[data-archive-back]')?.addEventListener('click', () => overlay.remove());
     overlay.querySelectorAll('[data-story-index]').forEach((button) => {
       button.addEventListener('click', () => {
@@ -221,44 +521,6 @@
         overlay.remove();
         openStoryViewer(stories[idx], stories);
       });
-      if (typeof onLongPress === 'function') {
-        onLongPress(button, async () => {
-          const story = stories[Number(button.dataset.storyIndex)];
-          if (!story || typeof storyCall !== 'function') return;
-          const title =
-            typeof promptNameSheet === 'function'
-              ? await promptNameSheet({
-                  title: 'Add to Highlight',
-                  placeholder: 'Name a new Highlight (blank = Favorites)',
-                  confirmLabel: 'Add',
-                  allowBlank: true,
-                })
-              : 'Favorites';
-          if (title === null) return;
-          try {
-            let highlightId = '';
-            if (title) {
-              const created = await storyCall('create_highlight', { title });
-              highlightId = created.id;
-            } else {
-              const list = await storyCall('list_highlights', {});
-              highlightId = list.highlights?.[0]?.id || '';
-              if (!highlightId) {
-                const created = await storyCall('create_highlight', { title: 'Favorites' });
-                highlightId = created.id;
-              }
-            }
-            await storyCall('add_highlight_story', {
-              highlightId,
-              destination: story.destination,
-              storyId: story.id,
-            });
-            if (typeof showToast === 'function') showToast('Added to Highlight');
-          } catch (e) {
-            if (typeof showToast === 'function') showToast('Could not add to Highlight');
-          }
-        });
-      }
     });
   }
 
@@ -271,5 +533,8 @@
   window.commentPlatformStory = commentPlatformStory;
   window.openProfileStories = openProfileStories;
   window.renderLiveBaithakStories = renderLiveBaithakStories;
+  window.renderBaithakInstants = renderBaithakInstants;
+  window.openBaithakInstantComposer = openBaithakInstantComposer;
+  window.openBaithakAvatarMenu = openBaithakAvatarMenu;
   window.openStoryArchive = openStoryArchive;
 })();

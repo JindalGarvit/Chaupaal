@@ -7,11 +7,13 @@
  * "Professional" = businesses, media houses, content creators, or public figures
  * operating in a professional capacity — NOT a personal career/networking profile mode.
  *
+ * Personal ↔ Professional is NOT a same-login toggle. Want both? Add a separate
+ * account via the device switcher (Instagram-style). Type is chosen at signup.
+ *
  * EXTENSIBILITY POINT (do not remove): future pro-account features should branch on
  * getProfileType() / digitalProfile.profileType — e.g. business info fields, verified
  * badges, follower-style dynamics (vs mutual friends), and creator tools — without a
- * schema migration. Matching, field visibility, and badges are intentionally unchanged
- * for now; only the toggleable field exists.
+ * schema migration.
  */
 (function () {
   const VALID = new Set(['personal', 'professional']);
@@ -64,25 +66,18 @@
     } catch (e) {}
   }
 
-  /** Compact toggle UI for profile settings (Social / account area). */
+  /** Read-only account type + CTA to add a separate account (no Personal↔Pro flip). */
   function renderProfileTypeToggleHtml() {
     const type = getProfileType();
+    const label = type === 'professional' ? 'Professional' : 'Personal';
     return `
       <div class="profile-type-block" id="profileTypeBlock" style="margin:0 0 16px;padding:14px;border:1.5px solid var(--line);border-radius:14px;background:var(--cream);">
         <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;margin-bottom:4px;">Account type</div>
+        <div style="font-size:12px;color:var(--ink);font-weight:600;margin-bottom:6px;">${label}</div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.4;">
-          Personal for yourself · Professional for a business, media house, creator, or public figure.
+          Personal and Professional are separate accounts — not a toggle. Add another account from the switcher to use both.
         </div>
-        <div style="display:flex;gap:8px;">
-          <button type="button" class="profile-type-opt${type === 'personal' ? ' active' : ''}" data-profile-type="personal"
-            style="flex:1;padding:10px;border-radius:12px;border:2px solid ${type === 'personal' ? 'var(--red)' : 'var(--line)'};background:${type === 'personal' ? 'rgba(230,57,70,0.08)' : 'var(--white)'};color:${type === 'personal' ? 'var(--red)' : 'var(--ink)'};font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;cursor:pointer;">
-            Personal
-          </button>
-          <button type="button" class="profile-type-opt${type === 'professional' ? ' active' : ''}" data-profile-type="professional"
-            style="flex:1;padding:10px;border-radius:12px;border:2px solid ${type === 'professional' ? 'var(--red)' : 'var(--line)'};background:${type === 'professional' ? 'rgba(230,57,70,0.08)' : 'var(--white)'};color:${type === 'professional' ? 'var(--red)' : 'var(--ink)'};font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;cursor:pointer;">
-            Professional
-          </button>
-        </div>
+        <button type="button" class="btn btn--block" data-open-account-switcher style="background:var(--white);border:1.5px solid var(--line);">Switch / add account</button>
       </div>`;
   }
 
@@ -159,24 +154,9 @@
     const block = root?.querySelector?.('#profileTypeBlock') || document.getElementById('profileTypeBlock');
     if (!block || block.dataset.wired) return;
     block.dataset.wired = '1';
-    block.querySelectorAll('[data-profile-type]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const prev = getProfileType();
-        const next = saveProfileType(btn.dataset.profileType);
-        block.querySelectorAll('[data-profile-type]').forEach((b) => {
-          const on = b.dataset.profileType === next;
-          b.classList.toggle('active', on);
-          b.style.borderColor = on ? 'var(--red)' : 'var(--line)';
-          b.style.background = on ? 'rgba(230,57,70,0.08)' : 'var(--white)';
-          b.style.color = on ? 'var(--red)' : 'var(--ink)';
-        });
-        if (typeof showToast === 'function') {
-          showToast(next === 'professional' ? 'Switched to Professional account' : 'Switched to Personal account');
-        }
-        if (prev !== 'personal' && next === 'personal') {
-          promptPersonalGenderIfNeeded();
-        }
-      });
+    block.querySelector('[data-open-account-switcher]')?.addEventListener('click', () => {
+      if (typeof openAccountSwitcher === 'function') openAccountSwitcher();
+      else if (typeof openProfileSwitcher === 'function') openProfileSwitcher();
     });
   }
 

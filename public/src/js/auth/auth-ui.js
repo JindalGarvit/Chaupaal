@@ -54,9 +54,14 @@ if (auth) {
           await UsersPublic.syncPublicProfile(user.uid, userProfile);
         }
       } catch (e) {}
-      if (typeof AuthProfiles !== 'undefined' && AuthProfiles.hydrateActiveProfile) {
+      if (typeof AuthProfiles !== 'undefined') {
         try {
-          await AuthProfiles.hydrateActiveProfile(user.uid, userProfile);
+          if (AuthProfiles.hydrateActiveProfile) {
+            await AuthProfiles.hydrateActiveProfile(user.uid, userProfile);
+          }
+          if (AuthProfiles.rememberCurrentAccount) {
+            AuthProfiles.rememberCurrentAccount();
+          }
         } catch (e) {}
       }
       if (userProfile.lang) {

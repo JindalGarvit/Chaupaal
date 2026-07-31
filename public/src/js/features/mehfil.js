@@ -590,6 +590,88 @@
     }
   }
 
+  async function stopCurrentMedia() {
+    try {
+      ytPlayer?.stopVideo?.();
+    } catch (e) {}
+    try {
+      ytPlayer?.destroy?.();
+    } catch (e) {}
+    ytPlayer = null;
+    try {
+      window.__mehfilSharedAudio?.pause?.();
+      window.__mehfilSharedAudio = null;
+    } catch (e) {}
+    const stageHost = overlayEl?.querySelector('[data-mehfil-yt]');
+    if (stageHost) stageHost.innerHTML = '';
+  }
+
+  async function playYoutubeId(id, title) {
+    await stopCurrentMedia();
+    ensureYtPlayer(id, true, 0);
+    await publishMediaState({
+      type: 'youtube',
+      id,
+      playing: true,
+      t: 0,
+      title: title || 'YouTube',
+    });
+    const nowEl = overlayEl?.querySelector('[data-mehfil-now]');
+    if (nowEl) nowEl.textContent = tt('mehfil_now_playing', 'Now playing: {{title}}', { title: title || 'YouTube' });
+  }
+
+  function showMehfilVideoPicker(results, query) {
+    const rows = (results || [])
+      .map(
+        (r, i) =>
+          `<button type="button" class="mehfil-yt-pick" data-yt-i="${i}">
+            ${r.thumb ? `<img src="${esc(r.thumb)}" alt="">` : '<span class="mehfil-yt-pick-ph">▶</span>'}
+            <span class="mehfil-yt-pick-meta">
+              <strong>${esc(r.title || 'Video')}</strong>
+              <small>${esc(r.channel || r.artist || '')}</small>
+            </span>
+          </button>`
+      )
+      .join('');
+    const bodyHtml = `
+      <div class="mehfil-yt-picks">${rows || `<div class="cp-empty">${tt('mehfil_no_preview', 'No playable preview — paste a YouTube link')}</div>`}</div>`;
+    if (typeof openHalfSheet === 'function') {
+      openHalfSheet({
+        id: 'mehfilYtPickSheet',
+        title: tt('mehfil_pick_video', 'Pick a video'),
+        accent: 'baithak',
+        bodyHtml,
+        onMount: (sheet, close) => {
+          sheet.querySelectorAll('[data-yt-i]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              const r = results[Number(btn.dataset.ytI)];
+              close();
+              if (r?.id) await playYoutubeId(r.id, r.title);
+              else if (r?.previewUrl) {
+                await stopCurrentMedia();
+                if (typeof pauseAllMusic === 'function') pauseAllMusic();
+                const a = new Audio(r.previewUrl);
+                window.__mehfilSharedAudio = a;
+                if (!(typeof quietMode !== 'undefined' && quietMode)) await a.play().catch(() => {});
+                await publishMediaState({
+                  type: 'music',
+                  previewUrl: r.previewUrl,
+                  title: `${r.title || ''} — ${r.artist || ''}`.trim(),
+                  playing: true,
+                  t: 0,
+                });
+              }
+            });
+          });
+        },
+      });
+      return;
+    }
+    // Fallback: take first result only if sheet unavailable
+    const first = results?.[0];
+    if (first?.id) playYoutubeId(first.id, first.title);
+  }
+
   async function searchAndPlay(query) {
     const q = String(query || '').trim();
     if (!q) return;
@@ -597,39 +679,45 @@
       q.match(/(?:v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{6,})/) ||
       (q.length === 11 && /^[a-zA-Z0-9_-]+$/.test(q) ? [0, q] : null);
     if (ytMatch) {
-      const id = ytMatch[1];
-      ensureYtPlayer(id, true, 0);
-      await publishMediaState({ type: 'youtube', id, playing: true, t: 0, title: 'YouTube' });
+      await playYoutubeId(ytMatch[1], 'YouTube');
       return;
     }
     if (typeof apiFetch !== 'function') return;
     try {
-      const envelope = await apiFetch('/api/media-config', {
-        method: 'POST',
-        needAuth: true,
-        body: { action: 'music_search', query: q, limit: 5 },
-      });
-      const song = envelope?.data?.results?.[0];
-      if (!song?.previewUrl) {
+      // Prefer YouTube search when available; fall back to music_search list
+      let results = [];
+      try {
+        const ytEnv = await apiFetch('/api/media-config', {
+          method: 'POST',
+          needAuth: true,
+          body: { action: 'youtube_search', query: q, limit: 8 },
+        });
+        results = (ytEnv?.data?.results || []).map((r) => ({
+          id: r.id || r.videoId,
+          title: r.title,
+          channel: r.channelTitle || r.channel,
+          thumb: r.thumb || r.thumbnail,
+        })).filter((r) => r.id);
+      } catch (e) {}
+      if (!results.length) {
+        const envelope = await apiFetch('/api/media-config', {
+          method: 'POST',
+          needAuth: true,
+          body: { action: 'music_search', query: q, limit: 8 },
+        });
+        results = (envelope?.data?.results || []).map((song) => ({
+          previewUrl: song.previewUrl,
+          title: song.title,
+          artist: song.artist,
+          id: song.youtubeId || null,
+          thumb: song.artwork || song.thumb,
+        }));
+      }
+      if (!results.length) {
         if (typeof showToast === 'function') showToast(tt('mehfil_no_preview', 'No playable preview — paste a YouTube link'));
         return;
       }
-      if (typeof quietMode !== 'undefined' && quietMode) {
-        if (typeof showToast === 'function') showToast(tt('mehfil_quiet_media', 'Quiet mode — media muted'));
-      }
-      if (typeof pauseAllMusic === 'function') pauseAllMusic();
-      const a = new Audio(song.previewUrl);
-      window.__mehfilSharedAudio = a;
-      if (!(typeof quietMode !== 'undefined' && quietMode)) await a.play().catch(() => {});
-      await publishMediaState({
-        type: 'music',
-        previewUrl: song.previewUrl,
-        title: `${song.title} — ${song.artist || ''}`.trim(),
-        playing: true,
-        t: 0,
-      });
-      const nowEl = overlayEl?.querySelector('[data-mehfil-now]');
-      if (nowEl) nowEl.textContent = tt('mehfil_now_playing', 'Now playing: {{title}}', { title: song.title });
+      showMehfilVideoPicker(results, q);
     } catch (e) {
       if (typeof showToast === 'function') showToast(tt('mehfil_media_fail', 'Media search failed'));
     }
@@ -693,14 +781,27 @@
         client = null;
       }
     } catch (e) {}
+    // Silence immediately — stop YT + shared audio before DOM teardown
+    try {
+      ytPlayer?.stopVideo?.();
+    } catch (e) {}
     try {
       ytPlayer?.destroy?.();
     } catch (e) {}
     ytPlayer = null;
     try {
       window.__mehfilSharedAudio?.pause?.();
+      if (window.__mehfilSharedAudio) {
+        window.__mehfilSharedAudio.src = '';
+        window.__mehfilSharedAudio.load?.();
+      }
       window.__mehfilSharedAudio = null;
     } catch (e) {}
+    if (typeof pauseAllMusic === 'function') {
+      try {
+        pauseAllMusic();
+      } catch (e) {}
+    }
     if (activeChatId && currentUser?.uid) {
       try {
         rtdbRef(`mehfil/${activeChatId}/participants/${currentUser.uid}`)?.remove();

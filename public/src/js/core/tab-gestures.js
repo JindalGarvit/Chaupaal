@@ -297,12 +297,11 @@
   /**
    * Morph shortcut slot map (5 slots):
    *   1 & 5 = corner actions · 2 = left swipe neighbor · 3 = tab home · 4 = right swipe neighbor
-   * Peepal: discuss | Khoj | Vriksha | Mashhoor | find
+   * Peepal: discuss | Khoj | Vriksha | Mashhoor | Chaupaal search (global)
    * Akhbaar: Relevant today | Surkhiya | All | Saathi | Add category
-   *   (#1 morning brief · #5 extends past rightmost category edge)
    * Duniya: post | Lehar | Vishwa | Prasidha | story
-   * Baithak: story | Sambhavanayein | Sabha | Mitra | find
-   * Dangal: pulse | Khel(GOTD) | Manch(library) | Maidan(resume) | challenge
+   * Baithak: Instant | Sambhavanayein | Sabha | Mitra | find
+   * Dangal: Performance | Khel(GOTD) | Manch(library) | Maidan(resume) | Challenge GOTD
    */
   function shortcutsFor(tab) {
     const sets = {
@@ -344,14 +343,13 @@
           },
         },
         {
-          id: 'find',
-          label: tt('shortcut_peepal_search', 'Find people'),
+          id: 'search',
+          label: tt('shortcut_peepal_global_search', 'Search Chaupaal'),
           run: () => {
-            switchTo('peepal');
-            if (typeof openPeopleSearchWithContacts === 'function') openPeopleSearchWithContacts({ surface: 'peepal' });
-            else {
-              document.getElementById('peepalSearchBtn')?.click();
-              document.getElementById('peepalInlineSearch')?.focus();
+            if (typeof openUniversalSearch === 'function') {
+              openUniversalSearch({ types: ['users', 'duniya', 'peepal', 'groups', 'games'] });
+            } else if (typeof openPeopleSearchWithContacts === 'function') {
+              openPeopleSearchWithContacts({ surface: 'peepal' });
             }
           },
         },
@@ -447,13 +445,13 @@
       ],
       baithak: [
         {
-          id: 'story',
-          label: tt('shortcut_baithak_story', 'Create story'),
+          id: 'instant',
+          label: tt('shortcut_baithak_instant', 'New Instant'),
           run: () => {
             if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
             switchTo('baithak');
-            if (typeof openBaithakStoryComposer === 'function') openBaithakStoryComposer('camera');
-            else document.getElementById('addStoryBtn')?.click();
+            if (typeof openBaithakInstantComposer === 'function') openBaithakInstantComposer();
+            else if (typeof openBaithakStoryComposer === 'function') openBaithakStoryComposer('camera');
           },
         },
         {
@@ -493,8 +491,8 @@
       dangal: [
         {
           id: 'pulse',
-          label: tt('shortcut_dangal_pulse', 'Progress'),
-          run: () => openDangalPulseSheet(),
+          label: tt('shortcut_dangal_pulse', 'Performance'),
+          run: () => openDangalPulseSheet({ refresh: true }),
         },
         {
           id: 'khel',
@@ -744,45 +742,107 @@
 
   function openDangalOpponentPicker(mode) {
     switchTo('dangal');
+    // Challenge morph (#5): always Game of the Day — never a hardcoded first tile
+    const gotdId =
+      (typeof window !== 'undefined' && window.__dangalGotdId) ||
+      document.querySelector('#dangalGotdHost [data-game]')?.dataset?.game ||
+      null;
     const tile = document.querySelector('#dangalGamesGrid [data-game], .dangal-game-tile[data-game]');
-    const gameId = tile?.dataset?.game || 'quiz';
+    const gameId = gotdId || tile?.dataset?.game || 'quiz';
     if (mode === 'random' && typeof launchDangalWithOpponent === 'function') {
       launchDangalWithOpponent(gameId);
       setTimeout(() => document.getElementById('dgRandomOpp')?.click(), 80);
       return;
     }
-    if (typeof launchDangalWithOpponent === 'function') {
-      launchDangalWithOpponent(gameId);
+    const launch = () => {
+      if (typeof launchDangalWithOpponent === 'function') {
+        launchDangalWithOpponent(gameId);
+        return;
+      }
+      if (typeof handleDangalGameTap === 'function') handleDangalGameTap(gameId);
+    };
+    if (!gotdId && typeof fetchGameOfTheDay === 'function') {
+      fetchGameOfTheDay()
+        .then((gotd) => {
+          if (gotd?.gameId) {
+            try {
+              window.__dangalGotdId = gotd.gameId;
+            } catch (e) {}
+            if (typeof launchDangalWithOpponent === 'function') launchDangalWithOpponent(gotd.gameId);
+            else if (typeof handleDangalGameTap === 'function') handleDangalGameTap(gotd.gameId);
+          } else launch();
+        })
+        .catch(() => launch());
       return;
     }
-    if (typeof handleDangalGameTap === 'function') handleDangalGameTap(gameId);
+    launch();
   }
 
-  function openDangalPulseSheet() {
+  function openDangalPulseSheet(opts) {
     document.getElementById('dangalPulseSheet')?.remove();
-    const sheet = document.createElement('div');
-    sheet.id = 'dangalPulseSheet';
-    sheet.className = 'archive-overlay';
-    sheet.dataset.navManaged = '1';
+    // Refresh dynamic stats after each open (not once-a-day snapshot)
+    try {
+      if (opts?.refresh && typeof renderDangalGamesGrid === 'function') {
+        const host = document.getElementById('dangalGamesGrid');
+        if (host && typeof getDangalHubSummary === 'function') {
+          // Soft refresh of overall rating strip without full grid rebuild when possible
+          const overall = document.getElementById('dangalOverallRating');
+          if (overall && typeof NEWS_CATEGORIES !== 'undefined') {
+            const quizRatings = userProfile?.categoryRatings || {};
+            const avgQuiz = Math.round(
+              NEWS_CATEGORIES.reduce((s, c) => s + (quizRatings[c] || 1200), 0) / NEWS_CATEGORIES.length
+            );
+            const hub = getDangalHubSummary();
+            const streakBit =
+              hub && hub.softDayStreak > 0
+                ? `<span class="dor-meta">${hub.softDayStreak > 1 ? `${hub.softDayStreak}-day streak` : 'Played today'} · ${hub.weekPlays} this week</span>`
+                : hub
+                  ? `<span class="dor-meta">${hub.weekPlays} play${hub.weekPlays === 1 ? '' : 's'} this week</span>`
+                  : '';
+            overall.innerHTML = `<div class="dor-main"><span class="dor-label">Quiz Rating</span><span class="dor-val">${avgQuiz}</span></div>${streakBit}`;
+          }
+        }
+      }
+    } catch (e) {}
+
     let body = '';
     const ratingsEl = document.getElementById('rpRatings');
     if (ratingsEl && ratingsEl.innerHTML.trim()) {
-      body = `<div style="padding:12px 16px;">${ratingsEl.innerHTML}</div>`;
+      body = `<div style="padding:4px 0;">${ratingsEl.innerHTML}</div>`;
     } else {
-      body = `<div style="padding:28px 16px;color:var(--muted);text-align:center;">${tt(
+      body = `<div style="padding:28px 8px;color:var(--muted);text-align:center;">${tt(
         'dangal_pulse_empty',
         'Play a few games — your category pulse will show up here.'
       )}</div>`;
     }
+    body += `<button type="button" class="btn btn--primary btn--block" data-open-dangal style="margin-top:12px;">${tt('dangal_pulse_play', 'Open Dangal')}</button>`;
+
+    if (typeof openHalfSheet === 'function') {
+      openHalfSheet({
+        id: 'dangalPulseSheet',
+        title: tt('dangal_pulse_title', 'Game performance'),
+        accent: 'dangal',
+        bodyHtml: body,
+        onMount: (sheet, close) => {
+          sheet.querySelector('[data-open-dangal]')?.addEventListener('click', () => {
+            close();
+            switchTo('dangal');
+          });
+        },
+      });
+      return;
+    }
+
+    const sheet = document.createElement('div');
+    sheet.id = 'dangalPulseSheet';
+    sheet.className = 'archive-overlay';
+    sheet.dataset.navManaged = '1';
     sheet.innerHTML = `
       <div class="archive-header">
         <button type="button" data-overlay-dismiss aria-label="Back">←</button>
         <div style="flex:1"><strong>${tt('dangal_pulse_title', 'Game performance')}</strong></div>
       </div>
-      ${body}
-      <div style="padding:0 16px 24px;">
-        <button type="button" class="btn btn--primary btn--block" data-open-dangal>${tt('dangal_pulse_play', 'Open Dangal')}</button>
-      </div>`;
+      <div style="padding:12px 16px 24px;">${body}</div>`;
     document.querySelector('.device')?.appendChild(sheet);
     const close = () => {
       if (typeof removeNavLayer === 'function') removeNavLayer(sheet);

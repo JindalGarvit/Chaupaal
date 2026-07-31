@@ -131,15 +131,8 @@ function initDuniya(){
     else if (typeof showToast === 'function') showToast(t('duniya_search_unavailable'));
   };
   document.getElementById('duniyaSearchBtn')?.addEventListener('click', runDuniyaSearch);
-  document.getElementById('duniyaInlineSearch')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      runDuniyaSearch();
-    }
-  });
-  document.getElementById('duniyaInlineSearch')?.addEventListener('focus', () => {
-    /* keep soft — Enter opens search; focus alone doesn't steal the feed */
-  });
+  document.getElementById('duniyaInlineSearch')?.remove();
+  // Chaupaal search lives under Peepal morph #5 — no Duniya top search bar.
 }
 
 async function renderDuniyaStories(){
@@ -1465,12 +1458,8 @@ function toggleOpenToMeet(){
       [...panel.classList].filter((c) => c.startsWith('room-kit')).forEach((c) => panel.classList.remove(c));
       panel.classList.add('room-kit', 'room-kit--water', `room-kit--${mode}`);
     }
-    const hints = document.querySelectorAll('.duniya-mode-hint span');
-    if (hints.length >= 3) {
-      hints[0].classList.toggle('is-center', mode === 'lehar');
-      hints[1].classList.toggle('is-center', mode === 'vishwa');
-      hints[2].classList.toggle('is-center', mode === 'prasidha');
-    }
+    const hints = document.querySelectorAll('.duniya-mode-hint');
+    hints.forEach((h) => h.remove());
     if (mode === 'lehar') renderLeharFeed();
     if (mode === 'prasidha') renderPrasidhaFeed();
   }

@@ -314,18 +314,12 @@ function renderDangalGamesGrid() {
     if (typeof wireDangalProgressPanel === 'function') wireDangalProgressPanel(progressHost);
   }
 
-  // Mode hint: Khel ← Manch → Maidan
-  const hint = document.createElement('div');
-  hint.className = 'dangal-mode-hint';
-  hint.setAttribute('aria-hidden', 'true');
-  hint.innerHTML = `<span data-hint="khel">Khel</span><span data-hint="manch" class="is-center">Manch</span><span data-hint="maidan">Maidan</span>`;
-  grid.appendChild(hint);
+  // Mode hint: Khel ← Manch → Maidan — removed (swipe + morph only)
 
   // ── Khel: Game of the Day ──
   const khel = document.createElement('div');
   khel.className = 'dangal-section room-kit room-kit--fire room-kit--khel';
   khel.dataset.dangalSection = 'khel';
-  khel.innerHTML = `<div class="room-kit-header">Khel<small>Game of the Day</small></div>`;
   const gotdHost = document.createElement('div');
   gotdHost.id = 'dangalGotdHost';
   khel.appendChild(gotdHost);
@@ -352,8 +346,7 @@ function renderDangalGamesGrid() {
   const manch = document.createElement('div');
   manch.className = 'dangal-section room-kit room-kit--fire room-kit--manch';
   manch.dataset.dangalSection = 'manch';
-  manch.innerHTML = `<div class="room-kit-header">Manch<small>All games</small></div>
-    <div class="dangal-section-grid">
+  manch.innerHTML = `<div class="dangal-section-grid">
       ${library.map(dangalTileHtml).join('') || ''}
     </div>`;
   if (!library.length && typeof renderEmptyState === 'function') {
@@ -372,7 +365,7 @@ function renderDangalGamesGrid() {
     last && last.id && typeof getGame === 'function'
       ? getGame(last.id === 'muqabala' ? 'quiz' : last.id)
       : null;
-  maidan.innerHTML = `<div class="room-kit-header">Maidan<small>Resume & in-progress</small></div>`;
+  maidan.innerHTML = ``;
   const maidanBody = document.createElement('div');
   maidanBody.className = 'dangal-section-grid dangal-maidan-actions';
   if (lastGame) {
@@ -440,20 +433,17 @@ function setDangalSection(section, opts) {
     el.style.display = match ? '' : 'none';
   });
   // Keep chips / progress visible across rooms
-  host.querySelectorAll('.dangal-chips, .dangal-progress-host, .dangal-mode-hint').forEach((el) => {
+  host.querySelectorAll('.dangal-chips, .dangal-progress-host').forEach((el) => {
     el.style.display = '';
   });
-  host.querySelectorAll('.dangal-mode-hint [data-hint]').forEach((el) => {
-    el.classList.toggle('is-center', el.dataset.hint === dangalSection);
-  });
+  document.querySelectorAll('.dangal-mode-hint').forEach((el) => el.remove());
   const screen = document.getElementById('dangalScreen') || document.getElementById('panel-dangal');
   if (screen) {
     [...screen.classList].filter((c) => c.startsWith('room-kit')).forEach((c) => screen.classList.remove(c));
     screen.classList.add('room-kit', 'room-kit--fire', `room-kit--${dangalSection}`);
   }
   if (!opts?.silent) {
-    const label = { khel: 'Khel', manch: 'Manch', maidan: 'Maidan' }[dangalSection];
-    if (typeof showToast === 'function') showToast(`${label}`);
+    // Quiet: no toast on section change (morph / swipe are enough)
   }
   const target = host.querySelector(`[data-dangal-section="${dangalSection}"]`);
   target?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });

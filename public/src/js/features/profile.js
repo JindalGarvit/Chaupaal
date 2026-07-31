@@ -56,8 +56,8 @@ function renderProfileModal(){
         <button type="button" class="icon-btn dp-settings-gear" id="profileSettingsGear" aria-label="Settings" data-icon="settings" title="Settings"></button>
       </div>
       <div class="dp-hero-copy">
-        <div class="dp-hero-name" data-pro-badge-self data-pro-badge-name="${(displayName||'').replace(/"/g,'&quot;')}">${nameHtml}</div>
-        <div class="dp-hero-handle">@${p.username||'username'}</div>
+        <div class="dp-hero-name" data-account-switch data-pro-badge-self data-pro-badge-name="${(displayName||'').replace(/"/g,'&quot;')}" style="cursor:pointer;" title="Switch account">${nameHtml}</div>
+        <div class="dp-hero-handle" data-account-switch style="cursor:pointer;" title="Switch account">@${p.username||'username'}</div>
         <div class="dp-hero-meta">${[dp.currentCity,dp.occupation].filter(Boolean).join(' · ')||'Add your city & job'}</div>
         <div class="dp-hero-complete">
           <div class="dp-hero-complete-row">
@@ -104,7 +104,7 @@ function renderProfileModal(){
     <div class="dp-account-strip">
       <button type="button" class="btn btn--primary btn--block" data-dp-open-hub>Chaupaal Hub · trust, Plus, devices</button>
       <button type="button" class="btn btn--block" id="manageCloseFriendsBtn">Close Friends</button>
-      <button type="button" class="btn btn--block" id="switchProfileBtn">Switch / add profile</button>
+      <button type="button" class="btn btn--block" id="switchProfileBtn">Switch / add account</button>
       <button type="button" class="logout-btn" id="logoutBtn">Log out</button>
     </div>
   `;
@@ -432,15 +432,28 @@ function renderProfileModal(){
     });
     renderSection('Personal');
     document.getElementById('switchProfileBtn')?.addEventListener('click',()=>{
-      if(typeof openProfileSwitcher==='function') openProfileSwitcher();
+      if(typeof openAccountSwitcher==='function') openAccountSwitcher();
+      else if(typeof openProfileSwitcher==='function') openProfileSwitcher();
       else if(typeof showToast==='function') showToast(t('profile_switcher_loading'));
+    });
+    el.querySelectorAll('[data-account-switch]').forEach((node)=>{
+      node.addEventListener('click',()=>{
+        if(typeof openAccountSwitcher==='function') openAccountSwitcher();
+        else if(typeof openProfileSwitcher==='function') openProfileSwitcher();
+      });
     });
     document.getElementById('logoutBtn')?.addEventListener('click',async()=>{
       if(typeof endCurrentSessionQuietly==='function') endCurrentSessionQuietly();
       if(typeof stopNotifInbox==='function') stopNotifInbox();
       if(typeof stopChatPresence==='function') stopChatPresence();
+      document.getElementById('profileModal')?.classList.add('hidden');
+      const uid = currentUser?.uid;
+      if(typeof AuthProfiles!=='undefined' && AuthProfiles.removeAccountFromDevice && uid){
+        await AuthProfiles.removeAccountFromDevice(uid);
+        if(typeof showToast==='function') showToast(t('profile_see_you'));
+        return;
+      }
       await auth.signOut();currentUser=null;userProfile=null;
-      document.getElementById('profileModal').classList.add('hidden');
       showToast(t('profile_see_you'));
     });
     document.getElementById('manageCloseFriendsBtn')?.addEventListener('click',()=>openCloseFriendsManager());

@@ -239,6 +239,47 @@ textarea.auth-input,
   margin: 8px auto 4px;
   flex-shrink: 0;
 }
+/* Shared half-sheet (5A) — grabber dismiss; expand only when opted in */
+.cp-half-sheet.archive-overlay {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: auto;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  border-radius: var(--r-sheet) var(--r-sheet) 0 0;
+  padding-bottom: max(12px, var(--safe-bottom, env(safe-area-inset-bottom, 0px)));
+  max-height: min(72vh, calc(100% - var(--safe-top, env(safe-area-inset-top, 0px)) - 48px));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+.cp-half-sheet--half {
+  height: min(52%, 480px);
+}
+.cp-half-sheet--expand {
+  height: min(78%, 640px);
+}
+.cp-half-sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 16px 16px;
+  overscroll-behavior: contain;
+}
+.cp-half-sheet-close {
+  background: none;
+  border: 0;
+  font-size: 16px;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 6px 8px;
+  line-height: 1;
+}
 .notif-panel-sheet .archive-header {
   padding-top: 4px;
   gap: 8px;

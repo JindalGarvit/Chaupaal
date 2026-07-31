@@ -27,15 +27,19 @@
     el.classList.add('room-kit', ...(kits || []));
   }
 
-  function ensureRoomHeader(host, title, sub) {
+  /** Mode-name hint strips removed — navigation is swipe + morph only. No-op kept for callers. */
+  function ensureRoomHeader(host) {
     if (!host) return;
-    let hdr = host.querySelector(':scope > .room-kit-header');
-    if (!hdr) {
-      hdr = document.createElement('div');
-      hdr.className = 'room-kit-header';
-      host.insertBefore(hdr, host.firstChild);
-    }
-    hdr.innerHTML = `${title}${sub ? `<small>${sub}</small>` : ''}`;
+    host.querySelectorAll(':scope > .room-kit-header').forEach((h) => h.remove());
+  }
+
+  function sharesPersonalEvents() {
+    try {
+      const share = JSON.parse(localStorage.getItem('chaupaal_share_toggles') || 'null');
+      if (share && typeof share.personalEvents === 'boolean') return share.personalEvents;
+      if (share) return share.birthday !== false || share.trip !== false || share.anniversary !== false;
+    } catch (e) {}
+    return true;
   }
 
   // ─── Peepal ────────────────────────────────────────────────────────────────
@@ -48,13 +52,15 @@
     applyRoomKit(screen || panel, ['room-kit--earth', `room-kit--${peepalMode}`]);
 
     if (peepalMode === 'khoj') {
-      ensureRoomHeader(
-        screen || feed,
-        tt('peepal_khoj_title', 'Khoj'),
-        tt('peepal_khoj_sub', 'Find people and discussions')
-      );
-      document.getElementById('peepalInlineSearch')?.focus();
-      document.getElementById('peepalSearchBtn')?.click();
+      ensureRoomHeader(screen || feed);
+      if (typeof renderKhojSurface === 'function') {
+        try {
+          renderKhojSurface(screen || feed);
+        } catch (e) {}
+      } else {
+        document.getElementById('peepalInlineSearch')?.focus();
+        document.getElementById('peepalSearchBtn')?.click();
+      }
       return;
     }
 
@@ -67,11 +73,7 @@
     feed?.querySelector('[data-peepal-mode-banner]')?.remove();
     document.getElementById('peepalMashhoorGrid')?.classList.add('hidden');
     if (feed) feed.classList.remove('hidden');
-    ensureRoomHeader(
-      screen || feed,
-      tt('peepal_vriksha_title', 'Vriksha'),
-      tt('peepal_vriksha_sub', 'Your Peepal tree')
-    );
+    ensureRoomHeader(screen || feed);
     if (typeof renderPeepalFeed === 'function') {
       try {
         renderPeepalFeed();
@@ -100,11 +102,7 @@
     }
     host.classList.remove('hidden');
     if (feed) feed.classList.add('hidden');
-    ensureRoomHeader(
-      host,
-      tt('peepal_mashhoor_title', 'Mashhoor'),
-      tt('peepal_mashhoor_sub', 'Trending discussions this week')
-    );
+    ensureRoomHeader(host);
 
     const posts =
       typeof peepalPosts !== 'undefined' && Array.isArray(peepalPosts)
@@ -170,21 +168,37 @@
   // ─── Akhbaar ───────────────────────────────────────────────────────────────
   function buildSurkhiyaHtml() {
     const headlines = collectSurkhiyaHeadlines();
+    const personal = collectSurkhiyaPersonalEvents();
+    const personalHtml = personal.length
+      ? `<div class="surkhiya-personal">
+          ${personal
+            .map(
+              (p) =>
+                `<button type="button" class="surkhiya-event" data-surkhiya-event="${escapeLite(p.action || 'baithak')}">
+                  <span class="surkhiya-event-icon">${p.icon || '🎉'}</span>
+                  <span class="surkhiya-event-copy">
+                    <strong>${escapeLite(p.title)}</strong>
+                    <small>${escapeLite(p.sub || '')}</small>
+                  </span>
+                </button>`
+            )
+            .join('')}
+        </div>`
+      : '';
     const chips = headlines
-      .slice(0, 8)
+      .slice(0, 10)
       .map(
         (h, i) =>
-          `<button type="button" class="surkhiya-chip" data-surkhiya-i="${i}">
+          `<button type="button" class="surkhiya-chip" data-surkhiya-i="${i}" aria-expanded="false">
             <span class="surkhiya-chip-kicker">${escapeLite(h.cat || 'News')}</span>
             <span class="surkhiya-chip-title">${escapeLite(h.title)}</span>
+            <span class="surkhiya-chip-brief hidden" data-surkhiya-brief>${escapeLite(h.brief || '')}</span>
           </button>`
       )
       .join('');
     return `
       <div class="akhbaar-surkhiya room-kit room-kit--air room-kit--surkhiya">
-        <div class="room-kit-header">${tt('akhbaar_surkhiya', 'Surkhiya')}
-          <small>${tt('akhbaar_surkhiya_sub', 'Morning paper — today’s short digest')}</small>
-        </div>
+        ${personalHtml}
         <div class="surkhiya-digest">
           ${
             chips ||
@@ -193,7 +207,6 @@
         </div>
         <div class="akhbaar-surkhiya-chips">
           <button type="button" class="btn" data-surkhiya-jump="all">${tt('akhbaar_all_headlines', 'All headlines')}</button>
-          <button type="button" class="btn btn--primary" data-surkhiya-jump="quiz">${tt('shortcut_akhbaar_quiz', "Today's quiz")}</button>
         </div>
       </div>`;
   }
@@ -210,8 +223,14 @@
               ? SAMPLE_QUESTIONS
               : [];
       qs.slice(0, 12).forEach((q) => {
+        const title = q.headline || q.news || q.q || 'Headline';
+        const brief = String(q.news || q.explain || q.proof || q.q || '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 220);
         out.push({
-          title: q.headline || q.news || q.q || 'Headline',
+          title,
+          brief: brief || String(title).slice(0, 160),
           cat: q.category || q.tag || 'News',
           q,
         });
@@ -220,12 +239,61 @@
     return out;
   }
 
+  function collectSurkhiyaPersonalEvents() {
+    if (!sharesPersonalEvents()) return [];
+    const out = [];
+    const today = new Date();
+    const md = `${today.getMonth() + 1}-${today.getDate()}`;
+    const pools = [];
+    try {
+      if (typeof friends !== 'undefined' && Array.isArray(friends)) pools.push(...friends);
+    } catch (e) {}
+    try {
+      if (typeof SAMPLE_DISCOVERY_POOL !== 'undefined') pools.push(...SAMPLE_DISCOVERY_POOL);
+    } catch (e) {}
+    const seen = new Set();
+    pools.forEach((p) => {
+      const dob = p.dateOfBirth || p.dob || '';
+      if (!dob) return;
+      const d = new Date(dob);
+      if (Number.isNaN(d.getTime())) return;
+      const key = p.uid || p.username || p.name;
+      if (seen.has(key)) return;
+      if (`${d.getMonth() + 1}-${d.getDate()}` === md) {
+        seen.add(key);
+        out.push({
+          icon: '🎂',
+          title: tt('relevant_birthday', "{{name}}'s birthday").replace(
+            '{{name}}',
+            p.name || p.username || 'Friend'
+          ),
+          sub: tt('relevant_birthday_sub', 'Wish them on Baithak'),
+          action: 'baithak',
+        });
+      }
+      const ann = p.anniversary || p.workAnniversary || p.anniversaryDate;
+      if (ann) {
+        const a = new Date(ann);
+        if (!Number.isNaN(a.getTime()) && `${a.getMonth() + 1}-${a.getDate()}` === md && !seen.has(`ann-${key}`)) {
+          seen.add(`ann-${key}`);
+          out.push({
+            icon: '💍',
+            title: tt('relevant_anniversary', "{{name}}'s anniversary").replace(
+              '{{name}}',
+              p.name || p.username || 'Friend'
+            ),
+            sub: tt('relevant_anniversary_sub', 'Send a note on Baithak'),
+            action: 'baithak',
+          });
+        }
+      }
+    });
+    return out.slice(0, 6);
+  }
+
   function buildSaathiHtml() {
     return `
       <div class="akhbaar-saathi room-kit room-kit--air room-kit--saathi" id="akhbaarSaathi">
-        <div class="room-kit-header">${tt('akhbaar_saathi', 'Saathi')}
-          <small>${tt('akhbaar_saathi_sub', 'Quizzes & updates from your circle')}</small>
-        </div>
         <div class="saathi-feed" data-saathi-feed></div>
       </div>`;
   }
@@ -299,17 +367,29 @@
 
   function wireSurkhiya(host) {
     host.querySelector('[data-surkhiya-jump="all"]')?.addEventListener('click', () => setAkhbaarMode('all'));
-    host.querySelector('[data-surkhiya-jump="quiz"]')?.addEventListener('click', () => {
-      setAkhbaarMode('all');
-      if (typeof window.ensureAkhbaarBuilt === 'function') window.ensureAkhbaarBuilt();
+    host.querySelectorAll('[data-surkhiya-event]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const a = btn.dataset.surkhiyaEvent;
+        if (a === 'baithak') {
+          document.querySelector('.bottom-tabs .tab-btn[data-tab="baithak"]')?.click();
+        }
+      });
     });
     host.querySelectorAll('[data-surkhiya-i]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        setAkhbaarMode('all');
-        const stage = document.getElementById('reelStage');
-        const cards = stage?.querySelectorAll('.reel-card');
-        const i = Number(btn.dataset.surkhiyaI) || 0;
-        cards?.[i]?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+        const brief = btn.querySelector('[data-surkhiya-brief]');
+        const open = btn.getAttribute('aria-expanded') === 'true';
+        host.querySelectorAll('[data-surkhiya-i]').forEach((other) => {
+          other.setAttribute('aria-expanded', 'false');
+          other.classList.remove('is-expanded');
+          other.querySelector('[data-surkhiya-brief]')?.classList.add('hidden');
+        });
+        if (!open && brief) {
+          btn.setAttribute('aria-expanded', 'true');
+          btn.classList.add('is-expanded');
+          brief.classList.remove('hidden');
+        }
+        // Expand brief only — never jump to today's quiz
       });
     });
   }
@@ -349,17 +429,8 @@
     saa.innerHTML = buildSaathiHtml();
     renderSaathiFeed(saa);
 
-    // Mode hint under cat bar
-    let hint = document.getElementById('akhbaarModeHint');
-    if (!hint) {
-      hint = document.createElement('div');
-      hint.id = 'akhbaarModeHint';
-      hint.className = 'akhbaar-mode-hint';
-      hint.setAttribute('aria-hidden', 'true');
-      hint.innerHTML =
-        '<span data-hint="surkhiya">Surkhiya</span><span data-hint="all" class="is-center">All</span><span data-hint="saathi">Saathi</span>';
-      catBar?.parentNode?.insertBefore(hint, catBar);
-    }
+    // Mode-name hint rows removed (swipe + morph only)
+    document.getElementById('akhbaarModeHint')?.remove();
   }
 
   function syncAkhbaarChrome(id) {
@@ -368,7 +439,6 @@
     const catBar = document.getElementById('akhbaarCatBar');
     const sur = document.getElementById('akhbaarSurkhiya');
     const saa = document.getElementById('akhbaarSaathiHost');
-    const hint = document.getElementById('akhbaarModeHint');
     const panel = document.getElementById('panel-akhbaar');
 
     const mode = id === 'gk' ? 'all' : id;
@@ -399,9 +469,6 @@
       if (typeof window.ensureAkhbaarBuilt === 'function') window.ensureAkhbaarBuilt();
     }
 
-    hint?.querySelectorAll('[data-hint]').forEach((el) => {
-      el.classList.toggle('is-center', el.dataset.hint === mode);
-    });
     if (panel) {
       [...panel.classList].filter((c) => c.startsWith('room-kit')).forEach((c) => panel.classList.remove(c));
       panel.classList.add('room-kit', 'room-kit--air', `room-kit--${mode === 'all' ? 'air' : mode}`);
@@ -440,7 +507,35 @@
     return { goTo: (i) => setAkhbaarMode(['surkhiya', 'all', 'saathi'][i] || 'all') };
   }
 
-  // Edge: swipe past Saathi → add category; within-tab Surkhiya ← All → Saathi
+  function akhbaarCategoryOrder() {
+    const bar = document.getElementById('akhbaarCatBar');
+    if (!bar) return ['all', 'saathi'];
+    return [...bar.querySelectorAll('.akhbaar-cat-chip')]
+      .map((c) => c.dataset.cat)
+      .filter((c) => c && c !== 'add');
+  }
+
+  function selectAkhbaarCategory(cat) {
+    if (!cat) return;
+    if (cat === 'saathi') {
+      setAkhbaarMode('saathi');
+      return;
+    }
+    if (akhbaarMode !== 'all') setAkhbaarMode('all');
+    try {
+      akhbaarActiveCat = cat;
+    } catch (e) {}
+    const bar = document.getElementById('akhbaarCatBar');
+    bar?.querySelectorAll('.akhbaar-cat-chip').forEach((c) => c.classList.remove('active'));
+    bar?.querySelector(`.akhbaar-cat-chip[data-cat="${cat}"]`)?.classList.add('active');
+    if (typeof filterReelByCategory === 'function') filterReelByCategory(cat);
+  }
+
+  /**
+   * Category swipe: walks All → Saathi → …customs.
+   * After last category: rubber-band → Add Category half-sheet (not a virtual end page).
+   * Direct Add control still opens the sheet anytime.
+   */
   function wireAkhbaarSwipe() {
     const panel = document.getElementById('panel-akhbaar');
     if (!panel || panel.dataset.swipeWired) return;
@@ -474,15 +569,35 @@
         if (locked !== 'h') return;
         const dx = (e.changedTouches[0]?.clientX || 0) - sx;
         if (Math.abs(dx) < 56) return;
-        const order = ['surkhiya', 'all', 'saathi'];
-        const cur = order.indexOf(akhbaarMode);
-        if (dx < 0 && akhbaarMode === 'saathi') {
-          // Past rightmost → add category sheet
-          if (typeof openAkhbaarCatAdd === 'function') openAkhbaarCatAdd();
+        // Surkhiya mode: swipe left → All
+        if (akhbaarMode === 'surkhiya') {
+          if (dx < 0) setAkhbaarMode('all');
           return;
         }
-        const next = order[Math.max(0, Math.min(2, cur + (dx < 0 ? 1 : -1)))];
-        if (next && next !== akhbaarMode) setAkhbaarMode(next);
+        const cats = akhbaarCategoryOrder();
+        const curCat =
+          akhbaarMode === 'saathi'
+            ? 'saathi'
+            : typeof akhbaarActiveCat !== 'undefined'
+              ? akhbaarActiveCat
+              : 'all';
+        let idx = cats.indexOf(curCat);
+        if (idx < 0) idx = 0;
+        if (dx < 0) {
+          // next category; past last → rubber-band add sheet
+          if (idx >= cats.length - 1) {
+            if (typeof openAkhbaarCatAdd === 'function') openAkhbaarCatAdd();
+            return;
+          }
+          selectAkhbaarCategory(cats[idx + 1]);
+        } else {
+          // previous; from first → Surkhiya
+          if (idx <= 0) {
+            setAkhbaarMode('surkhiya');
+            return;
+          }
+          selectAkhbaarCategory(cats[idx - 1]);
+        }
       },
       { passive: true }
     );
@@ -577,15 +692,7 @@
         if (typeof setBaithakSection === 'function') {
           setBaithakSection(next);
           applyRoomKit(panel, ['room-kit--sky', `room-kit--${next}`]);
-          ensureRoomHeader(
-            panel.querySelector('.baithak-search-row') || panel,
-            next === 'sabha' ? 'Sabha' : next === 'mitra' ? 'Mitra' : 'Sambhavanayein',
-            next === 'mitra'
-              ? tt('baithak_mitra_sub', 'Friend chats')
-              : next === 'sambhavanayein'
-                ? tt('baithak_sambhav_sub', 'New possibilities')
-                : tt('baithak_sabha_sub', 'Your gatherings')
-          );
+          ensureRoomHeader(panel);
         }
       },
       { passive: true }

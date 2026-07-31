@@ -37,20 +37,27 @@ async function resolveAdultByContact(adminApp, contact) {
     }
   }
 
-  // Phone / username via indexes if present
+  // Phone / username via indexes if present (client writes phoneIndex / phoneHashIndex)
   const phoneKey = c.replace(/\D/g, '');
   if (phoneKey.length >= 10) {
-    const variants = [c, '+' + phoneKey, '+91' + phoneKey.slice(-10)];
+    const variants = [
+      c,
+      '+' + phoneKey,
+      '+91' + phoneKey.slice(-10),
+      phoneKey.length === 10 ? '+91' + phoneKey : null,
+    ].filter(Boolean);
     for (const v of variants) {
-      const idx = await db.collection('phone_index').doc(v).get().catch(() => null);
-      if (idx?.exists) {
-        const uid = idx.data()?.uid;
-        if (!uid) continue;
-        const snap = await db.collection('users').doc(uid).get();
-        if (!snap.exists) continue;
-        const age = Number(snap.data()?.age) || 0;
-        if (age > 0 && age < 18) return { error: 'PARENT_NOT_ADULT' };
-        return { uid, phone: v, email: snap.data()?.email || null };
+      for (const col of ['phoneIndex', 'phone_index']) {
+        const idx = await db.collection(col).doc(v).get().catch(() => null);
+        if (idx?.exists) {
+          const uid = idx.data()?.uid;
+          if (!uid) continue;
+          const snap = await db.collection('users').doc(uid).get();
+          if (!snap.exists) continue;
+          const age = Number(snap.data()?.age) || 0;
+          if (age > 0 && age < 18) return { error: 'PARENT_NOT_ADULT' };
+          return { uid, phone: v, email: snap.data()?.email || null };
+        }
       }
     }
   }
@@ -89,7 +96,8 @@ async function startParentalConsent(adminApp, childUid, contact) {
       { merge: true }
     );
 
-  // Soft deliver: store for parent inbox notification + return demo OTP only in non-prod
+  // Soft deliver: parent Chaupaal notification inbox (not SMS).
+  // Optional: return OTP in API when PARENTAL_CONSENT_RETURN_OTP=1 or non-production.
   try {
     const { upsertNotification, resolveActor } = require('./notifications');
     const actor = await resolveActor(adminApp, childUid);
@@ -104,11 +112,18 @@ async function startParentalConsent(adminApp, childUid, contact) {
     console.warn('[parental-consent] notif', e?.message || e);
   }
 
+  const returnOtp =
+    process.env.PARENTAL_CONSENT_RETURN_OTP === '1' ||
+    process.env.NODE_ENV === 'development' ||
+    process.env.VERCEL_ENV === 'development' ||
+    process.env.VERCEL_ENV === 'preview';
+
   return {
     ok: true,
     needParentSignup: false,
-    // Surface OTP in API only when explicitly allowed (local/dev). Production relies on parent notif.
-    otp: process.env.PARENTAL_CONSENT_RETURN_OTP === '1' ? otp : undefined,
+    delivery: 'parent_notification',
+    // Surface OTP in API only when explicitly allowed (local/dev/preview).
+    otp: returnOtp ? otp : undefined,
   };
 }
 

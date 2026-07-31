@@ -1,9 +1,14 @@
 // ===================== BAITHAK INIT =====================
 function initBaithak(){
-  const storiesRow=document.getElementById('storiesRow');
-  if(!storiesRow)return;
-  if(!storiesRow.dataset.wired){
-    storiesRow.dataset.wired='1';
+  const panel=document.getElementById('panel-baithak');
+  if(!panel)return;
+  if(!panel.dataset.baithakChromeWired){
+    panel.dataset.baithakChromeWired='1';
+    document.getElementById('baithakOverflowBtn')?.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      openBaithakOverflowMenu(e.currentTarget);
+    });
+    // Legacy FAB / stories row if still present
     document.getElementById('baithakFab')?.addEventListener('click',showNewChatOptions);
     const addStoryBtn=document.getElementById('addStoryBtn');
     addStoryBtn?.addEventListener('click',()=>{
@@ -11,15 +16,10 @@ function initBaithak(){
         addStoryBtn.dataset.suppressClick='0';
         return;
       }
-      if(typeof openBaithakStoryComposer==='function') openBaithakStoryComposer('camera');
-      else showAddStoryOptions();
+      if(typeof openBaithakInstantComposer==='function') openBaithakInstantComposer();
+      else if(typeof openBaithakStoryComposer==='function') openBaithakStoryComposer('camera');
+      else if(typeof showAddStoryOptions==='function') showAddStoryOptions();
     });
-    if(addStoryBtn&&typeof onLongPress==='function'){
-      onLongPress(addStoryBtn,()=>{
-        addStoryBtn.dataset.suppressClick='1';
-        if(typeof showBaithakShareMenu==='function') showBaithakShareMenu();
-      });
-    }
     document.getElementById('baithakSearch')?.addEventListener('input',e=>{
       const q=e.target.value.toLowerCase();
       if(q.startsWith('@')&&q.length>1&&typeof openUniversalSearch==='function'){
@@ -30,18 +30,65 @@ function initBaithak(){
       renderChatList(typeof getBaithakChatsForSearch==='function'?getBaithakChatsForSearch(q):(typeof pinSelfChat==='function'?pinSelfChat([]):[]));
     });
   }
-  if(currentUser&&typeof renderLiveBaithakStories==='function') renderLiveBaithakStories();
-  else renderStories();
+  if(currentUser&&typeof renderBaithakInstants==='function') renderBaithakInstants();
+  else if(currentUser&&typeof renderLiveBaithakStories==='function') renderLiveBaithakStories();
+  else if(typeof renderStories==='function') renderStories();
   if(typeof baithakChats!=='undefined') baithakChats = typeof pinSelfChat==='function' ? pinSelfChat(baithakChats) : baithakChats;
-  renderChatList(typeof baithakChats!=='undefined'?baithakChats:(typeof pinSelfChat==='function'?pinSelfChat([]):[]));
+  if(typeof setBaithakSection==='function'){
+    setBaithakSection(typeof baithakSection==='function'?baithakSection():'sabha');
+  } else {
+    renderChatList(typeof baithakChats!=='undefined'?baithakChats:(typeof pinSelfChat==='function'?pinSelfChat([]):[]));
+  }
   if(db&&currentUser&&typeof loadBaithakChatsPage==='function'){
     loadBaithakChatsPage({reset:true})
-      .then(()=>{ if(typeof baithakChats!=='undefined') baithakChats = pinSelfChat(baithakChats); renderChatList(baithakChats); })
+      .then(()=>{
+        if(typeof baithakChats!=='undefined') baithakChats = pinSelfChat(baithakChats);
+        if(typeof setBaithakSection==='function') setBaithakSection(typeof baithakSection==='function'?baithakSection():'sabha');
+        else renderChatList(baithakChats);
+      })
       .catch(()=>{
         if(typeof baithakChatLoadError!=='undefined') baithakChatLoadError=true;
         renderChatList(typeof baithakChats!=='undefined'?pinSelfChat(baithakChats):(typeof pinSelfChat==='function'?pinSelfChat([]):[]));
       });
   }
+}
+
+/** WhatsApp-style ⋯ — New chat · New group · Find people · Chat settings (≤4, no mute). */
+function openBaithakOverflowMenu(anchor){
+  document.getElementById('baithakOverflowMenu')?.remove();
+  const menu=document.createElement('div');
+  menu.id='baithakOverflowMenu';
+  menu.className='baithak-overflow-menu';
+  menu.setAttribute('role','menu');
+  const tt=(k,f)=>{ try{ if(typeof t==='function'){ const v=t(k); if(v&&v!==k) return v; } }catch(e){} return f; };
+  menu.innerHTML=`
+    <button type="button" role="menuitem" data-baithak-menu="new_chat">${tt('baithak_menu_new_chat','New chat')}</button>
+    <button type="button" role="menuitem" data-baithak-menu="new_group">${tt('baithak_menu_new_group','New group')}</button>
+    <button type="button" role="menuitem" data-baithak-menu="find">${tt('shortcut_baithak_search','Find people')}</button>
+    <button type="button" role="menuitem" data-baithak-menu="settings">${tt('baithak_menu_chat_settings','Chat settings')}</button>`;
+  const host=document.querySelector('.device')||document.body;
+  host.appendChild(menu);
+  const rect=anchor?.getBoundingClientRect?.();
+  const hostRect=host.getBoundingClientRect?.()||{top:0,left:0,right:window.innerWidth,height:window.innerHeight};
+  if(rect){
+    menu.style.top=`${Math.min(rect.bottom-hostRect.top+4, (hostRect.height||600)-160)}px`;
+    menu.style.right=`${Math.max(8, hostRect.right-rect.right)}px`;
+  }
+  const close=()=>{ document.removeEventListener('pointerdown',onOut,true); menu.remove(); };
+  const onOut=(e)=>{ if(!menu.contains(e.target)&&e.target!==anchor) close(); };
+  setTimeout(()=>document.addEventListener('pointerdown',onOut,true),0);
+  menu.querySelectorAll('[data-baithak-menu]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const id=btn.dataset.baithakMenu;
+      close();
+      if(id==='new_chat') showNewDmSearchSheet();
+      else if(id==='new_group') showCreateGroup();
+      else if(id==='find'){
+        if(typeof openPeopleSearchWithContacts==='function') openPeopleSearchWithContacts({surface:'baithak'});
+        else showNewDmSearchSheet();
+      } else if(id==='settings' && typeof openSettingsModal==='function') openSettingsModal();
+    });
+  });
 }
 
 // FUTURE_I18N: Baithak UI strings below are English defaults until a language preference exists.
@@ -433,18 +480,30 @@ function showNewDmSearchSheet(opts){
 }
 
 function showNewChatOptions(){
+  const bodyHtml=`
+    <button type="button" class="btn btn--block" data-new="dm" style="margin-bottom:8px;text-align:left;">💬 Start a new conversation</button>
+    <button type="button" class="btn btn--block" data-new="group" style="margin-bottom:8px;text-align:left;">👥 Gather a group</button>`;
+  if(typeof openHalfSheet==='function'){
+    openHalfSheet({
+      id:'baithakNewChatSheet',
+      title: typeof t==='function' ? (t('baithak_menu_new_chat')||'New chat') : 'New chat',
+      accent:'baithak',
+      bodyHtml,
+      onMount:(sheet,close)=>{
+        sheet.querySelector('[data-new="dm"]')?.addEventListener('click',()=>{close();showNewDmSearchSheet();});
+        sheet.querySelector('[data-new="group"]')?.addEventListener('click',()=>{close();showCreateGroup();});
+      },
+    });
+    return;
+  }
   const sheet=document.createElement('div');
   sheet.style.cssText='position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:22px;z-index:100;';
-  sheet.innerHTML=`
-    <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;margin-bottom:14px;">New chat</div>
-    <button id="newDm" style="width:100%;padding:14px;background:var(--cream);border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;text-align:left;margin-bottom:8px;">💬 Start a new conversation</button>
-    <button id="newGroup" style="width:100%;padding:14px;background:var(--cream);border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;text-align:left;margin-bottom:8px;">👥 Gather a group</button>
-    <button id="closeSheet2" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>
-  `;
+  sheet.innerHTML=`<div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;margin-bottom:14px;">New chat</div>${bodyHtml}
+    <button id="closeSheet2" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>`;
   document.querySelector('.device').appendChild(sheet);
-  document.getElementById('newDm').addEventListener('click',()=>{sheet.remove();showNewDmSearchSheet();});
-  document.getElementById('newGroup').addEventListener('click',()=>{sheet.remove();showCreateGroup();});
-  document.getElementById('closeSheet2').addEventListener('click',()=>sheet.remove());
+  sheet.querySelector('[data-new="dm"]')?.addEventListener('click',()=>{sheet.remove();showNewDmSearchSheet();});
+  sheet.querySelector('[data-new="group"]')?.addEventListener('click',()=>{sheet.remove();showCreateGroup();});
+  sheet.querySelector('#closeSheet2')?.addEventListener('click',()=>sheet.remove());
 }
 
 function showCreateGroup(){

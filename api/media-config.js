@@ -126,6 +126,60 @@ async function handleResolveIdentifier(req, res, body) {
   }
 }
 
+/**
+ * Device multi-account switch — exchange stored refreshToken for a customToken.
+ * Pre-auth (Bearer optional). Requires FIREBASE_SERVICE_ACCOUNT_JSON + web API key.
+ */
+async function handleSwitchAccount(req, res, body) {
+  const refreshToken = String(body.refreshToken || '').trim();
+  if (!refreshToken || refreshToken.length < 20 || refreshToken.length > 4096) {
+    return sendError(res, 400, 'INVALID_TOKEN', 'Missing refresh token');
+  }
+  const adminApp = initAdmin();
+  if (!adminApp) {
+    return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured for account switch');
+  }
+  const apiKey =
+    (typeof process.env.FIREBASE_WEB_API_KEY === 'string' && process.env.FIREBASE_WEB_API_KEY.trim()) ||
+    (typeof process.env.NEXT_PUBLIC_FIREBASE_API_KEY === 'string' &&
+      process.env.NEXT_PUBLIC_FIREBASE_API_KEY.trim()) ||
+    // Web API keys are public (same as client firebase.js); used only to hit Google token endpoint.
+    'AIzaSyA1JtxTBu3_4OOBrT7NUTH7zy43ROioCcA';
+  if (!apiKey) {
+    return sendError(
+      res,
+      503,
+      'API_KEY_MISSING',
+      'FIREBASE_WEB_API_KEY required for switch_account'
+    );
+  }
+  try {
+    const tokenRes = await fetch(`https://securetoken.googleapis.com/v1/token?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(refreshToken)}`,
+    });
+    const tokens = await tokenRes.json();
+    if (!tokenRes.ok || !tokens.user_id) {
+      return sendError(
+        res,
+        401,
+        'TOKEN_INVALID',
+        tokens?.error?.message || 'Could not refresh account session'
+      );
+    }
+    const customToken = await adminApp.auth().createCustomToken(String(tokens.user_id));
+    return sendSuccess(res, {
+      customToken,
+      uid: String(tokens.user_id),
+      refreshToken: tokens.refresh_token || refreshToken,
+    });
+  } catch (e) {
+    console.warn('[media-config] switch_account', e?.message || e);
+    return sendError(res, 500, 'SWITCH_FAILED', e?.message || 'Account switch failed');
+  }
+}
+
 async function handlePost(req, res) {
   let body;
   try {
@@ -142,6 +196,9 @@ async function handlePost(req, res) {
   }
   if (action === 'resolve_identifier') {
     return handleResolveIdentifier(req, res, body);
+  }
+  if (action === 'switch_account') {
+    return handleSwitchAccount(req, res, body);
   }
 
   const user = await requireUser(req, res, { allowWeak: false });
@@ -196,6 +253,63 @@ async function handlePost(req, res) {
       console.warn('[media-config] music_search:', e?.message || e);
       // Never block compose — empty results let the picker show "no results"
       return sendSuccess(res, { results: [], provider: null, fallbackUsed: false });
+    }
+  }
+
+  if (action === 'youtube_search') {
+    const query = String(body.query || '').trim();
+    if (query.length < 1) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'query is required');
+    }
+    // Day-one: no YouTube Data API key required — return empty so client shows paste-link UX
+    // Extension: set YOUTUBE_API_KEY and wire googleapis search here.
+    const key = typeof process.env.YOUTUBE_API_KEY === 'string' ? process.env.YOUTUBE_API_KEY.trim() : '';
+    if (!key) {
+      return sendSuccess(res, { results: [], provider: null });
+    }
+    try {
+      const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=${Math.min(
+        10,
+        Number(body.limit) || 8
+      )}&q=${encodeURIComponent(query)}&key=${encodeURIComponent(key)}`;
+      const resp = await fetch(url);
+      const data = await resp.json();
+      const results = (data.items || []).map((it) => ({
+        id: it.id?.videoId,
+        title: it.snippet?.title,
+        channel: it.snippet?.channelTitle,
+        thumb: it.snippet?.thumbnails?.medium?.url || it.snippet?.thumbnails?.default?.url,
+      })).filter((r) => r.id);
+      return sendSuccess(res, { results, provider: 'youtube' });
+    } catch (e) {
+      console.warn('[media-config] youtube_search', e?.message || e);
+      return sendSuccess(res, { results: [], provider: null });
+    }
+  }
+
+  if (action === 'search_query') {
+    try {
+      const { checkActionRateLimit } = require('../server-lib/rate-limit');
+      const rate = await checkActionRateLimit(user.uid, 'global_search');
+      if (!rate.ok) {
+        return sendError(res, 429, 'RATE_LIMITED', 'Too many searches. Try again shortly.');
+      }
+    } catch (e) {}
+    const app = initAdmin();
+    if (!app) {
+      return sendSuccess(res, { query: body.query || '', categories: {}, degraded: true });
+    }
+    try {
+      const { searchChaupaal } = require('../server-lib/search-index');
+      const data = await searchChaupaal(app.firestore(), {
+        query: body.query,
+        types: body.types,
+        limit: body.limit,
+      });
+      return sendSuccess(res, data);
+    } catch (e) {
+      console.warn('[media-config] search_query', e?.message || e);
+      return sendSuccess(res, { query: body.query || '', categories: {}, degraded: true });
     }
   }
 
@@ -579,6 +693,8 @@ async function handlePost(req, res) {
   return sendError(res, 400, 'VALIDATION_ERROR', 'Unknown media action', {
     allowed: [
       'music_search',
+      'youtube_search',
+      'search_query',
       'music_resolve',
       'geocode_search',
       'live_location_stop',
@@ -587,6 +703,7 @@ async function handlePost(req, res) {
       'policy_consume',
       'username_check',
       'resolve_identifier',
+      'switch_account',
       'get_game_of_day',
       'record_game_play',
       'record_game_like',

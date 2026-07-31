@@ -1,6 +1,7 @@
-﻿// ===================== AUTH STATE MACHINE v4 =====================
-// Signup: Personal-default / Pro toggle → identity → email/password or phone (+ optional)
-// Login: username | email | phone + password (resolve_identifier) · verify banner (no kickback)
+﻿// ===================== AUTH STATE MACHINE v5 =====================
+// Signup: Personal | Professional (separate accounts) → identity → email/password or phone
+// Login: username | email | phone + password · phone OTP · Google · device multi-account
+// OTP: PhoneOtp helper (invisible→visible reCAPTCHA, resend cooldown, actionable errors)
 
 let regData = emptyRegData();
 
@@ -537,6 +538,9 @@ function syncEmailVerifyBanner() {
 
 window.syncEmailVerifyBanner = syncEmailVerifyBanner;
 window.hasVerifiedContact = hasVerifiedContact;
+window.showAuthScreen = showAuthScreen;
+window.showAuth = showAuth;
+window.hideAuth = hideAuth;
 
 function wireAuthEvents() {
   if (authEventsWired) return;
@@ -571,11 +575,14 @@ function wireAuthEvents() {
   document.getElementById('parentConsentSend')?.addEventListener('click', async () => {
     const contact = document.getElementById('parentConsentContact')?.value?.trim();
     const err = document.getElementById('parentConsentError');
+    const hint = document.getElementById('parentConsentHint');
+    const btn = document.getElementById('parentConsentSend');
     if (err) err.textContent = '';
     if (!contact) {
       if (err) err.textContent = 'Enter a parent email or phone';
       return;
     }
+    if (btn) btn.disabled = true;
     try {
       const env = await apiFetch('/api/media-config', {
         method: 'POST',
@@ -583,28 +590,68 @@ function wireAuthEvents() {
         body: { action: 'parental_consent_start', contact },
       });
       if (!env?.ok) throw new Error(env?.error?.message || 'Could not start consent');
-      if (env.data?.needParentSignup) {
-        if (err) err.textContent = 'No adult account found for that contact. Ask your parent to create one, then retry.';
+      if (env.data?.needParentSignup || env.data?.error === 'PARENT_NOT_FOUND') {
+        if (err)
+          err.textContent =
+            'No adult Chaupaal account for that contact. Ask your parent to create one, then retry.';
         if (typeof showToast === 'function') showToast('Parent needs a Chaupaal adult account first');
         return;
       }
+      if (env.data?.error === 'PARENT_NOT_ADULT') {
+        if (err) err.textContent = 'That account is under 18 — consent needs an adult parent account';
+        return;
+      }
       document.getElementById('parentConsentOtpWrap')?.classList.remove('hidden');
-      if (typeof showToast === 'function') showToast('Code sent to parent');
+      const otpInp = document.getElementById('parentConsentOtp');
+      if (otpInp && typeof PhoneOtp !== 'undefined') {
+        PhoneOtp.wireOtpInput(otpInp, {
+          onComplete: () => document.getElementById('parentConsentVerify')?.click(),
+        });
+        otpInp.focus();
+      }
+      if (env.data?.otp) {
+        if (otpInp) otpInp.value = String(env.data.otp);
+        if (hint) {
+          hint.textContent =
+            'Dev code shown below (PARENTAL_CONSENT_RETURN_OTP). Production: parent sees it in Chaupaal notifications — not SMS.';
+        }
+        if (typeof showToast === 'function') showToast('Dev consent code ready');
+      } else {
+        if (hint) {
+          hint.textContent =
+            'Code delivered to your parent’s Chaupaal notification inbox (not SMS). Ask them to open Chaupaal and share the 6-digit code.';
+        }
+        if (typeof showToast === 'function') showToast('Code sent to parent’s Chaupaal inbox');
+      }
     } catch (e) {
       if (err) err.textContent = e.message || 'Failed';
+    } finally {
+      if (btn) btn.disabled = false;
     }
   });
   document.getElementById('parentConsentVerify')?.addEventListener('click', async () => {
     const otp = document.getElementById('parentConsentOtp')?.value?.trim();
     const err = document.getElementById('parentConsentError');
+    const btn = document.getElementById('parentConsentVerify');
     if (err) err.textContent = '';
+    if (!otp || String(otp).replace(/\D/g, '').length !== 6) {
+      if (err) err.textContent = 'Enter the 6-digit code from your parent';
+      return;
+    }
+    if (btn) btn.disabled = true;
     try {
       const env = await apiFetch('/api/media-config', {
         method: 'POST',
         needAuth: true,
         body: { action: 'parental_consent_verify', otp },
       });
-      if (!env?.ok) throw new Error(env?.error?.message || 'Invalid code');
+      if (!env?.ok) {
+        const code = env?.error?.code || '';
+        if (code === 'EXPIRED') throw new Error('Code expired — ask parent to request a new one');
+        if (code === 'INVALID_OTP') throw new Error('Incorrect code — try again');
+        if (code === 'NO_PENDING') throw new Error('No pending code — tap Send verification code first');
+        throw new Error(env?.error?.message || 'Invalid code');
+      }
       if (userProfile) {
         userProfile.parentalConsent = env.data?.parentalConsent || { verified: true, required: true };
         userProfile.teenMode = true;
@@ -613,6 +660,8 @@ function wireAuthEvents() {
       if (typeof showToast === 'function') showToast('Parental consent saved — welcome');
     } catch (e) {
       if (err) err.textContent = e.message || 'Could not verify';
+    } finally {
+      if (btn) btn.disabled = false;
     }
   });
 
@@ -664,27 +713,43 @@ function wireAuthEvents() {
   });
 
   // ---- Google / Phone (verified contact required) ----
-  let loginConfirmation = null;
-  let regConfirmation = null;
   let regPhoneVerified = '';
-  let loginRecaptcha = null;
-  let regRecaptcha = null;
+  const LOGIN_OTP_HOST = 'recaptcha-container';
+  const REG_OTP_HOST = 'recaptcha-container-reg';
 
   function toE164India(raw) {
-    const digits = String(raw || '').replace(/\D/g, '');
+    if (typeof PhoneOtp !== 'undefined' && PhoneOtp.toE164India) return PhoneOtp.toE164India(raw);
+    const s = String(raw || '').trim();
+    const digits = s.replace(/\D/g, '');
     if (digits.length === 10) return '+91' + digits;
     if (digits.length === 12 && digits.startsWith('91')) return '+' + digits;
-    if (String(raw || '').startsWith('+') && digits.length >= 10) return '+' + digits.replace(/^\+/, '');
+    if (s.startsWith('+') && digits.length >= 10) return '+' + digits;
     return null;
+  }
+
+  function setOtpStatus(elId, text, ok) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    el.textContent = text || '';
+    el.style.color = ok ? 'var(--green, #33C481)' : 'var(--muted)';
   }
 
   async function finishAuthSession(welcomeMsg) {
     if (typeof trackLogin === 'function') trackLogin();
+    if (typeof AuthProfiles !== 'undefined' && AuthProfiles.rememberCurrentAccount) {
+      AuthProfiles.rememberCurrentAccount();
+    }
+    window.__chaupaalAddingAccount = false;
     hideAuth();
     updateProfileBtn();
     if (typeof loadStreak === 'function') loadStreak();
     if (typeof initActivityStatus === 'function') initActivityStatus();
     if (typeof startNotifInbox === 'function') startNotifInbox();
+    if (typeof registerSession === 'function') {
+      try {
+        await registerSession();
+      } catch (e) {}
+    }
     if (typeof rememberLastUser === 'function') {
       rememberLastUser({
         uid: currentUser?.uid,
@@ -755,9 +820,21 @@ function wireAuthEvents() {
 
   document.getElementById('loginPhoneBtn')?.addEventListener('click', () => {
     document.getElementById('authPhonePanel')?.classList.toggle('hidden');
+    const otpInp = document.getElementById('loginPhoneOtp');
+    if (otpInp && typeof PhoneOtp !== 'undefined') {
+      PhoneOtp.wireOtpInput(otpInp, {
+        onComplete: () => document.getElementById('loginPhoneVerifyOtp')?.click(),
+      });
+    }
   });
   document.getElementById('regPhoneBtn')?.addEventListener('click', () => {
     document.getElementById('regPhonePanel')?.classList.toggle('hidden');
+    const otpInp = document.getElementById('regPhoneOtpCode');
+    if (otpInp && typeof PhoneOtp !== 'undefined') {
+      PhoneOtp.wireOtpInput(otpInp, {
+        onComplete: () => document.getElementById('regPhoneVerifyOtp')?.click(),
+      });
+    }
   });
   document.getElementById('regGoogleBtn')?.addEventListener('click', async () => {
     const errEl = document.getElementById('reg2Error') || document.getElementById('reg1Error');
@@ -779,33 +856,77 @@ function wireAuthEvents() {
     }
   });
 
-  document.getElementById('loginPhoneSendOtp')?.addEventListener('click', async () => {
-    const errEl = document.getElementById('loginError');
-    const phone = toE164India(document.getElementById('loginPhone')?.value);
-    if (!phone) {
-      if (errEl) errEl.textContent = 'Enter a valid 10-digit Indian mobile number';
-      return;
-    }
+  async function handlePhoneSend({ phoneInputId, containerId, errEl, statusId, sendBtn, resendBtn }) {
+    if (errEl) errEl.textContent = '';
+    const phoneRaw = document.getElementById(phoneInputId)?.value;
+    if (sendBtn) sendBtn.disabled = true;
     try {
-      if (!loginRecaptcha) {
-        loginRecaptcha = new firebase.auth.RecaptchaVerifier('recaptcha-container', { size: 'invisible' });
+      if (typeof PhoneOtp === 'undefined') {
+        throw Object.assign(new Error('Phone OTP module missing'), { code: 'auth/internal-error' });
       }
-      loginConfirmation = await auth.signInWithPhoneNumber(phone, loginRecaptcha);
-      showToast(t('auth_otp_sent'));
+      const { phone } = await PhoneOtp.sendOtp({ phoneRaw, containerId });
+      setOtpStatus(statusId, 'OTP sent to ' + phone + ' — enter the 6-digit code', true);
+      if (typeof showToast === 'function') showToast(t('auth_otp_sent'));
+      const otpId = containerId === LOGIN_OTP_HOST ? 'loginPhoneOtp' : 'regPhoneOtpCode';
+      const otpInp = document.getElementById(otpId);
+      otpInp?.focus();
+      if (resendBtn && typeof PhoneOtp.paintResendButton === 'function') {
+        resendBtn.classList.remove('hidden');
+        PhoneOtp.paintResendButton(resendBtn, containerId);
+      }
+      if (sendBtn) {
+        sendBtn.textContent = 'OTP sent';
+        setTimeout(() => {
+          if (sendBtn) sendBtn.textContent = sendBtn.dataset.defaultLabel || 'Send OTP';
+        }, 2000);
+      }
     } catch (e) {
-      if (errEl) errEl.textContent = e.message || 'Could not send OTP';
+      const mapped =
+        typeof PhoneOtp !== 'undefined' ? PhoneOtp.mapPhoneAuthError(e) : { text: e.message };
+      if (errEl) errEl.textContent = mapped.text || e.message || 'Could not send OTP';
+      setOtpStatus(statusId, '', false);
+      try {
+        if (typeof PhoneOtp !== 'undefined') await PhoneOtp.clearVerifier(containerId);
+      } catch (err) {}
+    } finally {
+      if (sendBtn) sendBtn.disabled = false;
     }
-  });
+  }
+
+  document.getElementById('loginPhoneSendOtp')?.addEventListener('click', () =>
+    handlePhoneSend({
+      phoneInputId: 'loginPhone',
+      containerId: LOGIN_OTP_HOST,
+      errEl: document.getElementById('loginError'),
+      statusId: 'loginOtpStatus',
+      sendBtn: document.getElementById('loginPhoneSendOtp'),
+      resendBtn: document.getElementById('loginPhoneResendOtp'),
+    })
+  );
+  document.getElementById('loginPhoneResendOtp')?.addEventListener('click', () =>
+    handlePhoneSend({
+      phoneInputId: 'loginPhone',
+      containerId: LOGIN_OTP_HOST,
+      errEl: document.getElementById('loginError'),
+      statusId: 'loginOtpStatus',
+      sendBtn: document.getElementById('loginPhoneResendOtp'),
+      resendBtn: document.getElementById('loginPhoneResendOtp'),
+    })
+  );
 
   document.getElementById('loginPhoneVerifyOtp')?.addEventListener('click', async () => {
     const errEl = document.getElementById('loginError');
+    const btn = document.getElementById('loginPhoneVerifyOtp');
     const code = document.getElementById('loginPhoneOtp')?.value.trim();
-    if (!loginConfirmation || !code) {
-      if (errEl) errEl.textContent = 'Send OTP first, then enter the code';
-      return;
-    }
+    if (errEl) errEl.textContent = '';
+    if (btn) btn.disabled = true;
     try {
-      const cred = await loginConfirmation.confirm(code);
+      if (typeof PhoneOtp === 'undefined') throw new Error('Phone OTP module missing');
+      if (!PhoneOtp.getConfirmation(LOGIN_OTP_HOST)) {
+        if (errEl) errEl.textContent = 'Send OTP first, then enter the code';
+        return;
+      }
+      const cred = await PhoneOtp.confirmOtp(LOGIN_OTP_HOST, code);
       currentUser = cred.user;
       await writePhoneIndex(cred.user, cred.user.email || '');
       const doc = await ensureUserDocAfterSocial(cred.user, { phone: cred.user.phoneNumber });
@@ -816,7 +937,11 @@ function wireAuthEvents() {
       }
       await finishAuthSession(t('auth_welcome_back'));
     } catch (e) {
-      if (errEl) errEl.textContent = e.message || 'Invalid OTP';
+      const mapped =
+        typeof PhoneOtp !== 'undefined' ? PhoneOtp.mapPhoneAuthError(e) : { text: e.message };
+      if (errEl) errEl.textContent = mapped.text || e.message || 'Invalid OTP';
+    } finally {
+      if (btn) btn.disabled = false;
     }
   });
 
@@ -855,35 +980,40 @@ function wireAuthEvents() {
     else await finishAuthSession(t('auth_welcome_back'));
   });
 
-  document.getElementById('regPhoneSendOtp')?.addEventListener('click', async () => {
-    const errEl = document.getElementById('reg2Error') || document.getElementById('registerError');
-    const phone = toE164India(
-      document.getElementById('regPhoneOtpInput')?.value || document.getElementById('regPhone')?.value
-    );
-    if (!phone) {
-      if (errEl) errEl.textContent = 'Enter a valid 10-digit Indian mobile number';
-      return;
-    }
-    try {
-      if (!regRecaptcha) {
-        regRecaptcha = new firebase.auth.RecaptchaVerifier('recaptcha-container-reg', { size: 'invisible' });
-      }
-      regConfirmation = await auth.signInWithPhoneNumber(phone, regRecaptcha);
-      showToast(t('auth_otp_sent'));
-    } catch (e) {
-      if (errEl) errEl.textContent = e.message || 'Could not send OTP';
-    }
-  });
+  document.getElementById('regPhoneSendOtp')?.addEventListener('click', () =>
+    handlePhoneSend({
+      phoneInputId: 'regPhoneOtpInput',
+      containerId: REG_OTP_HOST,
+      errEl: document.getElementById('reg2Error') || document.getElementById('registerError'),
+      statusId: 'regOtpStatus',
+      sendBtn: document.getElementById('regPhoneSendOtp'),
+      resendBtn: document.getElementById('regPhoneResendOtp'),
+    })
+  );
+  document.getElementById('regPhoneResendOtp')?.addEventListener('click', () =>
+    handlePhoneSend({
+      phoneInputId: 'regPhoneOtpInput',
+      containerId: REG_OTP_HOST,
+      errEl: document.getElementById('reg2Error') || document.getElementById('registerError'),
+      statusId: 'regOtpStatus',
+      sendBtn: document.getElementById('regPhoneResendOtp'),
+      resendBtn: document.getElementById('regPhoneResendOtp'),
+    })
+  );
 
   document.getElementById('regPhoneVerifyOtp')?.addEventListener('click', async () => {
     const errEl = document.getElementById('reg2Error') || document.getElementById('registerError');
+    const btn = document.getElementById('regPhoneVerifyOtp');
     const code = document.getElementById('regPhoneOtpCode')?.value.trim();
-    if (!regConfirmation || !code) {
-      if (errEl) errEl.textContent = 'Send OTP first, then enter the code';
-      return;
-    }
+    if (errEl) errEl.textContent = '';
+    if (btn) btn.disabled = true;
     try {
-      const cred = await regConfirmation.confirm(code);
+      if (typeof PhoneOtp === 'undefined') throw new Error('Phone OTP module missing');
+      if (!PhoneOtp.getConfirmation(REG_OTP_HOST)) {
+        if (errEl) errEl.textContent = 'Send OTP first, then enter the code';
+        return;
+      }
+      const cred = await PhoneOtp.confirmOtp(REG_OTP_HOST, code);
       currentUser = cred.user;
       regPhoneVerified = cred.user.phoneNumber || '';
       regData.phone = regPhoneVerified;
@@ -893,15 +1023,22 @@ function wireAuthEvents() {
         hint.style.display = 'block';
         hint.textContent = `Phone verified ✓ ${regPhoneVerified}`;
       }
-      // Surface password + email so phone accounts can use identifier login later
-      const pwdHint = document.getElementById('regPassword')?.closest('.auth-input-group')?.querySelector('.auth-input-hint');
+      setOtpStatus('regOtpStatus', 'Phone verified', true);
+      const pwdHint = document
+        .getElementById('regPassword')
+        ?.closest('.auth-input-group')
+        ?.querySelector('.auth-input-hint');
       if (pwdHint) {
         pwdHint.textContent =
           'Recommended after phone verify — set email + password to log in without OTP next time.';
       }
       showToast(t('auth_phone_verified'));
     } catch (e) {
-      if (errEl) errEl.textContent = e.message || 'Invalid OTP';
+      const mapped =
+        typeof PhoneOtp !== 'undefined' ? PhoneOtp.mapPhoneAuthError(e) : { text: e.message };
+      if (errEl) errEl.textContent = mapped.text || e.message || 'Invalid OTP';
+    } finally {
+      if (btn) btn.disabled = false;
     }
   });
 
@@ -1449,9 +1586,17 @@ function wireAuthEvents() {
             try {
               if (auth?.currentUser) await auth.currentUser.reload();
             } catch (e) {}
+            if (typeof AuthProfiles !== 'undefined' && AuthProfiles.rememberCurrentAccount) {
+              AuthProfiles.rememberCurrentAccount();
+            }
             hideAuth();
             updateProfileBtn();
             if (typeof loadStreak === 'function') loadStreak();
+            if (typeof registerSession === 'function') {
+              try {
+                await registerSession();
+              } catch (e) {}
+            }
             syncEmailVerifyBanner();
           });
         }

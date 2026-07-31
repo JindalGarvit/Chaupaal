@@ -219,11 +219,83 @@
       if (typeof showAuth === 'function') showAuth();
       return;
     }
+    const bodyHtml = `
+      <input id="peopleSearchInput" type="search" autocomplete="off" placeholder="${tt('contacts_search_ph', 'Search by name or @username')}"
+        style="width:100%;padding:12px 14px;border:2px solid var(--line);border-radius:14px;font-size:15px;box-sizing:border-box;">
+      <button type="button" class="btn" id="peopleContactsBtn" style="margin-top:10px;width:100%;">${tt('contacts_use_btn', 'Find from contacts')}</button>
+      <div id="peopleSearchResults" style="margin-top:12px;"></div>`;
+
+    function wire(sheet, close) {
+      const results = sheet.querySelector('#peopleSearchResults');
+      sheet.querySelector('#peopleContactsBtn')?.addEventListener('click', () => loadContactsInto(results));
+      if (contactsSupported()) {
+        results.innerHTML = `<div class="contacts-fallback">${tt(
+          'contacts_soft_prompt',
+          'Optional: find friends already on Chaupaal from your contacts. We never upload your full address book.'
+        )}</div>`;
+      } else {
+        renderContactsBlock(results, { unsupported: true });
+      }
+      let timer = null;
+      sheet.querySelector('#peopleSearchInput')?.addEventListener('input', (e) => {
+        clearTimeout(timer);
+        const q = e.target.value.trim();
+        timer = setTimeout(async () => {
+          if (!q) return;
+          try {
+            const rows =
+              typeof searchUsersProvider === 'function' ? await searchUsersProvider(q, { limit: 20 }) : [];
+            results.querySelectorAll('.new-dm-row, .contacts-search-row').forEach((el) => el.remove());
+            const html = rows
+              .map(
+                (r) =>
+                  `<button type="button" class="contacts-search-row contacts-row" data-uid="${r.uid || ''}">
+                    <div style="font-weight:700;">${r.name || r.username || 'User'}</div>
+                    <div style="font-size:12px;color:var(--muted);">@${r.username || 'user'}</div>
+                  </button>`
+              )
+              .join('');
+            results.insertAdjacentHTML(
+              'beforeend',
+              html || `<div class="contacts-fallback">${tt('contacts_no_results', 'No people found')}</div>`
+            );
+            results.querySelectorAll('[data-uid]').forEach((btn) => {
+              btn.addEventListener('click', async () => {
+                const uid = btn.dataset.uid;
+                if (!uid) return;
+                close();
+                if (typeof openDmWithSharedHello === 'function') {
+                  await openDmWithSharedHello({
+                    uid,
+                    name: 'Friend',
+                    avatar: '👤',
+                    starterText: 'Hi!',
+                    origin: surface,
+                  });
+                }
+              });
+            });
+          } catch (err) {}
+        }, 280);
+      });
+      setTimeout(() => sheet.querySelector('#peopleSearchInput')?.focus(), 80);
+    }
+
+    if (typeof openHalfSheet === 'function') {
+      openHalfSheet({
+        id: 'peopleSearchContactsSheet',
+        title: tt('contacts_find_title', 'Find people'),
+        accent: surface === 'akhbaar' ? 'akhbaar' : surface === 'peepal' ? 'peepal' : 'baithak',
+        bodyHtml,
+        onMount: wire,
+      });
+      return;
+    }
+
     if (surface === 'baithak' && typeof showNewDmSearchSheet === 'function') {
       showNewDmSearchSheet({ withContacts: true });
       return;
     }
-    // Generic sheet
     document.getElementById('peopleSearchContactsSheet')?.remove();
     const sheet = document.createElement('div');
     sheet.id = 'peopleSearchContactsSheet';
@@ -234,12 +306,7 @@
         <button type="button" data-overlay-dismiss aria-label="Back">←</button>
         <div style="flex:1"><strong>${tt('contacts_find_title', 'Find people')}</strong></div>
       </div>
-      <div style="padding:12px 16px;">
-        <input id="peopleSearchInput" type="search" autocomplete="off" placeholder="${tt('contacts_search_ph', 'Search by name or @username')}"
-          style="width:100%;padding:12px 14px;border:2px solid var(--line);border-radius:14px;font-size:15px;box-sizing:border-box;">
-        <button type="button" class="btn" id="peopleContactsBtn" style="margin-top:10px;width:100%;">${tt('contacts_use_btn', 'Find from contacts')}</button>
-      </div>
-      <div id="peopleSearchResults" style="flex:1;overflow:auto;padding:0 16px 24px;"></div>`;
+      <div style="padding:12px 16px;">${bodyHtml}</div>`;
     document.querySelector('.device')?.appendChild(sheet);
     const close = () => {
       if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
@@ -247,50 +314,7 @@
     };
     if (typeof pushNavLayer === 'function') pushNavLayer(sheet, close);
     sheet.querySelector('[data-overlay-dismiss]')?.addEventListener('click', close);
-    const results = sheet.querySelector('#peopleSearchResults');
-    sheet.querySelector('#peopleContactsBtn')?.addEventListener('click', () => loadContactsInto(results));
-    // Soft prompt — not a nag; one optional tap
-    if (contactsSupported()) {
-      results.innerHTML = `<div class="contacts-fallback">${tt(
-        'contacts_soft_prompt',
-        'Optional: find friends already on Chaupaal from your contacts. We never upload your full address book.'
-      )}</div>`;
-    } else {
-      renderContactsBlock(results, { unsupported: true });
-    }
-    let timer = null;
-    sheet.querySelector('#peopleSearchInput')?.addEventListener('input', (e) => {
-      clearTimeout(timer);
-      const q = e.target.value.trim();
-      timer = setTimeout(async () => {
-        if (!q) return;
-        try {
-          const rows =
-            typeof searchUsersProvider === 'function' ? await searchUsersProvider(q, { limit: 20 }) : [];
-          results.querySelectorAll('.new-dm-row, .contacts-search-row').forEach((el) => el.remove());
-          const html = rows
-            .map(
-              (r) =>
-                `<button type="button" class="contacts-search-row contacts-row" data-uid="${r.uid || ''}">
-                  <div style="font-weight:700;">${r.name || r.username || 'User'}</div>
-                  <div style="font-size:12px;color:var(--muted);">@${r.username || 'user'}</div>
-                </button>`
-            )
-            .join('');
-          results.insertAdjacentHTML('beforeend', html || `<div class="contacts-fallback">${tt('contacts_no_results', 'No people found')}</div>`);
-          results.querySelectorAll('[data-uid]').forEach((btn) => {
-            btn.addEventListener('click', async () => {
-              const uid = btn.dataset.uid;
-              if (!uid) return;
-              close();
-              if (typeof openDmWithSharedHello === 'function') {
-                await openDmWithSharedHello({ uid, name: 'Friend', avatar: '👤', starterText: 'Hi!', origin: surface });
-              }
-            });
-          });
-        } catch (err) {}
-      }, 280);
-    });
+    wire(sheet, close);
   }
 
   window.ContactsFind = {

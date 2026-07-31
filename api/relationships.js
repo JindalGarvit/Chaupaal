@@ -153,11 +153,18 @@ async function relationshipState(db, uid, targetUid) {
     received,
     close
   );
+  const derived = deriveRelationshipState({ following: mineSnap.exists, followsYou: theirsSnap.exists });
+  let closeFriend = closeSnap.exists;
+  // Empty CF list = everyone (friends) included by default
+  if (!closeFriend && derived.friend) {
+    const anyCf = await db.collection('users').doc(uid).collection('close_friends').limit(1).get();
+    if (anyCf.empty) closeFriend = true;
+  }
   return {
-    ...deriveRelationshipState({ following: mineSnap.exists, followsYou: theirsSnap.exists }),
+    ...derived,
     requestSent: sentSnap.exists,
     requestReceived: receivedSnap.exists,
-    closeFriend: closeSnap.exists,
+    closeFriend,
   };
 }
 
@@ -362,14 +369,34 @@ async function setCloseFriend(db, admin, uid, targetUid, enabled) {
     const state = await relationshipState(db, uid, targetUid);
     if (!state.friend) throw new Error('FRIEND_REQUIRED');
   }
-  const ref = db.collection('users').doc(uid).collection('close_friends').doc(targetUid);
+  const col = db.collection('users').doc(uid).collection('close_friends');
+  const ref = col.doc(targetUid);
   if (enabled) {
     await ref.set({
       uid: targetUid,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
   } else {
-    await ref.delete();
+    // Opt-out: empty list means "everyone included". First removal seeds all
+    // other friends into the explicit list, then drops the target.
+    const existing = await col.limit(1).get();
+    if (existing.empty) {
+      const friends = await listFriends(db, uid);
+      const batch = db.batch();
+      let ops = 0;
+      friends.forEach((p) => {
+        if (!p?.uid || p.uid === targetUid) return;
+        batch.set(col.doc(p.uid), {
+          uid: p.uid,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          seededFromDefault: true,
+        });
+        ops += 1;
+      });
+      if (ops) await batch.commit();
+    } else {
+      await ref.delete();
+    }
   }
   return enabled;
 }
