@@ -48,18 +48,77 @@ const SoundLib=(()=>{
     tone(1318.5,0.4,0.35,'triangle',0.11);
     tone(1046.5,0.55,0.4,'triangle',0.1);
   }
-  /** Short themed one-shots per element tab (silenced by Quiet only). */
+  /** Noise burst through a biquad — used for earth/air/fire texture. */
+  function noiseBurst(opts){
+    const c=getCtx();
+    const dur=opts.dur||0.18;
+    const gVal=opts.gain||0.06;
+    const start=opts.start||0;
+    const len=Math.max(1,Math.floor(c.sampleRate*dur));
+    const buf=c.createBuffer(1,len,c.sampleRate);
+    const data=buf.getChannelData(0);
+    for(let i=0;i<len;i++){
+      const env=1-i/len;
+      data[i]=(Math.random()*2-1)*env*env;
+    }
+    const src=c.createBufferSource();
+    src.buffer=buf;
+    const filter=c.createBiquadFilter();
+    filter.type=opts.type||'bandpass';
+    filter.frequency.value=opts.freq||1200;
+    filter.Q.value=opts.Q||1.2;
+    const gain=c.createGain();
+    gain.gain.value=0;
+    src.connect(filter);filter.connect(gain);gain.connect(c.destination);
+    const t0=c.currentTime+start;
+    gain.gain.linearRampToValueAtTime(gVal,t0+0.008);
+    gain.gain.exponentialRampToValueAtTime(0.001,t0+dur);
+    src.start(t0);src.stop(t0+dur+0.02);
+  }
+  /**
+   * Distinctive element one-shots (Quiet-only mute).
+   * peepal=leaf rustle · duniya=water drip/sheen · baithak=steam/air lift ·
+   * akhbaar=paper flutter · dangal=sparks/energy
+   */
   function element(tab, kind){
     if(quietMode) return;
     const t0 = String(tab||'');
     const strong = kind === 'ambience' || kind === 'open';
-    const g = strong ? 0.1 : 0.07;
-    if(t0==='peepal'){ tone(392,0,0.12,'triangle',g); tone(523,0.08,0.14,'sine',g*0.85); }
-    else if(t0==='duniya'){ tone(440,0,0.1,'sine',g); tone(554,0.1,0.18,'sine',g*0.8); }
-    else if(t0==='baithak'){ tone(349,0,0.14,'triangle',g); tone(415,0.1,0.16,'triangle',g*0.75); }
-    else if(t0==='akhbaar'){ tone(587,0,0.08,'square',g*0.55); tone(698,0.07,0.1,'square',g*0.45); }
-    else if(t0==='dangal'){ tone(220,0,0.08,'sawtooth',g*0.5); tone(330,0.05,0.12,'triangle',g); tone(880,0.14,0.08,'sine',g*0.6); }
-    else { tap(); }
+    const g = strong ? 0.11 : 0.075;
+    if(t0==='peepal'){
+      // Leaf rustle — soft bandpass noise + wood tick
+      noiseBurst({dur:0.22,freq:1800,Q:0.7,type:'bandpass',gain:g*0.55,start:0});
+      noiseBurst({dur:0.16,freq:900,Q:1.1,type:'bandpass',gain:g*0.35,start:0.05});
+      tone(220,0.02,0.08,'triangle',g*0.35);
+      tone(330,0.1,0.1,'sine',g*0.25);
+    } else if(t0==='duniya'){
+      // Water drip + sheen
+      tone(880,0,0.06,'sine',g*0.7);
+      tone(1320,0.05,0.12,'sine',g*0.45);
+      tone(660,0.14,0.2,'triangle',g*0.35);
+      noiseBurst({dur:0.12,freq:4200,Q:0.5,type:'highpass',gain:g*0.2,start:0.08});
+    } else if(t0==='baithak'){
+      // Steam / air lift — rising filtered hush
+      noiseBurst({dur:0.28,freq:600,Q:0.6,type:'lowpass',gain:g*0.4,start:0});
+      noiseBurst({dur:0.2,freq:1400,Q:0.8,type:'bandpass',gain:g*0.3,start:0.08});
+      tone(196,0,0.18,'sine',g*0.3);
+      tone(294,0.12,0.22,'triangle',g*0.28);
+    } else if(t0==='akhbaar'){
+      // Paper flutter / page turn
+      noiseBurst({dur:0.1,freq:2800,Q:1.4,type:'bandpass',gain:g*0.5,start:0});
+      noiseBurst({dur:0.14,freq:1600,Q:0.9,type:'bandpass',gain:g*0.4,start:0.06});
+      tone(587,0.02,0.07,'square',g*0.28);
+      tone(698,0.09,0.09,'square',g*0.22);
+      tone(784,0.16,0.08,'triangle',g*0.18);
+    } else if(t0==='dangal'){
+      // Sparks / energy crackle
+      noiseBurst({dur:0.08,freq:3200,Q:2.2,type:'bandpass',gain:g*0.45,start:0});
+      tone(220,0,0.07,'sawtooth',g*0.4);
+      tone(440,0.05,0.08,'sawtooth',g*0.35);
+      tone(880,0.11,0.1,'triangle',g*0.4);
+      noiseBurst({dur:0.1,freq:5000,Q:1.5,type:'highpass',gain:g*0.28,start:0.12});
+      tone(1320,0.16,0.06,'sine',g*0.3);
+    } else { tap(); }
   }
   function playFeedback(isCorrect,soundTag){
     if(quietMode)return;

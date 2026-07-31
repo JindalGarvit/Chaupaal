@@ -289,7 +289,23 @@ function duniyaHeartIcon(){
 }
 
 function createDuniyaPost(post, {variant='list'}={}){
-  const el=document.createElement('div');el.className='duniya-post';el.dataset.id=post.id;
+  const el=document.createElement('div');el.className='duniya-post'+(variant==='tile'?' duniya-post--tile':'');el.dataset.id=post.id;
+  if(variant==='tile'){
+    const imgSrc=typeof mediaUrlFor==='function'?mediaUrlFor(post,'tile'):(post.thumb||post.media);
+    const caption=duniyaEsc((post.caption||'').slice(0,80));
+    el.innerHTML=`
+      <div class="duniya-post-media" style="min-height:100px;">
+        ${post.type==='video'
+          ?`<video src="${duniyaEsc(post.media||'')}" muted playsinline preload="metadata"></video>`
+          :(imgSrc?`<img data-no-zoom="1" src="${duniyaEsc(imgSrc)}" loading="lazy" decoding="async" alt="">`:`<div class="duniya-post-media-placeholder">📷</div>`)}
+      </div>
+      <div class="duniya-post-likes" style="padding:6px 8px;font-size:11px;">${formatCount(post.likes||0)} · ${caption}</div>`;
+    el.addEventListener('click',()=>{
+      if(typeof openDuniyaDetail==='function') openDuniyaDetail(post);
+      else if(typeof openDuniyaComments==='function') openDuniyaComments(post.id);
+    });
+    return el;
+  }
   const isFollowing=followingSet.has(post.user.uid);
   // Escape BEFORE decorating @/# so caption text can never carry raw HTML
   const caption=duniyaEsc(post.caption||'').replace(/@(\w+)/g,'<span class="duniya-post-tag">@$1</span>').replace(/#(\w+)/g,'<span style="color:var(--red);cursor:pointer;">#$1</span>');
@@ -1444,6 +1460,10 @@ function toggleOpenToMeet(){
     document.getElementById('prasidhaFeed')?.classList.toggle('hidden', mode !== 'prasidha');
     const panel = document.getElementById('panel-duniya') || document.getElementById('duniyaScreen');
     panel?.classList.toggle('is-lehar', mode === 'lehar');
+    if (panel) {
+      [...panel.classList].filter((c) => c.startsWith('room-kit')).forEach((c) => panel.classList.remove(c));
+      panel.classList.add('room-kit', 'room-kit--water', `room-kit--${mode}`);
+    }
     const hints = document.querySelectorAll('.duniya-mode-hint span');
     if (hints.length >= 3) {
       hints[0].classList.toggle('is-center', mode === 'lehar');
@@ -1457,21 +1477,48 @@ function toggleOpenToMeet(){
   function renderPrasidhaFeed() {
     const host = document.getElementById('prasidhaFeed');
     if (!host) return;
+    host.classList.add('room-kit', 'room-kit--water', 'room-kit--prasidha');
     const ranked =
       typeof rankByVelocity === 'function'
         ? rankByVelocity(duniyaPosts || [], {
             friendUids: typeof followingSet !== 'undefined' ? [...followingSet] : [],
           })
         : [...(duniyaPosts || [])];
-    host.innerHTML = '';
-    ranked.slice(0, 40).forEach((post) => {
-      host.appendChild(createDuniyaPost(post, { variant: 'list' }));
+    host.innerHTML = `<div class="room-kit-header">Prasidha<small>${
+      typeof t === 'function' && t('prasidha_sub') !== 'prasidha_sub'
+        ? t('prasidha_sub')
+        : 'Trending this week'
+    }</small></div>`;
+    const grid = document.createElement('div');
+    grid.className = 'prasidha-masonry';
+    ranked.slice(0, 40).forEach((post, i) => {
+      const tile = document.createElement('div');
+      const w = Number(post.mediaWidth || post.width || post.media?.width || 0);
+      const h = Number(post.mediaHeight || post.height || post.media?.height || 0);
+      const ratio = w && h ? w / h : i % 7 === 0 ? 0.7 : i % 5 === 0 ? 1.5 : 1;
+      let span = 'prasidha-span-std';
+      if (ratio >= 1.35) span = 'prasidha-span-wide';
+      else if (ratio <= 0.72) span = 'prasidha-span-tall';
+      else if (ratio >= 0.95 && ratio <= 1.05) span = 'prasidha-span-square';
+      tile.className = `prasidha-tile ${span}`;
+      try {
+        const card = createDuniyaPost(post, { variant: 'tile' });
+        if (card) tile.appendChild(card);
+        else tile.appendChild(createDuniyaPost(post, { variant: 'list' }));
+      } catch (e) {
+        tile.appendChild(createDuniyaPost(post, { variant: 'list' }));
+      }
+      grid.appendChild(tile);
     });
+    host.appendChild(grid);
     if (!ranked.length && typeof renderEmptyState === 'function') {
       renderEmptyState(host, {
         icon: '✨',
-        title: 'Prasidha is warming up',
-        message: 'Trending posts from the last week will land here.',
+        title: typeof t === 'function' ? t('prasidha_empty_title') || 'Prasidha is warming up' : 'Prasidha is warming up',
+        message:
+          typeof t === 'function'
+            ? t('prasidha_empty_msg') || 'Trending posts from the last week will land here.'
+            : 'Trending posts from the last week will land here.',
       });
     }
   }

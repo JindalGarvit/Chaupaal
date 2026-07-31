@@ -1,19 +1,26 @@
 /**
- * Horizontal swipe pager for tab sections (Vishwa/Lehar/Prasidha, Vriksha/Khoj, etc.).
+ * Horizontal swipe pager for tab sections (Vishwa/Lehar/Prasidha, Surkhiya/All/Saathi, etc.).
  * Center page is default. Emits `chaupaal:pagerchange` on the root element.
+ * Within-tab only — never used for root bottom-tab switching.
  */
 (function () {
   'use strict';
 
-  const MOVE_THRESHOLD = 48;
+  const MOVE_THRESHOLD = 44;
+  const EDGE_RESIST = 0.38;
+  const VELOCITY_FLICK = 0.45; // px/ms
 
-  function createSwipePager(root, { pages = [], initial = 0, onChange } = {}) {
+  function createSwipePager(root, { pages = [], initial = 0, onChange, edgeBounce = true } = {}) {
     if (!root || !pages.length) return null;
     let index = Math.max(0, Math.min(pages.length - 1, initial));
     let startX = 0;
     let startY = 0;
+    let startT = 0;
+    let lastX = 0;
+    let lastT = 0;
     let tracking = false;
     let locked = null; // 'h' | 'v'
+    let dragging = false;
 
     root.classList.add('cp-swipe-pager');
     root.innerHTML = '';
@@ -57,17 +64,31 @@
 
     function goTo(i, { animate = true } = {}) {
       const next = Math.max(0, Math.min(pages.length - 1, i));
-      if (next === index && animate) return;
+      if (next === index && animate !== false) {
+        paint(true);
+        return;
+      }
       index = next;
       paint(animate);
     }
 
+    function resist(dx) {
+      if (!edgeBounce) return dx;
+      const atStart = index === 0 && dx > 0;
+      const atEnd = index === pages.length - 1 && dx < 0;
+      if (atStart || atEnd) return dx * EDGE_RESIST;
+      return dx;
+    }
+
     function onPointerDown(e) {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
+      // Don't steal vertical scroll ownership from nested scrollers mid-gesture
       tracking = true;
+      dragging = false;
       locked = null;
-      startX = e.clientX;
+      startX = lastX = e.clientX;
       startY = e.clientY;
+      startT = lastT = performance.now();
       track.style.transition = 'none';
       try {
         root.setPointerCapture(e.pointerId);
@@ -80,21 +101,41 @@
       const dy = e.clientY - startY;
       if (!locked) {
         if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
-        locked = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+        locked = Math.abs(dx) > Math.abs(dy) * 1.15 ? 'h' : 'v';
+        if (locked === 'v') {
+          tracking = false;
+          paint(true);
+          return;
+        }
       }
       if (locked !== 'h') return;
+      dragging = true;
       e.preventDefault();
-      const pct = (dx / Math.max(1, root.clientWidth)) * 100;
+      lastX = e.clientX;
+      lastT = performance.now();
+      const w = Math.max(1, root.clientWidth);
+      const pct = (resist(dx) / w) * 100;
       track.style.transform = `translate3d(${-index * 100 + pct}%,0,0)`;
     }
 
     function onPointerUp(e) {
-      if (!tracking) return;
+      if (!tracking && !dragging) return;
+      const wasDragging = dragging;
       tracking = false;
+      dragging = false;
       const dx = e.clientX - startX;
+      const dt = Math.max(1, performance.now() - startT);
+      const recentDt = Math.max(1, performance.now() - lastT);
+      const velocity = Math.abs(e.clientX - lastX) / recentDt;
       track.style.transition = '';
-      if (locked === 'h' && Math.abs(dx) > MOVE_THRESHOLD) {
-        goTo(index + (dx < 0 ? 1 : -1));
+      if (locked === 'h' && wasDragging) {
+        const flick = velocity > VELOCITY_FLICK && Math.abs(dx) > 18;
+        const crossed = Math.abs(dx) > MOVE_THRESHOLD;
+        if (flick || crossed) {
+          goTo(index + (dx < 0 ? 1 : -1));
+        } else {
+          paint(true);
+        }
       } else {
         paint(true);
       }
@@ -114,6 +155,7 @@
       prev: () => goTo(index - 1),
       index: () => index,
       pageId: () => pages[index]?.id,
+      pages: () => pages.slice(),
       destroy() {
         root.innerHTML = '';
       },
@@ -149,29 +191,30 @@
     const used = new Set();
     // Interleave: reserve early slots for friends, then fill by velocity
     let fi = 0;
-    for (let i = 0; i < scored.length; i++) {
-      if (i < friendSlots * 2 && i % 2 === 1 && fi < friends.length) {
+    let ri = 0;
+    while (out.length < scored.length) {
+      if (fi < friends.length && (out.length < friendSlots || ri >= rest.length)) {
         const f = friends[fi++];
         if (!used.has(f.it)) {
-          out.push(f.it);
           used.add(f.it);
-          continue;
+          out.push(f.it);
         }
+        continue;
       }
-      const next = rest.find((x) => !used.has(x.it));
-      if (next) {
-        out.push(next.it);
-        used.add(next.it);
+      if (ri < rest.length) {
+        const r = rest[ri++];
+        if (!used.has(r.it)) {
+          used.add(r.it);
+          out.push(r.it);
+        }
+        continue;
       }
+      break;
     }
-    friends.forEach((f) => {
-      if (!used.has(f.it)) out.push(f.it);
-    });
     return out;
   }
 
   window.createSwipePager = createSwipePager;
-  window.engagementVelocity = engagementVelocity;
   window.rankByVelocity = rankByVelocity;
-  window.TREND_WINDOW_MS = TREND_WINDOW_MS;
+  window.engagementVelocity = engagementVelocity;
 })();

@@ -520,6 +520,62 @@ async function handlePost(req, res) {
     }
   }
 
+  // ─── Contacts match (hashed phones only — never raw address book) ────────
+  if (action === 'match_contact_hashes') {
+    try {
+      const { checkActionRateLimit } = require('../server-lib/rate-limit');
+      const rate = await checkActionRateLimit(user.uid, 'contact_match');
+      if (!rate.ok) {
+        return sendError(res, 429, 'RATE_LIMITED', 'Too many contact lookups. Try again shortly.');
+      }
+    } catch (e) {
+      console.warn('[media-config] contact rate-limit', e?.message || e);
+    }
+    const adminApp = initAdmin();
+    if (!adminApp) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    const hashes = [
+      ...new Set(
+        (Array.isArray(body.hashes) ? body.hashes : [])
+          .map((h) => String(h || '').toLowerCase().trim())
+          .filter((h) => /^[a-f0-9]{64}$/.test(h))
+      ),
+    ].slice(0, 80);
+    if (!hashes.length) return sendSuccess(res, { matches: [] });
+    try {
+      const db = adminApp.firestore();
+      const matches = [];
+      // Firestore getAll in chunks of 10
+      for (let i = 0; i < hashes.length; i += 10) {
+        const chunk = hashes.slice(i, i + 10);
+        const refs = chunk.map((h) => db.collection('phoneHashIndex').doc(h));
+        const snaps = await db.getAll(...refs);
+        for (const snap of snaps) {
+          if (!snap.exists) continue;
+          const d = snap.data() || {};
+          const uid = String(d.uid || '');
+          if (!uid || uid === user.uid) continue;
+          let name = '';
+          let username = '';
+          let photoURL = '';
+          try {
+            const pub = await db.collection('users_public').doc(uid).get();
+            if (pub.exists) {
+              const p = pub.data() || {};
+              name = String(p.name || p.displayName || '');
+              username = String(p.username || '');
+              photoURL = String(p.photoURL || '');
+            }
+          } catch (e) {}
+          matches.push({ hash: snap.id, uid, name, username, photoURL });
+        }
+      }
+      return sendSuccess(res, { matches });
+    } catch (e) {
+      console.warn('[media-config] match_contact_hashes', e?.message || e);
+      return sendError(res, 500, 'CONTACT_MATCH_ERROR', e?.message || 'Match failed');
+    }
+  }
+
   return sendError(res, 400, 'VALIDATION_ERROR', 'Unknown media action', {
     allowed: [
       'music_search',
@@ -544,6 +600,7 @@ async function handlePost(req, res) {
       'notif_dm',
       'parental_consent_start',
       'parental_consent_verify',
+      'match_contact_hashes',
     ],
   });
 }

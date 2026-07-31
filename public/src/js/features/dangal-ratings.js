@@ -302,8 +302,6 @@ function renderDangalGamesGrid() {
   }
 
   const library = typeof getGames === 'function' ? getGames({ dangal: true }) : [];
-  const solos = library.filter((g) => g.solo || g.gameType === 'solo');
-  const vsFriend = library.filter((g) => !(g.solo || g.gameType === 'solo'));
 
   grid.innerHTML = '';
   renderDangalContinueAndChips(grid);
@@ -316,9 +314,22 @@ function renderDangalGamesGrid() {
     if (typeof wireDangalProgressPanel === 'function') wireDangalProgressPanel(progressHost);
   }
 
+  // Mode hint: Khel ← Manch → Maidan
+  const hint = document.createElement('div');
+  hint.className = 'dangal-mode-hint';
+  hint.setAttribute('aria-hidden', 'true');
+  hint.innerHTML = `<span data-hint="khel">Khel</span><span data-hint="manch" class="is-center">Manch</span><span data-hint="maidan">Maidan</span>`;
+  grid.appendChild(hint);
+
+  // ── Khel: Game of the Day ──
+  const khel = document.createElement('div');
+  khel.className = 'dangal-section room-kit room-kit--fire room-kit--khel';
+  khel.dataset.dangalSection = 'khel';
+  khel.innerHTML = `<div class="room-kit-header">Khel<small>Game of the Day</small></div>`;
   const gotdHost = document.createElement('div');
   gotdHost.id = 'dangalGotdHost';
-  grid.appendChild(gotdHost);
+  khel.appendChild(gotdHost);
+  grid.appendChild(khel);
   fetchGameOfTheDay().then((gotd) => {
     if (!gotdHost.isConnected) return;
     gotdHost.innerHTML = '';
@@ -328,45 +339,78 @@ function renderDangalGamesGrid() {
       } catch (e) {}
     }
     renderDangalGotdSlot(gotdHost, gotd);
+    if (!gotd?.gameId && typeof renderEmptyState === 'function') {
+      renderEmptyState(gotdHost, {
+        icon: '🔥',
+        title: 'Khel is warming up',
+        message: 'Today’s featured game will land here.',
+      });
+    }
   });
 
-  const sections = [
-    { id: 'khel', label: 'Khel · solos', items: solos },
-    { id: 'manch', label: 'Manch · vs friend', items: vsFriend },
-    { id: 'maidan', label: 'Maidan · Muqabala & boards', items: [] },
-  ];
-  sections.forEach((sec) => {
-    const section = document.createElement('div');
-    section.className = 'dangal-section';
-    section.dataset.dangalSection = sec.id;
-    if (sec.id === 'maidan') {
-      section.innerHTML = `<div class="dangal-section-label">${sec.label}</div>
-        <div class="dangal-section-grid dangal-maidan-actions">
-          <button type="button" class="btn btn--primary dangal-action-btn" data-dangal-maidan="muqabala">Open Muqabala</button>
-          <button type="button" class="btn dangal-action-btn" data-dangal-maidan="finder">Find opponent</button>
-        </div>`;
-    } else if (!sec.items.length) {
-      return;
-    } else {
-      section.innerHTML = `<div class="dangal-section-label">${sec.label}</div>
-        <div class="dangal-section-grid">
-          ${sec.items.map(dangalTileHtml).join('')}
-        </div>`;
-    }
-    grid.appendChild(section);
-  });
+  // ── Manch: full games library ──
+  const manch = document.createElement('div');
+  manch.className = 'dangal-section room-kit room-kit--fire room-kit--manch';
+  manch.dataset.dangalSection = 'manch';
+  manch.innerHTML = `<div class="room-kit-header">Manch<small>All games</small></div>
+    <div class="dangal-section-grid">
+      ${library.map(dangalTileHtml).join('') || ''}
+    </div>`;
+  if (!library.length && typeof renderEmptyState === 'function') {
+    const empty = document.createElement('div');
+    manch.appendChild(empty);
+    renderEmptyState(empty, { icon: '🎮', title: 'Library empty', message: 'Games will appear here.' });
+  }
+  grid.appendChild(manch);
+
+  // ── Maidan: resume / last played / in-progress ──
+  const maidan = document.createElement('div');
+  maidan.className = 'dangal-section room-kit room-kit--fire room-kit--maidan';
+  maidan.dataset.dangalSection = 'maidan';
+  const last = typeof getLastPlayedGame === 'function' ? getLastPlayedGame() : null;
+  const lastGame =
+    last && last.id && typeof getGame === 'function'
+      ? getGame(last.id === 'muqabala' ? 'quiz' : last.id)
+      : null;
+  maidan.innerHTML = `<div class="room-kit-header">Maidan<small>Resume & in-progress</small></div>`;
+  const maidanBody = document.createElement('div');
+  maidanBody.className = 'dangal-section-grid dangal-maidan-actions';
+  if (lastGame) {
+    maidanBody.innerHTML = `
+      <button type="button" class="btn btn--primary dangal-action-btn" data-dangal-resume="${lastGame.id}">
+        Resume · ${lastGame.icon || ''} ${lastGame.name}
+      </button>
+      <button type="button" class="btn dangal-action-btn" data-dangal-maidan="muqabala">Open Muqabala</button>
+      <button type="button" class="btn dangal-action-btn" data-dangal-maidan="finder">Find opponent</button>`;
+  } else {
+    maidanBody.innerHTML = `
+      <div class="cp-empty" style="padding:16px;text-align:center;color:var(--muted);grid-column:1/-1;">
+        No game in progress — pick something from Manch.
+      </div>
+      <button type="button" class="btn btn--primary dangal-action-btn" data-dangal-maidan="muqabala">Open Muqabala</button>
+      <button type="button" class="btn dangal-action-btn" data-dangal-maidan="finder">Find opponent</button>`;
+  }
+  maidan.appendChild(maidanBody);
+  grid.appendChild(maidan);
+
   wireDangalTiles(grid);
-  grid.querySelector('[data-dangal-maidan="muqabala"]')?.addEventListener('click', () => {
-    document.getElementById('aiFindMuqabalaBtn')?.click();
+  maidan.querySelector('[data-dangal-resume]')?.addEventListener('click', (e) => {
+    const id = e.currentTarget.dataset.dangalResume;
+    if (typeof handleDangalGameTap === 'function') handleDangalGameTap(id);
   });
-  grid.querySelector('[data-dangal-maidan="finder"]')?.addEventListener('click', () => {
-    if (typeof openAIFinder === 'function') openAIFinder();
+  grid.querySelectorAll('[data-dangal-maidan="muqabala"]').forEach((btn) => {
+    btn.addEventListener('click', () => document.getElementById('aiFindMuqabalaBtn')?.click() || openQuizCategorySheet());
+  });
+  grid.querySelectorAll('[data-dangal-maidan="finder"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (typeof openAIFinder === 'function') openAIFinder();
+    });
   });
 
   const boardHost = document.createElement('div');
   boardHost.id = 'dangalFriendsBoardHost';
   boardHost.dataset.dangalSection = 'maidan';
-  grid.appendChild(boardHost);
+  maidan.appendChild(boardHost);
   if (typeof buildWeeklyFriendsBoard === 'function') {
     buildWeeklyFriendsBoard('chess')
       .then((rows) => {
@@ -377,32 +421,86 @@ function renderDangalGamesGrid() {
       })
       .catch(() => {});
   }
+
+  // Apply current section visibility + swipe
+  setDangalSection(dangalSection || 'manch', { silent: true });
+  wireDangalSwipe();
 }
 
-let dangalSection = 'khel';
-function setDangalSection(section) {
-  dangalSection = ['khel', 'manch', 'maidan'].includes(section) ? section : 'khel';
-  const grid = document.getElementById('dangalGamesGrid');
-  if (!grid) {
+let dangalSection = 'manch';
+function setDangalSection(section, opts) {
+  dangalSection = ['khel', 'manch', 'maidan'].includes(section) ? section : 'manch';
+  const host = document.getElementById('dangalGamesGrid');
+  if (!host) {
     if (typeof renderDangalGamesGrid === 'function') renderDangalGamesGrid();
+    return;
   }
-  const host = document.getElementById('dangalGamesGrid') || grid;
-  if (!host) return;
   host.querySelectorAll('[data-dangal-section]').forEach((el) => {
     const match = el.dataset.dangalSection === dangalSection;
     el.style.display = match ? '' : 'none';
   });
-  // Always keep chips + GOTD visible
-  host.querySelector('#dangalGotdHost, .dangal-chips')?.closest?.('.dangal-chips');
-  host.querySelectorAll('.dangal-chips, #dangalGotdHost').forEach((el) => {
+  // Keep chips / progress visible across rooms
+  host.querySelectorAll('.dangal-chips, .dangal-progress-host, .dangal-mode-hint').forEach((el) => {
     el.style.display = '';
   });
-  const label = { khel: 'Khel', manch: 'Manch', maidan: 'Maidan' }[dangalSection];
-  if (typeof showToast === 'function') showToast(`${label}`);
+  host.querySelectorAll('.dangal-mode-hint [data-hint]').forEach((el) => {
+    el.classList.toggle('is-center', el.dataset.hint === dangalSection);
+  });
+  const screen = document.getElementById('dangalScreen') || document.getElementById('panel-dangal');
+  if (screen) {
+    [...screen.classList].filter((c) => c.startsWith('room-kit')).forEach((c) => screen.classList.remove(c));
+    screen.classList.add('room-kit', 'room-kit--fire', `room-kit--${dangalSection}`);
+  }
+  if (!opts?.silent) {
+    const label = { khel: 'Khel', manch: 'Manch', maidan: 'Maidan' }[dangalSection];
+    if (typeof showToast === 'function') showToast(`${label}`);
+  }
   const target = host.querySelector(`[data-dangal-section="${dangalSection}"]`);
   target?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
 }
 window.setDangalSection = setDangalSection;
+
+function wireDangalSwipe() {
+  const screen = document.getElementById('dangalScreen') || document.getElementById('panel-dangal');
+  if (!screen || screen.dataset.swipeWired) return;
+  screen.dataset.swipeWired = '1';
+  let sx = 0;
+  let sy = 0;
+  let locked = null;
+  screen.addEventListener(
+    'touchstart',
+    (e) => {
+      sx = e.touches[0].clientX;
+      sy = e.touches[0].clientY;
+      locked = null;
+    },
+    { passive: true }
+  );
+  screen.addEventListener(
+    'touchmove',
+    (e) => {
+      const dx = e.touches[0].clientX - sx;
+      const dy = e.touches[0].clientY - sy;
+      if (!locked && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+        locked = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+      }
+    },
+    { passive: true }
+  );
+  screen.addEventListener(
+    'touchend',
+    (e) => {
+      if (locked !== 'h') return;
+      const dx = (e.changedTouches[0]?.clientX || 0) - sx;
+      if (Math.abs(dx) < 56) return;
+      const order = ['khel', 'manch', 'maidan'];
+      const cur = order.indexOf(dangalSection);
+      const next = order[Math.max(0, Math.min(2, cur + (dx < 0 ? 1 : -1)))];
+      setDangalSection(next);
+    },
+    { passive: true }
+  );
+}
 
 function getGameRating(key){
   if(!key)return null;

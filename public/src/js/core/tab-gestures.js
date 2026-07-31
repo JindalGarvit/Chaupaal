@@ -294,13 +294,21 @@
     });
   }
 
-  // ─── Shortcut sets ─────────────────────────────────────────────────────────
+  /**
+   * Morph shortcut slot map (5 slots):
+   *   1 & 5 = corner actions · 2 = left swipe neighbor · 3 = tab home · 4 = right swipe neighbor
+   * Peepal: discuss | Khoj | Vriksha | Mashhoor | find
+   * Akhbaar: Relevant today | Surkhiya | All | Saathi | Add category
+   *   (#1 morning brief · #5 extends past rightmost category edge)
+   * Duniya: post | Lehar | Vishwa | Prasidha | story
+   * Baithak: story | Sambhavanayein | Sabha | Mitra | find
+   * Dangal: pulse | Khel(GOTD) | Manch(library) | Maidan(resume) | challenge
+   */
   function shortcutsFor(tab) {
     const sets = {
       peepal: [
         {
           id: 'discuss',
-          icon: 'pen',
           label: tt('shortcut_peepal_ask', 'Discuss something'),
           run: () => {
             if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
@@ -309,7 +317,6 @@
         },
         {
           id: 'khoj',
-          icon: 'search',
           label: 'Khoj',
           run: () => {
             switchTo('peepal');
@@ -322,7 +329,6 @@
         },
         {
           id: 'vriksha',
-          icon: 'tree',
           label: 'Vriksha',
           run: () => {
             switchTo('peepal');
@@ -331,76 +337,73 @@
         },
         {
           id: 'mashhoor',
-          icon: 'trending-up',
           label: 'Mashhoor',
           run: () => {
             switchTo('peepal');
             if (typeof setPeepalMode === 'function') setPeepalMode('mashhoor');
-            else if (typeof showToast === 'function') showToast('Mashhoor — trending on Peepal');
           },
         },
         {
           id: 'find',
-          icon: 'users',
           label: tt('shortcut_peepal_search', 'Find people'),
           run: () => {
             switchTo('peepal');
-            document.getElementById('peepalSearchBtn')?.click();
-            document.getElementById('peepalInlineSearch')?.focus();
+            if (typeof openPeopleSearchWithContacts === 'function') openPeopleSearchWithContacts({ surface: 'peepal' });
+            else {
+              document.getElementById('peepalSearchBtn')?.click();
+              document.getElementById('peepalInlineSearch')?.focus();
+            }
           },
         },
       ],
       akhbaar: [
         {
           id: 'today',
-          icon: 'sparkles',
           label: tt('shortcut_akhbaar_today', 'Relevant today'),
           run: () => openRelevantTodaySheet(),
         },
         {
           id: 'surkhiya',
-          icon: 'flame',
-          label: 'Surkhiya',
+          label: tt('akhbaar_surkhiya', 'Surkhiya'),
           run: () => {
             switchTo('akhbaar');
             if (typeof setAkhbaarMode === 'function') setAkhbaarMode('surkhiya');
-            else if (typeof showToast === 'function') showToast('Surkhiya — today’s short digest');
+            else if (typeof goAkhbaarPage === 'function') goAkhbaarPage('surkhiya');
           },
         },
         {
           id: 'all',
-          icon: 'home',
-          label: 'All',
+          label: tt('akhbaar_all', 'All'),
           run: () => {
             switchTo('akhbaar');
             if (typeof setAkhbaarMode === 'function') setAkhbaarMode('all');
+            else if (typeof goAkhbaarPage === 'function') goAkhbaarPage('all');
             else document.querySelector('.akhbaar-cat-chip[data-cat="all"]')?.click();
           },
         },
         {
-          id: 'gk',
-          icon: 'brain',
-          label: 'GK',
+          id: 'saathi',
+          label: tt('akhbaar_saathi', 'Saathi'),
           run: () => {
             switchTo('akhbaar');
-            if (typeof setAkhbaarMode === 'function') setAkhbaarMode('gk');
-            else document.querySelector('.akhbaar-cat-chip[data-cat="GK"]')?.click();
+            if (typeof setAkhbaarMode === 'function') setAkhbaarMode('saathi');
+            else if (typeof goAkhbaarPage === 'function') goAkhbaarPage('saathi');
+            else document.querySelector('.akhbaar-cat-chip[data-cat="saathi"]')?.click();
           },
         },
         {
-          id: 'quiz',
-          icon: 'newspaper',
-          label: tt('shortcut_akhbaar_quiz', "Today's quiz"),
+          id: 'addcat',
+          label: tt('shortcut_akhbaar_add_cat', 'Add category'),
           run: () => {
             switchTo('akhbaar');
-            if (typeof window.ensureAkhbaarBuilt === 'function') window.ensureAkhbaarBuilt();
+            if (typeof openAkhbaarCatAdd === 'function') openAkhbaarCatAdd();
+            else document.getElementById('akhbaarAddCat')?.click();
           },
         },
       ],
       duniya: [
         {
           id: 'post',
-          icon: 'plus',
           label: tt('shortcut_duniya_post', 'Create post'),
           run: () => {
             if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
@@ -409,17 +412,7 @@
           },
         },
         {
-          id: 'vishwa',
-          icon: 'globe',
-          label: 'Vishwa',
-          run: () => {
-            switchTo('duniya');
-            if (typeof setDuniyaMode === 'function') setDuniyaMode('vishwa');
-          },
-        },
-        {
           id: 'lehar',
-          icon: 'sparkles',
           label: 'Lehar',
           run: () => {
             switchTo('duniya');
@@ -427,8 +420,15 @@
           },
         },
         {
+          id: 'vishwa',
+          label: 'Vishwa',
+          run: () => {
+            switchTo('duniya');
+            if (typeof setDuniyaMode === 'function') setDuniyaMode('vishwa');
+          },
+        },
+        {
           id: 'prasidha',
-          icon: 'trending-up',
           label: 'Prasidha',
           run: () => {
             switchTo('duniya');
@@ -437,7 +437,6 @@
         },
         {
           id: 'story',
-          icon: 'camera',
           label: tt('shortcut_duniya_story', 'Create Story'),
           run: () => {
             if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
@@ -449,7 +448,6 @@
       baithak: [
         {
           id: 'story',
-          icon: 'camera',
           label: tt('shortcut_baithak_story', 'Create story'),
           run: () => {
             if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
@@ -460,17 +458,14 @@
         },
         {
           id: 'sambhavanayein',
-          icon: 'sparkles',
           label: 'Sambhavanayein',
           run: () => {
             switchTo('baithak');
             if (typeof setBaithakSection === 'function') setBaithakSection('sambhavanayein');
-            else if (typeof showToast === 'function') showToast('Sambhavanayein — stranger chats');
           },
         },
         {
           id: 'sabha',
-          icon: 'message-circle',
           label: 'Sabha',
           run: () => {
             switchTo('baithak');
@@ -479,44 +474,38 @@
         },
         {
           id: 'mitra',
-          icon: 'handshake',
           label: 'Mitra',
           run: () => {
             switchTo('baithak');
             if (typeof setBaithakSection === 'function') setBaithakSection('mitra');
-            else if (typeof showToast === 'function') showToast('Mitra — friend chats');
           },
         },
         {
           id: 'find',
-          icon: 'users',
           label: tt('shortcut_baithak_search', 'Find people'),
           run: () => {
             if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
-            if (typeof showNewDmSearchSheet === 'function') showNewDmSearchSheet();
+            if (typeof openPeopleSearchWithContacts === 'function') openPeopleSearchWithContacts({ surface: 'baithak' });
+            else if (typeof showNewDmSearchSheet === 'function') showNewDmSearchSheet();
           },
         },
       ],
       dangal: [
         {
           id: 'pulse',
-          icon: 'flame',
           label: tt('shortcut_dangal_pulse', 'Progress'),
           run: () => openDangalPulseSheet(),
         },
         {
           id: 'khel',
-          icon: 'trophy',
           label: 'Khel',
           run: () => {
             switchTo('dangal');
             if (typeof setDangalSection === 'function') setDangalSection('khel');
-            else document.querySelector('.dangal-gotd, [data-gotd]')?.click();
           },
         },
         {
           id: 'manch',
-          icon: 'swords',
           label: 'Manch',
           run: () => {
             switchTo('dangal');
@@ -525,20 +514,14 @@
         },
         {
           id: 'maidan',
-          icon: 'gamepad',
           label: 'Maidan',
           run: () => {
             switchTo('dangal');
             if (typeof setDangalSection === 'function') setDangalSection('maidan');
-            else {
-              const last = typeof getLastPlayedGame === 'function' ? getLastPlayedGame() : null;
-              if (last && typeof handleDangalGameTap === 'function') handleDangalGameTap(last.id || last);
-            }
           },
         },
         {
           id: 'challenge',
-          icon: 'target',
           label: tt('shortcut_dangal_challenge', 'Challenge'),
           run: () => openDangalOpponentPicker('challenge'),
         },
@@ -588,18 +571,21 @@
       const iconEl = btn.querySelector('.tab-icon');
       const labelEl = btn.querySelector('.tab-label');
       if (iconEl) {
-        iconEl.classList.remove('tab-el-icon');
-        iconEl.removeAttribute('data-tab-element');
-        iconEl.removeAttribute('data-icon-skip');
-        iconEl.setAttribute('data-icon', sc.icon);
-        iconEl.setAttribute('data-icon-size', '20');
-        delete iconEl.dataset.iconHydrated;
-        iconEl.innerHTML = '';
+        if (typeof TabElements !== 'undefined' && TabElements.mountShortcutIcon) {
+          TabElements.mountShortcutIcon(iconEl, sc.id, tab);
+        } else {
+          iconEl.classList.remove('tab-el-icon');
+          iconEl.removeAttribute('data-tab-element');
+          iconEl.setAttribute('data-icon', sc.icon || 'sparkles');
+          iconEl.setAttribute('data-icon-size', '20');
+          delete iconEl.dataset.iconHydrated;
+          iconEl.innerHTML = '';
+          if (typeof hydrateIcons === 'function') hydrateIcons(btn);
+        }
       }
       if (labelEl) labelEl.textContent = sc.label;
       btn.querySelector('.tab-notif-light')?.classList.add('hidden');
     });
-    if (typeof hydrateIcons === 'function') hydrateIcons(bar);
 
     setTimeout(() => {
       document.addEventListener('pointerdown', onOutsideMorph, true);

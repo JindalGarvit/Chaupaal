@@ -226,6 +226,10 @@ textarea.auth-input,
   height: min(54%, 520px);
   max-height: 560px;
   padding-bottom: var(--safe-bottom);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  contain: layout style;
 }
 .notif-panel-grabber {
   width: 36px;

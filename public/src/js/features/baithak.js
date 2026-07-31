@@ -339,7 +339,7 @@ function openChallengeCreator(chat){
   render();
 }
 
-function showNewDmSearchSheet(){
+function showNewDmSearchSheet(opts){
   if(typeof currentUser==='undefined'||!currentUser){
     if(typeof showGuestSignInBanner==='function') showGuestSignInBanner();
     if(typeof showAuth==='function') showAuth();
@@ -357,6 +357,7 @@ function showNewDmSearchSheet(){
     <div style="padding:12px 16px;">
       <input id="newDmSearch" type="search" autocomplete="off" placeholder="Search by name or @username"
         style="width:100%;padding:12px 14px;border:2px solid var(--line);border-radius:14px;font-size:15px;box-sizing:border-box;outline:none;">
+      <button type="button" class="btn" id="newDmContactsBtn" style="margin-top:10px;width:100%;">Find from contacts</button>
     </div>
     <div id="newDmResults" style="flex:1;overflow:auto;padding:0 16px 24px;"></div>`;
   document.querySelector('.device')?.appendChild(sheet);
@@ -365,6 +366,14 @@ function showNewDmSearchSheet(){
   if(typeof pushNavLayer==='function'){ sheet.dataset.navManaged='1'; pushNavLayer(sheet,close); }
   const input=sheet.querySelector('#newDmSearch');
   const results=sheet.querySelector('#newDmResults');
+  sheet.querySelector('#newDmContactsBtn')?.addEventListener('click',()=>{
+    if(typeof loadContactsInto==='function') loadContactsInto(results);
+  });
+  if(typeof ContactsFind!=='undefined'&&ContactsFind.supported&&ContactsFind.supported()){
+    results.innerHTML=`<div class="contacts-fallback">${typeof t==='function'?t('contacts_soft_prompt'):'Optional: find friends already on Chaupaal from your contacts. We never upload your full address book.'}</div>`;
+  } else if(opts&&opts.withContacts&&typeof loadContactsInto==='function'){
+    loadContactsInto(results);
+  }
   let timer=null;
   async function runSearch(q){
     results.innerHTML='<div style="padding:16px;color:var(--muted);font-size:13px;">Searching…</div>';

@@ -325,6 +325,12 @@ async function writePhoneIndex(user, email) {
         },
         { merge: true }
       );
+    // Privacy-preserving contact match index (SHA-256 of E.164) — never raw contacts
+    if (window.crypto?.subtle) {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(user.phoneNumber));
+      const hash = [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+      await db.collection('phoneHashIndex').doc(hash).set({ uid: user.uid, updatedAt: Date.now() }, { merge: true });
+    }
   } catch (e) {
     console.warn('[auth] phoneIndex', e);
   }

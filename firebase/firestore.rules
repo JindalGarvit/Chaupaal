@@ -282,6 +282,15 @@ service cloud.firestore {
       allow delete: if isAuth() && resource.data.uid == request.auth.uid;
     }
 
+    /* SHA-256(E.164) → uid for contacts match. Client writes own hash; Admin reads for match. */
+    match /phoneHashIndex/{hash} {
+      allow get, list: if false;
+      allow create, update: if isAuth()
+        && request.resource.data.uid == request.auth.uid
+        && hash.matches('^[a-f0-9]{64}$');
+      allow delete: if isAuth() && resource.data.uid == request.auth.uid;
+    }
+
     // Professional signup picklists — public read (label + count only); auth increments.
     match /industryStats/{value} {
       allow read: if true;
