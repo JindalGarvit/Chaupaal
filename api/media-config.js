@@ -520,6 +520,24 @@ async function handlePost(req, res) {
     }
   }
 
+  // ─── Sync own phone hash (Admin write; bound to token.phone_number) ─────
+  if (action === 'sync_phone_hash') {
+    const adminApp = initAdmin();
+    if (!adminApp) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    const { buildPhoneHashRecord } = require('../server-lib/phone-hash');
+    const built = buildPhoneHashRecord(user.uid, user.decoded);
+    if (!built.ok) {
+      return sendError(res, 400, built.error || 'NO_VERIFIED_PHONE', 'Verified phone required on auth token');
+    }
+    try {
+      await adminApp.firestore().collection('phoneHashIndex').doc(built.hash).set(built.data, { merge: true });
+      return sendSuccess(res, { synced: true, hash: built.hash });
+    } catch (e) {
+      console.warn('[media-config] sync_phone_hash', e?.message || e);
+      return sendError(res, 500, 'PHONE_HASH_SYNC_ERROR', e?.message || 'Sync failed');
+    }
+  }
+
   // ─── Contacts match (hashed phones only — never raw address book) ────────
   if (action === 'match_contact_hashes') {
     try {
@@ -600,6 +618,7 @@ async function handlePost(req, res) {
       'notif_dm',
       'parental_consent_start',
       'parental_consent_verify',
+      'sync_phone_hash',
       'match_contact_hashes',
     ],
   });

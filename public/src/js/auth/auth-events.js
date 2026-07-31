@@ -325,11 +325,20 @@ async function writePhoneIndex(user, email) {
         },
         { merge: true }
       );
-    // Privacy-preserving contact match index (SHA-256 of E.164) — never raw contacts
-    if (window.crypto?.subtle) {
-      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(user.phoneNumber));
-      const hash = [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
-      await db.collection('phoneHashIndex').doc(hash).set({ uid: user.uid, updatedAt: Date.now() }, { merge: true });
+    // phoneHashIndex is Admin-only (rules cannot bind hash to token.phone_number).
+    // Force-refresh so the ID token carries phone_number after OTP/link.
+    try {
+      await user.getIdToken(true);
+      if (typeof apiFetch === 'function') {
+        const env = await apiFetch('/api/media-config', {
+          method: 'POST',
+          needAuth: true,
+          body: { action: 'sync_phone_hash' },
+        });
+        if (!env?.ok) console.warn('[auth] sync_phone_hash', env?.error?.message || env);
+      }
+    } catch (hashErr) {
+      console.warn('[auth] sync_phone_hash', hashErr?.message || hashErr);
     }
   } catch (e) {
     console.warn('[auth] phoneIndex', e);
