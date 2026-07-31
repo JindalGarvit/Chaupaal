@@ -31,6 +31,14 @@
     </div>`;
   }
 
+  function quietBlocked() {
+    if (typeof quietMode === 'undefined' || !quietMode) return false;
+    if (typeof showToast === 'function') {
+      showToast(typeof t === 'function' ? t('quiet_voice_muted', 'Quiet mode is on') : 'Quiet mode is on');
+    }
+    return true;
+  }
+
   function ensureMiniPlayer() {
     let bar = document.getElementById('cpMiniPlayer');
     if (bar) return bar;
@@ -40,26 +48,43 @@
     bar.className = 'cp-mini-player hidden';
     bar.dataset.navIgnore = '1';
     bar.innerHTML = `
-      <button type="button" class="cp-mini-art" data-cp-mini-art aria-hidden="true">♪</button>
-      <div class="cp-mini-meta">
-        <div class="cp-mini-title" data-cp-mini-title>Now playing</div>
-        <div class="cp-mini-artist" data-cp-mini-artist></div>
-        <input type="range" class="cp-mini-seek" data-cp-mini-seek min="0" max="1000" value="0" step="1" aria-label="Seek">
+      <div class="cp-mini-compact" data-cp-mini-body>
+        <button type="button" class="cp-mini-art" data-cp-mini-art aria-hidden="true">♪</button>
+        <div class="cp-mini-meta">
+          <div class="cp-mini-title" data-cp-mini-title>Now playing</div>
+          <div class="cp-mini-artist" data-cp-mini-artist></div>
+        </div>
+        <div class="cp-mini-actions">
+          <button type="button" data-cp-mini-play aria-label="Play">▶</button>
+          <button type="button" data-cp-mini-close aria-label="Close">✕</button>
+        </div>
       </div>
-      <div class="cp-mini-actions">
-        <button type="button" data-cp-mini-prev aria-label="Previous">⏮</button>
-        <button type="button" data-cp-mini-play aria-label="Play">▶</button>
-        <button type="button" data-cp-mini-next aria-label="Next">⏭</button>
-        <button type="button" data-cp-mini-close aria-label="Close">✕</button>
+      <div class="cp-mini-expanded-panel" data-cp-mini-panel hidden>
+        <div class="cp-mini-seek-row">
+          <span data-cp-mini-elapsed>0:00</span>
+          <input type="range" class="cp-mini-seek" data-cp-mini-seek min="0" max="1000" value="0" step="1" aria-label="Seek">
+          <span data-cp-mini-remain>−0:00</span>
+        </div>
+        <div class="cp-mini-transport">
+          <button type="button" data-cp-mini-prev aria-label="Previous">⏮</button>
+          <button type="button" data-cp-mini-skip="-10" aria-label="Back 10 seconds">−10</button>
+          <button type="button" data-cp-mini-skip="10" aria-label="Forward 10 seconds">+10</button>
+          <button type="button" data-cp-mini-next aria-label="Next">⏭</button>
+          <button type="button" data-cp-mini-collapse aria-label="Collapse">▴</button>
+        </div>
       </div>`;
     device.appendChild(bar);
     return bar;
   }
 
+  function setMiniExpanded(on) {
+    const bar = ensureMiniPlayer();
+    const panel = bar.querySelector('[data-cp-mini-panel]');
+    bar.classList.toggle('is-expanded', !!on);
+    if (panel) panel.hidden = !on;
+  }
+
   function getSharedAudio() {
-    if (typeof MusicCard !== 'undefined' && MusicCard) {
-      // music-card keeps private sharedAudio — use document query or window hook
-    }
     return window.__chaupaalSharedAudio || null;
   }
 
@@ -67,14 +92,35 @@
     window.__chaupaalSharedAudio = audio;
   }
 
+  function updateMiniArt(bar, thumb) {
+    const artBtn = bar.querySelector('[data-cp-mini-art]');
+    if (!artBtn) return;
+    const src = String(thumb || '').trim();
+    if (src) {
+      artBtn.classList.add('has-thumb');
+      artBtn.innerHTML = `<img src="${src.replace(/"/g, '&quot;')}" alt="" decoding="async">`;
+    } else {
+      artBtn.classList.remove('has-thumb');
+      artBtn.textContent = '♪';
+    }
+  }
+
   function syncMiniFromMedia(media) {
     const bar = ensureMiniPlayer();
-    if (!media || (media.paused && !queue.length) || (!media.src && !queue.length)) {
-      if (!queue.length) bar.classList.add('hidden');
+    if (!media) {
+      bar.classList.add('hidden');
+      setMiniExpanded(false);
+      return;
+    }
+    if ((media.paused && !queue.length) || (!media.src && !media.currentSrc && !queue.length)) {
+      if (!queue.length) {
+        bar.classList.add('hidden');
+        setMiniExpanded(false);
+      }
       return;
     }
     if (!media.paused || queue.length) bar.classList.remove('hidden');
-    if (media.paused && !media.src) return;
+    if (media.paused && !media.src && !media.currentSrc) return;
 
     const qItem = queueIndex >= 0 && queue[queueIndex] ? queue[queueIndex] : null;
     const title =
@@ -95,17 +141,33 @@
     const artistEl = bar.querySelector('[data-cp-mini-artist]');
     if (titleEl) titleEl.textContent = title;
     if (artistEl) artistEl.textContent = artist;
+
+    const thumb =
+      qItem?.thumb ||
+      document.querySelector('.music-card.is-playing')?.dataset?.musicThumb ||
+      '';
+    updateMiniArt(bar, thumb);
+
     const playBtn = bar.querySelector('[data-cp-mini-play]');
-    if (playBtn) playBtn.textContent = media.paused ? '▶' : '⏸';
+    if (playBtn) {
+      playBtn.textContent = media.paused ? '▶' : '⏸';
+      playBtn.setAttribute('aria-label', media.paused ? 'Play' : 'Pause');
+    }
     const prevBtn = bar.querySelector('[data-cp-mini-prev]');
     const nextBtn = bar.querySelector('[data-cp-mini-next]');
     if (prevBtn) prevBtn.disabled = !(queue.length > 1 && queueIndex > 0);
     if (nextBtn) nextBtn.disabled = !(queue.length > 1 && queueIndex < queue.length - 1);
-    const seek = bar.querySelector('[data-cp-mini-seek]');
+
     const d = media.duration;
-    if (seek && Number.isFinite(d) && d > 0) {
-      seek.value = String(Math.round(((media.currentTime || 0) / d) * 1000));
+    const t = media.currentTime || 0;
+    const seek = bar.querySelector('[data-cp-mini-seek]');
+    if (seek && Number.isFinite(d) && d > 0 && seek.dataset.seeking !== '1') {
+      seek.value = String(Math.round((t / d) * 1000));
     }
+    const elapsed = bar.querySelector('[data-cp-mini-elapsed]');
+    const remain = bar.querySelector('[data-cp-mini-remain]');
+    if (elapsed) elapsed.textContent = formatTime(t);
+    if (remain) remain.textContent = Number.isFinite(d) ? '−' + formatTime(Math.max(0, d - t)) : '−0:00';
   }
 
   function bindMiniOnce(media) {
@@ -113,52 +175,93 @@
     miniBound = true;
     setSharedAudioRef(media);
     const bar = ensureMiniPlayer();
-    bar.querySelector('[data-cp-mini-play]')?.addEventListener('click', () => {
-      if (media.paused) media.play().catch(() => {});
-      else media.pause();
-    });
-    bar.querySelector('[data-cp-mini-close]')?.addEventListener('click', () => {
-      try {
+
+    bar.querySelector('[data-cp-mini-play]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (media.paused) {
+        if (quietBlocked()) return;
+        media.play().catch(() => {});
+      } else {
         media.pause();
-      } catch (e) {}
-      if (typeof pauseAllMusic === 'function') pauseAllMusic();
-      bar.classList.add('hidden');
+      }
+    });
+    bar.querySelector('[data-cp-mini-close]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       queue = [];
       queueIndex = -1;
+      setMiniExpanded(false);
+      try {
+        media.pause();
+      } catch (err) {}
+      if (typeof pauseAllMusic === 'function') pauseAllMusic();
+      else {
+        try {
+          media.removeAttribute('src');
+          media.load();
+        } catch (err) {}
+        bar.classList.add('hidden');
+      }
     });
-    bar.querySelector('[data-cp-mini-prev]')?.addEventListener('click', () => playQueueIndex(queueIndex - 1));
-    bar.querySelector('[data-cp-mini-next]')?.addEventListener('click', () => playQueueIndex(queueIndex + 1));
-    let seeking = false;
+    bar.querySelector('[data-cp-mini-prev]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      playMediaPrev();
+    });
+    bar.querySelector('[data-cp-mini-next]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      playMediaNext();
+    });
+    bar.querySelector('[data-cp-mini-collapse]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setMiniExpanded(false);
+    });
+    bar.querySelectorAll('[data-cp-mini-skip]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const delta = Number(btn.dataset.cpMiniSkip) || 0;
+        try {
+          const next = Math.max(0, Math.min(media.duration || 1e9, (media.currentTime || 0) + delta));
+          media.currentTime = next;
+          syncMiniFromMedia(media);
+        } catch (err) {}
+      });
+    });
+
+    // Tap compact body (not action buttons) to expand / collapse
+    bar.querySelector('[data-cp-mini-body]')?.addEventListener('click', (e) => {
+      if (e.target.closest('button, input, a')) return;
+      setMiniExpanded(!bar.classList.contains('is-expanded'));
+    });
+
     const seek = bar.querySelector('[data-cp-mini-seek]');
     seek?.addEventListener('input', () => {
-      seeking = true;
+      seek.dataset.seeking = '1';
     });
     seek?.addEventListener('change', () => {
-      seeking = false;
+      seek.dataset.seeking = '0';
       const d = media.duration;
       if (!Number.isFinite(d) || d <= 0) return;
       media.currentTime = (Number(seek.value) / 1000) * d;
+      syncMiniFromMedia(media);
     });
     media.addEventListener('timeupdate', () => {
-      if (!seeking) syncMiniFromMedia(media);
+      if (seek?.dataset.seeking !== '1') syncMiniFromMedia(media);
     });
     media.addEventListener('play', () => syncMiniFromMedia(media));
     media.addEventListener('pause', () => syncMiniFromMedia(media));
     media.addEventListener('ended', () => playQueueIndex(queueIndex + 1));
   }
 
+  /**
+   * Switch queue track. Does NOT call pauseAllMusic (that clears src and breaks next).
+   * Stops at ends — no wrap. No-ops when i is out of range (including ended at last track).
+   */
   function playQueueIndex(i) {
     if (!queue.length) return;
     if (i < 0 || i >= queue.length) return;
+    if (quietBlocked()) return;
     queueIndex = i;
     const item = queue[i];
     if (!item?.previewUrl) return;
-
-    if (typeof pauseAllMusic === 'function') {
-      try {
-        pauseAllMusic();
-      } catch (e) {}
-    }
 
     const audio = getSharedAudio() || window.__chaupaalSharedAudio;
     if (!audio) return;
@@ -176,11 +279,25 @@
     audio.play().catch(() => {});
     ensureMiniPlayer().classList.remove('hidden');
     syncMiniFromMedia(audio);
+    try {
+      if (typeof syncMusicCardFromTrack === 'function') syncMusicCardFromTrack(item);
+      else if (typeof MusicCard?.syncFromTrack === 'function') MusicCard.syncFromTrack(item);
+    } catch (e) {}
+  }
+
+  function playMediaPrev() {
+    if (queueIndex <= 0) return;
+    playQueueIndex(queueIndex - 1);
+  }
+
+  function playMediaNext() {
+    if (queueIndex < 0 || queueIndex >= queue.length - 1) return;
+    playQueueIndex(queueIndex + 1);
   }
 
   /**
    * Enqueue tracks for mini-player next/prev (does not auto-start unless opts.play).
-   * @param {{ title: string, artist?: string, previewUrl: string }[]} tracks
+   * @param {{ title: string, artist?: string, previewUrl: string, thumb?: string }[]} tracks
    * @param {{ startIndex?: number, play?: boolean }} [opts]
    */
   function setMediaQueue(tracks, opts = {}) {
@@ -308,8 +425,6 @@
     });
   }
 
-  // Expose shared audio from music-card when it creates one
-  const origDesc = Object.getOwnPropertyDescriptor(window, '__chaupaalSharedAudio');
   document.addEventListener(
     'play',
     (e) => {
@@ -371,6 +486,13 @@
   window.enhanceMediaIn = enhanceMediaIn;
   window.setMediaQueue = setMediaQueue;
   window.syncMiniPlayer = syncMiniFromMedia;
+  window.playMediaPrev = playMediaPrev;
+  window.playMediaNext = playMediaNext;
   window.resolvePlayableUrl = resolvePlayableUrl;
-  window.MediaPlayback = { resolvePlayableUrl, setMediaQueue };
+  window.MediaPlayback = {
+    resolvePlayableUrl,
+    setMediaQueue,
+    playPrev: playMediaPrev,
+    playNext: playMediaNext,
+  };
 })();

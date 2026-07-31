@@ -360,29 +360,63 @@
 .music-card--story .cp-media-times{color:rgba(255,255,255,.75);}
 .profile-voice-player{width:min(320px,90%);margin:12px auto;display:block;}
 
-/* Persistent mini-player (Phase 6) */
+/* Persistent mini-player — Gathered light pill above bottom tabs */
 .cp-mini-player{
-  position:absolute;left:8px;right:8px;bottom:calc(var(--tab-h,60px) + env(safe-area-inset-bottom,0px) + 8px);
-  z-index:40;display:flex;align-items:center;gap:10px;
-  padding:10px 12px;border-radius:16px;
-  background:rgba(27,31,59,.94);color:#fff;
-  box-shadow:0 10px 28px rgba(0,0,0,.28);
-  backdrop-filter:blur(10px);
+  position:absolute;left:10px;right:10px;
+  bottom:calc(var(--tab-h,64px) + env(safe-area-inset-bottom,0px) + 8px);
+  z-index:40;display:flex;flex-direction:column;gap:0;
+  padding:0;border-radius:var(--r-card);
+  background:var(--surface-elevated);color:var(--ink);
+  border:1px solid var(--line);
+  box-shadow:var(--elev-2);
+  overflow:hidden;
 }
 .cp-mini-player.hidden{display:none!important;}
+.cp-mini-compact{
+  display:flex;align-items:center;gap:10px;
+  padding:8px 10px;cursor:pointer;min-height:56px;
+}
 .cp-mini-art{
-  width:44px;height:44px;border-radius:10px;border:none;background:rgba(255,255,255,.12);
-  color:#fff;font-size:18px;flex-shrink:0;
+  width:44px;height:44px;border-radius:var(--r-control);border:none;
+  background:var(--surface-sunken);color:var(--muted);font-size:18px;flex-shrink:0;
+  padding:0;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;
 }
+.cp-mini-art.has-thumb{background:transparent;}
+.cp-mini-art img{width:100%;height:100%;object-fit:cover;display:block;}
 .cp-mini-meta{flex:1;min-width:0;}
-.cp-mini-title{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.cp-mini-artist{font-size:11px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.cp-mini-seek{width:100%;margin-top:4px;accent-color:var(--red,#E63946);height:22px;}
-.cp-mini-actions{display:flex;gap:4px;flex-shrink:0;}
-.cp-mini-actions button{
-  width:36px;height:36px;border:none;border-radius:10px;background:rgba(255,255,255,.1);
-  color:#fff;cursor:pointer;font-size:12px;
+.cp-mini-title{
+  font-family:var(--font-display);font-size:13px;font-weight:700;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink);
 }
+.cp-mini-artist{
+  font-size:11px;color:var(--muted);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.cp-mini-actions{display:flex;gap:4px;flex-shrink:0;}
+.cp-mini-actions button,
+.cp-mini-transport button{
+  width:36px;height:36px;border:1px solid var(--line);border-radius:var(--r-control);
+  background:var(--surface-sunken);color:var(--ink);cursor:pointer;font-size:12px;font-weight:700;
+  display:inline-flex;align-items:center;justify-content:center;touch-action:manipulation;
+}
+.cp-mini-actions button:active,
+.cp-mini-transport button:active{transform:scale(.96);}
+.cp-mini-actions button:disabled,
+.cp-mini-transport button:disabled{opacity:.35;cursor:default;}
+.cp-mini-expanded-panel{
+  padding:0 12px 10px;border-top:1px solid var(--line);
+  background:var(--surface-elevated);
+}
+.cp-mini-expanded-panel[hidden]{display:none!important;}
+.cp-mini-seek-row{
+  display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;
+  padding-top:8px;font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums;
+}
+.cp-mini-seek{width:100%;accent-color:var(--brand-red);height:22px;cursor:pointer;}
+.cp-mini-transport{
+  display:flex;justify-content:center;align-items:center;gap:8px;padding-top:6px;
+}
+.cp-mini-player.is-expanded .cp-mini-compact{padding-bottom:6px;}
 html.kb-open .cp-mini-player{bottom:12px;}
 
 /* ===== DANGAL RATINGS GRID ===== */

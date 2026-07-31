@@ -41,11 +41,9 @@
       window.__chaupaalSharedAudio = sharedAudio;
       sharedAudio.addEventListener('ended', () => syncActiveCard(false));
       sharedAudio.addEventListener('timeupdate', () => {
-        if (!activeCardEl) return;
-        const bar = activeCardEl.querySelector('[data-music-progress]');
-        if (bar && sharedAudio.duration) {
-          const pct = Math.min(100, (sharedAudio.currentTime / sharedAudio.duration) * 100);
-          bar.style.width = pct + '%';
+        if (activeCardEl) {
+          updateCardProgress(activeCardEl, sharedAudio);
+          updateMediaSession(activeCardEl, sharedAudio);
         }
         if (typeof syncMiniPlayer === 'function') syncMiniPlayer(sharedAudio);
       });
@@ -73,13 +71,19 @@
     return sharedAudio;
   }
 
-  function ensureCardMediaControls(card) {
-    const host = card.querySelector('[data-music-extra-controls]');
-    if (!host || host.dataset.bound === '1') return;
-    host.dataset.bound = '1';
-    if (typeof bindMediaControls === 'function') {
-      bindMediaControls(getSharedAudio(), host);
-    }
+  function transportHtml(playing) {
+    return `<div class="music-card-transport" data-music-transport data-nav-ignore="1">
+      <button type="button" class="music-card-transport-btn" data-music-prev aria-label="Previous track">${skipBackIcon()}</button>
+      <button type="button" class="music-card-transport-btn music-card-transport-skip" data-music-skip="-10" aria-label="Back 10 seconds">−10</button>
+      <button type="button" class="music-card-play" data-music-play aria-label="${playing ? 'Pause song' : 'Play song'}">${playing ? pauseIcon() : playIcon()}</button>
+      <button type="button" class="music-card-transport-btn music-card-transport-skip" data-music-skip="10" aria-label="Forward 10 seconds">+10</button>
+      <button type="button" class="music-card-transport-btn" data-music-next aria-label="Next track">${skipFwdIcon()}</button>
+    </div>
+    <div class="music-card-progress-track" aria-hidden="true"><div class="music-card-progress-bar" data-music-progress></div></div>
+    <div class="music-card-times">
+      <span data-music-elapsed>0:00</span>
+      <span data-music-remain>−0:00</span>
+    </div>`;
   }
 
   function syncActiveCard(playing) {
@@ -109,6 +113,12 @@
   function pauseIcon() {
     return '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>';
   }
+  function skipBackIcon() {
+    return '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11 18V6l-8.5 6 8.5 6zm.5-6 8.5 6V6l-8.5 6z"/></svg>';
+  }
+  function skipFwdIcon() {
+    return '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13 6v12l8.5-6L13 6zM4 18l8.5-6L4 6v12z"/></svg>';
+  }
 
   function pauseAllMusic() {
     try {
@@ -119,6 +129,198 @@
     } catch (e) {}
     activeCardEl = null;
     syncActiveCard(false);
+    try {
+      if (typeof syncMiniPlayer === 'function') syncMiniPlayer(null);
+    } catch (e) {}
+    try {
+      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
+    } catch (e) {}
+  }
+
+  function formatCardTime(sec) {
+    if (typeof formatMediaTime === 'function') return formatMediaTime(sec);
+    if (!Number.isFinite(sec) || sec < 0) return '0:00';
+    const s = Math.floor(sec % 60);
+    const m = Math.floor(sec / 60);
+    return m + ':' + String(s).padStart(2, '0');
+  }
+
+  function updateCardProgress(card, audio) {
+    if (!card || !audio) return;
+    const bar = card.querySelector('[data-music-progress]');
+    const elapsed = card.querySelector('[data-music-elapsed]');
+    const remain = card.querySelector('[data-music-remain]');
+    const d = audio.duration;
+    const t = audio.currentTime || 0;
+    if (bar && Number.isFinite(d) && d > 0) {
+      bar.style.width = Math.min(100, (t / d) * 100) + '%';
+    }
+    if (elapsed) elapsed.textContent = formatCardTime(t);
+    if (remain) remain.textContent = Number.isFinite(d) ? '−' + formatCardTime(Math.max(0, d - t)) : '−0:00';
+  }
+
+  function seekCardFromPointer(card, clientX) {
+    const track = card.querySelector('.music-card-progress-track');
+    const audio = getSharedAudio();
+    if (!track || !audio || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
+    const rect = track.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)));
+    audio.currentTime = pct * audio.duration;
+    updateCardProgress(card, audio);
+  }
+
+  function bindCardSeek(card) {
+    const track = card.querySelector('.music-card-progress-track');
+    if (!track || track.dataset.seekBound === '1') return;
+    track.dataset.seekBound = '1';
+    track.setAttribute('role', 'slider');
+    track.setAttribute('aria-label', 'Seek');
+    track.setAttribute('tabindex', '0');
+    let dragging = false;
+    const onMove = (e) => {
+      if (!dragging) return;
+      const x = e.touches ? e.touches[0].clientX : e.clientX;
+      seekCardFromPointer(card, x);
+    };
+    const onUp = () => {
+      dragging = false;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onUp);
+    };
+    track.addEventListener('pointerdown', (e) => {
+      if (activeCardEl !== card) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dragging = true;
+      seekCardFromPointer(card, e.clientX);
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    });
+    track.addEventListener('touchstart', (e) => {
+      if (activeCardEl !== card || !e.touches?.[0]) return;
+      e.stopPropagation();
+      dragging = true;
+      seekCardFromPointer(card, e.touches[0].clientX);
+      window.addEventListener('touchmove', onMove, { passive: true });
+      window.addEventListener('touchend', onUp);
+    }, { passive: true });
+    track.addEventListener('keydown', (e) => {
+      if (activeCardEl !== card) return;
+      const audio = getSharedAudio();
+      if (!audio || !Number.isFinite(audio.duration)) return;
+      const step = e.shiftKey ? 10 : 5;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        audio.currentTime = Math.min(audio.duration, (audio.currentTime || 0) + step);
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        audio.currentTime = Math.max(0, (audio.currentTime || 0) - step);
+      }
+      updateCardProgress(card, audio);
+    });
+  }
+
+  function wireCardTransport(card) {
+    const row = card.querySelector('[data-music-transport]');
+    if (!row || row.dataset.transportBound === '1') return;
+    row.dataset.transportBound = '1';
+    card.querySelector('[data-music-skip="-10"]')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const audio = getSharedAudio();
+      if (activeCardEl !== card || !audio) return;
+      audio.currentTime = Math.max(0, (audio.currentTime || 0) - 10);
+      updateCardProgress(card, audio);
+    });
+    card.querySelector('[data-music-skip="10"]')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const audio = getSharedAudio();
+      if (activeCardEl !== card || !audio) return;
+      const d = audio.duration;
+      audio.currentTime = Math.min(Number.isFinite(d) ? d : 1e9, (audio.currentTime || 0) + 10);
+      updateCardProgress(card, audio);
+    });
+    card.querySelector('[data-music-prev]')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof playMediaPrev === 'function') playMediaPrev();
+    });
+    card.querySelector('[data-music-next]')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof playMediaNext === 'function') playMediaNext();
+    });
+  }
+
+  /** Sync playing card UI when queue prev/next switches tracks. */
+  function syncActiveFromTrack(item) {
+    const url = ensureHttpsUrl(item?.previewUrl || '');
+    if (!url) {
+      activeCardEl = null;
+      syncActiveCard(false);
+      return;
+    }
+    const cards = Array.from(document.querySelectorAll('[data-music-card]'));
+    const match = cards.find((c) => {
+      const p = ensureHttpsUrl(c.dataset.musicPreview || '');
+      return p && (p === url || p.endsWith(url) || url.endsWith(p) || p.indexOf(url) !== -1 || url.indexOf(p) !== -1);
+    });
+    if (match) {
+      activeCardEl = match;
+      if (item?.title) match.dataset.musicTitle = item.title;
+      if (item?.artist != null) match.dataset.musicArtist = item.artist || '';
+      if (item?.thumb) match.dataset.musicThumb = item.thumb;
+      syncActiveCard(true);
+      updateCardProgress(match, getSharedAudio());
+      updateMediaSession(match, getSharedAudio());
+    } else {
+      activeCardEl = null;
+      syncActiveCard(false);
+    }
+  }
+
+  function updateMediaSession(card, audio) {
+    if (!('mediaSession' in navigator) || !card) return;
+    try {
+      const artwork = card.dataset.musicThumb
+        ? [{ src: card.dataset.musicThumb, sizes: '512x512', type: 'image/jpeg' }]
+        : [];
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: card.dataset.musicTitle || 'Chaupaal',
+        artist: card.dataset.musicArtist || '',
+        album: 'Chaupaal',
+        artwork,
+      });
+      navigator.mediaSession.playbackState = audio?.paused ? 'paused' : 'playing';
+      navigator.mediaSession.setActionHandler('play', () => {
+        if (typeof quietMode !== 'undefined' && quietMode) return;
+        audio?.play?.().catch(() => {});
+      });
+      navigator.mediaSession.setActionHandler('pause', () => audio?.pause?.());
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        if (typeof playMediaPrev === 'function') playMediaPrev();
+      });
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        if (typeof playMediaNext === 'function') playMediaNext();
+      });
+      navigator.mediaSession.setActionHandler('seekbackward', (d) => {
+        const off = d?.seekOffset || 10;
+        if (audio) audio.currentTime = Math.max(0, (audio.currentTime || 0) - off);
+      });
+      navigator.mediaSession.setActionHandler('seekforward', (d) => {
+        const off = d?.seekOffset || 10;
+        if (audio) {
+          const dur = audio.duration;
+          audio.currentTime = Math.min(Number.isFinite(dur) ? dur : 1e9, (audio.currentTime || 0) + off);
+        }
+      });
+      navigator.mediaSession.setActionHandler('seekto', (d) => {
+        if (audio && d?.seekTime != null) audio.currentTime = d.seekTime;
+      });
+    } catch (e) {}
   }
 
   function normalizeMusic(m) {
@@ -145,9 +347,7 @@
       ? `<img class="music-card-art" src="${esc(m.thumbnail)}" alt="" loading="lazy" decoding="async">`
       : `<div class="music-card-art music-card-art--empty" aria-hidden="true">♪</div>`;
     const controls = playable
-      ? `<button type="button" class="music-card-play" data-music-play aria-label="Play song">${playIcon()}</button>
-         <div class="music-card-progress-track" aria-hidden="true"><div class="music-card-progress-bar" data-music-progress></div></div>
-         <div data-music-extra-controls></div>`
+      ? transportHtml(false)
       : `<span class="music-card-unavailable">Preview not available</span>`;
 
     return `<div class="music-card music-card--${variant}${playable ? '' : ' music-card--static'}"
@@ -200,9 +400,7 @@
     card.classList.remove('music-card--static');
     const unavail = card.querySelector('.music-card-unavailable');
     if (unavail) {
-      unavail.outerHTML = `<button type="button" class="music-card-play" data-music-play aria-label="Play song">${playIcon()}</button>
-        <div class="music-card-progress-track" aria-hidden="true"><div class="music-card-progress-bar" data-music-progress></div></div>
-        <div data-music-extra-controls></div>`;
+      unavail.outerHTML = transportHtml(false);
       card.dataset.musicBound = '0';
       bindCard(card);
     }
@@ -213,10 +411,19 @@
     card.classList.add('music-card--static');
     card.dataset.musicPreview = '';
     card.dataset.musicSource = 'none';
-    const play = card.querySelector('[data-music-play]');
+    const transport = card.querySelector('[data-music-transport]');
     const track = card.querySelector('.music-card-progress-track');
+    const times = card.querySelector('.music-card-times');
+    const play = card.querySelector('[data-music-play]');
     const extra = card.querySelector('[data-music-extra-controls]');
-    if (play) {
+    if (transport) {
+      transport.replaceWith(
+        Object.assign(document.createElement('span'), {
+          className: 'music-card-unavailable',
+          textContent: 'Preview not available',
+        })
+      );
+    } else if (play) {
       play.replaceWith(
         Object.assign(document.createElement('span'), {
           className: 'music-card-unavailable',
@@ -225,6 +432,7 @@
       );
     }
     track?.remove();
+    times?.remove();
     extra?.remove();
   }
 
@@ -267,6 +475,7 @@
       title: c.dataset.musicTitle || 'Track',
       artist: c.dataset.musicArtist || '',
       previewUrl: ensureHttpsUrl(c.dataset.musicPreview || ''),
+      thumb: ensureHttpsUrl(c.dataset.musicThumb || '') || c.dataset.musicThumb || '',
     }));
     let startIndex = cards.indexOf(startCard);
     if (startIndex < 0) startIndex = 0;
@@ -287,10 +496,10 @@
       return;
     }
     const audio = getSharedAudio();
-    ensureCardMediaControls(card);
     if (activeCardEl === card && !audio.paused && !audio.ended && !audio.error) {
       audio.pause();
       syncActiveCard(false);
+      updateMediaSession(card, audio);
       return;
     }
     if (activeCardEl && activeCardEl !== card) {
@@ -321,6 +530,8 @@
       }
       await audio.play();
       syncActiveCard(true);
+      updateCardProgress(card, audio);
+      updateMediaSession(card, audio);
       if (typeof syncMiniPlayer === 'function') syncMiniPlayer(audio);
     } catch (e) {
       const name = e?.name || '';
@@ -337,7 +548,8 @@
   function bindCard(card) {
     if (!card || card.dataset.musicBound === '1') return;
     card.dataset.musicBound = '1';
-    ensureCardMediaControls(card);
+    bindCardSeek(card);
+    wireCardTransport(card);
     card.querySelector('[data-music-play]')?.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -582,11 +794,8 @@
     input?.focus();
   }
 
-  // Pause when chat/story overlays dismiss or tab hides
-  document.addEventListener('chaupaal:dismiss', () => pauseAllMusic());
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) pauseAllMusic();
-  });
+  // Do not pause music on overlay dismiss / tab hide — mini-player owns stop.
+  // (Stories still call pauseAllMusic on their own viewer dismiss.)
 
   window.MusicCard = {
     render: renderMusicCard,
@@ -594,11 +803,13 @@
     pauseAll: pauseAllMusic,
     openPicker: openSongPicker,
     normalize: normalizeMusic,
+    syncFromTrack: syncActiveFromTrack,
     search: async (q) => {
       const packed = await searchSongs(q);
       return Array.isArray(packed) ? packed : packed?.results || [];
     },
   };
+  window.syncMusicCardFromTrack = syncActiveFromTrack;
   // JioSaavn/iTunes integration boundary (CONVENTIONS 4c). renderMusicCard is
   // NOT wrapped — callers concatenate its return into HTML, so a null from the
   // guard would render the literal text "null".

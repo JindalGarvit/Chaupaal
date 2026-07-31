@@ -13,7 +13,7 @@ let activeChatAttachDocClick = null;
 function closeChatScreen(opts = {}) {
   const { updateHistory = true, animate = true } = opts;
 
-  if (typeof pauseAllMusic === 'function') pauseAllMusic();
+  // Keep in-app music playing when leaving chat — mini-player owns stop/dismiss
   if (typeof stopChatPresence === 'function') stopChatPresence();
   if (typeof ChatRating?.stopPolling === 'function') ChatRating.stopPolling();
 
