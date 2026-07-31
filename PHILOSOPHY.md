@@ -26,13 +26,18 @@ Before shipping a new limit, boost, or “unlimited” bypass, ask:
 
 If a feature fights this philosophy (e.g. pay-to-spam AI Discovery), it needs an explicit product call — not a silent ship.
 
-## Design language (Phases 3–11)
+## Design language — Gathered light
 
-- **Personal / warm tone** over dashboard chrome: remove global branding bars when a tab can own the first viewport.
-- **Collapsible clarity**: profile and archive sections collapse; one job per section.
-- **Deliberate colorful exceptions**: bottom-tab icons (and matching Plus cosmetics) may use color; the rest of the icon system stays restrained monochrome.
-- **Swipeable triads** name the middle of each tab’s long-press menu; corners are actions; no close glyph — tap outside dismisses.
+See [DESIGN.md](./DESIGN.md) for the token table and do/don’t list.
+
+- **Gathered light**: one shared key light; social heat + clarity must both pass. Visual polish is **always free**.
+- **Neutral daylight** surfaces; warmth only via Auto golden/evening — no cream/parchment costume.
+- **Chaupaal red** is the single primary accent; element tabs stay colorful accents, not five competing brands.
+- **Personal / warm tone** over dashboard chrome; collapsible clarity; one job per section.
+- **Deliberate colorful exceptions**: bottom-tab icons may use color; chrome icons stay monochrome.
+- **Swipeable triads** name the middle of each tab’s long-press menu; corners are actions; tap outside dismisses.
 - **Teen Mode** protects minors without excluding them: reciprocal friends or peer minors only for DMs; parental consent for 13–17; “K” badge mirrors the Professional seal.
+- **Global commons**, not India-default visual identity; festivals whisper through Auto weather/time only.
 
 ## Related
 

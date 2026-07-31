@@ -167,20 +167,32 @@ The client still loads classic non-module scripts (`<script src>`), so top-level
 
 ## 13. Design tokens (UI polish)
 
-Visual hierarchy tokens live in `public/src/styles/tokens.css` (`:root`). **Prefer these over one-off hex/px in feature CSS.**
+Visual hierarchy tokens live in `public/src/styles/tokens.css` (`:root`). Application helpers in `gathered-light.css`. Full identity doc: [DESIGN.md](./DESIGN.md). **Prefer tokens over one-off hex/px.**
+
+**Identity:** Gathered light — people under the same light. Free polish forever (never paywall cosmetics). Neutral daylight + Chaupaal red accent; Auto may warm golden/evening only.
 
 | Token group | Examples | Use for |
 |---|---|---|
-| Color | `--red`, `--cream`, `--ink`, `--muted`, `--bubble-me-bg` | Brand, surfaces, chat bubbles |
-| Type | `--text-sm`…`--text-2xl`, `--font-display`, `--weight-*` | Labels vs body vs titles |
-| Space | `--space-1`…`--space-8` | Padding/gaps (not arbitrary 7px/11px) |
-| Radius | `--r-sm`…`--r-sheet`, `--r-bubble` | Controls, cards, sheets |
-| Elevation | `--shadow-sm`…`--shadow-xl` | Cards, sheets, FABs |
-| Actions | `--btn-primary-*`, `--btn-secondary-*`, `--btn-tertiary-*`, `--icon-*` | Primary CTA dominant; secondary/tertiary quieter |
-| Feed | `--feed-card-pad`, `--feed-avatar`, `--feed-action-gap` | Shared Peepal/Duniya/Lehar card anatomy |
-| Call / Mehfil | `--call-bg`, `--call-surface`, `--call-tile`, `--call-ctrl-*`, `--call-hangup-*`, `--call-speaking`, `--call-chrome-fade` | In-call stage, dock states (muted/live), hang-up, chrome dim |
-| Sensory theme | `--theme-light-temp`, `--theme-brightness`, `--theme-precipitation`, `--theme-cloud-cover`, `--theme-motion`, `--theme-overlay`, `--theme-dim` | Continuous look from `theme-engine.js` (anchors + interpolation) |
+| Brand | `--brand-red`, `--brand-on-red` | CTAs, mark, focus |
+| Surfaces | `--surface-page`, `--surface-elevated`, `--surface-sunken` (`--cream` aliases page) | Page / cards / inputs |
+| Ink | `--ink`, `--ink-secondary`, `--muted`, `--line` | Text + dividers |
+| Light model | `--light-key-temp`, `--light-cast`, `--light-specular` | Gathered light / Auto wash |
+| Type | `--text-sm`…`--text-2xl`, `--font-ui`, `--font-display` (stats only) | Labels vs body vs titles |
+| Space | `--space-1`…`--space-8` | Padding/gaps |
+| Radius | `--r-sm`…`--r-sheet`, `--corner-continuous` | Squircle controls/cards/sheets |
+| Elevation | `--elev-1`…`--elev-3` (aliases `--shadow-*`) | Cards, sheets — not glass stacks |
+| Motion | `--ease-spring`, `--duration-*` | **One** spring family app-wide |
+| Presence | `--presence-online`, `--presence-mehfil`, `--presence-typing` | Soft occupancy cues |
+| Actions / feed / call | `--btn-*`, `--feed-*`, `--call-*` | Hierarchy + Mehfil stage |
+| Sensory theme | `--theme-light-temp`, `--theme-overlay`, `--theme-dim`, … | Written by `theme-engine.js` |
 
-Chat polish (bubbles, composer, typing) lives mainly in `baithak.css`. Media cards use the same action hierarchy in `components.css` (`.music-card`). Empty/loading/error shells use `ui-states.js` + `.cp-empty` / `.cp-state` in `components.css`. Mehfil call chrome lives in `mehfil.css` (linked from `index.html`); do not reinject call styles from JS.
+Chat polish lives mainly in `baithak.css`. Empty/loading/error: `ui-states.js` + `.cp-empty`. Mehfil: `mehfil.css`. Brand mark: `public/brand/chaupaal-mark.svg` + `public/icon.png`.
 
 Do not invent a second palette per screen. If a new surface needs a value, add a token first.
+
+## 14. Brand mark & Gathered light
+
+- Use `.cp-mark` / `chaupaal-mark.svg` for splash, auth, sidebar, favicon — no emoji/placeholder logos.
+- Primary buttons use press specular (`.btn--primary` / `.gl-press`) — press, not hover.
+- Avatar stacking (`.avatar-stack`) only in Mehfil / group headers; elsewhere use `.presence-dot`.
+- Honor `prefers-reduced-motion` and Quiet for decorative motion.

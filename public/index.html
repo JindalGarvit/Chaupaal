@@ -3,17 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Chaupaal — News with Social Discovery</title>
-<meta name="description" content="News with Social Discovery — India's digital chaupaal. Daily news quiz, real discussions, games, and friends.">
+<meta name="description" content="Gather under the same light — news quiz, real discussions, games, and friends.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Chaupaal">
-<meta property="og:title" content="Chaupaal — News with Social Discovery">
-<meta property="og:description" content="News with Social Discovery — India's digital chaupaal. Daily news quiz, real discussions, games, and friends.">
+<meta property="og:title" content="Chaupaal — Gather under the same light">
+<meta property="og:description" content="News, discussions, games, and friends — people under the same light.">
 <meta property="og:image" content="/icon.png">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Chaupaal — News with Social Discovery">
-<meta name="twitter:description" content="News with Social Discovery — India's digital chaupaal.">
+<meta name="twitter:title" content="Chaupaal">
+<meta name="twitter:description" content="Gather under the same light — news, discussions, games, and friends.">
 <meta name="twitter:image" content="/icon.png">
+<title>Chaupaal — Gather under the same light</title>
+<link rel="icon" type="image/svg+xml" href="/brand/chaupaal-mark-32.svg">
 <link rel="icon" type="image/png" href="/icon.png">
 <link rel="manifest" href="/manifest.json">
 <meta name="chaupaal-recaptcha-site-key" content="6Lfv8WAtAAAAAFSsXosQpDyqG6o1oAziDyh3XwQ8">
@@ -23,17 +24,18 @@
 <meta name="apple-mobile-web-app-title" content="Chaupaal">
 <link rel="apple-touch-icon" href="/icon.png">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/src/styles/tokens.css?v=8cf613f7">
+  <link rel="stylesheet" href="/src/styles/tokens.css?v=482d8f55">
   <link rel="stylesheet" href="/src/styles/squircle.css?v=0683b171">
+  <link rel="stylesheet" href="/src/styles/gathered-light.css?v=05fbe297">
   <link rel="stylesheet" href="/src/styles/icons.css?v=152a1d7b">
-  <link rel="stylesheet" href="/src/styles/layout.css?v=cd770852">
+  <link rel="stylesheet" href="/src/styles/layout.css?v=30e75023">
   <link rel="stylesheet" href="/src/styles/tab-elements.css?v=5d6b2ee1">
   <link rel="stylesheet" href="/src/styles/akhbaar.css?v=b924fec3">
   <link rel="stylesheet" href="/src/styles/dangal.css?v=1806b1a8">
   <link rel="stylesheet" href="/src/styles/baithak.css?v=ab036180">
   <link rel="stylesheet" href="/src/styles/peepal.css?v=c3530dde">
   <link rel="stylesheet" href="/src/styles/duniya.css?v=3a83dbb8">
-  <link rel="stylesheet" href="/src/styles/components.css?v=501f0963">
+  <link rel="stylesheet" href="/src/styles/components.css?v=3b722cfe">
   <link rel="stylesheet" href="/src/styles/mehfil.css?v=e9ad44b0">
 </head>
 <body>
@@ -43,13 +45,9 @@
   <div class="splash" id="splash">
     <img src="splash.png" alt="Chaupaal">
     <div class="splash-brand">
-      <svg width="42" height="42" viewBox="0 0 34 34" fill="none">
-        <rect width="34" height="34" rx="9" fill="#E63946"/>
-        <rect x="6" y="14" width="22" height="3.5" rx="1.5" fill="#FFC93C"/>
-        <path d="M9 17.5V8M12.5 17.5V8M16 17.5V8.5M19.5 17.5V8M23 17.5V8" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity=".85"/>
-        <path d="M7 8H27" stroke="#FFC93C" stroke-width="1.4" stroke-linecap="round"/>
-        <path d="M9.5 17.5L7.5 25M24.5 17.5L26.5 25" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
-      </svg>
+      <span class="cp-mark cp-mark--lg" aria-hidden="true">
+        <img src="/brand/chaupaal-mark.svg" alt="" width="48" height="48">
+      </span>
       <div><div class="splash-title">Chaupaal</div></div>
     </div>
   </div>
@@ -67,12 +65,12 @@
         </div>
         <div class="auth-hero-content">
           <div class="auth-hero-logo">
-            <div class="auth-hero-icon">
-              <svg width="36" height="36" viewBox="0 0 34 34" fill="none"><rect x="4" y="12" width="26" height="3" rx="1.5" fill="#FFC93C"/><path d="M8 15V7M12 15V7M17 15V7.5M22 15V7M27 15V7" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><path d="M8.5 15L6.5 27M26.5 15L28.5 27" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <div class="auth-hero-icon cp-mark cp-mark--hero">
+              <img src="/brand/chaupaal-mark.svg" alt="" width="56" height="56">
             </div>
             <span class="auth-hero-wordmark">Chaupaal</span>
           </div>
-          <div class="auth-hero-headline">India's digital<br><em>chaupaal</em> <span data-icon="armchair" data-icon-size="28" style="display:inline-flex;vertical-align:middle;color:var(--red);"></span></div>
+          <div class="auth-hero-headline">A place to gather<br><em>under the same light</em></div>
           <div class="auth-hero-sub">Where real people discuss real things — news, life, games, and each other.</div>
           <div class="auth-feature-pills">
             <span class="auth-pill"><span data-icon="newspaper" data-icon-size="14"></span> Daily news quiz</span>
@@ -551,7 +549,9 @@
     <!-- Sidebar logo (desktop only) -->
     <div class="sidebar-logo">
       <div class="sidebar-logo-brand">
-        <svg width="28" height="28" viewBox="0 0 34 34" fill="none"><rect width="34" height="34" rx="9" fill="#E63946"/><rect x="6" y="14" width="22" height="3.5" rx="1.5" fill="#FFC93C"/><path d="M9 17.5V8M12.5 17.5V8M16 17.5V8.5M19.5 17.5V8M23 17.5V8" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity=".85"/><path d="M9.5 17.5L7.5 25M24.5 17.5L26.5 25" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+        <span class="cp-mark cp-mark--sm" aria-hidden="true">
+          <img src="/brand/chaupaal-mark.svg" alt="" width="28" height="28">
+        </span>
         <span>Chaupaal</span>
       </div>
       <div class="sidebar-logo-actions">
@@ -859,7 +859,7 @@
   <script src="/src/js/core/safety.js?v=39f430c8"></script>
   <script src="/src/js/core/notif-prefs.js?v=19bbe844"></script>
   <script src="/src/js/core/feature-flags.js?v=b967fa88"></script>
-  <script src="/src/js/core/theme-engine.js?v=2d2563b4"></script>
+  <script src="/src/js/core/theme-engine.js?v=79d825af"></script>
   <script src="/src/js/core/ambient-sound.js?v=d6b818ff"></script>
   <script src="/src/js/core/overlay-scope.js?v=b83a34fe"></script>
   <script src="/src/js/core/a11y.js?v=c13f075d"></script>
@@ -881,10 +881,10 @@
   <script src="/src/js/auth/auth-ui.js?v=f4191dd7"></script>
   <script src="/src/js/auth/phone-otp.js?v=3315dcd2"></script>
   <script src="/src/js/auth/auth-profiles.js?v=80630a42"></script>
-  <script src="/src/js/features/akhbaar.js?v=2b13d5d0"></script>
+  <script src="/src/js/features/akhbaar.js?v=5cb256bc"></script>
   <script src="/src/js/features/dangal.js?v=04bfccfa"></script>
   <script src="/src/js/features/dangal-ratings.js?v=369eb05c"></script>
-  <script src="/src/js/features/baithak-data.js?v=304c4e60"></script>
+  <script src="/src/js/features/baithak-data.js?v=ede450c7"></script>
   <script src="/src/js/features/self-chat.js?v=9dfd834b"></script>
   <script src="/src/js/features/chaupaal-chat.js?v=843094a0"></script>
   <script src="/src/js/features/chat-rating.js?v=19d676d2"></script>

@@ -1,0 +1,164 @@
+/* Gathered light — chrome application (free polish; CSS only) */
+
+/* Brand mark */
+.cp-mark{
+  display:inline-flex;align-items:center;justify-content:center;
+  flex-shrink:0;border-radius:var(--r-control);
+  overflow:hidden;background:var(--brand-red);
+  box-shadow:var(--elev-1);
+}
+.cp-mark img,.cp-mark svg{display:block;width:100%;height:100%;}
+.cp-mark--sm{width:28px;height:28px;border-radius:8px;}
+.cp-mark--md{width:36px;height:36px;border-radius:10px;}
+.cp-mark--lg{width:48px;height:48px;border-radius:14px;}
+.cp-mark--hero{width:56px;height:56px;border-radius:16px;box-shadow:var(--elev-2);}
+
+/* Press specular on primary CTAs / elevated cards (press, not hover) */
+.btn--primary,
+.auth-hero-cta,
+.gl-press{
+  position:relative;overflow:hidden;
+  transition:transform var(--duration-ui) var(--ease-spring),
+    box-shadow var(--duration-ui) var(--ease-out),
+    filter var(--duration-fast) var(--ease-out);
+}
+.btn--primary::after,
+.auth-hero-cta::after,
+.gl-press::after{
+  content:"";position:absolute;inset:-40% -20%;
+  background:linear-gradient(115deg, transparent 35%, var(--light-specular) 48%, transparent 62%);
+  transform:translateX(-40%) rotate(8deg);opacity:0;pointer-events:none;
+  transition:opacity var(--duration-fast) var(--ease-out), transform var(--duration-normal) var(--ease-spring);
+}
+.btn--primary:active,
+.auth-hero-cta:active,
+.gl-press:active{
+  transform:scale(var(--mx-press-scale));
+  filter:brightness(1.04);
+}
+.btn--primary:active::after,
+.auth-hero-cta:active::after,
+.gl-press:active::after{
+  opacity:1;transform:translateX(18%) rotate(8deg);
+}
+
+/* Elevated surfaces under shared light */
+.gl-elev-1{box-shadow:var(--elev-1);border-radius:var(--r-card);background:var(--surface-elevated);}
+.gl-elev-2{box-shadow:var(--elev-2);border-radius:var(--r-card);background:var(--surface-elevated);}
+.gl-elev-3{box-shadow:var(--elev-3);border-radius:var(--r-sheet);background:var(--surface-elevated);}
+
+/* High-traffic cards / sheets / lists */
+.feed-card,
+.card-inner,
+.post-card,
+.peepal-card,
+.akhbaar-card,
+.settings-modal .settings-body,
+.archive-overlay,
+.notif-panel-sheet,
+.half-sheet-panel,
+.profile-peek-sheet,
+.cp-empty{
+  border-radius:var(--r-card);
+}
+.feed-card,
+.card-inner,
+.post-card,
+.peepal-card{
+  box-shadow:var(--elev-1);
+  background:var(--surface-elevated);
+}
+.bottom-tabs{
+  box-shadow:0 -4px 20px rgba(28,27,31,0.06);
+  background:color-mix(in srgb, var(--surface-elevated) 92%, transparent);
+}
+.topbar,.status-bar,.app-header{
+  background:var(--surface-page);
+}
+
+/* Presence — soft occupancy (social heat) */
+.presence-dot{
+  position:absolute;width:10px;height:10px;border-radius:50%;
+  border:2px solid var(--presence-ring);
+  background:var(--presence-online);
+  right:0;bottom:0;box-sizing:border-box;
+  box-shadow:0 0 0 1px rgba(28,27,31,0.06);
+}
+.presence-dot--mehfil{background:var(--presence-mehfil);}
+.presence-dot--typing{
+  background:var(--presence-typing);
+  animation:gl-presence-pulse 1.4s var(--ease-spring) infinite;
+}
+.presence-host{position:relative;display:inline-flex;}
+.avatar-stack{
+  display:flex;flex-direction:row-reverse;align-items:center;
+}
+.avatar-stack > *{
+  margin-left:-10px;border:2px solid var(--presence-ring);
+  border-radius:50%;box-shadow:var(--elev-1);
+}
+.avatar-stack > *:last-child{margin-left:0;}
+/* Stacking only intended for Mehfil / group headers */
+.mehfil-stage .avatar-stack,
+.chat-header .avatar-stack,
+.group-header .avatar-stack{gap:0;}
+
+@keyframes gl-presence-pulse{
+  0%,100%{transform:scale(1);opacity:1;}
+  50%{transform:scale(1.15);opacity:0.75;}
+}
+
+/* Sheet / tab choreography — light stagger budget */
+.half-sheet-panel,
+.notif-panel-sheet,
+.archive-overlay[data-nav-managed],
+.settings-modal{
+  transition:transform var(--duration-sheet) var(--ease-sheet),
+    opacity var(--duration-panel) var(--ease-out);
+}
+.tab-btn{
+  transition:transform var(--duration-ui) var(--ease-spring),
+    color var(--duration-fast) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out);
+}
+.tab-btn.active{transform:translateY(-1px);}
+
+/* Empty / error — commons voice via layout; keep readable */
+.cp-empty,.ui-state,.gl-empty{
+  max-width:var(--empty-max-width);
+  margin-inline:auto;text-align:center;
+  color:var(--ink-secondary);
+  padding:var(--space-6) var(--space-4);
+}
+.cp-empty h3,.ui-state-title,.gl-empty-title{
+  font-family:var(--font-display);
+  font-size:var(--text-lg);font-weight:var(--weight-bold);
+  color:var(--ink);margin-bottom:var(--space-2);
+  letter-spacing:-0.01em;
+}
+.cp-empty p,.ui-state-body,.gl-empty-body{
+  font-size:var(--text-base);line-height:var(--leading-body);
+  color:var(--muted);
+}
+
+/* Auto key-light cast — only when theme-engine sets --light-cast */
+.device{
+  isolation:isolate;
+}
+.device::before{
+  content:"";pointer-events:none;position:absolute;inset:0;z-index:0;
+  background:var(--light-cast, transparent);
+  mix-blend-mode:normal;opacity:1;
+}
+
+html.quiet-mode .presence-dot--typing{animation:none;}
+@media (prefers-reduced-motion: reduce){
+  .presence-dot--typing{animation:none;}
+  .btn--primary::after,
+  .auth-hero-cta::after,
+  .gl-press::after{display:none;}
+  .btn--primary:active,
+  .auth-hero-cta:active,
+  .gl-press:active{transform:none;filter:none;}
+  .tab-btn.active{transform:none;}
+}

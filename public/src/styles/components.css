@@ -11,17 +11,17 @@
   min-height:var(--tap-min);
   display:inline-flex;align-items:center;justify-content:center;gap:var(--space-2);
   padding:var(--space-3) var(--space-4);
-  border:1.5px solid transparent;border-radius:var(--r-md);
-  font:700 var(--text-base)/1 'Space Grotesk',sans-serif;
+  border:1.5px solid transparent;border-radius:var(--r-control);
+  font:700 var(--text-base)/1 var(--font-display);
   text-decoration:none;cursor:pointer;
-  transition:transform var(--duration-fast) var(--ease-out),filter var(--duration-fast) var(--ease-out),opacity var(--duration-fast) var(--ease-out);
+  transition:transform var(--duration-ui) var(--ease-spring),filter var(--duration-fast) var(--ease-out),opacity var(--duration-fast) var(--ease-out);
 }
-.btn:active{transform:scale(.97);}
+.btn:active{transform:scale(var(--mx-press-scale));}
 .btn:disabled,.btn[aria-disabled="true"]{opacity:.55;cursor:not-allowed;pointer-events:none;transform:none;}
-.btn--primary{background:var(--grad-brand);color:#fff;box-shadow:0 4px 14px rgba(230,57,70,.22);}
-.btn--secondary{background:var(--cream);color:var(--ink);border-color:var(--line);}
-.btn--ghost{background:transparent;color:var(--red);border-color:transparent;}
-.btn--danger{background:var(--red);color:#fff;}
+.btn--primary{background:var(--grad-brand);color:var(--brand-on-red);box-shadow:var(--elev-2), 0 4px 14px rgba(230,57,70,.18);}
+.btn--secondary{background:var(--surface-sunken);color:var(--ink);border-color:var(--line);}
+.btn--ghost{background:transparent;color:var(--brand-red);border-color:transparent;}
+.btn--danger{background:var(--brand-red);color:var(--brand-on-red);}
 .btn--block{display:flex;width:100%;}
 .btn--lg{padding:15px var(--space-4);font-size:var(--text-md);}
 .btn--sm{min-height:36px;padding:var(--space-2) var(--space-3);font-size:var(--text-sm);}
@@ -1384,7 +1384,8 @@ body.theme-goldenHour,
 .auth-hero-bg{position:absolute;inset:0;background:linear-gradient(165deg,#B91C2C 0%,#E63946 45%,#FF9A3C 100%);background-size:140% 140%;animation:authHeroShift 14s ease-in-out infinite alternate;}
 .auth-hero-content{flex:1;display:flex;flex-direction:column;justify-content:center;padding:48px 28px 24px;position:relative;z-index:1;}
 .auth-hero-logo{display:flex;align-items:center;gap:10px;margin-bottom:28px;}
-.auth-hero-icon{width:48px;height:48px;background:rgba(255,255,255,0.15);border-radius:14px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.25);}
+.auth-hero-icon{width:56px;height:56px;padding:0;background:transparent;border:none;backdrop-filter:none;overflow:hidden;}
+.auth-hero-icon img{width:100%;height:100%;display:block;}
 .auth-hero-wordmark{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:26px;color:#fff;letter-spacing:-0.03em;}
 .auth-hero-headline{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:clamp(30px,9vw,44px);color:#fff;letter-spacing:-0.03em;line-height:1.1;margin-bottom:12px;}
 .auth-hero-headline em{font-style:normal;color:var(--gold);}

@@ -1,127 +1,234 @@
 :root{
-  --red:#E63946; --red-deep:#C72E3A; --gold:#FFC93C;
-  /* True Light baseline — Material / Android-system neutral (not parchment) */
-  --cream:#F5F5F5; --bg:#F5F5F5; --white:#FFFFFF; --ink:#1C1B1F;
-  --muted:#5F6368; --green:#33C481; --line:#E0E0E0;
-  --card:#FFFFFF; --navy:#15192E;
-  --tab-h:60px;
+  /* ── Gathered light — Chaupaal visual identity ──
+     Signature: people under the same light.
+     Free-tier polish only; never paywall cosmetics.
+     Social heat + clarity must both pass every choice. */
+
+  /* Brand accent (structural red) */
+  --brand-red:#E63946;
+  --brand-red-deep:#C72E3A;
+  --brand-on-red:#FFFFFF;
+  --red:var(--brand-red);
+  --red-deep:var(--brand-red-deep);
+  --gold:#FFC93C; /* milestones / speaking only — not a second brand */
+
+  /* Neutral Light surfaces — Material-familiar daylight (no parchment cast) */
+  --surface-page:#F5F5F5;
+  --surface-elevated:#FFFFFF;
+  --surface-sunken:#EEEEEE;
+  --cream:var(--surface-page); /* legacy alias → page */
+  --bg:var(--surface-page);
+  --white:var(--surface-elevated);
+  --card:var(--surface-elevated);
+
+  /* Ink roles — WCAG-safe on Light */
+  --ink:#1C1B1F;
+  --ink-secondary:#3C4043;
+  --muted:#5F6368;
+  --line:#E0E0E0;
+  --line-strong:#C4C7C5;
+  --green:#33C481;
+  --navy:#15192E;
+
+  --tab-h:64px;
   --tap-min:44px;
   --bp-tablet:768px;
   --bp-desktop:1024px;
-  /* Elevation */
-  --shadow-sm:0 1px 3px rgba(43,39,48,0.06),0 1px 2px rgba(43,39,48,0.04);
-  --shadow-md:0 4px 12px rgba(43,39,48,0.08),0 2px 4px rgba(43,39,48,0.04);
-  --shadow-lg:0 8px 24px rgba(43,39,48,0.12),0 4px 8px rgba(43,39,48,0.06);
-  --shadow-xl:0 20px 48px rgba(43,39,48,0.16),0 8px 16px rgba(43,39,48,0.08);
-  --glass-bg:rgba(255,255,255,0.72);
-  --glass-border:rgba(255,255,255,0.5);
-  --glass-blur:blur(20px);
-  /* Type scale */
+
+  /* Gathered-light model (theme-engine writes these in Auto) */
+  --light-key-temp:0.42;          /* 0 cool → 1 warm; day neutral ~0.42 */
+  --light-key-elev:1;             /* elevation brightness under shared light */
+  --light-specular:rgba(255,255,255,0.22);
+  --light-cast:transparent;       /* warm wash only at golden/evening via Auto */
+
+  /* Elevation — soft layered shadows under shared key light (not glass) */
+  --elev-1:0 1px 2px rgba(28,27,31,0.05), 0 1px 3px rgba(28,27,31,0.04);
+  --elev-2:0 2px 6px rgba(28,27,31,0.06), 0 4px 12px rgba(28,27,31,0.06);
+  --elev-3:0 8px 20px rgba(28,27,31,0.10), 0 4px 8px rgba(28,27,31,0.05);
+  --shadow-sm:var(--elev-1);
+  --shadow-md:var(--elev-2);
+  --shadow-lg:var(--elev-3);
+  --shadow-xl:0 16px 40px rgba(28,27,31,0.14), 0 8px 16px rgba(28,27,31,0.06);
+
+  /* Legacy glass kept quiet — prefer elev tokens over frosted stacks */
+  --glass-bg:rgba(255,255,255,0.88);
+  --glass-border:rgba(255,255,255,0.55);
+  --glass-blur:blur(12px);
+
+  /* Type — modular scale; UI sans primary; display for stats only */
   --text-xs:10px; --text-sm:12px; --text-base:14px;
   --text-md:15px; --text-lg:17px; --text-xl:20px;
   --text-2xl:24px; --text-3xl:30px; --text-4xl:38px;
-  --font-display:'Space Grotesk',sans-serif;
-  --font-body:'Inter',sans-serif;
-  --weight-regular:400; --weight-semibold:600; --weight-bold:700;
-  /* Spacing scale */
+  --font-ui:'Inter',system-ui,-apple-system,sans-serif;
+  --font-body:var(--font-ui);
+  --font-display:'Space Grotesk',var(--font-ui);
+  --weight-regular:400; --weight-medium:500; --weight-semibold:600; --weight-bold:700;
+  --leading-tight:1.2; --leading-body:1.45; --leading-loose:1.6;
+
+  /* Spacing */
   --space-1:4px; --space-2:8px; --space-3:12px;
   --space-4:16px; --space-5:20px; --space-6:24px; --space-8:32px;
-  /* Radius scale — iOS / Apple squircle-leaning (Phase 1 premium chrome) */
+
+  /* Shape — squircle / continuous corners */
   --r-xs:6px; --r-sm:10px; --r-control:14px; --r-md:16px;
   --r-card:20px; --r-bubble:22px; --r-lg:24px; --r-sheet:28px; --r-xl:32px; --r-full:999px;
-  /* Continuous corner token (supported browsers); border-radius remains the fallback */
   --corner-continuous:superellipse(1.05);
   --r-tab:16px;
   --r-icon:14px;
   --r-chip:14px;
   --r-avatar:22%;
+  --r-mark:118; /* SVG rx for brand mark */
+
   --safe-bottom:env(safe-area-inset-bottom,0px);
   --safe-top:env(safe-area-inset-top,0px);
   --safe-left:env(safe-area-inset-left,0px);
   --safe-right:env(safe-area-inset-right,0px);
-  --tab-h:64px;
   --status-pad:calc(10px + var(--safe-top));
   --home-indicator-pad:max(var(--safe-bottom), 8px);
-  /* Motion */
-  --ease-spring:cubic-bezier(0.34,1.56,0.64,1);
-  --ease-smooth:cubic-bezier(0.4,0,0.2,1);
-  --ease-out:cubic-bezier(0,0,0.2,1);
-  --ease-sheet:cubic-bezier(.2,.8,.2,1);
-  --duration-fast:150ms; --duration-ui:200ms; --duration-normal:250ms;
-  --duration-panel:300ms; --duration-sheet:350ms; --duration-slow:400ms;
-  /* Brand gradients */
-  --grad-brand:linear-gradient(135deg,#E63946 0%,#C72E3A 100%);
+
+  /* Motion — ONE spring family + duration scale */
+  --ease-spring:cubic-bezier(0.34, 1.4, 0.64, 1);
+  --ease-out:cubic-bezier(0, 0, 0.2, 1);
+  --ease-smooth:var(--ease-out);
+  --ease-sheet:cubic-bezier(0.2, 0.8, 0.2, 1);
+  --duration-instant:80ms;
+  --duration-fast:150ms;
+  --duration-ui:200ms;
+  --duration-normal:250ms;
+  --duration-panel:300ms;
+  --duration-sheet:350ms;
+  --duration-slow:400ms;
+
+  /* Brand gradients — red-led only (no purple/indigo costume) */
+  --grad-brand:linear-gradient(135deg, var(--brand-red) 0%, var(--brand-red-deep) 100%);
   --grad-gold:linear-gradient(135deg,#FFC93C 0%,#FF9A3C 100%);
   --grad-navy:linear-gradient(160deg,#15192E 0%,#1F2A45 100%);
-  --grad-hero:linear-gradient(160deg,#E63946 0%,#8134AF 60%,#3D52D5 100%);
+  --grad-hero:linear-gradient(160deg, #C72E3A 0%, #E63946 42%, #FF6B75 100%);
   --grad-dawn:linear-gradient(160deg,#FF9A3C 0%,#E63946 100%);
   --grad-success:linear-gradient(135deg,#33C481 0%,#20A367 100%);
-  /* Chat surfaces */
-  --bubble-me-bg:#E63946;
-  --bubble-me-fg:#FFFFFF;
-  --bubble-them-bg:#FFFFFF;
+
+  /* Chat */
+  --bubble-me-bg:var(--brand-red);
+  --bubble-me-fg:var(--brand-on-red);
+  --bubble-them-bg:var(--surface-elevated);
   --bubble-them-fg:var(--ink);
   --bubble-pad-y:10px;
   --bubble-pad-x:14px;
   --bubble-max:min(78%, 320px);
   --chat-gap:var(--space-3);
-  /* Action hierarchy */
-  --btn-primary-bg:var(--red);
-  --btn-primary-fg:#fff;
+
+  /* Actions */
+  --btn-primary-bg:var(--brand-red);
+  --btn-primary-fg:var(--brand-on-red);
   --btn-primary-size:44px;
-  --btn-secondary-bg:var(--cream);
+  --btn-secondary-bg:var(--surface-sunken);
   --btn-secondary-fg:var(--ink);
   --btn-secondary-size:40px;
   --btn-tertiary-fg:var(--muted);
   --btn-tertiary-size:36px;
   --icon-lg:24px; --icon-md:20px; --icon-sm:16px; --icon-xs:14px;
-  /* Feed card anatomy */
+
+  /* Feed */
   --feed-card-pad:var(--space-4);
   --feed-card-gap:var(--space-3);
   --feed-avatar:44px;
   --feed-action-gap:var(--space-4);
+
   /* Empty / loading */
   --empty-icon-size:40px;
   --empty-max-width:280px;
-  /* Call / Mehfil chrome (dark stage — extends action hierarchy) */
-  --call-bg:#0F1117;
-  --call-surface:#161922;
-  --call-tile:#1B1F3B;
+
+  /* Presence (social heat) */
+  --presence-online:#33C481;
+  --presence-mehfil:var(--brand-red);
+  --presence-typing:var(--gold);
+  --presence-ring:var(--surface-elevated);
+
+  /* Call / Mehfil — theme-aware stage (not forced Discord black costume) */
+  --call-bg:#12141A;
+  --call-surface:#1A1D26;
+  --call-tile:#222633;
   --call-chrome-fg:#FFFFFF;
   --call-chrome-muted:rgba(255,255,255,0.62);
   --call-ctrl-bg:rgba(255,255,255,0.10);
   --call-ctrl-live:var(--green);
   --call-ctrl-muted:rgba(255,255,255,0.14);
-  --call-hangup-bg:var(--red);
+  --call-hangup-bg:var(--brand-red);
   --call-hangup-fg:#fff;
   --call-speaking:var(--gold);
   --call-ctrl-size:52px;
   --call-chrome-fade:0.22;
-  /* Sensory theme engine — written by theme-engine.js; surfaces opt in via these vars */
-  --theme-light-temp:0.45;
-  --theme-brightness:0.88;
+
+  /* Sensory theme engine — written by theme-engine.js */
+  --theme-light-temp:0.42;
+  --theme-brightness:0.92;
   --theme-precipitation:0;
   --theme-cloud-cover:0.15;
   --theme-motion:0.3;
   --theme-is-day:1;
   --theme-overlay:rgba(0,0,0,0);
   --theme-dim:0;
-  /* Microinteractions */
-  --mx-spring:cubic-bezier(0.34, 1.45, 0.64, 1);
-  --mx-press-scale:0.94;
-  --mx-duration:220ms;
+
+  /* Microinteractions — same spring family */
+  --mx-spring:var(--ease-spring);
+  --mx-press-scale:0.96;
+  --mx-duration:var(--duration-ui);
 }
+
+/* Dark / Night — sibling roles of Light, not a separate art direction */
+html.theme-preset-dark,
+html.theme-night,
+html.theme-preset-night,
+.theme-preset-dark,
+.theme-night{
+  --surface-page:#12141A;
+  --surface-elevated:#1C1F28;
+  --surface-sunken:#0E1015;
+  --cream:var(--surface-page);
+  --bg:var(--surface-page);
+  --white:var(--surface-elevated);
+  --card:var(--surface-elevated);
+  --ink:#E8EAED;
+  --ink-secondary:#C4C7C5;
+  --muted:#9AA0A6;
+  --line:#2A2F3A;
+  --line-strong:#3C4454;
+  --elev-1:0 1px 2px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.25);
+  --elev-2:0 2px 8px rgba(0,0,0,0.4), 0 4px 14px rgba(0,0,0,0.28);
+  --elev-3:0 10px 28px rgba(0,0,0,0.5), 0 4px 10px rgba(0,0,0,0.3);
+  --shadow-sm:var(--elev-1);
+  --shadow-md:var(--elev-2);
+  --shadow-lg:var(--elev-3);
+  --bubble-them-bg:#252A36;
+  --btn-secondary-bg:#252A36;
+  --presence-ring:var(--surface-elevated);
+  --glass-bg:rgba(28,31,40,0.88);
+  --glass-border:rgba(255,255,255,0.08);
+}
+
 @media (prefers-reduced-motion: reduce){
   :root{
     --mx-spring:linear;
+    --ease-spring:linear;
     --mx-press-scale:1;
     --mx-duration:1ms;
+    --duration-instant:1ms;
+    --duration-fast:1ms;
+    --duration-ui:1ms;
+    --duration-normal:1ms;
+    --duration-panel:1ms;
+    --duration-sheet:1ms;
+    --duration-slow:1ms;
   }
 }
+html.quiet-mode{
+  --mx-press-scale:1;
+}
+
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{
   height:100%;font-family:var(--font-body);
-  background:var(--cream);margin:0;padding:0;
+  background:var(--surface-page);color:var(--ink);margin:0;padding:0;
   -webkit-font-smoothing:antialiased;
   -moz-osx-font-smoothing:grayscale;
 }

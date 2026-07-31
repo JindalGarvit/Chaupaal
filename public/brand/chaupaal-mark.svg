@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Chaupaal">
+  <!-- Gathered light mark: structural Chaupaal red + people under one key light. Reads at 32px. -->
+  <defs>
+    <linearGradient id="cpKeyLight" x1="256" y1="40" x2="256" y2="280" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.55"/>
+      <stop offset="55%" stop-color="#FF8B94" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#E63946" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="cpSquircle">
+      <rect width="512" height="512" rx="118" ry="118"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#cpSquircle)">
+    <rect width="512" height="512" fill="#E63946"/>
+    <ellipse cx="256" cy="96" rx="220" ry="120" fill="url(#cpKeyLight)"/>
+    <!-- Soft specular rim under the light -->
+    <ellipse cx="256" cy="150" rx="168" ry="36" fill="#FFFFFF" opacity="0.14"/>
+    <!-- Three figures under the light (commons) -->
+    <g fill="#FFFFFF">
+      <circle cx="158" cy="286" r="38"/>
+      <path d="M98 420c8-62 36-94 60-94s52 32 60 94H98z"/>
+      <circle cx="256" cy="268" r="44"/>
+      <path d="M182 424c10-72 42-108 74-108s64 36 74 108H182z"/>
+      <circle cx="354" cy="286" r="38"/>
+      <path d="M294 420c8-62 36-94 60-94s52 32 60 94H294z"/>
+    </g>
+  </g>
+</svg>

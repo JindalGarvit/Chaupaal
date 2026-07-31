@@ -611,16 +611,23 @@
     const bright = Number(s.brightness) || 0;
     const anchor = s.anchor || 'clearDay';
     const bucket = s.weatherBucket || weatherCtx.bucket;
-    // Stronger warm edge wash near golden hour / dawn — still Light-first
+    // Gathered light: neutral day by default; warm only golden/evening via Auto
+    const keyTemp = atmosphereOn ? (s.isDay ? 0.38 + warm * 0.35 : 0.22 + warm * 0.15) : 0.42;
+    set('--light-key-temp', String(keyTemp.toFixed(3)));
+    set('--light-key-elev', String((atmosphereOn ? 0.85 + bright * 0.2 : 1).toFixed(3)));
+    // Stronger warm edge wash near golden hour / dawn — still Light-first (no parchment costume)
     const warmWash =
       atmosphereOn && s.isDay && (anchor === 'goldenHour' || anchor === 'dawn' || warm > 0.5)
-        ? Math.min(0.07, 0.02 + warm * 0.055)
-        : atmosphereOn && s.isDay
-          ? Math.min(0.025, warm * 0.035)
-          : 0;
+        ? Math.min(0.06, 0.015 + warm * 0.05)
+        : 0;
+    const lightCast =
+      warmWash > 0
+        ? `rgba(${Math.round(255 * Math.min(1, warm + 0.2))}, ${Math.round(180 + 35 * warm)}, ${Math.round(100 + 40 * (1 - warm))}, ${warmWash.toFixed(3)})`
+        : 'transparent';
+    set('--light-cast', lightCast);
     set(
       '--theme-overlay',
-      `rgba(${Math.round(255 * Math.min(1, warm + 0.15))}, ${Math.round(170 + 40 * warm)}, ${Math.round(90 + 30 * (1 - warm))}, ${warmWash.toFixed(3)})`
+      lightCast === 'transparent' ? 'rgba(0,0,0,0)' : lightCast
     );
     // Cool dim for rain/fog; soft night dim
     const wxDim =

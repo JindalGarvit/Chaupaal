@@ -158,8 +158,9 @@ function renderChatList(chats, opts){
       ? formatRelativeTime(chat.ts || chat.updatedAt || chat.time)
       : chat.time);
     item.innerHTML = `
-      <div class="chat-avatar ${chat.type==='group'?'group':''}${self?' self':''}${chaupaal?' chaupaal':''}" ${self?'data-self-pin-avatar="1" title="Open your profile"':''}${chaupaal?'data-chaupaal-pin-avatar="1" title="Open Chaupaal profile"':''}>${chat.avatar||'📝'}
+      <div class="chat-avatar presence-host ${chat.type==='group'?'group':''}${self?' self':''}${chaupaal?' chaupaal':''}" ${self?'data-self-pin-avatar="1" title="Open your profile"':''}${chaupaal?'data-chaupaal-pin-avatar="1" title="Open Chaupaal profile"':''}>${chat.avatar||'📝'}
         ${chat.duelStreak?`<div class="streak-badge">🔥${chat.duelStreak}</div>`:''}
+        ${!self&&!chaupaal?`<span class="presence-dot presence-dot--mehfil" data-mehfil-presence-dot hidden aria-hidden="true"></span>`:''}
       </div>
       <div class="chat-info">
         <div class="chat-name">${(self||chaupaal||chat.type==='group'||chat.type==='self')?(chat.name||'Chat'):(typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(chat.name||'Chat',chat):(chat.name||'Chat'))}${self?` <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">· you</span>`:''}${chaupaal?` <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">· companion</span>`:''}${chat.members?` <span style="font-size:11px;color:var(--muted);font-weight:400;">${chat.members} members</span>`:''}</div>
@@ -174,10 +175,13 @@ function renderChatList(chats, opts){
     if(!self&&!chaupaal&&typeof watchMehfilPresence==='function'){
       const cid=chat.firestoreId||chat.id;
       const liveEl=item.querySelector('[data-mehfil-live-row]');
+      const presenceDot=item.querySelector('[data-mehfil-presence-dot]');
       if(cid&&liveEl){
         const unsub=watchMehfilPresence(cid,({count})=>{
           if(!liveEl.isConnected) return;
-          liveEl.hidden=!(count>0);
+          const live=count>0;
+          liveEl.hidden=!live;
+          if(presenceDot) presenceDot.hidden=!live;
           const span=liveEl.querySelector('span');
           if(span) span.textContent=count>1?`Live · ${count}`:'Live';
         });
