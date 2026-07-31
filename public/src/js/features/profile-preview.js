@@ -191,9 +191,13 @@
     document.querySelector('.device')?.appendChild(sheet);
     const close = () => {
       if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
-      else sheet.remove();
+      if (sheet.isConnected) sheet.remove();
     };
-    if (typeof pushNavLayer === 'function') pushNavLayer(sheet, { onPop: () => sheet.remove() });
+    if (typeof openLayer === 'function') openLayer(sheet, close, { remove: false });
+    else if (typeof pushNavLayer === 'function') {
+      sheet.dataset.navManaged = '1';
+      pushNavLayer(sheet, close);
+    }
     sheet.addEventListener('click', (e) => {
       if (e.target === sheet) close();
     });

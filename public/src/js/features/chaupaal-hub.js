@@ -64,13 +64,23 @@
           <button type="button" class="btn" data-hub-ai>Open Chaupaal AI profile</button>
         </div>
       </div>`;
-    document.querySelector('.device')?.appendChild(overlay);
-    if (typeof pushNavLayer === 'function') {
-      pushNavLayer(overlay, { onPop: () => overlay.remove() });
+    const layer =
+      typeof openLayer === 'function'
+        ? openLayer(overlay, null, { label: 'Chaupaal hub' })
+        : null;
+    if (!layer) {
+      document.querySelector('.device')?.appendChild(overlay);
+      if (typeof pushNavLayer === 'function') {
+        overlay.dataset.navManaged = '1';
+        pushNavLayer(overlay, () => overlay.remove());
+      }
     }
     const close = () => {
-      if (typeof removeNavLayer === 'function') removeNavLayer(overlay);
-      else overlay.remove();
+      if (layer) layer.close();
+      else if (typeof removeNavLayer === 'function') {
+        removeNavLayer(overlay);
+        overlay.remove();
+      } else overlay.remove();
     };
     overlay.querySelector('[data-hub-back]')?.addEventListener('click', close);
     overlay.querySelector('[data-hub-blocked]')?.addEventListener('click', () => {

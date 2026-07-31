@@ -13,17 +13,21 @@ Implementation lives primarily in:
 
 ## 1. Navigation & overlay contract
 
-**Single entry point:** Every full-screen view, modal, sheet, or dismissible overlay must register through `pushNavLayer()` / the nav-stack observer — not ad-hoc `history.pushState` / `replaceState`.
+**Single entry point:** Every full-screen view, modal, sheet, or dismissible overlay must register through `openLayer()` (preferred) or `pushNavLayer()` / the nav-stack observer — not ad-hoc `history.pushState` / `replaceState`.
+
+**`openLayer(el, onDismiss, opts)`** — shared helper in `nav-stack.js`. Appends into `#device` / `.device`, sets `data-nav-managed="1"`, registers one history layer, and returns `{ close }` so Android back, swipe-back, Escape, and the feature’s own close control share one dismiss path. New UI must use this (or an equivalent `pushNavLayer` + `data-nav-managed` pair). Do not call `removeNavLayer` without also removing/hiding the DOM.
 
 **Exceptions (deep routes only):** `deeplinks.js` may push `{ chaupaalDeep: true }` when opening shareable routes (`/chat/…`, `/profile/…`, `/post/…`). Closing a deep route must use `history.back()`, never `pushState('/', …)`.
 
-**One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register.
+**One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
-**Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.
+**Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.
 
 **Recovery:** If the stack and visible UI diverge, call `recoverNavStack()` — do not leave the user with a dead back button.
 
 **Non-layers:** DOM injected for media controls, progress bars, or other inline UI must use `data-nav-ignore="1"` and must never match overlay selectors.
+
+**Mehfil:** Full-screen room overlay must stay `position:absolute` inside the app shell (never `position:fixed` on `body`/`html`). Leave always goes through nav-stack dismiss; teardown must call `clearShellGlitches` and clear any shell class such as `.device.is-mehfil-open`.
 
 ---
 
@@ -63,13 +67,15 @@ Any message, attachment, story card, or rich bubble type must **render identical
 
 ## Checklist for new features
 
-- [ ] Overlay registered via nav-stack (`pushNavLayer` + `data-nav-managed` if manual)
+- [ ] Overlay registered via `openLayer` (preferred) or `pushNavLayer` + `data-nav-managed` if manual
+- [ ] Close path removes/hides DOM (not only `removeNavLayer`)
 - [ ] No direct `history.*` except deeplink routes
 - [ ] Media does not touch history; listeners cleaned up on dismiss
 - [ ] Firestore payload includes all fields needed to re-render after reload
 - [ ] Tap-outside and back dismiss work without custom one-offs
 - [ ] Closing the feature clears keyboard inset / never leaves `html.kb-open` stuck
 - [ ] Failures call `reportClientError` (or are caught by `safeFeature`) and recover the shell
+- [ ] Full-screen rooms (Mehfil) are shell-contained; leave clears shell classes / `clearShellGlitches`
 
 ---
 
@@ -156,7 +162,7 @@ The client still loads classic non-module scripts (`<script src>`), so top-level
 **For new code:**
 - Prefer an IIFE / block scope; export only what other files need.
 - Attach new public APIs under `window.ChaupaalNS` (or an existing feature namespace like `AuthProfiles`, `UsersPublic`) instead of adding bare `window.foo`.
-- Reuse existing entry points (`showToast`, `t`, `pushNavLayer`, `safeFeature`) rather than inventing parallel globals.
+- Reuse existing entry points (`showToast`, `t`, `openLayer` / `pushNavLayer`, `safeFeature`) rather than inventing parallel globals.
 - User-facing strings go through `t('key')` with keys in `i18n.js` (`en` / `hi` / `ta`).
 
 ## 13. Design tokens (UI polish)

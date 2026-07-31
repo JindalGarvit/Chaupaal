@@ -48,11 +48,14 @@
     '.streak-milestone-overlay',
     // Full-screen surfaces that previously bypassed the stack (system back
     // left the app / desynced history): onboarding, challenge creator,
-    // story viewer, daily duel ritual.
+    // story viewer, daily duel ritual, Mehfil.
     '.onboarding-overlay',
     '.challenge-creator',
     '.story-viewer',
     '.duel-ritual-overlay',
+    '.mehfil-overlay',
+    '#mehfilOverlay',
+    '.chaupaal-hub-overlay',
     // Dangal launch surfaces (quiz category + AI finder) — permanent DOM
     // toggles; without these, Android back leaves the app instead of closing.
     '#quizCategorySheet',
@@ -192,6 +195,92 @@
     else if (typeof clearKeyboardInset === 'function') clearKeyboardInset();
   }
 
+  /**
+   * Normalize dismiss: function, or legacy `{ onPop }` / `{ onDismiss }` objects
+   * that some call sites passed by mistake.
+   */
+  function normalizeDismissFn(el, dismissFn) {
+    if (typeof dismissFn === 'function') return dismissFn;
+    if (dismissFn && typeof dismissFn.onPop === 'function') {
+      return () => dismissFn.onPop();
+    }
+    if (dismissFn && typeof dismissFn.onDismiss === 'function') {
+      return () => dismissFn.onDismiss();
+    }
+    return () => dismissEl(el);
+  }
+
+  /**
+   * Preferred entry for new overlays/sheets. Registers with nav-stack, appends
+   * into the app shell, and returns `{ close }` so callers never skip history.
+   *
+   * @param {Element} el
+   * @param {Function|{onPop?:Function,onDismiss?:Function}|null} [onDismiss]
+   * @param {{ host?: Element, remove?: boolean, role?: string, label?: string }} [opts]
+   * @returns {{ el: Element, close: Function }|null}
+   */
+  function openLayer(el, onDismiss, opts) {
+    if (!el || el.nodeType !== 1) return null;
+    const options = opts && typeof opts === 'object' ? opts : {};
+    const host =
+      options.host ||
+      document.getElementById('device') ||
+      document.querySelector('.device') ||
+      document.body;
+    el.dataset.navManaged = '1';
+    if (options.role) el.setAttribute('role', options.role);
+    if (options.label) el.setAttribute('aria-label', options.label);
+    if (!el.isConnected && host) {
+      try {
+        host.appendChild(el);
+      } catch (e) {
+        return null;
+      }
+    }
+    if (!el.isConnected) return null;
+
+    let closed = false;
+    const runDismiss = normalizeDismissFn(el, onDismiss);
+    const dismiss = () => {
+      if (closed) return;
+      closed = true;
+      try {
+        runDismiss();
+      } catch (e) {
+        console.warn('[nav-stack] openLayer dismiss', e?.message || e);
+      }
+      if (options.remove !== false && el.isConnected) {
+        try {
+          el.remove();
+        } catch (e) {}
+      }
+      try {
+        if (typeof clearShellGlitches === 'function') clearShellGlitches('openLayer');
+      } catch (e) {}
+    };
+
+    pushLayer(el, dismiss);
+
+    return {
+      el,
+      close() {
+        if (closed) return;
+        // Prefer history-backed dismiss when this layer is still on the stack
+        // (Android back / swipe-back share the same path).
+        if (el.dataset.navLayer && stack.length && stack[stack.length - 1]?.el === el) {
+          try {
+            history.back();
+            return;
+          } catch (e) {}
+        }
+        if (el.dataset.navLayer) {
+          removeLayerForEl(el);
+        }
+        dismiss();
+      },
+    };
+  }
+
   function pushLayer(el, dismissFn) {
     if (!el || !el.isConnected) return;
     if (el.dataset.navIgnore === '1') return;
@@ -201,12 +290,7 @@
 
     const key = `layer_${++seq}`;
     el.dataset.navLayer = key;
-    const dismiss =
-      typeof dismissFn === 'function'
-        ? dismissFn
-        : () => {
-            dismissEl(el);
-          };
+    const dismiss = normalizeDismissFn(el, dismissFn);
     stack.push({ el, dismiss, key });
     try {
       history.pushState({ chaupaalLayer: true, key }, '');
@@ -511,6 +595,7 @@
   }
 
   window.pushNavLayer = pushLayer;
+  window.openLayer = openLayer;
   window.removeNavLayer = removeLayerForEl;
   window.dismissTopNavLayer = dismissTopLayer;
   window.hasNavLayers = hasLayers;

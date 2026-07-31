@@ -136,9 +136,13 @@
     document.querySelector('.device')?.appendChild(sheet);
     const close = () => {
       if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
-      else sheet.remove();
+      if (sheet.isConnected) sheet.remove();
     };
-    if (typeof pushNavLayer === 'function') pushNavLayer(sheet, { onPop: () => sheet.remove() });
+    if (typeof openLayer === 'function') openLayer(sheet, close, { remove: false });
+    else if (typeof pushNavLayer === 'function') {
+      sheet.dataset.navManaged = '1';
+      pushNavLayer(sheet, close);
+    }
     sheet.querySelector('[data-overlay-dismiss]')?.addEventListener('click', close);
     sheet.querySelector('[data-card-share]')?.addEventListener('click', () => {
       const url = `${location.origin}/profile/${encodeURIComponent(uname)}`;
@@ -176,9 +180,13 @@
     document.querySelector('.device')?.appendChild(sheet);
     const close = () => {
       if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
-      else sheet.remove();
+      if (sheet.isConnected) sheet.remove();
     };
-    if (typeof pushNavLayer === 'function') pushNavLayer(sheet, { onPop: () => sheet.remove() });
+    if (typeof openLayer === 'function') openLayer(sheet, close, { remove: false });
+    else if (typeof pushNavLayer === 'function') {
+      sheet.dataset.navManaged = '1';
+      pushNavLayer(sheet, close);
+    }
     sheet.addEventListener('click', (e) => {
       if (e.target === sheet) close();
     });
@@ -254,9 +262,13 @@
     document.querySelector('.device')?.appendChild(sheet);
     const close = () => {
       if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
-      else sheet.remove();
+      if (sheet.isConnected) sheet.remove();
     };
-    if (typeof pushNavLayer === 'function') pushNavLayer(sheet, { onPop: () => sheet.remove() });
+    if (typeof openLayer === 'function') openLayer(sheet, close, { remove: false });
+    else if (typeof pushNavLayer === 'function') {
+      sheet.dataset.navManaged = '1';
+      pushNavLayer(sheet, close);
+    }
     sheet.querySelector('[data-overlay-dismiss]')?.addEventListener('click', close);
     sheet.querySelector('[data-cai-chat]')?.addEventListener('click', () => {
       close();

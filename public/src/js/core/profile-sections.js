@@ -288,7 +288,15 @@
         <button type="button" class="btn btn--primary btn--block" data-sec-create style="margin-top:16px;">Create section</button>
       </div>`;
     document.querySelector('.device')?.appendChild(sheet);
-    if (typeof pushNavLayer === 'function') pushNavLayer(sheet, { onPop: () => sheet.remove() });
+    const close = () => {
+      if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
+      if (sheet.isConnected) sheet.remove();
+    };
+    if (typeof openLayer === 'function') openLayer(sheet, close, { remove: false });
+    else if (typeof pushNavLayer === 'function') {
+      sheet.dataset.navManaged = '1';
+      pushNavLayer(sheet, close);
+    }
 
     let type = 'grid';
     let privacy = 'public';
@@ -308,16 +316,12 @@
     sheet.querySelectorAll('[data-sec-privacy]').forEach((b) =>
       b.addEventListener('click', () => setPrivacy(b.dataset.secPrivacy))
     );
-    sheet.querySelector('[data-overlay-dismiss]')?.addEventListener('click', () => {
-      if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
-      else sheet.remove();
-    });
+    sheet.querySelector('[data-overlay-dismiss]')?.addEventListener('click', close);
     sheet.querySelector('[data-sec-create]')?.addEventListener('click', async () => {
       const name = sheet.querySelector('[data-sec-name]')?.value?.trim() || 'New section';
       try {
         const section = await createCustomSection({ name, type, privacy });
-        if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
-        else sheet.remove();
+        close();
         if (typeof onDone === 'function') onDone(section);
         if (typeof showToast === 'function') showToast('Section created');
       } catch (e) {
@@ -360,7 +364,15 @@
         <button type="button" class="btn btn--primary btn--block" data-sec-save style="margin-top:14px;">Save</button>
       </div>`;
     document.querySelector('.device')?.appendChild(sheet);
-    if (typeof pushNavLayer === 'function') pushNavLayer(sheet, { onPop: () => sheet.remove() });
+    const close = () => {
+      if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
+      if (sheet.isConnected) sheet.remove();
+    };
+    if (typeof openLayer === 'function') openLayer(sheet, close, { remove: false });
+    else if (typeof pushNavLayer === 'function') {
+      sheet.dataset.navManaged = '1';
+      pushNavLayer(sheet, close);
+    }
 
     let type = meta.type;
     let privacy = meta.privacy;
@@ -376,10 +388,6 @@
         sheet.querySelectorAll('[data-sec-privacy]').forEach((x) => x.classList.toggle('btn--primary', x === b));
       })
     );
-    const close = () => {
-      if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
-      else sheet.remove();
-    };
     sheet.querySelector('[data-overlay-dismiss]')?.addEventListener('click', close);
     sheet.querySelector('[data-sec-delete]')?.addEventListener('click', async () => {
       if (!confirm('Delete this section?')) return;

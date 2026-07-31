@@ -78,13 +78,16 @@
       </div>
       <div class="archive-hub-body" data-ah-body>Loading…</div>`;
     document.querySelector('.device')?.appendChild(overlay);
-    if (typeof pushNavLayer === 'function') {
-      pushNavLayer(overlay, { onPop: () => overlay.remove() });
-    }
-    overlay.querySelector('[data-archive-hub-back]')?.addEventListener('click', () => {
+    const close = () => {
       if (typeof removeNavLayer === 'function') removeNavLayer(overlay);
-      else overlay.remove();
-    });
+      if (overlay.isConnected) overlay.remove();
+    };
+    if (typeof openLayer === 'function') openLayer(overlay, close, { remove: false, label: 'Archive' });
+    else if (typeof pushNavLayer === 'function') {
+      overlay.dataset.navManaged = '1';
+      pushNavLayer(overlay, close);
+    }
+    overlay.querySelector('[data-archive-hub-back]')?.addEventListener('click', close);
 
     const body = overlay.querySelector('[data-ah-body]');
     const setTab = async (tab) => {

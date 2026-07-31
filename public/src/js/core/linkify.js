@@ -105,15 +105,15 @@
         </div>
       </div>`;
     document.querySelector('.device')?.appendChild(sheet);
-    if (typeof pushNavLayer === 'function') {
-      pushNavLayer(sheet, {
-        onPop: () => sheet.remove(),
-      });
-    }
     const close = () => {
       if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
-      else sheet.remove();
+      if (sheet.isConnected) sheet.remove();
     };
+    if (typeof openLayer === 'function') openLayer(sheet, close, { remove: false });
+    else if (typeof pushNavLayer === 'function') {
+      sheet.dataset.navManaged = '1';
+      pushNavLayer(sheet, close);
+    }
     sheet.querySelector('[data-leave-cancel]')?.addEventListener('click', close);
     sheet.addEventListener('click', (e) => {
       if (e.target === sheet) close();

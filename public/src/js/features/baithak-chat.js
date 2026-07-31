@@ -46,6 +46,9 @@ function closeChatScreen(opts = {}) {
   }
 
   const screen = activeChatScreen || document.getElementById('activeChatScreen');
+  try {
+    screen?._mehfilPresenceUnsub?.();
+  } catch (e) {}
   activeChatScreen = null;
 
   if (screen) {
@@ -143,7 +146,7 @@ function openChatScreen(chat){
       </div>
       <div class="chat-header-actions">
         ${isSelf?`<button class="chat-header-btn" id="chatSelfSettingsBtn" title="Settings" aria-label="Settings">${typeof iconHtml==='function'?iconHtml('settings',{size:18}):'⚙'}</button>`
-          :(!isChaupaal?`<button class="chat-header-btn" id="chatMehfilBtn" title="Mehfil" aria-label="Mehfil">${typeof iconHtml==='function'?iconHtml('home',{size:18}):'🏠'}</button>`:'')}
+          :(!isChaupaal?`<button class="chat-header-btn mehfil-entry" id="chatMehfilBtn" title="${typeof t==='function'?t('mehfil_title'):'Mehfil'}" aria-label="${typeof t==='function'?t('mehfil_title'):'Mehfil'}">${typeof mehfilMarkHtml==='function'?mehfilMarkHtml(20):(typeof iconHtml==='function'?iconHtml('home',{size:18}):'🏠')}</button>`:'')}
         ${!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatChallengeBtn" title="Create challenge" aria-label="Create challenge">${typeof iconHtml==='function'?iconHtml('target',{size:18}):'🎯'}</button>`:''}
         ${!isGroup&&!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatMuqabalaBtn" title="Muqabala" aria-label="Muqabala">${typeof iconHtml==='function'?iconHtml('swords',{size:18}):'⚔️'}</button>`:''}
       </div>
@@ -156,6 +159,14 @@ function openChatScreen(chat){
         <div class="duel-ritual-streak">${chat.duelStreak} day streak with ${chat.name}</div>
       </div>
       <button class="duel-ritual-cta" id="startRitualBtn">Play today!</button>
+    </div>`:''}
+    ${!isSelf&&!isChaupaal?`<div class="mehfil-live-banner" id="mehfilLiveBanner" hidden>
+      <span class="mehfil-mark-wrap">${typeof mehfilMarkHtml==='function'?mehfilMarkHtml(28):'🏠'}</span>
+      <div class="mehfil-live-banner-copy">
+        <strong data-mehfil-live-title>Mehfil is live</strong>
+        <span data-mehfil-live-sub>Others are in the room</span>
+      </div>
+      <button type="button" class="mehfil-live-banner-cta" id="mehfilLiveJoin">${typeof t==='function'?t('mehfil_join_cta'):'Join Mehfil'}</button>
     </div>`:''}
     <div class="chat-messages-area" id="chatMsgsArea">
       ${msgs.map(m => renderMsgBubble(m, isGroup)).join('')}
@@ -478,6 +489,33 @@ function openChatScreen(chat){
     if (typeof openMehfil === 'function') openMehfil(chat);
     else if (typeof showToast === 'function') showToast('Mehfil loading…');
   });
+  document.getElementById('mehfilLiveJoin')?.addEventListener('click', () => {
+    if (typeof openMehfil === 'function') openMehfil(chat);
+  });
+  // Live presence → header badge + Discord-style join banner
+  if (!isSelf && !isChaupaal && typeof watchMehfilPresence === 'function') {
+    const chatId = chat.firestoreId || chat.id;
+    const unsub = watchMehfilPresence(chatId, ({ count }) => {
+      const btn = document.getElementById('chatMehfilBtn');
+      const banner = document.getElementById('mehfilLiveBanner');
+      const live = count > 0;
+      btn?.classList.toggle('is-live', live);
+      if (banner) {
+        const inRoom = typeof isMehfilOpen === 'function' && isMehfilOpen();
+        banner.hidden = !(live && !inRoom);
+        const title = banner.querySelector('[data-mehfil-live-title]');
+        const sub = banner.querySelector('[data-mehfil-live-sub]');
+        if (title) title.textContent = typeof t === 'function' ? t('mehfil_live_title') : 'Mehfil is live';
+        if (sub) {
+          sub.textContent =
+            typeof t === 'function'
+              ? t('mehfil_live_sub', { n: String(count) })
+              : `${count} in the room`;
+        }
+      }
+    });
+    screen._mehfilPresenceUnsub = unsub;
+  }
   document.getElementById('chatChallengeBtn')?.addEventListener('click', () => openChallengeCreator(chat));
   if(!isGroup&&!isSelf) document.getElementById('chatMuqabalaBtn')?.addEventListener('click', () => {
     closeChatScreen({ updateHistory: true, animate: true });
@@ -629,6 +667,10 @@ function renderMsgBubble(m, isGroup){
     }
     body=`<div class="msg-bubble-challenge-inner challenge"><div class="challenge-label">⚔️ Custom Challenge</div><div class="challenge-title">${n} questions · ${secs}s</div><button class="challenge-btn" type="button" data-muqabala-challenge="${cid}">Answer →</button></div>`;
     rich=true;
+  } else if(att && att.type==='mehfil_invite'){
+    const label=chatEsc(att.label||(typeof t==='function'?t('mehfil_join_cta'):'Join Mehfil'));
+    body=`<div class="mehfil-invite-card">${typeof mehfilMarkHtml==='function'?mehfilMarkHtml(28):''}<strong>${chatEsc(m.text||(typeof t==='function'?t('mehfil_nudge_text',{name:m.name||'Someone'}):'Join Mehfil'))}</strong><button type="button" data-mehfil-invite-join>${label}</button></div>`;
+    rich=true;
   }
 
   if(!rich) body=chatEsc(body);
@@ -646,7 +688,7 @@ function renderMsgBubble(m, isGroup){
       ${!isMe?`<div class="msg-avatar-small">${chatEsc(m.avatar||'👤')}</div>`:''}
       <div>
         ${(isGroup&&!isMe&&m.name)?`<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px;">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(m.name,m):chatEsc(m.name)}</div>`:''}
-        <div class="msg-bubble ${isMe?'me':'them'}${att&&att.type==='muqabala_challenge'?' challenge':''}" data-msg-text="${chatEsc(m.text||'')}">${body}</div>
+        <div class="msg-bubble ${isMe?'me':'them'}${att&&att.type==='muqabala_challenge'?' challenge':''}${att&&att.type==='mehfil_invite'?' mehfil-invite':''}" data-msg-text="${chatEsc(m.text||'')}">${body}</div>
         <div class="msg-meta">
           <span class="msg-time" data-rel="${chatEsc(relTime||'')}" data-abs="${chatEsc(absTime||relTime||'')}" title="Tap for time">${chatEsc(relTime||absTime||'')}</span>
           ${statusHtml}
@@ -664,6 +706,15 @@ function wireChallengeBubble(root){
       const id=btn.dataset.muqabalaChallenge;
       if(typeof launchPendingMuqabalaChallenge==='function') launchPendingMuqabalaChallenge(id);
       else if(typeof showToast==='function') showToast(t('baithak_challenge_unavailable'));
+    });
+  });
+  root?.querySelectorAll?.('[data-mehfil-invite-join]').forEach((btn)=>{
+    if(btn.dataset.wired==='1') return;
+    btn.dataset.wired='1';
+    btn.addEventListener('click',()=>{
+      const chat=window.currentOpenChat;
+      if(chat && typeof openMehfil==='function') openMehfil(chat);
+      else if(typeof showToast==='function') showToast(typeof t==='function'?t('mehfil_unavailable'):'Mehfil unavailable');
     });
   });
 }

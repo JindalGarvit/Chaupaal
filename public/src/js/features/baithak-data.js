@@ -132,6 +132,14 @@ function renderChatList(chats){
     return;
   }
   list.innerHTML = '';
+  try {
+    (list._mehfilPresenceUnsubs || []).forEach((u) => {
+      try {
+        u();
+      } catch (e) {}
+    });
+  } catch (e) {}
+  list._mehfilPresenceUnsubs = [];
   const pinned = pinSelfChat(chats||[]);
   // Only Self + Chaupaal means the social inbox is empty — show CTA under pins.
   const socialOnly = pinned.filter(c => !isSelfChatRow(c) && !isChaupaalChatRow(c));
@@ -157,8 +165,22 @@ function renderChatList(chats){
       <div class="chat-meta">
         <div class="chat-time">${when||''}</div>
         ${chat.unread?`<div class="chat-badge">${chat.unread}</div>`:''}
+        ${!self&&!chaupaal?`<div class="chat-list-mehfil-live" data-mehfil-live-row hidden>${typeof mehfilMarkHtml==='function'?mehfilMarkHtml(12):''}<span>Live</span></div>`:''}
       </div>
     `;
+    if(!self&&!chaupaal&&typeof watchMehfilPresence==='function'){
+      const cid=chat.firestoreId||chat.id;
+      const liveEl=item.querySelector('[data-mehfil-live-row]');
+      if(cid&&liveEl){
+        const unsub=watchMehfilPresence(cid,({count})=>{
+          if(!liveEl.isConnected) return;
+          liveEl.hidden=!(count>0);
+          const span=liveEl.querySelector('span');
+          if(span) span.textContent=count>1?`Live · ${count}`:'Live';
+        });
+        list._mehfilPresenceUnsubs.push(unsub);
+      }
+    }
     if(self){
       item.style.background='rgba(230,57,70,0.04)';
       item.style.borderBottom='1px solid var(--line)';
