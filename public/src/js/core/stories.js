@@ -351,8 +351,11 @@
       return f;
     };
     let isCf = !!profile.closeFriend;
-    menu.innerHTML = `
-      <button type="button" role="menuitem" data-act="profile">${tt('avatar_menu_profile', 'Show profile')}</button>
+    const isAi = !!profile.isChaupaal || profile.uid === 'chaupaal';
+    menu.innerHTML = isAi
+      ? `<button type="button" role="menuitem" data-act="profile">${tt('avatar_menu_profile', 'Show profile')}</button>
+         <button type="button" role="menuitem" data-act="hub">${tt('chaupaal_hub', 'Chaupaal Hub')}</button>`
+      : `<button type="button" role="menuitem" data-act="profile">${tt('avatar_menu_profile', 'Show profile')}</button>
       <button type="button" role="menuitem" data-act="cf">${isCf ? tt('avatar_menu_remove_cf', 'Remove Close Friend') : tt('avatar_menu_add_cf', 'Add Close Friend')}</button>
       <button type="button" role="menuitem" data-act="message">${tt('avatar_menu_message', 'Message')}</button>`;
     const host = document.querySelector('.device') || document.body;
@@ -390,8 +393,11 @@
         const act = btn.dataset.act;
         close();
         if (act === 'profile') {
-          if (typeof openPublicProfile === 'function') openPublicProfile(profile);
+          if (isAi && typeof openChaupaalAiProfile === 'function') openChaupaalAiProfile();
+          else if (typeof openPublicProfile === 'function') openPublicProfile(profile);
           else if (typeof openProfilePreview === 'function') openProfilePreview(profile);
+        } else if (act === 'hub' && typeof openChaupaalHub === 'function') {
+          openChaupaalHub();
         } else if (act === 'cf' && typeof setCloseFriend === 'function') {
           try {
             await setCloseFriend(profile.uid, !isCf);

@@ -630,6 +630,9 @@ function wireAiKbToInput(inputEl,contextLabel){
 
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click',()=>{
+    // Heal keyboard / Mehfil shell poison on every tab (Dangal used to be the only remount that felt OK)
+    if(typeof restoreAppShell==='function') restoreAppShell('tab:'+(btn.dataset.tab||''));
+    else if(typeof clearKeyboardInset==='function') clearKeyboardInset();
     document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));

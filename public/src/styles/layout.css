@@ -128,9 +128,13 @@ html,body{
   }
   .tab-btn .tab-icon{font-size:22px;}
   .tab-btn .tab-label{font-size:10px;}
+  /* Soft active dot under label — never a covering red stroke over icons */
+  .tab-btn.active::before{content:none!important;display:none!important;}
   .tab-btn.active::after{
-    content:'';position:absolute;bottom:4px;
-    width:18px;height:3px;background:var(--red);border-radius:var(--r-full);
+    content:'';position:absolute;bottom:3px;left:50%;
+    transform:translateX(-50%);
+    width:5px;height:5px;background:var(--brand-red,var(--red));
+    border-radius:50%;opacity:.85;pointer-events:none;
   }
   .topbar{
     display:flex;padding:10px 16px;

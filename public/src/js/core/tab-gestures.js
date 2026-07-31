@@ -559,6 +559,30 @@
     try {
       if (typeof TabElements !== 'undefined' && TabElements.playAmbience) TabElements.playAmbience(tab);
     } catch (e) {}
+    try {
+      bar.querySelector('.morph-spread')?.remove();
+      const quiet =
+        (typeof quietMode !== 'undefined' && quietMode) ||
+        document.documentElement.classList.contains('quiet-mode') ||
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (!quiet) {
+        const spread = document.createElement('div');
+        spread.className = 'morph-spread';
+        spread.setAttribute('aria-hidden', 'true');
+        for (let i = 0; i < 12; i++) {
+          const s = document.createElement('span');
+          const x = 8 + Math.random() * 84;
+          const y = 40 + Math.random() * 40;
+          s.style.left = `${x}%`;
+          s.style.top = `${y}%`;
+          s.style.setProperty('--mx', `${(Math.random() - 0.5) * 60}px`);
+          s.style.setProperty('--my', `${-18 - Math.random() * 36}px`);
+          s.style.animationDelay = `${i * 0.04}s`;
+          spread.appendChild(s);
+        }
+        bar.prepend(spread);
+      }
+    } catch (e) {}
 
     buttons.forEach((btn, i) => {
       const sc = shortcuts[i];
@@ -615,6 +639,7 @@
     });
     bar.classList.remove('is-shortcut-mode');
     bar.removeAttribute('data-morph-tab');
+    bar.querySelector('.morph-spread')?.remove();
     morphSnapshot = null;
     morphSourceTab = null;
     document.removeEventListener('pointerdown', onOutsideMorph, true);

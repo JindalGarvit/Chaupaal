@@ -20,15 +20,19 @@
         </radialGradient>
       </defs>
       <ellipse cx="12" cy="9" rx="9.5" ry="7.2" fill="url(#elPeepalGlow)"/>
+      <ellipse class="el-idle el-leaf-1" cx="5.6" cy="11" rx="3.2" ry="2" fill="#43A047" opacity=".9" transform="rotate(-38 5.6 11)"/>
       <ellipse class="el-idle el-leaf-1" cx="6.8" cy="10.2" rx="3.6" ry="2.3" fill="#4CAF50" opacity=".92" transform="rotate(-32 6.8 10.2)"/>
+      <ellipse class="el-idle el-leaf-2" cx="17.4" cy="10.4" rx="3.2" ry="2" fill="#2E7D32" opacity=".88" transform="rotate(34 17.4 10.4)"/>
       <ellipse class="el-idle el-leaf-2" cx="16.8" cy="9.2" rx="3.8" ry="2.4" fill="#66BB6A" opacity=".95" transform="rotate(26 16.8 9.2)"/>
       <ellipse class="el-idle el-leaf-4" cx="9.2" cy="6.4" rx="3.2" ry="2" fill="#81C784" opacity=".9" transform="rotate(-12 9.2 6.4)"/>
+      <ellipse class="el-idle el-leaf-3" cx="14.2" cy="6" rx="3" ry="1.9" fill="#66BB6A" opacity=".85" transform="rotate(14 14.2 6)"/>
       <ellipse class="el-idle el-leaf-3" cx="12.2" cy="5.2" rx="4.4" ry="2.8" fill="url(#elPeepalCanopy)"/>
       <path d="M12 9.8c1.4 2 1.8 4 1.9 6.8.1 1.5-.1 3.4-.2 5.4h-3.2c-.1-2-.3-4-.2-5.5.2-2.7.8-4.6 1.7-6.7z" fill="url(#elPeepalTrunk)"/>
       <path d="M11.2 14.2c-1.2.6-2.4 1.8-2.8 3.2" fill="none" stroke="#6B4423" stroke-width=".7" stroke-linecap="round" opacity=".55"/>
       <path d="M13.2 13.8c1 .5 2 1.4 2.4 2.6" fill="none" stroke="#6B4423" stroke-width=".7" stroke-linecap="round" opacity=".45"/>
       <circle class="el-idle el-fruit" cx="9.6" cy="12.6" r="1.15" fill="#FFC93C"/>
       <circle class="el-idle el-fruit" cx="14.4" cy="11.8" r=".85" fill="#FFB703" opacity=".9"/>
+      <circle class="el-idle el-fruit" cx="11.2" cy="10.4" r=".55" fill="#FFE082" opacity=".8"/>
       <ellipse cx="10.6" cy="4.2" rx="1.6" ry=".9" fill="#fff" opacity=".22"/>
     </svg>`,
 

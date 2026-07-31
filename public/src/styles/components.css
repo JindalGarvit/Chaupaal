@@ -78,16 +78,22 @@
     transition: color var(--duration-fast);
     letter-spacing: 0.02em;
   }
-  .tab-btn.active .tab-icon { transform: scale(1.18) translateY(-2px); }
+  .tab-btn.active .tab-icon { transform: scale(1.12) translateY(-1px); }
   .tab-btn.active .tab-label { color: var(--red); }
-  .tab-btn.active::before {
+  /* Minimal active cue — do NOT cover 3D icons (removed top red bar) */
+  .tab-btn.active::before { content: none !important; display: none !important; }
+  .tab-btn.active::after {
     content: '';
     position: absolute;
-    top: 0; left: 50%;
+    bottom: 3px;
+    left: 50%;
     transform: translateX(-50%);
-    width: 32px; height: 3px;
-    background: var(--grad-brand);
-    border-radius: 0 0 var(--r-full) var(--r-full);
+    width: 5px;
+    height: 5px;
+    background: var(--brand-red, var(--red));
+    border-radius: 50%;
+    opacity: 0.85;
+    pointer-events: none;
   }
 }
 

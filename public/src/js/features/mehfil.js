@@ -674,7 +674,10 @@
 
   async function searchAndPlay(query) {
     const q = String(query || '').trim();
-    if (!q) return;
+    if (!q) {
+      await loadMehfilYtRecs(overlayEl, { openPicker: true });
+      return;
+    }
     const ytMatch =
       q.match(/(?:v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{6,})/) ||
       (q.length === 11 && /^[a-zA-Z0-9_-]+$/.test(q) ? [0, q] : null);
@@ -684,7 +687,6 @@
     }
     if (typeof apiFetch !== 'function') return;
     try {
-      // Prefer YouTube search when available; fall back to music_search list
       let results = [];
       try {
         const ytEnv = await apiFetch('/api/media-config', {
@@ -720,6 +722,75 @@
       showMehfilVideoPicker(results, q);
     } catch (e) {
       if (typeof showToast === 'function') showToast(tt('mehfil_media_fail', 'Media search failed'));
+    } finally {
+      if (typeof restoreAppShell === 'function') setTimeout(() => restoreAppShell('mehfil_search_done'), 100);
+    }
+  }
+
+  const YT_REC_QUERIES = ['lofi chill', 'bollywood hits', 'indie acoustic', 'focus music', 'chaupaal vibes'];
+
+  async function loadMehfilYtRecs(root, { openPicker = false } = {}) {
+    const host = root || overlayEl;
+    const row = host?.querySelector('[data-mehfil-recs-row]');
+    const wrap = host?.querySelector('[data-mehfil-recs]');
+    if (!row || !wrap || typeof apiFetch !== 'function') return;
+    if (wrap.dataset.loaded === '1' && !openPicker) {
+      wrap.hidden = false;
+      return;
+    }
+    const q = YT_REC_QUERIES[Math.floor(Math.random() * YT_REC_QUERIES.length)];
+    try {
+      const ytEnv = await apiFetch('/api/media-config', {
+        method: 'POST',
+        needAuth: true,
+        body: { action: 'youtube_search', query: q, limit: 6 },
+      });
+      let results = (ytEnv?.data?.results || [])
+        .map((r) => ({
+          id: r.id || r.videoId,
+          title: r.title,
+          channel: r.channelTitle || r.channel,
+          thumb: r.thumb || r.thumbnail,
+        }))
+        .filter((r) => r.id);
+      if (!results.length) {
+        const envelope = await apiFetch('/api/media-config', {
+          method: 'POST',
+          needAuth: true,
+          body: { action: 'music_search', query: q, limit: 6 },
+        });
+        results = (envelope?.data?.results || []).map((song) => ({
+          id: song.youtubeId || null,
+          title: song.title,
+          channel: song.artist,
+          thumb: song.artwork || song.thumb,
+          previewUrl: song.previewUrl,
+        }));
+      }
+      if (!results.length) {
+        wrap.hidden = true;
+        return;
+      }
+      wrap.dataset.loaded = '1';
+      wrap.hidden = false;
+      row.innerHTML = results
+        .map(
+          (r, i) =>
+            `<button type="button" class="mehfil-yt-rec" data-rec-i="${i}" title="${esc(r.title || '')}">
+              ${r.thumb ? `<img src="${esc(r.thumb)}" alt="">` : '<span>▶</span>'}
+              <span>${esc((r.title || 'Video').slice(0, 42))}</span>
+            </button>`
+        )
+        .join('');
+      row.querySelectorAll('[data-rec-i]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const r = results[Number(btn.dataset.recI)];
+          if (r?.id) await playYoutubeId(r.id, r.title);
+        });
+      });
+      if (openPicker) showMehfilVideoPicker(results, q);
+    } catch (e) {
+      wrap.hidden = true;
     }
   }
 
@@ -827,7 +898,8 @@
       } catch (e) {}
     }
     try {
-      if (typeof clearShellGlitches === 'function') clearShellGlitches(reason || 'mehfil_leave');
+      if (typeof restoreAppShell === 'function') restoreAppShell(reason || 'mehfil_leave');
+      else if (typeof clearShellGlitches === 'function') clearShellGlitches(reason || 'mehfil_leave');
     } catch (e) {}
   }
 
@@ -1264,14 +1336,19 @@
               <div class="mehfil-waiting-msg">${esc(tt('mehfil_waiting_msg', 'Mic starts on; tap camera when you want to be seen. Share YouTube or chat in the sidebar.'))}</div>
             </div>
           </div>
-          <div class="mehfil-sheet mehfil-media-sheet" data-mehfil-media>
-            <div class="mehfil-now" data-mehfil-now>${esc(tt('mehfil_media_hint', 'Search a song or paste a YouTube link'))}</div>
+            <div class="mehfil-sheet mehfil-media-sheet" data-mehfil-media>
+            <div class="mehfil-now" data-mehfil-now>${esc(tt('mehfil_media_hint', 'Search YouTube for the room'))}</div>
             <div class="mehfil-yt-empty" data-mehfil-yt-empty hidden></div>
             <div id="mehfilYtHost" class="mehfil-yt" data-mehfil-yt></div>
             <div class="mehfil-media-search">
-              <input type="search" placeholder="${esc(tt('mehfil_media_ph', 'Song or YouTube link…'))}" data-mehfil-q enterkeyhint="search">
-              <button type="button" data-mehfil-play>${esc(tt('mehfil_play', 'Play'))}</button>
+              <input type="search" placeholder="${esc(tt('mehfil_yt_search_ph', 'Search YouTube…'))}" data-mehfil-q enterkeyhint="search" autocomplete="off">
+              <button type="button" data-mehfil-play>${esc(tt('mehfil_search', 'Search'))}</button>
             </div>
+            <div class="mehfil-yt-recs" data-mehfil-recs hidden>
+              <div class="mehfil-yt-recs-label">${esc(tt('mehfil_yt_recs', 'Suggested for the room'))}</div>
+              <div class="mehfil-yt-recs-row" data-mehfil-recs-row></div>
+            </div>
+            <p class="mehfil-yt-paste-hint">${esc(tt('mehfil_yt_paste_hint', 'Tip: paste a YouTube link anytime'))}</p>
           </div>
           <div class="mehfil-sheet mehfil-react-tray" data-mehfil-reacts>
             ${REACTIONS.map((e) => `<button type="button" data-emoji="${e}">${e}</button>`).join('')}
@@ -1440,6 +1517,14 @@
         searchAndPlay(e.target.value);
       }
     });
+    el.querySelector('[data-mehfil-q]')?.addEventListener('focus', () => {
+      loadMehfilYtRecs(el);
+    });
+    el.querySelector('[data-mehfil-q]')?.addEventListener('blur', () => {
+      setTimeout(() => {
+        if (typeof restoreAppShell === 'function') restoreAppShell('mehfil_search_blur');
+      }, 160);
+    });
 
     await ensureMehfilParticipant(chatId);
     bindMembersList(chatId);
@@ -1469,10 +1554,21 @@
         const handler = (snap) => {
           const val = snap.val() || {};
           const uids = Object.keys(val);
+          const me = currentUser?.uid || '';
+          // Honest Live: only count *others* in the room (never sticky from yourself alone)
+          const others = me ? uids.filter((u) => u !== me) : uids;
           const set = presenceWatchers.get(chatId);
           set?.forEach((fn) => {
             try {
-              fn({ count: uids.length, uids, participants: val });
+              fn({
+                count: others.length,
+                othersCount: others.length,
+                totalCount: uids.length,
+                uids: others,
+                allUids: uids,
+                participants: val,
+                live: others.length >= 1,
+              });
             } catch (e) {}
           });
         };

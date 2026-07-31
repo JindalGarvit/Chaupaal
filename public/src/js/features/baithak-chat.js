@@ -146,7 +146,10 @@ function openChatScreen(chat){
       </div>
       <div class="chat-header-actions">
         ${isSelf?`<button class="chat-header-btn" id="chatSelfSettingsBtn" title="Settings" aria-label="Settings">${typeof iconHtml==='function'?iconHtml('settings',{size:18}):'⚙'}</button>`
-          :(!isChaupaal?`<button class="chat-header-btn mehfil-entry" id="chatMehfilBtn" title="${typeof t==='function'?t('mehfil_title'):'Mehfil'}" aria-label="${typeof t==='function'?t('mehfil_title'):'Mehfil'}">${typeof mehfilMarkHtml==='function'?mehfilMarkHtml(20):(typeof iconHtml==='function'?iconHtml('home',{size:18}):'🏠')}</button>`:'')}
+          :(isChaupaal
+            ?`<button class="chat-header-btn" id="chatJournalBtn" title="${typeof t==='function'?t('chaupaal_journal','Journal'):'Journal'}" aria-label="Journal">${typeof iconHtml==='function'?iconHtml('book-open',{size:18}):'📓'}</button>
+              <button class="chat-header-btn" id="chatHubBtn" title="${typeof t==='function'?t('chaupaal_hub','Chaupaal Hub'):'Hub'}" aria-label="Chaupaal Hub">${typeof iconHtml==='function'?iconHtml('sparkles',{size:18}):'✨'}</button>`
+            :`<button class="chat-header-btn mehfil-entry" id="chatMehfilBtn" title="${typeof t==='function'?t('mehfil_title'):'Mehfil'}" aria-label="${typeof t==='function'?t('mehfil_title'):'Mehfil'}">${typeof mehfilMarkHtml==='function'?mehfilMarkHtml(20):(typeof iconHtml==='function'?iconHtml('home',{size:18}):'🏠')}</button>`)}
         ${!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatChallengeBtn" title="Create challenge" aria-label="Create challenge">${typeof iconHtml==='function'?iconHtml('target',{size:18}):'🎯'}</button>`:''}
         ${!isGroup&&!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatMuqabalaBtn" title="Muqabala" aria-label="Muqabala">${typeof iconHtml==='function'?iconHtml('swords',{size:18}):'⚔️'}</button>`:''}
       </div>
@@ -485,6 +488,14 @@ function openChatScreen(chat){
     if (typeof openSettingsModal === 'function') openSettingsModal();
     else document.getElementById('settingsBtn')?.click();
   });
+  document.getElementById('chatJournalBtn')?.addEventListener('click', () => {
+    if (typeof openArchiveHub === 'function') openArchiveHub('journal');
+    else if (typeof showToast === 'function') showToast(typeof t==='function'?t('chaupaal_journal','Journal'):'Journal');
+  });
+  document.getElementById('chatHubBtn')?.addEventListener('click', () => {
+    if (typeof openChaupaalHub === 'function') openChaupaalHub();
+    else if (typeof openChaupaalAiProfile === 'function') openChaupaalAiProfile();
+  });
   document.getElementById('chatMehfilBtn')?.addEventListener('click', () => {
     if (typeof openMehfil === 'function') openMehfil(chat);
     else if (typeof showToast === 'function') showToast('Mehfil loading…');
@@ -492,17 +503,17 @@ function openChatScreen(chat){
   document.getElementById('mehfilLiveJoin')?.addEventListener('click', () => {
     if (typeof openMehfil === 'function') openMehfil(chat);
   });
-  // Live presence → header badge + Discord-style join banner
+  // Live presence → header badge + join banner (others ≥ 1 only)
   if (!isSelf && !isChaupaal && typeof watchMehfilPresence === 'function') {
     const chatId = chat.firestoreId || chat.id;
-    const unsub = watchMehfilPresence(chatId, ({ count }) => {
+    const unsub = watchMehfilPresence(chatId, ({ count, live }) => {
       const btn = document.getElementById('chatMehfilBtn');
       const banner = document.getElementById('mehfilLiveBanner');
-      const live = count > 0;
-      btn?.classList.toggle('is-live', live);
+      const isLive = live != null ? !!live : count > 0;
+      btn?.classList.toggle('is-live', isLive);
       if (banner) {
         const inRoom = typeof isMehfilOpen === 'function' && isMehfilOpen();
-        banner.hidden = !(live && !inRoom);
+        banner.hidden = !(isLive && !inRoom);
         const title = banner.querySelector('[data-mehfil-live-title]');
         const sub = banner.querySelector('[data-mehfil-live-sub]');
         if (title) title.textContent = typeof t === 'function' ? t('mehfil_live_title') : 'Mehfil is live';
@@ -515,6 +526,39 @@ function openChatScreen(chat){
       }
     });
     screen._mehfilPresenceUnsub = unsub;
+  }
+  // Chaupaal header avatar → AI profile; human 1:1 avatar → peek + long-press CF menu
+  if (isChaupaal) {
+    const headerAv = screen.querySelector('.chat-header-avatar');
+    headerAv?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (typeof openChaupaalAiProfile === 'function') openChaupaalAiProfile();
+    });
+  } else if (!isGroup && !isSelf) {
+    const headerAv = screen.querySelector('.chat-header-avatar');
+    const peerUid = chat.peerUid || chat.otherUid || chat.uid ||
+      (Array.isArray(chat.participants) ? chat.participants.find((u) => u && u !== currentUser?.uid) : null);
+    if (headerAv && peerUid) {
+      headerAv.style.cursor = 'pointer';
+      headerAv.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const profile = { uid: peerUid, name: chat.name, avatar: chat.avatar, photoURL: chat.photoURL };
+        if (typeof openProfilePeek === 'function') openProfilePeek(profile);
+        else if (typeof openPublicProfile === 'function') openPublicProfile(profile);
+      });
+      if (typeof onLongPress === 'function') {
+        onLongPress(headerAv, () => {
+          if (typeof openBaithakAvatarMenu === 'function') {
+            openBaithakAvatarMenu(headerAv, {
+              uid: peerUid,
+              name: chat.name || 'Friend',
+              avatar: chat.avatar,
+              photoURL: chat.photoURL,
+            });
+          }
+        });
+      }
+    }
   }
   document.getElementById('chatChallengeBtn')?.addEventListener('click', () => openChallengeCreator(chat));
   if(!isGroup&&!isSelf) document.getElementById('chatMuqabalaBtn')?.addEventListener('click', () => {

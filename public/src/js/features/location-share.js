@@ -211,42 +211,93 @@
     const sheet = document.createElement('div');
     sheet.id = 'locFullMap';
     sheet.className = 'loc-full-sheet';
+    sheet.dataset.navManaged = '1';
     const isLive = L0.mode === 'live' && L0.liveShareId;
+    const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${L0.lat},${L0.lng}`)}`;
+    const appleUrl = `https://maps.apple.com/?daddr=${encodeURIComponent(`${L0.lat},${L0.lng}`)}`;
     sheet.innerHTML = `
       <div class="loc-full-backdrop" data-loc-close></div>
       <div class="loc-full-panel" role="dialog" aria-label="Map">
+        <div class="half-sheet-grabber" aria-hidden="true"></div>
         <div class="loc-full-head">
           <div>
             <div class="loc-full-title">${esc(L0.placeName || L0.label || 'Location')}</div>
-            <div class="loc-full-sub" data-loc-full-sub>${esc(L0.address || '')}</div>
+            <div class="loc-full-sub" data-loc-full-sub>${esc(L0.address || `${L0.lat.toFixed(5)}, ${L0.lng.toFixed(5)}`)}</div>
           </div>
-          <button type="button" class="loc-full-close" data-loc-close aria-label="Close">✕</button>
         </div>
         <div class="loc-full-map" data-loc-full-map></div>
-        ${isLive ? '<button type="button" class="btn btn--primary btn--block loc-stop-btn hidden" data-loc-stop>Stop sharing</button>' : ''}
+        <div class="loc-full-actions">
+          <a class="btn btn--primary" data-loc-directions href="${mapsUrl}" target="_blank" rel="noopener">${typeof t==='function'?t('loc_directions','Directions'):'Directions'}</a>
+          <a class="btn btn--secondary" href="${appleUrl}" target="_blank" rel="noopener">${typeof t==='function'?t('loc_apple_maps','Apple Maps'):'Apple Maps'}</a>
+        </div>
+        ${isLive ? '<button type="button" class="btn btn--block loc-stop-btn hidden" data-loc-stop>Stop sharing</button>' : ''}
       </div>`;
     host().appendChild(sheet);
-    if (typeof pushNavLayer === 'function') pushNavLayer(sheet, () => close());
     let closed = false;
     let unsub = null;
     let mapApi = null;
+    let youMarker = null;
     const close = () => {
       if (closed) return;
       closed = true;
       try {
         unsub?.();
       } catch (e) {}
+      try {
+        mapApi?.map?.remove?.();
+      } catch (e) {}
       if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
       sheet.remove();
     };
+    if (typeof openLayer === 'function') {
+      openLayer(sheet, close, { host: host() });
+    } else if (typeof pushNavLayer === 'function') {
+      pushNavLayer(sheet, close);
+    }
     sheet.querySelectorAll('[data-loc-close]').forEach((b) => b.addEventListener('click', close));
+    if (typeof enableSwipeDismiss === 'function') {
+      enableSwipeDismiss(sheet.querySelector('.loc-full-panel'), close);
+    }
 
     const markerRef = { current: null };
     mountMiniMap(sheet.querySelector('[data-loc-full-map]'), L0.lat, L0.lng, {
       interactive: true,
       markerRef,
-    }).then((api) => {
+    }).then(async (api) => {
       mapApi = api;
+      if (!api?.map || !api.L) return;
+      // Fit shared pin + user location when permission granted
+      try {
+        const here = await new Promise((resolve, reject) => {
+          if (!navigator.geolocation) return reject(new Error('no geo'));
+          navigator.geolocation.getCurrentPosition(
+            (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+            reject,
+            { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+          );
+        });
+        if (here && Number.isFinite(here.lat) && Number.isFinite(here.lng)) {
+          youMarker = api.L.circleMarker([here.lat, here.lng], {
+            radius: 7,
+            color: '#E63946',
+            fillColor: '#E63946',
+            fillOpacity: 0.85,
+            weight: 2,
+          }).addTo(api.map);
+          youMarker.bindTooltip(typeof t === 'function' ? t('loc_you', 'You') : 'You');
+          const bounds = api.L.latLngBounds([
+            [L0.lat, L0.lng],
+            [here.lat, here.lng],
+          ]);
+          api.map.fitBounds(bounds.pad(0.25));
+          const dir = sheet.querySelector('[data-loc-directions]');
+          if (dir) {
+            dir.href = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(`${here.lat},${here.lng}`)}&destination=${encodeURIComponent(`${L0.lat},${L0.lng}`)}`;
+          }
+        }
+      } catch (e) {
+        /* deny: still show shared pin */
+      }
     });
 
     if (isLive && db) {

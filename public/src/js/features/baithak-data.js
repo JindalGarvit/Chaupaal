@@ -177,11 +177,11 @@ function renderChatList(chats, opts){
       const liveEl=item.querySelector('[data-mehfil-live-row]');
       const presenceDot=item.querySelector('[data-mehfil-presence-dot]');
       if(cid&&liveEl){
-        const unsub=watchMehfilPresence(cid,({count})=>{
+        const unsub=watchMehfilPresence(cid,({count,live})=>{
           if(!liveEl.isConnected) return;
-          const live=count>0;
-          liveEl.hidden=!live;
-          if(presenceDot) presenceDot.hidden=!live;
+          const isLive=live!=null?!!live:count>0;
+          liveEl.hidden=!isLive;
+          if(presenceDot) presenceDot.hidden=!isLive;
           const span=liveEl.querySelector('span');
           if(span) span.textContent=count>1?`Live · ${count}`:'Live';
         });
@@ -204,13 +204,54 @@ function renderChatList(chats, opts){
     }
     if(chaupaal){
       const avatar=item.querySelector('[data-chaupaal-pin-avatar]');
-      const openAi=(e)=>{
+      // Avatar → Chaupaal AI profile directly (skip peek / Open chat stack)
+      avatar?.addEventListener('click',(e)=>{
         e.stopPropagation();
-        if(typeof openChaupaalAiPeek==='function') openChaupaalAiPeek();
-        else if(typeof openChaupaalAiProfile==='function') openChaupaalAiProfile();
-      };
-      avatar?.addEventListener('click', openAi);
-      item.querySelector('.chat-name')?.addEventListener('click', openAi);
+        if(typeof openChaupaalAiProfile==='function') openChaupaalAiProfile();
+        else if(typeof openChaupaalAiPeek==='function') openChaupaalAiPeek();
+      });
+      avatar?.addEventListener('contextmenu',(e)=>{
+        e.preventDefault();
+        e.stopPropagation();
+        if(typeof openBaithakAvatarMenu==='function'){
+          openBaithakAvatarMenu(avatar,{
+            uid:'chaupaal',
+            name:'Chaupaal',
+            closeFriend:false,
+            isChaupaal:true,
+          });
+        }
+      });
+      if(typeof onLongPress==='function'){
+        onLongPress(avatar,()=>{
+          if(typeof openBaithakAvatarMenu==='function'){
+            openBaithakAvatarMenu(avatar,{uid:'chaupaal',name:'Chaupaal',isChaupaal:true});
+          }
+        });
+      }
+    } else if(!self){
+      const avatar=item.querySelector('.chat-avatar');
+      const peerUid=chat.peerUid||chat.otherUid||chat.uid||(Array.isArray(chat.participants)?chat.participants.find(u=>u&&u!==currentUser?.uid):null);
+      if(avatar&&peerUid){
+        avatar.addEventListener('click',(e)=>{
+          e.stopPropagation();
+          const profile={uid:peerUid,name:chat.name,avatar:chat.avatar,photoURL:chat.photoURL,username:chat.username};
+          if(typeof openProfilePeek==='function') openProfilePeek(profile);
+          else if(typeof openPublicProfile==='function') openPublicProfile(profile);
+        });
+        if(typeof onLongPress==='function'){
+          onLongPress(avatar,()=>{
+            if(typeof openBaithakAvatarMenu==='function'){
+              openBaithakAvatarMenu(avatar,{
+                uid:peerUid,
+                name:chat.name||'Friend',
+                avatar:chat.avatar,
+                photoURL:chat.photoURL,
+              });
+            }
+          });
+        }
+      }
     }
     item.addEventListener('click', () => openChatScreen(chat));
     list.appendChild(item);

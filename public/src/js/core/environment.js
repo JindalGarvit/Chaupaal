@@ -99,7 +99,12 @@
   function applyViewport() {
     rafId = 0;
     const vv = window.visualViewport;
-    const h = Math.round(vv?.height || window.innerHeight || document.documentElement.clientHeight);
+    // Prefer layout viewport when keyboard is closed; when measuring for shell
+    // restore, always use the larger of vv.height and innerHeight so a stuck
+    // keyboard inset can't permanently shrink --app-height.
+    const vvH = Math.round(vv?.height || 0);
+    const winH = Math.round(window.innerHeight || document.documentElement.clientHeight || 0);
+    const h = Math.max(vvH, winH) || winH;
     if (h > 0) {
       document.documentElement.style.setProperty('--app-height', h + 'px');
     }
@@ -111,6 +116,53 @@
     if (rafId) return;
     rafId = requestAnimationFrame(applyViewport);
   }
+
+  /**
+   * Heal shell after keyboard / Mehfil / overlay glitches.
+   * Root cause of blank bottom: html.kb-open collapses .bottom-tabs to height:0;
+   * Mehfil search focus can leave kb-open stuck when blur/viewport lag.
+   * Dangal "healed" by remount + resize — every tab now calls this explicitly.
+   */
+  function restoreAppShell(reason) {
+    try {
+      if (typeof clearKeyboardInset === 'function') clearKeyboardInset();
+      else {
+        document.documentElement.classList.remove('kb-open');
+        document.documentElement.style.setProperty('--kb-inset', '0px');
+        document.querySelectorAll('.cp-kb-lift').forEach((el) => el.classList.remove('cp-kb-lift'));
+      }
+    } catch (e) {}
+    try {
+      if (typeof clearShellGlitches === 'function') clearShellGlitches(reason || 'restoreAppShell');
+    } catch (e) {}
+    try {
+      const ae = document.activeElement;
+      if (ae && (ae.matches?.('[data-mehfil-q], .mehfil-media-search input, .mehfil-overlay input, .mehfil-overlay textarea') || ae.closest?.('.mehfil-overlay'))) {
+        ae.blur?.();
+      }
+    } catch (e) {}
+    try {
+      if (!document.querySelector('.mehfil-overlay')) {
+        document.querySelector('.device')?.classList.remove('is-mehfil-open');
+        document.documentElement.classList.remove('mehfil-open');
+      }
+    } catch (e) {}
+    try {
+      const tabs = document.querySelector('.bottom-tabs');
+      if (tabs) {
+        ['height', 'min-height', 'max-height', 'visibility', 'pointer-events', 'overflow', 'padding', 'border', 'opacity', 'transform', 'display'].forEach(
+          (p) => tabs.style.removeProperty(p)
+        );
+      }
+    } catch (e) {}
+    try {
+      applyViewport();
+      scheduleViewport();
+      setTimeout(scheduleViewport, 50);
+      setTimeout(scheduleViewport, 200);
+    } catch (e) {}
+  }
+
   function initViewport() {
     applyViewport();
     window.addEventListener('resize', scheduleViewport, { passive: true });
@@ -119,7 +171,6 @@
       window.visualViewport.addEventListener('resize', scheduleViewport, { passive: true });
       window.visualViewport.addEventListener('scroll', scheduleViewport, { passive: true });
     }
-    // URL bar collapse on first scroll / load settle
     window.addEventListener('load', scheduleViewport, { passive: true, once: true });
     setTimeout(scheduleViewport, 300);
   }
@@ -190,5 +241,7 @@
     safeAreaInsets,
     whenAuthReady,
     refreshViewport: scheduleViewport,
+    restoreAppShell,
   };
+  window.restoreAppShell = restoreAppShell;
 })();
