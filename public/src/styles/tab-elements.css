@@ -1,0 +1,168 @@
+/**
+ * Element tab icons — colorful premium SVGs + ritual / ambience animations.
+ * Idle: subtle. Long-press / refresh / notif: stronger. Quiet + reduced-motion calm.
+ */
+
+.tab-el-icon{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:26px;height:26px;line-height:0;position:relative;
+  filter:drop-shadow(0 1px 1px rgba(0,0,0,0.08));
+}
+.tab-el-icon svg{
+  width:26px;height:26px;overflow:visible;display:block;
+}
+.tab-btn .tab-label{margin-top:1px;}
+
+/* Element color accents (fill lives in SVG) */
+.tab-btn[data-tab="peepal"] .tab-el-icon{color:#2f9e44;}
+.tab-btn[data-tab="duniya"] .tab-el-icon{color:#2a6fdb;}
+.tab-btn[data-tab="baithak"] .tab-el-icon{color:#c47a3a;}
+.tab-btn[data-tab="akhbaar"] .tab-el-icon{color:#7b2cbf;}
+.tab-btn[data-tab="dangal"] .tab-el-icon{color:#e85d04;}
+
+/* ── Idle subtle loops (paused when Quiet / reduced-motion) ── */
+.tab-btn:not(.is-shortcut) .tab-el-icon .el-idle{
+  animation-duration:4.5s;
+  animation-timing-function:ease-in-out;
+  animation-iteration-count:infinite;
+}
+.tab-btn[data-tab="peepal"]:not(.is-shortcut) .el-leaf-1{animation-name:elLeafIdle;animation-delay:0s;}
+.tab-btn[data-tab="peepal"]:not(.is-shortcut) .el-leaf-2{animation-name:elLeafIdle;animation-delay:.6s;}
+.tab-btn[data-tab="peepal"]:not(.is-shortcut) .el-leaf-3{animation-name:elLeafIdle;animation-delay:1.1s;}
+.tab-btn[data-tab="duniya"]:not(.is-shortcut) .el-globe{animation-name:elGlobeIdle;}
+.tab-btn[data-tab="duniya"]:not(.is-shortcut) .el-ring{animation-name:elRingIdle;transform-origin:12px 12px;}
+.tab-btn[data-tab="baithak"]:not(.is-shortcut) .el-steam-1,
+.tab-btn[data-tab="baithak"]:not(.is-shortcut) .el-steam-2{animation-name:elSteamIdle;}
+.tab-btn[data-tab="akhbaar"]:not(.is-shortcut) .el-page{animation-name:elPageIdle;transform-origin:4px 12px;}
+.tab-btn[data-tab="dangal"]:not(.is-shortcut) .el-spark{animation-name:elSparkIdle;}
+.tab-btn[data-tab="dangal"]:not(.is-shortcut) .el-core{animation-name:elCoreIdle;}
+
+@keyframes elLeafIdle{
+  0%,100%{transform:translateY(0) rotate(0);}
+  40%{transform:translateY(0.6px) rotate(-4deg);}
+  70%{transform:translateY(-0.4px) rotate(3deg);}
+}
+@keyframes elGlobeIdle{
+  0%,100%{transform:rotate(0);}
+  50%{transform:rotate(6deg);}
+}
+@keyframes elRingIdle{
+  0%{transform:rotate(0);opacity:.85;}
+  50%{transform:rotate(180deg);opacity:1;}
+  100%{transform:rotate(360deg);opacity:.85;}
+}
+@keyframes elSteamIdle{
+  0%,100%{transform:translateY(0);opacity:.55;}
+  50%{transform:translateY(-2px);opacity:.95;}
+}
+@keyframes elPageIdle{
+  0%,100%{transform:rotateY(0);}
+  50%{transform:rotateY(8deg);}
+}
+@keyframes elSparkIdle{
+  0%,100%{opacity:.35;transform:scale(0.9);}
+  50%{opacity:1;transform:scale(1.08);}
+}
+@keyframes elCoreIdle{
+  0%,100%{transform:scale(1);}
+  50%{transform:scale(1.04);}
+}
+
+/* ── Ritual burst (refresh) ── */
+.tab-el-icon.is-ritual .el-leaf-1,
+.tab-el-icon.is-ritual .el-leaf-2,
+.tab-el-icon.is-ritual .el-leaf-3{animation:elLeafRitual .85s ease both;}
+.tab-el-icon.is-ritual .el-globe{animation:elGlobeRitual 1s ease both;}
+.tab-el-icon.is-ritual .el-ring{animation:elRingRitual 1s ease both;transform-origin:12px 12px;}
+.tab-el-icon.is-ritual .el-steam-1,
+.tab-el-icon.is-ritual .el-steam-2{animation:elSteamRitual .9s ease both;}
+.tab-el-icon.is-ritual .el-cafe{animation:elLiftRitual .9s ease both;}
+.tab-el-icon.is-ritual .el-page{animation:elPageRitual .7s ease both;transform-origin:4px 12px;}
+.tab-el-icon.is-ritual .el-spark{animation:elSparkRitual .75s ease both;}
+.tab-el-icon.is-ritual .el-core{animation:elCoreRitual .75s ease both;}
+
+@keyframes elLeafRitual{
+  0%{transform:translate(0,0) rotate(0);opacity:1;}
+  60%{transform:translate(3px,8px) rotate(25deg);opacity:.4;}
+  100%{transform:translate(0,0) rotate(0);opacity:1;}
+}
+@keyframes elGlobeRitual{
+  0%{transform:rotate(0);}
+  100%{transform:rotate(360deg);}
+}
+@keyframes elRingRitual{
+  0%{transform:rotate(0) scale(1);opacity:1;}
+  50%{transform:rotate(180deg) scale(1.15);opacity:.7;}
+  100%{transform:rotate(360deg) scale(1);opacity:1;}
+}
+@keyframes elSteamRitual{
+  0%{transform:translateY(0);opacity:.4;}
+  40%{transform:translateY(-6px);opacity:1;}
+  100%{transform:translateY(0);opacity:.55;}
+}
+@keyframes elLiftRitual{
+  0%,100%{transform:translateY(0);}
+  40%{transform:translateY(-2px);}
+}
+@keyframes elPageRitual{
+  0%{transform:rotateY(0);}
+  35%{transform:rotateY(-42deg);}
+  70%{transform:rotateY(18deg);}
+  100%{transform:rotateY(0);}
+}
+@keyframes elSparkRitual{
+  0%{opacity:.2;transform:scale(0.7);}
+  40%{opacity:1;transform:scale(1.35);}
+  100%{opacity:.4;transform:scale(1);}
+}
+@keyframes elCoreRitual{
+  0%,100%{transform:scale(1);}
+  40%{transform:scale(1.18);}
+}
+
+/* ── Morph ambience wash around tab bar ── */
+.bottom-tabs.is-shortcut-mode{
+  position:relative;
+}
+.bottom-tabs.is-shortcut-mode::after{
+  content:'';position:absolute;inset:-8px -4px -4px;
+  border-radius:var(--r-lg);pointer-events:none;z-index:0;
+  opacity:0.35;filter:blur(12px);
+  background:var(--morph-wash, transparent);
+  animation:elMorphWash 1.2s ease-in-out infinite alternate;
+}
+.bottom-tabs.is-shortcut-mode[data-morph-tab="peepal"]{--morph-wash:radial-gradient(circle at 50% 40%,#2f9e44,transparent 70%);}
+.bottom-tabs.is-shortcut-mode[data-morph-tab="duniya"]{--morph-wash:radial-gradient(circle at 50% 40%,#2a6fdb,transparent 70%);}
+.bottom-tabs.is-shortcut-mode[data-morph-tab="baithak"]{--morph-wash:radial-gradient(circle at 50% 40%,#c47a3a,transparent 70%);}
+.bottom-tabs.is-shortcut-mode[data-morph-tab="akhbaar"]{--morph-wash:radial-gradient(circle at 50% 40%,#7b2cbf,transparent 70%);}
+.bottom-tabs.is-shortcut-mode[data-morph-tab="dangal"]{--morph-wash:radial-gradient(circle at 50% 40%,#e85d04,transparent 70%);}
+.bottom-tabs.is-shortcut-mode .tab-btn{position:relative;z-index:1;}
+
+@keyframes elMorphWash{
+  from{opacity:0.22;transform:scale(0.96);}
+  to{opacity:0.42;transform:scale(1.02);}
+}
+
+html.quiet-mode .tab-el-icon .el-idle,
+html.quiet-mode .tab-el-icon.is-ritual *,
+html.quiet-mode .bottom-tabs.is-shortcut-mode::after{
+  animation:none!important;
+}
+
+@media (prefers-reduced-motion: reduce){
+  .tab-btn .tab-el-icon .el-idle,
+  .tab-el-icon.is-ritual .el-leaf-1,
+  .tab-el-icon.is-ritual .el-leaf-2,
+  .tab-el-icon.is-ritual .el-leaf-3,
+  .tab-el-icon.is-ritual .el-globe,
+  .tab-el-icon.is-ritual .el-ring,
+  .tab-el-icon.is-ritual .el-steam-1,
+  .tab-el-icon.is-ritual .el-steam-2,
+  .tab-el-icon.is-ritual .el-cafe,
+  .tab-el-icon.is-ritual .el-page,
+  .tab-el-icon.is-ritual .el-spark,
+  .tab-el-icon.is-ritual .el-core,
+  .bottom-tabs.is-shortcut-mode::after{
+    animation:none!important;
+  }
+}

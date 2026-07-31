@@ -141,6 +141,8 @@
     const scope = root && root.querySelectorAll ? root : document;
     scope.querySelectorAll('[data-icon]').forEach((el) => {
       if (el.dataset.iconHydrated === '1') return;
+      if (el.hasAttribute('data-icon-skip') || el.hasAttribute('data-tab-element')) return;
+      if (el.classList.contains('tab-el-icon')) return;
       const name = el.getAttribute('data-icon');
       const size = el.getAttribute('data-icon-size') || el.dataset.iconSize || 20;
       const html = iconHtml(name, { size: Number(size) || 20 });

@@ -15,11 +15,8 @@
   }
 
   function uiSoundsOn() {
+    // Action sounds always on unless Quiet — no separate UI-sounds toggle
     if (typeof quietMode !== 'undefined' && quietMode) return false;
-    try {
-      const v = localStorage.getItem('chaupaal_ui_sounds');
-      if (v === '0') return false;
-    } catch (e) {}
     return true;
   }
 

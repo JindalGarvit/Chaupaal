@@ -1,0 +1,286 @@
+/**
+ * Phase 1 — shared squircle / continuous-corner chrome.
+ * Uses token radii + corner-shape where supported; border-radius is the fallback.
+ * Opt out with .sq-none (story rings, full-bleed media, game canvases, status avatars).
+ */
+
+@supports (corner-shape: superellipse(1)) {
+  .sq,
+  .sq-sm,
+  .sq-md,
+  .sq-lg,
+  .sq-xl,
+  .sq-sheet,
+  .sq-control,
+  .sq-chip,
+  .sq-card,
+  .sq-tab {
+    corner-shape: var(--corner-continuous);
+  }
+}
+
+.sq { border-radius: var(--r-md); }
+.sq-xs { border-radius: var(--r-xs); }
+.sq-sm { border-radius: var(--r-sm); }
+.sq-control { border-radius: var(--r-control); }
+.sq-md { border-radius: var(--r-md); }
+.sq-lg { border-radius: var(--r-lg); }
+.sq-xl { border-radius: var(--r-xl); }
+.sq-sheet {
+  border-radius: var(--r-sheet) var(--r-sheet) 0 0;
+}
+.sq-chip { border-radius: var(--r-chip); }
+.sq-card { border-radius: var(--r-card); }
+.sq-tab { border-radius: var(--r-tab); }
+.sq-icon { border-radius: var(--r-icon); }
+.sq-none,
+.sq-none * {
+  corner-shape: unset !important;
+}
+
+/* High-traffic surfaces — token radii + continuous corners (no one-off px) */
+.btn:not(.btn--pill):not(.btn--icon),
+.modal-btn,
+.auth-btn,
+.auth-hero-cta,
+.auth-hero-login {
+  border-radius: var(--r-md);
+}
+@supports (corner-shape: superellipse(1)) {
+  .btn:not(.btn--pill):not(.btn--icon),
+  .modal-btn,
+  .auth-btn,
+  .auth-hero-cta,
+  .auth-hero-login {
+    corner-shape: var(--corner-continuous);
+  }
+}
+
+.auth-input,
+.modal-select,
+.tab-inline-search,
+input.auth-input,
+textarea.auth-input,
+.peepal-ai-search input,
+.close-friends-search input {
+  border-radius: var(--r-control);
+}
+@supports (corner-shape: superellipse(1)) {
+  .auth-input,
+  .modal-select,
+  .tab-inline-search,
+  input.auth-input,
+  textarea.auth-input {
+    corner-shape: var(--corner-continuous);
+  }
+}
+
+.auth-tab,
+.auth-type-chip,
+.auth-photo-btn,
+.display-mode-option,
+.settings-cat,
+.profile-prompt-card,
+.profile-media-action,
+.notif-item,
+.chip,
+.akhbaar-cat-chip,
+.peepal-nudge-chip,
+.auth-gender-chip:not(.auth-pick-chip) {
+  border-radius: var(--r-chip);
+}
+@supports (corner-shape: superellipse(1)) {
+  .auth-tab,
+  .auth-type-chip,
+  .settings-cat,
+  .notif-item,
+  .akhbaar-cat-chip {
+    corner-shape: var(--corner-continuous);
+  }
+}
+
+/* Cards / list rows */
+.card-inner,
+.feed-card,
+.peepal-card,
+.duniya-card,
+.reel-card .card-inner,
+.baithak-chat-row,
+.chat-list-item,
+.rp-card {
+  border-radius: var(--r-card);
+}
+@supports (corner-shape: superellipse(1)) {
+  .card-inner,
+  .feed-card,
+  .peepal-card,
+  .duniya-card,
+  .baithak-chat-row,
+  .chat-list-item,
+  .rp-card {
+    corner-shape: var(--corner-continuous);
+  }
+}
+
+/* Modals / sheets / settings */
+.modal,
+.settings-modal,
+.modal-backdrop .modal,
+.archive-overlay.notif-panel-sheet,
+.cp-action-panel,
+.cp-sheet-panel,
+.music-picker-sheet,
+.media-picker-sheet,
+.auth-hero-actions,
+.auth-overlay .auth-card-wrap {
+  border-radius: var(--r-sheet) var(--r-sheet) 0 0;
+}
+@media (min-width: 768px) {
+  .modal,
+  .settings-modal,
+  .modal-backdrop .modal,
+  .auth-overlay .auth-card-wrap {
+    border-radius: var(--r-xl);
+  }
+}
+@supports (corner-shape: superellipse(1)) {
+  .modal,
+  .settings-modal,
+  .modal-backdrop .modal,
+  .archive-overlay.notif-panel-sheet,
+  .cp-action-panel,
+  .cp-sheet-panel,
+  .auth-overlay .auth-card-wrap {
+    corner-shape: var(--corner-continuous);
+  }
+}
+
+/* Profile bits (not status/story rings) */
+.sidebar-profile,
+.sidebar-streak,
+.profile-gender-prompt,
+.profile-voice-recorder {
+  border-radius: var(--r-control);
+}
+@supports (corner-shape: superellipse(1)) {
+  .sidebar-profile,
+  .sidebar-streak {
+    corner-shape: var(--corner-continuous);
+  }
+}
+
+/* Exceptions — keep circular / full-bleed / canvas */
+.story-ring,
+.story-avatar,
+.story-add,
+.story-add-icon,
+.profile-btn,
+.profile-btn img,
+.auth-photo-preview,
+.cp-status-avatar,
+.notif-actor-av,
+.icon-btn,
+.btn--icon,
+.btn--pill,
+.auth-back-btn,
+.auth-gender-chip.auth-pick-chip,
+.auth-type-pill,
+.auth-type-toggle,
+.streak-pill,
+[data-game-canvas],
+.dangal-canvas,
+.game-canvas,
+.full-bleed,
+.full-bleed img,
+.full-bleed video,
+.story-media,
+.story-media img,
+.story-media video {
+  corner-shape: unset;
+}
+
+/* iOS-proportion safe-area chrome (no fake bezel) */
+.topbar {
+  padding-top: calc(10px + var(--safe-top));
+  min-height: calc(44px + var(--safe-top));
+}
+@media (max-width: 767px) {
+  .bottom-tabs {
+    padding-bottom: max(var(--safe-bottom), 4px);
+    height: calc(var(--tab-h) + max(var(--safe-bottom), 4px));
+  }
+  .tab-btn {
+    border-radius: var(--r-tab);
+    margin: 4px 2px calc(2px + env(safe-area-inset-bottom, 0px) * 0);
+    min-height: 48px;
+  }
+  .tab-btn.active::after {
+    bottom: 4px;
+    border-radius: var(--r-full);
+  }
+}
+
+/* Notification sheet premium chrome */
+.notif-panel-sheet.archive-overlay {
+  border-radius: var(--r-sheet) var(--r-sheet) 0 0;
+  height: min(54%, 520px);
+  max-height: 560px;
+  padding-bottom: var(--safe-bottom);
+}
+.notif-panel-grabber {
+  width: 36px;
+  height: 5px;
+  border-radius: var(--r-full);
+  background: rgba(0, 0, 0, 0.18);
+  margin: 8px auto 4px;
+  flex-shrink: 0;
+}
+.notif-panel-sheet .archive-header {
+  padding-top: 4px;
+  gap: 8px;
+}
+.notif-panel-sheet[data-tab-accent] {
+  position: relative;
+  overflow: hidden;
+}
+.notif-panel-sheet::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 72px;
+  pointer-events: none;
+  opacity: 0.22;
+  background: var(--notif-wash, transparent);
+  transition: opacity var(--duration-panel) var(--ease-smooth);
+}
+.notif-panel-sheet[data-tab-accent="peepal"] {
+  --notif-wash: linear-gradient(180deg, #2f9e44, transparent);
+  border-top: 3px solid #2f9e44;
+}
+.notif-panel-sheet[data-tab-accent="duniya"] {
+  --notif-wash: linear-gradient(180deg, #2a6fdb, transparent);
+  border-top: 3px solid #2a6fdb;
+}
+.notif-panel-sheet[data-tab-accent="baithak"] {
+  --notif-wash: linear-gradient(180deg, #c47a3a, transparent);
+  border-top: 3px solid #c47a3a;
+}
+.notif-panel-sheet[data-tab-accent="dangal"] {
+  --notif-wash: linear-gradient(180deg, #e85d04, transparent);
+  border-top: 3px solid #e85d04;
+}
+.notif-panel-sheet[data-tab-accent="akhbaar"] {
+  --notif-wash: linear-gradient(180deg, #7b2cbf, transparent);
+  border-top: 3px solid #7b2cbf;
+}
+.notif-panel-sheet.is-opening {
+  animation: notifSheetIn var(--duration-sheet) var(--ease-sheet);
+}
+@keyframes notifSheetIn {
+  from { transform: translateY(18%); opacity: 0.85; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .notif-panel-sheet.is-opening { animation: none; }
+  .notif-panel-sheet::before { opacity: 0.12; }
+}

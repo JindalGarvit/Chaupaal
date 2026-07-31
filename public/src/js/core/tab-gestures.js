@@ -165,6 +165,9 @@
     refreshingTabs.add(tab);
     setTabBusy(tab, true);
     lightHaptic();
+    try {
+      if (typeof TabElements !== 'undefined' && TabElements.playRitual) TabElements.playRitual(tab);
+    } catch (e) {}
 
     try {
       if (tab === 'peepal') {
@@ -253,9 +256,8 @@
       return;
     }
     if (typeof Micro !== 'undefined') {
-      Micro.haptic('medium');
-      Micro.playUi('tap');
-    } else if (typeof haptic === 'function') haptic('medium');
+      Micro.haptic('heavy');
+    } else if (typeof haptic === 'function') haptic('heavy');
     if (typeof openNotificationPanel === 'function') {
       openNotificationPanel(tab || 'all');
     }
@@ -570,9 +572,12 @@
     bar.setAttribute('data-morph-tab', tab);
     suppressNextClick = true;
     if (typeof Micro !== 'undefined') {
-      Micro.haptic('medium');
+      Micro.haptic('heavy');
       Micro.playUi('tap');
     }
+    try {
+      if (typeof TabElements !== 'undefined' && TabElements.playAmbience) TabElements.playAmbience(tab);
+    } catch (e) {}
 
     buttons.forEach((btn, i) => {
       const sc = shortcuts[i];
@@ -583,7 +588,11 @@
       const iconEl = btn.querySelector('.tab-icon');
       const labelEl = btn.querySelector('.tab-label');
       if (iconEl) {
+        iconEl.classList.remove('tab-el-icon');
+        iconEl.removeAttribute('data-tab-element');
+        iconEl.removeAttribute('data-icon-skip');
         iconEl.setAttribute('data-icon', sc.icon);
+        iconEl.setAttribute('data-icon-size', '20');
         delete iconEl.dataset.iconHydrated;
         iconEl.innerHTML = '';
       }
@@ -625,7 +634,8 @@
     morphSnapshot = null;
     morphSourceTab = null;
     document.removeEventListener('pointerdown', onOutsideMorph, true);
-    if (typeof hydrateIcons === 'function') hydrateIcons(bar);
+    if (typeof TabElements !== 'undefined' && TabElements.mountAll) TabElements.mountAll(bar);
+    else if (typeof hydrateIcons === 'function') hydrateIcons(bar);
     updateTabLights();
   }
 

@@ -450,11 +450,8 @@
   }
 
   function isAmbientUserOn() {
-    try {
-      return localStorage.getItem(STORAGE_AMBIENT) === '1';
-    } catch (e) {
-      return false;
-    }
+    // Folded under Quiet — no separate Display toggle; feature flag + Quiet gate playback.
+    return true;
   }
 
   function setAmbientUserOn(on) {

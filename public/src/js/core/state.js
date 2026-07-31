@@ -1,6 +1,7 @@
 // ===================== STATE =====================
 let quietMode=false,currentLang='en';
 try{ quietMode = localStorage.getItem('chaupaal_quiet')==='1'; }catch(e){}
+try{ document.documentElement.classList.toggle('quiet-mode', !!quietMode); }catch(e){}
 let score=0,maxUnlocked=0,categoryScores={};
 let QUESTIONS=[],BONUS_QUESTIONS=[];
 
@@ -22,9 +23,8 @@ const SoundLib=(()=>{
   function wrongTone(){tone(330,0,0.3,'sine',0.1);tone(220,0.12,0.4,'sine',0.08);}
   function cheer(){[523.25,659.25,783.99,1046.5].forEach((f,i)=>tone(f,i*0.08,0.3,'triangle',0.14));tone(1046.5,0.32,0.5,'triangle',0.12);}
   function birthdayJingle(){[392,392,440,392,523,494].forEach((f,i)=>tone(f,i*0.15,0.22,'triangle',0.13));}
-  /** ~0.08s — subtle UI tap / nav */
+  /** ~0.08s — subtle UI tap / nav (always on unless Quiet) */
   function tap(){
-    try{ if(localStorage.getItem('chaupaal_ui_sounds')==='0') return; }catch(e){}
     tone(880,0,0.07,'sine',0.045);
   }
   /** ~0.2s — like */
@@ -48,6 +48,19 @@ const SoundLib=(()=>{
     tone(1318.5,0.4,0.35,'triangle',0.11);
     tone(1046.5,0.55,0.4,'triangle',0.1);
   }
+  /** Short themed one-shots per element tab (silenced by Quiet only). */
+  function element(tab, kind){
+    if(quietMode) return;
+    const t0 = String(tab||'');
+    const strong = kind === 'ambience' || kind === 'open';
+    const g = strong ? 0.1 : 0.07;
+    if(t0==='peepal'){ tone(392,0,0.12,'triangle',g); tone(523,0.08,0.14,'sine',g*0.85); }
+    else if(t0==='duniya'){ tone(440,0,0.1,'sine',g); tone(554,0.1,0.18,'sine',g*0.8); }
+    else if(t0==='baithak'){ tone(349,0,0.14,'triangle',g); tone(415,0.1,0.16,'triangle',g*0.75); }
+    else if(t0==='akhbaar'){ tone(587,0,0.08,'square',g*0.55); tone(698,0.07,0.1,'square',g*0.45); }
+    else if(t0==='dangal'){ tone(220,0,0.08,'sawtooth',g*0.5); tone(330,0.05,0.12,'triangle',g); tone(880,0.14,0.08,'sine',g*0.6); }
+    else { tap(); }
+  }
   function playFeedback(isCorrect,soundTag){
     if(quietMode)return;
     if(isCorrect){if(soundTag==='cheer')cheer();else if(soundTag==='birthday')birthdayJingle();else if(soundTag==='milestone')milestone();else correctChime();}
@@ -55,11 +68,6 @@ const SoundLib=(()=>{
   }
   function play(name){
     if(quietMode)return;
-    // Optional UI click layer (taps) can be muted independently of Quiet
-    if((name==='tap') && typeof Micro!=='undefined' && Micro.uiSoundsOn && !Micro.uiSoundsOn()) return;
-    if(name==='tap'){
-      try{ if(localStorage.getItem('chaupaal_ui_sounds')==='0') return; }catch(e){}
-    }
     const map={
       tap,like,send,postPublish,follow,notification,error,rateLimited,
       sectionComplete,milestone,correctChime,wrongTone,cheer,birthdayJingle,
@@ -78,7 +86,7 @@ const SoundLib=(()=>{
     window.speechSynthesis.cancel();window.speechSynthesis.speak(utter);
   }
   // startBg/stopBg removed — no continuous / looped audio in the app.
-  return{play,playFeedback,speak,tap,like,send,postPublish,follow,notification,error,rateLimited,sectionComplete,milestone};
+  return{play,playFeedback,speak,tap,like,send,postPublish,follow,notification,error,rateLimited,sectionComplete,milestone,element};
 })();
 
 // ===================== TOAST =====================
@@ -107,13 +115,9 @@ function openSettingsModal(){
     const mode=(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.getDisplayMode)?ChaupaalTheme.getDisplayMode():'auto';
     const radio=document.querySelector(`input[name="displayMode"][value="${mode}"]`);
     if(radio) radio.checked=true;
-    const amb=document.getElementById('toggleAmbientSound');
-    if(amb) amb.checked=!!(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.isAmbientUserOn&&ChaupaalTheme.isAmbientUserOn());
-    if(typeof updateThemeGeoStatusUI==='function') updateThemeGeoStatusUI();
     const quiet=document.getElementById('toggleQuiet');
     if(quiet) quiet.checked=!!quietMode || localStorage.getItem('chaupaal_quiet')==='1';
-    const uiSnd=document.getElementById('toggleUiSounds');
-    if(uiSnd) uiSnd.checked=localStorage.getItem('chaupaal_ui_sounds')!=='0';
+    if(typeof updateThemeGeoStatusUI==='function') updateThemeGeoStatusUI();
   }catch(e){}
   // Companion opt-out: checked = outreach ON (optOut false)
   try{
@@ -173,20 +177,11 @@ document.getElementById('saveSettings').addEventListener('click',()=>{
       db.collection('users').doc(currentUser.uid).set({ akhbaarAppearInFriendsPrompts: appearOn }, { merge:true }).catch(()=>{});
     }
   }catch(e){}
-  // Display mode + ambient sound
+  // Display mode (ambient folded under Quiet — no separate toggle)
   try{
     const modeEl=document.querySelector('input[name="displayMode"]:checked');
     const mode=modeEl?.value||'auto';
     if(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.setDisplayMode) ChaupaalTheme.setDisplayMode(mode);
-    const ambOn=!!document.getElementById('toggleAmbientSound')?.checked;
-    if(ambOn){
-      if(typeof ChaupaalAmbient!=='undefined'&&ChaupaalAmbient.enableFromUserGesture) ChaupaalAmbient.enableFromUserGesture();
-      else if(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.setAmbientUserOn) ChaupaalTheme.setAmbientUserOn(true);
-    }else if(typeof ChaupaalAmbient!=='undefined'&&ChaupaalAmbient.disable){
-      ChaupaalAmbient.disable();
-    }else if(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.setAmbientUserOn){
-      ChaupaalTheme.setAmbientUserOn(false);
-    }
   }catch(e){}
   document.getElementById('settingsModal').classList.add('hidden');
   showToast(t('settings_saved'));
@@ -223,6 +218,8 @@ document.getElementById('toggleQuiet').addEventListener('change',e=>{
   try{localStorage.setItem('chaupaal_quiet', quietMode?'1':'0');}catch(err){}
   // Quiet kills ambient + voice + UI cues (SoundLib/Micro already check quietMode)
   try{ if(window.speechSynthesis) window.speechSynthesis.cancel(); }catch(err){}
+  try{ document.documentElement.classList.toggle('quiet-mode', !!quietMode); }catch(err){}
+  try{ if(typeof TabElements!=='undefined'&&TabElements.syncQuietClass) TabElements.syncQuietClass(); }catch(err){}
   if(quietMode){
     if(typeof ChaupaalAmbient!=='undefined'&&ChaupaalAmbient.hardStop) ChaupaalAmbient.hardStop(120);
     else if(typeof ChaupaalAmbient!=='undefined'&&ChaupaalAmbient.sync) ChaupaalAmbient.sync();
@@ -230,9 +227,6 @@ document.getElementById('toggleQuiet').addEventListener('change',e=>{
     ChaupaalAmbient.sync();
   }
   if(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.recompute) ChaupaalTheme.recompute('quiet');
-});
-document.getElementById('toggleUiSounds')?.addEventListener('change',(e)=>{
-  try{localStorage.setItem('chaupaal_ui_sounds', e.target.checked?'1':'0');}catch(err){}
 });
 
 // Apply display mode immediately when tapped (don't wait for Done)
@@ -245,16 +239,6 @@ document.querySelectorAll('input[name="displayMode"]').forEach((el)=>{
       applyTheme(mode==='light'?'clearDay':'night');
     }
   });
-});
-document.getElementById('toggleAmbientSound')?.addEventListener('change',(e)=>{
-  if(e.target.checked){
-    if(typeof ChaupaalAmbient!=='undefined'&&ChaupaalAmbient.enableFromUserGesture) ChaupaalAmbient.enableFromUserGesture();
-    else if(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.setAmbientUserOn) ChaupaalTheme.setAmbientUserOn(true);
-  }else if(typeof ChaupaalAmbient!=='undefined'&&ChaupaalAmbient.disable){
-    ChaupaalAmbient.disable();
-  }else if(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.setAmbientUserOn){
-    ChaupaalTheme.setAmbientUserOn(false);
-  }
 });
 
 function updateThemeGeoStatusUI(){

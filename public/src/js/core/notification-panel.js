@@ -5,8 +5,10 @@
 (function () {
   'use strict';
 
-  const DEFAULT_LIMIT = 8;
-  const EXPANDED_LIMIT = 50;
+  const DEFAULT_LIMIT = 6;
+  const EXPANDED_LIMIT = 40;
+  const MAX_VISIBLE = 6;
+  const MAX_READ_WHEN_UNREAD = 2;
 
   /** type substring → tab section */
   const SECTION_TYPES = {
@@ -492,9 +494,22 @@
     }
   }
 
+  function prioritizeVisible(items) {
+    const list = (items || []).filter((n) => !isTypeMuted(n));
+    const unread = list.filter((n) => !n.read);
+    const read = list.filter((n) => n.read);
+    unread.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+    read.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+    if (!unread.length) return read.slice(0, MAX_VISIBLE);
+    const unreadTake = unread.slice(0, MAX_VISIBLE);
+    const room = Math.max(0, MAX_VISIBLE - unreadTake.length);
+    const readCap = Math.min(MAX_READ_WHEN_UNREAD, room);
+    return [...unreadTake, ...read.slice(0, readCap)];
+  }
+
   function renderPanelList(listEl, items, { hasMore, onMore, section, repaint } = {}) {
     if (!listEl) return;
-    const visible = items.filter((n) => !isTypeMuted(n));
+    const visible = prioritizeVisible(items);
     if (!visible.length) {
       const cta = emptyCtaFor(section || 'all');
       if (typeof renderEmptyState === 'function') {
@@ -698,14 +713,16 @@
       baithak: tt('notif_title_baithak', 'Baithak'),
       akhbaar: tt('notif_title_akhbaar', 'Akhbaar'),
     };
+    const accent = section === 'all' ? 'akhbaar' : section;
     const sheet = document.createElement('div');
     sheet.id = 'notifPanelSheet';
-    sheet.className = 'archive-overlay notif-panel-sheet';
+    sheet.className = 'archive-overlay notif-panel-sheet is-opening';
     sheet.setAttribute('data-nav-managed', '1');
-    sheet.setAttribute('data-tab-accent', section === 'all' ? 'akhbaar' : section);
+    sheet.setAttribute('data-tab-accent', accent);
+    sheet.setAttribute('data-sheet-panel', '1');
     sheet.innerHTML = `
+      <div class="notif-panel-grabber" aria-hidden="true"></div>
       <div class="archive-header">
-        <button type="button" data-overlay-dismiss aria-label="Back">←</button>
         <div style="flex:1"><strong>${title || titles[section] || titles.all}</strong></div>
         <button type="button" class="notif-clear-all" data-clear-all>${tt('notif_clear_all', 'Clear all')}</button>
       </div>
@@ -714,12 +731,28 @@
       </div>
       <div class="notif-panel-list" data-notif-panel-list></div>`;
     document.querySelector('.device')?.appendChild(sheet);
+
     const closePanel = () => {
       panelRepaint = null;
+      document.removeEventListener('pointerdown', onOutside, true);
       if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
       sheet.remove();
     };
+    const onOutside = (e) => {
+      if (!sheet.isConnected) return;
+      if (sheet.contains(e.target)) return;
+      closePanel();
+    };
     if (typeof pushNavLayer === 'function') pushNavLayer(sheet, closePanel);
+    setTimeout(() => document.addEventListener('pointerdown', onOutside, true), 0);
+
+    try {
+      if (typeof enableSwipeDismiss === 'function') {
+        enableSwipeDismiss(sheet, closePanel);
+      } else if (typeof window.enableSwipeDismiss === 'function') {
+        window.enableSwipeDismiss(sheet, closePanel);
+      }
+    } catch (e) {}
 
     const listEl = sheet.querySelector('[data-notif-panel-list]');
 
@@ -737,7 +770,6 @@
     };
     panelRepaint = paint;
 
-    sheet.querySelector('[data-overlay-dismiss]')?.addEventListener('click', closePanel);
     sheet.querySelector('[data-mark-all]')?.addEventListener('click', async () => {
       await markAllNotificationsRead(section);
       paint();
@@ -749,6 +781,11 @@
 
     paint();
     apiNotif('notif_prune', {}).catch(() => {});
+    try {
+      if (typeof Micro !== 'undefined' && Micro.haptic) Micro.haptic('medium');
+      if (typeof SoundLib !== 'undefined' && SoundLib.element) SoundLib.element(accent, 'open');
+    } catch (e) {}
+    setTimeout(() => sheet.classList.remove('is-opening'), 400);
   }
 
   function wireTabNotificationButtons() {
