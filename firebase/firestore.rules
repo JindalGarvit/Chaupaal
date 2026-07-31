@@ -282,13 +282,11 @@ service cloud.firestore {
       allow delete: if isAuth() && resource.data.uid == request.auth.uid;
     }
 
-    /* SHA-256(E.164) → uid for contacts match. Client writes own hash; Admin reads for match. */
+    /* SHA-256(E.164) → uid for contacts match.
+       Admin-only writes (sync_phone_hash) — rules cannot SHA-256(token.phone_number),
+       so client create/update would let any auth user claim arbitrary hashes. */
     match /phoneHashIndex/{hash} {
-      allow get, list: if false;
-      allow create, update: if isAuth()
-        && request.resource.data.uid == request.auth.uid
-        && hash.matches('^[a-f0-9]{64}$');
-      allow delete: if isAuth() && resource.data.uid == request.auth.uid;
+      allow get, list, create, update, delete: if false;
     }
 
     // Professional signup picklists — public read (label + count only); auth increments.
