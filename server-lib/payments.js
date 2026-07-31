@@ -156,4 +156,5 @@ module.exports = {
   confirmPayment,
   getPaymentStatus,
   refund,
+  sanitizeMeta,
 };

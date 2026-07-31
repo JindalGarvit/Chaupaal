@@ -87,7 +87,7 @@ async function userAllowsCompanion(db, uid) {
   }
 }
 
-function birthdayMatch(profile, tz) {
+function birthdayMatch(profile, tz, now = new Date()) {
   const b =
     profile?.dateOfBirth ||
     profile?.birthday ||
@@ -110,7 +110,7 @@ function birthdayMatch(profile, tz) {
       timeZone: tz,
       month: 'numeric',
       day: 'numeric',
-    }).formatToParts(new Date());
+    }).formatToParts(now instanceof Date ? now : new Date(now));
     const month = Number(parts.find((p) => p.type === 'month')?.value);
     const day = Number(parts.find((p) => p.type === 'day')?.value);
     return month === bm && day === bd;
@@ -343,6 +343,7 @@ module.exports = {
   processCompanionOutreach,
   festivalForDate,
   checkInIntervalDays,
+  birthdayMatch,
   FESTIVAL_CALENDAR,
   maybeCompanionPremiumUpsellPlaceholder,
   CHECKIN_FLOOR_DAYS,
