@@ -103,4 +103,59 @@ test('recordEventSent prunes and stamps', () => {
   assert.ok(next.eventsToday.length === 1);
 });
 
+test('hard daily cap blocks even journal as 3rd event', () => {
+  const today = cadence.localDateKey('Asia/Kolkata');
+  const state = {
+    timezone: 'Asia/Kolkata',
+    eventsToday: [
+      { type: 'session_nudge', dateKey: today },
+      { type: 'goodnight_journal', dateKey: today, isJournal: true },
+    ],
+  };
+  const blocked = cadence.canSendProactive(state, { type: 'check_in' });
+  assert.strictEqual(blocked.ok, false);
+  assert.strictEqual(blocked.reason, 'daily_cap');
+  assert.strictEqual(
+    cadence.canSendProactive(state, { type: 'goodnight_journal', isJournal: true }).reason,
+    'daily_cap'
+  );
+});
+
+test('journal pause and recommendation cooldown', () => {
+  const now = new Date('2026-07-31T12:00:00Z');
+  const paused = {
+    timezone: 'Asia/Kolkata',
+    journalPauseUntil: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
+  };
+  assert.strictEqual(
+    cadence.canSendProactive(paused, { type: 'goodnight_journal', isJournal: true, now }).reason,
+    'journal_paused'
+  );
+
+  const cooled = {
+    timezone: 'Asia/Kolkata',
+    lastRecommendationAt: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+  };
+  assert.strictEqual(
+    cadence.canSendProactive(cooled, { type: 'weekly_recommendation', now }).reason,
+    'recommendation_cooldown'
+  );
+  const ready = {
+    timezone: 'Asia/Kolkata',
+    lastRecommendationAt: new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000).toISOString(),
+  };
+  assert.strictEqual(cadence.canSendProactive(ready, { type: 'weekly_recommendation', now }).ok, true);
+});
+
+test('journal ignore streak applies multi-day pause', () => {
+  const now = new Date('2026-07-31T12:00:00Z');
+  let state = {};
+  state = cadence.applyDismiss(state, { isJournal: true, now });
+  state = cadence.applyDismiss(state, { isJournal: true, now });
+  assert.strictEqual(state.journalPauseUntil, undefined);
+  state = cadence.applyDismiss(state, { isJournal: true, now });
+  assert.ok(state.journalPauseUntil);
+  assert.strictEqual(state.journalIgnoredStreak, 3);
+});
+
 console.log('\nDone.');

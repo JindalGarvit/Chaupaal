@@ -69,4 +69,5 @@ function mintAgoraToken(opts = {}) {
 module.exports = {
   getAgoraConfig,
   mintAgoraToken,
+  uidToNumber,
 };
