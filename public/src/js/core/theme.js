@@ -1,77 +1,81 @@
 /**
- * App-wide dynamic theming — discrete 6-state registry + bridge into ChaupaalTheme.
- * When sensory_theme flag is off: classic snap between anchors (unchanged UX).
+ * App-wide dynamic theming — discrete 6-state registry + gateway into ChaupaalTheme.
+ * Light baseline is Material-neutral; other anchors derive from Light (see theme-engine.js).
+ * When sensory_theme flag is off: snap between Light-derived anchors.
  * When on: theme-engine.js owns continuous interpolation + CSS vars.
  * Weather: single Open-Meteo client fetch (shared with engine via setWeatherContext).
  */
 (function () {
   'use strict';
 
+  /** Keep in sync with ChaupaalTheme.LIGHT / ANCHORS (theme-engine.js). */
+  const LIGHT = {
+    '--cream': '#F5F5F5',
+    '--bg': '#F5F5F5',
+    '--white': '#FFFFFF',
+    '--card': '#FFFFFF',
+    '--ink': '#1C1B1F',
+    '--muted': '#5F6368',
+    '--line': '#E0E0E0',
+  };
+  const DARK = {
+    '--cream': '#121316',
+    '--bg': '#121316',
+    '--white': '#1C1E22',
+    '--card': '#1C1E22',
+    '--ink': '#E8EAED',
+    '--muted': '#9AA0A6',
+    '--line': '#2C2E33',
+  };
+
   const THEME_REGISTRY = {
     clearDay: {
-      metaThemeColor: '#F7F1E8',
-      vars: {
-        '--cream': '#F7F1E8',
-        '--white': '#FFFcf7',
-        '--ink': '#2B2730',
-        '--muted': '#7A7480',
-        '--line': '#E8DFD4',
-      },
+      metaThemeColor: '#F5F5F5',
+      vars: { ...LIGHT },
       ambient: null,
     },
     overcast: {
-      metaThemeColor: '#E8EEF2',
+      metaThemeColor: '#F0F2F4',
       vars: {
-        '--cream': '#E8EEF2',
-        '--white': '#F5F7FA',
-        '--ink': '#243040',
-        '--muted': '#6B7785',
-        '--line': '#D5DCE3',
+        ...LIGHT,
+        '--cream': '#F0F2F4',
+        '--bg': '#F0F2F4',
+        '--white': '#FAFBFC',
+        '--card': '#FAFBFC',
+        '--ink': '#1A1C1E',
+        '--muted': '#5C636A',
+        '--line': '#DCE0E4',
       },
       ambient: null,
     },
     rainy: {
-      metaThemeColor: '#D9E4EC',
+      metaThemeColor: '#EEF1F4',
       vars: {
-        '--cream': '#D9E4EC',
-        '--white': '#EEF3F7',
-        '--ink': '#1E2A36',
-        '--muted': '#5E6D7A',
-        '--line': '#C5D0D9',
+        ...LIGHT,
+        '--cream': '#EEF1F4',
+        '--bg': '#EEF1F4',
+        '--white': '#F7F9FB',
+        '--card': '#F7F9FB',
+        '--ink': '#181B1F',
+        '--muted': '#586068',
+        '--line': '#D5DBE1',
       },
       ambient: null,
     },
+    // Surfaces = Light; warmth is overlay-only in the engine
     goldenHour: {
-      metaThemeColor: '#F5E0C8',
-      vars: {
-        '--cream': '#F5E0C8',
-        '--white': '#FFF6EB',
-        '--ink': '#3A2A1F',
-        '--muted': '#8A6E55',
-        '--line': '#E8D2B8',
-      },
+      metaThemeColor: '#F5F5F5',
+      vars: { ...LIGHT },
       ambient: null,
     },
     dawn: {
-      metaThemeColor: '#F5E6D3',
-      vars: {
-        '--cream': '#F5E6D3',
-        '--white': '#FFF9F2',
-        '--ink': '#3A2F28',
-        '--muted': '#8A7A6C',
-        '--line': '#E8D9C8',
-      },
+      metaThemeColor: '#F5F5F5',
+      vars: { ...LIGHT },
       ambient: null,
     },
     night: {
-      metaThemeColor: '#0F1117',
-      vars: {
-        '--cream': '#161A24',
-        '--white': '#1B2030',
-        '--ink': '#F2F0F5',
-        '--muted': '#A8A0B0',
-        '--line': '#2A3145',
-      },
+      metaThemeColor: '#121316',
+      vars: { ...DARK },
       ambient: null,
     },
   };
@@ -84,6 +88,7 @@
     const def = THEME_REGISTRY[key] || THEME_REGISTRY.clearDay;
     const root = document.documentElement;
     const device = document.querySelector('.device');
+    const isDay = key !== 'night';
 
     THEME_KEYS.forEach((k) => {
       root.classList.remove('theme-' + k);
@@ -107,7 +112,14 @@
     });
 
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', def.metaThemeColor || '#E63946');
+    if (meta) meta.setAttribute('content', def.metaThemeColor || (isDay ? '#F5F5F5' : '#121316'));
+
+    const statusBar = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+    if (statusBar) statusBar.setAttribute('content', isDay ? 'default' : 'black');
+
+    try {
+      root.style.colorScheme = isDay ? 'light' : 'dark';
+    } catch (e) {}
 
     try {
       if (themeKey === 'auto' || !localStorage.getItem('chaupaal_theme_lock')) {

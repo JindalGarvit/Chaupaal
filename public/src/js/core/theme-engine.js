@@ -1,12 +1,13 @@
 /**
- * Chaupaal sensory theme engine (Phase 1).
- * Continuous interpolation between the 6 named anchors — not a new discrete mode per hour.
+ * Chaupaal display / sensory theme engine.
+ * True Material-like Light is the baseline. Other anchors derive from Light.
+ * Auto = Light-first + subtle sky/weather (not a costume). Fixed Light = no atmosphere.
  *
  * Flags:
- *   sensory_theme  → SENSORY_THEME_ENABLED (visual continuous engine)
- *   ambient_sound  → AMBIENT_SOUND_ENABLED (independent kill switch)
+ *   sensory_theme  → continuous Auto interpolation
+ *   ambient_sound  → independent kill switch
  *
- * When sensory_theme is off, callers use discrete applyTheme() in theme.js (unchanged UX).
+ * When sensory_theme is off, Auto uses discrete Light-derived anchors (same Light baseline).
  */
 (function () {
   'use strict';
@@ -14,176 +15,182 @@
   const STORAGE_MODE = 'chaupaal_display_mode';
   const STORAGE_AMBIENT = 'chaupaal_ambient_sound';
   const STORAGE_GEO = 'chaupaal_theme_geo_consent';
-  const RECOMPUTE_MS = 20 * 60_000; // Phase 7: coarser auto blend (~20 min)
+  const RECOMPUTE_MS = 20 * 60_000;
 
   /** @typedef {'clearDay'|'overcast'|'rainy'|'goldenHour'|'dawn'|'night'} AnchorKey */
 
   /**
-   * Anchor points — same 6 states as THEME_REGISTRY, plus continuous sensory fields.
-   * soundKey is nearest-anchor for crossfade; real loop URLs optional later.
+   * True Light — Material / Android-system light baseline.
+   * Brand red/gold stay accents only; canvas stays neutral gray-white.
+   */
+  const LIGHT = {
+    '--cream': '#F5F5F5',
+    '--bg': '#F5F5F5',
+    '--white': '#FFFFFF',
+    '--card': '#FFFFFF',
+    '--ink': '#1C1B1F',
+    '--muted': '#5F6368',
+    '--line': '#E0E0E0',
+    '--red': '#E63946',
+  };
+  const LIGHT_META = '#F5F5F5';
+
+  /** Dark sibling of Light (same roles, inverted). */
+  const DARK = {
+    '--cream': '#121316',
+    '--bg': '#121316',
+    '--white': '#1C1E22',
+    '--card': '#1C1E22',
+    '--ink': '#E8EAED',
+    '--muted': '#9AA0A6',
+    '--line': '#2C2E33',
+    '--red': '#E63946',
+  };
+  const DARK_META = '#121316';
+
+  /** Night = dimmer + slightly warmer than Dark (late reading). */
+  const NIGHT = {
+    '--cream': '#141210',
+    '--bg': '#141210',
+    '--white': '#1E1A17',
+    '--card': '#1E1A17',
+    '--ink': '#F0EBE6',
+    '--muted': '#A89F96',
+    '--line': '#322C28',
+    '--red': '#E63946',
+  };
+  const NIGHT_META = '#141210';
+
+  /**
+   * Six sensory anchors — surfaces derived from LIGHT (or DARK for night).
+   * goldenHour / dawn keep Light surfaces; warmth is overlay-only via lightTemp.
    */
   const ANCHORS = {
     clearDay: {
-      lightTemp: 0.35,
-      brightness: 0.92,
+      lightTemp: 0.32,
+      brightness: 0.96,
       precipitation: 0,
-      cloudCover: 0.1,
-      motionIntensity: 0.35,
+      cloudCover: 0.08,
+      motionIntensity: 0.12,
       soundKey: 'day_ambient',
-      metaThemeColor: '#F7F1E8',
-      vars: {
-        '--cream': '#F7F1E8',
-        '--white': '#FFFcf7',
-        '--ink': '#2B2730',
-        '--muted': '#7A7480',
-        '--line': '#E8DFD4',
-      },
+      metaThemeColor: LIGHT_META,
+      vars: { ...LIGHT },
     },
     overcast: {
-      lightTemp: 0.28,
-      brightness: 0.78,
-      precipitation: 0.05,
-      cloudCover: 0.75,
-      motionIntensity: 0.25,
+      lightTemp: 0.22,
+      brightness: 0.9,
+      precipitation: 0.04,
+      cloudCover: 0.72,
+      motionIntensity: 0.1,
       soundKey: 'day_ambient',
-      metaThemeColor: '#E8EEF2',
+      metaThemeColor: '#F0F2F4',
+      // Slight cool shift — still reads as Light variant
       vars: {
-        '--cream': '#E8EEF2',
-        '--white': '#F5F7FA',
-        '--ink': '#243040',
-        '--muted': '#6B7785',
-        '--line': '#D5DCE3',
+        ...LIGHT,
+        '--cream': '#F0F2F4',
+        '--bg': '#F0F2F4',
+        '--white': '#FAFBFC',
+        '--card': '#FAFBFC',
+        '--ink': '#1A1C1E',
+        '--muted': '#5C636A',
+        '--line': '#DCE0E4',
       },
     },
     rainy: {
-      lightTemp: 0.22,
-      brightness: 0.7,
-      precipitation: 0.85,
-      cloudCover: 0.9,
-      motionIntensity: 0.55,
+      lightTemp: 0.18,
+      brightness: 0.86,
+      precipitation: 0.8,
+      cloudCover: 0.88,
+      motionIntensity: 0.22,
       soundKey: 'rain_soft',
-      metaThemeColor: '#D9E4EC',
+      metaThemeColor: '#EEF1F4',
       vars: {
-        '--cream': '#D9E4EC',
-        '--white': '#EEF3F7',
-        '--ink': '#1E2A36',
-        '--muted': '#5E6D7A',
-        '--line': '#C5D0D9',
+        ...LIGHT,
+        '--cream': '#EEF1F4',
+        '--bg': '#EEF1F4',
+        '--white': '#F7F9FB',
+        '--card': '#F7F9FB',
+        '--ink': '#181B1F',
+        '--muted': '#586068',
+        '--line': '#D5DBE1',
       },
     },
+    // Surfaces locked to Light — warm edge wash only in writeCss
     goldenHour: {
-      lightTemp: 0.85,
-      brightness: 0.8,
+      lightTemp: 0.72,
+      brightness: 0.94,
       precipitation: 0,
-      cloudCover: 0.2,
-      motionIntensity: 0.4,
+      cloudCover: 0.15,
+      motionIntensity: 0.12,
       soundKey: 'golden_hour_wind',
-      metaThemeColor: '#F5E0C8',
-      vars: {
-        '--cream': '#F5E0C8',
-        '--white': '#FFF6EB',
-        '--ink': '#3A2A1F',
-        '--muted': '#8A6E55',
-        '--line': '#E8D2B8',
-      },
+      metaThemeColor: LIGHT_META,
+      vars: { ...LIGHT },
     },
     dawn: {
-      lightTemp: 0.7,
-      brightness: 0.75,
+      lightTemp: 0.58,
+      brightness: 0.93,
       precipitation: 0,
-      cloudCover: 0.25,
-      motionIntensity: 0.3,
+      cloudCover: 0.18,
+      motionIntensity: 0.1,
       soundKey: 'day_ambient',
-      metaThemeColor: '#F5E6D3',
-      vars: {
-        '--cream': '#F5E6D3',
-        '--white': '#FFF9F2',
-        '--ink': '#3A2F28',
-        '--muted': '#8A7A6C',
-        '--line': '#E8D9C8',
-      },
+      metaThemeColor: LIGHT_META,
+      vars: { ...LIGHT },
     },
     night: {
-      lightTemp: 0.15,
-      brightness: 0.35,
+      lightTemp: 0.2,
+      brightness: 0.34,
       precipitation: 0,
-      cloudCover: 0.3,
-      motionIntensity: 0.15,
+      cloudCover: 0.25,
+      motionIntensity: 0.08,
       soundKey: 'night_quiet',
-      metaThemeColor: '#0F1117',
-      vars: {
-        '--cream': '#161A24',
-        '--white': '#1B2030',
-        '--ink': '#F2F0F5',
-        '--muted': '#A8A0B0',
-        '--line': '#2A3145',
-      },
+      metaThemeColor: DARK_META,
+      vars: { ...DARK },
     },
   };
 
-  /** Manual presets — fixed ThemeState writers (same CSS contract as Auto). */
+  /** Manual presets — fixed writers (same CSS contract as Auto). */
   const PRESETS = {
     light: {
       isDay: true,
-      lightTemp: 0.32,
-      brightness: 0.97,
+      lightTemp: 0.3,
+      brightness: 0.98,
       precipitation: 0,
       cloudCover: 0,
-      motionIntensity: 0.15,
+      motionIntensity: 0,
       soundKey: null,
       soundVolume: 0,
       anchor: 'clearDay',
-      vars: {
-        ...ANCHORS.clearDay.vars,
-        '--bg': '#F7F5F2',
-        '--cream': '#F7F5F2',
-        '--white': '#FFFEFB',
-        '--ink': '#141218',
-        '--muted': '#3a3640',
-        '--line': 'rgba(20,18,24,0.1)',
-        '--red': '#d62839',
-      },
-      metaThemeColor: '#F7F5F2',
+      vars: { ...LIGHT },
+      metaThemeColor: LIGHT_META,
+      atmosphere: false,
     },
     dark: {
-      // Neutral dark UI preference (cooler than Night)
       isDay: false,
-      lightTemp: 0.12,
-      brightness: 0.42,
+      lightTemp: 0.1,
+      brightness: 0.4,
       precipitation: 0,
       cloudCover: 0,
-      motionIntensity: 0.12,
+      motionIntensity: 0,
       soundKey: null,
       soundVolume: 0,
       anchor: 'night',
-      vars: {
-        '--cream': '#12141C',
-        '--white': '#1A1D27',
-        '--ink': '#F2F0F5',
-        '--muted': '#9AA0B0',
-        '--line': '#2A2F3D',
-      },
-      metaThemeColor: '#0B0D14',
+      vars: { ...DARK },
+      metaThemeColor: DARK_META,
+      atmosphere: false,
     },
     night: {
-      // Dim + warm — late-night reading
       isDay: false,
-      lightTemp: 0.55,
+      lightTemp: 0.42,
       brightness: 0.28,
       precipitation: 0,
       cloudCover: 0,
-      motionIntensity: 0.08,
+      motionIntensity: 0.05,
       soundKey: 'night_quiet',
       soundVolume: 0,
       anchor: 'night',
-      vars: {
-        '--cream': '#1A1410',
-        '--white': '#241C16',
-        '--ink': '#F5EDE4',
-        '--muted': '#B0A090',
-        '--line': '#3A2E24',
-      },
-      metaThemeColor: '#140F0C',
+      vars: { ...NIGHT },
+      metaThemeColor: NIGHT_META,
+      atmosphere: false,
     },
   };
 
@@ -234,15 +241,51 @@
     const out = {};
     const keys = new Set([...Object.keys(va || {}), ...Object.keys(vb || {})]);
     keys.forEach((k) => {
-      out[k] = mixHex(va[k] || '#000000', vb[k] || '#000000', t);
+      const a = va[k] || LIGHT[k] || '#000000';
+      const b = vb[k] || LIGHT[k] || '#000000';
+      // Non-hex tokens (e.g. future) — pick nearer endpoint
+      if (!/^#[0-9A-Fa-f]{6}$/.test(a) || !/^#[0-9A-Fa-f]{6}$/.test(b)) {
+        out[k] = t < 0.5 ? a : b;
+        return;
+      }
+      out[k] = mixHex(a, b, t);
     });
     return out;
+  }
+
+  /** Cap surface drift so blends never leave the Light family during day. */
+  function capDaySurfaceMix(vars, towardKey, amount) {
+    const cap =
+      towardKey === 'rainy' ? 0.12 : towardKey === 'overcast' ? 0.1 : towardKey === 'night' ? 1 : 0.04;
+    const t = Math.min(clamp01(amount), cap);
+    if (t <= 0 || towardKey === 'goldenHour' || towardKey === 'dawn') {
+      return { ...LIGHT, ...(vars || {}), '--cream': LIGHT['--cream'], '--white': LIGHT['--white'], '--ink': LIGHT['--ink'], '--muted': LIGHT['--muted'], '--line': LIGHT['--line'], '--bg': LIGHT['--bg'], '--card': LIGHT['--card'] };
+    }
+    return mixVars(LIGHT, ANCHORS[towardKey]?.vars || LIGHT, t);
   }
 
   function mixAnchor(aKey, bKey, t) {
     const A = ANCHORS[aKey] || ANCHORS.clearDay;
     const B = ANCHORS[bKey] || ANCHORS.clearDay;
     const tt = clamp01(t);
+    const warmOnly =
+      (aKey === 'goldenHour' || aKey === 'dawn' || bKey === 'goldenHour' || bKey === 'dawn') &&
+      aKey !== 'night' &&
+      bKey !== 'night';
+
+    let vars;
+    if (warmOnly) {
+      // Keep Light surfaces; only sensory fields interpolate
+      vars = { ...LIGHT };
+    } else if (aKey === 'night' || bKey === 'night') {
+      vars = mixVars(A.vars, B.vars, tt);
+    } else {
+      // Day anchors: blend from Light with small caps
+      const toward = tt < 0.5 ? aKey : bKey;
+      const amt = toward === aKey ? 1 - tt : tt;
+      vars = capDaySurfaceMix(mixVars(A.vars, B.vars, tt), toward, amt);
+    }
+
     return {
       lightTemp: lerp(A.lightTemp, B.lightTemp, tt),
       brightness: lerp(A.brightness, B.brightness, tt),
@@ -253,8 +296,10 @@
       soundKeyA: A.soundKey,
       soundKeyB: B.soundKey,
       soundBlend: tt,
-      vars: mixVars(A.vars, B.vars, tt),
-      metaThemeColor: mixHex(A.metaThemeColor, B.metaThemeColor, tt),
+      vars,
+      metaThemeColor: warmOnly
+        ? LIGHT_META
+        : mixHex(A.metaThemeColor, B.metaThemeColor, tt),
       anchor: tt < 0.5 ? aKey : bKey,
     };
   }
@@ -265,10 +310,6 @@
     return Number.isFinite(d.getTime()) ? d.getTime() : null;
   }
 
-  /**
-   * Time-of-day pair + blend using sunrise/sunset when available,
-   * else fixed local clock windows (still continuous — no hard cut).
-   */
   function timeBlend(now = new Date()) {
     const h = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
     const sunrise = parseSunMs(weatherCtx.sunrise);
@@ -278,16 +319,13 @@
     if (sunrise && sunset) {
       const dawnWin = 45 * 60 * 1000;
       const goldWin = 50 * 60 * 1000;
-      // Night → dawn around sunrise
       if (nowMs < sunrise - dawnWin) return { a: 'night', b: 'night', t: 0 };
       if (nowMs < sunrise + dawnWin) {
         const t = clamp01((nowMs - (sunrise - dawnWin)) / (2 * dawnWin));
         if (t < 0.5) return { a: 'night', b: 'dawn', t: t * 2 };
         return { a: 'dawn', b: 'clearDay', t: (t - 0.5) * 2 };
       }
-      // Day
       if (nowMs < sunset - goldWin) return { a: 'clearDay', b: 'clearDay', t: 0 };
-      // Golden hour → night around sunset
       if (nowMs < sunset + goldWin) {
         const t = clamp01((nowMs - (sunset - goldWin)) / (2 * goldWin));
         if (t < 0.45) return { a: 'clearDay', b: 'goldenHour', t: t / 0.45 };
@@ -296,7 +334,6 @@
       return { a: 'night', b: 'night', t: 0 };
     }
 
-    // Clock-only schedule (continuous segments)
     const pts = [
       [0, 'night'],
       [5, 'night'],
@@ -343,42 +380,52 @@
               ? 0.9
               : 0.15;
 
-    // Keep weather influence gentle so UI text stays primary
-    const weatherMix = 0.18; // Phase 7: narrower weather blend
+    // Whisper-level weather influence on tokens (content stays primary)
+    const weatherMix = 0.08;
+
+    if (out.anchor === 'night') {
+      out.cloudCover = cloud;
+      out.precipitation = precip;
+      out.weatherBucket = bucket || 'clear';
+      return out;
+    }
 
     if (precip > 0.05 || bucket === 'snow') {
-      const rainy = mixAnchor(out.anchor, 'rainy', clamp01(precip) * weatherMix);
       const snowy = bucket === 'snow';
+      const amt = clamp01(precip) * weatherMix;
       out = {
-        ...rainy,
-        lightTemp: lerp(out.lightTemp, rainy.lightTemp, precip * weatherMix),
-        brightness: lerp(out.brightness, rainy.brightness, precip * weatherMix),
+        ...out,
+        lightTemp: lerp(out.lightTemp, ANCHORS.rainy.lightTemp, amt),
+        brightness: lerp(out.brightness, ANCHORS.rainy.brightness, amt),
         precipitation: Math.max(out.precipitation, precip),
         cloudCover: Math.max(out.cloudCover, cloud),
-        motionIntensity: lerp(out.motionIntensity, rainy.motionIntensity, precip * 0.5),
-        vars: mixVars(out.vars, ANCHORS.rainy.vars, precip * weatherMix),
+        motionIntensity: lerp(out.motionIntensity, ANCHORS.rainy.motionIntensity, precip * 0.35),
+        vars: capDaySurfaceMix(out.vars, 'rainy', amt),
         soundKey: snowy ? 'snow_soft' : precip > 0.28 ? 'rain_soft' : out.soundKey,
         soundKeyA: out.soundKeyA || out.soundKey,
         soundKeyB: snowy ? 'snow_soft' : 'rain_soft',
         soundBlend: precip,
-        anchor: precip > 0.65 ? 'rainy' : out.anchor,
+        anchor: precip > 0.75 ? 'rainy' : out.anchor,
         weatherBucket: bucket || (snowy ? 'snow' : 'rain'),
+        metaThemeColor: LIGHT_META,
       };
     } else if (cloud > 0.4) {
-      const over = mixAnchor(out.anchor === 'night' ? 'night' : out.anchor, 'overcast', (cloud - 0.4) / 0.6);
+      const amt = ((cloud - 0.4) / 0.6) * weatherMix;
       out = {
         ...out,
-        lightTemp: lerp(out.lightTemp, over.lightTemp, 0.28),
-        brightness: lerp(out.brightness, over.brightness, 0.32),
+        lightTemp: lerp(out.lightTemp, ANCHORS.overcast.lightTemp, 0.2),
+        brightness: lerp(out.brightness, ANCHORS.overcast.brightness, 0.22),
         cloudCover: cloud,
-        vars: mixVars(out.vars, ANCHORS.overcast.vars, ((cloud - 0.4) / 0.6) * 0.4),
-        anchor: cloud > 0.85 && out.anchor === 'clearDay' ? 'overcast' : out.anchor,
+        vars: capDaySurfaceMix(out.vars, 'overcast', amt),
+        anchor: cloud > 0.9 && out.anchor === 'clearDay' ? 'overcast' : out.anchor,
         weatherBucket: bucket || 'overcast',
+        metaThemeColor: LIGHT_META,
       };
     } else {
       out.cloudCover = cloud;
       out.precipitation = precip;
       out.weatherBucket = bucket || 'clear';
+      out.metaThemeColor = out.isDay === false ? out.metaThemeColor : LIGHT_META;
     }
     return out;
   }
@@ -395,7 +442,6 @@
     const m = mode === 'light' || mode === 'dark' || mode === 'night' ? mode : 'auto';
     try {
       localStorage.setItem(STORAGE_MODE, m);
-      // Keep legacy key in sync so old discrete locks don't fight Light/Dark/Night
       if (m === 'light') localStorage.setItem('chaupaal_theme', 'clearDay');
       else if (m === 'dark' || m === 'night') localStorage.setItem('chaupaal_theme', 'night');
       else localStorage.removeItem('chaupaal_theme');
@@ -448,22 +494,28 @@
     const hour = new Date().getHours();
     const isDay = hour >= 6 && hour < 20 && mixed.anchor !== 'night';
     const ambientOn = ambientFlagEnabled && isAmbientUserOn() && !quietModeOn();
+    // Daytime Auto: meta stays Light-native so Android chrome matches system light apps
+    const meta =
+      mixed.anchor === 'night' || !isDay
+        ? mixed.metaThemeColor || DARK_META
+        : LIGHT_META;
     return {
       isDay,
       lightTemp: clamp01(mixed.lightTemp),
       brightness: clamp01(mixed.brightness),
       precipitation: clamp01(mixed.precipitation),
       cloudCover: clamp01(mixed.cloudCover),
-      motionIntensity: clamp01(mixed.motionIntensity),
+      motionIntensity: clamp01(Math.min(mixed.motionIntensity, 0.28)),
       weatherBucket: mixed.weatherBucket || weatherCtx.bucket || null,
       soundKey: ambientOn ? mixed.soundKey : null,
       soundKeyA: mixed.soundKeyA || mixed.soundKey,
       soundKeyB: mixed.soundKeyB || mixed.soundKey,
       soundBlend: mixed.soundBlend != null ? mixed.soundBlend : 0,
-      soundVolume: ambientOn ? 0.12 : 0,
+      soundVolume: ambientOn ? 0.1 : 0,
       anchor: mixed.anchor,
       vars: mixed.vars,
-      metaThemeColor: mixed.metaThemeColor,
+      metaThemeColor: meta,
+      atmosphere: true,
     };
   }
 
@@ -479,24 +531,25 @@
     else if (w === 'clear' || (h >= 8 && h < 17)) key = 'clearDay';
     else key = 'goldenHour';
     const A = ANCHORS[key] || ANCHORS.clearDay;
+    const isDay = key !== 'night';
     return {
-      isDay: key !== 'night',
+      isDay,
       lightTemp: A.lightTemp,
       brightness: A.brightness,
       precipitation: A.precipitation,
       cloudCover: A.cloudCover,
-      motionIntensity: A.motionIntensity,
+      motionIntensity: Math.min(A.motionIntensity, 0.2),
       soundKey: null,
       soundVolume: 0,
       anchor: key,
-      vars: A.vars,
-      metaThemeColor: A.metaThemeColor,
+      vars: { ...A.vars },
+      metaThemeColor: isDay ? LIGHT_META : A.metaThemeColor,
+      atmosphere: true,
     };
   }
 
   function buildState() {
     const mode = getDisplayMode();
-    // Manual presets always win — independent of sensory_theme flag
     if (mode !== 'auto' && PRESETS[mode]) {
       return { ...PRESETS[mode], discrete: true, mode };
     }
@@ -509,32 +562,53 @@
   function writeCss(s) {
     const root = document.documentElement;
     const device = document.querySelector('.device');
+    const mode = s.mode || getDisplayMode();
+    const atmosphereOn = mode === 'auto' && s.atmosphere !== false;
     const set = (prop, val) => {
       root.style.setProperty(prop, val);
       device?.style.setProperty(prop, val);
     };
     set('--theme-light-temp', String(Number(s.lightTemp || 0).toFixed(3)));
     set('--theme-brightness', String(Number(s.brightness || 0).toFixed(3)));
-    set('--theme-precipitation', String(Number(s.precipitation || 0).toFixed(3)));
-    set('--theme-cloud-cover', String(Number(s.cloudCover || 0).toFixed(3)));
-    set('--theme-motion', String(Number(s.motionIntensity || 0).toFixed(3)));
+    set('--theme-precipitation', String(Number(atmosphereOn ? s.precipitation || 0 : 0).toFixed(3)));
+    set('--theme-cloud-cover', String(Number(atmosphereOn ? s.cloudCover || 0 : 0).toFixed(3)));
+    set('--theme-motion', String(Number(atmosphereOn ? s.motionIntensity || 0 : 0).toFixed(3)));
     set('--theme-is-day', s.isDay ? '1' : '0');
 
     Object.entries(s.vars || {}).forEach(([prop, val]) => set(prop, val));
 
-    const warm = Number(s.lightTemp) || 0;
+    const warm = atmosphereOn ? Number(s.lightTemp) || 0 : 0;
     const bright = Number(s.brightness) || 0;
-    // Whisper-level wash — perceptible only if you look for it
+    const anchor = s.anchor || 'clearDay';
+    // Faint warm edge wash only near golden hour / dawn — never peach UI
+    const warmWash =
+      atmosphereOn && s.isDay && (anchor === 'goldenHour' || anchor === 'dawn' || warm > 0.5)
+        ? Math.min(0.035, 0.012 + warm * 0.028)
+        : atmosphereOn && s.isDay
+          ? Math.min(0.012, warm * 0.02)
+          : 0;
     set(
       '--theme-overlay',
-      `rgba(${Math.round(255 * warm)}, ${Math.round(190 * warm)}, ${Math.round(100 * warm)}, ${(0.028 * warm).toFixed(3)})`
+      `rgba(${Math.round(255 * Math.min(1, warm + 0.15))}, ${Math.round(170 + 40 * warm)}, ${Math.round(90 + 30 * (1 - warm))}, ${warmWash.toFixed(3)})`
     );
-    set('--theme-dim', String((1 - bright) * 0.1));
+    set('--theme-dim', String(atmosphereOn ? (1 - bright) * 0.06 : 0));
 
+    const metaColor =
+      mode === 'light'
+        ? LIGHT_META
+        : mode === 'dark'
+          ? DARK_META
+          : mode === 'night'
+            ? NIGHT_META
+            : s.metaThemeColor || (s.isDay ? LIGHT_META : DARK_META);
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta && s.metaThemeColor) meta.setAttribute('content', s.metaThemeColor);
+    if (meta) meta.setAttribute('content', metaColor);
 
-    const key = s.anchor || 'clearDay';
+    const statusBar = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+    if (statusBar) {
+      statusBar.setAttribute('content', s.isDay ? 'default' : 'black');
+    }
+
     const keys = Object.keys(ANCHORS);
     keys.forEach((k) => {
       root.classList.remove('theme-' + k);
@@ -543,21 +617,25 @@
     });
     root.classList.remove('theme-default', 'theme-rain', 'theme-hot', 'theme-cold');
     ['auto', 'light', 'dark', 'night'].forEach((m) => root.classList.remove('theme-preset-' + m));
-    root.classList.add('theme-' + key);
-    document.body?.classList.add('theme-' + key);
-    device?.classList.add('theme-' + key);
-    if (key === 'rainy') {
+    root.classList.add('theme-' + anchor);
+    document.body?.classList.add('theme-' + anchor);
+    device?.classList.add('theme-' + anchor);
+    if (atmosphereOn && anchor === 'rainy') {
       root.classList.add('theme-rain');
       document.body?.classList.add('theme-rain');
     }
-    root.classList.toggle('theme-sensory', !!sensoryEnabled && (s.mode || getDisplayMode()) === 'auto');
-    root.classList.add('theme-preset-' + (s.mode || getDisplayMode()));
+    root.classList.toggle('theme-sensory', !!sensoryEnabled && mode === 'auto');
+    root.classList.add('theme-preset-' + mode);
     try {
       root.style.colorScheme = s.isDay ? 'light' : 'dark';
     } catch (e) {}
 
-    ensureWeatherAtmosphere(s.precipitation || 0, s.weatherBucket || weatherCtx.bucket);
-    window.__chaupaalTheme = key;
+    if (atmosphereOn && !quietModeOn()) {
+      ensureWeatherAtmosphere(s.precipitation || 0, s.weatherBucket || weatherCtx.bucket);
+    } else {
+      ensureWeatherAtmosphere(0, null);
+    }
+    window.__chaupaalTheme = anchor;
     window.__chaupaalThemeState = s;
   }
 
@@ -569,7 +647,7 @@
     }
   }
 
-  /** Subtle rain streaks / snowflakes — always behind UI (z-index 0). */
+  /** Quiet rain / snow — always behind UI. Fixed Light/Dark/Night call with precip=0. */
   function ensureWeatherAtmosphere(precip, bucket) {
     const device = document.querySelector('.device') || document.body;
     let el = document.getElementById('themeRainOverlay');
@@ -577,7 +655,6 @@
       el = document.createElement('div');
       el.id = 'themeRainOverlay';
       el.setAttribute('aria-hidden', 'true');
-      // Insert first so paint order stays under chrome even without z-index help
       if (device.firstChild) device.insertBefore(el, device.firstChild);
       else device.appendChild(el);
     }
@@ -585,19 +662,20 @@
 
     const p = clamp01(precip);
     const isSnow = bucket === 'snow';
-    const showRain = !isSnow && p > 0.06;
-    const showSnow = isSnow && p > 0.04;
-    const reduced = prefersReducedMotion();
+    const showRain = !isSnow && p > 0.1;
+    const showSnow = isSnow && p > 0.08;
+    const reduced = prefersReducedMotion() || quietModeOn();
 
     el.classList.toggle('is-rain', showRain);
     el.classList.toggle('is-snow', showSnow);
 
-    // Cap opacity low — ambient hint, not a filter over text
-    const maxOp = isSnow ? 0.2 : 0.16;
-    el.style.opacity = String(showRain || showSnow ? Math.min(maxOp, 0.04 + p * maxOp) : 0);
+    // Much quieter than prior sensory pass
+    const maxOp = isSnow ? 0.1 : 0.08;
+    el.style.opacity = String(showRain || showSnow ? Math.min(maxOp, 0.02 + p * maxOp) : 0);
 
     if (reduced || (!showRain && !showSnow)) {
       el.innerHTML = '';
+      el.dataset.wxMode = '';
       return;
     }
 
@@ -605,27 +683,26 @@
     if (el.dataset.wxMode === mode && el.childElementCount) return;
 
     el.dataset.wxMode = mode;
-    const count = showSnow ? Math.round(10 + p * 14) : Math.round(8 + p * 12);
+    const count = showSnow ? Math.round(5 + p * 7) : Math.round(4 + p * 6);
     const bits = [];
     for (let i = 0; i < count; i++) {
-      const left = (i * 37 + 11) % 100;
-      const delay = ((i * 0.37) % 4).toFixed(2);
-      const dur = showSnow ? (7 + (i % 5) * 1.4).toFixed(1) : (1.6 + (i % 4) * 0.35).toFixed(2);
-      const size = showSnow ? 2 + (i % 3) : 1;
+      const left = (i * 41 + 13) % 100;
+      const delay = ((i * 0.45) % 5).toFixed(2);
+      const dur = showSnow ? (9 + (i % 4) * 1.6).toFixed(1) : (2.4 + (i % 4) * 0.5).toFixed(2);
+      const size = showSnow ? 2 + (i % 2) : 1;
       if (showSnow) {
         bits.push(
           `<span class="wx-flake" style="left:${left}%;width:${size}px;height:${size}px;animation-delay:-${delay}s;animation-duration:${dur}s"></span>`
         );
       } else {
         bits.push(
-          `<span class="wx-drop" style="left:${left}%;animation-delay:-${delay}s;animation-duration:${dur}s;opacity:${(0.15 + (i % 5) * 0.04).toFixed(2)}"></span>`
+          `<span class="wx-drop" style="left:${left}%;animation-delay:-${delay}s;animation-duration:${dur}s;opacity:${(0.08 + (i % 4) * 0.03).toFixed(2)}"></span>`
         );
       }
     }
     el.innerHTML = bits.join('');
   }
 
-  // Back-compat alias
   function ensureRainOverlay(precip) {
     ensureWeatherAtmosphere(precip, weatherCtx.bucket);
   }
@@ -644,7 +721,7 @@
     if (typeof ChaupaalAmbient !== 'undefined' && ChaupaalAmbient.sync) ChaupaalAmbient.sync(state);
   }
 
-  function setWeatherContext( partial ) {
+  function setWeatherContext(partial) {
     weatherCtx = { ...weatherCtx, ...partial };
     recompute('weather');
   }
@@ -692,7 +769,6 @@
   async function start() {
     await refreshFlags();
     started = true;
-    // Always apply display mode (Light/Dark/Night/Auto) — sensory flag only affects Auto interpolation
     recompute('start');
     startPolling();
     if (getDisplayMode() === 'auto') {
@@ -713,6 +789,7 @@
   window.ChaupaalTheme = {
     ANCHORS,
     PRESETS,
+    LIGHT,
     getState,
     subscribe,
     recompute,

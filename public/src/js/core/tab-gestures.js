@@ -1,6 +1,9 @@
 /**
- * Bottom-tab gestures: scroll-to-top, double-tap → tab notifications,
- * long-press → morph tab bar into contextual shortcuts.
+ * Bottom-tab gestures: active-tab scroll-to-top / refresh, double-tap → tab
+ * notifications, long-press → morph tab bar into contextual shortcuts.
+ *
+ * Active-tab single tap is deferred ~DOUBLE_MS so a fast second tap can open
+ * notifications without also refreshing.
  */
 (function () {
   'use strict';
@@ -8,9 +11,11 @@
   const DOUBLE_MS = 300;
   const LONG_MS = 340;
   const LONG_MOVE_PX = 12;
+  const AT_TOP_PX = 12;
 
   let lastTapTab = null;
   let lastTapAt = 0;
+  let pendingSingle = null; // { tab, atTop, timer }
   let morphSourceTab = null;
   let morphSnapshot = null;
   let longTimer = null;
@@ -18,6 +23,8 @@
   let longStartX = 0;
   let longStartY = 0;
   let suppressNextClick = false;
+  /** @type {Set<string>} */
+  const refreshingTabs = new Set();
 
   function tt(key, fallback) {
     try {
@@ -42,20 +49,201 @@
     return document.querySelector('.bottom-tabs .tab-btn.active')?.dataset?.tab || '';
   }
 
+  function reducedMotion() {
+    try {
+      if (typeof Micro !== 'undefined' && Micro.prefersReducedMotion) return !!Micro.prefersReducedMotion();
+      return !!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function lightHaptic() {
+    if (typeof Micro !== 'undefined' && Micro.haptic) Micro.haptic('light');
+    else if (typeof haptic === 'function') haptic('light');
+  }
+
+  /** Resolve the real scroll root for a tab (not window). */
+  function getTabScrollRoot(tab) {
+    const candidates = {
+      peepal: ['#panel-peepal .peepal-screen', '#peepalFeed', '#panel-peepal'],
+      duniya: [
+        '#panel-duniya .duniya-screen',
+        '#leharFeed:not(.hidden)',
+        '#duniyaFeed',
+        '#panel-duniya',
+      ],
+      baithak: ['#chatList', '#baithakInbox', '#panel-baithak'],
+      akhbaar: ['#reelStage', '#panel-akhbaar'],
+      dangal: ['#dangalScreen', '#dangalGamesGrid', '#panel-dangal'],
+    }[tab] || [`#panel-${tab}`];
+
+    let fallback = null;
+    for (const sel of candidates) {
+      const el = document.querySelector(sel);
+      if (!el) continue;
+      if (!fallback) fallback = el;
+      let oy = '';
+      try {
+        oy = getComputedStyle(el).overflowY || '';
+      } catch (e) {}
+      const scrollable =
+        /(auto|scroll)/.test(oy) || el.scrollHeight > el.clientHeight + AT_TOP_PX;
+      if (scrollable) return el;
+    }
+    return fallback || document.getElementById('panel-' + tab);
+  }
+
+  function isTabAtTop(tab) {
+    const el = getTabScrollRoot(tab);
+    if (!el) return true;
+    return (el.scrollTop || 0) <= AT_TOP_PX;
+  }
+
   function scrollTabToTop(tab) {
-    const map = {
-      akhbaar: '#reelStage',
-      duniya: '#duniyaFeed, #leharFeed:not(.hidden)',
-      peepal: '#peepalFeed',
-      baithak: '#chatList, #baithakInbox',
-      dangal: '#dangalGamesGrid, #panel-dangal',
+    const el = getTabScrollRoot(tab);
+    if (!el) return;
+    const behavior = reducedMotion() ? 'auto' : 'smooth';
+    if (typeof el.scrollTo === 'function') el.scrollTo({ top: 0, behavior });
+    else el.scrollTop = 0;
+  }
+
+  function cancelPendingSingle() {
+    if (!pendingSingle) return;
+    clearTimeout(pendingSingle.timer);
+    pendingSingle = null;
+  }
+
+  function scheduleActiveTabSingle(tab, atTop) {
+    cancelPendingSingle();
+    pendingSingle = {
+      tab,
+      atTop,
+      timer: setTimeout(() => {
+        const job = pendingSingle;
+        pendingSingle = null;
+        if (!job || job.tab !== tab) return;
+        if (activeTab() !== tab) return;
+        if (job.atTop) refreshTabContent(tab);
+        else {
+          scrollTabToTop(tab);
+          lightHaptic();
+          if (typeof Micro !== 'undefined' && Micro.tabFeedback) Micro.tabFeedback();
+        }
+      }, DOUBLE_MS),
     };
-    const sel = map[tab] || `#panel-${tab}`;
-    const el = document.querySelector(sel);
-    if (el && typeof el.scrollTo === 'function') {
-      el.scrollTo({ top: 0, behavior: Micro?.prefersReducedMotion?.() ? 'auto' : 'smooth' });
-    } else {
-      document.getElementById(`panel-${tab}`)?.scrollTo?.({ top: 0, behavior: 'auto' });
+  }
+
+  function isOffline() {
+    try {
+      return typeof navigator !== 'undefined' && navigator.onLine === false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function setTabBusy(tab, busy) {
+    const btn = document.querySelector(`.bottom-tabs .tab-btn[data-tab="${tab}"]`);
+    if (!btn) return;
+    if (busy) btn.setAttribute('aria-busy', 'true');
+    else btn.removeAttribute('aria-busy');
+  }
+
+  async function refreshTabContent(tab) {
+    if (refreshingTabs.has(tab)) return;
+    if (isOffline()) {
+      if (typeof showToast === 'function') {
+        showToast(
+          typeof friendlyError === 'function'
+            ? friendlyError({ message: 'offline' })
+            : tt('offline_banner', "You're offline — some actions may not work")
+        );
+      }
+      return;
+    }
+
+    refreshingTabs.add(tab);
+    setTabBusy(tab, true);
+    lightHaptic();
+
+    try {
+      if (tab === 'peepal') {
+        const feed = document.getElementById('peepalFeed');
+        if (typeof db !== 'undefined' && db && !isGuest() && typeof loadPeepalPage === 'function') {
+          if (typeof renderSkeleton === 'function' && feed) renderSkeleton(feed, { variant: 'feed', count: 2 });
+          await loadPeepalPage({ reset: true });
+          if (typeof renderPeepalFeed === 'function') renderPeepalFeed();
+        } else if (typeof initPeepal === 'function') {
+          await initPeepal();
+        } else if (typeof renderPeepalFeed === 'function') {
+          renderPeepalFeed();
+        }
+      } else if (tab === 'duniya') {
+        const feed = document.getElementById('duniyaFeed');
+        if (typeof db !== 'undefined' && db && !isGuest() && typeof loadDuniyaPage === 'function') {
+          if (typeof renderSkeleton === 'function' && feed) renderSkeleton(feed, { variant: 'feed', count: 2 });
+          await loadDuniyaPage({ reset: true });
+          if (typeof renderDuniyaFeed === 'function') renderDuniyaFeed();
+        } else if (typeof initDuniya === 'function') {
+          const screen = document.getElementById('duniyaScreen');
+          if (screen) delete screen.dataset.loaded;
+          initDuniya();
+        } else if (typeof renderDuniyaFeed === 'function') {
+          renderDuniyaFeed();
+        }
+      } else if (tab === 'baithak') {
+        if (typeof db !== 'undefined' && db && !isGuest() && typeof loadBaithakChatsPage === 'function') {
+          const list = document.getElementById('chatList');
+          if (typeof renderSkeleton === 'function' && list) renderSkeleton(list, { variant: 'list', count: 4 });
+          await loadBaithakChatsPage({ reset: true });
+          if (typeof baithakChats !== 'undefined' && typeof pinSelfChat === 'function') {
+            baithakChats = pinSelfChat(baithakChats);
+          }
+          if (typeof renderChatList === 'function') {
+            renderChatList(
+              typeof baithakChats !== 'undefined'
+                ? baithakChats
+                : typeof pinSelfChat === 'function'
+                  ? pinSelfChat([])
+                  : []
+            );
+          }
+        } else if (typeof initBaithak === 'function') {
+          initBaithak();
+        } else if (typeof renderChatList === 'function') {
+          renderChatList(
+            typeof baithakChats !== 'undefined'
+              ? typeof pinSelfChat === 'function'
+                ? pinSelfChat(baithakChats)
+                : baithakChats
+              : typeof pinSelfChat === 'function'
+                ? pinSelfChat([])
+                : []
+          );
+        }
+      } else if (tab === 'akhbaar') {
+        const stage = document.getElementById('reelStage');
+        if (stage && typeof renderSkeleton === 'function') {
+          renderSkeleton(stage, { variant: 'feed', count: 1 });
+        }
+        if (typeof refreshAkhbaar === 'function') await refreshAkhbaar();
+        else if (typeof window.ensureAkhbaarBuilt === 'function') await window.ensureAkhbaarBuilt();
+      } else if (tab === 'dangal') {
+        if (typeof initCategoryRatings === 'function') initCategoryRatings();
+        else if (typeof renderDangalGamesGrid === 'function') renderDangalGamesGrid();
+      }
+    } catch (e) {
+      console.warn('[tab-gestures] refresh', tab, e?.message || e);
+      if (typeof showToast === 'function') {
+        showToast(
+          typeof friendlyError === 'function'
+            ? friendlyError(e)
+            : tt('generic_error', 'Something went wrong. Please try again.')
+        );
+      }
+    } finally {
+      refreshingTabs.delete(tab);
+      setTabBusy(tab, false);
     }
   }
 
@@ -97,8 +285,7 @@
     }
     const tabs = ['akhbaar', 'duniya', 'peepal', 'baithak', 'dangal'];
     tabs.forEach((tab) => {
-      const count =
-        typeof unreadNotifCount === 'function' ? unreadNotifCount(tab) : 0;
+      const count = typeof unreadNotifCount === 'function' ? unreadNotifCount(tab) : 0;
       document.querySelectorAll(`[data-tab-light="${tab}"]`).forEach((el) => {
         el.classList.toggle('hidden', !count);
       });
@@ -107,7 +294,6 @@
 
   // ─── Shortcut sets ─────────────────────────────────────────────────────────
   function shortcutsFor(tab) {
-    // Phase 5: 5 slots — corners = actions, middle 3 = swipeable section names. No close icon.
     const sets = {
       peepal: [
         {
@@ -367,6 +553,7 @@
   function enterMorph(tab) {
     const bar = document.querySelector('.bottom-tabs');
     if (!bar || bar.classList.contains('is-shortcut-mode')) return;
+    cancelPendingSingle();
     const shortcuts = shortcutsFor(tab).slice(0, 5);
     const buttons = [...bar.querySelectorAll('.tab-btn[data-tab]')];
     if (buttons.length < 5) return;
@@ -401,12 +588,10 @@
         iconEl.innerHTML = '';
       }
       if (labelEl) labelEl.textContent = sc.label;
-      // Keep light hidden in morph
       btn.querySelector('.tab-notif-light')?.classList.add('hidden');
     });
     if (typeof hydrateIcons === 'function') hydrateIcons(bar);
 
-    // Outside dismiss
     setTimeout(() => {
       document.addEventListener('pointerdown', onOutsideMorph, true);
     }, 0);
@@ -433,7 +618,6 @@
       delete btn.dataset.shortcutId;
       btn.classList.remove('is-shortcut');
       btn.innerHTML = snap.html;
-      // Re-attach light after restore
       ensureTabLights();
     });
     bar.classList.remove('is-shortcut-mode');
@@ -457,7 +641,6 @@
     }
   }
 
-  // ─── Relevant today / Dangal helpers ───────────────────────────────────────
   function openRelevantTodaySheet() {
     document.getElementById('relevantTodaySheet')?.remove();
     const sheet = document.createElement('div');
@@ -510,7 +693,6 @@
     const today = new Date();
     const md = `${today.getMonth() + 1}-${today.getDate()}`;
 
-    // Friends / sample discovery with matching DOB month-day
     const pools = [];
     try {
       if (typeof friends !== 'undefined' && Array.isArray(friends)) pools.push(...friends);
@@ -540,7 +722,6 @@
       }
     });
 
-    // Breaking / taaza if present in local state
     try {
       const raw = localStorage.getItem('chaupaal_taaza_cache');
       if (raw) {
@@ -567,7 +748,6 @@
 
   function openDangalOpponentPicker(mode) {
     switchTo('dangal');
-    // Reuse game registry: pick first popular game then opponent sheet
     const tile = document.querySelector('#dangalGamesGrid [data-game], .dangal-game-tile[data-game]');
     const gameId = tile?.dataset?.game || 'quiz';
     if (mode === 'random' && typeof launchDangalWithOpponent === 'function') {
@@ -620,7 +800,6 @@
     });
   }
 
-  // ─── Event wiring ──────────────────────────────────────────────────────────
   function onTabPointerDown(e) {
     const btn = e.target.closest('.bottom-tabs .tab-btn[data-tab]');
     if (!btn) return;
@@ -653,7 +832,6 @@
       return;
     }
 
-    // Morph mode: shortcut select
     if (bar?.classList.contains('is-shortcut-mode')) {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -671,31 +849,22 @@
       if (lastTapTab === tab && now - lastTapAt < DOUBLE_MS) {
         e.preventDefault();
         e.stopImmediatePropagation();
+        cancelPendingSingle();
         lastTapTab = null;
         lastTapAt = 0;
         openTabNotifications(tab);
         return;
       }
+
+      e.preventDefault();
+      e.stopImmediatePropagation();
       lastTapTab = tab;
       lastTapAt = now;
-      const nearTop = (() => {
-        const panel = document.getElementById('panel-' + tab);
-        const scroller = panel?.querySelector('[data-scroll-owner], .peepal-screen, .duniya-screen, .reel-stage, .baithak-list, .content-area') || panel;
-        return !scroller || (scroller.scrollTop || 0) < 24;
-      })();
-      if (nearTop) {
-        // Already at top → soft refresh hooks
-        if (tab === 'duniya' && typeof loadDuniyaPage === 'function') loadDuniyaPage({ reset: true }).then(() => typeof renderDuniyaFeed === 'function' && renderDuniyaFeed());
-        if (tab === 'peepal' && typeof renderPeepalFeed === 'function') renderPeepalFeed();
-        if (tab === 'akhbaar' && typeof window.ensureAkhbaarBuilt === 'function') window.ensureAkhbaarBuilt();
-      } else {
-        scrollTabToTop(tab);
-      }
-      if (typeof Micro !== 'undefined') Micro.tabFeedback();
+      scheduleActiveTabSingle(tab, isTabAtTop(tab));
       return;
     }
 
-    // Switching tabs — double-tap soon after switch still opens notifs
+    cancelPendingSingle();
     lastTapTab = tab;
     lastTapAt = now;
     if (typeof Micro !== 'undefined') Micro.tabFeedback();
@@ -727,10 +896,6 @@
       if (e.target.closest('.tab-btn')) e.preventDefault();
     });
 
-    // Back dismisses morph
-    if (typeof pushNavLayer === 'function') {
-      /* morph uses outside tap; also listen popstate-ish via nav */
-    }
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && bar.classList.contains('is-shortcut-mode')) exitMorph();
     });
@@ -742,6 +907,8 @@
   window.exitTabMorph = exitMorph;
   window.openRelevantTodaySheet = openRelevantTodaySheet;
   window.openDangalPulseSheet = openDangalPulseSheet;
+  window.getTabScrollRoot = getTabScrollRoot;
+  window.refreshTabContent = refreshTabContent;
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire);
   else setTimeout(wire, 0);

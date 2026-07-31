@@ -333,7 +333,7 @@
     );
   }
 
-  // ─── Pull to refresh ──────────────────────────────────────────────────────
+  // ─── Pull to refresh (Instagram-style — complements tab-tap refresh) ───────
   function isInsideHorizontalScroll(target, boundary) {
     let n = target;
     while (n && n !== boundary && n !== document.body) {
@@ -350,26 +350,47 @@
     return false;
   }
 
+  function ptrLabel(key, fallback) {
+    try {
+      if (typeof t === 'function') {
+        const v = t(key);
+        if (v && v !== key) return v;
+      }
+    } catch (e) {}
+    return fallback;
+  }
+
   function enablePullToRefresh(scrollEl, onRefresh) {
     if (!scrollEl || scrollEl.dataset.ptr === '1') return;
     scrollEl.dataset.ptr = '1';
     let startY = 0;
     let startX = 0;
     let pulling = false;
+    let armed = false;
     let dy = 0;
+    let busy = false;
     const indicator = document.createElement('div');
     indicator.className = 'cp-ptr-indicator';
-    indicator.textContent = 'Pull to refresh';
+    indicator.setAttribute('aria-hidden', 'true');
+    indicator.textContent = ptrLabel('ptr_pull', 'Pull to refresh');
     scrollEl.prepend(indicator);
+
+    const resetIndicator = () => {
+      indicator.style.height = '0';
+      indicator.classList.remove('is-ready', 'is-busy');
+      indicator.textContent = ptrLabel('ptr_pull', 'Pull to refresh');
+    };
 
     scrollEl.addEventListener(
       'touchstart',
       (e) => {
+        if (busy) return;
         if (scrollEl.scrollTop > 2) return;
         if (isInsideHorizontalScroll(e.target, scrollEl)) return;
         startY = e.touches[0].clientY;
         startX = e.touches[0].clientX;
         pulling = true;
+        armed = false;
         dy = 0;
       },
       { passive: true }
@@ -378,26 +399,32 @@
     scrollEl.addEventListener(
       'touchmove',
       (e) => {
-        if (!pulling) return;
+        if (!pulling || busy) return;
         if (scrollEl.scrollTop > 2) {
           pulling = false;
-          indicator.style.height = '0';
+          resetIndicator();
           return;
         }
-        const t = e.touches[0];
-        const adx = Math.abs(t.clientX - startX);
-        const rawDy = t.clientY - startY;
+        const tch = e.touches[0];
+        const adx = Math.abs(tch.clientX - startX);
+        const rawDy = tch.clientY - startY;
         // Angle gate: abort when gesture is mostly horizontal
         if (adx > 12 && adx > Math.abs(rawDy) * 0.65) {
           pulling = false;
-          indicator.style.height = '0';
+          resetIndicator();
           dy = 0;
           return;
         }
         dy = Math.max(0, rawDy);
-        if (dy > 8) {
-          indicator.style.height = Math.min(64, dy * 0.45) + 'px';
-          indicator.textContent = dy > 70 ? 'Release to refresh' : 'Pull to refresh';
+        if (dy > 10) {
+          armed = true;
+          const h = Math.min(72, dy * 0.42);
+          indicator.style.height = h + 'px';
+          const ready = dy > 72;
+          indicator.classList.toggle('is-ready', ready);
+          indicator.textContent = ready
+            ? ptrLabel('ptr_release', 'Release to refresh')
+            : ptrLabel('ptr_pull', 'Pull to refresh');
         }
       },
       { passive: true }
@@ -408,25 +435,94 @@
       async () => {
         if (!pulling) return;
         pulling = false;
-        const should = dy > 70;
+        const should = armed && dy > 72 && !busy;
         dy = 0;
+        armed = false;
         if (!should) {
-          indicator.style.height = '0';
+          resetIndicator();
           return;
         }
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+          indicator.style.height = '48px';
+          indicator.textContent =
+            typeof friendlyError === 'function'
+              ? friendlyError({ message: 'offline' })
+              : ptrLabel('ptr_offline', "You're offline");
+          setTimeout(resetIndicator, 900);
+          return;
+        }
+        busy = true;
+        indicator.classList.add('is-busy');
+        indicator.classList.remove('is-ready');
         indicator.style.height = '48px';
-        indicator.textContent = 'Refreshing…';
+        indicator.textContent = ptrLabel('ptr_refreshing', 'Refreshing…');
         hapticLight();
         try {
           await Promise.resolve(onRefresh && onRefresh());
-        } catch (e) {}
-        indicator.textContent = 'Updated';
+          indicator.textContent = ptrLabel('ptr_done', 'Updated');
+        } catch (e) {
+          indicator.textContent =
+            typeof friendlyError === 'function'
+              ? friendlyError(e)
+              : ptrLabel('ptr_fail', 'Couldn’t refresh');
+        }
         setTimeout(() => {
-          indicator.style.height = '0';
-        }, 500);
+          busy = false;
+          resetIndicator();
+        }, 520);
       },
       { passive: true }
     );
+  }
+
+  /**
+   * Wire Instagram-style pull-to-refresh on each tab’s real scroll root.
+   * Shares refreshTabContent with active-tab tap refresh — does not replace it.
+   */
+  function bindPullToRefresh() {
+    const tabs = ['peepal', 'duniya', 'baithak', 'akhbaar', 'dangal'];
+    tabs.forEach((tab) => {
+      let el =
+        typeof getTabScrollRoot === 'function' ? getTabScrollRoot(tab) : null;
+      if (!el) {
+        const fallback = {
+          peepal: document.querySelector('#panel-peepal .peepal-screen') || document.getElementById('peepalFeed'),
+          duniya: document.querySelector('#panel-duniya .duniya-screen') || document.getElementById('duniyaFeed'),
+          baithak: document.getElementById('chatList'),
+          akhbaar: document.getElementById('reelStage'),
+          dangal: document.getElementById('dangalScreen'),
+        };
+        el = fallback[tab];
+      }
+      if (!el || el.dataset.ptr === '1') return;
+      enablePullToRefresh(el, async () => {
+        if (typeof refreshTabContent === 'function') {
+          await refreshTabContent(tab);
+          return;
+        }
+        // Fallback if tab-gestures not loaded yet
+        if (tab === 'duniya' && typeof loadDuniyaPage === 'function') {
+          await loadDuniyaPage({ reset: true });
+          if (typeof renderDuniyaFeed === 'function') renderDuniyaFeed();
+        } else if (tab === 'peepal' && typeof loadPeepalPage === 'function') {
+          await loadPeepalPage({ reset: true });
+          if (typeof renderPeepalFeed === 'function') renderPeepalFeed();
+        } else if (tab === 'baithak' && typeof loadBaithakChatsPage === 'function') {
+          await loadBaithakChatsPage({ reset: true });
+          if (typeof renderChatList === 'function') {
+            renderChatList(
+              typeof baithakChats !== 'undefined' && typeof pinSelfChat === 'function'
+                ? pinSelfChat(baithakChats)
+                : baithakChats || []
+            );
+          }
+        } else if (tab === 'akhbaar' && typeof refreshAkhbaar === 'function') {
+          await refreshAkhbaar();
+        } else if (tab === 'dangal' && typeof initCategoryRatings === 'function') {
+          initCategoryRatings();
+        }
+      });
+    });
   }
 
   // ─── Long press ───────────────────────────────────────────────────────────
@@ -729,33 +825,6 @@
     });
   }
 
-  function bindPullToRefresh() {
-    const duniya = document.getElementById('duniyaFeed');
-    if (duniya) {
-      enablePullToRefresh(duniya, async () => {
-        if (typeof loadDuniyaPage === 'function') {
-          await loadDuniyaPage({ reset: true });
-          if (typeof renderDuniyaFeed === 'function') renderDuniyaFeed();
-        } else if (typeof renderDuniyaFeed === 'function') renderDuniyaFeed();
-      });
-    }
-    const peepal = document.getElementById('peepalFeed');
-    if (peepal) {
-      enablePullToRefresh(peepal, async () => {
-        if (typeof renderPeepalFeed === 'function') renderPeepalFeed();
-      });
-    }
-    const akhbaar = document.getElementById('panel-akhbaar') || document.getElementById('reelStage');
-    if (akhbaar && !akhbaar.dataset.ptr) {
-      // Soft PTR: snap to top reel
-      enablePullToRefresh(akhbaar, async () => {
-        const stage = document.getElementById('reelStage');
-        if (stage) stage.scrollTo({ top: 0, behavior: 'smooth' });
-        if (typeof showToast === 'function') showToast('Akhbaar refreshed');
-      });
-    }
-  }
-
   function enhanceTapTargets() {
     document.querySelectorAll(
       '.tab-btn, .chat-back, .chat-header-btn, .chat-action-btn, .chat-send-btn, .duniya-action-btn, .duniya-more-btn, .duniya-follow-btn, .peepal-delete-btn, .bottom-tabs button, .topbar button, #profileBtn, #settingsBtn'
@@ -860,12 +929,15 @@
   }
 
   function observeDom() {
+    let ptrTimer = null;
     const mo = new MutationObserver(() => {
       bindZoomableImages(deviceRoot());
       bindLongPressTargets(deviceRoot());
       bindSwipeTargets();
       enhanceTapTargets();
       enhanceImages(deviceRoot());
+      clearTimeout(ptrTimer);
+      ptrTimer = setTimeout(bindPullToRefresh, 200);
     });
     mo.observe(deviceRoot(), { childList: true, subtree: true });
   }

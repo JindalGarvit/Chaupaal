@@ -1017,11 +1017,11 @@ html.theme-sensory .device > .bottom-tabs{z-index:10;}
   background:repeating-linear-gradient(
     -18deg,
     transparent 0,
-    transparent 14px,
-    rgba(110,140,175,calc(0.015 + var(--theme-precipitation,0) * 0.03)) 14px,
-    rgba(110,140,175,calc(0.015 + var(--theme-precipitation,0) * 0.03)) 15px
+    transparent 18px,
+    rgba(110,140,175,calc(0.008 + var(--theme-precipitation,0) * 0.018)) 18px,
+    rgba(110,140,175,calc(0.008 + var(--theme-precipitation,0) * 0.018)) 19px
   );
-  animation:themeRainDrift 2.4s linear infinite;
+  animation:themeRainDrift 3.6s linear infinite;
 }
 .theme-weather-overlay.is-snow{
   background:transparent;
@@ -1030,23 +1030,23 @@ html.theme-sensory .device > .bottom-tabs{z-index:10;}
   position:absolute;
   top:-8%;
   border-radius:50%;
-  background:rgba(255,255,255,0.55);
-  box-shadow:0 0 2px rgba(200,220,255,0.35);
+  background:rgba(255,255,255,0.4);
+  box-shadow:0 0 2px rgba(200,220,255,0.2);
   animation:themeSnowFall linear infinite;
-  opacity:0.35;
+  opacity:0.22;
 }
 .theme-weather-overlay.is-rain .wx-drop{
   position:absolute;
   top:-10%;
   width:1px;
-  height:14px;
+  height:12px;
   border-radius:1px;
-  background:rgba(130,160,200,0.28);
+  background:rgba(130,160,200,0.18);
   animation:themeRainFall linear infinite;
 }
 @keyframes themeRainDrift{
   from{background-position:0 0;}
-  to{background-position:8px 22px;}
+  to{background-position:6px 18px;}
 }
 @keyframes themeRainFall{
   from{transform:translateY(0);}
@@ -1054,13 +1054,35 @@ html.theme-sensory .device > .bottom-tabs{z-index:10;}
 }
 @keyframes themeSnowFall{
   0%{transform:translate3d(0,0,0) rotate(0deg);opacity:0;}
-  12%{opacity:0.4;}
-  100%{transform:translate3d(12px,110vh,0) rotate(180deg);opacity:0;}
+  12%{opacity:0.25;}
+  100%{transform:translate3d(8px,110vh,0) rotate(120deg);opacity:0;}
 }
 @media (prefers-reduced-motion:reduce){
   .theme-weather-overlay.is-rain,
   .theme-weather-overlay .wx-flake,
   .theme-weather-overlay .wx-drop{animation:none!important;}
+}
+/* Fixed Light: no atmosphere layer */
+html.theme-preset-light .theme-weather-overlay{
+  opacity:0!important;
+  visibility:hidden;
+}
+/* Soft sky wash sits behind chrome (Auto only) */
+html.theme-sensory .device::before{
+  content:'';
+  pointer-events:none;
+  position:absolute;
+  inset:0;
+  z-index:0;
+  background:
+    linear-gradient(180deg, var(--theme-overlay, transparent) 0%, transparent 42%),
+    radial-gradient(120% 60% at 50% -10%, var(--theme-overlay, transparent), transparent 55%);
+  opacity:1;
+}
+html.theme-preset-light .device::before,
+html.theme-preset-dark .device::before,
+html.theme-preset-night .device::before{
+  display:none;
 }
 .display-mode-group{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
 .display-mode-option{
@@ -1105,12 +1127,13 @@ html.theme-sensory .device > .bottom-tabs{z-index:10;}
 .settings-cat .modal-select{margin-bottom:0;}
 
 .theme-night{
-  --cream:#12141C;
-  --white:#1A1D27;
-  --ink:#F2F0F5;
-  --muted:#9AA0B0;
-  --line:#2A2F3D;
-  --card:#1A1D27;
+  --cream:#121316;
+  --bg:#121316;
+  --white:#1C1E22;
+  --ink:#E8EAED;
+  --muted:#9AA0A6;
+  --line:#2C2E33;
+  --card:#1C1E22;
   --navy:#0B0D14;
   color-scheme:dark;
 }
@@ -1153,52 +1176,74 @@ body.theme-night,
   border-color:var(--line) !important;
 }
 
-.theme-dawn{
-  --cream:#FFF4E8;
-  --white:#FFFBF5;
-  --ink:#3A2E28;
-  --muted:#A89080;
-  --line:#F0E0D0;
-  --card:#FFFBF5;
-  --gold:#FFB347;
+/* Dawn / goldenHour: no peach UI — Light surfaces; Auto wash is overlay-only */
+.theme-dawn,
+.theme-goldenHour{
+  --cream:#F5F5F5;
+  --bg:#F5F5F5;
+  --white:#FFFFFF;
+  --ink:#1C1B1F;
+  --muted:#5F6368;
+  --line:#E0E0E0;
+  --card:#FFFFFF;
+  color-scheme:light;
 }
 .theme-dawn body,
 body.theme-dawn,
-.theme-dawn .device{
-  background:linear-gradient(180deg,#FFE8D0 0%,#FFF4E8 40%,#FFF8EE 100%) !important;
+.theme-dawn .device,
+.theme-goldenHour body,
+body.theme-goldenHour,
+.theme-goldenHour .device{
+  background:var(--cream) !important;
 }
 @media(min-width:768px){
-  body.theme-dawn{background:#F5E6D3 !important;}
+  body.theme-dawn,
+  body.theme-goldenHour{background:var(--cream) !important;}
 }
 
 .theme-rain{
-  --cream:#Eef2F5;
-  --white:#F7FAFC;
-  --ink:#243040;
-  --muted:#7A8A9A;
-  --line:#D5DEE6;
+  --cream:#EEF1F4;
+  --bg:#EEF1F4;
+  --white:#F7F9FB;
+  --ink:#181B1F;
+  --muted:#586068;
+  --line:#D5DBE1;
 }
+/* Legacy aliases — keep near Light, no costume themes */
 .theme-hot{
-  --cream:#FFF5EE;
-  --white:#FFFAF6;
-  --ink:#3A2218;
-  --muted:#A87860;
-  --line:#F0D8C8;
+  --cream:#F5F5F5;
+  --white:#FFFFFF;
+  --ink:#1C1B1F;
+  --muted:#5F6368;
+  --line:#E0E0E0;
   --red:#E63946;
 }
 .theme-cold{
-  --cream:#F0F7FA;
-  --white:#F7FBFD;
-  --ink:#1E3340;
-  --muted:#6A8494;
-  --line:#D0E2EA;
+  --cream:#F0F2F4;
+  --white:#FAFBFC;
+  --ink:#1A1C1E;
+  --muted:#5C636A;
+  --line:#DCE0E4;
 }
 
-/* Phase 7 registry aliases */
-.theme-clearDay{ --cream:#F7F1E8; --white:#FFFcf7; --ink:#2B2730; --muted:#7A7480; --line:#E8DFD4; }
-.theme-overcast{ --cream:#E8EEF2; --white:#F5F7FA; --ink:#243040; --muted:#6B7785; --line:#D5DCE3; }
-.theme-rainy{ --cream:#D9E4EC; --white:#EEF3F7; --ink:#1E2A36; --muted:#5E6D7A; --line:#C5D0D9; }
-.theme-goldenHour{ --cream:#F5E0C8; --white:#FFF6EB; --ink:#3A2A1F; --muted:#8A6E55; --line:#E8D2B8; }
+/* Phase 7+ registry — Light baseline + derived cool variants (no parchment / peach) */
+.theme-clearDay,
+.theme-goldenHour,
+.theme-dawn{
+  --cream:#F5F5F5; --bg:#F5F5F5; --white:#FFFFFF; --card:#FFFFFF;
+  --ink:#1C1B1F; --muted:#5F6368; --line:#E0E0E0;
+  color-scheme:light;
+}
+.theme-overcast{
+  --cream:#F0F2F4; --bg:#F0F2F4; --white:#FAFBFC; --card:#FAFBFC;
+  --ink:#1A1C1E; --muted:#5C636A; --line:#DCE0E4;
+  color-scheme:light;
+}
+.theme-rainy{
+  --cream:#EEF1F4; --bg:#EEF1F4; --white:#F7F9FB; --card:#F7F9FB;
+  --ink:#181B1F; --muted:#586068; --line:#D5DBE1;
+  color-scheme:light;
+}
 
 /* ============================================================
    SCROLLBARS ? minimal
@@ -2242,9 +2287,12 @@ form.cp-kb-lift {
   font-size: 12px;
   font-weight: 600;
   color: var(--muted);
-  transition: height 160ms ease;
+  transition: height 160ms ease, color 160ms ease;
   flex-shrink: 0;
+  letter-spacing: 0.01em;
 }
+.cp-ptr-indicator.is-ready { color: var(--ink); }
+.cp-ptr-indicator.is-busy { color: var(--red); }
 
 /* Narrow phones */
 @media (max-width: 374px) {

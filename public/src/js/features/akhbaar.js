@@ -167,6 +167,13 @@ function ensureAkhbaarBuilt(){
 }
 window.ensureAkhbaarBuilt=ensureAkhbaarBuilt;
 
+async function refreshAkhbaar(){
+  if(_akhbaarBuilding) return _akhbaarBuilding;
+  _akhbaarBuilt=false;
+  return ensureAkhbaarBuilt();
+}
+window.refreshAkhbaar=refreshAkhbaar;
+
 /** Beat-my-score banner for `?game=akhbaar&challenge=…&score=…` deep links. */
 function applyAkhbaarBeatBanner(){
   const pending=window.__akhbaarBeatChallenge;
