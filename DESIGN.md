@@ -96,11 +96,11 @@ Even quality across en/hi/ta — no script treated as “more premium.”
 
 ## Brand mark
 
-- Source: `public/brand/chaupaal-mark-charpai.png` (+ `chaupaal-mark-32-charpai.png` for favicon)
-- Raster PWA: `public/icon-charpai.png` (1024), `icon-192-charpai.png`, `icon-512-charpai.png`, `icon-maskable-512-charpai.png`, `apple-touch-icon-charpai.png`
-- Concept: traditional Indian **charpai / khat** on a white→red gradient — the commons seat as identity.
+- Source: `public/brand/chaupaal-mark-charpai-z.png` (+ `chaupaal-mark-32-charpai-z.png` for favicon)
+- Raster PWA: `public/icon-charpai-z.png` (1024), `icon-192-charpai-z.png`, `icon-512-charpai-z.png`, `icon-maskable-512-charpai-z.png`, `apple-touch-icon-charpai-z.png`
+- Concept: traditional Indian **charpai / khat** on a white→red gradient — the commons seat as identity. Icons use a tight center crop (~2.1× zoom via `scripts/regen-charpai-icons.js`) so empty photo margins do not read as a border under circle/squircle masks.
 - SVG wrappers (`chaupaal-mark.svg`, `chaupaal-mark-32.svg`) embed the raster for legacy paths; UI and favicons use PNG.
-- Filenames include `-charpai` so Android/iOS cannot keep serving a cached geometric mark at the old URL after reinstall.
+- Filenames include `-charpai-z` so Android/iOS cannot keep serving a cached prior icon URL after reinstall.
 
 ---
 

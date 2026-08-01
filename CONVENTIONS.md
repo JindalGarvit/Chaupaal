@@ -186,13 +186,13 @@ Visual hierarchy tokens live in `public/src/styles/tokens.css` (`:root`). Applic
 | Actions / feed / call | `--btn-*`, `--feed-*`, `--call-*` | Hierarchy + Mehfil stage |
 | Sensory theme | `--theme-light-temp`, `--theme-overlay`, `--theme-dim`, … | Written by `theme-engine.js` |
 
-Chat polish lives mainly in `baithak.css`. Empty/loading/error: `ui-states.js` + `.cp-empty`. Mehfil: `mehfil.css`. Brand mark: `public/brand/chaupaal-mark-charpai.png` + `public/icon-charpai.png` (PWA sizes: `icon-192-charpai` / `icon-512-charpai` / `icon-maskable-512-charpai` / `apple-touch-icon-charpai`).
+Chat polish lives mainly in `baithak.css`. Empty/loading/error: `ui-states.js` + `.cp-empty`. Mehfil: `mehfil.css`. Brand mark: `public/brand/chaupaal-mark-charpai-z.png` + `public/icon-charpai-z.png` (PWA sizes: `icon-192-charpai-z` / `icon-512-charpai-z` / `icon-maskable-512-charpai-z` / `apple-touch-icon-charpai-z`).
 
 Do not invent a second palette per screen. If a new surface needs a value, add a token first.
 
 ## 14. Brand mark & Gathered light
 
-- Use `.cp-mark` / `chaupaal-mark-charpai.png` for auth, sidebar, favicon chrome — no emoji/placeholder logos. (Splash uses `splash.png`, a separate full-bleed scene.)
+- Use `.cp-mark` / `chaupaal-mark-charpai-z.png` for auth, sidebar, favicon chrome — no emoji/placeholder logos. (Splash uses `splash.png`, a separate full-bleed scene.)
 - Primary buttons use press specular (`.btn--primary` / `.gl-press`) — press, not hover.
 - Avatar stacking (`.avatar-stack`) only in Mehfil / group headers; elsewhere use `.presence-dot`.
 - Honor `prefers-reduced-motion` and Quiet for decorative motion.
