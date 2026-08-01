@@ -16,7 +16,9 @@
 
   let lastTapTab = null;
   let lastTapAt = 0;
-  let pendingSingle = null; // { tab, atTop, timer }
+  let pendingSingle = null; // { tab, atTop, timer, gen }
+  let pendingGen = 0;
+  let suppressRefreshUntil = 0;
   let morphSourceTab = null;
   let morphSnapshot = null;
   let longTimer = null;
@@ -113,17 +115,22 @@
     if (!pendingSingle) return;
     clearTimeout(pendingSingle.timer);
     pendingSingle = null;
+    pendingGen += 1;
   }
 
   function scheduleActiveTabSingle(tab, atTop) {
     cancelPendingSingle();
+    const gen = ++pendingGen;
     pendingSingle = {
       tab,
       atTop,
+      gen,
       timer: setTimeout(() => {
         const job = pendingSingle;
         pendingSingle = null;
-        if (!job || job.tab !== tab) return;
+        // Second tap / notifs must cancel — never refresh after double-tap
+        if (!job || job.gen !== gen || job.tab !== tab) return;
+        if (Date.now() < suppressRefreshUntil) return;
         if (activeTab() !== tab) return;
         if (job.atTop) refreshTabContent(tab);
         else {
@@ -252,6 +259,8 @@
   }
 
   function openTabNotifications(tab) {
+    cancelPendingSingle();
+    suppressRefreshUntil = Date.now() + DOUBLE_MS + 80;
     if (isGuest()) {
       requireSignIn(tt('notif_sign_in', 'Sign in to see notifications'));
       return;
@@ -766,93 +775,288 @@
     return out.slice(0, 8);
   }
 
-  function openDangalOpponentPicker(mode) {
-    switchTo('dangal');
-    // Challenge morph (#5): always Game of the Day — never a hardcoded first tile
-    const gotdId =
+  function resolveGotdId() {
+    return (
       (typeof window !== 'undefined' && window.__dangalGotdId) ||
       document.querySelector('#dangalGotdHost [data-game]')?.dataset?.game ||
-      null;
-    const tile = document.querySelector('#dangalGamesGrid [data-game], .dangal-game-tile[data-game]');
-    const gameId = gotdId || tile?.dataset?.game || 'quiz';
-    if (mode === 'random' && typeof launchDangalWithOpponent === 'function') {
-      launchDangalWithOpponent(gameId);
-      setTimeout(() => document.getElementById('dgRandomOpp')?.click(), 80);
-      return;
+      null
+    );
+  }
+
+  function dangalCatalogExcludingGotd(gotdId) {
+    let list = [];
+    try {
+      if (typeof getGames === 'function') {
+        list = getGames({ dangal: true }) || [];
+      }
+    } catch (e) {}
+    if (!list.length) {
+      document.querySelectorAll('#dangalGamesGrid [data-game], .dangal-game-tile[data-game]').forEach((el) => {
+        const id = el.dataset.game;
+        if (id) list.push({ id, name: el.dataset.name || id, icon: el.dataset.icon || '🎮' });
+      });
     }
-    const launch = () => {
-      if (typeof launchDangalWithOpponent === 'function') {
+    const exclude = gotdId ? String(gotdId) : '';
+    return list.filter((g) => g && g.id && String(g.id) !== exclude);
+  }
+
+  function pickRandomChallengeGame(gotdId) {
+    const pool = dangalCatalogExcludingGotd(gotdId);
+    if (!pool.length) return null;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  function escHtml(s) {
+    return String(s || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function formatLastPlayed(ts) {
+    if (!ts) return '';
+    try {
+      if (typeof formatRelativeTime === 'function') return formatRelativeTime(ts);
+    } catch (e) {}
+    const d = Date.now() - Number(ts);
+    if (d < 3600000) return 'just now';
+    if (d < 86400000) return Math.floor(d / 3600000) + 'h ago';
+    return Math.floor(d / 86400000) + 'd ago';
+  }
+
+  function buildPerfChartSvg(rows) {
+    const vals = rows.map((r) => r.played || 0);
+    const max = Math.max(1, ...vals);
+    const w = 280;
+    const h = 64;
+    const n = Math.max(1, rows.length);
+    const gap = 4;
+    const barW = Math.max(6, (w - gap * (n + 1)) / n);
+    const bars = rows
+      .map((r, i) => {
+        const bh = Math.round(((r.played || 0) / max) * (h - 8));
+        const x = gap + i * (barW + gap);
+        const y = h - bh;
+        return `<rect x="${x}" y="${y}" width="${barW}" height="${bh}" rx="3" fill="var(--brand-red,#E63946)" opacity="${0.45 + (r.played / max) * 0.55}"/>`;
+      })
+      .join('');
+    const sparkPts = rows
+      .map((r, i) => {
+        const x = gap + i * (barW + gap) + barW / 2;
+        const y = h - Math.round(((r.wins || 0) / Math.max(1, r.played || 1)) * (h - 10)) - 4;
+        return `${x},${y}`;
+      })
+      .join(' ');
+    return `<svg class="cp-perf-chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="Plays by game">${bars}<polyline fill="none" stroke="#1C1B1F" stroke-opacity=".35" stroke-width="1.5" points="${sparkPts}"/></svg>`;
+  }
+
+  function buildPerformanceBodyHtml() {
+    const hub = typeof getDangalHubSummary === 'function' ? getDangalHubSummary() : null;
+    const progress = typeof getDangalProgress === 'function' ? getDangalProgress() : { games: {} };
+    const gamesMap = progress.games || {};
+    let catalog = [];
+    try {
+      if (typeof getGames === 'function') catalog = getGames({ dangal: true }) || [];
+    } catch (e) {}
+    const byId = {};
+    catalog.forEach((g) => {
+      byId[g.id] = g;
+    });
+
+    const rows = Object.keys(gamesMap)
+      .map((id) => {
+        const g = gamesMap[id] || {};
+        const meta = byId[id] || { id, name: id, icon: '🎮' };
+        return {
+          id,
+          name: meta.name || id,
+          icon: meta.icon || '🎮',
+          played: g.played || 0,
+          wins: g.wins || 0,
+          losses: g.losses || 0,
+          draws: g.draws || 0,
+          bestScore: g.bestScore,
+          bestStreak: g.bestStreak || 0,
+          lastAt: g.lastAt || 0,
+        };
+      })
+      .filter((r) => r.played > 0)
+      .sort((a, b) => (b.lastAt || 0) - (a.lastAt || 0));
+
+    if (!rows.length) {
+      return `<div class="cp-empty" style="padding:28px 8px;text-align:center;color:var(--muted);">
+        ${tt('dangal_pulse_empty', 'Play a few games — your performance will show up here.')}
+      </div>
+      <button type="button" class="btn btn--primary btn--block" data-open-dangal>${tt('dangal_pulse_play', 'Open Dangal')}</button>`;
+    }
+
+    const totalPlayed = hub?.totalPlayed ?? rows.reduce((s, r) => s + r.played, 0);
+    const totalWins = hub?.totalWins ?? rows.reduce((s, r) => s + r.wins, 0);
+    const decided = rows.reduce((s, r) => s + r.wins + r.losses, 0);
+    const winPct = decided > 0 ? Math.round((totalWins / decided) * 100) : null;
+    const maxPlayed = Math.max(1, ...rows.map((r) => r.played));
+
+    const gameRows = rows
+      .map((r) => {
+        const wl =
+          r.wins + r.losses + r.draws > 0
+            ? `${r.wins}W · ${r.losses}L${r.draws ? ` · ${r.draws}D` : ''}`
+            : 'Score runs';
+        const bits = [`${r.played} play${r.played === 1 ? '' : 's'}`, wl];
+        if (r.bestScore != null) bits.push(`best ${r.bestScore}`);
+        if (r.bestStreak > 1) bits.push(`best streak ${r.bestStreak}`);
+        if (r.lastAt) bits.push(formatLastPlayed(r.lastAt));
+        const pct = Math.round((r.played / maxPlayed) * 100);
+        return `<div class="cp-perf-game" data-perf-game="${escHtml(r.id)}">
+          <div class="cp-perf-game-icon" aria-hidden="true">${escHtml(r.icon)}</div>
+          <div class="cp-perf-game-body">
+            <div class="cp-perf-game-name">${escHtml(r.name)}</div>
+            <div class="cp-perf-game-meta">${escHtml(bits.join(' · '))}</div>
+            <div class="cp-perf-bar" aria-hidden="true"><i style="width:${pct}%"></i></div>
+          </div>
+        </div>`;
+      })
+      .join('');
+
+    return `
+      <div class="cp-perf-summary">
+        <div class="cp-perf-pill"><strong>${totalPlayed}</strong><span>Plays</span></div>
+        <div class="cp-perf-pill"><strong>${winPct != null ? winPct + '%' : '—'}</strong><span>Win rate</span></div>
+        <div class="cp-perf-pill"><strong>${hub?.softDayStreak || 0}</strong><span>Day streak</span></div>
+      </div>
+      ${buildPerfChartSvg(rows.slice(0, 10))}
+      <div class="cp-perf-games">${gameRows}</div>
+      <button type="button" class="btn btn--primary btn--block" data-open-dangal style="margin-top:12px;">${tt('dangal_pulse_play', 'Open Dangal')}</button>`;
+  }
+
+  function openDangalOpponentPicker(mode) {
+    switchTo('dangal');
+
+    const startChallenge = (gameId) => {
+      if (!gameId) return;
+      if (mode === 'random' && typeof launchDangalWithOpponent === 'function') {
         launchDangalWithOpponent(gameId);
+        setTimeout(() => document.getElementById('dgRandomOpp')?.click(), 80);
         return;
       }
-      if (typeof handleDangalGameTap === 'function') handleDangalGameTap(gameId);
+      if (typeof launchDangalWithOpponent === 'function') launchDangalWithOpponent(gameId);
+      else if (typeof handleDangalGameTap === 'function') handleDangalGameTap(gameId);
     };
-    if (!gotdId && typeof fetchGameOfTheDay === 'function') {
+
+    const openPickerSheet = (gotdId) => {
+      let pick = pickRandomChallengeGame(gotdId);
+      if (!pick) {
+        if (typeof showToast === 'function') {
+          showToast(tt('dangal_challenge_empty', 'No other games in Manch right now — try Khel.'));
+        }
+        return;
+      }
+
+      const renderBody = (game) => `
+        <div class="cp-challenge-pick">
+          <div class="cp-challenge-icon" aria-hidden="true">${escHtml(game.icon || '🎮')}</div>
+          <h3>${escHtml(game.name || game.id)}</h3>
+          <p>${tt('dangal_challenge_sub', 'Random from Manch — not today’s Game of the Day.')}</p>
+          <button type="button" class="btn btn--primary btn--block" data-challenge-start>${tt('dangal_challenge_start', 'Challenge')}</button>
+          <button type="button" class="btn btn--ghost btn--block" data-challenge-reroll style="margin-top:8px;">${tt('dangal_challenge_reroll', 'Pick another')}</button>
+        </div>`;
+
+      if (typeof openHalfSheet !== 'function') {
+        startChallenge(pick.id);
+        return;
+      }
+
+      openHalfSheet({
+        id: 'dangalChallengeSheet',
+        title: tt('shortcut_dangal_challenge', 'Challenge'),
+        accent: 'dangal',
+        snap: 'mid',
+        bodyHtml: renderBody(pick),
+        onMount: (sheet, close) => {
+          const body = sheet.querySelector('[data-half-sheet-body]');
+          const wire = () => {
+            body?.querySelector('[data-challenge-start]')?.addEventListener('click', () => {
+              const id = pick?.id;
+              close();
+              startChallenge(id);
+            });
+            body?.querySelector('[data-challenge-reroll]')?.addEventListener('click', () => {
+              const next = pickRandomChallengeGame(gotdId);
+              if (!next) return;
+              pick = next;
+              if (body) {
+                body.innerHTML = renderBody(pick);
+                wire();
+              }
+            });
+          };
+          wire();
+        },
+      });
+    };
+
+    const gotdNow = resolveGotdId();
+    if (!gotdNow && typeof fetchGameOfTheDay === 'function') {
       fetchGameOfTheDay()
         .then((gotd) => {
           if (gotd?.gameId) {
             try {
               window.__dangalGotdId = gotd.gameId;
             } catch (e) {}
-            if (typeof launchDangalWithOpponent === 'function') launchDangalWithOpponent(gotd.gameId);
-            else if (typeof handleDangalGameTap === 'function') handleDangalGameTap(gotd.gameId);
-          } else launch();
+          }
+          openPickerSheet(gotd?.gameId || resolveGotdId());
         })
-        .catch(() => launch());
+        .catch(() => openPickerSheet(resolveGotdId()));
       return;
     }
-    launch();
+    openPickerSheet(gotdNow);
   }
 
   function openDangalPulseSheet(opts) {
     document.getElementById('dangalPulseSheet')?.remove();
-    // Refresh dynamic stats after each open (not once-a-day snapshot)
     try {
-      if (opts?.refresh && typeof renderDangalGamesGrid === 'function') {
-        const host = document.getElementById('dangalGamesGrid');
-        if (host && typeof getDangalHubSummary === 'function') {
-          // Soft refresh of overall rating strip without full grid rebuild when possible
-          const overall = document.getElementById('dangalOverallRating');
-          if (overall && typeof NEWS_CATEGORIES !== 'undefined') {
-            const quizRatings = userProfile?.categoryRatings || {};
-            const avgQuiz = Math.round(
-              NEWS_CATEGORIES.reduce((s, c) => s + (quizRatings[c] || 1200), 0) / NEWS_CATEGORIES.length
-            );
-            const hub = getDangalHubSummary();
-            const streakBit =
-              hub && hub.softDayStreak > 0
-                ? `<span class="dor-meta">${hub.softDayStreak > 1 ? `${hub.softDayStreak}-day streak` : 'Played today'} · ${hub.weekPlays} this week</span>`
-                : hub
-                  ? `<span class="dor-meta">${hub.weekPlays} play${hub.weekPlays === 1 ? '' : 's'} this week</span>`
-                  : '';
-            overall.innerHTML = `<div class="dor-main"><span class="dor-label">Quiz Rating</span><span class="dor-val">${avgQuiz}</span></div>${streakBit}`;
+      if (opts?.refresh !== false && typeof renderDangalGamesGrid === 'function') {
+        // Soft hub strip refresh when available
+        const overall = document.getElementById('dangalOverallRating');
+        if (overall && typeof getDangalHubSummary === 'function') {
+          const hub = getDangalHubSummary();
+          const streakBit =
+            hub && hub.softDayStreak > 0
+              ? `<span class="dor-meta">${hub.softDayStreak > 1 ? `${hub.softDayStreak}-day streak` : 'Played today'} · ${hub.weekPlays} this week</span>`
+              : hub
+                ? `<span class="dor-meta">${hub.weekPlays} play${hub.weekPlays === 1 ? '' : 's'} this week</span>`
+                : '';
+          if (hub) {
+            overall.innerHTML = `<div class="dor-main"><span class="dor-label">${tt('dangal_pulse_title', 'Performance')}</span><span class="dor-val">${hub.totalPlayed || 0}</span></div>${streakBit}`;
           }
         }
       }
     } catch (e) {}
 
-    let body = '';
-    const ratingsEl = document.getElementById('rpRatings');
-    if (ratingsEl && ratingsEl.innerHTML.trim()) {
-      body = `<div style="padding:4px 0;">${ratingsEl.innerHTML}</div>`;
-    } else {
-      body = `<div style="padding:28px 8px;color:var(--muted);text-align:center;">${tt(
-        'dangal_pulse_empty',
-        'Play a few games — your category pulse will show up here.'
-      )}</div>`;
-    }
-    body += `<button type="button" class="btn btn--primary btn--block" data-open-dangal style="margin-top:12px;">${tt('dangal_pulse_play', 'Open Dangal')}</button>`;
+    const body = buildPerformanceBodyHtml();
 
     if (typeof openHalfSheet === 'function') {
       openHalfSheet({
         id: 'dangalPulseSheet',
         title: tt('dangal_pulse_title', 'Game performance'),
         accent: 'dangal',
+        snap: 'tall',
+        expand: true,
         bodyHtml: body,
         onMount: (sheet, close) => {
           sheet.querySelector('[data-open-dangal]')?.addEventListener('click', () => {
             close();
             switchTo('dangal');
+          });
+          sheet.querySelectorAll('[data-perf-game]').forEach((row) => {
+            row.style.cursor = 'pointer';
+            row.addEventListener('click', () => {
+              const gid = row.getAttribute('data-perf-game');
+              close();
+              switchTo('dangal');
+              if (gid && typeof handleDangalGameTap === 'function') handleDangalGameTap(gid);
+            });
           });
         },
       });

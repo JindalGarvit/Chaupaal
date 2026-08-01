@@ -445,10 +445,65 @@
     return items;
   }
 
+  async function recordContentInterest(opts) {
+    const o = opts || {};
+    const postId = String(o.postId || '').slice(0, 128);
+    const signal = o.signal === 'more_like' || o.signal === 'not_interested' ? o.signal : '';
+    const surface = String(o.surface || 'peepal').slice(0, 24);
+    if (!postId || !signal) return { persisted: false };
+    if (typeof apiFetch !== 'function' || typeof currentUser === 'undefined' || !currentUser) {
+      return { persisted: false };
+    }
+    try {
+      const envelope = await apiFetch('/api/peepal-reactions', {
+        method: 'POST',
+        needAuth: true,
+        body: {
+          action: 'content_signal',
+          postId,
+          surface,
+          signal,
+          authorUid: o.authorUid || null,
+          tag: o.tag || '',
+        },
+      });
+      if (!envelope?.ok) throw new Error(envelope?.error?.message || 'Could not save preference');
+      return { persisted: true, ...envelope.data };
+    } catch (e) {
+      // Local fallback so UI still feels honest offline
+      try {
+        if (typeof db !== 'undefined' && db && currentUser) {
+          const docId = `${surface}_${postId}`.slice(0, 180);
+          await db
+            .collection('users')
+            .doc(currentUser.uid)
+            .collection('recommendationSignals')
+            .doc(docId)
+            .set(
+              {
+                type: 'content_interest',
+                surface,
+                postId,
+                authorUid: o.authorUid || null,
+                signal,
+                value: signal === 'more_like' ? 1 : -1,
+                tag: String(o.tag || '').slice(0, 80),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+              },
+              { merge: true }
+            );
+          return { persisted: true, local: true };
+        }
+      } catch (err) {}
+      throw e;
+    }
+  }
+
   window.hydrateContentLikes = hydrateContentLikes;
   window.toggleContentLike = toggleContentLike;
   window.hydratePeepalReactions = hydratePeepalReactions;
   window.setPeepalReaction = setPeepalReaction;
+  window.recordContentInterest = recordContentInterest;
   window.incrementContentShares = incrementContentShares;
   window.loadContentComments = loadContentComments;
   window.persistContentComment = persistContentComment;

@@ -214,9 +214,14 @@ textarea.auth-input,
     margin: 4px 2px calc(2px + env(safe-area-inset-bottom, 0px) * 0);
     min-height: 48px;
   }
-  .tab-btn.active::after {
-    bottom: 4px;
+  .tab-btn.active::before {
+    top: 3px;
+    width: 18px;
     border-radius: var(--r-full);
+  }
+  .tab-btn.active::after {
+    content: none !important;
+    display: none !important;
   }
 }
 
@@ -239,7 +244,7 @@ textarea.auth-input,
   margin: 8px auto 4px;
   flex-shrink: 0;
 }
-/* Shared half-sheet (5A) — grabber dismiss; expand only when opted in */
+/* Shared half-sheet — grabber resize mid/tall; drag past floor dismisses */
 .cp-half-sheet.archive-overlay {
   left: 0;
   right: 0;
@@ -250,11 +255,13 @@ textarea.auth-input,
   margin: 0;
   border-radius: var(--r-sheet) var(--r-sheet) 0 0;
   padding-bottom: max(12px, var(--safe-bottom, env(safe-area-inset-bottom, 0px)));
-  max-height: min(72vh, calc(100% - var(--safe-top, env(safe-area-inset-top, 0px)) - 48px));
+  max-height: calc(100% - var(--safe-top, env(safe-area-inset-top, 0px)) - 48px);
   overflow: hidden;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+  touch-action: none;
+  will-change: height;
 }
 .cp-half-sheet--half {
   height: min(52%, 480px);
@@ -262,14 +269,36 @@ textarea.auth-input,
 .cp-half-sheet--expand {
   height: min(78%, 640px);
 }
+.cp-half-sheet.is-dragging {
+  transition: none !important;
+}
+.cp-half-sheet .notif-panel-grabber,
+.cp-half-sheet [data-sheet-grabber] {
+  width: 40px;
+  height: 5px;
+  border-radius: 99px;
+  background: rgba(0, 0, 0, 0.22);
+  margin: 10px auto 6px;
+  flex-shrink: 0;
+  cursor: grab;
+  touch-action: none;
+}
+.cp-half-sheet.is-dragging .notif-panel-grabber,
+.cp-half-sheet.is-dragging [data-sheet-grabber] {
+  cursor: grabbing;
+  background: var(--brand-red, var(--red));
+  opacity: 0.55;
+}
 .cp-half-sheet-body {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding: 4px 16px 16px;
   overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 .cp-half-sheet-close {
   background: none;
@@ -279,6 +308,120 @@ textarea.auth-input,
   cursor: pointer;
   padding: 6px 8px;
   line-height: 1;
+  flex-shrink: 0;
+}
+/* Performance / challenge sheet charts */
+.cp-perf-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.cp-perf-pill {
+  background: var(--surface-sunken, var(--cream));
+  border-radius: var(--r-control, 14px);
+  padding: 10px 8px;
+  text-align: center;
+  min-width: 0;
+}
+.cp-perf-pill strong {
+  display: block;
+  font-family: var(--font-display, 'Space Grotesk', sans-serif);
+  font-size: 18px;
+  color: var(--ink);
+  word-break: break-word;
+}
+.cp-perf-pill span {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.cp-perf-chart {
+  width: 100%;
+  height: 72px;
+  margin: 4px 0 14px;
+  display: block;
+}
+.cp-perf-game {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  min-width: 0;
+}
+.cp-perf-game:last-child { border-bottom: 0; }
+.cp-perf-game-icon { font-size: 22px; flex-shrink: 0; line-height: 1.2; }
+.cp-perf-game-body { flex: 1; min-width: 0; }
+.cp-perf-game-name {
+  font-weight: 700;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.cp-perf-game-meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+.cp-perf-bar {
+  height: 4px;
+  background: var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+.cp-perf-bar > i {
+  display: block;
+  height: 100%;
+  background: var(--brand-red, var(--red));
+  border-radius: 4px;
+}
+.cp-challenge-pick {
+  text-align: center;
+  padding: 8px 4px 4px;
+}
+.cp-challenge-pick .cp-challenge-icon { font-size: 40px; line-height: 1; margin-bottom: 8px; }
+.cp-challenge-pick h3 {
+  margin: 0 0 4px;
+  font-family: var(--font-display, 'Space Grotesk', sans-serif);
+  font-size: 18px;
+}
+.cp-challenge-pick p { margin: 0 0 14px; font-size: 13px; color: var(--muted); }
+.cp-post-menu-list { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 8px; }
+.cp-post-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 10px;
+  border: 0;
+  border-radius: var(--r-control, 14px);
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  min-width: 0;
+}
+.cp-post-menu-item:hover,
+.cp-post-menu-item:focus-visible {
+  background: var(--surface-sunken, var(--cream));
+  outline: none;
+}
+.cp-post-menu-item.is-danger { color: var(--brand-red, var(--red)); }
+.cp-post-menu-item .cp-post-menu-ico {
+  width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+.cp-post-menu-item span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .notif-panel-sheet .archive-header {
   padding-top: 4px;

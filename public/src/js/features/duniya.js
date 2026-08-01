@@ -248,7 +248,7 @@ function renderDuniyaFeed(){
   if(!visible.length){
     if(typeof renderEmptyState==='function'){
       renderEmptyState(feed, {
-        icon: typeof iconHtml==='function'?iconHtml('globe',{size:40,className:'cp-icon--empty'}):'🌍',
+        icon: (typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('duniya',40):(typeof iconHtml==='function'?iconHtml('globe',{size:40,className:'cp-icon--empty'}):'🌍'),
         title:'No posts yet',
         message:'Be the first to share something with Duniya.',
         actionLabel:'Create a post',
@@ -313,7 +313,7 @@ function createDuniyaPost(post, {variant='list'}={}){
       <div class="duniya-post-avatar">${post.user.photoURL?`<img src="${duniyaEsc(post.user.photoURL)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:`<span>${duniyaEsc(post.user.avatar||'👤')}</span>`}</div>
       <div class="duniya-post-user">
         <div class="duniya-post-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(post.user.name,post.user):duniyaEsc(post.user.name)}</div>
-        <div class="duniya-post-meta">${duniyaEsc(typeof formatRelativeTime==='function'?formatRelativeTime(post.ts||post.timestamp):post.timestamp)} · 🌍 Public</div>
+        <div class="duniya-post-meta">${duniyaEsc(typeof formatRelativeTime==='function'?formatRelativeTime(post.ts||post.timestamp):post.timestamp)} · <span class="cp-tab-mark" data-tab-mark="duniya" aria-hidden="true"></span> Public</div>
       </div>
       <button class="duniya-follow-btn ${isFollowing?'following':''}" data-uid="${duniyaEsc(post.user.uid)}" aria-label="${isFollowing?'Unfollow':'Follow'} ${duniyaEsc(post.user.name)}">${isFollowing?'Following':'Follow'}</button>
       ${(currentUser&&(post.user?.uid===currentUser.uid||post.uid===currentUser.uid))?`<button type="button" class="duniya-delete-btn" title="Delete" aria-label="Delete post" style="background:none;border:none;cursor:pointer;color:var(--muted);padding:4px;">${typeof iconHtml==='function'?iconHtml('trash',{size:16}):'🗑️'}</button>`:''}
@@ -579,7 +579,10 @@ function createDuniyaPost(post, {variant='list'}={}){
   el.querySelector('.share-btn').addEventListener('click',()=>openShareSheet(post));
 
   // More (flag/block)
-  el.querySelector('.duniya-more-btn').addEventListener('click',()=>openFlagSheet(post.user));
+  el.querySelector('.duniya-more-btn').addEventListener('click',()=>{
+    if(typeof openContentMenu==='function') openContentMenu(post,{surface:'duniya'});
+    else if(typeof openFlagSheet==='function') openFlagSheet(post.user,{postId:post.id,targetType:'duniya'});
+  });
 
   el.querySelector('.duniya-delete-btn')?.addEventListener('click',(e)=>{
     e.stopPropagation();

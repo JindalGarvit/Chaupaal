@@ -80,21 +80,21 @@
   }
   .tab-btn.active .tab-icon { transform: scale(1.12) translateY(-1px); }
   .tab-btn.active .tab-label { color: var(--red); }
-  /* Minimal active cue — do NOT cover 3D icons (removed top red bar) */
-  .tab-btn.active::before { content: none !important; display: none !important; }
-  .tab-btn.active::after {
+  /* Thin red line above icon — does not cover label or illustrated marks */
+  .tab-btn.active::before {
     content: '';
     position: absolute;
-    bottom: 3px;
+    top: 2px;
     left: 50%;
     transform: translateX(-50%);
-    width: 5px;
-    height: 5px;
+    width: 16px;
+    height: 2px;
     background: var(--brand-red, var(--red));
-    border-radius: 50%;
-    opacity: 0.85;
+    border-radius: 2px;
+    opacity: 0.95;
     pointer-events: none;
   }
+  .tab-btn.active::after { content: none !important; display: none !important; }
 }
 
 /* Desktop sidebar improved */

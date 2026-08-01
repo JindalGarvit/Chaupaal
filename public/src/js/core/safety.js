@@ -358,12 +358,200 @@
     });
   }
 
+  /**
+   * Balanced post ⋯ menu — constructive + safety, with Report cascade.
+   * @param {object} content - peepal question or duniya post
+   * @param {object} [opts]
+   * @param {'peepal'|'duniya'} [opts.surface]
+   */
+  function openContentMenu(content, opts = {}) {
+    const surface = opts.surface || 'peepal';
+    const user = content?.user || { uid: content?.uid, name: 'User' };
+    const postId = content?.id || content?.firestoreId || opts.postId || null;
+    const authorUid = user?.uid || content?.uid || null;
+    const isOwn =
+      typeof currentUser !== 'undefined' &&
+      currentUser &&
+      authorUid &&
+      (authorUid === currentUser.uid || content?.uid === currentUser.uid);
+
+    const esc = (s) =>
+      String(s || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+
+    const shareUrl = (() => {
+      try {
+        if (typeof buildShareUrl === 'function') return buildShareUrl(surface, postId);
+      } catch (e) {}
+      try {
+        const base = location.origin || '';
+        if (surface === 'duniya' && postId) return `${base}/post/${postId}`;
+        if (surface === 'peepal' && postId) return `${base}/peepal/${postId}`;
+      } catch (e) {}
+      return '';
+    })();
+
+    const hideContentLocally = () => {
+      try {
+        if (surface === 'peepal' && typeof peepalQuestions !== 'undefined' && Array.isArray(peepalQuestions)) {
+          peepalQuestions = peepalQuestions.filter((q) => q.id !== content.id && q.firestoreId !== content.id);
+          if (typeof renderPeepalFeed === 'function') renderPeepalFeed();
+        }
+        if (surface === 'duniya' && typeof duniyaPosts !== 'undefined' && Array.isArray(duniyaPosts)) {
+          duniyaPosts = duniyaPosts.filter((p) => p.id !== content.id);
+          if (typeof renderDuniyaFeed === 'function') renderDuniyaFeed();
+        }
+      } catch (e) {}
+    };
+
+    const runInterest = async (signal) => {
+      try {
+        if (typeof recordContentInterest === 'function') {
+          await recordContentInterest({
+            postId,
+            surface,
+            signal,
+            authorUid,
+            tag: content?.tag || '',
+          });
+        }
+        if (authorUid && typeof recordDiscoveryInterest === 'function') {
+          recordDiscoveryInterest(authorUid, signal === 'more_like');
+        }
+        if (signal === 'not_interested') hideContentLocally();
+        if (typeof showToast === 'function') {
+          showToast(
+            signal === 'more_like'
+              ? "Noted — we'll show more like this"
+              : "Got it — we'll show less like this"
+          );
+        }
+      } catch (e) {
+        if (typeof showToast === 'function') {
+          showToast(typeof friendlyError === 'function' ? friendlyError(e) : 'Could not save preference');
+        }
+      }
+    };
+
+    const items = [];
+    if (!isOwn && authorUid) {
+      items.push({ id: 'more_like', label: 'More like this', ico: '♥' });
+      items.push({ id: 'not_interested', label: 'Not interested', ico: '✕' });
+    }
+    items.push({ id: 'share', label: 'Share', ico: '↗' });
+    if (shareUrl) items.push({ id: 'copy', label: 'Copy link', ico: '🔗' });
+    if (!isOwn && authorUid) {
+      items.push({ id: 'hide', label: 'Hide', ico: '👁' });
+      items.push({ id: 'report', label: 'Report…', ico: '⚑', danger: true });
+      items.push({ id: 'block', label: `Block ${user.name || 'user'}`, ico: '⛔', danger: true });
+    }
+
+    const bodyHtml = `<div class="cp-post-menu-list" role="menu">
+      ${items
+        .map(
+          (it) =>
+            `<button type="button" class="cp-post-menu-item${it.danger ? ' is-danger' : ''}" data-menu-act="${it.id}" role="menuitem">
+              <span class="cp-post-menu-ico" aria-hidden="true">${it.ico}</span>
+              <span>${esc(it.label)}</span>
+            </button>`
+        )
+        .join('')}
+    </div>`;
+
+    const handleAct = async (act, close) => {
+      if (act === 'more_like') {
+        if (close) close();
+        await runInterest('more_like');
+        return;
+      }
+      if (act === 'not_interested') {
+        if (close) close();
+        await runInterest('not_interested');
+        return;
+      }
+      if (act === 'share') {
+        if (close) close();
+        if (typeof openShareSheet === 'function') openShareSheet(content);
+        else if (navigator.share) {
+          navigator
+            .share({
+              title: 'Chaupaal',
+              text: String(content.question || content.caption || '').slice(0, 120),
+              url: shareUrl || undefined,
+            })
+            .catch(() => {});
+        }
+        return;
+      }
+      if (act === 'copy') {
+        if (close) close();
+        try {
+          await navigator.clipboard.writeText(shareUrl);
+          if (typeof showToast === 'function') showToast('Link copied');
+        } catch (e) {
+          if (typeof showToast === 'function') showToast('Could not copy link');
+        }
+        return;
+      }
+      if (act === 'hide') {
+        if (close) close();
+        hideContentLocally();
+        if (typeof showToast === 'function') showToast('Hidden from your feed');
+        return;
+      }
+      if (act === 'report') {
+        if (close) close();
+        openFlagSheet(user, { postId, targetType: surface });
+        return;
+      }
+      if (act === 'block') {
+        if (close) close();
+        try {
+          await blockUser(authorUid, user.name);
+        } catch (e) {
+          if (typeof showToast === 'function') showToast("Couldn't block — try again");
+        }
+      }
+    };
+
+    if (typeof openHalfSheet === 'function') {
+      openHalfSheet({
+        id: 'cpContentMenu',
+        title: 'Post options',
+        accent: surface === 'duniya' ? 'duniya' : 'peepal',
+        snap: 'mid',
+        bodyHtml,
+        onMount: (sheet, close) => {
+          sheet.querySelectorAll('[data-menu-act]').forEach((btn) => {
+            btn.addEventListener('click', () => handleAct(btn.dataset.menuAct, close));
+          });
+        },
+      });
+      return;
+    }
+
+    if (typeof showActionSheet === 'function') {
+      showActionSheet(
+        'Post options',
+        items.map((it) => ({
+          label: it.label,
+          danger: !!it.danger,
+          fn: () => handleAct(it.id, null),
+        }))
+      );
+    }
+  }
+
   window.REPORT_REASONS = REPORT_REASONS;
   window.FLAG_REASONS = FLAG_REASONS;
   window.blockUser = blockUser;
   window.unblockUser = unblockUser;
   window.flagUser = flagUser;
   window.openFlagSheet = openFlagSheet;
+  window.openContentMenu = openContentMenu;
   window.openBlockedUsersSheet = openBlockedUsersSheet;
   window.loadBlockedFromFirestore = loadBlockedFromFirestore;
   window.listBlockedUsers = listBlockedUsers;

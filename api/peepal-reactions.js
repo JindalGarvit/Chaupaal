@@ -383,6 +383,39 @@ module.exports = async function handler(req, res) {
       return sendSuccess(res, result);
     }
 
+    // Feed menu: More like this / Not interested → same recommendationSignals pipeline as reactions
+    if (body.action === 'content_signal') {
+      const postId = cleanPostId(body.postId);
+      const surface = String(body.surface || 'peepal').slice(0, 24);
+      const signal = String(body.signal || '');
+      const authorUid = body.authorUid ? String(body.authorUid).slice(0, 128) : null;
+      const tag = String(body.tag || '').slice(0, 80);
+      if (!postId || (signal !== 'more_like' && signal !== 'not_interested')) {
+        return sendError(res, 400, 'VALIDATION_ERROR', 'postId and signal (more_like|not_interested) required');
+      }
+      const value = signal === 'more_like' ? 1 : -1;
+      const docId = `${surface}_${postId}`.slice(0, 180);
+      await db
+        .collection('users')
+        .doc(user.uid)
+        .collection('recommendationSignals')
+        .doc(docId)
+        .set(
+          {
+            type: 'content_interest',
+            surface,
+            postId,
+            authorUid,
+            signal,
+            value,
+            tag,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+      return sendSuccess(res, { ok: true, signal, value });
+    }
+
     // ── Unified payments scaffold (folded here — Hobby function cap) ──
     if (body.action === 'payment_create' || body.action === 'boost_post') {
       const purpose =

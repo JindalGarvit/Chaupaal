@@ -203,7 +203,7 @@ function maybeShowPeepalCheckIn(){
     const nudge = document.createElement('div');
     nudge.style.cssText='background:linear-gradient(135deg,var(--navy),#2A3158);border-radius:16px;padding:14px 16px;margin-bottom:12px;color:#fff;display:flex;align-items:center;gap:12px;';
     nudge.innerHTML=`
-      <div style="font-size:28px;">🌳</div>
+      <div style="font-size:28px;">${(typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('peepal',28):'🌳'}</div>
       <div style="flex:1;">
         <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;">How's Peepal working for you?</div>
         <div style="font-size:11px;color:rgba(255,255,255,0.6);margin-top:2px;">Quick 1-tap — helps us improve your matches</div>

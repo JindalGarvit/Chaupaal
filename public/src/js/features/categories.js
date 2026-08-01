@@ -1141,7 +1141,7 @@ function renderPeepalFeed(){
   if(!sorted.length){
     if(typeof renderEmptyState==='function'){
       renderEmptyState(feed, {
-        icon: typeof iconHtml==='function'?iconHtml('tree',{size:40,className:'cp-icon--empty'}):'🌳',
+        icon: (typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('peepal',40):(typeof iconHtml==='function'?iconHtml('tree',{size:40,className:'cp-icon--empty'}):'🌳'),
         title:'No questions yet',
         message:'Be the first to ask the Peepal community something.',
         actionLabel:'Ask a question',
@@ -1204,7 +1204,8 @@ function renderPeepalFeed(){
     });
     card.querySelector('.peepal-more-btn')?.addEventListener('click',(e)=>{
       e.stopPropagation();
-      if(typeof openFlagSheet==='function') openFlagSheet(q.user||{uid:q.uid});
+      if(typeof openContentMenu==='function') openContentMenu(q,{surface:'peepal'});
+      else if(typeof openFlagSheet==='function') openFlagSheet(q.user||{uid:q.uid},{postId:q.id,targetType:'peepal'});
       else if(typeof showToast==='function') showToast('Report unavailable');
     });
     // Wired via listener (not inline onclick) so question text can't break out
@@ -1476,7 +1477,7 @@ function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
   detail.innerHTML=`
     <div class="peepal-detail-header">
       <button class="peepal-detail-back cp-tap-target" id="peepalDetailBack" aria-label="Back">${typeof iconHtml==='function'?iconHtml('arrow-left',{size:22}):'←'}</button>
-      <div class="peepal-detail-title" style="display:flex;align-items:center;gap:8px;">${typeof iconHtml==='function'?iconHtml('tree',{size:20}):'🌳'} Peepal</div>
+      <div class="peepal-detail-title" style="display:flex;align-items:center;gap:8px;">${(typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('peepal',20):(typeof iconHtml==='function'?iconHtml('tree',{size:20}):'🌳')} Peepal</div>
     </div>
     <div class="peepal-detail-body">
       <div class="peepal-card-header" style="padding:0 0 12px;">

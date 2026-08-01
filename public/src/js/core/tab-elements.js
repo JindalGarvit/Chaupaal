@@ -215,6 +215,25 @@
     el.innerHTML = svg;
   }
 
+  function markHtml(tab, size) {
+    const svg = SVGS[tab];
+    if (!svg) return '';
+    const px = Number(size) || 24;
+    return `<span class="tab-el-icon cp-tab-mark-host" data-tab-element="${tab}" data-icon-skip="1" style="width:${px}px;height:${px}px;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;">${svg}</span>`;
+  }
+
+  function mountMarks(root) {
+    const scope = root && root.querySelectorAll ? root : document;
+    scope.querySelectorAll('[data-tab-mark]').forEach((el) => {
+      const tab = el.getAttribute('data-tab-mark');
+      if (!SVGS[tab]) return;
+      if (el.querySelector('.tab-el-svg')) return;
+      const size = Number(el.getAttribute('data-mark-size')) || 16;
+      el.innerHTML = markHtml(tab, size);
+      el.removeAttribute('data-tab-mark');
+    });
+  }
+
   function mountAll(root) {
     syncQuietClass();
     const scope = root && root.querySelectorAll ? root : document;
@@ -228,6 +247,7 @@
       if (el.querySelector('.tab-el-svg') && el.getAttribute('data-tab-element') === tab) return;
       mountIcon(el, tab);
     });
+    mountMarks(scope);
   }
 
   function playRitual(tab) {
@@ -265,6 +285,8 @@
     mountAll,
     mountIcon,
     mountShortcutIcon,
+    mountMarks,
+    markHtml,
     playRitual,
     playAmbience,
     syncQuietClass,

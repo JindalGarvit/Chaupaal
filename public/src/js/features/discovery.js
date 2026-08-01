@@ -208,12 +208,13 @@ Return ONLY valid JSON:
     if(!scored.length){
       if(typeof renderEmptyState==='function'){
         renderEmptyState(resultsEl, {
-          icon:'🌳',
+          icon:(typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('peepal',40):'🌳',
           title:'No matches yet',
           message:'The community is still growing. Try broader terms like “cricket” or “tech”.',
         });
       } else {
-        resultsEl.innerHTML = `<div style="text-align:center;padding:24px;color:var(--muted);"><div style="font-size:32px;margin-bottom:10px;">🌳</div><div style="font-size:14px;">No matches found yet. The community is still growing!<br>Try broader terms like "cricket" or "tech".</div></div>`;
+        const mark=(typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('peepal',32):'🌳';
+        resultsEl.innerHTML = `<div style="text-align:center;padding:24px;color:var(--muted);"><div style="font-size:32px;margin-bottom:10px;">${mark}</div><div style="font-size:14px;">No matches found yet. The community is still growing!<br>Try broader terms like "cricket" or "tech".</div></div>`;
       }
       return;
     }
@@ -285,9 +286,12 @@ ${summaries}`}]
           <div style="background:rgba(230,57,70,0.1);color:var(--red);border-radius:999px;padding:5px 11px;font-size:12px;font-weight:700;flex-shrink:0;">${matchPct}%</div>
         </div>
         ${(user.interests||[]).length?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">${(user.interests||[]).slice(0,4).map(i=>`<span style="background:rgba(230,57,70,0.07);color:var(--red);border-radius:999px;padding:3px 9px;font-size:11px;font-weight:600;">📌 ${i}</span>`).join('')}</div>`:''}
-        <div class="ai-match-reason">"${(typeof interestOverlapReason==='function' && interestOverlapReason(user)) || reason}"</div>
+        <div class="ai-match-reason" style="display:flex;align-items:flex-start;gap:8px;min-width:0;">
+          <div style="flex:1;min-width:0;overflow-wrap:anywhere;">"${(typeof interestOverlapReason==='function' && interestOverlapReason(user)) || reason}"</div>
+          <button type="button" class="cp-card-speak peepal-speak-btn" data-text="${String([user.name, reason, starter].filter(Boolean).join('. ')).replace(/"/g,'&quot;')}" title="Listen" aria-label="Listen">${typeof iconHtml==='function'?iconHtml('volume',{size:14}):'🔊'}</button>
+        </div>
         ${ib?`<div class="discovery-icebreaker"><div class="discovery-icebreaker-label">Conversation starter</div><div class="discovery-icebreaker-text">"${ib.answer}"</div></div>`:''}
-        <div style="background:rgba(43,39,48,0.04);border-radius:10px;padding:8px 12px;font-size:12px;color:var(--muted);margin-top:6px;margin-bottom:10px;">
+        <div style="background:rgba(43,39,48,0.04);border-radius:10px;padding:8px 12px;font-size:12px;color:var(--muted);margin-top:6px;margin-bottom:10px;overflow-wrap:anywhere;">
           💬 Suggested opener: <span style="color:var(--ink);font-style:italic;">"${starter}"</span>
         </div>
         <div style="display:flex;gap:8px;">
@@ -295,6 +299,11 @@ ${summaries}`}]
           <button class="peepal-ai-chat-btn" data-name="${user.name}" data-uid="${user.uid}" data-starter="${starter.replace(/"/g,'&quot;')}" style="flex:1;padding:9px;background:var(--red);color:#fff;border:none;border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;cursor:pointer;">💬 Say hi</button>
         </div>
       `;
+
+      card.querySelector('.cp-card-speak')?.addEventListener('click',(e)=>{
+        e.stopPropagation();
+        if(typeof speakText==='function') speakText(e.currentTarget.dataset.text, e.currentTarget);
+      });
 
       card.querySelector('.peepal-ai-chat-btn').addEventListener('click', e=>{
         const name = e.currentTarget.dataset.name;
