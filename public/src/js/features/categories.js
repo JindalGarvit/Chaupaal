@@ -831,46 +831,28 @@ async function initPeepal(){
   const feed=document.getElementById('peepalFeed');if(!feed)return;
   delete feed.dataset.loaded;
 
-  // Wire buttons (once only)
-  const askBtn=document.getElementById('peepalAskBtn');
-  if(askBtn&&!askBtn.dataset.wired){askBtn.dataset.wired='1';askBtn.addEventListener('click',()=>openPeepalAskSheet());}
-  const searchBtn=document.getElementById('peepalSearchBtn');
-  const openPeepalFind = () => {
-    const s=document.getElementById('peepalAiSearch');
-    s?.classList.remove('hidden');
-    if(typeof filterPeepalSearchNudges==='function') filterPeepalSearchNudges(s);
-    document.getElementById('peepalAiSearchInput')?.focus();
-  };
-  if(searchBtn&&!searchBtn.dataset.wired){searchBtn.dataset.wired='1';searchBtn.addEventListener('click',openPeepalFind);}
-  const inlineSearch=document.getElementById('peepalInlineSearch');
-  if(inlineSearch&&!inlineSearch.dataset.wired){
-    inlineSearch.dataset.wired='1';
-    inlineSearch.addEventListener('focus',()=>{
-      if(typeof openUniversalSearch==='function') openUniversalSearch({types:['users','posts']});
-    });
-    inlineSearch.addEventListener('keydown',(e)=>{
-      if(e.key==='Enter'){
-        e.preventDefault();
-        openPeepalFind();
-        const inp=document.getElementById('peepalAiSearchInput');
-        if(inp) inp.value=inlineSearch.value||'';
-      }
-    });
-  }
-  if(typeof filterPeepalSearchNudges==='function') filterPeepalSearchNudges();
-  document.getElementById('peepalAiSearchClose')?.addEventListener('click',()=>document.getElementById('peepalAiSearch')?.classList.add('hidden'));
-  // Wire nudge chips
-  document.querySelectorAll('.peepal-nudge-chip').forEach(chip=>{
+  // Intent card (Vriksha) — chips + free-text → AI people results. Morph: Discuss / Khoj / Search Chaupaal.
+  if(typeof filterPeepalSearchNudges==='function') filterPeepalSearchNudges(document.getElementById('peepalIntentCard'));
+  document.querySelectorAll('#peepalIntentCard .peepal-nudge-chip').forEach(chip=>{
+    if(chip.dataset.wired) return;
+    chip.dataset.wired='1';
     chip.addEventListener('click',()=>{
       const inp=document.getElementById('peepalAiSearchInput');
-      if(inp){inp.value=chip.dataset.hint;inp.focus();}
+      if(inp){inp.value=chip.dataset.hint||'';inp.focus();}
     });
   });
-  if(!document.getElementById('peepalAiSearchGo')?.dataset.wired){
-    document.getElementById('peepalAiSearchGo').dataset.wired='1';
-    document.getElementById('peepalAiSearchGo').addEventListener('click',runPeepalAiSearch);
-    document.getElementById('peepalAiSearchInput')?.addEventListener('keypress',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();runPeepalAiSearch();}});
+  const goBtn=document.getElementById('peepalAiSearchGo');
+  if(goBtn&&!goBtn.dataset.wired){
+    goBtn.dataset.wired='1';
+    goBtn.addEventListener('click',()=>{ if(typeof runPeepalAiSearch==='function') runPeepalAiSearch(); });
+    document.getElementById('peepalAiSearchInput')?.addEventListener('keypress',e=>{
+      if(e.key==='Enter'&&!e.shiftKey){e.preventDefault(); if(typeof runPeepalAiSearch==='function') runPeepalAiSearch();}
+    });
   }
+  if(typeof bindLivingPlaceholder==='function'){
+    bindLivingPlaceholder(document.getElementById('peepalAiSearchInput'),'peepal_intent');
+  }
+  document.getElementById('peepalIntentCard')?.classList.remove('hidden');
 
   // Reuse static HTML shell (keeps LCP title/subtitle in place) or create a loading host
   let loadingEl=document.getElementById('peepalDiscovery');

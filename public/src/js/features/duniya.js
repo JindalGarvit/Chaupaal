@@ -188,14 +188,7 @@ async function renderDuniyaStories(){
       }
       const storyUser=storyUsers[Number(item.dataset.storyIndex)];
       if(storyUser.self){
-        // Short expand: story vs create post
-        if(typeof showActionSheet==='function'){
-          showActionSheet('Share on Duniya',[
-            {label:'📷 Add story',hint:'Public story — discoverable in Duniya.',fn:()=>openDuniyaStoryAddSheet()},
-            {label:'✍️ Create a post',hint:'Photo, video, or caption for Vishwa / Lehar.',fn:()=>openDuniyaPostSheet('post')},
-          ]);
-          return;
-        }
+        // Tap → story creation immediately (gallery + camera); no chooser sheet
         openDuniyaStoryAddSheet();
       }else openStoryViewer(storyUser.stories[0],storyUser.stories);
     });
@@ -204,41 +197,61 @@ async function renderDuniyaStories(){
 
 function openDuniyaStoryAddSheet(){
   const s=document.createElement('div');
-  s.style.cssText='position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:20px;z-index:100;';
+  s.className='duniya-story-compose';
+  s.dataset.navManaged='1';
+  s.style.cssText='position:absolute;inset:0;background:var(--surface-page,#F5F5F5);z-index:100;display:flex;flex-direction:column;';
+  const tt=(k,f)=>{ try{ if(typeof t==='function'){ const v=t(k); if(v&&v!==k) return v; } }catch(e){} return f; };
   s.innerHTML=`
-    <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;margin-bottom:4px;">Add to Duniya Story</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">Duniya Stories are public and discoverable.</div>
-    <label style="display:flex;align-items:center;gap:12px;padding:13px;background:var(--cream);border-radius:14px;cursor:pointer;margin-bottom:10px;font-weight:600;font-size:14px;">
-      📷 Add photo or video<input type="file" accept="image/*,video/*" id="duniyaStoryFile" style="display:none;">
-    </label>
-    <button type="button" class="btn btn--primary btn--block" id="duniyaStoryCreatePost" style="margin-bottom:8px;">Create a post instead</button>
-    <button id="closeDuniyaStorySheet" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;margin-top:4px;">Cancel</button>
-  `;
-  document.querySelector('.device').appendChild(s);
-  if(typeof enableSwipeDismiss==='function') enableSwipeDismiss(s,()=>s.remove());
-  document.getElementById('closeDuniyaStorySheet')?.addEventListener('click',()=>s.remove());
-  document.getElementById('duniyaStoryCreatePost')?.addEventListener('click',()=>{
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;background:var(--surface-elevated,#fff);border-bottom:1px solid var(--line);">
+      <button type="button" data-story-close style="background:none;border:none;font-size:22px;cursor:pointer;" aria-label="Close">✕</button>
+      <div style="flex:1;font-family:var(--font-display,'Space Grotesk'),sans-serif;font-weight:700;font-size:17px;">${tt('duniya_add_story','Your story')}</div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;">
+      <div style="font-size:14px;color:var(--muted);text-align:center;max-width:260px;">${tt('duniya_story_hint','Pick from your gallery or open the camera — stories are public on Duniya.')}</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;">
+        <label class="btn btn--primary" style="cursor:pointer;display:inline-flex;align-items:center;gap:8px;padding:14px 20px;">
+          ${typeof iconHtml==='function'?iconHtml('image',{size:18}):'🖼'} ${tt('duniya_gallery','Gallery')}
+          <input type="file" accept="image/*,video/*" id="duniyaStoryGallery" style="display:none;">
+        </label>
+        <label class="btn btn--secondary" style="cursor:pointer;display:inline-flex;align-items:center;gap:8px;padding:14px 20px;border:2px solid var(--line);border-radius:var(--r-control);background:var(--surface-elevated);">
+          ${typeof iconHtml==='function'?iconHtml('camera',{size:18}):'📷'} ${tt('duniya_camera','Camera')}
+          <input type="file" accept="image/*,video/*" capture="environment" id="duniyaStoryCamera" style="display:none;">
+        </label>
+      </div>
+    </div>`;
+  const device=document.querySelector('.device')||document.body;
+  device.appendChild(s);
+  const close=()=>{
+    if(typeof removeNavLayer==='function') removeNavLayer(s);
     s.remove();
-    if(typeof openDuniyaPostSheet==='function') openDuniyaPostSheet('post');
-  });
-  document.getElementById('duniyaStoryFile')?.addEventListener('change',async e=>{
-    const file=e.target.files[0];if(!file)return;
-    s.remove();
-    showToast(t('duniya_preparing_story'));
+    try{ if(typeof restoreAppShell==='function') restoreAppShell('duniya_story'); }catch(e){}
+  };
+  if(typeof openLayer==='function') openLayer(s, close, { host: device });
+  else if(typeof pushNavLayer==='function') pushNavLayer(s, close);
+  s.querySelector('[data-story-close]')?.addEventListener('click', close);
+
+  async function handleFile(file){
+    if(!file) return;
+    close();
+    if(typeof showToast==='function') showToast(typeof t==='function'?t('duniya_preparing_story'):'Preparing story…');
     try{
-      if(typeof processAndUploadMedia!=='function')throw new Error('Media upload unavailable');
+      if(typeof processAndUploadMedia!=='function') throw new Error('Media upload unavailable');
       const up=await processAndUploadMedia(file,{folder:'stories'});
       await createPlatformStory({
         destination:'duniya',kind:'story',type:'media',
-        media:up.media,thumb:up.thumb,
+        media:up.media||up.url||up.secure_url,thumb:up.thumb||up.media||up.url,
         mediaType:file.type.startsWith('video')?'video':'image',
       });
       await renderDuniyaStories();
-      showToast(t('duniya_story_shared'));
+      if(typeof showToast==='function') showToast(typeof t==='function'?t('duniya_story_shared'):'Story shared');
     }catch(err){
-      showToast(typeof friendlyError==='function'?friendlyError(err):(err.message||t('duniya_story_fail')));
+      if(typeof showToast==='function') showToast(typeof friendlyError==='function'?friendlyError(err):(err.message||'Could not share story'));
     }
-  });
+  }
+  s.querySelector('#duniyaStoryGallery')?.addEventListener('change',e=>handleFile(e.target.files?.[0]));
+  s.querySelector('#duniyaStoryCamera')?.addEventListener('change',e=>handleFile(e.target.files?.[0]));
+  // Open gallery promptly so it feels like Instant create
+  setTimeout(()=>s.querySelector('#duniyaStoryGallery')?.click(), 80);
 }
 
 function renderDuniyaFeed(){

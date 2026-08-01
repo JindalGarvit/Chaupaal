@@ -58,17 +58,25 @@
 .baithak-search:focus{border-color:var(--red);}
 .baithak-overflow-btn{
   flex:0 0 auto;width:40px;height:40px;border:0;border-radius:12px;background:var(--cream);
-  color:var(--ink);font-size:22px;line-height:1;cursor:pointer;font-weight:700;
+  color:var(--ink);font-size:26px;line-height:1;cursor:pointer;font-weight:700;
+  letter-spacing:0;
 }
 .baithak-overflow-menu{
-  position:absolute;z-index:120;min-width:168px;background:var(--white);border:1px solid var(--line);
+  position:absolute;z-index:120;min-width:188px;background:var(--white);border:1px solid var(--line);
   border-radius:14px;box-shadow:var(--shadow-lg,0 12px 32px rgba(0,0,0,.12));padding:6px;overflow:hidden;
 }
 .baithak-overflow-menu button{
-  display:block;width:100%;text-align:left;padding:12px 14px;border:0;background:transparent;
+  display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:12px 14px;border:0;background:transparent;
   font:600 14px 'Space Grotesk',sans-serif;color:var(--ink);cursor:pointer;border-radius:10px;
 }
 .baithak-overflow-menu button:hover{background:var(--cream);}
+.baithak-menu-icon{flex-shrink:0;opacity:.85;}
+.instant-compose-premium .instant-compose-text{
+  width:100%;padding:14px;border:2px solid var(--line);border-radius:var(--r-control,14px);
+  font-size:15px;line-height:1.45;resize:none;background:var(--surface-sunken,var(--cream));box-sizing:border-box;
+}
+.instant-compose-tools{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+.instant-compose-meta{font-size:11px;color:var(--muted);margin-top:10px;}
 .baithak-avatar-menu{
   position:absolute;z-index:130;min-width:170px;background:var(--white);border:1px solid var(--line);
   border-radius:12px;box-shadow:var(--shadow-lg,0 10px 28px rgba(0,0,0,.14));padding:4px;overflow:hidden;

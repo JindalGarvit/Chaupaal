@@ -3,17 +3,38 @@
    nested scroll made posts feel unreachable and fought the bottom tabs. */
 .peepal-screen{flex:1;overflow-y:auto;display:flex;flex-direction:column;min-height:0;}
 .peepal-screen::-webkit-scrollbar{display:none;}
-.peepal-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px 10px;flex-shrink:0;background:var(--white);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:2;}
+.peepal-header{display:none!important;}
 .peepal-title{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:20px;}
 .peepal-ask-btn{background:var(--red);color:#fff;border:none;border-radius:999px;padding:8px 18px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px;cursor:pointer;}
 
-/* Peepal AI Search */
-.peepal-ai-search{background:var(--white);border-bottom:1px solid var(--line);flex-shrink:0;}
+/* Vriksha / Khoj intent card — native Peepal card, not a toolbar */
+.peepal-intent-card{
+  margin:14px 16px 0;padding:16px;background:var(--surface-elevated,#fff);
+  border:1px solid var(--line);border-radius:var(--r-card,20px);
+  box-shadow:var(--elev-1,0 4px 14px rgba(43,39,48,.07));
+  display:flex;flex-direction:column;gap:10px;flex-shrink:0;
+}
+.peepal-intent-card.hidden{display:none!important;}
+.peepal-intent-card-title{font-family:var(--font-display,'Space Grotesk'),sans-serif;font-weight:700;font-size:15px;color:var(--ink);}
+.peepal-intent-card-sub{font-size:12px;color:var(--muted);line-height:1.4;margin-top:-4px;}
+.peepal-intent-chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;}
+.peepal-intent-chips::-webkit-scrollbar{display:none;}
+.peepal-nudge-chip{
+  padding:6px 12px;background:var(--surface-sunken,var(--cream));border:1.5px solid var(--line);
+  border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;
+  display:inline-flex;align-items:center;gap:4px;color:var(--ink);
+}
+.peepal-nudge-chip:active{transform:scale(var(--mx-press-scale,.96));}
+.peepal-intent-results{margin-top:4px;}
+.peepal-intent-card .peepal-ai-search-btn{width:100%;margin-top:2px;}
+
+/* Peepal AI Search (legacy host hidden) */
+.peepal-ai-search{display:none!important;}
 .peepal-ai-search-inner{padding:14px 16px;}
 .peepal-ai-search-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--red);margin-bottom:8px;}
-.peepal-ai-search-input{width:100%;padding:10px 14px;border:2px solid var(--line);border-radius:14px;font-family:'Inter',sans-serif;font-size:14px;outline:none;resize:none;background:var(--cream);color:var(--ink);line-height:1.5;box-sizing:border-box;}
-.peepal-ai-search-input:focus{border-color:var(--red);}
-.peepal-ai-search-btn{flex:1;padding:10px 16px;background:var(--red);color:#fff;border:none;border-radius:12px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px;cursor:pointer;}
+.peepal-ai-search-input{width:100%;padding:10px 14px;border:2px solid var(--line);border-radius:14px;font-family:'Inter',sans-serif;font-size:14px;outline:none;resize:none;background:var(--surface-sunken,var(--cream));color:var(--ink);line-height:1.5;box-sizing:border-box;}
+.peepal-ai-search-input:focus{border-color:var(--brand-red,var(--red));}
+.peepal-ai-search-btn{flex:1;padding:10px 16px;background:var(--brand-red,var(--red));color:#fff;border:none;border-radius:12px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px;cursor:pointer;}
 .peepal-ai-result-card{background:var(--cream);border-radius:14px;padding:14px;margin-bottom:10px;border:1.5px solid var(--line);}
 .peepal-ai-result-card .ai-match-reason{font-size:12px;color:var(--muted);font-style:italic;margin-top:6px;line-height:1.5;}
 .peepal-ai-thinking{display:flex;align-items:center;gap:10px;padding:14px;color:var(--muted);font-size:13px;}

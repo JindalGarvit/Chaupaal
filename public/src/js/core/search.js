@@ -1,11 +1,7 @@
 /**
- * Unified global search — LinkedIn-style category sections.
+ * Unified global search — LinkedIn/IG verticals (All · Log · Personal · Professional · …).
  *
- * Peepal morph #5 opens this omnibox (profiles · posts · Peepal · groups · games).
- * Khoj remains intent-based people discovery only (see discovery.js / renderKhojSurface).
- *
- * Query path: prefer server search_query (server-lib/search-index.js) → fall back to
- * local Firestore providers registered below.
+ * Peepal morph #5 opens this omnibox. Khoj remains intent-based people discovery only.
  */
 (function () {
   /** @type {Record<string, (query: string, opts: object) => Promise<object[]>>} */
@@ -18,6 +14,20 @@
   const SEE_MORE_LIMIT = 20;
 
   const GLOBAL_TYPES = ['users', 'duniya', 'peepal', 'groups', 'games'];
+  /** Vertical tabs — All mixes keyword hits; Log = people; Personal/Professional split profiles. */
+  const VERTICAL_ORDER = ['all', 'log', 'personal', 'professional', 'duniya', 'peepal', 'groups', 'games'];
+
+  const CATEGORY_META = {
+    all: { label: 'All', empty: 'No matches' },
+    log: { label: 'Log', empty: 'No people matched' },
+    personal: { label: 'Personal', empty: 'No Personal profiles matched' },
+    professional: { label: 'Professional', empty: 'No Professional profiles matched' },
+    users: { label: 'Log', empty: 'No people matched' },
+    duniya: { label: 'Duniya', empty: 'No Duniya posts matched' },
+    peepal: { label: 'Peepal', empty: 'No Peepal posts matched' },
+    groups: { label: 'Baithak', empty: 'No public groups matched' },
+    games: { label: 'Dangal', empty: 'No games matched' },
+  };
 
   function loadSearchHistory() {
     try {
@@ -500,19 +510,11 @@
     return { query: q, byCategory, results, errors, source: 'client' };
   }
 
-  const CATEGORY_META = {
-    users: { label: 'Profiles', empty: 'No people matched' },
-    duniya: { label: 'Duniya', empty: 'No Duniya posts matched' },
-    peepal: { label: 'Peepal', empty: 'No Peepal posts matched' },
-    groups: { label: 'Baithak groups', empty: 'No public groups matched' },
-    games: { label: 'Games', empty: 'No games matched' },
-  };
-
   function openResult(r, closeSearch) {
     rememberSearch(document.getElementById('usInput')?.value || '');
     if (typeof closeSearch === 'function') closeSearch();
     else document.getElementById('universalSearchOverlay')?.remove();
-    if (r.type === 'user' || r.category === 'users') {
+    if (r.type === 'user' || r.category === 'users' || r.category === 'log' || r.category === 'personal' || r.category === 'professional') {
       const username = r.username;
       if (username && typeof navigateToDeepLink === 'function') navigateToDeepLink(`/profile/${username}`);
       else if (r.uid && typeof openPublicProfile === 'function') openPublicProfile({ uid: r.uid, name: r.name, username });
@@ -543,13 +545,14 @@
   }
 
   function renderResultRow(r) {
-    if (r.category === 'users' || r.type === 'user') {
+    if (r.category === 'users' || r.type === 'user' || r.category === 'log' || r.category === 'personal' || r.category === 'professional') {
+      const cat = r.category === 'personal' || r.category === 'professional' ? r.category : 'log';
       return `
-        <button type="button" class="us-result" data-cat="users" data-uid="${escapeSearchHtml(r.uid || '')}" data-username="${escapeSearchHtml(r.username || '')}" data-name="${escapeSearchHtml(r.name || r.username || '')}">
+        <button type="button" class="us-result" data-cat="${cat}" data-uid="${escapeSearchHtml(r.uid || '')}" data-username="${escapeSearchHtml(r.username || '')}" data-name="${escapeSearchHtml(r.name || r.username || '')}">
           <div class="us-result-avatar">${r.photoURL ? `<img src="${escapeSearchHtml(r.photoURL)}" alt="">` : '👤'}</div>
           <div class="us-result-meta">
             <div class="us-result-title">${typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml(r.name || r.username, r) : escapeSearchHtml(r.name || r.username)}</div>
-            <div class="us-result-sub">@${escapeSearchHtml(r.username || 'user')}${r.subtitle ? ' · ' + escapeSearchHtml(r.subtitle) : ''}</div>
+            <div class="us-result-sub">@${escapeSearchHtml(r.username || 'user')}${r.subtitle ? ' · ' + escapeSearchHtml(r.subtitle) : ''}${r.profileType === 'professional' ? ' · Pro' : ''}</div>
           </div>
         </button>`;
     }
@@ -576,14 +579,47 @@
           </div>
         </button>`;
     }
+    // Duniya / Peepal posts — professional cards with like / comment / open
+    const likes = Number(r.raw?.likes || r.raw?.likeCount || 0);
+    const comments = Number(r.raw?.comments || r.raw?.commentCount || r.raw?.totalResponses || 0);
+    const cat = r.category === 'peepal' ? 'peepal' : 'duniya';
     return `
-      <button type="button" class="us-result" data-cat="${escapeSearchHtml(r.category || r.type)}" data-id="${escapeSearchHtml(r.id)}">
-        <div class="us-result-avatar">${r.photoURL ? `<img src="${escapeSearchHtml(r.photoURL)}" alt="">` : r.category === 'peepal' ? '🌳' : '🌍'}</div>
-        <div class="us-result-meta">
-          <div class="us-result-title">${escapeSearchHtml(r.title || '')}</div>
-          <div class="us-result-sub">${escapeSearchHtml(r.subtitle || '')}</div>
+      <article class="us-result us-result--post" data-cat="${cat}" data-id="${escapeSearchHtml(r.id)}">
+        <button type="button" class="us-post-main" data-us-open>
+          <div class="us-result-avatar">${r.photoURL ? `<img src="${escapeSearchHtml(r.photoURL)}" alt="">` : cat === 'peepal' ? '🌳' : '🌍'}</div>
+          <div class="us-result-meta">
+            <div class="us-result-title">${escapeSearchHtml(r.title || '')}</div>
+            <div class="us-result-sub">${escapeSearchHtml(r.subtitle || '')}</div>
+          </div>
+        </button>
+        <div class="us-post-engage" data-nav-ignore="1">
+          <button type="button" class="us-engage-btn" data-us-like aria-label="Like">${typeof iconHtml === 'function' ? iconHtml('heart', { size: 16 }) : '♥'} <span data-like-count>${likes}</span></button>
+          <button type="button" class="us-engage-btn" data-us-comment aria-label="Comment">${typeof iconHtml === 'function' ? iconHtml('message-circle', { size: 16 }) : '💬'} <span>${comments}</span></button>
+          <button type="button" class="us-engage-btn" data-us-open aria-label="Open post">Open</button>
         </div>
-      </button>`;
+      </article>`;
+  }
+
+  function splitUserVerticals(byCategory) {
+    const users = byCategory.users || [];
+    const personal = users.filter((u) => String(u.profileType || 'personal').toLowerCase() !== 'professional');
+    const professional = users.filter((u) => String(u.profileType || '').toLowerCase() === 'professional');
+    return {
+      ...byCategory,
+      log: users,
+      personal,
+      professional,
+    };
+  }
+
+  function mixedAllResults(byCategory) {
+    const buckets = ['log', 'duniya', 'peepal', 'groups', 'games'];
+    const merged = [];
+    buckets.forEach((k) => {
+      (byCategory[k] || byCategory[k === 'log' ? 'users' : k] || []).forEach((r) => merged.push(r));
+    });
+    merged.sort((a, b) => (b.score || 0) - (a.score || 0));
+    return merged;
   }
 
   function openUniversalSearch({ initialQuery = '', types = GLOBAL_TYPES } = {}) {
@@ -595,38 +631,44 @@
     overlay.className = 'archive-overlay universal-search-overlay';
     overlay.dataset.navManaged = '1';
     const isGlobal = types.length > 1 || (types.length === 1 && types[0] !== 'users');
-    const title = isGlobal || types.includes('duniya') || types.includes('groups') ? 'Search Chaupaal' : 'Search people';
-    const placeholder = isGlobal ? 'People, posts, groups…' : 'Search @username or name…';
-    const hint = isGlobal
-      ? 'Profiles · Duniya · Peepal · Public groups'
-      : 'People by username or display name';
+    const title = isGlobal
+      ? (typeof t === 'function' ? t('search_chaupaal', 'Search Chaupaal') : 'Search Chaupaal')
+      : (typeof t === 'function' ? t('search_people', 'Search people') : 'Search people');
+    const placeholder = isGlobal
+      ? (typeof t === 'function' ? t('search_ph_global', 'People, posts, groups…') : 'People, posts, groups…')
+      : (typeof t === 'function' ? t('search_ph_people', 'Search @username or name…') : 'Search @username or name…');
 
     overlay.innerHTML = `
       <div class="archive-header">
         <button type="button" id="usBack" aria-label="Back" style="background:none;border:none;font-size:22px;cursor:pointer;">←</button>
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">${title}</div>
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">${escapeSearchHtml(title)}</div>
       </div>
-      <div style="padding:12px 16px;">
-        <input id="usInput" type="search" autocomplete="off" placeholder="${placeholder}"
+      <div style="padding:12px 16px 0;">
+        <input id="usInput" type="search" autocomplete="off" placeholder="${escapeSearchHtml(placeholder)}"
+          data-living-ph="chaupaal_search"
           style="width:100%;padding:12px 14px;border:2px solid var(--line);border-radius:14px;font-size:15px;box-sizing:border-box;outline:none;"
           value="${String(initialQuery || '').replace(/"/g, '&quot;')}">
-        <div style="font-size:11px;color:var(--muted);margin-top:8px;">${hint}</div>
       </div>
+      <div class="us-vertical-tabs" id="usTabs" role="tablist" hidden></div>
       <div id="usResults" style="flex:1;overflow:auto;padding:0 16px 24px;"></div>`;
     document.querySelector('.device')?.appendChild(overlay);
 
     const expanded = {};
-    GLOBAL_TYPES.forEach((t) => {
+    VERTICAL_ORDER.forEach((t) => {
       expanded[t] = false;
     });
     let lastByCategory = {};
     let lastErrors = {};
+    let activeVertical = 'all';
     let runId = 0;
 
     const closeSearch = () => {
       clearTimeout(timer);
       if (typeof removeNavLayer === 'function') removeNavLayer(overlay);
       overlay.remove();
+      try {
+        if (typeof restoreAppShell === 'function') restoreAppShell('search_close');
+      } catch (e) {}
     };
     if (typeof pushNavLayer === 'function') pushNavLayer(overlay, closeSearch);
     overlay.querySelector('#usBack')?.addEventListener('click', closeSearch);
@@ -640,16 +682,19 @@
 
     const input = overlay.querySelector('#usInput');
     const resultsEl = overlay.querySelector('#usResults');
+    const tabsEl = overlay.querySelector('#usTabs');
     let timer = null;
+    if (typeof bindLivingPlaceholder === 'function') bindLivingPlaceholder(input, 'chaupaal_search');
 
     function renderSearchStart() {
+      tabsEl.hidden = true;
       const history = loadSearchHistory();
       if (!history.length) {
         if (typeof renderEmptyState === 'function') {
           renderEmptyState(resultsEl, {
             icon: '🔍',
-            title: 'Search Chaupaal',
-            message: 'Find people, Duniya & Peepal posts, and public groups.',
+            title: title,
+            message: typeof t === 'function' ? t('search_start_hint', 'Find Log, Personal & Professional profiles, Duniya, Peepal, Baithak & Dangal.') : 'Find Log, Personal & Professional profiles, Duniya, Peepal, Baithak & Dangal.',
           });
         } else resultsEl.innerHTML = '';
         return;
@@ -671,71 +716,100 @@
       });
     }
 
-    function paintCategories() {
-      const sections = [];
-      let any = false;
-      const errTypes = Object.keys(lastErrors || {});
-      types.forEach((type) => {
-        const all = lastByCategory[type] || [];
-        const failed = !!(lastErrors && lastErrors[type]);
-        if (!all.length && !failed) return;
-        any = true;
-        const meta = CATEGORY_META[type] || { label: type };
-        if (failed && !all.length) {
-          sections.push(`
-            <section class="us-category" data-us-cat="${type}">
-              <div class="us-category-head">${escapeSearchHtml(meta.label)}</div>
-              <div class="cp-feature-error" role="status">Couldn't search ${escapeSearchHtml(meta.label)} — try again.</div>
-            </section>`);
-          return;
-        }
-        const showAll = expanded[type];
-        const slice = showAll ? all.slice(0, SEE_MORE_LIMIT) : all.slice(0, CATEGORY_PREVIEW);
-        const moreLeft = all.length > CATEGORY_PREVIEW && !showAll;
-        sections.push(`
-          <section class="us-category" data-us-cat="${type}">
-            <div class="us-category-head">${escapeSearchHtml(meta.label)}</div>
-            ${slice.map(renderResultRow).join('')}
-            ${moreLeft ? `<button type="button" class="us-see-more" data-see-more="${type}">Show all (${Math.min(all.length, SEE_MORE_LIMIT)})</button>` : ''}
-          </section>`);
+    function countsForTabs(byCat) {
+      return {
+        all: mixedAllResults(byCat).length,
+        log: (byCat.log || byCat.users || []).length,
+        personal: (byCat.personal || []).length,
+        professional: (byCat.professional || []).length,
+        duniya: (byCat.duniya || []).length,
+        peepal: (byCat.peepal || []).length,
+        groups: (byCat.groups || []).length,
+        games: (byCat.games || []).length,
+      };
+    }
+
+    function paintTabs(byCat) {
+      if (!isGlobal) {
+        tabsEl.hidden = true;
+        return;
+      }
+      const counts = countsForTabs(byCat);
+      const visible = VERTICAL_ORDER.filter((id) => id === 'all' || counts[id] > 0);
+      if (!visible.includes(activeVertical)) activeVertical = 'all';
+      tabsEl.hidden = false;
+      tabsEl.innerHTML = visible
+        .map((id) => {
+          const meta = CATEGORY_META[id] || { label: id };
+          const n = counts[id] || 0;
+          return `<button type="button" class="us-tab ${activeVertical === id ? 'is-active' : ''}" role="tab" data-us-tab="${id}" aria-selected="${activeVertical === id}">${escapeSearchHtml(meta.label)}${n ? ` · ${n}` : ''}</button>`;
+        })
+        .join('');
+      tabsEl.querySelectorAll('[data-us-tab]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          activeVertical = btn.dataset.usTab;
+          paintCategories();
+          paintTabs(lastByCategory);
+        });
       });
-      if (!any) {
-        const allFailed = errTypes.length > 0 && errTypes.length >= types.length;
+    }
+
+    function rowsForActive() {
+      if (activeVertical === 'all') return mixedAllResults(lastByCategory);
+      if (activeVertical === 'log') return lastByCategory.log || lastByCategory.users || [];
+      return lastByCategory[activeVertical] || [];
+    }
+
+    function paintCategories() {
+      const all = rowsForActive();
+      const typeKey = activeVertical === 'log' ? 'users' : activeVertical === 'all' ? 'all' : activeVertical;
+      const failed = !!(lastErrors && (lastErrors[typeKey] || lastErrors.users));
+      if (!all.length) {
+        const meta = CATEGORY_META[activeVertical] || { empty: 'No matches' };
         if (typeof renderEmptyState === 'function') {
           renderEmptyState(resultsEl, {
-            icon: allFailed ? '⚠️' : '🌳',
-            title: allFailed ? 'Search unavailable' : 'No matches',
-            message: allFailed
-              ? 'Something went wrong loading results. Try again in a moment.'
-              : 'Try another spelling or a shorter prefix.',
+            icon: failed ? '⚠️' : '🌳',
+            title: failed ? 'Search unavailable' : meta.empty || 'No matches',
+            message: failed ? 'Try again in a moment.' : 'Try another spelling or a shorter prefix.',
           });
         } else {
-          resultsEl.innerHTML = `<div style="padding:24px;color:var(--muted);text-align:center;">${
-            allFailed ? 'Search unavailable — try again' : 'No matches'
-          }</div>`;
+          resultsEl.innerHTML = `<div style="padding:24px;color:var(--muted);text-align:center;">${meta.empty || 'No matches'}</div>`;
         }
         return;
       }
-      resultsEl.innerHTML = sections.join('');
+      const showAll = expanded[activeVertical];
+      const slice = showAll ? all.slice(0, SEE_MORE_LIMIT) : all.slice(0, CATEGORY_PREVIEW);
+      const moreLeft = all.length > CATEGORY_PREVIEW && !showAll;
+      const meta = CATEGORY_META[activeVertical] || { label: activeVertical };
+      resultsEl.innerHTML = `
+        <section class="us-category" data-us-cat="${activeVertical}">
+          <div class="us-category-head">${escapeSearchHtml(meta.label)}</div>
+          ${slice.map(renderResultRow).join('')}
+          ${moreLeft ? `<button type="button" class="us-see-more" data-see-more="${activeVertical}">Show all (${Math.min(all.length, SEE_MORE_LIMIT)})</button>` : ''}
+        </section>`;
 
-      resultsEl.querySelectorAll('[data-see-more]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          expanded[btn.dataset.seeMore] = true;
-          paintCategories();
-        });
+      resultsEl.querySelector('[data-see-more]')?.addEventListener('click', () => {
+        expanded[activeVertical] = true;
+        paintCategories();
       });
 
-      const flat = types.flatMap((t) => lastByCategory[t] || []);
-      resultsEl.querySelectorAll('.us-result').forEach((btn, idx) => {
-        // Map button back to result via order within painted slices — re-find by data attrs
-        const cat = btn.dataset.cat;
-        const list = lastByCategory[cat] || [];
+      resultsEl.querySelectorAll('.us-result, .us-result--post').forEach((el) => {
+        const cat = el.dataset.cat;
+        const list =
+          cat === 'log' || cat === 'personal' || cat === 'professional'
+            ? lastByCategory[cat] || lastByCategory.users || []
+            : lastByCategory[cat] || [];
         let r = null;
-        if (cat === 'users') r = list.find((x) => x.uid === btn.dataset.uid);
-        else r = list.find((x) => x.id === btn.dataset.id);
-        if (!r) r = flat[idx];
-        const avatar = btn.querySelector('.us-result-avatar');
-        if (avatar && r?.uid && typeof bindProfileLongPress === 'function' && (r.type === 'user' || r.category === 'users')) {
+        if (el.dataset.uid) r = list.find((x) => x.uid === el.dataset.uid) || (lastByCategory.users || []).find((x) => x.uid === el.dataset.uid);
+        else r = list.find((x) => x.id === el.dataset.id);
+        const open = () => {
+          if (r) openResult(r, closeSearch);
+        };
+        el.querySelectorAll('[data-us-open]').forEach((btn) => btn.addEventListener('click', open));
+        if (el.matches('button.us-result')) el.addEventListener('click', open);
+
+        const avatar = el.querySelector('.us-result-avatar');
+        if (avatar && r?.uid && typeof bindProfileLongPress === 'function' && (r.type === 'user' || r.category === 'users' || r.category === 'log')) {
           bindProfileLongPress(avatar, {
             uid: r.uid,
             name: r.name || r.username,
@@ -743,8 +817,30 @@
             photoURL: r.photoURL || '',
           });
         }
-        btn.addEventListener('click', () => {
-          if (r) openResult(r, closeSearch);
+
+        el.querySelector('[data-us-like]')?.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (!r) return;
+          const countEl = el.querySelector('[data-like-count]');
+          const cur = Number(countEl?.textContent || 0);
+          if (countEl) countEl.textContent = String(cur + 1);
+          try {
+            const collection = r.category === 'peepal' ? 'peepal' : 'duniya';
+            const content = { ...(r.raw || r), firestoreId: r.postId || r.id, id: r.postId || r.id };
+            if (typeof toggleContentLike === 'function') {
+              const res = await toggleContentLike(collection, content);
+              if (countEl && res && Number.isFinite(res.likes)) countEl.textContent = String(res.likes);
+            }
+            if (typeof SoundLib !== 'undefined' && SoundLib.like && !(typeof quietMode !== 'undefined' && quietMode)) {
+              SoundLib.like();
+            }
+          } catch (err) {
+            if (countEl) countEl.textContent = String(cur);
+          }
+        });
+        el.querySelector('[data-us-comment]')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          open();
         });
       });
     }
@@ -756,7 +852,7 @@
         return;
       }
       if (remember) rememberSearch(q);
-      GLOBAL_TYPES.forEach((t) => {
+      VERTICAL_ORDER.forEach((t) => {
         expanded[t] = false;
       });
       const myRun = ++runId;
@@ -766,13 +862,16 @@
         limits[t] = SEE_MORE_LIMIT;
       });
       const { byCategory, errors } = await universalSearch(q, { types, limits });
-      if (myRun !== runId) return; // stale response
-      lastByCategory = byCategory;
-      lastErrors = errors || {};
+      if (myRun !== runId) return;
+      let enriched = byCategory;
       if (typeof enrichUsersWithProfileType === 'function' && byCategory.users?.length) {
         await enrichUsersWithProfileType(byCategory.users);
       }
       if (myRun !== runId) return;
+      lastByCategory = splitUserVerticals(enriched);
+      lastErrors = errors || {};
+      activeVertical = 'all';
+      paintTabs(lastByCategory);
       paintCategories();
     }
 

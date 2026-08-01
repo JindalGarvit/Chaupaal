@@ -39,11 +39,126 @@
     return true;
   }
 
+  const MINI_POS_KEY = 'chaupaal_mini_player_pos';
+  let miniDragWired = false;
+
+  function loadMiniPos() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(MINI_POS_KEY) || 'null');
+      if (raw && Number.isFinite(raw.x) && Number.isFinite(raw.y)) return raw;
+    } catch (e) {}
+    return null;
+  }
+
+  function saveMiniPos(x, y) {
+    try {
+      localStorage.setItem(MINI_POS_KEY, JSON.stringify({ x, y }));
+    } catch (e) {}
+  }
+
+  function applyMiniPos(bar) {
+    if (!bar || bar.classList.contains('is-expanded')) {
+      bar?.style.removeProperty('left');
+      bar?.style.removeProperty('top');
+      bar?.style.removeProperty('right');
+      bar?.style.removeProperty('bottom');
+      return;
+    }
+    const pos = loadMiniPos();
+    if (!pos) return;
+    const host = bar.offsetParent || document.querySelector('.device') || document.body;
+    const hw = host.clientWidth || window.innerWidth;
+    const hh = host.clientHeight || window.innerHeight;
+    const size = 56;
+    const tabH = 64;
+    const maxX = Math.max(8, hw - size - 8);
+    const maxY = Math.max(8, hh - size - tabH - 16);
+    const x = Math.min(maxX, Math.max(8, pos.x));
+    const y = Math.min(maxY, Math.max(8, pos.y));
+    bar.style.left = `${x}px`;
+    bar.style.top = `${y}px`;
+    bar.style.right = 'auto';
+    bar.style.bottom = 'auto';
+  }
+
+  function wireMiniDrag(bar) {
+    if (!bar || miniDragWired) return;
+    miniDragWired = true;
+    let dragging = false;
+    let moved = false;
+    let startX = 0;
+    let startY = 0;
+    let origLeft = 0;
+    let origTop = 0;
+
+    const onMove = (e) => {
+      if (!dragging || bar.classList.contains('is-expanded')) return;
+      const pt = e.touches ? e.touches[0] : e;
+      const dx = pt.clientX - startX;
+      const dy = pt.clientY - startY;
+      if (Math.abs(dx) + Math.abs(dy) > 6) moved = true;
+      if (!moved) return;
+      e.preventDefault?.();
+      const host = bar.offsetParent || document.querySelector('.device') || document.body;
+      const rect = host.getBoundingClientRect();
+      const size = 56;
+      const tabH = 64;
+      let x = origLeft + dx;
+      let y = origTop + dy;
+      x = Math.min(rect.width - size - 8, Math.max(8, x));
+      y = Math.min(rect.height - size - tabH - 16, Math.max(8, y));
+      bar.style.left = `${x}px`;
+      bar.style.top = `${y}px`;
+      bar.style.right = 'auto';
+      bar.style.bottom = 'auto';
+      bar.dataset.dragMoved = '1';
+    };
+    const onUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onUp);
+      if (moved) {
+        const left = parseFloat(bar.style.left) || 0;
+        const top = parseFloat(bar.style.top) || 0;
+        saveMiniPos(left, top);
+        setTimeout(() => {
+          delete bar.dataset.dragMoved;
+        }, 80);
+      }
+    };
+
+    bar.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (bar.classList.contains('is-expanded')) return;
+        if (e.target.closest('[data-cp-mini-close], [data-cp-mini-play], input')) return;
+        dragging = true;
+        moved = false;
+        const pt = e;
+        startX = pt.clientX;
+        startY = pt.clientY;
+        const host = bar.offsetParent || document.querySelector('.device') || document.body;
+        const br = bar.getBoundingClientRect();
+        const hr = host.getBoundingClientRect();
+        origLeft = br.left - hr.left;
+        origTop = br.top - hr.top;
+        document.addEventListener('pointermove', onMove, { passive: false });
+        document.addEventListener('pointerup', onUp);
+      },
+      { passive: true }
+    );
+  }
+
   function ensureMiniPlayer() {
     let bar = document.getElementById('cpMiniPlayer');
     if (bar) {
       bar.classList.add('cp-mini-player');
       bar.dataset.navIgnore = '1';
+      wireMiniDrag(bar);
+      applyMiniPos(bar);
       return bar;
     }
     const device = document.querySelector('.device') || document.body;
@@ -81,6 +196,8 @@
         </div>
       </div>`;
     device.appendChild(bar);
+    wireMiniDrag(bar);
+    applyMiniPos(bar);
     return bar;
   }
 
@@ -100,6 +217,14 @@
     bar.classList.toggle('is-expanded', !!on);
     bar.classList.toggle('cp-mini-fab', !on);
     if (panel) panel.hidden = !on;
+    if (on) {
+      bar.style.removeProperty('left');
+      bar.style.removeProperty('top');
+      bar.style.removeProperty('right');
+      bar.style.removeProperty('bottom');
+    } else {
+      applyMiniPos(bar);
+    }
   }
 
   function getSharedAudio() {
@@ -125,22 +250,21 @@
 
   function syncMiniFromMedia(media) {
     const bar = ensureMiniPlayer();
-    if (!media) {
+    const audio = media || getSharedAudio();
+    if (!audio) {
       bar.classList.add('hidden');
       setMiniExpanded(false);
       return;
     }
-    bindMiniOnce(media);
+    bindMiniOnce(audio);
+    setSharedAudioRef(audio);
 
-    const hasSrc = !!(media.src || media.currentSrc);
-    const playing = !media.paused && hasSrc;
-    if (!playing && !queue.length) {
+    const hasSrc = !!(audio.src || audio.currentSrc);
+    const playing = !audio.paused && hasSrc;
+    // Keep FAB while paused-with-src so pause/resume works; only hide when fully cleared
+    if (!hasSrc && !queue.length) {
       bar.classList.add('hidden');
       setMiniExpanded(false);
-      return;
-    }
-    if (!playing && media.paused && !queue.length) {
-      bar.classList.add('hidden');
       return;
     }
 
@@ -150,17 +274,20 @@
       return;
     }
 
-    if (playing || queue.length) bar.classList.remove('hidden');
-    if (!bar.classList.contains('is-expanded')) bar.classList.add('cp-mini-fab');
+    if (hasSrc || queue.length) bar.classList.remove('hidden');
+    if (!bar.classList.contains('is-expanded')) {
+      bar.classList.add('cp-mini-fab');
+      applyMiniPos(bar);
+    }
 
     const qItem = queueIndex >= 0 && queue[queueIndex] ? queue[queueIndex] : null;
     const title =
-      media.dataset.cpTitle ||
+      audio.dataset.cpTitle ||
       qItem?.title ||
       document.querySelector('.music-card.is-playing .music-card-title')?.textContent ||
       'Now playing';
     let artist =
-      media.dataset.cpArtist ||
+      audio.dataset.cpArtist ||
       qItem?.artist ||
       document.querySelector('.music-card.is-playing .music-card-artist')?.textContent ||
       '';
@@ -181,16 +308,16 @@
 
     const playBtns = bar.querySelectorAll('[data-cp-mini-play], [data-cp-mini-play-exp]');
     playBtns.forEach((playBtn) => {
-      playBtn.textContent = media.paused ? '▶' : '⏸';
-      playBtn.setAttribute('aria-label', media.paused ? 'Play' : 'Pause');
+      playBtn.textContent = audio.paused ? '▶' : '⏸';
+      playBtn.setAttribute('aria-label', audio.paused ? 'Play' : 'Pause');
     });
     const prevBtn = bar.querySelector('[data-cp-mini-prev]');
     const nextBtn = bar.querySelector('[data-cp-mini-next]');
     if (prevBtn) prevBtn.disabled = !(queue.length > 1 && queueIndex > 0);
     if (nextBtn) nextBtn.disabled = !(queue.length > 1 && queueIndex < queue.length - 1);
 
-    const d = media.duration;
-    const t = media.currentTime || 0;
+    const d = audio.duration;
+    const t = audio.currentTime || 0;
     const seek = bar.querySelector('[data-cp-mini-seek]');
     if (seek && Number.isFinite(d) && d > 0 && seek.dataset.seeking !== '1') {
       seek.value = String(Math.round((t / d) * 1000));
@@ -201,10 +328,11 @@
     if (remain) remain.textContent = Number.isFinite(d) ? '−' + formatTime(Math.max(0, d - t)) : '−0:00';
   }
 
-  function stopMiniAndClear(media) {
+  function stopMiniAndClear() {
     queue = [];
     queueIndex = -1;
     setMiniExpanded(false);
+    const media = getSharedAudio();
     try {
       media?.pause?.();
     } catch (err) {}
@@ -214,32 +342,37 @@
         media?.removeAttribute?.('src');
         media?.load?.();
       } catch (err) {}
-      ensureMiniPlayer().classList.add('hidden');
     }
+    ensureMiniPlayer().classList.add('hidden');
   }
 
   function bindMiniOnce(media) {
-    if (!media || miniBound) return;
-    miniBound = true;
+    if (!media) return;
     setSharedAudioRef(media);
+    if (miniBound) return;
+    miniBound = true;
     const bar = ensureMiniPlayer();
+
+    const resolveAudio = () => getSharedAudio() || media;
 
     const togglePlay = (e) => {
       e.stopPropagation();
-      if (media.paused) {
+      const audio = resolveAudio();
+      if (!audio) return;
+      if (audio.paused) {
         if (quietBlocked()) return;
-        media.play().catch(() => {});
+        audio.play().catch(() => {});
       } else {
-        media.pause();
+        audio.pause();
       }
-      syncMiniFromMedia(media);
+      syncMiniFromMedia(audio);
     };
 
     bar.querySelector('[data-cp-mini-play]')?.addEventListener('click', togglePlay);
     bar.querySelector('[data-cp-mini-play-exp]')?.addEventListener('click', togglePlay);
     bar.querySelector('[data-cp-mini-close]')?.addEventListener('click', (e) => {
       e.stopPropagation();
-      stopMiniAndClear(media);
+      stopMiniAndClear();
     });
     bar.querySelector('[data-cp-mini-prev]')?.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -252,57 +385,38 @@
     bar.querySelector('[data-cp-mini-collapse]')?.addEventListener('click', (e) => {
       e.stopPropagation();
       setMiniExpanded(false);
-      syncMiniFromMedia(media);
+      syncMiniFromMedia(resolveAudio());
     });
     bar.querySelectorAll('[data-cp-mini-skip]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
+        const audio = resolveAudio();
+        if (!audio) return;
         const delta = Number(btn.dataset.cpMiniSkip) || 0;
         try {
-          const next = Math.max(0, Math.min(media.duration || 1e9, (media.currentTime || 0) + delta));
-          media.currentTime = next;
-          syncMiniFromMedia(media);
+          const next = Math.max(0, Math.min(audio.duration || 1e9, (audio.currentTime || 0) + delta));
+          audio.currentTime = next;
+          syncMiniFromMedia(audio);
         } catch (err) {}
       });
     });
 
-    // Collapsed FAB: tap art/body expands; expanded compact tap toggles
+    // Collapsed FAB: tap art/body expands (ignore if just dragged)
     bar.querySelector('[data-cp-mini-body]')?.addEventListener('click', (e) => {
+      if (bar.dataset.dragMoved === '1') return;
       if (e.target.closest('[data-cp-mini-close], [data-cp-mini-play], input, a')) return;
       if (!bar.classList.contains('is-expanded')) {
         setMiniExpanded(true);
       } else if (!e.target.closest('button, input')) {
         setMiniExpanded(false);
-        syncMiniFromMedia(media);
+        syncMiniFromMedia(resolveAudio());
       }
     });
     bar.querySelector('[data-cp-mini-art]')?.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (bar.dataset.dragMoved === '1') return;
       if (!bar.classList.contains('is-expanded')) setMiniExpanded(true);
     });
-
-    // Long-press collapsed FAB (~550ms) → stop + remove
-    let lpTimer = null;
-    const clearLp = () => {
-      clearTimeout(lpTimer);
-      lpTimer = null;
-    };
-    bar.addEventListener(
-      'pointerdown',
-      (e) => {
-        if (bar.classList.contains('is-expanded')) return;
-        if (e.target.closest('[data-cp-mini-close]')) return;
-        clearLp();
-        lpTimer = setTimeout(() => {
-          lpTimer = null;
-          stopMiniAndClear(media);
-        }, 550);
-      },
-      { passive: true }
-    );
-    bar.addEventListener('pointerup', clearLp);
-    bar.addEventListener('pointercancel', clearLp);
-    bar.addEventListener('pointerleave', clearLp);
 
     const seek = bar.querySelector('[data-cp-mini-seek]');
     seek?.addEventListener('input', () => {
@@ -310,16 +424,17 @@
     });
     seek?.addEventListener('change', () => {
       seek.dataset.seeking = '0';
-      const d = media.duration;
-      if (!Number.isFinite(d) || d <= 0) return;
-      media.currentTime = (Number(seek.value) / 1000) * d;
-      syncMiniFromMedia(media);
+      const audio = resolveAudio();
+      const d = audio?.duration;
+      if (!audio || !Number.isFinite(d) || d <= 0) return;
+      audio.currentTime = (Number(seek.value) / 1000) * d;
+      syncMiniFromMedia(audio);
     });
     media.addEventListener('timeupdate', () => {
-      if (seek?.dataset.seeking !== '1') syncMiniFromMedia(media);
+      if (seek?.dataset.seeking !== '1') syncMiniFromMedia(resolveAudio());
     });
-    media.addEventListener('play', () => syncMiniFromMedia(media));
-    media.addEventListener('pause', () => syncMiniFromMedia(media));
+    media.addEventListener('play', () => syncMiniFromMedia(resolveAudio()));
+    media.addEventListener('pause', () => syncMiniFromMedia(resolveAudio()));
     media.addEventListener('ended', () => playQueueIndex(queueIndex + 1));
   }
 

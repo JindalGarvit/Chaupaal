@@ -357,4 +357,91 @@ window.initPeepal=async function(){
   setTimeout(animateDiscoveryCards,300);
 };
 
+// ---- Living placeholders (time-of-day / weekday rotation) ----
+(function () {
+  const POOLS = {
+    baithak_search: [
+      { hours: [5, 11], text: 'Search morning chats…' },
+      { hours: [11, 17], text: 'Find a friend or group…' },
+      { hours: [17, 22], text: 'Who are you catching up with?' },
+      { hours: [22, 5], text: 'Quiet night — search chats…' },
+      { weekday: 0, text: 'Sunday plans — search…' },
+      { weekday: 5, text: 'Friday vibes — find someone…' },
+      { text: 'Search chats, groups…' },
+    ],
+    peepal_intent: [
+      { hours: [5, 12], text: 'Who would brighten your morning?' },
+      { hours: [12, 18], text: 'Describe who you’re hoping to meet…' },
+      { hours: [18, 23], text: 'Looking for good evening company?' },
+      { text: 'Type anything — we’ll find matching people…' },
+    ],
+    khoj_intent: [
+      { hours: [5, 12], text: 'Seek someone for today…' },
+      { hours: [12, 18], text: 'Who are you hoping to meet?' },
+      { text: 'Type anything — Khoj filters matching people…' },
+    ],
+    chaupaal_search: [
+      { hours: [5, 12], text: 'Search Chaupaal this morning…' },
+      { hours: [12, 18], text: 'People, posts, groups…' },
+      { hours: [18, 23], text: 'Evening search — Log, Duniya, Dangal…' },
+      { text: 'Search everything on Chaupaal…' },
+    ],
+    share_search: [
+      { text: 'Search people to share with…' },
+      { hours: [18, 23], text: 'Who should see this tonight?' },
+    ],
+    instant_note: [
+      { hours: [5, 12], text: 'Morning note for Close Friends…' },
+      { hours: [17, 23], text: 'Leave a quick evening note…' },
+      { text: 'Leave a quick note for Close Friends…' },
+    ],
+  };
+
+  function pickLiving(poolKey) {
+    const pool = POOLS[poolKey] || POOLS.baithak_search;
+    const now = new Date();
+    const h = now.getHours();
+    const wd = now.getDay();
+    const matchHour = (entry) => {
+      if (!entry.hours) return false;
+      const [a, b] = entry.hours;
+      if (a < b) return h >= a && h < b;
+      return h >= a || h < b;
+    };
+    const byWeek = pool.find((e) => e.weekday === wd);
+    if (byWeek && Math.random() < 0.45) return byWeek.text;
+    const byHour = pool.find(matchHour);
+    if (byHour) return byHour.text;
+    const fallback = pool.find((e) => !e.hours && e.weekday == null) || pool[pool.length - 1];
+    return fallback?.text || '';
+  }
+
+  function bindLivingPlaceholder(input, poolKey) {
+    if (!input || input.dataset.livingBound === poolKey) return;
+    input.dataset.livingBound = poolKey;
+    const apply = () => {
+      if (document.activeElement === input && input.value) return;
+      const text = pickLiving(poolKey);
+      if (text) input.setAttribute('placeholder', text);
+    };
+    apply();
+    const iv = setInterval(apply, 12 * 60 * 1000);
+    input.addEventListener('focus', apply);
+    input._livingIv = iv;
+  }
+
+  function wireLivingPlaceholders(root) {
+    (root || document).querySelectorAll('[data-living-ph]').forEach((el) => {
+      bindLivingPlaceholder(el, el.getAttribute('data-living-ph'));
+    });
+  }
+
+  window.bindLivingPlaceholder = bindLivingPlaceholder;
+  window.wireLivingPlaceholders = wireLivingPlaceholders;
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => wireLivingPlaceholders());
+  } else {
+    setTimeout(() => wireLivingPlaceholders(), 0);
+  }
+})();
 

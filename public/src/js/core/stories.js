@@ -179,6 +179,25 @@
       </div>`;
 
     strip.querySelector('[data-instant-compose]')?.addEventListener('click', () => openBaithakInstantComposer());
+    // Long-press Leave a note → camera Instant (IG Notes-inspired)
+    const composeBtn = strip.querySelector('[data-instant-compose]');
+    if (composeBtn && typeof onLongPress === 'function') {
+      onLongPress(composeBtn, () => {
+        composeBtn.dataset.suppressClick = '1';
+        openBaithakInstantComposer('camera');
+      });
+      composeBtn.addEventListener(
+        'click',
+        (e) => {
+          if (composeBtn.dataset.suppressClick === '1') {
+            composeBtn.dataset.suppressClick = '0';
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        },
+        true
+      );
+    }
     strip.querySelector('[data-bundle="own"]')?.addEventListener('click', () => {
       if (own?.[0]) openStoryViewer(own[0], own);
     });
@@ -194,7 +213,7 @@
     return String(s || '').replace(/[&<>"']/g, '');
   }
 
-  /** Instants composer — text + GIF / sticker / music / camera; Close Friends audience; shares immediately. */
+  /** Instants composer — tap = note; long-press entry seeds camera. Close Friends audience. */
   function openBaithakInstantComposer(seedMode) {
     if (!currentUser) {
       if (typeof showAuth === 'function') showAuth();
@@ -210,20 +229,24 @@
       return f;
     };
     const bodyHtml = `
-      <textarea id="instantText" class="instant-compose-text" rows="3" maxlength="280" placeholder="${tt('instants_ph', 'Leave a quick Instant…')}"></textarea>
-      <div class="instant-compose-tools">
-        <button type="button" class="btn" data-instant-tool="gif">GIF</button>
-        <button type="button" class="btn" data-instant-tool="sticker">Sticker</button>
-        <button type="button" class="btn" data-instant-tool="music">Music</button>
-        <button type="button" class="btn" data-instant-tool="camera">Camera</button>
-      </div>
-      <div class="instant-compose-meta">${tt('instants_cf_note', 'Shared with Close Friends · disappears in ~24h')}</div>
-      <input type="file" id="instantCamera" accept="image/*,video/*" capture="environment" hidden>
-      <button type="button" class="btn btn--primary btn--block" data-instant-share style="margin-top:12px;">${tt('instants_share', 'Share Instant')}</button>`;
+      <div class="instant-compose-premium">
+        <textarea id="instantText" class="instant-compose-text" rows="3" maxlength="280"
+          placeholder="${tt('instants_ph', 'Leave a quick note for Close Friends…')}"
+          data-living-ph="instant_note"></textarea>
+        <div class="instant-compose-tools">
+          <button type="button" class="btn" data-instant-tool="gif">GIF</button>
+          <button type="button" class="btn" data-instant-tool="sticker">Sticker</button>
+          <button type="button" class="btn" data-instant-tool="music">Music</button>
+          <button type="button" class="btn" data-instant-tool="camera">${typeof iconHtml === 'function' ? iconHtml('camera', { size: 14 }) : '📷'} Camera</button>
+        </div>
+        <div class="instant-compose-meta">${tt('instants_cf_note', 'Shared with Close Friends · disappears in ~24h')}</div>
+        <input type="file" id="instantCamera" accept="image/*,video/*" capture="environment" hidden>
+        <button type="button" class="btn btn--primary btn--block" data-instant-share style="margin-top:12px;">${tt('instants_share', 'Share note')}</button>
+      </div>`;
 
     async function shareInstant(payload) {
       try {
-        await createPlatformStory({
+        const story = await createPlatformStory({
           destination: 'baithak',
           kind: 'instant',
           visibility: 'close_friends',
@@ -233,15 +256,21 @@
           type: payload.type || 'note',
           expiresInHours: 24,
         });
-        if (typeof showToast === 'function') showToast(tt('instants_shared', 'Instant shared'));
-        renderBaithakInstants();
+        if (!story) throw new Error(tt('baithak_story_fail', 'Could not share'));
+        if (typeof showToast === 'function') showToast(tt('instants_shared', 'Note shared'));
+        await renderBaithakInstants();
+        return story;
       } catch (e) {
         if (typeof showToast === 'function') showToast(e?.message || tt('baithak_story_fail', 'Could not share'));
+        throw e;
       }
     }
 
     function wire(sheet, close) {
       const fileInput = sheet.querySelector('#instantCamera');
+      if (typeof bindLivingPlaceholder === 'function') {
+        bindLivingPlaceholder(sheet.querySelector('#instantText'), 'instant_note');
+      }
       sheet.querySelectorAll('[data-instant-tool]').forEach((btn) => {
         btn.addEventListener('click', async () => {
           const tool = btn.dataset.instantTool;
@@ -252,8 +281,15 @@
           if (tool === 'gif' && typeof openGifPicker === 'function') {
             openGifPicker({
               onSelect: async (gif) => {
-                close();
-                await shareInstant({ text: '', media: gif?.url || gif?.mp4, thumb: gif?.preview || gif?.url, type: 'gif' });
+                try {
+                  await shareInstant({
+                    text: '',
+                    media: gif?.url || gif?.mp4,
+                    thumb: gif?.preview || gif?.url,
+                    type: 'gif',
+                  });
+                  close();
+                } catch (e) {}
               },
             });
             return;
@@ -261,11 +297,13 @@
           if (tool === 'music' && typeof openMusicPicker === 'function') {
             openMusicPicker({
               onSelect: async (song) => {
-                close();
-                await shareInstant({
-                  text: `${song?.title || 'Track'}${song?.artist ? ' — ' + song.artist : ''}`,
-                  type: 'music',
-                });
+                try {
+                  await shareInstant({
+                    text: `${song?.title || 'Track'}${song?.artist ? ' — ' + song.artist : ''}`,
+                    type: 'music',
+                  });
+                  close();
+                } catch (e) {}
               },
             });
             return;
@@ -280,16 +318,16 @@
       fileInput?.addEventListener('change', async () => {
         const file = fileInput.files?.[0];
         if (!file) return;
-        close();
         try {
           let media = null;
           let thumb = null;
           if (typeof processAndUploadMedia === 'function') {
             const up = await processAndUploadMedia(file, { folder: 'instants' });
-            media = up?.url || up?.secure_url;
+            media = up?.url || up?.secure_url || up?.media;
             thumb = up?.thumb || media;
           }
           await shareInstant({ media, thumb, type: file.type.startsWith('video') ? 'video' : 'photo' });
+          close();
         } catch (e) {
           if (typeof showToast === 'function') showToast(tt('baithak_story_fail', 'Could not share'));
         }
@@ -300,16 +338,22 @@
           if (typeof showToast === 'function') showToast(tt('instants_need_text', 'Write something or add media'));
           return;
         }
-        close();
-        await shareInstant({ text, type: 'note' });
+        const btn = sheet.querySelector('[data-instant-share]');
+        if (btn) btn.disabled = true;
+        try {
+          await shareInstant({ text, type: 'note' });
+          close();
+        } catch (e) {
+          if (btn) btn.disabled = false;
+        }
       });
-      if (seedMode === 'camera') setTimeout(() => fileInput?.click(), 100);
+      if (seedMode === 'camera') setTimeout(() => fileInput?.click(), 120);
     }
 
     if (typeof openHalfSheet === 'function') {
       openHalfSheet({
         id: 'baithakInstantComposer',
-        title: tt('instants_compose_title', 'New Instant'),
+        title: tt('instants_compose_title', 'Leave a note'),
         accent: 'baithak',
         bodyHtml,
         onMount: (sheet, close) => {
@@ -333,7 +377,7 @@
     sheet.id = 'baithakInstantComposer';
     sheet.className = 'archive-overlay';
     sheet.dataset.navManaged = '1';
-    sheet.innerHTML = `<div class="archive-header"><button type="button" data-overlay-dismiss>←</button><div style="flex:1"><strong>${tt('instants_compose_title', 'New Instant')}</strong></div></div><div style="padding:16px;">${bodyHtml}</div>`;
+    sheet.innerHTML = `<div class="archive-header"><button type="button" data-overlay-dismiss>←</button><div style="flex:1"><strong>${tt('instants_compose_title', 'Leave a note')}</strong></div></div><div style="padding:16px;">${bodyHtml}</div>`;
     document.querySelector('.device')?.appendChild(sheet);
     const close = () => {
       if (typeof removeNavLayer === 'function') removeNavLayer(sheet);

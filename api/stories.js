@@ -192,10 +192,18 @@ async function canView(db, story, viewerUid, includeArchive) {
   const blocked = owner ? false : await isBlockedPair(db, data.uid, viewerUid);
   const expires = data.expiresAt?.toMillis?.() || 0;
   const friend = data.destination === 'baithak' ? await isFriend(db, data.uid, viewerUid) : false;
-  const membership =
-    data.destination === 'baithak' && data.visibility === 'close_friends'
-      ? await db.collection('users').doc(data.uid).collection('close_friends').doc(viewerUid).get()
-      : null;
+  let isCloseFriend = false;
+  if (data.destination === 'baithak' && data.visibility === 'close_friends') {
+    const cfCol = db.collection('users').doc(data.uid).collection('close_friends');
+    const membership = await cfCol.doc(viewerUid).get();
+    if (membership.exists) {
+      isCloseFriend = true;
+    } else {
+      // Match recipientIds fanout: empty CF list ⇒ all friends can view Instants/notes
+      const sample = await cfCol.limit(1).get();
+      if (sample.empty && friend) isCloseFriend = true;
+    }
+  }
   return canViewStoryPolicy({
     destination: data.destination,
     visibility: data.visibility,
@@ -203,7 +211,7 @@ async function canView(db, story, viewerUid, includeArchive) {
     isOwner: owner,
     allowOwnerArchive: includeArchive,
     isFriend: friend,
-    isCloseFriend: !!membership?.exists,
+    isCloseFriend,
     blocked,
     active: data.active !== false && !data.deletedAt,
     expired: expires <= Date.now(),

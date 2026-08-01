@@ -330,9 +330,8 @@
           run: () => {
             switchTo('peepal');
             if (typeof setPeepalMode === 'function') setPeepalMode('khoj');
-            else {
-              document.getElementById('peepalInlineSearch')?.focus();
-              document.getElementById('peepalSearchBtn')?.click();
+            else if (typeof renderKhojSurface === 'function') {
+              renderKhojSurface(document.getElementById('peepalScreen'));
             }
           },
         },

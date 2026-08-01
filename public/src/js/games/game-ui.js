@@ -1008,9 +1008,9 @@
   }
 
   /**
-   * Unified share sheet — same shell as Dangal results (card + Share / friend / story / copy).
-   * Use for surfaces that aren't already inside gameResultHtml (Akhbaar, wraps, profile, Duniya, Peepal).
-   * @param {{gameId?:string,title?:string,subtitle?:string,stats?:object,friend?:boolean,story?:boolean,friendLabel?:string,onFriend?:Function,onShared?:Function}} opts
+   * Instagram-inspired share sheet (step 1):
+   * Friends grid · recent chats · search · Copy link · External/More → OS share (step 2).
+   * Never jump straight to navigator.share on first tap.
    */
   function openUnifiedShareSheet(opts) {
     const o = opts || {};
@@ -1019,82 +1019,155 @@
     document.getElementById('chaupaalShareSheet')?.remove();
     const sheet = document.createElement('div');
     sheet.id = 'chaupaalShareSheet';
-    sheet.className = 'game-friend-sheet chaupaal-share-sheet';
-    const cardHtml = buildGameShareCard(gameId, stats);
-    const showFriend = o.friend !== false;
+    sheet.className = 'game-friend-sheet chaupaal-share-sheet share-sheet-ig';
+    sheet.dataset.navManaged = '1';
     const showStory = o.story !== false;
+    const title = o.title || (typeof t === 'function' ? t('share_title', 'Share') : 'Share');
     sheet.innerHTML = `
       <div class="game-friend-backdrop" data-cs-close></div>
-      <div class="game-friend-card" role="dialog" aria-modal="true" aria-label="${safe(o.title || 'Share')}">
-        <div class="game-friend-title">${safe(o.title || 'Share')}</div>
+      <div class="game-friend-card share-sheet-card" role="dialog" aria-modal="true" aria-label="${safe(title)}">
+        <div class="half-sheet-grabber" aria-hidden="true"></div>
+        <div class="game-friend-title">${safe(title)}</div>
         ${o.subtitle ? `<div class="game-friend-sub">${safe(o.subtitle)}</div>` : ''}
-        <div class="chaupaal-share-preview">${cardHtml}</div>
-        <div class="game-result-actions chaupaal-share-actions">
-          <button type="button" class="game-result-btn game-result-btn--primary" data-cs="share">Share</button>
-          ${showFriend ? `<button type="button" class="game-result-btn" data-cs="friend">${safe(o.friendLabel || 'Share with friend')}</button>` : ''}
-          ${showStory ? `<button type="button" class="game-result-btn" data-cs="story">Post to story</button>` : ''}
-          <button type="button" class="game-result-btn" data-cs="copy">Copy link</button>
+        <div class="share-users-row" data-cs-friends><div class="game-friend-loading">…</div></div>
+        <div class="share-recents" data-cs-recents></div>
+        <div class="share-search-wrap">
+          <input type="search" class="share-search-input" data-cs-search placeholder="${safe(typeof t === 'function' ? t('share_search_ph', 'Search people…') : 'Search people…')}" autocomplete="off" enterkeyhint="search" data-living-ph="share_search">
         </div>
-        <button type="button" class="game-friend-cancel" data-cs-close>Cancel</button>
+        <div class="share-sheet-actions">
+          <button type="button" class="share-action-row" data-cs="copy"><span class="share-action-ico">🔗</span><span>${safe(typeof t === 'function' ? t('share_copy_link', 'Copy link') : 'Copy link')}</span></button>
+          ${showStory ? `<button type="button" class="share-action-row" data-cs="story"><span class="share-action-ico">📖</span><span>${safe(typeof t === 'function' ? t('share_to_story', 'Post to story') : 'Post to story')}</span></button>` : ''}
+          <button type="button" class="share-action-row share-action-row--external" data-cs="external"><span class="share-action-ico">↗</span><span>${safe(typeof t === 'function' ? t('share_external_more', 'External / More') : 'External / More')}</span></button>
+        </div>
+        <button type="button" class="game-friend-cancel" data-cs-close>${safe(typeof t === 'function' ? t('cancel', 'Cancel') : 'Cancel')}</button>
       </div>`;
-    const host = document.querySelector('.device') || document.body;
-    host.appendChild(sheet);
+    const hostEl = document.querySelector('.device') || document.body;
+    hostEl.appendChild(sheet);
     trackShareEvent('share_opened', { surface: gameId, method: 'sheet' });
-    const close = () => sheet.remove();
-    sheet.querySelectorAll('[data-cs-close]').forEach((el) => el.addEventListener('click', close));
 
-    const pulseShareCard = () => {
+    const close = () => {
+      if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
+      sheet.remove();
       try {
-        if (typeof haptic === 'function') haptic('light');
+        if (typeof restoreAppShell === 'function') restoreAppShell('share_close');
       } catch (e) {}
-      const card = sheet.querySelector('.game-share-card');
-      if (card && typeof pulseGameEl === 'function') pulseGameEl(card);
-      else if (card) {
-        card.classList.remove('game-pulse');
-        void card.offsetWidth;
-        card.classList.add('game-pulse');
-      }
     };
+    if (typeof openLayer === 'function') openLayer(sheet, close, { host: hostEl });
+    else if (typeof pushNavLayer === 'function') pushNavLayer(sheet, close);
+    sheet.querySelectorAll('[data-cs-close]').forEach((el) => el.addEventListener('click', close));
+    if (typeof bindLivingPlaceholder === 'function') {
+      bindLivingPlaceholder(sheet.querySelector('[data-cs-search]'), 'share_search');
+    }
 
-    sheet.querySelector('[data-cs="share"]')?.addEventListener('click', async () => {
-      pulseShareCard();
-      trackShareEvent('share_method', { surface: gameId, method: 'share' });
-      setTimeout(async () => {
-        close();
-        const result = await shareGameResult(gameId, stats);
-        if (typeof o.onShared === 'function') o.onShared(result || { method: 'share' });
-      }, 160);
-    });
-    sheet.querySelector('[data-cs="friend"]')?.addEventListener('click', async () => {
-      pulseShareCard();
-      close();
-      if (typeof o.onFriend === 'function') {
-        await o.onFriend(stats);
-        return;
-      }
-      const friend = await openFriendPickerSheet({
-        title: o.friendTitle || 'Share with a friend',
-        subtitle: o.friendSubtitle || 'Pick someone from your friends',
-      });
+    async function sendToFriend(friend) {
       if (!friend) return;
       trackShareEvent('share_method', { surface: gameId, method: 'friend' });
+      close();
+      if (typeof o.onFriend === 'function') {
+        await o.onFriend(stats, friend);
+        return;
+      }
       await openFriendShareFollowup(friend, gameId, stats);
       if (typeof o.onShared === 'function') o.onShared({ method: 'friend' });
-    });
-    sheet.querySelector('[data-cs="story"]')?.addEventListener('click', async () => {
-      pulseShareCard();
+    }
+
+    (async () => {
+      const listEl = sheet.querySelector('[data-cs-friends]');
+      const recentsEl = sheet.querySelector('[data-cs-recents]');
+      let profiles = [];
+      try {
+        profiles = await loadFriendProfilesForPicker();
+      } catch (e) {
+        profiles = [];
+      }
+      if (typeof enrichUsersWithProfileType === 'function') {
+        try {
+          await enrichUsersWithProfileType(profiles);
+        } catch (e) {}
+      }
+      if (!profiles.length) {
+        listEl.innerHTML = `<div class="share-empty">${safe(typeof t === 'function' ? t('share_no_friends', 'No friends yet — search someone or use External / More.') : 'No friends yet — search someone or use External / More.')}</div>`;
+      } else {
+        listEl.innerHTML = profiles
+          .slice(0, 24)
+          .map((p) => {
+            const name = safe((p.name || p.username || 'Friend').split(' ')[0]);
+            const av = p.photoURL
+              ? `<img src="${safe(p.photoURL)}" alt="">`
+              : '👤';
+            return `<button type="button" class="share-user-chip" data-uid="${safe(p.uid || p.id || '')}" data-name="${safe(p.name || p.username || '')}">
+              <span class="share-user-chip-avatar">${av}</span>
+              <span class="share-user-chip-name">${name}</span>
+            </button>`;
+          })
+          .join('');
+        listEl.querySelectorAll('.share-user-chip').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const uid = btn.dataset.uid;
+            const friend = profiles.find((p) => String(p.uid || p.id) === uid) || {
+              uid,
+              id: uid,
+              name: btn.dataset.name,
+            };
+            sendToFriend(friend);
+          });
+        });
+      }
+
+      // Recent chats / groups row
+      try {
+        const chats =
+          typeof baithakChats !== 'undefined' && Array.isArray(baithakChats)
+            ? baithakChats.filter((c) => c && !c.isSelf && !c.isChaupaal).slice(0, 8)
+            : [];
+        if (chats.length && recentsEl) {
+          recentsEl.innerHTML = `<div class="share-recents-label">${safe(typeof t === 'function' ? t('share_recent', 'Recent') : 'Recent')}</div>
+            <div class="share-users-row">${chats
+              .map((c) => {
+                const label = safe((c.name || c.peerName || 'Chat').split(' ')[0]);
+                const id = safe(c.firestoreId || c.id || '');
+                return `<button type="button" class="share-user-chip" data-chat-id="${id}" data-name="${safe(c.name || '')}">
+                  <span class="share-user-chip-avatar">${c.type === 'group' ? '👥' : '💬'}</span>
+                  <span class="share-user-chip-name">${label}</span>
+                </button>`;
+              })
+              .join('')}</div>`;
+          recentsEl.querySelectorAll('[data-chat-id]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              const chat = chats.find((c) => String(c.firestoreId || c.id) === btn.dataset.chatId);
+              if (!chat) return;
+              trackShareEvent('share_method', { surface: gameId, method: 'recent_chat' });
+              close();
+              if (typeof sendShareInBaithak === 'function') {
+                await sendShareInBaithak(chat, gameId, stats);
+              } else if (typeof openChatScreen === 'function') {
+                openChatScreen(chat);
+              }
+              if (typeof o.onShared === 'function') o.onShared({ method: 'recent_chat' });
+            });
+          });
+        }
+      } catch (e) {}
+    })();
+
+    sheet.querySelector('[data-cs-search]')?.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const q = e.target.value.trim();
+      if (!q) return;
       close();
-      await postGameScoreStory(gameId, stats);
-      if (typeof o.onShared === 'function') o.onShared({ method: 'story' });
+      if (typeof openUniversalSearch === 'function') {
+        openUniversalSearch({ initialQuery: q.replace(/^@/, ''), types: ['users'] });
+      }
     });
+
     sheet.querySelector('[data-cs="copy"]')?.addEventListener('click', async () => {
-      pulseShareCard();
       const url = stats.url || buildBeatScoreLink(gameId, stats.score, { cat: stats.cat, extra: stats.linkExtra });
       const text = `${stats.text || `Chaupaal ${gameDisplayName(gameId)}`}\n${url}`;
       try {
         if (navigator.clipboard && navigator.clipboard.writeText) {
           await navigator.clipboard.writeText(text);
-          if (typeof showToast === 'function') showToast('Link copied — share anywhere');
+          if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('share_copied', 'Link copied') : 'Link copied');
         } else if (typeof showToast === 'function') showToast(url);
       } catch (e) {
         if (typeof showToast === 'function') showToast(url);
@@ -1103,6 +1176,21 @@
       if (typeof o.onShared === 'function') o.onShared({ method: 'copy' });
       close();
     });
+
+    sheet.querySelector('[data-cs="story"]')?.addEventListener('click', async () => {
+      close();
+      await postGameScoreStory(gameId, stats);
+      if (typeof o.onShared === 'function') o.onShared({ method: 'story' });
+    });
+
+    // Step 2 — OS share only from External / More
+    sheet.querySelector('[data-cs="external"]')?.addEventListener('click', async () => {
+      trackShareEvent('share_method', { surface: gameId, method: 'external' });
+      close();
+      const result = await shareGameResult(gameId, stats);
+      if (typeof o.onShared === 'function') o.onShared(result || { method: 'external' });
+    });
+
     return sheet;
   }
 

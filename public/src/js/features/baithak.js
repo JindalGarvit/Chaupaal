@@ -29,13 +29,16 @@ function initBaithak(){
       }
       renderChatList(typeof getBaithakChatsForSearch==='function'?getBaithakChatsForSearch(q):(typeof pinSelfChat==='function'?pinSelfChat([]):[]));
     });
+    if(typeof bindLivingPlaceholder==='function'){
+      bindLivingPlaceholder(document.getElementById('baithakSearch'),'baithak_search');
+    }
   }
   if(currentUser&&typeof renderBaithakInstants==='function') renderBaithakInstants();
   else if(currentUser&&typeof renderLiveBaithakStories==='function') renderLiveBaithakStories();
   else if(typeof renderStories==='function') renderStories();
   if(typeof baithakChats!=='undefined') baithakChats = typeof pinSelfChat==='function' ? pinSelfChat(baithakChats) : baithakChats;
   if(typeof setBaithakSection==='function'){
-    setBaithakSection(typeof baithakSection==='function'?baithakSection():'sabha');
+    setBaithakSection(typeof window.baithakSection==='function'?window.baithakSection():'sabha');
   } else {
     renderChatList(typeof baithakChats!=='undefined'?baithakChats:(typeof pinSelfChat==='function'?pinSelfChat([]):[]));
   }
@@ -43,7 +46,7 @@ function initBaithak(){
     loadBaithakChatsPage({reset:true})
       .then(()=>{
         if(typeof baithakChats!=='undefined') baithakChats = pinSelfChat(baithakChats);
-        if(typeof setBaithakSection==='function') setBaithakSection(typeof baithakSection==='function'?baithakSection():'sabha');
+        if(typeof setBaithakSection==='function') setBaithakSection(typeof window.baithakSection==='function'?window.baithakSection():'sabha');
         else renderChatList(baithakChats);
       })
       .catch(()=>{
@@ -53,7 +56,7 @@ function initBaithak(){
   }
 }
 
-/** WhatsApp-style ⋯ — New chat · New group · Find people · Chat settings (≤4, no mute). */
+/** Vertical ⋮ — New chat · New group · Find people · Settings (icons on each row). */
 function openBaithakOverflowMenu(anchor){
   document.getElementById('baithakOverflowMenu')?.remove();
   const menu=document.createElement('div');
@@ -61,11 +64,12 @@ function openBaithakOverflowMenu(anchor){
   menu.className='baithak-overflow-menu';
   menu.setAttribute('role','menu');
   const tt=(k,f)=>{ try{ if(typeof t==='function'){ const v=t(k); if(v&&v!==k) return v; } }catch(e){} return f; };
+  const ic=(name)=>typeof iconHtml==='function'?iconHtml(name,{size:18,className:'baithak-menu-icon'}):'';
   menu.innerHTML=`
-    <button type="button" role="menuitem" data-baithak-menu="new_chat">${tt('baithak_menu_new_chat','New chat')}</button>
-    <button type="button" role="menuitem" data-baithak-menu="new_group">${tt('baithak_menu_new_group','New group')}</button>
-    <button type="button" role="menuitem" data-baithak-menu="find">${tt('shortcut_baithak_search','Find people')}</button>
-    <button type="button" role="menuitem" data-baithak-menu="settings">${tt('baithak_menu_chat_settings','Chat settings')}</button>`;
+    <button type="button" role="menuitem" data-baithak-menu="new_chat">${ic('message-circle')}<span>${tt('baithak_menu_new_chat','New chat')}</span></button>
+    <button type="button" role="menuitem" data-baithak-menu="new_group">${ic('users')}<span>${tt('baithak_menu_new_group','New group')}</span></button>
+    <button type="button" role="menuitem" data-baithak-menu="find">${ic('search')}<span>${tt('shortcut_baithak_search','Find people')}</span></button>
+    <button type="button" role="menuitem" data-baithak-menu="settings">${ic('settings')}<span>${tt('baithak_menu_settings','Settings')}</span></button>`;
   const host=document.querySelector('.device')||document.body;
   host.appendChild(menu);
   const rect=anchor?.getBoundingClientRect?.();

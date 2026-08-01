@@ -228,7 +228,7 @@
         <div class="loc-full-map" data-loc-full-map></div>
         <div class="loc-full-actions">
           <a class="btn btn--primary" data-loc-directions href="${mapsUrl}" target="_blank" rel="noopener">${typeof t==='function'?t('loc_directions','Directions'):'Directions'}</a>
-          <a class="btn btn--secondary" href="${appleUrl}" target="_blank" rel="noopener">${typeof t==='function'?t('loc_apple_maps','Apple Maps'):'Apple Maps'}</a>
+          <a class="btn btn--secondary loc-apple-maps-btn hidden" data-loc-apple href="${appleUrl}" target="_blank" rel="noopener">${typeof t==='function'?t('loc_apple_maps','Apple Maps'):'Apple Maps'}</a>
         </div>
         ${isLive ? '<button type="button" class="btn btn--block loc-stop-btn hidden" data-loc-stop>Stop sharing</button>' : ''}
       </div>`;
@@ -257,6 +257,48 @@
     sheet.querySelectorAll('[data-loc-close]').forEach((b) => b.addEventListener('click', close));
     if (typeof enableSwipeDismiss === 'function') {
       enableSwipeDismiss(sheet.querySelector('.loc-full-panel'), close);
+    }
+
+    // Directions: single tap = Google Maps. Double-long-press = reveal Google vs Apple chooser.
+    const dirBtn = sheet.querySelector('[data-loc-directions]');
+    const appleBtn = sheet.querySelector('[data-loc-apple]');
+    let lastLp = 0;
+    const revealMapsChooser = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const now = Date.now();
+      if (now - lastLp < 900) {
+        lastLp = 0;
+        appleBtn?.classList.remove('hidden');
+        if (typeof showToast === 'function') {
+          showToast(
+            typeof t === 'function'
+              ? t('loc_maps_chooser', 'Choose Google Maps or Apple Maps')
+              : 'Choose Google Maps or Apple Maps'
+          );
+        }
+        return;
+      }
+      lastLp = now;
+      // First long-press arms; second within window reveals Apple
+      if (typeof showToast === 'function') {
+        showToast(
+          typeof t === 'function'
+            ? t('loc_maps_arm', 'Long-press again for map options')
+            : 'Long-press again for map options'
+        );
+      }
+    };
+    if (dirBtn && typeof onLongPress === 'function') {
+      onLongPress(dirBtn, revealMapsChooser);
+    } else if (dirBtn) {
+      let timer = null;
+      dirBtn.addEventListener('pointerdown', () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => revealMapsChooser({ preventDefault() {}, stopPropagation() {} }), 550);
+      });
+      dirBtn.addEventListener('pointerup', () => clearTimeout(timer));
+      dirBtn.addEventListener('pointercancel', () => clearTimeout(timer));
     }
 
     const markerRef = { current: null };

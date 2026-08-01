@@ -25,17 +25,17 @@
 <link rel="apple-touch-icon" href="/icon.png">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/src/styles/tokens.css?v=482d8f55">
-  <link rel="stylesheet" href="/src/styles/squircle.css?v=0683b171">
+  <link rel="stylesheet" href="/src/styles/squircle.css?v=6878875a">
   <link rel="stylesheet" href="/src/styles/gathered-light.css?v=05fbe297">
   <link rel="stylesheet" href="/src/styles/icons.css?v=b5921022">
-  <link rel="stylesheet" href="/src/styles/layout.css?v=74a295ef">
+  <link rel="stylesheet" href="/src/styles/layout.css?v=d70bdf8c">
   <link rel="stylesheet" href="/src/styles/tab-elements.css?v=0544038c">
   <link rel="stylesheet" href="/src/styles/akhbaar.css?v=b924fec3">
   <link rel="stylesheet" href="/src/styles/dangal.css?v=1806b1a8">
-  <link rel="stylesheet" href="/src/styles/baithak.css?v=d7c17788">
-  <link rel="stylesheet" href="/src/styles/peepal.css?v=c3530dde">
-  <link rel="stylesheet" href="/src/styles/duniya.css?v=3a83dbb8">
-  <link rel="stylesheet" href="/src/styles/components.css?v=b6c203a2">
+  <link rel="stylesheet" href="/src/styles/baithak.css?v=5783c6dd">
+  <link rel="stylesheet" href="/src/styles/peepal.css?v=115e4a30">
+  <link rel="stylesheet" href="/src/styles/duniya.css?v=499b34a6">
+  <link rel="stylesheet" href="/src/styles/components.css?v=436d1006">
   <link rel="stylesheet" href="/src/styles/mehfil.css?v=14b3d3f2">
 </head>
 <body>
@@ -428,8 +428,8 @@
 
     <!-- Search + overflow (below Instants, above list) -->
     <div class="baithak-search-row">
-      <input class="baithak-search" id="baithakSearch" placeholder="Search..." type="text" data-i18n-placeholder="baithak_search">
-      <button type="button" class="baithak-overflow-btn" id="baithakOverflowBtn" aria-label="More" aria-haspopup="menu">⋯</button>
+      <input class="baithak-search" id="baithakSearch" placeholder="Search chats…" type="text" data-i18n-placeholder="baithak_search" data-living-ph="baithak_search">
+      <button type="button" class="baithak-overflow-btn" id="baithakOverflowBtn" aria-label="Settings menu" aria-haspopup="menu" title="More">⋮</button>
     </div>
 
     <!-- CHAT LIST -->
@@ -457,35 +457,26 @@
 
   <div class="tab-panel active" id="panel-peepal">
     <div class="peepal-screen" id="peepalScreen">
-      <div class="peepal-header">
-        <input type="search" class="tab-inline-search" id="peepalInlineSearch" placeholder="Search people & discussions…" autocomplete="off" enterkeyhint="search" aria-label="Search Peepal" />
-        <button class="peepal-ask-btn" id="peepalAskBtn" data-i18n="peepal_discuss">Discuss</button>
-        <button class="icon-btn" id="peepalSearchBtn" title="Find people" aria-label="Find people" data-icon="users" hidden></button>
-      </div>
-      <!-- AI People Search -->
-      <div class="peepal-ai-search hidden" id="peepalAiSearch">
-        <div class="peepal-ai-search-inner">
-          <div class="peepal-ai-search-label" style="display:flex;align-items:center;gap:6px;"><span data-icon="sparkles" data-icon-size="14"></span> <span data-i18n="peepal_find_label">Find people on Peepal</span></div>
-      <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:8px;" id="peepalSearchNudges">
-        <button type="button" class="peepal-nudge-chip" data-hint="someone to date around my age" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;"><span data-icon="heart" data-icon-size="14"></span> Dating</button>
-        <button type="button" class="peepal-nudge-chip" data-hint="make new friends with similar interests" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;"><span data-icon="handshake" data-icon-size="14"></span> Friendship</button>
-        <button type="button" class="peepal-nudge-chip" data-hint="professionals in tech or business" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;"><span data-icon="briefcase" data-icon-size="14"></span> Networking</button>
-        <button type="button" class="peepal-nudge-chip" data-hint="travel companion for upcoming trip" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;"><span data-icon="plane" data-icon-size="14"></span> Travel buddy</button>
-        <button type="button" class="peepal-nudge-chip" data-hint="someone to play games with" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;"><span data-icon="gamepad" data-icon-size="14"></span> Gaming</button>
-        <button type="button" class="peepal-nudge-chip" data-hint="music lover with similar taste" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;"><span data-icon="music" data-icon-size="14"></span> Music</button>
-        <button type="button" class="peepal-nudge-chip" data-hint="avid reader who loves non-fiction" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;"><span data-icon="book" data-icon-size="14"></span> Book club</button>
-        <button type="button" class="peepal-nudge-chip" data-hint="startup-minded person to collaborate" style="padding:6px 12px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;"><span data-icon="rocket" data-icon-size="14"></span> Co-founder</button>
-      </div>
-          <div style="position:relative;">
-            <textarea class="peepal-ai-search-input" id="peepalAiSearchInput" placeholder="Describe who you're looking for... e.g. 'someone into cricket and startups around my age' or 'a travel buddy from Mumbai who loves food'" rows="3" data-i18n-placeholder="peepal_find_ph"></textarea>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:10px;">
-            <button class="peepal-ai-search-btn" id="peepalAiSearchGo"><span data-icon="search" data-icon-size="16" style="margin-right:6px;"></span> <span data-i18n="peepal_find_btn">Find People</span></button>
-            <button style="padding:10px 14px;background:none;border:2px solid var(--line);border-radius:12px;font-size:13px;cursor:pointer;" id="peepalAiSearchClose" data-i18n="cancel">Cancel</button>
-          </div>
-          <div id="peepalAiSearchResults" style="margin-top:14px;"></div>
+      <!-- Intent people card (Vriksha) — native feed card, not a toolbar / not branded Khoj -->
+      <div class="peepal-card peepal-intent-card" id="peepalIntentCard" data-nav-ignore="1">
+        <div class="peepal-intent-card-title" data-i18n="peepal_find_label">Find people on Peepal</div>
+        <div class="peepal-intent-card-sub" data-i18n="peepal_intent_sub">Type anything — we’ll surface people who fit.</div>
+        <div class="peepal-intent-chips" id="peepalSearchNudges">
+          <button type="button" class="peepal-nudge-chip" data-hint="someone warm to date near me"><span data-icon="heart" data-icon-size="14"></span> Dating</button>
+          <button type="button" class="peepal-nudge-chip" data-hint="new friends with similar interests"><span data-icon="handshake" data-icon-size="14"></span> Friendship</button>
+          <button type="button" class="peepal-nudge-chip" data-hint="someone hiring or looking for work"><span data-icon="briefcase" data-icon-size="14"></span> Job</button>
+          <button type="button" class="peepal-nudge-chip" data-hint="flatmate or roommate nearby"><span data-icon="home" data-icon-size="14"></span> Flatmate</button>
+          <button type="button" class="peepal-nudge-chip" data-hint="travel companion for an upcoming trip"><span data-icon="plane" data-icon-size="14"></span> Travel</button>
+          <button type="button" class="peepal-nudge-chip" data-hint="someone to play games with"><span data-icon="gamepad" data-icon-size="14"></span> Gaming</button>
+          <button type="button" class="peepal-nudge-chip" data-hint="music lover with similar taste"><span data-icon="music" data-icon-size="14"></span> Music</button>
+          <button type="button" class="peepal-nudge-chip" data-hint="startup-minded person to collaborate"><span data-icon="rocket" data-icon-size="14"></span> Co-founder</button>
         </div>
+        <textarea class="peepal-ai-search-input" id="peepalAiSearchInput" rows="2" placeholder="Who are you hoping to meet?" data-i18n-placeholder="peepal_find_ph" data-living-ph="peepal_intent"></textarea>
+        <button type="button" class="peepal-ai-search-btn" id="peepalAiSearchGo"><span data-icon="search" data-icon-size="16" style="margin-right:6px;"></span> <span data-i18n="peepal_find_btn">Find People</span></button>
+        <div id="peepalAiSearchResults" class="peepal-intent-results"></div>
       </div>
+      <!-- Hidden legacy host kept for ID compatibility -->
+      <div class="peepal-ai-search hidden" id="peepalAiSearch" aria-hidden="true"></div>
       <!-- Static discovery shell: paints LCP before JS (replaced by initPeepal). -->
       <div class="peepal-discovery peepal-discovery--shell" id="peepalDiscovery" data-peepal-shell="1">
         <div class="peepal-discovery-header">
@@ -807,7 +798,7 @@
   <script src="/src/js/core/environment.js?v=32050a6f"></script>
   <script src="/src/js/core/storage.js?v=0fb0e244"></script>
   <script src="/src/js/core/icons.js?v=e6269432"></script>
-  <script src="/src/js/core/tab-elements.js?v=fb9ecd58"></script>
+  <script src="/src/js/core/tab-elements.js?v=40a33cce"></script>
   <script src="/src/js/config/policy-limits.js?v=8f3cfeb8"></script>
   <script src="/src/js/core/users-public.js?v=56c0234e"></script>
   <script src="/src/js/core/policy-usage.js?v=fcaff522"></script>
@@ -824,7 +815,7 @@
   <script src="/src/js/core/soft-delete.js?v=6947a077"></script>
   <script src="/src/js/core/optimistic.js?v=03f440fa"></script>
   <script src="/src/js/core/comments.js?v=e63b3a20"></script>
-  <script src="/src/js/core/social-persistence.js?v=ddd04cca"></script>
+  <script src="/src/js/core/social-persistence.js?v=da571dea"></script>
   <script src="/src/js/core/relationships.js?v=d0a01379"></script>
   <script src="/src/js/core/chat-presence.js?v=7176596d"></script>
   <script src="/src/js/core/image-pipeline.js?v=ac09e26b"></script>
@@ -839,8 +830,8 @@
   <script src="/src/js/core/profile-type.js?v=e983c303"></script>
   <script src="/src/js/core/profile-type-enrich.js?v=7378ff81"></script>
   <script src="/src/js/core/swipe-pager.js?v=4274e372"></script>
-  <script src="/src/js/core/section-modes.js?v=15355d23"></script>
-  <script src="/src/js/core/contacts-find.js?v=8aeeb5d7"></script>
+  <script src="/src/js/core/section-modes.js?v=4af77852"></script>
+  <script src="/src/js/core/contacts-find.js?v=b2d4bc70"></script>
   <script src="/src/js/core/teen-mode.js?v=1a76b0c5"></script>
   <script src="/src/js/core/professional-badge.js?v=775a0916"></script>
   <script src="/src/js/core/linkify.js?v=6dde463f"></script>
@@ -848,9 +839,9 @@
   <script src="/src/js/core/profile-section-mount.js?v=838d0f61"></script>
   <script src="/src/js/core/notification-panel.js?v=f91e12c6"></script>
   <script src="/src/js/core/micro.js?v=2f797874"></script>
-  <script src="/src/js/core/tab-gestures.js?v=2e603106"></script>
+  <script src="/src/js/core/tab-gestures.js?v=9cf6ef8f"></script>
   <script src="/src/js/core/sessions.js?v=fafd40d3"></script>
-  <script src="/src/js/core/safety.js?v=39f430c8"></script>
+  <script src="/src/js/core/safety.js?v=d76baa8b"></script>
   <script src="/src/js/core/notif-prefs.js?v=19bbe844"></script>
   <script src="/src/js/core/feature-flags.js?v=b967fa88"></script>
   <script src="/src/js/core/theme-engine.js?v=79d825af"></script>
@@ -858,15 +849,15 @@
   <script src="/src/js/core/overlay-scope.js?v=61bd18ea"></script>
   <script src="/src/js/core/a11y.js?v=c13f075d"></script>
   <script src="/src/js/core/nav-stack.js?v=ef412990"></script>
-  <script src="/src/js/core/half-sheet.js?v=0a952fe6"></script>
-  <script src="/src/js/core/media-player.js?v=0b74140c"></script>
-  <script src="/src/js/features/location-share.js?v=5801d4c9"></script>
+  <script src="/src/js/core/half-sheet.js?v=583d53dd"></script>
+  <script src="/src/js/core/media-player.js?v=cdd86cfe"></script>
+  <script src="/src/js/features/location-share.js?v=07b67a9e"></script>
   <script src="/src/js/core/touch.js?v=123207b9"></script>
   <script src="/src/js/ai/ai-config.js?v=b15d85db"></script>
   <script src="/src/js/ai/markdown.js?v=32d3b778"></script>
   <script src="/src/js/ai/call-ai.js?v=492d379f"></script>
   <script src="/src/js/ai/anthropic.js?v=ee230737"></script>
-  <script src="/src/js/core/search.js?v=65afcc00"></script>
+  <script src="/src/js/core/search.js?v=68612f7e"></script>
   <script src="/src/js/core/deeplinks.js?v=982cb1f9"></script>
   <script src="/src/js/core/rate-limit-client.js?v=2696fc7d"></script>
   <script src="/src/js/core/theme.js?v=612dd3bb"></script>
@@ -888,21 +879,21 @@
   <script src="/src/js/features/chaupaal-ai-profile.js?v=c3832ffa"></script>
   <script src="/src/js/features/music-card.js?v=af83d9e2"></script>
   <script src="/src/js/features/group-info.js?v=5f045c88"></script>
-  <script src="/src/js/core/stories.js?v=ee829e41"></script>
+  <script src="/src/js/core/stories.js?v=0f10b01b"></script>
   <script src="/src/js/core/archive-hub.js?v=0ec443f1"></script>
   <script src="/src/js/core/journal-anim.js?v=f2658ae2"></script>
-  <script src="/src/js/features/baithak.js?v=9fb10bc6"></script>
+  <script src="/src/js/features/baithak.js?v=fb181dfd"></script>
   <script src="/src/js/features/profile-preview.js?v=42020ee4"></script>
   <script src="/src/js/features/profile.js?v=e5d3b30d"></script>
-  <script src="/src/js/core/i18n.js?v=daf54e1d"></script>
-  <script src="/src/js/features/categories.js?v=8ef2f507"></script>
+  <script src="/src/js/core/i18n.js?v=5d078442"></script>
+  <script src="/src/js/features/categories.js?v=96e9bbe6"></script>
   <script src="/src/js/features/peepal.js?v=7ec67d45"></script>
   <script src="/src/js/features/onboarding.js?v=0d897b17"></script>
   <script src="/src/js/core/service-worker.js?v=9ffe9136"></script>
   <script src="/src/js/features/streak.js?v=4caf63f8"></script>
   <script src="/vendor/chess.js?v=434826c8"></script>
   <script src="/src/js/games/game-runtime.js?v=9d6492c3"></script>
-  <script src="/src/js/games/game-ui.js?v=75e7550e"></script>
+  <script src="/src/js/games/game-ui.js?v=e773a96b"></script>
   <script src="/src/js/games/game-registry.js?v=359a9355"></script>
   <script src="/src/js/games/ank-jod.js?v=941f78b7"></script>
   <script src="/src/js/games/engines.js?v=215073eb"></script>
@@ -910,13 +901,13 @@
   <script src="/src/js/games/arcade.js?v=107d74f6"></script>
   <script src="/src/js/main.js?v=3ff0e06e"></script>
   <script src="/src/js/features/akhbaar-catbar.js?v=05c19cfe"></script>
-  <script src="/src/js/features/duniya.js?v=fe3153b0"></script>
+  <script src="/src/js/features/duniya.js?v=24b32ec1"></script>
   <script src="/src/js/features/media-picker.js?v=0d1a4caa"></script>
   <script src="/src/js/features/premium.js?v=53c2aa53"></script>
-  <script src="/src/js/features/discovery.js?v=a8d3ad37"></script>
-  <script src="/src/js/features/khoj.js?v=ceae2f4d"></script>
-  <script src="/src/js/core/polish.js?v=f24ef3d2"></script>
-  <script src="/src/js/features/fairness.js?v=4fc5b152"></script>
+  <script src="/src/js/features/discovery.js?v=8a64d9e4"></script>
+  <script src="/src/js/features/khoj.js?v=0b1fdb11"></script>
+  <script src="/src/js/core/polish.js?v=267509b9"></script>
+  <script src="/src/js/features/fairness.js?v=42a550fa"></script>
   <script src="/src/js/features/media-profile.js?v=d8fe1026"></script>
   <script src="/src/js/auth/auth-events.js?v=3f0f8667"></script>
 </body>

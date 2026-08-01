@@ -53,25 +53,31 @@
 
     if (peepalMode === 'khoj') {
       ensureRoomHeader(screen || feed);
+      document.getElementById('peepalIntentCard')?.classList.add('hidden');
+      document.getElementById('peepalDiscovery')?.classList.add('hidden');
+      document.getElementById('peepalMashhoorGrid')?.classList.add('hidden');
       if (typeof renderKhojSurface === 'function') {
         try {
           renderKhojSurface(screen || feed);
         } catch (e) {}
-      } else {
-        document.getElementById('peepalInlineSearch')?.focus();
-        document.getElementById('peepalSearchBtn')?.click();
       }
       return;
     }
 
     if (peepalMode === 'mashhoor') {
+      document.getElementById('peepalIntentCard')?.classList.add('hidden');
+      document.getElementById('peepalDiscovery')?.classList.add('hidden');
+      document.getElementById('peepalKhojSurface')?.classList.add('hidden');
       renderMashhoorGrid();
       return;
     }
 
-    // vriksha — default tree/feed
+    // vriksha — default tree/feed + pinned intent card
     feed?.querySelector('[data-peepal-mode-banner]')?.remove();
     document.getElementById('peepalMashhoorGrid')?.classList.add('hidden');
+    document.getElementById('peepalKhojSurface')?.classList.add('hidden');
+    document.getElementById('peepalIntentCard')?.classList.remove('hidden');
+    document.getElementById('peepalDiscovery')?.classList.remove('hidden');
     if (feed) feed.classList.remove('hidden');
     ensureRoomHeader(screen || feed);
     if (typeof renderPeepalFeed === 'function') {
@@ -685,10 +691,15 @@
         if (locked !== 'h') return;
         const dx = (e.changedTouches[0]?.clientX || 0) - sx;
         if (Math.abs(dx) < 56) return;
-        if (typeof baithakSection === 'function') section = baithakSection() || 'sabha';
+        // Prefer window getter — lexical baithakSection in baithak-data.js is a string and would shadow.
+        try {
+          if (typeof window.baithakSection === 'function') section = window.baithakSection() || 'sabha';
+        } catch (err) {}
         const order = ['sambhavanayein', 'sabha', 'mitra'];
-        const cur = order.indexOf(section);
+        let cur = order.indexOf(section);
+        if (cur < 0) cur = 1; // sabha
         const next = order[Math.max(0, Math.min(2, cur + (dx < 0 ? 1 : -1)))];
+        if (next === section) return;
         if (typeof setBaithakSection === 'function') {
           setBaithakSection(next);
           applyRoomKit(panel, ['room-kit--sky', `room-kit--${next}`]);

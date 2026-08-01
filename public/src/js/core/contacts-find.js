@@ -97,6 +97,12 @@
       if (m?.uid) onApp.push({ ...m, contactName: p.name, e164: p.e164 });
       else invite.push({ name: p.name, e164: p.e164 });
     });
+    // Chaupaal matches first (richer profiles up top), then invite list
+    onApp.sort((a, b) => {
+      const score = (u) => (u.photoURL ? 2 : 0) + (u.username ? 1 : 0) + (u.name ? 1 : 0);
+      return score(b) - score(a) || String(a.name || a.contactName || '').localeCompare(String(b.name || b.contactName || ''));
+    });
+    invite.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
     return { onApp, invite };
   }
 
@@ -107,6 +113,17 @@
       'Join me on Chaupaal — a warmer place to chat, play, and catch up. {{url}}',
       { url }
     );
+    // Prefer two-step Chaupaal share sheet when available
+    if (typeof openUnifiedShareSheet === 'function') {
+      openUnifiedShareSheet({
+        gameId: 'invite',
+        title: tt('contacts_invite_title', 'Invite to Chaupaal'),
+        subtitle: contact?.name || '',
+        story: false,
+        stats: { text, url, scoreLine: contact?.name || 'Invite' },
+      });
+      return;
+    }
     if (navigator.share) {
       navigator.share({ title: 'Chaupaal', text, url }).catch(() => {});
     } else if (navigator.clipboard?.writeText) {
