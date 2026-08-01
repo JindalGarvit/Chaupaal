@@ -96,11 +96,10 @@ Even quality across en/hi/ta — no script treated as “more premium.”
 
 ## Brand mark
 
-- Source: `public/brand/chaupaal-mark.svg` (+ `chaupaal-mark-32.svg` for favicon)
-- Raster: `public/icon.png` (PWA / apple-touch)
-- Concept: **structural red** squircle + soft key light + three figures under it (commons). Reads at 32px.
-- Before: gold bench bar + white posts on red (chaupaal bench motif) — red field OK but mark read as furniture, gold competed with brand.
-- After: red is the whole field; people + light carry the metaphor globally.
+- Source: `public/brand/chaupaal-mark.png` (+ `chaupaal-mark-32.png` for favicon)
+- Raster PWA: `public/icon.png` (1024), `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, `apple-touch-icon.png`
+- Concept: traditional Indian **charpai / khat** on a white→red gradient — the commons seat as identity.
+- SVG wrappers (`chaupaal-mark.svg`, `chaupaal-mark-32.svg`) embed the raster for legacy paths; UI and favicons use PNG.
 
 ---
 

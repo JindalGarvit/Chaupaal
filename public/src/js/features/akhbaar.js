@@ -72,7 +72,7 @@ async function buildAkhbaar(QUESTIONS_IN,BONUS_QUESTIONS_IN){
   const resultsCard=document.createElement('div');resultsCard.className='reel-card';
   const rc=document.createElement('div');rc.className='results-card';rc.id='resultsCard';
   rc.innerHTML=`
-    <div class="results-brand"><span class="cp-mark cp-mark--sm" aria-hidden="true"><img src="/brand/chaupaal-mark.svg" alt="" width="20" height="20"></span> Chaupaal — Aaj ka Akhbaar<span class="results-date" id="resultsDate"></span></div>
+    <div class="results-brand"><span class="cp-mark cp-mark--sm" aria-hidden="true"><img src="/brand/chaupaal-mark.png" alt="" width="20" height="20"></span> Chaupaal — Aaj ka Akhbaar<span class="results-date" id="resultsDate"></span></div>
     <div class="score-big" id="scoreBig">0<span>/${QUESTIONS.length}</span></div>
     <div class="score-label">Questions answered correctly</div>
     <div class="breakdown" id="breakdown"></div>

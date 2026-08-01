@@ -1,7 +1,13 @@
-const CACHE = 'chaupaal-vd1fd20';
+const CACHE = 'chaupaal-v04f690';
 const ASSETS = [
   '/index.html',
   '/icon.png',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/icon-maskable-512.png',
+  '/apple-touch-icon.png',
+  '/brand/chaupaal-mark.png',
+  '/brand/chaupaal-mark-32.png',
   '/splash.png',
   '/vendor/chess.js',
   'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap',

@@ -1,9 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Chaupaal">
-  <!-- Favicon / 32px: red field + light arc + three dots -->
-  <rect width="32" height="32" rx="8" fill="#E63946"/>
-  <ellipse cx="16" cy="6" rx="12" ry="6" fill="#FFFFFF" opacity="0.35"/>
-  <circle cx="10" cy="19" r="3.2" fill="#FFFFFF"/>
-  <circle cx="16" cy="17.5" r="3.6" fill="#FFFFFF"/>
-  <circle cx="22" cy="19" r="3.2" fill="#FFFFFF"/>
-  <path d="M5.5 27c1.2-5 3.8-7.5 4.5-7.5S13 22 14 27H5.5zM12 27c1.4-6 4.2-9 4-9s2.6 3 4 9H12zM18 27c1.2-5 3.8-7.5 4.5-7.5S26 22 27 27H18z" fill="#FFFFFF"/>
+  <!-- Favicon wrapper — raster: chaupaal-mark-32.png -->
+  <image href="chaupaal-mark-32.png" width="32" height="32" preserveAspectRatio="xMidYMid slice"/>
 </svg>
