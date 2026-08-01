@@ -223,9 +223,9 @@ function maybeShowPeepalCheckIn(){
 
 // ---- Patch AI search to add feedback widget ----
 const _origRunPeepalAiSearch = runPeepalAiSearch;
-window.runPeepalAiSearch = async function(){
-  await _origRunPeepalAiSearch();
-  const query = document.getElementById('peepalAiSearchInput')?.value || '';
+window.runPeepalAiSearch = async function(opts){
+  await _origRunPeepalAiSearch(opts);
+  const query = (opts && opts.query) || document.getElementById('peepalAiSearchInput')?.value || '';
   const resultsEl = document.getElementById('peepalAiSearchResults');
   const count = resultsEl?.querySelectorAll('.peepal-ai-result-card').length || 0;
   if(count > 0) addSearchFeedback(resultsEl, query, count);

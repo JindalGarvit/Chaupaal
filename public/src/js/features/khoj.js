@@ -1,7 +1,6 @@
 /**
  * Khoj — intent / natural-language people discovery only (not global Chaupaal search).
- * Morph entry 1A + swipe → Khoj. Reuses Peepal find-people chips + AI filter.
- * Global omnibox lives at Peepal morph #5 → openUniversalSearch.
+ * Shares one brain with Vriksha intent card → runPeepalAiSearch → intent_discover API.
  */
 (function () {
   'use strict';
@@ -61,37 +60,13 @@
     }
     panel.classList.remove('hidden');
 
-    const lim = window.PolicyLimits?.AI_DISCOVERY_MSG || { perDay: 3, perWeek: 10 };
-    let quota = { remaining: lim.perDay, dayLeft: lim.perDay, weekLeft: lim.perWeek, exhausted: false };
-    try {
-      if (typeof PolicyUsage?.getRemaining === 'function') {
-        quota = (await PolicyUsage.getRemaining('aiDiscoveryMsg')) || quota;
-      }
-    } catch (e) {}
-
-    const remaining = quota.exhausted ? 0 : quota.dayLeft ?? quota.remaining ?? lim.perDay;
-    const nudge =
-      remaining <= 0
-        ? tt('khoj_nudge_exhausted', 'Daily AI Discovery messages used — message people you already know, or try again tomorrow.')
-        : remaining <= 1
-          ? tt('khoj_nudge_low', 'One careful hello left today — make it count.')
-          : tt('khoj_nudge_soft', 'Browsing is free. Messaging new Personal profiles via Khoj counts toward your daily limit.');
-
     const chipsHtml = INTENT_CHIPS.map(
       (c) =>
-        `<button type="button" class="peepal-nudge-chip" data-hint="${c.hint}">${icon(c.icon)} ${tt('khoj_chip_' + c.label.toLowerCase(), c.label)}</button>`
+        `<button type="button" class="peepal-nudge-chip" data-hint="${c.hint}" data-chip-intent="${c.label.toLowerCase()}">${icon(c.icon)} ${tt('khoj_chip_' + c.label.toLowerCase(), c.label)}</button>`
     ).join('');
 
     panel.innerHTML = `
-      <div class="khoj-quota" data-nav-ignore="1">
-        <div class="khoj-quota-num">${remaining}</div>
-        <div class="khoj-quota-copy">
-          <strong>${tt('khoj_quota_title', 'AI Discovery messages left today')}</strong>
-          <span>${tt('khoj_quota_week', '{{n}} left this week').replace('{{n}}', String(quota.weekLeft ?? lim.perWeek))}</span>
-          <p class="khoj-nudge">${nudge}</p>
-        </div>
-      </div>
-      <div class="peepal-card peepal-intent-card peepal-intent-card--khoj">
+      <div class="peepal-card peepal-intent-card peepal-intent-card--khoj" id="khojIntentCard">
         <div class="peepal-intent-card-title">${tt('khoj_title', 'Khoj')}</div>
         <div class="peepal-intent-card-sub">${tt('khoj_sub', 'Describe who you’re looking for — type anything, and we’ll filter matching people.')}</div>
         <div class="peepal-intent-chips" data-khoj-chips>${chipsHtml}</div>
@@ -103,22 +78,33 @@
       </div>
       <div class="khoj-hint">${tt('khoj_vs_global', 'Tip: Search posts, games & everything Chaupaal from Peepal’s Search Chaupaal shortcut.')}</div>`;
 
+    try {
+      if (typeof AiDiscoveryMeter?.mountOnIntentCard === 'function') {
+        await AiDiscoveryMeter.mountOnIntentCard(panel.querySelector('#khojIntentCard'), {
+          disclosePro: true,
+        });
+      }
+    } catch (e) {}
+
     const run = () => {
       const q = panel.querySelector('#khojIntentInput')?.value?.trim();
       if (!q) return;
       const peepalInput = document.getElementById('peepalAiSearchInput');
       if (peepalInput) peepalInput.value = q;
+      // Ensure results render into Khoj host by temporarily swapping results id host
+      const dest = panel.querySelector('#khojIntentResults');
+      const src = document.getElementById('peepalAiSearchResults');
       if (typeof runPeepalAiSearch === 'function') {
-        runPeepalAiSearch().then?.(() => {}).catch?.(() => {});
-        // Mirror results into Khoj host
-        const src = document.getElementById('peepalAiSearchResults');
-        const dest = panel.querySelector('#khojIntentResults');
+        const p = runPeepalAiSearch({ query: q });
+        Promise.resolve(p)
+          .then(() => {
+            if (src && dest) dest.innerHTML = src.innerHTML;
+          })
+          .catch(() => {});
         if (src && dest) {
-          const sync = () => {
+          const mo = new MutationObserver(() => {
             dest.innerHTML = src.innerHTML;
-          };
-          sync();
-          const mo = new MutationObserver(sync);
+          });
           mo.observe(src, { childList: true, subtree: true });
           setTimeout(() => mo.disconnect(), 20000);
         }
@@ -145,17 +131,14 @@
         run();
       }
     });
+    panel.querySelector('#khojIntentInput')?.addEventListener('blur', () => {
+      try {
+        if (typeof restoreAppShell === 'function') restoreAppShell('khoj_intent_blur');
+      } catch (e) {}
+    });
     if (typeof bindLivingPlaceholder === 'function') {
       bindLivingPlaceholder(panel.querySelector('#khojIntentInput'), 'khoj_intent');
     }
-
-    try {
-      if (typeof AiDiscoveryMeter?.mountMeter === 'function') {
-        const hostMeter = document.createElement('div');
-        panel.querySelector('.khoj-quota')?.after(hostMeter);
-        AiDiscoveryMeter.mountMeter(hostMeter);
-      }
-    } catch (e) {}
   }
 
   window.renderKhojSurface = renderKhojSurface;
@@ -171,6 +154,9 @@
           document.getElementById('peepalDiscovery')?.classList.remove('hidden');
           document.getElementById('peepalFeed')?.classList.remove('hidden');
         }
+        try {
+          if (typeof restoreAppShell === 'function') restoreAppShell('peepal_mode:' + mode);
+        } catch (e) {}
         return r;
       };
       window.setPeepalMode._khojWrapped = true;

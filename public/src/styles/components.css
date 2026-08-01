@@ -2928,17 +2928,18 @@ select:focus-visible,
 /* Friend picker sheet */
 .game-friend-sheet{position:absolute;inset:0;z-index:120;display:flex;align-items:flex-end;justify-content:center;}
 .game-friend-backdrop{position:absolute;inset:0;background:rgba(20,22,30,.4);}
-.game-friend-card{position:relative;width:100%;max-height:78vh;overflow:auto;background:var(--white);border-radius:22px 22px 0 0;padding:18px 16px 12px;box-shadow:0 -8px 28px rgba(0,0,0,.12);}
-.game-friend-title{font:700 17px 'Space Grotesk',sans-serif;}
+.game-friend-card{position:relative;width:100%;max-height:78vh;overflow:auto;background:var(--surface-elevated,var(--white));border-radius:var(--r-sheet,28px) var(--r-sheet,28px) 0 0;padding:18px 16px 12px;box-shadow:var(--elev-3,var(--shadow-lg,0 -8px 28px rgba(0,0,0,.12)));}
+.game-friend-title{font:700 17px var(--font-display,'Space Grotesk'),sans-serif;}
 .game-friend-sub{font-size:12px;color:var(--muted);margin:4px 0 12px;}
 .game-friend-list{display:flex;flex-direction:column;gap:6px;max-height:48vh;overflow:auto;}
-.game-friend-row{display:flex;align-items:center;gap:12px;width:100%;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--cream,#F7F4EF);cursor:pointer;text-align:left;}
+.game-friend-row{display:flex;align-items:center;gap:12px;width:100%;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--surface-sunken,var(--cream,#F7F4EF));cursor:pointer;text-align:left;}
 .game-friend-avatar{font-size:22px;width:36px;text-align:center;}
 .game-friend-info{display:flex;flex-direction:column;min-width:0;}
-.game-friend-name{font:700 14px 'Space Grotesk',sans-serif;}
+.game-friend-name{font:700 14px var(--font-display,'Space Grotesk'),sans-serif;}
 .game-friend-meta{font-size:11px;color:var(--muted);}
 .game-friend-cancel{width:100%;margin-top:10px;padding:12px;border:0;background:none;color:var(--muted);font-size:14px;cursor:pointer;}
 .game-friend-loading,.game-friend-empty{font-size:13px;color:var(--muted);padding:12px 4px;line-height:1.45;}
+.game-friend-card::before{display:none;}
 
 /* Unified score/share sheet (Akhbaar, wraps, streaks) */
 .chaupaal-share-sheet .chaupaal-share-preview{display:flex;justify-content:center;margin:4px 0 12px;}

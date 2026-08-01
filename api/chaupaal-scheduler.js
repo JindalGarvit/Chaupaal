@@ -14,6 +14,7 @@ const {
   localDateKey,
 } = require('../server-lib/chaupaal-cadence');
 const { runWeeklyIntentWeightRefresh } = require('../server-lib/intent-weights');
+const { processDiscoveryBatchLabels } = require('../server-lib/discovery-pipeline');
 const { expireLiveLocationShares } = require('../server-lib/live-location');
 const { advanceStalledPeepalSegments } = require('../server-lib/peepal-segments');
 const { processCompanionOutreach } = require('../server-lib/companion-outreach');
@@ -378,14 +379,18 @@ module.exports = async function handler(req, res) {
 
     // Weekly intent-weight refresh (Sundays UTC) — only profiles with ≥50 samples
     let intentWeights = { skipped: true, reason: 'not_sunday' };
+    let discoveryBatch = { skipped: true };
     try {
       const wd = new Date().getUTCDay(); // 0 = Sunday
       if (wd === 0) {
         intentWeights = await runWeeklyIntentWeightRefresh(db, admin);
       }
+      // Thin nightly discovery preference label stub (every run — idempotent by dayKey)
+      discoveryBatch = await processDiscoveryBatchLabels(db, admin, {});
     } catch (e) {
-      intentWeights = { error: e?.message || String(e) };
-      console.warn('[scheduler] intent weights', e?.message || e);
+      intentWeights = intentWeights.error ? intentWeights : { error: e?.message || String(e) };
+      discoveryBatch = { error: e?.message || String(e) };
+      console.warn('[scheduler] intent/discovery batch', e?.message || e);
     }
 
     // Expire live location shares past duration (independent of sender client)
@@ -426,7 +431,7 @@ module.exports = async function handler(req, res) {
       console.warn('[scheduler] denorm backfill', e?.message || e);
     }
 
-    return sendSuccess(res, { ...results, summary, intentWeights, liveLoc, peepalSegments, denormBackfill });
+    return sendSuccess(res, { ...results, summary, intentWeights, discoveryBatch, liveLoc, peepalSegments, denormBackfill });
   } catch (e) {
     console.error('[chaupaal-scheduler]', e?.message || e);
     return sendError(res, 500, 'SCHEDULER_FAILED', e?.message || 'Scheduler failed');

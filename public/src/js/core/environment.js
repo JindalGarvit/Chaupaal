@@ -140,9 +140,11 @@
       if (
         ae &&
         (ae.matches?.(
-          '[data-mehfil-q], .mehfil-media-search input, .mehfil-overlay input, .mehfil-overlay textarea, .instant-compose-text, #instantText'
+          '[data-mehfil-q], .mehfil-media-search input, .mehfil-overlay input, .mehfil-overlay textarea, .instant-compose-text, #instantText, .share-search-input, #peepalAiSearchInput, #khojIntentInput, #usInput, #commentInput, .peepal-ai-search-input, .khoj-intent-input'
         ) ||
-          ae.closest?.('.mehfil-overlay, .cp-half-sheet, #baithakInstantComposer'))
+          ae.closest?.(
+            '.mehfil-overlay, .cp-half-sheet, #baithakInstantComposer, .chaupaal-share-sheet, .game-friend-sheet, .loc-share-sheet, .share-sheet'
+          ))
       ) {
         ae.blur?.();
       }

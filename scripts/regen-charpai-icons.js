@@ -1,11 +1,13 @@
 /**
- * Regenerate PWA/brand icons from the user-provided charpai source PNG.
+ * Regenerate PWA/brand icons from IconV2 charpai source PNG.
  *
  * Applies a tight center crop (zoom) so empty photo margins / outer "border"
  * disappear when Android/iOS mask the icon to a circle/squircle.
  *
- * Writes *-charpai-z* filenames (cache-bust vs prior *-charpai*), and refreshes
- * legacy + previous *-charpai* paths with the same pixels.
+ * Writes *-charpai-v2* filenames (cache-bust vs prior *-charpai-z*), and
+ * refreshes legacy + previous *-charpai* / *-charpai-z* paths with the same pixels.
+ *
+ * Source: public/brand/chaupaal-icon-source-v2.png (copied from user IconV2).
  */
 'use strict';
 
@@ -14,28 +16,20 @@ const path = require('path');
 const sharp = require('sharp');
 
 const ROOT = path.join(__dirname, '..');
-const SRC = path.join(
-  process.env.USERPROFILE || '',
-  '.cursor',
-  'projects',
-  'c-Users-Garvit-Jindal-OneDrive-Documents-GitHub-Chaupaal',
-  'assets',
-  'c__Users_Garvit_Jindal_AppData_Roaming_Cursor_User_workspaceStorage_empty-window_images_image-8842bcd3-e9c4-445f-a0c2-1f1a83e00386.png'
-);
+const SRC = path.join(ROOT, 'public', 'brand', 'chaupaal-icon-source-v2.png');
 const PUBLIC = path.join(ROOT, 'public');
 const BRAND = path.join(PUBLIC, 'brand');
 
 /**
- * Fraction of source kept after crop. Charpai wood/weave bbox is ~870×539 in
- * 1024² — a bbox-fitting square still leaves large white-wall / red-floor bands
- * that read as a "border" under circle masks. 0.50 ≈ 2.0× zoom fills the
- * square with the bed; outer legs may clip (fine under OS masks).
- * Tuned from wood/weave bbox cy≈549 (CONTENT_CENTER_Y biased lower to drop
- * the white wall above the posts).
+ * Fraction of source kept after crop. IconV2 has a large peach band above the
+ * posts and red floor below the front rail. 0.50 ≈ 2.1× zoom fills the square
+ * with weave + rail (same philosophy as prior *-charpai-z); outer posts/legs
+ * may clip (fine under OS masks). CONTENT_CENTER_Y biased slightly above
+ * geometric center so peach above is cut and red floor does not dominate.
  */
 const CROP_RATIO = 0.5;
 /** Vertical center of crop as fraction of source height (0.5 = geometric). */
-const CONTENT_CENTER_Y = 0.575;
+const CONTENT_CENTER_Y = 0.46;
 /** Extra inset after the main crop (fraction of crop side) to drop JPEG edge fringing. */
 const EDGE_TRIM = 0.02;
 
@@ -113,35 +107,56 @@ function copy(from, to) {
       ` from ${region.sourceW}x${region.sourceH} — CROP_RATIO=${CROP_RATIO}, cy=${CONTENT_CENTER_Y}, trim=${EDGE_TRIM} (~${zoom}× zoom)`
   );
 
-  // Primary cache-bust suffix (-charpai-z)
-  await zoomedCoverPng(1024, path.join(PUBLIC, 'icon-charpai-z.png'));
-  await zoomedCoverPng(512, path.join(PUBLIC, 'icon-512-charpai-z.png'));
-  await zoomedCoverPng(192, path.join(PUBLIC, 'icon-192-charpai-z.png'));
-  await zoomedCoverPng(180, path.join(PUBLIC, 'apple-touch-icon-charpai-z.png'));
-  await zoomedCoverPng(512, path.join(BRAND, 'chaupaal-mark-charpai-z.png'));
-  await zoomedCoverPng(512, path.join(BRAND, 'chaupaal-icon-512-charpai-z.png'));
-  await zoomedCoverPng(32, path.join(BRAND, 'chaupaal-mark-32-charpai-z.png'));
-  await maskablePng(512, path.join(PUBLIC, 'icon-maskable-512-charpai-z.png'));
+  // Primary cache-bust suffix (-charpai-v2)
+  await zoomedCoverPng(1024, path.join(PUBLIC, 'icon-charpai-v2.png'));
+  await zoomedCoverPng(512, path.join(PUBLIC, 'icon-512-charpai-v2.png'));
+  await zoomedCoverPng(192, path.join(PUBLIC, 'icon-192-charpai-v2.png'));
+  await zoomedCoverPng(180, path.join(PUBLIC, 'apple-touch-icon-charpai-v2.png'));
+  await zoomedCoverPng(512, path.join(BRAND, 'chaupaal-mark-charpai-v2.png'));
+  await zoomedCoverPng(512, path.join(BRAND, 'chaupaal-icon-512-charpai-v2.png'));
+  await zoomedCoverPng(32, path.join(BRAND, 'chaupaal-mark-32-charpai-v2.png'));
+  await maskablePng(512, path.join(PUBLIC, 'icon-maskable-512-charpai-v2.png'));
 
-  // Prior -charpai URLs (also zoomed, in case anything still points here)
-  copy(path.join(PUBLIC, 'icon-charpai-z.png'), path.join(PUBLIC, 'icon-charpai.png'));
-  copy(path.join(PUBLIC, 'icon-512-charpai-z.png'), path.join(PUBLIC, 'icon-512-charpai.png'));
-  copy(path.join(PUBLIC, 'icon-192-charpai-z.png'), path.join(PUBLIC, 'icon-192-charpai.png'));
-  copy(path.join(PUBLIC, 'apple-touch-icon-charpai-z.png'), path.join(PUBLIC, 'apple-touch-icon-charpai.png'));
-  copy(path.join(PUBLIC, 'icon-maskable-512-charpai-z.png'), path.join(PUBLIC, 'icon-maskable-512-charpai.png'));
-  copy(path.join(BRAND, 'chaupaal-mark-charpai-z.png'), path.join(BRAND, 'chaupaal-mark-charpai.png'));
-  copy(path.join(BRAND, 'chaupaal-icon-512-charpai-z.png'), path.join(BRAND, 'chaupaal-icon-512-charpai.png'));
-  copy(path.join(BRAND, 'chaupaal-mark-32-charpai-z.png'), path.join(BRAND, 'chaupaal-mark-32-charpai.png'));
+  const primary = {
+    icon: path.join(PUBLIC, 'icon-charpai-v2.png'),
+    icon512: path.join(PUBLIC, 'icon-512-charpai-v2.png'),
+    icon192: path.join(PUBLIC, 'icon-192-charpai-v2.png'),
+    apple: path.join(PUBLIC, 'apple-touch-icon-charpai-v2.png'),
+    maskable: path.join(PUBLIC, 'icon-maskable-512-charpai-v2.png'),
+    mark: path.join(BRAND, 'chaupaal-mark-charpai-v2.png'),
+    mark512: path.join(BRAND, 'chaupaal-icon-512-charpai-v2.png'),
+    mark32: path.join(BRAND, 'chaupaal-mark-32-charpai-v2.png'),
+  };
+
+  // Prior -charpai-z URLs (Android may still have these cached by name)
+  copy(primary.icon, path.join(PUBLIC, 'icon-charpai-z.png'));
+  copy(primary.icon512, path.join(PUBLIC, 'icon-512-charpai-z.png'));
+  copy(primary.icon192, path.join(PUBLIC, 'icon-192-charpai-z.png'));
+  copy(primary.apple, path.join(PUBLIC, 'apple-touch-icon-charpai-z.png'));
+  copy(primary.maskable, path.join(PUBLIC, 'icon-maskable-512-charpai-z.png'));
+  copy(primary.mark, path.join(BRAND, 'chaupaal-mark-charpai-z.png'));
+  copy(primary.mark512, path.join(BRAND, 'chaupaal-icon-512-charpai-z.png'));
+  copy(primary.mark32, path.join(BRAND, 'chaupaal-mark-32-charpai-z.png'));
+
+  // Prior -charpai URLs
+  copy(primary.icon, path.join(PUBLIC, 'icon-charpai.png'));
+  copy(primary.icon512, path.join(PUBLIC, 'icon-512-charpai.png'));
+  copy(primary.icon192, path.join(PUBLIC, 'icon-192-charpai.png'));
+  copy(primary.apple, path.join(PUBLIC, 'apple-touch-icon-charpai.png'));
+  copy(primary.maskable, path.join(PUBLIC, 'icon-maskable-512-charpai.png'));
+  copy(primary.mark, path.join(BRAND, 'chaupaal-mark-charpai.png'));
+  copy(primary.mark512, path.join(BRAND, 'chaupaal-icon-512-charpai.png'));
+  copy(primary.mark32, path.join(BRAND, 'chaupaal-mark-32-charpai.png'));
 
   // Legacy un-suffixed paths
-  copy(path.join(PUBLIC, 'icon-charpai-z.png'), path.join(PUBLIC, 'icon.png'));
-  copy(path.join(PUBLIC, 'icon-512-charpai-z.png'), path.join(PUBLIC, 'icon-512.png'));
-  copy(path.join(PUBLIC, 'icon-192-charpai-z.png'), path.join(PUBLIC, 'icon-192.png'));
-  copy(path.join(PUBLIC, 'apple-touch-icon-charpai-z.png'), path.join(PUBLIC, 'apple-touch-icon.png'));
-  copy(path.join(PUBLIC, 'icon-maskable-512-charpai-z.png'), path.join(PUBLIC, 'icon-maskable-512.png'));
-  copy(path.join(BRAND, 'chaupaal-mark-charpai-z.png'), path.join(BRAND, 'chaupaal-mark.png'));
-  copy(path.join(BRAND, 'chaupaal-icon-512-charpai-z.png'), path.join(BRAND, 'chaupaal-icon-512.png'));
-  copy(path.join(BRAND, 'chaupaal-mark-32-charpai-z.png'), path.join(BRAND, 'chaupaal-mark-32.png'));
+  copy(primary.icon, path.join(PUBLIC, 'icon.png'));
+  copy(primary.icon512, path.join(PUBLIC, 'icon-512.png'));
+  copy(primary.icon192, path.join(PUBLIC, 'icon-192.png'));
+  copy(primary.apple, path.join(PUBLIC, 'apple-touch-icon.png'));
+  copy(primary.maskable, path.join(PUBLIC, 'icon-maskable-512.png'));
+  copy(primary.mark, path.join(BRAND, 'chaupaal-mark.png'));
+  copy(primary.mark512, path.join(BRAND, 'chaupaal-icon-512.png'));
+  copy(primary.mark32, path.join(BRAND, 'chaupaal-mark-32.png'));
 })().catch((e) => {
   console.error(e);
   process.exit(1);

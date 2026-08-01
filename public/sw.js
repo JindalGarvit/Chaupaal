@@ -1,13 +1,13 @@
-const CACHE = 'chaupaal-vcba50b';
+const CACHE = 'chaupaal-v1c2be1';
 const ASSETS = [
   '/index.html',
-  '/icon-charpai-z.png',
-  '/icon-192-charpai-z.png',
-  '/icon-512-charpai-z.png',
-  '/icon-maskable-512-charpai-z.png',
-  '/apple-touch-icon-charpai-z.png',
-  '/brand/chaupaal-mark-charpai-z.png',
-  '/brand/chaupaal-mark-32-charpai-z.png',
+  '/icon-charpai-v2.png',
+  '/icon-192-charpai-v2.png',
+  '/icon-512-charpai-v2.png',
+  '/icon-maskable-512-charpai-v2.png',
+  '/apple-touch-icon-charpai-v2.png',
+  '/brand/chaupaal-mark-charpai-v2.png',
+  '/brand/chaupaal-mark-32-charpai-v2.png',
   '/splash.png',
   '/vendor/chess.js',
   'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap',
@@ -122,8 +122,8 @@ self.addEventListener('push', (e) => {
   e.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: '/icon-charpai-z.png',
-      badge: '/icon-charpai-z.png',
+      icon: '/icon-charpai-v2.png',
+      badge: '/icon-charpai-v2.png',
       data: data.url || '/',
     })
   );

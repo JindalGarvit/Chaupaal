@@ -30,6 +30,8 @@ const LIMITS = {
   post: { minute: 6, hour: 40 },
   // AI calls (Anthropic / Chaupaal chat) — expensive per request
   ai: { minute: 10, hour: 120 },
+  // Intent people discovery (Khoj / Vriksha) — LLM parse when AI on + Firestore retrieve
+  discovery: { minute: 20, hour: 200 },
   // Music search/resolve, geocode, URL safety — third-party lookups
   media_lookup: { minute: 40, hour: 400 },
   // GIF search (Klipy proxy) — typing debounce still fires often

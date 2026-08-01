@@ -1017,27 +1017,37 @@
     const gameId = o.gameId || 'quiz';
     const stats = Object.assign({}, o.stats || {});
     document.getElementById('chaupaalShareSheet')?.remove();
+    try {
+      if (typeof restoreAppShell === 'function') restoreAppShell('share_open');
+    } catch (e) {}
     const sheet = document.createElement('div');
     sheet.id = 'chaupaalShareSheet';
     sheet.className = 'game-friend-sheet chaupaal-share-sheet share-sheet-ig';
     sheet.dataset.navManaged = '1';
     const showStory = o.story !== false;
     const title = o.title || (typeof t === 'function' ? t('share_title', 'Share') : 'Share');
+    const ico = (name, size) =>
+      typeof iconHtml === 'function' ? iconHtml(name, { size: size || 18 }) : '';
     sheet.innerHTML = `
       <div class="game-friend-backdrop" data-cs-close></div>
       <div class="game-friend-card share-sheet-card" role="dialog" aria-modal="true" aria-label="${safe(title)}">
-        <div class="half-sheet-grabber" aria-hidden="true"></div>
-        <div class="game-friend-title">${safe(title)}</div>
-        ${o.subtitle ? `<div class="game-friend-sub">${safe(o.subtitle)}</div>` : ''}
+        <div class="share-sheet-handle" aria-hidden="true"></div>
+        <div class="share-sheet-hero">
+          <div class="share-sheet-mark" aria-hidden="true">${typeof TabElements !== 'undefined' && TabElements.markHtml ? TabElements.markHtml('chaupaal', 28) : ico('share', 22)}</div>
+          <div class="game-friend-title">${safe(title)}</div>
+          ${o.subtitle ? `<div class="game-friend-sub">${safe(o.subtitle)}</div>` : `<div class="game-friend-sub">${safe(typeof t === 'function' ? t('share_sub', 'Send to someone on Chaupaal') : 'Send to someone on Chaupaal')}</div>`}
+        </div>
+        <div class="share-section-label">${safe(typeof t === 'function' ? t('share_friends', 'Friends') : 'Friends')}</div>
         <div class="share-users-row" data-cs-friends><div class="game-friend-loading">…</div></div>
         <div class="share-recents" data-cs-recents></div>
         <div class="share-search-wrap">
+          <span class="share-search-ico" aria-hidden="true">${ico('search', 16)}</span>
           <input type="search" class="share-search-input" data-cs-search placeholder="${safe(typeof t === 'function' ? t('share_search_ph', 'Search people…') : 'Search people…')}" autocomplete="off" enterkeyhint="search" data-living-ph="share_search">
         </div>
         <div class="share-sheet-actions">
-          <button type="button" class="share-action-row" data-cs="copy"><span class="share-action-ico">🔗</span><span>${safe(typeof t === 'function' ? t('share_copy_link', 'Copy link') : 'Copy link')}</span></button>
-          ${showStory ? `<button type="button" class="share-action-row" data-cs="story"><span class="share-action-ico">📖</span><span>${safe(typeof t === 'function' ? t('share_to_story', 'Post to story') : 'Post to story')}</span></button>` : ''}
-          <button type="button" class="share-action-row share-action-row--external" data-cs="external"><span class="share-action-ico">↗</span><span>${safe(typeof t === 'function' ? t('share_external_more', 'External / More') : 'External / More')}</span></button>
+          <button type="button" class="share-action-row" data-cs="copy"><span class="share-action-ico">${ico('link', 18)}</span><span>${safe(typeof t === 'function' ? t('share_copy_link', 'Copy link') : 'Copy link')}</span></button>
+          ${showStory ? `<button type="button" class="share-action-row" data-cs="story"><span class="share-action-ico">${ico('book-open', 18) || ico('image', 18)}</span><span>${safe(typeof t === 'function' ? t('share_to_story', 'Post to story') : 'Post to story')}</span></button>` : ''}
+          <button type="button" class="share-action-row share-action-row--external" data-cs="external"><span class="share-action-ico">${ico('share', 18)}</span><span>${safe(typeof t === 'function' ? t('share_external_more', 'External / More') : 'External / More')}</span></button>
         </div>
         <button type="button" class="game-friend-cancel" data-cs-close>${safe(typeof t === 'function' ? t('cancel', 'Cancel') : 'Cancel')}</button>
       </div>`;
@@ -1046,6 +1056,9 @@
     trackShareEvent('share_opened', { surface: gameId, method: 'sheet' });
 
     const close = () => {
+      try {
+        sheet.querySelector('[data-cs-search]')?.blur?.();
+      } catch (e) {}
       if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
       sheet.remove();
       try {
@@ -1094,7 +1107,7 @@
             const name = safe((p.name || p.username || 'Friend').split(' ')[0]);
             const av = p.photoURL
               ? `<img src="${safe(p.photoURL)}" alt="">`
-              : '👤';
+              : `<span class="share-user-chip-fallback">${ico('user', 20)}</span>`;
             return `<button type="button" class="share-user-chip" data-uid="${safe(p.uid || p.id || '')}" data-name="${safe(p.name || p.username || '')}">
               <span class="share-user-chip-avatar">${av}</span>
               <span class="share-user-chip-name">${name}</span>
@@ -1121,13 +1134,14 @@
             ? baithakChats.filter((c) => c && !c.isSelf && !c.isChaupaal).slice(0, 8)
             : [];
         if (chats.length && recentsEl) {
-          recentsEl.innerHTML = `<div class="share-recents-label">${safe(typeof t === 'function' ? t('share_recent', 'Recent') : 'Recent')}</div>
+          recentsEl.innerHTML = `<div class="share-section-label">${safe(typeof t === 'function' ? t('share_recent', 'Recent') : 'Recent')}</div>
             <div class="share-users-row">${chats
               .map((c) => {
                 const label = safe((c.name || c.peerName || 'Chat').split(' ')[0]);
                 const id = safe(c.firestoreId || c.id || '');
+                const avatarIco = c.type === 'group' ? ico('users', 18) : ico('message-circle', 18);
                 return `<button type="button" class="share-user-chip" data-chat-id="${id}" data-name="${safe(c.name || '')}">
-                  <span class="share-user-chip-avatar">${c.type === 'group' ? '👥' : '💬'}</span>
+                  <span class="share-user-chip-avatar share-user-chip-avatar--glyph">${avatarIco}</span>
                   <span class="share-user-chip-name">${label}</span>
                 </button>`;
               })

@@ -1,21 +1,21 @@
-// ===================== PEEPAL AI PEOPLE SEARCH =====================
+﻿// ===================== PEEPAL AI PEOPLE SEARCH =====================
 
 const PEEPAL_SEARCH_NUDGES = [
-  {emoji:'❤️', text:'Looking for someone to date?', hint:'Type something like "someone fun around 25 who loves movies and travel"'},
-  {emoji:'🤝', text:'Want new friends?', hint:'Try "cricket fan from Delhi who likes startups"'},
-  {emoji:'💼', text:'Hiring or job hunting?', hint:'Try "frontend developer looking for opportunities" or "hiring designers"'},
-  {emoji:'✈️', text:'Planning a trip?', hint:'Try "travel buddy for Ladakh in December"'},
-  {emoji:'🎮', text:'Find a game partner', hint:'Try "someone to play chess or word games with"'},
-  {emoji:'🎵', text:'Bond over music', hint:'Try "Bollywood music lover who also likes jazz"'},
-  {emoji:'📚', text:'Start a book club', hint:'Try "non-fiction reader interested in history"'},
-  {emoji:'🏋️', text:'Find a fitness buddy', hint:'Try "morning runner or gym person in Bangalore"'},
-  {emoji:'🍛', text:'Foodie connections', hint:'Try "food lover who likes trying new restaurants"'},
-  {emoji:'🧠', text:'Intellectual debates', hint:'Try "someone who loves discussing politics, philosophy or science"'},
-  {emoji:'🎬', text:'Movie or series partner', hint:'Try "thriller movie buff who watches OTT"'},
-  {emoji:'🚀', text:'Find a co-founder', hint:'Try "startup-minded person with product sense"'},
+  {emoji:'â¤ï¸', text:'Looking for someone to date?', hint:'Type something like "someone fun around 25 who loves movies and travel"'},
+  {emoji:'ðŸ¤', text:'Want new friends?', hint:'Try "cricket fan from Delhi who likes startups"'},
+  {emoji:'ðŸ’¼', text:'Hiring or job hunting?', hint:'Try "frontend developer looking for opportunities" or "hiring designers"'},
+  {emoji:'âœˆï¸', text:'Planning a trip?', hint:'Try "travel buddy for Ladakh in December"'},
+  {emoji:'ðŸŽ®', text:'Find a game partner', hint:'Try "someone to play chess or word games with"'},
+  {emoji:'ðŸŽµ', text:'Bond over music', hint:'Try "Bollywood music lover who also likes jazz"'},
+  {emoji:'ðŸ“š', text:'Start a book club', hint:'Try "non-fiction reader interested in history"'},
+  {emoji:'ðŸ‹ï¸', text:'Find a fitness buddy', hint:'Try "morning runner or gym person in Bangalore"'},
+  {emoji:'ðŸ›', text:'Foodie connections', hint:'Try "food lover who likes trying new restaurants"'},
+  {emoji:'ðŸ§ ', text:'Intellectual debates', hint:'Try "someone who loves discussing politics, philosophy or science"'},
+  {emoji:'ðŸŽ¬', text:'Movie or series partner', hint:'Try "thriller movie buff who watches OTT"'},
+  {emoji:'ðŸš€', text:'Find a co-founder', hint:'Try "startup-minded person with product sense"'},
 ];
 
-// Intent → criteria mapping (no API call needed for common patterns)
+// Intent â†’ criteria mapping (no API call needed for common patterns)
 const INTENT_MAP = {
   dating: {gender_preference:'opposite', interests:['relationships','lifestyle'], personality:'social', vibe:'romantic connection'},
   friendship: {interests:[], personality:null, vibe:'new friends'},
@@ -33,10 +33,12 @@ const INTENT_MAP = {
   debate: {interests:['politics','GK','World'], personality:'intellectual', vibe:'intellectual debate'},
 };
 
-async function runPeepalAiSearch(){
+async function runPeepalAiSearch(opts){
+  const o = opts || {};
   const input = document.getElementById('peepalAiSearchInput');
-  const query = input?.value.trim();
+  const query = (o.query != null ? String(o.query) : input?.value || '').trim();
   if(!query) return;
+  if(input && o.query != null) input.value = query;
   const resultsEl = document.getElementById('peepalAiSearchResults');
   if(!resultsEl) return;
 
@@ -44,325 +46,290 @@ async function runPeepalAiSearch(){
   else resultsEl.innerHTML = `<div class="peepal-ai-thinking">Finding the right people for you...</div>`;
 
   try{
-    // Step 1: Fast intent detection (local, no API call)
-    const queryLower = query.toLowerCase();
-    let quickCriteria = null;
-    for(const [intent, criteria] of Object.entries(INTENT_MAP)){
-      if(queryLower.includes(intent)){quickCriteria = {...criteria, detectedIntent: intent};break;}
-    }
-
-    // Step 2: LLM intent parse (skipped when master AI kill-switch is off — use local INTENT_MAP)
-    let criteria = {interests:[],ageRange:{min:null,max:null},gender:'any',city:null,personality:null,searchIntent:'any',vibe:'',conversationStarter:''};
-    if(quickCriteria){
-      criteria = {...criteria, ...quickCriteria, searchIntent: quickCriteria.detectedIntent || 'any'};
-    }
-    const aiOn = typeof isAiFeaturesEnabled === 'function' ? await isAiFeaturesEnabled() : false;
-    if(aiOn){
+    // Unified brain: server intent_discover (parse â†’ assume â†’ retrieve â†’ rank â†’ learn hooks)
+    let envelope = null;
+    if(typeof apiFetch === 'function' && typeof currentUser !== 'undefined' && currentUser){
       try{
-        const parseData = await callAI({
-          tier:'fast', max_tokens:500, feature:'peepal_ai_search',
-          system:`You are an expert people-matching AI for Chaupaal, India's social discovery app. Understand what kind of person the user wants to meet — go beyond literal words to understand real intent.
-
-INTENT EXAMPLES:
-- "dating" / "someone special" / "romantic" → searchIntent: dating, prioritize opposite gender, similar age
-- "startup person" / "entrepreneur" → interests: Business, Tech; personality: intellectual  
-- "cricket lover" / "sports fan" → interests: Sports
-- "travel buddy" / "someone to explore with" → personality: outdoorsy; interests include travel
-- "book club" / "reader" → personality: intellectual
-- "foodies" / "eating out" → interests: food
-- "gym partner" / "fitness" → personality: outdoorsy
-- "movie buff" / "web series" → personality: cinephile
-- "debate" / "philosophy" / "politics" → personality: intellectual; interests: GK, World
-- "music lover" → interests: Music
-- "co-founder" / "collaboration" → interests: Business, Tech; personality: intellectual
-- "job hunting" / "hiring" → interests: Business, Tech
-
-Return ONLY valid JSON:
-{
-  "interests": ["array of Chaupaal categories: GK, Sports, Tech, Business, India, World, Music, Food, Travel, Movies"],
-  "ageRange": {"min": number|null, "max": number|null},
-  "gender": "male"|"female"|"any",
-  "city": "city name"|null,
-  "personality": "intellectual"|"outdoorsy"|"cinephile"|"social"|null,
-  "searchIntent": "dating"|"friendship"|"recruitment"|"hobby"|"travel"|"gaming"|"any",
-  "vibe": "one line describing ideal match",
-  "conversationStarter": "a natural opening message they could send to match"
-}`,
-          messages:[{role:'user', content: query}]
+        envelope = await apiFetch('/api/peepal-reactions', {
+          method: 'POST',
+          needAuth: true,
+          body: {
+            action: 'intent_discover',
+            query,
+            chipIntent: o.chipIntent || null,
+            limit: 10,
+            ai: o.ai,
+          },
         });
-        try{
-          const raw = parseData.content?.[0]?.text || parseData.text || '{}';
-          const parsed = JSON.parse(raw.replace(/```json|```/g,'').trim());
-          criteria = {...criteria, ...parsed};
-          if(quickCriteria){
-            criteria.interests = [...new Set([...(criteria.interests||[]),...(quickCriteria.interests||[])])];
-            if(!criteria.personality && quickCriteria.personality) criteria.personality = quickCriteria.personality;
-            if(criteria.searchIntent==='any' && quickCriteria.detectedIntent) criteria.searchIntent = quickCriteria.detectedIntent;
-          }
-        }catch(e){}
-      }catch(e){ /* kill-switch / network — keep local criteria */ }
+      }catch(e){
+        console.warn('[discovery] intent_discover failed, falling back', e?.message || e);
+      }
     }
 
-    // Step 3: Score all available profiles
-    const pool = [...SAMPLE_DISCOVERY_POOL];
-    if(db && currentUser){
-      try{
-        const snap = await db.collection('users_public').where('openToMeet','==',true).limit(40).get();
-        snap.docs.forEach(d=>{
-          const u=d.data();
-          if(u.hiddenFromDiscovery) return;
-          if((u.uid||d.id)!==currentUser.uid&&u.name){
-            pool.push({
-              ...u,
-              uid:u.uid||d.id,
-              icebreakers: typeof resolveIcebreakersFromUser==='function'
-                ? resolveIcebreakersFromUser(u)
-                : (u.icebreakers||u.profile?.icebreakers||[]),
-            });
-          }
-        });
-      }catch(e){}
-    }
-
-    const myProfile = userProfile || {};
-    const myGender = myProfile.gender || digitalProfile.gender;
-
-    const scored = pool.filter(u => !dismissedUids.has(u.uid)).map(u=>{
-      let score = 0;
-      const reasons = [];
-      const theirInterests = new Set([...(u.interests||[]),...(u.topCat?[u.topCat]:[])].map(i=>i.toLowerCase()));
-
-      // Interest matching — flexible, includes synonyms
-      const interestAliases = {
-        'sports':['cricket','football','badminton','tennis','sports'],
-        'tech':['technology','software','programming','coding','startup','tech'],
-        'business':['business','finance','startup','entrepreneur','economics'],
-        'music':['music','songs','bands','concerts','bollywood'],
-        'food':['food','cooking','restaurants','chef','cuisine'],
-        'travel':['travel','trips','adventure','explore','trekking'],
-        'movies':['movies','films','cinema','series','ott','netflix'],
-        'gk':['gk','knowledge','quiz','trivia','current affairs'],
-        'india':['india','indian','politics','news','current events'],
-        'world':['world','international','global','geopolitics'],
-      };
-
-      (criteria.interests||[]).forEach(ci=>{
-        const ciLower = ci.toLowerCase();
-        const aliases = interestAliases[ciLower] || [ciLower];
-        const matched = aliases.some(alias => [...theirInterests].some(ti => ti.includes(alias) || alias.includes(ti)));
-        if(matched){score+=20; if(reasons.length<3) reasons.push(ci);}
-      });
-
-      // Dating intent: strong opposite-gender boost
-      if(criteria.searchIntent==='dating'){
-        const oppositeGender = myGender==='male'?'female':myGender==='female'?'male':null;
-        if(oppositeGender && u.gender===oppositeGender){score+=30;reasons.push('Your type');}
-        else if(!oppositeGender){score+=15;}
-        // Age proximity crucial for dating
-        if(u.age && myProfile.age){
-          const diff = Math.abs(u.age - myProfile.age);
-          score += Math.max(0, 20 - diff*3);
-        }
-      }
-
-      // Friendship / general: personality & city matter more
-      if(criteria.searchIntent==='friendship'||criteria.searchIntent==='hobby'){
-        if(criteria.personality && u.personality===criteria.personality){score+=20;reasons.push(`${u.personality} mindset`);}
-        if(criteria.city && u.city?.toLowerCase().includes(criteria.city.toLowerCase())){score+=15;reasons.push(u.city);}
-      }
-
-      // Recruitment: activity level matters
-      if(criteria.searchIntent==='recruitment'){
-        score += (u.questions||0) * 0.5; // active users
-        if(u.personality==='intellectual'){score+=15;reasons.push('Engaged & active');}
-      }
-
-      // Gender filter
-      if(criteria.gender && criteria.gender!=='any'){
-        if(u.gender===criteria.gender) score+=15;
-        else score-=20;
-      }
-
-      // City
-      if(criteria.city && u.city){
-        if(u.city.toLowerCase().includes(criteria.city.toLowerCase())){score+=20;reasons.push(u.city);}
-      }
-
-      // Personality
-      if(criteria.personality && u.personality===criteria.personality){score+=15;}
-
-      // Age range
-      if(u.age && (criteria.ageRange?.min||criteria.ageRange?.max)){
-        const {min,max} = criteria.ageRange;
-        if((!min||u.age>=min)&&(!max||u.age<=max)) score+=10;
-        else score-=15;
-      }
-
-      // Randomness factor (keep it fresh, 1 in 5 is serendipitous)
-      if(Math.random() < 0.2) score += 30; // surprise pick
-      else score += Math.random() * 8;
-
-      return {user:u, score, reasons, matchPct: Math.min(99, Math.max(30, Math.round(score*1.8)))};
-    }).filter(m => m.score > 0).sort((a,b) => b.score-a.score).slice(0,10);
-
-    if(!scored.length){
-      if(typeof renderEmptyState==='function'){
-        renderEmptyState(resultsEl, {
-          icon:(typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('peepal',40):'🌳',
-          title:'No matches yet',
-          message:'The community is still growing. Try broader terms like “cricket” or “tech”.',
-        });
-      } else {
-        const mark=(typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('peepal',32):'🌳';
-        resultsEl.innerHTML = `<div style="text-align:center;padding:24px;color:var(--muted);"><div style="font-size:32px;margin-bottom:10px;">${mark}</div><div style="font-size:14px;">No matches found yet. The community is still growing!<br>Try broader terms like "cricket" or "tech".</div></div>`;
-      }
+    const data = envelope?.ok && envelope.data ? envelope.data : null;
+    if(data && Array.isArray(data.matches)){
+      await renderIntentDiscoverResults(resultsEl, query, data);
       return;
     }
 
-    // Step 4: Generate personalised conversation starters (no-op when AI off)
-    const summaries = scored.slice(0,5).map(m=>`${m.user.name}: ${m.user.age||'?'}y, ${m.user.city||'India'}, ${(m.user.interests||[]).join('/')}, ${m.user.bio||''}`).join('\n');
-    let starters = {};
-    if(aiOn){
-      try{
-        const sd = await callAI({
-          tier:'fast', max_tokens:350, feature:'peepal_ai_starters',
-          system:'Return ONLY a JSON object mapping name → {reason: "why they match in 1 sentence", starter: "natural first message to send, max 15 words, warm and specific"}. No generic messages.',
-          messages:[{role:'user', content:`Search: "${query}"
-Intent: ${criteria.searchIntent}
-Profiles:
-${summaries}`}]
-        });
-        starters = JSON.parse((sd.content?.[0]?.text||sd.text||'{}').replace(/```json|```/g,'').trim());
-      }catch(e){}
-    }
-
-    // Render
-    let aiMsgLimit = null;
-    try {
-      if (typeof PolicyUsage?.getRemaining === 'function') {
-        aiMsgLimit = await PolicyUsage.getRemaining('aiDiscoveryMsg');
-      }
-    } catch (e) {}
-    const aiCollapsed = !!(aiMsgLimit && aiMsgLimit.exhausted);
-    if (typeof AiDiscoveryMeter?.injectStyles === 'function') AiDiscoveryMeter.injectStyles();
-
-    resultsEl.innerHTML = `
-      ${aiCollapsed ? `<div class="peepal-ai-limit-banner">${aiMsgLimit.unlock || 'AI Discovery messaging limit reached.'} Manual filters below stay available. Professional profiles found here stay unlimited.</div>` : ''}
-      <div id="peepalAiMeterHost"></div>
-      <div class="${aiCollapsed ? 'peepal-ai-results-collapsed' : ''}" id="peepalAiResultsBody">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-        <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Top ${scored.length} matches</div>
-        <div style="font-size:11px;color:var(--muted);">${criteria.vibe?`"${criteria.vibe.slice(0,40)}"`:''}</div>
-      </div>
-      </div>
-    `;
-    const bodyEl = document.getElementById('peepalAiResultsBody') || resultsEl;
-    const meterHost = document.getElementById('peepalAiMeterHost');
-    if (meterHost && typeof AiDiscoveryMeter?.mountMeter === 'function') {
-      AiDiscoveryMeter.mountMeter(meterHost);
-    }
-
-    scored.forEach(({user, score, reasons, matchPct})=>{
-      const info = starters[user.name] || {};
-      const reason = info.reason || reasons.join(' · ') || criteria.vibe || 'Shares your interests';
-      const starter = info.starter || criteria.conversationStarter || `Hey! Found you on Peepal 👋`;
-      const ib = typeof pickIcebreakerSnippet==='function'
-        ? pickIcebreakerSnippet(typeof resolveIcebreakersFromUser==='function'?resolveIcebreakersFromUser(user):user.icebreakers)
-        : null;
-      const theirIb = typeof resolveIcebreakersFromUser==='function'?resolveIcebreakersFromUser(user):(user.icebreakers||[]);
-
-      const card = document.createElement('div');
-      card.className = 'peepal-ai-result-card';
-      card.innerHTML = `
-        <div style="display:flex;align-items:center;gap:10px;">
-          <div style="width:50px;height:50px;border-radius:50%;background:var(--line);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;overflow:hidden;">
-            ${user.photoURL?`<img src="${user.photoURL}" style="width:100%;height:100%;object-fit:cover;">`:user.avatar||'👤'}
-          </div>
-          <div style="flex:1;min-width:0;">
-            <div style="font-weight:700;font-size:15px;">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(user.name,user):user.name}</div>
-            <div style="font-size:11px;color:var(--muted);">${[user.city,user.age?user.age+'y':'',user.personality||''].filter(Boolean).join(' · ')}</div>
-            ${user.bio?`<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:2px;">"${user.bio}"</div>`:''}
-          </div>
-          <div style="background:rgba(230,57,70,0.1);color:var(--red);border-radius:999px;padding:5px 11px;font-size:12px;font-weight:700;flex-shrink:0;">${matchPct}%</div>
-        </div>
-        ${(user.interests||[]).length?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">${(user.interests||[]).slice(0,4).map(i=>`<span style="background:rgba(230,57,70,0.07);color:var(--red);border-radius:999px;padding:3px 9px;font-size:11px;font-weight:600;">📌 ${i}</span>`).join('')}</div>`:''}
-        <div class="ai-match-reason" style="display:flex;align-items:flex-start;gap:8px;min-width:0;">
-          <div style="flex:1;min-width:0;overflow-wrap:anywhere;">"${(typeof interestOverlapReason==='function' && interestOverlapReason(user)) || reason}"</div>
-          <button type="button" class="cp-card-speak peepal-speak-btn" data-text="${String([user.name, reason, starter].filter(Boolean).join('. ')).replace(/"/g,'&quot;')}" title="Listen" aria-label="Listen">${typeof iconHtml==='function'?iconHtml('volume',{size:14}):'🔊'}</button>
-        </div>
-        ${ib?`<div class="discovery-icebreaker"><div class="discovery-icebreaker-label">Conversation starter</div><div class="discovery-icebreaker-text">"${ib.answer}"</div></div>`:''}
-        <div style="background:rgba(43,39,48,0.04);border-radius:10px;padding:8px 12px;font-size:12px;color:var(--muted);margin-top:6px;margin-bottom:10px;overflow-wrap:anywhere;">
-          💬 Suggested opener: <span style="color:var(--ink);font-style:italic;">"${starter}"</span>
-        </div>
-        <div style="display:flex;gap:8px;">
-          <button class="peepal-ai-view-btn" style="flex:1;padding:9px;background:var(--cream);border:2px solid var(--line);border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;cursor:pointer;">View questions</button>
-          <button class="peepal-ai-chat-btn" data-name="${user.name}" data-uid="${user.uid}" data-starter="${starter.replace(/"/g,'&quot;')}" style="flex:1;padding:9px;background:var(--red);color:#fff;border:none;border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;cursor:pointer;">💬 Say hi</button>
-        </div>
-      `;
-
-      card.querySelector('.cp-card-speak')?.addEventListener('click',(e)=>{
-        e.stopPropagation();
-        if(typeof speakText==='function') speakText(e.currentTarget.dataset.text, e.currentTarget);
-      });
-
-      card.querySelector('.peepal-ai-chat-btn').addEventListener('click', e=>{
-        const name = e.currentTarget.dataset.name;
-        const suggestedStarter = e.currentTarget.dataset.starter;
-        document.getElementById('peepalAiSearch')?.classList.add('hidden');
-        if(typeof openDmWithSharedHello==='function'){
-          openDmWithSharedHello({
-            uid: user.uid,
-            name,
-            avatar: user.avatar||'👤',
-            theirIcebreakers: theirIb,
-            starterText: suggestedStarter,
-            origin: 'ai_discovery',
-            peerProfileType: user.profileType || user.profile?.profileType || 'personal',
-          });
-          return;
-        }
-        const newChat = {id:`chat_ai_${user.uid}`,type:'dm',name,avatar:user.avatar||'👤',preview:'Found through Peepal AI search',time:'now',unread:0,duelStreak:0,theirIcebreakers:theirIb,icebreakers:theirIb};
-        if(!SAMPLE_CHATS.find(c=>c.id===newChat.id)) SAMPLE_CHATS.unshift(newChat);
-        document.querySelectorAll('.tab-btn').forEach(b=>{if(b.dataset.tab==='baithak')b.click();});
-        setTimeout(()=>{
-          initBaithak();
-          setTimeout(()=>{
-            openChatScreen(newChat);
-            setTimeout(()=>{
-              const msgInput = document.getElementById('chatMsgInput');
-              if(msgInput) msgInput.value = suggestedStarter;
-            },400);
-          },300);
-        },200);
-      });
-
-      bodyEl.appendChild(card);
-    });
-
-    // Serendipity note at bottom
-    if(scored.length>=3){
-      const note = document.createElement('div');
-      note.style.cssText='text-align:center;padding:14px;font-size:12px;color:var(--muted);';
-      note.innerHTML='✨ 1 in 5 results is a surprise pick — sometimes the best connections are unexpected';
-      bodyEl.appendChild(note);
-    }
-    // Close collapsed wrapper if used
-    if (bodyEl !== resultsEl && bodyEl.parentElement === resultsEl) {
-      /* already nested */
-    }
-
+    // Fallback: deterministic local INTENT_MAP + public pool (AI-off / offline)
+    await runPeepalAiSearchLocalFallback(query, resultsEl);
   }catch(err){
     console.error(err);
     if(typeof renderErrorState==='function'){
       renderErrorState(resultsEl, {
-        title:'Search couldn’t finish',
-        message: typeof friendlyError==='function'?friendlyError(err):'Couldn’t connect right now. Try again in a moment.',
+        title:'Search couldnâ€™t finish',
+        message: typeof friendlyError==='function'?friendlyError(err):'Couldnâ€™t connect right now. Try again in a moment.',
         onRetry:()=>runPeepalAiSearch(),
       });
     } else {
       resultsEl.innerHTML = `<div style="text-align:center;padding:24px;color:var(--muted);">Couldn't connect right now. Try again in a moment.</div>`;
     }
   }
+}
+
+async function renderIntentDiscoverResults(resultsEl, query, data){
+  const matches = Array.isArray(data.matches) ? data.matches : [];
+  const plan = data.plan || {};
+  const refineChips = Array.isArray(data.refineChips) ? data.refineChips : [];
+  const intentProfileId = data.intentProfileId || null;
+
+  let aiMsgLimit = null;
+  try {
+    if (typeof PolicyUsage?.getRemaining === 'function') {
+      aiMsgLimit = await PolicyUsage.getRemaining('aiDiscoveryMsg');
+    }
+  } catch (e) {}
+  const aiCollapsed = !!(aiMsgLimit && aiMsgLimit.exhausted);
+  if (typeof AiDiscoveryMeter?.injectStyles === 'function') AiDiscoveryMeter.injectStyles();
+  try {
+    if (typeof AiDiscoveryMeter?.mountOnIntentCard === 'function') {
+      AiDiscoveryMeter.mountOnIntentCard(document.getElementById('peepalIntentCard'), { disclosePro: true });
+    }
+  } catch (e) {}
+
+  if(!matches.length){
+    if(typeof renderEmptyState==='function'){
+      renderEmptyState(resultsEl, {
+        icon:(typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('peepal',40):'ðŸŒ³',
+        title:'No matches yet',
+        message: data.emptyMessage || 'No eligible people matched that search. We never invent profiles â€” try broader wording.',
+      });
+    } else {
+      resultsEl.innerHTML = `<div style="text-align:center;padding:24px;color:var(--muted);">${data.emptyMessage || 'No matches found.'}</div>`;
+    }
+    return;
+  }
+
+  const esc = (s) => String(s ?? '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+  resultsEl.innerHTML = `
+    ${aiCollapsed ? `<div class="peepal-ai-limit-banner">${aiMsgLimit.unlock || 'AI Discovery messaging limit reached.'} Professional profiles found here stay unlimited.</div>` : ''}
+    <div id="peepalAiMeterHost"></div>
+    <div class="${aiCollapsed ? 'peepal-ai-results-collapsed' : ''}" id="peepalAiResultsBody">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Top ${matches.length} matches</div>
+        <div style="font-size:11px;color:var(--muted);">${plan.vibe ? `"${esc(String(plan.vibe).slice(0,40))}"` : (data.mode === 'deterministic' ? 'Preference match' : 'AI-assisted')}</div>
+      </div>
+      ${refineChips.length ? `<div class="discovery-refine-chips" data-nav-ignore="1">${refineChips.map(c=>`<button type="button" class="peepal-nudge-chip" data-refine="${esc(c.id)}">${esc(c.label)}</button>`).join('')}</div>` : ''}
+    </div>
+  `;
+  const bodyEl = document.getElementById('peepalAiResultsBody') || resultsEl;
+  const meterHost = document.getElementById('peepalAiMeterHost');
+  if (meterHost && typeof AiDiscoveryMeter?.mountMeter === 'function') {
+    AiDiscoveryMeter.mountMeter(meterHost, { compact: true });
+  }
+
+  resultsEl.querySelectorAll('[data-refine]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.refine;
+      let next = query;
+      if (id === 'widen_location') next = `${query} anywhere`;
+      else if (id === 'include_everyone' || id === 'gender_everyone') next = `${query} everyone`;
+      else if (id === 'gender_women') next = `${query} women`;
+      else if (id === 'gender_men') next = `${query} men`;
+      runPeepalAiSearch({ query: next });
+    });
+  });
+
+  matches.forEach((m) => {
+    const user = {
+      uid: m.uid,
+      name: m.name,
+      username: m.username,
+      photoURL: m.photoURL,
+      city: m.city,
+      age: m.age,
+      bio: m.bio,
+      interests: m.interests || [],
+      icebreakers: m.icebreakers || [],
+      profileType: m.profileType || 'personal',
+      avatar: 'ðŸ‘¤',
+    };
+    const reason = m.explain || 'Matched on open profile';
+    const starter = `Hey ${String(user.name||'').split(' ')[0] || 'there'} â€” found you while looking for ${plan.searchIntent && plan.searchIntent !== 'any' ? plan.searchIntent : 'people'} on Chaupaal`;
+    const theirIb = typeof resolveIcebreakersFromUser==='function'?resolveIcebreakersFromUser(user):(user.icebreakers||[]);
+    const ib = typeof pickIcebreakerSnippet==='function' ? pickIcebreakerSnippet(theirIb) : null;
+    const matchPct = m.matchPct || 50;
+
+    const card = document.createElement('div');
+    card.className = 'peepal-ai-result-card';
+    card.dataset.uid = user.uid;
+    card.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:50px;height:50px;border-radius:var(--r-card,20px);background:var(--line);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;overflow:hidden;">
+          ${user.photoURL?`<img src="${esc(user.photoURL)}" style="width:100%;height:100%;object-fit:cover;">`:user.avatar||'ðŸ‘¤'}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:15px;">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(user.name,user):esc(user.name)}</div>
+          <div style="font-size:11px;color:var(--muted);">${[user.city,user.age?user.age+'y':''].filter(Boolean).map(esc).join(' Â· ')}</div>
+          ${user.bio?`<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:2px;">"${esc(user.bio)}"</div>`:''}
+        </div>
+        <div style="background:rgba(230,57,70,0.1);color:var(--red);border-radius:var(--r-control,14px);padding:5px 11px;font-size:12px;font-weight:700;flex-shrink:0;">${matchPct}%</div>
+      </div>
+      ${(user.interests||[]).length?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">${(user.interests||[]).slice(0,4).map(i=>`<span style="background:rgba(230,57,70,0.07);color:var(--red);border-radius:999px;padding:3px 9px;font-size:11px;font-weight:600;">${esc(i)}</span>`).join('')}</div>`:''}
+      <div class="ai-match-reason" style="margin-top:8px;font-size:12px;color:var(--ink-secondary,var(--muted));">${esc(reason)}</div>
+      ${ib?`<div class="discovery-icebreaker"><div class="discovery-icebreaker-label">Conversation starter</div><div class="discovery-icebreaker-text">"${esc(ib.answer)}"</div></div>`:''}
+      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
+        <button type="button" class="peepal-ai-feedback" data-sig="more_like" title="More like this">â™¥ More like this</button>
+        <button type="button" class="peepal-ai-feedback" data-sig="not_interested" title="Not interested">âœ• Not interested</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="peepal-ai-view-btn" style="flex:1;padding:9px;background:var(--surface-sunken,var(--cream));border:2px solid var(--line);border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;cursor:pointer;">View profile</button>
+        <button class="peepal-ai-chat-btn" data-name="${esc(user.name)}" data-uid="${esc(user.uid)}" data-starter="${esc(starter)}" style="flex:1;padding:9px;background:var(--red);color:#fff;border:none;border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;cursor:pointer;">Say hi</button>
+      </div>
+    `;
+
+    card.querySelectorAll('.peepal-ai-feedback').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const signal = btn.dataset.sig;
+        try {
+          if (typeof apiFetch === 'function') {
+            await apiFetch('/api/peepal-reactions', {
+              method: 'POST',
+              needAuth: true,
+              body: {
+                action: 'discovery_person_signal',
+                candidateUid: user.uid,
+                signal,
+                intentProfileId,
+              },
+            });
+          }
+          if (typeof showToast === 'function') {
+            showToast(signal === 'more_like' ? "Noted â€” we'll show more like this" : 'Got it â€” less of this');
+          }
+          if (signal === 'not_interested') card.remove();
+        } catch (err) {
+          if (typeof showToast === 'function') showToast('Could not save preference');
+        }
+      });
+    });
+
+    card.querySelector('.peepal-ai-view-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (typeof openPublicProfile === 'function') {
+        openPublicProfile(user, { uid: user.uid, username: user.username, context: 'discovery' });
+      }
+    });
+
+    card.querySelector('.peepal-ai-chat-btn')?.addEventListener('click', (e) => {
+      const name = e.currentTarget.dataset.name;
+      const suggestedStarter = e.currentTarget.dataset.starter;
+      if (typeof openDmWithSharedHello === 'function') {
+        openDmWithSharedHello({
+          uid: user.uid,
+          name,
+          avatar: user.avatar || 'ðŸ‘¤',
+          theirIcebreakers: theirIb,
+          starterText: suggestedStarter,
+          origin: 'ai_discovery',
+          peerProfileType: user.profileType || 'personal',
+          matchMeta: { intentProfileId, signalScores: m.signalScores || {} },
+        });
+      }
+    });
+
+    bodyEl.appendChild(card);
+  });
+}
+
+/** Local fallback when server discover is unavailable â€” never invents users. */
+async function runPeepalAiSearchLocalFallback(query, resultsEl){
+  const queryLower = query.toLowerCase();
+  let quickCriteria = null;
+  for(const [intent, criteria] of Object.entries(INTENT_MAP)){
+    if(queryLower.includes(intent)){quickCriteria = {...criteria, detectedIntent: intent};break;}
+  }
+  let criteria = {interests:[],ageRange:{min:null,max:null},gender:'any',city:null,personality:null,searchIntent:'any',vibe:'',conversationStarter:''};
+  if(quickCriteria){
+    criteria = {...criteria, ...quickCriteria, searchIntent: quickCriteria.detectedIntent || 'any'};
+  }
+
+  const pool = [];
+  if(db && currentUser){
+    try{
+      const snap = await db.collection('users_public').where('openToMeet','==',true).limit(40).get();
+      snap.docs.forEach(d=>{
+        const u=d.data();
+        if(u.hiddenFromDiscovery) return;
+        if((u.uid||d.id)!==currentUser.uid&&u.name){
+          pool.push({ ...u, uid:u.uid||d.id });
+        }
+      });
+    }catch(e){}
+  }
+
+  // Never invent: if pool empty, honest empty state (ignore SAMPLE_DISCOVERY_POOL fabricated names)
+  if(!pool.length){
+    if(typeof renderEmptyState==='function'){
+      renderEmptyState(resultsEl, {
+        icon:(typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('peepal',40):'ðŸŒ³',
+        title:'No matches yet',
+        message:'No eligible open profiles right now. We never invent people â€” try again as the community grows.',
+      });
+    } else {
+      resultsEl.innerHTML = `<div style="text-align:center;padding:24px;color:var(--muted);">No eligible open profiles right now.</div>`;
+    }
+    return;
+  }
+
+  const scored = pool.map(u=>{
+    let score = 1;
+    const reasons = [];
+    const interests = (u.interests||[]).map(i=>String(i).toLowerCase());
+    (criteria.interests||[]).forEach(i=>{
+      if(interests.includes(String(i).toLowerCase())){ score += 20; reasons.push(i); }
+    });
+    if(criteria.city && String(u.city||'').toLowerCase().includes(String(criteria.city).toLowerCase())){
+      score += 25; reasons.push('city');
+    }
+    return {user:u, score, reasons, matchPct: Math.min(99, Math.max(30, Math.round(score*1.8)))};
+  }).filter(m => m.score > 1).sort((a,b)=>b.score-a.score).slice(0,10);
+
+  await renderIntentDiscoverResults(resultsEl, query, {
+    mode: 'deterministic',
+    plan: { searchIntent: criteria.searchIntent, vibe: criteria.vibe, hardFilters: {}, appliedAssumptionIds: [], suppressedAssumptionIds: [] },
+    refineChips: [],
+    matches: scored.map(({user, score, reasons, matchPct})=>({
+      uid: user.uid,
+      name: user.name,
+      photoURL: user.photoURL,
+      city: user.city,
+      age: user.age,
+      bio: user.bio,
+      interests: user.interests || [],
+      icebreakers: user.icebreakers || [],
+      profileType: user.profileType || 'personal',
+      score,
+      matchPct,
+      explain: reasons.length ? `Matched on ${reasons.slice(0,3).join(' & ')}` : 'Matched on open profile',
+    })),
+    empty: !scored.length,
+    emptyMessage: 'No matches found yet. Try broader terms.',
+  });
 }
 
 // ===================== ACTIVITY STATUS =====================
@@ -397,7 +364,7 @@ async function getUserStatus(uid){
 
 function formatActivityStatus(statusData){
   if(!statusData) return '';
-  if(statusData.online) return '<span style="color:#2ECC71;font-size:11px;font-weight:700;">● Online</span>';
+  if(statusData.online) return '<span style="color:#2ECC71;font-size:11px;font-weight:700;">â— Online</span>';
   const lastSeen = statusData.lastSeen?.toDate?.() || new Date(statusData.lastSeen||0);
   const rel = typeof formatRelativeTime==='function'
     ? formatRelativeTime(lastSeen)
@@ -438,14 +405,14 @@ function handleOpenToMeetToggle(newValue){
     const sheet = document.createElement('div');
     sheet.style.cssText='position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:24px;z-index:100;';
     sheet.innerHTML=`
-      <div style="font-size:28px;text-align:center;margin-bottom:12px;">👋</div>
+      <div style="font-size:28px;text-align:center;margin-bottom:12px;">ðŸ‘‹</div>
       <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;text-align:center;margin-bottom:8px;">You're open to meeting people!</div>
       <div style="font-size:13px;color:var(--muted);text-align:center;line-height:1.6;margin-bottom:16px;">Your profile may now appear in Peepal's "You might enjoy talking to" section and in people's AI search results. You can turn this off anytime in Settings.</div>
       <div style="background:var(--cream);border-radius:14px;padding:14px;margin-bottom:16px;">
         <div style="font-size:12px;font-weight:700;color:var(--ink);margin-bottom:8px;">What this means:</div>
-        ${['Your profile shows up in Peepal discoveries for people with similar interests','AI search results include you when someone describes your type','You\'ll see more relevant people in your own Peepal feed','You can turn off at any time — no one is notified'].map(t=>`<div style="font-size:12px;color:var(--muted);padding:4px 0;display:flex;gap:8px;"><span>✓</span><span>${t}</span></div>`).join('')}
+        ${['Your profile shows up in Peepal discoveries for people with similar interests','AI search results include you when someone describes your type','You\'ll see more relevant people in your own Peepal feed','You can turn off at any time â€” no one is notified'].map(t=>`<div style="font-size:12px;color:var(--muted);padding:4px 0;display:flex;gap:8px;"><span>âœ“</span><span>${t}</span></div>`).join('')}
       </div>
-      <button id="closeOpenToMeetSheet" style="width:100%;padding:14px;background:var(--red);color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;">Got it! 🎉</button>
+      <button id="closeOpenToMeetSheet" style="width:100%;padding:14px;background:var(--red);color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;">Got it! ðŸŽ‰</button>
     `;
     document.querySelector('.device').appendChild(sheet);
     document.getElementById('closeOpenToMeetSheet').addEventListener('click',()=>sheet.remove());
@@ -477,7 +444,7 @@ function openPeepalAskSheet(){
   const lim = window.PolicyLimits?.ANON_POSTS || { perDay: 2, perWeek: 7 };
   sheet.innerHTML=`
     <div class="ask-header">
-      <button id="closeAsk" aria-label="Close" style="background:none;border:none;cursor:pointer;padding:8px;color:var(--ink);">${typeof iconHtml==='function'?iconHtml('x',{size:22}):'✕'}</button>
+      <button id="closeAsk" aria-label="Close" style="background:none;border:none;cursor:pointer;padding:8px;color:var(--ink);">${typeof iconHtml==='function'?iconHtml('x',{size:22}):'âœ•'}</button>
       <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">Ask Peepal</div>
       <button class="btn btn--primary btn--sm peepal-ask-publish-btn" id="peepalPublishBtn">Post</button>
     </div>
@@ -485,14 +452,14 @@ function openPeepalAskSheet(){
       <!-- Anonymous toggle (filled after quota load) -->
       <div id="anonToggleRow" style="background:var(--line);border:2px solid var(--line);border-radius:14px;padding:12px;margin-bottom:16px;display:flex;align-items:center;gap:12px;opacity:0.5;">
         <div style="flex:1;">
-          <div style="font-weight:700;font-size:14px;">🎭 Post anonymously</div>
-          <div id="anonToggleHint" style="font-size:11px;color:var(--muted);">Checking availability…</div>
+          <div style="font-weight:700;font-size:14px;">ðŸŽ­ Post anonymously</div>
+          <div id="anonToggleHint" style="font-size:11px;color:var(--muted);">Checking availabilityâ€¦</div>
         </div>
         <label class="switch" id="anonToggleLabel" style="pointer-events:none;"><input type="checkbox" id="anonToggle" disabled><span class="slider"></span></label>
       </div>
       <!-- Format -->
       <div style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;">
-        ${[{id:'mcq',label:'📋 MCQ'},{id:'binary',label:'⚖️ Binary'},{id:'open',label:'💬 Open'},{id:'poll',label:'📊 Poll'}].map((f,i)=>`<button class="peepal-format-chip${i===0?' active':''}" data-fmt="${f.id}" style="padding:8px 14px;border-radius:999px;border:2px solid ${i===0?'var(--red)':'var(--line)'};background:${i===0?'rgba(230,57,70,0.08)':'var(--white)'};font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;color:${i===0?'var(--red)':'var(--ink)'};">${f.label}</button>`).join('')}
+        ${[{id:'mcq',label:'ðŸ“‹ MCQ'},{id:'binary',label:'âš–ï¸ Binary'},{id:'open',label:'ðŸ’¬ Open'},{id:'poll',label:'ðŸ“Š Poll'}].map((f,i)=>`<button class="peepal-format-chip${i===0?' active':''}" data-fmt="${f.id}" style="padding:8px 14px;border-radius:999px;border:2px solid ${i===0?'var(--red)':'var(--line)'};background:${i===0?'rgba(230,57,70,0.08)':'var(--white)'};font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;color:${i===0?'var(--red)':'var(--ink)'};">${f.label}</button>`).join('')}
       </div>
       <textarea id="peepalQText" placeholder="What do you want to know?" style="width:100%;min-height:100px;border:2px solid var(--line);border-radius:14px;padding:12px;font-family:Inter,sans-serif;font-size:15px;outline:none;resize:none;box-sizing:border-box;background:var(--cream);"></textarea>
       <!-- MCQ options -->
@@ -503,10 +470,10 @@ function openPeepalAskSheet(){
       <div style="margin-top:8px;">
         <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Audience</div>
         <select id="peepalAudience" style="width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;background:var(--white);outline:none;">
-          <option value="everyone">🌍 Everyone</option>
-          <option value="friends">👥 Friends only</option>
-          <option value="ai">🤖 AI decides</option>
-          <option value="save_only">💾 Save without posting</option>
+          <option value="everyone">ðŸŒ Everyone</option>
+          <option value="friends">ðŸ‘¥ Friends only</option>
+          <option value="ai">ðŸ¤– AI decides</option>
+          <option value="save_only">ðŸ’¾ Save without posting</option>
         </select>
       </div>
       <!-- Response limits -->
@@ -517,7 +484,7 @@ function openPeepalAskSheet(){
           <option value="10">10 responses</option>
           <option value="50">50 responses</option>
           <option value="100">100 responses</option>
-          <option value="custom">Custom number…</option>
+          <option value="custom">Custom numberâ€¦</option>
         </select>
         <input id="peepalCustomCap" type="number" min="1" max="5000" placeholder="Custom cap" style="display:none;width:100%;margin-top:8px;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;box-sizing:border-box;background:var(--white);">
       </div>
@@ -527,12 +494,12 @@ function openPeepalAskSheet(){
           <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;">Audience segments (cascade)</div>
           <button type="button" id="peepalAddSegment" style="background:none;border:none;color:var(--red);font-weight:700;font-size:12px;cursor:pointer;">+ Add</button>
         </div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.35;">Segment 1 fills first. When it hits its cap or engagement stalls, the next segment starts automatically — no prompt. Add as many as you need (soft limit 15).</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.35;">Segment 1 fills first. When it hits its cap or engagement stalls, the next segment starts automatically â€” no prompt. Add as many as you need (soft limit 15).</div>
         <div id="peepalSegmentsList"></div>
       </div>
       <!-- Nudge templates -->
       <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px;">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:8px;">✨ Quick templates</div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:8px;">âœ¨ Quick templates</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;">
           ${PEEPAL_NUDGES.slice(0,6).map(n=>`<button class="peepal-template-chip" data-template="${n.template.replace(/"/g,'&quot;')}" style="padding:6px 11px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;">${n.icon} ${n.label}</button>`).join('')}
         </div>
@@ -561,7 +528,7 @@ function openPeepalAskSheet(){
       row.style.background = 'rgba(230,57,70,0.05)';
       row.style.borderColor = 'var(--red)';
       row.style.opacity = '1';
-      hint.textContent = `${anonQuota.dayLeft} anonymous left today · ${anonQuota.weekLeft} this week (max ${lim.perDay}/day, ${lim.perWeek}/week)`;
+      hint.textContent = `${anonQuota.dayLeft} anonymous left today Â· ${anonQuota.weekLeft} this week (max ${lim.perDay}/day, ${lim.perWeek}/week)`;
       label.style.pointerEvents = '';
       toggle.disabled = false;
     } else {
@@ -569,7 +536,7 @@ function openPeepalAskSheet(){
       row.style.borderColor = 'var(--line)';
       row.style.opacity = '0.5';
       hint.textContent = anonQuota.readFailed
-        ? (anonQuota.unlock || 'Couldn’t verify anonymous limit — try again shortly.')
+        ? (anonQuota.unlock || 'Couldnâ€™t verify anonymous limit â€” try again shortly.')
         : (anonQuota.unlock || 'Anonymous posting unavailable right now.');
       label.style.pointerEvents = 'none';
       toggle.disabled = true;
@@ -586,7 +553,7 @@ function openPeepalAskSheet(){
       <div class="peepal-seg-row" data-seg="${i}" style="background:var(--cream);border-radius:12px;padding:10px;margin-bottom:8px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
           <strong style="font-size:12px;">${i+1}. ${s.label||'Segment'}</strong>
-          ${segmentDrafts.length>1?`<button type="button" data-seg-remove="${i}" style="border:none;background:none;color:var(--muted);cursor:pointer;">✕</button>`:''}
+          ${segmentDrafts.length>1?`<button type="button" data-seg-remove="${i}" style="border:none;background:none;color:var(--muted);cursor:pointer;">âœ•</button>`:''}
         </div>
         <input data-seg-city="${i}" placeholder="City (optional)" value="${(s.city||'').replace(/"/g,'&quot;')}" style="width:100%;padding:8px 10px;border:1.5px solid var(--line);border-radius:10px;font-size:12px;margin-bottom:6px;box-sizing:border-box;">
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
@@ -673,6 +640,7 @@ function openPeepalAskSheet(){
   document.getElementById('closeAsk').addEventListener('click',()=>{
     peepalDraft?.flush?.();
     sheet.classList.remove('open');setTimeout(()=>sheet.remove(),350);
+    try{ if(typeof restoreAppShell==='function') restoreAppShell('peepal_ask_close'); }catch(e){}
   });
 
   document.getElementById('peepalPublishBtn').addEventListener('click',async()=>{
@@ -682,7 +650,7 @@ function openPeepalAskSheet(){
     if(unlock===false){ showToast(t('peepal_post_submitting')); return; }
     const pubBtn=document.getElementById('peepalPublishBtn');
     const pubLabel=pubBtn?pubBtn.textContent:'';
-    if(pubBtn){ pubBtn.disabled=true; pubBtn.textContent='Posting…'; }
+    if(pubBtn){ pubBtn.disabled=true; pubBtn.textContent='Postingâ€¦'; }
     try{
     if(typeof checkRateLimit==='function'){
       const rl=await checkRateLimit('post');
@@ -693,7 +661,7 @@ function openPeepalAskSheet(){
     const wantsAnon=!!document.getElementById('anonToggle')?.checked;
     let isAnon=false;
     // Check anon quota before build/write, but consume ONLY after Firestore
-    // succeeds — otherwise a denied write still burns a scarce slot.
+    // succeeds â€” otherwise a denied write still burns a scarce slot.
     if(wantsAnon){
       try{
         anonQuota = await getAnonRemaining();
@@ -742,7 +710,7 @@ function openPeepalAskSheet(){
       completedAt:null,
       stallReason:null,
     }));
-    // SECURITY: even anonymous posts must carry the real auth uid on user.uid —
+    // SECURITY: even anonymous posts must carry the real auth uid on user.uid â€”
     // Firestore create rules require user.uid == auth.uid (Phase A). Display
     // name/avatar stay anonymous; only the public label changes.
     const ownUid=currentUser?.uid||'me';
@@ -753,8 +721,8 @@ function openPeepalAskSheet(){
       archived:!!saveOnly,
       saveOnly:!!saveOnly,
       user:isAnon
-        ?{name:'Anonymous',avatar:'🎭',uid:ownUid,profileType:'personal'}
-        :{name:userProfile?.name||'You',avatar:userProfile?.photoURL||'🪑',uid:ownUid,photoURL:userProfile?.photoURL||null,profileType:(typeof ownProfileType==='function'?ownProfileType():(typeof getProfileType==='function'?getProfileType():'personal'))},
+        ?{name:'Anonymous',avatar:'ðŸŽ­',uid:ownUid,profileType:'personal'}
+        :{name:userProfile?.name||'You',avatar:userProfile?.photoURL||'ðŸª‘',uid:ownUid,photoURL:userProfile?.photoURL||null,profileType:(typeof ownProfileType==='function'?ownProfileType():(typeof getProfileType==='function'?getProfileType():'personal'))},
       anonymous:isAnon,uid:ownUid};
 
     // Optional image attachment (compressed to Storage)

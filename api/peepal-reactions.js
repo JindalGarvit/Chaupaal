@@ -27,6 +27,11 @@ const {
   defaultWeights,
   normalizeWeights,
 } = require('../server-lib/intent-weights');
+const {
+  runIntentDiscover,
+  recordDiscoveryPersonSignal,
+  processDiscoveryBatchLabels,
+} = require('../server-lib/discovery-pipeline');
 
 const VALID_REACTIONS = new Set(['up', 'down']);
 const MAX_HYDRATE_IDS = 20;
@@ -369,6 +374,47 @@ module.exports = async function handler(req, res) {
     }
     if (body.action === 'personal_match') {
       const result = await personalMatch(db, admin, user, body || {});
+      return sendSuccess(res, result);
+    }
+    // Unified Khoj / Vriksha intent discovery (folded here — Hobby function cap)
+    if (body.action === 'intent_discover') {
+      try {
+        const { checkActionRateLimit } = require('../server-lib/rate-limit');
+        const rate = await checkActionRateLimit(user.uid, 'discovery');
+        if (!rate.ok) {
+          return sendError(res, 429, 'RATE_LIMITED', 'Too many discovery searches. Try again shortly.');
+        }
+      } catch (e) {
+        console.warn('[intent_discover] rate-limit', e?.message || e);
+      }
+      let callAI = null;
+      try {
+        callAI = require('../server-lib/ai').callAI;
+      } catch (e) {}
+      const result = await runIntentDiscover(db, admin, user, body || {}, {
+        callAI,
+        refreshEmbedding,
+      });
+      return sendSuccess(res, result);
+    }
+    if (body.action === 'discovery_person_signal') {
+      const signal = String(body.signal || '');
+      const candidateUid = String(body.candidateUid || '').slice(0, 128);
+      if (!candidateUid || (signal !== 'more_like' && signal !== 'not_interested')) {
+        return sendError(res, 400, 'VALIDATION_ERROR', 'candidateUid and signal (more_like|not_interested) required');
+      }
+      const result = await recordDiscoveryPersonSignal(db, admin, {
+        uid: user.uid,
+        candidateUid,
+        signal,
+        intentProfileId: body.intentProfileId || null,
+        queryHash: body.queryHash || null,
+      });
+      return sendSuccess(res, result);
+    }
+    if (body.action === 'discovery_batch_labels') {
+      // Thin nightly stub — also callable from chaupaal-scheduler
+      const result = await processDiscoveryBatchLabels(db, admin, { dayKey: body.dayKey });
       return sendSuccess(res, result);
     }
     if (body.action === 'log_match_engagement') {

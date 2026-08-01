@@ -848,11 +848,19 @@ async function initPeepal(){
     document.getElementById('peepalAiSearchInput')?.addEventListener('keypress',e=>{
       if(e.key==='Enter'&&!e.shiftKey){e.preventDefault(); if(typeof runPeepalAiSearch==='function') runPeepalAiSearch();}
     });
+    document.getElementById('peepalAiSearchInput')?.addEventListener('blur',()=>{
+      try{ if(typeof restoreAppShell==='function') restoreAppShell('peepal_intent_blur'); }catch(e){}
+    });
   }
   if(typeof bindLivingPlaceholder==='function'){
     bindLivingPlaceholder(document.getElementById('peepalAiSearchInput'),'peepal_intent');
   }
   document.getElementById('peepalIntentCard')?.classList.remove('hidden');
+  try{
+    if(typeof AiDiscoveryMeter?.mountOnIntentCard==='function'){
+      AiDiscoveryMeter.mountOnIntentCard(document.getElementById('peepalIntentCard'),{disclosePro:true});
+    }
+  }catch(e){}
 
   // Reuse static HTML shell (keeps LCP title/subtitle in place) or create a loading host
   let loadingEl=document.getElementById('peepalDiscovery');
@@ -1300,7 +1308,7 @@ function renderPeepalOptions(q){
       `;
       return`
         <textarea class="peepal-open-input" placeholder="Share your thoughts..." id="open_${q.id}" rows="2" style="resize:none;min-height:60px;"></textarea>
-        <button class="peepal-submit-btn" onclick="submitPeepalOpen('${q.id}')">Share</button>
+        <button class="peepal-submit-btn" onclick="submitPeepalOpen('${q.id}')">Post answer</button>
       `;
     }
 
@@ -1493,6 +1501,7 @@ function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
     if(typeof closeAiKeyboard==='function') closeAiKeyboard();
     detail.classList.remove('open');setTimeout(()=>detail.classList.add('hidden'),300);
     try{ history.pushState({},'', '/'); }catch(e){}
+    try{ if(typeof restoreAppShell==='function') restoreAppShell('peepal_detail_back'); }catch(e){}
   });
   detail.querySelector('[data-say-hi]')?.addEventListener('click',async(e)=>{
     e.preventDefault();

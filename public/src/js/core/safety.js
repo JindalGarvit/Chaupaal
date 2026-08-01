@@ -441,7 +441,10 @@
       items.push({ id: 'more_like', label: 'More like this', ico: '♥' });
       items.push({ id: 'not_interested', label: 'Not interested', ico: '✕' });
     }
-    items.push({ id: 'share', label: 'Share', ico: '↗' });
+    // Peepal cards already expose Share on the footer action bar — one affordance.
+    if (surface !== 'peepal') {
+      items.push({ id: 'share', label: 'Share', ico: '↗' });
+    }
     if (shareUrl) items.push({ id: 'copy', label: 'Copy link', ico: '🔗' });
     if (!isOwn && authorUid) {
       items.push({ id: 'hide', label: 'Hide', ico: '👁' });

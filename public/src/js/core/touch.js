@@ -588,6 +588,14 @@
     return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable === true;
   }
 
+  /** Overlay sheets that manage their own scroll — don't collapse bottom tabs under them. */
+  function isOverlaySheetField(el) {
+    if (!el) return false;
+    return !!el.closest?.(
+      '.chaupaal-share-sheet, .game-friend-sheet, .cp-half-sheet, .loc-share-sheet, [data-nav-managed="1"].flag-sheet, .share-sheet, .mehfil-overlay'
+    );
+  }
+
   function setupKeyboardAvoidance() {
     if (!window.visualViewport) return;
     const vv = window.visualViewport;
@@ -595,6 +603,7 @@
       const offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
       const focused = document.activeElement;
       const inputFocused = isTextField(focused);
+      const overlayField = inputFocused && isOverlaySheetField(focused);
       // If keyboard is gone (or never opened) and nothing is focused, always clear —
       // stuck html.kb-open collapses .bottom-tabs to height:0 (blank bottom / dead nav).
       if (offset <= 40 && !inputFocused) {
@@ -606,14 +615,19 @@
         return;
       }
       document.documentElement.style.setProperty('--kb-inset', offset + 'px');
-      document.documentElement.classList.toggle('kb-open', offset > 80 && inputFocused);
+      // Root cause of blank Android bottom: kb-open hides .bottom-tabs forever when
+      // focus lingers in a sheet. Overlay sheets must not set the global class.
+      const wantKbOpen = offset > 80 && inputFocused && !overlayField;
+      document.documentElement.classList.toggle('kb-open', wantKbOpen);
       if (inputFocused && offset > 40) {
         try {
-          focused.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          focused.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         } catch (e) {}
         document.querySelectorAll('.cp-kb-lift').forEach((el) => el.classList.remove('cp-kb-lift'));
-        const bar = focused.closest(COMPOSER_SEL);
-        if (bar) bar.classList.add('cp-kb-lift');
+        if (!overlayField) {
+          const bar = focused.closest(COMPOSER_SEL);
+          if (bar) bar.classList.add('cp-kb-lift');
+        }
       }
     };
     vv.addEventListener('resize', apply);

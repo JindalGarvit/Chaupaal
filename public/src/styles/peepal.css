@@ -37,6 +37,13 @@
 .peepal-ai-search-btn{flex:1;padding:10px 16px;background:var(--brand-red,var(--red));color:#fff;border:none;border-radius:12px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px;cursor:pointer;}
 .peepal-ai-result-card{background:var(--cream);border-radius:14px;padding:14px;margin-bottom:10px;border:1.5px solid var(--line);}
 .peepal-ai-result-card .ai-match-reason{font-size:12px;color:var(--muted);font-style:italic;margin-top:6px;line-height:1.5;}
+.peepal-ai-feedback{
+  border:1.5px solid var(--line);background:var(--surface-elevated,var(--white));
+  border-radius:999px;padding:6px 12px;font-size:11px;font-weight:600;color:var(--ink);cursor:pointer;
+}
+.peepal-ai-feedback:active{transform:scale(0.96);}
+.discovery-refine-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px;}
+.discovery-refine-chips .peepal-nudge-chip{font-size:11px;}
 .peepal-ai-thinking{display:flex;align-items:center;gap:10px;padding:14px;color:var(--muted);font-size:13px;}
 .peepal-feed{
   flex:none;
