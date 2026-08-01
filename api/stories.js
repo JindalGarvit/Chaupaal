@@ -6,7 +6,10 @@
 const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
 const { requireUser, initAdmin } = require('../server-lib/auth');
 const { checkActionRateLimit } = require('../server-lib/rate-limit');
-const { canViewStory: canViewStoryPolicy } = require('../server-lib/social-model');
+const {
+  canViewStory: canViewStoryPolicy,
+  resolveEmptyCloseFriendsAudience,
+} = require('../server-lib/social-model');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const COLLECTIONS = {
@@ -126,13 +129,8 @@ async function friendIds(db, uid) {
 async function recipientIds(db, uid, visibility) {
   if (visibility === 'close_friends') {
     const close = await db.collection('users').doc(uid).collection('close_friends').get();
-    // Opt-out model for Instants: empty Close Friends list ⇒ everyone (all friends) included.
-    // Once the user manages the list, only listed friends receive CF Instants.
-    if (!close.docs.length) {
-      const friends = await friendIds(db, uid);
-      const allowed = await Promise.all(friends.map(async (target) => !(await isBlockedPair(db, uid, target))));
-      return friends.filter((_, index) => allowed[index]);
-    }
+    // Empty Close Friends is a private opt-in list — never fan out to all friends.
+    // createStory falls back to friends + audienceFallback when this returns [].
     const possible = close.docs.map((doc) => doc.id);
     const checks = await Promise.all(
       possible.map(async (target) => (await isFriend(db, uid, target)) && !(await isBlockedPair(db, uid, target)))
@@ -192,18 +190,10 @@ async function canView(db, story, viewerUid, includeArchive) {
   const blocked = owner ? false : await isBlockedPair(db, data.uid, viewerUid);
   const expires = data.expiresAt?.toMillis?.() || 0;
   const friend = data.destination === 'baithak' ? await isFriend(db, data.uid, viewerUid) : false;
-  let isCloseFriend = false;
-  if (data.destination === 'baithak' && data.visibility === 'close_friends') {
-    const cfCol = db.collection('users').doc(data.uid).collection('close_friends');
-    const membership = await cfCol.doc(viewerUid).get();
-    if (membership.exists) {
-      isCloseFriend = true;
-    } else {
-      // Match recipientIds fanout: empty CF list ⇒ all friends can view Instants/notes
-      const sample = await cfCol.limit(1).get();
-      if (sample.empty && friend) isCloseFriend = true;
-    }
-  }
+  const membership =
+    data.destination === 'baithak' && data.visibility === 'close_friends'
+      ? await db.collection('users').doc(data.uid).collection('close_friends').doc(viewerUid).get()
+      : null;
   return canViewStoryPolicy({
     destination: data.destination,
     visibility: data.visibility,
@@ -211,7 +201,8 @@ async function canView(db, story, viewerUid, includeArchive) {
     isOwner: owner,
     allowOwnerArchive: includeArchive,
     isFriend: friend,
-    isCloseFriend,
+    // Membership only — empty CF list must not grant all friends access.
+    isCloseFriend: !!membership?.exists,
     blocked,
     active: data.active !== false && !data.deletedAt,
     expired: expires <= Date.now(),
@@ -227,7 +218,8 @@ async function createStory(db, admin, uid, body) {
   const location = cleanLocation(body.location);
   if (!media && !text && !music && !location && body.type !== 'score') throw new Error('EMPTY_STORY');
   const kind = destination === 'baithak' && body.kind === 'instant' ? 'instant' : 'story';
-  // Instants go to Close Friends (opt-out: empty CF list = all friends).
+  // Instants default to Close Friends. If the list is empty, fall back to Friends
+  // and surface audienceFallback so the client can disclose the wider audience.
   let visibility =
     destination === 'baithak' && body.visibility === 'close_friends'
       ? 'close_friends'
@@ -237,7 +229,15 @@ async function createStory(db, admin, uid, body) {
   if (kind === 'instant' && destination === 'baithak') {
     visibility = 'close_friends';
   }
-  const audienceFallback = null;
+  let audienceFallback = null;
+  if (destination === 'baithak' && visibility === 'close_friends') {
+    const cfRecipients = await recipientIds(db, uid, 'close_friends');
+    if (!cfRecipients.length) {
+      const empty = resolveEmptyCloseFriendsAudience();
+      visibility = empty.visibility;
+      audienceFallback = empty.audienceFallback;
+    }
+  }
   const collection = db.collection(COLLECTIONS[destination]);
   const clientId = cleanClientId(body.clientId);
   const ref = clientId ? collection.doc(`${uid}_${clientId}`) : collection.doc();
@@ -356,10 +356,7 @@ async function createStory(db, admin, uid, body) {
   }
 
   const recipients = await recipientIds(db, uid, visibility);
-  // Empty CF + no friends is OK for Instants (author-only / see-and-forget); still persist.
-  if (visibility === 'close_friends' && !recipients.length && kind !== 'instant') {
-    throw new Error('NO_CLOSE_FRIENDS');
-  }
+  if (visibility === 'close_friends' && !recipients.length) throw new Error('NO_CLOSE_FRIENDS');
   const manifest = db.collection('users').doc(uid).collection('storyDeliveryManifests').doc(ref.id);
   const writes = [
     (batch) => batch.set(ref, story),
