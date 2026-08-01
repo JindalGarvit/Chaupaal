@@ -768,3 +768,12 @@ module.exports = async function handler(req, res) {
     return sendError(res, 500, 'STORY_FAILED', 'Could not complete story action');
   }
 };
+
+// Tiny exports for deterministic unit tests (no Firestore).
+module.exports.cleanUid = cleanUid;
+module.exports.cleanDestination = cleanDestination;
+module.exports.cleanMedia = cleanMedia;
+module.exports.cleanClientId = cleanClientId;
+module.exports.cleanMusic = cleanMusic;
+module.exports.cleanLocation = cleanLocation;
+module.exports.serializeStory = serializeStory;
