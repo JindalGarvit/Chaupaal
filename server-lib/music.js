@@ -209,4 +209,5 @@ module.exports = {
   getProvider,
   PROVIDERS,
   MUSIC_PROVIDER,
+  normalizeItunesTrack,
 };
