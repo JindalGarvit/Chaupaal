@@ -75,6 +75,7 @@
       if (typeof window.removeNavLayer === 'function') window.removeNavLayer(el);
     } catch (e) {}
     try {
+      // bubbles:false — element-local listeners only; document runtime-guard won't see this
       el.dispatchEvent(new CustomEvent('chaupaal:dismiss', { bubbles: false }));
     } catch (e) {}
     const btn = el.querySelector && el.querySelector(DISMISS_SELECTORS);
@@ -86,17 +87,26 @@
           try {
             if (el.isConnected) el.remove();
           } catch (err) {}
+          try {
+            if (typeof restoreAppShell === 'function') restoreAppShell('dismissOverlay');
+          } catch (err) {}
         }, 400);
         return;
       } catch (e) {
         try {
           el.remove();
         } catch (err) {}
+        try {
+          if (typeof restoreAppShell === 'function') restoreAppShell('dismissOverlay');
+        } catch (err) {}
         return;
       }
     }
     try {
       el.remove();
+    } catch (e) {}
+    try {
+      if (typeof restoreAppShell === 'function') restoreAppShell('dismissOverlay');
     } catch (e) {}
   }
 

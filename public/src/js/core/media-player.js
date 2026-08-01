@@ -41,22 +41,28 @@
 
   function ensureMiniPlayer() {
     let bar = document.getElementById('cpMiniPlayer');
-    if (bar) return bar;
+    if (bar) {
+      bar.classList.add('cp-mini-player');
+      bar.dataset.navIgnore = '1';
+      return bar;
+    }
     const device = document.querySelector('.device') || document.body;
     bar = document.createElement('div');
     bar.id = 'cpMiniPlayer';
-    bar.className = 'cp-mini-player hidden';
+    bar.className = 'cp-mini-player cp-mini-fab hidden';
     bar.dataset.navIgnore = '1';
+    bar.setAttribute('role', 'group');
+    bar.setAttribute('aria-label', 'Now playing');
     bar.innerHTML = `
       <div class="cp-mini-compact" data-cp-mini-body>
-        <button type="button" class="cp-mini-art" data-cp-mini-art aria-hidden="true">♪</button>
+        <button type="button" class="cp-mini-art" data-cp-mini-art aria-label="Expand player">♪</button>
         <div class="cp-mini-meta">
           <div class="cp-mini-title" data-cp-mini-title>Now playing</div>
           <div class="cp-mini-artist" data-cp-mini-artist></div>
         </div>
         <div class="cp-mini-actions">
           <button type="button" data-cp-mini-play aria-label="Play">▶</button>
-          <button type="button" data-cp-mini-close aria-label="Close">✕</button>
+          <button type="button" data-cp-mini-close aria-label="Stop and dismiss">✕</button>
         </div>
       </div>
       <div class="cp-mini-expanded-panel" data-cp-mini-panel hidden>
@@ -68,6 +74,7 @@
         <div class="cp-mini-transport">
           <button type="button" data-cp-mini-prev aria-label="Previous">⏮</button>
           <button type="button" data-cp-mini-skip="-10" aria-label="Back 10 seconds">−10</button>
+          <button type="button" data-cp-mini-play-exp aria-label="Play">▶</button>
           <button type="button" data-cp-mini-skip="10" aria-label="Forward 10 seconds">+10</button>
           <button type="button" data-cp-mini-next aria-label="Next">⏭</button>
           <button type="button" data-cp-mini-collapse aria-label="Collapse">▴</button>
@@ -77,10 +84,21 @@
     return bar;
   }
 
+  /** Hide FAB while the playing card is still on-screen in chat/story. */
+  function cardChromeOwnsPlayback() {
+    const card = document.querySelector('.music-card.is-playing');
+    if (!card || !card.isConnected) return false;
+    if (card.closest('.story-viewer')) return true;
+    const chat = document.getElementById('activeChatScreen');
+    if (chat && chat.classList.contains('open') && chat.contains(card)) return true;
+    return false;
+  }
+
   function setMiniExpanded(on) {
     const bar = ensureMiniPlayer();
     const panel = bar.querySelector('[data-cp-mini-panel]');
     bar.classList.toggle('is-expanded', !!on);
+    bar.classList.toggle('cp-mini-fab', !on);
     if (panel) panel.hidden = !on;
   }
 
@@ -112,15 +130,28 @@
       setMiniExpanded(false);
       return;
     }
-    if ((media.paused && !queue.length) || (!media.src && !media.currentSrc && !queue.length)) {
-      if (!queue.length) {
-        bar.classList.add('hidden');
-        setMiniExpanded(false);
-      }
+    bindMiniOnce(media);
+
+    const hasSrc = !!(media.src || media.currentSrc);
+    const playing = !media.paused && hasSrc;
+    if (!playing && !queue.length) {
+      bar.classList.add('hidden');
+      setMiniExpanded(false);
       return;
     }
-    if (!media.paused || queue.length) bar.classList.remove('hidden');
-    if (media.paused && !media.src && !media.currentSrc) return;
+    if (!playing && media.paused && !queue.length) {
+      bar.classList.add('hidden');
+      return;
+    }
+
+    // Prefer in-card controls while the full card is still visible
+    if (playing && cardChromeOwnsPlayback() && !bar.classList.contains('is-expanded')) {
+      bar.classList.add('hidden');
+      return;
+    }
+
+    if (playing || queue.length) bar.classList.remove('hidden');
+    if (!bar.classList.contains('is-expanded')) bar.classList.add('cp-mini-fab');
 
     const qItem = queueIndex >= 0 && queue[queueIndex] ? queue[queueIndex] : null;
     const title =
@@ -148,11 +179,11 @@
       '';
     updateMiniArt(bar, thumb);
 
-    const playBtn = bar.querySelector('[data-cp-mini-play]');
-    if (playBtn) {
+    const playBtns = bar.querySelectorAll('[data-cp-mini-play], [data-cp-mini-play-exp]');
+    playBtns.forEach((playBtn) => {
       playBtn.textContent = media.paused ? '▶' : '⏸';
       playBtn.setAttribute('aria-label', media.paused ? 'Play' : 'Pause');
-    }
+    });
     const prevBtn = bar.querySelector('[data-cp-mini-prev]');
     const nextBtn = bar.querySelector('[data-cp-mini-next]');
     if (prevBtn) prevBtn.disabled = !(queue.length > 1 && queueIndex > 0);
@@ -170,13 +201,30 @@
     if (remain) remain.textContent = Number.isFinite(d) ? '−' + formatTime(Math.max(0, d - t)) : '−0:00';
   }
 
+  function stopMiniAndClear(media) {
+    queue = [];
+    queueIndex = -1;
+    setMiniExpanded(false);
+    try {
+      media?.pause?.();
+    } catch (err) {}
+    if (typeof pauseAllMusic === 'function') pauseAllMusic();
+    else {
+      try {
+        media?.removeAttribute?.('src');
+        media?.load?.();
+      } catch (err) {}
+      ensureMiniPlayer().classList.add('hidden');
+    }
+  }
+
   function bindMiniOnce(media) {
     if (!media || miniBound) return;
     miniBound = true;
     setSharedAudioRef(media);
     const bar = ensureMiniPlayer();
 
-    bar.querySelector('[data-cp-mini-play]')?.addEventListener('click', (e) => {
+    const togglePlay = (e) => {
       e.stopPropagation();
       if (media.paused) {
         if (quietBlocked()) return;
@@ -184,23 +232,14 @@
       } else {
         media.pause();
       }
-    });
+      syncMiniFromMedia(media);
+    };
+
+    bar.querySelector('[data-cp-mini-play]')?.addEventListener('click', togglePlay);
+    bar.querySelector('[data-cp-mini-play-exp]')?.addEventListener('click', togglePlay);
     bar.querySelector('[data-cp-mini-close]')?.addEventListener('click', (e) => {
       e.stopPropagation();
-      queue = [];
-      queueIndex = -1;
-      setMiniExpanded(false);
-      try {
-        media.pause();
-      } catch (err) {}
-      if (typeof pauseAllMusic === 'function') pauseAllMusic();
-      else {
-        try {
-          media.removeAttribute('src');
-          media.load();
-        } catch (err) {}
-        bar.classList.add('hidden');
-      }
+      stopMiniAndClear(media);
     });
     bar.querySelector('[data-cp-mini-prev]')?.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -213,6 +252,7 @@
     bar.querySelector('[data-cp-mini-collapse]')?.addEventListener('click', (e) => {
       e.stopPropagation();
       setMiniExpanded(false);
+      syncMiniFromMedia(media);
     });
     bar.querySelectorAll('[data-cp-mini-skip]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
@@ -226,11 +266,43 @@
       });
     });
 
-    // Tap compact body (not action buttons) to expand / collapse
+    // Collapsed FAB: tap art/body expands; expanded compact tap toggles
     bar.querySelector('[data-cp-mini-body]')?.addEventListener('click', (e) => {
-      if (e.target.closest('button, input, a')) return;
-      setMiniExpanded(!bar.classList.contains('is-expanded'));
+      if (e.target.closest('[data-cp-mini-close], [data-cp-mini-play], input, a')) return;
+      if (!bar.classList.contains('is-expanded')) {
+        setMiniExpanded(true);
+      } else if (!e.target.closest('button, input')) {
+        setMiniExpanded(false);
+        syncMiniFromMedia(media);
+      }
     });
+    bar.querySelector('[data-cp-mini-art]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!bar.classList.contains('is-expanded')) setMiniExpanded(true);
+    });
+
+    // Long-press collapsed FAB (~550ms) → stop + remove
+    let lpTimer = null;
+    const clearLp = () => {
+      clearTimeout(lpTimer);
+      lpTimer = null;
+    };
+    bar.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (bar.classList.contains('is-expanded')) return;
+        if (e.target.closest('[data-cp-mini-close]')) return;
+        clearLp();
+        lpTimer = setTimeout(() => {
+          lpTimer = null;
+          stopMiniAndClear(media);
+        }, 550);
+      },
+      { passive: true }
+    );
+    bar.addEventListener('pointerup', clearLp);
+    bar.addEventListener('pointercancel', clearLp);
+    bar.addEventListener('pointerleave', clearLp);
 
     const seek = bar.querySelector('[data-cp-mini-seek]');
     seek?.addEventListener('input', () => {

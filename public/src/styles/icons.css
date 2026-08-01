@@ -28,6 +28,12 @@
   line-height:0;
   font-size:0; /* hide leftover emoji text if any */
 }
+.tab-btn .tab-icon.tab-el-icon,
+.tab-btn .tab-el-icon{
+  /* SVG children have explicit px size — keep host measurable */
+  min-width:26px;
+  min-height:26px;
+}
 .tab-btn .tab-icon .cp-icon{
   width:22px;
   height:22px;

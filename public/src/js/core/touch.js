@@ -574,6 +574,14 @@
     document.querySelectorAll('.cp-kb-lift').forEach((el) => el.classList.remove('cp-kb-lift'));
   }
 
+  function healShellAfterKeyboard(reason) {
+    clearKeyboardInset();
+    try {
+      if (typeof restoreAppShell === 'function') restoreAppShell(reason || 'kb_hide');
+      else if (typeof ChaupaalEnv?.refreshViewport === 'function') ChaupaalEnv.refreshViewport();
+    } catch (e) {}
+  }
+
   function isTextField(el) {
     if (!el || el === document.body || el === document.documentElement) return false;
     const tag = el.tagName;
@@ -590,7 +598,11 @@
       // If keyboard is gone (or never opened) and nothing is focused, always clear —
       // stuck html.kb-open collapses .bottom-tabs to height:0 (blank bottom / dead nav).
       if (offset <= 40 && !inputFocused) {
-        clearKeyboardInset();
+        if (document.documentElement.classList.contains('kb-open')) {
+          healShellAfterKeyboard('kb_gone');
+        } else {
+          clearKeyboardInset();
+        }
         return;
       }
       document.documentElement.style.setProperty('--kb-inset', offset + 'px');
@@ -615,7 +627,11 @@
     document.addEventListener('focusout', () => {
       setTimeout(() => {
         if (!isTextField(document.activeElement)) {
-          clearKeyboardInset();
+          const wasOpen =
+            document.documentElement.classList.contains('kb-open') ||
+            (parseInt(getComputedStyle(document.documentElement).getPropertyValue('--kb-inset'), 10) || 0) > 40;
+          if (wasOpen) healShellAfterKeyboard('kb_focusout');
+          else clearKeyboardInset();
           // Re-check viewport in case iOS reports lagging inset after blur
           setTimeout(apply, 120);
         }
@@ -623,7 +639,7 @@
     });
     window.addEventListener('orientationchange', () => {
       setTimeout(() => {
-        clearKeyboardInset();
+        healShellAfterKeyboard('kb_orient');
         apply();
       }, 200);
     });

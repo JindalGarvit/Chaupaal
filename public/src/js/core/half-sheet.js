@@ -64,6 +64,9 @@
       try {
         if (layerHandle && typeof layerHandle.close === 'function') {
           layerHandle.close();
+          try {
+            if (typeof restoreAppShell === 'function') restoreAppShell('half_sheet:' + id);
+          } catch (e) {}
           return;
         }
       } catch (e) {}
@@ -71,6 +74,9 @@
         if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
       } catch (e) {}
       sheet.remove();
+      try {
+        if (typeof restoreAppShell === 'function') restoreAppShell('half_sheet:' + id);
+      } catch (e) {}
     };
 
     let layerHandle = null;
@@ -79,6 +85,9 @@
         closed = true;
         document.removeEventListener('pointerdown', onOutside, true);
         sheet.remove();
+        try {
+          if (typeof restoreAppShell === 'function') restoreAppShell('half_sheet_layer:' + id);
+        } catch (e) {}
       });
     } else if (typeof pushNavLayer === 'function') {
       pushNavLayer(sheet, close);

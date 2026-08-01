@@ -491,7 +491,10 @@
       flushErrorQueue();
     }
   });
-  document.addEventListener('chaupaal:dismiss', () => clearShellGlitches('dismiss'));
+  document.addEventListener('chaupaal:dismiss', () => {
+    if (typeof restoreAppShell === 'function') restoreAppShell('dismiss');
+    else clearShellGlitches('dismiss');
+  });
 
   const flushTimer = setInterval(() => {
     if (typeof currentUser !== 'undefined' && currentUser?.uid && typeof db !== 'undefined' && db) {

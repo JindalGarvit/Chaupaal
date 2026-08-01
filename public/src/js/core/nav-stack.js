@@ -191,7 +191,8 @@
     try {
       if (typeof pauseAllMusic === 'function') pauseAllMusic();
     } catch (e) {}
-    if (typeof clearShellGlitches === 'function') clearShellGlitches('recoverNavStack');
+    if (typeof restoreAppShell === 'function') restoreAppShell('recoverNavStack');
+    else if (typeof clearShellGlitches === 'function') clearShellGlitches('recoverNavStack');
     else if (typeof clearKeyboardInset === 'function') clearKeyboardInset();
   }
 
@@ -255,7 +256,8 @@
         } catch (e) {}
       }
       try {
-        if (typeof clearShellGlitches === 'function') clearShellGlitches('openLayer');
+        if (typeof restoreAppShell === 'function') restoreAppShell('openLayer');
+        else if (typeof clearShellGlitches === 'function') clearShellGlitches('openLayer');
       } catch (e) {}
     };
 

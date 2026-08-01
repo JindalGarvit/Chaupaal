@@ -817,6 +817,11 @@
     });
     box.querySelector('[data-mehfil-leave-err]')?.addEventListener('click', () => leaveMehfil());
     updateWaitingState();
+    if (opts?.fatal) {
+      try {
+        if (typeof restoreAppShell === 'function') restoreAppShell('mehfil_error');
+      } catch (e) {}
+    }
   }
 
   /**
@@ -1555,19 +1560,21 @@
           const val = snap.val() || {};
           const uids = Object.keys(val);
           const me = currentUser?.uid || '';
-          // Honest Live: only count *others* in the room (never sticky from yourself alone)
+          // Honest Live: room needs ≥2 real participants (not sticky solo / click-only)
           const others = me ? uids.filter((u) => u !== me) : uids;
+          const total = uids.length;
+          const isLive = total >= 2;
           const set = presenceWatchers.get(chatId);
           set?.forEach((fn) => {
             try {
               fn({
-                count: others.length,
+                count: total,
                 othersCount: others.length,
-                totalCount: uids.length,
+                totalCount: total,
                 uids: others,
                 allUids: uids,
                 participants: val,
-                live: others.length >= 1,
+                live: isLive,
               });
             } catch (e) {}
           });

@@ -177,13 +177,14 @@ function renderChatList(chats, opts){
       const liveEl=item.querySelector('[data-mehfil-live-row]');
       const presenceDot=item.querySelector('[data-mehfil-presence-dot]');
       if(cid&&liveEl){
-        const unsub=watchMehfilPresence(cid,({count,live})=>{
+        const unsub=watchMehfilPresence(cid,({count,live,totalCount})=>{
           if(!liveEl.isConnected) return;
-          const isLive=live!=null?!!live:count>0;
+          const total=totalCount!=null?totalCount:count;
+          const isLive=live!=null?!!live:total>=2;
           liveEl.hidden=!isLive;
           if(presenceDot) presenceDot.hidden=!isLive;
           const span=liveEl.querySelector('span');
-          if(span) span.textContent=count>1?`Live · ${count}`:'Live';
+          if(span) span.textContent=total>2?`Live · ${total}`:'Live';
         });
         list._mehfilPresenceUnsubs.push(unsub);
       }

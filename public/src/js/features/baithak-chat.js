@@ -75,6 +75,17 @@ function closeChatScreen(opts = {}) {
       }
     } catch (e) {}
   }
+
+  try {
+    if (typeof restoreAppShell === 'function') restoreAppShell('chat_close');
+    else if (typeof clearKeyboardInset === 'function') clearKeyboardInset();
+  } catch (e) {}
+
+  // Nudge mini-player now that in-card chrome may be gone
+  try {
+    const a = window.__chaupaalSharedAudio;
+    if (a && typeof syncMiniPlayer === 'function') syncMiniPlayer(a);
+  } catch (e) {}
 }
 
 function openChatScreen(chat){
@@ -503,13 +514,14 @@ function openChatScreen(chat){
   document.getElementById('mehfilLiveJoin')?.addEventListener('click', () => {
     if (typeof openMehfil === 'function') openMehfil(chat);
   });
-  // Live presence → header badge + join banner (others ≥ 1 only)
+  // Live presence → header badge + join banner (total participants ≥ 2)
   if (!isSelf && !isChaupaal && typeof watchMehfilPresence === 'function') {
     const chatId = chat.firestoreId || chat.id;
-    const unsub = watchMehfilPresence(chatId, ({ count, live }) => {
+    const unsub = watchMehfilPresence(chatId, ({ count, live, totalCount }) => {
       const btn = document.getElementById('chatMehfilBtn');
       const banner = document.getElementById('mehfilLiveBanner');
-      const isLive = live != null ? !!live : count > 0;
+      const total = totalCount != null ? totalCount : count;
+      const isLive = live != null ? !!live : total >= 2;
       btn?.classList.toggle('is-live', isLive);
       if (banner) {
         const inRoom = typeof isMehfilOpen === 'function' && isMehfilOpen();
@@ -520,8 +532,8 @@ function openChatScreen(chat){
         if (sub) {
           sub.textContent =
             typeof t === 'function'
-              ? t('mehfil_live_sub', { n: String(count) })
-              : `${count} in the room`;
+              ? t('mehfil_live_sub', { n: String(total) })
+              : `${total} in the room`;
         }
       }
     });

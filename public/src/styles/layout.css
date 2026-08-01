@@ -204,11 +204,11 @@ html,body{
 .tab-btn[data-tab="baithak"] .tab-icon{color:#c47a3a;}
 .tab-btn[data-tab="dangal"] .tab-icon{color:#e85d04;}
 .tab-btn[data-tab="akhbaar"] .tab-icon{color:#7b2cbf;}
-.tab-btn.active[data-tab="duniya"] .tab-icon{animation:tabGlobeSpin 1.2s ease;}
-.tab-btn.active[data-tab="peepal"] .tab-icon{animation:tabLeafRustle .7s ease;}
-.tab-btn.active[data-tab="baithak"] .tab-icon{animation:tabSteam .9s ease;}
-.tab-btn.active[data-tab="dangal"] .tab-icon{animation:tabClash .45s ease;}
-.tab-btn.active[data-tab="akhbaar"] .tab-icon{animation:tabPaperFlip .55s ease;}
+.tab-btn.active[data-tab="duniya"] .tab-icon:not(.tab-el-icon){animation:tabGlobeSpin 1.2s ease;}
+.tab-btn.active[data-tab="peepal"] .tab-icon:not(.tab-el-icon){animation:tabLeafRustle .7s ease;}
+.tab-btn.active[data-tab="baithak"] .tab-icon:not(.tab-el-icon){animation:tabSteam .9s ease;}
+.tab-btn.active[data-tab="dangal"] .tab-icon:not(.tab-el-icon){animation:tabClash .45s ease;}
+.tab-btn.active[data-tab="akhbaar"] .tab-icon:not(.tab-el-icon){animation:tabPaperFlip .55s ease;}
 @keyframes tabGlobeSpin{0%{transform:rotate(0)}40%{transform:rotate(18deg)}100%{transform:rotate(0)}}
 @keyframes tabLeafRustle{0%,100%{transform:rotate(0)}30%{transform:rotate(-8deg)}60%{transform:rotate(6deg)}}
 @keyframes tabSteam{0%,100%{transform:translateY(0);opacity:1}50%{transform:translateY(-2px);opacity:.85}}

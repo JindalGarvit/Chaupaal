@@ -137,7 +137,13 @@
     } catch (e) {}
     try {
       const ae = document.activeElement;
-      if (ae && (ae.matches?.('[data-mehfil-q], .mehfil-media-search input, .mehfil-overlay input, .mehfil-overlay textarea') || ae.closest?.('.mehfil-overlay'))) {
+      if (
+        ae &&
+        (ae.matches?.(
+          '[data-mehfil-q], .mehfil-media-search input, .mehfil-overlay input, .mehfil-overlay textarea, .instant-compose-text, #instantText'
+        ) ||
+          ae.closest?.('.mehfil-overlay, .cp-half-sheet, #baithakInstantComposer'))
+      ) {
         ae.blur?.();
       }
     } catch (e) {}
@@ -146,6 +152,22 @@
         document.querySelector('.device')?.classList.remove('is-mehfil-open');
         document.documentElement.classList.remove('mehfil-open');
       }
+    } catch (e) {}
+    try {
+      const device = document.querySelector('.device');
+      if (device) {
+        ['transform', 'top', 'bottom', 'height', 'max-height', 'overflow'].forEach((p) =>
+          device.style.removeProperty(p)
+        );
+      }
+      const html = document.documentElement;
+      const body = document.body;
+      ['overflow', 'position', 'height', 'max-height', 'touch-action'].forEach((p) => {
+        html.style.removeProperty(p);
+        body?.style.removeProperty(p);
+      });
+      html.classList.remove('scroll-lock', 'overlay-open', 'sheet-open');
+      body?.classList.remove('scroll-lock', 'overlay-open', 'sheet-open');
     } catch (e) {}
     try {
       const tabs = document.querySelector('.bottom-tabs');

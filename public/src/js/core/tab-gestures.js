@@ -9,7 +9,8 @@
   'use strict';
 
   const DOUBLE_MS = 300;
-  const LONG_MS = 340;
+  /** Hold to morph — short enough to feel responsive, long enough to avoid accidental morphs */
+  const LONG_MS = 480;
   const LONG_MOVE_PX = 12;
   const AT_TOP_PX = 12;
 

@@ -252,7 +252,7 @@
       bar.classList.remove('is-morph-fx');
       void bar.offsetWidth;
       bar.classList.add('is-morph-fx');
-      setTimeout(() => bar.classList.remove('is-morph-fx'), 1400);
+      setTimeout(() => bar.classList.remove('is-morph-fx'), 2100);
     }
     try {
       if (typeof SoundLib !== 'undefined' && SoundLib.element) SoundLib.element(tab, 'ambience');
@@ -273,7 +273,23 @@
   function boot() {
     mountAll();
     syncQuietClass();
+    // Remount if something wiped empty icon slots (SW race / late DOM)
+    setTimeout(mountAll, 0);
+    setTimeout(mountAll, 400);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
+
+  window.addEventListener('pageshow', () => {
+    try {
+      mountAll();
+    } catch (e) {}
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      try {
+        mountAll();
+      } catch (e) {}
+    }
+  });
 })();

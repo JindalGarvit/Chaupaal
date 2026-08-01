@@ -4,12 +4,20 @@
  */
 
 .tab-el-icon{
-  display:inline-flex;align-items:center;justify-content:center;
-  width:26px;height:26px;line-height:0;position:relative;
+  display:inline-flex!important;align-items:center;justify-content:center;
+  width:26px;height:26px;min-width:26px;min-height:26px;line-height:0;position:relative;
   filter:drop-shadow(0 1px 2px rgba(0,0,0,0.12));
+  /* Defeat icons.css font-size:0 on empty emoji slots — SVG must paint */
+  font-size:0;overflow:visible;opacity:1;visibility:visible;
 }
-.tab-el-icon svg{
-  width:26px;height:26px;overflow:visible;display:block;
+.tab-el-icon svg,
+.tab-el-icon .tab-el-svg{
+  width:26px!important;height:26px!important;overflow:visible;display:block!important;
+  opacity:1!important;visibility:visible!important;pointer-events:none;
+}
+/* Element SVGs own their ritual — don't layer emoji keyframes that can blank/transform the host */
+.tab-btn.active .tab-el-icon{
+  animation:none!important;
 }
 .tab-btn .tab-label{margin-top:1px;}
 
@@ -178,7 +186,7 @@
   border-radius:var(--r-lg);pointer-events:none;z-index:0;
   opacity:0.4;filter:blur(14px);
   background:var(--morph-wash, transparent);
-  animation:elMorphWash 1.15s ease-in-out infinite alternate;
+  animation:elMorphWash 2s ease-in-out infinite alternate;
 }
 /* Element spread particles — behind shortcuts, never capture taps */
 .bottom-tabs.is-shortcut-mode .morph-spread{
@@ -188,7 +196,7 @@
 .bottom-tabs.is-shortcut-mode .morph-spread span{
   position:absolute;width:6px;height:6px;border-radius:50%;
   background:var(--morph-particle,#fff);opacity:0;
-  animation:morphParticle 1.1s var(--ease-spring,cubic-bezier(.34,1.4,.64,1)) forwards;
+  animation:morphParticle 2s var(--ease-spring,cubic-bezier(.34,1.4,.64,1)) forwards;
 }
 .bottom-tabs.is-shortcut-mode[data-morph-tab="peepal"] .morph-spread span{background:#4CAF50;width:7px;height:4px;border-radius:40%;}
 .bottom-tabs.is-shortcut-mode[data-morph-tab="duniya"] .morph-spread span{background:#7EC8FF;}
@@ -244,7 +252,7 @@ html.quiet-mode .bottom-tabs.is-shortcut-mode .morph-spread{display:none;}
   filter:drop-shadow(0 1px 2px rgba(0,0,0,0.14));
 }
 .bottom-tabs.is-shortcut-mode.is-morph-fx::after{
-  animation:elMorphBurst 1.2s ease both;
+  animation:elMorphBurst 2s ease both;
 }
 
 @keyframes elMorphWash{

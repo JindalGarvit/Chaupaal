@@ -312,7 +312,18 @@
         title: tt('instants_compose_title', 'New Instant'),
         accent: 'baithak',
         bodyHtml,
-        onMount: wire,
+        onMount: (sheet, close) => {
+          const wrapped = () => {
+            try {
+              close();
+            } finally {
+              try {
+                if (typeof restoreAppShell === 'function') restoreAppShell('instants_close');
+              } catch (e) {}
+            }
+          };
+          wire(sheet, wrapped);
+        },
       });
       return;
     }
@@ -327,6 +338,9 @@
     const close = () => {
       if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
       sheet.remove();
+      try {
+        if (typeof restoreAppShell === 'function') restoreAppShell('instants_close');
+      } catch (e) {}
     };
     if (typeof pushNavLayer === 'function') pushNavLayer(sheet, close);
     sheet.querySelector('[data-overlay-dismiss]')?.addEventListener('click', close);
