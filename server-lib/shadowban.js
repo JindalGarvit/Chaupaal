@@ -2,10 +2,14 @@
  * Shadow-ban helpers (Admin SDK only).
  * Tiers: none | soft (hidden from discovery) | severe (discovery hide + content create deny).
  * Soft bans decay after DECAY_MS with no new signals.
+ *
+ * Trust model: client-supplied reason codes must never jump a target to severe.
+ * Each reporterUid contributes at most one count toward thresholds (deduped).
  */
 const SOFT_THRESHOLD = 2;
 const SEVERE_THRESHOLD = 5;
-const IMMEDIATE_SEVERE = new Set(['harassment', 'impersonation']);
+/** Serious report codes floor at soft (like a block), never skip to severe. */
+const SOFT_FLOOR_REASONS = new Set(['harassment', 'impersonation']);
 const DECAY_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
 
 async function setDiscoveryHidden(db, uid, hidden) {
@@ -16,6 +20,27 @@ async function setDiscoveryHidden(db, uid, hidden) {
   if (hidden) {
     await db.collection('users').doc(uid).set({ openToMeet: false }, { merge: true }).catch(() => {});
   }
+}
+
+/**
+ * Pure tier math — exported for unit tests.
+ * @returns {{ count: number, tier: string }}
+ */
+function nextShadowbanState({ prevCount = 0, prevTier = 'none', reasonCode = 'custom', alreadyCounted = false }) {
+  if (alreadyCounted) {
+    return {
+      count: Math.max(0, Number(prevCount) || 0),
+      tier: prevTier === 'severe' ? 'severe' : prevTier === 'soft' ? 'soft' : 'none',
+    };
+  }
+  let count = (Number(prevCount) || 0) + 1;
+  if (SOFT_FLOOR_REASONS.has(String(reasonCode || ''))) {
+    count = Math.max(count, SOFT_THRESHOLD);
+  }
+  let tier = prevTier === 'severe' ? 'severe' : prevTier === 'soft' ? 'soft' : 'none';
+  if (count >= SEVERE_THRESHOLD) tier = 'severe';
+  else if (count >= SOFT_THRESHOLD) tier = tier === 'severe' ? 'severe' : 'soft';
+  return { count, tier };
 }
 
 /**
@@ -50,7 +75,8 @@ async function maybeDecayShadowban(db, admin, uid) {
 
 /**
  * Apply a report signal toward shadowban.
- * @returns {{ tier, count, escalated }}
+ * Same reporterUid never increments count twice for the same reportedUid.
+ * @returns {{ ok, tier, count, escalated, duplicate? }}
  */
 async function applyFlagSignal(db, admin, { reportedUid, reporterUid, reasonCode, chatId }) {
   if (!reportedUid || !reporterUid || reportedUid === reporterUid) {
@@ -58,26 +84,61 @@ async function applyFlagSignal(db, admin, { reportedUid, reporterUid, reasonCode
   }
   await maybeDecayShadowban(db, admin, reportedUid).catch(() => {});
   const ref = db.collection('shadowbans').doc(reportedUid);
+  const reporterRef = ref.collection('reporters').doc(reporterUid);
   const now = admin.firestore.FieldValue.serverTimestamp();
-  let next = { tier: 'none', count: 0, escalated: false };
+  let next = { tier: 'none', count: 0, escalated: false, duplicate: false };
 
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
+    const reporterSnap = await tx.get(reporterRef);
     const data = snap.exists ? snap.data() || {} : {};
-    const count = (Number(data.count) || 0) + 1;
-    let tier = data.tier === 'severe' ? 'severe' : data.tier === 'soft' ? 'soft' : 'none';
-    if (IMMEDIATE_SEVERE.has(String(reasonCode || ''))) tier = 'severe';
-    else if (count >= SEVERE_THRESHOLD) tier = 'severe';
-    else if (count >= SOFT_THRESHOLD) tier = tier === 'severe' ? 'severe' : 'soft';
-
     const prevTier = data.tier || 'none';
-    next = { tier, count, escalated: tier !== prevTier && tier !== 'none' };
+    const alreadyCounted = reporterSnap.exists;
+
+    const state = nextShadowbanState({
+      prevCount: Number(data.count) || 0,
+      prevTier,
+      reasonCode,
+      alreadyCounted,
+    });
+
+    next = {
+      tier: state.tier,
+      count: state.count,
+      escalated: !alreadyCounted && state.tier !== prevTier && state.tier !== 'none',
+      duplicate: alreadyCounted,
+    };
+
+    if (alreadyCounted) {
+      // Refresh last-* metadata for moderation, but do not bump count/tier.
+      tx.set(
+        ref,
+        {
+          lastReasonCode: String(reasonCode || 'custom').slice(0, 40),
+          lastReporterUid: reporterUid,
+          lastChatId: chatId ? String(chatId).slice(0, 80) : null,
+          updatedAt: now,
+        },
+        { merge: true }
+      );
+      return;
+    }
+
+    tx.set(
+      reporterRef,
+      {
+        reasonCode: String(reasonCode || 'custom').slice(0, 40),
+        chatId: chatId ? String(chatId).slice(0, 80) : null,
+        createdAt: now,
+      },
+      { merge: true }
+    );
 
     tx.set(
       ref,
       {
-        count,
-        tier,
+        count: state.count,
+        tier: state.tier,
         lastReasonCode: String(reasonCode || 'custom').slice(0, 40),
         lastReporterUid: reporterUid,
         lastChatId: chatId ? String(chatId).slice(0, 80) : null,
@@ -135,7 +196,9 @@ module.exports = {
   applyBlockSignal,
   setDiscoveryHidden,
   maybeDecayShadowban,
+  nextShadowbanState,
   SOFT_THRESHOLD,
   SEVERE_THRESHOLD,
+  SOFT_FLOOR_REASONS,
   DECAY_MS,
 };

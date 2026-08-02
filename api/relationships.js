@@ -523,6 +523,10 @@ module.exports = async function handler(req, res) {
       const rate = await checkActionRateLimit(user.uid, 'follow');
       if (!rate.ok) return sendError(res, 429, 'RATE_LIMITED', 'Too many relationship changes. Try again shortly.');
     }
+    if (['flag_user', 'chat_rating', 'block_signal'].includes(action)) {
+      const rate = await checkActionRateLimit(user.uid, 'report');
+      if (!rate.ok) return sendError(res, 429, 'RATE_LIMITED', 'Too many reports. Try again shortly.');
+    }
     if (action === 'hydrate') {
       await maybeDecayShadowban(db, admin, user.uid).catch(() => {});
       const targets = Array.isArray(body.targetUids) ? body.targetUids : [];
@@ -693,16 +697,23 @@ module.exports = async function handler(req, res) {
       const score = Math.max(1, Math.min(10, Number(body.score) || 0));
       if (!score) return sendError(res, 400, 'VALIDATION_ERROR', 'score 1–10 required');
       const chatId = body.chatId ? String(body.chatId).slice(0, 80) : null;
-      const ratingRef = db.collection('chatRatings').doc();
-      await ratingRef.set({
+      // One rating doc per rater→peer so spam cannot unbounded-write or stack signals.
+      const ratingId = `${user.uid}_${targetUid}`.slice(0, 180);
+      const ratingRef = db.collection('chatRatings').doc(ratingId);
+      const existingRating = await ratingRef.get();
+      const ratingPatch = {
         raterUid: user.uid,
         peerUid: targetUid,
         chatId,
         score,
         discoveryOrigin: body.discoveryOrigin ? String(body.discoveryOrigin).slice(0, 40) : null,
         intentProfileId: body.intentProfileId ? String(body.intentProfileId).slice(0, 80) : null,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      if (!existingRating.exists) {
+        ratingPatch.createdAt = admin.firestore.FieldValue.serverTimestamp();
+      }
+      await ratingRef.set(ratingPatch, { merge: true });
       // Consistently low → reduce future surfacing; high → modest accepted signal
       const intentProfileId = body.intentProfileId ? String(body.intentProfileId).slice(0, 80) : null;
       if (intentProfileId && body.signalScores) {
@@ -718,7 +729,7 @@ module.exports = async function handler(req, res) {
           });
         }
       }
-      // Very low scores also nudge shadowban soft path
+      // Very low scores also nudge shadowban soft path (reporter-deduped in applyFlagSignal)
       if (score <= 2) {
         await applyFlagSignal(db, admin, {
           reportedUid: targetUid,
