@@ -743,3 +743,7 @@ module.exports = async function handler(req, res) {
     return sendError(res, 500, 'RELATIONSHIP_FAILED', 'Could not update relationship');
   }
 };
+
+// Pure helpers for unit tests (count integrity on profile cards).
+module.exports.normalizeCounts = normalizeCounts;
+module.exports.cleanUid = cleanUid;

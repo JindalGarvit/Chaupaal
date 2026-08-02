@@ -157,4 +157,13 @@ module.exports = {
   CACHE_VERSION,
   generateCatNewsGrounded,
   generateCatMCQGrounded,
+  // Pure helpers exported for unit tests (grounding / URL hygiene).
+  extractAnthropicText,
+  parseJsonArrayLoose,
+  isArticleUrl,
+  normalizeCatLink,
+  sanitizeCatNewsItems,
+  sanitizeCatMCQItems,
+  catNewsLooksGrounded,
+  catMCQLooksGrounded,
 };
