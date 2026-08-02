@@ -13,7 +13,12 @@ const {
   ASSUMPTION_VERSION,
   ASSUMPTION_CATALOGUE,
 } = require('../server-lib/discovery-assumptions');
-const { rankDiscoveryCandidates } = require('../server-lib/discovery-pipeline');
+const {
+  rankDiscoveryCandidates,
+  parseIntentQuery,
+  BATCH_INTERFACE,
+} = require('../server-lib/discovery-pipeline');
+const { LIMITS } = require('../server-lib/rate-limit');
 
 function assert(cond, msg) {
   if (!cond) throw new Error(msg || 'assert failed');
@@ -198,5 +203,102 @@ assert(ASSUMPTION_CATALOGUE.some((a) => a.id === 'dating_opposite_gender'), 'cat
   assert(ranked.length >= 1 && ranked[0].uid === 'plant1', 'specific college recall near top');
 }
 
-console.log('\nDiscovery assumption / recall unit tests passed.');
-console.log('Golden (manual): set AI_FEATURES_ENABLED=true + AI_MODEL_FAST → POST intent_discover with NL query; expect mode=ai_parse.');
+// Preference deltas: not_interested hard-drops; more_like boosts
+{
+  const viewer = {
+    uid: 'v1',
+    gender: 'male',
+    age: 25,
+    profile: { interests: ['Music'], currentCity: 'Pune' },
+    profileEmbedding: { vector: [1, 0, 0] },
+  };
+  const plan = buildQueryPlan({
+    query: 'friends who like music',
+    chipIntent: 'friendship',
+    viewer,
+    aiEnabled: false,
+  });
+  const a = {
+    uid: 'a1',
+    gender: 'female',
+    age: 24,
+    openToMeet: true,
+    profileType: 'personal',
+    interests: ['Music'],
+    profile: { interests: ['Music'], currentCity: 'Pune' },
+    profileEmbedding: { vector: [0.9, 0.1, 0] },
+  };
+  const b = {
+    uid: 'b1',
+    gender: 'female',
+    age: 24,
+    openToMeet: true,
+    profileType: 'personal',
+    interests: ['Music'],
+    profile: { interests: ['Music'], currentCity: 'Pune' },
+    profileEmbedding: { vector: [0.85, 0.15, 0] },
+  };
+  const dropped = rankDiscoveryCandidates({
+    viewer,
+    candidates: [a, b],
+    edgeMap: {},
+    plan,
+    weights: null,
+    prefs: {
+      moreLikeUids: new Set(),
+      notInterestedUids: new Set(['a1']),
+      interestBoost: {},
+    },
+    limit: 5,
+  });
+  assert(dropped.every((r) => r.uid !== 'a1'), 'not_interested uid excluded from rank');
+
+  const boosted = rankDiscoveryCandidates({
+    viewer,
+    candidates: [a, b],
+    edgeMap: {},
+    plan,
+    weights: null,
+    prefs: {
+      moreLikeUids: new Set(['b1']),
+      notInterestedUids: new Set(),
+      interestBoost: {},
+    },
+    limit: 5,
+  });
+  assert(boosted[0].uid === 'b1', 'more_like uid floats above near-peer');
+}
+
+assert(LIMITS.discovery && LIMITS.discovery.minute === 20 && LIMITS.discovery.hour === 200, 'discovery rate limits registered');
+assert(BATCH_INTERFACE.collection === 'discoveryQueryLogs', 'batch interface collection');
+assert(BATCH_INTERFACE.labelsCollection === 'discoveryPreferenceDeltas', 'batch labels collection');
+assert(Object.isFrozen(BATCH_INTERFACE), 'batch interface frozen');
+
+// parseIntentQuery: AI-off and LLM failure both stay deterministic
+(async () => {
+  const off = await parseIntentQuery({
+    query: 'dating in Delhi',
+    chipIntent: 'dating',
+    aiEnabled: false,
+  });
+  assert(off.usedLlm === false, 'AI-off parse skips LLM');
+  assert(off.parsed.searchIntent === 'dating', 'chip intent preserved when AI off');
+
+  const fail = await parseIntentQuery({
+    query: 'dating',
+    chipIntent: 'dating',
+    aiEnabled: true,
+    callAI: async () => {
+      throw new Error('provider down');
+    },
+  });
+  assert(fail.usedLlm === false, 'LLM failure falls back without usedLlm');
+  assert(fail.parsed.searchIntent === 'dating', 'fallback keeps chip intent');
+  assert(!!fail.parseError, 'parseError recorded on failure');
+
+  console.log('\nDiscovery assumption / recall unit tests passed.');
+  console.log('Golden (manual): set AI_FEATURES_ENABLED=true + AI_MODEL_FAST → POST intent_discover with NL query; expect mode=ai_parse.');
+})().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
