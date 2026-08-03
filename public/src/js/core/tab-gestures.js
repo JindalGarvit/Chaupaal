@@ -380,7 +380,7 @@
         },
         {
           id: 'all',
-          label: tt('akhbaar_all', 'All'),
+          label: tt('akhbaar_all', 'Khabar'),
           run: () => {
             switchTo('akhbaar');
             if (typeof setAkhbaarMode === 'function') setAkhbaarMode('all');

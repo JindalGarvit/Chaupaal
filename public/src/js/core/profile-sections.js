@@ -378,8 +378,8 @@
       if (!items.length) return '<div class="public-profile-posts-empty">No items — add from archive or upload</div>';
       return `<div class="cp-sec-items" data-sec-items>${items
         .map(
-          (it, i) => `<div class="cp-sec-item" data-item-i="${i}" draggable="true">
-            <span class="profile-section-drag" data-item-drag>⠿</span>
+          (it, i) => `<div class="cp-sec-item" data-item-i="${i}">
+            <span class="profile-section-drag" data-item-drag title="Long-press to reorder" aria-label="Reorder">⠿</span>
             ${it.url || it.thumb ? `<img src="${escAttr(it.thumb || it.url)}" alt="">` : ''}
             <div class="cp-sec-item-meta">
               <input type="text" data-item-caption value="${escAttr(it.caption || it.label || '')}" placeholder="Caption / label">
@@ -426,7 +426,7 @@
         </div>
         <input type="file" accept="image/*,video/*" data-sec-file hidden multiple>
         <div data-sec-items-host>${renderItems()}</div>
-        <p style="font-size:12px;color:var(--muted);margin:10px 0;">Profile-only items never require a feed post. Drag ⠿ to rearrange.</p>
+        <p style="font-size:12px;color:var(--muted);margin:10px 0;">Profile-only items never require a feed post. Long-press ⠿ to rearrange.</p>
         <button type="button" class="btn btn--primary btn--block" data-sec-save style="margin-top:14px;">Save</button>
       </div>`;
     document.querySelector('.device')?.appendChild(sheet);
@@ -471,21 +471,83 @@
       });
       const list = sheet.querySelector('[data-sec-items]');
       if (!list) return;
+
       let dragI = null;
-      list.querySelectorAll('[data-item-i]').forEach((row) => {
-        row.addEventListener('dragstart', () => {
-          dragI = Number(row.dataset.itemI);
-          row.classList.add('is-dragging');
+      let longPressTimer = null;
+      let reordering = false;
+
+      const clearTimer = () => {
+        if (longPressTimer) clearTimeout(longPressTimer);
+        longPressTimer = null;
+      };
+
+      const rebuildFromDom = () => {
+        syncItemCaptions();
+        const next = [];
+        list.querySelectorAll('[data-item-i]').forEach((row) => {
+          const i = Number(row.dataset.itemI);
+          if (items[i]) next.push(items[i]);
         });
-        row.addEventListener('dragend', () => row.classList.remove('is-dragging'));
-        row.addEventListener('dragover', (e) => e.preventDefault());
-        row.addEventListener('drop', () => {
-          const to = Number(row.dataset.itemI);
-          if (dragI == null || dragI === to) return;
-          syncItemCaptions();
-          const [moved] = items.splice(dragI, 1);
-          items.splice(to, 0, moved);
-          refreshItems();
+        if (next.length === items.length) items = next;
+        refreshItems();
+      };
+
+      list.querySelectorAll('[data-item-i]').forEach((row) => {
+        const handle = row.querySelector('[data-item-drag]') || row;
+        if (handle.dataset.reorderWired) return;
+        handle.dataset.reorderWired = '1';
+
+        handle.addEventListener('pointerdown', (e) => {
+          if (e.button != null && e.button !== 0) return;
+          if (e.target?.closest?.('[data-item-remove], input, textarea, button:not([data-item-drag])')) return;
+          clearTimer();
+          longPressTimer = setTimeout(() => {
+            reordering = true;
+            dragI = Number(row.dataset.itemI);
+            row.classList.add('is-dragging');
+            list.classList.add('is-item-reorder');
+            try {
+              handle.setPointerCapture?.(e.pointerId);
+            } catch (err) {}
+            if (typeof haptic === 'function') haptic('medium');
+          }, 420);
+        });
+        handle.addEventListener('pointerup', () => {
+          clearTimer();
+          if (!reordering) return;
+          reordering = false;
+          list.classList.remove('is-item-reorder');
+          list.querySelectorAll('.is-dragging').forEach((el) => el.classList.remove('is-dragging'));
+          dragI = null;
+          rebuildFromDom();
+        });
+        handle.addEventListener('pointercancel', () => {
+          clearTimer();
+          reordering = false;
+          row.classList.remove('is-dragging');
+          list.classList.remove('is-item-reorder');
+          dragI = null;
+        });
+        handle.addEventListener('pointermove', (e) => {
+          if (!reordering || dragI == null) {
+            if (longPressTimer && (Math.abs(e.movementX) > 6 || Math.abs(e.movementY) > 6)) clearTimer();
+            return;
+          }
+          e.preventDefault();
+          const y = e.clientY;
+          const rows = [...list.querySelectorAll('[data-item-i]')];
+          const dragging = rows.find((r) => Number(r.dataset.itemI) === dragI) || row;
+          for (const other of rows) {
+            if (other === dragging) continue;
+            const rect = other.getBoundingClientRect();
+            const mid = rect.top + rect.height / 2;
+            if (y < mid) {
+              list.insertBefore(dragging, other);
+              break;
+            } else if (other === rows[rows.length - 1] && y > mid) {
+              list.appendChild(dragging);
+            }
+          }
         });
       });
     }
@@ -709,8 +771,11 @@
       return `<div class="profile-links-list">${items
         .slice(0, 12)
         .map((it) => {
-          const url = it.url || '#';
           const label = (it.label || it.caption || 'Link').replace(/</g, '&lt;');
+          if (it.type === 'text' || (!it.url && label)) {
+            return `<div class="profile-link-chip profile-link-chip--text">${label}</div>`;
+          }
+          const url = it.url || '#';
           return `<a class="profile-link-chip" href="${String(url).replace(/"/g, '')}" data-external-link="1">${label}</a>`;
         })
         .join('')}</div>`;
@@ -748,6 +813,12 @@
         .map((it) => {
           const src = it.url || it.thumb || '';
           const cap = (it.caption || it.label || 'Item').replace(/</g, '&lt;');
+          if (it.type === 'link' || (it.url && it.type !== 'image' && it.type !== 'video' && !it.thumb && !String(it.url).match(/\.(jpe?g|png|gif|webp|mp4)/i))) {
+            return `<a class="cp-list-row cp-list-row--link" href="${String(it.url || '#').replace(/"/g, '')}" data-external-link="1"><span>${cap || 'Link'}</span></a>`;
+          }
+          if (it.type === 'text' || (!src && cap)) {
+            return `<div class="cp-list-row cp-list-row--text"><span>${cap}</span></div>`;
+          }
           return `<div class="cp-list-row">${src ? `<img src="${src}" alt="">` : ''}<span>${cap}</span></div>`;
         })
         .join('')}</div>`;

@@ -1,7 +1,7 @@
 /**
  * Swipeable section modes:
  * Peepal — Khoj ← Vriksha → Mashhoor
- * Akhbaar — Surkhiya ← All → Saathi (+ category chips)
+ * Akhbaar — Surkhiya ← Khabar → Saathi (+ category chips)
  * Room-kit headers for visual distinctiveness without labels.
  */
 (function () {
@@ -208,7 +208,7 @@
         <div class="surkhiya-digest">
           ${
             chips ||
-            `<div class="cp-empty surkhiya-empty">${tt('surkhiya_empty', 'Digest warming up — open All to start today’s quiz.')}</div>`
+            `<div class="cp-empty surkhiya-empty">${tt('surkhiya_empty', 'Digest warming up — open Khabar to start today’s quiz.')}</div>`
           }
         </div>
         <div class="akhbaar-surkhiya-chips">
@@ -544,7 +544,13 @@
    */
   function swipeTargetIgnored(target) {
     try {
-      return !!(target && target.closest && target.closest('[data-nav-ignore="1"], #cpMiniPlayer'));
+      return !!(
+        target &&
+        target.closest &&
+        target.closest(
+          '[data-nav-ignore="1"], #cpMiniPlayer, .peepal-intent-chips, [data-khoj-chips], .khoj-intent-card .peepal-intent-chips, .peepal-nudge-chip, .akhbaar-cat-chip, .akhbaar-cat-bar, [data-swipe-ignore]'
+        )
+      );
     } catch (e) {
       return false;
     }
@@ -586,7 +592,7 @@
         if (ignored || locked !== 'h') return;
         const dx = (e.changedTouches[0]?.clientX || 0) - sx;
         if (Math.abs(dx) < 56) return;
-        // Surkhiya mode: swipe left → All
+        // Surkhiya mode: swipe left → Khabar (data-cat=all)
         if (akhbaarMode === 'surkhiya') {
           if (dx < 0) setAkhbaarMode('all');
           return;

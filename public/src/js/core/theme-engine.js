@@ -1,13 +1,13 @@
 /**
  * Chaupaal display / sensory theme engine.
  * True Material-like Light is the baseline. Other anchors derive from Light.
- * Auto = Light-first + subtle sky/weather (not a costume). Fixed Light = no atmosphere.
+ * Auto = Light-first + always-perceptible sky/weather wash (not a costume). Fixed Light = no atmosphere.
  *
  * Flags:
- *   sensory_theme  → continuous Auto interpolation
- *   ambient_sound  → independent kill switch
+ *   sensory_theme  → continuous Auto interpolation (discrete anchors when off)
+ *   ambient_sound  → independent kill switch (do not change defaults in atmosphere passes)
  *
- * When sensory_theme is off, Auto uses discrete Light-derived anchors (same Light baseline).
+ * Visual Auto atmosphere is always on when display mode is Auto (not gated by sensory_theme).
  */
 (function () {
   'use strict';
@@ -615,31 +615,62 @@
     const keyTemp = atmosphereOn ? (s.isDay ? 0.38 + warm * 0.35 : 0.22 + warm * 0.15) : 0.42;
     set('--light-key-temp', String(keyTemp.toFixed(3)));
     set('--light-key-elev', String((atmosphereOn ? 0.85 + bright * 0.2 : 1).toFixed(3)));
-    // Stronger warm edge wash near golden hour / dawn — still Light-first (no parchment costume)
+    // Stronger, always-on Auto sky wash (even clear day) — perceptible vs fixed Light, not a costume
+    let skyWash = 'transparent';
+    if (atmosphereOn) {
+      if (!s.isDay || anchor === 'night') {
+        skyWash = 'rgba(48, 72, 120, 0.14)';
+      } else if (anchor === 'dawn') {
+        skyWash = 'rgba(255, 186, 140, 0.09)';
+      } else if (anchor === 'goldenHour') {
+        skyWash = 'rgba(255, 168, 88, 0.10)';
+      } else if (anchor === 'overcast' || bucket === 'overcast' || bucket === 'fog') {
+        skyWash = 'rgba(150, 168, 190, 0.08)';
+      } else if (
+        bucket === 'rain' ||
+        bucket === 'storm' ||
+        bucket === 'drizzle' ||
+        bucket === 'snow' ||
+        anchor === 'rainy'
+      ) {
+        skyWash = 'rgba(110, 140, 175, 0.09)';
+      } else {
+        // clear day — soft sky blue (always readable vs Light's flat gray)
+        skyWash = 'rgba(120, 175, 230, 0.075)';
+      }
+    }
     const warmWash =
-      atmosphereOn && s.isDay && (anchor === 'goldenHour' || anchor === 'dawn' || warm > 0.5)
-        ? Math.min(0.06, 0.015 + warm * 0.05)
+      atmosphereOn && s.isDay && (anchor === 'goldenHour' || anchor === 'dawn')
+        ? Math.min(0.05, 0.02 + warm * 0.04)
         : 0;
     const lightCast =
       warmWash > 0
         ? `rgba(${Math.round(255 * Math.min(1, warm + 0.2))}, ${Math.round(180 + 35 * warm)}, ${Math.round(100 + 40 * (1 - warm))}, ${warmWash.toFixed(3)})`
-        : 'transparent';
+        : skyWash;
     set('--light-cast', lightCast);
-    set(
-      '--theme-overlay',
-      lightCast === 'transparent' ? 'rgba(0,0,0,0)' : lightCast
-    );
+    set('--theme-overlay', skyWash);
     // Cool dim for rain/fog; soft night dim
     const wxDim =
       atmosphereOn && (bucket === 'rain' || bucket === 'storm' || bucket === 'drizzle' || bucket === 'fog')
         ? 0.04 + clamp01(s.precipitation) * 0.06
-        : atmosphereOn
-          ? (1 - bright) * 0.08
-          : 0;
+        : atmosphereOn && (!s.isDay || anchor === 'night')
+          ? 0.1
+          : atmosphereOn
+            ? (1 - bright) * 0.05
+            : 0;
     set('--theme-dim', String(wxDim));
     set('--theme-fog', String(atmosphereOn && bucket === 'fog' ? 0.45 : 0));
     set('--theme-storm', String(atmosphereOn && bucket === 'storm' ? clamp01(s.precipitation || 0.8) : 0));
 
+    // theme_color: slight TOD tint in Auto so OS chrome differs from fixed Light
+    const TOD_META = {
+      dawn: '#F3E6DA',
+      clearDay: '#E6EFF7',
+      goldenHour: '#F3E4D2',
+      overcast: '#ECEFF2',
+      rainy: '#E8EDF2',
+      night: DARK_META,
+    };
     const metaColor =
       mode === 'light'
         ? LIGHT_META
@@ -647,9 +678,14 @@
           ? DARK_META
           : mode === 'night'
             ? NIGHT_META
-            : s.metaThemeColor || (s.isDay ? LIGHT_META : DARK_META);
+            : TOD_META[anchor] || (s.isDay ? TOD_META.clearDay : TOD_META.night);
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', metaColor);
+    try {
+      if (typeof updatePwaAtmosphereChrome === 'function') {
+        updatePwaAtmosphereChrome({ mode, anchor, isDay: s.isDay, bucket, themeColor: metaColor });
+      }
+    } catch (e) {}
 
     const statusBar = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
     if (statusBar) {
@@ -674,7 +710,8 @@
     root.classList.toggle('theme-fog', atmosphereOn && bucket === 'fog');
     root.classList.toggle('theme-storm', atmosphereOn && bucket === 'storm');
     root.classList.toggle('theme-snow', atmosphereOn && bucket === 'snow');
-    root.classList.toggle('theme-sensory', !!sensoryEnabled && mode === 'auto');
+    // Visual Auto atmosphere always on in Auto (flag sensory_theme only gates continuous interpolation)
+    root.classList.toggle('theme-sensory', atmosphereOn);
     root.classList.add('theme-preset-' + mode);
     try {
       root.style.colorScheme = s.isDay ? 'light' : 'dark';
@@ -682,9 +719,9 @@
 
     // Atmosphere particles even in Quiet (visual only) — Quiet calms motion via prefersReduced
     if (atmosphereOn) {
-      ensureWeatherAtmosphere(s.precipitation || 0, s.weatherBucket || weatherCtx.bucket);
+      ensureWeatherAtmosphere(s.precipitation || 0, s.weatherBucket || weatherCtx.bucket, anchor);
     } else {
-      ensureWeatherAtmosphere(0, null);
+      ensureWeatherAtmosphere(0, null, null);
     }
     window.__chaupaalTheme = anchor;
     window.__chaupaalThemeState = s;
@@ -699,7 +736,7 @@
   }
 
   /** Weather particles / wash — always behind UI. Fixed Light/Dark/Night call with precip=0. */
-  function ensureWeatherAtmosphere(precip, bucket) {
+  function ensureWeatherAtmosphere(precip, bucket, anchor) {
     const device = document.querySelector('.device') || document.body;
     let el = document.getElementById('themeRainOverlay');
     if (!el) {
@@ -711,6 +748,15 @@
     }
     el.className = 'theme-weather-overlay';
 
+    // No atmosphere for fixed presets (anchor null) or when cleared
+    if (anchor == null && !bucket && !(precip > 0)) {
+      el.style.opacity = '0';
+      el.innerHTML = '';
+      el.dataset.wxMode = '';
+      el.className = 'theme-weather-overlay';
+      return;
+    }
+
     const p = clamp01(precip);
     const isSnow = bucket === 'snow';
     const isFog = bucket === 'fog';
@@ -720,36 +766,54 @@
     const showFog = isFog;
     const reduced = prefersReducedMotion() || quietModeOn();
 
+    // Always-on soft sky / time-of-day layer in Auto
+    let finalTod = 'day';
+    if (anchor === 'night') finalTod = 'night';
+    else if (anchor === 'dawn') finalTod = 'dawn';
+    else if (anchor === 'goldenHour') finalTod = 'golden';
+    else if (anchor === 'overcast' || bucket === 'overcast' || bucket === 'fog') finalTod = 'overcast';
+    else finalTod = 'day';
+
+    el.classList.add('is-sky');
+    ['dawn', 'day', 'golden', 'overcast', 'night'].forEach((t) => el.classList.remove('is-tod-' + t));
+    el.classList.add('is-tod-' + finalTod);
     el.classList.toggle('is-rain', showRain);
     el.classList.toggle('is-snow', showSnow);
     el.classList.toggle('is-fog', showFog);
     el.classList.toggle('is-storm', isStorm && showRain);
     el.classList.toggle('is-drizzle', bucket === 'drizzle' && showRain);
 
-    const maxOp = isSnow ? 0.28 : isFog ? 0.35 : isStorm ? 0.32 : 0.26;
-    el.style.opacity = String(
-      showRain || showSnow || showFog ? Math.min(maxOp, 0.08 + Math.max(p, showFog ? 0.4 : 0) * maxOp) : 0
-    );
+    const skyOp = finalTod === 'night' ? 0.34 : finalTod === 'dawn' || finalTod === 'golden' ? 0.3 : 0.26;
+    const weatherOp =
+      showRain || showSnow || showFog
+        ? Math.min(isSnow ? 0.28 : isFog ? 0.35 : isStorm ? 0.32 : 0.26, 0.08 + Math.max(p, showFog ? 0.4 : 0) * 0.28)
+        : 0;
+    el.style.opacity = String(Math.max(skyOp, weatherOp));
 
     if (reduced) {
-      // Keep wash/opacity; drop moving particles
-      el.innerHTML = '';
-      el.dataset.wxMode = reduced ? 'static' : '';
+      // Keep wash; soft static clouds only
+      el.innerHTML =
+        '<span class="wx-sky-wash"></span><span class="wx-cloud wx-cloud--1"></span><span class="wx-cloud wx-cloud--2"></span>';
+      el.dataset.wxMode = 'static-' + finalTod;
       return;
     }
 
     if (!showRain && !showSnow && !showFog) {
-      el.innerHTML = '';
-      el.dataset.wxMode = '';
+      el.innerHTML =
+        '<span class="wx-sky-wash"></span><span class="wx-cloud wx-cloud--1"></span><span class="wx-cloud wx-cloud--2"></span>';
+      el.dataset.wxMode = 'sky-' + finalTod;
       return;
     }
 
     const mode = showFog ? 'fog' : showSnow ? 'snow' : isStorm ? 'storm' : bucket === 'drizzle' ? 'drizzle' : 'rain';
-    if (el.dataset.wxMode === mode && el.childElementCount) return;
+    if (el.dataset.wxMode === mode + '-' + finalTod && el.childElementCount) return;
 
-    el.dataset.wxMode = mode;
+    el.dataset.wxMode = mode + '-' + finalTod;
+    const skyBits =
+      '<span class="wx-sky-wash"></span><span class="wx-cloud wx-cloud--1"></span><span class="wx-cloud wx-cloud--2"></span>';
     if (showFog) {
-      el.innerHTML = '<span class="wx-fog-veil"></span><span class="wx-fog-veil wx-fog-veil--2"></span>';
+      el.innerHTML =
+        skyBits + '<span class="wx-fog-veil"></span><span class="wx-fog-veil wx-fog-veil--2"></span>';
       return;
     }
     const count = showSnow
@@ -759,11 +823,15 @@
         : bucket === 'drizzle'
           ? Math.round(10 + p * 10)
           : Math.round(16 + p * 16);
-    const bits = [];
+    const bits = [skyBits];
     for (let i = 0; i < count; i++) {
       const left = (i * 37 + 11) % 100;
       const delay = ((i * 0.37) % 4.5).toFixed(2);
-      const dur = showSnow ? (7 + (i % 5) * 1.4).toFixed(1) : isStorm ? (1.4 + (i % 4) * 0.35).toFixed(2) : (2.0 + (i % 5) * 0.4).toFixed(2);
+      const dur = showSnow
+        ? (7 + (i % 5) * 1.4).toFixed(1)
+        : isStorm
+          ? (1.4 + (i % 4) * 0.35).toFixed(2)
+          : (2.0 + (i % 5) * 0.4).toFixed(2);
       const size = showSnow ? 2 + (i % 3) : isStorm ? 1.5 : 1;
       if (showSnow) {
         bits.push(
@@ -780,8 +848,33 @@
   }
 
   function ensureRainOverlay(precip) {
-    ensureWeatherAtmosphere(precip, weatherCtx.bucket);
+    ensureWeatherAtmosphere(precip, weatherCtx.bucket, getState()?.anchor || null);
   }
+
+  /** Best-effort PWA chrome: theme_color + favicon hint. Dynamic home-screen icons are not reliable (esp. iOS). */
+  function updatePwaAtmosphereChrome({ mode, anchor, isDay, bucket, themeColor }) {
+    if (mode !== 'auto') return;
+    const color = themeColor || (isDay ? '#E6EFF7' : '#121316');
+    document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', color));
+    // Browser tab favicon swap (installed PWA icons usually need reinstall — documented)
+    let link = document.querySelector('link[rel="icon"][data-atmo-icon="1"]');
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      link.setAttribute('data-atmo-icon', '1');
+      document.head.appendChild(link);
+    }
+    // Reuse brand icons — night uses same mark; theme_color carries atmosphere for OS chrome
+    const href =
+      !isDay || anchor === 'night'
+        ? '/icon-192-charpai-v2as.png'
+        : bucket === 'rain' || bucket === 'storm' || bucket === 'drizzle'
+          ? '/icon-192-charpai-v2as.png'
+          : '/icon-192-charpai-v2as.png';
+    if (link.getAttribute('href') !== href) link.setAttribute('href', href);
+    link.sizes = '192x192';
+  }
+  window.updatePwaAtmosphereChrome = updatePwaAtmosphereChrome;
 
   function recompute(reason) {
     const now = Date.now();

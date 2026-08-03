@@ -101,6 +101,8 @@
     wordguess: { key: 'chaupaal_pb_wordguess', label: 'guesses', higherBetter: false },
     ankjod: { key: 'chaupaal_pb_ankjod', label: 's', higherBetter: false },
     quiz: { key: 'chaupaal_pb_quiz', label: '/10', higherBetter: true },
+    streetcricket: { key: 'chaupaal_pb_streetcricket', label: 'runs', higherBetter: true },
+    gullykick: { key: 'chaupaal_pb_gullykick', label: 'goals', higherBetter: true },
   };
 
   function gameFeedback(action, opts) {
@@ -1227,8 +1229,21 @@
   }
 
   /* ── Dangal progress · stats · soft weekly missions (local, per active profile) ── */
-  const SCORE_FOCUS_GAMES = { rushrunner: true, tiptap: true, ankjod: true, wordguess: true };
-  const HIGHER_BETTER_SCORE = { rushrunner: true, tiptap: true, quiz: true };
+  const SCORE_FOCUS_GAMES = {
+    rushrunner: true,
+    tiptap: true,
+    ankjod: true,
+    wordguess: true,
+    streetcricket: true,
+    gullykick: true,
+  };
+  const HIGHER_BETTER_SCORE = {
+    rushrunner: true,
+    tiptap: true,
+    quiz: true,
+    streetcricket: true,
+    gullykick: true,
+  };
   const LOWER_BETTER_SCORE = { wordguess: true, ankjod: true };
 
   function normalizeDangalGameId(gameId) {

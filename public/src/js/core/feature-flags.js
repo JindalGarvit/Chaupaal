@@ -94,7 +94,7 @@
       percent: 0,
       allowList: [],
       denyList: [],
-      note: 'Continuous sensory theming (time + weather interpolation). Off = discrete 6-state themes.',
+      note: 'Continuous Auto interpolation (time+weather blend). Visual Auto atmosphere always on; this flag only gates continuous vs discrete anchors.',
     },
     ambient_sound: {
       enabled: false,

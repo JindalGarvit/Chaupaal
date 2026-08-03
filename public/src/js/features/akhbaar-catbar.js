@@ -1,5 +1,5 @@
 // ===================== AKHBAAR CATEGORY BAR =====================
-// Order: All → Saathi → others → Add (Add is control only — not in swipe walk)
+// Order: Khabar → Saathi → others → Add (Add is control only — not in swipe walk)
 let akhbaarActiveCat = 'all';
 
 function initAkhbaarCatBar() {

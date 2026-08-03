@@ -80,8 +80,26 @@
       return dx;
     }
 
+    function pointerIgnored(target) {
+      try {
+        return !!(
+          target &&
+          target.closest &&
+          target.closest(
+            '[data-nav-ignore="1"], [data-swipe-ignore], .peepal-intent-chips, [data-khoj-chips], .peepal-nudge-chip, .akhbaar-cat-bar, .akhbaar-cat-chip'
+          )
+        );
+      } catch (e) {
+        return false;
+      }
+    }
+
     function onPointerDown(e) {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (pointerIgnored(e.target)) {
+        tracking = false;
+        return;
+      }
       // Don't steal vertical scroll ownership from nested scrollers mid-gesture
       tracking = true;
       dragging = false;

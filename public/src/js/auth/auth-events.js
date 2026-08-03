@@ -1590,7 +1590,7 @@ document.getElementById('reg1Next')?.addEventListener('click', async () => {
 
       const cta = document.getElementById('authSuccessCta');
       if (cta) {
-        cta.textContent = 'Enter Chaupaal';
+        cta.textContent = 'Finish your Digital →';
         if (!cta.dataset.wired) {
           cta.dataset.wired = '1';
           cta.addEventListener('click', async () => {
@@ -1600,15 +1600,35 @@ document.getElementById('reg1Next')?.addEventListener('click', async () => {
             if (typeof AuthProfiles !== 'undefined' && AuthProfiles.rememberCurrentAccount) {
               AuthProfiles.rememberCurrentAccount();
             }
-            hideAuth();
-            updateProfileBtn();
-            if (typeof loadStreak === 'function') loadStreak();
-            if (typeof registerSession === 'function') {
-              try {
-                await registerSession();
-              } catch (e) {}
+            const enterApp = async () => {
+              hideAuth();
+              updateProfileBtn();
+              if (typeof loadStreak === 'function') loadStreak();
+              if (typeof registerSession === 'function') {
+                try {
+                  await registerSession();
+                } catch (e) {}
+              }
+              syncEmailVerifyBanner();
+            };
+            if (typeof openDigitalCanvasDeepen === 'function') {
+              hideAuth();
+              updateProfileBtn();
+              openDigitalCanvasDeepen({
+                reason: 'post_signup',
+                onDone: async () => {
+                  if (typeof loadStreak === 'function') loadStreak();
+                  if (typeof registerSession === 'function') {
+                    try {
+                      await registerSession();
+                    } catch (e) {}
+                  }
+                  syncEmailVerifyBanner();
+                },
+              });
+            } else {
+              await enterApp();
             }
-            syncEmailVerifyBanner();
           });
         }
       }

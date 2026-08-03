@@ -69,7 +69,7 @@
       <div class="peepal-card peepal-intent-card peepal-intent-card--khoj" id="khojIntentCard">
         <div class="peepal-intent-card-title">${tt('khoj_title', 'Khoj')}</div>
         <div class="peepal-intent-card-sub">${tt('khoj_sub', 'Describe who you’re looking for — type anything, and we’ll filter matching people.')}</div>
-        <div class="peepal-intent-chips" data-khoj-chips>${chipsHtml}</div>
+        <div class="peepal-intent-chips" data-khoj-chips data-swipe-ignore>${chipsHtml}</div>
         <textarea id="khojIntentInput" class="peepal-ai-search-input khoj-intent-input" rows="2"
           placeholder="${tt('khoj_ph', 'Who are you hoping to meet?')}"
           data-living-ph="khoj_intent" enterkeyhint="search"></textarea>

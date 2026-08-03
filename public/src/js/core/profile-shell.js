@@ -281,15 +281,276 @@
     const layout = tab.layout || tab.type || 'grid';
     const body =
       typeof renderCustomSectionBody === 'function'
-        ? renderCustomSectionBody({ ...tab, type: layout === 'stack' || layout === 'list' ? (layout === 'list' ? 'links' : 'flexible') : layout })
+        ? renderCustomSectionBody({ ...tab, layout, type: tab.type || layout })
         : '<div class="public-profile-posts-empty">Empty section</div>';
     return `<div class="cp-custom-pane" data-layout="${esc(layout)}" data-section-id="${esc(tab.id)}">
       ${editable ? `<div class="cp-custom-toolbar">
         <button type="button" class="btn" data-edit-custom="${esc(tab.id)}">Edit section</button>
-        <span class="profile-section-drag" data-tab-drag="${esc(tab.id)}" title="Drag to reorder tabs">⠿</span>
+        <span class="profile-section-drag" data-tab-drag="${esc(tab.id)}" title="Long-press tabs to reorder">⠿</span>
       </div>` : ''}
       <div class="cp-custom-body" data-custom-layout="${esc(layout)}">${body}</div>
     </div>`;
+  }
+
+  /** Long-press / pointer reorder for custom profile tabs (matches section reorder). */
+  function wireCustomTabReorder(tabBar, { onPersist } = {}) {
+    if (!tabBar || tabBar.dataset.tabReorderWired) return;
+    tabBar.dataset.tabReorderWired = '1';
+    let dragId = null;
+    let longPressTimer = null;
+    let reordering = false;
+    let suppressClick = false;
+
+    const clearTimer = () => {
+      if (longPressTimer) clearTimeout(longPressTimer);
+      longPressTimer = null;
+    };
+
+    const customButtons = () =>
+      [...tabBar.querySelectorAll('.cp-profile-tab[data-tab]')].filter(
+        (b) => !['digital', 'duniya', 'peepal'].includes(b.dataset.tab)
+      );
+
+    const endReorder = async () => {
+      clearTimer();
+      if (!reordering) return;
+      reordering = false;
+      tabBar.classList.remove('is-tab-reorder');
+      tabBar.querySelectorAll('.is-dragging').forEach((el) => el.classList.remove('is-dragging'));
+      const order = ['digital', 'duniya', 'peepal'];
+      tabBar.querySelectorAll('.cp-profile-tab[data-tab]').forEach((b) => {
+        if (!order.includes(b.dataset.tab)) order.push(b.dataset.tab);
+      });
+      dragId = null;
+      suppressClick = true;
+      setTimeout(() => {
+        suppressClick = false;
+      }, 280);
+      await persistTabOrder(order);
+      if (typeof onPersist === 'function') onPersist(order);
+      if (typeof showToast === 'function') showToast('Tab order saved');
+    };
+
+    customButtons().forEach((btn) => {
+      if (btn.dataset.reorderWired) return;
+      btn.dataset.reorderWired = '1';
+      btn.title = 'Long-press to reorder';
+      btn.setAttribute('aria-label', `${btn.textContent || 'Tab'} — long-press to reorder`);
+
+      btn.addEventListener(
+        'click',
+        (e) => {
+          if (suppressClick || reordering) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+          }
+        },
+        true
+      );
+
+      btn.addEventListener('pointerdown', (e) => {
+        if (e.button != null && e.button !== 0) return;
+        clearTimer();
+        longPressTimer = setTimeout(() => {
+          reordering = true;
+          dragId = btn.dataset.tab;
+          btn.classList.add('is-dragging');
+          tabBar.classList.add('is-tab-reorder');
+          try {
+            btn.setPointerCapture?.(e.pointerId);
+          } catch (err) {}
+          if (typeof haptic === 'function') haptic('medium');
+        }, 420);
+      });
+      btn.addEventListener('pointerup', endReorder);
+      btn.addEventListener('pointercancel', () => {
+        clearTimer();
+        reordering = false;
+        btn.classList.remove('is-dragging');
+        tabBar.classList.remove('is-tab-reorder');
+        dragId = null;
+      });
+      btn.addEventListener('pointermove', (e) => {
+        if (!reordering || !dragId) {
+          if (longPressTimer && (Math.abs(e.movementX) > 6 || Math.abs(e.movementY) > 6)) clearTimer();
+          return;
+        }
+        e.preventDefault();
+        const x = e.clientX;
+        const customs = customButtons();
+        const dragging = customs.find((b) => b.dataset.tab === dragId);
+        if (!dragging) return;
+        for (const other of customs) {
+          if (other === dragging) continue;
+          const rect = other.getBoundingClientRect();
+          const mid = rect.left + rect.width / 2;
+          if (x < mid) {
+            tabBar.insertBefore(dragging, other);
+            break;
+          } else if (other === customs[customs.length - 1] && x > mid) {
+            const addBtn = tabBar.querySelector('[data-add-tab]');
+            if (addBtn) tabBar.insertBefore(dragging, addBtn);
+            else tabBar.appendChild(dragging);
+          }
+        }
+      });
+    });
+  }
+
+  const DIGITAL_DEEPEN_KEY = 'chaupaal_digital_deepen_v1';
+
+  function needsDigitalCanvasDeepen(profile) {
+    try {
+      if (localStorage.getItem(DIGITAL_DEEPEN_KEY) === 'done') return false;
+    } catch (e) {}
+    const dp = profile || (typeof digitalProfile !== 'undefined' ? digitalProfile : {}) || {};
+    const bio = String(dp.bio || '').trim();
+    const city = String(dp.currentCity || '').trim();
+    const prompts = Array.isArray(dp.prompts) ? dp.prompts.filter((p) => p?.answer) : [];
+    return !bio || !city || prompts.length < 1;
+  }
+
+  /** Post-signup / first-profile canvas deepen — same digitalProfile + Firestore fields. */
+  function openDigitalCanvasDeepen(opts = {}) {
+    document.getElementById('digitalCanvasDeepenSheet')?.remove();
+    try {
+      sessionStorage.setItem('chaupaal_digital_deepen_offered', '1');
+    } catch (e) {}
+    const dp = (typeof digitalProfile !== 'undefined' ? digitalProfile : {}) || {};
+    const bank =
+      (typeof PROFILE_PROMPT_BANK !== 'undefined' && Array.isArray(PROFILE_PROMPT_BANK)
+        ? PROFILE_PROMPT_BANK
+        : []) || [];
+    const pick = bank.slice(0, 8);
+    const sheet = document.createElement('div');
+    sheet.id = 'digitalCanvasDeepenSheet';
+    sheet.className = 'archive-overlay digital-canvas-deepen';
+    sheet.setAttribute('data-nav-managed', '1');
+    const escAttr = (s) => String(s || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    sheet.innerHTML = `
+      <div class="archive-header">
+        <button type="button" data-overlay-dismiss aria-label="Skip">←</button>
+        <div style="flex:1"><strong>Your Digital canvas</strong></div>
+        <button type="button" class="btn" data-deepen-skip style="font-size:12px;">Skip</button>
+      </div>
+      <div class="digital-canvas-deepen-body">
+        <div class="auth-profile-canvas digital-canvas-deepen-preview">
+          <div class="auth-profile-canvas-hero">
+            <div class="auth-profile-canvas-avatar" aria-hidden="true">🪑</div>
+            <div class="auth-canvas-live-name">${esc(dp.displayName || 'Your name')}</div>
+            <div class="auth-canvas-live-handle">@${esc((dp.username || 'username').replace(/^@/, ''))}</div>
+            <p class="digital-canvas-live-bio" data-live-bio>${esc(dp.bio || 'Your bio will show here')}</p>
+            <p class="digital-canvas-live-city" data-live-city>${esc(dp.currentCity ? `📍 ${dp.currentCity}` : 'City on your Digital tab')}</p>
+          </div>
+          <label class="story-editor-field">Bio
+            <textarea data-deepen-bio maxlength="280" rows="3" placeholder="A line or two about you">${escAttr(dp.bio || '')}</textarea>
+          </label>
+          <label class="story-editor-field">City
+            <input type="text" data-deepen-city maxlength="60" placeholder="e.g. Mumbai" value="${escAttr(dp.currentCity || '')}">
+          </label>
+          <label class="story-editor-field">Prompt
+            <select data-deepen-prompt-id>
+              ${pick
+                .map(
+                  (p) =>
+                    `<option value="${escAttr(p.id)}">${esc(p.text)}</option>`
+                )
+                .join('')}
+            </select>
+          </label>
+          <label class="story-editor-field">Your answer
+            <textarea data-deepen-prompt-ans maxlength="500" rows="2" placeholder="Free text — shows on Digital">${escAttr(
+              (Array.isArray(dp.prompts) && dp.prompts[0]?.answer) || ''
+            )}</textarea>
+          </label>
+        </div>
+        <p class="digital-canvas-deepen-hint">Same slots as your Digital tab — save anytime from Profile.</p>
+        <button type="button" class="btn btn--primary btn--block" data-deepen-save>Save to Digital</button>
+      </div>`;
+    document.querySelector('.device')?.appendChild(sheet);
+
+    const markDone = () => {
+      try {
+        localStorage.setItem(DIGITAL_DEEPEN_KEY, 'done');
+      } catch (e) {}
+    };
+    const close = () => {
+      if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
+      if (sheet.isConnected) sheet.remove();
+      if (typeof opts.onDone === 'function') opts.onDone();
+    };
+    if (typeof openLayer === 'function') openLayer(sheet, close, { remove: false });
+    else if (typeof pushNavLayer === 'function') {
+      sheet.dataset.navManaged = '1';
+      pushNavLayer(sheet, close);
+    }
+
+    const bioEl = sheet.querySelector('[data-deepen-bio]');
+    const cityEl = sheet.querySelector('[data-deepen-city]');
+    const liveBio = sheet.querySelector('[data-live-bio]');
+    const liveCity = sheet.querySelector('[data-live-city]');
+    const syncLive = () => {
+      const b = bioEl?.value?.trim() || '';
+      const c = cityEl?.value?.trim() || '';
+      if (liveBio) liveBio.textContent = b || 'Your bio will show here';
+      if (liveCity) liveCity.textContent = c ? `📍 ${c}` : 'City on your Digital tab';
+    };
+    bioEl?.addEventListener('input', syncLive);
+    cityEl?.addEventListener('input', syncLive);
+    syncLive();
+
+    const finishSkip = () => {
+      markDone();
+      close();
+    };
+    sheet.querySelector('[data-overlay-dismiss]')?.addEventListener('click', finishSkip);
+    sheet.querySelector('[data-deepen-skip]')?.addEventListener('click', finishSkip);
+    sheet.querySelector('[data-deepen-save]')?.addEventListener('click', () => {
+      const bio = bioEl?.value?.trim() || '';
+      const city = cityEl?.value?.trim() || '';
+      const promptId = sheet.querySelector('[data-deepen-prompt-id]')?.value || '';
+      const answer = sheet.querySelector('[data-deepen-prompt-ans]')?.value?.trim() || '';
+      if (bio && typeof saveProfileField === 'function') saveProfileField('bio', bio);
+      else if (bio && typeof digitalProfile !== 'undefined') {
+        digitalProfile.bio = bio;
+        try {
+          localStorage.setItem('chaupaal_digital_profile', JSON.stringify(digitalProfile));
+        } catch (e) {}
+      }
+      if (city && typeof saveProfileField === 'function') saveProfileField('currentCity', city);
+      else if (city && typeof digitalProfile !== 'undefined') {
+        digitalProfile.currentCity = city;
+        try {
+          localStorage.setItem('chaupaal_digital_profile', JSON.stringify(digitalProfile));
+        } catch (e) {}
+      }
+      if (promptId && answer && typeof savePromptAnswer === 'function') {
+        savePromptAnswer(promptId, answer);
+      } else if (promptId && answer && typeof persistPrompts === 'function') {
+        const bankP = bank.find((p) => p.id === promptId);
+        persistPrompts([
+          {
+            promptId,
+            answer,
+            answeredAt: Date.now(),
+            prompt: bankP?.text,
+          },
+        ]);
+      }
+      markDone();
+      if (typeof showToast === 'function') showToast('Digital canvas updated');
+      close();
+    });
+  }
+
+  function maybeOfferDigitalCanvasDeepen(profile) {
+    if (!needsDigitalCanvasDeepen(profile)) return false;
+    try {
+      if (sessionStorage.getItem('chaupaal_digital_deepen_offered') === '1') return false;
+      sessionStorage.setItem('chaupaal_digital_deepen_offered', '1');
+    } catch (e) {}
+    openDigitalCanvasDeepen({ reason: 'first_profile' });
+    return true;
   }
 
   async function mountProfileShell(host, opts = {}) {
@@ -416,38 +677,17 @@
       }
     });
 
-    // Drag custom tabs to reorder (edit mode)
+    // Long-press custom tabs to reorder (edit mode — touch + desktop)
     if (editable) {
       const tabBar = host.querySelector('[data-profile-tabs]');
-      let dragTab = null;
-      tabBar?.querySelectorAll('.cp-profile-tab[data-tab]').forEach((btn) => {
-        if (['digital', 'duniya', 'peepal'].includes(btn.dataset.tab)) return;
-        btn.draggable = true;
-        btn.addEventListener('dragstart', () => {
-          dragTab = btn.dataset.tab;
-          btn.classList.add('is-dragging');
-        });
-        btn.addEventListener('dragend', async () => {
-          btn.classList.remove('is-dragging');
-          const order = ['digital', 'duniya', 'peepal'];
-          tabBar.querySelectorAll('.cp-profile-tab[data-tab]').forEach((b) => {
-            if (!order.includes(b.dataset.tab)) order.push(b.dataset.tab);
-          });
-          await persistTabOrder(order);
-          dragTab = null;
-        });
-        btn.addEventListener('dragover', (e) => e.preventDefault());
-        btn.addEventListener('drop', (e) => {
-          e.preventDefault();
-          if (!dragTab || dragTab === btn.dataset.tab) return;
-          const from = tabBar.querySelector(`[data-tab="${dragTab}"]`);
-          if (from) tabBar.insertBefore(from, btn);
-        });
-      });
+      if (tabBar) wireCustomTabReorder(tabBar);
     }
 
     const start = tabs.find((t) => t.id === initial)?.id || tabs[0]?.id || 'digital';
     await activateTab(start);
+    if (editable && isOwner && typeof maybeOfferDigitalCanvasDeepen === 'function') {
+      setTimeout(() => maybeOfferDigitalCanvasDeepen(profile), 600);
+    }
     if (typeof restoreAppShell === 'function') restoreAppShell();
   }
 
@@ -457,4 +697,8 @@
   window.getProfileTabOrder = migrateTabOrder;
   window.persistProfileTabOrder = persistTabOrder;
   window.visibleProfileTabs = visibleTabs;
+  window.wireCustomTabReorder = wireCustomTabReorder;
+  window.openDigitalCanvasDeepen = openDigitalCanvasDeepen;
+  window.needsDigitalCanvasDeepen = needsDigitalCanvasDeepen;
+  window.maybeOfferDigitalCanvasDeepen = maybeOfferDigitalCanvasDeepen;
 })();
