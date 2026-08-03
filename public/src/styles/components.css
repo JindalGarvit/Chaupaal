@@ -1589,16 +1589,59 @@ body.theme-goldenHour,
 .archive-hub-tabs--sub button{flex:0 0 auto;min-width:72px;padding:8px 12px;border-radius:999px;border:1.5px solid var(--line);margin-right:6px;}
 .archive-hub-tabs--sub button.active{background:rgba(230,57,70,.08);border-color:var(--red);}
 .archive-journal-compose{margin-bottom:16px;display:flex;flex-direction:column;gap:8px;}
-.archive-journal-compose textarea{
-  width:100%;min-height:72px;padding:12px;border:1.5px solid var(--line);border-radius:12px;
-  font:inherit;resize:vertical;background:var(--cream);
+.archive-journal-compose textarea,
+.journal-compose-wrap textarea{
+  width:100%;min-height:72px;padding:12px;padding-right:48px;border:1.5px solid var(--line);border-radius:12px;
+  font:inherit;resize:vertical;background:var(--cream);box-sizing:border-box;
 }
-.archive-journal-consent{font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:flex-start;}
+.archive-journal-consent,.journal-analysis-consent{font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:flex-start;}
 .archive-hub-body{flex:1;overflow-y:auto;padding:14px 16px 28px;}
 .archive-hub-copy{font-size:12px;color:var(--muted);line-height:1.45;margin-bottom:14px;}
 .archive-hub-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
-.archive-post-row,.archive-highlight-row,.archive-journal-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);}
-.archive-post-row p,.archive-journal-row p{margin:4px 0 0;font-size:13px;line-height:1.4;}
+.archive-post-row,.archive-highlight-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);}
+.archive-post-row p{margin:4px 0 0;font-size:13px;line-height:1.4;}
+
+/* Journal compose mic + expandable Archive rows */
+.journal-compose-wrap{position:relative;}
+.journal-compose-mic{
+  position:absolute;right:8px;bottom:8px;width:36px;height:36px;border:none;border-radius:50%;
+  background:var(--cream);color:var(--ink);display:inline-flex;align-items:center;justify-content:center;
+  cursor:pointer;box-shadow:0 0 0 1px var(--line);
+}
+.journal-compose-mic.recording{background:rgba(230,57,70,.12);color:var(--red);}
+.journal-compose-mic[hidden],.journal-compose-mic[style*="display: none"]{display:none!important;}
+.journal-checkin-prompt{font:600 14px/1.35 'Space Grotesk',sans-serif;margin:0 0 10px;color:var(--ink);}
+.journal-checkin-dismiss{
+  width:100%;margin-top:8px;padding:10px;border:none;background:none;color:var(--muted);
+  font:600 13px/1.2 inherit;cursor:pointer;
+}
+.journal-checkin-body{padding:4px 2px 8px;}
+.cp-half-sheet--compact .journal-checkin-body textarea{min-height:88px;}
+
+.archive-journal-row{
+  display:grid;grid-template-columns:1fr auto;gap:8px 10px;align-items:start;
+  padding:12px 0;border-bottom:1px solid var(--line);cursor:pointer;
+}
+.archive-journal-row-main{min-width:0;}
+.archive-journal-dates{display:flex;flex-direction:column;gap:2px;margin-bottom:4px;}
+.archive-journal-date{font:700 12px/1.2 'Space Grotesk',sans-serif;color:var(--ink);}
+.archive-journal-time{font-size:11px;color:var(--muted);}
+.archive-journal-body{margin:0;font-size:13px;line-height:1.45;color:var(--ink);white-space:pre-wrap;word-break:break-word;}
+.archive-journal-body.is-clamped{
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;
+  white-space:normal;
+}
+.archive-journal-row-actions{display:flex;align-items:flex-start;}
+.archive-journal-edit{
+  width:36px;height:36px;border:none;border-radius:10px;background:transparent;color:var(--muted);
+  display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
+}
+.archive-journal-edit:hover{background:var(--cream);color:var(--ink);}
+.archive-journal-edit-panel{grid-column:1 / -1;display:flex;flex-direction:column;gap:8px;padding-top:4px;}
+.archive-journal-edit-panel[hidden]{display:none!important;}
+.archive-journal-edit-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.archive-journal-row.is-expanded{cursor:default;}
+.archive-journal-row.is-expanded .archive-journal-row-main{cursor:pointer;}
 
 /* Chaupaal Profile hub */
 .chaupaal-hub-overlay{

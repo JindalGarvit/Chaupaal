@@ -212,7 +212,7 @@ window.openSettingsModal = openSettingsModal;
 document.getElementById('settingsBtn')?.addEventListener('click', openSettingsModal);
 document.getElementById('settingsArchiveBtn')?.addEventListener('click',()=>{
   document.getElementById('settingsModal')?.classList.add('hidden');
-  if(typeof openArchiveHub==='function') openArchiveHub('stories');
+  if(typeof openArchiveHub==='function') openArchiveHub('journal');
   else if(typeof openArchive==='function') openArchive();
 });
 document.getElementById('closeSettings').addEventListener('click',()=>document.getElementById('settingsModal').classList.add('hidden'));

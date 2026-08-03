@@ -128,7 +128,7 @@
         ${bioHtml ? `<p class="public-profile-bio">${bioHtml}</p>` : ''}
       </div>
       <div class="own-preview-sections" data-own-preview-sections></div>
-      <p class="own-preview-footnote">Highlights · Digital · Duniya · Peepal — switch to Edit to add custom tabs and rearrange.</p>
+      <p class="own-preview-footnote">Highlights · Profile · Duniya · Peepal — switch to Edit to add custom tabs and rearrange.</p>
     `;
   }
 

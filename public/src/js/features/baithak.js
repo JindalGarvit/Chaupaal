@@ -587,52 +587,46 @@ function showYearlyWrap(){
   document.querySelector('.device').appendChild(wrap);renderPage();
 }
 
-// ===================== HOW WAS YOUR DAY (journal) =====================
-const dayCheckModal=document.createElement('div');
-dayCheckModal.className='day-check-modal';
-dayCheckModal.id='dayCheckModal';
-dayCheckModal.innerHTML=`
-  <div class="day-check-panel" data-sheet-panel>
-    <div class="day-check-title">How was your day?</div>
-    <div class="day-check-sub">Write what's on your mind — saved privately to your Archive, only you can see it</div>
-    <textarea class="day-check-textarea" id="dayCheckText" placeholder="Anything interesting happen today? Something on your mind? Just write..."></textarea>
-    <button class="btn btn--primary btn--block day-check-send" id="dayCheckSend">Save to Journal</button>
-    <button class="day-check-snooze" id="dayCheckSnooze" type="button">Remind me later</button>
-    <button class="day-check-skip" id="dayCheckSkip" type="button">Not today</button>
-  </div>
-`;
-document.querySelector('.device').appendChild(dayCheckModal);
-
+// ===================== JOURNAL CHECK-IN (half-sheet via JournalCheckIn) =====================
 function journalLocalDayKey(){
+  if (typeof JournalCheckIn?.istDateKey === 'function') return JournalCheckIn.istDateKey();
   try{
     return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
   }catch(e){
     return new Date().toISOString().slice(0,10);
   }
 }
-function journalDoneKey(){ return 'chaupaal_journal_done_'+journalLocalDayKey(); }
-function journalDismissKey(){ return 'chaupaal_journal_dismissed_'+journalLocalDayKey(); }
+function journalWindowKey(kind, win){
+  const date = journalLocalDayKey();
+  const w = win || (typeof JournalCheckIn?.journalWindow === 'function' ? JournalCheckIn.journalWindow() : null) || 'evening';
+  return `chaupaal_journal_${kind}_${date}_${w}`;
+}
 function journalSnoozeUntil(){
   try{ return Number(localStorage.getItem('chaupaal_journal_snooze_until')||'0')||0; }catch(e){ return 0; }
 }
+/** Sync gate for graphic cards / events — window-scoped dismiss + done + snooze. */
 function canShowJournalPrompt(){
   try{
-    if(localStorage.getItem(journalDoneKey())) return false;
-    if(localStorage.getItem(journalDismissKey())) return false;
-    const until=journalSnoozeUntil();
-    if(until && Date.now()<until) return false;
+    const win = typeof JournalCheckIn?.journalWindow === 'function' ? JournalCheckIn.journalWindow() : null;
+    if (!win) return false;
+    if (localStorage.getItem(journalWindowKey('done', win))) return false;
+    if (localStorage.getItem(journalWindowKey('dismissed', win))) return false;
+    const until = journalSnoozeUntil();
+    if (until && Date.now() < until) return false;
   }catch(e){}
   return true;
 }
 function markJournalDoneToday(){
   try{
-    localStorage.setItem(journalDoneKey(),'1');
+    const win = typeof JournalCheckIn?.journalWindow === 'function' ? JournalCheckIn.journalWindow() : 'evening';
+    if (win) localStorage.setItem(journalWindowKey('done', win), '1');
     localStorage.removeItem('chaupaal_journal_snooze_until');
   }catch(e){}
 }
 function markJournalDismissedToday(){
   try{
-    localStorage.setItem(journalDismissKey(),'1');
+    const win = typeof JournalCheckIn?.journalWindow === 'function' ? JournalCheckIn.journalWindow() : 'evening';
+    if (win) localStorage.setItem(journalWindowKey('dismissed', win), '1');
     localStorage.removeItem('chaupaal_journal_snooze_until');
   }catch(e){}
 }
@@ -640,7 +634,6 @@ function markJournalDismissedToday(){
 function snoozeJournalPrompt(hours){
   const h=Math.max(1, Math.min(8, Number(hours)||3));
   let until=Date.now()+h*60*60*1000;
-  // Cap at end of local IST day so snooze never spills into tomorrow's trigger
   try{
     const parts=journalLocalDayKey().split('-').map(Number);
     const end=new Date(Date.UTC(parts[0],parts[1]-1,parts[2],18,29,59)); // ~23:59 IST
@@ -654,32 +647,31 @@ window.markJournalDoneToday=markJournalDoneToday;
 window.markJournalDismissedToday=markJournalDismissedToday;
 window.snoozeJournalPrompt=snoozeJournalPrompt;
 
+/** Bridge: old day-check modal → JournalCheckIn half-sheet. */
 function showDayCheck(opts){
-  const force=!!(opts&&opts.force);
-  if(!force && !canShowJournalPrompt()) return false;
-  dayCheckModal.classList.add('open');
-  if (typeof pushNavLayer === 'function' && !dayCheckModal.dataset.navLayer) {
-    dayCheckModal.dataset.navManaged = '1';
-    pushNavLayer(dayCheckModal, () => {
-      dayCheckModal.classList.remove('open');
-      if (typeof removeNavLayer === 'function') removeNavLayer(dayCheckModal);
-    });
+  const o = opts || {};
+  if (typeof maybeShowJournalCheckIn === 'function') {
+    const p = maybeShowJournalCheckIn(o);
+    if (p && typeof p.then === 'function') p.catch(() => {});
+    return true;
   }
-  if(!localStorage.getItem('chaupaal_journal_intro_seen')){
-    setTimeout(()=>showToast('Journal entries stay private in your Archive — only you can see them'),400);
-    localStorage.setItem('chaupaal_journal_intro_seen','1');
+  if (typeof JournalCheckIn?.maybeShow === 'function') {
+    const p = JournalCheckIn.maybeShow(o);
+    if (p && typeof p.then === 'function') p.catch(() => {});
+    return true;
   }
-  setTimeout(()=>{
-    const ta=dayCheckModal.querySelector('#dayCheckText');
-    if(ta) wireAiKbToInput(ta,'User daily journal reflection');
-  },100);
-  return true;
+  if (typeof openJournalComposeSheet === 'function') {
+    openJournalComposeSheet({ window: o.window || (typeof JournalCheckIn?.journalWindow === 'function' ? JournalCheckIn.journalWindow() : null) || 'anytime' });
+    return true;
+  }
+  return false;
 }
 window.showDayCheck = showDayCheck;
 
-// Client evening demo path REMOVED — journal prompts come only from server
-// goodnight_journal events (once/day) so we don't double-prompt at 10 PM.
 function scheduleEveningCheckIn(){
-  /* no-op: server cron + chaupaal-events graphic card is the sole journal trigger */
+  if (typeof JournalCheckIn?.scheduleWatch === 'function') {
+    JournalCheckIn.scheduleWatch();
+    return;
+  }
 }
 window.scheduleEveningCheckIn=scheduleEveningCheckIn;

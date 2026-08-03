@@ -104,7 +104,7 @@ function renderProfileModal(){
       <div data-friend-requests></div>
     </div>
     <div class="own-edit-sections" data-own-edit-sections></div>
-    <p class="dp-reorder-hint">Highlights sit above tabs · Digital / Duniya / Peepal are fixed · ＋ adds custom tabs · edit section items drag to rearrange</p>
+    <p class="dp-reorder-hint">Highlights sit above tabs · Profile / Duniya / Peepal are fixed · ＋ adds custom tabs · edit section items drag to rearrange</p>
     <div class="dp-field-tabs" id="profileSectionTabs">
       ${['Personal','Career','Lifestyle','Relationships','Social'].map((s,i)=>`<button type="button" class="profile-section-tab${i===0?' active':''}" data-sec="${s}">${s}</button>`).join('')}
     </div>

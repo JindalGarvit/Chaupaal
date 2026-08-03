@@ -1,16 +1,27 @@
 /**
  * Instagram-structured profile body: Highlights above tabs,
- * then Digital (dating) · Duniya 3×3 · Peepal 2×2 · custom tabs.
+ * then Profile (dating canvas) · Duniya 3×3 · Peepal 2×2 · custom tabs.
  * Migrates legacy sectionOrder → tabOrder without wiping customs.
  */
 (function () {
   'use strict';
 
   const CORE_TABS = [
-    { id: 'digital', label: 'Digital', builtin: true },
+    { id: 'digital', label: 'Profile', builtin: true },
     { id: 'duniya', label: 'Duniya', builtin: true },
     { id: 'peepal', label: 'Peepal', builtin: true },
   ];
+
+  function coreTabLabel(tab) {
+    if (!tab) return '';
+    if (tab.id === 'digital' && typeof t === 'function') {
+      try {
+        const v = t('profile_tab_digital', 'Profile');
+        if (v && v !== 'profile_tab_digital') return v;
+      } catch (e) {}
+    }
+    return tab.label || tab.id;
+  }
 
   const DIGITAL_BLOCKS = ['bio', 'prompts', 'about', 'lifestyle', 'media', 'links', 'stats', 'pinned'];
 
@@ -90,7 +101,7 @@
     return order
       .map((id) => {
         const core = CORE_TABS.find((t) => t.id === id);
-        if (core) return { ...core };
+        if (core) return { ...core, label: coreTabLabel(core) };
         const c = customs.find((x) => x.id === id);
         if (!c) return null;
         if (c.privacy === 'private' && !(isOwner || editMode)) return null;
@@ -440,7 +451,7 @@
             <div class="auth-canvas-live-name">${esc(dp.displayName || 'Your name')}</div>
             <div class="auth-canvas-live-handle">@${esc((dp.username || 'username').replace(/^@/, ''))}</div>
             <p class="digital-canvas-live-bio" data-live-bio>${esc(dp.bio || 'Your bio will show here')}</p>
-            <p class="digital-canvas-live-city" data-live-city>${esc(dp.currentCity ? `📍 ${dp.currentCity}` : 'City on your Digital tab')}</p>
+            <p class="digital-canvas-live-city" data-live-city>${esc(dp.currentCity ? `📍 ${dp.currentCity}` : 'City on your Profile tab')}</p>
           </div>
           <label class="story-editor-field">Bio
             <textarea data-deepen-bio maxlength="280" rows="3" placeholder="A line or two about you">${escAttr(dp.bio || '')}</textarea>
@@ -464,7 +475,7 @@
             )}</textarea>
           </label>
         </div>
-        <p class="digital-canvas-deepen-hint">Same slots as your Digital tab — save anytime from Profile.</p>
+        <p class="digital-canvas-deepen-hint">Same slots as your Profile tab — save anytime from Profile.</p>
         <button type="button" class="btn btn--primary btn--block" data-deepen-save>Save to Digital</button>
       </div>`;
     document.querySelector('.device')?.appendChild(sheet);
@@ -493,7 +504,7 @@
       const b = bioEl?.value?.trim() || '';
       const c = cityEl?.value?.trim() || '';
       if (liveBio) liveBio.textContent = b || 'Your bio will show here';
-      if (liveCity) liveCity.textContent = c ? `📍 ${c}` : 'City on your Digital tab';
+      if (liveCity) liveCity.textContent = c ? `📍 ${c}` : 'City on your Profile tab';
     };
     bioEl?.addEventListener('input', syncLive);
     cityEl?.addEventListener('input', syncLive);

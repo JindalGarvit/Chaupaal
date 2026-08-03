@@ -150,16 +150,16 @@ function openChatScreen(chat){
   screen.innerHTML = `
     <div class="chat-screen-header">
       <button class="chat-back" id="chatBack" aria-label="Back">${typeof iconHtml==='function'?iconHtml('arrow-left',{size:22}):'←'}</button>
-      <div class="chat-header-avatar${isGroup?' chat-header-tappable':''}" ${isGroup?'data-open-group-info':''} role="${isGroup?'button':''}">${chat.avatar}</div>
-      <div class="chat-header-info${isGroup?' chat-header-tappable':''}" ${isGroup?'data-open-group-info':''} role="${isGroup?'button':''}">
+      <div class="chat-header-avatar${isGroup || !isSelf ? ' chat-header-tappable' : ''}" ${isGroup ? 'data-open-group-info' : !isSelf ? 'data-open-chat-profile' : ''} role="${isGroup || !isSelf ? 'button' : ''}" ${!isSelf ? 'tabindex="0"' : ''}>${chat.avatar}</div>
+      <div class="chat-header-info${isGroup || !isSelf ? ' chat-header-tappable' : ''}" ${isGroup ? 'data-open-group-info' : !isSelf ? 'data-open-chat-profile' : ''} role="${isGroup || !isSelf ? 'button' : ''}" ${!isSelf ? 'tabindex="0"' : ''}>
         <div class="chat-header-name">${(chat.type==='group'||chat.type==='self')?chat.name:(typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(chat.name,chat):chat.name)}</div>
         <div id="chatActivityStatus" style="font-size:11px;color:var(--muted);">${statusLine}</div>
       </div>
       <div class="chat-header-actions">
         ${isSelf?`<button class="chat-header-btn" id="chatSelfSettingsBtn" title="Settings" aria-label="Settings">${typeof iconHtml==='function'?iconHtml('settings',{size:18}):'⚙'}</button>`
           :(isChaupaal
-            ?`<button class="chat-header-btn" id="chatJournalBtn" title="${typeof t==='function'?t('chaupaal_journal','Journal'):'Journal'}" aria-label="Journal">${typeof iconHtml==='function'?iconHtml('book-open',{size:18}):'📓'}</button>
-              <button class="chat-header-btn" id="chatHubBtn" title="${typeof t==='function'?t('chaupaal_hub','Chaupaal Hub'):'Hub'}" aria-label="Chaupaal Hub">${typeof iconHtml==='function'?iconHtml('sparkles',{size:18}):'✨'}</button>`
+            ?`<button class="chat-header-btn chat-header-btn--labeled" id="chatJournalBtn" title="${typeof t==='function'?t('chaupaal_journal','Journal'):'Journal'}" aria-label="Journal"><span class="chat-header-btn-ico">${typeof iconHtml==='function'?iconHtml('notebook',{size:18}):'📓'}</span><span class="chat-header-btn-label">${typeof t==='function'?t('chaupaal_journal','Journal'):'Journal'}</span></button>
+              <button class="chat-header-btn chat-header-btn--labeled" id="chatArchiveBtn" title="${typeof t==='function'?t('chaupaal_archive','Archive'):'Archive'}" aria-label="Archive"><span class="chat-header-btn-ico">${typeof iconHtml==='function'?iconHtml('archive',{size:18}):'🗄'}</span><span class="chat-header-btn-label">${typeof t==='function'?t('chaupaal_archive','Archive'):'Archive'}</span></button>`
             :`<button class="chat-header-btn mehfil-entry" id="chatMehfilBtn" title="${typeof t==='function'?t('mehfil_title'):'Mehfil'}" aria-label="${typeof t==='function'?t('mehfil_title'):'Mehfil'}">${typeof mehfilMarkHtml==='function'?mehfilMarkHtml(20):(typeof iconHtml==='function'?iconHtml('home',{size:18}):'🏠')}</button>`)}
         ${!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatChallengeBtn" title="Create challenge" aria-label="Create challenge">${typeof iconHtml==='function'?iconHtml('target',{size:18}):'🎯'}</button>`:''}
         ${!isGroup&&!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatMuqabalaBtn" title="Muqabala" aria-label="Muqabala">${typeof iconHtml==='function'?iconHtml('swords',{size:18}):'⚔️'}</button>`:''}
@@ -195,14 +195,19 @@ function openChatScreen(chat){
         <div class="chat-attach-icon" style="background:#3B82F6;">📄</div>
         <div class="chat-attach-label">File</div>
       </div>
-      <div class="chat-attach-option" id="attachGame">
+      ${isChaupaal ? '' : `<div class="chat-attach-option" id="attachGame">
         <div class="chat-attach-icon" style="background:#10B981;">🎮</div>
         <div class="chat-attach-label">Game</div>
-      </div>
-      <div class="chat-attach-option" id="attachSong">
+      </div>`}
+      ${isChaupaal
+        ? `<div class="chat-attach-option" id="attachJournal">
+        <div class="chat-attach-icon" style="background:#E63946;">${typeof iconHtml==='function'?iconHtml('notebook',{size:22}):'📓'}</div>
+        <div class="chat-attach-label">Journal</div>
+      </div>`
+        : `<div class="chat-attach-option" id="attachSong">
         <div class="chat-attach-icon" style="background:#E63946;">🎵</div>
         <div class="chat-attach-label">Song</div>
-      </div>
+      </div>`}
       <div class="chat-attach-option" id="attachLocation">
         <div class="chat-attach-icon" style="background:#F59E0B;">📍</div>
         <div class="chat-attach-label">Location</div>
@@ -282,16 +287,13 @@ function openChatScreen(chat){
   }
 
   if (!isSelf && !isChaupaal && typeof bindProfileLongPress === 'function') {
-    const headerAvatar = screen.querySelector('.chat-header-avatar');
     const profile = {
       uid: chat.uid || chat.otherUid || chat.peerUid || chat.id?.replace?.(/^chat_profile_|^dm_|^chat_/, '') || '',
       name: chat.name,
       avatar: chat.avatar,
       photoURL: chat.photoURL || (/^https:/.test(chat.avatar || '') ? chat.avatar : ''),
     };
-    if (profile.uid && profile.uid !== currentUser?.uid) {
-      bindProfileLongPress(headerAvatar, profile);
-    }
+    // Message avatars: long-press CF. Header uses openBaithakAvatarMenu below (not peek on click).
     bindMsgAvatarLongPress(screen, profile);
   }
 
@@ -425,9 +427,15 @@ function openChatScreen(chat){
       sendRealtimeMessage(chat.firestoreId||chat.id, `📄 ${name}`, isGroup, null, { type:'file', name });
     }
   });
-  document.getElementById('attachGame').addEventListener('click',()=>{
+  document.getElementById('attachGame')?.addEventListener('click',()=>{
     attachMenu.classList.remove('show');
     openGamePicker(chat, isGroup);
+  });
+  document.getElementById('attachJournal')?.addEventListener('click',()=>{
+    attachMenu.classList.remove('show');
+    if (typeof openJournalComposeSheet === 'function') openJournalComposeSheet({});
+    else if (typeof JournalCheckIn?.openCompose === 'function') JournalCheckIn.openCompose({});
+    else if (typeof showToast === 'function') showToast('Journal');
   });
   document.getElementById('attachSong')?.addEventListener('click',()=>{
     attachMenu.classList.remove('show');
@@ -501,13 +509,75 @@ function openChatScreen(chat){
     else document.getElementById('settingsBtn')?.click();
   });
   document.getElementById('chatJournalBtn')?.addEventListener('click', () => {
+    if (typeof openJournalComposeSheet === 'function') openJournalComposeSheet({});
+    else if (typeof JournalCheckIn?.openCompose === 'function') JournalCheckIn.openCompose({});
+    else if (typeof openArchiveHub === 'function') openArchiveHub('journal');
+  });
+  document.getElementById('chatArchiveBtn')?.addEventListener('click', () => {
     if (typeof openArchiveHub === 'function') openArchiveHub('journal');
-    else if (typeof showToast === 'function') showToast(typeof t==='function'?t('chaupaal_journal','Journal'):'Journal');
+    else if (typeof showToast === 'function') showToast('Archive');
   });
-  document.getElementById('chatHubBtn')?.addEventListener('click', () => {
-    if (typeof openChaupaalHub === 'function') openChaupaalHub();
-    else if (typeof openChaupaalAiProfile === 'function') openChaupaalAiProfile();
+  // Chaupaal / 1:1: avatar or name → full profile (not peek). Groups keep group-info.
+  async function openChatPeerFullProfile() {
+    if (isChaupaal) {
+      if (typeof openChaupaalAiProfile === 'function') openChaupaalAiProfile();
+      return;
+    }
+    if (isGroup || isSelf) return;
+    const peerUid =
+      chat.peerUid ||
+      chat.otherUid ||
+      chat.uid ||
+      (Array.isArray(chat.participants) ? chat.participants.find((u) => u && u !== currentUser?.uid) : null);
+    if (!peerUid) return;
+    let u = {
+      uid: peerUid,
+      name: chat.name,
+      avatar: chat.avatar,
+      photoURL: chat.photoURL,
+      username: chat.username,
+    };
+    try {
+      if (typeof UsersPublic?.getPublicProfile === 'function') {
+        const pub = await UsersPublic.getPublicProfile(peerUid);
+        if (pub) u = { ...u, ...pub, uid: peerUid };
+      } else if (db) {
+        const snap = await db.collection('users').doc(peerUid).get();
+        if (snap.exists) u = { ...u, ...snap.data(), uid: peerUid };
+      }
+    } catch (e) {}
+    if (typeof openPublicProfile === 'function') {
+      openPublicProfile(u, { uid: peerUid, username: u.username });
+    }
+  }
+  screen.querySelectorAll('[data-open-chat-profile]').forEach((el) => {
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openChatPeerFullProfile();
+    });
   });
+  // Long-press CF menu on avatar only (1:1) — don't fight profile tap
+  if (!isGroup && !isSelf && !isChaupaal) {
+    const headerAv = screen.querySelector('.chat-header-avatar');
+    const peerUid =
+      chat.peerUid ||
+      chat.otherUid ||
+      chat.uid ||
+      (Array.isArray(chat.participants) ? chat.participants.find((u) => u && u !== currentUser?.uid) : null);
+    if (headerAv && peerUid && typeof onLongPress === 'function') {
+      onLongPress(headerAv, () => {
+        if (typeof openBaithakAvatarMenu === 'function') {
+          openBaithakAvatarMenu(headerAv, {
+            uid: peerUid,
+            name: chat.name || 'Friend',
+            avatar: chat.avatar,
+            photoURL: chat.photoURL,
+          });
+        }
+      });
+    }
+  }
   document.getElementById('chatMehfilBtn')?.addEventListener('click', () => {
     if (typeof openMehfil === 'function') openMehfil(chat);
     else if (typeof showToast === 'function') showToast('Mehfil loading…');
@@ -539,39 +609,6 @@ function openChatScreen(chat){
       }
     });
     screen._mehfilPresenceUnsub = unsub;
-  }
-  // Chaupaal header avatar → AI profile; human 1:1 avatar → peek + long-press CF menu
-  if (isChaupaal) {
-    const headerAv = screen.querySelector('.chat-header-avatar');
-    headerAv?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (typeof openChaupaalAiProfile === 'function') openChaupaalAiProfile();
-    });
-  } else if (!isGroup && !isSelf) {
-    const headerAv = screen.querySelector('.chat-header-avatar');
-    const peerUid = chat.peerUid || chat.otherUid || chat.uid ||
-      (Array.isArray(chat.participants) ? chat.participants.find((u) => u && u !== currentUser?.uid) : null);
-    if (headerAv && peerUid) {
-      headerAv.style.cursor = 'pointer';
-      headerAv.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const profile = { uid: peerUid, name: chat.name, avatar: chat.avatar, photoURL: chat.photoURL };
-        if (typeof openProfilePeek === 'function') openProfilePeek(profile);
-        else if (typeof openPublicProfile === 'function') openPublicProfile(profile);
-      });
-      if (typeof onLongPress === 'function') {
-        onLongPress(headerAv, () => {
-          if (typeof openBaithakAvatarMenu === 'function') {
-            openBaithakAvatarMenu(headerAv, {
-              uid: peerUid,
-              name: chat.name || 'Friend',
-              avatar: chat.avatar,
-              photoURL: chat.photoURL,
-            });
-          }
-        });
-      }
-    }
   }
   document.getElementById('chatChallengeBtn')?.addEventListener('click', () => openChallengeCreator(chat));
   if(!isGroup&&!isSelf) document.getElementById('chatMuqabalaBtn')?.addEventListener('click', () => {
@@ -778,18 +815,25 @@ function wireChallengeBubble(root){
 window.wireChallengeBubble=wireChallengeBubble;
 
 function bindMsgAvatarLongPress(root, fallbackProfile){
-  if(typeof bindProfileLongPress!=='function'||!root) return;
+  if(!root) return;
   root.querySelectorAll('.msg-avatar-small').forEach((el)=>{
     if(el.dataset.lpBound) return;
     const row=el.closest('.msg-row');
     const uid=row?.dataset?.uid||fallbackProfile?.uid||'';
     if(!uid||uid===currentUser?.uid) return;
     el.dataset.lpBound='1';
-    bindProfileLongPress(el,{
+    const profile={
       uid,
       name:row?.dataset?.name||fallbackProfile?.name||'Member',
       avatar:el.textContent?.trim()||fallbackProfile?.avatar||'👤',
-    });
+      photoURL:fallbackProfile?.photoURL||'',
+    };
+    // Prefer Baithak CF menu; fall back to relationship sheet. Click stays on bubble/profile handlers.
+    if(typeof onLongPress==='function' && typeof openBaithakAvatarMenu==='function'){
+      onLongPress(el, () => openBaithakAvatarMenu(el, profile));
+    } else if(typeof bindProfileLongPress==='function'){
+      bindProfileLongPress(el, profile);
+    }
   });
 }
 

@@ -1,5 +1,5 @@
 /**
- * Archive Hub — Stories, Duniya/Lehar, Peepal in clearly separated sections.
+ * Archive Hub — Journal first, then Stories, Duniya/Lehar, Peepal, Interactions.
  * Owner sees archived + live; visitors never see archived (filtered on profile).
  */
 (function () {
@@ -55,6 +55,218 @@
     });
   }
 
+  function jc() {
+    return typeof JournalCheckIn !== 'undefined' ? JournalCheckIn : null;
+  }
+
+  function ico(name, size) {
+    return typeof iconHtml === 'function' ? iconHtml(name, { size: size || 16 }) : '';
+  }
+
+  function esc(s) {
+    return typeof escapeHtmlText === 'function'
+      ? escapeHtmlText(s)
+      : String(s || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/"/g, '&quot;');
+  }
+
+  function renderJournalComposeHtml() {
+    const prompt =
+      jc()?.pickPrompt?.(jc()?.journalWindow?.() || 'anytime') || 'What’s sitting with you right now?';
+    return `<div class="archive-journal-compose" data-ah-journal-compose>
+      <p class="journal-checkin-prompt">${esc(prompt)}</p>
+      <div class="journal-compose-wrap">
+        <textarea data-ah-journal-input rows="3" maxlength="4000" placeholder="Write freely — only you can see this"></textarea>
+        <button type="button" class="journal-compose-mic" data-ah-journal-mic aria-label="Voice typing">${ico('mic', 20)}</button>
+      </div>
+      <label class="archive-journal-consent journal-analysis-consent">
+        <input type="checkbox" data-ah-journal-ai checked>
+        Allow soft analysis for personal insights (optional)
+      </label>
+      <button type="button" class="btn btn--primary" data-ah-journal-save>Save entry</button>
+    </div>`;
+  }
+
+  function journalRowHtml(e) {
+    const api = jc();
+    const ms = api?.entryCreatedMs?.(e) || 0;
+    const collapsedDate = api?.formatCollapsedDate?.(ms, e.date) || String(e.date || '').slice(0, 10) || 'Entry';
+    const expandedDate = api?.formatExpandedDate?.(ms, e.date) || collapsedDate;
+    const expandedTime = api?.formatExpandedTime?.(ms) || '';
+    const canEdit = api?.canEditEntry?.(e);
+    const text = String(e.text || '');
+    return `<div class="archive-journal-row" data-journal-id="${esc(e.id)}" data-expanded="0">
+      <div class="archive-journal-row-main" data-journal-toggle>
+        <div class="archive-journal-dates">
+          <strong class="archive-journal-date" data-date-collapsed>${esc(collapsedDate)}</strong>
+          <strong class="archive-journal-date archive-journal-date--expanded" data-date-expanded hidden>${esc(expandedDate)}</strong>
+          ${expandedTime ? `<small class="archive-journal-time" data-time-expanded hidden>${esc(expandedTime)}</small>` : ''}
+        </div>
+        <p class="archive-journal-body" data-journal-body>${esc(text)}</p>
+      </div>
+      <div class="archive-journal-row-actions">
+        ${
+          canEdit
+            ? `<button type="button" class="archive-journal-edit" data-journal-edit aria-label="Edit">${ico('pen', 16)}</button>`
+            : ''
+        }
+      </div>
+      <div class="archive-journal-edit-panel" data-journal-edit-panel hidden>
+        <div class="journal-compose-wrap">
+          <textarea data-journal-edit-text rows="3" maxlength="4000">${esc(text)}</textarea>
+          <button type="button" class="journal-compose-mic" data-journal-edit-mic aria-label="Voice typing">${ico('mic', 20)}</button>
+        </div>
+        <label class="archive-journal-consent">
+          <input type="checkbox" data-journal-edit-ai checked>
+          Allow soft analysis for personal insights (optional)
+        </label>
+        <div class="archive-journal-edit-actions">
+          <button type="button" class="btn btn--primary" data-journal-edit-save>Save changes</button>
+          <button type="button" class="btn" data-journal-edit-cancel>Cancel</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  async function renderJournalTab(body, setTab) {
+    body.innerHTML = `<div class="archive-hub-copy">Private journal — never visible on your public profile.</div>
+      ${renderJournalComposeHtml()}
+      <div data-ah-journal>Loading…</div>`;
+    if (!db || !currentUser) {
+      body.querySelector('[data-ah-journal]').innerHTML = '<div class="comments-empty">Sign in to journal</div>';
+      return;
+    }
+
+    const compose = body.querySelector('[data-ah-journal-compose]');
+    const ta = compose?.querySelector('[data-ah-journal-input]');
+    const mic = compose?.querySelector('[data-ah-journal-mic]');
+    const aiBox = compose?.querySelector('[data-ah-journal-ai]');
+    if (aiBox) aiBox.checked = true;
+    if (jc()?.wireMicForTextarea) jc().wireMicForTextarea(ta, mic);
+    else if (typeof JournalCheckIn?.wireMicForTextarea === 'function') {
+      JournalCheckIn.wireMicForTextarea(ta, mic);
+    }
+
+    compose?.querySelector('[data-ah-journal-save]')?.addEventListener('click', async () => {
+      const text = String(ta?.value || '');
+      const allowAi = !!aiBox?.checked;
+      try {
+        if (jc()?.save) {
+          await jc().save({ text, allowAnalysis: allowAi });
+        } else if (typeof JournalCheckIn?.save === 'function') {
+          await JournalCheckIn.save({ text, allowAnalysis: allowAi });
+        } else {
+          throw new Error('NO_SAVE');
+        }
+        if (typeof showToast === 'function') showToast('Saved to journal');
+        if (ta) ta.value = '';
+        ta?.dispatchEvent(new Event('input', { bubbles: true }));
+        if (aiBox) aiBox.checked = true;
+        setTab('journal');
+      } catch (e) {
+        const msg =
+          e?.message === 'EMPTY'
+            ? 'Write something first'
+            : e?.message === 'CAP'
+              ? 'Journal is full for now'
+              : 'Could not save';
+        if (typeof showToast === 'function') showToast(msg);
+      }
+    });
+
+    const host = body.querySelector('[data-ah-journal]');
+    try {
+      const snap = await db
+        .collection('users')
+        .doc(currentUser.uid)
+        .collection('journal')
+        .limit(120)
+        .get();
+      const entries = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => {
+          const am = jc()?.entryCreatedMs?.(a) || 0;
+          const bm = jc()?.entryCreatedMs?.(b) || 0;
+          if (bm !== am) return bm - am;
+          return String(b.date || '').localeCompare(String(a.date || ''));
+        });
+      host.innerHTML = entries.length
+        ? entries.map((e) => journalRowHtml(e)).join('')
+        : '<div class="comments-empty">No journal entries yet</div>';
+
+      host.querySelectorAll('.archive-journal-row').forEach((row) => {
+        const toggle = row.querySelector('[data-journal-toggle]');
+        const editBtn = row.querySelector('[data-journal-edit]');
+        const editPanel = row.querySelector('[data-journal-edit-panel]');
+        const bodyEl = row.querySelector('[data-journal-body]');
+        const dateCollapsed = row.querySelector('[data-date-collapsed]');
+        const dateExpanded = row.querySelector('[data-date-expanded]');
+        const timeExpanded = row.querySelector('[data-time-expanded]');
+
+        const setExpanded = (on) => {
+          row.dataset.expanded = on ? '1' : '0';
+          row.classList.toggle('is-expanded', on);
+          if (dateCollapsed) dateCollapsed.hidden = !!on;
+          if (dateExpanded) dateExpanded.hidden = !on;
+          if (timeExpanded) timeExpanded.hidden = !on;
+          if (bodyEl) bodyEl.classList.toggle('is-clamped', !on);
+        };
+        setExpanded(false);
+
+        toggle?.addEventListener('click', (ev) => {
+          if (ev.target.closest('[data-journal-edit]') || !editPanel?.hidden) return;
+          setExpanded(row.dataset.expanded !== '1');
+        });
+
+        editBtn?.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          editPanel.hidden = false;
+          editBtn.hidden = true;
+          setExpanded(true);
+          const editTa = editPanel.querySelector('[data-journal-edit-text]');
+          const editMic = editPanel.querySelector('[data-journal-edit-mic]');
+          const editAi = editPanel.querySelector('[data-journal-edit-ai]');
+          if (editAi) editAi.checked = true;
+          if (jc()?.wireMicForTextarea) jc().wireMicForTextarea(editTa, editMic);
+          editTa?.focus();
+        });
+
+        editPanel?.querySelector('[data-journal-edit-cancel]')?.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          editPanel.hidden = true;
+          if (editBtn) editBtn.hidden = false;
+        });
+
+        editPanel?.querySelector('[data-journal-edit-save]')?.addEventListener('click', async (ev) => {
+          ev.stopPropagation();
+          const text = editPanel.querySelector('[data-journal-edit-text]')?.value || '';
+          const allowAi = !!editPanel.querySelector('[data-journal-edit-ai]')?.checked;
+          try {
+            if (jc()?.save) {
+              await jc().save({
+                text,
+                allowAnalysis: allowAi,
+                entryId: row.dataset.journalId,
+              });
+            } else {
+              throw new Error('NO_SAVE');
+            }
+            if (typeof showToast === 'function') showToast('Updated');
+            setTab('journal');
+          } catch (e) {
+            if (typeof showToast === 'function') {
+              showToast(e?.message === 'EMPTY' ? 'Write something first' : 'Could not save');
+            }
+          }
+        });
+      });
+    } catch (e) {
+      host.innerHTML = '<div class="comments-empty">Could not load journal</div>';
+    }
+  }
+
   function openArchiveHub(initialTab) {
     document.getElementById('archiveHubSheet')?.remove();
     const overlay = document.createElement('div');
@@ -70,11 +282,11 @@
         </div>
       </div>
       <div class="archive-hub-tabs">
-        <button type="button" data-ah-tab="stories" class="active">Stories</button>
+        <button type="button" data-ah-tab="journal" class="active">Journal</button>
+        <button type="button" data-ah-tab="stories">Stories</button>
         <button type="button" data-ah-tab="duniya">Duniya / Lehar</button>
         <button type="button" data-ah-tab="peepal">Peepal</button>
         <button type="button" data-ah-tab="interactions">Interactions</button>
-        <button type="button" data-ah-tab="journal">Journal</button>
       </div>
       <div class="archive-hub-body" data-ah-body>Loading…</div>`;
     document.querySelector('.device')?.appendChild(overlay);
@@ -94,74 +306,7 @@
       overlay.querySelectorAll('[data-ah-tab]').forEach((b) => b.classList.toggle('active', b.dataset.ahTab === tab));
 
       if (tab === 'journal') {
-        body.innerHTML = `<div class="archive-hub-copy">Private journal — never visible on your public profile.</div>
-          <div class="archive-journal-compose">
-            <textarea data-ah-journal-input placeholder="Quick capture — how are you today?" rows="3"></textarea>
-            <label class="archive-journal-consent"><input type="checkbox" data-ah-journal-ai> Allow soft analysis for personal insights (optional)</label>
-            <button type="button" class="btn btn--primary" data-ah-journal-save>Save entry</button>
-          </div>
-          <div data-ah-journal>Loading…</div>`;
-        if (!db || !currentUser) return;
-        const saveBtn = body.querySelector('[data-ah-journal-save]');
-        saveBtn?.addEventListener('click', async () => {
-          const text = String(body.querySelector('[data-ah-journal-input]')?.value || '').trim();
-          if (!text) {
-            if (typeof showToast === 'function') showToast('Write something first');
-            return;
-          }
-          const allowAi = !!body.querySelector('[data-ah-journal-ai]')?.checked;
-          const date = new Date().toISOString().slice(0, 10);
-          try {
-            const col = db.collection('users').doc(currentUser.uid).collection('journal');
-            await col.add({
-              text: text.slice(0, 4000),
-              date,
-              allowAnalysis: allowAi,
-              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            });
-            if (allowAi && typeof callAI === 'function') {
-              try {
-                const hint = typeof teenAiSystemHint === 'function' ? teenAiSystemHint() : '';
-                await callAI({
-                  tier: 'fast',
-                  max_tokens: 120,
-                  feature: 'journal_analysis',
-                  system:
-                    'You summarize a private journal entry into 1 warm sentence of personal insight. No diagnosis.' +
-                    hint,
-                  messages: [{ role: 'user', content: text.slice(0, 800) }],
-                });
-              } catch (e) {}
-            }
-            if (typeof showToast === 'function') showToast('Saved to journal');
-            body.querySelector('[data-ah-journal-input]').value = '';
-            setTab('journal');
-          } catch (e) {
-            if (typeof showToast === 'function') showToast('Could not save');
-          }
-        });
-        try {
-          const snap = await db
-            .collection('users')
-            .doc(currentUser.uid)
-            .collection('journal')
-            .limit(60)
-            .get();
-          const entries = snap.docs
-            .map((d) => ({ id: d.id, ...d.data() }))
-            .sort((a, b) => String(b.date || b.createdAt || '').localeCompare(String(a.date || a.createdAt || '')));
-          const host = body.querySelector('[data-ah-journal]');
-          host.innerHTML = entries.length
-            ? entries
-                .map(
-                  (e) =>
-                    `<div class="archive-journal-row"><strong>${(e.date || '').slice(0, 10) || 'Entry'}</strong><p>${String(e.text || '').slice(0, 180)}</p></div>`
-                )
-                .join('')
-            : '<div class="comments-empty">No journal entries yet</div>';
-        } catch (e) {
-          body.querySelector('[data-ah-journal]').innerHTML = '<div class="comments-empty">Could not load journal</div>';
-        }
+        await renderJournalTab(body, setTab);
         return;
       }
 
@@ -346,13 +491,13 @@
         ? 'duniya'
         : initialTab === 'saved'
           ? 'interactions'
-          : initialTab || 'stories';
+          : initialTab || 'journal';
     setTab(initial);
   }
 
   window.openArchiveHub = openArchiveHub;
   window.setPostArchived = setPostArchived;
   window.openArchive = function () {
-    openArchiveHub('duniya');
+    openArchiveHub('journal');
   };
 })();

@@ -6,6 +6,7 @@
 (function () {
   'use strict';
 
+  const SNAP_COMPACT = 0.3;
   const SNAP_MID = 0.52;
   const SNAP_TALL = 0.78;
   const DISMISS_FRAC = 0.28;
@@ -30,8 +31,9 @@
 
   function heightForSnap(sheet, snap) {
     const max = sheetMaxPx(sheet);
-    const frac = snap === 'tall' ? SNAP_TALL : SNAP_MID;
-    return Math.round(Math.min(max * frac, snap === 'tall' ? 640 : 480));
+    const frac = snap === 'tall' ? SNAP_TALL : snap === 'compact' ? SNAP_COMPACT : SNAP_MID;
+    const cap = snap === 'tall' ? 640 : snap === 'compact' ? 360 : 480;
+    return Math.round(Math.min(max * frac, cap));
   }
 
   function applyHeight(sheet, px, animate) {
@@ -46,19 +48,28 @@
     }
     const mid = heightForSnap(sheet, 'mid');
     const tall = heightForSnap(sheet, 'tall');
-    const nearest = Math.abs(clamped - tall) < Math.abs(clamped - mid) ? 'tall' : 'mid';
+    const compact = heightForSnap(sheet, 'compact');
+    let nearest = 'mid';
+    const dist = { mid: Math.abs(clamped - mid), tall: Math.abs(clamped - tall), compact: Math.abs(clamped - compact) };
+    if (dist.tall <= dist.mid && dist.tall <= dist.compact) nearest = 'tall';
+    else if (dist.compact < dist.mid) nearest = 'compact';
     sheet.dataset.sheetSnap = nearest;
     sheet.classList.toggle('cp-half-sheet--expand', nearest === 'tall');
-    sheet.classList.toggle('cp-half-sheet--half', nearest === 'mid');
+    sheet.classList.toggle('cp-half-sheet--half', nearest === 'mid' || nearest === 'compact');
+    sheet.classList.toggle('cp-half-sheet--compact', nearest === 'compact');
     return clamped;
   }
 
   function nearestSnap(sheet, px) {
     const mid = heightForSnap(sheet, 'mid');
     const tall = heightForSnap(sheet, 'tall');
+    const compact = heightForSnap(sheet, 'compact');
     const max = sheetMaxPx(sheet);
     if (px < max * DISMISS_FRAC) return 'dismiss';
-    return Math.abs(px - tall) < Math.abs(px - mid) ? 'tall' : 'mid';
+    const dist = { mid: Math.abs(px - mid), tall: Math.abs(px - tall), compact: Math.abs(px - compact) };
+    if (dist.tall <= dist.mid && dist.tall <= dist.compact) return 'tall';
+    if (dist.compact < dist.mid) return 'compact';
+    return 'mid';
   }
 
   /**
@@ -155,7 +166,11 @@
     sheet.id = id;
     sheet.className =
       'archive-overlay notif-panel-sheet cp-half-sheet is-opening' +
-      (startSnap === 'tall' ? ' cp-half-sheet--expand' : ' cp-half-sheet--half');
+      (startSnap === 'tall'
+        ? ' cp-half-sheet--expand'
+        : startSnap === 'compact'
+          ? ' cp-half-sheet--half cp-half-sheet--compact'
+          : ' cp-half-sheet--half');
     sheet.setAttribute('data-nav-managed', '1');
     sheet.setAttribute('data-sheet-panel', '1');
     sheet.dataset.sheetSnap = startSnap;
@@ -238,7 +253,8 @@
     return {
       close,
       el: sheet,
-      setSnap: (snap) => applyHeight(sheet, heightForSnap(sheet, snap === 'tall' ? 'tall' : 'mid'), true),
+      setSnap: (snap) =>
+        applyHeight(sheet, heightForSnap(sheet, snap === 'tall' ? 'tall' : snap === 'compact' ? 'compact' : 'mid'), true),
     };
   }
 
