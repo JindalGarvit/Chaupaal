@@ -32,6 +32,21 @@ async function ensureChatDoc(db, uid) {
       preview: 'Your space with Chaupaal',
       serverOwned: true,
     });
+  } else {
+    const data = snap.data() || {};
+    const parts = Array.isArray(data.participants) ? data.participants : [];
+    if (!parts.includes(uid) || data.type !== 'chaupaal') {
+      await ref.set(
+        {
+          participants: parts.includes(uid) ? parts : [...parts, uid],
+          type: 'chaupaal',
+          pinned: true,
+          name: data.name || 'Chaupaal',
+          updatedAt: new Date(),
+        },
+        { merge: true }
+      );
+    }
   }
   return ref;
 }
@@ -121,6 +136,7 @@ module.exports = async function handler(req, res) {
         from: 'chaupaal',
         name: 'Chaupaal',
         role: 'assistant',
+        avatar: '🏠',
         serverOwned: true,
         crisis: true,
       });
@@ -134,13 +150,32 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    if (!aiOn) {
-      return sendSuccess(res, {
-        reply: null,
+    const QUIET_TEXT =
+      "Chaupaal is resting right now — your messages and history are safe here, and Chaupaal will be back soon.";
+
+    async function persistQuietReply() {
+      const replyId = await appendMessage(db, chatRef, {
+        text: QUIET_TEXT,
+        uid: 'chaupaal',
+        from: 'chaupaal',
+        name: 'Chaupaal',
+        role: 'assistant',
+        avatar: '🏠',
+        serverOwned: true,
         quiet: true,
-        message:
-          "Chaupaal is resting right now — your messages and history are safe here, and Chaupaal will be back soon.",
+      });
+      return replyId;
+    }
+
+    if (!aiOn) {
+      const replyId = await persistQuietReply();
+      return sendSuccess(res, {
+        reply: QUIET_TEXT,
+        quiet: true,
+        message: QUIET_TEXT,
         userMessageId: userMsgId,
+        replyMessageId: replyId,
+        chatId: chatIdFor(user.uid),
       });
     }
 
@@ -164,12 +199,14 @@ module.exports = async function handler(req, res) {
       rawText = result.text || '';
     } catch (e) {
       if (e instanceof AiDisabledError || e?.code === 'AI_DISABLED') {
+        const replyId = await persistQuietReply();
         return sendSuccess(res, {
-          reply: null,
+          reply: QUIET_TEXT,
           quiet: true,
-          message:
-            "Chaupaal is resting right now — your messages and history are safe here, and Chaupaal will be back soon.",
+          message: QUIET_TEXT,
           userMessageId: userMsgId,
+          replyMessageId: replyId,
+          chatId: chatIdFor(user.uid),
         });
       }
       throw e;
@@ -182,6 +219,7 @@ module.exports = async function handler(req, res) {
       from: 'chaupaal',
       name: 'Chaupaal',
       role: 'assistant',
+      avatar: '🏠',
       serverOwned: true,
       isFeedback: !!normalized.isFeedback,
       feedbackTag: normalized.feedbackTag || null,

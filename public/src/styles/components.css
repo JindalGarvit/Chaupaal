@@ -3306,9 +3306,14 @@ select:focus-visible,
 .public-profile-name,.discover-name,.friend-name{
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;
 }
-/* Prefer wrapping long strings in chat/game HUDs over horizontal bleed */
-.msg-bubble,.game-turn-label{
-  overflow-wrap:anywhere;word-break:break-word;
+/* Chat bubbles: WhatsApp-like wrap — never mid-word scrap on short text */
+.msg-bubble{
+  overflow-wrap:break-word;
+  word-break:normal;
+  hyphens:manual;
+}
+.game-turn-label{
+  overflow-wrap:break-word;word-break:break-word;
 }
 
 /* ===== Mobile polish batch (inputs, taps, sheets, safe-area) ===== */

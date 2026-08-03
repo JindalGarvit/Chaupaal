@@ -170,13 +170,18 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
     rendered.add(doc.id);
     const m=doc.data()||{};
     const mine=m.uid===currentUser.uid;
+    const isChaupaalMsg =
+      m.uid === 'chaupaal' ||
+      m.role === 'assistant' ||
+      m.from === 'chaupaal' ||
+      m.name === 'Chaupaal';
     const div=document.createElement('div');
     div.innerHTML=renderMsgBubble({
       from:mine?'me':'them',
       text:m.text,
       time:m.ts?.toDate?new Date(m.ts.toDate()).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'',
-      avatar:m.avatar||'👤',
-      name:m.name,
+      avatar:isChaupaalMsg ? (m.avatar || '🏠') : (m.avatar||'👤'),
+      name:m.name || (isChaupaalMsg ? 'Chaupaal' : undefined),
       profileType:m.profileType||null,
       music:m.music||null,
       attachment:m.attachment||null,
@@ -231,6 +236,15 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
           if(m.uid===currentUser.uid){
             const pending=[...msgsArea.querySelectorAll('.msg-row.me[data-pending="1"]')];
             const match=pending.reverse().find((row)=>{
+              const t=row.querySelector('.msg-bubble')?.getAttribute('data-msg-text')||'';
+              return t && m.text && t.slice(0,80)===String(m.text).slice(0,80);
+            });
+            match?.remove();
+          }
+          // Drop optimistic Chaupaal "them" bubbles once the real doc arrives
+          if(m.uid==='chaupaal' || m.role==='assistant'){
+            const themPending=[...msgsArea.querySelectorAll('.msg-row:not(.me):not([data-msg-id])')];
+            const match=themPending.reverse().find((row)=>{
               const t=row.querySelector('.msg-bubble')?.getAttribute('data-msg-text')||'';
               return t && m.text && t.slice(0,80)===String(m.text).slice(0,80);
             });

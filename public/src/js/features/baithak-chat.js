@@ -344,6 +344,7 @@ function openChatScreen(chat){
   if (isChaupaal) {
     try { if (typeof ensureChaupaalChatDoc === 'function') ensureChaupaalChatDoc(); } catch (e) {}
     try { if (typeof hydrateChaupaalQuietState === 'function') hydrateChaupaalQuietState(screen); } catch (e) {}
+    try { if (typeof restoreAppShell === 'function') restoreAppShell('chaupaal_open'); } catch (e) {}
     // Hide attach game / challenge affordances for system chat
     document.getElementById('attachGame')?.classList.add('hidden');
   }
@@ -859,15 +860,30 @@ async function sendMsg(chat){
             });
             const data = await sendChaupaalMessage(text, hist.slice(-12));
             if(data?.quiet){
-              // In-voice "back soon" bubble — never a silent failure or error state
               if(typeof applyChaupaalQuietComposer==='function'){
                 applyChaupaalQuietComposer(document.getElementById('activeChatScreen'), true);
               }
-              addMsgBubble({from:'them',text:data.message||"Chaupaal is resting right now — back soon. 🌙",time:'now',avatar:'🏠'}, false);
-              return;
             }
-            if(data?.reply){
-              addMsgBubble({from:'them',text:data.reply,time:'now',avatar:'🏠'}, false);
+            // User + quiet/crisis/assistant replies are persisted by the API.
+            // Firestore listener replaces the pending "me" bubble and appends
+            // Chaupaal's reply — avoid permanent duplicate them-bubbles.
+            // Fallback if the listener is slow/missing (e.g. offline rules lag).
+            const assistText = data?.reply || (data?.quiet ? (data.message || '') : '');
+            if(assistText){
+              const area2=document.getElementById('chatMsgsArea');
+              const already=!![...(area2?.querySelectorAll('.msg-row:not(.me) .msg-bubble')||[])]
+                .find((b)=> (b.getAttribute('data-msg-text')||'').slice(0,80)===String(assistText).slice(0,80));
+              if(!already){
+                setTimeout(()=>{
+                  const area3=document.getElementById('chatMsgsArea');
+                  if(!area3) return;
+                  const has=!![...area3.querySelectorAll('.msg-row:not(.me) .msg-bubble')]
+                    .find((b)=> (b.getAttribute('data-msg-text')||'').slice(0,80)===String(assistText).slice(0,80));
+                  if(!has){
+                    addMsgBubble({from:'them',text:assistText,time:'now',avatar:'🏠',uid:'chaupaal',name:'Chaupaal'}, false);
+                  }
+                }, 1800);
+              }
             }
             if(typeof trackMessageSent==='function') trackMessageSent({ chat_type: 'chaupaal' });
             return;
@@ -908,7 +924,21 @@ async function sendMsg(chat){
       apply();
       if(isChaupaal && typeof sendChaupaalMessage==='function'){
         const data = await sendChaupaalMessage(text, []);
-        if(data?.reply) addMsgBubble({from:'them',text:data.reply,time:'now',avatar:'🏠'}, false);
+        if(data?.quiet && typeof applyChaupaalQuietComposer==='function'){
+          applyChaupaalQuietComposer(document.getElementById('activeChatScreen'), true);
+        }
+        const assistText = data?.reply || (data?.quiet ? (data.message || '') : '');
+        if(assistText){
+          setTimeout(()=>{
+            const area3=document.getElementById('chatMsgsArea');
+            if(!area3) return;
+            const has=!![...area3.querySelectorAll('.msg-row:not(.me) .msg-bubble')]
+              .find((b)=> (b.getAttribute('data-msg-text')||'').slice(0,80)===String(assistText).slice(0,80));
+            if(!has){
+              addMsgBubble({from:'them',text:assistText,time:'now',avatar:'🏠',uid:'chaupaal',name:'Chaupaal'}, false);
+            }
+          }, 1800);
+        }
       } else if(typeof sendRealtimeMessage==='function') {
         sendRealtimeMessage(chat.firestoreId||chat.id,text,isGroup);
       }

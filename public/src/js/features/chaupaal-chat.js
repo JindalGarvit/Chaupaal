@@ -9,7 +9,9 @@
     const u =
       uid ||
       (typeof currentUser !== 'undefined' && currentUser?.uid) ||
-      'anon';
+      null;
+    // Never open/listen on chat_chaupaal_anon after auth — empty "thread" lookalike
+    if (!u) return CHAUPAAL_PREFIX + 'anon';
     return CHAUPAAL_PREFIX + u;
   }
 
@@ -111,21 +113,13 @@
     return id;
   }
 
-  const QUIET_REPLY =
-    "Chaupaal is resting right now — your messages and history are safe here. I'll be back soon. 🌙";
-
   /**
-   * Send via authenticated API; persists user + assistant messages server-side.
-   * When the client-side gate is off we skip the network call and answer
-   * locally in Chaupaal's voice (never a silent failure or spinner).
+   * Send via authenticated API — always POST so user + quiet/crisis/assistant
+   * replies persist in Firestore. Quiet/AI-off is a server concern for reply
+   * text, never a reason to skip the network (optimistic-only bubbles vanish).
    */
   async function sendChaupaalMessage(text, history = []) {
     if (typeof apiFetch !== 'function') throw new Error('apiFetch missing');
-    const aiOn =
-      typeof isAiFeaturesEnabledSync === 'function' ? isAiFeaturesEnabledSync() : true;
-    if (!aiOn) {
-      return { quiet: true, reply: null, message: QUIET_REPLY };
-    }
     const envelope = await apiFetch('/api/chaupaal-chat', {
       method: 'POST',
       needAuth: true,
