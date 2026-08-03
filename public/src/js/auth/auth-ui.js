@@ -76,6 +76,11 @@ if (auth) {
       if (typeof hydratePromptsFromUserDoc === 'function') hydratePromptsFromUserDoc(userProfile);
       if (typeof hydrateProfileTypeFromUserDoc === 'function') hydrateProfileTypeFromUserDoc(userProfile);
       if (typeof hydrateProfileSectionsFromUserDoc === 'function') hydrateProfileSectionsFromUserDoc(userProfile);
+      if (typeof hydrateTabHabitsFromFirestore === 'function') {
+        hydrateTabHabitsFromFirestore().catch(() => {});
+      } else if (typeof TabHabits !== 'undefined' && TabHabits.onAuthUidChanged) {
+        TabHabits.onAuthUidChanged(user.uid);
+      }
       if (userProfile.profileMedia || userProfile.profile?.profileMedia) {
         const media = userProfile.profileMedia || userProfile.profile.profileMedia;
         if (typeof digitalProfile !== 'undefined') digitalProfile.profileMedia = media;

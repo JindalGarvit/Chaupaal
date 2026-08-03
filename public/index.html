@@ -26,18 +26,18 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon-charpai-v2as.png">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/src/styles/tokens.css?v=482d8f55">
-  <link rel="stylesheet" href="/src/styles/squircle.css?v=6878875a">
+  <link rel="stylesheet" href="/src/styles/squircle.css?v=11033972">
   <link rel="stylesheet" href="/src/styles/gathered-light.css?v=05fbe297">
   <link rel="stylesheet" href="/src/styles/icons.css?v=b5921022">
-  <link rel="stylesheet" href="/src/styles/layout.css?v=d70bdf8c">
+  <link rel="stylesheet" href="/src/styles/layout.css?v=39218253">
   <link rel="stylesheet" href="/src/styles/tab-elements.css?v=0544038c">
   <link rel="stylesheet" href="/src/styles/akhbaar.css?v=b924fec3">
   <link rel="stylesheet" href="/src/styles/dangal.css?v=1806b1a8">
-  <link rel="stylesheet" href="/src/styles/baithak.css?v=d5648384">
+  <link rel="stylesheet" href="/src/styles/baithak.css?v=f611c341">
   <link rel="stylesheet" href="/src/styles/peepal.css?v=c964bad0">
   <link rel="stylesheet" href="/src/styles/duniya.css?v=51212780">
-  <link rel="stylesheet" href="/src/styles/components.css?v=e18032a4">
-  <link rel="stylesheet" href="/src/styles/mehfil.css?v=14b3d3f2">
+  <link rel="stylesheet" href="/src/styles/components.css?v=92012d35">
+  <link rel="stylesheet" href="/src/styles/mehfil.css?v=ea547811">
 </head>
 <body>
 <div class="device">
@@ -196,6 +196,14 @@
         </div>
         <div class="auth-step-bar"><div class="auth-step-fill" style="width:50%"></div></div>
         <div class="auth-form-body">
+          <div class="auth-profile-canvas" id="authProfileCanvas">
+            <div class="auth-profile-canvas-hero">
+              <div class="auth-profile-canvas-avatar" aria-hidden="true">🪑</div>
+              <div class="auth-canvas-live-name" id="authCanvasLiveName">Your name</div>
+              <div class="auth-canvas-live-handle" id="authCanvasLiveHandle">@username</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:6px;">Type into your live profile — same slots after signup</div>
+            </div>
+
           <div class="auth-input-group">
             <label class="auth-input-label">Account type</label>
             <div class="auth-type-toggle" id="regProfileTypeRow" role="group" aria-label="Account type">
@@ -245,9 +253,10 @@
               <input type="text" class="auth-input hidden" id="regPurposeOther" maxlength="80" placeholder="Type your purpose" style="margin-top:8px;">
             </div>
           </div>
-          <div class="auth-error" id="reg1Error"></div>
+                    </div><!-- /.auth-profile-canvas -->
+<div class="auth-error" id="reg1Error"></div>
           <button class="btn btn--primary btn--block btn--lg auth-btn" id="reg1Next">Continue →</button>
-          <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:12px;line-height:1.5;">Photo, bio, and more come later — signup stays quick.</div>
+          <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:12px;line-height:1.5;">Core identity on your profile canvas — photo, bio & prompts deepen after you join.</div>
         </div>
       </div>
 
@@ -430,7 +439,7 @@
     <!-- Search + overflow (below Instants, above list) -->
     <div class="baithak-search-row">
       <input class="baithak-search" id="baithakSearch" placeholder="Search chats…" type="text" data-i18n-placeholder="baithak_search" data-living-ph="baithak_search">
-      <button type="button" class="baithak-overflow-btn" id="baithakOverflowBtn" aria-label="Settings menu" aria-haspopup="menu" title="More">⋮</button>
+      <button type="button" class="baithak-overflow-btn" id="baithakOverflowBtn" data-icon="more-vertical" data-icon-size="22" aria-label="More options" aria-haspopup="menu" title="More">⋮</button>
     </div>
 
     <!-- CHAT LIST -->
@@ -798,8 +807,9 @@
   <script src="/src/js/config/app-check.js?v=c74ed63b"></script>
   <script src="/src/js/core/environment.js?v=b180aeb3"></script>
   <script src="/src/js/core/storage.js?v=0fb0e244"></script>
-  <script src="/src/js/core/icons.js?v=e6269432"></script>
+  <script src="/src/js/core/icons.js?v=119f03c0"></script>
   <script src="/src/js/core/tab-elements.js?v=40a33cce"></script>
+  <script src="/src/js/core/tab-habits.js?v=288ff896"></script>
   <script src="/src/js/config/policy-limits.js?v=8f3cfeb8"></script>
   <script src="/src/js/core/users-public.js?v=56c0234e"></script>
   <script src="/src/js/core/policy-usage.js?v=fcaff522"></script>
@@ -815,14 +825,14 @@
   <script src="/src/js/core/drafts.js?v=e672a449"></script>
   <script src="/src/js/core/soft-delete.js?v=6947a077"></script>
   <script src="/src/js/core/optimistic.js?v=03f440fa"></script>
-  <script src="/src/js/core/comments.js?v=e63b3a20"></script>
+  <script src="/src/js/core/comments.js?v=3117d17f"></script>
   <script src="/src/js/core/social-persistence.js?v=da571dea"></script>
-  <script src="/src/js/core/relationships.js?v=d0a01379"></script>
+  <script src="/src/js/core/relationships.js?v=670b8294"></script>
   <script src="/src/js/core/chat-presence.js?v=7176596d"></script>
   <script src="/src/js/core/image-pipeline.js?v=ac09e26b"></script>
-  <script src="/src/js/core/profile-completion.js?v=a746ffb4"></script>
-  <script src="/src/js/core/profile-facts.js?v=a637d891"></script>
-  <script src="/src/js/core/profile-rewards.js?v=84193613"></script>
+  <script src="/src/js/core/profile-completion.js?v=1a6bc181"></script>
+  <script src="/src/js/core/profile-facts.js?v=061d8fda"></script>
+  <script src="/src/js/core/profile-rewards.js?v=1bee301a"></script>
   <script src="/src/js/core/icebreakers.js?v=e5a2c7c6"></script>
   <script src="/src/js/core/profile-prompts.js?v=57b49dba"></script>
   <script src="/src/js/core/chaupaal-activity.js?v=f96f41fc"></script>
@@ -831,18 +841,20 @@
   <script src="/src/js/core/profile-type.js?v=e983c303"></script>
   <script src="/src/js/core/profile-type-enrich.js?v=7378ff81"></script>
   <script src="/src/js/core/swipe-pager.js?v=4274e372"></script>
-  <script src="/src/js/core/section-modes.js?v=4af77852"></script>
+  <script src="/src/js/core/section-modes.js?v=bf3f252b"></script>
   <script src="/src/js/core/contacts-find.js?v=b2d4bc70"></script>
   <script src="/src/js/core/teen-mode.js?v=1a76b0c5"></script>
   <script src="/src/js/core/professional-badge.js?v=775a0916"></script>
   <script src="/src/js/core/linkify.js?v=6dde463f"></script>
-  <script src="/src/js/core/profile-sections.js?v=8e183886"></script>
-  <script src="/src/js/core/profile-section-mount.js?v=838d0f61"></script>
-  <script src="/src/js/core/notification-panel.js?v=f91e12c6"></script>
+  <script src="/src/js/core/profile-sections.js?v=22b450fc"></script>
+  <script src="/src/js/core/profile-highlights.js?v=bce95bea"></script>
+  <script src="/src/js/core/profile-shell.js?v=20ee76c6"></script>
+  <script src="/src/js/core/profile-section-mount.js?v=a15557d7"></script>
+  <script src="/src/js/core/notification-panel.js?v=f663ae4c"></script>
   <script src="/src/js/core/micro.js?v=2f797874"></script>
   <script src="/src/js/core/tab-gestures.js?v=9cf6ef8f"></script>
   <script src="/src/js/core/sessions.js?v=fafd40d3"></script>
-  <script src="/src/js/core/safety.js?v=4a8bc90e"></script>
+  <script src="/src/js/core/safety.js?v=813eda01"></script>
   <script src="/src/js/core/notif-prefs.js?v=19bbe844"></script>
   <script src="/src/js/core/feature-flags.js?v=b967fa88"></script>
   <script src="/src/js/core/theme-engine.js?v=79d825af"></script>
@@ -853,56 +865,57 @@
   <script src="/src/js/core/half-sheet.js?v=583d53dd"></script>
   <script src="/src/js/core/media-player.js?v=698bc13a"></script>
   <script src="/src/js/features/location-share.js?v=07b67a9e"></script>
-  <script src="/src/js/core/touch.js?v=16e66560"></script>
+  <script src="/src/js/core/touch.js?v=7086443f"></script>
   <script src="/src/js/ai/ai-config.js?v=b15d85db"></script>
   <script src="/src/js/ai/markdown.js?v=32d3b778"></script>
   <script src="/src/js/ai/call-ai.js?v=492d379f"></script>
   <script src="/src/js/ai/anthropic.js?v=ee230737"></script>
   <script src="/src/js/core/search.js?v=68612f7e"></script>
-  <script src="/src/js/core/deeplinks.js?v=982cb1f9"></script>
+  <script src="/src/js/core/deeplinks.js?v=0ac3232d"></script>
   <script src="/src/js/core/rate-limit-client.js?v=2696fc7d"></script>
   <script src="/src/js/core/theme.js?v=612dd3bb"></script>
   <script src="/src/js/core/discovery-core.js?v=9a58f62e"></script>
   <script src="/src/js/core/profile-btn.js?v=f94e84cb"></script>
-  <script src="/src/js/auth/auth-ui.js?v=f4191dd7"></script>
+  <script src="/src/js/auth/auth-ui.js?v=3c6580a4"></script>
   <script src="/src/js/auth/phone-otp.js?v=3315dcd2"></script>
   <script src="/src/js/auth/auth-profiles.js?v=80630a42"></script>
   <script src="/src/js/features/akhbaar.js?v=301df0b0"></script>
   <script src="/src/js/features/dangal.js?v=04bfccfa"></script>
-  <script src="/src/js/features/dangal-ratings.js?v=369eb05c"></script>
+  <script src="/src/js/features/dangal-ratings.js?v=2f7f7bd7"></script>
   <script src="/src/js/features/baithak-data.js?v=373e1139"></script>
   <script src="/src/js/features/self-chat.js?v=9dfd834b"></script>
   <script src="/src/js/features/chaupaal-chat.js?v=759adadb"></script>
   <script src="/src/js/features/chat-rating.js?v=19d676d2"></script>
-  <script src="/src/js/features/baithak-chat.js?v=9dda9295"></script>
-  <script src="/src/js/features/mehfil.js?v=724d555a"></script>
+  <script src="/src/js/features/baithak-chat.js?v=36a0ffed"></script>
+  <script src="/src/js/features/mehfil.js?v=90911e42"></script>
   <script src="/src/js/features/chaupaal-hub.js?v=945a01db"></script>
   <script src="/src/js/features/chaupaal-ai-profile.js?v=c3832ffa"></script>
   <script src="/src/js/features/music-card.js?v=af83d9e2"></script>
-  <script src="/src/js/features/group-info.js?v=5f045c88"></script>
+  <script src="/src/js/features/group-info.js?v=8f6fe47c"></script>
   <script src="/src/js/core/stories.js?v=0f10b01b"></script>
-  <script src="/src/js/core/archive-hub.js?v=0ec443f1"></script>
+  <script src="/src/js/core/archive-hub.js?v=fdf005d6"></script>
   <script src="/src/js/core/journal-anim.js?v=f2658ae2"></script>
-  <script src="/src/js/features/baithak.js?v=fb181dfd"></script>
-  <script src="/src/js/features/profile-preview.js?v=42020ee4"></script>
-  <script src="/src/js/features/profile.js?v=e5d3b30d"></script>
+  <script src="/src/js/features/baithak.js?v=0add1063"></script>
+  <script src="/src/js/features/profile-preview.js?v=392d6563"></script>
+  <script src="/src/js/features/profile.js?v=0523a0f7"></script>
   <script src="/src/js/core/i18n.js?v=5d078442"></script>
-  <script src="/src/js/features/categories.js?v=e2bff51c"></script>
+  <script src="/src/js/features/categories.js?v=5bac4356"></script>
   <script src="/src/js/features/peepal.js?v=7ec67d45"></script>
-  <script src="/src/js/features/onboarding.js?v=0d897b17"></script>
+  <script src="/src/js/features/onboarding.js?v=4dcbb9f5"></script>
   <script src="/src/js/core/service-worker.js?v=9ffe9136"></script>
   <script src="/src/js/features/streak.js?v=badf601a"></script>
   <script src="/vendor/chess.js?v=434826c8"></script>
   <script src="/src/js/games/game-runtime.js?v=9d6492c3"></script>
-  <script src="/src/js/games/game-ui.js?v=393d484e"></script>
-  <script src="/src/js/games/game-registry.js?v=359a9355"></script>
-  <script src="/src/js/games/ank-jod.js?v=941f78b7"></script>
-  <script src="/src/js/games/engines.js?v=215073eb"></script>
-  <script src="/src/js/games/board-games.js?v=d768442d"></script>
-  <script src="/src/js/games/arcade.js?v=107d74f6"></script>
-  <script src="/src/js/main.js?v=3ff0e06e"></script>
+  <script src="/src/js/games/game-ui.js?v=c10494f4"></script>
+  <script src="/src/js/games/game-registry.js?v=af10e9b0"></script>
+  <script src="/src/js/games/ank-jod.js?v=565f9cb0"></script>
+  <script src="/src/js/games/engines.js?v=c6353488"></script>
+  <script src="/src/js/games/board-games.js?v=dcf20a95"></script>
+  <script src="/src/js/games/arcade.js?v=f91e8a89"></script>
+  <script src="/src/js/games/rw-sports.js?v=49e66354"></script>
+  <script src="/src/js/main.js?v=05233c72"></script>
   <script src="/src/js/features/akhbaar-catbar.js?v=05c19cfe"></script>
-  <script src="/src/js/features/duniya.js?v=24b32ec1"></script>
+  <script src="/src/js/features/duniya.js?v=f1682e00"></script>
   <script src="/src/js/features/media-picker.js?v=0d1a4caa"></script>
   <script src="/src/js/features/premium.js?v=53c2aa53"></script>
   <script src="/src/js/features/discovery.js?v=2c8fd9a7"></script>
@@ -910,6 +923,6 @@
   <script src="/src/js/core/polish.js?v=267509b9"></script>
   <script src="/src/js/features/fairness.js?v=0afd899f"></script>
   <script src="/src/js/features/media-profile.js?v=d8fe1026"></script>
-  <script src="/src/js/auth/auth-events.js?v=3f0f8667"></script>
+  <script src="/src/js/auth/auth-events.js?v=4f2da1b1"></script>
 </body>
 </html>

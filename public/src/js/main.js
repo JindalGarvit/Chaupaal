@@ -14,16 +14,20 @@
     requestAnimationFrame(()=>requestAnimationFrame(()=>{try{fn();}catch(e){console.warn('[boot] paint',e);}}));
   };
 
-  // Peepal is the default tab — activate shell immediately (also marked active in HTML).
+  // Default bottom tab: habit preference when learned, else Peepal (HTML fallback).
   try{
-    document.querySelectorAll('.tab-panel').forEach(p=>{
-      p.classList.toggle('active', p.id==='panel-peepal');
-    });
-    document.querySelectorAll('.tab-btn').forEach(b=>{
-      b.classList.toggle('active', b.dataset.tab==='peepal');
-    });
-    const progressBar=document.getElementById('progressBar');
-    if(progressBar) progressBar.style.display='none';
+    if(typeof TabHabits!=='undefined'&&TabHabits.prepareBoot){
+      TabHabits.prepareBoot();
+    } else {
+      document.querySelectorAll('.tab-panel').forEach(p=>{
+        p.classList.toggle('active', p.id==='panel-peepal');
+      });
+      document.querySelectorAll('.tab-btn').forEach(b=>{
+        b.classList.toggle('active', b.dataset.tab==='peepal');
+      });
+      const progressBar=document.getElementById('progressBar');
+      if(progressBar) progressBar.style.display='none';
+    }
   }catch(e){}
 
   // Always dismiss splash even if later init throws (stuck splash = "app won't open").
@@ -60,16 +64,30 @@
   });
 
   try{
-    // Hydrate Peepal after App Check has a chance to activate (double-rAF gated).
-    const startPeepal=()=>{
-      if(typeof initPeepal==='function'){
-        try{initPeepal();}catch(e){console.warn('[boot] initPeepal',e);}
-      }
+    // Apply habit default (same path as a real tab click) then init active tab.
+    try{
+      if(typeof TabHabits!=='undefined'&&TabHabits.startSession) TabHabits.startSession();
+      else if(typeof TabHabits!=='undefined'&&TabHabits.applyDefaultTab) TabHabits.applyDefaultTab();
+    }catch(e){console.warn('[boot] tab habits',e);}
+
+    // Hydrate active tab after App Check has a chance to activate (double-rAF gated).
+    const startActiveTab=()=>{
+      const tab=document.querySelector('.bottom-tabs .tab-btn.active')?.dataset?.tab||'peepal';
+      try{
+        if(tab==='peepal'&&typeof initPeepal==='function') initPeepal();
+        else if(tab==='baithak'&&typeof initBaithak==='function') initBaithak();
+        else if(tab==='dangal'&&typeof initCategoryRatings==='function') initCategoryRatings();
+        else if(tab==='duniya'&&typeof initDuniya==='function') initDuniya();
+        else if(tab==='akhbaar'){
+          if(typeof initAkhbaarCatBar==='function') initAkhbaarCatBar();
+          if(typeof window.ensureAkhbaarBuilt==='function') window.ensureAkhbaarBuilt();
+        } else if(typeof initPeepal==='function') initPeepal();
+      }catch(e){console.warn('[boot] init tab',tab,e);}
     };
     if(window.chaupaalAppCheckReady&&typeof window.chaupaalAppCheckReady.then==='function'){
-      window.chaupaalAppCheckReady.then(()=>afterPaint(startPeepal)).catch(()=>afterPaint(startPeepal));
+      window.chaupaalAppCheckReady.then(()=>afterPaint(startActiveTab)).catch(()=>afterPaint(startActiveTab));
     } else {
-      afterPaint(startPeepal);
+      afterPaint(startActiveTab);
     }
 
     // Non-critical tabs: defer off the LCP path
@@ -91,6 +109,9 @@
       if(auth){
         auth.onAuthStateChanged(user=>{
           if(!user){
+            try{
+              if(typeof TabHabits!=='undefined'&&TabHabits.onAuthUidChanged) TabHabits.onAuthUidChanged(null);
+            }catch(e){}
             // Guests: onboarding only — never auto-stack auth mid-onboarding.
             // Soft "Sign in to save" banner appears after onboarding finishes.
             setTimeout(()=>{
@@ -110,6 +131,8 @@
             if(typeof registerSession==='function') registerSession();
             if(typeof loadBlockedFromFirestore==='function') loadBlockedFromFirestore();
             if(typeof hydrateNotifPrefsFromFirestore==='function') hydrateNotifPrefsFromFirestore();
+            if(typeof hydrateTabHabitsFromFirestore==='function') hydrateTabHabitsFromFirestore();
+            else if(typeof TabHabits!=='undefined'&&TabHabits.onAuthUidChanged) TabHabits.onAuthUidChanged(user.uid);
             if(typeof persistProfileCompletion==='function'&&typeof calcProfileCompletion==='function'){
               persistProfileCompletion(calcProfileCompletion());
             }

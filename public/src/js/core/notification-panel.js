@@ -422,8 +422,9 @@
     const actions = [
       {
         label: tt('notif_action_clear', 'Clear'),
+        icon: 'trash',
         danger: true,
-        onClick: () => {
+        fn: () => {
           softClearIds([n.id]).then(() => {
             repaint();
             if (typeof showToast === 'function') showToast(tt('notif_cleared_one', 'Notification cleared'));
@@ -432,7 +433,8 @@
       },
       {
         label: tt('notif_action_mute_type', 'Hide this type'),
-        onClick: () => {
+        icon: 'bell-off',
+        fn: () => {
           try {
             const key = 'chaupaal_muted_notif_types';
             const muted = JSON.parse(localStorage.getItem(key) || '[]');
@@ -445,7 +447,8 @@
       },
       {
         label: tt('notif_action_mark_read', 'Mark read'),
-        onClick: async () => {
+        icon: 'check',
+        fn: async () => {
           await markNotificationRead(n.id);
           repaint();
         },
@@ -454,7 +457,7 @@
     if (typeof showActionSheet === 'function') {
       showActionSheet(tt('notif_actions_title', 'Notification'), actions);
     } else {
-      actions[0].onClick();
+      actions[0].fn();
     }
   }
 

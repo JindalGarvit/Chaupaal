@@ -4,11 +4,20 @@
  */
 (function () {
   const MILESTONES = [
-    { pct: 25, id: 'm25', title: 'Getting to know you 🌱', blurb: 'First quarter done — the Chaupaal is starting to recognise you.' },
-    { pct: 50, id: 'm50', title: 'Finding your circle 🌿', blurb: 'Halfway. Discovery has enough to stop guessing.' },
-    { pct: 75, id: 'm75', title: 'Almost there 🔥', blurb: 'Three-quarters filled — Peepal matching gets serious from here.' },
-    { pct: 100, id: 'm100', title: 'Chaupaal Regular ✅', blurb: 'Full profile. You show up complete — and matching can use everything.' },
+    { pct: 15, id: 'm15', title: 'First sparks ✨', blurb: 'You started. Matchmaking already has a little more to work with.' },
+    { pct: 47, id: 'm47', title: 'Getting interesting 🌿', blurb: 'Almost halfway — discovery stops guessing as hard.' },
+    { pct: 72, id: 'm72', title: 'Looking sharp 🔥', blurb: 'Solid profile energy. Nearby & Peepal get smarter from here.' },
+    { pct: 91, id: 'm91', title: 'Nearly complete 💫', blurb: 'Over 91% — progress bar softens; you\'re basically there.' },
+    { pct: 97, id: 'm97', title: 'Chaupaal Regular ✅', blurb: '97%+ — we\'ll tuck the progress chrome away. You show up complete.' },
   ];
+
+  function playfulPct(real) {
+    // Playful display: keep real underneath but nudge display off round tens sometimes
+    if (real >= 97) return real;
+    if (real >= 91) return Math.min(96, real + (real % 3 === 0 ? 1 : 0));
+    const jitter = [0, 1, -1, 2][real % 4];
+    return Math.max(0, Math.min(96, real + jitter));
+  }
 
   const STORAGE_KEY = 'chaupaal_profile_milestones';
 
@@ -97,15 +106,22 @@
       typeof getProfileFact === 'function'
         ? await getProfileFact(fieldName, value)
         : { line: 'Section saved.', unlockHint: null };
-    if (typeof SoundLib !== 'undefined' && SoundLib.sectionComplete) SoundLib.sectionComplete();
-    if (typeof launchConfetti === 'function') launchConfetti({ x: 50, y: 42 }, 28);
+    const quiet = document.documentElement.classList.contains('quiet-mode');
+    if (!quiet && typeof SoundLib !== 'undefined' && SoundLib.sectionComplete) SoundLib.sectionComplete();
+    if (!quiet && typeof launchConfetti === 'function') launchConfetti({ x: 50, y: 42 }, 28);
     if (typeof haptic === 'function') haptic('success');
+    // Subtle field flash on matching input
+    document.querySelectorAll(`[data-key="${fieldName}"]`).forEach((el) => {
+      el.classList.add('dp-field-saved-pop');
+      setTimeout(() => el.classList.remove('dp-field-saved-pop'), 700);
+    });
     const label =
       (typeof COMPLETION_FIELDS !== 'undefined' &&
         COMPLETION_FIELDS.find((f) => f.key === fieldName || (f.aliases || []).includes(fieldName))?.label) ||
       fieldName;
+    const emoji = ['✨', '🌟', '💫', '🎯', '🔥'][Math.abs(String(fieldName).length) % 5];
     showRewardToast({
-      title: `${label} ✓`,
+      title: `${emoji} ${label} ✓`,
       line: fact.line,
       trivia: fact.trivia || null,
       unlockHint: fact.unlockHint,
@@ -138,8 +154,13 @@
     showRewardToast({
       title: `Unlocked: ${top.title}`,
       line: top.blurb,
-      milestoneTitle: `${top.pct}% profile`,
-      unlockHint: top.pct >= 75 ? 'Peepal matching can use your full profile signals.' : null,
+      milestoneTitle: `${playfulPct(top.pct)}% vibes`,
+      unlockHint:
+        top.pct >= 72
+          ? 'Advantage: stronger Peepal matchmaking & nearby discovery.'
+          : top.pct >= 47
+            ? 'Advantage: better discovery matches from what you filled.'
+            : 'Keep going — every field helps people find you.',
       durationMs: 3800,
     });
   }
@@ -157,6 +178,7 @@
   }
 
   window.PROFILE_MILESTONES = MILESTONES;
+  window.playfulProfilePct = playfulPct;
   window.celebrateSectionComplete = celebrateSectionComplete;
   window.celebrateMilestones = celebrateMilestones;
   window.onProfileFieldSaved = onProfileFieldSaved;

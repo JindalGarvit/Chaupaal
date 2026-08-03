@@ -1149,7 +1149,18 @@ function wireAuthEvents() {
     usernameCheckTimer = setTimeout(() => checkUsernameAvailability(val), 320);
   });
 
-  document.getElementById('reg1Next')?.addEventListener('click', async () => {
+  
+  const syncAuthCanvasPreview = () => {
+    const name = document.getElementById('regName')?.value?.trim() || 'Your name';
+    const un = document.getElementById('regUsername')?.value?.trim() || 'username';
+    const nEl = document.getElementById('authCanvasLiveName');
+    const hEl = document.getElementById('authCanvasLiveHandle');
+    if (nEl) nEl.textContent = name;
+    if (hEl) hEl.textContent = '@' + un.replace(/^@/, '');
+  };
+  document.getElementById('regName')?.addEventListener('input', syncAuthCanvasPreview);
+  document.getElementById('regUsername')?.addEventListener('input', syncAuthCanvasPreview);
+document.getElementById('reg1Next')?.addEventListener('click', async () => {
     const name = document.getElementById('regName')?.value.trim();
     const username = document.getElementById('regUsername')?.value.trim().toLowerCase();
     const dob = document.getElementById('regDob')?.value;

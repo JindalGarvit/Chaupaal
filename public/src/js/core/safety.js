@@ -359,7 +359,7 @@
   }
 
   /**
-   * Balanced post ⋯ menu — constructive + safety, with Report cascade.
+   * Balanced post ⋮ menu — constructive + safety, with Report cascade.
    * @param {object} content - peepal question or duniya post
    * @param {object} [opts]
    * @param {'peepal'|'duniya'} [opts.surface]
@@ -436,28 +436,31 @@
       }
     };
 
+    const menuIco = (name) =>
+      typeof iconHtml === 'function' ? iconHtml(name, { size: 18, className: 'cp-menu-icon' }) : '';
+
     const items = [];
     if (!isOwn && authorUid) {
-      items.push({ id: 'more_like', label: 'More like this', ico: '♥' });
-      items.push({ id: 'not_interested', label: 'Not interested', ico: '✕' });
+      items.push({ id: 'more_like', label: 'More like this', icon: 'heart' });
+      items.push({ id: 'not_interested', label: 'Not interested', icon: 'thumbs-down' });
     }
     // Peepal cards already expose Share on the footer action bar — one affordance.
     if (surface !== 'peepal') {
-      items.push({ id: 'share', label: 'Share', ico: '↗' });
+      items.push({ id: 'share', label: 'Share', icon: 'share' });
     }
-    if (shareUrl) items.push({ id: 'copy', label: 'Copy link', ico: '🔗' });
+    if (shareUrl) items.push({ id: 'copy', label: 'Copy link', icon: 'link' });
     if (!isOwn && authorUid) {
-      items.push({ id: 'hide', label: 'Hide', ico: '👁' });
-      items.push({ id: 'report', label: 'Report…', ico: '⚑', danger: true });
-      items.push({ id: 'block', label: `Block ${user.name || 'user'}`, ico: '⛔', danger: true });
+      items.push({ id: 'hide', label: 'Hide', icon: 'eye-off' });
+      items.push({ id: 'report', label: 'Report…', icon: 'triangle-alert', danger: true });
+      items.push({ id: 'block', label: `Block ${user.name || 'user'}`, icon: 'ban', danger: true });
     }
 
-    const bodyHtml = `<div class="cp-post-menu-list" role="menu">
+    const bodyHtml = `<div class="cp-post-menu-list cp-menu-list" role="menu">
       ${items
         .map(
           (it) =>
-            `<button type="button" class="cp-post-menu-item${it.danger ? ' is-danger' : ''}" data-menu-act="${it.id}" role="menuitem">
-              <span class="cp-post-menu-ico" aria-hidden="true">${it.ico}</span>
+            `<button type="button" class="cp-menu-item cp-post-menu-item${it.danger ? ' is-danger' : ''}" data-menu-act="${it.id}" role="menuitem">
+              <span class="cp-menu-ico cp-post-menu-ico" aria-hidden="true">${menuIco(it.icon)}</span>
               <span>${esc(it.label)}</span>
             </button>`
         )
@@ -541,6 +544,7 @@
         'Post options',
         items.map((it) => ({
           label: it.label,
+          icon: it.icon,
           danger: !!it.danger,
           fn: () => handleAct(it.id, null),
         }))

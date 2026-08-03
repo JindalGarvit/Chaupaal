@@ -22,11 +22,21 @@
 
   // ─── Context action sheet ─────────────────────────────────────────────────
   function showActionSheet(title, actions) {
+    // Tolerate callers that pass (actions[], { title }) — keep menus working.
+    if (Array.isArray(title)) {
+      const opts = actions && !Array.isArray(actions) ? actions : {};
+      actions = title;
+      title = opts.title || '';
+    }
     const existing = document.getElementById('cpActionSheet');
     if (existing) existing.remove();
     const sheet = document.createElement('div');
     sheet.id = 'cpActionSheet';
     sheet.className = 'cp-action-sheet';
+    const ico = (name) =>
+      name && typeof iconHtml === 'function'
+        ? `<span class="cp-menu-ico" aria-hidden="true">${iconHtml(name, { size: 18, className: 'cp-menu-icon' })}</span>`
+        : '';
     sheet.innerHTML = `
       <div class="cp-action-backdrop" data-dismiss="1"></div>
       <div class="cp-action-panel" role="menu">
@@ -34,9 +44,11 @@
         ${(actions || [])
           .map(
             (a, i) =>
-              `<button type="button" class="cp-action-item ${a.danger ? 'cp-action-item--danger' : ''}" data-i="${i}"><span class="cp-action-label">${a.label}</span>${
+              `<button type="button" class="cp-action-item cp-menu-item ${a.danger ? 'cp-action-item--danger is-danger' : ''}" data-i="${i}" role="menuitem">${ico(
+                a.icon
+              )}<span class="cp-action-text"><span class="cp-action-label">${a.label}</span>${
                 a.hint ? `<span class="cp-action-hint">${a.hint}</span>` : ''
-              }</button>`
+              }</span></button>`
           )
           .join('')}
         <button type="button" class="cp-action-item cp-action-cancel" data-dismiss="1">Cancel</button>
@@ -58,9 +70,10 @@
       const i = +btn.dataset.i;
       const act = actions[i];
       close();
-      if (act && typeof act.fn === 'function') {
+      const run = act && (typeof act.fn === 'function' ? act.fn : act.onClick);
+      if (typeof run === 'function') {
         try {
-          act.fn();
+          run();
         } catch (err) {}
       }
     });
@@ -673,6 +686,7 @@
     const actions = [
       {
         label: 'Copy',
+        icon: 'copy',
         fn: () => {
           if (navigator.clipboard && text) navigator.clipboard.writeText(text).catch(() => {});
           if (typeof showToast === 'function') showToast('Copied');
@@ -680,6 +694,7 @@
       },
       {
         label: 'Reply',
+        icon: 'reply',
         fn: () => {
           const input = document.getElementById('chatMsgInput');
           if (input) {
@@ -692,6 +707,7 @@
     if (isMe) {
       actions.push({
         label: 'Delete',
+        icon: 'trash',
         danger: true,
         fn: async () => {
           // Persist delete for text + music/photo/location — never optimistic-only
@@ -740,6 +756,7 @@
     const actions = [
       {
         label: 'Share',
+        icon: 'share',
         fn: () => {
           const shareBtn = postEl.querySelector('.share-btn');
           if (shareBtn) shareBtn.click();
@@ -748,6 +765,7 @@
       },
       {
         label: 'Copy caption',
+        icon: 'copy',
         fn: () => {
           if (navigator.clipboard && caption) navigator.clipboard.writeText(caption).catch(() => {});
           if (typeof showToast === 'function') showToast('Copied');
@@ -757,6 +775,7 @@
     if (img && (img.dataset.full || img.src)) {
       actions.unshift({
         label: 'View image',
+        icon: 'image',
         fn: () => openImageViewer(img.dataset.full || img.currentSrc || img.src),
       });
     }
@@ -764,6 +783,7 @@
     if (more) {
       actions.push({
         label: 'Report / block',
+        icon: 'triangle-alert',
         danger: true,
         fn: () => more.click(),
       });
@@ -772,6 +792,7 @@
     if (del) {
       actions.push({
         label: 'Delete post',
+        icon: 'trash',
         danger: true,
         fn: () => del.click(),
       });

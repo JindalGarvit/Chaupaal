@@ -94,11 +94,20 @@
   function refreshProfileCompletionUI() {
     const stats = calcProfileCompletion();
     persistProfileCompletion(stats);
+    const displayPct =
+      typeof playfulProfilePct === 'function' ? playfulProfilePct(stats.pct) : stats.pct;
+    const hideBar = stats.pct >= 97;
+    const collapseBar = stats.pct >= 91 && stats.pct < 97;
     const pctEl = document.querySelector('[data-ui="profile-completion-pct"]');
     const barEl = document.querySelector('[data-ui="profile-completion-bar"]');
     const hintEl = document.querySelector('[data-ui="profile-completion-hint"]');
+    const completeWrap = document.querySelector('.dp-hero-complete');
+    if (completeWrap) {
+      completeWrap.style.display = hideBar ? 'none' : '';
+      completeWrap.classList.toggle('is-collapsed', collapseBar);
+    }
     if (pctEl) {
-      pctEl.textContent = `${stats.pct}%`;
+      pctEl.textContent = `${displayPct}%`;
       pctEl.style.color = stats.pct >= 80 ? 'var(--green)' : 'var(--red)';
     }
     if (barEl) {
@@ -108,7 +117,7 @@
     if (hintEl) {
       hintEl.style.display = stats.pct < 60 ? '' : 'none';
       if (stats.missing.length) {
-        hintEl.textContent = `Add ${stats.missing.slice(0, 3).join(', ')} to improve discovery ✨`;
+        hintEl.textContent = `Add ${stats.missing.slice(0, 3).join(', ')} — helps matchmaking & discovery`;
       }
     }
     return stats;

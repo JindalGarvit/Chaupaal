@@ -163,6 +163,7 @@
 
     actions.push({
       label: 'View profile',
+      icon: 'user',
       hint: 'Peek then open their Chaupaal profile',
       fn: () => {
         if (typeof openProfilePeek === 'function') {
@@ -176,6 +177,7 @@
     if (state.friend) {
       actions.push({
         label: state.closeFriend ? 'Remove from Close Friends' : 'Add to Close Friends',
+        icon: 'star',
         hint: 'Close Friends is private — only you see this list. Unfollowing also removes them.',
         fn: async () => {
           const next = await setCloseFriend(profile.uid, !state.closeFriend);
@@ -185,6 +187,7 @@
       });
       actions.push({
         label: 'Unfriend',
+        icon: 'user-x',
         danger: true,
         hint: 'Removes your follow. They may still follow you.',
         fn: async () => {
@@ -196,6 +199,7 @@
     } else if (state.requestReceived) {
       actions.push({
         label: 'Accept friend request',
+        icon: 'user-plus',
         fn: async () => {
           await respondFriend(profile.uid, true);
           showToast(t('rel_now_friends_with',{name}));
@@ -204,6 +208,7 @@
       });
       actions.push({
         label: 'Decline friend request',
+        icon: 'x',
         danger: true,
         fn: async () => {
           await respondFriend(profile.uid, false);
@@ -213,6 +218,7 @@
     } else if (state.requestSent) {
       actions.push({
         label: 'Cancel friend request',
+        icon: 'x',
         fn: async () => {
           await cancelFriendRequest(profile.uid);
           showToast(t('rel_request_cancelled'));
@@ -222,6 +228,7 @@
     } else {
       actions.push({
         label: 'Add Friend',
+        icon: 'user-plus',
         hint: state.followsYou
           ? 'They already follow you — this will make you Friends right away.'
           : 'They’ll need to accept before you’re Friends.',
@@ -240,6 +247,7 @@
     if (!state.following) {
       actions.push({
         label: 'Follow',
+        icon: 'user-plus',
         hint: 'One-way follow. If they follow you back, you become Friends automatically.',
         fn: async () => {
           const next = await setFollowing(profile.uid, true, 'profile_menu');
@@ -250,6 +258,7 @@
     } else if (!state.friend) {
       actions.push({
         label: 'Unfollow',
+        icon: 'user-minus',
         fn: async () => {
           await setFollowing(profile.uid, false, 'profile_menu');
           showToast(t('rel_unfollowed',{name}));
@@ -261,6 +270,7 @@
     if (state.followsYou) {
       actions.push({
         label: 'Remove follower',
+        icon: 'user-x',
         danger: true,
         hint: 'Stops them following you. Your follow of them (if any) stays.',
         fn: async () => {

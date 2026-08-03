@@ -1363,31 +1363,31 @@
           </div>
           <div class="mehfil-more-menu" data-mehfil-more>
             <button type="button" class="mehfil-more-item" data-mehfil-react-btn>
-              <span class="icon" aria-hidden="true">😀</span>
+              <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('smile',{size:18}):''}</span>
               ${esc(tt('mehfil_reactions', 'Reactions'))}
             </button>
             <button type="button" class="mehfil-more-item" data-mehfil-sticker-btn>
-              <span class="icon" aria-hidden="true">🪷</span>
+              <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('sparkles',{size:18}):''}</span>
               ${esc(tt('mehfil_stickers', 'Stickers'))}
             </button>
             <button type="button" class="mehfil-more-item" data-mehfil-media-btn>
-              <span class="icon" aria-hidden="true">🎵</span>
+              <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('music',{size:18}):''}</span>
               ${esc(tt('mehfil_media', 'Music / YouTube'))}
             </button>
             <button type="button" class="mehfil-more-item" data-mehfil-nudge-more>
-              <span class="icon" aria-hidden="true">🔔</span>
+              <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('bell',{size:18}):''}</span>
               ${esc(tt('mehfil_nudge', 'Invite'))}
             </button>
             <button type="button" class="mehfil-more-item" data-mehfil-copy>
-              <span class="icon" aria-hidden="true">🔗</span>
+              <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('link',{size:18}):''}</span>
               ${esc(tt('mehfil_copy_link', 'Copy link'))}
             </button>
             <button type="button" class="mehfil-more-item" data-mehfil-flip title="${esc(tt('mehfil_flip', 'Flip camera'))}">
-              <span class="icon" aria-hidden="true">🔄</span>
+              <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('rotate-cw',{size:18}):''}</span>
               ${esc(tt('mehfil_flip', 'Flip'))}
             </button>
             <button type="button" class="mehfil-more-item" data-mehfil-share title="${esc(tt('mehfil_share', 'Share screen'))}">
-              <span class="icon" aria-hidden="true">🖥️</span>
+              <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('monitor',{size:18}):''}</span>
               <span data-mehfil-share-label>${esc(tt('mehfil_share', 'Share'))}</span>
             </button>
           </div>
@@ -1395,7 +1395,7 @@
             <div class="mehfil-dock-primary">
               <button type="button" class="mehfil-ctrl ${micWanted ? 'is-live' : 'is-muted'}" data-mehfil-mic title="${esc(tt('mehfil_mic', 'Microphone'))}" aria-label="${esc(tt('mehfil_mic', 'Toggle microphone'))}" aria-pressed="${micWanted ? 'true' : 'false'}">🎤</button>
               <button type="button" class="mehfil-ctrl is-off" data-mehfil-cam title="${esc(tt('mehfil_cam', 'Camera'))}" aria-label="${esc(tt('mehfil_cam', 'Toggle camera'))}" aria-pressed="false">📷</button>
-              <button type="button" class="mehfil-ctrl" data-mehfil-more-btn title="${esc(tt('mehfil_more', 'More'))}" aria-label="${esc(tt('mehfil_more', 'More call actions'))}" aria-haspopup="true">⋯</button>
+              <button type="button" class="mehfil-ctrl" data-mehfil-more-btn title="${esc(tt('mehfil_more', 'More'))}" aria-label="${esc(tt('mehfil_more', 'More call actions'))}" aria-haspopup="true">${typeof iconHtml==='function'?iconHtml('more-vertical',{size:20}):'⋮'}</button>
             </div>
             <button type="button" class="mehfil-leave" data-mehfil-leave title="${esc(tt('mehfil_leave', 'Leave'))}" aria-label="${esc(tt('mehfil_leave', 'Leave Mehfil'))}">${esc(tt('mehfil_leave', 'Leave'))}</button>
           </div>

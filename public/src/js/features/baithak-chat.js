@@ -1337,11 +1337,11 @@ function showBaithakShareMenu(){
   if (!anchor || !row) {
     if (typeof showActionSheet === 'function') {
       showActionSheet('Share in Baithak', [
-        {label:'⚡ Instant',hint:'Snaps to Close Friends (or Friends if that list is empty). No editing — short undo window.',fn:openBaithakInstantCamera},
-        {label:'📷 Create a story',hint:'Camera with text, stickers, games, and audience controls.',fn:()=>openBaithakStoryComposer('camera')},
-        {label:'🖼️ Upload a story',hint:'Pick from gallery, then edit before sharing with Friends or Close Friends.',fn:()=>openBaithakStoryComposer('gallery')},
-        {label:'🎵 Share a song',hint:'In-app music card — searchable, playable preview. No external apps.',fn:shareBaithakSongStory},
-        {label:'📍 Share a location',hint:'Current place, search, pin drop, or live share — map card in Stories.',fn:shareBaithakLocationStory},
+        {label:'Instant',icon:'zap',hint:'Snaps to Close Friends (or Friends if that list is empty). No editing — short undo window.',fn:openBaithakInstantCamera},
+        {label:'Create a story',icon:'camera',hint:'Camera with text, stickers, games, and audience controls.',fn:()=>openBaithakStoryComposer('camera')},
+        {label:'Upload a story',icon:'image',hint:'Pick from gallery, then edit before sharing with Friends or Close Friends.',fn:()=>openBaithakStoryComposer('gallery')},
+        {label:'Share a song',icon:'music',hint:'In-app music card — searchable, playable preview. No external apps.',fn:shareBaithakSongStory},
+        {label:'Share a location',icon:'map-pin',hint:'Current place, search, pin drop, or live share — map card in Stories.',fn:shareBaithakLocationStory},
       ]);
     } else openBaithakStoryComposer('camera');
     return;

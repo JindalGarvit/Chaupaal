@@ -391,6 +391,23 @@ textarea.auth-input,
 }
 .cp-challenge-pick p { margin: 0 0 14px; font-size: 13px; color: var(--muted); }
 .cp-post-menu-list { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 8px; }
+.cp-menu-list { display: flex; flex-direction: column; gap: 4px; }
+.cp-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 10px;
+  border: 0;
+  border-radius: var(--r-control, 14px);
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  min-width: 0;
+}
 .cp-post-menu-item {
   display: flex;
   align-items: center;
@@ -407,18 +424,36 @@ textarea.auth-input,
   color: var(--ink);
   min-width: 0;
 }
+.cp-menu-item:hover,
+.cp-menu-item:focus-visible,
 .cp-post-menu-item:hover,
 .cp-post-menu-item:focus-visible {
   background: var(--surface-sunken, var(--cream));
   outline: none;
 }
+.cp-menu-item.is-danger,
 .cp-post-menu-item.is-danger { color: var(--brand-red, var(--red)); }
-.cp-post-menu-item .cp-post-menu-ico {
+.cp-menu-item .cp-menu-ico,
+.cp-menu-item .cp-menu-icon,
+.cp-post-menu-item .cp-post-menu-ico,
+.cp-post-menu-item .cp-menu-ico {
   width: 22px;
+  height: 22px;
   text-align: center;
   flex-shrink: 0;
   opacity: 0.85;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
 }
+.cp-menu-item .cp-menu-icon,
+.cp-post-menu-item .cp-menu-icon,
+.baithak-menu-icon {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+.cp-menu-item > span:last-child,
 .cp-post-menu-item span:last-child {
   min-width: 0;
   overflow-wrap: anywhere;

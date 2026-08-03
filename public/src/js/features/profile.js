@@ -19,7 +19,15 @@ function renderProfileModal(){
       if(typeof wirePreviewToggle==='function'){
         wirePreviewToggle(el, ()=>renderProfileModal());
       }
-      if(typeof mountOwnProfileSections==='function'){
+      if(typeof mountProfileShell==='function'){
+        mountProfileShell(el.querySelector('[data-own-preview-sections]'), {
+          editable:false,
+          isOwner:true,
+          includeArchived:true,
+          profile:dp,
+          view: typeof getPublicVisibleProfile==='function'?getPublicVisibleProfile(dp,p):null,
+        });
+      } else if(typeof mountOwnProfileSections==='function'){
         mountOwnProfileSections(el.querySelector('[data-own-preview-sections]'), {
           editable:false,
           isOwner:true,
@@ -96,7 +104,7 @@ function renderProfileModal(){
       <div data-friend-requests></div>
     </div>
     <div class="own-edit-sections" data-own-edit-sections></div>
-    <p class="dp-reorder-hint">Long-press ⠿ to reorder · swipe section privacy on edit · tap ＋ for bio, links, grids &amp; more</p>
+    <p class="dp-reorder-hint">Highlights sit above tabs · Digital / Duniya / Peepal are fixed · ＋ adds custom tabs · edit section items drag to rearrange</p>
     <div class="dp-field-tabs" id="profileSectionTabs">
       ${['Personal','Career','Lifestyle','Relationships','Social'].map((s,i)=>`<button type="button" class="profile-section-tab${i===0?' active':''}" data-sec="${s}">${s}</button>`).join('')}
     </div>
@@ -373,7 +381,15 @@ function renderProfileModal(){
     if(typeof wirePreviewToggle==='function'){
       wirePreviewToggle(el, ()=>renderProfileModal());
     }
-    if(typeof mountOwnProfileSections==='function'){
+    if(typeof mountProfileShell==='function'){
+      mountProfileShell(el.querySelector('[data-own-edit-sections]'), {
+        editable:true,
+        isOwner:true,
+        includeArchived:true,
+        profile:dp,
+        onCustomChange:()=>renderProfileModal(),
+      });
+    } else if(typeof mountOwnProfileSections==='function'){
       mountOwnProfileSections(el.querySelector('[data-own-edit-sections]'), {
         editable:true,
         isOwner:true,
@@ -404,13 +420,13 @@ function renderProfileModal(){
     });
     el.querySelector('[data-dp-more-hub]')?.addEventListener('click',()=>{
       if(typeof showActionSheet==='function'){
-        showActionSheet([
-          {label:'Monthly wrap',fn:()=>{ if(typeof showMonthlyWrap==='function') showMonthlyWrap(); }},
-          {label:'Devices & sessions',fn:()=>{ if(typeof openSessionsSheet==='function') openSessionsSheet(); }},
-          {label:'Blocked users',fn:()=>{ if(typeof openBlockedUsersSheet==='function') openBlockedUsersSheet(); }},
-          {label:'Chaupaal Hub',fn:()=>{ if(typeof openChaupaalProfileHub==='function') openChaupaalProfileHub(); }},
-          {label:'Chaupaal AI profile',fn:()=>{ if(typeof openChaupaalAiProfile==='function') openChaupaalAiProfile(); }},
-        ],{title:'More on your profile'});
+        showActionSheet('More on your profile',[
+          {label:'Monthly wrap',icon:'calendar',fn:()=>{ if(typeof showMonthlyWrap==='function') showMonthlyWrap(); }},
+          {label:'Devices & sessions',icon:'laptop',fn:()=>{ if(typeof openSessionsSheet==='function') openSessionsSheet(); }},
+          {label:'Blocked users',icon:'ban',fn:()=>{ if(typeof openBlockedUsersSheet==='function') openBlockedUsersSheet(); }},
+          {label:'Chaupaal Hub',icon:'user',fn:()=>{ if(typeof openChaupaalProfileHub==='function') openChaupaalProfileHub(); }},
+          {label:'Chaupaal AI profile',icon:'brain',fn:()=>{ if(typeof openChaupaalAiProfile==='function') openChaupaalAiProfile(); }},
+        ]);
       } else if(typeof openChaupaalProfileHub==='function') openChaupaalProfileHub();
     });
     document.getElementById('profileAddSectionBtn')?.addEventListener('click',()=>{

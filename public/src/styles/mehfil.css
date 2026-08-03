@@ -400,6 +400,10 @@
   background:var(--call-ctrl-bg);
   display:inline-flex;align-items:center;justify-content:center;
   font-size:var(--icon-md, 18px);
+  color:inherit;
+}
+.mehfil-more-item span.icon .cp-icon{
+  width:18px;height:18px;
 }
 .mehfil-more-item.is-live span.icon{
   background:var(--call-ctrl-live);

@@ -119,6 +119,7 @@ async function fetchGameOfTheDay() {
       _dangalGotdCache = {
         gameId: envelope.data.gameId,
         date: envelope.data.date || today,
+        genre: envelope.data.genre || null,
       };
       return _dangalGotdCache;
     }
@@ -151,6 +152,10 @@ async function recordDangalGameLike(gameId, btn) {
 function dangalTileHtml(g) {
   const rating = typeof getGameRating === 'function' ? getGameRating(g.ratingKey) : null;
   const soloTag = g.solo || g.gameType === 'solo' ? '<span class="dangal-solo-tag">SOLO</span>' : '';
+  const genreHint =
+    g.genre && typeof genreLabel === 'function'
+      ? `<span class="dangal-genre-tag">${genreLabel(g.genre)}</span>`
+      : '';
   const accent = (typeof GAME_ACCENTS !== 'undefined' && GAME_ACCENTS[g.id]) || 'var(--red)';
   const progressPill =
     typeof tileProgressPillHtml === 'function' ? tileProgressPillHtml(g.id) : '';
@@ -159,6 +164,7 @@ function dangalTileHtml(g) {
     <div>
       <div class="dangal-game-name">${g.name}${soloTag}</div>
       <div class="dangal-game-desc">${g.desc}</div>
+      ${genreHint}
       ${rating ? `<div class="dangal-game-rating-pill">★ ${rating}</div>` : ''}
       ${progressPill}
     </div>
@@ -249,12 +255,17 @@ function renderDangalGotdSlot(host, gotd) {
   card.dataset.game = g.id;
   card.setAttribute('role', 'button');
   card.tabIndex = 0;
+  const genreBit =
+    (gotd.genre || g.genre) && typeof genreLabel === 'function'
+      ? `<div class="dangal-gotd-desc">${genreLabel(gotd.genre || g.genre)}</div>`
+      : '';
   card.innerHTML = `
     <div class="dangal-gotd-icon">${g.icon}</div>
     <div>
       <div class="dangal-gotd-badge">Game of the Day</div>
       <div class="dangal-gotd-name">${g.name}</div>
       <div class="dangal-gotd-desc">${g.desc}</div>
+      ${genreBit}
     </div>
     <div class="dangal-gotd-actions">
       <span class="dangal-gotd-play">Play →</span>
@@ -342,18 +353,106 @@ function renderDangalGamesGrid() {
     }
   });
 
-  // ── Manch: full games library ──
+  // ── Manch: full games library + sticky filters ──
   const manch = document.createElement('div');
   manch.className = 'dangal-section room-kit room-kit--fire room-kit--manch';
   manch.dataset.dangalSection = 'manch';
-  manch.innerHTML = `<div class="dangal-section-grid">
-      ${library.map(dangalTileHtml).join('') || ''}
-    </div>`;
-  if (!library.length && typeof renderEmptyState === 'function') {
-    const empty = document.createElement('div');
-    manch.appendChild(empty);
-    renderEmptyState(empty, { icon: '🎮', title: 'Library empty', message: 'Games will appear here.' });
+  const filterBar = document.createElement('div');
+  filterBar.className = 'dangal-manch-filters';
+  filterBar.setAttribute('data-nav-ignore', '1');
+  filterBar.setAttribute('role', 'toolbar');
+  filterBar.setAttribute('aria-label', 'Filter games');
+  const modeFilters = [
+    { id: 'all', label: 'All', kind: 'all' },
+    { id: 'solo', label: 'Solo', kind: 'mode', gameType: 'solo' },
+    { id: 'dual', label: 'Dual', kind: 'mode', gameType: 'dual' },
+    { id: 'multiplayer', label: 'Multi', kind: 'mode', gameType: 'multiplayer' },
+  ];
+  const genreFilters = (typeof getGameGenres === 'function' ? getGameGenres() : []).map((g) => ({
+    id: g.id,
+    label: g.label,
+    kind: 'genre',
+    genre: g.id,
+  }));
+  const allFilters = modeFilters.concat(genreFilters);
+  if (!window.__dangalManchFilter) window.__dangalManchFilter = { mode: 'all', genre: null };
+  const state = window.__dangalManchFilter;
+
+  const chipsHtml = allFilters
+    .map((f) => {
+      const active =
+        f.kind === 'all'
+          ? state.mode === 'all' && !state.genre
+          : f.kind === 'mode'
+            ? state.mode === f.gameType && !state.genre
+            : state.genre === f.genre;
+      return `<button type="button" class="dangal-filter-chip${active ? ' is-active' : ''}" data-filter-kind="${f.kind}" data-filter-id="${f.id}"${f.gameType ? ` data-game-type="${f.gameType}"` : ''}${f.genre ? ` data-genre="${f.genre}"` : ''}>${f.label}</button>`;
+    })
+    .join('');
+  filterBar.innerHTML = `<div class="dangal-filter-row">${chipsHtml}</div>`;
+  manch.appendChild(filterBar);
+
+  const manchGrid = document.createElement('div');
+  manchGrid.className = 'dangal-section-grid';
+  manchGrid.dataset.manchGrid = '1';
+
+  function filteredLibrary() {
+    let list = library.slice();
+    if (state.genre) list = list.filter((g) => g.genre === state.genre);
+    else if (state.mode && state.mode !== 'all') {
+      list = list.filter((g) => g.gameType === state.mode);
+    }
+    return list;
   }
+
+  function paintManchGrid() {
+    const list = filteredLibrary();
+    if (!list.length) {
+      manchGrid.innerHTML = '';
+      if (typeof renderEmptyState === 'function') {
+        renderEmptyState(manchGrid, {
+          icon: '🎮',
+          title: 'No games here',
+          message: 'Try another filter — or All to see everything.',
+        });
+      } else {
+        manchGrid.innerHTML =
+          '<div class="cp-empty" style="grid-column:1/-1;padding:20px;text-align:center;color:var(--muted);">No games match this filter.</div>';
+      }
+    } else {
+      manchGrid.innerHTML = list.map(dangalTileHtml).join('');
+      wireDangalTiles(manchGrid);
+    }
+  }
+
+  paintManchGrid();
+  manch.appendChild(manchGrid);
+
+  filterBar.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-filter-kind]');
+    if (!btn) return;
+    const kind = btn.dataset.filterKind;
+    if (kind === 'all') {
+      state.mode = 'all';
+      state.genre = null;
+    } else if (kind === 'mode') {
+      state.mode = btn.dataset.gameType || 'all';
+      state.genre = null;
+    } else if (kind === 'genre') {
+      state.genre = btn.dataset.genre || null;
+      state.mode = 'all';
+    }
+    filterBar.querySelectorAll('.dangal-filter-chip').forEach((c) => {
+      const k = c.dataset.filterKind;
+      let on = false;
+      if (k === 'all') on = state.mode === 'all' && !state.genre;
+      else if (k === 'mode') on = !state.genre && state.mode === c.dataset.gameType;
+      else if (k === 'genre') on = state.genre === c.dataset.genre;
+      c.classList.toggle('is-active', on);
+    });
+    paintManchGrid();
+  });
+
   grid.appendChild(manch);
 
   // ── Maidan: resume / last played / in-progress ──

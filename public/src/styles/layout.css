@@ -263,6 +263,11 @@ html,body{
 /* ===== TAB CONTENT PANELS ===== */
 .tab-panel{display:none;flex:1;overflow:hidden;flex-direction:column;}
 .tab-panel.active{display:flex;}
+/* Hide panels until habit default is applied (avoids Peepal flash when habit ≠ peepal). */
+html.tabs-habit-pending .device > .tab-panel{
+  opacity:0;
+  pointer-events:none;
+}
 
 /* Desktop shell — must follow base .topbar/.bottom-tabs rules (cascade fix) */
 @media(min-width:768px){

@@ -1163,7 +1163,7 @@ function renderPeepalFeed(){
           ${q.user.bio?`<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">"${escPeepalText(q.user.bio)}"</div>`:''}
         </div>
         ${canDelete?`<button class="peepal-delete-btn" title="Delete" aria-label="Delete" style="background:none;border:none;cursor:pointer;color:var(--muted);">${typeof iconHtml==='function'?iconHtml('trash',{size:16}):'🗑️'}</button>`:''}
-        ${!canDelete&&q.user?.uid&&q.user.uid!==currentUser?.uid?`<button class="peepal-more-btn" title="More" aria-label="More options" style="background:none;border:none;cursor:pointer;color:var(--muted);padding:4px;">${typeof iconHtml==='function'?iconHtml('more-horizontal',{size:16}):'⋯'}</button>`:''}
+        ${!canDelete&&q.user?.uid&&q.user.uid!==currentUser?.uid?`<button class="peepal-more-btn" title="More" aria-label="More options">${typeof iconHtml==='function'?iconHtml('more-vertical',{size:18}):'⋮'}</button>`:''}
         <button class="peepal-speak-btn" data-text="${escPeepalText(peepalSpeakPayload(q))}" title="Listen to this post" aria-label="Listen to this post">${typeof iconHtml==='function'?iconHtml('volume',{size:16}):'🔊'}</button>
       </div>
       <div class="peepal-card-body">

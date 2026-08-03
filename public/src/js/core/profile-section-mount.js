@@ -5,9 +5,9 @@
 (function () {
   'use strict';
 
-  async function fillBuiltinBody(bodyEl, sectionId, profileUid, { isOwner, includeArchived, profileMedia } = {}) {
+  async function fillBuiltinBody(bodyEl, sectionId, profileUid, opts = {}) {
     if (!bodyEl || !profileUid) return;
-    const opts = { isOwner, includeArchived, profileMedia };
+    const { isOwner, includeArchived, profileMedia } = opts;
     const dp =
       opts.profile ||
       (typeof digitalProfile !== 'undefined' && profileUid === currentUser?.uid ? digitalProfile : {}) ||
@@ -217,6 +217,7 @@
           isOwner,
           includeArchived,
           profileMedia: profile.profileMedia,
+          profile,
         });
       } else if (typeof renderCustomSectionBody === 'function') {
         body.innerHTML = renderCustomSectionBody(meta);

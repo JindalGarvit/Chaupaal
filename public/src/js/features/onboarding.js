@@ -13,6 +13,10 @@ function checkViralLink(){
   document.getElementById('topbar')?.after(banner);
   document.getElementById('guestSignupBtn')?.addEventListener('click',()=>{banner.remove();showAuth();});
 
+  try{
+    if(typeof TabHabits!=='undefined'&&TabHabits.markOverride) TabHabits.markOverride('viral_challenge');
+  }catch(e){}
+
   if(game==='akhbaar'){
     window.__akhbaarBeatChallenge={
       challenger:decodeURIComponent(challenger),
@@ -647,6 +651,11 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       if(typeof window.ensureAkhbaarBuilt==='function') window.ensureAkhbaarBuilt();
     }
     if(btn.dataset.tab==='peepal')initPeepal();
+    try{
+      if(typeof TabHabits!=='undefined'&&TabHabits.onTabActivated){
+        TabHabits.onTabActivated(btn.dataset.tab||'');
+      }
+    }catch(e){}
   });
 });
 async function requestNotificationPermission(){

@@ -66,10 +66,10 @@ function openBaithakOverflowMenu(anchor){
   const tt=(k,f)=>{ try{ if(typeof t==='function'){ const v=t(k); if(v&&v!==k) return v; } }catch(e){} return f; };
   const ic=(name)=>typeof iconHtml==='function'?iconHtml(name,{size:18,className:'baithak-menu-icon'}):'';
   menu.innerHTML=`
-    <button type="button" role="menuitem" data-baithak-menu="new_chat">${ic('message-circle')}<span>${tt('baithak_menu_new_chat','New chat')}</span></button>
-    <button type="button" role="menuitem" data-baithak-menu="new_group">${ic('users')}<span>${tt('baithak_menu_new_group','New group')}</span></button>
-    <button type="button" role="menuitem" data-baithak-menu="find">${ic('search')}<span>${tt('shortcut_baithak_search','Find people')}</span></button>
-    <button type="button" role="menuitem" data-baithak-menu="settings">${ic('settings')}<span>${tt('baithak_menu_settings','Settings')}</span></button>`;
+    <button type="button" role="menuitem" class="cp-menu-item" data-baithak-menu="new_chat">${ic('message-circle')}<span>${tt('baithak_menu_new_chat','New chat')}</span></button>
+    <button type="button" role="menuitem" class="cp-menu-item" data-baithak-menu="new_group">${ic('users')}<span>${tt('baithak_menu_new_group','New group')}</span></button>
+    <button type="button" role="menuitem" class="cp-menu-item" data-baithak-menu="find">${ic('search')}<span>${tt('shortcut_baithak_search','Find people')}</span></button>
+    <button type="button" role="menuitem" class="cp-menu-item" data-baithak-menu="settings">${ic('settings')}<span>${tt('baithak_menu_settings','Settings')}</span></button>`;
   const host=document.querySelector('.device')||document.body;
   host.appendChild(menu);
   const rect=anchor?.getBoundingClientRect?.();

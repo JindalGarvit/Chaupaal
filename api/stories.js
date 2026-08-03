@@ -461,6 +461,7 @@ async function profileStories(db, uid, targetUid) {
 
 async function listHighlights(db, uid, targetUid) {
   const ownerUid = targetUid || uid;
+  const isOwner = ownerUid === uid;
   const snap = await db.collection('users').doc(ownerUid).collection('story_highlights').limit(40).get();
   return snap.docs
     .map((doc) => {
@@ -471,24 +472,69 @@ async function listHighlights(db, uid, targetUid) {
         coverUrl: d.coverUrl || '',
         storyCount: Array.isArray(d.storyRefs) ? d.storyRefs.length : 0,
         storyRefs: d.storyRefs || [],
+        order: Number(d.order) || 0,
+        privacy: d.privacy === 'private' ? 'private' : 'public',
         updatedAt: d.updatedAt?.toMillis?.() || 0,
       };
     })
-    .sort((a, b) => b.updatedAt - a.updatedAt);
+    .filter((h) => isOwner || h.privacy !== 'private')
+    .sort((a, b) => (a.order || 0) - (b.order || 0) || b.updatedAt - a.updatedAt);
 }
 
 async function createHighlight(db, admin, uid, body) {
   const title = cleanText(body.title, 40) || 'Highlight';
   const ref = db.collection('users').doc(uid).collection('story_highlights').doc();
   const now = admin.firestore.FieldValue.serverTimestamp();
+  const orderSnap = await db.collection('users').doc(uid).collection('story_highlights').limit(40).get();
+  const maxOrder = orderSnap.docs.reduce((m, d) => Math.max(m, Number(d.data()?.order) || 0), 0);
   await ref.set({
     title,
     coverUrl: cleanText(body.coverUrl, 500) || '',
     storyRefs: [],
+    order: maxOrder + 1,
+    privacy: body.privacy === 'private' ? 'private' : 'public',
     createdAt: now,
     updatedAt: now,
   });
   return { id: ref.id, title };
+}
+
+async function updateHighlight(db, admin, uid, body) {
+  const highlightId = cleanText(body.highlightId, 180);
+  if (!highlightId) throw new Error('INVALID_HIGHLIGHT');
+  const href = db.collection('users').doc(uid).collection('story_highlights').doc(highlightId);
+  const snap = await href.get();
+  if (!snap.exists) throw new Error('HIGHLIGHT_NOT_FOUND');
+  const patch = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+  if (body.title != null) patch.title = cleanText(body.title, 40) || 'Highlight';
+  if (body.coverUrl != null) patch.coverUrl = cleanText(body.coverUrl, 500) || '';
+  if (body.privacy === 'private' || body.privacy === 'public') patch.privacy = body.privacy;
+  if (Number.isFinite(Number(body.order))) patch.order = Number(body.order);
+  await href.set(patch, { merge: true });
+  return { id: highlightId, ...patch, updatedAt: Date.now() };
+}
+
+async function deleteHighlight(db, uid, highlightId) {
+  const id = cleanText(highlightId, 180);
+  if (!id) throw new Error('INVALID_HIGHLIGHT');
+  const href = db.collection('users').doc(uid).collection('story_highlights').doc(id);
+  const snap = await href.get();
+  if (!snap.exists) throw new Error('HIGHLIGHT_NOT_FOUND');
+  await href.delete();
+  return { deleted: true, id };
+}
+
+async function reorderHighlights(db, admin, uid, body) {
+  const ids = Array.isArray(body.ids) ? body.ids.map((x) => cleanText(x, 180)).filter(Boolean) : [];
+  if (!ids.length) throw new Error('INVALID_HIGHLIGHT');
+  const batch = db.batch();
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  ids.forEach((id, i) => {
+    const href = db.collection('users').doc(uid).collection('story_highlights').doc(id);
+    batch.set(href, { order: i + 1, updatedAt: now }, { merge: true });
+  });
+  await batch.commit();
+  return { ok: true, ids };
 }
 
 async function mutateHighlightStories(db, admin, uid, body, mode) {
@@ -738,6 +784,15 @@ module.exports = async function handler(req, res) {
     }
     if (action === 'create_highlight') {
       return sendSuccess(res, await createHighlight(db, admin, user.uid, body));
+    }
+    if (action === 'update_highlight') {
+      return sendSuccess(res, await updateHighlight(db, admin, user.uid, body));
+    }
+    if (action === 'delete_highlight') {
+      return sendSuccess(res, await deleteHighlight(db, user.uid, body.highlightId));
+    }
+    if (action === 'reorder_highlights') {
+      return sendSuccess(res, await reorderHighlights(db, admin, user.uid, body));
     }
     if (action === 'add_highlight_story') {
       return sendSuccess(res, await mutateHighlightStories(db, admin, user.uid, body, 'add'));

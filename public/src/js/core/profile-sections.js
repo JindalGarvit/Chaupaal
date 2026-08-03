@@ -23,6 +23,18 @@
     { id: 'links', label: 'Link list', hint: 'Website, social, shop' },
     { id: 'image', label: 'Featured image', hint: 'One wide visual' },
     { id: 'quote', label: 'Quote / prompt', hint: 'Pinned thought' },
+    { id: 'stack', label: 'Stack', hint: 'One-by-one cards' },
+    { id: 'list', label: 'List', hint: 'Vertical list rows' },
+  ];
+
+  const LAYOUTS = [
+    { id: 'grid', label: 'Grid' },
+    { id: 'stack', label: 'Stack' },
+    { id: 'list', label: 'List' },
+    { id: 'flexible', label: 'Text' },
+    { id: 'image', label: 'Featured' },
+    { id: 'quote', label: 'Quote' },
+    { id: 'links', label: 'Links' },
   ];
 
   function defaultOrder(profileType) {
@@ -68,6 +80,7 @@
       label: c.name || 'Section',
       builtin: false,
       type: c.type || 'grid',
+      layout: c.layout || c.type || 'grid',
       privacy: c.privacy === 'private' ? 'private' : 'public',
       body: c.body || '',
       items: Array.isArray(c.items) ? c.items : [],
@@ -99,8 +112,10 @@
     if (!docData || typeof digitalProfile === 'undefined') return;
     const order = docData.profile?.sectionOrder || docData.sectionOrder;
     const customs = docData.profile?.customSections || docData.customSections;
+    const tabs = docData.profile?.tabOrder || docData.tabOrder;
     if (Array.isArray(order)) digitalProfile.sectionOrder = order;
     if (Array.isArray(customs)) digitalProfile.customSections = customs;
+    if (Array.isArray(tabs)) digitalProfile.tabOrder = tabs;
     try {
       localStorage.setItem('chaupaal_digital_profile', JSON.stringify(digitalProfile));
     } catch (e) {}
@@ -112,21 +127,39 @@
       : `cs_${Date.now().toString(36)}`;
   }
 
-  async function createCustomSection({ name, type, privacy }) {
+  async function createCustomSection({ name, type, privacy, layout }) {
     const customs = getCustomSections();
+    const resolvedType = LAYOUTS.some((l) => l.id === type) ? type : type === 'flexible' ? 'flexible' : 'grid';
     const section = {
       id: uid(),
       name: String(name || 'New section').slice(0, 40),
-      type: type === 'flexible' ? 'flexible' : 'grid',
+      type: resolvedType,
+      layout: layout || resolvedType,
       privacy: privacy === 'private' ? 'private' : 'public',
       body: '',
       items: [],
       createdAt: Date.now(),
+      updatedAt: Date.now(),
     };
     customs.push(section);
     const order = getSectionOrder();
     order.push(section.id);
     await persistSections({ sectionOrder: order, customSections: customs });
+    // Also append to Instagram tabOrder if present
+    if (typeof digitalProfile !== 'undefined') {
+      const tabs = Array.isArray(digitalProfile.tabOrder) ? digitalProfile.tabOrder : null;
+      if (tabs && !tabs.includes(section.id)) {
+        tabs.push(section.id);
+        digitalProfile.tabOrder = tabs;
+        if (typeof persistProfileTabOrder === 'function') persistProfileTabOrder(tabs);
+        else if (db && currentUser) {
+          db.collection('users')
+            .doc(currentUser.uid)
+            .update({ 'profile.tabOrder': tabs, tabOrder: tabs })
+            .catch(() => {});
+        }
+      }
+    }
     return section;
   }
 
@@ -278,7 +311,7 @@
         <div class="add-section-types" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
           ${CUSTOM_TYPES.map((t,i)=>`<button type="button" class="btn${i===0?' btn--primary':''}" data-sec-type="${t.id}" style="text-align:left;padding:10px 12px;"><strong style="display:block;font-size:13px;">${t.label}</strong><span style="font-size:11px;color:var(--muted);font-weight:500;">${t.hint}</span></button>`).join('')}
         </div>
-        <p style="font-size:12px;color:var(--muted);margin:10px 0;">Built-ins (About, Stats, Highlights, Pinned, Photos, Links, Duniya, Peepal) stay on by default — reorder or hide via privacy.</p>
+        <p style="font-size:12px;color:var(--muted);margin:10px 0;">Creates a new profile tab. Pull content from archive or upload profile-only media — no feed post required.</p>
         <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin:14px 0 8px;">Visibility</div>
         <div style="display:flex;gap:8px;">
           <button type="button" class="btn btn--primary" data-sec-privacy="public" style="flex:1;">Public</button>
@@ -338,29 +371,62 @@
     sheet.id = 'editCustomSectionSheet';
     sheet.className = 'archive-overlay';
     sheet.setAttribute('data-nav-managed', '1');
+    let items = Array.isArray(meta.items) ? [...meta.items] : [];
+    const escAttr = (s) => String(s || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+    function renderItems() {
+      if (!items.length) return '<div class="public-profile-posts-empty">No items — add from archive or upload</div>';
+      return `<div class="cp-sec-items" data-sec-items>${items
+        .map(
+          (it, i) => `<div class="cp-sec-item" data-item-i="${i}" draggable="true">
+            <span class="profile-section-drag" data-item-drag>⠿</span>
+            ${it.url || it.thumb ? `<img src="${escAttr(it.thumb || it.url)}" alt="">` : ''}
+            <div class="cp-sec-item-meta">
+              <input type="text" data-item-caption value="${escAttr(it.caption || it.label || '')}" placeholder="Caption / label">
+              ${it.url && !it.thumb ? `<small>${escAttr(String(it.url).slice(0, 40))}</small>` : ''}
+            </div>
+            <button type="button" data-item-remove aria-label="Remove">✕</button>
+          </div>`
+        )
+        .join('')}</div>`;
+    }
+
     sheet.innerHTML = `
       <div class="archive-header">
         <button type="button" data-overlay-dismiss>←</button>
         <div style="flex:1"><strong>Edit section</strong></div>
         <button type="button" data-sec-delete style="background:none;border:none;color:var(--red);font-weight:700;cursor:pointer;">Delete</button>
       </div>
-      <div style="padding:16px;">
+      <div style="padding:16px;overflow:auto;max-height:calc(100% - 56px);">
         <label class="story-editor-field">Name
-          <input type="text" maxlength="40" data-sec-name value="${(meta.label || '').replace(/"/g, '&quot;')}">
+          <input type="text" maxlength="40" data-sec-name value="${escAttr(meta.label)}">
         </label>
-        <div style="display:flex;gap:8px;margin:14px 0;">
-          <button type="button" class="btn ${meta.type === 'grid' ? 'btn--primary' : ''}" data-sec-type="grid" style="flex:1;">Grid</button>
-          <button type="button" class="btn ${meta.type === 'flexible' ? 'btn--primary' : ''}" data-sec-type="flexible" style="flex:1;">Flexible</button>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin:14px 0 8px;">Layout</div>
+        <div class="cp-layout-pills" style="display:flex;flex-wrap:wrap;gap:6px;">
+          ${LAYOUTS.map(
+            (l) =>
+              `<button type="button" class="btn ${(meta.layout || meta.type) === l.id ? 'btn--primary' : ''}" data-sec-layout="${l.id}" style="padding:8px 10px;font-size:12px;">${l.label}</button>`
+          ).join('')}
         </div>
-        <div style="display:flex;gap:8px;margin-bottom:14px;">
+        <div style="display:flex;gap:8px;margin:14px 0;">
           <button type="button" class="btn ${meta.privacy === 'public' ? 'btn--primary' : ''}" data-sec-privacy="public" style="flex:1;">Public</button>
           <button type="button" class="btn ${meta.privacy === 'private' ? 'btn--primary' : ''}" data-sec-privacy="private" style="flex:1;">Private</button>
         </div>
-        ${
-          meta.type === 'flexible'
-            ? `<textarea data-sec-body style="width:100%;min-height:120px;border:1.5px solid var(--line);border-radius:12px;padding:12px;font-size:14px;box-sizing:border-box;">${(meta.body || '').replace(/</g, '&lt;')}</textarea>`
-            : `<p style="font-size:13px;color:var(--muted);">Add photos from Archive or your camera roll (coming into grid items).</p>`
-        }
+        <div data-sec-text-wrap>
+          <label class="story-editor-field">Text / quote
+            <textarea data-sec-body style="width:100%;min-height:90px;border:1.5px solid var(--line);border-radius:12px;padding:12px;font-size:14px;box-sizing:border-box;">${(meta.body || '').replace(/</g, '&lt;')}</textarea>
+          </label>
+        </div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin:14px 0 8px;">Content</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+          <button type="button" class="btn" data-sec-from-archive>From archive</button>
+          <button type="button" class="btn" data-sec-upload>Upload new</button>
+          <button type="button" class="btn" data-sec-add-link>Add link</button>
+          <button type="button" class="btn" data-sec-add-text>Add text card</button>
+        </div>
+        <input type="file" accept="image/*,video/*" data-sec-file hidden multiple>
+        <div data-sec-items-host>${renderItems()}</div>
+        <p style="font-size:12px;color:var(--muted);margin:10px 0;">Profile-only items never require a feed post. Drag ⠿ to rearrange.</p>
         <button type="button" class="btn btn--primary btn--block" data-sec-save style="margin-top:14px;">Save</button>
       </div>`;
     document.querySelector('.device')?.appendChild(sheet);
@@ -374,12 +440,61 @@
       pushNavLayer(sheet, close);
     }
 
-    let type = meta.type;
+    let layout = meta.layout || meta.type || 'grid';
     let privacy = meta.privacy;
-    sheet.querySelectorAll('[data-sec-type]').forEach((b) =>
+
+    function syncItemCaptions() {
+      sheet.querySelectorAll('[data-item-i]').forEach((row) => {
+        const i = Number(row.dataset.itemI);
+        const cap = row.querySelector('[data-item-caption]')?.value || '';
+        if (items[i]) {
+          items[i] = { ...items[i], caption: cap, label: cap || items[i].label };
+        }
+      });
+    }
+
+    function refreshItems() {
+      syncItemCaptions();
+      const host = sheet.querySelector('[data-sec-items-host]');
+      if (host) host.innerHTML = renderItems();
+      wireItemUi();
+    }
+
+    function wireItemUi() {
+      sheet.querySelectorAll('[data-item-remove]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          syncItemCaptions();
+          const i = Number(btn.closest('[data-item-i]')?.dataset.itemI);
+          items.splice(i, 1);
+          refreshItems();
+        });
+      });
+      const list = sheet.querySelector('[data-sec-items]');
+      if (!list) return;
+      let dragI = null;
+      list.querySelectorAll('[data-item-i]').forEach((row) => {
+        row.addEventListener('dragstart', () => {
+          dragI = Number(row.dataset.itemI);
+          row.classList.add('is-dragging');
+        });
+        row.addEventListener('dragend', () => row.classList.remove('is-dragging'));
+        row.addEventListener('dragover', (e) => e.preventDefault());
+        row.addEventListener('drop', () => {
+          const to = Number(row.dataset.itemI);
+          if (dragI == null || dragI === to) return;
+          syncItemCaptions();
+          const [moved] = items.splice(dragI, 1);
+          items.splice(to, 0, moved);
+          refreshItems();
+        });
+      });
+    }
+    wireItemUi();
+
+    sheet.querySelectorAll('[data-sec-layout]').forEach((b) =>
       b.addEventListener('click', () => {
-        type = b.dataset.secType;
-        sheet.querySelectorAll('[data-sec-type]').forEach((x) => x.classList.toggle('btn--primary', x === b));
+        layout = b.dataset.secLayout;
+        sheet.querySelectorAll('[data-sec-layout]').forEach((x) => x.classList.toggle('btn--primary', x === b));
       })
     );
     sheet.querySelectorAll('[data-sec-privacy]').forEach((b) =>
@@ -392,31 +507,200 @@
     sheet.querySelector('[data-sec-delete]')?.addEventListener('click', async () => {
       if (!confirm('Delete this section?')) return;
       await deleteCustomSection(id);
+      if (typeof digitalProfile !== 'undefined' && Array.isArray(digitalProfile.tabOrder)) {
+        digitalProfile.tabOrder = digitalProfile.tabOrder.filter((t) => t !== id);
+        if (typeof persistProfileTabOrder === 'function') persistProfileTabOrder(digitalProfile.tabOrder);
+      }
       close();
       if (typeof onDone === 'function') onDone(null);
     });
+
+    sheet.querySelector('[data-sec-from-archive]')?.addEventListener('click', () => {
+      openArchivePickerForSection((picked) => {
+        items = items.concat(picked);
+        refreshItems();
+      });
+    });
+    sheet.querySelector('[data-sec-upload]')?.addEventListener('click', () => {
+      sheet.querySelector('[data-sec-file]')?.click();
+    });
+    sheet.querySelector('[data-sec-file]')?.addEventListener('change', async (e) => {
+      const files = [...(e.target.files || [])];
+      for (const file of files.slice(0, 8)) {
+        try {
+          let url = '';
+          if (typeof uploadOptimizedImage === 'function' && file.type.startsWith('image/')) {
+            const res = await uploadOptimizedImage(file, { folder: 'profile-sections' });
+            url = res?.url || res || '';
+          } else if (typeof uploadFile === 'function') {
+            url = await uploadFile(file, 'profile-sections');
+          } else {
+            url = await new Promise((resolve, reject) => {
+              const r = new FileReader();
+              r.onload = () => resolve(r.result);
+              r.onerror = reject;
+              r.readAsDataURL(file);
+            });
+          }
+          if (url) {
+            items.push({
+              url,
+              thumb: url,
+              caption: file.name.replace(/\.[^.]+$/, '').slice(0, 40),
+              source: 'upload',
+              profileOnly: true,
+              type: file.type.startsWith('video/') ? 'video' : 'image',
+            });
+          }
+        } catch (err) {
+          if (typeof showToast === 'function') showToast('Upload failed');
+        }
+      }
+      e.target.value = '';
+      refreshItems();
+    });
+    sheet.querySelector('[data-sec-add-link]')?.addEventListener('click', () => {
+      const url = prompt('Link URL');
+      if (!url) return;
+      const label = prompt('Label') || 'Link';
+      items.push({ url, label, caption: label, type: 'link', profileOnly: true });
+      refreshItems();
+    });
+    sheet.querySelector('[data-sec-add-text]')?.addEventListener('click', () => {
+      const text = prompt('Text card');
+      if (!text) return;
+      items.push({ caption: text, type: 'text', profileOnly: true });
+      refreshItems();
+    });
+
     sheet.querySelector('[data-sec-save]')?.addEventListener('click', async () => {
+      syncItemCaptions();
       const name = sheet.querySelector('[data-sec-name]')?.value?.trim() || meta.label;
       const body = sheet.querySelector('[data-sec-body]')?.value || '';
-      await updateCustomSection(id, { name, type, privacy, body });
+      await updateCustomSection(id, {
+        name,
+        type: layout,
+        layout,
+        privacy,
+        body,
+        items,
+        updatedAt: Date.now(),
+      });
       close();
       if (typeof onDone === 'function') onDone(id);
       if (typeof showToast === 'function') showToast('Section saved');
     });
   }
 
+  async function openArchivePickerForSection(onPick) {
+    document.getElementById('cpArchivePickSheet')?.remove();
+    const sheet = document.createElement('div');
+    sheet.id = 'cpArchivePickSheet';
+    sheet.className = 'archive-overlay';
+    sheet.setAttribute('data-nav-managed', '1');
+    sheet.innerHTML = `
+      <div class="archive-header">
+        <button type="button" data-overlay-dismiss>←</button>
+        <div style="flex:1"><strong>Pick from archive</strong></div>
+        <button type="button" class="btn btn--primary" data-pick-done>Add</button>
+      </div>
+      <div class="cp-archive-pick-tabs" style="display:flex;gap:6px;padding:10px 12px;">
+        <button type="button" class="btn btn--primary" data-pick-src="stories">Stories</button>
+        <button type="button" class="btn" data-pick-src="duniya">Duniya</button>
+        <button type="button" class="btn" data-pick-src="peepal">Peepal</button>
+      </div>
+      <div data-pick-grid class="cp-hl-pick-grid" style="padding:12px;">Loading…</div>`;
+    document.querySelector('.device')?.appendChild(sheet);
+    const close = () => {
+      if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
+      sheet.remove();
+    };
+    if (typeof openLayer === 'function') openLayer(sheet, close, { remove: false });
+    const selected = [];
+    let src = 'stories';
+
+    async function loadSrc(kind) {
+      src = kind;
+      sheet.querySelectorAll('[data-pick-src]').forEach((b) => b.classList.toggle('btn--primary', b.dataset.pickSrc === kind));
+      const grid = sheet.querySelector('[data-pick-grid]');
+      grid.innerHTML = 'Loading…';
+      try {
+        if (kind === 'stories') {
+          const archived = typeof storyCall === 'function' ? await storyCall('archive', {}) : { stories: [] };
+          const stories = archived.stories || [];
+          grid.innerHTML = stories.length
+            ? stories
+                .slice(0, 48)
+                .map((s, i) => {
+                  const url = s.thumb || s.media || '';
+                  return `<button type="button" class="cp-hl-pick-cell" data-pick-i="${i}" data-url="${escAttr(url)}" data-cap="${escAttr((s.text || '').slice(0, 40))}">
+                    ${url ? `<img src="${escAttr(url)}" alt="">` : `<span>${escAttr((s.text || 'Story').slice(0, 20))}</span>`}
+                  </button>`;
+                })
+                .join('')
+            : '<div class="public-profile-posts-empty">No stories</div>';
+        } else if (db && currentUser) {
+          const snap = await db.collection(kind).where('uid', '==', currentUser.uid).limit(40).get();
+          const posts = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((p) => !p.deleted);
+          grid.innerHTML = posts.length
+            ? posts
+                .map((p, i) => {
+                  const url = p.thumb || p.media || '';
+                  const cap = (p.caption || p.question || '').slice(0, 40);
+                  return `<button type="button" class="cp-hl-pick-cell" data-pick-i="${i}" data-url="${escAttr(url)}" data-cap="${escAttr(cap)}" data-post="${escAttr(p.id)}" data-col="${kind}">
+                    ${url ? `<img src="${escAttr(url)}" alt="">` : `<span>${escAttr(cap || 'Post')}</span>`}
+                  </button>`;
+                })
+                .join('')
+            : `<div class="public-profile-posts-empty">No ${kind} posts</div>`;
+        }
+      } catch (e) {
+        grid.innerHTML = '<div class="public-profile-posts-empty">Unavailable</div>';
+      }
+      grid.querySelectorAll('.cp-hl-pick-cell').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          btn.classList.toggle('is-selected');
+        });
+      });
+    }
+
+    function escAttr(s) {
+      return String(s || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    }
+
+    sheet.querySelectorAll('[data-pick-src]').forEach((b) => b.addEventListener('click', () => loadSrc(b.dataset.pickSrc)));
+    sheet.querySelector('[data-overlay-dismiss]')?.addEventListener('click', close);
+    sheet.querySelector('[data-pick-done]')?.addEventListener('click', () => {
+      const picked = [];
+      sheet.querySelectorAll('.cp-hl-pick-cell.is-selected').forEach((btn) => {
+        picked.push({
+          url: btn.dataset.url || '',
+          thumb: btn.dataset.url || '',
+          caption: btn.dataset.cap || '',
+          source: src,
+          postId: btn.dataset.post || '',
+          profileOnly: false,
+        });
+      });
+      close();
+      if (typeof onPick === 'function') onPick(picked);
+    });
+    loadSrc('stories');
+  }
+
   function renderCustomSectionBody(meta, { linkify } = {}) {
-    if (meta.type === 'flexible' || meta.type === 'quote') {
+    const layout = meta.layout || meta.type || 'grid';
+    if (layout === 'flexible' || layout === 'quote' || meta.type === 'flexible' || meta.type === 'quote') {
       const text =
         typeof linkifyText === 'function' && linkify !== false
           ? linkifyText(meta.body || '')
           : (meta.body || '').replace(/</g, '&lt;');
-      const empty = meta.type === 'quote' ? 'Add a quote' : 'Empty flexible block';
+      const empty = layout === 'quote' || meta.type === 'quote' ? 'Add a quote' : 'Empty flexible block';
       return text
-        ? `<div class="profile-flexible-block${meta.type === 'quote' ? ' profile-quote-block' : ''}">${text}</div>`
+        ? `<div class="profile-flexible-block${layout === 'quote' || meta.type === 'quote' ? ' profile-quote-block' : ''}">${text}</div>`
         : `<div class="public-profile-posts-empty">${empty}</div>`;
     }
-    if (meta.type === 'links') {
+    if (layout === 'links' || meta.type === 'links') {
       const items = meta.items || [];
       if (!items.length && meta.body) {
         return `<div class="profile-flexible-block">${typeof linkifyText === 'function' ? linkifyText(meta.body) : meta.body.replace(/</g, '&lt;')}</div>`;
@@ -431,14 +715,43 @@
         })
         .join('')}</div>`;
     }
-    if (meta.type === 'image') {
+    if (layout === 'image' || meta.type === 'image') {
       const src = meta.items?.[0]?.url || meta.items?.[0]?.thumb || '';
       return src
         ? `<div class="profile-featured-image"><img src="${src}" alt=""></div>`
         : `<div class="public-profile-posts-empty">Add a featured image</div>`;
     }
     const items = meta.items || [];
-    if (!items.length) return `<div class="public-profile-posts-empty">No items yet</div>`;
+    if (!items.length) {
+      const text =
+        meta.body && (layout === 'stack' || layout === 'list')
+          ? `<div class="profile-flexible-block">${typeof linkifyText === 'function' ? linkifyText(meta.body) : meta.body.replace(/</g, '&lt;')}</div>`
+          : '';
+      return text || `<div class="public-profile-posts-empty">No items yet</div>`;
+    }
+    if (layout === 'stack') {
+      return `<div class="cp-stack-layout">${items
+        .slice(0, 20)
+        .map((it) => {
+          const src = it.url || it.thumb || '';
+          const cap = (it.caption || it.label || '').replace(/</g, '&lt;');
+          if (it.type === 'text' || (!src && cap)) return `<div class="cp-stack-card"><p>${cap}</p></div>`;
+          if (it.type === 'link')
+            return `<a class="cp-stack-card" href="${String(it.url || '#').replace(/"/g, '')}" data-external-link="1">${cap || 'Link'}</a>`;
+          return `<div class="cp-stack-card">${src ? `<img src="${src}" alt="">` : ''}${cap ? `<p>${cap}</p>` : ''}</div>`;
+        })
+        .join('')}</div>`;
+    }
+    if (layout === 'list') {
+      return `<div class="cp-list-layout">${items
+        .slice(0, 24)
+        .map((it) => {
+          const src = it.url || it.thumb || '';
+          const cap = (it.caption || it.label || 'Item').replace(/</g, '&lt;');
+          return `<div class="cp-list-row">${src ? `<img src="${src}" alt="">` : ''}<span>${cap}</span></div>`;
+        })
+        .join('')}</div>`;
+    }
     return `<div class="public-profile-posts">${items
       .slice(0, 12)
       .map((it) => {
@@ -452,6 +765,8 @@
 
   window.PROFILE_BUILTIN_SECTIONS = BUILTIN;
   window.PROFILE_CUSTOM_SECTION_TYPES = CUSTOM_TYPES;
+  window.PROFILE_SECTION_LAYOUTS = LAYOUTS;
+  window.openArchivePickerForSection = openArchivePickerForSection;
   window.getProfileSectionOrder = getSectionOrder;
   window.getCustomProfileSections = getCustomSections;
   window.visibleProfileSections = visibleSectionsForViewer;

@@ -608,7 +608,7 @@
           return `<div class="group-info-member" data-member-uid="${esc(m.uid)}">
             <div class="group-info-member-av">${/^https:/.test(av) ? `<img src="${esc(av)}" alt="">` : esc(m.avatar || '👤')}</div>
             <div class="group-info-member-meta"><div class="group-info-member-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(m.name,m):esc(m.name)}${isMe ? ' (You)' : ''}</div>${badge}</div>
-            ${admin && !isMe ? `<button type="button" class="group-info-member-menu" data-member-menu aria-label="Member options">⋯</button>` : ''}
+            ${admin && !isMe ? `<button type="button" class="group-info-member-menu" data-member-menu aria-label="More options">${typeof iconHtml==='function'?iconHtml('more-vertical',{size:18}):'⋮'}</button>` : ''}
           </div>`;
         })
         .join('');
@@ -759,12 +759,20 @@
       sheet.className = 'cp-action-sheet group-info-member-sheet';
       sheet.dataset.navManaged = '1';
       const isAd = member.role === 'admin';
+      const ic = (name) =>
+        typeof iconHtml === 'function' ? iconHtml(name, { size: 18, className: 'cp-menu-icon' }) : '';
       sheet.innerHTML = `
         <div class="cp-sheet-panel">
           <div class="group-info-sheet-title">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(member.name,member):esc(member.name)}</div>
-          <button type="button" data-act-promote>${isAd ? 'Remove admin' : 'Make admin'}</button>
-          <button type="button" data-act-remove class="danger">Remove from group</button>
-          <button type="button" data-act-cancel>Cancel</button>
+          <button type="button" class="cp-menu-item" data-act-promote>
+            <span class="cp-menu-ico" aria-hidden="true">${ic(isAd ? 'user-minus' : 'shield')}</span>
+            <span>${isAd ? 'Remove admin' : 'Make admin'}</span>
+          </button>
+          <button type="button" class="cp-menu-item is-danger danger" data-act-remove>
+            <span class="cp-menu-ico" aria-hidden="true">${ic('user-x')}</span>
+            <span>Remove from group</span>
+          </button>
+          <button type="button" class="cp-menu-item" data-act-cancel>Cancel</button>
         </div>`;
       device.appendChild(sheet);
       const done = () => {

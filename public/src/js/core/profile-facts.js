@@ -718,14 +718,42 @@
   }
 
   async function getProfileFact(fieldName, value) {
+    let base;
     if (PROFILE_FACTS_USE_REAL_STATS) {
       try {
-        return await realStatsProvider(fieldName, value);
+        base = await realStatsProvider(fieldName, value);
       } catch (e) {
-        return genericProvider(fieldName, value);
+        base = await genericProvider(fieldName, value);
       }
+    } else {
+      base = await genericProvider(fieldName, value);
     }
-    return genericProvider(fieldName, value);
+    // Optional cheap AI garnish — never blocks; falls back to client banks
+    try {
+      const aiOn =
+        typeof isAiFeaturesEnabledSync === 'function' ? isAiFeaturesEnabledSync() : false;
+      if (
+        aiOn &&
+        typeof callAI === 'function' &&
+        value != null &&
+        value !== '' &&
+        !(typeof Quiet !== 'undefined' && Quiet?.motion === false)
+      ) {
+        const snippet = formatValueSnippet(value).slice(0, 80);
+        const prompt = `One short fun world trivia fact (max 18 words) about someone who filled "${fieldName}" with "${snippet}". No name invented. Neutral, warm.`;
+        const ai = await Promise.race([
+          callAI({ prompt, maxTokens: 60 }),
+          new Promise((r) => setTimeout(() => r(null), 1200)),
+        ]);
+        const line = typeof ai === 'string' ? ai : ai?.text || ai?.reply || '';
+        if (line && String(line).trim().length > 8) {
+          base = { ...base, trivia: String(line).trim().slice(0, 160), source: base.source + '+ai' };
+        }
+      }
+    } catch (e) {
+      /* keep client bank */
+    }
+    return base;
   }
 
   window.PROFILE_FACTS_USE_REAL_STATS = PROFILE_FACTS_USE_REAL_STATS;

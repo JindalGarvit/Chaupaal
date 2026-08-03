@@ -1,6 +1,11 @@
 /**
  * Game of the Day — fairness × popularity weighted pick, cached once per IST day.
  * Used by /api/media-config actions (no separate serverless function).
+ *
+ * Rules:
+ *  - Never same gameId within last 7 IST days (when alternatives exist)
+ *  - Never same genre as yesterday’s GOTD (when alternatives exist)
+ *  - Fallback: relax 7-day ban before relaxing genre ban
  */
 
 /** Play floor for "low engagement" flag (informational only). */
@@ -9,6 +14,8 @@ const LOW_ENGAGEMENT_MAX_PLAYS = 5;
 const LOW_ENGAGEMENT_MIN_AGE_DAYS = 14;
 /** Never-featured fairness base (days) so new games get a strong rotation boost. */
 const NEVER_FEATURED_FAIRNESS_DAYS = 365;
+/** Do not re-feature the same gameId within this many IST days. */
+const GOTD_GAME_COOLDOWN_DAYS = 7;
 
 const KNOWN_GAME_IDS = [
   'quiz',
@@ -24,7 +31,33 @@ const KNOWN_GAME_IDS = [
   'rushrunner',
   'tiptap',
   'ankjod',
+  'streetcricket',
+  'gullykick',
 ];
+
+/** Single source of truth for GOTD genre filters (mirrors client registry). */
+const GAME_GENRE_BY_ID = {
+  quiz: 'quiz',
+  chess: 'board',
+  snakes: 'board',
+  ludo: 'board',
+  uno: 'party',
+  ttt: 'board',
+  wordguess: 'brain',
+  fiveinrow: 'board',
+  business: 'board',
+  scribble: 'party',
+  rushrunner: 'arcade',
+  tiptap: 'brain',
+  ankjod: 'brain',
+  streetcricket: 'rw_sports',
+  gullykick: 'rw_sports',
+};
+
+function genreForGameId(id, gameDoc) {
+  if (gameDoc && gameDoc.genre) return String(gameDoc.genre);
+  return GAME_GENRE_BY_ID[id] || 'other';
+}
 
 function calendarDateIST(d = new Date()) {
   return new Intl.DateTimeFormat('en-CA', {
@@ -33,6 +66,14 @@ function calendarDateIST(d = new Date()) {
     month: '2-digit',
     day: '2-digit',
   }).format(d);
+}
+
+/** Previous IST calendar date string (YYYY-MM-DD). */
+function previousIstDate(dateStr) {
+  const [y, m, d] = String(dateStr).split('-').map(Number);
+  const utc = Date.UTC(y, m - 1, d, 12, 0, 0);
+  const prev = new Date(utc - 86400000);
+  return calendarDateIST(prev);
 }
 
 function toDate(value) {
@@ -81,18 +122,27 @@ async function ensureGamesSeeded(db, FieldValue) {
   const batch = db.batch();
   let writes = 0;
   snaps.forEach((snap, i) => {
-    if (snap.exists) return;
     const id = KNOWN_GAME_IDS[i];
-    batch.set(snap.ref, {
-      playCount: 0,
-      likeCount: 0,
-      featuredCount: 0,
-      lastFeaturedAt: null,
-      createdAt: FieldValue.serverTimestamp(),
-      active: true,
-      flaggedLowEngagement: false,
-    });
-    writes += 1;
+    const genre = GAME_GENRE_BY_ID[id] || 'other';
+    if (!snap.exists) {
+      batch.set(snap.ref, {
+        playCount: 0,
+        likeCount: 0,
+        featuredCount: 0,
+        lastFeaturedAt: null,
+        createdAt: FieldValue.serverTimestamp(),
+        active: true,
+        flaggedLowEngagement: false,
+        genre,
+      });
+      writes += 1;
+      return;
+    }
+    const data = snap.data() || {};
+    if (!data.genre) {
+      batch.set(snap.ref, { genre, active: true }, { merge: true });
+      writes += 1;
+    }
   });
   if (writes) await batch.commit();
   return writes;
@@ -125,9 +175,80 @@ async function flagLowEngagementGames(db, games, now = new Date()) {
   return n;
 }
 
+/** IST calendar dates in [date − days, date) — used for gameId cooldown. */
+function istCooldownDateSet(date, days = GOTD_GAME_COOLDOWN_DAYS) {
+  const set = new Set();
+  let d = previousIstDate(date);
+  for (let i = 0; i < days; i++) {
+    set.add(d);
+    d = previousIstDate(d);
+  }
+  return set;
+}
+
+/**
+ * Build candidate list with GOTD constraints.
+ *
+ * Fallback order (documented):
+ *  1. none     — exclude gameIds featured in last 7 IST days AND exclude yesterday’s genre
+ *  2. cooldown — relax 7-day gameId ban; keep yesterday-genre ban (still skip exact meta.gameId)
+ *  3. genre    — relax genre ban; still skip exact yesterday/meta gameId
+ *  4. all      — any active known game (last resort)
+ */
+function pickGotdCandidates(active, meta, date) {
+  const recent = Array.isArray(meta.recent) ? meta.recent : [];
+  const cooldownDates = istCooldownDateSet(date, GOTD_GAME_COOLDOWN_DAYS);
+  const yDate = previousIstDate(date);
+
+  const recentIds = new Set(
+    recent
+      .filter((r) => r && r.gameId && r.date && cooldownDates.has(String(r.date)))
+      .map((r) => String(r.gameId))
+  );
+  // Top-level meta may not yet be pushed into recent[]
+  if (meta.gameId && meta.date && cooldownDates.has(String(meta.date))) {
+    recentIds.add(String(meta.gameId));
+  }
+
+  let yesterdayGenre = null;
+  if (meta.date === yDate) {
+    yesterdayGenre = meta.genre || (meta.gameId ? genreForGameId(String(meta.gameId), null) : null);
+  } else {
+    const yEntry = recent.find((r) => r && r.date === yDate);
+    if (yEntry) {
+      yesterdayGenre = yEntry.genre || genreForGameId(String(yEntry.gameId), null);
+    }
+  }
+
+  const withMeta = active.map((g) => ({
+    ...g,
+    genre: genreForGameId(g.id, g),
+  }));
+
+  const yesterdayGameId =
+    (meta.date === yDate && meta.gameId && String(meta.gameId)) ||
+    recent.find((r) => r && r.date === yDate)?.gameId ||
+    null;
+
+  let pool = withMeta.filter((g) => !recentIds.has(g.id) && g.genre !== yesterdayGenre);
+  if (pool.length) return { candidates: pool, relaxed: 'none', yesterdayGenre };
+
+  // Fallback 1: relax 7-day gameId cooldown, keep genre constraint
+  pool = withMeta.filter(
+    (g) => g.genre !== yesterdayGenre && g.id !== yesterdayGameId && g.id !== meta.gameId
+  );
+  if (pool.length) return { candidates: pool, relaxed: 'cooldown', yesterdayGenre };
+
+  // Fallback 2: relax genre, keep excluding yesterday’s exact game
+  pool = withMeta.filter((g) => g.id !== yesterdayGameId && g.id !== meta.gameId);
+  if (pool.length) return { candidates: pool, relaxed: 'genre', yesterdayGenre };
+
+  return { candidates: withMeta.slice(), relaxed: 'all', yesterdayGenre };
+}
+
 /**
  * Read cached GOTD or compute once for the IST calendar day.
- * @returns {{ gameId: string, date: string, cached: boolean }}
+ * @returns {{ gameId: string, date: string, genre?: string, cached: boolean }}
  */
 async function getOrComputeGameOfDay(adminApp) {
   const db = adminApp.firestore();
@@ -138,7 +259,12 @@ async function getOrComputeGameOfDay(adminApp) {
   const metaSnap = await metaRef.get();
   const meta = metaSnap.exists ? metaSnap.data() || {} : {};
   if (meta.date === date && meta.gameId) {
-    return { gameId: String(meta.gameId), date, cached: true };
+    return {
+      gameId: String(meta.gameId),
+      date,
+      genre: meta.genre || genreForGameId(String(meta.gameId), null),
+      cached: true,
+    };
   }
 
   await ensureGamesSeeded(db, FieldValue);
@@ -147,10 +273,7 @@ async function getOrComputeGameOfDay(adminApp) {
   const allGames = gamesSnap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) }));
   const active = allGames.filter((g) => g.active !== false && KNOWN_GAME_IDS.includes(g.id));
 
-  // Exclude previous (or current) featured game from immediate re-selection.
-  const excludeId = meta.gameId ? String(meta.gameId) : null;
-  let candidates = active.filter((g) => g.id !== excludeId);
-  if (!candidates.length) candidates = active.slice();
+  const { candidates, yesterdayGenre } = pickGotdCandidates(active, meta, date);
   if (!candidates.length) {
     return { gameId: null, date, cached: false };
   }
@@ -162,6 +285,8 @@ async function getOrComputeGameOfDay(adminApp) {
   if (!pick) {
     return { gameId: null, date, cached: false };
   }
+
+  const pickGenre = genreForGameId(pick.id, pick);
 
   try {
     await flagLowEngagementGames(db, allGames, now);
@@ -175,12 +300,28 @@ async function getOrComputeGameOfDay(adminApp) {
     if (freshData.date === date && freshData.gameId) {
       return;
     }
+    const prevRecent = Array.isArray(freshData.recent) ? freshData.recent.slice() : [];
+    // Push previous featured day into recent history
+    if (freshData.date && freshData.gameId) {
+      prevRecent.unshift({
+        date: String(freshData.date),
+        gameId: String(freshData.gameId),
+        genre: freshData.genre || genreForGameId(String(freshData.gameId), null),
+      });
+    }
+    const recent = prevRecent
+      .filter((r) => r && r.date && r.gameId)
+      .slice(0, GOTD_GAME_COOLDOWN_DAYS + 3);
+
     tx.set(
       metaRef,
       {
         gameId: pick.id,
         date,
-        previousGameId: excludeId || null,
+        genre: pickGenre,
+        previousGameId: freshData.gameId || null,
+        previousGenre: yesterdayGenre || freshData.genre || null,
+        recent,
         updatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true }
@@ -191,6 +332,7 @@ async function getOrComputeGameOfDay(adminApp) {
         featuredCount: FieldValue.increment(1),
         lastFeaturedAt: FieldValue.serverTimestamp(),
         active: true,
+        genre: pickGenre,
       },
       { merge: true }
     );
@@ -201,6 +343,7 @@ async function getOrComputeGameOfDay(adminApp) {
   return {
     gameId: final.gameId ? String(final.gameId) : pick.id,
     date: final.date || date,
+    genre: final.genre || pickGenre,
     cached: false,
   };
 }
@@ -236,6 +379,7 @@ async function recordGameLike(adminApp, uid, gameId) {
       {
         likeCount: FieldValue.increment(1),
         active: true,
+        genre: GAME_GENRE_BY_ID[id] || 'other',
       },
       { merge: true }
     );
@@ -267,10 +411,19 @@ async function recordGamePlaySafe(adminApp, gameId) {
         createdAt: FieldValue.serverTimestamp(),
         active: true,
         flaggedLowEngagement: false,
+        genre: GAME_GENRE_BY_ID[id] || 'other',
       });
       return;
     }
-    tx.set(ref, { playCount: FieldValue.increment(1), active: true }, { merge: true });
+    tx.set(
+      ref,
+      {
+        playCount: FieldValue.increment(1),
+        active: true,
+        genre: snap.data()?.genre || GAME_GENRE_BY_ID[id] || 'other',
+      },
+      { merge: true }
+    );
   });
   return { ok: true, gameId: id };
 }
@@ -290,6 +443,7 @@ async function listGamesHealth(adminApp, { flaggedOnly = true } = {}) {
       featuredCount: Number(data.featuredCount) || 0,
       active: data.active !== false,
       flaggedLowEngagement: !!data.flaggedLowEngagement,
+      genre: data.genre || GAME_GENRE_BY_ID[d.id] || 'other',
       lastFeaturedAt: toDate(data.lastFeaturedAt)?.toISOString?.() || null,
       createdAt: toDate(data.createdAt)?.toISOString?.() || null,
       ageDays: Math.round(daysSince(data.createdAt, now) * 10) / 10,
@@ -304,12 +458,18 @@ async function listGamesHealth(adminApp, { flaggedOnly = true } = {}) {
 module.exports = {
   LOW_ENGAGEMENT_MAX_PLAYS,
   LOW_ENGAGEMENT_MIN_AGE_DAYS,
+  GOTD_GAME_COOLDOWN_DAYS,
   KNOWN_GAME_IDS,
+  GAME_GENRE_BY_ID,
   calendarDateIST,
+  previousIstDate,
+  istCooldownDateSet,
   getOrComputeGameOfDay,
   recordGamePlaySafe,
   recordGameLike,
   listGamesHealth,
   fairnessScore,
   popularityScores,
+  genreForGameId,
+  pickGotdCandidates,
 };

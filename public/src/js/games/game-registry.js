@@ -4,6 +4,7 @@
  * Self-registration: each game file calls registerGame(descriptor) at load time.
  *
  * @typedef {'solo'|'dual'|'multiplayer'} GameType
+ * @typedef {'rw_sports'|'brain'|'board'|'party'|'arcade'|'quiz'|'other'} GameGenre
  *
  * @typedef {Object} GameLaunchContext
  * @property {object} [chat]
@@ -15,7 +16,8 @@
  * @property {string} name
  * @property {string} desc
  * @property {string} icon
- * @property {GameType} [gameType] - internal only (never shown in UI)
+ * @property {GameType} [gameType] - Solo / Dual / Multiplayer mode axis
+ * @property {GameGenre|string} [genre] - Manch genre chip axis
  * @property {string} [ratingKey]
  * @property {boolean} [solo] - pure solo (no opponent UI); implies gameType solo when unset
  * @property {boolean} [selfChat] - show in self-chat picker
@@ -33,6 +35,36 @@
   /** @type {string[]} */
   const order = [];
 
+  /** Genre catalog — UI label + order for Manch chips. */
+  const GAME_GENRES = [
+    { id: 'rw_sports', label: 'RW Sports' },
+    { id: 'brain', label: 'Brain Boost' },
+    { id: 'board', label: 'Board & Classics' },
+    { id: 'party', label: 'Party & Social' },
+    { id: 'arcade', label: 'Arcade Rush' },
+    { id: 'quiz', label: 'Quiz & Duel' },
+  ];
+
+  /** Fallback genre by game id when descriptor omits genre. */
+  const DEFAULT_GENRE_BY_ID = {
+    quiz: 'quiz',
+    chess: 'board',
+    snakes: 'board',
+    ludo: 'board',
+    uno: 'party',
+    ttt: 'board',
+    wordguess: 'brain',
+    fiveinrow: 'board',
+    business: 'board',
+    scribble: 'party',
+    rushrunner: 'arcade',
+    tiptap: 'brain',
+    ankjod: 'brain',
+    kakuro: 'brain',
+    streetcricket: 'rw_sports',
+    gullykick: 'rw_sports',
+  };
+
   function inferGameType(d) {
     if (d.gameType === 'solo' || d.gameType === 'dual' || d.gameType === 'multiplayer') return d.gameType;
     if (d.solo) return 'solo';
@@ -40,12 +72,26 @@
     return 'dual';
   }
 
+  function inferGenre(d) {
+    const g = String(d.genre || '').trim().toLowerCase();
+    if (GAME_GENRES.some((x) => x.id === g)) return g;
+    return DEFAULT_GENRE_BY_ID[d.id] || 'other';
+  }
+
+  function genreLabel(genreId) {
+    const hit = GAME_GENRES.find((x) => x.id === genreId);
+    return hit ? hit.label : 'Games';
+  }
+
   /**
    * @param {GameDescriptor} descriptor
    */
   function registerGame(descriptor) {
     if (!descriptor || !descriptor.id || typeof descriptor.launch !== 'function') return;
-    const next = Object.assign({}, descriptor, { gameType: inferGameType(descriptor) });
+    const next = Object.assign({}, descriptor, {
+      gameType: inferGameType(descriptor),
+      genre: inferGenre(descriptor),
+    });
     if (!games.has(next.id)) order.push(next.id);
     games.set(next.id, next);
   }
@@ -57,7 +103,8 @@
    * @param {boolean} [filter.selfChat]
    * @param {boolean} [filter.chat1v1]
    * @param {boolean} [filter.chatGroup]
-   * @param {GameType} [filter.gameType] - internal categorization filter
+   * @param {GameType} [filter.gameType]
+   * @param {string} [filter.genre]
    * @param {string} [filter.id]
    * @returns {GameDescriptor[]}
    */
@@ -68,9 +115,9 @@
     if (f.id) return list.filter((g) => g.id === f.id);
     if (f.dangal) list = list.filter((g) => g.dangal !== false);
     if (f.gameType) list = list.filter((g) => g.gameType === f.gameType);
+    if (f.genre) list = list.filter((g) => g.genre === f.genre);
     if (f.solo === true) list = list.filter((g) => g.gameType === 'solo' || g.solo);
     if (f.selfChat === true) {
-      // Practice hub: pure solos + dual/multi marked selfChat (AI / solo practice)
       list = list.filter((g) => g.selfChat || g.gameType === 'solo' || g.solo);
     }
     if (f.chat1v1 === true) list = list.filter((g) => g.chat1v1);
@@ -82,6 +129,10 @@
 
   function getGame(id) {
     return games.get(id) || null;
+  }
+
+  function getGameGenres() {
+    return GAME_GENRES.slice();
   }
 
   /** Registry-driven chat game picker (replaces duplicated openGamePicker). */
@@ -269,6 +320,7 @@
     desc: 'GK, Sports, Tech & more — pick a category',
     icon: '🧠',
     gameType: 'dual',
+    genre: 'quiz',
     ratingKey: null,
     dangal: true,
     chat1v1: false,
@@ -292,6 +344,9 @@
   window.registerGame = registerGame;
   window.getGames = getGames;
   window.getGame = getGame;
+  window.getGameGenres = getGameGenres;
+  window.genreLabel = genreLabel;
+  window.GAME_GENRES = GAME_GENRES;
   // Game-launch boundary (CONVENTIONS 4c) — a broken engine must not blank the shell
   const guardGame = typeof safeFeature === 'function' ? safeFeature : (n, f) => f;
   window.openGamePicker = guardGame('game_picker', openGamePicker);

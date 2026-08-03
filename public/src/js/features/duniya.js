@@ -330,7 +330,7 @@ function createDuniyaPost(post, {variant='list'}={}){
       </div>
       <button class="duniya-follow-btn ${isFollowing?'following':''}" data-uid="${duniyaEsc(post.user.uid)}" aria-label="${isFollowing?'Unfollow':'Follow'} ${duniyaEsc(post.user.name)}">${isFollowing?'Following':'Follow'}</button>
       ${(currentUser&&(post.user?.uid===currentUser.uid||post.uid===currentUser.uid))?`<button type="button" class="duniya-delete-btn" title="Delete" aria-label="Delete post" style="background:none;border:none;cursor:pointer;color:var(--muted);padding:4px;">${typeof iconHtml==='function'?iconHtml('trash',{size:16}):'🗑️'}</button>`:''}
-      <button style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);padding:4px;" class="duniya-more-btn" aria-label="More options">⋯</button>
+      <button type="button" class="duniya-more-btn" aria-label="More options">${typeof iconHtml==='function'?iconHtml('more-vertical',{size:20}):'⋮'}</button>
     </div>
     <div class="duniya-post-media"${mediaWrapAttrs}>
       ${post.type==='video'

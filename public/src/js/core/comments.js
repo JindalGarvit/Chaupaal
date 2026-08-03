@@ -48,7 +48,7 @@
             ${!isReply && !c.deleted ? `<button type="button" class="comment-reply-btn" data-reply="${escapeHtml(c.id)}">Reply</button>` : ''}
           </div>
         </div>
-        ${c.deleted ? '' : `<button type="button" class="comment-actions-btn" data-comment-actions="${escapeHtml(c.id)}" aria-label="Comment actions">⋯</button>`}
+        ${c.deleted ? '' : `<button type="button" class="comment-actions-btn" data-comment-actions="${escapeHtml(c.id)}" aria-label="More options">${typeof iconHtml === 'function' ? iconHtml('more-vertical', { size: 18 }) : '⋮'}</button>`}
       </div>`;
   }
 
@@ -124,6 +124,7 @@
       const actions = [
         {
           label: 'Copy comment',
+          icon: 'copy',
           fn: () => {
             navigator.clipboard?.writeText(comment.text || '').catch(() => {});
             if (typeof showToast === 'function') showToast('Comment copied');
@@ -132,12 +133,13 @@
       ];
       if (mine) {
         actions.push(
-          { label: 'Edit comment', fn: () => typeof o.onEdit === 'function' && o.onEdit(comment, row) },
-          { label: 'Delete comment', danger: true, fn: () => typeof o.onDelete === 'function' && o.onDelete(comment, row) }
+          { label: 'Edit comment', icon: 'pen', fn: () => typeof o.onEdit === 'function' && o.onEdit(comment, row) },
+          { label: 'Delete comment', icon: 'trash', danger: true, fn: () => typeof o.onDelete === 'function' && o.onDelete(comment, row) }
         );
       } else if (uid) {
         actions.push({
           label: 'Report comment',
+          icon: 'triangle-alert',
           danger: true,
           fn: () => typeof o.onReport === 'function' && o.onReport(comment, row),
         });

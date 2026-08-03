@@ -288,10 +288,17 @@
             ? list
                 .map(
                   (h) =>
-                    `<div class="archive-highlight-row"><strong>${h.title}</strong><span>${h.storyCount} stories</span></div>`
+                    `<button type="button" class="archive-highlight-row" data-manage-hl="${h.id}" style="width:100%;text-align:left;cursor:pointer;"><strong>${h.title}</strong><span>${h.storyCount} stories · Edit</span></button>`
                 )
                 .join('')
             : '<div class="comments-empty">No Highlights yet</div>';
+          host.querySelectorAll('[data-manage-hl]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              if (typeof openManageHighlightSheet === 'function') {
+                openManageHighlightSheet(btn.dataset.manageHl, () => setTab('stories'));
+              }
+            });
+          });
         } catch (e) {
           body.querySelector('[data-ah-highlights]').innerHTML = '<div class="comments-empty">Could not load highlights</div>';
         }

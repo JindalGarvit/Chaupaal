@@ -38,6 +38,8 @@
     tiptap: '#2F9C95',
     ankjod: '#9A6BCE',
     kakuro: '#9A6BCE',
+    streetcricket: '#1B7A4E',
+    gullykick: '#2D6A4F',
     wrap: '#8134AF',
     duniya: '#E63946',
     peepal: '#2A9D8F',
@@ -61,6 +63,8 @@
     tiptap: 'Tip Tap',
     ankjod: 'Ank Jod',
     kakuro: 'Ank Jod',
+    streetcricket: 'Street Cricket',
+    gullykick: 'Gully Kick',
     wrap: 'Monthly Wrap',
     duniya: 'Duniya',
     peepal: 'Peepal',
@@ -87,6 +91,8 @@
     rushrunner: ['Tap or swipe up to jump', 'Collect coins · avoid obstacles', 'Distance is your score'],
     tiptap: ['Swap adjacent gems to match 3+', 'Special gems clear more of the board', 'Beat the target before moves run out'],
     ankjod: ['Each row & column sums to the clue', 'Pencil notes help narrow digits', 'Check when you think you are done'],
+    streetcricket: ['Tap Bowl, then Hit in the green window', 'Six balls · two wickets ends the over', 'Practice timing — full matches later'],
+    gullykick: ['Pick left, center, or right', 'Beat the keeper’s dive', 'Five kicks per shootout'],
   };
 
   const PB_KEYS = {

@@ -195,25 +195,56 @@
             <button class="btn" data-public-profile-hi type="button">Say hi</button>
           </div>
         </div>
-        <div class="public-profile-ordered-sections" data-public-ordered-sections></div>
+        <div class="public-profile-shell-host" data-public-profile-shell></div>
+        <div class="public-profile-ordered-sections" data-public-ordered-sections hidden></div>
       </div>`;
     document.querySelector('.device')?.appendChild(sheet);
-    if (typeof mountOwnProfileSections === 'function' && profileUid && !view.locked) {
+    if (profileUid && !view.locked) {
       const sectionProfile = {
         ...(u.profile || {}),
         sectionOrder: u.profile?.sectionOrder || u.sectionOrder,
         customSections: u.profile?.customSections || u.customSections,
+        tabOrder: u.profile?.tabOrder || u.tabOrder,
         profileMedia: media,
+        bio: dp.bio,
+        prompts: u.profile?.prompts || dp.prompts,
+        icebreakers: dp.icebreakers,
+        interests: dp.interests,
+        hobbies: dp.hobbies,
+        currentCity: u.profile?.currentCity || dp.currentCity,
+        occupation: u.profile?.occupation || dp.occupation,
+        lookingFor: u.profile?.lookingFor,
+        relationshipStatus: u.profile?.relationshipStatus,
+        languages: u.profile?.languages,
+        diet: u.profile?.diet,
+        drinking: u.profile?.drinking,
+        smoking: u.profile?.smoking,
+        fitness: u.profile?.fitness,
+        website: u.profile?.website || dp.website,
+        instagram: u.profile?.instagram || dp.instagram,
+        profileLinks: u.profile?.profileLinks,
       };
-      mountOwnProfileSections(sheet.querySelector('[data-public-ordered-sections]'), {
-        uid: profileUid,
-        profile: sectionProfile,
-        editable: false,
-        isOwner: !!(currentUser && currentUser.uid === profileUid),
-        includeArchived: !!(currentUser && currentUser.uid === profileUid),
-      });
+      const shellHost = sheet.querySelector('[data-public-profile-shell]');
+      if (typeof mountProfileShell === 'function' && shellHost) {
+        mountProfileShell(shellHost, {
+          uid: profileUid,
+          profile: sectionProfile,
+          view,
+          editable: false,
+          isOwner: !!(currentUser && currentUser.uid === profileUid),
+          includeArchived: !!(currentUser && currentUser.uid === profileUid),
+        });
+      } else if (typeof mountOwnProfileSections === 'function') {
+        mountOwnProfileSections(sheet.querySelector('[data-public-ordered-sections]'), {
+          uid: profileUid,
+          profile: sectionProfile,
+          editable: false,
+          isOwner: !!(currentUser && currentUser.uid === profileUid),
+          includeArchived: !!(currentUser && currentUser.uid === profileUid),
+        });
+      }
     } else if (view.locked) {
-      const host = sheet.querySelector('[data-public-ordered-sections]');
+      const host = sheet.querySelector('[data-public-profile-shell]') || sheet.querySelector('[data-public-ordered-sections]');
       if (host) host.innerHTML = '';
     }
 
@@ -626,6 +657,11 @@
 
   async function handleDeepLink(route) {
     if (!route) return false;
+    try {
+      if (typeof TabHabits !== 'undefined' && TabHabits.markOverride) {
+        TabHabits.markOverride('deeplink:' + route.name);
+      }
+    } catch (e) {}
     if (route.name === 'profile') await openProfileByUsername(route.id);
     else if (route.name === 'post') await openPostById(route.id);
     else if (route.name === 'chat') await openChatById(route.id);
