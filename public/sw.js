@@ -1,4 +1,4 @@
-const CACHE = 'chaupaal-vc3b5c8';
+const CACHE = 'chaupaal-vf8a522';
 const ASSETS = [
   '/index.html',
   '/icon-charpai-v2as.png',

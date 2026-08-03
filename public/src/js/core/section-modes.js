@@ -542,6 +542,14 @@
    * After last category: rubber-band → Add Category half-sheet (not a virtual end page).
    * Direct Add control still opens the sheet anytime.
    */
+  function swipeTargetIgnored(target) {
+    try {
+      return !!(target && target.closest && target.closest('[data-nav-ignore="1"], #cpMiniPlayer'));
+    } catch (e) {
+      return false;
+    }
+  }
+
   function wireAkhbaarSwipe() {
     const panel = document.getElementById('panel-akhbaar');
     if (!panel || panel.dataset.swipeWired) return;
@@ -549,9 +557,11 @@
     let sx = 0;
     let sy = 0;
     let locked = null;
+    let ignored = false;
     panel.addEventListener(
       'touchstart',
       (e) => {
+        ignored = swipeTargetIgnored(e.target);
         sx = e.touches[0].clientX;
         sy = e.touches[0].clientY;
         locked = null;
@@ -561,6 +571,7 @@
     panel.addEventListener(
       'touchmove',
       (e) => {
+        if (ignored) return;
         const dx = e.touches[0].clientX - sx;
         const dy = e.touches[0].clientY - sy;
         if (!locked && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
@@ -572,7 +583,7 @@
     panel.addEventListener(
       'touchend',
       (e) => {
-        if (locked !== 'h') return;
+        if (ignored || locked !== 'h') return;
         const dx = (e.changedTouches[0]?.clientX || 0) - sx;
         if (Math.abs(dx) < 56) return;
         // Surkhiya mode: swipe left → All
@@ -621,9 +632,11 @@
     let sx = 0;
     let sy = 0;
     let locked = null;
+    let ignored = false;
     screen.addEventListener(
       'touchstart',
       (e) => {
+        ignored = swipeTargetIgnored(e.target);
         sx = e.touches[0].clientX;
         sy = e.touches[0].clientY;
         locked = null;
@@ -633,6 +646,7 @@
     screen.addEventListener(
       'touchmove',
       (e) => {
+        if (ignored) return;
         const dx = e.touches[0].clientX - sx;
         const dy = e.touches[0].clientY - sy;
         if (!locked && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
@@ -644,7 +658,7 @@
     screen.addEventListener(
       'touchend',
       (e) => {
-        if (locked !== 'h') return;
+        if (ignored || locked !== 'h') return;
         const dx = (e.changedTouches[0]?.clientX || 0) - sx;
         if (Math.abs(dx) < 56) return;
         const order = ['khoj', 'vriksha', 'mashhoor'];
@@ -664,10 +678,12 @@
     let sx = 0;
     let sy = 0;
     let locked = null;
+    let ignored = false;
     let section = 'sabha';
     panel.addEventListener(
       'touchstart',
       (e) => {
+        ignored = swipeTargetIgnored(e.target);
         sx = e.touches[0].clientX;
         sy = e.touches[0].clientY;
         locked = null;
@@ -677,6 +693,7 @@
     panel.addEventListener(
       'touchmove',
       (e) => {
+        if (ignored) return;
         const dx = e.touches[0].clientX - sx;
         const dy = e.touches[0].clientY - sy;
         if (!locked && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
@@ -688,7 +705,7 @@
     panel.addEventListener(
       'touchend',
       (e) => {
-        if (locked !== 'h') return;
+        if (ignored || locked !== 'h') return;
         const dx = (e.changedTouches[0]?.clientX || 0) - sx;
         if (Math.abs(dx) < 56) return;
         // Prefer window getter — lexical baithakSection in baithak-data.js is a string and would shadow.
