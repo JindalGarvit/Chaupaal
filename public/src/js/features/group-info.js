@@ -369,11 +369,65 @@
     await ref.set({ status: accept ? 'accepted' : 'rejected', resolvedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
   }
 
-  /** Join via invite token (instant or request). Uses groupInvites/{token} — never lists chats by invite. */
+  /** Join via invite token (instant or request). Server verifies token — never trust client self-join for private/approval. */
   async function joinGroupByInviteToken(token) {
     if (!db || !currentUser || !token) return { ok: false, reason: 'auth' };
     const uid = currentUser.uid;
     try {
+      if (typeof apiFetch === 'function') {
+        const envelope = await apiFetch('/api/media-config', {
+          method: 'POST',
+          needAuth: true,
+          body: {
+            action: 'group_join_invite',
+            token,
+            name: userProfile?.name || currentUser.displayName || 'Member',
+            avatar: userProfile?.avatar || '👤',
+            photoURL: currentUser.photoURL || '',
+            profileType:
+              typeof ownProfileType === 'function'
+                ? ownProfileType()
+                : typeof getProfileType === 'function'
+                  ? getProfileType()
+                  : 'personal',
+          },
+        });
+        if (!envelope?.ok) {
+          const code = envelope?.error?.code || envelope?.error?.message || 'error';
+          return { ok: false, reason: String(code).toLowerCase() };
+        }
+        const data = envelope.data || {};
+        const chatId = data.chatId;
+        if (!chatId) return { ok: false, reason: 'not_found' };
+        if (data.pending) {
+          return {
+            ok: true,
+            pending: true,
+            chat: { id: chatId, firestoreId: chatId, type: 'group', name: 'Group' },
+          };
+        }
+        const fetched = await fetchGroupDoc(chatId);
+        const chat =
+          fetched ||
+          normalizeGroupChat({
+            id: chatId,
+            firestoreId: chatId,
+            type: 'group',
+            name: 'Group',
+            participants: [uid],
+          });
+        if (typeof baithakChats !== 'undefined') {
+          const existing = baithakChats.find((c) => (c.firestoreId || c.id) === chatId);
+          if (!existing) {
+            baithakChats.unshift(chat);
+            if (typeof pinSelfChat === 'function') baithakChats = pinSelfChat(baithakChats);
+            if (typeof renderChatList === 'function') renderChatList(baithakChats);
+          }
+        }
+        return { ok: true, chat, alreadyMember: !!data.alreadyMember };
+      }
+
+      // Offline / no API: read invite index then attempt client update (public+instant only under rules).
       const inviteSnap = await db.collection('groupInvites').doc(token).get();
       if (!inviteSnap.exists) return { ok: false, reason: 'not_found' };
       const inviteMeta = inviteSnap.data() || {};
@@ -427,13 +481,15 @@
         });
 
       const data = await fetchGroupDoc(chatId);
-      const chat = data || normalizeGroupChat({
-        id: chatId,
-        firestoreId: chatId,
-        type: 'group',
-        name: inviteMeta.name || 'Group',
-        participants: [uid],
-      });
+      const chat =
+        data ||
+        normalizeGroupChat({
+          id: chatId,
+          firestoreId: chatId,
+          type: 'group',
+          name: inviteMeta.name || 'Group',
+          participants: [uid],
+        });
       if (typeof baithakChats !== 'undefined') {
         baithakChats.unshift(chat);
         if (typeof pinSelfChat === 'function') baithakChats = pinSelfChat(baithakChats);

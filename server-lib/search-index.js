@@ -16,6 +16,8 @@
  */
 'use strict';
 
+const { isGroupPublicForSearch } = require('./group-invite-join');
+
 const COLLECTORS = {
   users: collectUsers,
   duniya: collectDuniya,
@@ -136,45 +138,34 @@ async function collectPeepal(db, q, limit) {
 
 async function collectGroups(db, q, limit) {
   const out = [];
+  // Canonical discoverability flag is isPublic (not legacy visibility).
+  // Fallback must still exclude private groups — missing isPublic ≠ public.
+  let snap = null;
   try {
-    const snap = await db.collection('chats').where('type', '==', 'group').where('visibility', '==', 'public').limit(60).get();
-    snap.docs.forEach((doc) => {
-      if (out.length >= limit) return;
-      const g = doc.data() || {};
-      const hay = `${g.name || ''} ${g.title || ''} ${g.description || ''}`.toLowerCase();
-      if (!hay.includes(q)) return;
-      out.push({
-        type: 'group',
-        category: 'groups',
-        id: doc.id,
-        title: g.name || g.title || 'Group',
-        subtitle: g.description || 'Public group',
-        avatar: g.avatar || '👥',
-        score: 60,
-      });
-    });
+    snap = await db.collection('chats').where('type', '==', 'group').where('isPublic', '==', true).limit(60).get();
   } catch (e) {
-    // Fallback: name prefix without visibility index
     try {
-      const snap = await db.collection('chats').where('type', '==', 'group').limit(40).get();
-      snap.docs.forEach((doc) => {
-        if (out.length >= limit) return;
-        const g = doc.data() || {};
-        if (g.visibility && g.visibility !== 'public') return;
-        const hay = `${g.name || ''} ${g.title || ''}`.toLowerCase();
-        if (!hay.includes(q)) return;
-        out.push({
-          type: 'group',
-          category: 'groups',
-          id: doc.id,
-          title: g.name || g.title || 'Group',
-          subtitle: 'Group',
-          avatar: g.avatar || '👥',
-          score: 50,
-        });
-      });
-    } catch (err) {}
+      snap = await db.collection('chats').where('type', '==', 'group').limit(80).get();
+    } catch (err) {
+      return out;
+    }
   }
+  (snap?.docs || []).forEach((doc) => {
+    if (out.length >= limit) return;
+    const g = doc.data() || {};
+    if (!isGroupPublicForSearch(g)) return;
+    const hay = `${g.name || ''} ${g.title || ''} ${g.description || ''}`.toLowerCase();
+    if (!hay.includes(q)) return;
+    out.push({
+      type: 'group',
+      category: 'groups',
+      id: doc.id,
+      title: g.name || g.title || 'Group',
+      subtitle: g.description || 'Public group',
+      avatar: g.avatar || '👥',
+      score: 60,
+    });
+  });
   return out;
 }
 
