@@ -42,6 +42,11 @@ function cleanPostId(value) {
   return /^[A-Za-z0-9_-]{1,180}$/.test(id) ? id : '';
 }
 
+/** Shared validator for content_signal / discovery_person_signal feedback values. */
+function isValidRecoSignal(signal) {
+  return signal === 'more_like' || signal === 'not_interested';
+}
+
 function publicSummary(data) {
   const up = Math.max(0, Number(data?.upCount) || 0);
   const down = Math.max(0, Number(data?.downCount) || 0);
@@ -400,7 +405,7 @@ module.exports = async function handler(req, res) {
     if (body.action === 'discovery_person_signal') {
       const signal = String(body.signal || '');
       const candidateUid = String(body.candidateUid || '').slice(0, 128);
-      if (!candidateUid || (signal !== 'more_like' && signal !== 'not_interested')) {
+      if (!candidateUid || !isValidRecoSignal(signal)) {
         return sendError(res, 400, 'VALIDATION_ERROR', 'candidateUid and signal (more_like|not_interested) required');
       }
       const result = await recordDiscoveryPersonSignal(db, admin, {
@@ -436,7 +441,7 @@ module.exports = async function handler(req, res) {
       const signal = String(body.signal || '');
       const authorUid = body.authorUid ? String(body.authorUid).slice(0, 128) : null;
       const tag = String(body.tag || '').slice(0, 80);
-      if (!postId || (signal !== 'more_like' && signal !== 'not_interested')) {
+      if (!postId || !isValidRecoSignal(signal)) {
         return sendError(res, 400, 'VALIDATION_ERROR', 'postId and signal (more_like|not_interested) required');
       }
       const value = signal === 'more_like' ? 1 : -1;
@@ -555,3 +560,6 @@ module.exports = async function handler(req, res) {
     return sendError(res, 500, 'PEEPAL_REACTION_FAILED', 'Could not save reaction');
   }
 };
+
+module.exports.cleanPostId = cleanPostId;
+module.exports.isValidRecoSignal = isValidRecoSignal;
