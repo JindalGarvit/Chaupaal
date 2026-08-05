@@ -27,6 +27,13 @@ const {
   resolveIntentWeightProfile,
 } = require('./intent-weights');
 const { isAiFeaturesEnabled } = require('./ai-config');
+const {
+  buildDiscoveryCacheKey,
+  readDiscoveryCandidateCache,
+  writeDiscoveryCandidateCache,
+  shouldCacheDiscoveryQuery,
+  normalizeDiscoveryQuery,
+} = require('./discovery-query-cache');
 
 const DISCOVER_POOL = 120;
 const DISCOVER_LIMIT_DEFAULT = 10;
@@ -228,20 +235,75 @@ async function runIntentDiscover(db, admin, user, body, deps) {
   );
   const hardCtx = { blockedSet, mutedSet, viewerIsTeen };
 
-  let snap;
-  try {
-    snap = await db.collection('users').where('openToMeet', '==', true).limit(DISCOVER_POOL).get();
-  } catch (e) {
-    snap = await db.collection('users').limit(DISCOVER_POOL).get();
+  let cacheHit = false;
+  let cacheMissReason = null;
+  let candidates = [];
+  const keyInfo =
+    shouldCacheDiscoveryQuery({ query, plan })
+      ? buildDiscoveryCacheKey({ query, plan })
+      : null;
+
+  if (keyInfo) {
+    const cached = await readDiscoveryCandidateCache(db, keyInfo);
+    if (cached?.hit && Array.isArray(cached.candidates)) {
+      cacheHit = true;
+      // Re-hydrate + re-apply viewer privacy — never replay another user's final list
+      const ids = cached.candidates.map((c) => c.uid).filter(Boolean).slice(0, 80);
+      const scoreHint = {};
+      cached.candidates.forEach((c) => {
+        if (c.uid) scoreHint[c.uid] = c.score;
+      });
+      await Promise.all(
+        ids.map(async (id) => {
+          try {
+            const d = await db.collection('users').doc(id).get();
+            if (!d.exists) return;
+            const data = { uid: d.id, ...d.data(), _cacheScore: scoreHint[id] };
+            if (!passesHardEligibility(viewer, data, hardCtx)) return;
+            if (!passesQueryHardFilters(data, plan.hardFilters)) return;
+            candidates.push(data);
+          } catch (e) {}
+        })
+      );
+      // Quality guard: if re-filter wiped the pool, fall through to live retrieve
+      if (candidates.length < 2) {
+        cacheHit = false;
+        cacheMissReason = 'refilter_empty';
+        candidates = [];
+        console.info('[intent_discover] cache_bypass', { reason: 'refilter_empty' });
+      } else {
+        console.info('[intent_discover] cache_hit', {
+          norm: keyInfo.norm,
+          pool: ids.length,
+          afterFilter: candidates.length,
+        });
+      }
+    } else {
+      cacheMissReason = cached?.reason || 'miss';
+      console.info('[intent_discover] cache_miss', {
+        norm: keyInfo.norm,
+        reason: cacheMissReason,
+      });
+    }
+  } else {
+    cacheMissReason = 'skipped_quality';
   }
 
-  const candidates = [];
-  snap.docs.forEach((d) => {
-    const data = { uid: d.id, ...d.data() };
-    if (!passesHardEligibility(viewer, data, hardCtx)) return;
-    if (!passesQueryHardFilters(data, plan.hardFilters)) return;
-    candidates.push(data);
-  });
+  if (!cacheHit) {
+    let snap;
+    try {
+      snap = await db.collection('users').where('openToMeet', '==', true).limit(DISCOVER_POOL).get();
+    } catch (e) {
+      snap = await db.collection('users').limit(DISCOVER_POOL).get();
+    }
+
+    snap.docs.forEach((d) => {
+      const data = { uid: d.id, ...d.data() };
+      if (!passesHardEligibility(viewer, data, hardCtx)) return;
+      if (!passesQueryHardFilters(data, plan.hardFilters)) return;
+      candidates.push(data);
+    });
+  }
 
   const edgeMap = {};
   await Promise.all(
@@ -271,16 +333,36 @@ async function runIntentDiscover(db, admin, user, body, deps) {
     limit,
   });
 
+  // Write shared candidate pool (uids+scores) on miss — never viewer-final list
+  if (!cacheHit && keyInfo && candidates.length) {
+    const poolForCache = candidates.map((c) => ({
+      uid: c.uid,
+      score: typeof c._cacheScore === 'number' ? c._cacheScore : 0,
+    }));
+    // Prefer ranked scores when available for better reuse hints
+    const rankedMap = {};
+    ranked.forEach((m) => {
+      rankedMap[m.uid] = m.score;
+    });
+    const toStore = candidates.map((c) => ({
+      uid: c.uid,
+      score: rankedMap[c.uid] != null ? rankedMap[c.uid] : poolForCache.find((x) => x.uid === c.uid)?.score || 0,
+    }));
+    writeDiscoveryCandidateCache(db, keyInfo, { candidates: toStore, plan }).catch(() => {});
+  }
+
   try {
     await db.collection(BATCH_INTERFACE.collection).add({
       uid: user.uid,
-      queryHash: simpleHash(query),
+      queryHash: simpleHash(normalizeDiscoveryQuery(query) || query),
       searchIntent: plan.searchIntent,
       appliedAssumptionIds: plan.appliedAssumptionIds,
       suppressedAssumptionIds: plan.suppressedAssumptionIds,
       hardFilterKeys: Object.keys(plan.hardFilters || {}),
       resultCount: ranked.length,
       usedLlm,
+      cacheHit,
+      cacheMissReason: cacheHit ? null : cacheMissReason,
       assumptionVersion: ASSUMPTION_VERSION,
       intentProfileId,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -297,6 +379,8 @@ async function runIntentDiscover(db, admin, user, body, deps) {
   return {
     mode: usedLlm ? 'ai_parse' : 'deterministic',
     aiEnabled,
+    cacheHit,
+    cacheMissReason: cacheHit ? null : cacheMissReason,
     plan: {
       version: plan.version,
       searchIntent: plan.searchIntent,

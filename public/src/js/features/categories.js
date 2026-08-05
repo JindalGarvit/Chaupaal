@@ -38,6 +38,46 @@ const CAT_CACHE_VERSION = 'v2';
 // Pause all live Claude calls for Khabar/Sawaal (cron is also paused). Flip to false to resume.
 const CAT_LIVE_AI_PAUSED = true;
 
+/** IST day YYYY-MM-DD — aligns with server-lib/cat-cache-keys. */
+function catIstDayKey() {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+  } catch (e) {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+function catCacheSlug(raw) {
+  return String(raw || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9_\-]/g, '')
+    .slice(0, 48);
+}
+
+/**
+ * Shareable cache doc ids (generate-once / serve-many).
+ * Primary: `{cat}__{istDay}` [+ `__c_{city}`] [+ `__i_{industry}`]
+ * Fallback: bare `{cat}` for legacy docs.
+ */
+function catCacheDocIds(catName, scope = {}) {
+  const cat = catCacheSlug(catName);
+  if (!cat) return [];
+  const parts = [cat, catIstDayKey()];
+  const city = catCacheSlug(scope.city);
+  if (city) parts.push(`c_${city}`);
+  const industry = catCacheSlug(scope.industry);
+  if (industry) parts.push(`i_${industry}`);
+  const dayId = parts.join('__');
+  return dayId === cat ? [cat] : [dayId, cat];
+}
+
 function getCacheKey(type, id){
   // v2: grounded-link era; include version so stale pre-grounded local caches never apply
   return `chaupaal_cache_${CAT_CACHE_VERSION}_${type}_${id.toLowerCase().replace(/\s+/g,'_')}`;
@@ -89,28 +129,47 @@ function renderCatPausedEmpty(body, catName, kind){
     </div>`;
 }
 
-async function fetchCategoryCacheDoc(catName){
+async function fetchCategoryCacheDoc(catName, scope = {}){
   if(!db) return null;
-  try{
-    const snap = await db.collection('category_cache').doc(catName.toLowerCase()).get();
-    return snap.exists ? snap.data() : null;
-  }catch(e){ return null; }
+  const ids = catCacheDocIds(catName, scope);
+  for (const id of ids) {
+    try{
+      const snap = await db.collection('category_cache').doc(id).get();
+      if (snap.exists) {
+        const data = snap.data();
+        if (data) return { ...data, _cacheId: id };
+      }
+    }catch(e){}
+  }
+  return null;
 }
 
-function persistCategoryCacheDoc(catName, patch){
+function persistCategoryCacheDoc(catName, patch, scope = {}){
   if(!db) return;
   const now = Date.now();
   const stamped = { ...patch };
   if(patch.news) stamped.newsTs = now;
   if(patch.mcq) stamped.mcqTs = now;
-  db.collection('category_cache').doc(catName.toLowerCase()).set({
+  const ids = catCacheDocIds(catName, scope);
+  const primary = ids[0] || catName.toLowerCase();
+  const payload = {
     name: catName,
     ...stamped,
     ts: now,
     webGrounded: true,
     cacheVersion: CAT_CACHE_VERSION,
     generatedBy: 'client',
-  }, {merge:true}).catch(()=>{});
+    istDay: catIstDayKey(),
+    city: scope.city || null,
+    industry: scope.industry || null,
+    cacheKey: primary,
+  };
+  // Write day-keyed shareable doc — all users with same slice reuse it
+  db.collection('category_cache').doc(primary).set(payload, {merge:true}).catch(()=>{});
+  // Mirror legacy bare id when no geo/industry scope
+  if (!scope.city && !scope.industry && ids[1]) {
+    db.collection('category_cache').doc(ids[1]).set({ ...payload, cacheKey: ids[1] }, {merge:true}).catch(()=>{});
+  }
 }
 
 // AI Keyboard daily limit
@@ -158,12 +217,27 @@ async function loadCatDetailTab(cat, tab){
   }
 }
 
+function viewerCatScope(){
+  try{
+    const p = typeof userProfile !== 'undefined' ? userProfile : null;
+    return {
+      city: p?.profile?.currentCity || p?.city || '',
+      industry: p?.industry || p?.profile?.industry || '',
+    };
+  }catch(e){ return {}; }
+}
+
 async function loadCatNews(cat, body){
+  const scope = viewerCatScope();
   // While live AI is paused: serve any cached content indefinitely; never call Claude.
   if(CAT_LIVE_AI_PAUSED){
     const local = readCache('news', cat.name, {ignoreTtl:true});
     if(local){ body.innerHTML=''; renderCatNewsItems(local, body); return; }
-    const doc = await fetchCategoryCacheDoc(cat.name);
+    // Prefer city/industry-scoped shareable cache, then base category
+    let doc = await fetchCategoryCacheDoc(cat.name, scope);
+    if(!hasUsableCatCache(doc, 'news') && (scope.city || scope.industry)){
+      doc = await fetchCategoryCacheDoc(cat.name, {});
+    }
     if(hasUsableCatCache(doc, 'news')){
       writeCache('news', cat.name, doc.news);
       body.innerHTML=''; renderCatNewsItems(doc.news, body); return;
@@ -175,7 +249,10 @@ async function loadCatNews(cat, body){
   const cached = readCache('news', cat.name);
   if(cached){ body.innerHTML=''; renderCatNewsItems(cached, body); return; }
 
-  const doc = await fetchCategoryCacheDoc(cat.name);
+  let doc = await fetchCategoryCacheDoc(cat.name, scope);
+  if(!isScheduledCatCacheFresh(doc, 'news') && (scope.city || scope.industry)){
+    doc = await fetchCategoryCacheDoc(cat.name, {});
+  }
   if(isScheduledCatCacheFresh(doc, 'news')){
     writeCache('news', cat.name, doc.news);
     body.innerHTML=''; renderCatNewsItems(doc.news, body); return;
@@ -186,7 +263,8 @@ async function loadCatNews(cat, body){
   items = sanitizeCatNewsItems(items, cat.name);
 
   writeCache('news', cat.name, items);
-  persistCategoryCacheDoc(cat.name, {news: items});
+  // Persist to shareable day-keyed doc — other users with same slice reuse (no N× AI)
+  persistCategoryCacheDoc(cat.name, {news: items}, scope);
   body.innerHTML='';
   renderCatNewsItems(items, body);
 }
@@ -210,10 +288,14 @@ function renderCatNewsItems(items, body){
 }
 
 async function loadCatMCQ(cat, body){
+  const scope = viewerCatScope();
   if(CAT_LIVE_AI_PAUSED){
     const local = readCache('mcq', cat.name, {ignoreTtl:true});
     if(local){ body.innerHTML=''; renderCatMCQItems(local, body); return; }
-    const doc = await fetchCategoryCacheDoc(cat.name);
+    let doc = await fetchCategoryCacheDoc(cat.name, scope);
+    if(!hasUsableCatCache(doc, 'mcq') && (scope.city || scope.industry)){
+      doc = await fetchCategoryCacheDoc(cat.name, {});
+    }
     if(hasUsableCatCache(doc, 'mcq')){
       writeCache('mcq', cat.name, doc.mcq);
       body.innerHTML=''; renderCatMCQItems(doc.mcq, body); return;
@@ -225,7 +307,10 @@ async function loadCatMCQ(cat, body){
   const cached = readCache('mcq', cat.name);
   if(cached){ body.innerHTML=''; renderCatMCQItems(cached, body); return; }
 
-  const doc = await fetchCategoryCacheDoc(cat.name);
+  let doc = await fetchCategoryCacheDoc(cat.name, scope);
+  if(!isScheduledCatCacheFresh(doc, 'mcq') && (scope.city || scope.industry)){
+    doc = await fetchCategoryCacheDoc(cat.name, {});
+  }
   if(isScheduledCatCacheFresh(doc, 'mcq')){
     writeCache('mcq', cat.name, doc.mcq);
     body.innerHTML=''; renderCatMCQItems(doc.mcq, body); return;
@@ -236,7 +321,7 @@ async function loadCatMCQ(cat, body){
   items = sanitizeCatMCQItems(items, cat.name);
 
   writeCache('mcq', cat.name, items);
-  persistCategoryCacheDoc(cat.name, {mcq: items});
+  persistCategoryCacheDoc(cat.name, {mcq: items}, scope);
   body.innerHTML='';
   renderCatMCQItems(items, body);
 }

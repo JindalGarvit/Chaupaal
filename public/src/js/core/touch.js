@@ -429,11 +429,11 @@
           return;
         }
         dy = Math.max(0, rawDy);
-        if (dy > 10) {
+        if (dy > 18) {
           armed = true;
-          const h = Math.min(72, dy * 0.42);
+          const h = Math.min(84, dy * 0.38);
           indicator.style.height = h + 'px';
-          const ready = dy > 72;
+          const ready = dy > 96;
           indicator.classList.toggle('is-ready', ready);
           indicator.textContent = ready
             ? ptrLabel('ptr_release', 'Release to refresh')
@@ -448,7 +448,7 @@
       async () => {
         if (!pulling) return;
         pulling = false;
-        const should = armed && dy > 72 && !busy;
+        const should = armed && dy > 96 && !busy;
         dy = 0;
         armed = false;
         if (!should) {

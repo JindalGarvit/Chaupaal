@@ -226,25 +226,42 @@
         else if (typeof showToast === 'function') showToast('Thanks — share feedback anytime in Chaupaal chat');
       } else if (p.action === 'wish_friend' || p.action === 'open_friend_dm') {
         const friendUid = p.friendUid;
-        const prefill = p.prefill || (p.action === 'wish_friend' ? `Happy birthday, ${p.friendName || 'friend'}! 🎂` : '');
+        const friendName = p.friendName || 'friend';
+        const prefill =
+          p.prefill ||
+          p.meta?.prefill ||
+          (typeof baithakWishMessage === 'function'
+            ? baithakWishMessage({
+                type: p.action === 'wish_friend' ? 'birthday' : 'friend_update',
+                name: friendName,
+                uid: friendUid,
+              })
+            : `Happy birthday, ${friendName}! 🎂`);
         try {
-          document.querySelector('.tab-btn[data-tab="baithak"]')?.click();
-          if (friendUid && typeof openChatById === 'function') {
-            // Prefer direct chat id patterns; deeplink helper may resolve uid chats
-            await openChatById(friendUid);
-          } else if (friendUid && typeof startOrOpenDm === 'function') {
-            await startOrOpenDm(friendUid, { prefill });
-          } else if (friendUid && typeof openProfilePreview === 'function') {
-            openProfilePreview(friendUid);
-          }
-          if (prefill && typeof document !== 'undefined') {
-            setTimeout(() => {
-              const input = document.getElementById('chatMsgInput');
-              if (input && !input.value) {
-                input.value = prefill;
-                input.focus();
-              }
-            }, 400);
+          if (typeof openBaithakWithPrefill === 'function') {
+            await openBaithakWithPrefill({
+              uid: friendUid,
+              name: friendName,
+              type: p.action === 'wish_friend' ? 'birthday' : 'friend_update',
+              prefill,
+            });
+          } else {
+            document.querySelector('.tab-btn[data-tab="baithak"]')?.click();
+            if (friendUid && typeof openChatById === 'function') {
+              await openChatById(friendUid);
+            } else if (friendUid && typeof openDmWithSharedHello === 'function') {
+              await openDmWithSharedHello({ uid: friendUid, name: friendName, origin: 'notif_wish' });
+            }
+            if (typeof applyBaithakPrefill === 'function') applyBaithakPrefill(prefill);
+            else {
+              setTimeout(() => {
+                const input = document.getElementById('chatMsgInput');
+                if (input && !input.value) {
+                  input.value = prefill;
+                  input.focus();
+                }
+              }, 400);
+            }
           }
         } catch (e) {
           if (typeof showToast === 'function') showToast('Open Baithak to message them');

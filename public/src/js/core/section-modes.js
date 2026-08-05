@@ -171,54 +171,132 @@
       .replace(/"/g, '&quot;');
   }
 
-  // ─── Akhbaar ───────────────────────────────────────────────────────────────
-  function buildSurkhiyaHtml() {
-    const headlines = collectSurkhiyaHeadlines();
-    const personal = collectSurkhiyaPersonalEvents();
-    const personalHtml = personal.length
-      ? `<div class="surkhiya-personal">
-          ${personal
-            .map(
-              (p) =>
-                `<button type="button" class="surkhiya-event" data-surkhiya-event="${escapeLite(p.action || 'baithak')}">
-                  <span class="surkhiya-event-icon">${p.icon || '🎉'}</span>
-                  <span class="surkhiya-event-copy">
-                    <strong>${escapeLite(p.title)}</strong>
-                    <small>${escapeLite(p.sub || '')}</small>
-                  </span>
-                </button>`
-            )
-            .join('')}
-        </div>`
-      : '';
-    const chips = headlines
-      .slice(0, 10)
-      .map(
-        (h, i) =>
-          `<button type="button" class="surkhiya-chip" data-surkhiya-i="${i}" aria-expanded="false">
-            <span class="surkhiya-chip-kicker">${escapeLite(h.cat || 'News')}</span>
-            <span class="surkhiya-chip-title">${escapeLite(h.title)}</span>
-            <span class="surkhiya-chip-brief hidden" data-surkhiya-brief>${escapeLite(h.brief || '')}</span>
-          </button>`
-      )
-      .join('');
-    return `
-      <div class="akhbaar-surkhiya room-kit room-kit--air room-kit--surkhiya">
-        ${personalHtml}
-        <div class="surkhiya-digest">
-          ${
-            chips ||
-            `<div class="cp-empty surkhiya-empty">${tt('surkhiya_empty', 'Digest warming up — open Khabar to start today’s quiz.')}</div>`
-          }
-        </div>
-        <div class="akhbaar-surkhiya-chips">
-          <button type="button" class="btn" data-surkhiya-jump="all">${tt('akhbaar_all_headlines', 'All headlines')}</button>
-        </div>
-      </div>`;
+  // ─── Akhbaar / Surkhiya bands ───────────────────────────────────────────────
+  function mdKey(d) {
+    return `${d.getMonth() + 1}-${d.getDate()}`;
   }
 
-  function collectSurkhiyaHeadlines() {
+  function daysUntilNextMd(from, to) {
+    // Days until next occurrence of from's month/day after `to`
+    const y = to.getFullYear();
+    let next = new Date(y, from.getMonth(), from.getDate());
+    const today0 = new Date(y, to.getMonth(), to.getDate());
+    if (next < today0) next = new Date(y + 1, from.getMonth(), from.getDate());
+    return Math.round((next - today0) / 86400000);
+  }
+
+  function friendPools() {
+    const pools = [];
+    try {
+      if (typeof friends !== 'undefined' && Array.isArray(friends)) pools.push(...friends);
+    } catch (e) {}
+    try {
+      if (typeof SAMPLE_DISCOVERY_POOL !== 'undefined') pools.push(...SAMPLE_DISCOVERY_POOL);
+    } catch (e) {}
+    return pools;
+  }
+
+  function viewerCity() {
+    try {
+      return (
+        (typeof userProfile !== 'undefined' &&
+          (userProfile?.profile?.currentCity || userProfile?.city || userProfile?.profile?.city)) ||
+        ''
+      );
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function viewerJobBits() {
+    try {
+      const p = typeof userProfile !== 'undefined' ? userProfile : null;
+      return {
+        industry: p?.industry || p?.profile?.industry || '',
+        job: p?.jobTitle || p?.profile?.jobTitle || p?.profession || '',
+      };
+    } catch (e) {
+      return { industry: '', job: '' };
+    }
+  }
+
+  function collectPersonalBand(windowDays) {
+    if (!sharesPersonalEvents()) return [];
     const out = [];
+    const today = new Date();
+    const seen = new Set();
+    friendPools().forEach((p) => {
+      const name = p.name || p.username || 'Friend';
+      const uid = p.uid || '';
+      const key = uid || p.username || name;
+      const dob = p.dateOfBirth || p.dob || '';
+      if (dob) {
+        const d = new Date(dob);
+        if (!Number.isNaN(d.getTime())) {
+          const delta = daysUntilNextMd(d, today);
+          if (delta >= 0 && delta < windowDays && !seen.has(`bday-${key}`)) {
+            seen.add(`bday-${key}`);
+            out.push({
+              kind: 'personal',
+              eventType: 'birthday',
+              icon: '🎂',
+              title: tt('relevant_birthday', "{{name}}'s birthday").replace('{{name}}', name),
+              sub: tt('relevant_birthday_sub', 'Wish them on Baithak'),
+              uid,
+              name,
+              avatar: p.avatar || p.photoURL || '🎂',
+              bandHint: delta === 0 ? 'today' : delta < 7 ? 'week' : 'month',
+            });
+          }
+        }
+      }
+      const ann = p.anniversary || p.workAnniversary || p.anniversaryDate;
+      if (ann) {
+        const a = new Date(ann);
+        if (!Number.isNaN(a.getTime())) {
+          const delta = daysUntilNextMd(a, today);
+          if (delta >= 0 && delta < windowDays && !seen.has(`ann-${key}`)) {
+            seen.add(`ann-${key}`);
+            out.push({
+              kind: 'personal',
+              eventType: 'anniversary',
+              icon: '💍',
+              title: tt('relevant_anniversary', "{{name}}'s anniversary").replace('{{name}}', name),
+              sub: tt('relevant_anniversary_sub', 'Send a note on Baithak'),
+              uid,
+              name,
+              avatar: p.avatar || '💍',
+              bandHint: delta === 0 ? 'today' : delta < 7 ? 'week' : 'month',
+            });
+          }
+        }
+      }
+      // Friend activity / update hints when present
+      if (p.recentUpdate || p.lastUpdateText) {
+        if (!seen.has(`upd-${key}`) && windowDays >= 7) {
+          seen.add(`upd-${key}`);
+          out.push({
+            kind: 'personal',
+            eventType: 'friend_update',
+            icon: '✨',
+            title: tt('surkhiya_friend_update', "{{name}} shared an update").replace('{{name}}', name),
+            sub: String(p.recentUpdate || p.lastUpdateText).slice(0, 100),
+            uid,
+            name,
+            avatar: p.avatar || '✨',
+            bandHint: 'week',
+          });
+        }
+      }
+    });
+    return out;
+  }
+
+  function collectNewsBandItems() {
+    const out = [];
+    const city = String(viewerCity() || '').toLowerCase();
+    const { industry, job } = viewerJobBits();
+    const ind = String(industry || job || '').toLowerCase();
     try {
       const qs =
         typeof QUESTIONS !== 'undefined' && QUESTIONS?.length
@@ -228,73 +306,117 @@
             : typeof SAMPLE_QUESTIONS !== 'undefined'
               ? SAMPLE_QUESTIONS
               : [];
-      qs.slice(0, 12).forEach((q) => {
+      qs.forEach((q, i) => {
         const title = q.headline || q.news || q.q || 'Headline';
-        const brief = String(q.news || q.explain || q.proof || q.q || '')
+        const brief = String(q.news || q.explain || q.proof || q.synopsis || q.q || '')
           .replace(/\s+/g, ' ')
           .trim()
           .slice(0, 220);
+        const cat = q.category || q.tag || 'News';
+        const blob = `${title} ${brief} ${cat} ${q.city || ''}`.toLowerCase();
+        let priority = 0;
+        if (city && blob.includes(city)) priority += 3;
+        if (ind && (blob.includes(ind) || String(cat).toLowerCase().includes(ind.slice(0, 4)))) priority += 2;
+        if (q.personal || q.friendUid || q.visibility === 'friends') priority += 4;
+        // Band by index / freshness hint
+        const band =
+          priority >= 3 || i < 4 ? 'today' : i < 8 ? 'week' : 'month';
         out.push({
+          kind: 'news',
           title,
           brief: brief || String(title).slice(0, 160),
-          cat: q.category || q.tag || 'News',
+          cat,
+          priority,
+          band,
+          friendUid: q.friendUid || q.uid || q.authorUid || null,
+          friendName: q.authorName || q.user?.name || null,
+          personal: !!(q.personal || q.friendUid || q.visibility === 'friends'),
           q,
+          idx: i,
         });
       });
     } catch (e) {}
+    // Prefer city/job/personal
+    out.sort((a, b) => b.priority - a.priority || a.idx - b.idx);
     return out;
   }
 
-  function collectSurkhiyaPersonalEvents() {
-    if (!sharesPersonalEvents()) return [];
-    const out = [];
-    const today = new Date();
-    const md = `${today.getMonth() + 1}-${today.getDate()}`;
-    const pools = [];
-    try {
-      if (typeof friends !== 'undefined' && Array.isArray(friends)) pools.push(...friends);
-    } catch (e) {}
-    try {
-      if (typeof SAMPLE_DISCOVERY_POOL !== 'undefined') pools.push(...SAMPLE_DISCOVERY_POOL);
-    } catch (e) {}
-    const seen = new Set();
-    pools.forEach((p) => {
-      const dob = p.dateOfBirth || p.dob || '';
-      if (!dob) return;
-      const d = new Date(dob);
-      if (Number.isNaN(d.getTime())) return;
-      const key = p.uid || p.username || p.name;
-      if (seen.has(key)) return;
-      if (`${d.getMonth() + 1}-${d.getDate()}` === md) {
-        seen.add(key);
-        out.push({
-          icon: '🎂',
-          title: tt('relevant_birthday', "{{name}}'s birthday").replace(
-            '{{name}}',
-            p.name || p.username || 'Friend'
-          ),
-          sub: tt('relevant_birthday_sub', 'Wish them on Baithak'),
-          action: 'baithak',
-        });
-      }
-      const ann = p.anniversary || p.workAnniversary || p.anniversaryDate;
-      if (ann) {
-        const a = new Date(ann);
-        if (!Number.isNaN(a.getTime()) && `${a.getMonth() + 1}-${a.getDate()}` === md && !seen.has(`ann-${key}`)) {
-          seen.add(`ann-${key}`);
-          out.push({
-            icon: '💍',
-            title: tt('relevant_anniversary', "{{name}}'s anniversary").replace(
-              '{{name}}',
-              p.name || p.username || 'Friend'
-            ),
-            sub: tt('relevant_anniversary_sub', 'Send a note on Baithak'),
-            action: 'baithak',
-          });
+  function renderSurkhiyaCard(item, i) {
+    if (item.kind === 'personal') {
+      return `<button type="button" class="surkhiya-event" data-surkhiya-wish="1"
+        data-event-type="${escapeLite(item.eventType || 'generic')}"
+        data-uid="${escapeLite(item.uid || '')}"
+        data-name="${escapeLite(item.name || '')}"
+        data-avatar="${escapeLite(item.avatar || '')}">
+        <span class="surkhiya-event-icon">${item.icon || '🎉'}</span>
+        <span class="surkhiya-event-copy">
+          <strong>${escapeLite(item.title)}</strong>
+          <small>${escapeLite(item.sub || '')}</small>
+        </span>
+      </button>`;
+    }
+    const friendAttr =
+      item.personal && item.friendUid
+        ? ` data-surkhiya-wish="1" data-event-type="friend_update" data-uid="${escapeLite(item.friendUid)}" data-name="${escapeLite(item.friendName || '')}"`
+        : '';
+    return `<button type="button" class="surkhiya-chip" data-surkhiya-i="${i}" aria-expanded="false"${friendAttr}>
+      <span class="surkhiya-chip-kicker">${escapeLite(item.cat || 'News')}</span>
+      <span class="surkhiya-chip-title">${escapeLite(item.title)}</span>
+      <span class="surkhiya-chip-brief hidden" data-surkhiya-brief>${escapeLite(item.brief || '')}</span>
+    </button>`;
+  }
+
+  function buildBandHtml(id, label, items) {
+    if (!items.length) return '';
+    return `<section class="surkhiya-band" data-band="${id}">
+      <h3 class="surkhiya-band-title">${escapeLite(label)}</h3>
+      <div class="surkhiya-band-list">
+        ${items.map((it, i) => renderSurkhiyaCard(it, `${id}-${i}`)).join('')}
+      </div>
+    </section>`;
+  }
+
+  function buildSurkhiyaHtml() {
+    const personalAll = collectPersonalBand(31);
+    const newsAll = collectNewsBandItems();
+
+    const todayPersonal = personalAll.filter((p) => p.bandHint === 'today');
+    const weekPersonal = personalAll.filter((p) => p.bandHint === 'week');
+    const monthPersonal = personalAll.filter((p) => p.bandHint === 'month');
+
+    const todayNews = newsAll.filter((n) => n.band === 'today').slice(0, 6);
+    const weekNews = newsAll.filter((n) => n.band === 'week').slice(0, 6);
+    const monthNews = newsAll.filter((n) => n.band === 'month').slice(0, 6);
+
+    // Today: personal first, then city/job/interest news
+    const todayItems = [...todayPersonal, ...todayNews];
+    const weekItems = [...weekPersonal, ...weekNews];
+    const monthItems = [...monthPersonal, ...monthNews];
+
+    const todayHtml = buildBandHtml('today', tt('surkhiya_band_today', 'Today'), todayItems);
+    const weekHtml = buildBandHtml('week', tt('surkhiya_band_week', 'This week'), weekItems);
+    const monthHtml = buildBandHtml('month', tt('surkhiya_band_month', 'This month'), monthItems);
+
+    const hasAny = todayHtml || weekHtml || monthHtml;
+    return `
+      <div class="akhbaar-surkhiya room-kit room-kit--air room-kit--surkhiya">
+        ${
+          hasAny
+            ? `${todayHtml}${weekHtml}${monthHtml}`
+            : `<div class="cp-empty surkhiya-empty">${tt('surkhiya_empty', 'Digest warming up — open Khabar to start today’s quiz.')}</div>`
         }
-      }
-    });
-    return out.slice(0, 6);
+        <div class="akhbaar-surkhiya-chips">
+          <button type="button" class="btn" data-surkhiya-jump="all">${tt('akhbaar_all_headlines', 'All headlines')}</button>
+        </div>
+      </div>`;
+  }
+
+  function collectSurkhiyaHeadlines() {
+    return collectNewsBandItems();
+  }
+
+  function collectSurkhiyaPersonalEvents() {
+    return collectPersonalBand(1);
   }
 
   function buildSaathiHtml() {
@@ -373,16 +495,33 @@
 
   function wireSurkhiya(host) {
     host.querySelector('[data-surkhiya-jump="all"]')?.addEventListener('click', () => setAkhbaarMode('all'));
-    host.querySelectorAll('[data-surkhiya-event]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const a = btn.dataset.surkhiyaEvent;
-        if (a === 'baithak') {
-          document.querySelector('.bottom-tabs .tab-btn[data-tab="baithak"]')?.click();
-        }
+
+    const openWish = (btn) => {
+      const uid = btn.dataset.uid;
+      const name = btn.dataset.name;
+      const type = btn.dataset.eventType || 'generic';
+      const avatar = btn.dataset.avatar || '';
+      if (typeof openBaithakWithPrefill === 'function') {
+        openBaithakWithPrefill({ uid, name, avatar, type });
+      } else {
+        document.querySelector('.bottom-tabs .tab-btn[data-tab="baithak"]')?.click();
+      }
+    };
+
+    host.querySelectorAll('[data-surkhiya-wish]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openWish(btn);
       });
     });
+
     host.querySelectorAll('[data-surkhiya-i]').forEach((btn) => {
       btn.addEventListener('click', () => {
+        if (btn.dataset.surkhiyaWish === '1' && btn.dataset.uid) {
+          openWish(btn);
+          return;
+        }
         const brief = btn.querySelector('[data-surkhiya-brief]');
         const open = btn.getAttribute('aria-expanded') === 'true';
         host.querySelectorAll('[data-surkhiya-i]').forEach((other) => {
@@ -395,7 +534,6 @@
           btn.classList.add('is-expanded');
           brief.classList.remove('hidden');
         }
-        // Expand brief only — never jump to today's quiz
       });
     });
   }
@@ -548,12 +686,35 @@
         target &&
         target.closest &&
         target.closest(
-          '[data-nav-ignore="1"], #cpMiniPlayer, .peepal-intent-chips, [data-khoj-chips], .khoj-intent-card .peepal-intent-chips, .peepal-nudge-chip, .akhbaar-cat-chip, .akhbaar-cat-bar, [data-swipe-ignore]'
+          [
+            '[data-nav-ignore="1"]',
+            '#cpMiniPlayer',
+            '.peepal-intent-chips',
+            '[data-khoj-chips]',
+            '.khoj-intent-card .peepal-intent-chips',
+            '.peepal-nudge-chip',
+            '.akhbaar-cat-chip',
+            '.akhbaar-cat-bar',
+            '.dangal-manch-filters',
+            '.dangal-filter-chip',
+            '.dangal-filter-row',
+            '[data-manch-grid]',
+            '.dangal-section-grid',
+            '.mashhoor-masonry',
+            '.surkhiya-band-list',
+            '[data-swipe-ignore]',
+          ].join(', ')
         )
       );
     } catch (e) {
       return false;
     }
+  }
+
+  /** Empty chrome / non-chip areas — section swipe never fires from chip rows / filter grids. */
+  function isEmptyChromeSwipe(target, panel) {
+    if (swipeTargetIgnored(target)) return false;
+    return true;
   }
 
   function wireAkhbaarSwipe() {
@@ -567,7 +728,7 @@
     panel.addEventListener(
       'touchstart',
       (e) => {
-        ignored = swipeTargetIgnored(e.target);
+        ignored = swipeTargetIgnored(e.target) || !isEmptyChromeSwipe(e.target, panel);
         sx = e.touches[0].clientX;
         sy = e.touches[0].clientY;
         locked = null;
@@ -642,7 +803,7 @@
     screen.addEventListener(
       'touchstart',
       (e) => {
-        ignored = swipeTargetIgnored(e.target);
+        ignored = swipeTargetIgnored(e.target) || !isEmptyChromeSwipe(e.target, screen);
         sx = e.touches[0].clientX;
         sy = e.touches[0].clientY;
         locked = null;
@@ -689,7 +850,7 @@
     panel.addEventListener(
       'touchstart',
       (e) => {
-        ignored = swipeTargetIgnored(e.target);
+        ignored = swipeTargetIgnored(e.target) || !isEmptyChromeSwipe(e.target, panel);
         sx = e.touches[0].clientX;
         sy = e.touches[0].clientY;
         locked = null;

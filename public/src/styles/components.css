@@ -4515,3 +4515,37 @@ html.quiet-mode [data-decorative-motion]{animation:none!important;transition:non
 #authRegStep1 .auth-profile-canvas .auth-input-label{font-size:10px;letter-spacing:.06em;}
 #authRegStep1 .auth-signup-hero .dp-hero-name{min-height:24px;}
 #authRegStep1 .auth-signup-hero .dp-hero-handle{min-height:18px;}
+
+/* ── Surkhiya bands + Safar + tinted chips (product pass) ── */
+.surkhiya-band{margin:0 12px 16px;}
+.surkhiya-band-title{font:700 12px/1.2 'Space Grotesk',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#7B2CBF;margin:0 0 8px;padding:0 2px;}
+.surkhiya-band-list{display:flex;flex-direction:column;gap:8px;}
+.surkhiya-band[data-band="today"] .surkhiya-band-title{color:var(--red,#E63946);}
+.surkhiya-band[data-band="week"] .surkhiya-band-title{color:#7B2CBF;}
+.surkhiya-band[data-band="month"] .surkhiya-band-title{color:#546E7A;}
+.akhbaar-cat-chip--tinted .cp-icon,
+.akhbaar-cat-chip--tinted [data-icon],
+.akhbaar-cat-chip--tinted svg{color:var(--cat-tint,#7B2CBF)!important;stroke:var(--cat-tint,#7B2CBF);}
+.akhbaar-cat-chip--tinted.active{border-color:var(--cat-tint,#E63946);color:var(--cat-tint,#E63946);background:color-mix(in srgb, var(--cat-tint,#E63946) 8%, transparent);}
+.akhbaar-cat-emoji{margin-right:2px;}
+.dangal-filter-chip{display:inline-flex;align-items:center;gap:6px;color:var(--chip-tint,#E85D04);border-color:color-mix(in srgb, var(--chip-tint,#E85D04) 35%, var(--line));}
+.dangal-filter-chip .dangal-filter-ico{font-size:13px;line-height:1;}
+.dangal-filter-chip.is-active{background:color-mix(in srgb, var(--chip-tint,#E85D04) 14%, var(--white));border-color:var(--chip-tint,#E85D04);color:var(--ink);font-weight:700;}
+.safar-hero{text-align:center;padding:8px 8px 16px;background:linear-gradient(165deg,rgba(155,93,229,.12),rgba(255,209,102,.1) 55%,transparent);border-radius:18px;margin-bottom:14px;}
+.safar-hero.is-quiet{background:var(--cream);}
+.safar-hero-emoji{font-size:36px;line-height:1;margin-bottom:6px;}
+.safar-hero-phase{font:700 13px 'Space Grotesk',sans-serif;color:#7B2CBF;letter-spacing:.04em;text-transform:uppercase;}
+.safar-hero-streak{font:700 28px/1.15 'Space Grotesk',sans-serif;margin:6px 0;}
+.safar-hero-streak strong{color:var(--red);}
+.safar-hero-sub{font-size:13px;color:var(--muted);margin:0;line-height:1.4;}
+.safar-milestones{display:flex;justify-content:space-between;gap:6px;margin-bottom:14px;}
+.safar-milestone{flex:1;text-align:center;padding:8px 4px;border-radius:12px;background:var(--cream);border:1px solid var(--line);font-size:11px;}
+.safar-milestone.is-done{background:rgba(46,125,50,.1);border-color:#2E7D32;color:#2E7D32;font-weight:700;}
+.safar-milestone-num{display:block;font:700 14px 'Space Grotesk',sans-serif;}
+.safar-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
+.safar-card{padding:10px 8px;border-radius:14px;background:var(--white);border:1px solid var(--line);text-align:center;}
+.safar-card-val{font:700 20px 'Space Grotesk',sans-serif;color:var(--ink);}
+.safar-card-title{font-size:11px;font-weight:700;margin-top:2px;}
+.safar-card-sub{font-size:10px;color:var(--muted);margin-top:2px;line-height:1.3;}
+.safar-flair{text-align:center;font-size:11px;color:var(--muted);margin:4px 0 12px;letter-spacing:.04em;}
+html.quiet-mode .safar-flair{display:none;}

@@ -8,7 +8,15 @@
  *   FIREBASE_SERVICE_ACCOUNT_JSON  — stringified service-account JSON
  */
 const admin = require('firebase-admin');
-const { CACHE_VERSION, generateCatNewsGrounded, generateCatMCQGrounded } = require('../server-lib/cat-content');
+const {
+  CACHE_VERSION,
+  TTL_MS,
+  generateCatNewsGrounded,
+  generateCatMCQGrounded,
+  buildCatCacheDocId,
+  isCatCacheFresh,
+  istDayKey,
+} = require('../server-lib/cat-content');
 const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
 const { requireCronSecret } = require('../server-lib/auth');
 const { asInt } = require('../server-lib/validate');
@@ -18,10 +26,22 @@ const { asInt } = require('../server-lib/validate');
 const CATEGORY_CRON_PAUSED = true;
 const { isAiFeaturesEnabled } = require('../server-lib/ai-config');
 
-// Align with client CAT_CACHE_TTL_MS.
+// Align with client CAT_CACHE_TTL_MS / server-lib/cat-cache-keys TTL_MS.
 // Hobby Vercel: daily cron. Pro/external: change schedule to 0 */6 * * * and set to 6h.
-const REFRESH_MS = 24 * 60 * 60 * 1000;
+const REFRESH_MS = TTL_MS || 24 * 60 * 60 * 1000;
 const FRESH_SKEW_MS = 30 * 60 * 1000; // skip if newer than interval - 30m
+
+/** Optional city / industry scopes — generate once, reuse for all matching users. */
+const GEO_SCOPES = (process.env.CAT_CACHE_CITIES || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)
+  .slice(0, 8);
+const INDUSTRY_SCOPES = (process.env.CAT_CACHE_INDUSTRIES || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)
+  .slice(0, 6);
 
 const SCHEDULED_CATEGORIES = [
   // Core Akhbaar / ratings categories
@@ -72,29 +92,39 @@ function authorize(req) {
 }
 
 function isFresh(data) {
-  if (!data || !data.webGrounded || data.cacheVersion !== CACHE_VERSION) return false;
-  if (!data.news || !data.mcq) return false;
-  const newsTs = typeof data.newsTs === 'number' ? data.newsTs : data.ts;
-  const mcqTs = typeof data.mcqTs === 'number' ? data.mcqTs : data.ts;
-  if (typeof newsTs !== 'number' || typeof mcqTs !== 'number') return false;
-  const ageNews = Date.now() - newsTs;
-  const ageMcq = Date.now() - mcqTs;
-  return ageNews < REFRESH_MS - FRESH_SKEW_MS && ageMcq < REFRESH_MS - FRESH_SKEW_MS;
+  return isCatCacheFresh(data, { ttlMs: REFRESH_MS, skewMs: FRESH_SKEW_MS });
 }
 
-async function refreshOne(db, catName) {
-  const id = catName.toLowerCase();
+/**
+ * Refresh one shareable cache doc. Key = category + IST day [+ city] [+ industry].
+ * Same story is not AI-generated N times the same day for N users.
+ */
+async function refreshOne(db, catName, scope = {}) {
+  const day = istDayKey();
+  const id =
+    buildCatCacheDocId({
+      category: catName,
+      city: scope.city,
+      industry: scope.industry,
+      day,
+    }) || catName.toLowerCase();
   const ref = db.collection('category_cache').doc(id);
   const snap = await ref.get();
   if (snap.exists && isFresh(snap.data())) {
-    return { category: catName, status: 'skipped_fresh' };
+    return {
+      category: catName,
+      cacheId: id,
+      status: 'skipped_fresh',
+      city: scope.city || null,
+      industry: scope.industry || null,
+    };
   }
 
-  const news = await generateCatNewsGrounded(catName);
-  const mcq = await generateCatMCQGrounded(catName);
+  const news = await generateCatNewsGrounded(catName, scope);
+  const mcq = await generateCatMCQGrounded(catName, scope);
 
   if (!news?.length && !mcq?.length) {
-    return { category: catName, status: 'empty' };
+    return { category: catName, cacheId: id, status: 'empty' };
   }
 
   const now = Date.now();
@@ -108,45 +138,76 @@ async function refreshOne(db, catName) {
     webGrounded: true,
     cacheVersion: CACHE_VERSION,
     generatedBy: 'cron',
+    istDay: day,
+    city: scope.city || null,
+    industry: scope.industry || null,
+    cacheKey: id,
   };
   await ref.set(payload, { merge: true });
+  // Also mirror to legacy bare-category id for older clients (base scope only)
+  if (!scope.city && !scope.industry) {
+    await db
+      .collection('category_cache')
+      .doc(catName.toLowerCase())
+      .set({ ...payload, cacheKey: catName.toLowerCase() }, { merge: true });
+  }
   return {
     category: catName,
+    cacheId: id,
     status: 'updated',
     newsCount: (news || []).length,
     mcqCount: (mcq || []).length,
+    city: scope.city || null,
+    industry: scope.industry || null,
   };
+}
+
+function buildRefreshJobs(categories) {
+  const jobs = [];
+  for (const cat of categories) {
+    jobs.push({ catName: cat, scope: {} });
+    for (const city of GEO_SCOPES) {
+      jobs.push({ catName: cat, scope: { city } });
+    }
+    for (const industry of INDUSTRY_SCOPES) {
+      jobs.push({ catName: cat, scope: { industry } });
+    }
+  }
+  return jobs;
 }
 
 async function runRefresh({ offset = 0, limit = SCHEDULED_CATEGORIES.length } = {}) {
   const db = initAdmin();
-  const slice = SCHEDULED_CATEGORIES.slice(offset, offset + limit);
+  const jobs = buildRefreshJobs(SCHEDULED_CATEGORIES);
+  const slice = jobs.slice(offset, offset + limit);
   const results = [];
   // Leave buffer before Vercel kills the function (~300s max)
   const deadline = Date.now() + 270000;
 
-  for (const cat of slice) {
+  for (const job of slice) {
     if (Date.now() > deadline) {
       results.push({
-        category: cat,
+        category: job.catName,
         status: 'deferred',
         error: 'Approaching function timeout — re-run with higher offset',
       });
       break;
     }
     try {
-      results.push(await refreshOne(db, cat));
+      results.push(await refreshOne(db, job.catName, job.scope));
     } catch (err) {
-      results.push({ category: cat, status: 'error', error: err.message });
+      results.push({ category: job.catName, status: 'error', error: err.message });
     }
   }
 
   return {
     ok: true,
     cacheVersion: CACHE_VERSION,
+    istDay: istDayKey(),
     refreshedAt: new Date().toISOString(),
     offset,
     limit,
+    totalJobs: jobs.length,
     totalCategories: SCHEDULED_CATEGORIES.length,
     results,
   };
@@ -186,7 +247,7 @@ module.exports = async function handler(req, res) {
         const body = parseJsonBody(req);
         offset = asInt(body.offset, { min: 0, max: 10_000 }) ?? 0;
         limit =
-          asInt(body.limit, { min: 1, max: SCHEDULED_CATEGORIES.length }) ??
+          asInt(body.limit, { min: 1, max: 500 }) ??
           SCHEDULED_CATEGORIES.length;
       } catch {
         return sendError(res, 400, 'INVALID_JSON', 'Invalid JSON body');
@@ -195,7 +256,7 @@ module.exports = async function handler(req, res) {
       const q = req.query || {};
       offset = asInt(q.offset, { min: 0, max: 10_000 }) ?? 0;
       limit =
-        asInt(q.limit, { min: 1, max: SCHEDULED_CATEGORIES.length }) ??
+        asInt(q.limit, { min: 1, max: 500 }) ??
         SCHEDULED_CATEGORIES.length;
     }
 
@@ -205,10 +266,12 @@ module.exports = async function handler(req, res) {
     const deferred = (summary.results || []).filter((r) => r.status === 'deferred').length;
     const data = {
       cacheVersion: summary.cacheVersion,
+      istDay: summary.istDay,
       refreshedAt: summary.refreshedAt,
       offset: summary.offset,
       limit: summary.limit,
       totalCategories: summary.totalCategories,
+      totalJobs: summary.totalJobs,
       results: summary.results,
       stats: {
         updated,

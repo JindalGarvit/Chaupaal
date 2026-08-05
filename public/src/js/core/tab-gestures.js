@@ -179,33 +179,28 @@
 
     try {
       if (tab === 'peepal') {
-        const feed = document.getElementById('peepalFeed');
+        // Intentional refresh without skeleton wipe — preserve in-view until new data paints
         if (typeof db !== 'undefined' && db && !isGuest() && typeof loadPeepalPage === 'function') {
-          if (typeof renderSkeleton === 'function' && feed) renderSkeleton(feed, { variant: 'feed', count: 2 });
           await loadPeepalPage({ reset: true });
           if (typeof renderPeepalFeed === 'function') renderPeepalFeed();
-        } else if (typeof initPeepal === 'function') {
-          await initPeepal();
         } else if (typeof renderPeepalFeed === 'function') {
           renderPeepalFeed();
+        } else if (typeof initPeepal === 'function') {
+          await initPeepal();
         }
       } else if (tab === 'duniya') {
-        const feed = document.getElementById('duniyaFeed');
         if (typeof db !== 'undefined' && db && !isGuest() && typeof loadDuniyaPage === 'function') {
-          if (typeof renderSkeleton === 'function' && feed) renderSkeleton(feed, { variant: 'feed', count: 2 });
           await loadDuniyaPage({ reset: true });
           if (typeof renderDuniyaFeed === 'function') renderDuniyaFeed();
+        } else if (typeof renderDuniyaFeed === 'function') {
+          renderDuniyaFeed();
         } else if (typeof initDuniya === 'function') {
           const screen = document.getElementById('duniyaScreen');
           if (screen) delete screen.dataset.loaded;
           initDuniya();
-        } else if (typeof renderDuniyaFeed === 'function') {
-          renderDuniyaFeed();
         }
       } else if (tab === 'baithak') {
         if (typeof db !== 'undefined' && db && !isGuest() && typeof loadBaithakChatsPage === 'function') {
-          const list = document.getElementById('chatList');
-          if (typeof renderSkeleton === 'function' && list) renderSkeleton(list, { variant: 'list', count: 4 });
           await loadBaithakChatsPage({ reset: true });
           if (typeof baithakChats !== 'undefined' && typeof pinSelfChat === 'function') {
             baithakChats = pinSelfChat(baithakChats);
@@ -233,12 +228,14 @@
           );
         }
       } else if (tab === 'akhbaar') {
-        const stage = document.getElementById('reelStage');
-        if (stage && typeof renderSkeleton === 'function') {
-          renderSkeleton(stage, { variant: 'feed', count: 1 });
+        // Soft: Surkhiya rebuild in place; Khabar refresh without blanking stage first
+        if (typeof setAkhbaarMode === 'function' && typeof akhbaarMode === 'function' && akhbaarMode() === 'surkhiya') {
+          setAkhbaarMode('surkhiya');
+        } else if (typeof refreshAkhbaar === 'function') {
+          await refreshAkhbaar();
+        } else if (typeof window.ensureAkhbaarBuilt === 'function') {
+          await window.ensureAkhbaarBuilt();
         }
-        if (typeof refreshAkhbaar === 'function') await refreshAkhbaar();
-        else if (typeof window.ensureAkhbaarBuilt === 'function') await window.ensureAkhbaarBuilt();
       } else if (tab === 'dangal') {
         if (typeof initCategoryRatings === 'function') initCategoryRatings();
         else if (typeof renderDangalGamesGrid === 'function') renderDangalGamesGrid();
@@ -308,10 +305,10 @@
    * Morph shortcut slot map (5 slots):
    *   1 & 5 = corner actions · 2 = left swipe neighbor · 3 = tab home · 4 = right swipe neighbor
    * Peepal: discuss | Khoj | Vriksha | Mashhoor | Chaupaal search (global)
-   * Akhbaar: Relevant today | Surkhiya | All | Saathi | Add category
+   * Akhbaar: Safar | Surkhiya | Khabar | Saathi | Add category
    * Duniya: post | Lehar | Vishwa | Prasidha | story
    * Baithak: Instant | Sambhavanayein | Sabha | Mitra | find
-   * Dangal: Performance | Khel(GOTD) | Manch(library) | Maidan(resume) | Challenge GOTD
+   * Dangal: Tarakki | Khel(GOTD) | Manch(library) | Maidan(resume) | Challenge GOTD
    */
   function shortcutsFor(tab) {
     const sets = {
@@ -365,9 +362,9 @@
       ],
       akhbaar: [
         {
-          id: 'today',
-          label: tt('shortcut_akhbaar_today', 'Relevant today'),
-          run: () => openRelevantTodaySheet(),
+          id: 'safar',
+          label: tt('shortcut_akhbaar_safar', 'Safar'),
+          run: () => openSafarSheet(),
         },
         {
           id: 'surkhiya',
@@ -500,7 +497,7 @@
       dangal: [
         {
           id: 'pulse',
-          label: tt('shortcut_dangal_pulse', 'Performance'),
+          label: tt('shortcut_dangal_tarakki', 'Tarakki'),
           run: () => openDangalPulseSheet({ refresh: true }),
         },
         {
@@ -669,33 +666,149 @@
     }
   }
 
-  function openRelevantTodaySheet() {
+  function safarPhase(streak) {
+    const n = Math.max(0, Number(streak) || 0);
+    if (n >= 100) return { id: 'legend', label: tt('safar_phase_legend', 'Legend trail'), emoji: '🏆' };
+    if (n >= 30) return { id: 'seasoned', label: tt('safar_phase_seasoned', 'Seasoned path'), emoji: '🌄' };
+    if (n >= 14) return { id: 'steady', label: tt('safar_phase_steady', 'Steady steps'), emoji: '🛤️' };
+    if (n >= 7) return { id: 'warming', label: tt('safar_phase_warming', 'Warming up'), emoji: '🔥' };
+    if (n >= 3) return { id: 'sprout', label: tt('safar_phase_sprout', 'First sprouts'), emoji: '🌱' };
+    return { id: 'start', label: tt('safar_phase_start', 'Journey begins'), emoji: '👣' };
+  }
+
+  function collectSafarStats() {
+    let streak = 0;
+    let freezes = 0;
+    let quizToday = 0;
+    let weekPlays = 0;
+    try {
+      streak = Number(document.getElementById('streakNum')?.textContent) || 0;
+      freezes = Number(document.getElementById('streakFreezeCount')?.textContent) || 0;
+    } catch (e) {}
+    try {
+      if (typeof userProfile !== 'undefined' && userProfile) {
+        streak = Math.max(streak, Number(userProfile.streak) || 0);
+        freezes = Math.max(freezes, Number(userProfile.streakFreezes) || 0);
+      }
+    } catch (e) {}
+    try {
+      const hub = typeof getDangalHubSummary === 'function' ? getDangalHubSummary() : null;
+      if (hub) weekPlays = hub.weekPlays || 0;
+    } catch (e) {}
+    try {
+      const raw = localStorage.getItem('chaupaal_quiz_day');
+      if (raw) {
+        const d = JSON.parse(raw);
+        quizToday = Number(d?.score || d?.answered || 0) || 0;
+      }
+    } catch (e) {}
+    return { streak, freezes, quizToday, weekPlays };
+  }
+
+  function buildSafarBodyHtml() {
+    const stats = collectSafarStats();
+    const phase = safarPhase(stats.streak);
+    const milestones = [3, 7, 14, 30, 100];
+    const next = milestones.find((m) => m > stats.streak) || null;
+    const quiet =
+      (typeof quietMode !== 'undefined' && quietMode) ||
+      document.documentElement.classList.contains('quiet-mode');
+
+    const milestoneHtml = milestones
+      .map((m) => {
+        const done = stats.streak >= m;
+        return `<div class="safar-milestone${done ? ' is-done' : ''}" aria-label="${m} days">
+          <span class="safar-milestone-num">${m}</span>
+          <span class="safar-milestone-mark">${done ? '✓' : '·'}</span>
+        </div>`;
+      })
+      .join('');
+
+    const cards = [
+      {
+        title: tt('safar_card_streak', 'Day streak'),
+        value: String(stats.streak),
+        sub: phase.label,
+      },
+      {
+        title: tt('safar_card_freeze', 'Freezes'),
+        value: String(stats.freezes),
+        sub: tt('safar_card_freeze_sub', 'Soft safety nets'),
+      },
+      {
+        title: tt('safar_card_week', 'Plays this week'),
+        value: String(stats.weekPlays),
+        sub: tt('safar_card_week_sub', 'Dangal + quiz soft count'),
+      },
+    ];
+
+    const nextLine = next
+      ? tt('safar_next_milestone', 'Next milestone: {{n}} days').replace('{{n}}', String(next))
+      : tt('safar_next_done', 'You’ve walked every marked milestone — keep the habit kind.');
+
+    return `
+      <div class="safar-hero${quiet ? ' is-quiet' : ''}">
+        <div class="safar-hero-emoji" aria-hidden="true">${phase.emoji}</div>
+        <div class="safar-hero-phase">${escHtml(phase.label)}</div>
+        <div class="safar-hero-streak"><strong>${stats.streak}</strong> ${tt('safar_days', 'day streak')}</div>
+        <p class="safar-hero-sub">${escHtml(nextLine)}</p>
+      </div>
+      <div class="safar-milestones" role="list">${milestoneHtml}</div>
+      <div class="safar-cards">
+        ${cards
+          .map(
+            (c) =>
+              `<div class="safar-card">
+                <div class="safar-card-val">${escHtml(c.value)}</div>
+                <div class="safar-card-title">${escHtml(c.title)}</div>
+                <div class="safar-card-sub">${escHtml(c.sub)}</div>
+              </div>`
+          )
+          .join('')}
+      </div>
+      <div class="safar-flair" aria-hidden="true">${quiet ? '' : '✦ · light reward flair · ✦'}</div>
+      <button type="button" class="btn btn--primary btn--block" data-safar-akhbaar>${tt('safar_play_cta', 'Keep today’s streak')}</button>
+      <button type="button" class="btn btn--ghost btn--block" data-safar-surkhiya style="margin-top:8px;">${tt('safar_surkhiya_cta', 'Peek Surkhiya Today')}</button>`;
+  }
+
+  /** Gamified progress surface — replaces Relevant-today morph slot. */
+  function openSafarSheet() {
+    document.getElementById('safarSheet')?.remove();
     document.getElementById('relevantTodaySheet')?.remove();
+    const body = buildSafarBodyHtml();
+    if (typeof openHalfSheet === 'function') {
+      openHalfSheet({
+        id: 'safarSheet',
+        title: tt('safar_title', 'Safar'),
+        accent: 'akhbaar',
+        snap: 'tall',
+        expand: true,
+        bodyHtml: body,
+        onMount: (sheet, close) => {
+          sheet.querySelector('[data-safar-akhbaar]')?.addEventListener('click', () => {
+            close();
+            switchTo('akhbaar');
+            if (typeof setAkhbaarMode === 'function') setAkhbaarMode('all');
+          });
+          sheet.querySelector('[data-safar-surkhiya]')?.addEventListener('click', () => {
+            close();
+            switchTo('akhbaar');
+            if (typeof setAkhbaarMode === 'function') setAkhbaarMode('surkhiya');
+          });
+        },
+      });
+      return;
+    }
     const sheet = document.createElement('div');
-    sheet.id = 'relevantTodaySheet';
+    sheet.id = 'safarSheet';
     sheet.className = 'archive-overlay';
     sheet.dataset.navManaged = '1';
-    const items = buildRelevantTodayItems();
     sheet.innerHTML = `
       <div class="archive-header">
         <button type="button" data-overlay-dismiss aria-label="Back">←</button>
-        <div style="flex:1"><strong>${tt('relevant_today_title', 'Relevant today')}</strong></div>
+        <div style="flex:1"><strong>${tt('safar_title', 'Safar')}</strong></div>
       </div>
-      <div class="relevant-today-list" style="padding:12px 16px 28px;overflow:auto;">
-        ${
-          items.length
-            ? items
-                .map(
-                  (it) =>
-                    `<button type="button" class="relevant-today-row" data-action="${it.action}" style="width:100%;text-align:left;padding:14px;margin-bottom:8px;border:0;border-radius:14px;background:var(--white);cursor:pointer;">
-                      <div style="font-weight:700;font-size:14px;">${it.icon} ${it.title}</div>
-                      <div style="font-size:12px;color:var(--muted);margin-top:4px;">${it.sub}</div>
-                    </button>`
-                )
-                .join('')
-            : `<div class="cp-empty" style="padding:32px 12px;text-align:center;color:var(--muted);">${tt('relevant_today_empty', 'Nothing special queued for today — check back later.')}</div>`
-        }
-      </div>`;
+      <div style="padding:12px 16px 28px;">${body}</div>`;
     document.querySelector('.device')?.appendChild(sheet);
     const close = () => {
       if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
@@ -703,75 +816,26 @@
     };
     if (typeof pushNavLayer === 'function') pushNavLayer(sheet, close);
     sheet.querySelector('[data-overlay-dismiss]')?.addEventListener('click', close);
-    sheet.querySelectorAll('.relevant-today-row').forEach((row) => {
-      row.addEventListener('click', () => {
-        const a = row.dataset.action;
-        close();
-        if (a === 'akhbaar') {
-          switchTo('akhbaar');
-          if (typeof window.ensureAkhbaarBuilt === 'function') window.ensureAkhbaarBuilt();
-        } else if (a === 'baithak') switchTo('baithak');
-        else if (a === 'breaking') switchTo('akhbaar');
-      });
+    sheet.querySelector('[data-safar-akhbaar]')?.addEventListener('click', () => {
+      close();
+      switchTo('akhbaar');
+    });
+    sheet.querySelector('[data-safar-surkhiya]')?.addEventListener('click', () => {
+      close();
+      switchTo('akhbaar');
+      if (typeof setAkhbaarMode === 'function') setAkhbaarMode('surkhiya');
     });
   }
 
+  /** @deprecated Relevant-today sheet retired — redirect to Surkhiya Today. */
+  function openRelevantTodaySheet() {
+    switchTo('akhbaar');
+    if (typeof setAkhbaarMode === 'function') setAkhbaarMode('surkhiya');
+    else if (typeof goAkhbaarPage === 'function') goAkhbaarPage('surkhiya');
+  }
+
   function buildRelevantTodayItems() {
-    const out = [];
-    const today = new Date();
-    const md = `${today.getMonth() + 1}-${today.getDate()}`;
-
-    const pools = [];
-    try {
-      if (typeof friends !== 'undefined' && Array.isArray(friends)) pools.push(...friends);
-    } catch (e) {}
-    try {
-      if (typeof SAMPLE_DISCOVERY_POOL !== 'undefined') pools.push(...SAMPLE_DISCOVERY_POOL);
-    } catch (e) {}
-    const seen = new Set();
-    pools.forEach((p) => {
-      const dob = p.dateOfBirth || p.dob || '';
-      if (!dob) return;
-      const d = new Date(dob);
-      if (Number.isNaN(d.getTime())) return;
-      const key = p.uid || p.username || p.name;
-      if (seen.has(key)) return;
-      if (`${d.getMonth() + 1}-${d.getDate()}` === md) {
-        seen.add(key);
-        out.push({
-          icon: '🎂',
-          title: tt('relevant_birthday', "{{name}}'s birthday").replace(
-            '{{name}}',
-            p.name || p.username || 'Friend'
-          ),
-          sub: tt('relevant_birthday_sub', 'Wish them on Baithak'),
-          action: 'baithak',
-        });
-      }
-    });
-
-    try {
-      const raw = localStorage.getItem('chaupaal_taaza_cache');
-      if (raw) {
-        const item = JSON.parse(raw);
-        if (item?.headline) {
-          out.push({
-            icon: '📰',
-            title: item.headline.slice(0, 80),
-            sub: tt('relevant_news_sub', 'Trending on Akhbaar'),
-            action: 'breaking',
-          });
-        }
-      }
-    } catch (e) {}
-
-    out.push({
-      icon: '🔥',
-      title: tt('relevant_streak_cta', "Keep today's streak"),
-      sub: tt('relevant_streak_sub', "Play today's Akhbaar quiz"),
-      action: 'akhbaar',
-    });
-    return out.slice(0, 8);
+    return [];
   }
 
   function resolveGotdId() {
@@ -885,7 +949,7 @@
 
     if (!rows.length) {
       return `<div class="cp-empty" style="padding:28px 8px;text-align:center;color:var(--muted);">
-        ${tt('dangal_pulse_empty', 'Play a few games — your performance will show up here.')}
+        ${tt('dangal_pulse_empty', 'Play a few games — your Tarakki will show up here.')}
       </div>
       <button type="button" class="btn btn--primary btn--block" data-open-dangal>${tt('dangal_pulse_play', 'Open Dangal')}</button>`;
     }
@@ -1027,7 +1091,7 @@
                 ? `<span class="dor-meta">${hub.weekPlays} play${hub.weekPlays === 1 ? '' : 's'} this week</span>`
                 : '';
           if (hub) {
-            overall.innerHTML = `<div class="dor-main"><span class="dor-label">${tt('dangal_pulse_title', 'Performance')}</span><span class="dor-val">${hub.totalPlayed || 0}</span></div>${streakBit}`;
+            overall.innerHTML = `<div class="dor-main"><span class="dor-label">${tt('dangal_pulse_title', 'Tarakki')}</span><span class="dor-val">${hub.totalPlayed || 0}</span></div>${streakBit}`;
           }
         }
       }
@@ -1038,7 +1102,7 @@
     if (typeof openHalfSheet === 'function') {
       openHalfSheet({
         id: 'dangalPulseSheet',
-        title: tt('dangal_pulse_title', 'Game performance'),
+        title: tt('dangal_pulse_title', 'Tarakki'),
         accent: 'dangal',
         snap: 'tall',
         expand: true,
@@ -1069,7 +1133,7 @@
     sheet.innerHTML = `
       <div class="archive-header">
         <button type="button" data-overlay-dismiss aria-label="Back">←</button>
-        <div style="flex:1"><strong>${tt('dangal_pulse_title', 'Game performance')}</strong></div>
+        <div style="flex:1"><strong>${tt('dangal_pulse_title', 'Tarakki')}</strong></div>
       </div>
       <div style="padding:12px 16px 24px;">${body}</div>`;
     document.querySelector('.device')?.appendChild(sheet);
@@ -1191,6 +1255,7 @@
   window.updateTabNotifLights = updateTabLights;
   window.exitTabMorph = exitMorph;
   window.openRelevantTodaySheet = openRelevantTodaySheet;
+  window.openSafarSheet = openSafarSheet;
   window.openDangalPulseSheet = openDangalPulseSheet;
   window.getTabScrollRoot = getTabScrollRoot;
   window.refreshTabContent = refreshTabContent;

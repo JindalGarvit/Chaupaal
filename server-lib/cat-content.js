@@ -1,10 +1,19 @@
 /**
  * Shared grounded Khabar/Sawaal generation for the scheduled cron.
  * Haiku-first → Sonnet escalate (same rules as the client path).
+ *
+ * Cache identity: see cat-cache-keys.js (category + IST day + optional city/industry).
+ * Generate once per key; all users with that relevance slice reuse the same doc.
  */
 const { callAnthropicServer } = require('./anthropic-server');
-
-const CACHE_VERSION = 'v2';
+const {
+  CACHE_VERSION,
+  TTL_MS,
+  buildCatCacheDocId,
+  catCacheLookupIds,
+  istDayKey,
+  isCatCacheFresh,
+} = require('./cat-cache-keys');
 
 function extractAnthropicText(data) {
   if (!data?.content) return '';
@@ -105,16 +114,22 @@ async function callCatAIWithSearch({ model, tier, max_tokens, system, user }) {
   });
 }
 
-async function generateCatNewsGrounded(catName) {
+/**
+ * @param {string} catName
+ * @param {{ city?: string, industry?: string }} [scope]
+ */
+async function generateCatNewsGrounded(catName, scope = {}) {
+  const cityBit = scope.city ? ` relevant to ${scope.city}` : '';
+  const industryBit = scope.industry ? ` with an angle for ${scope.industry} professionals` : '';
   const system = `You are a news curator for Chaupaal, an Indian news app.
-You MUST use the web_search tool to find real, recent articles about "${catName}" (prefer Indian/global mainstream sources).
+You MUST use the web_search tool to find real, recent articles about "${catName}"${cityBit}${industryBit} (prefer Indian/global mainstream sources).
 For each item: summarize ONLY from what the search returned, and set "link" to that article's exact URL from the search results.
 If you cannot find a usable real article URL for an item, set "link" to null — NEVER invent or guess a URL, and NEVER use a publisher homepage.
 Return ONLY a valid JSON array (no markdown, no commentary) with this exact shape:
 [{"headline":"...","body":"...max 80 words...","source":"Publication name","link":"https://... or null","date":"Today"}]
 Produce exactly 3 items.`;
 
-  const user = `Search the web for recent news in category "${catName}", then return 3 grounded news items as JSON.`;
+  const user = `Search the web for recent news in category "${catName}"${cityBit}${industryBit}, then return 3 grounded news items as JSON.`;
 
   let data = await callCatAIWithSearch({ tier: 'fast', max_tokens: 2000, system, user });
   let items = parseJsonArrayLoose(extractAnthropicText(data));
@@ -125,9 +140,15 @@ Produce exactly 3 items.`;
   return sanitizeCatNewsItems(items);
 }
 
-async function generateCatMCQGrounded(catName) {
+/**
+ * @param {string} catName
+ * @param {{ city?: string, industry?: string }} [scope]
+ */
+async function generateCatMCQGrounded(catName, scope = {}) {
+  const cityBit = scope.city ? ` relevant to ${scope.city}` : '';
+  const industryBit = scope.industry ? ` for ${scope.industry} professionals` : '';
   const system = `You are a quiz maker for Chaupaal, an Indian news & social app.
-You MUST use the web_search tool to find real, recent articles about "${catName}" for an Indian audience.
+You MUST use the web_search tool to find real, recent articles about "${catName}"${cityBit}${industryBit} for an Indian audience.
 Each question must be grounded in a searched story: write the synopsis from the article found, and set "link" to that article's exact URL from search results.
 If no usable real article URL exists for a question, set "link" to null — NEVER invent URLs or use publisher homepages.
 Return ONLY a valid JSON array (no markdown) with this exact shape:
@@ -142,7 +163,7 @@ Return ONLY a valid JSON array (no markdown) with this exact shape:
 }]
 Produce exactly 5 questions.`;
 
-  const user = `Search the web for recent "${catName}" news, then return 5 grounded MCQ questions as JSON.`;
+  const user = `Search the web for recent "${catName}" news${cityBit}${industryBit}, then return 5 grounded MCQ questions as JSON.`;
 
   let data = await callCatAIWithSearch({ tier: 'fast', max_tokens: 3000, system, user });
   let items = parseJsonArrayLoose(extractAnthropicText(data));
@@ -155,6 +176,11 @@ Produce exactly 5 questions.`;
 
 module.exports = {
   CACHE_VERSION,
+  TTL_MS,
+  buildCatCacheDocId,
+  catCacheLookupIds,
+  istDayKey,
+  isCatCacheFresh,
   generateCatNewsGrounded,
   generateCatMCQGrounded,
 };

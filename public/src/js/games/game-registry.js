@@ -37,12 +37,12 @@
 
   /** Genre catalog — UI label + order for Manch chips. */
   const GAME_GENRES = [
-    { id: 'rw_sports', label: 'RW Sports' },
-    { id: 'brain', label: 'Brain Boost' },
-    { id: 'board', label: 'Board & Classics' },
-    { id: 'party', label: 'Party & Social' },
-    { id: 'arcade', label: 'Arcade Rush' },
-    { id: 'quiz', label: 'Quiz & Duel' },
+    { id: 'rw_sports', label: 'RW Sports', icon: '🏏', color: '#2E7D32' },
+    { id: 'brain', label: 'Brain Boost', icon: '🧠', color: '#6A1B9A' },
+    { id: 'board', label: 'Board & Classics', icon: '♟️', color: '#5D4037' },
+    { id: 'party', label: 'Party & Social', icon: '🎉', color: '#E65100' },
+    { id: 'arcade', label: 'Arcade Rush', icon: '👾', color: '#1565C0' },
+    { id: 'quiz', label: 'Quiz & Duel', icon: '🎯', color: '#C62828' },
   ];
 
   /** Fallback genre by game id when descriptor omits genre. */

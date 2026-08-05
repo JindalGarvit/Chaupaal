@@ -363,16 +363,18 @@ function renderDangalGamesGrid() {
   filterBar.setAttribute('role', 'toolbar');
   filterBar.setAttribute('aria-label', 'Filter games');
   const modeFilters = [
-    { id: 'all', label: 'All', kind: 'all' },
-    { id: 'solo', label: 'Solo', kind: 'mode', gameType: 'solo' },
-    { id: 'dual', label: 'Dual', kind: 'mode', gameType: 'dual' },
-    { id: 'multiplayer', label: 'Multi', kind: 'mode', gameType: 'multiplayer' },
+    { id: 'all', label: 'All', kind: 'all', icon: '▦', color: '#546E7A' },
+    { id: 'solo', label: 'Solo', kind: 'mode', gameType: 'solo', icon: '①', color: '#00897B' },
+    { id: 'dual', label: 'Dual', kind: 'mode', gameType: 'dual', icon: '②', color: '#F9A825' },
+    { id: 'multiplayer', label: 'Multi', kind: 'mode', gameType: 'multiplayer', icon: '③', color: '#E53935' },
   ];
   const genreFilters = (typeof getGameGenres === 'function' ? getGameGenres() : []).map((g) => ({
     id: g.id,
     label: g.label,
     kind: 'genre',
     genre: g.id,
+    icon: g.icon || '🎮',
+    color: g.color || '#E85D04',
   }));
   const allFilters = modeFilters.concat(genreFilters);
   if (!window.__dangalManchFilter) window.__dangalManchFilter = { mode: 'all', genre: null };
@@ -386,15 +388,19 @@ function renderDangalGamesGrid() {
           : f.kind === 'mode'
             ? state.mode === f.gameType && !state.genre
             : state.genre === f.genre;
-      return `<button type="button" class="dangal-filter-chip${active ? ' is-active' : ''}" data-filter-kind="${f.kind}" data-filter-id="${f.id}"${f.gameType ? ` data-game-type="${f.gameType}"` : ''}${f.genre ? ` data-genre="${f.genre}"` : ''}>${f.label}</button>`;
+      const tint = f.color || '#E85D04';
+      return `<button type="button" class="dangal-filter-chip${active ? ' is-active' : ''}" data-filter-kind="${f.kind}" data-filter-id="${f.id}"${f.gameType ? ` data-game-type="${f.gameType}"` : ''}${f.genre ? ` data-genre="${f.genre}"` : ''} style="--chip-tint:${tint}"><span class="dangal-filter-ico" aria-hidden="true">${f.icon || ''}</span>${f.label}</button>`;
     })
     .join('');
-  filterBar.innerHTML = `<div class="dangal-filter-row">${chipsHtml}</div>`;
+  filterBar.innerHTML = `<div class="dangal-filter-row" data-swipe-ignore="1">${chipsHtml}</div>`;
   manch.appendChild(filterBar);
 
   const manchGrid = document.createElement('div');
   manchGrid.className = 'dangal-section-grid';
   manchGrid.dataset.manchGrid = '1';
+  if (state.mode !== 'all' || state.genre) {
+    manchGrid.dataset.swipeIgnore = '1';
+  }
 
   function filteredLibrary() {
     let list = library.slice();
@@ -450,6 +456,9 @@ function renderDangalGamesGrid() {
       else if (k === 'genre') on = state.genre === c.dataset.genre;
       c.classList.toggle('is-active', on);
     });
+    // Filter active → block section swipe from filtered grid; All restores it
+    if (state.mode !== 'all' || state.genre) manchGrid.dataset.swipeIgnore = '1';
+    else delete manchGrid.dataset.swipeIgnore;
     paintManchGrid();
   });
 
@@ -556,9 +565,29 @@ function wireDangalSwipe() {
   let sx = 0;
   let sy = 0;
   let locked = null;
+  let ignored = false;
+
+  function dangalSwipeIgnored(target) {
+    try {
+      if (
+        target?.closest?.(
+          '.dangal-manch-filters, .dangal-filter-row, .dangal-filter-chip, [data-swipe-ignore], [data-nav-ignore="1"]'
+        )
+      ) {
+        return true;
+      }
+      // With a Manch genre/mode filter active, ignore swipes from the filtered grid
+      const state = window.__dangalManchFilter;
+      const filtered = state && (state.mode !== 'all' || state.genre);
+      if (filtered && target?.closest?.('[data-manch-grid], .dangal-section-grid')) return true;
+    } catch (e) {}
+    return false;
+  }
+
   screen.addEventListener(
     'touchstart',
     (e) => {
+      ignored = dangalSwipeIgnored(e.target);
       sx = e.touches[0].clientX;
       sy = e.touches[0].clientY;
       locked = null;
@@ -568,6 +597,7 @@ function wireDangalSwipe() {
   screen.addEventListener(
     'touchmove',
     (e) => {
+      if (ignored) return;
       const dx = e.touches[0].clientX - sx;
       const dy = e.touches[0].clientY - sy;
       if (!locked && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
@@ -579,7 +609,7 @@ function wireDangalSwipe() {
   screen.addEventListener(
     'touchend',
     (e) => {
-      if (locked !== 'h') return;
+      if (ignored || locked !== 'h') return;
       const dx = (e.changedTouches[0]?.clientX || 0) - sx;
       if (Math.abs(dx) < 56) return;
       const order = ['khel', 'manch', 'maidan'];

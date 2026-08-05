@@ -30,6 +30,21 @@ function readDob(profile) {
   );
 }
 
+function birthdayPrefill(name) {
+  const n = name || 'friend';
+  const pool = [
+    `Happy birthday, ${n}! 🎂 Hope today feels as warm as your chai.`,
+    `${n} — birthday vibes! Wishing you an easy, joyful day.`,
+    `Hey ${n}, happy birthday! Saving you a slice of the celebration 🎉`,
+    `Birthday greetings, ${n}! May this year be kinder than the last.`,
+  ];
+  const day = new Date().toISOString().slice(0, 10);
+  let h = 0;
+  const seed = `${n}|${day}`;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+  return pool[Math.abs(h) % pool.length];
+}
+
 function isBirthdayToday(profile, tz) {
   const b = readDob(profile);
   if (!b) return false;
@@ -259,7 +274,7 @@ async function maybeFriendBirthday(db, uid, state, stateRef, tz) {
       action: 'wish_friend',
       friendUid: friend.uid,
       friendName: name,
-      meta: { prefill: `Happy birthday, ${name}! 🎂` },
+      meta: { prefill: birthdayPrefill(name) },
     });
     const next = recordEventSent(state, { type, now: new Date() });
     await stateRef.set(next, { merge: true });

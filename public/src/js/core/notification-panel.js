@@ -295,7 +295,28 @@
     if (!n) return;
     const link = n.deepLink || n.link || {};
     const type = String(n.type || '').toLowerCase();
+    const action = String(n.action || link.action || '').toLowerCase();
     try {
+      // Friend event notifs → Baithak with rotating prefill (same as Surkhiya)
+      if (
+        action === 'wish_friend' ||
+        action === 'open_friend_dm' ||
+        type.includes('friend_birthday') ||
+        type.includes('akhbaar_friend')
+      ) {
+        const uid = n.friendUid || link.uid || n.refId || '';
+        const name = n.friendName || link.name || n.title || 'Friend';
+        const prefill = n.prefill || n.meta?.prefill || link.prefill || '';
+        if (typeof openBaithakWithPrefill === 'function' && uid) {
+          openBaithakWithPrefill({
+            uid,
+            name,
+            type: type.includes('birthday') || action === 'wish_friend' ? 'birthday' : 'friend_update',
+            prefill,
+          });
+          return;
+        }
+      }
       if (link.chatId && typeof openChatById === 'function') {
         openChatById(link.chatId);
         return;

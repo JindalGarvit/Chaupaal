@@ -274,16 +274,30 @@ function showNewsSummary(inner,data,idx){
   const explainHtml=(!wasCorrect&&data.explain)?`<div class="explain-box">💡 <strong>${t('why')}</strong> ${data.explain}</div>`:'';
   const linkHtml=data.link?`<a class="news-link" href="${data.link}" target="_blank" rel="noopener">${t('read_more')}</a>`:'';
   const hintText=idx===QUESTIONS.length-1?t('scroll_recap'):t('scroll_next');
+  const friendUid=data.friendUid||data.uid||data.authorUid||'';
+  const friendName=data.friendName||data.authorName||data.user?.name||'';
+  const wishHtml=(data.personal&&friendUid)
+    ?`<button type="button" class="btn btn--primary" data-akhbaar-wish style="margin-top:10px;width:100%;">Wish ${friendName||'them'} on Baithak</button>`
+    :'';
   inner.innerHTML=`
     <div class="q-tag ${data.personal?'personal':'news'}">${data.personal?'👥 Personal':data.category}</div>
     <div class="news-summary">
       <div class="news-headline">${data.headline||'About this question'}</div>
       ${explainHtml}
       <div class="news-body">${data.news||'This question is based on recent news.'}</div>
-      ${linkHtml}${sourceLine}
+      ${linkHtml}${sourceLine}${wishHtml}
       <div class="hint show">${hintText}</div>
     </div>
   `;
+  inner.querySelector('[data-akhbaar-wish]')?.addEventListener('click',()=>{
+    if(typeof openBaithakWithPrefill==='function'){
+      openBaithakWithPrefill({
+        uid:friendUid,
+        name:friendName||'Friend',
+        type:data.eventType||'friend_update',
+      });
+    }
+  });
   // populate results if last question
   if(idx===QUESTIONS.length-1)setTimeout(()=>populateResults(),200);
 }
