@@ -61,7 +61,10 @@ function renderProfileModal(){
             ✎<input type="file" accept="image/*" id="profilePhotoInput" style="display:none;">
           </label>
         </div>
-        <button type="button" class="icon-btn dp-settings-gear" id="profileSettingsGear" aria-label="Settings" data-icon="settings" title="Settings"></button>
+        <div class="dp-hero-actions" role="group" aria-label="Profile tools">
+          <button type="button" class="icon-btn dp-hero-action" id="profileArchiveBtn" aria-label="Archive" title="Archive">${typeof iconHtml==='function'?iconHtml('archive',{size:20}):''}</button>
+          <button type="button" class="icon-btn dp-hero-action" id="profileSettingsGear" aria-label="Settings" title="Settings">${typeof iconHtml==='function'?iconHtml('settings',{size:20}):''}</button>
+        </div>
       </div>
       <div class="dp-hero-copy">
         <div class="dp-hero-name" data-account-switch data-pro-badge-self data-pro-badge-name="${(displayName||'').replace(/"/g,'&quot;')}" style="cursor:pointer;" title="Switch account">${nameHtml}</div>
@@ -92,7 +95,6 @@ function renderProfileModal(){
         <span data-i18n="profile_notifications">Inbox</span>
         <span class="notif-dot hidden" data-notif-dot="all" aria-hidden="true"></span>
       </button>
-      <button type="button" class="btn" data-dp-hub="archive">Archive</button>
       <button type="button" class="btn" data-dp-hub="interactions">Activity</button>
       <button type="button" class="btn" data-dp-hub="journal">Journal</button>
       <button type="button" class="btn" data-dp-hub="stories">Highlights</button>
@@ -397,6 +399,10 @@ function renderProfileModal(){
       });
     }
     document.getElementById('profileOpenArchiveBtn')?.addEventListener('click',()=>{
+      if(typeof openArchiveHub==='function') openArchiveHub('posts');
+      else if(typeof openArchive==='function') openArchive();
+    });
+    document.getElementById('profileArchiveBtn')?.addEventListener('click',()=>{
       if(typeof openArchiveHub==='function') openArchiveHub('posts');
       else if(typeof openArchive==='function') openArchive();
     });

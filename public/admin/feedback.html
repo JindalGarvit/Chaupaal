@@ -47,7 +47,16 @@
       <div id="summaryBox"><em class="meta">Load a date to see the private daily aggregate.</em></div>
     </div>
     <div class="card">
+      <div class="row">
+        <strong>Product feedback</strong>
+        <span class="meta">(companionProductFeedback — sheet + companion asks)</span>
+        <button type="button" id="btnProduct" class="secondary">Load product</button>
+      </div>
+      <div id="productBox" style="margin-top:10px"><em class="meta">Sign in as admin to load.</em></div>
+    </div>
+    <div class="card">
       <strong>Chronological log</strong>
+      <span class="meta"> · chat-tagged chaupaalFeedback</span>
       <div id="logBox" style="margin-top:10px"><em class="meta">Sign in as admin to load.</em></div>
     </div>
   </main>
@@ -81,6 +90,8 @@
       return json.data;
     }
 
+    const productBox = document.getElementById('productBox');
+
     function renderLog(items) {
       if (!items?.length) {
         logBox.innerHTML = '<em class="meta">No feedback yet.</em>';
@@ -89,6 +100,19 @@
       logBox.innerHTML = items.map(it => `
         <div class="item">
           <div class="meta"><span class="tag">${it.tag || 'other'}</span> · ${it.timestamp || ''} · ${it.userId || '?'}</div>
+          <div>${(it.message || '').replace(/</g,'&lt;')}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderProduct(items) {
+      if (!items?.length) {
+        productBox.innerHTML = '<em class="meta">No product feedback yet.</em>';
+        return;
+      }
+      productBox.innerHTML = items.map(it => `
+        <div class="item">
+          <div class="meta"><span class="tag">${it.category || it.source || 'note'}</span> · ${it.createdAt || ''} · ${it.uid || '?'}</div>
           <div>${(it.message || '').replace(/</g,'&lt;')}</div>
         </div>
       `).join('');
@@ -117,6 +141,15 @@
       }
     }
 
+    async function refreshProduct() {
+      try {
+        const data = await api('/api/admin-feedback?view=product&limit=80');
+        renderProduct(data.items || []);
+      } catch (e) {
+        productBox.innerHTML = `<div class="err">${e.message}${e.code ? ' ('+e.code+')' : ''}</div>`;
+      }
+    }
+
     async function loadSummary() {
       try {
         const d = dateInput.value || new Date().toISOString().slice(0, 10);
@@ -131,7 +164,8 @@
       const provider = new firebase.auth.GoogleAuthProvider();
       await firebase.auth().signInWithPopup(provider);
     });
-    document.getElementById('btnRefresh').addEventListener('click', () => { refresh(); loadSummary(); });
+    document.getElementById('btnRefresh').addEventListener('click', () => { refresh(); refreshProduct(); loadSummary(); });
+    document.getElementById('btnProduct')?.addEventListener('click', refreshProduct);
     document.getElementById('btnSummary').addEventListener('click', loadSummary);
 
     firebase.auth().onAuthStateChanged(async (u) => {
@@ -146,6 +180,7 @@
         : `Signed in as ${u.email || u.uid} — missing admin claim`;
       if (isAdmin) {
         refresh();
+        refreshProduct();
         loadSummary();
       }
     });

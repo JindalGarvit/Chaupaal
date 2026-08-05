@@ -441,7 +441,7 @@
     sheet.innerHTML = `
       <div class="archive-header">
         <button type="button" data-overlay-dismiss aria-label="Skip">←</button>
-        <div style="flex:1"><strong>Your Digital canvas</strong></div>
+        <div style="flex:1"><strong>Finish your Profile</strong></div>
         <button type="button" class="btn" data-deepen-skip style="font-size:12px;">Skip</button>
       </div>
       <div class="digital-canvas-deepen-body">
@@ -470,13 +470,13 @@
             </select>
           </label>
           <label class="story-editor-field">Your answer
-            <textarea data-deepen-prompt-ans maxlength="500" rows="2" placeholder="Free text — shows on Digital">${escAttr(
+            <textarea data-deepen-prompt-ans maxlength="500" rows="2" placeholder="Free text — shows on your Profile">${escAttr(
               (Array.isArray(dp.prompts) && dp.prompts[0]?.answer) || ''
             )}</textarea>
           </label>
         </div>
-        <p class="digital-canvas-deepen-hint">Same slots as your Profile tab — save anytime from Profile.</p>
-        <button type="button" class="btn btn--primary btn--block" data-deepen-save>Save to Digital</button>
+      <p class="digital-canvas-deepen-hint">Same slots as your Profile tab — save anytime from Profile.</p>
+        <button type="button" class="btn btn--primary btn--block" data-deepen-save>Save to Profile</button>
       </div>`;
     document.querySelector('.device')?.appendChild(sheet);
 
@@ -549,7 +549,7 @@
         ]);
       }
       markDone();
-      if (typeof showToast === 'function') showToast('Digital canvas updated');
+      if (typeof showToast === 'function') showToast('Profile updated');
       close();
     });
   }

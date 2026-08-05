@@ -17,6 +17,57 @@ function chatIdFor(uid) {
   return `chat_chaupaal_${uid}`;
 }
 
+function isAdminUser(user) {
+  return !!(user && user.decoded && user.decoded.admin === true);
+}
+
+function wantsProductFeedbackSummary(text) {
+  const t = String(text || '').toLowerCase();
+  if (!t.trim()) return false;
+  return (
+    /\b(product )?feedback\b/.test(t) &&
+    /\b(summary|summarize|recent|latest|list|show|what|any|review)\b/.test(t)
+  );
+}
+
+async function loadProductFeedbackBrief(db, { limit = 12 } = {}) {
+  const out = { product: [], chatTagged: [] };
+  try {
+    const snap = await db
+      .collection('companionProductFeedback')
+      .orderBy('createdAt', 'desc')
+      .limit(limit)
+      .get();
+    out.product = snap.docs.map((d) => {
+      const data = d.data() || {};
+      return {
+        id: d.id,
+        message: String(data.message || '').slice(0, 240),
+        category: data.category || null,
+        source: data.source || null,
+        createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
+      };
+    });
+  } catch (e) {
+    console.warn('[chaupaal-chat] product feedback brief', e?.message || e);
+  }
+  try {
+    const snap = await db.collection('chaupaalFeedback').orderBy('timestamp', 'desc').limit(limit).get();
+    out.chatTagged = snap.docs.map((d) => {
+      const data = d.data() || {};
+      return {
+        id: d.id,
+        message: String(data.message || '').slice(0, 240),
+        tag: data.tag || null,
+        timestamp: data.timestamp?.toDate?.()?.toISOString?.() || null,
+      };
+    });
+  } catch (e) {
+    console.warn('[chaupaal-chat] chat feedback brief', e?.message || e);
+  }
+  return out;
+}
+
 async function ensureChatDoc(db, uid) {
   const id = chatIdFor(uid);
   const ref = db.collection('chats').doc(id);
@@ -180,6 +231,25 @@ module.exports = async function handler(req, res) {
     }
 
     const history = Array.isArray(body.history) ? body.history.slice(-12) : [];
+    let systemPrompt = CHAUPAAL_SYSTEM_PROMPT;
+    let adminFeedbackBrief = null;
+
+    // Admin-only convenience: Chaupaal can summarize recent product feedback.
+    // Never inject feedback into context for non-admin users.
+    if (isAdminUser(user) && wantsProductFeedbackSummary(text)) {
+      try {
+        adminFeedbackBrief = await loadProductFeedbackBrief(db, { limit: 14 });
+        systemPrompt +=
+          '\n\nADMIN CONTEXT (private — only for this admin user):\n' +
+          'Recent product feedback (companionProductFeedback) and chat-tagged feedback follow as JSON. ' +
+          'Summarize warmly in 3–6 short bullets for the founder. Do not invent items. ' +
+          'If empty, say nothing new has come in.\n' +
+          JSON.stringify(adminFeedbackBrief).slice(0, 6000);
+      } catch (e) {
+        console.warn('[chaupaal-chat] admin feedback inject', e?.message || e);
+      }
+    }
+
     const messages = [
       ...history
         .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && m.content)
@@ -191,7 +261,7 @@ module.exports = async function handler(req, res) {
     try {
       const result = await callAI({
         tier: 'balanced',
-        system: CHAUPAAL_SYSTEM_PROMPT,
+        system: systemPrompt,
         messages,
         max_tokens: 700,
         feature: 'chaupaal_chat',
@@ -225,7 +295,7 @@ module.exports = async function handler(req, res) {
       feedbackTag: normalized.feedbackTag || null,
     });
 
-    if (normalized.isFeedback) {
+    if (normalized.isFeedback && !adminFeedbackBrief) {
       try {
         await writeFeedback(db, {
           uid: user.uid,
@@ -246,6 +316,7 @@ module.exports = async function handler(req, res) {
       userMessageId: userMsgId,
       replyMessageId: replyId,
       chatId: chatIdFor(user.uid),
+      adminFeedback: !!adminFeedbackBrief,
     });
   } catch (e) {
     console.error('[chaupaal-chat]', e?.message || e);

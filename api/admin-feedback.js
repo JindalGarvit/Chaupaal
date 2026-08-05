@@ -2,8 +2,11 @@
  * Admin-only feedback log + daily summaries + Peepal intent weight profiles.
  * Requires Firebase ID token with custom claim admin === true.
  *
- * GET  ?view=log|summary|errors|intent_weights
+ * GET  ?view=log|summary|errors|intent_weights|product
  * POST { action: 'revert_intent_weights', profileId }  (intent weights only)
+ *
+ * Product feedback SOT: companionProductFeedback (sheet + companion asks).
+ * Chat-classified feedback remains in chaupaalFeedback (view=log).
  */
 const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
 const { requireUser, initAdmin } = require('../server-lib/auth');
@@ -100,6 +103,36 @@ module.exports = async function handler(req, res) {
         });
       }
       return sendSuccess(res, { date, current: { id: snap.id, ...snap.data() }, recent: [] });
+    }
+
+    // One-shot product feedback (companionProductFeedback SOT — sheet + companion asks)
+    if (view === 'product' || view === 'product_feedback') {
+      const limit = Math.min(100, Math.max(1, Number(req.query?.limit) || 50));
+      let snap;
+      try {
+        snap = await db
+          .collection('companionProductFeedback')
+          .orderBy('createdAt', 'desc')
+          .limit(limit)
+          .get();
+      } catch (e) {
+        // Fallback if index missing — unordered sample
+        snap = await db.collection('companionProductFeedback').limit(limit).get();
+      }
+      const items = snap.docs.map((d) => {
+        const data = d.data() || {};
+        return {
+          id: d.id,
+          uid: data.uid || null,
+          message: data.message || '',
+          category: data.category || null,
+          source: data.source || null,
+          eventId: data.eventId || null,
+          meta: data.meta || null,
+          createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
+        };
+      });
+      return sendSuccess(res, { items, collection: 'companionProductFeedback' });
     }
 
     if (view === 'errors') {

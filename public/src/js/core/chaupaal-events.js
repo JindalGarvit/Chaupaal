@@ -333,52 +333,166 @@
   }
 
   /**
-   * Product feedback from companion ask — stored in companionProductFeedback
-   * (separate from regular chat / chaupaalFeedback chat tags).
+   * Product feedback SOT: companionProductFeedback
+   * (one-shot sheet + companion asks). Separate from chat-tagged chaupaalFeedback.
+   * Client create-only; no Archive / public profile; no edit/delete after send.
    */
-  function openCompanionFeedbackSheet(ev) {
-    document.getElementById('companionFeedbackSheet')?.remove();
-    const sheet = document.createElement('div');
-    sheet.id = 'companionFeedbackSheet';
-    sheet.className = 'name-prompt-sheet';
-    sheet.dataset.navManaged = '1';
-    sheet.innerHTML = `
-      <div class="cp-sheet-panel" style="padding:18px;">
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;margin-bottom:6px;">What would you enjoy more?</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Optional product feedback for Garvit — not a chat message. No pressure.</div>
-        <textarea id="companionFeedbackText" rows="4" placeholder="One honest line…" style="width:100%;box-sizing:border-box;padding:12px;border-radius:12px;border:1.5px solid var(--line);font-size:14px;resize:vertical;"></textarea>
-        <button type="button" class="btn btn--primary btn--block" id="companionFeedbackSend" style="margin-top:10px;">Send feedback</button>
-        <button type="button" data-cf-skip style="width:100%;margin-top:8px;border:none;background:none;color:var(--muted);padding:10px;cursor:pointer;">Skip</button>
+  const FEEDBACK_PROMPTS = [
+    'What’s one thing that would make Chaupaal feel more like home?',
+    'Anything missing when you open the app?',
+    'What felt confusing or rough this week?',
+    'A small delight you’d love more of?',
+    'If you could fix one thing today, what would it be?',
+    'What should we build next — honest take?',
+  ];
+
+  const FEEDBACK_CATEGORIES = [
+    { id: 'bug', label: 'Bug' },
+    { id: 'idea', label: 'Idea' },
+    { id: 'missing', label: 'Missing' },
+    { id: 'other', label: 'Other' },
+  ];
+
+  function pickFeedbackPrompt() {
+    const i = Math.floor(Math.random() * FEEDBACK_PROMPTS.length);
+    return FEEDBACK_PROMPTS[i];
+  }
+
+  function escFb(s) {
+    return String(s || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  /**
+   * Distinctive half-sheet for product feedback (not journal chrome).
+   * @param {object} [opts]
+   * @param {string} [opts.source] default chaupaal_chat_feedback
+   * @param {object} [opts.event] companion event (optional)
+   */
+  function openProductFeedbackSheet(opts = {}) {
+    const source = opts.source || (opts.event ? 'companion_feedback_ask' : 'chaupaal_chat_feedback');
+    const prompt = pickFeedbackPrompt();
+    const ico = (name, size) =>
+      typeof iconHtml === 'function' ? iconHtml(name, { size: size || 18 }) : '';
+
+    if (typeof openHalfSheet !== 'function') {
+      if (typeof showToast === 'function') showToast('Feedback unavailable');
+      return null;
+    }
+
+    const bodyHtml = `
+      <div class="product-feedback-body" data-no-sheet-drag>
+        <div class="product-feedback-kicker">${ico('message-square', 16)} For the team · one-shot</div>
+        <p class="product-feedback-prompt">${escFb(prompt)}</p>
+        <p class="product-feedback-hint">Improve the app, note what’s missing, or leave a general thought. Not in Archive or your profile — no edit after send.</p>
+        <div class="product-feedback-chips" role="group" aria-label="Category">
+          ${FEEDBACK_CATEGORIES.map(
+            (c, i) =>
+              `<button type="button" class="product-feedback-chip${i === 3 ? ' is-selected' : ''}" data-fb-cat="${c.id}">${escFb(c.label)}</button>`
+          ).join('')}
+        </div>
+        <textarea data-product-feedback-text rows="4" maxlength="2000" placeholder="Write freely — only founders &amp; admins see this"></textarea>
+        <button type="button" class="btn btn--primary btn--block product-feedback-send" data-product-feedback-send>Send feedback</button>
       </div>`;
-    host().appendChild(sheet);
-    const close = () => {
-      if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
-      sheet.remove();
-    };
-    if (typeof pushNavLayer === 'function') pushNavLayer(sheet, close);
-    sheet.querySelector('[data-cf-skip]')?.addEventListener('click', close);
-    sheet.querySelector('#companionFeedbackSend')?.addEventListener('click', async () => {
-      const text = sheet.querySelector('#companionFeedbackText')?.value?.trim();
-      if (!text) {
-        if (typeof showToast === 'function') showToast('Write a short note, or skip');
-        return;
-      }
-      try {
-        if (db && currentUser) {
-          await db.collection('companionProductFeedback').add({
-            uid: currentUser.uid,
-            message: text.slice(0, 2000),
-            eventId: ev?.id || null,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            source: 'companion_feedback_ask',
+
+    return openHalfSheet({
+      id: 'productFeedbackSheet',
+      title: 'Feedback',
+      snap: 'compact',
+      accent: 'feedback',
+      bodyHtml,
+      onMount(sheet, close) {
+        let category = 'other';
+        sheet.querySelectorAll('[data-fb-cat]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            category = btn.dataset.fbCat || 'other';
+            sheet.querySelectorAll('[data-fb-cat]').forEach((b) =>
+              b.classList.toggle('is-selected', b === btn)
+            );
           });
-        }
-        if (typeof showToast === 'function') showToast('Thanks — noted for the product team');
-      } catch (e) {
-        if (typeof showToast === 'function') showToast('Could not save — try again later');
-      }
-      close();
+        });
+        const ta = sheet.querySelector('[data-product-feedback-text]');
+        setTimeout(() => ta?.focus(), 80);
+        sheet.querySelector('[data-product-feedback-send]')?.addEventListener('click', async () => {
+          const text = ta?.value?.trim();
+          if (!text) {
+            if (typeof showToast === 'function') showToast('Write a short note first');
+            return;
+          }
+          const sendBtn = sheet.querySelector('[data-product-feedback-send]');
+          if (sendBtn) {
+            sendBtn.disabled = true;
+            sendBtn.textContent = 'Sending…';
+          }
+          try {
+            await submitProductFeedback({
+              text,
+              category,
+              source,
+              eventId: opts.event?.id || null,
+            });
+            if (typeof showToast === 'function') showToast('Thanks — noted for the product team');
+            close();
+          } catch (e) {
+            if (sendBtn) {
+              sendBtn.disabled = false;
+              sendBtn.textContent = 'Send feedback';
+            }
+            if (typeof showToast === 'function') showToast('Could not save — try again later');
+          }
+        });
+      },
     });
+  }
+
+  async function submitProductFeedback({ text, category, source, eventId }) {
+    const message = String(text || '').trim().slice(0, 2000);
+    if (!message) throw new Error('EMPTY');
+    const payload = {
+      action: 'product_feedback',
+      text: message,
+      category: String(category || 'other').slice(0, 40),
+      source: String(source || 'chaupaal_chat_feedback').slice(0, 80),
+      eventId: eventId || null,
+      meta: {
+        userAgent: typeof navigator !== 'undefined' ? String(navigator.userAgent || '').slice(0, 180) : '',
+        appVersion:
+          (typeof window !== 'undefined' && (window.CHAUPAAL_APP_VERSION || window.__CHAUPAAL_SW_CACHE)) ||
+          null,
+      },
+    };
+    if (typeof apiFetch === 'function') {
+      const envelope = await apiFetch('/api/chaupaal-events', {
+        method: 'POST',
+        needAuth: true,
+        body: payload,
+      });
+      if (!envelope?.ok) {
+        const err = new Error(envelope?.error?.message || 'Feedback failed');
+        err.code = envelope?.error?.code;
+        throw err;
+      }
+      return envelope.data || {};
+    }
+    // Fallback: direct Firestore create (same SOT)
+    if (!db || !currentUser) throw new Error('AUTH');
+    await db.collection('companionProductFeedback').add({
+      uid: currentUser.uid,
+      message,
+      category: payload.category,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      source: payload.source,
+      eventId: eventId || null,
+      meta: payload.meta,
+    });
+    return { ok: true };
+  }
+
+  function openCompanionFeedbackSheet(ev) {
+    openProductFeedbackSheet({ event: ev, source: 'companion_feedback_ask' });
   }
 
   window.renderChaupaalEvent = renderEvent;
@@ -389,6 +503,8 @@
   window.dismissOpenJournalEvent = dismissOpenJournalEvent;
   window.snoozeOpenJournalEvent = snoozeOpenJournalEvent;
   window.openCompanionFeedbackSheet = openCompanionFeedbackSheet;
+  window.openProductFeedbackSheet = openProductFeedbackSheet;
+  window.submitProductFeedback = submitProductFeedback;
 
   document.addEventListener('chaupaal:auth', () => {
     try {

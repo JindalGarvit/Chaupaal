@@ -1,6 +1,9 @@
 // ===================== AUTH =====================
 function showAuth(){document.getElementById('authOverlay').classList.remove('hidden');}
-function hideAuth(){document.getElementById('authOverlay').classList.add('hidden');}
+function hideAuth(){
+  document.getElementById('authOverlay')?.classList.add('hidden');
+  try{ if(typeof restoreAppShell==='function') restoreAppShell('auth_close'); }catch(e){}
+}
 
 // Auth v2 — listeners wired in auth_js.js
 

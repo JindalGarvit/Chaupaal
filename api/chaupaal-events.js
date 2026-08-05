@@ -251,6 +251,31 @@ module.exports = async function handler(req, res) {
       });
     }
 
+    // One-shot product feedback → companionProductFeedback (SOT for sheet + companion asks).
+    // Not written to Archive / chaupaalFeedback chat tags / public profile.
+    if (action === 'product_feedback') {
+      const text = String(body.text || body.message || '').trim();
+      if (!text || text.length > 2000) {
+        return sendError(res, 400, 'VALIDATION_ERROR', 'Feedback text required (max 2000 chars)');
+      }
+      const category = String(body.category || 'other').slice(0, 40);
+      const source = String(body.source || 'chaupaal_chat_feedback').slice(0, 80);
+      const metaIn = body.meta && typeof body.meta === 'object' ? body.meta : {};
+      const ref = await db.collection('companionProductFeedback').add({
+        uid: user.uid,
+        message: text,
+        category,
+        source,
+        eventId: body.eventId ? String(body.eventId).slice(0, 80) : null,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        meta: {
+          userAgent: String(metaIn.userAgent || '').slice(0, 180),
+          appVersion: metaIn.appVersion ? String(metaIn.appVersion).slice(0, 80) : null,
+        },
+      });
+      return sendSuccess(res, { id: ref.id, source, category });
+    }
+
     return sendError(res, 400, 'UNKNOWN_ACTION', `Unknown action: ${action}`);
   } catch (e) {
     console.error('[chaupaal-events]', e?.message || e);

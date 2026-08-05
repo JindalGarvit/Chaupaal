@@ -659,7 +659,7 @@ module.exports = async function handler(req, res) {
       if (!targetUid) return sendError(res, 400, 'VALIDATION_ERROR', 'targetUid required');
       const reasonCode = String(body.reasonCode || 'custom').slice(0, 40);
       const reasonLabel = String(body.reason || body.reasonLabel || reasonCode).slice(0, 120);
-      await db.collection('user_flags').add({
+      const flagRef = await db.collection('user_flags').add({
         reportedUid: targetUid,
         reporterUid: user.uid,
         reason: reasonLabel,
@@ -668,16 +668,122 @@ module.exports = async function handler(req, res) {
         targetType: String(body.targetType || 'user').slice(0, 40),
         postId: body.postId ? String(body.postId).slice(0, 80) : null,
         chatId: body.chatId ? String(body.chatId).slice(0, 80) : null,
+        status: 'active',
         ts: Date.now(),
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      // Private reporter mirror so Settings → Reported can list without reading admin-only user_flags
+      await db
+        .collection('users')
+        .doc(user.uid)
+        .collection('reported')
+        .doc(targetUid)
+        .set(
+          {
+            targetUid,
+            name: body.targetName ? String(body.targetName).slice(0, 80) : null,
+            username: body.targetUsername ? String(body.targetUsername).slice(0, 80) : null,
+            reasonCode,
+            reason: reasonLabel,
+            customText: body.customText ? String(body.customText).slice(0, 500) : null,
+            flagId: flagRef.id,
+            status: 'active',
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
       const ban = await applyFlagSignal(db, admin, {
         reportedUid: targetUid,
         reporterUid: user.uid,
         reasonCode,
         chatId: body.chatId,
       });
-      return sendSuccess(res, { flagged: true, shadowban: ban });
+      return sendSuccess(res, { flagged: true, flagId: flagRef.id, shadowban: ban });
+    }
+    if (action === 'withdraw_flag') {
+      if (!targetUid) return sendError(res, 400, 'VALIDATION_ERROR', 'targetUid required');
+      const flagId = body.flagId ? String(body.flagId).slice(0, 80) : null;
+      const withdrawReason = String(body.withdrawReason || body.reason || 'changed_mind').slice(0, 80);
+      if (flagId) {
+        const flagRef = db.collection('user_flags').doc(flagId);
+        const snap = await flagRef.get();
+        if (snap.exists && snap.data()?.reporterUid === user.uid) {
+          await flagRef.set(
+            {
+              status: 'withdrawn',
+              withdrawnAt: admin.firestore.FieldValue.serverTimestamp(),
+              withdrawReason,
+            },
+            { merge: true }
+          );
+        }
+      } else {
+        // Best-effort: mark newest active flag from this reporter on target
+        const q = await db
+          .collection('user_flags')
+          .where('reporterUid', '==', user.uid)
+          .where('reportedUid', '==', targetUid)
+          .limit(5)
+          .get();
+        const batch = db.batch();
+        q.docs.forEach((d) => {
+          if (d.data()?.status === 'withdrawn') return;
+          batch.set(
+            d.ref,
+            {
+              status: 'withdrawn',
+              withdrawnAt: admin.firestore.FieldValue.serverTimestamp(),
+              withdrawReason,
+            },
+            { merge: true }
+          );
+        });
+        await batch.commit().catch(() => {});
+      }
+      await db
+        .collection('users')
+        .doc(user.uid)
+        .collection('reported')
+        .doc(targetUid)
+        .set(
+          {
+            status: 'withdrawn',
+            withdrawnAt: admin.firestore.FieldValue.serverTimestamp(),
+            withdrawReason,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+      return sendSuccess(res, { withdrawn: true, targetUid });
+    }
+    if (action === 'list_my_reports') {
+      const snap = await db
+        .collection('users')
+        .doc(user.uid)
+        .collection('reported')
+        .where('status', '==', 'active')
+        .limit(60)
+        .get()
+        .catch(async () =>
+          db.collection('users').doc(user.uid).collection('reported').limit(60).get()
+        );
+      const items = snap.docs
+        .map((d) => {
+          const data = d.data() || {};
+          return {
+            id: d.id,
+            targetUid: data.targetUid || d.id,
+            name: data.name || 'User',
+            username: data.username || '',
+            reason: data.reason || data.reasonCode || '',
+            flagId: data.flagId || null,
+            status: data.status || 'active',
+            createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
+          };
+        })
+        .filter((r) => r.status !== 'withdrawn');
+      return sendSuccess(res, { items });
     }
     if (action === 'block_signal') {
       if (!targetUid) return sendError(res, 400, 'VALIDATION_ERROR', 'targetUid required');

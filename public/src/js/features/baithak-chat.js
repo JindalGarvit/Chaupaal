@@ -156,10 +156,12 @@ function openChatScreen(chat){
         <div id="chatActivityStatus" style="font-size:11px;color:var(--muted);">${statusLine}</div>
       </div>
       <div class="chat-header-actions">
-        ${isSelf?`<button class="chat-header-btn" id="chatSelfSettingsBtn" title="Settings" aria-label="Settings">${typeof iconHtml==='function'?iconHtml('settings',{size:18}):'⚙'}</button>`
+        ${isSelf
+          ?`<button class="chat-header-btn chat-header-btn--labeled" id="chatSelfArchiveBtn" title="Archive" aria-label="Archive"><span class="chat-header-btn-ico">${typeof iconHtml==='function'?iconHtml('archive',{size:18}):''}</span><span class="chat-header-btn-label">Archive</span></button>
+            <button class="chat-header-btn chat-header-btn--labeled" id="chatSelfSettingsBtn" title="Settings" aria-label="Settings"><span class="chat-header-btn-ico">${typeof iconHtml==='function'?iconHtml('settings',{size:18}):''}</span><span class="chat-header-btn-label">Settings</span></button>`
           :(isChaupaal
-            ?`<button class="chat-header-btn chat-header-btn--labeled" id="chatJournalBtn" title="${typeof t==='function'?t('chaupaal_journal','Journal'):'Journal'}" aria-label="Journal"><span class="chat-header-btn-ico">${typeof iconHtml==='function'?iconHtml('notebook',{size:18}):'📓'}</span><span class="chat-header-btn-label">${typeof t==='function'?t('chaupaal_journal','Journal'):'Journal'}</span></button>
-              <button class="chat-header-btn chat-header-btn--labeled" id="chatArchiveBtn" title="${typeof t==='function'?t('chaupaal_archive','Archive'):'Archive'}" aria-label="Archive"><span class="chat-header-btn-ico">${typeof iconHtml==='function'?iconHtml('archive',{size:18}):'🗄'}</span><span class="chat-header-btn-label">${typeof t==='function'?t('chaupaal_archive','Archive'):'Archive'}</span></button>`
+            ?`<button class="chat-header-btn chat-header-btn--labeled" id="chatJournalBtn" title="${typeof t==='function'?t('chaupaal_journal','Journal'):'Journal'}" aria-label="Journal"><span class="chat-header-btn-ico">${typeof iconHtml==='function'?iconHtml('notebook',{size:18}):''}</span><span class="chat-header-btn-label">${typeof t==='function'?t('chaupaal_journal','Journal'):'Journal'}</span></button>
+              <button class="chat-header-btn chat-header-btn--labeled" id="chatFeedbackBtn" title="Feedback" aria-label="Feedback"><span class="chat-header-btn-ico">${typeof iconHtml==='function'?iconHtml('message-square',{size:18}):''}</span><span class="chat-header-btn-label">Feedback</span></button>`
             :`<button class="chat-header-btn mehfil-entry" id="chatMehfilBtn" title="${typeof t==='function'?t('mehfil_title'):'Mehfil'}" aria-label="${typeof t==='function'?t('mehfil_title'):'Mehfil'}">${typeof mehfilMarkHtml==='function'?mehfilMarkHtml(20):(typeof iconHtml==='function'?iconHtml('home',{size:18}):'🏠')}</button>`)}
         ${!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatChallengeBtn" title="Create challenge" aria-label="Create challenge">${typeof iconHtml==='function'?iconHtml('target',{size:18}):'🎯'}</button>`:''}
         ${!isGroup&&!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatMuqabalaBtn" title="Muqabala" aria-label="Muqabala">${typeof iconHtml==='function'?iconHtml('swords',{size:18}):'⚔️'}</button>`:''}
@@ -504,6 +506,10 @@ function openChatScreen(chat){
     activeChatRecognition.start();
   });
 
+  document.getElementById('chatSelfArchiveBtn')?.addEventListener('click', () => {
+    if (typeof openArchiveHub === 'function') openArchiveHub('journal');
+    else if (typeof showToast === 'function') showToast('Archive');
+  });
   document.getElementById('chatSelfSettingsBtn')?.addEventListener('click', () => {
     if (typeof openSettingsModal === 'function') openSettingsModal();
     else document.getElementById('settingsBtn')?.click();
@@ -513,9 +519,10 @@ function openChatScreen(chat){
     else if (typeof JournalCheckIn?.openCompose === 'function') JournalCheckIn.openCompose({});
     else if (typeof openArchiveHub === 'function') openArchiveHub('journal');
   });
-  document.getElementById('chatArchiveBtn')?.addEventListener('click', () => {
-    if (typeof openArchiveHub === 'function') openArchiveHub('journal');
-    else if (typeof showToast === 'function') showToast('Archive');
+  document.getElementById('chatFeedbackBtn')?.addEventListener('click', () => {
+    if (typeof openProductFeedbackSheet === 'function') openProductFeedbackSheet({ source: 'chaupaal_chat_feedback' });
+    else if (typeof openCompanionFeedbackSheet === 'function') openCompanionFeedbackSheet(null);
+    else if (typeof showToast === 'function') showToast('Feedback');
   });
   // Chaupaal / 1:1: avatar or name → full profile (not peek). Groups keep group-info.
   async function openChatPeerFullProfile() {

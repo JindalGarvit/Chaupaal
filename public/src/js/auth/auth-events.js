@@ -1,5 +1,5 @@
-﻿// ===================== AUTH STATE MACHINE v5 =====================
-// Signup: Personal | Professional (separate accounts) → identity → email/password or phone
+﻿// ===================== AUTH STATE MACHINE v6 =====================
+// Signup: one Profile canvas (identity + optional extras + credentials)
 // Login: username | email | phone + password · phone OTP · Google · device multi-account
 // OTP: PhoneOtp helper (invisible→visible reCAPTCHA, resend cooldown, actionable errors)
 
@@ -71,6 +71,10 @@ function showAuthScreen(screenId, direction = 'forward') {
     'authParentalConsentScreen',
     'authSuccessScreen',
   ];
+  // One-canvas signup: never park on empty legacy step shells
+  if (screenId === 'authRegStep2' || screenId === 'authRegStep3') {
+    screenId = 'authRegStep1';
+  }
   screens.forEach((id) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -82,10 +86,24 @@ function showAuthScreen(screenId, direction = 'forward') {
       el.classList.add('hidden');
     }
   });
+  const scroll = document.getElementById('authRegScroll') || document.querySelector(`#${screenId} .auth-form-body`);
+  if (scroll) {
+    try {
+      scroll.scrollTop = 0;
+    } catch (e) {}
+  }
+  try {
+    if (typeof restoreAppShell === 'function' && (screenId === 'authHeroScreen' || screenId === 'authSuccessScreen')) {
+      restoreAppShell('auth_screen:' + screenId);
+    }
+  } catch (e) {}
 }
 
 function showAuth() {
   document.getElementById('authOverlay')?.classList.remove('hidden');
+  try {
+    if (typeof restoreAppShell === 'function') restoreAppShell('auth_open');
+  } catch (e) {}
   wireAuthEvents();
   syncRegProfileTypeUi();
   const last = typeof readLastUser === 'function' ? readLastUser() : null;
@@ -120,6 +138,9 @@ function paintWelcomeBack(last) {
 
 function hideAuth() {
   document.getElementById('authOverlay')?.classList.add('hidden');
+  try {
+    if (typeof restoreAppShell === 'function') restoreAppShell('auth_close');
+  } catch (e) {}
 }
 
 function ageFromDob(dob) {
@@ -227,6 +248,7 @@ function syncRegProfileTypeUi() {
   }
   const custom = document.getElementById('regGenderCustom');
   if (custom) custom.classList.toggle('hidden', !regData.genderSelfDescribe);
+  syncSignupProgress();
 }
 
 function syncGenderUi() {
@@ -237,6 +259,73 @@ function syncGenderUi() {
   });
   const custom = document.getElementById('regGenderCustom');
   if (custom) custom.classList.toggle('hidden', !regData.genderSelfDescribe);
+  syncSignupProgress();
+}
+
+function syncSignupProgress() {
+  const name = !!document.getElementById('regName')?.value?.trim();
+  const un = (document.getElementById('regUsername')?.value || '').trim().length >= 3;
+  const dob = !!document.getElementById('regDob')?.value;
+  const genderOk =
+    regData.profileType !== 'personal' ||
+    !!(regData.genderSelfDescribe
+      ? document.getElementById('regGenderCustom')?.value?.trim()
+      : regData.gender);
+  const city = !!document.getElementById('regCity')?.value?.trim();
+  const photo = !!regData.photoFile;
+  const intents = (regData.intents || []).length > 0;
+  const email = !!document.getElementById('regEmail')?.value?.trim();
+  const pwd = (document.getElementById('regPassword')?.value || '').length >= 8;
+  const phoneHint = document.getElementById('regPhoneVerifiedHint');
+  const phone = !!(phoneHint && phoneHint.style.display !== 'none' && phoneHint.style.display !== '');
+  const checks = [
+    { on: name, w: 18 },
+    { on: un, w: 18 },
+    { on: dob, w: 14 },
+    { on: genderOk, w: 10 },
+    { on: photo, w: 12 },
+    { on: city, w: 10 },
+    { on: intents, w: 8 },
+    { on: email || pwd || phone, w: 10 },
+  ];
+  let earned = 0;
+  let total = 0;
+  checks.forEach((c) => {
+    total += c.w;
+    if (c.on) earned += c.w;
+  });
+  const pct = Math.round((earned / Math.max(total, 1)) * 100);
+  const pctEl = document.getElementById('authSignupPct');
+  const barEl = document.getElementById('authSignupBar');
+  const hintEl = document.getElementById('authSignupHint');
+  if (pctEl) {
+    pctEl.textContent = pct + '%';
+    pctEl.style.color = pct >= 70 ? 'var(--green,#33C481)' : 'var(--red)';
+  }
+  if (barEl) {
+    barEl.style.width = pct + '%';
+    barEl.style.background = pct >= 70 ? '#2ECC71' : 'var(--red)';
+  }
+  if (hintEl) {
+    if (!name || !un || !dob) hintEl.textContent = 'Name, username & birthday unlock your Profile';
+    else if (!photo) hintEl.textContent = 'Photo optional — people see a real you';
+    else if (!city) hintEl.textContent = 'City helps nearby matches';
+    else if (!intents) hintEl.textContent = 'Intents → better Peepal matches (optional)';
+    else hintEl.textContent = 'Looking good — add account access below to finish';
+  }
+}
+
+function syncAuthCanvasPreview() {
+  const name = document.getElementById('regName')?.value?.trim() || 'Your name';
+  const un = document.getElementById('regUsername')?.value?.trim() || 'username';
+  const city = document.getElementById('regCity')?.value?.trim() || '';
+  const nEl = document.getElementById('authCanvasLiveName');
+  const hEl = document.getElementById('authCanvasLiveHandle');
+  const mEl = document.getElementById('authCanvasLiveMeta');
+  if (nEl) nEl.textContent = name;
+  if (hEl) hEl.textContent = '@' + un.replace(/^@/, '');
+  if (mEl) mEl.textContent = city || 'Add your city';
+  syncSignupProgress();
 }
 
 async function checkUsernameAvailability(username) {
@@ -828,20 +917,26 @@ function wireAuthEvents() {
     }
   });
   document.getElementById('regPhoneBtn')?.addEventListener('click', () => {
-    document.getElementById('regPhonePanel')?.classList.toggle('hidden');
+    const panel = document.getElementById('regPhonePanel');
+    panel?.classList.toggle('hidden');
     const otpInp = document.getElementById('regPhoneOtpCode');
     if (otpInp && typeof PhoneOtp !== 'undefined') {
       PhoneOtp.wireOtpInput(otpInp, {
         onComplete: () => document.getElementById('regPhoneVerifyOtp')?.click(),
       });
     }
+    if (panel && !panel.classList.contains('hidden')) {
+      try {
+        panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      } catch (e) {}
+    }
   });
   document.getElementById('regGoogleBtn')?.addEventListener('click', async () => {
-    const errEl = document.getElementById('reg2Error') || document.getElementById('reg1Error');
+    const errEl = document.getElementById('registerError') || document.getElementById('reg1Error');
     try {
-      if (!regData.username || !regData.usernameAvailable) {
-        if (errEl) errEl.textContent = 'Finish step 1 (username) first';
-        showAuthScreen('authRegStep1', 'back');
+      const identity = await captureRegIdentity({ errEl });
+      if (!identity) {
+        document.getElementById('regName')?.focus();
         return;
       }
       const provider = new firebase.auth.GoogleAuthProvider();
@@ -1024,6 +1119,7 @@ function wireAuthEvents() {
         hint.textContent = `Phone verified ✓ ${regPhoneVerified}`;
       }
       setOtpStatus('regOtpStatus', 'Phone verified', true);
+      syncSignupProgress();
       const pwdHint = document
         .getElementById('regPassword')
         ?.closest('.auth-input-group')
@@ -1132,6 +1228,7 @@ function wireAuthEvents() {
   });
   document.getElementById('regGenderCustom')?.addEventListener('input', (e) => {
     if (regData.genderSelfDescribe) regData.gender = String(e.target.value || '').trim().slice(0, 40);
+    syncSignupProgress();
   });
   document.getElementById('regIndustryOther')?.addEventListener('input', (e) => {
     regData.industry = String(e.target.value || '').trim().slice(0, 80);
@@ -1149,58 +1246,84 @@ function wireAuthEvents() {
     usernameCheckTimer = setTimeout(() => checkUsernameAvailability(val), 320);
   });
 
-  
-  const syncAuthCanvasPreview = () => {
-    const name = document.getElementById('regName')?.value?.trim() || 'Your name';
-    const un = document.getElementById('regUsername')?.value?.trim() || 'username';
-    const nEl = document.getElementById('authCanvasLiveName');
-    const hEl = document.getElementById('authCanvasLiveHandle');
-    if (nEl) nEl.textContent = name;
-    if (hEl) hEl.textContent = '@' + un.replace(/^@/, '');
-  };
   document.getElementById('regName')?.addEventListener('input', syncAuthCanvasPreview);
   document.getElementById('regUsername')?.addEventListener('input', syncAuthCanvasPreview);
-document.getElementById('reg1Next')?.addEventListener('click', async () => {
+  document.getElementById('regCity')?.addEventListener('input', syncAuthCanvasPreview);
+  document.getElementById('regDob')?.addEventListener('change', syncSignupProgress);
+  document.getElementById('regEmail')?.addEventListener('input', syncSignupProgress);
+
+  const paintAuthAvatar = (src) => {
+    const av = document.getElementById('authCanvasAvatar');
+    const nudge = document.getElementById('authPhotoNudge');
+    if (!av) return;
+    if (src) {
+      av.innerHTML = `<img src="${src}" alt="" style="width:100%;height:100%;object-fit:cover;">`;
+      av.classList.add('has-photo');
+      if (nudge) {
+        nudge.textContent = 'Looking good — people see a real you.';
+        nudge.classList.add('is-done');
+      }
+    } else {
+      av.innerHTML = '<span id="authCanvasAvatarFallback" aria-hidden="true">🪑</span>';
+      av.classList.remove('has-photo');
+      if (nudge) {
+        nudge.textContent = 'A photo helps people see a real you — optional, skip anytime.';
+        nudge.classList.remove('is-done');
+      }
+    }
+    syncSignupProgress();
+  };
+
+  /** Capture + validate identity fields into regData. Returns true on success. */
+  async function captureRegIdentity({ errEl, quiet } = {}) {
     const name = document.getElementById('regName')?.value.trim();
     const username = document.getElementById('regUsername')?.value.trim().toLowerCase();
     const dob = document.getElementById('regDob')?.value;
-    const errEl = document.getElementById('reg1Error');
+    const showErr = (msg) => {
+      if (errEl) errEl.textContent = msg;
+    };
     if (regData.genderSelfDescribe) {
       regData.gender = document.getElementById('regGenderCustom')?.value.trim() || '';
     }
     if (!name) {
-      errEl.textContent = 'Please enter your full name';
-      return;
+      showErr('Please enter your full name');
+      document.getElementById('regName')?.focus();
+      return false;
     }
     if (!username || username.length < 3) {
-      errEl.textContent = 'Username must be at least 3 characters';
-      return;
+      showErr('Username must be at least 3 characters');
+      document.getElementById('regUsername')?.focus();
+      return false;
     }
     if (!dob) {
-      errEl.textContent = 'Date of birth required';
-      return;
+      showErr('Date of birth required');
+      document.getElementById('regDob')?.focus();
+      return false;
     }
     const age = ageFromDob(dob);
     if (age < 13) {
-      errEl.textContent = 'You must be 13 or older to join Chaupaal';
-      return;
+      showErr('You must be 13 or older to join Chaupaal');
+      return false;
     }
     regData.age = age;
     regData.isMinor = age < 18;
     regData.teenMode = age >= 13 && age < 18;
     if (regData.profileType === 'personal' && !regData.gender) {
-      errEl.textContent = regData.genderSelfDescribe
-        ? 'Please describe your gender'
-        : 'Please choose a gender for your Personal account';
-      return;
+      showErr(
+        regData.genderSelfDescribe
+          ? 'Please describe your gender'
+          : 'Please choose a gender for your Personal account'
+      );
+      return false;
     }
-    errEl.textContent = 'Checking username…';
+    if (errEl) errEl.textContent = quiet ? '' : 'Checking username…';
     const available = await checkUsernameAvailability(username);
     if (!available) {
-      errEl.textContent = 'That username is taken — pick another';
-      return;
+      showErr('That username is taken — pick another');
+      document.getElementById('regUsername')?.focus();
+      return false;
     }
-    errEl.textContent = '';
+    if (errEl) errEl.textContent = '';
     regData.name = name;
     regData.username = username;
     regData.dob = dob;
@@ -1218,27 +1341,31 @@ document.getElementById('reg1Next')?.addEventListener('click', async () => {
       regData.industry = '';
       regData.purpose = '';
     }
-    showAuthScreen('authRegStep2');
-  });
+    return true;
+  }
 
-  // ---- Step 2 (credentials + optional) ----
-  document.getElementById('reg2BackBtn')?.addEventListener('click', () => showAuthScreen('authRegStep1', 'back'));
-
+  // ---- One-canvas: photo on Profile hero + credentials ----
   const photoInput = document.getElementById('photoInput');
-  const photoPreview = document.getElementById('photoPreview');
   photoInput?.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
     regData.photoFile = file;
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      photoPreview.innerHTML = `<img src="${ev.target.result}" style="width:100%;height:100%;object-fit:cover;">`;
-    };
+    reader.onload = (ev) => paintAuthAvatar(ev.target.result);
     reader.readAsDataURL(file);
   });
-  photoPreview?.addEventListener('click', () => photoInput?.click());
+  document.getElementById('authCanvasAvatar')?.addEventListener('click', () => photoInput?.click());
+
+  document.getElementById('authSkipOptionals')?.addEventListener('click', () => {
+    const creds = document.getElementById('authCredsSection');
+    try {
+      creds?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    } catch (e) {}
+    document.getElementById('regEmail')?.focus();
+  });
 
   document.getElementById('regPassword')?.addEventListener('input', (e) => {
+    syncSignupProgress();
     const pwd = e.target.value;
     const strengthEl = document.getElementById('pwdStrength');
     const fillEl = document.getElementById('pwdStrengthFill');
@@ -1297,6 +1424,7 @@ document.getElementById('reg1Next')?.addEventListener('click', async () => {
           regData.customIntent = '';
           if (customInp) customInp.value = '';
         }
+        syncSignupProgress();
         return;
       }
       if (chip.classList.contains('active')) {
@@ -1304,6 +1432,7 @@ document.getElementById('reg1Next')?.addEventListener('click', async () => {
       } else {
         regData.intents = regData.intents.filter((v) => v !== val);
       }
+      syncSignupProgress();
     });
   });
   document.getElementById('intentCustomInput')?.addEventListener('input', (e) => {
@@ -1324,7 +1453,12 @@ document.getElementById('reg1Next')?.addEventListener('click', async () => {
   document.getElementById('registerBtn')?.addEventListener('click', async () => {
     const email = document.getElementById('regEmail')?.value.trim();
     const pwd = document.getElementById('regPassword')?.value;
-    const errEl = document.getElementById('registerError') || document.getElementById('reg2Error');
+    const errEl = document.getElementById('registerError') || document.getElementById('reg1Error');
+    if (errEl) errEl.hidden = false;
+
+    const identityOk = await captureRegIdentity({ errEl, quiet: false });
+    if (!identityOk) return;
+
     const phoneOk = !!(regPhoneVerified || auth?.currentUser?.phoneNumber);
     const googleOk = !!(
       auth?.currentUser?.email && auth.currentUser.providerData?.some((p) => p.providerId === 'google.com')
@@ -1333,6 +1467,9 @@ document.getElementById('reg1Next')?.addEventListener('click', async () => {
 
     if (!emailOk && !phoneOk && !googleOk) {
       errEl.textContent = 'Verify email+password, Google, or phone OTP to create an account';
+      try {
+        document.getElementById('authCredsSection')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      } catch (e) {}
       return;
     }
     // Phone path: if email entered, password is required to link for identifier login
@@ -1357,7 +1494,8 @@ document.getElementById('reg1Next')?.addEventListener('click', async () => {
     if (!regData.usernameAvailable) {
       const ok = await checkUsernameAvailability(regData.username);
       if (!ok) {
-        errEl.textContent = 'Username is no longer available — go back and pick another';
+        errEl.textContent = 'Username is no longer available — pick another';
+        document.getElementById('regUsername')?.focus();
         return;
       }
     }
@@ -1585,12 +1723,12 @@ document.getElementById('reg1Next')?.addEventListener('click', async () => {
       else if (emailOk && !googleOk) desc += ' Check your email to verify your address.';
       document.getElementById('authSuccessDesc').textContent = regData.intents.length
         ? `${desc} You're here to: ${regData.intents.slice(0, 2).join(' & ')}.`
-        : `${desc} Add a bio and prompts anytime.`;
+        : `${desc} Add a bio and prompts anytime on your Profile.`;
       if (typeof launchConfetti === 'function') launchConfetti({ x: 50, y: 40 }, 80);
 
       const cta = document.getElementById('authSuccessCta');
       if (cta) {
-        cta.textContent = 'Finish your Digital →';
+        cta.textContent = 'Open my Profile →';
         if (!cta.dataset.wired) {
           cta.dataset.wired = '1';
           cta.addEventListener('click', async () => {

@@ -207,6 +207,9 @@ function openSettingsModal(){
       }
     }
   }catch(e){}
+  if(typeof refreshSettingsSafetyLists==='function'){
+    try{ refreshSettingsSafetyLists(); }catch(e){}
+  }
 }
 window.openSettingsModal = openSettingsModal;
 document.getElementById('settingsBtn')?.addEventListener('click', openSettingsModal);
@@ -258,10 +261,6 @@ document.getElementById('saveSettings').addEventListener('click',()=>{
 document.getElementById('settingsSessionsBtn')?.addEventListener('click',()=>{
   document.getElementById('settingsModal').classList.add('hidden');
   if(typeof openSessionsSheet==='function') openSessionsSheet();
-});
-document.getElementById('settingsBlockedBtn')?.addEventListener('click',()=>{
-  document.getElementById('settingsModal').classList.add('hidden');
-  if(typeof openBlockedUsersSheet==='function') openBlockedUsersSheet();
 });
 document.getElementById('toggleOpenToMeet').addEventListener('change',e=>{
   const isOn=e.target.value==='on';

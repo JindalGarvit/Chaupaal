@@ -2,8 +2,9 @@
  * Safety: block / unblock + report (Phase 3).
  *
  * Block list: blocks/{uid}.blocked[] + local dismissedUids for instant UI.
- * Reports: user_flags with stable reasonCode + optional customText.
+ * Reports: user_flags (admin) + users/{uid}/reported/{targetUid} (private mirror).
  * Reasons match product brief; "Other" opens a free-text box.
+ * After block/report: ~5s Undo chip. Settings hosts Blocked & Reported lists.
  */
 (function () {
   const REPORT_REASONS = [
@@ -15,8 +16,17 @@
     { code: 'custom', label: 'Other (type your reason)' },
   ];
 
+  const SAFETY_UNDO_REASONS = [
+    { code: 'mistake', label: 'Blocked/reported by mistake' },
+    { code: 'resolved', label: 'Issue resolved' },
+    { code: 'changed_mind', label: 'Changed my mind' },
+    { code: 'other', label: 'Other' },
+  ];
+
   // Back-compat alias used by older call sites
   const FLAG_REASONS = REPORT_REASONS.map((r) => r.label);
+
+  const UNDO_MS = 5000;
 
   function getBlockedSet() {
     if (typeof dismissedUids !== 'undefined' && dismissedUids instanceof Set) return dismissedUids;
@@ -25,6 +35,22 @@
     } catch (e) {
       return new Set();
     }
+  }
+
+  function showSafetyUndo(message, onUndo) {
+    if (typeof showUndoToast === 'function') {
+      try {
+        // micro.js: (msg, { onUndo, duration })
+        showUndoToast(message, { onUndo, duration: UNDO_MS });
+        return;
+      } catch (e) {}
+      try {
+        // soft-delete.js: ({ message, onUndo })
+        showUndoToast({ message, onUndo });
+        return;
+      } catch (e) {}
+    }
+    if (typeof showToast === 'function') showToast(message);
   }
 
   async function loadBlockedFromFirestore() {
@@ -41,7 +67,7 @@
     } catch (e) {}
   }
 
-  async function blockUser(uid, name) {
+  async function blockUser(uid, name, opts = {}) {
     if (!uid) return;
     if (typeof currentUser !== 'undefined' && currentUser && uid === currentUser.uid) {
       if (typeof showToast === 'function') showToast("You can't block yourself");
@@ -59,7 +85,6 @@
       peepalQuestions = peepalQuestions.filter((q) => q.user?.uid !== uid);
       if (typeof renderPeepalFeed === 'function') renderPeepalFeed();
     }
-    if (typeof showToast === 'function') showToast(`${name || 'User'} blocked. You won't see their content.`);
     if (db && currentUser) {
       await db
         .collection('blocks')
@@ -77,10 +102,25 @@
         }).catch(() => {});
       }
     }
+    if (!opts.silent) {
+      showSafetyUndo(`${name || 'User'} blocked`, async () => {
+        await unblockUser(uid, name, { silent: true, skipReason: true });
+        if (typeof showToast === 'function') showToast('Block undone');
+        if (typeof refreshSettingsSafetyLists === 'function') refreshSettingsSafetyLists();
+      });
+    } else if (typeof showToast === 'function') {
+      showToast(`${name || 'User'} blocked. You won't see their content.`);
+    }
   }
 
-  async function unblockUser(uid, name) {
+  async function unblockUser(uid, name, opts = {}) {
     if (!uid) return;
+    const reason = opts.reason || null;
+    if (!opts.skipReason && !reason && opts.requireReason !== false && opts.fromSettings) {
+      const picked = await pickSafetyReasonSheet('Why unblock?');
+      if (!picked) return;
+      opts.reason = picked;
+    }
     if (typeof dismissedUids !== 'undefined') dismissedUids.delete(uid);
     try {
       localStorage.setItem('chaupaal_dismissed_uids', JSON.stringify([...getBlockedSet()]));
@@ -92,7 +132,9 @@
         .set({ blocked: firebase.firestore.FieldValue.arrayRemove(uid) }, { merge: true })
         .catch(() => {});
     }
-    if (typeof showToast === 'function') showToast(`${name || 'User'} unblocked`);
+    if (!opts.silent && typeof showToast === 'function') {
+      showToast(`${name || 'User'} unblocked`);
+    }
   }
 
   async function listBlockedUsers() {
@@ -119,8 +161,34 @@
     return out;
   }
 
+  async function rememberReportLocal(uid, payload) {
+    if (!db || !currentUser || !uid) return;
+    try {
+      await db
+        .collection('users')
+        .doc(currentUser.uid)
+        .collection('reported')
+        .doc(uid)
+        .set(
+          {
+            targetUid: uid,
+            name: payload.name || null,
+            username: payload.username || null,
+            reasonCode: payload.reasonCode || null,
+            reason: payload.reasonLabel || null,
+            customText: payload.customText || null,
+            flagId: payload.flagId || null,
+            status: 'active',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+    } catch (e) {}
+  }
+
   async function flagUser(uid, reasonOrCode, opts = {}) {
-    if (!uid) return;
+    if (!uid) return null;
     let reasonCode = 'custom';
     let reasonLabel = String(reasonOrCode || 'Other');
     let customText = opts.customText || '';
@@ -133,14 +201,17 @@
 
     if (reasonCode === 'custom' && !customText) customText = reasonLabel;
 
+    let flagId = null;
     if (db && currentUser && typeof apiFetch === 'function') {
       try {
-        await apiFetch('/api/relationships', {
+        const envelope = await apiFetch('/api/relationships', {
           method: 'POST',
           needAuth: true,
           body: {
             action: 'flag_user',
             targetUid: uid,
+            targetName: opts.name || null,
+            targetUsername: opts.username || null,
             reasonCode,
             reason: reasonLabel,
             customText: customText || null,
@@ -149,11 +220,11 @@
             chatId: opts.chatId || null,
           },
         });
+        flagId = envelope?.data?.flagId || null;
       } catch (e) {
         // Fallback local flag if API down
-        await db
-          .collection('user_flags')
-          .add({
+        try {
+          const ref = await db.collection('user_flags').add({
             reportedUid: uid,
             reporterUid: currentUser.uid,
             reason: reasonLabel,
@@ -164,15 +235,24 @@
             commentId: opts.commentId || null,
             icebreakerQuestion: opts.icebreakerQuestion || null,
             chatId: opts.chatId || null,
+            status: 'active',
             ts: Date.now(),
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-          })
-          .catch(() => {});
+          });
+          flagId = ref.id;
+        } catch (e2) {}
+        await rememberReportLocal(uid, {
+          name: opts.name,
+          username: opts.username,
+          reasonCode,
+          reasonLabel,
+          customText,
+          flagId,
+        });
       }
     } else if (db && currentUser) {
-      await db
-        .collection('user_flags')
-        .add({
+      try {
+        const ref = await db.collection('user_flags').add({
           reportedUid: uid,
           reporterUid: currentUser.uid,
           reason: reasonLabel,
@@ -183,12 +263,182 @@
           commentId: opts.commentId || null,
           icebreakerQuestion: opts.icebreakerQuestion || null,
           chatId: opts.chatId || null,
+          status: 'active',
           ts: Date.now(),
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        })
-        .catch(() => {});
+        });
+        flagId = ref.id;
+      } catch (e) {}
+      await rememberReportLocal(uid, {
+        name: opts.name,
+        username: opts.username,
+        reasonCode,
+        reasonLabel,
+        customText,
+        flagId,
+      });
     }
     if (typeof addNotification === 'function') addNotification('system', '⚑', 'Report submitted for review.');
+
+    if (!opts.silent) {
+      showSafetyUndo('Report submitted', async () => {
+        await withdrawReport(uid, {
+          flagId,
+          name: opts.name,
+          reason: 'mistake',
+          silent: true,
+          skipReason: true,
+        });
+        if (typeof showToast === 'function') showToast('Report withdrawn');
+        if (typeof refreshSettingsSafetyLists === 'function') refreshSettingsSafetyLists();
+      });
+    }
+    return { flagId };
+  }
+
+  async function withdrawReport(uid, opts = {}) {
+    if (!uid) return;
+    let reason = opts.reason || null;
+    if (!opts.skipReason && opts.requireReason !== false && opts.fromSettings) {
+      const picked = await pickSafetyReasonSheet('Why remove this report?');
+      if (!picked) return;
+      reason = picked;
+    }
+    reason = reason || 'changed_mind';
+
+    if (typeof apiFetch === 'function' && currentUser) {
+      try {
+        await apiFetch('/api/relationships', {
+          method: 'POST',
+          needAuth: true,
+          body: {
+            action: 'withdraw_flag',
+            targetUid: uid,
+            flagId: opts.flagId || null,
+            withdrawReason: reason,
+          },
+        });
+      } catch (e) {
+        if (db && currentUser) {
+          await db
+            .collection('users')
+            .doc(currentUser.uid)
+            .collection('reported')
+            .doc(uid)
+            .set(
+              {
+                status: 'withdrawn',
+                withdrawReason: reason,
+                withdrawnAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+              },
+              { merge: true }
+            )
+            .catch(() => {});
+        }
+      }
+    } else if (db && currentUser) {
+      await db
+        .collection('users')
+        .doc(currentUser.uid)
+        .collection('reported')
+        .doc(uid)
+        .set(
+          {
+            status: 'withdrawn',
+            withdrawReason: reason,
+            withdrawnAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        )
+        .catch(() => {});
+    }
+    if (!opts.silent && typeof showToast === 'function') {
+      showToast(`Report on ${opts.name || 'user'} removed`);
+    }
+  }
+
+  async function listReportedUsers() {
+    if (!currentUser) return [];
+    if (typeof apiFetch === 'function') {
+      try {
+        const envelope = await apiFetch('/api/relationships', {
+          method: 'POST',
+          needAuth: true,
+          body: { action: 'list_my_reports' },
+        });
+        if (envelope?.ok && Array.isArray(envelope.data?.items)) {
+          return envelope.data.items.map((r) => ({
+            uid: r.targetUid || r.id,
+            name: r.name || 'User',
+            username: r.username || '',
+            reason: r.reason || '',
+            flagId: r.flagId || null,
+          }));
+        }
+      } catch (e) {}
+    }
+    if (!db) return [];
+    try {
+      const snap = await db
+        .collection('users')
+        .doc(currentUser.uid)
+        .collection('reported')
+        .limit(60)
+        .get();
+      return snap.docs
+        .map((d) => {
+          const data = d.data() || {};
+          return {
+            uid: data.targetUid || d.id,
+            name: data.name || 'User',
+            username: data.username || '',
+            reason: data.reason || data.reasonCode || '',
+            flagId: data.flagId || null,
+            status: data.status || 'active',
+          };
+        })
+        .filter((r) => r.status !== 'withdrawn');
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function pickSafetyReasonSheet(title) {
+    return new Promise((resolve) => {
+      if (typeof openHalfSheet !== 'function') {
+        resolve('changed_mind');
+        return;
+      }
+      const bodyHtml = `<div class="safety-reason-list" role="list">
+        ${SAFETY_UNDO_REASONS.map(
+          (r) =>
+            `<button type="button" class="cp-menu-item safety-reason-item" data-reason="${r.code}" role="listitem">${r.label}</button>`
+        ).join('')}
+        <button type="button" class="btn btn--block" data-reason-cancel style="margin-top:8px;">Cancel</button>
+      </div>`;
+      openHalfSheet({
+        id: 'safetyReasonSheet',
+        title: title || 'Reason',
+        snap: 'compact',
+        accent: 'baithak',
+        bodyHtml,
+        onMount(sheet, close) {
+          sheet.querySelectorAll('[data-reason]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              const code = btn.dataset.reason;
+              close();
+              resolve(code);
+            });
+          });
+          sheet.querySelector('[data-reason-cancel]')?.addEventListener('click', () => {
+            close();
+            resolve(null);
+          });
+        },
+      });
+    });
   }
 
   /**
@@ -282,9 +532,12 @@
           return;
         }
         try {
-          await flagUser(user.uid, code, opts);
+          await flagUser(user.uid, code, {
+            ...opts,
+            name: user.name,
+            username: user.username,
+          });
           close();
-          if (typeof showToast === 'function') showToast("Report submitted. We'll review it. 🙏");
         } catch (e) {
           if (typeof showToast === 'function') showToast('Couldn’t submit report — try again');
         }
@@ -298,9 +551,13 @@
         return;
       }
       try {
-        await flagUser(user.uid, 'custom', { ...opts, customText: text });
+        await flagUser(user.uid, 'custom', {
+          ...opts,
+          customText: text,
+          name: user.name,
+          username: user.username,
+        });
         close();
-        if (typeof showToast === 'function') showToast("Report submitted. We'll review it. 🙏");
       } catch (e) {
         if (typeof showToast === 'function') showToast('Couldn’t submit report — try again');
       }
@@ -317,6 +574,21 @@
   }
 
   async function openBlockedUsersSheet() {
+    // Prefer Settings Safety section when available
+    if (typeof openSettingsModal === 'function' && document.getElementById('settingsSafetySection')) {
+      openSettingsModal();
+      setTimeout(() => {
+        const sec = document.getElementById('settingsSafetySection');
+        if (sec) {
+          sec.open = true;
+          sec.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+        document.getElementById('settingsBlockedDetails')?.setAttribute('open', '');
+        if (typeof refreshSettingsSafetyLists === 'function') refreshSettingsSafetyLists();
+      }, 80);
+      return;
+    }
+
     const overlay = document.createElement('div');
     overlay.className = 'archive-overlay';
     overlay.innerHTML = `
@@ -351,11 +623,86 @@
       .join('');
     list.querySelectorAll('[data-unblock]').forEach((btn) => {
       btn.addEventListener('click', async () => {
-        await unblockUser(btn.dataset.unblock, btn.dataset.name);
+        await unblockUser(btn.dataset.unblock, btn.dataset.name, { fromSettings: true });
         overlay.remove();
         openBlockedUsersSheet();
       });
     });
+  }
+
+  async function renderSettingsSafetyLists() {
+    const blockedHost = document.getElementById('settingsBlockedList');
+    const reportedHost = document.getElementById('settingsReportedList');
+    const blockedCount = document.getElementById('settingsBlockedCount');
+    const reportedCount = document.getElementById('settingsReportedCount');
+    if (!blockedHost && !reportedHost) return;
+
+    if (blockedHost) {
+      blockedHost.innerHTML = '<div class="toggle-desc">Loading…</div>';
+      const rows = await listBlockedUsers();
+      if (blockedCount) blockedCount.textContent = String(rows.length);
+      if (!rows.length) {
+        blockedHost.innerHTML = '<div class="toggle-desc">No blocked people.</div>';
+      } else {
+        blockedHost.innerHTML = rows
+          .map(
+            (u) => `<div class="settings-safety-row">
+            <div class="settings-safety-meta">
+              <strong>${typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml(u.name, u) : u.name}</strong>
+              ${u.username ? `<span class="toggle-desc">@${u.username}</span>` : ''}
+            </div>
+            <button type="button" class="btn btn--secondary" data-settings-unblock="${u.uid}" data-name="${(u.name || '').replace(/"/g, '&quot;')}">Unblock</button>
+          </div>`
+          )
+          .join('');
+        blockedHost.querySelectorAll('[data-settings-unblock]').forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            await unblockUser(btn.dataset.settingsUnblock, btn.dataset.name, {
+              fromSettings: true,
+              requireReason: true,
+            });
+            renderSettingsSafetyLists();
+          });
+        });
+      }
+    }
+
+    if (reportedHost) {
+      reportedHost.innerHTML = '<div class="toggle-desc">Loading…</div>';
+      const rows = await listReportedUsers();
+      if (reportedCount) reportedCount.textContent = String(rows.length);
+      if (!rows.length) {
+        reportedHost.innerHTML = '<div class="toggle-desc">No active reports.</div>';
+      } else {
+        reportedHost.innerHTML = rows
+          .map(
+            (u) => `<div class="settings-safety-row">
+            <div class="settings-safety-meta">
+              <strong>${typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml(u.name, u) : u.name}</strong>
+              ${u.username ? `<span class="toggle-desc">@${u.username}</span>` : ''}
+              ${u.reason ? `<span class="toggle-desc">${u.reason}</span>` : ''}
+            </div>
+            <button type="button" class="btn btn--secondary" data-settings-unreport="${u.uid}" data-flag="${u.flagId || ''}" data-name="${(u.name || '').replace(/"/g, '&quot;')}">Remove report</button>
+          </div>`
+          )
+          .join('');
+        reportedHost.querySelectorAll('[data-settings-unreport]').forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            await withdrawReport(btn.dataset.settingsUnreport, {
+              flagId: btn.dataset.flag || null,
+              name: btn.dataset.name,
+              fromSettings: true,
+              requireReason: true,
+            });
+            renderSettingsSafetyLists();
+          });
+        });
+      }
+    }
+  }
+
+  function refreshSettingsSafetyLists() {
+    return renderSettingsSafetyLists();
   }
 
   /**
@@ -554,12 +901,17 @@
 
   window.REPORT_REASONS = REPORT_REASONS;
   window.FLAG_REASONS = FLAG_REASONS;
+  window.SAFETY_UNDO_REASONS = SAFETY_UNDO_REASONS;
   window.blockUser = blockUser;
   window.unblockUser = unblockUser;
   window.flagUser = flagUser;
+  window.withdrawReport = withdrawReport;
   window.openFlagSheet = openFlagSheet;
   window.openContentMenu = openContentMenu;
   window.openBlockedUsersSheet = openBlockedUsersSheet;
   window.loadBlockedFromFirestore = loadBlockedFromFirestore;
   window.listBlockedUsers = listBlockedUsers;
+  window.listReportedUsers = listReportedUsers;
+  window.renderSettingsSafetyLists = renderSettingsSafetyLists;
+  window.refreshSettingsSafetyLists = refreshSettingsSafetyLists;
 })();

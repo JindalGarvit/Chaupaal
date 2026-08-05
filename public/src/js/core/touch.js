@@ -605,8 +605,33 @@
   function isOverlaySheetField(el) {
     if (!el) return false;
     return !!el.closest?.(
-      '.chaupaal-share-sheet, .game-friend-sheet, .cp-half-sheet, .loc-share-sheet, [data-nav-managed="1"].flag-sheet, .share-sheet, .mehfil-overlay'
+      '.chaupaal-share-sheet, .game-friend-sheet, .cp-half-sheet, .loc-share-sheet, [data-nav-managed="1"].flag-sheet, .share-sheet, .mehfil-overlay, .auth-overlay'
     );
+  }
+
+  function scrollAuthFieldIntoView(el) {
+    if (!el) return;
+    const body = el.closest?.('.auth-form-body');
+    if (!body) {
+      try {
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      } catch (e) {}
+      return;
+    }
+    try {
+      const bodyRect = body.getBoundingClientRect();
+      const elRect = el.getBoundingClientRect();
+      const pad = 24;
+      if (elRect.bottom > bodyRect.bottom - pad) {
+        body.scrollTop += elRect.bottom - bodyRect.bottom + pad + 48;
+      } else if (elRect.top < bodyRect.top + pad) {
+        body.scrollTop -= bodyRect.top + pad - elRect.top;
+      }
+    } catch (e) {
+      try {
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      } catch (err) {}
+    }
   }
 
   function setupKeyboardAvoidance() {
@@ -634,7 +659,8 @@
       document.documentElement.classList.toggle('kb-open', wantKbOpen);
       if (inputFocused && offset > 40) {
         try {
-          focused.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          if (focused.closest?.('.auth-overlay')) scrollAuthFieldIntoView(focused);
+          else focused.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         } catch (e) {}
         document.querySelectorAll('.cp-kb-lift').forEach((el) => el.classList.remove('cp-kb-lift'));
         if (!overlayField) {
@@ -647,6 +673,10 @@
     vv.addEventListener('scroll', apply);
     document.addEventListener('focusin', (e) => {
       if (isTextField(e.target)) {
+        if (e.target.closest?.('.auth-overlay')) {
+          setTimeout(() => scrollAuthFieldIntoView(e.target), 50);
+          setTimeout(() => scrollAuthFieldIntoView(e.target), 320);
+        }
         setTimeout(apply, 50);
         setTimeout(apply, 300);
       }
