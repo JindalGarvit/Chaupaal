@@ -434,9 +434,13 @@ function simpleHash(s) {
   return String(h);
 }
 
+function isValidDiscoveryPersonSignal(signal) {
+  return signal === 'more_like' || signal === 'not_interested';
+}
+
 async function recordDiscoveryPersonSignal(db, admin, { uid, candidateUid, signal, intentProfileId, queryHash }) {
   if (!uid || !candidateUid) throw new Error('UID_REQUIRED');
-  if (signal !== 'more_like' && signal !== 'not_interested') throw new Error('SIGNAL_INVALID');
+  if (!isValidDiscoveryPersonSignal(signal)) throw new Error('SIGNAL_INVALID');
   const value = signal === 'more_like' ? 1 : -1;
   const docId = `discovery_${candidateUid}`.slice(0, 180);
   await db
@@ -509,6 +513,7 @@ module.exports = {
   processDiscoveryBatchLabels,
   parseIntentQuery,
   rankDiscoveryCandidates,
+  isValidDiscoveryPersonSignal,
   BATCH_INTERFACE,
   DISCOVER_POOL,
 };

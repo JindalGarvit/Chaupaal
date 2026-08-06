@@ -179,6 +179,7 @@ async function runDenormBackfillPage(db) {
 
 module.exports = {
   BATCH,
+  groupNameLower,
   buildPublicProjection,
   backfillGroups,
   backfillUsersPublic,
