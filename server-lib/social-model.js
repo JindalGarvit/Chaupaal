@@ -63,9 +63,19 @@ function canViewStory({
   return visibility === 'friends';
 }
 
+/**
+ * Empty Close Friends is opt-in emptiness, not "all friends".
+ * Stories/Instants must widen to friends and disclose via audienceFallback —
+ * never keep visibility=close_friends while fanning out to everyone.
+ */
+function resolveEmptyCloseFriendsAudience() {
+  return { visibility: 'friends', audienceFallback: 'friends' };
+}
+
 module.exports = {
   deriveRelationshipState,
   primaryRelationshipMode,
   countDeltasForFollowChange,
   canViewStory,
+  resolveEmptyCloseFriendsAudience,
 };

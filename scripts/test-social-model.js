@@ -119,6 +119,33 @@ test('Close Friends stories require private-list membership', () => {
   );
 });
 
+test('empty Close Friends falls back to friends with disclosure — never silent all-friends CF', () => {
+  const { resolveEmptyCloseFriendsAudience } = require('../server-lib/social-model');
+  const resolved = resolveEmptyCloseFriendsAudience();
+  assert.equal(resolved.visibility, 'friends');
+  assert.equal(resolved.audienceFallback, 'friends');
+  // A mere friend must not see content still labeled close_friends.
+  assert.equal(
+    canViewStory({
+      destination: 'baithak',
+      visibility: 'close_friends',
+      isFriend: true,
+      isCloseFriend: false,
+    }),
+    false
+  );
+  // After honest fallback, friends can view under friends visibility.
+  assert.equal(
+    canViewStory({
+      destination: 'baithak',
+      visibility: resolved.visibility,
+      isFriend: true,
+      isCloseFriend: false,
+    }),
+    true
+  );
+});
+
 test('blocks override all non-owner story access', () => {
   assert.equal(
     canViewStory({

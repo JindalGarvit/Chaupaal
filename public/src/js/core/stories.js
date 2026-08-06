@@ -257,7 +257,18 @@
           expiresInHours: 24,
         });
         if (!story) throw new Error(tt('baithak_story_fail', 'Could not share'));
-        if (typeof showToast === 'function') showToast(tt('instants_shared', 'Note shared'));
+        if (typeof showToast === 'function') {
+          if (story.audienceFallback === 'friends') {
+            showToast(
+              tt(
+                'instants_shared_friends_fallback',
+                'Note shared with Friends — add Close Friends for a private list'
+              )
+            );
+          } else {
+            showToast(tt('instants_shared', 'Note shared'));
+          }
+        }
         await renderBaithakInstants();
         return story;
       } catch (e) {
