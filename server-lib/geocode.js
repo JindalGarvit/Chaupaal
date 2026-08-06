@@ -78,4 +78,4 @@ async function searchPlaces(query, limit = 6) {
   }
 }
 
-module.exports = { searchPlaces };
+module.exports = { searchPlaces, cacheKey };
