@@ -349,6 +349,48 @@ async function handlePost(req, res) {
     }
   }
 
+  if (action === 'group_join_invite') {
+    const token = String(body.token || body.inviteToken || '').trim();
+    if (!token) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'invite token required');
+    }
+    try {
+      const { checkActionRateLimit } = require('../server-lib/rate-limit');
+      const rate = await checkActionRateLimit(user.uid, 'follow');
+      if (!rate.ok) {
+        return sendError(res, 429, 'RATE_LIMITED', 'Too many join attempts. Try again shortly.');
+      }
+    } catch (e) {
+      console.warn('[media-config] group_join_invite rate-limit', e?.message || e);
+    }
+    const adminApp = initAdmin();
+    if (!adminApp) {
+      return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    }
+    try {
+      const { joinGroupByInviteToken } = require('../server-lib/group-invite-join');
+      const result = await joinGroupByInviteToken(adminApp.firestore(), adminApp, {
+        uid: user.uid,
+        token,
+        profile: {
+          name: body.name || body.actorName || '',
+          avatar: body.avatar || '👤',
+          photoURL: body.photoURL || '',
+          profileType: body.profileType || 'personal',
+        },
+      });
+      if (!result.ok) {
+        const status =
+          result.code === 'NOT_FOUND' ? 404 : result.code === 'DISABLED' ? 403 : 400;
+        return sendError(res, status, result.code || 'JOIN_FAILED', 'Could not join group');
+      }
+      return sendSuccess(res, result);
+    } catch (e) {
+      console.warn('[media-config] group_join_invite', e?.message || e);
+      return sendError(res, 500, 'JOIN_FAILED', e?.message || 'Could not join group');
+    }
+  }
+
   if (action === 'live_location_stop') {
     const shareId = String(body.shareId || '').trim();
     if (!shareId) return sendError(res, 400, 'VALIDATION_ERROR', 'shareId required');
@@ -698,6 +740,7 @@ async function handlePost(req, res) {
       'music_resolve',
       'geocode_search',
       'live_location_stop',
+      'group_join_invite',
       'check_url',
       'agora_token',
       'policy_consume',

@@ -558,12 +558,22 @@ service cloud.firestore {
         resource.data.admins != null &&
         resource.data.admins.hasAny([request.auth.uid]);
     }
-    // Non-member may only arrayUnion themselves (+ memberProfiles / updatedAt) when invite is enabled.
+    // Tokenless client self-join is ONLY for public + instant groups (Join button).
+    // Private groups and approval-mode joins must use Admin POST group_join_invite
+    // so the invite token is verified. Previously any auth user who knew chatId
+    // could arrayUnion themselves whenever invite.enabled was true — bypassing
+    // both the secret token and admin approval.
     function validInviteSelfJoin() {
       return isAuth()
+        && resource.data.type == 'group'
+        && resource.data.isPublic == true
         && resource.data.invite != null
         && resource.data.invite.enabled == true
         && resource.data.invite.token is string
+        && (
+          !('mode' in resource.data.invite) ||
+          resource.data.invite.mode == 'instant'
+        )
         && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['participants', 'memberProfiles', 'updatedAt', 'memberCount'])
         && request.resource.data.participants.hasAll(resource.data.participants)
