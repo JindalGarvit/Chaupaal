@@ -36,6 +36,8 @@ const LIMITS = {
   media_lookup: { minute: 40, hour: 400 },
   // GIF search (Klipy proxy) — typing debounce still fires often
   gif_search: { minute: 30, hour: 300 },
+  // Reports / low chat ratings / block trust signals — abuse would silence peers
+  report: { minute: 5, hour: 30 },
 };
 
 let redis = null;
