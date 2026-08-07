@@ -1757,6 +1757,14 @@ body.theme-goldenHour,
 .duniya-mode-switch{display:flex;gap:4px;background:var(--cream);border-radius:12px;padding:3px;border:1px solid var(--line);}
 .duniya-mode-btn{border:0;background:transparent;border-radius:10px;padding:8px 12px;font:700 12px 'Space Grotesk',sans-serif;color:var(--muted);cursor:pointer;}
 .duniya-mode-btn.active{background:var(--white);color:var(--red);box-shadow:0 1px 3px rgba(0,0,0,.06);}
+.duniya-music-bar{padding:8px 14px 4px;flex-shrink:0;}
+.duniya-music-btn{
+  display:inline-flex;align-items:center;gap:8px;padding:8px 14px;
+  border-radius:999px;border:1.5px solid var(--line);background:var(--cream);
+  font:700 13px 'Space Grotesk',sans-serif;color:var(--ink);cursor:pointer;
+  touch-action:manipulation;
+}
+.duniya-music-btn:active{border-color:var(--red);color:var(--red);}
 .lehar-feed{
   position:absolute;inset:0;top:0;overflow-y:auto;
   scroll-snap-type:y mandatory;scroll-snap-stop:always;
@@ -3913,6 +3921,94 @@ button[aria-busy="true"]::after{
 .music-picker-skel-lines div:last-child{width:55%;}
 @keyframes musicSkel{0%,100%{opacity:.45}50%{opacity:.9}}
 
+/* ===== Category manage sheet ===== */
+.cat-manage-hint{font-size:12px;color:var(--muted);margin:0 0 10px;line-height:1.4;}
+.cat-manage-list{max-height:36vh;overflow-y:auto;margin-bottom:12px;}
+.cat-manage-row{
+  display:flex;align-items:center;gap:8px;padding:10px 8px;
+  border-bottom:1px solid var(--line);cursor:grab;
+}
+.cat-manage-row.is-dragging{opacity:.5;background:var(--cream);}
+.cat-manage-grip{color:var(--muted);font-size:12px;letter-spacing:-2px;}
+.cat-manage-emoji{font-size:16px;}
+.cat-manage-name{flex:1;font:700 13px 'Space Grotesk',sans-serif;color:var(--ink);}
+.cat-manage-kind{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;}
+.cat-manage-del{border:none;background:transparent;color:var(--muted);cursor:pointer;padding:6px;}
+.cat-manage-add-title{font:700 12px 'Space Grotesk',sans-serif;margin-bottom:8px;color:var(--ink);}
+.cat-manage-suggestions{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
+.cat-manage-sug{
+  padding:6px 10px;border-radius:999px;border:1.5px solid var(--line);
+  background:var(--cream);font-size:12px;font-weight:600;cursor:pointer;
+}
+.cat-manage-custom{display:flex;gap:8px;align-items:center;margin-bottom:10px;}
+.cat-manage-custom .music-picker-input{flex:1;}
+.cat-manage-custom .music-hub-cta{width:auto;padding:10px 14px;}
+.cat-manage-refresh{
+  width:100%;padding:10px;border:none;background:transparent;color:var(--red);
+  font:700 13px 'Space Grotesk',sans-serif;cursor:pointer;
+}
+
+/* ===== Music hub (Radio / Trending / Lists) ===== */
+.music-hub-tabs{
+  display:flex;gap:6px;overflow-x:auto;padding:0 0 10px;margin-bottom:4px;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;
+}
+.music-hub-tabs::-webkit-scrollbar{display:none;}
+.music-hub-tab{
+  flex:0 0 auto;padding:8px 12px;border-radius:999px;border:1.5px solid var(--line);
+  background:var(--cream);font:700 12px 'Space Grotesk',sans-serif;color:var(--muted);
+  cursor:pointer;touch-action:manipulation;
+}
+.music-hub-tab.is-active{border-color:var(--red);color:var(--red);background:rgba(230,57,70,.07);}
+.music-hub-settings{
+  display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;
+}
+.music-hub-settings label{
+  display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:700;color:var(--muted);
+}
+.music-hub-settings select{
+  padding:8px 10px;border-radius:10px;border:1.5px solid var(--line);
+  background:var(--white);font-size:13px;color:var(--ink);
+}
+.music-hub-row{display:flex;align-items:center;gap:4px;}
+.music-hub-row .music-picker-row{flex:1;min-width:0;}
+.music-hub-like,.music-hub-share{
+  width:40px;height:40px;border:none;border-radius:12px;background:transparent;
+  color:var(--muted);font-size:16px;cursor:pointer;flex-shrink:0;
+}
+.music-hub-like.is-liked{color:var(--red);}
+.music-hub-playlist{
+  width:100%;display:flex;justify-content:space-between;align-items:center;
+  padding:14px 12px;margin-bottom:6px;border:1px solid var(--line);border-radius:14px;
+  background:var(--cream);cursor:pointer;text-align:left;
+}
+.music-hub-playlist strong{font:700 14px 'Space Grotesk',sans-serif;color:var(--ink);}
+.music-hub-playlist span{font-size:12px;color:var(--muted);}
+.music-hub-footer{padding-top:10px;flex-shrink:0;}
+.music-hub-cta{
+  width:100%;padding:12px 16px;border:none;border-radius:14px;
+  background:var(--red);color:#fff;font:700 14px 'Space Grotesk',sans-serif;cursor:pointer;
+}
+.music-hub-cta.hidden,.music-hub-settings.hidden,.music-hub-search-wrap.hidden,.music-hub-scope.hidden{display:none!important;}
+
+.radio-share-card{
+  display:flex;align-items:center;gap:12px;min-width:220px;max-width:300px;
+  padding:10px 12px;border-radius:var(--r-card,14px);
+  background:var(--surface-elevated,var(--white));border:1px solid var(--line);
+  box-shadow:var(--shadow-sm);cursor:pointer;box-sizing:border-box;text-align:left;
+}
+.radio-share-art{
+  width:52px;height:52px;border-radius:12px;object-fit:cover;flex-shrink:0;
+  background:linear-gradient(135deg,rgba(230,57,70,.15),rgba(42,49,88,.2));
+}
+.radio-share-art--empty{display:grid;place-items:center;font-size:22px;}
+.radio-share-meta{min-width:0;flex:1;}
+.radio-share-label{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--red);}
+.radio-share-title{font:700 13px/1.25 'Space Grotesk',sans-serif;color:var(--ink);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.radio-share-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+.msg-bubble .radio-share-card{margin:0;}
+
 .story-music-backdrop{
   width:100%;height:100%;
   background:linear-gradient(160deg,var(--navy,#1B1F3B),#3d1f2e 55%,var(--red,#E63946));
@@ -4210,6 +4306,34 @@ a.chaupaal-ext-link{color:var(--red);text-decoration:underline;text-underline-of
 .notif-item.is-read{opacity:0.72;}
 .notif-item.unread{background:rgba(230,57,70,0.05);}
 .notif-item.is-swiping{transition:none;}
+.notif-item{overflow:hidden;}
+.notif-swipe-underlay{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;border-radius:12px;pointer-events:none;z-index:0;
+  background:transparent;opacity:0;transition:opacity .15s ease;
+}
+.notif-item.is-swipe-less .notif-swipe-underlay{
+  opacity:1;background:linear-gradient(90deg,rgba(230,57,70,.18),transparent 55%);
+}
+.notif-item.is-swipe-more .notif-swipe-underlay{
+  opacity:1;background:linear-gradient(270deg,rgba(42,157,143,.2),transparent 55%);
+}
+.notif-swipe-less,.notif-swipe-more{
+  font:700 11px 'Space Grotesk',sans-serif;text-transform:uppercase;letter-spacing:.04em;
+  opacity:0;
+}
+.notif-item.is-swipe-less .notif-swipe-less{opacity:1;color:var(--red);}
+.notif-item.is-swipe-more .notif-swipe-more{opacity:1;color:#2A9D8F;}
+.notif-item > .notif-icon,
+.notif-item > .notif-body,
+.notif-item > .notif-unread-pip{position:relative;z-index:1;background:inherit;}
+.push-hist-meta{padding:4px 14px 8px;font-size:12px;color:var(--muted);font-weight:600;}
+@media (prefers-reduced-motion: reduce){
+  .notif-item{transition:none;}
+  .notif-swipe-underlay{transition:none;}
+}
+html.quiet-mode .notif-item{transition:none;}
+
 .notif-text-row{display:flex;align-items:flex-start;gap:6px;}
 .notif-text-row .notif-expand{border:0;background:transparent;color:var(--muted);font-size:12px;padding:0 2px;cursor:pointer;line-height:1.4;flex-shrink:0;}
 .notif-actors{display:flex;flex-direction:column;gap:4px;margin:8px 0 4px;padding:6px 0 0;border-top:1px solid rgba(0,0,0,0.06);}
@@ -4240,6 +4364,13 @@ a.chaupaal-ext-link{color:var(--red);text-decoration:underline;text-underline-of
 }
 .bottom-tabs.is-shortcut-mode .tab-btn .tab-label{
   font-size:8px;line-height:1.1;max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+/* Red base-tab indicator is for the five tabs only — hide while morph shortcuts are up */
+.bottom-tabs.is-shortcut-mode .tab-btn.active::before,
+.bottom-tabs.is-shortcut-mode .tab-btn.is-shortcut.active::before{
+  content:none!important;
+  display:none!important;
+  opacity:0!important;
 }
 .bottom-tabs.is-shortcut-mode .sidebar-logo,
 .bottom-tabs.is-shortcut-mode .sidebar-streak,

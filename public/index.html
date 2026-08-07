@@ -33,10 +33,10 @@
   <link rel="stylesheet" href="/src/styles/tab-elements.css?v=0544038c">
   <link rel="stylesheet" href="/src/styles/akhbaar.css?v=b924fec3">
   <link rel="stylesheet" href="/src/styles/dangal.css?v=1806b1a8">
-  <link rel="stylesheet" href="/src/styles/baithak.css?v=3a1ea394">
-  <link rel="stylesheet" href="/src/styles/peepal.css?v=ed9385c2">
+  <link rel="stylesheet" href="/src/styles/baithak.css?v=e8bff023">
+  <link rel="stylesheet" href="/src/styles/peepal.css?v=c2c4d705">
   <link rel="stylesheet" href="/src/styles/duniya.css?v=51212780">
-  <link rel="stylesheet" href="/src/styles/components.css?v=52bb138b">
+  <link rel="stylesheet" href="/src/styles/components.css?v=73d7064a">
   <link rel="stylesheet" href="/src/styles/mehfil.css?v=ea547811">
 </head>
 <body>
@@ -492,22 +492,28 @@
 
   <div class="tab-panel active" id="panel-peepal">
     <div class="peepal-screen" id="peepalScreen">
-      <!-- Intent people card (Vriksha) — native feed card, not a toolbar / not branded Khoj -->
+      <!-- Intent people card (Vriksha) — compact: mini icons, 60/20/20 actions, 2–3 peeks -->
       <div class="peepal-card peepal-intent-card" id="peepalIntentCard" data-nav-ignore="1">
-        <div class="peepal-intent-card-title" data-i18n="peepal_find_label">Find people on Peepal</div>
-        <div class="peepal-intent-card-sub" data-i18n="peepal_intent_sub">Type anything — we’ll surface people who fit.</div>
-        <div class="peepal-intent-chips" id="peepalSearchNudges" data-swipe-ignore>
-          <button type="button" class="peepal-nudge-chip" data-hint="someone warm to date near me"><span data-icon="heart" data-icon-size="14"></span> Dating</button>
-          <button type="button" class="peepal-nudge-chip" data-hint="new friends with similar interests"><span data-icon="handshake" data-icon-size="14"></span> Friendship</button>
-          <button type="button" class="peepal-nudge-chip" data-hint="someone hiring or looking for work"><span data-icon="briefcase" data-icon-size="14"></span> Job</button>
-          <button type="button" class="peepal-nudge-chip" data-hint="flatmate or roommate nearby"><span data-icon="home" data-icon-size="14"></span> Flatmate</button>
-          <button type="button" class="peepal-nudge-chip" data-hint="travel companion for an upcoming trip"><span data-icon="plane" data-icon-size="14"></span> Travel</button>
-          <button type="button" class="peepal-nudge-chip" data-hint="someone to play games with"><span data-icon="gamepad" data-icon-size="14"></span> Gaming</button>
-          <button type="button" class="peepal-nudge-chip" data-hint="music lover with similar taste"><span data-icon="music" data-icon-size="14"></span> Music</button>
-          <button type="button" class="peepal-nudge-chip" data-hint="startup-minded person to collaborate"><span data-icon="rocket" data-icon-size="14"></span> Co-founder</button>
+        <div class="peepal-intent-card-head">
+          <div class="peepal-intent-card-title" data-i18n="peepal_find_label">Find people</div>
+          <div class="peepal-intent-mini-icons peepal-intent-chips" id="peepalSearchNudges" data-swipe-ignore role="toolbar" aria-label="Intent shortcuts">
+            <button type="button" class="peepal-nudge-chip peepal-nudge-chip--mini" data-chip-intent="dating" data-hint="someone warm to date near me" data-tint="#E63946" title="Dating" aria-label="Dating"><span data-icon="heart" data-icon-size="14"></span></button>
+            <button type="button" class="peepal-nudge-chip peepal-nudge-chip--mini" data-chip-intent="friendship" data-hint="new friends with similar interests" data-tint="#2E7D32" title="Friendship" aria-label="Friendship"><span data-icon="handshake" data-icon-size="14"></span></button>
+            <button type="button" class="peepal-nudge-chip peepal-nudge-chip--mini" data-chip-intent="job" data-hint="someone hiring or looking for work" data-tint="#EF6C00" title="Job" aria-label="Job"><span data-icon="briefcase" data-icon-size="14"></span></button>
+            <button type="button" class="peepal-nudge-chip peepal-nudge-chip--mini" data-chip-intent="flatmate" data-hint="flatmate or roommate nearby" data-tint="#00838F" title="Flatmate" aria-label="Flatmate"><span data-icon="home" data-icon-size="14"></span></button>
+            <button type="button" class="peepal-nudge-chip peepal-nudge-chip--mini" data-chip-intent="travel" data-hint="travel companion for an upcoming trip" data-tint="#00897B" title="Travel" aria-label="Travel"><span data-icon="plane" data-icon-size="14"></span></button>
+            <button type="button" class="peepal-nudge-chip peepal-nudge-chip--mini" data-chip-intent="gaming" data-hint="someone to play games with" data-tint="#5E35B1" title="Gaming" aria-label="Gaming"><span data-icon="gamepad" data-icon-size="14"></span></button>
+            <button type="button" class="peepal-nudge-chip peepal-nudge-chip--mini" data-chip-intent="music" data-hint="music lover with similar taste" data-tint="#AD1457" title="Music" aria-label="Music"><span data-icon="music" data-icon-size="14"></span></button>
+            <button type="button" class="peepal-nudge-chip peepal-nudge-chip--mini" data-chip-intent="cofounder" data-hint="startup-minded person to collaborate" data-tint="#1565C0" title="Co-founder" aria-label="Co-founder"><span data-icon="rocket" data-icon-size="14"></span></button>
+          </div>
         </div>
         <textarea class="peepal-ai-search-input" id="peepalAiSearchInput" rows="2" placeholder="Who are you hoping to meet?" data-i18n-placeholder="peepal_find_ph" data-living-ph="peepal_intent"></textarea>
-        <button type="button" class="peepal-ai-search-btn" id="peepalAiSearchGo"><span data-icon="search" data-icon-size="16" style="margin-right:6px;"></span> <span data-i18n="peepal_find_btn">Find People</span></button>
+        <div class="peepal-intent-actions" role="group" aria-label="People search actions">
+          <button type="button" class="peepal-ai-search-btn peepal-intent-act peepal-intent-act--primary" id="peepalAiSearchGo"><span data-icon="search" data-icon-size="16" style="margin-right:4px;"></span> <span data-i18n="peepal_find_btn">Find people</span></button>
+          <button type="button" class="peepal-intent-act peepal-intent-act--global" id="peepalIntentGlobalSearch" title="Search Chaupaal"><span data-icon="globe" data-icon-size="15"></span><span class="peepal-intent-act-label">Chaupaal</span></button>
+          <button type="button" class="peepal-intent-act peepal-intent-act--discuss" id="peepalIntentDiscuss" title="Start discussion"><span data-icon="message-circle" data-icon-size="15"></span><span class="peepal-intent-act-label">Discuss</span></button>
+        </div>
+        <div id="peepalCompatPeeks" class="peepal-compat-peeks" aria-live="polite"></div>
         <div id="peepalAiSearchResults" class="peepal-intent-results"></div>
       </div>
       <!-- Hidden legacy host kept for ID compatibility -->
@@ -847,7 +853,7 @@
   <script src="/src/js/core/environment.js?v=b180aeb3"></script>
   <script src="/src/js/core/storage.js?v=0fb0e244"></script>
   <script src="/src/js/core/icons.js?v=6970847a"></script>
-  <script src="/src/js/core/tab-elements.js?v=a422ecf7"></script>
+  <script src="/src/js/core/tab-elements.js?v=cde8c0a1"></script>
   <script src="/src/js/core/tab-habits.js?v=288ff896"></script>
   <script src="/src/js/config/policy-limits.js?v=8f3cfeb8"></script>
   <script src="/src/js/core/users-public.js?v=56c0234e"></script>
@@ -890,7 +896,8 @@
   <script src="/src/js/core/profile-highlights.js?v=bce95bea"></script>
   <script src="/src/js/core/profile-shell.js?v=25a809d0"></script>
   <script src="/src/js/core/profile-section-mount.js?v=a15557d7"></script>
-  <script src="/src/js/core/notification-panel.js?v=66a944ca"></script>
+  <script src="/src/js/core/push-prefs.js?v=967d0d68"></script>
+  <script src="/src/js/core/notification-panel.js?v=64b2676e"></script>
   <script src="/src/js/core/micro.js?v=2f797874"></script>
   <script src="/src/js/core/tab-gestures.js?v=8177870a"></script>
   <script src="/src/js/core/sessions.js?v=fafd40d3"></script>
@@ -901,10 +908,10 @@
   <script src="/src/js/core/ambient-sound.js?v=d6b818ff"></script>
   <script src="/src/js/core/overlay-scope.js?v=61bd18ea"></script>
   <script src="/src/js/core/a11y.js?v=c13f075d"></script>
-  <script src="/src/js/core/nav-stack.js?v=ef412990"></script>
+  <script src="/src/js/core/nav-stack.js?v=54897972"></script>
   <script src="/src/js/core/half-sheet.js?v=f0391e52"></script>
   <script src="/src/js/core/journal-checkin.js?v=d8008bc5"></script>
-  <script src="/src/js/core/media-player.js?v=698bc13a"></script>
+  <script src="/src/js/core/media-player.js?v=e3b702ac"></script>
   <script src="/src/js/features/location-share.js?v=07b67a9e"></script>
   <script src="/src/js/core/touch.js?v=29d73777"></script>
   <script src="/src/js/ai/ai-config.js?v=b15d85db"></script>
@@ -915,7 +922,7 @@
   <script src="/src/js/core/deeplinks.js?v=0ac3232d"></script>
   <script src="/src/js/core/rate-limit-client.js?v=2696fc7d"></script>
   <script src="/src/js/core/theme.js?v=612dd3bb"></script>
-  <script src="/src/js/core/discovery-core.js?v=9a58f62e"></script>
+  <script src="/src/js/core/discovery-core.js?v=03aaa25d"></script>
   <script src="/src/js/core/profile-btn.js?v=f94e84cb"></script>
   <script src="/src/js/auth/auth-ui.js?v=30e365df"></script>
   <script src="/src/js/auth/phone-otp.js?v=3315dcd2"></script>
@@ -927,24 +934,27 @@
   <script src="/src/js/features/self-chat.js?v=9dfd834b"></script>
   <script src="/src/js/features/chaupaal-chat.js?v=759adadb"></script>
   <script src="/src/js/features/chat-rating.js?v=19d676d2"></script>
-  <script src="/src/js/features/baithak-chat.js?v=9cfac479"></script>
+  <script src="/src/js/features/baithak-chat.js?v=da3a3ed0"></script>
   <script src="/src/js/features/mehfil.js?v=90911e42"></script>
   <script src="/src/js/features/chaupaal-hub.js?v=945a01db"></script>
   <script src="/src/js/features/chaupaal-ai-profile.js?v=c3832ffa"></script>
   <script src="/src/js/features/music-card.js?v=af83d9e2"></script>
+  <script src="/src/js/features/music-taste.js?v=6b45b133"></script>
+  <script src="/src/js/features/music-hub.js?v=c3cd9df1"></script>
   <script src="/src/js/features/group-info.js?v=8f6fe47c"></script>
   <script src="/src/js/core/stories.js?v=0f10b01b"></script>
   <script src="/src/js/core/archive-hub.js?v=c5e706ec"></script>
   <script src="/src/js/core/journal-anim.js?v=f2658ae2"></script>
   <script src="/src/js/features/baithak.js?v=e76ecd86"></script>
   <script src="/src/js/features/profile-preview.js?v=6cbccc29"></script>
-  <script src="/src/js/features/profile.js?v=f6c39dde"></script>
+  <script src="/src/js/features/profile.js?v=0f43047c"></script>
   <script src="/src/js/core/i18n.js?v=30f494a5"></script>
-  <script src="/src/js/features/categories.js?v=e4574bf8"></script>
+  <script src="/src/js/features/categories.js?v=265cf83a"></script>
+  <script src="/src/js/features/category-prefs.js?v=033b4dec"></script>
   <script src="/src/js/features/peepal.js?v=7ec67d45"></script>
   <script src="/src/js/features/onboarding.js?v=4dcbb9f5"></script>
   <script src="/src/js/core/service-worker.js?v=9ffe9136"></script>
-  <script src="/src/js/features/streak.js?v=badf601a"></script>
+  <script src="/src/js/features/streak.js?v=1f821f36"></script>
   <script src="/vendor/chess.js?v=434826c8"></script>
   <script src="/src/js/games/game-runtime.js?v=9d6492c3"></script>
   <script src="/src/js/games/game-ui.js?v=b4d06f64"></script>
@@ -955,12 +965,12 @@
   <script src="/src/js/games/arcade.js?v=f91e8a89"></script>
   <script src="/src/js/games/rw-sports.js?v=9f729fe1"></script>
   <script src="/src/js/main.js?v=05233c72"></script>
-  <script src="/src/js/features/akhbaar-catbar.js?v=fa1939cc"></script>
-  <script src="/src/js/features/duniya.js?v=f1682e00"></script>
+  <script src="/src/js/features/akhbaar-catbar.js?v=0a3b9b77"></script>
+  <script src="/src/js/features/duniya.js?v=3966bbee"></script>
   <script src="/src/js/features/media-picker.js?v=0d1a4caa"></script>
   <script src="/src/js/features/premium.js?v=53c2aa53"></script>
-  <script src="/src/js/features/discovery.js?v=2c8fd9a7"></script>
-  <script src="/src/js/features/khoj.js?v=37c3d493"></script>
+  <script src="/src/js/features/discovery.js?v=99f03c51"></script>
+  <script src="/src/js/features/khoj.js?v=7b51543e"></script>
   <script src="/src/js/core/polish.js?v=267509b9"></script>
   <script src="/src/js/features/fairness.js?v=0afd899f"></script>
   <script src="/src/js/features/media-profile.js?v=d8fe1026"></script>

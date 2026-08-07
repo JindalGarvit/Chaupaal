@@ -778,3 +778,238 @@ html.kb-open .cp-mini-player.cp-mini-fab:not(.is-expanded){bottom:12px;}
 .match-bar-fill{height:100%;border-radius:8px;background:var(--red);}
 .match-pct{font-weight:700;color:var(--ink);width:36px;text-align:right;}
 
+/* ===== Phase 1: Baithak 3D broken bottom border =====
+   Solid Chaupaal-red bottom edge with ~18% center break;
+   left/right segments bulge outward via perspective + drop shadow.
+   Body / text / taps unchanged — bottom edge only. */
+:root{
+  --baithak-3d-gap:18%;
+  --baithak-3d-red:var(--brand-red, var(--red, #E63946));
+  --baithak-3d-depth:color-mix(in srgb, var(--baithak-3d-red) 62%, #1a0a0c);
+}
+
+.baithak-3d-edge,
+.msg-bubble .music-card:not(.music-card--story),
+.msg-bubble .loc-card:not(.loc-card--story),
+.msg-bubble .chat-file-msg,
+.msg-bubble .chat-location-msg,
+.msg-bubble .chat-img-wrap,
+.msg-bubble .radio-share-card,
+.msg-bubble .user-link-card,
+.msg-bubble .call-invite-card,
+.msg-bubble.mehfil-invite,
+.msg-bubble.challenge,
+.chat-messages-area .baithak-3d-edge{
+  --_3d-seg:calc((100% - var(--baithak-3d-gap)) / 2);
+  position:relative;
+  isolation:isolate;
+  /* Keep side/top borders; hand bottom to pseudo segments */
+  border-bottom-color:transparent !important;
+  /* Allow 3D lip to paint slightly below the box */
+  overflow:visible;
+}
+
+/* File / legacy location stubs — ensure a frame exists for the break */
+.msg-bubble .chat-file-msg,
+.msg-bubble .chat-location-msg{
+  border:1px solid var(--line);
+  box-shadow:var(--shadow-sm, 0 1px 3px rgba(43,39,48,.06));
+  background:var(--surface-elevated, var(--white));
+}
+.msg-bubble .chat-location-msg{
+  display:flex;align-items:center;gap:8px;
+  border-radius:var(--r-card, 12px);padding:10px 12px;
+  font-size:13px;font-weight:600;
+}
+
+/* Photo attachments: wrap frames the image (img can't host ::before/::after) */
+.msg-bubble .chat-img-wrap{
+  display:inline-block;
+  max-width:100%;
+  border:1px solid var(--line);
+  border-radius:14px;
+  box-sizing:border-box;
+  box-shadow:var(--shadow-sm, 0 1px 3px rgba(43,39,48,.06));
+  line-height:0;
+}
+.msg-bubble .chat-img-wrap .chat-img-msg{
+  border:0;box-shadow:none;border-radius:13px;max-width:100%;
+}
+
+/* Loc map still clips to radius while card allows 3D lip */
+.msg-bubble .loc-card:not(.loc-card--story) .loc-card-map{
+  overflow:hidden;
+  border-radius:calc(var(--r-card, 14px) - 1px) calc(var(--r-card, 14px) - 1px) 0 0;
+}
+
+/* Left + right bottom segments */
+.baithak-3d-edge::before,
+.baithak-3d-edge::after,
+.msg-bubble .music-card:not(.music-card--story)::before,
+.msg-bubble .music-card:not(.music-card--story)::after,
+.msg-bubble .loc-card:not(.loc-card--story)::before,
+.msg-bubble .loc-card:not(.loc-card--story)::after,
+.msg-bubble .chat-file-msg::before,
+.msg-bubble .chat-file-msg::after,
+.msg-bubble .chat-location-msg::before,
+.msg-bubble .chat-location-msg::after,
+.msg-bubble .chat-img-wrap::before,
+.msg-bubble .chat-img-wrap::after,
+.msg-bubble .radio-share-card::before,
+.msg-bubble .radio-share-card::after,
+.msg-bubble .user-link-card::before,
+.msg-bubble .user-link-card::after,
+.msg-bubble .call-invite-card::before,
+.msg-bubble .call-invite-card::after,
+.msg-bubble.mehfil-invite::before,
+.msg-bubble.mehfil-invite::after,
+.msg-bubble.challenge::before,
+.msg-bubble.challenge::after{
+  content:'';
+  position:absolute;
+  z-index:3;
+  bottom:-1.5px;
+  height:3px;
+  width:var(--_3d-seg, 41%);
+  pointer-events:none;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--baithak-3d-red) 88%, #fff) 0%,
+      var(--baithak-3d-red) 45%,
+      var(--baithak-3d-depth) 100%);
+  border-radius:1px 1px 2.5px 2.5px;
+  box-shadow:
+    0 1.5px 0 0 var(--baithak-3d-depth),
+    0 3px 5px -1px rgba(230,57,70,.32),
+    0 0.5px 0 rgba(255,255,255,.35) inset;
+  transform:perspective(36px) rotateX(14deg) translateZ(0.01px);
+  transform-origin:center top;
+  will-change:transform;
+}
+
+.baithak-3d-edge::before,
+.msg-bubble .music-card:not(.music-card--story)::before,
+.msg-bubble .loc-card:not(.loc-card--story)::before,
+.msg-bubble .chat-file-msg::before,
+.msg-bubble .chat-location-msg::before,
+.msg-bubble .chat-img-wrap::before,
+.msg-bubble .radio-share-card::before,
+.msg-bubble .user-link-card::before,
+.msg-bubble .call-invite-card::before,
+.msg-bubble.mehfil-invite::before,
+.msg-bubble.challenge::before{
+  left:0;
+  border-bottom-left-radius:inherit;
+}
+
+.baithak-3d-edge::after,
+.msg-bubble .music-card:not(.music-card--story)::after,
+.msg-bubble .loc-card:not(.loc-card--story)::after,
+.msg-bubble .chat-file-msg::after,
+.msg-bubble .chat-location-msg::after,
+.msg-bubble .chat-img-wrap::after,
+.msg-bubble .radio-share-card::after,
+.msg-bubble .user-link-card::after,
+.msg-bubble .call-invite-card::after,
+.msg-bubble.mehfil-invite::after,
+.msg-bubble.challenge::after{
+  right:0;
+  border-bottom-right-radius:inherit;
+}
+
+/* Soft idle shimmer on the lip (decorative only) */
+@keyframes baithak3dLip{
+  0%,100%{filter:brightness(1)}
+  50%{filter:brightness(1.08)}
+}
+@media (prefers-reduced-motion: no-preference){
+  html:not(.quiet-mode) .baithak-3d-edge::before,
+  html:not(.quiet-mode) .baithak-3d-edge::after,
+  html:not(.quiet-mode) .msg-bubble .music-card:not(.music-card--story)::before,
+  html:not(.quiet-mode) .msg-bubble .music-card:not(.music-card--story)::after,
+  html:not(.quiet-mode) .msg-bubble .loc-card:not(.loc-card--story)::before,
+  html:not(.quiet-mode) .msg-bubble .loc-card:not(.loc-card--story)::after,
+  html:not(.quiet-mode) .msg-bubble .chat-file-msg::before,
+  html:not(.quiet-mode) .msg-bubble .chat-file-msg::after,
+  html:not(.quiet-mode) .msg-bubble .chat-location-msg::before,
+  html:not(.quiet-mode) .msg-bubble .chat-location-msg::after,
+  html:not(.quiet-mode) .msg-bubble .chat-img-wrap::before,
+  html:not(.quiet-mode) .msg-bubble .chat-img-wrap::after,
+  html:not(.quiet-mode) .msg-bubble .radio-share-card::before,
+  html:not(.quiet-mode) .msg-bubble .radio-share-card::after,
+  html:not(.quiet-mode) .msg-bubble .user-link-card::before,
+  html:not(.quiet-mode) .msg-bubble .user-link-card::after,
+  html:not(.quiet-mode) .msg-bubble .call-invite-card::before,
+  html:not(.quiet-mode) .msg-bubble .call-invite-card::after,
+  html:not(.quiet-mode) .msg-bubble.mehfil-invite::before,
+  html:not(.quiet-mode) .msg-bubble.mehfil-invite::after,
+  html:not(.quiet-mode) .msg-bubble.challenge::before,
+  html:not(.quiet-mode) .msg-bubble.challenge::after{
+    animation:baithak3dLip 4.5s ease-in-out infinite;
+  }
+}
+
+/* Quiet + reduced-motion: keep the break, flatten 3D / kill shimmer */
+@media (prefers-reduced-motion: reduce){
+  .baithak-3d-edge::before,
+  .baithak-3d-edge::after,
+  .msg-bubble .music-card:not(.music-card--story)::before,
+  .msg-bubble .music-card:not(.music-card--story)::after,
+  .msg-bubble .loc-card:not(.loc-card--story)::before,
+  .msg-bubble .loc-card:not(.loc-card--story)::after,
+  .msg-bubble .chat-file-msg::before,
+  .msg-bubble .chat-file-msg::after,
+  .msg-bubble .chat-location-msg::before,
+  .msg-bubble .chat-location-msg::after,
+  .msg-bubble .chat-img-wrap::before,
+  .msg-bubble .chat-img-wrap::after,
+  .msg-bubble .radio-share-card::before,
+  .msg-bubble .radio-share-card::after,
+  .msg-bubble .user-link-card::before,
+  .msg-bubble .user-link-card::after,
+  .msg-bubble .call-invite-card::before,
+  .msg-bubble .call-invite-card::after,
+  .msg-bubble.mehfil-invite::before,
+  .msg-bubble.mehfil-invite::after,
+  .msg-bubble.challenge::before,
+  .msg-bubble.challenge::after{
+    transform:none;
+    box-shadow:0 1px 0 0 var(--baithak-3d-depth);
+    animation:none !important;
+  }
+}
+html.quiet-mode .baithak-3d-edge::before,
+html.quiet-mode .baithak-3d-edge::after,
+html.quiet-mode .msg-bubble .music-card:not(.music-card--story)::before,
+html.quiet-mode .msg-bubble .music-card:not(.music-card--story)::after,
+html.quiet-mode .msg-bubble .loc-card:not(.loc-card--story)::before,
+html.quiet-mode .msg-bubble .loc-card:not(.loc-card--story)::after,
+html.quiet-mode .msg-bubble .chat-file-msg::before,
+html.quiet-mode .msg-bubble .chat-file-msg::after,
+html.quiet-mode .msg-bubble .chat-location-msg::before,
+html.quiet-mode .msg-bubble .chat-location-msg::after,
+html.quiet-mode .msg-bubble .chat-img-wrap::before,
+html.quiet-mode .msg-bubble .chat-img-wrap::after,
+html.quiet-mode .msg-bubble .radio-share-card::before,
+html.quiet-mode .msg-bubble .radio-share-card::after,
+html.quiet-mode .msg-bubble .user-link-card::before,
+html.quiet-mode .msg-bubble .user-link-card::after,
+html.quiet-mode .msg-bubble .call-invite-card::before,
+html.quiet-mode .msg-bubble .call-invite-card::after,
+html.quiet-mode .msg-bubble.mehfil-invite::before,
+html.quiet-mode .msg-bubble.mehfil-invite::after,
+html.quiet-mode .msg-bubble.challenge::before,
+html.quiet-mode .msg-bubble.challenge::after{
+  transform:none;
+  box-shadow:0 1px 0 0 var(--baithak-3d-depth);
+  animation:none !important;
+}
+
+/* Me-bubble nested cards still get the red break (brand accent) */
+.msg-bubble.me .music-card:not(.music-card--story),
+.msg-bubble.me .loc-card:not(.loc-card--story),
+.msg-bubble.me .chat-file-msg,
+.msg-bubble.me .chat-location-msg{
+  border-bottom-color:transparent !important;
+}
+

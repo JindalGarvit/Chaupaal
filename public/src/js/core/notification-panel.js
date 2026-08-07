@@ -408,16 +408,48 @@
     return map[section] || map.all;
   }
 
+  function hapticPulse(kind) {
+    try {
+      if (typeof quietMode !== 'undefined' && quietMode) return;
+      if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
+      const prefs = typeof PushPrefs !== 'undefined' ? PushPrefs.loadPrefs?.() : null;
+      if (prefs && prefs.haptics === false) return;
+      if (typeof Haptic !== 'undefined') {
+        if (kind === 'more' && Haptic.success) Haptic.success();
+        else if (kind === 'less' && Haptic.warn) Haptic.warn();
+        else if (Haptic.tap) Haptic.tap();
+      } else if (navigator.vibrate) {
+        navigator.vibrate(kind === 'more' ? [8, 30, 8] : [18]);
+      }
+    } catch (e) {}
+  }
+
+  /**
+   * Phase 4: swipe left = Show less (−freq, red), right = Show more (+freq, green).
+   * Threshold ~40% of row width; spring-back otherwise. Still supports far-left clear.
+   */
   function bindSwipeClear(row, onClear) {
     let startX = 0;
     let dx = 0;
     let tracking = false;
+    let width = 280;
+
+    const underlay = document.createElement('div');
+    underlay.className = 'notif-swipe-underlay';
+    underlay.innerHTML =
+      '<span class="notif-swipe-less">Show less</span><span class="notif-swipe-more">Show more</span>';
+    row.style.position = 'relative';
+    if (!row.querySelector('.notif-swipe-underlay')) {
+      row.insertBefore(underlay, row.firstChild);
+    }
+
     row.addEventListener(
       'touchstart',
       (e) => {
         startX = e.touches[0].clientX;
         dx = 0;
         tracking = true;
+        width = row.offsetWidth || 280;
         row.classList.add('is-swiping');
       },
       { passive: true }
@@ -427,15 +459,63 @@
       (e) => {
         if (!tracking) return;
         dx = e.touches[0].clientX - startX;
-        if (dx < 0) row.style.transform = `translateX(${Math.max(dx, -120)}px)`;
+        const capped = Math.max(-width * 0.55, Math.min(width * 0.55, dx));
+        row.style.transform = `translateX(${capped}px)`;
+        row.classList.toggle('is-swipe-less', capped < -8);
+        row.classList.toggle('is-swipe-more', capped > 8);
       },
       { passive: true }
     );
     row.addEventListener('touchend', () => {
       tracking = false;
       row.classList.remove('is-swiping');
-      if (dx < -72) onClear();
-      else row.style.transform = '';
+      const threshold = width * 0.4;
+      const reduce =
+        typeof quietMode !== 'undefined' && quietMode
+          ? true
+          : !!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+
+      const springBack = () => {
+        if (reduce) {
+          row.style.transform = '';
+          row.classList.remove('is-swipe-less', 'is-swipe-more');
+          return;
+        }
+        row.style.transition = 'transform 280ms cubic-bezier(.34,1.4,.64,1)';
+        row.style.transform = 'translateX(0)';
+        setTimeout(() => {
+          row.style.transition = '';
+          row.classList.remove('is-swipe-less', 'is-swipe-more');
+        }, 300);
+      };
+
+      if (dx <= -threshold) {
+        hapticPulse('less');
+        try {
+          PushPrefs?.showLess?.();
+        } catch (e) {}
+        if (typeof showToast === 'function') {
+          showToast(tt('notif_show_less', 'Got it — fewer like this'));
+        }
+        // Far swipe still clears
+        if (dx < -Math.min(120, width * 0.5) && typeof onClear === 'function') {
+          onClear();
+        } else {
+          springBack();
+        }
+      } else if (dx >= threshold) {
+        hapticPulse('more');
+        try {
+          PushPrefs?.showMore?.();
+        } catch (e) {}
+        if (typeof showToast === 'function') {
+          showToast(tt('notif_show_more', 'We’ll share a bit more'));
+        }
+        springBack();
+      } else {
+        springBack();
+      }
+      dx = 0;
     });
   }
 
@@ -633,6 +713,9 @@
       });
       item.addEventListener('click', async (e) => {
         if (e.target.closest('[data-expand],[data-actors],[data-friend-actions]')) return;
+        try {
+          PushPrefs?.recordEngagement?.('open');
+        } catch (err) {}
         await markNotificationRead(item.dataset.id);
         item.classList.remove('unread');
         item.classList.add('is-read');
@@ -841,7 +924,7 @@
     }
     if (!section) section = inferSectionFromType(type);
     const n = {
-      id: `local_${Date.now()}`,
+      id: (extra && extra.id) || `local_${Date.now()}`,
       type,
       icon: icon || iconForType(type),
       text,

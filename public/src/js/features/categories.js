@@ -916,7 +916,8 @@ async function initPeepal(){
   const feed=document.getElementById('peepalFeed');if(!feed)return;
   delete feed.dataset.loaded;
 
-  // Intent card (Vriksha) — chips + free-text → AI people results. Morph: Discuss / Khoj / Search Chaupaal.
+  // Intent card (Vriksha) — compact mini icons + 60/20/20 + compatibility peeks
+  if(typeof tintPeepalIntentChips==='function') tintPeepalIntentChips(document.getElementById('peepalIntentCard'));
   if(typeof filterPeepalSearchNudges==='function') filterPeepalSearchNudges(document.getElementById('peepalIntentCard'));
   document.querySelectorAll('#peepalIntentCard .peepal-nudge-chip').forEach(chip=>{
     if(chip.dataset.wired) return;
@@ -937,6 +938,29 @@ async function initPeepal(){
       try{ if(typeof restoreAppShell==='function') restoreAppShell('peepal_intent_blur'); }catch(e){}
     });
   }
+  const globalBtn=document.getElementById('peepalIntentGlobalSearch');
+  if(globalBtn&&!globalBtn.dataset.wired){
+    globalBtn.dataset.wired='1';
+    globalBtn.addEventListener('click',()=>{
+      if(typeof openUniversalSearch==='function'){
+        openUniversalSearch({ types:['users','duniya','peepal','groups','games'] });
+      } else if(typeof openPeopleSearchWithContacts==='function'){
+        openPeopleSearchWithContacts({ surface:'peepal' });
+      }
+    });
+  }
+  const discussBtn=document.getElementById('peepalIntentDiscuss');
+  if(discussBtn&&!discussBtn.dataset.wired){
+    discussBtn.dataset.wired='1';
+    discussBtn.addEventListener('click',()=>{
+      if(typeof currentUser==='undefined'||!currentUser){
+        if(typeof requireSignIn==='function') return requireSignIn(typeof t==='function'?t('auth_sign_in_short'):'Sign in to continue');
+        return;
+      }
+      // Same destination as Peepal morph Discuss
+      if(typeof openPeepalAskSheet==='function') openPeepalAskSheet();
+    });
+  }
   if(typeof bindLivingPlaceholder==='function'){
     bindLivingPlaceholder(document.getElementById('peepalAiSearchInput'),'peepal_intent');
   }
@@ -946,6 +970,13 @@ async function initPeepal(){
       AiDiscoveryMeter.mountOnIntentCard(document.getElementById('peepalIntentCard'),{disclosePro:true});
     }
   }catch(e){}
+  // 2–3 compatibility peeks under the action row (specific icebreakers)
+  try{
+    if(typeof mountCompatPeeks==='function'){
+      mountCompatPeeks(document.getElementById('peepalCompatPeeks'),{limit:3,reset:true,friendshipMajority:true});
+    }
+  }catch(e){}
+  try{ if(typeof hydrateIcons==='function') hydrateIcons(document.getElementById('peepalIntentCard')); }catch(e){}
 
   // Reuse static HTML shell (keeps LCP title/subtitle in place) or create a loading host
   let loadingEl=document.getElementById('peepalDiscovery');

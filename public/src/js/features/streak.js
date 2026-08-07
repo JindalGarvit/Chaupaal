@@ -325,7 +325,7 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment){
   const body=String(text||'').trim();
   if(!body && !(music&&music.title) && !attachment) return;
   const payload={
-    text:body||(music?.title?`🎵 ${music.title}`:(attachment?.type==='photo'?'📷 Photo':attachment?.type==='file'?'📄 File':attachment?.type==='location'?'📍 Location':attachment?.type==='muqabala_challenge'?'⚔️ Challenge':attachment?.type==='mehfil_invite'?(body||'Join Mehfil'):'')),
+    text:body||(music?.title?`🎵 ${music.title}`:(attachment?.type==='photo'?'📷 Photo':attachment?.type==='file'?'📄 File':attachment?.type==='location'?'📍 Location':attachment?.type==='radio_share'?'📻 Radio':attachment?.type==='muqabala_challenge'?'⚔️ Challenge':attachment?.type==='mehfil_invite'?(body||'Join Mehfil'):'')),
     uid:currentUser.uid,
     name:userProfile?.name||currentUser.displayName||'You',
     avatar:currentUser.photoURL||'',
@@ -373,6 +373,14 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment){
         questions:Array.isArray(attachment.questions)?attachment.questions.slice(0,20):null,
         timerSeconds:Number(attachment.timerSeconds)||null,
         label:attachment.label?String(attachment.label).slice(0,120):null,
+        mood:attachment.mood?String(attachment.mood).slice(0,40):null,
+        genre:attachment.genre?String(attachment.genre).slice(0,40):null,
+        language:attachment.language?String(attachment.language).slice(0,16):null,
+        sample:attachment.sample&&typeof attachment.sample==='object'?{
+          title:String(attachment.sample.title||'').slice(0,160),
+          artist:String(attachment.sample.artist||'').slice(0,160),
+          thumbnail:String(attachment.sample.thumbnail||'').slice(0,2048),
+        }:null,
       };
     }
   }

@@ -9,6 +9,11 @@
 const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
 const { requireUser, initAdmin } = require('../server-lib/auth');
 const { callMusicProvider, resolveMusicPreview } = require('../server-lib/music');
+const {
+  generateRadio,
+  generateTrending,
+  generateRecommendations,
+} = require('../server-lib/music-radio');
 const { searchPlaces } = require('../server-lib/geocode');
 const { checkUrlWithWebRisk } = require('../server-lib/url-safety');
 const { searchGifs } = require('../server-lib/gif-search');
@@ -327,6 +332,53 @@ async function handlePost(req, res) {
     } catch (e) {
       console.warn('[media-config] music_resolve:', e?.message || e);
       return sendSuccess(res, { previewUrl: null, source: 'none', song: null });
+    }
+  }
+
+  if (action === 'music_radio' || action === 'music_trending' || action === 'music_recommend') {
+    try {
+      const { checkActionRateLimit } = require('../server-lib/rate-limit');
+      const rate = await checkActionRateLimit(user.uid, 'music_radio');
+      if (!rate.ok) {
+        return sendError(res, 429, 'RATE_LIMITED', 'Too many music requests. Try again shortly.');
+      }
+    } catch (e) {
+      /* rate-limit optional */
+    }
+    const app = initAdmin();
+    const db = app ? app.firestore() : null;
+    try {
+      let data;
+      if (action === 'music_radio') {
+        data = await generateRadio({
+          db,
+          mood: body.mood,
+          genre: body.genre,
+          language: body.language,
+          seeds: Array.isArray(body.seeds) ? body.seeds : undefined,
+        });
+      } else if (action === 'music_trending') {
+        data = await generateTrending({
+          db,
+          scope: body.scope || 'global',
+        });
+      } else {
+        data = await generateRecommendations({
+          db,
+          seeds: Array.isArray(body.seeds) ? body.seeds : undefined,
+        });
+      }
+      return sendSuccess(res, {
+        tracks: data.tracks || [],
+        cacheKey: data.cacheKey || null,
+        fromCache: !!data.fromCache,
+        provider: data.provider || null,
+        scope: data.scope || null,
+        batchSize: (data.tracks || []).length,
+      });
+    } catch (e) {
+      console.warn('[media-config]', action, e?.message || e);
+      return sendSuccess(res, { tracks: [], cacheKey: null, fromCache: false, degraded: true });
     }
   }
 
@@ -693,6 +745,9 @@ async function handlePost(req, res) {
   return sendError(res, 400, 'VALIDATION_ERROR', 'Unknown media action', {
     allowed: [
       'music_search',
+      'music_radio',
+      'music_trending',
+      'music_recommend',
       'youtube_search',
       'search_query',
       'music_resolve',

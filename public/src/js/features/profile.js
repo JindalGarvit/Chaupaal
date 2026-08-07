@@ -96,6 +96,7 @@ function renderProfileModal(){
         <span class="notif-dot hidden" data-notif-dot="all" aria-hidden="true"></span>
       </button>
       <button type="button" class="btn" data-dp-hub="interactions">Activity</button>
+      <button type="button" class="btn" data-push-history>Notif history</button>
       <button type="button" class="btn" data-dp-hub="journal">Journal</button>
       <button type="button" class="btn" data-dp-hub="stories">Highlights</button>
       <button type="button" class="btn" data-dp-more-hub>More</button>
@@ -413,6 +414,10 @@ function renderProfileModal(){
           openArchiveHub(tab === 'archive' ? 'stories' : tab);
         } else if(typeof openArchive==='function') openArchive();
       });
+    });
+    el.querySelector('[data-push-history]')?.addEventListener('click',()=>{
+      if(typeof PushPrefs!=='undefined' && PushPrefs.openPushHistorySheet) PushPrefs.openPushHistorySheet();
+      else if(typeof openNotificationPanel==='function') openNotificationPanel('all');
     });
     el.querySelector('[data-dp-open-hub]')?.addEventListener('click',()=>{
       if(typeof openChaupaalProfileHub==='function') openChaupaalProfileHub();

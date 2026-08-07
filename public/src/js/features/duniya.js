@@ -117,6 +117,23 @@ function initDuniya(){
   }
   screen.dataset.loaded='1';
   loadArchive();
+  if(!screen.dataset.musicWired){
+    screen.dataset.musicWired='1';
+    const bar=document.createElement('div');
+    bar.id='duniyaMusicBar';
+    bar.className='duniya-music-bar';
+    bar.innerHTML=`<button type="button" class="duniya-music-btn" id="duniyaMusicOpen" aria-label="Discover music">
+      <span aria-hidden="true">🎵</span><span>Radio & songs</span>
+    </button>`;
+    const pager=document.getElementById('duniyaPager');
+    if(pager) pager.insertBefore(bar, pager.firstChild);
+    else screen.appendChild(bar);
+    document.getElementById('duniyaMusicOpen')?.addEventListener('click',()=>{
+      if(typeof openMusicHub==='function') openMusicHub({title:'Discover music',tab:'radio'});
+      else if(typeof openSongPicker==='function') openSongPicker({title:'Discover music'});
+      else if(typeof showToast==='function') showToast('Music coming soon');
+    });
+  }
   renderDuniyaStories();
   renderDuniyaFeed();
   // Hydrate from Firestore with cursor pagination when signed in.

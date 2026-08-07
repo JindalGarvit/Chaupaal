@@ -441,11 +441,31 @@ function openChatScreen(chat){
   });
   document.getElementById('attachSong')?.addEventListener('click',()=>{
     attachMenu.classList.remove('show');
-    if(typeof openSongPicker!=='function'){showToast(t('baithak_song_unavailable'));return;}
-    openSongPicker({
-      title:'Share a song',
+    const openMusic = typeof openMusicHub==='function' ? openMusicHub : openSongPicker;
+    if(typeof openMusic!=='function'){showToast(t('baithak_song_unavailable'));return;}
+    openMusic({
+      title:'Share music',
+      tab:'search',
       onSelect:async (music)=>{
         if(!music) return;
+        if(music.__radioShare){
+          const att={
+            type:'radio_share',
+            mood:music.mood||'discovery',
+            genre:music.genre||'any',
+            language:music.language||'any',
+            sample:music.sample||null,
+          };
+          const pendingRow=addMsgBubble({from:'me',text:'📻 Radio',attachment:att,time:'now',pending:true}, isGroup);
+          if(typeof sendRealtimeMessage!=='function') return;
+          try{
+            await sendRealtimeMessage(chat.firestoreId||chat.id, '📻 Radio', isGroup, null, att);
+          }catch(e){
+            pendingRow?.remove?.();
+            showToast(typeof friendlyError==='function'?friendlyError(e):'Could not share radio');
+          }
+          return;
+        }
         const pendingRow=addMsgBubble({from:'me',text:music.title?`🎵 ${music.title}`:'🎵 Song',music,time:'now',pending:true}, isGroup);
         if(typeof sendRealtimeMessage!=='function') return;
         try{
@@ -732,7 +752,7 @@ function renderMsgBubble(m, isGroup){
   // Legacy photo encoding
   if(!att && typeof body==='string' && body.startsWith('[photo] ')){
     const url=body.slice(8).trim();
-    if(url){ body=`<img class="chat-img-msg" src="${chatEsc(url)}" decoding="async" alt="">`; rich=true; }
+    if(url){ body=`<div class="chat-img-wrap baithak-3d-edge"><img class="chat-img-msg" src="${chatEsc(url)}" decoding="async" alt=""></div>`; rich=true; }
   }
 
   if(m.music && typeof renderMusicCard==='function'){
@@ -742,10 +762,10 @@ function renderMsgBubble(m, isGroup){
     rich=true;
   } else if(att && att.type==='photo' && att.url){
     const sizeAttrs=att.width&&att.height?` width="${Number(att.width)||0}" height="${Number(att.height)||0}" style="aspect-ratio:${Number(att.width)||1}/${Number(att.height)||1};"`:'';
-    body=`<img class="chat-img-msg" src="${chatEsc(att.url)}" decoding="async" alt=""${sizeAttrs}>`;
+    body=`<div class="chat-img-wrap baithak-3d-edge"><img class="chat-img-msg" src="${chatEsc(att.url)}" decoding="async" alt=""${sizeAttrs}></div>`;
     rich=true;
   } else if(att && att.type==='file'){
-    body=`<div class="chat-file-msg">📄 ${chatEsc(att.name||'File')}</div>`;
+    body=`<div class="chat-file-msg baithak-3d-edge">📄 ${chatEsc(att.name||'File')}</div>`;
     rich=true;
   } else if(att && att.type==='location'){
     body=typeof renderLocationCard==='function'
@@ -771,6 +791,11 @@ function renderMsgBubble(m, isGroup){
   } else if(att && att.type==='mehfil_invite'){
     const label=chatEsc(att.label||(typeof t==='function'?t('mehfil_join_cta'):'Join Mehfil'));
     body=`<div class="mehfil-invite-card">${typeof mehfilMarkHtml==='function'?mehfilMarkHtml(28):''}<strong>${chatEsc(m.text||(typeof t==='function'?t('mehfil_nudge_text',{name:m.name||'Someone'}):'Join Mehfil'))}</strong><button type="button" data-mehfil-invite-join>${label}</button></div>`;
+    rich=true;
+  } else if(att && att.type==='radio_share'){
+    body=typeof renderRadioShareCard==='function'
+      ?renderRadioShareCard({mood:att.mood,genre:att.genre,language:att.language}, att.sample)
+      :`<div class="radio-share-card baithak-3d-edge">📻 Radio · ${chatEsc(att.mood||'discovery')}</div>`;
     rich=true;
   }
 
@@ -855,6 +880,7 @@ function addMsgBubble(msg, isGroup){
   bindMsgAvatarLongPress(node);
   if(typeof mountMusicCards==='function') mountMusicCards(node);
   if(typeof mountLocationCards==='function') mountLocationCards(node);
+  if(typeof mountRadioShareCards==='function') mountRadioShareCards(node);
   if(typeof wireChallengeBubble==='function') wireChallengeBubble(node);
   area.scrollTop = area.scrollHeight;
   return node;

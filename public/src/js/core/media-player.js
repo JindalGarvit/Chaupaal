@@ -590,7 +590,14 @@
     });
     media.addEventListener('play', () => syncMiniFromMedia(resolveAudio()));
     media.addEventListener('pause', () => syncMiniFromMedia(resolveAudio()));
-    media.addEventListener('ended', () => playQueueIndex(queueIndex + 1));
+    media.addEventListener('ended', () => {
+      playQueueIndex(queueIndex + 1);
+      try {
+        if (typeof window.onMediaQueueAdvance === 'function') {
+          window.onMediaQueueAdvance(queueIndex, queue.length);
+        }
+      } catch (e) {}
+    });
   }
 
   /**
@@ -651,6 +658,28 @@
       const audio = getSharedAudio() || window.__chaupaalSharedAudio;
       if (audio) syncMiniFromMedia(audio);
     }
+  }
+
+  /** Append playable tracks for silent radio refill (no restart). */
+  function appendMediaQueue(tracks) {
+    const extra = Array.isArray(tracks) ? tracks.filter((t) => t && t.previewUrl) : [];
+    if (!extra.length) return queue.length;
+    const seen = new Set(queue.map((t) => `${t.title}|${t.artist || ''}`));
+    extra.forEach((t) => {
+      const k = `${t.title}|${t.artist || ''}`;
+      if (seen.has(k)) return;
+      seen.add(k);
+      queue.push(t);
+    });
+    return queue.length;
+  }
+
+  function getMediaQueueState() {
+    return {
+      length: queue.length,
+      index: queueIndex,
+      remaining: queue.length > 0 && queueIndex >= 0 ? queue.length - queueIndex - 1 : 0,
+    };
   }
 
   function bindMediaControls(media, hostEl, opts = {}) {
@@ -827,6 +856,8 @@
   window.bindMediaControls = bindMediaControls;
   window.enhanceMediaIn = enhanceMediaIn;
   window.setMediaQueue = setMediaQueue;
+  window.appendMediaQueue = appendMediaQueue;
+  window.getMediaQueueState = getMediaQueueState;
   window.syncMiniPlayer = syncMiniFromMedia;
   window.playMediaPrev = playMediaPrev;
   window.playMediaNext = playMediaNext;
@@ -834,6 +865,8 @@
   window.MediaPlayback = {
     resolvePlayableUrl,
     setMediaQueue,
+    appendMediaQueue,
+    getMediaQueueState,
     playPrev: playMediaPrev,
     playNext: playMediaNext,
   };

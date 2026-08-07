@@ -56,27 +56,51 @@ function initAkhbaarCatBar() {
 
   ensureSaathiChip(bar);
 
-  if (typeof myCategories !== 'undefined' && Array.isArray(myCategories)) {
-    myCategories.slice(0, 5).forEach((cat) => {
-      if (bar.querySelector(`[data-cat="${cat.name}"]`)) return;
-      const btn = document.createElement('button');
-      btn.className = 'akhbaar-cat-chip';
-      btn.dataset.cat = cat.name;
-      btn.innerHTML = `<span class="akhbaar-cat-emoji" aria-hidden="true">${cat.emoji || '📌'}</span> ${cat.name}`;
-      bar.insertBefore(btn, document.getElementById('akhbaarAddCat'));
-    });
-  }
+  // Personalized extras (user + suggested) from CategoryPrefs
+  try {
+    if (typeof CategoryPrefs !== 'undefined') {
+      CategoryPrefs.getOrderedCategories()
+        .filter((c) => c.name && c.name !== 'all' && c.name !== 'saathi')
+        .slice(0, 8)
+        .forEach((cat) => {
+          if (bar.querySelector(`[data-cat="${cat.name}"]`)) return;
+          const btn = document.createElement('button');
+          btn.className = 'akhbaar-cat-chip';
+          btn.dataset.cat = cat.name;
+          btn.dataset.catKind = cat.kind || 'user';
+          btn.innerHTML = `<span class="akhbaar-cat-emoji" aria-hidden="true">${cat.emoji || '📌'}</span> ${cat.name}`;
+          bar.insertBefore(btn, document.getElementById('akhbaarAddCat'));
+        });
+      CategoryPrefs.bindCategoryLongPress(bar);
+    } else if (typeof myCategories !== 'undefined' && Array.isArray(myCategories)) {
+      myCategories.slice(0, 5).forEach((cat) => {
+        if (bar.querySelector(`[data-cat="${cat.name}"]`)) return;
+        const btn = document.createElement('button');
+        btn.className = 'akhbaar-cat-chip';
+        btn.dataset.cat = cat.name;
+        btn.innerHTML = `<span class="akhbaar-cat-emoji" aria-hidden="true">${cat.emoji || '📌'}</span> ${cat.name}`;
+        bar.insertBefore(btn, document.getElementById('akhbaarAddCat'));
+      });
+    }
+  } catch (e) {}
 
   bar.querySelectorAll('.akhbaar-cat-chip').forEach((chip) => {
     tintAkhbaarChip(chip);
     chip.addEventListener('click', () => {
       if (chip.dataset.cat === 'add') {
-        openAkhbaarCatAdd();
+        if (typeof CategoryPrefs !== 'undefined' && CategoryPrefs.openCategoryManageSheet) {
+          CategoryPrefs.openCategoryManageSheet();
+        } else {
+          openAkhbaarCatAdd();
+        }
         return;
       }
       bar.querySelectorAll('.akhbaar-cat-chip').forEach((c) => c.classList.remove('active'));
       chip.classList.add('active');
       akhbaarActiveCat = chip.dataset.cat;
+      try {
+        CategoryPrefs?.touchCategory?.(akhbaarActiveCat);
+      } catch (e) {}
       if (akhbaarActiveCat === 'saathi') {
         if (typeof setAkhbaarMode === 'function') setAkhbaarMode('saathi');
         return;
@@ -102,7 +126,11 @@ function initAkhbaarCatBar() {
     (e) => {
       const dx = (e.changedTouches[0]?.clientX || 0) - sx;
       if (dx < -64 && bar.scrollLeft + bar.clientWidth >= bar.scrollWidth - 8) {
-        openAkhbaarCatAdd();
+        if (typeof CategoryPrefs !== 'undefined' && CategoryPrefs.openCategoryManageSheet) {
+          CategoryPrefs.openCategoryManageSheet();
+        } else {
+          openAkhbaarCatAdd();
+        }
       }
     },
     { passive: true }

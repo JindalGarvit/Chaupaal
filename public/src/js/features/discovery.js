@@ -168,10 +168,13 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
       avatar: 'ðŸ‘¤',
     };
     const reason = m.explain || 'Matched on open profile';
-    const starter = `Hey ${String(user.name||'').split(' ')[0] || 'there'} â€” found you while looking for ${plan.searchIntent && plan.searchIntent !== 'any' ? plan.searchIntent : 'people'} on Chaupaal`;
     const theirIb = typeof resolveIcebreakersFromUser==='function'?resolveIcebreakersFromUser(user):(user.icebreakers||[]);
-    const ib = typeof pickIcebreakerSnippet==='function' ? pickIcebreakerSnippet(theirIb) : null;
+    const ib = typeof craftSpecificIcebreaker==='function'
+      ? craftSpecificIcebreaker(user, { shared: user.interests || [], reason })
+      : (typeof pickIcebreakerSnippet==='function' ? pickIcebreakerSnippet(theirIb) : null);
     const matchPct = m.matchPct || 50;
+    const starter = (ib && (ib.line || ib.answer))
+      || `Hey ${String(user.name||'').split(' ')[0] || 'there'} — found you while looking for ${plan.searchIntent && plan.searchIntent !== 'any' ? plan.searchIntent : 'people'} on Chaupaal`;
 
     const card = document.createElement('div');
     card.className = 'peepal-ai-result-card';
@@ -179,25 +182,25 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
     card.innerHTML = `
       <div style="display:flex;align-items:center;gap:10px;">
         <div style="width:50px;height:50px;border-radius:var(--r-card,20px);background:var(--line);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;overflow:hidden;">
-          ${user.photoURL?`<img src="${esc(user.photoURL)}" style="width:100%;height:100%;object-fit:cover;">`:user.avatar||'ðŸ‘¤'}
+          ${user.photoURL?`<img src="${esc(user.photoURL)}" style="width:100%;height:100%;object-fit:cover;">`:user.avatar||'👤'}
         </div>
         <div style="flex:1;min-width:0;">
           <div style="font-weight:700;font-size:15px;">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(user.name,user):esc(user.name)}</div>
-          <div style="font-size:11px;color:var(--muted);">${[user.city,user.age?user.age+'y':''].filter(Boolean).map(esc).join(' Â· ')}</div>
+          <div style="font-size:11px;color:var(--muted);">${[user.city,user.age?user.age+'y':''].filter(Boolean).map(esc).join(' · ')}</div>
           ${user.bio?`<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:2px;">"${esc(user.bio)}"</div>`:''}
         </div>
         <div style="background:rgba(230,57,70,0.1);color:var(--red);border-radius:var(--r-control,14px);padding:5px 11px;font-size:12px;font-weight:700;flex-shrink:0;">${matchPct}%</div>
       </div>
       ${(user.interests||[]).length?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">${(user.interests||[]).slice(0,4).map(i=>`<span style="background:rgba(230,57,70,0.07);color:var(--red);border-radius:999px;padding:3px 9px;font-size:11px;font-weight:600;">${esc(i)}</span>`).join('')}</div>`:''}
       <div class="ai-match-reason" style="margin-top:8px;font-size:12px;color:var(--ink-secondary,var(--muted));">${esc(reason)}</div>
-      ${ib?`<div class="discovery-icebreaker"><div class="discovery-icebreaker-label">Conversation starter</div><div class="discovery-icebreaker-text">"${esc(ib.answer)}"</div></div>`:''}
+      ${ib?`<div class="discovery-icebreaker"><div class="discovery-icebreaker-label">Conversation starter</div><div class="discovery-icebreaker-text">"${esc(ib.line || ib.answer)}"</div></div>`:''}
       <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
-        <button type="button" class="peepal-ai-feedback" data-sig="more_like" title="More like this">â™¥ More like this</button>
-        <button type="button" class="peepal-ai-feedback" data-sig="not_interested" title="Not interested">âœ• Not interested</button>
+        <button type="button" class="peepal-ai-feedback" data-sig="more_like" title="More like this">♥ More like this</button>
+        <button type="button" class="peepal-ai-feedback" data-sig="not_interested" title="Not interested">✕ Not interested</button>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px;">
         <button class="peepal-ai-view-btn" style="flex:1;padding:9px;background:var(--surface-sunken,var(--cream));border:2px solid var(--line);border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;cursor:pointer;">View profile</button>
-        <button class="peepal-ai-chat-btn" data-name="${esc(user.name)}" data-uid="${esc(user.uid)}" data-starter="${esc(starter)}" style="flex:1;padding:9px;background:var(--red);color:#fff;border:none;border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;cursor:pointer;">Say hi</button>
+        <button class="peepal-ai-chat-btn" data-name="${esc(user.name)}" data-uid="${esc(user.uid)}" data-starter="${esc(starter)}" style="flex:1;padding:9px;background:var(--red);color:#fff;border:none;border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;cursor:pointer;">${esc(ib?.cta || 'Ask them')}</button>
       </div>
     `;
 

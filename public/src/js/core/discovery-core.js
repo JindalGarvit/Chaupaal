@@ -304,9 +304,12 @@ function renderDiscoverySection(profiles){
     </div>
     <div class="discovery-cards">
       ${profiles.map(({user, matchPct, reasons, reason})=>{
-        const ib = typeof pickIcebreakerSnippet==='function'
-          ? pickIcebreakerSnippet(typeof resolveIcebreakersFromUser==='function'?resolveIcebreakersFromUser(user):user.icebreakers)
-          : null;
+        const sharedTags = (reasons||[]).map(r=>String(r).replace(/^📌\s*/,''));
+        const ib = typeof craftSpecificIcebreaker==='function'
+          ? craftSpecificIcebreaker(user, { shared: sharedTags, reason })
+          : (typeof pickIcebreakerSnippet==='function'
+            ? pickIcebreakerSnippet(typeof resolveIcebreakersFromUser==='function'?resolveIcebreakersFromUser(user):user.icebreakers)
+            : null);
         const ibJson = encodeURIComponent(JSON.stringify(
           typeof resolveIcebreakersFromUser==='function'?resolveIcebreakersFromUser(user):(user.icebreakers||[])
         ));
@@ -326,12 +329,12 @@ function renderDiscoverySection(profiles){
           ${(reasons||[]).length?`<div class="discovery-shared">${reasons.slice(0,4).map(r=>`<span class="discovery-shared-tag">${String(r).startsWith('📌')?r:`📌 ${r}`}</span>`).join('')}</div>`:''}
           <div class="discovery-reason">"${(typeof interestOverlapReason==='function' && interestOverlapReason(user)) || reason||'Shared interests on Chaupaal'}"</div>
           <div class="discovery-transparency" style="font-size:11px;color:var(--muted);margin:4px 0 8px;">Why this pick: ${(reasons||[]).slice(0,2).join(' · ') || 'compatibility signals'}</div>
-          ${ib?`<div class="discovery-icebreaker"><div class="discovery-icebreaker-label">Conversation starter</div><div class="discovery-icebreaker-text">"${ib.answer}"</div></div>`:''}
+          ${ib?`<div class="discovery-icebreaker"><div class="discovery-icebreaker-label">Conversation starter</div><div class="discovery-icebreaker-text">"${ib.line || ib.answer}"</div></div>`:''}
           <div class="discovery-actions">
             <button class="discovery-view-btn" data-uid="${user.uid}">View profile</button>
             <button class="discovery-friend-btn" data-friend-uid="${user.uid}">Add Friend</button>
           </div>
-          <button class="discovery-nudge-btn discovery-nudge-btn--secondary" data-uid="${user.uid}" data-name="${user.name}" data-avatar="${user.avatar||'👤'}" data-icebreakers="${ibJson}">💬 Say hi</button>
+          <button class="discovery-nudge-btn discovery-nudge-btn--secondary" data-uid="${user.uid}" data-name="${user.name}" data-avatar="${user.avatar||'👤'}" data-icebreakers="${ibJson}" data-starter="${encodeURIComponent(ib?.line || ib?.answer || '')}">💬 ${ib?.cta || 'Ask about their prompt'}</button>
         </div>`;
       }).join('')}
     </div>
@@ -428,6 +431,7 @@ function renderDiscoverySection(profiles){
           name,
           avatar,
           theirIcebreakers,
+          starterText: (()=>{ try{ return decodeURIComponent(btn.dataset.starter||''); }catch(e){ return ''; } })() || undefined,
           origin: 'peepal_discovery',
           peerProfileType: (profiles.find((p) => p.user?.uid === uid)?.user?.profileType) || 'personal',
         });
@@ -460,3 +464,412 @@ function renderDiscoverySection(profiles){
 
   return el;
 }
+
+/** Intent lean for mix rules — friendship-majority surfaces. */
+function detectIntentLean(user) {
+  const blob = [
+    user?.lookingFor,
+    user?.matchIntent,
+    user?.profile?.lookingFor,
+    ...(Array.isArray(user?.intents) ? user.intents : []),
+    ...(Array.isArray(user?.profile?.intents) ? user.profile.intents : []),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  if (/dat|romance|marriage|relationship/.test(blob)) return 'dating';
+  if (/job|hir|career|co-?founder|network|mentor|recruit/.test(blob)) return 'career';
+  if (/flat|room|travel|game|music/.test(blob)) return 'other';
+  if (/friend|buddy|hang/.test(blob)) return 'friendship';
+  return 'friendship'; // default lean — Chaupaal is friendship-majority
+}
+
+function viewerCompatSignals() {
+  const gender = String(
+    userProfile?.gender || digitalProfile?.gender || ''
+  )
+    .trim()
+    .toLowerCase();
+  const age = Number(userProfile?.age || digitalProfile?.age || 0) || null;
+  const opposite =
+    gender === 'male' || gender === 'm' || gender === 'man'
+      ? 'female'
+      : gender === 'female' || gender === 'f' || gender === 'woman'
+        ? 'male'
+        : null;
+  const interests = new Set(
+    [
+      ...(personalityProfile?.interests || []),
+      ...(typeof digitalProfile !== 'undefined' && digitalProfile?.interests ? digitalProfile.interests : []),
+      ...(myCategories || []).map((c) => c.name),
+    ]
+      .filter(Boolean)
+      .map((i) => String(i).toLowerCase())
+  );
+  return { gender, age, opposite, interests };
+}
+
+function isDiscoveryEligibleUser(user) {
+  if (!user?.uid) return false;
+  if (typeof currentUser !== 'undefined' && currentUser?.uid && user.uid === currentUser.uid) return false;
+  if (typeof dismissedUids !== 'undefined' && dismissedUids?.has?.(user.uid)) return false;
+  try {
+    if (typeof getBlockedSet === 'function' && getBlockedSet().has(user.uid)) return false;
+  } catch (e) {}
+  try {
+    const blocked = JSON.parse(localStorage.getItem('chaupaal_dismissed_uids') || '[]');
+    if (Array.isArray(blocked) && blocked.includes(user.uid)) return false;
+  } catch (e) {}
+  if (user.hiddenFromDiscovery || user.openToMeet === false) return false;
+  if (typeof isBlockedAge === 'function' && user.age != null && isBlockedAge(Number(user.age))) return false;
+  if (typeof isTeenModeUser === 'function' && isTeenModeUser() && detectIntentLean(user) === 'dating') return false;
+  return true;
+}
+
+/**
+ * Specific icebreaker line — prefer profile prompt answer, then shared interest, else a light generated line.
+ * Never invents people; only crafts text from real profile fields.
+ */
+function craftSpecificIcebreaker(user, opts) {
+  const o = opts || {};
+  const their =
+    typeof resolveIcebreakersFromUser === 'function'
+      ? resolveIcebreakersFromUser(user)
+      : user?.icebreakers || user?.profile?.icebreakers || [];
+  const snippet =
+    typeof pickIcebreakerSnippet === 'function' ? pickIcebreakerSnippet(their) : their?.[0] || null;
+  if (snippet?.answer) {
+    const promptText =
+      snippet.question ||
+      (typeof getIcebreakerPromptById === 'function' && snippet.promptId
+        ? getIcebreakerPromptById(snippet.promptId)?.text
+        : null) ||
+      '';
+    const shortQ = promptText
+      ? promptText.length > 48
+        ? promptText.slice(0, 46) + '…'
+        : promptText
+      : '';
+    const line = shortQ
+      ? `Ask about “${shortQ}” — they said “${snippet.answer}”`
+      : `Ask them about: “${snippet.answer}”`;
+    return {
+      ...snippet,
+      line,
+      cta: shortQ ? `Ask: ${shortQ.slice(0, 28)}${shortQ.length > 28 ? '…' : ''}` : 'Ask about their prompt',
+      source: 'prompt',
+    };
+  }
+  const shared = (o.shared || []).map((s) => String(s).replace(/^📌\s*/, '')).filter(Boolean);
+  const interest =
+    shared.find((s) => !/similar age|same city|friendship|dating|career|compatibility/i.test(s)) ||
+    (user?.interests || [])[0];
+  if (interest) {
+    const label = String(interest).charAt(0).toUpperCase() + String(interest).slice(1);
+    return {
+      answer: label,
+      line: `You both light up around ${label} — ask how they got into it`,
+      cta: `Ask about ${label}`,
+      source: 'shared',
+    };
+  }
+  if (user?.bio && String(user.bio).trim().length > 8) {
+    const bio = String(user.bio).trim();
+    const clip = bio.length > 64 ? bio.slice(0, 62) + '…' : bio;
+    return {
+      answer: clip,
+      line: `Open with their bio: “${clip}”`,
+      cta: 'Ask about their bio',
+      source: 'bio',
+    };
+  }
+  if (user?.city) {
+    return {
+      answer: user.city,
+      line: `Ask what they’d show a friend visiting ${user.city} for one evening`,
+      cta: `Ask about ${user.city}`,
+      source: 'city',
+    };
+  }
+  return null;
+}
+
+/**
+ * Re-rank matches: friendship-majority mix; opposite-gender + similar-age dominate; light other mix OK.
+ */
+function rankCompatibilityPeeks(profiles, opts) {
+  const o = opts || {};
+  const signals = viewerCompatSignals();
+  const friendshipMajority = o.friendshipMajority !== false;
+  const scored = (profiles || [])
+    .filter((p) => isDiscoveryEligibleUser(p?.user || p))
+    .map((p) => {
+      const user = p.user || p;
+      const base = Number(p.score || p.matchPct || 50);
+      let score = base;
+      const lean = detectIntentLean(user);
+      const theirGender = String(user.gender || user.profile?.gender || '')
+        .trim()
+        .toLowerCase();
+      const theirAge = Number(user.age || user.profile?.age || 0) || null;
+      if (friendshipMajority) {
+        if (lean === 'friendship') score += 22;
+        else if (lean === 'dating') score += 4;
+        else if (lean === 'career') score += 8;
+        else score += 10;
+      }
+      if (signals.opposite && theirGender) {
+        const norm =
+          theirGender === 'm' || theirGender === 'man'
+            ? 'male'
+            : theirGender === 'f' || theirGender === 'woman'
+              ? 'female'
+              : theirGender;
+        if (norm === signals.opposite) score += 18;
+        else if (norm === signals.gender) score -= 4;
+      }
+      if (signals.age && theirAge) {
+        const delta = Math.abs(signals.age - theirAge);
+        if (delta <= 3) score += 16;
+        else if (delta <= 6) score += 10;
+        else if (delta <= 10) score += 4;
+        else score -= 6;
+      }
+      const theirInterests = [...(user.interests || []), ...(user.profile?.interests || [])]
+        .filter(Boolean)
+        .map((i) => String(i).toLowerCase());
+      const shared = theirInterests.filter((i) =>
+        [...signals.interests].some((m) => m.includes(i) || i.includes(m))
+      );
+      score += Math.min(24, shared.length * 8);
+      const ice = craftSpecificIcebreaker(user, { shared, reason: p.reason });
+      return {
+        ...p,
+        user,
+        lean,
+        score,
+        matchPct: Math.min(98, Math.max(42, Math.round(p.matchPct || score))),
+        shared,
+        icebreaker: ice,
+      };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  if (!friendshipMajority || scored.length <= 3) return scored;
+
+  // Soft mix: keep ~60%+ friendship-leaning in the visible window without inventing users
+  const friends = scored.filter((p) => p.lean === 'friendship');
+  const others = scored.filter((p) => p.lean !== 'friendship');
+  const out = [];
+  let fi = 0;
+  let oi = 0;
+  while (out.length < scored.length && (fi < friends.length || oi < others.length)) {
+    const preferFriend = out.filter((x) => x.lean === 'friendship').length <= out.length * 0.6;
+    if (preferFriend && fi < friends.length) out.push(friends[fi++]);
+    else if (oi < others.length) out.push(others[oi++]);
+    else if (fi < friends.length) out.push(friends[fi++]);
+    else break;
+  }
+  return out;
+}
+
+let _compatPeekCache = [];
+let _compatPeekCursor = 0;
+
+async function getCompatibilityPeeks(opts) {
+  const o = opts || {};
+  const limit = Math.max(1, Math.min(20, Number(o.limit) || 3));
+  const reset = !!o.reset;
+  const friendshipOnly = !!o.friendshipOnly;
+  if (reset || !_compatPeekCache.length) {
+    const prevIntent = discoveryFilters.matchIntent;
+    if (friendshipOnly || o.emptyFriendship) {
+      discoveryFilters.matchIntent = 'Friendship';
+    }
+    let raw = [];
+    try {
+      raw = typeof getDiscoveryProfiles === 'function' ? await getDiscoveryProfiles() : [];
+    } catch (e) {
+      raw = [];
+    }
+    if (friendshipOnly || o.emptyFriendship) {
+      discoveryFilters.matchIntent = prevIntent;
+    }
+    // Pull a wider pool for Khoj scroll when possible
+    if (raw.length < 8 && typeof SAMPLE_DISCOVERY_POOL !== 'undefined') {
+      const extra = SAMPLE_DISCOVERY_POOL.filter((u) => isDiscoveryEligibleUser(u)).map((u) => ({
+        user: u,
+        score: 50,
+        matchPct: 55,
+        reasons: (u.interests || []).slice(0, 2),
+        reason: u.bio || 'Someone you might enjoy talking to',
+      }));
+      const seen = new Set(raw.map((p) => p.user?.uid));
+      extra.forEach((p) => {
+        if (p.user?.uid && !seen.has(p.user.uid)) {
+          seen.add(p.user.uid);
+          raw.push(p);
+        }
+      });
+    }
+    _compatPeekCache = rankCompatibilityPeeks(raw, {
+      friendshipMajority: o.friendshipMajority !== false,
+    });
+    if (friendshipOnly || o.emptyFriendship) {
+      const friends = _compatPeekCache.filter((p) => p.lean === 'friendship');
+      if (friends.length) _compatPeekCache = friends.concat(_compatPeekCache.filter((p) => p.lean !== 'friendship'));
+    }
+    _compatPeekCursor = 0;
+  }
+  const offset = o.offset != null ? Number(o.offset) : _compatPeekCursor;
+  const slice = _compatPeekCache.slice(offset, offset + limit);
+  _compatPeekCursor = offset + slice.length;
+  return {
+    peeks: slice,
+    hasMore: _compatPeekCursor < _compatPeekCache.length,
+    cursor: _compatPeekCursor,
+    total: _compatPeekCache.length,
+  };
+}
+
+function escCompat(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function renderCompatPeekCard(peek) {
+  const user = peek.user || {};
+  const ice = peek.icebreaker || craftSpecificIcebreaker(user, { shared: peek.shared || peek.reasons });
+  const ibJson = encodeURIComponent(
+    JSON.stringify(
+      typeof resolveIcebreakersFromUser === 'function'
+        ? resolveIcebreakersFromUser(user)
+        : user.icebreakers || []
+    )
+  );
+  const starter = encodeURIComponent(ice?.line || ice?.answer || '');
+  const nameHtml =
+    typeof formatDisplayNameHtml === 'function'
+      ? formatDisplayNameHtml(user.name, user)
+      : escCompat(user.name || 'Someone');
+  return `
+    <article class="peepal-compat-peek" data-uid="${escCompat(user.uid)}">
+      <div class="peepal-compat-peek-avatar">${
+        user.photoURL
+          ? `<img src="${escCompat(user.photoURL)}" alt="">`
+          : escCompat(user.avatar || '👤')
+      }</div>
+      <div class="peepal-compat-peek-body">
+        <div class="peepal-compat-peek-name">${nameHtml}<span class="peepal-compat-peek-pct">${peek.matchPct || '?'}%</span></div>
+        <div class="peepal-compat-peek-meta">${[user.city, user.age ? user.age + 'y' : '', peek.lean === 'friendship' ? 'Friendship' : '']
+          .filter(Boolean)
+          .map(escCompat)
+          .join(' · ')}</div>
+        ${
+          ice
+            ? `<div class="peepal-compat-peek-ice"><strong>Icebreaker</strong>${escCompat(ice.line || ice.answer)}</div>`
+            : ''
+        }
+        <div class="peepal-compat-peek-actions">
+          <button type="button" class="peepal-compat-peek-view" data-uid="${escCompat(user.uid)}">Profile</button>
+          <button type="button" class="peepal-compat-peek-chat" data-uid="${escCompat(user.uid)}" data-name="${escCompat(user.name || '')}" data-avatar="${escCompat(user.avatar || '👤')}" data-icebreakers="${ibJson}" data-starter="${starter}">${escCompat(ice?.cta || 'Ask them')}</button>
+        </div>
+      </div>
+    </article>`;
+}
+
+function wireCompatPeekHost(host, peeks) {
+  if (!host) return;
+  host.querySelectorAll('.peepal-compat-peek-view').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const match = (peeks || []).find((p) => p.user?.uid === btn.dataset.uid);
+      if (match?.user && typeof openPublicProfile === 'function') {
+        openPublicProfile(match.user, { uid: match.user.uid, username: match.user.username, context: 'peepal' });
+      }
+    });
+  });
+  host.querySelectorAll('.peepal-compat-peek-chat').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const uid = btn.dataset.uid;
+      const match = (peeks || []).find((p) => p.user?.uid === uid);
+      let theirIcebreakers = [];
+      try {
+        theirIcebreakers = JSON.parse(decodeURIComponent(btn.dataset.icebreakers || '%5B%5D'));
+      } catch (err) {}
+      let starterText = '';
+      try {
+        starterText = decodeURIComponent(btn.dataset.starter || '');
+      } catch (err) {}
+      if (typeof openDmWithSharedHello === 'function') {
+        openDmWithSharedHello({
+          uid,
+          name: btn.dataset.name,
+          avatar: btn.dataset.avatar,
+          theirIcebreakers,
+          starterText: starterText || undefined,
+          origin: 'compat_peek',
+          peerProfileType: match?.user?.profileType || 'personal',
+        });
+      } else if (typeof showToast === 'function') {
+        showToast(starterText || 'Open chat from Baithak');
+      }
+    });
+  });
+}
+
+async function mountCompatPeeks(host, opts) {
+  if (!host) return [];
+  const o = opts || {};
+  host.innerHTML = `<div class="discovery-loading" style="padding:8px;font-size:12px;">Finding compatible people…</div>`;
+  try {
+    const { peeks } = await getCompatibilityPeeks({
+      limit: o.limit || 3,
+      reset: o.reset !== false,
+      friendshipOnly: !!o.friendshipOnly,
+      emptyFriendship: !!o.emptyFriendship,
+      friendshipMajority: o.friendshipMajority !== false,
+    });
+    if (!peeks.length) {
+      host.innerHTML = `<div class="khoj-compat-empty">No eligible people to suggest right now — try Khoj or widen your search. We never invent profiles.</div>`;
+      return [];
+    }
+    host.innerHTML = peeks.map(renderCompatPeekCard).join('');
+    wireCompatPeekHost(host, peeks);
+    return peeks;
+  } catch (e) {
+    host.innerHTML = `<div class="khoj-compat-empty">Couldn’t load peeks — try again shortly.</div>`;
+    return [];
+  }
+}
+
+function tintPeepalIntentChips(root) {
+  const scope = root || document;
+  scope.querySelectorAll('.peepal-nudge-chip[data-tint], [data-khoj-chips] .peepal-nudge-chip').forEach((chip) => {
+    const tint = chip.getAttribute('data-tint') || chip.dataset.tint;
+    if (!tint) return;
+    chip.style.setProperty('--chip-tint', tint);
+    chip.classList.add('peepal-nudge-chip--tinted');
+    if (chip.classList.contains('peepal-nudge-chip--mini')) return;
+    const icon = chip.querySelector('[data-icon], .cp-icon, svg');
+    if (icon) {
+      icon.style.color = tint;
+      icon.style.stroke = tint;
+    }
+  });
+}
+
+window.craftSpecificIcebreaker = craftSpecificIcebreaker;
+window.rankCompatibilityPeeks = rankCompatibilityPeeks;
+window.getCompatibilityPeeks = getCompatibilityPeeks;
+window.mountCompatPeeks = mountCompatPeeks;
+window.renderCompatPeekCard = renderCompatPeekCard;
+window.wireCompatPeekHost = wireCompatPeekHost;
+window.tintPeepalIntentChips = tintPeepalIntentChips;
+window.isDiscoveryEligibleUser = isDiscoveryEligibleUser;
+window.detectIntentLean = detectIntentLean;
+

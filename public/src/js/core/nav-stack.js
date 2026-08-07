@@ -39,6 +39,7 @@
     '.name-prompt-sheet',
     '.confirm-prompt-sheet',
     '.music-picker-sheet',
+    '.music-hub-sheet',
     '.flag-sheet',
     '.loc-share-sheet',
     '.group-info-overlay',
@@ -71,7 +72,7 @@
       return;
     }
     const btn = el.querySelector(
-      '[data-overlay-dismiss],[data-dismiss],.sheet-close,.icon-btn,.game-back-btn,#chatBack,.chat-back,[data-music-picker-close],[data-loc-share-close],[data-group-info-close],#closeFlagSheet'
+      '[data-overlay-dismiss],[data-dismiss],.sheet-close,.icon-btn,.game-back-btn,#chatBack,.chat-back,[data-music-picker-close],[data-music-hub-close],[data-loc-share-close],[data-group-info-close],#closeFlagSheet'
     );
     if (btn) {
       try {
