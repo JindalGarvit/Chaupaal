@@ -361,6 +361,7 @@ async function handlePost(req, res) {
         data = await generateTrending({
           db,
           scope: body.scope || 'global',
+          seeds: Array.isArray(body.seeds) ? body.seeds : undefined,
         });
       } else {
         data = await generateRecommendations({

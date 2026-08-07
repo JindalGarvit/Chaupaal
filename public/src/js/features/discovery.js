@@ -464,6 +464,9 @@ function openPeepalAskSheet(){
       <div style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;">
         ${[{id:'mcq',label:'ðŸ“‹ MCQ'},{id:'binary',label:'âš–ï¸ Binary'},{id:'open',label:'ðŸ’¬ Open'},{id:'poll',label:'ðŸ“Š Poll'}].map((f,i)=>`<button class="peepal-format-chip${i===0?' active':''}" data-fmt="${f.id}" style="padding:8px 14px;border-radius:999px;border:2px solid ${i===0?'var(--red)':'var(--line)'};background:${i===0?'rgba(230,57,70,0.08)':'var(--white)'};font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;color:${i===0?'var(--red)':'var(--ink)'};">${f.label}</button>`).join('')}
       </div>
+      <div id="peepalAskCatRow" style="display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;align-items:center;">
+        <span style="font-size:11px;font-weight:700;color:var(--muted);flex-shrink:0;">Topic</span>
+      </div>
       <textarea id="peepalQText" placeholder="What do you want to know?" style="width:100%;min-height:100px;border:2px solid var(--line);border-radius:14px;padding:12px;font-family:Inter,sans-serif;font-size:15px;outline:none;resize:none;box-sizing:border-box;background:var(--cream);"></textarea>
       <!-- MCQ options -->
       <div id="mcqOptions" style="margin-top:10px;">
@@ -515,6 +518,44 @@ function openPeepalAskSheet(){
     sheet.dataset.navManaged='1';
     pushNavLayer(sheet,()=>{ sheet.classList.remove('open'); setTimeout(()=>sheet.remove(),350); });
   }
+
+  // Topic chips from CategoryPrefs (same manage sheet as Akhbaar)
+  let peepalAskCat = '';
+  try {
+    const catRow = sheet.querySelector('#peepalAskCatRow');
+    if (catRow && typeof CategoryPrefs !== 'undefined') {
+      const cats = (CategoryPrefs.getOrderedCategories?.() || [])
+        .filter((c) => c.name && c.name !== 'all' && c.name !== 'saathi')
+        .slice(0, 10);
+      cats.forEach((c) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'peepal-ask-cat-chip';
+        btn.dataset.cat = c.name;
+        btn.textContent = `${c.emoji || '✨'} ${c.name}`;
+        btn.style.cssText =
+          'padding:6px 11px;border-radius:999px;border:1.5px solid var(--line);background:var(--white);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;';
+        btn.addEventListener('click', () => {
+          peepalAskCat = peepalAskCat === c.name ? '' : c.name;
+          catRow.querySelectorAll('.peepal-ask-cat-chip').forEach((b) => {
+            const on = b.dataset.cat === peepalAskCat;
+            b.style.borderColor = on ? 'var(--red)' : 'var(--line)';
+            b.style.color = on ? 'var(--red)' : 'var(--ink)';
+            b.style.background = on ? 'rgba(230,57,70,0.08)' : 'var(--white)';
+          });
+          if (peepalAskCat) CategoryPrefs.touchCategory?.(peepalAskCat);
+        });
+        catRow.appendChild(btn);
+      });
+      const manage = document.createElement('button');
+      manage.type = 'button';
+      manage.textContent = 'Manage';
+      manage.style.cssText =
+        'padding:6px 10px;border:none;background:none;color:var(--red);font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0;';
+      manage.addEventListener('click', () => CategoryPrefs.openCategoryManageSheet?.());
+      catRow.appendChild(manage);
+    }
+  } catch (e) {}
 
   let anonQuota = { exhausted: true, remaining: 0, dayLeft: 0, weekLeft: lim.perWeek, unlock: '' };
   (async () => {
@@ -717,7 +758,7 @@ function openPeepalAskSheet(){
     // Firestore create rules require user.uid == auth.uid (Phase A). Display
     // name/avatar stay anonymous; only the public label changes.
     const ownUid=currentUser?.uid||'me';
-    const q={id:`q_${Date.now()}`,question:text,format:fmt,options:opts,responses:opts.map(()=>0),totalResponses:0,comments:0,timeAgo:'just now',ts:Date.now(),tag:fmt.toUpperCase(),answered:false,deleted:false,
+    const q={id:`q_${Date.now()}`,question:text,format:fmt,options:opts,responses:opts.map(()=>0),totalResponses:0,comments:0,timeAgo:'just now',ts:Date.now(),tag:peepalAskCat||fmt.toUpperCase(),answered:false,deleted:false,
       audience:saveOnly?'private':audience, responseLimitMode, responseCap:postCap, audienceSegments:saveOnly?[]:audienceSegments,
       segmentDistributionActive:!saveOnly && audienceSegments.some(s=>s.status==='active'),
       activeSegmentIndex:0,

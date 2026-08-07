@@ -331,33 +331,164 @@ function loadVoiceList(){
 }
 if(window.speechSynthesis){loadVoiceList();window.speechSynthesis.onvoiceschanged=loadVoiceList;}
 
-/** Internal only — never expose a voice picker. Prefer lang match, then a calm female-ish voice. */
-function getSelectedVoice(){
-  const lang=(typeof currentLang!=='undefined'&&currentLang)||'en';
-  const byLang=availableVoices.find(v=>String(v.lang||'').toLowerCase().startsWith(String(lang).toLowerCase().slice(0,2)));
-  if(byLang) return byLang;
-  return availableVoices.find(v=>/samantha|google.*en|zira|female/i.test(v.name))||availableVoices[0];
+/**
+ * Curated listen voices — UI shows names only.
+ * Diversity is in match patterns (Indic / East Asian / American / European), not labels.
+ */
+const VOICE_CATALOG = [
+  { id: 'asha', label: 'Asha', patterns: [/veena/i, /heera/i, /google हिन्दी/i, /hindi.*female/i], langPref: ['hi'] },
+  { id: 'arjun', label: 'Arjun', patterns: [/ravi/i, /hemant/i, /hindi.*male/i], langPref: ['hi'] },
+  { id: 'maya', label: 'Maya', patterns: [/samantha/i, /zira/i, /aria/i, /google us english female/i, /female.*en-us/i], langPref: ['en'] },
+  { id: 'noah', label: 'Noah', patterns: [/\balex\b/i, /\bdavid\b/i, /\bmark\b/i, /google us english male/i, /guy/i], langPref: ['en'] },
+  { id: 'yuki', label: 'Yuki', patterns: [/kyoko/i, /haruka/i, /google 日本語/i, /^ja/i], langPref: ['ja'] },
+  { id: 'mei', label: 'Mei', patterns: [/ting-ting|tingting/i, /xiaoxiao/i, /google.*(普通话|中文)|普通话/i, /^zh/i], langPref: ['zh'] },
+  { id: 'elena', label: 'Elena', patterns: [/monica/i, /paulina/i, /elvira/i, /google español/i, /^es/i], langPref: ['es', 'pt'] },
+  { id: 'luca', label: 'Luca', patterns: [/thomas/i, /hortense/i, /google français/i, /^fr/i, /^de/i, /^it/i], langPref: ['fr', 'de', 'it'] },
+];
+
+function resolveCatalogVoice(entry, voices) {
+  if (!entry || !voices?.length) return null;
+  for (const re of entry.patterns || []) {
+    const hit = voices.find((v) => re.test(v.name) || re.test(String(v.lang || '')));
+    if (hit) return hit;
+  }
+  for (const pref of entry.langPref || []) {
+    const p = String(pref).toLowerCase().slice(0, 2);
+    const hit = voices.find((v) => String(v.lang || '').toLowerCase().startsWith(p));
+    if (hit) return hit;
+  }
+  return null;
 }
 
-let currentlySpeaking=null;
-function speakText(text, btnEl){
-  if(!window.speechSynthesis)return;
-  if(typeof quietMode!=='undefined'&&quietMode){
-    if(typeof showToast==='function') showToast(typeof t==='function'?t('quiet_voice_muted','Quiet mode is on'):'Quiet mode is on');
+function getDefaultVoiceId() {
+  const lang = (typeof normalizeLang === 'function' ? normalizeLang(currentLang) : currentLang) || 'en';
+  const byLang = VOICE_CATALOG.find((e) => (e.langPref || []).some((p) => String(p).slice(0, 2) === lang.slice(0, 2)));
+  return (byLang || VOICE_CATALOG.find((e) => e.id === 'maya') || VOICE_CATALOG[0]).id;
+}
+
+function getSelectedVoice() {
+  loadVoiceList();
+  const savedId = (() => {
+    try {
+      return localStorage.getItem('chaupaal_voice_id') || '';
+    } catch (e) {
+      return '';
+    }
+  })();
+  const entry = VOICE_CATALOG.find((e) => e.id === savedId) || VOICE_CATALOG.find((e) => e.id === getDefaultVoiceId());
+  const resolved = resolveCatalogVoice(entry, availableVoices);
+  if (resolved) return resolved;
+  // Legacy name save
+  try {
+    const legacy = localStorage.getItem('chaupaal_voice');
+    if (legacy) {
+      const v = availableVoices.find((x) => x.name === legacy);
+      if (v) return v;
+    }
+  } catch (e) {}
+  const lang = (typeof currentLang !== 'undefined' && currentLang) || 'en';
+  const tts = typeof getTtsLang === 'function' ? getTtsLang(lang) : lang;
+  const byLang =
+    availableVoices.find((v) => String(v.lang || '').toLowerCase().startsWith(String(tts).toLowerCase().slice(0, 2))) ||
+    availableVoices.find((v) => String(v.lang || '').toLowerCase().startsWith(String(lang).toLowerCase().slice(0, 2)));
+  if (byLang) return byLang;
+  return availableVoices.find((v) => /samantha|google.*en|zira/i.test(v.name)) || availableVoices[0];
+}
+
+function populateVoiceDropdown() {
+  const select = document.getElementById('voiceSelect');
+  if (!select) return;
+  loadVoiceList();
+  const working = VOICE_CATALOG.map((entry) => {
+    const voice = resolveCatalogVoice(entry, availableVoices);
+    return voice ? { entry, voice } : null;
+  }).filter(Boolean);
+  // If engine has voices but none matched patterns, map first few engines to catalog labels
+  let options = working;
+  if (!options.length && availableVoices.length) {
+    options = VOICE_CATALOG.slice(0, Math.min(6, availableVoices.length)).map((entry, i) => ({
+      entry,
+      voice: availableVoices[i],
+    }));
+  }
+  let savedId = '';
+  try {
+    savedId = localStorage.getItem('chaupaal_voice_id') || '';
+  } catch (e) {}
+  if (!savedId || !options.some((o) => o.entry.id === savedId)) savedId = getDefaultVoiceId();
+  if (!options.some((o) => o.entry.id === savedId) && options[0]) savedId = options[0].entry.id;
+  select.innerHTML = options.length
+    ? options.map((o) => `<option value="${o.entry.id}" ${o.entry.id === savedId ? 'selected' : ''}>${o.entry.label}</option>`).join('')
+    : '<option value="">—</option>';
+  try {
+    localStorage.setItem('chaupaal_voice_id', select.value || savedId);
+  } catch (e) {}
+  if (!select.dataset.voiceWired) {
+    select.dataset.voiceWired = '1';
+    select.addEventListener('change', () => {
+      try {
+        localStorage.setItem('chaupaal_voice_id', select.value);
+      } catch (e) {}
+      if (typeof showToast === 'function') showToast(t('onboard_voice_updated'));
+    });
+  }
+}
+
+function previewSelectedVoice() {
+  if (!window.speechSynthesis) return;
+  if (typeof quietMode !== 'undefined' && quietMode) {
+    if (typeof showToast === 'function') showToast(t('quiet_voice_muted', 'Quiet mode is on'));
     return;
   }
-  if(currentlySpeaking===btnEl){
-    window.speechSynthesis.cancel();currentlySpeaking=null;
-    btnEl?.classList.remove('speaking');return;
+  const sample =
+    typeof t === 'function' ? t('settings_voice_desc', 'Voice used for Listen to post') : 'Hello from Chaupaal';
+  window.speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(sample);
+  const v = getSelectedVoice();
+  if (v) utter.voice = v;
+  utter.lang = (v && v.lang) || (typeof getTtsLang === 'function' ? getTtsLang() : 'en-US');
+  utter.rate = 0.95;
+  utter.pitch = 1;
+  window.speechSynthesis.speak(utter);
+}
+
+let currentlySpeaking = null;
+function speakText(text, btnEl) {
+  if (!window.speechSynthesis) return;
+  if (typeof quietMode !== 'undefined' && quietMode) {
+    if (typeof showToast === 'function')
+      showToast(typeof t === 'function' ? t('quiet_voice_muted', 'Quiet mode is on') : 'Quiet mode is on');
+    return;
+  }
+  if (currentlySpeaking === btnEl) {
+    window.speechSynthesis.cancel();
+    currentlySpeaking = null;
+    btnEl?.classList.remove('speaking');
+    return;
   }
   window.speechSynthesis.cancel();
-  document.querySelectorAll('.peepal-speak-btn.speaking,.duniya-caption-speak.speaking').forEach(b=>b.classList.remove('speaking'));
-  const utter=new SpeechSynthesisUtterance(text);
-  const v=getSelectedVoice();if(v)utter.voice=v;
-  utter.rate=0.95;utter.pitch=1;
-  utter.onend=()=>{btnEl?.classList.remove('speaking');currentlySpeaking=null;};
+  document
+    .querySelectorAll('.peepal-speak-btn.speaking,.duniya-caption-speak.speaking')
+    .forEach((b) => b.classList.remove('speaking'));
+  const utter = new SpeechSynthesisUtterance(text);
+  const v = getSelectedVoice();
+  if (v) utter.voice = v;
+  utter.lang = (v && v.lang) || (typeof getTtsLang === 'function' ? getTtsLang() : 'en-US');
+  utter.rate = 0.95;
+  utter.pitch = 1;
+  utter.onend = () => {
+    btnEl?.classList.remove('speaking');
+    currentlySpeaking = null;
+  };
   window.speechSynthesis.speak(utter);
-  btnEl?.classList.add('speaking');currentlySpeaking=btnEl;
+  btnEl?.classList.add('speaking');
+  currentlySpeaking = btnEl;
+}
+
+document.getElementById('voicePreviewBtn')?.addEventListener('click', previewSelectedVoice);
+setTimeout(populateVoiceDropdown, 400);
+if (window.speechSynthesis) {
+  window.speechSynthesis.addEventListener?.('voiceschanged', () => populateVoiceDropdown());
 }
 
 // ===================== UN COUNTRIES LIST =====================

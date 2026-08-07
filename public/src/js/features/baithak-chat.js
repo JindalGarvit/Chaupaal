@@ -513,7 +513,7 @@ function openChatScreen(chat){
       activeChatRecognition?.stop();return;
     }
     activeChatRecognition = new SR();
-    activeChatRecognition.lang = currentLang==='hi'?'hi-IN':'en-IN';
+    activeChatRecognition.lang = typeof getTtsLang === 'function' ? getTtsLang() : (currentLang==='hi'?'hi-IN':'en-IN');
     activeChatRecognition.interimResults = false;
     activeChatRecognition.onstart = () => micBtn.classList.add('recording');
     activeChatRecognition.onend = () => micBtn.classList.remove('recording');

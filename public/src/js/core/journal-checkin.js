@@ -227,7 +227,7 @@
       }
       const rec = new SR();
       micBtn._rec = rec;
-      rec.lang = (typeof currentLang !== 'undefined' && currentLang === 'hi') ? 'hi-IN' : 'en-IN';
+      rec.lang = typeof getTtsLang === 'function' ? getTtsLang() : ((typeof currentLang !== 'undefined' && currentLang === 'hi') ? 'hi-IN' : 'en-IN');
       rec.interimResults = false;
       rec.onstart = () => micBtn.classList.add('recording');
       rec.onend = () => micBtn.classList.remove('recording');

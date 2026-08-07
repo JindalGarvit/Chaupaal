@@ -140,8 +140,11 @@ const SoundLib=(()=>{
   function speak(text){
     if(quietMode||!window.speechSynthesis)return;
     const utter=new SpeechSynthesisUtterance(text);
-    const v=voices.find(v=>/samantha|google us|zira|female/i.test(v.name))||voices[0];
-    if(v)utter.voice=v;utter.pitch=1.15;utter.rate=0.95;utter.volume=0.8;
+    const v=(typeof getSelectedVoice==='function'?getSelectedVoice():null)
+      ||voices.find(v=>/samantha|google us|zira/i.test(v.name))||voices[0];
+    if(v)utter.voice=v;
+    utter.lang=(v&&v.lang)||(typeof getTtsLang==='function'?getTtsLang():'en-US');
+    utter.pitch=1.15;utter.rate=0.95;utter.volume=0.8;
     window.speechSynthesis.cancel();window.speechSynthesis.speak(utter);
   }
   // startBg/stopBg removed — no continuous / looped audio in the app.
@@ -161,6 +164,8 @@ function openSettingsModal(){
   const modal=document.getElementById('settingsModal');
   if(!modal) return;
   modal.classList.remove('hidden');
+  if(typeof populateLangSelect==='function') populateLangSelect();
+  if(typeof populateVoiceDropdown==='function') populateVoiceDropdown();
   if(typeof applyNotifPrefsToSettingsUI==='function') applyNotifPrefsToSettingsUI();
   try{
     const share=JSON.parse(localStorage.getItem('chaupaal_share_toggles')||'null');
@@ -223,6 +228,10 @@ document.getElementById('saveSettings').addEventListener('click',()=>{
   const langVal=document.getElementById('langSelect')?.value||'en';
   if(typeof setAppLanguage==='function') setAppLanguage(langVal,{persistRemote:true});
   else currentLang=langVal;
+  try{
+    const voiceId=document.getElementById('voiceSelect')?.value;
+    if(voiceId) localStorage.setItem('chaupaal_voice_id', voiceId);
+  }catch(e){}
   if(typeof readNotifPrefsFromSettingsUI==='function'&&typeof saveNotifPrefs==='function'){
     saveNotifPrefs(readNotifPrefsFromSettingsUI());
   }

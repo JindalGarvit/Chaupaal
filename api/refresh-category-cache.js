@@ -6,6 +6,8 @@
  *   ANTHROPIC_API_KEY
  *   CRON_SECRET
  *   FIREBASE_SERVICE_ACCOUNT_JSON  — stringified service-account JSON
+ *   CAT_CACHE_CITIES — optional comma-separated cities (max 8) for geo-scoped shareable docs
+ *   CAT_CACHE_INDUSTRIES — optional comma-separated industries (max 6)
  */
 const admin = require('firebase-admin');
 const {

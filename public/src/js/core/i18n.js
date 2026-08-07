@@ -1,4 +1,75 @@
 // ===================== i18n TRANSLATION SYSTEM =====================
+/**
+ * Single source for Settings language picker + TTS BCP-47 tags.
+ * Add/remove a language here and (optionally) a message pack — not scattered hardcodes.
+ */
+const LANG_CATALOG = [
+  { code: 'en', native: 'English', name: 'English', tts: 'en-US' },
+  { code: 'hi', native: 'हिंदी', name: 'Hindi', tts: 'hi-IN' },
+  { code: 'bn', native: 'বাংলা', name: 'Bengali', tts: 'bn-IN' },
+  { code: 'te', native: 'తెలుగు', name: 'Telugu', tts: 'te-IN' },
+  { code: 'ta', native: 'தமிழ்', name: 'Tamil', tts: 'ta-IN' },
+  { code: 'mr', native: 'मराठी', name: 'Marathi', tts: 'mr-IN' },
+  { code: 'gu', native: 'ગુજરાતી', name: 'Gujarati', tts: 'gu-IN' },
+  { code: 'kn', native: 'ಕನ್ನಡ', name: 'Kannada', tts: 'kn-IN' },
+  { code: 'ml', native: 'മലയാളം', name: 'Malayalam', tts: 'ml-IN' },
+  { code: 'pa', native: 'ਪੰਜਾਬੀ', name: 'Punjabi', tts: 'pa-IN' },
+  { code: 'or', native: 'ଓଡ଼ିଆ', name: 'Odia', tts: 'or-IN' },
+  { code: 'as', native: 'অসমীয়া', name: 'Assamese', tts: 'as-IN' },
+  { code: 'ur', native: 'اردو', name: 'Urdu', tts: 'ur-PK' },
+  { code: 'ne', native: 'नेपाली', name: 'Nepali', tts: 'ne-NP' },
+  { code: 'ar', native: 'العربية', name: 'Arabic', tts: 'ar-SA' },
+  { code: 'es', native: 'Español', name: 'Spanish', tts: 'es-ES' },
+  { code: 'fr', native: 'Français', name: 'French', tts: 'fr-FR' },
+  { code: 'pt', native: 'Português', name: 'Portuguese', tts: 'pt-BR' },
+  { code: 'de', native: 'Deutsch', name: 'German', tts: 'de-DE' },
+  { code: 'it', native: 'Italiano', name: 'Italian', tts: 'it-IT' },
+  { code: 'tr', native: 'Türkçe', name: 'Turkish', tts: 'tr-TR' },
+  { code: 'id', native: 'Bahasa Indonesia', name: 'Indonesian', tts: 'id-ID' },
+  { code: 'ru', native: 'Русский', name: 'Russian', tts: 'ru-RU' },
+  { code: 'ja', native: '日本語', name: 'Japanese', tts: 'ja-JP' },
+  { code: 'ko', native: '한국어', name: 'Korean', tts: 'ko-KR' },
+  { code: 'zh', native: '中文', name: 'Chinese', tts: 'zh-CN' },
+];
+
+const LANG_CODE_SET = new Set(LANG_CATALOG.map((l) => l.code));
+
+function getLangEntry(code) {
+  const c = normalizeLang(code);
+  return LANG_CATALOG.find((l) => l.code === c) || LANG_CATALOG[0];
+}
+
+function normalizeLang(code) {
+  const raw = String(code || 'en').trim().toLowerCase();
+  if (LANG_CODE_SET.has(raw)) return raw;
+  const base = raw.split(/[-_]/)[0];
+  if (LANG_CODE_SET.has(base)) return base;
+  if (base === 'zh') return 'zh';
+  return 'en';
+}
+
+function getTtsLang(code) {
+  return getLangEntry(code != null ? code : typeof currentLang !== 'undefined' ? currentLang : 'en').tts || 'en-US';
+}
+
+/** Merge partial packs (from i18n-locales.js). Catalog entry alone is enough for fallback-to-en UI. */
+function registerI18nLocale(code, messages) {
+  const c = normalizeLang(code);
+  if (!messages || typeof messages !== 'object') return;
+  I18N[c] = Object.assign({}, I18N[c] || {}, messages);
+}
+
+function populateLangSelect() {
+  const sel = document.getElementById('langSelect');
+  if (!sel) return;
+  const cur = normalizeLang(typeof currentLang !== 'undefined' ? currentLang : 'en');
+  sel.innerHTML = LANG_CATALOG.map((l) => {
+    const label = l.native === l.name ? l.native : `${l.native} (${l.name})`;
+    return `<option value="${l.code}">${label}</option>`;
+  }).join('');
+  sel.value = cur;
+}
+
 const I18N = {
   en:{
     correct:'Correct!', wrong:'Not quite!', scroll_next:'Scroll up for next ↑',
@@ -56,6 +127,8 @@ const I18N = {
     display_ambient_desc:'Soft background tone in Auto mode (off when Quiet)',
     settings_quiet:'Quiet mode',
     settings_quiet_desc:'Mute sounds, voice & animations',
+    settings_voice:'Listen voice',
+    settings_voice_desc:'Voice used for Listen to post',
     display_geo_enable:'Use location for subtle sky/weather',
     display_geo_status_unknown:'Sky location: not set (uses clock and city if available)',
     display_geo_status_granted:'Sky location: on (never shared with anyone)',
@@ -110,7 +183,7 @@ const I18N = {
     notif_presence_desc:'Show typing & seen (1:1)',
     notif_types_summary:'Notification types',
     notif_inbox_hint:'Unread shows as tab lights. Open inbox via double-tap a tab or your profile.',
-    lang_chrome_hint:'Full app chrome: English, Hindi, Tamil. Other picks set content & listen-to-post language.',
+    lang_chrome_hint:'App UI follows your pick. Missing strings fall back to English.',
     companion_tips_label:'Tips & wishes from Chaupaal',
     companion_tips_desc:'Festival wishes, gentle check-ins, and companion notes. Journal Goodnight is separate.',
     appear_friends_label:"Appear in friends’ prompts",
@@ -119,6 +192,30 @@ const I18N = {
     share_personal_events_label:'Share personal events',
     share_personal_events_desc:'Show birthdays, anniversaries, and similar in Akhbaar / Surkhiya. On by default — turn off anytime.',
     quiet_voice_muted:'Quiet mode is on',
+    music_hub_title:'Music',
+    music_hub_empty:'Nothing here yet',
+    music_hub_no_preview:'No playable preview right now',
+    music_hub_search_hint:'Search for a song to share or play',
+    music_hub_no_lists:'No playlists yet',
+    music_hub_error:'Could not load music',
+    music_start_radio:'Start radio',
+    music_liked:'Saved to Liked',
+    music_radio_card:'Chaupaal Radio',
+    music_radio_tap:'Tap to tune in',
+    music_radio_started:'Radio on — queue will refill quietly',
+    music_share_title:'Share a song',
+    push_app_update_t:'Something new on Chaupaal',
+    push_app_update_b:'A small polish just landed — come see.',
+    push_milestone_t:'Nice streak, {{name}}',
+    push_milestone_b:'Your profile is filling out. One more detail keeps the vibe warm.',
+    push_social_t:'{{actor}} thought of you',
+    push_social_b:'A soft ping from your circle — tap to open.',
+    push_rec_t:'A {{category}} pick for you',
+    push_rec_b:'Based on what you’ve been into — no rush, just a nudge.',
+    push_chal_t:'A challenge is waiting',
+    push_chal_b:'Someone left a Muqabala at your door.',
+    push_ts_t:'Happening now',
+    push_ts_b:'A live moment won’t wait long — jump in if you’re free.',
     chaupaal_card_title:'Chaupaal card',
     chaupaal_card_sub:'Shareable identity · Hub · Plus',
     peek_view_profile:'View profile',
@@ -296,6 +393,8 @@ const I18N = {
     display_ambient_desc:'Auto mode mein soft background (Quiet pe band)',
     settings_quiet:'Quiet mode',
     settings_quiet_desc:'Sounds, voice aur animations mute',
+    settings_voice:'Listen voice',
+    settings_voice_desc:'Post sunne ke liye voice',
     display_geo_enable:'Halka sky/mausam ke liye location on karein',
     display_geo_status_unknown:'Sky location: set nahi (clock / city use hogi)',
     display_geo_status_granted:'Sky location: on (kisi se share nahi)',
@@ -349,7 +448,7 @@ const I18N = {
     notif_presence_desc:'Typing aur seen dikhao (1:1)',
     notif_types_summary:'Notification types',
     notif_inbox_hint:'Unread tab lights pe dikhta hai. Inbox double-tap ya profile se kholo.',
-    lang_chrome_hint:'Poora UI: English, Hindi, Tamil. Baaki content / listen language ke liye.',
+    lang_chrome_hint:'App UI aapki bhasha follow karegi. Jo string nahi hai woh English mein aayegi.',
     companion_tips_label:'Chaupaal se tips aur wishes',
     companion_tips_desc:'Tyohar wishes, soft check-ins. Journal Goodnight alag hai.',
     appear_friends_label:'Doston ke prompts mein dikho',
@@ -534,6 +633,8 @@ const I18N = {
     display_ambient_desc:'Auto mode-il soft background (Quiet-la off)',
     settings_quiet:'Quiet mode',
     settings_quiet_desc:'Sounds, voice & animations mute',
+    settings_voice:'Listen voice',
+    settings_voice_desc:'Post kekka use aagum voice',
     display_geo_enable:'Soft sky/weather-kaga location on seyyungal',
     display_geo_status_unknown:'Sky location: set illai (clock / city)',
     display_geo_status_granted:'Sky location: on (yaarumum share seyyappadathu)',
@@ -587,7 +688,7 @@ const I18N = {
     notif_presence_desc:'Typing & seen (1:1)',
     notif_types_summary:'Notification types',
     notif_inbox_hint:'Unread tab lights-la theriyum. Inbox double-tap / profile.',
-    lang_chrome_hint:'Full UI: English, Hindi, Tamil. Matra mozhi content / listen-kaga.',
+    lang_chrome_hint:'App UI ungalloda mozhiyai follow aagum. Illaatha strings English-ku pogum.',
     companion_tips_label:'Chaupaal tips & wishes',
     companion_tips_desc:'Thiruvizha wishes, soft check-ins. Journal Goodnight thani.',
     appear_friends_label:'Nanpar prompts-il theri',
@@ -1776,19 +1877,55 @@ Object.assign(I18N_TOASTS.ta, {
 ['en', 'hi', 'ta'].forEach((lang) => {
   if (I18N[lang] && I18N_TOASTS[lang]) Object.assign(I18N[lang], I18N_TOASTS[lang]);
 });
+// Ensure music/push chrome keys exist on hi/ta (partial overlap with English until packs grow)
+['hi', 'ta'].forEach((lang) => {
+  if (!I18N[lang]) return;
+  [
+    'music_hub_title',
+    'music_hub_empty',
+    'music_hub_no_preview',
+    'music_hub_search_hint',
+    'music_hub_no_lists',
+    'music_hub_error',
+    'music_start_radio',
+    'music_liked',
+    'music_radio_card',
+    'music_radio_tap',
+    'music_radio_started',
+    'music_share_title',
+    'push_app_update_t',
+    'push_app_update_b',
+    'push_milestone_t',
+    'push_milestone_b',
+    'push_social_t',
+    'push_social_b',
+    'push_rec_t',
+    'push_rec_b',
+    'push_chal_t',
+    'push_chal_b',
+    'push_ts_t',
+    'push_ts_b',
+    'settings_voice',
+    'settings_voice_desc',
+  ].forEach((k) => {
+    if (I18N[lang][k] == null && I18N.en[k] != null) I18N[lang][k] = I18N.en[k];
+  });
+});
 
 /** Persist + apply language preference (localStorage, optional Firestore). */
 function setAppLanguage(lang, {persistRemote=false}={}){
-  const next=(lang&&String(lang).trim())||'en';
+  const next=normalizeLang(lang);
   currentLang=next;
   try{localStorage.setItem('chaupaal_lang',next);}catch(e){}
-  const sel=document.getElementById('langSelect');
-  if(sel&&sel.value!==next) sel.value=next;
+  populateLangSelect();
   document.documentElement.lang=next;
   if(persistRemote&&typeof db!=='undefined'&&db&&typeof currentUser!=='undefined'&&currentUser){
     db.collection('users').doc(currentUser.uid).set({lang:next},{merge:true}).catch(()=>{});
   }
   if(typeof applyChromeI18n==='function') applyChromeI18n();
+  if(typeof populateVoiceDropdown==='function'){
+    try{populateVoiceDropdown();}catch(e){}
+  }
 }
 
 function bootLanguagePreference(){
@@ -1829,12 +1966,20 @@ function applyChromeI18n(){
   });
 }
 
-// Fallback to English for unlisted languages
+/** Resolve UI string: selected lang → English → optional string fallback → key. */
 function t(key, vars={}){
-  const lang = currentLang||'en';
-  const dict = I18N[lang] || I18N.en;
-  let str = dict[key] || I18N.en[key] || key;
-  Object.entries(vars).forEach(([k,v])=>{ str=str.replace(`{{${k}}}`,v); });
+  let fallback='';
+  if(typeof vars==='string'){ fallback=vars; vars={}; }
+  const lang = normalizeLang(currentLang||'en');
+  const packs = lang === 'en' ? [I18N.en] : [I18N[lang], I18N.en];
+  let str;
+  for (const dict of packs) {
+    if (!dict) continue;
+    const v = dict[key];
+    if (v != null && v !== '') { str = v; break; }
+  }
+  if (str == null) str = fallback || key;
+  Object.entries(vars||{}).forEach(([k,v])=>{ str=String(str).replace(`{{${k}}}`,v); });
   return str;
 }
 

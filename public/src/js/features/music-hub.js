@@ -463,9 +463,14 @@
           return;
         }
         if (tab === 'trending') {
-          const data = await apiMusic('music_trending', {
-            scope: radioSettings.scope || 'local',
-          });
+          const scope = radioSettings.scope || 'local';
+          const payload = { scope };
+          // Circle: only pass real local play seeds (liked/history) — never invent friend listens.
+          if (scope === 'circle') {
+            const seeds = MusicTaste?.recommendSeeds?.() || [];
+            if (seeds.length) payload.seeds = seeds;
+          }
+          const data = await apiMusic('music_trending', payload);
           currentList = (data.tracks || []).map(normalizeTrack).filter(Boolean);
           resultsEl.innerHTML = trackRows(currentList, { shareMode });
           wireRows(false);

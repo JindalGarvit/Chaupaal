@@ -212,11 +212,16 @@ async function generateRadio(opts = {}) {
 }
 
 /**
- * @param {{ db?: FirebaseFirestore, scope?: 'global'|'local'|'circle' }} opts
+ * @param {{ db?: FirebaseFirestore, scope?: 'global'|'local'|'circle', seeds?: string[] }} opts
  */
 async function generateTrending(opts = {}) {
   const scope = slug(opts.scope || 'global');
-  const key = `trending__${scope}__${istHourBucket(3)}`;
+  const extraSeeds = Array.isArray(opts.seeds) ? opts.seeds.filter(Boolean).slice(0, 8) : [];
+  // Circle: fold local play seeds into cache identity when present (no invented friend data).
+  const key =
+    scope === 'circle' && extraSeeds.length
+      ? `trending__${scope}__${seedHash(extraSeeds)}__${istHourBucket(3)}`
+      : `trending__${scope}__${istHourBucket(3)}`;
 
   const cached = memGet(key) || (await firestoreGet(opts.db, key));
   if (cached) {
@@ -224,7 +229,13 @@ async function generateTrending(opts = {}) {
     return { ...cached, cacheKey: key, scope };
   }
 
-  const queries = pickQueries({ scope, mood: 'discovery', genre: 'any', language: 'any' });
+  const queries = pickQueries({
+    scope,
+    mood: 'discovery',
+    genre: 'any',
+    language: 'any',
+    seeds: extraSeeds,
+  });
   const { tracks, provider } = await fetchBatch(queries, BATCH);
   const payload = { tracks, cacheKey: key, fromCache: false, provider, scope };
   memSet(key, payload);
