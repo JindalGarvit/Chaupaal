@@ -188,35 +188,35 @@ function openChatScreen(chat){
       ${msgs.map(m => renderMsgBubble(m, isGroup)).join('')}
     </div>
     <div class="ai-suggestion-bar hidden" id="aiSuggestionBar"></div>
-    <div class="chat-attach-menu" id="chatAttachMenu">
-      <div class="chat-attach-option" id="attachPhoto">
-        <div class="chat-attach-icon" style="background:#A855F7;">📷</div>
-        <div class="chat-attach-label">Photo</div>
-      </div>
-      <div class="chat-attach-option" id="attachFile">
-        <div class="chat-attach-icon" style="background:#3B82F6;">📄</div>
-        <div class="chat-attach-label">File</div>
-      </div>
-      ${isChaupaal ? '' : `<div class="chat-attach-option" id="attachGame">
-        <div class="chat-attach-icon" style="background:#10B981;">🎮</div>
-        <div class="chat-attach-label">Game</div>
-      </div>`}
+    <div class="chat-attach-menu" id="chatAttachMenu" role="menu" aria-label="${typeof t==='function'?t('attach_menu','Attach'):'Attach'}">
+      <button type="button" class="chat-attach-option" id="attachPhoto" role="menuitem">
+        <span class="chat-attach-icon chat-attach-icon--photo">${typeof iconHtml==='function'?iconHtml('camera',{size:22}):''}</span>
+        <span class="chat-attach-label">${typeof t==='function'?t('attach_photo','Photo'):'Photo'}</span>
+      </button>
+      <button type="button" class="chat-attach-option" id="attachFile" role="menuitem">
+        <span class="chat-attach-icon chat-attach-icon--file">${typeof iconHtml==='function'?iconHtml('file',{size:22}):''}</span>
+        <span class="chat-attach-label">${typeof t==='function'?t('attach_file','File'):'File'}</span>
+      </button>
+      ${isChaupaal ? '' : `<button type="button" class="chat-attach-option" id="attachGame" role="menuitem">
+        <span class="chat-attach-icon chat-attach-icon--game">${typeof iconHtml==='function'?iconHtml('gamepad',{size:22}):''}</span>
+        <span class="chat-attach-label">${typeof t==='function'?t('attach_game','Game'):'Game'}</span>
+      </button>`}
       ${isChaupaal
-        ? `<div class="chat-attach-option" id="attachJournal">
-        <div class="chat-attach-icon" style="background:#E63946;">${typeof iconHtml==='function'?iconHtml('notebook',{size:22}):'📓'}</div>
-        <div class="chat-attach-label">Journal</div>
-      </div>`
-        : `<div class="chat-attach-option" id="attachSong">
-        <div class="chat-attach-icon" style="background:#E63946;">🎵</div>
-        <div class="chat-attach-label">Song</div>
-      </div>`}
-      <div class="chat-attach-option" id="attachLocation">
-        <div class="chat-attach-icon" style="background:#F59E0B;">📍</div>
-        <div class="chat-attach-label">Location</div>
-      </div>
+        ? `<button type="button" class="chat-attach-option" id="attachJournal" role="menuitem">
+        <span class="chat-attach-icon chat-attach-icon--journal">${typeof iconHtml==='function'?iconHtml('notebook',{size:22}):''}</span>
+        <span class="chat-attach-label">${typeof t==='function'?t('attach_journal','Journal'):'Journal'}</span>
+      </button>`
+        : `<button type="button" class="chat-attach-option" id="attachSong" role="menuitem">
+        <span class="chat-attach-icon chat-attach-icon--song">${typeof iconHtml==='function'?iconHtml('music',{size:22}):''}</span>
+        <span class="chat-attach-label">${typeof t==='function'?t('attach_song','Song'):'Song'}</span>
+      </button>`}
+      <button type="button" class="chat-attach-option" id="attachLocation" role="menuitem">
+        <span class="chat-attach-icon chat-attach-icon--location">${typeof iconHtml==='function'?iconHtml('map-pin',{size:22}):''}</span>
+        <span class="chat-attach-label">${typeof t==='function'?t('attach_location','Location'):'Location'}</span>
+      </button>
     </div>
     <div class="chat-input-bar">
-      <button class="chat-action-btn" id="chatPlusBtn" aria-label="Attach">＋</button>
+      <button class="chat-action-btn" id="chatPlusBtn" aria-label="Attach">${typeof iconHtml==='function'?iconHtml('plus',{size:22}):'＋'}</button>
       <textarea id="chatMsgInput" rows="1" placeholder="${placeholder}" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
       <button class="chat-action-btn mic-btn" id="chatMicBtn" title="Voice typing" aria-label="Voice typing">🎙️</button>
       <button class="chat-action-btn chat-send-btn" id="chatSendBtn" aria-label="Send message">➤</button>
@@ -765,7 +765,7 @@ function renderMsgBubble(m, isGroup){
     body=`<div class="chat-img-wrap baithak-3d-edge"><img class="chat-img-msg" src="${chatEsc(att.url)}" decoding="async" alt=""${sizeAttrs}></div>`;
     rich=true;
   } else if(att && att.type==='file'){
-    body=`<div class="chat-file-msg baithak-3d-edge">📄 ${chatEsc(att.name||'File')}</div>`;
+    body=`<div class="chat-file-msg baithak-3d-edge">${typeof iconHtml==='function'?iconHtml('file',{size:18}):''}<span class="chat-file-name">${chatEsc(att.name||'File')}</span></div>`;
     rich=true;
   } else if(att && att.type==='location'){
     body=typeof renderLocationCard==='function'

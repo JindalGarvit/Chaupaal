@@ -192,7 +192,29 @@
 }
 .msg-bubble.me{
   background:var(--bubble-me-bg);color:var(--bubble-me-fg);
-  border-bottom-right-radius:var(--r-xs);
+  /* Soften the “me” tail — still tighter than other corners, not a hard red spike */
+  border-bottom-right-radius:12px;
+}
+.msg-bubble:has(.music-card),
+.msg-bubble:has(.loc-card),
+.msg-bubble:has(.chat-img-wrap),
+.msg-bubble:has(.chat-file-msg),
+.msg-bubble:has(.radio-share-card){
+  padding:6px;
+}
+.msg-bubble.me:has(.music-card),
+.msg-bubble.me:has(.loc-card),
+.msg-bubble.me:has(.chat-img-wrap),
+.msg-bubble.me:has(.chat-file-msg),
+.msg-bubble.me:has(.radio-share-card){
+  border-bottom-right-radius:14px;
+}
+.msg-bubble.them:has(.music-card),
+.msg-bubble.them:has(.loc-card),
+.msg-bubble.them:has(.chat-img-wrap),
+.msg-bubble.them:has(.chat-file-msg),
+.msg-bubble.them:has(.radio-share-card){
+  border-bottom-left-radius:10px;
 }
 .msg-meta{
   display:flex;align-items:center;gap:var(--space-1);
@@ -388,8 +410,8 @@
   font-size:12px;font-weight:700;cursor:pointer;touch-action:manipulation;
 }
 .cp-media-times{grid-column:1 / -1;display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;}
-.cp-media-seek-wrap{grid-column:1 / -1;}
-.cp-media-seek{width:100%;accent-color:var(--red);height:28px;cursor:pointer;}
+.cp-media-seek-wrap{grid-column:1 / -1;padding:0 8px;box-sizing:border-box;}
+.cp-media-seek{width:100%;accent-color:var(--red);height:28px;cursor:pointer;margin:0;}
 .cp-media-buffering{font-size:11px;color:var(--muted);grid-column:1 / -1;}
 .music-card .cp-media-controls{margin-top:6px;}
 .music-card--story .cp-media-skip{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.25);color:#fff;}
@@ -482,15 +504,41 @@
 .cp-mini-actions button:disabled,
 .cp-mini-transport button:disabled{opacity:.35;cursor:default;}
 .cp-mini-expanded-panel{
-  padding:0 12px 10px;border-top:1px solid var(--line);
+  padding:0 14px 14px;border-top:1px solid var(--line);
   background:var(--surface-elevated);
+  box-sizing:border-box;
 }
 .cp-mini-expanded-panel[hidden]{display:none!important;}
 .cp-mini-seek-row{
-  display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;
-  padding-top:8px;font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums;
+  display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;
+  padding:10px 2px 4px;font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums;
 }
-.cp-mini-seek{width:100%;accent-color:var(--brand-red);height:22px;cursor:pointer;touch-action:manipulation;}
+.cp-mini-seek-wrap{min-width:0;padding:0 6px;box-sizing:border-box;}
+.cp-mini-seek{
+  width:100%;height:28px;margin:0;padding:0;
+  background:transparent;accent-color:var(--brand-red);
+  cursor:pointer;touch-action:manipulation;
+}
+.cp-mini-seek::-webkit-slider-runnable-track{
+  height:6px;border-radius:999px;background:var(--surface-sunken, var(--line));
+}
+.cp-mini-seek::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:14px;height:14px;border-radius:50%;
+  background:var(--brand-red, var(--red));
+  border:2px solid var(--white,#fff);
+  box-shadow:0 1px 3px rgba(43,39,48,.18);
+  margin-top:-4px;
+}
+.cp-mini-seek::-moz-range-track{
+  height:6px;border-radius:999px;background:var(--surface-sunken, var(--line));border:none;
+}
+.cp-mini-seek::-moz-range-thumb{
+  width:14px;height:14px;border-radius:50%;
+  background:var(--brand-red, var(--red));
+  border:2px solid var(--white,#fff);
+  box-shadow:0 1px 3px rgba(43,39,48,.18);
+}
 .cp-mini-transport{
   display:flex;justify-content:center;align-items:center;gap:6px;padding-top:6px;flex-wrap:wrap;
 }
@@ -833,13 +881,13 @@ html.kb-open .cp-mini-player.cp-mini-fab:not(.is-expanded){bottom:12px;}
   line-height:0;
 }
 .msg-bubble .chat-img-wrap .chat-img-msg{
-  border:0;box-shadow:none;border-radius:13px;max-width:100%;
+  border:0;box-shadow:none;border-radius:12px;max-width:100%;display:block;
 }
 
 /* Loc map still clips to radius while card allows 3D lip */
 .msg-bubble .loc-card:not(.loc-card--story) .loc-card-map{
   overflow:hidden;
-  border-radius:calc(var(--r-card, 14px) - 1px) calc(var(--r-card, 14px) - 1px) 0 0;
+  border-radius:10px;
 }
 
 /* Left + right bottom segments */

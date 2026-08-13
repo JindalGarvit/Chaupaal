@@ -71,18 +71,25 @@
     return sharedAudio;
   }
 
+  function ico(name, size) {
+    if (typeof iconHtml === 'function') return iconHtml(name, { size: size || 16 });
+    return '';
+  }
+
   function transportHtml(playing) {
-    return `<div class="music-card-transport" data-music-transport data-nav-ignore="1">
-      <button type="button" class="music-card-transport-btn" data-music-prev aria-label="Previous track">${skipBackIcon()}</button>
-      <button type="button" class="music-card-transport-btn music-card-transport-skip" data-music-skip="-10" aria-label="Back 10 seconds">−10</button>
-      <button type="button" class="music-card-play" data-music-play aria-label="${playing ? 'Pause song' : 'Play song'}">${playing ? pauseIcon() : playIcon()}</button>
-      <button type="button" class="music-card-transport-btn music-card-transport-skip" data-music-skip="10" aria-label="Forward 10 seconds">+10</button>
-      <button type="button" class="music-card-transport-btn" data-music-next aria-label="Next track">${skipFwdIcon()}</button>
-    </div>
-    <div class="music-card-progress-track" aria-hidden="true"><div class="music-card-progress-bar" data-music-progress></div></div>
-    <div class="music-card-times">
-      <span data-music-elapsed>0:00</span>
-      <span data-music-remain>−0:00</span>
+    return `<div class="music-card-controls">
+      <div class="music-card-transport" data-music-transport data-nav-ignore="1">
+        <button type="button" class="music-card-transport-btn" data-music-prev aria-label="Previous track">${ico('skip-back', 16) || skipBackIcon()}</button>
+        <button type="button" class="music-card-transport-btn music-card-transport-skip" data-music-skip="-10" aria-label="Back 10 seconds">${ico('rewind', 16) || skipBackIcon()}</button>
+        <button type="button" class="music-card-play" data-music-play aria-label="${playing ? 'Pause song' : 'Play song'}">${playing ? pauseIcon() : playIcon()}</button>
+        <button type="button" class="music-card-transport-btn music-card-transport-skip" data-music-skip="10" aria-label="Forward 10 seconds">${ico('fast-forward', 16) || skipFwdIcon()}</button>
+        <button type="button" class="music-card-transport-btn" data-music-next aria-label="Next track">${ico('skip-forward', 16) || skipFwdIcon()}</button>
+      </div>
+      <div class="music-card-progress-track" data-music-seek role="slider" tabindex="0" aria-label="Seek" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="music-card-progress-bar" data-music-progress></div></div>
+      <div class="music-card-times">
+        <span data-music-elapsed>0:00</span>
+        <span data-music-remain>−0:00</span>
+      </div>
     </div>`;
   }
 
@@ -100,10 +107,10 @@
     if (playing && activeCardEl) {
       activeCardEl.classList.add('is-playing');
       const btn = activeCardEl.querySelector('[data-music-play]');
-      if (btn) {
-        btn.setAttribute('aria-label', 'Pause song');
-        btn.innerHTML = pauseIcon();
-      }
+        if (btn) {
+          btn.setAttribute('aria-label', 'Pause song');
+          btn.innerHTML = pauseIcon();
+        }
     }
   }
 
@@ -357,12 +364,14 @@
       data-music-preview="${esc(m.previewUrl || '')}"
       data-music-source="${esc(m.source || 'none')}"
       data-music-thumb="${esc(m.thumbnail || '')}">
-      ${thumb}
-      <div class="music-card-meta">
-        <div class="music-card-title">${esc(m.title)}</div>
-        <div class="music-card-artist">${esc(m.artist)}</div>
-        ${controls}
+      <div class="music-card-head">
+        ${thumb}
+        <div class="music-card-meta">
+          <div class="music-card-title">${esc(m.title)}</div>
+          <div class="music-card-artist">${esc(m.artist)}</div>
+        </div>
       </div>
+      ${controls}
     </div>`;
   }
 

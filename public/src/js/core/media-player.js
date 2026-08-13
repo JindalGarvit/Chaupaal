@@ -310,7 +310,9 @@
       <div class="cp-mini-expanded-panel" data-cp-mini-panel hidden>
         <div class="cp-mini-seek-row">
           <span data-cp-mini-elapsed>0:00</span>
-          <input type="range" class="cp-mini-seek" data-cp-mini-seek min="0" max="1000" value="0" step="1" aria-label="Seek">
+          <div class="cp-mini-seek-wrap">
+            <input type="range" class="cp-mini-seek" data-cp-mini-seek min="0" max="1000" value="0" step="1" aria-label="Seek">
+          </div>
           <span data-cp-mini-remain>−0:00</span>
         </div>
         <div class="cp-mini-transport">

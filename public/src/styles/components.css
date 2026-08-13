@@ -3761,15 +3761,15 @@ button[aria-busy="true"]::after{
 
 .music-card{
   display:flex;
-  align-items:flex-start;
-  gap:10px;
+  flex-direction:column;
+  align-items:stretch;
+  gap:8px;
   min-width:220px;max-width:300px;width:100%;
-  padding:10px;
-  border-radius:var(--r-card);
+  padding:10px 10px 12px;
+  border-radius:14px;
   background:var(--surface-elevated);border:1px solid var(--line);
   box-shadow:var(--shadow-sm);
   box-sizing:border-box;
-  overflow:hidden;
 }
 .music-card--story{
   position:absolute;left:50%;bottom:72px;z-index:3;transform:translateX(-50%);
@@ -3783,14 +3783,15 @@ button[aria-busy="true"]::after{
 .music-card--story .music-card-unavailable,
 .music-card--story .music-card-times{color:rgba(255,255,255,.72);}
 .music-card--story .music-card-play{background:rgba(255,255,255,.18);color:#fff;}
-.music-card--story .music-card-transport-btn{
-  background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.22);color:#fff;
-}
+.music-card--story .music-card-transport-btn{color:#fff;background:transparent;}
 .music-card--story .music-card-progress-track{background:rgba(255,255,255,.22);}
 .music-card--story .music-card-progress-bar{background:var(--gold,#FFE66D);}
 
+.music-card-head{
+  display:flex;align-items:center;gap:10px;min-width:0;width:100%;
+}
 .music-card-art{
-  width:52px;height:52px;border-radius:var(--r-sm);object-fit:cover;flex-shrink:0;
+  width:48px;height:48px;border-radius:10px;object-fit:cover;flex-shrink:0;
   background:var(--line);box-shadow:var(--shadow-sm);
 }
 .music-card-art--empty{
@@ -3799,7 +3800,7 @@ button[aria-busy="true"]::after{
 }
 .music-card-meta{
   flex:1;min-width:0;
-  display:flex;flex-direction:column;gap:4px;
+  display:flex;flex-direction:column;gap:2px;
 }
 .music-card-title{
   font-family:var(--font-display);font-weight:var(--weight-bold);
@@ -3808,53 +3809,51 @@ button[aria-busy="true"]::after{
 }
 .music-card-artist{
   font-size:var(--text-xs);color:var(--muted);font-weight:var(--weight-regular);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:-2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
+.music-card-controls{width:100%;min-width:0;box-sizing:border-box;}
 .music-card-transport{
   display:flex;align-items:center;justify-content:space-between;gap:2px;
-  margin-top:2px;width:100%;max-width:100%;
-  box-sizing:border-box;
+  width:100%;max-width:100%;padding:0 2px;box-sizing:border-box;
 }
 .music-card-transport-btn{
-  flex:1 1 0;
-  min-width:0;min-height:30px;height:30px;padding:0 2px;
-  border:1px solid var(--line);border-radius:var(--r-sm);
-  background:var(--surface-sunken);color:var(--ink);
+  flex:0 0 32px;width:32px;min-width:32px;height:32px;padding:0;
+  border:none;border-radius:50%;
+  background:transparent;color:var(--ink);
   display:inline-flex;align-items:center;justify-content:center;
   cursor:pointer;touch-action:manipulation;
-  font-size:10px;font-weight:700;font-variant-numeric:tabular-nums;
 }
 .music-card-transport-btn:active{transform:scale(.96);}
-.music-card-transport-skip{flex:1.1 1 0;letter-spacing:-0.02em;}
-.music-card-transport-btn svg{width:14px;height:14px;}
+.music-card-transport-btn svg,.music-card-transport-btn .cp-icon{width:16px;height:16px;display:block;}
 .music-card-play{
-  width:32px;height:32px;min-width:32px;min-height:32px;flex:0 0 32px;
-  border:none;border-radius:var(--r-sm);cursor:pointer;
+  width:36px;height:36px;min-width:36px;min-height:36px;flex:0 0 36px;
+  border:none;border-radius:50%;cursor:pointer;
   background:var(--btn-primary-bg);color:var(--btn-primary-fg);
   display:inline-flex;align-items:center;justify-content:center;
   padding:0;box-shadow:var(--shadow-sm);
 }
-.music-card-play svg{width:14px;height:14px;}
+.music-card-play svg,.music-card-play .cp-icon{width:16px;height:16px;display:block;}
 .music-card-play:active{transform:scale(.96);}
 .music-card-progress-track{
-  height:6px;border-radius:var(--r-full);background:var(--surface-sunken);
-  overflow:hidden;margin-top:2px;cursor:pointer;touch-action:none;
-  position:relative;width:100%;
+  height:5px;border-radius:999px;background:var(--surface-sunken);
+  overflow:hidden;margin:6px 10px 0;cursor:pointer;touch-action:none;
+  position:relative;width:auto;box-sizing:border-box;
 }
 .music-card.is-playing .music-card-progress-track{cursor:pointer;}
 .music-card-progress-bar{
-  height:100%;width:0;background:var(--brand-red);border-radius:var(--r-full);
+  height:100%;width:0;background:var(--brand-red);border-radius:999px;
   pointer-events:none;
 }
 .music-card-times{
   display:flex;justify-content:space-between;align-items:center;
-  font-size:9px;line-height:1;color:var(--muted);font-variant-numeric:tabular-nums;
-  margin-top:0;
+  font-size:10px;line-height:1;color:var(--muted);font-variant-numeric:tabular-nums;
+  margin:4px 10px 0;padding:0;
 }
 .music-card-unavailable{
   font-size:var(--text-xs);font-weight:var(--weight-semibold);color:var(--muted);
+  padding:0 4px;
 }
-.msg-bubble .music-card{margin:0;max-width:min(300px,100%);}
+.msg-bubble .music-card{margin:0;max-width:100%;width:100%;}
 
 .music-picker-scrim{
   position:absolute;inset:0;z-index:115;background:rgba(15,18,24,.42);
@@ -4018,26 +4017,28 @@ button[aria-busy="true"]::after{
 /* ===== Location cards + share sheet (Baithak / Stories) ===== */
 .loc-card{
   display:flex;flex-direction:column;min-width:220px;max-width:280px;
-  border-radius:var(--r-card,14px);overflow:hidden;cursor:pointer;
+  border-radius:14px;cursor:pointer;
   background:var(--cream);border:1.5px solid var(--line);
   box-sizing:border-box;text-align:left;
+  padding:8px 8px 0;
 }
 .loc-card:focus-visible{outline:2px solid var(--red);outline-offset:2px;}
 .loc-card-map{
-  width:100%;height:120px;background:var(--line);position:relative;
+  width:100%;height:112px;background:var(--line);position:relative;
+  border-radius:10px;overflow:hidden;
 }
 .loc-card-map .leaflet-container{
   width:100%;height:100%;background:var(--line);
-  font:inherit;border-radius:0;
+  font:inherit;border-radius:10px;
 }
 .loc-card-map .leaflet-control-attribution,
 .loc-card-map .leaflet-control-zoom{display:none!important;}
 .loc-card-meta{
-  display:flex;flex-direction:column;gap:2px;padding:10px 12px 12px;position:relative;
+  display:flex;flex-direction:column;gap:2px;padding:10px 6px 12px;position:relative;
 }
 .loc-card-title{
   font:700 13px/1.25 'Space Grotesk',sans-serif;color:var(--ink);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:14px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:18px;
 }
 .loc-card-sub{
   font-size:11px;color:var(--muted);line-height:1.35;
@@ -4069,6 +4070,10 @@ button[aria-busy="true"]::after{
 }
 .msg-bubble.me .loc-card-title{color:#fff;}
 .msg-bubble.me .loc-card-sub{color:rgba(255,255,255,.78);}
+.msg-bubble.me .chat-file-msg{
+  background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.28);color:#fff;
+}
+.msg-bubble.me .chat-file-msg .cp-icon{color:rgba(255,255,255,.9);}
 
 .loc-share-sheet,.loc-full-sheet{
   position:absolute;inset:0;z-index:130;display:flex;align-items:flex-end;justify-content:center;
