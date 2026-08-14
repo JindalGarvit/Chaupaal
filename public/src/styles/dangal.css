@@ -140,4 +140,30 @@
   background:var(--game-surface,#1a1a2e);
 }
 
+.dangal-fullgame-body{flex:1;min-height:0;overflow:auto;padding:12px 16px 24px;color:#fff;}
+.cs-rally,.cs-kabaddi,.cs-patang,.pc-tambola,.pc-rummy,.pc-tp,.pc-bluff,.pc-satte,.pc-ab,.pc-cue{display:flex;flex-direction:column;align-items:center;gap:12px;}
+.cs-rally-score{font:700 28px var(--font-display,'Space Grotesk',sans-serif);}
+.cs-rally-msg,.pc-hint{font-size:13px;opacity:.85;text-align:center;margin:0;}
+.cs-rally-hint{font-size:11px;opacity:.55;margin:0;}
+.cs-timing{width:min(280px,90%);height:10px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden;}
+.cs-timing i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#66bb6a,#ffeb3b 55%,#ef5350);transform-origin:left;transform:scaleX(0);}
+.cs-hit{min-width:160px;padding:14px 18px;border:0;border-radius:14px;background:var(--game-primary,#E63946);color:#fff;font:700 16px var(--font-display,'Space Grotesk',sans-serif);cursor:pointer;}
+.cs-hit:disabled{opacity:.4;}
+.cs-breath{width:min(280px,90%);height:8px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden;}
+.cs-breath i{display:block;height:100%;background:#FFB300;}
+.cs-defenders{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:min(280px,90%);}
+.cs-def{height:56px;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);font-size:22px;cursor:pointer;}
+.cs-patang canvas,.pc-cue canvas{width:100%;height:min(52vh,420px);border-radius:16px;touch-action:none;background:#01579B;}
+.pc-ticket{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;width:min(300px,100%);}
+.pc-tcell{text-align:center;padding:10px 0;border-radius:10px;background:rgba(255,255,255,.1);font-weight:700;}
+.pc-tcell.is-on{background:#E91E8C;}
+.pc-call{font:800 42px var(--font-display,'Space Grotesk',sans-serif);}
+.pc-hand{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;}
+.pc-card{width:46px;height:64px;border-radius:8px;border:1px solid rgba(0,0,0,.15);background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;cursor:pointer;}
+.pc-card.is-sel{outline:2px solid #FFD600;}
+.pc-card.pc-back{background:#1a237e;color:#fff;}
+.pc-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
+.pc-sevens,.pc-ab-cols{display:flex;gap:12px;font-size:13px;}
+.pc-row{display:flex;align-items:center;gap:8px;}
+
 

@@ -63,6 +63,20 @@
     kakuro: 'brain',
     streetcricket: 'rw_sports',
     gullykick: 'rw_sports',
+    badminton: 'rw_sports',
+    tabletennis: 'rw_sports',
+    pickleball: 'rw_sports',
+    kabaddi: 'rw_sports',
+    tennis: 'rw_sports',
+    tambola: 'party',
+    carrom: 'board',
+    pool: 'board',
+    rummy: 'party',
+    teenpatti: 'party',
+    bluff: 'party',
+    sattepe: 'party',
+    andarbaahar: 'party',
+    patangbaazi: 'arcade',
   };
 
   function inferGameType(d) {

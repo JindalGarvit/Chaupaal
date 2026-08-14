@@ -15,6 +15,13 @@
     kakuro: 'ankjod',
     cricket: 'streetcricket',
     football: 'gullykick',
+    snooker: 'pool',
+    billiards: 'pool',
+    andarbahar: 'andarbaahar',
+    sattepesatta: 'sattepe',
+    kite: 'patangbaazi',
+    fischerrandom: 'chess',
+    chess960: 'chess',
   };
 
   function canonicalGameId(id) {

@@ -236,6 +236,7 @@ const TC_OPTIONS=[
 ];
 const TC_ICONS={'Bullet':'⚡','Blitz':'🔥','Rapid':'⏱️','Classical':'🏆','No Limit':'♾️'};
 let pickedDiff='medium';
+let picked960=false;
 const tcSheet=document.createElement('div');
 tcSheet.style.cssText='position:absolute;inset:0;background:#15192e;z-index:100;display:flex;flex-direction:column;overflow-y:auto;';
 const cats=[...new Set(TC_OPTIONS.map(t=>t.cat))];
@@ -247,6 +248,10 @@ tcSheet.innerHTML=`
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
         ${DIFF_OPTIONS.map(d=>`<button type="button" class="chess-diff-btn" data-diff="${d.id}" style="padding:12px 6px;background:${d.id===pickedDiff?'rgba(201,162,39,0.25)':'rgba(255,255,255,0.07)'};border:2px solid ${d.id===pickedDiff?'var(--gold)':'rgba(255,255,255,0.12)'};border-radius:14px;color:#fff;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;cursor:pointer;"><div>${d.label}</div><div style="font-size:10px;opacity:.55;font-weight:600;margin-top:2px;">${d.desc}</div></button>`).join('')}
       </div>
+    </div>
+    <div style="margin-bottom:18px;">
+      <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">Position</div>
+      <button type="button" id="chess960Toggle" style="width:100%;padding:12px;background:rgba(255,255,255,0.07);border:2px solid rgba(255,255,255,0.12);border-radius:14px;color:#fff;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;cursor:pointer;text-align:left;">Standard starting position</button>
     </div>
     ${cats.map(cat=>{
       const opts=TC_OPTIONS.filter(t=>t.cat===cat);
@@ -274,13 +279,22 @@ tcSheet.querySelectorAll('.chess-diff-btn').forEach(btn=>{
     });
   });
 });
+const chess960Btn=tcSheet.querySelector('#chess960Toggle');
+if(chess960Btn){
+  chess960Btn.addEventListener('click',()=>{
+    picked960=!picked960;
+    chess960Btn.textContent=picked960?'Fischer Random (Chess960)':'Standard starting position';
+    chess960Btn.style.borderColor=picked960?'var(--gold)':'rgba(255,255,255,0.12)';
+    chess960Btn.style.background=picked960?'rgba(201,162,39,0.25)':'rgba(255,255,255,0.07)';
+  });
+}
 tcSheet.querySelectorAll('.tc-btn').forEach(btn=>{
   btn.addEventListener('mouseover',()=>btn.style.borderColor='var(--gold)');
   btn.addEventListener('mouseout',()=>btn.style.borderColor='rgba(255,255,255,0.12)');
   btn.addEventListener('click',()=>{
     closePicker();
     const depth=(DIFF_OPTIONS.find(d=>d.id===pickedDiff)||DIFF_OPTIONS[1]).depth;
-    const tc={min:parseInt(btn.dataset.min),inc:parseInt(btn.dataset.inc),difficulty:pickedDiff,aiDepth:depth};
+    const tc={min:parseInt(btn.dataset.min),inc:parseInt(btn.dataset.inc),difficulty:pickedDiff,aiDepth:depth,chess960:picked960};
     startChessGame(chat,tc);
   });
 });
@@ -328,6 +342,28 @@ const PIECE_UNICODE={K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙',k:'♚',q:'
 const AI_DEPTH=Math.max(1,Math.min(3,tc.aiDepth||2));
 const DIFF_LABEL=tc.difficulty==='easy'?'Easy':tc.difficulty==='hard'?'Hard':'Medium';
 
+function chess960Fen(){
+  const place=Array(8).fill('');
+  const dark=[0,2,4,6][Math.floor(Math.random()*4)];
+  const light=[1,3,5,7][Math.floor(Math.random()*4)];
+  place[dark]='b';
+  place[light]='b';
+  const empty=()=>place.map((p,i)=>p?'':i).filter((i)=>i!=='');
+  const pick=(arr)=>arr.splice(Math.floor(Math.random()*arr.length),1)[0];
+  let e=empty();
+  place[pick(e)]='q';
+  e=empty();
+  place[pick(e)]='n';
+  e=empty();
+  place[pick(e)]='n';
+  e=empty().sort((a,b)=>a-b);
+  place[e[0]]='r';
+  place[e[1]]='k';
+  place[e[2]]='r';
+  const black=place.join('');
+  return `${black}/pppppppp/8/8/8/8/PPPPPPPP/${black.toUpperCase()} w - - 0 1`;
+}
+
 function rcToSq(r,c){return FILES[c]+(8-r);}
 function sqToRC(sq){return[8-parseInt(sq[1],10),FILES.indexOf(sq[0])];}
 function pieceColor(p){return p&&(p===p.toUpperCase()?'w':'b');}
@@ -342,7 +378,12 @@ function boardFromChess(chess){
   return b;
 }
 
-let chess=new Chess();
+let chess;
+try{
+  chess=tc.chess960?new Chess(chess960Fen(),{skipValidation:true}):new Chess();
+}catch(e){
+  chess=new Chess();
+}
 let state={board:boardFromChess(chess),turn:chess.turn(),selected:null,legalMoves:[],history:[],status:'playing',check:false,ratingRecorded:false,lastMove:null,animating:false};
 
 function syncFromChess(){
