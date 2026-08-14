@@ -38,19 +38,32 @@
         <div style="width:36px"></div>
       </div>
       <div class="rw-sports-body" data-rw-body></div>`;
-    const device = document.querySelector('.device') || document.body;
-    device.appendChild(overlay);
+    const begin = typeof beginGameOverlaySession === 'function' ? beginGameOverlaySession : null;
+    const gs = begin
+      ? begin({
+          type: o.gameId,
+          title: o.title || o.gameId,
+          mode: 'solo',
+          overlay,
+          cleanup: o.onClose,
+        })
+      : null;
+    if (begin && (!gs || !gs.alive())) {
+      return { overlay, body: null, dismiss() {}, gs: null };
+    }
+    if (!begin) {
+      const device = document.querySelector('.device') || document.body;
+      device.appendChild(overlay);
+    }
     if (typeof prepareGameOverlay === 'function') {
       prepareGameOverlay(overlay, { theme: 'light', gameId: o.gameId, accent: o.accent });
     }
     const dismiss = () => {
-      try {
-        if (typeof o.onClose === 'function') o.onClose();
-      } catch (e) {}
-      closeOverlay(overlay);
+      if (gs) gs.close('dismissed');
+      else closeOverlay(overlay);
     };
     overlay.querySelector('[data-rw-close]')?.addEventListener('click', dismiss);
-    return { overlay, body: overlay.querySelector('[data-rw-body]'), dismiss };
+    return { overlay, body: overlay.querySelector('[data-rw-body]'), dismiss, gs };
   }
 
   function flashOutcome(body, text, kind) {
@@ -77,6 +90,7 @@
     } else if (typeof markGamePlayed === 'function') {
       markGamePlayed(gameId);
     }
+    if (o.gs && typeof o.gs.setOutcome === 'function') o.gs.setOutcome('complete');
     if (typeof gameFeedback === 'function') gameFeedback('complete');
     const shareStats = {
       scoreLine: o.scoreLine || String(score),
@@ -142,12 +156,13 @@
       windowTimer = null;
       bowlTimer = null;
     };
-    const { body } = mountSportsShell({
+    const { body, gs } = mountSportsShell({
       gameId: 'streetcricket',
       title: 'Street Cricket',
       accent: '#1B7A4E',
       onClose: clearTimers,
     });
+    if (!body) return;
 
     const reset = () => {
       clearTimers();
@@ -171,6 +186,7 @@
           shareText: `I scored ${runs} runs in Street Cricket on Chaupaal!`,
           againLabel: 'Bat again',
           onAgain: reset,
+          gs,
         });
         return;
       }
@@ -254,6 +270,7 @@
       }
       if (phase === 'window') {
         clearTimers();
+        if (typeof gameFeedback === 'function') gameFeedback('bat');
         const elapsed = Date.now() - windowOpenedAt;
         // Timing tiers: early (<180) / perfect (180–420) / late (>420)
         let timing = 'ok';
@@ -314,11 +331,12 @@
 
   /** Gully Kick — 5 penalties; aim left/center/right vs keeper dive. */
   function openGullyKick() {
-    const { body } = mountSportsShell({
+    const { body, gs } = mountSportsShell({
       gameId: 'gullykick',
       title: 'Gully Kick',
       accent: '#2D6A4F',
     });
+    if (!body) return;
     let scored = 0;
     let taken = 0;
     const MAX = 5;
@@ -354,6 +372,7 @@
           shareText: `I scored ${scored}/${MAX} in Gully Kick on Chaupaal!`,
           againLabel: 'Kick again',
           onAgain: reset,
+          gs,
         });
         return;
       }
@@ -402,6 +421,7 @@
           lastAim = aim;
           lastDive = dive;
           taken += 1;
+          if (typeof gameFeedback === 'function') gameFeedback('kick');
           if (aim !== dive) {
             scored += 1;
             lastGoal = true;

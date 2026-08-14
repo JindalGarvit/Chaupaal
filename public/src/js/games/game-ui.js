@@ -8,9 +8,9 @@
   /** Map common game actions → existing SoundLib + haptic cues (no new one-off sounds). */
   const ACTION_MAP = {
     select: { sound: 'tap', haptic: 'light' },
-    move: { sound: 'tap', haptic: 'light' },
-    place: { sound: 'send', haptic: 'medium' },
-    card: { sound: 'send', haptic: 'medium' },
+    move: { sound: 'move', haptic: 'light' },
+    place: { sound: 'place', haptic: 'medium' },
+    card: { sound: 'card', haptic: 'medium' },
     valid: { sound: 'tap', haptic: 'light' },
     invalid: { sound: 'error', haptic: 'error' },
     turn: { sound: 'notification', haptic: 'light' },
@@ -18,6 +18,15 @@
     lose: { sound: 'wrongTone', haptic: 'error' },
     draw: { sound: 'sectionComplete', haptic: 'medium' },
     complete: { sound: 'sectionComplete', haptic: 'success', confetti: true },
+    dice: { sound: 'dice', haptic: 'medium' },
+    stone: { sound: 'stone', haptic: 'medium' },
+    capture: { sound: 'capture', haptic: 'heavy' },
+    coin: { sound: 'coin', haptic: 'light' },
+    jump: { sound: 'jump', haptic: 'light' },
+    crash: { sound: 'crash', haptic: 'heavy' },
+    kick: { sound: 'kick', haptic: 'medium' },
+    bat: { sound: 'bat', haptic: 'medium' },
+    check: { sound: 'check', haptic: 'medium' },
   };
 
   const GAME_ACCENTS = {

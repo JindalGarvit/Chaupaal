@@ -213,6 +213,7 @@
     if (s === 'win' || s === 'won') return 'win';
     if (s === 'loss' || s === 'lost' || s === 'lose') return 'loss';
     if (s === 'draw' || s === 'tie' || s === 'stalemate') return 'draw';
+    if (s === 'complete' || s === 'finished') return 'complete';
     return null;
   }
 

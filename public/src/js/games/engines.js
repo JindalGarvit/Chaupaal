@@ -671,6 +671,7 @@ function makeMove(move){
     if(HAS_TIMER&&tc.inc>0)clocks[result.color]+=tc.inc;
     syncFromChess();
     state.animating=false;
+    if(state.check && typeof gameFeedback==='function') gameFeedback('check');
     if(HAS_TIMER&&state.status==='playing')startClock(state.turn);
     render();
     if(state.status!=='playing'){stopClock();return;}
@@ -910,6 +911,7 @@ function openSnakesVersion(chat, version){
 
   function rollDice(){
     if(!gs.alive()||!myTurn||rolling||gameOver||hopping)return;rolling=true;
+    if(typeof gameFeedback==='function')gameFeedback('dice');
     let ticks=0;
     if(diceIv)clearInterval(diceIv);
     diceIv=setInterval(()=>{
@@ -1257,6 +1259,7 @@ function openLudoGame(chat, playerCount){
 
   function rollDice(){
     if(!gs.alive()||phase!=='roll'||rolling||gameOver||animating)return;
+    if(typeof gameFeedback==='function')gameFeedback('dice');
     rolling=true;let ticks=0;
     if(diceIv)clearInterval(diceIv);
     diceIv=setInterval(()=>{
@@ -1486,7 +1489,7 @@ function openLudoGame(chat, playerCount){
       </div>
     `;
     document.getElementById('ludoBack').addEventListener('click',()=>gs.close());
-    document.getElementById('ludoRoll').addEventListener('click',()=>{if(currentPlayer===0&&phase==='roll'&&!gameOver){if(typeof gameFeedback==='function')gameFeedback('select');rollDice();}});
+    document.getElementById('ludoRoll').addEventListener('click',()=>{if(currentPlayer===0&&phase==='roll'&&!gameOver){if(typeof gameFeedback==='function')gameFeedback('dice');rollDice();}});
     const layer=overlay.querySelector('#ludoTokens');
     layer.addEventListener('click',(e)=>{
       const tok=e.target.closest('.ludo-token');
@@ -1980,7 +1983,9 @@ const VALID_WORDS=[
   'GRAIN','HEART','HONEY','HOUSE','IMAGE','IVORY','JELLY','JUDGE','LEMON','LEVEL','LUNAR','MANGO','METAL','MINTY','MOUSE','MUSIC','NORTH','NOVEL','OLIVE','OPERA',
   'ORBIT','PEARL','PLANT','POISE','POWER','PRISM','RADIO','RIDGE','ROYAL','SCALE','SCOUT','SHARE','SHINE','SKILL','SOLID','SPICE','STONE','STORY','SWEET','TABLE',
   'THORN','TIGER','TODAY','TOKEN','TREND','TRUST','URBAN','VALUE','VIVID','WHEAT','WIDOW','WORLD','WRIST','YACHT','YEAST','ADORE','ALERT','AMBER','ARROW','ATLAS',
-  'AUDIO','BASIL','BERRY','BOUND','BRAIN','BROOK','CABLE','CAMEL','CEDAR','CHALK','CIDER','CORAL','CROWN','DELTA','DIARY','DRIFT','EMBER','FABLE','FEAST','FLORA'
+  'AUDIO','BASIL','BERRY','BOUND','BRAIN','BROOK','CABLE','CAMEL','CEDAR','CHALK','CIDER','CORAL','CROWN','DELTA','DIARY','DRIFT','EMBER','FABLE','FEAST','FLORA',
+  'ALBUM','ANGLE','APRON','BADGE','BASIN','BATCH','BISON','BLISS','BRUSH','CABIN','CANOE','CLOAK','CLOVE','COMET','CRANE','CREST','CURVE','DEITY','DOUBT','DWARF',
+  'ELBOW','EPOCH','EQUIP','FENCE','FJORD','FLUTE','FROST','GLINT','GRAPH','GROVE','GUARD','HAVEN','HEDGE','HIKER','HUMOR','INLET','JOKER','KARMA','LODGE','MOSSY'
 ];
 const COMMON=VALID_WORDS.filter((w,i)=>i%2===0||['PRESS','CHAIN','BLADE','CRATE','CHEST','FLAME','STORM','PRIDE','CLOUD','EARTH','LIGHT','OCEAN','RIVER','MUSIC','STONE','HEART','DREAM','POWER','WORLD','TODAY'].includes(w));
 

@@ -339,7 +339,7 @@ function openRushRunner(){
     if(typeof setGamePB==='function') bestScore=setGamePB('rushrunner', final) ?? Math.max(bestScore, final);
     else if(final>bestScore){bestScore=final;localStorage.setItem('rushrunner_best',String(bestScore));}
     const vsBest=typeof formatVsBest==='function'?formatVsBest('rushrunner', final):`Best ${bestScore}m`;
-    if(gs)gs.setOutcome('lost');
+    if(gs)gs.setOutcome('complete');
     if(typeof recordGameResult==='function')recordGameResult('rushrunner',false,false,{score:final,scoreOnly:true});
     buzz('lose');
     const div=document.getElementById('rrOverlay');

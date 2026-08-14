@@ -191,13 +191,16 @@ async function resolveGame(db, admin, uid, body) {
   }
 
   const rawResult = String(body.result || '').toLowerCase();
+  const isComplete = rawResult === 'complete' || rawResult === 'finished';
   const isDraw =
-    !!body.isDraw || rawResult === 'draw' || rawResult === 'tie' || rawResult === 'stalemate';
-  const won = !isDraw && (body.won === true || rawResult === 'win' || rawResult === 'won');
-  const resultTag = (isDraw ? 'draw' : won ? 'win' : 'loss').slice(0, 40);
+    !isComplete &&
+    (!!body.isDraw || rawResult === 'draw' || rawResult === 'tie' || rawResult === 'stalemate');
+  const won = !isComplete && !isDraw && (body.won === true || rawResult === 'win' || rawResult === 'won');
+  const resultTag = (isComplete ? 'complete' : isDraw ? 'draw' : won ? 'win' : 'loss').slice(0, 40);
 
   const opponentUidRaw = body.opponentUid ? String(body.opponentUid).slice(0, 128) : '';
-  const opponentUid = isPersistableUid(opponentUidRaw) && opponentUidRaw !== uid ? opponentUidRaw : '';
+  const opponentUid =
+    !isComplete && isPersistableUid(opponentUidRaw) && opponentUidRaw !== uid ? opponentUidRaw : '';
   const winnerUid = isDraw ? '' : String(body.winnerUid || (won ? uid : opponentUid || '')).slice(0, 128);
   const stake = Math.max(0, Math.min(MAX_STAKE, Math.floor(Number(body.stake) || 0)));
 
@@ -229,7 +232,7 @@ async function resolveGame(db, admin, uid, body) {
   const oData = (oppStats && oppStats.data()) || {};
   let eloDelta = 0;
   let oppEloDelta = 0;
-  if (RATED.has(gameType) && opponentUid) {
+  if (RATED.has(gameType) && opponentUid && !isComplete) {
     const scoreA = isDraw ? 0.5 : won ? 1 : 0;
     eloDelta = computeEloDelta(
       Number(rData.elo) || 1200,
@@ -247,7 +250,7 @@ async function resolveGame(db, admin, uid, body) {
     db,
     FieldValue,
     uid,
-    { gameType, won, isDraw, eloDelta, stake, resultTag, dayKey },
+    { gameType, won, isDraw, eloDelta: isComplete ? 0 : eloDelta, stake: isComplete ? 0 : stake, resultTag, dayKey },
     batch
   );
 

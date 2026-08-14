@@ -101,7 +101,7 @@ function openFiveInRowGame(chat){
     lastMove=[r,c];
     dropCell=r+'_'+c;
     statusNote='';
-    if(typeof gameFeedback==='function')gameFeedback(who==='me'?'place':'move');
+    if(typeof gameFeedback==='function')gameFeedback(who==='me'?'stone':'move');
     if(typeof DSL!=='undefined'&&DSL.onMove)DSL.onMove('fiveinrow');
     const win=checkFiveWin(r,c,sym);
     if(win){

@@ -1,29 +1,49 @@
 /**
- * Sound stub — registry ready; missing files fail silently.
+ * Dangal sound router — Web Audio via SoundLib (no missing-file 404s).
  */
 (function () {
   'use strict';
 
-  const cache = new Map();
+  const TOKEN_MAP = {
+    'ui.click': 'tap',
+    'ui.tap': 'tap',
+    'ui.move': 'move',
+    'ui.place': 'place',
+    'ui.win': 'cheer',
+    'ui.lose': 'wrongTone',
+    'ui.draw': 'sectionComplete',
+    'ui.achieve': 'milestone',
+    'ui.dice': 'dice',
+    'ui.stone': 'stone',
+    'ui.capture': 'capture',
+    'ui.card': 'card',
+    'ui.clock': 'clock',
+    'ui.check': 'check',
+    'ui.coin': 'coin',
+    'ui.jump': 'jump',
+    'ui.crash': 'crash',
+    'ui.kick': 'kick',
+    'ui.bat': 'bat',
+    'ui.turn': 'notification',
+    'ui.invalid': 'error',
+  };
+
   let enabled = true;
 
+  function allowed() {
+    if (!enabled) return false;
+    if (typeof quietMode !== 'undefined' && quietMode) return false;
+    return true;
+  }
+
   function play(token) {
-    if (!enabled || typeof quietMode !== 'undefined' && quietMode) return;
+    if (!allowed()) return;
+    const key = String(token || '');
+    const name = TOKEN_MAP[key] || key.replace(/^ui\./, '') || key;
     try {
-      if (typeof SoundLib !== 'undefined' && SoundLib.click && String(token || '').indexOf('ui.') === 0) {
-        SoundLib.click();
+      if (typeof SoundLib !== 'undefined' && typeof SoundLib.play === 'function') {
+        SoundLib.play(name);
       }
-    } catch (e) {}
-    const src = '/assets/sounds/' + String(token || '').replace(/[^\w.-]/g, '_') + '.mp3';
-    try {
-      let a = cache.get(src);
-      if (!a) {
-        a = new Audio(src);
-        a.preload = 'none';
-        cache.set(src, a);
-      }
-      a.currentTime = 0;
-      a.play().catch(() => {});
     } catch (e) {}
   }
 

@@ -328,6 +328,14 @@ function renderDangalGamesGrid() {
   grid.innerHTML = '';
   renderDangalContinueAndChips(grid);
 
+  const weekHost = document.createElement('div');
+  weekHost.className = 'dangal-week-host';
+  grid.appendChild(weekHost);
+  if (typeof mountWeeklyHub === 'function') {
+    const uid = typeof currentUser !== 'undefined' ? currentUser?.uid : null;
+    mountWeeklyHub(weekHost, uid);
+  }
+
   if (typeof dangalHubProgressHtml === 'function') {
     const progressHost = document.createElement('div');
     progressHost.className = 'dangal-progress-host';

@@ -120,6 +120,24 @@ const SoundLib=(()=>{
       tone(1320,0.16,0.06,'sine',g*0.3);
     } else { tap(); }
   }
+  function dice(){
+    noiseBurst({dur:0.09,freq:1800,Q:0.8,type:'bandpass',gain:0.07,start:0});
+    tone(180,0,0.08,'square',0.05);
+    tone(140,0.07,0.1,'square',0.04);
+  }
+  function move(){tone(392,0,0.06,'sine',0.05);tone(494,0.04,0.07,'triangle',0.045);}
+  function place(){tone(262,0,0.08,'triangle',0.08);noiseBurst({dur:0.06,freq:700,Q:1.4,type:'lowpass',gain:0.05,start:0});}
+  function stone(){tone(196,0,0.1,'sine',0.07);tone(98,0.04,0.12,'triangle',0.05);}
+  function capture(){tone(220,0,0.08,'sawtooth',0.07);tone(165,0.07,0.14,'triangle',0.06);noiseBurst({dur:0.08,freq:900,Q:1.2,type:'bandpass',gain:0.05,start:0.02});}
+  function card(){noiseBurst({dur:0.07,freq:2400,Q:1.6,type:'bandpass',gain:0.05,start:0});tone(740,0.02,0.08,'triangle',0.04);}
+  function clock(){tone(880,0,0.04,'square',0.035);tone(880,0.12,0.04,'square',0.03);}
+  function check(){tone(659,0,0.1,'triangle',0.08);tone(988,0.1,0.16,'triangle',0.07);}
+  function coin(){tone(988,0,0.07,'sine',0.07);tone(1318,0.06,0.12,'triangle',0.06);}
+  function jump(){tone(330,0,0.08,'square',0.05);tone(523,0.05,0.1,'triangle',0.05);}
+  function crash(){noiseBurst({dur:0.16,freq:400,Q:0.6,type:'lowpass',gain:0.08,start:0});tone(110,0,0.18,'sawtooth',0.06);}
+  function kick(){tone(90,0,0.12,'sine',0.1);noiseBurst({dur:0.08,freq:300,Q:0.8,type:'lowpass',gain:0.06,start:0});}
+  function bat(){noiseBurst({dur:0.05,freq:2200,Q:2,type:'bandpass',gain:0.06,start:0});tone(196,0.02,0.1,'triangle',0.05);}
+  const click=tap;
   function playFeedback(isCorrect,soundTag){
     if(quietMode)return;
     if(isCorrect){if(soundTag==='cheer')cheer();else if(soundTag==='birthday')birthdayJingle();else if(soundTag==='milestone')milestone();else correctChime();}
@@ -128,10 +146,11 @@ const SoundLib=(()=>{
   function play(name){
     if(quietMode)return;
     const map={
-      tap,like,send,postPublish,follow,notification,error,rateLimited,
+      tap,click,like,send,postPublish,follow,notification,error,rateLimited,
       sectionComplete,milestone,correctChime,wrongTone,cheer,birthdayJingle,
+      dice,move,place,stone,capture,card,clock,check,coin,jump,crash,kick,bat,
     };
-    const fn=map[name];
+    const fn=map[name]||map[String(name||'').replace(/^ui\./,'')];
     if(typeof fn==='function') fn();
   }
   let voices=[];
@@ -148,7 +167,7 @@ const SoundLib=(()=>{
     window.speechSynthesis.cancel();window.speechSynthesis.speak(utter);
   }
   // startBg/stopBg removed — no continuous / looped audio in the app.
-  return{play,playFeedback,speak,tap,like,send,postPublish,follow,notification,error,rateLimited,sectionComplete,milestone,element};
+  return{play,playFeedback,speak,tap,click,like,send,postPublish,follow,notification,error,rateLimited,sectionComplete,milestone,element,dice,move,place,stone,capture,card,clock,check,coin,jump,crash,kick,bat};
 })();
 
 // ===================== TOAST =====================
