@@ -325,7 +325,7 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment){
   const body=String(text||'').trim();
   if(!body && !(music&&music.title) && !attachment) return;
   const payload={
-    text:body||(music?.title?`🎵 ${music.title}`:(attachment?.type==='photo'?'📷 Photo':attachment?.type==='file'?'📄 File':attachment?.type==='location'?'📍 Location':attachment?.type==='radio_share'?'📻 Radio':attachment?.type==='muqabala_challenge'?'⚔️ Challenge':attachment?.type==='mehfil_invite'?(body||'Join Mehfil'):'')),
+    text:body||(music?.title?`🎵 ${music.title}`:(attachment?.type==='photo'?'📷 Photo':attachment?.type==='file'?'📄 File':attachment?.type==='location'?'📍 Location':attachment?.type==='radio_share'?'📻 Radio':attachment?.type==='muqabala_challenge'?'⚔️ Challenge':attachment?.type==='game_challenge'?'🎮 Challenge':attachment?.type==='mehfil_invite'?(body||'Join Mehfil'):'')),
     uid:currentUser.uid,
     name:userProfile?.name||currentUser.displayName||'You',
     avatar:currentUser.photoURL||'',
@@ -381,6 +381,18 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment){
           artist:String(attachment.sample.artist||'').slice(0,160),
           thumbnail:String(attachment.sample.thumbnail||'').slice(0,2048),
         }:null,
+        matchId:attachment.matchId?String(attachment.matchId).slice(0,120):null,
+        gameType:attachment.gameType?String(attachment.gameType).slice(0,40):null,
+        status:attachment.status?String(attachment.status).slice(0,20):null,
+        fromUid:attachment.fromUid?String(attachment.fromUid).slice(0,128):null,
+        toUid:attachment.toUid?String(attachment.toUid).slice(0,128):null,
+        expiresAt:attachment.expiresAt!=null?(Number(attachment.expiresAt)||null):null,
+        gameName:attachment.gameName?String(attachment.gameName).slice(0,80):null,
+        gameIcon:attachment.gameIcon?String(attachment.gameIcon).slice(0,8):null,
+        gameColor:attachment.gameColor?String(attachment.gameColor).slice(0,16):null,
+        mode:attachment.mode?String(attachment.mode).slice(0,40):null,
+        stake:Number(attachment.stake)||null,
+        timeControl:attachment.timeControl?String(attachment.timeControl).slice(0,40):null,
       };
     }
   }

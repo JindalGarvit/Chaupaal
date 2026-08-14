@@ -94,6 +94,11 @@
             console.warn('[game-runtime] cleanup error', e);
           }
         }
+        if (typeof DSL !== 'undefined' && DSL.unmount) {
+          try {
+            DSL.unmount();
+          } catch (e) {}
+        }
         activeSessions.delete(session);
         cleaning = false;
       }
@@ -135,6 +140,12 @@
             });
           } else if (rootEl && rootEl.classList) {
             rootEl.classList.add('game-overlay', 'game-overlay--ready');
+          }
+          if (rootEl && typeof applyGameIdentity === 'function') {
+            applyGameIdentity(config.gameId || gameType, rootEl);
+          }
+          if (rootEl && typeof DSL !== 'undefined' && DSL.mount) {
+            DSL.mount(rootEl, { gameType: config.gameId || gameType });
           }
           if (rootEl && typeof registerScopedOverlay === 'function') {
             unregisterOverlay = registerScopedOverlay(scopeId, rootEl, () => {
@@ -197,6 +208,22 @@
           } catch (e) {
             console.warn('[game-runtime] end hook error', e);
           }
+        }
+        const skipReport = !normalizeDangalResult
+          ? result === 'dismissed' || result === 'aborted' || result === 'error'
+          : !normalizeDangalResult(result);
+        if (!skipReport && window.DangalEconomy && typeof DangalEconomy.reportGameEnd === 'function') {
+          try {
+            DangalEconomy.reportGameEnd({
+              gameType,
+              result,
+              sessionId: config.context?.matchId || sessionId,
+              matchId: config.context?.matchId || sessionId,
+              opponentUid: config.context?.opponentUid || config.opponentUid || '',
+              stake: Number(config.context?.stake || config.stake) || 0,
+              winnerUid: config.context?.winnerUid || '',
+            });
+          } catch (e) {}
         }
         runCleanup();
         return session;

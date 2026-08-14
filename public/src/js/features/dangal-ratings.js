@@ -312,6 +312,17 @@ function renderDangalGamesGrid() {
     overall.innerHTML = `<div class="dor-main"><span class="dor-label">Quiz Rating</span><span class="dor-val">${avgQuiz}</span></div>${streakBit}`;
   }
 
+  const chipEl = document.getElementById('dangalChipBalance');
+  if (chipEl && window.DangalEconomy && typeof DangalEconomy.getChipBalance === 'function') {
+    DangalEconomy.getChipBalance()
+      .then((w) => {
+        if (!chipEl.isConnected || !w) return;
+        chipEl.hidden = false;
+        chipEl.textContent = '⚡ ' + (Number(w.balance) || 0);
+      })
+      .catch(() => {});
+  }
+
   const library = typeof getGames === 'function' ? getGames({ dangal: true }) : [];
 
   grid.innerHTML = '';

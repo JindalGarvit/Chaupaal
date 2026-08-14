@@ -37,6 +37,20 @@
           }
         }
       }
+    },
+    "games": {
+      "$gameType": {
+        "$gameId": {
+          ".read": "auth != null && (data.child('players').child(auth.uid).exists() || data.child('playerA').val() == auth.uid || data.child('playerB').val() == auth.uid || !data.exists())",
+          ".write": "auth != null && (!data.exists() || data.child('players').child(auth.uid).exists() || data.child('playerA').val() == auth.uid || data.child('playerB').val() == auth.uid)",
+          "hands": {
+            "$uid": {
+              ".read": "auth != null && auth.uid == $uid",
+              ".write": "auth != null && auth.uid == $uid"
+            }
+          }
+        }
+      }
     }
   }
 }

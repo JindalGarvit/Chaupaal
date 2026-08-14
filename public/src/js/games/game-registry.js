@@ -92,6 +92,25 @@
       gameType: inferGameType(descriptor),
       genre: inferGenre(descriptor),
     });
+    const userLaunch = next.launch;
+    next.launch = function (ctx) {
+      const c = ctx || {};
+      const matchId =
+        c.matchId ||
+        (typeof dangalMatchId === 'function' ? dangalMatchId(next.id, c.chat) : '');
+      const opponentUid =
+        c.opponentUid ||
+        (typeof opponentUidFromChat === 'function' ? opponentUidFromChat(c.chat) : '');
+      window.__dangalLaunchCtx = {
+        matchId,
+        opponentUid,
+        stake: Number(c.stake) || 0,
+        source: c.source || '',
+        gameType: next.id,
+      };
+      if (c.chat && matchId) c.chat.dangalMatchId = matchId;
+      return userLaunch(c);
+    };
     if (!games.has(next.id)) order.push(next.id);
     games.set(next.id, next);
   }
@@ -128,7 +147,9 @@
   }
 
   function getGame(id) {
-    return games.get(id) || null;
+    const raw = id == null ? '' : String(id);
+    const key = typeof canonicalGameId === 'function' ? canonicalGameId(raw) : raw;
+    return games.get(key) || games.get(raw) || null;
   }
 
   function getGameGenres() {
@@ -146,6 +167,7 @@
 
     if (isSelf) {
       pickerGames = getGames({ selfChat: true }).map((g) => ({
+        id: g.id,
         emoji: g.icon,
         name: g.name,
         desc: g.desc,
@@ -155,6 +177,7 @@
       subtitle = 'Solo games only — practice & test here';
     } else if (isGroup) {
       pickerGames = getGames({ chatGroup: true }).map((g) => ({
+        id: g.id,
         emoji: g.icon,
         name: g.name,
         desc: g.desc,
@@ -164,6 +187,7 @@
       subtitle = "Select a game — you'll pick players next";
     } else {
       pickerGames = getGames({ chat1v1: true }).map((g) => ({
+        id: g.id,
         emoji: g.icon,
         name: g.name,
         desc: g.desc,
@@ -183,10 +207,17 @@
     ${pickerGames
       .map(
         (g, i) => `
-      <button data-i="${i}" style="width:100%;padding:13px 14px;background:var(--cream);border:2px solid var(--line);border-radius:14px;margin-bottom:8px;text-align:left;display:flex;align-items:center;gap:12px;cursor:pointer;">
+      <div class="dangal-picker-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:stretch;">
+      <button data-i="${i}" type="button" style="flex:1;padding:13px 14px;background:var(--cream);border:2px solid var(--line);border-radius:14px;text-align:left;display:flex;align-items:center;gap:12px;cursor:pointer;">
         <span style="font-size:26px;flex-shrink:0;">${g.emoji}</span>
         <div><div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;">${g.name}</div><div style="font-size:11px;color:var(--muted);margin-top:1px;">${g.desc}</div></div>
-      </button>`
+      </button>
+      ${
+        !isSelf && !isGroup
+          ? `<button type="button" data-challenge-i="${i}" class="dangal-picker-challenge" style="flex-shrink:0;padding:10px 12px;border-radius:14px;border:2px solid var(--line);background:var(--white);font:700 11px Space Grotesk,sans-serif;cursor:pointer;max-width:88px;">Challenge</button>`
+          : ''
+      }
+      </div>`
       )
       .join('')}
     <button id="closeGP" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;margin-top:4px;">Cancel</button>
@@ -204,6 +235,32 @@
         g.fn();
       })
     );
+    sheet.querySelectorAll('[data-challenge-i]').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const i = Number(btn.dataset.challengeI);
+        const row = pickerGames[i];
+        if (!row || !row.id) return;
+        const toUid = typeof opponentUidFromChat === 'function' ? opponentUidFromChat(chat) : '';
+        const chatId = chat?.firestoreId || chat?.id;
+        if (!toUid || !chatId || typeof sendChallengeCard !== 'function') {
+          if (typeof showToast === 'function') showToast('Open a real chat to send a challenge');
+          return;
+        }
+        btn.disabled = true;
+        try {
+          const gid = row.id;
+          const matchId = typeof dangalMatchId === 'function' ? dangalMatchId(gid, chat) : '';
+          await sendChallengeCard(toUid, gid, { chatId, matchId });
+          sheet.remove();
+          if (typeof showToast === 'function') showToast('Challenge sent');
+        } catch (err) {
+          btn.disabled = false;
+          if (typeof showToast === 'function') showToast(err?.message || 'Could not send challenge');
+        }
+      });
+    });
     document.getElementById('closeGP').addEventListener('click', () => {
       sheet.remove();
       // Soft signal for conversation-repair chips (no guilt / streak)

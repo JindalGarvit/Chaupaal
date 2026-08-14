@@ -102,6 +102,7 @@ function openFiveInRowGame(chat){
     dropCell=r+'_'+c;
     statusNote='';
     if(typeof gameFeedback==='function')gameFeedback(who==='me'?'place':'move');
+    if(typeof DSL!=='undefined'&&DSL.onMove)DSL.onMove('fiveinrow');
     const win=checkFiveWin(r,c,sym);
     if(win){
       gameOver=true;winLine=win;stopFirTimer();

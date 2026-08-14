@@ -92,3 +92,52 @@
 
 .hidden{display:none!important;}
 
+.dangal-chip-balance{
+  flex-shrink:0;font:700 13px var(--font-display,'Space Grotesk',sans-serif);
+  background:rgba(255,201,60,.18);color:#FFD54F;border-radius:999px;padding:6px 10px;
+}
+.baithak-challenge-card{
+  min-width:220px;padding:12px 14px;border-radius:14px;
+  background:color-mix(in srgb, var(--challenge-color,#E63946) 12%, var(--white,#fff));
+  border:1px solid color-mix(in srgb, var(--challenge-color,#E63946) 45%, var(--line,#ddd));
+}
+.baithak-challenge-card__header{display:flex;gap:10px;align-items:center;}
+.baithak-challenge-card__header span{font-size:22px;line-height:1;}
+.baithak-challenge-card__header strong{display:block;font:700 14px var(--font-display,'Space Grotesk',sans-serif);}
+.baithak-challenge-card__from{display:block;font-size:11px;color:var(--muted);}
+.baithak-challenge-card__detail{font-size:12px;color:var(--muted);margin-top:8px;}
+.baithak-challenge-card__footer{display:flex;gap:8px;margin-top:10px;}
+.dangal-challenge-accept,.dangal-challenge-decline{
+  border:0;border-radius:10px;padding:8px 12px;font:700 12px var(--font-display,'Space Grotesk',sans-serif);cursor:pointer;
+}
+.dangal-challenge-accept{background:var(--challenge-color,#E63946);color:#fff;}
+.dangal-challenge-decline{background:transparent;color:var(--ink);border:1px solid var(--line);}
+.baithak-challenge-card__status{font-size:12px;font-weight:700;color:var(--muted);}
+.chaupaal-achievement-toast{
+  position:absolute;left:16px;right:16px;bottom:88px;z-index:80;
+  display:flex;gap:10px;align-items:center;padding:12px 14px;border-radius:16px;
+  background:#1A1A2E;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.25);
+}
+.chaupaal-achievement-toast__icon{font-size:22px;}
+.chaupaal-achievement-toast__body{flex:1;display:flex;flex-direction:column;gap:2px;}
+.chaupaal-achievement-toast__body strong{font:700 13px var(--font-display,'Space Grotesk',sans-serif);}
+.chaupaal-achievement-toast__body span{font-size:11px;opacity:.8;}
+.chaupaal-achievement-toast__chips{font:700 12px var(--font-display,'Space Grotesk',sans-serif);color:#FFD54F;}
+.chaupaal-achievement-toast.is-out{opacity:0;transform:translateY(8px);transition:opacity .35s,transform .35s;}
+.dangal-profile__summary{display:flex;gap:16px;margin-bottom:12px;}
+.dangal-profile__summary div{display:flex;flex-direction:column;}
+.dangal-profile__summary strong{font:700 18px var(--font-display,'Space Grotesk',sans-serif);}
+.dangal-profile__summary span{font-size:11px;color:var(--muted);}
+.dangal-profile__games-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.dangal-profile__game-card{
+  display:flex;flex-direction:column;gap:2px;padding:10px;border-radius:12px;
+  border:1px solid color-mix(in srgb, var(--game-primary,#888) 35%, var(--line));
+  background:color-mix(in srgb, var(--game-primary,#888) 8%, var(--white));
+  font-size:12px;
+}
+.dangal-dsl{--game-primary:var(--game-primary,#E63946);}
+.dangal-dsl[data-dsl-game="chess"],.dangal-dsl[data-dsl-game="fiveinrow"]{
+  background:var(--game-surface,#1a1a2e);
+}
+
+

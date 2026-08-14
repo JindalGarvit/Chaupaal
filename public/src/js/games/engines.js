@@ -13,6 +13,20 @@ function beginGameOverlaySession(opts) {
   let alive = true;
   let outcome = null;
   let session = null;
+  const launch = window.__dangalLaunchCtx || {};
+  const opponentUid =
+    opts.opponentUid ||
+    launch.opponentUid ||
+    (typeof opponentUidFromChat === 'function' ? opponentUidFromChat(opts.chat) : '');
+  const matchId = String(
+    opts.matchId ||
+      launch.matchId ||
+      (opts.chat && opts.chat.dangalMatchId) ||
+      (typeof dangalMatchId === 'function' ? dangalMatchId(type, opts.chat) : type + '_' + Date.now())
+  )
+    .replace(/[^\w.-]/g, '')
+    .slice(0, 120);
+  const stake = Number(opts.stake || launch.stake) || 0;
 
   if (overlay) {
     if (!overlay.innerHTML || !String(overlay.innerHTML).trim()) {
@@ -59,6 +73,23 @@ function beginGameOverlaySession(opts) {
         const key = r === 'won' ? 'win' : r === 'lost' ? 'lose' : r === 'draw' ? 'draw' : null;
         if (key) gameFeedback(key);
       }
+      if (typeof DSL !== 'undefined' && DSL.onGameOver) {
+        try {
+          DSL.onGameOver({ gameType: type, result: r, overlay });
+        } catch (e) {}
+      }
+      if (window.DangalEconomy && typeof DangalEconomy.reportGameEnd === 'function') {
+        try {
+          DangalEconomy.reportGameEnd({
+            gameType: type,
+            result: r,
+            sessionId: matchId,
+            matchId,
+            opponentUid,
+            stake,
+          });
+        } catch (e) {}
+      }
     }
   }
 
@@ -98,7 +129,7 @@ function beginGameOverlaySession(opts) {
 
   if (typeof createGameSession === 'function') {
     session = createGameSession({
-      id: type + '_' + Date.now(),
+      id: matchId || type + '_' + Date.now(),
       type,
       title: opts.title || type,
       mode: opts.mode || '1v1',
@@ -106,7 +137,10 @@ function beginGameOverlaySession(opts) {
         chat: opts.chat,
         overlayScope:
           typeof OVERLAY_SCOPE_CHAT !== 'undefined' ? OVERLAY_SCOPE_CHAT : 'chat',
-        source: opts.source,
+        source: opts.source || launch.source,
+        opponentUid,
+        matchId,
+        stake,
       },
       mount() {
         return overlay;
@@ -632,6 +666,7 @@ function makeMove(move){
       return;
     }
     if(typeof gameFeedback==='function')gameFeedback('move');
+    if(typeof DSL!=='undefined'&&DSL.onMove)DSL.onMove('chess');
     state.history.push(move);state.selected=null;state.lastMove={from:move.from,to:move.to};
     if(HAS_TIMER&&tc.inc>0)clocks[result.color]+=tc.inc;
     syncFromChess();

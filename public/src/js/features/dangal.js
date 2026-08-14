@@ -525,7 +525,7 @@ function runMuqabala(overlay, oppName, mode, opts){
   let session = null;
   if(typeof createGameSession === 'function'){
     session = createGameSession({
-      id: 'muqabala_' + Date.now(),
+      id: (options.matchId || (window.__dangalLaunchCtx && window.__dangalLaunchCtx.matchId) || ('muqabala_' + Date.now())),
       type: 'quiz',
       title: 'Muqabala',
       mode: String(mode || 'GK'),
@@ -534,6 +534,8 @@ function runMuqabala(overlay, oppName, mode, opts){
         source: options.source,
         timerSeconds,
         overlayScope: typeof OVERLAY_SCOPE_CHAT !== 'undefined' ? OVERLAY_SCOPE_CHAT : 'chat',
+        matchId: options.matchId || (window.__dangalLaunchCtx && window.__dangalLaunchCtx.matchId) || (typeof dangalMatchId === 'function' ? dangalMatchId('quiz', { name: oppName }) : ''),
+        opponentUid: options.opponentUid || (window.__dangalLaunchCtx && window.__dangalLaunchCtx.opponentUid) || '',
       },
       mount(){
         return overlay;

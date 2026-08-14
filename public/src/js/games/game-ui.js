@@ -115,7 +115,20 @@
       }
     } catch (e) {}
     try {
+      if (typeof Sound !== 'undefined' && Sound.play) {
+        if (key === 'win') Sound.play('ui.win');
+        else if (key === 'lose') Sound.play('ui.lose');
+        else if (key === 'draw') Sound.play('ui.draw');
+        else Sound.play('ui.click');
+      }
+    } catch (e) {}
+    try {
       if (typeof haptic === 'function' && spec.haptic) haptic(spec.haptic);
+    } catch (e) {}
+    try {
+      if (typeof Haptic !== 'undefined') {
+        if (key === 'win' && Haptic.win) Haptic.win();
+      }
     } catch (e) {}
     if (spec.confetti && typeof launchConfetti === 'function' && !o.noConfetti) {
       try {

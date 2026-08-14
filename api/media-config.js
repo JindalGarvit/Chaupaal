@@ -687,7 +687,32 @@ async function handlePost(req, res) {
     }
   }
 
-  // ─── Contacts match (hashed phones only — never raw address book) ────────
+  // ─── Dangal virtual chips / Elo (Admin SDK; no extra Vercel function) ──
+  if (action === 'dangal_wallet_get' || action === 'dangal_game_resolve') {
+    try {
+      const { checkActionRateLimit } = require('../server-lib/rate-limit');
+      const rate = await checkActionRateLimit(user.uid, 'dangal');
+      if (rate && rate.ok === false) {
+        return sendError(res, 429, 'RATE_LIMITED', 'Too many game actions. Try again shortly.');
+      }
+    } catch (e) {}
+    try {
+      const econ = require('../server-lib/dangal-economy');
+      const adminApp = initAdmin();
+      if (!adminApp) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+      const db = adminApp.firestore();
+      if (action === 'dangal_wallet_get') {
+        const wallet = await econ.getWallet(db, adminApp, user.uid);
+        return sendSuccess(res, wallet);
+      }
+      const resolved = await econ.resolveGame(db, adminApp, user.uid, body);
+      return sendSuccess(res, resolved);
+    } catch (e) {
+      console.warn('[media-config] dangal', e?.message || e);
+      return sendError(res, 500, 'DANGAL_ERROR', e?.message || 'Dangal action failed');
+    }
+  }
+
   if (action === 'match_contact_hashes') {
     try {
       const { checkActionRateLimit } = require('../server-lib/rate-limit');
@@ -774,6 +799,8 @@ async function handlePost(req, res) {
       'parental_consent_start',
       'parental_consent_verify',
       'match_contact_hashes',
+      'dangal_wallet_get',
+      'dangal_game_resolve',
     ],
   });
 }

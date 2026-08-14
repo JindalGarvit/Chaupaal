@@ -788,6 +788,12 @@ function renderMsgBubble(m, isGroup){
     }
     body=`<div class="msg-bubble-challenge-inner challenge"><div class="challenge-label">⚔️ Custom Challenge</div><div class="challenge-title">${n} questions · ${secs}s</div><button class="challenge-btn" type="button" data-muqabala-challenge="${cid}">Answer →</button></div>`;
     rich=true;
+  } else if(att && att.type==='game_challenge'){
+    const myUid=typeof currentUser!=='undefined'?currentUser?.uid:'';
+    body=typeof renderChallengeCard==='function'
+      ?renderChallengeCard(m,myUid)
+      :`<div class="baithak-challenge-card">${chatEsc(att.gameName||m.text||'Challenge')}</div>`;
+    rich=true;
   } else if(att && att.type==='mehfil_invite'){
     const label=chatEsc(att.label||(typeof t==='function'?t('mehfil_join_cta'):'Join Mehfil'));
     body=`<div class="mehfil-invite-card">${typeof mehfilMarkHtml==='function'?mehfilMarkHtml(28):''}<strong>${chatEsc(m.text||(typeof t==='function'?t('mehfil_nudge_text',{name:m.name||'Someone'}):'Join Mehfil'))}</strong><button type="button" data-mehfil-invite-join>${label}</button></div>`;
@@ -843,6 +849,21 @@ function wireChallengeBubble(root){
       else if(typeof showToast==='function') showToast(typeof t==='function'?t('mehfil_unavailable'):'Mehfil unavailable');
     });
   });
+  if(typeof wireChallengeCard==='function'){
+    root?.querySelectorAll?.('.baithak-challenge-card').forEach((card)=>{
+      wireChallengeCard(card.parentElement || card, {
+        attachment: {
+          type: 'game_challenge',
+          gameType: card.dataset.challengeGame,
+          status: card.dataset.challengeStatus,
+          toUid: card.dataset.challengeTo,
+          fromUid: card.dataset.challengeFrom,
+          matchId: card.dataset.challengeMatch,
+          gameName: card.dataset.challengeName,
+        },
+      });
+    });
+  }
 }
 window.wireChallengeBubble=wireChallengeBubble;
 

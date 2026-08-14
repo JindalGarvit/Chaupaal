@@ -249,6 +249,32 @@ service cloud.firestore {
           && request.resource.data.targetUid == targetUid;
         allow delete: if isOwner(userId);
       }
+
+      // Dangal economy — Admin SDK only (dangal_wallet_get / dangal_game_resolve)
+      match /wallet/{docId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+      match /chipTransactions/{txId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+      match /gameStats/{gameId} {
+        allow read: if isAuth();
+        allow write: if false;
+      }
+      match /achievements/{achId} {
+        allow read: if isAuth();
+        allow write: if false;
+      }
+      match /dailyCredits/{dayId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+      match /gameResolves/{resolveId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
     }
 
     // ===================== USERS_PUBLIC (cross-user reads) =====================
@@ -954,6 +980,21 @@ service cloud.firestore {
     // Klipy GIF search cache (Admin SDK /api/media-config gif_search only)
     match /gifCache/{docId} {
       allow read, write: if false;
+    }
+
+    // Dangal weekly scores — Admin SDK writes; authenticated clients may read
+    match /weeklyLeaderboard/{weekId} {
+      allow read: if isAuth();
+      allow write: if false;
+      match /scores/{scoreId} {
+        allow read: if isAuth();
+        allow write: if false;
+      }
+    }
+
+    match /dangalMatches/{matchId} {
+      allow read: if isAuth();
+      allow write: if false;
     }
 
   }

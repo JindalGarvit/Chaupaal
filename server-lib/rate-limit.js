@@ -32,6 +32,7 @@ const LIMITS = {
   ai: { minute: 10, hour: 120 },
   // Intent people discovery (Khoj / Vriksha) — LLM parse when AI on + Firestore retrieve
   discovery: { minute: 20, hour: 200 },
+  dangal: { minute: 40, hour: 400 },
   // Music search/resolve, geocode, URL safety — third-party lookups
   media_lookup: { minute: 40, hour: 400 },
   // GIF search (Klipy proxy) — typing debounce still fires often

@@ -212,6 +212,10 @@
         }
         <section class="cp-digital-block" data-digital-block="media" data-lazy-media></section>
         <section class="cp-digital-block" data-digital-block="links" data-lazy-links></section>
+        <section class="cp-digital-block" data-digital-block="dangal" data-lazy-dangal>
+          <h3 class="cp-digital-h">Dangal</h3>
+          <div class="dangal-profile-host"></div>
+        </section>
         ${editable ? `<p class="cp-digital-edit-hint">Edit fields below (or switch to Edit my profile) — values land in these same slots.</p>` : ''}
       </div>`;
   }
@@ -646,6 +650,10 @@
             isOwner,
             profile,
           });
+        }
+        const dangalHost = pane.querySelector('[data-lazy-dangal] .dangal-profile-host');
+        if (dangalHost && typeof renderDangalProfileSection === 'function') {
+          await renderDangalProfileSection(profileUid, dangalHost);
         }
         return;
       }

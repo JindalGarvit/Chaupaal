@@ -32,7 +32,7 @@
   <link rel="stylesheet" href="/src/styles/layout.css?v=e39470b7">
   <link rel="stylesheet" href="/src/styles/tab-elements.css?v=0544038c">
   <link rel="stylesheet" href="/src/styles/akhbaar.css?v=b924fec3">
-  <link rel="stylesheet" href="/src/styles/dangal.css?v=1806b1a8">
+  <link rel="stylesheet" href="/src/styles/dangal.css?v=6d52165e">
   <link rel="stylesheet" href="/src/styles/baithak.css?v=425f376d">
   <link rel="stylesheet" href="/src/styles/peepal.css?v=26cc9a4d">
   <link rel="stylesheet" href="/src/styles/duniya.css?v=51212780">
@@ -479,6 +479,7 @@
             <div class="dangal-title" data-i18n="dangal_title">Dangal</div>
             <div class="dangal-sub" data-i18n="dangal_sub">Solos, duels & Muqabala — soft streaks, weekly goals, shareable wins</div>
           </div>
+          <div class="dangal-chip-balance" id="dangalChipBalance" hidden>⚡ —</div>
         </div>
         <div class="dangal-overall-rating" id="dangalOverallRating"></div>
       </div>
@@ -882,7 +883,7 @@
   <script src="/src/js/core/linkify.js?v=6dde463f"></script>
   <script src="/src/js/core/profile-sections.js?v=c9dc40c9"></script>
   <script src="/src/js/core/profile-highlights.js?v=bce95bea"></script>
-  <script src="/src/js/core/profile-shell.js?v=25a809d0"></script>
+  <script src="/src/js/core/profile-shell.js?v=db8b3b2a"></script>
   <script src="/src/js/core/profile-section-mount.js?v=a15557d7"></script>
   <script src="/src/js/core/push-prefs.js?v=967d0d68"></script>
   <script src="/src/js/core/notification-panel.js?v=64b2676e"></script>
@@ -916,13 +917,13 @@
   <script src="/src/js/auth/phone-otp.js?v=3315dcd2"></script>
   <script src="/src/js/auth/auth-profiles.js?v=80630a42"></script>
   <script src="/src/js/features/akhbaar.js?v=64b8165b"></script>
-  <script src="/src/js/features/dangal.js?v=04bfccfa"></script>
-  <script src="/src/js/features/dangal-ratings.js?v=6d059be1"></script>
+  <script src="/src/js/features/dangal.js?v=d53bdd6b"></script>
+  <script src="/src/js/features/dangal-ratings.js?v=bc333e7e"></script>
   <script src="/src/js/features/baithak-data.js?v=373e1139"></script>
   <script src="/src/js/features/self-chat.js?v=9dfd834b"></script>
   <script src="/src/js/features/chaupaal-chat.js?v=759adadb"></script>
   <script src="/src/js/features/chat-rating.js?v=19d676d2"></script>
-  <script src="/src/js/features/baithak-chat.js?v=3d391854"></script>
+  <script src="/src/js/features/baithak-chat.js?v=7a24e46b"></script>
   <script src="/src/js/features/mehfil.js?v=90911e42"></script>
   <script src="/src/js/features/chaupaal-hub.js?v=945a01db"></script>
   <script src="/src/js/features/chaupaal-ai-profile.js?v=c3832ffa"></script>
@@ -943,14 +944,26 @@
   <script src="/src/js/features/peepal.js?v=7ec67d45"></script>
   <script src="/src/js/features/onboarding.js?v=fba2f553"></script>
   <script src="/src/js/core/service-worker.js?v=9ffe9136"></script>
-  <script src="/src/js/features/streak.js?v=1f821f36"></script>
+  <script src="/src/js/features/streak.js?v=daa86c08"></script>
   <script src="/vendor/chess.js?v=434826c8"></script>
-  <script src="/src/js/games/game-runtime.js?v=9d6492c3"></script>
-  <script src="/src/js/games/game-ui.js?v=b4d06f64"></script>
-  <script src="/src/js/games/game-registry.js?v=ae39575c"></script>
+  <script src="/src/js/games/game-runtime.js?v=3674179d"></script>
+  <script src="/src/js/games/game-ui.js?v=91346664"></script>
+  <script src="/src/js/dangal/dangal-utils.js?v=60272180"></script>
+  <script src="/src/js/dangal/design-system.js?v=3c5e076b"></script>
+  <script src="/src/js/dangal/dangal-sound.js?v=e50f6334"></script>
+  <script src="/src/js/dangal/dangal-haptic.js?v=1de635e2"></script>
+  <script src="/src/js/games/game-registry.js?v=8dc70465"></script>
+  <script src="/src/js/dangal/dangal-chips.js?v=f007620a"></script>
+  <script src="/src/js/dangal/dangal-achievements.js?v=6c363394"></script>
+  <script src="/src/js/dangal/dangal-notifications.js?v=28a08674"></script>
+  <script src="/src/js/dangal/dangal-challenge-cards.js?v=723ac91e"></script>
+  <script src="/src/js/dangal/dsl/dangal-dsl.js?v=9630012e"></script>
+  <script src="/src/js/dangal/dangal-profile-stats.js?v=3b0e7b71"></script>
+  <script src="/src/js/dangal/dangal-leaderboard.js?v=090ebd1a"></script>
+  <script src="/src/js/dangal/chess-elo.js?v=76378890"></script>
   <script src="/src/js/games/ank-jod.js?v=565f9cb0"></script>
-  <script src="/src/js/games/engines.js?v=c6353488"></script>
-  <script src="/src/js/games/board-games.js?v=dcf20a95"></script>
+  <script src="/src/js/games/engines.js?v=0fa62ab9"></script>
+  <script src="/src/js/games/board-games.js?v=19989930"></script>
   <script src="/src/js/games/arcade.js?v=f91e8a89"></script>
   <script src="/src/js/games/rw-sports.js?v=9f729fe1"></script>
   <script src="/src/js/main.js?v=05233c72"></script>
