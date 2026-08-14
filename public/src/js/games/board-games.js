@@ -2,16 +2,21 @@
 function openFiveInRowGame(chat){
   const SIZE=13;
   let board=Array(SIZE).fill(null).map(()=>Array(SIZE).fill(null));
-  let myTurn=true;let gameOver=false;let winLine=null;
+  let gameOver=false;let winLine=null;
   let lastMove=null;let dropCell=null;let statusNote='';
   const FIR_SECS=18;let firTimer=FIR_SECS;let firInterval=null;let warned=false;
+  const liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat);
+  const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat):null;
+  let myTurn=!liveRoles||liveRoles.myColor==='w';
+  let liveHandle=null;
+  let applyingLive=false;
 
   const overlay=document.createElement('div');
   overlay.style.cssText='position:absolute;inset:0;background:#1a1a2e;z-index:80;display:flex;flex-direction:column;';
   const begin=typeof beginGameOverlaySession==='function'?beginGameOverlaySession:null;
   const gs=begin?begin({
     type:'fiveinrow',title:'Five in a Row',mode:'1v1',chat,overlay,
-    cleanup(){stopFirTimer();},
+    cleanup(){stopFirTimer();if(liveHandle&&liveHandle.leave)liveHandle.leave();},
   }):null;
   if(begin&&(!gs||!gs.alive()))return;
   if(!begin){
@@ -31,6 +36,13 @@ function openFiveInRowGame(chat){
     if(typeof showToast==='function')showToast('Time’s up — your turn passed');
     myTurn=false;stopFirTimer();
     render();
+    if(liveOn){
+      if(liveHandle&&liveRoles){
+        liveHandle.push({status:'playing',turn:liveRoles.opp,lastMove:lastMove?{r:lastMove[0],c:lastMove[1],uid:liveRoles.me}:null});
+        if(typeof DangalLive!=='undefined'&&DangalLive.pingTurn)DangalLive.pingTurn(liveRoles.opp,'fiveinrow',{chatId:chat&&(chat.firestoreId||chat.id)});
+      }
+      return;
+    }
     if(!gameOver)schedule(()=>{if(!alive())return;const[ar,ac]=getAIMoveFIR();playMove(ar,ac,'opp');},700);
   }
 
@@ -121,7 +133,18 @@ function openFiveInRowGame(chat){
     myTurn=who!=='me';
     if(myTurn)startFirTimer();else stopFirTimer();
     render();
-    if(!myTurn&&!gameOver)schedule(()=>{if(!alive())return;const[ar,ac]=getAIMoveFIR();playMove(ar,ac,'opp');},700);
+    if(liveOn&&who==='me'&&liveHandle&&!gameOver&&!applyingLive){
+      liveHandle.push({
+        lastMove:{r,c,uid:liveRoles&&liveRoles.me},
+        status:'playing',
+        turn:liveRoles?liveRoles.opp:'',
+      });
+      if(typeof DangalLive!=='undefined'&&DangalLive.pingTurn&&liveRoles){
+        DangalLive.pingTurn(liveRoles.opp,'fiveinrow',{chatId:chat&&(chat.firestoreId||chat.id)});
+      }
+      return;
+    }
+    if(!myTurn&&!gameOver&&!liveOn)schedule(()=>{if(!alive())return;const[ar,ac]=getAIMoveFIR();playMove(ar,ac,'opp');},700);
   }
 
   function render(){
@@ -163,7 +186,7 @@ function openFiveInRowGame(chat){
       ${typeof gameTurnBannerHtml==='function'
         ? gameTurnBannerHtml({
             mode: gameOver?'over':myTurn?'yours':'theirs',
-            label: gameOver?(winLine?(board[winLine[0][0]][winLine[0][1]]==='X'?'You won!':(chat.name||'Opponent')+' won!'):"It's a draw!"):(myTurn?'Your turn':(chat.name||'Opponent')+' thinking…'),
+            label: gameOver?(winLine?(board[winLine[0][0]][winLine[0][1]]==='X'?'You won!':(chat.name||'Opponent')+' won!'):"It's a draw!"):(myTurn?'Your turn':(chat.name||'Opponent')+(liveOn?' to move':' thinking…')),
             pulse: !gameOver && myTurn,
           })
         : `<div class="fir-turn-fallback">${gameOver?(winLine?(board[winLine[0][0]][winLine[0][1]]==='X'?'You won!':chat.name+' won!'):"It's a draw!"):(myTurn?'Your turn':chat.name+' thinking…')}</div>`}`}
@@ -213,7 +236,25 @@ function openFiveInRowGame(chat){
     }
     dropCell=null;
   }
-  render();startFirTimer();
+  if(liveOn&&liveRoles&&typeof DangalLive!=='undefined'){
+    liveHandle=DangalLive.join({
+      gameType:'fiveinrow',
+      matchId:(chat&&chat.dangalMatchId)||(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.matchId),
+      me:liveRoles.me,
+      playerA:liveRoles.playerA,
+      playerB:liveRoles.playerB,
+      onSnap(val){
+        if(!val||!val.lastMove||applyingLive||!alive())return;
+        const lm=val.lastMove;
+        if(!lm||lm.uid===liveRoles.me)return;
+        if(board[lm.r]&&board[lm.r][lm.c])return;
+        applyingLive=true;
+        playMove(lm.r,lm.c,'opp');
+        applyingLive=false;
+      },
+    });
+  }
+  render();if(myTurn)startFirTimer();
 }
 
 // ===================== BUSINESS (property trading) =====================
@@ -886,15 +927,16 @@ if (typeof registerGame === 'function') {
   registerGame({
     id: 'fiveinrow',
     name: 'Five in a Row',
-    desc: 'Gomoku — connect 5',
+    desc: 'Connect 5 · live vs a friend',
     icon: '🔵',
     ratingKey: 'fiveinrow',
     gameType: 'dual',
+    liveDuel: true,
     genre: 'board',
     chat1v1: true,
     selfChat: true,
     order: 70,
-    launch(ctx) { openFiveInRowGame(ctx.chat); },
+    launch(ctx) { openFiveInRowGame(typeof chatFromLaunch === 'function' ? chatFromLaunch(ctx) : ctx.chat); },
   });
   registerGame({
     id: 'business',

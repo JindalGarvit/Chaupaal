@@ -379,6 +379,28 @@ textarea.auth-input,
   background: var(--brand-red, var(--red));
   border-radius: 4px;
 }
+.cp-perf-wow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: -6px 0 14px;
+}
+.cp-perf-elo-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+.cp-perf-elo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--surface-sunken, var(--cream));
+  font-size: 12px;
+}
+.cp-perf-elo strong { font-family: var(--font-display, 'Space Grotesk', sans-serif); }
 .cp-challenge-pick {
   text-align: center;
   padding: 8px 4px 4px;

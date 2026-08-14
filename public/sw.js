@@ -1,4 +1,4 @@
-const CACHE = 'chaupaal-vdc9cb6';
+const CACHE = 'chaupaal-ve4f8f8';
 const ASSETS = [
   '/index.html',
   '/icon-charpai-v2as.png',
@@ -118,13 +118,21 @@ self.addEventListener('fetch', (e) => {
 });
 
 self.addEventListener('push', (e) => {
-  const data = e.data?.json() || { title: 'Chaupaal 🪑', body: 'Something new is waiting for you!' };
+  let payload = {};
+  try {
+    payload = e.data ? e.data.json() : {};
+  } catch (err) {
+    payload = {};
+  }
+  const title = payload.notification?.title || payload.data?.title || payload.title || 'Chaupaal';
+  const body = payload.notification?.body || payload.data?.body || payload.body || '';
+  const url = payload.fcmOptions?.link || payload.data?.url || payload.url || '/';
   e.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
+    self.registration.showNotification(title, {
+      body,
       icon: '/icon-charpai-v2as.png',
       badge: '/icon-charpai-v2as.png',
-      data: data.url || '/',
+      data: url,
     })
   );
 });

@@ -954,6 +954,29 @@
       <button type="button" class="btn btn--primary btn--block" data-open-dangal>${tt('dangal_pulse_play', 'Open Dangal')}</button>`;
     }
 
+    const lastWeek = progress.lastWeek || null;
+    const weekPlays = hub?.weekPlays ?? 0;
+    const weekWins = hub?.weekWins ?? 0;
+    const wowPlays = lastWeek ? weekPlays - (lastWeek.plays || 0) : null;
+    const wowWins = lastWeek ? weekWins - (lastWeek.wins || 0) : null;
+    const wowBit = (n) => (n == null ? '—' : n > 0 ? '+' + n : String(n));
+    const rated = ['chess', 'fiveinrow', 'ttt', 'quiz', 'streetcricket', 'gullykick'];
+    const eloBits = rated
+      .map((id) => {
+        let elo = null;
+        try {
+          const ratings =
+            (typeof userProfile !== 'undefined' && userProfile && userProfile.gameRatings) ||
+            JSON.parse(localStorage.getItem('chaupaal_game_ratings') || '{}');
+          if (ratings && ratings[id] != null) elo = ratings[id];
+        } catch (e) {}
+        if (elo == null) return '';
+        const meta = byId[id] || { name: id, icon: '🎮' };
+        return `<div class="cp-perf-elo"><span>${escHtml(meta.icon)} ${escHtml(meta.name || id)}</span><strong>${Math.round(Number(elo) || 1200)}</strong></div>`;
+      })
+      .filter(Boolean)
+      .join('');
+
     const totalPlayed = hub?.totalPlayed ?? rows.reduce((s, r) => s + r.played, 0);
     const totalWins = hub?.totalWins ?? rows.reduce((s, r) => s + r.wins, 0);
     const decided = rows.reduce((s, r) => s + r.wins + r.losses, 0);
@@ -988,6 +1011,12 @@
         <div class="cp-perf-pill"><strong>${winPct != null ? winPct + '%' : '—'}</strong><span>Win rate</span></div>
         <div class="cp-perf-pill"><strong>${hub?.softDayStreak || 0}</strong><span>Day streak</span></div>
       </div>
+      <div class="cp-perf-wow">
+        <div class="cp-perf-pill"><strong>${weekPlays}</strong><span>This week</span></div>
+        <div class="cp-perf-pill"><strong>${wowBit(wowPlays)}</strong><span>vs last week (plays)</span></div>
+        <div class="cp-perf-pill"><strong>${wowBit(wowWins)}</strong><span>vs last week (wins)</span></div>
+      </div>
+      ${eloBits ? `<div class="cp-perf-elo-row">${eloBits}</div>` : ''}
       ${buildPerfChartSvg(rows.slice(0, 10))}
       <div class="cp-perf-games">${gameRows}</div>
       <button type="button" class="btn btn--primary btn--block" data-open-dangal style="margin-top:12px;">${tt('dangal_pulse_play', 'Open Dangal')}</button>`;

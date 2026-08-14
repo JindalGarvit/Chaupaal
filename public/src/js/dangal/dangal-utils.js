@@ -192,6 +192,18 @@
     return '';
   }
 
+  function chatFromLaunch(ctx) {
+    const c = Object.assign({}, (ctx && ctx.chat) || {});
+    if (ctx && ctx.matchId) c.dangalMatchId = ctx.matchId;
+    if (ctx && ctx.opponentUid) {
+      c.uid = ctx.opponentUid;
+      c.peerUid = ctx.opponentUid;
+      c.opponentUid = ctx.opponentUid;
+    }
+    if (ctx && ctx.source) c.dangalSource = ctx.source;
+    return c;
+  }
+
   function dangalMatchId(gameType, chat, nonce) {
     const g = canonicalGameId(gameType) || 'game';
     const me = getCurrentUid() || 'me';
@@ -247,6 +259,7 @@
   window.denormalisePoint = denormalisePoint;
   window.isPersistableUid = isPersistableUid;
   window.opponentUidFromChat = opponentUidFromChat;
+  window.chatFromLaunch = chatFromLaunch;
   window.dangalMatchId = dangalMatchId;
   window.normalizeDangalResult = normalizeDangalResult;
 })();

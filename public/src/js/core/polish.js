@@ -114,6 +114,8 @@ function wirePeepalCardTypes(){
 
 // ---- Haptic feedback (where supported) ----
 function haptic(type='light'){
+  if(typeof quietMode!=='undefined'&&quietMode)return;
+  try{if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;}catch(e){}
   if(!navigator.vibrate)return;
   const patterns={light:10,medium:25,heavy:50,success:[10,50,10],error:[50,50,50]};
   navigator.vibrate(patterns[type]||10);

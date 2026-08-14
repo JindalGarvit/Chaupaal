@@ -186,6 +186,12 @@ function beginGameOverlaySession(opts) {
     if (overlay && !overlay.isConnected) device.appendChild(overlay);
   }
 
+  try {
+    if (overlay && typeof attachDangalPlayComm === 'function') {
+      attachDangalPlayComm(overlay, { chat: opts.chat, matchId, opponentUid });
+    }
+  } catch (e) {}
+
   return {
     alive: () => alive,
     close,
@@ -217,6 +223,10 @@ window.ensureGameCanvas = ensureGameCanvas;
 
 // ===================== PROFESSIONAL CHESS ENGINE =====================
 function openChessGame(chat){
+if(typeof DangalLive!=='undefined'&&DangalLive.isLive(chat)){
+  startChessGame(chat,{min:0,inc:0,difficulty:'live',aiDepth:0,chess960:false});
+  return;
+}
 // ---- DIFFICULTY + TIME CONTROL PICKER ----
 const device=document.querySelector('.device');
 if(!device){
@@ -340,7 +350,7 @@ function startChessGameInner(chat, tc) {
 const FILES='abcdefgh';
 const PIECE_UNICODE={K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙',k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
 const AI_DEPTH=Math.max(1,Math.min(3,tc.aiDepth||2));
-const DIFF_LABEL=tc.difficulty==='easy'?'Easy':tc.difficulty==='hard'?'Hard':'Medium';
+const DIFF_LABEL=tc.difficulty==='live'?'Live':tc.difficulty==='easy'?'Easy':tc.difficulty==='hard'?'Hard':'Medium';
 
 function chess960Fen(){
   const place=Array(8).fill('');
@@ -383,6 +393,39 @@ try{
   chess=tc.chess960?new Chess(chess960Fen(),{skipValidation:true}):new Chess();
 }catch(e){
   chess=new Chess();
+}
+const liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat);
+const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat):null;
+const myChessColor=liveRoles?liveRoles.myColor:'w';
+let liveHandle=null;
+let applyingLive=false;
+if(liveOn&&liveRoles){
+  liveHandle=DangalLive.join({
+    gameType:'chess',
+    matchId:(chat&&chat.dangalMatchId)||(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.matchId),
+    me:liveRoles.me,
+    playerA:liveRoles.playerA,
+    playerB:liveRoles.playerB,
+    fen:chess.fen(),
+    onSnap(val){
+      if(!val||applyingLive||!gs.alive())return;
+      if(val.fen&&val.fen!==chess.fen()){
+        applyingLive=true;
+        try{
+          chess.load(val.fen);
+          syncFromChess();
+          if(val.lastMove)state.lastMove=val.lastMove;
+          render();
+          if(typeof gameFeedback==='function')gameFeedback('move');
+        }catch(e){}
+        applyingLive=false;
+      }
+      if(val.status&&val.status!=='playing'){
+        syncFromChess();
+        render();
+      }
+    },
+  });
 }
 let state={board:boardFromChess(chess),turn:chess.turn(),selected:null,legalMoves:[],history:[],status:'playing',check:false,ratingRecorded:false,lastMove:null,animating:false};
 
@@ -483,7 +526,10 @@ overlay.style.cssText='position:absolute;inset:0;background:#1a1a2e;z-index:80;d
 let clockInterval=null;
 const gs=beginGameOverlaySession({
   type:'chess',title:'Chess',mode:'1v1',chat,overlay,
-  cleanup(){clearInterval(clockInterval);clockInterval=null;},
+  cleanup(){
+    clearInterval(clockInterval);clockInterval=null;
+    if(liveHandle&&liveHandle.leave)liveHandle.leave();
+  },
 });
 if(!gs.alive())return;
 
@@ -565,18 +611,18 @@ function render(){
     ${gameChromeHtml({title:'Chess',subtitle:DIFF_LABEL,backId:'chessBack',rightHtml:gameEnded?'':'<button id="chessFlip" class="game-chrome-action game-tap-target">Flip</button>'})}
     ${resultBlock?`<div class="chess-result-mount">${resultBlock}</div>`:`
     <div style="background:var(--game-panel,#1F2542);padding:8px 16px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
-      <div style="color:#ccc;font-size:13px;"><span aria-hidden="true">●</span> ${chat.name} <span style="opacity:.6;font-size:11px;">(Black)</span></div>
-      <div style="font-size:12px;color:var(--gold);">${cap.bCap}</div>
-      ${HAS_TIMER?`<div id="clock_b" style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;color:${clocks.b<=10?'#E74C3C':'var(--gold)'};">${formatClock(clocks.b)}</div>`:''}
+      <div style="color:#ccc;font-size:13px;"><span aria-hidden="true">${myChessColor==='w'?'●':'○'}</span> ${chat.name} <span style="opacity:.6;font-size:11px;">(${myChessColor==='w'?'Black':'White'})</span></div>
+      <div style="font-size:12px;color:var(--gold);">${myChessColor==='w'?cap.bCap:cap.wCap}</div>
+      ${HAS_TIMER?`<div id="clock_${myChessColor==='w'?'b':'w'}" style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;color:${clocks[myChessColor==='w'?'b':'w']<=10?'#E74C3C':'var(--gold)'};">${formatClock(clocks[myChessColor==='w'?'b':'w'])}</div>`:''}
     </div>
     <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:8px;position:relative;">
       <div id="chessBoard" style="display:grid;grid-template-columns:repeat(8,1fr);width:min(360px,94vw);aspect-ratio:1;border-radius:var(--game-board-radius,6px);overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.5);position:relative;" role="grid" aria-label="Chess board"></div>
       <div id="chessSlideLayer" style="position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center;"></div>
     </div>
     <div style="background:var(--game-panel,#1F2542);padding:8px 16px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
-      <div style="color:#fff;font-size:13px;"><span aria-hidden="true">○</span> You <span style="opacity:.6;font-size:11px;">(White)</span></div>
-      <div style="font-size:12px;color:var(--gold);">${cap.wCap}</div>
-      ${HAS_TIMER?`<div id="clock_w" style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;color:${clocks.w<=10?'#E74C3C':'var(--gold)'};">${formatClock(clocks.w)}</div>`:''}
+      <div style="color:#fff;font-size:13px;"><span aria-hidden="true">${myChessColor==='w'?'○':'●'}</span> You <span style="opacity:.6;font-size:11px;">(${myChessColor==='w'?'White':'Black'})</span></div>
+      <div style="font-size:12px;color:var(--gold);">${myChessColor==='w'?cap.wCap:cap.bCap}</div>
+      ${HAS_TIMER?`<div id="clock_${myChessColor}" style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;color:${clocks[myChessColor]<=10?'#E74C3C':'var(--gold)'};">${formatClock(clocks[myChessColor])}</div>`:''}
     </div>
     ${turnBanner}`}
   `;
@@ -630,7 +676,7 @@ function render(){
   }));
 }
 
-let renderFlipped=false;
+let renderFlipped=myChessColor==='b';
 
 const HAS_TIMER=tc.min>0;
 let clocks={w:tc.min*60,b:tc.min*60};
@@ -647,7 +693,7 @@ function startClock(color){
     if(clocks[color]<=0){
       clocks[color]=0;clearInterval(clockInterval);
       state.status='timeout';render();
-      showToast(color==='w'?`${chat.name} wins on time! ⏱️`:'You won on time! ⏱️');
+      showToast(color===myChessColor?`${chat.name} wins on time! ⏱️`:'You won on time! ⏱️');
     }
   },1000);
 }
@@ -681,15 +727,15 @@ function animatePieceSlide(from,to,pieceChar,done){
 }
 
 function handleClick(r,c){
-  if(!gs.alive()||state.status!=='playing'||state.turn!=='w'||state.animating)return;
+  if(!gs.alive()||state.status!=='playing'||state.turn!==myChessColor||state.animating)return;
   const p=state.board[r][c];
   if(state.selected){
     const move=state.legalMoves.find(m=>m.from[0]===state.selected[0]&&m.from[1]===state.selected[1]&&m.to[0]===r&&m.to[1]===c);
     if(move){makeMove(move);return;}
-    if(p&&pieceColor(p)==='w'){state.selected=[r,c];syncFromChess();render();return;}
+    if(p&&pieceColor(p)===myChessColor){state.selected=[r,c];syncFromChess();render();return;}
     state.selected=null;syncFromChess();render();return;
   }
-  if(p&&pieceColor(p)==='w'){state.selected=[r,c];syncFromChess();render();}
+  if(p&&pieceColor(p)===myChessColor){state.selected=[r,c];syncFromChess();render();}
 }
 
 function makeMove(move){
@@ -716,6 +762,19 @@ function makeMove(move){
     if(HAS_TIMER&&state.status==='playing')startClock(state.turn);
     render();
     if(state.status!=='playing'){stopClock();return;}
+    if(liveOn&&liveHandle){
+      const oppTurn=liveRoles&&state.turn==='w'?liveRoles.playerB:liveRoles.playerA;
+      liveHandle.push({
+        fen:chess.fen(),
+        turn:oppTurn,
+        lastMove:state.lastMove,
+        status:state.status,
+      });
+      if(typeof DangalLive!=='undefined'&&DangalLive.pingTurn&&liveRoles){
+        DangalLive.pingTurn(liveRoles.opp,'chess',{chatId:chat&&(chat.firestoreId||chat.id)});
+      }
+      return;
+    }
     if(typeof gameFeedback==='function')gameFeedback('turn');
     gs.schedule(()=>{
       if(!gs.alive())return;
@@ -1841,6 +1900,10 @@ function openUnoGame(chat, variant='normal'){
 function openTicTacToe(chat){
   const device=document.querySelector('.device');
   if(!device){if(typeof showToast==='function')showToast('Could not open Tic-Tac-Toe');return;}
+  if(typeof DangalLive!=='undefined'&&DangalLive.isLive(chat)){
+    startTicTacToe(chat,'live');
+    return;
+  }
   const DIFFS=[
     {id:'easy',label:'Easy'},
     {id:'medium',label:'Medium'},
@@ -1863,12 +1926,18 @@ function openTicTacToe(chat){
 
 function startTicTacToe(chat, difficulty){
 const diff=difficulty||'hard';
-const DIFF_LABEL=diff==='easy'?'Easy':diff==='medium'?'Medium':'Hard';
+const liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat);
+const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat):null;
+const DIFF_LABEL=liveOn?'Live':diff==='easy'?'Easy':diff==='medium'?'Medium':'Hard';
 const overlay=document.createElement('div');
 overlay.style.cssText='position:absolute;inset:0;background:#1a1a2e;z-index:80;display:flex;flex-direction:column;align-items:center;padding:0 0 12px;gap:12px;';
-const gs=beginGameOverlaySession({type:'ttt',title:'Tic-Tac-Toe',mode:'1v1',chat,overlay});
+const gs=beginGameOverlaySession({type:'ttt',title:'Tic-Tac-Toe',mode:'1v1',chat,overlay,cleanup(){if(liveHandle&&liveHandle.leave)liveHandle.leave();}});
 if(!gs.alive())return;
-let board=Array(9).fill(null);let myTurn=true;let gameOver=false;let winLine=null;let scores={me:0,opp:0,draw:0};let showResult=false;
+let board=Array(9).fill(null);let gameOver=false;let winLine=null;let scores={me:0,opp:0,draw:0};let showResult=false;
+let myTurn=!liveRoles||liveRoles.myColor==='w';
+let liveHandle=null;let applyingLive=false;
+const myMark=(!liveRoles||liveRoles.myColor==='w')?'X':'O';
+const oppMark=myMark==='X'?'O':'X';
 
 function checkWin(b,s){
   const w=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
@@ -1912,7 +1981,7 @@ function endRound(outcome){
 function render(){
   if(!gs.alive())return;
   const w=winLine;
-  const statusText=gameOver?(winLine?(board[winLine[0]]==='X'?'You won':`${chat.name} wins`):"It's a draw"):(myTurn?'Your turn (✕)':'Thinking…');
+  const statusText=gameOver?(winLine?(board[winLine[0]]===myMark?'You won':`${chat.name} wins`):"It's a draw"):(myTurn?`Your turn (${myMark==='X'?'✕':'⭕'})`:(liveOn?`${chat.name}'s turn`:'Thinking…'));
   const turnMode=gameOver?'over':myTurn?'yours':'theirs';
   const turnBanner=typeof gameTurnBannerHtml==='function'
     ? gameTurnBannerHtml({ mode: turnMode, label: statusText, pulse: turnMode==='yours' })
@@ -1920,13 +1989,13 @@ function render(){
   const resultBlock=showResult&&typeof gameResultHtml==='function'
     ? gameResultHtml({
         gameId: 'ttt',
-        title: winLine?(board[winLine[0]]==='X'?'You win!':`${chat.name} wins`):"It's a draw",
+        title: winLine?(board[winLine[0]]===myMark?'You win!':`${chat.name} wins`):"It's a draw",
         subtitle: DIFF_LABEL+(typeof getDuelStreak==='function'&&getDuelStreak(chat.id||chat.name)?.streak>1?` · Streak ${getDuelStreak(chat.id||chat.name).streak}`:''),
         you: scores.me,
         opp: scores.opp,
         youLabel: 'You',
         oppLabel: chat.name.split(' ')[0],
-        glyph: winLine?(board[winLine[0]]==='X'?'✕':'⭕'):'—',
+        glyph: winLine?(board[winLine[0]]===myMark?'✕':'⭕'):'—',
         shareCardHtml: typeof buildGameShareCard==='function'?buildGameShareCard('ttt',{scoreLine:`${scores.me}–${scores.opp}`,vs:`vs ${chat.name}`,meta:DIFF_LABEL}):'',
         actions: [
           {label:'Play again',primary:true,id:'again'},
@@ -1939,7 +2008,7 @@ function render(){
   overlay.innerHTML=`
     ${gameChromeHtml({title:'Tic-Tac-Toe',subtitle:DIFF_LABEL,backId:'tttBack'})}
     ${typeof gameScoreHtml==='function'
-      ? `${gameScoreHtml({label:'You (X)',score:scores.me},{label:`${chat.name} (O)`,score:scores.opp})}<div style="text-align:center;color:rgba(255,255,255,.55);font-size:12px;margin:-4px 0 8px;">Draws ${scores.draw}</div>`
+      ? `${gameScoreHtml({label:`You (${myMark})`,score:scores.me},{label:`${chat.name} (${oppMark})`,score:scores.opp})}<div style="text-align:center;color:rgba(255,255,255,.55);font-size:12px;margin:-4px 0 8px;">Draws ${scores.draw}</div>`
       : `<div style="display:flex;gap:20px;"><div>You ${scores.me}</div><div>Draw ${scores.draw}</div><div>${chat.name} ${scores.opp}</div></div>`}
     <div style="position:relative;width:min(280px,82vw);">
       <div id="tttBoard" style="display:grid;grid-template-columns:repeat(3,1fr);gap:var(--game-gap,8px);width:100%;" role="grid" aria-label="Tic-Tac-Toe board"></div>
@@ -1951,12 +2020,12 @@ function render(){
   if(typeof prepareGameOverlay==='function') prepareGameOverlay(overlay,{theme:'dark',gameId:'ttt'});
   document.getElementById('tttBack').addEventListener('click',()=>gs.close());
   const newBtn=document.getElementById('tttNew');
-  if(newBtn)newBtn.addEventListener('click',()=>{board=Array(9).fill(null);myTurn=true;gameOver=false;winLine=null;showResult=false;render();});
+  if(newBtn)newBtn.addEventListener('click',()=>resetTtt());
   if(showResult){
     if(typeof wireGameResultActions==='function'){
       const tttShare={scoreLine:`${scores.me}–${scores.opp}`,vs:`vs ${chat.name}`,meta:DIFF_LABEL};
       wireGameResultActions(overlay,{
-        again:()=>{board=Array(9).fill(null);myTurn=true;gameOver=false;winLine=null;showResult=false;render();},
+        again:()=>resetTtt(),
         share:()=>{
           if(typeof shareGameResult==='function'){
             shareGameResult('ttt',tttShare);
@@ -1973,7 +2042,7 @@ function render(){
     } else {
       overlay.querySelectorAll('[data-result-action]').forEach(btn=>{
         btn.addEventListener('click',()=>{
-          if(btn.dataset.resultAction==='0'){board=Array(9).fill(null);myTurn=true;gameOver=false;winLine=null;showResult=false;render();}
+          if(btn.dataset.resultAction==='0')resetTtt();
           else gs.close();
         });
       });
@@ -1989,26 +2058,63 @@ function render(){
     sq.setAttribute('aria-label', cell==='X'?'X':cell==='O'?'O':`Empty cell ${i+1}`);
     if(cell==='X')sq.style.color='var(--game-accent,#e74c3c)';
     if(cell==='O')sq.style.color='#5BA3D9';
-    if(!cell&&myTurn&&!gameOver)sq.addEventListener('click',()=>{
-      if(typeof pulseGameEl==='function')pulseGameEl(sq);
+    if(!cell&&myTurn&&!gameOver)sq.addEventListener('click',()=>placeTtt(i,myMark,false));
+    boardEl.appendChild(sq);
+  });
+}
+
+function resetTtt(){
+  board=Array(9).fill(null);myTurn=myMark==='X';gameOver=false;winLine=null;showResult=false;render();
+  if(liveOn&&liveHandle)pushTtt();
+}
+
+function placeTtt(i,mark,fromRemote){
+      if(board[i]||gameOver)return;
+      if(typeof pulseGameEl==='function')pulseGameEl(document.getElementById('tttBoard')?.children[i]);
       if(typeof gameFeedback==='function')gameFeedback('place');
-      board[i]='X';
-      const w2=checkWin(board,'X');
-      if(w2){winLine=w2;gameOver=true;scores.me++;if(typeof recordGameResult==='function')recordGameResult('ttt',true);if(typeof recordDuelStreak==='function')recordDuelStreak(chat.id||chat.name,true,false);endRound('won');return;}
-      if(board.every(Boolean)){gameOver=true;scores.draw++;if(typeof recordGameResult==='function')recordGameResult('ttt',false,true);if(typeof recordDuelStreak==='function')recordDuelStreak(chat.id||chat.name,false,true);endRound('draw');return;}
-      myTurn=false;render();
+      board[i]=mark;
+      const w2=checkWin(board,mark);
+      const iWon=mark===myMark;
+      if(w2){winLine=w2;gameOver=true;if(iWon)scores.me++;else scores.opp++;if(typeof recordGameResult==='function')recordGameResult('ttt',iWon,false);if(typeof recordDuelStreak==='function')recordDuelStreak(chat.id||chat.name,iWon,false);if(liveOn&&liveHandle&&!fromRemote)pushTtt();endRound(iWon?'won':'lost');return;}
+      if(board.every(Boolean)){gameOver=true;scores.draw++;if(typeof recordGameResult==='function')recordGameResult('ttt',false,true);if(typeof recordDuelStreak==='function')recordDuelStreak(chat.id||chat.name,false,true);if(liveOn&&liveHandle&&!fromRemote)pushTtt();endRound('draw');return;}
+      myTurn=mark!==myMark;
+      render();
+      if(liveOn){
+        if(!fromRemote&&liveHandle)pushTtt();
+        return;
+      }
+      if(mark!==myMark)return;
       if(typeof gameFeedback==='function')gameFeedback('turn');
       gs.schedule(()=>{
         if(!gs.alive())return;
-        const m=getAiMove();if(m==null)return;board[m]='O';
-        if(typeof gameFeedback==='function')gameFeedback('place');
-        const w3=checkWin(board,'O');
-        if(w3){winLine=w3;gameOver=true;scores.opp++;if(typeof recordGameResult==='function')recordGameResult('ttt',false);if(typeof recordDuelStreak==='function')recordDuelStreak(chat.id||chat.name,false,false);endRound('lost');return;}
-        if(board.every(Boolean)){gameOver=true;scores.draw++;if(typeof recordGameResult==='function')recordGameResult('ttt',false,true);if(typeof recordDuelStreak==='function')recordDuelStreak(chat.id||chat.name,false,true);endRound('draw');return;}
-        myTurn=true;render();
+        const m=getAiMove();if(m==null)return;placeTtt(m,'O',true);
       },450);
-    });
-    boardEl.appendChild(sq);
+}
+
+function pushTtt(){
+  liveHandle.push({board:board.map((c)=>c||'.').join(''),turn:liveRoles&&liveRoles.opp,lastMove:{board:board.slice()},status:gameOver?'over':'playing'});
+  if(typeof DangalLive!=='undefined'&&DangalLive.pingTurn&&liveRoles)DangalLive.pingTurn(liveRoles.opp,'ttt',{chatId:chat&&(chat.firestoreId||chat.id)});
+}
+if(liveOn&&liveRoles){
+  liveHandle=DangalLive.join({
+    gameType:'ttt',
+    matchId:(chat&&chat.dangalMatchId)||(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.matchId),
+    me:liveRoles.me,playerA:liveRoles.playerA,playerB:liveRoles.playerB,
+    onSnap(val){
+      if(!val||applyingLive||!gs.alive())return;
+      if(!val.board)return;
+      const next=String(val.board).split('').map((ch)=>ch==='.'||ch===' '?null:ch);
+      if(next.length!==9)return;
+      if(next.join('')===board.map((c)=>c||'').join(''))return;
+      applyingLive=true;
+      board=next.map((c)=>c||null);
+      const wX=checkWin(board,'X');const wO=checkWin(board,'O');
+      winLine=wX||wO;
+      gameOver=!!winLine||board.every(Boolean);
+      myTurn=(board.filter(Boolean).length%2===0)?(myMark==='X'):(myMark==='O');
+      render();
+      applyingLive=false;
+    },
   });
 }
 render();
@@ -2294,15 +2400,16 @@ if (typeof registerGame === 'function') {
   registerGame({
     id: 'chess',
     name: 'Chess',
-    desc: 'Classic strategy, AI opponent',
+    desc: 'Live vs a friend · or AI',
     icon: '♟',
     ratingKey: 'chess',
     gameType: 'dual',
+    liveDuel: true,
     genre: 'board',
     chat1v1: true,
     selfChat: true,
     order: 10,
-    launch(ctx) { openChessGame(ctx.chat); },
+    launch(ctx) { openChessGame(typeof chatFromLaunch === 'function' ? chatFromLaunch(ctx) : ctx.chat); },
   });
   registerGame({
     id: 'snakes',
@@ -2352,15 +2459,16 @@ if (typeof registerGame === 'function') {
   registerGame({
     id: 'ttt',
     name: 'Tic-Tac-Toe',
-    desc: 'Quick & unbeatable AI',
+    desc: 'Live vs a friend · or quick AI',
     icon: '⭕',
     ratingKey: 'ttt',
     gameType: 'dual',
+    liveDuel: true,
     genre: 'board',
     chat1v1: true,
     selfChat: true,
     order: 50,
-    launch(ctx) { openTicTacToe(ctx.chat); },
+    launch(ctx) { openTicTacToe(typeof chatFromLaunch === 'function' ? chatFromLaunch(ctx) : ctx.chat); },
   });
   registerGame({
     id: 'wordguess',

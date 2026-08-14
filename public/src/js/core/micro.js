@@ -32,6 +32,7 @@
 
   function haptic(type) {
     try {
+      if (typeof quietMode !== 'undefined' && quietMode) return;
       if (typeof window.haptic === 'function') window.haptic(type || 'light');
       else if (navigator.vibrate) {
         const patterns = { light: 10, medium: 25, heavy: 50, success: [10, 50, 10], error: [50, 50, 50] };

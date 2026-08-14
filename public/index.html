@@ -26,13 +26,13 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon-charpai-v2as.png">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/src/styles/tokens.css?v=482d8f55">
-  <link rel="stylesheet" href="/src/styles/squircle.css?v=ca89e243">
+  <link rel="stylesheet" href="/src/styles/squircle.css?v=5f766bae">
   <link rel="stylesheet" href="/src/styles/gathered-light.css?v=05fbe297">
   <link rel="stylesheet" href="/src/styles/icons.css?v=b5921022">
   <link rel="stylesheet" href="/src/styles/layout.css?v=e39470b7">
   <link rel="stylesheet" href="/src/styles/tab-elements.css?v=0544038c">
   <link rel="stylesheet" href="/src/styles/akhbaar.css?v=b924fec3">
-  <link rel="stylesheet" href="/src/styles/dangal.css?v=86810327">
+  <link rel="stylesheet" href="/src/styles/dangal.css?v=f8f0653e">
   <link rel="stylesheet" href="/src/styles/baithak.css?v=425f376d">
   <link rel="stylesheet" href="/src/styles/peepal.css?v=26cc9a4d">
   <link rel="stylesheet" href="/src/styles/duniya.css?v=51212780">
@@ -887,8 +887,9 @@
   <script src="/src/js/core/profile-section-mount.js?v=a15557d7"></script>
   <script src="/src/js/core/push-prefs.js?v=967d0d68"></script>
   <script src="/src/js/core/notification-panel.js?v=64b2676e"></script>
-  <script src="/src/js/core/micro.js?v=2f797874"></script>
-  <script src="/src/js/core/tab-gestures.js?v=8177870a"></script>
+  <script src="/src/js/core/fcm-client.js?v=bd490c1b"></script>
+  <script src="/src/js/core/micro.js?v=014dea03"></script>
+  <script src="/src/js/core/tab-gestures.js?v=f748415f"></script>
   <script src="/src/js/core/sessions.js?v=fafd40d3"></script>
   <script src="/src/js/core/safety.js?v=c3b3c2a2"></script>
   <script src="/src/js/core/notif-prefs.js?v=19bbe844"></script>
@@ -918,7 +919,7 @@
   <script src="/src/js/auth/auth-profiles.js?v=80630a42"></script>
   <script src="/src/js/features/akhbaar.js?v=64b8165b"></script>
   <script src="/src/js/features/dangal.js?v=d53bdd6b"></script>
-  <script src="/src/js/features/dangal-ratings.js?v=3327076f"></script>
+  <script src="/src/js/features/dangal-ratings.js?v=1cc5662a"></script>
   <script src="/src/js/features/baithak-data.js?v=373e1139"></script>
   <script src="/src/js/features/self-chat.js?v=9dfd834b"></script>
   <script src="/src/js/features/chaupaal-chat.js?v=759adadb"></script>
@@ -947,23 +948,26 @@
   <script src="/src/js/features/streak.js?v=daa86c08"></script>
   <script src="/vendor/chess.js?v=434826c8"></script>
   <script src="/src/js/games/game-runtime.js?v=3674179d"></script>
-  <script src="/src/js/games/game-ui.js?v=dfa1c16d"></script>
-  <script src="/src/js/dangal/dangal-utils.js?v=629e7f25"></script>
+  <script src="/src/js/games/game-ui.js?v=b2ccd059"></script>
+  <script src="/src/js/dangal/dangal-utils.js?v=390f20c6"></script>
   <script src="/src/js/dangal/design-system.js?v=3c5e076b"></script>
   <script src="/src/js/dangal/dangal-sound.js?v=0770106c"></script>
   <script src="/src/js/dangal/dangal-haptic.js?v=1de635e2"></script>
   <script src="/src/js/games/game-registry.js?v=9c013b78"></script>
   <script src="/src/js/dangal/dangal-chips.js?v=f007620a"></script>
   <script src="/src/js/dangal/dangal-achievements.js?v=6c363394"></script>
-  <script src="/src/js/dangal/dangal-notifications.js?v=28a08674"></script>
-  <script src="/src/js/dangal/dangal-challenge-cards.js?v=723ac91e"></script>
+  <script src="/src/js/dangal/dangal-notifications.js?v=3bda4bd3"></script>
+  <script src="/src/js/dangal/dangal-live.js?v=6dd96c50"></script>
+  <script src="/src/js/dangal/dangal-khel-daily.js?v=9bf88648"></script>
+  <script src="/src/js/dangal/dangal-play-comm.js?v=cc1245b2"></script>
+  <script src="/src/js/dangal/dangal-challenge-cards.js?v=2085e874"></script>
   <script src="/src/js/dangal/dsl/dangal-dsl.js?v=9630012e"></script>
   <script src="/src/js/dangal/dangal-profile-stats.js?v=3b0e7b71"></script>
   <script src="/src/js/dangal/dangal-leaderboard.js?v=3f447506"></script>
   <script src="/src/js/dangal/chess-elo.js?v=76378890"></script>
   <script src="/src/js/games/ank-jod.js?v=565f9cb0"></script>
-  <script src="/src/js/games/engines.js?v=7a97adfc"></script>
-  <script src="/src/js/games/board-games.js?v=50550f8d"></script>
+  <script src="/src/js/games/engines.js?v=6131eeb9"></script>
+  <script src="/src/js/games/board-games.js?v=c7f1db88"></script>
   <script src="/src/js/games/arcade.js?v=516e22b3"></script>
   <script src="/src/js/games/rw-sports.js?v=0ba58ae8"></script>
   <script src="/src/js/games/court-sports.js?v=132aecda"></script>
@@ -975,7 +979,7 @@
   <script src="/src/js/features/premium.js?v=53c2aa53"></script>
   <script src="/src/js/features/discovery.js?v=04bca3e7"></script>
   <script src="/src/js/features/khoj.js?v=7b51543e"></script>
-  <script src="/src/js/core/polish.js?v=267509b9"></script>
+  <script src="/src/js/core/polish.js?v=e763bf53"></script>
   <script src="/src/js/features/fairness.js?v=0afd899f"></script>
   <script src="/src/js/features/media-profile.js?v=d8fe1026"></script>
   <script src="/src/js/auth/auth-events.js?v=9b315d2d"></script>

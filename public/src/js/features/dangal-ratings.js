@@ -309,7 +309,7 @@ function renderDangalGamesGrid() {
         : hub
           ? `<span class="dor-meta">${hub.weekPlays} play${hub.weekPlays === 1 ? '' : 's'} this week</span>`
           : '';
-    overall.innerHTML = `<div class="dor-main"><span class="dor-label">Quiz Rating</span><span class="dor-val">${avgQuiz}</span></div>${streakBit}`;
+    overall.innerHTML = `<div class="dor-main"><span class="dor-label">${typeof t === 'function' ? t('dangal_pulse_title') : 'Tarakki'}</span><span class="dor-val">${hub ? hub.totalPlayed || 0 : avgQuiz}</span></div>${streakBit}`;
   }
 
   const chipEl = document.getElementById('dangalChipBalance');
@@ -354,7 +354,8 @@ function renderDangalGamesGrid() {
   gotdHost.id = 'dangalGotdHost';
   khel.appendChild(gotdHost);
   grid.appendChild(khel);
-  fetchGameOfTheDay().then((gotd) => {
+  fetchGameOfTheDay()
+    .then((gotd) => {
     if (!gotdHost.isConnected) return;
     gotdHost.innerHTML = '';
     if (gotd?.gameId) {
@@ -363,6 +364,7 @@ function renderDangalGamesGrid() {
       } catch (e) {}
     }
     renderDangalGotdSlot(gotdHost, gotd);
+    if (typeof mountKhelDailies === 'function') mountKhelDailies(khel);
     if (!gotd?.gameId && typeof renderEmptyState === 'function') {
       renderEmptyState(gotdHost, {
         icon: '🔥',
@@ -370,7 +372,10 @@ function renderDangalGamesGrid() {
         message: 'Today’s featured game will land here.',
       });
     }
-  });
+  })
+    .catch(() => {
+      if (khel.isConnected && typeof mountKhelDailies === 'function') mountKhelDailies(khel);
+    });
 
   // ── Manch: full games library + sticky filters ──
   const manch = document.createElement('div');
@@ -385,6 +390,7 @@ function renderDangalGamesGrid() {
     { id: 'all', label: 'All', kind: 'all', icon: '▦', color: '#546E7A' },
     { id: 'solo', label: 'Solo', kind: 'mode', gameType: 'solo', icon: '①', color: '#00897B' },
     { id: 'dual', label: 'Dual', kind: 'mode', gameType: 'dual', icon: '②', color: '#F9A825' },
+    { id: 'live', label: 'Live 1v1', kind: 'live', icon: '●', color: '#E53935' },
     { id: 'multiplayer', label: 'Multi', kind: 'mode', gameType: 'multiplayer', icon: '③', color: '#E53935' },
   ];
   const genreFilters = (typeof getGameGenres === 'function' ? getGameGenres() : []).map((g) => ({
@@ -396,7 +402,7 @@ function renderDangalGamesGrid() {
     color: g.color || '#E85D04',
   }));
   const allFilters = modeFilters.concat(genreFilters);
-  if (!window.__dangalManchFilter) window.__dangalManchFilter = { mode: 'all', genre: null };
+  if (!window.__dangalManchFilter) window.__dangalManchFilter = { mode: 'all', genre: null, live: false };
   const state = window.__dangalManchFilter;
 
   const chipsHtml = allFilters
@@ -404,7 +410,9 @@ function renderDangalGamesGrid() {
       const active =
         f.kind === 'all'
           ? state.mode === 'all' && !state.genre
-          : f.kind === 'mode'
+          : f.kind === 'live'
+            ? !!state.live
+            : f.kind === 'mode'
             ? state.mode === f.gameType && !state.genre
             : state.genre === f.genre;
       const tint = f.color || '#E85D04';
@@ -423,7 +431,8 @@ function renderDangalGamesGrid() {
 
   function filteredLibrary() {
     let list = library.slice();
-    if (state.genre) list = list.filter((g) => g.genre === state.genre);
+    if (state.live) list = list.filter((g) => g.liveDuel || g.id === 'chess' || g.id === 'fiveinrow' || g.id === 'ttt');
+    else if (state.genre) list = list.filter((g) => g.genre === state.genre);
     else if (state.mode && state.mode !== 'all') {
       list = list.filter((g) => g.gameType === state.mode);
     }
@@ -460,23 +469,30 @@ function renderDangalGamesGrid() {
     if (kind === 'all') {
       state.mode = 'all';
       state.genre = null;
+      state.live = false;
+    } else if (kind === 'live') {
+      state.live = true;
+      state.mode = 'all';
+      state.genre = null;
     } else if (kind === 'mode') {
       state.mode = btn.dataset.gameType || 'all';
       state.genre = null;
+      state.live = false;
     } else if (kind === 'genre') {
       state.genre = btn.dataset.genre || null;
       state.mode = 'all';
+      state.live = false;
     }
     filterBar.querySelectorAll('.dangal-filter-chip').forEach((c) => {
       const k = c.dataset.filterKind;
       let on = false;
-      if (k === 'all') on = state.mode === 'all' && !state.genre;
-      else if (k === 'mode') on = !state.genre && state.mode === c.dataset.gameType;
+      if (k === 'all') on = state.mode === 'all' && !state.genre && !state.live;
+      else if (k === 'live') on = !!state.live;
+      else if (k === 'mode') on = !state.genre && !state.live && state.mode === c.dataset.gameType;
       else if (k === 'genre') on = state.genre === c.dataset.genre;
       c.classList.toggle('is-active', on);
     });
-    // Filter active → block section swipe from filtered grid; All restores it
-    if (state.mode !== 'all' || state.genre) manchGrid.dataset.swipeIgnore = '1';
+    if (state.mode !== 'all' || state.genre || state.live) manchGrid.dataset.swipeIgnore = '1';
     else delete manchGrid.dataset.swipeIgnore;
     paintManchGrid();
   });

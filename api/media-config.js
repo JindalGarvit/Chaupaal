@@ -553,7 +553,10 @@ async function handlePost(req, res) {
     action === 'notif_soft_clear' ||
     action === 'notif_prune' ||
     action === 'notif_emit' ||
-    action === 'notif_dm'
+    action === 'notif_dm' ||
+    action === 'fcm_config' ||
+    action === 'fcm_register' ||
+    action === 'fcm_unregister'
   ) {
     const adminApp = initAdmin();
     if (!adminApp) {
@@ -583,6 +586,20 @@ async function handlePost(req, res) {
       }
       if (action === 'notif_prune') {
         return sendSuccess(res, await notif.pruneOldReadNotifications(adminApp, user.uid));
+      }
+      if (action === 'fcm_config') {
+        const fcm = require('../server-lib/fcm');
+        return sendSuccess(res, { vapidKey: fcm.vapidKey() || '' });
+      }
+      if (action === 'fcm_register') {
+        const fcm = require('../server-lib/fcm');
+        const saved = await fcm.saveToken(adminApp, user.uid, body.token);
+        return sendSuccess(res, saved);
+      }
+      if (action === 'fcm_unregister') {
+        const fcm = require('../server-lib/fcm');
+        const deleted = await fcm.deleteToken(adminApp, user.uid, body.token);
+        return sendSuccess(res, deleted);
       }
       if (action === 'notif_dm') {
         const chatId = String(body.chatId || '').slice(0, 120);
@@ -796,6 +813,9 @@ async function handlePost(req, res) {
       'notif_prune',
       'notif_emit',
       'notif_dm',
+      'fcm_config',
+      'fcm_register',
+      'fcm_unregister',
       'parental_consent_start',
       'parental_consent_verify',
       'match_contact_hashes',

@@ -149,6 +149,10 @@ service cloud.firestore {
         allow read: if isOwner(userId);
         allow write: if false;
       }
+      match /fcmTokens/{tokenId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
 
       // Legacy friends index is retired. Friendship is reciprocal following.
       match /friends/{friendId} {

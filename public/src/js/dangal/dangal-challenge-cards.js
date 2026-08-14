@@ -110,7 +110,9 @@
       (isReceiver && pending
         ? '<button type="button" class="dangal-challenge-accept">Accept</button>' +
           '<button type="button" class="dangal-challenge-decline">Decline</button>'
-        : '<span class="baithak-challenge-card__status">' + esc(statusMap[att.status] || att.status || '') + '</span>') +
+        : !isReceiver && att.status === 'accepted'
+          ? '<button type="button" class="dangal-challenge-accept" data-join="1">Play</button>'
+          : '<span class="baithak-challenge-card__status">' + esc(statusMap[att.status] || att.status || '') + '</span>') +
       '</div></div>'
     );
   }
@@ -120,25 +122,44 @@
     if (!card || card.dataset.wired === '1') return;
     card.dataset.wired = '1';
     const att = message.attachment || message;
+    const myUid = typeof getCurrentUid === 'function' ? getCurrentUid() : null;
     card.querySelector('.dangal-challenge-accept')?.addEventListener('click', () => {
-      att.status = 'accepted';
-      card.querySelector('.baithak-challenge-card__footer').innerHTML =
-        '<span class="baithak-challenge-card__status">Accepted</span>';
+      const joinOnly = card.querySelector('.dangal-challenge-accept')?.dataset.join === '1';
       const openChat = window.currentOpenChat || {};
       const g = typeof getGame === 'function' ? getGame(att.gameType) : null;
+      const iAmHost = att.fromUid === myUid;
+      if (!joinOnly) {
+        att.status = 'accepted';
+        try {
+          const cid = openChat.firestoreId || openChat.id;
+          if (cid && message.id && typeof db !== 'undefined' && db) {
+            db.collection('chats').doc(cid).collection('messages').doc(message.id).update({
+              'attachment.status': 'accepted',
+            });
+          }
+        } catch (e) {}
+        if (typeof notifyPlayer === 'function' && att.fromUid) {
+          notifyPlayer(att.fromUid, 'challenge_accepted', {
+            fromName: typeof getDisplayName === 'function' ? getDisplayName() : '',
+            gameName: att.gameName,
+            chatId: openChat.firestoreId || openChat.id,
+          });
+        }
+      }
+      const opp = iAmHost ? att.toUid : att.fromUid;
       const chat = {
         name: openChat.name || att.gameName || 'Opponent',
         id: openChat.id,
         firestoreId: openChat.firestoreId || openChat.id,
-        uid: att.fromUid,
-        peerUid: att.fromUid,
+        uid: opp,
+        peerUid: opp,
         dangalMatchId: att.matchId || card.dataset.challengeMatch || '',
       };
       if (g?.launch) {
         g.launch({
-          source: 'challenge',
+          source: iAmHost ? 'challenge_host' : 'challenge',
           matchId: chat.dangalMatchId,
-          opponentUid: att.fromUid,
+          opponentUid: opp,
           chat,
         });
       } else if (typeof showToast === 'function') showToast('Opening ' + (att.gameName || 'game'));

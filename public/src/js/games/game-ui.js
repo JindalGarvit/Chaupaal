@@ -1403,6 +1403,7 @@
       softDayStreak: 0,
       lastPlayDay: '',
       week: emptyDangalWeek(),
+      lastWeek: null,
       panelCollapsed: false,
       hideMissionsUntil: '',
     };
@@ -1416,7 +1417,15 @@
     } catch (e) {}
     const weekKey = dangalWeekKey();
     if (!data.week || data.week.key !== weekKey) {
+      if (data.week && data.week.key && data.week.key !== weekKey) {
+        data.lastWeek = {
+          key: data.week.key,
+          plays: data.week.plays || 0,
+          wins: data.week.wins || 0,
+        };
+      }
       data.week = emptyDangalWeek(weekKey);
+      saveDangalProgress(data);
     }
     if (!data.games || typeof data.games !== 'object') data.games = {};
     return data;
@@ -1501,6 +1510,9 @@
 
     saveDangalProgress(data);
     maybeCelebrateMissions(data);
+    try {
+      if (typeof tickKhelDailies === 'function') tickKhelDailies(id, { won: o.won === true, drew: !!o.drew });
+    } catch (e) {}
     return data;
   }
 

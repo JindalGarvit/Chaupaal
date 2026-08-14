@@ -166,6 +166,21 @@ async function upsertNotification(adminApp, recipientUid, { type, refId, actor, 
     return { bundleId, created: false };
   });
 
+    if (result && !result.skipped) {
+      try {
+        const fcm = require('./fcm');
+        const actorName = a.name || 'Someone';
+        fcm
+          .sendToUser(adminApp, recipientUid, {
+            title: actorName,
+            body: previewText || 'New activity on Chaupaal',
+            link: '/',
+            data: { type: t, refId: rid, section },
+          })
+          .catch(() => {});
+      } catch (e) {}
+    }
+
   return result;
 }
 
