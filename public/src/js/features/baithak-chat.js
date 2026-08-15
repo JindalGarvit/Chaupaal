@@ -666,6 +666,18 @@ function openChatScreen(chat){
           chat.id = id;
           window.currentOpenChat = chat;
         }
+      } else if (!isGroup && typeof ensurePeerDmChat === 'function') {
+        const peer = chat.uid || chat.peerUid || chat.otherUid;
+        if (peer) {
+          const id = await ensurePeerDmChat(peer);
+          if (id) {
+            chatId = id;
+            chat.firestoreId = id;
+            chat.id = id;
+            chat.participants = currentUser?.uid ? [currentUser.uid, peer].sort() : chat.participants;
+            window.currentOpenChat = chat;
+          }
+        }
       }
       // Never listen on legacy sample self id
       if (chatId === 'chat_self' && typeof selfChatId === 'function' && currentUser?.uid) {

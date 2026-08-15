@@ -312,9 +312,14 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
 
 async function sendRealtimeMessage(chatId, text, isGroup, music, attachment){
   if(!db||!currentUser) throw new Error('Not signed in');
-  const id=String(chatId||'');
+  let id=String(chatId||'');
   if(!id || id==='chat_self' || /^chat_(riya|arjun)/.test(id) || id.startsWith('grp_')){
     throw new Error('This chat is not synced yet — open a real conversation');
+  }
+  if((id.startsWith('chat_profile_') || id.startsWith('chat_disc_')) && typeof ensurePeerDmChat==='function'){
+    const peer=id.replace(/^chat_(profile|disc)_/, '');
+    const real=await ensurePeerDmChat(peer);
+    if(real) id=real;
   }
   if(id.startsWith('chat_self_') && typeof ensureSelfChatDoc==='function'){
     await ensureSelfChatDoc();

@@ -127,6 +127,10 @@
         <div class="own-preview-chip">${esc(view.visibilityLabel)} · how others see you</div>
         ${bioHtml ? `<p class="public-profile-bio">${bioHtml}</p>` : ''}
       </div>
+      <div class="dp-rel-strip">
+        <div data-profile-relationship-counts class="relationship-counts-loading">Loading relationships…</div>
+        <div data-friend-requests></div>
+      </div>
       <div class="own-preview-sections" data-own-preview-sections></div>
       <p class="own-preview-footnote">Highlights · Profile · Duniya · Peepal — switch to Edit to add custom tabs and rearrange.</p>
     `;

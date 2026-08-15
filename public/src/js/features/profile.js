@@ -36,6 +36,7 @@ function renderProfileModal(){
       }
       if(typeof wireTabNotificationButtons==='function') wireTabNotificationButtons();
       if(typeof updateSectionNotifDots==='function') updateSectionNotifDots();
+      if(typeof mountOwnRelationshipPanel==='function') mountOwnRelationshipPanel(el);
     },0);
     return;
   }

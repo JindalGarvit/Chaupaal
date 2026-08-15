@@ -44,6 +44,34 @@
       .join(' · ')}`;
   }
 
+  function dmChatIdFor(peerUid) {
+    const me = typeof currentUser !== 'undefined' ? currentUser?.uid : '';
+    const peer = String(peerUid || '').trim();
+    if (!me || !peer || me === peer) return '';
+    return [me, peer].sort().join('_');
+  }
+
+  /** Persist a 1:1 chat so both people can send (rules require the chat doc). */
+  async function ensurePeerDmChat(peerUid, extras) {
+    const chatId = dmChatIdFor(peerUid);
+    if (!chatId || typeof db === 'undefined' || !db) return chatId;
+    const ref = db.collection('chats').doc(chatId);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      await ref.set({
+        participants: [currentUser.uid, peerUid].sort(),
+        type: 'dm',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        createdBy: currentUser.uid,
+        openedBy: currentUser.uid,
+        lastMessageAt: Date.now(),
+        ...(extras && typeof extras === 'object' ? extras : {}),
+      });
+    }
+    return chatId;
+  }
+
   /**
    * Create / open a DM and persist a shared first-hello card for both sides.
    */
@@ -68,10 +96,7 @@
       });
       if (!ok) return null;
     }
-    const chatId =
-      currentUser?.uid && uid
-        ? [currentUser.uid, uid].sort().join('_')
-        : `chat_disc_${uid || Date.now()}`;
+    const chatId = dmChatIdFor(uid) || `chat_disc_${uid || Date.now()}`;
     const hello = pickSharedHello();
     const discoveryOrigin = origin === 'ai_discovery' ? 'ai_discovery' : origin || null;
     const peerType = peerProfileType || 'personal';
@@ -294,7 +319,9 @@
 
   window.pickSharedHello = pickSharedHello;
   window.interestOverlapReason = interestOverlapReason;
-  window.openDmWithSharedHello = openDmWithSharedHello;
+  window.dmChatIdFor = dmChatIdFor;
+  window.ensurePeerDmChat = ensurePeerDmChat;
+  window.openDmWithSharedHello = openDmWithSharedHello
   window.mountConversationRepairChips = mountConversationRepairChips;
   window.markGameInviteDeclined = markGameInviteDeclined;
   window.onChaupaalJournalCompleted = onJournalCompleted;

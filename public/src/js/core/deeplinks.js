@@ -398,6 +398,18 @@
           if (peepalEl) peepalEl.innerHTML = '<div class="public-profile-posts-empty">Posts unavailable</div>';
         });
     }
+    const visitContext = context === 'peepal' || context === 'duniya' ? context : 'profile';
+    const relProfile = {
+      ...u,
+      uid: profileUid,
+      profileType: u.profileType || u.profile?.profileType || 'personal',
+      name: u.name || uname || 'Chaupaal member',
+    };
+    if (profileUid && typeof wireProfileRelationshipActions === 'function') {
+      wireProfileRelationshipActions(sheet.querySelector('[data-rel-actions]'), relProfile, {
+        context: visitContext,
+      });
+    }
     if (profileUid && typeof loadRelationshipProfile === 'function') {
       loadRelationshipProfile(profileUid)
         .then((data) => {
@@ -408,22 +420,34 @@
               wireRelationshipCountButtons(counts, { targetUid: profileUid });
             }
           }
-          const relProfile = {
-            ...u,
-            uid: profileUid,
-            profileType: data.profile?.profileType || u.profileType || u.profile?.profileType || 'personal',
-            name: data.profile?.name || u.name || uname || 'Chaupaal member',
-          };
-          const visitContext = context === 'peepal' || context === 'duniya' ? context : 'profile';
-          if (typeof wireProfileRelationshipActions === 'function') {
-            wireProfileRelationshipActions(sheet.querySelector('[data-rel-actions]'), relProfile, {
-              context: visitContext,
-            });
-          }
         })
-        .catch(() => {});
+        .catch(() => {
+          const counts = sheet.querySelector('[data-public-profile-counts]');
+          if (counts) counts.innerHTML = '<span class="public-profile-chrome-label">Connections</span>';
+        });
     }
     sheet.querySelector('[data-public-profile-hi]')?.addEventListener('click', async () => {
+      if (!profileUid) {
+        if (typeof showToast === 'function') showToast('Could not open chat');
+        return;
+      }
+      if (typeof openDmWithSharedHello === 'function') {
+        sheet.remove();
+        await openDmWithSharedHello({
+          uid: profileUid,
+          name: u.name || uname || 'Chaupaal member',
+          avatar: u.avatar || u.photoURL || '👤',
+          theirIcebreakers: u.icebreakers || u.profile?.icebreakers || [],
+          origin: 'profile',
+          peerProfileType: relProfile.profileType,
+          matchMeta: {
+            teenMode: u.teenMode,
+            isMinor: u.isMinor,
+            age: u.age,
+          },
+        });
+        return;
+      }
       if (typeof assertCanMessage === 'function') {
         const ok = await assertCanMessage({
           uid: profileUid,
@@ -436,14 +460,18 @@
         if (!ok) return;
       }
       sheet.remove();
+      const chatId =
+        typeof dmChatIdFor === 'function' ? dmChatIdFor(profileUid) : `chat_profile_${profileUid}`;
       const chat = {
-        id: `chat_profile_${profileUid || uname}`,
+        id: chatId || `chat_profile_${profileUid}`,
+        firestoreId: chatId || undefined,
         type: 'dm',
         name: u.name || uname || 'Chaupaal member',
         avatar: u.avatar || '👤',
         uid: profileUid,
         peerUid: profileUid,
-        preview: 'Opened from discovery',
+        participants: currentUser?.uid ? [currentUser.uid, profileUid].sort() : [profileUid],
+        preview: 'Opened from profile',
         time: 'now',
         unread: 0,
         theirIcebreakers: u.icebreakers || [],
@@ -451,6 +479,15 @@
         isMinor: u.isMinor,
         age: u.age,
       };
+      if (typeof ensurePeerDmChat === 'function') {
+        try {
+          const id = await ensurePeerDmChat(profileUid);
+          if (id) {
+            chat.id = id;
+            chat.firestoreId = id;
+          }
+        } catch (e) {}
+      }
       if (typeof SAMPLE_CHATS !== 'undefined' && !SAMPLE_CHATS.find((c) => c.id === chat.id)) SAMPLE_CHATS.unshift(chat);
       switchTab('baithak');
       setTimeout(() => {
