@@ -44,6 +44,8 @@
       .join(' · ')}`;
   }
 
+  const ensuredDmIds = new Set();
+
   function dmChatIdFor(peerUid) {
     const me = typeof currentUser !== 'undefined' ? currentUser?.uid : '';
     const peer = String(peerUid || '').trim();
@@ -55,6 +57,7 @@
   async function ensurePeerDmChat(peerUid, extras) {
     const chatId = dmChatIdFor(peerUid);
     if (!chatId || typeof db === 'undefined' || !db) return chatId;
+    if (ensuredDmIds.has(chatId) && !extras) return chatId;
     const ref = db.collection('chats').doc(chatId);
     const snap = await ref.get();
     if (!snap.exists) {
@@ -69,6 +72,7 @@
         ...(extras && typeof extras === 'object' ? extras : {}),
       });
     }
+    ensuredDmIds.add(chatId);
     return chatId;
   }
 

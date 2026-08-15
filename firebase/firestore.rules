@@ -288,14 +288,16 @@ service cloud.firestore {
       allow create: if isOwner(userId)
         && !('hiddenFromDiscovery' in request.resource.data
              && request.resource.data.hiddenFromDiscovery == true)
-        && !request.resource.data.keys().hasAny(['email', 'phone', 'phoneNumber', 'dob', 'dateOfBirth']);
+        && !request.resource.data.keys().hasAny(['email', 'phone', 'phoneNumber', 'dob', 'dateOfBirth', 'relationshipCounts']);
       allow update: if isOwner(userId)
         && (
           !('hiddenFromDiscovery' in resource.data)
           || request.resource.data.hiddenFromDiscovery == resource.data.hiddenFromDiscovery
         )
-        // PII must never land on the world-readable public doc
-        && !request.resource.data.keys().hasAny(['email', 'phone', 'phoneNumber', 'dob', 'dateOfBirth']);
+        // PII must never land on the world-readable public doc.
+        // relationshipCounts are Admin-only (follow graph); clients must not clobber them.
+        && !request.resource.data.keys().hasAny(['email', 'phone', 'phoneNumber', 'dob', 'dateOfBirth'])
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['relationshipCounts']);
       allow delete: if isOwner(userId);
     }
 

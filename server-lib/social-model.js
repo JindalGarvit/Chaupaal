@@ -26,20 +26,44 @@ function primaryRelationshipMode({ context = '', profileType = 'personal' } = {}
  * Count deltas when A adds or removes the A→B follow edge.
  * Returns { from: {friends,followers,following}, to: {...} } relative to A=from, B=to.
  */
+function emptyCountDelta() {
+  return { friends: 0, followers: 0, following: 0 };
+}
+
 function countDeltasForFollowChange({ alreadyFollowing = false, reverseExists = false, follow = true } = {}) {
-  const empty = { friends: 0, followers: 0, following: 0 };
   if (follow) {
-    if (alreadyFollowing) return { from: { ...empty }, to: { ...empty } };
+    if (alreadyFollowing) return { from: emptyCountDelta(), to: emptyCountDelta() };
     return {
       from: { friends: reverseExists ? 1 : 0, followers: 0, following: 1 },
       to: { friends: reverseExists ? 1 : 0, followers: 1, following: 0 },
     };
   }
-  if (!alreadyFollowing) return { from: { ...empty }, to: { ...empty } };
+  if (!alreadyFollowing) return { from: emptyCountDelta(), to: emptyCountDelta() };
   return {
     from: { friends: reverseExists ? -1 : 0, followers: 0, following: -1 },
     to: { friends: reverseExists ? -1 : 0, followers: -1, following: 0 },
   };
+}
+
+/**
+ * Count deltas to make A↔B mutual follows (Friends).
+ * aFollowsB = A already follows B; bFollowsA = B already follows A.
+ */
+function countDeltasForMutualFollow({ aFollowsB = false, bFollowsA = false } = {}) {
+  if (aFollowsB && bFollowsA) return { a: emptyCountDelta(), b: emptyCountDelta() };
+  const a = emptyCountDelta();
+  const b = emptyCountDelta();
+  if (!aFollowsB) {
+    a.following += 1;
+    b.followers += 1;
+  }
+  if (!bFollowsA) {
+    b.following += 1;
+    a.followers += 1;
+  }
+  a.friends += 1;
+  b.friends += 1;
+  return { a, b };
 }
 
 function canViewStory({
@@ -67,5 +91,7 @@ module.exports = {
   deriveRelationshipState,
   primaryRelationshipMode,
   countDeltasForFollowChange,
+  countDeltasForMutualFollow,
+  emptyCountDelta,
   canViewStory,
 };

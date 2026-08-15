@@ -66,38 +66,43 @@
     return data.states || {};
   }
 
+  function emitRelationshipChanged(targetUid, data) {
+    if (data?.state) cache.set(targetUid, data.state);
+    document.dispatchEvent(
+      new CustomEvent('chaupaal:relationship-changed', {
+        detail: {
+          targetUid,
+          state: relationshipState(targetUid),
+          counts: data?.counts || null,
+          targetCounts: data?.targetCounts || null,
+          autoAccepted: !!data?.autoAccepted,
+        },
+      })
+    );
+  }
+
   async function setFollowing(targetUid, enabled, source) {
     if (!requireRelationshipUser()) throw new Error('Sign in required');
     const data = await callRelationship(enabled ? 'follow' : 'unfollow', {
       targetUid,
       source: source || 'profile',
     });
-    cache.set(targetUid, data.state || defaultState());
+    emitRelationshipChanged(targetUid, data);
     if (enabled && typeof haptic === 'function') haptic('success');
-    document.dispatchEvent(
-      new CustomEvent('chaupaal:relationship-changed', {
-        detail: { targetUid, state: relationshipState(targetUid) },
-      })
-    );
     return relationshipState(targetUid);
   }
 
   async function requestFriend(targetUid) {
     if (!requireRelationshipUser()) throw new Error('Sign in required');
     const data = await callRelationship('request_friend', { targetUid });
-    cache.set(targetUid, data.state || defaultState());
-    document.dispatchEvent(
-      new CustomEvent('chaupaal:relationship-changed', {
-        detail: { targetUid, state: relationshipState(targetUid), autoAccepted: !!data.autoAccepted },
-      })
-    );
+    emitRelationshipChanged(targetUid, data);
     return { state: relationshipState(targetUid), accepted: !!data.accepted, autoAccepted: !!data.autoAccepted };
   }
 
   async function cancelFriendRequest(targetUid) {
     if (!requireRelationshipUser()) throw new Error('Sign in required');
     const data = await callRelationship('cancel_friend_request', { targetUid });
-    cache.set(targetUid, data.state || defaultState());
+    emitRelationshipChanged(targetUid, data);
     return relationshipState(targetUid);
   }
 
@@ -107,14 +112,14 @@
       targetUid: requesterUid,
       accept: !!accept,
     });
-    cache.set(requesterUid, data.state || defaultState());
+    emitRelationshipChanged(requesterUid, data);
     return relationshipState(requesterUid);
   }
 
   async function removeFollower(followerUid) {
     if (!requireRelationshipUser()) throw new Error('Sign in required');
     const data = await callRelationship('remove_follower', { targetUid: followerUid });
-    cache.set(followerUid, data.state || defaultState());
+    emitRelationshipChanged(followerUid, data);
     return relationshipState(followerUid);
   }
 
@@ -141,6 +146,29 @@
         <button type="button" data-relationship-list="following"><strong>${Number(c.following) || 0}</strong><span>Following</span></button>
       </div>`;
   }
+
+  function paintRelationshipCounts(host, counts, targetUid) {
+    if (!host) return;
+    const uid = targetUid || (typeof currentUser !== 'undefined' ? currentUser?.uid : '');
+    if (uid) host.setAttribute('data-rel-counts-uid', uid);
+    host.innerHTML = relationshipCountsHtml(counts);
+    wireRelationshipCountButtons(host, { targetUid: targetUid && targetUid !== currentUser?.uid ? targetUid : undefined });
+  }
+
+  function paintRelationshipCountsFor(uid, counts) {
+    if (!uid || !counts) return;
+    document.querySelectorAll(`[data-rel-counts-uid="${uid}"]`).forEach((host) => {
+      paintRelationshipCounts(host, counts, uid);
+    });
+  }
+
+  document.addEventListener('chaupaal:relationship-changed', (event) => {
+    const me = typeof currentUser !== 'undefined' ? currentUser?.uid : '';
+    if (me && event.detail?.counts) paintRelationshipCountsFor(me, event.detail.counts);
+    if (event.detail?.targetUid && event.detail?.targetCounts) {
+      paintRelationshipCountsFor(event.detail.targetUid, event.detail.targetCounts);
+    }
+  });
 
   function friendActionLabel(state) {
     if (state.friend) return '✓ Friends';
@@ -170,6 +198,24 @@
           openProfilePeek(profile, { uid: profile.uid, username: profile.username });
         } else if (typeof openPublicProfile === 'function') {
           openPublicProfile(profile, { uid: profile.uid, username: profile.username });
+        }
+      },
+    });
+    actions.push({
+      label: 'Message',
+      icon: 'message-circle',
+      hint: 'Open a private chat. Photos, files, and challenges attach in the thread.',
+      fn: async () => {
+        if (typeof openDmWithSharedHello === 'function') {
+          await openDmWithSharedHello({
+            uid: profile.uid,
+            name,
+            avatar: profile.photoURL || profile.avatar,
+            theirIcebreakers: profile.icebreakers,
+            peerProfileType: profile.profileType,
+          });
+        } else if (typeof showToast === 'function') {
+          showToast('Open Baithak to message');
         }
       },
     });
@@ -248,7 +294,7 @@
       actions.push({
         label: 'Follow',
         icon: 'user-plus',
-        hint: 'One-way follow. If they follow you back, you become Friends automatically.',
+        hint: 'One-way follow. If they follow you back — or already sent you a friend request — you become Friends.',
         fn: async () => {
           const next = await setFollowing(profile.uid, true, 'profile_menu');
           showToast(next.friend?t('rel_now_friends_named',{name}):t('rel_following_named',{name}));
@@ -345,6 +391,8 @@
    */
   async function wireProfileRelationshipActions(host, profile, { context = '' } = {}) {
     if (!host || !profile?.uid) return;
+    if (host.dataset.relWired === profile.uid) return;
+    host.dataset.relWired = profile.uid;
     const primaryBtn = host.querySelector('[data-rel-primary]');
     const moreBtn = host.querySelector('[data-rel-more]');
     if (!cache.has(profile.uid)) {
@@ -405,6 +453,7 @@
       onLongPress(primaryBtn, () => openRelationshipMenu(profile, { title: 'Connect' }));
     }
     document.addEventListener('chaupaal:relationship-changed', (event) => {
+      if (!host.isConnected) return;
       if (event.detail?.targetUid === profile.uid) paint();
     });
   }
@@ -597,13 +646,8 @@
     const countsHost = root.querySelector('[data-profile-relationship-counts]');
     const requestsHost = root.querySelector('[data-friend-requests]');
     try {
-      // Keep denormalized counters honest during pre-launch testing.
-      await callRelationship('recompute_counts').catch(() => null);
       const data = await loadRelationshipProfile();
-      if (countsHost) {
-        countsHost.innerHTML = relationshipCountsHtml(data.counts);
-        wireRelationshipCountButtons(countsHost);
-      }
+      if (countsHost) paintRelationshipCounts(countsHost, data.counts, currentUser.uid);
     } catch (error) {
       if (countsHost) countsHost.textContent = 'Relationship counts unavailable';
     }
@@ -627,16 +671,23 @@
         requestsHost.querySelectorAll('[data-request-accept]').forEach((button) => {
           button.addEventListener('click', async () => {
             const row = button.closest('[data-request-uid]');
-            await respondFriend(row.dataset.requestUid, true);
-            row.remove();
-            mountOwnRelationshipPanel(root);
+            try {
+              await respondFriend(row.dataset.requestUid, true);
+              row.remove();
+            } catch (e) {
+              if (typeof showToast === 'function') showToast(e?.message || t('rel_update_fail'));
+            }
           });
         });
         requestsHost.querySelectorAll('[data-request-decline]').forEach((button) => {
           button.addEventListener('click', async () => {
             const row = button.closest('[data-request-uid]');
-            await respondFriend(row.dataset.requestUid, false);
-            row.remove();
+            try {
+              await respondFriend(row.dataset.requestUid, false);
+              row.remove();
+            } catch (e) {
+              if (typeof showToast === 'function') showToast(e?.message || t('rel_update_fail'));
+            }
           });
         });
       } catch (error) {
@@ -654,6 +705,7 @@
   window.removeFollower = removeFollower;
   window.setCloseFriend = setCloseFriend;
   window.loadRelationshipProfile = loadRelationshipProfile;
+  window.paintRelationshipCounts = paintRelationshipCounts;
   window.relationshipCountsHtml = relationshipCountsHtml;
   window.wireFriendAction = wireFriendAction;
   window.wireProfileRelationshipActions = wireProfileRelationshipActions;

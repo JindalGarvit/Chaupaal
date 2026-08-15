@@ -320,6 +320,14 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment){
     const peer=id.replace(/^chat_(profile|disc)_/, '');
     const real=await ensurePeerDmChat(peer);
     if(real) id=real;
+  } else if(!isGroup && typeof ensurePeerDmChat==='function' && typeof dmChatIdFor==='function'){
+    const open=window.currentOpenChat;
+    const peer=open&&(open.uid||open.peerUid||open.otherUid);
+    const expected=peer?dmChatIdFor(peer):'';
+    if(peer && (id===expected || id===open?.id || id===open?.firestoreId)){
+      const real=await ensurePeerDmChat(peer);
+      if(real) id=real;
+    }
   }
   if(id.startsWith('chat_self_') && typeof ensureSelfChatDoc==='function'){
     await ensureSelfChatDoc();

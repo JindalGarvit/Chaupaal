@@ -20,6 +20,7 @@ const { checkActionRateLimit } = require('../server-lib/rate-limit');
 const {
   deriveRelationshipState,
   countDeltasForFollowChange,
+  countDeltasForMutualFollow,
 } = require('../server-lib/social-model');
 const { applyFlagSignal, applyBlockSignal, maybeDecayShadowban } = require('../server-lib/shadowban');
 const { logMatchEngagement } = require('../server-lib/intent-weights');
@@ -95,49 +96,77 @@ function clearCloseFriendsPair(tx, db, a, b) {
   tx.delete(db.collection('users').doc(b).collection('close_friends').doc(a));
 }
 
+function writeFollowEdge(tx, db, admin, fromUid, toUid, source) {
+  const refs = edgeRefs(db, fromUid, toUid);
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const src = String(source || 'follow').slice(0, 40);
+  tx.set(refs.following, { uid: toUid, source: src, createdAt: now }, { merge: true });
+  tx.set(
+    refs.follower,
+    { uid: fromUid, source: src, createdAt: now },
+    { merge: true }
+  );
+}
+
 async function setFollow(db, admin, fromUid, toUid, follow, source) {
   if (fromUid === toUid) throw new Error('SELF_RELATIONSHIP');
   await ensureTarget(db, toUid);
   if (follow && (await isBlockedPair(db, fromUid, toUid))) throw new Error('RELATIONSHIP_BLOCKED');
   const refs = edgeRefs(db, fromUid, toUid);
   const reverse = edgeRefs(db, toUid, fromUid);
+  const incomingFromTarget = requestRefs(db, toUid, fromUid).incoming;
 
   await db.runTransaction(async (tx) => {
-    const [mineSnap, theirsSnap] = await Promise.all([tx.get(refs.following), tx.get(reverse.following)]);
+    const [mineSnap, theirsSnap, incomingSnap] = await Promise.all([
+      tx.get(refs.following),
+      tx.get(reverse.following),
+      tx.get(incomingFromTarget),
+    ]);
     const alreadyFollowing = mineSnap.exists;
     const reverseExists = theirsSnap.exists;
-    const deltas = countDeltasForFollowChange({ alreadyFollowing, reverseExists, follow: !!follow });
 
     if (follow) {
-      if (!alreadyFollowing) {
-        const data = {
-          uid: toUid,
-          source: String(source || 'follow').slice(0, 40),
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        };
-        tx.set(refs.following, data, { merge: true });
-        tx.set(
-          refs.follower,
-          {
-            uid: fromUid,
-            source: data.source,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          },
-          { merge: true }
-        );
+      // They already asked to be Friends — following them completes both edges.
+      const completeMutual = incomingSnap.exists && !(alreadyFollowing && reverseExists);
+      if (completeMutual) {
+        const deltas = countDeltasForMutualFollow({
+          aFollowsB: alreadyFollowing,
+          bFollowsA: reverseExists,
+        });
+        if (!alreadyFollowing) writeFollowEdge(tx, db, admin, fromUid, toUid, source || 'follow');
+        if (!reverseExists) writeFollowEdge(tx, db, admin, toUid, fromUid, 'friend_accept');
+        clearRequestPair(tx, db, fromUid, toUid);
+        applyCountDelta(tx, db, admin, fromUid, deltas.a);
+        applyCountDelta(tx, db, admin, toUid, deltas.b);
+        return;
       }
-      // Mutual follow → Friends: drop any stale pending requests both ways.
+
+      const deltas = countDeltasForFollowChange({ alreadyFollowing, reverseExists, follow: true });
+      if (!alreadyFollowing) writeFollowEdge(tx, db, admin, fromUid, toUid, source || 'follow');
       if (reverseExists) clearRequestPair(tx, db, fromUid, toUid);
-    } else if (alreadyFollowing) {
-      tx.delete(refs.following);
-      tx.delete(refs.follower);
-      // Close Friends is a private subset of Friends — unfollow breaks CF both ways.
-      clearCloseFriendsPair(tx, db, fromUid, toUid);
+      applyCountDelta(tx, db, admin, fromUid, deltas.from);
+      applyCountDelta(tx, db, admin, toUid, deltas.to);
+      return;
     }
 
+    const deltas = countDeltasForFollowChange({ alreadyFollowing, reverseExists, follow: false });
+    if (alreadyFollowing) {
+      tx.delete(refs.following);
+      tx.delete(refs.follower);
+      clearCloseFriendsPair(tx, db, fromUid, toUid);
+    }
     applyCountDelta(tx, db, admin, fromUid, deltas.from);
     applyCountDelta(tx, db, admin, toUid, deltas.to);
   });
+}
+
+async function mutationResult(db, uid, targetUid) {
+  const [state, counts, targetCounts] = await Promise.all([
+    relationshipState(db, uid, targetUid),
+    recomputeCounts(db, uid),
+    recomputeCounts(db, targetUid),
+  ]);
+  return { state, counts, targetCounts };
 }
 
 async function relationshipState(db, uid, targetUid) {
@@ -316,33 +345,14 @@ async function respondFriend(db, admin, uid, requesterUid, accept) {
       const mine = edgeRefs(db, uid, requesterUid);
       const theirs = edgeRefs(db, requesterUid, uid);
       const [mineSnap, theirsSnap] = await Promise.all([tx.get(mine.following), tx.get(theirs.following)]);
-      const now = admin.firestore.FieldValue.serverTimestamp();
-
-      // Ensure uid → requester
-      if (!mineSnap.exists) {
-        const d = countDeltasForFollowChange({
-          alreadyFollowing: false,
-          reverseExists: theirsSnap.exists,
-          follow: true,
-        });
-        tx.set(mine.following, { uid: requesterUid, source: 'friend_accept', createdAt: now }, { merge: true });
-        tx.set(mine.follower, { uid, source: 'friend_accept', createdAt: now }, { merge: true });
-        applyCountDelta(tx, db, admin, uid, d.from);
-        applyCountDelta(tx, db, admin, requesterUid, d.to);
-      }
-
-      // Ensure requester → uid (reverse now exists after the block above, or already did)
-      if (!theirsSnap.exists) {
-        const d = countDeltasForFollowChange({
-          alreadyFollowing: false,
-          reverseExists: true,
-          follow: true,
-        });
-        tx.set(theirs.following, { uid, source: 'friend_accept', createdAt: now }, { merge: true });
-        tx.set(theirs.follower, { uid: requesterUid, source: 'friend_accept', createdAt: now }, { merge: true });
-        applyCountDelta(tx, db, admin, requesterUid, d.from);
-        applyCountDelta(tx, db, admin, uid, d.to);
-      }
+      const deltas = countDeltasForMutualFollow({
+        aFollowsB: mineSnap.exists,
+        bFollowsA: theirsSnap.exists,
+      });
+      if (!mineSnap.exists) writeFollowEdge(tx, db, admin, uid, requesterUid, 'friend_accept');
+      if (!theirsSnap.exists) writeFollowEdge(tx, db, admin, requesterUid, uid, 'friend_accept');
+      applyCountDelta(tx, db, admin, uid, deltas.a);
+      applyCountDelta(tx, db, admin, requesterUid, deltas.b);
     }
 
     tx.delete(incoming);
@@ -556,18 +566,19 @@ module.exports = async function handler(req, res) {
         try {
           const { upsertNotification, resolveActor } = require('../server-lib/notifications');
           const actor = await resolveActor(admin, user.uid);
+          const state = await relationshipState(db, user.uid, targetUid);
           await upsertNotification(admin, targetUid, {
-            type: 'follow',
+            type: state.friend ? 'friend_accept' : 'follow',
             refId: user.uid,
             actor,
-            preview: 'started following you',
+            preview: state.friend ? 'you are now Friends' : 'started following you',
             deepLink: { uid: user.uid },
           });
         } catch (e) {
           console.warn('[relationships] notif follow', e?.message || e);
         }
       }
-      return sendSuccess(res, { state: await relationshipState(db, user.uid, targetUid) });
+      return sendSuccess(res, await mutationResult(db, user.uid, targetUid));
     }
     if (action === 'request_friend') {
       if (!targetUid) return sendError(res, 400, 'VALIDATION_ERROR', 'targetUid required');
@@ -587,17 +598,19 @@ module.exports = async function handler(req, res) {
           console.warn('[relationships] notif friend_request', e?.message || e);
         }
       }
-      return sendSuccess(res, out);
+      const pair = await mutationResult(db, user.uid, targetUid);
+      return sendSuccess(res, { ...out, ...pair, state: pair.state });
     }
     if (action === 'cancel_friend_request') {
       if (!targetUid) return sendError(res, 400, 'VALIDATION_ERROR', 'targetUid required');
-      return sendSuccess(res, { state: await cancelFriendRequest(db, user.uid, targetUid) });
+      await cancelFriendRequest(db, user.uid, targetUid);
+      return sendSuccess(res, await mutationResult(db, user.uid, targetUid));
     }
     if (action === 'respond_friend') {
       if (!targetUid || typeof body.accept !== 'boolean') {
         return sendError(res, 400, 'VALIDATION_ERROR', 'requester targetUid and accept required');
       }
-      const state = await respondFriend(db, admin, user.uid, targetUid, body.accept);
+      await respondFriend(db, admin, user.uid, targetUid, body.accept);
       if (body.accept) {
         try {
           const { upsertNotification, resolveActor, markNotificationRead, makeBundleId } = require('../server-lib/notifications');
@@ -620,11 +633,12 @@ module.exports = async function handler(req, res) {
           await markNotificationRead(admin, user.uid, makeBundleId('friend_request', targetUid));
         } catch (e) {}
       }
-      return sendSuccess(res, { state });
+      return sendSuccess(res, await mutationResult(db, user.uid, targetUid));
     }
     if (action === 'remove_follower') {
       if (!targetUid) return sendError(res, 400, 'VALIDATION_ERROR', 'targetUid required');
-      return sendSuccess(res, { state: await removeFollower(db, admin, user.uid, targetUid) });
+      await removeFollower(db, admin, user.uid, targetUid);
+      return sendSuccess(res, await mutationResult(db, user.uid, targetUid));
     }
     if (action === 'set_close_friend') {
       if (!targetUid || typeof body.enabled !== 'boolean') {

@@ -34,7 +34,6 @@
     'intents',
     'occupation',
     'personality',
-    'relationshipCounts',
     'profile', // nested public-ish profile slice (sanitized below)
   ];
 

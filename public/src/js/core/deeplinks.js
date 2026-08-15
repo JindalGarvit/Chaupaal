@@ -185,7 +185,7 @@
                   .join('')}</div>`
               : ''
           }
-          <div data-public-profile-counts class="relationship-counts-loading public-profile-chrome-slot">
+          <div data-public-profile-counts data-rel-counts-uid="${esc(profileUid)}" class="relationship-counts-loading public-profile-chrome-slot">
             <span class="public-profile-chrome-label">Connections</span>
             <span>Loading…</span>
           </div>
@@ -414,7 +414,9 @@
       loadRelationshipProfile(profileUid)
         .then((data) => {
           const counts = sheet.querySelector('[data-public-profile-counts]');
-          if (counts) {
+          if (counts && typeof paintRelationshipCounts === 'function') {
+            paintRelationshipCounts(counts, data.counts, profileUid);
+          } else if (counts) {
             counts.innerHTML = relationshipCountsHtml(data.counts);
             if (typeof wireRelationshipCountButtons === 'function') {
               wireRelationshipCountButtons(counts, { targetUid: profileUid });

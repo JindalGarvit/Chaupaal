@@ -4,6 +4,7 @@ const {
   canViewStory,
   primaryRelationshipMode,
   countDeltasForFollowChange,
+  countDeltasForMutualFollow,
 } = require('../server-lib/social-model');
 
 function test(name, fn) {
@@ -71,6 +72,27 @@ test('unfollow from mutual decrements friends', () => {
       to: { friends: -1, followers: -1, following: 0 },
     }
   );
+});
+
+test('completing a one-way follow into mutual increments friends and the reverse edge', () => {
+  assert.deepStrictEqual(countDeltasForMutualFollow({ aFollowsB: true, bFollowsA: false }), {
+    a: { friends: 1, followers: 1, following: 0 },
+    b: { friends: 1, followers: 0, following: 1 },
+  });
+});
+
+test('accepting a request with no edges yet increments following, followers, and friends both ways', () => {
+  assert.deepStrictEqual(countDeltasForMutualFollow({ aFollowsB: false, bFollowsA: false }), {
+    a: { friends: 1, followers: 1, following: 1 },
+    b: { friends: 1, followers: 1, following: 1 },
+  });
+});
+
+test('already-friends mutual follow is a no-op for counts', () => {
+  assert.deepStrictEqual(countDeltasForMutualFollow({ aFollowsB: true, bFollowsA: true }), {
+    a: { friends: 0, followers: 0, following: 0 },
+    b: { friends: 0, followers: 0, following: 0 },
+  });
 });
 
 test('idempotent follow is a no-op for counts', () => {
