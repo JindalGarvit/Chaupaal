@@ -162,7 +162,8 @@ function openChatScreen(chat){
           :(isChaupaal
             ?`<button class="chat-header-btn chat-header-btn--labeled" id="chatJournalBtn" title="${typeof t==='function'?t('chaupaal_journal','Journal'):'Journal'}" aria-label="Journal"><span class="chat-header-btn-ico">${typeof iconHtml==='function'?iconHtml('notebook',{size:18}):''}</span><span class="chat-header-btn-label">${typeof t==='function'?t('chaupaal_journal','Journal'):'Journal'}</span></button>
               <button class="chat-header-btn chat-header-btn--labeled" id="chatFeedbackBtn" title="Feedback" aria-label="Feedback"><span class="chat-header-btn-ico">${typeof iconHtml==='function'?iconHtml('message-square',{size:18}):''}</span><span class="chat-header-btn-label">Feedback</span></button>`
-            :`<button class="chat-header-btn mehfil-entry" id="chatMehfilBtn" title="${typeof t==='function'?t('mehfil_title'):'Mehfil'}" aria-label="${typeof t==='function'?t('mehfil_title'):'Mehfil'}">${typeof mehfilMarkHtml==='function'?mehfilMarkHtml(20):(typeof iconHtml==='function'?iconHtml('home',{size:18}):'🏠')}</button>`)}
+            :`<button class="chat-header-btn mehfil-entry" id="chatMehfilBtn" title="${typeof t==='function'?t('mehfil_title'):'Mehfil'}" aria-label="${typeof t==='function'?t('mehfil_title'):'Mehfil'}">${typeof mehfilMarkHtml==='function'?mehfilMarkHtml(20):(typeof iconHtml==='function'?iconHtml('home',{size:18}):'🏠')}</button>
+            <button class="chat-header-btn" id="chatMehfilRingBtn" title="${typeof t==='function'?t('mehfil_ring','Ring'):'Ring'}" aria-label="${typeof t==='function'?t('mehfil_ring','Ring'):'Ring'}">${typeof iconHtml==='function'?iconHtml('phone',{size:18}):'☎'}</button>`)}
         ${!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatChallengeBtn" title="Create challenge" aria-label="Create challenge">${typeof iconHtml==='function'?iconHtml('target',{size:18}):'🎯'}</button>`:''}
         ${!isGroup&&!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatMuqabalaBtn" title="Muqabala" aria-label="Muqabala">${typeof iconHtml==='function'?iconHtml('swords',{size:18}):'⚔️'}</button>`:''}
       </div>
@@ -606,6 +607,11 @@ function openChatScreen(chat){
   }
   document.getElementById('chatMehfilBtn')?.addEventListener('click', () => {
     if (typeof openMehfil === 'function') openMehfil(chat);
+    else if (typeof showToast === 'function') showToast('Mehfil loading…');
+  });
+  document.getElementById('chatMehfilRingBtn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (typeof startMehfilRing === 'function') startMehfilRing(chat);
     else if (typeof showToast === 'function') showToast('Mehfil loading…');
   });
   document.getElementById('mehfilLiveJoin')?.addEventListener('click', () => {

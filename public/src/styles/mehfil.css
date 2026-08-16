@@ -580,7 +580,59 @@
 .mehfil-main{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;position:relative;overflow:hidden;}
 .mehfil-overlay.mehfil-sidebar-collapsed .mehfil-sidebar{display:none;}
 
-html.quiet-mode .mehfil-float-react{animation:none;opacity:.85;}
+.mehfil-media-sheet{
+  max-height:52%;
+}
+.mehfil-yt-results{display:flex;flex-direction:column;gap:8px;max-height:28vh;overflow:auto;}
+.mehfil-yt-results[hidden]{display:none!important;}
+.mehfil-yt-empty-copy{padding:8px 4px;font-size:13px;opacity:.8;}
+.mehfil-ring-btn{
+  display:inline-flex;align-items:center;gap:6px;
+  min-height:44px;padding:0 12px;margin-left:auto;margin-right:8px;
+  border:none;border-radius:999px;cursor:pointer;
+  background:rgba(255,255,255,.12);color:inherit;font-weight:700;font-size:12px;
+}
+.mehfil-incoming{
+  position:absolute;inset:0;z-index:160;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(8,10,14,.72);
+}
+.mehfil-incoming-card{
+  width:min(320px,88%);
+  background:#16181d;color:#fff;border-radius:20px;padding:24px 20px;
+  text-align:center;box-shadow:0 16px 40px rgba(0,0,0,.4);
+}
+.mehfil-incoming-avatar{
+  width:72px;height:72px;border-radius:50%;margin:12px auto;
+  background:rgba(255,255,255,.12);display:grid;place-items:center;
+  font-size:28px;overflow:hidden;
+}
+.mehfil-incoming-avatar img{width:100%;height:100%;object-fit:cover;}
+.mehfil-incoming-name{font-weight:800;font-size:18px;}
+.mehfil-incoming-sub{opacity:.7;margin:6px 0 18px;font-size:13px;}
+.mehfil-incoming-actions{display:flex;gap:10px;}
+.mehfil-incoming-actions button{
+  flex:1;min-height:44px;border:none;border-radius:12px;font-weight:700;cursor:pointer;
+}
+.mehfil-incoming-decline{background:rgba(255,255,255,.12);color:#fff;}
+.mehfil-incoming-accept{background:var(--green,#2A9D8F);color:#04110e;}
+.mehfil-ring-pick{
+  position:absolute;inset:0;z-index:155;
+  display:flex;align-items:flex-end;justify-content:center;
+  background:rgba(8,10,14,.55);
+}
+.mehfil-ring-pick-card{
+  width:100%;max-height:70%;overflow:auto;
+  background:#16181d;color:#fff;border-radius:18px 18px 0 0;padding:16px;
+}
+.mehfil-ring-pick-all,.mehfil-ring-pick-actions button{
+  min-height:44px;width:100%;border:none;border-radius:12px;margin:8px 0;cursor:pointer;font-weight:700;
+}
+.mehfil-ring-pick-all{background:var(--red,#e63946);color:#fff;}
+.mehfil-ring-pick-row{display:flex;align-items:center;gap:10px;min-height:44px;}
+.mehfil-ring-pick-actions{display:flex;gap:8px;}
+.mehfil-ring-pick-actions button{flex:1;}
+
 html.quiet-mode .chat-header-btn.mehfil-entry.is-live::after{animation:none;}
 
 @media (max-width:420px){

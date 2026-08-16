@@ -262,33 +262,37 @@ async function handlePost(req, res) {
   }
 
   if (action === 'youtube_search') {
+    try {
+      const { checkActionRateLimit } = require('../server-lib/rate-limit');
+      const rate = await checkActionRateLimit(user.uid, 'youtube_search');
+      if (!rate.ok) {
+        return sendError(res, 429, 'RATE_LIMITED', 'Too many YouTube searches. Try again shortly.');
+      }
+    } catch (e) {
+      console.warn('[media-config] youtube_search rate-limit', e?.message || e);
+    }
     const query = String(body.query || '').trim();
     if (query.length < 1) {
       return sendError(res, 400, 'VALIDATION_ERROR', 'query is required');
     }
-    // Day-one: no YouTube Data API key required — return empty so client shows paste-link UX
-    // Extension: set YOUTUBE_API_KEY and wire googleapis search here.
-    const key = typeof process.env.YOUTUBE_API_KEY === 'string' ? process.env.YOUTUBE_API_KEY.trim() : '';
-    if (!key) {
-      return sendSuccess(res, { results: [], provider: null });
+    if (query.length > 120) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'query too long');
     }
     try {
-      const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=${Math.min(
-        10,
-        Number(body.limit) || 8
-      )}&q=${encodeURIComponent(query)}&key=${encodeURIComponent(key)}`;
-      const resp = await fetch(url);
-      const data = await resp.json();
-      const results = (data.items || []).map((it) => ({
-        id: it.id?.videoId,
-        title: it.snippet?.title,
-        channel: it.snippet?.channelTitle,
-        thumb: it.snippet?.thumbnails?.medium?.url || it.snippet?.thumbnails?.default?.url,
-      })).filter((r) => r.id);
-      return sendSuccess(res, { results, provider: 'youtube' });
+      const { searchYoutube } = require('../server-lib/youtube-search');
+      const adminApp = initAdmin();
+      const result = await searchYoutube(adminApp, { query, limit: body.limit });
+      return sendSuccess(res, result, { meta: { cached: !!result.cached } });
     } catch (e) {
       console.warn('[media-config] youtube_search', e?.message || e);
-      return sendSuccess(res, { results: [], provider: null });
+      const configured = !!(typeof process.env.YOUTUBE_API_KEY === 'string' && process.env.YOUTUBE_API_KEY.trim());
+      return sendSuccess(res, {
+        results: [],
+        configured,
+        provider: configured ? 'youtube' : null,
+        cached: false,
+        error: 'YOUTUBE_ERROR',
+      });
     }
   }
 
@@ -553,6 +557,7 @@ async function handlePost(req, res) {
     action === 'notif_soft_clear' ||
     action === 'notif_prune' ||
     action === 'notif_emit' ||
+    action === 'notif_mehfil_ring' ||
     action === 'notif_dm' ||
     action === 'fcm_config' ||
     action === 'fcm_register' ||
@@ -632,6 +637,39 @@ async function handlePost(req, res) {
           preview: String(body.preview || 'New message').slice(0, 280),
         });
         return sendSuccess(res, result || { skipped: 'none' });
+      }
+      if (action === 'notif_mehfil_ring') {
+        const chatId = String(body.chatId || '').slice(0, 120);
+        const targets = Array.isArray(body.targetUids) ? body.targetUids.map(String).filter(Boolean) : [];
+        if (!chatId || !targets.length) {
+          return sendError(res, 400, 'VALIDATION_ERROR', 'chatId and targetUids required');
+        }
+        const db = adminApp.firestore();
+        const chatSnap = await db.collection('chats').doc(chatId).get();
+        if (!chatSnap.exists) return sendError(res, 404, 'NOT_FOUND', 'Chat not found');
+        const members = chatSnap.data()?.participants || chatSnap.data()?.members || [];
+        const memberSet = new Set(Array.isArray(members) ? members.map(String) : Object.keys(members || {}));
+        if (!memberSet.has(user.uid)) return sendError(res, 403, 'FORBIDDEN', 'Not a chat member');
+        const actor =
+          (await notif.resolveActor(adminApp, user.uid)) ||
+          notif.normalizeActor({
+            uid: user.uid,
+            name: body.fromName || 'Someone',
+            avatar: body.fromAvatar || '🏠',
+          });
+        const unique = [...new Set(targets.filter((uid) => uid !== user.uid && memberSet.has(uid)))].slice(0, 40);
+        await Promise.all(
+          unique.map((recipientUid) =>
+            notif.upsertNotification(adminApp, recipientUid, {
+              type: 'mehfil_ring',
+              refId: chatId,
+              actor,
+              preview: 'Incoming Mehfil',
+              deepLink: { chatId, mehfil: 1 },
+            })
+          )
+        );
+        return sendSuccess(res, { rang: unique.length, targets: unique });
       }
       if (action === 'notif_emit') {
         // Validated emit for content like/comment after client write — checks like/comment ownership
@@ -812,6 +850,7 @@ async function handlePost(req, res) {
       'notif_soft_clear',
       'notif_prune',
       'notif_emit',
+      'notif_mehfil_ring',
       'notif_dm',
       'fcm_config',
       'fcm_register',

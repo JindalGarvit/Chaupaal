@@ -64,7 +64,7 @@ function shouldPruneReadBundle(data, nowMs = Date.now(), maxAgeMs = PRUNE_AGE_MS
 
 function sectionForType(type) {
   const t = String(type || '').toLowerCase();
-  if (['message', 'dm', 'friend_request', 'friend_accept', 'story', 'story_like', 'story_comment'].some((x) => t.includes(x))) {
+  if (['message', 'dm', 'friend_request', 'friend_accept', 'story', 'story_like', 'story_comment', 'mehfil'].some((x) => t.includes(x))) {
     return 'baithak';
   }
   if (['peepal', 'reaction', 'reply', 'mention', 'match'].some((x) => t.includes(x))) return 'peepal';

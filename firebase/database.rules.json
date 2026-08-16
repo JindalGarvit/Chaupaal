@@ -35,6 +35,25 @@
           "$mid": {
             ".validate": "newData.hasChildren(['text', 'by', 'at']) && newData.child('by').val() == auth.uid && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 500"
           }
+        },
+        "ring": {
+          ".write": "auth != null && (!newData.exists() || newData.child('fromUid').val() == auth.uid || data.exists() && data.child('fromUid').val() == auth.uid)",
+          ".validate": "!newData.exists() || (newData.hasChildren(['fromUid', 'chatId', 'ts', 'expiresAt']) && newData.child('fromUid').val() == auth.uid && newData.child('chatId').val() == $chatId)"
+        },
+        "ringAck": {
+          "$uid": {
+            ".write": "auth != null && auth.uid == $uid",
+            ".validate": "!newData.exists() || (newData.hasChildren(['status', 'at']) && newData.child('status').isString())"
+          }
+        }
+      }
+    },
+    "mehfilInbox": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        "$chatId": {
+          ".write": "auth != null && (newData.child('fromUid').val() == auth.uid || (!newData.exists() && auth.uid == $uid))",
+          ".validate": "!newData.exists() || (newData.hasChildren(['fromUid', 'chatId', 'ts', 'expiresAt']) && newData.child('fromUid').val() == auth.uid && newData.child('chatId').val() == $chatId)"
         }
       }
     },

@@ -37,6 +37,8 @@ const LIMITS = {
   media_lookup: { minute: 40, hour: 400 },
   // GIF search (Klipy proxy) — typing debounce still fires often
   gif_search: { minute: 30, hour: 300 },
+  // YouTube Data API Search.list is 100 quota units — keep this tight.
+  youtube_search: { minute: 8, hour: 40 },
 };
 
 let redis = null;

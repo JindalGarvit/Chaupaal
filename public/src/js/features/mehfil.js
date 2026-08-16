@@ -35,8 +35,14 @@
   let ytResyncTimer = null;
   let leaving = false;
   let joinGeneration = 0;
-  let presenceWatchers = new Map(); // chatId → Set<cb>
-  let presenceUnsubs = new Map(); // chatId → unsub
+  const YT_REC_QUERY = 'lofi chill';
+  const RING_TTL_MS = 40000;
+  const RING_COOLDOWN_MS = 15000;
+  let lastRingAt = new Map();
+  let ringInboxUnsub = null;
+  let incomingRingEl = null;
+  let incomingRingClose = null;
+  let ringAckUnsubs = [];
 
   function tt(key, fallback, vars) {
     if (typeof t === 'function') {
@@ -118,6 +124,54 @@
     if (typeof chat.id === 'string' && chat.id.startsWith('chat_chaupaal_')) return true;
     if (typeof chat.id === 'string' && chat.id.startsWith('chat_self')) return true;
     return false;
+  }
+
+  function mehfilRoomTitle(chat) {
+    if (!chat) return tt('mehfil_title', 'Mehfil');
+    if (chat.type === 'group') return chat.name || tt('mehfil_group', 'Group');
+    const me = currentUser?.uid;
+    const peer =
+      chat.uid ||
+      chat.peerUid ||
+      chat.otherUid ||
+      (Array.isArray(chat.participants) ? chat.participants.find((u) => u && u !== me) : null);
+    const mp = peer && chat.memberProfiles && chat.memberProfiles[peer];
+    return (mp && (mp.name || mp.displayName)) || chat.name || tt('mehfil_friend', 'Friend');
+  }
+
+  function peerUidOfChat(chat) {
+    if (!chat) return '';
+    const me = currentUser?.uid;
+    return (
+      chat.uid ||
+      chat.peerUid ||
+      chat.otherUid ||
+      (Array.isArray(chat.participants) ? chat.participants.find((u) => u && u !== me) : '') ||
+      ''
+    );
+  }
+
+  function displayNameForUid(uid) {
+    if (!uid) return tt('mehfil_someone', 'Someone');
+    if (uid === currentUser?.uid) {
+      return userProfile?.name || digitalProfile?.displayName || tt('mehfil_you_label', 'You');
+    }
+    const mp = activeChat?.memberProfiles?.[uid];
+    if (mp?.name || mp?.displayName) return mp.name || mp.displayName;
+    return tt('mehfil_someone', 'Someone');
+  }
+
+  function groupRingMembers(chat) {
+    const me = currentUser?.uid;
+    const ids = Array.isArray(chat?.participants) ? chat.participants.map(String) : [];
+    const profiles = chat?.memberProfiles && typeof chat.memberProfiles === 'object' ? chat.memberProfiles : {};
+    return ids
+      .filter((u) => u && u !== me)
+      .map((uid) => ({
+        uid,
+        name: profiles[uid]?.name || profiles[uid]?.displayName || tt('mehfil_someone', 'Someone'),
+        photo: profiles[uid]?.photoURL || profiles[uid]?.avatar || '',
+      }));
   }
 
   function shellHost() {
@@ -470,7 +524,8 @@
         if (!v?.text) return;
         const row = document.createElement('div');
         row.className = 'mehfil-chat-row' + (v.by === currentUser?.uid ? ' is-me' : '');
-        row.innerHTML = `<span class="mehfil-chat-name">${esc(v.name || 'Someone')}</span><span class="mehfil-chat-text">${esc(v.text)}</span>`;
+        const name = v.name && v.name !== v.by ? v.name : displayNameForUid(v.by);
+        row.innerHTML = `<span class="mehfil-chat-name">${esc(name)}</span><span class="mehfil-chat-text">${esc(v.text)}</span>`;
         msgsEl.appendChild(row);
         msgsEl.scrollTop = msgsEl.scrollHeight;
       };
@@ -630,56 +685,39 @@
     if (nowEl) nowEl.textContent = tt('mehfil_now_playing', 'Now playing: {{title}}', { title: title || 'YouTube' });
   }
 
-  function showMehfilVideoPicker(results, query) {
-    const rows = (results || [])
+  function paintYtResults(results, { configured, emptyHint } = {}) {
+    const host = overlayEl?.querySelector('[data-mehfil-yt-results]');
+    if (!host) return;
+    const list = results || [];
+    if (!list.length) {
+      host.innerHTML = `<div class="cp-empty mehfil-yt-empty-copy">${esc(
+        emptyHint ||
+          (configured === false
+            ? tt('mehfil_yt_needs_key', 'Search needs YOUTUBE_API_KEY on the host. Paste a YouTube link to play.')
+            : tt('mehfil_yt_no_videos', 'No videos — try another search or paste a link.'))
+      )}</div>`;
+      host.hidden = false;
+      return;
+    }
+    host.hidden = false;
+    host.innerHTML = list
       .map(
         (r, i) =>
           `<button type="button" class="mehfil-yt-pick" data-yt-i="${i}">
             ${r.thumb ? `<img src="${esc(r.thumb)}" alt="">` : '<span class="mehfil-yt-pick-ph">▶</span>'}
             <span class="mehfil-yt-pick-meta">
               <strong>${esc(r.title || 'Video')}</strong>
-              <small>${esc(r.channel || r.artist || '')}</small>
+              <small>${esc(r.channel || '')}</small>
             </span>
           </button>`
       )
       .join('');
-    const bodyHtml = `
-      <div class="mehfil-yt-picks">${rows || `<div class="cp-empty">${tt('mehfil_no_preview', 'No playable preview — paste a YouTube link')}</div>`}</div>`;
-    if (typeof openHalfSheet === 'function') {
-      openHalfSheet({
-        id: 'mehfilYtPickSheet',
-        title: tt('mehfil_pick_video', 'Pick a video'),
-        accent: 'baithak',
-        bodyHtml,
-        onMount: (sheet, close) => {
-          sheet.querySelectorAll('[data-yt-i]').forEach((btn) => {
-            btn.addEventListener('click', async () => {
-              const r = results[Number(btn.dataset.ytI)];
-              close();
-              if (r?.id) await playYoutubeId(r.id, r.title);
-              else if (r?.previewUrl) {
-                await stopCurrentMedia();
-                if (typeof pauseAllMusic === 'function') pauseAllMusic();
-                const a = new Audio(r.previewUrl);
-                window.__mehfilSharedAudio = a;
-                if (!(typeof quietMode !== 'undefined' && quietMode)) await a.play().catch(() => {});
-                await publishMediaState({
-                  type: 'music',
-                  previewUrl: r.previewUrl,
-                  title: `${r.title || ''} — ${r.artist || ''}`.trim(),
-                  playing: true,
-                  t: 0,
-                });
-              }
-            });
-          });
-        },
+    host.querySelectorAll('[data-yt-i]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const r = list[Number(btn.dataset.ytI)];
+        if (r?.id) await playYoutubeId(r.id, r.title);
       });
-      return;
-    }
-    // Fallback: take first result only if sheet unavailable
-    const first = results?.[0];
-    if (first?.id) playYoutubeId(first.id, first.title);
+    });
   }
 
   async function searchAndPlay(query) {
@@ -696,48 +734,54 @@
       return;
     }
     if (typeof apiFetch !== 'function') return;
+    const resultsHost = overlayEl?.querySelector('[data-mehfil-yt-results]');
+    if (resultsHost) {
+      resultsHost.hidden = false;
+      resultsHost.innerHTML = `<div class="cp-empty">${esc(tt('mehfil_searching', 'Searching…'))}</div>`;
+    }
     try {
-      let results = [];
-      try {
-        const ytEnv = await apiFetch('/api/media-config', {
-          method: 'POST',
-          needAuth: true,
-          body: { action: 'youtube_search', query: q, limit: 8 },
-        });
-        results = (ytEnv?.data?.results || []).map((r) => ({
+      const ytEnv = await apiFetch('/api/media-config', {
+        method: 'POST',
+        needAuth: true,
+        body: { action: 'youtube_search', query: q, limit: 8 },
+      });
+      if (ytEnv?.httpStatus === 429 || ytEnv?.error?.code === 'RATE_LIMITED') {
+        if (typeof showToast === 'function') showToast(tt('mehfil_yt_rate', 'Too many searches — try again shortly.'));
+        if (resultsHost) resultsHost.innerHTML = '';
+        return;
+      }
+      const configured = ytEnv?.data?.configured !== false && !!ytEnv?.data?.provider;
+      const configuredFlag = ytEnv?.data?.configured;
+      const results = (ytEnv?.data?.results || [])
+        .map((r) => ({
           id: r.id || r.videoId,
           title: r.title,
           channel: r.channelTitle || r.channel,
           thumb: r.thumb || r.thumbnail,
-        })).filter((r) => r.id);
-      } catch (e) {}
-      if (!results.length) {
-        const envelope = await apiFetch('/api/media-config', {
-          method: 'POST',
-          needAuth: true,
-          body: { action: 'music_search', query: q, limit: 8 },
-        });
-        results = (envelope?.data?.results || []).map((song) => ({
-          previewUrl: song.previewUrl,
-          title: song.title,
-          artist: song.artist,
-          id: song.youtubeId || null,
-          thumb: song.artwork || song.thumb,
-        }));
+        }))
+        .filter((r) => r.id);
+      if (ytEnv?.data?.error && typeof showToast === 'function') {
+        showToast(
+          ytEnv.data.error === 'YOUTUBE_QUOTA'
+            ? tt('mehfil_yt_quota', 'YouTube search is busy — paste a link or try later.')
+            : tt('mehfil_yt_error', 'YouTube search failed — paste a link instead.')
+        );
       }
-      if (!results.length) {
-        if (typeof showToast === 'function') showToast(tt('mehfil_no_preview', 'No playable preview — paste a YouTube link'));
+      if (configuredFlag === false) {
+        paintYtResults([], { configured: false });
+        if (typeof showToast === 'function') {
+          showToast(tt('mehfil_yt_needs_key', 'Search needs YOUTUBE_API_KEY on the host. Paste a YouTube link to play.'));
+        }
         return;
       }
-      showMehfilVideoPicker(results, q);
+      paintYtResults(results, { configured: true });
     } catch (e) {
+      if (typeof reportClientError === 'function') {
+        reportClientError({ feature: 'mehfil_yt_search', message: e?.message || String(e) });
+      }
       if (typeof showToast === 'function') showToast(tt('mehfil_media_fail', 'Media search failed'));
-    } finally {
-      if (typeof restoreAppShell === 'function') setTimeout(() => restoreAppShell('mehfil_search_done'), 100);
     }
   }
-
-  const YT_REC_QUERIES = ['lofi chill', 'bollywood hits', 'indie acoustic', 'focus music', 'chaupaal vibes'];
 
   async function loadMehfilYtRecs(root, { openPicker = false } = {}) {
     const host = root || overlayEl;
@@ -745,17 +789,22 @@
     const wrap = host?.querySelector('[data-mehfil-recs]');
     if (!row || !wrap || typeof apiFetch !== 'function') return;
     if (wrap.dataset.loaded === '1' && !openPicker) {
-      wrap.hidden = false;
+      wrap.hidden = wrap.dataset.hide === '1';
       return;
     }
-    const q = YT_REC_QUERIES[Math.floor(Math.random() * YT_REC_QUERIES.length)];
     try {
       const ytEnv = await apiFetch('/api/media-config', {
         method: 'POST',
         needAuth: true,
-        body: { action: 'youtube_search', query: q, limit: 6 },
+        body: { action: 'youtube_search', query: YT_REC_QUERY, limit: 6 },
       });
-      let results = (ytEnv?.data?.results || [])
+      if (ytEnv?.data?.configured === false) {
+        wrap.hidden = true;
+        wrap.dataset.hide = '1';
+        wrap.dataset.loaded = '1';
+        return;
+      }
+      const results = (ytEnv?.data?.results || [])
         .map((r) => ({
           id: r.id || r.videoId,
           title: r.title,
@@ -764,24 +813,14 @@
         }))
         .filter((r) => r.id);
       if (!results.length) {
-        const envelope = await apiFetch('/api/media-config', {
-          method: 'POST',
-          needAuth: true,
-          body: { action: 'music_search', query: q, limit: 6 },
-        });
-        results = (envelope?.data?.results || []).map((song) => ({
-          id: song.youtubeId || null,
-          title: song.title,
-          channel: song.artist,
-          thumb: song.artwork || song.thumb,
-          previewUrl: song.previewUrl,
-        }));
-      }
-      if (!results.length) {
         wrap.hidden = true;
+        wrap.dataset.loaded = '1';
+        wrap.dataset.hide = '1';
+        if (openPicker) paintYtResults([], { configured: true });
         return;
       }
       wrap.dataset.loaded = '1';
+      wrap.dataset.hide = '0';
       wrap.hidden = false;
       row.innerHTML = results
         .map(
@@ -798,7 +837,7 @@
           if (r?.id) await playYoutubeId(r.id, r.title);
         });
       });
-      if (openPicker) showMehfilVideoPicker(results, q);
+      if (openPicker) paintYtResults(results, { configured: true });
     } catch (e) {
       wrap.hidden = true;
     }
@@ -986,9 +1025,13 @@
       const perm =
         e?.code === 'PERMISSION_DENIED' || /Permission|NotAllowed|NotFound/i.test(String(e?.message || e));
       if (perm) {
-        showStageError(tt('mehfil_cam_perm', 'Camera permission denied — check browser settings.'), {
-          retry: true,
-        });
+        if (typeof showToast === 'function') {
+          showToast(tt('mehfil_cam_perm', 'Camera permission denied — check browser settings.'));
+        }
+        camWanted = false;
+        writePrefs({ cam: false });
+        renderLocalPlaceholder(tt('mehfil_cam_off', 'Camera off'));
+        setCamUi(false);
       } else if (typeof showToast === 'function') {
         showToast(tt('mehfil_cam_fail', 'Camera unavailable'));
       }
@@ -1101,6 +1144,283 @@
     }
   }
 
+  function clearIncomingRingUi() {
+    try {
+      incomingRingClose?.();
+    } catch (e) {}
+    incomingRingClose = null;
+    if (incomingRingEl?.isConnected) {
+      try {
+        incomingRingEl.remove();
+      } catch (e) {}
+    }
+    incomingRingEl = null;
+  }
+
+  async function ackMehfilRing(chatId, status) {
+    if (!chatId || !currentUser?.uid) return;
+    try {
+      await rtdbRef(`mehfil/${chatId}/ringAck/${currentUser.uid}`)?.set({ status, at: Date.now() });
+    } catch (e) {}
+    try {
+      await rtdbRef(`mehfilInbox/${currentUser.uid}/${chatId}`)?.remove();
+    } catch (e) {}
+  }
+
+  function watchCallerRingAcks(chatId, targetUids) {
+    ringAckUnsubs.forEach((fn) => {
+      try {
+        fn();
+      } catch (e) {}
+    });
+    ringAckUnsubs = [];
+    const targets = new Set((targetUids || []).map(String));
+    const oneToOne = targets.size === 1;
+    const timeoutId = setTimeout(() => {
+      if (typeof showToast === 'function') showToast(tt('mehfil_no_answer', 'No answer'));
+      rtdbRef(`mehfil/${chatId}/ring`)?.remove().catch(() => {});
+    }, RING_TTL_MS);
+    ringAckUnsubs.push(() => clearTimeout(timeoutId));
+    const ref = rtdbRef(`mehfil/${chatId}/ringAck`);
+    if (!ref) return;
+    const onChild = (snap) => {
+      const uid = snap.key;
+      if (!targets.has(String(uid))) return;
+      const status = snap.val()?.status;
+      if (status === 'declined' && oneToOne) {
+        clearTimeout(timeoutId);
+        if (typeof showToast === 'function') showToast(tt('mehfil_declined', 'Declined'));
+        rtdbRef(`mehfil/${chatId}/ring`)?.remove().catch(() => {});
+      }
+      if (status === 'accepted') {
+        clearTimeout(timeoutId);
+      }
+    };
+    ref.on('child_added', onChild);
+    ringAckUnsubs.push(() => ref.off('child_added', onChild));
+  }
+
+  async function writeMehfilRing(chat, targetUids, mode) {
+    const chatId = chat?.firestoreId || chat?.id;
+    if (!chatId || !currentUser?.uid) return false;
+    const now = Date.now();
+    const prev = lastRingAt.get(chatId) || 0;
+    if (now - prev < RING_COOLDOWN_MS) {
+      if (typeof showToast === 'function') showToast(tt('mehfil_ring_wait', 'Wait a moment before ringing again'));
+      return false;
+    }
+    lastRingAt.set(chatId, now);
+    const payload = {
+      fromUid: currentUser.uid,
+      fromName: userProfile?.name || digitalProfile?.displayName || 'Someone',
+      fromPhoto: currentUser.photoURL || userProfile?.photoURL || '',
+      chatId,
+      mode: mode === 'users' ? 'users' : 'all',
+      targetUids: (targetUids || []).map(String),
+      ts: now,
+      expiresAt: now + RING_TTL_MS,
+    };
+    try {
+      await rtdbRef(`mehfil/${chatId}/ring`)?.set(payload);
+      await Promise.all(
+        payload.targetUids.map((uid) => rtdbRef(`mehfilInbox/${uid}/${chatId}`)?.set(payload))
+      );
+    } catch (e) {
+      if (typeof reportClientError === 'function') {
+        reportClientError({ feature: 'mehfil_ring', message: e?.message || String(e) });
+      }
+      if (typeof showToast === 'function') showToast(tt('mehfil_ring_fail', 'Could not ring'));
+      return false;
+    }
+    if (typeof apiFetch === 'function') {
+      apiFetch('/api/media-config', {
+        method: 'POST',
+        needAuth: true,
+        body: {
+          action: 'notif_mehfil_ring',
+          chatId,
+          targetUids: payload.targetUids,
+          fromName: payload.fromName,
+        },
+      }).catch(() => {});
+    }
+    watchCallerRingAcks(chatId, payload.targetUids);
+    if (typeof showToast === 'function') showToast(tt('mehfil_ringing', 'Ringing…'));
+    return true;
+  }
+
+  async function startMehfilRing(chat) {
+    if (isMehfilBlockedChat(chat)) {
+      if (typeof showToast === 'function') showToast(tt('mehfil_blocked', 'Mehfil isn’t available in this chat'));
+      return;
+    }
+    const isGroup = chat?.type === 'group';
+    if (!isGroup) {
+      const peer = peerUidOfChat(chat);
+      if (!peer) {
+        if (typeof showToast === 'function') showToast(tt('mehfil_ring_fail', 'Could not ring'));
+        return;
+      }
+      await writeMehfilRing(chat, [peer], 'all');
+      return;
+    }
+    const members = groupRingMembers(chat);
+    if (!members.length) {
+      if (typeof showToast === 'function') showToast(tt('mehfil_ring_nobody', 'No one to ring'));
+      return;
+    }
+    const sheet = document.createElement('div');
+    sheet.className = 'mehfil-ring-pick';
+    sheet.setAttribute('role', 'dialog');
+    sheet.innerHTML = `
+      <div class="mehfil-ring-pick-card">
+        <h3>${esc(tt('mehfil_ring', 'Ring'))}</h3>
+        <button type="button" class="mehfil-ring-pick-all" data-ring-all>${esc(tt('mehfil_ring_everyone', 'Ring everyone'))}</button>
+        <p class="mehfil-ring-pick-label">${esc(tt('mehfil_ring_choose', 'Choose people'))}</p>
+        <div class="mehfil-ring-pick-list">
+          ${members
+            .map(
+              (m) => `<label class="mehfil-ring-pick-row">
+                <input type="checkbox" value="${esc(m.uid)}" checked>
+                <span>${esc(m.name)}</span>
+              </label>`
+            )
+            .join('')}
+        </div>
+        <div class="mehfil-ring-pick-actions">
+          <button type="button" data-ring-cancel>${esc(tt('cancel', 'Cancel'))}</button>
+          <button type="button" data-ring-confirm>${esc(tt('mehfil_ring', 'Ring'))}</button>
+        </div>
+      </div>`;
+    const onDismiss = () => {
+      sheet.remove();
+    };
+    let handle;
+    if (typeof openLayer === 'function') {
+      handle = openLayer(sheet, onDismiss, { host: shellHost(), role: 'dialog', label: tt('mehfil_ring', 'Ring') });
+    } else {
+      shellHost().appendChild(sheet);
+    }
+    const close = () => {
+      if (handle?.close) handle.close();
+      else sheet.remove();
+    };
+    sheet.querySelector('[data-ring-cancel]')?.addEventListener('click', close);
+    sheet.querySelector('[data-ring-all]')?.addEventListener('click', async () => {
+      close();
+      await writeMehfilRing(chat, members.map((m) => m.uid), 'all');
+    });
+    sheet.querySelector('[data-ring-confirm]')?.addEventListener('click', async () => {
+      const selected = [...sheet.querySelectorAll('input[type="checkbox"]:checked')].map((el) => el.value);
+      close();
+      if (!selected.length) {
+        if (typeof showToast === 'function') showToast(tt('mehfil_ring_nobody', 'No one to ring'));
+        return;
+      }
+      await writeMehfilRing(chat, selected, 'users');
+    });
+  }
+
+  function showIncomingMehfilRing(payload) {
+    const chatId = String(payload?.chatId || '');
+    const me = currentUser?.uid;
+    if (!chatId || !me || payload.fromUid === me) return;
+    const targets = Array.isArray(payload.targetUids)
+      ? payload.targetUids.map(String)
+      : payload.targetUids && typeof payload.targetUids === 'object'
+        ? Object.values(payload.targetUids).map(String)
+        : [];
+    if (targets.length && !targets.includes(me)) return;
+    if (Number(payload.expiresAt) && Date.now() > Number(payload.expiresAt)) {
+      rtdbRef(`mehfilInbox/${me}/${chatId}`)?.remove();
+      return;
+    }
+    if (overlayEl && activeChatId === chatId) return;
+    if (incomingRingEl && incomingRingEl.dataset.chatId === chatId) return;
+    clearIncomingRingUi();
+    const name = payload.fromName || tt('mehfil_someone', 'Someone');
+    const photo = payload.fromPhoto || '';
+    const el = document.createElement('div');
+    el.id = 'mehfilIncoming';
+    el.className = 'mehfil-incoming';
+    el.dataset.chatId = chatId;
+    el.setAttribute('role', 'dialog');
+    el.innerHTML = `
+      <div class="mehfil-incoming-card">
+        ${mehfilMarkHtml(36)}
+        <div class="mehfil-incoming-avatar">${
+          photo && /^https?:/.test(photo)
+            ? `<img src="${esc(photo)}" alt="">`
+            : esc((name || '?').slice(0, 1))
+        }</div>
+        <div class="mehfil-incoming-name">${esc(name)}</div>
+        <div class="mehfil-incoming-sub">${esc(tt('mehfil_incoming', 'Incoming Mehfil'))}</div>
+        <div class="mehfil-incoming-actions">
+          <button type="button" class="mehfil-incoming-decline" data-incoming-decline>${esc(tt('mehfil_decline', 'Decline'))}</button>
+          <button type="button" class="mehfil-incoming-accept" data-incoming-accept>${esc(tt('mehfil_accept', 'Accept'))}</button>
+        </div>
+      </div>`;
+    const expireMs = Math.max(1000, Number(payload.expiresAt) - Date.now() || RING_TTL_MS);
+    const expireTimer = setTimeout(() => {
+      ackMehfilRing(chatId, 'timeout');
+      clearIncomingRingUi();
+    }, expireMs);
+    const onDismiss = () => {
+      clearTimeout(expireTimer);
+      incomingRingEl = null;
+      incomingRingClose = null;
+    };
+    incomingRingEl = el;
+    if (typeof openLayer === 'function') {
+      const handle = openLayer(el, onDismiss, {
+        host: shellHost(),
+        role: 'dialog',
+        label: tt('mehfil_incoming', 'Incoming Mehfil'),
+      });
+      incomingRingClose = () => {
+        clearTimeout(expireTimer);
+        handle?.close?.();
+      };
+    } else {
+      shellHost().appendChild(el);
+      incomingRingClose = () => {
+        clearTimeout(expireTimer);
+        el.remove();
+        incomingRingEl = null;
+      };
+    }
+    el.querySelector('[data-incoming-decline]')?.addEventListener('click', () => {
+      ackMehfilRing(chatId, 'declined');
+      clearIncomingRingUi();
+    });
+    el.querySelector('[data-incoming-accept]')?.addEventListener('click', async () => {
+      clearTimeout(expireTimer);
+      await ackMehfilRing(chatId, 'accepted');
+      clearIncomingRingUi();
+      const chat =
+        (typeof baithakChats !== 'undefined' && baithakChats.find((c) => (c.firestoreId || c.id) === chatId)) ||
+        { id: chatId, firestoreId: chatId, name: name, type: 'dm', uid: payload.fromUid };
+      openMehfil(chat);
+    });
+  }
+
+  function bindMehfilRingInbox() {
+    if (ringInboxUnsub) {
+      try {
+        ringInboxUnsub();
+      } catch (e) {}
+      ringInboxUnsub = null;
+    }
+    if (!currentUser?.uid) return;
+    const ref = rtdbRef(`mehfilInbox/${currentUser.uid}`);
+    if (!ref) return;
+    const onChild = (snap) => {
+      showIncomingMehfilRing(snap.val());
+    };
+    ref.on('child_added', onChild);
+    ringInboxUnsub = () => ref.off('child_added', onChild);
+  }
+
   async function copyInviteLink() {
     if (!activeChatId) return;
     const url = `${location.origin}/chat/${encodeURIComponent(activeChatId)}?mehfil=1`;
@@ -1113,7 +1433,24 @@
   }
 
   function remoteTileLabel(user) {
-    return String(user?.uid || 'Guest');
+    const uid = String(user?.uid || '');
+    return displayNameForUid(uid);
+  }
+
+  function ensureRemoteTile(uid, label) {
+    const stage = overlayEl?.querySelector('[data-mehfil-stage]');
+    if (!stage || uid == null) return null;
+    let tile = overlayEl.querySelector(`.mehfil-tile[data-uid="${uid}"]`);
+    if (tile) return tile;
+    tile = document.createElement('div');
+    tile.className = 'mehfil-tile';
+    tile.dataset.uid = String(uid);
+    tile.innerHTML = `<span class="mehfil-tile-placeholder">${esc(
+      tt('mehfil_in_room', 'In the room')
+    )}</span><div class="mehfil-tile-label">${esc(label || remoteTileLabel({ uid }))}</div>`;
+    stage.appendChild(tile);
+    updateWaitingState();
+    return tile;
   }
 
   async function joinAgora(chatId, gen) {
@@ -1124,8 +1461,10 @@
     }
 
     let tokenPayload;
+    let envelope = null;
     try {
-      const envelope = await withTimeout(
+      setMehfilStatus(tt('mehfil_connecting', 'Connecting…'));
+      envelope = await withTimeout(
         apiFetch('/api/media-config', {
           method: 'POST',
           needAuth: true,
@@ -1137,11 +1476,18 @@
       tokenPayload = envelope?.ok === false ? null : envelope?.data;
     } catch (e) {
       tokenPayload = null;
+      console.warn('[mehfil] agora_token fetch', e?.message || e);
     }
 
     if (gen !== joinGeneration) return;
 
     if (!tokenPayload?.configured || !tokenPayload.token) {
+      console.warn('[mehfil] agora_token', {
+        ok: envelope?.ok,
+        configured: tokenPayload?.configured,
+        reason: tokenPayload?.reason,
+        error: envelope?.error || tokenPayload?.error,
+      });
       showStageError(
         tt(
           'mehfil_voice_paused',
@@ -1171,19 +1517,17 @@
         }
       });
 
+      client.on('user-joined', (user) => {
+        ensureRemoteTile(user.uid, remoteTileLabel(user));
+        setMehfilStatus(tt('mehfil_in_call', 'In the room'), 'live');
+      });
+
       client.on('user-published', async (user, mediaType) => {
         try {
           await client.subscribe(user, mediaType);
+          const tile = ensureRemoteTile(user.uid, remoteTileLabel(user));
           if (mediaType === 'video') {
-            const stage = overlayEl?.querySelector('[data-mehfil-stage]');
-            let tile = overlayEl?.querySelector(`[data-uid="${user.uid}"]`);
-            if (!tile && stage) {
-              tile = document.createElement('div');
-              tile.className = 'mehfil-tile';
-              tile.dataset.uid = user.uid;
-              tile.innerHTML = `<div class="mehfil-tile-label">${esc(remoteTileLabel(user))}</div>`;
-              stage.appendChild(tile);
-            }
+            tile?.querySelector('.mehfil-tile-placeholder')?.remove();
             user.videoTrack?.play(tile);
             updateWaitingState();
             setMehfilStatus(tt('mehfil_in_call', 'In the room'), 'live');
@@ -1241,7 +1585,7 @@
       camWanted = !!prefs.cam;
 
       setMehfilStatus(tt('mehfil_mic_prompt', 'Allow microphone to speak'));
-      localAudio = await AgoraRTC.createMicrophoneAudioTrack();
+      localAudio = await withTimeout(AgoraRTC.createMicrophoneAudioTrack(), 12000, 'MIC_TIMEOUT');
       await localAudio.setEnabled(micWanted);
       await client.publish([localAudio]);
       setMicUi(micWanted);
@@ -1320,14 +1664,15 @@
     el.className = 'mehfil-overlay';
     el.setAttribute('role', 'dialog');
     el.setAttribute('aria-modal', 'true');
-    el.setAttribute('aria-label', tt('mehfil_title', 'Mehfil'));
+    const roomTitle = mehfilRoomTitle(chat);
+    el.setAttribute('aria-label', tt('mehfil_title', 'Mehfil') + ' · ' + roomTitle);
     el.innerHTML = `
       <div class="mehfil-layout">
         <aside class="mehfil-sidebar" data-mehfil-sidebar>
           <div class="mehfil-sidebar-head">
             <div>
               <div class="mehfil-channel-label">${esc(tt('mehfil_channel', '# voice'))}</div>
-              <strong>${esc(chat.name || 'Mehfil')}</strong>
+              <strong>${esc(roomTitle)}</strong>
             </div>
             <button type="button" class="mehfil-sidebar-toggle" data-mehfil-sidebar-hide aria-label="${esc(tt('mehfil_hide_sidebar', 'Hide sidebar'))}">‹</button>
           </div>
@@ -1348,7 +1693,8 @@
         <div class="mehfil-main">
           <div class="mehfil-top">
             <button type="button" class="mehfil-sidebar-open" data-mehfil-sidebar-show aria-label="${esc(tt('mehfil_show_chat', 'Show chat'))}">💬</button>
-            <div class="mehfil-title">${mehfilMarkHtml(20)} <span>${esc(tt('mehfil_title', 'Mehfil'))} · ${esc(chat.name || 'Chat')}</span></div>
+            <div class="mehfil-title">${mehfilMarkHtml(20)} <span>${esc(tt('mehfil_title', 'Mehfil'))} · ${esc(roomTitle)}</span></div>
+            <button type="button" class="mehfil-ring-btn" data-mehfil-ring title="${esc(tt('mehfil_ring', 'Ring'))}" aria-label="${esc(tt('mehfil_ring', 'Ring'))}">${typeof iconHtml==='function'?iconHtml('phone',{size:18}):'☎'} <span>${esc(tt('mehfil_ring', 'Ring'))}</span></button>
             <div class="mehfil-status" data-mehfil-status>${esc(tt('mehfil_joining', 'Joining…'))}</div>
           </div>
           <div class="mehfil-stage" data-mehfil-stage>
@@ -1362,13 +1708,14 @@
             </div>
           </div>
             <div class="mehfil-sheet mehfil-media-sheet" data-mehfil-media>
-            <div class="mehfil-now" data-mehfil-now>${esc(tt('mehfil_media_hint', 'Search YouTube for the room'))}</div>
+            <div class="mehfil-now" data-mehfil-now>${esc(tt('mehfil_media_hint', 'Search YouTube or paste a link'))}</div>
             <div class="mehfil-yt-empty" data-mehfil-yt-empty hidden></div>
             <div id="mehfilYtHost" class="mehfil-yt" data-mehfil-yt></div>
-            <div class="mehfil-media-search">
-              <input type="search" placeholder="${esc(tt('mehfil_yt_search_ph', 'Search YouTube…'))}" data-mehfil-q enterkeyhint="search" autocomplete="off">
-              <button type="button" data-mehfil-play>${esc(tt('mehfil_search', 'Search'))}</button>
-            </div>
+            <form class="mehfil-media-search" data-mehfil-search-form>
+              <input type="search" placeholder="${esc(tt('mehfil_yt_search_ph', 'Search YouTube or paste a link'))}" data-mehfil-q enterkeyhint="search" autocomplete="off">
+              <button type="submit" data-mehfil-play>${esc(tt('mehfil_search', 'Search'))}</button>
+            </form>
+            <div class="mehfil-yt-results" data-mehfil-yt-results hidden></div>
             <div class="mehfil-yt-recs" data-mehfil-recs hidden>
               <div class="mehfil-yt-recs-label">${esc(tt('mehfil_yt_recs', 'Suggested for the room'))}</div>
               <div class="mehfil-yt-recs-row" data-mehfil-recs-row></div>
@@ -1481,16 +1828,24 @@
       const input = el.querySelector('[data-mehfil-chat-input]');
       const text = String(input?.value || '').trim();
       if (!text || !activeChatId) return;
+      const ref = rtdbRef(`mehfil/${activeChatId}/chat`);
+      if (!ref) {
+        if (typeof showToast === 'function') showToast(tt('mehfil_rtdb_missing', 'Room chat needs Realtime Database.'));
+        return;
+      }
       input.value = '';
       try {
         await ensureMehfilParticipant(activeChatId);
-        await rtdbRef(`mehfil/${activeChatId}/chat`)?.push({
+        await ref.push({
           text: text.slice(0, 500),
           by: currentUser?.uid || null,
-          name: userProfile?.name || userProfile?.username || 'You',
+          name: userProfile?.name || userProfile?.username || digitalProfile?.displayName || 'You',
           at: Date.now(),
         });
       } catch (err) {
+        if (typeof reportClientError === 'function') {
+          reportClientError({ feature: 'mehfil_chat', message: err?.message || String(err) });
+        }
         if (typeof showToast === 'function') showToast(tt('mehfil_send_fail', 'Could not send'));
       }
     });
@@ -1504,7 +1859,11 @@
     el.querySelector('[data-mehfil-more-btn]')?.addEventListener('click', () => toggleCallSheet('more'));
     el.querySelector('[data-mehfil-react-btn]')?.addEventListener('click', () => toggleCallSheet('reacts'));
     el.querySelector('[data-mehfil-sticker-btn]')?.addEventListener('click', () => toggleCallSheet('stickers'));
-    el.querySelector('[data-mehfil-media-btn]')?.addEventListener('click', () => toggleCallSheet('media'));
+    el.querySelector('[data-mehfil-media-btn]')?.addEventListener('click', () => {
+      toggleCallSheet('media');
+      loadMehfilYtRecs(el);
+    });
+    el.querySelector('[data-mehfil-ring]')?.addEventListener('click', () => startMehfilRing(activeChat));
     el.querySelector('[data-mehfil-flip]')?.addEventListener('click', flipCamera);
     el.querySelector('[data-mehfil-share]')?.addEventListener('click', toggleScreenShare);
     el.querySelector('[data-mehfil-nudge]')?.addEventListener('click', nudgeOthers);
@@ -1520,35 +1879,28 @@
       btn.addEventListener('click', async () => {
         const emoji = btn.dataset.emoji;
         showReactionBurst(emoji);
-        if (activeChatId) {
-          try {
-            await ensureMehfilParticipant(activeChatId);
-            await rtdbRef(`mehfil/${activeChatId}/reactions`)?.push({
-              emoji,
-              by: currentUser?.uid || null,
-              at: Date.now(),
-            });
-          } catch (e) {}
+        if (!activeChatId) return;
+        const ref = rtdbRef(`mehfil/${activeChatId}/reactions`);
+        if (!ref) {
+          if (typeof showToast === 'function') showToast(tt('mehfil_rtdb_missing', 'Room chat needs Realtime Database.'));
+          return;
+        }
+        try {
+          await ensureMehfilParticipant(activeChatId);
+          await ref.push({
+            emoji,
+            by: currentUser?.uid || null,
+            at: Date.now(),
+          });
+        } catch (e) {
+          if (typeof showToast === 'function') showToast(tt('mehfil_react_fail', 'Could not send reaction'));
         }
         pokeChrome();
       });
     });
-    el.querySelector('[data-mehfil-play]')?.addEventListener('click', () => {
+    el.querySelector('[data-mehfil-search-form]')?.addEventListener('submit', (e) => {
+      e.preventDefault();
       searchAndPlay(el.querySelector('[data-mehfil-q]')?.value);
-    });
-    el.querySelector('[data-mehfil-q]')?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        searchAndPlay(e.target.value);
-      }
-    });
-    el.querySelector('[data-mehfil-q]')?.addEventListener('focus', () => {
-      loadMehfilYtRecs(el);
-    });
-    el.querySelector('[data-mehfil-q]')?.addEventListener('blur', () => {
-      setTimeout(() => {
-        if (typeof restoreAppShell === 'function') restoreAppShell('mehfil_search_blur');
-      }, 160);
     });
 
     await ensureMehfilParticipant(chatId);
@@ -1633,4 +1985,12 @@
   window.mehfilEligible = mehfilEligible;
   window.mehfilMarkHtml = renderMehfilMark;
   window.isMehfilOpen = () => !!overlayEl;
+  window.startMehfilRing = guardMehfil('mehfil_ring', startMehfilRing);
+
+  try {
+    bindMehfilRingInbox();
+    if (typeof auth !== 'undefined' && auth?.onAuthStateChanged) {
+      auth.onAuthStateChanged(() => bindMehfilRingInbox());
+    }
+  } catch (e) {}
 })();

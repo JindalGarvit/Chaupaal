@@ -999,6 +999,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // YouTube Search.list cache (Admin SDK /api/media-config youtube_search only)
+    match /youtubeSearchCache/{docId} {
+      allow read, write: if false;
+    }
+
     // Dangal weekly scores — Admin SDK writes; authenticated clients may read
     match /weeklyLeaderboard/{weekId} {
       allow read: if isAuth();

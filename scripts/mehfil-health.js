@@ -19,7 +19,15 @@ const checks = [
   ['database.rules.json has chat', (() => {
     try {
       const raw = fs.readFileSync(path.join(root, 'firebase/database.rules.json'), 'utf8');
-      return raw.includes('"chat"') && raw.includes('mehfil');
+      return raw.includes('"chat"') && raw.includes('mehfil') && raw.includes('mehfilInbox') && raw.includes('"ring"');
+    } catch (e) {
+      return false;
+    }
+  })()],
+  ['youtube-search.js', exists('server-lib/youtube-search.js')],
+  ['YOUTUBE_API_KEY documented', (() => {
+    try {
+      return fs.readFileSync(path.join(root, '.env.example'), 'utf8').includes('YOUTUBE_API_KEY');
     } catch (e) {
       return false;
     }

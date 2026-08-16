@@ -317,6 +317,10 @@
           return;
         }
       }
+      if (type.includes('mehfil') && link.chatId && typeof openChatById === 'function') {
+        openChatById(link.chatId);
+        return;
+      }
       if (link.chatId && typeof openChatById === 'function') {
         openChatById(link.chatId);
         return;

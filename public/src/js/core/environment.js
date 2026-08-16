@@ -137,13 +137,15 @@
     } catch (e) {}
     try {
       const ae = document.activeElement;
-      if (
+      if (ae && ae.closest?.('.mehfil-overlay')) {
+        /* Keep Mehfil search focused — blur here swallowed the first Search tap. */
+      } else if (
         ae &&
         (ae.matches?.(
-          '[data-mehfil-q], .mehfil-media-search input, .mehfil-overlay input, .mehfil-overlay textarea, .instant-compose-text, #instantText, .share-search-input, #peepalAiSearchInput, #khojIntentInput, #usInput, #commentInput, .peepal-ai-search-input, .khoj-intent-input'
+          '.instant-compose-text, #instantText, .share-search-input, #peepalAiSearchInput, #khojIntentInput, #usInput, #commentInput, .peepal-ai-search-input, .khoj-intent-input'
         ) ||
           ae.closest?.(
-            '.mehfil-overlay, .cp-half-sheet, #baithakInstantComposer, .chaupaal-share-sheet, .game-friend-sheet, .loc-share-sheet, .share-sheet'
+            '.cp-half-sheet, #baithakInstantComposer, .chaupaal-share-sheet, .game-friend-sheet, .loc-share-sheet, .share-sheet'
           ))
       ) {
         ae.blur?.();
