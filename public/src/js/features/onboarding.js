@@ -795,6 +795,9 @@ async function requestNotificationPermission(){
     const p=await Notification.requestPermission();
     if(p==='granted')showToast(t('notifications_on'));
   }
+  if(Notification.permission==='granted' && typeof registerChaupaalFcm==='function'){
+    try{ await registerChaupaalFcm(); }catch(e){}
+  }
 }
 function scheduleLocalNudge(){
   // No on-open / focused-app OS push spam — unread stays on tab lights + inbox
