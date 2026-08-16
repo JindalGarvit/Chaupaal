@@ -66,6 +66,36 @@
     return data.states || {};
   }
 
+  function patchRelationshipState(uid, patch) {
+    cache.set(uid, { ...relationshipState(uid), ...patch });
+  }
+
+  async function openProfileMessage(profile) {
+    if (!requireRelationshipUser()) return null;
+    const uid = profile?.uid;
+    if (!uid) {
+      if (typeof showToast === 'function') showToast('Could not open chat');
+      return null;
+    }
+    if (typeof openDmWithSharedHello === 'function') {
+      return openDmWithSharedHello({
+        uid,
+        name: profile.name || profile.displayName || 'Chaupaal member',
+        avatar: profile.photoURL || profile.avatar,
+        theirIcebreakers: profile.icebreakers,
+        origin: 'profile',
+        peerProfileType: profile.profileType,
+        matchMeta: {
+          teenMode: profile.teenMode,
+          isMinor: profile.isMinor,
+          age: profile.age,
+        },
+      });
+    }
+    if (typeof showToast === 'function') showToast('Open Baithak to message');
+    return null;
+  }
+
   function emitRelationshipChanged(targetUid, data) {
     if (data?.state) cache.set(targetUid, data.state);
     document.dispatchEvent(
@@ -171,8 +201,8 @@
   });
 
   function friendActionLabel(state) {
-    if (state.friend) return '✓ Friends';
-    if (state.requestReceived) return 'Respond';
+    if (state.friend) return 'Friends';
+    if (state.requestReceived) return 'Accept';
     if (state.requestSent) return 'Requested';
     return 'Add Friend';
   }
@@ -182,9 +212,13 @@
   }
 
   /** Build expandable actions for a target — used by long-press and profile ▾ menu. */
-  function buildRelationshipActions(profile, state, { onChanged } = {}) {
+  function buildRelationshipActions(profile, state, { onChanged, context = '' } = {}) {
     const actions = [];
     const name = profile.name || 'them';
+    const mode = primaryRelationshipMode({
+      context,
+      profileType: profile.profileType || 'personal',
+    });
     const refresh = async () => {
       if (typeof onChanged === 'function') await onChanged();
     };
@@ -204,19 +238,9 @@
     actions.push({
       label: 'Message',
       icon: 'message-circle',
-      hint: 'Open a private chat. Photos, files, and challenges attach in the thread.',
+      hint: 'Anyone can message. Teen Mode is the only exception.',
       fn: async () => {
-        if (typeof openDmWithSharedHello === 'function') {
-          await openDmWithSharedHello({
-            uid: profile.uid,
-            name,
-            avatar: profile.photoURL || profile.avatar,
-            theirIcebreakers: profile.icebreakers,
-            peerProfileType: profile.profileType,
-          });
-        } else if (typeof showToast === 'function') {
-          showToast('Open Baithak to message');
-        }
+        await openProfileMessage(profile);
       },
     });
 
@@ -271,7 +295,7 @@
           await refresh();
         },
       });
-    } else {
+    } else if (!state.requestSent && mode !== 'friend') {
       actions.push({
         label: 'Add Friend',
         icon: 'user-plus',
@@ -291,16 +315,18 @@
     }
 
     if (!state.following) {
-      actions.push({
-        label: 'Follow',
-        icon: 'user-plus',
-        hint: 'One-way follow. If they follow you back — or already sent you a friend request — you become Friends.',
-        fn: async () => {
-          const next = await setFollowing(profile.uid, true, 'profile_menu');
-          showToast(next.friend?t('rel_now_friends_named',{name}):t('rel_following_named',{name}));
-          await refresh();
-        },
-      });
+      if (mode !== 'follow') {
+        actions.push({
+          label: 'Follow',
+          icon: 'user-plus',
+          hint: 'One-way follow. Available here on personal profiles. Mutual follow makes you Friends.',
+          fn: async () => {
+            const next = await setFollowing(profile.uid, true, 'profile_menu');
+            showToast(next.friend?t('rel_now_friends_named',{name}):t('rel_following_named',{name}));
+            await refresh();
+          },
+        });
+      }
     } else if (!state.friend) {
       actions.push({
         label: 'Unfollow',
@@ -330,14 +356,14 @@
     return actions;
   }
 
-  function openRelationshipMenu(profile, { title } = {}) {
+  function openRelationshipMenu(profile, { title, context } = {}) {
     if (!requireRelationshipUser()) return;
     const run = async () => {
       if (!cache.has(profile.uid)) await hydrateRelationships([profile.uid]);
       const state = relationshipState(profile.uid);
-      const actions = buildRelationshipActions(profile, state);
+      const actions = buildRelationshipActions(profile, state, { context });
       if (typeof showActionSheet === 'function') {
-        showActionSheet(title || 'Connect', actions);
+        showActionSheet(title || 'More', actions);
       }
     };
     run().catch((error) => showToast(error?.message || t('rel_actions_fail')));
@@ -386,8 +412,9 @@
   }
 
   /**
-   * Renders primary CTA + ▾ expander based on surface context and profile type.
-   * Host should contain [data-rel-primary] and [data-rel-more].
+   * Primary CTA + Message + ⋯ .
+   * Personal → Add Friend (Follow lives in More). Professional → Follow.
+   * Host: [data-rel-primary], [data-rel-message], [data-rel-more].
    */
   async function wireProfileRelationshipActions(host, profile, { context = '' } = {}) {
     if (!host || !profile?.uid) return;
@@ -395,22 +422,26 @@
     host.dataset.relWired = profile.uid;
     const primaryBtn = host.querySelector('[data-rel-primary]');
     const moreBtn = host.querySelector('[data-rel-more]');
+    const messageBtn = host.querySelector('[data-rel-message]');
     if (!cache.has(profile.uid)) {
       try {
         await hydrateRelationships([profile.uid]);
       } catch (e) {}
     }
 
-    const paint = () => {
-      const state = relationshipState(profile.uid);
-      const mode = primaryRelationshipMode({
+    const modeOf = () =>
+      primaryRelationshipMode({
         context,
         profileType: profile.profileType || 'personal',
       });
+
+    const paint = () => {
+      const state = relationshipState(profile.uid);
+      const mode = modeOf();
       if (!primaryBtn) return;
       if (mode === 'friend') {
         primaryBtn.textContent = friendActionLabel(state);
-        primaryBtn.classList.toggle('is-connected', state.friend);
+        primaryBtn.classList.toggle('is-connected', !!(state.friend || state.requestSent));
         primaryBtn.dataset.mode = 'friend';
       } else {
         primaryBtn.textContent = followActionLabel(state);
@@ -422,35 +453,66 @@
     paint();
     primaryBtn?.addEventListener('click', async () => {
       if (!requireRelationshipUser()) return;
-      const state = relationshipState(profile.uid);
+      const prev = { ...relationshipState(profile.uid) };
       const mode = primaryBtn.dataset.mode;
       try {
         if (mode === 'friend') {
-          if (state.friend || state.requestSent || state.requestReceived) {
-            openRelationshipMenu(profile, { title: 'Friends' });
+          if (prev.friend) {
+            openRelationshipMenu(profile, { title: 'Friends', context });
             return;
           }
+          if (prev.requestReceived) {
+            patchRelationshipState(profile.uid, {
+              friend: true,
+              following: true,
+              followsYou: true,
+              requestReceived: false,
+              requestSent: false,
+            });
+            paint();
+            await respondFriend(profile.uid, true);
+            showToast(t('rel_now_friends'));
+            return;
+          }
+          if (prev.requestSent) {
+            openRelationshipMenu(profile, { title: 'Requested', context });
+            return;
+          }
+          patchRelationshipState(profile.uid, {
+            requestSent: !prev.followsYou,
+            friend: !!prev.followsYou,
+            following: !!prev.followsYou || prev.following,
+          });
+          paint();
           const result = await requestFriend(profile.uid);
           paint();
           if (result.autoAccepted || result.accepted) showToast(t('rel_now_friends'));
           else showToast(t('rel_request_sent'));
         } else {
-          if (state.following) {
-            openRelationshipMenu(profile, { title: 'Following' });
+          if (prev.following) {
+            openRelationshipMenu(profile, { title: 'Following', context });
             return;
           }
+          patchRelationshipState(profile.uid, {
+            following: true,
+            friend: !!prev.followsYou,
+          });
+          paint();
           const next = await setFollowing(profile.uid, true, context || 'profile');
           paint();
-          showToast(next.friend?t('rel_now_friends'):t('rel_following'));
+          showToast(next.friend ? t('rel_now_friends') : t('rel_following'));
         }
       } catch (error) {
+        cache.set(profile.uid, prev);
+        paint();
         showToast(error?.message || t('rel_update_fail'));
       }
     });
 
-    moreBtn?.addEventListener('click', () => openRelationshipMenu(profile, { title: 'More options' }));
+    messageBtn?.addEventListener('click', () => openProfileMessage(profile));
+    moreBtn?.addEventListener('click', () => openRelationshipMenu(profile, { title: 'More', context }));
     if (typeof onLongPress === 'function' && primaryBtn) {
-      onLongPress(primaryBtn, () => openRelationshipMenu(profile, { title: 'Connect' }));
+      onLongPress(primaryBtn, () => openRelationshipMenu(profile, { title: 'More', context }));
     }
     document.addEventListener('chaupaal:relationship-changed', (event) => {
       if (!host.isConnected) return;
@@ -696,6 +758,7 @@
     }
   }
 
+  window.openProfileMessage = openProfileMessage;
   window.relationshipState = relationshipState;
   window.hydrateRelationships = hydrateRelationships;
   window.setFollowing = setFollowing;

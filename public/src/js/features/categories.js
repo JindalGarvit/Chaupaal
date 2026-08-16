@@ -1600,7 +1600,7 @@ function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
       <div style="height:16px;"></div>
       <div class="spark-nudge">
         <div class="spark-nudge-text">👋 <strong>${escPeepalText((q.user.name||'').split(' ')[0])}</strong> would love to hear your thoughts! Start a conversation.</div>
-        <button type="button" class="spark-nudge-btn" data-say-hi>Say hi</button>
+        <button type="button" class="spark-nudge-btn" data-say-hi>Message</button>
       </div>
       <div style="font-size:13px;font-weight:700;margin-bottom:12px;">Comments (${q.comments})</div>
       <div id="peepalCommentsList" class="comments-list">
@@ -1627,7 +1627,7 @@ function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
     if(!currentUser){
       if(typeof showGuestSignInBanner==='function') showGuestSignInBanner();
       if(typeof showAuth==='function') showAuth();
-      else if(typeof showToast==='function') showToast('Sign in to say hi');
+      else if(typeof showToast==='function') showToast('Sign in to message');
       return;
     }
     if(!uid){

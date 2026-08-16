@@ -2940,8 +2940,7 @@ select:focus-visible,
 .relationship-counts strong{display:block;font:700 18px/1 'Space Grotesk',sans-serif;}
 .relationship-counts span{display:block;margin-top:5px;color:var(--muted);font-size:11px;}
 .relationship-counts-loading,.relationship-private-note{color:var(--muted);font-size:11px;}
-.public-profile-actions{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:14px;}
-.public-profile-actions [data-public-profile-hi]{grid-column:1/-1;}
+.public-profile-actions{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-top:14px;}
 .public-profile-actions [data-rel-more]{min-width:44px;padding-inline:12px;}
 .public-profile-actions .is-connected,.discovery-friend-btn.is-connected{background:var(--cream);color:var(--muted);border:1px solid var(--line);}
 .cp-action-item{display:flex;flex-direction:column;align-items:stretch;gap:4px;text-align:left;}

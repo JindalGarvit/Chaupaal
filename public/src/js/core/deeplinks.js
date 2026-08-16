@@ -190,9 +190,9 @@
             <span>Loading…</span>
           </div>
           <div class="public-profile-actions" data-rel-actions>
-            <button class="btn btn--primary" data-rel-primary type="button">Connect</button>
-            <button class="btn" data-rel-more type="button" aria-label="More relationship options">▾</button>
-            <button class="btn" data-public-profile-hi type="button">Say hi</button>
+            <button class="btn btn--primary" data-rel-primary type="button">${String(dp.profileType || u.profileType || '').toLowerCase() === 'professional' ? 'Follow' : 'Add Friend'}</button>
+            <button class="btn" data-rel-message type="button">Message</button>
+            <button class="btn" data-rel-more type="button" aria-label="More">⋯</button>
           </div>
         </div>
         <div class="public-profile-shell-host" data-public-profile-shell></div>
@@ -428,75 +428,6 @@
           if (counts) counts.innerHTML = '<span class="public-profile-chrome-label">Connections</span>';
         });
     }
-    sheet.querySelector('[data-public-profile-hi]')?.addEventListener('click', async () => {
-      if (!profileUid) {
-        if (typeof showToast === 'function') showToast('Could not open chat');
-        return;
-      }
-      if (typeof openDmWithSharedHello === 'function') {
-        sheet.remove();
-        await openDmWithSharedHello({
-          uid: profileUid,
-          name: u.name || uname || 'Chaupaal member',
-          avatar: u.avatar || u.photoURL || '👤',
-          theirIcebreakers: u.icebreakers || u.profile?.icebreakers || [],
-          origin: 'profile',
-          peerProfileType: relProfile.profileType,
-          matchMeta: {
-            teenMode: u.teenMode,
-            isMinor: u.isMinor,
-            age: u.age,
-          },
-        });
-        return;
-      }
-      if (typeof assertCanMessage === 'function') {
-        const ok = await assertCanMessage({
-          uid: profileUid,
-          name: u.name || uname,
-          teenMode: u.teenMode,
-          isMinor: u.isMinor,
-          age: u.age,
-          dob: u.dob || u.dateOfBirth,
-        });
-        if (!ok) return;
-      }
-      sheet.remove();
-      const chatId =
-        typeof dmChatIdFor === 'function' ? dmChatIdFor(profileUid) : `chat_profile_${profileUid}`;
-      const chat = {
-        id: chatId || `chat_profile_${profileUid}`,
-        firestoreId: chatId || undefined,
-        type: 'dm',
-        name: u.name || uname || 'Chaupaal member',
-        avatar: u.avatar || '👤',
-        uid: profileUid,
-        peerUid: profileUid,
-        participants: currentUser?.uid ? [currentUser.uid, profileUid].sort() : [profileUid],
-        preview: 'Opened from profile',
-        time: 'now',
-        unread: 0,
-        theirIcebreakers: u.icebreakers || [],
-        teenMode: u.teenMode,
-        isMinor: u.isMinor,
-        age: u.age,
-      };
-      if (typeof ensurePeerDmChat === 'function') {
-        try {
-          const id = await ensurePeerDmChat(profileUid);
-          if (id) {
-            chat.id = id;
-            chat.firestoreId = id;
-          }
-        } catch (e) {}
-      }
-      if (typeof SAMPLE_CHATS !== 'undefined' && !SAMPLE_CHATS.find((c) => c.id === chat.id)) SAMPLE_CHATS.unshift(chat);
-      switchTab('baithak');
-      setTimeout(() => {
-        if (typeof initBaithak === 'function') initBaithak();
-        setTimeout(() => window.openChatScreen?.(chat), 200);
-      }, 100);
-    });
     return sheet;
   }
 

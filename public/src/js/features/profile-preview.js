@@ -216,7 +216,8 @@
     });
     sheet.querySelector('[data-peek-message]')?.addEventListener('click', () => {
       close();
-      if (typeof openDmWithSharedHello === 'function' && uid) openDmWithSharedHello({ uid, name, username });
+      if (typeof openProfileMessage === 'function') openProfileMessage({ ...profile, uid, username, name });
+      else if (typeof openDmWithSharedHello === 'function' && uid) openDmWithSharedHello({ uid, name, username });
       else if (typeof startChatWithUser === 'function') startChatWithUser(profile);
       else if (typeof showToast === 'function') showToast('Open Baithak to message');
     });

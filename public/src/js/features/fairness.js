@@ -96,10 +96,6 @@ function scoreMatch(user){
 }
 
 function interceptStrangerMessage(targetUid, targetName, targetLimit, onProceed){
-  if(!canMessageStranger(targetUid, targetLimit)){
-    showToast(`${targetName} is taking a break from new connections today. Try again tomorrow!`);
-    return;
-  }
   incrementStrangerCount(targetUid);
   recordMessageSent(targetUid);
   onProceed();
