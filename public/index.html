@@ -36,7 +36,7 @@
   <link rel="stylesheet" href="/src/styles/baithak.css?v=945e8c52">
   <link rel="stylesheet" href="/src/styles/peepal.css?v=26cc9a4d">
   <link rel="stylesheet" href="/src/styles/duniya.css?v=51212780">
-  <link rel="stylesheet" href="/src/styles/components.css?v=96997851">
+  <link rel="stylesheet" href="/src/styles/components.css?v=4b8561ed">
   <link rel="stylesheet" href="/src/styles/mehfil.css?v=66769939">
 </head>
 <body>
@@ -191,7 +191,7 @@
       <div class="auth-form-screen hidden" id="authRegStep1">
         <div class="auth-form-header">
           <button class="auth-back-btn" id="reg1BackBtn" data-icon="arrow-left" aria-label="Back"></button>
-          <div class="auth-form-title">Create your Profile</div>
+          <div class="auth-form-title" id="authCanvasTitle">Create your Profile</div>
           <div style="width:36px;" aria-hidden="true"></div>
         </div>
         <div class="auth-form-body auth-reg-scroll" id="authRegScroll">
@@ -212,14 +212,15 @@
                 <div class="dp-hero-name" id="authCanvasLiveName">Your name</div>
                 <div class="dp-hero-handle" id="authCanvasLiveHandle">@username</div>
                 <div class="dp-hero-meta" id="authCanvasLiveMeta">Add your city</div>
-                <p class="auth-photo-nudge" id="authPhotoNudge">A photo helps people see a real you — optional, skip anytime.</p>
+                <p class="auth-welcome-kicker hidden" id="authWelcomeKicker">Welcome back</p>
+                <p class="auth-photo-nudge" id="authPhotoNudge">A photo helps people recognise you — optional, skip anytime.</p>
                 <div class="dp-hero-complete" id="authSignupComplete">
                   <div class="dp-hero-complete-row">
                     <span>Profile start</span>
                     <span data-ui="auth-signup-pct" id="authSignupPct">0%</span>
                   </div>
                   <div class="dp-hero-complete-track">
-                    <div id="authSignupBar" data-ui="auth-signup-bar" style="width:0%;background:var(--red);"></div>
+                    <div id="authSignupBar" data-ui="auth-signup-bar"></div>
                   </div>
                   <div class="dp-hero-complete-hint" id="authSignupHint">Name, username &amp; birthday unlock your Profile</div>
                 </div>
@@ -232,6 +233,7 @@
               <button type="button" tabindex="-1" disabled aria-disabled="true"><strong>0</strong><span>Following</span></button>
             </div>
 
+            <div id="authCanvasCreateFields">
             <section class="auth-canvas-section" aria-labelledby="authSecIdentity">
               <h3 class="auth-canvas-section-title" id="authSecIdentity">Identity</h3>
               <div class="auth-input-group">
@@ -271,20 +273,6 @@
                 <input type="text" class="auth-input hidden" id="regGenderCustom" maxlength="40" placeholder="How do you describe your gender?" style="margin-top:8px;" autocomplete="sex">
                 <div class="auth-input-hint" id="regGenderHint">Required for Personal accounts</div>
               </div>
-              <div id="regProFields" class="hidden">
-                <div class="auth-input-group">
-                  <label class="auth-input-label">Industry</label>
-                  <div class="auth-picklist" id="regIndustryPicklist"></div>
-                  <input type="text" class="auth-input hidden" id="regIndustryOther" maxlength="80" placeholder="Type your industry" style="margin-top:8px;">
-                  <div class="auth-input-hint auth-nudge">Optional — helps people in your world find you.</div>
-                </div>
-                <div class="auth-input-group">
-                  <label class="auth-input-label">Purpose</label>
-                  <div class="auth-picklist" id="regPurposePicklist"></div>
-                  <input type="text" class="auth-input hidden" id="regPurposeOther" maxlength="80" placeholder="Type your purpose" style="margin-top:8px;">
-                  <div class="auth-input-hint auth-nudge">Optional — skip and add later from Profile.</div>
-                </div>
-              </div>
             </section>
 
             <section class="auth-canvas-section" aria-labelledby="authSecExtras">
@@ -310,40 +298,15 @@
                   <option value="pa">ਪੰਜਾਬੀ</option>
                 </select>
               </div>
-              <div class="auth-input-group">
-                <label class="auth-input-label">What are you here for?</label>
-                <div style="display:flex;flex-wrap:wrap;gap:7px;" id="intentChips">
-                  <button type="button" class="auth-intent-chip" data-val="Friendship">Friendship</button>
-                  <button type="button" class="auth-intent-chip" data-val="Dating">Dating</button>
-                  <button type="button" class="auth-intent-chip" data-val="Marriage">Marriage</button>
-                  <button type="button" class="auth-intent-chip" data-val="Co-founder / Collaborator">Co-founder</button>
-                  <button type="button" class="auth-intent-chip" data-val="Study buddy">Study buddy</button>
-                  <button type="button" class="auth-intent-chip" data-val="Workout buddy">Workout buddy</button>
-                  <button type="button" class="auth-intent-chip" data-val="Mentorship">Mentorship</button>
-                  <button type="button" class="auth-intent-chip" data-val="Language exchange">Language exchange</button>
-                  <button type="button" class="auth-intent-chip" data-val="Flatmate / Roommate">Flatmate</button>
-                  <button type="button" class="auth-intent-chip" data-val="Networking / Professional connections">Network</button>
-                  <button type="button" class="auth-intent-chip" data-val="Job hunt">Job hunt</button>
-                  <button type="button" class="auth-intent-chip" data-val="Travel buddies">Travel buddies</button>
-                  <button type="button" class="auth-intent-chip" data-val="Something else">Something else</button>
-                </div>
-                <input type="text" class="auth-input hidden" id="intentCustomInput" maxlength="80" placeholder="Describe what you're looking for…" style="margin-top:8px;">
-                <div class="auth-input-hint auth-nudge">Intents → better matches on Peepal. Skip for now if you want.</div>
-              </div>
-              <div class="auth-input-group">
-                <label class="auth-input-label">Open to meeting new people?</label>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                  <button type="button" class="auth-gender-chip active" data-val="yes" id="openToMeetYes">Yes, show my profile</button>
-                  <button type="button" class="auth-gender-chip" data-val="no" id="openToMeetNo">Not right now</button>
-                </div>
-              </div>
-              <div class="auth-input-group">
-                <label class="auth-input-label" for="regPhone">Mobile number</label>
-                <input class="auth-input" type="tel" id="regPhone" placeholder="+91 98765 43210" autocomplete="tel">
-                <div class="auth-input-hint">Optional contact note — verifying phone below also counts as signup.</div>
-              </div>
-              <button type="button" class="auth-guest-btn auth-skip-optionals" id="authSkipOptionals">Add bio &amp; prompts later →</button>
+              <button type="button" class="auth-guest-btn auth-skip-optionals" id="authSkipOptionals">Skip extras — go to account access →</button>
             </section>
+            </div><!-- /#authCanvasCreateFields -->
+
+            <button type="button" class="auth-switch-btn" id="authAlreadyHaveAccount">I already have an account</button>
+            <button type="button" class="auth-guest-btn hidden" id="authCanvasNotYou">Not you? Switch account</button>
+            <button type="button" class="auth-guest-btn" id="authCanvasGuest">Explore as guest →</button>
+
+            <section class="auth-canvas-section hidden" id="authCanvasLoginHost" aria-label="Log in"></section>
 
             <section class="auth-canvas-section auth-creds-section" aria-labelledby="authSecCreds" id="authCredsSection">
               <h3 class="auth-canvas-section-title" id="authSecCreds">Account access</h3>
@@ -867,9 +830,9 @@
   <script src="/src/js/core/relationships.js?v=0fad018c"></script>
   <script src="/src/js/core/chat-presence.js?v=7176596d"></script>
   <script src="/src/js/core/image-pipeline.js?v=ac09e26b"></script>
-  <script src="/src/js/core/profile-completion.js?v=1a6bc181"></script>
-  <script src="/src/js/core/profile-facts.js?v=061d8fda"></script>
-  <script src="/src/js/core/profile-rewards.js?v=1bee301a"></script>
+  <script src="/src/js/core/profile-completion.js?v=4145ef72"></script>
+  <script src="/src/js/core/profile-facts.js?v=83ce64be"></script>
+  <script src="/src/js/core/profile-rewards.js?v=17032046"></script>
   <script src="/src/js/core/icebreakers.js?v=e5a2c7c6"></script>
   <script src="/src/js/core/profile-prompts.js?v=57b49dba"></script>
   <script src="/src/js/core/chaupaal-activity.js?v=f96f41fc"></script>
@@ -881,12 +844,12 @@
   <script src="/src/js/core/swipe-pager.js?v=e81d56e6"></script>
   <script src="/src/js/core/section-modes.js?v=f654f9cd"></script>
   <script src="/src/js/core/contacts-find.js?v=b2d4bc70"></script>
-  <script src="/src/js/core/teen-mode.js?v=1a76b0c5"></script>
+  <script src="/src/js/core/teen-mode.js?v=fba4d750"></script>
   <script src="/src/js/core/professional-badge.js?v=775a0916"></script>
   <script src="/src/js/core/linkify.js?v=6dde463f"></script>
   <script src="/src/js/core/profile-sections.js?v=c9dc40c9"></script>
   <script src="/src/js/core/profile-highlights.js?v=bce95bea"></script>
-  <script src="/src/js/core/profile-shell.js?v=db8b3b2a"></script>
+  <script src="/src/js/core/profile-shell.js?v=0cbaf5e1"></script>
   <script src="/src/js/core/profile-section-mount.js?v=a15557d7"></script>
   <script src="/src/js/core/push-prefs.js?v=967d0d68"></script>
   <script src="/src/js/core/notification-panel.js?v=32b723dd"></script>
@@ -919,7 +882,7 @@
   <script src="/src/js/core/profile-btn.js?v=f94e84cb"></script>
   <script src="/src/js/auth/auth-ui.js?v=30e365df"></script>
   <script src="/src/js/auth/phone-otp.js?v=3315dcd2"></script>
-  <script src="/src/js/auth/auth-profiles.js?v=80630a42"></script>
+  <script src="/src/js/auth/auth-profiles.js?v=ea92be32"></script>
   <script src="/src/js/features/akhbaar.js?v=64b8165b"></script>
   <script src="/src/js/features/dangal.js?v=d53bdd6b"></script>
   <script src="/src/js/features/dangal-ratings.js?v=1cc5662a"></script>
@@ -940,7 +903,7 @@
   <script src="/src/js/core/journal-anim.js?v=f2658ae2"></script>
   <script src="/src/js/features/baithak.js?v=3ea316fa"></script>
   <script src="/src/js/features/profile-preview.js?v=88dd9762"></script>
-  <script src="/src/js/features/profile.js?v=8efd321e"></script>
+  <script src="/src/js/features/profile.js?v=9d32c287"></script>
   <script src="/src/js/core/i18n.js?v=23430662"></script>
   <script src="/src/js/core/i18n-locales.js?v=5812eb81"></script>
   <script src="/src/js/features/categories.js?v=b08b3bb1"></script>
@@ -985,6 +948,6 @@
   <script src="/src/js/core/polish.js?v=e763bf53"></script>
   <script src="/src/js/features/fairness.js?v=464ed9b3"></script>
   <script src="/src/js/features/media-profile.js?v=d8fe1026"></script>
-  <script src="/src/js/auth/auth-events.js?v=9b315d2d"></script>
+  <script src="/src/js/auth/auth-events.js?v=0a3f1a5b"></script>
 </body>
 </html>

@@ -221,6 +221,7 @@
   window.isBlockedAge = isBlockedAge;
   window.isTeenAge = isTeenAge;
   window.isTeenModeUser = isTeenModeUser;
+  window.teenHideDatingIntents = teenHideDatingIntents;
   window.needsParentalConsent = needsParentalConsent;
   window.canMessageTarget = canMessageTarget;
   window.assertCanMessage = assertCanMessage;

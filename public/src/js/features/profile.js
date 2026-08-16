@@ -73,13 +73,25 @@ function renderProfileModal(){
         <div class="dp-hero-meta">${[dp.currentCity,dp.occupation].filter(Boolean).join(' · ')||'Add your city & job'}</div>
         <div class="dp-hero-complete">
           <div class="dp-hero-complete-row">
-            <span>Profile completeness</span>
-            <span data-ui="profile-completion-pct" style="color:${pct>=80?'var(--green)':'var(--red)'};">${pct}%</span>
+            <span>Profile</span>
+            <span data-ui="profile-completion-pct">${pct}%</span>
           </div>
           <div class="dp-hero-complete-track">
-            <div data-ui="profile-completion-bar" style="width:${pct}%;background:${pct>=80?'#2ECC71':'var(--red)'};"></div>
+            <div data-ui="profile-completion-bar" style="width:${pct}%"></div>
           </div>
-          <div data-ui="profile-completion-hint" class="dp-hero-complete-hint" style="${pct<60?'':'display:none;'}">${stats.missing?.length?`Add ${stats.missing.slice(0,3).join(', ')}`:'Looking good — keep discovering'}</div>
+          <div class="dp-hero-sections" role="list">
+            ${['identity','social','relationship','career','trust'].map((id)=>{
+              const sec=stats.sections?.[id]||{pct:0};
+              const hide=id==='relationship' && (stats.hideRelationship || (typeof teenHideDatingIntents==='function' && teenHideDatingIntents()));
+              const labels={identity:'Identity',social:'Social',relationship:'Relationship',career:'Career',trust:'Trust'};
+              return `<button type="button" class="dp-hero-section${sec.complete?' is-complete':''}" data-complete-section="${id}" ${hide?'hidden':''} role="listitem">
+                <span class="dp-hero-section-lab">${labels[id]}</span>
+                <span class="dp-hero-section-track"><span data-section-bar style="width:${sec.pct||0}%"></span></span>
+                <span data-section-pct>${sec.pct||0}%</span>
+              </button>`;
+            }).join('')}
+          </div>
+          <div data-ui="profile-completion-hint" class="dp-hero-complete-hint">${stats.missing?.length?`Next: ${stats.missing.slice(0,2).join(', ')}`:'Looking good — this Profile feels like you.'}</div>
         </div>
       </div>
     </div>
@@ -177,17 +189,20 @@ function renderProfileModal(){
       ${profileField('Life goals','lifeGoals','textarea','What are you working towards?')}
       ${profileField('Core values','coreValues','chips','Add values',['Family','Ambition','Freedom','Creativity','Loyalty','Honesty','Adventure','Security','Faith','Growth','Humour','Independence','Empathy','Justice'])}
     `,
-    Relationships:()=>`
+    Relationships:()=>{
+      const teen=typeof teenHideDatingIntents==='function'&&teenHideDatingIntents();
+      return `
       ${profileField('Relationship status','relationshipStatus','select','',['','Single','Single — not open to dating','Single — open to friendship only','Single — open to casual dating','Single — open to serious relationship only','Single — only open to marriage','In a relationship','Married','Separated','Divorced','Widowed','In an open relationship','It\'s complicated','Prefer not to say'])}
-      ${profileField('Looking for','lookingFor','select','',['','Friendship','Dating','Marriage','Co-founder / Collaborator','Study buddy','Workout buddy','Mentorship','Language exchange','Flatmate / Roommate','Networking / Professional connections','Job hunt','Casual dating','Serious relationship','Activity partner','Travel buddy','Nothing specific','Open to anything'])}
+      ${teen?'':profileField('Looking for','lookingFor','select','',['','Friendship','Dating','Marriage','Co-founder / Collaborator','Study buddy','Workout buddy','Mentorship','Language exchange','Flatmate / Roommate','Networking / Professional connections','Job hunt','Casual dating','Serious relationship','Activity partner','Travel buddy','Nothing specific','Open to anything'])}
       ${profileField('Do you have children?','haveChildren','select','',['','No','Yes — live with me','Yes — don\'t live with me','Prefer not to say'])}
-      ${profileField('Want children?','wantChildren','select','',['','Yes','No','Open to it','Already have enough','Prefer not to say'])}
+      ${teen?'':profileField('Want children?','wantChildren','select','',['','Yes','No','Open to it','Already have enough','Prefer not to say'])}
       ${profileField('Living situation','livingSituation','select','',['','Live alone','With family','With roommates','With partner','In hostel/PG','In college dorm','Other'])}
       ${profileField('Family type (grew up in)','familyType','select','',['','Nuclear family','Joint family','Single parent','Extended family','Foster/adopted','Other'])}
       ${profileField('Siblings','siblings','select','',['','Only child','1 sibling','2 siblings','3+ siblings','Prefer not to say'])}
-      ${profileField('Open to long distance?','longDistance','select','',['','Yes','No','Depends','Prefer not to say'])}
-      ${profileField('Marital history','maritalHistory','select','',['','Never married','Divorced','Widowed','Prefer not to say'])}
-    `,
+      ${teen?'':profileField('Open to long distance?','longDistance','select','',['','Yes','No','Depends','Prefer not to say'])}
+      ${teen?'':profileField('Marital history','maritalHistory','select','',['','Never married','Divorced','Widowed','Prefer not to say'])}
+    `;
+    },
     Social:()=>`
       ${typeof renderProfileTypeToggleHtml==='function'?renderProfileTypeToggleHtml():''}
       ${profileField('Instagram','instagram','text','@username')}
@@ -459,6 +474,27 @@ function renderProfileModal(){
       });
     });
     renderSection('Personal');
+    if(typeof refreshProfileCompletionUI==='function') refreshProfileCompletionUI();
+    el.querySelectorAll('[data-complete-section]').forEach((btn)=>{
+      btn.addEventListener('click',()=>{
+        const id=btn.getAttribute('data-complete-section');
+        const map={identity:'Personal',social:'Personal',relationship:'Relationships',career:'Career',trust:'Personal'};
+        const sec=map[id]||'Personal';
+        const tab=document.querySelector(`#profileSectionTabs .profile-section-tab[data-sec="${sec}"]`);
+        if(tab) tab.click();
+        else renderSection(sec);
+        const content=document.getElementById('profileSectionContent');
+        try{ content?.scrollIntoView({block:'start',behavior:'smooth'}); }catch(e){}
+        const focusKey={identity:'bio',social:'currentCity',relationship:'relationshipStatus',career:'occupation',trust:'displayName'}[id];
+        setTimeout(()=>{
+          const field=document.querySelector(`#profileSectionContent .dp-field[data-key="${focusKey}"]`);
+          field?.focus();
+        },80);
+      });
+    });
+    if(typeof maybeOfferProfileCompleteNudge==='function'){
+      setTimeout(()=>maybeOfferProfileCompleteNudge({reason:'edit'}),700);
+    }
     document.getElementById('switchProfileBtn')?.addEventListener('click',()=>{
       if(typeof openAccountSwitcher==='function') openAccountSwitcher();
       else if(typeof openProfileSwitcher==='function') openProfileSwitcher();

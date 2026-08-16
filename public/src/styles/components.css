@@ -4255,8 +4255,26 @@ button[aria-busy="true"]::after{
   display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:5px;
 }
 .dp-hero-complete-track{height:5px;background:var(--line);border-radius:99px;overflow:hidden;}
-.dp-hero-complete-track > div{height:100%;border-radius:99px;transition:width .5s ease;}
+.dp-hero-complete-track > div{height:100%;border-radius:99px;transition:width .5s ease;background:var(--red,#E63946);}
 .dp-hero-complete-hint{font-size:11px;color:var(--muted);margin-top:5px;}
+.dp-hero-sections{display:flex;flex-direction:column;gap:6px;margin-top:10px;}
+.dp-hero-section{
+  display:grid;grid-template-columns:76px 1fr 36px;align-items:center;gap:8px;
+  border:none;background:transparent;padding:0;cursor:pointer;text-align:left;width:100%;
+  font-family:Inter,sans-serif;color:var(--ink);
+}
+.dp-hero-section-lab{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);}
+.dp-hero-section-track{height:4px;background:var(--line);border-radius:99px;overflow:hidden;}
+.dp-hero-section-track > span{display:block;height:100%;border-radius:99px;background:var(--red,#E63946);transition:width .45s ease;}
+.dp-hero-section [data-section-pct]{font-size:10px;font-weight:700;color:var(--muted);text-align:right;}
+.dp-hero-section.is-complete .dp-hero-section-lab{color:var(--ink);}
+html.quiet-mode .dp-hero-complete-track > div,
+html.quiet-mode .dp-hero-section-track > span{transition:none;}
+#authSignupBar{height:100%;width:0;background:var(--red,#E63946);border-radius:99px;}
+#authRegStep1.is-welcome .dp-hero-edit{display:none;}
+.auth-welcome-kicker{font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;margin:8px 0 0;color:var(--ink);}
+#authCanvasLoginHost .auth-form-title{display:none;}
+#authCanvasLoginHost{padding-top:8px;}
 .dp-rel-strip{margin:4px 0 10px;}
 .dp-reorder-hint{font-size:11px;color:var(--muted);margin:0 0 12px;line-height:1.4;}
 .dp-field-tabs{

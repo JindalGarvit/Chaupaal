@@ -421,8 +421,9 @@
       if (typeof showAuth === 'function') {
         document.getElementById('authOverlay')?.classList.remove('hidden');
         if (mode === 'signup') {
-          if (typeof window.emptyRegData === 'function') {
-            /* no-op — regData reset below via events */
+          if (typeof enterAuthCanvasCreate === 'function') enterAuthCanvasCreate();
+          else if (typeof window.emptyRegData === 'function') {
+            /* canvas helpers may load after */
           }
           showAuthScreenSafe('authRegStep1');
         } else {

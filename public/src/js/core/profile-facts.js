@@ -54,7 +54,41 @@
       return `${list}. Always nicer when you can just talk.`;
     },
     photos: () => `Photo's up. So much better than a blank face.`,
+    photoURL: () => `Photo's up. So much better than a blank face.`,
     family: () => `Family bit added. Makes chats feel less like starting from zero.`,
+    lookingFor: () => `Got what you're looking for — people can match the vibe.`,
+    prompts: () => `Prompts in. Instant icebreaker energy.`,
+    icebreakers: () => `Icebreakers in. Chats just got easier to start.`,
+    industry: () => `Industry noted — you'll bump into people in similar worlds.`,
+    username: (v) => (v ? `@${String(v).replace(/^@/, '')} is yours.` : `Username's set.`),
+    identity: () => `Identity's looking like you — photo, bio, prompts.`,
+    social: () => `Social's filled in — city, languages, the stuff you like.`,
+    relationship: () => `Relationship bits are in. Clear, no guessing.`,
+    career: () => `Career's on the Profile. Work world's a little more findable.`,
+    trust: () => `Trust checks out — handle, face, verified contact.`,
+  };
+
+  const SECTION_FACTS = {
+    identity: [
+      'Profiles with a photo and a bio get recognised faster in a crowded room — same energy here.',
+      'A couple of prompts beat a long manifesto. People remember the spark, not the essay.',
+    ],
+    social: [
+      'City + languages is how people find “someone nearby who actually gets the joke.”',
+      'Shared hobbies are the original icebreaker. You just wrote yours down.',
+    ],
+    relationship: [
+      'Clear status saves everyone an awkward “so what are you looking for?” later.',
+      'Intent on the Profile is optional energy — but when it’s there, matching gets kinder.',
+    ],
+    career: [
+      'Occupation is a shortcut to “oh, you live in that world too.”',
+      'Work stuff on a Profile is for finding people — not a CV dump.',
+    ],
+    trust: [
+      'A real photo + a verified contact is the whole “this is a person” handshake.',
+      'Username’s yours. That’s the handle people will actually remember.',
+    ],
   };
 
   const UNLOCK_HINTS = {
@@ -756,8 +790,21 @@
     return base;
   }
 
+  async function getSectionCompleteFact(sectionId) {
+    const id = String(sectionId || '');
+    const lineFn = GENERIC[id];
+    const line = lineFn ? lineFn() : `Nice — that part of your Profile is done.`;
+    return {
+      line,
+      trivia: pick(SECTION_FACTS[id] || null),
+      source: 'generic',
+      field: id,
+    };
+  }
+
   window.PROFILE_FACTS_USE_REAL_STATS = PROFILE_FACTS_USE_REAL_STATS;
   window.getProfileFact = getProfileFact;
+  window.getSectionCompleteFact = getSectionCompleteFact;
   window.profileFactsGenericProvider = genericProvider;
   window.profileFactsRealStatsProvider = realStatsProvider;
 })();

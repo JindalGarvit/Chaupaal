@@ -98,19 +98,45 @@
     return true;
   }
 
-  /**
-   * Call after a field save when the field newly becomes filled.
-   */
-  async function celebrateSectionComplete(fieldName, value) {
+  const SECTION_STORAGE = 'chaupaal_profile_section_done';
+
+  function isQuietMotion() {
+    return (
+      document.documentElement.classList.contains('quiet-mode') ||
+      (typeof Quiet !== 'undefined' && Quiet?.motion === false)
+    );
+  }
+
+  function smallBurst() {
+    if (isQuietMotion()) return;
+    if (typeof launchConfetti === 'function') launchConfetti({ x: 50, y: 42 }, 16);
+  }
+
+  function bigBurst() {
+    if (isQuietMotion()) return;
+    if (typeof launchConfetti === 'function') launchConfetti({ x: 50, y: 35 }, 70);
+  }
+
+  function loadSectionDone() {
+    try {
+      return JSON.parse(localStorage.getItem(SECTION_STORAGE) || '[]');
+    } catch {
+      return [];
+    }
+  }
+
+  function saveSectionDone(ids) {
+    try {
+      localStorage.setItem(SECTION_STORAGE, JSON.stringify(ids));
+    } catch (e) {}
+  }
+
+  /** Field newly filled — toast + fact, no confetti (not every keystroke). */
+  async function celebrateFieldFill(fieldName, value) {
     const fact =
       typeof getProfileFact === 'function'
         ? await getProfileFact(fieldName, value)
-        : { line: 'Section saved.', unlockHint: null };
-    const quiet = document.documentElement.classList.contains('quiet-mode');
-    if (!quiet && typeof SoundLib !== 'undefined' && SoundLib.sectionComplete) SoundLib.sectionComplete();
-    if (!quiet && typeof launchConfetti === 'function') launchConfetti({ x: 50, y: 42 }, 28);
-    if (typeof haptic === 'function') haptic('success');
-    // Subtle field flash on matching input
+        : { line: 'Saved.', unlockHint: null };
     document.querySelectorAll(`[data-key="${fieldName}"]`).forEach((el) => {
       el.classList.add('dp-field-saved-pop');
       setTimeout(() => el.classList.remove('dp-field-saved-pop'), 700);
@@ -119,14 +145,54 @@
       (typeof COMPLETION_FIELDS !== 'undefined' &&
         COMPLETION_FIELDS.find((f) => f.key === fieldName || (f.aliases || []).includes(fieldName))?.label) ||
       fieldName;
-    const emoji = ['✨', '🌟', '💫', '🎯', '🔥'][Math.abs(String(fieldName).length) % 5];
     showRewardToast({
-      title: `${emoji} ${label} ✓`,
+      title: `${label} ✓`,
       line: fact.line,
       trivia: fact.trivia || null,
       unlockHint: fact.unlockHint,
-      durationMs: fact.trivia ? 3400 : 2600,
+      durationMs: fact.trivia ? 3200 : 2400,
     });
+  }
+
+  async function celebrateProfileSection(sectionId) {
+    const names = { identity: 'Identity', social: 'Social', relationship: 'Relationship', career: 'Career', trust: 'Trust' };
+    const fact =
+      typeof getSectionCompleteFact === 'function'
+        ? await getSectionCompleteFact(sectionId)
+        : typeof getProfileFact === 'function'
+          ? await getProfileFact(sectionId, sectionId)
+          : { line: 'Section complete.' };
+    const quiet = isQuietMotion();
+    if (!quiet && typeof SoundLib !== 'undefined' && SoundLib.sectionComplete) SoundLib.sectionComplete();
+    smallBurst();
+    if (typeof haptic === 'function') haptic('success');
+    const emoji = { identity: '✨', social: '🌿', relationship: '💫', career: '🎯', trust: '🔒' }[sectionId] || '✨';
+    showRewardToast({
+      title: `${emoji} ${names[sectionId] || sectionId} complete`,
+      line: fact.line,
+      trivia: fact.trivia || null,
+      durationMs: 3200,
+    });
+  }
+
+  /** Back-compat name: field fill used to fire a section burst — keep export, quieter now. */
+  async function celebrateSectionComplete(fieldName, value) {
+    await celebrateFieldFill(fieldName, value);
+  }
+
+  function celebrateNewlyCompletedSections(prevStats, nextStats) {
+    if (!nextStats?.sections) return;
+    const done = loadSectionDone();
+    const newly = [];
+    ['identity', 'social', 'relationship', 'career', 'trust'].forEach((id) => {
+      const next = nextStats.sections[id];
+      const prev = prevStats?.sections?.[id];
+      if (next?.hidden) return;
+      if (next?.complete && !prev?.complete && !done.includes(id)) newly.push(id);
+    });
+    if (!newly.length) return;
+    saveSectionDone(done.concat(newly));
+    newly.forEach((id) => celebrateProfileSection(id));
   }
 
   function celebrateMilestones(pct) {
@@ -138,7 +204,6 @@
     if (!newly.length) return;
     const ids = unlocked.concat(newly.map((m) => m.id));
     saveUnlocked(ids);
-    // Persist badge titles on user doc (best-effort)
     if (db && currentUser) {
       const titles = MILESTONES.filter((m) => ids.includes(m.id)).map((m) => m.title);
       db.collection('users')
@@ -146,40 +211,47 @@
         .set({ profileBadges: titles, profileMilestoneIds: ids }, { merge: true })
         .catch(() => {});
     }
-    // Show highest new milestone only (distinct achievement, not a stack)
     const top = newly.sort((a, b) => b.pct - a.pct)[0];
-    if (typeof SoundLib !== 'undefined' && SoundLib.milestone) SoundLib.milestone();
-    if (typeof launchConfetti === 'function') launchConfetti({ x: 50, y: 35 }, 70);
+    const big = top.pct >= 97;
+    if (!isQuietMotion() && typeof SoundLib !== 'undefined' && SoundLib.milestone) SoundLib.milestone();
+    if (big) bigBurst();
     if (typeof haptic === 'function') haptic('success');
     showRewardToast({
       title: `Unlocked: ${top.title}`,
       line: top.blurb,
       milestoneTitle: `${playfulPct(top.pct)}% vibes`,
       unlockHint:
-        top.pct >= 72
-          ? 'Advantage: stronger Peepal matchmaking & nearby discovery.'
-          : top.pct >= 47
-            ? 'Advantage: better discovery matches from what you filled.'
-            : 'Keep going — every field helps people find you.',
+        top.pct >= 97
+          ? 'You show up complete — chrome tucks away.'
+          : top.pct >= 72
+            ? 'Stronger Peepal matchmaking from here.'
+            : 'Every field helps people find you.',
       durationMs: 3800,
     });
   }
 
   /**
-   * Hook from saveProfileField — only celebrates empty→filled transitions.
+   * Hook from saveProfileField — field toast on empty→filled; burst only when a section completes.
    */
   async function onProfileFieldSaved(fieldName, value, prevSnapshot) {
+    const prevStats =
+      typeof calcProfileCompletion === 'function' ? calcProfileCompletion(prevSnapshot || {}) : null;
     const newlyFilled = wasEmpty(prevSnapshot, fieldName) && isNowFilled(value);
     if (newlyFilled) {
-      await celebrateSectionComplete(fieldName, value);
+      await celebrateFieldFill(fieldName, value);
     }
     const stats = typeof calcProfileCompletion === 'function' ? calcProfileCompletion() : null;
-    if (stats) celebrateMilestones(stats.pct);
+    if (stats) {
+      celebrateNewlyCompletedSections(prevStats, stats);
+      celebrateMilestones(stats.pct);
+    }
   }
 
   window.PROFILE_MILESTONES = MILESTONES;
   window.playfulProfilePct = playfulPct;
   window.celebrateSectionComplete = celebrateSectionComplete;
+  window.celebrateFieldFill = celebrateFieldFill;
+  window.celebrateProfileSection = celebrateProfileSection;
   window.celebrateMilestones = celebrateMilestones;
   window.onProfileFieldSaved = onProfileFieldSaved;
   window.getUnlockedProfileMilestones = loadUnlocked;

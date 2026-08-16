@@ -58,6 +58,89 @@ function emptyRegData() {
     usernameAvailable: false,
   };
 }
+window.emptyRegData = emptyRegData;
+
+function foldLoginOntoCanvas() {
+  const host = document.getElementById('authCanvasLoginHost');
+  const body = document.querySelector('#authLoginScreen .auth-form-body');
+  if (!host || !body || body.parentElement === host) return;
+  host.appendChild(body);
+}
+
+function setAuthCanvasMode(mode) {
+  foldLoginOntoCanvas();
+  const step = document.getElementById('authRegStep1');
+  if (step) {
+    step.classList.toggle('is-welcome', mode === 'welcome');
+    step.classList.toggle('is-login-reveal', mode === 'login');
+    step.dataset.authMode = mode;
+  }
+  const title = document.getElementById('authCanvasTitle');
+  const kicker = document.getElementById('authWelcomeKicker');
+  const create = document.getElementById('authCanvasCreateFields');
+  const creds = document.getElementById('authCredsSection');
+  const loginHost = document.getElementById('authCanvasLoginHost');
+  const already = document.getElementById('authAlreadyHaveAccount');
+  const notYou = document.getElementById('authCanvasNotYou');
+  const guest = document.getElementById('authCanvasGuest');
+  const footer = document.querySelector('#authRegStep1 .auth-sticky-cta');
+  const legal = document.querySelector('#authRegStep1 .auth-reg-legal');
+  const photoNudge = document.getElementById('authPhotoNudge');
+  const complete = document.getElementById('authSignupComplete');
+  const welcome = mode === 'welcome';
+  const login = mode === 'login' || welcome;
+  if (title) title.textContent = welcome ? 'Welcome back' : 'Create your Profile';
+  if (kicker) kicker.classList.toggle('hidden', !welcome);
+  if (create) create.classList.toggle('hidden', welcome);
+  if (creds) creds.classList.toggle('hidden', login);
+  if (loginHost) loginHost.classList.toggle('hidden', !login);
+  if (already) already.classList.toggle('hidden', welcome || mode === 'login');
+  if (notYou) notYou.classList.toggle('hidden', !welcome);
+  if (guest) guest.classList.toggle('hidden', welcome);
+  if (footer) footer.classList.toggle('hidden', login);
+  if (legal) legal.classList.toggle('hidden', welcome);
+  if (photoNudge) photoNudge.classList.toggle('hidden', welcome);
+  if (complete) complete.classList.toggle('hidden', welcome);
+  const loginToSignup = document.getElementById('loginToSignup');
+  if (loginToSignup) loginToSignup.classList.toggle('hidden', welcome);
+}
+
+function enterAuthCanvasCreate() {
+  setAuthCanvasMode('create');
+  syncRegProfileTypeUi();
+  syncGenderUi();
+  syncAuthCanvasPreview();
+}
+
+function enterAuthCanvasWelcome(last) {
+  setAuthCanvasMode('welcome');
+  const nEl = document.getElementById('authCanvasLiveName');
+  const hEl = document.getElementById('authCanvasLiveHandle');
+  const mEl = document.getElementById('authCanvasLiveMeta');
+  const name = last?.name || last?.username || 'Welcome back';
+  if (nEl) nEl.textContent = name;
+  if (hEl) hEl.textContent = last?.username ? '@' + String(last.username).replace(/^@/, '') : '';
+  if (mEl) mEl.textContent = 'Unlock your Profile';
+  if (last?.photoURL) {
+    const av = document.getElementById('authCanvasAvatar');
+    if (av) {
+      av.innerHTML = `<img src="${String(last.photoURL).replace(/"/g, '')}" alt="" style="width:100%;height:100%;object-fit:cover;">`;
+      av.classList.add('has-photo');
+    }
+  }
+  const idInp = document.getElementById('loginIdentifier');
+  if (idInp && last?.username && !idInp.value) idInp.value = last.username;
+  const kicker = document.getElementById('authWelcomeKicker');
+  if (kicker) kicker.textContent = 'Welcome back';
+}
+
+function enterAuthCanvasLoginReveal() {
+  setAuthCanvasMode('login');
+  try {
+    document.getElementById('authCanvasLoginHost')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  } catch (e) {}
+  document.getElementById('loginIdentifier')?.focus();
+}
 
 function showAuthScreen(screenId, direction = 'forward') {
   const screens = [
@@ -71,8 +154,18 @@ function showAuthScreen(screenId, direction = 'forward') {
     'authParentalConsentScreen',
     'authSuccessScreen',
   ];
-  // One-canvas signup: never park on empty legacy step shells
   if (screenId === 'authRegStep2' || screenId === 'authRegStep3') {
+    screenId = 'authRegStep1';
+  }
+  if (screenId === 'authWelcomeBackScreen') {
+    const last = typeof readLastUser === 'function' ? readLastUser() : null;
+    enterAuthCanvasWelcome(last);
+    screenId = 'authRegStep1';
+  }
+  if (screenId === 'authLoginScreen') {
+    const last = typeof readLastUser === 'function' ? readLastUser() : null;
+    if (last?.username || last?.name) enterAuthCanvasWelcome(last);
+    else enterAuthCanvasLoginReveal();
     screenId = 'authRegStep1';
   }
   screens.forEach((id) => {
@@ -105,14 +198,13 @@ function showAuth() {
     if (typeof restoreAppShell === 'function') restoreAppShell('auth_open');
   } catch (e) {}
   wireAuthEvents();
-  syncRegProfileTypeUi();
   const last = typeof readLastUser === 'function' ? readLastUser() : null;
   if (last?.username || last?.name) {
-    paintWelcomeBack(last);
-    showAuthScreen('authWelcomeBackScreen');
+    enterAuthCanvasWelcome(last);
+    showAuthScreen('authRegStep1');
   } else {
-    showAuthScreen('authHeroScreen');
-    regData = emptyRegData();
+    enterAuthCanvasCreate();
+    showAuthScreen('authRegStep1');
   }
 }
 
@@ -242,10 +334,7 @@ function syncRegProfileTypeUi() {
         : 'Optional for Professional accounts — you can add it later';
   }
   const pro = document.getElementById('regProFields');
-  if (pro) {
-    pro.classList.toggle('hidden', type !== 'professional');
-    if (type === 'professional') ensureProPicklists();
-  }
+  if (pro) pro.classList.add('hidden');
   const custom = document.getElementById('regGenderCustom');
   if (custom) custom.classList.toggle('hidden', !regData.genderSelfDescribe);
   syncSignupProgress();
@@ -273,19 +362,17 @@ function syncSignupProgress() {
       : regData.gender);
   const city = !!document.getElementById('regCity')?.value?.trim();
   const photo = !!regData.photoFile;
-  const intents = (regData.intents || []).length > 0;
   const email = !!document.getElementById('regEmail')?.value?.trim();
   const pwd = (document.getElementById('regPassword')?.value || '').length >= 8;
   const phoneHint = document.getElementById('regPhoneVerifiedHint');
   const phone = !!(phoneHint && phoneHint.style.display !== 'none' && phoneHint.style.display !== '');
   const checks = [
-    { on: name, w: 18 },
-    { on: un, w: 18 },
-    { on: dob, w: 14 },
-    { on: genderOk, w: 10 },
-    { on: photo, w: 12 },
-    { on: city, w: 10 },
-    { on: intents, w: 8 },
+    { on: name, w: 22 },
+    { on: un, w: 22 },
+    { on: dob, w: 16 },
+    { on: genderOk, w: 12 },
+    { on: photo, w: 10 },
+    { on: city, w: 8 },
     { on: email || pwd || phone, w: 10 },
   ];
   let earned = 0;
@@ -298,19 +385,12 @@ function syncSignupProgress() {
   const pctEl = document.getElementById('authSignupPct');
   const barEl = document.getElementById('authSignupBar');
   const hintEl = document.getElementById('authSignupHint');
-  if (pctEl) {
-    pctEl.textContent = pct + '%';
-    pctEl.style.color = pct >= 70 ? 'var(--green,#33C481)' : 'var(--red)';
-  }
-  if (barEl) {
-    barEl.style.width = pct + '%';
-    barEl.style.background = pct >= 70 ? '#2ECC71' : 'var(--red)';
-  }
+  if (pctEl) pctEl.textContent = pct + '%';
+  if (barEl) barEl.style.width = pct + '%';
   if (hintEl) {
     if (!name || !un || !dob) hintEl.textContent = 'Name, username & birthday unlock your Profile';
-    else if (!photo) hintEl.textContent = 'Photo optional — people see a real you';
-    else if (!city) hintEl.textContent = 'City helps nearby matches';
-    else if (!intents) hintEl.textContent = 'Intents → better Peepal matches (optional)';
+    else if (!photo) hintEl.textContent = 'Photo optional — people recognise you faster';
+    else if (!city) hintEl.textContent = 'City is optional — add later from Profile';
     else hintEl.textContent = 'Looking good — add account access below to finish';
   }
 }
@@ -630,6 +710,9 @@ window.hasVerifiedContact = hasVerifiedContact;
 window.showAuthScreen = showAuthScreen;
 window.showAuth = showAuth;
 window.hideAuth = hideAuth;
+window.enterAuthCanvasCreate = enterAuthCanvasCreate;
+window.enterAuthCanvasWelcome = enterAuthCanvasWelcome;
+window.enterAuthCanvasLoginReveal = enterAuthCanvasLoginReveal;
 
 function wireAuthEvents() {
   if (authEventsWired) return;
@@ -637,12 +720,27 @@ function wireAuthEvents() {
 
   document.getElementById('heroSignupBtn')?.addEventListener('click', () => {
     regData = emptyRegData();
-    syncRegProfileTypeUi();
-    syncGenderUi();
+    enterAuthCanvasCreate();
     showAuthScreen('authRegStep1');
   });
-  document.getElementById('heroLoginBtn')?.addEventListener('click', () => showAuthScreen('authLoginScreen'));
+  document.getElementById('heroLoginBtn')?.addEventListener('click', () => {
+    enterAuthCanvasLoginReveal();
+    showAuthScreen('authRegStep1');
+  });
   document.getElementById('authSkip')?.addEventListener('click', hideAuth);
+  document.getElementById('authCanvasGuest')?.addEventListener('click', hideAuth);
+  document.getElementById('authAlreadyHaveAccount')?.addEventListener('click', () => {
+    enterAuthCanvasLoginReveal();
+  });
+  document.getElementById('authCanvasNotYou')?.addEventListener('click', () => {
+    if (typeof clearLastUser === 'function') clearLastUser();
+    if (typeof openAccountSwitcher === 'function') {
+      openAccountSwitcher();
+      return;
+    }
+    regData = emptyRegData();
+    enterAuthCanvasCreate();
+  });
 
   document.getElementById('welcomeBackContinue')?.addEventListener('click', async () => {
     if (auth?.currentUser) {
@@ -757,8 +855,7 @@ function wireAuthEvents() {
   document.getElementById('loginBackBtn')?.addEventListener('click', () => showAuthScreen('authHeroScreen', 'back'));
   document.getElementById('loginToSignup')?.addEventListener('click', () => {
     regData = emptyRegData();
-    syncRegProfileTypeUi();
-    syncGenderUi();
+    enterAuthCanvasCreate();
     showAuthScreen('authRegStep1');
   });
   document.getElementById('toggleLoginPwd')?.addEventListener('click', () => {
@@ -852,6 +949,9 @@ function wireAuthEvents() {
       showAuthScreen('authParentalConsentScreen');
     }
     syncEmailVerifyBanner();
+    if (typeof persistProfileCompletion === 'function' && typeof calcProfileCompletion === 'function') {
+      persistProfileCompletion(calcProfileCompletion());
+    }
     showToast(welcomeMsg || t('auth_welcome'));
   }
 
@@ -1328,19 +1428,6 @@ function wireAuthEvents() {
     regData.username = username;
     regData.dob = dob;
     regData.age = age;
-    if (regData.profileType === 'professional') {
-      const indOther = document.getElementById('regIndustryOther');
-      const purOther = document.getElementById('regPurposeOther');
-      if (indOther && !indOther.classList.contains('hidden')) {
-        regData.industry = indOther.value.trim();
-      }
-      if (purOther && !purOther.classList.contains('hidden')) {
-        regData.purpose = purOther.value.trim();
-      }
-    } else {
-      regData.industry = '';
-      regData.purpose = '';
-    }
     return true;
   }
 
@@ -1357,6 +1444,16 @@ function wireAuthEvents() {
   document.getElementById('authCanvasAvatar')?.addEventListener('click', () => photoInput?.click());
 
   document.getElementById('authSkipOptionals')?.addEventListener('click', () => {
+    if (!regData.photoFile) {
+      try {
+        if (sessionStorage.getItem('chaupaal_photo_skip_nudge') !== '1') {
+          sessionStorage.setItem('chaupaal_photo_skip_nudge', '1');
+          if (typeof showToast === 'function') {
+            showToast('A photo helps people recognise you — skip anytime.');
+          }
+        }
+      } catch (e) {}
+    }
     const creds = document.getElementById('authCredsSection');
     try {
       creds?.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -1406,48 +1503,6 @@ function wireAuthEvents() {
       btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
       btn.dataset.iconHydrated = '1';
     }
-  });
-
-  document.querySelectorAll('#intentChips .auth-intent-chip').forEach((chip) => {
-    chip.addEventListener('click', () => {
-      chip.classList.toggle('active');
-      const val = chip.dataset.val;
-      const customInp = document.getElementById('intentCustomInput');
-      if (val === 'Something else') {
-        if (chip.classList.contains('active')) {
-          customInp?.classList.remove('hidden');
-          customInp?.focus();
-          if (!regData.intents.includes('Something else')) regData.intents.push('Something else');
-        } else {
-          customInp?.classList.add('hidden');
-          regData.intents = regData.intents.filter((v) => v !== 'Something else' && v !== regData.customIntent);
-          regData.customIntent = '';
-          if (customInp) customInp.value = '';
-        }
-        syncSignupProgress();
-        return;
-      }
-      if (chip.classList.contains('active')) {
-        if (!regData.intents.includes(val)) regData.intents.push(val);
-      } else {
-        regData.intents = regData.intents.filter((v) => v !== val);
-      }
-      syncSignupProgress();
-    });
-  });
-  document.getElementById('intentCustomInput')?.addEventListener('input', (e) => {
-    regData.customIntent = String(e.target.value || '').trim().slice(0, 80);
-  });
-
-  document.getElementById('openToMeetYes')?.addEventListener('click', () => {
-    document.getElementById('openToMeetYes')?.classList.add('active');
-    document.getElementById('openToMeetNo')?.classList.remove('active');
-    regData.openToMeet = true;
-  });
-  document.getElementById('openToMeetNo')?.addEventListener('click', () => {
-    document.getElementById('openToMeetNo')?.classList.add('active');
-    document.getElementById('openToMeetYes')?.classList.remove('active');
-    regData.openToMeet = false;
   });
 
   document.getElementById('registerBtn')?.addEventListener('click', async () => {
@@ -1569,13 +1624,6 @@ function wireAuthEvents() {
         await credUser.updateProfile({ displayName: regData.name, photoURL: photoURL || undefined });
 
         const profileType = regData.profileType === 'professional' ? 'professional' : 'personal';
-        const intentList = [...regData.intents];
-        if (regData.customIntent) {
-          const idx = intentList.indexOf('Something else');
-          if (idx >= 0) intentList[idx] = regData.customIntent;
-          else if (!intentList.includes(regData.customIntent)) intentList.push(regData.customIntent);
-        }
-        const primaryIntent = intentList.find((i) => i && i !== 'Something else') || '';
         const needsEmailForPasswordLogin = !!(
           phoneOk &&
           !userHasPasswordProvider(credUser) &&
@@ -1602,14 +1650,14 @@ function wireAuthEvents() {
           photoURL,
           photoThumb: photoThumb || null,
           profileType,
-          industry: profileType === 'professional' ? regData.industry || '' : '',
-          purpose: profileType === 'professional' ? regData.purpose || '' : '',
+          industry: '',
+          purpose: '',
           needsEmailForPasswordLogin,
-          openToMeet: regData.openToMeet,
+          openToMeet: true,
           strangerDailyLimit: 10,
-          intents: intentList,
-          matchIntent: primaryIntent,
-          lookingFor: primaryIntent,
+          intents: [],
+          matchIntent: '',
+          lookingFor: '',
           streak: 0,
           lastPlayed: '',
           streakFreezes: 0,
@@ -1632,9 +1680,9 @@ function wireAuthEvents() {
             dateOfBirth: regData.dob,
             age: regData.age,
             currentCity: regData.city || '',
-            lookingFor: primaryIntent,
-            industry: profileType === 'professional' ? regData.industry || '' : '',
-            purpose: profileType === 'professional' ? regData.purpose || '' : '',
+            lookingFor: '',
+            industry: '',
+            purpose: '',
           },
         };
 
@@ -1665,10 +1713,6 @@ function wireAuthEvents() {
             await unameRef.set({ uid: credUser.uid, profileId: 'primary' });
           }
           await db.collection('users').doc(credUser.uid).set(profile, { merge: true });
-          if (profileType === 'professional') {
-            if (regData.industry) await bumpStat('industryStats', regData.industry);
-            if (regData.purpose) await bumpStat('purposeStats', regData.purpose);
-          }
           try {
             if (typeof UsersPublic?.syncPublicProfile === 'function') {
               await UsersPublic.syncPublicProfile(credUser.uid, profile);
@@ -1689,20 +1733,32 @@ function wireAuthEvents() {
           digitalProfile.dateOfBirth = regData.dob;
           digitalProfile.age = regData.age;
           digitalProfile.profileType = profileType;
-          digitalProfile.lookingFor = primaryIntent;
+          digitalProfile.lookingFor = '';
+          digitalProfile.purpose = '';
           try {
             localStorage.setItem('chaupaal_digital_profile', JSON.stringify(digitalProfile));
           } catch (e) {}
         }
         if (typeof saveProfileType === 'function') saveProfileType(profileType);
         if (typeof trackSignup === 'function') trackSignup({ has_photo: !!photoURL, profile_type: profileType });
-
-        if (regData.openToMeet) {
-          openToMeet = true;
+        if (typeof persistProfileCompletion === 'function' && typeof calcProfileCompletion === 'function') {
+          persistProfileCompletion(calcProfileCompletion());
+        }
+        if (!photoURL) {
           try {
-            localStorage.setItem('chaupaal_open_to_meet', 'true');
+            if (sessionStorage.getItem('chaupaal_photo_skip_nudge') !== '1') {
+              sessionStorage.setItem('chaupaal_photo_skip_nudge', '1');
+              if (typeof showToast === 'function') {
+                showToast('A photo helps people recognise you — add anytime.');
+              }
+            }
           } catch (e) {}
         }
+
+        openToMeet = true;
+        try {
+          localStorage.setItem('chaupaal_open_to_meet', 'true');
+        } catch (e) {}
       }
 
       showAuthScreen('authSuccessScreen');
@@ -1721,9 +1777,8 @@ function wireAuthEvents() {
       else if (phoneOk && !regData.email)
         desc += ' Add an email in your profile to enable password login with your phone number.';
       else if (emailOk && !googleOk) desc += ' Check your email to verify your address.';
-      document.getElementById('authSuccessDesc').textContent = regData.intents.length
-        ? `${desc} You're here to: ${regData.intents.slice(0, 2).join(' & ')}.`
-        : `${desc} Add a bio and prompts anytime on your Profile.`;
+      document.getElementById('authSuccessDesc').textContent =
+        `${desc} Add a bio and prompts anytime on your Profile.`;
       if (typeof launchConfetti === 'function') launchConfetti({ x: 50, y: 40 }, 80);
 
       const cta = document.getElementById('authSuccessCta');
@@ -1748,25 +1803,11 @@ function wireAuthEvents() {
                 } catch (e) {}
               }
               syncEmailVerifyBanner();
+              if (typeof maybeOfferProfileCompleteNudge === 'function') {
+                setTimeout(() => maybeOfferProfileCompleteNudge({ reason: 'signup' }), 500);
+              }
             };
-            if (typeof openDigitalCanvasDeepen === 'function') {
-              hideAuth();
-              updateProfileBtn();
-              openDigitalCanvasDeepen({
-                reason: 'post_signup',
-                onDone: async () => {
-                  if (typeof loadStreak === 'function') loadStreak();
-                  if (typeof registerSession === 'function') {
-                    try {
-                      await registerSession();
-                    } catch (e) {}
-                  }
-                  syncEmailVerifyBanner();
-                },
-              });
-            } else {
-              await enterApp();
-            }
+            await enterApp();
           });
         }
       }

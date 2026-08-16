@@ -704,8 +704,8 @@
 
     const start = tabs.find((t) => t.id === initial)?.id || tabs[0]?.id || 'digital';
     await activateTab(start);
-    if (editable && isOwner && typeof maybeOfferDigitalCanvasDeepen === 'function') {
-      setTimeout(() => maybeOfferDigitalCanvasDeepen(profile), 600);
+    if (editable && isOwner && typeof maybeOfferProfileCompleteNudge === 'function') {
+      setTimeout(() => maybeOfferProfileCompleteNudge({ reason: 'edit' }), 600);
     }
     if (typeof restoreAppShell === 'function') restoreAppShell();
   }
