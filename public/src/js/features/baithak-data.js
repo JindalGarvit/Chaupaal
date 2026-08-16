@@ -420,20 +420,27 @@ async function loadBaithakChatsPage({reset=false}={}){
     });
     const mapped=page.items.map(mapChatDoc);
     if(typeof enrichUsersWithProfileType==='function') await enrichUsersWithProfileType(mapped);
+    const openChat=typeof window!=='undefined'?window.currentOpenChat:null;
+    const openId=openChat&&(openChat.firestoreId||openChat.id);
+    const keepOpen=(list)=>{
+      if(!openChat||!openId) return list;
+      if((list||[]).some(c=>(c.firestoreId||c.id)===openId)) return list;
+      return [openChat, ...(list||[])];
+    };
     if(reset&&mapped.length){
       baithakChatLiveMode=true;
       baithakChatLoadError=false;
-      baithakChats=pinSelfChat(mapped);
+      baithakChats=pinSelfChat(keepOpen(mapped));
       // Do NOT merge SAMPLE demo rows into a live inbox — sticky unread badges
       // and intentionally-blocked sends looked like product bugs.
     } else if(mapped.length){
       const seen=new Set(baithakChats.map(c=>c.firestoreId||c.id));
       mapped.forEach(c=>{ if(!seen.has(c.firestoreId||c.id)) baithakChats.push(c); });
-      baithakChats=pinSelfChat(baithakChats);
+      baithakChats=pinSelfChat(keepOpen(baithakChats));
     } else if(reset){
       baithakChatLiveMode=true;
       baithakChatLoadError=false;
-      baithakChats=pinSelfChat([]);
+      baithakChats=pinSelfChat(keepOpen([]));
     }
     baithakChatCursor=page.lastDoc;
     baithakChatHasMore=page.hasMore;
@@ -443,8 +450,8 @@ async function loadBaithakChatsPage({reset=false}={}){
     if(reset){
       baithakChatLiveMode=false;
       baithakChatLoadError=true;
-      // Keep Self + Chaupaal pins only — never SAMPLE_CHATS.
-      baithakChats=pinSelfChat([]);
+      const openChat=typeof window!=='undefined'?window.currentOpenChat:null;
+      baithakChats=pinSelfChat(openChat?[openChat]:[]);
     }
     return {loaded:0,error:e};
   }finally{

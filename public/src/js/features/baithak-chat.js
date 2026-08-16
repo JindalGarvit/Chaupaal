@@ -667,13 +667,18 @@ function openChatScreen(chat){
           window.currentOpenChat = chat;
         }
       } else if (!isGroup && typeof ensurePeerDmChat === 'function') {
-        const peer = chat.uid || chat.peerUid || chat.otherUid;
+        const peer =
+          chat.uid ||
+          chat.peerUid ||
+          chat.otherUid ||
+          (chat.participants || []).find((u) => u && u !== currentUser?.uid);
         if (peer) {
           const id = await ensurePeerDmChat(peer);
           if (id) {
             chatId = id;
             chat.firestoreId = id;
             chat.id = id;
+            chat.uid = chat.uid || peer;
             chat.participants = currentUser?.uid ? [currentUser.uid, peer].sort() : chat.participants;
             window.currentOpenChat = chat;
           }
@@ -687,6 +692,9 @@ function openChatScreen(chat){
       }
     } catch (e) {
       console.warn('[chat] ensure before listen', e?.message || e);
+      if (typeof reportClientError === 'function') {
+        reportClientError({ feature: 'ensure_before_listen', message: e?.message || String(e) });
+      }
     }
     loadRealtimeMessages(chatId, area, isGroup);
     // Load activity status for DMs (never for self/Chaupaal — system chats keep their own subtitle)

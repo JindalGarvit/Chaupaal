@@ -76,39 +76,44 @@ function getLimiter(action, window) {
  * @returns {Promise<{ ok: boolean, remaining?: number, reset?: number, limit?: number, configured: boolean, window?: string }>}
  */
 async function checkActionRateLimit(uid, action) {
-  if (!LIMITS[action]) {
-    return { ok: true, configured: true, remaining: null };
-  }
-  if (!getRedis()) {
-    return { ok: true, configured: false, remaining: null };
-  }
-
-  const id = `${uid}:${action}`;
-  let lastOk = null;
-  for (const window of ['minute', 'hour']) {
-    const limiter = getLimiter(action, window);
-    if (!limiter) continue;
-    const result = await limiter.limit(id);
-    lastOk = result;
-    if (!result.success) {
-      return {
-        ok: false,
-        configured: true,
-        remaining: result.remaining,
-        reset: result.reset,
-        limit: result.limit,
-        window,
-      };
+  try {
+    if (!LIMITS[action]) {
+      return { ok: true, configured: true, remaining: null };
     }
-  }
+    if (!getRedis()) {
+      return { ok: true, configured: false, remaining: null };
+    }
 
-  return {
-    ok: true,
-    configured: true,
-    remaining: lastOk?.remaining ?? LIMITS[action].minute,
-    reset: lastOk?.reset,
-    limit: LIMITS[action].minute,
-  };
+    const id = `${uid}:${action}`;
+    let lastOk = null;
+    for (const window of ['minute', 'hour']) {
+      const limiter = getLimiter(action, window);
+      if (!limiter) continue;
+      const result = await limiter.limit(id);
+      lastOk = result;
+      if (!result.success) {
+        return {
+          ok: false,
+          configured: true,
+          remaining: result.remaining,
+          reset: result.reset,
+          limit: result.limit,
+          window,
+        };
+      }
+    }
+
+    return {
+      ok: true,
+      configured: true,
+      remaining: lastOk?.remaining ?? LIMITS[action].minute,
+      reset: lastOk?.reset,
+      limit: LIMITS[action].minute,
+    };
+  } catch (e) {
+    console.warn('[rate-limit] fail open', action, e?.message || e);
+    return { ok: true, configured: false, remaining: null, degraded: true };
+  }
 }
 
 module.exports = {

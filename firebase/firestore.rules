@@ -577,6 +577,17 @@ service cloud.firestore {
         chatId == 'chat_chaupaal_' + request.auth.uid
       );
     }
+    // Canonical 1:1 id is sorted uidA + '_' + uidB (dmChatIdFor). Allow get of a
+    // missing pair doc that includes the caller so ensurePeerDmChat can .get() then .set().
+    function isOwnCanonicalDmId(chatId) {
+      return isAuth()
+        && request.auth.uid.size() > 8
+        && !chatId.matches('^chat_')
+        && (
+          chatId.matches('^' + request.auth.uid + '_.+$')
+          || chatId.matches('^.+_' + request.auth.uid + '$')
+        );
+    }
     function chatDocExists(chatId) {
       return exists(/databases/$(database)/documents/chats/$(chatId));
     }
@@ -624,11 +635,11 @@ service cloud.firestore {
     }
     match /chats/{chatId} {
       // Participants always; public groups readable for global search (Phase 3.2).
-      // Own system chat ids are gettable even when the doc is missing so
-      // ensureSelfChatDoc / ensureChaupaalChatDoc can .get() then .set() —
-      // isChatParticipant() alone denies missing docs (resource.data N/A),
-      // which left chat_self_{uid} uncreated and blocked message listeners.
+      // Own system chat ids and canonical DM pair ids are gettable even when the
+      // doc is missing so ensure* can .get() then .set() —
+      // isChatParticipant() alone denies missing docs (resource.data N/A).
       allow get: if isOwnSystemChatId(chatId)
+        || isOwnCanonicalDmId(chatId)
         || isChatParticipant()
         || (resource.data.type == 'group' && resource.data.isPublic == true);
       allow list: if isChatParticipant()

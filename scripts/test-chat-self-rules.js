@@ -43,12 +43,49 @@ async function main() {
 
     const alice = testEnv.authenticatedContext(uid);
     const bob = testEnv.authenticatedContext(other);
+    const charlie = testEnv.authenticatedContext('user_stranger_3');
     const aliceDb = alice.firestore();
     const bobDb = bob.firestore();
+    const charlieDb = charlie.firestore();
+    const pairId = [uid, other].sort().join('_');
 
     // 1) GET missing self-chat (was denied by isChatParticipant-only)
     await rut.assertSucceeds(aliceDb.doc(`chats/${selfId}`).get());
     await rut.assertFails(bobDb.doc(`chats/${selfId}`).get());
+
+    // 1b) GET missing canonical DM pair (ensurePeerDmChat .get() then .set())
+    await rut.assertSucceeds(aliceDb.doc(`chats/${pairId}`).get());
+    await rut.assertSucceeds(bobDb.doc(`chats/${pairId}`).get());
+    await rut.assertFails(charlieDb.doc(`chats/${pairId}`).get());
+    await rut.assertFails(aliceDb.doc(`chats/${dmId}`).get());
+
+    await rut.assertSucceeds(
+      aliceDb.doc(`chats/${pairId}`).set({
+        participants: [uid, other].sort(),
+        type: 'dm',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        createdBy: uid,
+        openedBy: uid,
+      })
+    );
+    await rut.assertSucceeds(
+      aliceDb.collection(`chats/${pairId}/messages`).add({
+        text: 'first dm',
+        uid,
+        name: 'Alice',
+        ts: Date.now(),
+      })
+    );
+    await rut.assertSucceeds(bobDb.doc(`chats/${pairId}`).get());
+    await rut.assertFails(charlieDb.doc(`chats/${pairId}`).get());
+    await rut.assertFails(
+      charlieDb.collection(`chats/${pairId}/messages`).add({
+        text: 'nope',
+        uid: 'user_stranger_3',
+        ts: Date.now(),
+      })
+    );
 
     // 2) CREATE self-chat with participants: [uid]
     await rut.assertSucceeds(
@@ -195,7 +232,7 @@ async function main() {
       bobDb.doc(`chats/${selfId}/messages/${msgRef.id}`).delete()
     );
 
-    console.log('PASS: self-chat get/create, text+music self/dm/group, inbox list, spoof denied, owner delete');
+    console.log('PASS: self-chat get/create, missing DM get+create, text+music self/dm/group, inbox list, spoof denied, owner delete');
   } finally {
     await testEnv.cleanup();
   }

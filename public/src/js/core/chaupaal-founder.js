@@ -56,21 +56,43 @@
   /** Persist a 1:1 chat so both people can send (rules require the chat doc). */
   async function ensurePeerDmChat(peerUid, extras) {
     const chatId = dmChatIdFor(peerUid);
-    if (!chatId || typeof db === 'undefined' || !db) return chatId;
+    if (!chatId) throw new Error('Could not open chat');
+    if (typeof db === 'undefined' || !db || !currentUser) throw new Error('Not signed in');
     if (ensuredDmIds.has(chatId) && !extras) return chatId;
+    const peer = String(peerUid || '').trim();
+    const payload = {
+      participants: [currentUser.uid, peer].sort(),
+      type: 'dm',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdBy: currentUser.uid,
+      openedBy: currentUser.uid,
+      lastMessageAt: Date.now(),
+      ...(extras && typeof extras === 'object' ? extras : {}),
+    };
     const ref = db.collection('chats').doc(chatId);
-    const snap = await ref.get();
-    if (!snap.exists) {
-      await ref.set({
-        participants: [currentUser.uid, peerUid].sort(),
-        type: 'dm',
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        createdBy: currentUser.uid,
-        openedBy: currentUser.uid,
-        lastMessageAt: Date.now(),
-        ...(extras && typeof extras === 'object' ? extras : {}),
-      });
+    let exists = false;
+    try {
+      const snap = await ref.get();
+      exists = !!(snap && snap.exists);
+    } catch (e) {
+      exists = false;
+    }
+    if (!exists) {
+      try {
+        await ref.set(payload);
+      } catch (e) {
+        const code = String(e?.code || '');
+        const already = code === 'already-exists' || /already.?exist/i.test(String(e?.message || ''));
+        if (!already) {
+          if (typeof reportClientError === 'function') {
+            reportClientError({ feature: 'ensure_dm', message: e?.message || String(e) });
+          }
+          throw e;
+        }
+      }
+    } else if (extras && typeof extras === 'object') {
+      await ref.set(extras, { merge: true }).catch(() => {});
     }
     ensuredDmIds.add(chatId);
     return chatId;
@@ -100,13 +122,19 @@
       });
       if (!ok) return null;
     }
-    const chatId = dmChatIdFor(uid) || `chat_disc_${uid || Date.now()}`;
+    const chatId = dmChatIdFor(uid);
+    if (!chatId) {
+      if (typeof showToast === 'function') showToast('Could not open chat');
+      return null;
+    }
     const hello = pickSharedHello();
     const discoveryOrigin = origin === 'ai_discovery' ? 'ai_discovery' : origin || null;
     const peerType = peerProfileType || 'personal';
     const newChat = {
       id: chatId,
       firestoreId: chatId,
+      uid,
+      peerUid: uid,
       type: 'dm',
       name: name || 'Friend',
       avatar: avatar || '👤',
@@ -135,29 +163,22 @@
     }
 
     if (db && currentUser && uid) {
+      const extras = {
+        sharedFirstHello: hello,
+        preview: hello,
+        firstMessageAt: Date.now(),
+        ...(discoveryOrigin
+          ? { discoveryOrigin, peerProfileType: peerType, origin: discoveryOrigin }
+          : {}),
+        ...(matchMeta && typeof matchMeta === 'object' ? { matchMeta } : {}),
+      };
       try {
+        await ensurePeerDmChat(uid, extras);
+        newChat.openedBy = currentUser.uid;
+        newChat.createdBy = currentUser.uid;
+        if (matchMeta) newChat.matchMeta = matchMeta;
         const ref = db.collection('chats').doc(chatId);
-        const snap = await ref.get();
-        if (!snap.exists) {
-          await ref.set({
-            participants: [currentUser.uid, uid].sort(),
-            type: 'dm',
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            sharedFirstHello: hello,
-            preview: hello,
-            openedBy: currentUser.uid,
-            createdBy: currentUser.uid,
-            firstMessageAt: Date.now(),
-            lastMessageAt: Date.now(),
-            ...(discoveryOrigin
-              ? { discoveryOrigin, peerProfileType: peerType, origin: discoveryOrigin }
-              : {}),
-            ...(matchMeta && typeof matchMeta === 'object' ? { matchMeta } : {}),
-          });
-          newChat.openedBy = currentUser.uid;
-          newChat.createdBy = currentUser.uid;
-          if (matchMeta) newChat.matchMeta = matchMeta;
+        try {
           await ref.collection('messages').add({
             text: `Shared starter for both of you:\n"${hello}"`,
             uid: currentUser.uid,
@@ -167,25 +188,17 @@
             kind: 'shared_first_hello',
             ts: firebase.firestore.FieldValue.serverTimestamp(),
           });
-        } else {
-          const data = snap.data() || {};
-          if (!data.sharedFirstHello) {
-            await ref.set({ sharedFirstHello: hello }, { merge: true });
-          } else {
-            newChat.sharedFirstHello = data.sharedFirstHello;
-          }
-          if (discoveryOrigin && !data.discoveryOrigin) {
-            await ref.set(
-              { discoveryOrigin, peerProfileType: peerType, origin: discoveryOrigin },
-              { merge: true }
-            );
-          } else if (data.discoveryOrigin) {
-            newChat.discoveryOrigin = data.discoveryOrigin;
-            newChat.peerProfileType = data.peerProfileType || peerType;
+        } catch (e) {
+          if (typeof reportClientError === 'function') {
+            reportClientError({ feature: 'shared_hello_msg', message: e?.message || String(e) });
           }
         }
       } catch (e) {
-        console.warn('[founder] shared hello', e);
+        if (typeof reportClientError === 'function') {
+          reportClientError({ feature: 'open_dm', message: e?.message || String(e) });
+        }
+        if (typeof showToast === 'function') showToast('Could not start chat');
+        return null;
       }
     }
 
@@ -200,21 +213,18 @@
       ];
     }
 
-    document.querySelectorAll('.tab-btn').forEach((b) => {
-      if (b.dataset.tab === 'baithak') b.click();
-    });
-    setTimeout(() => {
-      if (typeof initBaithak === 'function') initBaithak();
+    if (typeof openChatScreen === 'function') openChatScreen(newChat);
+    const baithakBtn = document.querySelector('.bottom-tabs .tab-btn[data-tab="baithak"]');
+    if (baithakBtn && !baithakBtn.classList.contains('active')) baithakBtn.click();
+    if (starterText) {
       setTimeout(() => {
-        if (typeof openChatScreen === 'function') openChatScreen(newChat);
-        if (starterText) {
-          setTimeout(() => {
-            const msgInput = document.getElementById('chatMsgInput');
-            if (msgInput && !msgInput.value) msgInput.value = starterText;
-          }, 350);
-        }
-      }, 280);
-    }, 180);
+        const msgInput = document.getElementById('chatMsgInput');
+        if (msgInput && !msgInput.value) msgInput.value = starterText;
+      }, 200);
+    }
+    if (typeof loadBaithakChatsPage === 'function') {
+      loadBaithakChatsPage({ reset: false }).catch(() => {});
+    }
 
     return newChat;
   }

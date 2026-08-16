@@ -320,11 +320,16 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment){
     const peer=id.replace(/^chat_(profile|disc)_/, '');
     const real=await ensurePeerDmChat(peer);
     if(real) id=real;
-  } else if(!isGroup && typeof ensurePeerDmChat==='function' && typeof dmChatIdFor==='function'){
+  } else if(!isGroup && typeof ensurePeerDmChat==='function'){
     const open=window.currentOpenChat;
-    const peer=open&&(open.uid||open.peerUid||open.otherUid);
-    const expected=peer?dmChatIdFor(peer):'';
-    if(peer && (id===expected || id===open?.id || id===open?.firestoreId)){
+    let peer=open&&(open.uid||open.peerUid||open.otherUid);
+    if(!peer && currentUser?.uid && !id.startsWith('chat_')){
+      const prefix=currentUser.uid+'_';
+      const suffix='_'+currentUser.uid;
+      if(id.startsWith(prefix)) peer=id.slice(prefix.length);
+      else if(id.endsWith(suffix)) peer=id.slice(0,-suffix.length);
+    }
+    if(peer){
       const real=await ensurePeerDmChat(peer);
       if(real) id=real;
     }
@@ -410,7 +415,7 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment){
     }
   }
   try{
-    await db.collection('chats').doc(chatId).collection('messages').add(payload);
+    await db.collection('chats').doc(id).collection('messages').add(payload);
     const nowMs = Date.now();
     const previewText = String(payload.text || '').slice(0, 120);
     const chatPatch = {
@@ -418,22 +423,23 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment){
       preview: previewText,
       lastMessageAt: nowMs,
     };
-    // firstMessageAt set-once via merge only if we can read — use set merge with sentinel
-    let participants = [];
-    try {
-      const cref = db.collection('chats').doc(chatId);
-      const csnap = await cref.get();
-      if (csnap.exists) {
-        if (!csnap.data()?.firstMessageAt) chatPatch.firstMessageAt = nowMs;
-        participants = Array.isArray(csnap.data()?.participants) ? csnap.data().participants : [];
+    const open = window.currentOpenChat;
+    let participants = Array.isArray(open?.participants) ? open.participants.slice() : [];
+    if (!participants.length && currentUser?.uid) {
+      const openPeer = open?.uid || open?.peerUid || open?.otherUid;
+      let inferred = openPeer ? String(openPeer) : '';
+      if (!inferred && !id.startsWith('chat_')) {
+        const prefix = currentUser.uid + '_';
+        const suffix = '_' + currentUser.uid;
+        if (id.startsWith(prefix)) inferred = id.slice(prefix.length);
+        else if (id.endsWith(suffix)) inferred = id.slice(0, -suffix.length);
       }
-      await cref.set(chatPatch, { merge: true });
-    } catch (e2) {
-      await db.collection('chats').doc(chatId).set(chatPatch, { merge: true }).catch((e3) => {
-        if (typeof reportClientError === 'function') reportClientError({ feature: 'streak_patch', message: e3?.message || String(e3) });
-      });
+      if (inferred) participants = [currentUser.uid, inferred].sort();
     }
-    if (window.currentOpenChat && (window.currentOpenChat.firestoreId === chatId || window.currentOpenChat.id === chatId)) {
+    await db.collection('chats').doc(id).set(chatPatch, { merge: true }).catch((e3) => {
+      if (typeof reportClientError === 'function') reportClientError({ feature: 'streak_patch', message: e3?.message || String(e3) });
+    });
+    if (window.currentOpenChat && (window.currentOpenChat.firestoreId === id || window.currentOpenChat.id === id || window.currentOpenChat.firestoreId === chatId || window.currentOpenChat.id === chatId)) {
       window.currentOpenChat.lastMessageAt = nowMs;
       if (!window.currentOpenChat.firstMessageAt) window.currentOpenChat.firstMessageAt = nowMs;
       window.currentOpenChat.updatedAt = nowMs;

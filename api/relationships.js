@@ -74,12 +74,25 @@ async function ensureTarget(db, uid) {
   return snap.data() || {};
 }
 
+function blockedUids(raw) {
+  if (Array.isArray(raw)) return raw.map(String);
+  if (raw && typeof raw === 'object') {
+    return Object.keys(raw).filter((k) => raw[k]);
+  }
+  return [];
+}
+
 async function isBlockedPair(db, a, b) {
-  const [aBlock, bBlock] = await db.getAll(
-    db.collection('blocks').doc(a),
-    db.collection('blocks').doc(b)
-  );
-  return (aBlock.data()?.blocked || []).includes(b) || (bBlock.data()?.blocked || []).includes(a);
+  try {
+    const [aBlock, bBlock] = await db.getAll(
+      db.collection('blocks').doc(a),
+      db.collection('blocks').doc(b)
+    );
+    return blockedUids(aBlock.data()?.blocked).includes(b) || blockedUids(bBlock.data()?.blocked).includes(a);
+  } catch (e) {
+    console.warn('[relationships] isBlockedPair', e?.message || e);
+    return false;
+  }
 }
 
 function clearRequestPair(tx, db, a, b) {
@@ -161,11 +174,27 @@ async function setFollow(db, admin, fromUid, toUid, follow, source) {
 }
 
 async function mutationResult(db, uid, targetUid) {
-  const [state, counts, targetCounts] = await Promise.all([
-    relationshipState(db, uid, targetUid),
-    recomputeCounts(db, uid),
-    recomputeCounts(db, targetUid),
-  ]);
+  let state = { following: false, followsYou: false, friend: false, requestSent: false, requestReceived: false, closeFriend: false };
+  try {
+    state = await relationshipState(db, uid, targetUid);
+  } catch (e) {
+    console.warn('[relationships] state', e?.message || e);
+  }
+  let counts = null;
+  let targetCounts = null;
+  try {
+    counts = await recomputeCounts(db, uid);
+  } catch (e) {
+    console.warn('[relationships] recompute mine', e?.message || e);
+    try {
+      counts = await profileCounts(db, uid);
+    } catch (e2) {}
+  }
+  try {
+    targetCounts = await recomputeCounts(db, targetUid);
+  } catch (e) {
+    console.warn('[relationships] recompute target', e?.message || e);
+  }
   return { state, counts, targetCounts };
 }
 
@@ -318,7 +347,13 @@ async function requestFriend(db, admin, uid, targetUid) {
   batch.set(refs.incoming, payload);
   batch.set(refs.sent, payload);
   await batch.commit();
-  return { accepted: false, state: { ...state, requestSent: true } };
+  let nextState = { ...state, requestSent: true };
+  try {
+    nextState = { ...(await relationshipState(db, uid, targetUid)), requestSent: true };
+  } catch (e) {
+    console.warn('[relationships] requestFriend state', e?.message || e);
+  }
+  return { accepted: false, state: nextState };
 }
 
 async function cancelFriendRequest(db, uid, targetUid) {
@@ -598,8 +633,13 @@ module.exports = async function handler(req, res) {
           console.warn('[relationships] notif friend_request', e?.message || e);
         }
       }
-      const pair = await mutationResult(db, user.uid, targetUid);
-      return sendSuccess(res, { ...out, ...pair, state: pair.state });
+      try {
+        const pair = await mutationResult(db, user.uid, targetUid);
+        return sendSuccess(res, { ...out, ...pair, state: pair.state || out.state });
+      } catch (e) {
+        console.warn('[relationships] request_friend post-write', e?.message || e);
+        return sendSuccess(res, out);
+      }
     }
     if (action === 'cancel_friend_request') {
       if (!targetUid) return sendError(res, 400, 'VALIDATION_ERROR', 'targetUid required');
@@ -851,15 +891,30 @@ module.exports = async function handler(req, res) {
     }
     return sendError(res, 400, 'VALIDATION_ERROR', 'Unknown relationship action');
   } catch (error) {
+    const msg = String(error?.message || '');
+    const code = String(error?.code || error?.status || '');
+    console.error('[relationships]', action, msg, error?.stack || error);
     const known = {
-      USER_NOT_FOUND: [404, 'NOT_FOUND', 'User not found'],
-      REQUEST_NOT_FOUND: [404, 'NOT_FOUND', 'Friend request not found'],
+      USER_NOT_FOUND: [404, 'USER_NOT_FOUND', 'User not found'],
+      REQUEST_NOT_FOUND: [404, 'REQUEST_NOT_FOUND', 'Friend request not found'],
       SELF_RELATIONSHIP: [400, 'VALIDATION_ERROR', 'You cannot use this action on yourself'],
       FRIEND_REQUIRED: [403, 'FRIEND_REQUIRED', 'Only Friends can be added to Close Friends'],
       RELATIONSHIP_BLOCKED: [403, 'RELATIONSHIP_BLOCKED', 'This relationship action is unavailable'],
-    }[error?.message];
+    }[msg];
     if (known) return sendError(res, known[0], known[1], known[2]);
-    console.error('[relationships]', action, error?.message || error);
+    const blob = `${msg} ${code}`;
+    if (/NOT_FOUND|not-found/i.test(blob)) {
+      return sendError(res, 404, 'USER_NOT_FOUND', 'User not found');
+    }
+    if (/upstash|redis|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|fetch failed/i.test(blob)) {
+      return sendError(res, 503, 'RATE_LIMIT_UNAVAILABLE', 'Could not check rate limit. Try again.');
+    }
+    if (/PERMISSION_DENIED|permission-denied/i.test(blob)) {
+      return sendError(res, 403, 'FIRESTORE_DENIED', 'Could not save this relationship.');
+    }
+    if (/firestore|GRPC|UNAVAILABLE|DEADLINE|ABORTED/i.test(blob)) {
+      return sendError(res, 503, 'FIRESTORE_UNAVAILABLE', 'Could not save this relationship. Try again.');
+    }
     return sendError(res, 500, 'RELATIONSHIP_FAILED', 'Could not update relationship');
   }
 };
