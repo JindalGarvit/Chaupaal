@@ -758,6 +758,70 @@
     }
   }
 
+  async function mountBaithakFriendRequests() {
+    const host = document.getElementById('baithakFriendRequests');
+    if (!host || typeof currentUser === 'undefined' || !currentUser) return;
+    try {
+      const data = await callRelationship('list_friend_requests');
+      const profiles = data.profiles || [];
+      if (!profiles.length) {
+        host.hidden = true;
+        host.innerHTML = '';
+        return;
+      }
+      host.hidden = false;
+      host.innerHTML = profiles
+        .map((profile) => {
+          const name = safe(profile.name || profile.username || 'Someone');
+          const photo = profile.photoURL
+            ? `<img src="${safe(profile.photoURL)}" alt="">`
+            : '👤';
+          return `<div class="baithak-fr-row" data-request-uid="${safe(profile.uid)}">
+            <div class="baithak-fr-avatar">${photo}</div>
+            <div class="baithak-fr-copy"><strong>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(profile.name,profile):name}</strong><span>Friend request</span></div>
+            <button type="button" class="baithak-fr-accept" data-request-accept>Accept</button>
+            <button type="button" class="baithak-fr-decline" data-request-decline aria-label="Decline">${typeof iconHtml==='function'?iconHtml('x',{size:16}):'×'}</button>
+          </div>`;
+        })
+        .join('');
+      host.querySelectorAll('[data-request-accept]').forEach((button) => {
+        button.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const row = button.closest('[data-request-uid]');
+          try {
+            await respondFriend(row.dataset.requestUid, true);
+            row.remove();
+            if (!host.querySelector('[data-request-uid]')) {
+              host.hidden = true;
+              host.innerHTML = '';
+            }
+            if (typeof showToast === 'function') showToast(t('rel_now_friends'));
+          } catch (err) {
+            if (typeof showToast === 'function') showToast(err?.message || t('rel_update_fail'));
+          }
+        });
+      });
+      host.querySelectorAll('[data-request-decline]').forEach((button) => {
+        button.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const row = button.closest('[data-request-uid]');
+          try {
+            await respondFriend(row.dataset.requestUid, false);
+            row.remove();
+            if (!host.querySelector('[data-request-uid]')) {
+              host.hidden = true;
+              host.innerHTML = '';
+            }
+          } catch (err) {
+            if (typeof showToast === 'function') showToast(err?.message || t('rel_update_fail'));
+          }
+        });
+      });
+    } catch (e) {
+      host.hidden = true;
+    }
+  }
+
   window.openProfileMessage = openProfileMessage;
   window.relationshipState = relationshipState;
   window.hydrateRelationships = hydrateRelationships;
@@ -779,4 +843,5 @@
   window.bindProfileLongPress = bindProfileLongPress;
   window.openCloseFriendsManager = openCloseFriendsManager;
   window.mountOwnRelationshipPanel = mountOwnRelationshipPanel;
+  window.mountBaithakFriendRequests = mountBaithakFriendRequests;
 })();

@@ -619,6 +619,9 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
 .chat-img-msg {
   display: block;
   max-width: 100%;
+  max-height: 280px;
+  width: 100%;
+  object-fit: cover;
   border-radius: var(--r-md);
   box-shadow: var(--shadow-sm);
 }
@@ -3852,7 +3855,14 @@ button[aria-busy="true"]::after{
   font-size:var(--text-xs);font-weight:var(--weight-semibold);color:var(--muted);
   padding:0 4px;
 }
-.msg-bubble .music-card{margin:0;max-width:100%;width:100%;}
+.msg-bubble .music-card{margin:0;max-width:min(260px,100%);width:100%;padding:8px 8px 10px;gap:6px;}
+.msg-bubble .music-card-transport-skip{display:none;}
+.msg-bubble .music-card-transport{justify-content:center;gap:8px;}
+.msg-bubble .music-card-progress-track{margin:4px 6px 0;}
+.msg-bubble .music-card-times{margin:2px 6px 0;}
+.msg-bubble .loc-card{max-width:min(240px,100%);padding:6px 6px 0;}
+.msg-bubble .loc-card-map{height:96px;}
+.msg-bubble .mehfil-invite-card{max-width:min(240px,100%);padding:10px 12px;}
 
 .music-picker-scrim{
   position:absolute;inset:0;z-index:115;background:rgba(15,18,24,.42);
@@ -4344,18 +4354,17 @@ html.quiet-mode .notif-item{transition:none;}
 .notif-actor{display:flex;align-items:center;gap:8px;border:0;background:transparent;padding:4px 0;text-align:left;cursor:pointer;font:inherit;color:inherit;}
 .notif-actor-av{width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.04);font-size:12px;}
 .notif-actors-more{font-size:11px;color:var(--muted);padding-left:30px;}
-.notif-friend-actions{display:flex;gap:8px;margin-top:8px;}
-.notif-friend-accept,.notif-friend-decline{font-size:12px;padding:6px 12px;border-radius:8px;}
-.notif-friend-accept{background:var(--red,#e63946);color:#fff;border:0;}
-.notif-friend-decline{background:transparent;border:1px solid rgba(0,0,0,0.12);color:inherit;}
+.notif-friend-actions{display:flex;align-items:center;gap:8px;margin-top:10px;}
+.notif-friend-accept{flex:1;min-height:44px;font-size:15px;font-weight:700;padding:10px 16px;border-radius:12px;background:var(--red,#e63946);color:#fff;border:0;}
+.notif-friend-decline{flex:0 0 44px;width:44px;height:44px;padding:0;border-radius:50%;background:var(--cream);border:1px solid var(--line);color:var(--ink);display:inline-flex;align-items:center;justify-content:center;}
 .notif-unread-pip{width:8px;height:8px;border-radius:50%;background:var(--red);flex-shrink:0;margin-top:14px;}
 .notif-view-more{width:100%;margin-top:12px;}
 
-/* Tab presence light (no counts) */
+/* Tab presence light */
 .tab-btn .tab-icon{position:relative;}
 .tab-notif-light{
-  position:absolute;top:-1px;right:-2px;width:5px;height:5px;border-radius:50%;
-  background:var(--red);box-shadow:0 0 0 1.5px var(--white);pointer-events:none;
+  position:absolute;top:-2px;right:-3px;width:8px;height:8px;border-radius:50%;
+  background:var(--red);box-shadow:0 0 0 2px var(--white);pointer-events:none;
 }
 .tab-notif-light.hidden{display:none!important;}
 

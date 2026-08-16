@@ -200,9 +200,19 @@
     });
   }
 
+  function withTimeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error(label || 'timeout')), ms);
+      }),
+    ]);
+  }
+
   async function ensureAgora() {
     if (window.AgoraRTC) return window.AgoraRTC;
-    await loadScript(AGORA_CDN);
+    await withTimeout(loadScript(AGORA_CDN), 12000, 'AGORA_SDK_TIMEOUT');
+    if (!window.AgoraRTC) throw new Error('AGORA_SDK_MISSING');
     return window.AgoraRTC;
   }
 
@@ -1115,12 +1125,16 @@
 
     let tokenPayload;
     try {
-      const envelope = await apiFetch('/api/media-config', {
-        method: 'POST',
-        needAuth: true,
-        body: { action: 'agora_token', channel: channelForChat(chatId) },
-      });
-      tokenPayload = envelope?.data;
+      const envelope = await withTimeout(
+        apiFetch('/api/media-config', {
+          method: 'POST',
+          needAuth: true,
+          body: { action: 'agora_token', channel: channelForChat(chatId) },
+        }),
+        10000,
+        'TOKEN_TIMEOUT'
+      );
+      tokenPayload = envelope?.ok === false ? null : envelope?.data;
     } catch (e) {
       tokenPayload = null;
     }
@@ -1204,7 +1218,12 @@
 
       client.on('volume-indicator', (volumes) => applyVolumeIndicators(volumes));
 
-      await client.join(tokenPayload.appId, tokenPayload.channel, tokenPayload.token, tokenPayload.uid);
+      setMehfilStatus(tt('mehfil_connecting', 'Connecting…'));
+      await withTimeout(
+        client.join(tokenPayload.appId, tokenPayload.channel, tokenPayload.token, tokenPayload.uid),
+        12000,
+        'JOIN_TIMEOUT'
+      );
       if (gen !== joinGeneration) {
         try {
           await client.leave();
@@ -1221,6 +1240,7 @@
       micWanted = prefs.mic !== false;
       camWanted = !!prefs.cam;
 
+      setMehfilStatus(tt('mehfil_mic_prompt', 'Allow microphone to speak'));
       localAudio = await AgoraRTC.createMicrophoneAudioTrack();
       await localAudio.setEnabled(micWanted);
       await client.publish([localAudio]);

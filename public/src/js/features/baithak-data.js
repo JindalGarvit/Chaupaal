@@ -158,7 +158,7 @@ function renderChatList(chats, opts){
       ? formatRelativeTime(chat.ts || chat.updatedAt || chat.time)
       : chat.time);
     item.innerHTML = `
-      <div class="chat-avatar presence-host ${chat.type==='group'?'group':''}${self?' self':''}${chaupaal?' chaupaal':''}" ${self?'data-self-pin-avatar="1" title="Open your profile"':''}${chaupaal?'data-chaupaal-pin-avatar="1" title="Open Chaupaal profile"':''}>${chat.avatar||'📝'}
+      <div class="chat-avatar presence-host ${chat.type==='group'?'group':''}${self?' self':''}${chaupaal?' chaupaal':''}" ${self?'data-self-pin-avatar="1" title="Open your profile"':''}${chaupaal?'data-chaupaal-pin-avatar="1" title="Open Chaupaal profile"':''}>${self||chaupaal?(chat.avatar||'📝'):chatAvatarMarkup(chat)}
         ${chat.duelStreak?`<div class="streak-badge">🔥${chat.duelStreak}</div>`:''}
         ${!self&&!chaupaal?`<span class="presence-dot presence-dot--mehfil" data-mehfil-presence-dot hidden aria-hidden="true"></span>`:''}
       </div>
@@ -350,17 +350,71 @@ let baithakChatLiveMode=false;
 let baithakChatLoading=false;
 let baithakChatLoadError=false;
 
+function isGenericDmTitle(name){
+  const n=String(name||'').trim();
+  return !n || /^chat$/i.test(n) || n==='💬' || n==='Friend' || n==='Chaupaal member';
+}
+
+function chatAvatarMarkup(chat){
+  const url=chat?.photoURL||chat?.photoThumb||(/^https?:\/\//i.test(String(chat?.avatar||''))?chat.avatar:'');
+  if(url){
+    const safe=String(url).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+    return `<img src="${safe}" alt="">`;
+  }
+  const glyph=String(chat?.avatar||'').trim();
+  if(glyph && glyph.length<=8 && !glyph.includes('<')) return glyph;
+  return '👤';
+}
+
+async function hydrateInboxPeers(chats){
+  if(!Array.isArray(chats)||!chats.length) return chats;
+  await Promise.all(chats.map(async(c)=>{
+    if(!c||c.type==='group') return;
+    if(typeof isSelfChatRow==='function'&&isSelfChatRow(c)) return;
+    if(typeof isChaupaalChatRow==='function'&&isChaupaalChatRow(c)) return;
+    const peerUid=c.uid||c.peerUid||(c.participants||[]).find((u)=>u&&u!==currentUser?.uid);
+    if(!peerUid) return;
+    c.uid=peerUid;
+    const mem=c.memberProfiles&&c.memberProfiles[peerUid];
+    if(mem){
+      if(isGenericDmTitle(c.name)&&mem.name) c.name=mem.name;
+      c.username=c.username||mem.username;
+      c.photoURL=c.photoURL||mem.photoURL||mem.photoThumb;
+      c.profileType=c.profileType||mem.profileType;
+    }
+    if(!isGenericDmTitle(c.name)&&c.photoURL) return;
+    try{
+      const pub=typeof UsersPublic?.getPublicProfile==='function'
+        ? await UsersPublic.getPublicProfile(peerUid)
+        : (db?(await db.collection('users_public').doc(peerUid).get()).data():null);
+      if(!pub) return;
+      if(isGenericDmTitle(c.name)) c.name=pub.name||pub.displayName||pub.username||c.name;
+      c.username=c.username||pub.username;
+      c.photoURL=c.photoURL||pub.photoURL||pub.photoThumb;
+      c.profileType=c.profileType||pub.profileType;
+    }catch(e){}
+  }));
+  return chats;
+}
+
 function mapChatDoc(raw){
   const updated=raw.updatedAt?.toMillis?.()||raw.updatedAt?.toDate?.()?.getTime?.()||raw.ts||null;
   const profiles=raw.memberProfiles&&typeof raw.memberProfiles==='object'?raw.memberProfiles:{};
   const peerUid=(raw.participants||[]).find?.(uid=>typeof currentUser!=='undefined'&&uid!==currentUser?.uid);
   const peerProfile=peerUid?profiles[peerUid]:null;
+  const isGroup=raw.type==='group';
+  const peerName=peerProfile?.name||peerProfile?.username||'';
+  const title=isGroup
+    ? (raw.name||raw.title||'Group')
+    : (peerName||(!isGenericDmTitle(raw.name||raw.title)?(raw.name||raw.title):'')||'Chat');
+  const photo=peerProfile?.photoURL||peerProfile?.photoThumb||raw.photoURL||null;
   return {
     id: raw.id,
     firestoreId: raw.id,
     type: raw.type||'dm',
-    name: raw.name||raw.title||'Chat',
-    avatar: raw.avatar||'💬',
+    name: title,
+    avatar: photo?photo:(raw.avatar&&raw.avatar!=='💬'?raw.avatar:'👤'),
+    photoURL: photo,
     preview: raw.preview||raw.lastMessage||'',
     time: updated?undefined:raw.time,
     ts: updated||raw.ts||Date.now(),
@@ -419,6 +473,7 @@ async function loadBaithakChatsPage({reset=false}={}){
       excludeDeleted:false,
     });
     const mapped=page.items.map(mapChatDoc);
+    await hydrateInboxPeers(mapped);
     if(typeof enrichUsersWithProfileType==='function') await enrichUsersWithProfileType(mapped);
     const openChat=typeof window!=='undefined'?window.currentOpenChat:null;
     const openId=openChat&&(openChat.firestoreId||openChat.id);
@@ -533,4 +588,6 @@ async function setBaithakSection(section) {
 }
 window.setBaithakSection = setBaithakSection;
 window.baithakSection = () => baithakSection;
+window.hydrateInboxPeers = hydrateInboxPeers;
+window.chatAvatarMarkup = chatAvatarMarkup;
 

@@ -366,13 +366,18 @@ async function getUserStatus(uid){
 }
 
 function formatActivityStatus(statusData){
-  if(!statusData) return '';
-  if(statusData.online) return '<span style="color:#2ECC71;font-size:11px;font-weight:700;">â— Online</span>';
-  const lastSeen = statusData.lastSeen?.toDate?.() || new Date(statusData.lastSeen||0);
+  if(!statusData) return '<span class="chat-presence-line">Offline</span>';
+  if(statusData.online) {
+    return '<span class="chat-presence-line is-online"><span class="chat-presence-dot" aria-hidden="true"></span>Online</span>';
+  }
+  const lastSeen = statusData.lastSeen?.toDate?.() || (statusData.lastSeen ? new Date(statusData.lastSeen) : null);
+  const valid = lastSeen && !Number.isNaN(lastSeen.getTime()) && lastSeen.getTime() > 0;
+  if(!valid) return '<span class="chat-presence-line">Offline</span>';
   const rel = typeof formatRelativeTime==='function'
     ? formatRelativeTime(lastSeen)
     : lastSeen.toLocaleDateString('en-IN',{day:'numeric',month:'short'});
-  return `<span style="color:var(--muted);font-size:11px;">last seen ${rel.toLowerCase()}</span>`;
+  const when = String(rel || '').replace(/^last seen\s+/i, '');
+  return `<span class="chat-presence-line">Last seen ${when}</span>`;
 }
 
 // Add status badge to chat headers

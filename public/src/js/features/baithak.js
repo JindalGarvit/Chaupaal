@@ -42,12 +42,14 @@ function initBaithak(){
   } else {
     renderChatList(typeof baithakChats!=='undefined'?baithakChats:(typeof pinSelfChat==='function'?pinSelfChat([]):[]));
   }
+  if(typeof mountBaithakFriendRequests==='function') mountBaithakFriendRequests();
   if(db&&currentUser&&typeof loadBaithakChatsPage==='function'){
     loadBaithakChatsPage({reset:true})
       .then(()=>{
         if(typeof baithakChats!=='undefined') baithakChats = pinSelfChat(baithakChats);
         if(typeof setBaithakSection==='function') setBaithakSection(typeof window.baithakSection==='function'?window.baithakSection():'sabha');
         else renderChatList(baithakChats);
+        if(typeof mountBaithakFriendRequests==='function') mountBaithakFriendRequests();
       })
       .catch(()=>{
         if(typeof baithakChatLoadError!=='undefined') baithakChatLoadError=true;

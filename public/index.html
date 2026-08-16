@@ -33,10 +33,10 @@
   <link rel="stylesheet" href="/src/styles/tab-elements.css?v=0544038c">
   <link rel="stylesheet" href="/src/styles/akhbaar.css?v=b924fec3">
   <link rel="stylesheet" href="/src/styles/dangal.css?v=f8f0653e">
-  <link rel="stylesheet" href="/src/styles/baithak.css?v=425f376d">
+  <link rel="stylesheet" href="/src/styles/baithak.css?v=945e8c52">
   <link rel="stylesheet" href="/src/styles/peepal.css?v=26cc9a4d">
   <link rel="stylesheet" href="/src/styles/duniya.css?v=51212780">
-  <link rel="stylesheet" href="/src/styles/components.css?v=d6f44e8e">
+  <link rel="stylesheet" href="/src/styles/components.css?v=96997851">
   <link rel="stylesheet" href="/src/styles/mehfil.css?v=ea547811">
 </head>
 <body>
@@ -467,6 +467,9 @@
       <button type="button" class="baithak-overflow-btn" id="baithakOverflowBtn" data-icon="more-vertical" data-icon-size="22" aria-label="More options" aria-haspopup="menu" title="More">⋮</button>
     </div>
 
+    <!-- Friend requests (inbox strip) -->
+    <div class="baithak-friend-requests" id="baithakFriendRequests" hidden></div>
+
     <!-- CHAT LIST -->
     <div class="chat-list" id="chatList"></div>
   </div>
@@ -861,7 +864,7 @@
   <script src="/src/js/core/optimistic.js?v=03f440fa"></script>
   <script src="/src/js/core/comments.js?v=3117d17f"></script>
   <script src="/src/js/core/social-persistence.js?v=da571dea"></script>
-  <script src="/src/js/core/relationships.js?v=8a20c81f"></script>
+  <script src="/src/js/core/relationships.js?v=0fad018c"></script>
   <script src="/src/js/core/chat-presence.js?v=7176596d"></script>
   <script src="/src/js/core/image-pipeline.js?v=ac09e26b"></script>
   <script src="/src/js/core/profile-completion.js?v=1a6bc181"></script>
@@ -872,7 +875,7 @@
   <script src="/src/js/core/chaupaal-activity.js?v=f96f41fc"></script>
   <script src="/src/js/core/baithak-wish.js?v=334ec100"></script>
   <script src="/src/js/core/chaupaal-events.js?v=198c7651"></script>
-  <script src="/src/js/core/chaupaal-founder.js?v=533ac725"></script>
+  <script src="/src/js/core/chaupaal-founder.js?v=67b05702"></script>
   <script src="/src/js/core/profile-type.js?v=e983c303"></script>
   <script src="/src/js/core/profile-type-enrich.js?v=7378ff81"></script>
   <script src="/src/js/core/swipe-pager.js?v=e81d56e6"></script>
@@ -886,7 +889,7 @@
   <script src="/src/js/core/profile-shell.js?v=db8b3b2a"></script>
   <script src="/src/js/core/profile-section-mount.js?v=a15557d7"></script>
   <script src="/src/js/core/push-prefs.js?v=967d0d68"></script>
-  <script src="/src/js/core/notification-panel.js?v=64b2676e"></script>
+  <script src="/src/js/core/notification-panel.js?v=31492f6d"></script>
   <script src="/src/js/core/fcm-client.js?v=dc39a6ec"></script>
   <script src="/src/js/core/micro.js?v=014dea03"></script>
   <script src="/src/js/core/tab-gestures.js?v=f748415f"></script>
@@ -920,12 +923,12 @@
   <script src="/src/js/features/akhbaar.js?v=64b8165b"></script>
   <script src="/src/js/features/dangal.js?v=d53bdd6b"></script>
   <script src="/src/js/features/dangal-ratings.js?v=1cc5662a"></script>
-  <script src="/src/js/features/baithak-data.js?v=fbc8bee4"></script>
+  <script src="/src/js/features/baithak-data.js?v=58c8f27f"></script>
   <script src="/src/js/features/self-chat.js?v=9dfd834b"></script>
   <script src="/src/js/features/chaupaal-chat.js?v=759adadb"></script>
   <script src="/src/js/features/chat-rating.js?v=19d676d2"></script>
-  <script src="/src/js/features/baithak-chat.js?v=d08a3603"></script>
-  <script src="/src/js/features/mehfil.js?v=90911e42"></script>
+  <script src="/src/js/features/baithak-chat.js?v=985ef014"></script>
+  <script src="/src/js/features/mehfil.js?v=cc7163a8"></script>
   <script src="/src/js/features/chaupaal-hub.js?v=945a01db"></script>
   <script src="/src/js/features/chaupaal-ai-profile.js?v=c3832ffa"></script>
   <script src="/src/js/features/music-card.js?v=bd7663dd"></script>
@@ -935,7 +938,7 @@
   <script src="/src/js/core/stories.js?v=0f10b01b"></script>
   <script src="/src/js/core/archive-hub.js?v=c5e706ec"></script>
   <script src="/src/js/core/journal-anim.js?v=f2658ae2"></script>
-  <script src="/src/js/features/baithak.js?v=e76ecd86"></script>
+  <script src="/src/js/features/baithak.js?v=3ea316fa"></script>
   <script src="/src/js/features/profile-preview.js?v=88dd9762"></script>
   <script src="/src/js/features/profile.js?v=8efd321e"></script>
   <script src="/src/js/core/i18n.js?v=9b1b9044"></script>
@@ -977,7 +980,7 @@
   <script src="/src/js/features/duniya.js?v=3966bbee"></script>
   <script src="/src/js/features/media-picker.js?v=0d1a4caa"></script>
   <script src="/src/js/features/premium.js?v=53c2aa53"></script>
-  <script src="/src/js/features/discovery.js?v=04bca3e7"></script>
+  <script src="/src/js/features/discovery.js?v=0335c498"></script>
   <script src="/src/js/features/khoj.js?v=7b51543e"></script>
   <script src="/src/js/core/polish.js?v=e763bf53"></script>
   <script src="/src/js/features/fairness.js?v=464ed9b3"></script>

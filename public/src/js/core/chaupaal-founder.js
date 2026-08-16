@@ -53,6 +53,38 @@
     return [me, peer].sort().join('_');
   }
 
+  function ownMemberSlice() {
+    const me = typeof currentUser !== 'undefined' ? currentUser : null;
+    const up = typeof userProfile !== 'undefined' ? userProfile : {};
+    const dp = typeof digitalProfile !== 'undefined' ? digitalProfile : {};
+    return {
+      name: up.name || dp.displayName || me?.displayName || 'You',
+      username: up.username || dp.username || '',
+      photoURL: up.photoURL || me?.photoURL || '',
+      profileType: up.profileType || dp.profileType || 'personal',
+    };
+  }
+
+  function peerMemberSlice(peerUid, extra) {
+    const x = extra && typeof extra === 'object' ? extra : {};
+    return {
+      name: x.peerName || x.displayName || (x.sharedFirstHello ? '' : x.name) || 'Chaupaal member',
+      username: x.username || '',
+      photoURL: x.photoURL || x.avatar || '',
+      profileType: x.profileType || x.peerProfileType || 'personal',
+    };
+  }
+
+  function dmMemberProfiles(peerUid, peerExtra) {
+    const me = typeof currentUser !== 'undefined' ? currentUser?.uid : '';
+    const peer = String(peerUid || '').trim();
+    if (!me || !peer) return {};
+    return {
+      [me]: ownMemberSlice(),
+      [peer]: peerMemberSlice(peer, peerExtra),
+    };
+  }
+
   /** Persist a 1:1 chat so both people can send (rules require the chat doc). */
   async function ensurePeerDmChat(peerUid, extras) {
     const chatId = dmChatIdFor(peerUid);
@@ -60,6 +92,7 @@
     if (typeof db === 'undefined' || !db || !currentUser) throw new Error('Not signed in');
     if (ensuredDmIds.has(chatId) && !extras) return chatId;
     const peer = String(peerUid || '').trim();
+    const profiles = dmMemberProfiles(peer, extras);
     const payload = {
       participants: [currentUser.uid, peer].sort(),
       type: 'dm',
@@ -68,6 +101,7 @@
       createdBy: currentUser.uid,
       openedBy: currentUser.uid,
       lastMessageAt: Date.now(),
+      memberProfiles: profiles,
       ...(extras && typeof extras === 'object' ? extras : {}),
     };
     const ref = db.collection('chats').doc(chatId);
@@ -91,8 +125,28 @@
           throw e;
         }
       }
-    } else if (extras && typeof extras === 'object') {
-      await ref.set(extras, { merge: true }).catch(() => {});
+    } else {
+      const patch = { memberProfiles: profiles };
+      const allow = [
+        'sharedFirstHello',
+        'preview',
+        'firstMessageAt',
+        'lastMessageAt',
+        'discoveryOrigin',
+        'peerProfileType',
+        'origin',
+        'photoURL',
+        'matchMeta',
+        'openedBy',
+        'createdBy',
+        'updatedAt',
+      ];
+      if (extras && typeof extras === 'object') {
+        allow.forEach((k) => {
+          if (extras[k] != null) patch[k] = extras[k];
+        });
+      }
+      await ref.set(patch, { merge: true }).catch(() => {});
     }
     ensuredDmIds.add(chatId);
     return chatId;
@@ -163,10 +217,13 @@
     }
 
     if (db && currentUser && uid) {
-      const extras = {
+        const extras = {
         sharedFirstHello: hello,
         preview: hello,
         firstMessageAt: Date.now(),
+        peerName: name,
+        photoURL: String(avatar || '').startsWith('http') ? avatar : '',
+        peerProfileType: peerType,
         ...(discoveryOrigin
           ? { discoveryOrigin, peerProfileType: peerType, origin: discoveryOrigin }
           : {}),

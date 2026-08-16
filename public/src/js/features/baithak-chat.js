@@ -150,10 +150,10 @@ function openChatScreen(chat){
   screen.innerHTML = `
     <div class="chat-screen-header">
       <button class="chat-back" id="chatBack" aria-label="Back">${typeof iconHtml==='function'?iconHtml('arrow-left',{size:22}):'←'}</button>
-      <div class="chat-header-avatar${isGroup || !isSelf ? ' chat-header-tappable' : ''}" ${isGroup ? 'data-open-group-info' : !isSelf ? 'data-open-chat-profile' : ''} role="${isGroup || !isSelf ? 'button' : ''}" ${!isSelf ? 'tabindex="0"' : ''}>${chat.avatar}</div>
+      <div class="chat-header-avatar${isGroup || !isSelf ? ' chat-header-tappable' : ''}" ${isGroup ? 'data-open-group-info' : !isSelf ? 'data-open-chat-profile' : ''} role="${isGroup || !isSelf ? 'button' : ''}" ${!isSelf ? 'tabindex="0"' : ''}>${isGroup || isSelf || isChaupaal ? (chat.avatar || '👤') : (typeof chatAvatarMarkup === 'function' ? chatAvatarMarkup(chat) : (chat.avatar || '👤'))}</div>
       <div class="chat-header-info${isGroup || !isSelf ? ' chat-header-tappable' : ''}" ${isGroup ? 'data-open-group-info' : !isSelf ? 'data-open-chat-profile' : ''} role="${isGroup || !isSelf ? 'button' : ''}" ${!isSelf ? 'tabindex="0"' : ''}>
-        <div class="chat-header-name">${(chat.type==='group'||chat.type==='self')?chat.name:(typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(chat.name,chat):chat.name)}</div>
-        <div id="chatActivityStatus" style="font-size:11px;color:var(--muted);">${statusLine}</div>
+        <div class="chat-header-name">${(chat.type==='group'||chat.type==='self'||isChaupaal)?(chat.name||'Chat'):(typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(chat.name&&chat.name!=='Chat'?chat.name:(chat.username||'Chat'),chat):(chat.name&&chat.name!=='Chat'?chat.name:'Chat'))}</div>
+        <div id="chatActivityStatus" class="chat-activity-status">${statusLine}</div>
       </div>
       <div class="chat-header-actions">
         ${isSelf
@@ -401,7 +401,6 @@ function openChatScreen(chat){
         e.target.value='';
         return;
       }
-      const sizeAttrs=mediaWidth&&mediaHeight?` width="${mediaWidth}" height="${mediaHeight}" style="aspect-ratio:${mediaWidth}/${mediaHeight};"`:'';
       const pendingPhoto=addMsgBubble({from:'me',text:`📷 Photo`,attachment:{type:'photo',url:src,width:mediaWidth,height:mediaHeight},time:'now',pending:true}, isGroup);
       if(typeof sendRealtimeMessage==='function'){
         try{
@@ -697,7 +696,46 @@ function openChatScreen(chat){
       }
     }
     loadRealtimeMessages(chatId, area, isGroup);
-    // Load activity status for DMs (never for self/Chaupaal — system chats keep their own subtitle)
+    const peerUid =
+      chat.uid ||
+      chat.peerUid ||
+      chat.otherUid ||
+      (Array.isArray(chat.participants) ? chat.participants.find((u) => u && u !== currentUser?.uid) : null);
+    if (peerUid) chat.uid = peerUid;
+    if (!isSelf && !isChaupaal && !isGroup && peerUid && typeof hydrateInboxPeers === 'function') {
+      hydrateInboxPeers([chat]).then(() => {
+        const nameEl = screen.querySelector('.chat-header-name');
+        const avEl = screen.querySelector('.chat-header-avatar');
+        if (nameEl && chat.name && chat.name !== 'Chat') {
+          nameEl.innerHTML =
+            typeof formatDisplayNameHtml === 'function'
+              ? formatDisplayNameHtml(chat.name, chat)
+              : chatEsc(chat.name);
+        }
+        if (avEl && typeof chatAvatarMarkup === 'function') avEl.innerHTML = chatAvatarMarkup(chat);
+        try {
+          if (db && currentUser?.uid && chat.uid) {
+            const me = typeof userProfile !== 'undefined' ? userProfile : {};
+            db.collection('chats').doc(chatId).set({
+              memberProfiles: {
+                [currentUser.uid]: {
+                  name: me.name || currentUser.displayName || 'You',
+                  username: me.username || '',
+                  photoURL: me.photoURL || currentUser.photoURL || '',
+                  profileType: me.profileType || 'personal',
+                },
+                [chat.uid]: {
+                  name: chat.name || '',
+                  username: chat.username || '',
+                  photoURL: chat.photoURL || '',
+                  profileType: chat.profileType || 'personal',
+                },
+              },
+            }, { merge: true }).catch(() => {});
+          }
+        } catch (e) {}
+      }).catch(() => {});
+    }
     if(isSelf||isChaupaal){ /* keep notes / quiet subtitle */ }
     else if(!isGroup&&chat.uid) injectChatActivityStatus(chat.uid);
     else if(!isGroup){ const el=document.getElementById('chatActivityStatus'); if(el) el.textContent=''; }
@@ -781,7 +819,7 @@ function renderMsgBubble(m, isGroup){
     body=card+(caption||'');
     rich=true;
   } else if(att && att.type==='photo' && att.url){
-    const sizeAttrs=att.width&&att.height?` width="${Number(att.width)||0}" height="${Number(att.height)||0}" style="aspect-ratio:${Number(att.width)||1}/${Number(att.height)||1};"`:'';
+    const sizeAttrs='';
     body=`<div class="chat-img-wrap baithak-3d-edge"><img class="chat-img-msg" src="${chatEsc(att.url)}" decoding="async" alt=""${sizeAttrs}></div>`;
     rich=true;
   } else if(att && att.type==='file'){

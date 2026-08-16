@@ -667,7 +667,7 @@
           String(n.type || '') === 'friend_request'
             ? `<div class="notif-friend-actions" data-friend-actions>
             <button type="button" class="btn notif-friend-accept" data-friend-accept>${tt('notif_accept', 'Accept')}</button>
-            <button type="button" class="btn notif-friend-decline" data-friend-decline>${tt('notif_decline', 'Decline')}</button>
+            <button type="button" class="notif-friend-decline" data-friend-decline aria-label="${tt('notif_decline', 'Decline')}">${typeof iconHtml==='function'?iconHtml('x',{size:18}):'×'}</button>
           </div>`
             : '';
         return `<div class="notif-item ${n.read ? 'is-read' : 'unread'}" data-id="${n.id}" data-notif-row>
@@ -773,6 +773,7 @@
         notifHasMore = snap.size >= notifLimit && notifLimit < EXPANDED_LIMIT;
         syncNotificationsGlobal();
         updateSectionNotifDots();
+        mergePendingFriendRequests();
         if (typeof panelRepaint === 'function') panelRepaint();
         if (!pruneOnce) {
           pruneOnce = true;
@@ -781,8 +782,52 @@
       },
       (err) => {
         console.warn('[notif] inbox listen', err?.message || err);
+        mergePendingFriendRequests();
       }
     );
+    mergePendingFriendRequests();
+  }
+
+  async function mergePendingFriendRequests() {
+    if (typeof apiFetch !== 'function' || typeof currentUser === 'undefined' || !currentUser) return;
+    try {
+      const envelope = await apiFetch('/api/relationships', {
+        method: 'POST',
+        needAuth: true,
+        body: { action: 'list_friend_requests' },
+      });
+      const profiles = envelope?.ok ? envelope.data?.profiles || [] : [];
+      const seen = new Set(
+        [...cloudNotifications, ...localEphemeral]
+          .filter((n) => String(n.type || '') === 'friend_request')
+          .map((n) => n.refId || n.deepLink?.uid)
+      );
+      profiles.forEach((p) => {
+        const uid = p.uid;
+        if (!uid || seen.has(uid)) return;
+        seen.add(uid);
+        localEphemeral.unshift({
+          id: `friend_request_local_${uid}`,
+          type: 'friend_request',
+          refId: uid,
+          icon: iconForType('friend_request'),
+          text: null,
+          time: 'now',
+          ts: Date.now(),
+          read: false,
+          section: 'baithak',
+          deepLink: { uid },
+          localOnly: true,
+          actors: [{ uid, name: p.name || p.username || 'Someone', photoURL: p.photoURL || '' }],
+          actorCount: 1,
+        });
+      });
+      localEphemeral = localEphemeral.slice(0, 20);
+      syncNotificationsGlobal();
+      updateSectionNotifDots();
+      if (typeof panelRepaint === 'function') panelRepaint();
+      if (typeof mountBaithakFriendRequests === 'function') mountBaithakFriendRequests();
+    } catch (e) {}
   }
 
   function startNotifInbox() {
@@ -926,16 +971,17 @@
     const n = {
       id: (extra && extra.id) || `local_${Date.now()}`,
       type,
+      refId: (extra && (extra.refId || extra.uid)) || '',
       icon: icon || iconForType(type),
       text,
       time: 'now',
       ts: Date.now(),
       read: false,
       section: section || null,
-      deepLink: deepLink || null,
+      deepLink: deepLink || (extra && extra.uid ? { uid: extra.uid } : null),
       localOnly: true,
-      actors: [],
-      actorCount: 0,
+      actors: (extra && extra.actors) || [],
+      actorCount: (extra && extra.actorCount) || ((extra && extra.actors) || []).length || 0,
     };
     localEphemeral.unshift(n);
     localEphemeral = localEphemeral.slice(0, 20);
