@@ -242,6 +242,11 @@
     return db.runTransaction(async (tx) => {
       const parentSnap = await tx.get(parentRef);
       if (!parentSnap.exists) throw new Error('This post is no longer available');
+      if (collection === 'duniya' && parentSnap.data()?.commentsOff) {
+        const ownerUid = parentSnap.data()?.uid;
+        const collab = Array.isArray(parentSnap.data()?.collabUids) ? parentSnap.data().collabUids : [];
+        if (uid !== ownerUid && !collab.includes(uid)) throw new Error('Comments are off');
+      }
       const existing = await tx.get(commentRef);
       if (existing.exists) {
         return { persisted: true, id, comments: Math.max(0, Number(parentSnap.data()?.comments) || 0), created: false };

@@ -1,0 +1,578 @@
+/* Duniya create-post composer — Chaupaal cream/ink, not an IG skin */
+
+.duniya-compose {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  background: var(--cream, #f6f1e8);
+  color: var(--ink, #1a1a1a);
+  font-family: Inter, system-ui, sans-serif;
+}
+
+.duniya-compose-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--white, #fff);
+  border-bottom: 1px solid var(--line, #e8e0d4);
+  flex-shrink: 0;
+}
+
+.duniya-compose-bar h2 {
+  margin: 0;
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.duniya-compose-bar button {
+  background: none;
+  border: none;
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 18px;
+  cursor: pointer;
+  color: inherit;
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+}
+
+.duniya-compose-bar .dc-share {
+  background: var(--red, #e63946);
+  color: #fff;
+  border-radius: 12px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.duniya-compose-bar .dc-share:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.duniya-compose-body {
+  flex: 1;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Picker */
+.dc-picker {
+  padding: 16px;
+}
+
+.dc-picker-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.dc-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 88px;
+  border: 1.5px solid var(--line, #e8e0d4);
+  border-radius: 16px;
+  background: var(--white, #fff);
+  cursor: pointer;
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.dc-tile span[aria-hidden] {
+  font-size: 22px;
+}
+
+.dc-filmstrip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 0 12px;
+}
+
+.dc-thumb {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 2px solid transparent;
+  background: var(--line);
+  cursor: grab;
+}
+
+.dc-thumb.is-active {
+  border-color: var(--red, #e63946);
+}
+
+.dc-thumb img,
+.dc-thumb video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.dc-thumb .dc-thumb-x {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+}
+
+.dc-thumb.is-missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  text-align: center;
+  padding: 6px;
+  color: var(--muted);
+}
+
+.dc-hint {
+  font-size: 12px;
+  color: var(--muted, #7a7166);
+  margin-top: 8px;
+}
+
+/* Crop */
+.dc-crop {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.dc-crop-stage {
+  position: relative;
+  flex: 1;
+  min-height: 240px;
+  background: #111;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.dc-crop-img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  max-width: none;
+  transform-origin: center center;
+  user-select: none;
+  pointer-events: none;
+}
+
+.dc-crop-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--white);
+  border-top: 1px solid var(--line);
+}
+
+.dc-crop-tools button,
+.dc-filter {
+  border: 1.5px solid var(--line);
+  background: var(--cream);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: "Space Grotesk", sans-serif;
+}
+
+.dc-filter.is-on {
+  border-color: var(--ink);
+  background: var(--white);
+}
+
+.dc-trim {
+  padding: 8px 12px 14px;
+  background: var(--white);
+}
+
+.dc-trim input[type="range"] {
+  width: 100%;
+}
+
+/* Extras */
+.dc-preview-tap {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  background: #111;
+  cursor: pointer;
+}
+
+.dc-text-hero-edit {
+  padding: 20px 16px 8px;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+.dc-caption-wrap {
+  padding: 12px 16px;
+}
+
+.dc-caption-wrap textarea {
+  width: 100%;
+  min-height: 88px;
+  border: none;
+  outline: none;
+  resize: none;
+  background: transparent;
+  font-family: Inter, sans-serif;
+  font-size: 15px;
+}
+
+.dc-counter {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+}
+
+.dc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--white);
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: inherit;
+}
+
+.dc-row small {
+  display: block;
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.dc-toggle {
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  border: none;
+  background: var(--line);
+  position: relative;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.dc-toggle::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s ease;
+}
+
+.dc-toggle.is-on {
+  background: var(--red, #e63946);
+}
+
+.dc-toggle.is-on::after {
+  transform: translateX(18px);
+}
+
+.dc-search {
+  padding: 10px 16px;
+}
+
+.dc-search input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.dc-user-hit {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dc-progress.hidden {
+  display: none;
+}
+
+.dc-progress-bar {
+  height: 4px;
+  background: var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.dc-progress-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--red);
+  width: 0;
+}
+
+.dc-after {
+  padding: 20px 16px;
+  text-align: center;
+}
+
+.dc-after h3 {
+  font-family: "Space Grotesk", sans-serif;
+  margin: 0 0 16px;
+}
+
+.dc-after button {
+  display: block;
+  width: 100%;
+  margin: 8px 0;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1.5px solid var(--line);
+  background: var(--white);
+  font-weight: 700;
+  font-family: "Space Grotesk", sans-serif;
+  cursor: pointer;
+}
+
+.dc-tag-stage {
+  position: relative;
+  background: #111;
+}
+
+.dc-tag-chip {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: rgba(26, 26, 26, 0.82);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 999px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.dc-audience-note {
+  padding: 0 16px 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .duniya-compose-bar .dc-share,
+  .dc-toggle::after {
+    transition: none;
+  }
+}
+
+/* Feed carousel / text hero */
+.duniya-post-text-hero {
+  padding: 18px 16px 8px;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.duniya-carousel {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  background: var(--line);
+  max-height: 80vh;
+  min-height: 200px;
+  transition: height 0.22s ease;
+}
+
+.duniya-carousel-track {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+.duniya-carousel-slide {
+  min-width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #111;
+}
+
+.duniya-carousel-slide img,
+.duniya-carousel-slide video {
+  width: 100%;
+  max-height: min(80vh, calc(var(--device-stage-h, 100vh) * 0.8));
+  object-fit: contain;
+  display: block;
+}
+
+.duniya-carousel-count {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
+.duniya-carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 0 0;
+}
+
+.duniya-carousel-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--line);
+}
+
+.duniya-carousel-dots span.is-on {
+  background: var(--red, #e63946);
+}
+
+.duniya-post-media.duniya-post-media--ratio {
+  max-height: min(80vh, calc(var(--device-stage-h, 100vh) * 0.8));
+  min-height: min(100vw, 280px);
+}
+
+.duniya-music-pill {
+  display: block;
+  margin: 8px 16px 0;
+  max-width: calc(100% - 32px);
+}
+.duniya-music-pill .music-card {
+  border-radius: 14px;
+}
+
+.duniya-collab-banner {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--cream);
+  border-bottom: 1px solid var(--line);
+}
+
+.duniya-collab-banner button {
+  flex: 1;
+  min-height: 40px;
+  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.duniya-photo-tag {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: rgba(26, 26, 26, 0.85);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.duniya-tags-hint {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  background: rgba(26, 26, 26, 0.6);
+  color: #fff;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+}
+
+.chat-duniya-post-card {
+  display: block;
+  width: 160px;
+  border: 0;
+  padding: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-duniya-post-card img {
+  width: 160px;
+  height: 160px;
+  object-fit: cover;
+  border-radius: 12px;
+  background: #111;
+}
+
+.duniya-hashtag,
+.duniya-post-tag,
+.duniya-loc-line {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--red, #e63946);
+  font-weight: 700;
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .duniya-carousel {
+    transition: none;
+  }
+}

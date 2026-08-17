@@ -41,7 +41,8 @@
     { "source": "/chat/(.*)", "destination": "/index.html" },
     { "source": "/u/(.*)", "destination": "/index.html" },
     { "source": "/p/(.*)", "destination": "/index.html" },
-    { "source": "/c/(.*)", "destination": "/index.html" }
+    { "source": "/c/(.*)", "destination": "/index.html" },
+    { "source": "/story/(.*)", "destination": "/index.html" }
   ],
   "functions": {
     "api/refresh-category-cache.js": {

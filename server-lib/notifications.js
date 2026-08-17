@@ -99,7 +99,7 @@ async function upsertNotification(adminApp, recipientUid, { type, refId, actor, 
   const ref = itemsRef(db, recipientUid).doc(bundleId);
   const previewText = String(preview || '').slice(0, 280);
   const link = deepLink && typeof deepLink === 'object' ? deepLink : null;
-  const section = sectionForType(t);
+  const section = (link && link.section) || sectionForType(t);
 
   const result = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);

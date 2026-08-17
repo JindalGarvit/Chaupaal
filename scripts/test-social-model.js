@@ -2,6 +2,7 @@ const assert = require('assert');
 const {
   deriveRelationshipState,
   canViewStory,
+  isCloseFriendOptOut,
   primaryRelationshipMode,
   countDeltasForFollowChange,
   countDeltasForMutualFollow,
@@ -117,7 +118,7 @@ test('Friends can see normal Baithak stories', () => {
   assert.equal(canViewStory({ destination: 'baithak', visibility: 'friends', isFriend: true }), true);
 });
 
-test('Close Friends stories still require current friendship', () => {
+test('Close Friends stories require current friendship', () => {
   assert.equal(
     canViewStory({
       destination: 'baithak',
@@ -129,7 +130,7 @@ test('Close Friends stories still require current friendship', () => {
   );
 });
 
-test('Close Friends stories require private-list membership', () => {
+test('excluded friends cannot see Splits', () => {
   assert.equal(
     canViewStory({
       destination: 'baithak',
@@ -139,6 +140,12 @@ test('Close Friends stories require private-list membership', () => {
     }),
     false
   );
+});
+
+test('Close Friends opt-out includes friends who are not excluded', () => {
+  assert.equal(isCloseFriendOptOut({ isFriend: true, excluded: false }), true);
+  assert.equal(isCloseFriendOptOut({ isFriend: true, excluded: true }), false);
+  assert.equal(isCloseFriendOptOut({ isFriend: false, excluded: false }), false);
 });
 
 test('blocks override all non-owner story access', () => {

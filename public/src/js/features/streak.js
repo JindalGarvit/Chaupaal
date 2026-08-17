@@ -343,7 +343,7 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment){
   const body=String(text||'').trim();
   if(!body && !(music&&music.title) && !attachment) return;
   const payload={
-    text:body||(music?.title?`🎵 ${music.title}`:(attachment?.type==='photo'?'📷 Photo':attachment?.type==='file'?'📄 File':attachment?.type==='location'?'📍 Location':attachment?.type==='radio_share'?'📻 Radio':attachment?.type==='muqabala_challenge'?'⚔️ Challenge':attachment?.type==='game_challenge'?'🎮 Challenge':attachment?.type==='mehfil_invite'?(body||'Join Mehfil'):'')),
+    text:body||(music?.title?`🎵 ${music.title}`:(attachment?.type==='photo'?'📷 Photo':attachment?.type==='file'?'📄 File':attachment?.type==='location'?'📍 Location':attachment?.type==='radio_share'?'📻 Radio':attachment?.type==='muqabala_challenge'?'⚔️ Challenge':attachment?.type==='game_challenge'?'🎮 Challenge':attachment?.type==='story'?'Sent a story':attachment?.type==='duniya_post'?'Sent a post':attachment?.type==='mehfil_invite'?(body||'Join Mehfil'):'')),
     uid:currentUser.uid,
     name:userProfile?.name||currentUser.displayName||'You',
     avatar:currentUser.photoURL||'',
@@ -411,6 +411,11 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment){
         mode:attachment.mode?String(attachment.mode).slice(0,40):null,
         stake:Number(attachment.stake)||null,
         timeControl:attachment.timeControl?String(attachment.timeControl).slice(0,40):null,
+        storyId:attachment.storyId?String(attachment.storyId).slice(0,180):null,
+        destination:attachment.destination==='baithak'?'baithak':(attachment.destination==='duniya'?'duniya':null),
+        thumb:attachment.thumb?String(attachment.thumb).slice(0,2048):null,
+        ownerUid:attachment.ownerUid?String(attachment.ownerUid).slice(0,128):null,
+        mediaType:attachment.mediaType?String(attachment.mediaType).slice(0,16):null,
       };
     }
   }

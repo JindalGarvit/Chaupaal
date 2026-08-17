@@ -11,9 +11,18 @@
  * Denormalized counters live at users/{uid}.relationshipCounts and are
  * maintained only by this Admin-backed write path (client writes blocked in rules).
  *
- * Close Friends (users/{uid}/close_friends/{id}) is a private subset of current
- * Friends — adding requires friendship; unfollow clears CF membership both ways.
+ * Close Friends is opt-out for Splits: every current Friend receives Splits
+ * unless users/{uid}/cf_excluded/{id} exists. Unfollow/block clears exclusions
+ * both ways so a later re-friend starts included again.
  */
+const {
+  excludedIds,
+  excludedRef,
+  legacyCloseFriendRef,
+  purgeLegacyCloseFriendsAllowlist,
+  syncSplitInboxForFriend,
+  maybeFanoutSplitsOnFriendship,
+} = require('../server-lib/close-friends');
 const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
 const { requireUser, initAdmin } = require('../server-lib/auth');
 const { checkActionRateLimit } = require('../server-lib/rate-limit');
@@ -105,8 +114,10 @@ function clearRequestPair(tx, db, a, b) {
 }
 
 function clearCloseFriendsPair(tx, db, a, b) {
-  tx.delete(db.collection('users').doc(a).collection('close_friends').doc(b));
-  tx.delete(db.collection('users').doc(b).collection('close_friends').doc(a));
+  tx.delete(legacyCloseFriendRef(db, a, b));
+  tx.delete(legacyCloseFriendRef(db, b, a));
+  tx.delete(excludedRef(db, a, b));
+  tx.delete(excludedRef(db, b, a));
 }
 
 function writeFollowEdge(tx, db, admin, fromUid, toUid, source) {
@@ -171,6 +182,13 @@ async function setFollow(db, admin, fromUid, toUid, follow, source) {
     applyCountDelta(tx, db, admin, fromUid, deltas.from);
     applyCountDelta(tx, db, admin, toUid, deltas.to);
   });
+
+  if (follow) {
+    const [mineSnap, theirsSnap] = await db.getAll(refs.following, reverse.following);
+    if (mineSnap.exists && theirsSnap.exists) {
+      await maybeFanoutSplitsOnFriendship(db, admin, fromUid, toUid);
+    }
+  }
 }
 
 async function mutationResult(db, uid, targetUid) {
@@ -203,26 +221,20 @@ async function relationshipState(db, uid, targetUid) {
   const theirs = edgeRefs(db, targetUid, uid).following;
   const sent = db.collection('users').doc(uid).collection('sentFriendRequests').doc(targetUid);
   const received = db.collection('users').doc(uid).collection('friendRequests').doc(targetUid);
-  const close = db.collection('users').doc(uid).collection('close_friends').doc(targetUid);
-  const [mineSnap, theirsSnap, sentSnap, receivedSnap, closeSnap] = await db.getAll(
+  const excluded = excludedRef(db, uid, targetUid);
+  const [mineSnap, theirsSnap, sentSnap, receivedSnap, excludedSnap] = await db.getAll(
     mine,
     theirs,
     sent,
     received,
-    close
+    excluded
   );
   const derived = deriveRelationshipState({ following: mineSnap.exists, followsYou: theirsSnap.exists });
-  let closeFriend = closeSnap.exists;
-  // Empty CF list = everyone (friends) included by default
-  if (!closeFriend && derived.friend) {
-    const anyCf = await db.collection('users').doc(uid).collection('close_friends').limit(1).get();
-    if (anyCf.empty) closeFriend = true;
-  }
   return {
     ...derived,
     requestSent: sentSnap.exists,
     requestReceived: receivedSnap.exists,
-    closeFriend,
+    closeFriend: derived.friend && !excludedSnap.exists,
   };
 }
 
@@ -395,6 +407,10 @@ async function respondFriend(db, admin, uid, requesterUid, accept) {
     clearRequestPair(tx, db, uid, requesterUid);
   });
 
+  if (accept) {
+    await maybeFanoutSplitsOnFriendship(db, admin, uid, requesterUid);
+  }
+
   return relationshipState(db, uid, requesterUid);
 }
 
@@ -409,41 +425,22 @@ async function removeFollower(db, admin, uid, followerUid) {
 async function setCloseFriend(db, admin, uid, targetUid, enabled) {
   if (uid === targetUid) throw new Error('SELF_RELATIONSHIP');
   await ensureTarget(db, targetUid);
+  await purgeLegacyCloseFriendsAllowlist(db, uid);
+  const state = await relationshipState(db, uid, targetUid);
+  if (!state.friend) throw new Error('FRIEND_REQUIRED');
+  if (await isBlockedPair(db, uid, targetUid)) throw new Error('RELATIONSHIP_BLOCKED');
+  const ref = excludedRef(db, uid, targetUid);
   if (enabled) {
-    if (await isBlockedPair(db, uid, targetUid)) throw new Error('RELATIONSHIP_BLOCKED');
-    const state = await relationshipState(db, uid, targetUid);
-    if (!state.friend) throw new Error('FRIEND_REQUIRED');
+    await ref.delete();
+    await syncSplitInboxForFriend(db, admin, uid, targetUid, { include: true });
+    return true;
   }
-  const col = db.collection('users').doc(uid).collection('close_friends');
-  const ref = col.doc(targetUid);
-  if (enabled) {
-    await ref.set({
-      uid: targetUid,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-  } else {
-    // Opt-out: empty list means "everyone included". First removal seeds all
-    // other friends into the explicit list, then drops the target.
-    const existing = await col.limit(1).get();
-    if (existing.empty) {
-      const friends = await listFriends(db, uid);
-      const batch = db.batch();
-      let ops = 0;
-      friends.forEach((p) => {
-        if (!p?.uid || p.uid === targetUid) return;
-        batch.set(col.doc(p.uid), {
-          uid: p.uid,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          seededFromDefault: true,
-        });
-        ops += 1;
-      });
-      if (ops) await batch.commit();
-    } else {
-      await ref.delete();
-    }
-  }
-  return enabled;
+  await ref.set({
+    uid: targetUid,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  await syncSplitInboxForFriend(db, admin, uid, targetUid, { include: false });
+  return false;
 }
 
 function mapProfile(snap) {
@@ -472,11 +469,17 @@ async function profilesForIds(db, ids) {
 }
 
 async function listCloseFriends(db, uid) {
-  const snap = await db.collection('users').doc(uid).collection('close_friends').limit(MAX_LIST).get();
-  return profilesForIds(
-    db,
-    snap.docs.map((doc) => doc.id)
-  );
+  await purgeLegacyCloseFriendsAllowlist(db, uid);
+  const friends = await listFriends(db, uid);
+  const excluded = await excludedIds(db, uid);
+  const profiles = friends.map((profile) => ({
+    ...profile,
+    closeFriend: !excluded.has(profile.uid),
+  }));
+  return {
+    profiles,
+    excluded: profiles.filter((profile) => !profile.closeFriend),
+  };
 }
 
 async function listFriendRequests(db, uid) {
@@ -689,7 +692,7 @@ module.exports = async function handler(req, res) {
       });
     }
     if (action === 'list_close_friends') {
-      return sendSuccess(res, { profiles: await listCloseFriends(db, user.uid) });
+      return sendSuccess(res, await listCloseFriends(db, user.uid));
     }
     if (action === 'list_friend_requests') {
       return sendSuccess(res, { profiles: await listFriendRequests(db, user.uid) });

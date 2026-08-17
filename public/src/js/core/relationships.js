@@ -1,7 +1,7 @@
 /**
  * Relationship client.
  * Follow is directional; Friend is derived from reciprocal follows.
- * Close Friends is a private subset of Friends (decision 1B).
+ * Close Friends is opt-out: every Friend sees Splits unless you remove them.
  */
 (function () {
   'use strict';
@@ -246,9 +246,9 @@
 
     if (state.friend) {
       actions.push({
-        label: state.closeFriend ? 'Remove from Close Friends' : 'Add to Close Friends',
+        label: state.closeFriend ? (typeof t==='function'?t('avatar_menu_remove_cf'):'Remove from Close Friends') : (typeof t==='function'?t('avatar_menu_add_cf'):'Add back to Close Friends'),
         icon: 'star',
-        hint: 'Close Friends is private — only you see this list. Unfollowing also removes them.',
+        hint: typeof t==='function'?t('cf_manager_sub'):'All friends see your Splits. Remove someone to hide Splits from them. Only you see this list.',
         fn: async () => {
           const next = await setCloseFriend(profile.uid, !state.closeFriend);
           showToast(next.closeFriend?t('rel_cf_added',{name}):t('rel_cf_removed',{name}));
@@ -616,13 +616,13 @@
       <div class="archive-header">
         <button type="button" data-close-friends-back aria-label="Back">←</button>
         <div style="flex:1"><strong>Close Friends</strong>
-          <div class="relationship-private-note">Private — only you see this list. Only current Friends can be added. Unfollowing removes them automatically.</div>
+          <div class="relationship-private-note">${typeof t==='function'?t('cf_manager_sub'):'All friends see your Splits. Remove someone to hide Splits from them. Only you see this list.'}</div>
         </div>
       </div>
       <div class="close-friends-manager">
         <label class="close-friends-search"><span>Search Friends</span><input type="search" placeholder="Search by username"></label>
         <div data-close-friends-results></div>
-        <div class="close-friends-heading">On your list</div>
+        <div class="close-friends-heading">${typeof t==='function'?t('cf_manager_heading'):'Friends'}</div>
         <div data-close-friends-list class="ui-skeleton-stack">Loading…</div>
       </div>`;
     document.querySelector('.device')?.appendChild(overlay);
@@ -663,13 +663,13 @@
           callRelationship('list_friends'),
         ]);
         const profiles = data.profiles || [];
-        allFriends = friendsData.profiles || [];
+        allFriends = profiles.length ? profiles : friendsData.profiles || [];
         profiles.forEach((profile) => {
-          cache.set(profile.uid, { ...relationshipState(profile.uid), closeFriend: true });
+          cache.set(profile.uid, { ...relationshipState(profile.uid), closeFriend: profile.closeFriend !== false });
         });
-        list.innerHTML = profiles.length
-          ? profiles.map((profile) => row(profile, true)).join('')
-          : '<div class="comments-empty">Your Close Friends list is empty. Add Friends here for selective Baithak sharing.</div>';
+        list.innerHTML = allFriends.length
+          ? allFriends.map((profile) => row(profile, profile.closeFriend !== false)).join('')
+          : `<div class="comments-empty">${typeof t==='function'?t('cf_manager_empty'):'No friends yet.'}</div>`;
         wire(list);
       } catch (error) {
         list.textContent = error?.message || 'Could not load Close Friends';
@@ -692,7 +692,7 @@
             .includes(q.replace(/^@/, ''))
       );
       results.innerHTML = matches.length
-        ? matches.map((profile) => row(profile, relationshipState(profile.uid).closeFriend)).join('')
+        ? matches.map((profile) => row(profile, profile.closeFriend !== false)).join('')
         : '<div class="comments-empty">No matching Friend. Only Friends can join Close Friends.</div>';
       wire(results);
     }

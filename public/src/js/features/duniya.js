@@ -27,17 +27,22 @@ function loadArchive(){
 
 function mapDuniyaDoc(raw){
   const created=raw.createdAt?.toMillis?.()||raw.createdAt?.toDate?.()?.getTime?.()||raw.ts||null;
+  const slides=Array.isArray(raw.slides)?raw.slides:[];
+  const first=slides[0]||null;
+  const collabUids=Array.isArray(raw.collabUids)?raw.collabUids:[];
+  const collabPendingUids=Array.isArray(raw.collabPendingUids)?raw.collabPendingUids:[];
   return {
     id: raw.id,
     firestoreId: raw.id,
     user: raw.user||{name:raw.name||'User',avatar:raw.avatar||'👤',uid:raw.uid},
-    type: raw.type||'image',
-    media: raw.media||null,
-    thumb: raw.thumb||null,
-    mediaPath: raw.mediaPath||null,
-    thumbPath: raw.thumbPath||null,
-    mediaWidth: Number(raw.mediaWidth||raw.width)||null,
-    mediaHeight: Number(raw.mediaHeight||raw.height)||null,
+    type: first?.type||raw.type||(slides.length?first.type:'text'),
+    media: first?.media||raw.media||null,
+    thumb: first?.thumb||raw.thumb||null,
+    mediaPath: raw.mediaPath||first?.mediaPath||null,
+    thumbPath: raw.thumbPath||first?.thumbPath||null,
+    mediaWidth: Number(first?.width||raw.mediaWidth||raw.width)||null,
+    mediaHeight: Number(first?.height||raw.mediaHeight||raw.height)||null,
+    slides,
     caption: raw.caption||'',
     likes: raw.likes||0,
     comments: raw.comments||0,
@@ -45,13 +50,29 @@ function mapDuniyaDoc(raw){
     timestamp: created?undefined:raw.timestamp,
     ts: created||raw.ts||Date.now(),
     tags: raw.tags||[],
+    taggedPeople: Array.isArray(raw.taggedPeople)?raw.taggedPeople:[],
+    mentionedUids: Array.isArray(raw.mentionedUids)?raw.mentionedUids:[],
+    hashtags: Array.isArray(raw.hashtags)?raw.hashtags:[],
+    music: raw.music||null,
+    location: raw.location||null,
+    hideLikeCount: !!raw.hideLikeCount,
+    commentsOff: !!raw.commentsOff,
     followed: false,
     likedByMe: false,
     audience: raw.audience||'public',
+    archived: !!raw.archived,
+    saveOnly: !!raw.saveOnly,
+    collabUids,
+    collabPendingUids,
+    collabInvites: Array.isArray(raw.collabInvites)?raw.collabInvites:[],
+    collabUsers: Array.isArray(raw.collabUsers)?raw.collabUsers:[],
+    firstCommentId: raw.firstCommentId||'',
+    coverSlideIndex: Number(raw.coverSlideIndex)||0,
     uid: raw.uid,
     deleted: !!raw.deleted,
   };
 }
+if(typeof window!=='undefined') window.mapDuniyaDoc=mapDuniyaDoc;
 
 async function loadDuniyaPage({reset=false}={}){
   if(!db||typeof fetchFirestorePage!=='function') return {loaded:0};
@@ -153,122 +174,15 @@ function initDuniya(){
 }
 
 async function renderDuniyaStories(){
-  const row=document.getElementById('duniyaStoriesRow');if(!row)return;
-  let stories=[];
-  if(currentUser&&typeof loadStoryFeed==='function'){
-    try{stories=await loadStoryFeed('duniya');}catch(error){console.warn('[stories] Duniya feed',error);}
+  if(typeof DuniyaStory!=='undefined' && typeof DuniyaStory.renderStrip==='function'){
+    return DuniyaStory.renderStrip();
   }
-  if(stories.length&&typeof enrichUsersWithProfileType==='function'){
-    await enrichUsersWithProfileType(stories);
-  }
-  if(stories.length&&typeof hydrateRelationships==='function'){
-    const states=await hydrateRelationships(stories.map(story=>story.uid)).catch(()=>({}));
-    stories.sort((a,b)=>{
-      const followDelta=Number(!!states[b.uid]?.following)-Number(!!states[a.uid]?.following);
-      return followDelta||b.createdAt-a.createdAt;
-    });
-  }
-  const groups=new Map();
-  stories.forEach(story=>{
-    if(!groups.has(story.uid))groups.set(story.uid,[]);
-    groups.get(story.uid).push(story);
-  });
-  const storyUsers=[{name:'Your story',avatar:'＋',self:true},...[...groups.values()].map(group=>({...group[0],stories:group}))];
-  row.innerHTML=storyUsers.map((u,index)=>`
-    <div class="duniya-story-item" data-story-index="${index}">
-      <div class="duniya-story-ring" style="${u.self?'background:var(--line);':''}">
-        <div class="duniya-story-avatar" style="${u.self?'border:2px dashed var(--muted);':''}">
-          ${u.self?'<span style="font-size:24px;color:var(--muted);">＋</span>':u.avatar&&/^https:/.test(u.avatar)?`<img src="${u.avatar}">`:`<span>${u.avatar||'👤'}</span>`}
-        </div>
-      </div>
-      <div class="duniya-story-name">${u.self?'Add story':u.name.split(' ')[0]}</div>
-    </div>
-  `).join('');
-  row.querySelectorAll('.duniya-story-item').forEach(item=>{
-    const u=storyUsers[Number(item.dataset.storyIndex)];
-    if(!u.self&&u.uid&&typeof bindProfileLongPress==='function'){
-      bindProfileLongPress(item.querySelector('.duniya-story-avatar'),{
-        uid:u.uid,name:u.name,avatar:u.avatar,photoURL:/^https:/.test(u.avatar||'')?u.avatar:'',
-      });
-    }
-    if(u.self&&typeof onLongPress==='function'){
-      onLongPress(item.querySelector('.duniya-story-avatar')||item,()=>{
-        item.dataset.suppressClick='1';
-        if(typeof openDuniyaPostSheet==='function') openDuniyaPostSheet('post');
-        else if(typeof showToast==='function') showToast('Create a post');
-      });
-    }
-    item.addEventListener('click',()=>{
-      if(item.dataset.suppressClick==='1'){
-        item.dataset.suppressClick='0';
-        return;
-      }
-      const storyUser=storyUsers[Number(item.dataset.storyIndex)];
-      if(storyUser.self){
-        // Tap → story creation immediately (gallery + camera); no chooser sheet
-        openDuniyaStoryAddSheet();
-      }else openStoryViewer(storyUser.stories[0],storyUser.stories);
-    });
-  });
 }
 
 function openDuniyaStoryAddSheet(){
-  const s=document.createElement('div');
-  s.className='duniya-story-compose';
-  s.dataset.navManaged='1';
-  s.style.cssText='position:absolute;inset:0;background:var(--surface-page,#F5F5F5);z-index:100;display:flex;flex-direction:column;';
-  const tt=(k,f)=>{ try{ if(typeof t==='function'){ const v=t(k); if(v&&v!==k) return v; } }catch(e){} return f; };
-  s.innerHTML=`
-    <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;background:var(--surface-elevated,#fff);border-bottom:1px solid var(--line);">
-      <button type="button" data-story-close style="background:none;border:none;font-size:22px;cursor:pointer;" aria-label="Close">✕</button>
-      <div style="flex:1;font-family:var(--font-display,'Space Grotesk'),sans-serif;font-weight:700;font-size:17px;">${tt('duniya_add_story','Your story')}</div>
-    </div>
-    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;">
-      <div style="font-size:14px;color:var(--muted);text-align:center;max-width:260px;">${tt('duniya_story_hint','Pick from your gallery or open the camera — stories are public on Duniya.')}</div>
-      <div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;">
-        <label class="btn btn--primary" style="cursor:pointer;display:inline-flex;align-items:center;gap:8px;padding:14px 20px;">
-          ${typeof iconHtml==='function'?iconHtml('image',{size:18}):'🖼'} ${tt('duniya_gallery','Gallery')}
-          <input type="file" accept="image/*,video/*" id="duniyaStoryGallery" style="display:none;">
-        </label>
-        <label class="btn btn--secondary" style="cursor:pointer;display:inline-flex;align-items:center;gap:8px;padding:14px 20px;border:2px solid var(--line);border-radius:var(--r-control);background:var(--surface-elevated);">
-          ${typeof iconHtml==='function'?iconHtml('camera',{size:18}):'📷'} ${tt('duniya_camera','Camera')}
-          <input type="file" accept="image/*,video/*" capture="environment" id="duniyaStoryCamera" style="display:none;">
-        </label>
-      </div>
-    </div>`;
-  const device=document.querySelector('.device')||document.body;
-  device.appendChild(s);
-  const close=()=>{
-    if(typeof removeNavLayer==='function') removeNavLayer(s);
-    s.remove();
-    try{ if(typeof restoreAppShell==='function') restoreAppShell('duniya_story'); }catch(e){}
-  };
-  if(typeof openLayer==='function') openLayer(s, close, { host: device });
-  else if(typeof pushNavLayer==='function') pushNavLayer(s, close);
-  s.querySelector('[data-story-close]')?.addEventListener('click', close);
-
-  async function handleFile(file){
-    if(!file) return;
-    close();
-    if(typeof showToast==='function') showToast(typeof t==='function'?t('duniya_preparing_story'):'Preparing story…');
-    try{
-      if(typeof processAndUploadMedia!=='function') throw new Error('Media upload unavailable');
-      const up=await processAndUploadMedia(file,{folder:'stories'});
-      await createPlatformStory({
-        destination:'duniya',kind:'story',type:'media',
-        media:up.media||up.url||up.secure_url,thumb:up.thumb||up.media||up.url,
-        mediaType:file.type.startsWith('video')?'video':'image',
-      });
-      await renderDuniyaStories();
-      if(typeof showToast==='function') showToast(typeof t==='function'?t('duniya_story_shared'):'Story shared');
-    }catch(err){
-      if(typeof showToast==='function') showToast(typeof friendlyError==='function'?friendlyError(err):(err.message||'Could not share story'));
-    }
+  if(typeof DuniyaStory!=='undefined' && typeof DuniyaStory.startCreate==='function'){
+    DuniyaStory.startCreate();
   }
-  s.querySelector('#duniyaStoryGallery')?.addEventListener('change',e=>handleFile(e.target.files?.[0]));
-  s.querySelector('#duniyaStoryCamera')?.addEventListener('change',e=>handleFile(e.target.files?.[0]));
-  // Open gallery promptly so it feels like Instant create
-  setTimeout(()=>s.querySelector('#duniyaStoryGallery')?.click(), 80);
 }
 
 function renderDuniyaFeed(){
@@ -291,6 +205,8 @@ function renderDuniyaFeed(){
   }
   visible.forEach(post=>feed.appendChild(createDuniyaPost(post)));
   if(typeof enhanceMediaIn==='function') enhanceMediaIn(feed);
+  if(typeof mountMusicCards==='function') mountMusicCards(feed);
+  if(typeof mountLocationCards==='function') mountLocationCards(feed);
   if(duniyaLiveMode&&duniyaHasMore&&typeof ensureLoadMoreButton==='function'){
     ensureLoadMoreButton(feed,{
       label:'Load more posts',
@@ -307,20 +223,123 @@ function duniyaEsc(s){
   return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+function duniyaSlidesOf(post){
+  if(Array.isArray(post.slides)&&post.slides.length) return post.slides;
+  if(post.media){
+    return [{
+      type: post.type||'image',
+      media: post.media,
+      thumb: post.thumb||post.media,
+      width: post.mediaWidth||post.width||0,
+      height: post.mediaHeight||post.height||0,
+      alt: post.alt||'',
+      poster: post.poster||'',
+    }];
+  }
+  return [];
+}
+
+function duniyaCanEditPost(post){
+  const me=typeof currentUser!=='undefined'?currentUser?.uid:'';
+  if(!me||!post) return false;
+  if(post.uid===me||post.user?.uid===me) return true;
+  return Array.isArray(post.collabUids)&&post.collabUids.includes(me);
+}
+
+function duniyaViewerOwns(post){
+  const me=typeof currentUser!=='undefined'?currentUser?.uid:'';
+  return !!(me&&(post.uid===me||post.user?.uid===me||(Array.isArray(post.collabUids)&&post.collabUids.includes(me))));
+}
+
+function duniyaDecorateCaption(post){
+  const raw=duniyaEsc(post.caption||'');
+  return raw
+    .replace(/@([A-Za-z0-9_.]{2,40})/g,'<button type="button" class="duniya-post-tag" data-mention="$1">@$1</button>')
+    .replace(/#([A-Za-z0-9_]{1,40})/g,'<button type="button" class="duniya-hashtag" data-hashtag="$1">#$1</button>');
+}
+
+function duniyaMediaHtml(slide, post, variant){
+  if(!slide) return '';
+  const imgSrc=typeof mediaUrlFor==='function'?mediaUrlFor({media:slide.media,thumb:slide.thumb}, variant):(slide.thumb||slide.media);
+  const w=Number(slide.width)||0;
+  const h=Number(slide.height)||0;
+  const alt=duniyaEsc(slide.alt||('Post by '+(post.user?.name||'')));
+  const ratio=w>0&&h>0?` style="aspect-ratio:${w}/${h};"`:'';
+  if(slide.type==='video'){
+    const poster=slide.poster?` poster="${duniyaEsc(slide.poster)}"`:'';
+    return `<video src="${duniyaEsc(slide.media||'')}"${poster} playsinline preload="metadata" ${variant==='list'?'muted':''} controls></video>`;
+  }
+  if(slide.type==='gif'){
+    return `<img data-no-zoom="1" src="${duniyaEsc(slide.media||imgSrc)}" alt="${alt}"${ratio} class="duniya-gif">`;
+  }
+  return `<img data-no-zoom="1" src="${duniyaEsc(imgSrc)}" loading="lazy" decoding="async" alt="${alt}"${ratio} ${variant==='list'&&slide.media&&slide.media!==imgSrc?`data-full="${duniyaEsc(slide.media)}"`:''}>`;
+}
+
+function duniyaStageMaxH(){
+  const stage=document.querySelector('.device')||document.getElementById('device');
+  const h=stage?.clientHeight||window.innerHeight||640;
+  return Math.round(h*0.8);
+}
+
+function bindDuniyaCarousel(el, post, slides){
+  const wrap=el.querySelector('.duniya-carousel');
+  if(!wrap||slides.length<2) return;
+  let idx=0;
+  const track=wrap.querySelector('.duniya-carousel-track');
+  const count=wrap.querySelector('.duniya-carousel-count');
+  const dots=wrap.querySelectorAll('.duniya-carousel-dots span');
+  const apply=()=>{
+    const slide=slides[idx]||slides[0];
+    const w=Number(slide.width)||1;
+    const h=Number(slide.height)||1;
+    const maxH=duniyaStageMaxH();
+    const minH=Math.min(wrap.clientWidth||300, maxH);
+    let height=Math.round((wrap.clientWidth||300)*h/w);
+    height=Math.max(Math.min(minH, maxH), Math.min(height, maxH));
+    wrap.style.height=height+'px';
+    wrap.style.setProperty('--media-ratio', `${w}/${h}`);
+    if(track) track.style.transform=`translateX(-${idx*100}%)`;
+    if(count) count.textContent=`${idx+1}/${slides.length}`;
+    dots.forEach((d,i)=>d.classList.toggle('is-on', i===idx));
+    wrap.dataset.index=String(idx);
+  };
+  apply();
+  let startX=0, startY=0, dragging=false;
+  wrap.addEventListener('pointerdown',(e)=>{ dragging=true; startX=e.clientX; startY=e.clientY; });
+  wrap.addEventListener('pointerup',(e)=>{
+    if(!dragging) return;
+    dragging=false;
+    const dx=e.clientX-startX;
+    const dy=e.clientY-startY;
+    if(Math.abs(dx)<40||Math.abs(dx)<Math.abs(dy)) return;
+    if(dx<0&&idx<slides.length-1) idx+=1;
+    else if(dx>0&&idx>0) idx-=1;
+    apply();
+  });
+  wrap.addEventListener('dblclick',(e)=>{
+    e.preventDefault();
+    el.querySelector('.like-btn')?.click();
+  });
+}
+
 function duniyaHeartIcon(){
   return`<svg class="duniya-heart-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.2-4.35-9.55-8.55C.5 8.95 2.35 4.5 6.4 4.5c2.25 0 3.75 1.3 4.6 2.55.85-1.25 2.35-2.55 4.6-2.55 4.05 0 5.9 4.45 3.95 7.95C19.2 16.65 12 21 12 21Z"/></svg>`;
 }
 
 function createDuniyaPost(post, {variant='list'}={}){
   const el=document.createElement('div');el.className='duniya-post'+(variant==='tile'?' duniya-post--tile':'');el.dataset.id=post.id;
+  const slides=duniyaSlidesOf(post);
+  const cover=slides[post.coverSlideIndex||0]||slides[0];
   if(variant==='tile'){
-    const imgSrc=typeof mediaUrlFor==='function'?mediaUrlFor(post,'tile'):(post.thumb||post.media);
+    const imgSrc=typeof mediaUrlFor==='function'?mediaUrlFor(cover||post,'tile'):(cover?.thumb||cover?.media||post.thumb||post.media);
     const caption=duniyaEsc((post.caption||'').slice(0,80));
     el.innerHTML=`
       <div class="duniya-post-media" style="min-height:100px;">
-        ${post.type==='video'
-          ?`<video src="${duniyaEsc(post.media||'')}" muted playsinline preload="metadata"></video>`
-          :(imgSrc?`<img data-no-zoom="1" src="${duniyaEsc(imgSrc)}" loading="lazy" decoding="async" alt="">`:`<div class="duniya-post-media-placeholder">📷</div>`)}
+        ${cover
+          ?(cover.type==='video'
+            ?`<video src="${duniyaEsc(cover.media||'')}" muted playsinline preload="metadata" poster="${duniyaEsc(cover.poster||cover.thumb||'')}"></video>`
+            :`<img data-no-zoom="1" src="${duniyaEsc(imgSrc)}" loading="lazy" decoding="async" alt="">`)
+          :`<div class="duniya-post-text-hero">${caption||'Post'}</div>`}
       </div>
       <div class="duniya-post-likes" style="padding:6px 8px;font-size:11px;">${formatCount(post.likes||0)} · ${caption}</div>`;
     el.addEventListener('click',()=>{
@@ -330,48 +349,60 @@ function createDuniyaPost(post, {variant='list'}={}){
     return el;
   }
   const isFollowing=followingSet.has(post.user.uid);
-  // Escape BEFORE decorating @/# so caption text can never carry raw HTML
-  const caption=duniyaEsc(post.caption||'').replace(/@(\w+)/g,'<span class="duniya-post-tag">@$1</span>').replace(/#(\w+)/g,'<span style="color:var(--red);cursor:pointer;">#$1</span>');
-  const imgSrc=typeof mediaUrlFor==='function'?mediaUrlFor(post, variant): (post.thumb||post.media);
-  const mediaWidth=Number(post.mediaWidth||post.width)||0;
-  const mediaHeight=Number(post.mediaHeight||post.height)||0;
-  const hasMediaSize=mediaWidth>0&&mediaHeight>0;
-  const mediaSizeAttrs=hasMediaSize?` width="${mediaWidth}" height="${mediaHeight}" style="aspect-ratio:${mediaWidth}/${mediaHeight};"`:'';
-  const mediaWrapAttrs=hasMediaSize?` data-has-ratio="1" style="--media-ratio:${mediaWidth}/${mediaHeight};"`:'';
+  const caption=duniyaDecorateCaption(post);
+  const me=typeof currentUser!=='undefined'?currentUser?.uid:'';
+  const own=duniyaViewerOwns(post);
+  const locName=post.location?.placeName||post.location?.label||'';
+  const audienceLabel=post.archived?'Archive':(post.audience==='public'||!post.audience?'Everyone':post.audience);
+  const names=[post.user?.name].concat((post.collabUsers||[]).map((u)=>u.name).filter(Boolean));
+  const headerName=names.length>1
+    ? names.map((n)=>duniyaEsc(n)).join(' & ')
+    :(typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(post.user.name,post.user):duniyaEsc(post.user.name));
+  const first=slides[0];
+  const w=Number(first?.width||post.mediaWidth||post.width)||0;
+  const h=Number(first?.height||post.mediaHeight||post.height)||0;
+  const hasMediaSize=w>0&&h>0;
+  const mediaWrapAttrs=hasMediaSize?` data-has-ratio="1" class="duniya-post-media duniya-post-media--ratio" style="--media-ratio:${w}/${h};max-height:${duniyaStageMaxH()}px;"`:` class="duniya-post-media"`;
+  let mediaBlock='';
+  if(!slides.length){
+    mediaBlock=`<div class="duniya-post-text-hero">${duniyaEsc(post.caption||'')}</div>`;
+  } else if(slides.length===1){
+    mediaBlock=`<div${mediaWrapAttrs}>${duniyaMediaHtml(slides[0],post,variant)}${slides[0].type!=='video'?`<button type="button" class="duniya-expand-media cp-tap-target" aria-label="Open image full screen">⛶</button>`:''}${post.taggedPeople?.length?`<button type="button" class="duniya-tags-hint" data-show-tags>Tags</button>`:''}</div>`;
+  } else {
+    mediaBlock=`<div class="duniya-carousel" data-has-ratio="1"${hasMediaSize?` style="--media-ratio:${w}/${h};"`:''}>
+      <div class="duniya-carousel-track">${slides.map((s)=>`<div class="duniya-carousel-slide">${duniyaMediaHtml(s,post,variant)}</div>`).join('')}</div>
+      <div class="duniya-carousel-count">1/${slides.length}</div>
+    </div>
+    <div class="duniya-carousel-dots">${slides.map((_,i)=>`<span${i===0?' class="is-on"':''}></span>`).join('')}</div>`;
+  }
+  const pendingInvite=Array.isArray(post.collabPendingUids)&&post.collabPendingUids.includes(me);
+  const hideLikes=post.hideLikeCount&&!own;
   el.innerHTML=`
+    ${pendingInvite?`<div class="duniya-collab-banner" data-collab-banner><span>Collaborate on this post?</span><button type="button" data-collab="accept">Accept</button><button type="button" data-collab="decline">Decline</button></div>`:''}
     <div class="duniya-post-header">
       <div class="duniya-post-avatar">${post.user.photoURL?`<img src="${duniyaEsc(post.user.photoURL)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:`<span>${duniyaEsc(post.user.avatar||'👤')}</span>`}</div>
       <div class="duniya-post-user">
-        <div class="duniya-post-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(post.user.name,post.user):duniyaEsc(post.user.name)}</div>
-        <div class="duniya-post-meta">${duniyaEsc(typeof formatRelativeTime==='function'?formatRelativeTime(post.ts||post.timestamp):post.timestamp)} · <span class="cp-tab-mark" data-tab-mark="duniya" aria-hidden="true"></span> Public</div>
+        <div class="duniya-post-name">${headerName}</div>
+        <div class="duniya-post-meta">${duniyaEsc(typeof formatRelativeTime==='function'?formatRelativeTime(post.ts||post.timestamp):post.timestamp)} · <span class="cp-tab-mark" data-tab-mark="duniya" aria-hidden="true"></span> ${duniyaEsc(audienceLabel)}${locName?` · <button type="button" class="duniya-loc-line" data-loc>${duniyaEsc(locName)}</button>`:''}</div>
       </div>
       <button class="duniya-follow-btn ${isFollowing?'following':''}" data-uid="${duniyaEsc(post.user.uid)}" aria-label="${isFollowing?'Unfollow':'Follow'} ${duniyaEsc(post.user.name)}">${isFollowing?'Following':'Follow'}</button>
-      ${(currentUser&&(post.user?.uid===currentUser.uid||post.uid===currentUser.uid))?`<button type="button" class="duniya-delete-btn" title="Delete" aria-label="Delete post" style="background:none;border:none;cursor:pointer;color:var(--muted);padding:4px;">${typeof iconHtml==='function'?iconHtml('trash',{size:16}):'🗑️'}</button>`:''}
+      ${own?`<button type="button" class="duniya-delete-btn" title="Delete" aria-label="Delete post" style="background:none;border:none;cursor:pointer;color:var(--muted);padding:4px;">${typeof iconHtml==='function'?iconHtml('trash',{size:16}):'🗑️'}</button>`:''}
       <button type="button" class="duniya-more-btn" aria-label="More options">${typeof iconHtml==='function'?iconHtml('more-vertical',{size:20}):'⋮'}</button>
     </div>
-    <div class="duniya-post-media"${mediaWrapAttrs}>
-      ${post.type==='video'
-        ?(post.media
-          ?`<video src="${duniyaEsc(post.media)}" controls playsinline preload="none"></video>`
-          :`<div class="duniya-post-media-placeholder">🎬<div style="font-size:14px;color:rgba(255,255,255,0.6);margin-top:8px;">Video</div></div>`)
-        :(imgSrc
-          ?`<img data-no-zoom="1" src="${duniyaEsc(imgSrc)}" loading="lazy" decoding="async" alt="Post by ${duniyaEsc(post.user.name)}"${mediaSizeAttrs} ${variant==='list'&&post.media&&post.media!==imgSrc?`data-full="${duniyaEsc(post.media)}"`:''}>
-             <button type="button" class="duniya-expand-media cp-tap-target" aria-label="Open image full screen">⛶</button>`
-          :`<div class="duniya-post-media-placeholder">📷</div>`)
-      }
-    </div>
+    ${mediaBlock}
+    ${post.music?(typeof renderMusicCard==='function'?`<div class="duniya-music-pill">${renderMusicCard(post.music,{variant:'chat'})}</div>`:`<button type="button" class="duniya-music-pill" data-music-card data-music-title="${duniyaEsc(post.music.title||'')}" data-music-artist="${duniyaEsc(post.music.artist||'')}" data-music-preview="${duniyaEsc(post.music.previewUrl||'')}" data-music-source="${duniyaEsc(post.music.source||'none')}" data-music-thumb="${duniyaEsc(post.music.thumbnail||'')}"><span aria-hidden="true">♪</span> ${duniyaEsc(post.music.title||'Music')}</button>`):''}
     <div class="duniya-post-actions">
       <button class="duniya-action-btn like-btn ${post.likedByMe?'liked':''}" data-id="${post.id}" aria-label="Like this post" aria-pressed="${post.likedByMe?'true':'false'}">${duniyaHeartIcon()}</button>
       <button class="duniya-action-btn comment-btn" data-id="${post.id}" aria-label="Open comments">${typeof iconHtml==='function'?iconHtml('message-circle',{size:22}):'<span aria-hidden="true">💬</span>'}</button>
       <button class="duniya-action-btn share-btn" data-id="${post.id}" aria-label="Share post">${typeof iconHtml==='function'?iconHtml('share',{size:22}):'<span aria-hidden="true">↗</span>'}</button>
       <button class="duniya-action-btn duniya-bookmark-btn ${post.savedByMe?'saved':''}" data-id="${post.id}" aria-label="Save post" aria-pressed="${post.savedByMe?'true':'false'}">${typeof iconHtml==='function'?iconHtml('bookmark',{size:22}):'<span aria-hidden="true">🔖</span>'}</button>
     </div>
-    <div class="duniya-post-likes">${formatCount(post.likedByMe?post.likes:post.likes)} likes</div>
-    <div class="duniya-post-caption-row">
+    ${hideLikes?'':`<div class="duniya-post-likes">${formatCount(post.likes||0)} likes</div>`}
+    ${slides.length?`<div class="duniya-post-caption-row">
       <div class="duniya-post-caption"><strong class="duniya-post-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(post.user.name,post.user):duniyaEsc(post.user.name)}</strong> ${caption}</div>
       ${post.caption?`<button type="button" class="duniya-caption-speak" title="Listen to caption" aria-label="Listen to caption">${typeof iconHtml==='function'?iconHtml('volume',{size:16}):'🔊'}</button>`:''}
-    </div>
-    ${post.comments>0?`<div class="duniya-view-comments">View all ${post.comments} comments</div>`:''}
+    </div>`:''}
+    ${post.comments>0&&!post.commentsOff?`<div class="duniya-view-comments">View all ${post.comments} comments</div>`:(post.comments>0&&own?`<div class="duniya-view-comments">View comments</div>`:'')}
   `;
   const postAvatar=el.querySelector('.duniya-post-avatar');
   if(typeof bindProfileLongPress==='function') bindProfileLongPress(postAvatar,post.user);
@@ -382,7 +413,7 @@ function createDuniyaPost(post, {variant='list'}={}){
 
   // Like — optimistic (UI first, rate-limit/persist after)
   const likeBtn=el.querySelector('.like-btn');
-  likeBtn.addEventListener('click', async (e) => {
+  likeBtn?.addEventListener('click', async (e) => {
     const btn = e.currentTarget;
     if (btn.dataset.busy) return;
     btn.dataset.busy = '1';
@@ -400,7 +431,7 @@ function createDuniyaPost(post, {variant='list'}={}){
       post.likes = p.likes;
       btn.classList.toggle('liked', p.likedByMe);
       btn.setAttribute('aria-pressed', p.likedByMe ? 'true' : 'false');
-      el.querySelector('.duniya-post-likes').textContent = `${formatCount(p.likes)} likes`;
+      el.querySelector('.duniya-post-likes') && (el.querySelector('.duniya-post-likes').textContent = `${formatCount(p.likes)} likes`);
       if (p.likedByMe && typeof SoundLib !== 'undefined' && SoundLib.like) SoundLib.like();
       if (p.likedByMe && typeof haptic === 'function') haptic('light');
     };
@@ -411,7 +442,7 @@ function createDuniyaPost(post, {variant='list'}={}){
       post.likes = prevLikes;
       btn.classList.toggle('liked', prevLiked);
       btn.setAttribute('aria-pressed', prevLiked ? 'true' : 'false');
-      el.querySelector('.duniya-post-likes').textContent = `${formatCount(prevLikes)} likes`;
+      el.querySelector('.duniya-post-likes') && (el.querySelector('.duniya-post-likes').textContent = `${formatCount(prevLikes)} likes`);
     };
     try {
       if (typeof runOptimistic === 'function') {
@@ -429,7 +460,7 @@ function createDuniyaPost(post, {variant='list'}={}){
                 post.likes = saved.likes;
                 btn.classList.toggle('liked', saved.liked);
                 btn.setAttribute('aria-pressed', saved.liked ? 'true' : 'false');
-                el.querySelector('.duniya-post-likes').textContent = `${formatCount(saved.likes)} likes`;
+                el.querySelector('.duniya-post-likes') && (el.querySelector('.duniya-post-likes').textContent = `${formatCount(saved.likes)} likes`);
               }
             }
           },
@@ -629,8 +660,95 @@ function createDuniyaPost(post, {variant='list'}={}){
   });
 
   // Comments
-  el.querySelector('.comment-btn')?.addEventListener('click',()=>openDuniyaDetail(post));
+  el.querySelector('.comment-btn')?.addEventListener('click',()=>{
+    if(post.commentsOff && !duniyaViewerOwns(post)){
+      if(typeof showToast==='function') showToast('Comments are off');
+      return;
+    }
+    openDuniyaDetail(post);
+  });
   el.querySelector('.duniya-view-comments')?.addEventListener('click',()=>openDuniyaDetail(post));
+
+  bindDuniyaCarousel(el, post, slides);
+  el.querySelectorAll('[data-hashtag]').forEach((btn)=>{
+    btn.addEventListener('click',(e)=>{
+      e.preventDefault();
+      const tag=btn.dataset.hashtag;
+      if(typeof openUniversalSearch==='function') openUniversalSearch('#'+tag);
+      else if(typeof showToast==='function') showToast('#'+tag);
+    });
+  });
+  el.querySelectorAll('[data-mention]').forEach((btn)=>{
+    btn.addEventListener('click', async (e)=>{
+      e.preventDefault();
+      const handle=btn.dataset.mention;
+      try{
+        if(typeof searchUsersProvider==='function'){
+          const rows=await searchUsersProvider(handle,{limit:1});
+          const u=rows?.[0];
+          if(u && typeof openPublicProfile==='function'){
+            openPublicProfile(u,{uid:u.uid,username:u.username,context:'duniya'});
+            return;
+          }
+        }
+        if(typeof openUniversalSearch==='function') openUniversalSearch('@'+handle);
+      }catch(err){}
+    });
+  });
+  el.querySelector('[data-loc]')?.addEventListener('click',(e)=>{
+    e.preventDefault();
+    if(!post.location) return;
+    if(typeof renderLocationCard==='function'){
+      const holder=document.createElement('div');
+      holder.innerHTML=renderLocationCard(post.location,{variant:'chat'});
+      document.body.appendChild(holder);
+      if(typeof mountLocationCards==='function') mountLocationCards(holder);
+      holder.querySelector('[data-loc-card]')?.click();
+      setTimeout(()=>holder.remove(),0);
+    }
+  });
+  el.querySelector('[data-show-tags]')?.addEventListener('click',(e)=>{
+    e.preventDefault();
+    e.stopPropagation();
+    const media=el.querySelector('.duniya-post-media, .duniya-carousel');
+    if(!media) return;
+    const existing=media.querySelectorAll('.duniya-photo-tag');
+    if(existing.length){ existing.forEach((n)=>n.remove()); return; }
+    const idx=Number(el.querySelector('.duniya-carousel')?.dataset.index||0);
+    (post.taggedPeople||[]).filter((t)=>Number(t.slideIndex||0)===idx).forEach((t)=>{
+      const chip=document.createElement('button');
+      chip.type='button';
+      chip.className='duniya-photo-tag';
+      chip.style.left=(t.x*100)+'%';
+      chip.style.top=(t.y*100)+'%';
+      chip.textContent=t.username||t.name||'';
+      chip.addEventListener('click',(ev)=>{
+        ev.stopPropagation();
+        if(typeof openPublicProfile==='function') openPublicProfile({uid:t.uid,name:t.name,username:t.username},{uid:t.uid,username:t.username,context:'duniya'});
+      });
+      media.style.position='relative';
+      media.appendChild(chip);
+    });
+  });
+  el.querySelectorAll('[data-collab]').forEach((btn)=>{
+    btn.addEventListener('click', async ()=>{
+      try{
+        if(typeof apiFetch!=='function') return;
+        const envelope=await apiFetch('/api/duniya-posts',{method:'POST',needAuth:true,body:{action:'collab',collabAction:btn.dataset.collab,postId:post.firestoreId||post.id}});
+        if(!envelope?.ok) throw new Error(envelope?.error?.message||'Could not update');
+        const next=envelope.data?.post;
+        if(next && typeof mapDuniyaDoc==='function'){
+          Object.assign(post, mapDuniyaDoc({...next,id:next.id}));
+        }
+        if(typeof renderDuniyaFeed==='function') renderDuniyaFeed();
+      }catch(err){
+        if(typeof showToast==='function') showToast(err.message||'Could not update invite');
+      }
+    });
+  });
+  if(post.commentsOff){
+    el.querySelector('.comment-btn')?.setAttribute('aria-label','Comments are off');
+  }
 
   return el;
 }
@@ -642,7 +760,10 @@ function syncDuniyaPostUI(post){
   const id=String(post.id||'');
   document.querySelectorAll(`.duniya-post[data-id="${id}"]`).forEach((card)=>{
     const likesEl=card.querySelector('.duniya-post-likes');
-    if(likesEl) likesEl.textContent=`${formatCount(post.likes||0)} likes`;
+    if(likesEl){
+      if(post.hideLikeCount && !duniyaViewerOwns(post)) likesEl.remove();
+      else likesEl.textContent=`${formatCount(post.likes||0)} likes`;
+    }
     const likeBtn=card.querySelector('.like-btn');
     if(likeBtn){
       likeBtn.classList.toggle('liked', !!post.likedByMe);
@@ -712,10 +833,12 @@ function openDuniyaDetail(post){
       </div>
     </div>
     <div id="duniyaReplyHint" class="comment-reply-hint hidden"></div>
-    <div class="duniya-comments-composer">
+    ${post.commentsOff && !duniyaViewerOwns(post)
+      ? `<div class="duniya-comments-composer" style="justify-content:center;color:var(--muted);font-size:13px;">Comments are off</div>`
+      : `<div class="duniya-comments-composer">
       <input id="duniyaCommentInput" style="flex:1;padding:10px 14px;border:2px solid var(--line);border-radius:12px;font-family:Inter,sans-serif;font-size:14px;outline:none;min-height:44px;" placeholder="Add a comment... @mention someone">
       <button id="duniyaCommentSend" class="cp-tap-target" style="background:var(--red);color:#fff;border:none;border-radius:12px;padding:10px 16px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;cursor:pointer;min-height:44px;">Post</button>
-    </div>
+    </div>`}
   `;
   detail.querySelector('.duniya-expand-media')?.addEventListener('click',(e)=>{
     e.preventDefault();
@@ -795,7 +918,11 @@ function openDuniyaDetail(post){
       });
   }
 
-  commentSend.addEventListener('click', async () => {
+  commentSend?.addEventListener('click', async () => {
+    if(post.commentsOff && !duniyaViewerOwns(post)){
+      if(typeof showToast==='function') showToast('Comments are off');
+      return;
+    }
     const txt = commentInput.value.trim();
     if (!txt) return;
     const id = typeof newCommentId === 'function' ? newCommentId() : 'c_' + Date.now();
@@ -857,201 +984,21 @@ function openDuniyaDetail(post){
   wireTagging(commentInput);
 }
 
-// ===================== DUNIYA POST CREATION =====================
 function openDuniyaPostSheet(mode='post'){
-  const sheet=document.getElementById('duniyaPostSheet');
-  sheet.innerHTML=`
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--white);border-bottom:1px solid var(--line);flex-shrink:0;">
-      <button id="closeDuniyaPost" style="background:none;border:none;font-size:22px;cursor:pointer;">✕</button>
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">${mode==='story'?'Add Story':'New Post'}</div>
-      <button id="duniyaSharePost" style="background:var(--red);color:#fff;border:none;border-radius:10px;padding:8px 16px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;cursor:pointer;">Share</button>
-    </div>
-    <div style="flex:1;overflow-y:auto;padding:16px;">
-      <div style="display:flex;gap:8px;margin-bottom:14px;">
-        <div style="width:44px;height:44px;border-radius:50%;background:var(--line);display:flex;align-items:center;justify-content:center;font-size:20px;">🪑</div>
-        <div>
-          <div style="font-weight:700;font-size:14px;">${userProfile?.name||'You'}</div>
-          <select id="duniyaAudience" style="border:1.5px solid var(--line);border-radius:8px;padding:4px 8px;font-size:12px;margin-top:4px;">
-            <option value="public">🌍 Everyone</option>
-            <option value="followers">👥 Followers only</option>
-            <option value="ai">🤖 AI decides</option>
-            <option value="friends">🤝 Friends only</option>
-            <option value="save_only">💾 Save without posting</option>
-          </select>
-        </div>
-      </div>
-      <textarea id="duniyaCaptionInput" style="width:100%;min-height:100px;border:none;outline:none;font-family:Inter,sans-serif;font-size:15px;resize:none;background:transparent;" placeholder="Write a caption... use @mention or #hashtag"></textarea>
-      <div id="duniyaDraftHint" style="font-size:11px;color:var(--muted);margin-top:4px;"></div>
-      <div id="duniyaMediaPreview" style="margin-top:10px;"></div>
-      <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
-        <label style="display:flex;align-items:center;gap:6px;padding:10px 14px;background:var(--cream);border-radius:12px;cursor:pointer;font-size:13px;font-weight:600;">
-          📷 Photo/Video<input type="file" id="duniyaMediaInput" accept="image/*,video/*" style="display:none;">
-        </label>
-        <button type="button" id="duniyaGifBtn" style="padding:10px 14px;background:var(--cream);border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;">🎭 GIF</button>
-        <button type="button" id="duniyaStickerBtn" style="padding:10px 14px;background:var(--cream);border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;">😄 Sticker</button>
-      </div>
-    </div>
-  `;
-  sheet.classList.remove('hidden');requestAnimationFrame(()=>sheet.classList.add('open'));
-  window.__duniyaPendingGif=null;
-  document.getElementById('duniyaGifBtn')?.addEventListener('click',()=>{
-    if(typeof openGifPicker==='function') openGifPicker();
-    else if(typeof showToast==='function') showToast('GIF picker unavailable');
-  });
-  document.getElementById('duniyaStickerBtn')?.addEventListener('click',()=>{
-    if(typeof openStickerPicker==='function') openStickerPicker();
-    else if(typeof showToast==='function') showToast('Sticker picker unavailable');
-  });
-  const captionEl=document.getElementById('duniyaCaptionInput');
-  const audienceEl=document.getElementById('duniyaAudience');
-  let duniyaDraft=null;
-  if(typeof bindDraftAutosave==='function'){
-    duniyaDraft=bindDraftAutosave({
-      name:'duniya',
-      fields:[captionEl,audienceEl],
-      getState:()=>({caption:captionEl?.value||'',audience:audienceEl?.value||'public'}),
-      applyState:(s)=>{
-        if(captionEl&&s.caption) captionEl.value=s.caption;
-        if(audienceEl&&s.audience) audienceEl.value=s.audience;
-        const hint=document.getElementById('duniyaDraftHint');
-        if(hint) hint.textContent='Draft saved on this device';
-      },
-    });
+  if(typeof currentUser==='undefined'||!currentUser){
+    if(typeof showAuth==='function') showAuth();
+    return;
   }
-  document.getElementById('closeDuniyaPost').addEventListener('click',()=>{
-    duniyaDraft?.flush?.();
-    sheet.classList.remove('open');setTimeout(()=>sheet.classList.add('hidden'),350);
-  });
-  wireTagging(captionEl);
-  let pendingMediaFile=null;
-  document.getElementById('duniyaMediaInput').addEventListener('change',e=>{
-    const file=e.target.files[0];if(!file)return;
-    pendingMediaFile=file;
-    window.__duniyaPendingGif=null;
-    const preview=document.getElementById('duniyaMediaPreview');
-    const localUrl=URL.createObjectURL(file);
-    if(file.type.startsWith('video')){
-      preview.innerHTML=`<video src="${localUrl}" controls style="width:100%;border-radius:12px;"></video><div style="font-size:11px;color:var(--muted);margin-top:6px;">Will upload (max 15MB)</div>`;
-    } else {
-      preview.innerHTML=`<img src="${localUrl}" style="width:100%;border-radius:12px;max-height:300px;object-fit:cover;"><div style="font-size:11px;color:var(--muted);margin-top:6px;">Compressed on device before upload</div>`;
-    }
-  });
-  document.getElementById('duniyaSharePost').addEventListener('click',async()=>{
-    const shareBtn=document.getElementById('duniyaSharePost');
-    const caption=captionEl.value.trim();
-    const audience=audienceEl?.value||'public';
-    const saveOnly=audience==='save_only';
-    const mediaEl=document.getElementById('duniyaMediaPreview').querySelector('img,video');
-    const unlock=typeof beginClientMutation==='function'?beginClientMutation('duniya_post'):()=>{};
-    if(unlock===false){ showToast(t('duniya_post_submitting')); return; }
-    if(typeof setButtonLoading==='function') setButtonLoading(shareBtn,true,saveOnly?'Saving':'Sharing');
-    else { shareBtn.disabled=true; shareBtn.textContent='…'; }
-
-    if(typeof checkRateLimit==='function'){
-      const rl=await checkRateLimit('post');
-      if(!rl.ok){
-        if(typeof setButtonLoading==='function') setButtonLoading(shareBtn,false);
-        else { shareBtn.disabled=false;shareBtn.textContent='Share'; }
-        if(typeof unlock==='function') unlock();
-        if(typeof showToast==='function') showToast(rl.message||t('duniya_slow_down'));
-        return;
-      }
-    }
-
-    let mediaUrl=null, thumbUrl=null, mediaPath=null, thumbPath=null, mediaWidth=null, mediaHeight=null, mediaType=mediaEl?.tagName==='VIDEO'?'video':'image';
-    try{
-      if(window.__duniyaPendingGif?.url && !pendingMediaFile){
-        mediaUrl=window.__duniyaPendingGif.url;
-        thumbUrl=mediaUrl;
-        mediaType='gif';
-      } else if(pendingMediaFile&&typeof processAndUploadMedia==='function'&&currentUser&&(typeof isMediaUploadReady!=='function'||await isMediaUploadReady())){
-        shareBtn.classList.remove('is-loading');
-        shareBtn.removeAttribute('aria-busy');
-        shareBtn.textContent='Uploading…';
-        const uploaded=await processAndUploadMedia(pendingMediaFile,{
-          folder: pendingMediaFile.type.startsWith('video')?'videos':'posts',
-          onProgress:(msg)=>{ shareBtn.textContent=msg||'Uploading…'; },
-        });
-        mediaUrl=uploaded.media;
-        thumbUrl=uploaded.thumb;
-        mediaPath=uploaded.mediaPath;
-        thumbPath=uploaded.thumbPath;
-        mediaWidth=Number(uploaded.width)||null;
-        mediaHeight=Number(uploaded.height)||null;
-        mediaType=pendingMediaFile.type.startsWith('video')?'video':'image';
-      } else if(mediaEl?.src && mediaEl.src.startsWith('http')){
-        mediaUrl=mediaEl.src;
-        thumbUrl=mediaEl.src;
-      } else if(mediaEl?.src){
-        // Offline / no Storage — keep local preview only (not written to Firestore)
-        mediaUrl=mediaEl.src;
-        thumbUrl=mediaEl.src;
-      }
-    }catch(err){
-      if(typeof setButtonLoading==='function') setButtonLoading(shareBtn,false);
-      else { shareBtn.disabled=false; shareBtn.textContent='Share'; }
-      if(typeof unlock==='function') unlock();
-      showToast(typeof friendlyError==='function'?friendlyError(err):(err.message||t('duniya_upload_fail')));
-      return;
-    }
-
-    const newPost={
-      id:`d_${Date.now()}`,
-      user:{name:userProfile?.name||'You',avatar:'🪑',uid:currentUser?.uid||'me',photoURL:userProfile?.photoURL||null,profileType:(typeof ownProfileType==='function'?ownProfileType():(typeof getProfileType==='function'?getProfileType():'personal'))},
-      type:mediaType,
-      media:mediaUrl,
-      thumb:thumbUrl,
-      mediaPath, thumbPath,
-      mediaWidth, mediaHeight,
-      caption:caption||'Just posted on Duniya 🌍',
-      likes:0,comments:0,shares:0,
-      timestamp:'now',ts:Date.now(),tags:[],followed:false,likedByMe:false,
-      audience:saveOnly?'private':audience, deleted:false, uid:currentUser?.uid||'me',
-      archived:!!saveOnly,
-    };
-    const firestorePayload={
-      uid:currentUser?.uid,
-      user:{name:newPost.user.name,avatar:newPost.user.avatar,uid:newPost.user.uid,photoURL:userProfile?.photoURL||null,profileType:newPost.user.profileType||'personal'},
-      type:newPost.type,
-      media: mediaUrl && String(mediaUrl).startsWith('http') ? mediaUrl : null,
-      thumb: thumbUrl && String(thumbUrl).startsWith('http') ? thumbUrl : null,
-      mediaPath: mediaPath||null,
-      thumbPath: thumbPath||null,
-      mediaWidth: mediaWidth||null,
-      mediaHeight: mediaHeight||null,
-      caption:newPost.caption,
-      likes:0,comments:0,shares:0,
-      tags:newPost.tags,
-      audience:saveOnly?'private':audience,
-      archived:!!saveOnly,
-      archivedAt:saveOnly?firebase.firestore.FieldValue.serverTimestamp():null,
-      saveOnly:!!saveOnly,
-      deleted:false,
-      createdAt:firebase.firestore.FieldValue.serverTimestamp(),
-      ts:Date.now(),
-    };
-    if(!saveOnly) duniyaPosts.unshift(newPost);
-    saveToArchive({type:'duniya_post',...newPost,media:firestorePayload.media,thumb:firestorePayload.thumb});
-    duniyaDraft?.clear?.();
-    sheet.classList.remove('open');setTimeout(()=>sheet.classList.add('hidden'),350);
-    if(!saveOnly) renderDuniyaFeed();
-    showToast(saveOnly?t('duniya_saved_archive'):t('duniya_posted'));
-    if(typeof trackPostCreated==='function' && !saveOnly) trackPostCreated('duniya');
-    if(typeof SoundLib!=='undefined'&&SoundLib.postPublish) SoundLib.postPublish();
-    if(db&&currentUser){
-      try{
-        if(typeof assertOwnUid==='function'&&!assertOwnUid(currentUser.uid)) throw new Error('Not authorized');
-        const ref=await db.collection('duniya').add(firestorePayload);
-        newPost.firestoreId=ref.id;
-      }catch(e){
-        showToast(typeof friendlyError==='function'?friendlyError(e):t('duniya_sync_fail'));
-      }
-    }
-    if(typeof setButtonLoading==='function') setButtonLoading(shareBtn,false);
-    else { shareBtn.disabled=false; shareBtn.textContent='Share'; }
-    if(typeof haptic==='function') haptic('success');
-    if(typeof unlock==='function') unlock();
-  });
+  if(mode==='story'){
+    if(typeof DuniyaStory!=='undefined' && typeof DuniyaStory.startCreate==='function') DuniyaStory.startCreate();
+    else if(typeof showToast==='function') showToast('Story composer unavailable');
+    return;
+  }
+  if(typeof DuniyaCompose!=='undefined' && typeof DuniyaCompose.open==='function'){
+    DuniyaCompose.open({ mode: mode==='text' ? 'text' : 'media' });
+    return;
+  }
+  if(typeof showToast==='function') showToast('Composer unavailable');
 }
 
 // ===================== SHARE SHEET =====================
@@ -1133,27 +1080,35 @@ function openShareSheet(post){
 let userFlags={};
 
 // ===================== @TAGGING SYSTEM =====================
-const ALL_TAGGABLE_USERS=SAMPLE_DISCOVERY_POOL.map(u=>({name:u.name,username:u.name.toLowerCase().replace(/\s+/g,'_')}));
-
 function wireTagging(inputEl){
   if(!inputEl||inputEl.dataset.tagged)return;
   inputEl.dataset.tagged='1';
   let tagDropdown=null;
+  let timer=null;
   inputEl.addEventListener('input',()=>{
     const val=inputEl.value;const at=val.lastIndexOf('@');
     if(at===-1||val.slice(at+1).includes(' ')){tagDropdown?.remove();tagDropdown=null;return;}
-    const query=val.slice(at+1).toLowerCase();
-    const matches=ALL_TAGGABLE_USERS.filter(u=>u.username.includes(query)||u.name.toLowerCase().includes(query)).slice(0,5);
-    if(!matches.length){tagDropdown?.remove();tagDropdown=null;return;}
-    if(!tagDropdown){tagDropdown=document.createElement('div');tagDropdown.className='tag-dropdown';inputEl.parentElement.style.position='relative';inputEl.parentElement.appendChild(tagDropdown);}
-    tagDropdown.innerHTML=matches.map(u=>`<div class="tag-user-item" data-username="${u.username}"><span>👤</span><span style="font-weight:600;font-size:13px;">${u.name}</span><span style="font-size:11px;color:var(--muted);">@${u.username}</span></div>`).join('');
-    tagDropdown.querySelectorAll('.tag-user-item').forEach(item=>{
-      item.addEventListener('click',()=>{
-        const before=val.slice(0,at);inputEl.value=before+'@'+item.dataset.username+' ';
-        tagDropdown.remove();tagDropdown=null;inputEl.focus();
-        addNotification('tag','🏷️',`You tagged @${item.dataset.username}`);
+    const query=val.slice(at+1).trim();
+    if(!query){tagDropdown?.remove();tagDropdown=null;return;}
+    clearTimeout(timer);
+    timer=setTimeout(async()=>{
+      let matches=[];
+      try{
+        if(typeof searchUsersProvider==='function'){
+          const me=typeof currentUser!=='undefined'?currentUser?.uid:'';
+          matches=((await searchUsersProvider(query,{limit:6}))||[]).filter(u=>u.uid&&u.uid!==me);
+        }
+      }catch(e){}
+      if(!matches.length){tagDropdown?.remove();tagDropdown=null;return;}
+      if(!tagDropdown){tagDropdown=document.createElement('div');tagDropdown.className='tag-dropdown';inputEl.parentElement.style.position='relative';inputEl.parentElement.appendChild(tagDropdown);}
+      tagDropdown.innerHTML=matches.map(u=>`<button type="button" class="tag-user-item" data-username="${duniyaEsc(u.username||'')}"><span>👤</span><span style="font-weight:600;font-size:13px;">${duniyaEsc(u.name||'')}</span><span style="font-size:11px;color:var(--muted);">@${duniyaEsc(u.username||'')}</span></button>`).join('');
+      tagDropdown.querySelectorAll('.tag-user-item').forEach(item=>{
+        item.addEventListener('click',()=>{
+          const before=inputEl.value.slice(0,at);inputEl.value=before+'@'+item.dataset.username+' ';
+          tagDropdown.remove();tagDropdown=null;inputEl.focus();
+        });
       });
-    });
+    },200);
   });
   document.addEventListener('click',e=>{if(!e.target.closest('.tag-dropdown')&&e.target!==inputEl){tagDropdown?.remove();tagDropdown=null;}},{capture:true});
 }

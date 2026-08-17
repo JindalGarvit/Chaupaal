@@ -15,7 +15,9 @@
  */
 (function () {
   const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
-  const MAX_VIDEO_BYTES = 15 * 1024 * 1024;
+  /** Cloudinary unsigned presets commonly allow ~100MB; product cap is 10 minutes. */
+  const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
+  const MAX_VIDEO_MS = 10 * 60 * 1000;
 
   const PRESETS = {
     feed: { maxEdge: 1200, quality: 0.82, mime: 'image/jpeg' },
@@ -153,7 +155,91 @@
     return `chaupaal/${folder}/${uid}`;
   }
 
-  async function uploadToCloudinary(blobOrFile, { resourceType = 'image', folder = 'posts', filename } = {}) {
+  function readVideoMeta(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.muted = true;
+      video.playsInline = true;
+      video.onloadedmetadata = () => {
+        const meta = {
+          durationMs: Math.round((video.duration || 0) * 1000),
+          width: video.videoWidth || 0,
+          height: video.videoHeight || 0,
+        };
+        URL.revokeObjectURL(url);
+        resolve(meta);
+      };
+      video.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('Could not read video'));
+      };
+      video.src = url;
+    });
+  }
+
+  /**
+   * Best-effort bitrate transcode via MediaRecorder. Never silently cuts to 15s.
+   * If the browser cannot transcode, the caller keeps the original file.
+   */
+  async function transcodeVideoFile(file, { maxBytes = MAX_VIDEO_BYTES, onProgress } = {}) {
+    if (!file || file.size <= maxBytes) return file;
+    if (typeof MediaRecorder === 'undefined') return file;
+    const url = URL.createObjectURL(file);
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.src = url;
+    await new Promise((resolve, reject) => {
+      video.onloadedmetadata = resolve;
+      video.onerror = () => reject(new Error('Could not decode video for compress'));
+    });
+    if (typeof video.captureStream !== 'function' && typeof video.mozCaptureStream !== 'function') {
+      URL.revokeObjectURL(url);
+      return file;
+    }
+    const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+      ? 'video/webm;codecs=vp8,opus'
+      : MediaRecorder.isTypeSupported('video/webm')
+        ? 'video/webm'
+        : '';
+    if (!mime) {
+      URL.revokeObjectURL(url);
+      return file;
+    }
+    if (typeof onProgress === 'function') onProgress('Compressing video…', 5);
+    const stream = video.captureStream ? video.captureStream() : video.mozCaptureStream();
+    const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 1500000 });
+    const chunks = [];
+    rec.ondataavailable = (e) => {
+      if (e.data && e.data.size) chunks.push(e.data);
+    };
+    const done = new Promise((resolve, reject) => {
+      rec.onstop = () => resolve();
+      rec.onerror = () => reject(new Error('Compress failed'));
+    });
+    rec.start(250);
+    try {
+      await video.play();
+    } catch (e) {
+      rec.stop();
+      URL.revokeObjectURL(url);
+      return file;
+    }
+    await new Promise((resolve) => {
+      video.onended = resolve;
+      setTimeout(resolve, Math.min(MAX_VIDEO_MS + 2000, (video.duration || 0) * 1000 + 2000));
+    });
+    if (rec.state !== 'inactive') rec.stop();
+    await done;
+    URL.revokeObjectURL(url);
+    const blob = new Blob(chunks, { type: mime });
+    if (!blob.size || blob.size >= file.size) return file;
+    return new File([blob], (file.name || 'clip').replace(/\.[^.]+$/, '') + '.webm', { type: mime });
+  }
+
+  async function uploadToCloudinary(blobOrFile, { resourceType = 'image', folder = 'posts', filename, onProgress } = {}) {
     const cfg = await getMediaConfig();
     if (!cfg) {
       throw new Error('Media upload is not configured. Set Cloudinary on Vercel (see .env.example).');
@@ -165,7 +251,9 @@
       throw new Error('File too large after compression');
     }
     if (resourceType === 'video' && size > MAX_VIDEO_BYTES) {
-      throw new Error('Video is too large (max 15MB). Try a shorter clip.');
+      const err = new Error('This clip is still too large after compress. Trim it or pick a lower-quality export.');
+      err.code = 'VIDEO_TOO_HEAVY';
+      throw err;
     }
 
     const endpoint = `https://api.cloudinary.com/v1_1/${cfg.cloudName}/${resourceType}/upload`;
@@ -173,15 +261,27 @@
     form.append('file', blobOrFile, filename || (resourceType === 'video' ? 'clip.mp4' : 'photo.jpg'));
     form.append('upload_preset', cfg.uploadPreset);
     form.append('folder', folderPath(folder));
-    // Public metadata only — helps audit in Cloudinary console
     if (currentUser?.uid) form.append('context', `uid=${currentUser.uid}`);
 
-    const res = await fetch(endpoint, { method: 'POST', body: form });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(data?.error?.message || `Cloudinary upload failed (${res.status})`);
-    }
-    return data; // secure_url, public_id, width, height, …
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', endpoint);
+      xhr.upload.onprogress = (e) => {
+        if (!e.lengthComputable || typeof onProgress !== 'function') return;
+        const pct = Math.max(0, Math.min(99, Math.round((e.loaded / e.total) * 100)));
+        onProgress(`Uploading… ${pct}%`, pct);
+      };
+      xhr.onload = () => {
+        let json = {};
+        try {
+          json = JSON.parse(xhr.responseText || '{}');
+        } catch (e) {}
+        if (xhr.status >= 200 && xhr.status < 300) resolve(json);
+        else reject(new Error(json?.error?.message || `Cloudinary upload failed (${xhr.status})`));
+      };
+      xhr.onerror = () => reject(new Error('Upload failed — check your connection and retry'));
+      xhr.send(form);
+    });
   }
 
   /**
@@ -198,6 +298,7 @@
       resourceType: 'image',
       folder,
       filename: 'photo.jpg',
+      onProgress,
     });
 
     const media = uploaded.secure_url;
@@ -217,16 +318,34 @@
     };
   }
 
-  async function uploadVideoFile(file, { folder = 'videos', onProgress } = {}) {
+  async function uploadVideoFile(file, { folder = 'videos', onProgress, maxDurationMs = MAX_VIDEO_MS } = {}) {
     if (!isVideoFile(file)) throw new Error('Expected a video');
-    if (file.size > MAX_VIDEO_BYTES) {
-      throw new Error('Video is too large (max 15MB). Try a shorter clip.');
+    let working = file;
+    try {
+      const meta = await readVideoMeta(file);
+      if (meta.durationMs > maxDurationMs) {
+        const err = new Error('Trim this clip to 10 minutes or less before sharing.');
+        err.code = 'VIDEO_TOO_LONG';
+        throw err;
+      }
+    } catch (e) {
+      if (e.code === 'VIDEO_TOO_LONG') throw e;
     }
-    if (typeof onProgress === 'function') onProgress('Uploading video…');
-    const uploaded = await uploadToCloudinary(file, {
+    if (working.size > MAX_VIDEO_BYTES) {
+      if (typeof onProgress === 'function') onProgress('File is large — compressing…', 2);
+      working = await transcodeVideoFile(working, { maxBytes: MAX_VIDEO_BYTES, onProgress });
+    }
+    if (working.size > MAX_VIDEO_BYTES) {
+      const err = new Error('This clip is still too large. Trim it or export at a lower quality, then retry.');
+      err.code = 'VIDEO_TOO_HEAVY';
+      throw err;
+    }
+    if (typeof onProgress === 'function') onProgress('Uploading video…', 8);
+    const uploaded = await uploadToCloudinary(working, {
       resourceType: 'video',
       folder,
-      filename: file.name || 'clip.mp4',
+      filename: working.name || file.name || 'clip.mp4',
+      onProgress,
     });
     const media = uploaded.secure_url;
     // Video "thumb": Cloudinary can serve a JPEG frame via so_0 + f_jpg
@@ -265,6 +384,8 @@
   }
 
   window.IMAGE_PRESETS = PRESETS;
+  window.transcodeVideoFile = transcodeVideoFile;
+  window.readVideoMeta = readVideoMeta;
   window.compressImageFile = compressImageFile;
   window.uploadOptimizedImage = uploadOptimizedImage;
   window.uploadVideoFile = uploadVideoFile;

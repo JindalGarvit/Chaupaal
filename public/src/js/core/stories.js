@@ -77,6 +77,61 @@
     });
   }
 
+  async function viewPlatformStory(story) {
+    if (!story?.id) return;
+    try {
+      await storyCall('view', { destination: story.destination || 'duniya', storyId: story.id });
+    } catch (e) {}
+  }
+
+  async function listStoryViews(story, q) {
+    const data = await storyCall('list_views', {
+      destination: story.destination || 'duniya',
+      storyId: story.id,
+      q: q || '',
+    });
+    return data || { count: 0, viewers: [] };
+  }
+
+  async function respondStoryInteractive(story, type, value) {
+    return storyCall('interactive_respond', {
+      destination: story.destination || 'duniya',
+      storyId: story.id,
+      type,
+      value,
+    });
+  }
+
+  async function listStoryInteractive(story) {
+    return storyCall('list_interactive', {
+      destination: story.destination || 'duniya',
+      storyId: story.id,
+    });
+  }
+
+  async function sendStoryToPeers(story, { uids, chatIds, text } = {}) {
+    return storyCall('send_story', {
+      destination: story.destination || 'duniya',
+      storyId: story.id,
+      uids: uids || [],
+      chatIds: chatIds || [],
+      text: text || '',
+    });
+  }
+
+  async function deleteStoryComment(story, commentId) {
+    return storyCall('delete_comment', {
+      destination: story.destination || 'duniya',
+      storyId: story.id,
+      commentId,
+    });
+  }
+
+  async function getPlatformStory(storyId, destination) {
+    const data = await storyCall('get', { storyId, destination: destination || 'duniya' });
+    return data.story || null;
+  }
+
   async function openProfileStories(targetUid) {
     if (!targetUid || !currentUser) return;
     const data = await storyCall('profile', { targetUid });
@@ -100,10 +155,306 @@
     return [...groups.values()];
   }
 
+  function isSplitKind(story) {
+    const kind = story?.kind || story;
+    return kind === 'split' || kind === 'instant';
+  }
+
+  function splitTt(key, fallback) {
+    try {
+      if (typeof t === 'function') {
+        const value = t(key);
+        if (value && value !== key) return value;
+      }
+    } catch (e) {}
+    return fallback;
+  }
+
+  const SPLIT_SEEN_KEY = 'chaupaal_split_seen_v1';
+
+  function loadSplitSeen() {
+    try {
+      return JSON.parse(localStorage.getItem(SPLIT_SEEN_KEY) || '{}') || {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function markSplitsSeen(ids) {
+    const map = loadSplitSeen();
+    const now = Date.now();
+    (ids || []).forEach((id) => {
+      if (id) map[id] = now;
+    });
+    const cutoff = now - 48 * 60 * 60 * 1000;
+    Object.keys(map).forEach((id) => {
+      if (map[id] < cutoff) delete map[id];
+    });
+    try {
+      localStorage.setItem(SPLIT_SEEN_KEY, JSON.stringify(map));
+    } catch (e) {}
+  }
+
+  function groupHasUnseen(group) {
+    const seen = loadSplitSeen();
+    return (group || []).some((story) => story?.id && !seen[story.id]);
+  }
+
   async function renderLiveBaithakStories() {
-    // Baithak no longer shows Instagram-style Stories rings — Instants only.
-    // Duniya owns Stories.
     return renderBaithakInstants();
+  }
+
+  async function shareBaithakSplit(payload, { toastOnSuccess = true, refresh = true } = {}) {
+    const story = await createPlatformStory({
+      destination: 'baithak',
+      kind: 'split',
+      visibility: 'close_friends',
+      text: payload.text || '',
+      media: payload.media || null,
+      thumb: payload.thumb || null,
+      type: payload.type || 'note',
+      mediaType: payload.mediaType || undefined,
+      music: payload.music || null,
+      expiresInHours: 24,
+    });
+    if (!story) throw new Error(splitTt('instants_fail', 'Could not share Split'));
+    if (toastOnSuccess && typeof showToast === 'function') {
+      showToast(splitTt('instants_shared', 'Split shared'));
+    }
+    if (refresh) await renderBaithakInstants();
+    return story;
+  }
+
+  function showSplitUndoBar({ previewUrl, previewLabel, onCommit, onCancel } = {}) {
+    document.querySelectorAll('.instant-pending').forEach((el) => el.remove());
+    const pending = document.createElement('div');
+    pending.className = 'instant-pending';
+    pending.setAttribute('data-nav-ignore', '1');
+    const preview = previewUrl
+      ? `<img src="${safe(previewUrl)}" alt="">`
+      : `<span class="instant-pending-glyph">${safe(previewLabel || '⚡')}</span>`;
+    pending.innerHTML = `${preview}<div><strong>${splitTt('instants_ready', 'Split ready')}</strong><span>${splitTt(
+      'instants_sharing_cf',
+      'Sharing with Close Friends in 5s…'
+    )}</span></div><button type="button">${splitTt('instants_undo', 'Undo')}</button>`;
+    document.querySelector('.device')?.appendChild(pending);
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      if (cancelled) return;
+      const span = pending.querySelector('span');
+      if (span) span.textContent = splitTt('instants_sharing', 'Sharing…');
+      try {
+        await onCommit?.();
+        pending.remove();
+      } catch (error) {
+        pending.remove();
+        if (typeof showToast === 'function') {
+          showToast(error?.message || splitTt('instants_fail', 'Could not share Split'));
+        }
+      }
+    }, 5000);
+    pending.querySelector('button')?.addEventListener('click', () => {
+      cancelled = true;
+      clearTimeout(timer);
+      pending.remove();
+      try {
+        onCancel?.();
+      } catch (e) {}
+      if (typeof showToast === 'function') showToast(splitTt('instants_undone', 'Split undone'));
+    });
+    return pending;
+  }
+
+  function collapseBaithakSplitComposer() {
+    const bar = document.getElementById('baithakSplitComposer');
+    if (!bar) return;
+    const ta = bar.querySelector('#splitNoteText');
+    if (ta) ta.value = '';
+    bar.hidden = true;
+  }
+
+  function wireSplitComposer(bar) {
+    if (bar.dataset.wired === '1') return;
+    bar.dataset.wired = '1';
+    const ta = bar.querySelector('#splitNoteText');
+    const fileInput = bar.querySelector('#splitPhotoInput');
+    if (typeof bindLivingPlaceholder === 'function') {
+      bindLivingPlaceholder(ta, 'instant_note');
+    }
+
+    async function autoShare(payload, preview) {
+      showSplitUndoBar({
+        previewUrl: preview?.url,
+        previewLabel: preview?.label,
+        onCommit: async () => {
+          await shareBaithakSplit(payload);
+        },
+      });
+    }
+
+    bar.querySelector('[data-split-send]')?.addEventListener('click', async () => {
+      const text = ta?.value?.trim() || '';
+      if (!text) {
+        if (typeof showToast === 'function') showToast(splitTt('instants_need_text', 'Write something first'));
+        return;
+      }
+      const btn = bar.querySelector('[data-split-send]');
+      if (btn) btn.disabled = true;
+      try {
+        await shareBaithakSplit({ text, type: 'note' });
+        collapseBaithakSplitComposer();
+      } catch (error) {
+        if (typeof showToast === 'function') {
+          showToast(error?.message || splitTt('instants_fail', 'Could not share Split'));
+        }
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    });
+
+    bar.querySelectorAll('[data-split-tool]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const tool = btn.dataset.splitTool;
+        if (tool === 'photo') {
+          fileInput?.click();
+          return;
+        }
+        if (tool === 'camera') {
+          if (typeof openBaithakInstantCamera === 'function') openBaithakInstantCamera();
+          return;
+        }
+        if (tool === 'gif' && typeof openGifPicker === 'function') {
+          openGifPicker({
+            onSelect: (gif) => {
+              const url = gif?.url || gif?.mp4 || '';
+              if (!url) return;
+              autoShare(
+                { text: '', media: url, thumb: gif?.preview || gif?.url || url, type: 'gif' },
+                { url: gif?.preview || gif?.url || url }
+              );
+            },
+          });
+          return;
+        }
+        if (tool === 'song') {
+          const picker =
+            typeof openSongPicker === 'function'
+              ? openSongPicker
+              : typeof openMusicPicker === 'function'
+                ? openMusicPicker
+                : null;
+          if (!picker) {
+            if (typeof showToast === 'function') showToast(splitTt('baithak_song_unavailable', 'Song sharing unavailable'));
+            return;
+          }
+          picker({
+            onSelect: (song) => {
+              if (!song) return;
+              autoShare(
+                { type: 'music', music: song, text: '' },
+                { label: '♪', url: song.thumbnail || '' }
+              );
+            },
+          });
+          return;
+        }
+        if (tool === 'sticker') {
+          const insert = (emoji) => {
+            if (!ta || !emoji) return;
+            ta.value = (ta.value || '') + emoji;
+            ta.focus();
+          };
+          if (typeof openStickerPicker === 'function') {
+            openStickerPicker({ onSelect: insert });
+          } else {
+            insert('✨');
+          }
+        }
+      });
+    });
+
+    fileInput?.addEventListener('change', async () => {
+      const file = fileInput.files?.[0];
+      fileInput.value = '';
+      if (!file) return;
+      const preview = URL.createObjectURL(file);
+      showSplitUndoBar({
+        previewUrl: preview,
+        onCommit: async () => {
+          if (typeof processAndUploadMedia !== 'function') throw new Error(splitTt('instants_fail', 'Could not share Split'));
+          const up = await processAndUploadMedia(file, { folder: 'splits' });
+          const media = up?.url || up?.secure_url || up?.media;
+          const thumb = up?.thumb || media;
+          await shareBaithakSplit({
+            media,
+            thumb,
+            type: file.type.startsWith('video') ? 'video' : 'photo',
+            mediaType: file.type.startsWith('video') ? 'video' : 'image',
+          });
+          URL.revokeObjectURL(preview);
+        },
+        onCancel: () => URL.revokeObjectURL(preview),
+      });
+    });
+  }
+
+  function ensureSplitComposer(strip) {
+    let bar = document.getElementById('baithakSplitComposer');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'baithakSplitComposer';
+      bar.className = 'baithak-split-composer';
+      bar.hidden = true;
+      const ico = (name) => (typeof iconHtml === 'function' ? iconHtml(name, { size: 16 }) : '');
+      bar.innerHTML = `
+        <textarea id="splitNoteText" class="instant-compose-text baithak-split-text" rows="2" maxlength="280"
+          placeholder="${splitTt('instants_ph', 'Leave a split…')}" data-living-ph="instant_note"
+          aria-label="${splitTt('instants_compose_title', 'Leave a split')}"></textarea>
+        <div class="baithak-split-actions">
+          <button type="button" class="btn btn--primary baithak-split-send" data-split-send>${splitTt('instants_share', 'Share split')}</button>
+        </div>
+        <div class="instant-compose-tools baithak-split-tools">
+          <button type="button" class="btn" data-split-tool="gif" aria-label="GIF">${ico('gif') || 'GIF'}</button>
+          <button type="button" class="btn" data-split-tool="song" aria-label="${splitTt('attach_song', 'Song')}">${ico('music') || '♪'}</button>
+          <button type="button" class="btn" data-split-tool="photo" aria-label="${splitTt('attach_photo', 'Photo')}">${ico('image') || '🖼'}</button>
+          <button type="button" class="btn" data-split-tool="sticker" aria-label="${splitTt('instants_sticker', 'Sticker')}">${ico('smile') || '☺'}</button>
+          <button type="button" class="btn" data-split-tool="camera" aria-label="${splitTt('duniya_camera', 'Camera')}">${ico('camera') || '📷'}</button>
+        </div>
+        <div class="instant-compose-meta">${splitTt('instants_cf_note', 'Close Friends · ~24h')}</div>
+        <input type="file" id="splitPhotoInput" accept="image/*" hidden>`;
+      strip.appendChild(bar);
+    }
+    wireSplitComposer(bar);
+    return bar;
+  }
+
+  function expandBaithakSplitComposer() {
+    if (!currentUser) {
+      if (typeof showAuth === 'function') showAuth();
+      else if (typeof showToast === 'function') showToast(splitTt('baithak_sign_in_instant', 'Sign in to share a Split'));
+      return;
+    }
+    const strip = document.getElementById('baithakInstants');
+    if (!strip) return;
+    const bar = ensureSplitComposer(strip);
+    bar.hidden = false;
+    const ta = bar.querySelector('#splitNoteText');
+    requestAnimationFrame(() => {
+      ta?.focus();
+      try {
+        ta?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      } catch (e) {}
+    });
+  }
+
+  /** Deprecated alias — Split tile / morph "New split" expand the inline bar, never a half-sheet. */
+  function openBaithakInstantComposer(seedMode) {
+    if (seedMode === 'camera') {
+      if (typeof openBaithakInstantCamera === 'function') openBaithakInstantCamera();
+      else expandBaithakSplitComposer();
+      return;
+    }
+    expandBaithakSplitComposer();
   }
 
   async function renderBaithakInstants() {
@@ -116,56 +467,54 @@
       strip.className = 'baithak-instants';
       chatList?.parentElement?.insertBefore(strip, chatList);
     }
+    strip.setAttribute('aria-label', splitTt('instants_tray', 'Splits'));
     if (!currentUser) {
-      strip.innerHTML = '';
+      strip.querySelector('.baithak-instants-row')?.remove();
+      collapseBaithakSplitComposer();
       return;
     }
     let stories = [];
     try {
       stories = await loadStoryFeed('baithak');
     } catch (error) {
-      console.warn('[instants] Baithak feed', error);
+      console.warn('[splits] Baithak feed', error);
     }
-    const instants = stories.filter((s) => s.kind === 'instant' || s.destination === 'baithak');
-    // Prefer kind=instant; fall back to baithak feed items for migration
-    const items = stories.filter((s) => s.kind === 'instant');
-    const pool = items.length ? items : instants.filter((s) => s.kind !== 'story');
+    const pool = stories.filter((s) => isSplitKind(s));
     if (typeof enrichUsersWithProfileType === 'function') {
       await enrichUsersWithProfileType(pool);
     }
     const bundles = groupByOwner(pool);
     const own = bundles.find((g) => g[0]?.own || g[0]?.uid === currentUser?.uid);
     const others = bundles.filter((g) => g !== own);
+    const unseen = others.filter(groupHasUnseen);
+    const seen = others.filter((g) => !groupHasUnseen(g));
+    const ordered = [...unseen, ...seen];
 
-    const tt = (k, f) => {
-      try {
-        if (typeof t === 'function') {
-          const v = t(k);
-          if (v && v !== k) return v;
-        }
-      } catch (e) {}
-      return f;
-    };
-
-    strip.innerHTML = `
-      <div class="baithak-instants-row" role="list">
+    let row = strip.querySelector('.baithak-instants-row');
+    if (!row) {
+      row = document.createElement('div');
+      row.className = 'baithak-instants-row';
+      row.setAttribute('role', 'list');
+      strip.insertBefore(row, strip.firstChild);
+    }
+    row.innerHTML = `
         <button type="button" class="baithak-instant baithak-instant--prompt" data-instant-compose role="listitem">
           <span class="baithak-instant-stub">${own ? '＋' : '✎'}</span>
-          <small>${tt('instants_leave_note', 'Leave a note')}</small>
+          <small>${splitTt('instants_leave_note', 'Leave a split')}</small>
         </button>
         ${
           own
             ? `<button type="button" class="baithak-instant baithak-instant--you is-own" data-bundle="own" role="listitem">
                 <span class="baithak-instant-stub">${own[0].thumb || own[0].media ? `<img src="${safe(own[0].thumb || own[0].media)}" alt="">` : '⚡'}</span>
-                <small>${tt('instants_you', 'You')}</small>
+                <small>${splitTt('instants_you', 'You')}</small>
                 ${own.length > 1 ? `<span class="baithak-instant-count">${own.length}</span>` : ''}
               </button>`
             : ''
         }
-        ${others
+        ${ordered
           .map(
             (group, i) => `
-          <button type="button" class="baithak-instant" data-bundle="${i}" role="listitem">
+          <button type="button" class="baithak-instant${groupHasUnseen(group) ? '' : ' is-seen'}" data-bundle="${i}" role="listitem">
             <span class="baithak-instant-stub">${
               group[0].thumb || group[0].media
                 ? `<img src="${safe(group[0].thumb || group[0].media)}" alt="">`
@@ -175,16 +524,16 @@
             ${group.length > 1 ? `<span class="baithak-instant-count">${group.length}</span>` : ''}
           </button>`
           )
-          .join('')}
-      </div>`;
+          .join('')}`;
 
-    strip.querySelector('[data-instant-compose]')?.addEventListener('click', () => openBaithakInstantComposer());
-    // Long-press Leave a note → camera Instant (IG Notes-inspired)
-    const composeBtn = strip.querySelector('[data-instant-compose]');
+    ensureSplitComposer(strip);
+
+    const composeBtn = row.querySelector('[data-instant-compose]');
+    composeBtn?.addEventListener('click', () => expandBaithakSplitComposer());
     if (composeBtn && typeof onLongPress === 'function') {
       onLongPress(composeBtn, () => {
         composeBtn.dataset.suppressClick = '1';
-        openBaithakInstantComposer('camera');
+        if (typeof openBaithakInstantCamera === 'function') openBaithakInstantCamera();
       });
       composeBtn.addEventListener(
         'click',
@@ -198,197 +547,22 @@
         true
       );
     }
-    strip.querySelector('[data-bundle="own"]')?.addEventListener('click', () => {
+    row.querySelector('[data-bundle="own"]')?.addEventListener('click', () => {
       if (own?.[0]) openStoryViewer(own[0], own);
     });
-    strip.querySelectorAll('[data-bundle]:not([data-bundle="own"])').forEach((btn) => {
+    row.querySelectorAll('[data-bundle]:not([data-bundle="own"])').forEach((btn) => {
       btn.addEventListener('click', () => {
-        const group = others[Number(btn.dataset.bundle)];
-        if (group?.[0]) openStoryViewer(group[0], group);
+        const group = ordered[Number(btn.dataset.bundle)];
+        if (!group?.[0]) return;
+        markSplitsSeen(group.map((s) => s.id));
+        openStoryViewer(group[0], group);
+        btn.classList.add('is-seen');
       });
     });
   }
 
   function escapeLiteText(s) {
     return String(s || '').replace(/[&<>"']/g, '');
-  }
-
-  /** Instants composer — tap = note; long-press entry seeds camera. Close Friends audience. */
-  function openBaithakInstantComposer(seedMode) {
-    if (!currentUser) {
-      if (typeof showAuth === 'function') showAuth();
-      return;
-    }
-    const tt = (k, f) => {
-      try {
-        if (typeof t === 'function') {
-          const v = t(k);
-          if (v && v !== k) return v;
-        }
-      } catch (e) {}
-      return f;
-    };
-    const bodyHtml = `
-      <div class="instant-compose-premium">
-        <textarea id="instantText" class="instant-compose-text" rows="3" maxlength="280"
-          placeholder="${tt('instants_ph', 'Leave a quick note for Close Friends…')}"
-          data-living-ph="instant_note"></textarea>
-        <div class="instant-compose-tools">
-          <button type="button" class="btn" data-instant-tool="gif">GIF</button>
-          <button type="button" class="btn" data-instant-tool="sticker">Sticker</button>
-          <button type="button" class="btn" data-instant-tool="music">Music</button>
-          <button type="button" class="btn" data-instant-tool="camera">${typeof iconHtml === 'function' ? iconHtml('camera', { size: 14 }) : '📷'} Camera</button>
-        </div>
-        <div class="instant-compose-meta">${tt('instants_cf_note', 'Shared with Close Friends · disappears in ~24h')}</div>
-        <input type="file" id="instantCamera" accept="image/*,video/*" capture="environment" hidden>
-        <button type="button" class="btn btn--primary btn--block" data-instant-share style="margin-top:12px;">${tt('instants_share', 'Share note')}</button>
-      </div>`;
-
-    async function shareInstant(payload) {
-      try {
-        const story = await createPlatformStory({
-          destination: 'baithak',
-          kind: 'instant',
-          visibility: 'close_friends',
-          text: payload.text || '',
-          media: payload.media || null,
-          thumb: payload.thumb || null,
-          type: payload.type || 'note',
-          expiresInHours: 24,
-        });
-        if (!story) throw new Error(tt('baithak_story_fail', 'Could not share'));
-        if (typeof showToast === 'function') showToast(tt('instants_shared', 'Note shared'));
-        await renderBaithakInstants();
-        return story;
-      } catch (e) {
-        if (typeof showToast === 'function') showToast(e?.message || tt('baithak_story_fail', 'Could not share'));
-        throw e;
-      }
-    }
-
-    function wire(sheet, close) {
-      const fileInput = sheet.querySelector('#instantCamera');
-      if (typeof bindLivingPlaceholder === 'function') {
-        bindLivingPlaceholder(sheet.querySelector('#instantText'), 'instant_note');
-      }
-      sheet.querySelectorAll('[data-instant-tool]').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-          const tool = btn.dataset.instantTool;
-          if (tool === 'camera') {
-            fileInput?.click();
-            return;
-          }
-          if (tool === 'gif' && typeof openGifPicker === 'function') {
-            openGifPicker({
-              onSelect: async (gif) => {
-                try {
-                  await shareInstant({
-                    text: '',
-                    media: gif?.url || gif?.mp4,
-                    thumb: gif?.preview || gif?.url,
-                    type: 'gif',
-                  });
-                  close();
-                } catch (e) {}
-              },
-            });
-            return;
-          }
-          if (tool === 'music' && typeof openMusicPicker === 'function') {
-            openMusicPicker({
-              onSelect: async (song) => {
-                try {
-                  await shareInstant({
-                    text: `${song?.title || 'Track'}${song?.artist ? ' — ' + song.artist : ''}`,
-                    type: 'music',
-                  });
-                  close();
-                } catch (e) {}
-              },
-            });
-            return;
-          }
-          if (tool === 'sticker' && typeof showToast === 'function') {
-            showToast(tt('instants_sticker_soon', 'Stickers — pick an emoji for now'));
-            const ta = sheet.querySelector('#instantText');
-            if (ta) ta.value = (ta.value || '') + '✨';
-          }
-        });
-      });
-      fileInput?.addEventListener('change', async () => {
-        const file = fileInput.files?.[0];
-        if (!file) return;
-        try {
-          let media = null;
-          let thumb = null;
-          if (typeof processAndUploadMedia === 'function') {
-            const up = await processAndUploadMedia(file, { folder: 'instants' });
-            media = up?.url || up?.secure_url || up?.media;
-            thumb = up?.thumb || media;
-          }
-          await shareInstant({ media, thumb, type: file.type.startsWith('video') ? 'video' : 'photo' });
-          close();
-        } catch (e) {
-          if (typeof showToast === 'function') showToast(tt('baithak_story_fail', 'Could not share'));
-        }
-      });
-      sheet.querySelector('[data-instant-share]')?.addEventListener('click', async () => {
-        const text = sheet.querySelector('#instantText')?.value?.trim() || '';
-        if (!text) {
-          if (typeof showToast === 'function') showToast(tt('instants_need_text', 'Write something or add media'));
-          return;
-        }
-        const btn = sheet.querySelector('[data-instant-share]');
-        if (btn) btn.disabled = true;
-        try {
-          await shareInstant({ text, type: 'note' });
-          close();
-        } catch (e) {
-          if (btn) btn.disabled = false;
-        }
-      });
-      if (seedMode === 'camera') setTimeout(() => fileInput?.click(), 120);
-    }
-
-    if (typeof openHalfSheet === 'function') {
-      openHalfSheet({
-        id: 'baithakInstantComposer',
-        title: tt('instants_compose_title', 'Leave a note'),
-        accent: 'baithak',
-        bodyHtml,
-        onMount: (sheet, close) => {
-          const wrapped = () => {
-            try {
-              close();
-            } finally {
-              try {
-                if (typeof restoreAppShell === 'function') restoreAppShell('instants_close');
-              } catch (e) {}
-            }
-          };
-          wire(sheet, wrapped);
-        },
-      });
-      return;
-    }
-    // Fallback overlay
-    document.getElementById('baithakInstantComposer')?.remove();
-    const sheet = document.createElement('div');
-    sheet.id = 'baithakInstantComposer';
-    sheet.className = 'archive-overlay';
-    sheet.dataset.navManaged = '1';
-    sheet.innerHTML = `<div class="archive-header"><button type="button" data-overlay-dismiss>←</button><div style="flex:1"><strong>${tt('instants_compose_title', 'Leave a note')}</strong></div></div><div style="padding:16px;">${bodyHtml}</div>`;
-    document.querySelector('.device')?.appendChild(sheet);
-    const close = () => {
-      if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
-      sheet.remove();
-      try {
-        if (typeof restoreAppShell === 'function') restoreAppShell('instants_close');
-      } catch (e) {}
-    };
-    if (typeof pushNavLayer === 'function') pushNavLayer(sheet, close);
-    sheet.querySelector('[data-overlay-dismiss]')?.addEventListener('click', close);
-    wire(sheet, close);
   }
 
   /** Avatar micro-menu: Show profile · Add/Remove Close Friend · (basics). Anchored to DP — not a half-sheet. */
@@ -414,7 +588,7 @@
       ? `<button type="button" role="menuitem" data-act="profile">${tt('avatar_menu_profile', 'Show profile')}</button>
          <button type="button" role="menuitem" data-act="hub">${tt('chaupaal_hub', 'Chaupaal Hub')}</button>`
       : `<button type="button" role="menuitem" data-act="profile">${tt('avatar_menu_profile', 'Show profile')}</button>
-      <button type="button" role="menuitem" data-act="cf">${isCf ? tt('avatar_menu_remove_cf', 'Remove Close Friend') : tt('avatar_menu_add_cf', 'Add Close Friend')}</button>
+      <button type="button" role="menuitem" data-act="cf">${isCf ? tt('avatar_menu_remove_cf', 'Remove from Close Friends') : tt('avatar_menu_add_cf', 'Add back to Close Friends')}</button>
       <button type="button" role="menuitem" data-act="message">${tt('avatar_menu_message', 'Message')}</button>`;
     const host = document.querySelector('.device') || document.body;
     host.appendChild(menu);
@@ -439,8 +613,8 @@
           const btn = menu.querySelector('[data-act="cf"]');
           if (btn) {
             btn.textContent = isCf
-              ? tt('avatar_menu_remove_cf', 'Remove Close Friend')
-              : tt('avatar_menu_add_cf', 'Add Close Friend');
+              ? tt('avatar_menu_remove_cf', 'Remove from Close Friends')
+              : tt('avatar_menu_add_cf', 'Add back to Close Friends');
           }
         })
         .catch(() => {});
@@ -537,16 +711,16 @@
     const duniya = stories.filter((s) => s.destination === 'duniya');
     const live = stories.filter((s) => !s.expiresAt || s.expiresAt > Date.now());
     const expired = stories.filter((s) => s.expiresAt && s.expiresAt <= Date.now());
-    const instants = stories.filter((s) => s.kind === 'instant');
+    const splits = stories.filter((s) => s.kind === 'split' || s.kind === 'instant');
 
     const cell = (story, index) => `
       <button type="button" class="story-archive-cell" data-story-index="${index}">
         ${story.thumb || story.media
           ? `<img src="${story.thumb || story.media}" alt="">`
-          : `<span class="story-archive-fallback">${story.kind === 'instant' ? '⚡' : story.type === 'score' ? '🎯' : '📖'}</span>`}
+          : `<span class="story-archive-fallback">${story.kind === 'split' || story.kind === 'instant' ? '⚡' : story.type === 'score' ? '🎯' : '📖'}</span>`}
         <span class="story-archive-meta">
-          <strong>${story.destination === 'duniya' ? 'Duniya' : 'Baithak'}${story.kind === 'instant' ? ' · Instant' : ''}</strong>
-          <small>${story.visibility === 'close_friends' ? 'Close Friends' : story.destination === 'duniya' ? 'Public' : 'Friends'}${
+          <strong>${story.destination === 'duniya' ? 'Duniya' : 'Baithak'}${story.kind === 'split' || story.kind === 'instant' ? ' · Split' : ''}</strong>
+          <small>${story.own && story.visibility === 'close_friends' ? 'Close Friends' : story.destination === 'duniya' ? 'Public' : 'Friends'}${
             story.expiresAt && story.expiresAt > Date.now() ? ' · live' : ' · archived'
           }</small>
         </span>
@@ -557,20 +731,20 @@
         <button type="button" data-archive-back aria-label="Back">←</button>
         <div style="flex:1">
           <strong>Archive</strong>
-          <div class="relationship-private-note">Stories (Duniya) · Instants (Baithak). Only you see this.</div>
+          <div class="relationship-private-note">Stories (Duniya) · Splits (Baithak). Only you see this.</div>
         </div>
       </div>
       <div class="story-archive-body">
         <div class="story-archive-stats">
           <span><strong>${live.length}</strong> live</span>
-          <span><strong>${instants.length}</strong> Instants</span>
+          <span><strong>${splits.length}</strong> Splits</span>
           <span><strong>${duniya.length}</strong> Duniya</span>
           <span><strong>${expired.length}</strong> expired</span>
         </div>
         ${
           stories.length
             ? `<div class="story-archive-grid">${stories.map((s, i) => cell(s, i)).join('')}</div>`
-            : `<div class="comments-empty">No stories or Instants yet.</div>`
+            : `<div class="comments-empty">No stories or Splits yet.</div>`
         }
       </div>`;
     document.querySelector('.device')?.appendChild(overlay);
@@ -595,10 +769,20 @@
   window.getStoryInteractions = getStoryInteractions;
   window.likePlatformStory = likePlatformStory;
   window.commentPlatformStory = commentPlatformStory;
+  window.viewPlatformStory = viewPlatformStory;
+  window.listStoryViews = listStoryViews;
+  window.respondStoryInteractive = respondStoryInteractive;
+  window.listStoryInteractive = listStoryInteractive;
+  window.sendStoryToPeers = sendStoryToPeers;
+  window.deleteStoryComment = deleteStoryComment;
+  window.getPlatformStory = getPlatformStory;
   window.openProfileStories = openProfileStories;
   window.renderLiveBaithakStories = renderLiveBaithakStories;
   window.renderBaithakInstants = renderBaithakInstants;
   window.openBaithakInstantComposer = openBaithakInstantComposer;
+  window.expandBaithakSplitComposer = expandBaithakSplitComposer;
+  window.showSplitUndoBar = showSplitUndoBar;
+  window.shareBaithakSplit = shareBaithakSplit;
   window.openBaithakAvatarMenu = openBaithakAvatarMenu;
   window.openStoryArchive = openStoryArchive;
 })();

@@ -6,7 +6,21 @@
 const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
 const { requireUser, initAdmin } = require('../server-lib/auth');
 const { checkActionRateLimit } = require('../server-lib/rate-limit');
-const { canViewStory: canViewStoryPolicy } = require('../server-lib/social-model');
+const { canViewStory: canViewStoryPolicy, isCloseFriendOptOut } = require('../server-lib/social-model');
+const {
+  isSplitKind,
+  normalizeBaithakKind,
+  closeFriendsRecipients,
+  excludedIds,
+} = require('../server-lib/close-friends');
+const {
+  cleanOverlays,
+  cleanInteractive,
+  cleanMentions,
+  cleanRestoryOf,
+  publicInteractive,
+  tallyResponses,
+} = require('../server-lib/story-overlays');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const COLLECTIONS = {
@@ -124,24 +138,18 @@ async function friendIds(db, uid) {
 }
 
 async function recipientIds(db, uid, visibility) {
-  if (visibility === 'close_friends') {
-    const close = await db.collection('users').doc(uid).collection('close_friends').get();
-    // Opt-out model for Instants: empty Close Friends list ⇒ everyone (all friends) included.
-    // Once the user manages the list, only listed friends receive CF Instants.
-    if (!close.docs.length) {
-      const friends = await friendIds(db, uid);
-      const allowed = await Promise.all(friends.map(async (target) => !(await isBlockedPair(db, uid, target))));
-      return friends.filter((_, index) => allowed[index]);
-    }
-    const possible = close.docs.map((doc) => doc.id);
-    const checks = await Promise.all(
-      possible.map(async (target) => (await isFriend(db, uid, target)) && !(await isBlockedPair(db, uid, target)))
-    );
-    return possible.filter((_, index) => checks[index]);
-  }
   const friends = await friendIds(db, uid);
-  const allowed = await Promise.all(friends.map(async (target) => !(await isBlockedPair(db, uid, target))));
-  return friends.filter((_, index) => allowed[index]);
+  const blockedFlags = await Promise.all(friends.map(async (target) => isBlockedPair(db, uid, target)));
+  const blockedIds = friends.filter((_, index) => blockedFlags[index]);
+  if (visibility === 'close_friends') {
+    const excluded = await excludedIds(db, uid);
+    return closeFriendsRecipients({
+      friendIds: friends,
+      excludedIds: [...excluded],
+      blockedIds,
+    });
+  }
+  return friends.filter((_, index) => !blockedFlags[index]);
 }
 
 async function commitChunks(db, writes) {
@@ -179,9 +187,32 @@ function serializeStory(doc, viewerUid) {
     expiresAt: data.expiresAt?.toMillis?.() || data.expiresAt || 0,
     own,
     deletable: own,
+    overlays: Array.isArray(data.overlays) ? data.overlays : [],
+    interactive: data.interactive || null,
+    mentions: Array.isArray(data.mentions) ? data.mentions : [],
+    durationMs: Number(data.durationMs) || 0,
+    parentStoryId: data.parentStoryId || '',
+    chainId: data.chainId || '',
+    restoryOf: data.restoryOf || null,
+    filter: data.filter || 'normal',
+    crop: data.crop || null,
+    trimStartMs: Number(data.trimStartMs) || 0,
+    trimEndMs: Number(data.trimEndMs) || 0,
+    muted: !!data.muted,
+    width: Number(data.width) || 0,
+    height: Number(data.height) || 0,
+    addYoursFaces: Array.isArray(data.addYoursFaces) ? data.addYoursFaces.slice(0, 50) : [],
+    addYoursCount: Number(data.addYoursCount) || 0,
   };
-  // Audience metadata is poster-only. Recipients get no selective-sharing tell.
-  if (own) output.visibility = data.visibility || (data.destination === 'duniya' ? 'public' : 'friends');
+  if (own) {
+    output.visibility = data.visibility || (data.destination === 'duniya' ? 'public' : 'friends');
+    output.viewCount = Number(data.viewCount) || 0;
+    output.likeCount = Number(data.likeCount) || 0;
+  } else if (output.interactive?.quiz) {
+    const quiz = { ...output.interactive.quiz };
+    delete quiz.correctIndex;
+    output.interactive = { ...output.interactive, quiz };
+  }
   return output;
 }
 
@@ -194,15 +225,13 @@ async function canView(db, story, viewerUid, includeArchive) {
   const friend = data.destination === 'baithak' ? await isFriend(db, data.uid, viewerUid) : false;
   let isCloseFriend = false;
   if (data.destination === 'baithak' && data.visibility === 'close_friends') {
-    const cfCol = db.collection('users').doc(data.uid).collection('close_friends');
-    const membership = await cfCol.doc(viewerUid).get();
-    if (membership.exists) {
-      isCloseFriend = true;
-    } else {
-      // Match recipientIds fanout: empty CF list ⇒ all friends can view Instants/notes
-      const sample = await cfCol.limit(1).get();
-      if (sample.empty && friend) isCloseFriend = true;
-    }
+    const excludedSnap = await db
+      .collection('users')
+      .doc(data.uid)
+      .collection('cf_excluded')
+      .doc(viewerUid)
+      .get();
+    isCloseFriend = isCloseFriendOptOut({ isFriend: friend, excluded: excludedSnap.exists });
   }
   return canViewStoryPolicy({
     destination: data.destination,
@@ -226,15 +255,14 @@ async function createStory(db, admin, uid, body) {
   const music = cleanMusic(body.music);
   const location = cleanLocation(body.location);
   if (!media && !text && !music && !location && body.type !== 'score') throw new Error('EMPTY_STORY');
-  const kind = destination === 'baithak' && body.kind === 'instant' ? 'instant' : 'story';
-  // Instants go to Close Friends (opt-out: empty CF list = all friends).
+  const kind = normalizeBaithakKind(destination, body.kind);
   let visibility =
     destination === 'baithak' && body.visibility === 'close_friends'
       ? 'close_friends'
       : destination === 'baithak'
         ? 'friends'
         : 'public';
-  if (kind === 'instant' && destination === 'baithak') {
+  if (isSplitKind(kind) && destination === 'baithak') {
     visibility = 'close_friends';
   }
   const audienceFallback = null;
@@ -311,6 +339,34 @@ async function createStory(db, admin, uid, body) {
     sharedGameId: cleanText(body.sharedGameId, 50),
     music: music || null,
     location: location || null,
+    overlays: cleanOverlays(body.overlays),
+    interactive: null,
+    mentions: cleanMentions(body.mentions),
+    durationMs: Math.max(0, Math.min(90 * 1000, Number(body.durationMs) || 0)),
+    parentStoryId: cleanText(body.parentStoryId, 180),
+    chainId: cleanText(body.chainId, 180),
+    restoryOf: cleanRestoryOf(body.restoryOf),
+    filter: ['normal', 'bright', 'contrast', 'warm', 'cool', 'mono', 'fade'].includes(String(body.filter || ''))
+      ? String(body.filter)
+      : 'normal',
+    crop: body.crop && typeof body.crop === 'object'
+      ? {
+          x: Number(body.crop.x) || 0,
+          y: Number(body.crop.y) || 0,
+          scale: Number(body.crop.scale) || 1,
+          rotate: Number(body.crop.rotate) || 0,
+        }
+      : null,
+    trimStartMs: Math.max(0, Number(body.trimStartMs) || 0),
+    trimEndMs: Math.max(0, Math.min(90 * 1000, Number(body.trimEndMs) || 0)),
+    muted: !!body.muted,
+    width: Math.max(0, Number(body.width) || 0),
+    height: Math.max(0, Number(body.height) || 0),
+    viewCount: 0,
+    likeCount: 0,
+    addYoursFaces: [],
+    addYoursCount: 0,
+    chainDepth: 0,
     score: body.type === 'score' ? Math.max(0, Number(body.score) || 0) : null,
     total: body.type === 'score' ? Math.max(0, Number(body.total) || 0) : null,
     streak: body.type === 'score' ? Math.max(0, Number(body.streak) || 0) : null,
@@ -321,6 +377,16 @@ async function createStory(db, admin, uid, body) {
     createdAt: now,
     expiresAt: saveOnly ? now : expiresAt,
   };
+  story.interactive = cleanInteractive(body.interactive, story.overlays);
+  if (story.parentStoryId && destination === 'duniya') {
+    const parent = await db.collection('duniya_stories').doc(story.parentStoryId).get();
+    if (parent.exists) {
+      const depth = Number(parent.data()?.chainDepth) || 0;
+      if (depth >= 50) throw new Error('CHAIN_TOO_LONG');
+      story.chainDepth = depth + 1;
+      story.chainId = story.chainId || parent.data()?.chainId || story.parentStoryId;
+    }
+  }
 
   if (saveOnly || destination === 'duniya') {
     await ref.set(story);
@@ -352,12 +418,13 @@ async function createStory(db, admin, uid, body) {
     const serialized = serializeStory({ id: ref.id, data: () => story }, uid);
     if (saveOnly) serialized.audienceFallback = 'archive_only';
     else if (audienceFallback) serialized.audienceFallback = audienceFallback;
+    await afterStoryCreate(db, admin, uid, ref.id, story);
     return serialized;
   }
 
   const recipients = await recipientIds(db, uid, visibility);
   // Empty CF + no friends is OK for Instants (author-only / see-and-forget); still persist.
-  if (visibility === 'close_friends' && !recipients.length && kind !== 'instant') {
+  if (visibility === 'close_friends' && !recipients.length && !isSplitKind(kind)) {
     throw new Error('NO_CLOSE_FRIENDS');
   }
   const manifest = db.collection('users').doc(uid).collection('storyDeliveryManifests').doc(ref.id);
@@ -385,7 +452,62 @@ async function createStory(db, admin, uid, body) {
   await commitChunks(db, writes);
   const serialized = serializeStory({ id: ref.id, data: () => story }, uid);
   if (audienceFallback) serialized.audienceFallback = audienceFallback;
+  await afterStoryCreate(db, admin, uid, ref.id, story);
   return serialized;
+}
+
+async function afterStoryCreate(db, admin, uid, storyId, story) {
+  try {
+    const { upsertNotification, resolveActor } = require('../server-lib/notifications');
+    const actor = await resolveActor(admin, uid);
+    const destination = story.destination;
+    const section = destination === 'duniya' ? 'duniya' : 'baithak';
+    const deep = { section, storyId, destination };
+    if (story.restoryOf?.uid && story.restoryOf.uid !== uid) {
+      await upsertNotification(admin, story.restoryOf.uid, {
+        type: 'story_restory',
+        refId: storyId,
+        actor,
+        preview: 'restoried your story',
+        deepLink: deep,
+      });
+    }
+    const mentioned = Array.isArray(story.mentions) ? story.mentions : [];
+    for (const m of mentioned) {
+      if (!m.uid || m.uid === uid) continue;
+      if (await isBlockedPair(db, uid, m.uid)) continue;
+      await upsertNotification(admin, m.uid, {
+        type: 'story_mention',
+        refId: storyId,
+        actor,
+        preview: 'mentioned you in a story',
+        deepLink: deep,
+      });
+    }
+    if (story.parentStoryId && destination === 'duniya') {
+      const parent = await db.collection('duniya_stories').doc(story.parentStoryId).get();
+      if (parent.exists) {
+        const pdata = parent.data() || {};
+        const faces = Array.isArray(pdata.addYoursFaces) ? pdata.addYoursFaces.slice() : [];
+        if (!faces.some((f) => f.uid === uid)) {
+          faces.unshift({
+            uid,
+            name: story.name,
+            avatar: story.avatar || '',
+          });
+        }
+        await parent.ref.set(
+          {
+            addYoursFaces: faces.slice(0, 50),
+            addYoursCount: (Number(pdata.addYoursCount) || 0) + 1,
+          },
+          { merge: true }
+        );
+      }
+    }
+  } catch (e) {
+    console.warn('[stories] after create', e?.message || e);
+  }
 }
 
 async function getStory(db, destination, storyId) {
@@ -618,8 +740,13 @@ async function interact(db, admin, uid, body) {
   const ownerUid = story.data()?.uid || null;
   if (type === 'like') {
     const ref = story.ref.collection('likes').doc(uid);
-    if (body.enabled === false) await ref.delete();
-    else await ref.set({ uid, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+    if (body.enabled === false) {
+      await ref.delete();
+      await story.ref.set({ likeCount: admin.firestore.FieldValue.increment(-1) }, { merge: true });
+    } else {
+      await ref.set({ uid, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+      await story.ref.set({ likeCount: admin.firestore.FieldValue.increment(1) }, { merge: true });
+    }
   } else if (type === 'comment') {
     const text = cleanText(body.text, 500);
     if (!text) throw new Error('EMPTY_COMMENT');
@@ -645,7 +772,7 @@ async function interact(db, admin, uid, body) {
           refId: storyId,
           actor,
           preview: 'liked your story',
-          deepLink: { section: 'baithak', storyId, destination },
+          deepLink: { section: destination === 'duniya' ? 'duniya' : 'baithak', storyId, destination },
         });
       } else if (type === 'comment') {
         await upsertNotification(admin, ownerUid, {
@@ -653,7 +780,7 @@ async function interact(db, admin, uid, body) {
           refId: storyId,
           actor,
           preview: String(body.text || '').slice(0, 120) || 'commented on your story',
-          deepLink: { section: 'baithak', storyId, destination },
+          deepLink: { section: destination === 'duniya' ? 'duniya' : 'baithak', storyId, destination },
         });
       }
     } catch (e) {
@@ -665,29 +792,37 @@ async function interact(db, admin, uid, body) {
 async function interactions(db, uid, destination, storyId) {
   const story = await getStory(db, destination, storyId);
   if (!story || !(await canView(db, story, uid, story?.data()?.uid === uid))) throw new Error('STORY_NOT_FOUND');
-  const [likes, comments] = await Promise.all([
+  const [likes, comments, responses] = await Promise.all([
     story.ref.collection('likes').limit(500).get(),
     story.ref.collection('comments').orderBy('createdAt', 'asc').limit(500).get(),
+    story.ref.collection('responses').limit(400).get(),
   ]);
   const profiles = await profilesMap(db, [
     ...likes.docs.map((doc) => doc.id),
     ...comments.docs.map((doc) => doc.data().uid),
   ]);
+  const data = story.data() || {};
+  const own = data.uid === uid;
+  const mine = responses.docs.find((d) => d.id === uid);
+  const voted = mine ? mine.data() : null;
+  const tallies = tallyResponses(responses.docs, data.interactive);
   return {
     liked: likes.docs.some((doc) => doc.id === uid),
     likeCount: likes.size,
     comments: comments.docs.map((doc) => {
-      const data = doc.data();
+      const cdata = doc.data();
       return {
         id: doc.id,
-        uid: data.uid,
-        name: profiles[data.uid]?.name || 'Chaupaal member',
-        avatar: profiles[data.uid]?.photoURL || '',
-        profileType: profiles[data.uid]?.profileType || 'personal',
-        text: data.text,
-        createdAt: data.createdAt?.toMillis?.() || 0,
+        uid: cdata.uid,
+        name: profiles[cdata.uid]?.name || 'Chaupaal member',
+        avatar: profiles[cdata.uid]?.photoURL || '',
+        profileType: profiles[cdata.uid]?.profileType || 'personal',
+        text: cdata.text,
+        createdAt: cdata.createdAt?.toMillis?.() || 0,
       };
     }),
+    interactive: publicInteractive(data.interactive, { voted, own, tallies }),
+    addYoursFaces: Array.isArray(data.addYoursFaces) ? data.addYoursFaces.slice(0, 50) : [],
   };
 }
 
@@ -702,6 +837,7 @@ async function profilesMap(db, ids) {
         snap.id,
         {
           name: data.name || data.displayName || data.username || 'Chaupaal member',
+          username: data.username || '',
           photoURL: data.photoThumb || data.photoURL || '',
           profileType:
             String(data.profileType || data.profile?.profileType || 'personal').toLowerCase() ===
@@ -712,6 +848,298 @@ async function profilesMap(db, ids) {
       ];
     })
   );
+}
+
+async function recordView(db, admin, uid, destination, storyId) {
+  const story = await getStory(db, destination, storyId);
+  if (!story || !(await canView(db, story, uid, false))) throw new Error('STORY_NOT_FOUND');
+  const ownerUid = story.data()?.uid;
+  if (ownerUid === uid) return { viewed: true, self: true };
+  const ref = story.ref.collection('views').doc(uid);
+  const existing = await ref.get();
+  if (existing.exists) return { viewed: true };
+  await ref.set({ uid, viewedAt: admin.firestore.FieldValue.serverTimestamp() });
+  await story.ref.set({ viewCount: admin.firestore.FieldValue.increment(1) }, { merge: true });
+  return { viewed: true };
+}
+
+async function listViews(db, uid, destination, storyId, q) {
+  const story = await getStory(db, destination, storyId);
+  if (!story || story.data()?.uid !== uid) throw new Error('STORY_NOT_FOUND');
+  let snap;
+  try {
+    snap = await story.ref.collection('views').orderBy('viewedAt', 'desc').limit(200).get();
+  } catch (e) {
+    snap = await story.ref.collection('views').limit(200).get();
+  }
+  const ids = snap.docs.map((d) => d.id).filter((id) => id !== uid);
+  const profiles = await profilesMap(db, ids);
+  const needle = String(q || '')
+    .trim()
+    .toLowerCase();
+  const viewers = snap.docs
+    .filter((d) => d.id !== uid)
+    .map((d) => {
+      const p = profiles[d.id] || {};
+      return {
+        uid: d.id,
+        name: p.name || 'Chaupaal member',
+        username: p.username || '',
+        avatar: p.photoURL || '',
+        viewedAt: d.data()?.viewedAt?.toMillis?.() || 0,
+      };
+    })
+    .filter((v) => {
+      if (!needle) return true;
+      return (
+        String(v.name || '')
+          .toLowerCase()
+          .includes(needle) ||
+        String(v.username || '')
+          .toLowerCase()
+          .includes(needle)
+      );
+    });
+  return { count: viewers.length, viewers };
+}
+
+async function getStoryById(db, uid, destination, storyId) {
+  const dest = cleanDestination(destination) || 'duniya';
+  const story = await getStory(db, dest, storyId);
+  if (!story || !(await canView(db, story, uid, story.data()?.uid === uid))) throw new Error('STORY_NOT_FOUND');
+  return serializeStory(story, uid);
+}
+
+async function interactiveRespond(db, admin, uid, body) {
+  const destination = cleanDestination(body.destination);
+  const story = await getStory(db, destination, cleanText(body.storyId, 180));
+  if (!story || !(await canView(db, story, uid, false))) throw new Error('STORY_NOT_FOUND');
+  const type = String(body.type || '');
+  const interactive = story.data()?.interactive || {};
+  const ref = story.ref.collection('responses').doc(uid);
+  const existing = await ref.get();
+  const prev = existing.exists ? existing.data() || {} : {};
+  const patch = { uid, updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+  if (type === 'poll') {
+    if (!interactive.poll) throw new Error('INVALID_INTERACTION');
+    if (prev.poll != null) {
+      /* keep first vote */
+    } else {
+      const idx = Math.max(0, Math.min((interactive.poll.options || []).length - 1, Number(body.value)));
+      if (!Number.isInteger(idx)) throw new Error('INVALID_INTERACTION');
+      patch.poll = idx;
+    }
+  } else if (type === 'quiz') {
+    if (!interactive.quiz) throw new Error('INVALID_INTERACTION');
+    if (prev.quiz == null) {
+      const idx = Math.max(0, Math.min((interactive.quiz.options || []).length - 1, Number(body.value)));
+      patch.quiz = idx;
+    }
+  } else if (type === 'slider') {
+    if (!interactive.slider) throw new Error('INVALID_INTERACTION');
+    if (prev.slider == null) patch.slider = Math.max(0, Math.min(100, Number(body.value) || 0));
+  } else if (type === 'question') {
+    if (!interactive.question) throw new Error('INVALID_INTERACTION');
+    const text = cleanText(body.value || body.text, 280);
+    if (!text) throw new Error('EMPTY_COMMENT');
+    patch.question = text;
+    patch.questionAt = admin.firestore.FieldValue.serverTimestamp();
+    const ownerUid = story.data()?.uid;
+    if (ownerUid && ownerUid !== uid) {
+      try {
+        const { upsertNotification, resolveActor } = require('../server-lib/notifications');
+        const actor = await resolveActor(admin, uid);
+        await upsertNotification(admin, ownerUid, {
+          type: 'story_question',
+          refId: story.id,
+          actor,
+          preview: text.slice(0, 120),
+          deepLink: {
+            section: destination === 'duniya' ? 'duniya' : 'baithak',
+            storyId: story.id,
+            destination,
+          },
+        });
+      } catch (e) {
+        console.warn('[stories] question notif', e?.message || e);
+      }
+    }
+  } else if (type === 'countdown_remind') {
+    patch.countdownRemind = true;
+  } else if (type === 'add_yours_open') {
+    patch.addYoursOpen = true;
+  } else {
+    throw new Error('INVALID_INTERACTION');
+  }
+  await ref.set(patch, { merge: true });
+  const all = await story.ref.collection('responses').limit(400).get();
+  const mine = (await ref.get()).data() || {};
+  const tallies = tallyResponses(all.docs, interactive);
+  const own = story.data()?.uid === uid;
+  return {
+    interactive: publicInteractive(interactive, { voted: mine, own, tallies }),
+  };
+}
+
+async function listInteractive(db, uid, destination, storyId) {
+  const story = await getStory(db, destination, storyId);
+  if (!story || story.data()?.uid !== uid) throw new Error('STORY_NOT_FOUND');
+  const interactive = story.data()?.interactive || {};
+  const snap = await story.ref.collection('responses').limit(400).get();
+  const ids = snap.docs.map((d) => d.id);
+  const profiles = await profilesMap(db, ids);
+  const tallies = tallyResponses(snap.docs, interactive);
+  const answers = snap.docs
+    .filter((d) => d.data()?.question)
+    .map((d) => {
+      const p = profiles[d.id] || {};
+      return {
+        uid: d.id,
+        name: p.name || 'Chaupaal member',
+        avatar: p.photoURL || '',
+        text: d.data().question,
+        at: d.data().questionAt?.toMillis?.() || d.data().updatedAt?.toMillis?.() || 0,
+      };
+    })
+    .sort((a, b) => b.at - a.at);
+  return {
+    tallies,
+    answers,
+    responseCount: snap.size,
+    interactive,
+    addYoursFaces: Array.isArray(story.data()?.addYoursFaces) ? story.data().addYoursFaces : [],
+  };
+}
+
+async function canMessagePeer(db, a, b) {
+  if (!a || !b || a === b) return false;
+  if (await isBlockedPair(db, a, b)) return false;
+  const [ua, ub] = await db.getAll(db.collection('users').doc(a), db.collection('users').doc(b));
+  const da = ua.data() || {};
+  const dbUser = ub.data() || {};
+  const teenA = !!(da.teenMode || da.isMinor);
+  const teenB = !!(dbUser.teenMode || dbUser.isMinor);
+  if (!teenA && !teenB) return true;
+  if (await isFriend(db, a, b)) return true;
+  if (teenA && teenB) return true;
+  return false;
+}
+
+async function sendStoryCard(db, admin, uid, body) {
+  const destination = cleanDestination(body.destination) || 'duniya';
+  const storyId = cleanText(body.storyId, 180);
+  const story = await getStory(db, destination, storyId);
+  if (!story || !(await canView(db, story, uid, false))) throw new Error('STORY_NOT_FOUND');
+  const data = story.data() || {};
+  const peerUids = Array.isArray(body.uids) ? body.uids.map(cleanUid).filter(Boolean) : [];
+  const chatIds = Array.isArray(body.chatIds) ? body.chatIds.map((x) => cleanText(x, 180)).filter(Boolean) : [];
+  const caption = cleanText(body.text, 280);
+  const senderSnap = await db.collection('users').doc(uid).get();
+  const sender = senderSnap.data() || {};
+  const sent = [];
+  const skipped = [];
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const attachment = {
+    type: 'story',
+    storyId,
+    destination,
+    url: data.thumb || data.media || '',
+    thumb: data.thumb || data.media || '',
+    name: data.name || 'Story',
+    ownerUid: data.uid,
+    mediaType: data.mediaType || 'image',
+    expiresAt: data.expiresAt?.toMillis?.() || 0,
+  };
+
+  async function writeToChat(chatId, peerUid) {
+    const chatRef = db.collection('chats').doc(chatId);
+    const snap = await chatRef.get();
+    if (!snap.exists) {
+      await chatRef.set({
+        participants: [uid, peerUid].sort(),
+        type: 'dm',
+        createdAt: now,
+        createdBy: uid,
+        openedBy: uid,
+        lastMessageAt: Date.now(),
+        updatedAt: now,
+        preview: caption || 'Sent a story',
+      });
+    } else {
+      const parts = snap.data()?.participants || [];
+      if (!parts.includes(uid)) throw new Error('FORBIDDEN');
+    }
+    await chatRef.collection('messages').add({
+      text: caption || 'Sent a story',
+      uid,
+      name: sender.name || sender.displayName || 'You',
+      avatar: sender.photoThumb || sender.photoURL || '',
+      profileType:
+        String(sender.profileType || 'personal').toLowerCase() === 'professional' ? 'professional' : 'personal',
+      ts: now,
+      attachment,
+    });
+    await chatRef.set(
+      {
+        updatedAt: now,
+        lastMessageAt: Date.now(),
+        preview: caption || 'Sent a story',
+      },
+      { merge: true }
+    );
+    sent.push({ chatId, uid: peerUid });
+  }
+
+  for (const peer of peerUids.slice(0, 20)) {
+    if (!(await canMessagePeer(db, uid, peer))) {
+      skipped.push(peer);
+      continue;
+    }
+    const chatId = [uid, peer].sort().join('_');
+    try {
+      await writeToChat(chatId, peer);
+    } catch (e) {
+      skipped.push(peer);
+    }
+  }
+  for (const chatId of chatIds.slice(0, 20)) {
+    try {
+      const snap = await db.collection('chats').doc(chatId).get();
+      if (!snap.exists) {
+        skipped.push(chatId);
+        continue;
+      }
+      const parts = snap.data()?.participants || [];
+      if (!parts.includes(uid)) {
+        skipped.push(chatId);
+        continue;
+      }
+      const peer = parts.find((p) => p !== uid) || '';
+      if (peer && !(await canMessagePeer(db, uid, peer))) {
+        skipped.push(chatId);
+        continue;
+      }
+      await writeToChat(chatId, peer);
+    } catch (e) {
+      skipped.push(chatId);
+    }
+  }
+  return { sent: sent.length, skipped };
+}
+
+async function deleteComment(db, uid, destination, storyId, commentId) {
+  const story = await getStory(db, destination, storyId);
+  if (!story) throw new Error('STORY_NOT_FOUND');
+  const id = cleanText(commentId, 180);
+  if (!id) throw new Error('EMPTY_COMMENT');
+  const cref = story.ref.collection('comments').doc(id);
+  const snap = await cref.get();
+  if (!snap.exists) throw new Error('STORY_NOT_FOUND');
+  const owner = story.data()?.uid === uid;
+  const author = snap.data()?.uid === uid;
+  if (!owner && !author) throw new Error('FORBIDDEN');
+  await cref.delete();
+  return { deleted: true };
 }
 
 async function archive(db, uid) {
@@ -744,6 +1172,10 @@ module.exports = async function handler(req, res) {
     }
     if (action === 'interact') {
       const rate = await checkActionRateLimit(user.uid, body.type === 'comment' ? 'comment' : 'like');
+      if (!rate.ok) return sendError(res, 429, 'RATE_LIMITED', 'Too many story interactions. Try again shortly.');
+    }
+    if (action === 'interactive_respond' || action === 'send_story') {
+      const rate = await checkActionRateLimit(user.uid, 'comment');
       if (!rate.ok) return sendError(res, 429, 'RATE_LIMITED', 'Too many story interactions. Try again shortly.');
     }
     if (action === 'create') return sendSuccess(res, { story: await createStory(db, admin, user.uid, body) });
@@ -805,6 +1237,53 @@ module.exports = async function handler(req, res) {
       const highlightId = cleanText(body.highlightId, 180);
       return sendSuccess(res, await highlightStories(db, ownerUid, highlightId, user.uid));
     }
+    if (action === 'get') {
+      return sendSuccess(res, {
+        story: await getStoryById(db, user.uid, body.destination, cleanText(body.storyId, 180)),
+      });
+    }
+    if (action === 'view') {
+      return sendSuccess(
+        res,
+        await recordView(db, admin, user.uid, cleanDestination(body.destination), cleanText(body.storyId, 180))
+      );
+    }
+    if (action === 'list_views') {
+      return sendSuccess(
+        res,
+        await listViews(
+          db,
+          user.uid,
+          cleanDestination(body.destination),
+          cleanText(body.storyId, 180),
+          body.q
+        )
+      );
+    }
+    if (action === 'interactive_respond') {
+      return sendSuccess(res, await interactiveRespond(db, admin, user.uid, body));
+    }
+    if (action === 'list_interactive') {
+      return sendSuccess(
+        res,
+        await listInteractive(db, user.uid, cleanDestination(body.destination), cleanText(body.storyId, 180))
+      );
+    }
+    if (action === 'send_story') {
+      return sendSuccess(res, await sendStoryCard(db, admin, user.uid, body));
+    }
+    if (action === 'delete_comment') {
+      return sendSuccess(
+        res,
+        await deleteComment(
+          db,
+          user.uid,
+          cleanDestination(body.destination),
+          cleanText(body.storyId, 180),
+          cleanText(body.commentId, 180)
+        )
+      );
+    }
     return sendError(res, 400, 'VALIDATION_ERROR', 'Unknown story action');
   } catch (error) {
     const known = {
@@ -817,6 +1296,8 @@ module.exports = async function handler(req, res) {
       HIGHLIGHT_NOT_FOUND: [404, 'NOT_FOUND', 'Highlight not found'],
       INVALID_HIGHLIGHT: [400, 'VALIDATION_ERROR', 'Highlight id / story required'],
       NO_CLOSE_FRIENDS: [400, 'NO_CLOSE_FRIENDS', 'Add at least one Friend to Close Friends before sharing'],
+      FORBIDDEN: [403, 'FORBIDDEN', 'Not allowed'],
+      CHAIN_TOO_LONG: [400, 'VALIDATION_ERROR', 'Add yours chain is full'],
     }[error?.message];
     if (known) return sendError(res, known[0], known[1], known[2]);
     console.error('[stories]', action, error?.message || error);

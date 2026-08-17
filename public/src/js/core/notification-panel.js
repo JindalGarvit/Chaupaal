@@ -14,7 +14,7 @@
   const SECTION_TYPES = {
     baithak: ['baithak', 'message', 'dm', 'chat', 'group', 'story', 'friend', 'invite'],
     peepal: ['peepal', 'match', 'response', 'join', 'ask', 'discovery', 'mention', 'reply', 'reaction'],
-    duniya: ['duniya', 'like', 'comment', 'follow', 'lehar', 'post', 'tag'],
+    duniya: ['duniya', 'like', 'comment', 'follow', 'lehar', 'post', 'tag', 'collab'],
     akhbaar: ['akhbaar', 'quiz', 'streak', 'breaking', 'news', 'taaza'],
     dangal: ['dangal', 'duel', 'muqabala', 'game', 'invite', 'turn', 'result', 'challenge'],
     all: null,
@@ -334,6 +334,22 @@
       }
       if (link.uid && typeof openPublicProfile === 'function') {
         openPublicProfile({ uid: link.uid, username: link.username, name: link.name }, { uid: link.uid });
+        return;
+      }
+      if (link.path && String(link.path).startsWith('/post/') && typeof navigateToDeepLink === 'function') {
+        navigateToDeepLink(link.path);
+        return;
+      }
+      if ((type.includes('collab') || type === 'mention' || type === 'tag') && (link.postId || n.refId) && typeof navigateToDeepLink === 'function') {
+        navigateToDeepLink(`/post/${link.postId || n.refId}`);
+        return;
+      }
+      if (link.storyId) {
+        if (typeof DuniyaStory !== 'undefined' && DuniyaStory.openById && (link.destination === 'duniya' || link.section === 'duniya')) {
+          DuniyaStory.openById(link.storyId);
+          return;
+        }
+        document.querySelector('.tab-btn[data-tab="duniya"]')?.click();
         return;
       }
       if (link.postId) {

@@ -90,7 +90,7 @@ async function collectUsers(db, q, limit) {
 async function collectDuniya(db, q, limit) {
   const out = [];
   try {
-    const snap = await db.collection('duniyaPosts').orderBy('createdAt', 'desc').limit(80).get();
+    const snap = await db.collection('duniya').orderBy('createdAt', 'desc').limit(80).get();
     snap.docs.forEach((doc) => {
       if (out.length >= limit) return;
       const p = doc.data() || {};

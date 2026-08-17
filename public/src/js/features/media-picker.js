@@ -151,7 +151,8 @@
     }
   }
 
-  function openGifPicker() {
+  function openGifPicker(opts) {
+    const onSelect = opts && typeof opts.onSelect === 'function' ? opts.onSelect : null;
     openPickerSheet({
       title: tt('gif_picker_title', 'Pick a GIF'),
       bodyHtml: `
@@ -176,7 +177,9 @@
             .join('');
           grid.querySelectorAll('[data-gif-url]').forEach((btn) => {
             btn.addEventListener('click', () => {
-              insertIntoComposer({ type: 'gif', url: btn.dataset.gifUrl, title: btn.dataset.gifTitle });
+              const gif = { type: 'gif', url: btn.dataset.gifUrl, title: btn.dataset.gifTitle, preview: btn.dataset.gifUrl };
+              if (onSelect) onSelect(gif);
+              else insertIntoComposer(gif);
               close();
             });
           });
@@ -222,7 +225,8 @@
     });
   }
 
-  function openStickerPicker() {
+  function openStickerPicker(opts) {
+    const onSelect = opts && typeof opts.onSelect === 'function' ? opts.onSelect : null;
     openPickerSheet({
       title: tt('sticker_picker_title', 'Stickers'),
       bodyHtml: `<div class="media-picker-sticker-grid" id="stickerGrid"></div>`,
@@ -234,7 +238,8 @@
         ).join('');
         grid.querySelectorAll('[data-sticker]').forEach((btn) => {
           btn.addEventListener('click', () => {
-            insertIntoComposer({ type: 'sticker', emoji: btn.dataset.sticker });
+            if (onSelect) onSelect(btn.dataset.sticker);
+            else insertIntoComposer({ type: 'sticker', emoji: btn.dataset.sticker });
             close();
           });
         });

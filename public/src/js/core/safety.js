@@ -721,6 +721,12 @@
       currentUser &&
       authorUid &&
       (authorUid === currentUser.uid || content?.uid === currentUser.uid);
+    const isCollab =
+      surface === 'duniya' &&
+      typeof currentUser !== 'undefined' &&
+      currentUser &&
+      Array.isArray(content?.collabUids) &&
+      content.collabUids.includes(currentUser.uid);
 
     const esc = (s) =>
       String(s || '')
@@ -787,6 +793,9 @@
       typeof iconHtml === 'function' ? iconHtml(name, { size: 18, className: 'cp-menu-icon' }) : '';
 
     const items = [];
+    if ((isOwn || isCollab) && surface === 'duniya') {
+      items.push({ id: 'edit_post', label: 'Edit post', icon: 'pen' });
+    }
     if (!isOwn && authorUid) {
       items.push({ id: 'more_like', label: 'More like this', icon: 'heart' });
       items.push({ id: 'not_interested', label: 'Not interested', icon: 'thumbs-down' });
@@ -815,6 +824,13 @@
     </div>`;
 
     const handleAct = async (act, close) => {
+      if (act === 'edit_post') {
+        if (close) close();
+        if (typeof DuniyaCompose !== 'undefined' && typeof DuniyaCompose.openEdit === 'function') {
+          DuniyaCompose.openEdit(content);
+        }
+        return;
+      }
       if (act === 'more_like') {
         if (close) close();
         await runInterest('more_like');

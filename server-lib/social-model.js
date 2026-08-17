@@ -66,6 +66,14 @@ function countDeltasForMutualFollow({ aFollowsB = false, bFollowsA = false } = {
   return { a, b };
 }
 
+/**
+ * Close Friends for Splits: every current friend is included unless excluded.
+ * Followers who are not friends never qualify.
+ */
+function isCloseFriendOptOut({ isFriend = false, excluded = false } = {}) {
+  return !!isFriend && !excluded;
+}
+
 function canViewStory({
   destination,
   visibility,
@@ -93,5 +101,6 @@ module.exports = {
   countDeltasForFollowChange,
   countDeltasForMutualFollow,
   emptyCountDelta,
+  isCloseFriendOptOut,
   canViewStory,
 };

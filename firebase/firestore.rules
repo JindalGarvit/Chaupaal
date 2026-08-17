@@ -39,14 +39,21 @@ service cloud.firestore {
 
     function canReadDuniya(postId) {
       let post = get(/databases/$(database)/documents/duniya/$(postId)).data;
+      let collab = ('collabUids' in post && request.auth.uid in post.collabUids)
+        || ('collabPendingUids' in post && request.auth.uid in post.collabPendingUids);
+      let archived = ('archived' in post) && post.archived == true;
       return isAuth() &&
         exists(/databases/$(database)/documents/duniya/$(postId)) &&
-        (!('deleted' in post) || post.deleted == false || isOwner(post.uid)) &&
+        (!('deleted' in post) || post.deleted == false || isOwner(post.uid) || collab) &&
         (
-          post.audience == 'public' ||
-          isOwner(post.uid) ||
-          (post.audience == 'followers' && isFollower(post.uid)) ||
-          (post.audience == 'friends' && isFriend(post.uid))
+          (archived && (isOwner(post.uid) || collab)) ||
+          (!archived && (
+            post.audience == 'public' ||
+            isOwner(post.uid) ||
+            collab ||
+            (post.audience == 'followers' && isFollower(post.uid)) ||
+            (post.audience == 'friends' && isFriend(post.uid))
+          ))
         );
     }
 
@@ -159,7 +166,13 @@ service cloud.firestore {
         allow read, write: if false;
       }
       // Close Friends is owner-private and server-mediated.
+      // Legacy allowlist — ignored for Split delivery; Admin may still delete.
       match /close_friends/{friendId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+      // Opt-out Close Friends: presence = this friend does not receive Splits.
+      match /cf_excluded/{friendId} {
         allow read: if isOwner(userId);
         allow write: if false;
       }
@@ -482,14 +495,26 @@ service cloud.firestore {
 
     // ===================== DUNIYA POSTS =====================
     match /duniya/{postId} {
-      // Public/followers/friends visibility, plus soft-delete: only owner sees deleted
+      // Public/followers/friends visibility; archived = owner/collab; old followers/friends still readable
       allow read: if isAuth() && (
-        (!('deleted' in resource.data) || resource.data.deleted == false || isOwner(resource.data.uid))
+        (!('deleted' in resource.data) || resource.data.deleted == false || isOwner(resource.data.uid) || ('collabUids' in resource.data && request.auth.uid in resource.data.collabUids) || ('collabPendingUids' in resource.data && request.auth.uid in resource.data.collabPendingUids))
       ) && (
-        resource.data.audience == 'public' ||
-        isOwner(resource.data.uid) ||
-        (resource.data.audience == 'followers' && isFollower(resource.data.uid)) ||
-        (resource.data.audience == 'friends' && isFriend(resource.data.uid))
+        (
+          ('archived' in resource.data) && resource.data.archived == true && (
+            isOwner(resource.data.uid) ||
+            ('collabUids' in resource.data && request.auth.uid in resource.data.collabUids) ||
+            ('collabPendingUids' in resource.data && request.auth.uid in resource.data.collabPendingUids)
+          )
+        ) || (
+          (!('archived' in resource.data) || resource.data.archived != true) && (
+            resource.data.audience == 'public' ||
+            isOwner(resource.data.uid) ||
+            ('collabUids' in resource.data && request.auth.uid in resource.data.collabUids) ||
+            ('collabPendingUids' in resource.data && request.auth.uid in resource.data.collabPendingUids) ||
+            (resource.data.audience == 'followers' && isFollower(resource.data.uid)) ||
+            (resource.data.audience == 'friends' && isFriend(resource.data.uid))
+          )
+        )
       );
       allow create: if isAuth()
         && request.resource.data.uid == request.auth.uid
@@ -498,6 +523,7 @@ service cloud.firestore {
              request.resource.data.caption is string
              && request.resource.data.caption.size() <= 4000
            ))
+        && (!('audience' in request.resource.data) || request.resource.data.audience in ['public', 'private'])
         && (!('likes' in request.resource.data) || request.resource.data.likes == 0)
         && (!('comments' in request.resource.data) || request.resource.data.comments == 0)
         && (!('shares' in request.resource.data) || request.resource.data.shares == 0)
@@ -506,10 +532,15 @@ service cloud.firestore {
              && (!('uid' in request.resource.data.user) || request.resource.data.user.uid == request.auth.uid)
            ));
       allow update: if isAuth() && (
-        isOwner(resource.data.uid) ||
         validDuniyaShareMutation(postId) ||
         validDuniyaLikeMutation(postId) ||
-        validDuniyaCommentMutation(postId)
+        validDuniyaCommentMutation(postId) ||
+        (
+          (isOwner(resource.data.uid) || ('collabUids' in resource.data && request.auth.uid in resource.data.collabUids))
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'uid', 'slides', 'likes', 'comments', 'shares', 'collabUids', 'collabPendingUids', 'collabInvites', 'clientId'
+          ])
+        )
       );
       allow delete: if isOwner(resource.data.uid);
 
@@ -525,7 +556,13 @@ service cloud.firestore {
 
       match /comments/{commentId} {
         allow read: if canReadDuniya(postId);
-        allow create: if canReadDuniya(postId) && validCommentCreate();
+        allow create: if canReadDuniya(postId) && validCommentCreate() && (
+          !('commentsOff' in get(/databases/$(database)/documents/duniya/$(postId)).data)
+          || get(/databases/$(database)/documents/duniya/$(postId)).data.commentsOff != true
+          || isOwner(get(/databases/$(database)/documents/duniya/$(postId)).data.uid)
+          || ('collabUids' in get(/databases/$(database)/documents/duniya/$(postId)).data
+              && request.auth.uid in get(/databases/$(database)/documents/duniya/$(postId)).data.collabUids)
+        );
         allow update: if isAuth() &&
           resource.data.uid == request.auth.uid &&
           request.resource.data.uid == resource.data.uid &&
@@ -554,6 +591,12 @@ service cloud.firestore {
       match /comments/{commentId} {
         allow read, write: if false;
       }
+      match /views/{userId} {
+        allow read, write: if false;
+      }
+      match /responses/{userId} {
+        allow read, write: if false;
+      }
     }
 
     // ===================== BAITHAK STORIES (friends / close friends only) =====================
@@ -565,6 +608,12 @@ service cloud.firestore {
         allow read, write: if false;
       }
       match /comments/{commentId} {
+        allow read, write: if false;
+      }
+      match /views/{userId} {
+        allow read, write: if false;
+      }
+      match /responses/{userId} {
         allow read, write: if false;
       }
     }

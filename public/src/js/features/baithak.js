@@ -16,8 +16,8 @@ function initBaithak(){
         addStoryBtn.dataset.suppressClick='0';
         return;
       }
-      if(typeof openBaithakInstantComposer==='function') openBaithakInstantComposer();
-      else if(typeof openBaithakStoryComposer==='function') openBaithakStoryComposer('camera');
+      if(typeof expandBaithakSplitComposer==='function') expandBaithakSplitComposer();
+      else if(typeof openBaithakInstantComposer==='function') openBaithakInstantComposer();
       else if(typeof showAddStoryOptions==='function') showAddStoryOptions();
     });
     document.getElementById('baithakSearch')?.addEventListener('input',e=>{

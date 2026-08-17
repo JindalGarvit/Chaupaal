@@ -17,7 +17,7 @@
     { name: 'profile', re: /^\/(?:profile|u)\/([^/?#]+)\/?$/i },
     { name: 'post', re: /^\/(?:post|p)\/([^/?#]+)\/?$/i },
     { name: 'chat', re: /^\/(?:chat|c)\/([^/?#]+)\/?$/i },
-    { name: 'join', re: /^\/(?:join|g)\/([^/?#]+)\/?$/i },
+    { name: 'story', re: /^\/story\/([^/?#]+)\/?$/i },
   ];
 
   function parseDeepLink(pathname = location.pathname) {
@@ -45,6 +45,7 @@
     if (name === 'post') return `/post/${safe}`;
     if (name === 'chat') return `/chat/${safe}`;
     if (name === 'join') return `/join/g/${safe}`;
+    if (name === 'story') return `/story/${safe}`;
     return '/';
   }
 
@@ -571,7 +572,8 @@
         snap = await db.collection('duniya').doc(id).get();
         if (snap.exists) {
           switchTab('duniya');
-          const p = { id: snap.id, firestoreId: snap.id, ...snap.data() };
+          const raw = { id: snap.id, firestoreId: snap.id, ...snap.data() };
+          const p = typeof mapDuniyaDoc === 'function' ? mapDuniyaDoc(raw) : raw;
           setTimeout(() => {
             initDuniya?.();
             openDuniyaDetail?.(p);
@@ -636,6 +638,10 @@
     else if (route.name === 'post') await openPostById(route.id);
     else if (route.name === 'chat') await openChatById(route.id);
     else if (route.name === 'join') await openGroupInvite(route.id);
+    else if (route.name === 'story') {
+      switchTab('duniya');
+      if (typeof DuniyaStory !== 'undefined' && DuniyaStory.openById) await DuniyaStory.openById(route.id);
+    }
     return true;
   }
 

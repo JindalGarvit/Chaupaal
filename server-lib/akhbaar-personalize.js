@@ -13,6 +13,7 @@ const { callAI } = require('./ai');
 const { canSendProactive, recordEventSent, localDateKey } = require('./chaupaal-cadence');
 const { fetchWeatherForUser } = require('./weather');
 const { fetchLocalEvents } = require('./events-provider');
+const { excludedIds } = require('./close-friends');
 
 function profileBlob(data) {
   return { ...(data || {}), ...(data?.profile || {}) };
@@ -148,8 +149,17 @@ async function createPersonalEvent(db, uid, { type, title, text, cta, action, fr
 
 async function loadCloseFriendProfiles(db, uid) {
   try {
-    const snap = await db.collection('users').doc(uid).collection('close_friends').limit(40).get();
-    const ids = snap.docs.map((d) => d.id);
+    const userRef = db.collection('users').doc(uid);
+    const [following, followers, excluded] = await Promise.all([
+      userRef.collection('following').limit(200).get(),
+      userRef.collection('followers').limit(200).get(),
+      excludedIds(db, uid),
+    ]);
+    const inbound = new Set(followers.docs.map((d) => d.id));
+    const ids = following.docs
+      .map((d) => d.id)
+      .filter((id) => inbound.has(id) && !excluded.has(id))
+      .slice(0, 40);
     if (!ids.length) return [];
     const refs = ids.map((id) => db.collection('users').doc(id));
     const snaps = await db.getAll(...refs);

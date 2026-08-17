@@ -139,8 +139,11 @@ function openChatScreen(chat){
   screen.dataset.chatId = chat.firestoreId || chat.id || '';
   if (isChaupaal) screen.dataset.chaupaal = '1';
   window.currentOpenChat = chat;
+  if (typeof rememberInboxChat === 'function' && currentUser && !isSelf && !isChaupaal) {
+    rememberInboxChat(chat);
+  }
   if (typeof ensureChatUpdatedAt === 'function' && currentUser && !isSelf && !isChaupaal) {
-    ensureChatUpdatedAt(chat);
+    ensureChatUpdatedAt({ ...chat, missingUpdatedAt: chat.missingUpdatedAt !== false });
   }
 
   const statusLine = isChaupaal
@@ -865,6 +868,24 @@ function renderMsgBubble(m, isGroup){
     const label=chatEsc(att.label||(typeof t==='function'?t('mehfil_join_cta'):'Join Mehfil'));
     body=`<div class="mehfil-invite-card">${typeof mehfilMarkHtml==='function'?mehfilMarkHtml(28):''}<strong>${chatEsc(m.text||(typeof t==='function'?t('mehfil_nudge_text',{name:m.name||'Someone'}):'Join Mehfil'))}</strong><button type="button" data-mehfil-invite-join>${label}</button></div>`;
     rich=true;
+  } else if(att && att.type==='duniya_post'){
+    const thumb = att.thumb || att.url || '';
+    const cap = att.caption || m.text || 'Post';
+    body=`<button type="button" class="chat-duniya-post-card" data-duniya-post="${chatEsc(att.postId||'')}">
+      ${thumb?`<img src="${chatEsc(thumb)}" alt="">`:`<span class="chat-duniya-post-card-text">${chatEsc(cap.slice(0,80))}</span>`}
+      <span>${chatEsc(att.author||'Duniya')}</span>
+      <span style="font-weight:500;color:var(--muted);">${chatEsc(cap.slice(0,80))}</span>
+    </button>`;
+    rich=true;
+  } else if(att && att.type==='story'){
+    const live = !att.expiresAt || Number(att.expiresAt) > Date.now();
+    const thumb = att.thumb || att.url || '';
+    body=`<button type="button" class="ds-story-card" data-story-id="${chatEsc(att.storyId||'')}" data-story-dest="${chatEsc(att.destination||'duniya')}" ${live?'':'data-expired="1"'} style="display:block;width:120px;border:0;padding:0;background:none;text-align:left;cursor:pointer;">
+      <span style="display:block;width:120px;height:180px;border-radius:12px;overflow:hidden;background:#111;">${thumb?`<img src="${chatEsc(thumb)}" alt="" style="width:100%;height:100%;object-fit:cover;">`:''}</span>
+      <span style="display:block;font-size:11px;font-weight:700;margin-top:4px;">${chatEsc(att.name||'Story')}</span>
+      ${live?'':`<span style="font-size:11px;color:var(--muted);">Story unavailable</span>`}
+    </button>`;
+    rich=true;
   } else if(att && att.type==='radio_share'){
     body=typeof renderRadioShareCard==='function'
       ?renderRadioShareCard({mood:att.mood,genre:att.genre,language:att.language}, att.sample)
@@ -916,21 +937,38 @@ function wireChallengeBubble(root){
       else if(typeof showToast==='function') showToast(typeof t==='function'?t('mehfil_unavailable'):'Mehfil unavailable');
     });
   });
-  if(typeof wireChallengeCard==='function'){
-    root?.querySelectorAll?.('.baithak-challenge-card').forEach((card)=>{
-      wireChallengeCard(card.parentElement || card, {
-        attachment: {
-          type: 'game_challenge',
-          gameType: card.dataset.challengeGame,
-          status: card.dataset.challengeStatus,
-          toUid: card.dataset.challengeTo,
-          fromUid: card.dataset.challengeFrom,
-          matchId: card.dataset.challengeMatch,
-          gameName: card.dataset.challengeName,
-        },
-      });
+  root?.querySelectorAll?.('[data-story-id]').forEach((btn)=>{
+    if(btn.dataset.wired==='1') return;
+    btn.dataset.wired='1';
+    btn.addEventListener('click',()=>{
+      if(btn.dataset.expired==='1'){
+        if(typeof showToast==='function') showToast(typeof t==='function'?t('story_unavailable','Story unavailable'):'Story unavailable');
+        return;
+      }
+      const id=btn.dataset.storyId;
+      if(typeof DuniyaStory!=='undefined' && DuniyaStory.openById) DuniyaStory.openById(id);
+      else if(typeof showToast==='function') showToast('Story unavailable');
     });
-  }
+  });
+  root?.querySelectorAll?.('[data-duniya-post]').forEach((btn)=>{
+    if(btn.dataset.wired==='1') return;
+    btn.dataset.wired='1';
+    btn.addEventListener('click', async ()=>{
+      const id=btn.dataset.duniyaPost;
+      if(!id) return;
+      try{
+        if(typeof db!=='undefined' && db && typeof openDuniyaDetail==='function'){
+          const doc=await db.collection('duniya').doc(id).get();
+          if(doc.exists){
+            const post=typeof mapDuniyaDoc==='function'?mapDuniyaDoc({id:doc.id,...doc.data()}):{id:doc.id,...doc.data()};
+            openDuniyaDetail(post);
+            return;
+          }
+        }
+      }catch(e){}
+      if(typeof showToast==='function') showToast('Post unavailable');
+    });
+  });
 }
 window.wireChallengeBubble=wireChallengeBubble;
 
@@ -1118,6 +1156,7 @@ function leaveGroupChat(chat){
   if(idx<0) return;
   const item=baithakChats[idx];
   baithakChats.splice(idx,1);
+  if(typeof forgetInboxChat==='function') forgetInboxChat(chat.firestoreId||chat.id);
   closeChatScreen({ updateHistory:true, animate:true });
   if(typeof renderChatList==='function') renderChatList(baithakChats);
   if(typeof showUndoToast==='function'){
@@ -1244,7 +1283,7 @@ function safeStoryText(value){
   return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 }
 
-function openStoryViewer(story, allStories){
+function openBaithakStoryViewer(story, allStories){
   const stories=allStories||[story];
   let currentIdx=stories.indexOf(story);if(currentIdx<0)currentIdx=0;
   let progressInterval=null;
@@ -1443,6 +1482,15 @@ function openStoryViewer(story, allStories){
   renderStory(currentIdx);
 }
 
+window.openBaithakStoryViewer = openBaithakStoryViewer;
+function openStoryViewer(story, allStories, tray) {
+  if (typeof DuniyaStory !== 'undefined' && DuniyaStory.openViewer && (story?.destination === 'duniya' || tray?.tray)) {
+    return DuniyaStory.openViewer(story, allStories, tray);
+  }
+  return openBaithakStoryViewer(story, allStories);
+}
+window.openStoryViewer = openStoryViewer;
+
 // Prefer shared helper from ui-states.js; keep a tiny local fallback.
 function timeAgoStr(ts){
   if(typeof formatRelativeTime==='function') return formatRelativeTime(ts);
@@ -1502,7 +1550,7 @@ function showBaithakShareMenu(){
   if (!anchor || !row) {
     if (typeof showActionSheet === 'function') {
       showActionSheet('Share in Baithak', [
-        {label:'Instant',icon:'zap',hint:'Snaps to Close Friends (or Friends if that list is empty). No editing — short undo window.',fn:openBaithakInstantCamera},
+        {label:'Split',icon:'zap',hint:'Shares with Close Friends in 5s. No editing.',fn:openBaithakInstantCamera},
         {label:'Create a story',icon:'camera',hint:'Camera with text, stickers, games, and audience controls.',fn:()=>openBaithakStoryComposer('camera')},
         {label:'Upload a story',icon:'image',hint:'Pick from gallery, then edit before sharing with Friends or Close Friends.',fn:()=>openBaithakStoryComposer('gallery')},
         {label:'Share a song',icon:'music',hint:'In-app music card — searchable, playable preview. No external apps.',fn:shareBaithakSongStory},
@@ -1518,7 +1566,7 @@ function showBaithakShareMenu(){
   expand.className = 'story-share-expand';
   expand.setAttribute('role', 'menu');
   const items = [
-    {label:'Instant',icon:'zap',fn:openBaithakInstantCamera},
+    {label:'Split',icon:'zap',fn:openBaithakInstantCamera},
     {label:'Create',icon:'camera',fn:()=>openBaithakStoryComposer('camera')},
     {label:'Upload',icon:'image',fn:()=>openBaithakStoryComposer('gallery')},
     {label:'Song',icon:'music',fn:shareBaithakSongStory},
@@ -1625,7 +1673,7 @@ function chooseBaithakMedia(mode,onFile){
 }
 
 /** In-app camera capture when getUserMedia is available; falls back to file input. */
-function openInAppCamera({onCapture,facingMode='environment'}={}){
+function openInAppCamera({onCapture,facingMode='environment',hint}={}){
   if(!navigator.mediaDevices?.getUserMedia){
     chooseBaithakMedia('camera',onCapture);
     return;
@@ -1637,7 +1685,7 @@ function openInAppCamera({onCapture,facingMode='environment'}={}){
     <canvas class="story-camera-canvas hidden"></canvas>
     <div class="story-camera-chrome">
       <button type="button" data-cam-close aria-label="Close">✕</button>
-      <div class="story-camera-hint">Instant · Close Friends</div>
+      <div class="story-camera-hint">${hint || 'Story'}</div>
       <button type="button" data-cam-flip aria-label="Flip camera">↻</button>
     </div>
     <button type="button" class="story-camera-shutter" data-cam-shutter aria-label="Capture"></button>`;
@@ -1680,7 +1728,7 @@ function openInAppCamera({onCapture,facingMode='environment'}={}){
     canvas.getContext('2d').drawImage(video,0,0);
     canvas.toBlob((blob)=>{
       if(!blob)return;
-      const file=new File([blob],`instant_${Date.now()}.jpg`,{type:'image/jpeg'});
+      const file=new File([blob],`split_${Date.now()}.jpg`,{type:'image/jpeg'});
       stop();
       onCapture(file);
     },'image/jpeg',0.92);
@@ -1689,42 +1737,66 @@ function openInAppCamera({onCapture,facingMode='environment'}={}){
 }
 
 function openBaithakInstantCamera(){
-  if(!currentUser){showToast(t('baithak_sign_in_instant'));return;}
-  openInAppCamera({onCapture:(file)=>{
+  const signInMsg = typeof t==='function' ? t('baithak_sign_in_instant') : 'Sign in to share a Split';
+  if(!currentUser){showToast(signInMsg);return;}
+  const hint = typeof t==='function' && t('instants_camera_hint')!=='instants_camera_hint'
+    ? t('instants_camera_hint')
+    : 'Split · Close Friends';
+  openInAppCamera({hint,onCapture:(file)=>{
     const preview=URL.createObjectURL(file);
+    const share = async ()=>{
+      if(typeof processAndUploadMedia!=='function') throw new Error('Media upload unavailable');
+      const up=await processAndUploadMedia(file,{folder:'splits'});
+      const created = typeof shareBaithakSplit==='function'
+        ? await shareBaithakSplit({
+            type:'media',
+            media:up.media||up.url||up.secure_url,
+            thumb:up.thumb,
+            mediaType:file.type.startsWith('video')?'video':'image',
+          })
+        : await createPlatformStory({
+            destination:'baithak',kind:'split',visibility:'close_friends',
+            type:'media',media:up.media,thumb:up.thumb,
+            mediaType:file.type.startsWith('video')?'video':'image',
+          });
+      if(typeof renderBaithakInstants==='function') renderBaithakInstants();
+      else if(typeof renderLiveBaithakStories==='function') renderLiveBaithakStories();
+      return created;
+    };
+    if(typeof showSplitUndoBar==='function'){
+      showSplitUndoBar({
+        previewUrl:preview,
+        onCommit:async()=>{
+          await share();
+          URL.revokeObjectURL(preview);
+        },
+        onCancel:()=>URL.revokeObjectURL(preview),
+      });
+      return;
+    }
     const pending=document.createElement('div');
     pending.className='instant-pending';
-    pending.innerHTML=`<img src="${preview}" alt=""><div><strong>Instant ready</strong><span>Sharing to Close Friends in 5s…</span><small>If your Close Friends list is empty, Friends will see it instead.</small></div><button type="button">Undo</button>`;
+    pending.setAttribute('data-nav-ignore','1');
+    pending.innerHTML=`<img src="${preview}" alt=""><div><strong>Split ready</strong><span>Sharing with Close Friends in 5s…</span></div><button type="button">Undo</button>`;
     document.querySelector('.device')?.appendChild(pending);
     let cancelled=false;
     const timer=setTimeout(async()=>{
       if(cancelled)return;
       pending.querySelector('span').textContent='Sharing…';
       try{
-        if(typeof processAndUploadMedia!=='function') throw new Error('Media upload unavailable');
-        const up=await processAndUploadMedia(file,{folder:'stories'});
-        const created=await createPlatformStory({
-          destination:'baithak',kind:'instant',visibility:'close_friends',
-          type:'media',media:up.media,thumb:up.thumb,
-          mediaType:file.type.startsWith('video')?'video':'image',
-        });
+        await share();
         pending.remove();
         URL.revokeObjectURL(preview);
-        renderLiveBaithakStories();
-        if(created?.audienceFallback==='friends'){
-          showToast('Instant shared with Friends — add Close Friends for a private list');
-        }else{
-          showToast('Instant shared with Close Friends');
-        }
+        showToast(typeof t==='function'?t('instants_shared'):'Split shared');
       }catch(error){
         pending.remove();
         URL.revokeObjectURL(preview);
-        showToast(error?.message||'Instant could not be shared');
+        showToast(error?.message||'Could not share Split');
       }
     },5000);
     pending.querySelector('button').addEventListener('click',()=>{
       cancelled=true;clearTimeout(timer);pending.remove();URL.revokeObjectURL(preview);
-      showToast('Instant undone');
+      showToast(typeof t==='function'?t('instants_undone'):'Split undone');
     });
   }});
 }
@@ -1812,7 +1884,7 @@ function showBaithakStoryEditor(file,mode){
       </div>
       <div class="story-editor-plus-row">
         <button type="button" class="story-plus-btn" data-story-plus aria-label="Add more">＋</button>
-        <span>Tap for camera · long-press for Instant / Create / Upload</span>
+        <span>Tap for camera · long-press for Split / Create / Upload</span>
       </div>
     </div>`;
   document.querySelector('.device')?.appendChild(editor);

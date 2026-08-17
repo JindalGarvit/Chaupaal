@@ -231,6 +231,23 @@
         snap = await db.collection(col).where('uid', '==', profileUid).limit(48).get();
       }
       let posts = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((p) => !p.deleted);
+      if (col === 'duniya') {
+        try {
+          let collabSnap;
+          try {
+            collabSnap = await db.collection(col).where('collabUids', 'array-contains', profileUid).orderBy('createdAt', 'desc').limit(48).get();
+          } catch (e) {
+            collabSnap = await db.collection(col).where('collabUids', 'array-contains', profileUid).limit(48).get();
+          }
+          const seen = new Set(posts.map((p) => p.id));
+          collabSnap.docs.forEach((d) => {
+            if (seen.has(d.id)) return;
+            const row = { id: d.id, ...d.data() };
+            if (!row.deleted) posts.push(row);
+          });
+          posts.sort((a, b) => (b.createdAt?.toMillis?.() || b.ts || 0) - (a.createdAt?.toMillis?.() || a.ts || 0));
+        } catch (e) {}
+      }
       if (!includeArchived || !isOwner) posts = posts.filter((p) => p.archived !== true);
       if (!posts.length) {
         bodyEl.innerHTML = `<div class="cp-grid-empty">
@@ -244,9 +261,10 @@
         bodyEl.innerHTML = `<div class="cp-post-grid cp-post-grid--3">${posts
           .slice(0, limit)
           .map((p) => {
-            const media = p.thumb || p.media || p.image || '';
+            const media = p.thumb || p.media || p.image || (Array.isArray(p.slides) && p.slides[0] && (p.slides[0].thumb || p.slides[0].media)) || '';
+            const cellCaption = esc((p.caption || 'Post').slice(0, 40));
             return `<button type="button" class="cp-post-cell" data-open-post="duniya" data-post-id="${esc(p.id)}">
-              ${media ? `<img src="${esc(media)}" alt="">` : `<span>${esc((p.caption || 'Post').slice(0, 40))}</span>`}
+              ${media ? `<img src="${esc(media)}" alt="">` : `<span>${cellCaption}</span>`}
             </button>`;
           })
           .join('')}</div>`;

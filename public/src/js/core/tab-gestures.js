@@ -307,7 +307,7 @@
    * Peepal: discuss | Khoj | Vriksha | Mashhoor | Chaupaal search (global)
    * Akhbaar: Safar | Surkhiya | Khabar | Saathi | Add category
    * Duniya: post | Lehar | Vishwa | Prasidha | story
-   * Baithak: Instant | Sambhavanayein | Sabha | Mitra | find
+   * Baithak: Split | Sambhavanayein | Sabha | Mitra | find
    * Dangal: Tarakki | Khel(GOTD) | Manch(library) | Maidan(resume) | Challenge GOTD
    */
   function shortcutsFor(tab) {
@@ -445,19 +445,20 @@
           run: () => {
             if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
             switchTo('duniya');
-            if (typeof openDuniyaPostSheet === 'function') openDuniyaPostSheet('story');
+            if (typeof DuniyaStory !== 'undefined' && typeof DuniyaStory.startCreate === 'function') DuniyaStory.startCreate();
+            else if (typeof openDuniyaPostSheet === 'function') openDuniyaPostSheet('story');
           },
         },
       ],
       baithak: [
         {
           id: 'instant',
-          label: tt('shortcut_baithak_instant', 'New Instant'),
+          label: tt('shortcut_baithak_instant', 'New split'),
           run: () => {
             if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
             switchTo('baithak');
-            if (typeof openBaithakInstantComposer === 'function') openBaithakInstantComposer();
-            else if (typeof openBaithakStoryComposer === 'function') openBaithakStoryComposer('camera');
+            if (typeof expandBaithakSplitComposer === 'function') expandBaithakSplitComposer();
+            else if (typeof openBaithakInstantComposer === 'function') openBaithakInstantComposer();
           },
         },
         {

@@ -3034,6 +3034,16 @@ select:focus-visible,
 .baithak-instant{width:68px;flex:0 0 68px;border:0;background:transparent;color:var(--ink);cursor:pointer;}
 .baithak-instant img,.baithak-instant>span{width:60px;height:74px;border-radius:16px;display:grid;place-items:center;object-fit:cover;background:var(--line);}
 .baithak-instant small{display:block;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.baithak-instant.is-seen{opacity:.55;}
+.baithak-split-composer{
+  margin-top:8px;padding:10px 2px 2px;border-top:1px solid var(--line);
+}
+.baithak-split-composer[hidden]{display:none!important;}
+.baithak-split-text{min-height:52px;resize:none;margin:0;}
+.baithak-split-actions{display:flex;justify-content:flex-end;margin-top:8px;}
+.baithak-split-send{min-width:108px;}
+.baithak-split-tools .btn{min-width:40px;}
+.instant-pending-glyph{width:44px;height:54px;border-radius:10px;display:grid;place-items:center;background:rgba(255,255,255,.12);font-size:22px;}
 .instant-pending{position:absolute;left:12px;right:12px;bottom:82px;z-index:240;display:flex;align-items:center;gap:10px;padding:10px;background:var(--ink);color:#fff;border-radius:16px;box-shadow:0 12px 30px rgba(0,0,0,.28);}
 .instant-pending img{width:44px;height:54px;object-fit:cover;border-radius:10px;}
 .instant-pending div{flex:1}.instant-pending strong,.instant-pending span,.instant-pending small{display:block}.instant-pending span{font-size:11px;opacity:.7;margin-top:2px;}.instant-pending small{font-size:10px;opacity:.55;margin-top:4px;line-height:1.35;}
