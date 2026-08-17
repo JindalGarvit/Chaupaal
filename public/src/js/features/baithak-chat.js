@@ -139,6 +139,9 @@ function openChatScreen(chat){
   screen.dataset.chatId = chat.firestoreId || chat.id || '';
   if (isChaupaal) screen.dataset.chaupaal = '1';
   window.currentOpenChat = chat;
+  if (typeof ensureChatUpdatedAt === 'function' && currentUser && !isSelf && !isChaupaal) {
+    ensureChatUpdatedAt(chat);
+  }
 
   const statusLine = isChaupaal
     ? 'Your space with Chaupaal'

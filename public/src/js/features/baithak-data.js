@@ -336,7 +336,8 @@ function renderChatList(chats, opts){
       label:'Load more chats',
       onLoadMore:async()=>{
         await loadBaithakChatsPage({reset:false});
-        renderChatList(baithakChats);
+        if(typeof setBaithakSection==='function') setBaithakSection(typeof window.baithakSection==='function'?window.baithakSection():'sabha');
+        else renderChatList(baithakChats);
       },
     });
   }
@@ -349,6 +350,7 @@ let baithakChatHasMore=false;
 let baithakChatLiveMode=false;
 let baithakChatLoading=false;
 let baithakChatLoadError=false;
+let baithakInboxGapWarned=false;
 
 function isGenericDmTitle(name){
   const n=String(name||'').trim();
@@ -397,8 +399,67 @@ async function hydrateInboxPeers(chats){
   return chats;
 }
 
+/** Firestore timestamps / numbers → ms. Docs without `updatedAt` still recency-sort via lastMessageAt/createdAt/ts. */
+function chatFieldMs(v){
+  if(v==null||v==='') return null;
+  if(typeof v==='number'&&Number.isFinite(v)) return v;
+  if(typeof v?.toMillis==='function') return v.toMillis();
+  if(typeof v?.toDate==='function'){
+    const d=v.toDate();
+    return d&&!Number.isNaN(d.getTime())?d.getTime():null;
+  }
+  const n=Number(v);
+  return Number.isFinite(n)?n:null;
+}
+
+function chatRecencyMs(c){
+  const n=chatFieldMs(c?.updatedAt)||chatFieldMs(c?.lastMessageAt)||chatFieldMs(c?.createdAt)||chatFieldMs(c?.ts)||0;
+  return Number.isFinite(n)?n:0;
+}
+
+function chatInboxId(c){
+  return (c&&(c.firestoreId||c.id))||'';
+}
+
+function isLiveSampleChat(c){
+  if(!c) return false;
+  if(c.isSample) return true;
+  const id=String(c.id||c.firestoreId||'');
+  return id==='chat_riya'||id==='chat_arjun'||id==='grp_tech'||id==='grp_news';
+}
+
+/**
+ * Union inbox rows by id. Never drop already-shown live chats this session.
+ * Never admit SAMPLE_CHATS (Riya / grp_tech are offline-only).
+ */
+function mergeBaithakInbox(existing, incoming){
+  const byId=new Map();
+  const add=(c)=>{
+    if(!c||isLiveSampleChat(c)) return;
+    const id=chatInboxId(c);
+    if(!id) return;
+    const prev=byId.get(id);
+    byId.set(id, prev?Object.assign({},prev,c):c);
+  };
+  (existing||[]).forEach(add);
+  (incoming||[]).forEach(add);
+  return [...byId.values()].sort((a,b)=>chatRecencyMs(b)-chatRecencyMs(a));
+}
+
+async function ensureChatUpdatedAt(raw){
+  if(!db||!currentUser||!raw) return;
+  if(isLiveSampleChat(raw)) return;
+  const id=chatInboxId(raw);
+  if(!id||String(id).startsWith('chat_self')||String(id)==='chat_self') return;
+  if(!raw.missingUpdatedAt && chatFieldMs(raw.updatedAt)!=null) return;
+  const val=raw.lastMessageAt||raw.createdAt||raw.ts||(typeof firebase!=='undefined'&&firebase.firestore?.FieldValue?.serverTimestamp?.())||Date.now();
+  try{
+    await db.collection('chats').doc(id).set({updatedAt:val},{merge:true});
+  }catch(e){}
+}
+
 function mapChatDoc(raw){
-  const updated=raw.updatedAt?.toMillis?.()||raw.updatedAt?.toDate?.()?.getTime?.()||raw.ts||null;
+  const updated=chatFieldMs(raw.updatedAt)||chatFieldMs(raw.lastMessageAt)||chatFieldMs(raw.createdAt)||chatFieldMs(raw.ts);
   const profiles=raw.memberProfiles&&typeof raw.memberProfiles==='object'?raw.memberProfiles:{};
   const peerUid=(raw.participants||[]).find?.(uid=>typeof currentUser!=='undefined'&&uid!==currentUser?.uid);
   const peerProfile=peerUid?profiles[peerUid]:null;
@@ -419,6 +480,7 @@ function mapChatDoc(raw){
     time: updated?undefined:raw.time,
     ts: updated||raw.ts||Date.now(),
     updatedAt: updated,
+    missingUpdatedAt: chatFieldMs(raw.updatedAt)==null,
     unread: (()=>{
       const last=raw.lastMessageAt?.toMillis?.()||raw.lastMessageAt||updated||0;
       const myUid=typeof currentUser!=='undefined'?currentUser?.uid:null;
@@ -456,15 +518,35 @@ function mapChatDoc(raw){
   };
 }
 
+/**
+ * Inbox load: recency query (participants + updatedAt desc) PLUS a membership
+ * fallback. Firestore OMITs docs that lack the orderBy field — old groups/DMs
+ * with only createdAt/ts/lastMessageAt never appear in the recency page.
+ * Do not treat an empty updatedAt page as “no chats”. Never seed SAMPLE_CHATS.
+ */
 async function loadBaithakChatsPage({reset=false}={}){
   if(!db||!currentUser||typeof fetchFirestorePage!=='function') return {loaded:0};
   if(baithakChatLoading) return {loaded:0};
   if(!reset&&!baithakChatHasMore) return {loaded:0};
   baithakChatLoading=true;
+  const prevLive=(baithakChats||[]).filter((c)=>!isLiveSampleChat(c));
+  const openChat=typeof window!=='undefined'?window.currentOpenChat:null;
+  const keepOpen=(list)=>{
+    const openId=openChat&&(openChat.firestoreId||openChat.id);
+    if(!openChat||!openId||isLiveSampleChat(openChat)) return list;
+    if((list||[]).some(c=>(c.firestoreId||c.id)===openId)) return list;
+    return [openChat, ...(list||[])];
+  };
+  const applyList=(incoming)=>{
+    const withPrev=mergeBaithakInbox(prevLive, incoming);
+    baithakChats=pinSelfChat(keepOpen(withPrev));
+  };
+  let orderedError=null;
+  let page={items:[],lastDoc:null,hasMore:false};
   try{
     if(reset){ baithakChatCursor=null; baithakChatHasMore=true; }
     // Requires composite index: participants ARRAY + updatedAt DESC
-    const page=await fetchFirestorePage({
+    page=await fetchFirestorePage({
       queryBase: db.collection('chats').where('participants','array-contains',currentUser.uid),
       orderField:'updatedAt',
       direction:'desc',
@@ -472,42 +554,70 @@ async function loadBaithakChatsPage({reset=false}={}){
       cursor: reset?null:baithakChatCursor,
       excludeDeleted:false,
     });
-    const mapped=page.items.map(mapChatDoc);
-    await hydrateInboxPeers(mapped);
-    if(typeof enrichUsersWithProfileType==='function') await enrichUsersWithProfileType(mapped);
-    const openChat=typeof window!=='undefined'?window.currentOpenChat:null;
-    const openId=openChat&&(openChat.firestoreId||openChat.id);
-    const keepOpen=(list)=>{
-      if(!openChat||!openId) return list;
-      if((list||[]).some(c=>(c.firestoreId||c.id)===openId)) return list;
-      return [openChat, ...(list||[])];
-    };
-    if(reset&&mapped.length){
-      baithakChatLiveMode=true;
-      baithakChatLoadError=false;
-      baithakChats=pinSelfChat(keepOpen(mapped));
-      // Do NOT merge SAMPLE demo rows into a live inbox — sticky unread badges
-      // and intentionally-blocked sends looked like product bugs.
-    } else if(mapped.length){
-      const seen=new Set(baithakChats.map(c=>c.firestoreId||c.id));
-      mapped.forEach(c=>{ if(!seen.has(c.firestoreId||c.id)) baithakChats.push(c); });
-      baithakChats=pinSelfChat(keepOpen(baithakChats));
-    } else if(reset){
-      baithakChatLiveMode=true;
-      baithakChatLoadError=false;
-      baithakChats=pinSelfChat(keepOpen([]));
+  }catch(e){
+    orderedError=e;
+    console.warn('[baithak] chat recency page failed', e?.message||e);
+  }
+
+  let fallbackItems=[];
+  let fallbackError=null;
+  if(reset){
+    try{
+      const snap=await db.collection('chats').where('participants','array-contains',currentUser.uid).limit(80).get();
+      fallbackItems=snap.docs.map((d)=>({id:d.id,...(d.data()||{})}));
+    }catch(e2){
+      fallbackError=e2;
+      console.warn('[baithak] chat membership fallback failed', e2?.message||e2);
     }
-    baithakChatCursor=page.lastDoc;
-    baithakChatHasMore=page.hasMore;
-    return {loaded:mapped.length};
+  }
+
+  if(orderedError&&fallbackError){
+    baithakChatLoadError=true;
+    baithakChatLoading=false;
+    if(typeof showToast==='function') showToast('Couldn’t refresh chats.');
+    baithakChats=pinSelfChat(keepOpen(prevLive.length?prevLive:(openChat&&!isLiveSampleChat(openChat)?[openChat]:[])));
+    return {loaded:0,error:orderedError};
+  }
+
+  try{
+    const orderedMapped=(page.items||[]).map(mapChatDoc);
+    const fallbackMapped=fallbackItems.map(mapChatDoc);
+    if(reset&&fallbackMapped.length>orderedMapped.length&&!baithakInboxGapWarned){
+      baithakInboxGapWarned=true;
+      console.warn('[baithak] inbox updatedAt page omitted chats', {
+        ordered: orderedMapped.length,
+        membership: fallbackMapped.length,
+      });
+    }
+    const incoming=reset?orderedMapped.concat(fallbackMapped):orderedMapped;
+    await hydrateInboxPeers(incoming);
+    if(typeof enrichUsersWithProfileType==='function') await enrichUsersWithProfileType(incoming);
+    baithakChatLiveMode=true;
+    baithakChatLoadError=false;
+    applyList(incoming);
+    const needBackfill=[];
+    const seenBackfill=new Set();
+    incoming.forEach((c)=>{
+      if(!c.missingUpdatedAt) return;
+      const id=c.firestoreId||c.id;
+      if(!id||seenBackfill.has(id)) return;
+      seenBackfill.add(id);
+      if(needBackfill.length<12) needBackfill.push(c);
+    });
+    needBackfill.forEach((c)=>{ ensureChatUpdatedAt(c); });
+    if(!orderedError){
+      baithakChatCursor=page.lastDoc;
+      baithakChatHasMore=!!page.hasMore;
+    } else {
+      baithakChatHasMore=false;
+      if(typeof showToast==='function') showToast('Couldn’t refresh chats.');
+    }
+    return {loaded:incoming.length};
   }catch(e){
     console.warn('[baithak] chat page failed', e?.message||e);
-    if(reset){
-      baithakChatLiveMode=false;
-      baithakChatLoadError=true;
-      const openChat=typeof window!=='undefined'?window.currentOpenChat:null;
-      baithakChats=pinSelfChat(openChat?[openChat]:[]);
-    }
+    baithakChatLoadError=true;
+    if(typeof showToast==='function') showToast('Couldn’t refresh chats.');
+    baithakChats=pinSelfChat(keepOpen(prevLive.length?prevLive:(openChat&&!isLiveSampleChat(openChat)?[openChat]:[])));
     return {loaded:0,error:e};
   }finally{
     baithakChatLoading=false;
@@ -590,4 +700,18 @@ window.setBaithakSection = setBaithakSection;
 window.baithakSection = () => baithakSection;
 window.hydrateInboxPeers = hydrateInboxPeers;
 window.chatAvatarMarkup = chatAvatarMarkup;
+window.ensureChatUpdatedAt = ensureChatUpdatedAt;
+window.mergeBaithakInbox = mergeBaithakInbox;
+window.mapChatDoc = mapChatDoc;
+window.chatRecencyMs = chatRecencyMs;
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    chatFieldMs,
+    chatRecencyMs,
+    chatInboxId,
+    isLiveSampleChat,
+    mergeBaithakInbox,
+    mapChatDoc,
+  };
+}
 

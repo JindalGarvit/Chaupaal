@@ -423,7 +423,8 @@ module.exports = async function handler(req, res) {
         pages.push(page);
         const gDone = !!(page.groups?.done || page.groups?.skipped);
         const uDone = !!(page.usersPublic?.done || page.usersPublic?.skipped);
-        if (gDone && uDone) break;
+        const cDone = !!(page.chatsUpdatedAt?.done || page.chatsUpdatedAt?.skipped);
+        if (gDone && uDone && cDone) break;
       }
       denormBackfill = { pages };
     } catch (e) {

@@ -202,6 +202,7 @@
       permissions: { addMembers: 'all', editInfo: 'admin' },
       invite: { token, mode: 'instant', enabled: true },
       preview: 'Group created',
+      lastMessageAt: Date.now(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     };

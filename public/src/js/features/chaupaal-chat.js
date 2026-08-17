@@ -95,8 +95,15 @@
       const snap = await ref.get();
       if (!snap.exists) {
         await ref.set(createPayload);
-      } else if (!Array.isArray(snap.data()?.participants) || !snap.data().participants.includes(currentUser.uid)) {
-        await ref.set(repairPayload, { merge: true });
+      } else {
+        const data = snap.data() || {};
+        const patch = {};
+        if (!Array.isArray(data.participants) || !data.participants.includes(currentUser.uid)) {
+          Object.assign(patch, repairPayload);
+        } else if (data.updatedAt == null) {
+          patch.updatedAt = data.lastMessageAt || data.createdAt || firebase.firestore.FieldValue.serverTimestamp();
+        }
+        if (Object.keys(patch).length) await ref.set(patch, { merge: true });
       }
     } catch (e) {
       console.warn('[chaupaal-chat] ensure doc get/create', e?.code || e?.message || e);

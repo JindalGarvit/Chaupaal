@@ -97,18 +97,20 @@
       participants: [currentUser.uid, peer].sort(),
       type: 'dm',
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       createdBy: currentUser.uid,
       openedBy: currentUser.uid,
       lastMessageAt: Date.now(),
       memberProfiles: profiles,
       ...(extras && typeof extras === 'object' ? extras : {}),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     };
     const ref = db.collection('chats').doc(chatId);
     let exists = false;
+    let existingData = null;
     try {
       const snap = await ref.get();
       exists = !!(snap && snap.exists);
+      existingData = exists ? snap.data() || {} : null;
     } catch (e) {
       exists = false;
     }
@@ -145,6 +147,12 @@
         allow.forEach((k) => {
           if (extras[k] != null) patch[k] = extras[k];
         });
+      }
+      if (existingData && existingData.updatedAt == null) {
+        patch.updatedAt =
+          existingData.lastMessageAt ||
+          existingData.createdAt ||
+          firebase.firestore.FieldValue.serverTimestamp();
       }
       await ref.set(patch, { merge: true }).catch(() => {});
     }

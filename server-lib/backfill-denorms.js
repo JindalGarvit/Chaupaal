@@ -136,6 +136,38 @@ async function backfillUsersPublic(db, { limit = BATCH, startAfterId = null } = 
 }
 
 /**
+ * Set updatedAt on chat docs that only have createdAt/ts/lastMessageAt.
+ * Firestore orderBy('updatedAt') omits those docs from the Baithak inbox.
+ */
+async function backfillChatUpdatedAt(db, { limit = BATCH, startAfterId = null } = {}) {
+  let q = db.collection('chats').orderBy('__name__').limit(limit);
+  if (startAfterId) {
+    const cursor = await db.collection('chats').doc(startAfterId).get();
+    if (cursor.exists) q = q.startAfter(cursor);
+  }
+  const snap = await q.get();
+  let patched = 0;
+  const batch = db.batch();
+  let ops = 0;
+  snap.docs.forEach((doc) => {
+    const data = doc.data() || {};
+    if (data.updatedAt != null) return;
+    const stamp = data.lastMessageAt || data.createdAt || data.ts || new Date();
+    batch.set(doc.ref, { updatedAt: stamp }, { merge: true });
+    ops += 1;
+    patched += 1;
+  });
+  if (ops) await batch.commit();
+  const lastId = snap.docs.length ? snap.docs[snap.docs.length - 1].id : startAfterId;
+  return {
+    scanned: snap.size,
+    patched,
+    done: snap.empty || snap.size < limit,
+    lastId: snap.empty ? null : lastId,
+  };
+}
+
+/**
  * Run one page of both jobs using cursors in chaupaalMeta/denormBackfill.
  */
 async function runDenormBackfillPage(db) {
@@ -174,6 +206,21 @@ async function runDenormBackfillPage(db) {
     out.usersPublic = { skipped: true, done: true };
   }
 
+  if (!meta.chatsUpdatedAtDone) {
+    out.chatsUpdatedAt = await backfillChatUpdatedAt(db, { startAfterId: meta.chatsUpdatedAtLastId || null });
+    await ref.set(
+      {
+        chatsUpdatedAtLastId: out.chatsUpdatedAt.done ? null : out.chatsUpdatedAt.lastId,
+        chatsUpdatedAtDone: !!out.chatsUpdatedAt.done,
+        chatsUpdatedAtPatchedTotal: (Number(meta.chatsUpdatedAtPatchedTotal) || 0) + out.chatsUpdatedAt.patched,
+        updatedAt: new Date(),
+      },
+      { merge: true }
+    );
+  } else {
+    out.chatsUpdatedAt = { skipped: true, done: true };
+  }
+
   return out;
 }
 
@@ -182,5 +229,6 @@ module.exports = {
   buildPublicProjection,
   backfillGroups,
   backfillUsersPublic,
+  backfillChatUpdatedAt,
   runDenormBackfillPage,
 };
