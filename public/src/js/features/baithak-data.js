@@ -282,11 +282,21 @@ function renderChatList(chats, opts){
                 ? t('baithak_sambhav_empty_title') || 'No Sambhavanayein yet'
                 : 'No Sambhavanayein yet',
             message:
-              typeof t === 'function'
-                ? t('baithak_sambhav_empty_msg') || 'Chats with people you haven’t friended or followed yet.'
-                : 'Chats with people you haven’t friended or followed yet.',
-            actionLabel: typeof t === 'function' ? t('shortcut_baithak_search') || 'Find people' : 'Find people',
+              (baithakChats||[]).some((c)=>c&&c.type==='group'&&!isLiveSampleChat(c))
+                ? (typeof t === 'function'
+                    ? t('baithak_sambhav_groups_in_sabha') || 'Groups and friend chats live in Sabha — swipe there to see them.'
+                    : 'Groups and friend chats live in Sabha — swipe there to see them.')
+                : (typeof t === 'function'
+                    ? t('baithak_sambhav_empty_msg') || 'Chats with people you haven’t friended or followed yet.'
+                    : 'Chats with people you haven’t friended or followed yet.'),
+            actionLabel: (baithakChats||[]).some((c)=>!isSelfChatRow(c)&&!isChaupaalChatRow(c)&&!isLiveSampleChat(c))
+              ? (typeof t === 'function' ? t('baithak_sabha_sub') || 'Sabha' : 'Sabha')
+              : (typeof t === 'function' ? t('shortcut_baithak_search') || 'Find people' : 'Find people'),
             onAction: () => {
+              if ((baithakChats||[]).some((c)=>!isSelfChatRow(c)&&!isChaupaalChatRow(c)&&!isLiveSampleChat(c))) {
+                if (typeof setBaithakSection === 'function') setBaithakSection('sabha');
+                return;
+              }
               if (typeof openPeopleSearchWithContacts === 'function') openPeopleSearchWithContacts({ surface: 'baithak' });
             },
           };
@@ -349,8 +359,12 @@ let baithakChatCursor=null;
 let baithakChatHasMore=false;
 let baithakChatLiveMode=false;
 let baithakChatLoading=false;
+let baithakChatLoadQueued=null;
 let baithakChatLoadError=false;
 let baithakInboxGapWarned=false;
+const INBOX_CACHE_MAX=200;
+const MEMBERSHIP_PAGE=100;
+const MEMBERSHIP_MAX=500;
 
 function isGenericDmTitle(name){
   const n=String(name||'').trim();
@@ -446,16 +460,126 @@ function mergeBaithakInbox(existing, incoming){
   return [...byId.values()].sort((a,b)=>chatRecencyMs(b)-chatRecencyMs(a));
 }
 
+function inboxCacheKey(){
+  const uid=typeof currentUser!=='undefined'?currentUser?.uid:'';
+  return uid?`chaupaal_baithak_inbox_v1_${uid}`:'';
+}
+
+function readInboxCache(){
+  const key=inboxCacheKey();
+  if(!key) return [];
+  try{
+    const raw=localStorage.getItem(key);
+    const list=raw?JSON.parse(raw):[];
+    if(!Array.isArray(list)) return [];
+    return list.filter((c)=>c&&chatInboxId(c)&&!isLiveSampleChat(c));
+  }catch(e){
+    return [];
+  }
+}
+
+function writeInboxCache(chats){
+  const key=inboxCacheKey();
+  if(!key) return;
+  try{
+    const stubs=(chats||[])
+      .filter((c)=>c&&!isLiveSampleChat(c)&&!isSelfChatRow(c)&&!isChaupaalChatRow(c))
+      .sort((a,b)=>chatRecencyMs(b)-chatRecencyMs(a))
+      .slice(0,INBOX_CACHE_MAX)
+      .map((c)=>{
+        const id=chatInboxId(c);
+        return {
+          id,
+          firestoreId:id,
+          type:c.type||'dm',
+          name:c.name||'',
+          preview:String(c.preview||'').slice(0,160),
+          ts:chatRecencyMs(c),
+          updatedAt:chatRecencyMs(c),
+          uid:c.uid||null,
+          photoURL:c.photoURL||null,
+          avatar:typeof c.avatar==='string'&&c.avatar.length<=8?c.avatar:'👤',
+          participants:Array.isArray(c.participants)?c.participants.slice(0,40):[],
+          members:c.members||null,
+        };
+      });
+    localStorage.setItem(key,JSON.stringify(stubs));
+  }catch(e){}
+}
+
+function forgetInboxChat(chatId){
+  const id=String(chatId||'');
+  if(!id) return;
+  const next=readInboxCache().filter((c)=>chatInboxId(c)!==id);
+  writeInboxCache(next);
+}
+
+function rememberInboxChat(chat){
+  if(!chat||isLiveSampleChat(chat)) return;
+  writeInboxCache(mergeBaithakInbox(readInboxCache(),[chat]));
+}
+
 async function ensureChatUpdatedAt(raw){
   if(!db||!currentUser||!raw) return;
   if(isLiveSampleChat(raw)) return;
   const id=chatInboxId(raw);
-  if(!id||String(id).startsWith('chat_self')||String(id)==='chat_self') return;
+  if(!id||String(id).startsWith('chat_self')||String(id)==='chat_self'||String(id).startsWith('chat_chaupaal_')) return;
   if(!raw.missingUpdatedAt && chatFieldMs(raw.updatedAt)!=null) return;
   const val=raw.lastMessageAt||raw.createdAt||raw.ts||(typeof firebase!=='undefined'&&firebase.firestore?.FieldValue?.serverTimestamp?.())||Date.now();
   try{
     await db.collection('chats').doc(id).set({updatedAt:val},{merge:true});
   }catch(e){}
+}
+
+/**
+ * Every chat whose `participants` array contains the signed-in uid.
+ * Does NOT orderBy updatedAt — Firestore omits docs missing that field.
+ * Pages by document id (always present) so old groups/DMs cannot fall off a limit(80).
+ */
+async function fetchParticipatingChats(){
+  const uid=currentUser.uid;
+  const base=db.collection('chats').where('participants','array-contains',uid);
+  const out=[];
+  const seen=new Set();
+  const addSnap=(snap)=>{
+    (snap?.docs||[]).forEach((d)=>{
+      if(seen.has(d.id)) return;
+      seen.add(d.id);
+      out.push({id:d.id,...(d.data()||{})});
+    });
+  };
+
+  let scannedAll=false;
+  try{
+    const idPath=firebase.firestore.FieldPath.documentId();
+    let cursor=null;
+    for(let i=0;i<Math.ceil(MEMBERSHIP_MAX/MEMBERSHIP_PAGE);i++){
+      let q=base.orderBy(idPath).limit(MEMBERSHIP_PAGE);
+      if(cursor) q=q.startAfter(cursor);
+      const snap=await q.get();
+      addSnap(snap);
+      if(snap.size<MEMBERSHIP_PAGE){ scannedAll=true; break; }
+      cursor=snap.docs[snap.docs.length-1];
+      if(out.length>=MEMBERSHIP_MAX){ scannedAll=false; break; }
+    }
+  }catch(e){
+    console.warn('[baithak] membership id-order scan failed', e?.message||e);
+    try{
+      const snap=await base.limit(MEMBERSHIP_MAX).get();
+      addSnap(snap);
+      scannedAll=snap.size<MEMBERSHIP_MAX;
+    }catch(e2){
+      console.warn('[baithak] membership fallback failed', e2?.message||e2);
+      throw e2;
+    }
+  }
+
+  try{
+    const created=await base.orderBy('createdAt','desc').limit(100).get();
+    addSnap(created);
+  }catch(e){}
+
+  return {items:out, scannedAll};
 }
 
 function mapChatDoc(raw){
@@ -519,17 +643,21 @@ function mapChatDoc(raw){
 }
 
 /**
- * Inbox load: recency query (participants + updatedAt desc) PLUS a membership
- * fallback. Firestore OMITs docs that lack the orderBy field — old groups/DMs
- * with only createdAt/ts/lastMessageAt never appear in the recency page.
- * Do not treat an empty updatedAt page as “no chats”. Never seed SAMPLE_CHATS.
+ * Inbox load: recency (participants + updatedAt) is FAST but Firestore OMITs
+ * any doc missing `updatedAt`. Always union a membership scan (no updatedAt
+ * order) plus a device cache so old groups/DMs cannot disappear — now or later.
+ * Never treat an empty recency page as “no chats”. Never seed SAMPLE_CHATS.
  */
 async function loadBaithakChatsPage({reset=false}={}){
   if(!db||!currentUser||typeof fetchFirestorePage!=='function') return {loaded:0};
-  if(baithakChatLoading) return {loaded:0};
+  if(baithakChatLoading){
+    if(reset) baithakChatLoadQueued={reset:true};
+    return {loaded:0,queued:true};
+  }
   if(!reset&&!baithakChatHasMore) return {loaded:0};
   baithakChatLoading=true;
   const prevLive=(baithakChats||[]).filter((c)=>!isLiveSampleChat(c));
+  const cached=reset?readInboxCache():[];
   const openChat=typeof window!=='undefined'?window.currentOpenChat:null;
   const keepOpen=(list)=>{
     const openId=openChat&&(openChat.firestoreId||openChat.id);
@@ -537,20 +665,20 @@ async function loadBaithakChatsPage({reset=false}={}){
     if((list||[]).some(c=>(c.firestoreId||c.id)===openId)) return list;
     return [openChat, ...(list||[])];
   };
-  const applyList=(incoming)=>{
+  const applyList=(incoming, {replaceCache=false}={})=>{
     const withPrev=mergeBaithakInbox(prevLive, incoming);
     baithakChats=pinSelfChat(keepOpen(withPrev));
+    if(replaceCache) writeInboxCache(baithakChats);
   };
   let orderedError=null;
   let page={items:[],lastDoc:null,hasMore:false};
   try{
     if(reset){ baithakChatCursor=null; baithakChatHasMore=true; }
-    // Requires composite index: participants ARRAY + updatedAt DESC
     page=await fetchFirestorePage({
       queryBase: db.collection('chats').where('participants','array-contains',currentUser.uid),
       orderField:'updatedAt',
       direction:'desc',
-      pageSize: 15,
+      pageSize: 40,
       cursor: reset?null:baithakChatCursor,
       excludeDeleted:false,
     });
@@ -559,42 +687,53 @@ async function loadBaithakChatsPage({reset=false}={}){
     console.warn('[baithak] chat recency page failed', e?.message||e);
   }
 
-  let fallbackItems=[];
-  let fallbackError=null;
+  let membershipItems=[];
+  let membershipError=null;
+  let scannedAll=false;
   if(reset){
     try{
-      const snap=await db.collection('chats').where('participants','array-contains',currentUser.uid).limit(80).get();
-      fallbackItems=snap.docs.map((d)=>({id:d.id,...(d.data()||{})}));
+      const mem=await fetchParticipatingChats();
+      membershipItems=mem.items||[];
+      scannedAll=!!mem.scannedAll;
     }catch(e2){
-      fallbackError=e2;
-      console.warn('[baithak] chat membership fallback failed', e2?.message||e2);
+      membershipError=e2;
     }
   }
 
-  if(orderedError&&fallbackError){
+  if(orderedError&&membershipError){
     baithakChatLoadError=true;
-    baithakChatLoading=false;
     if(typeof showToast==='function') showToast('Couldn’t refresh chats.');
-    baithakChats=pinSelfChat(keepOpen(prevLive.length?prevLive:(openChat&&!isLiveSampleChat(openChat)?[openChat]:[])));
+    const recovered=mergeBaithakInbox(prevLive, cached);
+    baithakChats=pinSelfChat(keepOpen(recovered.length?recovered:(openChat&&!isLiveSampleChat(openChat)?[openChat]:[])));
+    baithakChatLoading=false;
+    const queuedFail=baithakChatLoadQueued;
+    baithakChatLoadQueued=null;
+    if(queuedFail) setTimeout(()=>{ loadBaithakChatsPage(queuedFail); }, 0);
     return {loaded:0,error:orderedError};
   }
 
   try{
     const orderedMapped=(page.items||[]).map(mapChatDoc);
-    const fallbackMapped=fallbackItems.map(mapChatDoc);
-    if(reset&&fallbackMapped.length>orderedMapped.length&&!baithakInboxGapWarned){
+    const membershipMapped=membershipItems.map(mapChatDoc);
+    if(reset&&membershipMapped.length>orderedMapped.length&&!baithakInboxGapWarned){
       baithakInboxGapWarned=true;
       console.warn('[baithak] inbox updatedAt page omitted chats', {
         ordered: orderedMapped.length,
-        membership: fallbackMapped.length,
+        membership: membershipMapped.length,
       });
     }
-    const incoming=reset?orderedMapped.concat(fallbackMapped):orderedMapped;
-    await hydrateInboxPeers(incoming);
-    if(typeof enrichUsersWithProfileType==='function') await enrichUsersWithProfileType(incoming);
+    let incoming=reset?mergeBaithakInbox(orderedMapped, membershipMapped):orderedMapped;
+    if(reset&&!scannedAll) incoming=mergeBaithakInbox(cached, incoming);
+    applyList(incoming, {replaceCache:reset&&(scannedAll||incoming.length>=cached.length)});
+    try{
+      await hydrateInboxPeers(incoming);
+      if(typeof enrichUsersWithProfileType==='function') await enrichUsersWithProfileType(incoming);
+      applyList(incoming, {replaceCache:true});
+    }catch(hydrateErr){
+      console.warn('[baithak] inbox hydrate', hydrateErr?.message||hydrateErr);
+    }
     baithakChatLiveMode=true;
     baithakChatLoadError=false;
-    applyList(incoming);
     const needBackfill=[];
     const seenBackfill=new Set();
     incoming.forEach((c)=>{
@@ -602,25 +741,36 @@ async function loadBaithakChatsPage({reset=false}={}){
       const id=c.firestoreId||c.id;
       if(!id||seenBackfill.has(id)) return;
       seenBackfill.add(id);
-      if(needBackfill.length<12) needBackfill.push(c);
+      if(needBackfill.length<40) needBackfill.push(c);
     });
     needBackfill.forEach((c)=>{ ensureChatUpdatedAt(c); });
     if(!orderedError){
       baithakChatCursor=page.lastDoc;
       baithakChatHasMore=!!page.hasMore;
     } else {
-      baithakChatHasMore=false;
-      if(typeof showToast==='function') showToast('Couldn’t refresh chats.');
+      baithakChatHasMore=!scannedAll;
+    }
+    if(typeof setBaithakSection==='function'){
+      try{ setBaithakSection(typeof window.baithakSection==='function'?window.baithakSection():baithakSection); }
+      catch(e){ if(typeof renderChatList==='function') renderChatList(baithakChats); }
+    }else if(typeof renderChatList==='function'){
+      renderChatList(baithakChats);
     }
     return {loaded:incoming.length};
   }catch(e){
     console.warn('[baithak] chat page failed', e?.message||e);
     baithakChatLoadError=true;
     if(typeof showToast==='function') showToast('Couldn’t refresh chats.');
-    baithakChats=pinSelfChat(keepOpen(prevLive.length?prevLive:(openChat&&!isLiveSampleChat(openChat)?[openChat]:[])));
+    const recovered=mergeBaithakInbox(prevLive, cached);
+    baithakChats=pinSelfChat(keepOpen(recovered.length?recovered:(openChat&&!isLiveSampleChat(openChat)?[openChat]:[])));
     return {loaded:0,error:e};
   }finally{
     baithakChatLoading=false;
+    const queued=baithakChatLoadQueued;
+    baithakChatLoadQueued=null;
+    if(queued){
+      setTimeout(()=>{ loadBaithakChatsPage(queued); }, 0);
+    }
   }
 }
 
@@ -701,6 +851,8 @@ window.baithakSection = () => baithakSection;
 window.hydrateInboxPeers = hydrateInboxPeers;
 window.chatAvatarMarkup = chatAvatarMarkup;
 window.ensureChatUpdatedAt = ensureChatUpdatedAt;
+window.rememberInboxChat = rememberInboxChat;
+window.forgetInboxChat = forgetInboxChat;
 window.mergeBaithakInbox = mergeBaithakInbox;
 window.mapChatDoc = mapChatDoc;
 window.chatRecencyMs = chatRecencyMs;

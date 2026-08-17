@@ -72,4 +72,23 @@ function assert(cond, msg) {
   assert(merged.length === 1, 'empty updatedAt page is not “no chats” when fallback has docs');
 }
 
+{
+  const recency = Array.from({ length: 15 }, (_, i) => ({
+    id: 'new_' + i,
+    firestoreId: 'new_' + i,
+    type: 'dm',
+    updatedAt: 10000 + i,
+    ts: 10000 + i,
+  }));
+  const oldGroups = [
+    { id: 'old_grp_a', firestoreId: 'old_grp_a', type: 'group', createdAt: 10, ts: 10 },
+    { id: 'old_grp_b', firestoreId: 'old_grp_b', type: 'group', lastMessageAt: 20, ts: 20 },
+  ];
+  const cached = [{ id: 'cached_dm', firestoreId: 'cached_dm', type: 'dm', ts: 5 }];
+  const union = mergeBaithakInbox(mergeBaithakInbox(recency, oldGroups), cached);
+  assert(union.length === 18, 'recency + membership + cache keeps every live id');
+  assert(union.some((c) => c.id === 'old_grp_a'), 'old group A survives recency-only page');
+  assert(union.some((c) => c.id === 'cached_dm'), 'device cache fills gaps when scan is incomplete');
+}
+
 console.log('baithak inbox tests ok');
