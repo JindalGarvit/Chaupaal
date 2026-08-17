@@ -8,15 +8,19 @@
 
   const QUEUE_KEY = 'chaupaal_client_error_queue';
   const SESSION_KEY = 'chaupaal_client_error_session';
+  const SNOOZE_KEY = 'chaupaal_recovery_snooze';
   const MAX_QUEUE = 24;
   const MAX_WRITES_PER_SESSION = 12;
   const DEDUP_WINDOW_MS = 60 * 1000;
   const MIN_REPORT_GAP_MS = 2500;
   const STACK_MAX = 1200;
+  /** After tap, no chip at all for this long (storms). Same signature stays snoozed for the session. */
+  const RECOVERY_GLOBAL_COOLDOWN_MS = 12 * 60 * 1000;
 
   let lastReportAt = 0;
   let flushing = false;
   let recoveryVisible = false;
+  let lastRecoverySignature = '';
   /** @type {Map<string, { count: number, lastAt: number }>} */
   const dedupMap = new Map();
 
@@ -80,6 +84,172 @@
       .replace(/\?[^:\s]+/g, '')
       .slice(0, 160);
     return [String(feature || ''), String(message || '').slice(0, 160), loc].join('::');
+  }
+
+  function isNoiseClientError(message, stack, feature) {
+    const blob = [message, stack, feature].map((x) => String(x || '')).join(' ').toLowerCase();
+    if (!blob.trim()) return false;
+    if (/resizeobserver/.test(blob)) return true;
+    if (/^script error\.?$/.test(String(message || '').trim().toLowerCase())) return true;
+    if (/\bscript error\b/.test(blob) && blob.length < 40) return true;
+    if (/\baborterror\b|\babort(ed|ing)?\b|\bcancel(led)?\b/.test(blob)) return true;
+    if (/\bfailed to fetch\b|\bnetworkerror\b|\bload failed\b|\boffline\b/.test(blob)) return true;
+    if (/\b429\b|\btoo many requests\b/.test(blob)) return true;
+    if (/permission-denied|missing or insufficient permissions|permission_denied/.test(blob)) return true;
+    if (/safari-web-extension|chrome-extension|moz-extension|webkit-masked-url/.test(blob)) return true;
+    if (/err_blocked_by_client|err_network_changed|err_internet_disconnected/.test(blob)) return true;
+    if (/the operation was aborted|the user aborted/.test(blob)) return true;
+    if (/cdn|optional/.test(blob) && /load failed|net::/.test(blob)) return true;
+    return false;
+  }
+
+  function activeTabId() {
+    return document.querySelector('.bottom-tabs .tab-btn.active, .bottom-tabs .tab.active')?.dataset?.tab || '';
+  }
+
+  function activeTabPanel() {
+    const tab = activeTabId();
+    return tab ? document.getElementById('panel-' + tab) : null;
+  }
+
+  function isActiveTabBlank() {
+    const panel = activeTabPanel();
+    if (!panel) return !document.querySelector('.device');
+    return panel.childElementCount === 0;
+  }
+
+  function isNavDead() {
+    // Keyboard-open intentionally collapses the tab bar — that is not a dead nav.
+    if (document.documentElement.classList.contains('kb-open')) return false;
+    const tabs = document.querySelector('.bottom-tabs');
+    if (!tabs) return true;
+    try {
+      const st = window.getComputedStyle(tabs);
+      if (st.display === 'none' || st.visibility === 'hidden' || st.pointerEvents === 'none') return true;
+    } catch (e) {}
+    return false;
+  }
+
+  /** True when the visible shell is actually unusable — not every thrown Error. */
+  function isShellUnusable() {
+    try {
+      if (!document.querySelector('.device')) return true;
+      if (document.documentElement.classList.contains('kb-open')) {
+        const el = document.activeElement;
+        const typing =
+          el &&
+          (el.tagName === 'INPUT' ||
+            el.tagName === 'TEXTAREA' ||
+            el.tagName === 'SELECT' ||
+            el.isContentEditable);
+        if (!typing) return true;
+      } else if (isNavDead()) {
+        return true;
+      }
+      if (isActiveTabBlank()) return true;
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function readRecoverySnooze() {
+    try {
+      const raw = sessionStorage.getItem(SNOOZE_KEY);
+      const data = raw ? JSON.parse(raw) : null;
+      if (data && typeof data === 'object') {
+        return {
+          until: Number(data.until) || 0,
+          signatures: Array.isArray(data.signatures) ? data.signatures.map(String) : [],
+          dismissedAt: Number(data.dismissedAt) || 0,
+        };
+      }
+    } catch (e) {}
+    return { until: 0, signatures: [], dismissedAt: 0 };
+  }
+
+  function writeRecoverySnooze(data) {
+    try {
+      sessionStorage.setItem(
+        SNOOZE_KEY,
+        JSON.stringify({
+          until: Number(data.until) || 0,
+          signatures: (data.signatures || []).slice(-40),
+          dismissedAt: Number(data.dismissedAt) || Date.now(),
+        })
+      );
+    } catch (e) {}
+  }
+
+  function isRecoverySnoozed(signature) {
+    const s = readRecoverySnooze();
+    const sig = String(signature || '');
+    if (sig && s.signatures.includes(sig)) return true;
+    if (s.until && Date.now() < s.until) return true;
+    return false;
+  }
+
+  function snoozeRecovery(signature) {
+    const s = readRecoverySnooze();
+    const sig = String(signature || lastRecoverySignature || '');
+    const signatures = s.signatures.slice();
+    if (sig && !signatures.includes(sig)) signatures.push(sig);
+    writeRecoverySnooze({
+      until: Date.now() + RECOVERY_GLOBAL_COOLDOWN_MS,
+      signatures,
+      dismissedAt: Date.now(),
+    });
+  }
+
+  function resolveFeatureHost(name) {
+    const n = String(name || '');
+    if (n.includes('duniya') || n.includes('lehar')) {
+      return (
+        document.getElementById('duniyaFeed') ||
+        document.getElementById('leharFeed') ||
+        document.getElementById('panel-duniya')
+      );
+    }
+    if (n.includes('peepal')) {
+      return document.getElementById('peepalFeed') || document.getElementById('panel-peepal');
+    }
+    if (n.includes('akhbaar')) return document.getElementById('panel-akhbaar');
+    if (n.includes('dangal')) {
+      return document.getElementById('dangalScreen') || document.getElementById('panel-dangal');
+    }
+    if (n.includes('baithak') || n.includes('chat')) {
+      if (document.getElementById('activeChatScreen')) return document.getElementById('activeChatScreen');
+      return document.getElementById('chatList') || document.getElementById('panel-baithak');
+    }
+    if (n.includes('search')) {
+      return document.querySelector('.universal-search, #searchOverlay, [data-universal-search]');
+    }
+    if (n.includes('mehfil')) {
+      return document.querySelector('.mehfil-overlay, #mehfilOverlay, [data-mehfil-room]');
+    }
+    return activeTabPanel();
+  }
+
+  function refreshActiveSurface() {
+    if (document.getElementById('activeChatScreen')) return;
+    const tab = activeTabId() || detectScreen();
+    const known = ['peepal', 'duniya', 'baithak', 'akhbaar', 'dangal'];
+    try {
+      if (typeof refreshTabContent === 'function' && known.includes(tab)) {
+        Promise.resolve(refreshTabContent(tab)).catch(() => {});
+        return;
+      }
+    } catch (e) {}
+    if (tab === 'baithak' && typeof loadBaithakChatsPage === 'function') {
+      Promise.resolve(loadBaithakChatsPage({ reset: true }))
+        .then(() => {
+          if (typeof setBaithakSection === 'function') setBaithakSection('sabha');
+          else if (typeof renderChatList === 'function' && typeof baithakChats !== 'undefined') {
+            renderChatList(baithakChats);
+          }
+        })
+        .catch(() => {});
+    }
   }
 
   function clearShellGlitches(reason) {
@@ -151,15 +321,41 @@
     recoveryVisible = false;
   }
 
+  function onRecoveryChipTap() {
+    const chip = document.getElementById('cpRecoveryChip');
+    const sig = (chip && chip.dataset.signature) || lastRecoverySignature || 'generic';
+    hideRecoveryChip();
+    snoozeRecovery(sig);
+    clearShellGlitches('recovery-chip');
+    try {
+      if (typeof recoverNavStack === 'function') recoverNavStack('recovery-chip');
+    } catch (e) {}
+    try {
+      if (typeof restoreAppShell === 'function') restoreAppShell('recovery-chip');
+    } catch (e) {}
+    refreshActiveSurface();
+    if (typeof showToast === 'function') {
+      showToast('You’re back — try that again');
+    }
+    try {
+      if (isActiveTabBlank() && isNavDead()) location.reload();
+    } catch (e) {}
+  }
+
   /**
    * Narrow recovery affordance — not a full-page takeover.
-   * Tap continues: clear shell glitches, scrub orphan nav, dismiss chip.
+   * One chip. After a successful tap, the same signature stays snoozed for the session.
    */
   function showRecoveryChip(opts) {
     try {
+      const signature = String(opts?.signature || lastRecoverySignature || 'generic');
+      const existing = document.getElementById('cpRecoveryChip');
+      if (recoveryVisible && existing && !existing.hidden) return;
+      if (isRecoverySnoozed(signature)) return;
+      lastRecoverySignature = signature;
       ensureRecoveryStyles();
       const device = document.querySelector('.device') || document.body;
-      let chip = document.getElementById('cpRecoveryChip');
+      let chip = existing;
       if (!chip) {
         chip = document.createElement('button');
         chip.type = 'button';
@@ -168,22 +364,10 @@
         chip.dataset.navIgnore = '1';
         chip.dataset.overlayOrphan = '1';
         chip.innerHTML = '<span><strong>Something went wrong</strong> — tap to continue</span>';
-        chip.addEventListener('click', () => {
-          hideRecoveryChip();
-          clearShellGlitches('recovery-chip');
-          try {
-            if (typeof recoverNavStack === 'function') recoverNavStack('recovery-chip');
-          } catch (e) {}
-          if (typeof showToast === 'function') {
-            showToast('You’re back — try that again');
-          }
-        });
+        chip.addEventListener('click', onRecoveryChipTap);
         device.appendChild(chip);
       }
-      const msg = opts?.message ? String(opts.message).slice(0, 80) : '';
-      chip.querySelector('span').innerHTML = msg
-        ? `<strong>Something went wrong</strong> — ${msg.replace(/</g, '&lt;')} · tap to continue`
-        : '<strong>Something went wrong</strong> — tap to continue';
+      chip.dataset.signature = signature;
       chip.hidden = false;
       recoveryVisible = true;
     } catch (e) {}
@@ -320,16 +504,21 @@
       const stack = String(opts?.stack || '').slice(0, STACK_MAX);
       const screen = String(opts?.screen || detectScreen()).slice(0, 80);
       const fatal = !!opts?.fatal;
+      const sig = errorSignature(message, stack, feature);
 
       console.error('[chaupaal]', feature, message, stack || '');
 
+      const offerChip = () => {
+        if (!fatal) return;
+        clearShellGlitches('fatal');
+        showRecoveryChip({ signature: sig });
+      };
+
       const session = readSessionMeta();
       if ((session.writes || 0) >= MAX_WRITES_PER_SESSION && !fatal) {
-        if (fatal) showRecoveryChip({ message: 'tap to continue' });
         return;
       }
 
-      const sig = errorSignature(message, stack, feature);
       const now = Date.now();
       const prev = dedupMap.get(sig);
       if (prev && now - prev.lastAt < DEDUP_WINDOW_MS) {
@@ -349,6 +538,7 @@
           count: 1,
           fatal,
         });
+        offerChip();
         return;
       }
       dedupMap.set(sig, { count: 1, lastAt: now });
@@ -392,11 +582,28 @@
         });
       }
 
-      if (fatal) {
-        clearShellGlitches('fatal');
-        showRecoveryChip({ message: 'tap to continue' });
-      }
+      offerChip();
     } catch (e) {}
+  }
+
+  function recoverFeatureFailure(name, err) {
+    const message = err?.message || String(err);
+    const stack = err?.stack || '';
+    reportClientError({
+      feature: name,
+      message,
+      stack,
+      fatal: false,
+    });
+    clearShellGlitches(name);
+    try {
+      if (typeof recoverNavStack === 'function') recoverNavStack(name);
+    } catch (e) {}
+    const host = resolveFeatureHost(name);
+    if (host) showFeatureError(host);
+    if (isShellUnusable() || isActiveTabBlank()) {
+      showRecoveryChip({ signature: errorSignature(message, stack, name) });
+    }
   }
 
   /**
@@ -411,31 +618,13 @@
         const result = fn.apply(this, args);
         if (result && typeof result.then === 'function') {
           return result.catch((e) => {
-            reportClientError({
-              feature: name,
-              message: e?.message || String(e),
-              stack: e?.stack || '',
-            });
-            clearShellGlitches(name);
-            try {
-              if (typeof recoverNavStack === 'function') recoverNavStack(name);
-            } catch (err) {}
-            showRecoveryChip({ message: 'tap to continue' });
+            recoverFeatureFailure(name, e);
             return null;
           });
         }
         return result;
       } catch (e) {
-        reportClientError({
-          feature: name,
-          message: e?.message || String(e),
-          stack: e?.stack || '',
-        });
-        clearShellGlitches(name);
-        try {
-          if (typeof recoverNavStack === 'function') recoverNavStack(name);
-        } catch (err) {}
-        showRecoveryChip({ message: 'tap to continue' });
+        recoverFeatureFailure(name, e);
         return null;
       }
     };
@@ -461,27 +650,44 @@
     } catch (e) {}
   }
 
-  window.addEventListener('error', (ev) => {
+  function handleUncaught(feature, message, stack) {
+    if (isNoiseClientError(message, stack, feature)) {
+      reportClientError({
+        feature,
+        message,
+        stack,
+        fatal: false,
+      });
+      return;
+    }
+    const fatal = isShellUnusable();
+    const sig = errorSignature(message, stack, feature);
     reportClientError({
-      feature: 'window.onerror',
-      message: ev?.message || 'script error',
-      stack: ev?.error?.stack || `${ev?.filename || ''}:${ev?.lineno || ''}`,
-      fatal: true,
+      feature,
+      message,
+      stack,
+      fatal,
     });
-    clearShellGlitches('window.onerror');
-    showRecoveryChip({ message: 'tap to continue' });
+    clearShellGlitches(feature);
+    showRecoveryChip({ signature: sig });
+  }
+
+  window.addEventListener('error', (ev) => {
+    handleUncaught(
+      'window.onerror',
+      ev?.message || 'script error',
+      ev?.error?.stack || `${ev?.filename || ''}:${ev?.lineno || ''}`
+    );
   });
 
   window.addEventListener('unhandledrejection', (ev) => {
     const reason = ev?.reason;
-    reportClientError({
-      feature: 'unhandledrejection',
-      message: reason?.message || String(reason || 'rejection'),
-      stack: reason?.stack || '',
-      fatal: true,
-    });
-    clearShellGlitches('unhandledrejection');
-    showRecoveryChip({ message: 'tap to continue' });
+    const extra = reason?.code ? String(reason.code) : '';
+    handleUncaught(
+      'unhandledrejection',
+      [reason?.message || String(reason || 'rejection'), extra].filter(Boolean).join(' '),
+      reason?.stack || ''
+    );
   });
 
   window.addEventListener('pageshow', () => clearShellGlitches('pageshow'));
@@ -501,7 +707,9 @@
       flushErrorQueue();
     }
   }, 15000);
-  setTimeout(() => clearInterval(flushTimer), 10 * 60 * 1000);
+  const flushCapTimer = setTimeout(() => clearInterval(flushTimer), 10 * 60 * 1000);
+  if (typeof flushTimer.unref === 'function') flushTimer.unref();
+  if (typeof flushCapTimer.unref === 'function') flushCapTimer.unref();
 
   window.clearShellGlitches = clearShellGlitches;
   window.reportClientError = reportClientError;
@@ -510,4 +718,16 @@
   window.showRecoveryChip = showRecoveryChip;
   window.hideRecoveryChip = hideRecoveryChip;
   window.showFeatureError = showFeatureError;
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      isNoiseClientError,
+      isRecoverySnoozed,
+      snoozeRecovery,
+      readRecoverySnooze,
+      errorSignature,
+      isShellUnusable,
+      isNavDead,
+    };
+  }
 })();

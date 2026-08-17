@@ -82,8 +82,8 @@ Any message, attachment, story card, or rich bubble type must **render identical
 ## 4b. Runtime resilience & daily error summary
 
 - `public/src/js/core/runtime-guard.js` owns shell recovery (`clearShellGlitches`), scoped recovery chip (`showRecoveryChip`), and client error reporting.
-- Prefer `safeFeature(name, fn)` for risky entrypoints. On failure: report → clear keyboard/nav glitches → recovery chip → optional `recoverNavStack`.
-- Global `window.onerror` / `unhandledrejection` always **console.error** and may show a small “tap to continue” chip — never a full-page takeover that hides the real error.
+- Prefer `safeFeature(name, fn)` for risky entrypoints. On failure: report (`fatal:false`) → clear keyboard/nav glitches → inline `showFeatureError` on the feature host → `recoverNavStack`. Global recovery chip only if the current tab is still blank after recover.
+- Global `window.onerror` / `unhandledrejection` always **console.error**. The “Something went wrong — tap to continue” chip is one-shot: skip noise (ResizeObserver, abort, offline, permission-denied, …), never stack, snooze the signature for the session after tap. `fatal:true` only when the shell is unusable. Never a full-page takeover that hides the real error.
 - Client errors: session write-cap + client dedup → `clientErrorCounters/{day_hash}` (increment) and occasional `clientErrorReports` samples. No chat/user PII fields.
 - Admin glance view: `/admin/client-errors.html` via `GET /api/admin-feedback?view=errors` (admin claim).
 - Surfaces tagged as `pwa` | `mobile_web` | `desktop`; screens coarse (`chat`, `peepal`, …).
