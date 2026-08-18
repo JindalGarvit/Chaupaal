@@ -1,0 +1,19 @@
+---
+description: Stay at ≤12 Vercel Hobby serverless functions; never add a 13th api/*.js
+alwaysApply: true
+---
+
+# Vercel Hobby function cap (Chaupaal)
+
+Production is on the **Hobby** plan: **max 12 serverless functions**. Each file under `api/*.js` counts as one. A rewrite in `vercel.json` does **not** stop Vercel from counting the source file.
+
+## Hard rule
+
+- Keep **`api/*.js` at ≤12**. Count files before every production push.
+- **Do not add a new `api/*.js` file.** Fold new handlers into an existing route (`api/stories.js`, `api/relationships.js`, `api/media-config.js`, …) and put shared logic in `server-lib/`.
+- If the client must keep an old path, add a `vercel.json` rewrite **and delete** the extra `api/*.js` (example: `/api/duniya-posts` → `/api/stories`; handlers live in `server-lib/duniya-posts.js`).
+- Do not “upgrade to Pro” as the default fix. Do not raise `maxDuration` on `refresh-category-cache` / `chaupaal-scheduler` unless the inspect error is specifically duration/Hobby.
+
+## Symptom
+
+Build succeeds (`Build Completed in /vercel/output`) then **Error** at `Deploying outputs…` with no test failure — that is usually the 13th function, not CI.

@@ -110,7 +110,11 @@ Point future Cursor sessions at this section before adding a new provider, picke
 
 ---
 
-## 5. Payments contract
+## 5. Vercel Hobby function cap
+
+Production is Hobby: **≤12 serverless functions**. Each `api/*.js` file counts; a `vercel.json` rewrite does not un-count a leftover file. Do not add a new `api/*.js` — fold into an existing route and `server-lib/`. See `.cursor/rules/vercel-hobby.mdc`.
+
+## 5b. Payments contract
 
 All paid features must go through `server-lib/payments.js` and write to `chaupaalTransactions` with a `purpose` tag (`boost_post`, `premium_subscription`, `companion_gift`, …). Do not invent per-feature payment ledgers. Gate live charging with `PAYMENTS_ENABLED` (default off). Never simulate a successful charge while the kill switch is off.
 
