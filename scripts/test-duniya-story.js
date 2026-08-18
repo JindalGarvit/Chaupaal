@@ -1,6 +1,8 @@
 /**
  * Duniya story overlay sanitizers.
  */
+const fs = require('fs');
+const path = require('path');
 const {
   cleanOverlays,
   cleanInteractive,
@@ -57,6 +59,18 @@ function assert(cond, msg) {
     { poll: { options: ['A', 'B'] } }
   );
   assert(tallies.poll[0] === 2 && tallies.poll[1] === 1, 'poll tallies');
+}
+
+{
+  const html = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
+  assert(html.includes('/src/js/features/duniya-story.js'), 'index.html loads duniya-story.js');
+  assert(html.includes('/src/js/features/duniya-story-editor.js'), 'index.html loads story editor');
+  assert(html.includes('/src/js/features/duniya-story-viewer.js'), 'index.html loads story viewer');
+  assert(html.includes('/src/styles/duniya-story.css'), 'index.html loads duniya-story.css');
+  assert(
+    html.indexOf('/src/js/features/duniya-story.js') < html.indexOf('/src/js/features/duniya.js'),
+    'story modules load before duniya.js'
+  );
 }
 
 console.log('duniya story overlay tests ok');

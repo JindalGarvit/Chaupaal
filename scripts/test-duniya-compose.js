@@ -12,6 +12,8 @@ const {
   validateCreate,
   mentionedFromCaption,
 } = require('../server-lib/duniya-post-payload');
+const fs = require('fs');
+const path = require('path');
 const { isDuniyaPostRequest } = require('../server-lib/duniya-posts');
 
 function assert(cond, msg) {
@@ -75,6 +77,12 @@ function assert(cond, msg) {
   assert(isDuniyaPostRequest({}, { action: 'collab', postId: 'p1' }), 'collab is a post action');
   assert(isDuniyaPostRequest({}, { action: 'create', slides: [], caption: 'hi' }), 'post create has slides/caption, no destination');
   assert(!isDuniyaPostRequest({}, { action: 'create', destination: 'baithak', text: 'split' }), 'story create stays on stories');
+}
+
+{
+  const html = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
+  assert(html.includes('/src/js/features/duniya-compose.js'), 'index.html loads duniya-compose.js');
+  assert(html.includes('/src/styles/duniya-compose.css'), 'index.html loads duniya-compose.css');
 }
 
 console.log('duniya compose payload tests ok');
