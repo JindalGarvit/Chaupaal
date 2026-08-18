@@ -3,10 +3,10 @@
  * Collection stays `duniya`. Side-effects (mentions, tags, collab, first comment)
  * run here so they are not a trust-the-client fanout.
  */
-const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
-const { requireUser, initAdmin } = require('../server-lib/auth');
-const { checkActionRateLimit } = require('../server-lib/rate-limit');
-const { upsertNotification, resolveActor } = require('../server-lib/notifications');
+const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('./http');
+const { requireUser, initAdmin } = require('./auth');
+const { checkActionRateLimit } = require('./rate-limit');
+const { upsertNotification, resolveActor } = require('./notifications');
 const {
   cleanText,
   cleanUid,
@@ -20,10 +20,37 @@ const {
   mentionedFromCaption,
   validateCreate,
   serializePost,
-} = require('../server-lib/duniya-post-payload');
+} = require('./duniya-post-payload');
 
 const COLLECTION = 'duniya';
 const MAX_COLLAB_INVITES = 3;
+
+function isDuniyaPostRequest(req, body) {
+  const hint = [
+    req?.url,
+    req?.originalUrl,
+    req?.headers?.['x-invoke-path'],
+    req?.headers?.['x-matched-path'],
+    req?.headers?.['x-forwarded-uri'],
+    req?.headers?.['x-vercel-original-path'],
+    req?.headers?.['x-rewrite-url'],
+  ]
+    .map((v) => String(v || '').toLowerCase())
+    .join(' ');
+  if (hint.includes('duniya-posts')) return true;
+  const action = String(body?.action || '');
+  if (action === 'collab' || action === 'send_post') return true;
+  if (action === 'update' && body?.postId) return true;
+  if (action === 'get' && body?.postId && !body?.storyId && !body?.destination) return true;
+  if (
+    action === 'create' &&
+    !body?.destination &&
+    (Array.isArray(body?.slides) || 'caption' in (body || {}) || body?.saveOnly)
+  ) {
+    return true;
+  }
+  return false;
+}
 
 function err(code, message) {
   const e = new Error(message || code);
@@ -474,40 +501,28 @@ async function sendPostCard(db, admin, uid, body) {
   return { sent, skipped };
 }
 
-module.exports = async function handler(req, res) {
-  if (!requireMethod(req, res, 'POST')) return;
-  const user = await requireUser(req, res, { allowWeak: false });
-  if (!user) return;
-  const admin = initAdmin();
-  if (!admin) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Firebase Admin not configured');
-  let body;
-  try {
-    body = parseJsonBody(req);
-  } catch {
-    return sendError(res, 400, 'INVALID_JSON', 'Invalid JSON body');
-  }
-  const db = admin.firestore();
+async function dispatchDuniyaPost(res, { db, admin, uid, body }) {
   const action = String(body.action || '');
   try {
     if (action === 'create') {
-      const rate = await checkActionRateLimit(user.uid, 'post');
+      const rate = await checkActionRateLimit(uid, 'post');
       if (!rate.ok) return sendError(res, 429, 'RATE_LIMITED', 'Too many posts. Try again shortly.');
-      return sendSuccess(res, { post: await createPost(db, admin, user.uid, body) });
+      return sendSuccess(res, { post: await createPost(db, admin, uid, body) });
     }
     if (action === 'update') {
-      return sendSuccess(res, { post: await updatePost(db, admin, user.uid, body) });
+      return sendSuccess(res, { post: await updatePost(db, admin, uid, body) });
     }
     if (action === 'collab') {
-      return sendSuccess(res, { post: await collabAction(db, admin, user.uid, body) });
+      return sendSuccess(res, { post: await collabAction(db, admin, uid, body) });
     }
     if (action === 'send_post') {
-      const rate = await checkActionRateLimit(user.uid, 'message');
+      const rate = await checkActionRateLimit(uid, 'message');
       if (!rate.ok) return sendError(res, 429, 'RATE_LIMITED', 'Slow down a little.');
-      return sendSuccess(res, await sendPostCard(db, admin, user.uid, body));
+      return sendSuccess(res, await sendPostCard(db, admin, uid, body));
     }
     if (action === 'get') {
       const snap = await getPost(db, body.postId);
-      return sendSuccess(res, { post: serializePost(snap, user.uid) });
+      return sendSuccess(res, { post: serializePost(snap, uid) });
     }
     return sendError(res, 400, 'INVALID_ACTION', 'Unknown action');
   } catch (e) {
@@ -522,4 +537,25 @@ module.exports = async function handler(req, res) {
             : 500;
     return sendError(res, status, code, e.message || 'Request failed');
   }
-};
+}
+
+async function handler(req, res) {
+  if (!requireMethod(req, res, 'POST')) return;
+  const user = await requireUser(req, res, { allowWeak: false });
+  if (!user) return;
+  const admin = initAdmin();
+  if (!admin) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Firebase Admin not configured');
+  let body;
+  try {
+    body = parseJsonBody(req);
+  } catch {
+    return sendError(res, 400, 'INVALID_JSON', 'Invalid JSON body');
+  }
+  return dispatchDuniyaPost(res, { db: admin.firestore(), admin, uid: user.uid, body });
+}
+
+handler.isDuniyaPostRequest = isDuniyaPostRequest;
+handler.dispatchDuniyaPost = dispatchDuniyaPost;
+module.exports = handler;
+module.exports.isDuniyaPostRequest = isDuniyaPostRequest;
+module.exports.dispatchDuniyaPost = dispatchDuniyaPost;

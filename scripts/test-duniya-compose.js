@@ -12,6 +12,7 @@ const {
   validateCreate,
   mentionedFromCaption,
 } = require('../server-lib/duniya-post-payload');
+const { isDuniyaPostRequest } = require('../server-lib/duniya-posts');
 
 function assert(cond, msg) {
   if (!cond) throw new Error(msg || 'assert failed');
@@ -66,6 +67,14 @@ function assert(cond, msg) {
   assert(tags.includes('chai') && tags.includes('tea'), 'hashtags from list+caption, lowercased');
   assert(mentionedFromCaption('hi @Riya and @dev_1')[0] === 'riya', 'mention handles parsed');
   assert(cleanUidList(['ok', 'bad uid', 'ok'], 10).length === 1, 'uid list unique + cleaned');
+}
+
+{
+  const req = { url: '/api/stories', headers: { 'x-forwarded-uri': '/api/duniya-posts' } };
+  assert(isDuniyaPostRequest(req, { action: 'create' }), 'rewrite path still routes to post handler');
+  assert(isDuniyaPostRequest({}, { action: 'collab', postId: 'p1' }), 'collab is a post action');
+  assert(isDuniyaPostRequest({}, { action: 'create', slides: [], caption: 'hi' }), 'post create has slides/caption, no destination');
+  assert(!isDuniyaPostRequest({}, { action: 'create', destination: 'baithak', text: 'split' }), 'story create stays on stories');
 }
 
 console.log('duniya compose payload tests ok');

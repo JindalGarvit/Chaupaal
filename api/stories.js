@@ -13,6 +13,7 @@ const {
   closeFriendsRecipients,
   excludedIds,
 } = require('../server-lib/close-friends');
+const { isDuniyaPostRequest, dispatchDuniyaPost } = require('../server-lib/duniya-posts');
 const {
   cleanOverlays,
   cleanInteractive,
@@ -1165,6 +1166,9 @@ module.exports = async function handler(req, res) {
   }
   const db = admin.firestore();
   const action = String(body.action || '');
+  if (isDuniyaPostRequest(req, body)) {
+    return dispatchDuniyaPost(res, { db, admin, uid: user.uid, body });
+  }
   try {
     if (action === 'create') {
       const rate = await checkActionRateLimit(user.uid, 'post');
