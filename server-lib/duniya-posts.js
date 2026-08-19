@@ -139,10 +139,11 @@ function canEditPost(data, uid) {
   return collab.includes(uid);
 }
 
-async function getPost(db, postId) {
+async function getPost(db, postId, collection = COLLECTION) {
   const id = cleanText(postId, 180);
   if (!id) throw err('NOT_FOUND', 'Post not found');
-  const snap = await db.collection(COLLECTION).doc(id).get();
+  const col = collection === 'peepal' ? 'peepal' : COLLECTION;
+  const snap = await db.collection(col).doc(id).get();
   if (!snap.exists) throw err('NOT_FOUND', 'Post not found');
   return snap;
 }
@@ -430,22 +431,35 @@ async function collabAction(db, admin, uid, body) {
 }
 
 async function sendPostCard(db, admin, uid, body) {
-  const snap = await getPost(db, body.postId);
+  const collection = body.collection === 'peepal' ? 'peepal' : COLLECTION;
+  const snap = await getPost(db, body.postId, collection);
   const data = snap.data() || {};
   if (data.deleted || data.archived) throw err('NOT_FOUND', 'Post not found');
   const peerUids = cleanUidList(body.uids || body.peerUids, 20);
   const sender = await loadUser(db, uid);
   const now = admin.firestore.FieldValue.serverTimestamp();
   const caption = cleanText(body.text, 280);
-  const first = Array.isArray(data.slides) && data.slides[0] ? data.slides[0] : null;
-  const attachment = {
-    type: 'duniya_post',
-    postId: snap.id,
-    thumb: first?.thumb || data.thumb || data.media || '',
-    caption: String(data.caption || '').slice(0, 140),
-    author: data.user?.name || data.user?.username || 'Duniya',
-    authorUid: data.uid,
-  };
+  const attachment =
+    collection === 'peepal'
+      ? {
+          type: 'peepal_post',
+          postId: snap.id,
+          thumb: data.attachment?.thumb || data.attachment?.data || '',
+          caption: String(data.question || '').slice(0, 140),
+          author: data.user?.name || data.user?.username || 'Peepal',
+          authorUid: data.uid,
+        }
+      : (() => {
+          const first = Array.isArray(data.slides) && data.slides[0] ? data.slides[0] : null;
+          return {
+            type: 'duniya_post',
+            postId: snap.id,
+            thumb: first?.thumb || data.thumb || data.media || '',
+            caption: String(data.caption || '').slice(0, 140),
+            author: data.user?.name || data.user?.username || 'Duniya',
+            authorUid: data.uid,
+          };
+        })();
   const sent = [];
   const skipped = [];
 

@@ -403,7 +403,7 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment){
   const body=String(text||'').trim();
   if(!body && !(music&&music.title) && !attachment) return;
   const payload={
-    text:body||(music?.title?`🎵 ${music.title}`:(attachment?.type==='photo'?'📷 Photo':attachment?.type==='file'?'📄 File':attachment?.type==='location'?'📍 Location':attachment?.type==='radio_share'?'📻 Radio':attachment?.type==='muqabala_challenge'?'⚔️ Challenge':attachment?.type==='game_challenge'?'🎮 Challenge':attachment?.type==='story'?'Sent a story':attachment?.type==='duniya_post'?'Sent a post':attachment?.type==='mehfil_invite'?(body||'Join Mehfil'):'')),
+    text:body||(music?.title?`🎵 ${music.title}`:(attachment?.type==='photo'?'📷 Photo':attachment?.type==='file'?'📄 File':attachment?.type==='location'?'📍 Location':attachment?.type==='radio_share'?'📻 Radio':attachment?.type==='muqabala_challenge'?'⚔️ Challenge':attachment?.type==='game_challenge'?'🎮 Challenge':attachment?.type==='story'?'Sent a story':attachment?.type==='duniya_post'?'Sent a post':attachment?.type==='peepal_post'?'Sent a discussion':attachment?.type==='mehfil_invite'?(body||'Join Mehfil'):'')),
     uid:currentUser.uid,
     name:userProfile?.name||currentUser.displayName||'You',
     avatar:currentUser.photoURL||'',

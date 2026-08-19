@@ -714,7 +714,7 @@
   function openContentMenu(content, opts = {}) {
     const surface = opts.surface || 'peepal';
     const user = content?.user || { uid: content?.uid, name: 'User' };
-    const postId = content?.id || content?.firestoreId || opts.postId || null;
+    const postId = content?.firestoreId || content?.id || opts.postId || null;
     const authorUid = user?.uid || content?.uid || null;
     const isOwn =
       typeof currentUser !== 'undefined' &&
@@ -735,14 +735,14 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
 
-    const shareUrl = (() => {
+    const shareUrlValue = (() => {
+      if (!postId) return '';
       try {
-        if (typeof buildShareUrl === 'function') return buildShareUrl(surface, postId);
+        if (typeof shareUrl === 'function') return shareUrl('post', postId);
       } catch (e) {}
       try {
         const base = location.origin || '';
-        if (surface === 'duniya' && postId) return `${base}/post/${postId}`;
-        if (surface === 'peepal' && postId) return `${base}/peepal/${postId}`;
+        return `${base}/post/${encodeURIComponent(postId)}`;
       } catch (e) {}
       return '';
     })();
@@ -796,6 +796,9 @@
     if ((isOwn || isCollab) && surface === 'duniya') {
       items.push({ id: 'edit_post', label: 'Edit post', icon: 'pen' });
     }
+    if (isOwn && surface === 'peepal') {
+      items.push({ id: 'edit_post', label: 'Edit post', icon: 'pen' });
+    }
     if (!isOwn && authorUid) {
       items.push({ id: 'more_like', label: 'More like this', icon: 'heart' });
       items.push({ id: 'not_interested', label: 'Not interested', icon: 'thumbs-down' });
@@ -804,7 +807,7 @@
     if (surface !== 'peepal') {
       items.push({ id: 'share', label: 'Share', icon: 'share' });
     }
-    if (shareUrl) items.push({ id: 'copy', label: 'Copy link', icon: 'link' });
+    if (shareUrlValue) items.push({ id: 'copy', label: 'Copy link', icon: 'link' });
     if (!isOwn && authorUid) {
       items.push({ id: 'hide', label: 'Hide', icon: 'eye-off' });
       items.push({ id: 'report', label: 'Report…', icon: 'triangle-alert', danger: true });
@@ -826,7 +829,9 @@
     const handleAct = async (act, close) => {
       if (act === 'edit_post') {
         if (close) close();
-        if (typeof DuniyaCompose !== 'undefined' && typeof DuniyaCompose.openEdit === 'function') {
+        if (surface === 'peepal' && typeof openPeepalEditSheet === 'function') {
+          openPeepalEditSheet(content);
+        } else if (typeof DuniyaCompose !== 'undefined' && typeof DuniyaCompose.openEdit === 'function') {
           DuniyaCompose.openEdit(content);
         }
         return;
@@ -849,7 +854,7 @@
             .share({
               title: 'Chaupaal',
               text: String(content.question || content.caption || '').slice(0, 120),
-              url: shareUrl || undefined,
+              url: shareUrlValue || undefined,
             })
             .catch(() => {});
         }
@@ -858,7 +863,7 @@
       if (act === 'copy') {
         if (close) close();
         try {
-          await navigator.clipboard.writeText(shareUrl);
+          await navigator.clipboard.writeText(shareUrlValue);
           if (typeof showToast === 'function') showToast('Link copied');
         } catch (e) {
           if (typeof showToast === 'function') showToast('Could not copy link');

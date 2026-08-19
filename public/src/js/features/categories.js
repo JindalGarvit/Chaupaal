@@ -838,6 +838,10 @@ function mapPeepalDoc(raw){
     audienceSegments: Array.isArray(raw.audienceSegments)?raw.audienceSegments:[],
     segmentDistributionActive: !!raw.segmentDistributionActive,
     activeSegmentIndex: Number.isFinite(raw.activeSegmentIndex)?raw.activeSegmentIndex:0,
+    archived: raw.archived === true,
+    saveOnly: raw.saveOnly === true,
+    shares: Number(raw.shares) || 0,
+    attachments: Array.isArray(raw.attachments) ? raw.attachments : [],
   };
 }
 
@@ -1600,10 +1604,15 @@ function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
   const attachmentWrapAttrs=attachmentHasSize?` data-has-ratio="1" style="margin:12px 0;--media-ratio:${attachmentWidth}/${attachmentHeight};"`:' style="margin:12px 0;"';
   const attachmentSizeAttrs=attachmentHasSize?` width="${attachmentWidth}" height="${attachmentHeight}" style="width:100%;aspect-ratio:${attachmentWidth}/${attachmentHeight};border-radius:12px;"`:' style="width:100%;border-radius:12px;"';
   let replyTo = null;
+  const isOwner = !!(currentUser && (q.uid === currentUser.uid || q.user?.uid === currentUser.uid));
   detail.innerHTML=`
     <div class="peepal-detail-header">
       <button class="peepal-detail-back cp-tap-target cp-back-btn" id="peepalDetailBack" aria-label="Back">${typeof iconHtml==='function'?iconHtml('arrow-left',{size:22}):''}</button>
       <div class="peepal-detail-title" style="display:flex;align-items:center;gap:8px;">${(typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('peepal',20):(typeof iconHtml==='function'?iconHtml('tree',{size:20}):'🌳')} Peepal</div>
+      <div class="peepal-detail-actions">
+        ${isOwner ? `<button type="button" class="peepal-detail-action-btn" data-peepal-edit aria-label="Edit">${typeof iconHtml==='function'?iconHtml('pen',{size:18}):'Edit'}</button>` : ''}
+        <button type="button" class="peepal-detail-action-btn" data-peepal-share aria-label="Share">${typeof iconHtml==='function'?iconHtml('share',{size:18}):'Share'}</button>
+      </div>
     </div>
     <div class="peepal-detail-body">
       <div class="peepal-card-header" style="padding:0 0 12px;">
@@ -1638,6 +1647,14 @@ function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
     detail.classList.remove('open');setTimeout(()=>detail.classList.add('hidden'),300);
     try{ history.pushState({},'', '/'); }catch(e){}
     try{ if(typeof restoreAppShell==='function') restoreAppShell('peepal_detail_back'); }catch(e){}
+  });
+  detail.querySelector('[data-peepal-edit]')?.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    if(typeof openPeepalEditSheet==='function') openPeepalEditSheet(q);
+  });
+  detail.querySelector('[data-peepal-share]')?.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    if(typeof openShareSheet==='function') openShareSheet(q);
   });
   detail.querySelector('[data-say-hi]')?.addEventListener('click',async(e)=>{
     e.preventDefault();

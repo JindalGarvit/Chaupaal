@@ -4484,6 +4484,17 @@ html.quiet-mode .notif-item{transition:none;}
 .archive-post-meta{flex:1;min-width:0;}
 .archive-post-meta p{margin:2px 0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .archive-post-meta small.is-archived{color:var(--red);}
+.archive-post-row{align-items:stretch;}
+.archive-post-main{flex:1;display:flex;align-items:center;gap:10px;min-width:0;padding:0;border:0;background:transparent;text-align:left;cursor:pointer;font:inherit;color:inherit;}
+.archive-post-main:focus-visible{outline:2px solid var(--red);outline-offset:2px;border-radius:8px;}
+.archive-post-actions{display:flex;flex-shrink:0;align-items:center;gap:4px;}
+.archive-post-icon-btn{width:36px;height:36px;border:0;border-radius:10px;background:var(--cream);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--ink);}
+.archive-post-icon-btn:active{transform:scale(0.96);}
+.archive-post-row--ix{width:100%;padding:10px 0;border:0;border-bottom:1px solid var(--line);background:transparent;text-align:left;cursor:pointer;font:inherit;color:inherit;}
+.peepal-detail-header,.duniya-comments-header{display:flex;align-items:center;gap:8px;}
+.peepal-detail-actions,.duniya-detail-actions{display:flex;align-items:center;gap:6px;margin-left:auto;}
+.peepal-detail-action-btn,.duniya-detail-action-btn{width:36px;height:36px;border:0;border-radius:10px;background:var(--cream);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--ink);}
+.public-profile-post-cell,.public-profile-peepal-card{cursor:pointer;border:0;font:inherit;color:inherit;text-align:left;width:100%;}
 
 /* Guest soft sign-in banner + media pickers */
 .guest-signin-banner{

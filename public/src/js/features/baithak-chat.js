@@ -1009,6 +1009,15 @@ function renderMsgBubble(m, isGroup){
       <span style="font-weight:500;color:var(--muted);">${chatEsc(cap.slice(0,80))}</span>
     </button>`;
     rich=true;
+  } else if(att && att.type==='peepal_post'){
+    const thumb = att.thumb || att.url || '';
+    const cap = att.caption || m.text || 'Discussion';
+    body=`<button type="button" class="chat-duniya-post-card chat-peepal-post-card" data-peepal-post="${chatEsc(att.postId||'')}">
+      ${thumb?`<img src="${chatEsc(thumb)}" alt="">`:`<span class="chat-duniya-post-card-text">🌳 ${chatEsc(cap.slice(0,80))}</span>`}
+      <span>${chatEsc(att.author||'Peepal')}</span>
+      <span style="font-weight:500;color:var(--muted);">${chatEsc(cap.slice(0,80))}</span>
+    </button>`;
+    rich=true;
   } else if(att && att.type==='story'){
     const live = !att.expiresAt || Number(att.expiresAt) > Date.now();
     const thumb = att.thumb || att.url || '';
@@ -1094,6 +1103,29 @@ function wireChallengeBubble(root){
           if(doc.exists){
             const post=typeof mapDuniyaDoc==='function'?mapDuniyaDoc({id:doc.id,...doc.data()}):{id:doc.id,...doc.data()};
             openDuniyaDetail(post);
+            return;
+          }
+        }
+      }catch(e){}
+      if(typeof showToast==='function') showToast('Post unavailable');
+    });
+  });
+  root?.querySelectorAll?.('[data-peepal-post]').forEach((btn)=>{
+    if(btn.dataset.wired==='1') return;
+    btn.dataset.wired='1';
+    btn.addEventListener('click', async ()=>{
+      const id=btn.dataset.peepalPost;
+      if(!id) return;
+      try{
+        if(typeof openPostById==='function'){
+          await openPostById(id);
+          return;
+        }
+        if(typeof db!=='undefined' && db && typeof openPeepalDetail==='function'){
+          const doc=await db.collection('peepal').doc(id).get();
+          if(doc.exists){
+            const post=typeof mapPeepalDoc==='function'?mapPeepalDoc({id:doc.id,...doc.data()}):{id:doc.id,...doc.data()};
+            openPeepalDetail(post);
             return;
           }
         }

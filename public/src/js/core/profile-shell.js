@@ -698,6 +698,23 @@
     host.querySelectorAll('[data-tab]').forEach((btn) => {
       btn.addEventListener('click', () => activateTab(btn.dataset.tab));
     });
+
+    const onPostsChanged = () => {
+      if (!host.isConnected) {
+        document.removeEventListener('chaupaal:profile-posts-changed', onPostsChanged);
+        return;
+      }
+      if (loaded.has('duniya')) {
+        const pane = host.querySelector('[data-pane="duniya"]');
+        if (pane) fillPostGrid(pane, 'duniya', profileUid, { isOwner, includeArchived, cols: 3 });
+      }
+      if (loaded.has('peepal')) {
+        const pane = host.querySelector('[data-pane="peepal"]');
+        if (pane) fillPostGrid(pane, 'peepal', profileUid, { isOwner, includeArchived, cols: 2 });
+      }
+    };
+    document.addEventListener('chaupaal:profile-posts-changed', onPostsChanged);
+
     host.querySelector('[data-add-tab]')?.addEventListener('click', () => {
       if (typeof openAddProfileSectionSheet === 'function') {
         openAddProfileSectionSheet((section) => {

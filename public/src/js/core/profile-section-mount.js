@@ -5,6 +5,38 @@
 (function () {
   'use strict';
 
+  function wireProfilePostOpens(bodyEl) {
+    if (!bodyEl) return;
+    bodyEl.querySelectorAll('[data-open-post]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.postId;
+        const kind = btn.dataset.openPost;
+        if (!id || !db) return;
+        try {
+          if (kind === 'duniya') {
+            const doc = await db.collection('duniya').doc(id).get();
+            if (doc.exists && typeof openDuniyaDetail === 'function') {
+              const raw = { id: doc.id, ...doc.data() };
+              const post = typeof mapDuniyaDoc === 'function' ? mapDuniyaDoc(raw) : raw;
+              openDuniyaDetail(post);
+              return;
+            }
+          }
+          if (kind === 'peepal') {
+            const doc = await db.collection('peepal').doc(id).get();
+            if (doc.exists && typeof openPeepalDetail === 'function') {
+              const raw = { id: doc.id, ...doc.data() };
+              const post = typeof mapPeepalDoc === 'function' ? mapPeepalDoc(raw) : raw;
+              openPeepalDetail(post);
+              return;
+            }
+          }
+        } catch (e) {}
+        if (typeof showToast === 'function') showToast('Could not open post');
+      });
+    });
+  }
+
   async function fillBuiltinBody(bodyEl, sectionId, profileUid, opts = {}) {
     if (!bodyEl || !profileUid) return;
     const { isOwner, includeArchived, profileMedia } = opts;
@@ -165,11 +197,11 @@
             .map((p) => {
               const media = p.thumb || p.media || '';
               const archived = p.archived === true && isOwner ? '<span class="arch-pill">Archived</span>' : '';
-              return `<div class="public-profile-post-cell">${media ? `<img src="${media}" alt="">` : `<span>${(p.caption || '').slice(0, 40)}</span>`}${archived}</div>`;
+              return `<button type="button" class="public-profile-post-cell" data-open-post="duniya" data-post-id="${String(p.id).replace(/"/g, '&quot;')}">${media ? `<img src="${media}" alt="">` : `<span>${(p.caption || '').slice(0, 40)}</span>`}${archived}</button>`;
             })
             .join('')}</div>`;
         } else {
-          bodyEl.innerHTML = posts
+          bodyEl.innerHTML = `<div class="public-profile-posts">${posts
             .slice(0, 8)
             .map((p) => {
               const q =
@@ -178,10 +210,11 @@
                   : String(p.question || '').slice(0, 120);
               const archived =
                 p.archived === true && isOwner ? '<span class="arch-pill">Archived</span>' : '';
-              return `<div class="public-profile-peepal-card"><strong>${p.tag || 'Peepal'}</strong>${archived}<p>${q}</p></div>`;
+              return `<button type="button" class="public-profile-peepal-card" data-open-post="peepal" data-post-id="${String(p.id).replace(/"/g, '&quot;')}"><strong>${p.tag || 'Peepal'}</strong>${archived}<p>${q}</p></button>`;
             })
-            .join('');
+            .join('')}</div>`;
         }
+        wireProfilePostOpens(bodyEl);
       } catch (e) {
         bodyEl.innerHTML = '<div class="public-profile-posts-empty">Posts unavailable</div>';
       }
@@ -223,6 +256,27 @@
         body.innerHTML = renderCustomSectionBody(meta);
       }
     }
+
+    const onPostsChanged = () => {
+      if (!host.isConnected) {
+        document.removeEventListener('chaupaal:profile-posts-changed', onPostsChanged);
+        return;
+      }
+      sections
+        .filter((m) => m.id === 'duniya' || m.id === 'peepal')
+        .forEach((meta) => {
+          const body = host.querySelector(`[data-section-body="${meta.id}"]`);
+          if (body) {
+            fillBuiltinBody(body, meta.id, profileUid, {
+              isOwner,
+              includeArchived,
+              profileMedia: profile.profileMedia,
+              profile,
+            });
+          }
+        });
+    };
+    document.addEventListener('chaupaal:profile-posts-changed', onPostsChanged);
 
     if (editable) {
       if (typeof wireProfileSectionReorder === 'function') {

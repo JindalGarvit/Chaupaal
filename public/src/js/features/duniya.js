@@ -821,6 +821,7 @@ function openDuniyaDetail(post){
     ? (Array.isArray(post._comments) ? post._comments : [])
     : getDuniyaComments(post);
   let replyTo = null;
+  const canEdit = typeof duniyaCanEditPost === 'function' && duniyaCanEditPost(post);
   detail.innerHTML=`
     <div class="duniya-comments-handle" aria-hidden="true"></div>
     <div class="duniya-comments-header">
@@ -828,7 +829,10 @@ function openDuniyaDetail(post){
         <div class="duniya-comments-title">Comments</div>
         <div class="duniya-comments-subtitle">${post.comments||0} on ${post.user?.name||'this post'}</div>
       </div>
-      <button id="duniyaDetailBack" class="cp-tap-target duniya-comments-close" aria-label="Close comments">✕</button>
+      <div class="duniya-detail-actions">
+        ${canEdit ? `<button type="button" class="duniya-detail-action-btn" data-duniya-edit aria-label="Edit">${typeof iconHtml==='function'?iconHtml('pen',{size:18}):'Edit'}</button>` : ''}
+        <button type="button" id="duniyaDetailBack" class="cp-tap-target duniya-comments-close" aria-label="Close comments">✕</button>
+      </div>
     </div>
     <div class="duniya-comments-body">
       <div class="duniya-comments-post-context">
@@ -859,6 +863,10 @@ function openDuniyaDetail(post){
     if(typeof closeAiKeyboard==='function') closeAiKeyboard();
     detail.classList.remove('open');setTimeout(()=>detail.classList.add('hidden'),300);
     try{ history.pushState({},'', '/'); }catch(e){}
+  });
+  detail.querySelector('[data-duniya-edit]')?.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    if(typeof DuniyaCompose !== 'undefined' && DuniyaCompose.openEdit) DuniyaCompose.openEdit(post);
   });
   try{
     const pid=post.firestoreId||post.id;
@@ -1029,6 +1037,53 @@ async function recordDuniyaShare(post){
   }
 }
 
+async function recordPeepalShare(post){
+  const id = post.firestoreId || post.id;
+  const target =
+    (typeof peepalQuestions !== 'undefined' && Array.isArray(peepalQuestions)
+      ? peepalQuestions.find((x) => x.id === id || x.firestoreId === id)
+      : null) || post;
+  const previous = Math.max(0, Number(target.shares) || 0);
+  try{
+    if(typeof incrementContentShares==='function'){
+      const saved=await incrementContentShares('peepal', { ...target, firestoreId: id, id });
+      if(Number.isFinite(saved.shares)){
+        target.shares=saved.shares;
+        post.shares=saved.shares;
+      }
+    }else{
+      target.shares=previous+1;
+      post.shares=target.shares;
+    }
+  }catch(e){
+    target.shares=previous;
+    post.shares=previous;
+  }
+}
+
+async function sendPostToFriendViaApi(post, friend, isPeepal){
+  const postId=post.firestoreId||post.id;
+  if(!postId||String(postId).startsWith('q_')){
+    if(typeof showToast==='function') showToast('Post still saving — try again in a moment');
+    return false;
+  }
+  if(typeof apiFetch!=='function'||!friend?.uid) return false;
+  const env=await apiFetch('/api/stories',{
+    method:'POST',
+    needAuth:true,
+    body:{
+      action:'send_post',
+      postId,
+      collection:isPeepal?'peepal':'duniya',
+      uids:[friend.uid],
+    },
+  });
+  if(!env?.ok) throw new Error(env?.error?.message||'Could not send');
+  if(isPeepal) await recordPeepalShare(post);
+  else await recordDuniyaShare(post);
+  return true;
+}
+
 function openShareSheet(post){
   const caption=String(post.caption||post.question||'').trim();
   const preview=caption.slice(0,140);
@@ -1054,7 +1109,17 @@ function openShareSheet(post){
       };
 
   const afterShare=async()=>{
-    if(!isPeepal) await recordDuniyaShare(post);
+    if(isPeepal) await recordPeepalShare(post);
+    else await recordDuniyaShare(post);
+  };
+
+  const onFriend=async(_stats,friend)=>{
+    try{
+      const ok=await sendPostToFriendViaApi(post,friend,isPeepal);
+      if(ok&&typeof showToast==='function') showToast('Sent in Baithak');
+    }catch(e){
+      if(typeof showToast==='function') showToast(e?.message||'Could not send');
+    }
   };
 
   if(typeof openUnifiedShareSheet==='function'){
@@ -1064,6 +1129,7 @@ function openShareSheet(post){
       subtitle:preview?preview.slice(0,72):undefined,
       stats,
       onShared:afterShare,
+      onFriend,
     });
     return;
   }

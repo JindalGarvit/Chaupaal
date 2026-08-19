@@ -446,7 +446,9 @@ async function getAnonRemaining() {
   };
 }
 
-function openPeepalAskSheet(){
+function openPeepalAskSheet(editPost = null){
+  const isEdit = !!(editPost && (editPost.firestoreId || editPost.id));
+  const editId = isEdit ? (editPost.firestoreId || editPost.id) : null;
   const sheet = document.createElement('div');
   sheet.className = 'peepal-ask-sheet';
   const lim = window.PolicyLimits?.ANON_POSTS || { perDay: 2, perWeek: 7 };
@@ -469,11 +471,11 @@ function openPeepalAskSheet(){
   sheet.innerHTML = `
     <div class="peepal-ask-header">
       <button id="closeAsk" aria-label="Close" style="background:var(--surface-sunken,var(--cream));border:none;border-radius:999px;cursor:pointer;padding:8px;color:var(--ink);width:36px;height:36px;display:flex;align-items:center;justify-content:center;">${typeof iconHtml==='function' ? iconHtml('x',{size:18}) : '✕'}</button>
-      <div class="peepal-ask-title">Discuss</div>
-      <button id="peepalPublishBtn" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:8px 20px;font:700 14px 'Space Grotesk',sans-serif;min-width:60px;cursor:pointer;">Post</button>
+      <div class="peepal-ask-title">${isEdit ? 'Edit discussion' : 'Discuss'}</div>
+      <button id="peepalPublishBtn" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:8px 20px;font:700 14px 'Space Grotesk',sans-serif;min-width:60px;cursor:pointer;">${isEdit ? 'Save' : 'Post'}</button>
     </div>
     <div class="peepal-ask-body">
-      <div id="anonToggleRow" style="background:var(--line);border:2px solid var(--line);border-radius:14px;padding:12px;margin-bottom:16px;display:flex;align-items:center;gap:12px;opacity:0.5;">
+      <div id="anonToggleRow" style="background:var(--line);border:2px solid var(--line);border-radius:14px;padding:12px;margin-bottom:16px;display:${isEdit ? 'none' : 'flex'};align-items:center;gap:12px;opacity:0.5;">
         <div style="flex:1;">
           <div style="font-weight:700;font-size:14px;">🎭 Post anonymously</div>
           <div id="anonToggleHint" style="font-size:11px;color:var(--muted);">Anonymous posts don't reveal your identity</div>
@@ -795,6 +797,31 @@ function openPeepalAskSheet(){
   }
   setCapUi('10');
 
+  if (isEdit) {
+    const qTextEl = document.getElementById('peepalQText');
+    if (qTextEl) qTextEl.value = String(editPost.question || '');
+    const fmt = editPost.format || 'open';
+    sheet.querySelector(`.peepal-format-chip[data-fmt="${fmt}"]`)?.click();
+    (editPost.options || []).forEach((v, i) => {
+      const el = document.getElementById(`mcqOpt${i + 1}`);
+      if (el && v) el.value = v;
+    });
+    const aud = document.getElementById('peepalAudience');
+    if (aud) {
+      aud.value = editPost.saveOnly ? 'save_only' : (editPost.audience || 'everyone');
+    }
+    if (editPost.responseCap != null) setCapUi(String(editPost.responseCap));
+    if (Array.isArray(editPost.attachments)) {
+      composeAttachments = editPost.attachments.map((a) => ({ ...a }));
+      renderAttachPreview();
+    }
+    if (editPost.attachment?.type) {
+      composeAttachments.push({ type: editPost.attachment.type, label: editPost.attachment.type, ...editPost.attachment });
+      renderAttachPreview();
+    }
+    peepalAskCat = editPost.tag && editPost.tag !== (editPost.format || 'open').toUpperCase() ? editPost.tag : '';
+  }
+
   document.getElementById('closeAsk').addEventListener('click',()=>{
     peepalDraft?.flush?.();
     sheet.classList.remove('open');setTimeout(()=>sheet.remove(),350);
@@ -804,12 +831,54 @@ function openPeepalAskSheet(){
   document.getElementById('peepalPublishBtn').addEventListener('click',async()=>{
     const text=qText.value.trim();
     if(!text){showToast('Write something to start a discussion');return;}
-    const unlock=typeof beginClientMutation==='function'?beginClientMutation('peepal_post'):()=>{};
+    const unlock=typeof beginClientMutation==='function'?beginClientMutation(isEdit?'peepal_edit':'peepal_post'):()=>{};
     if(unlock===false){ showToast(t('peepal_post_submitting')); return; }
     const pubBtn=document.getElementById('peepalPublishBtn');
     const pubLabel=pubBtn?pubBtn.textContent:'';
-    if(pubBtn){ pubBtn.disabled=true; pubBtn.textContent='Posting…'; }
+    if(pubBtn){ pubBtn.disabled=true; pubBtn.textContent=isEdit?'Saving…':'Posting…'; }
     try{
+    if(isEdit){
+      if(!db||!currentUser||!editId){
+        showToast(t('peepal_sign_in_post'));
+        return;
+      }
+      if(editPost.uid&&editPost.uid!==currentUser.uid){
+        showToast('Not authorized');
+        return;
+      }
+      const fmt=sheet.querySelector('.peepal-format-chip.active')?.dataset.fmt||'open';
+      const opts=fmt==='poll'?[1,2,3,4].map(i=>document.getElementById(`mcqOpt${i}`)?.value||'').filter(Boolean):[];
+      const audience=document.getElementById('peepalAudience')?.value||'everyone';
+      const saveOnly=audience==='save_only';
+      const updatePayload={
+        question:text,
+        format:fmt,
+        options:opts,
+        responses:opts.length?(editPost.responses||[]).slice(0,opts.length).concat(opts.map((_,i)=>(editPost.responses||[])[i]||0)).slice(0,opts.length):[],
+        tag:peepalAskCat||fmt.toUpperCase(),
+        audience:saveOnly?'private':audience,
+        responseCap:selectedCap,
+        archived:!!saveOnly,
+        saveOnly:!!saveOnly,
+        attachments: composeAttachments.map((a) => ({ ...a, blob: undefined, file: undefined })),
+        updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
+      };
+      if(editPost.attachment?.type==='image'&&!composeAttachments.some(a=>a.type==='photo'||a.type==='image')){
+        updatePayload.attachment=editPost.attachment;
+      }
+      await db.collection('peepal').doc(editId).update(updatePayload);
+      const idx=peepalQuestions.findIndex(q=>(q.firestoreId||q.id)===editId);
+      const merged={...editPost,...updatePayload,id:editId,firestoreId:editId,question:text,format:fmt,options:opts};
+      if(idx>=0) peepalQuestions[idx]=merged;
+      peepalDraft?.clear?.();
+      composeAttachments=[];
+      renderAttachPreview();
+      sheet.classList.remove('open');setTimeout(()=>sheet.remove(),350);
+      renderPeepalFeed();
+      try{ document.dispatchEvent(new CustomEvent('chaupaal:profile-posts-changed')); }catch(e){}
+      showToast('Discussion updated');
+      return;
+    }
     if(typeof checkRateLimit==='function'){
       const rl=await checkRateLimit('post');
       if(!rl.ok){ if(typeof showToast==='function') showToast(rl.message||t('peepal_slow_down')); return; }
@@ -908,6 +977,7 @@ function openPeepalAskSheet(){
           attachments: q.attachments || [],
         });
         q.firestoreId=ref.id;
+        q.id=ref.id;
         // Consume after successful write so a rules/network failure never burns a slot
         if(!saveOnly && typeof PolicyUsage?.consume==='function'){
           try{ await PolicyUsage.consume('peepalPost'); }
@@ -1028,4 +1098,10 @@ function openPeepalAskSheet(){
     if(typeof wirePeepalAskAiTarget==='function') wirePeepalAskAiTarget();
   }, 50);
 }
+
+function openPeepalEditSheet(post){
+  if(!post) return;
+  openPeepalAskSheet(post);
+}
+window.openPeepalEditSheet=openPeepalEditSheet;
 

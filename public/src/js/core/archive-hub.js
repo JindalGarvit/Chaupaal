@@ -5,60 +5,6 @@
 (function () {
   'use strict';
 
-  async function setPostArchived(collection, postId, archived) {
-    if (!db || !currentUser || !postId) return;
-    await db
-      .collection(collection)
-      .doc(postId)
-      .update({
-        archived: !!archived,
-        archivedAt: archived ? firebase.firestore.FieldValue.serverTimestamp() : null,
-      });
-  }
-
-  async function loadOwnerPosts(collection) {
-    if (!db || !currentUser) return [];
-    const snap = await db.collection(collection).where('uid', '==', currentUser.uid).limit(80).get();
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((p) => !p.deleted);
-  }
-
-  function postRow(p, collection) {
-    const archived = p.archived === true;
-    const label = collection === 'duniya' ? 'Duniya' : 'Peepal';
-    const title =
-      collection === 'duniya' ? (p.caption || 'Post').slice(0, 80) : (p.question || 'Question').slice(0, 80);
-    const thumb = p.thumb || p.media || '';
-    return `<div class="archive-post-row" data-id="${p.id}" data-col="${collection}">
-      ${thumb ? `<img class="archive-thumb" src="${thumb}" alt="">` : '<div class="archive-thumb archive-thumb--empty">◇</div>'}
-      <div class="archive-post-meta">
-        <strong>${label}</strong>
-        <p>${title}</p>
-        <small class="${archived ? 'is-archived' : ''}">${archived ? 'Archived — only you can see this' : 'Live on profile'}</small>
-      </div>
-      <button type="button" class="btn" data-toggle-archive="${archived ? '0' : '1'}">${archived ? 'Unarchive' : 'Archive'}</button>
-    </div>`;
-  }
-
-  function wireArchiveToggles(host, onDone) {
-    host.querySelectorAll('[data-toggle-archive]').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const rowEl = btn.closest('.archive-post-row');
-        const archived = btn.dataset.toggleArchive === '1';
-        try {
-          await setPostArchived(rowEl.dataset.col, rowEl.dataset.id, archived);
-          if (typeof showToast === 'function') showToast(archived ? 'Archived' : 'Unarchived');
-          if (typeof onDone === 'function') onDone();
-        } catch (e) {
-          if (typeof showToast === 'function') showToast('Could not update');
-        }
-      });
-    });
-  }
-
-  function jc() {
-    return typeof JournalCheckIn !== 'undefined' ? JournalCheckIn : null;
-  }
-
   function ico(name, size) {
     return typeof iconHtml === 'function' ? iconHtml(name, { size: size || 16 }) : '';
   }
@@ -70,6 +16,147 @@
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
           .replace(/"/g, '&quot;');
+  }
+
+  async function setPostArchived(collection, postId, archived) {
+    if (!db || !currentUser || !postId) return;
+    await db
+      .collection(collection)
+      .doc(postId)
+      .update({
+        archived: !!archived,
+        archivedAt: archived ? firebase.firestore.FieldValue.serverTimestamp() : null,
+      });
+    try {
+      document.dispatchEvent(new CustomEvent('chaupaal:profile-posts-changed'));
+    } catch (e) {}
+  }
+
+  async function loadOwnerPosts(collection) {
+    if (!db || !currentUser) return [];
+    const snap = await db.collection(collection).where('uid', '==', currentUser.uid).limit(80).get();
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((p) => !p.deleted);
+  }
+
+  async function openPostFromArchive(collection, postId) {
+    if (!db || !postId) return;
+    try {
+      const doc = await db.collection(collection).doc(postId).get();
+      if (!doc.exists) {
+        if (typeof showToast === 'function') showToast('Post not found');
+        return;
+      }
+      const raw = { id: doc.id, ...doc.data() };
+      if (collection === 'duniya') {
+        const post =
+          typeof mapDuniyaDoc === 'function' ? mapDuniyaDoc(raw) : { ...raw, firestoreId: doc.id };
+        if (typeof openDuniyaDetail === 'function') {
+          openDuniyaDetail(post);
+          stackDetailNav(document.getElementById('duniyaPostDetail'));
+        }
+      } else {
+        const post = typeof mapPeepalDoc === 'function' ? mapPeepalDoc(raw) : { ...raw, firestoreId: doc.id };
+        if (typeof openPeepalDetail === 'function') {
+          openPeepalDetail(post);
+          stackDetailNav(document.getElementById('peepalDetail'));
+        }
+      }
+    } catch (e) {
+      if (typeof showToast === 'function') showToast('Could not open post');
+    }
+  }
+
+  function stackDetailNav(el) {
+    if (!el || typeof pushNavLayer !== 'function' || el.dataset.navArchiveStacked === '1') return;
+    el.dataset.navArchiveStacked = '1';
+    pushNavLayer(el, () => {
+      el.classList.remove('open');
+      setTimeout(() => el.classList.add('hidden'), 300);
+      delete el.dataset.navArchiveStacked;
+    });
+  }
+
+  function postRow(p, collection) {
+    const archived = p.archived === true;
+    const label = collection === 'duniya' ? 'Duniya' : 'Peepal';
+    const title =
+      collection === 'duniya' ? (p.caption || 'Post').slice(0, 80) : (p.question || 'Question').slice(0, 80);
+    const thumb = p.thumb || p.media || p.attachment?.thumb || p.attachment?.data || '';
+    const visLabel = archived ? 'Show on profile' : 'Hide from profile';
+    const visIcon = archived ? 'eye' : 'eye-off';
+    return `<div class="archive-post-row" data-id="${esc(p.id)}" data-col="${collection}">
+      <button type="button" class="archive-post-main" data-archive-open aria-label="Open post">
+        ${thumb ? `<img class="archive-thumb" src="${esc(thumb)}" alt="">` : '<div class="archive-thumb archive-thumb--empty">◇</div>'}
+        <div class="archive-post-meta">
+          <strong>${label}</strong>
+          <p>${esc(title)}</p>
+          <small class="${archived ? 'is-archived' : ''}">${archived ? 'Hidden from profile' : 'Live on profile'}</small>
+        </div>
+      </button>
+      <div class="archive-post-actions">
+        <button type="button" class="archive-post-icon-btn" data-toggle-profile-vis="${archived ? '0' : '1'}" aria-label="${visLabel}" title="${visLabel}">${ico(visIcon, 18)}</button>
+        <button type="button" class="archive-post-icon-btn" data-archive-edit aria-label="Edit post" title="Edit">${ico('pen', 16)}</button>
+      </div>
+    </div>`;
+  }
+
+  function wireArchivePostRows(host, onDone) {
+    host.querySelectorAll('.archive-post-row').forEach((rowEl) => {
+      rowEl.querySelector('[data-archive-open]')?.addEventListener('click', () => {
+        openPostFromArchive(rowEl.dataset.col, rowEl.dataset.id);
+      });
+      rowEl.querySelector('[data-toggle-profile-vis]')?.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const btn = e.currentTarget;
+        const archived = btn.getAttribute('data-toggle-profile-vis') === '1';
+        try {
+          await setPostArchived(rowEl.dataset.col, rowEl.dataset.id, archived);
+          if (typeof showToast === 'function') {
+            showToast(archived ? 'Hidden from profile' : 'Shown on profile');
+          }
+          if (typeof onDone === 'function') onDone();
+        } catch (err) {
+          if (typeof showToast === 'function') showToast('Could not update');
+        }
+      });
+      rowEl.querySelector('[data-archive-edit]')?.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const col = rowEl.dataset.col;
+        const id = rowEl.dataset.id;
+        if (!db || !id) return;
+        try {
+          const doc = await db.collection(col).doc(id).get();
+          if (!doc.exists) return;
+          const raw = { id: doc.id, ...doc.data() };
+          if (col === 'duniya') {
+            const post =
+              typeof mapDuniyaDoc === 'function' ? mapDuniyaDoc(raw) : { ...raw, firestoreId: doc.id };
+            if (typeof DuniyaCompose !== 'undefined' && DuniyaCompose.openEdit) DuniyaCompose.openEdit(post);
+          } else if (typeof openPeepalEditSheet === 'function') {
+            const post = typeof mapPeepalDoc === 'function' ? mapPeepalDoc(raw) : raw;
+            openPeepalEditSheet(post);
+          }
+        } catch (err) {
+          if (typeof showToast === 'function') showToast('Could not open editor');
+        }
+      });
+    });
+  }
+
+  function wireInteractionRows(host) {
+    host.querySelectorAll('[data-open-interaction]').forEach((row) => {
+      row.addEventListener('click', () => {
+        const col = row.dataset.collection;
+        const postId = row.dataset.postId;
+        if (!col || !postId) return;
+        const normalized = col === 'peepal' || col === 'duniya' ? col : 'duniya';
+        openPostFromArchive(normalized, postId);
+      });
+    });
+  }
+
+  function jc() {
+    return typeof JournalCheckIn !== 'undefined' ? JournalCheckIn : null;
   }
 
   function renderJournalComposeHtml() {
@@ -343,10 +430,13 @@
                 ? rows
                     .map(
                       (r) =>
-                        `<div class="archive-post-row"><div class="archive-post-meta"><strong>${r.collection || 'post'}</strong><p>${String(r.preview || r.postId || '').slice(0, 100)}</p><small>Saved</small></div></div>`
+                        `<button type="button" class="archive-post-row archive-post-row--ix" data-open-interaction data-collection="${esc(r.collection || 'duniya')}" data-post-id="${esc(r.postId || r.refId || '')}">
+                          <div class="archive-post-meta"><strong>${esc(r.collection || 'post')}</strong><p>${esc(String(r.preview || r.postId || '').slice(0, 100))}</p><small>Saved</small></div>
+                        </button>`
                     )
                     .join('')
                 : '<div class="comments-empty">No saved posts yet — tap the bookmark on Duniya or Peepal</div>';
+              wireInteractionRows(ixBody);
               return;
             }
             if (kind === 'likes') {
@@ -362,13 +452,15 @@
                 ? rows
                     .map(
                       (r) =>
-                        `<div class="archive-post-row"><div class="archive-post-meta"><strong>${r.collection || 'like'}</strong><p>${String(r.preview || r.postId || '').slice(0, 100)}</p></div></div>`
+                        `<button type="button" class="archive-post-row archive-post-row--ix" data-open-interaction data-collection="${esc(r.collection || 'like')}" data-post-id="${esc(r.postId || r.refId || '')}">
+                          <div class="archive-post-meta"><strong>${esc(r.collection || 'like')}</strong><p>${esc(String(r.preview || r.postId || '').slice(0, 100))}</p></div>
+                        </button>`
                     )
                     .join('')
                 : '<div class="comments-empty">Liked posts will show here</div>';
+              wireInteractionRows(ixBody);
               return;
             }
-            // comments
             const snap = await db
               .collection('users')
               .doc(currentUser.uid)
@@ -381,10 +473,13 @@
               ? rows
                   .map(
                     (r) =>
-                      `<div class="archive-post-row"><div class="archive-post-meta"><strong>${r.collection || 'comment'}</strong><p>${String(r.text || r.preview || '').slice(0, 120)}</p></div></div>`
+                      `<button type="button" class="archive-post-row archive-post-row--ix" data-open-interaction data-collection="${esc(r.collection || 'comment')}" data-post-id="${esc(r.postId || r.refId || '')}">
+                        <div class="archive-post-meta"><strong>${esc(r.collection || 'comment')}</strong><p>${esc(String(r.text || r.preview || '').slice(0, 120))}</p></div>
+                      </button>`
                   )
                   .join('')
               : '<div class="comments-empty">Your comments will gather here</div>';
+            wireInteractionRows(ixBody);
           } catch (e) {
             ixBody.innerHTML = '<div class="comments-empty">Could not load interactions</div>';
           }
@@ -478,7 +573,7 @@
         const posts = await loadOwnerPosts(col);
         const host = body.querySelector('[data-ah-posts]');
         host.innerHTML = posts.map((p) => postRow(p, col)).join('') || '<div class="comments-empty">No posts yet</div>';
-        wireArchiveToggles(host, () => setTab(tab));
+        wireArchivePostRows(host, () => setTab(tab));
         return;
       }
     };
