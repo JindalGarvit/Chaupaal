@@ -400,7 +400,9 @@
           label: tt('shortcut_akhbaar_add_cat', 'Add category'),
           run: () => {
             switchTo('akhbaar');
-            if (typeof openAkhbaarCatAdd === 'function') openAkhbaarCatAdd();
+            const fn = window.CategoryPrefs?.openCategoryManageSheet;
+            if (typeof fn === 'function') fn();
+            else if (typeof openAkhbaarCatAdd === 'function') openAkhbaarCatAdd();
             else document.getElementById('akhbaarAddCat')?.click();
           },
         },

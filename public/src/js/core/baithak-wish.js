@@ -167,7 +167,12 @@
     }
   }
 
+  function openBaithakWithWish({ uid, name, avatar, type, username } = {}) {
+    return openBaithakWithPrefill({ uid, name, avatar, type, username });
+  }
+
   window.baithakWishMessage = baithakWishMessage;
+  window.openBaithakWithWish = openBaithakWithWish;
   window.openBaithakWithPrefill = openBaithakWithPrefill;
   window.applyBaithakPrefill = applyPrefill;
 })();

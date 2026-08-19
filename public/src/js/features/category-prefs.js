@@ -258,7 +258,7 @@
         <div class="music-picker-title">Categories</div>
         <button type="button" class="music-picker-close" data-cat-manage-close aria-label="Close">✕</button>
       </div>
-      <p class="cat-manage-hint">Long-press chips to reorder. Suggested ones fade if unused for 2 weeks.</p>
+      <p class="cat-manage-hint">Long-press chips to reorder. Suggested ones fade if unused for 2 weeks. Suggested categories you haven't tapped in 2 weeks are removed automatically.</p>
       <div class="cat-manage-list" data-cat-manage-list>
         ${cats
           .map(

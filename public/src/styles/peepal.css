@@ -47,7 +47,7 @@
 .peepal-nudge-chip--tinted [data-icon],
 .peepal-nudge-chip--tinted svg{color:var(--chip-tint,#2E7D32)!important;stroke:var(--chip-tint,#2E7D32);}
 .peepal-nudge-chip:active{transform:scale(var(--mx-press-scale,.96));}
-.peepal-intent-actions{display:flex;gap:6px;align-items:stretch;width:100%;}
+.peepal-intent-actions{display:flex;gap:6px;align-items:stretch;width:100%;border-top:1px solid var(--line);padding-top:8px;margin-top:2px;}
 .peepal-intent-act{
   border:1.5px solid var(--line);border-radius:12px;background:var(--surface-sunken,var(--cream));
   color:var(--ink);font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:11px;
@@ -57,7 +57,14 @@
 .peepal-intent-act--primary{flex:3 1 0%;background:var(--brand-red,var(--red));color:#fff;border-color:transparent;font-size:13px;}
 .peepal-intent-act--global,
 .peepal-intent-act--discuss{flex:1 1 0%;gap:4px;}
+.peepal-intent-act--global,
+.peepal-intent-act--discuss{background:var(--surface-sunken,var(--cream));border-color:var(--line);}
+.peepal-intent-act--global:active,
+.peepal-intent-act--discuss:active{background:var(--line);}
 .peepal-intent-act-label{font-size:9px;font-weight:700;letter-spacing:.02em;opacity:.9;}
+.peepal-intent-act-label{display:block;}
+.peepal-intent-act--global span:last-child,
+.peepal-intent-act--discuss span:last-child{font-size:9px;font-weight:700;letter-spacing:.03em;opacity:.85;}
 .peepal-intent-results{margin-top:2px;}
 .peepal-intent-card .peepal-ai-search-btn{margin-top:0;}
 .peepal-intent-card .peepal-ai-search-input{width:100%;box-sizing:border-box;}
@@ -95,8 +102,8 @@
 .peepal-ai-search{display:none!important;}
 .peepal-ai-search-inner{padding:14px 16px;}
 .peepal-ai-search-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--red);margin-bottom:8px;}
-.peepal-ai-search-input{width:100%;padding:10px 14px;border:2px solid var(--line);border-radius:14px;font-family:'Inter',sans-serif;font-size:14px;outline:none;resize:none;background:var(--surface-sunken,var(--cream));color:var(--ink);line-height:1.5;box-sizing:border-box;}
-.peepal-ai-search-input:focus{border-color:var(--brand-red,var(--red));}
+.peepal-ai-search-input{width:100%;padding:10px 14px;border:2px solid var(--line);border-radius:14px;font-family:'Inter',sans-serif;font-size:14px;outline:none;resize:none;background:var(--white);color:var(--ink);line-height:1.5;box-sizing:border-box;box-shadow:inset 0 1px 3px rgba(0,0,0,0.06);transition:border-color 0.15s;}
+.peepal-ai-search-input:focus{border-color:var(--brand-red,var(--red));box-shadow:inset 0 1px 3px rgba(0,0,0,0.06), 0 0 0 3px rgba(230,57,70,0.08);}
 .peepal-ai-search-btn{flex:1;padding:10px 16px;background:var(--brand-red,var(--red));color:#fff;border:none;border-radius:12px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px;cursor:pointer;}
 .peepal-ai-result-card{background:var(--cream);border-radius:14px;padding:14px;margin-bottom:10px;border:1.5px solid var(--line);}
 .peepal-ai-result-card .ai-match-reason{font-size:12px;color:var(--muted);font-style:italic;margin-top:6px;line-height:1.5;}
@@ -316,6 +323,29 @@
 .peepal-collab-row,.peepal-link-row{display:flex;gap:8px;align-items:center;margin-top:8px;}
 .peepal-collab-row input,.peepal-link-row input{flex:1;border:1.5px solid var(--line);border-radius:10px;padding:8px 10px;font-size:13px;background:var(--white);}
 .peepal-collab-row button,.peepal-link-row button{border:1.5px solid var(--line);background:var(--cream);border-radius:10px;padding:8px 10px;font-weight:700;cursor:pointer;}
+.peepal-cap-btn {
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: var(--surface-sunken, var(--cream));
+  font: 700 12px 'Space Grotesk', sans-serif;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+.peepal-cap-btn.active {
+  border-color: var(--brand-red, var(--red));
+  background: rgba(230,57,70,0.09);
+  color: var(--brand-red, var(--red));
+}
+.peepal-cap-btn--pro {
+  opacity: 0.55;
+  border-style: dashed;
+}
+.peepal-cap-btn--pro::after {
+  content: '';
+}
 
 /* Twitter-style card interior */
 .pc-row{display:flex;gap:10px;padding:12px 14px;}

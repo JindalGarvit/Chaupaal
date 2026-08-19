@@ -69,6 +69,11 @@ function initAkhbaarCatBar() {
           btn.dataset.cat = cat.name;
           btn.dataset.catKind = cat.kind || 'user';
           btn.innerHTML = `<span class="akhbaar-cat-emoji" aria-hidden="true">${cat.emoji || '📌'}</span> ${cat.name}`;
+          const WARN_DAYS = 10;
+          if (cat.kind === 'suggested') {
+            const daysSince = (Date.now() - (Number(cat.lastUsedAt) || Date.now())) / 86400000;
+            if (daysSince >= WARN_DAYS) btn.style.opacity = String(Math.max(0.4, 1 - (daysSince - WARN_DAYS) / 4));
+          }
           bar.insertBefore(btn, document.getElementById('akhbaarAddCat'));
         });
       CategoryPrefs.bindCategoryLongPress(bar);
@@ -98,9 +103,7 @@ function initAkhbaarCatBar() {
       bar.querySelectorAll('.akhbaar-cat-chip').forEach((c) => c.classList.remove('active'));
       chip.classList.add('active');
       akhbaarActiveCat = chip.dataset.cat;
-      try {
-        CategoryPrefs?.touchCategory?.(akhbaarActiveCat);
-      } catch (e) {}
+      CategoryPrefs?.touchCategory?.(akhbaarActiveCat);
       if (akhbaarActiveCat === 'saathi') {
         if (typeof setAkhbaarMode === 'function') setAkhbaarMode('saathi');
         return;
@@ -166,86 +169,18 @@ function filterReelByCategory(cat) {
 }
 
 function openAkhbaarCatAdd() {
-  const bar = document.getElementById('akhbaarCatBar');
-  const title =
-    typeof t === 'function' && t('akhbaar_add_cat_title') !== 'akhbaar_add_cat_title'
-      ? t('akhbaar_add_cat_title')
-      : 'Add a Category to Akhbaar';
-  const sub =
-    typeof t === 'function' && t('akhbaar_add_cat_sub') !== 'akhbaar_add_cat_sub'
-      ? t('akhbaar_add_cat_sub')
-      : 'AI will generate news & questions for it daily';
-
-  const bodyHtml = `
-    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">${sub}</div>
-    <div class="cat-search-wrap" style="margin-bottom:14px;">
-      <input class="cat-search-input" id="akhbaarCatInput" placeholder="Search or type a category…">
-      <div class="cat-suggestions" id="akhbaarCatSuggestions"></div>
-    </div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;" data-akhbaar-cat-picks>
-      ${(typeof CATEGORY_SUGGESTIONS !== 'undefined' ? CATEGORY_SUGGESTIONS : [])
-        .slice(0, 10)
-        .map(
-          (c) =>
-            `<button type="button" class="akhbaar-cat-chip" data-name="${c.name}" data-emoji="${c.emoji}">${c.emoji} ${c.name}</button>`
-        )
-        .join('')}
-    </div>`;
-
-  function wirePicks(sheet, close) {
-    sheet.querySelectorAll('[data-name]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const name = btn.dataset.name;
-        const emoji = btn.dataset.emoji;
-        if (typeof addCategory === 'function') addCategory(name, emoji);
-        const newChip = document.createElement('button');
-        newChip.className = 'akhbaar-cat-chip';
-        newChip.dataset.cat = name;
-        newChip.textContent = emoji + ' ' + name;
-        bar?.insertBefore(newChip, document.getElementById('akhbaarAddCat'));
-        newChip.addEventListener('click', () => {
-          bar.querySelectorAll('.akhbaar-cat-chip').forEach((c) => c.classList.remove('active'));
-          newChip.classList.add('active');
-          akhbaarActiveCat = name;
-          filterReelByCategory(name);
-        });
-        close();
-        if (typeof showToast === 'function') showToast(`${emoji} ${name} added to Akhbaar!`);
-      });
-    });
-  }
-
-  if (typeof openHalfSheet === 'function') {
-    openHalfSheet({
-      id: 'akhbaarCatAddSheet',
-      title,
-      accent: 'akhbaar',
-      bodyHtml,
-      onMount: wirePicks,
-    });
+  const fn = window.CategoryPrefs?.openCategoryManageSheet;
+  if (typeof fn === 'function') {
+    fn();
     return;
   }
-
-  document.getElementById('akhbaarCatAddSheet')?.remove();
-  const sheet = document.createElement('div');
-  sheet.id = 'akhbaarCatAddSheet';
-  sheet.className = 'archive-overlay';
-  sheet.dataset.navManaged = '1';
-  sheet.dataset.sheetPanel = '1';
-  sheet.innerHTML = `
-    <div class="archive-header">
-      <button type="button" data-overlay-dismiss aria-label="Back">←</button>
-      <div style="flex:1"><strong>${title}</strong></div>
-    </div>
-    <div style="padding:16px 18px 28px;">${bodyHtml}</div>`;
-  document.querySelector('.device')?.appendChild(sheet);
-  const close = () => {
-    if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
-    sheet.remove();
-  };
-  if (typeof pushNavLayer === 'function') pushNavLayer(sheet, close);
-  sheet.querySelector('[data-overlay-dismiss]')?.addEventListener('click', close);
-  wirePicks(sheet, close);
+  // true fallback only if CategoryPrefs not loaded yet
+  openHalfSheet?.({
+    id: 'akhbaarCatAddSheet',
+    title: 'Add category',
+    accent: 'akhbaar',
+    bodyHtml: `<p style="color:var(--muted);font-size:13px;">Loading categories…</p>`,
+  });
 }
 
 window.initAkhbaarCatBar = initAkhbaarCatBar;

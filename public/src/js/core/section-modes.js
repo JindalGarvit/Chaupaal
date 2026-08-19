@@ -770,7 +770,9 @@
         if (dx < 0) {
           // next category; past last → rubber-band add sheet
           if (idx >= cats.length - 1) {
-            if (typeof openAkhbaarCatAdd === 'function') openAkhbaarCatAdd();
+            const fn = window.CategoryPrefs?.openCategoryManageSheet;
+            if (typeof fn === 'function') fn();
+            else if (typeof openAkhbaarCatAdd === 'function') openAkhbaarCatAdd();
             return;
           }
           selectAkhbaarCategory(cats[idx + 1]);

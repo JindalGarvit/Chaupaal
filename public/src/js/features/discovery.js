@@ -465,6 +465,7 @@ function openPeepalAskSheet(){
     { type: 'collab', icon: '🤝', label: 'Collab' },
   ];
   let composeAttachments = [];
+  let selectedCap = '10';
   sheet.innerHTML = `
     <div class="peepal-ask-header">
       <button id="closeAsk" aria-label="Close" style="background:var(--surface-sunken,var(--cream));border:none;border-radius:999px;cursor:pointer;padding:8px;color:var(--ink);width:36px;height:36px;display:flex;align-items:center;justify-content:center;">${typeof iconHtml==='function' ? iconHtml('x',{size:18}) : '✕'}</button>
@@ -507,6 +508,25 @@ function openPeepalAskSheet(){
           <option value="ai">🤖 AI decides</option>
           <option value="save_only">💾 Save without posting</option>
         </select>
+      </div>
+      <!-- Response cap -->
+      <div style="margin-top:12px;">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+                    letter-spacing:0.05em;margin-bottom:6px;">Responses wanted</div>
+        <div id="peepalResponseCapRow" style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="peepal-cap-btn active" data-cap="10">10</button>
+          <button type="button" class="peepal-cap-btn" data-cap="25">25</button>
+          <button type="button" class="peepal-cap-btn peepal-cap-btn--free-max" data-cap="50">50</button>
+          <button type="button" class="peepal-cap-btn peepal-cap-btn--pro" data-cap="100"
+                  title="Pro feature">100 ✦</button>
+          <button type="button" class="peepal-cap-btn peepal-cap-btn--pro" data-cap="500"
+                  title="Pro feature">500 ✦</button>
+          <button type="button" class="peepal-cap-btn peepal-cap-btn--pro" data-cap="unlimited"
+                  title="Pro feature">Unlimited ✦</button>
+        </div>
+        <div id="peepalCapHint" style="font-size:11px;color:var(--muted);margin-top:5px;line-height:1.4;">
+          Free posts get up to 50 responses. Higher caps are a Pro feature.
+        </div>
       </div>
       <input id="peepalPhotoInput" type="file" accept="image/*" hidden>
       <input id="peepalVideoInput" type="file" accept="video/*" hidden>
@@ -720,6 +740,31 @@ function openPeepalAskSheet(){
       document.getElementById('mcqOptions').style.display = chip.dataset.fmt === 'poll' ? 'block' : 'none';
     });
   });
+  const capRow = document.getElementById('peepalResponseCapRow');
+  const capHint = document.getElementById('peepalCapHint');
+  const setCapUi = (cap) => {
+    selectedCap = String(cap || '10');
+    capRow?.querySelectorAll('.peepal-cap-btn').forEach((b) => {
+      b.classList.toggle('active', b.dataset.cap === selectedCap);
+    });
+    if (capHint) {
+      capHint.textContent = selectedCap === '50'
+        ? 'Maximum free cap. Upgrade to Pro for more.'
+        : `Your post will stop collecting new responses after ${selectedCap}.`;
+    }
+  };
+  capRow?.querySelectorAll('.peepal-cap-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cap = btn.dataset.cap;
+      const isPro = btn.classList.contains('peepal-cap-btn--pro');
+      if (isPro) {
+        if (typeof openProUpsell === 'function') openProUpsell('response_cap');
+        else if (typeof showToast === 'function') showToast('Higher response caps coming with Pro ✦');
+        return;
+      }
+      setCapUi(cap);
+    });
+  });
 
   const qText=document.getElementById('peepalQText');
   const audienceSel=document.getElementById('peepalAudience');
@@ -734,6 +779,7 @@ function openPeepalAskSheet(){
         format:sheet.querySelector('.peepal-format-chip.active')?.dataset.fmt||'open',
         opts:[1,2,3,4].map(i=>document.getElementById(`mcqOpt${i}`)?.value||''),
         attachments: composeAttachments.map((a) => ({ type: a.type, label: a.label || a.name || a.type })),
+        responseCap: selectedCap,
       }),
       applyState:(s)=>{
         if(qText&&s.question) qText.value=s.question;
@@ -743,9 +789,11 @@ function openPeepalAskSheet(){
           const chip=sheet.querySelector(`.peepal-format-chip[data-fmt="${s.format}"]`);
           chip?.click();
         }
+        setCapUi(s.responseCap || '10');
       },
     });
   }
+  setCapUi('10');
 
   document.getElementById('closeAsk').addEventListener('click',()=>{
     peepalDraft?.flush?.();
@@ -794,7 +842,7 @@ function openPeepalAskSheet(){
     // name/avatar stay anonymous; only the public label changes.
     const ownUid=currentUser?.uid||'me';
     const q={id:`q_${Date.now()}`,question:text,format:fmt,options:opts,responses:opts.map(()=>0),totalResponses:0,comments:0,timeAgo:'just now',ts:Date.now(),tag:peepalAskCat||fmt.toUpperCase(),answered:false,deleted:false,
-      audience:saveOnly?'private':audience, responseLimitMode:'algorithm', responseCap:null, audienceSegments:[],
+      audience:saveOnly?'private':audience, responseLimitMode:'manual', responseCap:selectedCap, audienceSegments:[],
       segmentDistributionActive:false,
       activeSegmentIndex:0,
       archived:!!saveOnly,

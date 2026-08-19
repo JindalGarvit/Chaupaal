@@ -115,7 +115,8 @@
         background:var(--surface-sunken,var(--cream));
         border:1px solid var(--line);
         border-radius:999px;
-        padding:2px 7px;
+        padding:2px 9px;
+        letter-spacing:-0.01em;
         white-space:nowrap;
         flex-shrink:0;
       }
@@ -166,13 +167,14 @@
     } catch (e) {}
     const lim = limDefaults();
     const dayLeft = Math.max(0, state?.dayLeft ?? lim.perDay);
+    const weekLeft = Math.max(0, state?.weekLeft ?? lim.perWeek);
     const head = cardEl.querySelector('.peepal-intent-card-head');
     if (!head) return state;
     head.querySelectorAll('.ai-disc-mini-pill').forEach((n) => n.remove());
     const pill = document.createElement('span');
     pill.className = 'ai-disc-mini-pill';
-    pill.textContent = `${dayLeft}/${lim.perWeek}`;
-    pill.title = `${dayLeft}/${lim.perDay} today · ${Math.max(0, state?.weekLeft ?? lim.perWeek)}/${lim.perWeek} this week`;
+    pill.textContent = `${dayLeft}/${lim.perDay} · ${weekLeft}/${lim.perWeek}`;
+    pill.title = `AI Discovery outreach: ${dayLeft} of ${lim.perDay} left today · ${weekLeft} of ${lim.perWeek} left this week`;
     const nudgeRow = head.querySelector('.peepal-intent-mini-icons');
     if (nudgeRow) head.insertBefore(pill, nudgeRow);
     else head.appendChild(pill);

@@ -270,14 +270,31 @@ function renderQuestion(inner,data,idx,updateProgress){
 
 function showNewsSummary(inner,data,idx){
   const wasCorrect=inner.dataset.wasCorrect==='true';
-  const sourceLine=data.personal?`<div class="news-source">${t('source_personal')}</div>`:`<div class="news-source">${t('source_news',{date:new Date().toDateString()})}</div>`;
+  let sourceLine;
+  if (data.personal) {
+    sourceLine = `<div class="news-source">${t('source_personal')}</div>`;
+  } else if (data.link) {
+    const domain = (() => {
+      try {
+        return new URL(data.link).hostname.replace(/^www\./, '');
+      } catch (e) {
+        return data.link;
+      }
+    })();
+    sourceLine = `<div class="news-source"><a href="${data.link}" target="_blank" rel="noopener" class="news-source-link">Source: ${domain} ↗</a></div>`;
+  } else if (data.source) {
+    sourceLine = `<div class="news-source">${data.source} · ${new Date().toDateString()}</div>`;
+  } else {
+    sourceLine = `<div class="news-source">${t('source_news',{date:new Date().toDateString()})}</div>`;
+  }
   const explainHtml=(!wasCorrect&&data.explain)?`<div class="explain-box">💡 <strong>${t('why')}</strong> ${data.explain}</div>`:'';
   const linkHtml=data.link?`<a class="news-link" href="${data.link}" target="_blank" rel="noopener">${t('read_more')}</a>`:'';
   const hintText=idx===QUESTIONS.length-1?t('scroll_recap'):t('scroll_next');
   const friendUid=data.friendUid||data.uid||data.authorUid||'';
   const friendName=data.friendName||data.authorName||data.user?.name||'';
-  const wishHtml=(data.personal&&friendUid)
-    ?`<button type="button" class="btn btn--primary" data-akhbaar-wish style="margin-top:10px;width:100%;">Wish ${friendName||'them'} on Baithak</button>`
+  const isEvent = data.personal || data.eventType === 'birthday' || data.eventType === 'anniversary' || data.eventType === 'trip';
+  const wishHtml=(isEvent&&friendUid)
+    ?`<button type="button" class="btn btn--primary" data-akhbaar-wish style="margin-top:10px;width:100%;">${data.eventType === 'birthday' ? '🎂' : data.eventType === 'anniversary' ? '💍' : '✈️'} Wish ${friendName||'them'} on Baithak</button>`
     :'';
   inner.innerHTML=`
     <div class="q-tag ${data.personal?'personal':'news'}">${data.personal?'👥 Personal':data.category}</div>
@@ -290,7 +307,13 @@ function showNewsSummary(inner,data,idx){
     </div>
   `;
   inner.querySelector('[data-akhbaar-wish]')?.addEventListener('click',()=>{
-    if(typeof openBaithakWithPrefill==='function'){
+    if(typeof openBaithakWithWish==='function'){
+      openBaithakWithWish({
+        uid:friendUid,
+        name:friendName||'Friend',
+        type:data.eventType||'generic',
+      });
+    } else if(typeof openBaithakWithPrefill==='function'){
       openBaithakWithPrefill({
         uid:friendUid,
         name:friendName||'Friend',

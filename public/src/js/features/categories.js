@@ -942,10 +942,14 @@ async function initPeepal(){
   if(globalBtn&&!globalBtn.dataset.wired){
     globalBtn.dataset.wired='1';
     globalBtn.addEventListener('click',()=>{
-      if(typeof openUniversalSearch==='function'){
-        openUniversalSearch({ types:['users','duniya','peepal','groups','games'] });
-      } else if(typeof openPeopleSearchWithContacts==='function'){
-        openPeopleSearchWithContacts({ surface:'peepal' });
+      const fn=window.openUniversalSearch||(typeof openUniversalSearch!=='undefined'?openUniversalSearch:null);
+      if(typeof fn==='function'){
+        fn({ types:['users','duniya','peepal','groups','games'] });
+      }else{
+        setTimeout(()=>{
+          const fn2=window.openUniversalSearch;
+          if(typeof fn2==='function') fn2({ types:['users','duniya','peepal','groups','games'] });
+        },300);
       }
     });
   }
