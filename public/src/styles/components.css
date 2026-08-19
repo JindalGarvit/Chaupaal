@@ -1760,14 +1760,7 @@ body.theme-goldenHour,
 .duniya-mode-switch{display:flex;gap:4px;background:var(--cream);border-radius:12px;padding:3px;border:1px solid var(--line);}
 .duniya-mode-btn{border:0;background:transparent;border-radius:10px;padding:8px 12px;font:700 12px 'Space Grotesk',sans-serif;color:var(--muted);cursor:pointer;}
 .duniya-mode-btn.active{background:var(--white);color:var(--red);box-shadow:0 1px 3px rgba(0,0,0,.06);}
-.duniya-music-bar{padding:8px 14px 4px;flex-shrink:0;}
-.duniya-music-btn{
-  display:inline-flex;align-items:center;gap:8px;padding:8px 14px;
-  border-radius:999px;border:1.5px solid var(--line);background:var(--cream);
-  font:700 13px 'Space Grotesk',sans-serif;color:var(--ink);cursor:pointer;
-  touch-action:manipulation;
-}
-.duniya-music-btn:active{border-color:var(--red);color:var(--red);}
+/* .duniya-music-bar and .duniya-music-btn removed — Radio & Songs feature removed */
 .lehar-feed{
   position:absolute;inset:0;top:0;overflow-y:auto;
   scroll-snap-type:y mandatory;scroll-snap-stop:always;
@@ -1780,12 +1773,15 @@ html[data-display="night"] .lehar-feed,
 html.theme-dark .lehar-feed{--lehar-bg:#0d1117;--lehar-scrim:rgba(0,0,0,.55);}
 html[data-display="light"] .lehar-feed,
 html.theme-light .lehar-feed,
-:root .lehar-feed{--lehar-scrim:rgba(20,30,40,.42);}
+:root .lehar-feed{--lehar-bg:var(--surface,var(--cream,#f3efe6));--lehar-slide-bg:var(--surface,#f3efe6);--lehar-scrim:rgba(20,30,40,.42);}
+html[data-display="dark"] .lehar-feed,
+html[data-display="night"] .lehar-feed,
+html.theme-dark .lehar-feed{--lehar-slide-bg:#111318;}
 #panel-duniya.is-lehar .duniya-header,
 #duniyaScreen.is-lehar .duniya-header{opacity:0;pointer-events:none;}
 .lehar-slide{
   position:relative;height:100%;min-height:100%;
-  scroll-snap-align:start;scroll-snap-stop:always;background:var(--lehar-bg, #1a1a1a);
+  scroll-snap-align:start;scroll-snap-stop:always;background:var(--lehar-slide-bg,var(--lehar-bg,#111318));
 }
 .lehar-slide video{width:100%;height:100%;object-fit:cover;display:block;}
 .lehar-progress{

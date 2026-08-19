@@ -138,23 +138,6 @@ function initDuniya(){
   }
   screen.dataset.loaded='1';
   loadArchive();
-  if(!screen.dataset.musicWired){
-    screen.dataset.musicWired='1';
-    const bar=document.createElement('div');
-    bar.id='duniyaMusicBar';
-    bar.className='duniya-music-bar';
-    bar.innerHTML=`<button type="button" class="duniya-music-btn" id="duniyaMusicOpen" aria-label="Discover music">
-      <span aria-hidden="true">🎵</span><span>Radio & songs</span>
-    </button>`;
-    const pager=document.getElementById('duniyaPager');
-    if(pager) pager.insertBefore(bar, pager.firstChild);
-    else screen.appendChild(bar);
-    document.getElementById('duniyaMusicOpen')?.addEventListener('click',()=>{
-      if(typeof openMusicHub==='function') openMusicHub({title:'Discover music',tab:'radio'});
-      else if(typeof openSongPicker==='function') openSongPicker({title:'Discover music'});
-      else if(typeof showToast==='function') showToast('Music coming soon');
-    });
-  }
   renderDuniyaStories();
   renderDuniyaFeed();
   // Hydrate from Firestore with cursor pagination when signed in.
@@ -367,7 +350,7 @@ function createDuniyaPost(post, {variant='list'}={}){
   if(!slides.length){
     mediaBlock=`<div class="duniya-post-text-hero">${duniyaEsc(post.caption||'')}</div>`;
   } else if(slides.length===1){
-    mediaBlock=`<div${mediaWrapAttrs}>${duniyaMediaHtml(slides[0],post,variant)}${slides[0].type!=='video'?`<button type="button" class="duniya-expand-media cp-tap-target" aria-label="Open image full screen">⛶</button>`:''}${post.taggedPeople?.length?`<button type="button" class="duniya-tags-hint" data-show-tags>Tags</button>`:''}</div>`;
+    mediaBlock=`<div${mediaWrapAttrs}>${duniyaMediaHtml(slides[0],post,variant)}${post.taggedPeople?.length?`<button type="button" class="duniya-tags-hint" data-show-tags>Tags</button>`:''}</div>`;
   } else {
     mediaBlock=`<div class="duniya-carousel" data-has-ratio="1"${hasMediaSize?` style="--media-ratio:${w}/${h};"`:''}>
       <div class="duniya-carousel-track">${slides.map((s)=>`<div class="duniya-carousel-slide">${duniyaMediaHtml(s,post,variant)}</div>`).join('')}</div>
@@ -513,53 +496,77 @@ function createDuniyaPost(post, {variant='list'}={}){
     if (typeof speakText === 'function') speakText(text, e.currentTarget);
   });
 
-  // Feed media: double-tap/double-click likes; a dedicated button opens viewer.
-  const mediaImg=el.querySelector('.duniya-post-media img');
-  const expandBtn=el.querySelector('.duniya-expand-media');
-  if(mediaImg&&expandBtn){
-    mediaImg.setAttribute('data-no-zoom','1');
-    mediaImg.classList.remove('cp-zoomable');
-    delete mediaImg.dataset.zoomBound;
-    expandBtn.addEventListener('click',(e)=>{
-      e.preventDefault();
-      e.stopPropagation();
-      if(typeof openImageViewer==='function'){
-        openImageViewer(mediaImg.dataset.full||post.media||mediaImg.currentSrc||mediaImg.src,{alt:mediaImg.alt});
-      }
-    });
-    if(variant==='list'){
-      let lastTouchTap=0;
-      const likeFromMedia=()=>{
-        if(!post.likedByMe&&!likeBtn.dataset.busy) likeBtn.click();
-        el.querySelector('.duniya-double-like-heart')?.remove();
-        const heart=document.createElement('div');
-        heart.className='duniya-double-like-heart';
-        heart.setAttribute('aria-hidden','true');
-        heart.textContent='♥';
-        el.querySelector('.duniya-post-media')?.appendChild(heart);
-        setTimeout(()=>heart.remove(),650);
-      };
-      // Swallow single clicks so leftover zoom binders cannot open the viewer.
-      mediaImg.addEventListener('click',(e)=>{
-        e.preventDefault();
-        e.stopPropagation();
-      });
-      mediaImg.addEventListener('pointerup',(e)=>{
-        if(e.pointerType!=='touch') return;
-        const now=Date.now();
-        if(now-lastTouchTap<300){
-          e.preventDefault();
-          e.stopPropagation();
-          lastTouchTap=0;
-          likeFromMedia();
-        }else lastTouchTap=now;
-      });
-      mediaImg.addEventListener('dblclick',(e)=>{
-        e.preventDefault();
-        e.stopPropagation();
-        likeFromMedia();
-      });
+  // Feed media: tap=viewer, double-tap=like, long-press=comments
+  const mediaWrap=el.querySelector('.duniya-post-media');
+  const mediaImg=mediaWrap?.querySelector('img');
+  if(mediaWrap&&variant==='list'){
+    if(mediaImg){
+      mediaImg.setAttribute('data-no-zoom','1');
+      mediaImg.classList.remove('cp-zoomable');
+      delete mediaImg.dataset.zoomBound;
     }
+    const likeFromMedia=()=>{
+      if(!post.likedByMe&&!likeBtn.dataset.busy) likeBtn.click();
+      mediaWrap.querySelector('.duniya-double-like-heart')?.remove();
+      const heart=document.createElement('div');
+      heart.className='duniya-double-like-heart';
+      heart.setAttribute('aria-hidden','true');
+      heart.textContent='♥';
+      mediaWrap.appendChild(heart);
+      setTimeout(()=>heart.remove(),650);
+    };
+    const openViewer=()=>{
+      if(typeof openImageViewer==='function'&&mediaImg){
+        openImageViewer(mediaImg.dataset.full||post.media||mediaImg.currentSrc||mediaImg.src,{alt:mediaImg.alt||''});
+      }
+    };
+    const openComments=()=>{
+      if(post.commentsOff&&!duniyaViewerOwns(post)){
+        if(typeof showToast==='function') showToast('Comments are off');
+        return;
+      }
+      openDuniyaDetail(post);
+    };
+    // Gesture arbitration: single tap=viewer, double tap=like, long press=comments
+    let tapTimer=null, lastTap=0, longPressTimer=null, touchMoved=false;
+    const DOUBLE_TAP_MS=280, LONG_PRESS_MS=480;
+    // Pointer-based long-press (works for touch and mouse)
+    mediaWrap.addEventListener('pointerdown',(e)=>{
+      if(e.target.closest('.duniya-tags-hint')) return;
+      touchMoved=false;
+      longPressTimer=setTimeout(()=>{
+        if(!touchMoved){
+          longPressTimer=null;
+          openComments();
+        }
+      },LONG_PRESS_MS);
+    });
+    const cancelLong=()=>{ clearTimeout(longPressTimer); longPressTimer=null; };
+    mediaWrap.addEventListener('pointermove',(e)=>{
+      if(Math.abs(e.movementX||0)+Math.abs(e.movementY||0)>6){ touchMoved=true; cancelLong(); }
+    });
+    mediaWrap.addEventListener('pointercancel',cancelLong);
+    // Click arbitration for single vs double tap
+    mediaWrap.addEventListener('click',(e)=>{
+      if(e.target.closest('.duniya-tags-hint')) return;
+      cancelLong();
+      const now=Date.now();
+      if(now-lastTap<DOUBLE_TAP_MS){
+        clearTimeout(tapTimer); tapTimer=null;
+        lastTap=0;
+        likeFromMedia();
+        return;
+      }
+      lastTap=now;
+      clearTimeout(tapTimer);
+      tapTimer=setTimeout(()=>{ tapTimer=null; openViewer(); }, DOUBLE_TAP_MS+20);
+    });
+    // dblclick for non-touch (desktop)
+    mediaWrap.addEventListener('dblclick',(e)=>{
+      if(e.target.closest('.duniya-tags-hint')) return;
+      clearTimeout(tapTimer); tapTimer=null;
+      likeFromMedia();
+    });
   }
 
   // Follow / unfollow — optimistic; unfollow uses Undo toast

@@ -1169,6 +1169,7 @@
         toast('Post updated');
         closeComposer();
         if (typeof renderDuniyaFeed === 'function') renderDuniyaFeed();
+        if (typeof renderLeharFeed === 'function') renderLeharFeed();
         return;
       }
 
@@ -1196,6 +1197,7 @@
       if (typeof haptic === 'function') haptic('success');
       toast(state.saveOnly ? tt('duniya_saved_archive', 'Saved to archive') : tt('duniya_posted', 'Posted to Duniya! 🌍'));
       if (typeof renderDuniyaFeed === 'function') renderDuniyaFeed();
+      if (typeof renderLeharFeed === 'function') renderLeharFeed();
       showAfterShare(post);
     } catch (err) {
       report(err);

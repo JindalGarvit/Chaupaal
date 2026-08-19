@@ -1268,7 +1268,7 @@ function renderPeepalFeed(){
             ${collab?.collaborator?.username ? `<span class="pc-tag">@${escPeepalText(collab.collaborator.username)}</span>` : ''}
             <div class="pc-actions-right">
               ${canDelete?`<button class="pc-icon-btn peepal-delete-btn" title="Delete" aria-label="Delete">${typeof iconHtml==='function'?iconHtml('trash',{size:15}):'🗑️'}</button>`:''}
-              ${!canDelete&&q.user?.uid&&q.user.uid!==currentUser?.uid?`<button class="pc-icon-btn peepal-more-btn" title="More">${typeof iconHtml==='function'?iconHtml('more-vertical',{size:17}):'⋮'}</button>`:''}
+              ${!canDelete&&q.user?.uid&&q.user.uid!==currentUser?.uid?(()=>{const req=!!(q.user?.friendRequested||q._friendRequested);return`<button class="pc-icon-btn peepal-more-btn" title="More">${typeof iconHtml==='function'?iconHtml('more-vertical',{size:17}):'⋮'}</button><button class="peepal-friend-btn${req?' is-requested':''}" data-uid="${escPeepalText(q.user.uid||'')}" aria-label="${req?'Cancel friend request':'Add friend'}">${req?'Requested':'Add Friend'}</button>`;})():''}
               <button class="pc-icon-btn peepal-speak-btn" data-text="${escPeepalText(peepalSpeakPayload(q))}" title="Listen">${typeof iconHtml==='function'?iconHtml('volume',{size:15}):'🔊'}</button>
             </div>
           </div>
@@ -1332,6 +1332,34 @@ function renderPeepalFeed(){
       else if(typeof showToast==='function') showToast(t('cat_boost_soon'));
     });
     card.querySelector('.peepal-start-comment')?.addEventListener('click',(e)=>{e.stopPropagation();openPeepalDetail(q,{focusComposer:true});});
+    // Friend request toggle — Add Friend ↔ Requested
+    card.querySelector('.peepal-friend-btn')?.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const btn = e.currentTarget;
+      if (btn.disabled) return;
+      btn.disabled = true;
+      const wasRequested = btn.classList.contains('is-requested');
+      btn.classList.toggle('is-requested', !wasRequested);
+      btn.textContent = wasRequested ? 'Add Friend' : 'Requested';
+      btn.setAttribute('aria-label', wasRequested ? 'Add friend' : 'Cancel friend request');
+      try {
+        if (wasRequested) {
+          if (typeof cancelFriendRequest === 'function') await cancelFriendRequest(btn.dataset.uid);
+          q.user._friendRequested = false; q._friendRequested = false;
+        } else {
+          if (typeof requestFriend === 'function') await requestFriend(btn.dataset.uid);
+          q.user._friendRequested = true; q._friendRequested = true;
+          if (typeof showToast === 'function') showToast('Friend request sent');
+        }
+      } catch (err) {
+        btn.classList.toggle('is-requested', wasRequested);
+        btn.textContent = wasRequested ? 'Requested' : 'Add Friend';
+        btn.setAttribute('aria-label', wasRequested ? 'Cancel friend request' : 'Add friend');
+        if (typeof showToast === 'function') showToast(typeof friendlyError === 'function' ? friendlyError(err) : 'Could not update request');
+      } finally {
+        btn.disabled = false;
+      }
+    });
     card.querySelectorAll('.peepal-comment-chip').forEach(chip=>{
       const open=()=>openPeepalDetail(q,{focusCommentId:chip.dataset.commentId});
       chip.addEventListener('click',(e)=>{
