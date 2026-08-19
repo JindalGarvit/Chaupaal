@@ -606,7 +606,6 @@
         drawing = false;
         render();
       } else if (tool === 'more') {
-        const teen = NS.isTeen();
         promptSheet(
           NS.tt('more', 'More'),
           `
@@ -614,8 +613,7 @@
           <button type="button" class="ds-sheet-btn" data-m="location">📍 ${NS.tt('location', 'Location')}</button>
           <button type="button" class="ds-sheet-btn" data-m="interactive">◍ ${NS.tt('story_interactive', 'Interactive')}</button>
           <button type="button" class="ds-sheet-btn" data-m="crop">⛶ ${NS.tt('story_crop', 'Crop')}</button>
-          <button type="button" class="ds-sheet-btn" data-m="camera">📷 ${NS.tt('camera', 'Camera')}</button>
-          ${teen ? '' : ''}`,
+          <button type="button" class="ds-sheet-btn" data-m="camera">📷 ${NS.tt('camera', 'Camera')}</button>`,
           (sheet, done) => {
             sheet.querySelectorAll('[data-m]').forEach((b) =>
               b.addEventListener('click', () => {
@@ -710,7 +708,6 @@
     }
 
     function runInteractiveMenu() {
-      const teen = NS.isTeen();
       promptSheet(
         NS.tt('story_interactive', 'Stickers'),
         `
@@ -720,7 +717,7 @@
           <button type="button" data-k="slider">Slider</button>
           <button type="button" data-k="countdown">Countdown</button>
           <button type="button" data-k="addyours">Add yours</button>
-          ${teen ? '' : '<button type="button" data-k="link">Link</button>'}
+          <button type="button" data-k="link">Link</button>
         `,
         (sheet, done) => {
           sheet.querySelectorAll('[data-k]').forEach((b) =>

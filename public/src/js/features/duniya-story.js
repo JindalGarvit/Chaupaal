@@ -128,8 +128,7 @@
 
   function renderOverlayHtml(ov, opts) {
     if (!ov || !ov.type) return '';
-    const teenHideLink = opts?.teen && ov.type === 'link';
-    const cls = `ds-ov ds-ov-${ov.type}${ov.locked ? ' is-lock' : ''}${teenHideLink ? ' ds-link-hidden' : ''}`;
+    const cls = `ds-ov ds-ov-${ov.type}${ov.locked ? ' is-lock' : ''}`;
     const style = overlayStyle(ov);
     const id = esc(ov.id || '');
     if (ov.type === 'text') {
@@ -146,7 +145,6 @@
       return `<button type="button" class="${cls} ds-sticker" data-ov="${id}" data-mention="${esc(ov.uid)}" style="${style}">@${esc(ov.name || ov.username)}</button>`;
     }
     if (ov.type === 'link') {
-      if (teenHideLink) return `<div class="${cls} ds-sticker" data-ov="${id}" style="${style}">Link hidden in Teen Mode</div>`;
       return `<button type="button" class="${cls} ds-sticker" data-ov="${id}" data-link="${esc(ov.url)}" style="${style}">${esc(ov.label || 'Link')}</button>`;
     }
     if (ov.type === 'credit') {
@@ -221,7 +219,6 @@
         .concat(extra)
         .map((ov) =>
           renderOverlayHtml(ov, {
-            teen: isTeen(),
             faces: story.addYoursFaces,
             musicHtml,
             locationHtml,

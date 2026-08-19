@@ -236,4 +236,3 @@ html.quiet-mode .ds-flying span,
   background:#fff;padding:10px;cursor:pointer;font-weight:700;font-size:13px;
 }
 .ds-widget button:active{background:rgba(230,57,70,.08);border-color:var(--brand-red,#E63946);}
-.ds-link-hidden{pointer-events:none;opacity:.55;}
