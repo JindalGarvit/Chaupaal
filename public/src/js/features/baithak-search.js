@@ -610,16 +610,11 @@
     if (!panel || panel.dataset.baithakSearchWired === '1') return;
     panel.dataset.baithakSearchWired = '1';
 
-    const row = document.querySelector('.baithak-search-bar-row');
-    if (row && !document.getElementById('baithakSearchOpenBtn')) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.id = 'baithakSearchOpenBtn';
-      btn.className = 'baithak-search-open-btn';
-      btn.setAttribute('aria-label', tt('baithak_search_open', 'Search everywhere'));
-      btn.innerHTML = typeof iconHtml === 'function' ? iconHtml('search', { size: 20 }) : '🔍';
-      row.insertBefore(btn, document.getElementById('baithakOverflowBtn'));
-      btn.addEventListener('click', () => {
+    const iconBtn = document.getElementById('baithakSearchIconBtn');
+    if (iconBtn && !iconBtn.dataset.baithakSearchWiredIcon) {
+      iconBtn.dataset.baithakSearchWiredIcon = '1';
+      if (typeof iconHtml === 'function') iconBtn.innerHTML = iconHtml('search', { size: 16 });
+      iconBtn.addEventListener('click', () => {
         const q = document.getElementById('baithakSearch')?.value?.trim() || '';
         openBaithakSearchOverlay({ initialQuery: q, tab: 'all' });
       });

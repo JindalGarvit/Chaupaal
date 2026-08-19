@@ -1247,6 +1247,9 @@
     lastTapTab = tab;
     lastTapAt = now;
     if (typeof Micro !== 'undefined') Micro.tabFeedback();
+    try {
+      if (typeof scheduleTabNudge === 'function') scheduleTabNudge(tab);
+    } catch (e) {}
   }
 
   function wire() {

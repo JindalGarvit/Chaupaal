@@ -33,11 +33,11 @@
   <link rel="stylesheet" href="/src/styles/tab-elements.css?v=0544038c">
   <link rel="stylesheet" href="/src/styles/akhbaar.css?v=b924fec3">
   <link rel="stylesheet" href="/src/styles/dangal.css?v=f8f0653e">
-  <link rel="stylesheet" href="/src/styles/baithak.css?v=7a8dfc4f">
+  <link rel="stylesheet" href="/src/styles/baithak.css?v=5da0f49f">
   <link rel="stylesheet" href="/src/styles/peepal.css?v=26cc9a4d">
   <link rel="stylesheet" href="/src/styles/duniya.css?v=51212780">
   <link rel="stylesheet" href="/src/styles/duniya-compose.css?v=624ed6bc">
-  <link rel="stylesheet" href="/src/styles/duniya-story.css?v=e3571395">
+  <link rel="stylesheet" href="/src/styles/duniya-story.css?v=31364c56">
   <link rel="stylesheet" href="/src/styles/components.css?v=5ec1f3e6">
   <link rel="stylesheet" href="/src/styles/mehfil.css?v=66769939">
 </head>
@@ -428,7 +428,10 @@
 
     <!-- Search + overflow (below Instants, above list) -->
     <div class="baithak-search-bar-row">
-      <input class="baithak-search" id="baithakSearch" placeholder="Search chats…" type="text" data-i18n-placeholder="baithak_search" data-living-ph="baithak_search">
+      <div class="baithak-search-wrap">
+        <input class="baithak-search" id="baithakSearch" placeholder="Search chats…" type="text" data-i18n-placeholder="baithak_search" data-living-ph="baithak_search">
+        <button type="button" class="baithak-search-icon-btn" id="baithakSearchIconBtn" aria-label="Search everywhere" data-icon="search" data-icon-size="16">🔍</button>
+      </div>
       <button type="button" class="baithak-overflow-btn" id="baithakOverflowBtn" data-icon="more-vertical" data-icon-size="22" aria-label="More options" aria-haspopup="menu" title="More">⋮</button>
     </div>
 
@@ -857,7 +860,8 @@
   <script src="/src/js/core/notification-panel.js?v=ba8500fe"></script>
   <script src="/src/js/core/fcm-client.js?v=dc39a6ec"></script>
   <script src="/src/js/core/micro.js?v=014dea03"></script>
-  <script src="/src/js/core/tab-gestures.js?v=5a98d705"></script>
+  <script src="/src/js/core/tab-gestures.js?v=678a96d3"></script>
+  <script src="/src/js/core/tab-nudges.js?v=034b4760"></script>
   <script src="/src/js/core/sessions.js?v=fafd40d3"></script>
   <script src="/src/js/core/safety.js?v=1dcac469"></script>
   <script src="/src/js/core/notif-prefs.js?v=19bbe844"></script>
@@ -889,7 +893,7 @@
   <script src="/src/js/features/dangal.js?v=d53bdd6b"></script>
   <script src="/src/js/features/dangal-ratings.js?v=1cc5662a"></script>
   <script src="/src/js/features/baithak-data.js?v=210c5325"></script>
-  <script src="/src/js/features/baithak-search.js?v=7d70e4d7"></script>
+  <script src="/src/js/features/baithak-search.js?v=188c28da"></script>
   <script src="/src/js/features/self-chat.js?v=5f1997ce"></script>
   <script src="/src/js/features/chaupaal-chat.js?v=398006be"></script>
   <script src="/src/js/features/chat-rating.js?v=19d676d2"></script>
@@ -901,7 +905,7 @@
   <script src="/src/js/features/music-taste.js?v=6b45b133"></script>
   <script src="/src/js/features/music-hub.js?v=86b5c5f2"></script>
   <script src="/src/js/features/group-info.js?v=f75d5d74"></script>
-  <script src="/src/js/core/stories.js?v=cf04c6f8"></script>
+  <script src="/src/js/core/stories.js?v=13e7f501"></script>
   <script src="/src/js/core/archive-hub.js?v=c5e706ec"></script>
   <script src="/src/js/core/journal-anim.js?v=f2658ae2"></script>
   <script src="/src/js/features/baithak.js?v=9bdd414d"></script>
@@ -943,9 +947,9 @@
   <script src="/src/js/games/party-classics.js?v=8e773c46"></script>
   <script src="/src/js/main.js?v=05233c72"></script>
   <script src="/src/js/features/akhbaar-catbar.js?v=0a3b9b77"></script>
-  <script src="/src/js/features/duniya-story.js?v=1bd7bc59"></script>
-  <script src="/src/js/features/duniya-story-media.js?v=0889e3de"></script>
-  <script src="/src/js/features/duniya-story-editor.js?v=f27c8cf4"></script>
+  <script src="/src/js/features/duniya-story.js?v=a0780487"></script>
+  <script src="/src/js/features/duniya-story-media.js?v=fa2ef6e4"></script>
+  <script src="/src/js/features/duniya-story-editor.js?v=4dff1e38"></script>
   <script src="/src/js/features/duniya-story-viewer.js?v=f7948a45"></script>
   <script src="/src/js/features/duniya-compose.js?v=4bd7e473"></script>
   <script src="/src/js/features/duniya.js?v=5fb22f0e"></script>

@@ -246,8 +246,10 @@
       try {
         await onCommit?.();
         pending.remove();
+        collapseBaithakSplitComposer();
       } catch (error) {
         pending.remove();
+        collapseBaithakSplitComposer();
         if (typeof showToast === 'function') {
           showToast(error?.message || splitTt('instants_fail', 'Could not share Split'));
         }
@@ -257,6 +259,7 @@
       cancelled = true;
       clearTimeout(timer);
       pending.remove();
+      collapseBaithakSplitComposer();
       try {
         onCancel?.();
       } catch (e) {}
@@ -282,6 +285,20 @@
       bindLivingPlaceholder(ta, 'instant_note');
     }
 
+    // Blur / click-outside: collapse if user leaves without sending
+    let splitBarFocused = false;
+    if (ta) {
+      ta.addEventListener('focus', () => { splitBarFocused = true; });
+      ta.addEventListener('blur', () => {
+        splitBarFocused = false;
+        setTimeout(() => {
+          if (!splitBarFocused) collapseBaithakSplitComposer();
+        }, 150);
+      });
+    }
+    bar.addEventListener('pointerdown', () => { splitBarFocused = true; });
+    bar.addEventListener('pointerup', () => { setTimeout(() => { splitBarFocused = false; }, 200); });
+
     async function autoShare(payload, preview) {
       showSplitUndoBar({
         previewUrl: preview?.url,
@@ -290,6 +307,7 @@
           await shareBaithakSplit(payload);
         },
       });
+      collapseBaithakSplitComposer();
     }
 
     bar.querySelector('[data-split-send]')?.addEventListener('click', async () => {
@@ -395,6 +413,7 @@
         },
         onCancel: () => URL.revokeObjectURL(preview),
       });
+      collapseBaithakSplitComposer();
     });
   }
 

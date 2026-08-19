@@ -54,11 +54,15 @@
 .stories-row{position:relative;}
 
 .baithak-search-bar-row{display:flex;gap:8px;padding:10px 16px;flex-shrink:0;align-items:center;}
-.baithak-search{flex:1;min-width:0;padding:10px 14px 10px 14px;border:2px solid var(--line);border-radius:12px;font-family:'Inter',sans-serif;font-size:14px;background:var(--cream);outline:none;}
-.baithak-search-open-btn{
-  flex:0 0 auto;width:40px;height:40px;border:0;border-radius:12px;background:var(--cream);
-  display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);
+.baithak-search-wrap{position:relative;flex:1;min-width:0;}
+.baithak-search{width:100%;box-sizing:border-box;padding:10px 40px 10px 14px;border:2px solid var(--line);border-radius:12px;font-family:'Inter',sans-serif;font-size:14px;background:var(--cream);outline:none;}
+.baithak-search-icon-btn{
+  position:absolute;right:8px;top:50%;transform:translateY(-50%);
+  border:0;background:transparent;color:var(--muted);cursor:pointer;
+  display:flex;align-items:center;padding:4px;line-height:1;
 }
+/* kept for any external callers; no longer injected into the DOM */
+.baithak-search-open-btn{display:none;}
 .baithak-search-everywhere{
   display:block;width:calc(100% - 32px);margin:8px 16px 12px;padding:12px 14px;border:1px dashed var(--line);
   border-radius:12px;background:rgba(230,57,70,.04);color:var(--red);font:600 13px 'Space Grotesk',sans-serif;text-align:left;cursor:pointer;
