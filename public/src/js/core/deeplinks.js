@@ -155,7 +155,7 @@
       <div class="public-profile-scroll">
         <div class="public-profile-hero">
           <div data-public-profile-avatar class="public-profile-avatar">
-            ${view.photoURL || u.photoURL ? `<img src="${esc(view.photoURL || u.photoURL)}" alt="">` : esc(u.avatar || '👤')}
+            ${typeof renderUserAvatarHtml==='function'?renderUserAvatarHtml({...u,...view,uid:profileUid},{decorative:false,alt:view.displayName||u.name}):(view.photoURL||u.photoURL?`<img src="${esc(view.photoURL||u.photoURL)}" alt="">`:esc(u.avatar||'👤'))}
           </div>
           <div class="public-profile-name">${nameHtml}</div>
           ${uname ? `<div class="public-profile-uname">@${esc(uname)}</div>` : ''}
@@ -186,7 +186,6 @@
           }
           <div data-public-profile-counts data-rel-counts-uid="${esc(profileUid)}" class="relationship-counts-loading public-profile-chrome-slot">
             <span class="public-profile-chrome-label">Connections</span>
-            <span>Loading…</span>
           </div>
           <div class="public-profile-actions" data-rel-actions>
             <button class="btn btn--primary" data-rel-primary type="button">${String(dp.profileType || u.profileType || '').toLowerCase() === 'professional' ? 'Follow' : 'Add Friend'}</button>
@@ -424,6 +423,12 @@
       });
     }
     if (profileUid && typeof loadRelationshipProfile === 'function') {
+      const countsEl = sheet.querySelector('[data-public-profile-counts]');
+      if (countsEl && typeof renderSkeleton === 'function') {
+        const skWrap = document.createElement('div');
+        countsEl.appendChild(skWrap);
+        renderSkeleton(skWrap, { variant: 'detail', count: 1 });
+      }
       loadRelationshipProfile(profileUid)
         .then((data) => {
           const counts = sheet.querySelector('[data-public-profile-counts]');
@@ -436,9 +441,18 @@
             }
           }
         })
-        .catch(() => {
+        .catch((err) => {
           const counts = sheet.querySelector('[data-public-profile-counts]');
-          if (counts) counts.innerHTML = '<span class="public-profile-chrome-label">Connections</span>';
+          if (counts && typeof renderErrorState === 'function') {
+            renderErrorState(counts, {
+              message: typeof friendlyError === 'function' ? friendlyError(err) : 'Could not load counts',
+              onRetry: () => loadRelationshipProfile(profileUid).then((data) => {
+                if (typeof paintRelationshipCounts === 'function') paintRelationshipCounts(counts, data.counts, profileUid);
+              }),
+            });
+          } else if (counts) {
+            counts.innerHTML = '<span class="public-profile-chrome-label">Connections</span>';
+          }
         });
     }
     return sheet;
@@ -478,7 +492,7 @@
         </div>
         <div style="padding:24px 16px;text-align:center;">
           <div style="width:88px;height:88px;border-radius:50%;margin:0 auto 12px;background:var(--line);overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:40px;">
-            ${u.photoURL ? `<img src="${u.photoURL}" style="width:100%;height:100%;object-fit:cover;">` : '👤'}
+            ${typeof renderUserAvatarHtml==='function'?renderUserAvatarHtml(u,{decorative:true}):(u.photoURL?`<img src="${u.photoURL}" style="width:100%;height:100%;object-fit:cover;">`:'👤')}
           </div>
           <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:20px;">${u.name || uname}</div>
           <div style="color:var(--muted);font-size:13px;margin-bottom:8px;">@${uname}</div>

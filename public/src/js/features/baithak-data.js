@@ -218,7 +218,7 @@ function renderChatList(chats, opts){
           openBaithakAvatarMenu(avatar,{
             uid:'chaupaal',
             name:'Chaupaal',
-            closeFriend:false,
+            splitExcluded:false,
             isChaupaal:true,
           });
         }
@@ -383,6 +383,27 @@ function isGenericDmTitle(name){
 }
 
 function chatAvatarMarkup(chat){
+  if(chat?.type==='group'||chat?.isChaupaal) return String(chat?.avatar||'👤');
+  if(typeof renderUserAvatarHtml==='function'){
+    return renderUserAvatarHtml({
+      uid:chat?.uid||chat?.peerUid,
+      name:chat?.name,
+      username:chat?.username,
+      photoURL:chat?.photoURL,
+      photoThumb:chat?.photoThumb,
+      avatar:chat?.avatar,
+      profileType:chat?.profileType,
+      interests:chat?.interests,
+      hobbies:chat?.hobbies,
+      industry:chat?.industry,
+      gender:chat?.gender,
+      avatarDisplay:chat?.avatarDisplay,
+      profile:chat?.profile,
+      city:chat?.city,
+      occupation:chat?.occupation,
+      topCat:chat?.topCat,
+    }, { decorative:true });
+  }
   const url=chat?.photoURL||chat?.photoThumb||(/^https?:\/\//i.test(String(chat?.avatar||''))?chat.avatar:'');
   if(url){
     const safe=String(url).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
@@ -894,7 +915,7 @@ function peerUidOfChat(c) {
 
 function isFriendOrFollowing(st) {
   if (!st) return false;
-  return !!(st.friend || st.following || st.closeFriend || st.status === 'friends' || st.status === 'following');
+  return !!(st.friend || st.following || st.status === 'friends' || st.status === 'following');
 }
 
 async function setBaithakSection(section) {

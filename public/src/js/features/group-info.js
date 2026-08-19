@@ -619,7 +619,7 @@
           const badge = m.role === 'admin' ? '<span class="group-info-admin-badge">Admin</span>' : '';
           const av = m.photoURL || m.avatar;
           return `<div class="group-info-member" data-member-uid="${esc(m.uid)}">
-            <div class="group-info-member-av">${/^https:/.test(av) ? `<img src="${esc(av)}" alt="">` : esc(m.avatar || '👤')}</div>
+            <div class="group-info-member-av">${typeof renderUserAvatarHtml==='function'?renderUserAvatarHtml(m,{decorative:true}):(/^https:/.test(av)?`<img src="${esc(av)}" alt="">`:esc(m.avatar||'👤'))}</div>
             <div class="group-info-member-meta"><div class="group-info-member-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(m.name,m):esc(m.name)}${isMe ? ' (You)' : ''}</div>${badge}</div>
             ${admin && !isMe ? `<button type="button" class="group-info-member-menu" data-member-menu aria-label="More options">${typeof iconHtml==='function'?iconHtml('more-vertical',{size:18}):'⋮'}</button>` : ''}
           </div>`;

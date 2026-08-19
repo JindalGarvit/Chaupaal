@@ -168,6 +168,28 @@ function openDuniyaStoryAddSheet(){
   }
 }
 
+function renderDuniyaDemoBanner(feed){
+  if(!feed||duniyaLiveMode||typeof currentUser!=='undefined'&&currentUser)return;
+  try{if(sessionStorage.getItem('chaupaal_duniya_demo_dismissed')==='1')return;}catch(e){}
+  const existing=feed.querySelector('.duniya-demo-banner');
+  if(existing)return;
+  const banner=document.createElement('div');
+  banner.className='duniya-demo-banner';
+  banner.setAttribute('role','status');
+  banner.innerHTML=`<span class="duniya-demo-banner-text">Sample posts — sign in to see your real feed</span>
+    <button type="button" class="btn btn--primary duniya-demo-banner-cta" data-duniya-demo-signin>Sign in</button>
+    <button type="button" class="duniya-demo-banner-dismiss" data-duniya-demo-dismiss aria-label="Dismiss">×</button>`;
+  banner.querySelector('[data-duniya-demo-signin]')?.addEventListener('click',()=>{
+    if(typeof openAuthSheet==='function')openAuthSheet('login');
+    else if(typeof showToast==='function')showToast('Sign in from the menu');
+  });
+  banner.querySelector('[data-duniya-demo-dismiss]')?.addEventListener('click',()=>{
+    try{sessionStorage.setItem('chaupaal_duniya_demo_dismissed','1');}catch(e){}
+    banner.remove();
+  });
+  feed.insertBefore(banner,feed.firstChild);
+}
+
 function renderDuniyaFeed(){
   const feed=document.getElementById('duniyaFeed');if(!feed)return;
   const visible=duniyaPosts.filter(p=>!(typeof isSoftDeleted==='function'?isSoftDeleted(p):p.deleted)).filter(p=>p.archived!==true);
@@ -187,6 +209,7 @@ function renderDuniyaFeed(){
     return;
   }
   visible.forEach(post=>feed.appendChild(createDuniyaPost(post)));
+  renderDuniyaDemoBanner(feed);
   if(typeof enhanceMediaIn==='function') enhanceMediaIn(feed);
   if(typeof mountMusicCards==='function') mountMusicCards(feed);
   if(typeof mountLocationCards==='function') mountLocationCards(feed);
@@ -363,7 +386,7 @@ function createDuniyaPost(post, {variant='list'}={}){
   el.innerHTML=`
     ${pendingInvite?`<div class="duniya-collab-banner" data-collab-banner><span>Collaborate on this post?</span><button type="button" data-collab="accept">Accept</button><button type="button" data-collab="decline">Decline</button></div>`:''}
     <div class="duniya-post-header">
-      <div class="duniya-post-avatar">${post.user.photoURL?`<img src="${duniyaEsc(post.user.photoURL)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:`<span>${duniyaEsc(post.user.avatar||'👤')}</span>`}</div>
+      <div class="duniya-post-avatar">${typeof duniyaUserAvatarHtml==='function'?duniyaUserAvatarHtml(post.user):`<span>${duniyaEsc(post.user.avatar||'👤')}</span>`}</div>
       <div class="duniya-post-user">
         <div class="duniya-post-name">${headerName}</div>
         <div class="duniya-post-meta">${duniyaEsc(typeof formatRelativeTime==='function'?formatRelativeTime(post.ts||post.timestamp):post.timestamp)} · <span class="cp-tab-mark" data-tab-mark="duniya" aria-hidden="true"></span> ${duniyaEsc(audienceLabel)}${locName?` · <button type="button" class="duniya-loc-line" data-loc>${duniyaEsc(locName)}</button>`:''}</div>

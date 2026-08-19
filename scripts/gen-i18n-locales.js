@@ -75,7 +75,7 @@ const EN = {
   companion_tips_label: 'Tips & wishes from Chaupaal',
   companion_tips_desc: 'Festival wishes, gentle check-ins, and companion notes. Journal Goodnight is separate.',
   appear_friends_label: "Appear in friends’ prompts",
-  appear_friends_desc: 'Birthday / update prompts about you for Close Friends.',
+  appear_friends_desc: 'Birthday / update prompts about you for mutual friends.',
   share_friends_section: 'Share with friends',
   share_personal_events_label: 'Share personal events',
   share_personal_events_desc: 'Show birthdays, anniversaries, and similar in Akhbaar / Surkhiya. On by default — turn off anytime.',

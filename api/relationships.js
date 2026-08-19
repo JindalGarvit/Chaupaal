@@ -11,9 +11,9 @@
  * Denormalized counters live at users/{uid}.relationshipCounts and are
  * maintained only by this Admin-backed write path (client writes blocked in rules).
  *
- * Close Friends is opt-out for Splits: every current Friend receives Splits
- * unless users/{uid}/cf_excluded/{id} exists. Unfollow/block clears exclusions
- * both ways so a later re-friend starts included again.
+ * Split exclusion list (private): every current Friend receives Splits unless
+ * users/{uid}/cf_excluded/{id} exists. Unfollow/block clears exclusions both
+ * ways so a later re-friend starts included again.
  */
 const {
   excludedIds,
@@ -213,7 +213,7 @@ async function setFollow(db, admin, fromUid, toUid, follow, source) {
 }
 
 async function mutationResult(db, uid, targetUid) {
-  let state = { following: false, followsYou: false, friend: false, requestSent: false, requestReceived: false, closeFriend: false };
+  let state = { following: false, followsYou: false, friend: false, requestSent: false, requestReceived: false, splitExcluded: false };
   try {
     state = await relationshipState(db, uid, targetUid);
   } catch (e) {
@@ -258,7 +258,7 @@ async function relationshipState(db, uid, targetUid) {
     ...derived,
     requestSent: sentSnap.exists,
     requestReceived: receivedSnap.exists,
-    closeFriend: derived.friend && !excludedSnap.exists,
+    splitExcluded: derived.friend && excludedSnap.exists,
     friendOrigin,
     theirFollowSource: theirsSnap.exists ? theirsSnap.data()?.source || null : null,
   };
@@ -448,7 +448,8 @@ async function removeFollower(db, admin, uid, followerUid) {
   return relationshipState(db, uid, followerUid);
 }
 
-async function setCloseFriend(db, admin, uid, targetUid, enabled) {
+/** @returns {boolean} splitExcluded — true when target is on the owner's exclusion list */
+async function setSplitExclusion(db, admin, uid, targetUid, excluded) {
   if (uid === targetUid) throw new Error('SELF_RELATIONSHIP');
   await ensureTarget(db, targetUid);
   await purgeLegacyCloseFriendsAllowlist(db, uid);
@@ -456,17 +457,24 @@ async function setCloseFriend(db, admin, uid, targetUid, enabled) {
   if (!state.friend) throw new Error('FRIEND_REQUIRED');
   if (await isBlockedPair(db, uid, targetUid)) throw new Error('RELATIONSHIP_BLOCKED');
   const ref = excludedRef(db, uid, targetUid);
-  if (enabled) {
+  if (!excluded) {
     await ref.delete();
     await syncSplitInboxForFriend(db, admin, uid, targetUid, { include: true });
-    return true;
+    return false;
   }
   await ref.set({
     uid: targetUid,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
   await syncSplitInboxForFriend(db, admin, uid, targetUid, { include: false });
-  return false;
+  return true;
+}
+
+async function listExclusion(db, uid) {
+  await purgeLegacyCloseFriendsAllowlist(db, uid);
+  const excluded = await excludedIds(db, uid);
+  const profiles = await profilesForIds(db, [...excluded]);
+  return { excluded: profiles };
 }
 
 async function mapProfileResolved(db, snap) {
@@ -564,7 +572,7 @@ async function searchUsers(db, uid, query) {
     uid,
     candidates.map((profile) => profile.uid)
   );
-  // Close Friends manager only offers current Friends (CF is a Friends subset).
+  // Exclusion list manager search only offers current Friends.
   return candidates.filter((profile) => states[profile.uid]?.friend);
 }
 
@@ -595,6 +603,7 @@ module.exports = async function handler(req, res) {
         'cancel_friend_request',
         'remove_follower',
         'set_close_friend',
+        'set_exclusion',
       ].includes(action)
     ) {
       const rate = await checkActionRateLimit(user.uid, 'follow');
@@ -717,13 +726,23 @@ module.exports = async function handler(req, res) {
       await removeFollower(db, admin, user.uid, targetUid);
       return sendSuccess(res, await mutationResult(db, user.uid, targetUid));
     }
+    if (action === 'set_exclusion') {
+      if (!targetUid || typeof body.excluded !== 'boolean') {
+        return sendError(res, 400, 'VALIDATION_ERROR', 'targetUid and excluded required');
+      }
+      return sendSuccess(res, {
+        splitExcluded: await setSplitExclusion(db, admin, user.uid, targetUid, body.excluded),
+      });
+    }
+    if (action === 'list_exclusion') {
+      return sendSuccess(res, await listExclusion(db, user.uid));
+    }
     if (action === 'set_close_friend') {
       if (!targetUid || typeof body.enabled !== 'boolean') {
         return sendError(res, 400, 'VALIDATION_ERROR', 'targetUid and enabled required');
       }
-      return sendSuccess(res, {
-        closeFriend: await setCloseFriend(db, admin, user.uid, targetUid, body.enabled),
-      });
+      const splitExcluded = await setSplitExclusion(db, admin, user.uid, targetUid, !body.enabled);
+      return sendSuccess(res, { splitExcluded, closeFriend: !splitExcluded });
     }
     if (action === 'list_close_friends') {
       return sendSuccess(res, await listCloseFriends(db, user.uid));
@@ -935,7 +954,7 @@ module.exports = async function handler(req, res) {
       USER_NOT_FOUND: [404, 'USER_NOT_FOUND', 'User not found'],
       REQUEST_NOT_FOUND: [404, 'REQUEST_NOT_FOUND', 'Friend request not found'],
       SELF_RELATIONSHIP: [400, 'VALIDATION_ERROR', 'You cannot use this action on yourself'],
-      FRIEND_REQUIRED: [403, 'FRIEND_REQUIRED', 'Only Friends can be added to Close Friends'],
+      FRIEND_REQUIRED: [403, 'FRIEND_REQUIRED', 'Only Friends can be added to your exclusion list'],
       RELATIONSHIP_BLOCKED: [403, 'RELATIONSHIP_BLOCKED', 'This relationship action is unavailable'],
     }[msg];
     if (known) return sendError(res, known[0], known[1], known[2]);

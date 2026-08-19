@@ -217,10 +217,30 @@
     </div>`;
   }
 
+  function showHostLoading(host, variant = 'detail', count = 2) {
+    if (!host) return;
+    if (typeof renderSkeleton === 'function') renderSkeleton(host, { variant, count });
+    else host.innerHTML = '<div class="comments-empty">Loading…</div>';
+  }
+
+  function showHostError(host, onRetry, err) {
+    if (!host) return;
+    if (typeof renderErrorState === 'function') {
+      renderErrorState(host, {
+        message: typeof friendlyError === 'function' ? friendlyError(err) : 'Please try again.',
+        onRetry,
+      });
+    } else {
+      host.innerHTML = '<div class="comments-empty">Could not load</div>';
+    }
+  }
+
   async function renderJournalTab(body, setTab) {
     body.innerHTML = `<div class="archive-hub-copy">Private journal — never visible on your public profile.</div>
       ${renderJournalComposeHtml()}
-      <div data-ah-journal>Loading…</div>`;
+      <div data-ah-journal></div>`;
+    const journalHost = body.querySelector('[data-ah-journal]');
+    showHostLoading(journalHost, 'list', 3);
     if (!db || !currentUser) {
       body.querySelector('[data-ah-journal]').innerHTML = '<div class="comments-empty">Sign in to journal</div>';
       return;
@@ -375,7 +395,8 @@
         <button type="button" data-ah-tab="peepal">Peepal</button>
         <button type="button" data-ah-tab="interactions">Interactions</button>
       </div>
-      <div class="archive-hub-body" data-ah-body>Loading…</div>`;
+      <div class="archive-hub-body" data-ah-body></div>`;
+    showHostLoading(body, 'detail', 2);
     document.querySelector('.device')?.appendChild(overlay);
     const close = () => {
       if (typeof removeNavLayer === 'function') removeNavLayer(overlay);
@@ -404,15 +425,16 @@
             <button type="button" data-ah-ix="likes">Likes</button>
             <button type="button" data-ah-ix="comments">Comments</button>
           </div>
-          <div data-ah-ix-body>Loading…</div>`;
+          <div data-ah-ix-body></div>`;
         const ixBody = body.querySelector('[data-ah-ix-body]');
+        showHostLoading(ixBody, 'list', 4);
         const loadIx = async (kind) => {
           body.querySelectorAll('[data-ah-ix]').forEach((b) => b.classList.toggle('active', b.dataset.ahIx === kind));
           if (!db || !currentUser) {
             ixBody.innerHTML = '<div class="comments-empty">Sign in to see interactions</div>';
             return;
           }
-          ixBody.innerHTML = 'Loading…';
+          showHostLoading(ixBody, 'list', 4);
           try {
             if (kind === 'saved') {
               const snap = await db
@@ -481,7 +503,7 @@
               : '<div class="comments-empty">Your comments will gather here</div>';
             wireInteractionRows(ixBody);
           } catch (e) {
-            ixBody.innerHTML = '<div class="comments-empty">Could not load interactions</div>';
+            showHostError(ixBody, () => loadIx(kind), e);
           }
         };
         body.querySelectorAll('[data-ah-ix]').forEach((btn) => {
@@ -497,8 +519,10 @@
             <button type="button" class="btn" data-ah-new-highlight>New Highlight</button>
             <button type="button" class="btn btn--primary" data-ah-story-archive>Open story archive</button>
           </div>
-          <div data-ah-highlights>Loading…</div>
+          <div data-ah-highlights></div>
           <div data-ah-story-list style="margin-top:14px;"></div>`;
+        const hlHost = body.querySelector('[data-ah-highlights]');
+        showHostLoading(hlHost, 'card', 2);
         body.querySelector('[data-ah-story-archive]')?.addEventListener('click', () => {
           if (typeof openStoryArchive === 'function') openStoryArchive();
         });
@@ -540,7 +564,7 @@
             });
           });
         } catch (e) {
-          body.querySelector('[data-ah-highlights]').innerHTML = '<div class="comments-empty">Could not load highlights</div>';
+          showHostError(body.querySelector('[data-ah-highlights]'), () => setTab('stories'), e);
         }
         try {
           const archived =
@@ -569,11 +593,16 @@
           col === 'duniya'
             ? 'Duniya / Lehar posts — archive hides them from visitors.'
             : 'Peepal posts — archive hides them from visitors.'
-        }</div><div data-ah-posts>Loading…</div>`;
-        const posts = await loadOwnerPosts(col);
-        const host = body.querySelector('[data-ah-posts]');
-        host.innerHTML = posts.map((p) => postRow(p, col)).join('') || '<div class="comments-empty">No posts yet</div>';
-        wireArchivePostRows(host, () => setTab(tab));
+        }</div><div data-ah-posts></div>`;
+        const postsHost = body.querySelector('[data-ah-posts]');
+        showHostLoading(postsHost, 'list', 4);
+        try {
+          const posts = await loadOwnerPosts(col);
+          postsHost.innerHTML = posts.map((p) => postRow(p, col)).join('') || '<div class="comments-empty">No posts yet</div>';
+          wireArchivePostRows(postsHost, () => setTab(tab));
+        } catch (e) {
+          showHostError(postsHost, () => setTab(tab), e);
+        }
         return;
       }
     };

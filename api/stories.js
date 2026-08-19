@@ -1,7 +1,7 @@
 /**
  * Separate Baithak and Duniya story repositories.
  * Baithak uses private per-recipient inbox fanout so no audience list or
- * Close Friends marker is ever exposed to another viewer.
+ * exclusion marker is ever exposed to another viewer.
  */
 const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
 const { requireUser, initAdmin } = require('../server-lib/auth');
@@ -1301,7 +1301,7 @@ module.exports = async function handler(req, res) {
       STORY_NOT_FOUND: [404, 'NOT_FOUND', 'Story unavailable'],
       HIGHLIGHT_NOT_FOUND: [404, 'NOT_FOUND', 'Highlight not found'],
       INVALID_HIGHLIGHT: [400, 'VALIDATION_ERROR', 'Highlight id / story required'],
-      NO_CLOSE_FRIENDS: [400, 'NO_CLOSE_FRIENDS', 'Add at least one Friend to Close Friends before sharing'],
+      NO_CLOSE_FRIENDS: [400, 'NO_CLOSE_FRIENDS', 'Add at least one Friend before sharing'],
       FORBIDDEN: [403, 'FORBIDDEN', 'Not allowed'],
       CHAIN_TOO_LONG: [400, 'VALIDATION_ERROR', 'Add yours chain is full'],
     }[error?.message];

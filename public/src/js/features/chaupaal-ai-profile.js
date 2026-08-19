@@ -122,7 +122,7 @@
       </div>
       <div class="chaupaal-id-card-preview">
         <div class="chaupaal-id-card-preview-inner">
-          <div class="chaupaal-id-card-preview-avatar">${p.photoURL ? `<img src="${esc(p.photoURL)}" alt="">` : '🪑'}</div>
+          <div class="chaupaal-id-card-preview-avatar">${typeof renderUserAvatarHtml==='function'?renderUserAvatarHtml({...p,profile:typeof digitalProfile!=='undefined'?digitalProfile:{}},{decorative:true}):(p.photoURL?`<img src="${esc(p.photoURL)}" alt="">`:'🪑')}</div>
           <div class="chaupaal-id-card-preview-name">${esc(name)}</div>
           <div class="chaupaal-id-card-preview-handle">@${esc(uname)}</div>
           <div class="chaupaal-id-card-preview-brand">Chaupaal</div>

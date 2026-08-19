@@ -78,13 +78,25 @@
 
   async function mountWeeklyHub(host, uid) {
     if (!host) return;
-    host.innerHTML = '<div class="dangal-friends-board"><p class="dangal-profile__empty">Loading week…</p></div>';
-    try {
-      const rows = await loadWeeklyHub(uid);
-      host.innerHTML = renderWeeklyHubHtml(rows);
-    } catch (e) {
-      host.innerHTML = '<div class="dangal-friends-board"><p class="dangal-profile__empty">Week board unavailable.</p></div>';
-    }
+    if (typeof renderSkeleton === 'function') renderSkeleton(host, { variant: 'list', count: 5 });
+    else host.innerHTML = '<div class="dangal-friends-board"><p class="dangal-profile__empty">Loading week…</p></div>';
+    const load = async () => {
+      try {
+        const rows = await loadWeeklyHub(uid);
+        host.innerHTML = renderWeeklyHubHtml(rows);
+      } catch (e) {
+        if (typeof renderErrorState === 'function') {
+          renderErrorState(host, {
+            title: 'Week board unavailable',
+            message: typeof friendlyError === 'function' ? friendlyError(e) : 'Please try again.',
+            onRetry: load,
+          });
+        } else {
+          host.innerHTML = '<div class="dangal-friends-board"><p class="dangal-profile__empty">Week board unavailable.</p></div>';
+        }
+      }
+    };
+    await load();
   }
 
   window.loadWeeklyLeaderboard = loadWeeklyLeaderboard;

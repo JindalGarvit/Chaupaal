@@ -47,7 +47,12 @@
     if (typeof applyGameIdentity === 'function') applyGameIdentity(o.id, overlay);
     overlay.innerHTML =
       (typeof gameChromeHtml === 'function'
-        ? gameChromeHtml({ title: o.title, subtitle: o.subtitle || '', backId: o.backId || 'csBack' })
+        ? gameChromeHtml({
+            title: o.title,
+            subtitle: o.subtitle || '',
+            backId: o.backId || 'csBack',
+            pauseId: o.pauseId || '',
+          })
         : '') + `<div class="dangal-fullgame-body" data-cs-body></div>`;
     const body = overlay.querySelector('[data-cs-body]');
     const close = (reason) => {
@@ -56,7 +61,7 @@
       else overlay.remove();
     };
     overlay.querySelector('#' + (o.backId || 'csBack'))?.addEventListener('click', () => close('dismissed'));
-    return { overlay, body, gs, close, alive: () => (gs ? gs.alive() : true) };
+    return { overlay, body, gs, close, alive: () => (gs ? gs.alive() : true), host: overlay };
   }
 
   function showDuelResult(shell, spec) {
@@ -206,14 +211,39 @@
   }
 
   function openKabaddi() {
+    let shellPauseCtrl = null;
+    let raidPaused = false;
+    let activeRaf = 0;
     const shell = openShell({
       id: 'kabaddi',
       title: 'Kabaddi',
       subtitle: 'Raid · tag · make it home',
       accent: '#BF360C',
       bg: '#1A0800',
+      pauseId: 'csKabaddiPause',
+      cleanup: () => {
+        if (activeRaf) cancelAnimationFrame(activeRaf);
+        if (shellPauseCtrl) shellPauseCtrl.destroy();
+      },
     });
     if (!shell) return;
+    if (typeof createGamePauseController === 'function') {
+      shellPauseCtrl = createGamePauseController({
+        host: shell.host || shell.overlay,
+        pauseBtnId: 'csKabaddiPause',
+        onPause() {
+          raidPaused = true;
+          if (activeRaf) {
+            cancelAnimationFrame(activeRaf);
+            activeRaf = 0;
+          }
+        },
+        onResume() {
+          raidPaused = false;
+        },
+        onQuit: () => shell.close('dismissed'),
+      });
+    }
     const TO_WIN = 5;
     let you = 0;
     let opp = 0;
@@ -273,6 +303,11 @@
       }
 
       function loop(now) {
+        if (raidPaused) {
+          last = now;
+          activeRaf = requestAnimationFrame(loop);
+          return;
+        }
         const dt = now - last;
         last = now;
         breath -= dt;
@@ -287,10 +322,12 @@
           return;
         }
         raf = requestAnimationFrame(loop);
+        activeRaf = raf;
       }
 
       paint();
       raf = requestAnimationFrame(loop);
+      activeRaf = raf;
     }
 
     function next(msg) {
@@ -320,13 +357,18 @@
 
   function openPatang() {
     let raf = 0;
+    let pauseCtrl = null;
     const shell = openShell({
       id: 'patangbaazi',
       title: 'Patang Baazi',
       subtitle: 'Climb · cut the rival kite',
       accent: '#FF6D00',
       bg: '#001018',
-      cleanup: () => cancelAnimationFrame(raf),
+      pauseId: 'csPatangPause',
+      cleanup: () => {
+        cancelAnimationFrame(raf);
+        if (pauseCtrl) pauseCtrl.destroy();
+      },
     });
     if (!shell) return;
 
@@ -391,6 +433,10 @@
 
     function loop(now) {
       if (!shell.alive() || ended) return;
+      if (pauseCtrl && pauseCtrl.isPaused()) {
+        raf = requestAnimationFrame(loop);
+        return;
+      }
       t = now / 1000;
       you.speed = holding ? Math.min(1, you.speed + 0.02) : Math.max(0.15, you.speed - 0.01);
       you.y -= (holding ? 0.0028 : -0.0012) * (0.6 + you.speed);
@@ -426,6 +472,20 @@
       ctx.fillText('🪁', you.x * w - 14, you.y * h);
       ctx.fillText('🪁', opp.x * w - 14, opp.y * h);
       raf = requestAnimationFrame(loop);
+    }
+    if (typeof createGamePauseController === 'function') {
+      pauseCtrl = createGamePauseController({
+        host: shell.host || shell.overlay,
+        pauseBtnId: 'csPatangPause',
+        onPause() {
+          cancelAnimationFrame(raf);
+          raf = 0;
+        },
+        onResume() {
+          if (!ended && !raf) raf = requestAnimationFrame(loop);
+        },
+        onQuit: () => shell.close('dismissed'),
+      });
     }
     raf = requestAnimationFrame(loop);
   }

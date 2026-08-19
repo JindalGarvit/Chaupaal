@@ -638,8 +638,10 @@
     if (!blockedHost && !reportedHost) return;
 
     if (blockedHost) {
-      blockedHost.innerHTML = '<div class="toggle-desc">Loading…</div>';
-      const rows = await listBlockedUsers();
+      if (typeof renderSkeleton === 'function') renderSkeleton(blockedHost, { variant: 'list', count: 3 });
+      else blockedHost.innerHTML = '<div class="toggle-desc">Loading…</div>';
+      try {
+        const rows = await listBlockedUsers();
       if (blockedCount) blockedCount.textContent = String(rows.length);
       if (!rows.length) {
         blockedHost.innerHTML = '<div class="toggle-desc">No blocked people.</div>';
@@ -665,11 +667,21 @@
           });
         });
       }
+      } catch (e) {
+        if (typeof renderErrorState === 'function') {
+          renderErrorState(blockedHost, {
+            message: typeof friendlyError === 'function' ? friendlyError(e) : 'Please try again.',
+            onRetry: () => renderSettingsSafetyLists(),
+          });
+        }
+      }
     }
 
     if (reportedHost) {
-      reportedHost.innerHTML = '<div class="toggle-desc">Loading…</div>';
-      const rows = await listReportedUsers();
+      if (typeof renderSkeleton === 'function') renderSkeleton(reportedHost, { variant: 'list', count: 3 });
+      else reportedHost.innerHTML = '<div class="toggle-desc">Loading…</div>';
+      try {
+        const rows = await listReportedUsers();
       if (reportedCount) reportedCount.textContent = String(rows.length);
       if (!rows.length) {
         reportedHost.innerHTML = '<div class="toggle-desc">No active reports.</div>';
@@ -697,6 +709,14 @@
             renderSettingsSafetyLists();
           });
         });
+      }
+      } catch (e) {
+        if (typeof renderErrorState === 'function') {
+          renderErrorState(reportedHost, {
+            message: typeof friendlyError === 'function' ? friendlyError(e) : 'Please try again.',
+            onRetry: () => renderSettingsSafetyLists(),
+          });
+        }
       }
     }
   }

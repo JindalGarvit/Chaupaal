@@ -335,11 +335,13 @@
         <div class="duniya-story-ring">
           <div class="duniya-story-avatar" style="${selfHas ? '' : 'border:2px dashed var(--muted);'}">
             ${
-              selfHas && (own[0].thumb || own[0].media || myAvatar)
-                ? `<img src="${esc(own[0].thumb || own[0].media || myAvatar)}" alt="">`
-                : myAvatar
-                  ? `<img src="${esc(myAvatar)}" alt="">`
-                  : `<span style="font-size:24px;color:var(--muted);">＋</span>`
+              selfHas && (own[0].thumb || own[0].media)
+                ? `<img src="${esc(own[0].thumb || own[0].media)}" alt="">`
+                : typeof renderUserAvatarHtml==='function'
+                  ? renderUserAvatarHtml(typeof ownProfileForAvatar==='function'?ownProfileForAvatar(me,typeof digitalProfile!=='undefined'?digitalProfile:{}):{...me,uid:currentUser.uid,photoURL:myAvatar},{decorative:true})
+                  : myAvatar
+                    ? `<img src="${esc(myAvatar)}" alt="">`
+                    : `<span style="font-size:24px;color:var(--muted);">＋</span>`
             }
           </div>
         </div>
@@ -351,7 +353,9 @@
       .map((group, i) => {
         const u = group[0];
         const seen = bundleFullySeen(group);
-        const av = u.avatar && /^https:/.test(u.avatar) ? `<img src="${esc(u.avatar)}" alt="">` : `<span>${esc(u.avatar || '👤')}</span>`;
+        const av = typeof renderUserAvatarHtml==='function'&&u.uid&&String(u.uid).length>12
+          ? renderUserAvatarHtml(u,{decorative:true})
+          :(u.avatar && /^https:/.test(u.avatar) ? `<img src="${esc(u.avatar)}" alt="">` : `<span>${esc(u.avatar || '👤')}</span>`);
         return `
         <div class="duniya-story-item${seen ? ' is-seen' : ''}" data-bundle="${i}">
           <div class="duniya-story-ring">

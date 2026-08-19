@@ -34,11 +34,13 @@
     const profileUid = opts.uid || currentUser?.uid;
     if (!profileUid) return;
     const isOwner = !!(opts.isOwner || (currentUser && currentUser.uid === profileUid));
-    host.innerHTML = `<div class="cp-hl-rail" data-hl-rail><span class="cp-hl-loading">Loading…</span></div>`;
+    host.innerHTML = `<div class="cp-hl-rail" data-hl-rail></div>`;
+    const rail = host.querySelector('[data-hl-rail]');
+    if (typeof renderSkeleton === 'function' && rail) renderSkeleton(rail, { variant: 'card', count: 3 });
+    else if (rail) rail.innerHTML = '<span class="cp-hl-loading">Loading…</span>';
     try {
       const data = typeof storyCall === 'function' ? await storyCall('list_highlights', { targetUid: profileUid }) : { highlights: [] };
       const highlights = data.highlights || [];
-      const rail = host.querySelector('[data-hl-rail]');
       if (!rail) return;
       if (!highlights.length && !isOwner) {
         rail.innerHTML = '<span class="public-profile-highlights-empty">No highlights yet</span>';
@@ -91,7 +93,15 @@
         openCreateHighlightSheet(() => mountProfileHighlights(host, opts));
       });
     } catch (e) {
-      host.innerHTML = '<span class="public-profile-highlights-empty">Highlights unavailable</span>';
+      if (typeof renderErrorState === 'function') {
+        renderErrorState(host, {
+          title: 'Highlights unavailable',
+          message: typeof friendlyError === 'function' ? friendlyError(e) : 'Please try again.',
+          onRetry: () => mountProfileHighlights(host, opts),
+        });
+      } else {
+        host.innerHTML = '<span class="public-profile-highlights-empty">Highlights unavailable</span>';
+      }
     }
   }
 

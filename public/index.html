@@ -543,7 +543,7 @@
   </div>
 
   <!-- BOTTOM TABS / SIDEBAR -->
-  <div class="bottom-tabs">
+  <div class="bottom-tabs" role="tablist" aria-label="Main">
     <!-- Sidebar logo (desktop only) -->
     <div class="sidebar-logo">
       <div class="sidebar-logo-brand">
@@ -557,23 +557,23 @@
       </div>
     </div>
 
-    <button class="tab-btn" data-tab="akhbaar">
+    <button class="tab-btn" role="tab" id="tab-akhbaar" aria-controls="panel-akhbaar" aria-selected="false" data-tab="akhbaar">
       <span class="tab-icon tab-el-icon" data-tab-element="akhbaar" data-icon-skip="1"></span>
       <span class="tab-label">Akhbaar</span>
     </button>
-    <button class="tab-btn" data-tab="duniya">
+    <button class="tab-btn" role="tab" id="tab-duniya" aria-controls="panel-duniya" aria-selected="false" data-tab="duniya">
       <span class="tab-icon tab-el-icon" data-tab-element="duniya" data-icon-skip="1"></span>
       <span class="tab-label">Duniya</span>
     </button>
-    <button class="tab-btn active" data-tab="peepal">
+    <button class="tab-btn active" role="tab" id="tab-peepal" aria-controls="panel-peepal" aria-selected="true" data-tab="peepal">
       <span class="tab-icon tab-el-icon" data-tab-element="peepal" data-icon-skip="1"></span>
       <span class="tab-label">Peepal</span>
     </button>
-    <button class="tab-btn" data-tab="baithak">
+    <button class="tab-btn" role="tab" id="tab-baithak" aria-controls="panel-baithak" aria-selected="false" data-tab="baithak">
       <span class="tab-icon tab-el-icon" data-tab-element="baithak" data-icon-skip="1"></span>
       <span class="tab-label">Baithak</span>
     </button>
-    <button class="tab-btn" data-tab="dangal">
+    <button class="tab-btn" role="tab" id="tab-dangal" aria-controls="panel-dangal" aria-selected="false" data-tab="dangal">
       <span class="tab-icon tab-el-icon" data-tab-element="dangal" data-icon-skip="1"></span>
       <span class="tab-label">Dangal</span>
     </button>
@@ -715,10 +715,19 @@
           <div class="toggle-row">
             <div>
               <div class="toggle-label" data-i18n="appear_friends_label">Appear in friends’ prompts</div>
-              <div class="toggle-desc" data-i18n="appear_friends_desc">Birthday / update prompts about you for Close Friends.</div>
+              <div class="toggle-desc" data-i18n="appear_friends_desc">Birthday / update prompts about you for mutual friends.</div>
             </div>
             <label class="switch"><input type="checkbox" id="toggleAkhbaarAppearInFriends" checked><span class="slider"></span></label>
           </div>
+          <button type="button" class="settings-link-row" id="openExclusionListBtn" aria-label="Exclusion list">
+            <span class="settings-link-icon" aria-hidden="true"><span data-icon="user-minus" data-icon-size="18"></span></span>
+            <span class="settings-link-text">
+              <strong data-i18n="exclusion_list_label">Exclusion list</strong>
+              <small data-i18n="exclusion_list_desc">Hide Baithak Splits from specific Friends</small>
+            </span>
+            <span class="settings-link-meta" id="exclusionListCount" hidden></span>
+            <span class="settings-link-chevron" aria-hidden="true">›</span>
+          </button>
           <div class="settings-section" style="margin-top:12px;" data-i18n="share_friends_section">Share with friends</div>
           <div class="toggle-row">
             <div>
@@ -817,6 +826,7 @@
   <script src="/src/js/core/tab-habits.js?v=288ff896"></script>
   <script src="/src/js/config/policy-limits.js?v=8f3cfeb8"></script>
   <script src="/src/js/core/users-public.js?v=618806a7"></script>
+  <script src="/src/js/core/chaupaal-avatar.js?v=1"></script>
   <script src="/src/js/core/policy-usage.js?v=fcaff522"></script>
   <script src="/src/js/core/ai-discovery-meter.js?v=6aa38197"></script>
   <script src="/src/js/core/api-client.js?v=f8c6b38e"></script>
@@ -942,6 +952,7 @@
   <script src="/src/js/games/engines.js?v=6131eeb9"></script>
   <script src="/src/js/games/board-games.js?v=c7f1db88"></script>
   <script src="/src/js/games/arcade.js?v=516e22b3"></script>
+  <script src="/src/js/games/brick-breaker.js?v=1"></script>
   <script src="/src/js/games/rw-sports.js?v=0ba58ae8"></script>
   <script src="/src/js/games/court-sports.js?v=132aecda"></script>
   <script src="/src/js/games/party-classics.js?v=8e773c46"></script>

@@ -470,9 +470,7 @@
         ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-as-close' }):'<button type="button" data-as-close class="cp-back-btn" aria-label="Back">←</button>'}
         <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">Accounts</div>
       </div>
-      <div class="group-info-scroll auth-account-list" style="padding:16px;" data-as-list>
-        <div style="color:var(--muted);font-size:13px;">Loading…</div>
-      </div>
+      <div class="group-info-scroll auth-account-list" style="padding:16px;" data-as-list></div>
       <div style="padding:12px 16px 24px;display:flex;flex-direction:column;gap:8px;">
         <button type="button" class="btn btn--primary btn--block" data-as-add-login>Add account — Log in</button>
         <button type="button" class="btn btn--block" data-as-add-signup style="background:var(--cream);border:1.5px solid var(--line);">Add account — Sign up</button>
@@ -493,6 +491,9 @@
     }
     sheet.querySelector('[data-as-close]')?.addEventListener('click', close);
 
+    const listEl = sheet.querySelector('[data-as-list]');
+    if (typeof renderSkeleton === 'function') renderSkeleton(listEl, { variant: 'list', count: 3 });
+
     const paint = () => {
       rememberCurrentAccount();
       const list = readDeviceAccounts();
@@ -512,7 +513,9 @@
           return `<div class="auth-account-row${isActive ? ' is-active' : ''}" data-as-uid="${esc(a.uid)}">
             <button type="button" class="auth-account-main" data-as-switch="${esc(a.uid)}">
               <div class="auth-account-av">${
-                a.photoURL
+                typeof renderUserAvatarHtml==='function'
+                  ? renderUserAvatarHtml(a,{decorative:true})
+                  : a.photoURL
                   ? `<img src="${esc(a.photoURL)}" alt="">`
                   : esc((a.name || a.username || '?')[0].toUpperCase())
               }</div>

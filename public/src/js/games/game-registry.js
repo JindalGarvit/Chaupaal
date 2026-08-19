@@ -77,6 +77,7 @@
     sattepe: 'party',
     andarbaahar: 'party',
     patangbaazi: 'arcade',
+    brickbreaker: 'arcade',
   };
 
   function inferGameType(d) {

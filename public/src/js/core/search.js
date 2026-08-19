@@ -550,7 +550,7 @@
       const cat = r.category === 'personal' || r.category === 'professional' ? r.category : 'log';
       return `
         <button type="button" class="us-result" data-cat="${cat}" data-uid="${escapeSearchHtml(r.uid || '')}" data-username="${escapeSearchHtml(r.username || '')}" data-name="${escapeSearchHtml(r.name || r.username || '')}">
-          <div class="us-result-avatar">${r.photoURL ? `<img src="${escapeSearchHtml(r.photoURL)}" alt="">` : '👤'}</div>
+          <div class="us-result-avatar">${typeof renderUserAvatarHtml==='function'?renderUserAvatarHtml(r,{decorative:true}):(r.photoURL?`<img src="${escapeSearchHtml(r.photoURL)}" alt="">`:'👤')}</div>
           <div class="us-result-meta">
             <div class="us-result-title">${typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml(r.name || r.username, r) : escapeSearchHtml(r.name || r.username)}</div>
             <div class="us-result-sub">@${escapeSearchHtml(r.username || 'user')}${r.subtitle ? ' · ' + escapeSearchHtml(r.subtitle) : ''}${r.profileType === 'professional' ? ' · Pro' : ''}</div>

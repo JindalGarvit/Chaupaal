@@ -30,6 +30,8 @@
     '#storyArchiveSheet',
     '#relationshipListSheet',
     '.relationship-list-sheet',
+    '#exclusionListManager',
+    '.exclusion-list-overlay',
     '#closeFriendsManager',
     '.close-friends-manager-overlay',
     '.public-profile-sheet',

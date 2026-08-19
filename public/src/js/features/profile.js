@@ -1,4 +1,23 @@
 // ===================== PROFILE MODAL — FULL DIGITAL PROFILE =====================
+function ownProfileForAvatar(p, dp){
+  return {
+    uid:typeof currentUser!=='undefined'?currentUser?.uid:'',
+    ...(p||{}),
+    name:(dp&&dp.displayName)||p?.name,
+    gender:(dp&&dp.gender)||p?.gender,
+    interests:(dp&&dp.interests)||p?.interests,
+    hobbies:(dp&&dp.hobbies)||p?.hobbies,
+    occupation:(dp&&dp.occupation)||p?.occupation,
+    city:(dp&&dp.currentCity)||p?.city,
+    profileType:(dp&&dp.profileType)||p?.profileType,
+    industry:p?.industry||(dp&&dp.industry),
+    purpose:p?.purpose||(dp&&dp.purpose),
+    avatarDisplay:p?.avatarDisplay,
+    profile:dp||{},
+  };
+}
+window.ownProfileForAvatar = ownProfileForAvatar;
+
 function renderProfileModal(){
   const el=document.getElementById('profileContent');
   if(!currentUser){
@@ -48,6 +67,15 @@ function renderProfileModal(){
   const nameHtml=typeof formatDisplayNameHtml==='function'
     ? formatDisplayNameHtml(displayName, typeof getProfileType==='function'?getProfileType():dp.profileType)
     : displayName;
+  const avatarProfile=ownProfileForAvatar(p,dp);
+  const avatarHtml=typeof renderUserAvatarHtml==='function'
+    ? renderUserAvatarHtml(avatarProfile,{noteIntroForSelf:true,decorative:false,alt:displayName})
+    :(p.photoURL?`<img src="${p.photoURL}" alt="">`:'🪑');
+  const showAvatarToggle=typeof hasUserProfilePhoto==='function'&&hasUserProfilePhoto(avatarProfile);
+  const avatarMode=typeof getAvatarDisplay==='function'?getAvatarDisplay(avatarProfile):'photo';
+  const avatarToggleLabel=avatarMode==='gift'
+    ?(typeof t==='function'&&t('avatar_use_photo')!=='avatar_use_photo'?t('avatar_use_photo'):'Use my photo')
+    :(typeof t==='function'&&t('avatar_use_gift')!=='avatar_use_gift'?t('avatar_use_gift'):'Use Chaupaal avatar');
 
   el.innerHTML=`
     ${typeof renderPreviewToggleHtml==='function'?renderPreviewToggleHtml():''}
@@ -56,11 +84,12 @@ function renderProfileModal(){
       <div class="dp-hero-top">
         <div class="dp-hero-avatar-wrap">
           <div id="ownProfileStoryAvatar" class="dp-hero-avatar squircle-avatar">
-            ${p.photoURL?`<img src="${p.photoURL}" alt="">`:'🪑'}
+            ${avatarHtml}
           </div>
           <label class="dp-hero-edit" title="Change photo">
             ✎<input type="file" accept="image/*" id="profilePhotoInput" style="display:none;">
           </label>
+          ${showAvatarToggle?`<button type="button" class="dp-avatar-mode-btn" id="toggleAvatarDisplayBtn">${avatarToggleLabel}</button>`:''}
         </div>
         <div class="dp-hero-actions" role="group" aria-label="Profile tools">
           <button type="button" class="icon-btn dp-hero-action" id="profileArchiveBtn" aria-label="Archive" title="Archive">${typeof iconHtml==='function'?iconHtml('archive',{size:20}):''}</button>
@@ -127,7 +156,6 @@ function renderProfileModal(){
     <div id="profileSectionContent" class="dp-field-body"></div>
     <div class="dp-account-strip">
       <button type="button" class="btn btn--primary btn--block" data-dp-open-hub>Chaupaal Hub · trust, Plus, devices</button>
-      <button type="button" class="btn btn--block" id="manageCloseFriendsBtn">Close Friends</button>
       <button type="button" class="btn btn--block" id="switchProfileBtn">Switch / add account</button>
       <button type="button" class="logout-btn" id="logoutBtn">Log out</button>
     </div>
@@ -520,8 +548,15 @@ function renderProfileModal(){
       await auth.signOut();currentUser=null;userProfile=null;
       showToast(t('profile_see_you'));
     });
-    document.getElementById('manageCloseFriendsBtn')?.addEventListener('click',()=>openCloseFriendsManager());
     document.getElementById('ownProfileStoryAvatar')?.addEventListener('click',()=>openProfileStories(currentUser.uid));
+    document.getElementById('toggleAvatarDisplayBtn')?.addEventListener('click',async()=>{
+      if(typeof setAvatarDisplayMode!=='function'||typeof getAvatarDisplay!=='function') return;
+      const next=getAvatarDisplay(ownProfileForAvatar(userProfile,digitalProfile))==='gift'?'photo':'gift';
+      await setAvatarDisplayMode(next);
+      renderProfileModal();
+      if(typeof updateProfileBtn==='function') updateProfileBtn();
+      if(typeof renderBaithakInbox==='function') renderBaithakInbox();
+    });
     document.getElementById('profilePhotoInput')?.addEventListener('change',async e=>{
       const file=e.target.files[0];if(!file||!file.type.startsWith('image/'))return;
       try{
@@ -540,11 +575,12 @@ function renderProfileModal(){
         if(userProfile){
           userProfile.photoURL=photoURL;
           userProfile.photoThumb=thumbURL;
+          userProfile.avatarDisplay='photo';
         }
         if(db&&currentUser){
-          db.collection('users').doc(currentUser.uid).update({photoURL,photoThumb:thumbURL||null}).then(()=>{
+          db.collection('users').doc(currentUser.uid).update({photoURL,photoThumb:thumbURL||null,avatarDisplay:'photo'}).then(()=>{
             if(typeof UsersPublic?.syncPublicProfile==='function'){
-              UsersPublic.syncPublicProfile(currentUser.uid, {...(userProfile||{}), photoURL, photoThumb:thumbURL||null});
+              UsersPublic.syncPublicProfile(currentUser.uid, {...(userProfile||{}), photoURL, photoThumb:thumbURL||null, avatarDisplay:'photo'});
             }
           }).catch(()=>{});
         }

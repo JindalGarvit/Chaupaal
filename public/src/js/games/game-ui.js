@@ -63,6 +63,7 @@
     sattepe: '#1565C0',
     andarbaahar: '#1B5E20',
     patangbaazi: '#FF6D00',
+    brickbreaker: '#7C4DFF',
     wrap: '#8134AF',
     duniya: '#E63946',
     peepal: '#2A9D8F',
@@ -102,6 +103,7 @@
     sattepe: 'Satte pe Satta',
     andarbaahar: 'Andar Bahar',
     patangbaazi: 'Patang Baazi',
+    brickbreaker: 'Brick Breaker',
     wrap: 'Monthly Wrap',
     duniya: 'Duniya',
     peepal: 'Peepal',
@@ -144,6 +146,7 @@
     sattepe: ['Play next to a seven chain', 'Empty your hand first', 'Sevens can always start a suit'],
     andarbaahar: ['Joker sets the rank', 'Pick Andar or Bahar', 'First matching rank wins the side'],
     patangbaazi: ['Hold to climb, drag to steer', 'Overlap cuts the slower kite', 'Don’t stall at the top'],
+    brickbreaker: ['Drag or use arrows to move the paddle', 'Break every brick to clear the level', 'Catch falling power-ups — wide paddle and multi-ball help most', 'Steel bricks bounce the ball but never break'],
   };
 
   const PB_KEYS = {
@@ -161,6 +164,7 @@
     kabaddi: { key: 'chaupaal_pb_kabaddi', label: 'pts', higherBetter: true },
     carrom: { key: 'chaupaal_pb_carrom', label: 'coins', higherBetter: true },
     pool: { key: 'chaupaal_pb_pool', label: 'balls', higherBetter: true },
+    brickbreaker: { key: 'chaupaal_pb_brickbreaker', label: 'pts', higherBetter: true },
   };
 
   function gameFeedback(action, opts) {
@@ -224,7 +228,12 @@
     const title = safe(o.title || 'Game');
     const subtitle = o.subtitle ? `<span class="game-chrome-subtitle">${safe(o.subtitle)}</span>` : '';
     const brand = o.hideBrand ? '' : `<div class="game-chrome-brand">${gameBrandMarkHtml(true)}</div>`;
-    const right = o.rightHtml || '<span class="game-chrome-spacer" aria-hidden="true"></span>';
+    const pauseId = o.pauseId ? safe(o.pauseId) : '';
+    const pauseBtn = pauseId
+      ? `<button type="button" id="${pauseId}" class="game-chrome-action game-tap-target" aria-label="Pause">⏸</button>`
+      : '';
+    const rightInner = o.rightHtml || '<span class="game-chrome-spacer" aria-hidden="true"></span>';
+    const right = pauseBtn + rightInner;
     return `<div class="game-chrome">
       ${typeof backButtonHtml==='function'?backButtonHtml({ className: 'game-back-btn game-tap-target', id: backId }):`<button type="button" id="${backId}" class="game-back-btn game-tap-target cp-back-btn" aria-label="Back">${typeof iconHtml==='function'?iconHtml('arrow-left',{size:22}):''}</button>`}
       <div class="game-chrome-heading">${brand}<div class="game-chrome-title">${title}</div>${subtitle}</div>
@@ -1184,9 +1193,9 @@
           .slice(0, 24)
           .map((p) => {
             const name = safe((p.name || p.username || 'Friend').split(' ')[0]);
-            const av = p.photoURL
-              ? `<img src="${safe(p.photoURL)}" alt="">`
-              : `<span class="share-user-chip-fallback">${ico('user', 20)}</span>`;
+            const av = typeof renderUserAvatarHtml==='function'
+              ? renderUserAvatarHtml(p,{decorative:true})
+              :(p.photoURL?`<img src="${safe(p.photoURL)}" alt="">`:`<span class="share-user-chip-fallback">${ico('user', 20)}</span>`);
             return `<button type="button" class="share-user-chip" data-uid="${safe(p.uid || p.id || '')}" data-name="${safe(p.name || p.username || '')}">
               <span class="share-user-chip-avatar">${av}</span>
               <span class="share-user-chip-name">${name}</span>
@@ -1314,6 +1323,7 @@
     kabaddi: true,
     carrom: true,
     pool: true,
+    brickbreaker: true,
   };
   const HIGHER_BETTER_SCORE = {
     rushrunner: true,
@@ -1328,6 +1338,7 @@
     kabaddi: true,
     carrom: true,
     pool: true,
+    brickbreaker: true,
   };
   const LOWER_BETTER_SCORE = { wordguess: true, ankjod: true };
 
@@ -1841,6 +1852,117 @@
     }
   }
 
+  /** prefers-reduced-motion or Quiet mode — reduce particles / screen shake in canvas games. */
+  function shouldReduceGameMotion() {
+    try {
+      if (typeof quietMode !== 'undefined' && quietMode) return true;
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true;
+    } catch (e) {}
+    return false;
+  }
+
+  /**
+   * Pause scrim with Resume / Quit, auto-pause on visibility hidden.
+   * @param {{ host?: Element, overlay?: Element, pauseBtnId?: string, onPause?: Function, onResume?: Function, onQuit?: Function }} opts
+   */
+  function createGamePauseController(opts) {
+    const o = opts || {};
+    const host = o.host || o.overlay;
+    if (!host) return { pause: () => {}, resume: () => {}, toggle: () => {}, isPaused: () => false, destroy: () => {} };
+    const onPause = typeof o.onPause === 'function' ? o.onPause : () => {};
+    const onResume = typeof o.onResume === 'function' ? o.onResume : () => {};
+    const onQuit = typeof o.onQuit === 'function' ? o.onQuit : typeof o.onClose === 'function' ? o.onClose : () => {};
+    let paused = false;
+    let scrim = null;
+    let pauseBtn = null;
+    let pauseClick = null;
+
+    function hideScrim() {
+      if (scrim) {
+        scrim.remove();
+        scrim = null;
+      }
+    }
+
+    function showScrim() {
+      if (scrim) return;
+      scrim = document.createElement('div');
+      scrim.className = 'game-pause-scrim';
+      scrim.setAttribute('role', 'dialog');
+      scrim.setAttribute('aria-label', 'Game paused');
+      scrim.innerHTML = `<div class="game-pause-card">
+        <h3 class="game-pause-title">Paused</h3>
+        <button type="button" class="btn btn--primary game-tap-target" data-gp-resume>Resume</button>
+        <button type="button" class="btn btn--secondary game-tap-target" data-gp-quit>Quit</button>
+      </div>`;
+      host.appendChild(scrim);
+      scrim.querySelector('[data-gp-resume]')?.addEventListener('click', () => resume());
+      scrim.querySelector('[data-gp-quit]')?.addEventListener('click', () => {
+        destroy();
+        onQuit();
+      });
+    }
+
+    function pause() {
+      if (paused) return;
+      paused = true;
+      showScrim();
+      onPause();
+    }
+
+    function resume() {
+      if (!paused) return;
+      paused = false;
+      hideScrim();
+      onResume();
+    }
+
+    function toggle() {
+      if (paused) resume();
+      else pause();
+    }
+
+    const visHandler = () => {
+      if (document.hidden && !paused) pause();
+    };
+    document.addEventListener('visibilitychange', visHandler);
+
+    if (o.pauseBtnId) {
+      pauseBtn = document.getElementById(o.pauseBtnId);
+      if (pauseBtn) {
+        pauseClick = () => toggle();
+        pauseBtn.addEventListener('click', pauseClick);
+      }
+    }
+
+    function destroy() {
+      document.removeEventListener('visibilitychange', visHandler);
+      if (pauseBtn && pauseClick) pauseBtn.removeEventListener('click', pauseClick);
+      hideScrim();
+      paused = false;
+    }
+
+    return { pause, resume, toggle, isPaused: () => paused, destroy };
+  }
+
+  /** Arrow / A-D paddle helper — returns unbind(). */
+  function bindGameKeyboardPaddle(keys, onMove) {
+    const left = (keys && keys.left) || ['ArrowLeft', 'a', 'A'];
+    const right = (keys && keys.right) || ['ArrowRight', 'd', 'D'];
+    const move = typeof onMove === 'function' ? onMove : () => {};
+    const handler = (e) => {
+      if (left.includes(e.key)) {
+        e.preventDefault();
+        move(-1);
+      } else if (right.includes(e.key)) {
+        e.preventDefault();
+        move(1);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }
+
   window.GameFeedback = gameFeedback;
   window.gameFeedback = gameFeedback;
   window.gameTurnBannerHtml = gameTurnBannerHtml;
@@ -1897,4 +2019,7 @@
   window.tileProgressPillHtml = tileProgressPillHtml;
   window.normalizeDangalGameId = normalizeDangalGameId;
   window.GAME_ACCENTS = GAME_ACCENTS;
+  window.shouldReduceGameMotion = shouldReduceGameMotion;
+  window.createGamePauseController = createGamePauseController;
+  window.bindGameKeyboardPaddle = bindGameKeyboardPaddle;
 })();

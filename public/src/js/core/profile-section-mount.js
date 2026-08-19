@@ -108,7 +108,10 @@
     }
 
     if (sectionId === 'highlights') {
-      bodyEl.innerHTML = '<span class="public-profile-chrome-label">Story Highlights</span><span>Loading…</span>';
+      bodyEl.innerHTML = '<span class="public-profile-chrome-label">Story Highlights</span>';
+      const skHost = document.createElement('div');
+      bodyEl.appendChild(skHost);
+      if (typeof renderSkeleton === 'function') renderSkeleton(skHost, { variant: 'card', count: 3 });
       try {
         const data = typeof storyCall === 'function' ? await storyCall('list_highlights', { targetUid: profileUid }) : { highlights: [] };
         const highlights = data.highlights || [];
@@ -141,7 +144,15 @@
           });
         });
       } catch (e) {
-        bodyEl.innerHTML = '<span class="public-profile-highlights-empty">Highlights unavailable</span>';
+        if (typeof renderErrorState === 'function') {
+          renderErrorState(bodyEl, {
+            title: 'Highlights unavailable',
+            message: typeof friendlyError === 'function' ? friendlyError(e) : 'Please try again.',
+            onRetry: () => fillBuiltinBody(bodyEl, sectionId, profileUid, opts),
+          });
+        } else {
+          bodyEl.innerHTML = '<span class="public-profile-highlights-empty">Highlights unavailable</span>';
+        }
       }
       return;
     }
@@ -176,7 +187,8 @@
 
     if (sectionId === 'duniya' || sectionId === 'peepal') {
       const col = sectionId;
-      bodyEl.innerHTML = 'Loading…';
+      if (typeof renderSkeleton === 'function') renderSkeleton(bodyEl, { variant: 'feed', count: 2 });
+      else bodyEl.innerHTML = 'Loading…';
       if (!db) {
         bodyEl.innerHTML = '<div class="public-profile-posts-empty">Unavailable</div>';
         return;
@@ -216,7 +228,15 @@
         }
         wireProfilePostOpens(bodyEl);
       } catch (e) {
-        bodyEl.innerHTML = '<div class="public-profile-posts-empty">Posts unavailable</div>';
+        if (typeof renderErrorState === 'function') {
+          renderErrorState(bodyEl, {
+            title: 'Posts unavailable',
+            message: typeof friendlyError === 'function' ? friendlyError(e) : 'Please try again.',
+            onRetry: () => fillBuiltinBody(bodyEl, sectionId, profileUid, opts),
+          });
+        } else {
+          bodyEl.innerHTML = '<div class="public-profile-posts-empty">Posts unavailable</div>';
+        }
       }
     }
   }

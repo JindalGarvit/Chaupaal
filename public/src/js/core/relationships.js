@@ -1,7 +1,7 @@
 /**
  * Relationship client.
  * Follow is directional; Friend is derived from reciprocal follows.
- * Close Friends is opt-out: every Friend sees Splits unless you remove them.
+ * Split exclusion list (private): Friends receive Splits unless on the list.
  */
 (function () {
   'use strict';
@@ -12,6 +12,14 @@
     return String(value ?? '').replace(/[&<>"']/g, (ch) =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]
     );
+  }
+
+  function avatarCell(profile) {
+    if (typeof renderUserAvatarHtml === 'function') {
+      return renderUserAvatarHtml(profile || {}, { decorative: true });
+    }
+    const p = profile || {};
+    return p.photoURL ? `<img src="${safe(p.photoURL)}" alt="">` : '👤';
   }
 
   async function callRelationship(action, body) {
@@ -32,7 +40,7 @@
       friend: false,
       requestSent: false,
       requestReceived: false,
-      closeFriend: false,
+      splitExcluded: false,
       friendOrigin: null,
       theirFollowSource: null,
     };
@@ -47,6 +55,10 @@
   function refreshFriendRequestSurfaces() {
     if (typeof mergePendingFriendRequests === 'function') mergePendingFriendRequests();
     else if (typeof mountBaithakFriendRequests === 'function') mountBaithakFriendRequests();
+    const profileRoot = document.getElementById('profileContent');
+    if (profileRoot && typeof mountOwnRelationshipPanel === 'function') {
+      mountOwnRelationshipPanel(profileRoot);
+    }
   }
 
   function relationshipState(uid) {
@@ -168,6 +180,9 @@
     if (!requireRelationshipUser()) throw new Error('Sign in required');
     const data = await callRelationship('cancel_friend_request', { targetUid });
     emitRelationshipChanged(targetUid, data);
+    if (typeof dismissNotificationsByRef === 'function') {
+      await dismissNotificationsByRef({ type: 'friend_request', refId: targetUid });
+    }
     refreshFriendRequestSurfaces();
     return relationshipState(targetUid);
   }
@@ -179,6 +194,9 @@
       accept: !!accept,
     });
     emitRelationshipChanged(requesterUid, data);
+    if (typeof dismissNotificationsByRef === 'function') {
+      await dismissNotificationsByRef({ type: 'friend_request', refId: requesterUid });
+    }
     refreshFriendRequestSurfaces();
     return relationshipState(requesterUid);
   }
@@ -190,11 +208,12 @@
     return relationshipState(followerUid);
   }
 
-  async function setCloseFriend(targetUid, enabled) {
+  async function setSplitExclusion(targetUid, excluded) {
     if (!requireRelationshipUser()) throw new Error('Sign in required');
-    const data = await callRelationship('set_close_friend', { targetUid, enabled: !!enabled });
-    const state = { ...relationshipState(targetUid), closeFriend: !!data.closeFriend };
+    const data = await callRelationship('set_exclusion', { targetUid, excluded: !!excluded });
+    const state = { ...relationshipState(targetUid), splitExcluded: !!data.splitExcluded };
     cache.set(targetUid, state);
+    if (typeof refreshExclusionListCount === 'function') refreshExclusionListCount();
     return state;
   }
 
@@ -283,12 +302,25 @@
 
     if (state.friend) {
       actions.push({
-        label: state.closeFriend ? (typeof t==='function'?t('avatar_menu_remove_cf'):'Remove from Close Friends') : (typeof t==='function'?t('avatar_menu_add_cf'):'Add back to Close Friends'),
-        icon: 'star',
-        hint: typeof t==='function'?t('cf_manager_sub'):'All friends see your Splits. Remove someone to hide Splits from them. Only you see this list.',
+        label: state.splitExcluded
+          ? typeof t === 'function'
+            ? t('exclusion_menu_remove')
+            : 'Remove from exclusion list'
+          : typeof t === 'function'
+            ? t('exclusion_menu_exclude')
+            : 'Exclude from Splits',
+        icon: 'user-minus',
+        hint:
+          typeof t === 'function'
+            ? t('exclusion_menu_hint')
+            : 'They won\'t receive your Baithak Splits. Only you see this.',
         fn: async () => {
-          const next = await setCloseFriend(profile.uid, !state.closeFriend);
-          showToast(next.closeFriend?t('rel_cf_added',{name}):t('rel_cf_removed',{name}));
+          const next = await setSplitExclusion(profile.uid, !state.splitExcluded);
+          showToast(
+            next.splitExcluded
+              ? t('exclusion_added', { name })
+              : t('exclusion_removed', { name })
+          );
           await refresh();
         },
       });
@@ -496,6 +528,7 @@
       if (!requireRelationshipUser()) return;
       const prev = { ...relationshipState(profile.uid) };
       const mode = primaryBtn.dataset.mode;
+      if (typeof setButtonLoading === 'function') setButtonLoading(primaryBtn, true);
       try {
         if (mode === 'friend') {
           if (prev.friend) {
@@ -527,8 +560,13 @@
           paint();
           const result = await requestFriend(profile.uid);
           paint();
-          if (result.autoAccepted || result.accepted) showToast(t('rel_now_friends'));
-          else showToast(t('rel_request_sent'));
+          if (result.autoAccepted || result.accepted) {
+            showToast(t('rel_now_friends'), 3000, { type: 'success' });
+            if (typeof haptic === 'function') haptic('light');
+          } else {
+            showToast(t('rel_request_sent'), 3000, { type: 'success' });
+            if (typeof haptic === 'function') haptic('light');
+          }
         } else {
           if (prev.following) {
             openRelationshipMenu(profile, { title: 'Following', context });
@@ -541,12 +579,15 @@
           paint();
           const next = await setFollowing(profile.uid, true, context || 'profile');
           paint();
-          showToast(next.friend ? t('rel_now_friends') : t('rel_following'));
+          showToast(next.friend ? t('rel_now_friends') : t('rel_following'), 3000, { type: 'success' });
+          if (typeof haptic === 'function') haptic('light');
         }
       } catch (error) {
         cache.set(profile.uid, prev);
         paint();
-        showToast(error?.message || t('rel_update_fail'));
+        showToast(error?.message || t('rel_update_fail'), 3000, { type: 'error' });
+      } finally {
+        if (typeof setButtonLoading === 'function') setButtonLoading(primaryBtn, false);
       }
     });
 
@@ -602,7 +643,10 @@
           }</div>
         </div>
       </div>
-      <div class="close-friends-manager" data-rel-list-body>Loading…</div>`;
+      <div class="close-friends-manager" data-rel-list-body></div>`;
+    const body = overlay.querySelector('[data-rel-list-body]');
+    if (typeof renderSkeleton === 'function') renderSkeleton(body, { variant: 'list', count: 5 });
+    else body.innerHTML = 'Loading…';
     const deviceEl = document.querySelector('.device');
     let listLayer = null;
     const dismissList = () => {};
@@ -620,7 +664,6 @@
       }
     });
 
-    const body = overlay.querySelector('[data-rel-list-body]');
     try {
       const data = await callRelationship(action, targetUid ? { targetUid } : {});
       const profiles = data.profiles || [];
@@ -632,7 +675,7 @@
         .map(
           (profile) => `
         <div class="close-friends-row" data-uid="${profile.uid}">
-          <div class="close-friends-avatar">${profile.photoURL ? `<img src="${profile.photoURL}" alt="">` : '👤'}</div>
+          <div class="close-friends-avatar">${avatarCell(profile)}</div>
           <div class="close-friends-person"><strong>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(profile.name,profile):safe(profile.name)}</strong><span>${safe(
             profile.username ? '@' + profile.username : profile.city || ''
           )}</span></div>
@@ -650,7 +693,14 @@
         });
       });
     } catch (error) {
-      body.textContent = error?.message || 'Could not load list';
+      if (typeof renderErrorState === 'function') {
+        renderErrorState(body, {
+          message: typeof friendlyError === 'function' ? friendlyError(error) : error?.message || 'Could not load list',
+          onRetry: () => openRelationshipList(kind, { targetUid }),
+        });
+      } else {
+        body.textContent = error?.message || 'Could not load list';
+      }
     }
   }
 
@@ -660,63 +710,69 @@
     });
   }
 
-  async function openCloseFriendsManager() {
+  async function openExclusionListManager() {
     const overlay = document.createElement('div');
-    overlay.className = 'archive-overlay close-friends-manager-overlay';
+    overlay.className = 'archive-overlay exclusion-list-overlay close-friends-manager-overlay';
+    overlay.id = 'exclusionListManager';
     overlay.dataset.navManaged = '1';
     overlay.innerHTML = `
       <div class="archive-header">
-        ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-close-friends-back' }) : '<button type="button" data-close-friends-back aria-label="Back" class="cp-back-btn">←</button>'}
-        <div style="flex:1"><strong>Close Friends</strong>
-          <div class="relationship-private-note">${typeof t==='function'?t('cf_manager_sub'):'All friends see your Splits. Remove someone to hide Splits from them. Only you see this list.'}</div>
+        ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-exclusion-back' }) : '<button type="button" data-exclusion-back aria-label="Back" class="cp-back-btn">←</button>'}
+        <div style="flex:1"><strong>${typeof t === 'function' ? t('exclusion_list_label') : 'Exclusion list'}</strong>
+          <div class="relationship-private-note">${typeof t === 'function' ? t('exclusion_list_note') : 'People here won\'t receive your Baithak Splits. Only you can see this list.'}</div>
         </div>
       </div>
-      <div class="close-friends-manager">
-        <label class="close-friends-search"><span>Search Friends</span><input type="search" placeholder="Search by username"></label>
-        <div data-close-friends-results></div>
-        <div class="close-friends-heading">${typeof t==='function'?t('cf_manager_heading'):'Friends'}</div>
-        <div data-close-friends-list class="ui-skeleton-stack">Loading…</div>
+      <div class="exclusion-list-manager close-friends-manager">
+        <label class="exclusion-list-search close-friends-search"><span>${typeof t === 'function' ? t('exclusion_search_label') : 'Search Friends'}</span><input type="search" placeholder="${typeof t === 'function' ? t('exclusion_search_ph') : 'Search by username'}" data-exclusion-search></label>
+        <div data-exclusion-search-results></div>
+        <div class="exclusion-list-heading close-friends-heading">${typeof t === 'function' ? t('exclusion_list_heading') : 'Excluded'}</div>
+        <div data-exclusion-list class="ui-skeleton-stack"></div>
       </div>`;
     const deviceEl = document.querySelector('.device');
-    let cfLayer = null;
-    const dismissCf = () => {};
+    let layer = null;
+    const dismiss = () => {};
     if (typeof openLayer === 'function') {
-      cfLayer = openLayer(overlay, dismissCf, { host: deviceEl, remove: true });
+      layer = openLayer(overlay, dismiss, { host: deviceEl, remove: true });
     } else {
       deviceEl?.appendChild(overlay);
-      if (typeof pushNavLayer === 'function') pushNavLayer(overlay, dismissCf);
+      if (typeof pushNavLayer === 'function') pushNavLayer(overlay, dismiss);
     }
-    overlay.querySelector('[data-close-friends-back]')?.addEventListener('click', () => {
-      if (cfLayer?.close) cfLayer.close();
+    overlay.querySelector('[data-exclusion-back]')?.addEventListener('click', () => {
+      if (layer?.close) layer.close();
       else {
         if (typeof removeNavLayer === 'function') removeNavLayer(overlay);
         overlay.remove();
       }
     });
-    const list = overlay.querySelector('[data-close-friends-list]');
-    const results = overlay.querySelector('[data-close-friends-results]');
+    const list = overlay.querySelector('[data-exclusion-list]');
+    const results = overlay.querySelector('[data-exclusion-search-results]');
+    if (typeof renderSkeleton === 'function') renderSkeleton(list, { variant: 'list', count: 3 });
+    let excludedIds = new Set();
     let allFriends = [];
 
-    const row = (profile, selected) => `
-      <div class="close-friends-row" data-uid="${profile.uid}">
-        <div class="close-friends-avatar">${profile.photoURL ? `<img src="${profile.photoURL}" alt="">` : '👤'}</div>
-        <div class="close-friends-person"><strong>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(profile.name || profile.username || 'Member',profile):safe(profile.name || profile.username || 'Member')}</strong><span>${safe(profile.username ? '@' + profile.username : profile.city || '')}</span></div>
-        <button type="button" data-close-toggle="${selected ? 'remove' : 'add'}">${selected ? 'Remove' : 'Add'}</button>
+    const row = (profile, mode) => {
+      const isAdd = mode === 'add';
+      return `
+      <div class="exclusion-list-row close-friends-row" data-uid="${profile.uid}">
+        <div class="exclusion-list-avatar close-friends-avatar">${avatarCell(profile)}</div>
+        <div class="exclusion-list-person close-friends-person"><strong>${typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml(profile.name || profile.username || 'Member', profile) : safe(profile.name || profile.username || 'Member')}</strong><span>${safe(profile.username ? '@' + profile.username : profile.city || '')}</span></div>
+        <button type="button" data-exclusion-toggle="${isAdd ? 'add' : 'remove'}">${isAdd ? (typeof t === 'function' ? t('exclusion_add') : 'Add') : typeof t === 'function' ? t('exclusion_remove') : 'Remove'}</button>
       </div>`;
+    };
 
     const wire = (root) => {
-      root.querySelectorAll('[data-close-toggle]').forEach((button) => {
+      root.querySelectorAll('[data-exclusion-toggle]').forEach((button) => {
         button.addEventListener('click', async () => {
           const uid = button.closest('[data-uid]')?.dataset.uid;
           if (!uid) return;
           button.disabled = true;
           try {
-            await setCloseFriend(uid, button.dataset.closeToggle === 'add');
+            await setSplitExclusion(uid, button.dataset.exclusionToggle === 'add');
             await renderList();
-            renderSearch(overlay.querySelector('input')?.value || '');
+            renderSearch(overlay.querySelector('[data-exclusion-search]')?.value || '');
           } catch (error) {
             button.disabled = false;
-            showToast(error?.message || t('rel_cf_fail'));
+            showToast(error?.message || (typeof t === 'function' ? t('exclusion_fail') : 'Could not update exclusion list'));
           }
         });
       });
@@ -724,21 +780,34 @@
 
     async function renderList() {
       try {
-        const [data, friendsData] = await Promise.all([
-          callRelationship('list_close_friends'),
+        const [exclusionData, friendsData] = await Promise.all([
+          callRelationship('list_exclusion'),
           callRelationship('list_friends'),
         ]);
-        const profiles = data.profiles || [];
-        allFriends = profiles.length ? profiles : friendsData.profiles || [];
-        profiles.forEach((profile) => {
-          cache.set(profile.uid, { ...relationshipState(profile.uid), closeFriend: profile.closeFriend !== false });
+        const excluded = exclusionData.excluded || [];
+        allFriends = friendsData.profiles || [];
+        excludedIds = new Set(excluded.map((p) => p.uid));
+        excluded.forEach((profile) => {
+          cache.set(profile.uid, { ...relationshipState(profile.uid), splitExcluded: true });
         });
-        list.innerHTML = allFriends.length
-          ? allFriends.map((profile) => row(profile, profile.closeFriend !== false)).join('')
-          : `<div class="comments-empty">${typeof t==='function'?t('cf_manager_empty'):'No friends yet.'}</div>`;
+        allFriends.forEach((profile) => {
+          if (!excludedIds.has(profile.uid)) {
+            cache.set(profile.uid, { ...relationshipState(profile.uid), splitExcluded: false });
+          }
+        });
+        list.innerHTML = excluded.length
+          ? excluded.map((profile) => row(profile, 'remove')).join('')
+          : `<div class="comments-empty">${typeof t === 'function' ? t('exclusion_list_empty') : 'No one excluded — all Friends receive your Splits'}</div>`;
         wire(list);
       } catch (error) {
-        list.textContent = error?.message || 'Could not load Close Friends';
+        if (typeof renderErrorState === 'function') {
+          renderErrorState(list, {
+            message: typeof friendlyError === 'function' ? friendlyError(error) : error?.message || 'Could not load',
+            onRetry: () => renderList(),
+          });
+        } else {
+          list.textContent = error?.message || 'Could not load exclusion list';
+        }
       }
     }
 
@@ -750,23 +819,42 @@
       }
       const matches = allFriends.filter(
         (profile) =>
-          String(profile.name || '')
+          !excludedIds.has(profile.uid) &&
+          (String(profile.name || '')
             .toLowerCase()
             .includes(q) ||
-          String(profile.username || '')
-            .toLowerCase()
-            .includes(q.replace(/^@/, ''))
+            String(profile.username || '')
+              .toLowerCase()
+              .includes(q.replace(/^@/, '')))
       );
       results.innerHTML = matches.length
-        ? matches.map((profile) => row(profile, profile.closeFriend !== false)).join('')
-        : '<div class="comments-empty">No matching Friend. Only Friends can join Close Friends.</div>';
+        ? matches.map((profile) => row(profile, 'add')).join('')
+        : `<div class="comments-empty">${typeof t === 'function' ? t('exclusion_search_empty') : 'No matching Friend to add, or they are already excluded.'}</div>`;
       wire(results);
     }
 
-    overlay.querySelector('input')?.addEventListener('input', (event) => {
+    overlay.querySelector('[data-exclusion-search]')?.addEventListener('input', (event) => {
       renderSearch(event.target.value);
     });
     await renderList();
+  }
+
+  async function refreshExclusionListCount() {
+    const badge = document.getElementById('exclusionListCount');
+    if (!badge || !currentUser) return;
+    try {
+      const data = await callRelationship('list_exclusion');
+      const count = (data.excluded || []).length;
+      if (count > 0) {
+        badge.textContent = String(count);
+        badge.hidden = false;
+      } else {
+        badge.textContent = '';
+        badge.hidden = true;
+      }
+    } catch (e) {
+      badge.hidden = true;
+    }
   }
 
   async function mountOwnRelationshipPanel(root) {
@@ -788,7 +876,7 @@
               .map(
                 (profile) => `
               <div class="close-friends-row" data-request-uid="${profile.uid}">
-                <div class="close-friends-avatar">${profile.photoURL ? `<img src="${profile.photoURL}" alt="">` : '👤'}</div>
+                <div class="close-friends-avatar">${avatarCell(profile)}</div>
                 <div class="close-friends-person"><strong>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(profile.name,profile):safe(profile.name)}</strong><span>${safe(profile.username ? '@' + profile.username : '')}</span></div>
                 <button type="button" data-request-accept>Accept</button>
                 <button type="button" data-request-decline class="relationship-decline">Decline</button>
@@ -801,7 +889,7 @@
             const row = button.closest('[data-request-uid]');
             try {
               await respondFriend(row.dataset.requestUid, true);
-              row.remove();
+              refreshFriendRequestSurfaces();
             } catch (e) {
               if (typeof showToast === 'function') showToast(e?.message || t('rel_update_fail'));
             }
@@ -812,7 +900,7 @@
             const row = button.closest('[data-request-uid]');
             try {
               await respondFriend(row.dataset.requestUid, false);
-              row.remove();
+              refreshFriendRequestSurfaces();
             } catch (e) {
               if (typeof showToast === 'function') showToast(e?.message || t('rel_update_fail'));
             }
@@ -839,9 +927,7 @@
       host.innerHTML = profiles
         .map((profile) => {
           const name = safe(displayNameFor(profile));
-          const photo = profile.photoURL
-            ? `<img src="${safe(profile.photoURL)}" alt="">`
-            : '👤';
+          const photo = avatarCell(profile);
           const uname = profile.username ? `@${safe(profile.username)}` : '';
           return `<div class="baithak-fr-row" data-request-uid="${safe(profile.uid)}">
             <button type="button" class="baithak-fr-avatar" data-fr-profile="${safe(profile.uid)}" aria-label="View profile">${photo}</button>
@@ -915,7 +1001,9 @@
   window.cancelFriendRequest = cancelFriendRequest;
   window.respondFriend = respondFriend;
   window.removeFollower = removeFollower;
-  window.setCloseFriend = setCloseFriend;
+  window.setSplitExclusion = setSplitExclusion;
+  window.openExclusionListManager = openExclusionListManager;
+  window.refreshExclusionListCount = refreshExclusionListCount;
   window.loadRelationshipProfile = loadRelationshipProfile;
   window.paintRelationshipCounts = paintRelationshipCounts;
   window.relationshipCountsHtml = relationshipCountsHtml;
@@ -926,7 +1014,6 @@
   window.openRelationshipList = openRelationshipList;
   window.wireRelationshipCountButtons = wireRelationshipCountButtons;
   window.bindProfileLongPress = bindProfileLongPress;
-  window.openCloseFriendsManager = openCloseFriendsManager;
   window.mountOwnRelationshipPanel = mountOwnRelationshipPanel;
   window.mountBaithakFriendRequests = mountBaithakFriendRequests;
 })();

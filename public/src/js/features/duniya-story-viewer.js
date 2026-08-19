@@ -151,7 +151,9 @@
       const name =
         (typeof resolvePersonDisplayName === 'function' ? resolvePersonDisplayName(s) : s.name) ||
         (s.username ? `@${s.username}` : 'Someone');
-      const av = s.avatar && /^https:/.test(s.avatar) ? `<img src="${NS.esc(s.avatar)}" alt="">` : `<div class="ds-av">${NS.esc((s.avatar || '👤').slice(0, 2))}</div>`;
+      const av = typeof renderUserAvatarHtml==='function'&&s.uid&&String(s.uid).length>12
+        ? renderUserAvatarHtml(s,{decorative:true})
+        :(s.avatar && /^https:/.test(s.avatar) ? `<img src="${NS.esc(s.avatar)}" alt="">` : `<div class="ds-av">${NS.esc((s.avatar || '👤').slice(0, 2))}</div>`);
       const media =
         s.mediaType === 'video' && s.media
           ? `<video src="${NS.esc(s.media)}" playsinline ${muted ? 'muted' : ''} autoplay></video>`

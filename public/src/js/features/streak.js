@@ -221,7 +221,8 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
       .onSnapshot(snap=>{
         if(!oldestDoc && snap.docs.length) oldestDoc=snap.docs[0];
         if(!primed){
-          primed=true; // set sync so overlapping snapshots don't double-clear
+          primed=true;
+          msgsArea.querySelectorAll('.ui-skeleton-stack').forEach((el)=>el.remove());
           // Full hydrate including own messages — fixes music/photo/challenge on reopen
           msgsArea.querySelectorAll('.msg-row[data-pending="1"]').forEach((el)=>el.remove());
           // Clear optimistic/demo seed when we have Firestore history

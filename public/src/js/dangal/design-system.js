@@ -34,6 +34,7 @@
     pool: { primary: '#1B3A2D', secondary: '#F5F5DC', surface: '#0A1A10', label: 'Pool / Snooker', icon: '🎱', orientation: 'landscape' },
     ankjod: { primary: '#1A237E', secondary: '#FFD600', surface: '#0A0014', label: 'Ank Jod', icon: '🔢', orientation: 'portrait' },
     tiptap: { primary: '#FF6D00', secondary: '#FFD600', surface: '#1A0800', label: 'Tip Tap', icon: '🌼', orientation: 'portrait' },
+    brickbreaker: { primary: '#7C4DFF', secondary: '#B39DFF', surface: '#0D0A18', label: 'Brick Breaker', icon: '🧱', orientation: 'landscape' },
   };
 
   const RATED_GAMES = ['chess', 'fiveinrow', 'ttt', 'streetcricket', 'gullykick', 'quiz'];

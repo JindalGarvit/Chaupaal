@@ -156,7 +156,7 @@
         (u) =>
           `<button type="button" class="contacts-row" data-contact-uid="${u.uid}" data-contact-name="${(u.name || u.contactName || '').replace(/"/g, '&quot;')}">
             <div style="width:40px;height:40px;border-radius:50%;background:var(--white);display:grid;place-items:center;overflow:hidden;flex-shrink:0;">${
-              u.photoURL ? `<img src="${u.photoURL}" alt="" style="width:100%;height:100%;object-fit:cover;">` : '👤'
+              typeof renderUserAvatarHtml==='function'?renderUserAvatarHtml(u,{decorative:true}):(u.photoURL?`<img src="${u.photoURL}" alt="" style="width:100%;height:100%;object-fit:cover;">`:'👤')
             }</div>
             <div style="flex:1;min-width:0;">
               <div style="font-weight:700;font-size:14px;">${u.name || u.contactName || 'Friend'}</div>

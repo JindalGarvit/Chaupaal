@@ -120,7 +120,7 @@
       </div>
       <div class="public-profile-hero own-preview-hero">
         <div class="public-profile-avatar" data-own-preview-avatar>
-          ${view.photoURL ? `<img src="${esc(view.photoURL)}" alt="">` : '👤'}
+          ${typeof renderUserAvatarHtml==='function'?renderUserAvatarHtml({...view,uid:typeof currentUser!=='undefined'?currentUser?.uid:'',profile:dp,avatarDisplay:(userMeta||{}).avatarDisplay},{decorative:false,alt:view.displayName}):(view.photoURL?`<img src="${esc(view.photoURL)}" alt="">`:'👤')}
         </div>
         <div class="public-profile-name" data-pro-badge-self data-pro-badge-name="${esc(view.displayName)}">${nameHtml}</div>
         <div class="public-profile-uname">@${esc(view.username)}</div>
@@ -183,7 +183,7 @@
       typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml(name, pType) : String(name).replace(/</g, '&lt;');
     sheet.innerHTML = `
       <div class="profile-peek-inner">
-        <div class="profile-peek-avatar squircle-avatar">${photo ? `<img src="${String(photo).replace(/"/g, '')}" alt="">` : '👤'}</div>
+        <div class="profile-peek-avatar squircle-avatar">${typeof renderUserAvatarHtml==='function'?renderUserAvatarHtml({...profile,uid,photoURL:photo||profile.photoURL},{decorative:false,alt:name}):(photo?`<img src="${String(photo).replace(/"/g,'')}" alt="">`:'👤')}</div>
         <div class="profile-peek-name">${nameHtml}</div>
         <div class="profile-peek-sub">${username ? '@' + String(username).replace(/</g, '&lt;') : ''}</div>
         <div class="profile-peek-actions">

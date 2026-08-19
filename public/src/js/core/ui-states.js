@@ -211,7 +211,7 @@
     setOfflineUi(!navigator.onLine);
     window.addEventListener('online', () => {
       setOfflineUi(false);
-      if (typeof showToast === 'function') showToast("You're back online ✓");
+      if (typeof showToast === 'function') showToast("You're back online ✓", 3000, { type: 'success' });
     });
     window.addEventListener('offline', () => setOfflineUi(true));
   }

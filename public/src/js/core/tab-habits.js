@@ -317,7 +317,14 @@
     if (!isValidTab(tab)) tab = FALLBACK;
     try {
       document.querySelectorAll('.tab-btn').forEach((b) => {
-        b.classList.toggle('active', b.dataset.tab === tab);
+        const on = b.dataset.tab === tab;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+        if (on) {
+          b.setAttribute('aria-current', 'page');
+        } else {
+          b.removeAttribute('aria-current');
+        }
       });
       document.querySelectorAll('.tab-panel').forEach((p) => {
         p.classList.toggle('active', p.id === 'panel-' + tab);

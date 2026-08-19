@@ -68,7 +68,12 @@
     if (typeof applyGameIdentity === 'function') applyGameIdentity(o.id, overlay);
     overlay.innerHTML =
       (typeof gameChromeHtml === 'function'
-        ? gameChromeHtml({ title: o.title, subtitle: o.subtitle || '', backId: o.backId || 'pcBack' })
+        ? gameChromeHtml({
+            title: o.title,
+            subtitle: o.subtitle || '',
+            backId: o.backId || 'pcBack',
+            pauseId: o.pauseId || '',
+          })
         : '') + `<div class="dangal-fullgame-body" data-pc-body></div>`;
     const body = overlay.querySelector('[data-pc-body]');
     const close = (reason) => {
@@ -77,7 +82,7 @@
       else overlay.remove();
     };
     overlay.querySelector('#' + (o.backId || 'pcBack'))?.addEventListener('click', () => close('dismissed'));
-    return { overlay, body, gs, close, alive: () => (gs ? gs.alive() : true) };
+    return { overlay, body, gs, close, alive: () => (gs ? gs.alive() : true), host: overlay };
   }
 
   function showDuelResult(shell, spec) {
@@ -206,13 +211,19 @@
   /* ---------- Cue physics (carrom + pool) ---------- */
   function openCueGame(spec) {
     let raf = 0;
+    let pauseCtrl = null;
+    const pauseId = 'pcCuePause_' + (spec.id || 'game');
     const shell = openShell({
       id: spec.id,
       title: spec.title,
       subtitle: spec.subtitle,
       accent: spec.accent,
       bg: spec.bg,
-      cleanup: () => cancelAnimationFrame(raf),
+      pauseId,
+      cleanup: () => {
+        cancelAnimationFrame(raf);
+        if (pauseCtrl) pauseCtrl.destroy();
+      },
     });
     if (!shell) return;
 
@@ -420,6 +431,10 @@
 
     function loop() {
       if (!shell.alive() || ended) return;
+      if (pauseCtrl && pauseCtrl.isPaused()) {
+        raf = requestAnimationFrame(loop);
+        return;
+      }
       if (moving) {
         step();
         moving = balls.some((b) => !b.dead && Math.hypot(b.vx, b.vy) > 0.05);
@@ -433,6 +448,20 @@
       }
       draw();
       raf = requestAnimationFrame(loop);
+    }
+    if (typeof createGamePauseController === 'function') {
+      pauseCtrl = createGamePauseController({
+        host: shell.host || shell.overlay,
+        pauseBtnId: pauseId,
+        onPause() {
+          cancelAnimationFrame(raf);
+          raf = 0;
+        },
+        onResume() {
+          if (!ended && !raf) raf = requestAnimationFrame(loop);
+        },
+        onQuit: () => shell.close('dismissed'),
+      });
     }
     raf = requestAnimationFrame(loop);
   }

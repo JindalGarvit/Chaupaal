@@ -34,6 +34,10 @@
     'intents',
     'occupation',
     'personality',
+    'gender',
+    'industry',
+    'purpose',
+    'avatarDisplay',
     'profile', // nested public-ish profile slice (sanitized below)
   ];
 
@@ -51,6 +55,10 @@
       'occupation',
       'lookingFor',
       'age',
+      'gender',
+      'industry',
+      'purpose',
+      'avatarDisplay',
       'profileMedia',
       'sectionOrder',
       'customSections',

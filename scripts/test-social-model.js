@@ -118,7 +118,7 @@ test('Friends can see normal Baithak stories', () => {
   assert.equal(canViewStory({ destination: 'baithak', visibility: 'friends', isFriend: true }), true);
 });
 
-test('Close Friends stories require current friendship', () => {
+test('Split stories require current friendship', () => {
   assert.equal(
     canViewStory({
       destination: 'baithak',
@@ -142,7 +142,7 @@ test('excluded friends cannot see Splits', () => {
   );
 });
 
-test('Close Friends opt-out includes friends who are not excluded', () => {
+test('Split exclusion opt-out: friends not excluded receive Splits', () => {
   assert.equal(isCloseFriendOptOut({ isFriend: true, excluded: false }), true);
   assert.equal(isCloseFriendOptOut({ isFriend: true, excluded: true }), false);
   assert.equal(isCloseFriendOptOut({ isFriend: false, excluded: false }), false);

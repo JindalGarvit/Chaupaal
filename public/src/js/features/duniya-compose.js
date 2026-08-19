@@ -1111,12 +1111,14 @@
       return;
     }
     shareBtn.disabled = true;
+    if (typeof setButtonLoading === 'function') setButtonLoading(shareBtn, true, state.mode === 'edit' ? 'Saving…' : 'Sharing…');
     if (progress) progress.classList.remove('hidden');
 
     if (typeof checkRateLimit === 'function') {
       const rl = await checkRateLimit('post');
       if (!rl.ok) {
         shareBtn.disabled = false;
+        if (typeof setButtonLoading === 'function') setButtonLoading(shareBtn, false);
         if (typeof unlock === 'function') unlock();
         toast(rl.message || tt('duniya_slow_down', 'Slow down a little'));
         return;
@@ -1202,6 +1204,7 @@
     } catch (err) {
       report(err);
       shareBtn.disabled = false;
+      if (typeof setButtonLoading === 'function') setButtonLoading(shareBtn, false);
       shareBtn.textContent = 'Retry';
       if (msgEl) msgEl.textContent = typeof friendlyError === 'function' ? friendlyError(err) : err.message || 'Could not post';
       toast(typeof friendlyError === 'function' ? friendlyError(err) : err.message || 'Could not post — retry');

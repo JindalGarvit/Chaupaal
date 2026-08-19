@@ -171,11 +171,41 @@ const SoundLib=(()=>{
 })();
 
 // ===================== TOAST =====================
-function showToast(msg,dur=3000){
-  const t=document.getElementById('toast');
-  if(t&&!t.getAttribute('role')){t.setAttribute('role','status');t.setAttribute('aria-live','polite');}
-  t.textContent=msg;t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'),dur);
+let toastHideTimer = null;
+
+function showToast(msg, dur = 3000, opts = {}) {
+  const t = document.getElementById('toast');
+  if (!t) return;
+  if (!t.getAttribute('role')) {
+    t.setAttribute('role', 'status');
+    t.setAttribute('aria-live', 'polite');
+  }
+  const options = opts && typeof opts === 'object' && !Array.isArray(opts) ? opts : {};
+  const type = options.type || 'default';
+  t.classList.remove('toast--success', 'toast--error', 'toast--info', 'toast--action');
+  if (type !== 'default') t.classList.add(`toast--${type}`);
+  if (options.actionLabel && typeof options.onAction === 'function') {
+    t.classList.add('toast--action');
+    t.innerHTML = `<span class="toast-msg">${String(msg || '')}</span><button type="button" class="toast-action">${String(options.actionLabel)}</button>`;
+    t.querySelector('.toast-action')?.addEventListener(
+      'click',
+      () => {
+        t.classList.remove('show');
+        try {
+          options.onAction();
+        } catch (e) {}
+      },
+      { once: true }
+    );
+  } else {
+    t.textContent = msg;
+  }
+  if (toastHideTimer) clearTimeout(toastHideTimer);
+  t.classList.add('show');
+  toastHideTimer = setTimeout(() => {
+    t.classList.remove('show');
+    toastHideTimer = null;
+  }, dur);
 }
 
 // ===================== SETTINGS =====================
@@ -234,9 +264,16 @@ function openSettingsModal(){
   if(typeof refreshSettingsSafetyLists==='function'){
     try{ refreshSettingsSafetyLists(); }catch(e){}
   }
+  if(typeof refreshExclusionListCount==='function'){
+    try{ refreshExclusionListCount(); }catch(e){}
+  }
 }
 window.openSettingsModal = openSettingsModal;
 document.getElementById('settingsBtn')?.addEventListener('click', openSettingsModal);
+document.getElementById('openExclusionListBtn')?.addEventListener('click',()=>{
+  document.getElementById('settingsModal')?.classList.add('hidden');
+  if(typeof openExclusionListManager==='function') openExclusionListManager();
+});
 document.getElementById('settingsArchiveBtn')?.addEventListener('click',()=>{
   document.getElementById('settingsModal')?.classList.add('hidden');
   if(typeof openArchiveHub==='function') openArchiveHub('journal');

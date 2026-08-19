@@ -182,7 +182,7 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
     card.innerHTML = `
       <div style="display:flex;align-items:center;gap:10px;">
         <div style="width:50px;height:50px;border-radius:var(--r-card,20px);background:var(--line);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;overflow:hidden;">
-          ${user.photoURL?`<img src="${esc(user.photoURL)}" style="width:100%;height:100%;object-fit:cover;">`:user.avatar||'👤'}
+          ${user.photoURL?`<img src="${esc(user.photoURL)}" style="width:100%;height:100%;object-fit:cover;">`:(typeof renderUserAvatarHtml==='function'?renderUserAvatarHtml(user,{decorative:true}):(user.avatar||'👤'))}
         </div>
         <div style="flex:1;min-width:0;">
           <div style="font-weight:700;font-size:15px;">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(user.name,user):esc(user.name)}</div>
@@ -835,7 +835,10 @@ function openPeepalAskSheet(editPost = null){
     if(unlock===false){ showToast(t('peepal_post_submitting')); return; }
     const pubBtn=document.getElementById('peepalPublishBtn');
     const pubLabel=pubBtn?pubBtn.textContent:'';
-    if(pubBtn){ pubBtn.disabled=true; pubBtn.textContent=isEdit?'Saving…':'Posting…'; }
+    if(pubBtn){
+      if(typeof setButtonLoading==='function') setButtonLoading(pubBtn, true);
+      else { pubBtn.disabled=true; pubBtn.textContent=isEdit?'Saving…':'Posting…'; }
+    }
     try{
     if(isEdit){
       if(!db||!currentUser||!editId){
@@ -1021,9 +1024,12 @@ function openPeepalAskSheet(editPost = null){
     renderPeepalFeed();
       if(typeof trackPostCreated==='function') trackPostCreated(isAnon?'peepal_anon':'peepal');
       if(typeof SoundLib!=='undefined'&&SoundLib.postPublish) SoundLib.postPublish();
-      showToast(saveOnly?t('peepal_saved_archive'):(isAnon?t('peepal_posted_anon'):t('peepal_posted')));
+      showToast(saveOnly?t('peepal_saved_archive'):(isAnon?t('peepal_posted_anon'):t('peepal_posted')), 3000, { type: 'success' });
     }finally{
-      if(pubBtn){ pubBtn.disabled=false; pubBtn.textContent=pubLabel; }
+      if(pubBtn){
+        if(typeof setButtonLoading==='function') setButtonLoading(pubBtn, false);
+        else { pubBtn.disabled=false; pubBtn.textContent=pubLabel; }
+      }
       if(typeof unlock==='function') unlock();
     }
   });

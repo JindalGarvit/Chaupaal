@@ -34,9 +34,11 @@
 
   function commentRowHtml(c, { isReply, collapsed } = {}) {
     const avatar =
-      c.user && c.user.photoURL
-        ? `<img src="${escapeHtml(c.user.photoURL)}" alt="">`
-        : escapeHtml((c.user && c.user.avatar) || '👤');
+      c.user && typeof renderUserAvatarHtml === 'function'
+        ? renderUserAvatarHtml(c.user, { decorative: true })
+        : c.user && c.user.photoURL
+          ? `<img src="${escapeHtml(c.user.photoURL)}" alt="">`
+          : escapeHtml((c.user && c.user.avatar) || '👤');
     return `
       <div class="comment-item ${isReply ? 'comment-item--reply' : ''} ${c.pending ? 'comment-item--pending' : ''} ${c.deleted ? 'comment-item--deleted' : ''}" data-cid="${escapeHtml(c.id)}" ${c.parentId ? `data-parent="${escapeHtml(c.parentId)}"` : ''}>
         <div class="comment-avatar">${avatar}</div>

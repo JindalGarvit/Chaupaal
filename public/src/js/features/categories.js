@@ -1266,7 +1266,7 @@ function renderPeepalFeed(){
     const collab = Array.isArray(q.attachments) ? q.attachments.find((a) => a.type === 'collab') : null;
     card.innerHTML = `
       <div class="pc-row">
-        <div class="pc-avatar peepal-user-avatar" style="cursor:pointer;">${q.user.photoURL ? `<img src="${escPeepalText(q.user.photoURL)}" alt="">` : escPeepalText(q.user.avatar||'👤')}</div>
+        <div class="pc-avatar peepal-user-avatar" style="cursor:pointer;">${typeof renderUserAvatarHtml==='function'?renderUserAvatarHtml(q.user,{decorative:true}):(q.user.photoURL?`<img src="${escPeepalText(q.user.photoURL)}" alt="">`:escPeepalText(q.user.avatar||'👤'))}</div>
         <div class="pc-body">
           <div class="pc-meta">
             <span class="pc-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(q.user.name,q.user):escPeepalText(q.user.name)}</span>

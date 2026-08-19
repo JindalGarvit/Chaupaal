@@ -1,9 +1,10 @@
 /**
- * Close Friends is opt-out: every current mutual friend receives Splits
- * unless users/{uid}/cf_excluded/{targetUid} exists.
+ * Split exclusion list — delivery uses friends minus cf_excluded.
+ * Every current mutual friend receives Splits unless
+ * users/{uid}/cf_excluded/{targetUid} exists.
  *
  * Legacy users/{uid}/close_friends allowlists are ignored for delivery and
- * deleted on the next list/set Close Friends call (reset_all — not migrated).
+ * deleted on the next list/set exclusion call (reset_all — not migrated).
  */
 const CF_EXCLUDED = 'cf_excluded';
 const CF_LEGACY = 'close_friends';

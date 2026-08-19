@@ -222,7 +222,8 @@
 
   async function fillPostGrid(bodyEl, col, profileUid, { isOwner, includeArchived, cols } = {}) {
     if (!bodyEl || !db || !profileUid) return;
-    bodyEl.innerHTML = '<div class="public-profile-posts-empty">Loading…</div>';
+    if (typeof renderSkeleton === 'function') renderSkeleton(bodyEl, { variant: 'feed', count: 2 });
+    else bodyEl.innerHTML = '<div class="public-profile-posts-empty">Loading…</div>';
     try {
       let snap;
       try {
@@ -306,7 +307,15 @@
         });
       });
     } catch (e) {
-      bodyEl.innerHTML = '<div class="public-profile-posts-empty">Posts unavailable</div>';
+      if (typeof renderErrorState === 'function') {
+        renderErrorState(bodyEl, {
+          title: 'Posts unavailable',
+          message: typeof friendlyError === 'function' ? friendlyError(e) : 'Please try again.',
+          onRetry: () => fillPostGrid(bodyEl, col, profileUid, { isOwner, includeArchived, cols }),
+        });
+      } else {
+        bodyEl.innerHTML = '<div class="public-profile-posts-empty">Posts unavailable</div>';
+      }
     }
   }
 

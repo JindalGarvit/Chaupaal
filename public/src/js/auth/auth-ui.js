@@ -8,26 +8,44 @@ function hideAuth(){
 // Auth v2 — listeners wired in auth_js.js
 
 function updateProfileBtn(){
-  // Mobile profile button
   const btn=document.getElementById('profileBtnInner');
-  if(currentUser?.photoURL){
-    const img=document.createElement('img');img.src=currentUser.photoURL;
-    img.style.cssText='width:100%;height:100%;object-fit:cover;border-radius:50%;';
-    btn?.replaceWith(img);if(img)img.id='profileBtnInner';
-  } else if(currentUser){
-    if(btn){btn.textContent=(currentUser.displayName||'U')[0].toUpperCase();
-    btn.style.cssText='font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;color:var(--red);';}
+  const profile=typeof ownProfileForAvatar==='function'&&typeof userProfile!=='undefined'
+    ? ownProfileForAvatar(userProfile, typeof digitalProfile!=='undefined'?digitalProfile:{})
+    : { uid: currentUser?.uid, photoURL: currentUser?.photoURL, ...(typeof userProfile!=='undefined'?userProfile:{}) };
+  if(btn&&currentUser){
+    if(typeof renderUserAvatarHtml==='function'){
+      const wrap=document.createElement('div');
+      wrap.id='profileBtnInner';
+      wrap.style.cssText='width:100%;height:100%;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;';
+      wrap.innerHTML=renderUserAvatarHtml(profile,{decorative:true,size:36});
+      btn.replaceWith(wrap);
+    }else if(currentUser.photoURL){
+      const img=document.createElement('img');img.src=currentUser.photoURL;
+      img.style.cssText='width:100%;height:100%;object-fit:cover;border-radius:50%;';
+      btn?.replaceWith(img);if(img)img.id='profileBtnInner';
+    }else if(btn){
+      btn.textContent=(currentUser.displayName||'U')[0].toUpperCase();
+      btn.style.cssText='font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;color:var(--red);';
+    }
   }
   // Desktop sidebar profile
   const sidebarName=document.getElementById('sidebarProfileName');
   const sidebarIcon=document.getElementById('sidebarProfileIcon');
   if(sidebarName&&currentUser) sidebarName.textContent=userProfile?.name?.split(' ')[0]||currentUser.displayName?.split(' ')[0]||'Profile';
-  if(sidebarIcon&&currentUser?.photoURL){
-    const img=document.createElement('img');img.src=currentUser.photoURL;
-    img.style.cssText='width:32px;height:32px;border-radius:50%;object-fit:cover;';
-    sidebarIcon.replaceWith(img);
-  } else if(sidebarIcon&&currentUser){
-    sidebarIcon.textContent=(currentUser.displayName||'U')[0].toUpperCase();
+  if(sidebarIcon&&currentUser){
+    if(typeof renderUserAvatarHtml==='function'){
+      const wrap=document.createElement('div');
+      wrap.id='sidebarProfileIcon';
+      wrap.style.cssText='width:32px;height:32px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;';
+      wrap.innerHTML=renderUserAvatarHtml(profile,{decorative:true,size:32});
+      sidebarIcon.replaceWith(wrap);
+    }else if(currentUser.photoURL){
+      const img=document.createElement('img');img.src=currentUser.photoURL;
+      img.style.cssText='width:32px;height:32px;border-radius:50%;object-fit:cover;';
+      sidebarIcon.replaceWith(img);
+    }else{
+      sidebarIcon.textContent=(currentUser.displayName||'U')[0].toUpperCase();
+    }
   }
 }
 

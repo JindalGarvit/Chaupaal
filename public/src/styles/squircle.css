@@ -236,6 +236,10 @@ textarea.auth-input,
   overflow: hidden;
   contain: layout style;
 }
+.notif-panel-sheet.archive-overlay[data-inbox-mode="all"] {
+  height: 85%;
+  max-height: none;
+}
 .notif-panel-grabber {
   width: 36px;
   height: 5px;
@@ -517,6 +521,10 @@ textarea.auth-input,
 .notif-panel-sheet[data-tab-accent="akhbaar"] {
   --notif-wash: linear-gradient(180deg, #7b2cbf, transparent);
   border-top: 3px solid #7b2cbf;
+}
+.notif-panel-sheet[data-tab-accent="general"] {
+  --notif-wash: linear-gradient(180deg, rgba(43, 39, 48, 0.08), transparent);
+  border-top: 3px solid var(--line);
 }
 .notif-panel-sheet[data-tab-accent="feedback"] {
   --notif-wash: linear-gradient(180deg, #0F766E, transparent);

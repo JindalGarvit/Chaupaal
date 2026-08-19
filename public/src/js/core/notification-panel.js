@@ -6,9 +6,19 @@
   'use strict';
 
   const DEFAULT_LIMIT = 6;
-  const EXPANDED_LIMIT = 40;
+  const EXPANDED_LIMIT = 60;
   const MAX_VISIBLE = 6;
   const MAX_READ_WHEN_UNREAD = 2;
+  const CROSS_GROUP_WINDOW_MS = 86400000;
+
+  const SECTION_LABELS = {
+    baithak: 'Baithak',
+    duniya: 'Duniya',
+    peepal: 'Peepal',
+    akhbaar: 'Akhbaar',
+    dangal: 'Dangal',
+    general: 'General',
+  };
 
   /** type substring → tab section */
   const SECTION_TYPES = {
@@ -116,7 +126,169 @@
     if (typeof updateTabNotifLights === 'function') updateTabNotifLights();
   }
 
+  function notifDedupeKey(n) {
+    const type = String(n?.type || '').toLowerCase();
+    const refId = String(n?.refId || n?.deepLink?.uid || '').trim();
+    if (!type) return `id::${n?.id || ''}`;
+    if (!refId) return `${type}::${n?.id || ''}`;
+    return `${type}::${refId}`;
+  }
+
+  function dedupeNotifications(items) {
+    const byKey = new Map();
+    (items || []).forEach((n) => {
+      const key = notifDedupeKey(n);
+      const existing = byKey.get(key);
+      if (!existing) {
+        byKey.set(key, n);
+        return;
+      }
+      if (existing.localOnly && !n.localOnly) {
+        byKey.set(key, n);
+        return;
+      }
+      if (!existing.localOnly && n.localOnly) return;
+      if ((n.ts || 0) > (existing.ts || 0)) byKey.set(key, n);
+    });
+    return [...byKey.values()];
+  }
+
+  function crossTargetFamily(type) {
+    const t = String(type || '').toLowerCase();
+    if (t.includes('like') || t.includes('reaction') || t === 'story_like') return 'like';
+    if (t.includes('comment') || t.includes('reply') || t === 'story_comment') return 'comment';
+    if (t === 'follow' || (t.includes('follow') && !t.includes('friend'))) return 'follow';
+    return null;
+  }
+
+  function groupCrossTargetBundles(items, { windowMs = CROSS_GROUP_WINDOW_MS } = {}) {
+    const now = Date.now();
+    const kept = [];
+    const byFamily = new Map();
+
+    (items || []).forEach((n) => {
+      const family = crossTargetFamily(n.type);
+      const candidate = family && !n.read && now - (n.ts || 0) <= windowMs;
+      if (!candidate) {
+        kept.push(n);
+        return;
+      }
+      if (!byFamily.has(family)) byFamily.set(family, []);
+      byFamily.get(family).push(n);
+    });
+
+    byFamily.forEach((group, family) => {
+      const distinctRefs = new Set(
+        group.map((n) => String(n.refId || n.deepLink?.postId || '').trim()).filter(Boolean)
+      );
+      if (group.length < 2 || distinctRefs.size < 2) {
+        kept.push(...group);
+        return;
+      }
+      const sorted = [...group].sort((a, b) => (b.ts || 0) - (a.ts || 0));
+      let totalActors = 0;
+      const actors = [];
+      const sourceIds = [];
+      sorted.forEach((n) => {
+        sourceIds.push(n.id);
+        totalActors += Math.max(1, Number(n.actorCount) || (n.actors || []).length || 1);
+        (n.actors || []).forEach((a) => {
+          if (a?.uid && !actors.some((x) => x.uid === a.uid)) actors.push(a);
+        });
+      });
+      const primary = sorted[0];
+      kept.push({
+        ...primary,
+        id: `group_${family}_${primary.ts || Date.now()}`,
+        grouped: true,
+        groupFamily: family,
+        sourceIds,
+        actorCount: totalActors,
+        actors: actors.slice(0, 8),
+        ts: primary.ts,
+        read: sorted.some((n) => !n.read) ? false : true,
+      });
+    });
+
+    return kept.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  }
+
+  function sectionDisplayLabel(n) {
+    const sec = notifSection(n);
+    if (sec === 'all' || !SECTION_LABELS[sec]) return SECTION_LABELS.general;
+    return SECTION_LABELS[sec];
+  }
+
+  function sectionPillAccent(n) {
+    const sec = notifSection(n);
+    return sec === 'all' || !SECTION_LABELS[sec] ? 'general' : sec;
+  }
+
+  function prepareAllInboxItems(items) {
+    return groupCrossTargetBundles(dedupeNotifications((items || []).filter((n) => !isTypeMuted(n))));
+  }
+
+  function notificationIdsFor(n) {
+    if (!n) return [];
+    if (n.grouped && Array.isArray(n.sourceIds) && n.sourceIds.length) return n.sourceIds;
+    return [n.id].filter(Boolean);
+  }
+
+  async function dismissNotificationsByRef({ type, refId }) {
+    const ty = String(type || '').toLowerCase();
+    const ref = String(refId || '').trim();
+    if (!ty || !ref) return;
+    const ids = new Set();
+    cloudNotifications.forEach((n) => {
+      if (String(n.type || '').toLowerCase() === ty && String(n.refId || n.deepLink?.uid || '') === ref) {
+        ids.add(n.id);
+      }
+    });
+    localEphemeral.forEach((n) => {
+      if (String(n.type || '').toLowerCase() === ty && String(n.refId || n.deepLink?.uid || '') === ref) {
+        ids.add(n.id);
+      }
+    });
+    if (ty === 'friend_request') ids.add(`friend_request_local_${ref}`);
+    localEphemeral = localEphemeral.filter(
+      (n) =>
+        !(
+          String(n.type || '').toLowerCase() === ty &&
+          (String(n.refId || n.deepLink?.uid || '') === ref || n.id === `friend_request_local_${ref}`)
+        )
+    );
+    syncNotificationsGlobal();
+    await softClearIds([...ids]);
+    updateSectionNotifDots();
+    if (typeof panelRepaint === 'function') panelRepaint();
+    if (typeof mountBaithakFriendRequests === 'function') mountBaithakFriendRequests();
+  }
+
+  function playPanelOpenSound(section) {
+    try {
+      if (typeof quietMode !== 'undefined' && quietMode) return;
+      if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
+      if (section === 'all') {
+        if (typeof SoundLib !== 'undefined' && SoundLib.tap) SoundLib.tap();
+      } else if (typeof SoundLib !== 'undefined' && SoundLib.element) {
+        SoundLib.element(section, 'open');
+      }
+    } catch (e) {}
+  }
+
   function iconForType(type) {
+    const t0 = String(type || '').toLowerCase();
+    if (t0.includes('like') || t0.includes('reaction')) return '❤️';
+    if (t0.includes('comment') || t0.includes('reply')) return '💬';
+    if (t0.includes('follow')) return '➕';
+    if (t0.includes('friend')) return '🤝';
+    if (t0.includes('message') || t0.includes('dm')) return '💬';
+    if (t0.includes('story')) return '✨';
+    if (t0.includes('duel') || t0.includes('challenge')) return '⚔️';
+    if (t0.includes('breaking')) return '🔴';
+    return '🔔';
+  }
+
     const t0 = String(type || '').toLowerCase();
     if (t0.includes('like') || t0.includes('reaction')) return '❤️';
     if (t0.includes('comment') || t0.includes('reply')) return '💬';
@@ -137,6 +309,38 @@
     const others = Math.max(0, count - 1);
     const type = String(n.type || '').toLowerCase();
     const preview = String(n.preview || '').trim();
+    const family = n.grouped ? n.groupFamily : crossTargetFamily(type);
+
+    if (n.grouped && family === 'like') {
+      return others
+        ? tt(
+            'notif_group_like_posts',
+            '<strong>{{actor}}</strong> and {{n}} others liked your posts',
+            { actor: escapeHtml(actor), n: String(others) }
+          )
+        : tt('notif_bundle_like', '<strong>{{actor}}</strong> liked your post', { actor: escapeHtml(actor) });
+    }
+    if (n.grouped && family === 'comment') {
+      return others
+        ? tt(
+            'notif_group_comment_posts',
+            '<strong>{{actor}}</strong> and {{n}} others commented on your posts',
+            { actor: escapeHtml(actor), n: String(others) }
+          )
+        : tt('notif_bundle_comment', '<strong>{{actor}}</strong> commented{{preview}}', {
+            actor: escapeHtml(actor),
+            preview: preview ? `: ${escapeHtml(preview.slice(0, 80))}` : '',
+          });
+    }
+    if (n.grouped && family === 'follow') {
+      return others
+        ? tt(
+            'notif_group_follow_many',
+            '<strong>{{actor}}</strong> and {{n}} others started following you',
+            { actor: escapeHtml(actor), n: String(others) }
+          )
+        : tt('notif_bundle_follow', '<strong>{{actor}}</strong> started following you', { actor: escapeHtml(actor) });
+    }
 
     if (type === 'friend_request') {
       return tt('notif_bundle_friend_request', '<strong>{{actor}}</strong> sent you a friend request', { actor: escapeHtml(actor) });
@@ -551,7 +755,7 @@
         icon: 'trash',
         danger: true,
         fn: () => {
-          softClearIds([n.id]).then(() => {
+          softClearIds(notificationIdsFor(n)).then(() => {
             repaint();
             if (typeof showToast === 'function') showToast(tt('notif_cleared_one', 'Notification cleared'));
           });
@@ -575,7 +779,7 @@
         label: tt('notif_action_mark_read', 'Mark read'),
         icon: 'check',
         fn: async () => {
-          await markNotificationRead(n.id);
+          await Promise.all(notificationIdsFor(n).map((id) => markNotificationRead(id)));
           repaint();
         },
       },
@@ -608,7 +812,7 @@
         body: { action: 'respond_friend', targetUid, accept: !!accept },
       });
       if (!env?.ok) throw new Error(env?.error?.message || 'Failed');
-      await softClearIds([n.id]);
+      await dismissNotificationsByRef({ type: 'friend_request', refId: targetUid });
       if (typeof mergePendingFriendRequests === 'function') mergePendingFriendRequests();
       else if (typeof mountBaithakFriendRequests === 'function') mountBaithakFriendRequests();
       if (typeof showToast === 'function') {
@@ -638,9 +842,10 @@
     return [...unreadTake, ...read.slice(0, readCap)];
   }
 
-  function renderPanelList(listEl, items, { hasMore, onMore, section, repaint } = {}) {
+  function renderPanelList(listEl, items, { hasMore, onMore, section, repaint, inboxMode } = {}) {
     if (!listEl) return;
-    const visible = prioritizeVisible(items);
+    const isAllInbox = section === 'all' || inboxMode === 'all';
+    const visible = isAllInbox ? prepareAllInboxItems(items) : prioritizeVisible(items);
     if (!visible.length) {
       const cta = emptyCtaFor(section || 'all');
       if (typeof renderEmptyState === 'function') {
@@ -678,7 +883,7 @@
               .map(
                 (a) =>
                   `<button type="button" class="notif-actor" data-actor-uid="${escapeHtml(a.uid)}">
-                    <span class="notif-actor-av">${escapeHtml(a.avatar || '👤')}</span>
+                    <span class="notif-actor-av">${typeof renderUserAvatarHtml==='function'?renderUserAvatarHtml(a,{decorative:true}):escapeHtml(a.avatar||'👤')}</span>
                     <span>${escapeHtml(a.name || 'Someone')}</span>
                   </button>`
               )
@@ -697,13 +902,16 @@
             <button type="button" class="notif-friend-decline" data-friend-decline aria-label="${tt('notif_decline', 'Decline')}">${typeof iconHtml==='function'?iconHtml('x',{size:18}):'×'}</button>
           </div>`
             : '';
+        const sectionPill = isAllInbox
+          ? `<span class="notif-section-pill" data-section="${escapeHtml(sectionPillAccent(n))}">${escapeHtml(sectionDisplayLabel(n))}</span>`
+          : '';
         return `<div class="notif-item ${n.read ? 'is-read' : 'unread'}" data-id="${n.id}" data-notif-row>
           <div class="notif-icon">${n.icon || '🔔'}</div>
           <div class="notif-body">
             <div class="notif-text-row">${text}${expand}</div>
             ${actorsHtml}
             ${friendActions}
-            <div class="notif-time">${when}</div>
+            <div class="notif-meta-row">${sectionPill}<div class="notif-time">${when}</div></div>
           </div>
           ${n.read ? '' : '<span class="notif-unread-pip" aria-hidden="true"></span>'}
         </div>`;
@@ -711,7 +919,8 @@
       .join('');
 
     listEl.querySelectorAll('[data-notif-row]').forEach((item) => {
-      const n = (window.notifications || []).find((x) => x.id === item.dataset.id);
+      const n = visible.find((x) => x.id === item.dataset.id);
+      if (!n) return;
       item.querySelector('[data-expand]')?.addEventListener('click', (e) => {
         e.stopPropagation();
         const panel = item.querySelector('[data-actors]');
@@ -743,14 +952,18 @@
         try {
           PushPrefs?.recordEngagement?.('open');
         } catch (err) {}
-        await markNotificationRead(item.dataset.id);
+        if (n.grouped && n.sourceIds?.length) {
+          await Promise.all(n.sourceIds.map((id) => markNotificationRead(id)));
+        } else {
+          await markNotificationRead(item.dataset.id);
+        }
         item.classList.remove('unread');
         item.classList.add('is-read');
         item.querySelector('.notif-unread-pip')?.remove();
         deepLinkNotification(n);
       });
       bindSwipeClear(item, () => {
-        softClearIds([item.dataset.id]).then(() => {
+        softClearIds(notificationIdsFor(n)).then(() => {
           item.remove();
           if (typeof showToast === 'function') showToast(tt('notif_cleared_one', 'Notification cleared'));
           if (!listEl.querySelector('[data-notif-row]')) repaint?.();
@@ -768,7 +981,7 @@
     });
 
     listEl.querySelector('[data-notif-more]')?.remove();
-    if (hasMore) {
+    if (hasMore && isAllInbox) {
       const more = document.createElement('button');
       more.type = 'button';
       more.className = 'btn notif-view-more';
@@ -903,7 +1116,13 @@
       return;
     }
 
-    if (!notifUnsub) startNotifInbox();
+    const isAllInbox = section === 'all';
+    if (!notifUnsub) {
+      if (isAllInbox) attachInboxListener(EXPANDED_LIMIT);
+      else startNotifInbox();
+    } else if (isAllInbox && notifLimit < EXPANDED_LIMIT) {
+      attachInboxListener(EXPANDED_LIMIT);
+    }
 
     document.getElementById('notifPanelSheet')?.remove();
     const titles = {
@@ -914,24 +1133,38 @@
       baithak: tt('notif_title_baithak', 'Baithak'),
       akhbaar: tt('notif_title_akhbaar', 'Akhbaar'),
     };
-    const accent = section === 'all' ? 'akhbaar' : section;
+    const accent = isAllInbox ? 'general' : section;
     const sheet = document.createElement('div');
     sheet.id = 'notifPanelSheet';
     sheet.className = 'archive-overlay notif-panel-sheet is-opening';
     sheet.setAttribute('data-nav-managed', '1');
     sheet.setAttribute('data-tab-accent', accent);
+    if (isAllInbox) sheet.setAttribute('data-inbox-mode', 'all');
     sheet.setAttribute('data-sheet-panel', '1');
+    const headerTitle = title || titles[section] || titles.all;
+    const tabMark =
+      !isAllInbox && typeof TabElements !== 'undefined' && TabElements.markHtml
+        ? TabElements.markHtml(section, 22)
+        : '';
     sheet.innerHTML = `
       <div class="notif-panel-grabber" aria-hidden="true"></div>
-      <div class="archive-header">
-        <div style="flex:1"><strong>${title || titles[section] || titles.all}</strong></div>
+      <div class="archive-header notif-panel-header">
+        <div class="notif-panel-title-row">
+          ${tabMark ? `<span class="notif-panel-tab-mark" aria-hidden="true">${tabMark}</span>` : ''}
+          <strong>${headerTitle}</strong>
+        </div>
         <button type="button" class="notif-clear-all" data-clear-all>${tt('notif_clear_all', 'Clear all')}</button>
       </div>
       <div class="notif-panel-toolbar">
         <button type="button" class="notif-mark-all" data-mark-all>${tt('notif_mark_all', 'Mark all read')}</button>
       </div>
-      <div class="notif-panel-list" data-notif-panel-list></div>`;
+      <div class="notif-panel-list" data-notif-panel-list>
+        <div class="notif-panel-loading">${tt('notif_loading', 'Loading notifications…')}</div>
+      </div>`;
     document.querySelector('.device')?.appendChild(sheet);
+    if (!isAllInbox && typeof TabElements !== 'undefined' && TabElements.mountMarks) {
+      TabElements.mountMarks(sheet);
+    }
 
     const closePanel = () => {
       panelRepaint = null;
@@ -962,7 +1195,8 @@
       const filtered = filterBySection(all, section);
       renderPanelList(listEl, filtered, {
         section,
-        hasMore: notifHasMore,
+        inboxMode: isAllInbox ? 'all' : section,
+        hasMore: isAllInbox && notifHasMore,
         onMore: () => {
           attachInboxListener(EXPANDED_LIMIT);
         },
@@ -980,11 +1214,11 @@
       clearSectionWithUndo(section, paint);
     });
 
-    paint();
+    mergePendingFriendRequests().finally(() => paint());
     apiNotif('notif_prune', {}).catch(() => {});
     try {
       if (typeof Micro !== 'undefined' && Micro.haptic) Micro.haptic('medium');
-      if (typeof SoundLib !== 'undefined' && SoundLib.element) SoundLib.element(accent, 'open');
+      playPanelOpenSound(section);
     } catch (e) {}
     setTimeout(() => sheet.classList.remove('is-opening'), 400);
   }
@@ -1063,6 +1297,7 @@
   window.startNotifInbox = startNotifInbox;
   window.stopNotifInbox = stopNotifInbox;
   window.mergePendingFriendRequests = mergePendingFriendRequests;
+  window.dismissNotificationsByRef = dismissNotificationsByRef;
   window.addLocalNotification = addLocalNotification;
   // Prefer local-only path; keep name for callers / notif-prefs gate
   window.addNotification = addLocalNotification;
@@ -1077,4 +1312,8 @@
 
   document.addEventListener('DOMContentLoaded', wireTabNotificationButtons);
   if (document.readyState !== 'loading') setTimeout(wireTabNotificationButtons, 0);
+
+  document.addEventListener('chaupaal:relationship-changed', () => {
+    mergePendingFriendRequests();
+  });
 })();

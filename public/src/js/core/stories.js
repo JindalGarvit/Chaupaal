@@ -234,8 +234,8 @@
       ? `<img src="${safe(previewUrl)}" alt="">`
       : `<span class="instant-pending-glyph">${safe(previewLabel || '⚡')}</span>`;
     pending.innerHTML = `${preview}<div><strong>${splitTt('instants_ready', 'Split ready')}</strong><span>${splitTt(
-      'instants_sharing_cf',
-      'Sharing with Close Friends in 5s…'
+      'instants_sharing_friends',
+      'Sharing with Friends in 5s…'
     )}</span></div><button type="button">${splitTt('instants_undo', 'Undo')}</button>`;
     document.querySelector('.device')?.appendChild(pending);
     let cancelled = false;
@@ -439,7 +439,7 @@
           <button type="button" class="btn" data-split-tool="sticker" aria-label="${splitTt('instants_sticker', 'Sticker')}">${ico('smile') || '☺'}</button>
           <button type="button" class="btn" data-split-tool="camera" aria-label="${splitTt('duniya_camera', 'Camera')}">${ico('camera') || '📷'}</button>
         </div>
-        <div class="instant-compose-meta">${splitTt('instants_cf_note', 'Close Friends · ~24h')}</div>
+        <div class="instant-compose-meta">${splitTt('instants_friends_note', 'Friends · ~24h')}</div>
         <input type="file" id="splitPhotoInput" accept="image/*" hidden>`;
       strip.appendChild(bar);
     }
@@ -584,7 +584,7 @@
     return String(s || '').replace(/[&<>"']/g, '');
   }
 
-  /** Avatar micro-menu: Show profile · Add/Remove Close Friend · (basics). Anchored to DP — not a half-sheet. */
+  /** Avatar micro-menu: Show profile · Exclude from Splits (friends) · Message. */
   function openBaithakAvatarMenu(anchor, profile) {
     if (!profile?.uid) return;
     document.getElementById('baithakAvatarMenu')?.remove();
@@ -601,13 +601,14 @@
       } catch (e) {}
       return f;
     };
-    let isCf = !!profile.closeFriend;
+    let isExcluded = !!profile.splitExcluded;
+    let isFriend = !!profile.friend;
     const isAi = !!profile.isChaupaal || profile.uid === 'chaupaal';
     menu.innerHTML = isAi
       ? `<button type="button" role="menuitem" data-act="profile">${tt('avatar_menu_profile', 'Show profile')}</button>
          <button type="button" role="menuitem" data-act="hub">${tt('chaupaal_hub', 'Chaupaal Hub')}</button>`
       : `<button type="button" role="menuitem" data-act="profile">${tt('avatar_menu_profile', 'Show profile')}</button>
-      <button type="button" role="menuitem" data-act="cf">${isCf ? tt('avatar_menu_remove_cf', 'Remove from Close Friends') : tt('avatar_menu_add_cf', 'Add back to Close Friends')}</button>
+      <button type="button" role="menuitem" data-act="exclusion" hidden>${tt('exclusion_menu_exclude', 'Exclude from Splits')}</button>
       <button type="button" role="menuitem" data-act="message">${tt('avatar_menu_message', 'Message')}</button>`;
     const host = document.querySelector('.device') || document.body;
     host.appendChild(menu);
@@ -624,16 +625,23 @@
     };
     setTimeout(() => document.addEventListener('pointerdown', onOut, true), 0);
 
-    // Hydrate CF state
-    if (typeof hydrateRelationships === 'function') {
+    // Hydrate friend + exclusion state
+    if (!isAi && typeof hydrateRelationships === 'function') {
       hydrateRelationships([profile.uid])
         .then((states) => {
-          isCf = !!states[profile.uid]?.closeFriend;
-          const btn = menu.querySelector('[data-act="cf"]');
+          const st = states[profile.uid] || {};
+          isFriend = !!st.friend;
+          isExcluded = !!st.splitExcluded;
+          const btn = menu.querySelector('[data-act="exclusion"]');
           if (btn) {
-            btn.textContent = isCf
-              ? tt('avatar_menu_remove_cf', 'Remove from Close Friends')
-              : tt('avatar_menu_add_cf', 'Add back to Close Friends');
+            if (isFriend) {
+              btn.hidden = false;
+              btn.textContent = isExcluded
+                ? tt('exclusion_menu_remove', 'Remove from exclusion list')
+                : tt('exclusion_menu_exclude', 'Exclude from Splits');
+            } else {
+              btn.remove();
+            }
           }
         })
         .catch(() => {});
@@ -649,18 +657,18 @@
           else if (typeof openProfilePreview === 'function') openProfilePreview(profile);
         } else if (act === 'hub' && typeof openChaupaalHub === 'function') {
           openChaupaalHub();
-        } else if (act === 'cf' && typeof setCloseFriend === 'function') {
+        } else if (act === 'exclusion' && typeof setSplitExclusion === 'function') {
           try {
-            await setCloseFriend(profile.uid, !isCf);
+            await setSplitExclusion(profile.uid, !isExcluded);
             if (typeof showToast === 'function') {
               showToast(
-                !isCf
-                  ? tt('avatar_cf_added', 'Added to Close Friends')
-                  : tt('avatar_cf_removed', 'Removed from Close Friends')
+                !isExcluded
+                  ? tt('exclusion_added_short', 'Added to exclusion list')
+                  : tt('exclusion_removed_short', 'Removed from exclusion list')
               );
             }
           } catch (e) {
-            if (typeof showToast === 'function') showToast(e?.message || 'Could not update');
+            if (typeof showToast === 'function') showToast(e?.message || tt('exclusion_fail', 'Could not update exclusion list'));
           }
         } else if (act === 'message' && typeof openDmWithSharedHello === 'function') {
           await openDmWithSharedHello({
@@ -739,7 +747,7 @@
           : `<span class="story-archive-fallback">${story.kind === 'split' || story.kind === 'instant' ? '⚡' : story.type === 'score' ? '🎯' : '📖'}</span>`}
         <span class="story-archive-meta">
           <strong>${story.destination === 'duniya' ? 'Duniya' : 'Baithak'}${story.kind === 'split' || story.kind === 'instant' ? ' · Split' : ''}</strong>
-          <small>${story.own && story.visibility === 'close_friends' ? 'Close Friends' : story.destination === 'duniya' ? 'Public' : 'Friends'}${
+          <small>${story.own && (story.kind === 'split' || story.kind === 'instant') ? ' · Split' : story.destination === 'duniya' ? 'Public' : 'Friends'}${
             story.expiresAt && story.expiresAt > Date.now() ? ' · live' : ' · archived'
           }</small>
         </span>

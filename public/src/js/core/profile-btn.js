@@ -122,7 +122,7 @@ async function loadFriends() {
           typeof formatDisplayNameHtml === 'function'
             ? formatDisplayNameHtml(f.name, f.profileType || f.profile?.profileType)
             : f.name;
-        row.innerHTML = `<img class="friend-avatar" src="${f.photoThumb || f.photoURL || 'icon.png'}" onerror="this.style.fontSize='16px';this.src='icon.png'"><div class="friend-info"><div class="friend-name">${nameHtml}</div><div class="friend-username">@${f.username}</div></div><button class="friend-duel-btn" data-uname="${f.username}">⚔️ Muqabala</button>`;
+        row.innerHTML = `${typeof renderUserAvatarHtml==='function'?`<span class="friend-avatar-wrap">${renderUserAvatarHtml(f,{decorative:true,size:40})}</span>`:`<img class="friend-avatar" src="${f.photoThumb||f.photoURL||'icon.png'}" onerror="this.style.fontSize='16px';this.src='icon.png'">`}<div class="friend-info"><div class="friend-name">${nameHtml}</div><div class="friend-username">@${f.username}</div></div><button class="friend-duel-btn" data-uname="${f.username}">⚔️ Muqabala</button>`;
         if (typeof bindProfileLongPress === 'function' && f.uid) {
           bindProfileLongPress(row.querySelector('.friend-avatar'), {
             uid: f.uid,

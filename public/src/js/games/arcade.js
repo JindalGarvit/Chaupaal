@@ -21,6 +21,7 @@ function openRushRunner(){
   let raf=null,lastTime=0,spawnAcc=0,coinAcc=0,powerAcc=0,scroll=0;
   let resizeObs=null,cssW=320,cssH=480,shake=0;
   let keyHandler=null;
+  let pauseCtrl=null;
 
   const THEMES=[
     {name:'Mumbai Streets',skyTop:'#FFB347',skyBot:'#FF6B35',road:'#2A2A32',roadEdge:'#F4A261',line:'#FFE08A',accent:'#E8663D',bldg:['#5C4033','#8B5A2B','#3D2B1F','#6B4423']},
@@ -50,6 +51,7 @@ function openRushRunner(){
     if(raf){cancelAnimationFrame(raf);raf=null;}
     if(resizeObs){try{resizeObs.disconnect();}catch(e){}resizeObs=null;}
     if(keyHandler){window.removeEventListener('keydown',keyHandler);keyHandler=null;}
+    if(pauseCtrl){pauseCtrl.destroy();pauseCtrl=null;}
   }
 
   const begin=typeof beginGameOverlaySession==='function'?beginGameOverlaySession:null;
@@ -71,7 +73,7 @@ function openRushRunner(){
   const buzz=(a)=>{if(typeof gameFeedback==='function')gameFeedback(a);};
 
   overlay.innerHTML=`
-    ${gameChromeHtml({title:'Rush Runner',subtitle:theme.name,backId:'rrBack',rightHtml:'<span class="game-chrome-metric" id="rrScore">0m</span>'})}
+    ${gameChromeHtml({title:'Rush Runner',subtitle:theme.name,backId:'rrBack',pauseId:'rrPause',rightHtml:'<span class="game-chrome-metric" id="rrScore">0m</span>'})}
     <div class="rr-stage" id="rrGame">
       <canvas id="rrCanvas" aria-label="Rush Runner playfield"></canvas>
       <div class="rr-hud-chip" id="rrCoins" aria-live="polite">◆ 0</div>
@@ -386,6 +388,7 @@ function openRushRunner(){
 
   function update(ts){
     if(!alive()||gameOver||!started)return;
+    if(pauseCtrl&&pauseCtrl.isPaused()){raf=requestAnimationFrame(update);return;}
     const dtMs=Math.min(ts-lastTime,40);lastTime=ts;
     const dt=dtMs/1000;
 
@@ -561,6 +564,16 @@ function openRushRunner(){
     else if(e.key==='ArrowDown'){e.preventDefault();doSlide();}
   };
   window.addEventListener('keydown',keyHandler);
+
+  if(typeof createGamePauseController==='function'){
+    pauseCtrl=createGamePauseController({
+      host:overlay,
+      pauseBtnId:'rrPause',
+      onPause(){if(raf){cancelAnimationFrame(raf);raf=null;}},
+      onResume(){if(started&&!gameOver&&!raf){lastTime=performance.now();raf=requestAnimationFrame(update);}},
+      onQuit:close,
+    });
+  }
 }
 
 // ===================== TIP TAP (Match-3 juice) =====================
@@ -581,6 +594,7 @@ function openTipTap(){
   let selected=null,animating=false,gameOver=false;
   let combo=0,cascadeTimer=null,fxLayer=null;
   let cellSize=40;
+  let pauseCtrl=null;
 
   const LEVELS=Array.from({length:100},(_,i)=>({
     level:i+1,
@@ -595,7 +609,10 @@ function openTipTap(){
   const begin=typeof beginGameOverlaySession==='function'?beginGameOverlaySession:null;
   const gs=begin?begin({
     type:'tiptap',title:'Tip Tap',mode:'solo',overlay,
-    cleanup(){if(cascadeTimer){clearTimeout(cascadeTimer);cascadeTimer=null;}},
+    cleanup(){
+      if(cascadeTimer){clearTimeout(cascadeTimer);cascadeTimer=null;}
+      if(pauseCtrl){pauseCtrl.destroy();pauseCtrl=null;}
+    },
   }):null;
   if(begin&&(!gs||!gs.alive()))return;
   if(!begin){
@@ -612,6 +629,7 @@ function openTipTap(){
   };
   const close=()=>{
     if(cascadeTimer){clearTimeout(cascadeTimer);cascadeTimer=null;}
+    if(pauseCtrl){pauseCtrl.destroy();pauseCtrl=null;}
     if(gs)gs.close();else overlay.remove();
   };
   const buzz=(a)=>{if(typeof gameFeedback==='function')gameFeedback(a);};
@@ -925,7 +943,7 @@ function openTipTap(){
   }
 
   overlay.innerHTML=`
-    ${gameChromeHtml({title:'Tip Tap',subtitle:`Level ${level}`,backId:'cbBack',rightHtml:'<span class="game-chrome-metric" id="cbScore">0</span>'})}
+    ${gameChromeHtml({title:'Tip Tap',subtitle:`Level ${level}`,backId:'cbBack',pauseId:'cbPause',rightHtml:'<span class="game-chrome-metric" id="cbScore">0</span>'})}
     <div class="tt-meter">
       <div class="tt-meter-row">
         <span>Target: <strong id="cbTarget">${LEVELS[Math.min(level-1,99)].target.toLocaleString()}</strong></span>
@@ -945,6 +963,15 @@ function openTipTap(){
 
   fxLayer=document.getElementById('cbFx');
   document.getElementById('cbBack').addEventListener('click',()=>close());
+  if(typeof createGamePauseController==='function'){
+    pauseCtrl=createGamePauseController({
+      host:overlay,
+      pauseBtnId:'cbPause',
+      onPause(){if(cascadeTimer){clearTimeout(cascadeTimer);cascadeTimer=null;}},
+      onResume(){},
+      onQuit:close,
+    });
+  }
 
   // Swipe-to-swap on grid
   const gridEl=document.getElementById('cbGrid');

@@ -393,7 +393,7 @@ window.initPeepal=async function(){
       { hours: [18, 23], text: 'Who should see this tonight?' },
     ],
     instant_note: [
-      { hours: [5, 12], text: 'Morning split for Close Friends…' },
+      { hours: [5, 12], text: 'Morning Split for friends…' },
       { hours: [17, 23], text: 'Leave an evening split…' },
       { text: 'Leave a split…' },
     ],

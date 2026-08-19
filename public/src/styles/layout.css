@@ -217,6 +217,10 @@ html,body{
   border-radius:var(--r-sheet) var(--r-sheet) 0 0;
   box-shadow:0 -8px 32px rgba(0,0,0,0.12);
 }
+.notif-panel-sheet.archive-overlay[data-inbox-mode="all"]{
+  height:85%;
+  max-height:none;
+}
 
 .brand-block{display:flex;flex-direction:column;}
 .brand{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:20px;color:var(--ink);display:flex;align-items:center;gap:7px;}

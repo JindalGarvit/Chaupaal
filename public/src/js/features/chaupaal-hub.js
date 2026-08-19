@@ -29,7 +29,7 @@
       </div>
       <div class="chaupaal-hub-body">
         <div class="chaupaal-hub-hero">
-          <div class="chaupaal-hub-avatar">${p.photoURL ? `<img src="${p.photoURL}" alt="">` : '🪑'}</div>
+          <div class="chaupaal-hub-avatar">${typeof renderUserAvatarHtml==='function'?renderUserAvatarHtml({...p,profile:dp,uid:typeof currentUser!=='undefined'?currentUser?.uid:''},{decorative:true}):(p.photoURL?`<img src="${p.photoURL}" alt="">`:'🪑')}</div>
           <div>
             <div class="chaupaal-hub-name">${name}</div>
             <div class="chaupaal-hub-meta">@${p.username || 'username'}${teen ? ' · Teen Mode' : ''}</div>

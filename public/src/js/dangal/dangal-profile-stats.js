@@ -6,8 +6,10 @@
 
   async function renderDangalProfileSection(uid, containerEl) {
     if (!containerEl || !uid || typeof db === 'undefined' || !db) return;
-    containerEl.innerHTML = '<p class="dangal-profile__empty">Loading…</p>';
-    try {
+    if (typeof renderSkeleton === 'function') renderSkeleton(containerEl, { variant: 'detail', count: 1 });
+    else containerEl.innerHTML = '<p class="dangal-profile__empty">Loading…</p>';
+    const load = async () => {
+      try {
       const snap = await db.collection('users').doc(uid).collection('gameStats').limit(40).get();
       const played = snap.docs
         .map((d) => Object.assign({ gameType: d.id }, d.data()))
@@ -57,9 +59,19 @@
         '</div><div class="dangal-profile__games-grid">' +
         cards +
         '</div>';
-    } catch (e) {
-      containerEl.innerHTML = '<p class="dangal-profile__empty">Stats unavailable.</p>';
-    }
+      } catch (e) {
+        if (typeof renderErrorState === 'function') {
+          renderErrorState(containerEl, {
+            title: 'Stats unavailable',
+            message: typeof friendlyError === 'function' ? friendlyError(e) : 'Please try again.',
+            onRetry: load,
+          });
+        } else {
+          containerEl.innerHTML = '<p class="dangal-profile__empty">Stats unavailable.</p>';
+        }
+      }
+    };
+    await load();
   }
 
   window.renderDangalProfileSection = renderDangalProfileSection;

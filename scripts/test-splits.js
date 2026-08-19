@@ -1,5 +1,5 @@
 /**
- * Split / Close Friends opt-out helpers.
+ * Split exclusion / delivery helpers.
  */
 const assert = require('assert');
 const {
@@ -46,10 +46,10 @@ test('legacy allowlist docs do not restrict opt-out delivery', () => {
   );
 });
 
-test('followers who are not friends never qualify as Close Friends', () => {
+test('non-friends never receive Split delivery', () => {
   assert.equal(isCloseFriendOptOut({ isFriend: false, excluded: false }), false);
 });
 
-test('new friends are included until excluded', () => {
+test('Split exclusion: friend not excluded receives; excluded does not', () => {
   assert.equal(isCloseFriendOptOut({ isFriend: true, excluded: false }), true);
 });

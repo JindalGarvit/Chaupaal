@@ -27,7 +27,7 @@
     baithak: [
       'Your friends might be wondering where you are — drop a Split.',
       'A group you're in had some activity.',
-      'Send something to your close friends today.',
+      'Send a Split to friends today.',
       'Baithak is quiet — be the one to break the silence.',
     ],
     dangal: [

@@ -671,7 +671,7 @@
         <button type="button" class="btn" data-pick-src="duniya">Duniya</button>
         <button type="button" class="btn" data-pick-src="peepal">Peepal</button>
       </div>
-      <div data-pick-grid class="cp-hl-pick-grid" style="padding:12px;">Loading…</div>`;
+      <div data-pick-grid class="cp-hl-pick-grid" style="padding:12px;"></div>`;
     document.querySelector('.device')?.appendChild(sheet);
     const close = () => {
       if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
@@ -685,7 +685,8 @@
       src = kind;
       sheet.querySelectorAll('[data-pick-src]').forEach((b) => b.classList.toggle('btn--primary', b.dataset.pickSrc === kind));
       const grid = sheet.querySelector('[data-pick-grid]');
-      grid.innerHTML = 'Loading…';
+      if (typeof renderSkeleton === 'function') renderSkeleton(grid, { variant: 'list', count: 4 });
+      else grid.innerHTML = 'Loading…';
       try {
         if (kind === 'stories') {
           const archived = typeof storyCall === 'function' ? await storyCall('archive', {}) : { stories: [] };
@@ -717,7 +718,14 @@
             : `<div class="public-profile-posts-empty">No ${kind} posts</div>`;
         }
       } catch (e) {
-        grid.innerHTML = '<div class="public-profile-posts-empty">Unavailable</div>';
+        if (typeof renderErrorState === 'function') {
+          renderErrorState(grid, {
+            message: typeof friendlyError === 'function' ? friendlyError(e) : 'Please try again.',
+            onRetry: () => loadSrc(kind),
+          });
+        } else {
+          grid.innerHTML = '<div class="public-profile-posts-empty">Unavailable</div>';
+        }
       }
       grid.querySelectorAll('.cp-hl-pick-cell').forEach((btn) => {
         btn.addEventListener('click', () => {

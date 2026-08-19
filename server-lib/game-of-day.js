@@ -33,6 +33,7 @@ const KNOWN_GAME_IDS = [
   'ankjod',
   'streetcricket',
   'gullykick',
+  'brickbreaker',
 ];
 
 /** Single source of truth for GOTD genre filters (mirrors client registry). */
@@ -52,6 +53,7 @@ const GAME_GENRE_BY_ID = {
   ankjod: 'brain',
   streetcricket: 'rw_sports',
   gullykick: 'rw_sports',
+  brickbreaker: 'arcade',
 };
 
 function genreForGameId(id, gameDoc) {

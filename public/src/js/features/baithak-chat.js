@@ -145,6 +145,7 @@ async function prepareChatThread(chat, screen, { isGroup, isSelf, isChaupaal }) 
 
   if (needsBootstrap) {
     setChatComposerReady(screen, false, 'Connecting…');
+    if (typeof renderSkeleton === 'function') renderSkeleton(area, { variant: 'list', count: 4 });
   }
 
   try {
@@ -214,8 +215,14 @@ async function prepareChatThread(chat, screen, { isGroup, isSelf, isChaupaal }) 
     }
     if (needsBootstrap) {
       setChatComposerReady(screen, false, 'Could not connect — go back and try again');
+      if (typeof renderErrorState === 'function') {
+        renderErrorState(area, {
+          message: typeof friendlyDmError === 'function' ? friendlyDmError(e) : 'Could not open chat',
+          onRetry: () => prepareChatThread(chat, screen, { isGroup, isSelf, isChaupaal }),
+        });
+      }
       if (typeof showToast === 'function') {
-        showToast(typeof friendlyDmError === 'function' ? friendlyDmError(e) : e?.message || 'Could not open chat');
+        showToast(typeof friendlyDmError === 'function' ? friendlyDmError(e) : e?.message || 'Could not open chat', 3000, { type: 'error' });
       }
       return;
     }
@@ -1046,7 +1053,7 @@ function renderMsgBubble(m, isGroup){
 
   return `
     <div class="msg-row ${isMe?'me':''}" data-uid="${chatEsc(uid)}" data-name="${chatEsc(name)}"${m.pending?' data-pending="1"':''}${m.failed?' data-failed="1"':''}>
-      ${!isMe?`<div class="msg-avatar-small">${chatEsc(m.avatar||'👤')}</div>`:''}
+      ${!isMe?`<div class="msg-avatar-small">${typeof renderUserAvatarHtml==='function'?renderUserAvatarHtml({uid,name,avatar:m.avatar,photoURL:m.photoURL},{decorative:true,size:24}):chatEsc(m.avatar||'👤')}</div>`:''}
       <div>
         ${(isGroup&&!isMe&&m.name)?`<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px;">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(m.name,m):chatEsc(m.name)}</div>`:''}
         <div class="msg-bubble ${isMe?'me':'them'}${att&&att.type==='muqabala_challenge'?' challenge':''}${att&&att.type==='mehfil_invite'?' mehfil-invite':''}" data-msg-text="${chatEsc(m.text||'')}">${body}</div>
@@ -1203,7 +1210,8 @@ async function sendMsg(chat){
   if(unlock===false){ if(typeof showToast==='function') showToast(t('baithak_sending')); return; }
 
   const sendBtn=document.getElementById('chatSendBtn');
-  if(sendBtn) sendBtn.disabled=true;
+  if(typeof setButtonLoading==='function') setButtonLoading(sendBtn, true);
+  else if(sendBtn) sendBtn.disabled=true;
   try{
     if(typeof runOptimistic==='function'){
       await runOptimistic({
@@ -1318,7 +1326,11 @@ async function sendMsg(chat){
         sendRealtimeMessage(chat.firestoreId||chat.id,text,isGroup);
       }
     }
-  }finally{ if(sendBtn) sendBtn.disabled=false; if(typeof unlock==='function') unlock(); }
+  }finally{
+    if(typeof setButtonLoading==='function') setButtonLoading(sendBtn, false);
+    else if(sendBtn) sendBtn.disabled=false;
+    if(typeof unlock==='function') unlock();
+  }
 }
 
 function leaveGroupChat(chat){
@@ -1483,7 +1495,7 @@ function openBaithakStoryViewer(story, allStories){
     const locationOnly=hasLocation&&!(isMedia&&s.media)&&!hasMusic;
     const timeAgo=(s.ts||s.createdAt)?timeAgoStr(s.ts||s.createdAt):'now';
     const destinationLabel=s.destination==='duniya'?'Duniya':s.destination==='baithak'?'Baithak':'';
-    const ownerAudience=s.own&&s.visibility==='close_friends'?' · Close Friends':'';
+    const ownerAudience=s.own&&(s.kind==='split'||s.kind==='instant')?' · Split':'';
     const musicOverlay=hasMusic&&typeof renderMusicCard==='function'
       ?renderMusicCard(s.music,{variant:'story'})
       :'';
@@ -1722,9 +1734,9 @@ function showBaithakShareMenu(){
   if (!anchor || !row) {
     if (typeof showActionSheet === 'function') {
       showActionSheet('Share in Baithak', [
-        {label:'Split',icon:'zap',hint:'Shares with Close Friends in 5s. No editing.',fn:openBaithakInstantCamera},
+        {label:'Split',icon:'zap',hint:'Shares with Friends in 5s. No editing.',fn:openBaithakInstantCamera},
         {label:'Create a story',icon:'camera',hint:'Camera with text, stickers, games, and audience controls.',fn:()=>openBaithakStoryComposer('camera')},
-        {label:'Upload a story',icon:'image',hint:'Pick from gallery, then edit before sharing with Friends or Close Friends.',fn:()=>openBaithakStoryComposer('gallery')},
+        {label:'Upload a story',icon:'image',hint:'Pick from gallery, then edit before sharing with Friends.',fn:()=>openBaithakStoryComposer('gallery')},
         {label:'Share a song',icon:'music',hint:'In-app music card — searchable, playable preview. No external apps.',fn:shareBaithakSongStory},
         {label:'Share a location',icon:'map-pin',hint:'Current place, search, pin drop, or live share — map card in Stories.',fn:shareBaithakLocationStory},
       ]);
@@ -1913,7 +1925,7 @@ function openBaithakInstantCamera(){
   if(!currentUser){showToast(signInMsg);return;}
   const hint = typeof t==='function' && t('instants_camera_hint')!=='instants_camera_hint'
     ? t('instants_camera_hint')
-    : 'Split · Close Friends';
+    : 'Split · Friends';
   openInAppCamera({hint,onCapture:(file)=>{
     const preview=URL.createObjectURL(file);
     const share = async ()=>{
@@ -1949,7 +1961,7 @@ function openBaithakInstantCamera(){
     const pending=document.createElement('div');
     pending.className='instant-pending';
     pending.setAttribute('data-nav-ignore','1');
-    pending.innerHTML=`<img src="${preview}" alt=""><div><strong>Split ready</strong><span>Sharing with Close Friends in 5s…</span></div><button type="button">Undo</button>`;
+    pending.innerHTML=`<img src="${preview}" alt=""><div><strong>Split ready</strong><span>Sharing with Friends in 5s…</span></div><button type="button">Undo</button>`;
     document.querySelector('.device')?.appendChild(pending);
     let cancelled=false;
     const timer=setTimeout(async()=>{
@@ -2027,7 +2039,6 @@ function showBaithakStoryEditor(file,mode){
       <label class="story-editor-field">Audience
         <select data-story-audience>
           <option value="friends">Friends — mutual connections only</option>
-          <option value="close_friends">Close Friends — private list (only you manage it)</option>
           <option value="save_only">💾 Save without posting</option>
           <option value="highlights_only">◎ Add directly to Highlights</option>
         </select>
@@ -2037,7 +2048,7 @@ function showBaithakStoryEditor(file,mode){
           <select data-story-highlight></select>
         </label>
       </div>
-      <p class="story-editor-note">Close Friends is invisible to others — recipients never see that a selective list exists. Save without posting / Highlights never appear as a live story.</p>
+      <p class="story-editor-note">Save without posting / Highlights never appear as a live story.</p>
       <label class="story-editor-field">Game card
         <select data-story-game>
           <option value="">No game attached</option>
@@ -2233,10 +2244,6 @@ function showBaithakStoryEditor(file,mode){
       if(typeof haptic==='function') haptic('success');
       if(saveOnly){
         showToast(audience==='highlights_only'?'Added to Highlights (private until shared)':'Saved privately to Archive');
-      }else if(created?.audienceFallback==='friends'){
-        showToast('Shared with Friends — your Close Friends list was empty');
-      }else if(audience==='close_friends'){
-        showToast(t('baithak_story_cf'));
       }else{
         showToast(t('baithak_story_friends'));
       }

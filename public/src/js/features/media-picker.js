@@ -191,7 +191,8 @@
         }
 
         async function run(q) {
-          grid.innerHTML = `<div class="media-picker-loading cp-state" role="status">${tt('gif_loading', 'Loading…')}</div>`;
+          if (typeof renderSkeleton === 'function') renderSkeleton(grid, { variant: 'card', count: 6 });
+          else grid.innerHTML = `<div class="media-picker-loading cp-state" role="status">${tt('gif_loading', 'Loading…')}</div>`;
           const remote = await fetchServerGifs(q);
           if (!remote) {
             paintLocal(q);
