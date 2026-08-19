@@ -134,6 +134,10 @@ function openChatScreen(chat){
   const isSelf = typeof isSelfChat==='function' && isSelfChat(chat);
   const isChaupaal = typeof isChaupaalChat==='function' && isChaupaalChat(chat);
   const isGroup = chat.type === 'group';
+  const previewJoin = !!(chat._previewJoin && isGroup && currentUser?.uid && !(chat.participants || []).includes(currentUser.uid));
+  const headerTitle = (typeof BaithakSearch !== 'undefined' && typeof BaithakSearch.resolveChatDisplayName === 'function')
+    ? BaithakSearch.resolveChatDisplayName(chat, chat.name || 'Chat')
+    : (chat.name || 'Chat');
   const msgs = SAMPLE_MESSAGES[chat.id] || SAMPLE_MESSAGES[chat.firestoreId] || (isSelf ? SAMPLE_MESSAGES.chat_self : null) || [];
   const hasDuelStreak = !isGroup && !isSelf && !isChaupaal && chat.duelStreak;
   screen.dataset.chatId = chat.firestoreId || chat.id || '';
@@ -158,7 +162,7 @@ function openChatScreen(chat){
       <button class="chat-back" id="chatBack" aria-label="Back">${typeof iconHtml==='function'?iconHtml('arrow-left',{size:22}):'←'}</button>
       <div class="chat-header-avatar${isGroup || !isSelf ? ' chat-header-tappable' : ''}" ${isGroup ? 'data-open-group-info' : !isSelf ? 'data-open-chat-profile' : ''} role="${isGroup || !isSelf ? 'button' : ''}" ${!isSelf ? 'tabindex="0"' : ''}>${isGroup || isSelf || isChaupaal ? (chat.avatar || '👤') : (typeof chatAvatarMarkup === 'function' ? chatAvatarMarkup(chat) : (chat.avatar || '👤'))}</div>
       <div class="chat-header-info${isGroup || !isSelf ? ' chat-header-tappable' : ''}" ${isGroup ? 'data-open-group-info' : !isSelf ? 'data-open-chat-profile' : ''} role="${isGroup || !isSelf ? 'button' : ''}" ${!isSelf ? 'tabindex="0"' : ''}>
-        <div class="chat-header-name">${(chat.type==='group'||chat.type==='self'||isChaupaal)?(chat.name||'Chat'):(typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(chat.name&&chat.name!=='Chat'?chat.name:(chat.username||'Chat'),chat):(chat.name&&chat.name!=='Chat'?chat.name:'Chat'))}</div>
+        <div class="chat-header-name">${(chat.type==='group'||chat.type==='self'||isChaupaal)?headerTitle:(typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(headerTitle!=='Chat'?headerTitle:(chat.username||'Chat'),chat):(headerTitle!=='Chat'?headerTitle:'Chat'))}</div>
         <div id="chatActivityStatus" class="chat-activity-status">${statusLine}</div>
       </div>
       <div class="chat-header-actions">
@@ -222,12 +226,13 @@ function openChatScreen(chat){
         <span class="chat-attach-label">${typeof t==='function'?t('attach_location','Location'):'Location'}</span>
       </button>
     </div>
-    <div class="chat-input-bar">
+    <div class="chat-input-bar"${previewJoin ? ' hidden' : ''}>
       <button class="chat-action-btn" id="chatPlusBtn" aria-label="Attach">${typeof iconHtml==='function'?iconHtml('plus',{size:22}):'＋'}</button>
       <textarea id="chatMsgInput" rows="1" placeholder="${placeholder}" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
       <button class="chat-action-btn mic-btn" id="chatMicBtn" title="Voice typing" aria-label="Voice typing">🎙️</button>
       <button class="chat-action-btn chat-send-btn" id="chatSendBtn" aria-label="Send message">➤</button>
     </div>
+    ${previewJoin ? `<div class="chat-preview-join-bar"><button type="button" id="chatPreviewJoinBtn" class="chat-preview-join-btn">Join group to send messages</button></div>` : ''}
     <input type="file" id="chatPhotoInput" accept="image/*" style="display:none">
     <input type="file" id="chatFileInput" style="display:none">
   `;
@@ -306,7 +311,39 @@ function openChatScreen(chat){
     bindMsgAvatarLongPress(screen, profile);
   }
 
-  document.getElementById('chatSendBtn').addEventListener('click', () => sendMsg(chat));
+  document.getElementById('chatSendBtn')?.addEventListener('click', () => sendMsg(chat));
+  screen.querySelector('#chatPreviewJoinBtn')?.addEventListener('click', async () => {
+    const chatId = chat.firestoreId || chat.id;
+    if (!chatId || !currentUser?.uid || !db) return;
+    try {
+      if (chat.invite?.mode === 'approval') {
+        await db.collection('chats').doc(chatId).collection('joinRequests').doc(currentUser.uid).set({
+          uid: currentUser.uid,
+          name: userProfile?.name || currentUser.displayName || 'Member',
+          status: 'pending',
+          requestedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        if (typeof showToast === 'function') showToast('Join request sent');
+        return;
+      }
+      await db.collection('chats').doc(chatId).update({
+        participants: firebase.firestore.FieldValue.arrayUnion(currentUser.uid),
+        [`memberProfiles.${currentUser.uid}`]: {
+          name: userProfile?.name || currentUser.displayName || 'Member',
+          photoURL: currentUser.photoURL || '',
+        },
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      chat.participants = [...new Set([...(chat.participants || []), currentUser.uid])];
+      delete chat._previewJoin;
+      if (typeof showToast === 'function') showToast('Joined group');
+      closeChatScreen({ updateHistory: true, animate: false });
+      openChatScreen(chat);
+      if (typeof loadBaithakChatsPage === 'function') loadBaithakChatsPage({ reset: false }).catch(() => {});
+    } catch (e) {
+      if (typeof showToast === 'function') showToast('Could not join group');
+    }
+  });
   const msgInput = document.getElementById('chatMsgInput');
   const sendBtn = document.getElementById('chatSendBtn');
   const syncSendIdle = () => {

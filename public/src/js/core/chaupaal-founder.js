@@ -129,6 +129,17 @@
       }
     } else {
       const patch = { memberProfiles: profiles };
+      const parts = Array.isArray(existingData?.participants)
+        ? existingData.participants.slice()
+        : Array.isArray(existingData?.members)
+          ? existingData.members.slice()
+          : Array.isArray(existingData?.participantIds)
+            ? existingData.participantIds.slice()
+            : [];
+      const sorted = [currentUser.uid, peer].sort();
+      if (!parts.length || !parts.includes(currentUser.uid) || !parts.includes(peer)) {
+        patch.participants = sorted;
+      }
       const allow = [
         'sharedFirstHello',
         'preview',

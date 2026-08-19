@@ -466,7 +466,8 @@
         <div class="group-info-section" data-gi-privacy hidden>
           <div class="group-info-section-head">Discoverability</div>
           <label class="group-info-toggle"><span>Public — appear in Chaupaal search</span><input type="checkbox" data-gi-public-toggle></label>
-          <div class="group-info-muted" style="font-size:12px;margin-top:6px;">Private groups stay invite-only and never show in global search for non-members.</div>
+          <label class="group-info-toggle" style="margin-top:8px;"><span>Discoverable in search (without making public)</span><input type="checkbox" data-gi-discoverable-toggle></label>
+          <div class="group-info-muted" style="font-size:12px;margin-top:6px;">Private groups stay invite-only unless discoverable is on. Non-members see a preview before joining.</div>
         </div>
         <div class="group-info-section">
           <div class="group-info-section-head">Members <span data-gi-count></span></div>
@@ -597,6 +598,17 @@
             noticeEl.hidden = true;
           }
         };
+        const discToggle = overlay.querySelector('[data-gi-discoverable-toggle]');
+        if (discToggle) {
+          discToggle.checked = chat.discoverableInSearch === true || (isGroupPublic(chat) && chat.discoverableInSearch !== false);
+          discToggle.onchange = async () => {
+            const next = !!discToggle.checked;
+            await patchGroupDoc(chatId, { discoverableInSearch: next });
+            chat.discoverableInSearch = next;
+            mergeChatLocal(chatId, { discoverableInSearch: next });
+            if (typeof showToast === 'function') showToast(next ? 'Group is discoverable in search' : 'Hidden from search');
+          };
+        }
       } else privacyEl.hidden = true;
 
       overlay.querySelector('[data-gi-count]').textContent = `(${members.length})`;
@@ -934,7 +946,26 @@
     refresh();
   }
 
+  /** Telegram-style preview for searchable groups the viewer has not joined. */
+  function openGroupSearchPreview(initialChat) {
+    const chat = normalizeGroupChat({ ...initialChat });
+    const uid = currentUser?.uid;
+    const isMember = uid && (chat.participants || []).includes(uid);
+    if (isMember) {
+      if (typeof openChatScreen === 'function') openChatScreen(chat);
+      return;
+    }
+    if (isGroupPublic(chat)) {
+      const preview = { ...chat, _previewJoin: true };
+      if (typeof openChatScreen === 'function') openChatScreen(preview);
+      return;
+    }
+    openGroupInfo(chat);
+  }
+
   window.openGroupInfo = openGroupInfo;
+  window.openGroupInfoSheet = openGroupInfo;
+  window.openGroupSearchPreview = openGroupSearchPreview;
   window.createGroupInFirestore = createGroupInFirestore;
   window.joinGroupByInviteToken = joinGroupByInviteToken;
   window.normalizeGroupChat = normalizeGroupChat;

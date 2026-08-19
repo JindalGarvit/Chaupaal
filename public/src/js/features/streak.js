@@ -420,7 +420,22 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment){
     }
   }
   try{
-    await db.collection('chats').doc(id).collection('messages').add(payload);
+    const msgRef=await db.collection('chats').doc(id).collection('messages').add(payload);
+    if(typeof indexChatMessageForSearch==='function'){
+      indexChatMessageForSearch({
+        chatId:id,
+        messageId:msgRef.id,
+        text:body,
+        ts:Date.now(),
+      }).catch(()=>{});
+    }else if(typeof BaithakSearch!=='undefined'&&typeof BaithakSearch.indexChatMessageForSearch==='function'){
+      BaithakSearch.indexChatMessageForSearch({
+        chatId:id,
+        messageId:msgRef.id,
+        text:body,
+        ts:Date.now(),
+      }).catch(()=>{});
+    }
     const nowMs = Date.now();
     const previewText = String(payload.text || '').slice(0, 120);
     const chatPatch = {
@@ -444,6 +459,9 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment){
     await db.collection('chats').doc(id).set(chatPatch, { merge: true }).catch((e3) => {
       if (typeof reportClientError === 'function') reportClientError({ feature: 'streak_patch', message: e3?.message || String(e3) });
     });
+    if(participants.length){
+      await db.collection('chats').doc(id).set({ participants }, { merge: true }).catch(()=>{});
+    }
     if (window.currentOpenChat && (window.currentOpenChat.firestoreId === id || window.currentOpenChat.id === id || window.currentOpenChat.firestoreId === chatId || window.currentOpenChat.id === chatId)) {
       window.currentOpenChat.lastMessageAt = nowMs;
       if (!window.currentOpenChat.firstMessageAt) window.currentOpenChat.firstMessageAt = nowMs;

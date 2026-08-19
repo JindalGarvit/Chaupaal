@@ -343,8 +343,9 @@
       if (!id || seen.has(id)) return;
       const isMember = myUid && Array.isArray(g.participants) && g.participants.includes(myUid);
       const isPublic = typeof isGroupPublic === 'function' ? isGroupPublic(g) : g.isPublic !== false;
-      // Private groups never appear for non-members
-      if (!isPublic && !isMember) return;
+      const discoverable = g.discoverableInSearch === true || (isPublic && g.discoverableInSearch !== false);
+      if (!isMember && !discoverable) return;
+      if (!isPublic && !discoverable && !isMember) return;
       seen.add(id);
       const members = Number(g.memberCount != null ? g.memberCount : (g.participants || []).length);
       const name = String(g.name || '');
@@ -360,7 +361,7 @@
         chatId: id,
         name,
         title: name || 'Group',
-        subtitle: `${members} member${members === 1 ? '' : 's'}${isPublic ? ' · Public' : ' · Private'}`,
+        subtitle: `${members} member${members === 1 ? '' : 's'}${isPublic ? ' · Public' : discoverable ? ' · Discoverable' : ' · Private'}`,
         photoURL: g.photoURL || (/^https:/.test(g.avatar || '') ? g.avatar : null),
         avatar: g.avatar || '👥',
         memberCount: members,

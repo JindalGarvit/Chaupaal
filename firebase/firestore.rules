@@ -215,6 +215,17 @@ service cloud.firestore {
         allow read: if isOwner(userId);
         allow write: if false;
       }
+      // Private nicknames — viewer-only; never notifies the target.
+      match /chat_nicknames/{targetUid} {
+        allow read, write: if isOwner(userId);
+      }
+      match /group_nicknames/{chatId} {
+        allow read, write: if isOwner(userId);
+      }
+      // Baithak message search index (forward-only from client sends).
+      match /chat_search_index/{docId} {
+        allow read, write: if isOwner(userId);
+      }
       // Compose drafts (Phase 2) — owner only
       match /drafts/{draftId} {
         allow read, write: if isOwner(userId);
@@ -671,9 +682,9 @@ service cloud.firestore {
         'participants', 'memberProfiles', 'discoveryOrigin', 'peerProfileType', 'origin',
         'name', 'description', 'avatar', 'photoURL', 'admins', 'permissions', 'invite',
         'openedBy', 'createdBy', 'firstMessageAt', 'matchMeta',
-        'isPublic', 'nameLower', 'memberCount', 'discoverableNoticeAck'
+        'isPublic', 'nameLower', 'memberCount', 'discoverableNoticeAck', 'discoverableInSearch'
       ]);
-      let adminOnly = keys.hasAny(['admins', 'permissions', 'invite', 'isPublic', 'discoverableNoticeAck']);
+      let adminOnly = keys.hasAny(['admins', 'permissions', 'invite', 'isPublic', 'discoverableNoticeAck', 'discoverableInSearch']);
       let infoKeys = keys.hasAny(['name', 'description', 'avatar', 'photoURL', 'nameLower']);
       let canEditInfo = isChatAdmin() ||
         (resource.data.permissions != null && resource.data.permissions.editInfo == 'all');
@@ -692,7 +703,8 @@ service cloud.firestore {
         || isChatParticipant()
         || (resource.data.type == 'group' && resource.data.isPublic == true);
       allow list: if isChatParticipant()
-        || (resource.data.type == 'group' && resource.data.isPublic == true);
+        || (resource.data.type == 'group' && resource.data.isPublic == true)
+        || (resource.data.type == 'group' && resource.data.discoverableInSearch == true);
       allow create: if isAuth()
         && request.resource.data.participants.hasAny([request.auth.uid])
         && (

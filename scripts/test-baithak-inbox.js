@@ -91,4 +91,10 @@ function assert(cond, msg) {
   assert(union.some((c) => c.id === 'cached_dm'), 'device cache fills gaps when scan is incomplete');
 }
 
+{
+  const cached = [{ id: 'legacy_dm', type: 'dm', name: 'Legacy', participants: ['u1', 'u2'], ts: 1 }];
+  const merged = mergeBaithakInbox([], cached.map(mapChatDoc));
+  assert(merged.length === 1, 'always merge device cache on reset keeps legacy dm');
+}
+
 console.log('baithak inbox tests ok');

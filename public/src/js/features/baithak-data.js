@@ -164,7 +164,7 @@ function renderChatList(chats, opts){
       </div>
       <div class="chat-info">
         <div class="chat-name">${(self||chaupaal||chat.type==='group'||chat.type==='self')?(chat.name||'Chat'):(typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(chat.name||'Chat',chat):(chat.name||'Chat'))}${self?` <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">· you</span>`:''}${chaupaal?` <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">· companion</span>`:''}${chat.members?` <span style="font-size:11px;color:var(--muted);font-weight:400;">${chat.members} members</span>`:''}</div>
-        <div class="chat-preview">${chat.preview||''}</div>
+        <div class="chat-preview">${chat._searchSnippet||chat.preview||''}</div>
       </div>
       <div class="chat-meta">
         <div class="chat-time">${when||''}</div>
@@ -253,6 +253,17 @@ function renderChatList(chats, opts){
           });
         }
       }
+    }
+    if(!self&&!chaupaal&&typeof onLongPress==='function'){
+      onLongPress(item,()=>{
+        if(typeof openBaithakNicknameSheet==='function'){
+          openBaithakNicknameSheet({
+            chat,
+            peerUid: chat.type==='group'?null:peerUidOfChat(chat),
+            title: chat.type==='group'?'Rename group (private)':'Set nickname',
+          });
+        }
+      },{ delayMs: 520 });
     }
     item.addEventListener('click', () => openChatScreen(chat));
     list.appendChild(item);
@@ -519,6 +530,67 @@ function rememberInboxChat(chat){
   writeInboxCache(mergeBaithakInbox(readInboxCache(),[chat]));
 }
 
+/** Hydrate inbox from device cache immediately (before Firestore round-trip). */
+function hydrateInboxFromDeviceCache(){
+  const cached=readInboxCache();
+  if(!cached.length) return [];
+  const mapped=cached.map((c)=>mapChatDoc(c));
+  baithakChats=typeof pinSelfChat==='function'?pinSelfChat(mergeBaithakInbox(baithakChats,mapped)):mergeBaithakInbox(baithakChats,mapped);
+  if(typeof BaithakSearch!=='undefined'&&typeof BaithakSearch.applyDisplayNames==='function'){
+    BaithakSearch.applyDisplayNames(baithakChats);
+  }
+  return mapped;
+}
+
+/** Fetch cached chat ids individually when list queries miss legacy rows. */
+async function recoverCachedChatsById(cachedStubs){
+  if(!db||!currentUser||!Array.isArray(cachedStubs)||!cachedStubs.length) return [];
+  const out=[];
+  const seen=new Set();
+  for(const stub of cachedStubs.slice(0,INBOX_CACHE_MAX)){
+    const id=chatInboxId(stub);
+    if(!id||seen.has(id)) continue;
+    seen.add(id);
+    try{
+      const snap=await db.collection('chats').doc(id).get();
+      if(snap.exists){
+        out.push(mapChatDoc({id,...snap.data()}));
+      }else{
+        out.push(mapChatDoc(stub));
+      }
+    }catch(e){
+      out.push(mapChatDoc(stub));
+    }
+  }
+  return out;
+}
+
+function normalizeParticipants(raw){
+  const uid=currentUser?.uid;
+  if(!raw||!uid) return [];
+  const parts=raw.participants||raw.members||raw.participantIds||[];
+  return Array.isArray(parts)?parts.filter(Boolean):[];
+}
+
+async function repairChatParticipants(raw){
+  if(!db||!currentUser||!raw) return false;
+  const id=chatInboxId(raw);
+  if(!id||isLiveSampleChat(raw)) return false;
+  const uid=currentUser.uid;
+  const parts=normalizeParticipants(raw);
+  if(parts.includes(uid)) return true;
+  const isCanonicalDm=typeof dmChatIdFor==='function'&&id===dmChatIdFor(raw.uid||raw.peerUid);
+  if(raw.type==='dm'&&isCanonicalDm&&(raw.uid||raw.peerUid)){
+    try{
+      await ensurePeerDmChat(raw.uid||raw.peerUid);
+      return true;
+    }catch(e){
+      console.warn('[baithak] repair dm participants', e?.message||e);
+    }
+  }
+  return false;
+}
+
 async function ensureChatUpdatedAt(raw){
   if(!db||!currentUser||!raw) return;
   if(isLiveSampleChat(raw)) return;
@@ -723,14 +795,32 @@ async function loadBaithakChatsPage({reset=false}={}){
       });
     }
     let incoming=reset?mergeBaithakInbox(orderedMapped, membershipMapped):orderedMapped;
-    if(reset&&!scannedAll) incoming=mergeBaithakInbox(cached, incoming);
-    applyList(incoming, {replaceCache:reset&&(scannedAll||incoming.length>=cached.length)});
+    if(reset){
+      incoming=mergeBaithakInbox(cached.map((c)=>mapChatDoc(c)), incoming);
+    }
+    applyList(incoming, {replaceCache:reset&&incoming.length>0});
     try{
       await hydrateInboxPeers(incoming);
       if(typeof enrichUsersWithProfileType==='function') await enrichUsersWithProfileType(incoming);
+      if(typeof loadBaithakNicknames==='function') await loadBaithakNicknames();
+      else if(typeof BaithakSearch!=='undefined'&&typeof BaithakSearch.loadNicknames==='function') await BaithakSearch.loadNicknames();
+      if(typeof BaithakSearch!=='undefined'&&typeof BaithakSearch.applyDisplayNames==='function') BaithakSearch.applyDisplayNames(incoming);
       applyList(incoming, {replaceCache:true});
     }catch(hydrateErr){
       console.warn('[baithak] inbox hydrate', hydrateErr?.message||hydrateErr);
+    }
+    if(reset&&cached.length){
+      recoverCachedChatsById(cached)
+        .then((recovered)=>{
+          if(!recovered.length) return;
+          applyList(mergeBaithakInbox(baithakChats, recovered), {replaceCache:true});
+          if(typeof setBaithakSection==='function'){
+            setBaithakSection(typeof window.baithakSection==='function'?window.baithakSection():baithakSection);
+          }else if(typeof renderChatList==='function'){
+            renderChatList(baithakChats);
+          }
+        })
+        .catch(()=>{});
     }
     baithakChatLiveMode=true;
     baithakChatLoadError=false;
@@ -775,10 +865,12 @@ async function loadBaithakChatsPage({reset=false}={}){
 }
 
 function getBaithakChatsForSearch(q){
+  if(typeof BaithakSearch!=='undefined'&&typeof BaithakSearch.filterChatsForSearch==='function'){
+    return BaithakSearch.filterChatsForSearch(q);
+  }
   const query=(q||'').toLowerCase();
   const base = pinSelfChat(baithakChats);
   if(!query) return base;
-  // Self-chat stays pinned even while filtering the rest of the inbox
   const rest = base.filter(c => !isSelfChatRow(c) && (c.name||'').toLowerCase().includes(query));
   return pinSelfChat(rest);
 }
@@ -856,6 +948,9 @@ window.forgetInboxChat = forgetInboxChat;
 window.mergeBaithakInbox = mergeBaithakInbox;
 window.mapChatDoc = mapChatDoc;
 window.chatRecencyMs = chatRecencyMs;
+window.hydrateInboxFromDeviceCache = hydrateInboxFromDeviceCache;
+window.recoverCachedChatsById = recoverCachedChatsById;
+window.peerUidOfChat = peerUidOfChat;
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     chatFieldMs,
@@ -864,6 +959,10 @@ if (typeof module !== 'undefined' && module.exports) {
     isLiveSampleChat,
     mergeBaithakInbox,
     mapChatDoc,
+    hydrateInboxFromDeviceCache,
+    recoverCachedChatsById,
+    normalizeParticipants,
+    peerUidOfChat,
   };
 }
 

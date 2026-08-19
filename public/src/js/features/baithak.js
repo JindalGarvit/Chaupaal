@@ -20,15 +20,7 @@ function initBaithak(){
       else if(typeof openBaithakInstantComposer==='function') openBaithakInstantComposer();
       else if(typeof showAddStoryOptions==='function') showAddStoryOptions();
     });
-    document.getElementById('baithakSearch')?.addEventListener('input',e=>{
-      const q=e.target.value.toLowerCase();
-      if(q.startsWith('@')&&q.length>1&&typeof openUniversalSearch==='function'){
-        openUniversalSearch({initialQuery:q.slice(1),types:['users']});
-        e.target.value='';
-        return;
-      }
-      renderChatList(typeof getBaithakChatsForSearch==='function'?getBaithakChatsForSearch(q):(typeof pinSelfChat==='function'?pinSelfChat([]):[]));
-    });
+    document.getElementById('baithakSearch')?.removeAttribute('data-baithak-inline-wired');
     if(typeof bindLivingPlaceholder==='function'){
       bindLivingPlaceholder(document.getElementById('baithakSearch'),'baithak_search');
     }
@@ -37,6 +29,10 @@ function initBaithak(){
   else if(currentUser&&typeof renderLiveBaithakStories==='function') renderLiveBaithakStories();
   else if(typeof renderStories==='function') renderStories();
   if(typeof baithakChats!=='undefined') baithakChats = typeof pinSelfChat==='function' ? pinSelfChat(baithakChats) : baithakChats;
+  if(typeof BaithakSearch!=='undefined'&&typeof BaithakSearch.wireChrome==='function') BaithakSearch.wireChrome();
+  if(currentUser&&typeof hydrateInboxFromDeviceCache==='function'){
+    hydrateInboxFromDeviceCache();
+  }
   if(!currentUser){
     const samples=typeof SAMPLE_CHATS!=='undefined'?SAMPLE_CHATS.filter((c)=>c.isSample||c.type==='self'):[];
     const guest=typeof pinSelfChat==='function'?pinSelfChat(samples):samples;
@@ -51,6 +47,7 @@ function initBaithak(){
   }
   if(typeof mountBaithakFriendRequests==='function') mountBaithakFriendRequests();
   if(db&&currentUser&&typeof loadBaithakChatsPage==='function'){
+    if(typeof loadBaithakNicknames==='function') loadBaithakNicknames().catch(()=>{});
     loadBaithakChatsPage({reset:true})
       .then(()=>{
         if(typeof baithakChats!=='undefined') baithakChats = pinSelfChat(baithakChats);
