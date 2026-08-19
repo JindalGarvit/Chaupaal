@@ -33,7 +33,20 @@
       requestSent: false,
       requestReceived: false,
       closeFriend: false,
+      friendOrigin: null,
+      theirFollowSource: null,
     };
+  }
+
+  function displayNameFor(profile) {
+    if (typeof resolvePersonDisplayName === 'function') return resolvePersonDisplayName(profile);
+    const p = profile || {};
+    return p.name || p.displayName || (p.username ? `@${p.username}` : '') || 'Someone';
+  }
+
+  function refreshFriendRequestSurfaces() {
+    if (typeof mergePendingFriendRequests === 'function') mergePendingFriendRequests();
+    else if (typeof mountBaithakFriendRequests === 'function') mountBaithakFriendRequests();
   }
 
   function relationshipState(uid) {
@@ -77,12 +90,17 @@
       if (typeof showToast === 'function') showToast('Could not open chat');
       return null;
     }
-    if (typeof openDmWithSharedHello === 'function') {
-      return openDmWithSharedHello({
+    if (typeof bootstrapDmChat !== 'function') {
+      if (typeof showToast === 'function') showToast('Open Baithak to message');
+      return null;
+    }
+    try {
+      const chat = await bootstrapDmChat({
         uid,
-        name: profile.name || profile.displayName || 'Chaupaal member',
-        avatar: profile.photoURL || profile.avatar,
-        theirIcebreakers: profile.icebreakers,
+        name: displayNameFor(profile),
+        username: profile.username,
+        photoURL: profile.photoURL,
+        avatar: profile.avatar || profile.photoURL,
         origin: 'profile',
         peerProfileType: profile.profileType,
         matchMeta: {
@@ -91,9 +109,25 @@
           age: profile.age,
         },
       });
+      if (!chat) return null;
+
+      if (typeof rememberInboxChat === 'function') rememberInboxChat(chat);
+      if (typeof baithakChats !== 'undefined' && Array.isArray(baithakChats)) {
+        const id = chat.firestoreId || chat.id;
+        const i = baithakChats.findIndex((c) => (c.firestoreId || c.id) === id);
+        if (i >= 0) baithakChats[i] = { ...baithakChats[i], ...chat };
+        else baithakChats.unshift(chat);
+      }
+
+      if (typeof openChatScreen === 'function') openChatScreen(chat);
+      document.querySelector('.bottom-tabs .tab-btn[data-tab="baithak"]')?.click();
+      return chat;
+    } catch (e) {
+      const msg =
+        typeof friendlyDmError === 'function' ? friendlyDmError(e) : e?.message || 'Could not open chat — try again';
+      if (typeof showToast === 'function') showToast(msg);
+      return null;
     }
-    if (typeof showToast === 'function') showToast('Open Baithak to message');
-    return null;
   }
 
   function emitRelationshipChanged(targetUid, data) {
@@ -126,6 +160,7 @@
     if (!requireRelationshipUser()) throw new Error('Sign in required');
     const data = await callRelationship('request_friend', { targetUid });
     emitRelationshipChanged(targetUid, data);
+    refreshFriendRequestSurfaces();
     return { state: relationshipState(targetUid), accepted: !!data.accepted, autoAccepted: !!data.autoAccepted };
   }
 
@@ -133,6 +168,7 @@
     if (!requireRelationshipUser()) throw new Error('Sign in required');
     const data = await callRelationship('cancel_friend_request', { targetUid });
     emitRelationshipChanged(targetUid, data);
+    refreshFriendRequestSurfaces();
     return relationshipState(targetUid);
   }
 
@@ -143,6 +179,7 @@
       accept: !!accept,
     });
     emitRelationshipChanged(requesterUid, data);
+    refreshFriendRequestSurfaces();
     return relationshipState(requesterUid);
   }
 
@@ -340,17 +377,21 @@
     }
 
     if (state.followsYou) {
-      actions.push({
-        label: 'Remove follower',
-        icon: 'user-x',
-        danger: true,
-        hint: 'Stops them following you. Your follow of them (if any) stays.',
-        fn: async () => {
-          await removeFollower(profile.uid);
-          showToast(t('rel_removed_follower',{name}));
-          await refresh();
-        },
-      });
+      const canRemoveFollower =
+        state.followsYou && !(state.friend && state.friendOrigin === 'friend_request');
+      if (canRemoveFollower) {
+        actions.push({
+          label: 'Remove follower',
+          icon: 'user-x',
+          danger: true,
+          hint: 'Stops them following you. Your follow of them (if any) stays.',
+          fn: async () => {
+            await removeFollower(profile.uid);
+            showToast(t('rel_removed_follower',{name}));
+            await refresh();
+          },
+        });
+      }
     }
 
     return actions;
@@ -545,13 +586,12 @@
     const action = actions[kind];
     if (!action) return;
 
-    document.getElementById('relationshipListSheet')?.remove();
     const overlay = document.createElement('div');
-    overlay.id = 'relationshipListSheet';
-    overlay.className = 'archive-overlay';
+    overlay.className = 'archive-overlay relationship-list-sheet';
+    overlay.dataset.navManaged = '1';
     overlay.innerHTML = `
       <div class="archive-header">
-        <button type="button" data-rel-list-back aria-label="Back">←</button>
+        ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-rel-list-back' }) : '<button type="button" data-rel-list-back aria-label="Back" class="cp-back-btn">←</button>'}
         <div style="flex:1"><strong>${titles[kind]}</strong>
           <div class="relationship-private-note">${
             kind === 'friends'
@@ -563,8 +603,22 @@
         </div>
       </div>
       <div class="close-friends-manager" data-rel-list-body>Loading…</div>`;
-    document.querySelector('.device')?.appendChild(overlay);
-    overlay.querySelector('[data-rel-list-back]')?.addEventListener('click', () => overlay.remove());
+    const deviceEl = document.querySelector('.device');
+    let listLayer = null;
+    const dismissList = () => {};
+    if (typeof openLayer === 'function') {
+      listLayer = openLayer(overlay, dismissList, { host: deviceEl, remove: true });
+    } else {
+      deviceEl?.appendChild(overlay);
+      if (typeof pushNavLayer === 'function') pushNavLayer(overlay, dismissList);
+    }
+    overlay.querySelector('[data-rel-list-back]')?.addEventListener('click', () => {
+      if (listLayer?.close) listLayer.close();
+      else {
+        if (typeof removeNavLayer === 'function') removeNavLayer(overlay);
+        overlay.remove();
+      }
+    });
 
     const body = overlay.querySelector('[data-rel-list-body]');
     try {
@@ -591,7 +645,6 @@
           const uid = button.closest('[data-uid]')?.dataset.uid;
           const profile = profiles.find((p) => p.uid === uid);
           if (!profile) return;
-          overlay.remove();
           if (typeof openPublicProfile === 'function') openPublicProfile(profile);
           else openRelationshipMenu(profile);
         });
@@ -608,13 +661,12 @@
   }
 
   async function openCloseFriendsManager() {
-    document.getElementById('closeFriendsManager')?.remove();
     const overlay = document.createElement('div');
-    overlay.id = 'closeFriendsManager';
-    overlay.className = 'archive-overlay';
+    overlay.className = 'archive-overlay close-friends-manager-overlay';
+    overlay.dataset.navManaged = '1';
     overlay.innerHTML = `
       <div class="archive-header">
-        <button type="button" data-close-friends-back aria-label="Back">←</button>
+        ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-close-friends-back' }) : '<button type="button" data-close-friends-back aria-label="Back" class="cp-back-btn">←</button>'}
         <div style="flex:1"><strong>Close Friends</strong>
           <div class="relationship-private-note">${typeof t==='function'?t('cf_manager_sub'):'All friends see your Splits. Remove someone to hide Splits from them. Only you see this list.'}</div>
         </div>
@@ -625,8 +677,22 @@
         <div class="close-friends-heading">${typeof t==='function'?t('cf_manager_heading'):'Friends'}</div>
         <div data-close-friends-list class="ui-skeleton-stack">Loading…</div>
       </div>`;
-    document.querySelector('.device')?.appendChild(overlay);
-    overlay.querySelector('[data-close-friends-back]')?.addEventListener('click', () => overlay.remove());
+    const deviceEl = document.querySelector('.device');
+    let cfLayer = null;
+    const dismissCf = () => {};
+    if (typeof openLayer === 'function') {
+      cfLayer = openLayer(overlay, dismissCf, { host: deviceEl, remove: true });
+    } else {
+      deviceEl?.appendChild(overlay);
+      if (typeof pushNavLayer === 'function') pushNavLayer(overlay, dismissCf);
+    }
+    overlay.querySelector('[data-close-friends-back]')?.addEventListener('click', () => {
+      if (cfLayer?.close) cfLayer.close();
+      else {
+        if (typeof removeNavLayer === 'function') removeNavLayer(overlay);
+        overlay.remove();
+      }
+    });
     const list = overlay.querySelector('[data-close-friends-list]');
     const results = overlay.querySelector('[data-close-friends-results]');
     let allFriends = [];
@@ -772,18 +838,31 @@
       host.hidden = false;
       host.innerHTML = profiles
         .map((profile) => {
-          const name = safe(profile.name || profile.username || 'Someone');
+          const name = safe(displayNameFor(profile));
           const photo = profile.photoURL
             ? `<img src="${safe(profile.photoURL)}" alt="">`
             : '👤';
+          const uname = profile.username ? `@${safe(profile.username)}` : '';
           return `<div class="baithak-fr-row" data-request-uid="${safe(profile.uid)}">
-            <div class="baithak-fr-avatar">${photo}</div>
-            <div class="baithak-fr-copy"><strong>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(profile.name,profile):name}</strong><span>Friend request</span></div>
+            <button type="button" class="baithak-fr-avatar" data-fr-profile="${safe(profile.uid)}" aria-label="View profile">${photo}</button>
+            <button type="button" class="baithak-fr-copy" data-fr-profile="${safe(profile.uid)}"><strong>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(displayNameFor(profile),profile):name}</strong><span>${uname || 'Friend request'}</span></button>
             <button type="button" class="baithak-fr-accept" data-request-accept>Accept</button>
             <button type="button" class="baithak-fr-decline" data-request-decline aria-label="Decline">${typeof iconHtml==='function'?iconHtml('x',{size:16}):'×'}</button>
           </div>`;
         })
         .join('');
+      host.querySelectorAll('[data-fr-profile]').forEach((button) => {
+        button.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const uid = button.getAttribute('data-fr-profile');
+          const profile = profiles.find((p) => p.uid === uid);
+          if (typeof openPublicProfile === 'function') {
+            openPublicProfile(profile || { uid }, { uid, context: 'friend_request' });
+          } else if (typeof openProfileByUid === 'function') {
+            openProfileByUid(uid);
+          }
+        });
+      });
       host.querySelectorAll('[data-request-accept]').forEach((button) => {
         button.addEventListener('click', async (e) => {
           e.stopPropagation();
@@ -795,6 +874,7 @@
               host.hidden = true;
               host.innerHTML = '';
             }
+            refreshFriendRequestSurfaces();
             if (typeof showToast === 'function') showToast(t('rel_now_friends'));
           } catch (err) {
             if (typeof showToast === 'function') showToast(err?.message || t('rel_update_fail'));
@@ -812,6 +892,7 @@
               host.hidden = true;
               host.innerHTML = '';
             }
+            refreshFriendRequestSurfaces();
           } catch (err) {
             if (typeof showToast === 'function') showToast(err?.message || t('rel_update_fail'));
           }
@@ -821,6 +902,10 @@
       host.hidden = true;
     }
   }
+
+  document.addEventListener('chaupaal:relationship-changed', () => {
+    refreshFriendRequestSurfaces();
+  });
 
   window.openProfileMessage = openProfileMessage;
   window.relationshipState = relationshipState;

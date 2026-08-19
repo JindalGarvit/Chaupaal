@@ -808,7 +808,7 @@
     sheet.dataset.navManaged = '1';
     sheet.innerHTML = `
       <div class="archive-header">
-        <button type="button" data-overlay-dismiss aria-label="Back">←</button>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="Back">←</button>'}
         <div style="flex:1"><strong>${tt('safar_title', 'Safar')}</strong></div>
       </div>
       <div style="padding:12px 16px 28px;">${body}</div>`;
@@ -1164,7 +1164,7 @@
     sheet.dataset.navManaged = '1';
     sheet.innerHTML = `
       <div class="archive-header">
-        <button type="button" data-overlay-dismiss aria-label="Back">←</button>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="Back">←</button>'}
         <div style="flex:1"><strong>${tt('dangal_pulse_title', 'Tarakki')}</strong></div>
       </div>
       <div style="padding:12px 16px 24px;">${body}</div>`;

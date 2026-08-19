@@ -747,7 +747,7 @@
 
     overlay.innerHTML = `
       <div class="archive-header">
-        <button type="button" data-archive-back aria-label="Back">←</button>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-archive-back' }):'<button type="button" data-archive-back class="cp-back-btn" aria-label="Back">←</button>'}
         <div style="flex:1">
           <strong>Archive</strong>
           <div class="relationship-private-note">Stories (Duniya) · Splits (Baithak). Only you see this.</div>

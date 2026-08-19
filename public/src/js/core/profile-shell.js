@@ -462,7 +462,7 @@
     const escAttr = (s) => String(s || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
     sheet.innerHTML = `
       <div class="archive-header">
-        <button type="button" data-overlay-dismiss aria-label="Skip">←</button>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ label: 'Skip', attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="Skip">←</button>'}
         <div style="flex:1"><strong>Finish your Profile</strong></div>
         <button type="button" class="btn" data-deepen-skip style="font-size:12px;">Skip</button>
       </div>

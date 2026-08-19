@@ -46,6 +46,17 @@
     return `<span class="pro-badge k-badge" title="Under 18" role="img" aria-label="Under 18 account"><svg class="pro-badge-svg" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><text x="10" y="13.5" text-anchor="middle" font-size="9" font-weight="700" font-family="Space Grotesk,sans-serif" fill="currentColor">K</text></svg></span>`;
   }
 
+  function resolvePersonDisplayName(profile) {
+    const p = profile && typeof profile === 'object' ? profile : {};
+    const raw =
+      p.name ||
+      p.displayName ||
+      p.peerName ||
+      (p.username ? `@${p.username}` : '') ||
+      'Someone';
+    return String(raw).trim() || 'Someone';
+  }
+
   function formatDisplayNameHtml(name, profileTypeOrUser) {
     const esc =
       typeof escapeHtmlText === 'function'
@@ -76,6 +87,7 @@
   document.addEventListener('chaupaal:profile-type-changed', () => refreshProfessionalBadges());
 
   window.professionalBadgeHtml = professionalBadgeHtml;
+  window.resolvePersonDisplayName = resolvePersonDisplayName;
   window.formatDisplayNameHtml = formatDisplayNameHtml;
   window.isProfessionalType = isProfessionalType;
   window.refreshProfessionalBadges = refreshProfessionalBadges;

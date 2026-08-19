@@ -68,7 +68,7 @@
   function peerMemberSlice(peerUid, extra) {
     const x = extra && typeof extra === 'object' ? extra : {};
     return {
-      name: x.peerName || x.displayName || (x.sharedFirstHello ? '' : x.name) || 'Chaupaal member',
+      name: x.peerName || x.displayName || (x.sharedFirstHello ? '' : x.name) || (x.username ? `@${x.username}` : 'Someone'),
       username: x.username || '',
       photoURL: x.photoURL || x.avatar || '',
       profileType: x.profileType || x.peerProfileType || 'personal',
@@ -85,16 +85,43 @@
     };
   }
 
+  function friendlyDmError(err) {
+    const code = String(err?.code || '');
+    if (code === 'CHAT_BOOTSTRAP_FAILED') return 'Could not open chat — try again';
+    if (code === 'CHAT_NOT_READY' || code === 'permission-denied') return 'Chat not ready — wait a moment and retry';
+    return err?.message || 'Could not open chat';
+  }
+
+  async function verifyDmChatDoc(chatId, peerUid) {
+    const ref = db.collection('chats').doc(chatId);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      throw Object.assign(new Error('Chat could not be created'), { code: 'CHAT_BOOTSTRAP_FAILED' });
+    }
+    const data = snap.data() || {};
+    const parts = Array.isArray(data.participants) ? data.participants.map(String) : [];
+    const me = currentUser.uid;
+    const peer = String(peerUid || '').trim();
+    if (!parts.includes(me) || !parts.includes(peer)) {
+      throw Object.assign(new Error('Chat participants not ready'), { code: 'CHAT_BOOTSTRAP_FAILED' });
+    }
+    return data;
+  }
+
   /** Persist a 1:1 chat so both people can send (rules require the chat doc). */
   async function ensurePeerDmChat(peerUid, extras) {
     const chatId = dmChatIdFor(peerUid);
     if (!chatId) throw new Error('Could not open chat');
     if (typeof db === 'undefined' || !db || !currentUser) throw new Error('Not signed in');
-    if (ensuredDmIds.has(chatId) && !extras) return chatId;
     const peer = String(peerUid || '').trim();
+    if (ensuredDmIds.has(chatId) && !extras) {
+      await verifyDmChatDoc(chatId, peer);
+      return chatId;
+    }
     const profiles = dmMemberProfiles(peer, extras);
+    const sorted = [currentUser.uid, peer].sort();
     const payload = {
-      participants: [currentUser.uid, peer].sort(),
+      participants: sorted,
       type: 'dm',
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       createdBy: currentUser.uid,
@@ -128,7 +155,7 @@
         }
       }
     } else {
-      const patch = { memberProfiles: profiles };
+      const patch = { memberProfiles: profiles, participants: sorted };
       const parts = Array.isArray(existingData?.participants)
         ? existingData.participants.slice()
         : Array.isArray(existingData?.members)
@@ -136,7 +163,6 @@
           : Array.isArray(existingData?.participantIds)
             ? existingData.participantIds.slice()
             : [];
-      const sorted = [currentUser.uid, peer].sort();
       if (!parts.length || !parts.includes(currentUser.uid) || !parts.includes(peer)) {
         patch.participants = sorted;
       }
@@ -165,15 +191,107 @@
           existingData.createdAt ||
           firebase.firestore.FieldValue.serverTimestamp();
       }
-      await ref.set(patch, { merge: true }).catch(() => {});
+      await ref.set(patch, { merge: true });
     }
+    await verifyDmChatDoc(chatId, peer);
     ensuredDmIds.add(chatId);
     return chatId;
   }
 
   /**
-   * Create / open a DM and persist a shared first-hello card for both sides.
+   * Canonical DM bootstrap — verifies Firestore chat doc before returning.
    */
+  async function bootstrapDmChat({
+    uid,
+    name,
+    username,
+    photoURL,
+    avatar,
+    origin,
+    peerProfileType,
+    profileType,
+    matchMeta,
+    starterText,
+  } = {}) {
+    const peerUid = String(uid || '').trim();
+    if (!peerUid) throw Object.assign(new Error('Invalid user'), { code: 'CHAT_BOOTSTRAP_FAILED' });
+    if (typeof db === 'undefined' || !db || !currentUser) throw new Error('Not signed in');
+
+    if (typeof assertCanMessage === 'function') {
+      const ok = await assertCanMessage({
+        uid: peerUid,
+        name,
+        teenMode: matchMeta?.teenMode,
+        isMinor: matchMeta?.isMinor,
+        age: matchMeta?.age,
+        profileType: peerProfileType || profileType,
+      });
+      if (!ok) return null;
+    }
+
+    const chatId = dmChatIdFor(peerUid);
+    if (!chatId) throw Object.assign(new Error('Could not open chat'), { code: 'CHAT_BOOTSTRAP_FAILED' });
+
+    const peerType = peerProfileType || profileType || 'personal';
+    const extras = {
+      peerName: name,
+      photoURL: String(photoURL || avatar || '').startsWith('http') ? photoURL || avatar : '',
+      peerProfileType: peerType,
+      ...(origin ? { origin, discoveryOrigin: origin === 'ai_discovery' ? 'ai_discovery' : origin } : {}),
+      ...(matchMeta && typeof matchMeta === 'object' ? { matchMeta } : {}),
+    };
+
+    await ensurePeerDmChat(peerUid, extras);
+
+    const displayName =
+      name ||
+      (username ? `@${username}` : '') ||
+      (typeof resolvePersonDisplayName === 'function'
+        ? resolvePersonDisplayName({ name, username })
+        : 'Someone');
+
+    const chat = {
+      id: chatId,
+      firestoreId: chatId,
+      uid: peerUid,
+      peerUid,
+      type: 'dm',
+      name: displayName,
+      username: username || '',
+      avatar: avatar || photoURL || '👤',
+      photoURL: photoURL || '',
+      preview: starterText ? String(starterText).slice(0, 80) : '',
+      time: 'now',
+      unread: 0,
+      duelStreak: 0,
+      participants: [currentUser.uid, peerUid].sort(),
+      profileType: peerType,
+      peerProfileType: peerType,
+      origin: origin || null,
+      discoveryOrigin: origin === 'ai_discovery' ? 'ai_discovery' : origin || null,
+      matchMeta: matchMeta || null,
+      openedBy: currentUser.uid,
+    };
+
+    return chat;
+  }
+
+  function addChatToInboxCache(chat) {
+    if (!chat) return;
+    if (typeof rememberInboxChat === 'function') rememberInboxChat(chat);
+    if (typeof baithakChats !== 'undefined' && Array.isArray(baithakChats)) {
+      const id = chat.firestoreId || chat.id;
+      const i = baithakChats.findIndex((c) => (c.firestoreId || c.id) === id);
+      if (i >= 0) baithakChats[i] = { ...baithakChats[i], ...chat };
+      else baithakChats.unshift(chat);
+    }
+  }
+
+  function openBaithakTabIfNeeded() {
+    const baithakBtn = document.querySelector('.bottom-tabs .tab-btn[data-tab="baithak"]');
+    if (baithakBtn && !baithakBtn.classList.contains('active')) baithakBtn.click();
+  }
+
   async function openDmWithSharedHello({
     uid,
     name,
@@ -183,77 +301,46 @@
     origin,
     peerProfileType,
     matchMeta,
+    username,
+    photoURL,
   }) {
-    if (typeof assertCanMessage === 'function') {
-      const ok = await assertCanMessage({
+    const hello = pickSharedHello();
+    let chat;
+    try {
+      chat = await bootstrapDmChat({
         uid,
         name,
-        teenMode: matchMeta?.teenMode,
-        isMinor: matchMeta?.isMinor,
-        age: matchMeta?.age,
-        profileType: peerProfileType,
+        username,
+        photoURL: photoURL || (String(avatar || '').startsWith('http') ? avatar : ''),
+        avatar,
+        origin,
+        peerProfileType,
+        matchMeta,
+        starterText,
       });
-      if (!ok) return null;
-    }
-    const chatId = dmChatIdFor(uid);
-    if (!chatId) {
-      if (typeof showToast === 'function') showToast('Could not open chat');
+    } catch (e) {
+      if (typeof reportClientError === 'function') {
+        reportClientError({ feature: 'open_dm', message: e?.message || String(e) });
+      }
+      if (typeof showToast === 'function') showToast(friendlyDmError(e));
       return null;
     }
-    const hello = pickSharedHello();
-    const discoveryOrigin = origin === 'ai_discovery' ? 'ai_discovery' : origin || null;
-    const peerType = peerProfileType || 'personal';
-    const newChat = {
-      id: chatId,
-      firestoreId: chatId,
-      uid,
-      peerUid: uid,
-      type: 'dm',
-      name: name || 'Friend',
-      avatar: avatar || '👤',
-      preview: 'Say hi — shared starter waiting',
-      time: 'now',
-      unread: 0,
-      duelStreak: 0,
-      theirIcebreakers: theirIcebreakers || [],
-      icebreakers: theirIcebreakers || [],
-      sharedFirstHello: hello,
-      participants: currentUser?.uid && uid ? [currentUser.uid, uid].sort() : undefined,
-      discoveryOrigin,
-      peerProfileType: peerType,
-      profileType: peerType,
-      openedBy: typeof currentUser !== 'undefined' ? currentUser?.uid : null,
-      matchMeta: matchMeta || null,
-    };
+    if (!chat) return null;
 
-    if (typeof SAMPLE_CHATS !== 'undefined' && !SAMPLE_CHATS.find((c) => c.id === newChat.id)) {
-      SAMPLE_CHATS.unshift(newChat);
-    }
-    if (typeof baithakChats !== 'undefined' && Array.isArray(baithakChats)) {
-      if (!baithakChats.find((c) => c.id === newChat.id || c.firestoreId === chatId)) {
-        baithakChats.unshift(newChat);
-      }
-    }
+    chat.theirIcebreakers = theirIcebreakers || [];
+    chat.icebreakers = theirIcebreakers || [];
+    chat.sharedFirstHello = hello;
+    chat.preview = 'Say hi — shared starter waiting';
 
     if (db && currentUser && uid) {
-        const extras = {
+      const extras = {
         sharedFirstHello: hello,
         preview: hello,
         firstMessageAt: Date.now(),
-        peerName: name,
-        photoURL: String(avatar || '').startsWith('http') ? avatar : '',
-        peerProfileType: peerType,
-        ...(discoveryOrigin
-          ? { discoveryOrigin, peerProfileType: peerType, origin: discoveryOrigin }
-          : {}),
-        ...(matchMeta && typeof matchMeta === 'object' ? { matchMeta } : {}),
       };
       try {
         await ensurePeerDmChat(uid, extras);
-        newChat.openedBy = currentUser.uid;
-        newChat.createdBy = currentUser.uid;
-        if (matchMeta) newChat.matchMeta = matchMeta;
-        const ref = db.collection('chats').doc(chatId);
+        const ref = db.collection('chats').doc(chat.firestoreId);
         try {
           await ref.collection('messages').add({
             text: `Shared starter for both of you:\n"${hello}"`,
@@ -273,36 +360,37 @@
         if (typeof reportClientError === 'function') {
           reportClientError({ feature: 'open_dm', message: e?.message || String(e) });
         }
-        if (typeof showToast === 'function') showToast('Could not start chat');
+        if (typeof showToast === 'function') showToast(friendlyDmError(e));
         return null;
       }
     }
 
+    addChatToInboxCache(chat);
+
     if (typeof SAMPLE_MESSAGES !== 'undefined') {
-      SAMPLE_MESSAGES[chatId] = SAMPLE_MESSAGES[chatId] || [
+      SAMPLE_MESSAGES[chat.firestoreId] = SAMPLE_MESSAGES[chat.firestoreId] || [
         {
           from: 'them',
-          text: `🏠 Shared starter for both of you:\n"${newChat.sharedFirstHello}"`,
+          text: `🏠 Shared starter for both of you:\n"${hello}"`,
           time: 'now',
           avatar: '🏠',
         },
       ];
     }
 
-    if (typeof openChatScreen === 'function') openChatScreen(newChat);
-    const baithakBtn = document.querySelector('.bottom-tabs .tab-btn[data-tab="baithak"]');
-    if (baithakBtn && !baithakBtn.classList.contains('active')) baithakBtn.click();
+    if (typeof openChatScreen === 'function') openChatScreen(chat);
+    openBaithakTabIfNeeded();
     if (starterText) {
       setTimeout(() => {
         const msgInput = document.getElementById('chatMsgInput');
         if (msgInput && !msgInput.value) msgInput.value = starterText;
-      }, 200);
+      }, 300);
     }
     if (typeof loadBaithakChatsPage === 'function') {
       loadBaithakChatsPage({ reset: false }).catch(() => {});
     }
 
-    return newChat;
+    return chat;
   }
 
   function mountConversationRepairChips(screen, chat) {
@@ -411,7 +499,9 @@
   window.interestOverlapReason = interestOverlapReason;
   window.dmChatIdFor = dmChatIdFor;
   window.ensurePeerDmChat = ensurePeerDmChat;
-  window.openDmWithSharedHello = openDmWithSharedHello
+  window.bootstrapDmChat = bootstrapDmChat;
+  window.friendlyDmError = friendlyDmError;
+  window.openDmWithSharedHello = openDmWithSharedHello;
   window.mountConversationRepairChips = mountConversationRepairChips;
   window.markGameInviteDeclined = markGameInviteDeclined;
   window.onChaupaalJournalCompleted = onJournalCompleted;

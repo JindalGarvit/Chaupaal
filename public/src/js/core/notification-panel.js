@@ -97,7 +97,12 @@
 
   function unreadCount(section) {
     const list = window.notifications || [];
-    return filterBySection(list, section).filter((n) => !n.read && !n.localOnly).length;
+    return filterBySection(list, section).filter((n) => {
+      if (n.read) return false;
+      if (n.localOnly && String(n.type || '') === 'friend_request' && section === 'baithak') return true;
+      if (n.localOnly) return false;
+      return true;
+    }).length;
   }
 
   function updateSectionNotifDots() {
@@ -604,6 +609,8 @@
       });
       if (!env?.ok) throw new Error(env?.error?.message || 'Failed');
       await softClearIds([n.id]);
+      if (typeof mergePendingFriendRequests === 'function') mergePendingFriendRequests();
+      else if (typeof mountBaithakFriendRequests === 'function') mountBaithakFriendRequests();
       if (typeof showToast === 'function') {
         showToast(
           accept
@@ -817,15 +824,21 @@
         body: { action: 'list_friend_requests' },
       });
       const profiles = envelope?.ok ? envelope.data?.profiles || [] : [];
-      const seen = new Set(
-        [...cloudNotifications, ...localEphemeral]
-          .filter((n) => String(n.type || '') === 'friend_request')
-          .map((n) => n.refId || n.deepLink?.uid)
-      );
+      window.pendingFriendRequestCount = profiles.length;
+
+      localEphemeral = localEphemeral.filter((n) => !String(n.id || '').startsWith('friend_request_local_'));
+
+      const apiUids = new Set(profiles.map((p) => p.uid).filter(Boolean));
       profiles.forEach((p) => {
         const uid = p.uid;
-        if (!uid || seen.has(uid)) return;
-        seen.add(uid);
+        if (!uid) return;
+        const cloudUnread = cloudNotifications.find(
+          (n) =>
+            String(n.type || '') === 'friend_request' &&
+            (n.refId === uid || n.deepLink?.uid === uid) &&
+            !n.read
+        );
+        if (cloudUnread) return;
         localEphemeral.unshift({
           id: `friend_request_local_${uid}`,
           type: 'friend_request',
@@ -838,10 +851,26 @@
           section: 'baithak',
           deepLink: { uid },
           localOnly: true,
-          actors: [{ uid, name: p.name || p.username || 'Someone', photoURL: p.photoURL || '' }],
+          actors: [
+            {
+              uid,
+              name:
+                (typeof resolvePersonDisplayName === 'function'
+                  ? resolvePersonDisplayName(p)
+                  : p.name || (p.username ? `@${p.username}` : 'Someone')),
+              photoURL: p.photoURL || '',
+            },
+          ],
           actorCount: 1,
         });
       });
+
+      localEphemeral = localEphemeral.filter((n) => {
+        if (!String(n.id || '').startsWith('friend_request_local_')) return true;
+        const uid = n.refId || n.deepLink?.uid;
+        return uid && apiUids.has(uid);
+      });
+
       localEphemeral = localEphemeral.slice(0, 20);
       syncNotificationsGlobal();
       updateSectionNotifDots();
@@ -1033,6 +1062,7 @@
   window.notifSectionOf = notifSection;
   window.startNotifInbox = startNotifInbox;
   window.stopNotifInbox = stopNotifInbox;
+  window.mergePendingFriendRequests = mergePendingFriendRequests;
   window.addLocalNotification = addLocalNotification;
   // Prefer local-only path; keep name for callers / notif-prefs gate
   window.addNotification = addLocalNotification;

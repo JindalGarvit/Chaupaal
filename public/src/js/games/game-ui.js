@@ -226,7 +226,7 @@
     const brand = o.hideBrand ? '' : `<div class="game-chrome-brand">${gameBrandMarkHtml(true)}</div>`;
     const right = o.rightHtml || '<span class="game-chrome-spacer" aria-hidden="true"></span>';
     return `<div class="game-chrome">
-      <button type="button" id="${backId}" class="game-back-btn game-tap-target" aria-label="Back">←</button>
+      ${typeof backButtonHtml==='function'?backButtonHtml({ className: 'game-back-btn game-tap-target', id: backId }):`<button type="button" id="${backId}" class="game-back-btn game-tap-target cp-back-btn" aria-label="Back">${typeof iconHtml==='function'?iconHtml('arrow-left',{size:22}):''}</button>`}
       <div class="game-chrome-heading">${brand}<div class="game-chrome-title">${title}</div>${subtitle}</div>
       <div class="game-chrome-right">${right}</div>
     </div>`;
@@ -317,7 +317,7 @@
     return `
       <div class="game-overlay ${dark ? 'game-overlay--dark' : 'game-overlay--light'} game-overlay--entering" data-game-shell="1">
         <div class="game-chrome">
-          <button type="button" class="game-back-btn" data-overlay-dismiss style="visibility:hidden" aria-hidden="true">←</button>
+          <button type="button" class="game-back-btn cp-back-btn" data-overlay-dismiss style="visibility:hidden" aria-hidden="true"></button>
           <div class="game-chrome-title">${title}</div>
           <div style="width:36px"></div>
         </div>

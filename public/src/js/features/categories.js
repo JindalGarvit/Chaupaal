@@ -5,7 +5,7 @@ function openCategoryDetail(cat){
   let activeTab='news';
   detail.innerHTML=`
     <div class="cat-detail-header">
-      <button class="cat-detail-back" id="catDetailBack">←</button>
+      ${typeof backButtonHtml==='function'?backButtonHtml({ className: 'cat-detail-back', id: 'catDetailBack' }):'<button class="cat-detail-back cp-back-btn" id="catDetailBack" aria-label="Back">←</button>'}
       <span>${cat.emoji}</span>
       <div class="cat-detail-title">${cat.name}</div>
     </div>
@@ -1602,7 +1602,7 @@ function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
   let replyTo = null;
   detail.innerHTML=`
     <div class="peepal-detail-header">
-      <button class="peepal-detail-back cp-tap-target" id="peepalDetailBack" aria-label="Back">${typeof iconHtml==='function'?iconHtml('arrow-left',{size:22}):'←'}</button>
+      <button class="peepal-detail-back cp-tap-target cp-back-btn" id="peepalDetailBack" aria-label="Back">${typeof iconHtml==='function'?iconHtml('arrow-left',{size:22}):''}</button>
       <div class="peepal-detail-title" style="display:flex;align-items:center;gap:8px;">${(typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('peepal',20):(typeof iconHtml==='function'?iconHtml('tree',{size:20}):'🌳')} Peepal</div>
     </div>
     <div class="peepal-detail-body">

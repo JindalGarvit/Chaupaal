@@ -21,7 +21,7 @@
     overlay.dataset.navManaged = '1';
     overlay.innerHTML = `
       <div class="chaupaal-hub-header">
-        <button type="button" data-hub-back aria-label="Back">←</button>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-hub-back' }):'<button type="button" data-hub-back class="cp-back-btn" aria-label="Back">←</button>'}
         <div>
           <strong>Chaupaal Profile</strong>
           <div class="chaupaal-hub-sub">Your space on the charpai</div>

@@ -775,6 +775,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     if(panel)panel.classList.add('active');
     document.getElementById('progressBar').style.display=btn.dataset.tab==='akhbaar'?'flex':'none';
     if(btn.dataset.tab==='baithak')initBaithak();
+    else if(typeof stopBaithakFriendRequestPoll==='function') stopBaithakFriendRequestPoll();
     if(btn.dataset.tab==='dangal')initCategoryRatings();
     if(btn.dataset.tab==='duniya')initDuniya();
     if(btn.dataset.tab==='akhbaar'){

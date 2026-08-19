@@ -320,7 +320,7 @@
     sheet.dataset.navManaged = '1';
     sheet.innerHTML = `
       <div class="archive-header">
-        <button type="button" data-overlay-dismiss aria-label="Back">←</button>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="Back">←</button>'}
         <div style="flex:1"><strong>${tt('contacts_find_title', 'Find people')}</strong></div>
       </div>
       <div style="padding:12px 16px;">${bodyHtml}</div>`;

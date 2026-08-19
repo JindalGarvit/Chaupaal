@@ -160,6 +160,23 @@ let activeChatListener=null;
 
 async function loadRealtimeMessages(chatId, msgsArea, isGroup){
   if(!db||!currentUser||!msgsArea) return;
+  let id=String(chatId||'');
+  if((id.startsWith('chat_profile_')||id.startsWith('chat_disc_'))&&typeof ensurePeerDmChat==='function'){
+    const peer=id.replace(/^chat_(profile|disc)_/, '');
+    try{
+      const real=await ensurePeerDmChat(peer);
+      if(real) id=real;
+    }catch(e){}
+  }else if(!isGroup&&typeof dmChatIdFor==='function'){
+    const open=window.currentOpenChat;
+    const peer=open&&(open.uid||open.peerUid||open.otherUid);
+    if(peer){
+      const canon=dmChatIdFor(peer);
+      if(canon&&id!==canon&&(id.startsWith('chat_')||!id.includes('_'))){
+        id=canon;
+      }
+    }
+  }
   if(activeChatListener){ activeChatListener(); activeChatListener=null; }
   let oldestDoc=null;
   let primed=false;
@@ -199,7 +216,7 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
   }
 
   try{
-    activeChatListener=db.collection('chats').doc(chatId).collection('messages')
+    activeChatListener=db.collection('chats').doc(id).collection('messages')
       .orderBy('ts','asc').limitToLast(50)
       .onSnapshot(snap=>{
         if(!oldestDoc && snap.docs.length) oldestDoc=snap.docs[0];
@@ -256,7 +273,16 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
       }, (err)=>{
         console.warn('[chat] messages listener', err?.code||err?.message||err);
         if(typeof reportClientError==='function'){
-          reportClientError({feature:'chat_listener',message:err?.message||String(err)});
+          reportClientError({feature:'chat_listener',message:err?.message||String(err),code:err?.code||''});
+        }
+        const code=String(err?.code||'');
+        if(code==='permission-denied'||/permission/i.test(String(err?.message||''))){
+          const banner=document.createElement('div');
+          banner.className='chat-listener-banner';
+          banner.textContent="Can't load messages — check connection or reopen chat";
+          if(!msgsArea.querySelector('.chat-listener-banner')){
+            msgsArea.insertBefore(banner, msgsArea.firstChild);
+          }
         }
       });
 
@@ -311,26 +337,27 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
 }
 
 async function sendRealtimeMessage(chatId, text, isGroup, music, attachment){
-  if(!db||!currentUser) throw new Error('Not signed in');
+  if(!db||!currentUser) throw Object.assign(new Error('Not signed in'), { code: 'CHAT_NOT_READY' });
   let id=String(chatId||'');
   if(!id || id==='chat_self' || /^chat_(riya|arjun)/.test(id) || id.startsWith('grp_')){
-    throw new Error('This chat is not synced yet — open a real conversation');
+    throw Object.assign(new Error('This chat is not synced yet — open a real conversation'), { code: 'CHAT_NOT_READY' });
   }
+  let peerUid = null;
   if((id.startsWith('chat_profile_') || id.startsWith('chat_disc_')) && typeof ensurePeerDmChat==='function'){
-    const peer=id.replace(/^chat_(profile|disc)_/, '');
-    const real=await ensurePeerDmChat(peer);
+    peerUid=id.replace(/^chat_(profile|disc)_/, '');
+    const real=await ensurePeerDmChat(peerUid);
     if(real) id=real;
   } else if(!isGroup && typeof ensurePeerDmChat==='function'){
     const open=window.currentOpenChat;
-    let peer=open&&(open.uid||open.peerUid||open.otherUid);
-    if(!peer && currentUser?.uid && !id.startsWith('chat_')){
+    peerUid=open&&(open.uid||open.peerUid||open.otherUid);
+    if(!peerUid && currentUser?.uid && !id.startsWith('chat_')){
       const prefix=currentUser.uid+'_';
       const suffix='_'+currentUser.uid;
-      if(id.startsWith(prefix)) peer=id.slice(prefix.length);
-      else if(id.endsWith(suffix)) peer=id.slice(0,-suffix.length);
+      if(id.startsWith(prefix)) peerUid=id.slice(prefix.length);
+      else if(id.endsWith(suffix)) peerUid=id.slice(0,-suffix.length);
     }
-    if(peer){
-      const real=await ensurePeerDmChat(peer);
+    if(peerUid){
+      const real=await ensurePeerDmChat(peerUid);
       if(real) id=real;
     }
   }
@@ -339,6 +366,39 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment){
   }
   if(id.startsWith('chat_chaupaal_') && typeof ensureChaupaalChatDoc==='function'){
     await ensureChaupaalChatDoc();
+  }
+
+  const chatRef=db.collection('chats').doc(id);
+  let chatSnap=await chatRef.get();
+  if(!chatSnap.exists && peerUid && typeof ensurePeerDmChat==='function'){
+    await ensurePeerDmChat(peerUid);
+    chatSnap=await chatRef.get();
+  }
+  if(!chatSnap.exists){
+    const err=Object.assign(new Error('Chat not ready'), { code: 'CHAT_NOT_READY' });
+    if(typeof reportClientError==='function'){
+      reportClientError({feature:'dm_send',chatId:id,code:err.code});
+    }
+    throw err;
+  }
+  const parts=Array.isArray(chatSnap.data()?.participants)?chatSnap.data().participants.map(String):[];
+  if(!isGroup && peerUid && (!parts.includes(currentUser.uid)||!parts.includes(String(peerUid)))){
+    if(typeof ensurePeerDmChat==='function'){
+      await ensurePeerDmChat(peerUid);
+      chatSnap=await chatRef.get();
+    }
+    const parts2=Array.isArray(chatSnap.data()?.participants)?chatSnap.data().participants.map(String):[];
+    if(!parts2.includes(currentUser.uid)||(peerUid&&!parts2.includes(String(peerUid)))){
+      const err=Object.assign(new Error('Chat participants not ready'), { code: 'CHAT_NOT_READY' });
+      if(typeof reportClientError==='function'){
+        reportClientError({feature:'dm_send',chatId:id,code:err.code});
+      }
+      throw err;
+    }
+  }
+  if(window.currentOpenChat && (window.currentOpenChat.firestoreId===chatId||window.currentOpenChat.id===chatId)){
+    window.currentOpenChat.firestoreId=id;
+    window.currentOpenChat.id=id;
   }
   const body=String(text||'').trim();
   if(!body && !(music&&music.title) && !attachment) return;

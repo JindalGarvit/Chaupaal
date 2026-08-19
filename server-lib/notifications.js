@@ -10,6 +10,7 @@
 const ACTOR_STORE_MAX = 3;
 const PRUNE_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const DM_THROTTLE_MS = 2 * 60 * 1000; // skip spammy DM notifs for same chat
+const { resolveActiveProfileName, resolveDisplayNameFromData } = require('./profile-display');
 
 function sanitizeIdPart(raw) {
   return String(raw || '')
@@ -321,9 +322,10 @@ async function resolveActor(adminApp, uid) {
       db.collection('users').doc(uid).get(),
     ]);
     const p = { ...(priv.data() || {}), ...(pub.data() || {}) };
+    const profileName = await resolveActiveProfileName(db, uid, p);
     return normalizeActor({
       uid,
-      name: p.name || p.displayName || p.username || 'Someone',
+      name: resolveDisplayNameFromData(p, profileName),
       avatar: p.avatar || '👤',
       photoURL: p.photoURL || '',
     });

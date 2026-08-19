@@ -340,7 +340,7 @@
         : 'Add a bio whenever you like. No rush.';
     sheet.innerHTML = `
       <div class="archive-header">
-        <button type="button" data-overlay-dismiss aria-label="Not now">←</button>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ label: 'Not now', attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="Not now">←</button>'}
         <div style="flex:1"><strong>Make it feel like you</strong></div>
       </div>
       <div style="padding:18px 16px 24px;">

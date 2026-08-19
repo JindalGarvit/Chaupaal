@@ -143,7 +143,7 @@ function cleanOverlay(item, index) {
     return {
       ...base,
       uid,
-      name: cleanText(item.name, 80) || 'Chaupaal member',
+      name: cleanText(item.name, 80) || (item.username ? `@${cleanText(item.username, 40)}` : 'Someone'),
       locked: true,
     };
   }
@@ -274,7 +274,7 @@ function cleanRestoryOf(value) {
   return {
     storyId,
     uid,
-    name: cleanText(value.name, 80) || 'Chaupaal member',
+    name: cleanText(value.name, 80) || (value.username ? `@${cleanText(value.username, 40)}` : 'Someone'),
   };
 }
 

@@ -298,7 +298,7 @@
     const { cap, tier, bias } = dailyCap();
     sheet.innerHTML = `
       <div class="archive-header">
-        <button type="button" data-overlay-dismiss aria-label="Back">←</button>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="Back">←</button>'}
         <div style="flex:1"><strong>Notification activity</strong></div>
       </div>
       <div class="push-hist-meta">Pace: ${tier} · ~${cap}/day · bias ${bias >= 0 ? '+' : ''}${bias}</div>

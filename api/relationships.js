@@ -33,6 +33,7 @@ const {
 } = require('../server-lib/social-model');
 const { applyFlagSignal, applyBlockSignal, maybeDecayShadowban } = require('../server-lib/shadowban');
 const { logMatchEngagement } = require('../server-lib/intent-weights');
+const { resolveActiveProfileName, resolveDisplayNameFromData } = require('../server-lib/profile-display');
 
 const MAX_TARGETS = 30;
 const MAX_LIST = 100;
@@ -120,16 +121,30 @@ function clearCloseFriendsPair(tx, db, a, b) {
   tx.delete(excludedRef(db, b, a));
 }
 
-function writeFollowEdge(tx, db, admin, fromUid, toUid, source) {
+function writeFollowEdge(tx, db, admin, fromUid, toUid, source, friendOrigin) {
   const refs = edgeRefs(db, fromUid, toUid);
   const now = admin.firestore.FieldValue.serverTimestamp();
   const src = String(source || 'follow').slice(0, 40);
-  tx.set(refs.following, { uid: toUid, source: src, createdAt: now }, { merge: true });
-  tx.set(
-    refs.follower,
-    { uid: fromUid, source: src, createdAt: now },
-    { merge: true }
-  );
+  const edge = { uid: toUid, source: src, createdAt: now };
+  const followerEdge = { uid: fromUid, source: src, createdAt: now };
+  if (friendOrigin) {
+    edge.friendOrigin = friendOrigin;
+    followerEdge.friendOrigin = friendOrigin;
+  }
+  tx.set(refs.following, edge, { merge: true });
+  tx.set(refs.follower, followerEdge, { merge: true });
+}
+
+function inferFriendOrigin(mineSnap, theirsSnap, sentSnap, receivedSnap) {
+  if (!mineSnap?.exists || !theirsSnap?.exists) return null;
+  const stored = mineSnap.data()?.friendOrigin || theirsSnap.data()?.friendOrigin;
+  if (stored) return stored;
+  const mySource = mineSnap.data()?.source || '';
+  const theirSource = theirsSnap.data()?.source || '';
+  if (mySource === 'friend_accept' || theirSource === 'friend_accept') return 'friend_request';
+  if (mySource === 'friend_auto_accept' || theirSource === 'friend_auto_accept') return 'friend_auto_accept';
+  if (sentSnap?.exists || receivedSnap?.exists) return 'friend_request';
+  return 'mutual_follow';
 }
 
 async function setFollow(db, admin, fromUid, toUid, follow, source) {
@@ -157,8 +172,8 @@ async function setFollow(db, admin, fromUid, toUid, follow, source) {
           aFollowsB: alreadyFollowing,
           bFollowsA: reverseExists,
         });
-        if (!alreadyFollowing) writeFollowEdge(tx, db, admin, fromUid, toUid, source || 'follow');
-        if (!reverseExists) writeFollowEdge(tx, db, admin, toUid, fromUid, 'friend_accept');
+        if (!alreadyFollowing) writeFollowEdge(tx, db, admin, fromUid, toUid, source || 'follow', 'friend_request');
+        if (!reverseExists) writeFollowEdge(tx, db, admin, toUid, fromUid, 'friend_accept', 'friend_request');
         clearRequestPair(tx, db, fromUid, toUid);
         applyCountDelta(tx, db, admin, fromUid, deltas.a);
         applyCountDelta(tx, db, admin, toUid, deltas.b);
@@ -166,7 +181,13 @@ async function setFollow(db, admin, fromUid, toUid, follow, source) {
       }
 
       const deltas = countDeltasForFollowChange({ alreadyFollowing, reverseExists, follow: true });
-      if (!alreadyFollowing) writeFollowEdge(tx, db, admin, fromUid, toUid, source || 'follow');
+      const origin =
+        String(source || '') === 'friend_auto_accept'
+          ? 'friend_auto_accept'
+          : !alreadyFollowing && reverseExists
+            ? 'mutual_follow'
+            : undefined;
+      if (!alreadyFollowing) writeFollowEdge(tx, db, admin, fromUid, toUid, source || 'follow', origin);
       if (reverseExists) clearRequestPair(tx, db, fromUid, toUid);
       applyCountDelta(tx, db, admin, fromUid, deltas.from);
       applyCountDelta(tx, db, admin, toUid, deltas.to);
@@ -230,11 +251,16 @@ async function relationshipState(db, uid, targetUid) {
     excluded
   );
   const derived = deriveRelationshipState({ following: mineSnap.exists, followsYou: theirsSnap.exists });
+  const friendOrigin = derived.friend
+    ? inferFriendOrigin(mineSnap, theirsSnap, sentSnap, receivedSnap)
+    : null;
   return {
     ...derived,
     requestSent: sentSnap.exists,
     requestReceived: receivedSnap.exists,
     closeFriend: derived.friend && !excludedSnap.exists,
+    friendOrigin,
+    theirFollowSource: theirsSnap.exists ? theirsSnap.data()?.source || null : null,
   };
 }
 
@@ -396,8 +422,8 @@ async function respondFriend(db, admin, uid, requesterUid, accept) {
         aFollowsB: mineSnap.exists,
         bFollowsA: theirsSnap.exists,
       });
-      if (!mineSnap.exists) writeFollowEdge(tx, db, admin, uid, requesterUid, 'friend_accept');
-      if (!theirsSnap.exists) writeFollowEdge(tx, db, admin, requesterUid, uid, 'friend_accept');
+      if (!mineSnap.exists) writeFollowEdge(tx, db, admin, uid, requesterUid, 'friend_accept', 'friend_request');
+      if (!theirsSnap.exists) writeFollowEdge(tx, db, admin, requesterUid, uid, 'friend_accept', 'friend_request');
       applyCountDelta(tx, db, admin, uid, deltas.a);
       applyCountDelta(tx, db, admin, requesterUid, deltas.b);
     }
@@ -443,11 +469,12 @@ async function setCloseFriend(db, admin, uid, targetUid, enabled) {
   return false;
 }
 
-function mapProfile(snap) {
+async function mapProfileResolved(db, snap) {
   const data = snap.data() || {};
+  const resolvedName = resolveDisplayNameFromData(data, await resolveActiveProfileName(db, snap.id, data));
   return {
     uid: snap.id,
-    name: data.name || data.displayName || data.username || 'Chaupaal member',
+    name: resolvedName,
     username: data.username || '',
     photoURL: data.photoThumb || data.photoURL || '',
     city: data.city || data.profile?.currentCity || '',
@@ -465,7 +492,7 @@ async function profilesForIds(db, ids) {
   for (let start = 0; start < clean.length; start += 100) {
     snaps.push(...(await db.getAll(...clean.slice(start, start + 100).map((uid) => db.collection('users').doc(uid)))));
   }
-  return snaps.filter((snap) => snap.exists).map(mapProfile);
+  return Promise.all(snaps.filter((snap) => snap.exists).map((snap) => mapProfileResolved(db, snap)));
 }
 
 async function listCloseFriends(db, uid) {
@@ -529,7 +556,9 @@ async function searchUsers(db, uid, query) {
     .endAt(q + '\uf8ff')
     .limit(20)
     .get();
-  const candidates = snap.docs.filter((doc) => doc.id !== uid).map(mapProfile);
+  const candidates = await Promise.all(
+    snap.docs.filter((doc) => doc.id !== uid).map((doc) => mapProfileResolved(db, doc))
+  );
   const states = await hydrate(
     db,
     uid,
@@ -587,7 +616,7 @@ module.exports = async function handler(req, res) {
       const profileUid = targetUid || user.uid;
       const userSnap = await db.collection('users').doc(profileUid).get();
       if (!userSnap.exists) throw new Error('USER_NOT_FOUND');
-      const profile = mapProfile(userSnap);
+      const profile = await mapProfileResolved(db, userSnap);
       const [counts, state] = await Promise.all([
         profileCounts(db, profileUid),
         profileUid === user.uid ? null : relationshipState(db, user.uid, profileUid),
@@ -622,6 +651,11 @@ module.exports = async function handler(req, res) {
       if (!targetUid) return sendError(res, 400, 'VALIDATION_ERROR', 'targetUid required');
       const out = await requestFriend(db, admin, user.uid, targetUid);
       if (!out.accepted && out.state?.requestSent) {
+        console.log('[relationships] request_friend ok', {
+          from: user.uid,
+          to: targetUid,
+          wroteIncoming: true,
+        });
         try {
           const { upsertNotification, resolveActor } = require('../server-lib/notifications');
           const actor = await resolveActor(admin, user.uid);

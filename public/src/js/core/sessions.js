@@ -185,7 +185,7 @@
     overlay.className = 'archive-overlay';
     overlay.innerHTML = `
       <div class="archive-header">
-        <button id="sessionsBack" style="background:none;border:none;font-size:22px;cursor:pointer;">←</button>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ id: 'sessionsBack' }):'<button id="sessionsBack" class="cp-back-btn" aria-label="Back">←</button>'}
         <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">Devices & sessions</div>
       </div>
       <div style="padding:12px 16px;font-size:12px;color:var(--muted);">Sign out a single device, or everywhere at once.</div>

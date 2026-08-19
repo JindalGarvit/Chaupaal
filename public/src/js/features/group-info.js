@@ -456,7 +456,7 @@
     overlay.dataset.navManaged = '1';
     overlay.innerHTML = `
       <div class="group-info-header archive-header">
-        <button type="button" class="group-info-back" data-group-info-close aria-label="Back">←</button>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ className: 'group-info-back', attrs: 'data-group-info-close' }):'<button type="button" class="group-info-back cp-back-btn" data-group-info-close aria-label="Back">←</button>'}
         <div class="group-info-title">Group info</div>
       </div>
       <div class="group-info-scroll" data-gi-scroll>

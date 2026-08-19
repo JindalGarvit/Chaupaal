@@ -1,4 +1,23 @@
 // ===================== BAITHAK INIT =====================
+let baithakFriendRequestPoll = null;
+
+function startBaithakFriendRequestPoll() {
+  stopBaithakFriendRequestPoll();
+  if (typeof currentUser === 'undefined' || !currentUser) return;
+  if (typeof mergePendingFriendRequests === 'function') mergePendingFriendRequests();
+  baithakFriendRequestPoll = setInterval(() => {
+    if (typeof mergePendingFriendRequests === 'function') mergePendingFriendRequests();
+    else if (typeof mountBaithakFriendRequests === 'function') mountBaithakFriendRequests();
+  }, 60000);
+}
+
+function stopBaithakFriendRequestPoll() {
+  if (baithakFriendRequestPoll) {
+    clearInterval(baithakFriendRequestPoll);
+    baithakFriendRequestPoll = null;
+  }
+}
+
 function initBaithak(){
   const panel=document.getElementById('panel-baithak');
   if(!panel)return;
@@ -46,6 +65,7 @@ function initBaithak(){
     renderChatList(typeof baithakChats!=='undefined'?baithakChats:(typeof pinSelfChat==='function'?pinSelfChat([]):[]));
   }
   if(typeof mountBaithakFriendRequests==='function') mountBaithakFriendRequests();
+  startBaithakFriendRequestPoll();
   if(db&&currentUser&&typeof loadBaithakChatsPage==='function'){
     if(typeof loadBaithakNicknames==='function') loadBaithakNicknames().catch(()=>{});
     loadBaithakChatsPage({reset:true})
@@ -408,7 +428,7 @@ function showNewDmSearchSheet(opts){
   sheet.style.cssText='position:absolute;inset:0;background:var(--cream);z-index:100;display:flex;flex-direction:column;';
   sheet.innerHTML=`
     <div style="display:flex;align-items:center;gap:10px;padding:16px;background:var(--white);border-bottom:1px solid var(--line);">
-      <button type="button" id="closeNewDm" style="background:none;border:none;font-size:22px;cursor:pointer;">←</button>
+      ${typeof backButtonHtml==='function'?backButtonHtml({ id: 'closeNewDm' }):'<button type="button" id="closeNewDm" class="cp-back-btn" aria-label="Back">←</button>'}
       <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">Start a new conversation</div>
     </div>
     <div style="padding:12px 16px;">
@@ -521,7 +541,7 @@ function showCreateGroup(){
   sheet.style.cssText='position:absolute;inset:0;background:var(--cream);z-index:100;display:flex;flex-direction:column;padding:24px;';
   sheet.innerHTML=`
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
-      <button id="closeGrp" style="background:none;border:none;font-size:22px;cursor:pointer;">←</button>
+      ${typeof backButtonHtml==='function'?backButtonHtml({ id: 'closeGrp' }):'<button type="button" id="closeGrp" class="cp-back-btn" aria-label="Back">←</button>'}
       <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;">New group</div>
     </div>
     <input class="auth-input" placeholder="Group name" id="grpName">
@@ -681,3 +701,5 @@ function scheduleEveningCheckIn(){
   }
 }
 window.scheduleEveningCheckIn=scheduleEveningCheckIn;
+window.startBaithakFriendRequestPoll=startBaithakFriendRequestPoll;
+window.stopBaithakFriendRequestPoll=stopBaithakFriendRequestPoll;

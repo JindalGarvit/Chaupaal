@@ -863,7 +863,7 @@ function openGroupGameSetup(groupChat, gameId){
   function render(){
     sheet.innerHTML=`
       <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;background:var(--white);border-bottom:1px solid var(--line);flex-shrink:0;">
-        <button id="groupGameBack" style="background:none;border:none;font-size:22px;cursor:pointer;">←</button>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ id: 'groupGameBack' }):'<button id="groupGameBack" class="cp-back-btn" aria-label="Back">←</button>'}
         <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">${cfg.name} — Select Players</div>
       </div>
       <div style="padding:16px;flex:1;overflow-y:auto;">

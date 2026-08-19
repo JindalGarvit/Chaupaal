@@ -300,7 +300,7 @@
     sheet.setAttribute('data-nav-managed', '1');
     sheet.innerHTML = `
       <div class="archive-header">
-        <button type="button" data-overlay-dismiss aria-label="Back">←</button>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="Back">←</button>'}
         <div style="flex:1"><strong>Add section</strong></div>
       </div>
       <div class="add-section-body" style="padding:16px;">
@@ -393,7 +393,7 @@
 
     sheet.innerHTML = `
       <div class="archive-header">
-        <button type="button" data-overlay-dismiss>←</button>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="Back">←</button>'}
         <div style="flex:1"><strong>Edit section</strong></div>
         <button type="button" data-sec-delete style="background:none;border:none;color:var(--red);font-weight:700;cursor:pointer;">Delete</button>
       </div>
@@ -662,7 +662,7 @@
     sheet.setAttribute('data-nav-managed', '1');
     sheet.innerHTML = `
       <div class="archive-header">
-        <button type="button" data-overlay-dismiss>←</button>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="Back">←</button>'}
         <div style="flex:1"><strong>Pick from archive</strong></div>
         <button type="button" class="btn btn--primary" data-pick-done>Add</button>
       </div>

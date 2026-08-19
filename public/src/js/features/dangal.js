@@ -438,7 +438,7 @@ function startMuqabala(opponentName, mode, opts){
 
   if(options.skipMatchmaking){
     overlay.innerHTML = `
-      ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:label,backId:'closeMuqabala'}):`<div class="muqabala-header"><div class="muqabala-title">Muqabala — ${label}</div><button class="icon-btn" id="closeMuqabala">←</button></div>`}
+      ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:label,backId:'closeMuqabala'}):`<div class="muqabala-header"><div class="muqabala-title">Muqabala — ${label}</div>${typeof backButtonHtml==='function'?backButtonHtml({ className: 'icon-btn', id: 'closeMuqabala' }):'<button class="icon-btn cp-back-btn" id="closeMuqabala" aria-label="Back"></button>'}</div>`}
       <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;">
         <div style="font-size:48px;">🎯</div>
         <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">${opponentName ? `Challenge vs ${opponentName}` : 'Starting…'}</div>
@@ -453,7 +453,7 @@ function startMuqabala(opponentName, mode, opts){
   }
 
   overlay.innerHTML = `
-    ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:label,backId:'closeMuqabala'}):`<div class="muqabala-header"><div class="muqabala-title">Muqabala — ${label}</div><button class="icon-btn" id="closeMuqabala">←</button></div>`}
+    ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:label,backId:'closeMuqabala'}):`<div class="muqabala-header"><div class="muqabala-title">Muqabala — ${label}</div>${typeof backButtonHtml==='function'?backButtonHtml({ className: 'icon-btn', id: 'closeMuqabala' }):'<button class="icon-btn cp-back-btn" id="closeMuqabala" aria-label="Back"></button>'}</div>`}
     <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;">
       <div style="font-size:48px;animation:pulse 1s ease-in-out infinite;">⚡</div>
       <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">${opponentName?`Sending challenge to ${opponentName}…`:'Finding a worthy opponent…'}</div>
@@ -598,7 +598,7 @@ function runMuqabala(overlay, oppName, mode, opts){
     const urgencyAt = Math.max(3, Math.ceil(timerSeconds * 0.35));
 
     overlay.innerHTML = `
-      ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:`Q${qIdx+1}/${totalQ} · ${mode}`,backId:'closeMuqabala2'}):`<div class="muqabala-header"><div class="muqabala-title">Q${qIdx+1}/${totalQ} · ${mode}</div><button class="icon-btn" id="closeMuqabala2">←</button></div>`}
+      ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:`Q${qIdx+1}/${totalQ} · ${mode}`,backId:'closeMuqabala2'}):`<div class="muqabala-header"><div class="muqabala-title">Q${qIdx+1}/${totalQ} · ${mode}</div>${typeof backButtonHtml==='function'?backButtonHtml({ className: 'icon-btn', id: 'closeMuqabala2' }):'<button class="icon-btn cp-back-btn" id="closeMuqabala2" aria-label="Back"></button>'}</div>`}
       ${typeof gameScoreHtml==='function'?gameScoreHtml({label:t('you')||'You',score:myScore},{label:oppName,score:oppScore}):`<div class="vs-row"><div class="player-chip me">${t('you')||'You'} — ${myScore}</div><div class="player-chip opp">${oppName} — ${oppScore}</div></div>`}
       <div class="muqabala-timer${data.philosophical?'':' muqabala-timer--live'}" id="mTimer" style="${data.philosophical?'font-size:14px;color:var(--gold);':''}">
         ${data.philosophical?t('philosophical_label'):`${timeLeft}`}
@@ -756,7 +756,7 @@ function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalA
     : '';
 
   overlay.innerHTML=`
-    ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:'Game over',backId:'closeMuqabala3'}):`<div class="muqabala-header"><div class="muqabala-title">Muqabala over!</div><button class="icon-btn" id="closeMuqabala3">←</button></div>`}
+    ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:'Game over',backId:'closeMuqabala3'}):`<div class="muqabala-header"><div class="muqabala-title">Muqabala over!</div>${typeof backButtonHtml==='function'?backButtonHtml({ className: 'icon-btn', id: 'closeMuqabala3' }):'<button class="icon-btn cp-back-btn" id="closeMuqabala3" aria-label="Back"></button>'}</div>`}
     ${typeof gameResultHtml==='function'?gameResultHtml({
       gameId:'quiz',
       glyph:tie?'=':won?'✓':'·',

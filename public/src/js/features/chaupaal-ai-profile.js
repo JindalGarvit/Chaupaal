@@ -117,7 +117,7 @@
     sheet.setAttribute('data-nav-managed', '1');
     sheet.innerHTML = `
       <div class="archive-header">
-        <button type="button" data-overlay-dismiss aria-label="Back">←</button>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="Back">←</button>'}
         <div style="flex:1"><strong>${tt('chaupaal_card_title', 'Chaupaal card')}</strong></div>
       </div>
       <div class="chaupaal-id-card-preview">
@@ -215,7 +215,7 @@
 
     sheet.innerHTML = `
       <div class="archive-header">
-        <button type="button" data-overlay-dismiss aria-label="Back">←</button>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="Back">←</button>'}
         <div style="flex:1"><strong>${tt('cai_profile_title', 'Chaupaal')}</strong></div>
         <button type="button" class="btn" data-cai-chat style="font-size:12px;">${tt('cai_open_chat', 'Chat')}</button>
       </div>

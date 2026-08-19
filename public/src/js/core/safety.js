@@ -593,7 +593,7 @@
     overlay.className = 'archive-overlay';
     overlay.innerHTML = `
       <div class="archive-header">
-        <button id="blockedBack" style="background:none;border:none;font-size:22px;cursor:pointer;">←</button>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ id: 'blockedBack' }):'<button id="blockedBack" class="cp-back-btn" aria-label="Back">←</button>'}
         <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">Blocked users</div>
       </div>
       <div id="blockedList" style="flex:1;overflow:auto;padding:12px 16px 24px;"></div>`;

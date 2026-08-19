@@ -424,7 +424,10 @@
       .map((row) => {
         if (row.type === 'person' || row.category === 'users') {
           const uid = row.uid || row.id;
-          const name = row.title || row.name || 'Person';
+          const name =
+            typeof resolvePersonDisplayName === 'function'
+              ? resolvePersonDisplayName(row)
+              : row.title || row.name || (row.username ? `@${row.username}` : 'Someone');
           const sub = row.subtitle || row.username || '';
           return `<button type="button" class="baithak-search-hit" data-person="${esc(uid)}">
             <span class="baithak-search-hit-title">${esc(name)}</span>
@@ -452,8 +455,11 @@
       btn.addEventListener('click', async () => {
         const uid = btn.getAttribute('data-person');
         if (!uid) return;
-        if (typeof openDmWithSharedHello === 'function') {
-          await openDmWithSharedHello({ uid, name: btn.querySelector('.baithak-search-hit-title')?.textContent || 'Friend' });
+        const row = rows.find((r) => (r.uid || r.id) === uid) || { uid };
+        if (typeof openPublicProfile === 'function') {
+          openPublicProfile(row, { uid, context: 'baithak_search' });
+        } else if (typeof openProfileByUid === 'function') {
+          openProfileByUid(uid);
         }
         overlayClose?.();
       });
@@ -486,7 +492,7 @@
     overlay.dataset.navManaged = '1';
     overlay.innerHTML = `
       <div class="baithak-search-overlay-head">
-        <button type="button" data-bs-back aria-label="Back">←</button>
+        ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-bs-back' }) : '<button type="button" data-bs-back aria-label="Back" class="cp-back-btn">←</button>'}
         <input type="search" id="baithakSearchOverlayInput" placeholder="${esc(tt('baithak_search_ph', 'Search chats, people, groups…'))}" value="${esc(initialQuery)}" autocomplete="off">
       </div>
       <div class="baithak-search-tabs" role="tablist">
@@ -624,6 +630,19 @@
     if (input && !input.dataset.baithakInlineWired) {
       input.dataset.baithakInlineWired = '1';
       input.addEventListener('input', (e) => debouncedInlineSearch(e.target.value));
+      const openOverlayFromInput = () => {
+        const q = input.value?.trim() || '';
+        openBaithakSearchOverlay({ initialQuery: q, tab: 'all' });
+      };
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.keyCode === 13) {
+          e.preventDefault();
+          openOverlayFromInput();
+        }
+      });
+      input.addEventListener('search', () => {
+        openOverlayFromInput();
+      });
     }
   }
 

@@ -641,7 +641,7 @@
 
     overlay.innerHTML = `
       <div class="archive-header">
-        <button type="button" id="usBack" aria-label="Back" style="background:none;border:none;font-size:22px;cursor:pointer;">←</button>
+        <button type="button" id="usBack" aria-label="Back" class="cp-back-btn">${typeof iconHtml==='function'?iconHtml('arrow-left',{size:22}):''}</button>
         <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">${escapeSearchHtml(title)}</div>
       </div>
       <div style="padding:12px 16px 0;">

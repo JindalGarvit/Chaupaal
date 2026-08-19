@@ -11,6 +11,8 @@
 
   /** @type {{ el: Element, dismiss: Function, key: string }[]} */
   const stack = [];
+  /** Base z-index for overlay stack — above chat chrome (~50) and tab bar (~40). */
+  const BASE_OVERLAY_Z = 200;
   let seq = 0;
   let suppressingPop = false;
   let wired = false;
@@ -27,7 +29,16 @@
     '#cpActionSheet',
     '#storyArchiveSheet',
     '#relationshipListSheet',
+    '.relationship-list-sheet',
     '#closeFriendsManager',
+    '.close-friends-manager-overlay',
+    '.public-profile-sheet',
+    '#publicProfileSheet',
+    '.chat-screen',
+    '#activeChatScreen',
+    '.baithak-search-overlay',
+    '#baithakSearchOverlay',
+    '#notifPanelSheet',
     '#closeFriendsSheet',
     '#gameFriendPicker',
     '#gameShareSheet',
@@ -72,7 +83,7 @@
       return;
     }
     const btn = el.querySelector(
-      '[data-overlay-dismiss],[data-dismiss],.sheet-close,.icon-btn,.game-back-btn,#chatBack,.chat-back,[data-music-picker-close],[data-music-hub-close],[data-loc-share-close],[data-group-info-close],#closeFlagSheet'
+      '[data-overlay-dismiss],[data-dismiss],.sheet-close,.icon-btn,.game-back-btn,#chatBack,.chat-back,[data-music-picker-close],[data-music-hub-close],[data-loc-share-close],[data-group-info-close],#closeFlagSheet,[data-public-profile-close],[data-rel-list-back],[data-close-friends-back],[data-bs-back],[data-archive-back],[data-archive-hub-back],[data-hub-back],[data-as-close]'
     );
     if (btn) {
       try {
@@ -284,6 +295,17 @@
     };
   }
 
+  function applyLayerZIndex(el, depth) {
+    if (!el) return;
+    el.style.zIndex = String(BASE_OVERLAY_Z + depth * 10);
+  }
+
+  function refreshStackZIndices() {
+    stack.forEach((entry, i) => {
+      if (entry.el?.isConnected) applyLayerZIndex(entry.el, i + 1);
+    });
+  }
+
   function pushLayer(el, dismissFn) {
     if (!el || !el.isConnected) return;
     if (el.dataset.navIgnore === '1') return;
@@ -295,6 +317,7 @@
     el.dataset.navLayer = key;
     const dismiss = normalizeDismissFn(el, dismissFn);
     stack.push({ el, dismiss, key });
+    refreshStackZIndices();
     try {
       history.pushState({ chaupaalLayer: true, key }, '');
       layerHistoryDepth = stack.length;
@@ -345,6 +368,7 @@
     } catch (e) {}
     const isTop = idx === stack.length - 1;
     stack.splice(idx, 1);
+    refreshStackZIndices();
     // CRITICAL: do NOT syncLayerHistoryDepth() before popHistoryForLayer.
     // Syncing first clamps depth to the new (smaller) stack length and skips
     // history.back(), leaving an orphan {chaupaalLayer} entry — that desyncs

@@ -1,0 +1,75 @@
+---
+description: Progressive disclosure — simple by default, powerful when needed, never broken when revealed
+alwaysApply: true
+---
+
+# Progressive disclosure (Chaupaal)
+
+**Mantra:** Simple by default, powerful when needed, never broken when revealed.
+
+## Principles
+
+1. **One job per surface**  
+   Each screen should read as doing one obvious thing first. Secondary capabilities stay one step deeper (sheet, menu, expand, or “More”).
+
+2. **Three layers max on first paint**  
+   - **Glance** — what this is  
+   - **Act** — complete the common task  
+   - **Power** — advanced options, limits, monetization, admin-ish controls  
+   Power layer appears only after intent (tap, type, long-press, or explicit “More / Advanced”).
+
+3. **Discoverable depth, not hidden power**  
+   Advanced features must be findable without reading docs. Prefer: More, +, chevron, long-press, secondary sheet — not settings-only Easter eggs.
+
+4. **Context reveals complexity**  
+   Show controls when they apply. Hide or disable what cannot work in the current state. Empty states stay minimal; rich tooling appears once the user is engaged.
+
+5. **Plain language first**  
+   Default labels are verbs and outcomes users understand. Internal/product jargon stays out of primary UI.
+
+6. **Policy and limits — calm and compact**  
+   Surface limits as small, honest indicators. Full explanation only when relevant (near limit, blocked, or user asks). Never block browsing when only a narrow action is capped.
+
+7. **Errors — simple face, precise backend**  
+   Users get one clear message + one next step. Developers get logging/telemetry. No raw errors in UI.
+
+8. **One primary action per entity**  
+   On cards, profiles, and rows: one obvious primary action; everything else in overflow / More. Avoid competing equal-weight buttons.
+
+9. **Compose flows start minimal**  
+   Open with the smallest viable composer. Attachments, audience, caps, and advanced settings expand on demand — not above the fold by default.
+
+10. **Consistency over novelty**  
+    Reuse the same patterns for sheets, share flows, pickers, and destructive actions. Users should learn once.
+
+11. **Reliability is not sacrificed for simplicity**  
+    Progressive disclosure governs **presentation and timing**, not whether backend actions work. Hidden power must still be fully wired when revealed.
+
+## Decision checklist (before adding to default UI)
+
+- Do most first-time users need this immediately? If no → defer.
+- Can it appear after the user shows intent? If yes → defer.
+- Does showing it early increase mistakes? If yes → move deeper or add confirm.
+- Would a new user need a tutorial for this screen? If yes → simplify the default layer.
+
+## What this does not override
+
+- Explicit product specs and user-directed build prompts  
+- Auth, verification, safety, and policy gates  
+- “Must work end-to-end” reliability requirements  
+
+## Applying on future work
+
+When implementing or polishing any feature:
+
+1. Audit the **default visible UI** — remove or defer anything that belongs in layer 2–3 unless the user explicitly asked for it on the main surface.
+
+2. Prefer:
+   - Primary action visible  
+   - Secondary in overflow / More / sheet  
+   - Advanced behind “Advanced” or second step  
+   - Limits as compact indicators, details on tap  
+
+3. Do **not** strip functionality the user requested — **relocate** it deeper in the flow.
+
+4. When a build prompt and this rule conflict, **the build prompt wins** for that task; apply progressive disclosure within those constraints.

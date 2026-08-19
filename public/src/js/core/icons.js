@@ -202,9 +202,23 @@
     });
   }
 
-  window.Icons = { PATHS, iconHtml, iconForEmpty, hydrateIcons };
+  /**
+   * Standard back control for overlay / sheet headers.
+   * @param {{ size?: number, className?: string, label?: string, id?: string, attrs?: string }} [opts]
+   */
+  function backButtonHtml(opts = {}) {
+    const size = opts.size || 22;
+    const cls = 'cp-back-btn' + (opts.className ? ' ' + opts.className : '');
+    const label = String(opts.label || 'Back').replace(/"/g, '&quot;');
+    const id = opts.id ? ` id="${String(opts.id).replace(/"/g, '')}"` : '';
+    const attrs = opts.attrs ? ' ' + String(opts.attrs).trim() : '';
+    return `<button type="button" class="${cls}"${id} aria-label="${label}"${attrs}>${iconHtml('arrow-left', { size })}</button>`;
+  }
+
+  window.Icons = { PATHS, iconHtml, iconForEmpty, hydrateIcons, backButtonHtml };
   window.iconHtml = iconHtml;
   window.hydrateIcons = hydrateIcons;
+  window.backButtonHtml = backButtonHtml;
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => hydrateIcons());

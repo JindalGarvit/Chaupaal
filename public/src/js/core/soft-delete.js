@@ -209,7 +209,7 @@
     overlay.className = 'archive-overlay';
     overlay.innerHTML = `
       <div class="archive-header">
-        <button id="recoveryBack" style="background:none;border:none;font-size:22px;cursor:pointer;">←</button>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ id: 'recoveryBack' }):'<button id="recoveryBack" class="cp-back-btn" aria-label="Back">←</button>'}
         <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">🗑️ Recently deleted</div>
       </div>
       <div style="padding:12px 16px;font-size:12px;color:var(--muted);">Items stay here for ${RECOVERY_DAYS} days, then they’re gone for good.</div>

@@ -379,7 +379,7 @@ const MEMBERSHIP_MAX=500;
 
 function isGenericDmTitle(name){
   const n=String(name||'').trim();
-  return !n || /^chat$/i.test(n) || n==='💬' || n==='Friend' || n==='Chaupaal member';
+  return !n || /^chat$/i.test(n) || n==='💬' || n==='Friend' || n==='Chaupaal member' || n==='Someone';
 }
 
 function chatAvatarMarkup(chat){

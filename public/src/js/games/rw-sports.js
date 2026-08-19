@@ -33,7 +33,7 @@
     overlay.dataset.gameId = o.gameId || '';
     overlay.innerHTML = `
       <div class="game-chrome">
-        <button type="button" class="game-back-btn" data-rw-close aria-label="Close">←</button>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ className: 'game-back-btn', label: 'Close', attrs: 'data-rw-close' }):'<button type="button" class="game-back-btn cp-back-btn" data-rw-close aria-label="Close"></button>'}
         <div class="game-chrome-title">${esc(o.title || 'RW Sports')}</div>
         <div style="width:36px"></div>
       </div>

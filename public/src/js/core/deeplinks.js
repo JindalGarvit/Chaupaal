@@ -71,11 +71,9 @@
     const u = user || {};
     const profileUid = uid || u.uid || '';
     const uname = String(username || u.username || '').replace(/^@/, '');
-    const existing = document.getElementById('publicProfileSheet');
-    if (existing) existing.remove();
     const sheet = document.createElement('div');
-    sheet.id = 'publicProfileSheet';
-    sheet.className = 'archive-overlay';
+    sheet.className = 'archive-overlay public-profile-sheet';
+    sheet.dataset.navManaged = '1';
     const profile = { ...(u.profile || {}) };
     // Flatten so visibility helpers see profile.* fields at top level
     const dp = {
@@ -98,7 +96,7 @@
             profileType: dp.profileType,
           })
         : {
-            displayName: u.name || dp.displayName || uname || 'Chaupaal member',
+            displayName: u.name || dp.displayName || (uname ? `@${uname}` : 'Someone'),
             username: uname,
             photoURL: u.photoURL || null,
             bio: dp.bio || '',
@@ -127,8 +125,8 @@
       : (Array.isArray(dp.icebreakers) ? dp.icebreakers : []).filter((a) => a?.answer).slice(0, 2);
     const nameHtml =
       typeof formatDisplayNameHtml === 'function'
-        ? formatDisplayNameHtml(view.displayName || uname || 'Chaupaal member', view.profileType)
-        : esc(view.displayName || uname || 'Chaupaal member');
+        ? formatDisplayNameHtml(view.displayName || (uname ? `@${uname}` : 'Someone'), view.profileType)
+        : esc(view.displayName || (uname ? `@${uname}` : 'Someone'));
     const bioHtml =
       view.bio && !view.locked
         ? typeof linkifyText === 'function'
@@ -150,7 +148,7 @@
           : '';
     sheet.innerHTML = `
       <div class="archive-header">
-        <button type="button" data-public-profile-close aria-label="Back" style="background:none;border:none;font-size:22px;cursor:pointer;">←</button>
+        ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-public-profile-close' }) : '<button type="button" data-public-profile-close aria-label="Back" class="cp-back-btn">←</button>'}
         <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">Profile</div>
         ${uname ? '<button type="button" data-public-profile-share aria-label="Share profile" style="background:none;border:none;font-size:18px;cursor:pointer;">↗</button>' : ''}
       </div>
@@ -199,7 +197,15 @@
         <div class="public-profile-shell-host" data-public-profile-shell></div>
         <div class="public-profile-ordered-sections" data-public-ordered-sections hidden></div>
       </div>`;
-    document.querySelector('.device')?.appendChild(sheet);
+    const deviceEl = document.querySelector('.device');
+    let profileLayer = null;
+    const dismissProfile = () => {};
+    if (typeof openLayer === 'function') {
+      profileLayer = openLayer(sheet, dismissProfile, { host: deviceEl, remove: true });
+    } else {
+      deviceEl?.appendChild(sheet);
+      if (typeof pushNavLayer === 'function') pushNavLayer(sheet, dismissProfile);
+    }
     if (profileUid && !view.locked) {
       const sectionProfile = {
         ...(u.profile || {}),
@@ -249,7 +255,13 @@
       if (host) host.innerHTML = '';
     }
 
-    sheet.querySelector('[data-public-profile-close]')?.addEventListener('click', () => sheet.remove());
+    sheet.querySelector('[data-public-profile-close]')?.addEventListener('click', () => {
+      if (profileLayer?.close) profileLayer.close();
+      else {
+        if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
+        sheet.remove();
+      }
+    });
     sheet.querySelector('[data-public-profile-share]')?.addEventListener('click', () => {
       const url = shareUrl('profile', uname);
       const display = u.name || uname;
@@ -404,7 +416,7 @@
       ...u,
       uid: profileUid,
       profileType: u.profileType || u.profile?.profileType || 'personal',
-      name: u.name || uname || 'Chaupaal member',
+      name: u.name || (uname ? `@${uname}` : 'Someone'),
     };
     if (profileUid && typeof wireProfileRelationshipActions === 'function') {
       wireProfileRelationshipActions(sheet.querySelector('[data-rel-actions]'), relProfile, {
@@ -460,7 +472,7 @@
       sheet.className = 'archive-overlay';
       sheet.innerHTML = `
         <div class="archive-header">
-          <button id="dlProfBack" style="background:none;border:none;font-size:22px;cursor:pointer;">←</button>
+          ${typeof backButtonHtml==='function'?backButtonHtml({ id: 'dlProfBack' }):'<button id="dlProfBack" class="cp-back-btn" aria-label="Back"></button>'}
           <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">Profile</div>
           <button id="dlProfShare" style="background:none;border:none;font-size:18px;cursor:pointer;">↗</button>
         </div>

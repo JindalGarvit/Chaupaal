@@ -1129,7 +1129,7 @@ function openArchive(){
 
   overlay.innerHTML=`
     <div class="archive-header">
-      <button id="archiveBack" style="background:none;border:none;font-size:22px;cursor:pointer;">←</button>
+      <button id="archiveBack" class="cp-back-btn" aria-label="Back">${typeof iconHtml==='function'?iconHtml('arrow-left',{size:22}):''}</button>
       <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">🗄️ My Archive</div>
       <button id="openRecoveryBinBtn" style="background:none;border:2px solid var(--line);border-radius:10px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer;">🗑️ Deleted</button>
     </div>

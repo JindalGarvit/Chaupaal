@@ -170,7 +170,7 @@ function serializeStory(doc, viewerUid) {
     destination: data.destination,
     kind: data.kind || 'story',
     type: data.type || 'media',
-    name: data.name || 'Chaupaal member',
+    name: data.name || 'Someone',
     avatar: data.avatar || '',
     profileType: data.profileType || 'personal',
     media: data.media || '',
@@ -327,7 +327,7 @@ async function createStory(db, admin, uid, body) {
     visibility: saveOnly ? 'archive_only' : visibility,
     kind,
     type: cleanText(body.type, 30) || 'media',
-    name: cleanText(user.name || user.displayName || user.username, 100) || 'Chaupaal member',
+    name: cleanText(user.name || user.displayName || user.username, 100) || 'Someone',
     avatar: cleanMedia(user.photoThumb || user.photoURL) || cleanText(body.avatar, 12),
     profileType:
       String(user.profileType || user.profile?.profileType || 'personal').toLowerCase() === 'professional'
@@ -817,7 +817,7 @@ async function interactions(db, uid, destination, storyId) {
       return {
         id: doc.id,
         uid: cdata.uid,
-        name: profiles[cdata.uid]?.name || 'Chaupaal member',
+        name: profiles[cdata.uid]?.name || 'Someone',
         avatar: profiles[cdata.uid]?.photoURL || '',
         profileType: profiles[cdata.uid]?.profileType || 'personal',
         text: cdata.text,
@@ -839,7 +839,7 @@ async function profilesMap(db, ids) {
       return [
         snap.id,
         {
-          name: data.name || data.displayName || data.username || 'Chaupaal member',
+          name: data.name || data.displayName || data.username || 'Someone',
           username: data.username || '',
           photoURL: data.photoThumb || data.photoURL || '',
           profileType:
@@ -886,7 +886,7 @@ async function listViews(db, uid, destination, storyId, q) {
       const p = profiles[d.id] || {};
       return {
         uid: d.id,
-        name: p.name || 'Chaupaal member',
+        name: p.name || 'Someone',
         username: p.username || '',
         avatar: p.photoURL || '',
         viewedAt: d.data()?.viewedAt?.toMillis?.() || 0,
@@ -998,7 +998,7 @@ async function listInteractive(db, uid, destination, storyId) {
       const p = profiles[d.id] || {};
       return {
         uid: d.id,
-        name: p.name || 'Chaupaal member',
+        name: p.name || 'Someone',
         avatar: p.photoURL || '',
         text: d.data().question,
         at: d.data().questionAt?.toMillis?.() || d.data().updatedAt?.toMillis?.() || 0,

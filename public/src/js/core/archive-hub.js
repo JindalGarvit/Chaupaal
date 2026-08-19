@@ -275,7 +275,7 @@
     overlay.setAttribute('data-nav-managed', '1');
     overlay.innerHTML = `
       <div class="archive-header">
-        <button type="button" data-archive-hub-back aria-label="Back">←</button>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-archive-hub-back' }):'<button type="button" data-archive-hub-back class="cp-back-btn" aria-label="Back">←</button>'}
         <div style="flex:1">
           <strong>Archive</strong>
           <div class="relationship-private-note">Everything you’ve posted — archived items stay private to you</div>

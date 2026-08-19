@@ -467,7 +467,7 @@
     sheet.dataset.navManaged = '1';
     sheet.innerHTML = `
       <div class="archive-header">
-        <button type="button" data-as-close aria-label="Back">←</button>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-as-close' }):'<button type="button" data-as-close class="cp-back-btn" aria-label="Back">←</button>'}
         <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">Accounts</div>
       </div>
       <div class="group-info-scroll auth-account-list" style="padding:16px;" data-as-list>

@@ -148,7 +148,9 @@
       const s = current();
       const own = !!(s.own || (typeof currentUser !== 'undefined' && s.uid === currentUser?.uid));
       NS.markStorySeen(s);
-      const name = s.name || 'Chaupaal member';
+      const name =
+        (typeof resolvePersonDisplayName === 'function' ? resolvePersonDisplayName(s) : s.name) ||
+        (s.username ? `@${s.username}` : 'Someone');
       const av = s.avatar && /^https:/.test(s.avatar) ? `<img src="${NS.esc(s.avatar)}" alt="">` : `<div class="ds-av">${NS.esc((s.avatar || '👤').slice(0, 2))}</div>`;
       const media =
         s.mediaType === 'video' && s.media
