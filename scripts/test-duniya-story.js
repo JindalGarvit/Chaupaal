@@ -64,6 +64,7 @@ function assert(cond, msg) {
 {
   const html = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
   assert(html.includes('/src/js/features/duniya-story.js'), 'index.html loads duniya-story.js');
+  assert(html.includes('/src/js/features/duniya-story-media.js'), 'index.html loads duniya-story-media.js');
   assert(html.includes('/src/js/features/duniya-story-editor.js'), 'index.html loads story editor');
   assert(html.includes('/src/js/features/duniya-story-viewer.js'), 'index.html loads story viewer');
   assert(html.includes('/src/styles/duniya-story.css'), 'index.html loads duniya-story.css');
@@ -71,6 +72,28 @@ function assert(cond, msg) {
     html.indexOf('/src/js/features/duniya-story.js') < html.indexOf('/src/js/features/duniya.js'),
     'story modules load before duniya.js'
   );
+  assert(
+    html.indexOf('/src/js/features/duniya-story-media.js') < html.indexOf('/src/js/features/duniya-story-editor.js'),
+    'story media loads before editor'
+  );
+}
+
+{
+  const { splitOverlaysForBake, renderDrawOverlayHtml } = require('../public/src/js/features/duniya-story-media.js');
+  const overlays = [
+    { type: 'text', text: 'Hi', x: 0.5, y: 0.4 },
+    { type: 'draw', strokes: [{ color: '#E63946', width: 4, points: [{ x: 0.1, y: 0.2 }, { x: 0.3, y: 0.4 }] }] },
+    { type: 'emoji', emoji: '🔥', x: 0.5, y: 0.5 },
+    { type: 'poll', prompt: 'Tea?', options: ['Yes', 'No'] },
+    { type: 'music', x: 0.5, y: 0.8 },
+  ];
+  const { bakedOverlays, payloadOverlays } = splitOverlaysForBake(overlays);
+  assert(bakedOverlays.length === 3, 'bake collects text draw emoji');
+  assert(payloadOverlays.some((o) => o.type === 'poll'), 'interactive poll survives as JSON overlay');
+  assert(!payloadOverlays.some((o) => o.type === 'text'), 'bake removes text from payload');
+  assert(!payloadOverlays.some((o) => o.type === 'draw'), 'bake removes draw from payload');
+  const drawHtml = renderDrawOverlayHtml(overlays[1], { width: 360, height: 640 });
+  assert(drawHtml.includes('ds-ov-draw') && drawHtml.includes('<path'), 'draw overlay renders in viewer HTML');
 }
 
 console.log('duniya story overlay tests ok');

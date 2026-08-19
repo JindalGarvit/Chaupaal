@@ -186,6 +186,12 @@
     if (ov.type === 'location' && opts?.locationHtml) {
       return `<div class="${cls}" data-ov="${id}" style="${style}">${opts.locationHtml}</div>`;
     }
+    if (ov.type === 'draw') {
+      if (typeof DuniyaStoryMedia !== 'undefined' && DuniyaStoryMedia.renderDrawOverlayHtml) {
+        return DuniyaStoryMedia.renderDrawOverlayHtml(ov, opts);
+      }
+      return '';
+    }
     return '';
   }
 

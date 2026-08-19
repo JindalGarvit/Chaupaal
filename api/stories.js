@@ -196,6 +196,7 @@ function serializeStory(doc, viewerUid) {
     chainId: data.chainId || '',
     restoryOf: data.restoryOf || null,
     filter: data.filter || 'normal',
+    baked: !!data.baked,
     crop: data.crop || null,
     trimStartMs: Number(data.trimStartMs) || 0,
     trimEndMs: Number(data.trimEndMs) || 0,
@@ -350,6 +351,7 @@ async function createStory(db, admin, uid, body) {
     filter: ['normal', 'bright', 'contrast', 'warm', 'cool', 'mono', 'fade'].includes(String(body.filter || ''))
       ? String(body.filter)
       : 'normal',
+    baked: !!body.baked,
     crop: body.crop && typeof body.crop === 'object'
       ? {
           x: Number(body.crop.x) || 0,

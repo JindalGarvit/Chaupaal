@@ -1,11 +1,18 @@
 /**
- * Duniya story canvas editor — crop/trim → overlays → Share.
+ * Duniya story canvas editor — crop/trim → overlays → hybrid bake → Share.
  */
 (function () {
   'use strict';
   const NS = (window.DuniyaStory = window.DuniyaStory || {});
+  const M = () => window.DuniyaStoryMedia || {};
   const MAX_VIDEO_MS = 90 * 1000;
   const FILTERS = ['normal', 'bright', 'contrast', 'warm', 'cool', 'mono', 'fade'];
+  const BRUSHES = {
+    pen: { width: 4, alpha: 1 },
+    marker: { width: 12, alpha: 0.55 },
+    neon: { width: 6, alpha: 1, glow: true },
+    eraser: { width: 18, eraser: true },
+  };
 
   function uid() {
     return typeof crypto?.randomUUID === 'function'
@@ -36,44 +43,65 @@
       parentStoryId: extra?.parentStoryId || '',
       chainId: extra?.chainId || '',
       restoryOf: extra?.restoryOf || null,
+      _cropInit: false,
     };
   }
 
-  function bindDrag(el, ov) {
+  function bindDrag(el, ov, stage) {
     let sx = 0;
     let sy = 0;
     let ox = ov.x;
     let oy = ov.y;
+    let dist0 = 0;
+    let scale0 = ov.scale || 1;
+    let rot0 = ov.rotate || 0;
+    let ang0 = 0;
+    const pointers = new Map();
+
     const onDown = (e) => {
       if (ov.locked) return;
-      const p = e.touches ? e.touches[0] : e;
-      sx = p.clientX;
-      sy = p.clientY;
-      ox = ov.x;
-      oy = ov.y;
+      el.setPointerCapture(e.pointerId);
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 1) {
+        sx = e.clientX;
+        sy = e.clientY;
+        ox = ov.x;
+        oy = ov.y;
+      } else if (pointers.size === 2) {
+        const pts = [...pointers.values()];
+        dist0 = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        scale0 = ov.scale || 1;
+        rot0 = ov.rotate || 0;
+        ang0 = Math.atan2(pts[1].y - pts[0].y, pts[1].x - pts[0].x);
+      }
       e.stopPropagation();
     };
     const onMove = (e) => {
-      if (!sx && !sy) return;
-      const p = e.touches ? e.touches[0] : e;
-      const host = el.parentElement?.getBoundingClientRect();
+      if (!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const host = stage?.getBoundingClientRect();
       if (!host) return;
-      ov.x = Math.max(0.05, Math.min(0.95, ox + (p.clientX - sx) / host.width));
-      ov.y = Math.max(0.05, Math.min(0.95, oy + (p.clientY - sy) / host.height));
+      if (pointers.size >= 2) {
+        const pts = [...pointers.values()];
+        const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        const ang = Math.atan2(pts[1].y - pts[0].y, pts[1].x - pts[0].x);
+        if (dist0) ov.scale = Math.max(0.4, Math.min(3, scale0 * (dist / dist0)));
+        ov.rotate = rot0 + ((ang - ang0) * 180) / Math.PI;
+      } else {
+        ov.x = Math.max(0.05, Math.min(0.95, ox + (e.clientX - sx) / host.width));
+        ov.y = Math.max(0.05, Math.min(0.95, oy + (e.clientY - sy) / host.height));
+      }
       el.style.left = ov.x * 100 + '%';
       el.style.top = ov.y * 100 + '%';
+      el.style.transform = `translate(-50%,-50%) scale(${ov.scale || 1}) rotate(${ov.rotate || 0}deg)`;
     };
-    const onUp = () => {
-      sx = 0;
-      sy = 0;
+    const onUp = (e) => {
+      pointers.delete(e.pointerId);
     };
     el.addEventListener('pointerdown', onDown);
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    el._dsUnbind = () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-    };
+    el.addEventListener('pointermove', onMove);
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointercancel', onUp);
   }
 
   NS.openEditor = function openEditor(opts) {
@@ -106,8 +134,14 @@
     let idx = 0;
     let dirty = true;
     let drawing = false;
+    let cropMode = false;
+    let showFilters = false;
     let drawColor = '#E63946';
-    let eraser = false;
+    let drawBrush = 'pen';
+    let drawSize = 4;
+    let drawUndo = [];
+    let activeTextId = null;
+
     const strokes = () => {
       let ov = queue[idx].overlays.find((o) => o.type === 'draw');
       if (!ov) {
@@ -118,7 +152,7 @@
     };
 
     const root = document.createElement('div');
-    root.className = 'ds-overlay';
+    root.className = 'ds-overlay ds-editor';
     root.dataset.navManaged = '1';
     root.setAttribute('role', 'dialog');
     root.setAttribute('aria-label', NS.tt('duniya_story_editor', 'Edit story'));
@@ -148,12 +182,41 @@
       layer.close();
     }
 
+    function paintMediaTransform(stage, item) {
+      const el = stage.querySelector('img,video');
+      if (!el || item.mediaType !== 'image') return;
+      const media = M();
+      if (!media.applyCropTransform) return;
+      const apply = () => {
+        if (!item._cropInit && el.naturalWidth) {
+          item._cropInit = true;
+          if (item.crop.scale === 1 && item.crop.x === 0.5 && item.crop.y === 0.5 && media.autoFitCrop916) {
+            Object.assign(item.crop, media.autoFitCrop916(el.naturalWidth, el.naturalHeight));
+          }
+        }
+        if (cropMode && media.bindCropGestures) {
+          if (!stage.dataset.cropBound) {
+            stage.dataset.cropBound = '1';
+            media.bindCropGestures(stage, el, item);
+          }
+        } else {
+          delete stage.dataset.cropBound;
+          media.applyCropTransform(el, item, stage);
+        }
+      };
+      if (el.complete && el.naturalWidth) apply();
+      else el.addEventListener('load', apply, { once: true });
+    }
+
     function paintOverlays(stage) {
-      stage.querySelectorAll('.ds-ov,.ds-draw-canvas').forEach((n) => n.remove());
-      NS.renderOverlaysInto(stage, queue[idx], {});
+      stage.querySelectorAll('.ds-ov,.ds-draw-canvas,.ds-inline-text').forEach((n) => n.remove());
+      NS.renderOverlaysInto(stage, queue[idx], {
+        width: stage.clientWidth || 360,
+        height: stage.clientHeight || 640,
+      });
       stage.querySelectorAll('.ds-ov').forEach((el) => {
         const ov = queue[idx].overlays.find((o) => o.id === el.dataset.ov);
-        if (ov) bindDrag(el, ov);
+        if (ov && ov.type !== 'draw') bindDrag(el, ov, stage);
       });
       const drawOv = queue[idx].overlays.find((o) => o.type === 'draw');
       if (drawOv || drawing) {
@@ -166,10 +229,17 @@
         const replay = () => {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           (drawOv?.strokes || []).forEach((s) => {
+            ctx.save();
             ctx.strokeStyle = s.eraser ? 'rgba(0,0,0,1)' : s.color;
             ctx.globalCompositeOperation = s.eraser ? 'destination-out' : 'source-over';
             ctx.lineWidth = s.width;
             ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            if (s.glow) {
+              ctx.shadowColor = s.color;
+              ctx.shadowBlur = 12;
+            }
+            ctx.globalAlpha = s.alpha != null ? s.alpha : 1;
             ctx.beginPath();
             s.points.forEach((p, i) => {
               const x = p.x * canvas.width;
@@ -178,6 +248,7 @@
               else ctx.moveTo(x, y);
             });
             ctx.stroke();
+            ctx.restore();
           });
           ctx.globalCompositeOperation = 'source-over';
         };
@@ -189,120 +260,281 @@
             const p = e.touches ? e.touches[0] : e;
             return { x: (p.clientX - r.left) / r.width, y: (p.clientY - r.top) / r.height };
           };
+          const brush = BRUSHES[drawBrush] || BRUSHES.pen;
           canvas.addEventListener('pointerdown', (e) => {
-            cur = { color: drawColor, width: eraser ? 16 : 4, eraser, points: [pt(e)] };
+            cur = {
+              color: drawColor,
+              width: drawBrush === 'eraser' ? brush.width : drawSize || brush.width,
+              eraser: drawBrush === 'eraser',
+              alpha: brush.alpha,
+              glow: brush.glow,
+              points: [pt(e)],
+            };
             e.preventDefault();
           });
           canvas.addEventListener('pointermove', (e) => {
             if (!cur) return;
             cur.points.push(pt(e));
-            strokes().strokes = (strokes().strokes || []).concat([]);
-            if (!strokes().strokes.includes(cur)) strokes().strokes.push(cur);
             replay();
+            ctx.save();
+            ctx.strokeStyle = cur.eraser ? 'rgba(0,0,0,1)' : cur.color;
+            ctx.globalCompositeOperation = cur.eraser ? 'destination-out' : 'source-over';
+            ctx.lineWidth = cur.width;
+            ctx.lineCap = 'round';
+            if (cur.glow) {
+              ctx.shadowColor = cur.color;
+              ctx.shadowBlur = 12;
+            }
+            ctx.globalAlpha = cur.alpha != null ? cur.alpha : 1;
+            ctx.beginPath();
+            cur.points.forEach((p, i) => {
+              const x = p.x * canvas.width;
+              const y = p.y * canvas.height;
+              if (i) ctx.lineTo(x, y);
+              else ctx.moveTo(x, y);
+            });
+            ctx.stroke();
+            ctx.restore();
           });
           canvas.addEventListener('pointerup', () => {
             if (cur && cur.points.length > 1) {
               const ov = strokes();
-              if (!ov.strokes.includes(cur)) ov.strokes.push(cur);
+              drawUndo.push(JSON.stringify(ov.strokes || []));
+              ov.strokes = (ov.strokes || []).concat([cur]);
             }
             cur = null;
+            replay();
           });
         }
       }
+    }
+
+    function bindTrimScrubber(stage, item) {
+      const track = root.querySelector('[data-trim-track]');
+      const range = root.querySelector('[data-trim-range]');
+      const hL = root.querySelector('[data-h-l]');
+      const hR = root.querySelector('[data-h-r]');
+      const label = root.querySelector('[data-trim-label]');
+      const v = stage.querySelector('video');
+      if (!track || !v) return;
+      const dur = () => item.durationMs || MAX_VIDEO_MS;
+      const paint = () => {
+        const d = dur();
+        const l = (item.trimStartMs / d) * 100;
+        const r = (item.trimEndMs / d) * 100;
+        if (range) {
+          range.style.left = l + '%';
+          range.style.width = Math.max(0, r - l) + '%';
+        }
+        if (hL) hL.style.left = l + '%';
+        if (hR) hR.style.left = r + '%';
+        if (label) {
+          const span = Math.round((item.trimEndMs - item.trimStartMs) / 100) / 10;
+          label.textContent = d > MAX_VIDEO_MS ? `${NS.tt('story_trim_needed', 'Trim to 90s or less')} · ${span}s` : `${span}s selected`;
+        }
+        try {
+          v.currentTime = (item.trimStartMs || 0) / 1000;
+        } catch (e) {}
+      };
+      const drag = (handle, which) => {
+        let moving = false;
+        handle.addEventListener('pointerdown', (e) => {
+          moving = true;
+          handle.setPointerCapture(e.pointerId);
+          e.stopPropagation();
+        });
+        handle.addEventListener('pointermove', (e) => {
+          if (!moving) return;
+          const rect = track.getBoundingClientRect();
+          const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+          const d = dur();
+          if (which === 'start') item.trimStartMs = Math.round(pct * d);
+          else item.trimEndMs = Math.round(pct * d);
+          if (item.trimEndMs - item.trimStartMs > MAX_VIDEO_MS) {
+            if (which === 'start') item.trimStartMs = item.trimEndMs - MAX_VIDEO_MS;
+            else item.trimEndMs = item.trimStartMs + MAX_VIDEO_MS;
+          }
+          if (item.trimEndMs <= item.trimStartMs) item.trimEndMs = Math.min(d, item.trimStartMs + 1000);
+          paint();
+        });
+        const up = () => {
+          moving = false;
+        };
+        handle.addEventListener('pointerup', up);
+        handle.addEventListener('pointercancel', up);
+      };
+      drag(hL, 'start');
+      drag(hR, 'end');
+      v.addEventListener('timeupdate', () => {
+        const end = item.trimEndMs / 1000;
+        if (v.currentTime >= end) {
+          v.currentTime = (item.trimStartMs || 0) / 1000;
+          v.play().catch(() => {});
+        }
+      });
+      paint();
+    }
+
+    function addInlineText() {
+      const item = queue[idx];
+      const id = uid();
+      const ov = { id, type: 'text', text: NS.tt('story_tap_edit', 'Tap to edit'), x: 0.5, y: 0.4, scale: 1, rotate: 0, z: 6, color: '#fff', style: 'display', align: 'center' };
+      item.overlays.push(ov);
+      activeTextId = id;
+      render();
     }
 
     function render() {
       const item = queue[idx];
       const media =
         item.mediaType === 'video'
-          ? `<video src="${NS.esc(item.url)}" playsinline ${item.muted ? 'muted' : ''}></video>`
-          : `<img src="${NS.esc(item.url)}" alt="">`;
+          ? `<video src="${NS.esc(item.url)}" playsinline loop ${item.muted ? 'muted' : ''}></video>`
+          : `<img src="${NS.esc(item.url)}" alt="" crossorigin="anonymous">`;
+      const filterBar = showFilters
+        ? `<div class="ds-filter-carousel" data-filters>${FILTERS.map(
+            (f) =>
+              `<button type="button" class="ds-filter-chip${item.filter === f ? ' is-on' : ''}" data-f="${f}"><span class="ds-filter-thumb ds-filter-${f}"></span><small>${f}</small></button>`
+          ).join('')}</div>`
+        : '';
+      const drawBar = drawing
+        ? `<div class="ds-draw-bar">
+            ${Object.keys(BRUSHES)
+              .map((b) => `<button type="button" class="${drawBrush === b ? 'is-on' : ''}" data-brush="${b}">${b}</button>`)
+              .join('')}
+            <input type="range" min="2" max="24" value="${drawSize}" data-size aria-label="Size">
+            <input type="color" value="${drawColor}" data-color aria-label="Color">
+            <button type="button" data-undo aria-label="Undo">↶</button>
+            <button type="button" data-redo aria-label="Redo">↷</button>
+            <button type="button" data-draw-done>${NS.tt('done', 'Done')}</button>
+          </div>`
+        : '';
+      const cropBar = cropMode
+        ? `<div class="ds-crop-bar"><button type="button" data-crop-cancel>${NS.tt('cancel', 'Cancel')}</button><span>${NS.tt('story_crop', 'Crop')}</span><button type="button" data-crop-done>${NS.tt('done', 'Done')}</button></div>`
+        : '';
       root.innerHTML = `
-        <div class="ds-stage${NS.filterClass(item.filter)}" data-stage>${media}
-          ${item.mediaType === 'video' ? `<div class="ds-trim"><input type="range" min="0" max="1000" value="${Math.round((item.trimStartMs / Math.max(item.durationMs, 1)) * 1000)}" data-trim-start><input type="range" min="0" max="1000" value="${Math.round((item.trimEndMs / Math.max(item.durationMs || MAX_VIDEO_MS, 1)) * 1000) || 1000}" data-trim-end><small data-trim-label></small></div>` : ''}
-        </div>
+        <div class="ds-stage${NS.filterClass(item.filter)}${cropMode ? ' is-crop' : ''}" data-stage>${media}</div>
+        ${cropBar}
+        ${item.mediaType === 'video' ? `<div class="ds-trim-scrub" data-trim><div class="ds-trim-track" data-trim-track><div class="ds-trim-range" data-trim-range></div></div><div class="ds-trim-handle ds-trim-l" data-h-l></div><div class="ds-trim-handle ds-trim-r" data-h-r></div><small data-trim-label></small></div>` : ''}
         <div class="ds-topbar">
           <button type="button" class="ds-icon-btn" data-close aria-label="Close">✕</button>
-          <button type="button" class="ds-icon-btn" data-save aria-label="Save">${NS.tt('story_save', 'Save')}</button>
-          <button type="button" class="ds-cta" data-share>${NS.tt('story_share', 'Share')}</button>
+          <div class="ds-topbar-actions">
+            <button type="button" class="ds-icon-btn" data-save aria-label="Save">${NS.tt('story_save', 'Save')}</button>
+            <button type="button" class="ds-cta" data-share>${NS.tt('story_share', 'Share')}</button>
+          </div>
         </div>
-        <div class="ds-rail">
-          <button type="button" data-tool="text" aria-label="Text">Aa</button>
-          <button type="button" data-tool="draw" aria-label="Draw">✎</button>
-          <button type="button" data-tool="stickers" aria-label="Stickers">☺</button>
-          <button type="button" data-tool="music" aria-label="Music">♪</button>
-          <button type="button" data-tool="location" aria-label="Location">📍</button>
-          <button type="button" data-tool="mention" aria-label="Mention">@</button>
-          <button type="button" data-tool="interactive" aria-label="Interactive">◍</button>
-          <button type="button" data-tool="filter" aria-label="Filter">☀</button>
-          <button type="button" data-tool="crop" aria-label="Crop">⛶</button>
-          <button type="button" data-tool="camera" aria-label="Camera">📷</button>
-        </div>
+        ${!cropMode && !drawing ? `<div class="ds-toolbar">
+          <button type="button" data-tool="text"><span>Aa</span><small>Text</small></button>
+          <button type="button" data-tool="stickers"><span>☺</span><small>Stickers</small></button>
+          <button type="button" data-tool="draw"><span>✎</span><small>Draw</small></button>
+          <button type="button" data-tool="music"><span>♪</span><small>Music</small></button>
+          <button type="button" data-tool="effects"><span>✦</span><small>Effects</small></button>
+          <button type="button" data-tool="more"><span>⋯</span><small>More</small></button>
+        </div>` : ''}
+        ${filterBar}${drawBar}
         <div class="ds-bottombar">
           <div class="ds-filmstrip" data-strip></div>
         </div>`;
       const stage = root.querySelector('[data-stage]');
-      const img = stage.querySelector('img,video');
-      if (img && item.mediaType === 'image') {
-        img.style.transform = `translate(-50%,-50%) scale(${item.crop.scale}) rotate(${item.rotation}deg)`;
-        img.style.position = 'absolute';
-        img.style.left = item.crop.x * 100 + '%';
-        img.style.top = item.crop.y * 100 + '%';
-        img.style.width = '120%';
-        img.style.height = '120%';
-        img.style.objectFit = 'cover';
-      }
+      paintMediaTransform(stage, item);
       if (item.mediaType === 'video') {
         const v = stage.querySelector('video');
         v.addEventListener('loadedmetadata', () => {
           item.durationMs = Math.round((v.duration || 0) * 1000);
           if (!item.trimEndMs) item.trimEndMs = Math.min(item.durationMs, MAX_VIDEO_MS);
-          updateTrim();
+          bindTrimScrubber(stage, item);
         });
-        const start = root.querySelector('[data-trim-start]');
-        const end = root.querySelector('[data-trim-end]');
-        const updateTrim = () => {
-          const dur = item.durationMs || MAX_VIDEO_MS;
-          item.trimStartMs = Math.round((Number(start.value) / 1000) * dur);
-          item.trimEndMs = Math.round((Number(end.value) / 1000) * dur);
-          if (item.trimEndMs - item.trimStartMs > MAX_VIDEO_MS) {
-            item.trimEndMs = item.trimStartMs + MAX_VIDEO_MS;
-            end.value = String(Math.round((item.trimEndMs / dur) * 1000));
-          }
-          if (item.trimEndMs <= item.trimStartMs) item.trimEndMs = Math.min(dur, item.trimStartMs + 1000);
-          const label = root.querySelector('[data-trim-label]');
-          if (label) {
-            const span = Math.round((item.trimEndMs - item.trimStartMs) / 100) / 10;
-            label.textContent =
-              dur > MAX_VIDEO_MS
-                ? NS.tt('story_trim_needed', 'Trim to 90s or less') + ` · ${span}s`
-                : `${span}s`;
-          }
-        };
-        start?.addEventListener('input', updateTrim);
-        end?.addEventListener('input', updateTrim);
-        updateTrim();
+        v.play().catch(() => {});
+        if (item.durationMs) bindTrimScrubber(stage, item);
       }
       paintOverlays(stage);
+      if (activeTextId) {
+        const ov = queue[idx].overlays.find((o) => o.id === activeTextId);
+        if (ov && ov.type === 'text') {
+          const el = stage.querySelector(`[data-ov="${ov.id}"]`);
+          if (el) {
+            el.contentEditable = 'true';
+            el.focus();
+            el.addEventListener('input', () => {
+              ov.text = el.textContent.trim() || ov.text;
+            });
+            el.addEventListener('blur', () => {
+              ov.text = el.textContent.trim() || NS.tt('story_tap_edit', 'Tap to edit');
+              activeTextId = null;
+            });
+          }
+        }
+      }
       const strip = root.querySelector('[data-strip]');
-      strip.innerHTML = queue
-        .map(
-          (it, i) =>
-            `<button type="button" class="ds-film${i === idx ? ' is-on' : ''}" data-i="${i}">${
-              it.mediaType === 'video' ? `<video src="${NS.esc(it.url)}" muted></video>` : `<img src="${NS.esc(it.url)}" alt="">`
-            }</button>`
-        )
-        .join('');
-      strip.querySelectorAll('[data-i]').forEach((b) =>
-        b.addEventListener('click', () => {
-          idx = Number(b.dataset.i);
-          render();
-        })
-      );
+      if (queue.length > 1) {
+        strip.innerHTML = queue
+          .map(
+            (it, i) =>
+              `<button type="button" class="ds-film${i === idx ? ' is-on' : ''}" data-i="${i}">${
+                it.mediaType === 'video' ? `<video src="${NS.esc(it.url)}" muted></video>` : `<img src="${NS.esc(it.url)}" alt="">`
+              }</button>`
+          )
+          .join('');
+        strip.querySelectorAll('[data-i]').forEach((b) =>
+          b.addEventListener('click', () => {
+            idx = Number(b.dataset.i);
+            cropMode = false;
+            drawing = false;
+            showFilters = false;
+            render();
+          })
+        );
+      } else {
+        strip.innerHTML = '';
+      }
       root.querySelector('[data-close]').addEventListener('click', confirmClose);
       root.querySelector('[data-save]').addEventListener('click', () => share({ saveOnly: true }));
       root.querySelector('[data-share]').addEventListener('click', () => share({}));
       root.querySelectorAll('[data-tool]').forEach((b) => b.addEventListener('click', () => runTool(b.dataset.tool)));
+      root.querySelectorAll('[data-f]').forEach((b) =>
+        b.addEventListener('click', () => {
+          item.filter = b.dataset.f;
+          render();
+        })
+      );
+      root.querySelector('[data-draw-done]')?.addEventListener('click', () => {
+        drawing = false;
+        render();
+      });
+      root.querySelectorAll('[data-brush]').forEach((b) =>
+        b.addEventListener('click', () => {
+          drawBrush = b.dataset.brush;
+          render();
+        })
+      );
+      root.querySelector('[data-size]')?.addEventListener('input', (e) => {
+        drawSize = Number(e.target.value) || 4;
+      });
+      root.querySelector('[data-color]')?.addEventListener('input', (e) => {
+        drawColor = e.target.value;
+      });
+      root.querySelector('[data-undo]')?.addEventListener('click', () => {
+        const ov = strokes();
+        if (ov.strokes?.length) {
+          drawUndo.push(JSON.stringify(ov.strokes));
+          ov.strokes.pop();
+          render();
+        }
+      });
+      root.querySelector('[data-redo]')?.addEventListener('click', () => {
+        if (!drawUndo.length) return;
+        try {
+          strokes().strokes = JSON.parse(drawUndo.pop());
+          render();
+        } catch (e) {}
+      });
+      root.querySelector('[data-crop-done]')?.addEventListener('click', () => {
+        cropMode = false;
+        render();
+      });
+      root.querySelector('[data-crop-cancel]')?.addEventListener('click', () => {
+        cropMode = false;
+        render();
+      });
     }
 
     function promptSheet(title, bodyHtml, onMount) {
@@ -318,82 +550,46 @@
     function runTool(tool) {
       const item = queue[idx];
       if (tool === 'text') {
-        promptSheet(NS.tt('story_text', 'Text'), `<textarea data-t maxlength="140" placeholder="Say something"></textarea>
-          <div style="display:flex;gap:6px;margin-top:8px;">
-            <button type="button" data-style="display">Aa</button>
-            <button type="button" data-style="serif">Serif</button>
-            <button type="button" data-style="poster">Poster</button>
-          </div>`, (sheet, done) => {
-          let style = 'display';
-          sheet.querySelectorAll('[data-style]').forEach((b) =>
-            b.addEventListener('click', () => {
-              style = b.dataset.style;
-            })
-          );
-          sheet.querySelector('[data-done]').addEventListener('click', () => {
-            const text = sheet.querySelector('[data-t]').value.trim();
-            if (text) item.overlays.push({ id: uid(), type: 'text', text, x: 0.5, y: 0.4, scale: 1, rotate: 0, z: 6, color: '#fff', style, align: 'center' });
-            done();
-            render();
-          });
-        });
+        addInlineText();
       } else if (tool === 'draw') {
-        drawing = !drawing;
+        drawing = true;
+        showFilters = false;
         render();
-        if (drawing) {
-          promptSheet(NS.tt('story_draw', 'Draw'), `
-            <div style="display:flex;gap:8px;">
-              ${['#E63946', '#F5F5F5', '#2B2730', '#F4C430'].map((c) => `<button type="button" data-c="${c}" style="width:28px;height:28px;border-radius:50%;background:${c};border:0;"></button>`).join('')}
-              <button type="button" data-erase>Eraser</button>
-              <button type="button" data-undo>Undo</button>
-            </div>`, (sheet) => {
-            sheet.querySelectorAll('[data-c]').forEach((b) =>
+      } else if (tool === 'stickers') {
+        promptSheet(
+          NS.tt('story_stickers', 'Stickers'),
+          `<div data-emoji class="ds-emoji-grid">${['🔥', '✨', '❤️', '😂', '🙏', '☕', '🏏', '🎵', '🌟', '🏠'].map((e) => `<button type="button" data-e="${e}">${e}</button>`).join('')}</div><button type="button" class="btn" data-gif>GIF</button>`,
+          (sheet, done) => {
+            sheet.querySelectorAll('[data-e]').forEach((b) =>
               b.addEventListener('click', () => {
-                drawColor = b.dataset.c;
-                eraser = false;
+                item.overlays.push({ id: uid(), type: 'emoji', emoji: b.dataset.e, x: 0.5, y: 0.45, scale: 1, rotate: 0, z: 7 });
+                done();
+                render();
               })
             );
-            sheet.querySelector('[data-erase]').addEventListener('click', () => {
-              eraser = true;
-            });
-            sheet.querySelector('[data-undo]').addEventListener('click', () => {
-              const ov = item.overlays.find((o) => o.type === 'draw');
-              if (ov?.strokes?.length) ov.strokes.pop();
-              render();
-            });
-          });
-        }
-      } else if (tool === 'stickers') {
-        promptSheet(NS.tt('story_stickers', 'Stickers'), `<div data-emoji style="display:flex;flex-wrap:wrap;gap:8px;font-size:28px;">${['🔥','✨','❤️','😂','🙏','☕','🏏','🎵','🌟','🏠'].map((e) => `<button type="button" data-e="${e}">${e}</button>`).join('')}</div><button type="button" class="btn" data-gif>GIF</button>`, (sheet, done) => {
-          sheet.querySelectorAll('[data-e]').forEach((b) =>
-            b.addEventListener('click', () => {
-              item.overlays.push({ id: uid(), type: 'emoji', emoji: b.dataset.e, x: 0.5, y: 0.45, scale: 1, rotate: 0, z: 7 });
+            sheet.querySelector('[data-gif]')?.addEventListener('click', () => {
               done();
-              render();
-            })
-          );
-          sheet.querySelector('[data-gif]')?.addEventListener('click', () => {
-            done();
-            if (typeof openGifPicker === 'function') {
-              openGifPicker({
-                onSelect: (gif) => {
-                  item.overlays.push({
-                    id: uid(),
-                    type: 'gif',
-                    url: gif.url,
-                    preview: gif.preview || gif.url,
-                    x: 0.5,
-                    y: 0.5,
-                    scale: 1,
-                    rotate: 0,
-                    z: 7,
-                  });
-                  render();
-                },
-              });
-            }
-          });
-        });
+              if (typeof openGifPicker === 'function') {
+                openGifPicker({
+                  onSelect: (gif) => {
+                    item.overlays.push({
+                      id: uid(),
+                      type: 'gif',
+                      url: gif.url,
+                      preview: gif.preview || gif.url,
+                      x: 0.5,
+                      y: 0.5,
+                      scale: 1,
+                      rotate: 0,
+                      z: 7,
+                    });
+                    render();
+                  },
+                });
+              }
+            });
+          }
+        );
       } else if (tool === 'music') {
         const picker = typeof openSongPicker === 'function' ? openSongPicker : typeof openMusicPicker === 'function' ? openMusicPicker : null;
         picker?.({
@@ -405,65 +601,119 @@
             render();
           },
         });
-      } else if (tool === 'location' && typeof openLocationComposer === 'function') {
-        openLocationComposer({
-          onSelect: (loc) => {
-            item.location = loc;
-            if (!item.overlays.some((o) => o.type === 'location')) {
-              item.overlays.push({ id: uid(), type: 'location', x: 0.5, y: 0.16, scale: 1, rotate: 0, z: 8 });
-            }
-            render();
-          },
-        });
-      } else if (tool === 'mention') {
-        promptSheet(NS.tt('story_mention', 'Mention'), `<input type="search" data-q placeholder="@username">`, (sheet) => {
-          const q = sheet.querySelector('[data-q]');
-          const run = async () => {
-            if (typeof searchUsersProvider !== 'function') return;
-            const rows = await searchUsersProvider(q.value.trim(), { limit: 6 }).catch(() => []);
-            sheet.querySelectorAll('[data-uid]').forEach((n) => n.remove());
-            (rows || []).forEach((u) => {
-              const b = document.createElement('button');
-              b.type = 'button';
-              b.className = 'ds-row';
-              b.dataset.uid = u.uid;
-              b.innerHTML = `${u.photoURL ? `<img src="${NS.esc(u.photoURL)}" alt="">` : ''}<span>${NS.esc(u.name || u.username)}</span>`;
-              b.addEventListener('click', async () => {
-                let blocked = false;
-                try {
-                  if (typeof getBlockedSet === 'function') blocked = getBlockedSet().has(u.uid);
-                } catch (e) {}
-                if (blocked) {
-                  if (typeof showToast === 'function') showToast(NS.tt('story_blocked', 'You can’t mention this person'));
-                  return;
-                }
-                item.overlays.push({
-                  id: uid(),
-                  type: 'mention',
-                  uid: u.uid,
-                  name: u.name,
-                  username: u.username,
-                  x: 0.5,
-                  y: 0.3,
-                  scale: 1,
-                  rotate: 0,
-                  z: 7,
-                });
-                item.mentions.push({ uid: u.uid, name: u.name, username: u.username, x: 0.5, y: 0.3 });
-                sheet.remove();
-                render();
-              });
-              sheet.appendChild(b);
-            });
-          };
-          q.addEventListener('input', () => {
-            clearTimeout(q._t);
-            q._t = setTimeout(run, 200);
-          });
-        });
-      } else if (tool === 'interactive') {
+      } else if (tool === 'effects') {
+        showFilters = !showFilters;
+        drawing = false;
+        render();
+      } else if (tool === 'more') {
         const teen = NS.isTeen();
-        promptSheet(NS.tt('story_interactive', 'Stickers'), `
+        promptSheet(
+          NS.tt('more', 'More'),
+          `
+          <button type="button" class="ds-sheet-btn" data-m="mention">@${NS.tt('mention', 'Mention')}</button>
+          <button type="button" class="ds-sheet-btn" data-m="location">📍 ${NS.tt('location', 'Location')}</button>
+          <button type="button" class="ds-sheet-btn" data-m="interactive">◍ ${NS.tt('story_interactive', 'Interactive')}</button>
+          <button type="button" class="ds-sheet-btn" data-m="crop">⛶ ${NS.tt('story_crop', 'Crop')}</button>
+          <button type="button" class="ds-sheet-btn" data-m="camera">📷 ${NS.tt('camera', 'Camera')}</button>
+          ${teen ? '' : ''}`,
+          (sheet, done) => {
+            sheet.querySelectorAll('[data-m]').forEach((b) =>
+              b.addEventListener('click', () => {
+                const m = b.dataset.m;
+                done();
+                if (m === 'mention') runMention();
+                else if (m === 'location') runLocation();
+                else if (m === 'interactive') runInteractiveMenu();
+                else if (m === 'crop') {
+                  cropMode = true;
+                  showFilters = false;
+                  drawing = false;
+                  render();
+                } else if (m === 'camera') {
+                  NS.pickGallery({
+                    capture: true,
+                    onFile: (file) => {
+                      queue.push(newItem(file));
+                      idx = queue.length - 1;
+                      render();
+                    },
+                  });
+                }
+              })
+            );
+          }
+        );
+      }
+    }
+
+    function runMention() {
+      const item = queue[idx];
+      promptSheet(NS.tt('story_mention', 'Mention'), `<input type="search" data-q placeholder="@username">`, (sheet) => {
+        const q = sheet.querySelector('[data-q]');
+        const run = async () => {
+          if (typeof searchUsersProvider !== 'function') return;
+          const rows = await searchUsersProvider(q.value.trim(), { limit: 6 }).catch(() => []);
+          sheet.querySelectorAll('[data-uid]').forEach((n) => n.remove());
+          (rows || []).forEach((u) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'ds-row';
+            b.dataset.uid = u.uid;
+            b.innerHTML = `${u.photoURL ? `<img src="${NS.esc(u.photoURL)}" alt="">` : ''}<span>${NS.esc(u.name || u.username)}</span>`;
+            b.addEventListener('click', async () => {
+              let blocked = false;
+              try {
+                if (typeof getBlockedSet === 'function') blocked = getBlockedSet().has(u.uid);
+              } catch (e) {}
+              if (blocked) {
+                if (typeof showToast === 'function') showToast(NS.tt('story_blocked', 'You can’t mention this person'));
+                return;
+              }
+              item.overlays.push({
+                id: uid(),
+                type: 'mention',
+                uid: u.uid,
+                name: u.name,
+                username: u.username,
+                x: 0.5,
+                y: 0.3,
+                scale: 1,
+                rotate: 0,
+                z: 7,
+              });
+              item.mentions.push({ uid: u.uid, name: u.name, username: u.username, x: 0.5, y: 0.3 });
+              sheet.remove();
+              render();
+            });
+            sheet.appendChild(b);
+          });
+        };
+        q.addEventListener('input', () => {
+          clearTimeout(q._t);
+          q._t = setTimeout(run, 200);
+        });
+      });
+    }
+
+    function runLocation() {
+      const item = queue[idx];
+      if (typeof openLocationComposer !== 'function') return;
+      openLocationComposer({
+        onSelect: (loc) => {
+          item.location = loc;
+          if (!item.overlays.some((o) => o.type === 'location')) {
+            item.overlays.push({ id: uid(), type: 'location', x: 0.5, y: 0.16, scale: 1, rotate: 0, z: 8 });
+          }
+          render();
+        },
+      });
+    }
+
+    function runInteractiveMenu() {
+      const teen = NS.isTeen();
+      promptSheet(
+        NS.tt('story_interactive', 'Stickers'),
+        `
           <button type="button" data-k="poll">Poll</button>
           <button type="button" data-k="question">Question</button>
           <button type="button" data-k="quiz">Quiz</button>
@@ -471,32 +721,16 @@
           <button type="button" data-k="countdown">Countdown</button>
           <button type="button" data-k="addyours">Add yours</button>
           ${teen ? '' : '<button type="button" data-k="link">Link</button>'}
-        `, (sheet, done) => {
+        `,
+        (sheet, done) => {
           sheet.querySelectorAll('[data-k]').forEach((b) =>
             b.addEventListener('click', () => {
               done();
               addInteractive(b.dataset.k);
             })
           );
-        });
-      } else if (tool === 'filter') {
-        item.filter = FILTERS[(FILTERS.indexOf(item.filter) + 1) % FILTERS.length];
-        if (typeof showToast === 'function') showToast(item.filter);
-        render();
-      } else if (tool === 'crop') {
-        item.crop.scale = item.crop.scale >= 1.4 ? 1 : item.crop.scale + 0.2;
-        item.rotation = (item.rotation + 90) % 360;
-        render();
-      } else if (tool === 'camera') {
-        NS.pickGallery({
-          capture: true,
-          onFile: (file) => {
-            queue.push(newItem(file));
-            idx = queue.length - 1;
-            render();
-          },
-        });
-      }
+        }
+      );
     }
 
     function addInteractive(kind) {
@@ -560,8 +794,7 @@
         });
       } else if (kind === 'link') {
         const professional =
-          (typeof ownProfileType === 'function' ? ownProfileType() : typeof userProfile !== 'undefined' ? userProfile.profileType : '') ===
-          'professional';
+          (typeof ownProfileType === 'function' ? ownProfileType() : typeof userProfile !== 'undefined' ? userProfile.profileType : '') === 'professional';
         promptSheet('Link', `<input data-u placeholder="https://"><small>${professional ? '' : NS.tt('story_link_confirm', 'This will be tappable on your story.')}</small>`, (sheet, done) => {
           sheet.querySelector('[data-done]').addEventListener('click', () => {
             const url = String(sheet.querySelector('[data-u]').value || '').trim();
@@ -596,11 +829,28 @@
         try {
           let media = item.url;
           let thumb = item.url;
-          if (item.file && typeof processAndUploadMedia === 'function') {
+          let overlays = item.overlays;
+          let baked = false;
+          let filter = item.filter;
+          const mediaApi = M();
+
+          if (item.mediaType === 'image' && mediaApi.bakeStoryImage && mediaApi.splitOverlaysForBake) {
+            const blob = await mediaApi.bakeStoryImage(item);
+            if (blob && typeof processAndUploadMedia === 'function') {
+              const file = new File([blob], `story-${uid()}.jpg`, { type: 'image/jpeg' });
+              const up = await processAndUploadMedia(file, { folder: 'stories' });
+              media = up.media || up.url || up.secure_url;
+              thumb = up.thumb || media;
+              overlays = mediaApi.splitOverlaysForBake(item.overlays).payloadOverlays;
+              baked = true;
+              filter = 'normal';
+            }
+          } else if (item.file && typeof processAndUploadMedia === 'function') {
             const up = await processAndUploadMedia(item.file, { folder: 'stories' });
             media = up.media || up.url || up.secure_url;
             thumb = up.thumb || media;
           }
+
           if (!media && !item.text && !item.music && !item.location) throw new Error('EMPTY_STORY');
           await createPlatformStory({
             destination: 'duniya',
@@ -609,15 +859,19 @@
             media,
             thumb,
             mediaType: item.mediaType,
-            durationMs: item.mediaType === 'video' ? Math.min(MAX_VIDEO_MS, (item.trimEndMs || item.durationMs) - (item.trimStartMs || 0) || item.durationMs) : 6000,
-            overlays: item.overlays,
+            durationMs:
+              item.mediaType === 'video'
+                ? Math.min(MAX_VIDEO_MS, (item.trimEndMs || item.durationMs) - (item.trimStartMs || 0) || item.durationMs)
+                : 6000,
+            overlays,
             interactive: item.interactive,
             mentions: item.mentions,
             music: item.music,
             location: item.location,
-            filter: item.filter,
-            crop: item.crop,
-            rotation: item.rotation,
+            filter,
+            baked,
+            crop: baked ? null : item.crop,
+            rotation: baked ? 0 : item.rotation,
             trimStartMs: item.trimStartMs,
             trimEndMs: item.trimEndMs,
             muted: item.muted,

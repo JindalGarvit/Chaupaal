@@ -199,7 +199,13 @@
           if (videoEl.duration) duration = Math.min(90000, videoEl.duration * 1000);
         });
       }
-      NS.renderOverlaysInto(stage, s, {});
+      NS.renderOverlaysInto(stage, s, {
+        width: stage.clientWidth || 360,
+        height: stage.clientHeight || 640,
+      });
+      if (typeof DuniyaStoryMedia !== 'undefined' && DuniyaStoryMedia.applyStoryMediaTransform) {
+        DuniyaStoryMedia.applyStoryMediaTransform(stage, s);
+      }
       if (typeof enhanceMediaIn === 'function') enhanceMediaIn(stage);
       if (s.music?.previewUrl) {
         try {
