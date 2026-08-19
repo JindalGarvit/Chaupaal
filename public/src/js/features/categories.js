@@ -966,8 +966,8 @@ async function initPeepal(){
   }
   document.getElementById('peepalIntentCard')?.classList.remove('hidden');
   try{
-    if(typeof AiDiscoveryMeter?.mountOnIntentCard==='function'){
-      AiDiscoveryMeter.mountOnIntentCard(document.getElementById('peepalIntentCard'),{disclosePro:true});
+    if(typeof AiDiscoveryMeter?.mountOnIntentCardCompact==='function'){
+      AiDiscoveryMeter.mountOnIntentCardCompact(document.getElementById('peepalIntentCard'),{disclosePro:true});
     }
   }catch(e){}
   // 2–3 compatibility peeks under the action row (specific icebreakers)
@@ -1124,72 +1124,50 @@ function peepalReceptionSummary(summary){
 }
 
 function renderPeepalReactionBar(q){
-  const mine=q.myReaction||null;
-  const owner=isPeepalPostOwner(q);
-  const summary=q.reactionSummary||{up:0,down:0};
-  return`
-    <div class="peepal-reaction-area" data-peepal-reactions="${q.id}">
-      <div class="peepal-reaction-buttons" role="group" aria-label="Your private reaction">
-        <button type="button" class="peepal-reaction-btn ${mine==='up'?'selected':''}" data-reaction="up" aria-pressed="${mine==='up'}" title="Helpful or positive">👍 <span>Up</span></button>
-        <button type="button" class="peepal-reaction-btn ${mine==='down'?'selected':''}" data-reaction="down" aria-pressed="${mine==='down'}" title="Not useful or negative">👎 <span>Down</span></button>
-        <span class="peepal-reaction-private">Only you see your reaction</span>
-      </div>
-      ${owner?`
-        <div class="peepal-owner-reception">
-          <strong>${summary.up} up · ${summary.down} down</strong>
-          <span>${peepalReceptionSummary(summary)}</span>
-          <small>Visible only to you as the poster</small>
-        </div>`:''}
-    </div>`;
+  const REACTS = [
+    { r: 'like', emoji: '👍' },
+    { r: 'love', emoji: '❤️' },
+    { r: 'fire', emoji: '🔥' },
+    { r: 'think', emoji: '🤔' },
+    { r: 'funny', emoji: '😂' },
+  ];
+  const totals = q?.reactions || {};
+  const total = REACTS.reduce((s, x) => s + (Number(totals?.[x.r]) || 0), 0);
+  if (!total && !currentUser) return '';
+  return REACTS.map((x) => {
+    const count = Number(totals?.[x.r]) || 0;
+    const mine = q.userReaction === x.r;
+    return `<button type="button" class="pc-react-btn peepal-reaction-btn${mine ? ' pc-react-btn--active' : ''}" data-reaction="${x.r}" style="${mine ? 'color:var(--red);background:rgba(230,57,70,.08);' : ''}">${x.emoji}${count ? `<span>${count}</span>` : ''}</button>`;
+  }).join('');
 }
 
 function renderPeepalCommentStrip(q){
-  const comments=(q._comments||[]).filter(c=>!c.parentId&&!c.deleted).slice(0,8);
+  const comments=(q._comments||[]).filter(c=>!c.parentId&&!c.deleted).slice(0,1);
   if(!comments.length){
-    return`<div class="peepal-comment-strip peepal-comment-strip--empty">
-      <button type="button" class="peepal-start-comment">💬 Start the conversation</button>
-    </div>`;
+    return `<button type="button" class="pc-react-btn peepal-start-comment">💬 Start</button>`;
   }
-  return`<div class="peepal-comments-preview">
-    <div class="peepal-comments-preview-head"><strong>Conversation</strong><span>Swipe to read · tap to expand</span></div>
-    <div class="peepal-comment-strip">
-      ${comments.map(c=>`
-        <article class="peepal-comment-chip" data-comment-id="${escPeepalText(c.id)}" tabindex="0">
-          <div class="peepal-comment-chip-author">${escPeepalText(c.user?.avatar||'👤')} ${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(c.user?.name||'User',c.user):escPeepalText(c.user?.name||'User')}</div>
-          <div class="peepal-comment-chip-text">${typeof formatCommentText==='function'?formatCommentText(c.text):escPeepalText(c.text)}</div>
-          <button type="button" class="peepal-quick-reply" data-reply-id="${escPeepalText(c.id)}">Reply</button>
-          <form class="peepal-inline-reply-form hidden" data-reply-form="${escPeepalText(c.id)}">
-            <input maxlength="2000" aria-label="Quick reply to ${escPeepalText(c.user?.name||'comment')}" placeholder="Write a quick reply…">
-            <button type="submit">Send</button>
-          </form>
-        </article>`).join('')}
-    </div>
-  </div>`;
+  const first = comments[0];
+  const author = String(first.user?.name || 'User').split(' ')[0];
+  return `<button type="button" class="pc-react-btn peepal-comment-chip" data-comment-id="${escPeepalText(first.id)}">💬 ${escPeepalText(author)}</button>`;
 }
 
 async function setPeepalCardReaction(q,type){
-  const previous=q.myReaction||null;
+  const previous=q.userReaction||null;
   const next=previous===type?null:type;
-  const previousSummary={...(q.reactionSummary||{up:0,down:0})};
-  q.myReaction=next;
-  if(isPeepalPostOwner(q)){
-    const summary={...previousSummary};
-    if(previous==='up') summary.up=Math.max(0,summary.up-1);
-    if(previous==='down') summary.down=Math.max(0,summary.down-1);
-    if(next==='up') summary.up++;
-    if(next==='down') summary.down++;
-    q.reactionSummary=summary;
-  }
+  const prevMap={...(q.reactions||{})};
+  q.userReaction=next;
+  q.reactions={...(q.reactions||{})};
+  if(previous) q.reactions[previous]=Math.max(0,(Number(q.reactions[previous])||0)-1);
+  if(next) q.reactions[next]=(Number(q.reactions[next])||0)+1;
   renderPeepalFeed();
   try{
     if(typeof setPeepalReaction==='function'){
-      const saved=await setPeepalReaction(q,next);
+      const saved=await setPeepalReaction(q,next ? 'up' : null);
       q.myReaction=saved.myReaction||null;
-      if(saved.summary) q.reactionSummary=saved.summary;
     }
   }catch(e){
-    q.myReaction=previous;
-    q.reactionSummary=previousSummary;
+    q.userReaction=previous;
+    q.reactions=prevMap;
     if(typeof showToast==='function') showToast(typeof friendlyError==='function'?friendlyError(e):t('cat_reaction_fail'));
   }
   renderPeepalFeed();
@@ -1242,7 +1220,14 @@ function renderPeepalFeed(){
   const sorted=[...peepalQuestions]
     .filter(q=>!(typeof isSoftDeleted==='function'?isSoftDeleted(q):q.deleted))
     .filter(q=>!(q.archived===true||q.saveOnly===true))
-    .sort((a,b)=>peepalScore(b)-peepalScore(a));
+    .sort((a,b)=>{
+      try{
+        const lhs = Number(peepalScore(b));
+        const rhs = Number(peepalScore(a));
+        if(Number.isFinite(lhs-rhs)) return lhs-rhs;
+      }catch(e){}
+      return (Number(b?.ts)||0)-(Number(a?.ts)||0);
+    });
   feed.innerHTML='';
   if(!sorted.length){
     if(typeof renderEmptyState==='function'){
@@ -1270,31 +1255,34 @@ function renderPeepalFeed(){
       ? `<a class="peepal-link-card" href="${/^https?:\/\//i.test(q.attachment.url||'')?escPeepalText(q.attachment.url):'#'}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()"><div class="peepal-link-thumb">🔗</div><div class="peepal-link-info"><div class="peepal-link-title">${escPeepalText(q.attachment.title)}</div><div class="peepal-link-url">${escPeepalText(q.attachment.url)}</div></div></a>`
       : '';
     const canDelete=currentUser&&(q.user?.uid===currentUser.uid||q.uid===currentUser.uid)&&!q.anonymous;
-    card.innerHTML=`
-      <div class="peepal-card-header">
-        <div class="peepal-user-avatar" style="cursor:pointer;" onclick="event.stopPropagation();">${q.user.photoURL?`<img src="${escPeepalText(q.user.photoURL)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:escPeepalText(q.user.avatar||'👤')}</div>
-        <div style="flex:1;min-width:0;">
-          <div class="peepal-user-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(q.user.name,q.user):escPeepalText(q.user.name)}</div>
-          <div class="peepal-user-meta">${escPeepalText([q.user.city, typeof formatRelativeTime==='function'?formatRelativeTime(q.timeAgo||q.ts):q.timeAgo].filter(Boolean).join(' · '))}</div>
-          ${q.user.bio?`<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">"${escPeepalText(q.user.bio)}"</div>`:''}
+    const collab = Array.isArray(q.attachments) ? q.attachments.find((a) => a.type === 'collab') : null;
+    card.innerHTML = `
+      <div class="pc-row">
+        <div class="pc-avatar peepal-user-avatar" style="cursor:pointer;">${q.user.photoURL ? `<img src="${escPeepalText(q.user.photoURL)}" alt="">` : escPeepalText(q.user.avatar||'👤')}</div>
+        <div class="pc-body">
+          <div class="pc-meta">
+            <span class="pc-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(q.user.name,q.user):escPeepalText(q.user.name)}</span>
+            <span class="pc-dot">·</span>
+            <span class="pc-time">${typeof formatRelativeTime==='function'?formatRelativeTime(q.timeAgo||q.ts):escPeepalText(q.timeAgo||'')}</span>
+            ${q.tag?`<span class="pc-tag">${escPeepalText(q.tag)}</span>`:''}
+            ${collab?.collaborator?.username ? `<span class="pc-tag">@${escPeepalText(collab.collaborator.username)}</span>` : ''}
+            <div class="pc-actions-right">
+              ${canDelete?`<button class="pc-icon-btn peepal-delete-btn" title="Delete" aria-label="Delete">${typeof iconHtml==='function'?iconHtml('trash',{size:15}):'🗑️'}</button>`:''}
+              ${!canDelete&&q.user?.uid&&q.user.uid!==currentUser?.uid?`<button class="pc-icon-btn peepal-more-btn" title="More">${typeof iconHtml==='function'?iconHtml('more-vertical',{size:17}):'⋮'}</button>`:''}
+              <button class="pc-icon-btn peepal-speak-btn" data-text="${escPeepalText(peepalSpeakPayload(q))}" title="Listen">${typeof iconHtml==='function'?iconHtml('volume',{size:15}):'🔊'}</button>
+            </div>
+          </div>
+          <div class="pc-question">${escPeepalText(q.question)}</div>
+          ${mediaHtml}
+          ${renderPeepalOptions(q)}
+          <div class="pc-reaction-row">
+            ${renderPeepalReactionBar(q)}
+            ${renderPeepalCommentStrip(q)}
+            <button type="button" class="pc-react-btn peepal-open-comments">${typeof iconHtml==='function'?iconHtml('message-circle',{size:14}):'💬'}<span>${q.comments}</span></button>
+            <button type="button" class="pc-react-btn peepal-share-btn">${typeof iconHtml==='function'?iconHtml('share',{size:14}):'↗️'}</button>
+            ${canDelete?`<button type="button" class="pc-react-btn peepal-boost-btn" data-boost-post>${typeof iconHtml==='function'?iconHtml('rocket',{size:14}):'🚀'}</button>`:''}
+          </div>
         </div>
-        ${canDelete?`<button class="peepal-delete-btn" title="Delete" aria-label="Delete" style="background:none;border:none;cursor:pointer;color:var(--muted);">${typeof iconHtml==='function'?iconHtml('trash',{size:16}):'🗑️'}</button>`:''}
-        ${!canDelete&&q.user?.uid&&q.user.uid!==currentUser?.uid?`<button class="peepal-more-btn" title="More" aria-label="More options">${typeof iconHtml==='function'?iconHtml('more-vertical',{size:18}):'⋮'}</button>`:''}
-        <button class="peepal-speak-btn" data-text="${escPeepalText(peepalSpeakPayload(q))}" title="Listen to this post" aria-label="Listen to this post">${typeof iconHtml==='function'?iconHtml('volume',{size:16}):'🔊'}</button>
-      </div>
-      <div class="peepal-card-body">
-        <div class="peepal-question-text">${escPeepalText(q.question)}</div>
-        ${mediaHtml}
-        ${renderPeepalOptions(q)}
-        ${renderPeepalReactionBar(q)}
-        ${renderPeepalCommentStrip(q)}
-      </div>
-      <div class="peepal-card-footer">
-        <button type="button" class="peepal-footer-stat peepal-open-comments">${typeof iconHtml==='function'?iconHtml('message-circle',{size:14}):'💬'} ${q.comments} comments</button>
-        <span class="peepal-footer-stat">${typeof iconHtml==='function'?iconHtml('users',{size:14}):'👥'} ${q.totalResponses} responses</span>
-        ${canDelete?`<button type="button" class="peepal-footer-stat peepal-boost-btn" data-boost-post title="Boost this post">${typeof iconHtml==='function'?iconHtml('rocket',{size:14}):'🚀'} Boost</button>`:''}
-        <button type="button" class="peepal-footer-stat peepal-share-btn" style="background:none;border:none;cursor:pointer;">${typeof iconHtml==='function'?iconHtml('share',{size:14}):'↗️'} Share</button>
-        <span class="peepal-tag">${escPeepalText(q.tag)}</span>
       </div>
     `;
     card.querySelectorAll('[data-peepal-opt]').forEach(btn=>{

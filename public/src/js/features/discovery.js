@@ -103,8 +103,8 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
   const aiCollapsed = !!(aiMsgLimit && aiMsgLimit.exhausted);
   if (typeof AiDiscoveryMeter?.injectStyles === 'function') AiDiscoveryMeter.injectStyles();
   try {
-    if (typeof AiDiscoveryMeter?.mountOnIntentCard === 'function') {
-      AiDiscoveryMeter.mountOnIntentCard(document.getElementById('peepalIntentCard'), { disclosePro: true });
+    if (typeof AiDiscoveryMeter?.mountOnIntentCardCompact === 'function') {
+      AiDiscoveryMeter.mountOnIntentCardCompact(document.getElementById('peepalIntentCard'), { disclosePro: true });
     }
   } catch (e) {}
 
@@ -450,71 +450,68 @@ function openPeepalAskSheet(){
   const sheet = document.createElement('div');
   sheet.className = 'peepal-ask-sheet';
   const lim = window.PolicyLimits?.ANON_POSTS || { perDay: 2, perWeek: 7 };
-  sheet.innerHTML=`
-    <div class="ask-header">
-      <button id="closeAsk" aria-label="Close" style="background:none;border:none;cursor:pointer;padding:8px;color:var(--ink);">${typeof iconHtml==='function'?iconHtml('x',{size:22}):'âœ•'}</button>
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">Ask Peepal</div>
-      <button class="btn btn--primary btn--sm peepal-ask-publish-btn" id="peepalPublishBtn">Post</button>
+  const attachDefs = [
+    { type: 'photo', icon: '📷', label: 'Photo' },
+    { type: 'video', icon: '🎬', label: 'Video' },
+    { type: 'music', icon: '🎵', label: 'Music' },
+    { type: 'voice', icon: '🎤', label: 'Voice' },
+    { type: 'gif', icon: 'GIF', label: 'GIF' },
+    { type: 'sticker', icon: '😄', label: 'Sticker' },
+    { type: 'link', icon: '🔗', label: 'Link' },
+    { type: 'location', icon: '📍', label: 'Location' },
+    { type: 'mention', icon: '@', label: 'Mention' },
+    { type: 'hashtag', icon: '#', label: 'Hashtag' },
+    { type: 'document', icon: '📄', label: 'Document' },
+    { type: 'collab', icon: '🤝', label: 'Collab' },
+  ];
+  let composeAttachments = [];
+  sheet.innerHTML = `
+    <div class="peepal-ask-header">
+      <button id="closeAsk" aria-label="Close" style="background:var(--surface-sunken,var(--cream));border:none;border-radius:999px;cursor:pointer;padding:8px;color:var(--ink);width:36px;height:36px;display:flex;align-items:center;justify-content:center;">${typeof iconHtml==='function' ? iconHtml('x',{size:18}) : '✕'}</button>
+      <div class="peepal-ask-title">Discuss</div>
+      <button id="peepalPublishBtn" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:8px 20px;font:700 14px 'Space Grotesk',sans-serif;min-width:60px;cursor:pointer;">Post</button>
     </div>
-    <div style="padding:16px;">
-      <!-- Anonymous toggle (filled after quota load) -->
+    <div class="peepal-ask-body">
       <div id="anonToggleRow" style="background:var(--line);border:2px solid var(--line);border-radius:14px;padding:12px;margin-bottom:16px;display:flex;align-items:center;gap:12px;opacity:0.5;">
         <div style="flex:1;">
-          <div style="font-weight:700;font-size:14px;">ðŸŽ­ Post anonymously</div>
-          <div id="anonToggleHint" style="font-size:11px;color:var(--muted);">Checking availabilityâ€¦</div>
+          <div style="font-weight:700;font-size:14px;">🎭 Post anonymously</div>
+          <div id="anonToggleHint" style="font-size:11px;color:var(--muted);">Anonymous posts don't reveal your identity</div>
         </div>
         <label class="switch" id="anonToggleLabel" style="pointer-events:none;"><input type="checkbox" id="anonToggle" disabled><span class="slider"></span></label>
       </div>
-      <!-- Format -->
       <div style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;">
-        ${[{id:'mcq',label:'ðŸ“‹ MCQ'},{id:'binary',label:'âš–ï¸ Binary'},{id:'open',label:'ðŸ’¬ Open'},{id:'poll',label:'ðŸ“Š Poll'}].map((f,i)=>`<button class="peepal-format-chip${i===0?' active':''}" data-fmt="${f.id}" style="padding:8px 14px;border-radius:999px;border:2px solid ${i===0?'var(--red)':'var(--line)'};background:${i===0?'rgba(230,57,70,0.08)':'var(--white)'};font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;color:${i===0?'var(--red)':'var(--ink)'};">${f.label}</button>`).join('')}
+        ${[{id:'open',label:'💬 Open'},{id:'poll',label:'📊 Poll'}].map((f,i)=>`<button class="peepal-format-chip${i===0?' active':''}" data-fmt="${f.id}" style="padding:8px 14px;border-radius:999px;border:2px solid ${i===0?'var(--red)':'var(--line)'};background:${i===0?'rgba(230,57,70,0.08)':'var(--white)'};font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;color:${i===0?'var(--red)':'var(--ink)'};">${f.label}</button>`).join('')}
       </div>
       <div id="peepalAskCatRow" style="display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;align-items:center;">
         <span style="font-size:11px;font-weight:700;color:var(--muted);flex-shrink:0;">Topic</span>
       </div>
-      <textarea id="peepalQText" placeholder="What do you want to know?" style="width:100%;min-height:100px;border:2px solid var(--line);border-radius:14px;padding:12px;font-family:Inter,sans-serif;font-size:15px;outline:none;resize:none;box-sizing:border-box;background:var(--cream);"></textarea>
-      <!-- MCQ options -->
-      <div id="mcqOptions" style="margin-top:10px;">
+      <textarea id="peepalQText" placeholder="What's on your mind?" style="width:100%;min-height:100px;border:2px solid var(--line);border-radius:14px;padding:12px;font-family:Inter,sans-serif;font-size:15px;outline:none;resize:none;box-sizing:border-box;background:var(--cream);"></textarea>
+      <div class="peepal-compose-toolbar" id="peepalComposeToolbar">
+        <button type="button" class="pct-btn" data-attach="photo" title="Photo">📷</button>
+        <button type="button" class="pct-btn" data-attach="gif" title="GIF">GIF</button>
+        <button type="button" class="pct-btn" data-attach="music" title="Music">🎵</button>
+        <button type="button" class="pct-btn pct-btn--more" id="peepalAttachMore" title="More">+</button>
+      </div>
+      <div class="peepal-attach-preview" id="peepalAttachPreview"></div>
+      <div id="peepalAttachGridHost"></div>
+      <div id="peepalLinkRow" class="peepal-link-row" style="display:none;"><input id="peepalLinkInput" type="url" placeholder="https://"><button type="button" id="peepalLinkAdd">Add</button></div>
+      <div id="peepalCollabRow" class="peepal-collab-row" style="display:none;"><input id="peepalCollabInput" type="text" placeholder="Invite co-author by username"><button type="button" id="peepalCollabAdd">Add</button></div>
+      <div id="mcqOptions" style="margin-top:10px;display:none;">
         ${[1,2,3,4].map(i=>`<input id="mcqOpt${i}" placeholder="Option ${i}${i>2?' (optional)':''}" style="width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;outline:none;margin-bottom:8px;box-sizing:border-box;background:var(--white);">`).join('')}
       </div>
-      <!-- Audience -->
       <div style="margin-top:8px;">
         <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Audience</div>
         <select id="peepalAudience" style="width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;background:var(--white);outline:none;">
-          <option value="everyone">ðŸŒ Everyone</option>
-          <option value="friends">ðŸ‘¥ Friends only</option>
-          <option value="ai">ðŸ¤– AI decides</option>
-          <option value="save_only">ðŸ’¾ Save without posting</option>
+          <option value="everyone">🌍 Everyone</option>
+          <option value="friends">👥 Friends only</option>
+          <option value="ai">🤖 AI decides</option>
+          <option value="save_only">💾 Save without posting</option>
         </select>
       </div>
-      <!-- Response limits -->
-      <div style="margin-top:12px;">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Responses wanted</div>
-        <select id="peepalResponseCap" style="width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;background:var(--white);outline:none;">
-          <option value="algorithm">Let the algorithm decide</option>
-          <option value="10">10 responses</option>
-          <option value="50">50 responses</option>
-          <option value="100">100 responses</option>
-          <option value="custom">Custom numberâ€¦</option>
-        </select>
-        <input id="peepalCustomCap" type="number" min="1" max="5000" placeholder="Custom cap" style="display:none;width:100%;margin-top:8px;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;box-sizing:border-box;background:var(--white);">
-      </div>
-      <!-- Cascading audience segments -->
-      <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;">Audience segments (cascade)</div>
-          <button type="button" id="peepalAddSegment" style="background:none;border:none;color:var(--red);font-weight:700;font-size:12px;cursor:pointer;">+ Add</button>
-        </div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.35;">Segment 1 fills first. When it hits its cap or engagement stalls, the next segment starts automatically â€” no prompt. Add as many as you need (soft limit 15).</div>
-        <div id="peepalSegmentsList"></div>
-      </div>
-      <!-- Nudge templates -->
-      <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px;">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:8px;">âœ¨ Quick templates</div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;">
-          ${PEEPAL_NUDGES.slice(0,6).map(n=>`<button class="peepal-template-chip" data-template="${n.template.replace(/"/g,'&quot;')}" style="padding:6px 11px;background:var(--cream);border:1.5px solid var(--line);border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;">${n.icon} ${n.label}</button>`).join('')}
-        </div>
-      </div>
+      <input id="peepalPhotoInput" type="file" accept="image/*" hidden>
+      <input id="peepalVideoInput" type="file" accept="video/*" hidden>
+      <input id="peepalAudioInput" type="file" accept="audio/*" hidden>
+      <input id="peepalDocInput" type="file" accept=".pdf,.doc,.docx,.txt" hidden>
     </div>
   `;
   document.querySelector('.device').appendChild(sheet);
@@ -577,7 +574,7 @@ function openPeepalAskSheet(){
       row.style.background = 'rgba(230,57,70,0.05)';
       row.style.borderColor = 'var(--red)';
       row.style.opacity = '1';
-      hint.textContent = `${anonQuota.dayLeft} anonymous left today Â· ${anonQuota.weekLeft} this week (max ${lim.perDay}/day, ${lim.perWeek}/week)`;
+      hint.textContent = `${anonQuota.dayLeft} anonymous left today · ${anonQuota.weekLeft} this week (max ${lim.perDay}/day, ${lim.perWeek}/week)`;
       label.style.pointerEvents = '';
       toggle.disabled = false;
     } else {
@@ -585,7 +582,7 @@ function openPeepalAskSheet(){
       row.style.borderColor = 'var(--line)';
       row.style.opacity = '0.5';
       hint.textContent = anonQuota.readFailed
-        ? (anonQuota.unlock || 'Couldnâ€™t verify anonymous limit â€” try again shortly.')
+        ? (anonQuota.unlock || "Couldn't verify anonymous limit — try again shortly.")
         : (anonQuota.unlock || 'Anonymous posting unavailable right now.');
       label.style.pointerEvents = 'none';
       toggle.disabled = true;
@@ -593,71 +590,134 @@ function openPeepalAskSheet(){
     }
   })();
 
-  // Segment builder state
-  let segmentDrafts=[{label:'Segment 1',city:'',gender:'any',intent:'any',capMode:'inherit'}];
-  const segList=document.getElementById('peepalSegmentsList');
-  function renderSegments(){
-    if(!segList) return;
-    segList.innerHTML=segmentDrafts.map((s,i)=>`
-      <div class="peepal-seg-row" data-seg="${i}" style="background:var(--cream);border-radius:12px;padding:10px;margin-bottom:8px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-          <strong style="font-size:12px;">${i+1}. ${s.label||'Segment'}</strong>
-          ${segmentDrafts.length>1?`<button type="button" data-seg-remove="${i}" style="border:none;background:none;color:var(--muted);cursor:pointer;">âœ•</button>`:''}
-        </div>
-        <input data-seg-city="${i}" placeholder="City (optional)" value="${(s.city||'').replace(/"/g,'&quot;')}" style="width:100%;padding:8px 10px;border:1.5px solid var(--line);border-radius:10px;font-size:12px;margin-bottom:6px;box-sizing:border-box;">
-        <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          <select data-seg-gender="${i}" style="flex:1;min-width:90px;padding:8px;border-radius:10px;border:1.5px solid var(--line);font-size:12px;">
-            <option value="any" ${s.gender==='any'?'selected':''}>Any gender</option>
-            <option value="female" ${s.gender==='female'?'selected':''}>Female</option>
-            <option value="male" ${s.gender==='male'?'selected':''}>Male</option>
-          </select>
-          <select data-seg-intent="${i}" style="flex:1;min-width:90px;padding:8px;border-radius:10px;border:1.5px solid var(--line);font-size:12px;">
-            <option value="any">Any intent</option>
-            <option value="dating" ${s.intent==='dating'?'selected':''}>Dating</option>
-            <option value="friendship" ${s.intent==='friendship'?'selected':''}>Friendship</option>
-            <option value="hobby" ${s.intent==='hobby'?'selected':''}>Hobby</option>
-            <option value="travel" ${s.intent==='travel'?'selected':''}>Travel</option>
-            <option value="gaming" ${s.intent==='gaming'?'selected':''}>Gaming</option>
-          </select>
-          <select data-seg-cap="${i}" style="flex:1;min-width:90px;padding:8px;border-radius:10px;border:1.5px solid var(--line);font-size:12px;">
-            <option value="inherit">Same as post</option>
-            <option value="10" ${s.capMode==='10'?'selected':''}>Cap 10</option>
-            <option value="50" ${s.capMode==='50'?'selected':''}>Cap 50</option>
-            <option value="100" ${s.capMode==='100'?'selected':''}>Cap 100</option>
-          </select>
-        </div>
-      </div>`).join('');
-    segList.querySelectorAll('[data-seg-remove]').forEach(btn=>btn.addEventListener('click',()=>{
-      segmentDrafts.splice(Number(btn.dataset.segRemove),1);
-      renderSegments();
-    }));
-    segList.querySelectorAll('[data-seg-city]').forEach(el=>el.addEventListener('input',()=>{ segmentDrafts[Number(el.dataset.segCity)].city=el.value; }));
-    segList.querySelectorAll('[data-seg-gender]').forEach(el=>el.addEventListener('change',()=>{ segmentDrafts[Number(el.dataset.segGender)].gender=el.value; }));
-    segList.querySelectorAll('[data-seg-intent]').forEach(el=>el.addEventListener('change',()=>{ segmentDrafts[Number(el.dataset.segIntent)].intent=el.value; }));
-    segList.querySelectorAll('[data-seg-cap]').forEach(el=>el.addEventListener('change',()=>{ segmentDrafts[Number(el.dataset.segCap)].capMode=el.value; }));
+  function addAttachment(item){
+    const idx = composeAttachments.findIndex((x) => x.type === item.type);
+    if (item.type === 'collab') {
+      composeAttachments = composeAttachments.filter((x) => x.type !== 'collab');
+      composeAttachments.push(item);
+    } else if (idx >= 0) composeAttachments[idx] = item;
+    else composeAttachments.push(item);
+    renderAttachPreview();
   }
-  renderSegments();
-  document.getElementById('peepalAddSegment')?.addEventListener('click',()=>{
-    if(segmentDrafts.length>=15){ showToast(t('peepal_segment_limit')); return; }
-    segmentDrafts.push({label:`Segment ${segmentDrafts.length+1}`,city:'',gender:'any',intent:'any',capMode:'inherit'});
-    renderSegments();
-  });
-  document.getElementById('peepalResponseCap')?.addEventListener('change',(e)=>{
-    const custom=document.getElementById('peepalCustomCap');
-    if(custom) custom.style.display=e.target.value==='custom'?'block':'none';
-  });
-
-  // Wire template chips
-  sheet.querySelectorAll('.peepal-template-chip').forEach(chip=>{
-    chip.addEventListener('click',()=>{document.getElementById('peepalQText').value=chip.dataset.template;});
-  });
+  function removeAttachment(type){
+    composeAttachments = composeAttachments.filter((a) => a.type !== type);
+    renderAttachPreview();
+  }
+  function renderAttachPreview(){
+    const host = document.getElementById('peepalAttachPreview');
+    if (!host) return;
+    host.innerHTML = composeAttachments.map((a) => {
+      const lbl = String(a.label || a.name || a.type);
+      return `<div class="peepal-attach-chip">${lbl}<button type="button" data-rm="${a.type}" aria-label="Remove">×</button></div>`;
+    }).join('');
+    host.querySelectorAll('[data-rm]').forEach((btn) => btn.addEventListener('click', () => removeAttachment(btn.dataset.rm)));
+  }
+  function toastSoon(kind){
+    if (typeof showToast === 'function') showToast(`${kind} — Coming soon`);
+  }
+  function renderAttachGrid(){
+    const host = document.getElementById('peepalAttachGridHost');
+    if (!host) return;
+    const grid = host.querySelector('.peepal-attach-grid');
+    if (grid) {
+      grid.remove();
+      return;
+    }
+    const el = document.createElement('div');
+    el.className = 'peepal-attach-grid';
+    el.innerHTML = attachDefs.map((d) => `<button type="button" class="peepal-attach-grid-btn" data-attach="${d.type}">${d.icon}<span>${d.label}</span></button>`).join('');
+    host.appendChild(el);
+    el.querySelectorAll('[data-attach]').forEach((b) => b.addEventListener('click', () => handleAttach(b.dataset.attach)));
+  }
+  async function handleAttach(type){
+    const text = document.getElementById('peepalQText');
+    if (type === 'photo') return document.getElementById('peepalPhotoInput')?.click();
+    if (type === 'video') return document.getElementById('peepalVideoInput')?.click();
+    if (type === 'document') return document.getElementById('peepalDocInput')?.click();
+    if (type === 'music') {
+      if (typeof openMusicPicker === 'function') {
+        return openMusicPicker({ onSelect: (song) => song && addAttachment({ type: 'music', label: `🎵 ${song.title || 'Music'}`, song }) });
+      }
+      return document.getElementById('peepalAudioInput')?.click();
+    }
+    if (type === 'gif') {
+      if (typeof openGifPicker === 'function') {
+        return openGifPicker({ onSelect: (gif) => gif && addAttachment({ type: 'gif', label: 'GIF', url: gif.url, preview: gif.preview || gif.url }) });
+      }
+      return toastSoon('GIF');
+    }
+    if (type === 'sticker') {
+      if (typeof openStickerPicker === 'function') {
+        return openStickerPicker({ onSelect: (sticker) => sticker && addAttachment({ type: 'sticker', label: '😄 Sticker', sticker }) });
+      }
+      return toastSoon('Sticker');
+    }
+    if (type === 'voice') {
+      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') return toastSoon('Voice');
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const rec = new MediaRecorder(stream);
+        const chunks = [];
+        rec.ondataavailable = (e) => e.data?.size && chunks.push(e.data);
+        rec.onstop = () => {
+          stream.getTracks().forEach((t) => t.stop());
+          const blob = new Blob(chunks, { type: 'audio/webm' });
+          addAttachment({ type: 'voice', label: '🎤 Voice', blob });
+        };
+        rec.start();
+        if (typeof showToast === 'function') showToast('Recording…');
+        setTimeout(() => rec.state !== 'inactive' && rec.stop(), 6000);
+      } catch (e) {
+        if (typeof showToast === 'function') showToast('Mic permission denied');
+      }
+      return;
+    }
+    if (type === 'location') {
+      if (!navigator.geolocation) return toastSoon('Location');
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const lat = Number(pos.coords?.latitude || 0).toFixed(4);
+        const lng = Number(pos.coords?.longitude || 0).toFixed(4);
+        const label = typeof resolveLocationLabel === 'function' ? resolveLocationLabel(pos.coords) : `${lat}, ${lng}`;
+        addAttachment({ type: 'location', label: `📍 ${label}`, lat: Number(lat), lng: Number(lng) });
+      }, () => {
+        if (typeof showToast === 'function') showToast('Location unavailable');
+      });
+      return;
+    }
+    if (type === 'mention') {
+      if (text) {
+        text.value = `${text.value || ''}@`;
+        text.focus();
+      }
+      if (typeof openMentionAutocomplete === 'function') openMentionAutocomplete(text);
+      return;
+    }
+    if (type === 'hashtag') {
+      if (text) {
+        text.value = `${text.value || ''}#`;
+        text.focus();
+      }
+      return;
+    }
+    if (type === 'link') {
+      const row = document.getElementById('peepalLinkRow');
+      if (row) row.style.display = row.style.display === 'none' ? 'flex' : 'none';
+      return;
+    }
+    if (type === 'collab') {
+      const row = document.getElementById('peepalCollabRow');
+      if (row) row.style.display = row.style.display === 'none' ? 'flex' : 'none';
+      return;
+    }
+    toastSoon(type);
+  }
 
   // Wire format chips
   sheet.querySelectorAll('.peepal-format-chip').forEach(chip=>{
     chip.addEventListener('click',()=>{
       sheet.querySelectorAll('.peepal-format-chip').forEach(c=>{c.classList.remove('active');c.style.borderColor='var(--line)';c.style.background='var(--white)';c.style.color='var(--ink)';});
       chip.classList.add('active');chip.style.borderColor='var(--red)';chip.style.background='rgba(230,57,70,0.08)';chip.style.color='var(--red)';
-      document.getElementById('mcqOptions').style.display=(chip.dataset.fmt==='mcq'||chip.dataset.fmt==='poll')?'block':'none';
+      document.getElementById('mcqOptions').style.display = chip.dataset.fmt === 'poll' ? 'block' : 'none';
     });
   });
 
@@ -673,6 +733,7 @@ function openPeepalAskSheet(){
         audience:audienceSel?.value||'everyone',
         format:sheet.querySelector('.peepal-format-chip.active')?.dataset.fmt||'open',
         opts:[1,2,3,4].map(i=>document.getElementById(`mcqOpt${i}`)?.value||''),
+        attachments: composeAttachments.map((a) => ({ type: a.type, label: a.label || a.name || a.type })),
       }),
       applyState:(s)=>{
         if(qText&&s.question) qText.value=s.question;
@@ -694,12 +755,12 @@ function openPeepalAskSheet(){
 
   document.getElementById('peepalPublishBtn').addEventListener('click',async()=>{
     const text=qText.value.trim();
-    if(!text){showToast(t('peepal_write_question'));return;}
+    if(!text){showToast('Write something to start a discussion');return;}
     const unlock=typeof beginClientMutation==='function'?beginClientMutation('peepal_post'):()=>{};
     if(unlock===false){ showToast(t('peepal_post_submitting')); return; }
     const pubBtn=document.getElementById('peepalPublishBtn');
     const pubLabel=pubBtn?pubBtn.textContent:'';
-    if(pubBtn){ pubBtn.disabled=true; pubBtn.textContent='Postingâ€¦'; }
+    if(pubBtn){ pubBtn.disabled=true; pubBtn.textContent='Posting…'; }
     try{
     if(typeof checkRateLimit==='function'){
       const rl=await checkRateLimit('post');
@@ -725,54 +786,24 @@ function openPeepalAskSheet(){
       }
     }
     const fmt=sheet.querySelector('.peepal-format-chip.active')?.dataset.fmt||'open';
-    const opts=fmt==='mcq'||fmt==='poll'?[1,2,3,4].map(i=>document.getElementById(`mcqOpt${i}`)?.value||'').filter(Boolean):[];
+    const opts=fmt==='poll'?[1,2,3,4].map(i=>document.getElementById(`mcqOpt${i}`)?.value||'').filter(Boolean):[];
     const audience=document.getElementById('peepalAudience')?.value||'everyone';
     const saveOnly=audience==='save_only';
-    const responseLimitMode=document.getElementById('peepalResponseCap')?.value||'algorithm';
-    const customCap=Number(document.getElementById('peepalCustomCap')?.value)||null;
-    const resolveCapLocal=(mode,custom)=>{
-      if(mode==='algorithm') return null;
-      if(mode==='custom') return Math.max(1,Math.min(5000,Number(custom)||50));
-      const n=Number(mode); return Number.isFinite(n)?n:null;
-    };
-    const postCap=resolveCapLocal(responseLimitMode, customCap);
-    const audienceSegments=segmentDrafts.map((s,i)=>({
-      id:`seg_${i+1}`,
-      order:i,
-      label:s.label||`Segment ${i+1}`,
-      criteria:{
-        city:s.city||null,
-        gender:s.gender||'any',
-        searchIntent:s.intent||'any',
-        interests:[],
-        ageRange:{min:null,max:null},
-        personality:null,
-        vibe:'',
-      },
-      cap:s.capMode==='inherit'?postCap:resolveCapLocal(s.capMode,null),
-      fulfilledCount:0,
-      viewsShown:0,
-      responsesInWindow:0,
-      windowStartedAt:null,
-      status:i===0?'active':'pending',
-      activatedAt:i===0?Date.now():null,
-      completedAt:null,
-      stallReason:null,
-    }));
-    // SECURITY: even anonymous posts must carry the real auth uid on user.uid â€”
+    // SECURITY: even anonymous posts must carry the real auth uid on user.uid —
     // Firestore create rules require user.uid == auth.uid (Phase A). Display
     // name/avatar stay anonymous; only the public label changes.
     const ownUid=currentUser?.uid||'me';
     const q={id:`q_${Date.now()}`,question:text,format:fmt,options:opts,responses:opts.map(()=>0),totalResponses:0,comments:0,timeAgo:'just now',ts:Date.now(),tag:peepalAskCat||fmt.toUpperCase(),answered:false,deleted:false,
-      audience:saveOnly?'private':audience, responseLimitMode, responseCap:postCap, audienceSegments:saveOnly?[]:audienceSegments,
-      segmentDistributionActive:!saveOnly && audienceSegments.some(s=>s.status==='active'),
+      audience:saveOnly?'private':audience, responseLimitMode:'algorithm', responseCap:null, audienceSegments:[],
+      segmentDistributionActive:false,
       activeSegmentIndex:0,
       archived:!!saveOnly,
       saveOnly:!!saveOnly,
       user:isAnon
-        ?{name:'Anonymous',avatar:'ðŸŽ­',uid:ownUid,profileType:'personal'}
-        :{name:userProfile?.name||'You',avatar:userProfile?.photoURL||'ðŸª‘',uid:ownUid,photoURL:userProfile?.photoURL||null,profileType:(typeof ownProfileType==='function'?ownProfileType():(typeof getProfileType==='function'?getProfileType():'personal'))},
+        ?{name:'Anonymous',avatar:'🎭',uid:ownUid,profileType:'personal'}
+        :{name:userProfile?.name||'You',avatar:userProfile?.photoURL||'🪑',uid:ownUid,photoURL:userProfile?.photoURL||null,profileType:(typeof ownProfileType==='function'?ownProfileType():(typeof getProfileType==='function'?getProfileType():'personal'))},
       anonymous:isAnon,uid:ownUid};
+    q.attachments = composeAttachments.map((a) => ({ ...a, blob: undefined, file: undefined }));
 
     // Optional image attachment (compressed to Storage)
     if(typeof pendingPeepalAttachment!=='undefined'&&pendingPeepalAttachment?.type==='image'&&pendingPeepalAttachment.file&&!isAnon){
@@ -826,6 +857,7 @@ function openPeepalAskSheet(){
               }
             : (q.attachment?.type==='link'?q.attachment:null),
           createdAt:firebase.firestore.FieldValue.serverTimestamp(),ts:Date.now(),
+          attachments: q.attachments || [],
         });
         q.firestoreId=ref.id;
         // Consume after successful write so a rules/network failure never burns a slot
@@ -864,6 +896,8 @@ function openPeepalAskSheet(){
     }
     if(!saveOnly) peepalQuestions.unshift(q);
     peepalDraft?.clear?.();
+    composeAttachments = [];
+    renderAttachPreview();
     saveToArchive({type:'peepal_post',...q});
     sheet.classList.remove('open');setTimeout(()=>sheet.remove(),350);
     renderPeepalFeed();
@@ -873,6 +907,70 @@ function openPeepalAskSheet(){
     }finally{
       if(pubBtn){ pubBtn.disabled=false; pubBtn.textContent=pubLabel; }
       if(typeof unlock==='function') unlock();
+    }
+  });
+
+  const toolbar = document.getElementById('peepalComposeToolbar');
+  toolbar?.querySelectorAll('[data-attach]').forEach((btn) => btn.addEventListener('click', () => handleAttach(btn.dataset.attach)));
+  document.getElementById('peepalAttachMore')?.addEventListener('click', renderAttachGrid);
+  document.getElementById('peepalPhotoInput')?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    addAttachment({ type: 'photo', label: `📷 ${file.name}`, file, preview: URL.createObjectURL(file) });
+  });
+  document.getElementById('peepalVideoInput')?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    addAttachment({ type: 'video', label: `🎬 ${file.name}`, file });
+  });
+  document.getElementById('peepalAudioInput')?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    addAttachment({ type: 'music', label: `🎵 ${file.name}`, file });
+  });
+  document.getElementById('peepalDocInput')?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    addAttachment({ type: 'document', label: `📄 ${file.name}`, file });
+  });
+  document.getElementById('peepalCollabAdd')?.addEventListener('click', () => {
+    const input = document.getElementById('peepalCollabInput');
+    const raw = String(input?.value || '').trim();
+    if (!raw) return;
+    addAttachment({ type: 'collab', label: `🤝 @${raw}`, collaborator: { uid: '', name: raw, username: raw.replace(/^@/, '') } });
+    if (input) input.value = '';
+  });
+  const addLink = async () => {
+    const input = document.getElementById('peepalLinkInput');
+    const url = String(input?.value || '').trim();
+    if (!/^https:\/\//i.test(url) || /javascript:/i.test(url)) {
+      if (typeof showToast === 'function') showToast('Use an https link');
+      return;
+    }
+    let title = url.replace(/^https:\/\//i, '');
+    try {
+      if (typeof apiFetch === 'function') {
+        const env = await apiFetch('/api/media-config', {
+          method: 'POST',
+          needAuth: true,
+          body: { action: 'link_preview', url },
+        });
+        const data = env?.data || env || {};
+        title = data.title || data.siteName || title;
+      }
+    } catch (e) {}
+    addAttachment({ type: 'link', label: `🔗 ${String(title).slice(0, 42)}`, url, title: String(title).slice(0, 120) });
+    if (input) input.value = '';
+  };
+  document.getElementById('peepalLinkAdd')?.addEventListener('click', addLink);
+  document.getElementById('peepalLinkInput')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addLink();
     }
   });
 

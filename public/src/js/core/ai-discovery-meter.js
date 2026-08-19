@@ -109,6 +109,16 @@
       .khoj-intent-collapsed .khoj-intent-input,
       .khoj-intent-collapsed .peepal-ai-search-btn,
       .khoj-intent-collapsed [data-khoj-chips]{opacity:0.45;pointer-events:none;}
+      .ai-disc-mini-pill{
+        font:700 10px 'Space Grotesk',sans-serif;
+        color:var(--muted);
+        background:var(--surface-sunken,var(--cream));
+        border:1px solid var(--line);
+        border-radius:999px;
+        padding:2px 7px;
+        white-space:nowrap;
+        flex-shrink:0;
+      }
     `;
     document.head.appendChild(s);
   }
@@ -145,5 +155,32 @@
     return state;
   }
 
-  window.AiDiscoveryMeter = { meterHtml, mountMeter, mountOnIntentCard, injectStyles, softNudge };
+  async function mountOnIntentCardCompact(cardEl, opts) {
+    if (!cardEl) return null;
+    injectStyles();
+    let state = null;
+    try {
+      if (typeof PolicyUsage?.getRemaining === 'function') {
+        state = await PolicyUsage.getRemaining('aiDiscoveryMsg');
+      }
+    } catch (e) {}
+    const lim = limDefaults();
+    const dayLeft = Math.max(0, state?.dayLeft ?? lim.perDay);
+    const head = cardEl.querySelector('.peepal-intent-card-head');
+    if (!head) return state;
+    head.querySelectorAll('.ai-disc-mini-pill').forEach((n) => n.remove());
+    const pill = document.createElement('span');
+    pill.className = 'ai-disc-mini-pill';
+    pill.textContent = `${dayLeft}/${lim.perWeek}`;
+    pill.title = `${dayLeft}/${lim.perDay} today · ${Math.max(0, state?.weekLeft ?? lim.perWeek)}/${lim.perWeek} this week`;
+    const nudgeRow = head.querySelector('.peepal-intent-mini-icons');
+    if (nudgeRow) head.insertBefore(pill, nudgeRow);
+    else head.appendChild(pill);
+    const exhausted = !!(state && state.exhausted);
+    cardEl.classList.toggle('is-limit-collapsed', exhausted);
+    cardEl.classList.toggle('khoj-intent-collapsed', exhausted);
+    return state;
+  }
+
+  window.AiDiscoveryMeter = { meterHtml, mountMeter, mountOnIntentCard, mountOnIntentCardCompact, injectStyles, softNudge };
 })();
