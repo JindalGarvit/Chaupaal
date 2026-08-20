@@ -10,14 +10,37 @@
  * calendar day / Monday week regardless of serverless region.
  */
 
-const LIMITS = Object.freeze({
-  anon: Object.freeze({ perDay: 2, perWeek: 7 }),
-  aiDiscoveryMsg: Object.freeze({ perDay: 3, perWeek: 10 }),
-  // Peepal posts (non-anon weekly scarcity). Anon still uses `anon` separately.
-  peepalPost: Object.freeze({ perDay: 5, perWeek: 5 }),
-  // Chaupaal AI keyboard free tier (was localStorage-only).
-  aiKb: Object.freeze({ perDay: 5, perWeek: 35 }),
+const UNLIMITED = 999999;
+
+/** Mirrors public/src/js/config/policy-limits.js TIER_LIMITS — keep in sync. */
+const TIER_LIMITS = Object.freeze({
+  free: Object.freeze({
+    anon: Object.freeze({ perDay: 2, perWeek: 7 }),
+    aiDiscoveryMsg: Object.freeze({ perDay: 3, perWeek: 10 }),
+    peepalPost: Object.freeze({ perDay: 5, perWeek: 5 }),
+    aiKb: Object.freeze({ perDay: 5, perWeek: 35 }),
+  }),
+  pradhan: Object.freeze({
+    anon: Object.freeze({ perDay: 6, perWeek: 21 }),
+    aiDiscoveryMsg: Object.freeze({ perDay: 9, perWeek: 30 }),
+    peepalPost: Object.freeze({ perDay: 15, perWeek: 15 }),
+    aiKb: Object.freeze({ perDay: 15, perWeek: 105 }),
+  }),
+  sarpanch: Object.freeze({
+    anon: Object.freeze({ perDay: UNLIMITED, perWeek: UNLIMITED }),
+    aiDiscoveryMsg: Object.freeze({ perDay: UNLIMITED, perWeek: UNLIMITED }),
+    peepalPost: Object.freeze({ perDay: UNLIMITED, perWeek: UNLIMITED }),
+    aiKb: Object.freeze({ perDay: UNLIMITED, perWeek: UNLIMITED }),
+  }),
 });
+
+const LIMITS = TIER_LIMITS.free;
+
+function limitsForTier(tier, feature) {
+  const t = String(tier || 'free').toLowerCase();
+  const bucket = TIER_LIMITS[t] || TIER_LIMITS.free;
+  return bucket[feature] || LIMITS[feature];
+}
 
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 
@@ -47,9 +70,16 @@ function weekKeyMondayIST(now = new Date()) {
  * @returns {Promise<{ok:boolean, code?:string, dayLeft?:number, weekLeft?:number, perDay?:number, perWeek?:number}>}
  */
 async function consumePolicyUsage(admin, uid, feature) {
-  const lim = LIMITS[feature];
-  if (!lim) return { ok: false, code: 'INVALID_FEATURE' };
+  if (!TIER_LIMITS.free[feature]) return { ok: false, code: 'INVALID_FEATURE' };
   const db = admin.firestore();
+  let tier = 'free';
+  try {
+    const { getUserEffectiveTier } = require('./subscription');
+    tier = await getUserEffectiveTier(db, uid);
+  } catch (e) {
+    console.warn('[policy-usage] tier read', e?.message || e);
+  }
+  const lim = limitsForTier(tier, feature);
   const ref = db.collection('users').doc(uid).collection('policyUsage').doc(feature);
   const today = dayKeyIST();
   const week = weekKeyMondayIST();
@@ -59,8 +89,8 @@ async function consumePolicyUsage(admin, uid, feature) {
       const cur = snap.exists ? snap.data() || {} : {};
       const dayCount = cur.dayKey === today ? Number(cur.dayCount) || 0 : 0;
       const weekCount = cur.weekKey === week ? Number(cur.weekCount) || 0 : 0;
-      if (dayCount >= lim.perDay) return { ok: false, code: 'DAILY_LIMIT' };
-      if (weekCount >= lim.perWeek) return { ok: false, code: 'WEEKLY_LIMIT' };
+      if (lim.perDay < UNLIMITED && dayCount >= lim.perDay) return { ok: false, code: 'DAILY_LIMIT' };
+      if (lim.perWeek < UNLIMITED && weekCount >= lim.perWeek) return { ok: false, code: 'WEEKLY_LIMIT' };
       tx.set(
         ref,
         {
@@ -72,12 +102,15 @@ async function consumePolicyUsage(admin, uid, feature) {
         },
         { merge: true }
       );
+      const dayLeft = lim.perDay >= UNLIMITED ? UNLIMITED : lim.perDay - dayCount - 1;
+      const weekLeft = lim.perWeek >= UNLIMITED ? UNLIMITED : lim.perWeek - weekCount - 1;
       return {
         ok: true,
-        dayLeft: lim.perDay - dayCount - 1,
-        weekLeft: lim.perWeek - weekCount - 1,
+        dayLeft,
+        weekLeft,
         perDay: lim.perDay,
         perWeek: lim.perWeek,
+        tier,
       };
     });
   } catch (e) {
@@ -88,6 +121,8 @@ async function consumePolicyUsage(admin, uid, feature) {
 
 module.exports = {
   POLICY_LIMITS: LIMITS,
+  TIER_LIMITS,
+  limitsForTier,
   dayKeyIST,
   weekKeyMondayIST,
   consumePolicyUsage,

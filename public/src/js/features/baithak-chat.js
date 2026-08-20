@@ -1039,6 +1039,18 @@ function renderMsgBubble(m, isGroup){
       ?renderRadioShareCard({mood:att.mood,genre:att.genre,language:att.language}, att.sample)
       :`<div class="radio-share-card baithak-3d-edge">📻 Radio · ${chatEsc(att.mood||'discovery')}</div>`;
     rich=true;
+  } else if(att && att.type==='commerce_card'){
+    const feat = att.feature ? chatEsc(String(att.feature)) : '';
+    const intro =
+      typeof t === 'function'
+        ? chatEsc(t('chat_commerce_nudge'))
+        : 'See membership or your Chaupaal Money account.';
+    body=`<div class="commerce-card"><div>${intro}${feat ? ` <strong>${feat}</strong>` : ''}</div>
+      <div class="commerce-card-actions">
+        <button type="button" class="btn" data-cm-membership>See membership</button>
+        <button type="button" class="btn" data-cm-money>Chaupaal Money account</button>
+      </div></div>`;
+    rich=true;
   }
 
   if(!rich) body=chatEsc(body);
@@ -1179,6 +1191,12 @@ function addMsgBubble(msg, isGroup){
   if(typeof mountLocationCards==='function') mountLocationCards(node);
   if(typeof mountRadioShareCards==='function') mountRadioShareCards(node);
   if(typeof wireChallengeBubble==='function') wireChallengeBubble(node);
+  node.querySelector('[data-cm-membership]')?.addEventListener('click', () => {
+    if (typeof ChaupaalMoney?.openMembership === 'function') ChaupaalMoney.openMembership();
+  });
+  node.querySelector('[data-cm-money]')?.addEventListener('click', () => {
+    if (typeof ChaupaalMoney?.openAccount === 'function') ChaupaalMoney.openAccount();
+  });
   area.scrollTop = area.scrollHeight;
   return node;
 }
@@ -1220,6 +1238,10 @@ async function sendMsg(chat){
         commit:async()=>{
           if(typeof assertRateLimit==='function') await assertRateLimit('message');
           if(isChaupaal && typeof sendChaupaalMessage==='function'){
+            if(typeof handleChaupaalCommerceBeforeSend==='function' && handleChaupaalCommerceBeforeSend(text)){
+              if(typeof trackMessageSent==='function') trackMessageSent({ chat_type: 'chaupaal_commerce' });
+              return;
+            }
             const area=document.getElementById('chatMsgsArea');
             const hist=[];
             area?.querySelectorAll('.msg-row')?.forEach(row=>{

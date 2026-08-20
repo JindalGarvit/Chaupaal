@@ -120,6 +120,53 @@
     return id;
   }
 
+  const COMMERCE_INTENT = /\b(money|balance|pradhan|sarpanch|upgrade|subscribe|membership|chaupaal money)\b/i;
+  const NUDGE_KEY = 'chaupaal_commerce_nudge_day';
+
+  function matchCommerceIntent(text) {
+    return COMMERCE_INTENT.test(String(text || ''));
+  }
+
+  function commerceCardMessage(featureLabel) {
+    const body =
+      typeof t === 'function'
+        ? t('chat_commerce_nudge')
+        : "Here's your Chaupaal Money and membership — both live in Chaupaal Profile.";
+    return {
+      from: 'them',
+      text: body,
+      time: 'now',
+      avatar: '🏠',
+      uid: 'chaupaal',
+      name: 'Chaupaal',
+      attachment: { type: 'commerce_card', feature: featureLabel || '' },
+    };
+  }
+
+  function appendCommerceReply(_text, featureLabel) {
+    if (typeof addMsgBubble !== 'function') return false;
+    addMsgBubble(commerceCardMessage(featureLabel), false);
+    return true;
+  }
+
+  function maybeCommerceNudge(feature) {
+    try {
+      const day = typeof PolicyLimits?.dayKey === 'function' ? PolicyLimits.dayKey() : '';
+      if (localStorage.getItem(NUDGE_KEY) === day) return;
+      const tier = typeof ChaupaalMoney?.effectiveTier === 'function' ? ChaupaalMoney.effectiveTier() : 'free';
+      if (tier !== 'free') return;
+      localStorage.setItem(NUDGE_KEY, day);
+      const label = feature ? String(feature).replace(/_/g, ' ') : '';
+      appendCommerceReply('', label);
+    } catch (e) {}
+  }
+
+  function handleChaupaalCommerceBeforeSend(text) {
+    if (!matchCommerceIntent(text)) return false;
+    appendCommerceReply(text);
+    return true;
+  }
+
   /**
    * Send via authenticated API — always POST so user + quiet/crisis/assistant
    * replies persist in Firestore. Quiet/AI-off is a server concern for reply
@@ -185,6 +232,9 @@
   window.ensureChaupaalChatDoc = ensureChaupaalChatDoc;
   window.hydrateChaupaalQuietState = hydrateChaupaalQuietState;
   window.applyChaupaalQuietComposer = applyQuietComposer;
+  window.handleChaupaalCommerceBeforeSend = handleChaupaalCommerceBeforeSend;
+  window.maybeChaupaalCommerceNudge = maybeCommerceNudge;
+  window.canDeleteOrBlockChaupaalAware = canDeleteOrBlockChaupaalAware;
 
   // Override delete/block gate
   const prevCan = window.canDeleteOrBlockChat;

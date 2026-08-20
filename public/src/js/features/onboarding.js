@@ -675,7 +675,7 @@ async function openAiKeyboard(targetInput,context=''){
     return;
   }
   if(await aiKbLimitReached()){
-    showToast(typeof t==='function'?t('ai_kb_limit',{n:AI_KB_LIMIT}):`Free AI limit reached (${AI_KB_LIMIT}/day). More queries coming with Premium! 🌟`);
+    showToast(typeof t==='function'?t('ai_kb_limit',{n:AI_KB_LIMIT}):`Free AI limit reached (${AI_KB_LIMIT}/day). Add Chaupaal Money or join Pradhan / Sarpanch.`);
     return;
   }
   document.getElementById('aiKeyboardEl')?.remove();

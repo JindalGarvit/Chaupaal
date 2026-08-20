@@ -241,10 +241,11 @@
           </div>
           <p class="cai-privacy-note">${tt('cai_privacy_note', 'Respects your tips & share prefs — never invents numbers.')}</p>
         </section>
-        <section class="cai-card cai-premium">
-          <h3>${tt('cai_plus_title', 'Chaupaal Plus')}</h3>
-          <p>${tt('cai_plus_body', 'Browse perks on your companion profile. Checkout when payments are live.')}</p>
-          <button type="button" class="btn btn--primary btn--block" data-cai-plus>${tt('cai_explore_plus', 'Explore Plus')}</button>
+        <section class="cai-card">
+          <h3>${tt('membership_title', 'Membership')}</h3>
+          <p>${tt('cai_membership_body', 'Pradhan and Sarpanch add room across Peepal, AI, and ads. Purchases use your Chaupaal Money account.')}</p>
+          <button type="button" class="btn" data-cai-money style="margin-bottom:8px;">${tt('money_account_title', 'Chaupaal Money account')}</button>
+          <button type="button" class="btn btn--primary btn--block" data-cai-membership>${tt('membership_title', 'See membership')}</button>
         </section>
         <section class="cai-card">
           <h3>${tt('cai_memory_title', 'Memory highlights')}</h3>
@@ -275,8 +276,11 @@
       const chat = typeof getChaupaalChat === 'function' ? getChaupaalChat() : null;
       if (chat && typeof openChatScreen === 'function') openChatScreen(chat);
     });
-    sheet.querySelector('[data-cai-plus]')?.addEventListener('click', () => {
-      if (typeof openPremiumSheet === 'function') openPremiumSheet();
+    sheet.querySelector('[data-cai-money]')?.addEventListener('click', () => {
+      if (typeof ChaupaalMoney?.openAccount === 'function') ChaupaalMoney.openAccount();
+    });
+    sheet.querySelector('[data-cai-membership]')?.addEventListener('click', () => {
+      if (typeof ChaupaalMoney?.openMembership === 'function') ChaupaalMoney.openMembership();
     });
   }
 

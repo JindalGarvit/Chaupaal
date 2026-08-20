@@ -11,10 +11,13 @@
   function limitsFor(feature) {
     const P = window.PolicyLimits;
     if (!P) return { perDay: 0, perWeek: 0 };
-    if (feature === 'anon') return P.ANON_POSTS;
-    if (feature === 'aiDiscoveryMsg') return P.AI_DISCOVERY_MSG;
-    if (feature === 'peepalPost') return P.PEEPAL_POST;
-    if (feature === 'aiKb') return P.AI_KB;
+    const tier =
+      typeof ChaupaalMoney?.effectiveTier === 'function' ? ChaupaalMoney.effectiveTier() : 'free';
+    const tierLim = typeof P.forTier === 'function' ? P.forTier(tier) : null;
+    if (feature === 'anon') return tierLim?.ANON_POSTS || P.ANON_POSTS;
+    if (feature === 'aiDiscoveryMsg') return tierLim?.AI_DISCOVERY_MSG || P.AI_DISCOVERY_MSG;
+    if (feature === 'peepalPost') return tierLim?.PEEPAL_POST || P.PEEPAL_POST;
+    if (feature === 'aiKb') return tierLim?.AI_KB || P.AI_KB;
     return { perDay: 0, perWeek: 0 };
   }
 

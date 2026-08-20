@@ -1,10 +1,22 @@
 /**
- * Chaupaal Profile hub — account recap, trust, dashboard shortcuts, Plus.
+ * Chaupaal Profile hub — account recap, trust, Money, Membership.
  */
 (function () {
   'use strict';
 
-  function openChaupaalProfileHub() {
+  function tierLabel(tier) {
+    const id = String(tier || 'free').toLowerCase();
+    if (typeof t === 'function') {
+      if (id === 'pradhan') return t('tier_pradhan') !== 'tier_pradhan' ? t('tier_pradhan') : 'Pradhan';
+      if (id === 'sarpanch') return t('tier_sarpanch') !== 'tier_sarpanch' ? t('tier_sarpanch') : 'Sarpanch';
+      return t('tier_free') !== 'tier_free' ? t('tier_free') : 'Free';
+    }
+    if (id === 'pradhan') return 'Pradhan';
+    if (id === 'sarpanch') return 'Sarpanch';
+    return 'Free';
+  }
+
+  async function openChaupaalProfileHub() {
     document.getElementById('chaupaalHubSheet')?.remove();
     const p = typeof userProfile !== 'undefined' ? userProfile || {} : {};
     const dp = typeof digitalProfile !== 'undefined' ? digitalProfile || {} : {};
@@ -15,6 +27,19 @@
       Number(document.getElementById('streakNum')?.textContent) ||
       0;
     const teen = typeof isTeenModeUser === 'function' && isTeenModeUser();
+
+    let balanceStr = '…';
+    let membershipStr = 'Free';
+    if (typeof ChaupaalMoney?.refreshCaches === 'function') {
+      try {
+        const { account, subscription } = await ChaupaalMoney.refreshCaches();
+        if (account && typeof ChaupaalMoney.formatAmount === 'function') {
+          balanceStr = ChaupaalMoney.formatAmount(account.balance, { cmLabel: true });
+        }
+        if (subscription?.tier) membershipStr = tierLabel(subscription.tier);
+      } catch (e) {}
+    }
+
     const overlay = document.createElement('div');
     overlay.id = 'chaupaalHubSheet';
     overlay.className = 'chaupaal-hub-overlay';
@@ -40,6 +65,22 @@
           <div><span>${Number(p.friendsCount) || '—'}</span>friends</div>
           <div><span>${Number(p.postsCount) || '—'}</span>posts</div>
         </div>
+        <button type="button" class="chaupaal-hub-glance" data-hub-money aria-label="Chaupaal Money account">
+          <span class="chaupaal-hub-glance-icon" aria-hidden="true">💰</span>
+          <span class="chaupaal-hub-glance-copy">
+            <strong>Chaupaal Money</strong>
+            <small>${balanceStr}</small>
+          </span>
+          <span class="chaupaal-hub-glance-chev" aria-hidden="true">›</span>
+        </button>
+        <button type="button" class="chaupaal-hub-glance" data-hub-membership aria-label="Membership">
+          <span class="chaupaal-hub-glance-icon" aria-hidden="true">⭐</span>
+          <span class="chaupaal-hub-glance-copy">
+            <strong>Membership</strong>
+            <small>${membershipStr}</small>
+          </span>
+          <span class="chaupaal-hub-glance-chev" aria-hidden="true">›</span>
+        </button>
         <div class="chaupaal-hub-section">
           <h3>Trust & safety</h3>
           <p>${teen ? 'Teen Mode keeps messaging friend-first and AI age-aware.' : 'Flag, block, and report tools live on every post and chat.'}</p>
@@ -53,14 +94,9 @@
           <button type="button" class="btn" data-hub-wrap>Monthly wrap</button>
           <button type="button" class="btn" data-hub-settings>Settings</button>
         </div>
-        <div class="chaupaal-hub-section chaupaal-hub-plus">
-          <h3>Chaupaal Plus</h3>
-          <p>Unlimited freezes, deeper insights, ad-free — checkout when payments are live.</p>
-          <button type="button" class="btn btn--primary" data-hub-plus>Explore Plus</button>
-        </div>
         <div class="chaupaal-hub-section">
           <h3>Companion</h3>
-          <p>Chaupaal’s own profile — monthly summary, stats, and Plus — separate from yours.</p>
+          <p>Chaupaal’s own profile — monthly summary, stats, and membership — separate from yours.</p>
           <button type="button" class="btn" data-hub-ai>Open Chaupaal AI profile</button>
         </div>
       </div>`;
@@ -83,6 +119,14 @@
       } else overlay.remove();
     };
     overlay.querySelector('[data-hub-back]')?.addEventListener('click', close);
+    overlay.querySelector('[data-hub-money]')?.addEventListener('click', () => {
+      if (typeof ChaupaalMoney?.openAccount === 'function') ChaupaalMoney.openAccount();
+      else close();
+    });
+    overlay.querySelector('[data-hub-membership]')?.addEventListener('click', () => {
+      if (typeof ChaupaalMoney?.openMembership === 'function') ChaupaalMoney.openMembership();
+      else close();
+    });
     overlay.querySelector('[data-hub-blocked]')?.addEventListener('click', () => {
       close();
       if (typeof openBlockedUsersSheet === 'function') openBlockedUsersSheet();
@@ -106,10 +150,6 @@
     overlay.querySelector('[data-hub-settings]')?.addEventListener('click', () => {
       close();
       if (typeof openSettingsModal === 'function') openSettingsModal();
-    });
-    overlay.querySelector('[data-hub-plus]')?.addEventListener('click', () => {
-      close();
-      if (typeof openPremiumSheet === 'function') openPremiumSheet();
     });
     overlay.querySelector('[data-hub-ai]')?.addEventListener('click', () => {
       close();

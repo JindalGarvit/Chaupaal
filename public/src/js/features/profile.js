@@ -128,7 +128,7 @@ function renderProfileModal(){
       <span class="chaupaal-id-card-mark" aria-hidden="true">🪑</span>
       <span class="chaupaal-id-card-copy">
         <strong data-i18n="chaupaal_card_title">Chaupaal card</strong>
-        <small data-i18n="chaupaal_card_sub">Shareable identity · Hub · Plus</small>
+        <small data-i18n="chaupaal_card_sub">Shareable identity · Money · Membership</small>
       </span>
       <span class="chaupaal-id-card-chev" aria-hidden="true">›</span>
     </button>
@@ -155,7 +155,7 @@ function renderProfileModal(){
     </div>
     <div id="profileSectionContent" class="dp-field-body"></div>
     <div class="dp-account-strip">
-      <button type="button" class="btn btn--primary btn--block" data-dp-open-hub>Chaupaal Hub · trust, Plus, devices</button>
+      <button type="button" class="btn btn--primary btn--block" data-dp-open-hub>Chaupaal Hub · trust, Money, devices</button>
       <button type="button" class="btn btn--block" id="switchProfileBtn">Switch / add account</button>
       <button type="button" class="logout-btn" id="logoutBtn">Log out</button>
     </div>

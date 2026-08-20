@@ -149,9 +149,11 @@ async function buyStreakFreeze(){
     const snap=await db.collection('users').doc(currentUser.uid).get();
     const freezes=snap.data()?.streakFreezes||0;
     if(freezes>=STREAK_FREEZE_MAX){showToast(`You already have ${freezes} Streak Freezes ❄️`);return;}
-    // Free freeze — in future this will be premium purchase
-    await db.collection('users').doc(currentUser.uid).update({streakFreezes:firebase.firestore.FieldValue.increment(1)});
-    showToast('❄️ Streak Freeze added! It auto-activates if you miss a day.');
+    // Streak freeze — Pradhan: 1/mo; Sarpanch: unlimited (future CM purchase)
+    if(typeof ChaupaalMoney?.requestPaywall==='function'){
+      ChaupaalMoney.requestPaywall({ reason: 'streak_freeze', open: 'membership' });
+      return;
+    }
   }catch(e){}
 }
 

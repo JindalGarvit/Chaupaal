@@ -8,25 +8,44 @@
 (function () {
   'use strict';
 
-  const ANON_POSTS = Object.freeze({
-    perDay: 2,
-    perWeek: 7,
+  const UNLIMITED = 999999;
+
+  const TIER_LIMITS = Object.freeze({
+    free: Object.freeze({
+      ANON_POSTS: Object.freeze({ perDay: 2, perWeek: 7 }),
+      AI_DISCOVERY_MSG: Object.freeze({ perDay: 3, perWeek: 10 }),
+      PEEPAL_POST: Object.freeze({ perDay: 5, perWeek: 5 }),
+      AI_KB: Object.freeze({ perDay: 5, perWeek: 35 }),
+      ADS_PER_DAY: 5,
+      STREAK_FREEZE_PER_MONTH: 0,
+    }),
+    pradhan: Object.freeze({
+      ANON_POSTS: Object.freeze({ perDay: 6, perWeek: 21 }),
+      AI_DISCOVERY_MSG: Object.freeze({ perDay: 9, perWeek: 30 }),
+      PEEPAL_POST: Object.freeze({ perDay: 15, perWeek: 15 }),
+      AI_KB: Object.freeze({ perDay: 15, perWeek: 105 }),
+      ADS_PER_DAY: 2,
+      STREAK_FREEZE_PER_MONTH: 1,
+    }),
+    sarpanch: Object.freeze({
+      ANON_POSTS: Object.freeze({ perDay: UNLIMITED, perWeek: UNLIMITED }),
+      AI_DISCOVERY_MSG: Object.freeze({ perDay: UNLIMITED, perWeek: UNLIMITED }),
+      PEEPAL_POST: Object.freeze({ perDay: UNLIMITED, perWeek: UNLIMITED }),
+      AI_KB: Object.freeze({ perDay: UNLIMITED, perWeek: UNLIMITED }),
+      ADS_PER_DAY: 0,
+      STREAK_FREEZE_PER_MONTH: UNLIMITED,
+    }),
   });
 
-  const AI_DISCOVERY_MSG = Object.freeze({
-    perDay: 3,
-    perWeek: 10,
-  });
+  const ANON_POSTS = TIER_LIMITS.free.ANON_POSTS;
+  const AI_DISCOVERY_MSG = TIER_LIMITS.free.AI_DISCOVERY_MSG;
+  const PEEPAL_POST = TIER_LIMITS.free.PEEPAL_POST;
+  const AI_KB = TIER_LIMITS.free.AI_KB;
 
-  const PEEPAL_POST = Object.freeze({
-    perDay: 5,
-    perWeek: 5,
-  });
-
-  const AI_KB = Object.freeze({
-    perDay: 5,
-    perWeek: 35,
-  });
+  function forTier(tier) {
+    const t = String(tier || 'free').toLowerCase();
+    return TIER_LIMITS[t] || TIER_LIMITS.free;
+  }
 
   /** Local calendar date key YYYY-MM-DD */
   function dayKey(d = new Date()) {
@@ -68,6 +87,9 @@
   }
 
   window.PolicyLimits = {
+    UNLIMITED,
+    TIER_LIMITS,
+    forTier,
     ANON_POSTS,
     AI_DISCOVERY_MSG,
     PEEPAL_POST,

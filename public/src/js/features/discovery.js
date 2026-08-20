@@ -751,7 +751,7 @@ function openPeepalAskSheet(editPost = null){
     });
     if (capHint) {
       capHint.textContent = selectedCap === '50'
-        ? 'Maximum free cap. Upgrade to Pro for more.'
+        ? 'Maximum free cap. Add Chaupaal Money or join Pradhan / Sarpanch for more.'
         : `Your post will stop collecting new responses after ${selectedCap}.`;
     }
   };
@@ -887,7 +887,11 @@ function openPeepalAskSheet(editPost = null){
       if(!rl.ok){ if(typeof showToast==='function') showToast(rl.message||t('peepal_slow_down')); return; }
     }
     const quota=await checkPeepalQuota();
-    if(!quota.ok){showToast(quota.unlock||t('peepal_weekly_limit'));return;}
+    if(!quota.ok){
+      showToast(quota.unlock||t('peepal_weekly_limit'));
+      if(typeof ChaupaalMoney?.openMembership==='function') ChaupaalMoney.openMembership();
+      return;
+    }
     const wantsAnon=!!document.getElementById('anonToggle')?.checked;
     let isAnon=false;
     // Check anon quota before build/write, but consume ONLY after Firestore

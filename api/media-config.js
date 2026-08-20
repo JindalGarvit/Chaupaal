@@ -768,6 +768,139 @@ async function handlePost(req, res) {
     }
   }
 
+  // ─── Chaupaal Money + Pradhan / Sarpanch (folded; no new api/*.js) ───────
+  const CM_ACTIONS = new Set([
+    'chaupaal_money_get',
+    'chaupaal_money_topup_create',
+    'chaupaal_money_topup_confirm',
+    'chaupaal_money_spend',
+    'subscription_get',
+    'subscription_purchase',
+    'pricing_get',
+  ]);
+  if (CM_ACTIONS.has(action)) {
+    try {
+      const { checkActionRateLimit } = require('../server-lib/rate-limit');
+      const rate = await checkActionRateLimit(user.uid, 'chaupaal_money');
+      if (rate && rate.ok === false) {
+        return sendError(res, 429, 'RATE_LIMITED', 'Too many requests. Try again shortly.');
+      }
+    } catch (e) {}
+    const adminApp = initAdmin();
+    if (!adminApp) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    const db = adminApp.firestore();
+    const money = require('../server-lib/chaupaal-money');
+    const subLib = require('../server-lib/subscription');
+    const { resolvePricingBucket, getVisiblePricing } = require('../server-lib/pricing-regions');
+
+    let userDoc = {};
+    try {
+      const us = await db.collection('users').doc(user.uid).get();
+      userDoc = us.exists ? us.data() || {} : {};
+    } catch (e) {
+      console.warn('[media-config] user doc', e?.message || e);
+    }
+
+    const profileType = (() => {
+      const fromBody = String(body.profileType || '').toLowerCase();
+      if (fromBody === 'professional' || fromBody === 'personal') return fromBody;
+      const fromDoc = String(userDoc.profileType || userDoc.profile?.profileType || 'personal').toLowerCase();
+      return fromDoc === 'professional' ? 'professional' : 'personal';
+    })();
+
+    const teenBlocked = () =>
+      sendError(res, 403, 'TEEN_BLOCKED', 'Purchases are not available in Teen Mode.');
+
+    if (userDoc.teenMode === true && (action.includes('topup') || action === 'subscription_purchase')) {
+      return teenBlocked();
+    }
+
+    try {
+      if (action === 'chaupaal_money_get') {
+        const balance = await money.getBalance(db, user.uid);
+        const txs = await money.listTransactions(db, user.uid, 20);
+        const bucket = resolvePricingBucket(user.uid, userDoc);
+        const pricing = getVisiblePricing(bucket, profileType);
+        return sendSuccess(res, {
+          ...balance,
+          cmPerUnit: 1,
+          fiatUnit: pricing.currency,
+          fiatSymbol: pricing.symbol,
+          transactions: txs,
+        });
+      }
+
+      if (action === 'pricing_get') {
+        const bucket = resolvePricingBucket(user.uid, userDoc);
+        return sendSuccess(res, getVisiblePricing(bucket, profileType));
+      }
+
+      if (action === 'subscription_get') {
+        const status = await subLib.getSubscriptionStatus(db, user.uid, profileType, userDoc);
+        const balance = await money.getBalance(db, user.uid);
+        return sendSuccess(res, { ...status, balance: balance.balance, currency: balance.currency });
+      }
+
+      if (action === 'chaupaal_money_topup_create') {
+        if (userDoc.teenMode === true) return teenBlocked();
+        const amount = Math.round(Number(body.amount) || 0);
+        if (amount <= 0 || amount > 100000) {
+          return sendError(res, 400, 'VALIDATION_ERROR', 'Invalid amount');
+        }
+        const bucket = resolvePricingBucket(user.uid, userDoc);
+        const pricing = getVisiblePricing(bucket, profileType);
+        const intent = money.createTopUpIntent(db, user.uid, amount, 'razorpay', pricing.currency);
+        return sendSuccess(res, intent);
+      }
+
+      if (action === 'chaupaal_money_topup_confirm') {
+        if (userDoc.teenMode === true) return teenBlocked();
+        const amount = Math.round(Number(body.amount) || 0);
+        const paymentRef = String(body.paymentRef || body.paymentId || '').trim();
+        const preview = body.preview === true && process.env.NODE_ENV !== 'production';
+        if (!preview && !paymentRef) {
+          return sendError(res, 400, 'VALIDATION_ERROR', 'paymentRef required');
+        }
+        if (amount <= 0 || amount > 100000) {
+          return sendError(res, 400, 'VALIDATION_ERROR', 'Invalid amount');
+        }
+        const bucket = resolvePricingBucket(user.uid, userDoc);
+        const pricing = getVisiblePricing(bucket, profileType);
+        const refId = preview ? `preview_${user.uid}_${Date.now()}` : paymentRef;
+        const credited = await money.creditTopUp(db, adminApp, user.uid, amount, refId, pricing.currency);
+        return sendSuccess(res, { ...credited, preview: !!preview });
+      }
+
+      if (action === 'subscription_purchase') {
+        if (userDoc.teenMode === true) return teenBlocked();
+        const tier = String(body.tier || '').toLowerCase();
+        try {
+          const result = await subLib.purchaseSubscription(db, adminApp, user.uid, tier, profileType, userDoc);
+          return sendSuccess(res, result);
+        } catch (e) {
+          const msg = e?.message || String(e);
+          if (msg === 'INSUFFICIENT_FUNDS') {
+            return sendError(res, 402, 'INSUFFICIENT_FUNDS', 'Add Chaupaal Money first.');
+          }
+          if (msg === 'TIER_NOT_AVAILABLE') {
+            return sendError(res, 400, 'TIER_NOT_AVAILABLE', 'This tier is not available for your profile.');
+          }
+          if (msg === 'INVALID_TIER') {
+            return sendError(res, 400, 'VALIDATION_ERROR', 'Invalid tier');
+          }
+          throw e;
+        }
+      }
+
+      if (action === 'chaupaal_money_spend') {
+        return sendError(res, 403, 'FORBIDDEN', 'Spend via feature endpoints only.');
+      }
+    } catch (e) {
+      console.warn('[media-config] chaupaal_money', action, e?.message || e);
+      return sendError(res, 500, 'MONEY_ERROR', e?.message || 'Chaupaal Money action failed');
+    }
+  }
+
   if (action === 'match_contact_hashes') {
     try {
       const { checkActionRateLimit } = require('../server-lib/rate-limit');
@@ -860,6 +993,13 @@ async function handlePost(req, res) {
       'match_contact_hashes',
       'dangal_wallet_get',
       'dangal_game_resolve',
+      'chaupaal_money_get',
+      'chaupaal_money_topup_create',
+      'chaupaal_money_topup_confirm',
+      'chaupaal_money_spend',
+      'subscription_get',
+      'subscription_purchase',
+      'pricing_get',
     ],
   });
 }
