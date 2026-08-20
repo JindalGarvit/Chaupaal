@@ -38,11 +38,19 @@
   const YT_REC_QUERY = 'lofi chill';
   const RING_TTL_MS = 40000;
   const RING_COOLDOWN_MS = 15000;
+  const THEME_OVERRIDE_KEY = 'chaupaal_mehfil_theme_override';
+  const CHAT_IDLE_COLLAPSE_MS = 3000;
   let lastRingAt = new Map();
   let ringInboxUnsub = null;
   let incomingRingEl = null;
   let incomingRingClose = null;
   let ringAckUnsubs = [];
+  const presenceWatchers = new Map();
+  const presenceUnsubs = new Map();
+  let chatIdleTimer = null;
+  let chatUnread = 0;
+  let cachedMediaState = null;
+  let mehfilAutoJoinPending = null;
 
   function tt(key, fallback, vars) {
     if (typeof t === 'function') {
@@ -178,6 +186,266 @@
     return document.getElementById('device') || document.querySelector('.device') || document.body;
   }
 
+  // --- Theme ---
+  function appThemeBaseline() {
+    try {
+      if (window.ChaupaalTheme?.getDisplayMode) {
+        const m = window.ChaupaalTheme.getDisplayMode();
+        if (m === 'light') return 'light';
+        if (m === 'dark' || m === 'night') return 'dark';
+      }
+      const html = document.documentElement;
+      if (html.classList.contains('theme-light')) return 'light';
+      if (html.classList.contains('theme-dark') || html.classList.contains('theme-night')) return 'dark';
+      return window.matchMedia?.('(prefers-color-scheme: dark)')?.matches ? 'dark' : 'light';
+    } catch (e) {
+      return 'dark';
+    }
+  }
+
+  function readThemeOverride() {
+    try {
+      const v = localStorage.getItem(THEME_OVERRIDE_KEY);
+      return v === 'light' || v === 'dark' ? v : '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function effectiveMehfilTheme() {
+    return readThemeOverride() || appThemeBaseline();
+  }
+
+  function applyMehfilTheme(el) {
+    if (!el) return;
+    const mode = effectiveMehfilTheme();
+    el.classList.remove('mehfil-theme--light', 'mehfil-theme--dark', 'mehfil-theme--match');
+    el.classList.add(mode === 'light' ? 'mehfil-theme--light' : 'mehfil-theme--dark');
+    const btn = el.querySelector('[data-mehfil-theme-toggle]');
+    if (btn) {
+      btn.textContent =
+        mode === 'light' ? tt('mehfil_theme_light', 'Light') : tt('mehfil_theme_dark', 'Dark');
+      btn.setAttribute(
+        'aria-label',
+        tt('mehfil_theme_follow_app', 'Room theme') + ': ' + btn.textContent
+      );
+    }
+  }
+
+  function toggleMehfilTheme() {
+    if (!overlayEl) return;
+    const cur = effectiveMehfilTheme();
+    const next = cur === 'light' ? 'dark' : 'light';
+    try {
+      localStorage.setItem(THEME_OVERRIDE_KEY, next);
+    } catch (e) {}
+    applyMehfilTheme(overlayEl);
+    pokeChrome();
+  }
+
+  // --- Layout / Cinema ---
+  function cameraRail() {
+    return overlayEl?.querySelector('[data-mehfil-camera-rail]');
+  }
+
+  function stageMain() {
+    return overlayEl?.querySelector('[data-mehfil-stage-main]');
+  }
+
+  function stageGrid() {
+    return overlayEl?.querySelector('[data-mehfil-stage]');
+  }
+
+  function hasYoutubeOnStage() {
+    return !!(
+      overlayEl?.classList.contains('mehfil-has-youtube') ||
+      cachedMediaState?.type === 'youtube' ||
+      ytPlayer
+    );
+  }
+
+  function relocateTilesForCinema() {
+    if (!overlayEl) return;
+    const rail = cameraRail();
+    const grid = stageGrid();
+    if (!rail || !grid) return;
+    const ytOn = hasYoutubeOnStage();
+    overlayEl.classList.toggle('mehfil-has-youtube', ytOn);
+    const tiles = [...overlayEl.querySelectorAll('.mehfil-tile')];
+    tiles.forEach((tile) => {
+      if (ytOn) {
+        if (tile.parentElement !== rail) rail.appendChild(tile);
+        tile.classList.add('mehfil-tile--rail');
+      } else {
+        if (tile.parentElement !== grid) grid.appendChild(tile);
+        tile.classList.remove('mehfil-tile--rail');
+      }
+    });
+    const waiting = overlayEl.querySelector('[data-mehfil-waiting]');
+    if (waiting && !ytOn && waiting.parentElement !== grid) grid.appendChild(waiting);
+  }
+
+  function layoutCinema() {
+    relocateTilesForCinema();
+  }
+
+  // --- Chat strip ---
+  function chatStripEl() {
+    return overlayEl?.querySelector('[data-mehfil-chat-strip]');
+  }
+
+  function expandChatStrip() {
+    const strip = chatStripEl();
+    if (!strip) return;
+    strip.classList.remove('is-collapsed');
+    strip.classList.add('is-expanded');
+    strip.setAttribute('role', 'log');
+    strip.setAttribute('aria-live', 'polite');
+    chatUnread = 0;
+    const badge = strip.querySelector('[data-mehfil-chat-badge]');
+    if (badge) badge.hidden = true;
+    clearTimeout(chatIdleTimer);
+    const msgs = strip.querySelector('[data-mehfil-chat-msgs]');
+    if (msgs) msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function collapseChatStrip() {
+    const strip = chatStripEl();
+    if (!strip) return;
+    strip.classList.add('is-collapsed');
+    strip.classList.remove('is-expanded');
+    strip.removeAttribute('aria-live');
+    scheduleChatIdleCollapse();
+  }
+
+  function scheduleChatIdleCollapse() {
+    clearTimeout(chatIdleTimer);
+    chatIdleTimer = setTimeout(() => {
+      if (chatStripEl()?.classList.contains('is-expanded')) return;
+      collapseChatStrip();
+    }, CHAT_IDLE_COLLAPSE_MS);
+  }
+
+  function appendChatLine(v) {
+    const strip = chatStripEl();
+    const msgsEl = strip?.querySelector('[data-mehfil-chat-msgs]');
+    const preview = strip?.querySelector('[data-mehfil-chat-preview]');
+    if (!msgsEl) return;
+    const row = document.createElement('div');
+    row.className = 'mehfil-chat-line' + (v.by === currentUser?.uid ? ' is-me' : '');
+    const name = v.name && v.name !== v.by ? v.name : displayNameForUid(v.by);
+    row.innerHTML = `<span class="mehfil-chat-name">${esc(name)}</span><span class="mehfil-chat-text">${esc(v.text)}</span>`;
+    msgsEl.appendChild(row);
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+    if (preview) {
+      preview.textContent = `${name}: ${v.text}`.slice(0, 120);
+      preview.classList.add('mehfil-chat-shimmer');
+      setTimeout(() => preview.classList.remove('mehfil-chat-shimmer'), 2600);
+    }
+    if (strip?.classList.contains('is-collapsed')) {
+      chatUnread += 1;
+      const badge = strip.querySelector('[data-mehfil-chat-badge]');
+      if (badge) {
+        badge.hidden = false;
+        badge.textContent = String(chatUnread);
+      }
+    }
+    scheduleChatIdleCollapse();
+  }
+
+  // --- Media host / control ---
+  function canControlMedia(m) {
+    const media = m || cachedMediaState || {};
+    const me = currentUser?.uid;
+    if (!me) return false;
+    if (media.controlMode === 'all') return true;
+    if (media.controlUid && media.controlUid === me) return true;
+    if (media.hostUid && media.hostUid === me) return true;
+    if (!media.hostUid && media.by === me) return true;
+    return false;
+  }
+
+  function updateHostControlUi(m) {
+    const media = m || cachedMediaState;
+    const chip = overlayEl?.querySelector('[data-mehfil-host-chip]');
+    if (!chip) return;
+    const me = currentUser?.uid;
+    if (!media?.hostUid) {
+      chip.hidden = true;
+      return;
+    }
+    chip.hidden = false;
+    const iAmHost = media.hostUid === me;
+    const iControl =
+      media.controlMode === 'all' || media.controlUid === me || (iAmHost && media.controlMode !== 'all');
+    if (iControl) chip.textContent = tt('mehfil_you_are_host', 'You control playback');
+    else if (media.controlMode === 'all') chip.textContent = tt('mehfil_control_everyone', 'Everyone can control');
+    else chip.textContent = tt('mehfil_host_controls', 'Host controls playback');
+    chip.classList.toggle('is-host', iAmHost);
+  }
+
+  async function fetchParticipantUids(chatId) {
+    return new Promise((resolve) => {
+      const ref = rtdbRef(`mehfil/${chatId}/participants`);
+      if (!ref) return resolve([]);
+      ref.once('value', (snap) => {
+        resolve(Object.keys(snap.val() || {}));
+      });
+    });
+  }
+
+  async function filterRingTargets(chatId, uids) {
+    const inRoom = await fetchParticipantUids(chatId);
+    const set = new Set(inRoom.map(String));
+    return (uids || []).map(String).filter((u) => u && !set.has(u));
+  }
+
+  function toggleImmersive() {
+    if (!overlayEl) return;
+    overlayEl.classList.toggle('mehfil-immersive');
+    const btn = overlayEl.querySelector('[data-mehfil-immersive]');
+    if (btn) {
+      const on = overlayEl.classList.contains('mehfil-immersive');
+      btn.setAttribute(
+        'aria-label',
+        on ? tt('mehfil_immersive_exit', 'Exit immersive') : tt('mehfil_immersive_enter', 'Immersive mode')
+      );
+    }
+    pokeChrome();
+  }
+
+  async function requestStageFullscreen() {
+    const host = overlayEl?.querySelector('[data-mehfil-stage-yt]');
+    if (!host?.requestFullscreen) {
+      if (typeof showToast === 'function') showToast(tt('mehfil_fs_unsupported', 'Fullscreen not supported here'));
+      return;
+    }
+    try {
+      await host.requestFullscreen();
+    } catch (e) {
+      if (typeof showToast === 'function') showToast(tt('mehfil_fs_unsupported', 'Fullscreen not supported here'));
+    }
+  }
+
+  async function transferHostIfNeeded() {
+    if (!activeChatId || !currentUser?.uid) return;
+    try {
+      const ref = rtdbRef(`mehfil/${activeChatId}/media`);
+      if (!ref) return;
+      const snap = await ref.once('value');
+      const m = snap.val() || {};
+      if (m.hostUid !== currentUser.uid) return;
+      const ps = await rtdbRef(`mehfil/${activeChatId}/participants`)?.once('value');
+      const val = ps?.val() || {};
+      const others = Object.entries(val)
+        .filter(([uid]) => uid !== currentUser.uid)
+        .sort((a, b) => (Number(a[1]?.at) || 0) - (Number(b[1]?.at) || 0));
+      if (others.length) {
+        await ref.update({ hostUid: others[0][0], controlUid: null, controlMode: 'host' });
+      }
+    } catch (e) {}
+  }
+
   function clearRtdb() {
     rtdbUnsubs.forEach((fn) => {
       try {
@@ -207,24 +475,24 @@
   }
 
   function bindMembersList(chatId) {
-    const host = overlayEl?.querySelector('[data-mehfil-members]');
+    const chipsHost = overlayEl?.querySelector('[data-mehfil-member-chips]');
     const ref = rtdbRef(`mehfil/${chatId}/participants`);
-    if (!host || !ref) return;
+    if (!chipsHost || !ref) return;
     const paint = (snap) => {
       const val = snap.val() || {};
       const rows = Object.entries(val).map(([uid, meta]) => {
         const name = meta?.name || 'Member';
         const me = uid === currentUser?.uid;
         const muted = !!meta?.muted;
-        return `<div class="mehfil-member${me ? ' is-me' : ''}${muted ? ' is-muted' : ''}">
-          <span class="mehfil-member-dot"></span>
-          <span class="mehfil-member-name">${esc(name)}${me ? ' · ' + tt('mehfil_you', 'you') : ''}</span>
-          ${muted ? `<span class="mehfil-member-mic" title="${esc(tt('mehfil_muted', 'Muted'))}">🔇</span>` : ''}
-        </div>`;
+        const initial = esc((name || '?').slice(0, 1));
+        return `<button type="button" class="mehfil-member-chip${me ? ' is-me' : ''}${muted ? ' is-muted' : ''}" data-uid="${esc(uid)}" title="${esc(name)}">
+          <span class="mehfil-member-chip-avatar">${initial}</span>
+          <span class="mehfil-member-chip-name">${esc(name.split(' ')[0])}${me ? ' · ' + tt('mehfil_you', 'you') : ''}</span>
+        </button>`;
       });
-      host.innerHTML = rows.length
+      chipsHost.innerHTML = rows.length
         ? rows.join('')
-        : `<div class="mehfil-member is-empty">${esc(tt('mehfil_empty_room', 'No one here yet'))}</div>`;
+        : `<span class="mehfil-member-chip is-empty">${esc(tt('mehfil_empty_room', 'No one here yet'))}</span>`;
       updateWaitingState();
       updateAloneHint(Object.keys(val).length);
     };
@@ -280,17 +548,20 @@
 
   function updateWaitingState() {
     if (!overlayEl) return;
-    const stage = overlayEl.querySelector('[data-mehfil-stage]');
+    const grid = stageGrid();
     const waiting = overlayEl.querySelector('[data-mehfil-waiting]');
-    if (!stage || !waiting) return;
-    const remotes = stage.querySelectorAll('.mehfil-tile:not(.mehfil-tile--self)').length;
-    const blocked = !!stage.querySelector('.mehfil-disabled, .mehfil-error');
-    waiting.hidden = blocked || remotes > 0;
+    if (!grid || !waiting) return;
+    const remotes = overlayEl.querySelectorAll('.mehfil-tile:not(.mehfil-tile--self)').length;
+    const blocked = !!grid.querySelector('.mehfil-disabled, .mehfil-error');
+    waiting.hidden = blocked || remotes > 0 || hasYoutubeOnStage();
+    layoutCinema();
   }
 
   function syncSheetOpenClass() {
     if (!overlayEl) return;
-    const open = !!overlayEl.querySelector('.mehfil-sheet.is-open, .mehfil-more-menu.is-open');
+    const open = !!overlayEl.querySelector(
+      '.mehfil-sheets .mehfil-sheet.is-open, .mehfil-sheets .mehfil-more-menu.is-open'
+    );
     overlayEl.classList.toggle('mehfil-sheet-open', open);
     if (open) {
       overlayEl.classList.remove('mehfil-chrome-dim');
@@ -386,6 +657,7 @@
     if (!tile || !track) return;
     tile.innerHTML = `<div class="mehfil-tile-label">${esc(label || tt('mehfil_you_label', 'You'))}</div>`;
     track.play(tile);
+    layoutCinema();
   }
 
   function applyVolumeIndicators(volumes) {
@@ -436,10 +708,11 @@
     setCamUi(true);
   }
 
-  function showReactionBurst(emoji) {
+  function showReactionBurst(emoji, opts) {
     if (!overlayEl) return;
-    if (typeof quietMode !== 'undefined' && quietMode) {
-      /* still show visual, skip sound */
+    if (typeof MehfilEffects?.burstReaction === 'function') {
+      MehfilEffects.burstReaction(emoji, { root: overlayEl, ...(opts || {}) });
+      return;
     }
     const el = document.createElement('div');
     el.className = 'mehfil-float-react';
@@ -449,8 +722,20 @@
     setTimeout(() => el.remove(), 900);
   }
 
+  function showStickerBurst(emoji, opts) {
+    if (typeof MehfilEffects?.burstSticker === 'function') {
+      MehfilEffects.burstSticker(emoji, { root: overlayEl, ...(opts || {}) });
+    } else {
+      showReactionBurst(emoji, opts);
+    }
+  }
+
   async function publishMediaState(patch) {
     if (!activeChatId || !currentUser?.uid) return;
+    const p = patch || {};
+    if ((p.playing != null || p.t != null) && !p.hostUid && !p.controlMode) {
+      if (cachedMediaState?.hostUid && !canControlMedia(cachedMediaState)) return;
+    }
     await ensureMehfilParticipant(activeChatId);
     const ref = rtdbRef(`mehfil/${activeChatId}/media`);
     if (!ref) return;
@@ -467,11 +752,17 @@
     if (!ref) return;
     const handler = (snap) => {
       const m = snap.val();
-      if (!m) return;
+      cachedMediaState = m || null;
+      updateHostControlUi(m);
+      if (!m) {
+        overlayEl?.classList.remove('mehfil-has-youtube');
+        layoutCinema();
+        return;
+      }
       if (m.by === currentUser?.uid && !applyingRemoteMedia) {
-        // Still update now-playing chrome for self
         const nowEl = overlayEl?.querySelector('[data-mehfil-now]');
         if (nowEl && m.title) nowEl.textContent = tt('mehfil_now_playing', 'Now playing: {{title}}', { title: m.title });
+        layoutCinema();
         return;
       }
       applyRemoteMedia(m);
@@ -517,17 +808,11 @@
     }
 
     const chatRef = rtdbRef(`mehfil/${activeChatId}/chat`);
-    const msgsEl = overlayEl?.querySelector('[data-mehfil-chat-msgs]');
-    if (chatRef && msgsEl) {
+    if (chatRef) {
       const onChat = (snap) => {
         const v = snap.val();
         if (!v?.text) return;
-        const row = document.createElement('div');
-        row.className = 'mehfil-chat-row' + (v.by === currentUser?.uid ? ' is-me' : '');
-        const name = v.name && v.name !== v.by ? v.name : displayNameForUid(v.by);
-        row.innerHTML = `<span class="mehfil-chat-name">${esc(name)}</span><span class="mehfil-chat-text">${esc(v.text)}</span>`;
-        msgsEl.appendChild(row);
-        msgsEl.scrollTop = msgsEl.scrollHeight;
+        appendChatLine(v);
       };
       chatRef.limitToLast(40).on('child_added', onChat);
       rtdbUnsubs.push(() => chatRef.off('child_added', onChat));
@@ -546,7 +831,9 @@
             : tt('mehfil_shared_media', 'Shared media');
       }
       if (m.type === 'youtube' && m.id) {
+        overlayEl?.classList.add('mehfil-has-youtube');
         ensureYtPlayer(m.id, !!m.playing, Number(m.t) || 0);
+        layoutCinema();
       } else if (m.type === 'music' && m.previewUrl) {
         if (typeof quietMode !== 'undefined' && quietMode) return;
         if (typeof pauseAllMusic === 'function') pauseAllMusic();
@@ -571,11 +858,13 @@
   }
 
   function ensureYtPlayer(videoId, play, startAt) {
-    const host = overlayEl?.querySelector('[data-mehfil-yt]');
+    const host = overlayEl?.querySelector('[data-mehfil-stage-yt]') || overlayEl?.querySelector('[data-mehfil-yt]');
     if (!host) return;
     const empty = overlayEl?.querySelector('[data-mehfil-yt-empty]');
     if (empty) empty.hidden = true;
     host.hidden = false;
+    overlayEl?.classList.add('mehfil-has-youtube');
+    layoutCinema();
 
     const boot = () => {
       if (!window.YT || !window.YT.Player) return;
@@ -602,7 +891,7 @@
               if (play) e.target.playVideo();
             },
             onStateChange: (e) => {
-              if (applyingRemoteMedia || !activeChatId) return;
+              if (applyingRemoteMedia || !activeChatId || !canControlMedia(cachedMediaState)) return;
               try {
                 const st = e.data;
                 const tSec = e.target.getCurrentTime?.() || 0;
@@ -663,6 +952,8 @@
       ytPlayer?.destroy?.();
     } catch (e) {}
     ytPlayer = null;
+    overlayEl?.classList.remove('mehfil-has-youtube');
+    layoutCinema();
     try {
       window.__mehfilSharedAudio?.pause?.();
       window.__mehfilSharedAudio = null;
@@ -674,13 +965,26 @@
   async function playYoutubeId(id, title) {
     await stopCurrentMedia();
     ensureYtPlayer(id, true, 0);
+    const ref = rtdbRef(`mehfil/${activeChatId}/media`);
+    let hostPatch = {};
+    try {
+      const snap = await ref?.once('value');
+      const cur = snap?.val() || {};
+      if (!cur.hostUid && currentUser?.uid) {
+        hostPatch = { hostUid: currentUser.uid, controlMode: 'host', controlUid: null };
+      }
+    } catch (e) {}
     await publishMediaState({
       type: 'youtube',
       id,
       playing: true,
       t: 0,
       title: title || 'YouTube',
+      ...hostPatch,
     });
+    cachedMediaState = { ...(cachedMediaState || {}), type: 'youtube', id, ...hostPatch };
+    updateHostControlUi(cachedMediaState);
+    layoutCinema();
     const nowEl = overlayEl?.querySelector('[data-mehfil-now]');
     if (nowEl) nowEl.textContent = tt('mehfil_now_playing', 'Now playing: {{title}}', { title: title || 'YouTube' });
   }
@@ -929,9 +1233,19 @@
     }
     if (activeChatId && currentUser?.uid) {
       try {
+        await transferHostIfNeeded();
         rtdbRef(`mehfil/${activeChatId}/participants/${currentUser.uid}`)?.remove();
       } catch (e) {}
     }
+    ringAckUnsubs.forEach((fn) => {
+      try {
+        fn();
+      } catch (e) {}
+    });
+    ringAckUnsubs = [];
+    clearTimeout(chatIdleTimer);
+    chatIdleTimer = null;
+    cachedMediaState = null;
     const el = overlayEl;
     overlayEl = null;
     activeChatId = null;
@@ -1203,6 +1517,11 @@
   async function writeMehfilRing(chat, targetUids, mode) {
     const chatId = chat?.firestoreId || chat?.id;
     if (!chatId || !currentUser?.uid) return false;
+    const filtered = await filterRingTargets(chatId, targetUids);
+    if (!filtered.length) {
+      if (typeof showToast === 'function') showToast(tt('mehfil_already_here', 'Everyone you selected is already here'));
+      return false;
+    }
     const now = Date.now();
     const prev = lastRingAt.get(chatId) || 0;
     if (now - prev < RING_COOLDOWN_MS) {
@@ -1216,7 +1535,7 @@
       fromPhoto: currentUser.photoURL || userProfile?.photoURL || '',
       chatId,
       mode: mode === 'users' ? 'users' : 'all',
-      targetUids: (targetUids || []).map(String),
+      targetUids: filtered.map(String),
       ts: now,
       expiresAt: now + RING_TTL_MS,
     };
@@ -1264,9 +1583,11 @@
       await writeMehfilRing(chat, [peer], 'all');
       return;
     }
-    const members = groupRingMembers(chat);
+    const membersRaw = groupRingMembers(chat);
+    const inRoom = new Set(await fetchParticipantUids(chat.firestoreId || chat.id));
+    const members = membersRaw.filter((m) => !inRoom.has(String(m.uid)));
     if (!members.length) {
-      if (typeof showToast === 'function') showToast(tt('mehfil_ring_nobody', 'No one to ring'));
+      if (typeof showToast === 'function') showToast(tt('mehfil_already_here', 'Everyone you selected is already here'));
       return;
     }
     const sheet = document.createElement('div');
@@ -1278,13 +1599,14 @@
         <button type="button" class="mehfil-ring-pick-all" data-ring-all>${esc(tt('mehfil_ring_everyone', 'Ring everyone'))}</button>
         <p class="mehfil-ring-pick-label">${esc(tt('mehfil_ring_choose', 'Choose people'))}</p>
         <div class="mehfil-ring-pick-list">
-          ${members
-            .map(
-              (m) => `<label class="mehfil-ring-pick-row">
-                <input type="checkbox" value="${esc(m.uid)}" checked>
-                <span>${esc(m.name)}</span>
-              </label>`
-            )
+          ${membersRaw
+            .map((m) => {
+              const here = inRoom.has(String(m.uid));
+              return `<label class="mehfil-ring-pick-row${here ? ' is-disabled' : ''}">
+                <input type="checkbox" value="${esc(m.uid)}" ${here ? 'disabled' : 'checked'}>
+                <span>${esc(m.name)}${here ? ` (${tt('mehfil_already_here_short', 'here')})` : ''}</span>
+              </label>`;
+            })
             .join('')}
         </div>
         <div class="mehfil-ring-pick-actions">
@@ -1321,6 +1643,34 @@
     });
   }
 
+  function showMehfilBusyBanner(payload) {
+    const chatId = String(payload?.chatId || '');
+    const me = currentUser?.uid;
+    if (!chatId || !me) return;
+    if (document.getElementById('mehfilBusyBanner')) return;
+    const name = payload.fromName || tt('mehfil_someone', 'Someone');
+    const el = document.createElement('div');
+    el.id = 'mehfilBusyBanner';
+    el.className = 'mehfil-busy-banner';
+    el.innerHTML = `
+      <span>${esc(tt('mehfil_ring_busy_banner', 'Mehfil ring from {{name}}', { name }))}</span>
+      <button type="button" data-busy-decline>${esc(tt('mehfil_decline', 'Decline'))}</button>
+      <button type="button" data-busy-accept>${esc(tt('mehfil_accept', 'Answer'))}</button>`;
+    overlayEl?.appendChild(el);
+    el.querySelector('[data-busy-decline]')?.addEventListener('click', () => {
+      ackMehfilRing(chatId, 'declined');
+      el.remove();
+    });
+    el.querySelector('[data-busy-accept]')?.addEventListener('click', async () => {
+      await ackMehfilRing(chatId, 'accepted');
+      el.remove();
+      const chat = { id: chatId, firestoreId: chatId };
+      await leaveMehfil();
+      setTimeout(() => openMehfil(chat), 400);
+    });
+    setTimeout(() => el.remove(), RING_TTL_MS);
+  }
+
   function showIncomingMehfilRing(payload) {
     const chatId = String(payload?.chatId || '');
     const me = currentUser?.uid;
@@ -1337,6 +1687,10 @@
     }
     if (overlayEl && activeChatId === chatId) return;
     if (incomingRingEl && incomingRingEl.dataset.chatId === chatId) return;
+    if (overlayEl && activeChatId && activeChatId !== chatId) {
+      showMehfilBusyBanner(payload);
+      return;
+    }
     clearIncomingRingUi();
     const name = payload.fromName || tt('mehfil_someone', 'Someone');
     const photo = payload.fromPhoto || '';
@@ -1438,17 +1792,23 @@
   }
 
   function ensureRemoteTile(uid, label) {
-    const stage = overlayEl?.querySelector('[data-mehfil-stage]');
-    if (!stage || uid == null) return null;
+    const grid = stageGrid();
+    const rail = cameraRail();
+    const parent = hasYoutubeOnStage() && rail ? rail : grid;
+    if (!parent || uid == null) return null;
     let tile = overlayEl.querySelector(`.mehfil-tile[data-uid="${uid}"]`);
-    if (tile) return tile;
+    if (tile) {
+      if (tile.parentElement !== parent) parent.appendChild(tile);
+      tile.classList.toggle('mehfil-tile--rail', parent === rail);
+      return tile;
+    }
     tile = document.createElement('div');
-    tile.className = 'mehfil-tile';
+    tile.className = 'mehfil-tile' + (parent === rail ? ' mehfil-tile--rail' : '');
     tile.dataset.uid = String(uid);
     tile.innerHTML = `<span class="mehfil-tile-placeholder">${esc(
       tt('mehfil_in_room', 'In the room')
     )}</span><div class="mehfil-tile-label">${esc(label || remoteTileLabel({ uid }))}</div>`;
-    stage.appendChild(tile);
+    parent.appendChild(tile);
     updateWaitingState();
     return tile;
   }
@@ -1667,36 +2027,20 @@
     const roomTitle = mehfilRoomTitle(chat);
     el.setAttribute('aria-label', tt('mehfil_title', 'Mehfil') + ' · ' + roomTitle);
     el.innerHTML = `
-      <div class="mehfil-layout">
-        <aside class="mehfil-sidebar" data-mehfil-sidebar>
-          <div class="mehfil-sidebar-head">
-            <div>
-              <div class="mehfil-channel-label">${esc(tt('mehfil_channel', '# voice'))}</div>
-              <strong>${esc(roomTitle)}</strong>
-            </div>
-            <button type="button" class="mehfil-sidebar-toggle" data-mehfil-sidebar-hide aria-label="${esc(tt('mehfil_hide_sidebar', 'Hide sidebar'))}">‹</button>
-          </div>
-          <div class="mehfil-members-block">
-            <div class="mehfil-members-title">${esc(tt('mehfil_in_room', 'In the room'))}</div>
-            <div class="mehfil-members" data-mehfil-members></div>
-          </div>
-          <div class="mehfil-alone" data-mehfil-alone hidden>
-            <p>${esc(tt('mehfil_alone', 'You’re the only one here — invite friends to join.'))}</p>
-            <button type="button" class="mehfil-nudge-btn" data-mehfil-nudge>${esc(tt('mehfil_nudge', 'Invite to Mehfil'))}</button>
-          </div>
-          <div class="mehfil-sidebar-msgs" data-mehfil-chat-msgs></div>
-          <form class="mehfil-sidebar-compose" data-mehfil-chat-form>
-            <input type="text" maxlength="500" placeholder="${esc(tt('mehfil_msg_ph', 'Message the room…'))}" data-mehfil-chat-input enterkeyhint="send" autocomplete="off">
-            <button type="submit" aria-label="${esc(tt('send', 'Send'))}">↑</button>
-          </form>
-        </aside>
-        <div class="mehfil-main">
-          <div class="mehfil-top">
-            <button type="button" class="mehfil-sidebar-open" data-mehfil-sidebar-show aria-label="${esc(tt('mehfil_show_chat', 'Show chat'))}">💬</button>
-            <div class="mehfil-title">${mehfilMarkHtml(20)} <span>${esc(tt('mehfil_title', 'Mehfil'))} · ${esc(roomTitle)}</span></div>
-            <button type="button" class="mehfil-ring-btn" data-mehfil-ring title="${esc(tt('mehfil_ring', 'Ring'))}" aria-label="${esc(tt('mehfil_ring', 'Ring'))}">${typeof iconHtml==='function'?iconHtml('phone',{size:18}):'☎'} <span>${esc(tt('mehfil_ring', 'Ring'))}</span></button>
-            <div class="mehfil-status" data-mehfil-status>${esc(tt('mehfil_joining', 'Joining…'))}</div>
-          </div>
+      <div class="mehfil-top">
+        ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-mehfil-leave-top' }) : ''}
+        <div class="mehfil-title">${mehfilMarkHtml(20)} <span>${esc(tt('mehfil_title', 'Mehfil'))} · ${esc(roomTitle)}</span></div>
+        <div class="mehfil-member-chips-scroll"><div class="mehfil-member-chips" data-mehfil-member-chips></div></div>
+        <button type="button" class="mehfil-theme-toggle" data-mehfil-theme-toggle aria-label="${esc(tt('mehfil_theme_follow_app', 'Room theme'))}">${esc(tt('mehfil_theme_dark', 'Dark'))}</button>
+        <button type="button" class="mehfil-immersive-btn" data-mehfil-immersive aria-label="${esc(tt('mehfil_immersive_enter', 'Immersive mode'))}">⛶</button>
+        <button type="button" class="mehfil-ring-btn" data-mehfil-ring title="${esc(tt('mehfil_ring', 'Ring'))}" aria-label="${esc(tt('mehfil_ring', 'Ring'))}">${typeof iconHtml==='function'?iconHtml('phone',{size:18}):'☎'}</button>
+        <div class="mehfil-status" data-mehfil-status>${esc(tt('mehfil_joining', 'Joining…'))}</div>
+      </div>
+      <div class="mehfil-cinema">
+        <div class="mehfil-stage-main" data-mehfil-stage-main>
+          <div class="mehfil-host-chip" data-mehfil-host-chip hidden></div>
+          <div id="mehfilYtHost" class="mehfil-yt mehfil-stage-yt" data-mehfil-stage-yt data-mehfil-yt hidden></div>
+          <div class="mehfil-yt-empty" data-mehfil-yt-empty hidden></div>
           <div class="mehfil-stage" data-mehfil-stage>
             <div class="mehfil-tile mehfil-tile--self is-cam-off" data-mehfil-local-video>
               <span class="mehfil-tile-placeholder">${esc(tt('mehfil_cam_off', 'Camera off'))}</span>
@@ -1704,69 +2048,95 @@
             </div>
             <div class="mehfil-waiting" data-mehfil-waiting>
               <div class="mehfil-waiting-title">${esc(tt('mehfil_waiting_title', 'Waiting for friends'))}</div>
-              <div class="mehfil-waiting-msg">${esc(tt('mehfil_waiting_msg', 'Mic starts on; tap camera when you want to be seen. Share YouTube or chat in the sidebar.'))}</div>
+              <div class="mehfil-waiting-msg">${esc(tt('mehfil_waiting_msg', 'Mic starts on; tap camera when you want to be seen. Share YouTube from More or ring friends in.'))}</div>
             </div>
-          </div>
-            <div class="mehfil-sheet mehfil-media-sheet" data-mehfil-media>
-            <div class="mehfil-now" data-mehfil-now>${esc(tt('mehfil_media_hint', 'Search YouTube or paste a link'))}</div>
-            <div class="mehfil-yt-empty" data-mehfil-yt-empty hidden></div>
-            <div id="mehfilYtHost" class="mehfil-yt" data-mehfil-yt></div>
-            <form class="mehfil-media-search" data-mehfil-search-form>
-              <input type="search" placeholder="${esc(tt('mehfil_yt_search_ph', 'Search YouTube or paste a link'))}" data-mehfil-q enterkeyhint="search" autocomplete="off">
-              <button type="submit" data-mehfil-play>${esc(tt('mehfil_search', 'Search'))}</button>
-            </form>
-            <div class="mehfil-yt-results" data-mehfil-yt-results hidden></div>
-            <div class="mehfil-yt-recs" data-mehfil-recs hidden>
-              <div class="mehfil-yt-recs-label">${esc(tt('mehfil_yt_recs', 'Suggested for the room'))}</div>
-              <div class="mehfil-yt-recs-row" data-mehfil-recs-row></div>
-            </div>
-            <p class="mehfil-yt-paste-hint">${esc(tt('mehfil_yt_paste_hint', 'Tip: paste a YouTube link anytime'))}</p>
-          </div>
-          <div class="mehfil-sheet mehfil-react-tray" data-mehfil-reacts>
-            ${REACTIONS.map((e) => `<button type="button" data-emoji="${e}">${e}</button>`).join('')}
-          </div>
-          <div class="mehfil-sheet mehfil-sticker-tray" data-mehfil-stickers>
-            ${STICKERS.map((e) => `<button type="button" data-emoji="${e}">${e}</button>`).join('')}
-          </div>
-          <div class="mehfil-more-menu" data-mehfil-more>
-            <button type="button" class="mehfil-more-item" data-mehfil-react-btn>
-              <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('smile',{size:18}):''}</span>
-              ${esc(tt('mehfil_reactions', 'Reactions'))}
-            </button>
-            <button type="button" class="mehfil-more-item" data-mehfil-sticker-btn>
-              <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('sparkles',{size:18}):''}</span>
-              ${esc(tt('mehfil_stickers', 'Stickers'))}
-            </button>
-            <button type="button" class="mehfil-more-item" data-mehfil-media-btn>
-              <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('music',{size:18}):''}</span>
-              ${esc(tt('mehfil_media', 'Music / YouTube'))}
-            </button>
-            <button type="button" class="mehfil-more-item" data-mehfil-nudge-more>
-              <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('bell',{size:18}):''}</span>
-              ${esc(tt('mehfil_nudge', 'Invite'))}
-            </button>
-            <button type="button" class="mehfil-more-item" data-mehfil-copy>
-              <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('link',{size:18}):''}</span>
-              ${esc(tt('mehfil_copy_link', 'Copy link'))}
-            </button>
-            <button type="button" class="mehfil-more-item" data-mehfil-flip title="${esc(tt('mehfil_flip', 'Flip camera'))}">
-              <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('rotate-cw',{size:18}):''}</span>
-              ${esc(tt('mehfil_flip', 'Flip'))}
-            </button>
-            <button type="button" class="mehfil-more-item" data-mehfil-share title="${esc(tt('mehfil_share', 'Share screen'))}">
-              <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('monitor',{size:18}):''}</span>
-              <span data-mehfil-share-label>${esc(tt('mehfil_share', 'Share'))}</span>
-            </button>
-          </div>
-          <div class="mehfil-dock">
-            <div class="mehfil-dock-primary">
-              <button type="button" class="mehfil-ctrl ${micWanted ? 'is-live' : 'is-muted'}" data-mehfil-mic title="${esc(tt('mehfil_mic', 'Microphone'))}" aria-label="${esc(tt('mehfil_mic', 'Toggle microphone'))}" aria-pressed="${micWanted ? 'true' : 'false'}">🎤</button>
-              <button type="button" class="mehfil-ctrl is-off" data-mehfil-cam title="${esc(tt('mehfil_cam', 'Camera'))}" aria-label="${esc(tt('mehfil_cam', 'Toggle camera'))}" aria-pressed="false">📷</button>
-              <button type="button" class="mehfil-ctrl" data-mehfil-more-btn title="${esc(tt('mehfil_more', 'More'))}" aria-label="${esc(tt('mehfil_more', 'More call actions'))}" aria-haspopup="true">${typeof iconHtml==='function'?iconHtml('more-vertical',{size:20}):'⋮'}</button>
-            </div>
-            <button type="button" class="mehfil-leave" data-mehfil-leave title="${esc(tt('mehfil_leave', 'Leave'))}" aria-label="${esc(tt('mehfil_leave', 'Leave Mehfil'))}">${esc(tt('mehfil_leave', 'Leave'))}</button>
           </div>
         </div>
+        <div class="mehfil-camera-rail" data-mehfil-camera-rail aria-label="${esc(tt('mehfil_cam_rail', 'Cameras'))}"></div>
+      </div>
+      <div class="mehfil-effects-layer" data-mehfil-effects-layer aria-hidden="true"></div>
+      <div class="mehfil-sheets">
+        <div class="mehfil-sheet mehfil-media-sheet" data-mehfil-media>
+          <div class="mehfil-now" data-mehfil-now>${esc(tt('mehfil_media_hint', 'Search YouTube or paste a link'))}</div>
+          <div class="mehfil-media-control" data-mehfil-media-control hidden>
+            <button type="button" data-mehfil-control-host>${esc(tt('mehfil_host_controls', 'Only me'))}</button>
+            <button type="button" data-mehfil-control-all>${esc(tt('mehfil_control_everyone', 'Everyone'))}</button>
+          </div>
+          <form class="mehfil-media-search" data-mehfil-search-form>
+            <input type="search" placeholder="${esc(tt('mehfil_yt_search_ph', 'Search YouTube or paste a link'))}" data-mehfil-q enterkeyhint="search" autocomplete="off">
+            <button type="submit" data-mehfil-play>${esc(tt('mehfil_search', 'Search'))}</button>
+          </form>
+          <div class="mehfil-yt-results" data-mehfil-yt-results hidden></div>
+          <div class="mehfil-yt-recs" data-mehfil-recs hidden>
+            <div class="mehfil-yt-recs-label">${esc(tt('mehfil_yt_recs', 'Suggested for the room'))}</div>
+            <div class="mehfil-yt-recs-row" data-mehfil-recs-row></div>
+          </div>
+          <p class="mehfil-yt-paste-hint">${esc(tt('mehfil_yt_paste_hint', 'Tip: paste a YouTube link anytime'))}</p>
+          <button type="button" class="mehfil-fs-btn" data-mehfil-fs hidden>${esc(tt('mehfil_immersive_enter', 'Fullscreen video'))}</button>
+        </div>
+        <div class="mehfil-sheet mehfil-react-tray" data-mehfil-reacts>
+          ${REACTIONS.map((e) => `<button type="button" data-emoji="${e}">${e}</button>`).join('')}
+        </div>
+        <div class="mehfil-sheet mehfil-sticker-tray" data-mehfil-stickers>
+          ${STICKERS.map((e) => `<button type="button" data-emoji="${e}">${e}</button>`).join('')}
+        </div>
+        <div class="mehfil-more-menu" data-mehfil-more>
+          <button type="button" class="mehfil-more-item" data-mehfil-react-btn>
+            <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('smile',{size:18}):''}</span>
+            ${esc(tt('mehfil_reactions', 'Reactions'))}
+          </button>
+          <button type="button" class="mehfil-more-item" data-mehfil-sticker-btn>
+            <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('sparkles',{size:18}):''}</span>
+            ${esc(tt('mehfil_stickers', 'Stickers'))}
+          </button>
+          <button type="button" class="mehfil-more-item" data-mehfil-media-btn>
+            <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('music',{size:18}):''}</span>
+            ${esc(tt('mehfil_media', 'Music / YouTube'))}
+          </button>
+          <button type="button" class="mehfil-more-item" data-mehfil-nudge-more>
+            <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('bell',{size:18}):''}</span>
+            ${esc(tt('mehfil_nudge', 'Invite'))}
+          </button>
+          <button type="button" class="mehfil-more-item" data-mehfil-copy>
+            <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('link',{size:18}):''}</span>
+            ${esc(tt('mehfil_copy_link', 'Copy link'))}
+          </button>
+          <button type="button" class="mehfil-more-item" data-mehfil-flip title="${esc(tt('mehfil_flip', 'Flip camera'))}">
+            <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('rotate-cw',{size:18}):''}</span>
+            ${esc(tt('mehfil_flip', 'Flip'))}
+          </button>
+          <button type="button" class="mehfil-more-item" data-mehfil-share title="${esc(tt('mehfil_share', 'Share screen'))}">
+            <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('monitor',{size:18}):''}</span>
+            <span data-mehfil-share-label>${esc(tt('mehfil_share', 'Share'))}</span>
+          </button>
+        </div>
+      </div>
+      <div class="mehfil-alone mehfil-alone-float" data-mehfil-alone hidden>
+        <p>${esc(tt('mehfil_alone', 'You’re the only one here — invite friends to join.'))}</p>
+        <button type="button" class="mehfil-nudge-btn" data-mehfil-nudge>${esc(tt('mehfil_nudge', 'Invite to Mehfil'))}</button>
+      </div>
+      <div class="mehfil-chat-strip is-collapsed" data-mehfil-chat-strip aria-label="${esc(tt('mehfil_chat_expand', 'Room chat'))}">
+        <button type="button" class="mehfil-chat-peek" data-mehfil-chat-toggle>
+          <span class="mehfil-chat-badge" data-mehfil-chat-badge hidden>0</span>
+          <span>💬</span>
+          <span class="mehfil-chat-preview" data-mehfil-chat-preview>${esc(tt('mehfil_chat_empty', 'Say hello to the room'))}</span>
+        </button>
+        <div class="mehfil-chat-expanded">
+          <div class="mehfil-chat-msgs" data-mehfil-chat-msgs></div>
+          <form class="mehfil-chat-compose" data-mehfil-chat-form>
+            <input type="text" maxlength="500" placeholder="${esc(tt('mehfil_msg_ph', 'Message the room…'))}" data-mehfil-chat-input enterkeyhint="send" autocomplete="off">
+            <button type="submit" aria-label="${esc(tt('send', 'Send'))}">↑</button>
+          </form>
+        </div>
+      </div>
+      <div class="mehfil-dock">
+        <div class="mehfil-dock-primary">
+          <button type="button" class="mehfil-ctrl ${micWanted ? 'is-live' : 'is-muted'}" data-mehfil-mic title="${esc(tt('mehfil_mic', 'Microphone'))}" aria-label="${esc(tt('mehfil_mic', 'Toggle microphone'))}" aria-pressed="${micWanted ? 'true' : 'false'}">🎤</button>
+          <button type="button" class="mehfil-ctrl is-off" data-mehfil-cam title="${esc(tt('mehfil_cam', 'Camera'))}" aria-label="${esc(tt('mehfil_cam', 'Toggle camera'))}" aria-pressed="false">📷</button>
+          <button type="button" class="mehfil-ctrl" data-mehfil-react-quick title="${esc(tt('mehfil_reactions', 'Reactions'))}">👏</button>
+          <button type="button" class="mehfil-ctrl" data-mehfil-more-btn title="${esc(tt('mehfil_more', 'More'))}" aria-label="${esc(tt('mehfil_more', 'More call actions'))}" aria-haspopup="true">${typeof iconHtml==='function'?iconHtml('more-vertical',{size:20}):'⋮'}</button>
+        </div>
+        <button type="button" class="mehfil-leave" data-mehfil-leave title="${esc(tt('mehfil_leave', 'Leave'))}" aria-label="${esc(tt('mehfil_leave', 'Leave Mehfil'))}">${esc(tt('mehfil_leave', 'Leave'))}</button>
       </div>`;
 
     const host = shellHost();
@@ -1808,20 +2178,48 @@
       });
     }
 
+    applyMehfilTheme(el);
+
     el.addEventListener('pointerdown', (e) => {
-      if (e.target.closest('.mehfil-dock, .mehfil-sheet, .mehfil-more-menu, .mehfil-top, .mehfil-sidebar')) {
+      if (
+        e.target.closest(
+          '.mehfil-dock, .mehfil-sheets, .mehfil-sheet, .mehfil-more-menu, .mehfil-top, .mehfil-chat-strip, .mehfil-chat-expanded'
+        )
+      ) {
         pokeChrome();
         return;
+      }
+      if (e.target.closest('[data-mehfil-stage-main]') && !e.target.closest('.mehfil-tile, .mehfil-yt, iframe')) {
+        collapseChatStrip();
       }
       pokeChrome();
     });
     pokeChrome();
 
-    el.querySelector('[data-mehfil-sidebar-hide]')?.addEventListener('click', () => {
-      el.classList.add('mehfil-sidebar-collapsed');
+    el.querySelector('[data-mehfil-theme-toggle]')?.addEventListener('click', toggleMehfilTheme);
+    el.querySelector('[data-mehfil-immersive]')?.addEventListener('click', toggleImmersive);
+    el.querySelector('[data-mehfil-leave-top]')?.addEventListener('click', () => leaveMehfil());
+    el.querySelector('[data-mehfil-chat-toggle]')?.addEventListener('click', () => {
+      const strip = chatStripEl();
+      if (strip?.classList.contains('is-expanded')) collapseChatStrip();
+      else expandChatStrip();
     });
-    el.querySelector('[data-mehfil-sidebar-show]')?.addEventListener('click', () => {
-      el.classList.remove('mehfil-sidebar-collapsed');
+    el.querySelector('[data-mehfil-stage-main]')?.addEventListener('dblclick', (e) => {
+      if (!e.target.closest('.mehfil-tile, .mehfil-yt, iframe, button')) collapseChatStrip();
+    });
+    el.querySelector('[data-mehfil-react-quick]')?.addEventListener('click', () => toggleCallSheet('reacts'));
+    el.querySelector('[data-mehfil-fs]')?.addEventListener('click', requestStageFullscreen);
+    el.querySelector('[data-mehfil-control-host]')?.addEventListener('click', async () => {
+      if (!activeChatId || !currentUser?.uid) return;
+      await rtdbRef(`mehfil/${activeChatId}/media`)?.update({
+        hostUid: currentUser.uid,
+        controlMode: 'host',
+        controlUid: null,
+      });
+    });
+    el.querySelector('[data-mehfil-control-all]')?.addEventListener('click', async () => {
+      if (!activeChatId || cachedMediaState?.hostUid !== currentUser?.uid) return;
+      await rtdbRef(`mehfil/${activeChatId}/media`)?.update({ controlMode: 'all', controlUid: null });
     });
     el.querySelector('[data-mehfil-chat-form]')?.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -1862,6 +2260,10 @@
     el.querySelector('[data-mehfil-media-btn]')?.addEventListener('click', () => {
       toggleCallSheet('media');
       loadMehfilYtRecs(el);
+      const fsBtn = el.querySelector('[data-mehfil-fs]');
+      if (fsBtn) fsBtn.hidden = !hasYoutubeOnStage();
+      const ctrl = el.querySelector('[data-mehfil-media-control]');
+      if (ctrl && cachedMediaState?.hostUid === currentUser?.uid) ctrl.hidden = false;
     });
     el.querySelector('[data-mehfil-ring]')?.addEventListener('click', () => startMehfilRing(activeChat));
     el.querySelector('[data-mehfil-flip]')?.addEventListener('click', flipCamera);
@@ -1878,7 +2280,9 @@
     el.querySelectorAll('[data-mehfil-reacts] button, [data-mehfil-stickers] button').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const emoji = btn.dataset.emoji;
-        showReactionBurst(emoji);
+        const isSticker = btn.closest('[data-mehfil-stickers]');
+        if (isSticker) showStickerBurst(emoji);
+        else showReactionBurst(emoji);
         if (!activeChatId) return;
         const ref = rtdbRef(`mehfil/${activeChatId}/reactions`);
         if (!ref) {
@@ -1986,6 +2390,9 @@
   window.mehfilMarkHtml = renderMehfilMark;
   window.isMehfilOpen = () => !!overlayEl;
   window.startMehfilRing = guardMehfil('mehfil_ring', startMehfilRing);
+  window.requestMehfilAutoJoin = (chatId) => {
+    mehfilAutoJoinPending = chatId;
+  };
 
   try {
     bindMehfilRingInbox();

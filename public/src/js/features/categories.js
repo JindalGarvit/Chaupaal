@@ -851,18 +851,27 @@ async function hydratePeepalSocial(items){
   if(typeof hydratePeepalReactions==='function') work.push(hydratePeepalReactions(live));
   if(typeof loadContentComments==='function'){
     live.forEach(q=>work.push(
-      loadContentComments('peepal',q,{limit:12})
+      loadContentComments('peepal',q,{limit:25})
         .then(async comments=>{
           if(!Array.isArray(comments)) return;
           if(typeof enrichUsersWithProfileType==='function'){
             await enrichUsersWithProfileType(comments.map(c=>c.user).filter(Boolean));
           }
           q._comments=comments;
+          if(typeof enrichCommentAggregates==='function') enrichCommentAggregates(q._comments);
+          if(typeof rankCommentsForPreview==='function'){
+            q._previewComments=rankCommentsForPreview(q._comments,{limit:3,viewerUid:currentUser?.uid});
+          }
+          if(typeof loadCommentLikeStates==='function'&&currentUser&&q._previewComments?.length){
+            const likedMap=await loadCommentLikeStates('peepal',q,q._previewComments.map(c=>c.id),currentUser.uid);
+            q._previewComments.forEach(c=>{ c.likedByMe=!!likedMap.get(c.id); });
+          }
         })
         .catch(()=>{})
     ));
   }
   await Promise.all(work);
+  if(live.length) renderPeepalFeed();
 }
 
 async function loadPeepalPage({reset=false}={}){
@@ -1149,14 +1158,51 @@ function renderPeepalReactionBar(q){
   }).join('');
 }
 
-function renderPeepalCommentStrip(q){
-  const comments=(q._comments||[]).filter(c=>!c.parentId&&!c.deleted).slice(0,1);
-  if(!comments.length){
-    return `<button type="button" class="pc-react-btn peepal-start-comment">💬 Start</button>`;
+function refreshPeepalPreviewComments(q){
+  if(!Array.isArray(q._comments)) return;
+  if(typeof enrichCommentAggregates==='function') enrichCommentAggregates(q._comments);
+  if(typeof rankCommentsForPreview==='function'){
+    q._previewComments=rankCommentsForPreview(q._comments,{limit:3,viewerUid:currentUser?.uid});
   }
-  const first = comments[0];
-  const author = String(first.user?.name || 'User').split(' ')[0];
-  return `<button type="button" class="pc-react-btn peepal-comment-chip" data-comment-id="${escPeepalText(first.id)}">💬 ${escPeepalText(author)}</button>`;
+}
+
+function renderPeepalFeedCommentsBlock(q){
+  const total=Math.max(Number(q.comments)||0,(q._comments||[]).filter(c=>!c.deleted).length);
+  if(typeof renderFeedCommentsPreviewHtml!=='function') return '';
+  if(!total){
+    return renderFeedCommentsPreviewHtml([],[],{prefix:'peepal',showEmpty:true,postId:q.firestoreId||q.id});
+  }
+  refreshPeepalPreviewComments(q);
+  return renderFeedCommentsPreviewHtml(q._comments||[],q._previewComments||[],{
+    prefix:'peepal',
+    totalCount:total,
+    postId:q.firestoreId||q.id,
+  });
+}
+
+function wirePeepalFeedComments(card,q){
+  const openSheet=(opts={})=>{
+    if(typeof openPeepalCommentsSheet==='function') openPeepalCommentsSheet(q,opts);
+    else openPeepalDetail(q,opts);
+  };
+  card.querySelectorAll('.feed-comment-row').forEach(row=>{
+    row.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      openSheet({focusCommentId:row.dataset.commentId});
+    });
+  });
+  card.querySelector('.feed-comment-more')?.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    openSheet();
+  });
+  card.querySelector('.peepal-feed-add-comment')?.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    if(!currentUser){
+      if(typeof requireSignIn==='function') return requireSignIn(typeof t==='function'?t('auth_sign_in_short'):'Sign in to continue');
+      return;
+    }
+    openSheet({focusComposer:true});
+  });
 }
 
 async function setPeepalCardReaction(q,type){
@@ -1285,11 +1331,11 @@ function renderPeepalFeed(){
           ${renderPeepalOptions(q)}
           <div class="pc-reaction-row">
             ${renderPeepalReactionBar(q)}
-            ${renderPeepalCommentStrip(q)}
-            <button type="button" class="pc-react-btn peepal-open-comments">${typeof iconHtml==='function'?iconHtml('message-circle',{size:14}):'💬'}<span>${q.comments}</span></button>
+            <button type="button" class="pc-react-btn peepal-open-comments">${typeof iconHtml==='function'?iconHtml('message-circle',{size:14}):'💬'}<span>${q.comments||0}</span></button>
             <button type="button" class="pc-react-btn peepal-share-btn">${typeof iconHtml==='function'?iconHtml('share',{size:14}):'↗️'}</button>
             ${canDelete?`<button type="button" class="pc-react-btn peepal-boost-btn" data-boost-post>${typeof iconHtml==='function'?iconHtml('rocket',{size:14}):'🚀'}</button>`:''}
           </div>
+          ${renderPeepalFeedCommentsBlock(q)}
         </div>
       </div>
     `;
@@ -1333,14 +1379,8 @@ function renderPeepalFeed(){
       btn.disabled=true;
       setPeepalCardReaction(q,btn.dataset.reaction);
     }));
-    card.querySelector('.peepal-open-comments')?.addEventListener('click',(e)=>{e.stopPropagation();openPeepalDetail(q);});
-    card.querySelector('.peepal-boost-btn')?.addEventListener('click',async(e)=>{
-      e.stopPropagation();
-      if(typeof openPeepalBoostComingSoon==='function') openPeepalBoostComingSoon(q);
-      else if(typeof showToast==='function') showToast(t('cat_boost_soon'));
-    });
-    card.querySelector('.peepal-start-comment')?.addEventListener('click',(e)=>{e.stopPropagation();openPeepalDetail(q,{focusComposer:true});});
-    // Friend request toggle — Add Friend ↔ Requested
+    card.querySelector('.peepal-open-comments')?.addEventListener('click',(e)=>{e.stopPropagation();openPeepalCommentsSheet(q);});
+    wirePeepalFeedComments(card,q);
     card.querySelector('.peepal-friend-btn')?.addEventListener('click', async (e) => {
       e.stopPropagation();
       const btn = e.currentTarget;
@@ -1368,25 +1408,6 @@ function renderPeepalFeed(){
         btn.disabled = false;
       }
     });
-    card.querySelectorAll('.peepal-comment-chip').forEach(chip=>{
-      const open=()=>openPeepalDetail(q,{focusCommentId:chip.dataset.commentId});
-      chip.addEventListener('click',(e)=>{
-        if(e.target.closest('.peepal-quick-reply,.peepal-inline-reply-form'))return;
-        e.stopPropagation();open();
-      });
-      chip.addEventListener('keydown',(e)=>{if(e.key==='Enter'){e.preventDefault();e.stopPropagation();open();}});
-    });
-    card.querySelectorAll('.peepal-quick-reply').forEach(btn=>btn.addEventListener('click',(e)=>{
-      e.stopPropagation();
-      const form=card.querySelector(`[data-reply-form="${btn.dataset.replyId}"]`);
-      form?.classList.toggle('hidden');
-      form?.querySelector('input')?.focus();
-    }));
-    card.querySelectorAll('.peepal-inline-reply-form').forEach(form=>form.addEventListener('submit',(e)=>{
-      e.preventDefault();e.stopPropagation();
-      const input=form.querySelector('input');
-      submitPeepalInlineReply(q,form.dataset.replyForm,input?.value);
-    }));
     card.querySelector('.peepal-delete-btn')?.addEventListener('click',(e)=>{
       e.stopPropagation();
       if(typeof softDeleteContent!=='function') return;
@@ -1590,6 +1611,181 @@ window.openPeepalBoostComingSoon=openPeepalBoostComingSoon;
 window.recordPeepalSegmentResponse=recordPeepalSegmentResponse;
 // Feed-render boundary (CONVENTIONS 4c) — dynamic list from network content
 if (typeof safeFeature === 'function') renderPeepalFeed = safeFeature('peepal_feed', renderPeepalFeed);
+
+function openPeepalCommentsSheet(q,{focusCommentId=null,focusComposer=false}={}){
+  const sheet=document.getElementById('peepalCommentsSheet');
+  if(!sheet) return openPeepalDetail(q,{focusCommentId,focusComposer});
+  const canLoadPersistentComments = typeof socialContentCanPersist === 'function' && socialContentCanPersist('peepal', q);
+  if(!Array.isArray(q._comments)) q._comments = canLoadPersistentComments ? [] : SAMPLE_COMMENTS.map(c=>({...c}));
+  const comments=q._comments;
+  let replyTo=null;
+  let layerHandle=null;
+  const close=()=>{
+    if(typeof closeAiKeyboard==='function') closeAiKeyboard();
+    sheet.classList.remove('open');
+    setTimeout(()=>sheet.classList.add('hidden'),220);
+    try{ history.pushState({},'', '/'); }catch(e){}
+  };
+  sheet.classList.remove('hidden');
+  sheet.innerHTML=`
+    <div class="social-comments-handle" aria-hidden="true"></div>
+    <div class="social-comments-header">
+      <div>
+        <div class="social-comments-title">${typeof t==='function'?t('comment_sheet_title'):'Comments'}</div>
+        <div class="social-comments-subtitle">${q.comments||0} on ${q.user?.name||'this post'}</div>
+      </div>
+      <button type="button" class="social-comments-close cp-tap-target" data-close-comments aria-label="Close comments">✕</button>
+    </div>
+    <div class="social-comments-body">
+      <div class="social-comments-context">
+        <strong>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(q.user?.name||'Post',q.user):(q.user?.name||'Post')}</strong>
+        <span>${escPeepalText(q.question||'')}</span>
+      </div>
+      <div id="peepalSheetCommentsList" class="comments-list"></div>
+    </div>
+    <div id="peepalSheetReplyHint" class="comment-reply-hint hidden"></div>
+    <div class="social-comments-composer">
+      <input class="comment-input" id="peepalSheetCommentInput" placeholder="${typeof t==='function'?t('comment_add_placeholder'):'Add a comment…'}">
+      <button class="btn btn--primary comment-send cp-tap-target" id="peepalSheetCommentSend">Post</button>
+    </div>
+  `;
+  sheet.querySelector('[data-close-comments]')?.addEventListener('click',close);
+  if(typeof openLayer==='function') layerHandle=openLayer(sheet, close, { role:'dialog', label: typeof t==='function'?t('comment_sheet_title'):'Comments' });
+  requestAnimationFrame(()=>sheet.classList.add('open'));
+  try{
+    const pid=q.firestoreId||q.id;
+    if(pid&&typeof buildDeepLink==='function') history.pushState({chaupaalDeep:true},'',buildDeepLink('post',pid));
+  }catch(e){}
+
+  const listEl=sheet.querySelector('#peepalSheetCommentsList');
+  const hint=sheet.querySelector('#peepalSheetReplyHint');
+  const input=sheet.querySelector('#peepalSheetCommentInput');
+  const send=sheet.querySelector('#peepalSheetCommentSend');
+  const commentActions=typeof createCommentActionHandlers==='function'
+    ? createCommentActionHandlers({collection:'peepal',content:q,comments,refresh:refreshComments})
+    : {};
+
+  function clearReply(){
+    replyTo=null;
+    if(hint){ hint.classList.add('hidden'); hint.innerHTML=''; }
+  }
+
+  function refreshComments(){
+    refreshPeepalPreviewComments(q);
+    listEl.innerHTML = typeof renderCommentsHtml === 'function'
+      ? renderCommentsHtml(comments,{ surface:'peepal', previewReplies:2 })
+      : '';
+    if(typeof wireCommentsList==='function'){
+      wireCommentsList(listEl, comments, {
+        ...commentActions,
+        surface:'peepal',
+        collection:'peepal',
+        content:q,
+        onReply(parentId){
+          replyTo=parentId;
+          const parent=comments.find((c)=>c.id===parentId);
+          if(hint){
+            hint.classList.remove('hidden');
+            const name=parent?.user?.name||'comment';
+            hint.innerHTML = `Replying to <strong>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(name,parent?.user):name}</strong> <button type="button" id="cancelPeepalSheetReply">${typeof t==='function'?t('cancel'):'Cancel'}</button>`;
+            hint.querySelector('#cancelPeepalSheetReply')?.addEventListener('click', clearReply);
+          }
+          const mention = parent?.user?.username || parent?.user?.name?.split?.(' ')?.[0];
+          if(input && mention && !String(input.value||'').trim()) input.value = `@${mention} `;
+          input?.focus();
+        },
+      });
+    }
+    renderPeepalFeed();
+  }
+
+  refreshComments();
+  if (canLoadPersistentComments && typeof loadContentComments === 'function') {
+    if (send) send.disabled = true;
+    if (typeof renderSkeleton === 'function') renderSkeleton(listEl, { variant: 'list', count: 3 });
+    loadContentComments('peepal', q, {limit:25})
+      .then(async (loaded) => {
+        if (!Array.isArray(loaded)) return;
+        comments.splice(0, comments.length, ...loaded);
+        q._comments = comments;
+        if (typeof enrichUsersWithProfileType === 'function') {
+          await enrichUsersWithProfileType(comments.map((c) => c.user).filter(Boolean));
+        }
+        refreshComments();
+      })
+      .catch((err) => {
+        if (typeof renderErrorState === 'function') {
+          renderErrorState(listEl, {
+            title: 'Couldn’t load comments',
+            message: typeof friendlyError === 'function' ? friendlyError(err) : 'Please try again.',
+            onRetry: () => openPeepalCommentsSheet(q,{focusCommentId,focusComposer}),
+          });
+        }
+      })
+      .finally(() => {
+        if (send) send.disabled = false;
+        if(focusCommentId && typeof focusCommentRow==='function') focusCommentRow(listEl,focusCommentId);
+      });
+  }
+
+  send?.addEventListener('click', async () => {
+    if(!currentUser){
+      if(typeof requireSignIn==='function') return requireSignIn(typeof t==='function'?t('auth_sign_in_short'):'Sign in to continue');
+      return;
+    }
+    const txt = input?.value?.trim();
+    if (!txt) return;
+    const id = typeof newCommentId === 'function' ? newCommentId() : 'c_' + Date.now();
+    const c = {
+      id,
+      parentId: replyTo || null,
+      user: typeof currentCommentUser === 'function' ? currentCommentUser() : { name: userProfile?.name || 'You', avatar: '🪑' },
+      text: txt,
+      time: 'just now',
+      pending: true,
+      likeCount:0,
+      replyCount:0,
+    };
+    const apply = () => {
+      comments.push(c);
+      q.comments = (q.comments || 0) + 1;
+      if(input) input.value = '';
+      clearReply();
+      refreshComments();
+    };
+    const revert = () => {
+      const i = comments.findIndex((x) => x.id === id);
+      if (i >= 0) comments.splice(i, 1);
+      q.comments = Math.max(0, (q.comments || 1) - 1);
+      refreshComments();
+    };
+    if (typeof runOptimistic === 'function') {
+      await runOptimistic({
+        apply,
+        revert,
+        commit: async () => {
+          if (typeof assertRateLimit === 'function') await assertRateLimit('comment');
+          if (typeof persistContentComment === 'function') {
+            const saved = await persistContentComment('peepal', q, c);
+            if (saved.persisted && Number.isFinite(saved.comments)) q.comments = saved.comments;
+          }
+          c.pending = false;
+          refreshComments();
+        },
+      });
+    } else {
+      apply();
+      c.pending = false;
+      refreshComments();
+    }
+  });
+
+  setTimeout(()=>{
+    if(input) wireAiKbToInput(input,`Peepal question: "${q.question.slice(0,80)}"`);
+    if(focusComposer) input?.focus();
+    if(focusCommentId && typeof focusCommentRow==='function') focusCommentRow(listEl,focusCommentId);
+  },100);
+}
 
 function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
   const detail=document.getElementById('peepalDetail');

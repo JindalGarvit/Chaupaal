@@ -208,10 +208,87 @@
       createdAt,
       editedAt: raw.editedAt?.toMillis?.() || null,
       deleted: raw.deleted === true,
+      likeCount: Math.max(0, Number(raw.likeCount) || 0),
+      replyCount: Math.max(0, Number(raw.replyCount) || 0),
       time: typeof formatRelativeTime === 'function' ? formatRelativeTime(createdAt) : 'recently',
       pending: false,
       persisted: true,
     };
+  }
+
+  function resolveCommentThreadRootId(commentId, commentById) {
+    if (typeof resolveThreadRootId === 'function' && commentById instanceof Map) {
+      return resolveThreadRootId(commentId, commentById);
+    }
+    let id = commentId;
+    let guard = 0;
+    while (id && guard < 10) {
+      const c = commentById.get(id);
+      if (!c || !c.parentId) return id;
+      id = c.parentId;
+      guard += 1;
+    }
+    return commentId;
+  }
+
+  async function loadCommentLikeStates(collection, content, commentIds, uid) {
+    const map = new Map();
+    if (!canPersist(collection, content) || !uid || !Array.isArray(commentIds) || !commentIds.length) {
+      return map;
+    }
+    const id = contentId(content);
+    const parentRef = db.collection(collection).doc(id);
+    await Promise.all(
+      commentIds.slice(0, 40).map(async (commentId) => {
+        try {
+          const snap = await parentRef.collection('comments').doc(commentId).collection('likes').doc(uid).get();
+          map.set(commentId, snap.exists);
+        } catch (e) {
+          map.set(commentId, false);
+        }
+      })
+    );
+    return map;
+  }
+
+  async function toggleCommentLike(collection, content, comment) {
+    if (!canPersist(collection, content) || !comment?.id) {
+      return {
+        persisted: false,
+        liked: !!comment.likedByMe,
+        likeCount: Math.max(0, Number(comment.likeCount) || 0),
+      };
+    }
+    const id = contentId(content);
+    const uid = currentUser.uid;
+    const commentRef = db.collection(collection).doc(id).collection('comments').doc(comment.id);
+    const likeRef = commentRef.collection('likes').doc(uid);
+
+    const result = await db.runTransaction(async (tx) => {
+      const commentSnap = await tx.get(commentRef);
+      if (!commentSnap.exists) throw new Error('Comment not found');
+      const likeSnap = await tx.get(likeRef);
+      const currentCount = Math.max(0, Number(commentSnap.data()?.likeCount) || 0);
+      if (likeSnap.exists) {
+        tx.delete(likeRef);
+        const next = Math.max(0, currentCount - 1);
+        tx.update(commentRef, { likeCount: next });
+        return { liked: false, likeCount: next };
+      }
+      tx.set(likeRef, { uid, at: serverTimestamp() });
+      const next = currentCount + 1;
+      tx.update(commentRef, { likeCount: next });
+      return { liked: true, likeCount: next };
+    });
+
+    if (result.liked) {
+      const ownerUid = comment.uid || comment.user?.uid;
+      if (ownerUid && ownerUid !== currentUser.uid) {
+        emitSocialNotif(collection, { ...content, uid: ownerUid }, 'like', 'liked your comment').catch(() => {});
+      }
+    }
+
+    return { persisted: true, ...result };
   }
 
   async function loadContentComments(collection, content, { limit = COMMENT_PAGE_SIZE } = {}) {
@@ -259,9 +336,19 @@
         user: safeCommentUser(comment.user),
         text,
         parentId,
+        likeCount: 0,
+        replyCount: 0,
         createdAt: serverTimestamp(),
         editedAt: null,
       });
+      if (parentId) {
+        const parentCommentRef = parentRef.collection('comments').doc(parentId);
+        const parentCommentSnap = await tx.get(parentCommentRef);
+        if (parentCommentSnap.exists) {
+          const prevReplies = Math.max(0, Number(parentCommentSnap.data()?.replyCount) || 0);
+          tx.update(parentCommentRef, { replyCount: prevReplies + 1 });
+        }
+      }
       tx.update(parentRef, {
         comments: currentCount + 1,
         commentMutationId: id,
@@ -511,6 +598,8 @@
   window.recordContentInterest = recordContentInterest;
   window.incrementContentShares = incrementContentShares;
   window.loadContentComments = loadContentComments;
+  window.loadCommentLikeStates = loadCommentLikeStates;
+  window.toggleCommentLike = toggleCommentLike;
   window.persistContentComment = persistContentComment;
   window.updateContentComment = updateContentComment;
   window.deleteContentComment = deleteContentComment;

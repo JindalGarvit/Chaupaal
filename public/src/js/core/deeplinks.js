@@ -611,8 +611,15 @@
     if (typeof showToast === 'function') showToast('Post not found');
   }
 
-  async function openChatById(id) {
+  async function openChatById(id, opts) {
     if (!id) return;
+    const wantMehfil = !!(opts && opts.mehfil) || (() => {
+      try {
+        return new URLSearchParams(location.search).get('mehfil') === '1';
+      } catch (e) {
+        return false;
+      }
+    })();
     // Already open on this chat — do not pushState / remount (breaks Back after overlays/music)
     const open = document.getElementById('activeChatScreen');
     const openId = open?.dataset?.chatId || window.currentOpenChat?.firestoreId || window.currentOpenChat?.id;
@@ -632,7 +639,14 @@
       const still = document.getElementById('activeChatScreen');
       const stillId = still?.dataset?.chatId;
       if (still && stillId && String(stillId) === String(id)) return;
-      setTimeout(() => openChatScreen?.(chat), 250);
+      setTimeout(() => {
+        openChatScreen?.(chat);
+        if (wantMehfil && typeof openMehfil === 'function' && currentUser) {
+          if (typeof mehfilEligible === 'function' && !mehfilEligible(chat)) return;
+          if (typeof isMehfilOpen === 'function' && isMehfilOpen()) return;
+          setTimeout(() => openMehfil(chat), 500);
+        }
+      }, 250);
     }, 100);
   }
 

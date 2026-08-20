@@ -527,7 +527,7 @@
         }
       }
       if (type.includes('mehfil') && link.chatId && typeof openChatById === 'function') {
-        openChatById(link.chatId);
+        openChatById(link.chatId, { mehfil: true });
         return;
       }
       if (link.chatId && typeof openChatById === 'function') {

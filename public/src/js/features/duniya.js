@@ -94,6 +94,20 @@ async function loadDuniyaPage({reset=false}={}){
       await enrichUsersWithProfileType(mapped.map(p=>p.user).filter(Boolean));
     }
     if(typeof hydrateContentLikes==='function') await hydrateContentLikes('duniya',mapped);
+    if(typeof loadContentComments==='function'){
+      await Promise.all(mapped.map(async(post)=>{
+        try{
+          const comments = await loadContentComments('duniya', post, { limit:25 });
+          if(Array.isArray(comments)){
+            post._comments = comments;
+            if(typeof enrichCommentAggregates==='function') enrichCommentAggregates(post._comments);
+            if(typeof rankCommentsForPreview==='function'){
+              post._previewComments = rankCommentsForPreview(post._comments,{ limit:2, viewerUid: currentUser?.uid });
+            }
+          }
+        }catch(e){}
+      }));
+    }
     if(typeof hydrateRelationships==='function'){
       const states=await hydrateRelationships(mapped.map(p=>p.user?.uid).filter(Boolean));
       mapped.forEach(p=>{
@@ -358,6 +372,19 @@ function createDuniyaPost(post, {variant='list'}={}){
   const caption=duniyaDecorateCaption(post);
   const me=typeof currentUser!=='undefined'?currentUser?.uid:'';
   const own=duniyaViewerOwns(post);
+  const previewTotal = Math.max(Number(post.comments)||0, Array.isArray(post._comments) ? post._comments.filter((c)=>!c.deleted).length : 0);
+  if(typeof enrichCommentAggregates==='function' && Array.isArray(post._comments)) enrichCommentAggregates(post._comments);
+  if(typeof rankCommentsForPreview==='function' && Array.isArray(post._comments)) post._previewComments = rankCommentsForPreview(post._comments,{ limit:2, viewerUid: currentUser?.uid });
+  const previewHtml = post.commentsOff && !own
+    ? ''
+    : (typeof renderFeedCommentsPreviewHtml==='function'
+      ? renderFeedCommentsPreviewHtml(post._comments||[], post._previewComments||[], {
+          prefix:'duniya',
+          totalCount: previewTotal,
+          showEmpty: previewTotal===0 && own,
+          postId: post.firestoreId || post.id,
+        })
+      : '');
   const locName=post.location?.placeName||post.location?.label||'';
   const audienceLabel=post.archived?'Archive':(post.audience==='public'||!post.audience?'Everyone':post.audience);
   const names=[post.user?.name].concat((post.collabUsers||[]).map((u)=>u.name).filter(Boolean));
@@ -408,7 +435,8 @@ function createDuniyaPost(post, {variant='list'}={}){
       <div class="duniya-post-caption"><strong class="duniya-post-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(post.user.name,post.user):duniyaEsc(post.user.name)}</strong> ${caption}</div>
       ${post.caption?`<button type="button" class="duniya-caption-speak" title="Listen to caption" aria-label="Listen to caption">${typeof iconHtml==='function'?iconHtml('volume',{size:16}):'🔊'}</button>`:''}
     </div>`:''}
-    ${post.comments>0&&!post.commentsOff?`<div class="duniya-view-comments">View all ${post.comments} comments</div>`:(post.comments>0&&own?`<div class="duniya-view-comments">View comments</div>`:'')}
+    ${previewHtml}
+    ${previewTotal>0&&!post.commentsOff?`<div class="duniya-view-comments">View all ${previewTotal} comments</div>`:(previewTotal>0&&own?`<div class="duniya-view-comments">View comments</div>`:'')}
   `;
   const postAvatar=el.querySelector('.duniya-post-avatar');
   if(typeof bindProfileLongPress==='function') bindProfileLongPress(postAvatar,post.user);
@@ -698,6 +726,22 @@ function createDuniyaPost(post, {variant='list'}={}){
     openDuniyaDetail(post);
   });
   el.querySelector('.duniya-view-comments')?.addEventListener('click',()=>openDuniyaDetail(post));
+  el.querySelectorAll('.feed-comment-row').forEach((row)=>row.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    openDuniyaDetail(post,{focusCommentId:row.dataset.commentId});
+  }));
+  el.querySelector('.feed-comment-more')?.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    openDuniyaDetail(post);
+  });
+  el.querySelector('.duniya-feed-add-comment')?.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    if(!currentUser){
+      if(typeof requireSignIn==='function') return requireSignIn(typeof t==='function'?t('auth_sign_in_short'):'Sign in to continue');
+      return;
+    }
+    openDuniyaDetail(post,{focusComposer:true});
+  });
 
   bindDuniyaCarousel(el, post, slides);
   el.querySelectorAll('[data-hashtag]').forEach((btn)=>{
@@ -800,7 +844,7 @@ function syncDuniyaPostUI(post){
       likeBtn.setAttribute('aria-pressed', post.likedByMe?'true':'false');
     }
     let view=card.querySelector('.duniya-view-comments');
-    const count=Math.max(0, Number(post.comments)||0);
+    const count=Math.max(0, Number(post.comments)||0, Array.isArray(post._comments)?post._comments.filter((c)=>!c.deleted).length:0);
     if(count>0){
       if(!view){
         view=document.createElement('div');
@@ -836,7 +880,7 @@ function getDuniyaComments(post) {
   return post._comments;
 }
 
-function openDuniyaDetail(post){
+function openDuniyaDetail(post,{focusCommentId=null,focusComposer=false}={}){
   const detail=document.getElementById('duniyaPostDetail');
   detail.classList.remove('hidden');requestAnimationFrame(()=>detail.classList.add('open'));
   const canLoadPersistentComments = typeof socialContentCanPersist === 'function' && socialContentCanPersist('duniya', post);
@@ -849,7 +893,7 @@ function openDuniyaDetail(post){
     <div class="duniya-comments-handle" aria-hidden="true"></div>
     <div class="duniya-comments-header">
       <div>
-        <div class="duniya-comments-title">Comments</div>
+        <div class="duniya-comments-title">${typeof t==='function'?t('comment_sheet_title'):'Comments'}</div>
         <div class="duniya-comments-subtitle">${post.comments||0} on ${post.user?.name||'this post'}</div>
       </div>
       <div class="duniya-detail-actions">
@@ -863,14 +907,14 @@ function openDuniyaDetail(post){
         <span>${String(post.caption||'').slice(0,150)}</span>
       </div>
       <div id="duniyaCommentsList" class="comments-list">
-        ${typeof renderCommentsHtml==='function'?renderCommentsHtml(comments):''}
+        ${typeof renderCommentsHtml==='function'?renderCommentsHtml(comments,{ surface:'duniya', previewReplies:2 }):''}
       </div>
     </div>
     <div id="duniyaReplyHint" class="comment-reply-hint hidden"></div>
     ${post.commentsOff && !duniyaViewerOwns(post)
       ? `<div class="duniya-comments-composer" style="justify-content:center;color:var(--muted);font-size:13px;">Comments are off</div>`
       : `<div class="duniya-comments-composer">
-      <input id="duniyaCommentInput" style="flex:1;padding:10px 14px;border:2px solid var(--line);border-radius:12px;font-family:Inter,sans-serif;font-size:14px;outline:none;min-height:44px;" placeholder="Add a comment... @mention someone">
+      <input id="duniyaCommentInput" style="flex:1;padding:10px 14px;border:2px solid var(--line);border-radius:12px;font-family:Inter,sans-serif;font-size:14px;outline:none;min-height:44px;" placeholder="${typeof t==='function'?t('comment_add_placeholder'):'Add a comment…'} @mention someone">
       <button id="duniyaCommentSend" class="cp-tap-target" style="background:var(--red);color:#fff;border:none;border-radius:12px;padding:10px 16px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;cursor:pointer;min-height:44px;">Post</button>
     </div>`}
   `;
@@ -906,23 +950,30 @@ function openDuniyaDetail(post){
 
   function refreshComments() {
     if (!listEl) return;
-    listEl.innerHTML = typeof renderCommentsHtml === 'function' ? renderCommentsHtml(comments) : '';
+    if(typeof enrichCommentAggregates==='function') enrichCommentAggregates(comments);
+    if(typeof rankCommentsForPreview==='function') post._previewComments = rankCommentsForPreview(comments,{limit:2,viewerUid:currentUser?.uid});
+    listEl.innerHTML = typeof renderCommentsHtml === 'function' ? renderCommentsHtml(comments,{ surface:'duniya', previewReplies:2 }) : '';
     syncDuniyaPostUI(post);
     if (typeof wireCommentsList === 'function') {
       wireCommentsList(listEl, comments, {
         ...commentActions,
+        surface:'duniya',
+        collection:'duniya',
+        content:post,
         onReply(parentId) {
           replyTo = parentId;
           const parent = comments.find((c) => c.id === parentId);
           if (hint) {
             hint.classList.remove('hidden');
-            hint.innerHTML = `Replying to <strong>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(parent?.user?.name||'comment',parent?.user):(parent?.user?.name||'comment')}</strong> <button type="button" id="cancelDuniyaReply">Cancel</button>`;
+            hint.innerHTML = `Replying to <strong>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(parent?.user?.name||'comment',parent?.user):(parent?.user?.name||'comment')}</strong> <button type="button" id="cancelDuniyaReply">${typeof t==='function'?t('cancel'):'Cancel'}</button>`;
             hint.querySelector('#cancelDuniyaReply')?.addEventListener('click', () => {
               replyTo = null;
               hint.classList.add('hidden');
               hint.innerHTML = '';
             });
           }
+          const mention = parent?.user?.username || parent?.user?.name?.split?.(' ')?.[0];
+          if(commentInput && mention && !String(commentInput.value||'').trim()) commentInput.value = `@${mention} `;
           commentInput?.focus();
         },
       });
@@ -932,7 +983,7 @@ function openDuniyaDetail(post){
   if (canLoadPersistentComments && typeof loadContentComments === 'function') {
     if (commentSend) commentSend.disabled = true;
     if (typeof renderSkeleton === 'function') renderSkeleton(listEl, { variant: 'list', count: 3 });
-    loadContentComments('duniya', post)
+    loadContentComments('duniya', post, {limit:25})
       .then(async (loaded) => {
         if (!Array.isArray(loaded)) return;
         comments.splice(0, comments.length, ...loaded);
@@ -971,6 +1022,8 @@ function openDuniyaDetail(post){
       text: txt,
       time: 'just now',
       pending: true,
+      likeCount:0,
+      replyCount:0,
     };
     const apply = () => {
       comments.push(c);
@@ -1259,6 +1312,10 @@ function openArchive(){
     overlay.remove();
     if(typeof openRecoveryBin==='function') openRecoveryBin();
   });
+  setTimeout(()=>{
+    if(focusComposer) commentInput?.focus();
+    if(focusCommentId && typeof focusCommentRow==='function') focusCommentRow(listEl,focusCommentId);
+  },100);
 }
 
 // ===================== PEEPAL NUDGES =====================
