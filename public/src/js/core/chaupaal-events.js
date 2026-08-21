@@ -394,6 +394,7 @@
     const prompt = pickFeedbackPrompt();
     const ico = (name, size) =>
       typeof iconHtml === 'function' ? iconHtml(name, { size: size || 18 }) : '';
+    const tt = (k, fb) => (typeof t === 'function' ? t(k) || fb : fb);
 
     if (typeof openHalfSheet !== 'function') {
       if (typeof showToast === 'function') showToast('Feedback unavailable');
@@ -401,24 +402,25 @@
     }
 
     const bodyHtml = `
-      <div class="product-feedback-body" data-no-sheet-drag>
-        <div class="product-feedback-kicker">${ico('message-square', 16)} For the team · one-shot</div>
-        <p class="product-feedback-prompt">${escFb(prompt)}</p>
-        <p class="product-feedback-hint">Improve the app, note what’s missing, or leave a general thought. Not in Archive or your profile — no edit after send.</p>
-        <div class="product-feedback-chips" role="group" aria-label="Category">
+      <div class="product-feedback-body journal-checkin-body" data-no-sheet-drag>
+        <p class="journal-checkin-prompt product-feedback-prompt">${escFb(prompt)}</p>
+        <p class="product-feedback-hint">${escFb(tt('feedback_hint', 'Improve the app, note what’s missing, or leave a thought. Only founders see this — no edit after send.'))}</p>
+        <div class="product-feedback-chips" role="group" aria-label="${escFb(tt('feedback_category', 'Category'))}">
           ${FEEDBACK_CATEGORIES.map(
             (c, i) =>
               `<button type="button" class="product-feedback-chip${i === 3 ? ' is-selected' : ''}" data-fb-cat="${c.id}">${escFb(c.label)}</button>`
           ).join('')}
         </div>
-        <textarea data-product-feedback-text rows="4" maxlength="2000" placeholder="Write freely — only founders &amp; admins see this"></textarea>
-        <button type="button" class="btn btn--primary btn--block product-feedback-send" data-product-feedback-send>Send feedback</button>
+        <div class="journal-compose-wrap">
+          <textarea data-product-feedback-text rows="5" maxlength="2000" placeholder="${escFb(tt('feedback_placeholder', 'Write freely — only founders & admins see this'))}"></textarea>
+        </div>
+        <button type="button" class="btn btn--primary btn--block product-feedback-send" data-product-feedback-send>${escFb(tt('feedback_send', 'Send feedback'))}</button>
       </div>`;
 
     return openHalfSheet({
       id: 'productFeedbackSheet',
-      title: 'Feedback',
-      snap: 'compact',
+      title: tt('feedback_title', 'Feedback'),
+      snap: 'mid',
       accent: 'feedback',
       bodyHtml,
       onMount(sheet, close) {
@@ -432,17 +434,22 @@
           });
         });
         const ta = sheet.querySelector('[data-product-feedback-text]');
-        setTimeout(() => ta?.focus(), 80);
+        setTimeout(() => {
+          ta?.focus();
+          try {
+            sheet.classList.add('cp-half-sheet--expand');
+          } catch (e) {}
+        }, 80);
         sheet.querySelector('[data-product-feedback-send]')?.addEventListener('click', async () => {
           const text = ta?.value?.trim();
           if (!text) {
-            if (typeof showToast === 'function') showToast('Write a short note first');
+            if (typeof showToast === 'function') showToast(tt('feedback_empty', 'Write a short note first'));
             return;
           }
           const sendBtn = sheet.querySelector('[data-product-feedback-send]');
           if (sendBtn) {
             sendBtn.disabled = true;
-            sendBtn.textContent = 'Sending…';
+            sendBtn.textContent = tt('feedback_sending', 'Sending…');
           }
           try {
             await submitProductFeedback({
@@ -451,14 +458,14 @@
               source,
               eventId: opts.event?.id || null,
             });
-            if (typeof showToast === 'function') showToast('Thanks — noted for the product team');
+            if (typeof showToast === 'function') showToast(tt('feedback_thanks', 'Thanks — noted for the product team'));
             close();
           } catch (e) {
             if (sendBtn) {
               sendBtn.disabled = false;
-              sendBtn.textContent = 'Send feedback';
+              sendBtn.textContent = tt('feedback_send', 'Send feedback');
             }
-            if (typeof showToast === 'function') showToast('Could not save — try again later');
+            if (typeof showToast === 'function') showToast(tt('feedback_fail', 'Could not save — try again later'));
           }
         });
       },

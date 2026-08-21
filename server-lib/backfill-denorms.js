@@ -80,7 +80,9 @@ async function backfillGroups(db, { limit = BATCH, startAfterId = null } = {}) {
   snap.docs.forEach((doc) => {
     const d = doc.data() || {};
     const patch = {};
-    if (!('isPublic' in d)) patch.isPublic = true;
+    if (!('isPublic' in d) && !('visibility' in d)) {
+      // Do not force-migrate legacy groups to public — leave flags alone
+    }
     const wantLower = groupNameLower(d.name);
     if (wantLower && d.nameLower !== wantLower) patch.nameLower = wantLower;
     const count = Array.isArray(d.participants) ? d.participants.length : 0;

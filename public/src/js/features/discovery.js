@@ -337,23 +337,58 @@ async function runPeepalAiSearchLocalFallback(query, resultsEl){
 
 // ===================== ACTIVITY STATUS =====================
 let _activityInterval = null;
+let _rtdbPresenceRef = null;
+let _chatPresenceUnsubs = [];
+
+function rtdbStatusRef(uid) {
+  try {
+    if (typeof firebase === 'undefined' || !firebase.database) return null;
+    return firebase.database().ref(`status/${uid}`);
+  } catch (e) {
+    return null;
+  }
+}
 
 function initActivityStatus(){
   if(!db||!currentUser) return;
-  // Set own status to online
   const statusRef = db.collection('user_status').doc(currentUser.uid);
   statusRef.set({online:true, lastSeen:firebase.firestore.FieldValue.serverTimestamp(), uid:currentUser.uid}).catch(()=>{});
-  // Update on visibility change
+
+  const rtdbRef = rtdbStatusRef(currentUser.uid);
+  if (rtdbRef) {
+    _rtdbPresenceRef = rtdbRef;
+    const onlinePayload = { state: 'online', at: firebase.database.ServerValue.TIMESTAMP };
+    const offlinePayload = { state: 'offline', at: firebase.database.ServerValue.TIMESTAMP };
+    rtdbRef.set(onlinePayload).catch(()=>{});
+    rtdbRef.onDisconnect().set(offlinePayload).catch(()=>{});
+  }
+
   document.addEventListener('visibilitychange',()=>{
-    if(document.hidden){statusRef.update({online:false,lastSeen:firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>{});}
-    else{statusRef.update({online:true}).catch(()=>{});}
+    if(document.hidden){
+      statusRef.update({online:false,lastSeen:firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>{});
+      rtdbRef?.set({ state: 'offline', at: firebase.database.ServerValue.TIMESTAMP }).catch(()=>{});
+    } else {
+      statusRef.update({online:true,lastSeen:firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>{});
+      rtdbRef?.set({ state: 'online', at: firebase.database.ServerValue.TIMESTAMP }).catch(()=>{});
+      rtdbRef?.onDisconnect().set({ state: 'offline', at: firebase.database.ServerValue.TIMESTAMP }).catch(()=>{});
+    }
   });
-  // Heartbeat every 60s
   _activityInterval = setInterval(()=>{
-    if(!document.hidden) statusRef.update({online:true,lastSeen:firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>{});
+    if(!document.hidden){
+      statusRef.update({online:true,lastSeen:firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>{});
+      rtdbRef?.update({ state: 'online', at: firebase.database.ServerValue.TIMESTAMP }).catch(()=>{});
+    }
   },60000);
-  // Set offline on unload
-  window.addEventListener('beforeunload',()=>statusRef.update({online:false,lastSeen:firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>{}));
+  window.addEventListener('beforeunload',()=>{
+    statusRef.update({online:false,lastSeen:firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>{});
+  });
+}
+
+function clearChatPresenceSubs() {
+  (_chatPresenceUnsubs || []).forEach((fn) => {
+    try { fn(); } catch (e) {}
+  });
+  _chatPresenceUnsubs = [];
 }
 
 async function getUserStatus(uid){
@@ -366,26 +401,76 @@ async function getUserStatus(uid){
 }
 
 function formatActivityStatus(statusData){
-  if(!statusData) return '<span class="chat-presence-line">Offline</span>';
-  if(statusData.online) {
-    return '<span class="chat-presence-line is-online"><span class="chat-presence-dot" aria-hidden="true"></span>Online</span>';
+  const tt = (k, fb) => (typeof t === 'function' ? t(k) || fb : fb);
+  if(!statusData) return `<span class="chat-presence-line">${tt('presence_offline','Offline')}</span>`;
+  if(statusData.online || statusData.state === 'online') {
+    return `<span class="chat-presence-line is-online"><span class="chat-presence-dot" aria-hidden="true"></span>${tt('presence_online','Online')}</span>`;
   }
-  const lastSeen = statusData.lastSeen?.toDate?.() || (statusData.lastSeen ? new Date(statusData.lastSeen) : null);
+  const lastSeen = statusData.lastSeen?.toDate?.()
+    || (statusData.lastSeen ? new Date(statusData.lastSeen) : null)
+    || (statusData.at ? new Date(statusData.at) : null);
   const valid = lastSeen && !Number.isNaN(lastSeen.getTime()) && lastSeen.getTime() > 0;
-  if(!valid) return '<span class="chat-presence-line">Offline</span>';
+  if(!valid) return `<span class="chat-presence-line">${tt('presence_offline','Offline')}</span>`;
+  const age = Date.now() - lastSeen.getTime();
+  if (age < 60_000) {
+    return `<span class="chat-presence-line">${tt('presence_last_just_now','Last seen just now')}</span>`;
+  }
   const rel = typeof formatRelativeTime==='function'
     ? formatRelativeTime(lastSeen)
     : lastSeen.toLocaleDateString('en-IN',{day:'numeric',month:'short'});
   const when = String(rel || '').replace(/^last seen\s+/i, '');
-  return `<span class="chat-presence-line">Last seen ${when}</span>`;
+  return `<span class="chat-presence-line">${tt('presence_last_seen','Last seen')} ${when}</span>`;
 }
 
-// Add status badge to chat headers
-async function injectChatActivityStatus(uid){
-  const status = await getUserStatus(uid);
+function injectChatActivityStatus(uid){
+  clearChatPresenceSubs();
   const el = document.getElementById('chatActivityStatus');
-  if(el) el.innerHTML = formatActivityStatus(status);
+  if(!el || !uid) return;
+  // Respect presence preference when set
+  try {
+    const prefs = typeof PushPrefs !== 'undefined' ? PushPrefs.loadPrefs?.() : null;
+    if (prefs && prefs.chatPresence === false) {
+      el.innerHTML = '';
+      return;
+    }
+  } catch (e) {}
+
+  const paint = (data) => {
+    if (el) el.innerHTML = formatActivityStatus(data || {});
+  };
+
+  const rtdb = rtdbStatusRef(uid);
+  if (rtdb) {
+    const handler = (snap) => {
+      const v = snap.val() || {};
+      paint({ online: v.state === 'online', state: v.state, at: v.at });
+    };
+    rtdb.on('value', handler);
+    _chatPresenceUnsubs.push(() => rtdb.off('value', handler));
+  }
+
+  if (db) {
+    const unsub = db.collection('user_status').doc(uid).onSnapshot(
+      (snap) => {
+        if (!snap.exists) return;
+        const d = snap.data() || {};
+        // Only apply Firestore when RTDB says offline / unavailable
+        const cur = el?.querySelector('.is-online');
+        if (cur && rtdb) return;
+        paint(d);
+      },
+      () => {}
+    );
+    _chatPresenceUnsubs.push(() => {
+      try { unsub(); } catch (e) {}
+    });
+  } else {
+    getUserStatus(uid).then(paint);
+  }
 }
+
+window.clearChatPresenceSubs = clearChatPresenceSubs;
+window.injectChatActivityStatus = injectChatActivityStatus;
 
 // ===================== OPEN TO MEET ENFORCEMENT =====================
 function isOpenToMeet(userObj){

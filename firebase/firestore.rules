@@ -690,9 +690,9 @@ service cloud.firestore {
         'participants', 'memberProfiles', 'discoveryOrigin', 'peerProfileType', 'origin',
         'name', 'description', 'avatar', 'photoURL', 'admins', 'permissions', 'invite',
         'openedBy', 'createdBy', 'firstMessageAt', 'matchMeta',
-        'isPublic', 'nameLower', 'memberCount', 'discoverableNoticeAck', 'discoverableInSearch'
+        'isPublic', 'nameLower', 'memberCount', 'discoverableNoticeAck', 'discoverableInSearch', 'visibility'
       ]);
-      let adminOnly = keys.hasAny(['admins', 'permissions', 'invite', 'isPublic', 'discoverableNoticeAck', 'discoverableInSearch']);
+      let adminOnly = keys.hasAny(['admins', 'permissions', 'invite', 'isPublic', 'discoverableNoticeAck', 'discoverableInSearch', 'visibility']);
       let infoKeys = keys.hasAny(['name', 'description', 'avatar', 'photoURL', 'nameLower']);
       let canEditInfo = isChatAdmin() ||
         (resource.data.permissions != null && resource.data.permissions.editInfo == 'all');
@@ -709,9 +709,16 @@ service cloud.firestore {
       allow get: if isOwnSystemChatId(chatId)
         || isOwnCanonicalDmId(chatId)
         || isChatParticipant()
-        || (resource.data.type == 'group' && resource.data.isPublic == true);
+        || (resource.data.type == 'group' && (
+             resource.data.isPublic == true
+             || resource.data.visibility == 'public'
+             || resource.data.visibility == 'discoverable'
+             || resource.data.discoverableInSearch == true
+           ));
       allow list: if isChatParticipant()
         || (resource.data.type == 'group' && resource.data.isPublic == true)
+        || (resource.data.type == 'group' && resource.data.visibility == 'public')
+        || (resource.data.type == 'group' && resource.data.visibility == 'discoverable')
         || (resource.data.type == 'group' && resource.data.discoverableInSearch == true);
       allow create: if isAuth()
         && request.resource.data.participants.hasAny([request.auth.uid])

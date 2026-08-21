@@ -16,6 +16,7 @@ function closeChatScreen(opts = {}) {
 
   // Keep in-app music playing when leaving chat — mini-player owns stop/dismiss
   if (typeof stopChatPresence === 'function') stopChatPresence();
+  if (typeof clearChatPresenceSubs === 'function') clearChatPresenceSubs();
   if (typeof ChatRating?.stopPolling === 'function') ChatRating.stopPolling();
 
   if (typeof endOverlayScope === 'function') {
@@ -337,6 +338,7 @@ async function prepareChatThread(chat, screen, { isGroup, isSelf, isChaupaal }) 
 }
 
 function openChatScreen(chat){
+  if (typeof clearBaithakSearch === 'function') clearBaithakSearch({ restoreList: false });
   // Teen Mode: reciprocal friends only (or other minors) for stranger DMs
   try {
     const isSelfEarly = typeof isSelfChat === 'function' && isSelfChat(chat);
@@ -924,25 +926,38 @@ function openChatScreen(chat){
       openChatPeerFullProfile();
     });
   });
-  // Long-press CF menu on avatar only (1:1) — don't fight profile tap
-  if (!isGroup && !isSelf && !isChaupaal) {
+  // Avatar: tap = enlarge photo; long-press = profile (DM) / group info
+  {
     const headerAv = screen.querySelector('.chat-header-avatar');
-    const peerUid =
-      chat.peerUid ||
-      chat.otherUid ||
-      chat.uid ||
-      (Array.isArray(chat.participants) ? chat.participants.find((u) => u && u !== currentUser?.uid) : null);
-    if (headerAv && peerUid && typeof onLongPress === 'function') {
-      onLongPress(headerAv, () => {
-        if (typeof openBaithakAvatarMenu === 'function') {
-          openBaithakAvatarMenu(headerAv, {
-            uid: peerUid,
-            name: chat.name || 'Friend',
-            avatar: chat.avatar,
-            photoURL: chat.photoURL,
+    if (headerAv) {
+      headerAv.addEventListener('click', (e) => {
+        if (headerAv.dataset.suppressClick === '1') {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        e.stopPropagation();
+        if (typeof openAvatarLightbox === 'function') {
+          openAvatarLightbox({
+            photoURL: chat.photoURL || (typeof chat.avatar === 'string' && /^https?:/i.test(chat.avatar) ? chat.avatar : ''),
+            name: chat.name || (isGroup ? 'Group' : 'Friend'),
+            avatar: chat.avatar || (isSelf ? '📝' : isChaupaal ? '🏠' : isGroup ? '👥' : '👤'),
           });
         }
       });
+      if (!isSelf && !isChaupaal && typeof onLongPress === 'function') {
+        onLongPress(
+          headerAv,
+          () => {
+            if (isGroup) {
+              if (typeof openGroupInfo === 'function') openGroupInfo(chat);
+              return;
+            }
+            openChatPeerFullProfile();
+          },
+          { delayMs: 520 }
+        );
+      }
     }
   }
   document.getElementById('chatMehfilBtn')?.addEventListener('click', () => {
@@ -964,7 +979,7 @@ function openChatScreen(chat){
       const btn = document.getElementById('chatMehfilBtn');
       const banner = document.getElementById('mehfilLiveBanner');
       const total = totalCount != null ? totalCount : count;
-      const isLive = live != null ? !!live : total >= 2;
+      const isLive = live != null ? !!live : false;
       btn?.classList.toggle('is-live', isLive);
       if (banner) {
         const inRoom = typeof isMehfilOpen === 'function' && isMehfilOpen();
@@ -1276,11 +1291,22 @@ function bindMsgAvatarLongPress(root, fallbackProfile){
       avatar:el.textContent?.trim()||fallbackProfile?.avatar||'👤',
       photoURL:fallbackProfile?.photoURL||'',
     };
-    // Prefer Baithak CF menu; fall back to relationship sheet. Click stays on bubble/profile handlers.
-    if(typeof onLongPress==='function' && typeof openBaithakAvatarMenu==='function'){
-      onLongPress(el, () => openBaithakAvatarMenu(el, profile));
-    } else if(typeof bindProfileLongPress==='function'){
-      bindProfileLongPress(el, profile);
+    el.addEventListener('click',(e)=>{
+      if(el.dataset.suppressClick==='1'){ e.preventDefault(); e.stopPropagation(); return; }
+      e.stopPropagation();
+      if(typeof openAvatarLightbox==='function'){
+        openAvatarLightbox({
+          photoURL: profile.photoURL || (typeof profile.avatar==='string'&&/^https?:/i.test(profile.avatar)?profile.avatar:''),
+          name: profile.name,
+          avatar: profile.avatar,
+        });
+      }
+    });
+    if(typeof onLongPress==='function'){
+      onLongPress(el, () => {
+        if(typeof openPublicProfile==='function') openPublicProfile(profile,{uid,context:'baithak'});
+        else if(typeof openProfilePeek==='function') openProfilePeek(profile);
+      },{ delayMs: 520 });
     }
   });
 }

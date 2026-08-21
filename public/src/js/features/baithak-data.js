@@ -197,7 +197,7 @@ function renderChatList(chats, opts){
         const unsub=watchMehfilPresence(cid,({count,live,totalCount})=>{
           if(!liveEl.isConnected) return;
           const total=totalCount!=null?totalCount:count;
-          const isLive=live!=null?!!live:total>=2;
+          const isLive=live!=null?!!live:false;
           liveEl.hidden=!isLive;
           if(presenceDot) presenceDot.hidden=!isLive;
           const span=liveEl.querySelector('span');
@@ -250,24 +250,30 @@ function renderChatList(chats, opts){
     } else if(!self){
       const avatar=item.querySelector('.chat-avatar');
       const peerUid=chat.peerUid||chat.otherUid||chat.uid||(Array.isArray(chat.participants)?chat.participants.find(u=>u&&u!==currentUser?.uid):null);
-      if(avatar&&peerUid){
+      const isGroup = chat.type === 'group';
+      if(avatar){
         avatar.addEventListener('click',(e)=>{
+          if(avatar.dataset.suppressClick==='1'){ e.preventDefault(); e.stopPropagation(); return; }
           e.stopPropagation();
-          const profile={uid:peerUid,name:chat.name,avatar:chat.avatar,photoURL:chat.photoURL,username:chat.username};
-          if(typeof openProfilePeek==='function') openProfilePeek(profile);
-          else if(typeof openPublicProfile==='function') openPublicProfile(profile);
+          if(typeof openAvatarLightbox==='function'){
+            openAvatarLightbox({
+              photoURL: chat.photoURL || (typeof chat.avatar==='string'&&/^https?:/i.test(chat.avatar)?chat.avatar:''),
+              name: chat.name || (isGroup ? 'Group' : 'Friend'),
+              avatar: chat.avatar || (isGroup ? '👥' : '👤'),
+            });
+          }
         });
         if(typeof onLongPress==='function'){
           onLongPress(avatar,()=>{
-            if(typeof openBaithakAvatarMenu==='function'){
-              openBaithakAvatarMenu(avatar,{
-                uid:peerUid,
-                name:chat.name||'Friend',
-                avatar:chat.avatar,
-                photoURL:chat.photoURL,
-              });
+            if(isGroup){
+              if(typeof openGroupInfo==='function') openGroupInfo(chat);
+              return;
             }
-          });
+            if(!peerUid) return;
+            const profile={uid:peerUid,name:chat.name,avatar:chat.avatar,photoURL:chat.photoURL,username:chat.username};
+            if(typeof openPublicProfile==='function') openPublicProfile(profile,{uid:peerUid,context:'baithak'});
+            else if(typeof openProfilePeek==='function') openProfilePeek(profile);
+          },{ delayMs: 520 });
         }
       }
     }

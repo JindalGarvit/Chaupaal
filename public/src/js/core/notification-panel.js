@@ -605,46 +605,19 @@
   }
 
   function emptyCtaFor(section) {
+    const universal = {
+      title: tt('notif_no_new', 'No new notifications'),
+      message: tt('notif_no_new_hint', 'You’re all caught up here.'),
+      actionLabel: null,
+      action: null,
+    };
     const map = {
-      peepal: {
-        title: tt('notif_empty_peepal', 'No Peepal activity yet'),
-        message: tt('notif_empty_peepal_msg', 'Replies and discoveries will show up here.'),
-        actionLabel: tt('shortcut_peepal_ask', 'Start discussion'),
-        action: () => typeof openPeepalAskSheet === 'function' && openPeepalAskSheet(),
-      },
-      duniya: {
-        title: tt('notif_empty_duniya', 'No Duniya activity yet'),
-        message: tt('notif_empty_duniya_msg', 'Likes, comments, and follows land here.'),
-        actionLabel: tt('shortcut_duniya_post', 'Create post'),
-        action: () => typeof openDuniyaPostSheet === 'function' && openDuniyaPostSheet('post'),
-      },
-      baithak: {
-        title: tt('notif_empty_baithak', 'No chats yet'),
-        message: tt('notif_empty_baithak_msg', 'DMs, groups, and story notes appear here.'),
-        actionLabel: tt('shortcut_baithak_dm', 'New DM'),
-        action: () => typeof showNewDmSearchSheet === 'function' && showNewDmSearchSheet(),
-      },
-      akhbaar: {
-        title: tt('notif_empty_akhbaar', 'No Akhbaar nudges'),
-        message: tt('notif_empty_akhbaar_msg', 'Streak and quiz reminders will show up here.'),
-        actionLabel: tt('shortcut_akhbaar_quiz', "Today's quiz"),
-        action: () => {
-          document.querySelector('.tab-btn[data-tab="akhbaar"]')?.click();
-          if (typeof window.ensureAkhbaarBuilt === 'function') window.ensureAkhbaarBuilt();
-        },
-      },
-      dangal: {
-        title: tt('notif_empty_dangal', 'No Dangal challenges'),
-        message: tt('notif_empty_dangal_msg', 'Invites and match results land here.'),
-        actionLabel: tt('shortcut_dangal_gotd', 'Game of the day'),
-        action: () => document.querySelector('.tab-btn[data-tab="dangal"]')?.click(),
-      },
-      all: {
-        title: tt('notif_empty_all', 'No notifications yet'),
-        message: tt('notif_empty_all_msg', 'Activity across Chaupaal will show up here.'),
-        actionLabel: null,
-        action: null,
-      },
+      peepal: { ...universal, message: tt('notif_hint_peepal', 'Peepal activity will show up here.') },
+      duniya: { ...universal, message: tt('notif_hint_duniya', 'Duniya likes and comments land here.') },
+      baithak: { ...universal, message: tt('notif_hint_baithak', 'Chats and story notes appear here.') },
+      akhbaar: { ...universal, message: tt('notif_hint_akhbaar', 'Quiz and streak nudges land here.') },
+      dangal: { ...universal, message: tt('notif_hint_dangal', 'Challenges and match results land here.') },
+      all: universal,
     };
     return map[section] || map.all;
   }

@@ -19,10 +19,45 @@
     return 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
 
-  /** Public by default (missing/undefined counts as public — Phase 3.2 retroactive). */
+  /** Map legacy flags → visibility without writing. */
+  function groupVisibility(chat) {
+    if (!chat) return 'private';
+    const v = chat.visibility;
+    if (v === 'private' || v === 'discoverable' || v === 'public') return v;
+    if (chat.isPublic === true) return 'public';
+    if (chat.discoverableInSearch === true) return 'discoverable';
+    if (chat.isPublic === false) return 'private';
+    // Legacy docs often omitted isPublic (treated as public in search)
+    if (chat.type === 'group' && !('isPublic' in chat) && !('visibility' in chat)) return 'public';
+    return 'private';
+  }
+
+  function visibilityPatch(vis, existingInvite) {
+    const mode =
+      vis === 'public' ? 'instant' : 'approval';
+    const invite = {
+      ...(existingInvite || {}),
+      mode,
+      enabled: existingInvite?.enabled !== false,
+      token: existingInvite?.token || inviteToken(),
+    };
+    if (vis === 'public') {
+      return { visibility: 'public', isPublic: true, discoverableInSearch: true, invite };
+    }
+    if (vis === 'discoverable') {
+      return { visibility: 'discoverable', isPublic: false, discoverableInSearch: true, invite };
+    }
+    return { visibility: 'private', isPublic: false, discoverableInSearch: false, invite };
+  }
+
+  /** Public = anyone can join + read history. */
   function isGroupPublic(chat) {
-    if (!chat) return true;
-    return chat.isPublic !== false;
+    return groupVisibility(chat) === 'public';
+  }
+
+  function isGroupDiscoverable(chat) {
+    const v = groupVisibility(chat);
+    return v === 'public' || v === 'discoverable';
   }
 
   function groupNameLower(name) {
@@ -162,8 +197,8 @@
     return `${location.origin}/join/g/${encodeURIComponent(token)}`;
   }
 
-  /** Create a new group in Firestore and local inbox. */
-  async function createGroupInFirestore({ name, description }) {
+  /** Create a new group in Firestore and local inbox. Default visibility: private. */
+  async function createGroupInFirestore({ name, description, visibility }) {
     if (!db || !currentUser) {
       if (typeof showToast === 'function') showToast(t('group_sign_in_create'));
       return null;
@@ -172,6 +207,7 @@
     if (!trimmed) return null;
     const uid = currentUser.uid;
     const token = inviteToken();
+    const vis = ['private', 'discoverable', 'public'].includes(visibility) ? visibility : 'private';
     const memberProfiles = {};
     memberProfiles[uid] = {
       name: userProfile?.name || currentUser.displayName || 'You',
@@ -186,6 +222,7 @@
             : 'personal',
       joinedAt: Date.now(),
     };
+    const visFields = visibilityPatch(vis, { token, enabled: true });
     const doc = {
       type: 'group',
       name: trimmed.slice(0, 80),
@@ -198,9 +235,8 @@
       createdBy: uid,
       memberProfiles,
       memberCount: 1,
-      isPublic: true,
+      ...visFields,
       permissions: { addMembers: 'all', editInfo: 'admin' },
-      invite: { token, mode: 'instant', enabled: true },
       preview: 'Group created',
       lastMessageAt: Date.now(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -210,7 +246,7 @@
     try {
       await db.collection('groupInvites').doc(token).set({
         chatId: ref.id,
-        mode: 'instant',
+        mode: doc.invite?.mode || 'approval',
         enabled: true,
         name: trimmed.slice(0, 80),
         createdBy: uid,
@@ -303,8 +339,17 @@
     return true;
   }
 
-  async function updateGroupDetails(chat, { name, photoURL, avatar, isPublic }) {
+  async function updateGroupDetails(chat, patchIn) {
     const chatId = chat.firestoreId || chat.id;
+    const {
+      name,
+      photoURL,
+      avatar,
+      isPublic,
+      visibility,
+      discoverableInSearch,
+      invite,
+    } = patchIn || {};
     const patch = {};
     if (name != null) {
       patch.name = String(name).slice(0, 80);
@@ -313,6 +358,9 @@
     if (photoURL != null) patch.photoURL = photoURL;
     if (avatar != null) patch.avatar = avatar;
     if (typeof isPublic === 'boolean') patch.isPublic = isPublic;
+    if (visibility) patch.visibility = visibility;
+    if (typeof discoverableInSearch === 'boolean') patch.discoverableInSearch = discoverableInSearch;
+    if (invite) patch.invite = invite;
     await patchGroupDoc(chatId, patch);
     mergeChatLocal(chatId, patch);
     const headerName = document.querySelector('#activeChatScreen .chat-header-name');
@@ -462,12 +510,14 @@
       <div class="group-info-scroll" data-gi-scroll>
         <div class="group-info-hero" data-gi-hero></div>
         <div class="group-info-section" data-gi-requests hidden></div>
-        <div class="group-info-notice" data-gi-public-notice hidden></div>
         <div class="group-info-section" data-gi-privacy hidden>
-          <div class="group-info-section-head">Discoverability</div>
-          <label class="group-info-toggle"><span>Public — appear in Chaupaal search</span><input type="checkbox" data-gi-public-toggle></label>
-          <label class="group-info-toggle" style="margin-top:8px;"><span>Discoverable in search (without making public)</span><input type="checkbox" data-gi-discoverable-toggle></label>
-          <div class="group-info-muted" style="font-size:12px;margin-top:6px;">Private groups stay invite-only unless discoverable is on. Non-members see a preview before joining.</div>
+          <div class="group-info-section-head">${typeof t==='function'?t('group_visibility'):'Visibility'}</div>
+          <div class="group-vis-seg" role="radiogroup" aria-label="Group visibility" data-gi-vis-seg>
+            <button type="button" class="group-vis-opt" data-gi-vis="private" role="radio">Private</button>
+            <button type="button" class="group-vis-opt" data-gi-vis="discoverable" role="radio">Discoverable</button>
+            <button type="button" class="group-vis-opt" data-gi-vis="public" role="radio">Public</button>
+          </div>
+          <div class="group-info-muted group-vis-hint" data-gi-vis-hint style="font-size:12px;margin-top:8px;line-height:1.45;"></div>
         </div>
         <div class="group-info-section">
           <div class="group-info-section-head">Members <span data-gi-count></span></div>
@@ -519,13 +569,12 @@
       const uid = currentUser?.uid;
       const admin = isGroupAdmin(chat, uid);
       const chatId = chat.firestoreId || chat.id;
-      // Lazy migrate: missing isPublic → public (retroactive) + denorm fields for search.
+      // Soft denorm only — never force-migrate visibility to public
       if (admin && chatId && db) {
         try {
           const snap = await db.collection('chats').doc(chatId).get();
           const data = snap.exists ? snap.data() || {} : {};
           const migrate = {};
-          if (!('isPublic' in data)) migrate.isPublic = true;
           if (!data.nameLower && chat.name) migrate.nameLower = groupNameLower(chat.name);
           if (typeof data.memberCount !== 'number') migrate.memberCount = (chat.participants || []).length;
           if (Object.keys(migrate).length) {
@@ -552,63 +601,65 @@
         </div>
         ${chat.description ? `<div class="group-info-desc">${esc(chat.description)}</div>` : ''}`;
 
-      // One-time admin notice: groups are discoverable by default.
-      const noticeEl = overlay.querySelector('[data-gi-public-notice]');
-      const noticeKey = `chaupaal_group_public_notice_${chatId}`;
-      let noticeSeen = false;
-      try {
-        noticeSeen = localStorage.getItem(noticeKey) === '1' || !!chat.discoverableNoticeAck;
-      } catch (e) {}
-      if (admin && isGroupPublic(chat) && !noticeSeen) {
-        noticeEl.hidden = false;
-        noticeEl.innerHTML = `
-          <div style="background:rgba(230,57,70,0.08);border:1px solid rgba(230,57,70,0.2);border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.45;color:var(--ink);">
-            <strong>Now discoverable in search</strong>
-            <div style="margin-top:4px;color:var(--muted);">Baithak groups are public by default so people can find them in Chaupaal search. You can switch this group to Private anytime below.</div>
-            <button type="button" data-gi-ack-notice style="margin-top:10px;border:none;background:var(--red);color:#fff;font-weight:700;font-size:12px;padding:8px 12px;border-radius:10px;cursor:pointer;">Got it</button>
-          </div>`;
-        noticeEl.querySelector('[data-gi-ack-notice]')?.addEventListener('click', async () => {
-          try {
-            localStorage.setItem(noticeKey, '1');
-          } catch (e) {}
-          try {
-            await patchGroupDoc(chatId, { discoverableNoticeAck: true });
-            chat.discoverableNoticeAck = true;
-          } catch (e) {}
-          noticeEl.hidden = true;
-        });
-      } else {
-        noticeEl.hidden = true;
-        noticeEl.innerHTML = '';
-      }
-
       const privacyEl = overlay.querySelector('[data-gi-privacy]');
+      const hintFor = (vis) => {
+        if (vis === 'public') {
+          return typeof t === 'function'
+            ? t('group_vis_public_hint')
+            : 'Anyone can find and join instantly, and see chat history.';
+        }
+        if (vis === 'discoverable') {
+          return typeof t === 'function'
+            ? t('group_vis_discoverable_hint')
+            : 'Appears in search. People can request to join — no history until accepted.';
+        }
+        return typeof t === 'function'
+          ? t('group_vis_private_hint')
+          : 'Invite-only. Hidden from search.';
+      };
       if (admin) {
         privacyEl.hidden = false;
-        const pubToggle = overlay.querySelector('[data-gi-public-toggle]');
-        pubToggle.checked = isGroupPublic(chat);
-        pubToggle.onchange = async () => {
-          const next = !!pubToggle.checked;
-          await updateGroupDetails(chat, { isPublic: next });
-          chat.isPublic = next;
-          if (typeof showToast === 'function') {
-            showToast(next?t('group_public'):t('group_private'));
-          }
-          if (!next) {
-            noticeEl.hidden = true;
-          }
-        };
-        const discToggle = overlay.querySelector('[data-gi-discoverable-toggle]');
-        if (discToggle) {
-          discToggle.checked = chat.discoverableInSearch === true || (isGroupPublic(chat) && chat.discoverableInSearch !== false);
-          discToggle.onchange = async () => {
-            const next = !!discToggle.checked;
-            await patchGroupDoc(chatId, { discoverableInSearch: next });
-            chat.discoverableInSearch = next;
-            mergeChatLocal(chatId, { discoverableInSearch: next });
-            if (typeof showToast === 'function') showToast(next ? 'Group is discoverable in search' : 'Hidden from search');
+        const cur = groupVisibility(chat);
+        const hint = overlay.querySelector('[data-gi-vis-hint]');
+        if (hint) hint.textContent = hintFor(cur);
+        overlay.querySelectorAll('[data-gi-vis]').forEach((btn) => {
+          const v = btn.dataset.giVis;
+          btn.classList.toggle('is-selected', v === cur);
+          btn.setAttribute('aria-checked', v === cur ? 'true' : 'false');
+          btn.onclick = async () => {
+            if (v === groupVisibility(chat)) return;
+            const patch = visibilityPatch(v, chat.invite);
+            await updateGroupDetails(chat, {
+              visibility: patch.visibility,
+              isPublic: patch.isPublic,
+              discoverableInSearch: patch.discoverableInSearch,
+              invite: patch.invite,
+            });
+            Object.assign(chat, patch);
+            if (patch.invite?.token) {
+              try {
+                await db.collection('groupInvites').doc(patch.invite.token).set(
+                  { mode: patch.invite.mode, enabled: patch.invite.enabled !== false },
+                  { merge: true }
+                );
+              } catch (e) {}
+            }
+            if (hint) hint.textContent = hintFor(v);
+            overlay.querySelectorAll('[data-gi-vis]').forEach((b) => {
+              b.classList.toggle('is-selected', b.dataset.giVis === v);
+              b.setAttribute('aria-checked', b.dataset.giVis === v ? 'true' : 'false');
+            });
+            if (typeof showToast === 'function') {
+              showToast(
+                v === 'public'
+                  ? t('group_public')
+                  : v === 'discoverable'
+                    ? t('group_discoverable') || 'Discoverable'
+                    : t('group_private')
+              );
+            }
           };
-        }
+        });
       } else privacyEl.hidden = true;
 
       overlay.querySelector('[data-gi-count]').textContent = `(${members.length})`;
@@ -709,8 +760,17 @@
       const joinBtn = overlay.querySelector('[data-gi-join]');
       if (leaveBtn) leaveBtn.hidden = !isMember;
       if (joinBtn) {
-        joinBtn.hidden = isMember || !isGroupPublic(chat);
-        joinBtn.textContent = chat.invite?.mode === 'approval' ? 'Request to join' : 'Join group';
+        const vis = groupVisibility(chat);
+        const canJoinUi = vis === 'public' || vis === 'discoverable';
+        joinBtn.hidden = isMember || !canJoinUi;
+        joinBtn.textContent =
+          vis === 'discoverable' || chat.invite?.mode === 'approval'
+            ? typeof t === 'function'
+              ? t('group_request_join') || 'Request to join'
+              : 'Request to join'
+            : typeof t === 'function'
+              ? t('group_join') || 'Join group'
+              : 'Join group';
       }
 
       listEl.querySelectorAll('[data-member-menu]').forEach((btn) => {
@@ -955,12 +1015,19 @@
       if (typeof openChatScreen === 'function') openChatScreen(chat);
       return;
     }
-    if (isGroupPublic(chat)) {
+    const vis = groupVisibility(chat);
+    if (vis === 'public') {
       const preview = { ...chat, _previewJoin: true };
       if (typeof openChatScreen === 'function') openChatScreen(preview);
       return;
     }
-    openGroupInfo(chat);
+    if (vis === 'discoverable') {
+      openGroupInfo(chat);
+      return;
+    }
+    if (typeof showToast === 'function') {
+      showToast(typeof t === 'function' ? t('group_private_blocked') || 'This group is private' : 'This group is private');
+    }
   }
 
   window.openGroupInfo = openGroupInfo;
@@ -972,4 +1039,6 @@
   window.normalizeGroupChat = normalizeGroupChat;
   window.isGroupAdmin = isGroupAdmin;
   window.isGroupPublic = isGroupPublic;
+  window.groupVisibility = groupVisibility;
+  window.isGroupDiscoverable = isGroupDiscoverable;
 })();

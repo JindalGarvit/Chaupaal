@@ -539,31 +539,115 @@
     });
   }
 
+  // ─── Avatar lightbox (centered card, not fullscreen takeover) ─────────────
+  function openAvatarLightbox(opts) {
+    const o = opts || {};
+    const photo =
+      o.photoURL ||
+      o.photoThumb ||
+      (typeof o.avatar === 'string' && /^https?:\/\//i.test(o.avatar) ? o.avatar : '') ||
+      '';
+    const name = o.name || 'Photo';
+    const fallback = o.fallback || o.avatar || '👤';
+    document.getElementById('cpAvatarLightbox')?.remove();
+    const host = document.createElement('div');
+    host.id = 'cpAvatarLightbox';
+    host.className = 'avatar-lightbox';
+    host.setAttribute('role', 'dialog');
+    host.setAttribute('aria-modal', 'true');
+    host.setAttribute('aria-label', name);
+    const media = photo
+      ? `<img class="avatar-lightbox-img" src="${String(photo).replace(/"/g, '&quot;')}" alt="">`
+      : typeof renderUserAvatarHtml === 'function'
+        ? `<div class="avatar-lightbox-fallback">${renderUserAvatarHtml(
+            { name, avatar: fallback, photoURL: '' },
+            { decorative: true, size: 160 }
+          )}</div>`
+        : `<div class="avatar-lightbox-fallback">${String(fallback).slice(0, 4)}</div>`;
+    host.innerHTML = `
+      <div class="avatar-lightbox-backdrop" data-dismiss="1"></div>
+      <div class="avatar-lightbox-card">
+        <div class="avatar-lightbox-grabber" aria-hidden="true"></div>
+        <button type="button" class="avatar-lightbox-close" data-dismiss="1" aria-label="Close">✕</button>
+        ${media}
+        <div class="avatar-lightbox-name">${String(name).replace(/</g, '&lt;')}</div>
+      </div>`;
+    deviceRoot().appendChild(host);
+    hapticLight();
+    requestAnimationFrame(() => host.classList.add('is-open'));
+    const close = () => {
+      host.classList.remove('is-open');
+      setTimeout(() => host.remove(), 200);
+      document.removeEventListener('keydown', onKey);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') close();
+    };
+    document.addEventListener('keydown', onKey);
+    host.addEventListener('click', (e) => {
+      if (e.target.closest('[data-dismiss]')) close();
+    });
+    const card = host.querySelector('.avatar-lightbox-card');
+    let startY = 0;
+    let dragging = false;
+    card?.addEventListener(
+      'touchstart',
+      (e) => {
+        startY = e.touches[0]?.clientY || 0;
+        dragging = true;
+      },
+      { passive: true }
+    );
+    card?.addEventListener(
+      'touchmove',
+      (e) => {
+        if (!dragging) return;
+        const dy = (e.touches[0]?.clientY || 0) - startY;
+        if (dy > 0) card.style.transform = `translateY(${Math.min(dy, 160)}px)`;
+      },
+      { passive: true }
+    );
+    card?.addEventListener('touchend', () => {
+      if (!dragging) return;
+      dragging = false;
+      const dy = parseFloat(String(card.style.transform || '').replace(/[^\d.-]/g, '')) || 0;
+      card.style.transform = '';
+      if (dy > 80) close();
+    });
+    host.querySelector('.avatar-lightbox-close')?.focus?.();
+    return { close };
+  }
+
   // ─── Long press ───────────────────────────────────────────────────────────
-  function onLongPress(el, handler) {
+  function onLongPress(el, handler, opts) {
     if (!el || el.dataset.longPress === '1') return;
     el.dataset.longPress = '1';
+    const delay = Math.max(280, Number(opts?.delayMs) || LONG_MS);
     let timer = null;
-    let moved = false;
+    let fired = false;
     const clear = () => {
       if (timer) clearTimeout(timer);
       timer = null;
     };
     const start = (e) => {
-      moved = false;
+      fired = false;
       clear();
       timer = setTimeout(() => {
         timer = null;
+        fired = true;
+        el.dataset.suppressClick = '1';
         hapticLight();
         handler(e);
-      }, LONG_MS);
+        setTimeout(() => {
+          el.dataset.suppressClick = '0';
+        }, 400);
+      }, delay);
     };
     el.addEventListener('touchstart', start, { passive: true });
     el.addEventListener('mousedown', start);
     el.addEventListener(
       'touchmove',
       () => {
-        moved = true;
         clear();
       },
       { passive: true }
@@ -572,9 +656,25 @@
     el.addEventListener('touchcancel', clear);
     el.addEventListener('mouseup', clear);
     el.addEventListener('mouseleave', clear);
+    el.addEventListener(
+      'click',
+      (e) => {
+        if (fired || el.dataset.suppressClick === '1') {
+          e.preventDefault();
+          e.stopPropagation();
+          fired = false;
+        }
+      },
+      true
+    );
     el.addEventListener('contextmenu', (e) => {
       e.preventDefault();
+      fired = true;
+      el.dataset.suppressClick = '1';
       handler(e);
+      setTimeout(() => {
+        el.dataset.suppressClick = '0';
+      }, 400);
     });
   }
 
@@ -1136,6 +1236,7 @@
   else init();
 
   window.openImageViewer = openImageViewer;
+  window.openAvatarLightbox = openAvatarLightbox;
   window.showActionSheet = showActionSheet;
   window.enableSwipeDismiss = enableSwipeDismiss;
   window.enableSwipeBack = enableSwipeBack;

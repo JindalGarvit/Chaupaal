@@ -432,7 +432,23 @@ module.exports = async function handler(req, res) {
       console.warn('[scheduler] denorm backfill', e?.message || e);
     }
 
-    return sendSuccess(res, { ...results, summary, intentWeights, discoveryBatch, liveLoc, peepalSegments, denormBackfill });
+    // Product feedback digests (companionProductFeedback → founders)
+    let feedbackDigest = { skipped: true };
+    try {
+      const { runFeedbackDigest } = require('../server-lib/feedback-digest');
+      const daily = await runFeedbackDigest(db, admin, { period: 'daily' });
+      let weekly = { skipped: true };
+      const day = new Date().getUTCDay(); // 0 = Sunday
+      if (day === 1 || String(req.query?.weekly || '') === '1') {
+        weekly = await runFeedbackDigest(db, admin, { period: 'weekly' });
+      }
+      feedbackDigest = { daily, weekly };
+    } catch (e) {
+      feedbackDigest = { error: e?.message || String(e) };
+      console.warn('[scheduler] feedback digest', e?.message || e);
+    }
+
+    return sendSuccess(res, { ...results, summary, intentWeights, discoveryBatch, liveLoc, peepalSegments, denormBackfill, feedbackDigest });
   } catch (e) {
     console.error('[chaupaal-scheduler]', e?.message || e);
     return sendError(res, 500, 'SCHEDULER_FAILED', e?.message || 'Scheduler failed');

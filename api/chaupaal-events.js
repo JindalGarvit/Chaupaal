@@ -264,16 +264,38 @@ module.exports = async function handler(req, res) {
       const ref = await db.collection('companionProductFeedback').add({
         uid: user.uid,
         message: text,
+        text,
         category,
+        chips: [category],
+        displayName: String(user.name || user.displayName || '').slice(0, 80),
         source,
+        status: 'new',
         eventId: body.eventId ? String(body.eventId).slice(0, 80) : null,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         meta: {
           userAgent: String(metaIn.userAgent || '').slice(0, 180),
           appVersion: metaIn.appVersion ? String(metaIn.appVersion).slice(0, 80) : null,
         },
+        clientMeta: {
+          userAgent: String(metaIn.userAgent || '').slice(0, 180),
+          appVersion: metaIn.appVersion ? String(metaIn.appVersion).slice(0, 80) : null,
+        },
       });
       return sendSuccess(res, { id: ref.id, source, category });
+    }
+
+    if (action === 'feedback_digest') {
+      const founders = String(process.env.FEEDBACK_FOUNDER_UIDS || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (!founders.includes(user.uid) && process.env.FEEDBACK_DIGEST_ALLOW_ANY !== 'true') {
+        return sendError(res, 403, 'FORBIDDEN', 'Founders only');
+      }
+      const period = body.period === 'weekly' ? 'weekly' : 'daily';
+      const { runFeedbackDigest } = require('../server-lib/feedback-digest');
+      const out = await runFeedbackDigest(db, admin, { period, force: !!body.force });
+      return sendSuccess(res, out || { ok: true, period });
     }
 
     return sendError(res, 400, 'UNKNOWN_ACTION', `Unknown action: ${action}`);

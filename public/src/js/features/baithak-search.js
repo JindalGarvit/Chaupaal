@@ -293,8 +293,34 @@
   };
 
   let inlineTimer = null;
+
+  function syncBaithakSearchClearBtn() {
+    const input = document.getElementById('baithakSearch');
+    const clearBtn = document.getElementById('baithakSearchClearBtn');
+    if (!clearBtn) return;
+    const has = !!(input?.value || '').trim();
+    clearBtn.hidden = !has;
+  }
+
+  function clearBaithakSearch(opts) {
+    const o = opts || {};
+    const input = document.getElementById('baithakSearch');
+    if (input) input.value = '';
+    inlineQuery = '';
+    syncBaithakSearchClearBtn();
+    document.getElementById('baithakSearchEverywhere')?.remove();
+    if (o.restoreList !== false) {
+      if (typeof setBaithakSection === 'function') {
+        setBaithakSection(typeof window.baithakSection === 'function' ? window.baithakSection() : 'sabha');
+      } else if (typeof renderChatList === 'function') {
+        renderChatList(allBaithakChats());
+      }
+    }
+  }
+
   async function runInlineSearch(rawQ) {
     inlineQuery = String(rawQ || '');
+    syncBaithakSearchClearBtn();
     const q = normalizeQuery(inlineQuery);
     if (!q) {
       if (typeof setBaithakSection === 'function') {
@@ -355,22 +381,35 @@
       const id = raw.firestoreId || raw.id;
       if (!id || seen.has(id)) return;
       const isMember = myUid && Array.isArray(raw.participants) && raw.participants.includes(myUid);
-      const isPublic = raw.isPublic !== false;
-      const discoverable = raw.discoverableInSearch === true || (isPublic && raw.discoverableInSearch !== false);
-      if (!isMember && !discoverable) return;
-      if (!isPublic && !discoverable) return;
+      const vis =
+        typeof groupVisibility === 'function'
+          ? groupVisibility(raw)
+          : raw.visibility === 'private' || raw.visibility === 'discoverable' || raw.visibility === 'public'
+            ? raw.visibility
+            : raw.isPublic === true
+              ? 'public'
+              : raw.discoverableInSearch === true
+                ? 'discoverable'
+                : raw.isPublic === false
+                  ? 'private'
+                  : 'public';
+      const searchable = vis === 'public' || vis === 'discoverable';
+      if (!isMember && !searchable) return;
       const hay = `${raw.name || ''} ${raw.description || ''} ${raw.nameLower || ''}`.toLowerCase();
       if (!hay.includes(q)) return;
       seen.add(id);
+      const label =
+        vis === 'public' ? 'Public' : vis === 'discoverable' ? 'Discoverable' : 'Private';
       out.push({
         type: 'group',
         id,
         chatId: id,
         name: raw.name || 'Group',
-        subtitle: `${(raw.participants || []).length} members${isPublic ? ' · Public' : ' · Private'}`,
-        isPublic,
+        subtitle: `${(raw.participants || []).length} members · ${label}`,
+        isPublic: vis === 'public',
         isMember: !!isMember,
-        discoverableInSearch: discoverable,
+        discoverableInSearch: searchable,
+        visibility: vis,
         score: boost + (raw.name || '').toLowerCase().startsWith(q) ? 50 : 20,
         chat: raw,
       });
@@ -638,10 +677,21 @@
       });
     }
 
+    const clearBtn = document.getElementById('baithakSearchClearBtn');
+    clearBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      clearBaithakSearch();
+      document.getElementById('baithakSearch')?.focus();
+    });
+
     const input = document.getElementById('baithakSearch');
     if (input && !input.dataset.baithakInlineWired) {
       input.dataset.baithakInlineWired = '1';
-      input.addEventListener('input', (e) => debouncedInlineSearch(e.target.value));
+      input.addEventListener('input', (e) => {
+        syncBaithakSearchClearBtn();
+        debouncedInlineSearch(e.target.value);
+      });
       const openOverlayFromInput = () => {
         const q = input.value?.trim() || '';
         openBaithakSearchOverlay({ initialQuery: q, tab: 'all' });
@@ -655,6 +705,7 @@
       input.addEventListener('search', () => {
         openOverlayFromInput();
       });
+      syncBaithakSearchClearBtn();
     }
   }
 
@@ -664,10 +715,12 @@
   NS.openOverlay = openBaithakSearchOverlay;
   NS.searchMessageIndex = searchMessageIndex;
   NS.wireChrome = wireBaithakSearchChrome;
+  NS.clearSearch = clearBaithakSearch;
 
   window.openBaithakSearchOverlay = openBaithakSearchOverlay;
   window.openBaithakNicknameSheet = openNicknameSheet;
   window.loadBaithakNicknames = loadBaithakNicknames;
+  window.clearBaithakSearch = clearBaithakSearch;
   window.indexChatMessageForSearch = NS.indexChatMessageForSearch;
 
   if (typeof module !== 'undefined' && module.exports) {

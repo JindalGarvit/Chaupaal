@@ -557,6 +557,13 @@ function showCreateGroup(){
     </div>
     <input class="auth-input" placeholder="Group name" id="grpName">
     <input class="auth-input" placeholder="Description (optional)" id="grpDesc">
+    <div style="font-size:13px;font-weight:700;margin:14px 0 8px;">${typeof t==='function'?t('group_visibility'):'Visibility'}</div>
+    <div class="group-vis-seg" role="radiogroup" data-create-vis>
+      <button type="button" class="group-vis-opt is-selected" data-vis="private" role="radio" aria-checked="true">${typeof t==='function'?t('group_vis_private'):'Private'}</button>
+      <button type="button" class="group-vis-opt" data-vis="discoverable" role="radio">${typeof t==='function'?t('group_vis_discoverable'):'Discoverable'}</button>
+      <button type="button" class="group-vis-opt" data-vis="public" role="radio">${typeof t==='function'?t('group_vis_public'):'Public'}</button>
+    </div>
+    <div class="group-vis-hint" data-create-vis-hint style="font-size:12px;color:var(--muted);margin-top:8px;line-height:1.45;">${typeof t==='function'?t('group_vis_private_hint'):'Invite-only. Hidden from search.'}</div>
     <div style="font-size:13px;color:var(--muted);margin:12px 0 8px;line-height:1.45;">After you create the group, you can copy a real invite link from group info.</div>
     <button style="margin-top:auto;width:100%;padding:15px;background:var(--red);color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;" id="createGrpBtn">Create group</button>
   `;
@@ -566,13 +573,30 @@ function showCreateGroup(){
     sheet.dataset.navManaged='1';
     pushNavLayer(sheet,()=>sheet.remove());
   }
+  let vis='private';
+  const hints={
+    private: typeof t==='function'?t('group_vis_private_hint'):'Invite-only. Hidden from search.',
+    discoverable: typeof t==='function'?t('group_vis_discoverable_hint'):'Appears in search. Request to join — no history until accepted.',
+    public: typeof t==='function'?t('group_vis_public_hint'):'Anyone can find and join instantly, and see chat history.',
+  };
+  sheet.querySelectorAll('[data-vis]').forEach((btn)=>{
+    btn.addEventListener('click',()=>{
+      vis=btn.dataset.vis||'private';
+      sheet.querySelectorAll('[data-vis]').forEach((b)=>{
+        b.classList.toggle('is-selected',b===btn);
+        b.setAttribute('aria-checked',b===btn?'true':'false');
+      });
+      const h=sheet.querySelector('[data-create-vis-hint]');
+      if(h) h.textContent=hints[vis]||hints.private;
+    });
+  });
   document.getElementById('createGrpBtn').addEventListener('click',async()=>{
     const name=document.getElementById('grpName').value.trim();
     if(!name){showToast(t('baithak_enter_group'));return;}
     const desc=document.getElementById('grpDesc')?.value?.trim()||'';
     sheet.remove();
     if(typeof createGroupInFirestore==='function'){
-      const chat=await createGroupInFirestore({name,description:desc});
+      const chat=await createGroupInFirestore({name,description:desc,visibility:vis});
       if(chat){
         showToast(t('baithak_group_created',{name}));
         if(typeof openChatScreen==='function') openChatScreen(chat);

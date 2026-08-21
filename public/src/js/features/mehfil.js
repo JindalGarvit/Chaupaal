@@ -471,6 +471,14 @@
         cam: !!camWanted,
       });
       ref.onDisconnect()?.remove();
+      if (window.__mehfilPresenceBeat) {
+        clearInterval(window.__mehfilPresenceBeat);
+        window.__mehfilPresenceBeat = null;
+      }
+      window.__mehfilPresenceBeat = setInterval(() => {
+        if (!activeChatId || activeChatId !== chatId) return;
+        ref.update({ at: Date.now() }).catch(() => {});
+      }, 15000);
     } catch (e) {}
   }
 
@@ -2341,21 +2349,25 @@
       if (ref) {
         const handler = (snap) => {
           const val = snap.val() || {};
-          const uids = Object.keys(val);
+          const now = Date.now();
           const me = currentUser?.uid || '';
-          // Honest Live: room needs ≥2 real participants (not sticky solo / click-only)
-          const others = me ? uids.filter((u) => u !== me) : uids;
-          const total = uids.length;
-          const isLive = total >= 2;
+          const FRESH_MS = 45_000;
+          const freshEntries = Object.entries(val).filter(
+            ([, meta]) => now - Number(meta?.at || 0) < FRESH_MS
+          );
+          const othersFresh = freshEntries.filter(([uid]) => uid !== me);
+          const allUids = Object.keys(val);
+          const total = freshEntries.length;
+          const isLive = othersFresh.length >= 1;
           const set = presenceWatchers.get(chatId);
           set?.forEach((fn) => {
             try {
               fn({
                 count: total,
-                othersCount: others.length,
+                othersCount: othersFresh.length,
                 totalCount: total,
-                uids: others,
-                allUids: uids,
+                uids: othersFresh.map(([u]) => u),
+                allUids,
                 participants: val,
                 live: isLive,
               });

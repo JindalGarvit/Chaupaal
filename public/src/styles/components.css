@@ -4370,6 +4370,18 @@ button[aria-busy="true"]::after{
 .group-info-invite-input{flex:1;min-width:0;padding:10px 12px;border-radius:12px;border:1.5px solid var(--line);font-size:12px;background:var(--cream);}
 .group-info-copy,.group-info-share{padding:10px 14px;border-radius:12px;border:none;background:var(--cream);font-weight:600;cursor:pointer;font-size:13px;}
 .group-info-toggle{display:flex;align-items:center;justify-content:space-between;margin-top:12px;font-size:14px;}
+.group-vis-seg{
+  display:flex;gap:6px;padding:4px;border-radius:14px;background:rgba(43,39,48,.05);
+}
+.group-vis-opt{
+  flex:1;border:0;background:transparent;color:var(--muted);
+  border-radius:11px;padding:10px 8px;font:700 12px/1.2 'Space Grotesk',sans-serif;
+  cursor:pointer;opacity:.7;
+}
+.group-vis-opt.is-selected{
+  background:var(--white);color:var(--ink);opacity:1;
+  box-shadow:0 1px 4px rgba(43,39,48,.1);
+}
 .group-info-muted{font-size:13px;color:var(--muted);}
 .group-info-request{display:flex;align-items:center;gap:8px;padding:8px;background:var(--white);border-radius:12px;margin-bottom:6px;}
 .group-info-accept,.group-info-reject{padding:8px 12px;border-radius:10px;border:none;font-size:12px;font-weight:600;cursor:pointer;}
