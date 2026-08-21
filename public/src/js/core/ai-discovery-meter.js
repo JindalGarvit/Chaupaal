@@ -101,14 +101,8 @@
       .ai-disc-meter-nudge{font-size:11px;color:var(--ink-secondary,#3C4043);margin-top:4px;line-height:1.35;}
       .ai-disc-meter-unlock{font-size:11px;color:var(--brand-red,var(--red));font-weight:600;margin-top:4px;}
       .ai-disc-meter-note{font-size:10px;color:var(--muted);margin-top:6px;line-height:1.35;}
-      .peepal-ai-results-collapsed{opacity:0.55;pointer-events:none;filter:grayscale(0.2);}
       .peepal-ai-limit-banner{padding:12px 14px;margin:8px 0 12px;border-radius:var(--r-control,12px);background:rgba(230,57,70,0.08);border:1.5px solid rgba(230,57,70,0.25);font-size:12px;line-height:1.4;color:var(--ink);}
-      .peepal-intent-card.is-limit-collapsed .peepal-ai-search-input,
-      .peepal-intent-card.is-limit-collapsed .peepal-ai-search-btn,
-      .peepal-intent-card.is-limit-collapsed .peepal-intent-chips{opacity:0.45;pointer-events:none;}
-      .khoj-intent-collapsed .khoj-intent-input,
-      .khoj-intent-collapsed .peepal-ai-search-btn,
-      .khoj-intent-collapsed [data-khoj-chips]{opacity:0.45;pointer-events:none;}
+      /* Messaging quota may exhaust Ask/Message — Find input/chips/button stay fully usable */
       .ai-disc-mini-pill{
         font:700 10px 'Space Grotesk',sans-serif;
         color:var(--muted);
@@ -150,9 +144,8 @@
       else cardEl.prepend(host);
     }
     const state = await mountMeter(host, Object.assign({ compact: true, nudge: true }, opts || {}));
-    const exhausted = !!(state && state.exhausted);
-    cardEl.classList.toggle('is-limit-collapsed', exhausted);
-    cardEl.classList.toggle('khoj-intent-collapsed', exhausted);
+    // Do not disable Find / chips when messaging quota is exhausted
+    cardEl.classList.remove('is-limit-collapsed', 'khoj-intent-collapsed');
     return state;
   }
 
@@ -178,9 +171,7 @@
     const nudgeRow = head.querySelector('.peepal-intent-mini-icons');
     if (nudgeRow) head.insertBefore(pill, nudgeRow);
     else head.appendChild(pill);
-    const exhausted = !!(state && state.exhausted);
-    cardEl.classList.toggle('is-limit-collapsed', exhausted);
-    cardEl.classList.toggle('khoj-intent-collapsed', exhausted);
+    cardEl.classList.remove('is-limit-collapsed', 'khoj-intent-collapsed');
     return state;
   }
 

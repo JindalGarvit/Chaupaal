@@ -52,7 +52,7 @@
     }
     try {
       const page = await getCompatibilityPeeks({
-        limit: o.limit || 6,
+        limit: o.limit || 5,
         reset,
         offset: reset ? 0 : undefined,
         friendshipOnly: !!o.friendshipOnly,
@@ -84,7 +84,7 @@
           moreBtn.className = 'khoj-compat-more';
           moreBtn.textContent = tt('khoj_more', 'See more compatible people');
           listEl.after(moreBtn);
-          moreBtn.addEventListener('click', () => loadKhojPeeks(listEl, { reset: false, limit: 6 }));
+          moreBtn.addEventListener('click', () => loadKhojPeeks(listEl, { reset: false, limit: 5 }));
         }
         moreBtn.classList.remove('hidden');
       } else if (moreBtn) {
@@ -156,33 +156,19 @@
 
     const listEl = panel.querySelector('#khojCompatList');
     // On open: ranked compatibility peeks; empty-query path uses broad friendship
-    loadKhojPeeks(listEl, { reset: true, limit: 6, emptyFriendship: true, friendshipOnly: false });
+    loadKhojPeeks(listEl, { reset: true, limit: 5, emptyFriendship: true, friendshipOnly: false });
 
     const run = () => {
       const q = panel.querySelector('#khojIntentInput')?.value?.trim();
       if (!q) {
-        // Empty query → refresh friendship-majority peeks (never blank)
-        loadKhojPeeks(listEl, { reset: true, limit: 6, emptyFriendship: true });
+        if (typeof showToast === 'function') {
+          showToast(tt('peepal_find_empty', "Type who you're looking for"));
+        }
         return;
       }
-      const peepalInput = document.getElementById('peepalAiSearchInput');
-      if (peepalInput) peepalInput.value = q;
       const dest = panel.querySelector('#khojIntentResults');
-      const src = document.getElementById('peepalAiSearchResults');
       if (typeof runPeepalAiSearch === 'function') {
-        const p = runPeepalAiSearch({ query: q });
-        Promise.resolve(p)
-          .then(() => {
-            if (src && dest) dest.innerHTML = src.innerHTML;
-          })
-          .catch(() => {});
-        if (src && dest) {
-          const mo = new MutationObserver(() => {
-            dest.innerHTML = src.innerHTML;
-          });
-          mo.observe(src, { childList: true, subtree: true });
-          setTimeout(() => mo.disconnect(), 20000);
-        }
+        runPeepalAiSearch({ query: q, resultsEl: dest, surface: 'khoj', limit: 5 });
         return;
       }
       if (typeof openPeopleSearchWithContacts === 'function') {
@@ -197,14 +183,7 @@
           inp.value = chip.dataset.hint || '';
           inp.focus();
         }
-        const intent = String(chip.dataset.chipIntent || '').toLowerCase();
-        if (intent === 'friendship' || !inp?.value) {
-          loadKhojPeeks(listEl, {
-            reset: true,
-            limit: 6,
-            emptyFriendship: intent === 'friendship' || !intent,
-          });
-        }
+        // Fill only — user must tap Find
       });
     });
     panel.querySelector('#khojIntentGo')?.addEventListener('click', run);
@@ -223,13 +202,13 @@
       bindLivingPlaceholder(panel.querySelector('#khojIntentInput'), 'khoj_intent');
     }
     const khojInp = panel.querySelector('#khojIntentInput');
-    if (typeof enhanceSearchField === 'function' && khojInp && !khojInp.dataset.searchFieldWired) {
+    if (typeof enhanceSearchField === 'function' && khojInp) {
+      delete khojInp.dataset.searchFieldWired;
       enhanceSearchField(khojInp, {
         surfaceId: 'khoj',
         onClear() {
           const host = panel.querySelector('#khojIntentResults');
           if (host) host.innerHTML = '';
-          loadKhojPeeks(listEl, { reset: true, limit: 6, emptyFriendship: true, friendshipOnly: false });
         },
       });
     }
@@ -240,7 +219,7 @@
       () => {
         if (!khojHasMore) return;
         if (panel.scrollTop + panel.clientHeight >= panel.scrollHeight - 80) {
-          loadKhojPeeks(listEl, { reset: false, limit: 6 });
+          loadKhojPeeks(listEl, { reset: false, limit: 5 });
         }
       },
       { passive: true }

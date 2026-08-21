@@ -926,7 +926,7 @@ function openChatScreen(chat){
       openChatPeerFullProfile();
     });
   });
-  // Avatar: tap = enlarge photo; long-press = profile (DM) / group info
+  // Avatar: tap = enlarge photo; long-press = options menu only
   {
     const headerAv = screen.querySelector('.chat-header-avatar');
     if (headerAv) {
@@ -938,10 +938,21 @@ function openChatScreen(chat){
         }
         e.stopPropagation();
         if (typeof openAvatarLightbox === 'function') {
+          const peerUid =
+            chat.uid ||
+            chat.peerUid ||
+            (Array.isArray(chat.participants)
+              ? chat.participants.find((u) => u && u !== currentUser?.uid)
+              : null);
           openAvatarLightbox({
             photoURL: chat.photoURL || (typeof chat.avatar === 'string' && /^https?:/i.test(chat.avatar) ? chat.avatar : ''),
             name: chat.name || (isGroup ? 'Group' : 'Friend'),
             avatar: chat.avatar || (isSelf ? '📝' : isChaupaal ? '🏠' : isGroup ? '👥' : '👤'),
+            uid: isChaupaal ? 'chaupaal' : isGroup ? '' : peerUid || '',
+            isGroup,
+            isChaupaal,
+            chat: isGroup ? chat : null,
+            username: chat.username || '',
           });
         }
       });
@@ -950,10 +961,26 @@ function openChatScreen(chat){
           headerAv,
           () => {
             if (isGroup) {
-              if (typeof openGroupInfo === 'function') openGroupInfo(chat);
+              if (typeof openBaithakChatActions === 'function') openBaithakChatActions(chat, { surface: 'header' });
+              else if (typeof openGroupInfo === 'function') openGroupInfo(chat);
               return;
             }
-            openChatPeerFullProfile();
+            const peerUid =
+              chat.uid ||
+              chat.peerUid ||
+              (Array.isArray(chat.participants)
+                ? chat.participants.find((u) => u && u !== currentUser?.uid)
+                : null);
+            if (!peerUid) return;
+            if (typeof openBaithakAvatarMenu === 'function') {
+              openBaithakAvatarMenu(headerAv, {
+                uid: peerUid,
+                name: chat.name,
+                avatar: chat.avatar,
+                photoURL: chat.photoURL,
+                username: chat.username,
+              });
+            }
           },
           { delayMs: 520 }
         );
@@ -1299,13 +1326,18 @@ function bindMsgAvatarLongPress(root, fallbackProfile){
           photoURL: profile.photoURL || (typeof profile.avatar==='string'&&/^https?:/i.test(profile.avatar)?profile.avatar:''),
           name: profile.name,
           avatar: profile.avatar,
+          uid,
+          username: fallbackProfile?.username || '',
         });
       }
     });
     if(typeof onLongPress==='function'){
       onLongPress(el, () => {
-        if(typeof openPublicProfile==='function') openPublicProfile(profile,{uid,context:'baithak'});
-        else if(typeof openProfilePeek==='function') openProfilePeek(profile);
+        if(typeof openBaithakAvatarMenu==='function'){
+          openBaithakAvatarMenu(el, profile);
+        } else if(typeof openBaithakChatActions==='function' && window.currentOpenChat){
+          openBaithakChatActions(window.currentOpenChat, { surface: 'message_avatar' });
+        }
       },{ delayMs: 520 });
     }
   });

@@ -33,20 +33,40 @@ const INTENT_MAP = {
   debate: {interests:['politics','GK','World'], personality:'intellectual', vibe:'intellectual debate'},
 };
 
+const DISCOVER_LIMIT_DEFAULT = 5;
+
 async function runPeepalAiSearch(opts){
   const o = opts || {};
-  const input = document.getElementById('peepalAiSearchInput');
+  const resultsEl =
+    o.resultsEl ||
+    (o.surface === 'khoj'
+      ? document.getElementById('khojIntentResults')
+      : document.getElementById('peepalAiSearchResults'));
+  const input =
+    o.surface === 'khoj'
+      ? document.getElementById('khojIntentInput')
+      : document.getElementById('peepalAiSearchInput');
   const query = (o.query != null ? String(o.query) : input?.value || '').trim();
-  if(!query) return;
-  if(input && o.query != null) input.value = query;
-  const resultsEl = document.getElementById('peepalAiSearchResults');
-  if(!resultsEl) return;
+  if (!query) {
+    if (typeof showToast === 'function') {
+      showToast(
+        typeof t === 'function'
+          ? t('peepal_find_empty', "Type who you're looking for")
+          : "Type who you're looking for"
+      );
+    }
+    return;
+  }
+  if (input && o.query != null) input.value = query;
+  if (!resultsEl) return;
+
+  const limit = Math.max(1, Math.min(20, Number(o.limit) || DISCOVER_LIMIT_DEFAULT));
 
   if(typeof renderSkeleton==='function') renderSkeleton(resultsEl, {variant:'card', count:2});
   else resultsEl.innerHTML = `<div class="peepal-ai-thinking">Finding the right people for you...</div>`;
 
   try{
-    // Unified brain: server intent_discover (parse â†’ assume â†’ retrieve â†’ rank â†’ learn hooks)
+    // Unified brain: server intent_discover (parse → assume → retrieve → rank → learn hooks)
     let envelope = null;
     if(typeof apiFetch === 'function' && typeof currentUser !== 'undefined' && currentUser){
       try{
@@ -57,7 +77,7 @@ async function runPeepalAiSearch(opts){
             action: 'intent_discover',
             query,
             chipIntent: o.chipIntent || null,
-            limit: 10,
+            limit,
             ai: o.ai,
           },
         });
@@ -68,19 +88,22 @@ async function runPeepalAiSearch(opts){
 
     const data = envelope?.ok && envelope.data ? envelope.data : null;
     if(data && Array.isArray(data.matches)){
+      data.matches = data.matches
+        .filter((m) => m?.uid && m.uid !== currentUser?.uid)
+        .slice(0, limit);
       await renderIntentDiscoverResults(resultsEl, query, data);
       return;
     }
 
     // Fallback: deterministic local INTENT_MAP + public pool (AI-off / offline)
-    await runPeepalAiSearchLocalFallback(query, resultsEl);
+    await runPeepalAiSearchLocalFallback(query, resultsEl, { limit });
   }catch(err){
     console.error(err);
     if(typeof renderErrorState==='function'){
       renderErrorState(resultsEl, {
-        title:'Search couldnâ€™t finish',
-        message: typeof friendlyError==='function'?friendlyError(err):'Couldnâ€™t connect right now. Try again in a moment.',
-        onRetry:()=>runPeepalAiSearch(),
+        title:'Search couldn’t finish',
+        message: typeof friendlyError==='function'?friendlyError(err):'Couldn’t connect right now. Try again in a moment.',
+        onRetry:()=>runPeepalAiSearch(o),
       });
     } else {
       resultsEl.innerHTML = `<div style="text-align:center;padding:24px;color:var(--muted);">Couldn't connect right now. Try again in a moment.</div>`;
@@ -100,7 +123,7 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
       aiMsgLimit = await PolicyUsage.getRemaining('aiDiscoveryMsg');
     }
   } catch (e) {}
-  const aiCollapsed = !!(aiMsgLimit && aiMsgLimit.exhausted);
+  const aiMsgExhausted = !!(aiMsgLimit && aiMsgLimit.exhausted);
   if (typeof AiDiscoveryMeter?.injectStyles === 'function') AiDiscoveryMeter.injectStyles();
   try {
     if (typeof AiDiscoveryMeter?.mountOnIntentCardCompact === 'function') {
@@ -111,9 +134,9 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
   if(!matches.length){
     if(typeof renderEmptyState==='function'){
       renderEmptyState(resultsEl, {
-        icon:(typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('peepal',40):'ðŸŒ³',
+        icon:(typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('peepal',40):'🌳',
         title:'No matches yet',
-        message: data.emptyMessage || 'No eligible people matched that search. We never invent profiles â€” try broader wording.',
+        message: data.emptyMessage || 'No eligible people matched that search. We never invent profiles — try broader wording.',
       });
     } else {
       resultsEl.innerHTML = `<div style="text-align:center;padding:24px;color:var(--muted);">${data.emptyMessage || 'No matches found.'}</div>`;
@@ -125,9 +148,9 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
   resultsEl.innerHTML = `
-    ${aiCollapsed ? `<div class="peepal-ai-limit-banner">${aiMsgLimit.unlock || 'AI Discovery messaging limit reached.'} Professional profiles found here stay unlimited.</div>` : ''}
+    ${aiMsgExhausted ? `<div class="peepal-ai-limit-banner">${aiMsgLimit.unlock || 'AI Discovery messaging limit reached — Find still works; Message/Ask may be paused.'} Professional profiles found here stay unlimited.</div>` : ''}
     <div id="peepalAiMeterHost"></div>
-    <div class="${aiCollapsed ? 'peepal-ai-results-collapsed' : ''}" id="peepalAiResultsBody">
+    <div id="peepalAiResultsBody">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
         <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Top ${matches.length} matches</div>
         <div style="font-size:11px;color:var(--muted);">${plan.vibe ? `"${esc(String(plan.vibe).slice(0,40))}"` : (data.mode === 'deterministic' ? 'Preference match' : 'AI-assisted')}</div>
@@ -135,8 +158,8 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
       ${refineChips.length ? `<div class="discovery-refine-chips" data-nav-ignore="1">${refineChips.map(c=>`<button type="button" class="peepal-nudge-chip" data-refine="${esc(c.id)}">${esc(c.label)}</button>`).join('')}</div>` : ''}
     </div>
   `;
-  const bodyEl = document.getElementById('peepalAiResultsBody') || resultsEl;
-  const meterHost = document.getElementById('peepalAiMeterHost');
+  const bodyEl = resultsEl.querySelector('#peepalAiResultsBody') || resultsEl;
+  const meterHost = resultsEl.querySelector('#peepalAiMeterHost');
   if (meterHost && typeof AiDiscoveryMeter?.mountMeter === 'function') {
     AiDiscoveryMeter.mountMeter(meterHost, { compact: true });
   }
@@ -149,7 +172,8 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
       else if (id === 'include_everyone' || id === 'gender_everyone') next = `${query} everyone`;
       else if (id === 'gender_women') next = `${query} women`;
       else if (id === 'gender_men') next = `${query} men`;
-      runPeepalAiSearch({ query: next });
+      const surface = resultsEl.id === 'khojIntentResults' ? 'khoj' : 'vriksha';
+      runPeepalAiSearch({ query: next, resultsEl, surface });
     });
   });
 
@@ -200,7 +224,7 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
       </div>
       <div style="display:flex;gap:8px;margin-top:8px;">
         <button class="peepal-ai-view-btn" style="flex:1;padding:9px;background:var(--surface-sunken,var(--cream));border:2px solid var(--line);border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;cursor:pointer;">View profile</button>
-        <button class="peepal-ai-chat-btn" data-name="${esc(user.name)}" data-uid="${esc(user.uid)}" data-starter="${esc(starter)}" style="flex:1;padding:9px;background:var(--red);color:#fff;border:none;border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;cursor:pointer;">${esc(ib?.cta || 'Ask them')}</button>
+        <button class="peepal-ai-chat-btn" data-name="${esc(user.name)}" data-uid="${esc(user.uid)}" data-starter="${esc(starter)}" ${aiMsgExhausted && (user.profileType || 'personal') === 'personal' ? 'disabled aria-disabled="true"' : ''} style="flex:1;padding:9px;background:var(--red);color:#fff;border:none;border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;cursor:pointer;${aiMsgExhausted && (user.profileType || 'personal') === 'personal' ? 'opacity:.55;' : ''}">${esc(ib?.cta || 'Ask them')}</button>
       </div>
     `;
 
@@ -239,13 +263,19 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
     });
 
     card.querySelector('.peepal-ai-chat-btn')?.addEventListener('click', (e) => {
+      if (e.currentTarget.disabled || e.currentTarget.getAttribute('aria-disabled') === 'true') {
+        if (typeof showToast === 'function') {
+          showToast(aiMsgLimit?.unlock || 'Messaging limit reached — Find still works');
+        }
+        return;
+      }
       const name = e.currentTarget.dataset.name;
       const suggestedStarter = e.currentTarget.dataset.starter;
       if (typeof openDmWithSharedHello === 'function') {
         openDmWithSharedHello({
           uid: user.uid,
           name,
-          avatar: user.avatar || 'ðŸ‘¤',
+          avatar: user.avatar || '👤',
           theirIcebreakers: theirIb,
           starterText: suggestedStarter,
           origin: 'ai_discovery',
@@ -259,8 +289,9 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
   });
 }
 
-/** Local fallback when server discover is unavailable â€” never invents users. */
-async function runPeepalAiSearchLocalFallback(query, resultsEl){
+/** Local fallback when server discover is unavailable — never invents users. */
+async function runPeepalAiSearchLocalFallback(query, resultsEl, opts){
+  const limit = Math.max(1, Math.min(20, Number(opts?.limit) || DISCOVER_LIMIT_DEFAULT));
   const queryLower = query.toLowerCase();
   let quickCriteria = null;
   for(const [intent, criteria] of Object.entries(INTENT_MAP)){
@@ -289,9 +320,9 @@ async function runPeepalAiSearchLocalFallback(query, resultsEl){
   if(!pool.length){
     if(typeof renderEmptyState==='function'){
       renderEmptyState(resultsEl, {
-        icon:(typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('peepal',40):'ðŸŒ³',
+        icon:(typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('peepal',40):'🌳',
         title:'No matches yet',
-        message:'No eligible open profiles right now. We never invent people â€” try again as the community grows.',
+        message:'No eligible open profiles right now. We never invent people — try again as the community grows.',
       });
     } else {
       resultsEl.innerHTML = `<div style="text-align:center;padding:24px;color:var(--muted);">No eligible open profiles right now.</div>`;
@@ -310,7 +341,7 @@ async function runPeepalAiSearchLocalFallback(query, resultsEl){
       score += 25; reasons.push('city');
     }
     return {user:u, score, reasons, matchPct: Math.min(99, Math.max(30, Math.round(score*1.8)))};
-  }).filter(m => m.score > 1).sort((a,b)=>b.score-a.score).slice(0,10);
+  }).filter(m => m.score > 1).sort((a,b)=>b.score-a.score).slice(0,limit);
 
   await renderIntentDiscoverResults(resultsEl, query, {
     mode: 'deterministic',

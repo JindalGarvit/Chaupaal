@@ -221,8 +221,17 @@ function maybeShowPeepalCheckIn(){
 const _origRunPeepalAiSearch = runPeepalAiSearch;
 window.runPeepalAiSearch = async function(opts){
   await _origRunPeepalAiSearch(opts);
-  const query = (opts && opts.query) || document.getElementById('peepalAiSearchInput')?.value || '';
-  const resultsEl = document.getElementById('peepalAiSearchResults');
+  const o = opts || {};
+  const query =
+    (o.query != null ? String(o.query) : '') ||
+    document.getElementById('khojIntentInput')?.value ||
+    document.getElementById('peepalAiSearchInput')?.value ||
+    '';
+  const resultsEl =
+    o.resultsEl ||
+    (o.surface === 'khoj'
+      ? document.getElementById('khojIntentResults')
+      : document.getElementById('peepalAiSearchResults'));
   const count = resultsEl?.querySelectorAll('.peepal-ai-result-card').length || 0;
   if(count > 0) addSearchFeedback(resultsEl, query, count);
 };

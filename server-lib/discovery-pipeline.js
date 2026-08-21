@@ -36,7 +36,7 @@ const {
 } = require('./discovery-query-cache');
 
 const DISCOVER_POOL = 120;
-const DISCOVER_LIMIT_DEFAULT = 10;
+const DISCOVER_LIMIT_DEFAULT = 5;
 
 /** Nightly batch interface (thin stub) — cron can call processDiscoveryBatchLabels. */
 const BATCH_INTERFACE = Object.freeze({

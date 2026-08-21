@@ -466,6 +466,7 @@
       if (!ref) return;
       await ref.set({
         at: Date.now(),
+        state: 'in_room',
         name: userProfile?.name || digitalProfile?.displayName || 'Member',
         muted: !micWanted,
         cam: !!camWanted,
@@ -477,8 +478,8 @@
       }
       window.__mehfilPresenceBeat = setInterval(() => {
         if (!activeChatId || activeChatId !== chatId) return;
-        ref.update({ at: Date.now() }).catch(() => {});
-      }, 15000);
+        ref.update({ at: Date.now(), state: 'in_room' }).catch(() => {});
+      }, 10000);
     } catch (e) {}
   }
 
@@ -1241,6 +1242,10 @@
     }
     if (activeChatId && currentUser?.uid) {
       try {
+        if (window.__mehfilPresenceBeat) {
+          clearInterval(window.__mehfilPresenceBeat);
+          window.__mehfilPresenceBeat = null;
+        }
         await transferHostIfNeeded();
         rtdbRef(`mehfil/${activeChatId}/participants/${currentUser.uid}`)?.remove();
       } catch (e) {}
@@ -2350,7 +2355,7 @@
     await joinAgora(chatId, gen);
   }
 
-  /** Live presence for chat list / header badges */
+  /** Live presence for chat list / header badges — Live only if ≥1 other in_room & fresh. */
   function watchMehfilPresence(chatId, cb) {
     if (!chatId || typeof cb !== 'function') return () => {};
     if (!presenceWatchers.has(chatId)) presenceWatchers.set(chatId, new Set());
@@ -2359,27 +2364,30 @@
     if (!presenceUnsubs.has(chatId)) {
       const ref = rtdbRef(`mehfil/${chatId}/participants`);
       if (ref) {
+        const FRESH_MS = 20_000;
         const handler = (snap) => {
           const val = snap.val() || {};
           const now = Date.now();
           const me = currentUser?.uid || '';
-          const FRESH_MS = 45_000;
-          const freshEntries = Object.entries(val).filter(
-            ([, meta]) => now - Number(meta?.at || 0) < FRESH_MS
+          const liveOthers = Object.entries(val).filter(([uid, meta]) => {
+            if (!uid || uid === me) return false;
+            if (String(meta?.state || '') !== 'in_room') return false;
+            return now - Number(meta?.at || 0) < FRESH_MS;
+          });
+          const freshAll = Object.entries(val).filter(
+            ([, meta]) =>
+              String(meta?.state || '') === 'in_room' && now - Number(meta?.at || 0) < FRESH_MS
           );
-          const othersFresh = freshEntries.filter(([uid]) => uid !== me);
-          const allUids = Object.keys(val);
-          const total = freshEntries.length;
-          const isLive = othersFresh.length >= 1;
+          const isLive = liveOthers.length >= 1;
           const set = presenceWatchers.get(chatId);
           set?.forEach((fn) => {
             try {
               fn({
-                count: total,
-                othersCount: othersFresh.length,
-                totalCount: total,
-                uids: othersFresh.map(([u]) => u),
-                allUids,
+                count: freshAll.length,
+                othersCount: liveOthers.length,
+                totalCount: freshAll.length,
+                uids: liveOthers.map(([u]) => u),
+                allUids: Object.keys(val),
                 participants: val,
                 live: isLive,
               });

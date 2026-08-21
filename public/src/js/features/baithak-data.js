@@ -260,19 +260,23 @@ function renderChatList(chats, opts){
               photoURL: chat.photoURL || (typeof chat.avatar==='string'&&/^https?:/i.test(chat.avatar)?chat.avatar:''),
               name: chat.name || (isGroup ? 'Group' : 'Friend'),
               avatar: chat.avatar || (isGroup ? '👥' : '👤'),
+              uid: isGroup ? '' : peerUid || '',
+              isGroup,
+              chat: isGroup ? chat : null,
+              username: chat.username || '',
             });
           }
         });
         if(typeof onLongPress==='function'){
           onLongPress(avatar,()=>{
             if(isGroup){
-              if(typeof openGroupInfo==='function') openGroupInfo(chat);
+              if(typeof openBaithakChatActions==='function') openBaithakChatActions(chat, { surface: 'inbox' });
+              else if(typeof openGroupInfo==='function') openGroupInfo(chat);
               return;
             }
             if(!peerUid) return;
             const profile={uid:peerUid,name:chat.name,avatar:chat.avatar,photoURL:chat.photoURL,username:chat.username};
-            if(typeof openPublicProfile==='function') openPublicProfile(profile,{uid:peerUid,context:'baithak'});
-            else if(typeof openProfilePeek==='function') openProfilePeek(profile);
+            if(typeof openBaithakAvatarMenu==='function') openBaithakAvatarMenu(avatar, profile);
           },{ delayMs: 520 });
         }
       }

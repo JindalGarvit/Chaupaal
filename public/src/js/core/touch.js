@@ -549,6 +549,9 @@
       '';
     const name = o.name || 'Photo';
     const fallback = o.fallback || o.avatar || '👤';
+    const uid = o.uid || '';
+    const isGroup = !!o.isGroup;
+    const chat = o.chat || null;
     document.getElementById('cpAvatarLightbox')?.remove();
     const host = document.createElement('div');
     host.id = 'cpAvatarLightbox';
@@ -564,13 +567,12 @@
             { decorative: true, size: 160 }
           )}</div>`
         : `<div class="avatar-lightbox-fallback">${String(fallback).slice(0, 4)}</div>`;
+    const safeName = String(name).replace(/</g, '&lt;').replace(/"/g, '&quot;');
     host.innerHTML = `
       <div class="avatar-lightbox-backdrop" data-dismiss="1"></div>
-      <div class="avatar-lightbox-card">
-        <div class="avatar-lightbox-grabber" aria-hidden="true"></div>
-        <button type="button" class="avatar-lightbox-close" data-dismiss="1" aria-label="Close">✕</button>
+      <div class="avatar-lightbox-card" role="document">
         ${media}
-        <div class="avatar-lightbox-name">${String(name).replace(/</g, '&lt;')}</div>
+        <button type="button" class="avatar-lightbox-name" data-avatar-name="1">${safeName}</button>
       </div>`;
     deviceRoot().appendChild(host);
     hapticLight();
@@ -587,34 +589,31 @@
     host.addEventListener('click', (e) => {
       if (e.target.closest('[data-dismiss]')) close();
     });
-    const card = host.querySelector('.avatar-lightbox-card');
-    let startY = 0;
-    let dragging = false;
-    card?.addEventListener(
-      'touchstart',
-      (e) => {
-        startY = e.touches[0]?.clientY || 0;
-        dragging = true;
-      },
-      { passive: true }
-    );
-    card?.addEventListener(
-      'touchmove',
-      (e) => {
-        if (!dragging) return;
-        const dy = (e.touches[0]?.clientY || 0) - startY;
-        if (dy > 0) card.style.transform = `translateY(${Math.min(dy, 160)}px)`;
-      },
-      { passive: true }
-    );
-    card?.addEventListener('touchend', () => {
-      if (!dragging) return;
-      dragging = false;
-      const dy = parseFloat(String(card.style.transform || '').replace(/[^\d.-]/g, '')) || 0;
-      card.style.transform = '';
-      if (dy > 80) close();
+    host.querySelector('[data-avatar-name]')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+      if (isGroup && chat && typeof openGroupInfo === 'function') {
+        openGroupInfo(chat);
+        return;
+      }
+      if (uid === 'chaupaal' || o.isChaupaal) {
+        if (typeof openChaupaalAiProfile === 'function') openChaupaalAiProfile();
+        return;
+      }
+      if (uid && typeof openPublicProfile === 'function') {
+        openPublicProfile(
+          {
+            uid,
+            name,
+            photoURL: photo || '',
+            avatar: fallback,
+            username: o.username || '',
+          },
+          { uid, context: 'baithak' }
+        );
+      }
     });
-    host.querySelector('.avatar-lightbox-close')?.focus?.();
     return { close };
   }
 
@@ -640,7 +639,7 @@
         handler(e);
         setTimeout(() => {
           el.dataset.suppressClick = '0';
-        }, 400);
+        }, 700);
       }, delay);
     };
     el.addEventListener('touchstart', start, { passive: true });

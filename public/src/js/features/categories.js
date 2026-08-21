@@ -943,9 +943,26 @@ async function initPeepal(){
   const goBtn=document.getElementById('peepalAiSearchGo');
   if(goBtn&&!goBtn.dataset.wired){
     goBtn.dataset.wired='1';
-    goBtn.addEventListener('click',()=>{ if(typeof runPeepalAiSearch==='function') runPeepalAiSearch(); });
+    goBtn.addEventListener('click',()=>{
+      if(typeof runPeepalAiSearch==='function'){
+        runPeepalAiSearch({
+          surface:'vriksha',
+          resultsEl:document.getElementById('peepalAiSearchResults'),
+          limit:5,
+        });
+      }
+    });
     document.getElementById('peepalAiSearchInput')?.addEventListener('keypress',e=>{
-      if(e.key==='Enter'&&!e.shiftKey){e.preventDefault(); if(typeof runPeepalAiSearch==='function') runPeepalAiSearch();}
+      if(e.key==='Enter'&&!e.shiftKey){
+        e.preventDefault();
+        if(typeof runPeepalAiSearch==='function'){
+          runPeepalAiSearch({
+            surface:'vriksha',
+            resultsEl:document.getElementById('peepalAiSearchResults'),
+            limit:5,
+          });
+        }
+      }
     });
     document.getElementById('peepalAiSearchInput')?.addEventListener('blur',()=>{
       try{ if(typeof restoreAppShell==='function') restoreAppShell('peepal_intent_blur'); }catch(e){}
