@@ -2077,8 +2077,9 @@
             <button type="button" data-mehfil-control-host>${esc(tt('mehfil_host_controls', 'Only me'))}</button>
             <button type="button" data-mehfil-control-all>${esc(tt('mehfil_control_everyone', 'Everyone'))}</button>
           </div>
-          <form class="mehfil-media-search" data-mehfil-search-form>
-            <input type="search" placeholder="${esc(tt('mehfil_yt_search_ph', 'Search YouTube or paste a link'))}" data-mehfil-q enterkeyhint="search" autocomplete="off">
+          <form class="mehfil-media-search search-field" data-mehfil-search-form>
+            <input type="search" class="search-field-input search-field-hide-native-clear" placeholder="${esc(tt('mehfil_yt_search_ph', 'Search YouTube or paste a link'))}" data-mehfil-q enterkeyhint="search" autocomplete="off">
+            <button type="button" class="search-field-clear" data-mehfil-clear aria-label="${esc(tt('search_clear', 'Clear search'))}" hidden>✕</button>
             <button type="submit" data-mehfil-play>${esc(tt('mehfil_search', 'Search'))}</button>
           </form>
           <div class="mehfil-yt-results" data-mehfil-yt-results hidden></div>
@@ -2321,6 +2322,17 @@
       e.preventDefault();
       searchAndPlay(el.querySelector('[data-mehfil-q]')?.value);
     });
+    const mehfilQ = el.querySelector('[data-mehfil-q]');
+    if (typeof enhanceSearchField === 'function' && mehfilQ && !mehfilQ.dataset.searchFieldWired) {
+      enhanceSearchField(mehfilQ, {
+        clearBtn: el.querySelector('[data-mehfil-clear]'),
+        surfaceId: 'mehfil',
+        onClear() {
+          const host = el.querySelector('[data-mehfil-results]') || el.querySelector('#mehfilYtResults');
+          if (host) host.innerHTML = '';
+        },
+      });
+    }
 
     await ensureMehfilParticipant(chatId);
     bindMembersList(chatId);

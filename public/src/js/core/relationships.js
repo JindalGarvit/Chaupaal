@@ -97,9 +97,13 @@
 
   async function openProfileMessage(profile) {
     if (!requireRelationshipUser()) return null;
-    const uid = profile?.uid;
+    const uid = String(profile?.uid || '').trim();
     if (!uid) {
       if (typeof showToast === 'function') showToast('Could not open chat');
+      return null;
+    }
+    if (uid === currentUser?.uid) {
+      if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('rel_cant_message_self', 'That’s you') : 'That’s you');
       return null;
     }
     if (typeof bootstrapDmChat !== 'function') {
@@ -107,9 +111,17 @@
       return null;
     }
     try {
+      // Switch to Baithak *before* opening chat so tab remount does not dismiss the screen.
+      const baithakBtn = document.querySelector('.bottom-tabs .tab-btn[data-tab="baithak"]');
+      if (baithakBtn && !baithakBtn.classList.contains('active')) {
+        baithakBtn.click();
+        await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 40)));
+      }
+
+      const peerName = displayNameFor(profile);
       const chat = await bootstrapDmChat({
         uid,
-        name: displayNameFor(profile),
+        name: peerName,
         username: profile.username,
         photoURL: profile.photoURL,
         avatar: profile.avatar || profile.photoURL,
@@ -132,12 +144,10 @@
       }
 
       if (typeof openChatScreen === 'function') openChatScreen(chat);
-      document.querySelector('.bottom-tabs .tab-btn[data-tab="baithak"]')?.click();
       return chat;
     } catch (e) {
       const msg =
-        typeof friendlyDmError === 'function' ? friendlyDmError(e) : e?.message || 'Could not open chat — try again';
-      if (typeof showToast === 'function') showToast(msg);
+        typeof friendlyDmError === 'function' ? friendlyDmError(e) : e?.message || 'Could not open chat — try again';      if (typeof showToast === 'function') showToast(msg);
       return null;
     }
   }
@@ -836,6 +846,15 @@
     overlay.querySelector('[data-exclusion-search]')?.addEventListener('input', (event) => {
       renderSearch(event.target.value);
     });
+    const exclInp = overlay.querySelector('[data-exclusion-search]');
+    if (typeof enhanceSearchField === 'function' && exclInp && !exclInp.dataset.searchFieldWired) {
+      enhanceSearchField(exclInp, {
+        surfaceId: 'exclusion',
+        onClear() {
+          renderSearch('');
+        },
+      });
+    }
     await renderList();
   }
 

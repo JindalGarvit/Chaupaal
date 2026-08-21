@@ -138,6 +138,13 @@ function renderFriendDiscovery(container){
   section.querySelector('#friendDiscoverSearch')?.addEventListener('keydown',(e)=>{
     if(e.key==='Enter'){ e.preventDefault(); runDiscoverSearch(); }
   });
+  const fdInp=section.querySelector('#friendDiscoverSearch');
+  if(typeof enhanceSearchField==='function'&&fdInp&&!fdInp.dataset.searchFieldWired){
+    enhanceSearchField(fdInp,{
+      surfaceId:'onboard_friends',
+      onClear(){ resultsEl.innerHTML=''; }
+    });
+  }
 }
 
 // ===================== DUEL SPECTATOR MODE =====================
@@ -774,6 +781,9 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     const panel=document.getElementById('panel-'+btn.dataset.tab);
     if(panel)panel.classList.add('active');
     document.getElementById('progressBar').style.display=btn.dataset.tab==='akhbaar'?'flex':'none';
+    if(typeof SearchFields?.resetAllExcept==='function'){
+      SearchFields.resetAllExcept(btn.dataset.tab||'');
+    }
     if(btn.dataset.tab==='baithak')initBaithak();
     else {
       if(typeof clearBaithakSearch==='function') clearBaithakSearch({ restoreList: false });

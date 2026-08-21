@@ -951,6 +951,16 @@ async function initPeepal(){
       try{ if(typeof restoreAppShell==='function') restoreAppShell('peepal_intent_blur'); }catch(e){}
     });
   }
+  const peepalSearchInp=document.getElementById('peepalAiSearchInput');
+  if(peepalSearchInp&&typeof enhanceSearchField==='function'&&!peepalSearchInp.dataset.searchFieldWired){
+    enhanceSearchField(peepalSearchInp,{
+      surfaceId:'peepal',
+      onClear(){
+        const host=document.getElementById('peepalAiSearchResults');
+        if(host) host.innerHTML='';
+      }
+    });
+  }
   const globalBtn=document.getElementById('peepalIntentGlobalSearch');
   if(globalBtn&&!globalBtn.dataset.wired){
     globalBtn.dataset.wired='1';

@@ -405,8 +405,9 @@
       ];
     }
 
-    if (typeof openChatScreen === 'function') openChatScreen(chat);
     openBaithakTabIfNeeded();
+    await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 40)));
+    if (typeof openChatScreen === 'function') openChatScreen(chat);
     if (starterText) {
       setTimeout(() => {
         const msgInput = document.getElementById('chatMsgInput');

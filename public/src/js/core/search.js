@@ -109,15 +109,20 @@
     };
   }
 
+  function viewerUid() {
+    return (typeof currentUser !== 'undefined' && currentUser?.uid) || '';
+  }
+
   /** Profiles: exact username + users_public name/username prefix + bio text boost. */
   async function searchUsersProvider(query, { limit = SEE_MORE_LIMIT } = {}) {
     const q = normalizeQuery(query);
     if (!q || q.length < 1) return [];
+    const me = viewerUid();
     const results = [];
     const seen = new Set();
 
     function pushUser(uid, u, usernameFallback, scoreBoost) {
-      if (!uid || seen.has(uid) || isHiddenFromDiscovery(u)) return;
+      if (!uid || uid === me || seen.has(uid) || isHiddenFromDiscovery(u)) return;
       seen.add(uid);
       const row = mapUserResult(uid, u, usernameFallback);
       const hay = textHaystack(row.name, row.username, row.bio, row.city, ...(u.interests || []));
@@ -142,6 +147,7 @@
       const pool = typeof SAMPLE_DISCOVERY_POOL !== 'undefined' ? SAMPLE_DISCOVERY_POOL : [];
       return pool
         .filter((u) => {
+          if (!u?.uid || u.uid === me) return false;
           if (isHiddenFromDiscovery(u)) return false;
           const un = String(u.username || u.name || '')
             .toLowerCase()
@@ -172,7 +178,7 @@
       const exact = await db.collection('usernames').doc(q).get();
       if (exact.exists) {
         const uid = exact.data()?.uid;
-        if (uid) {
+        if (uid && uid !== me) {
           const u =
             (typeof UsersPublic?.getPublicProfile === 'function'
               ? await UsersPublic.getPublicProfile(uid)
@@ -184,17 +190,16 @@
 
     // 2) usernameLower / nameLower prefix on users_public (no usernames list)
     async function prefixField(field) {
-      if (results.length >= limit) return;
+      if (results.length >= limit * 2) return;
       try {
         const snap = await db
           .collection('users_public')
           .orderBy(field)
           .startAt(q)
           .endAt(endPrefix(q))
-          .limit(limit)
+          .limit(Math.max(limit, 24))
           .get();
         snap.docs.forEach((doc) => {
-          if (results.length >= limit) return;
           pushUser(doc.id, doc.data() || {}, doc.data()?.username || '', field === 'usernameLower' ? 50 : 35);
         });
       } catch (e) {
@@ -205,8 +210,22 @@
     await prefixField('usernameLower');
     await prefixField('nameLower');
 
+    // Relationship tiers: friends ≫ following ≫ others (text score within tier)
+    try {
+      const uids = results.map((r) => r.uid).filter(Boolean);
+      if (uids.length && typeof hydrateRelationships === 'function') {
+        await hydrateRelationships(uids).catch(() => ({}));
+      }
+      results.forEach((row) => {
+        const st =
+          typeof relationshipState === 'function' ? relationshipState(row.uid) || {} : {};
+        if (st.friend || st.status === 'friends') row.score = (row.score || 0) + 100000;
+        else if (st.following || st.status === 'following') row.score = (row.score || 0) + 40000;
+      });
+    } catch (e) {}
+
     results.sort((a, b) => (b.score || 0) - (a.score || 0));
-    return results.slice(0, limit);
+    return results.filter((r) => r.uid && r.uid !== me).slice(0, limit);
   }
 
   function postEngagementScore(raw, q) {
@@ -645,10 +664,14 @@
         <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">${escapeSearchHtml(title)}</div>
       </div>
       <div style="padding:12px 16px 0;">
-        <input id="usInput" type="search" autocomplete="off" placeholder="${escapeSearchHtml(placeholder)}"
-          data-living-ph="chaupaal_search"
-          style="width:100%;padding:12px 14px;border:2px solid var(--line);border-radius:14px;font-size:15px;box-sizing:border-box;outline:none;"
-          value="${String(initialQuery || '').replace(/"/g, '&quot;')}">
+        <div class="us-search-wrap search-field">
+          <input id="usInput" type="search" class="search-field-input search-field-hide-native-clear" autocomplete="off" placeholder="${escapeSearchHtml(placeholder)}"
+            data-living-ph="chaupaal_search"
+            style="width:100%;padding:12px 44px 12px 14px;border:2px solid var(--line);border-radius:14px;font-size:15px;box-sizing:border-box;outline:none;"
+            value="${String(initialQuery || '').replace(/"/g, '&quot;')}">
+          <button type="button" class="search-field-clear" id="usClearBtn" aria-label="Clear search" hidden>✕</button>
+          <span class="search-field-icon" aria-hidden="true">${typeof iconHtml === 'function' ? iconHtml('search', { size: 16 }) : '🔍'}</span>
+        </div>
       </div>
       <div class="us-vertical-tabs" id="usTabs" role="tablist" hidden></div>
       <div id="usResults" style="flex:1;overflow:auto;padding:0 16px 24px;"></div>`;
@@ -665,6 +688,7 @@
 
     const closeSearch = () => {
       clearTimeout(timer);
+      if (typeof SearchFields?.resetSurface === 'function') SearchFields.resetSurface('chaupaal');
       if (typeof removeNavLayer === 'function') removeNavLayer(overlay);
       overlay.remove();
       try {
@@ -686,6 +710,16 @@
     const tabsEl = overlay.querySelector('#usTabs');
     let timer = null;
     if (typeof bindLivingPlaceholder === 'function') bindLivingPlaceholder(input, 'chaupaal_search');
+    if (typeof enhanceSearchField === 'function' && input) {
+      enhanceSearchField(input, {
+        clearBtn: overlay.querySelector('#usClearBtn'),
+        surfaceId: 'chaupaal',
+        onClear() {
+          clearTimeout(timer);
+          renderSearchStart();
+        },
+      });
+    }
 
     function renderSearchStart() {
       tabsEl.hidden = true;

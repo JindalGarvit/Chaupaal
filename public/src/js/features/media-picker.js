@@ -220,6 +220,15 @@
           clearTimeout(timer);
           timer = setTimeout(() => run(input.value.trim()), 320);
         });
+        if (typeof enhanceSearchField === 'function' && input) {
+          enhanceSearchField(input, {
+            surfaceId: 'gif',
+            onClear() {
+              clearTimeout(timer);
+              run('');
+            },
+          });
+        }
         run('');
         setTimeout(() => input?.focus(), 80);
       },

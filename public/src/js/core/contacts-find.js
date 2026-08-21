@@ -237,13 +237,17 @@
       return;
     }
     const bodyHtml = `
-      <input id="peopleSearchInput" type="search" autocomplete="off" placeholder="${tt('contacts_search_ph', 'Search by name or @username')}"
-        style="width:100%;padding:12px 14px;border:2px solid var(--line);border-radius:14px;font-size:15px;box-sizing:border-box;">
+      <div class="search-field search-field-wrap">
+        <input id="peopleSearchInput" type="search" class="search-field-input search-field-hide-native-clear" autocomplete="off" placeholder="${tt('contacts_search_ph', 'Search by name or @username')}"
+          style="width:100%;padding:12px 44px 12px 14px;border:2px solid var(--line);border-radius:14px;font-size:15px;box-sizing:border-box;">
+        <button type="button" class="search-field-clear" id="peopleSearchClearBtn" aria-label="${tt('search_clear', 'Clear search')}" hidden>✕</button>
+      </div>
       <button type="button" class="btn" id="peopleContactsBtn" style="margin-top:10px;width:100%;">${tt('contacts_use_btn', 'Find from contacts')}</button>
       <div id="peopleSearchResults" style="margin-top:12px;"></div>`;
 
     function wire(sheet, close) {
       const results = sheet.querySelector('#peopleSearchResults');
+      const searchInput = sheet.querySelector('#peopleSearchInput');
       sheet.querySelector('#peopleContactsBtn')?.addEventListener('click', () => loadContactsInto(results));
       if (contactsSupported()) {
         results.innerHTML = `<div class="contacts-fallback">${tt(
@@ -254,48 +258,68 @@
         renderContactsBlock(results, { unsupported: true });
       }
       let timer = null;
-      sheet.querySelector('#peopleSearchInput')?.addEventListener('input', (e) => {
+      async function runPeopleQuery(q) {
+        if (!q) {
+          if (contactsSupported()) {
+            results.innerHTML = `<div class="contacts-fallback">${tt(
+              'contacts_soft_prompt',
+              'Optional: find friends already on Chaupaal from your contacts. We never upload your full address book.'
+            )}</div>`;
+          } else renderContactsBlock(results, { unsupported: true });
+          return;
+        }
+        try {
+          const rows =
+            typeof searchUsersProvider === 'function' ? await searchUsersProvider(q, { limit: 20 }) : [];
+          results.innerHTML = '';
+          const html = rows
+            .map(
+              (r) =>
+                `<button type="button" class="contacts-search-row contacts-row" data-uid="${r.uid || ''}">
+                  <div style="font-weight:700;">${r.name || r.username || 'User'}</div>
+                  <div style="font-size:12px;color:var(--muted);">@${r.username || 'user'}</div>
+                </button>`
+            )
+            .join('');
+          results.insertAdjacentHTML(
+            'beforeend',
+            html || `<div class="contacts-fallback">${tt('contacts_no_results', 'No people found')}</div>`
+          );
+          results.querySelectorAll('[data-uid]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              const uid = btn.dataset.uid;
+              if (!uid) return;
+              close();
+              if (typeof openDmWithSharedHello === 'function') {
+                await openDmWithSharedHello({
+                  uid,
+                  name: btn.querySelector('div')?.textContent || 'Friend',
+                  username: (btn.querySelectorAll('div')[1]?.textContent || '').replace(/^@/, ''),
+                  avatar: '👤',
+                  starterText: 'Hi!',
+                  origin: surface,
+                });
+              }
+            });
+          });
+        } catch (err) {}
+      }
+      searchInput?.addEventListener('input', (e) => {
         clearTimeout(timer);
         const q = e.target.value.trim();
-        timer = setTimeout(async () => {
-          if (!q) return;
-          try {
-            const rows =
-              typeof searchUsersProvider === 'function' ? await searchUsersProvider(q, { limit: 20 }) : [];
-            results.querySelectorAll('.new-dm-row, .contacts-search-row').forEach((el) => el.remove());
-            const html = rows
-              .map(
-                (r) =>
-                  `<button type="button" class="contacts-search-row contacts-row" data-uid="${r.uid || ''}">
-                    <div style="font-weight:700;">${r.name || r.username || 'User'}</div>
-                    <div style="font-size:12px;color:var(--muted);">@${r.username || 'user'}</div>
-                  </button>`
-              )
-              .join('');
-            results.insertAdjacentHTML(
-              'beforeend',
-              html || `<div class="contacts-fallback">${tt('contacts_no_results', 'No people found')}</div>`
-            );
-            results.querySelectorAll('[data-uid]').forEach((btn) => {
-              btn.addEventListener('click', async () => {
-                const uid = btn.dataset.uid;
-                if (!uid) return;
-                close();
-                if (typeof openDmWithSharedHello === 'function') {
-                  await openDmWithSharedHello({
-                    uid,
-                    name: 'Friend',
-                    avatar: '👤',
-                    starterText: 'Hi!',
-                    origin: surface,
-                  });
-                }
-              });
-            });
-          } catch (err) {}
-        }, 280);
+        timer = setTimeout(() => runPeopleQuery(q), 280);
       });
-      setTimeout(() => sheet.querySelector('#peopleSearchInput')?.focus(), 80);
+      if (typeof enhanceSearchField === 'function' && searchInput) {
+        enhanceSearchField(searchInput, {
+          clearBtn: sheet.querySelector('#peopleSearchClearBtn'),
+          surfaceId: 'people_' + surface,
+          onClear() {
+            clearTimeout(timer);
+            runPeopleQuery('');
+          },
+        });
+      }
+      setTimeout(() => searchInput?.focus(), 80);
     }
 
     if (typeof openHalfSheet === 'function') {

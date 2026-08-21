@@ -300,6 +300,7 @@
     if (!clearBtn) return;
     const has = !!(input?.value || '').trim();
     clearBtn.hidden = !has;
+    clearBtn.setAttribute('aria-hidden', has ? 'false' : 'true');
   }
 
   function clearBaithakSearch(opts) {
@@ -544,7 +545,10 @@
     overlay.innerHTML = `
       <div class="baithak-search-overlay-head">
         ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-bs-back' }) : '<button type="button" data-bs-back aria-label="Back" class="cp-back-btn">←</button>'}
-        <input type="search" id="baithakSearchOverlayInput" placeholder="${esc(tt('baithak_search_ph', 'Search chats, people, groups…'))}" value="${esc(initialQuery)}" autocomplete="off">
+        <div class="baithak-search-overlay-field search-field">
+          <input type="search" id="baithakSearchOverlayInput" class="search-field-input search-field-hide-native-clear" placeholder="${esc(tt('baithak_search_ph', 'Search chats, people, groups…'))}" value="${esc(initialQuery)}" autocomplete="off">
+          <button type="button" class="search-field-clear" id="baithakOverlayClearBtn" aria-label="${esc(tt('search_clear', 'Clear search'))}" hidden>✕</button>
+        </div>
       </div>
       <div class="baithak-search-tabs" role="tablist">
         <button type="button" data-tab="all" class="active">${esc(tt('baithak_tab_all', 'All'))}</button>
@@ -557,6 +561,7 @@
 
     let activeTab = tab;
     const close = () => {
+      if (typeof SearchFields?.resetSurface === 'function') SearchFields.resetSurface('baithak_overlay');
       if (typeof removeNavLayer === 'function') removeNavLayer(overlay);
       overlay.remove();
       overlayClose = null;
@@ -609,6 +614,16 @@
       clearTimeout(timer);
       timer = setTimeout(runOverlaySearch, 200);
     });
+    if (typeof enhanceSearchField === 'function' && input) {
+      enhanceSearchField(input, {
+        clearBtn: overlay.querySelector('#baithakOverlayClearBtn'),
+        surfaceId: 'baithak_overlay',
+        onClear() {
+          clearTimeout(timer);
+          results.innerHTML = `<div class="baithak-search-empty">${esc(tt('baithak_search_start', 'Type to search your chats'))}</div>`;
+        },
+      });
+    }
     input?.focus();
     if (initialQuery) runOverlaySearch();
     else results.innerHTML = `<div class="baithak-search-empty">${esc(tt('baithak_search_start', 'Type to search your chats'))}</div>`;
@@ -678,14 +693,24 @@
     }
 
     const clearBtn = document.getElementById('baithakSearchClearBtn');
-    clearBtn?.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      clearBaithakSearch();
-      document.getElementById('baithakSearch')?.focus();
-    });
-
     const input = document.getElementById('baithakSearch');
+    if (input && typeof enhanceSearchField === 'function' && !input.dataset.searchFieldWired) {
+      enhanceSearchField(input, {
+        clearBtn,
+        surfaceId: 'baithak',
+        onClear() {
+          clearBaithakSearch();
+        },
+      });
+    } else {
+      clearBtn?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        clearBaithakSearch();
+        document.getElementById('baithakSearch')?.focus();
+      });
+    }
+
     if (input && !input.dataset.baithakInlineWired) {
       input.dataset.baithakInlineWired = '1';
       input.addEventListener('input', (e) => {

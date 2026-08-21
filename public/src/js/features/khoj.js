@@ -222,6 +222,17 @@
     if (typeof bindLivingPlaceholder === 'function') {
       bindLivingPlaceholder(panel.querySelector('#khojIntentInput'), 'khoj_intent');
     }
+    const khojInp = panel.querySelector('#khojIntentInput');
+    if (typeof enhanceSearchField === 'function' && khojInp && !khojInp.dataset.searchFieldWired) {
+      enhanceSearchField(khojInp, {
+        surfaceId: 'khoj',
+        onClear() {
+          const host = panel.querySelector('#khojIntentResults');
+          if (host) host.innerHTML = '';
+          loadKhojPeeks(listEl, { reset: true, limit: 6, emptyFriendship: true, friendshipOnly: false });
+        },
+      });
+    }
 
     // Infinite scroll inside Khoj surface
     panel.addEventListener(

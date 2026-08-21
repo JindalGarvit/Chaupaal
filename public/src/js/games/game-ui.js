@@ -1128,9 +1128,10 @@
         <div class="share-section-label">${safe(typeof t === 'function' ? t('share_friends', 'Friends') : 'Friends')}</div>
         <div class="share-users-row" data-cs-friends><div class="game-friend-loading">…</div></div>
         <div class="share-recents" data-cs-recents></div>
-        <div class="share-search-wrap">
-          <span class="share-search-ico" aria-hidden="true">${ico('search', 16)}</span>
-          <input type="search" class="share-search-input" data-cs-search placeholder="${safe(typeof t === 'function' ? t('share_search_ph', 'Search people…') : 'Search people…')}" autocomplete="off" enterkeyhint="search" data-living-ph="share_search">
+        <div class="share-search-wrap search-field">
+          <span class="share-search-ico search-field-icon" aria-hidden="true">${ico('search', 16)}</span>
+          <input type="search" class="share-search-input search-field-input search-field-hide-native-clear" data-cs-search placeholder="${safe(typeof t === 'function' ? t('share_search_ph', 'Search people…') : 'Search people…')}" autocomplete="off" enterkeyhint="search" data-living-ph="share_search">
+          <button type="button" class="search-field-clear share-search-clear" data-cs-clear aria-label="${safe(typeof t === 'function' ? t('search_clear', 'Clear search') : 'Clear search')}" hidden>✕</button>
         </div>
         <div class="share-sheet-actions">
           <button type="button" class="share-action-row" data-cs="copy"><span class="share-action-ico">${ico('link', 18)}</span><span>${safe(typeof t === 'function' ? t('share_copy_link', 'Copy link') : 'Copy link')}</span></button>
@@ -1158,6 +1159,14 @@
     sheet.querySelectorAll('[data-cs-close]').forEach((el) => el.addEventListener('click', close));
     if (typeof bindLivingPlaceholder === 'function') {
       bindLivingPlaceholder(sheet.querySelector('[data-cs-search]'), 'share_search');
+    }
+    const shareSearch = sheet.querySelector('[data-cs-search]');
+    if (typeof enhanceSearchField === 'function' && shareSearch) {
+      enhanceSearchField(shareSearch, {
+        clearBtn: sheet.querySelector('[data-cs-clear]'),
+        surfaceId: 'share',
+        onClear() {},
+      });
     }
 
     async function sendToFriend(friend) {

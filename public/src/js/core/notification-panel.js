@@ -301,18 +301,6 @@
     return '🔔';
   }
 
-    const t0 = String(type || '').toLowerCase();
-    if (t0.includes('like') || t0.includes('reaction')) return '❤️';
-    if (t0.includes('comment') || t0.includes('reply')) return '💬';
-    if (t0.includes('follow')) return '➕';
-    if (t0.includes('friend')) return '🤝';
-    if (t0.includes('message') || t0.includes('dm')) return '💬';
-    if (t0.includes('story')) return '✨';
-    if (t0.includes('duel') || t0.includes('challenge')) return '⚔️';
-    if (t0.includes('breaking')) return '🔴';
-    return '🔔';
-  }
-
   function formatBundledText(n) {
     if (n.text) return n.text;
     const actors = Array.isArray(n.actors) ? n.actors : [];
