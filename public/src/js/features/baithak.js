@@ -49,6 +49,11 @@ function initBaithak(){
   else if(typeof renderStories==='function') renderStories();
   if(typeof baithakChats!=='undefined') baithakChats = typeof pinSelfChat==='function' ? pinSelfChat(baithakChats) : baithakChats;
   if(typeof BaithakSearch!=='undefined'&&typeof BaithakSearch.wireChrome==='function') BaithakSearch.wireChrome();
+  if(currentUser&&typeof loadBaithakPrefs==='function'){
+    loadBaithakPrefs().catch(()=>{}).finally(()=>{
+      if(typeof setBaithakSection==='function') setBaithakSection(typeof window.baithakSection==='function'?window.baithakSection():'sabha');
+    });
+  }
   if(currentUser&&typeof hydrateInboxFromDeviceCache==='function'){
     hydrateInboxFromDeviceCache();
   }
@@ -69,11 +74,17 @@ function initBaithak(){
   if(db&&currentUser&&typeof loadBaithakChatsPage==='function'){
     if(typeof loadBaithakNicknames==='function') loadBaithakNicknames().catch(()=>{});
     loadBaithakChatsPage({reset:true})
-      .then(()=>{
+      .then(async ()=>{
+        if(typeof migrateDuplicateDmInbox==='function'){
+          try{ await migrateDuplicateDmInbox(currentUser.uid); }catch(e){}
+        }
         if(typeof baithakChats!=='undefined') baithakChats = pinSelfChat(baithakChats);
         if(typeof setBaithakSection==='function') setBaithakSection('sabha');
         else renderChatList(baithakChats);
         if(typeof mountBaithakFriendRequests==='function') mountBaithakFriendRequests();
+        if(typeof baithakMsgCache?.prefetchTop==='function'&&Array.isArray(baithakChats)){
+          baithakMsgCache.prefetchTop(baithakChats.slice(0,5).map((c)=>c.firestoreId||c.id)).catch(()=>{});
+        }
       })
       .catch(()=>{
         if(typeof baithakChatLoadError!=='undefined') baithakChatLoadError=true;

@@ -433,16 +433,19 @@
     })();
   }
 
-  /** Biometric / device unlock — stub until WebAuthn wiring is product-ready. */
+  /** Biometric / device unlock — WebAuthn when available; PIN via Hidden vault. */
   function biometricStatus() {
     const supported =
       typeof window.PublicKeyCredential === 'function' ||
       !!(window.PublicKeyCredential && navigator.credentials);
     let pref = 'off';
+    let hasCred = false;
     try {
       pref = localStorage.getItem(BIOMETRIC_STUB_KEY) || 'off';
+      const uid = auth?.currentUser?.uid;
+      if (uid) hasCred = !!localStorage.getItem('chaupaal_hidden_webauthn_v1_' + uid);
     } catch (e) {}
-    return { supported: !!supported, enabled: pref === 'on', stub: true };
+    return { supported: !!supported, enabled: pref === 'on' || hasCred, stub: false, hasCredential: hasCred };
   }
 
   function setBiometricPref(on) {
@@ -450,13 +453,35 @@
       localStorage.setItem(BIOMETRIC_STUB_KEY, on ? 'on' : 'off');
     } catch (e) {}
     if (typeof showToast === 'function') {
-      showToast(
-        on
-          ? 'Device unlock noted — full biometric unlock ships in a later pass'
-          : 'Device unlock preference cleared'
-      );
+      showToast(on ? 'Device unlock enabled' : 'Device unlock preference cleared');
     }
     return biometricStatus();
+  }
+
+  async function unlockWithBiometrics() {
+    if (!window.PublicKeyCredential || !navigator.credentials?.get) return { ok: false, reason: 'unsupported' };
+    const uid = auth?.currentUser?.uid;
+    if (!uid) return { ok: false, reason: 'signed_out' };
+    let credIdB64 = '';
+    try {
+      credIdB64 = localStorage.getItem('chaupaal_hidden_webauthn_v1_' + uid) || '';
+    } catch (e) {}
+    if (!credIdB64) return { ok: false, reason: 'no_credential' };
+    try {
+      const rawId = Uint8Array.from(atob(credIdB64), (c) => c.charCodeAt(0));
+      const challenge = crypto.getRandomValues(new Uint8Array(32));
+      const assertion = await navigator.credentials.get({
+        publicKey: {
+          challenge,
+          timeout: 60000,
+          userVerification: 'required',
+          allowCredentials: [{ type: 'public-key', id: rawId }],
+        },
+      });
+      return { ok: !!assertion };
+    } catch (e) {
+      return { ok: false, reason: e?.name || 'failed' };
+    }
   }
 
   function openAccountSwitcher() {
@@ -603,6 +628,7 @@
     openAddAccountFlow,
     biometricStatus,
     setBiometricPref,
+    unlockWithBiometrics,
   };
   window.openProfileSwitcher = openAccountSwitcher;
   window.openAccountSwitcher = openAccountSwitcher;

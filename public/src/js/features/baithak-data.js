@@ -142,6 +142,9 @@ function renderChatList(chats, opts){
   list._mehfilPresenceUnsubs = [];
   const section = opts?.sectionEmpty || (typeof baithakSection === 'string' ? baithakSection : 'sabha');
   const pinPins = section === 'sabha' || !opts?.sectionEmpty;
+  if (typeof applyBaithakListTransform === 'function' && !opts?.skipPrefsTransform) {
+    chats = applyBaithakListTransform(chats, { includeHidden: !!opts?.includeHidden });
+  }
   const pinned = pinPins ? pinSelfChat(chats||[]) : (chats || []).filter((c) => !isSelfChatRow(c) && !isChaupaalChatRow(c));
   // Only Self + Chaupaal means the social inbox is empty — show CTA under pins.
   const socialOnly = pinned.filter(c => !isSelfChatRow(c) && !isChaupaalChatRow(c));
@@ -150,26 +153,40 @@ function renderChatList(chats, opts){
     const item = document.createElement('div');
     const self = isSelfChatRow(chat);
     const chaupaal = isChaupaalChatRow(chat);
-    item.className = 'chat-item'+(self?' chat-item-self':'')+(chaupaal?' chat-item-chaupaal':'');
-    item.dataset.chatId = chat.id || '';
+    const pref = (typeof getBaithakPref==='function' ? getBaithakPref(chat.firestoreId||chat.id) : null) || chat._baithakPref || {};
+    const isUserPinned = !!(pref.pinned && !self && !chaupaal);
+    const isMuted = !!pref.muted;
+    const forceUnread = !!(pref.markUnread || chat._forceUnread);
+    const unreadN = forceUnread ? Math.max(1, Number(chat.unread)||1) : chat.unread;
+    item.className = 'chat-item'+(self?' chat-item-self':'')+(chaupaal?' chat-item-chaupaal':'')+(isUserPinned?' is-pinned':'')+(isMuted?' is-muted':'')+(forceUnread||unreadN?' is-unread':'');
+    item.dataset.chatId = chat.firestoreId || chat.id || '';
     if(self) item.dataset.selfChat = '1';
     if(chaupaal) item.dataset.chaupaalChat = '1';
+    if(isUserPinned) item.dataset.userPinned = '1';
     const when = self || chaupaal ? 'Pinned' : (typeof formatRelativeTime==='function'
       ? formatRelativeTime(chat.ts || chat.updatedAt || chat.time)
       : chat.time);
+    const statusIcons = [
+      isUserPinned ? '<span class="chat-status-ico" title="Pinned" aria-hidden="true">📌</span>' : '',
+      isMuted ? '<span class="chat-status-ico" title="Muted" aria-hidden="true">🔕</span>' : '',
+    ].filter(Boolean).join('');
+    const pinHandle = isUserPinned
+      ? `<button type="button" class="chat-pin-handle" aria-label="Reorder" tabindex="-1">☰</button>`
+      : '';
     item.innerHTML = `
       <div class="chat-avatar presence-host ${chat.type==='group'?'group':''}${self?' self':''}${chaupaal?' chaupaal':''}" ${self?'data-self-pin-avatar="1" title="Open your profile"':''}${chaupaal?'data-chaupaal-pin-avatar="1" title="Open Chaupaal profile"':''}>${self||chaupaal?(chat.avatar||'📝'):chatAvatarMarkup(chat)}
         ${chat.duelStreak?`<div class="streak-badge">🔥${chat.duelStreak}</div>`:''}
         ${!self&&!chaupaal?`<span class="presence-dot presence-dot--mehfil" data-mehfil-presence-dot hidden aria-hidden="true"></span>`:''}
       </div>
       <div class="chat-info">
-        <div class="chat-name">${(self||chaupaal||chat.type==='group'||chat.type==='self')?(chat.name||'Chat'):(typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(chat.name||'Chat',chat):(chat.name||'Chat'))}${self?` <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">· you</span>`:''}${chaupaal?` <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">· companion</span>`:''}${chat.members?` <span style="font-size:11px;color:var(--muted);font-weight:400;">${chat.members} members</span>`:''}</div>
+        <div class="chat-name">${(self||chaupaal||chat.type==='group'||chat.type==='self')?(chat.name||'Chat'):(typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(chat.name||'Chat',chat):(chat.name||'Chat'))}${self?` <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">· you</span>`:''}${chaupaal?` <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">· companion</span>`:''}${chat.members?` <span style="font-size:11px;color:var(--muted);font-weight:400;">${chat.members} members</span>`:''}${statusIcons}</div>
         <div class="chat-preview">${chat._searchSnippet||chat.preview||''}</div>
       </div>
       <div class="chat-meta">
         <div class="chat-time">${when||''}</div>
-        ${chat.unread?`<div class="chat-badge">${chat.unread}</div>`:''}
+        ${unreadN?`<div class="chat-badge">${unreadN}</div>`:''}
         ${!self&&!chaupaal?`<div class="chat-list-mehfil-live" data-mehfil-live-row hidden>${typeof mehfilMarkHtml==='function'?mehfilMarkHtml(12):''}<span>Live</span></div>`:''}
+        ${pinHandle}
       </div>
     `;
     if(!self&&!chaupaal&&typeof watchMehfilPresence==='function'){
@@ -256,16 +273,17 @@ function renderChatList(chats, opts){
     }
     if(!self&&!chaupaal&&typeof onLongPress==='function'){
       onLongPress(item,()=>{
-        if(typeof openBaithakNicknameSheet==='function'){
-          openBaithakNicknameSheet({
-            chat,
-            peerUid: chat.type==='group'?null:peerUidOfChat(chat),
-            title: chat.type==='group'?'Rename group (private)':'Set nickname',
-          });
-        }
+        if(typeof openBaithakChatActions==='function') openBaithakChatActions(chat, { surface: 'inbox' });
       },{ delayMs: 520 });
     }
-    item.addEventListener('click', () => openChatScreen(chat));
+    item.addEventListener('click', (e) => {
+      if(typeof BaithakChatActions!=='undefined' && BaithakChatActions.isPinReorderMode && BaithakChatActions.isPinReorderMode()){
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      openChatScreen(chat);
+    });
     list.appendChild(item);
   });
   if(showSectionEmpty){
@@ -362,6 +380,12 @@ function renderChatList(chats, opts){
       },
     });
   }
+  if (typeof BaithakChatActions !== 'undefined' && BaithakChatActions.isPinReorderMode && BaithakChatActions.isPinReorderMode()) {
+    list.classList.add('baithak-pin-reorder');
+    if (typeof BaithakChatActions.wirePinReorderHandles === 'function') BaithakChatActions.wirePinReorderHandles();
+  } else {
+    list.classList.remove('baithak-pin-reorder');
+  }
 }
 
 /** Cursor-paginated chat inbox. Never seed SAMPLE_CHATS into the live list. */
@@ -379,7 +403,44 @@ const MEMBERSHIP_MAX=500;
 
 function isGenericDmTitle(name){
   const n=String(name||'').trim();
-  return !n || /^chat$/i.test(n) || n==='💬' || n==='Friend' || n==='Chaupaal member' || n==='Someone';
+  if(!n) return true;
+  if(/^@/.test(n)) return true;
+  return /^chat$/i.test(n) || n==='💬' || n==='Friend' || n==='Chaupaal member' || n==='Someone' || /^someone$/i.test(n);
+}
+
+function isStubDmId(id){
+  const s=String(id||'');
+  if(/^chat_(dl|disc|profile)_/.test(s)) return true;
+  if(/^chat_(self|riya|arjun|chaupaal)/.test(s)) return false;
+  // Legacy wish fallback: chat_${firebaseUid}
+  return /^chat_[A-Za-z0-9]{10,}$/.test(s);
+}
+
+function peerUidOfInboxChat(c){
+  if(!c||c.type==='group') return '';
+  if(typeof isSelfChatRow==='function'&&isSelfChatRow(c)) return '';
+  if(typeof isChaupaalChatRow==='function'&&isChaupaalChatRow(c)) return '';
+  return String(c.uid||c.peerUid||c.otherUid||(c.participants||[]).find((u)=>u&&u!==currentUser?.uid)||'').trim();
+}
+
+function resolveBaithakTitle(chat, viewerUid){
+  if(!chat) return '';
+  if(typeof BaithakSearch!=='undefined'&&typeof BaithakSearch.resolveChatDisplayName==='function'){
+    const real=chat._realName||(!isGenericDmTitle(chat.name)?chat.name:'');
+    const title=BaithakSearch.resolveChatDisplayName(chat, real);
+    if(title&&!isGenericDmTitle(title)&&!/^@/.test(String(title).trim())) return title;
+  }
+  const peer=peerUidOfInboxChat(chat);
+  if(viewerUid&&peer&&typeof BaithakSearch!=='undefined'&&typeof BaithakSearch.getDmNickname==='function'){
+    const nick=BaithakSearch.getDmNickname(peer);
+    if(nick) return nick;
+  }
+  const mem=peer&&chat.memberProfiles&&chat.memberProfiles[peer];
+  const candidates=[chat._realName, mem?.name, chat.name, chat.displayName];
+  for(const c of candidates){
+    if(c&&!isGenericDmTitle(c)&&!/^@/.test(String(c).trim())) return String(c).trim();
+  }
+  return chat.name||'';
 }
 
 function chatAvatarMarkup(chat){
@@ -425,23 +486,38 @@ async function hydrateInboxPeers(chats){
     c.uid=peerUid;
     const mem=c.memberProfiles&&c.memberProfiles[peerUid];
     if(mem){
-      if(isGenericDmTitle(c.name)&&mem.name) c.name=mem.name;
+      if(isGenericDmTitle(c.name)&&mem.name){
+        c.name=mem.name;
+        c._realName=mem.name;
+      }
       c.username=c.username||mem.username;
       c.photoURL=c.photoURL||mem.photoURL||mem.photoThumb;
       c.profileType=c.profileType||mem.profileType;
     }
-    if(!isGenericDmTitle(c.name)&&c.photoURL) return;
+    if(!isGenericDmTitle(c.name)&&c.photoURL){
+      if(!c._realName&&!/^@/.test(String(c.name).trim())) c._realName=c.name;
+      return;
+    }
     try{
       const pub=typeof UsersPublic?.getPublicProfile==='function'
         ? await UsersPublic.getPublicProfile(peerUid)
         : (db?(await db.collection('users_public').doc(peerUid).get()).data():null);
       if(!pub) return;
-      if(isGenericDmTitle(c.name)) c.name=pub.name||pub.displayName||pub.username||c.name;
+      const pubName=pub.name||pub.displayName||'';
+      if(isGenericDmTitle(c.name)&&pubName){
+        c.name=pubName;
+        c._realName=pubName;
+      }else if(pubName&&!c._realName){
+        c._realName=pubName;
+      }
       c.username=c.username||pub.username;
       c.photoURL=c.photoURL||pub.photoURL||pub.photoThumb;
       c.profileType=c.profileType||pub.profileType;
     }catch(e){}
   }));
+  if(typeof BaithakSearch!=='undefined'&&typeof BaithakSearch.applyDisplayNames==='function'){
+    BaithakSearch.applyDisplayNames(chats);
+  }
   return chats;
 }
 
@@ -475,21 +551,56 @@ function isLiveSampleChat(c){
 }
 
 /**
- * Union inbox rows by id. Never drop already-shown live chats this session.
- * Never admit SAMPLE_CHATS (Riya / grp_tech are offline-only).
+ * Union inbox rows. DMs are keyed by peer (canonical dmChatId preferred).
+ * Never admit SAMPLE_CHATS (Riya / grp_tech are offline-only). Stub ids are dropped when peer is known.
  */
 function mergeBaithakInbox(existing, incoming){
-  const byId=new Map();
+  const byKey=new Map();
   const add=(c)=>{
     if(!c||isLiveSampleChat(c)) return;
     const id=chatInboxId(c);
     if(!id) return;
-    const prev=byId.get(id);
-    byId.set(id, prev?Object.assign({},prev,c):c);
+    const isSelf=typeof isSelfChatRow==='function'&&isSelfChatRow(c);
+    const isCai=typeof isChaupaalChatRow==='function'&&isChaupaalChatRow(c);
+    const isGroup=c.type==='group';
+    const peer=(!isSelf&&!isCai&&!isGroup)?peerUidOfInboxChat(c):'';
+    let key=id;
+    let canon='';
+    if(peer&&typeof dmChatIdFor==='function'){
+      canon=dmChatIdFor(peer)||'';
+      if(canon) key=`peer:${peer}`;
+    }
+    if(peer&&isStubDmId(id)&&canon&&id!==canon){
+      // Prefer remapping stubs onto canonical id rather than keeping them.
+      c={...c,id:canon,firestoreId:canon,uid:peer,peerUid:peer};
+    }
+    const prev=byKey.get(key);
+    if(!prev){
+      byKey.set(key,c);
+      return;
+    }
+    const prevId=chatInboxId(prev);
+    const nextId=chatInboxId(c);
+    let prefer=c;
+    if(canon){
+      if(prevId===canon&&nextId!==canon) prefer=prev;
+      else if(nextId===canon&&prevId!==canon) prefer=c;
+      else prefer=chatRecencyMs(c)>=chatRecencyMs(prev)?c:prev;
+    }else{
+      prefer=chatRecencyMs(c)>=chatRecencyMs(prev)?c:prev;
+    }
+    byKey.set(key, Object.assign({}, prev, prefer, {
+      id: (canon&&(prefer.firestoreId===canon||prefer.id===canon))?canon:(prefer.firestoreId||prefer.id||prevId),
+      firestoreId: (canon&&(prefer.firestoreId===canon||prefer.id===canon))?canon:(prefer.firestoreId||prefer.id||prevId),
+      uid: peer||prefer.uid||prev.uid,
+      peerUid: peer||prefer.peerUid||prev.peerUid,
+      name: (!isGenericDmTitle(prefer.name)?prefer.name:(!isGenericDmTitle(prev.name)?prev.name:prefer.name)),
+      _realName: prefer._realName||prev._realName||(!isGenericDmTitle(prefer.name)?prefer.name:prev._realName),
+    }));
   };
   (existing||[]).forEach(add);
   (incoming||[]).forEach(add);
-  return [...byId.values()].sort((a,b)=>chatRecencyMs(b)-chatRecencyMs(a));
+  return [...byKey.values()].sort((a,b)=>chatRecencyMs(b)-chatRecencyMs(a));
 }
 
 function inboxCacheKey(){
@@ -548,7 +659,110 @@ function forgetInboxChat(chatId){
 
 function rememberInboxChat(chat){
   if(!chat||isLiveSampleChat(chat)) return;
+  const peer=peerUidOfInboxChat(chat);
+  if(peer&&typeof dmChatIdFor==='function'){
+    const canon=dmChatIdFor(peer);
+    const id=chatInboxId(chat);
+    if(canon&&id&&id!==canon&&isStubDmId(id)){
+      chat={...chat,id:canon,firestoreId:canon,uid:peer,peerUid:peer};
+    }
+  }
   writeInboxCache(mergeBaithakInbox(readInboxCache(),[chat]));
+}
+
+function msgFingerprint(m){
+  const uid=String(m?.uid||'');
+  const text=String(m?.text||'').slice(0,200);
+  let ts=m?.ts;
+  if(ts&&typeof ts.toMillis==='function') ts=ts.toMillis();
+  else if(ts&&typeof ts.toDate==='function') ts=ts.toDate().getTime();
+  else ts=Number(ts)||0;
+  return `${uid}|${ts}|${text}`;
+}
+
+/**
+ * One-time per session: merge stub DMs into canonical dmChatIdFor(peer).
+ */
+async function migrateDuplicateDmInbox(uid){
+  const viewer=String(uid||currentUser?.uid||'');
+  if(!viewer||!db) return {merged:0};
+  const flag=`chaupaal_dm_merge_v1_${viewer}`;
+  try{ if(sessionStorage.getItem(flag)==='1') return {merged:0,skipped:true}; }catch(e){}
+  const list=mergeBaithakInbox(
+    Array.isArray(baithakChats)?baithakChats:[],
+    readInboxCache().map((c)=>typeof mapChatDoc==='function'?mapChatDoc(c):c)
+  );
+  const byPeer=new Map();
+  list.forEach((c)=>{
+    const peer=peerUidOfInboxChat(c);
+    if(!peer) return;
+    if(!byPeer.has(peer)) byPeer.set(peer,[]);
+    byPeer.get(peer).push(c);
+  });
+  let merged=0;
+  for(const [peer, rows] of byPeer){
+    const canon=typeof dmChatIdFor==='function'?dmChatIdFor(peer):'';
+    if(!canon) continue;
+    const stubs=rows.filter((r)=>{
+      const id=chatInboxId(r);
+      return id&&id!==canon;
+    });
+    if(!stubs.length&&rows.every((r)=>chatInboxId(r)===canon)) continue;
+    try{
+      if(typeof ensurePeerDmChat==='function') await ensurePeerDmChat(peer);
+      const canonRef=db.collection('chats').doc(canon);
+      const existingSnap=await canonRef.collection('messages').orderBy('ts','asc').limit(200).get().catch(()=>null);
+      const seen=new Set();
+      (existingSnap?.docs||[]).forEach((d)=>seen.add(msgFingerprint(d.data())));
+      for(const stub of stubs){
+        const stubId=chatInboxId(stub);
+        if(!stubId||stubId===canon) continue;
+        try{
+          const stubMsgs=await db.collection('chats').doc(stubId).collection('messages').orderBy('ts','asc').limit(200).get();
+          for(const doc of stubMsgs.docs){
+            const raw=doc.data()||{};
+            const fp=msgFingerprint(raw);
+            if(seen.has(fp)) continue;
+            seen.add(fp);
+            const copy={...raw};
+            delete copy.mergedFrom;
+            await canonRef.collection('messages').add({
+              ...copy,
+              mergedFrom: stubId,
+              clientTempId: raw.clientTempId||null,
+            });
+          }
+          await db.collection('chats').doc(stubId).set({
+            mergedInto:canon,
+            mergedAt:firebase.firestore.FieldValue.serverTimestamp(),
+          },{merge:true}).catch(()=>{});
+        }catch(e){}
+        forgetInboxChat(stubId);
+        if(Array.isArray(baithakChats)){
+          baithakChats=baithakChats.filter((c)=>chatInboxId(c)!==stubId);
+        }
+        if(typeof SAMPLE_CHATS!=='undefined'&&Array.isArray(SAMPLE_CHATS)){
+          const i=SAMPLE_CHATS.findIndex((c)=>c.id===stubId);
+          if(i>=0) SAMPLE_CHATS.splice(i,1);
+        }
+        merged+=1;
+      }
+      // Ensure canonical row present
+      const canonRow=rows.find((r)=>chatInboxId(r)===canon)||{
+        id:canon,firestoreId:canon,type:'dm',uid:peer,peerUid:peer,
+        name:rows[0]?.name||'Chat',participants:[viewer,peer].sort(),
+      };
+      rememberInboxChat(canonRow);
+    }catch(e){
+      console.warn('[baithak] dm merge', peer, e?.message||e);
+    }
+  }
+  try{ sessionStorage.setItem(flag,'1'); }catch(e){}
+  if(Array.isArray(baithakChats)){
+    baithakChats=mergeBaithakInbox(baithakChats,[]);
+    writeInboxCache(baithakChats);
+  }
+  return {merged};
 }
 
 /** Hydrate inbox from device cache immediately (before Firestore round-trip). */
@@ -966,6 +1180,10 @@ window.chatAvatarMarkup = chatAvatarMarkup;
 window.ensureChatUpdatedAt = ensureChatUpdatedAt;
 window.rememberInboxChat = rememberInboxChat;
 window.forgetInboxChat = forgetInboxChat;
+window.migrateDuplicateDmInbox = migrateDuplicateDmInbox;
+window.resolveBaithakTitle = resolveBaithakTitle;
+window.isGenericDmTitle = isGenericDmTitle;
+window.isStubDmId = isStubDmId;
 window.mergeBaithakInbox = mergeBaithakInbox;
 window.mapChatDoc = mapChatDoc;
 window.chatRecencyMs = chatRecencyMs;

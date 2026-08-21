@@ -65,23 +65,47 @@
     };
   }
 
-  function peerMemberSlice(peerUid, extra) {
+  function isBlankOrGenericPeerName(name) {
+    const n = String(name || '').trim();
+    if (!n) return true;
+    if (/^@/.test(n)) return true;
+    return /^(someone|friend|chat|chaupaal member)$/i.test(n) || n === '💬';
+  }
+
+  function peerMemberSlice(peerUid, extra, existingPeer) {
     const x = extra && typeof extra === 'object' ? extra : {};
+    const prev = existingPeer && typeof existingPeer === 'object' ? existingPeer : {};
+    const candidates = [
+      x.peerName,
+      x.displayName,
+      x.sharedFirstHello ? '' : x.name,
+      prev.name,
+    ];
+    let name = '';
+    for (const c of candidates) {
+      if (!isBlankOrGenericPeerName(c)) {
+        name = String(c).trim();
+        break;
+      }
+    }
+    if (!name && prev.name && !isBlankOrGenericPeerName(prev.name)) name = String(prev.name).trim();
+    if (!name) name = 'Someone';
     return {
-      name: x.peerName || x.displayName || (x.sharedFirstHello ? '' : x.name) || (x.username ? `@${x.username}` : 'Someone'),
-      username: x.username || '',
-      photoURL: x.photoURL || x.avatar || '',
-      profileType: x.profileType || x.peerProfileType || 'personal',
+      name,
+      username: x.username || prev.username || '',
+      photoURL: x.photoURL || x.avatar || prev.photoURL || '',
+      profileType: x.profileType || x.peerProfileType || prev.profileType || 'personal',
     };
   }
 
-  function dmMemberProfiles(peerUid, peerExtra) {
+  function dmMemberProfiles(peerUid, peerExtra, existingProfiles) {
     const me = typeof currentUser !== 'undefined' ? currentUser?.uid : '';
     const peer = String(peerUid || '').trim();
     if (!me || !peer) return {};
+    const existing = existingProfiles && typeof existingProfiles === 'object' ? existingProfiles : {};
     return {
-      [me]: ownMemberSlice(),
-      [peer]: peerMemberSlice(peer, peerExtra),
+      [me]: { ...(existing[me] || {}), ...ownMemberSlice() },
+      [peer]: peerMemberSlice(peer, peerExtra, existing[peer]),
     };
   }
 
@@ -118,8 +142,18 @@
       await verifyDmChatDoc(chatId, peer);
       return chatId;
     }
-    const profiles = dmMemberProfiles(peer, extras);
     const sorted = [currentUser.uid, peer].sort();
+    const ref = db.collection('chats').doc(chatId);
+    let exists = false;
+    let existingData = null;
+    try {
+      const snap = await ref.get();
+      exists = !!(snap && snap.exists);
+      existingData = exists ? snap.data() || {} : null;
+    } catch (e) {
+      exists = false;
+    }
+    const profiles = dmMemberProfiles(peer, extras, existingData?.memberProfiles);
     const payload = {
       participants: sorted,
       type: 'dm',
@@ -131,16 +165,6 @@
       ...(extras && typeof extras === 'object' ? extras : {}),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     };
-    const ref = db.collection('chats').doc(chatId);
-    let exists = false;
-    let existingData = null;
-    try {
-      const snap = await ref.get();
-      exists = !!(snap && snap.exists);
-      existingData = exists ? snap.data() || {} : null;
-    } catch (e) {
-      exists = false;
-    }
     if (!exists) {
       try {
         await ref.set(payload);
@@ -234,21 +258,23 @@
 
     const peerType = peerProfileType || profileType || 'personal';
     const extras = {
-      peerName: name,
       photoURL: String(photoURL || avatar || '').startsWith('http') ? photoURL || avatar : '',
       peerProfileType: peerType,
       ...(origin ? { origin, discoveryOrigin: origin === 'ai_discovery' ? 'ai_discovery' : origin } : {}),
       ...(matchMeta && typeof matchMeta === 'object' ? { matchMeta } : {}),
     };
+    if (name && !isBlankOrGenericPeerName(name)) extras.peerName = name;
 
     await ensurePeerDmChat(peerUid, extras);
 
     const displayName =
-      name ||
-      (username ? `@${username}` : '') ||
+      (name && !/^@/.test(String(name).trim()) ? name : '') ||
       (typeof resolvePersonDisplayName === 'function'
         ? resolvePersonDisplayName({ name, username })
-        : 'Someone');
+        : '') ||
+      'Someone';
+    // Never prefer @username as Baithak title
+    const safeName = /^@/.test(String(displayName).trim()) ? 'Someone' : displayName;
 
     const chat = {
       id: chatId,
@@ -256,7 +282,7 @@
       uid: peerUid,
       peerUid,
       type: 'dm',
-      name: displayName,
+      name: safeName,
       username: username || '',
       avatar: avatar || photoURL || '👤',
       photoURL: photoURL || '',
@@ -271,6 +297,7 @@
       discoveryOrigin: origin === 'ai_discovery' ? 'ai_discovery' : origin || null,
       matchMeta: matchMeta || null,
       openedBy: currentUser.uid,
+      _realName: safeName,
     };
 
     return chat;

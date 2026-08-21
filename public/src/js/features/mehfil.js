@@ -1687,6 +1687,13 @@
     }
     if (overlayEl && activeChatId === chatId) return;
     if (incomingRingEl && incomingRingEl.dataset.chatId === chatId) return;
+    {
+      const pref = typeof getBaithakPref === 'function' ? getBaithakPref(chatId) : null;
+      if (pref?.hidden) {
+        rtdbRef(`mehfilInbox/${me}/${chatId}`)?.remove();
+        return;
+      }
+    }
     if (overlayEl && activeChatId && activeChatId !== chatId) {
       showMehfilBusyBanner(payload);
       return;

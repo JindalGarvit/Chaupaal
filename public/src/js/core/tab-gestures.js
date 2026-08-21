@@ -488,12 +488,11 @@
           },
         },
         {
-          id: 'find',
-          label: tt('shortcut_baithak_search', 'Find people'),
+          id: 'hidden',
+          label: tt('shortcut_baithak_hidden', 'Hidden chats'),
           run: () => {
             if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
-            if (typeof openPeopleSearchWithContacts === 'function') openPeopleSearchWithContacts({ surface: 'baithak' });
-            else if (typeof showNewDmSearchSheet === 'function') showNewDmSearchSheet();
+            if (typeof openBaithakHiddenVault === 'function') openBaithakHiddenVault();
           },
         },
       ],

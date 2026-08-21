@@ -437,13 +437,7 @@ function renderDiscoverySection(profiles){
         });
         return;
       }
-      const newChat={id:`chat_disc_${uid}`,type:'dm',name,avatar,preview:'Found through Peepal discovery',time:'now',unread:0,duelStreak:0,theirIcebreakers,icebreakers:theirIcebreakers};
-      if(typeof SAMPLE_CHATS!=='undefined' && !SAMPLE_CHATS.find(c=>c.id===newChat.id)) SAMPLE_CHATS.unshift(newChat);
-      document.querySelectorAll('.tab-btn').forEach(b=>{if(b.dataset.tab==='baithak')b.click();});
-      setTimeout(()=>{
-        if(typeof initBaithak==='function') initBaithak();
-        setTimeout(()=>openChatScreen(newChat),300);
-      },200);
+      if(typeof showToast==='function') showToast('Could not open chat — try again');
     });
   });
 

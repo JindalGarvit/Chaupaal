@@ -965,6 +965,7 @@
 
   window.openGroupInfo = openGroupInfo;
   window.openGroupInfoSheet = openGroupInfo;
+  window.leaveGroupPersist = leaveGroupPersist;
   window.openGroupSearchPreview = openGroupSearchPreview;
   window.createGroupInFirestore = createGroupInFirestore;
   window.joinGroupByInviteToken = joinGroupByInviteToken;

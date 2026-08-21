@@ -44,7 +44,7 @@
         ${(actions || [])
           .map(
             (a, i) =>
-              `<button type="button" class="cp-action-item cp-menu-item ${a.danger ? 'cp-action-item--danger is-danger' : ''}" data-i="${i}" role="menuitem">${ico(
+              `<button type="button" class="cp-action-item cp-menu-item ${a.danger ? 'cp-action-item--danger is-danger' : ''} ${a.disabled ? 'is-disabled' : ''}" data-i="${i}" role="menuitem" ${a.disabled ? 'aria-disabled="true"' : ''}>${ico(
                 a.icon
               )}<span class="cp-action-text"><span class="cp-action-label">${a.label}</span>${
                 a.hint ? `<span class="cp-action-hint">${a.hint}</span>` : ''
@@ -69,6 +69,7 @@
       if (!btn) return;
       const i = +btn.dataset.i;
       const act = actions[i];
+      if (act?.disabled) return;
       close();
       const run = act && (typeof act.fn === 'function' ? act.fn : act.onClick);
       if (typeof run === 'function') {
@@ -706,24 +707,32 @@
   // ─── Message / post long-press menus ──────────────────────────────────────
   function messageActions(bubble) {
     const text = (bubble.textContent || '').trim();
-    const isMe = bubble.classList.contains('me');
+    const isMe = bubble.classList.contains('me') || !!bubble.closest('.msg-row.me');
     const row = bubble.closest('.msg-row');
     const msgId = row?.dataset?.msgId || '';
     const chatId =
       (typeof window.currentOpenChat !== 'undefined' &&
         (window.currentOpenChat?.firestoreId || window.currentOpenChat?.id)) ||
       '';
+    const isLocalOnly =
+      !chatId ||
+      chatId === 'chat_self' ||
+      /^chat_(riya|arjun)/.test(chatId) ||
+      (typeof isSelfChatRow === 'function' && isSelfChatRow(window.currentOpenChat));
+    const isDemo = /^chat_(riya|arjun)/.test(chatId) || chatId.startsWith('grp_tech') || chatId.startsWith('grp_news');
+    const tt = (k, fb) => (typeof t === 'function' ? t(k) || fb : fb);
+
     const actions = [
       {
-        label: 'Copy',
+        label: tt('baithak_msg_copy', 'Copy'),
         icon: 'copy',
         fn: () => {
           if (navigator.clipboard && text) navigator.clipboard.writeText(text).catch(() => {});
-          if (typeof showToast === 'function') showToast('Copied');
+          if (typeof showToast === 'function') showToast(tt('baithak_copied', 'Copied'));
         },
       },
       {
-        label: 'Reply',
+        label: tt('baithak_msg_reply', 'Reply'),
         icon: 'reply',
         fn: () => {
           const input = document.getElementById('chatMsgInput');
@@ -734,50 +743,133 @@
         },
       },
     ];
-    if (isMe) {
+
+    const openDeleteSheet = () => {
+      const msgTsAttr = row?.dataset?.msgTs || bubble.dataset?.msgTs || '';
+      let msgTs = Number(msgTsAttr) || 0;
+      if (!msgTs && row) {
+        const timeEl = row.querySelector('.msg-time');
+        // fallback: allow everyone if we can't parse (prefer for-me only when old)
+        msgTs = Date.now();
+      }
+      const windowMs =
+        (typeof BaithakChatActions !== 'undefined' && BaithakChatActions.DELETE_EVERYONE_MS) ||
+        60 * 60 * 1000;
+      const canEveryone = isMe && !isLocalOnly && !isDemo && msgTs && Date.now() - msgTs <= windowMs;
+      const deleteActions = [
+        {
+          label: tt('baithak_delete_for_me', 'Delete for me'),
+          icon: 'trash',
+          danger: true,
+          fn: () => deleteMessageForMe(chatId, msgId, row, isLocalOnly || isDemo),
+        },
+      ];
+      if (isMe) {
+        deleteActions.push({
+          label: tt('baithak_delete_for_everyone', 'Delete for everyone'),
+          icon: 'trash-2',
+          danger: true,
+          disabled: !canEveryone,
+          hint: canEveryone
+            ? ''
+            : tt('baithak_delete_everyone_expired', 'Only available within 1 hour'),
+          fn: () => {
+            if (!canEveryone) {
+              if (typeof showToast === 'function') {
+                showToast(tt('baithak_delete_everyone_expired', 'Only available within 1 hour'));
+              }
+              return;
+            }
+            deleteMessageForEveryone(chatId, msgId, row);
+          },
+        });
+      }
+      showActionSheet(tt('baithak_delete_msg', 'Delete message'), deleteActions);
+    };
+
+    if (row && !row.dataset.deletedEveryone) {
       actions.push({
-        label: 'Delete',
+        label: tt('baithak_delete_msg', 'Delete'),
         icon: 'trash',
         danger: true,
-        fn: async () => {
-          // Persist delete for text + music/photo/location — never optimistic-only
-          if (!msgId || !chatId || chatId === 'chat_self' || /^chat_(riya|arjun)/.test(chatId) || chatId.startsWith('grp_')) {
-            if (typeof showToast === 'function') {
-              showToast('This message is not synced — open a real conversation to delete');
-            }
-            return;
-          }
-          if (typeof db === 'undefined' || !db || typeof currentUser === 'undefined' || !currentUser) {
-            if (typeof showToast === 'function') showToast('Sign in to delete messages');
-            return;
-          }
-          row?.classList.add('msg-row--deleting');
-          try {
-            await db.collection('chats').doc(chatId).collection('messages').doc(msgId).delete();
-            row?.remove();
-            if (typeof showToast === 'function') showToast('Message deleted');
-          } catch (e) {
-            row?.classList.remove('msg-row--deleting');
-            if (typeof reportClientError === 'function') {
-              reportClientError({
-                feature: 'chat_msg_delete',
-                message: e?.message || String(e),
-              });
-            }
-            if (typeof showToast === 'function') {
-              showToast(
-                typeof friendlyError === 'function'
-                  ? friendlyError(e)
-                  : e?.code === 'permission-denied'
-                    ? 'Couldn’t delete — permission denied'
-                    : 'Couldn’t delete message'
-              );
-            }
-          }
-        },
+        fn: openDeleteSheet,
       });
     }
-    showActionSheet('Message', actions);
+    showActionSheet(tt('baithak_msg_actions', 'Message'), actions);
+  }
+
+  async function deleteMessageForMe(chatId, msgId, row, localOnly) {
+    const uid = typeof currentUser !== 'undefined' ? currentUser?.uid : '';
+    if (localOnly || !msgId || !chatId || !uid) {
+      row?.remove();
+      if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('baithak_msg_deleted') || 'Deleted' : 'Deleted');
+      return;
+    }
+    if (typeof db === 'undefined' || !db) {
+      row?.remove();
+      return;
+    }
+    row?.classList.add('msg-row--deleting');
+    try {
+      await db
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .doc(msgId)
+        .update({ [`deletedFor.${uid}`]: true });
+      row?.remove();
+      if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('baithak_msg_deleted') || 'Deleted' : 'Deleted');
+    } catch (e) {
+      row?.classList.remove('msg-row--deleting');
+      if (typeof showToast === 'function') {
+        showToast(typeof friendlyError === 'function' ? friendlyError(e) : 'Couldn’t delete message');
+      }
+    }
+  }
+
+  async function deleteMessageForEveryone(chatId, msgId, row) {
+    if (!msgId || !chatId || typeof db === 'undefined' || !db) return;
+    row?.classList.add('msg-row--deleting');
+    try {
+      await db
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .doc(msgId)
+        .update({
+          deletedForEveryone: true,
+          text: '',
+          deletedAt: Date.now(),
+        });
+      try {
+        const FieldValue = firebase?.firestore?.FieldValue;
+        if (FieldValue) {
+          await db
+            .collection('chats')
+            .doc(chatId)
+            .collection('messages')
+            .doc(msgId)
+            .update({
+              music: FieldValue.delete(),
+              attachment: FieldValue.delete(),
+            });
+        }
+      } catch (e2) {}
+      const bubble = row?.querySelector('.msg-bubble');
+      if (bubble) {
+        row.classList.add('msg-row--deleted');
+        row.dataset.deletedEveryone = '1';
+        bubble.classList.add('msg-bubble--deleted');
+        bubble.innerHTML = `<em>${typeof t === 'function' ? t('baithak_msg_deleted_everyone') || 'This message was deleted' : 'This message was deleted'}</em>`;
+      }
+      row?.classList.remove('msg-row--deleting');
+      if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('baithak_msg_deleted') || 'Deleted' : 'Deleted');
+    } catch (e) {
+      row?.classList.remove('msg-row--deleting');
+      if (typeof showToast === 'function') {
+        showToast(typeof friendlyError === 'function' ? friendlyError(e) : 'Couldn’t delete message');
+      }
+    }
   }
 
   function postActions(postEl) {

@@ -980,9 +980,17 @@ function openDuniyaDetail(post,{focusCommentId=null,focusComposer=false}={}){
     }
   }
   refreshComments();
+  if (typeof commentMsgCache?.get === 'function') {
+    commentMsgCache.get('duniya', post.firestoreId || post.id).then((cached) => {
+      if (!cached?.comments?.length || comments.length) return;
+      comments.splice(0, comments.length, ...cached.comments);
+      post._comments = comments;
+      refreshComments();
+    }).catch(() => {});
+  }
   if (canLoadPersistentComments && typeof loadContentComments === 'function') {
     if (commentSend) commentSend.disabled = true;
-    if (typeof renderSkeleton === 'function') renderSkeleton(listEl, { variant: 'list', count: 3 });
+    if (!listEl.querySelector('.comment-item') && typeof renderSkeleton === 'function') renderSkeleton(listEl, { variant: 'list', count: 3 });
     loadContentComments('duniya', post, {limit:25})
       .then(async (loaded) => {
         if (!Array.isArray(loaded)) return;
@@ -992,6 +1000,9 @@ function openDuniyaDetail(post,{focusCommentId=null,focusComposer=false}={}){
           await enrichUsersWithProfileType(comments.map((c) => c.user).filter(Boolean));
         }
         refreshComments();
+        if (typeof commentMsgCache?.put === 'function') {
+          commentMsgCache.put('duniya', post.firestoreId || post.id, comments).catch(() => {});
+        }
       })
       .catch((err) => {
         if (typeof renderErrorState === 'function') {
@@ -1062,6 +1073,9 @@ function openDuniyaDetail(post,{focusCommentId=null,focusComposer=false}={}){
           }
           c.pending = false;
           refreshComments();
+          if (typeof commentMsgCache?.put === 'function') {
+            commentMsgCache.put('duniya', post.firestoreId || post.id, comments).catch(() => {});
+          }
         },
       });
     } else {
@@ -1069,6 +1083,9 @@ function openDuniyaDetail(post,{focusCommentId=null,focusComposer=false}={}){
       c.pending = false;
       if (typeof saveToArchive === 'function') {
         saveToArchive({ type: 'comment', content: txt, postId: post.id, parentId: c.parentId, ts: new Date().toISOString() });
+      }
+      if (typeof commentMsgCache?.put === 'function') {
+        commentMsgCache.put('duniya', post.firestoreId || post.id, comments).catch(() => {});
       }
     }
   });

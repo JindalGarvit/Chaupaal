@@ -141,9 +141,15 @@
       );
       if (!chat) {
         const chatId =
-          typeof currentUser !== 'undefined' && currentUser?.uid
-            ? [currentUser.uid, uid].sort().join('_')
-            : `chat_${uid}`;
+          typeof dmChatIdFor === 'function'
+            ? dmChatIdFor(uid)
+            : typeof currentUser !== 'undefined' && currentUser?.uid
+              ? [currentUser.uid, uid].sort().join('_')
+              : '';
+        if (!chatId) {
+          if (typeof showToast === 'function') showToast('Sign in to message');
+          return null;
+        }
         chat = {
           id: chatId,
           firestoreId: chatId,

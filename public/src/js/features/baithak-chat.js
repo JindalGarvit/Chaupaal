@@ -142,10 +142,72 @@ async function prepareChatThread(chat, screen, { isGroup, isSelf, isChaupaal }) 
 
   let chatId = chat.firestoreId || chat.id;
   const needsBootstrap = !isGroup && !isSelf && !isChaupaal;
+  const peerEarly =
+    chat.uid ||
+    chat.peerUid ||
+    chat.otherUid ||
+    (chat.participants || []).find((u) => u && u !== currentUser?.uid);
 
-  if (needsBootstrap) {
+  // Remap stubs to canonical before paint/remember
+  if (needsBootstrap && peerEarly && typeof dmChatIdFor === 'function') {
+    const canon = dmChatIdFor(peerEarly);
+    if (canon && chatId !== canon) {
+      chatId = canon;
+      chat.firestoreId = canon;
+      chat.id = canon;
+      chat.uid = peerEarly;
+      chat.peerUid = peerEarly;
+      window.currentOpenChat = chat;
+    }
+  }
+
+  // Instant composer when peer + canonical id known; verify in background
+  if (needsBootstrap && peerEarly && chatId && typeof dmChatIdFor === 'function' && chatId === dmChatIdFor(peerEarly)) {
+    setChatComposerReady(screen, true, 'Checking activity…');
+  } else if (needsBootstrap) {
     setChatComposerReady(screen, false, 'Connecting…');
-    if (typeof renderSkeleton === 'function') renderSkeleton(area, { variant: 'list', count: 4 });
+  }
+
+  // Paint IDB cache before any network wait
+  if (typeof baithakMsgCache?.get === 'function' && chatId) {
+    try {
+      const cached = await baithakMsgCache.get(chatId);
+      if (cached?.messages?.length) {
+        area.querySelectorAll('.ui-skeleton-stack').forEach((el) => el.remove());
+        if (!area.querySelector('.msg-row')) {
+          cached.messages.forEach((m) => {
+            const mine = m.uid === currentUser?.uid;
+            const node = addMsgBubble(
+              {
+                from: mine ? 'me' : 'them',
+                text: m.text,
+                time: m.ts ? new Date(m.ts).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '',
+                avatar: m.avatar || '👤',
+                name: m.name,
+                profileType: m.profileType,
+                music: m.music,
+                attachment: m.attachment,
+                uid: m.uid,
+              },
+              isGroup
+            );
+            if (node && m.id) {
+              node.dataset.msgId = m.id;
+              node.setAttribute('data-msg-id', m.id);
+            }
+            if (node && m.clientTempId) node.dataset.clientTempId = m.clientTempId;
+          });
+        }
+      } else if (needsBootstrap && !area.querySelector('.msg-row') && typeof renderSkeleton === 'function') {
+        renderSkeleton(area, { variant: 'list', count: 3 });
+      }
+    } catch (e) {
+      if (needsBootstrap && !area.querySelector('.msg-row') && typeof renderSkeleton === 'function') {
+        renderSkeleton(area, { variant: 'list', count: 3 });
+      }
+    }
+  } else if (needsBootstrap && typeof renderSkeleton === 'function') {
+    renderSkeleton(area, { variant: 'list', count: 3 });
   }
 
   try {
@@ -166,16 +228,12 @@ async function prepareChatThread(chat, screen, { isGroup, isSelf, isChaupaal }) 
         window.currentOpenChat = chat;
       }
     } else if (needsBootstrap) {
-      const peer =
-        chat.uid ||
-        chat.peerUid ||
-        chat.otherUid ||
-        (chat.participants || []).find((u) => u && u !== currentUser?.uid);
+      const peer = peerEarly;
       if (peer) {
         if (typeof bootstrapDmChat === 'function') {
           const boot = await bootstrapDmChat({
             uid: peer,
-            name: chat.name,
+            name: chat._realName || chat.name,
             username: chat.username,
             photoURL: chat.photoURL,
             avatar: chat.avatar,
@@ -184,7 +242,12 @@ async function prepareChatThread(chat, screen, { isGroup, isSelf, isChaupaal }) 
             matchMeta: chat.matchMeta,
           });
           if (boot) {
+            const realName = chat._realName || (!isGenericDmTitle?.(chat.name) ? chat.name : '') || boot._realName || boot.name;
             Object.assign(chat, boot);
+            if (realName && !isGenericDmTitle?.(realName)) {
+              chat._realName = realName;
+              if (!BaithakSearch?.getDmNickname?.(peer)) chat.name = realName;
+            }
             chatId = boot.firestoreId || boot.id;
             window.currentOpenChat = chat;
             if (typeof rememberInboxChat === 'function') rememberInboxChat(chat);
@@ -198,6 +261,7 @@ async function prepareChatThread(chat, screen, { isGroup, isSelf, isChaupaal }) 
             chat.uid = chat.uid || peer;
             chat.participants = currentUser?.uid ? [currentUser.uid, peer].sort() : chat.participants;
             window.currentOpenChat = chat;
+            if (typeof rememberInboxChat === 'function') rememberInboxChat(chat);
           }
         }
       }
@@ -243,11 +307,13 @@ async function prepareChatThread(chat, screen, { isGroup, isSelf, isChaupaal }) 
       .then(() => {
         const nameEl = screen.querySelector('.chat-header-name');
         const avEl = screen.querySelector('.chat-header-avatar');
-        if (nameEl && chat.name && chat.name !== 'Chat') {
+        const title =
+          typeof resolveBaithakTitle === 'function'
+            ? resolveBaithakTitle(chat, currentUser?.uid)
+            : BaithakSearch?.resolveChatDisplayName?.(chat, chat._realName || chat.name) || chat.name;
+        if (nameEl && title) {
           nameEl.innerHTML =
-            typeof formatDisplayNameHtml === 'function'
-              ? formatDisplayNameHtml(chat.name, chat)
-              : chatEsc(chat.name);
+            typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml(title, chat) : chatEsc(title);
         }
         if (avEl && typeof chatAvatarMarkup === 'function') avEl.innerHTML = chatAvatarMarkup(chat);
       })
@@ -317,16 +383,41 @@ function openChatScreen(chat){
   const isChaupaal = typeof isChaupaalChat==='function' && isChaupaalChat(chat);
   const isGroup = chat.type === 'group';
   const previewJoin = !!(chat._previewJoin && isGroup && currentUser?.uid && !(chat.participants || []).includes(currentUser.uid));
-  const headerTitle = (typeof BaithakSearch !== 'undefined' && typeof BaithakSearch.resolveChatDisplayName === 'function')
-    ? BaithakSearch.resolveChatDisplayName(chat, chat.name || 'Chat')
-    : (chat.name || 'Chat');
+  const headerTitle =
+    typeof resolveBaithakTitle === 'function'
+      ? resolveBaithakTitle(chat, currentUser?.uid)
+      : typeof BaithakSearch !== 'undefined' && typeof BaithakSearch.resolveChatDisplayName === 'function'
+        ? BaithakSearch.resolveChatDisplayName(chat, chat._realName || chat.name || '')
+        : chat._realName || chat.name || '';
   const msgs = SAMPLE_MESSAGES[chat.id] || SAMPLE_MESSAGES[chat.firestoreId] || (isSelf ? SAMPLE_MESSAGES.chat_self : null) || [];
   const hasDuelStreak = !isGroup && !isSelf && !isChaupaal && chat.duelStreak;
+  // Remap stub ids before opening
+  if (!isGroup && !isSelf && !isChaupaal) {
+    const peer =
+      chat.uid || chat.peerUid || chat.otherUid || (chat.participants || []).find((u) => u && u !== currentUser?.uid);
+    if (peer && typeof dmChatIdFor === 'function') {
+      const canon = dmChatIdFor(peer);
+      if (canon) {
+        chat.firestoreId = canon;
+        chat.id = canon;
+        chat.uid = peer;
+        chat.peerUid = peer;
+      }
+    }
+  }
   screen.dataset.chatId = chat.firestoreId || chat.id || '';
   screen.dataset.chatReady = isSelf || isChaupaal || isGroup ? '1' : '0';
   if (isChaupaal) screen.dataset.chaupaal = '1';
   window.currentOpenChat = chat;
-  if (typeof rememberInboxChat === 'function' && currentUser && !isSelf && !isChaupaal) {
+  // Remember only after canonical remap (prepareChatThread also remembers post-bootstrap)
+  if (
+    typeof rememberInboxChat === 'function' &&
+    currentUser &&
+    !isSelf &&
+    !isChaupaal &&
+    chat.firestoreId &&
+    !(typeof isStubDmId === 'function' && isStubDmId(chat.firestoreId))
+  ) {
     rememberInboxChat(chat);
   }
   if (typeof ensureChatUpdatedAt === 'function' && currentUser && !isSelf && !isChaupaal) {
@@ -345,7 +436,7 @@ function openChatScreen(chat){
       ${typeof backButtonHtml==='function'?backButtonHtml({ className: 'chat-back', id: 'chatBack' }):`<button class="chat-back cp-back-btn" id="chatBack" aria-label="Back">${typeof iconHtml==='function'?iconHtml('arrow-left',{size:22}):''}</button>`}
       <div class="chat-header-avatar${isGroup || !isSelf ? ' chat-header-tappable' : ''}" ${isGroup ? 'data-open-group-info' : !isSelf ? 'data-open-chat-profile' : ''} role="${isGroup || !isSelf ? 'button' : ''}" ${!isSelf ? 'tabindex="0"' : ''}>${isGroup || isSelf || isChaupaal ? (chat.avatar || '👤') : (typeof chatAvatarMarkup === 'function' ? chatAvatarMarkup(chat) : (chat.avatar || '👤'))}</div>
       <div class="chat-header-info${isGroup || !isSelf ? ' chat-header-tappable' : ''}" ${isGroup ? 'data-open-group-info' : !isSelf ? 'data-open-chat-profile' : ''} role="${isGroup || !isSelf ? 'button' : ''}" ${!isSelf ? 'tabindex="0"' : ''}>
-        <div class="chat-header-name">${(chat.type==='group'||chat.type==='self'||isChaupaal)?headerTitle:(typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(headerTitle!=='Chat'?headerTitle:(chat.username||'Chat'),chat):(headerTitle!=='Chat'?headerTitle:'Chat'))}</div>
+        <div class="chat-header-name">${(chat.type==='group'||chat.type==='self'||isChaupaal)?(headerTitle||chat.name||'Chat'):(typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(headerTitle||'…',chat):(headerTitle||'…'))}</div>
         <div id="chatActivityStatus" class="chat-activity-status">${statusLine}</div>
       </div>
       <div class="chat-header-actions">
@@ -587,6 +678,13 @@ function openChatScreen(chat){
     markChatRead(chat.firestoreId || chat.id);
   } else if (typeof clearChatUnreadBadge === 'function') {
     clearChatUnreadBadge(chat.firestoreId || chat.id);
+  }
+  {
+    const cid = chat.firestoreId || chat.id;
+    const pref = typeof getBaithakPref === 'function' ? getBaithakPref(cid) : {};
+    if (pref?.markUnread && typeof BaithakChatActions?.setBaithakPref === 'function') {
+      BaithakChatActions.setBaithakPref(cid, { markUnread: false }).catch(() => {});
+    }
   }
   if (isChaupaal) {
     try { if (typeof ensureChaupaalChatDoc === 'function') ensureChaupaalChatDoc(); } catch (e) {}
@@ -950,6 +1048,15 @@ function renderMsgBubble(m, isGroup){
   const isMe = m.from === 'me';
   const uid = m.uid || m.user?.uid || '';
   const name = m.name || m.user?.name || '';
+  if (m.deletedForEveryone) {
+    const delLabel =
+      typeof t === 'function'
+        ? t('baithak_msg_deleted_everyone') || 'This message was deleted'
+        : 'This message was deleted';
+    return `<div class="msg-row ${isMe ? 'me' : 'them'} msg-row--deleted" data-deleted-everyone="1">
+      <div class="msg-bubble msg-bubble--deleted"><em>${delLabel}</em></div>
+    </div>`;
+  }
   let body = m.text || '';
   const att = m.attachment || null;
   // SECURITY: `rich` is set ONLY when body is built from structured fields
@@ -1204,23 +1311,38 @@ function addMsgBubble(msg, isGroup){
 async function sendMsg(chat){
   const screen = document.getElementById('activeChatScreen');
   if (screen?.dataset.chatReady !== '1') {
-    if (typeof showToast === 'function') showToast('Chat still connecting — try again in a moment');
+    if (typeof showToast === 'function') showToast(typeof t==='function'?t('baithak_send_failed','Chat still connecting — try again'):'Chat still connecting — try again');
     return;
   }
   const input=document.getElementById('chatMsgInput');
   const text=input?.value.trim();if(!text)return;
   const isGroup=chat.type==='group';
   const isChaupaal = typeof isChaupaalChat==='function' && isChaupaalChat(chat);
-  const tempId='local_'+Date.now();
-  const bubble={from:'me',text,time:'now',_tempId:tempId,pending:true};
+  const tempId='local_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  const bubble={from:'me',text,time:'now',_tempId:tempId,pending:true,name:userProfile?.name||currentUser?.displayName||'You'};
   const prevValue=input.value;
 
   const apply=()=>{
-    addMsgBubble(bubble,isGroup);
+    const row=addMsgBubble(bubble,isGroup);
+    if(row){
+      row.dataset.pending='1';
+      row.dataset.clientTempId=tempId;
+      row.setAttribute('data-pending','1');
+    }
     input.value='';
     document.getElementById('aiSuggestionBar')?.classList.add('hidden');
     if(typeof SoundLib!=='undefined'&&SoundLib.send) SoundLib.send();
     if(typeof haptic==='function') haptic('light');
+    if(typeof baithakMsgCache?.appendOptimistic==='function'){
+      baithakMsgCache.appendOptimistic(chat.firestoreId||chat.id,{
+        id:tempId,
+        clientTempId:tempId,
+        uid:currentUser?.uid,
+        text,
+        ts:Date.now(),
+        name:bubble.name,
+      }).catch(()=>{});
+    }
   };
   const revert=()=>{};
 
@@ -1255,10 +1377,6 @@ async function sendMsg(chat){
                 applyChaupaalQuietComposer(document.getElementById('activeChatScreen'), true);
               }
             }
-            // User + quiet/crisis/assistant replies are persisted by the API.
-            // Firestore listener replaces the pending "me" bubble and appends
-            // Chaupaal's reply — avoid permanent duplicate them-bubbles.
-            // Fallback if the listener is slow/missing (e.g. offline rules lag).
             const assistText = data?.reply || (data?.quiet ? (data.message || '') : '');
             if(assistText){
               const area2=document.getElementById('chatMsgsArea');
@@ -1280,7 +1398,6 @@ async function sendMsg(chat){
             return;
           }
           if(typeof sendRealtimeMessage==='function'){
-            // Count AI Discovery → Personal sends only (Professional uncapped).
             const origin = chat.discoveryOrigin || chat.origin;
             const peerType = (chat.peerProfileType || chat.profileType || 'personal').toLowerCase();
             if (origin === 'ai_discovery' && peerType !== 'professional' && typeof PolicyUsage?.consume === 'function') {
@@ -1297,7 +1414,7 @@ async function sendMsg(chat){
                 });
               }
             }
-            await sendRealtimeMessage(chat.firestoreId||chat.id,text,isGroup);
+            await sendRealtimeMessage(chat.firestoreId||chat.id,text,isGroup,null,null,{clientTempId:tempId});
           }
           scheduleChatInboxRefresh();
           if(typeof trackMessageSent==='function') trackMessageSent({ chat_type: chat.type||'dm' });
@@ -1305,7 +1422,6 @@ async function sendMsg(chat){
           if(typeof demoMarkSeenSoon==='function') demoMarkSeenSoon();
           if(!isChaupaal && (!db||!currentUser)) setTimeout(()=>{
             const replies=["Haha 😄","Totally agree!","Really?!","Let's talk later 🙏","Muqabala tomorrow? ⚔️","👍","What's the plan?"];
-            if(typeof startChatPresence==='function'){ /* typing already demoed */ }
             addMsgBubble({from:'them',text:replies[Math.floor(Math.random()*replies.length)],time:'now',avatar:chat.avatar},isGroup);
             if(typeof demoMarkSeenSoon==='function') demoMarkSeenSoon();
           },1200);
@@ -1313,12 +1429,13 @@ async function sendMsg(chat){
         onError:(err)=>{
           const area=document.getElementById('chatMsgsArea');
           const pending=[...(area?.querySelectorAll('.msg-row.me[data-pending="1"]')||[])];
-          const row=pending.reverse().find((r)=>{
+          const row=pending.reverse().find((r)=>r.dataset.clientTempId===tempId)
+            || pending.reverse().find((r)=>{
             const t=r.querySelector('.msg-bubble')?.getAttribute('data-msg-text')||'';
             return t===text;
           })||pending[0];
           markMsgRowFailed(row,text,chat,isGroup);
-          if(typeof showToast==='function') showToast(err?.message||'Message not sent');
+          if(typeof showToast==='function') showToast(err?.message||(typeof t==='function'?t('baithak_send_failed','Message not sent'):'Message not sent'));
           if(typeof reportClientError==='function'){
             reportClientError({feature:'dm_send',message:err?.message||String(err),code:err?.code||''});
           }
@@ -1345,7 +1462,7 @@ async function sendMsg(chat){
           }, 1800);
         }
       } else if(typeof sendRealtimeMessage==='function') {
-        sendRealtimeMessage(chat.firestoreId||chat.id,text,isGroup);
+        sendRealtimeMessage(chat.firestoreId||chat.id,text,isGroup,null,null,{clientTempId:tempId});
       }
     }
   }finally{

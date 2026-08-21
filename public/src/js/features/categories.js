@@ -1700,9 +1700,19 @@ function openPeepalCommentsSheet(q,{focusCommentId=null,focusComposer=false}={})
   }
 
   refreshComments();
+  // Warm comment cache paint
+  if (typeof commentMsgCache?.get === 'function') {
+    const postId = q.firestoreId || q.id;
+    commentMsgCache.get('peepal', postId).then((cached) => {
+      if (!cached?.comments?.length || comments.length) return;
+      comments.splice(0, comments.length, ...cached.comments);
+      q._comments = comments;
+      refreshComments();
+    }).catch(() => {});
+  }
   if (canLoadPersistentComments && typeof loadContentComments === 'function') {
     if (send) send.disabled = true;
-    if (typeof renderSkeleton === 'function') renderSkeleton(listEl, { variant: 'list', count: 3 });
+    if (!listEl.querySelector('.comment-item') && typeof renderSkeleton === 'function') renderSkeleton(listEl, { variant: 'list', count: 3 });
     loadContentComments('peepal', q, {limit:25})
       .then(async (loaded) => {
         if (!Array.isArray(loaded)) return;
@@ -1712,6 +1722,9 @@ function openPeepalCommentsSheet(q,{focusCommentId=null,focusComposer=false}={})
           await enrichUsersWithProfileType(comments.map((c) => c.user).filter(Boolean));
         }
         refreshComments();
+        if (typeof commentMsgCache?.put === 'function') {
+          commentMsgCache.put('peepal', q.firestoreId || q.id, comments).catch(() => {});
+        }
       })
       .catch((err) => {
         if (typeof renderErrorState === 'function') {
@@ -1771,6 +1784,9 @@ function openPeepalCommentsSheet(q,{focusCommentId=null,focusComposer=false}={})
           }
           c.pending = false;
           refreshComments();
+          if (typeof commentMsgCache?.put === 'function') {
+            commentMsgCache.put('peepal', q.firestoreId || q.id, comments).catch(() => {});
+          }
         },
       });
     } else {

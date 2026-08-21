@@ -2806,6 +2806,7 @@ form.cp-kb-lift {
 .cp-action-item.is-danger { color: var(--red); }
 .cp-action-item--danger .cp-action-hint,
 .cp-action-item.is-danger .cp-action-hint { color: inherit; opacity: 0.75; }
+.cp-action-item.is-disabled { opacity: 0.45; pointer-events: none; }
 .cp-action-cancel { background: transparent; color: var(--muted); justify-content: center; text-align: center; }
 
 /* Pull to refresh */

@@ -94,20 +94,32 @@
     if (chat.type === 'group') {
       const nick = NS.getGroupNickname(chat.firestoreId || chat.id);
       if (nick) return nick;
-      return realName || chat.name || 'Group';
+      return realName || chat._realName || chat.name || 'Group';
     }
     const peer = peerUidOfChat(chat);
     const nick = peer ? NS.getDmNickname(peer) : '';
     if (nick) return nick;
-    return realName || chat.name || chat.username || 'Chat';
+    const real =
+      realName ||
+      chat._realName ||
+      (chat.name && !/^@/.test(String(chat.name).trim()) && !/^(someone|friend|chat|chaupaal member)$/i.test(String(chat.name).trim())
+        ? chat.name
+        : '');
+    if (real && !/^@/.test(String(real).trim())) return real;
+    return '';
   };
 
   function applyDisplayNames(chats) {
     if (!Array.isArray(chats)) return chats;
     chats.forEach((c) => {
-      if (!c || typeof isSelfChatRow === 'function' && (isSelfChatRow(c) || isChaupaalChatRow(c))) return;
+      if (!c || (typeof isSelfChatRow === 'function' && (isSelfChatRow(c) || isChaupaalChatRow(c)))) return;
+      if (!c._realName && c.name && !/^@/.test(String(c.name).trim())) {
+        const nick = c.type === 'group'
+          ? NS.getGroupNickname(c.firestoreId || c.id)
+          : NS.getDmNickname(peerUidOfChat(c));
+        if (!nick || c.name !== nick) c._realName = c.name;
+      }
       const real = c._realName || c.name;
-      if (!c._realName) c._realName = c.name;
       c.displayName = NS.resolveChatDisplayName(c, real);
       c.name = c.displayName;
     });

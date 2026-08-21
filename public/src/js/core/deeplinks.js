@@ -537,25 +537,39 @@
           navigator.clipboard.writeText(url).then(() => showToast('Link copied'));
         }
       });
-      sheet.querySelector('#dlSayHi')?.addEventListener('click', () => {
+      sheet.querySelector('#dlSayHi')?.addEventListener('click', async () => {
         sheet.remove();
-        const chat = {
-          id: `chat_dl_${uid}`,
-          type: 'dm',
-          name: u.name || uname,
-          avatar: '👤',
-          preview: 'Opened from profile link',
-          time: 'now',
-          unread: 0,
-        };
-        if (typeof SAMPLE_CHATS !== 'undefined' && !SAMPLE_CHATS.find((c) => c.id === chat.id)) {
-          SAMPLE_CHATS.unshift(chat);
+        const display = u.name || u.displayName || '';
+        if (typeof openDmWithSharedHello === 'function') {
+          await openDmWithSharedHello({
+            uid,
+            name: display || uname,
+            username: uname,
+            photoURL: u.photoURL || '',
+            avatar: u.photoURL || '👤',
+            origin: 'deeplink_profile',
+          });
+          return;
         }
-        switchTab('baithak');
-        setTimeout(() => {
-          if (typeof initBaithak === 'function') initBaithak();
-          setTimeout(() => openChatScreen(chat), 200);
-        }, 100);
+        if (typeof bootstrapDmChat === 'function') {
+          try {
+            const chat = await bootstrapDmChat({
+              uid,
+              name: display || uname,
+              username: uname,
+              photoURL: u.photoURL || '',
+              origin: 'deeplink_profile',
+            });
+            if (chat && typeof openChatScreen === 'function') {
+              switchTab('baithak');
+              setTimeout(() => openChatScreen(chat), 80);
+            }
+          } catch (e) {
+            if (typeof showToast === 'function') showToast('Could not open chat');
+          }
+          return;
+        }
+        if (typeof showToast === 'function') showToast('Sign in to message');
       });
     } catch (e) {
       if (typeof showToast === 'function') {

@@ -47,8 +47,20 @@
     }
   } catch (e) {}
 
+  function notifChatId(n) {
+    return String(n?.deepLink?.chatId || n?.chatId || n?.refId || '').trim();
+  }
+
+  function shouldSkipNotif(n) {
+    const cid = notifChatId(n);
+    if (!cid) return false;
+    if (typeof shouldSuppressChatNotif === 'function' && shouldSuppressChatNotif(cid)) return true;
+    const pref = typeof getBaithakPref === 'function' ? getBaithakPref(cid) : null;
+    return !!(pref && pref.hidden);
+  }
+
   function syncNotificationsGlobal() {
-    const merged = [...cloudNotifications];
+    const merged = [...cloudNotifications.filter((n) => !shouldSkipNotif(n))];
     localEphemeral.forEach((n) => {
       if (!merged.some((x) => x.id === n.id)) merged.push(n);
     });
@@ -1265,12 +1277,17 @@
       localOnly: true,
       actors: (extra && extra.actors) || [],
       actorCount: (extra && extra.actorCount) || ((extra && extra.actors) || []).length || 0,
+      chatId: (extra && extra.chatId) || (deepLink && deepLink.chatId) || '',
     };
+    if (shouldSkipNotif(n)) return null;
     localEphemeral.unshift(n);
     localEphemeral = localEphemeral.slice(0, 20);
     syncNotificationsGlobal();
     updateSectionNotifDots();
-    if (typeof SoundLib !== 'undefined' && SoundLib.notification) SoundLib.notification();
+    const muted =
+      typeof getBaithakPref === 'function' &&
+      getBaithakPref(notifChatId(n))?.muted;
+    if (!muted && typeof SoundLib !== 'undefined' && SoundLib.notification) SoundLib.notification();
     return n;
   }
 

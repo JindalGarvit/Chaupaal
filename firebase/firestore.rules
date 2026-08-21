@@ -222,6 +222,14 @@ service cloud.firestore {
       match /group_nicknames/{chatId} {
         allow read, write: if isOwner(userId);
       }
+      // Baithak inbox prefs (pin / mute / hide / clear / delete-for-me)
+      match /baithak_prefs/{chatId} {
+        allow read, write: if isOwner(userId);
+      }
+      // Hidden vault PIN / WebAuthn metadata (owner only)
+      match /security/{docId} {
+        allow read, write: if isOwner(userId);
+      }
       // Baithak message search index (forward-only from client sends).
       match /chat_search_index/{docId} {
         allow read, write: if isOwner(userId);
@@ -781,7 +789,34 @@ service cloud.firestore {
               )
             )
           );
-        allow update: if false;
+        allow update: if isAuth()
+          && chatDocExists(chatId)
+          && get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid])
+          && (
+            // Delete for everyone — author only; tombstone fields
+            (
+              resource.data.uid == request.auth.uid
+              && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['deletedForEveryone', 'text', 'music', 'attachment', 'deletedAt', 'deletedFor'])
+              && request.resource.data.deletedForEveryone == true
+              && request.resource.data.text == ''
+            )
+            ||
+            // Delete for me — any participant may set deletedFor.{theirUid}
+            (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedFor'])
+              && request.resource.data.deletedFor is map
+              && request.resource.data.deletedFor[request.auth.uid] == true
+            )
+            ||
+            // Clear media after everyone-delete (author)
+            (
+              resource.data.uid == request.auth.uid
+              && resource.data.deletedForEveryone == true
+              && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['music', 'attachment'])
+            )
+          );
         allow delete: if isOwner(resource.data.uid);
       }
     }
