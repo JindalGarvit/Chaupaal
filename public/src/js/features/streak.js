@@ -270,7 +270,6 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
     node.dataset.msgId=doc.id;
     node.setAttribute('data-msg-id', doc.id);
     if(m.clientTempId) node.dataset.clientTempId=m.clientTempId;
-    const msgTs = m.ts?.toMillis ? m.ts.toMillis() : (typeof m.ts === 'number' ? m.ts : 0);
     if (msgTs) node.dataset.msgTs = String(msgTs);
     if(typeof mountMusicCards==='function') mountMusicCards(node);
     if(typeof mountLocationCards==='function') mountLocationCards(node);

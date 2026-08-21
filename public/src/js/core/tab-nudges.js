@@ -14,7 +14,7 @@
     ],
     duniya: [
       'Someone might have posted something worth seeing — check Duniya.',
-      'Stories disappear in 24h — don't miss them.',
+      "Stories disappear in 24h — don't miss them.",
       'Anything you want to share today?',
       'Your Duniya feed has fresh posts waiting.',
     ],
@@ -26,13 +26,13 @@
     ],
     baithak: [
       'Your friends might be wondering where you are — drop a Split.',
-      'A group you're in had some activity.',
+      "A group you're in had some activity.",
       'Send a Split to friends today.',
       'Baithak is quiet — be the one to break the silence.',
     ],
     dangal: [
-      'Today's Akhbaar game is waiting — 2 minutes to play.',
-      'You haven't challenged anyone today — pick a duel.',
+      "Today's Akhbaar game is waiting — 2 minutes to play.",
+      "You haven't challenged anyone today — pick a duel.",
       'Your Dangal streak is intact — play to keep it.',
       'A new Dangal round is open — jump in.',
     ],
