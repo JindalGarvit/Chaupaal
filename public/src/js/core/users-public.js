@@ -134,6 +134,48 @@
         ringId: th.ringId,
       };
     }
+    // Strip top-level fields whose Digital blocks are private/friends (no side-channel leak)
+    if (typeof DigitalLayout?.stripProfileFieldsForAudience === 'function') {
+      const merged = {
+        ...u,
+        ...(u.profile || {}),
+        digitalLayout: layoutSrc || u.digitalLayout || u.profile?.digitalLayout,
+      };
+      const stripped = DigitalLayout.stripProfileFieldsForAudience(merged, 'public');
+      const fieldKeys = [
+        'bio',
+        'prompts',
+        'interests',
+        'hobbies',
+        'profileMedia',
+        'lookingFor',
+        'occupation',
+        'website',
+        'instagram',
+        'profileLinks',
+        'diet',
+        'drinking',
+        'smoking',
+        'fitness',
+      ];
+      fieldKeys.forEach((k) => {
+        if (!(k in stripped)) {
+          delete proj[k];
+          if (proj.profile) delete proj.profile[k];
+        } else if (stripped[k] !== undefined) {
+          proj[k] = stripped[k];
+          if (proj.profile) proj.profile[k] = stripped[k];
+        }
+      });
+      // City mirrors about.currentCity
+      if (!('currentCity' in stripped)) {
+        delete proj.city;
+        if (proj.profile) delete proj.profile.currentCity;
+      } else {
+        proj.city = stripped.currentCity;
+        if (proj.profile) proj.profile.currentCity = stripped.currentCity;
+      }
+    }
     return proj;
   }
 
@@ -143,8 +185,40 @@
     if (me && me !== uid) return null; // only owner may write
     const src = raw || {};
     const proj = buildPublicProjection(uid, src);
+    // merge:true cannot remove keys — explicitly delete privacy-stripped fields
+    const del = typeof firebase !== 'undefined' && firebase.firestore?.FieldValue?.delete;
+    const wipe = {};
+    const maybeWipe = [
+      'bio',
+      'prompts',
+      'interests',
+      'hobbies',
+      'profileMedia',
+      'lookingFor',
+      'occupation',
+      'website',
+      'instagram',
+      'profileLinks',
+      'diet',
+      'drinking',
+      'smoking',
+      'fitness',
+      'city',
+    ];
+    if (typeof del === 'function') {
+      maybeWipe.forEach((k) => {
+        if (proj[k] === undefined) wipe[k] = del();
+      });
+      if (proj.profile) {
+        ['bio', 'prompts', 'interests', 'hobbies', 'profileMedia', 'currentCity', 'occupation', 'lookingFor', 'website', 'instagram', 'profileLinks'].forEach(
+          (k) => {
+            if (proj.profile[k] === undefined) wipe[`profile.${k}`] = del();
+          }
+        );
+      }
+    }
     try {
-      await db.collection('users_public').doc(uid).set(proj, { merge: true });
+      await db.collection('users_public').doc(uid).set({ ...proj, ...wipe }, { merge: true });
     } catch (e) {
       console.warn('[users-public] sync', e?.message || e);
     }

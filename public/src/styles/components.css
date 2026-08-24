@@ -5025,9 +5025,14 @@ input.search-field-hide-native-clear[type=search]::-webkit-search-decoration{dis
   to{transform:translate(-50%,-50%) rotate(calc(var(--i)*36deg)) translateY(-72px);opacity:0;}
 }
 html.quiet-mode .dp-arcade-burst,html.quiet-mode .dp-arcade-block{animation:none;box-shadow:none;}
-.cp-author-accent,.discovery-card.dp-themed,.peepal-ai-result-card.dp-themed,.duniya-post-header.cp-author-accent{
-  box-shadow:inset 3px 0 0 var(--dp-accent,var(--red));
-}
+.dp-mood-card{text-align:center;padding:8px;}
+.dp-mood-emoji{font-size:42px;line-height:1;display:block;}
+.dp-featured-media img,.dp-featured-media video,.dp-edit-preview{width:100%;max-height:220px;object-fit:cover;border-radius:12px;display:block;}
+.dp-voice-card audio{width:100%;margin-bottom:6px;}
+.dp-link-edit-row{display:flex;gap:6px;margin-bottom:8px;}
+.dp-link-edit-row input{flex:1;min-width:0;border:1.5px solid var(--line);border-radius:10px;padding:8px 10px;font-size:13px;}
+.dp-media-edit{display:flex;flex-direction:column;gap:10px;}
+.dp-block-edit-body .story-editor-field{display:block;margin-bottom:12px;}
 .cp-profile-highlights.dp-themed[data-dp-ring="pulse"] .highlight-circle{
   animation:dpRingPulse 1.6s ease-in-out infinite;
 }

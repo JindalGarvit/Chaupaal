@@ -162,7 +162,7 @@
 
   function customBlockBody(block) {
     if (block.type === 'emoji') {
-      return `<div class="dp-mood-card">${esc(block.emoji || '✨')}<p>${esc(block.body || block.label || 'Mood')}</p></div>`;
+      return `<div class="dp-mood-card"><span class="dp-mood-emoji">${esc(block.emoji || '✨')}</span><p>${esc(block.body || block.label || 'Mood')}</p></div>`;
     }
     if (block.type === 'quote') {
       const q = block.quote || block.body || '';
@@ -176,15 +176,191 @@
         .map((l) => `<a class="profile-link-chip" href="${esc(l.url || '#')}" data-external-link="1">${esc(l.label || 'Link')}</a>`)
         .join('')}</div>`;
     }
+    if (block.type === 'voice' && block.voiceUrl) {
+      return `<div class="dp-voice-card"><audio controls src="${esc(block.voiceUrl)}" preload="metadata"></audio><p>${esc(block.body || 'Voice note')}</p></div>`;
+    }
+    if ((block.type === 'video' || block.videoUrl) && block.videoUrl) {
+      return `<div class="dp-featured-media dp-featured-video"><video src="${esc(block.videoUrl)}" controls playsinline preload="metadata"></video>${block.body ? `<p>${esc(block.body)}</p>` : ''}</div>`;
+    }
+    if (block.mediaUrl) {
+      return `<div class="dp-featured-media"><img src="${esc(block.mediaUrl)}" alt="">${block.body ? `<p>${esc(block.body)}</p>` : ''}</div>`;
+    }
     if (block.body) {
       return `<div class="profile-flexible-block">${
         typeof linkifyText === 'function' ? linkifyText(block.body) : esc(block.body)
       }</div>`;
     }
-    if (block.mediaUrl) {
-      return `<div class="dp-featured-media"><img src="${esc(block.mediaUrl)}" alt=""></div>`;
-    }
     return `<div class="public-profile-posts-empty">Empty block</div>`;
+  }
+
+  function openDigitalBlockEditSheet(blockId, onDone) {
+    if (typeof DigitalLayout === 'undefined') return;
+    const layout = DigitalLayout.getDigitalLayout();
+    const block = layout.blocks.find((b) => b.id === blockId);
+    if (!block || block.type === 'builtin') return;
+    document.getElementById('dpBlockEditSheet')?.remove();
+    const sheet = document.createElement('div');
+    sheet.id = 'dpBlockEditSheet';
+    sheet.className = 'archive-overlay dp-catalog-sheet';
+    sheet.dataset.navManaged = '1';
+    const escAttr = (s) => String(s || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    const type = block.type || 'flexible';
+    const items = Array.isArray(block.items) ? block.items.slice() : [];
+    let mediaUrl = block.mediaUrl || '';
+    let videoUrl = block.videoUrl || '';
+    let voiceUrl = block.voiceUrl || '';
+
+    const typeFields = () => {
+      if (type === 'quote') {
+        return `<label class="story-editor-field">Quote<textarea data-ed-quote rows="4" maxlength="400">${escAttr(block.quote || block.body || '')}</textarea></label>`;
+      }
+      if (type === 'emoji') {
+        return `<label class="story-editor-field">Emoji<input type="text" data-ed-emoji maxlength="8" value="${escAttr(block.emoji || '✨')}"></label>
+          <label class="story-editor-field">Caption<input type="text" data-ed-body maxlength="80" value="${escAttr(block.body || '')}"></label>`;
+      }
+      if (type === 'links') {
+        return `<div class="dp-link-edit-list" data-ed-links>
+          ${[0, 1, 2, 3]
+            .map(
+              (i) =>
+                `<div class="dp-link-edit-row">
+                  <input type="text" data-link-label placeholder="Label" value="${escAttr(items[i]?.label || '')}">
+                  <input type="url" data-link-url placeholder="https://" value="${escAttr(items[i]?.url || '')}">
+                </div>`
+            )
+            .join('')}
+        </div>`;
+      }
+      if (type === 'media') {
+        return `<div class="dp-media-edit">
+          ${mediaUrl ? `<img class="dp-edit-preview" src="${escAttr(mediaUrl)}" alt="">` : '<p class="public-profile-posts-empty">No photo yet</p>'}
+          <label class="btn">Choose photo<input type="file" accept="image/*" data-ed-file-photo hidden></label>
+          <label class="story-editor-field">Caption<input type="text" data-ed-body maxlength="120" value="${escAttr(block.body || '')}"></label>
+        </div>`;
+      }
+      if (type === 'video') {
+        return `<div class="dp-media-edit">
+          ${videoUrl ? `<video class="dp-edit-preview" src="${escAttr(videoUrl)}" controls playsinline></video>` : '<p class="public-profile-posts-empty">No video yet</p>'}
+          <label class="btn">Choose video (≤30s)<input type="file" accept="video/*" data-ed-file-video hidden></label>
+          <label class="story-editor-field">Caption<input type="text" data-ed-body maxlength="120" value="${escAttr(block.body || '')}"></label>
+        </div>`;
+      }
+      if (type === 'voice') {
+        return `<div class="dp-media-edit">
+          ${voiceUrl ? `<audio controls src="${escAttr(voiceUrl)}"></audio>` : '<p class="public-profile-posts-empty">No voice note yet</p>'}
+          <label class="btn">Choose audio<input type="file" accept="audio/*,.m4a,.mp3,.webm" data-ed-file-voice hidden></label>
+          <label class="story-editor-field">Caption<input type="text" data-ed-body maxlength="80" value="${escAttr(block.body || '')}"></label>
+        </div>`;
+      }
+      return `<label class="story-editor-field">Title<input type="text" data-ed-label maxlength="40" value="${escAttr(block.label || '')}"></label>
+        <label class="story-editor-field">Text<textarea data-ed-body rows="5" maxlength="800">${escAttr(block.body || '')}</textarea></label>`;
+    };
+
+    sheet.innerHTML = `
+      <div class="archive-header">
+        ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-dismiss' }) : '<button type="button" data-dismiss class="cp-back-btn">←</button>'}
+        <div style="flex:1"><strong>Edit · ${esc(block.label || type)}</strong></div>
+      </div>
+      <div class="dp-block-edit-body" style="padding:16px;overflow:auto;">
+        ${type !== 'flexible' && type !== 'emoji' && type !== 'quote' && type !== 'links' ? '' : ''}
+        <label class="story-editor-field">Section name<input type="text" data-ed-label maxlength="40" value="${escAttr(block.label || '')}"></label>
+        ${typeFields()}
+        <button type="button" class="btn btn--primary btn--block" data-ed-save style="margin-top:16px;">Save to Base</button>
+      </div>`;
+    document.querySelector('.device')?.appendChild(sheet);
+    const close = () => {
+      if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
+      sheet.remove();
+    };
+    if (typeof pushNavLayer === 'function') pushNavLayer(sheet, close);
+    sheet.querySelector('[data-dismiss]')?.addEventListener('click', close);
+
+    async function uploadFile(file, kind) {
+      if (!file) return null;
+      if (typeof showToast === 'function') showToast('Uploading…');
+      let remote = null;
+      try {
+        if (kind === 'photo' && typeof uploadOptimizedImage === 'function') {
+          const up = await uploadOptimizedImage(file, { folder: 'digital-blocks' });
+          remote = up.media || up.url;
+        } else if (kind === 'video' && typeof uploadVideoFile === 'function') {
+          const up = await uploadVideoFile(file, { folder: 'digital-blocks' });
+          remote = up.media || up.url;
+        } else if (kind === 'voice' && typeof uploadToCloudinary === 'function') {
+          const up = await uploadToCloudinary(file, { resourceType: 'video', folder: 'digital-voice' });
+          remote = up.secure_url || up.url;
+        }
+      } catch (e) {
+        if (typeof showToast === 'function') showToast('Upload failed');
+        return null;
+      }
+      return remote;
+    }
+
+    sheet.querySelector('[data-ed-file-photo]')?.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      const url = await uploadFile(file, 'photo');
+      if (url) {
+        mediaUrl = url;
+        const prev = sheet.querySelector('.dp-edit-preview') || sheet.querySelector('.public-profile-posts-empty');
+        if (prev) {
+          const img = document.createElement('img');
+          img.className = 'dp-edit-preview';
+          img.src = url;
+          prev.replaceWith(img);
+        }
+        if (typeof DigitalLayout.arcadeBurst === 'function') DigitalLayout.arcadeBurst(sheet);
+      }
+    });
+    sheet.querySelector('[data-ed-file-video]')?.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      const url = await uploadFile(file, 'video');
+      if (url) {
+        videoUrl = url;
+        if (typeof DigitalLayout.arcadeBurst === 'function') DigitalLayout.arcadeBurst(sheet);
+        if (typeof showToast === 'function') showToast('Video ready');
+      }
+    });
+    sheet.querySelector('[data-ed-file-voice]')?.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      const url = await uploadFile(file, 'voice');
+      if (url) {
+        voiceUrl = url;
+        if (typeof DigitalLayout.arcadeBurst === 'function') DigitalLayout.arcadeBurst(sheet);
+        if (typeof showToast === 'function') showToast('Voice ready');
+      }
+    });
+
+    sheet.querySelector('[data-ed-save]')?.addEventListener('click', async () => {
+      const patch = {
+        label: sheet.querySelector('[data-ed-label]')?.value?.trim() || block.label,
+        body: sheet.querySelector('[data-ed-body]')?.value?.trim() || '',
+      };
+      if (type === 'quote') {
+        patch.quote = sheet.querySelector('[data-ed-quote]')?.value?.trim() || '';
+        patch.body = patch.quote;
+      }
+      if (type === 'emoji') {
+        patch.emoji = sheet.querySelector('[data-ed-emoji]')?.value?.trim() || '✨';
+      }
+      if (type === 'links') {
+        const nextItems = [];
+        sheet.querySelectorAll('.dp-link-edit-row').forEach((row) => {
+          const label = row.querySelector('[data-link-label]')?.value?.trim() || '';
+          const url = row.querySelector('[data-link-url]')?.value?.trim() || '';
+          if (url) nextItems.push({ label: label || 'Link', url });
+        });
+        patch.items = nextItems;
+      }
+      if (type === 'media') patch.mediaUrl = mediaUrl;
+      if (type === 'video') patch.videoUrl = videoUrl;
+      if (type === 'voice') patch.voiceUrl = voiceUrl;
+      await DigitalLayout.updateDigitalBlock(blockId, patch);
+      DigitalLayout.arcadeBurst(sheet);
+      if (typeof showToast === 'function') showToast('Block saved');
+      close();
+      if (typeof onDone === 'function') onDone();
+    });
   }
 
   function renderDigitalPane(dp, { isOwner, view, editable, isFriend } = {}) {
@@ -245,7 +421,7 @@
                   ${
                     isBuiltin
                       ? ''
-                      : `<button type="button" class="dp-chip dp-chip--danger" data-dp-remove="${esc(b.id)}">Remove</button>`
+                      : `<button type="button" class="dp-chip" data-dp-edit="${esc(b.id)}">Edit</button><button type="button" class="dp-chip dp-chip--danger" data-dp-remove="${esc(b.id)}">Remove</button>`
                   }
                 </div>`
               : `<h3 class="cp-digital-h">${esc(b.label || b.id)}</h3>`;
@@ -452,6 +628,13 @@
         await DigitalLayout.removeDigitalBlock(btn.dataset.dpRemove);
         DigitalLayout.arcadeBurst(pane);
         if (typeof reload === 'function') reload();
+      });
+    });
+    pane.querySelectorAll('[data-dp-edit]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        openDigitalBlockEditSheet(btn.dataset.dpEdit, () => {
+          if (typeof reload === 'function') reload();
+        });
       });
     });
 
@@ -890,8 +1073,18 @@
         isFriend = !!(st?.[profileUid]?.friend || (typeof relationshipState === 'function' && relationshipState(profileUid)?.friend));
       } catch (e) {}
     }
-    // Friends get public+friends Digital blocks via friend_projection (strangers cannot read).
-    if (!isOwner && isFriend && typeof DigitalLayout?.fetchFriendDigitalLayout === 'function') {
+    // Friends get public+friends Digital blocks (+ field slice) via friend_projection.
+    if (!isOwner && isFriend && typeof DigitalLayout?.fetchFriendDigitalProjection === 'function') {
+      try {
+        const friendProj = await DigitalLayout.fetchFriendDigitalProjection(profileUid);
+        if (friendProj?.digitalLayout?.blocks?.length) {
+          profile = { ...profile, digitalLayout: friendProj.digitalLayout };
+        }
+        if (friendProj?.profileSlice && typeof friendProj.profileSlice === 'object') {
+          profile = { ...profile, ...friendProj.profileSlice };
+        }
+      } catch (e) {}
+    } else if (!isOwner && isFriend && typeof DigitalLayout?.fetchFriendDigitalLayout === 'function') {
       try {
         const friendLayout = await DigitalLayout.fetchFriendDigitalLayout(profileUid);
         if (friendLayout?.blocks?.length) {

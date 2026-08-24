@@ -262,6 +262,68 @@
     });
   }
 
+  const BLOCK_FIELD_KEYS = {
+    bio: ['bio'],
+    prompts: ['prompts'],
+    about: [
+      'currentCity',
+      'occupation',
+      'lookingFor',
+      'relationshipStatus',
+      'height',
+      'languages',
+      'hometown',
+      'company',
+      'pronouns',
+    ],
+    interests: ['interests', 'hobbies'],
+    lifestyle: ['diet', 'drinking', 'smoking', 'fitness'],
+    media: ['profileMedia'],
+    links: ['website', 'instagram', 'profileLinks'],
+  };
+
+  /**
+   * Top-level / nested fields allowed for an audience given digitalLayout privacy.
+   * @param {'public'|'friends'} audience
+   */
+  function allowedFieldsForAudience(profile, audience) {
+    const layout = getDigitalLayout(profile);
+    const allow = new Set();
+    const byId = new Map((layout.blocks || []).map((b) => [b.id, b]));
+    Object.keys(BLOCK_FIELD_KEYS).forEach((blockId) => {
+      const b = byId.get(blockId);
+      // Missing block → treat as public (legacy)
+      const privacy = b ? b.privacy || 'public' : 'public';
+      const visible = b ? b.visible !== false : true;
+      if (!visible) return;
+      if (privacy === 'private') return;
+      if (audience === 'public' && privacy !== 'public') return;
+      BLOCK_FIELD_KEYS[blockId].forEach((k) => allow.add(k));
+    });
+    return allow;
+  }
+
+  function stripProfileFieldsForAudience(src, audience) {
+    const p = src && typeof src === 'object' ? { ...src } : {};
+    const allow = allowedFieldsForAudience(p, audience);
+    Object.keys(BLOCK_FIELD_KEYS).forEach((blockId) => {
+      BLOCK_FIELD_KEYS[blockId].forEach((k) => {
+        if (!allow.has(k) && k in p) delete p[k];
+      });
+    });
+    return p;
+  }
+
+  function buildAudienceProfileSlice(profile, audience) {
+    const p = profile || {};
+    const allow = allowedFieldsForAudience(p, audience);
+    const slice = {};
+    allow.forEach((k) => {
+      if (p[k] !== undefined) slice[k] = p[k];
+    });
+    return slice;
+  }
+
   function publicDigitalLayoutProjection(profile) {
     const layout = getDigitalLayout(profile);
     const blocks = layout.blocks
@@ -300,20 +362,24 @@
   async function syncFriendDigitalProjection(uid, profile) {
     if (!db || !uid) return null;
     const layout = friendsDigitalLayoutProjection(profile);
+    const profileSlice = buildAudienceProfileSlice(
+      { ...(profile || {}), ...(profile?.profile || {}) },
+      'friends'
+    );
     try {
       await db
         .collection('users_public')
         .doc(uid)
         .collection('friend_projection')
         .doc('digital')
-        .set({ digitalLayout: layout, updatedAt: Date.now() }, { merge: true });
+        .set({ digitalLayout: layout, profileSlice, updatedAt: Date.now() }, { merge: true });
     } catch (e) {
       console.warn('[digital-layout] friend projection', e?.message || e);
     }
-    return layout;
+    return { digitalLayout: layout, profileSlice };
   }
 
-  async function fetchFriendDigitalLayout(uid) {
+  async function fetchFriendDigitalProjection(uid) {
     if (!db || !uid) return null;
     try {
       const snap = await db
@@ -322,9 +388,15 @@
         .collection('friend_projection')
         .doc('digital')
         .get();
-      if (snap.exists && snap.data()?.digitalLayout) return snap.data().digitalLayout;
+      if (snap.exists) return snap.data();
     } catch (e) {}
     return null;
+  }
+
+  /** @deprecated use fetchFriendDigitalProjection */
+  async function fetchFriendDigitalLayout(uid) {
+    const data = await fetchFriendDigitalProjection(uid);
+    return data?.digitalLayout || null;
   }
 
   function arcadeBurst(el) {
@@ -438,7 +510,11 @@
     visibleDigitalBlocks,
     publicDigitalLayoutProjection,
     friendsDigitalLayoutProjection,
+    allowedFieldsForAudience,
+    stripProfileFieldsForAudience,
+    buildAudienceProfileSlice,
     syncFriendDigitalProjection,
+    fetchFriendDigitalProjection,
     fetchFriendDigitalLayout,
     blockHasContent,
     createCustomDigitalBlock,
