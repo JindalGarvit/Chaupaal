@@ -27,6 +27,8 @@
     'profileMedia',
     'sectionOrder',
     'customSections',
+    'digitalLayout',
+    'profileTheme',
     'openToMeet',
     'createdAt',
     'lookingFor',
@@ -62,10 +64,24 @@
       'profileMedia',
       'sectionOrder',
       'customSections',
+      'digitalLayout',
+      'profileTheme',
     ];
     allow.forEach((k) => {
       if (profile[k] != null) out[k] = profile[k];
     });
+    // Phase 3: never project private / friends-only Digital blocks to users_public
+    if (out.digitalLayout && typeof DigitalLayout?.publicDigitalLayoutProjection === 'function') {
+      out.digitalLayout = DigitalLayout.publicDigitalLayoutProjection({ ...profile, digitalLayout: out.digitalLayout });
+    } else if (out.digitalLayout?.blocks) {
+      out.digitalLayout = {
+        ...out.digitalLayout,
+        blocks: (out.digitalLayout.blocks || []).filter((b) => b && b.visible !== false && b.privacy === 'public'),
+      };
+    }
+    if (Array.isArray(out.customSections)) {
+      out.customSections = out.customSections.filter((c) => c && c.privacy !== 'private' && c.privacy !== 'friends');
+    }
     return Object.keys(out).length ? out : null;
   }
 
@@ -91,6 +107,33 @@
     if (!proj.profileType) {
       proj.profileType = u.profile?.profileType || 'personal';
     }
+    // Public digital layout: public blocks only
+    const layoutSrc = u.digitalLayout || u.profile?.digitalLayout;
+    if (layoutSrc) {
+      if (typeof DigitalLayout?.publicDigitalLayoutProjection === 'function') {
+        proj.digitalLayout = DigitalLayout.publicDigitalLayoutProjection({
+          ...u,
+          ...u.profile,
+          digitalLayout: layoutSrc,
+        });
+      } else {
+        proj.digitalLayout = {
+          version: layoutSrc.version || 1,
+          blocks: (layoutSrc.blocks || []).filter((b) => b && b.visible !== false && (!b.privacy || b.privacy === 'public')),
+        };
+      }
+    }
+    if (u.profileTheme || u.profile?.profileTheme) {
+      const th = u.profileTheme || u.profile.profileTheme;
+      proj.profileTheme = {
+        paletteId: th.paletteId,
+        accent: th.accent,
+        surface: th.surface,
+        glow: th.glow,
+        frameId: th.frameId,
+        ringId: th.ringId,
+      };
+    }
     return proj;
   }
 
@@ -98,11 +141,21 @@
     if (!db || !uid) return null;
     const me = typeof currentUser !== 'undefined' ? currentUser?.uid : null;
     if (me && me !== uid) return null; // only owner may write
-    const proj = buildPublicProjection(uid, raw || {});
+    const src = raw || {};
+    const proj = buildPublicProjection(uid, src);
     try {
       await db.collection('users_public').doc(uid).set(proj, { merge: true });
     } catch (e) {
       console.warn('[users-public] sync', e?.message || e);
+    }
+    if (typeof DigitalLayout?.syncFriendDigitalProjection === 'function') {
+      try {
+        await DigitalLayout.syncFriendDigitalProjection(uid, {
+          ...src,
+          ...src.profile,
+          digitalLayout: src.digitalLayout || src.profile?.digitalLayout,
+        });
+      } catch (e) {}
     }
     return proj;
   }

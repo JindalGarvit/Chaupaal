@@ -412,7 +412,7 @@ function createDuniyaPost(post, {variant='list'}={}){
   const hideLikes=post.hideLikeCount&&!own;
   el.innerHTML=`
     ${pendingInvite?`<div class="duniya-collab-banner" data-collab-banner><span>Collaborate on this post?</span><button type="button" data-collab="accept">Accept</button><button type="button" data-collab="decline">Decline</button></div>`:''}
-    <div class="duniya-post-header">
+    <div class="duniya-post-header${post.user?.profileTheme?.accent ? ' cp-author-accent dp-themed' : ''}"${post.user?.profileTheme?.accent ? ` style="--dp-accent:${duniyaEsc(post.user.profileTheme.accent)}"` : ''}>
       <div class="duniya-post-avatar">${typeof duniyaUserAvatarHtml==='function'?duniyaUserAvatarHtml(post.user):`<span>${duniyaEsc(post.user.avatar||'👤')}</span>`}</div>
       <div class="duniya-post-user">
         <div class="duniya-post-name">${headerName}</div>

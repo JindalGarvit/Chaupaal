@@ -68,14 +68,7 @@
     push('Instagram', p.instagram);
     push('Website', p.website);
 
-    const ice = Array.isArray(p.icebreakers) ? p.icebreakers : [];
-    ice.slice(0, 3).forEach((a) => {
-      const prompt =
-        typeof getIcebreakerPromptById === 'function' ? getIcebreakerPromptById(a.promptId) : null;
-      if (a?.answer) {
-        push(prompt ? `Icebreaker` : 'Conversation starter', a.answer);
-      }
-    });
+    // Icebreakers are chat/discovery openers — not Digital profile sections (Q7C)
 
     return { ...base, fields };
   }

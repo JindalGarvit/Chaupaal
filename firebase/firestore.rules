@@ -331,6 +331,12 @@ service cloud.firestore {
         && !request.resource.data.keys().hasAny(['email', 'phone', 'phoneNumber', 'dob', 'dateOfBirth'])
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['relationshipCounts']);
       allow delete: if isOwner(userId);
+
+      // Friends-only Digital blocks (public+friends, never private). Strangers cannot read.
+      match /friend_projection/{docId} {
+        allow read: if isOwner(userId) || isFriend(userId);
+        allow create, update, delete: if isOwner(userId);
+      }
     }
 
     // ===================== USERNAMES =====================

@@ -314,7 +314,7 @@ function renderDiscoverySection(profiles){
           typeof resolveIcebreakersFromUser==='function'?resolveIcebreakersFromUser(user):(user.icebreakers||[])
         ));
         return `
-        <div class="discovery-card" data-uid="${user.uid}">
+        <div class="discovery-card${user.profileTheme?.accent ? ' dp-themed cp-author-accent' : ''}" data-uid="${user.uid}"${user.profileTheme?.accent ? ` style="--dp-accent:${user.profileTheme.accent}"` : ''}>
           <div class="discovery-card-top">
             <div class="discovery-avatar-wrap">
               <div class="discovery-avatar">${user.photoURL?`<img src="${user.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`:user.avatar||'👤'}</div>

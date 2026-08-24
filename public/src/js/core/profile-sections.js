@@ -113,9 +113,13 @@
     const order = docData.profile?.sectionOrder || docData.sectionOrder;
     const customs = docData.profile?.customSections || docData.customSections;
     const tabs = docData.profile?.tabOrder || docData.tabOrder;
+    const layout = docData.profile?.digitalLayout || docData.digitalLayout;
+    const theme = docData.profile?.profileTheme || docData.profileTheme;
     if (Array.isArray(order)) digitalProfile.sectionOrder = order;
     if (Array.isArray(customs)) digitalProfile.customSections = customs;
     if (Array.isArray(tabs)) digitalProfile.tabOrder = tabs;
+    if (layout) digitalProfile.digitalLayout = layout;
+    if (theme) digitalProfile.profileTheme = theme;
     try {
       localStorage.setItem('chaupaal_digital_profile', JSON.stringify(digitalProfile));
     } catch (e) {}

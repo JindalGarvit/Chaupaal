@@ -210,6 +210,8 @@
         ...(u.profile || {}),
         sectionOrder: u.profile?.sectionOrder || u.sectionOrder,
         customSections: u.profile?.customSections || u.customSections,
+        digitalLayout: u.profile?.digitalLayout || u.digitalLayout,
+        profileTheme: u.profile?.profileTheme || u.profileTheme,
         tabOrder: u.profile?.tabOrder || u.tabOrder,
         profileMedia: media,
         bio: dp.bio,

@@ -177,6 +177,10 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
     });
   });
 
+  if (typeof enrichUsersWithProfileType === 'function') {
+    await enrichUsersWithProfileType(matches);
+  }
+
   matches.forEach((m) => {
     const user = {
       uid: m.uid,
@@ -189,6 +193,7 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
       interests: m.interests || [],
       icebreakers: m.icebreakers || [],
       profileType: m.profileType || 'personal',
+      profileTheme: m.profileTheme || null,
       avatar: 'ðŸ‘¤',
     };
     const reason = m.explain || 'Matched on open profile';
@@ -201,8 +206,9 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
       || `Hey ${String(user.name||'').split(' ')[0] || 'there'} — found you while looking for ${plan.searchIntent && plan.searchIntent !== 'any' ? plan.searchIntent : 'people'} on Chaupaal`;
 
     const card = document.createElement('div');
-    card.className = 'peepal-ai-result-card';
+    card.className = 'peepal-ai-result-card' + (user.profileTheme?.accent ? ' dp-themed cp-author-accent' : '');
     card.dataset.uid = user.uid;
+    if (user.profileTheme?.accent) card.style.setProperty('--dp-accent', user.profileTheme.accent);
     card.innerHTML = `
       <div style="display:flex;align-items:center;gap:10px;">
         <div style="width:50px;height:50px;border-radius:var(--r-card,20px);background:var(--line);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;overflow:hidden;">

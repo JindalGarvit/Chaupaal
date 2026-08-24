@@ -7,7 +7,7 @@
   'use strict';
 
   const CORE_TABS = [
-    { id: 'digital', label: 'Profile', builtin: true },
+    { id: 'digital', label: 'Digital', builtin: true },
     { id: 'duniya', label: 'Duniya', builtin: true },
     { id: 'peepal', label: 'Peepal', builtin: true },
   ];
@@ -16,7 +16,7 @@
     if (!tab) return '';
     if (tab.id === 'digital' && typeof t === 'function') {
       try {
-        const v = t('profile_tab_digital', 'Profile');
+        const v = t('profile_tab_digital', 'Digital');
         if (v && v !== 'profile_tab_digital') return v;
       } catch (e) {}
     }
@@ -128,20 +128,15 @@
   }
 
   function promptCards(dp) {
+    // Prompts only on Digital (Q7C) — icebreakers stay chat/discovery
     const prompts = Array.isArray(dp.prompts) ? dp.prompts.filter((p) => p?.answer) : [];
-    const ice = Array.isArray(dp.icebreakers) ? dp.icebreakers.filter((a) => a?.answer) : [];
-    const cards = [];
-    prompts.slice(0, 3).forEach((p) => {
-      cards.push(`<div class="cp-prompt-card"><span>${esc(p.prompt || p.question || 'Prompt')}</span><p>${esc(p.answer)}</p></div>`);
-    });
-    ice.slice(0, 2).forEach((a) => {
-      const q =
-        a.customQuestion ||
-        (typeof getIcebreakerPromptById === 'function' ? getIcebreakerPromptById(a.promptId)?.text : null) ||
-        'Icebreaker';
-      cards.push(`<div class="cp-prompt-card"><span>${esc(q)}</span><p>${esc(a.answer)}</p></div>`);
-    });
-    return cards.join('');
+    return prompts
+      .slice(0, 6)
+      .map(
+        (p) =>
+          `<div class="cp-prompt-card"><span>${esc(p.prompt || p.question || 'Prompt')}</span><p>${esc(p.answer)}</p></div>`
+      )
+      .join('');
   }
 
   function aboutRows(dp, view) {
@@ -165,59 +160,336 @@
     return rows.join('');
   }
 
-  function renderDigitalPane(dp, { isOwner, view, editable } = {}) {
-    const bio = String(dp.bio || '').trim();
-    const bioHtml = bio
-      ? typeof linkifyText === 'function'
-        ? linkifyText(bio)
-        : esc(bio)
-      : `<div class="public-profile-posts-empty">${isOwner ? 'Add a bio — this is your dating-style about' : 'No bio yet'}</div>`;
-    const interests = [...new Set([...(dp.interests || []), ...(Array.isArray(dp.hobbies) ? dp.hobbies : [])])].filter(Boolean);
+  function customBlockBody(block) {
+    if (block.type === 'emoji') {
+      return `<div class="dp-mood-card">${esc(block.emoji || '✨')}<p>${esc(block.body || block.label || 'Mood')}</p></div>`;
+    }
+    if (block.type === 'quote') {
+      const q = block.quote || block.body || '';
+      return q
+        ? `<blockquote class="dp-quote-card">“${esc(q)}”</blockquote>`
+        : `<div class="public-profile-posts-empty">Add a quote</div>`;
+    }
+    if (block.type === 'links' && Array.isArray(block.items) && block.items.length) {
+      return `<div class="profile-links-list">${block.items
+        .slice(0, 8)
+        .map((l) => `<a class="profile-link-chip" href="${esc(l.url || '#')}" data-external-link="1">${esc(l.label || 'Link')}</a>`)
+        .join('')}</div>`;
+    }
+    if (block.body) {
+      return `<div class="profile-flexible-block">${
+        typeof linkifyText === 'function' ? linkifyText(block.body) : esc(block.body)
+      }</div>`;
+    }
+    if (block.mediaUrl) {
+      return `<div class="dp-featured-media"><img src="${esc(block.mediaUrl)}" alt=""></div>`;
+    }
+    return `<div class="public-profile-posts-empty">Empty block</div>`;
+  }
+
+  function renderDigitalPane(dp, { isOwner, view, editable, isFriend } = {}) {
+    const DL = typeof DigitalLayout !== 'undefined' ? DigitalLayout : null;
+    const theme = DL?.getProfileTheme?.(dp) || {};
+    const blocks = DL?.visibleDigitalBlocks
+      ? DL.visibleDigitalBlocks(dp, { isOwner, editMode: editable, isFriend })
+      : [];
+    const interests = [...new Set([...(dp.interests || []), ...(Array.isArray(dp.hobbies) ? dp.hobbies : [])])].filter(
+      Boolean
+    );
     const lifestyle = [dp.diet, dp.drinking, dp.smoking, dp.fitness].filter(Boolean);
     const prompts = promptCards(dp);
     const about = aboutRows(dp, view);
-    return `
-      <div class="cp-digital-pane">
+
+    function builtinInner(id) {
+      if (id === 'bio') {
+        const bio = String(dp.bio || '').trim();
+        return bio
+          ? typeof linkifyText === 'function'
+            ? linkifyText(bio)
+            : esc(bio)
+          : `<div class="public-profile-posts-empty">${isOwner ? 'Add a bio — build your Base' : 'No bio yet'}</div>`;
+      }
+      if (id === 'prompts') {
+        return prompts
+          ? `<div class="cp-prompt-stack">${prompts}</div>`
+          : isOwner
+            ? `<div class="public-profile-posts-empty">Add prompts · Chat openers live in discovery/chat</div>`
+            : '';
+      }
+      if (id === 'about') return about ? `<dl class="cp-about-dl">${about}</dl>` : '';
+      if (id === 'interests') return interests.length ? chipRow(interests) : '';
+      if (id === 'lifestyle') return lifestyle.length ? chipRow(lifestyle) : '';
+      if (id === 'media') return `<div data-lazy-media></div>`;
+      if (id === 'links') return `<div data-lazy-links></div>`;
+      if (id === 'stats') return `<div data-lazy-stats></div>`;
+      if (id === 'pinned') return `<div data-lazy-pinned></div>`;
+      if (id === 'dangal') return `<div class="dangal-profile-host" data-lazy-dangal></div>`;
+      return '';
+    }
+
+    const useLayout = blocks.length > 0;
+    const sectionsHtml = useLayout
+      ? blocks
+          .map((b) => {
+            const accent = b.accent || theme.accent || 'var(--red)';
+            const isBuiltin = b.type === 'builtin' || (DL?.BUILTIN_BLOCKS || []).some((x) => x.id === b.id);
+            const inner = isBuiltin ? builtinInner(b.id) : customBlockBody(b);
+            if (!editable && !inner) return '';
+            const hiddenMark = b.visible === false ? ' is-owner-hidden' : '';
+            const editChrome = editable
+              ? `<div class="dp-block-chrome">
+                  <button type="button" class="dp-drag-handle" data-dp-drag="${esc(b.id)}" title="Drag to reorder" aria-label="Reorder">⠿</button>
+                  <span class="dp-block-label">${esc(b.label || b.id)}</span>
+                  <button type="button" class="dp-chip" data-dp-hide="${esc(b.id)}">${b.visible === false ? 'Unhide' : 'Hide'}</button>
+                  <button type="button" class="dp-chip" data-dp-privacy="${esc(b.id)}" data-privacy="${esc(b.privacy || 'public')}">${esc(b.privacy || 'public')}</button>
+                  ${
+                    isBuiltin
+                      ? ''
+                      : `<button type="button" class="dp-chip dp-chip--danger" data-dp-remove="${esc(b.id)}">Remove</button>`
+                  }
+                </div>`
+              : `<h3 class="cp-digital-h">${esc(b.label || b.id)}</h3>`;
+            return `<section class="cp-digital-block dp-arcade-block${hiddenMark}" data-digital-block="${esc(b.id)}" data-block-id="${esc(b.id)}" style="--block-accent:${accent}">
+              ${editChrome}
+              <div class="dp-block-body">${inner || `<div class="public-profile-posts-empty">Empty — fill or hide</div>`}</div>
+            </section>`;
+          })
+          .join('')
+      : null;
+
+    // Fallback if DigitalLayout missing
+    if (!useLayout) {
+      return `
+      <div class="cp-digital-pane" data-dp-root>
         <section class="cp-digital-block" data-digital-block="bio">
           <h3 class="cp-digital-h">About</h3>
-          <div class="profile-flexible-block">${bioHtml}</div>
+          <div class="profile-flexible-block">${builtinInner('bio')}</div>
         </section>
-        ${
-          prompts
-            ? `<section class="cp-digital-block" data-digital-block="prompts"><h3 class="cp-digital-h">Prompts</h3><div class="cp-prompt-stack">${prompts}</div></section>`
-            : isOwner
-              ? `<section class="cp-digital-block"><h3 class="cp-digital-h">Prompts</h3><div class="public-profile-posts-empty">Add prompts in Edit · Personal</div></section>`
-              : ''
-        }
-        ${
-          about
-            ? `<section class="cp-digital-block is-collapsible" data-digital-block="about">
-                <button type="button" class="cp-digital-h cp-collapse-btn" data-collapse>Essentials <span>▾</span></button>
-                <dl class="cp-about-dl">${about}</dl>
-              </section>`
-            : ''
-        }
-        ${
-          interests.length
-            ? `<section class="cp-digital-block" data-digital-block="interests"><h3 class="cp-digital-h">Interests</h3>${chipRow(interests)}</section>`
-            : ''
-        }
-        ${
-          lifestyle.length
-            ? `<section class="cp-digital-block is-collapsible" data-digital-block="lifestyle">
-                <button type="button" class="cp-digital-h cp-collapse-btn" data-collapse>Lifestyle <span>▾</span></button>
-                ${chipRow(lifestyle)}
-              </section>`
-            : ''
-        }
-        <section class="cp-digital-block" data-digital-block="media" data-lazy-media></section>
-        <section class="cp-digital-block" data-digital-block="links" data-lazy-links></section>
-        <section class="cp-digital-block" data-digital-block="dangal" data-lazy-dangal>
-          <h3 class="cp-digital-h">Dangal</h3>
-          <div class="dangal-profile-host"></div>
-        </section>
-        ${editable ? `<p class="cp-digital-edit-hint">Edit fields below (or switch to Edit my profile) — values land in these same slots.</p>` : ''}
       </div>`;
+    }
+
+    return `
+      <div class="cp-digital-pane dp-arcade-pane" data-dp-root data-dp-frame="${esc(theme.frameId || 'plain')}">
+        ${
+          editable
+            ? `<div class="dp-edit-toolbar">
+                <button type="button" class="btn btn--primary dp-add-block-btn" data-dp-add>＋ Add section</button>
+                <button type="button" class="btn" data-dp-theme>Base palette</button>
+                <span class="dp-edit-hint">Drag ⠿ · Hide · Privacy · Arcade juice on save</span>
+              </div>`
+            : ''
+        }
+        <div class="dp-block-stack" data-dp-stack>${sectionsHtml}</div>
+      </div>`;
+  }
+
+  function openDigitalBlockCatalog(onPicked) {
+    document.getElementById('dpBlockCatalog')?.remove();
+    const catalog = (typeof DigitalLayout !== 'undefined' && DigitalLayout.BLOCK_CATALOG) || [];
+    const sheet = document.createElement('div');
+    sheet.id = 'dpBlockCatalog';
+    sheet.className = 'archive-overlay dp-catalog-sheet';
+    sheet.dataset.navManaged = '1';
+    sheet.innerHTML = `
+      <div class="archive-header">
+        ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-dismiss' }) : '<button type="button" data-dismiss class="cp-back-btn">←</button>'}
+        <div style="flex:1"><strong>Add to your Base</strong></div>
+      </div>
+      <div class="dp-catalog-grid">
+        ${catalog
+          .map(
+            (c) =>
+              `<button type="button" class="dp-catalog-card" data-type="${esc(c.type)}" style="--block-accent:${esc(c.accent)}">
+                <span class="dp-catalog-emoji">${c.emoji || '➕'}</span>
+                <strong>${esc(c.label)}</strong>
+                <small>${esc(c.hint || '')}</small>
+              </button>`
+          )
+          .join('')}
+      </div>`;
+    document.querySelector('.device')?.appendChild(sheet);
+    const close = () => {
+      if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
+      sheet.remove();
+    };
+    if (typeof pushNavLayer === 'function') pushNavLayer(sheet, close);
+    sheet.querySelector('[data-dismiss]')?.addEventListener('click', close);
+    sheet.querySelectorAll('[data-type]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const type = btn.dataset.type;
+        const spec = catalog.find((c) => c.type === type) || { type, label: type };
+        close();
+        if (typeof DigitalLayout?.createCustomDigitalBlock === 'function') {
+          const block = await DigitalLayout.createCustomDigitalBlock(spec);
+          if (typeof onPicked === 'function') onPicked(block);
+        }
+      });
+    });
+  }
+
+  function openBasePalettePicker(onDone) {
+    if (typeof DigitalLayout === 'undefined') return;
+    document.getElementById('dpPalettePicker')?.remove();
+    const DL = DigitalLayout;
+    const theme = DL.getProfileTheme();
+    let pct = 0;
+    try {
+      if (typeof calcProfileCompletion === 'function') {
+        const c = calcProfileCompletion();
+        pct = Number(c?.pct || c || 0);
+      }
+    } catch (e) {}
+    const unlocked = new Set(DL.unlockCosmeticIds(pct).concat(theme.unlocked || []));
+    const sheet = document.createElement('div');
+    sheet.id = 'dpPalettePicker';
+    sheet.className = 'archive-overlay dp-catalog-sheet';
+    sheet.dataset.navManaged = '1';
+    sheet.innerHTML = `
+      <div class="archive-header">
+        ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-dismiss' }) : '<button type="button" data-dismiss class="cp-back-btn">←</button>'}
+        <div style="flex:1"><strong>Base palette</strong></div>
+      </div>
+      <div class="dp-palette-section"><h4>Colors</h4>
+        <div class="dp-palette-row">${DL.PALETTES.map(
+          (p) =>
+            `<button type="button" class="dp-swatch${unlocked.has(p.id) ? '' : ' is-locked'}${theme.paletteId === p.id ? ' is-active' : ''}" data-palette="${esc(p.id)}" style="--sw:${esc(p.accent)}" ${unlocked.has(p.id) ? '' : 'disabled'} title="${unlocked.has(p.id) ? esc(p.name) : `Reach ${p.unlockAt}% to unlock`}">
+              <span></span>${esc(p.name)}${unlocked.has(p.id) ? '' : ` · ${p.unlockAt}%`}
+            </button>`
+        ).join('')}</div>
+      </div>
+      <div class="dp-palette-section"><h4>Frames</h4>
+        <div class="dp-palette-row">${DL.FRAMES.map(
+          (f) =>
+            `<button type="button" class="dp-swatch${unlocked.has(f.id) ? '' : ' is-locked'}${theme.frameId === f.id ? ' is-active' : ''}" data-frame="${esc(f.id)}" ${unlocked.has(f.id) ? '' : 'disabled'}>${esc(f.name)}${unlocked.has(f.id) ? '' : ` · ${f.unlockAt}%`}</button>`
+        ).join('')}</div>
+      </div>
+      <div class="dp-palette-section"><h4>Highlight rings</h4>
+        <div class="dp-palette-row">${DL.RINGS.map(
+          (r) =>
+            `<button type="button" class="dp-swatch${unlocked.has(r.id) ? '' : ' is-locked'}${theme.ringId === r.id ? ' is-active' : ''}" data-ring="${esc(r.id)}" ${unlocked.has(r.id) ? '' : 'disabled'}>${esc(r.name)}${unlocked.has(r.id) ? '' : ` · ${r.unlockAt}%`}</button>`
+        ).join('')}</div>
+      </div>`;
+    document.querySelector('.device')?.appendChild(sheet);
+    const close = () => {
+      if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
+      sheet.remove();
+    };
+    if (typeof pushNavLayer === 'function') pushNavLayer(sheet, close);
+    sheet.querySelector('[data-dismiss]')?.addEventListener('click', close);
+    sheet.querySelectorAll('[data-palette]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const pal = DL.PALETTES.find((p) => p.id === btn.dataset.palette);
+        if (!pal) return;
+        const next = await DL.persistProfileTheme({
+          paletteId: pal.id,
+          accent: pal.accent,
+          surface: pal.surface,
+          glow: pal.glow,
+          unlocked: [...unlocked],
+        });
+        DL.arcadeBurst(sheet);
+        if (typeof showToast === 'function') showToast(`Base: ${pal.name}`);
+        close();
+        if (typeof onDone === 'function') onDone(next);
+      });
+    });
+    sheet.querySelectorAll('[data-frame]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const next = await DL.persistProfileTheme({ frameId: btn.dataset.frame, unlocked: [...unlocked] });
+        close();
+        if (typeof onDone === 'function') onDone(next);
+      });
+    });
+    sheet.querySelectorAll('[data-ring]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const next = await DL.persistProfileTheme({ ringId: btn.dataset.ring, unlocked: [...unlocked] });
+        DL.arcadeBurst(sheet);
+        close();
+        if (typeof onDone === 'function') onDone(next);
+      });
+    });
+  }
+
+  function wireDigitalPaneControls(pane, { profile, editable, reload } = {}) {
+    if (!pane || !editable || typeof DigitalLayout === 'undefined') return;
+    const root = pane.querySelector('[data-dp-root]') || pane;
+    DigitalLayout.applyProfileThemeToRoot(root, DigitalLayout.getProfileTheme(profile));
+    const hl = pane.closest('[data-profile-shell]')?.querySelector('[data-profile-highlights]');
+    if (hl) DigitalLayout.applyProfileThemeToRoot(hl, DigitalLayout.getProfileTheme(profile));
+
+    pane.querySelector('[data-dp-add]')?.addEventListener('click', () => {
+      openDigitalBlockCatalog(() => {
+        if (typeof reload === 'function') reload();
+      });
+    });
+    pane.querySelector('[data-dp-theme]')?.addEventListener('click', () => {
+      openBasePalettePicker(() => {
+        if (typeof reload === 'function') reload();
+      });
+    });
+
+    pane.querySelectorAll('[data-dp-hide]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.dpHide;
+        const layout = DigitalLayout.getDigitalLayout(profile);
+        const block = layout.blocks.find((b) => b.id === id);
+        await DigitalLayout.updateDigitalBlock(id, { visible: block?.visible === false });
+        DigitalLayout.arcadeBurst(pane);
+        if (typeof reload === 'function') reload();
+      });
+    });
+    pane.querySelectorAll('[data-dp-privacy]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const cur = btn.dataset.privacy || 'public';
+        const next = cur === 'public' ? 'friends' : cur === 'friends' ? 'private' : 'public';
+        await DigitalLayout.updateDigitalBlock(btn.dataset.dpPrivacy, { privacy: next });
+        DigitalLayout.arcadeBurst(pane);
+        if (typeof reload === 'function') reload();
+      });
+    });
+    pane.querySelectorAll('[data-dp-remove]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        await DigitalLayout.removeDigitalBlock(btn.dataset.dpRemove);
+        DigitalLayout.arcadeBurst(pane);
+        if (typeof reload === 'function') reload();
+      });
+    });
+
+    const stack = pane.querySelector('[data-dp-stack]');
+    if (stack && !stack.dataset.reorderWired) {
+      stack.dataset.reorderWired = '1';
+      let dragId = null;
+      stack.querySelectorAll('[data-dp-drag]').forEach((handle) => {
+        handle.addEventListener('pointerdown', (e) => {
+          if (e.button != null && e.button !== 0) return;
+          dragId = handle.dataset.dpDrag;
+          handle.closest('.cp-digital-block')?.classList.add('is-dragging');
+          try {
+            handle.setPointerCapture?.(e.pointerId);
+          } catch (err) {}
+        });
+        handle.addEventListener('pointerup', async () => {
+          stack.querySelectorAll('.is-dragging').forEach((el) => el.classList.remove('is-dragging'));
+          if (!dragId) return;
+          const ids = [...stack.querySelectorAll('[data-block-id]')].map((el) => el.dataset.blockId);
+          dragId = null;
+          await DigitalLayout.reorderDigitalBlocks(ids);
+          if (typeof showToast === 'function') showToast('Base order saved');
+        });
+        handle.addEventListener('pointermove', (e) => {
+          if (!dragId) return;
+          const el = document.elementFromPoint(e.clientX, e.clientY);
+          const target = el?.closest?.('[data-block-id]');
+          const dragging = stack.querySelector(
+            `[data-block-id="${(DigitalLayout.cssEscapeId || ((x) => x))(dragId)}"]`
+          );
+          if (!target || !dragging || target === dragging) return;
+          const rect = target.getBoundingClientRect();
+          if (e.clientY < rect.top + rect.height / 2) stack.insertBefore(dragging, target);
+          else stack.insertBefore(dragging, target.nextSibling);
+        });
+      });
+    }
   }
 
   async function fillPostGrid(bodyEl, col, profileUid, { isOwner, includeArchived, cols } = {}) {
@@ -472,25 +744,28 @@
     sheet.innerHTML = `
       <div class="archive-header">
         ${typeof backButtonHtml==='function'?backButtonHtml({ label: 'Skip', attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="Skip">←</button>'}
-        <div style="flex:1"><strong>Finish your Profile</strong></div>
+        <div style="flex:1"><strong>Build your Base</strong></div>
         <button type="button" class="btn" data-deepen-skip style="font-size:12px;">Skip</button>
       </div>
-      <div class="digital-canvas-deepen-body">
-        <div class="auth-profile-canvas digital-canvas-deepen-preview">
+      <div class="digital-canvas-deepen-body dp-deepen-arcade">
+        <div class="dp-mission-chips" aria-hidden="true">
+          <span>① Place your photo</span><span>② Add a spark</span><span>③ Drop your city</span>
+        </div>
+        <div class="auth-profile-canvas digital-canvas-deepen-preview dp-arcade-block" style="--block-accent:var(--dp-accent,var(--red))">
           <div class="auth-profile-canvas-hero">
             <div class="auth-profile-canvas-avatar" aria-hidden="true">🪑</div>
             <div class="auth-canvas-live-name">${esc(dp.displayName || 'Your name')}</div>
             <div class="auth-canvas-live-handle">@${esc((dp.username || 'username').replace(/^@/, ''))}</div>
             <p class="digital-canvas-live-bio" data-live-bio>${esc(dp.bio || 'Your bio will show here')}</p>
-            <p class="digital-canvas-live-city" data-live-city>${esc(dp.currentCity ? `📍 ${dp.currentCity}` : 'City on your Profile tab')}</p>
+            <p class="digital-canvas-live-city" data-live-city>${esc(dp.currentCity ? `📍 ${dp.currentCity}` : 'City on your Digital tab')}</p>
           </div>
-          <label class="story-editor-field">Bio
+          <label class="story-editor-field">Bio · spark
             <textarea data-deepen-bio maxlength="280" rows="3" placeholder="A line or two about you">${escAttr(dp.bio || '')}</textarea>
           </label>
-          <label class="story-editor-field">City
+          <label class="story-editor-field">City · mission
             <input type="text" data-deepen-city maxlength="60" placeholder="e.g. Mumbai" value="${escAttr(dp.currentCity || '')}">
           </label>
-          <label class="story-editor-field">Prompt
+          <label class="story-editor-field">Prompt · Digital only
             <select data-deepen-prompt-id>
               ${pick
                 .map(
@@ -501,15 +776,18 @@
             </select>
           </label>
           <label class="story-editor-field">Your answer
-            <textarea data-deepen-prompt-ans maxlength="500" rows="2" placeholder="Free text — shows on your Profile">${escAttr(
+            <textarea data-deepen-prompt-ans maxlength="500" rows="2" placeholder="Shows on Digital — chat openers are separate">${escAttr(
               (Array.isArray(dp.prompts) && dp.prompts[0]?.answer) || ''
             )}</textarea>
           </label>
         </div>
-      <p class="digital-canvas-deepen-hint">Same slots as your Profile tab — save anytime from Profile.</p>
-        <button type="button" class="btn btn--primary btn--block" data-deepen-save>Save to Profile</button>
+      <p class="digital-canvas-deepen-hint">Same Digital stack you’ll edit later — arcade juice, not a form quiz.</p>
+        <button type="button" class="btn btn--primary btn--block" data-deepen-save>Save to Base</button>
       </div>`;
     document.querySelector('.device')?.appendChild(sheet);
+    if (typeof DigitalLayout?.applyProfileThemeToRoot === 'function') {
+      DigitalLayout.applyProfileThemeToRoot(sheet, DigitalLayout.getProfileTheme(dp));
+    }
 
     const markDone = () => {
       try {
@@ -580,7 +858,8 @@
         ]);
       }
       markDone();
-      if (typeof showToast === 'function') showToast('Profile updated');
+      if (typeof DigitalLayout?.arcadeBurst === 'function') DigitalLayout.arcadeBurst(sheet);
+      if (typeof showToast === 'function') showToast('Base updated');
       close();
     });
   }
@@ -602,13 +881,33 @@
     const isOwner = opts.isOwner !== false && profileUid === currentUser?.uid;
     const editable = !!opts.editable && isOwner;
     const includeArchived = !!opts.includeArchived && isOwner;
-    const profile = opts.profile || (typeof digitalProfile !== 'undefined' ? digitalProfile : {});
+    let profile = opts.profile || (typeof digitalProfile !== 'undefined' ? digitalProfile : {});
     const view = opts.view || null;
+    let isFriend = !!opts.isFriend;
+    if (!isOwner && !isFriend && profileUid && typeof hydrateRelationships === 'function') {
+      try {
+        const st = await hydrateRelationships([profileUid]);
+        isFriend = !!(st?.[profileUid]?.friend || (typeof relationshipState === 'function' && relationshipState(profileUid)?.friend));
+      } catch (e) {}
+    }
+    // Friends get public+friends Digital blocks via friend_projection (strangers cannot read).
+    if (!isOwner && isFriend && typeof DigitalLayout?.fetchFriendDigitalLayout === 'function') {
+      try {
+        const friendLayout = await DigitalLayout.fetchFriendDigitalLayout(profileUid);
+        if (friendLayout?.blocks?.length) {
+          profile = { ...profile, digitalLayout: friendLayout };
+        }
+      } catch (e) {}
+    }
     const tabs = visibleTabs(profile, { isOwner, editMode: editable });
     const initial = opts.initialTab || 'digital';
 
+    if (typeof DigitalLayout?.applyProfileThemeToRoot === 'function') {
+      DigitalLayout.applyProfileThemeToRoot(host, DigitalLayout.getProfileTheme(profile));
+    }
+
     host.innerHTML = `
-      <div class="cp-profile-shell" data-profile-shell>
+      <div class="cp-profile-shell dp-themed" data-profile-shell>
         <div class="cp-profile-highlights" data-profile-highlights></div>
         <div class="cp-profile-tabs" role="tablist" data-profile-tabs>
           ${tabs
@@ -636,6 +935,10 @@
         editable,
       });
     }
+    const hlRoot = host.querySelector('[data-profile-highlights]');
+    if (hlRoot && typeof DigitalLayout?.applyProfileThemeToRoot === 'function') {
+      DigitalLayout.applyProfileThemeToRoot(hlRoot, DigitalLayout.getProfileTheme(profile));
+    }
 
     const loaded = new Set();
     async function activateTab(tabId) {
@@ -657,28 +960,35 @@
       if (!tab) return;
 
       if (tabId === 'digital') {
-        pane.innerHTML = renderDigitalPane(profile, { isOwner, view, editable });
-        pane.querySelectorAll('[data-collapse]').forEach((btn) => {
-          btn.addEventListener('click', () => {
-            btn.closest('.cp-digital-block')?.classList.toggle('is-collapsed');
-          });
+        const freshProfile =
+          isOwner && typeof digitalProfile !== 'undefined' ? digitalProfile : profile;
+        pane.innerHTML = renderDigitalPane(freshProfile, {
+          isOwner,
+          view,
+          editable,
+          isFriend,
         });
-        const mediaHost = pane.querySelector('[data-lazy-media]');
-        const linksHost = pane.querySelector('[data-lazy-links]');
-        if (mediaHost && typeof fillProfileSectionBody === 'function') {
-          await fillProfileSectionBody(mediaHost, 'media', profileUid, {
-            isOwner,
-            profileMedia: profile.profileMedia,
-            profile,
-          });
+        const reloadDigital = () => {
+          loaded.delete('digital');
+          activateTab('digital');
+        };
+        wireDigitalPaneControls(pane, {
+          profile: freshProfile,
+          editable,
+          reload: reloadDigital,
+        });
+        const fillOpts = { isOwner, profileMedia: freshProfile.profileMedia, profile: freshProfile };
+        if (typeof fillProfileSectionBody === 'function') {
+          const mediaHost = pane.querySelector('[data-lazy-media]');
+          if (mediaHost) await fillProfileSectionBody(mediaHost, 'media', profileUid, fillOpts);
+          const linksHost = pane.querySelector('[data-lazy-links]');
+          if (linksHost) await fillProfileSectionBody(linksHost, 'links', profileUid, fillOpts);
+          const statsHost = pane.querySelector('[data-lazy-stats]');
+          if (statsHost) await fillProfileSectionBody(statsHost, 'stats', profileUid, fillOpts);
+          const pinnedHost = pane.querySelector('[data-lazy-pinned]');
+          if (pinnedHost) await fillProfileSectionBody(pinnedHost, 'pinned', profileUid, fillOpts);
         }
-        if (linksHost && typeof fillProfileSectionBody === 'function') {
-          await fillProfileSectionBody(linksHost, 'links', profileUid, {
-            isOwner,
-            profile,
-          });
-        }
-        const dangalHost = pane.querySelector('[data-lazy-dangal] .dangal-profile-host');
+        const dangalHost = pane.querySelector('[data-lazy-dangal]');
         if (dangalHost && typeof renderDangalProfileSection === 'function') {
           await renderDangalProfileSection(profileUid, dangalHost);
         }

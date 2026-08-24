@@ -1,5 +1,5 @@
 /**
- * profileType enrich — backfill missing denormalized profileType on user blobs.
+ * profileType + Base palette enrich — backfill from users_public.
  * Batched Firestore reads + short in-memory TTL cache. Safe no-op if offline.
  *
  * TTL 5m / batch 10 (`in` query limit) — delete this module once old content ages out.
@@ -9,11 +9,24 @@
 
   const CACHE_TTL_MS = 5 * 60 * 1000;
   const BATCH = 10;
-  /** @type {Map<string, { type: string, expires: number }>} */
+  /** @type {Map<string, { type: string, theme: object|null, expires: number }>} */
   const cache = new Map();
 
   function normalizeType(v) {
     return String(v || 'personal').toLowerCase() === 'professional' ? 'professional' : 'personal';
+  }
+
+  function slimTheme(th) {
+    if (!th || typeof th !== 'object') return null;
+    if (!th.accent && !th.paletteId) return null;
+    return {
+      paletteId: th.paletteId || null,
+      accent: th.accent || null,
+      surface: th.surface || null,
+      glow: th.glow || null,
+      frameId: th.frameId || null,
+      ringId: th.ringId || null,
+    };
   }
 
   function ownProfileType() {
@@ -34,7 +47,12 @@
     return normalizeType(raw);
   }
 
-  function cachedProfileType(uid) {
+  function themeFromUserDoc(data) {
+    if (!data) return null;
+    return slimTheme(data.profileTheme || data.profile?.profileTheme);
+  }
+
+  function cachedEntry(uid) {
     if (!uid) return null;
     const hit = cache.get(uid);
     if (!hit) return null;
@@ -42,12 +60,21 @@
       cache.delete(uid);
       return null;
     }
-    return hit.type;
+    return hit;
   }
 
-  function putCache(uid, type) {
+  function cachedProfileType(uid) {
+    return cachedEntry(uid)?.type || null;
+  }
+
+  function putCache(uid, type, theme) {
     if (!uid) return;
-    cache.set(uid, { type: normalizeType(type), expires: Date.now() + CACHE_TTL_MS });
+    const prev = cache.get(uid);
+    cache.set(uid, {
+      type: normalizeType(type || prev?.type || 'personal'),
+      theme: theme !== undefined ? theme : prev?.theme ?? null,
+      expires: Date.now() + CACHE_TTL_MS,
+    });
   }
 
   function readTypeFromObject(obj) {
@@ -58,7 +85,7 @@
   }
 
   /**
-   * Apply profileType onto objects missing it. Mutates in place.
+   * Apply profileType (+ profileTheme when available) onto objects. Mutates in place.
    * @param {object[]} objects
    * @param {{ uidKey?: string }} [opts]
    */
@@ -71,19 +98,19 @@
     const seen = new Set();
 
     list.forEach((obj) => {
+      const uid = obj[uidKey] || obj.uid;
       const existing = readTypeFromObject(obj);
       if (existing) {
         obj.profileType = existing;
-        const uid = obj[uidKey] || obj.uid;
-        if (uid) putCache(uid, existing);
-        return;
+        if (uid) putCache(uid, existing, obj.profileTheme ? slimTheme(obj.profileTheme) : undefined);
       }
-      const uid = obj[uidKey] || obj.uid;
+      if (obj.profileTheme) return;
       if (!uid || uid === 'me' || uid === 'anon') return;
-      const cached = cachedProfileType(uid);
-      if (cached) {
-        obj.profileType = cached;
-        return;
+      const hit = cachedEntry(uid);
+      if (hit) {
+        if (!obj.profileType) obj.profileType = hit.type;
+        if (hit.theme && !obj.profileTheme) obj.profileTheme = hit.theme;
+        if (existing || hit.theme) return;
       }
       if (!seen.has(uid)) {
         seen.add(uid);
@@ -91,7 +118,15 @@
       }
     });
 
-    if (!missingUids.length || typeof db === 'undefined' || !db) return list;
+    if (!missingUids.length || typeof db === 'undefined' || !db) {
+      list.forEach((obj) => {
+        const uid = obj[uidKey] || obj.uid;
+        const hit = cachedEntry(uid);
+        if (hit?.theme && !obj.profileTheme) obj.profileTheme = hit.theme;
+        if (hit?.type && !obj.profileType) obj.profileType = hit.type;
+      });
+      return list;
+    }
 
     try {
       for (let i = 0; i < missingUids.length; i += BATCH) {
@@ -102,12 +137,14 @@
           .get();
         const found = new Set();
         snap.docs.forEach((doc) => {
-          const type = typeFromUserDoc(doc.data()) || 'personal';
-          putCache(doc.id, type);
+          const data = doc.data() || {};
+          const type = typeFromUserDoc(data) || 'personal';
+          const theme = themeFromUserDoc(data);
+          putCache(doc.id, type, theme);
           found.add(doc.id);
         });
         chunk.forEach((uid) => {
-          if (!found.has(uid)) putCache(uid, 'personal');
+          if (!found.has(uid)) putCache(uid, 'personal', null);
         });
       }
     } catch (e) {
@@ -116,10 +153,11 @@
     }
 
     list.forEach((obj) => {
-      if (readTypeFromObject(obj)) return;
       const uid = obj[uidKey] || obj.uid;
-      const cached = cachedProfileType(uid);
-      if (cached) obj.profileType = cached;
+      const hit = cachedEntry(uid);
+      if (!hit) return;
+      if (!readTypeFromObject(obj)) obj.profileType = hit.type;
+      if (hit.theme && !obj.profileTheme) obj.profileTheme = hit.theme;
     });
 
     return list;

@@ -201,33 +201,61 @@
     MILESTONES.forEach((m) => {
       if (pct >= m.pct && !unlocked.includes(m.id)) newly.push(m);
     });
-    if (!newly.length) return;
-    const ids = unlocked.concat(newly.map((m) => m.id));
-    saveUnlocked(ids);
-    if (db && currentUser) {
-      const titles = MILESTONES.filter((m) => ids.includes(m.id)).map((m) => m.title);
-      db.collection('users')
-        .doc(currentUser.uid)
-        .set({ profileBadges: titles, profileMilestoneIds: ids }, { merge: true })
-        .catch(() => {});
+    // Cosmetics tied to completion (Phase 2)
+    let cosmeticHint = '';
+    if (typeof DigitalLayout?.unlockCosmeticIds === 'function') {
+      const cosIds = DigitalLayout.unlockCosmeticIds(pct);
+      const theme = DigitalLayout.getProfileTheme();
+      const had = new Set(theme.unlocked || []);
+      const freshCos = cosIds.filter((id) => !had.has(id));
+      if (freshCos.length) {
+        DigitalLayout.persistProfileTheme({ unlocked: [...new Set([...(theme.unlocked || []), ...cosIds])] });
+        const names = {
+          mango: 'Mango palette',
+          neem: 'Neem palette',
+          indigo: 'Indigo palette',
+          neon: 'Neon Frame',
+          arcade: 'Arcade frame',
+          pulse: 'Pulse ring',
+          spark: 'Spark ring',
+        };
+        cosmeticHint = `Unlocked: ${names[freshCos[freshCos.length - 1]] || freshCos[freshCos.length - 1]}`;
+      }
     }
-    const top = newly.sort((a, b) => b.pct - a.pct)[0];
-    const big = top.pct >= 97;
-    if (!isQuietMotion() && typeof SoundLib !== 'undefined' && SoundLib.milestone) SoundLib.milestone();
-    if (big) bigBurst();
-    if (typeof haptic === 'function') haptic('success');
-    showRewardToast({
-      title: `Unlocked: ${top.title}`,
-      line: top.blurb,
-      milestoneTitle: `${playfulPct(top.pct)}% vibes`,
-      unlockHint:
-        top.pct >= 97
-          ? 'You show up complete — chrome tucks away.'
-          : top.pct >= 72
-            ? 'Stronger Peepal matchmaking from here.'
-            : 'Every field helps people find you.',
-      durationMs: 3800,
-    });
+    if (!newly.length && !cosmeticHint) return;
+    if (newly.length) {
+      const ids = unlocked.concat(newly.map((m) => m.id));
+      saveUnlocked(ids);
+      if (db && currentUser) {
+        const titles = MILESTONES.filter((m) => ids.includes(m.id)).map((m) => m.title);
+        db.collection('users')
+          .doc(currentUser.uid)
+          .set({ profileBadges: titles, profileMilestoneIds: ids }, { merge: true })
+          .catch(() => {});
+      }
+      const top = newly.sort((a, b) => b.pct - a.pct)[0];
+      const big = top.pct >= 97;
+      if (!isQuietMotion() && typeof SoundLib !== 'undefined' && SoundLib.milestone) SoundLib.milestone();
+      if (big) bigBurst();
+      if (typeof haptic === 'function') haptic('success');
+      showRewardToast({
+        title: `Unlocked: ${top.title}`,
+        line: top.blurb,
+        milestoneTitle: `${playfulPct(top.pct)}% vibes`,
+        unlockHint: cosmeticHint || (top.pct >= 97 ? 'You show up complete — chrome tucks away.' : 'Every field helps people find you.'),
+        durationMs: 3800,
+      });
+      return;
+    }
+    if (cosmeticHint) {
+      if (!isQuietMotion()) smallBurst();
+      showRewardToast({
+        title: cosmeticHint,
+        line: 'Equip it from Digital → Base palette.',
+        unlockHint: 'Pride cosmetics for your Base.',
+        durationMs: 3200,
+      });
+    }
   }
 
   /**
