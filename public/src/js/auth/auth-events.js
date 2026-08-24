@@ -1735,6 +1735,12 @@ function wireAuthEvents() {
           digitalProfile.profileType = profileType;
           digitalProfile.lookingFor = '';
           digitalProfile.purpose = '';
+          if (typeof DigitalLayout?.getDigitalLayout === 'function' && !digitalProfile.digitalLayout) {
+            digitalProfile.digitalLayout = DigitalLayout.getDigitalLayout({
+              ...digitalProfile,
+              profileType,
+            });
+          }
           try {
             localStorage.setItem('chaupaal_digital_profile', JSON.stringify(digitalProfile));
           } catch (e) {}

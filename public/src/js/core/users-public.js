@@ -186,41 +186,48 @@
     const src = raw || {};
     const proj = buildPublicProjection(uid, src);
     // merge:true cannot remove keys — explicitly delete privacy-stripped fields
-    const del = typeof firebase !== 'undefined' && firebase.firestore?.FieldValue?.delete;
     const wipe = {};
-    const maybeWipe = [
-      'bio',
-      'prompts',
-      'interests',
-      'hobbies',
-      'profileMedia',
-      'lookingFor',
-      'occupation',
-      'website',
-      'instagram',
-      'profileLinks',
-      'diet',
-      'drinking',
-      'smoking',
-      'fitness',
-      'city',
-    ];
-    if (typeof del === 'function') {
-      maybeWipe.forEach((k) => {
-        if (proj[k] === undefined) wipe[k] = del();
-      });
-      if (proj.profile) {
-        ['bio', 'prompts', 'interests', 'hobbies', 'profileMedia', 'currentCity', 'occupation', 'lookingFor', 'website', 'instagram', 'profileLinks'].forEach(
-          (k) => {
-            if (proj.profile[k] === undefined) wipe[`profile.${k}`] = del();
-          }
-        );
+    try {
+      const del = typeof firebase !== 'undefined' && firebase.firestore?.FieldValue?.delete;
+      const maybeWipe = [
+        'bio',
+        'prompts',
+        'interests',
+        'hobbies',
+        'profileMedia',
+        'lookingFor',
+        'occupation',
+        'website',
+        'instagram',
+        'profileLinks',
+        'diet',
+        'drinking',
+        'smoking',
+        'fitness',
+        'city',
+      ];
+      if (typeof del === 'function') {
+        maybeWipe.forEach((k) => {
+          if (proj[k] === undefined) wipe[k] = del();
+        });
+        if (proj.profile) {
+          ['bio', 'prompts', 'interests', 'hobbies', 'profileMedia', 'currentCity', 'occupation', 'lookingFor', 'website', 'instagram', 'profileLinks'].forEach(
+            (k) => {
+              if (proj.profile[k] === undefined) wipe[`profile.${k}`] = del();
+            }
+          );
+        }
       }
-    }
+    } catch (e) {}
     try {
       await db.collection('users_public').doc(uid).set({ ...proj, ...wipe }, { merge: true });
     } catch (e) {
-      console.warn('[users-public] sync', e?.message || e);
+      // Fallback without FieldValue.delete (some clients reject mixed deletes)
+      try {
+        await db.collection('users_public').doc(uid).set(proj, { merge: true });
+      } catch (e2) {
+        console.warn('[users-public] sync', e2?.message || e2);
+      }
     }
     if (typeof DigitalLayout?.syncFriendDigitalProjection === 'function') {
       try {

@@ -1599,8 +1599,7 @@ body.theme-goldenHour,
 .auth-creds-section{background:linear-gradient(180deg,rgba(230,57,70,0.03),transparent 80px);margin-left:-4px;margin-right:-4px;padding-left:4px;padding-right:4px;border-radius:12px;}
 .auth-photo-nudge{font-size:12px;color:var(--muted);line-height:1.4;margin:8px 0 0;}
 .auth-photo-nudge.is-done{color:var(--green,#33C481);}
-.auth-signup-counts{margin:4px 0 8px;opacity:.85;}
-.auth-signup-counts button{cursor:default;opacity:.9;}
+.auth-signup-counts{display:none!important;}
 .auth-signup-hero{flex-direction:column;align-items:stretch;border-bottom:none;padding-bottom:8px;}
 .auth-signup-hero .dp-hero-copy{margin-top:10px;}
 .auth-signup-hero .dp-hero-avatar{border-style:dashed;cursor:pointer;}
@@ -4887,11 +4886,46 @@ html.quiet-mode [data-decorative-motion]{animation:none!important;transition:non
 #authRegStep1 .auth-form-body{background:linear-gradient(180deg,rgba(230,57,70,0.03),transparent 140px);}
 #authRegStep1 .auth-profile-canvas{
   border:none;border-radius:0;padding:0;margin:0;background:transparent;box-shadow:none;
+  color:var(--ink,#2B2730);
 }
-#authRegStep1 .auth-profile-canvas .auth-input{border-radius:12px;border-width:1.5px;}
-#authRegStep1 .auth-profile-canvas .auth-input-label{font-size:10px;letter-spacing:.06em;}
+#authRegStep1 .auth-profile-canvas .auth-input{
+  border-radius:12px;border-width:1.5px;
+  background:var(--white,#fff);color:var(--ink,#2B2730);border-color:var(--line-strong,var(--line,#D0CBD4));
+}
+#authRegStep1 .auth-profile-canvas .auth-input::placeholder{color:#6B6570;opacity:1;}
+#authRegStep1 .auth-profile-canvas .auth-input-label{
+  font-size:11px;letter-spacing:.06em;color:var(--ink,#2B2730);opacity:.88;
+}
+#authRegStep1 .auth-input-hint,#authRegStep1 .auth-canvas-section-sub,#authRegStep1 .auth-photo-nudge,
+#authRegStep1 .auth-reg-legal,#authRegStep1 .auth-guest-btn,#authRegStep1 .auth-switch-btn{
+  color:#5C5663;
+}
+#authRegStep1 .auth-canvas-section-title,#authRegStep1 .auth-form-title,
+#authRegStep1 .dp-hero-name,#authRegStep1 .auth-welcome-kicker{color:var(--ink,#2B2730);}
+#authRegStep1 .dp-hero-handle,#authRegStep1 .dp-hero-meta,#authRegStep1 .dp-hero-complete-row,
+#authRegStep1 .dp-hero-complete-hint{color:#5C5663;}
+#authRegStep1 .auth-type-pill{color:#5C5663;}
+#authRegStep1 .auth-type-pill.active{color:var(--red,#E63946);background:var(--white,#fff);}
+#authRegStep1 .auth-gender-chip{color:var(--ink,#2B2730);background:var(--white,#fff);}
+#authRegStep1 .auth-alt-btn{color:var(--ink,#2B2730)!important;background:var(--white,#fff)!important;}
+#authRegStep1 .auth-signup-counts,
+#authRegStep1 .relationship-counts{display:none!important;}
 #authRegStep1 .auth-signup-hero .dp-hero-name{min-height:24px;}
 #authRegStep1 .auth-signup-hero .dp-hero-handle{min-height:18px;}
+/* Night: keep signup readable */
+.theme-night #authRegStep1 .auth-profile-canvas,
+.theme-night #authRegStep1 .auth-form-title,
+.theme-night #authRegStep1 .dp-hero-name,
+.theme-night #authRegStep1 .auth-canvas-section-title{color:var(--ink,#E8EAED);}
+.theme-night #authRegStep1 .auth-input-hint,
+.theme-night #authRegStep1 .dp-hero-handle,
+.theme-night #authRegStep1 .dp-hero-meta,
+.theme-night #authRegStep1 .auth-canvas-section-sub,
+.theme-night #authRegStep1 .auth-photo-nudge{color:var(--ink-secondary,#C4C7C5);}
+.theme-night #authRegStep1 .auth-profile-canvas .auth-input{
+  background:var(--cream,#121316)!important;color:var(--ink,#E8EAED)!important;
+}
+.theme-night #authRegStep1 .auth-profile-canvas .auth-input::placeholder{color:#9AA0A6;opacity:1;}
 
 /* ── Surkhiya bands + Safar + tinted chips (product pass) ── */
 .surkhiya-band{margin:0 12px 16px;}
@@ -4966,9 +5000,9 @@ input.search-field-hide-native-clear[type=search]::-webkit-search-decoration{dis
 
 /* -- Digital Profile arcade Base (game-feel) -- */
 .dp-themed,.cp-profile-shell.dp-themed{
-  --dp-accent:var(--dp-accent,var(--brand-red,var(--red,#E63946)));
-  --dp-surface:var(--dp-surface,var(--cream,#FFF8F6));
-  --dp-glow:var(--dp-glow,rgba(230,57,70,.2));
+  --dp-accent:var(--brand-red,var(--red,#E63946));
+  --dp-surface:var(--cream,#FFF8F6);
+  --dp-glow:rgba(230,57,70,.2);
 }
 .cp-profile-highlights.dp-themed .highlight-circle,
 .cp-profile-highlights.dp-themed [data-highlight-id]{
