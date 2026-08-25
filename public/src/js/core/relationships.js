@@ -96,29 +96,42 @@
   }
 
   async function openProfileMessage(profile) {
-    if (!requireRelationshipUser()) return null;
     const uid = String(profile?.uid || '').trim();
     if (!uid) {
       if (typeof showToast === 'function') showToast('Could not open chat');
       return null;
     }
-    if (uid === currentUser?.uid) {
+    if ((typeof isSelfUid === 'function' && isSelfUid(uid)) || uid === currentUser?.uid) {
       if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('rel_cant_message_self', 'That’s you') : 'That’s you');
+      return null;
+    }
+    if (!currentUser) {
+      if (typeof savePendingProfileMessage === 'function') savePendingProfileMessage(profile);
+      if (typeof showAuth === 'function') showAuth();
+      else if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('rel_sign_in') : 'Sign in');
       return null;
     }
     if (typeof bootstrapDmChat !== 'function') {
       if (typeof showToast === 'function') showToast('Open Baithak to message');
       return null;
     }
+    const messageBtn =
+      document.querySelector('[data-rel-message][data-msg-uid="' + uid + '"]') ||
+      document.querySelector('[data-rel-message]');
+    if (messageBtn) {
+      messageBtn.disabled = true;
+      if (typeof setButtonLoading === 'function') setButtonLoading(messageBtn, true, 'Opening…');
+    }
     try {
-      // Switch to Baithak *before* opening chat so tab remount does not dismiss the screen.
       const baithakBtn = document.querySelector('.bottom-tabs .tab-btn[data-tab="baithak"]');
       if (baithakBtn && !baithakBtn.classList.contains('active')) {
         baithakBtn.click();
         await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 40)));
       }
-
-      const peerName = displayNameFor(profile);
+      let peerName = displayNameFor(profile);
+      if (!peerName || /^(someone|friend|chaupaal member|member|chat)$/i.test(String(peerName).trim())) {
+        peerName = profile.username ? '@' + String(profile.username).replace(/^@/, '') : peerName || 'Chat';
+      }
       const chat = await bootstrapDmChat({
         uid,
         name: peerName,
@@ -134,7 +147,6 @@
         },
       });
       if (!chat) return null;
-
       if (typeof rememberInboxChat === 'function') rememberInboxChat(chat);
       if (typeof baithakChats !== 'undefined' && Array.isArray(baithakChats)) {
         const id = chat.firestoreId || chat.id;
@@ -142,13 +154,18 @@
         if (i >= 0) baithakChats[i] = { ...baithakChats[i], ...chat };
         else baithakChats.unshift(chat);
       }
-
       if (typeof openChatScreen === 'function') openChatScreen(chat);
       return chat;
     } catch (e) {
       const msg =
-        typeof friendlyDmError === 'function' ? friendlyDmError(e) : e?.message || 'Could not open chat — try again';      if (typeof showToast === 'function') showToast(msg);
+        typeof friendlyDmError === 'function' ? friendlyDmError(e) : e?.message || 'Could not open chat — try again';
+      if (typeof showToast === 'function') showToast(msg);
       return null;
+    } finally {
+      if (messageBtn) {
+        messageBtn.disabled = false;
+        if (typeof setButtonLoading === 'function') setButtonLoading(messageBtn, false);
+      }
     }
   }
 
@@ -506,6 +523,20 @@
     const primaryBtn = host.querySelector('[data-rel-primary]');
     const moreBtn = host.querySelector('[data-rel-more]');
     const messageBtn = host.querySelector('[data-rel-message]');
+    const isSelf =
+      typeof isSelfUid === 'function' ? isSelfUid(profile.uid) : profile.uid === currentUser?.uid;
+    if (isSelf) {
+      if (messageBtn) {
+        messageBtn.hidden = true;
+        messageBtn.disabled = true;
+      }
+      if (primaryBtn) {
+        primaryBtn.hidden = true;
+        primaryBtn.disabled = true;
+      }
+      return;
+    }
+    if (messageBtn) messageBtn.dataset.msgUid = profile.uid;
     if (!cache.has(profile.uid)) {
       try {
         await hydrateRelationships([profile.uid]);
@@ -653,8 +684,11 @@
           }</div>
         </div>
       </div>
-      <div class="close-friends-manager" data-rel-list-body></div>`;
+      <div class="relationship-list-filter-host" data-rel-list-filter-host></div>
+      <div class="close-friends-manager" data-rel-list-body></div>
+      <div class="comments-empty" data-list-filter-empty hidden>No matches</div>`;
     const body = overlay.querySelector('[data-rel-list-body]');
+    const filterHost = overlay.querySelector('[data-rel-list-filter-host]');
     if (typeof renderSkeleton === 'function') renderSkeleton(body, { variant: 'list', count: 5 });
     else body.innerHTML = 'Loading…';
     const deviceEl = document.querySelector('.device');
@@ -676,32 +710,68 @@
 
     try {
       const data = await callRelationship(action, targetUid ? { targetUid } : {});
-      const profiles = data.profiles || [];
+      let profiles = data.profiles || [];
+      if (typeof pinYouInProfiles === 'function') {
+        profiles = pinYouInProfiles(profiles);
+      }
       if (!profiles.length) {
         body.innerHTML = `<div class="comments-empty">No ${titles[kind].toLowerCase()} yet.</div>`;
         return;
       }
+      const youLabel = typeof selfListLabel === 'function' ? selfListLabel() : { title: 'You', name: '' };
       body.innerHTML = profiles
-        .map(
-          (profile) => `
-        <div class="close-friends-row" data-uid="${profile.uid}">
-          <div class="close-friends-avatar">${avatarCell(profile)}</div>
-          <div class="close-friends-person"><strong>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(profile.name,profile):safe(profile.name)}</strong><span>${safe(
-            profile.username ? '@' + profile.username : profile.city || ''
-          )}</span></div>
+        .map((profile) => {
+          const isYou = !!(profile._isYou || (currentUser && profile.uid === currentUser.uid));
+          const title = isYou
+            ? `You${youLabel.name && youLabel.name !== 'You' ? ` · ${youLabel.name}` : ''}`
+            : displayNameFor(profile);
+          const sub = isYou
+            ? youLabel.username
+              ? `@${youLabel.username}`
+              : ''
+            : profile.username
+              ? `@${profile.username}`
+              : profile.city || '';
+          const filterText = `${title} ${sub} ${profile.name || ''} ${profile.username || ''}`.toLowerCase();
+          return `
+        <div class="close-friends-row" data-uid="${safe(profile.uid)}" data-filter-text="${safe(filterText)}"${isYou ? ' data-is-you="1"' : ''}>
+          <div class="close-friends-avatar">${avatarCell(isYou ? { ...profile, photoURL: youLabel.photoURL || profile.photoURL, name: youLabel.name } : profile)}</div>
+          <div class="close-friends-person"><strong>${
+            isYou
+              ? safe(title)
+              : typeof formatDisplayNameHtml === 'function'
+                ? formatDisplayNameHtml(title, profile)
+                : safe(title)
+          }</strong><span>${safe(sub)}</span></div>
           <button type="button" data-rel-open>View</button>
-        </div>`
-        )
+        </div>`;
+        })
         .join('');
       body.querySelectorAll('[data-rel-open]').forEach((button) => {
         button.addEventListener('click', () => {
           const uid = button.closest('[data-uid]')?.dataset.uid;
           const profile = profiles.find((p) => p.uid === uid);
           if (!profile) return;
-          if (typeof openPublicProfile === 'function') openPublicProfile(profile);
+          const self = currentUser && uid === currentUser.uid;
+          if (typeof openUserProfile === 'function') {
+            openUserProfile(profile, {
+              uid,
+              username: profile.username,
+              context: self ? 'list_self' : 'list_other',
+            });
+          } else if (typeof openPublicProfile === 'function') openPublicProfile(profile);
           else openRelationshipMenu(profile);
         });
       });
+      if (filterHost && typeof mountListFilter === 'function') {
+        mountListFilter({
+          host: filterHost,
+          placeholder: `Search ${titles[kind].toLowerCase()}…`,
+          surfaceId: `rel_list_${kind}`,
+          getRows: () => [...body.querySelectorAll('.close-friends-row')],
+          emptyEl: overlay.querySelector('[data-list-filter-empty]'),
+        });
+      }
     } catch (error) {
       if (typeof renderErrorState === 'function') {
         renderErrorState(body, {

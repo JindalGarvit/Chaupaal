@@ -146,12 +146,79 @@
     resetAllExcept(null);
   }
 
+  /**
+   * Inline filter for fixed people lists (Friends, viewers, send-to).
+   * Does not open universal search.
+   * @param {{
+   *   host: Element,
+   *   placeholder?: string,
+   *   surfaceId?: string,
+   *   getRows: () => Element[],
+   *   match?: (row: Element, q: string) => boolean,
+   *   emptyEl?: Element|null,
+   * }} opts
+   */
+  function mountListFilter(opts) {
+    const o = opts || {};
+    const host = o.host;
+    if (!host) return null;
+    let bar = host.querySelector('[data-list-filter]');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.className = 'list-filter-bar search-field';
+      bar.setAttribute('data-list-filter', '1');
+      bar.innerHTML = `<input type="search" class="search-field-input list-filter-input" data-list-filter-input placeholder="${String(
+        o.placeholder || 'Search…'
+      ).replace(/"/g, '&quot;')}" autocomplete="off" enterkeyhint="search">`;
+      host.insertBefore(bar, host.firstChild);
+    }
+    const input = bar.querySelector('[data-list-filter-input]');
+    if (!input) return null;
+
+    const defaultMatch = (row, q) => {
+      const hay = (
+        row.getAttribute('data-filter-text') ||
+        row.textContent ||
+        ''
+      ).toLowerCase();
+      return hay.includes(q);
+    };
+    const matchFn = typeof o.match === 'function' ? o.match : defaultMatch;
+
+    const apply = () => {
+      const q = String(input.value || '')
+        .trim()
+        .toLowerCase();
+      const rows = typeof o.getRows === 'function' ? o.getRows() : [];
+      let shown = 0;
+      rows.forEach((row) => {
+        if (!row) return;
+        const ok = !q || matchFn(row, q);
+        row.hidden = !ok;
+        if (ok) shown += 1;
+      });
+      const empty = o.emptyEl || host.querySelector('[data-list-filter-empty]');
+      if (empty) empty.hidden = shown > 0 || !q;
+    };
+
+    enhanceSearchField(input, {
+      surfaceId: o.surfaceId || 'list_filter',
+      onClear: apply,
+      onQuery: apply,
+    });
+    input.addEventListener('input', apply);
+    apply();
+    return { apply, input, destroy: () => {} };
+  }
+
   window.SearchFields = {
     enhance: enhanceSearchField,
     enhanceSearchField,
     resetSurface,
     resetAll,
     resetAllExcept,
+    mountListFilter,
   };
   window.enhanceSearchField = enhanceSearchField;
+  window.mountListFilter = mountListFilter;
 })();

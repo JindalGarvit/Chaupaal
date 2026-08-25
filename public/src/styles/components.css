@@ -4998,6 +4998,17 @@ html.quiet-mode .safar-flair{display:none;}
 input.search-field-hide-native-clear[type=search]::-webkit-search-cancel-button,
 input.search-field-hide-native-clear[type=search]::-webkit-search-decoration{display:none;-webkit-appearance:none;}
 
+.relationship-list-filter-host,.list-filter-bar{padding:8px 12px 4px;}
+.list-filter-input{
+  width:100%;box-sizing:border-box;padding:10px 44px 10px 12px;
+  border:1.5px solid var(--line);border-radius:12px;font-size:14px;
+  background:var(--white);color:var(--ink);
+}
+.list-filter-bar .search-field-clear{right:8px;}
+.own-preview-edit-cta{padding:8px 0 12px;}
+.own-preview-chip{font-size:12px;font-weight:700;color:var(--muted);margin-top:6px;}
+.close-friends-row[data-is-you="1"] .close-friends-person strong{color:var(--red);}
+
 /* -- Digital Profile arcade Base (game-feel) -- */
 .dp-themed,.cp-profile-shell.dp-themed{
   --dp-accent:var(--brand-red,var(--red,#E63946));

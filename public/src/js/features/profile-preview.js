@@ -77,8 +77,8 @@
     const on = profilePreviewMode;
     return `
       <div id="profilePreviewToggle" class="profile-mode-toggle" role="tablist" aria-label="Profile mode">
-        <button type="button" data-preview="1" role="tab" aria-selected="${on ? 'true' : 'false'}" class="${on ? 'is-active' : ''}">Preview</button>
-        <button type="button" data-preview="0" role="tab" aria-selected="${!on ? 'true' : 'false'}" class="${!on ? 'is-active' : ''}">Edit my profile</button>
+        <button type="button" data-preview="1" role="tab" aria-selected="${on ? 'true' : 'false'}" class="${on ? 'is-active' : ''}">View as others</button>
+        <button type="button" data-preview="0" role="tab" aria-selected="${!on ? 'true' : 'false'}" class="${!on ? 'is-active' : ''}">Edit profile</button>
       </div>`;
   }
 
@@ -117,8 +117,11 @@
         </div>
         <div class="public-profile-name" data-pro-badge-self data-pro-badge-name="${esc(view.displayName)}">${nameHtml}</div>
         <div class="public-profile-uname">@${esc(view.username)}</div>
-        <div class="own-preview-chip">${esc(view.visibilityLabel)} · how others see you</div>
+        <div class="own-preview-chip">${esc(view.visibilityLabel)} · This is how others see you</div>
         ${bioHtml ? `<p class="public-profile-bio">${bioHtml}</p>` : ''}
+      </div>
+      <div class="own-preview-edit-cta">
+        <button type="button" class="btn btn--primary btn--block" data-preview="0">Edit profile</button>
       </div>
       <div class="dp-rel-strip">
         <div data-profile-relationship-counts class="relationship-counts-loading">Loading relationships…</div>
@@ -134,9 +137,11 @@
   }
 
   function wirePreviewToggle(root, onSwitch) {
-    const bar = root?.querySelector?.('#profilePreviewToggle') || document.getElementById('profilePreviewToggle');
-    if (!bar) return;
-    bar.querySelectorAll('[data-preview]').forEach((btn) => {
+    const scope = root || document;
+    const buttons = scope.querySelectorAll('[data-preview]');
+    buttons.forEach((btn) => {
+      if (btn.dataset.previewWired === '1') return;
+      btn.dataset.previewWired = '1';
       btn.addEventListener('click', () => {
         const next = btn.dataset.preview === '1';
         if (next === profilePreviewMode) return;
@@ -163,7 +168,28 @@
     }
     const uid = opts.uid || profile.uid || profile.id;
     const username = opts.username || profile.username;
-    const name = profile.name || profile.displayName || username || 'Member';
+    const isSelf =
+      typeof isSelfUid === 'function' ? isSelfUid(uid) : uid && uid === currentUser?.uid;
+    // Self from third-person surfaces → full preview (not peek)
+    if (isSelf) {
+      if (typeof openUserProfile === 'function') {
+        openUserProfile(profile, {
+          uid,
+          username,
+          context: opts.context || 'third_person',
+          initialMode: 'preview',
+        });
+        return;
+      }
+    }
+    const name =
+      (typeof resolvePersonDisplayName === 'function'
+        ? resolvePersonDisplayName(profile)
+        : null) ||
+      profile.name ||
+      profile.displayName ||
+      username ||
+      'Member';
     const photo = profile.photoURL || profile.photo || null;
     const pType = profile.profileType || 'personal';
 
@@ -181,7 +207,7 @@
         <div class="profile-peek-sub">${username ? '@' + String(username).replace(/</g, '&lt;') : ''}</div>
         <div class="profile-peek-actions">
           <button type="button" class="btn btn--primary" data-peek-full>${typeof t === 'function' ? t('peek_view_profile', 'View profile') : 'View profile'}</button>
-          <button type="button" class="btn" data-peek-message>${typeof t === 'function' ? t('peek_message', 'Message') : 'Message'}</button>
+          ${isSelf ? '' : `<button type="button" class="btn" data-peek-message>${typeof t === 'function' ? t('peek_message', 'Message') : 'Message'}</button>`}
           <button type="button" class="btn" data-peek-dismiss>${typeof t === 'function' ? t('cancel', 'Cancel') : 'Cancel'}</button>
         </div>
       </div>`;
@@ -201,7 +227,13 @@
     sheet.querySelector('[data-peek-dismiss]')?.addEventListener('click', close);
     sheet.querySelector('[data-peek-full]')?.addEventListener('click', () => {
       close();
-      if (typeof openPublicProfile === 'function') {
+      if (typeof openUserProfile === 'function') {
+        openUserProfile(profile, {
+          uid,
+          username,
+          context: opts.context || 'third_person',
+        });
+      } else if (typeof openPublicProfile === 'function') {
         openPublicProfile(profile, { uid, username });
       } else if (username && typeof openProfileByUsername === 'function') {
         openProfileByUsername(username);

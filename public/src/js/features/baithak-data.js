@@ -212,9 +212,11 @@ function renderChatList(chats, opts){
       const avatar=item.querySelector('[data-self-pin-avatar]');
       avatar?.addEventListener('click',(e)=>{
         e.stopPropagation();
-        if(typeof openOwnProfilePreview==='function') openOwnProfilePreview();
+        if(typeof openUserProfile==='function'){
+          openUserProfile({uid:currentUser?.uid},{context:'baithak_self',initialMode:'owner'});
+        } else if(typeof openOwnProfilePreview==='function') openOwnProfilePreview({context:'baithak_self',owner:true});
         else {
-          if(typeof setProfilePreviewMode==='function') setProfilePreviewMode(true);
+          if(typeof setProfilePreviewMode==='function') setProfilePreviewMode(false);
           if(typeof renderProfileModal==='function') renderProfileModal();
           document.getElementById('profileModal')?.classList.remove('hidden');
         }

@@ -416,39 +416,74 @@
 
     async function showViewers(s) {
       if (!(s.own || (typeof currentUser !== 'undefined' && s.uid === currentUser?.uid))) return;
-      openSheet(`<h3>${NS.tt('story_viewers', 'Viewers')}</h3><input type="search" data-q placeholder="${NS.tt('search', 'Search')}"><div data-list class="ds-empty">…</div>`, (sheet) => {
-        const listEl = sheet.querySelector('[data-list]');
-        const load = async (q) => {
-          try {
-            const data = await listStoryViews(s, q);
-            const rows = data.viewers || [];
+      openSheet(
+        `<h3>${NS.tt('story_viewers', 'Viewers')}</h3>
+         <div data-list-filter-host></div>
+         <div data-list class="ds-empty">…</div>
+         <div class="ds-empty" data-list-filter-empty hidden>No matches</div>`,
+        (sheet) => {
+          const listEl = sheet.querySelector('[data-list]');
+          const filterHost = sheet.querySelector('[data-list-filter-host]');
+          let lastRows = [];
+          const paint = (rows) => {
+            lastRows = rows || [];
+            if (typeof pinYouInProfiles === 'function') lastRows = pinYouInProfiles(lastRows);
+            const you = typeof selfListLabel === 'function' ? selfListLabel() : { title: 'You', name: '' };
             listEl.className = '';
-            listEl.innerHTML = rows.length
-              ? rows
-                  .map(
-                    (v) =>
-                      `<div class="ds-row" data-uid="${NS.esc(v.uid)}">${
-                        v.avatar && /^https:/.test(v.avatar) ? `<img src="${NS.esc(v.avatar)}" alt="">` : ''
-                      }<div><strong>${NS.esc(v.name)}</strong><small style="display:block;color:var(--muted)">@${NS.esc(v.username || '')}</small></div></div>`
-                  )
+            listEl.innerHTML = lastRows.length
+              ? lastRows
+                  .map((v) => {
+                    const isYou = !!(v._isYou || (currentUser && v.uid === currentUser.uid));
+                    const label = isYou
+                      ? `You${you.name && you.name !== 'You' ? ` · ${you.name}` : ''}`
+                      : v.name || v.username || 'Member';
+                    const filterText = `${label} ${v.username || ''}`.toLowerCase();
+                    return `<div class="ds-row" data-uid="${NS.esc(v.uid)}" data-filter-text="${NS.esc(filterText)}"${
+                      isYou ? ' data-is-you="1"' : ''
+                    }>${
+                      (isYou ? you.photoURL : v.avatar) && /^https:/.test(isYou ? you.photoURL : v.avatar)
+                        ? `<img src="${NS.esc(isYou ? you.photoURL : v.avatar)}" alt="">`
+                        : ''
+                    }<div><strong>${NS.esc(label)}</strong><small style="display:block;color:var(--muted)">@${NS.esc(
+                      isYou ? you.username || v.username || '' : v.username || ''
+                    )}</small></div></div>`;
+                  })
                   .join('')
               : `<div class="ds-empty">${NS.tt('story_no_views', 'No views yet')}</div>`;
             listEl.querySelectorAll('[data-uid]').forEach((row) =>
               row.addEventListener('click', () => {
-                if (typeof openPublicProfile === 'function') openPublicProfile({ uid: row.dataset.uid });
+                const uid = row.dataset.uid;
+                if (typeof openUserProfile === 'function') {
+                  openUserProfile(
+                    { uid },
+                    { uid, context: uid === currentUser?.uid ? 'list_self' : 'story_viewer' }
+                  );
+                } else if (typeof openPublicProfile === 'function') openPublicProfile({ uid });
               })
             );
-          } catch (e) {
-            NS.report('duniya_story_views', e);
-            listEl.innerHTML = `<div class="ds-empty">${NS.tt('story_no_views', 'No views yet')}</div>`;
-          }
-        };
-        load('');
-        sheet.querySelector('[data-q]').addEventListener('input', (e) => {
-          clearTimeout(e.target._t);
-          e.target._t = setTimeout(() => load(e.target.value), 200);
-        });
-      });
+            if (filterHost && typeof mountListFilter === 'function' && !filterHost.dataset.wired) {
+              filterHost.dataset.wired = '1';
+              mountListFilter({
+                host: filterHost,
+                placeholder: NS.tt('search_viewers', 'Search viewers…'),
+                surfaceId: 'story_viewers',
+                getRows: () => [...listEl.querySelectorAll('.ds-row')],
+                emptyEl: sheet.querySelector('[data-list-filter-empty]'),
+              });
+            }
+          };
+          const load = async (q) => {
+            try {
+              const data = await listStoryViews(s, q);
+              paint(data.viewers || []);
+            } catch (e) {
+              NS.report('duniya_story_views', e);
+              listEl.innerHTML = `<div class="ds-empty">${NS.tt('story_no_views', 'No views yet')}</div>`;
+            }
+          };
+          load('');
+        }
+      );
     }
 
     async function showComments(s, own) {

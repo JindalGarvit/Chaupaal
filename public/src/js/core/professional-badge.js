@@ -48,13 +48,26 @@
 
   function resolvePersonDisplayName(profile) {
     const p = profile && typeof profile === 'object' ? profile : {};
+    if (
+      p.uid &&
+      typeof currentUser !== 'undefined' &&
+      currentUser?.uid &&
+      String(p.uid) === String(currentUser.uid) &&
+      typeof selfDisplayName === 'function'
+    ) {
+      return selfDisplayName();
+    }
     const raw =
       p.name ||
       p.displayName ||
       p.peerName ||
       (p.username ? `@${p.username}` : '') ||
       'Someone';
-    return String(raw).trim() || 'Someone';
+    const cleaned = String(raw).trim();
+    if (/^(someone|friend|chaupaal member|member|chat)$/i.test(cleaned)) {
+      if (p.username) return `@${String(p.username).replace(/^@/, '')}`;
+    }
+    return cleaned || 'Someone';
   }
 
   function formatDisplayNameHtml(name, profileTypeOrUser) {

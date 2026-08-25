@@ -1,7 +1,14 @@
 // ===================== PROFILE BTN =====================
 document.getElementById('profileBtn')?.addEventListener('click', () => {
-  // Own profile opens in Preview (visitor view) by default
-  if (typeof setProfilePreviewMode === 'function') setProfilePreviewMode(true);
+  // Bottom-tab Profile → owner/edit by default (Instagram manage)
+  if (typeof openUserProfile === 'function') {
+    openUserProfile(
+      { uid: typeof currentUser !== 'undefined' ? currentUser?.uid : '' },
+      { context: 'tab_self', initialMode: 'owner' }
+    );
+    return;
+  }
+  if (typeof setProfilePreviewMode === 'function') setProfilePreviewMode(false);
   if (typeof renderProfileModal === 'function') renderProfileModal();
   document.getElementById('profileModal')?.classList.remove('hidden');
 });
@@ -51,9 +58,20 @@ document.getElementById('closeProfile')?.addEventListener('click', () => {
   document.getElementById('profileModal')?.classList.add('hidden');
 });
 
-/** Open own profile in Preview — used by Baithak self PIN and other entry points */
-function openOwnProfilePreview() {
-  if (typeof setProfilePreviewMode === 'function') setProfilePreviewMode(true);
+/** Open own profile — Baithak Me avatar → owner/edit by default */
+function openOwnProfilePreview(opts) {
+  const mode = opts?.mode || (opts?.owner ? 'owner' : null);
+  if (typeof openUserProfile === 'function') {
+    openUserProfile(
+      { uid: typeof currentUser !== 'undefined' ? currentUser?.uid : '' },
+      {
+        context: opts?.context || 'baithak_self',
+        initialMode: mode || 'owner',
+      }
+    );
+    return;
+  }
+  if (typeof setProfilePreviewMode === 'function') setProfilePreviewMode(mode !== 'owner');
   if (typeof renderProfileModal === 'function') renderProfileModal();
   document.getElementById('profileModal')?.classList.remove('hidden');
 }

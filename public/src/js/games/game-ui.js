@@ -716,7 +716,9 @@
         <div class="game-friend-card" role="dialog" aria-modal="true" aria-label="${safe(o.title || 'Challenge a friend')}">
           <div class="game-friend-title">${safe(o.title || 'Challenge a friend')}</div>
           <div class="game-friend-sub">${safe(o.subtitle || 'Pick someone from your friends')}</div>
+          <div data-list-filter-host class="game-friend-filter"></div>
           <div class="game-friend-list" data-fp-list><div class="game-friend-loading">Loading friends…</div></div>
+          <div class="game-friend-empty" data-list-filter-empty hidden>No matches</div>
           <button type="button" class="game-friend-cancel" data-fp-cancel>Cancel</button>
         </div>`;
       const host = document.querySelector('.device') || document.body;
@@ -751,16 +753,27 @@
         });
         return;
       }
-      listEl.innerHTML = profiles
+      let list = profiles;
+      if (typeof pinYouInProfiles === 'function') list = pinYouInProfiles(profiles);
+      listEl.innerHTML = list
         .map((p, i) => {
-          const rawName = p.name || p.username || p.displayName || 'Friend';
+          const isYou = !!(p._isYou || (typeof currentUser !== 'undefined' && p.uid === currentUser?.uid));
+          const you = typeof selfListLabel === 'function' ? selfListLabel() : null;
+          const rawName = isYou
+            ? `You${you?.name && you.name !== 'You' ? ` · ${you.name}` : ''}`
+            : p.name || p.username || p.displayName || 'Friend';
           const name =
-            typeof formatDisplayNameHtml === 'function'
-              ? formatDisplayNameHtml(rawName, p)
-              : safe(rawName);
-          const meta = safe(p.username || p.meta || '');
+            isYou
+              ? safe(rawName)
+              : typeof formatDisplayNameHtml === 'function'
+                ? formatDisplayNameHtml(rawName, p)
+                : safe(rawName);
+          const meta = safe(isYou ? (you?.username ? `@${you.username}` : '') : p.username || p.meta || '');
           const avatar = safe(p.avatar || '👤');
-          return `<button type="button" class="game-friend-row" data-fp-i="${i}">
+          const filterText = `${rawName} ${p.username || ''} ${p.name || ''}`.toLowerCase();
+          return `<button type="button" class="game-friend-row" data-fp-i="${i}" data-filter-text="${safe(filterText)}"${
+            isYou ? ' data-is-you="1"' : ''
+          }>
             <span class="game-friend-avatar">${avatar}</span>
             <span class="game-friend-info"><span class="game-friend-name">${name}</span>${meta ? `<span class="game-friend-meta">${meta}</span>` : ''}</span>
           </button>`;
@@ -768,10 +781,10 @@
         .join('');
       listEl.querySelectorAll('[data-fp-i]').forEach((btn) => {
         btn.addEventListener('click', () => {
-          const p = profiles[Number(btn.dataset.fpI)];
+          const p = list[Number(btn.dataset.fpI)];
           if (!p) return finish(null);
           finish({
-            name: p.name || p.username || 'Friend',
+            name: p.name || p.username || (typeof selfDisplayName === 'function' ? selfDisplayName() : 'Friend'),
             id: p.uid || p.id || 'friend_' + (p.username || p.name),
             uid: p.uid || p.id,
             avatar: p.avatar,
@@ -779,6 +792,16 @@
           });
         });
       });
+      const filterHost = sheet.querySelector('[data-list-filter-host]');
+      if (filterHost && typeof mountListFilter === 'function') {
+        mountListFilter({
+          host: filterHost,
+          placeholder: 'Search friends…',
+          surfaceId: 'friend_picker',
+          getRows: () => [...listEl.querySelectorAll('.game-friend-row')],
+          emptyEl: sheet.querySelector('[data-list-filter-empty]'),
+        });
+      }
     });
   }
 

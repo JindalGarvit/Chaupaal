@@ -121,5 +121,11 @@ if (auth) {
     updateProfileBtn();
     if (typeof syncEmailVerifyBanner === 'function') syncEmailVerifyBanner();
     if (typeof startNotifInbox === 'function') startNotifInbox();
+    // Guest Message → sign-in → open Baithak DM automatically
+    if (typeof resumePendingProfileMessage === 'function') {
+      setTimeout(() => {
+        resumePendingProfileMessage().catch(() => {});
+      }, 400);
+    }
   });
 }

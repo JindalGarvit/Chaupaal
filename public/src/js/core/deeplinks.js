@@ -71,6 +71,23 @@
     const u = user || {};
     const profileUid = uid || u.uid || '';
     const uname = String(username || u.username || '').replace(/^@/, '');
+    // Self → openUserProfile mode matrix (never public Message chrome for self)
+    if (
+      profileUid &&
+      typeof currentUser !== 'undefined' &&
+      currentUser?.uid &&
+      profileUid === currentUser.uid
+    ) {
+      if (typeof openUserProfile === 'function') {
+        openUserProfile(u, {
+          uid: profileUid,
+          username: uname,
+          context: context === 'profile' ? 'third_person' : context,
+          initialMode: 'preview',
+        });
+        return;
+      }
+    }
     const sheet = document.createElement('div');
     sheet.className = 'archive-overlay public-profile-sheet';
     sheet.dataset.navManaged = '1';
