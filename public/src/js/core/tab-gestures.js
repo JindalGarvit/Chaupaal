@@ -323,7 +323,7 @@
         },
         {
           id: 'khoj',
-          label: 'Khoj',
+          label: typeof morphLabel === 'function' ? morphLabel('peepal', 'khoj', 'Khoj') : 'Khoj · Find people',
           run: () => {
             switchTo('peepal');
             if (typeof setPeepalMode === 'function') setPeepalMode('khoj');
@@ -334,7 +334,7 @@
         },
         {
           id: 'vriksha',
-          label: 'Vriksha',
+          label: typeof morphLabel === 'function' ? morphLabel('peepal', 'vriksha', 'Vriksha') : 'Vriksha · Discussions',
           run: () => {
             switchTo('peepal');
             if (typeof setPeepalMode === 'function') setPeepalMode('vriksha');
@@ -342,7 +342,7 @@
         },
         {
           id: 'mashhoor',
-          label: 'Mashhoor',
+          label: typeof morphLabel === 'function' ? morphLabel('peepal', 'mashhoor', 'Mashhoor') : 'Mashhoor · Popular',
           run: () => {
             switchTo('peepal');
             if (typeof setPeepalMode === 'function') setPeepalMode('mashhoor');
@@ -368,7 +368,7 @@
         },
         {
           id: 'surkhiya',
-          label: tt('akhbaar_surkhiya', 'Surkhiya'),
+          label: typeof morphLabel === 'function' ? morphLabel('akhbaar', 'surkhiya', 'Surkhiya') : tt('akhbaar_surkhiya', 'Surkhiya'),
           run: () => {
             switchTo('akhbaar');
             if (typeof setAkhbaarMode === 'function') setAkhbaarMode('surkhiya');
@@ -377,7 +377,7 @@
         },
         {
           id: 'all',
-          label: tt('akhbaar_all', 'Khabar'),
+          label: typeof morphLabel === 'function' ? morphLabel('akhbaar', 'all', 'Khabar') : tt('akhbaar_all', 'Khabar'),
           run: () => {
             switchTo('akhbaar');
             if (typeof setAkhbaarMode === 'function') setAkhbaarMode('all');
@@ -387,7 +387,7 @@
         },
         {
           id: 'saathi',
-          label: tt('akhbaar_saathi', 'Saathi'),
+          label: typeof morphLabel === 'function' ? morphLabel('akhbaar', 'saathi', 'Saathi') : tt('akhbaar_saathi', 'Saathi'),
           run: () => {
             switchTo('akhbaar');
             if (typeof setAkhbaarMode === 'function') setAkhbaarMode('saathi');
@@ -419,7 +419,7 @@
         },
         {
           id: 'lehar',
-          label: 'Lehar',
+          label: typeof morphLabel === 'function' ? morphLabel('duniya', 'lehar', 'Lehar') : 'Lehar · Short clips',
           run: () => {
             switchTo('duniya');
             if (typeof setDuniyaMode === 'function') setDuniyaMode('lehar');
@@ -427,7 +427,7 @@
         },
         {
           id: 'vishwa',
-          label: 'Vishwa',
+          label: typeof morphLabel === 'function' ? morphLabel('duniya', 'vishwa', 'Vishwa') : 'Vishwa · Photos',
           run: () => {
             switchTo('duniya');
             if (typeof setDuniyaMode === 'function') setDuniyaMode('vishwa');
@@ -435,7 +435,7 @@
         },
         {
           id: 'prasidha',
-          label: 'Prasidha',
+          label: typeof morphLabel === 'function' ? morphLabel('duniya', 'prasidha', 'Prasidha') : 'Prasidha · Trending',
           run: () => {
             switchTo('duniya');
             if (typeof setDuniyaMode === 'function') setDuniyaMode('prasidha');
@@ -465,7 +465,7 @@
         },
         {
           id: 'sambhavanayein',
-          label: 'Sambhavanayein',
+          label: typeof morphLabel === 'function' ? morphLabel('baithak', 'sambhavanayein', 'Sambhavanayein') : 'Sambhavanayein · New',
           run: () => {
             switchTo('baithak');
             if (typeof setBaithakSection === 'function') setBaithakSection('sambhavanayein');
@@ -473,7 +473,7 @@
         },
         {
           id: 'sabha',
-          label: 'Sabha',
+          label: typeof morphLabel === 'function' ? morphLabel('baithak', 'sabha', 'Sabha') : 'Sabha · All chats',
           run: () => {
             switchTo('baithak');
             if (typeof setBaithakSection === 'function') setBaithakSection('sabha');
@@ -481,7 +481,7 @@
         },
         {
           id: 'mitra',
-          label: 'Mitra',
+          label: typeof morphLabel === 'function' ? morphLabel('baithak', 'mitra', 'Mitra') : 'Mitra · Friends',
           run: () => {
             switchTo('baithak');
             if (typeof setBaithakSection === 'function') setBaithakSection('mitra');
@@ -504,7 +504,7 @@
         },
         {
           id: 'khel',
-          label: 'Khel',
+          label: typeof morphLabel === 'function' ? morphLabel('dangal', 'khel', 'Khel') : 'Khel · Game of day',
           run: () => {
             switchTo('dangal');
             if (typeof setDangalSection === 'function') setDangalSection('khel');
@@ -512,7 +512,7 @@
         },
         {
           id: 'manch',
-          label: 'Manch',
+          label: typeof morphLabel === 'function' ? morphLabel('dangal', 'manch', 'Manch') : 'Manch · Library',
           run: () => {
             switchTo('dangal');
             if (typeof setDangalSection === 'function') setDangalSection('manch');
@@ -520,7 +520,7 @@
         },
         {
           id: 'maidan',
-          label: 'Maidan',
+          label: typeof morphLabel === 'function' ? morphLabel('dangal', 'maidan', 'Maidan') : 'Maidan · Resume',
           run: () => {
             switchTo('dangal');
             if (typeof setDangalSection === 'function') setDangalSection('maidan');

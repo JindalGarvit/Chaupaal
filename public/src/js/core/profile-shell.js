@@ -1252,7 +1252,7 @@
     const start = tabs.find((t) => t.id === initial)?.id || tabs[0]?.id || 'digital';
     await activateTab(start);
     if (editable && isOwner && typeof maybeOfferProfileCompleteNudge === 'function') {
-      setTimeout(() => maybeOfferProfileCompleteNudge({ reason: 'edit' }), 600);
+      setTimeout(() => maybeOfferProfileCompleteNudge({ reason: 'profile_tab' }), 600);
     }
     if (typeof restoreAppShell === 'function') restoreAppShell();
   }

@@ -147,18 +147,33 @@
     container.innerHTML = skeletonHtml(variant, count);
   }
 
-  function renderEmptyState(container, { icon = '📭', title = 'Nothing here yet', message = '', actionLabel = null, onAction = null } = {}) {
+  function renderEmptyState(container, { icon = '📭', title = 'Nothing here yet', message = '', actionLabel = null, onAction = null, secondaryActions = null } = {}) {
     if (!container) return;
+    const sec = Array.isArray(secondaryActions) ? secondaryActions : [];
+    const secHtml = sec
+      .map(
+        (a, i) =>
+          `<button type="button" class="btn btn--ghost ui-state-btn" data-ui-action="empty-sec" data-sec-i="${i}">${a.label || 'More'}</button>`
+      )
+      .join('');
     container.innerHTML = `
       <div class="ui-state ui-state-empty">
         <div class="ui-state-icon">${icon}</div>
         <div class="ui-state-title">${title}</div>
         ${message ? `<div class="ui-state-msg">${message}</div>` : ''}
-        ${actionLabel ? `<button type="button" class="btn btn--secondary ui-state-btn" data-ui-action="empty">${actionLabel}</button>` : ''}
+        <div class="ui-state-actions" style="display:flex;flex-direction:column;gap:8px;align-items:stretch;width:min(100%,280px);margin:12px auto 0;">
+          ${actionLabel ? `<button type="button" class="btn btn--primary ui-state-btn" data-ui-action="empty">${actionLabel}</button>` : ''}
+          ${secHtml}
+        </div>
       </div>`;
     if (actionLabel && typeof onAction === 'function') {
       container.querySelector('[data-ui-action="empty"]')?.addEventListener('click', onAction);
     }
+    container.querySelectorAll('[data-ui-action="empty-sec"]').forEach((btn) => {
+      const i = Number(btn.dataset.secI);
+      const act = sec[i];
+      if (act && typeof act.onAction === 'function') btn.addEventListener('click', act.onAction);
+    });
   }
 
   function renderErrorState(container, { icon = '⚠️', title = 'Something went wrong', message = 'Please try again.', retryLabel = 'Retry', onRetry = null } = {}) {

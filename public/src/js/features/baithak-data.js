@@ -158,10 +158,12 @@ function renderChatList(chats, opts){
     const isMuted = !!pref.muted;
     const forceUnread = !!(pref.markUnread || chat._forceUnread);
     const unreadN = forceUnread ? Math.max(1, Number(chat.unread)||1) : chat.unread;
-    item.className = 'chat-item'+(self?' chat-item-self':'')+(chaupaal?' chat-item-chaupaal':'')+(isUserPinned?' is-pinned':'')+(isMuted?' is-muted':'')+(forceUnread||unreadN?' is-unread':'');
+    const isSample = !!(chat.isSample || chat.isDemo);
+    item.className = 'chat-item'+(self?' chat-item-self':'')+(chaupaal?' chat-item-chaupaal':'')+(isUserPinned?' is-pinned':'')+(isMuted?' is-muted':'')+(forceUnread||unreadN?' is-unread':'')+(isSample?' chat-item-demo':'');
     item.dataset.chatId = chat.firestoreId || chat.id || '';
     if(self) item.dataset.selfChat = '1';
     if(chaupaal) item.dataset.chaupaalChat = '1';
+    if(isSample) item.dataset.demo = '1';
     if(isUserPinned) item.dataset.userPinned = '1';
     const when = self || chaupaal ? 'Pinned' : (typeof formatRelativeTime==='function'
       ? formatRelativeTime(chat.ts || chat.updatedAt || chat.time)
@@ -173,14 +175,15 @@ function renderChatList(chats, opts){
     const pinHandle = isUserPinned
       ? `<button type="button" class="chat-pin-handle" aria-label="Reorder" tabindex="-1">☰</button>`
       : '';
+    const demoBadge = isSample ? ` <span class="cp-demo-badge" title="Sample">Demo</span>` : '';
     item.innerHTML = `
       <div class="chat-avatar presence-host ${chat.type==='group'?'group':''}${self?' self':''}${chaupaal?' chaupaal':''}" ${self?'data-self-pin-avatar="1" title="Open your profile"':''}${chaupaal?'data-chaupaal-pin-avatar="1" title="Open Chaupaal profile"':''}>${self||chaupaal?(chat.avatar||'📝'):chatAvatarMarkup(chat)}
         ${chat.duelStreak?`<div class="streak-badge">🔥${chat.duelStreak}</div>`:''}
         ${!self&&!chaupaal?`<span class="presence-dot presence-dot--mehfil" data-mehfil-presence-dot hidden aria-hidden="true"></span>`:''}
       </div>
       <div class="chat-info">
-        <div class="chat-name">${(self||chaupaal||chat.type==='group'||chat.type==='self')?(chat.name||'Chat'):(typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(chat.name||'Chat',chat):(chat.name||'Chat'))}${self?` <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">· you</span>`:''}${chaupaal?` <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">· companion</span>`:''}${chat.members?` <span style="font-size:11px;color:var(--muted);font-weight:400;">${chat.members} members</span>`:''}${statusIcons}</div>
-        <div class="chat-preview">${chat._searchSnippet||chat.preview||''}</div>
+        <div class="chat-name">${(self||chaupaal||chat.type==='group'||chat.type==='self')?(chat.name||'Chat'):(typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(chat.name||'Chat',chat):(chat.name||'Chat'))}${demoBadge}${self?` <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">· you</span>`:''}${chaupaal?` <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">· companion</span>`:''}${chat.members?` <span style="font-size:11px;color:var(--muted);font-weight:400;">${chat.members} members</span>`:''}${statusIcons}</div>
+        <div class="chat-preview">${isSample?'Sample — sign in for real chats · ':''}${chat._searchSnippet||chat.preview||''}</div>
       </div>
       <div class="chat-meta">
         <div class="chat-time">${when||''}</div>
@@ -360,12 +363,42 @@ function renderChatList(chats, opts){
         },
       });
     } else if(typeof renderEmptyState==='function'){
+      const isGuest=typeof currentUser==='undefined'||!currentUser;
       renderEmptyState(emptyHost, {
         icon:'💬',
-        title:'No conversations yet',
-        message:'Find people on Peepal or start a new chat.',
-        actionLabel:'New chat',
-        onAction:()=>{ if(typeof showNewChatOptions==='function') showNewChatOptions(); },
+        title: isGuest ? 'Demo chats only' : 'No conversations yet',
+        message: isGuest
+          ? 'You’re browsing samples — sign in to chat with real people.'
+          : 'Invite friends or find people from your contacts. Sample people from guest mode won’t appear here.',
+        actionLabel: isGuest ? 'Sign in' : 'Invite friends',
+        onAction:()=>{
+          if(isGuest){
+            if(typeof showAuth==='function') showAuth();
+            else if(typeof openAuthSheet==='function') openAuthSheet('login');
+            return;
+          }
+          if(typeof shareInviteToChaupaal==='function') shareInviteToChaupaal();
+          else if(typeof openDay0MeetSheet==='function') openDay0MeetSheet();
+        },
+        secondaryActions: isGuest ? [] : [
+          {
+            label:'Find from contacts',
+            onAction:()=>{
+              if(typeof openPeopleSearchWithContacts==='function') openPeopleSearchWithContacts({surface:'baithak'});
+            },
+          },
+          {
+            label:'Find on Peepal',
+            onAction:()=>{
+              if(typeof showTab==='function') showTab('peepal');
+              if(typeof setPeepalMode==='function') setPeepalMode('khoj');
+            },
+          },
+          {
+            label:'New chat',
+            onAction:()=>{ if(typeof showNewChatOptions==='function') showNewChatOptions(); },
+          },
+        ],
       });
     }
   }
@@ -1148,6 +1181,9 @@ async function setBaithakSection(section) {
   baithakSection = ['sabha', 'sambhavanayein', 'mitra'].includes(section) ? section : 'sabha';
   const panel = document.getElementById('panel-baithak');
   if (panel) panel.dataset.baithakSection = baithakSection;
+  if (panel && typeof paintModeSubtitle === 'function') {
+    paintModeSubtitle(panel, 'baithak', baithakSection);
+  }
   const all = typeof pinSelfChat === 'function' ? pinSelfChat(baithakChats) : baithakChats || [];
 
   if (baithakSection === 'sabha') {

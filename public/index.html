@@ -38,7 +38,7 @@
   <link rel="stylesheet" href="/src/styles/duniya.css?v=51212780">
   <link rel="stylesheet" href="/src/styles/duniya-compose.css?v=624ed6bc">
   <link rel="stylesheet" href="/src/styles/duniya-story.css?v=31364c56">
-  <link rel="stylesheet" href="/src/styles/components.css?v=s20260825a">
+  <link rel="stylesheet" href="/src/styles/components.css?v=nux20260825">
   <link rel="stylesheet" href="/src/styles/social-comments.css?v=1">
   <link rel="stylesheet" href="/src/styles/mehfil.css?v=66769939">
   <link rel="stylesheet" href="/src/styles/mehfil-cinema.css?v=1">
@@ -274,29 +274,31 @@
             </section>
 
             <section class="auth-canvas-section" aria-labelledby="authSecExtras">
-              <h3 class="auth-canvas-section-title" id="authSecExtras">Make it yours</h3>
-              <p class="auth-canvas-section-sub">Optional — add now or from Profile after you join.</p>
-              <div class="auth-input-group">
-                <label class="auth-input-label" for="regCity">Current city</label>
-                <input class="auth-input" type="text" id="regCity" placeholder="e.g. Mumbai, Delhi, Bengaluru" autocomplete="address-level2">
-                <div class="auth-input-hint auth-nudge">City → easier to find people nearby.</div>
-              </div>
-              <div class="auth-input-group">
-                <label class="auth-input-label" for="regLanguage">Preferred language</label>
-                <select class="auth-input" id="regLanguage">
-                  <option value="en">English</option>
-                  <option value="hi">हिंदी</option>
-                  <option value="bn">বাংলা</option>
-                  <option value="te">తెలుగు</option>
-                  <option value="ta">தமிழ்</option>
-                  <option value="mr">मराठी</option>
-                  <option value="gu">ગુજરાતી</option>
-                  <option value="kn">ಕನ್ನಡ</option>
-                  <option value="ml">മലയാളം</option>
-                  <option value="pa">ਪੰਜਾਬੀ</option>
-                </select>
-              </div>
-              <button type="button" class="auth-guest-btn auth-skip-optionals" id="authSkipOptionals">Skip extras — go to account access →</button>
+              <details class="auth-optional-details" id="authOptionalDetails">
+                <summary class="auth-optional-summary" id="authSecExtras">Add more (optional)</summary>
+                <p class="auth-canvas-section-sub">City and language — add now or from Profile after you join.</p>
+                <div class="auth-input-group">
+                  <label class="auth-input-label" for="regCity">Current city</label>
+                  <input class="auth-input" type="text" id="regCity" placeholder="e.g. Mumbai, Delhi, Bengaluru" autocomplete="address-level2">
+                  <div class="auth-input-hint auth-nudge">City → easier to find people nearby.</div>
+                </div>
+                <div class="auth-input-group">
+                  <label class="auth-input-label" for="regLanguage">Preferred language</label>
+                  <select class="auth-input" id="regLanguage">
+                    <option value="en">English</option>
+                    <option value="hi">हिंदी</option>
+                    <option value="bn">বাংলা</option>
+                    <option value="te">తెలుగు</option>
+                    <option value="ta">தமிழ்</option>
+                    <option value="mr">मराठी</option>
+                    <option value="gu">ગુજરાતી</option>
+                    <option value="kn">ಕನ್ನಡ</option>
+                    <option value="ml">മലയാളം</option>
+                    <option value="pa">ਪੰਜਾਬੀ</option>
+                  </select>
+                </div>
+                <button type="button" class="auth-guest-btn auth-skip-optionals" id="authSkipOptionals">Skip extras — go to account access →</button>
+              </details>
             </section>
             </div><!-- /#authCanvasCreateFields -->
 
@@ -365,8 +367,8 @@
         <div class="auth-success-body">
           <div class="auth-success-emoji" id="authSuccessEmoji" data-icon="party" data-icon-size="64"></div>
           <div class="auth-success-title" id="authSuccessTitle">Welcome to Chaupaal!</div>
-          <div class="auth-success-desc" id="authSuccessDesc">Your Profile is ready. Next — add a bio &amp; a prompt.</div>
-          <button class="btn btn--primary btn--block btn--lg auth-btn" id="authSuccessCta" type="button">Open my Profile →</button>
+          <div class="auth-success-desc" id="authSuccessDesc">Your Profile is ready. One clear next step when you continue.</div>
+          <button class="btn btn--primary btn--block btn--lg auth-btn" id="authSuccessCta" type="button">Continue →</button>
         </div>
       </div>
 
@@ -642,6 +644,13 @@
             </div>
             <label class="switch"><input type="checkbox" id="toggleQuiet"><span class="slider"></span></label>
           </div>
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label" data-i18n="settings_hide_mode_hints">Hide mode hints</div>
+              <div class="toggle-desc" data-i18n="settings_hide_mode_hints_desc">Hide English job-titles under Peepal, Baithak, Duniya…</div>
+            </div>
+            <label class="switch"><input type="checkbox" id="toggleHideModeHints"><span class="slider"></span></label>
+          </div>
         </div>
       </details>
 
@@ -834,8 +843,8 @@
   <script src="/src/js/core/runtime-guard.js?v=ead1d56d"></script>
   <script src="/src/js/data/samples.js?v=e109e543"></script>
   <script src="/src/js/data/akhbaar-bank.js?v=e8c7e2d1"></script>
-  <script src="/src/js/core/state.js?v=86373704"></script>
-  <script src="/src/js/core/ui-states.js?v=572fae96"></script>
+  <script src="/src/js/core/state.js?v=nux20260825"></script>
+  <script src="/src/js/core/ui-states.js?v=nux20260825"></script>
   <script src="/src/js/core/firestore-page.js?v=3d7e5828"></script>
   <script src="/src/js/core/drafts.js?v=e672a449"></script>
   <script src="/src/js/core/soft-delete.js?v=6947a077"></script>
@@ -848,7 +857,7 @@
   <script src="/src/js/core/relationships.js?v=s20260825a"></script>
   <script src="/src/js/core/chat-presence.js?v=7176596d"></script>
   <script src="/src/js/core/image-pipeline.js?v=11f45e2b"></script>
-  <script src="/src/js/core/profile-completion.js?v=4145ef72"></script>
+  <script src="/src/js/core/profile-completion.js?v=nux20260825"></script>
   <script src="/src/js/core/profile-facts.js?v=83ce64be"></script>
   <script src="/src/js/core/profile-rewards.js?v=s20260824b"></script>
   <script src="/src/js/core/profile-digital-layout.js?v=s20260824c"></script>
@@ -862,19 +871,20 @@
   <script src="/src/js/core/profile-type.js?v=e983c303"></script>
   <script src="/src/js/core/profile-type-enrich.js?v=s20260824b"></script>
   <script src="/src/js/core/swipe-pager.js?v=e81d56e6"></script>
-  <script src="/src/js/core/section-modes.js?v=f654f9cd"></script>
+  <script src="/src/js/core/section-modes.js?v=nux20260825"></script>
+  <script src="/src/js/core/first-run.js?v=nux20260825"></script>
   <script src="/src/js/core/contacts-find.js?v=s20260821a"></script>
   <script src="/src/js/core/teen-mode.js?v=fba4d750"></script>
   <script src="/src/js/core/professional-badge.js?v=775a0916"></script>
   <script src="/src/js/core/linkify.js?v=6dde463f"></script>
   <script src="/src/js/core/profile-highlights.js?v=bce95bea"></script>
-  <script src="/src/js/core/profile-shell.js?v=s20260824c"></script>
-  <script src="/src/js/core/profile-section-mount.js?v=a15557d7"></script>
+  <script src="/src/js/core/profile-shell.js?v=nux20260825"></script>
+  <script src="/src/js/core/profile-section-mount.js?v=nux20260825"></script>
   <script src="/src/js/core/push-prefs.js?v=967d0d68"></script>
   <script src="/src/js/core/notification-panel.js?v=ba8500fe"></script>
   <script src="/src/js/core/fcm-client.js?v=dc39a6ec"></script>
   <script src="/src/js/core/micro.js?v=014dea03"></script>
-  <script src="/src/js/core/tab-gestures.js?v=678a96d3"></script>
+  <script src="/src/js/core/tab-gestures.js?v=nux20260825"></script>
   <script src="/src/js/core/tab-nudges.js?v=034b4760"></script>
   <script src="/src/js/core/sessions.js?v=fafd40d3"></script>
   <script src="/src/js/core/safety.js?v=1dcac469"></script>
@@ -906,8 +916,8 @@
   <script src="/src/js/auth/auth-profiles.js?v=ea92be32"></script>
   <script src="/src/js/features/akhbaar.js?v=64b8165b"></script>
   <script src="/src/js/features/dangal.js?v=d53bdd6b"></script>
-  <script src="/src/js/features/dangal-ratings.js?v=1cc5662a"></script>
-  <script src="/src/js/features/baithak-data.js?v=s20260825a"></script>
+  <script src="/src/js/features/dangal-ratings.js?v=nux20260825"></script>
+  <script src="/src/js/features/baithak-data.js?v=nux20260825"></script>
   <script src="/src/js/features/baithak-chat-actions.js?v=1"></script>
   <script src="/src/js/core/baithak-msg-cache.js?v=1"></script>
   <script src="/src/js/features/baithak-search.js?v=s20260821a"></script>
@@ -929,11 +939,11 @@
   <script src="/src/js/features/baithak.js?v=9bdd414d"></script>
   <script src="/src/js/features/profile-preview.js?v=s20260825a"></script>
   <script src="/src/js/features/profile.js?v=9d32c287"></script>
-  <script src="/src/js/core/i18n.js?v=s20260821b"></script>
+  <script src="/src/js/core/i18n.js?v=nux20260825"></script>
   <script src="/src/js/core/i18n-locales.js?v=5812eb81"></script>
   <script src="/src/js/features/categories.js?v=s20260821b"></script>
   <script src="/src/js/features/category-prefs.js?v=033b4dec"></script>
-  <script src="/src/js/features/peepal.js?v=7ec67d45"></script>
+  <script src="/src/js/features/peepal.js?v=nux20260825"></script>
   <script src="/src/js/features/onboarding.js?v=s20260821a"></script>
   <script src="/src/js/core/service-worker.js?v=9ffe9136"></script>
   <script src="/src/js/features/streak.js?v=016062bb"></script>
@@ -971,14 +981,14 @@
   <script src="/src/js/features/duniya-story-editor.js?v=4dff1e38"></script>
   <script src="/src/js/features/duniya-story-viewer.js?v=s20260825a"></script>
   <script src="/src/js/features/duniya-compose.js?v=082fe9ab"></script>
-  <script src="/src/js/features/duniya.js?v=s20260824b"></script>
+  <script src="/src/js/features/duniya.js?v=nux20260825"></script>
   <script src="/src/js/features/media-picker.js?v=s20260821a"></script>
   <script src="/src/js/features/premium.js?v=53c2aa53"></script>
   <script src="/src/js/features/discovery.js?v=s20260824b"></script>
-  <script src="/src/js/features/khoj.js?v=s20260821b"></script>
+  <script src="/src/js/features/khoj.js?v=nux20260825"></script>
   <script src="/src/js/core/polish.js?v=f8956255"></script>
   <script src="/src/js/features/fairness.js?v=s20260821b"></script>
   <script src="/src/js/features/media-profile.js?v=d8fe1026"></script>
-  <script src="/src/js/auth/auth-events.js?v=s20260824d"></script>
+  <script src="/src/js/auth/auth-events.js?v=nux20260825"></script>
 </body>
 </html>

@@ -584,6 +584,7 @@ function setDangalSection(section, opts) {
   if (screen) {
     [...screen.classList].filter((c) => c.startsWith('room-kit')).forEach((c) => screen.classList.remove(c));
     screen.classList.add('room-kit', 'room-kit--fire', `room-kit--${dangalSection}`);
+    if (typeof paintModeSubtitle === 'function') paintModeSubtitle(screen, 'dangal', dangalSection);
   }
   if (!opts?.silent) {
     // Quiet: no toast on section change (morph / swipe are enough)

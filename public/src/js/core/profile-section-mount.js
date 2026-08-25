@@ -92,7 +92,7 @@
     if (sectionId === 'pinned') {
       const pinned = Array.isArray(dp.pinnedPosts) ? dp.pinnedPosts : [];
       if (!pinned.length) {
-        bodyEl.innerHTML = `<div class="public-profile-posts-empty">${isOwner ? 'Pin posts from Archive (coming soon empty state)' : 'Nothing pinned'}</div>`;
+        bodyEl.innerHTML = `<div class="public-profile-posts-empty">${isOwner ? 'Nothing pinned yet — pin posts from your Archive when you’re ready.' : 'Nothing pinned'}</div>`;
         return;
       }
       bodyEl.innerHTML = `<div class="public-profile-posts">${pinned

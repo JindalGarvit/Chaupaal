@@ -28,7 +28,7 @@
 .btn--pill{border-radius:var(--r-full);}
 .btn--icon{width:var(--tap-min);height:var(--tap-min);padding:0;border-radius:50%;}
 
-/* Overlay stack base — depth assigned in nav-stack.js (BASE_OVERLAY_Z + n*10) */
+/* Overlay stack base ? depth assigned in nav-stack.js (BASE_OVERLAY_Z + n*10) */
 :root { --overlay-z-base: 200; }
 
 .cp-back-btn {
@@ -100,7 +100,7 @@
   }
   .tab-btn.active .tab-icon { transform: scale(1.12) translateY(-1px); }
   .tab-btn.active .tab-label { color: var(--red); }
-  /* Thin red line above icon — does not cover label or illustrated marks */
+  /* Thin red line above icon ? does not cover label or illustrated marks */
   .tab-btn.active::before {
     content: '';
     position: absolute;
@@ -1044,14 +1044,14 @@ html.is-offline .device { filter: saturate(0.92); }
 }
 
 /* ============================================================
-   DYNAMIC THEMES (time-of-day shell) — atmosphere stays BEHIND UI
+   DYNAMIC THEMES (time-of-day shell) ? atmosphere stays BEHIND UI
    ============================================================ */
 .theme-weather-overlay,
 .theme-rain-overlay{
   pointer-events:none;
   position:absolute;
   inset:0;
-  z-index:0; /* under content — never over text */
+  z-index:0; /* under content ? never over text */
   opacity:0;
   transition:opacity 1.4s var(--ease-smooth,ease);
   overflow:hidden;
@@ -1248,7 +1248,7 @@ html.theme-preset-night .device::before{
   .theme-weather-overlay .wx-cloud{animation:none!important;}
 }
 html.quiet-mode .theme-weather-overlay .wx-cloud{animation:none!important;}
-/* Chip rows: horizontal pan only — don't steal for section mode swipe */
+/* Chip rows: horizontal pan only ? don't steal for section mode swipe */
 .peepal-intent-chips,
 [data-khoj-chips],
 .akhbaar-cat-bar,
@@ -1288,7 +1288,7 @@ html.quiet-mode .theme-weather-overlay .wx-cloud{animation:none!important;}
 }
 .settings-cat-summary::-webkit-details-marker{display:none;}
 .settings-cat-summary::after{
-  content:'▸';
+  content:'?';
   color:var(--muted);
   font-size:12px;
   transition:transform .15s ease;
@@ -1356,7 +1356,7 @@ body.theme-night,
   border-color:var(--line) !important;
 }
 
-/* Dawn / goldenHour: no peach UI — Light surfaces; Auto wash is overlay-only */
+/* Dawn / goldenHour: no peach UI ? Light surfaces; Auto wash is overlay-only */
 .theme-dawn,
 .theme-goldenHour{
   --cream:#F5F5F5;
@@ -1389,7 +1389,7 @@ body.theme-goldenHour,
   --muted:#586068;
   --line:#D5DBE1;
 }
-/* Legacy aliases — keep near Light, no costume themes */
+/* Legacy aliases ? keep near Light, no costume themes */
 .theme-hot{
   --cream:#F5F5F5;
   --white:#FFFFFF;
@@ -1406,7 +1406,7 @@ body.theme-goldenHour,
   --line:#DCE0E4;
 }
 
-/* Phase 7+ registry — Light baseline + derived cool variants (no parchment / peach) */
+/* Phase 7+ registry ? Light baseline + derived cool variants (no parchment / peach) */
 .theme-clearDay,
 .theme-goldenHour,
 .theme-dawn{
@@ -1853,7 +1853,7 @@ body.theme-goldenHour,
 .akhbaar-surkhiya-sub{font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.4;}
 .akhbaar-surkhiya-chips{display:flex;gap:8px;flex-wrap:wrap;}
 
-/* Soft button system — shared primary/secondary rhythm */
+/* Soft button system ? shared primary/secondary rhythm */
 .btn{
   --btn-radius:12px;
   border-radius:var(--btn-radius);
@@ -1870,7 +1870,7 @@ body.theme-goldenHour,
 .duniya-mode-switch{display:flex;gap:4px;background:var(--cream);border-radius:12px;padding:3px;border:1px solid var(--line);}
 .duniya-mode-btn{border:0;background:transparent;border-radius:10px;padding:8px 12px;font:700 12px 'Space Grotesk',sans-serif;color:var(--muted);cursor:pointer;}
 .duniya-mode-btn.active{background:var(--white);color:var(--red);box-shadow:0 1px 3px rgba(0,0,0,.06);}
-/* .duniya-music-bar and .duniya-music-btn removed — Radio & Songs feature removed */
+/* .duniya-music-bar and .duniya-music-btn removed ? Radio & Songs feature removed */
 .lehar-feed{
   position:absolute;inset:0;top:0;overflow-y:auto;
   scroll-snap-type:y mandatory;scroll-snap-stop:always;
@@ -1961,7 +1961,7 @@ html.theme-dark .lehar-empty{color:#fff;}
   .prasidha-span-wide,.prasidha-span-tall{grid-column:span 1;grid-row:span 1;}
 }
 
-/* Mashhoor (Peepal) — different recipe: denser, earth-tinted, 3-col on wide */
+/* Mashhoor (Peepal) ? different recipe: denser, earth-tinted, 3-col on wide */
 .mashhoor-grid{padding:4px 10px 24px;}
 .mashhoor-masonry{
   display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;
@@ -2225,7 +2225,7 @@ html.theme-dark .lehar-empty{color:#fff;}
   100% { transform: scale(1); }
 }
 
-/* Rush Runner — lane bar + stage */
+/* Rush Runner ? lane bar + stage */
 .game-lane-bar {
   display: flex;
   justify-content: space-around;
@@ -2378,7 +2378,7 @@ html.theme-dark .lehar-empty{color:#fff;}
   cursor: pointer;
 }
 
-/* Tip Tap — gems, fall/pop, FX */
+/* Tip Tap ? gems, fall/pop, FX */
 .tt-meter {
   padding: 8px 16px;
   background: rgba(0, 0, 0, 0.18);
@@ -2839,7 +2839,7 @@ form.cp-kb-lift {
 }
 
 /* Collapse tab bar only while a text field is focused AND keyboard is open.
-   Stuck html.kb-open used to leave a blank bottom forever — touch.js + runtime-guard clear it. */
+   Stuck html.kb-open used to leave a blank bottom forever ? touch.js + runtime-guard clear it. */
 html.kb-open .bottom-tabs {
   visibility: hidden;
   pointer-events: none;
@@ -3145,7 +3145,7 @@ select:focus-visible,
 }
 .baithak-instant-stub{
   width:68px;height:44px;display:grid;place-items:center;overflow:hidden;
-  /* Soft parallelogram / ticket-stub — dense Notes-like tray */
+  /* Soft parallelogram / ticket-stub ? dense Notes-like tray */
   background:linear-gradient(135deg,var(--cream),var(--white));
   border:1.5px solid var(--line);
   border-radius:6px 14px 6px 14px;
@@ -3164,7 +3164,8 @@ select:focus-visible,
 .instant-compose-text{width:100%;box-sizing:border-box;padding:12px;border:2px solid var(--line);border-radius:14px;font:14px Inter,sans-serif;resize:vertical;min-height:72px;background:var(--cream);}
 .instant-compose-tools{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
 .instant-compose-meta{font-size:11px;color:var(--muted);margin-top:10px;line-height:1.35;}
-.akhbaar-mode-hint,.dangal-mode-hint,.duniya-mode-hint,.room-kit-header{display:none!important;}
+/* Old standalone mode-hint rows retired; room-kit-header / cp-mode-subtitle carry English jobs */
+.akhbaar-mode-hint,.dangal-mode-hint,.duniya-mode-hint{display:none!important;}
 .surkhiya-chip{display:block;width:100%;text-align:left;padding:12px 14px;margin-bottom:8px;border:0;border-radius:14px;background:var(--white);border:1px solid var(--line);cursor:pointer;}
 .surkhiya-chip.is-expanded{background:var(--cream);}
 .surkhiya-chip-brief{display:block;margin-top:8px;font-size:13px;line-height:1.45;color:var(--ink);}
@@ -3242,7 +3243,7 @@ select:focus-visible,
 .game-result-pb{margin:0;font:600 12px/1.4 'Space Grotesk',sans-serif;color:var(--game-accent,#E63946);}
 .game-overlay--dark .game-result-pb{color:color-mix(in srgb,var(--game-accent,#E63946) 85%,#fff);}
 
-/* Subtle Chaupaal brand mark — chrome / results / share */
+/* Subtle Chaupaal brand mark ? chrome / results / share */
 .game-brand-mark{display:inline-flex;align-items:center;gap:4px;font:600 9px/1 'Space Grotesk',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);opacity:.85;}
 .game-brand-mark--compact .game-brand-word{font-size:8px;}
 .game-brand-chair{font-size:10px;line-height:1;opacity:.9;filter:grayscale(.2);}
@@ -3424,7 +3425,7 @@ select:focus-visible,
 .dangal-friends-name{flex:1;}
 .dangal-friends-rating{font:700 13px var(--font-display);color:var(--red);}
 
-/* Dangal progress · soft weekly goals */
+/* Dangal progress � soft weekly goals */
 .dangal-progress-host{width:100%;margin:0 0 var(--space-3);}
 .dangal-progress{
   background:var(--white);border:1px solid var(--line);border-radius:var(--r-md);
@@ -3502,7 +3503,7 @@ select:focus-visible,
 .story-comments{max-height:130px;overflow-y:auto;margin-bottom:8px}.story-comment{display:flex;gap:8px;padding:6px 2px;font-size:12px}.story-comment strong{flex:0 0 auto}.story-comment span{color:rgba(255,255,255,.78);overflow-wrap:anywhere}.story-comment-empty{font-size:11px;color:rgba(255,255,255,.5);padding:6px 2px;}
 .story-comment-compose{display:flex;gap:8px}.story-comment-compose input{flex:1;min-width:0;padding:10px 12px;border:0;border-radius:999px;background:rgba(255,255,255,.12);color:#fff}.story-comment-compose button{border:0;background:#fff;color:#111;border-radius:50%;width:38px;height:38px;font-size:18px;cursor:pointer;}
 
-/* UX delight polish — sheets, discovery motion, profile chrome, stickers */
+/* UX delight polish ? sheets, discovery motion, profile chrome, stickers */
 .name-prompt-sheet{position:absolute;inset:0;z-index:200;display:flex;align-items:flex-end;justify-content:center;}
 .name-prompt-backdrop{position:absolute;inset:0;background:rgba(15,20,40,.45);}
 .name-prompt-card{position:relative;width:100%;background:var(--white);border-radius:20px 20px 0 0;padding:22px 18px 28px;box-shadow:0 -8px 32px rgba(0,0,0,.12);}
@@ -3758,7 +3759,7 @@ select:focus-visible,
 .public-profile-name,.discover-name,.friend-name{
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;
 }
-/* Chat bubbles: WhatsApp-like wrap — never mid-word scrap on short text */
+/* Chat bubbles: WhatsApp-like wrap ? never mid-word scrap on short text */
 .msg-bubble{
   overflow-wrap:break-word;
   word-break:normal;
@@ -4331,7 +4332,7 @@ button[aria-busy="true"]::after{
 .loc-stop-btn{margin-top:4px;}
 .loc-stop-btn.hidden{display:none!important;}
 
-/* ── Group info (Baithak) ─────────────────────────────────────────────────── */
+/* ?? Group info (Baithak) ??????????????????????????????????????????????????? */
 .chat-header-tappable{cursor:pointer;}
 .chat-header-tappable:active{opacity:0.85;}
 .group-info-overlay{z-index:95;}
@@ -4589,7 +4590,7 @@ html.quiet-mode .notif-item{transition:none;}
 }
 .tab-notif-light.hidden{display:none!important;}
 
-/* Morph: same slots → shortcuts */
+/* Morph: same slots ? shortcuts */
 .bottom-tabs.is-shortcut-mode{
   z-index:120;
 }
@@ -4599,7 +4600,7 @@ html.quiet-mode .notif-item{transition:none;}
 .bottom-tabs.is-shortcut-mode .tab-btn .tab-label{
   font-size:8px;line-height:1.1;max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
-/* Red base-tab indicator is for the five tabs only — hide while morph shortcuts are up */
+/* Red base-tab indicator is for the five tabs only ? hide while morph shortcuts are up */
 .bottom-tabs.is-shortcut-mode .tab-btn.active::before,
 .bottom-tabs.is-shortcut-mode .tab-btn.is-shortcut.active::before{
   content:none!important;
@@ -4709,7 +4710,7 @@ html.quiet-mode .notif-item{transition:none;}
 .duniya-gif-clear{position:absolute;top:8px;right:8px;border:0;border-radius:999px;width:28px;height:28px;background:rgba(0,0,0,.55);color:#fff;cursor:pointer;}
 .baithak-inbox-empty{padding:8px 0 24px;}
 
-/* ── Profile pass: peek, card, AI, hub row ───────────────────────────────── */
+/* ?? Profile pass: peek, card, AI, hub row ????????????????????????????????? */
 .dp-hero--premium{position:relative;padding-bottom:4px;}
 .dp-hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
 .dp-settings-gear,.dp-hero-actions{flex-shrink:0;margin-top:4px;}
@@ -4882,7 +4883,7 @@ html.quiet-mode [data-decorative-motion]{animation:none!important;transition:non
 .cp-danger-text{background:none;border:none;color:var(--red);cursor:pointer;}
 .dp-hero-complete.is-collapsed{opacity:.72;transform:scale(.98);transform-origin:left center;}
 .dp-hero-complete.is-collapsed .dp-hero-complete-hint{display:none!important;}
-/* Auth as live Profile canvas — full page, not a kid card form */
+/* Auth as live Profile canvas ? full page, not a kid card form */
 #authRegStep1 .auth-form-body{background:linear-gradient(180deg,rgba(230,57,70,0.03),transparent 140px);}
 #authRegStep1 .auth-profile-canvas{
   border:none;border-radius:0;padding:0;margin:0;background:transparent;box-shadow:none;
@@ -4927,7 +4928,7 @@ html.quiet-mode [data-decorative-motion]{animation:none!important;transition:non
 }
 .theme-night #authRegStep1 .auth-profile-canvas .auth-input::placeholder{color:#9AA0A6;opacity:1;}
 
-/* ── Surkhiya bands + Safar + tinted chips (product pass) ── */
+/* ?? Surkhiya bands + Safar + tinted chips (product pass) ?? */
 .surkhiya-band{margin:0 12px 16px;}
 .surkhiya-band-title{font:700 12px/1.2 'Space Grotesk',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#7B2CBF;margin:0 0 8px;padding:0 2px;}
 .surkhiya-band-list{display:flex;flex-direction:column;gap:8px;}
@@ -5090,4 +5091,57 @@ html.quiet-mode .dp-arcade-burst,html.quiet-mode .dp-arcade-block{animation:none
 }
 @media (prefers-reduced-motion: reduce){
   .dp-arcade-burst,.dp-arcade-block,.cp-profile-highlights.dp-themed[data-dp-ring="pulse"] .highlight-circle{animation:none!important;}
+
+/* New-user first-run (coach, mode jobs, demo badges) */
+.cp-mode-subtitle.room-kit-header{
+  display:block!important;
+  padding:8px 16px 4px;
+  position:relative;z-index:2;
 }
+.cp-mode-subtitle strong{display:block;font:700 13px 'Space Grotesk',sans-serif;}
+.cp-mode-subtitle small{display:block;font:500 11px/1.35 system-ui,sans-serif;color:var(--muted);margin-top:2px;}
+.cp-demo-badge{
+  display:inline-block;font:700 9px/1.2 system-ui,sans-serif;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line,#ddd);border-radius:4px;padding:2px 5px;margin-left:6px;vertical-align:middle;
+}
+.duniya-demo-banner{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  margin:8px 12px;padding:10px 12px;border-radius:12px;
+  background:rgba(26,23,20,.06);border:1px dashed var(--line,#ccc);font-size:12px;color:var(--ink);
+}
+.duniya-demo-banner-text{flex:1;min-width:140px;}
+.duniya-demo-banner-cta{font-size:12px!important;padding:6px 12px!important;}
+.duniya-demo-banner-dismiss{border:0;background:transparent;font-size:16px;cursor:pointer;color:var(--muted);padding:4px;}
+.chat-item-demo{opacity:.92;}
+.chat-item-demo .chat-preview{font-style:italic;}
+.first-run-coach{z-index:95;}
+.first-run-coach-body{padding:8px 16px 20px;display:flex;flex-direction:column;gap:12px;}
+.first-run-coach-card{
+  background:var(--white,#fff);border-radius:16px;padding:18px 16px;border:1px solid var(--line,#eee);
+  box-shadow:0 8px 24px rgba(0,0,0,.08);
+}
+.first-run-coach-ico{font-size:28px;margin-bottom:8px;line-height:1;}
+.first-run-coach-card h3{margin:0 0 8px;font:700 16px 'Space Grotesk',sans-serif;}
+.first-run-coach-card p{margin:0;font:400 13px/1.45 system-ui,sans-serif;color:var(--muted);}
+.first-run-coach-dots{display:flex;gap:6px;justify-content:center;padding:4px 0;}
+.first-run-coach-dots i{width:7px;height:7px;border-radius:50%;background:var(--line,#ccc);display:block;}
+.first-run-coach-dots i.is-on{background:var(--red,#E63946);}
+.first-run-coach-body.is-quiet .first-run-coach-card{box-shadow:none;}
+.day0-value-fork .day0-fork-body{padding:12px 16px 24px;display:flex;flex-direction:column;gap:10px;}
+.day0-fork-lead{margin:0 0 4px;font-size:13px;color:var(--muted);line-height:1.4;}
+.day0-fork-card{
+  text-align:left;border:1px solid var(--line,#ddd);border-radius:14px;padding:14px 16px;
+  background:var(--white,#fff);cursor:pointer;display:flex;flex-direction:column;gap:4px;
+}
+.day0-fork-card strong{font:700 15px 'Space Grotesk',sans-serif;}
+.day0-fork-card span{font-size:12px;color:var(--muted);line-height:1.35;}
+.legal-sheet-v1 .legal-sheet-body{padding:16px;overflow:auto;font:400 13px/1.55 system-ui,sans-serif;color:var(--ink);}
+.legal-sheet-v1 .legal-sheet-body p{margin:0 0 12px;}
+.legal-v1-note{font-size:11px;color:var(--muted)!important;}
+.auth-optional-details{border:1px solid var(--line,#e5e5e5);border-radius:12px;padding:4px 12px 10px;background:rgba(0,0,0,.02);}
+.auth-optional-summary{
+  cursor:pointer;font:700 13px 'Space Grotesk',sans-serif;padding:10px 0;list-style:none;
+}
+.auth-optional-summary::-webkit-details-marker{display:none;}
+.auth-optional-summary::after{content:' +';color:var(--muted);font-weight:700;}
+.auth-optional-details[open] .auth-optional-summary::after{content:' −';}

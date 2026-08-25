@@ -1,10 +1,10 @@
 // ===================== DUNIYA DATA =====================
 const SAMPLE_DUNIYA=[
-  {id:'d1',user:{name:'India Today',avatar:'📺',uid:'it',profileType:'professional'},type:'image',media:'https://picsum.photos/seed/news1/600/400',caption:'Breaking: Major policy announcement from Union Cabinet. #IndiaToday #News',likes:2847,comments:142,shares:389,timestamp:'2h',tags:[],followed:false,likedByMe:false},
-  {id:'d2',user:{name:'Priya Krishnan',avatar:'👩‍🎨',uid:'pk',profileType:'personal'},type:'image',media:'https://picsum.photos/seed/art2/600/600',caption:'My latest artwork inspired by the monsoons 🌧️ What do you think? @ArtLovers #Art #Monsoon',likes:934,comments:67,shares:28,timestamp:'4h',tags:['ArtLovers'],followed:false,likedByMe:false},
-  {id:'d3',user:{name:'StartupIndia',avatar:'🚀',uid:'si',profileType:'professional'},type:'video',media:null,caption:'5 Indian startups that are changing the world 🌏 Watch till the end! #Startup #India',likes:5201,comments:321,shares:1204,timestamp:'6h',tags:[],followed:false,likedByMe:false},
-  {id:'d4',user:{name:'Chef Rahul',avatar:'👨‍🍳',uid:'cr',profileType:'professional'},type:'image',media:'https://picsum.photos/seed/food4/600/500',caption:'Dal makhani recipe that took me 10 years to perfect. Recipe in comments! 🍛 #Food #Recipe',likes:3102,comments:892,shares:1567,timestamp:'8h',tags:[],followed:false,likedByMe:false},
-  {id:'d5',user:{name:'Riya Sharma',avatar:'😊',uid:'rs',profileType:'personal'},type:'image',media:'https://picsum.photos/seed/travel5/600/700',caption:'Ladakh calling 🏔️ Nothing compares to this. @Dev_travels #Travel #Ladakh',likes:1204,comments:89,shares:45,timestamp:'1d',tags:['Dev_travels'],followed:true,likedByMe:true},
+  {id:'d1',isSample:true,user:{name:'India Today',avatar:'📺',uid:'it',profileType:'professional'},type:'image',media:'https://picsum.photos/seed/news1/600/400',caption:'Breaking: Major policy announcement from Union Cabinet. #IndiaToday #News',likes:2847,comments:142,shares:389,timestamp:'2h',tags:[],followed:false,likedByMe:false},
+  {id:'d2',isSample:true,user:{name:'Priya Krishnan',avatar:'👩‍🎨',uid:'pk',profileType:'personal'},type:'image',media:'https://picsum.photos/seed/art2/600/600',caption:'My latest artwork inspired by the monsoons 🌧️ What do you think? @ArtLovers #Art #Monsoon',likes:934,comments:67,shares:28,timestamp:'4h',tags:['ArtLovers'],followed:false,likedByMe:false},
+  {id:'d3',isSample:true,user:{name:'StartupIndia',avatar:'🚀',uid:'si',profileType:'professional'},type:'video',media:null,caption:'5 Indian startups that are changing the world 🌏 Watch till the end! #Startup #India',likes:5201,comments:321,shares:1204,timestamp:'6h',tags:[],followed:false,likedByMe:false},
+  {id:'d4',isSample:true,user:{name:'Chef Rahul',avatar:'👨‍🍳',uid:'cr',profileType:'professional'},type:'image',media:'https://picsum.photos/seed/food4/600/500',caption:'Dal makhani recipe that took me 10 years to perfect. Recipe in comments! 🍛 #Food #Recipe',likes:3102,comments:892,shares:1567,timestamp:'8h',tags:[],followed:false,likedByMe:false},
+  {id:'d5',isSample:true,user:{name:'Riya Sharma',avatar:'😊',uid:'rs',profileType:'personal'},type:'image',media:'https://picsum.photos/seed/travel5/600/700',caption:'Ladakh calling 🏔️ Nothing compares to this. @Dev_travels #Travel #Ladakh',likes:1204,comments:89,shares:45,timestamp:'1d',tags:['Dev_travels'],followed:true,likedByMe:true},
 ];
 
 let duniyaPosts=[...SAMPLE_DUNIYA];
@@ -123,9 +123,14 @@ async function loadDuniyaPage({reset=false}={}){
       const seen=new Set(duniyaPosts.map(p=>p.firestoreId||p.id));
       mapped.forEach(p=>{ if(!seen.has(p.firestoreId||p.id)) duniyaPosts.push(p); });
     } else if(reset){
-      // Empty Firestore — keep samples so the tab isn't blank for demos.
-      duniyaLiveMode=false;
-      duniyaPosts=[...SAMPLE_DUNIYA];
+      // Empty Firestore: guests keep labeled samples; signed-in users get an honest empty feed.
+      if(typeof currentUser!=='undefined'&&currentUser){
+        duniyaLiveMode=true;
+        duniyaPosts=[];
+      } else {
+        duniyaLiveMode=false;
+        duniyaPosts=[...SAMPLE_DUNIYA];
+      }
     }
     duniyaPageCursor=page.lastDoc;
     duniyaHasMore=page.hasMore;
@@ -183,18 +188,21 @@ function openDuniyaStoryAddSheet(){
 }
 
 function renderDuniyaDemoBanner(feed){
-  if(!feed||duniyaLiveMode||typeof currentUser!=='undefined'&&currentUser)return;
+  if(!feed||duniyaLiveMode)return;
+  const showingSamples=(duniyaPosts||[]).some((p)=>p.isSample);
+  if(!showingSamples)return;
   try{if(sessionStorage.getItem('chaupaal_duniya_demo_dismissed')==='1')return;}catch(e){}
   const existing=feed.querySelector('.duniya-demo-banner');
   if(existing)return;
   const banner=document.createElement('div');
   banner.className='duniya-demo-banner';
   banner.setAttribute('role','status');
-  banner.innerHTML=`<span class="duniya-demo-banner-text">Sample posts — sign in to see your real feed</span>
+  banner.innerHTML=`<span class="duniya-demo-banner-text">Sample — sign in to see your real feed</span>
     <button type="button" class="btn btn--primary duniya-demo-banner-cta" data-duniya-demo-signin>Sign in</button>
     <button type="button" class="duniya-demo-banner-dismiss" data-duniya-demo-dismiss aria-label="Dismiss">×</button>`;
   banner.querySelector('[data-duniya-demo-signin]')?.addEventListener('click',()=>{
     if(typeof openAuthSheet==='function')openAuthSheet('login');
+    else if(typeof showAuth==='function')showAuth();
     else if(typeof showToast==='function')showToast('Sign in from the menu');
   });
   banner.querySelector('[data-duniya-demo-dismiss]')?.addEventListener('click',()=>{
@@ -213,9 +221,21 @@ function renderDuniyaFeed(){
       renderEmptyState(feed, {
         icon: (typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('duniya',40):(typeof iconHtml==='function'?iconHtml('globe',{size:40,className:'cp-icon--empty'}):'🌍'),
         title:'No posts yet',
-        message:'Be the first to share something with Duniya.',
+        message: (typeof currentUser!=='undefined'&&currentUser)
+          ? 'Guest sample posts don’t carry over after signup. Share something, or play Akhbaar meanwhile.'
+          : 'Be the first to share something with Duniya.',
         actionLabel:'Create a post',
-        onAction:()=>typeof openDuniyaPostSheet==='function'&&openDuniyaPostSheet(),
+        onAction:()=>{
+          if(typeof currentUser==='undefined'||!currentUser){
+            if(typeof showToast==='function') showToast('You’re browsing demos — sign in to post');
+            if(typeof showAuth==='function') showAuth();
+            return;
+          }
+          if(typeof openDuniyaPostSheet==='function') openDuniyaPostSheet();
+        },
+        secondaryActions: (typeof currentUser!=='undefined'&&currentUser) ? [
+          { label:'Play Akhbaar', onAction:()=>{ if(typeof showTab==='function') showTab('akhbaar'); } },
+        ] : [],
       });
     } else {
       feed.innerHTML='<div style="padding:32px;text-align:center;color:var(--muted);">No posts yet</div>';
@@ -347,7 +367,8 @@ function duniyaHeartIcon(){
 }
 
 function createDuniyaPost(post, {variant='list'}={}){
-  const el=document.createElement('div');el.className='duniya-post'+(variant==='tile'?' duniya-post--tile':'');el.dataset.id=post.id;
+  const el=document.createElement('div');el.className='duniya-post'+(variant==='tile'?' duniya-post--tile':'')+(post.isSample?' duniya-post--demo':'');el.dataset.id=post.id;
+  if(post.isSample) el.dataset.demo='1';
   const slides=duniyaSlidesOf(post);
   const cover=slides[post.coverSlideIndex||0]||slides[0];
   if(variant==='tile'){
@@ -415,8 +436,8 @@ function createDuniyaPost(post, {variant='list'}={}){
     <div class="duniya-post-header${post.user?.profileTheme?.accent ? ' cp-author-accent dp-themed' : ''}"${post.user?.profileTheme?.accent ? ` style="--dp-accent:${duniyaEsc(post.user.profileTheme.accent)}"` : ''}>
       <div class="duniya-post-avatar">${typeof duniyaUserAvatarHtml==='function'?duniyaUserAvatarHtml(post.user):`<span>${duniyaEsc(post.user.avatar||'👤')}</span>`}</div>
       <div class="duniya-post-user">
-        <div class="duniya-post-name">${headerName}</div>
-        <div class="duniya-post-meta">${duniyaEsc(typeof formatRelativeTime==='function'?formatRelativeTime(post.ts||post.timestamp):post.timestamp)} · <span class="cp-tab-mark" data-tab-mark="duniya" aria-hidden="true"></span> ${duniyaEsc(audienceLabel)}${locName?` · <button type="button" class="duniya-loc-line" data-loc>${duniyaEsc(locName)}</button>`:''}</div>
+        <div class="duniya-post-name">${headerName}${post.isSample?` <span class="cp-demo-badge">Demo</span>`:''}</div>
+        <div class="duniya-post-meta">${post.isSample?'Sample · ':''}${duniyaEsc(typeof formatRelativeTime==='function'?formatRelativeTime(post.ts||post.timestamp):post.timestamp)} · <span class="cp-tab-mark" data-tab-mark="duniya" aria-hidden="true"></span> ${duniyaEsc(audienceLabel)}${locName?` · <button type="button" class="duniya-loc-line" data-loc>${duniyaEsc(locName)}</button>`:''}</div>
       </div>
       <button class="duniya-follow-btn ${isFollowing?'following':''}" data-uid="${duniyaEsc(post.user.uid)}" aria-label="${isFollowing?'Unfollow':'Follow'} ${duniyaEsc(post.user.name)}">${isFollowing?'Following':'Follow'}</button>
       ${own?`<button type="button" class="duniya-delete-btn" title="Delete" aria-label="Delete post" style="background:none;border:none;cursor:pointer;color:var(--muted);padding:4px;">${typeof iconHtml==='function'?iconHtml('trash',{size:16}):'🗑️'}</button>`:''}
@@ -1618,6 +1639,9 @@ function toggleOpenToMeet(){
     }
     const hints = document.querySelectorAll('.duniya-mode-hint');
     hints.forEach((h) => h.remove());
+    if (panel && typeof paintModeSubtitle === 'function') {
+      paintModeSubtitle(panel, 'duniya', mode);
+    }
     if (mode === 'lehar') renderLeharFeed();
     if (mode === 'prasidha') renderPrasidhaFeed();
   }

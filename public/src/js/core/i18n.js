@@ -127,6 +127,8 @@ const I18N = {
     display_ambient_desc:'Soft background tone in Auto mode (off when Quiet)',
     settings_quiet:'Quiet mode',
     settings_quiet_desc:'Mute sounds, voice & animations',
+    settings_hide_mode_hints:'Hide mode hints',
+    settings_hide_mode_hints_desc:'Hide English job-titles under tab modes',
     settings_voice:'Listen voice',
     settings_voice_desc:'Voice used for Listen to post',
     display_geo_enable:'Use location for subtle sky/weather',

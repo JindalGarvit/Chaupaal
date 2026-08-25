@@ -1784,12 +1784,12 @@ function wireAuthEvents() {
         desc += ' Add an email in your profile to enable password login with your phone number.';
       else if (emailOk && !googleOk) desc += ' Check your email to verify your address.';
       document.getElementById('authSuccessDesc').textContent =
-        `${desc} Add a bio and prompts anytime on your Profile.`;
+        `${desc} Pick one next step — play or meet someone.`;
       if (typeof launchConfetti === 'function') launchConfetti({ x: 50, y: 40 }, 80);
 
       const cta = document.getElementById('authSuccessCta');
       if (cta) {
-        cta.textContent = 'Open my Profile →';
+        cta.textContent = 'Continue →';
         if (!cta.dataset.wired) {
           cta.dataset.wired = '1';
           cta.addEventListener('click', async () => {
@@ -1809,8 +1809,18 @@ function wireAuthEvents() {
                 } catch (e) {}
               }
               syncEmailVerifyBanner();
-              if (typeof maybeOfferProfileCompleteNudge === 'function') {
-                setTimeout(() => maybeOfferProfileCompleteNudge({ reason: 'signup' }), 500);
+              // One primary path only — no completion % modal stacked here.
+              try {
+                localStorage.setItem('chaupaal_nudge_after', String(Date.now() + 24 * 3600 * 1000));
+              } catch (e) {}
+              if (typeof runPostSignupPrimaryPath === 'function') {
+                setTimeout(() => runPostSignupPrimaryPath(), 400);
+              } else if (typeof maybeOfferFirstRunCoach === 'function') {
+                maybeOfferFirstRunCoach({
+                  onDone: () => {
+                    if (typeof openDay0ValueFork === 'function') openDay0ValueFork();
+                  },
+                });
               }
             };
             await enterApp();

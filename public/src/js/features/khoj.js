@@ -64,10 +64,28 @@
       if (reset) {
         khojShownPeeks = peeks.slice();
         if (!peeks.length) {
-          listEl.innerHTML = `<div class="khoj-compat-empty">${tt(
-            'khoj_empty_peeks',
-            'No eligible people yet — we never invent profiles. Try a broader description below.'
-          )}</div>`;
+          listEl.innerHTML = `<div class="khoj-compat-empty">
+            <p>${tt(
+              'khoj_empty_peeks',
+              'No eligible people yet — we never invent profiles. Try a broader description below.'
+            )}</p>
+            <div class="khoj-empty-ctas" style="display:flex;flex-direction:column;gap:8px;margin-top:12px;">
+              <button type="button" class="btn btn--primary" data-khoj-cta="invite">${tt('contacts_invite_cta', 'Invite friends')}</button>
+              <button type="button" class="btn btn--ghost" data-khoj-cta="search">${tt('shortcut_peepal_global_search', 'Search Chaupaal')}</button>
+              <button type="button" class="btn btn--ghost" data-khoj-cta="akhbaar">${tt('day0_play_akhbaar', 'Play Akhbaar')}</button>
+            </div>
+          </div>`;
+          listEl.querySelector('[data-khoj-cta="invite"]')?.addEventListener('click', () => {
+            if (typeof shareInviteToChaupaal === 'function') shareInviteToChaupaal();
+            else if (typeof openDay0MeetSheet === 'function') openDay0MeetSheet();
+          });
+          listEl.querySelector('[data-khoj-cta="search"]')?.addEventListener('click', () => {
+            if (typeof openUniversalSearch === 'function') openUniversalSearch({ types: ['users', 'duniya', 'peepal', 'groups', 'games'] });
+            else if (typeof openPeopleSearchWithContacts === 'function') openPeopleSearchWithContacts({ surface: 'peepal' });
+          });
+          listEl.querySelector('[data-khoj-cta="akhbaar"]')?.addEventListener('click', () => {
+            if (typeof showTab === 'function') showTab('akhbaar');
+          });
           return;
         }
         listEl.innerHTML = peeks.map((p) => renderCompatPeekCard(p)).join('');

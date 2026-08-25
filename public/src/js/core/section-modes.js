@@ -27,10 +27,14 @@
     el.classList.add('room-kit', ...(kits || []));
   }
 
-  /** Mode-name hint strips removed — navigation is swipe + morph only. No-op kept for callers. */
-  function ensureRoomHeader(host) {
+  /** Brand title + English job-title (permanent scaffold until Settings hide). */
+  function ensureRoomHeader(host, surface, mode) {
     if (!host) return;
-    host.querySelectorAll(':scope > .room-kit-header').forEach((h) => h.remove());
+    if (typeof paintModeSubtitle === 'function' && surface && mode) {
+      paintModeSubtitle(host, surface, mode);
+      return;
+    }
+    host.querySelectorAll(':scope > .room-kit-header, :scope > .cp-mode-subtitle').forEach((h) => h.remove());
   }
 
   function sharesPersonalEvents() {
@@ -52,7 +56,7 @@
     applyRoomKit(screen || panel, ['room-kit--earth', `room-kit--${peepalMode}`]);
 
     if (peepalMode === 'khoj') {
-      ensureRoomHeader(screen || feed);
+      ensureRoomHeader(screen || feed, 'peepal', 'khoj');
       document.getElementById('peepalIntentCard')?.classList.add('hidden');
       document.getElementById('peepalDiscovery')?.classList.add('hidden');
       document.getElementById('peepalMashhoorGrid')?.classList.add('hidden');
@@ -79,7 +83,7 @@
     document.getElementById('peepalIntentCard')?.classList.remove('hidden');
     document.getElementById('peepalDiscovery')?.classList.remove('hidden');
     if (feed) feed.classList.remove('hidden');
-    ensureRoomHeader(screen || feed);
+    ensureRoomHeader(screen || feed, 'peepal', 'vriksha');
     if (typeof renderPeepalFeed === 'function') {
       try {
         renderPeepalFeed();
@@ -108,7 +112,7 @@
     }
     host.classList.remove('hidden');
     if (feed) feed.classList.add('hidden');
-    ensureRoomHeader(host);
+    ensureRoomHeader(host, 'peepal', 'mashhoor');
 
     const posts =
       typeof peepalPosts !== 'undefined' && Array.isArray(peepalPosts)
@@ -573,7 +577,6 @@
     saa.innerHTML = buildSaathiHtml();
     renderSaathiFeed(saa);
 
-    // Mode-name hint rows removed (swipe + morph only)
     document.getElementById('akhbaarModeHint')?.remove();
   }
 
@@ -617,6 +620,7 @@
       [...panel.classList].filter((c) => c.startsWith('room-kit')).forEach((c) => panel.classList.remove(c));
       panel.classList.add('room-kit', 'room-kit--air', `room-kit--${mode === 'all' ? 'air' : mode}`);
       panel.dataset.akhbaarMode = mode;
+      ensureRoomHeader(panel, 'akhbaar', mode === 'all' ? 'all' : mode);
     }
   }
 
@@ -889,7 +893,7 @@
         if (typeof setBaithakSection === 'function') {
           setBaithakSection(next);
           applyRoomKit(panel, ['room-kit--sky', `room-kit--${next}`]);
-          ensureRoomHeader(panel);
+          ensureRoomHeader(panel, 'baithak', next);
         }
       },
       { passive: true }

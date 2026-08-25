@@ -240,6 +240,10 @@ function openSettingsModal(){
     if(radio) radio.checked=true;
     const quiet=document.getElementById('toggleQuiet');
     if(quiet) quiet.checked=!!quietMode || localStorage.getItem('chaupaal_quiet')==='1';
+    const hideHints=document.getElementById('toggleHideModeHints');
+    if(hideHints){
+      try{ hideHints.checked=localStorage.getItem('chaupaal_hide_mode_hints')==='1'; }catch(e){}
+    }
     if(typeof updateThemeGeoStatusUI==='function') updateThemeGeoStatusUI();
   }catch(e){}
   // Companion opt-out: checked = outreach ON (optOut false)
@@ -362,6 +366,24 @@ document.getElementById('toggleQuiet').addEventListener('change',e=>{
     ChaupaalAmbient.sync();
   }
   if(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.recompute) ChaupaalTheme.recompute('quiet');
+});
+
+document.getElementById('toggleHideModeHints')?.addEventListener('change',(e)=>{
+  try{ localStorage.setItem('chaupaal_hide_mode_hints', e.target.checked?'1':'0'); }catch(err){}
+  if(typeof showToast==='function'){
+    showToast(e.target.checked?'Mode hints hidden':'Mode hints on');
+  }
+  // Re-paint active surfaces
+  try{
+    if(typeof setPeepalMode==='function'&&typeof window.peepalMode==='function') setPeepalMode(window.peepalMode());
+    else if(typeof setPeepalMode==='function') setPeepalMode('vriksha');
+  }catch(err){}
+  try{
+    if(typeof setBaithakSection==='function') setBaithakSection(typeof window.baithakSection==='function'?window.baithakSection():'sabha');
+  }catch(err){}
+  try{ if(typeof setDuniyaMode==='function') setDuniyaMode('vishwa'); }catch(err){}
+  try{ if(typeof setAkhbaarMode==='function') setAkhbaarMode('all'); }catch(err){}
+  try{ if(typeof setDangalSection==='function') setDangalSection('manch',{silent:true}); }catch(err){}
 });
 
 // Apply display mode immediately when tapped (don't wait for Done)

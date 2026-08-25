@@ -316,12 +316,30 @@
     const reason = opts?.reason || 'edit';
     if (typeof isProfilePreviewMode === 'function' && isProfilePreviewMode()) return false;
     if (profileNudgeSkippedThisSession()) return false;
+
+    // Never stack on signup success — delay until Profile visit or 24h later.
+    if (reason === 'signup') {
+      try {
+        localStorage.setItem('chaupaal_nudge_after', String(Date.now() + 24 * 3600 * 1000));
+      } catch (e) {}
+      return false;
+    }
+    try {
+      const after = Number(localStorage.getItem('chaupaal_nudge_after') || 0);
+      if (after && Date.now() < after && reason !== 'edit' && reason !== 'profile_tab') return false;
+      if (reason === 'profile_tab' && after && Date.now() < after) {
+        // Allow on Profile tab even before 24h if deepen was skipped
+      } else if (after && Date.now() < after && reason === 'edit') {
+        /* ok on edit */
+      }
+    } catch (e) {}
+
     const stats = calcProfileCompletion();
     if (stats.pct >= 91) return false;
     const identityEmpty = !stats.sections?.identity?.complete;
     const photoMissing = (stats.missing || []).includes('Photo');
-    if (!identityEmpty && reason !== 'signup') return false;
-    if (reason === 'signup' && !photoMissing && stats.sections?.identity?.pct >= 50) return false;
+    if (!identityEmpty && reason !== 'signup' && reason !== 'profile_tab') return false;
+    if (reason === 'profile_tab' && stats.pct >= 70 && !photoMissing) return false;
 
     try {
       sessionStorage.setItem(NUDGE_OFFERED, '1');

@@ -112,9 +112,16 @@ function finishOnboarding(overlay){
   if(typeof currentUser==='undefined'||!currentUser){
     if(typeof showGuestSignInBanner==='function') showGuestSignInBanner();
   }
+  if(typeof maybeOfferFirstRunCoach==='function'){
+    maybeOfferFirstRunCoach({ delayMs: 700 });
+  }
 }
 
 function showComingSoonModal(kind){
+  if(typeof openLegalSheet==='function'){
+    openLegalSheet(kind==='privacy'?'privacy':'terms');
+    return;
+  }
   const title=kind==='privacy'?'Privacy Policy':'Terms of Service';
   const existing=document.getElementById('comingSoonModal');
   if(existing) existing.remove();
@@ -127,7 +134,7 @@ function showComingSoonModal(kind){
         <div class="modal-title" id="comingSoonTitle">${title}</div>
         <button type="button" class="icon-btn" data-dismiss="coming-soon" aria-label="Close">✕</button>
       </div>
-      <p class="modal-sub">Coming soon — we're drafting the full ${title.toLowerCase()}. Thanks for your patience.</p>
+      <p class="modal-sub">Legal text is temporarily unavailable. Please try again later.</p>
       <button type="button" class="btn btn--primary btn--block modal-btn" data-dismiss="coming-soon">Got it</button>
     </div>`;
   document.querySelector('.device')?.appendChild(backdrop);
@@ -180,5 +187,6 @@ document.addEventListener('click',(e)=>{
   if(!link) return;
   e.preventDefault();
   const kind=link.getAttribute('data-legal')||'terms';
-  showComingSoonModal(kind);
+  if(typeof openLegalSheet==='function') openLegalSheet(kind);
+  else showComingSoonModal(kind);
 });
