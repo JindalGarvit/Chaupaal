@@ -28,29 +28,29 @@
 
     // Dual / party — Muqabala Live + stakes (Phase 6)
     quiz: { grade: 'live', sync: 'live1v1', stakes: true, label: 'Live 1v1' },
-    snakes: { grade: 'live', sync: 'liveParty', stakes: false },
-    ludo: { grade: 'live', sync: 'liveParty', stakes: false },
-    uno: { grade: 'live', sync: 'liveParty', stakes: false },
-    business: { grade: 'practice', sync: 'none' },
-    scribble: { grade: 'live', sync: 'liveParty', stakes: false },
+    snakes: { grade: 'live', sync: 'liveParty', stakes: true },
+    ludo: { grade: 'live', sync: 'liveParty', stakes: true },
+    uno: { grade: 'live', sync: 'liveParty', stakes: true },
+    business: { grade: 'live', sync: 'live1v1', stakes: true },
+    scribble: { grade: 'live', sync: 'liveParty', stakes: true },
 
-    // Classics — Practice with honest labels; Live when friend UID
-    carrom: { grade: 'practice', sync: 'none' },
-    pool: { grade: 'practice', sync: 'none' },
-    rummy: { grade: 'practice', sync: 'none' },
-    teenpatti: { grade: 'practice', sync: 'none' },
-    bluff: { grade: 'practice', sync: 'none' },
-    sattepe: { grade: 'practice', sync: 'none' },
-    andarbaahar: { grade: 'practice', sync: 'none' },
-    tambola: { grade: 'practice', sync: 'none' },
-    streetcricket: { grade: 'practice', sync: 'none', label: 'Practice' },
-    gullykick: { grade: 'practice', sync: 'none', label: 'Practice' },
-    badminton: { grade: 'practice', sync: 'none', label: 'Practice' },
-    tabletennis: { grade: 'practice', sync: 'none', label: 'Practice' },
-    pickleball: { grade: 'practice', sync: 'none', label: 'Practice' },
-    tennis: { grade: 'practice', sync: 'none', label: 'Practice' },
-    kabaddi: { grade: 'practice', sync: 'none', label: 'Practice' },
-    patangbaazi: { grade: 'practice', sync: 'none', label: 'Practice' },
+    // Classics + court — Live 1v1 state sync (snapshot / score events)
+    carrom: { grade: 'live', sync: 'live1v1', stakes: true },
+    pool: { grade: 'live', sync: 'live1v1', stakes: true },
+    rummy: { grade: 'live', sync: 'live1v1', stakes: true },
+    teenpatti: { grade: 'live', sync: 'live1v1', stakes: true },
+    bluff: { grade: 'live', sync: 'live1v1', stakes: true },
+    sattepe: { grade: 'live', sync: 'live1v1', stakes: true },
+    andarbaahar: { grade: 'live', sync: 'live1v1', stakes: true },
+    tambola: { grade: 'live', sync: 'live1v1', stakes: true },
+    streetcricket: { grade: 'graduated', sync: 'none', label: 'Practice' },
+    gullykick: { grade: 'graduated', sync: 'none', label: 'Practice' },
+    badminton: { grade: 'live', sync: 'live1v1', stakes: true },
+    tabletennis: { grade: 'live', sync: 'live1v1', stakes: true },
+    pickleball: { grade: 'live', sync: 'live1v1', stakes: true },
+    tennis: { grade: 'live', sync: 'live1v1', stakes: true },
+    kabaddi: { grade: 'live', sync: 'live1v1', stakes: true },
+    patangbaazi: { grade: 'graduated', sync: 'none', label: 'Practice' },
   };
 
   function getGameGraduation(gameId) {
@@ -81,12 +81,16 @@
     if (info.grade === 'practice') {
       return '<span class="dangal-honesty-tag dangal-honesty-tag--practice">Practice</span>';
     }
+    if (info.grade === 'graduated' || g.solo || g.gameType === 'solo') {
+      // Graduated solos + graduated Practice sports (honest Practice, quality bar met)
+      if (info.sync === 'none' && info.label === 'Practice') {
+        return '<span class="dangal-honesty-tag dangal-honesty-tag--practice">Practice</span>';
+      }
+      return '<span class="dangal-honesty-tag dangal-honesty-tag--solo">Solo</span>';
+    }
     if (info.grade === 'live' && (info.sync === 'live1v1' || info.sync === 'liveParty')) {
       const liveLabel = info.sync === 'liveParty' ? 'Live' : 'Live 1v1';
       return `<span class="dangal-honesty-tag dangal-honesty-tag--live">${liveLabel}</span>`;
-    }
-    if (info.grade === 'graduated' || g.solo || g.gameType === 'solo') {
-      return '<span class="dangal-honesty-tag dangal-honesty-tag--solo">Solo</span>';
     }
     return '<span class="dangal-honesty-tag dangal-honesty-tag--practice">Practice</span>';
   }

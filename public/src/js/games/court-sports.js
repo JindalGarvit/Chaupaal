@@ -1,6 +1,6 @@
 /**
- * Court sports + Patang — timing / raid loops (practice vs AI).
- * Badminton, table tennis, pickleball, tennis, kabaddi, kite fighting.
+ * Court sports + Patang — timing / raid loops.
+ * Practice vs AI, or Live 1v1 score/serve sync (not continuous ball physics).
  */
 (function () {
   'use strict';
@@ -17,6 +17,93 @@
     if (typeof gameFeedback === 'function') gameFeedback(a, extra);
   }
 
+  function practiceSub(detail) {
+    if (typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel) {
+      return DangalLive.modeChromeLabel(false, detail || 'vs AI');
+    }
+    return detail ? 'Practice · ' + detail : 'Practice vs AI';
+  }
+
+  function liveSub() {
+    if (typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel) {
+      return DangalLive.modeChromeLabel(true);
+    }
+    return 'Live 1v1';
+  }
+
+  function resolveChat(arg) {
+    if (typeof chatFromLaunch === 'function' && arg != null) {
+      const from = chatFromLaunch(arg);
+      if (from && (from.name || from.dangalMatchId || from.uid || from.opponentUid || from.peerUid)) {
+        return from;
+      }
+    }
+    if (arg && arg.chat) return resolveChat(arg.chat);
+    if (arg && (arg.name || arg.dangalMatchId || arg.uid || arg.opponentUid || arg.peerUid)) return arg;
+    const ctx = window.__dangalLaunchCtx || {};
+    return Object.assign(
+      { name: 'Opponent' },
+      ctx.chat || {},
+      {
+        dangalMatchId: ctx.matchId || undefined,
+        opponentUid: ctx.opponentUid || undefined,
+        uid: ctx.opponentUid || undefined,
+        dangalSource: ctx.source || undefined,
+      }
+    );
+  }
+
+  function chatLiveOn(chat) {
+    return typeof DangalLive !== 'undefined' && DangalLive.isLive(chat);
+  }
+
+  function matchIdFor(chat, gameType) {
+    return (
+      (chat && chat.dangalMatchId) ||
+      (window.__dangalLaunchCtx && window.__dangalLaunchCtx.matchId) ||
+      (typeof dangalMatchId === 'function' ? dangalMatchId(gameType, chat) : gameType + '_' + Date.now())
+    );
+  }
+
+  async function confirmAndClose(shell, opts) {
+    const o = opts || {};
+    const playing = o.isPlaying !== false;
+    const live = !!o.live || !!o.liveHandle;
+    if (typeof DangalLive !== 'undefined' && DangalLive.requestLeave) {
+      const ok = await DangalLive.requestLeave({
+        live,
+        liveHandle: o.liveHandle,
+        isPlaying: playing,
+        title: o.title || 'Leave game?',
+        body: o.body || 'This practice run will end.',
+        forfeitBody: 'Leaving now counts as a forfeit for your opponent.',
+        onLeave: () => shell.close(o.reason || 'dismissed'),
+      });
+      return !!ok;
+    }
+    if (typeof confirmLeaveGame === 'function') {
+      const leave = await confirmLeaveGame({
+        title: o.title || 'Leave game?',
+        body:
+          live && playing
+            ? 'Leaving now counts as a forfeit for your opponent.'
+            : o.body || 'This practice run will end.',
+      });
+      if (!leave) return false;
+    }
+    if (o.liveHandle && playing) {
+      try {
+        o.liveHandle.leave({ forfeit: true });
+      } catch (e) {
+        try {
+          o.liveHandle.leave();
+        } catch (e2) {}
+      }
+    }
+    shell.close(o.reason || 'dismissed');
+    return true;
+  }
+
   function openShell(opts) {
     const o = opts || {};
     const overlay = document.createElement('div');
@@ -25,15 +112,29 @@
       'position:absolute;inset:0;z-index:80;display:flex;flex-direction:column;background:' +
       (o.bg || '#061018') +
       ';';
+    let liveHandle = o.liveHandle || null;
+    let gameOver = false;
     const begin = typeof beginGameOverlaySession === 'function' ? beginGameOverlaySession : null;
     const gs = begin
       ? begin({
           type: o.id,
           title: o.title,
-          mode: o.mode || 'solo',
+          mode: o.mode || (o.live ? 'live' : 'practice'),
           overlay,
           chat: o.chat,
-          cleanup: o.cleanup,
+          cleanup() {
+            if (typeof o.cleanup === 'function') o.cleanup();
+            if (liveHandle) {
+              try {
+                liveHandle.leave({ forfeit: !gameOver });
+              } catch (e) {
+                try {
+                  liveHandle.leave();
+                } catch (e2) {}
+              }
+              liveHandle = null;
+            }
+          },
         })
       : null;
     if (begin && (!gs || !gs.alive())) return null;
@@ -45,41 +146,59 @@
       prepareGameOverlay(overlay, { theme: 'dark', gameId: o.id, accent: o.accent });
     }
     if (typeof applyGameIdentity === 'function') applyGameIdentity(o.id, overlay);
-    const practiceSub =
-      typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel
-        ? DangalLive.modeChromeLabel(false, o.subtitle || 'vs AI')
-        : o.subtitle
-          ? 'Practice · ' + o.subtitle
-          : 'Practice';
+    const sub =
+      o.subtitle ||
+      (o.live ? liveSub() : practiceSub(o.practiceDetail || 'vs AI'));
     overlay.innerHTML =
       (typeof gameChromeHtml === 'function'
         ? gameChromeHtml({
             title: o.title,
-            subtitle: practiceSub,
+            subtitle: sub,
             backId: o.backId || 'csBack',
             pauseId: o.pauseId || '',
           })
         : '') + `<div class="dangal-fullgame-body" data-cs-body></div>`;
     const body = overlay.querySelector('[data-cs-body]');
     const close = (reason) => {
+      gameOver = true;
       if (gs) gs.close(reason || 'dismissed');
       else if (typeof animateGameExit === 'function') animateGameExit(overlay, () => overlay.remove());
       else overlay.remove();
     };
+    const shell = {
+      overlay,
+      body,
+      gs,
+      close,
+      alive: () => (gs ? gs.alive() : true),
+      host: overlay,
+      get liveHandle() {
+        return liveHandle;
+      },
+      set liveHandle(h) {
+        liveHandle = h;
+      },
+      markOver() {
+        gameOver = true;
+      },
+      get gameOver() {
+        return gameOver;
+      },
+    };
     overlay.querySelector('#' + (o.backId || 'csBack'))?.addEventListener('click', async () => {
-      if (typeof confirmLeaveGame === 'function') {
-        const leave = await confirmLeaveGame({
-          title: 'Leave ' + (o.title || 'practice') + '?',
-          body: 'This practice run will end.',
-        });
-        if (!leave) return;
-      }
-      close('dismissed');
+      await confirmAndClose(shell, {
+        live: !!o.live || !!liveHandle,
+        liveHandle,
+        isPlaying: !gameOver,
+        title: 'Leave ' + (o.title || 'game') + '?',
+        body: o.leaveBody || 'This practice run will end.',
+      });
     });
-    return { overlay, body, gs, close, alive: () => (gs ? gs.alive() : true), host: overlay };
+    return shell;
   }
 
   function showDuelResult(shell, spec) {
+    if (shell && typeof shell.markOver === 'function') shell.markOver();
     const you = spec.you | 0;
     const opp = spec.opp | 0;
     const draw = you === opp;
@@ -118,43 +237,128 @@
   }
 
   function openRallySport(spec) {
+    const chat = resolveChat(spec.chat || arguments[0]);
+    const liveOn = chatLiveOn(chat);
     const toWin = spec.toWin || 7;
+    const pauseId = 'csRallyPause_' + (spec.id || 'sport');
+    let pauseCtrl = null;
+    let rallyPaused = false;
+    let activeRaf = 0;
     const shell = openShell({
       id: spec.id,
       title: spec.name,
-      subtitle: 'First to ' + toWin,
+      subtitle: liveOn ? liveSub() : practiceSub('First to ' + toWin),
+      mode: liveOn ? 'live' : 'practice',
+      live: liveOn,
+      chat,
       accent: spec.accent,
       bg: spec.bg,
+      pauseId,
+      cleanup: () => {
+        if (activeRaf) cancelAnimationFrame(activeRaf);
+        if (pauseCtrl) pauseCtrl.destroy();
+      },
     });
     if (!shell) return;
+
+    if (typeof createGamePauseController === 'function') {
+      pauseCtrl = createGamePauseController({
+        host: shell.host || shell.overlay,
+        pauseBtnId: pauseId,
+        onPause() {
+          rallyPaused = true;
+          if (activeRaf) {
+            cancelAnimationFrame(activeRaf);
+            activeRaf = 0;
+          }
+        },
+        onResume() {
+          rallyPaused = false;
+        },
+        onQuit: () => shell.close('dismissed'),
+      });
+    }
 
     let you = 0;
     let opp = 0;
     let rally = 0;
     let windowMs = spec.windowMs || 720;
     let serving = true;
+    let myServe = true;
     let locked = false;
+    let ended = false;
+    let applying = false;
+    let liveRoles = null;
+    let liveHandle = null;
+    let eventSeq = 0;
+
+    function scoresForPush() {
+      if (!liveRoles) return { a: you, b: opp };
+      return liveRoles.me === liveRoles.playerA ? { a: you, b: opp } : { a: opp, b: you };
+    }
+
+    function applyScores(sc) {
+      if (!sc || !liveRoles) return;
+      you = liveRoles.me === liveRoles.playerA ? sc.a | 0 : sc.b | 0;
+      opp = liveRoles.me === liveRoles.playerA ? sc.b | 0 : sc.a | 0;
+    }
+
+    function pushPoint(whoScored, msg) {
+      if (!liveOn || !liveHandle || !liveRoles || applying) return;
+      eventSeq += 1;
+      const nextServe = whoScored === 'me';
+      myServe = nextServe;
+      serving = true;
+      liveHandle.push({
+        status: you >= toWin || opp >= toWin ? 'over' : 'playing',
+        winner: you >= toWin ? liveRoles.me : opp >= toWin ? liveRoles.opp : null,
+        turn: liveRoles.me,
+        state: {
+          scores: scoresForPush(),
+          servingUid: nextServe ? liveRoles.me : liveRoles.opp,
+          rally,
+          windowMs: spec.windowMs || 720,
+          eventSeq,
+          msg: msg || '',
+          pointBy: whoScored === 'me' ? liveRoles.me : liveRoles.opp,
+        },
+      });
+    }
 
     function renderPlay(msg) {
-      if (!shell.alive()) return;
+      if (!shell.alive() || ended) return;
+      // Live: contact when it is your serve/return window; Practice: always active vs AI.
+      const iAmActive = !liveOn || myServe;
       shell.body.innerHTML = `
         <div class="cs-rally">
           <div class="cs-rally-score">${esc(spec.icon)} <strong>${you}</strong> – <strong>${opp}</strong></div>
           <p class="cs-rally-msg">${esc(msg || spec.prompt)}</p>
           <div class="cs-timing" aria-hidden="true"><i data-cs-bar></i></div>
-          <button type="button" class="cs-hit" data-cs-hit>${esc(serving ? spec.serveLabel || 'Serve' : spec.hitLabel || 'Hit')}</button>
-          <p class="cs-rally-hint">Rally ${rally} · window ${Math.round(windowMs)}ms</p>
+          <button type="button" class="cs-hit" data-cs-hit ${!iAmActive ? 'disabled' : ''}>${esc(
+            serving ? spec.serveLabel || 'Serve' : spec.hitLabel || 'Hit'
+          )}</button>
+          <p class="cs-rally-hint">Rally ${rally} · window ${Math.round(windowMs)}ms${
+            liveOn ? (iAmActive ? ' · your contact' : ' · waiting') : ''
+          }</p>
         </div>`;
       const bar = shell.body.querySelector('[data-cs-bar]');
       const hit = shell.body.querySelector('[data-cs-hit]');
       let t0 = 0;
       let raf = 0;
       locked = false;
+      if (!iAmActive) {
+        return;
+      }
       const duration = serving ? Math.max(900, windowMs + 200) : windowMs;
       const sweet0 = 0.42;
       const sweet1 = 0.78;
 
       function tick(now) {
+        if (rallyPaused) {
+          t0 = 0;
+          activeRaf = requestAnimationFrame(tick);
+          return;
+        }
         if (!t0) t0 = now;
         const p = Math.min(1, (now - t0) / duration);
         if (bar) bar.style.transform = 'scaleX(' + p + ')';
@@ -163,11 +367,13 @@
           return;
         }
         raf = requestAnimationFrame(tick);
+        activeRaf = raf;
       }
       raf = requestAnimationFrame(tick);
+      activeRaf = raf;
 
       hit?.addEventListener('click', () => {
-        if (locked) return;
+        if (locked || !iAmActive) return;
         const p = t0 ? Math.min(1, (performance.now() - t0) / duration) : 0;
         if (p < sweet0) {
           miss('Early');
@@ -179,14 +385,37 @@
         }
         locked = true;
         cancelAnimationFrame(raf);
+        activeRaf = 0;
         buzz('kick');
         rally += 1;
         serving = false;
         windowMs = Math.max(380, windowMs * (spec.shrink || 0.94));
+        if (liveOn) {
+          // Successful contact — opponent must return; push "in play" so they get a timing window
+          eventSeq += 1;
+          liveHandle.push({
+            status: 'playing',
+            turn: liveRoles.opp,
+            state: {
+              scores: scoresForPush(),
+              servingUid: liveRoles.opp,
+              inPlay: true,
+              rally,
+              windowMs,
+              eventSeq,
+              msg: spec.goodLine || 'In! Keep the rally going.',
+            },
+          });
+          myServe = false;
+          serving = true;
+          renderPlay(spec.goodLine || 'In! Keep the rally going.');
+          return;
+        }
         if (Math.random() < 0.26 + rally * 0.04) {
           you += 1;
           rally = 0;
           serving = true;
+          myServe = true;
           windowMs = spec.windowMs || 720;
           if (you >= toWin || opp >= toWin) return finish();
           renderPlay('Opponent missed — your point.');
@@ -199,17 +428,35 @@
         if (locked) return;
         locked = true;
         cancelAnimationFrame(raf);
+        activeRaf = 0;
         buzz('lose', { noConfetti: true });
         opp += 1;
         rally = 0;
         serving = true;
         windowMs = spec.windowMs || 720;
+        if (liveOn) {
+          myServe = false;
+          pushPoint('opp', why + ' — opponent point.');
+          if (opp >= toWin || you >= toWin) return finish();
+          renderPlay(why + ' — opponent point.');
+          return;
+        }
+        myServe = true;
         if (opp >= toWin || you >= toWin) return finish();
         renderPlay(why + ' — opponent point.');
       }
     }
 
     function finish() {
+      if (ended) return;
+      ended = true;
+      if (liveOn && liveHandle && liveRoles && !applying) {
+        liveHandle.push({
+          status: 'over',
+          winner: you > opp ? liveRoles.me : opp > you ? liveRoles.opp : null,
+          state: { scores: scoresForPush(), eventSeq },
+        });
+      }
       showDuelResult(shell, {
         id: spec.id,
         you,
@@ -218,21 +465,97 @@
         pbScore: you,
         subtitle: 'Rally best ' + rally,
         shareText: 'I played ' + spec.name + ' on Chaupaal: ' + you + '–' + opp,
-        onAgain: () => openRallySport(spec),
+        onAgain: () => openRallySport(Object.assign({}, spec, { chat })),
       });
+    }
+
+    if (liveOn && typeof DangalLive !== 'undefined') {
+      const roles = DangalLive.roles(chat);
+      liveRoles = roles;
+      myServe = !!roles.host;
+      serving = true;
+      liveHandle = DangalLive.join({
+        gameType: spec.id,
+        matchId: matchIdFor(chat, spec.id),
+        me: roles.me,
+        playerA: roles.playerA,
+        playerB: roles.playerB,
+        onSnap(val) {
+          if (!val || ended || !shell.alive()) return;
+          if (val.status === 'forfeit' || (val.status === 'over' && val.winner != null)) {
+            applying = true;
+            if (val.state && val.state.scores) applyScores(val.state.scores);
+            else if (val.winner != null) {
+              const iWon = val.winner === roles.me;
+              you = iWon ? Math.max(you, toWin) : you;
+              opp = iWon ? opp : Math.max(opp, toWin);
+            }
+            finish();
+            applying = false;
+            return;
+          }
+          const st = val.state || {};
+          if (st.eventSeq != null && st.eventSeq <= eventSeq && st.pointBy !== roles.me) {
+            // still apply newer remote points
+          }
+          if (st.scores) applyScores(st.scores);
+          if (st.eventSeq != null) eventSeq = Math.max(eventSeq, st.eventSeq);
+          if (st.pointBy && st.pointBy !== roles.me) {
+            rally = 0;
+            windowMs = spec.windowMs || 720;
+            serving = true;
+            myServe = st.servingUid === roles.me;
+            if (you >= toWin || opp >= toWin) return finish();
+            renderPlay(st.msg || 'Point — next serve.');
+            return;
+          }
+          if (st.inPlay && val.turn === roles.me) {
+            serving = true;
+            myServe = true;
+            if (st.windowMs) windowMs = st.windowMs;
+            if (st.rally != null) rally = st.rally;
+            renderPlay(st.msg || 'Return!');
+            return;
+          }
+          if (st.servingUid) {
+            myServe = st.servingUid === roles.me;
+            serving = true;
+          }
+        },
+        onForfeit(info) {
+          if (ended) return;
+          const iWon = info && info.winner === roles.me;
+          you = iWon ? toWin : you;
+          opp = iWon ? opp : toWin;
+          finish();
+        },
+      });
+      shell.liveHandle = liveHandle;
+      if (roles.host) {
+        liveHandle.push({
+          status: 'playing',
+          turn: roles.me,
+          state: { scores: { a: 0, b: 0 }, servingUid: roles.me, eventSeq: 0 },
+        });
+      }
     }
 
     renderPlay(spec.prompt);
   }
 
   function openKabaddi() {
+    const chat = resolveChat(arguments[0]);
+    const liveOn = chatLiveOn(chat);
     let shellPauseCtrl = null;
     let raidPaused = false;
     let activeRaf = 0;
     const shell = openShell({
       id: 'kabaddi',
       title: 'Kabaddi',
-      subtitle: 'Raid · tag · make it home',
+      subtitle: liveOn ? liveSub() : practiceSub('Raid · tag · make it home'),
+      mode: liveOn ? 'live' : 'practice',
+      live: liveOn,
+      chat,
       accent: '#BF360C',
       bg: '#1A0800',
       pauseId: 'csKabaddiPause',
@@ -262,9 +585,33 @@
     const TO_WIN = 5;
     let you = 0;
     let opp = 0;
+    let ended = false;
+    let applying = false;
+    let liveRoles = null;
+    let liveHandle = null;
+    let myRaid = true;
+    let eventSeq = 0;
+
+    function scoresForPush() {
+      if (!liveRoles) return { a: you, b: opp };
+      return liveRoles.me === liveRoles.playerA ? { a: you, b: opp } : { a: opp, b: you };
+    }
+    function applyScores(sc) {
+      if (!sc || !liveRoles) return;
+      you = liveRoles.me === liveRoles.playerA ? sc.a | 0 : sc.b | 0;
+      opp = liveRoles.me === liveRoles.playerA ? sc.b | 0 : sc.a | 0;
+    }
 
     function startRaid() {
-      if (!shell.alive()) return;
+      if (!shell.alive() || ended) return;
+      if (liveOn && !myRaid) {
+        shell.body.innerHTML = `
+          <div class="cs-kabaddi">
+            <div class="cs-rally-score">💪 <strong>${you}</strong> – <strong>${opp}</strong></div>
+            <p class="cs-rally-msg">Opponent is raiding…</p>
+          </div>`;
+        return;
+      }
       const breathMax = 8000;
       let breath = breathMax;
       let tagged = 0;
@@ -313,6 +660,21 @@
             opp += 1;
             buzz('lose', { noConfetti: true });
           }
+          if (liveOn && liveHandle && liveRoles) {
+            eventSeq += 1;
+            myRaid = false;
+            liveHandle.push({
+              status: you >= TO_WIN || opp >= TO_WIN ? 'over' : 'playing',
+              winner: you >= TO_WIN ? liveRoles.me : opp >= TO_WIN ? liveRoles.opp : null,
+              turn: liveRoles.opp,
+              state: {
+                scores: scoresForPush(),
+                raidUid: liveRoles.opp,
+                eventSeq,
+                msg: 'Home with ' + pts + ' point' + (pts === 1 ? '' : 's') + '.',
+              },
+            });
+          }
           next('Home with ' + pts + ' point' + (pts === 1 ? '' : 's') + '.');
         });
       }
@@ -333,6 +695,21 @@
           cancelAnimationFrame(raf);
           opp += 1;
           buzz('lose', { noConfetti: true });
+          if (liveOn && liveHandle && liveRoles) {
+            eventSeq += 1;
+            myRaid = false;
+            liveHandle.push({
+              status: opp >= TO_WIN ? 'over' : 'playing',
+              winner: opp >= TO_WIN ? liveRoles.opp : null,
+              turn: liveRoles.opp,
+              state: {
+                scores: scoresForPush(),
+                raidUid: liveRoles.opp,
+                eventSeq,
+                msg: 'Caught — breath ran out.',
+              },
+            });
+          }
           next('Caught — breath ran out.');
           return;
         }
@@ -347,6 +724,7 @@
 
     function next(msg) {
       if (you >= TO_WIN || opp >= TO_WIN) {
+        ended = true;
         showDuelResult(shell, {
           id: 'kabaddi',
           you,
@@ -355,8 +733,17 @@
           pbScore: you,
           subtitle: msg,
           shareText: 'Kabaddi on Chaupaal: ' + you + '–' + opp,
-          onAgain: openKabaddi,
+          onAgain: () => openKabaddi(chat),
         });
+        return;
+      }
+      if (liveOn && !myRaid) {
+        shell.body.innerHTML = `
+          <div class="cs-kabaddi">
+            <div class="cs-rally-score">💪 <strong>${you}</strong> – <strong>${opp}</strong></div>
+            <p class="cs-rally-msg">${esc(msg)}</p>
+            <p class="cs-rally-hint">Waiting for opponent’s raid…</p>
+          </div>`;
         return;
       }
       shell.body.insertAdjacentHTML(
@@ -365,6 +752,57 @@
       );
       const go = () => startRaid();
       shell.body.addEventListener('click', go, { once: true });
+    }
+
+    if (liveOn && typeof DangalLive !== 'undefined') {
+      liveRoles = DangalLive.roles(chat);
+      myRaid = !!liveRoles.host;
+      liveHandle = DangalLive.join({
+        gameType: 'kabaddi',
+        matchId: matchIdFor(chat, 'kabaddi'),
+        me: liveRoles.me,
+        playerA: liveRoles.playerA,
+        playerB: liveRoles.playerB,
+        onSnap(val) {
+          if (!val || ended || !shell.alive()) return;
+          if (val.status === 'forfeit' || val.status === 'over') {
+            applying = true;
+            if (val.state && val.state.scores) applyScores(val.state.scores);
+            ended = true;
+            showDuelResult(shell, {
+              id: 'kabaddi',
+              you,
+              opp,
+              glyph: '💪',
+              pbScore: you,
+              subtitle: val.status === 'forfeit' ? 'Forfeit' : '',
+              shareText: 'Kabaddi on Chaupaal: ' + you + '–' + opp,
+              onAgain: () => openKabaddi(chat),
+            });
+            applying = false;
+            return;
+          }
+          const st = val.state || {};
+          if (st.scores) applyScores(st.scores);
+          if (st.eventSeq != null) eventSeq = Math.max(eventSeq, st.eventSeq);
+          if (st.raidUid === liveRoles.me && !myRaid) {
+            myRaid = true;
+            next(st.msg || 'Your raid.');
+            startRaid();
+          } else if (st.raidUid && st.raidUid !== liveRoles.me) {
+            myRaid = false;
+            next(st.msg || 'Opponent’s turn.');
+          }
+        },
+      });
+      shell.liveHandle = liveHandle;
+      if (liveRoles.host) {
+        liveHandle.push({
+          status: 'playing',
+          turn: liveRoles.me,
+          state: { scores: { a: 0, b: 0 }, raidUid: liveRoles.me, eventSeq: 0 },
+        });
+      }
     }
 
     startRaid();
@@ -376,7 +814,8 @@
     const shell = openShell({
       id: 'patangbaazi',
       title: 'Patang Baazi',
-      subtitle: 'Climb · cut the rival kite',
+      subtitle: practiceSub('Climb · cut the rival kite'),
+      mode: 'practice',
       accent: '#FF6D00',
       bg: '#001018',
       pauseId: 'csPatangPause',
@@ -559,7 +998,7 @@
       registerGame({
         id: g.id,
         name: g.name,
-        desc: 'Practice · timing rally to ' + (g.toWin || 7),
+        desc: 'Timing rally to ' + (g.toWin || 7),
         icon: g.icon,
         gameType: 'solo',
         genre: 'rw_sports',
@@ -568,15 +1007,15 @@
         dangal: true,
         chat1v1: true,
         order: 20 + i,
-        launch() {
-          openRallySport(g);
+        launch(ctx) {
+          openRallySport(Object.assign({}, g, { chat: ctx }));
         },
       });
     });
     registerGame({
       id: 'kabaddi',
       name: 'Kabaddi',
-      desc: 'Practice · raid, tag, home',
+      desc: 'Raid, tag, home',
       icon: '💪',
       gameType: 'solo',
       genre: 'rw_sports',
@@ -603,10 +1042,10 @@
     });
   }
 
-  window.openBadminton = () => openRallySport(RALLIES[0]);
-  window.openTableTennis = () => openRallySport(RALLIES[1]);
-  window.openPickleball = () => openRallySport(RALLIES[2]);
-  window.openTennis = () => openRallySport(RALLIES[3]);
+  window.openBadminton = (ctx) => openRallySport(Object.assign({}, RALLIES[0], { chat: ctx }));
+  window.openTableTennis = (ctx) => openRallySport(Object.assign({}, RALLIES[1], { chat: ctx }));
+  window.openPickleball = (ctx) => openRallySport(Object.assign({}, RALLIES[2], { chat: ctx }));
+  window.openTennis = (ctx) => openRallySport(Object.assign({}, RALLIES[3], { chat: ctx }));
   window.openKabaddi = openKabaddi;
   window.openPatangBaazi = openPatang;
 })();

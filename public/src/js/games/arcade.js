@@ -969,6 +969,7 @@ function openTipTap(){
 
   fxLayer=document.getElementById('cbFx');
   document.getElementById('cbBack').addEventListener('click',()=>{
+    if(gameOver){close();return;}
     const ask=typeof confirmLeaveGame==='function'
       ?confirmLeaveGame({title:'Leave Tip Tap?',body:'Level progress for this run will be lost.'})
       :Promise.resolve(window.confirm('Leave Tip Tap?'));

@@ -10,6 +10,7 @@ function openFiveInRowGame(chat){
   let myTurn=!liveRoles||liveRoles.myColor==='w';
   let liveHandle=null;
   let applyingLive=false;
+  let leaveConfirmed=false;
 
   const overlay=document.createElement('div');
   overlay.style.cssText='position:absolute;inset:0;background:#1a1a2e;z-index:80;display:flex;flex-direction:column;';
@@ -18,7 +19,7 @@ function openFiveInRowGame(chat){
     type:'fiveinrow',title:'Five in a Row',mode:liveOn?'live':'practice',chat,overlay,
     cleanup(){
       stopFirTimer();
-      if(liveHandle){
+      if(liveHandle&&!leaveConfirmed){
         try{liveHandle.leave({forfeit:!gameOver});}catch(e){try{liveHandle.leave();}catch(e2){}}
       }
     },
@@ -33,6 +34,21 @@ function openFiveInRowGame(chat){
   const alive=()=>gs?gs.alive():true;
   const schedule=(fn,ms)=>gs?gs.schedule(fn,ms):setTimeout(fn,ms);
   const close=()=>{if(gs)gs.close();else{stopFirTimer();overlay.remove();}};
+
+  async function askFirLeave(){
+    if(gameOver){close();return;}
+    if(typeof DangalLive!=='undefined'&&DangalLive.requestLeave){
+      const ok=await DangalLive.requestLeave({
+        liveHandle,isPlaying:!gameOver,title:'Leave Five in a Row?',body:'This run will end.',
+        onLeave:()=>{leaveConfirmed=true;liveHandle=null;},
+      });
+      if(!ok)return;
+    }else if(typeof confirmLeaveGame==='function'){
+      const ok=await confirmLeaveGame({title:'Leave Five in a Row?',body:'This run will end.'});
+      if(!ok)return;
+    }
+    close();
+  }
 
   function passTurnSoft(){
     if(!myTurn||gameOver)return;
@@ -218,7 +234,7 @@ function openFiveInRowGame(chat){
           })
         : `<div class="fir-turn-fallback">${gameOver?(winLine?(board[winLine[0][0]][winLine[0][1]]==='X'?'You won!':chat.name+' won!'):"It's a draw!"):(myTurn?'Your turn':chat.name+' thinking…')}</div>`}`}
     `;
-    document.getElementById('firBack').addEventListener('click',()=>close());
+    document.getElementById('firBack').addEventListener('click',()=>{askFirLeave();});
     if(resultBlock&&typeof wireGameResultActions==='function'){
       const shareStats={
         scoreLine:firDrew?'Draw':(firWon?'Win':'Loss'),
@@ -320,12 +336,20 @@ function openFiveInRowGame(chat){
 // ===================== BUSINESS (property trading) =====================
 function openBusinessGame(chat,playerCount){
   playerCount=Math.min(Math.max(playerCount||2,2),6);
-  // Business stays Practice-only (state too heavy for RTDB sync this pass)
-  const MODE_SUB=typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel
-    ?DangalLive.modeChromeLabel(false,playerCount>2?playerCount+' players':'vs AI')
-    :(playerCount>2?('Practice · '+playerCount+' players'):'Practice vs AI');
+  const liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat);
+  if(liveOn)playerCount=2;
+  const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat):null;
+  let liveHandle=null;let applyingLive=false;let leaveConfirmed=false;
+  const mySeat=!liveRoles||liveRoles.myColor==='w'?0:1;
+  const MODE_SUB=liveOn
+    ?(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel?DangalLive.modeChromeLabel(true):'Live 1v1')
+    :(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel
+      ?DangalLive.modeChromeLabel(false,playerCount>2?playerCount+' players':'vs AI')
+      :(playerCount>2?('Practice · '+playerCount+' players'):'Practice vs AI'));
   const PLAYER_COLORS=['#E74C3C','#3498DB','#2ECC71','#F1C40F','#9B59B6','#1ABC9C'];
-  const NAMES=['You',chat.name,...(playerCount>2?['Player 3','Player 4','Player 5','Player 6'].slice(0,playerCount-2):[])];
+  const NAMES=liveOn
+    ?(mySeat===0?['You',chat.name||'Friend']:[chat.name||'Friend','You'])
+    :['You',chat.name,...(playerCount>2?['Player 3','Player 4','Player 5','Player 6'].slice(0,playerCount-2):[])];
 
   const BOARD=[
     {name:'Start',type:'go'},
@@ -379,7 +403,7 @@ function openBusinessGame(chat,playerCount){
     jailed:0,
     bankrupt:false,
     color:PLAYER_COLORS[i],
-    profileType:i===0?ownType:(i===1?(chat?.profileType||null):null),
+    profileType:i===mySeat?ownType:(i===(mySeat===0?1:0)?(chat?.profileType||null):null),
   }));
   let currentPlayer=0;let diceVal=[1,1];let rolling=false;let gameOver=false;let message='';
   let awaitingBuy=false;let focusPos=0;
@@ -389,8 +413,13 @@ function openBusinessGame(chat,playerCount){
   overlay.style.cssText='position:absolute;inset:0;background:#1a1a2e;z-index:80;display:flex;flex-direction:column;';
   const begin=typeof beginGameOverlaySession==='function'?beginGameOverlaySession:null;
   const gs=begin?begin({
-    type:'business',title:'Business',mode:'practice',chat,overlay,
-    cleanup(){stopBusTimer();if(diceIv){clearInterval(diceIv);diceIv=null;}},
+    type:'business',title:'Business',mode:liveOn?'live':'practice',chat,overlay,
+    cleanup(){
+      stopBusTimer();if(diceIv){clearInterval(diceIv);diceIv=null;}
+      if(liveHandle&&!leaveConfirmed){
+        try{liveHandle.leave({forfeit:!gameOver});}catch(e){try{liveHandle.leave();}catch(e2){}}
+      }
+    },
   }):null;
   if(begin&&(!gs||!gs.alive()))return;
   if(!begin){
@@ -402,9 +431,59 @@ function openBusinessGame(chat,playerCount){
   const alive=()=>gs?gs.alive():true;
   const schedule=(fn,ms)=>gs?gs.schedule(fn,ms):setTimeout(fn,ms);
   const close=()=>{if(gs)gs.close();else{stopBusTimer();if(diceIv)clearInterval(diceIv);overlay.remove();}};
+  const isMyControl=()=>currentPlayer===mySeat;
+
+  async function askBusLeave(){
+    if(gameOver){close();return;}
+    if(typeof DangalLive!=='undefined'&&DangalLive.requestLeave){
+      const ok=await DangalLive.requestLeave({
+        liveHandle,isPlaying:!gameOver,title:'Leave Business?',body:'This run will end.',
+        onLeave:()=>{leaveConfirmed=true;liveHandle=null;},
+      });
+      if(!ok)return;
+    }else if(typeof confirmLeaveGame==='function'){
+      const ok=await confirmLeaveGame({title:'Leave Business?',body:'This run will end.'});
+      if(!ok)return;
+    }
+    close();
+  }
+
+  function serializeBusPlayers(){
+    return players.map(p=>({
+      pos:p.pos,money:p.money,properties:(p.properties||[]).slice(),
+      jailed:p.jailed||0,bankrupt:!!p.bankrupt,
+    }));
+  }
+  function applyBusPlayers(raw){
+    if(!Array.isArray(raw))return;
+    raw.forEach((rp,i)=>{
+      if(!players[i]||!rp)return;
+      players[i].pos=Number(rp.pos)||0;
+      players[i].money=Number(rp.money)||0;
+      players[i].properties=Array.isArray(rp.properties)?rp.properties.slice():[];
+      players[i].jailed=Number(rp.jailed)||0;
+      players[i].bankrupt=!!rp.bankrupt;
+    });
+  }
+  function pushBusiness(){
+    if(!liveOn||!liveHandle||!liveRoles||applyingLive)return;
+    const winnerSeat=gameOver?players.findIndex(p=>!p.bankrupt):-1;
+    liveHandle.push({
+      state:{
+        players:serializeBusPlayers(),
+        currentPlayer,diceVal:diceVal.slice(),message,gameOver,awaitingBuy,focusPos,
+      },
+      turn:gameOver?null:(currentPlayer===0?liveRoles.playerA:liveRoles.playerB),
+      status:gameOver?'over':'playing',
+      winner:winnerSeat===0?liveRoles.playerA:(winnerSeat===1?liveRoles.playerB:null),
+    });
+    if(!gameOver&&currentPlayer!==mySeat&&typeof DangalLive!=='undefined'&&DangalLive.pingTurn){
+      DangalLive.pingTurn(liveRoles.opp,'business',{chatId:chat&&(chat.firestoreId||chat.id)});
+    }
+  }
 
   function startBusTimer(){
-    if(currentPlayer!==0||!alive()||awaitingBuy)return;
+    if(!isMyControl()||!alive()||awaitingBuy)return;
     clearInterval(busInterval);busTimer=BUS_SECS;
     busInterval=setInterval(()=>{
       if(!alive()){clearInterval(busInterval);return;}
@@ -418,6 +497,7 @@ function openBusinessGame(chat,playerCount){
 
   function rollBusDice(){
     if(!alive()||rolling||gameOver||awaitingBuy)return;
+    if(liveOn&&!isMyControl())return;
     stopBusTimer();rolling=true;let ticks=0;
     if(typeof gameFeedback==='function')gameFeedback('select');
     if(diceIv)clearInterval(diceIv);
@@ -468,8 +548,8 @@ function openBusinessGame(chat,playerCount){
   }
 
   function offerBuy(tile,player){
-    if(currentPlayer!==0){
-      if(Math.random()<0.7&&player.money>=tile.price){
+    if(!isMyControl()){
+      if(!liveOn&&Math.random()<0.7&&player.money>=tile.price){
         player.money-=tile.price;player.properties.push(player.pos);
         message=`${player.name} bought ${tile.name}!`;
         if(typeof gameFeedback==='function')gameFeedback('card');
@@ -480,11 +560,12 @@ function openBusinessGame(chat,playerCount){
     stopBusTimer();
     message=`Buy ${tile.name}?`;
     render();
+    if(liveOn)pushBusiness();
   }
 
   function resolveBuy(yes){
-    if(!awaitingBuy)return;
-    const p=players[0];
+    if(!awaitingBuy||!isMyControl())return;
+    const p=players[currentPlayer];
     const tile=BOARD[p.pos];
     awaitingBuy=false;
     if(yes&&isBuyable(tile)&&p.money>=tile.price&&!players.find(pl=>pl.properties.includes(p.pos))){
@@ -509,13 +590,15 @@ function openBusinessGame(chat,playerCount){
       if(gs)gs.setOutcome(won?'won':'lost');
       if(typeof recordGameResult==='function')recordGameResult('business',won);
       if(typeof gameFeedback==='function')gameFeedback(won?'win':'lose');
+      if(liveOn)pushBusiness();
       render();return;
     }
     do{currentPlayer=(currentPlayer+1)%playerCount;}while(players[currentPlayer].bankrupt);
     focusPos=players[currentPlayer].pos;
+    if(liveOn)pushBusiness();
     render();
-    if(currentPlayer===0)startBusTimer();
-    else schedule(rollBusDice,900);
+    if(isMyControl())startBusTimer();
+    else if(!liveOn)schedule(rollBusDice,900);
   }
 
   function deedHtml(tile,idx){
@@ -532,7 +615,7 @@ function openBusinessGame(chat,playerCount){
     } else {
       body=`<div class="bus-deed-meta">${message||'Land here for an event'}</div>`;
     }
-    const buyActions=awaitingBuy&&currentPlayer===0?`
+    const buyActions=awaitingBuy&&isMyControl()?`
       <div class="bus-deed-actions">
         <button type="button" id="busBuyYes" class="game-tap-target bus-deed-btn bus-deed-btn--primary">Buy ₹${tile.price}</button>
         <button type="button" id="busBuyNo" class="game-tap-target bus-deed-btn">Skip</button>
@@ -585,7 +668,7 @@ function openBusinessGame(chat,playerCount){
           ],
         }):`<div style="padding:24px;text-align:center;color:#fff;">${winner?.name||'Someone'} wins</div>`}
       `;
-      document.getElementById('busBack')?.addEventListener('click',()=>close());
+      document.getElementById('busBack')?.addEventListener('click',()=>{askBusLeave();});
       if(typeof wireGameResultActions==='function'){
         const shareStats={scoreLine:winner?`${winner.name} wins`:'Over',meta:'Business'};
         wireGameResultActions(overlay,{
@@ -600,7 +683,7 @@ function openBusinessGame(chat,playerCount){
       return;
     }
     overlay.innerHTML=`
-      ${gameChromeHtml({title:'Business',subtitle:MODE_SUB,backId:'busBack',rightHtml:currentPlayer===0&&!awaitingBuy?`<span id="busTimerEl" class="game-chrome-metric">${busTimer}s</span>`:undefined})}
+      ${gameChromeHtml({title:'Business',subtitle:MODE_SUB,backId:'busBack',rightHtml:isMyControl()&&!awaitingBuy?`<span id="busTimerEl" class="game-chrome-metric">${busTimer}s</span>`:undefined})}
       <div class="bus-players">
         ${players.map((p,i)=>`<div class="bus-player${currentPlayer===i?' is-active':''}${p.bankrupt?' is-out':''}" style="--pc:${p.color}">
           <div class="bus-player-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(p.name,p):p.name}</div>
@@ -613,17 +696,51 @@ function openBusinessGame(chat,playerCount){
         ${miniBoardHtml()}
       </div>
       <div class="bus-controls">
-        <button type="button" id="busRollBtn" class="game-tap-target bus-roll-btn"${currentPlayer!==0||rolling||awaitingBuy?' disabled':''}>
-          ${awaitingBuy?'Choose Buy or Skip':currentPlayer===0?(rolling?'Rolling…':'Roll dice'):`${players[currentPlayer].name} playing…`}
+        <button type="button" id="busRollBtn" class="game-tap-target bus-roll-btn"${!isMyControl()||rolling||awaitingBuy?' disabled':''}>
+          ${awaitingBuy?'Choose Buy or Skip':isMyControl()?(rolling?'Rolling…':'Roll dice'):`${players[currentPlayer].name} playing…`}
         </button>
       </div>
     `;
-    document.getElementById('busBack').addEventListener('click',()=>close());
-    document.getElementById('busRollBtn')?.addEventListener('click',()=>{if(currentPlayer===0&&!rolling&&!awaitingBuy&&!gameOver)rollBusDice();});
+    document.getElementById('busBack').addEventListener('click',()=>{askBusLeave();});
+    document.getElementById('busRollBtn')?.addEventListener('click',()=>{if(isMyControl()&&!rolling&&!awaitingBuy&&!gameOver)rollBusDice();});
     document.getElementById('busBuyYes')?.addEventListener('click',()=>resolveBuy(true));
     document.getElementById('busBuyNo')?.addEventListener('click',()=>resolveBuy(false));
   }
-  render();startBusTimer();
+
+  if(liveOn&&liveRoles&&typeof DangalLive!=='undefined'){
+    liveHandle=DangalLive.join({
+      gameType:'business',
+      matchId:(chat&&chat.dangalMatchId)||(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.matchId),
+      me:liveRoles.me,playerA:liveRoles.playerA,playerB:liveRoles.playerB,
+      state:{players:serializeBusPlayers(),currentPlayer:0,diceVal:[1,1],message:'',gameOver:false,awaitingBuy:false,focusPos:0},
+      onSnap(val){
+        if(!val||applyingLive||!alive())return;
+        if(val.status==='forfeit'&&!gameOver){
+          gameOver=true;stopBusTimer();
+          const iWon=val.winner===liveRoles.me;
+          if(gs)gs.setOutcome(iWon?'won':'lost');
+          if(typeof recordGameResult==='function')recordGameResult('business',iWon);
+          message=iWon?'Opponent left — you win!':'Forfeit';
+          render();return;
+        }
+        const s=val.state;if(!s||!s.players)return;
+        applyingLive=true;
+        applyBusPlayers(s.players);
+        currentPlayer=Number(s.currentPlayer)||0;
+        if(Array.isArray(s.diceVal))diceVal=s.diceVal.slice();
+        message=s.message||'';
+        gameOver=!!s.gameOver||val.status==='over';
+        awaitingBuy=!!s.awaitingBuy;
+        focusPos=s.focusPos!=null?Number(s.focusPos):players[currentPlayer].pos;
+        stopBusTimer();
+        render();
+        if(!gameOver&&isMyControl()&&!awaitingBuy)startBusTimer();
+        applyingLive=false;
+      },
+    });
+  }
+  render();
+  if(isMyControl())startBusTimer();
 }
 
 // ===================== SCRIBBLE (draw & guess) =====================
@@ -634,7 +751,7 @@ function openScribbleGame(chat,playerList,opts){
   const list=(playerList||[]).filter(p=>p&&p.name!==undefined);
   const liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat);
   const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat):null;
-  let liveHandle=null;let applyingLive=false;let liveEnded=false;
+  let liveHandle=null;let applyingLive=false;let liveEnded=false;let leaveConfirmed=false;
   const practiceMode=!liveOn&&(!!options.practice || list.length===0 || !!(chat&&(chat.self||chat.isSelf||chat.id==='self'||chat.id==='practice')));
   const MODE_SUB=liveOn
     ?(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel?DangalLive.modeChromeLabel(true):'Live 1v1')
@@ -660,7 +777,7 @@ function openScribbleGame(chat,playerList,opts){
     cleanup(){
       clearInterval(roundInterval);roundInterval=null;
       if(aiGuessIv){clearInterval(aiGuessIv);aiGuessIv=null;}
-      if(liveHandle){
+      if(liveHandle&&!leaveConfirmed){
         try{liveHandle.leave({forfeit:!liveEnded});}catch(e){try{liveHandle.leave();}catch(e2){}}
       }
     },
@@ -679,6 +796,21 @@ function openScribbleGame(chat,playerList,opts){
     if(aiGuessIv){clearInterval(aiGuessIv);aiGuessIv=null;}
     if(gs)gs.close(result);else overlay.remove();
   };
+
+  async function askScribbleLeave(){
+    if(liveEnded){close();return;}
+    if(typeof DangalLive!=='undefined'&&DangalLive.requestLeave){
+      const ok=await DangalLive.requestLeave({
+        liveHandle,isPlaying:!liveEnded,title:'Leave Scribble?',body:'This run will end.',
+        onLeave:()=>{leaveConfirmed=true;liveHandle=null;},
+      });
+      if(!ok)return;
+    }else if(typeof confirmLeaveGame==='function'){
+      const ok=await confirmLeaveGame({title:'Leave Scribble?',body:'This run will end.'});
+      if(!ok)return;
+    }
+    close();
+  }
 
   function pickWord(){return SCRIBBLE_WORDS[Math.floor(Math.random()*SCRIBBLE_WORDS.length)];}
 
@@ -893,7 +1025,7 @@ function openScribbleGame(chat,playerList,opts){
         ${!isMyTurn?`<div class="scribble-guess-row"><input id="scribbleGuessInput" placeholder="Type your guess…" autocomplete="off"><button type="button" id="scribbleGuessBtn" class="game-tap-target">Guess</button></div>`:''}
       </div>`:''}
     `;
-    document.getElementById('scribbleBack').addEventListener('click',()=>close());
+    document.getElementById('scribbleBack').addEventListener('click',()=>{askScribbleLeave();});
     wireCanvas();
     if(!isMyTurn&&!practiceMode){
       document.getElementById('scribbleGuessBtn')?.addEventListener('click',submitGuess);

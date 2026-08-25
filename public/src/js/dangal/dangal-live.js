@@ -227,5 +227,37 @@
     return practiceLabel ? 'Practice · ' + practiceLabel : 'Practice vs AI';
   }
 
-  window.DangalLive = { isLive, roles, join, pingTurn, modeChromeLabel, PRESENCE_FORFEIT_MS };
+  /** Confirm leave; forfeit Live match if still playing. Returns true if left. */
+  async function requestLeave(opts) {
+    const o = opts || {};
+    const playing = o.isPlaying !== false;
+    const live = !!(o.live || o.liveHandle);
+    if (typeof confirmLeaveGame === 'function') {
+      const ok = await confirmLeaveGame({
+        title: o.title || 'Leave game?',
+        body:
+          live && playing
+            ? o.forfeitBody || 'Leaving now counts as a forfeit for your opponent.'
+            : o.body || 'This run will end.',
+      });
+      if (!ok) return false;
+    }
+    if (o.liveHandle && playing) {
+      try {
+        await Promise.resolve(o.liveHandle.leave({ forfeit: true }));
+      } catch (e) {
+        try {
+          o.liveHandle.leave();
+        } catch (e2) {}
+      }
+    } else if (o.liveHandle) {
+      try {
+        o.liveHandle.leave();
+      } catch (e) {}
+    }
+    if (typeof o.onLeave === 'function') o.onLeave();
+    return true;
+  }
+
+  window.DangalLive = { isLive, roles, join, pingTurn, modeChromeLabel, requestLeave, PRESENCE_FORFEIT_MS };
 })();

@@ -595,6 +595,7 @@ function runMuqabala(overlay, oppName, mode, opts){
   const philosophicalAnswers = [];
   let sessionEnded = false;
   let sessionResult = null;
+  let leaveConfirmed = false;
   const modeChrome = liveOn
     ? (typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel ? DangalLive.modeChromeLabel(true) : 'Live 1v1')
     : (typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel ? DangalLive.modeChromeLabel(false, 'AI') : 'Practice vs AI');
@@ -627,7 +628,7 @@ function runMuqabala(overlay, oppName, mode, opts){
       },
       cleanup(){
         if(timerInterval){ clearInterval(timerInterval); timerInterval = null; }
-        if(liveHandle){
+        if(liveHandle && !leaveConfirmed){
           try{ liveHandle.leave({ forfeit: !sessionEnded || ['dismissed','aborted','quit'].includes(sessionResult) }); }catch(e){}
           liveHandle = null;
         }
@@ -657,6 +658,32 @@ function runMuqabala(overlay, oppName, mode, opts){
   function closeOverlay(result){
     endSession(result || 'dismissed');
     overlay.classList.add('hidden');
+  }
+
+  async function askMuqabalaLeave(){
+    if(sessionEnded){ closeOverlay('dismissed'); return; }
+    if(typeof DangalLive !== 'undefined' && DangalLive.requestLeave){
+      const ok = await DangalLive.requestLeave({
+        liveHandle,
+        isPlaying: !sessionEnded,
+        title: 'Leave Muqabala?',
+        body: 'This round will end.',
+        onLeave: () => { leaveConfirmed = true; liveHandle = null; },
+      });
+      if(!ok) return;
+    } else if(typeof confirmLeaveGame === 'function'){
+      const ok = await confirmLeaveGame({
+        title: 'Leave Muqabala?',
+        body: liveOn ? 'Leaving now counts as a forfeit for your opponent.' : 'This round will end.',
+      });
+      if(!ok) return;
+      if(liveHandle && !sessionEnded){
+        try{ liveHandle.leave({ forfeit: true }); }catch(e){ try{ liveHandle.leave(); }catch(e2){} }
+        leaveConfirmed = true;
+        liveHandle = null;
+      }
+    }
+    closeOverlay('dismissed');
   }
 
   function noteAnswer(correct){
@@ -752,7 +779,7 @@ function runMuqabala(overlay, oppName, mode, opts){
           <div style="font-size:13px;color:var(--muted);">Waiting for host questions</div>
         </div>`;
       const b=document.getElementById('closeMuqabala2');
-      if(b)b.addEventListener('click',()=>closeOverlay('dismissed'));
+      if(b)b.addEventListener('click',()=>{askMuqabalaLeave();});
       setTimeout(()=>{ if(!sessionEnded) renderQ(); }, 400);
       return;
     }
@@ -789,7 +816,7 @@ function runMuqabala(overlay, oppName, mode, opts){
       </div>
     `;
 
-    document.getElementById('closeMuqabala2').addEventListener('click',()=>closeOverlay('dismissed'));
+    document.getElementById('closeMuqabala2').addEventListener('click',()=>{askMuqabalaLeave();});
 
     const optBtns = overlay.querySelectorAll('.opt');
     const tickTimerUi = ()=>{

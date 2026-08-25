@@ -403,6 +403,7 @@ const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat):null;
 const myChessColor=liveRoles?liveRoles.myColor:'w';
 let liveHandle=null;
 let applyingLive=false;
+let leaveConfirmed=false;
 if(liveOn&&liveRoles){
   liveHandle=DangalLive.join({
     gameType:'chess',
@@ -545,13 +546,29 @@ const gs=beginGameOverlaySession({
   type:'chess',title:'Chess',mode:liveOn?'live':'practice',chat,overlay,
   cleanup(){
     clearInterval(clockInterval);clockInterval=null;
-    if(liveHandle){
+    if(liveHandle&&!leaveConfirmed){
       const stillPlaying=state&&state.status==='playing';
       try{liveHandle.leave({forfeit:stillPlaying});}catch(e){try{liveHandle.leave();}catch(e2){}}
     }
   },
 });
 if(!gs.alive())return;
+
+async function askChessLeave(){
+  const playing=!(state&&(state.status==='checkmate'||state.status==='stalemate'||state.status==='timeout'));
+  if(!playing){gs.close();return;}
+  if(typeof DangalLive!=='undefined'&&DangalLive.requestLeave){
+    const ok=await DangalLive.requestLeave({
+      liveHandle,isPlaying:playing,title:'Leave Chess?',body:'This run will end.',
+      onLeave:()=>{leaveConfirmed=true;liveHandle=null;},
+    });
+    if(!ok)return;
+  }else if(typeof confirmLeaveGame==='function'){
+    const ok=await confirmLeaveGame({title:'Leave Chess?',body:'This run will end.'});
+    if(!ok)return;
+  }
+  gs.close();
+}
 
 function sqColor(r,c){return(r+c)%2===0?'#F0D9B5':'#B58863';}
 function sqHighlight(r,c){
@@ -646,7 +663,7 @@ function render(){
     </div>
     ${turnBanner}`}
   `;
-  document.getElementById('chessBack').addEventListener('click',()=>gs.close());
+  document.getElementById('chessBack').addEventListener('click',()=>{askChessLeave();});
   if(resultBlock&&typeof wireGameResultActions==='function'){
     const rematch=()=>{
       if(typeof openChessGame==='function'){gs.close();openChessGame(chat);}
@@ -921,7 +938,7 @@ function openSnakesVersion(chat, version){
   let LADDERS = {...version.ladders};
   const liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat);
   const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat):null;
-  let liveHandle=null;let applyingLive=false;
+  let liveHandle=null;let applyingLive=false;let leaveConfirmed=false;
   let pos={me:0,opp:0};let myTurn=!liveRoles||liveRoles.myColor==='w';let rolling=false;let gameOver=false;
   let diceVals=[null,null];let message='';let doubleRoll=false;
   let diceIv=null;let hopping=false;
@@ -972,12 +989,27 @@ function openSnakesVersion(chat, version){
     type:'snakes',title:'Snakes & Ladders',mode:liveOn?'live':'practice',chat,overlay,
     cleanup(){
       if(diceIv){clearInterval(diceIv);diceIv=null;}
-      if(liveHandle){
+      if(liveHandle&&!leaveConfirmed){
         try{liveHandle.leave({forfeit:!gameOver});}catch(e){try{liveHandle.leave();}catch(e2){}}
       }
     },
   });
   if(!gs.alive())return;
+
+  async function askSnakesLeave(){
+    if(gameOver){gs.close();return;}
+    if(typeof DangalLive!=='undefined'&&DangalLive.requestLeave){
+      const ok=await DangalLive.requestLeave({
+        liveHandle,isPlaying:!gameOver,title:'Leave Snakes & Ladders?',body:'This run will end.',
+        onLeave:()=>{leaveConfirmed=true;liveHandle=null;},
+      });
+      if(!ok)return;
+    }else if(typeof confirmLeaveGame==='function'){
+      const ok=await confirmLeaveGame({title:'Leave Snakes & Ladders?',body:'This run will end.'});
+      if(!ok)return;
+    }
+    gs.close();
+  }
 
   function diceEmoji(v){return v?['⚀','⚁','⚂','⚃','⚄','⚅'][v-1]:'🎲';}
 
@@ -1256,7 +1288,7 @@ function openSnakesVersion(chat, version){
         </button>
       </div>
     `;
-    document.getElementById('slBack').addEventListener('click',()=>gs.close());
+    document.getElementById('slBack').addEventListener('click',()=>{askSnakesLeave();});
     document.getElementById('rollBtn').addEventListener('click',rollDice);
     placeTokens();
   }
@@ -1303,7 +1335,7 @@ function openLudoGame(chat, playerCount){
   const liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat);
   if(liveOn)playerCount=2;
   const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat):null;
-  let liveHandle=null;let applyingLive=false;
+  let liveHandle=null;let applyingLive=false;let leaveConfirmed=false;
   const mySeat=!liveRoles||liveRoles.myColor==='w'?0:1;
   const MODE_SUB=liveOn
     ?(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel?DangalLive.modeChromeLabel(true):'Live 1v1')
@@ -1395,12 +1427,27 @@ function openLudoGame(chat, playerCount){
     type:'ludo',title:'Ludo',mode:liveOn?'live':(playerCount>2?'group':'practice'),chat,overlay,
     cleanup(){
       if(diceIv){clearInterval(diceIv);diceIv=null;}
-      if(liveHandle){
+      if(liveHandle&&!leaveConfirmed){
         try{liveHandle.leave({forfeit:!gameOver});}catch(e){try{liveHandle.leave();}catch(e2){}}
       }
     },
   });
   if(!gs.alive())return;
+
+  async function askLudoLeave(){
+    if(gameOver){gs.close();return;}
+    if(typeof DangalLive!=='undefined'&&DangalLive.requestLeave){
+      const ok=await DangalLive.requestLeave({
+        liveHandle,isPlaying:!gameOver,title:'Leave Ludo?',body:'This run will end.',
+        onLeave:()=>{leaveConfirmed=true;liveHandle=null;},
+      });
+      if(!ok)return;
+    }else if(typeof confirmLeaveGame==='function'){
+      const ok=await confirmLeaveGame({title:'Leave Ludo?',body:'This run will end.'});
+      if(!ok)return;
+    }
+    gs.close();
+  }
 
   function isMyControl(){return currentPlayer===(liveOn?mySeat:0);}
 
@@ -1737,7 +1784,7 @@ function openLudoGame(chat, playerCount){
         </button>
       </div>
     `;
-    document.getElementById('ludoBack').addEventListener('click',()=>gs.close());
+    document.getElementById('ludoBack').addEventListener('click',()=>{askLudoLeave();});
     document.getElementById('ludoRoll').addEventListener('click',()=>{if(isMyControl()&&phase==='roll'&&!gameOver){if(typeof gameFeedback==='function')gameFeedback('dice');rollDice();}});
     const layer=overlay.querySelector('#ludoTokens');
     layer.addEventListener('click',(e)=>{
@@ -1793,7 +1840,7 @@ function openUnoGame(chat, variant='normal'){
   const FLIP_DARK_ACTIONS=['skip_all','draw_all_5','wild_dark'];
   const liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat);
   const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat):null;
-  let liveHandle=null;let applyingLive=false;
+  let liveHandle=null;let applyingLive=false;let leaveConfirmed=false;
   const MODE_SUB=liveOn
     ?(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel?DangalLive.modeChromeLabel(true):'Live 1v1')
     :(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel
@@ -1844,12 +1891,27 @@ function openUnoGame(chat, variant='normal'){
   const gs=beginGameOverlaySession({
     type:'uno',title:'Oh, No! Cards',mode:liveOn?'live':'practice',chat,overlay,
     cleanup(){
-      if(liveHandle){
+      if(liveHandle&&!leaveConfirmed){
         try{liveHandle.leave({forfeit:!gameOver});}catch(e){try{liveHandle.leave();}catch(e2){}}
       }
     },
   });
   if(!gs.alive())return;
+
+  async function askUnoLeave(){
+    if(gameOver){gs.close();return;}
+    if(typeof DangalLive!=='undefined'&&DangalLive.requestLeave){
+      const ok=await DangalLive.requestLeave({
+        liveHandle,isPlaying:!gameOver,title:'Leave Oh, No!?',body:'This run will end.',
+        onLeave:()=>{leaveConfirmed=true;liveHandle=null;},
+      });
+      if(!ok)return;
+    }else if(typeof confirmLeaveGame==='function'){
+      const ok=await confirmLeaveGame({title:'Leave Oh, No!?',body:'This run will end.'});
+      if(!ok)return;
+    }
+    gs.close();
+  }
 
   function serializeUnoHands(){
     if(!liveRoles)return{handA:hands.me,handB:hands.opp};
@@ -1984,7 +2046,7 @@ function openUnoGame(chat, variant='normal'){
       overlay.innerHTML=`
         ${gameChromeHtml({title:'Oh, No!',subtitle:MODE_SUB,backId:'unoBack'})}
         <div style="flex:1;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.7);font-weight:700;">Waiting for deal…</div>`;
-      document.getElementById('unoBack')?.addEventListener('click',()=>gs.close());
+      document.getElementById('unoBack')?.addEventListener('click',()=>{askUnoLeave();});
       return;
     }
     if(gameOver&&typeof gameResultHtml==='function'){
@@ -2009,7 +2071,7 @@ function openUnoGame(chat, variant='normal'){
             {label:'Challenge friend',primary:false,id:'challenge'},
           ],
         })}</div>`;
-      document.getElementById('unoBack')?.addEventListener('click',()=>gs.close());
+      document.getElementById('unoBack')?.addEventListener('click',()=>{askUnoLeave();});
       if(typeof wireGameResultActions==='function'){
         wireGameResultActions(overlay,{
           again:()=>{gs.close();if(typeof openUnoVariantPicker==='function')openUnoVariantPicker(chat);else if(typeof openUnoGame==='function')openUnoGame(chat,variant);},
@@ -2071,7 +2133,7 @@ function openUnoGame(chat, variant='normal'){
       </div>
     `;
 
-    document.getElementById('unoBack').addEventListener('click',()=>gs.close());
+    document.getElementById('unoBack').addEventListener('click',()=>{askUnoLeave();});
     document.getElementById('unoUnoBtn').addEventListener('click',()=>{if(hands.me.length===2)unoCallWindow=true;});
 
     function playFromHand(i,chosenColor){
@@ -2211,10 +2273,11 @@ const DIFF_LABEL=liveOn
 const overlay=document.createElement('div');
 overlay.style.cssText='position:absolute;inset:0;background:#1a1a2e;z-index:80;display:flex;flex-direction:column;align-items:center;padding:0 0 12px;gap:12px;';
 let liveHandle=null;
+let leaveConfirmed=false;
 const gs=beginGameOverlaySession({
   type:'ttt',title:'Tic-Tac-Toe',mode:liveOn?'live':'practice',chat,overlay,
   cleanup(){
-    if(liveHandle){
+    if(liveHandle&&!leaveConfirmed){
       try{liveHandle.leave({forfeit:!gameOver});}catch(e){try{liveHandle.leave();}catch(e2){}}
     }
   },
@@ -2225,6 +2288,21 @@ let myTurn=!liveRoles||liveRoles.myColor==='w';
 let applyingLive=false;
 const myMark=(!liveRoles||liveRoles.myColor==='w')?'X':'O';
 const oppMark=myMark==='X'?'O':'X';
+
+async function askTttLeave(){
+  if(!liveHandle&&showResult){gs.close();return;}
+  if(typeof DangalLive!=='undefined'&&DangalLive.requestLeave){
+    const ok=await DangalLive.requestLeave({
+      liveHandle,isPlaying:!!liveHandle||!gameOver,title:'Leave Tic-Tac-Toe?',body:'This run will end.',
+      onLeave:()=>{leaveConfirmed=true;liveHandle=null;},
+    });
+    if(!ok)return;
+  }else if(typeof confirmLeaveGame==='function'){
+    const ok=await confirmLeaveGame({title:'Leave Tic-Tac-Toe?',body:'This run will end.'});
+    if(!ok)return;
+  }
+  gs.close();
+}
 
 function checkWin(b,s){
   const w=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
@@ -2305,7 +2383,7 @@ function render(){
     ${!showResult?`<button id="tttNew" class="game-tap-target" style="padding:12px 32px;background:${gameOver?'var(--game-accent,var(--red))':'rgba(255,255,255,0.1)'};color:#fff;border:none;border-radius:var(--game-btn-radius,14px);font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;cursor:pointer;min-height:44px;">New game</button>`:''}
   `;
   if(typeof prepareGameOverlay==='function') prepareGameOverlay(overlay,{theme:'dark',gameId:'ttt'});
-  document.getElementById('tttBack').addEventListener('click',()=>gs.close());
+  document.getElementById('tttBack').addEventListener('click',()=>{askTttLeave();});
   const newBtn=document.getElementById('tttNew');
   if(newBtn)newBtn.addEventListener('click',()=>resetTtt());
   if(showResult){
@@ -2477,6 +2555,21 @@ if(!gs.alive())return;
 if(typeof prepareGameOverlay==='function') prepareGameOverlay(overlay,{theme:'dark',gameId:'wordguess'});
 if(typeof markGamePlayed==='function') markGamePlayed('wordguess');
 
+async function askWordGuessLeave(){
+  if(gameOver){gs.close();return;}
+  if(typeof DangalLive!=='undefined'&&DangalLive.requestLeave){
+    const ok=await DangalLive.requestLeave({
+      title:'Leave Shabd Five?',body:'Puzzle progress will be lost.',
+      onLeave:()=>{},
+    });
+    if(!ok)return;
+  }else if(typeof confirmLeaveGame==='function'){
+    const ok=await confirmLeaveGame({title:'Leave Shabd Five?',body:'Puzzle progress will be lost.'});
+    if(!ok)return;
+  }
+  gs.close();
+}
+
 function getTileState(guess,pos){
   const letter=guess[pos];
   if(target[pos]===letter)return'correct';
@@ -2544,7 +2637,7 @@ function render(){
     ${resultBlock||(gameOver?`<div style="text-align:center;padding:8px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;color:${won?'#538D4E':'#B59F3B'};flex-shrink:0;">${won?'Brilliant!':'The word was '+target}</div>`:'')}
     ${gameOver?'':`<div style="flex-shrink:0;padding:8px;padding-bottom:max(8px,env(safe-area-inset-bottom));" id="wgKeyboard"></div>`}
   `;
-  document.getElementById('wgBack').addEventListener('click',()=>gs.close());
+  document.getElementById('wgBack').addEventListener('click',()=>{askWordGuessLeave();});
   document.getElementById('wgNew')?.addEventListener('click',()=>{gs.close('restart');openWordGuess(chat,{daily:false});});
 
   if(gameOver&&typeof wireGameResultActions==='function'){
