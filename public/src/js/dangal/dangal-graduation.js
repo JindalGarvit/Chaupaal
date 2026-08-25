@@ -17,8 +17,8 @@
     brickbreaker: { grade: 'graduated', sync: 'none', stakes: false },
     rushrunner: { grade: 'graduated', sync: 'none', stakes: false },
     tiptap: { grade: 'graduated', sync: 'none', stakes: false },
-    ankjod: { grade: 'practice', sync: 'none' },
-    kakuro: { grade: 'practice', sync: 'none' },
+    ankjod: { grade: 'graduated', sync: 'none', stakes: false },
+    kakuro: { grade: 'graduated', sync: 'none', stakes: false },
     wordguess: { grade: 'graduated', sync: 'none', stakes: false },
 
     // Phase 2 boards — Live when friend UID + matchId

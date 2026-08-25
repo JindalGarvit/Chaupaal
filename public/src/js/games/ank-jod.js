@@ -1198,7 +1198,7 @@
         .join('');
 
       root.innerHTML = `
-        ${gameChromeHtml({ title: 'Ank Jod', subtitle: diffMeta.label, backId: 'kkBack', rightHtml: `<button id="kkNew" class="game-chrome-action">New</button>` })}
+        ${gameChromeHtml({ title: 'Ank Jod', subtitle: diffMeta.label, backId: 'kkBack', pauseId: 'kkPause', rightHtml: `<button id="kkNew" class="game-chrome-action">New</button>` })}
         <div id="kkTimer" class="game-turn game-turn--waiting">${formatTime(elapsed)}</div>
         <div class="kk-board-area">
           <div id="kkStatus" class="kk-status${won ? ' kk-status--won' : ''}">${
@@ -1311,9 +1311,36 @@
       paint();
     }
 
+    let pauseCtrl = null;
+
     function wirePaintHandlers() {
+      if (pauseCtrl) {
+        try {
+          pauseCtrl.destroy();
+        } catch (e) {}
+        pauseCtrl = null;
+      }
+      if (typeof createGamePauseController === 'function' && !won) {
+        pauseCtrl = createGamePauseController({
+          host: root,
+          pauseBtnId: 'kkPause',
+          onQuit: () => {
+            if (session) session.end(won ? 'won' : 'quit');
+          },
+        });
+      }
       root.querySelector('#kkBack')?.addEventListener('click', () => {
-        if (session) session.end(won ? 'won' : 'quit');
+        if (won) {
+          if (session) session.end('won');
+          return;
+        }
+        const ask =
+          typeof confirmLeaveGame === 'function'
+            ? confirmLeaveGame({ title: 'Leave Ank Jod?', body: 'Puzzle progress will be lost.' })
+            : Promise.resolve(window.confirm('Leave Ank Jod?'));
+        Promise.resolve(ask).then((ok) => {
+          if (ok && session) session.end('quit');
+        });
       });
       root.querySelector('#kkNew')?.addEventListener('click', () => {
         if (session) session.end('restart');
@@ -1366,10 +1393,21 @@
       showMistakes = false;
       statusMsg = 'Puzzle solved!';
       paint();
-      if (typeof gameFeedback === 'function') gameFeedback('complete');
+      if (typeof gameFeedback === 'function') gameFeedback('win');
       if (typeof recordGameResult === 'function') {
         try {
           recordGameResult('ankjod', true);
+        } catch (e) {}
+      }
+      if (window.DangalEconomy && typeof DangalEconomy.reportGameEnd === 'function') {
+        try {
+          DangalEconomy.reportGameEnd({
+            gameType: 'ankjod',
+            result: 'won',
+            sessionId: session?.id || 'ankjod_' + Date.now(),
+            matchId: session?.id || '',
+            stake: 0,
+          });
         } catch (e) {}
       }
     }
@@ -1479,6 +1517,13 @@
           clearInterval(timerId);
           timerId = null;
         }
+        if (pauseCtrl) {
+          try {
+            pauseCtrl.destroy();
+          } catch (e) {}
+          pauseCtrl = null;
+        }
+        if (typeof clearDangalLaunchCtx === 'function') clearDangalLaunchCtx();
         session = null;
       },
     });
@@ -1509,7 +1554,7 @@
     registerGame({
       id: 'ankjod',
       name: 'Ank Jod',
-      desc: 'Cross-sums (Kakuro) · easy / medium / hard',
+      desc: 'Cross-sums · easy / medium / hard · Solo',
       icon: '🔢',
       ratingKey: 'ankjod',
       gameType: 'solo',
@@ -1521,7 +1566,7 @@
       chatGroup: false,
       featured: false,
       order: 95,
-      meta: { aliases: ['kakuro'], engine: 'ank-jod' },
+      meta: { aliases: ['kakuro'], engine: 'ank-jod', graduated: true, phase: 1 },
       launch(ctx) {
         openAnkJod(ctx || {});
       },
@@ -1530,7 +1575,7 @@
     registerGame({
       id: 'kakuro',
       name: 'Ank Jod',
-      desc: 'Cross-sums (Kakuro) · easy / medium / hard',
+      desc: 'Cross-sums · Solo',
       icon: '🔢',
       ratingKey: 'ankjod',
       gameType: 'solo',
@@ -1542,7 +1587,7 @@
       chatGroup: false,
       featured: false,
       order: 96,
-      meta: { aliasOf: 'ankjod' },
+      meta: { aliasOf: 'ankjod', graduated: true, phase: 1 },
       launch(ctx) {
         openAnkJod(ctx || {});
       },
