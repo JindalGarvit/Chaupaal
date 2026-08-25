@@ -151,7 +151,12 @@ async function recordDangalGameLike(gameId, btn) {
 
 function dangalTileHtml(g) {
   const rating = typeof getGameRating === 'function' ? getGameRating(g.ratingKey) : null;
-  const soloTag = g.solo || g.gameType === 'solo' ? '<span class="dangal-solo-tag">SOLO</span>' : '';
+  const honesty =
+    typeof dangalHonestyBadgeHtml === 'function'
+      ? dangalHonestyBadgeHtml(g)
+      : g.solo || g.gameType === 'solo'
+        ? '<span class="dangal-solo-tag">SOLO</span>'
+        : '<span class="dangal-honesty-tag dangal-honesty-tag--practice">Practice</span>';
   const genreHint =
     g.genre && typeof genreLabel === 'function'
       ? `<span class="dangal-genre-tag">${genreLabel(g.genre)}</span>`
@@ -162,7 +167,7 @@ function dangalTileHtml(g) {
   return `<div class="dangal-game-tile" data-game="${g.id}" style="--tile-accent:${accent}">
     <div class="dangal-game-icon">${g.icon}</div>
     <div>
-      <div class="dangal-game-name">${g.name}${soloTag}</div>
+      <div class="dangal-game-name">${g.name}${honesty}</div>
       <div class="dangal-game-desc">${g.desc}</div>
       ${genreHint}
       ${rating ? `<div class="dangal-game-rating-pill">★ ${rating}</div>` : ''}
@@ -431,7 +436,15 @@ function renderDangalGamesGrid() {
 
   function filteredLibrary() {
     let list = library.slice();
-    if (state.live) list = list.filter((g) => g.liveDuel || g.id === 'chess' || g.id === 'fiveinrow' || g.id === 'ttt');
+    if (state.live)
+      list = list.filter(
+        (g) =>
+          g.liveDuel ||
+          (typeof isLiveCapable === 'function' && isLiveCapable(g.id)) ||
+          g.id === 'chess' ||
+          g.id === 'fiveinrow' ||
+          g.id === 'ttt'
+      );
     else if (state.genre) list = list.filter((g) => g.genre === state.genre);
     else if (state.mode && state.mode !== 'all') {
       list = list.filter((g) => g.gameType === state.mode);
@@ -514,14 +527,15 @@ function renderDangalGamesGrid() {
   if (lastGame) {
     maidanBody.innerHTML = `
       <button type="button" class="btn btn--primary dangal-action-btn" data-dangal-resume="${lastGame.id}">
-        Resume · ${lastGame.icon || ''} ${lastGame.name}
+        Play again · ${lastGame.icon || ''} ${lastGame.name}
       </button>
+      <p class="dangal-maidan-note" style="grid-column:1/-1;font-size:12px;color:var(--muted);margin:0 0 8px;">No mid-match save yet — this restarts your last game type.</p>
       <button type="button" class="btn dangal-action-btn" data-dangal-maidan="muqabala">Open Muqabala</button>
       <button type="button" class="btn dangal-action-btn" data-dangal-maidan="finder">Find opponent</button>`;
   } else {
     maidanBody.innerHTML = `
       <div class="cp-empty" style="padding:16px;text-align:center;color:var(--muted);grid-column:1/-1;">
-        No game in progress — pick something from Manch.
+        Nothing in progress — pick a game from Manch.
       </div>
       <button type="button" class="btn btn--primary dangal-action-btn" data-dangal-maidan="muqabala">Open Muqabala</button>
       <button type="button" class="btn dangal-action-btn" data-dangal-maidan="finder">Find opponent</button>`;

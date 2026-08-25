@@ -98,6 +98,108 @@
     return hit ? hit.label : 'Games';
   }
 
+  function clearDangalLaunchCtx() {
+    try {
+      delete window.__dangalLaunchCtx;
+    } catch (e) {
+      window.__dangalLaunchCtx = null;
+    }
+  }
+
+  /**
+   * Single launch contract for Manch / challenge / picker / deep links.
+   * @param {object} opts
+   * @param {string} opts.gameId
+   * @param {'practice'|'live'|'daily'} [opts.mode]
+   * @param {string} [opts.opponentUid]
+   * @param {string} [opts.matchId]
+   * @param {number} [opts.stake]
+   * @param {string} [opts.chatId]
+   * @param {object} [opts.chat]
+   * @param {string} [opts.source]
+   */
+  function launchDangalGame(opts) {
+    const o = opts || {};
+    const gameId = o.gameId || o._descriptor?.id;
+    const game = o._descriptor || getGame(gameId);
+    if (!game) return;
+
+    const rawLaunch =
+      (typeof o._userLaunch === 'function' && o._userLaunch) ||
+      game.__rawLaunch ||
+      null;
+    if (typeof rawLaunch !== 'function') {
+      console.warn('[dangal] no raw launch for', gameId);
+      return;
+    }
+
+    const chat = o.chat || null;
+    const matchId =
+      o.matchId ||
+      (chat && chat.dangalMatchId) ||
+      (typeof dangalMatchId === 'function' ? dangalMatchId(gameId, chat) : '');
+    const opponentUid =
+      o.opponentUid ||
+      (typeof opponentUidFromChat === 'function' ? opponentUidFromChat(chat) : '') ||
+      '';
+    const persistable =
+      opponentUid && typeof isPersistableUid === 'function' && isPersistableUid(opponentUid);
+    const liveCapable = typeof isLiveCapable === 'function' ? isLiveCapable(gameId) : !!game.liveDuel;
+    let mode = o.mode || '';
+    if (!mode) {
+      if (o.source === 'challenge' || o.source === 'challenge_host') {
+        mode = persistable && liveCapable ? 'live' : 'practice';
+      } else if (persistable && liveCapable) {
+        mode = 'live';
+      } else if (game.solo || game.gameType === 'solo') {
+        mode = o.source === 'daily' || o.source === 'khel' ? 'daily' : 'practice';
+      } else {
+        mode = 'practice';
+      }
+    }
+    // Never claim Live with fake opponents
+    if (mode === 'live' && !persistable) mode = 'practice';
+
+    const stake =
+      mode === 'live' && typeof stakesEnabledForGame === 'function' && stakesEnabledForGame(gameId)
+        ? Number(o.stake) || 0
+        : 0;
+
+    window.__dangalLaunchCtx = {
+      gameId,
+      gameType: gameId,
+      mode,
+      matchId: matchId || '',
+      opponentUid: opponentUid || '',
+      stake,
+      chatId: o.chatId || chat?.firestoreId || chat?.id || '',
+      source: o.source || '',
+      startedAt: Date.now(),
+    };
+
+    if (chat && matchId) chat.dangalMatchId = matchId;
+
+    const ctx = Object.assign({}, o, {
+      chat,
+      matchId,
+      opponentUid,
+      stake,
+      mode,
+      source: o.source || '',
+    });
+    delete ctx._userLaunch;
+    delete ctx._descriptor;
+    delete ctx.gameId;
+
+    if (typeof markGamePlayed === 'function') {
+      try {
+        markGamePlayed(gameId);
+      } catch (e) {}
+    }
+
+    return rawLaunch(ctx);
+  }
+
   /**
    * @param {GameDescriptor} descriptor
    */
@@ -107,24 +209,15 @@
       gameType: inferGameType(descriptor),
       genre: inferGenre(descriptor),
     });
-    const userLaunch = next.launch;
+    next.__rawLaunch = descriptor.launch;
     next.launch = function (ctx) {
-      const c = ctx || {};
-      const matchId =
-        c.matchId ||
-        (typeof dangalMatchId === 'function' ? dangalMatchId(next.id, c.chat) : '');
-      const opponentUid =
-        c.opponentUid ||
-        (typeof opponentUidFromChat === 'function' ? opponentUidFromChat(c.chat) : '');
-      window.__dangalLaunchCtx = {
-        matchId,
-        opponentUid,
-        stake: Number(c.stake) || 0,
-        source: c.source || '',
-        gameType: next.id,
-      };
-      if (c.chat && matchId) c.chat.dangalMatchId = matchId;
-      return userLaunch(c);
+      return launchDangalGame(
+        Object.assign({}, ctx || {}, {
+          gameId: next.id,
+          _userLaunch: next.__rawLaunch,
+          _descriptor: next,
+        })
+      );
     };
     if (!games.has(next.id)) order.push(next.id);
     games.set(next.id, next);
@@ -285,7 +378,7 @@
     });
   }
 
-  /** Dangal opponent sheet for games that need a chat context. */
+  /** Honest opponent sheet — Practice vs AI or Live challenge friend (never fake Priya). */
   function launchDangalWithOpponent(gameId) {
     const game = getGame(gameId);
     if (!game) return;
@@ -294,11 +387,12 @@
       const s = document.createElement('div');
       s.style.cssText =
         'position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:20px;z-index:100;';
-      s.innerHTML = `<div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;margin-bottom:14px;">🎯 Ludo — How many players?</div>
+      s.innerHTML = `<div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;margin-bottom:6px;">🎯 Ludo</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Practice vs AI — Live friends coming as this title graduates.</div>
       ${[2, 3, 4]
         .map(
           (n) =>
-            `<button data-n="${n}" style="width:100%;padding:13px;background:var(--cream);border:2px solid var(--line);border-radius:14px;margin-bottom:8px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;cursor:pointer;">${n} Players</button>`
+            `<button data-n="${n}" style="width:100%;padding:13px;background:var(--cream);border:2px solid var(--line);border-radius:14px;margin-bottom:8px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;cursor:pointer;">${n} Players · Practice</button>`
         )
         .join('')}
       <button id="closeLudoPick" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>`;
@@ -306,55 +400,78 @@
       s.querySelectorAll('[data-n]').forEach((btn) =>
         btn.addEventListener('click', () => {
           s.remove();
-          openLudoGame({ name: 'AI Opponent', id: 'ai' }, parseInt(btn.dataset.n, 10));
+          const n = parseInt(btn.dataset.n, 10);
+          window.__dangalLaunchCtx = {
+            gameId: 'ludo',
+            gameType: 'ludo',
+            mode: 'practice',
+            matchId: '',
+            opponentUid: 'ai',
+            stake: 0,
+            chatId: '',
+            source: 'dangal',
+            startedAt: Date.now(),
+          };
+          openLudoGame({ name: 'AI', id: 'ai' }, n);
         })
       );
       document.getElementById('closeLudoPick').addEventListener('click', () => s.remove());
       return;
     }
 
+    const liveOk = typeof isLiveCapable === 'function' ? isLiveCapable(gameId) : !!game.liveDuel;
     const sheet = document.createElement('div');
     sheet.style.cssText =
       'position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:22px;z-index:100;';
     sheet.innerHTML = `
-    <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;margin-bottom:14px;">${game.icon} ${game.name}</div>
-    <button id="dgRandomOpp" style="width:100%;padding:14px;background:var(--game-accent,var(--red));color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;">🎯 Find a random opponent</button>
-    <button id="dgFriendOpp" style="width:100%;padding:14px;background:var(--cream);border:2px solid var(--line);border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;">👤 Challenge a friend</button>
+    <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;margin-bottom:4px;">${game.icon} ${game.name}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">${
+      liveOk
+        ? 'Practice vs AI anytime — or challenge a real friend for Live 1v1.'
+        : 'Practice vs AI for now. Live friend sync ships when this title graduates.'
+    }</div>
+    <button id="dgPracticeAi" style="width:100%;padding:14px;background:var(--cream);border:2px solid var(--line);border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;">🤖 Practice vs AI</button>
+    <button id="dgFriendOpp" style="width:100%;padding:14px;background:var(--game-accent,var(--red));color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;">👤 Challenge a friend${liveOk ? ' · Live' : ''}</button>
     <button id="dgCancelGame" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>
   `;
     document.querySelector('.device').appendChild(sheet);
     document.getElementById('dgCancelGame').addEventListener('click', () => sheet.remove());
-    const launchGame = (chat) => {
+    document.getElementById('dgPracticeAi').addEventListener('click', () => {
       sheet.remove();
-      game.launch({ chat, source: 'dangal' });
-    };
-    document.getElementById('dgRandomOpp').addEventListener('click', () =>
-      launchGame({ name: 'Priya_29', id: 'random' })
-    );
+      game.launch({
+        chat: { name: 'AI', id: 'ai' },
+        source: 'dangal',
+        mode: 'practice',
+        opponentUid: 'ai',
+      });
+    });
     document.getElementById('dgFriendOpp').addEventListener('click', async () => {
       if (typeof openFriendPickerSheet === 'function') {
         sheet.remove();
         const friend = await openFriendPickerSheet({
           title: `Challenge · ${game.name}`,
-          subtitle: 'Pick a friend to play',
+          subtitle: liveOk ? 'Live 1v1 with a real friend' : 'Friend challenge (Practice until Live ships)',
         });
         if (friend) {
+          const uid = friend.uid || friend.id || '';
+          const persistable = typeof isPersistableUid === 'function' && isPersistableUid(uid);
           game.launch({
-            chat: { name: friend.name, id: friend.id || 'friend_' + friend.name, uid: friend.uid },
+            chat: {
+              name: friend.name,
+              id: persistable ? uid : 'friend_' + (friend.name || 'x'),
+              uid: persistable ? uid : undefined,
+              peerUid: persistable ? uid : undefined,
+            },
             source: 'dangal',
+            mode: persistable && liveOk ? 'live' : 'practice',
+            opponentUid: persistable ? uid : '',
           });
         }
         return;
       }
-      const name =
-        typeof promptNameSheet === 'function'
-          ? await promptNameSheet({
-              title: 'Friend username',
-              placeholder: 'Enter username',
-              confirmLabel: 'Challenge',
-            })
-          : null;
-      if (name) launchGame({ name, id: 'friend_' + name });
+      if (typeof showToast === 'function') {
+        showToast('Sign in and add friends to challenge someone');
+      }
     });
   }
 
@@ -367,13 +484,30 @@
       return;
     }
 
-    if (game.solo) {
-      game.launch({ source: 'dangal' });
+    if (game.solo || game.gameType === 'solo') {
+      launchDangalGame({
+        gameId,
+        source: 'manch',
+        mode: 'practice',
+        _userLaunch: game.__rawLaunch,
+        _descriptor: game,
+      });
       return;
     }
 
     if (gameId === 'uno' && typeof openUnoVariantPicker === 'function') {
-      openUnoVariantPicker({ name: 'AI Opponent', id: 'ai' });
+      window.__dangalLaunchCtx = {
+        gameId: 'uno',
+        gameType: 'uno',
+        mode: 'practice',
+        matchId: '',
+        opponentUid: 'ai',
+        stake: 0,
+        chatId: '',
+        source: 'manch',
+        startedAt: Date.now(),
+      };
+      openUnoVariantPicker({ name: 'AI', id: 'ai' });
       return;
     }
 
@@ -419,6 +553,8 @@
   window.getGameGenres = getGameGenres;
   window.genreLabel = genreLabel;
   window.GAME_GENRES = GAME_GENRES;
+  window.launchDangalGame = launchDangalGame;
+  window.clearDangalLaunchCtx = clearDangalLaunchCtx;
   // Game-launch boundary (CONVENTIONS 4c) — a broken engine must not blank the shell
   const guardGame = typeof safeFeature === 'function' ? safeFeature : (n, f) => f;
   window.openGamePicker = guardGame('game_picker', openGamePicker);

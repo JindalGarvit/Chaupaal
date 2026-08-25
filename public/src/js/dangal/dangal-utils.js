@@ -215,24 +215,14 @@
 
   function normalizeDangalResult(result) {
     const s = String(result == null ? '' : result).toLowerCase();
-    if (
-      !s ||
-      [
-        'dismissed',
-        'aborted',
-        'error',
-        'quit',
-        'restart',
-        'complete',
-        'finished',
-      ].indexOf(s) !== -1
-    ) {
+    if (!s || ['dismissed', 'aborted', 'error', 'quit', 'restart'].indexOf(s) !== -1) {
       return null;
     }
     if (s === 'win' || s === 'won') return 'win';
     if (s === 'loss' || s === 'lost' || s === 'lose') return 'loss';
     if (s === 'draw' || s === 'tie' || s === 'stalemate') return 'draw';
-    if (s === 'complete' || s === 'finished') return 'complete';
+    // Solo score runs — treat finished run as loss for economy unless explicitly won
+    if (s === 'complete' || s === 'finished') return 'loss';
     return null;
   }
 

@@ -341,7 +341,7 @@ function openRushRunner(){
     if(typeof setGamePB==='function') bestScore=setGamePB('rushrunner', final) ?? Math.max(bestScore, final);
     else if(final>bestScore){bestScore=final;localStorage.setItem('rushrunner_best',String(bestScore));}
     const vsBest=typeof formatVsBest==='function'?formatVsBest('rushrunner', final):`Best ${bestScore}m`;
-    if(gs)gs.setOutcome('complete');
+    if(gs)gs.setOutcome('lost');
     if(typeof recordGameResult==='function')recordGameResult('rushrunner',false,false,{score:final,scoreOnly:true});
     buzz('lose');
     const div=document.getElementById('rrOverlay');
@@ -539,7 +539,13 @@ function openRushRunner(){
     raf=requestAnimationFrame(update);
   }
 
-  document.getElementById('rrBack').addEventListener('click',()=>close());
+  document.getElementById('rrBack').addEventListener('click',()=>{
+    if(gameOver){close();return;}
+    const ask=typeof confirmLeaveGame==='function'
+      ?confirmLeaveGame({title:'Leave Rush Runner?',body:'This run will end.'})
+      :Promise.resolve(window.confirm('Leave Rush Runner?'));
+    Promise.resolve(ask).then((ok)=>{if(ok)close();});
+  });
   document.getElementById('rrStart').addEventListener('click',startGame);
   document.getElementById('rrLeft').addEventListener('click',()=>{if(started&&!gameOver)setLane(laneTo-1);});
   document.getElementById('rrRight').addEventListener('click',()=>{if(started&&!gameOver)setLane(laneTo+1);});
@@ -962,7 +968,12 @@ function openTipTap(){
   if(subEl)subEl.id='cbSub';
 
   fxLayer=document.getElementById('cbFx');
-  document.getElementById('cbBack').addEventListener('click',()=>close());
+  document.getElementById('cbBack').addEventListener('click',()=>{
+    const ask=typeof confirmLeaveGame==='function'
+      ?confirmLeaveGame({title:'Leave Tip Tap?',body:'Level progress for this run will be lost.'})
+      :Promise.resolve(window.confirm('Leave Tip Tap?'));
+    Promise.resolve(ask).then((ok)=>{if(ok)close();});
+  });
   if(typeof createGamePauseController==='function'){
     pauseCtrl=createGamePauseController({
       host:overlay,
@@ -1005,7 +1016,7 @@ if (typeof registerGame === 'function') {
   registerGame({
     id: 'rushrunner',
     name: 'Rush Runner',
-    desc: 'Endless runner · dodge & collect',
+    desc: 'Endless runner · Solo',
     icon: '🏃',
     ratingKey: 'rushrunner',
     gameType: 'solo',
@@ -1013,12 +1024,13 @@ if (typeof registerGame === 'function') {
     solo: true,
     selfChat: true,
     order: 100,
+    meta: { graduated: true, phase: 1 },
     launch() { openRushRunner(); },
   });
   registerGame({
     id: 'tiptap',
     name: 'Tip Tap',
-    desc: 'Match-3 · 100 levels',
+    desc: 'Match-3 · 100 levels · Solo',
     icon: '✨',
     ratingKey: 'tiptap',
     gameType: 'solo',
@@ -1026,6 +1038,7 @@ if (typeof registerGame === 'function') {
     solo: true,
     selfChat: true,
     order: 110,
+    meta: { graduated: true, phase: 1 },
     launch() { openTipTap(); },
   });
 }

@@ -119,6 +119,7 @@ function beginGameOverlaySession(opts) {
     }
     alive = false;
     runUserCleanup();
+    if (typeof clearDangalLaunchCtx === 'function') clearDangalLaunchCtx();
     if (onEnd) {
       try {
         onEnd(r);
@@ -152,6 +153,7 @@ function beginGameOverlaySession(opts) {
         alive = false;
         runUserCleanup();
         session = null;
+        if (typeof clearDangalLaunchCtx === 'function') clearDangalLaunchCtx();
       },
     });
     try {
@@ -2473,7 +2475,7 @@ if (typeof registerGame === 'function') {
   registerGame({
     id: 'wordguess',
     name: 'Shabd Five',
-    desc: '5-letter daily puzzle',
+    desc: '5-letter daily puzzle · Solo',
     icon: '📝',
     ratingKey: 'wordguess',
     gameType: 'solo',
@@ -2482,6 +2484,7 @@ if (typeof registerGame === 'function') {
     chat1v1: true,
     selfChat: true,
     order: 60,
+    meta: { graduated: true, phase: 1 },
     launch(ctx) { openWordGuess(ctx.chat); },
   });
 }

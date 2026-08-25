@@ -1894,6 +1894,36 @@
   }
 
   /**
+   * Leave confirm — Promise<boolean>. Quiet / reduced-motion friendly sheet.
+   */
+  function confirmLeaveGame(opts) {
+    const o = opts || {};
+    return new Promise((resolve) => {
+      document.getElementById('gameLeaveConfirm')?.remove();
+      const sheet = document.createElement('div');
+      sheet.id = 'gameLeaveConfirm';
+      sheet.className = 'game-pause-scrim';
+      sheet.setAttribute('role', 'dialog');
+      sheet.innerHTML = `<div class="game-pause-card">
+        <h3 class="game-pause-title">${o.title || 'Leave game?'}</h3>
+        <p style="font-size:13px;color:rgba(255,255,255,.7);margin:0 0 14px;line-height:1.4;">${
+          o.body || 'Progress on this run will be lost.'
+        }</p>
+        <button type="button" class="btn btn--primary game-tap-target" data-leave-stay>Keep playing</button>
+        <button type="button" class="btn btn--secondary game-tap-target" data-leave-go>Leave</button>
+      </div>`;
+      const host = document.querySelector('.device') || document.body;
+      host.appendChild(sheet);
+      const done = (v) => {
+        sheet.remove();
+        resolve(!!v);
+      };
+      sheet.querySelector('[data-leave-stay]')?.addEventListener('click', () => done(false));
+      sheet.querySelector('[data-leave-go]')?.addEventListener('click', () => done(true));
+    });
+  }
+
+  /**
    * Pause scrim with Resume / Quit, auto-pause on visibility hidden.
    * @param {{ host?: Element, overlay?: Element, pauseBtnId?: string, onPause?: Function, onResume?: Function, onQuit?: Function }} opts
    */
@@ -2053,5 +2083,6 @@
   window.GAME_ACCENTS = GAME_ACCENTS;
   window.shouldReduceGameMotion = shouldReduceGameMotion;
   window.createGamePauseController = createGamePauseController;
+  window.confirmLeaveGame = confirmLeaveGame;
   window.bindGameKeyboardPaddle = bindGameKeyboardPaddle;
 })();

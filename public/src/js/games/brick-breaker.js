@@ -331,7 +331,7 @@ function openBrickBreaker() {
       bestScore = score;
       localStorage.setItem('chaupaal_pb_brickbreaker', String(bestScore));
     }
-    if (gs) gs.setOutcome(didWin ? 'won' : 'complete');
+    if (gs) gs.setOutcome(didWin ? 'won' : 'lost');
     if (typeof recordGameResult === 'function') {
       recordGameResult('brickbreaker', didWin, false, { score, scoreOnly: true });
     }
@@ -639,7 +639,19 @@ function openBrickBreaker() {
     pointerDown = false;
   });
 
-  document.getElementById('bbBack')?.addEventListener('click', () => close());
+  document.getElementById('bbBack')?.addEventListener('click', () => {
+    if (gameOver) {
+      close();
+      return;
+    }
+    const ask =
+      typeof confirmLeaveGame === 'function'
+        ? confirmLeaveGame({ title: 'Leave Brick Breaker?', body: 'Progress on this run will be lost.' })
+        : Promise.resolve(window.confirm('Leave Brick Breaker? Progress on this run will be lost.'));
+    Promise.resolve(ask).then((ok) => {
+      if (ok) close();
+    });
+  });
   document.getElementById('bbStart')?.addEventListener('click', launchBall);
 
   raf = requestAnimationFrame(update);
@@ -649,7 +661,7 @@ if (typeof registerGame === 'function') {
   registerGame({
     id: 'brickbreaker',
     name: 'Brick Breaker',
-    desc: 'Classic Breakout · 12 levels',
+    desc: 'Classic Breakout · 12 levels · Solo',
     icon: '🧱',
     ratingKey: 'brickbreaker',
     gameType: 'solo',
@@ -657,6 +669,7 @@ if (typeof registerGame === 'function') {
     solo: true,
     selfChat: true,
     order: 105,
+    meta: { graduated: true, phase: 1 },
     launch() {
       openBrickBreaker();
     },

@@ -161,11 +161,27 @@
           matchId: chat.dangalMatchId,
           opponentUid: opp,
           chat,
+          mode: 'live',
         });
       } else if (typeof showToast === 'function') showToast('Opening ' + (att.gameName || 'game'));
     });
     card.querySelector('.dangal-challenge-decline')?.addEventListener('click', () => {
       att.status = 'declined';
+      try {
+        const cid = (window.currentOpenChat || {}).firestoreId || (window.currentOpenChat || {}).id;
+        if (cid && message.id && typeof db !== 'undefined' && db) {
+          db.collection('chats').doc(cid).collection('messages').doc(message.id).update({
+            'attachment.status': 'declined',
+          });
+        }
+      } catch (e) {}
+      if (typeof notifyPlayer === 'function' && att.fromUid) {
+        notifyPlayer(att.fromUid, 'challenge_declined', {
+          fromName: typeof getDisplayName === 'function' ? getDisplayName() : '',
+          gameName: att.gameName,
+          chatId: (window.currentOpenChat || {}).firestoreId || (window.currentOpenChat || {}).id,
+        });
+      }
       card.querySelector('.baithak-challenge-card__footer').innerHTML =
         '<span class="baithak-challenge-card__status">Declined</span>';
     });
