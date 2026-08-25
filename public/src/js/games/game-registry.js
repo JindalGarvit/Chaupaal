@@ -106,6 +106,81 @@
     }
   }
 
+  /** Chip stake options for Live launches (Phase 6). Practice always stake 0. */
+  const DANGAL_STAKE_OPTIONS = [0, 10, 25, 50];
+
+  function dangalStakePickerHtml(gameId, selected) {
+    if (typeof stakesEnabledForGame === 'function' && gameId && !stakesEnabledForGame(gameId)) {
+      return '';
+    }
+    const sel = Number(selected) || 0;
+    return `<div class="dangal-stake-picker" data-dangal-stake-picker>
+      <div class="dangal-stake-picker__label">Stake · applies to Live only</div>
+      <div class="dangal-stake-picker__row">
+        ${DANGAL_STAKE_OPTIONS.map(
+          (s) =>
+            `<button type="button" class="dangal-stake-chip${s === sel ? ' is-selected' : ''}" data-stake="${s}">${
+              s === 0 ? 'Friendly' : '⚡' + s
+            }</button>`
+        ).join('')}
+      </div>
+    </div>`;
+  }
+
+  function wireDangalStakePicker(root) {
+    const picker = root && root.querySelector ? root.querySelector('[data-dangal-stake-picker]') : null;
+    if (!picker) return;
+    picker.querySelectorAll('[data-stake]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        picker.querySelectorAll('[data-stake]').forEach((b) => b.classList.remove('is-selected'));
+        btn.classList.add('is-selected');
+      });
+    });
+  }
+
+  function readDangalStake(root) {
+    const sel =
+      root && root.querySelector
+        ? root.querySelector('[data-dangal-stake-picker] [data-stake].is-selected')
+        : null;
+    return sel ? Number(sel.dataset.stake) || 0 : 0;
+  }
+
+  /** Compact stake sheet before Live challenge send. Resolves stake number or null if cancelled. */
+  function openDangalStakeSheet(gameId) {
+    return new Promise((resolve) => {
+      if (typeof stakesEnabledForGame !== 'function' || !stakesEnabledForGame(gameId)) {
+        resolve(0);
+        return;
+      }
+      const sheet = document.createElement('div');
+      sheet.style.cssText =
+        'position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:20px;z-index:110;';
+      sheet.innerHTML = `
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;margin-bottom:4px;">Stake chips</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Friendly (0) or wager virtual chips. Teen-safe — not real money.</div>
+        ${dangalStakePickerHtml(gameId, 0)}
+        <button type="button" id="dgStakeContinue" style="width:100%;margin-top:14px;padding:14px;background:var(--game-accent,var(--red));color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;">Continue</button>
+        <button type="button" id="dgStakeCancel" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>`;
+      const device = document.querySelector('.device');
+      if (!device) {
+        resolve(0);
+        return;
+      }
+      device.appendChild(sheet);
+      wireDangalStakePicker(sheet);
+      document.getElementById('dgStakeContinue')?.addEventListener('click', () => {
+        const stake = readDangalStake(sheet);
+        sheet.remove();
+        resolve(stake);
+      });
+      document.getElementById('dgStakeCancel')?.addEventListener('click', () => {
+        sheet.remove();
+        resolve(null);
+      });
+    });
+  }
+
   /**
    * Single launch contract for Manch / challenge / picker / deep links.
    * @param {object} opts
@@ -360,7 +435,16 @@
         try {
           const gid = row.id;
           const matchId = typeof dangalMatchId === 'function' ? dangalMatchId(gid, chat) : '';
-          await sendChallengeCard(toUid, gid, { chatId, matchId });
+          let stake = 0;
+          if (typeof stakesEnabledForGame === 'function' && stakesEnabledForGame(gid)) {
+            const picked = await openDangalStakeSheet(gid);
+            if (picked == null) {
+              btn.disabled = false;
+              return;
+            }
+            stake = picked;
+          }
+          await sendChallengeCard(toUid, gid, { chatId, matchId, stake });
           sheet.remove();
           if (typeof showToast === 'function') showToast('Challenge sent');
         } catch (err) {
@@ -420,6 +504,8 @@
     }
 
     const liveOk = typeof isLiveCapable === 'function' ? isLiveCapable(gameId) : !!game.liveDuel;
+    const stakesOk =
+      liveOk && typeof stakesEnabledForGame === 'function' && stakesEnabledForGame(gameId);
     const sheet = document.createElement('div');
     sheet.style.cssText =
       'position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:22px;z-index:100;';
@@ -431,10 +517,12 @@
         : 'Practice vs AI for now. Live friend sync ships when this title graduates.'
     }</div>
     <button id="dgPracticeAi" style="width:100%;padding:14px;background:var(--cream);border:2px solid var(--line);border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;">🤖 Practice vs AI</button>
-    <button id="dgFriendOpp" style="width:100%;padding:14px;background:var(--game-accent,var(--red));color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;">👤 Challenge a friend${liveOk ? ' · Live' : ''}</button>
+    ${stakesOk ? dangalStakePickerHtml(gameId, 0) : ''}
+    <button id="dgFriendOpp" style="width:100%;padding:14px;background:var(--game-accent,var(--red));color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;${stakesOk ? 'margin-top:10px;' : ''}">👤 Challenge a friend${liveOk ? ' · Live' : ''}</button>
     <button id="dgCancelGame" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>
   `;
     document.querySelector('.device').appendChild(sheet);
+    if (stakesOk) wireDangalStakePicker(sheet);
     document.getElementById('dgCancelGame').addEventListener('click', () => sheet.remove());
     document.getElementById('dgPracticeAi').addEventListener('click', () => {
       sheet.remove();
@@ -443,14 +531,20 @@
         source: 'dangal',
         mode: 'practice',
         opponentUid: 'ai',
+        stake: 0,
       });
     });
     document.getElementById('dgFriendOpp').addEventListener('click', async () => {
+      const stake = stakesOk ? readDangalStake(sheet) : 0;
       if (typeof openFriendPickerSheet === 'function') {
         sheet.remove();
         const friend = await openFriendPickerSheet({
           title: `Challenge · ${game.name}`,
-          subtitle: liveOk ? 'Live 1v1 with a real friend' : 'Friend challenge (Practice until Live ships)',
+          subtitle: liveOk
+            ? stake > 0
+              ? `Live 1v1 · ⚡${stake} stake`
+              : 'Live 1v1 with a real friend'
+            : 'Friend challenge (Practice until Live ships)',
         });
         if (friend) {
           const uid = friend.uid || friend.id || '';
@@ -465,6 +559,7 @@
             source: 'dangal',
             mode: persistable && liveOk ? 'live' : 'practice',
             opponentUid: persistable ? uid : '',
+            stake: persistable && liveOk ? stake : 0,
           });
         }
         return;
@@ -553,6 +648,11 @@
   window.getGameGenres = getGameGenres;
   window.genreLabel = genreLabel;
   window.GAME_GENRES = GAME_GENRES;
+  window.DANGAL_STAKE_OPTIONS = DANGAL_STAKE_OPTIONS;
+  window.dangalStakePickerHtml = dangalStakePickerHtml;
+  window.wireDangalStakePicker = wireDangalStakePicker;
+  window.readDangalStake = readDangalStake;
+  window.openDangalStakeSheet = openDangalStakeSheet;
   window.launchDangalGame = launchDangalGame;
   window.clearDangalLaunchCtx = clearDangalLaunchCtx;
   // Game-launch boundary (CONVENTIONS 4c) — a broken engine must not blank the shell

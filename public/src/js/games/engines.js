@@ -352,7 +352,9 @@ function startChessGameInner(chat, tc) {
 const FILES='abcdefgh';
 const PIECE_UNICODE={K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙',k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
 const AI_DEPTH=Math.max(1,Math.min(3,tc.aiDepth||2));
-const DIFF_LABEL=tc.difficulty==='live'?'Live':tc.difficulty==='easy'?'Easy':tc.difficulty==='hard'?'Hard':'Medium';
+const DIFF_LABEL=tc.difficulty==='live'?'Live 1v1':(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel
+  ?DangalLive.modeChromeLabel(false,tc.difficulty==='easy'?'Easy':tc.difficulty==='hard'?'Hard':'Medium')
+  :(tc.difficulty==='easy'?'Practice · Easy':tc.difficulty==='hard'?'Practice · Hard':'Practice · Medium'));
 
 function chess960Fen(){
   const place=Array(8).fill('');
@@ -410,7 +412,7 @@ if(liveOn&&liveRoles){
     playerB:liveRoles.playerB,
     fen:chess.fen(),
     onSnap(val){
-      if(!val||applyingLive||!gs.alive())return;
+      if(!val||applyingLive||!gs||!gs.alive())return;
       if(val.fen&&val.fen!==chess.fen()){
         applyingLive=true;
         try{
@@ -424,6 +426,19 @@ if(liveOn&&liveRoles){
       }
       if(val.status&&val.status!=='playing'){
         syncFromChess();
+        if(val.status==='forfeit'||val.status==='over'||val.status==='checkmate'||val.status==='stalemate'){
+          if(val.winner&&liveRoles){
+            const iWon=val.winner===liveRoles.me;
+            if(val.status==='forfeit'){
+              state.status='timeout';
+              if(!state.ratingRecorded){
+                state.ratingRecorded=true;
+                if(typeof recordGameResult==='function')recordGameResult('chess',iWon,false);
+                if(gs)gs.setOutcome(iWon?'won':'lost');
+              }
+            }
+          }
+        }
         render();
       }
     },
@@ -527,10 +542,13 @@ overlay.style.cssText='position:absolute;inset:0;background:#1a1a2e;z-index:80;d
 
 let clockInterval=null;
 const gs=beginGameOverlaySession({
-  type:'chess',title:'Chess',mode:'1v1',chat,overlay,
+  type:'chess',title:'Chess',mode:liveOn?'live':'practice',chat,overlay,
   cleanup(){
     clearInterval(clockInterval);clockInterval=null;
-    if(liveHandle&&liveHandle.leave)liveHandle.leave();
+    if(liveHandle){
+      const stillPlaying=state&&state.status==='playing';
+      try{liveHandle.leave({forfeit:stillPlaying});}catch(e){try{liveHandle.leave();}catch(e2){}}
+    }
   },
 });
 if(!gs.alive())return;
@@ -763,20 +781,22 @@ function makeMove(move){
     if(state.check && typeof gameFeedback==='function') gameFeedback('check');
     if(HAS_TIMER&&state.status==='playing')startClock(state.turn);
     render();
-    if(state.status!=='playing'){stopClock();return;}
     if(liveOn&&liveHandle){
-      const oppTurn=liveRoles&&state.turn==='w'?liveRoles.playerB:liveRoles.playerA;
+      const nextTurnUid=liveRoles?(state.turn==='w'?liveRoles.playerA:liveRoles.playerB):null;
       liveHandle.push({
         fen:chess.fen(),
-        turn:oppTurn,
+        turn:nextTurnUid,
         lastMove:state.lastMove,
-        status:state.status,
+        status:state.status==='playing'?'playing':state.status,
+        winner:winnerUid||null,
       });
-      if(typeof DangalLive!=='undefined'&&DangalLive.pingTurn&&liveRoles){
+      if(state.status==='playing'&&typeof DangalLive!=='undefined'&&DangalLive.pingTurn&&liveRoles){
         DangalLive.pingTurn(liveRoles.opp,'chess',{chatId:chat&&(chat.firestoreId||chat.id)});
       }
+      if(state.status!=='playing'){stopClock();return;}
       return;
     }
+    if(state.status!=='playing'){stopClock();return;}
     if(typeof gameFeedback==='function')gameFeedback('turn');
     gs.schedule(()=>{
       if(!gs.alive())return;
@@ -899,9 +919,17 @@ function openSnakesVersion(chat, version){
   const SQUARES = version.squares;
   const SNAKES = {...version.snakes};
   let LADDERS = {...version.ladders};
-  let pos={me:0,opp:0};let myTurn=true;let rolling=false;let gameOver=false;
+  const liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat);
+  const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat):null;
+  let liveHandle=null;let applyingLive=false;
+  let pos={me:0,opp:0};let myTurn=!liveRoles||liveRoles.myColor==='w';let rolling=false;let gameOver=false;
   let diceVals=[null,null];let message='';let doubleRoll=false;
   let diceIv=null;let hopping=false;
+  const MODE_SUB=liveOn
+    ?(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel?DangalLive.modeChromeLabel(true):'Live 1v1')
+    :(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel
+      ?DangalLive.modeChromeLabel(false,version.name||'vs AI')
+      :('Practice · '+(version.name||'vs AI')));
 
   function sqNum(r,c,totalRows){
     const row=totalRows-1-r;return row%2===0?row*10+c+1:row*10+(9-c)+1;
@@ -941,12 +969,39 @@ function openSnakesVersion(chat, version){
   const overlay=document.createElement('div');
   overlay.style.cssText='position:absolute;inset:0;background:#1a1a2e;z-index:80;display:flex;flex-direction:column;';
   const gs=beginGameOverlaySession({
-    type:'snakes',title:'Snakes & Ladders',mode:'1v1',chat,overlay,
-    cleanup(){if(diceIv){clearInterval(diceIv);diceIv=null;}},
+    type:'snakes',title:'Snakes & Ladders',mode:liveOn?'live':'practice',chat,overlay,
+    cleanup(){
+      if(diceIv){clearInterval(diceIv);diceIv=null;}
+      if(liveHandle){
+        try{liveHandle.leave({forfeit:!gameOver});}catch(e){try{liveHandle.leave();}catch(e2){}}
+      }
+    },
   });
   if(!gs.alive())return;
 
   function diceEmoji(v){return v?['⚀','⚁','⚂','⚃','⚄','⚅'][v-1]:'🎲';}
+
+  function pushSnakes(){
+    if(!liveOn||!liveHandle||!liveRoles||applyingLive)return;
+    const posA=liveRoles.myColor==='w'?pos.me:pos.opp;
+    const posB=liveRoles.myColor==='w'?pos.opp:pos.me;
+    const winnerUid=gameOver?(pos.me>=SQUARES?liveRoles.me:liveRoles.opp):null;
+    liveHandle.push({
+      state:{
+        posA,posB,
+        snakes:Object.assign({},SNAKES),
+        ladders:Object.assign({},LADDERS),
+        diceVals:diceVals.slice(),
+        message,doubleRoll,gameOver,
+      },
+      turn:gameOver?null:(myTurn?liveRoles.me:liveRoles.opp),
+      status:gameOver?'over':'playing',
+      winner:winnerUid,
+    });
+    if(!gameOver&&typeof DangalLive!=='undefined'&&DangalLive.pingTurn){
+      DangalLive.pingTurn(liveRoles.opp,'snakes',{chatId:chat&&(chat.firestoreId||chat.id)});
+    }
+  }
 
   function buildPathsSvg(){
     const snakes=Object.entries(SNAKES).map(([f,t])=>{
@@ -1067,6 +1122,7 @@ function openSnakesVersion(chat, version){
       if(typeof recordDuelStreak==='function') recordDuelStreak(chat.id||chat.name, who==='me', false);
       if(typeof gameFeedback==='function') gameFeedback(who==='me'?'win':'lose');
       updateHud();
+      if(liveOn&&who==='me'&&!applyingLive)pushSnakes();
       showSnakesResult(who==='me');
       return;
     }
@@ -1111,9 +1167,10 @@ function openSnakesVersion(chat, version){
 
   function endTurn(who){
     if(!gs.alive()||gameOver)return;
-    if(who==='me'&&doubleRoll){doubleRoll=false;updateHud();return;}
+    if(who==='me'&&doubleRoll){doubleRoll=false;updateHud();if(liveOn&&!applyingLive)pushSnakes();return;}
     if(who==='me'){
       myTurn=false;updateHud();
+      if(liveOn){if(!applyingLive)pushSnakes();return;}
       gs.schedule(()=>{
         if(!gs.alive())return;
         const r=Math.floor(Math.random()*6)+1+(version.dice===2?Math.floor(Math.random()*6)+1:0);
@@ -1170,7 +1227,7 @@ function openSnakesVersion(chat, version){
       }
     }
     overlay.innerHTML=`
-      ${gameChromeHtml({title:version.name,subtitle:version.desc,backId:'slBack'})}
+      ${gameChromeHtml({title:version.name,subtitle:MODE_SUB+(version.desc?' · '+version.desc:''),backId:'slBack'})}
       <div style="display:flex;gap:8px;padding:8px 12px;flex-shrink:0;">
         <div id="slMeCard" style="flex:1;background:${myTurn&&!gameOver?'color-mix(in srgb,var(--game-accent,var(--red)) 28%,transparent)':'rgba(255,255,255,0.05)'};border:2px solid ${myTurn&&!gameOver?'var(--game-accent,var(--red))':'transparent'};border-radius:12px;padding:8px;text-align:center;">
           <div style="color:#ccc;font-size:11px;font-weight:700;">🔴 You</div>
@@ -1203,15 +1260,61 @@ function openSnakesVersion(chat, version){
     document.getElementById('rollBtn').addEventListener('click',rollDice);
     placeTokens();
   }
+  if(liveOn&&liveRoles&&typeof DangalLive!=='undefined'){
+    liveHandle=DangalLive.join({
+      gameType:'snakes',
+      matchId:(chat&&chat.dangalMatchId)||(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.matchId),
+      me:liveRoles.me,playerA:liveRoles.playerA,playerB:liveRoles.playerB,
+      state:{posA:0,posB:0,snakes:Object.assign({},SNAKES),ladders:Object.assign({},LADDERS),diceVals:[null,null],message:'',doubleRoll:false,gameOver:false},
+      onSnap(val){
+        if(!val||applyingLive||!gs.alive())return;
+        if(val.status==='forfeit'&&!gameOver){
+          gameOver=true;
+          const iWon=val.winner===liveRoles.me;
+          gs.setOutcome(iWon?'won':'lost');
+          if(typeof recordGameResult==='function')recordGameResult('snakes',iWon);
+          message=iWon?'Opponent left — you win!':(chat.name+' wins by forfeit');
+          updateHud();showSnakesResult(iWon);return;
+        }
+        const s=val.state;if(!s)return;
+        const nextMe=liveRoles.myColor==='w'?s.posA:s.posB;
+        const nextOpp=liveRoles.myColor==='w'?s.posB:s.posA;
+        if(nextMe===pos.me&&nextOpp===pos.opp&&!!s.gameOver===gameOver&&(val.turn===liveRoles.me)===myTurn&&val.status!=='over')return;
+        applyingLive=true;
+        Object.keys(SNAKES).forEach(k=>delete SNAKES[k]);Object.assign(SNAKES,s.snakes||{});
+        Object.keys(LADDERS).forEach(k=>delete LADDERS[k]);Object.assign(LADDERS,s.ladders||{});
+        pos.me=Number(nextMe)||0;pos.opp=Number(nextOpp)||0;
+        if(Array.isArray(s.diceVals))diceVals=s.diceVals.slice();
+        message=s.message||'';doubleRoll=!!s.doubleRoll;
+        gameOver=!!s.gameOver||val.status==='over';
+        myTurn=!gameOver&&val.turn===liveRoles.me;
+        rebuildBoardArt();placeTokens();updateHud();
+        if(gameOver&&!overlay.querySelector('#slResultHost'))showSnakesResult(pos.me>=SQUARES);
+        applyingLive=false;
+      },
+    });
+  }
   render();
 }
 
 // ===================== LUDO ENGINE =====================
 function openLudoGame(chat, playerCount){
   playerCount = Math.min(Math.max(playerCount||2,2),4);
+  const liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat);
+  if(liveOn)playerCount=2;
+  const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat):null;
+  let liveHandle=null;let applyingLive=false;
+  const mySeat=!liveRoles||liveRoles.myColor==='w'?0:1;
+  const MODE_SUB=liveOn
+    ?(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel?DangalLive.modeChromeLabel(true):'Live 1v1')
+    :(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel
+      ?DangalLive.modeChromeLabel(false,playerCount>2?playerCount+'p':'vs AI')
+      :(playerCount>2?('Practice · '+playerCount+' players'):'Practice vs AI'));
   const COLORS=['red','blue','green','yellow'];
   const COLOR_STYLES={red:'#E74C3C',blue:'#3498DB',green:'#2ECC71',yellow:'#F1C40F'};
-  const NAMES=['You',chat.name,...(playerCount>2?['Player 3']:[]),(playerCount>3?'Player 4':'')].filter(Boolean).slice(0,playerCount);
+  const NAMES=liveOn
+    ?(mySeat===0?['You',chat.name||'Friend']:[chat.name||'Friend','You'])
+    :['You',chat.name,...(playerCount>2?['Player 3']:[]),(playerCount>3?'Player 4':'')].filter(Boolean).slice(0,playerCount);
 
   // 15×15 path (52 squares), clockwise from red start
   const LUDO_PATH=[
@@ -1289,10 +1392,52 @@ function openLudoGame(chat, playerCount){
   const overlay=document.createElement('div');
   overlay.style.cssText='position:absolute;inset:0;background:#1a1a2e;z-index:80;display:flex;flex-direction:column;';
   const gs=beginGameOverlaySession({
-    type:'ludo',title:'Ludo',mode:playerCount>2?'group':'1v1',chat,overlay,
-    cleanup(){if(diceIv){clearInterval(diceIv);diceIv=null;}},
+    type:'ludo',title:'Ludo',mode:liveOn?'live':(playerCount>2?'group':'practice'),chat,overlay,
+    cleanup(){
+      if(diceIv){clearInterval(diceIv);diceIv=null;}
+      if(liveHandle){
+        try{liveHandle.leave({forfeit:!gameOver});}catch(e){try{liveHandle.leave();}catch(e2){}}
+      }
+    },
   });
   if(!gs.alive())return;
+
+  function isMyControl(){return currentPlayer===(liveOn?mySeat:0);}
+
+  function serializeLudoPieces(){
+    const out={};
+    players.forEach(c=>{
+      out[c]=pieces[c].map(p=>({pos:p.pos,progress:p.progress,finished:!!p.finished}));
+    });
+    return out;
+  }
+
+  function applyLudoPieces(raw){
+    if(!raw)return;
+    players.forEach(c=>{
+      if(!raw[c])return;
+      raw[c].forEach((rp,i)=>{
+        if(!pieces[c][i])return;
+        pieces[c][i].pos=rp.pos;pieces[c][i].progress=rp.progress;pieces[c][i].finished=!!rp.finished;
+      });
+    });
+  }
+
+  function pushLudo(){
+    if(!liveOn||!liveHandle||!liveRoles||applyingLive)return;
+    liveHandle.push({
+      state:{
+        pieces:serializeLudoPieces(),
+        currentPlayer,diceVal,phase,message,gameOver,moveable:[...moveableSet],
+      },
+      turn:gameOver?null:(currentPlayer===0?liveRoles.playerA:liveRoles.playerB),
+      status:gameOver?'over':'playing',
+      winner:gameOver?(currentPlayer===0?liveRoles.playerA:liveRoles.playerB):null,
+    });
+    if(!gameOver&&typeof DangalLive!=='undefined'&&DangalLive.pingTurn&&currentPlayer!==mySeat){
+      DangalLive.pingTurn(liveRoles.opp,'ludo',{chatId:chat&&(chat.firestoreId||chat.id)});
+    }
+  }
 
   function cellEl(r,c){
     return overlay.querySelector(`.ludo-cell[data-r="${r}"][data-c="${c}"]`);
@@ -1321,7 +1466,7 @@ function openLudoGame(chat, playerCount){
         tok.classList.toggle('ludo-token--home',!!p.finished);
         tok.classList.toggle('ludo-token--yard',p.pos===-1&&!p.finished);
         tok.classList.toggle('ludo-token--moveable',phase==='move'&&moveableSet.has(color+':'+pi));
-        tok.disabled=!(phase==='move'&&currentPlayer===0&&moveableSet.has(color+':'+pi));
+        tok.disabled=!(phase==='move'&&isMyControl()&&moveableSet.has(color+':'+pi));
       });
     });
   }
@@ -1425,16 +1570,17 @@ function openLudoGame(chat, playerCount){
       const allFinished=pieces[color].every(x=>x.finished);
       if(allFinished){
         gameOver=true;message=`${NAMES[currentPlayer]} wins!`;
-        gs.setOutcome(currentPlayer===0?'won':'lost');
-        if(typeof recordGameResult==='function')recordGameResult('ludo',currentPlayer===0);
-        if(typeof recordDuelStreak==='function') recordDuelStreak(chat.id||chat.name, currentPlayer===0, false);
-        if(typeof gameFeedback==='function') gameFeedback(currentPlayer===0?'win':'lose');
+        gs.setOutcome(currentPlayer===mySeat||(!liveOn&&currentPlayer===0)?'won':'lost');
+        if(typeof recordGameResult==='function')recordGameResult('ludo',currentPlayer===mySeat||(!liveOn&&currentPlayer===0));
+        if(typeof recordDuelStreak==='function') recordDuelStreak(chat.id||chat.name, currentPlayer===mySeat||(!liveOn&&currentPlayer===0), false);
+        if(typeof gameFeedback==='function') gameFeedback(currentPlayer===mySeat||(!liveOn&&currentPlayer===0)?'win':'lose');
         phase='roll';updateHud();
-        showLudoResult(currentPlayer===0);
+        if(liveOn&&!applyingLive)pushLudo();
+        showLudoResult(currentPlayer===mySeat||(!liveOn&&currentPlayer===0));
         return;
       }
       phase='roll';
-      if(diceVal===6){message=`🎲 ${NAMES[currentPlayer]} rolls again!`;updateHud();return;}
+      if(diceVal===6){message=`🎲 ${NAMES[currentPlayer]} rolls again!`;updateHud();if(liveOn&&!applyingLive)pushLudo();return;}
       nextPlayer();
     });
   }
@@ -1443,6 +1589,7 @@ function openLudoGame(chat, playerCount){
     if(!gs.alive())return;
     currentPlayer=(currentPlayer+1)%playerCount;phase='roll';moveableSet.clear();
     updateHud();placeTokens();
+    if(liveOn){if(!applyingLive)pushLudo();return;}
     if(currentPlayer!==0)gs.schedule(aiMove,900);
   }
 
@@ -1483,7 +1630,7 @@ function openLudoGame(chat, playerCount){
   }
 
   function aiMove(){
-    if(!gs.alive()||gameOver||currentPlayer===0||animating)return;
+    if(!gs.alive()||gameOver||liveOn||currentPlayer===0||animating)return;
     const color=players[currentPlayer];
     diceVal=Math.floor(Math.random()*6)+1;updateHud();
     gs.schedule(()=>{
@@ -1524,10 +1671,10 @@ function openLudoGame(chat, playerCount){
     const rollBtn=overlay.querySelector('#ludoRoll');
     const color=players[currentPlayer];
     if(rollBtn){
-      const can=phase==='roll'&&currentPlayer===0&&!gameOver&&!rolling&&!animating;
+      const can=phase==='roll'&&isMyControl()&&!gameOver&&!rolling&&!animating;
       rollBtn.disabled=!can;
       rollBtn.style.background=can?COLOR_STYLES[color]:'rgba(255,255,255,0.1)';
-      rollBtn.textContent=gameOver?'Game Over!':phase==='roll'&&currentPlayer===0?'🎲 Roll Dice':phase==='move'&&currentPlayer===0?'Tap a glowing piece':'Opponents playing...';
+      rollBtn.textContent=gameOver?'Game Over!':phase==='roll'&&isMyControl()?'🎲 Roll Dice':phase==='move'&&isMyControl()?'Tap a glowing piece':(liveOn?((chat.name||'Friend')+' playing…'):'Opponents playing...');
     }
     players.forEach((c,i)=>{
       const card=overlay.querySelector(`[data-player-card="${i}"]`);
@@ -1563,7 +1710,7 @@ function openLudoGame(chat, playerCount){
     const color=players[currentPlayer];
     const diceEmojis=['⚀','⚁','⚂','⚃','⚄','⚅'];
     overlay.innerHTML=`
-      ${gameChromeHtml({title:'Ludo',subtitle:playerCount>2?`${playerCount} players`:'1 vs 1',backId:'ludoBack'})}
+      ${gameChromeHtml({title:'Ludo',subtitle:MODE_SUB,backId:'ludoBack'})}
       <div style="display:flex;gap:6px;padding:8px 12px;overflow-x:auto;flex-shrink:0;">
         ${players.map((c,i)=>`<div data-player-card="${i}" style="flex:1;min-width:60px;background:${currentPlayer===i?COLOR_STYLES[c]+'33':'rgba(255,255,255,0.05)'};border:2px solid ${currentPlayer===i?COLOR_STYLES[c]:'transparent'};border-radius:10px;padding:6px;text-align:center;"><div style="color:${COLOR_STYLES[c]};font-size:10px;font-weight:700;">${NAMES[i]}</div><div class="ludo-home-count" style="font-size:11px;color:#ccc;">${pieces[c].filter(p=>p.finished).length}/4 🏠</div></div>`).join('')}
       </div>
@@ -1579,27 +1726,60 @@ function openLudoGame(chat, playerCount){
       </div>
       ${typeof gameTurnBannerHtml==='function'
         ? gameTurnBannerHtml({
-            mode: gameOver?'over':currentPlayer===0?'yours':'theirs',
-            label: gameOver?'Game over':currentPlayer===0?(phase==='roll'?'Your turn — roll':phase==='move'?'Your turn — tap a piece':'Your turn'):'Waiting for opponents…',
-            pulse: !gameOver && currentPlayer===0,
+            mode: gameOver?'over':isMyControl()?'yours':'theirs',
+            label: gameOver?'Game over':isMyControl()?(phase==='roll'?'Your turn — roll':phase==='move'?'Your turn — tap a piece':'Your turn'):(liveOn?((chat.name||'Friend')+' to move'):'Waiting for opponents…'),
+            pulse: !gameOver && isMyControl(),
           })
         : ''}
       <div style="padding:10px 12px;padding-bottom:max(10px,env(safe-area-inset-bottom));flex-shrink:0;">
-        <button id="ludoRoll" class="game-tap-target" style="width:100%;min-height:48px;padding:13px;background:${phase==='roll'&&currentPlayer===0&&!gameOver?COLOR_STYLES[color]:'rgba(255,255,255,0.1)'};color:#fff;border:none;border-radius:var(--game-btn-radius,14px);font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;">
-          ${gameOver?'Game Over!':phase==='roll'&&currentPlayer===0?'🎲 Roll Dice':phase==='move'&&currentPlayer===0?'Tap a glowing piece':'Opponents playing...'}
+        <button id="ludoRoll" class="game-tap-target" style="width:100%;min-height:48px;padding:13px;background:${phase==='roll'&&isMyControl()&&!gameOver?COLOR_STYLES[color]:'rgba(255,255,255,0.1)'};color:#fff;border:none;border-radius:var(--game-btn-radius,14px);font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;">
+          ${gameOver?'Game Over!':phase==='roll'&&isMyControl()?'🎲 Roll Dice':phase==='move'&&isMyControl()?'Tap a glowing piece':(liveOn?((chat.name||'Friend')+' playing…'):'Opponents playing...')}
         </button>
       </div>
     `;
     document.getElementById('ludoBack').addEventListener('click',()=>gs.close());
-    document.getElementById('ludoRoll').addEventListener('click',()=>{if(currentPlayer===0&&phase==='roll'&&!gameOver){if(typeof gameFeedback==='function')gameFeedback('dice');rollDice();}});
+    document.getElementById('ludoRoll').addEventListener('click',()=>{if(isMyControl()&&phase==='roll'&&!gameOver){if(typeof gameFeedback==='function')gameFeedback('dice');rollDice();}});
     const layer=overlay.querySelector('#ludoTokens');
     layer.addEventListener('click',(e)=>{
       const tok=e.target.closest('.ludo-token');
-      if(!tok||phase!=='move'||currentPlayer!==0||animating)return;
+      if(!tok||phase!=='move'||!isMyControl()||animating)return;
       const c=tok.dataset.color,pi=parseInt(tok.dataset.pi,10);
       if(moveableSet.has(c+':'+pi))movePiece(c,pi);
     });
     placeTokens();
+  }
+  if(liveOn&&liveRoles&&typeof DangalLive!=='undefined'){
+    liveHandle=DangalLive.join({
+      gameType:'ludo',
+      matchId:(chat&&chat.dangalMatchId)||(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.matchId),
+      me:liveRoles.me,playerA:liveRoles.playerA,playerB:liveRoles.playerB,
+      state:{pieces:serializeLudoPieces(),currentPlayer:0,diceVal:null,phase:'roll',message:'',gameOver:false,moveable:[]},
+      onSnap(val){
+        if(!val||applyingLive||!gs.alive())return;
+        if(val.status==='forfeit'&&!gameOver){
+          gameOver=true;
+          const iWon=val.winner===liveRoles.me;
+          gs.setOutcome(iWon?'won':'lost');
+          if(typeof recordGameResult==='function')recordGameResult('ludo',iWon);
+          message=iWon?'Opponent left — you win!':'Forfeit';
+          updateHud();showLudoResult(iWon);return;
+        }
+        const s=val.state;if(!s||!s.pieces)return;
+        applyingLive=true;
+        applyLudoPieces(s.pieces);
+        currentPlayer=Number(s.currentPlayer)||0;
+        diceVal=s.diceVal==null?null:s.diceVal;
+        phase=s.phase||'roll';
+        message=s.message||'';
+        gameOver=!!s.gameOver||val.status==='over';
+        moveableSet=new Set(s.moveable||[]);
+        placeTokens();updateHud();
+        if(gameOver&&!overlay.querySelector('#ludoResultHost')){
+          showLudoResult(currentPlayer===mySeat);
+        }
+        applyingLive=false;
+      },
+    });
   }
   renderLudo();
 }
@@ -1611,6 +1791,14 @@ function openUnoGame(chat, variant='normal'){
   const NUMBER_CARDS=[0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9];
   const ACTION_CARDS=['skip','skip','reverse','reverse','draw2','draw2'];
   const FLIP_DARK_ACTIONS=['skip_all','draw_all_5','wild_dark'];
+  const liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat);
+  const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat):null;
+  let liveHandle=null;let applyingLive=false;
+  const MODE_SUB=liveOn
+    ?(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel?DangalLive.modeChromeLabel(true):'Live 1v1')
+    :(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel
+      ?DangalLive.modeChromeLabel(false,variant==='doublesided'?'Flip':variant==='blaze'?'Blaze':'Classic')
+      :('Practice · '+(variant==='doublesided'?'Flip':variant==='blaze'?'Blaze':'Classic')));
 
   function buildDeck(variant){
     const deck=[];
@@ -1636,26 +1824,62 @@ function openUnoGame(chat, variant='normal'){
 
   function shuffle(arr){for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}return arr;}
 
-  let deck=shuffle(buildDeck(variant));
-  let discardPile=[];let hands={me:[],opp:[]};let currentColor='';let currentValue='';
-  let myTurn=true;let direction=1;let drawStack=0;let flipped=false;
+  const isLiveHost=!liveRoles||liveRoles.myColor==='w';
+  let deck=[];let discardPile=[];let hands={me:[],opp:[]};let currentColor='';let currentValue='';
+  let myTurn=isLiveHost;let direction=1;let drawStack=0;let flipped=false;
   let message='';let gameOver=false;let selectedCard=null;let pickingColor=false;
   let unoCallWindow=false;
 
-  // Deal 7 cards each
-  for(let i=0;i<7;i++){hands.me.push(deck.pop());hands.opp.push(deck.pop());}
-  // First card
-  let firstCard=deck.pop();
-  while(firstCard.type==='wild'){deck.unshift(firstCard);firstCard=deck.pop();}
-  discardPile.push(firstCard);currentColor=firstCard.color;currentValue=firstCard.value;
+  if(!liveOn||isLiveHost){
+    deck=shuffle(buildDeck(variant));
+    for(let i=0;i<7;i++){hands.me.push(deck.pop());hands.opp.push(deck.pop());}
+    let firstCard=deck.pop();
+    while(firstCard&&firstCard.type==='wild'){deck.unshift(firstCard);firstCard=deck.pop();}
+    if(firstCard){discardPile.push(firstCard);currentColor=firstCard.color;currentValue=firstCard.value;}
+  }
 
   const NAMES=['You',chat.name];
   const overlay=document.createElement('div');
   overlay.style.cssText='position:absolute;inset:0;z-index:80;display:flex;flex-direction:column;';
   const gs=beginGameOverlaySession({
-    type:'uno',title:'Oh, No! Cards',mode:'1v1',chat,overlay,
+    type:'uno',title:'Oh, No! Cards',mode:liveOn?'live':'practice',chat,overlay,
+    cleanup(){
+      if(liveHandle){
+        try{liveHandle.leave({forfeit:!gameOver});}catch(e){try{liveHandle.leave();}catch(e2){}}
+      }
+    },
   });
   if(!gs.alive())return;
+
+  function serializeUnoHands(){
+    if(!liveRoles)return{handA:hands.me,handB:hands.opp};
+    return liveRoles.myColor==='w'
+      ?{handA:hands.me.slice(),handB:hands.opp.slice()}
+      :{handA:hands.opp.slice(),handB:hands.me.slice()};
+  }
+
+  function applyUnoHands(handA,handB){
+    if(!liveRoles||liveRoles.myColor==='w'){hands.me=(handA||[]).slice();hands.opp=(handB||[]).slice();}
+    else{hands.me=(handB||[]).slice();hands.opp=(handA||[]).slice();}
+  }
+
+  function pushUno(){
+    if(!liveOn||!liveHandle||!liveRoles||applyingLive)return;
+    const hs=serializeUnoHands();
+    liveHandle.push({
+      state:{
+        deck:deck.slice(),discardPile:discardPile.slice(),
+        handA:hs.handA,handB:hs.handB,
+        currentColor,currentValue,drawStack,direction,flipped,message,gameOver,variant,
+      },
+      turn:gameOver?null:(myTurn?liveRoles.me:liveRoles.opp),
+      status:gameOver?'over':'playing',
+      winner:gameOver?(hands.me.length===0?liveRoles.me:liveRoles.opp):null,
+    });
+    if(!gameOver&&!myTurn&&typeof DangalLive!=='undefined'&&DangalLive.pingTurn){
+      DangalLive.pingTurn(liveRoles.opp,'uno',{chatId:chat&&(chat.firestoreId||chat.id)});
+    }
+  }
 
   function drawCard(who,count=1){
     for(let i=0;i<count;i++){
@@ -1701,6 +1925,7 @@ function openUnoGame(chat, variant='normal'){
       gs.setOutcome(who==='me'?'won':'lost');
       if(typeof recordGameResult==='function')recordGameResult('uno',who==='me');
     }
+    if(liveOn&&who==='me'&&!applyingLive)pushUno();
   }
 
   function cardBg(card){
@@ -1755,6 +1980,13 @@ function openUnoGame(chat, variant='normal'){
     const bgColor=flipped?'#2C3E50':'#1a1a2e';
     const topCard=discardPile[discardPile.length-1];
     overlay.style.background=bgColor;
+    if(liveOn&&!topCard&&!gameOver){
+      overlay.innerHTML=`
+        ${gameChromeHtml({title:'Oh, No!',subtitle:MODE_SUB,backId:'unoBack'})}
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.7);font-weight:700;">Waiting for deal…</div>`;
+      document.getElementById('unoBack')?.addEventListener('click',()=>gs.close());
+      return;
+    }
     if(gameOver&&typeof gameResultHtml==='function'){
       const won=hands.me.length===0;
       const shareStats={
@@ -1764,7 +1996,7 @@ function openUnoGame(chat, variant='normal'){
         text:`Chaupaal Oh, No!: ${won?'I won':'tough loss'} vs ${chat.name}`,
       };
       overlay.innerHTML=`
-        ${gameChromeHtml({title:'Oh, No!',subtitle:'Game over',backId:'unoBack'})}
+        ${gameChromeHtml({title:'Oh, No!',subtitle:MODE_SUB+' · Game over',backId:'unoBack'})}
         <div class="uno-result-mount">${gameResultHtml({
           gameId:'uno',
           glyph:won?'✓':'·',
@@ -1793,7 +2025,7 @@ function openUnoGame(chat, variant='normal'){
       return;
     }
     overlay.innerHTML=`
-      ${gameChromeHtml({title:'Oh, No!',subtitle:variant==='classic'?'Classic':variant==='doublesided'?(flipped?'Flip · Dark side':'Flip'):'Blaze Mode',backId:'unoBack',rightHtml:`<button id="unoUnoBtn" class="game-chrome-action ${unoCallWindow?'is-active':''}">Oh No!</button>`})}
+      ${gameChromeHtml({title:'Oh, No!',subtitle:MODE_SUB+(variant==='doublesided'?(flipped?' · Dark':' · Light'):''),backId:'unoBack',rightHtml:`<button id="unoUnoBtn" class="game-chrome-action ${unoCallWindow?'is-active':''}">Oh No!</button>`})}
 
       <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative;">
         <div style="padding:10px 16px;flex-shrink:0;">
@@ -1852,7 +2084,7 @@ function openUnoGame(chat, variant='normal'){
         applyCard(card,'me',chosenColor);
         selectedCard=null;pickingColor=false;
         render();
-        if(!gameOver&&!myTurn)gs.schedule(aiPlayUno,900);
+        if(!gameOver&&!myTurn&&!liveOn)gs.schedule(aiPlayUno,900);
       });
     }
 
@@ -1871,16 +2103,16 @@ function openUnoGame(chat, variant='normal'){
 
     document.getElementById('deckBtn').addEventListener('click',()=>{
       if(!myTurn||pickingColor)return;
-      if(drawStack>0){drawCard('me',drawStack);message=`You drew ${drawStack} cards!`;drawStack=0;myTurn=false;render();gs.schedule(aiPlayUno,900);return;}
+      if(drawStack>0){drawCard('me',drawStack);message=`You drew ${drawStack} cards!`;drawStack=0;myTurn=false;if(liveOn)pushUno();render();if(!liveOn)gs.schedule(aiPlayUno,900);return;}
       drawCard('me',1);
       const drawn=hands.me[hands.me.length-1];
-      if(canPlay(drawn)){selectedCard=hands.me.length-1;message='Drew a playable card — tap it to play or skip';render();}
-      else{message='No playable card — passing';myTurn=false;render();gs.schedule(aiPlayUno,900);}
+      if(canPlay(drawn)){selectedCard=hands.me.length-1;message='Drew a playable card — tap it to play or skip';if(liveOn)pushUno();render();}
+      else{message='No playable card — passing';myTurn=false;if(liveOn)pushUno();render();if(!liveOn)gs.schedule(aiPlayUno,900);}
     });
   }
 
   function aiPlayUno(){
-    if(!gs.alive()||gameOver||myTurn)return;
+    if(!gs.alive()||gameOver||myTurn||liveOn)return;
     if(drawStack>0){drawCard('opp',drawStack);message=`${chat.name} drew ${drawStack} cards!`;drawStack=0;myTurn=true;render();return;}
     const playable=hands.opp.filter(canPlay);
     if(!playable.length){drawCard('opp',1);const drawn=hands.opp[hands.opp.length-1];
@@ -1894,6 +2126,47 @@ function openUnoGame(chat, variant='normal'){
     if(!gameOver&&!myTurn)gs.schedule(aiPlayUno,900);
   }
 
+  if(liveOn&&liveRoles&&typeof DangalLive!=='undefined'){
+    const hs0=serializeUnoHands();
+    liveHandle=DangalLive.join({
+      gameType:'uno',
+      matchId:(chat&&chat.dangalMatchId)||(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.matchId),
+      me:liveRoles.me,playerA:liveRoles.playerA,playerB:liveRoles.playerB,
+      state:isLiveHost?{
+        deck:deck.slice(),discardPile:discardPile.slice(),
+        handA:hs0.handA,handB:hs0.handB,
+        currentColor,currentValue,drawStack,direction,flipped,message,gameOver,variant,
+      }:null,
+      onSnap(val){
+        if(!val||applyingLive||!gs.alive())return;
+        if(val.status==='forfeit'&&!gameOver){
+          gameOver=true;
+          const iWon=val.winner===liveRoles.me;
+          gs.setOutcome(iWon?'won':'lost');
+          if(typeof recordGameResult==='function')recordGameResult('uno',iWon);
+          message=iWon?'Opponent left — you win!':'Forfeit';
+          render();return;
+        }
+        const s=val.state;if(!s)return;
+        applyingLive=true;
+        deck=Array.isArray(s.deck)?s.deck.slice():deck;
+        discardPile=Array.isArray(s.discardPile)?s.discardPile.slice():discardPile;
+        applyUnoHands(s.handA,s.handB);
+        currentColor=s.currentColor||currentColor;
+        currentValue=s.currentValue||currentValue;
+        drawStack=Number(s.drawStack)||0;
+        direction=s.direction==null?direction:s.direction;
+        flipped=!!s.flipped;
+        message=s.message||'';
+        gameOver=!!s.gameOver||val.status==='over';
+        myTurn=!gameOver&&val.turn===liveRoles.me;
+        selectedCard=null;pickingColor=false;
+        render();
+        applyingLive=false;
+      },
+    });
+    if(isLiveHost)pushUno();
+  }
   render();
 }
 
@@ -1930,14 +2203,26 @@ function startTicTacToe(chat, difficulty){
 const diff=difficulty||'hard';
 const liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat);
 const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat):null;
-const DIFF_LABEL=liveOn?'Live':diff==='easy'?'Easy':diff==='medium'?'Medium':'Hard';
+const DIFF_LABEL=liveOn
+  ?(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel?DangalLive.modeChromeLabel(true):'Live 1v1')
+  :(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel
+    ?DangalLive.modeChromeLabel(false,diff==='easy'?'Easy':diff==='medium'?'Medium':'Hard')
+    :('Practice · '+(diff==='easy'?'Easy':diff==='medium'?'Medium':'Hard')));
 const overlay=document.createElement('div');
 overlay.style.cssText='position:absolute;inset:0;background:#1a1a2e;z-index:80;display:flex;flex-direction:column;align-items:center;padding:0 0 12px;gap:12px;';
-const gs=beginGameOverlaySession({type:'ttt',title:'Tic-Tac-Toe',mode:'1v1',chat,overlay,cleanup(){if(liveHandle&&liveHandle.leave)liveHandle.leave();}});
+let liveHandle=null;
+const gs=beginGameOverlaySession({
+  type:'ttt',title:'Tic-Tac-Toe',mode:liveOn?'live':'practice',chat,overlay,
+  cleanup(){
+    if(liveHandle){
+      try{liveHandle.leave({forfeit:!gameOver});}catch(e){try{liveHandle.leave();}catch(e2){}}
+    }
+  },
+});
 if(!gs.alive())return;
 let board=Array(9).fill(null);let gameOver=false;let winLine=null;let scores={me:0,opp:0,draw:0};let showResult=false;
 let myTurn=!liveRoles||liveRoles.myColor==='w';
-let liveHandle=null;let applyingLive=false;
+let applyingLive=false;
 const myMark=(!liveRoles||liveRoles.myColor==='w')?'X':'O';
 const oppMark=myMark==='X'?'O':'X';
 
@@ -2094,8 +2379,17 @@ function placeTtt(i,mark,fromRemote){
 }
 
 function pushTtt(){
-  liveHandle.push({board:board.map((c)=>c||'.').join(''),turn:liveRoles&&liveRoles.opp,lastMove:{board:board.slice()},status:gameOver?'over':'playing'});
-  if(typeof DangalLive!=='undefined'&&DangalLive.pingTurn&&liveRoles)DangalLive.pingTurn(liveRoles.opp,'ttt',{chatId:chat&&(chat.firestoreId||chat.id)});
+  const winnerUid=gameOver&&winLine
+    ?(board[winLine[0]]===myMark?(liveRoles&&liveRoles.me):(liveRoles&&liveRoles.opp))
+    :null;
+  liveHandle.push({
+    board:board.map((c)=>c||'.').join(''),
+    turn:gameOver?null:(liveRoles&&liveRoles.opp),
+    lastMove:{board:board.slice()},
+    status:gameOver?'over':'playing',
+    winner:winnerUid||null,
+  });
+  if(!gameOver&&typeof DangalLive!=='undefined'&&DangalLive.pingTurn&&liveRoles)DangalLive.pingTurn(liveRoles.opp,'ttt',{chatId:chat&&(chat.firestoreId||chat.id)});
 }
 if(liveOn&&liveRoles){
   liveHandle=DangalLive.join({
@@ -2104,6 +2398,14 @@ if(liveOn&&liveRoles){
     me:liveRoles.me,playerA:liveRoles.playerA,playerB:liveRoles.playerB,
     onSnap(val){
       if(!val||applyingLive||!gs.alive())return;
+      if(val.status==='forfeit'&&!gameOver){
+        gameOver=true;
+        const iWon=val.winner===liveRoles.me;
+        if(iWon)scores.me++;else scores.opp++;
+        if(typeof recordGameResult==='function')recordGameResult('ttt',iWon,false);
+        endRound(iWon?'won':'lost');
+        return;
+      }
       if(!val.board)return;
       const next=String(val.board).split('').map((ch)=>ch==='.'||ch===' '?null:ch);
       if(next.length!==9)return;
@@ -2112,9 +2414,14 @@ if(liveOn&&liveRoles){
       board=next.map((c)=>c||null);
       const wX=checkWin(board,'X');const wO=checkWin(board,'O');
       winLine=wX||wO;
-      gameOver=!!winLine||board.every(Boolean);
+      gameOver=!!winLine||board.every(Boolean)||val.status==='over';
       myTurn=(board.filter(Boolean).length%2===0)?(myMark==='X'):(myMark==='O');
-      render();
+      if(gameOver&&!showResult){
+        if(winLine){
+          const iWon=board[winLine[0]]===myMark;
+          endRound(iWon?'won':'lost');
+        } else endRound('draw');
+      } else render();
       applyingLive=false;
     },
   });

@@ -753,7 +753,7 @@ function findRealOpponent(filters, onFound, onCancel){
   };
 
   (async()=>{
-    if(!db||!currentUser){ finish({name:'Priya_29',simulated:true}); return; }
+    if(!db||!currentUser){ finish({name:'Practice AI',simulated:true}); return; }
     const category=filters.category||'GK';
     const waitingRef=db.collection('matchmaking').doc(category).collection('waiting');
     const claimWaitingDoc=async (docSnap)=>{
@@ -779,7 +779,7 @@ function findRealOpponent(filters, onFound, onCancel){
         try{
           await claimWaitingDoc(snap.docs[0]);
         }catch(e){
-          finish({name:'Priya_29',simulated:true});
+          finish({name:'Practice AI',simulated:true});
         }
         return;
       }
@@ -812,10 +812,10 @@ function findRealOpponent(filters, onFound, onCancel){
           matchmakingListener=null;
         }
         if(myRef){ try{ await myRef.delete(); }catch(e){} }
-        finish({name:'Priya_29',simulated:true});
+        finish({name:'Practice AI',simulated:true});
       },20000);
     }catch(e){
-      finish({name:'Priya_29',simulated:true});
+      finish({name:'Practice AI',simulated:true});
     }
   })();
 

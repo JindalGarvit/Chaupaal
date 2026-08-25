@@ -9,6 +9,7 @@
     chess_challenge: (d) => (d.fromName || 'Someone') + ' challenges you to Chess',
     game_challenge: (d) => (d.fromName || 'Someone') + ' challenges you to ' + (d.gameName || 'a game'),
     challenge_accepted: (d) => (d.fromName || 'Someone') + ' accepted your ' + (d.gameName || 'game') + ' challenge',
+    challenge_declined: (d) => (d.fromName || 'Someone') + ' declined your ' + (d.gameName || 'game') + ' challenge',
     game_over: (d) => (d.gameName || 'Game') + ' over',
   };
 

@@ -31,10 +31,22 @@
     const overlay = document.createElement('div');
     overlay.className = 'game-overlay game-overlay--light rw-sports-overlay';
     overlay.dataset.gameId = o.gameId || '';
-    overlay.innerHTML = `
+    const practiceSub =
+      typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel
+        ? DangalLive.modeChromeLabel(false, 'solo')
+        : 'Practice';
+    overlay.innerHTML =
+      typeof gameChromeHtml === 'function'
+        ? gameChromeHtml({
+            title: o.title || 'RW Sports',
+            subtitle: practiceSub,
+            backId: 'rwSportsBack',
+          }) + `<div class="rw-sports-body" data-rw-body></div>`
+        : `
       <div class="game-chrome">
         ${typeof backButtonHtml==='function'?backButtonHtml({ className: 'game-back-btn', label: 'Close', attrs: 'data-rw-close' }):'<button type="button" class="game-back-btn cp-back-btn" data-rw-close aria-label="Close"></button>'}
         <div class="game-chrome-title">${esc(o.title || 'RW Sports')}</div>
+        <div class="game-chrome-sub" style="font-size:11px;color:var(--muted);">${esc(practiceSub)}</div>
         <div style="width:36px"></div>
       </div>
       <div class="rw-sports-body" data-rw-body></div>`;
@@ -62,7 +74,18 @@
       if (gs) gs.close('dismissed');
       else closeOverlay(overlay);
     };
-    overlay.querySelector('[data-rw-close]')?.addEventListener('click', dismiss);
+    const onBack = async () => {
+      if (typeof confirmLeaveGame === 'function') {
+        const leave = await confirmLeaveGame({
+          title: 'Leave ' + (o.title || 'practice') + '?',
+          body: 'This practice run will end.',
+        });
+        if (!leave) return;
+      }
+      dismiss();
+    };
+    overlay.querySelector('[data-rw-close]')?.addEventListener('click', onBack);
+    overlay.querySelector('#rwSportsBack')?.addEventListener('click', onBack);
     return { overlay, body: overlay.querySelector('[data-rw-body]'), dismiss, gs };
   }
 
@@ -451,7 +474,7 @@
     registerGame({
       id: 'streetcricket',
       name: 'Street Cricket',
-      desc: 'Six-ball practice · time your shot',
+      desc: 'Practice · six-ball innings',
       icon: '🏏',
       ratingKey: 'streetcricket',
       gameType: 'solo',
@@ -468,7 +491,7 @@
     registerGame({
       id: 'gullykick',
       name: 'Gully Kick',
-      desc: 'Penalty shootout · beat the keeper',
+      desc: 'Practice · penalty shootout',
       icon: '⚽',
       ratingKey: 'gullykick',
       gameType: 'solo',

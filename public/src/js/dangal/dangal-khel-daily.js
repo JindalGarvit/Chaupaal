@@ -30,7 +30,17 @@
 
   function catalogIds() {
     try {
-      return (typeof getGames === 'function' ? getGames({ dangal: true }) : []).map((g) => g.id).filter(Boolean);
+      const all = (typeof getGames === 'function' ? getGames({ dangal: true }) : []).map((g) => g.id).filter(Boolean);
+      // Prefer graduated / live titles for Khel missions (Phase 8 hub truth)
+      const preferred = all.filter((id) => {
+        if (typeof dangalManchVisibility === 'function' && dangalManchVisibility(id) === 'hidden') {
+          return false;
+        }
+        if (typeof getGameGraduation !== 'function') return true;
+        const info = getGameGraduation(id);
+        return info.grade === 'graduated' || info.grade === 'live';
+      });
+      return preferred.length ? preferred : all;
     } catch (e) {
       return ['chess', 'quiz', 'wordguess', 'streetcricket'];
     }

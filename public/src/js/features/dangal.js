@@ -184,47 +184,42 @@ function startSmartMatchmaking(filters){
   }
 
   function simNameFromFilters(){
-    const regionNames = {
-      'South India':['Priya','Arjun','Deepa','Kiran','Ananya'],
-      'North India':['Rahul','Priyanka','Vikram','Neha','Amit'],
-      'East India':['Sourav','Ritika','Debashish','Puja','Aritra'],
-      'West India':['Riya','Dev','Sneha','Rohan','Kavya'],
-    };
-    const pool = regionNames[activeFilters.region]||['Priya','Arjun','Riya','Dev','Neha'];
-    return pool[Math.floor(Math.random()*pool.length)] + '_' + Math.floor(Math.random()*99);
+    // Never invent Priya-style “human” names for simulated matches — Practice AI only.
+    return 'Practice AI';
   }
 
   function launchFound(opp){
     if(cancelled) return;
-    const name = opp?.name || simNameFromFilters();
-    const label = opp?.simulated
-      ? `${name} · ${activeFilters.region||'India'} · ${activeFilters.category||'GK'}`
+    const simulated = !!opp?.simulated || !(opp?.uid && typeof isPersistableUid === 'function' && isPersistableUid(opp.uid));
+    const name = simulated ? 'Practice AI' : (opp?.name || 'Opponent');
+    const label = simulated
+      ? `Practice vs AI · ${activeFilters.category||'GK'}`
       : `${name} · ${activeFilters.category||'GK'}`;
     statusEl.innerHTML = `
       <div style="font-size:52px;">🎯</div>
-      <div class="mm-title">${typeof t==='function'?t('found'):'Opponent found!'}</div>
+      <div class="mm-title">${simulated ? 'Practice ready' : (typeof t==='function'?t('found'):'Opponent found!')}</div>
       <div class="mm-sub">${label}</div>
     `;
     useMuqabalaCredit();
     setTimeout(()=>{
       statusEl.remove();
-      startMuqabala(name, activeFilters.category||'GK', {opponentUid:opp?.uid||null, simulated:!!opp?.simulated});
+      startMuqabala(name, activeFilters.category||'GK', {opponentUid:simulated?null:(opp?.uid||null), simulated});
     }, 900);
   }
 
   renderStatus();
   if(typeof findRealOpponent!=='function'){
-    launchFound({name:simNameFromFilters(),simulated:true});
+    launchFound({name:'Practice AI',simulated:true});
     return;
   }
   mmHandle = findRealOpponent(activeFilters, (opp)=>{
     if(cancelled) return;
     if(opp?.simulated){
-      // Soften with progressive copy, then simulated name from filters
-      renderStatus('Widening search — pairing with best available');
+      // Soften with progressive copy, then Practice AI (never fake human names)
+      renderStatus('Widening search — Practice vs AI available');
       setTimeout(()=>{
         if(cancelled) return;
-        launchFound({name:simNameFromFilters(),simulated:true});
+        launchFound({name:'Practice AI',simulated:true});
       }, 600);
       return;
     }
@@ -424,31 +419,65 @@ function startMuqabala(opponentName, mode, opts){
     );
   }
 
-  const beginRun = (opp)=>{
+  const beginRun = (opp, runOpts)=>{
     if(cancelled) return;
     matchFound = true;
+    const merged = Object.assign({}, options, runOpts || {});
     // Random/category: credit once at match confirm. Friend/custom challenges: unlimited.
-    if(!opponentName && !options.skipCredit) useMuqabalaCredit();
+    if(!opponentName && !merged.skipCredit) useMuqabalaCredit();
     startTimer = setTimeout(()=>{
       if(cancelled) return;
       releaseSearchScope();
-      runMuqabala(overlay, opp, label, options);
-    }, options.skipMatchmaking ? 400 : 900);
+      runMuqabala(overlay, opp, label, merged);
+    }, merged.skipMatchmaking ? 400 : 900);
   };
 
+  const practiceAiName = 'Practice AI';
+  const launchCtx = window.__dangalLaunchCtx || {};
+  const oppUid =
+    options.opponentUid ||
+    launchCtx.opponentUid ||
+    '';
+  const persistable =
+    oppUid && typeof isPersistableUid === 'function' && isPersistableUid(oppUid);
+  const liveReady =
+    persistable &&
+    !options.simulated &&
+    (options.matchId || launchCtx.matchId || (typeof dangalMatchId === 'function'));
+
   if(options.skipMatchmaking){
+    const displayOpp = persistable
+      ? (opponentName || 'Opponent')
+      : (options.simulated || !opponentName ? practiceAiName : opponentName);
+    const sub = persistable
+      ? (typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel
+          ? DangalLive.modeChromeLabel(true)
+          : 'Live 1v1')
+      : (typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel
+          ? DangalLive.modeChromeLabel(false, 'AI')
+          : 'Practice vs AI');
     overlay.innerHTML = `
-      ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:label,backId:'closeMuqabala'}):`<div class="muqabala-header"><div class="muqabala-title">Muqabala — ${label}</div>${typeof backButtonHtml==='function'?backButtonHtml({ className: 'icon-btn', id: 'closeMuqabala' }):'<button class="icon-btn cp-back-btn" id="closeMuqabala" aria-label="Back"></button>'}</div>`}
+      ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:sub+' · '+label,backId:'closeMuqabala'}):`<div class="muqabala-header"><div class="muqabala-title">Muqabala — ${label}</div>${typeof backButtonHtml==='function'?backButtonHtml({ className: 'icon-btn', id: 'closeMuqabala' }):'<button class="icon-btn cp-back-btn" id="closeMuqabala" aria-label="Back"></button>'}</div>`}
       <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;">
         <div style="font-size:48px;">🎯</div>
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">${opponentName ? `Challenge vs ${opponentName}` : 'Starting…'}</div>
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">${persistable?`Live vs ${displayOpp}`:`${sub}`}</div>
         <div style="font-size:13px;color:var(--muted);">${label} · ${qCount} questions · ${options.timerSeconds}s each</div>
       </div>
     `;
     document.getElementById('closeMuqabala').addEventListener('click',()=>{
       cancelSearch();
     });
-    beginRun(opponentName || 'Priya_29');
+    beginRun(displayOpp, {
+      practice: !persistable,
+      simulated: !persistable,
+      opponentUid: persistable ? oppUid : '',
+      matchId:
+        options.matchId ||
+        launchCtx.matchId ||
+        (persistable && typeof dangalMatchId === 'function'
+          ? dangalMatchId('quiz', { name: displayOpp, opponentUid: oppUid })
+          : ''),
+    });
     return;
   }
 
@@ -456,8 +485,9 @@ function startMuqabala(opponentName, mode, opts){
     ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:label,backId:'closeMuqabala'}):`<div class="muqabala-header"><div class="muqabala-title">Muqabala — ${label}</div>${typeof backButtonHtml==='function'?backButtonHtml({ className: 'icon-btn', id: 'closeMuqabala' }):'<button class="icon-btn cp-back-btn" id="closeMuqabala" aria-label="Back"></button>'}</div>`}
     <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;">
       <div style="font-size:48px;animation:pulse 1s ease-in-out infinite;">⚡</div>
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">${opponentName?`Sending challenge to ${opponentName}…`:'Finding a worthy opponent…'}</div>
-      <div style="font-size:13px;color:var(--muted);">${label} · ${qCount} questions · ${options.timerSeconds}s each</div>
+      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">${opponentName?`Waiting for ${opponentName}…`:'Finding a worthy opponent…'}</div>
+      <div style="font-size:13px;color:var(--muted);">${opponentName?'Challenge sent — no fake accept. They must open it.':`${label} · ${qCount} questions · ${options.timerSeconds}s each`}</div>
+      ${opponentName?`<button type="button" id="muqPracticeInstead" class="game-tap-target" style="margin-top:8px;padding:10px 18px;border-radius:12px;border:1px solid var(--line);background:rgba(0,0,0,.04);font:600 13px Space Grotesk,sans-serif;cursor:pointer;">Practice vs AI instead</button>`:''}
     </div>
   `;
   document.getElementById('closeMuqabala').addEventListener('click',()=>{
@@ -465,53 +495,97 @@ function startMuqabala(opponentName, mode, opts){
     try{ mmHandle?.cancel?.(); }catch(e){}
     if(!matchFound) showToast(typeof t==='function'?t('muqabala_search_cancelled'):'Search cancelled — no Muqabala used 👍');
   });
+  const practiceBtn = document.getElementById('muqPracticeInstead');
+  if(practiceBtn){
+    practiceBtn.addEventListener('click',()=>{
+      if(cancelled) return;
+      beginRun(practiceAiName, { practice:true, simulated:true, skipMatchmaking:true, opponentUid:'' });
+    });
+  }
 
   let mmHandle = null;
   if(opponentName){
-    const delay = 2800;
-    searchTimer = setTimeout(()=>{
-      if(cancelled) return;
-      const opp = opponentName;
-      const body = overlay.children[1];
-      if(body){
-        body.innerHTML = `
-          <div style="font-size:48px;">🎯</div>
-          <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">${opp} accepted!</div>
-          <div style="font-size:13px;color:var(--muted);">Starting now…</div>
-        `;
-      }
-      beginRun(opp);
-    }, delay);
+    // Real friend challenge: stay on wait screen (accept arrives via challenge card / launch). No fake "accepted!".
+    if(liveReady){
+      beginRun(opponentName, {
+        practice:false,
+        simulated:false,
+        opponentUid:oppUid,
+        matchId:options.matchId || launchCtx.matchId || (typeof dangalMatchId === 'function' ? dangalMatchId('quiz', { name: opponentName, opponentUid: oppUid }) : ''),
+      });
+    }
     return;
   }
 
-  // Live waiting-room match; simulated fallback inside findRealOpponent
+  // Live waiting-room match; Practice AI fallback when queue times out
   if(typeof findRealOpponent==='function'){
     mmHandle = findRealOpponent({category: mode||'GK'}, (opp)=>{
       if(cancelled) return;
       matchFound = true;
-      const name = opp?.name || 'Priya_29';
+      const simulated = !!opp?.simulated || !(opp?.uid && typeof isPersistableUid === 'function' && isPersistableUid(opp.uid));
+      const name = simulated ? practiceAiName : (opp?.name || 'Opponent');
       const body = overlay.children[1];
       if(body){
         body.innerHTML = `
           <div style="font-size:48px;">🎯</div>
-          <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">${name} found!</div>
+          <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">${simulated?'Practice vs AI':name+' found!'}</div>
           <div style="font-size:13px;color:var(--muted);">Starting now…</div>
         `;
       }
-      beginRun(name);
+      beginRun(name, {
+        practice: simulated,
+        simulated,
+        opponentUid: simulated ? '' : (opp.uid || ''),
+        matchId: !simulated && typeof dangalMatchId === 'function' ? dangalMatchId('quiz', { name, opponentUid: opp.uid }) : '',
+      });
     }, ()=>{ cancelled=true; });
   } else {
     searchTimer = setTimeout(()=>{
       if(cancelled) return;
-      beginRun('Priya_29');
+      beginRun(practiceAiName, { practice:true, simulated:true });
     }, 1800);
   }
 }
 
 function runMuqabala(overlay, oppName, mode, opts){
   const options = normalizeMuqabalaOptions(opts);
-  const questions = options.questions && options.questions.length
+  const launchCtx = window.__dangalLaunchCtx || {};
+  const oppUid = options.opponentUid || launchCtx.opponentUid || '';
+  const matchId =
+    options.matchId ||
+    launchCtx.matchId ||
+    (typeof dangalMatchId === 'function' ? dangalMatchId('quiz', { name: oppName, opponentUid: oppUid }) : ('quiz_' + Date.now()));
+  const practice =
+    options.practice === true ||
+    options.simulated === true ||
+    !(oppUid && typeof isPersistableUid === 'function' && isPersistableUid(oppUid));
+  const liveChat = {
+    name: oppName,
+    dangalMatchId: matchId,
+    dangalSource: options.source || launchCtx.source || '',
+  };
+  if(oppUid){
+    try{
+      window.__dangalLaunchCtx = Object.assign({}, launchCtx, {
+        matchId,
+        opponentUid: oppUid,
+        mode: practice ? 'practice' : 'live',
+        stake: Number(options.stake || launchCtx.stake) || 0,
+      });
+    }catch(e){}
+  }
+  const stake = practice ? 0 : (Number(options.stake || launchCtx.stake) || 0);
+  const liveOn =
+    !practice &&
+    typeof DangalLive !== 'undefined' &&
+    DangalLive.isLive(liveChat, window.__dangalLaunchCtx);
+  const liveRoles = liveOn && DangalLive.roles ? DangalLive.roles(liveChat, window.__dangalLaunchCtx) : null;
+  let liveHandle = null;
+  let questionsReady = !liveOn;
+  let remoteAnswers = {};
+  let remoteScores = {};
+
+  let questions = options.questions && options.questions.length
     ? options.questions
     : pickMuqabalaQuestions(mode, 10);
   const timerSeconds = options.timerSeconds;
@@ -521,22 +595,29 @@ function runMuqabala(overlay, oppName, mode, opts){
   const philosophicalAnswers = [];
   let sessionEnded = false;
   let sessionResult = null;
+  const modeChrome = liveOn
+    ? (typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel ? DangalLive.modeChromeLabel(true) : 'Live 1v1')
+    : (typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel ? DangalLive.modeChromeLabel(false, 'AI') : 'Practice vs AI');
+  const displayOpp = practice && (!oppName || /priya/i.test(String(oppName))) ? 'Practice AI' : oppName;
 
   let session = null;
   if(typeof createGameSession === 'function'){
     session = createGameSession({
-      id: (options.matchId || (window.__dangalLaunchCtx && window.__dangalLaunchCtx.matchId) || ('muqabala_' + Date.now())),
+      id: matchId,
       type: 'quiz',
       title: 'Muqabala',
       mode: String(mode || 'GK'),
       context: {
-        opponent: oppName,
+        opponent: displayOpp,
         source: options.source,
         timerSeconds,
         overlayScope: typeof OVERLAY_SCOPE_CHAT !== 'undefined' ? OVERLAY_SCOPE_CHAT : 'chat',
-        matchId: options.matchId || (window.__dangalLaunchCtx && window.__dangalLaunchCtx.matchId) || (typeof dangalMatchId === 'function' ? dangalMatchId('quiz', { name: oppName }) : ''),
-        opponentUid: options.opponentUid || (window.__dangalLaunchCtx && window.__dangalLaunchCtx.opponentUid) || '',
+        matchId,
+        opponentUid: practice ? '' : oppUid,
+        live: liveOn,
+        stake,
       },
+      stake,
       mount(){
         return overlay;
       },
@@ -546,6 +627,10 @@ function runMuqabala(overlay, oppName, mode, opts){
       },
       cleanup(){
         if(timerInterval){ clearInterval(timerInterval); timerInterval = null; }
+        if(liveHandle){
+          try{ liveHandle.leave({ forfeit: !sessionEnded || ['dismissed','aborted','quit'].includes(sessionResult) }); }catch(e){}
+          liveHandle = null;
+        }
         if(['dismissed','aborted','quit','error'].includes(sessionResult)){
           overlay.classList.add('hidden');
         }
@@ -558,6 +643,11 @@ function runMuqabala(overlay, oppName, mode, opts){
     if(sessionEnded) return;
     sessionEnded = true;
     if(timerInterval){ clearInterval(timerInterval); timerInterval = null; }
+    if(liveHandle && (result === 'win' || result === 'loss' || result === 'draw')){
+      try{
+        liveHandle.setStatus('over', result === 'draw' ? null : (result === 'win' ? (liveRoles && liveRoles.me) : (liveRoles && liveRoles.opp)));
+      }catch(e){}
+    }
     if(session && typeof session.end === 'function'){
       try{ session.end(result); }catch(e){}
       session = null;
@@ -587,9 +677,87 @@ function runMuqabala(overlay, oppName, mode, opts){
     }
   }
 
+  function pushLiveAnswer(qi, choice, correct){
+    if(!liveOn || !liveHandle || !liveRoles) return;
+    const answers = Object.assign({}, remoteAnswers);
+    const mine = Object.assign({}, answers[liveRoles.me] || {});
+    mine[qi] = { choice, correct: !!correct, at: Date.now() };
+    answers[liveRoles.me] = mine;
+    const scores = Object.assign({}, remoteScores);
+    scores[liveRoles.me] = myScore;
+    scores[liveRoles.opp] = oppScore;
+    liveHandle.push({
+      quiz: {
+        questions: questions.map((q)=>({ q:q.q, options:q.options, correct:q.correct, philosophical:!!q.philosophical })),
+        answers,
+        scores,
+        qIdx: qi,
+      },
+      status: 'playing',
+    });
+  }
+
+  function syncOppFromRemote(){
+    if(!liveRoles) return;
+    const oppAns = remoteAnswers[liveRoles.opp] || {};
+    const entry = oppAns[qIdx];
+    if(entry){
+      oppScore = Number(remoteScores[liveRoles.opp]) || Object.keys(oppAns).filter((k)=>oppAns[k] && oppAns[k].correct).length;
+      return entry;
+    }
+    return null;
+  }
+
+  if(liveOn && liveRoles && typeof DangalLive !== 'undefined'){
+    const seedQs = (liveRoles.host ? questions : null);
+    liveHandle = DangalLive.join({
+      gameType: 'quiz',
+      matchId,
+      me: liveRoles.me,
+      playerA: liveRoles.playerA,
+      playerB: liveRoles.playerB,
+      quizSeed: seedQs
+        ? {
+            questions: seedQs.map((q)=>({ q:q.q, options:q.options, correct:q.correct, philosophical:!!q.philosophical })),
+            answers: {},
+            scores: {},
+            qIdx: 0,
+          }
+        : null,
+      onSnap(val){
+        if(!val || !val.quiz) return;
+        const qz = val.quiz;
+        if(Array.isArray(qz.questions) && qz.questions.length && !liveRoles.host){
+          questions = qz.questions;
+          questionsReady = true;
+        }
+        if(liveRoles.host) questionsReady = true;
+        remoteAnswers = qz.answers || {};
+        remoteScores = qz.scores || {};
+        if(remoteScores[liveRoles.opp] != null) oppScore = Number(remoteScores[liveRoles.opp]) || oppScore;
+        if(val.status === 'forfeit' && !sessionEnded){
+          const iWon = val.winner === liveRoles.me;
+          showMuqabalaResult(overlay, myScore, iWon ? myScore + 1 : Math.max(0, myScore - 1), displayOpp, mode, philosophicalAnswers, options, endSession, { bestStreak, forfeit: true });
+        }
+      },
+    });
+  }
+
   function renderQ(){
+    if(liveOn && !questionsReady){
+      overlay.innerHTML = `
+        ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:modeChrome,backId:'closeMuqabala2'}):''}
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;">
+          <div style="font:700 16px Space Grotesk,sans-serif;">Syncing quiz…</div>
+          <div style="font-size:13px;color:var(--muted);">Waiting for host questions</div>
+        </div>`;
+      const b=document.getElementById('closeMuqabala2');
+      if(b)b.addEventListener('click',()=>closeOverlay('dismissed'));
+      setTimeout(()=>{ if(!sessionEnded) renderQ(); }, 400);
+      return;
+    }
     if(qIdx >= questions.length){
-      return showMuqabalaResult(overlay, myScore, oppScore, oppName, mode, philosophicalAnswers, options, endSession, { bestStreak });
+      return showMuqabalaResult(overlay, myScore, oppScore, displayOpp, mode, philosophicalAnswers, options, endSession, { bestStreak });
     }
     const data = questions[qIdx];
     let timeLeft = data.philosophical ? 999 : timerSeconds;
@@ -598,8 +766,8 @@ function runMuqabala(overlay, oppName, mode, opts){
     const urgencyAt = Math.max(3, Math.ceil(timerSeconds * 0.35));
 
     overlay.innerHTML = `
-      ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:`Q${qIdx+1}/${totalQ} · ${mode}`,backId:'closeMuqabala2'}):`<div class="muqabala-header"><div class="muqabala-title">Q${qIdx+1}/${totalQ} · ${mode}</div>${typeof backButtonHtml==='function'?backButtonHtml({ className: 'icon-btn', id: 'closeMuqabala2' }):'<button class="icon-btn cp-back-btn" id="closeMuqabala2" aria-label="Back"></button>'}</div>`}
-      ${typeof gameScoreHtml==='function'?gameScoreHtml({label:t('you')||'You',score:myScore},{label:oppName,score:oppScore}):`<div class="vs-row"><div class="player-chip me">${t('you')||'You'} — ${myScore}</div><div class="player-chip opp">${oppName} — ${oppScore}</div></div>`}
+      ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:`${modeChrome} · Q${qIdx+1}/${totalQ} · ${mode}`,backId:'closeMuqabala2'}):`<div class="muqabala-header"><div class="muqabala-title">Q${qIdx+1}/${totalQ} · ${mode}</div>${typeof backButtonHtml==='function'?backButtonHtml({ className: 'icon-btn', id: 'closeMuqabala2' }):'<button class="icon-btn cp-back-btn" id="closeMuqabala2" aria-label="Back"></button>'}</div>`}
+      ${typeof gameScoreHtml==='function'?gameScoreHtml({label:t('you')||'You',score:myScore},{label:displayOpp,score:oppScore}):`<div class="vs-row"><div class="player-chip me">${t('you')||'You'} — ${myScore}</div><div class="player-chip opp">${displayOpp} — ${oppScore}</div></div>`}
       <div class="muqabala-timer${data.philosophical?'':' muqabala-timer--live'}" id="mTimer" style="${data.philosophical?'font-size:14px;color:var(--gold);':''}">
         ${data.philosophical?t('philosophical_label'):`${timeLeft}`}
       </div>
@@ -617,7 +785,7 @@ function runMuqabala(overlay, oppName, mode, opts){
           </div>
           <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:10px;">${t('philosophical_score_note')}</div>
         `:''}
-        <div class="opp-indicator" id="oppInd">${t('opp_thinking',{name:oppName})}</div>
+        <div class="opp-indicator" id="oppInd">${liveOn?`${displayOpp} answering…`:t('opp_thinking',{name:displayOpp})}</div>
       </div>
     `;
 
@@ -632,6 +800,24 @@ function runMuqabala(overlay, oppName, mode, opts){
       tmr.classList.toggle('muqabala-timer--critical', timeLeft <= 3);
     };
 
+    const advanceAfterAnswer = ()=>{
+      const go = ()=>{ qIdx++; renderQ(); };
+      if(!liveOn){ setTimeout(go, 900); return; }
+      let waits = 0;
+      const poll = setInterval(()=>{
+        waits++;
+        const remote = syncOppFromRemote();
+        const oi = overlay.querySelector('#oppInd');
+        if(remote){
+          if(oi) oi.textContent = remote.correct ? t('opp_correct',{name:displayOpp}) : t('opp_wrong',{name:displayOpp});
+        }
+        if(remote || waits > 40){
+          clearInterval(poll);
+          setTimeout(go, 500);
+        }
+      }, 250);
+    };
+
     if(data.philosophical){
       optBtns.forEach(btn=>btn.addEventListener('click',()=>{
         if(answered)return; answered=true; clearInterval(timerInterval);
@@ -642,8 +828,9 @@ function runMuqabala(overlay, oppName, mode, opts){
         optBtns.forEach(b=>{b.disabled=true;b.classList.add('correct');b.querySelector('.mark').textContent='✓';});
         noteAnswer(true);
         if(!quietMode && typeof SoundLib!=='undefined') SoundLib.playFeedback(true,'default');
-        const oi=overlay.querySelector('#oppInd');if(oi)oi.textContent=t('opp_correct',{name:oppName});
+        const oi=overlay.querySelector('#oppInd');if(oi)oi.textContent=t('opp_correct',{name:displayOpp});
         myScore++;
+        pushLiveAnswer(qIdx, chosen, true);
         setTimeout(()=>{qIdx++;renderQ();},1400);
       }));
 
@@ -666,6 +853,7 @@ function runMuqabala(overlay, oppName, mode, opts){
           noteAnswer(true);
           if(!quietMode && typeof SoundLib!=='undefined') SoundLib.playFeedback(true,'default');
           myScore++;
+          pushLiveAnswer(qIdx, -1, true);
           setTimeout(()=>{qIdx++;renderQ();},1400);
         });
       }
@@ -688,21 +876,42 @@ function runMuqabala(overlay, oppName, mode, opts){
           if(comboFlash){comboEl.hidden=false;comboEl.textContent=comboFlash;comboEl.classList.add('muqabala-combo--pop');}
           else {comboEl.hidden=true;comboEl.textContent='';}
         }
+        pushLiveAnswer(qIdx, chosen, isCorrect);
+        if(liveOn){
+          const oi=overlay.querySelector('#oppInd');
+          const already=syncOppFromRemote();
+          if(oi) oi.textContent = already
+            ? (already.correct ? t('opp_correct',{name:displayOpp}) : t('opp_wrong',{name:displayOpp}))
+            : `${displayOpp} answering…`;
+          advanceAfterAnswer();
+          return;
+        }
         const oi=overlay.querySelector('#oppInd');
-        const oppCorrectLocal=Math.random()<0.62;
-        if(oi)oi.textContent=oppCorrectLocal?t('opp_correct',{name:oppName}):t('opp_wrong',{name:oppName});
+        const oppCorrectLocal=Math.random()<0.55;
+        if(oi)oi.textContent=oppCorrectLocal?t('opp_correct',{name:displayOpp}):t('opp_wrong',{name:displayOpp});
         if(oppCorrectLocal)oppScore++;
         setTimeout(()=>{qIdx++;renderQ();},900);
       }));
 
-      const oppCapMs = Math.max(2000, (timerSeconds - 2) * 1000);
-      const oppDelay=1200+Math.random()*Math.max(1000, oppCapMs - 1200);
-      const oppCorrect=Math.random()<0.62;
-      setTimeout(()=>{
-        const oi=overlay.querySelector('#oppInd');
-        if(oi&&!answered)oi.textContent=oppCorrect?t('opp_correct',{name:oppName}):t('opp_wrong',{name:oppName});
-        if(oppCorrect && !answered) oppScore++;
-      }, Math.min(oppDelay, oppCapMs));
+      if(!liveOn){
+        const oppCapMs = Math.max(2000, (timerSeconds - 2) * 1000);
+        const oppDelay=1200+Math.random()*Math.max(1000, oppCapMs - 1200);
+        const oppCorrect=Math.random()<0.55;
+        setTimeout(()=>{
+          const oi=overlay.querySelector('#oppInd');
+          if(oi&&!answered)oi.textContent=oppCorrect?t('opp_correct',{name:displayOpp}):t('opp_wrong',{name:displayOpp});
+          if(oppCorrect && !answered) oppScore++;
+        }, Math.min(oppDelay, oppCapMs));
+      } else {
+        const livePoll = setInterval(()=>{
+          if(answered){ clearInterval(livePoll); return; }
+          const remote = syncOppFromRemote();
+          if(remote){
+            const oi=overlay.querySelector('#oppInd');
+            if(oi) oi.textContent = remote.correct ? t('opp_correct',{name:displayOpp}) : t('opp_wrong',{name:displayOpp});
+          }
+        }, 300);
+      }
 
       tickTimerUi();
       timerInterval=setInterval(()=>{
@@ -716,8 +925,10 @@ function runMuqabala(overlay, oppName, mode, opts){
             noteAnswer(false);
             optBtns.forEach(b=>{b.disabled=true;b.classList.add('dim');});
             if(data.correct!==null){const c=optBtns[data.correct];if(c){c.classList.remove('dim');c.classList.add('correct');c.querySelector('.mark').textContent='✓';}}
+            pushLiveAnswer(qIdx, -1, false);
+            if(liveOn) advanceAfterAnswer();
+            else setTimeout(()=>{qIdx++;renderQ();},900);
           }
-          setTimeout(()=>{qIdx++;renderQ();},900);
         }
       },1000);
     }

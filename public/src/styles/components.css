@@ -3496,6 +3496,16 @@ select:focus-visible,
 .dangal-honesty-tag--live{background:rgba(46,125,50,.18);color:#2E7D32;}
 .dangal-honesty-tag--practice{background:rgba(21,101,192,.12);color:#1565C0;}
 .dangal-honesty-tag--polish{background:rgba(0,0,0,.06);color:var(--muted);}
+.dangal-stake-picker{margin:4px 0 8px;}
+.dangal-stake-picker__label{font-size:11px;color:var(--muted);margin-bottom:6px;}
+.dangal-stake-picker__row{display:flex;flex-wrap:wrap;gap:6px;}
+.dangal-stake-chip{
+  padding:8px 12px;border-radius:12px;border:2px solid var(--line);background:var(--cream);
+  font:700 12px Space Grotesk,sans-serif;cursor:pointer;color:var(--ink);
+}
+.dangal-stake-chip.is-selected{
+  border-color:var(--game-accent,var(--red));background:color-mix(in srgb,var(--game-accent,var(--red)) 12%,var(--white));
+}
 .dangal-maidan-note{line-height:1.35;}
 .story-destination-tag{font-weight:700;letter-spacing:.02em;}
 .story-destination-tag--baithak{color:#FFE66D;}

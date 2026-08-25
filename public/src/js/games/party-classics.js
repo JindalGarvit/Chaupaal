@@ -21,6 +21,14 @@
     if (typeof gameFeedback === 'function') gameFeedback(a, extra);
   }
 
+  /** Honest Practice chrome when not in a live Dangal match */
+  function practiceSub(detail) {
+    if (typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel) {
+      return DangalLive.modeChromeLabel(false, detail || 'vs AI');
+    }
+    return detail ? 'Practice · ' + detail : 'Practice vs AI';
+  }
+
   function rngFn() {
     return typeof seededRng === 'function' ? seededRng(Date.now() >>> 0) : Math.random;
   }
@@ -135,7 +143,7 @@
     const shell = openShell({
       id: 'tambola',
       title: 'Tambola',
-      subtitle: 'Full house vs caller',
+      subtitle: practiceSub('Full house vs caller'),
       accent: '#E91E8C',
       bg: '#1A0010',
     });
@@ -208,18 +216,22 @@
     tick();
   }
 
-  /* ---------- Cue physics (carrom + pool) ---------- */
+  /* ---------- Cue physics (carrom + pool) — Practice-honest; physics too heavy for RTDB ---------- */
   function openCueGame(spec) {
     let raf = 0;
     let pauseCtrl = null;
     const pauseId = 'pcCuePause_' + (spec.id || 'game');
+    const chat = spec.chat || null;
+    // Keep Practice honestly even if launched from a chat — cue physics sync is out of scope
+    const cueSub = practiceSub(spec.subtitle || spec.title || 'vs AI');
     const shell = openShell({
       id: spec.id,
       title: spec.title,
-      subtitle: spec.subtitle,
+      subtitle: cueSub,
       accent: spec.accent,
       bg: spec.bg,
       pauseId,
+      chat,
       cleanup: () => {
         cancelAnimationFrame(raf);
         if (pauseCtrl) pauseCtrl.destroy();
@@ -466,11 +478,12 @@
     raf = requestAnimationFrame(loop);
   }
 
-  function openCarrom() {
+  function openCarrom(ctx) {
     openCueGame({
       id: 'carrom',
       title: 'Carrom',
       subtitle: 'Pocket the coins',
+      chat: ctx && ctx.chat,
       accent: '#8D6E63',
       bg: '#1A0F00',
       felt: '#c4a574',
@@ -499,11 +512,12 @@
     });
   }
 
-  function openPool() {
+  function openPool(ctx) {
     openCueGame({
       id: 'pool',
       title: 'Pool',
       subtitle: 'Clear the table',
+      chat: ctx && ctx.chat,
       accent: '#1B3A2D',
       bg: '#0A1A10',
       felt: '#1b5e20',
@@ -573,7 +587,7 @@
     const shell = openShell({
       id: 'rummy',
       title: 'Rummy',
-      subtitle: 'Meld runs and sets',
+      subtitle: practiceSub('Meld runs and sets'),
       accent: '#6A1B9A',
       bg: '#100018',
     });
@@ -678,7 +692,7 @@
     const shell = openShell({
       id: 'teenpatti',
       title: 'Teen Patti',
-      subtitle: 'Best of three cards',
+      subtitle: practiceSub('Best of three cards'),
       accent: '#FFD700',
       bg: '#0D0018',
     });
@@ -733,7 +747,7 @@
     const shell = openShell({
       id: 'bluff',
       title: 'Bluff',
-      subtitle: 'Play face-down · get called',
+      subtitle: practiceSub('Play face-down · get called'),
       accent: '#FF1744',
       bg: '#0A0E10',
     });
@@ -826,7 +840,7 @@
     const shell = openShell({
       id: 'sattepe',
       title: 'Satte pe Satta',
-      subtitle: 'Build off the sevens',
+      subtitle: practiceSub('Build off the sevens'),
       accent: '#FFD600',
       bg: '#000A1A',
     });
@@ -895,7 +909,7 @@
     const shell = openShell({
       id: 'andarbaahar',
       title: 'Andar Bahar',
-      subtitle: 'Pick a side · match the joker',
+      subtitle: practiceSub('Pick a side · match the joker'),
       accent: '#FF6B35',
       bg: '#001A00',
     });
@@ -962,8 +976,8 @@
   if (typeof registerGame === 'function') {
     const games = [
       { id: 'tambola', name: 'Tambola', desc: 'Ticket · full house', icon: '🎱', genre: 'party', launch: openTambola, order: 30 },
-      { id: 'carrom', name: 'Carrom', desc: 'Aim the striker', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
-      { id: 'pool', name: 'Pool', desc: 'Clear the felt', icon: '🎱', genre: 'board', launch: openPool, order: 32 },
+      { id: 'carrom', name: 'Carrom', desc: 'Aim the striker', icon: '🪙', genre: 'board', launch: (ctx) => openCarrom(ctx), order: 31 },
+      { id: 'pool', name: 'Pool', desc: 'Clear the felt', icon: '🎱', genre: 'board', launch: (ctx) => openPool(ctx), order: 32 },
       { id: 'rummy', name: 'Rummy', desc: 'Runs and sets', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
       { id: 'teenpatti', name: 'Teen Patti', desc: 'Three-card show', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
       { id: 'bluff', name: 'Bluff', desc: 'Play face-down', icon: '🎭', genre: 'party', launch: openBluff, order: 35 },

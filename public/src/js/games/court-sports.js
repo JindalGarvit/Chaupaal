@@ -45,11 +45,17 @@
       prepareGameOverlay(overlay, { theme: 'dark', gameId: o.id, accent: o.accent });
     }
     if (typeof applyGameIdentity === 'function') applyGameIdentity(o.id, overlay);
+    const practiceSub =
+      typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel
+        ? DangalLive.modeChromeLabel(false, o.subtitle || 'vs AI')
+        : o.subtitle
+          ? 'Practice · ' + o.subtitle
+          : 'Practice';
     overlay.innerHTML =
       (typeof gameChromeHtml === 'function'
         ? gameChromeHtml({
             title: o.title,
-            subtitle: o.subtitle || '',
+            subtitle: practiceSub,
             backId: o.backId || 'csBack',
             pauseId: o.pauseId || '',
           })
@@ -60,7 +66,16 @@
       else if (typeof animateGameExit === 'function') animateGameExit(overlay, () => overlay.remove());
       else overlay.remove();
     };
-    overlay.querySelector('#' + (o.backId || 'csBack'))?.addEventListener('click', () => close('dismissed'));
+    overlay.querySelector('#' + (o.backId || 'csBack'))?.addEventListener('click', async () => {
+      if (typeof confirmLeaveGame === 'function') {
+        const leave = await confirmLeaveGame({
+          title: 'Leave ' + (o.title || 'practice') + '?',
+          body: 'This practice run will end.',
+        });
+        if (!leave) return;
+      }
+      close('dismissed');
+    });
     return { overlay, body, gs, close, alive: () => (gs ? gs.alive() : true), host: overlay };
   }
 
@@ -544,7 +559,7 @@
       registerGame({
         id: g.id,
         name: g.name,
-        desc: 'Timing rally · first to ' + (g.toWin || 7),
+        desc: 'Practice · timing rally to ' + (g.toWin || 7),
         icon: g.icon,
         gameType: 'solo',
         genre: 'rw_sports',
@@ -561,7 +576,7 @@
     registerGame({
       id: 'kabaddi',
       name: 'Kabaddi',
-      desc: 'Raid, tag, breathe home',
+      desc: 'Practice · raid, tag, home',
       icon: '💪',
       gameType: 'solo',
       genre: 'rw_sports',
@@ -575,7 +590,7 @@
     registerGame({
       id: 'patangbaazi',
       name: 'Patang Baazi',
-      desc: 'Climb and cut the rival kite',
+      desc: 'Practice · climb and cut',
       icon: '🪁',
       gameType: 'solo',
       genre: 'arcade',

@@ -7,7 +7,7 @@ let lbCursor=null;
 let lbHasMore=false;
 let lbEntries=[];
 let lbLoading=false;
-const LB_SAMPLE=[{name:'Riya S.',score:'15/15',profileType:'personal'},{name:'Dev K.',score:'14/15',profileType:'personal'},{name:'Priya N.',score:'13/15',profileType:'professional'},{name:'Arjun M.',score:'12/15',profileType:'personal'}];
+const LB_SAMPLE=[{name:'Riya S.',score:'15/15',profileType:'personal'},{name:'Dev K.',score:'14/15',profileType:'personal'},{name:'Neha P.',score:'13/15',profileType:'professional'},{name:'Arjun M.',score:'12/15',profileType:'personal'}];
 
 async function loadLeaderboard(){
   lbCursor=null; lbHasMore=true; lbEntries=[];
@@ -260,6 +260,8 @@ function renderDangalGotdSlot(host, gotd) {
   card.dataset.game = g.id;
   card.setAttribute('role', 'button');
   card.tabIndex = 0;
+  const honesty =
+    typeof dangalHonestyBadgeHtml === 'function' ? dangalHonestyBadgeHtml(g) : '';
   const genreBit =
     (gotd.genre || g.genre) && typeof genreLabel === 'function'
       ? `<div class="dangal-gotd-desc">${genreLabel(gotd.genre || g.genre)}</div>`
@@ -268,7 +270,7 @@ function renderDangalGotdSlot(host, gotd) {
     <div class="dangal-gotd-icon">${g.icon}</div>
     <div>
       <div class="dangal-gotd-badge">Game of the Day</div>
-      <div class="dangal-gotd-name">${g.name}</div>
+      <div class="dangal-gotd-name">${g.name}${honesty}</div>
       <div class="dangal-gotd-desc">${g.desc}</div>
       ${genreBit}
     </div>
@@ -436,14 +438,20 @@ function renderDangalGamesGrid() {
 
   function filteredLibrary() {
     let list = library.slice();
+    // Phase 9 prep — honor hideDefault without deleting titles
+    list = list.filter((g) => {
+      if (typeof dangalManchVisibility === 'function' && dangalManchVisibility(g.id) === 'hidden') {
+        return false;
+      }
+      return true;
+    });
     if (state.live)
       list = list.filter(
         (g) =>
-          g.liveDuel ||
           (typeof isLiveCapable === 'function' && isLiveCapable(g.id)) ||
-          g.id === 'chess' ||
-          g.id === 'fiveinrow' ||
-          g.id === 'ttt'
+          (g.liveDuel &&
+            typeof getGameGraduation === 'function' &&
+            getGameGraduation(g.id).grade === 'live')
       );
     else if (state.genre) list = list.filter((g) => g.genre === state.genre);
     else if (state.mode && state.mode !== 'all') {

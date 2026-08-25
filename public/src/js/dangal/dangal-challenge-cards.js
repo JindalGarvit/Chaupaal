@@ -162,6 +162,7 @@
           opponentUid: opp,
           chat,
           mode: 'live',
+          stake: Number(att.stake) || 0,
         });
       } else if (typeof showToast === 'function') showToast('Opening ' + (att.gameName || 'game'));
     });
