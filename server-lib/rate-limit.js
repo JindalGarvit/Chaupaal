@@ -39,6 +39,8 @@ const LIMITS = {
   gif_search: { minute: 30, hour: 300 },
   // YouTube Data API Search.list is 100 quota units — keep this tight.
   youtube_search: { minute: 8, hour: 40 },
+  // Pre-auth signup username availability (per IP)
+  username_check: { minute: 30, hour: 300 },
 };
 
 let redis = null;
@@ -123,3 +125,11 @@ module.exports = {
   checkActionRateLimit,
   getRedis,
 };
+
+/** Pre-auth IP rate limit (e.g. username_check). Degrades open when Redis missing. */
+async function checkIpRateLimit(ip, action) {
+  const safeIp = String(ip || 'unknown').slice(0, 64);
+  return checkActionRateLimit(`ip:${safeIp}`, action);
+}
+
+module.exports.checkIpRateLimit = checkIpRateLimit;

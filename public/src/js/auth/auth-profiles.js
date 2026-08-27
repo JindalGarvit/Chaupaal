@@ -26,10 +26,25 @@
   }
 
   function normalizeUsername(u) {
+    if (typeof ChaupaalUsername !== 'undefined' && ChaupaalUsername.normalizeUsername) {
+      return ChaupaalUsername.normalizeUsername(u);
+    }
     return String(u || '')
+      .trim()
       .toLowerCase()
-      .replace(/[^a-z0-9_]/g, '')
+      .replace(/^@+/, '')
       .slice(0, 30);
+  }
+
+  function assertValidUsername(u) {
+    if (typeof ChaupaalUsername !== 'undefined' && ChaupaalUsername.validateUsername) {
+      const v = ChaupaalUsername.validateUsername(u);
+      if (!v.ok) throw new Error('USERNAME_INVALID');
+      return v.username;
+    }
+    const uname = normalizeUsername(u);
+    if (!uname || uname.length < 3) throw new Error('USERNAME_INVALID');
+    return uname;
   }
 
   function profileId() {
@@ -37,8 +52,7 @@
   }
 
   async function claimUsername(username, uid, pid) {
-    const uname = normalizeUsername(username);
-    if (!uname || uname.length < 3) throw new Error('USERNAME_INVALID');
+    const uname = assertValidUsername(username);
     const ref = db.collection('usernames').doc(uname);
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
@@ -59,8 +73,7 @@
 
   /** Rename: frees old username immediately (Rename A). */
   async function renameUsername(uid, pid, oldUsername, newUsername) {
-    const next = normalizeUsername(newUsername);
-    if (!next || next.length < 3) throw new Error('USERNAME_INVALID');
+    const next = assertValidUsername(newUsername);
     if (next === normalizeUsername(oldUsername)) return next;
     await claimUsername(next, uid, pid);
     if (oldUsername && normalizeUsername(oldUsername) !== next) {

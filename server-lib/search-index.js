@@ -24,11 +24,10 @@ const COLLECTORS = {
   games: collectGames,
 };
 
+const { normalizeUsername } = require('./username');
+
 function normalize(q) {
-  return String(q || '')
-    .trim()
-    .replace(/^@/, '')
-    .toLowerCase();
+  return normalizeUsername(q);
 }
 
 async function collectUsers(db, q, limit) {

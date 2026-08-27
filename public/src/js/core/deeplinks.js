@@ -478,9 +478,12 @@
   }
 
   async function openProfileByUsername(username) {
-    const uname = String(username || '')
-      .replace(/^@/, '')
-      .toLowerCase();
+    const uname =
+      typeof ChaupaalUsername !== 'undefined' && ChaupaalUsername.normalizeUsername
+        ? ChaupaalUsername.normalizeUsername(username)
+        : String(username || '')
+            .replace(/^@/, '')
+            .toLowerCase();
     if (!uname) return;
     switchTab('peepal');
     if (!db) {

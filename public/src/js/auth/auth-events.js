@@ -408,39 +408,90 @@ function syncAuthCanvasPreview() {
   syncSignupProgress();
 }
 
+function hideUsernameSuggestions() {
+  const row = document.getElementById('usernameSuggestions');
+  if (!row) return;
+  row.hidden = true;
+  row.innerHTML = '';
+}
+
+function renderUsernameSuggestions(suggestions) {
+  const row = document.getElementById('usernameSuggestions');
+  if (!row) return;
+  const list = Array.isArray(suggestions) ? suggestions.filter(Boolean) : [];
+  if (list.length < 1) {
+    hideUsernameSuggestions();
+    return;
+  }
+  row.hidden = false;
+  row.innerHTML = list
+    .map(
+      (s) =>
+        `<button type="button" class="auth-username-suggestion" data-suggest="${String(s).replace(/"/g, '&quot;')}">${s}</button>`
+    )
+    .join('');
+  row.querySelectorAll('[data-suggest]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const input = document.getElementById('regUsername');
+      const val = btn.getAttribute('data-suggest') || '';
+      if (input) input.value = val;
+      regData.username = val;
+      hideUsernameSuggestions();
+      checkUsernameAvailability(val);
+      syncAuthCanvasPreview();
+    });
+  });
+}
+
 async function checkUsernameAvailability(username) {
   const hint = document.getElementById('usernameHint');
   if (!hint) return false;
-  if (!username || username.length < 3) {
-    hint.textContent = 'At least 3 characters';
+  hideUsernameSuggestions();
+
+  const validation =
+    typeof ChaupaalUsername !== 'undefined'
+      ? ChaupaalUsername.validateUsername(username)
+      : username.length >= 3 && username.length <= 30
+        ? { ok: true, username: username }
+        : { ok: false, detail: username.length < 3 ? 'At least 3 characters' : 'Max 30 characters' };
+
+  if (!validation.ok) {
+    hint.textContent = validation.detail || 'Invalid username';
     hint.style.color = 'var(--red)';
     regData.usernameAvailable = false;
     return false;
   }
-  if (username.length > 20) {
-    hint.textContent = 'Max 20 characters';
-    hint.style.color = 'var(--red)';
-    regData.usernameAvailable = false;
-    return false;
-  }
+
   hint.textContent = 'Checking availability…';
   hint.style.color = 'var(--muted)';
   try {
     let available = true;
+    let suggestions = [];
     if (typeof apiFetch === 'function') {
       const envelope = await apiFetch('/api/media-config', {
         method: 'POST',
-        body: { action: 'username_check', username },
+        body: { action: 'username_check', username: validation.username },
       });
-      if (envelope?.ok && envelope.data && envelope.data.available === false) available = false;
+      const data = envelope?.ok ? envelope.data : null;
+      if (data && data.available === false) {
+        if (data.reason && data.reason !== 'invalid') {
+          hint.textContent = data.detail || 'Invalid username';
+          hint.style.color = 'var(--red)';
+          regData.usernameAvailable = false;
+          return false;
+        }
+        available = false;
+        suggestions = Array.isArray(data.suggestions) ? data.suggestions : [];
+      }
     } else if (db && auth?.currentUser) {
-      const snap = await db.collection('usernames').doc(username).get();
+      const snap = await db.collection('usernames').doc(validation.username).get();
       available = !snap.exists;
     }
     if (!available) {
-      hint.textContent = 'Taken — try another';
+      hint.textContent = suggestions.length ? 'Taken — try one of these:' : 'Taken — try another';
       hint.style.color = 'var(--red)';
       regData.usernameAvailable = false;
+      if (suggestions.length) renderUsernameSuggestions(suggestions);
       return false;
     }
     hint.textContent = 'Available';
@@ -1338,10 +1389,15 @@ function wireAuthEvents() {
   });
 
   document.getElementById('regUsername')?.addEventListener('input', (e) => {
-    const val = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '');
+    const sanitize =
+      typeof ChaupaalUsername !== 'undefined' && ChaupaalUsername.sanitizeUsernameInput
+        ? ChaupaalUsername.sanitizeUsernameInput
+        : (v) => String(v || '').toLowerCase().replace(/[^a-z0-9._-]/g, '').slice(0, 30);
+    const val = sanitize(e.target.value);
     e.target.value = val;
     regData.username = val;
     regData.usernameAvailable = false;
+    hideUsernameSuggestions();
     clearTimeout(usernameCheckTimer);
     usernameCheckTimer = setTimeout(() => checkUsernameAvailability(val), 320);
   });
@@ -1377,7 +1433,17 @@ function wireAuthEvents() {
   /** Capture + validate identity fields into regData. Returns true on success. */
   async function captureRegIdentity({ errEl, quiet } = {}) {
     const name = document.getElementById('regName')?.value.trim();
-    const username = document.getElementById('regUsername')?.value.trim().toLowerCase();
+    const usernameRaw = document.getElementById('regUsername')?.value.trim() || '';
+    const username =
+      typeof ChaupaalUsername !== 'undefined'
+        ? ChaupaalUsername.normalizeUsername(usernameRaw)
+        : usernameRaw.toLowerCase();
+    const usernameValidation =
+      typeof ChaupaalUsername !== 'undefined'
+        ? ChaupaalUsername.validateUsername(username)
+        : username.length >= 3
+          ? { ok: true }
+          : { ok: false, detail: 'Username must be at least 3 characters' };
     const dob = document.getElementById('regDob')?.value;
     const showErr = (msg) => {
       if (errEl) errEl.textContent = msg;
@@ -1390,8 +1456,8 @@ function wireAuthEvents() {
       document.getElementById('regName')?.focus();
       return false;
     }
-    if (!username || username.length < 3) {
-      showErr('Username must be at least 3 characters');
+    if (!usernameValidation.ok) {
+      showErr(usernameValidation.detail || 'Invalid username');
       document.getElementById('regUsername')?.focus();
       return false;
     }
@@ -1417,7 +1483,7 @@ function wireAuthEvents() {
       return false;
     }
     if (errEl) errEl.textContent = quiet ? '' : 'Checking username…';
-    const available = await checkUsernameAvailability(username);
+    const available = await checkUsernameAvailability(usernameValidation.username || username);
     if (!available) {
       showErr('That username is taken — pick another');
       document.getElementById('regUsername')?.focus();
@@ -1425,7 +1491,7 @@ function wireAuthEvents() {
     }
     if (errEl) errEl.textContent = '';
     regData.name = name;
-    regData.username = username;
+    regData.username = usernameValidation.username || username;
     regData.dob = dob;
     regData.age = age;
     return true;

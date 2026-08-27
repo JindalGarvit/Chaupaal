@@ -17,6 +17,11 @@ const {
 const { searchPlaces } = require('../server-lib/geocode');
 const { checkUrlWithWebRisk } = require('../server-lib/url-safety');
 const { searchGifs } = require('../server-lib/gif-search');
+const {
+  normalizeUsername,
+  validateUsername,
+  suggestAvailableUsernames,
+} = require('../server-lib/username');
 
 async function handleGet(req, res) {
   const user = await requireUser(req, res, { allowWeak: false });
@@ -50,23 +55,50 @@ async function handleGet(req, res) {
   });
 }
 
+function clientIp(req) {
+  const xf = req.headers['x-forwarded-for'];
+  if (typeof xf === 'string' && xf.trim()) return xf.split(',')[0].trim();
+  if (Array.isArray(xf) && xf[0]) return String(xf[0]).trim();
+  return req.socket?.remoteAddress || 'unknown';
+}
+
 /** Pre-auth username availability — returns only { available }, never uid. */
 async function handleUsernameCheck(req, res, body) {
-  const username = String(body.username || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_]/g, '');
-  if (username.length < 3 || username.length > 20) {
-    return sendSuccess(res, { available: false, reason: 'invalid' });
+  try {
+    const { checkIpRateLimit } = require('../server-lib/rate-limit');
+    const rate = await checkIpRateLimit(clientIp(req), 'username_check');
+    if (!rate.ok) {
+      return sendSuccess(res, { available: true, degraded: true, rateLimited: true });
+    }
+  } catch (e) {
+    console.warn('[media-config] username_check rate-limit', e?.message || e);
   }
+
+  const validation = validateUsername(body.username);
+  if (!validation.ok) {
+    return sendSuccess(res, {
+      available: false,
+      reason: validation.reason,
+      detail: validation.detail,
+    });
+  }
+
   const app = initAdmin();
   if (!app) {
     // Soft allow when Admin isn't configured (local/dev) — claim still races safely on create.
     return sendSuccess(res, { available: true, degraded: true });
   }
   try {
-    const snap = await app.firestore().collection('usernames').doc(username).get();
-    return sendSuccess(res, { available: !snap.exists });
+    const db = app.firestore();
+    const snap = await db.collection('usernames').doc(validation.username).get();
+    if (!snap.exists) {
+      return sendSuccess(res, { available: true });
+    }
+    const suggestions = await suggestAvailableUsernames(db, validation.username);
+    return sendSuccess(res, {
+      available: false,
+      suggestions,
+    });
   } catch (e) {
     console.warn('[media-config] username_check', e?.message || e);
     return sendSuccess(res, { available: true, degraded: true });
@@ -110,14 +142,12 @@ async function handleResolveIdentifier(req, res, body) {
       return sendSuccess(res, { email });
     }
 
-    const username = raw
-      .toLowerCase()
-      .replace(/^@/, '')
-      .replace(/[^a-z0-9_]/g, '');
-    if (username.length < 3 || username.length > 20) {
+    const username = normalizeUsername(raw.replace(/^@/, ''));
+    const validation = validateUsername(raw.replace(/^@/, ''));
+    if (!validation.ok) {
       return sendSuccess(res, { notFound: true });
     }
-    const unameSnap = await app.firestore().collection('usernames').doc(username).get();
+    const unameSnap = await app.firestore().collection('usernames').doc(validation.username).get();
     if (!unameSnap.exists) return sendSuccess(res, { notFound: true });
     const uid = unameSnap.data()?.uid;
     if (!uid) return sendSuccess(res, { notFound: true });

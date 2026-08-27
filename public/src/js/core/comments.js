@@ -23,7 +23,7 @@
   }
 
   function formatCommentText(text) {
-    return escapeHtml(text).replace(/@(\w+)/g, '<span class="comment-mention">@$1</span>');
+    return escapeHtml(text).replace(/@([A-Za-z0-9_.-]{2,30})/g, '<span class="comment-mention">@$1</span>');
   }
 
   function buildCommentById(list) {
