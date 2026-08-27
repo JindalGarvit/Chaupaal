@@ -144,15 +144,18 @@
 
     panel.innerHTML = `
       <div class="peepal-card peepal-intent-card peepal-intent-card--khoj" id="khojIntentCard">
-        <div class="peepal-intent-card-title">${tt('khoj_title', 'Khoj')}</div>
         <div class="peepal-intent-card-sub">
           ${tt('khoj_sub', 'Most compatible first — friendship-leaning, with room for other intents. Scroll for more.')}
         </div>
         <div class="peepal-intent-chips" data-khoj-chips data-swipe-ignore>${chipsHtml}</div>
-        <textarea id="khojIntentInput" class="peepal-ai-search-input khoj-intent-input" rows="2"
-          placeholder="${tt('khoj_ph', 'Who are you hoping to meet?')}"
-          data-living-ph="khoj_intent" enterkeyhint="search"></textarea>
-        <button type="button" class="peepal-ai-search-btn" id="khojIntentGo">${icon('search', 16)} ${tt('khoj_go', 'Find')}</button>
+        <div class="khoj-search-row">
+          <div class="khoj-search-wrap">
+            <textarea id="khojIntentInput" class="peepal-ai-search-input khoj-intent-input" rows="2"
+              placeholder="${tt('khoj_ph', 'Who are you hoping to meet?')}"
+              data-living-ph="khoj_intent" enterkeyhint="search"></textarea>
+          </div>
+          <button type="button" class="peepal-ai-search-btn khoj-intent-go" id="khojIntentGo">${icon('search', 16)} ${tt('khoj_go', 'Find')}</button>
+        </div>
         <div id="khojCompatList" class="khoj-compat-scroll" aria-live="polite"></div>
         <div id="khojIntentResults" class="khoj-results peepal-intent-results"></div>
       </div>
@@ -177,11 +180,13 @@
     loadKhojPeeks(listEl, { reset: true, limit: 5, emptyFriendship: true, friendshipOnly: false });
 
     const run = () => {
-      const q = panel.querySelector('#khojIntentInput')?.value?.trim();
+      const inp = panel.querySelector('#khojIntentInput');
+      const q = inp?.value?.trim();
       if (!q) {
         if (typeof showToast === 'function') {
           showToast(tt('peepal_find_empty', "Type who you're looking for"));
         }
+        inp?.focus();
         return;
       }
       const dest = panel.querySelector('#khojIntentResults');
@@ -212,9 +217,16 @@
       }
     });
     panel.querySelector('#khojIntentInput')?.addEventListener('blur', () => {
-      try {
-        if (typeof restoreAppShell === 'function') restoreAppShell('khoj_intent_blur');
-      } catch (e) {}
+      setTimeout(() => {
+        const ae = document.activeElement;
+        if (ae?.matches?.('input, textarea, select, [contenteditable="true"]')) return;
+        const vv = window.visualViewport;
+        const inset = vv ? Math.max(0, window.innerHeight - vv.height - (vv.offsetTop || 0)) : 0;
+        if (inset > 40 || document.documentElement.classList.contains('kb-open')) return;
+        try {
+          if (typeof restoreAppShell === 'function') restoreAppShell('khoj_intent_blur');
+        } catch (e) {}
+      }, 100);
     });
     if (typeof bindLivingPlaceholder === 'function') {
       bindLivingPlaceholder(panel.querySelector('#khojIntentInput'), 'khoj_intent');
@@ -227,6 +239,8 @@
         onClear() {
           const host = panel.querySelector('#khojIntentResults');
           if (host) host.innerHTML = '';
+          const list = panel.querySelector('#khojCompatList');
+          if (list) loadKhojPeeks(list, { reset: true, limit: 5, emptyFriendship: true, friendshipOnly: false });
         },
       });
     }

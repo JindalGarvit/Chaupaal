@@ -27,14 +27,15 @@
     el.classList.add('room-kit', ...(kits || []));
   }
 
-  /** Brand title + English job-title (permanent scaffold until Settings hide). */
+  /** Remove stale mode title headers; room-kit classes applied separately. */
   function ensureRoomHeader(host, surface, mode) {
-    if (!host) return;
-    if (typeof paintModeSubtitle === 'function' && surface && mode) {
-      paintModeSubtitle(host, surface, mode);
-      return;
-    }
-    host.querySelectorAll(':scope > .room-kit-header, :scope > .cp-mode-subtitle').forEach((h) => h.remove());
+    host?.querySelectorAll?.(':scope > .room-kit-header, :scope > .cp-mode-subtitle').forEach((h) => h.remove());
+  }
+
+  function cleanupModeHeaders() {
+    ['peepalScreen', 'panel-baithak', 'panel-duniya', 'panel-akhbaar', 'panel-dangal'].forEach((id) => {
+      document.getElementById(id)?.querySelectorAll('.room-kit-header, .cp-mode-subtitle').forEach((el) => el.remove());
+    });
   }
 
   function sharesPersonalEvents() {
@@ -49,6 +50,7 @@
   // ─── Peepal ────────────────────────────────────────────────────────────────
   function setPeepalMode(mode) {
     peepalMode = ['vriksha', 'khoj', 'mashhoor'].includes(mode) ? mode : 'vriksha';
+    cleanupModeHeaders();
     const feed = document.getElementById('peepalFeed');
     const panel = document.getElementById('panel-peepal');
     const screen = document.getElementById('peepalScreen');
@@ -634,6 +636,7 @@
 
   function setAkhbaarMode(mode) {
     const next = ['all', 'surkhiya', 'saathi', 'gk'].includes(mode) ? mode : 'all';
+    cleanupModeHeaders();
     if (next === 'gk') {
       akhbaarMode = 'all';
       syncAkhbaarChrome('all');
@@ -684,82 +687,20 @@
    * After last category: rubber-band → Add Category half-sheet (not a virtual end page).
    * Direct Add control still opens the sheet anytime.
    */
+  /**
+   * @deprecated Use shouldBlockSectionSwipe from section-swipe.js
+   */
   function swipeTargetIgnored(target) {
-    try {
-      return !!(
-        target &&
-        target.closest &&
-        target.closest(
-          [
-            '[data-nav-ignore="1"]',
-            '#cpMiniPlayer',
-            '.peepal-intent-chips',
-            '[data-khoj-chips]',
-            '.khoj-intent-card .peepal-intent-chips',
-            '.peepal-nudge-chip',
-            '.akhbaar-cat-chip',
-            '.akhbaar-cat-bar',
-            '.dangal-manch-filters',
-            '.dangal-filter-chip',
-            '.dangal-filter-row',
-            '[data-manch-grid]',
-            '.dangal-section-grid',
-            '.mashhoor-masonry',
-            '.surkhiya-band-list',
-            '[data-swipe-ignore]',
-          ].join(', ')
-        )
-      );
-    } catch (e) {
-      return false;
-    }
-  }
-
-  /** Empty chrome / non-chip areas — section swipe never fires from chip rows / filter grids. */
-  function isEmptyChromeSwipe(target, panel) {
-    if (swipeTargetIgnored(target)) return false;
-    return true;
+    return typeof shouldBlockSectionSwipe === 'function' ? shouldBlockSectionSwipe(target) : false;
   }
 
   function wireAkhbaarSwipe() {
     const panel = document.getElementById('panel-akhbaar');
-    if (!panel || panel.dataset.swipeWired) return;
-    panel.dataset.swipeWired = '1';
-    let sx = 0;
-    let sy = 0;
-    let locked = null;
-    let ignored = false;
-    panel.addEventListener(
-      'touchstart',
-      (e) => {
-        ignored = swipeTargetIgnored(e.target) || !isEmptyChromeSwipe(e.target, panel);
-        sx = e.touches[0].clientX;
-        sy = e.touches[0].clientY;
-        locked = null;
-      },
-      { passive: true }
-    );
-    panel.addEventListener(
-      'touchmove',
-      (e) => {
-        if (ignored) return;
-        const dx = e.touches[0].clientX - sx;
-        const dy = e.touches[0].clientY - sy;
-        if (!locked && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
-          locked = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
-        }
-      },
-      { passive: true }
-    );
-    panel.addEventListener(
-      'touchend',
-      (e) => {
-        if (ignored || locked !== 'h') return;
-        const dx = (e.changedTouches[0]?.clientX || 0) - sx;
-        if (Math.abs(dx) < 56) return;
-        // Surkhiya mode: swipe left → Khabar (data-cat=all)
+    if (!panel || typeof wireSectionSwipe !== 'function') return;
+    wireSectionSwipe(panel, {
+      onSwipe(dir) {
         if (akhbaarMode === 'surkhiya') {
-          if (dx < 0) setAkhbaarMode('all');
+          if (dir > 0) setAkhbaarMode('all');
           return;
         }
         const cats = akhbaarCategoryOrder();
@@ -771,8 +712,7 @@
               : 'all';
         let idx = cats.indexOf(curCat);
         if (idx < 0) idx = 0;
-        if (dx < 0) {
-          // next category; past last → rubber-band add sheet
+        if (dir > 0) {
           if (idx >= cats.length - 1) {
             const fn = window.CategoryPrefs?.openCategoryManageSheet;
             if (typeof fn === 'function') fn();
@@ -781,7 +721,6 @@
           }
           selectAkhbaarCategory(cats[idx + 1]);
         } else {
-          // previous; from first → Surkhiya
           if (idx <= 0) {
             setAkhbaarMode('surkhiya');
             return;
@@ -789,8 +728,7 @@
           selectAkhbaarCategory(cats[idx - 1]);
         }
       },
-      { passive: true }
-    );
+    });
   }
 
   function wireAkhbaarEdgeAdd() {
@@ -800,95 +738,31 @@
   // Peepal swipe: Khoj ← Vriksha → Mashhoor
   function wirePeepalSwipe() {
     const screen = document.getElementById('peepalScreen') || document.getElementById('panel-peepal');
-    if (!screen || screen.dataset.swipeWired) return;
-    screen.dataset.swipeWired = '1';
-    let sx = 0;
-    let sy = 0;
-    let locked = null;
-    let ignored = false;
-    screen.addEventListener(
-      'touchstart',
-      (e) => {
-        ignored = swipeTargetIgnored(e.target) || !isEmptyChromeSwipe(e.target, screen);
-        sx = e.touches[0].clientX;
-        sy = e.touches[0].clientY;
-        locked = null;
-      },
-      { passive: true }
-    );
-    screen.addEventListener(
-      'touchmove',
-      (e) => {
-        if (ignored) return;
-        const dx = e.touches[0].clientX - sx;
-        const dy = e.touches[0].clientY - sy;
-        if (!locked && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
-          locked = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
-        }
-      },
-      { passive: true }
-    );
-    screen.addEventListener(
-      'touchend',
-      (e) => {
-        if (ignored || locked !== 'h') return;
-        const dx = (e.changedTouches[0]?.clientX || 0) - sx;
-        if (Math.abs(dx) < 56) return;
+    if (!screen || typeof wireSectionSwipe !== 'function') return;
+    wireSectionSwipe(screen, {
+      onSwipe(dir) {
         const order = ['khoj', 'vriksha', 'mashhoor'];
         const cur = order.indexOf(peepalMode);
-        const next = order[Math.max(0, Math.min(2, cur + (dx < 0 ? 1 : -1)))];
+        const next = order[Math.max(0, Math.min(2, cur + dir))];
         setPeepalMode(next);
       },
-      { passive: true }
-    );
+    });
   }
 
   // Baithak swipe: Sambhavanayein ← Sabha → Mitra
   function wireBaithakSwipe() {
     const panel = document.getElementById('panel-baithak');
-    if (!panel || panel.dataset.swipeWired) return;
-    panel.dataset.swipeWired = '1';
-    let sx = 0;
-    let sy = 0;
-    let locked = null;
-    let ignored = false;
-    let section = 'sabha';
-    panel.addEventListener(
-      'touchstart',
-      (e) => {
-        ignored = swipeTargetIgnored(e.target) || !isEmptyChromeSwipe(e.target, panel);
-        sx = e.touches[0].clientX;
-        sy = e.touches[0].clientY;
-        locked = null;
-      },
-      { passive: true }
-    );
-    panel.addEventListener(
-      'touchmove',
-      (e) => {
-        if (ignored) return;
-        const dx = e.touches[0].clientX - sx;
-        const dy = e.touches[0].clientY - sy;
-        if (!locked && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
-          locked = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
-        }
-      },
-      { passive: true }
-    );
-    panel.addEventListener(
-      'touchend',
-      (e) => {
-        if (ignored || locked !== 'h') return;
-        const dx = (e.changedTouches[0]?.clientX || 0) - sx;
-        if (Math.abs(dx) < 56) return;
-        // Prefer window getter — lexical baithakSection in baithak-data.js is a string and would shadow.
+    if (!panel || typeof wireSectionSwipe !== 'function') return;
+    wireSectionSwipe(panel, {
+      onSwipe(dir) {
+        let section = 'sabha';
         try {
           if (typeof window.baithakSection === 'function') section = window.baithakSection() || 'sabha';
         } catch (err) {}
         const order = ['sambhavanayein', 'sabha', 'mitra'];
         let cur = order.indexOf(section);
-        if (cur < 0) cur = 1; // sabha
-        const next = order[Math.max(0, Math.min(2, cur + (dx < 0 ? 1 : -1)))];
+        if (cur < 0) cur = 1;
+        const next = order[Math.max(0, Math.min(2, cur + dir))];
         if (next === section) return;
         if (typeof setBaithakSection === 'function') {
           setBaithakSection(next);
@@ -896,11 +770,11 @@
           ensureRoomHeader(panel, 'baithak', next);
         }
       },
-      { passive: true }
-    );
+    });
   }
 
   function boot() {
+    cleanupModeHeaders();
     wirePeepalSwipe();
     wireBaithakSwipe();
     wireAkhbaarSwipe();
@@ -915,6 +789,7 @@
     ]);
   }
 
+  window.cleanupModeHeaders = cleanupModeHeaders;
   window.setPeepalMode = setPeepalMode;
   window.setAkhbaarMode = setAkhbaarMode;
   window.goAkhbaarPage = goAkhbaarPage;

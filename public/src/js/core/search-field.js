@@ -17,7 +17,9 @@
   }
 
   function ensureWrap(input) {
-    let wrap = input.closest('.search-field, .baithak-search-wrap, .share-search-wrap, .us-search-wrap, .search-field-wrap');
+    let wrap = input.closest(
+      '.search-field, .baithak-search-wrap, .share-search-wrap, .us-search-wrap, .search-field-wrap, .khoj-search-wrap'
+    );
     if (wrap) {
       wrap.classList.add('search-field');
       return wrap;

@@ -81,12 +81,13 @@
     }
 
     function pointerIgnored(target) {
+      if (typeof shouldBlockSectionSwipe === 'function') return shouldBlockSectionSwipe(target);
       try {
         return !!(
           target &&
           target.closest &&
           target.closest(
-            '[data-nav-ignore="1"], [data-swipe-ignore], .peepal-intent-chips, [data-khoj-chips], .peepal-nudge-chip, .akhbaar-cat-bar, .akhbaar-cat-chip'
+            '[data-swipe-ignore], .peepal-intent-chips, [data-khoj-chips], .peepal-nudge-chip, .akhbaar-cat-bar, .akhbaar-cat-chip'
           )
         );
       } catch (e) {

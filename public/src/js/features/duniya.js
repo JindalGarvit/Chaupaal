@@ -1639,9 +1639,7 @@ function toggleOpenToMeet(){
     }
     const hints = document.querySelectorAll('.duniya-mode-hint');
     hints.forEach((h) => h.remove());
-    if (panel && typeof paintModeSubtitle === 'function') {
-      paintModeSubtitle(panel, 'duniya', mode);
-    }
+    if (typeof cleanupModeHeaders === 'function') cleanupModeHeaders();
     if (mode === 'lehar') renderLeharFeed();
     if (mode === 'prasidha') renderPrasidhaFeed();
   }
@@ -1656,11 +1654,7 @@ function toggleOpenToMeet(){
             friendUids: typeof followingSet !== 'undefined' ? [...followingSet] : [],
           })
         : [...(duniyaPosts || [])];
-    host.innerHTML = `<div class="room-kit-header">Prasidha<small>${
-      typeof t === 'function' && t('prasidha_sub') !== 'prasidha_sub'
-        ? t('prasidha_sub')
-        : 'Trending this week'
-    }</small></div>`;
+    host.innerHTML = '';
     const grid = document.createElement('div');
     grid.className = 'prasidha-masonry';
     ranked.slice(0, 40).forEach((post, i) => {
@@ -1698,44 +1692,15 @@ function toggleOpenToMeet(){
   // Swipe between Lehar ← Vishwa → Prasidha
   (function wireDuniyaSwipe() {
     const screen = document.getElementById('duniyaScreen');
-    if (!screen || screen.dataset.swipeWired) return;
-    screen.dataset.swipeWired = '1';
-    let sx = 0;
-    let sy = 0;
-    let locked = null;
-    screen.addEventListener(
-      'touchstart',
-      (e) => {
-        sx = e.touches[0].clientX;
-        sy = e.touches[0].clientY;
-        locked = null;
-      },
-      { passive: true }
-    );
-    screen.addEventListener(
-      'touchmove',
-      (e) => {
-        const dx = e.touches[0].clientX - sx;
-        const dy = e.touches[0].clientY - sy;
-        if (!locked && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
-          locked = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
-        }
-      },
-      { passive: true }
-    );
-    screen.addEventListener(
-      'touchend',
-      (e) => {
-        if (locked !== 'h') return;
-        const dx = (e.changedTouches[0]?.clientX || 0) - sx;
-        if (Math.abs(dx) < 56) return;
+    if (!screen || typeof wireSectionSwipe !== 'function') return;
+    wireSectionSwipe(screen, {
+      onSwipe(dir) {
         const order = ['lehar', 'vishwa', 'prasidha'];
         const cur = order.indexOf(mode === 'general' ? 'vishwa' : mode);
-        const next = order[Math.max(0, Math.min(2, cur + (dx < 0 ? 1 : -1)))];
+        const next = order[Math.max(0, Math.min(2, cur + dir))];
         setDuniyaMode(next);
       },
-      { passive: true }
-    );
+    });
   })();
 
   document.addEventListener('click', (e) => {

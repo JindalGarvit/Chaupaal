@@ -965,7 +965,14 @@ async function initPeepal(){
       }
     });
     document.getElementById('peepalAiSearchInput')?.addEventListener('blur',()=>{
-      try{ if(typeof restoreAppShell==='function') restoreAppShell('peepal_intent_blur'); }catch(e){}
+      setTimeout(()=>{
+        const ae=document.activeElement;
+        if(ae?.matches?.('input, textarea, select, [contenteditable="true"]')) return;
+        const vv=window.visualViewport;
+        const inset=vv?Math.max(0,window.innerHeight-vv.height-(vv.offsetTop||0)):0;
+        if(inset>40||document.documentElement.classList.contains('kb-open')) return;
+        try{ if(typeof restoreAppShell==='function') restoreAppShell('peepal_intent_blur'); }catch(e){}
+      },100);
     });
   }
   const peepalSearchInp=document.getElementById('peepalAiSearchInput');
@@ -975,6 +982,11 @@ async function initPeepal(){
       onClear(){
         const host=document.getElementById('peepalAiSearchResults');
         if(host) host.innerHTML='';
+        try{
+          if(typeof mountCompatPeeks==='function'){
+            mountCompatPeeks(document.getElementById('peepalCompatPeeks'),{limit:3,reset:true,friendshipMajority:true});
+          }
+        }catch(e){}
       }
     });
   }

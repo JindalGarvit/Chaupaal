@@ -606,7 +606,7 @@ function setDangalSection(section, opts) {
   if (screen) {
     [...screen.classList].filter((c) => c.startsWith('room-kit')).forEach((c) => screen.classList.remove(c));
     screen.classList.add('room-kit', 'room-kit--fire', `room-kit--${dangalSection}`);
-    if (typeof paintModeSubtitle === 'function') paintModeSubtitle(screen, 'dangal', dangalSection);
+    if (typeof cleanupModeHeaders === 'function') cleanupModeHeaders();
   }
   if (!opts?.silent) {
     // Quiet: no toast on section change (morph / swipe are enough)
@@ -618,65 +618,21 @@ window.setDangalSection = setDangalSection;
 
 function wireDangalSwipe() {
   const screen = document.getElementById('dangalScreen') || document.getElementById('panel-dangal');
-  if (!screen || screen.dataset.swipeWired) return;
-  screen.dataset.swipeWired = '1';
-  let sx = 0;
-  let sy = 0;
-  let locked = null;
-  let ignored = false;
-
-  function dangalSwipeIgnored(target) {
-    try {
-      if (
-        target?.closest?.(
-          '.dangal-manch-filters, .dangal-filter-row, .dangal-filter-chip, [data-swipe-ignore], [data-nav-ignore="1"]'
-        )
-      ) {
-        return true;
-      }
-      // With a Manch genre/mode filter active, ignore swipes from the filtered grid
+  if (!screen || typeof wireSectionSwipe !== 'function') return;
+  wireSectionSwipe(screen, {
+    extraIgnore(target) {
       const state = window.__dangalManchFilter;
       const filtered = state && (state.mode !== 'all' || state.genre);
       if (filtered && target?.closest?.('[data-manch-grid], .dangal-section-grid')) return true;
-    } catch (e) {}
-    return false;
-  }
-
-  screen.addEventListener(
-    'touchstart',
-    (e) => {
-      ignored = dangalSwipeIgnored(e.target);
-      sx = e.touches[0].clientX;
-      sy = e.touches[0].clientY;
-      locked = null;
+      return false;
     },
-    { passive: true }
-  );
-  screen.addEventListener(
-    'touchmove',
-    (e) => {
-      if (ignored) return;
-      const dx = e.touches[0].clientX - sx;
-      const dy = e.touches[0].clientY - sy;
-      if (!locked && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
-        locked = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
-      }
-    },
-    { passive: true }
-  );
-  screen.addEventListener(
-    'touchend',
-    (e) => {
-      if (ignored || locked !== 'h') return;
-      const dx = (e.changedTouches[0]?.clientX || 0) - sx;
-      if (Math.abs(dx) < 56) return;
+    onSwipe(dir) {
       const order = ['khel', 'manch', 'maidan'];
       const cur = order.indexOf(dangalSection);
-      const next = order[Math.max(0, Math.min(2, cur + (dx < 0 ? 1 : -1)))];
+      const next = order[Math.max(0, Math.min(2, cur + dir))];
       setDangalSection(next);
     },
-    { passive: true }
-  );
+  });
 }
 
 function getGameRating(key){

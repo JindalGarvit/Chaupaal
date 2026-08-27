@@ -79,22 +79,10 @@
     return `${job.brand} · ${short}`;
   }
 
-  /** Paint brand + English job under room header. */
+  /** Strip cosmetic mode title headers (room-kit theming stays on the panel). */
   function paintModeSubtitle(host, surface, mode) {
-    if (!host || hintsHidden()) {
-      host?.querySelectorAll?.(':scope > .room-kit-header, :scope > .cp-mode-subtitle').forEach((el) => {
-        if (el.classList.contains('cp-mode-subtitle') || el.classList.contains('room-kit-header')) el.remove();
-      });
-      return;
-    }
-    const job = modeJob(surface, mode);
-    if (!job) return;
-    host.querySelectorAll(':scope > .room-kit-header, :scope > .cp-mode-subtitle').forEach((el) => el.remove());
-    const el = document.createElement('div');
-    el.className = 'room-kit-header cp-mode-subtitle';
-    el.setAttribute('data-mode-subtitle', `${surface}:${mode}`);
-    el.innerHTML = `<strong>${escapeLite(job.brand)}</strong><small>${escapeLite(job.job)}</small>`;
-    host.insertBefore(el, host.firstChild);
+    host?.querySelectorAll?.(':scope > .room-kit-header, :scope > .cp-mode-subtitle').forEach((el) => el.remove());
+    if (typeof cleanupModeHeaders === 'function') cleanupModeHeaders();
   }
 
   function escapeLite(s) {

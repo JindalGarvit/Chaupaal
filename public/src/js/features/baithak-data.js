@@ -1181,9 +1181,7 @@ async function setBaithakSection(section) {
   baithakSection = ['sabha', 'sambhavanayein', 'mitra'].includes(section) ? section : 'sabha';
   const panel = document.getElementById('panel-baithak');
   if (panel) panel.dataset.baithakSection = baithakSection;
-  if (panel && typeof paintModeSubtitle === 'function') {
-    paintModeSubtitle(panel, 'baithak', baithakSection);
-  }
+  if (typeof cleanupModeHeaders === 'function') cleanupModeHeaders();
   const all = typeof pinSelfChat === 'function' ? pinSelfChat(baithakChats) : baithakChats || [];
 
   if (baithakSection === 'sabha') {

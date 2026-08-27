@@ -309,12 +309,8 @@ html.quiet-mode .bottom-tabs.is-morph-fx::after{
 }
 .room-kit > *{position:relative;z-index:1;}
 .room-kit-header{
-  padding:10px 16px 6px;font:700 13px 'Space Grotesk',sans-serif;
-  color:var(--room-ink, var(--ink));letter-spacing:.01em;
-}
-.room-kit-header small{
-  display:block;font:500 11px/1.35 system-ui,sans-serif;
-  color:var(--muted);margin-top:2px;font-weight:500;
+  display:none;
+  padding:0;
 }
 .room-kit--earth{--room-tint:linear-gradient(180deg,rgba(47,158,68,.06),transparent 120px);--room-ink:#1B6B2F;}
 .room-kit--water{--room-tint:linear-gradient(180deg,rgba(42,111,219,.07),transparent 120px);--room-ink:#143A7A;}

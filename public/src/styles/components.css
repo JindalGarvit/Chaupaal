@@ -3028,7 +3028,7 @@ html.kb-open .bottom-tabs {
   font:600 12px var(--font-ui,'Inter'),sans-serif;color:var(--ink);cursor:pointer;
 }
 .us-engage-btn:active{transform:scale(.96);}
-.peepal-khoj-surface{padding:12px 0 24px;overflow:auto;max-height:100%;}
+.peepal-khoj-surface{padding:4px 0 24px;overflow:auto;max-height:100%;}
 .khoj-quota{display:flex;gap:12px;align-items:flex-start;padding:12px 16px;border-radius:14px;background:var(--surface-sunken,var(--cream));border:1px solid var(--line);margin:0 16px 12px;}
 .khoj-quota-num{font:700 28px 'Space Grotesk',sans-serif;color:var(--brand-red,var(--red));line-height:1;}
 .khoj-quota-copy{font-size:12px;color:var(--muted);line-height:1.4;}
@@ -3184,7 +3184,7 @@ select:focus-visible,
 .mehfil-yt-pick-meta{display:flex;flex-direction:column;gap:2px;min-width:0;}
 .mehfil-yt-pick-meta strong{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .mehfil-yt-pick-meta small{font-size:11px;color:var(--muted);}
-.peepal-khoj-surface{padding:12px 14px 24px;overflow:auto;max-height:100%;}
+.peepal-khoj-surface{padding:4px 14px 24px;overflow:auto;max-height:100%;}
 .khoj-quota{display:flex;gap:12px;align-items:flex-start;padding:12px;border-radius:14px;background:var(--cream);border:1px solid var(--line);margin-bottom:12px;}
 .khoj-quota-num{font:700 28px 'Space Grotesk',sans-serif;color:var(--red);line-height:1;}
 .khoj-quota-copy{font-size:12px;color:var(--muted);line-height:1.4;}
@@ -3429,7 +3429,7 @@ select:focus-visible,
 .dangal-friends-name{flex:1;}
 .dangal-friends-rating{font:700 13px var(--font-display);color:var(--red);}
 
-/* Dangal progress � soft weekly goals */
+/* Dangal progress ? soft weekly goals */
 .dangal-progress-host{width:100%;margin:0 0 var(--space-3);}
 .dangal-progress{
   background:var(--white);border:1px solid var(--line);border-radius:var(--r-md);
@@ -5007,8 +5007,9 @@ html.quiet-mode .safar-flair{display:none;}
 .share-search-clear,.share-search-wrap .search-field-clear{left:auto;right:8px;}
 .share-search-input.search-field-input{padding-right:44px;}
 .peepal-ai-search-input.search-field-input,.khoj-intent-input.search-field-input{padding-right:44px;}
-.peepal-intent-card .search-field-clear,.khoj-intent-input+.search-field-clear,
+.peepal-intent-card .search-field-clear,.khoj-search-wrap .search-field-clear,
 .search-field:has(.peepal-ai-search-input) .search-field-clear{right:8px;top:14px;transform:none;}
+.khoj-search-wrap .search-field-clear{top:50%;transform:translateY(-50%);}
 .media-picker-search-row{position:relative;}
 .media-picker-search-row .search-field-clear{right:8px;}
 .media-picker-search-row input{padding-right:44px;box-sizing:border-box;width:100%;}
@@ -5113,13 +5114,9 @@ html.quiet-mode .dp-arcade-burst,html.quiet-mode .dp-arcade-block{animation:none
   .dp-arcade-burst,.dp-arcade-block,.cp-profile-highlights.dp-themed[data-dp-ring="pulse"] .highlight-circle{animation:none!important;}
 
 /* New-user first-run (coach, mode jobs, demo badges) */
-.cp-mode-subtitle.room-kit-header{
-  display:block!important;
-  padding:8px 16px 4px;
-  position:relative;z-index:2;
-}
-.cp-mode-subtitle strong{display:block;font:700 13px 'Space Grotesk',sans-serif;}
-.cp-mode-subtitle small{display:block;font:500 11px/1.35 system-ui,sans-serif;color:var(--muted);margin-top:2px;}
+.cp-mode-subtitle.room-kit-header,
+.room-kit-header.cp-mode-subtitle,
+.room-kit-header{display:none!important;}
 .cp-demo-badge{
   display:inline-block;font:700 9px/1.2 system-ui,sans-serif;letter-spacing:.04em;text-transform:uppercase;
   color:var(--muted);border:1px solid var(--line,#ddd);border-radius:4px;padding:2px 5px;margin-left:6px;vertical-align:middle;
@@ -5164,4 +5161,4 @@ html.quiet-mode .dp-arcade-burst,html.quiet-mode .dp-arcade-block{animation:none
 }
 .auth-optional-summary::-webkit-details-marker{display:none;}
 .auth-optional-summary::after{content:' +';color:var(--muted);font-weight:700;}
-.auth-optional-details[open] .auth-optional-summary::after{content:' −';}
+.auth-optional-details[open] .auth-optional-summary::after{content:' ?';}
