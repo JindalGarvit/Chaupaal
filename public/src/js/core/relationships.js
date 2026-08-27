@@ -309,10 +309,12 @@
     actions.push({
       label: 'View profile',
       icon: 'user',
-      hint: 'Peek then open their Chaupaal profile',
+      hint: 'Open their Chaupaal profile',
       fn: () => {
-        if (typeof openProfilePeek === 'function') {
-          openProfilePeek(profile, { uid: profile.uid, username: profile.username });
+        if (typeof tapAvatarFromFeed === 'function') {
+          tapAvatarFromFeed(profile, { context: 'relationship_menu' });
+        } else if (typeof openUserProfile === 'function') {
+          openUserProfile(profile, { uid: profile.uid, username: profile.username, context: 'third_person' });
         } else if (typeof openPublicProfile === 'function') {
           openPublicProfile(profile, { uid: profile.uid, username: profile.username });
         }
@@ -645,6 +647,13 @@
 
   function bindProfileLongPress(element, profile) {
     if (!element || !profile?.uid || profile.uid === currentUser?.uid) return;
+    if (typeof markIdentityAvatar === 'function') markIdentityAvatar(element);
+    else {
+      element.classList?.add?.('cp-identity-avatar');
+      element.style.userSelect = 'none';
+      element.style.webkitUserSelect = 'none';
+      element.style.webkitTouchCallout = 'none';
+    }
     const open = () => openRelationshipMenu(profile, { title: 'Profile actions' });
     if (typeof onLongPress === 'function') onLongPress(element, open);
     else {
@@ -655,6 +664,7 @@
       });
       ['pointerup', 'pointercancel', 'pointerleave'].forEach((name) => element.addEventListener(name, clear));
     }
+    element.addEventListener('selectstart', (e) => e.preventDefault());
   }
 
   async function openRelationshipList(kind, { targetUid } = {}) {

@@ -460,12 +460,20 @@ function createDuniyaPost(post, {variant='list'}={}){
     ${previewHtml}
     ${previewTotal>0&&!post.commentsOff?`<div class="duniya-view-comments">View all ${previewTotal} comments</div>`:(previewTotal>0&&own?`<div class="duniya-view-comments">View comments</div>`:'')}
   `;
-  const postAvatar=el.querySelector('.duniya-post-avatar');
-  if(typeof bindProfileLongPress==='function') bindProfileLongPress(postAvatar,post.user);
-  postAvatar?.addEventListener('click',()=>{
-    if(typeof openProfilePeek==='function') openProfilePeek(post.user,{uid:post.user.uid,username:post.user.username});
-    else if(typeof openPublicProfile==='function') openPublicProfile(post.user,{uid:post.user.uid,username:post.user.username,context:'duniya'});
-  });
+  if(typeof wireIdentityTaps==='function'){
+    wireIdentityTaps(el,post.user,{
+      avatarSel:'.duniya-post-avatar',
+      nameSel:'.duniya-post-user > .duniya-post-name, .duniya-post-caption > .duniya-post-name',
+      context:'duniya',
+    });
+  } else {
+    const postAvatar=el.querySelector('.duniya-post-avatar');
+    if(typeof bindProfileLongPress==='function') bindProfileLongPress(postAvatar,post.user);
+    postAvatar?.addEventListener('click',()=>{
+      if(typeof tapAvatarFromFeed==='function') tapAvatarFromFeed(post.user,{context:'duniya'});
+      else if(typeof openPublicProfile==='function') openPublicProfile(post.user,{uid:post.user.uid,username:post.user.username,context:'duniya'});
+    });
+  }
 
   // Like — optimistic (UI first, rate-limit/persist after)
   const likeBtn=el.querySelector('.like-btn');
@@ -748,10 +756,26 @@ function createDuniyaPost(post, {variant='list'}={}){
     openDuniyaDetail(post);
   });
   el.querySelector('.duniya-view-comments')?.addEventListener('click',()=>openDuniyaDetail(post));
-  el.querySelectorAll('.feed-comment-row').forEach((row)=>row.addEventListener('click',(e)=>{
-    e.stopPropagation();
-    openDuniyaDetail(post,{focusCommentId:row.dataset.commentId});
-  }));
+  el.querySelectorAll('.feed-comment-row').forEach((row)=>{
+    const preview=(post._previewComments||post._comments||[]).find((c)=>c.id===row.dataset.commentId);
+    const author=preview?.user||{};
+    if(typeof wireIdentityTaps==='function' && (author.uid||author.username)){
+      wireIdentityTaps(row,author,{
+        avatarSel:'.feed-comment-avatar',
+        nameSel:'.feed-comment-name',
+        context:'duniya',
+      });
+    }
+    row.querySelector('.feed-comment-open')?.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      openDuniyaDetail(post,{focusCommentId:row.dataset.commentId});
+    });
+    row.addEventListener('click',(e)=>{
+      if(e.target.closest('.feed-comment-avatar, .feed-comment-name, .cp-identity-avatar, .cp-identity-name')) return;
+      e.stopPropagation();
+      openDuniyaDetail(post,{focusCommentId:row.dataset.commentId});
+    });
+  });
   el.querySelector('.feed-comment-more')?.addEventListener('click',(e)=>{
     e.stopPropagation();
     openDuniyaDetail(post);
@@ -777,18 +801,10 @@ function createDuniyaPost(post, {variant='list'}={}){
   el.querySelectorAll('[data-mention]').forEach((btn)=>{
     btn.addEventListener('click', async (e)=>{
       e.preventDefault();
+      e.stopPropagation();
       const handle=btn.dataset.mention;
-      try{
-        if(typeof searchUsersProvider==='function'){
-          const rows=await searchUsersProvider(handle,{limit:1});
-          const u=rows?.[0];
-          if(u && typeof openPublicProfile==='function'){
-            openPublicProfile(u,{uid:u.uid,username:u.username,context:'duniya'});
-            return;
-          }
-        }
-        if(typeof openUniversalSearch==='function') openUniversalSearch('@'+handle);
-      }catch(err){}
+      if(typeof tapMentionFromFeed==='function') await tapMentionFromFeed(handle,{context:'duniya'});
+      else if(typeof openUniversalSearch==='function') openUniversalSearch('@'+handle);
     });
   });
   el.querySelector('[data-loc]')?.addEventListener('click',(e)=>{
@@ -820,7 +836,9 @@ function createDuniyaPost(post, {variant='list'}={}){
       chip.textContent=t.username||t.name||'';
       chip.addEventListener('click',(ev)=>{
         ev.stopPropagation();
-        if(typeof openPublicProfile==='function') openPublicProfile({uid:t.uid,name:t.name,username:t.username},{uid:t.uid,username:t.username,context:'duniya'});
+        const tagged={uid:t.uid,name:t.name,username:t.username};
+        if(typeof tapNameFromFeed==='function') tapNameFromFeed(tagged);
+        else if(typeof openProfileMessage==='function') openProfileMessage(tagged);
       });
       media.style.position='relative';
       media.appendChild(chip);
@@ -1485,10 +1503,12 @@ function toggleOpenToMeet(){
             </button>
           </div>
           <div class="lehar-meta">
-            <button type="button" class="lehar-author" data-lehar-author>
-              ${avatar ? `<img src="${duniyaEsc(avatar)}" alt="">` : `<span class="lehar-author-fallback">${duniyaEsc((name || '?').slice(0, 1))}</span>`}
-              <strong>${duniyaEsc(name)}</strong>
-            </button>
+            <div class="lehar-author">
+              <button type="button" class="lehar-author-avatar" data-lehar-avatar aria-label="Open profile">
+                ${avatar ? `<img src="${duniyaEsc(avatar)}" alt="">` : `<span class="lehar-author-fallback">${duniyaEsc((name || '?').slice(0, 1))}</span>`}
+              </button>
+              <button type="button" class="lehar-author-name" data-lehar-name><strong>${duniyaEsc(name)}</strong></button>
+            </div>
             <p>${duniyaEsc((p.caption || '').slice(0, 120))}</p>
           </div>
         </section>`;
@@ -1572,18 +1592,26 @@ function toggleOpenToMeet(){
           navigator.share({ title: 'Chaupaal', text: String(p.caption || '').slice(0, 120) }).catch(() => {});
         }
       });
-      s.querySelector('[data-lehar-author]')?.addEventListener('click', (e) => {
+      s.querySelector('[data-lehar-avatar]')?.addEventListener('click', (e) => {
         e.stopPropagation();
         const p = post();
         const u = p?.user;
-        if (u?.uid && typeof openPublicProfile === 'function') {
-          openPublicProfile(u, { uid: u.uid, username: u.username, context: 'duniya' });
-        }
+        if (!u) return;
+        if (typeof tapAvatarFromFeed === 'function') tapAvatarFromFeed(u, { context: 'duniya' });
+        else if (typeof openPublicProfile === 'function') openPublicProfile(u, { uid: u.uid, username: u.username, context: 'duniya' });
+      });
+      s.querySelector('[data-lehar-name]')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const p = post();
+        const u = p?.user;
+        if (!u) return;
+        if (typeof tapNameFromFeed === 'function') tapNameFromFeed(u);
+        else if (typeof openProfileMessage === 'function') openProfileMessage(u);
       });
 
       let lastTap = 0;
       s.addEventListener('click', (e) => {
-        if (e.target.closest('[data-lehar-mute],[data-lehar-like],[data-lehar-comment],[data-lehar-share],[data-lehar-author]')) return;
+        if (e.target.closest('[data-lehar-mute],[data-lehar-like],[data-lehar-comment],[data-lehar-share],[data-lehar-avatar],[data-lehar-name]')) return;
         const now = Date.now();
         if (now - lastTap < 320) {
           lastTap = 0;

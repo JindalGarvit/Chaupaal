@@ -332,8 +332,33 @@
       });
     });
     const avatarEl = sheet.querySelector('[data-public-profile-avatar]');
+    if (avatarEl && typeof markIdentityAvatar === 'function') markIdentityAvatar(avatarEl);
+    else if (avatarEl) {
+      avatarEl.classList.add('cp-identity-avatar');
+      avatarEl.style.userSelect = 'none';
+      avatarEl.style.webkitUserSelect = 'none';
+      avatarEl.style.webkitTouchCallout = 'none';
+    }
     if (profileUid && typeof bindProfileLongPress === 'function') bindProfileLongPress(avatarEl, { ...u, uid: profileUid });
-    if (profileUid && typeof openProfileStories === 'function') avatarEl?.addEventListener('click', () => openProfileStories(profileUid));
+    avatarEl?.addEventListener('click', (e) => {
+      if (avatarEl.dataset.suppressClick === '1') {
+        avatarEl.dataset.suppressClick = '0';
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof openAvatarLightbox === 'function') {
+        openAvatarLightbox({
+          photoURL: u.photoURL || u.photoThumb || '',
+          name: u.name || u.displayName || username || 'Photo',
+          uid: profileUid,
+          username: u.username || username,
+          avatar: u.avatar,
+        });
+      }
+    });
     if (profileUid && typeof storyCall === 'function') {
       storyCall('profile', { targetUid: profileUid })
         .then((data) => {

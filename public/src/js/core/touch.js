@@ -675,6 +675,7 @@
         el.dataset.suppressClick = '0';
       }, 400);
     });
+    el.addEventListener('selectstart', (e) => e.preventDefault());
   }
 
   // ─── Keyboard avoidance ───────────────────────────────────────────────────

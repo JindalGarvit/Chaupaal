@@ -23,7 +23,10 @@
   }
 
   function formatCommentText(text) {
-    return escapeHtml(text).replace(/@([A-Za-z0-9_.-]{2,30})/g, '<span class="comment-mention">@$1</span>');
+    return escapeHtml(text).replace(
+      /@([A-Za-z0-9_.-]{2,30})/g,
+      '<button type="button" class="comment-mention" data-mention="$1">@$1</button>'
+    );
   }
 
   function buildCommentById(list) {
@@ -189,14 +192,14 @@
               ? `<img src="${escapeHtml(c.user.photoURL)}" alt="">`
               : escapeHtml((c.user && c.user.avatar) || '👤');
         const text = c.deleted ? tt('comment_deleted', 'Comment deleted') : c.text || '';
-        return `<button type="button" class="feed-comment-row" data-comment-id="${escapeHtml(c.id)}">
-          <span class="feed-comment-avatar">${avatar}</span>
-          <span class="feed-comment-body">
-            <span class="feed-comment-name">${typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml(name, c.user) : escapeHtml(name)}</span>
+        return `<div class="feed-comment-row" data-comment-id="${escapeHtml(c.id)}" role="group">
+          <button type="button" class="feed-comment-avatar" aria-label="Open profile">${avatar}</button>
+          <div class="feed-comment-body">
+            <button type="button" class="feed-comment-name">${typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml(name, c.user) : escapeHtml(name)}</button>
             <span class="feed-comment-text">${formatCommentText(text)}</span>
             ${replyHint}
-          </span>
-        </button>`;
+          </div>
+        </div>`;
       })
       .join('');
 
@@ -332,6 +335,26 @@
     root.querySelectorAll('.comment-item').forEach((row) => {
       const comment = (comments || []).find((c) => c.id === row.dataset.cid);
       if (comment && typeof o.onLongPress === 'function') onLongPress(row, () => openActions(comment, row));
+      const author = comment?.user || (comment?.uid ? { uid: comment.uid, name: comment.user?.name } : null);
+      if (author && (author.uid || author.username) && typeof wireIdentityTaps === 'function') {
+        wireIdentityTaps(row, author, {
+          avatarSel: '.comment-avatar',
+          nameSel: '.comment-name',
+          context: o.context || o.surface || 'comment',
+        });
+      }
+    });
+
+    root.querySelectorAll('[data-mention]').forEach((btn) => {
+      if (btn.dataset.mentionWired === '1') return;
+      btn.dataset.mentionWired = '1';
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const handle = btn.dataset.mention;
+        if (typeof tapMentionFromFeed === 'function') await tapMentionFromFeed(handle, { context: o.context || o.surface || 'comment' });
+        else if (typeof openUniversalSearch === 'function') openUniversalSearch('@' + handle);
+      });
     });
   }
 

@@ -548,7 +548,19 @@ function renderProfileModal(){
       await auth.signOut();currentUser=null;userProfile=null;
       showToast(t('profile_see_you'));
     });
-    document.getElementById('ownProfileStoryAvatar')?.addEventListener('click',()=>openProfileStories(currentUser.uid));
+    document.getElementById('ownProfileStoryAvatar')?.addEventListener('click',()=>{
+      const p=userProfile||{};
+      const dp=digitalProfile||{};
+      if(typeof openAvatarLightbox==='function'){
+        openAvatarLightbox({
+          photoURL:dp.photoURL||p.photoURL||p.photoThumb||'',
+          name:dp.displayName||p.name||p.displayName||'You',
+          uid:currentUser?.uid||'',
+          username:dp.username||p.username||'',
+          avatar:p.avatar,
+        });
+      }
+    });
     document.getElementById('toggleAvatarDisplayBtn')?.addEventListener('click',async()=>{
       if(typeof setAvatarDisplayMode!=='function'||typeof getAvatarDisplay!=='function') return;
       const next=getAvatarDisplay(ownProfileForAvatar(userProfile,digitalProfile))==='gift'?'photo':'gift';

@@ -154,11 +154,35 @@
       else if (typeof openArchive === 'function') openArchive();
     });
     if (typeof wireTabNotificationButtons === 'function') wireTabNotificationButtons();
+    const ownAvatar = root?.querySelector?.('[data-own-preview-avatar]');
+    if (ownAvatar && ownAvatar.dataset.lightboxWired !== '1') {
+      ownAvatar.dataset.lightboxWired = '1';
+      if (typeof markIdentityAvatar === 'function') markIdentityAvatar(ownAvatar);
+      ownAvatar.addEventListener('click', (e) => {
+        if (ownAvatar.dataset.suppressClick === '1') {
+          ownAvatar.dataset.suppressClick = '0';
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        const dp = typeof digitalProfile !== 'undefined' ? digitalProfile : {};
+        const up = typeof userProfile !== 'undefined' ? userProfile : {};
+        if (typeof openAvatarLightbox === 'function') {
+          openAvatarLightbox({
+            photoURL: dp.photoURL || up.photoURL || up.photoThumb || '',
+            name: dp.displayName || up.name || up.displayName || 'You',
+            uid: typeof currentUser !== 'undefined' ? currentUser?.uid : '',
+            username: dp.username || up.username || '',
+            avatar: up.avatar,
+          });
+        }
+      });
+    }
   }
 
   /**
-   * Instagram/WhatsApp-style peek sheet → View profile (full).
-   * Use for taps on name/avatar across feeds; long-press can still open actions.
+   * Optional 3-button peek (View / Message / Cancel).
+   * Do not use for Duniya/Peepal feed identity taps — those go straight to profile or DM.
    */
   function openProfilePeek(profile, opts = {}) {
     if (!profile) return;

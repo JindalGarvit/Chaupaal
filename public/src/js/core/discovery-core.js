@@ -410,7 +410,16 @@ function renderDiscoverySection(profiles){
   el.querySelectorAll('.discovery-avatar').forEach(avatar=>{
     const card=avatar.closest('.discovery-card');
     const match=profiles.find(p=>p.user?.uid===card?.dataset.uid);
-    if(match?.user&&typeof bindProfileLongPress==='function') bindProfileLongPress(avatar,match.user);
+    if(!match?.user) return;
+    if(typeof wireIdentityTaps==='function'){
+      wireIdentityTaps(card,match.user,{
+        avatarSel:'.discovery-avatar',
+        nameSel:'.discovery-name',
+        context:'peepal',
+      });
+    } else if(typeof bindProfileLongPress==='function'){
+      bindProfileLongPress(avatar,match.user);
+    }
   });
 
   el.querySelectorAll('.discovery-nudge-btn').forEach(btn=>{
@@ -777,11 +786,23 @@ function renderCompatPeekCard(peek) {
 
 function wireCompatPeekHost(host, peeks) {
   if (!host) return;
+  host.querySelectorAll('.peepal-compat-peek').forEach((card) => {
+    const match = (peeks || []).find((p) => p.user?.uid === card.dataset.uid);
+    if (match?.user && typeof wireIdentityTaps === 'function') {
+      wireIdentityTaps(card, match.user, {
+        avatarSel: '.peepal-compat-peek-avatar',
+        nameSel: '.peepal-compat-peek-name',
+        context: 'peepal',
+      });
+    }
+  });
   host.querySelectorAll('.peepal-compat-peek-view').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const match = (peeks || []).find((p) => p.user?.uid === btn.dataset.uid);
-      if (match?.user && typeof openPublicProfile === 'function') {
+      if (match?.user && typeof tapAvatarFromFeed === 'function') {
+        tapAvatarFromFeed(match.user, { context: 'peepal' });
+      } else if (match?.user && typeof openPublicProfile === 'function') {
         openPublicProfile(match.user, { uid: match.user.uid, username: match.user.username, context: 'peepal' });
       }
     });

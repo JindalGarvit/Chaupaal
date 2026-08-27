@@ -1228,7 +1228,17 @@ function wirePeepalFeedComments(card,q){
     else openPeepalDetail(q,opts);
   };
   card.querySelectorAll('.feed-comment-row').forEach(row=>{
+    const preview=(q._previewComments||q._comments||[]).find((c)=>c.id===row.dataset.commentId);
+    const author=preview?.user||{};
+    if(typeof wireIdentityTaps==='function' && (author.uid||author.username)){
+      wireIdentityTaps(row,author,{
+        avatarSel:'.feed-comment-avatar',
+        nameSel:'.feed-comment-name',
+        context:'peepal',
+      });
+    }
     row.addEventListener('click',(e)=>{
+      if(e.target.closest('.feed-comment-avatar, .feed-comment-name, .cp-identity-avatar, .cp-identity-name')) return;
       e.stopPropagation();
       openSheet({focusCommentId:row.dataset.commentId});
     });
@@ -1407,13 +1417,22 @@ function renderPeepalFeed(){
         navigator.share({title:'Chaupaal',text:String(q.question||'').slice(0,120)}).catch(()=>{});
       }
     });
-    const peepalAvatar=card.querySelector('.peepal-user-avatar');
-    if(peepalAvatar&&q.user?.uid&&q.user.uid!==currentUser?.uid){
-      if(typeof bindProfileLongPress==='function') bindProfileLongPress(peepalAvatar,q.user);
-      peepalAvatar.addEventListener('click',(e)=>{
-        e.stopPropagation();
-        if(typeof openPublicProfile==='function') openPublicProfile(q.user,{uid:q.user.uid,username:q.user.username,context:'peepal'});
+    if(typeof wireIdentityTaps==='function' && q.user){
+      wireIdentityTaps(card,q.user,{
+        avatarSel:'.peepal-user-avatar',
+        nameSel:'.pc-name',
+        context:'peepal',
       });
+    } else {
+      const peepalAvatar=card.querySelector('.peepal-user-avatar');
+      if(peepalAvatar&&q.user?.uid){
+        if(typeof bindProfileLongPress==='function') bindProfileLongPress(peepalAvatar,q.user);
+        peepalAvatar.addEventListener('click',(e)=>{
+          e.stopPropagation();
+          if(typeof tapAvatarFromFeed==='function') tapAvatarFromFeed(q.user,{context:'peepal'});
+          else if(typeof openPublicProfile==='function') openPublicProfile(q.user,{uid:q.user.uid,username:q.user.username,context:'peepal'});
+        });
+      }
     }
     card.querySelectorAll('.peepal-reaction-btn').forEach(btn=>btn.addEventListener('click',(e)=>{
       e.stopPropagation();
@@ -2057,6 +2076,13 @@ function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
     e.stopPropagation();
     if(typeof openShareSheet==='function') openShareSheet(q);
   });
+  if(typeof wireIdentityTaps==='function' && q.user){
+    wireIdentityTaps(detail,q.user,{
+      avatarSel:'.peepal-user-avatar',
+      nameSel:'.peepal-user-name',
+      context:'peepal',
+    });
+  }
   detail.querySelector('[data-say-hi]')?.addEventListener('click',async(e)=>{
     e.preventDefault();
     e.stopPropagation();

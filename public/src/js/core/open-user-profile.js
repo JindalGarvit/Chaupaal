@@ -202,6 +202,117 @@
     return false;
   }
 
+  /** Feed/card avatar tap → full profile (never peek sheet). */
+  function tapAvatarFromFeed(profile, opts) {
+    const o = opts || {};
+    const p = profile && typeof profile === 'object' ? profile : { uid: profile };
+    const uid = String(o.uid || p.uid || p.id || '').trim();
+    const username = o.username || p.username || '';
+    if (!uid && !username) return;
+    if (typeof openUserProfile === 'function') {
+      openUserProfile(p, { uid, username, context: o.context || 'third_person' });
+      return;
+    }
+    if (typeof openPublicProfile === 'function') {
+      openPublicProfile(p, { uid, username, context: o.context || 'third_person' });
+    }
+  }
+
+  /** Feed/card display name / @username tap → 1:1 DM. */
+  function tapNameFromFeed(profile) {
+    const p = profile && typeof profile === 'object' ? profile : { uid: profile };
+    if (typeof openProfileMessage === 'function') return openProfileMessage(p);
+    return null;
+  }
+
+  /** Resolve @handle then DM (fallback search if unresolved). */
+  async function tapMentionFromFeed(handle, opts) {
+    const raw = String(handle || '')
+      .replace(/^@/, '')
+      .trim();
+    if (!raw) return;
+    const o = opts || {};
+    try {
+      if (typeof searchUsersProvider === 'function') {
+        const rows = await searchUsersProvider(raw, { limit: 1 });
+        const u = rows?.[0];
+        if (u?.uid) {
+          await tapNameFromFeed(u);
+          return;
+        }
+      }
+    } catch (e) {}
+    if (typeof openUniversalSearch === 'function') openUniversalSearch('@' + raw);
+    else if (typeof showToast === 'function') showToast('@' + raw);
+  }
+
+  function markIdentityAvatar(el) {
+    if (!el) return;
+    el.classList.add('cp-identity-avatar');
+    el.style.userSelect = 'none';
+    el.style.webkitUserSelect = 'none';
+    el.style.webkitTouchCallout = 'none';
+  }
+
+  /**
+   * Wire avatar → profile, name → DM, long-press options on avatar only.
+   * @param {Element} root
+   * @param {object} profile
+   * @param {{ avatarSel?: string|Element, nameSel?: string, context?: string, longPress?: boolean }} [opts]
+   */
+  function wireIdentityTaps(root, profile, opts) {
+    if (!root || !profile) return;
+    const o = opts || {};
+    const context = o.context || 'third_person';
+    const longPress = o.longPress !== false;
+    const avatar =
+      typeof o.avatarSel === 'string'
+        ? root.querySelector(o.avatarSel)
+        : o.avatarSel || null;
+    const nameNodes =
+      typeof o.nameSel === 'string'
+        ? [...root.querySelectorAll(o.nameSel)]
+        : o.nameSel
+          ? [o.nameSel]
+          : [];
+
+    if (avatar && avatar.dataset.identityTapWired !== '1') {
+      avatar.dataset.identityTapWired = '1';
+      markIdentityAvatar(avatar);
+      if (
+        longPress &&
+        typeof bindProfileLongPress === 'function' &&
+        profile.uid &&
+        !(typeof isSelfUid === 'function' ? isSelfUid(profile.uid) : profile.uid === currentUser?.uid)
+      ) {
+        bindProfileLongPress(avatar, profile);
+      }
+      avatar.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (avatar.dataset.suppressClick === '1') {
+          avatar.dataset.suppressClick = '0';
+          return;
+        }
+        tapAvatarFromFeed(profile, { context });
+      });
+    } else if (avatar) {
+      markIdentityAvatar(avatar);
+    }
+
+    nameNodes.forEach((nameEl) => {
+      if (!nameEl || nameEl.dataset.identityTapWired === '1') return;
+      nameEl.dataset.identityTapWired = '1';
+      nameEl.classList.add('cp-identity-name');
+      nameEl.style.cursor = 'pointer';
+      nameEl.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        tapNameFromFeed(profile);
+      });
+    });
+  }
+
   window.isSelfUid = isSelfUid;
   window.selfDisplayName = selfDisplayName;
   window.selfListLabel = selfListLabel;
@@ -211,4 +322,9 @@
   window.savePendingProfileMessage = savePendingProfileMessage;
   window.consumePendingProfileMessage = consumePendingProfileMessage;
   window.resumePendingProfileMessage = resumePendingProfileMessage;
+  window.tapAvatarFromFeed = tapAvatarFromFeed;
+  window.tapNameFromFeed = tapNameFromFeed;
+  window.tapMentionFromFeed = tapMentionFromFeed;
+  window.wireIdentityTaps = wireIdentityTaps;
+  window.markIdentityAvatar = markIdentityAvatar;
 })();
