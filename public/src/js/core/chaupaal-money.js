@@ -425,6 +425,10 @@
     showInsufficientFunds,
   };
 
+  window.openProUpsell = function openProUpsell() {
+    openMembership();
+  };
+
   window.ChaupaalCommerce = {
     openMoney: openAccount,
     openMembership,

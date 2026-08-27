@@ -1,9 +1,19 @@
 /* ===== DUNIYA ===== */
-.duniya-screen{flex:1;overflow-y:auto;display:flex;flex-direction:column;}
+.duniya-screen{flex:1;overflow-y:auto;display:flex;flex-direction:column;position:relative;}
 .duniya-screen::-webkit-scrollbar{display:none;}
 .duniya-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px 10px;background:var(--white);border-bottom:1px solid var(--line);flex-shrink:0;}
 .duniya-title{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:20px;}
-.duniya-stories-row{display:flex;gap:10px;padding:12px 16px;overflow-x:auto;flex-shrink:0;background:var(--white);border-bottom:1px solid var(--line);}
+.duniya-stories-row{display:flex;gap:12px;padding:14px 18px 22px;overflow-x:auto;overflow-y:hidden;flex-shrink:0;background:var(--white);border-bottom:1px solid var(--line);}
+.duniya-stories-row .duniya-story-item[data-self]{padding-right:8px;}
+.duniya-create-fab{
+  position:absolute;right:16px;bottom:calc(var(--tab-h,64px) + env(safe-area-inset-bottom,0px) + 16px);
+  z-index:8;width:52px;height:52px;border-radius:50%;border:0;cursor:pointer;
+  background:var(--brand-red,#E63946);color:#fff;font:700 28px/1 'Space Grotesk',sans-serif;
+  box-shadow:0 8px 20px rgba(230,57,70,.35);
+}
+#panel-duniya{position:relative;}
+#panel-duniya.is-lehar .duniya-create-fab,
+#panel-duniya.is-prasidha .duniya-create-fab{display:none;}
 .duniya-stories-row::-webkit-scrollbar{display:none;}
 .duniya-story-item{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;flex-shrink:0;}
 .duniya-story-ring{width:58px;height:58px;border-radius:50%;background:linear-gradient(45deg,#E63946,#8134AF);padding:2.5px;}
@@ -29,6 +39,8 @@
 .duniya-post-media[data-has-ratio="1"] video{height:100%;max-height:none;}
 .duniya-post-media img{width:100%;display:block;max-height:500px;object-fit:cover;}
 .duniya-post-media video{width:100%;display:block;max-height:500px;object-fit:cover;background:#000;}
+.duniya-post-media--reel{aspect-ratio:9/16;max-height:min(80vh,640px);margin:0 auto;background:#000;width:100%;}
+.duniya-post-media--reel video{max-height:min(80vh,640px);object-fit:cover;width:100%;}
 .duniya-expand-media{
   position:absolute;right:10px;top:10px;z-index:2;
   width:44px;height:44px;border:1px solid rgba(255,255,255,.5);

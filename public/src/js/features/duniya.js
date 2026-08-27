@@ -416,7 +416,8 @@ function createDuniyaPost(post, {variant='list'}={}){
   const w=Number(first?.width||post.mediaWidth||post.width)||0;
   const h=Number(first?.height||post.mediaHeight||post.height)||0;
   const hasMediaSize=w>0&&h>0;
-  const mediaWrapAttrs=hasMediaSize?` data-has-ratio="1" class="duniya-post-media duniya-post-media--ratio" style="--media-ratio:${w}/${h};max-height:${duniyaStageMaxH()}px;"`:` class="duniya-post-media"`;
+  const isReel=first&&first.type==='video'&&h>0&&w>0&&h/w>=1.2;
+  const mediaWrapAttrs=hasMediaSize?` data-has-ratio="1" class="duniya-post-media duniya-post-media--ratio${isReel?' duniya-post-media--reel':''}" style="--media-ratio:${isReel?'9/16':`${w}/${h}`};max-height:${duniyaStageMaxH()}px;"`:` class="duniya-post-media${isReel?' duniya-post-media--reel':''}"`;
   let mediaBlock='';
   if(!slides.length){
     mediaBlock=`<div class="duniya-post-text-hero">${duniyaEsc(post.caption||'')}</div>`;
@@ -1633,6 +1634,7 @@ function toggleOpenToMeet(){
     document.getElementById('prasidhaFeed')?.classList.toggle('hidden', mode !== 'prasidha');
     const panel = document.getElementById('panel-duniya') || document.getElementById('duniyaScreen');
     panel?.classList.toggle('is-lehar', mode === 'lehar');
+    panel?.classList.toggle('is-prasidha', mode === 'prasidha');
     if (panel) {
       [...panel.classList].filter((c) => c.startsWith('room-kit')).forEach((c) => panel.classList.remove(c));
       panel.classList.add('room-kit', 'room-kit--water', `room-kit--${mode}`);

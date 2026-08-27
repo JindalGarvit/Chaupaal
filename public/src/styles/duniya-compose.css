@@ -71,6 +71,12 @@
   gap: 10px;
   margin-bottom: 16px;
 }
+.dc-advanced-link{
+  display:block;width:100%;margin-top:8px;border:0;background:none;color:var(--muted);
+  font:700 12px 'Space Grotesk',sans-serif;cursor:pointer;text-align:left;padding:8px 0;
+}
+.dc-tile--quiet{min-height:64px;opacity:.9;}
+.dc-crop-stage--reel{max-width:min(100%,420px);background:#000;border-radius:16px;overflow:hidden;}
 
 .dc-tile {
   display: flex;

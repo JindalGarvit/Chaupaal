@@ -482,19 +482,18 @@
       <div class="dc-picker-tiles">
         <button type="button" class="dc-tile" data-act="gallery"><span aria-hidden="true">🖼</span>Gallery</button>
         <button type="button" class="dc-tile" data-act="camera"><span aria-hidden="true">📷</span>Camera</button>
-        <button type="button" class="dc-tile" data-act="text"><span aria-hidden="true">Aa</span>Text</button>
         <button type="button" class="dc-tile" data-act="gif"><span aria-hidden="true">GIF</span>GIF</button>
       </div>
       <div class="dc-filmstrip" data-dc-strip></div>
-      <p class="dc-hint">Up to 10 photos, videos, or GIFs. Camera is a control here — gallery opens first.</p>
+      <p class="dc-hint">Photos, videos, and carousels — up to 10 slides. Cancel the system picker to stay here.</p>
+      <button type="button" class="dc-advanced-link" data-act="more">More options</button>
+      <div class="dc-advanced hidden" data-dc-advanced>
+        <button type="button" class="dc-tile dc-tile--quiet" data-act="text"><span aria-hidden="true">Aa</span>Text only</button>
+      </div>
     </div>`;
     renderFilmstrip(el);
     el.querySelector('[data-act="gallery"]').addEventListener('click', async () => {
       const files = await pickFiles({ multiple: true });
-      if (!files.length && !state.slides.length) {
-        closeComposer();
-        return;
-      }
       addFiles(files);
       if (state.slides.length) showCrop();
     });
@@ -502,6 +501,9 @@
       const files = await pickFiles({ multiple: false, capture: true });
       addFiles(files);
       if (state.slides.length) showCrop();
+    });
+    el.querySelector('[data-act="more"]')?.addEventListener('click', () => {
+      el.querySelector('[data-dc-advanced]')?.classList.toggle('hidden');
     });
     el.querySelector('[data-act="text"]').addEventListener('click', () => {
       state.mode = 'text';
@@ -591,9 +593,10 @@
     const src = slide.localUrl || slide.gifUrl || slide.remote?.media || '';
     const el = body();
     const aspect = slide.width && slide.height ? slide.width / slide.height : 1;
-    const clamped = Math.max(0.56, Math.min(1.8, aspect));
+    const isReel = slide.type === 'video' && slide.height && slide.width && slide.height / slide.width >= 1.2;
+    const clamped = isReel ? 0.5625 : Math.max(0.56, Math.min(1.8, aspect));
     el.innerHTML = `<div class="dc-crop">
-      <div class="dc-crop-stage" data-dc-stage style="aspect-ratio:${clamped};max-height:62vh;width:100%;margin:0 auto;">
+      <div class="dc-crop-stage${isReel ? ' dc-crop-stage--reel' : ''}" data-dc-stage style="aspect-ratio:${clamped};max-height:${isReel ? '72vh' : '62vh'};width:100%;margin:0 auto;">
         ${
           slide.type === 'video'
             ? `<video class="dc-crop-img" src="${esc(src)}" playsinline ${slide.muted ? 'muted' : ''} data-dc-media></video>`
@@ -1330,15 +1333,7 @@
     if (state.caption || state.slides.length) {
       if (state.slides.length) showCrop();
       else showExtras();
-      return;
     }
-    const files = await pickFiles({ multiple: true });
-    if (!files.length && !state.slides.length) {
-      closeComposer();
-      return;
-    }
-    addFiles(files);
-    if (state.slides.length) showCrop();
   }
 
   function hydrateFromPost(post) {

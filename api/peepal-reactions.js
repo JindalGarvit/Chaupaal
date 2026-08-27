@@ -493,13 +493,102 @@ module.exports = async function handler(req, res) {
     }
 
     // Record a response against the active audience segment (cascade tracking)
-    if (body.action === 'record_segment_response') {
+    if (body.action === 'record_segment_response' || body.action === 'record_peepal_answer' || body.action === 'submit_form' || body.action === 'list_form_responses') {
       const postId = cleanPostId(body.postId);
       if (!postId) return sendError(res, 400, 'VALIDATION_ERROR', 'postId required');
       const ref = db.collection('peepal').doc(postId);
       const snap = await ref.get();
       if (!snap.exists) return sendError(res, 404, 'NOT_FOUND', 'Post not found');
       const data = snap.data() || {};
+      if (data.deleted === true) return sendError(res, 404, 'NOT_FOUND', 'Post not found');
+
+      if (body.action === 'list_form_responses') {
+        if (data.uid !== user.uid) return sendError(res, 403, 'FORBIDDEN', 'Only the owner can view responses');
+        const rs = await ref.collection('formResponses').limit(200).get();
+        const items = rs.docs.map((d) => ({ id: d.id, ...(d.data() || {}) }));
+        return sendSuccess(res, { items, formSchema: data.formSchema || null, question: data.question || '' });
+      }
+
+      const capRaw = data.responseCap;
+      const capN =
+        capRaw == null || capRaw === 'unlimited' || capRaw === 'algorithm' || capRaw === ''
+          ? null
+          : Number(capRaw);
+      const total = Number(data.totalResponses || 0);
+      if (Number.isFinite(capN) && capN > 0 && total >= capN) {
+        return sendError(res, 409, 'CAP_REACHED', 'This discussion is no longer collecting responses');
+      }
+
+      if (body.action === 'submit_form') {
+        if (data.format !== 'form') return sendError(res, 400, 'VALIDATION_ERROR', 'Not a form');
+        const existing = await ref.collection('formResponses').doc(user.uid).get();
+        if (existing.exists) return sendError(res, 409, 'ALREADY_ANSWERED', 'You already responded');
+        const questions = Array.isArray(data.formSchema?.questions) ? data.formSchema.questions : [];
+        const answers = body.answers && typeof body.answers === 'object' ? body.answers : {};
+        for (const q of questions) {
+          if (!q.required) continue;
+          const v = answers[q.id];
+          const empty = v == null || v === '' || (Array.isArray(v) && !v.length);
+          if (empty) return sendError(res, 400, 'VALIDATION_ERROR', 'Required questions missing');
+        }
+        await ref.collection('formResponses').doc(user.uid).set({
+          uid: user.uid,
+          answers,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        let segments = data.audienceSegments;
+        let advanced = false;
+        if (Array.isArray(segments) && segments.length) {
+          const result = recordSegmentResponse(segments);
+          segments = result.segments;
+          advanced = !!result.advanced;
+        }
+        const stillActive = Array.isArray(segments) ? segments.some((s) => s.status === 'active') : false;
+        await ref.set(
+          {
+            totalResponses: admin.firestore.FieldValue.increment(1),
+            audienceSegments: segments || data.audienceSegments || [],
+            segmentDistributionActive: stillActive,
+            activeSegmentIndex: Array.isArray(segments) ? segments.findIndex((s) => s.status === 'active') : 0,
+            segmentUpdatedAt: Date.now(),
+          },
+          { merge: true }
+        );
+        return sendSuccess(res, { ok: true, advanced });
+      }
+
+      if (body.action === 'record_peepal_answer') {
+        const existing = await ref.collection('answers').doc(user.uid).get();
+        if (existing.exists) return sendError(res, 409, 'ALREADY_ANSWERED', 'You already responded');
+        const optionIndex = Number.isFinite(Number(body.optionIndex)) ? Number(body.optionIndex) : null;
+        const text = String(body.text || '').slice(0, 2000);
+        await ref.collection('answers').doc(user.uid).set({
+          uid: user.uid,
+          optionIndex,
+          text,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        const patch = {
+          totalResponses: admin.firestore.FieldValue.increment(1),
+          segmentUpdatedAt: Date.now(),
+        };
+        if (optionIndex != null && Array.isArray(data.responses)) {
+          const responses = data.responses.slice();
+          if (optionIndex >= 0 && optionIndex < responses.length) {
+            responses[optionIndex] = Number(responses[optionIndex] || 0) + 1;
+            patch.responses = responses;
+          }
+        }
+        if (Array.isArray(data.audienceSegments) && data.audienceSegments.length) {
+          const result = recordSegmentResponse(data.audienceSegments);
+          patch.audienceSegments = result.segments;
+          patch.segmentDistributionActive = result.segments.some((s) => s.status === 'active');
+          patch.activeSegmentIndex = result.segments.findIndex((s) => s.status === 'active');
+        }
+        await ref.set(patch, { merge: true });
+        return sendSuccess(res, { ok: true });
+      }
+
       if (!Array.isArray(data.audienceSegments) || !data.audienceSegments.length) {
         return sendSuccess(res, { ok: true, skipped: true });
       }

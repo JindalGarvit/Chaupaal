@@ -330,22 +330,27 @@
     const myAvatar = me.photoURL || currentUser.photoURL || '';
     const first = (me.name || 'You').split(' ')[0];
 
+    const selfThumb =
+      selfHas && (own[0].thumb || own[0].media)
+        ? `<img src="${esc(own[0].thumb || own[0].media)}" alt="">`
+        : typeof renderUserAvatarHtml === 'function'
+          ? renderUserAvatarHtml(
+              typeof ownProfileForAvatar === 'function'
+                ? ownProfileForAvatar(me, typeof digitalProfile !== 'undefined' ? digitalProfile : {})
+                : { ...me, uid: currentUser.uid, photoURL: myAvatar },
+              { decorative: true }
+            )
+          : myAvatar
+            ? `<img src="${esc(myAvatar)}" alt="">`
+            : `<span class="duniya-story-fallback">＋</span>`;
     const selfHtml = `
       <div class="duniya-story-item ${selfHas ? 'is-own' : 'is-empty'}" data-self="1">
-        <div class="duniya-story-ring">
-          <div class="duniya-story-avatar" style="${selfHas ? '' : 'border:2px dashed var(--muted);'}">
-            ${
-              selfHas && (own[0].thumb || own[0].media)
-                ? `<img src="${esc(own[0].thumb || own[0].media)}" alt="">`
-                : typeof renderUserAvatarHtml==='function'
-                  ? renderUserAvatarHtml(typeof ownProfileForAvatar==='function'?ownProfileForAvatar(me,typeof digitalProfile!=='undefined'?digitalProfile:{}):{...me,uid:currentUser.uid,photoURL:myAvatar},{decorative:true})
-                  : myAvatar
-                    ? `<img src="${esc(myAvatar)}" alt="">`
-                    : `<span style="font-size:24px;color:var(--muted);">＋</span>`
-            }
+        <div class="duniya-story-ring-wrap">
+          <div class="duniya-story-ring">
+            <div class="duniya-story-avatar" style="${selfHas ? '' : 'border:2px dashed var(--muted);'}">${selfThumb}</div>
           </div>
+          <button type="button" class="duniya-story-add-badge" data-add aria-label="${esc(tt('duniya_add_story', 'Add story'))}">＋</button>
         </div>
-        ${selfHas ? `<button type="button" class="duniya-story-add-badge" data-add aria-label="${esc(tt('duniya_add_story', 'Add story'))}">＋</button>` : ''}
         <div class="duniya-story-name">${esc(selfHas ? first : selfName)}</div>
       </div>`;
 

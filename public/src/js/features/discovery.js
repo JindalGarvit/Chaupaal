@@ -594,21 +594,18 @@ function openPeepalAskSheet(editPost = null){
     <div class="peepal-ask-header">
       <button id="closeAsk" aria-label="Close" style="background:var(--surface-sunken,var(--cream));border:none;border-radius:999px;cursor:pointer;padding:8px;color:var(--ink);width:36px;height:36px;display:flex;align-items:center;justify-content:center;">${typeof iconHtml==='function' ? iconHtml('x',{size:18}) : '✕'}</button>
       <div class="peepal-ask-title">${isEdit ? 'Edit discussion' : 'Discuss'}</div>
-      <button id="peepalPublishBtn" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:8px 20px;font:700 14px 'Space Grotesk',sans-serif;min-width:60px;cursor:pointer;">${isEdit ? 'Save' : 'Post'}</button>
+      <button id="peepalPublishBtn" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:8px 20px;font:700 14px 'Space Grotesk',sans-serif;min-width:60px;cursor:pointer;">${isEdit ? 'Save' : 'Share'}</button>
     </div>
     <div class="peepal-ask-body">
       <div id="anonToggleRow" style="background:var(--line);border:2px solid var(--line);border-radius:14px;padding:12px;margin-bottom:16px;display:${isEdit ? 'none' : 'flex'};align-items:center;gap:12px;opacity:0.5;">
         <div style="flex:1;">
-          <div style="font-weight:700;font-size:14px;">🎭 Post anonymously</div>
+          <div style="font-weight:700;font-size:14px;">🎭 Share anonymously</div>
           <div id="anonToggleHint" style="font-size:11px;color:var(--muted);">Anonymous posts don't reveal your identity</div>
         </div>
         <label class="switch" id="anonToggleLabel" style="pointer-events:none;"><input type="checkbox" id="anonToggle" disabled><span class="slider"></span></label>
       </div>
       <div style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;">
-        ${[{id:'open',label:'💬 Open'},{id:'poll',label:'📊 Poll'}].map((f,i)=>`<button class="peepal-format-chip${i===0?' active':''}" data-fmt="${f.id}" style="padding:8px 14px;border-radius:999px;border:2px solid ${i===0?'var(--red)':'var(--line)'};background:${i===0?'rgba(230,57,70,0.08)':'var(--white)'};font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;color:${i===0?'var(--red)':'var(--ink)'};">${f.label}</button>`).join('')}
-      </div>
-      <div id="peepalAskCatRow" style="display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;align-items:center;">
-        <span style="font-size:11px;font-weight:700;color:var(--muted);flex-shrink:0;">Topic</span>
+        ${[{id:'open',label:'Open'},{id:'poll',label:'Poll'},{id:'form',label:'Form'}].map((f,i)=>`<button class="peepal-format-chip${i===0?' active':''}" data-fmt="${f.id}" style="padding:8px 14px;border-radius:999px;border:2px solid ${i===0?'var(--red)':'var(--line)'};background:${i===0?'rgba(230,57,70,0.08)':'var(--white)'};font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;color:${i===0?'var(--red)':'var(--ink)'};">${f.label}</button>`).join('')}
       </div>
       <textarea id="peepalQText" placeholder="What's on your mind?" style="width:100%;min-height:100px;border:2px solid var(--line);border-radius:14px;padding:12px;font-family:Inter,sans-serif;font-size:15px;outline:none;resize:none;box-sizing:border-box;background:var(--cream);"></textarea>
       <div class="peepal-compose-toolbar" id="peepalComposeToolbar">
@@ -624,33 +621,43 @@ function openPeepalAskSheet(editPost = null){
       <div id="mcqOptions" style="margin-top:10px;display:none;">
         ${[1,2,3,4].map(i=>`<input id="mcqOpt${i}" placeholder="Option ${i}${i>2?' (optional)':''}" style="width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;outline:none;margin-bottom:8px;box-sizing:border-box;background:var(--white);">`).join('')}
       </div>
-      <div style="margin-top:8px;">
+      <div id="peepalFormBuilder" class="peepal-form-builder" style="display:none;margin-top:10px;">
+        <div id="peepalFormQs"></div>
+        <button type="button" class="peepal-form-add" id="peepalFormAddQ">+ Add question</button>
+      </div>
+      <div id="peepalAudienceRow" style="margin-top:8px;">
         <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Audience</div>
         <select id="peepalAudience" style="width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;background:var(--white);outline:none;">
-          <option value="everyone">🌍 Everyone</option>
-          <option value="friends">👥 Friends only</option>
-          <option value="ai">🤖 AI decides</option>
-          <option value="save_only">💾 Save without posting</option>
+          <option value="everyone">Everyone</option>
+          <option value="followers">Followers only</option>
+          <option value="custom">Custom</option>
+          <option value="save_only">Save without posting</option>
         </select>
+        <p id="peepalAudienceHint" class="peepal-audience-hint">Everyone: ranked for people who may care — followers get a boost, not a wall.</p>
+        <textarea id="peepalCustomAudience" class="peepal-custom-audience" hidden rows="2" placeholder="Describe who should see this (e.g. Bangalore designers into startups)"></textarea>
+        <div id="peepalMultiSeg" class="peepal-multi-seg" hidden></div>
       </div>
       <!-- Response cap -->
       <div style="margin-top:12px;">
         <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
                     letter-spacing:0.05em;margin-bottom:6px;">Responses wanted</div>
-        <div id="peepalResponseCapRow" style="display:flex;gap:8px;flex-wrap:wrap;">
+        <div id="peepalResponseCapRow" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
           <button type="button" class="peepal-cap-btn active" data-cap="10">10</button>
           <button type="button" class="peepal-cap-btn" data-cap="25">25</button>
           <button type="button" class="peepal-cap-btn peepal-cap-btn--free-max" data-cap="50">50</button>
+          <input type="number" id="peepalCapInput" min="1" max="50" value="10" inputmode="numeric" class="peepal-cap-input" aria-label="Response cap">
           <button type="button" class="peepal-cap-btn peepal-cap-btn--pro" data-cap="100"
-                  title="Pro feature">100 ✦</button>
+                  title="Pradhan / Sarpanch">100 ✦</button>
           <button type="button" class="peepal-cap-btn peepal-cap-btn--pro" data-cap="500"
-                  title="Pro feature">500 ✦</button>
+                  title="Pradhan / Sarpanch">500 ✦</button>
           <button type="button" class="peepal-cap-btn peepal-cap-btn--pro" data-cap="unlimited"
-                  title="Pro feature">Unlimited ✦</button>
+                  title="Pradhan / Sarpanch">Unlimited ✦</button>
         </div>
         <div id="peepalCapHint" style="font-size:11px;color:var(--muted);margin-top:5px;line-height:1.4;">
-          Free posts get up to 50 responses. Higher caps are a Pro feature.
+          Free posts get up to 50 responses.
         </div>
+        <div id="peepalCapNudge" class="peepal-cap-nudge" hidden></div>
+        <p id="peepalPremiumNudge" class="peepal-premium-nudge">Pradhan / Sarpanch can split responses across several audiences.</p>
       </div>
       <input id="peepalPhotoInput" type="file" accept="image/*" hidden>
       <input id="peepalVideoInput" type="file" accept="video/*" hidden>
@@ -659,49 +666,194 @@ function openPeepalAskSheet(editPost = null){
     </div>
   `;
   document.querySelector('.device').appendChild(sheet);
+  const shell = document.getElementById('peepalAskSheet');
+  if (shell && shell !== sheet) {
+    shell.id = 'peepalAskSheetShell';
+    shell.classList.add('hidden');
+  }
+  sheet.id = 'peepalAskSheet';
   requestAnimationFrame(()=>sheet.classList.add('open'));
   if(typeof pushNavLayer==='function'){
     sheet.dataset.navManaged='1';
     pushNavLayer(sheet,()=>{ sheet.classList.remove('open'); setTimeout(()=>sheet.remove(),350); });
   }
 
-  // Topic chips from CategoryPrefs (same manage sheet as Akhbaar)
   let peepalAskCat = '';
-  try {
-    const catRow = sheet.querySelector('#peepalAskCatRow');
-    if (catRow && typeof CategoryPrefs !== 'undefined') {
-      const cats = (CategoryPrefs.getOrderedCategories?.() || [])
-        .filter((c) => c.name && c.name !== 'all' && c.name !== 'saathi')
-        .slice(0, 10);
-      cats.forEach((c) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'peepal-ask-cat-chip';
-        btn.dataset.cat = c.name;
-        btn.textContent = `${c.emoji || '✨'} ${c.name}`;
-        btn.style.cssText =
-          'padding:6px 11px;border-radius:999px;border:1.5px solid var(--line);background:var(--white);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;';
-        btn.addEventListener('click', () => {
-          peepalAskCat = peepalAskCat === c.name ? '' : c.name;
-          catRow.querySelectorAll('.peepal-ask-cat-chip').forEach((b) => {
-            const on = b.dataset.cat === peepalAskCat;
-            b.style.borderColor = on ? 'var(--red)' : 'var(--line)';
-            b.style.color = on ? 'var(--red)' : 'var(--ink)';
-            b.style.background = on ? 'rgba(230,57,70,0.08)' : 'var(--white)';
-          });
-          if (peepalAskCat) CategoryPrefs.touchCategory?.(peepalAskCat);
-        });
-        catRow.appendChild(btn);
-      });
-      const manage = document.createElement('button');
-      manage.type = 'button';
-      manage.textContent = 'Manage';
-      manage.style.cssText =
-        'padding:6px 10px;border:none;background:none;color:var(--red);font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0;';
-      manage.addEventListener('click', () => CategoryPrefs.openCategoryManageSheet?.());
-      catRow.appendChild(manage);
+  let formQuestions = [
+    { id: 'q1', type: 'short', prompt: '', required: true, options: ['', ''] },
+  ];
+  let extraSegments = [];
+
+  function isPremiumPeepal() {
+    return typeof PeepalAudience?.isPremiumPeepal === 'function' ? PeepalAudience.isPremiumPeepal() : false;
+  }
+
+  function syncAnonAudience() {
+    const on = !!sheet.querySelector('#anonToggle')?.checked;
+    const row = sheet.querySelector('#peepalAudienceRow');
+    if (row) row.hidden = on;
+  }
+
+  function syncAudienceHint() {
+    const val = sheet.querySelector('#peepalAudience')?.value || 'everyone';
+    const hint = sheet.querySelector('#peepalAudienceHint');
+    const custom = sheet.querySelector('#peepalCustomAudience');
+    if (custom) custom.hidden = val !== 'custom';
+    if (hint) {
+      hint.textContent =
+        val === 'followers'
+          ? 'Only people who follow you.'
+          : val === 'custom'
+            ? 'We’ll match this description as best we can — Share still works if it’s vague.'
+            : val === 'save_only'
+              ? 'Saved to your archive, not the feed.'
+              : 'Everyone: ranked for people who may care — followers get a boost, not a wall.';
     }
-  } catch (e) {}
+  }
+
+  function renderFormBuilder() {
+    const host = sheet.querySelector('#peepalFormQs');
+    if (!host) return;
+    host.innerHTML = formQuestions
+      .map((q, i) => {
+        const opts =
+          q.type === 'choice' || q.type === 'checks'
+            ? (q.options || ['', ''])
+                .map(
+                  (o, oi) =>
+                    `<input class="peepal-form-opt" data-qi="${i}" data-oi="${oi}" value="${String(o || '').replace(/"/g, '&quot;')}" placeholder="Option ${oi + 1}">`
+                )
+                .join('') +
+              `<button type="button" class="peepal-form-addopt" data-qi="${i}">+ option</button>`
+            : '';
+        return `<div class="peepal-form-q" data-qi="${i}">
+          <div class="peepal-form-q-head">
+            <select data-qtype="${i}">
+              <option value="short"${q.type === 'short' ? ' selected' : ''}>Short text</option>
+              <option value="long"${q.type === 'long' ? ' selected' : ''}>Long text</option>
+              <option value="choice"${q.type === 'choice' ? ' selected' : ''}>Multiple choice</option>
+              <option value="checks"${q.type === 'checks' ? ' selected' : ''}>Checkboxes</option>
+            </select>
+            <label><input type="checkbox" data-qreq="${i}" ${q.required ? 'checked' : ''}> Required</label>
+            <button type="button" data-qdel="${i}" ${formQuestions.length < 2 ? 'disabled' : ''}>Delete</button>
+          </div>
+          <input data-qprompt="${i}" placeholder="Question ${i + 1}" value="${String(q.prompt || '').replace(/"/g, '&quot;')}">
+          ${opts}
+        </div>`;
+      })
+      .join('');
+    host.querySelectorAll('[data-qtype]').forEach((sel) => {
+      sel.addEventListener('change', () => {
+        const i = Number(sel.getAttribute('data-qtype'));
+        formQuestions[i].type = sel.value;
+        if ((sel.value === 'choice' || sel.value === 'checks') && !(formQuestions[i].options || []).length) {
+          formQuestions[i].options = ['', ''];
+        }
+        renderFormBuilder();
+      });
+    });
+    host.querySelectorAll('[data-qreq]').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        formQuestions[Number(cb.getAttribute('data-qreq'))].required = cb.checked;
+      });
+    });
+    host.querySelectorAll('[data-qprompt]').forEach((inp) => {
+      inp.addEventListener('input', () => {
+        formQuestions[Number(inp.getAttribute('data-qprompt'))].prompt = inp.value;
+      });
+    });
+    host.querySelectorAll('.peepal-form-opt').forEach((inp) => {
+      inp.addEventListener('input', () => {
+        const qi = Number(inp.dataset.qi);
+        const oi = Number(inp.dataset.oi);
+        if (!formQuestions[qi].options) formQuestions[qi].options = [];
+        formQuestions[qi].options[oi] = inp.value;
+      });
+    });
+    host.querySelectorAll('.peepal-form-addopt').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const i = Number(btn.dataset.qi);
+        formQuestions[i].options = (formQuestions[i].options || []).concat(['']);
+        renderFormBuilder();
+      });
+    });
+    host.querySelectorAll('[data-qdel]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const i = Number(btn.getAttribute('data-qdel'));
+        if (formQuestions.length < 2) return;
+        formQuestions.splice(i, 1);
+        renderFormBuilder();
+      });
+    });
+  }
+
+  sheet.querySelector('#peepalFormAddQ')?.addEventListener('click', () => {
+    formQuestions.push({
+      id: 'q' + (formQuestions.length + 1) + '_' + Date.now().toString(36),
+      type: 'short',
+      prompt: '',
+      required: false,
+      options: ['', ''],
+    });
+    renderFormBuilder();
+  });
+  renderFormBuilder();
+
+  const premiumNudge = sheet.querySelector('#peepalPremiumNudge');
+  if (premiumNudge) premiumNudge.hidden = isPremiumPeepal();
+
+  function renderMultiSeg() {
+    const host = sheet.querySelector('#peepalMultiSeg');
+    if (!host) return;
+    if (!isPremiumPeepal()) {
+      host.hidden = true;
+      return;
+    }
+    host.hidden = false;
+    host.innerHTML =
+      extraSegments
+        .map(
+          (s, i) =>
+            `<div class="peepal-seg-row">
+              <select data-seg-aud="${i}">
+                <option value="everyone"${s.audience === 'everyone' ? ' selected' : ''}>Everyone</option>
+                <option value="followers"${s.audience === 'followers' ? ' selected' : ''}>Followers</option>
+                <option value="custom"${s.audience === 'custom' ? ' selected' : ''}>Custom</option>
+              </select>
+              <input data-seg-cap="${i}" type="number" min="1" value="${s.cap || 10}" style="width:64px;">
+              ${s.audience === 'custom' ? `<input data-seg-txt="${i}" placeholder="Who?" value="${String(s.customAudienceText || '').replace(/"/g, '&quot;')}">` : ''}
+              <button type="button" data-seg-del="${i}">×</button>
+            </div>`
+        )
+        .join('') + `<button type="button" id="peepalAddSeg">Add audience segment</button>`;
+    host.querySelector('#peepalAddSeg')?.addEventListener('click', () => {
+      extraSegments.push({ audience: 'followers', cap: 10, customAudienceText: '' });
+      renderMultiSeg();
+    });
+    host.querySelectorAll('[data-seg-aud]').forEach((sel) => {
+      sel.addEventListener('change', () => {
+        extraSegments[Number(sel.getAttribute('data-seg-aud'))].audience = sel.value;
+        renderMultiSeg();
+      });
+    });
+    host.querySelectorAll('[data-seg-cap]').forEach((inp) => {
+      inp.addEventListener('input', () => {
+        extraSegments[Number(inp.getAttribute('data-seg-cap'))].cap = Number(inp.value) || 10;
+      });
+    });
+    host.querySelectorAll('[data-seg-txt]').forEach((inp) => {
+      inp.addEventListener('input', () => {
+        extraSegments[Number(inp.getAttribute('data-seg-txt'))].customAudienceText = inp.value;
+      });
+    });
+    host.querySelectorAll('[data-seg-del]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        extraSegments.splice(Number(btn.getAttribute('data-seg-del')), 1);
+        renderMultiSeg();
+      });
+    });
+  }
+  renderMultiSeg();
 
   let anonQuota = { exhausted: true, remaining: 0, dayLeft: 0, weekLeft: lim.perWeek, unlock: '' };
   (async () => {
@@ -861,34 +1013,66 @@ function openPeepalAskSheet(editPost = null){
     chip.addEventListener('click',()=>{
       sheet.querySelectorAll('.peepal-format-chip').forEach(c=>{c.classList.remove('active');c.style.borderColor='var(--line)';c.style.background='var(--white)';c.style.color='var(--ink)';});
       chip.classList.add('active');chip.style.borderColor='var(--red)';chip.style.background='rgba(230,57,70,0.08)';chip.style.color='var(--red)';
-      document.getElementById('mcqOptions').style.display = chip.dataset.fmt === 'poll' ? 'block' : 'none';
+      const fmt = chip.dataset.fmt;
+      document.getElementById('mcqOptions').style.display = fmt === 'poll' ? 'block' : 'none';
+      const fb = document.getElementById('peepalFormBuilder');
+      if (fb) fb.style.display = fmt === 'form' ? 'block' : 'none';
     });
   });
   const capRow = document.getElementById('peepalResponseCapRow');
   const capHint = document.getElementById('peepalCapHint');
+  const capInput = document.getElementById('peepalCapInput');
+  const capNudge = document.getElementById('peepalCapNudge');
+  const freeMax = typeof PeepalAudience?.FREE_MAX_CAP === 'number' ? PeepalAudience.FREE_MAX_CAP : 50;
   const setCapUi = (cap) => {
-    selectedCap = String(cap || '10');
+    let next = String(cap || '10');
+    const n = Number(next);
+    if (next !== 'unlimited' && Number.isFinite(n)) {
+      if (!isPremiumPeepal() && n > freeMax) {
+        if (capNudge) {
+          capNudge.hidden = false;
+          capNudge.innerHTML = `Free accounts stop at ${freeMax}. <button type="button" class="peepal-soft-cta" id="peepalCapUpsell">See Chaupaal Money</button>`;
+          capNudge.querySelector('#peepalCapUpsell')?.addEventListener('click', () => {
+            if (typeof openProUpsell === 'function') openProUpsell('response_cap');
+            else if (typeof ChaupaalMoney?.openMembership === 'function') ChaupaalMoney.openMembership();
+          });
+        }
+        next = String(freeMax);
+        if (capInput) capInput.value = freeMax;
+      } else if (capNudge) capNudge.hidden = true;
+    }
+    selectedCap = next;
+    if (capInput && next !== 'unlimited' && Number.isFinite(Number(next))) capInput.value = String(next);
     capRow?.querySelectorAll('.peepal-cap-btn').forEach((b) => {
       b.classList.toggle('active', b.dataset.cap === selectedCap);
     });
     if (capHint) {
-      capHint.textContent = selectedCap === '50'
-        ? 'Maximum free cap. Add Chaupaal Money or join Pradhan / Sarpanch for more.'
-        : `Your post will stop collecting new responses after ${selectedCap}.`;
+      capHint.textContent =
+        selectedCap === 'unlimited'
+          ? 'Unlimited responses (membership).'
+          : `Your post will stop collecting new responses after ${selectedCap}.`;
     }
   };
   capRow?.querySelectorAll('.peepal-cap-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const cap = btn.dataset.cap;
       const isPro = btn.classList.contains('peepal-cap-btn--pro');
-      if (isPro) {
+      if (isPro && !isPremiumPeepal()) {
         if (typeof openProUpsell === 'function') openProUpsell('response_cap');
-        else if (typeof showToast === 'function') showToast('Higher response caps coming with Pro ✦');
+        else if (typeof ChaupaalMoney?.openMembership === 'function') ChaupaalMoney.openMembership();
+        else if (typeof showToast === 'function') showToast('Higher caps on Pradhan / Sarpanch');
         return;
       }
       setCapUi(cap);
     });
   });
+  capInput?.addEventListener('input', () => {
+    setCapUi(capInput.value);
+  });
+  sheet.querySelector('#peepalAudience')?.addEventListener('change', syncAudienceHint);
+  sheet.querySelector('#anonToggle')?.addEventListener('change', syncAnonAudience);
+  syncAudienceHint();
+  syncAnonAudience();
 
   const qText=document.getElementById('peepalQText');
   const audienceSel=document.getElementById('peepalAudience');
@@ -930,7 +1114,24 @@ function openPeepalAskSheet(editPost = null){
     });
     const aud = document.getElementById('peepalAudience');
     if (aud) {
-      aud.value = editPost.saveOnly ? 'save_only' : (editPost.audience || 'everyone');
+      let v = editPost.saveOnly ? 'save_only' : (editPost.audience || 'everyone');
+      if (v === 'friends') v = 'followers';
+      if (v === 'ai' || v === 'algorithm' || v === 'private') v = editPost.saveOnly ? 'save_only' : 'everyone';
+      aud.value = v;
+      const ca = document.getElementById('peepalCustomAudience');
+      if (ca) ca.value = editPost.customAudienceText || '';
+      syncAudienceHint();
+    }
+    if (editPost.format === 'form' && Array.isArray(editPost.formSchema?.questions)) {
+      formQuestions = editPost.formSchema.questions.map((q, i) => ({
+        id: q.id || 'q' + (i + 1),
+        type: q.type || 'short',
+        prompt: q.prompt || '',
+        required: !!q.required,
+        options: q.options || ['', ''],
+      }));
+      renderFormBuilder();
+      document.getElementById('peepalFormBuilder').style.display = 'block';
     }
     if (editPost.responseCap != null) setCapUi(String(editPost.responseCap));
     if (Array.isArray(editPost.attachments)) {
@@ -959,7 +1160,7 @@ function openPeepalAskSheet(editPost = null){
     const pubLabel=pubBtn?pubBtn.textContent:'';
     if(pubBtn){
       if(typeof setButtonLoading==='function') setButtonLoading(pubBtn, true);
-      else { pubBtn.disabled=true; pubBtn.textContent=isEdit?'Saving…':'Posting…'; }
+      else { pubBtn.disabled=true; pubBtn.textContent=isEdit?'Saving…':'Sharing…'; }
     }
     try{
     if(isEdit){
@@ -973,19 +1174,39 @@ function openPeepalAskSheet(editPost = null){
       }
       const fmt=sheet.querySelector('.peepal-format-chip.active')?.dataset.fmt||'open';
       const opts=fmt==='poll'?[1,2,3,4].map(i=>document.getElementById(`mcqOpt${i}`)?.value||'').filter(Boolean):[];
-      const audience=document.getElementById('peepalAudience')?.value||'everyone';
-      const saveOnly=audience==='save_only';
+      const audienceRaw=document.getElementById('peepalAudience')?.value||'everyone';
+      const saveOnly=audienceRaw==='save_only';
+      const audience=audienceRaw==='friends'?'followers':audienceRaw;
+      const customAudienceText=document.getElementById('peepalCustomAudience')?.value||'';
+      const formSchema =
+        fmt === 'form'
+          ? {
+              questions: formQuestions.map((q, i) => ({
+                id: q.id || `q${i + 1}`,
+                type: q.type || 'short',
+                prompt: String(q.prompt || '').trim(),
+                required: !!q.required,
+                options: (q.options || []).map((o) => String(o || '').trim()).filter(Boolean),
+              })),
+            }
+          : null;
+      if (fmt === 'form' && (!formSchema.questions.length || formSchema.questions.some((q) => !q.prompt))) {
+        showToast('Add prompts for each form question');
+        return;
+      }
       const updatePayload={
         question:text,
         format:fmt,
         options:opts,
         responses:opts.length?(editPost.responses||[]).slice(0,opts.length).concat(opts.map((_,i)=>(editPost.responses||[])[i]||0)).slice(0,opts.length):[],
-        tag:peepalAskCat||fmt.toUpperCase(),
+        tag: editPost.tag || (typeof PeepalAudience?.inferPeepalTopic === 'function' ? PeepalAudience.inferPeepalTopic(text) : 'GENERAL'),
         audience:saveOnly?'private':audience,
+        customAudienceText: audience === 'custom' ? customAudienceText : '',
         responseCap:selectedCap,
+        formSchema,
         archived:!!saveOnly,
         saveOnly:!!saveOnly,
-        attachments: composeAttachments.map((a) => ({ ...a, blob: undefined, file: undefined })),
+        attachments: composeAttachments.map((a) => ({ ...a, blob: undefined, file: undefined, preview: undefined })),
         updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
       };
       if(editPost.attachment?.type==='image'&&!composeAttachments.some(a=>a.type==='photo'||a.type==='image')){
@@ -1033,15 +1254,58 @@ function openPeepalAskSheet(editPost = null){
     }
     const fmt=sheet.querySelector('.peepal-format-chip.active')?.dataset.fmt||'open';
     const opts=fmt==='poll'?[1,2,3,4].map(i=>document.getElementById(`mcqOpt${i}`)?.value||'').filter(Boolean):[];
-    const audience=document.getElementById('peepalAudience')?.value||'everyone';
-    const saveOnly=audience==='save_only';
+    const audienceRaw=document.getElementById('peepalAudience')?.value||'everyone';
+    const saveOnly=audienceRaw==='save_only';
+    let audience=isAnon?'algorithm':(audienceRaw==='friends'?'followers':audienceRaw);
+    if (audience === 'ai') audience = 'everyone';
+    const customAudienceText = !isAnon && audience === 'custom' ? (document.getElementById('peepalCustomAudience')?.value || '') : '';
+    const formSchema =
+      fmt === 'form'
+        ? {
+            questions: formQuestions.map((q, i) => ({
+              id: q.id || `q${i + 1}`,
+              type: q.type || 'short',
+              prompt: String(q.prompt || '').trim(),
+              required: !!q.required,
+              options: (q.options || []).map((o) => String(o || '').trim()).filter(Boolean),
+            })),
+          }
+        : null;
+    if (fmt === 'form' && (!formSchema.questions.length || formSchema.questions.some((q) => !q.prompt))) {
+      showToast('Add prompts for each form question');
+      return;
+    }
+    const inferredTag =
+      typeof PeepalAudience?.inferPeepalTopic === 'function' ? PeepalAudience.inferPeepalTopic(text) : 'GENERAL';
+    const segmentDrafts =
+      !isAnon && isPremiumPeepal() && extraSegments.length
+        ? [
+            {
+              audience: audience === 'save_only' ? 'everyone' : audience,
+              cap: selectedCap,
+              customAudienceText,
+            },
+          ].concat(extraSegments)
+        : null;
+    const audienceSegments =
+      typeof PeepalAudience?.buildComposerSegments === 'function'
+        ? PeepalAudience.buildComposerSegments({
+            audience: saveOnly ? 'everyone' : audience,
+            anonymous: isAnon,
+            responseCap: selectedCap,
+            customAudienceText,
+            segments: segmentDrafts,
+          })
+        : [];
     // SECURITY: even anonymous posts must carry the real auth uid on user.uid —
     // Firestore create rules require user.uid == auth.uid (Phase A). Display
     // name/avatar stay anonymous; only the public label changes.
     const ownUid=currentUser?.uid||'me';
-    const q={id:`q_${Date.now()}`,question:text,format:fmt,options:opts,responses:opts.map(()=>0),totalResponses:0,comments:0,timeAgo:'just now',ts:Date.now(),tag:peepalAskCat||fmt.toUpperCase(),answered:false,deleted:false,
-      audience:saveOnly?'private':audience, responseLimitMode:'manual', responseCap:selectedCap, audienceSegments:[],
-      segmentDistributionActive:false,
+    const q={id:`q_${Date.now()}`,question:text,format:fmt,options:opts,responses:opts.map(()=>0),totalResponses:0,comments:0,timeAgo:'just now',ts:Date.now(),tag:inferredTag,answered:false,deleted:false,
+      audience:saveOnly?'private':audience, responseLimitMode:'manual', responseCap:selectedCap, audienceSegments,
+      customAudienceText,
+      formSchema,
+      segmentDistributionActive: audienceSegments.length > 1,
       activeSegmentIndex:0,
       archived:!!saveOnly,
       saveOnly:!!saveOnly,
@@ -1049,32 +1313,74 @@ function openPeepalAskSheet(editPost = null){
         ?{name:'Anonymous',avatar:'🎭',uid:ownUid,profileType:'personal'}
         :{name:userProfile?.name||'You',avatar:userProfile?.photoURL||'🪑',uid:ownUid,photoURL:userProfile?.photoURL||null,profileType:(typeof ownProfileType==='function'?ownProfileType():(typeof getProfileType==='function'?getProfileType():'personal'))},
       anonymous:isAnon,uid:ownUid};
-    q.attachments = composeAttachments.map((a) => ({ ...a, blob: undefined, file: undefined }));
 
-    // Optional image attachment (compressed to Storage)
-    if(typeof pendingPeepalAttachment!=='undefined'&&pendingPeepalAttachment?.type==='image'&&pendingPeepalAttachment.file&&!isAnon){
-      try{
-        if(typeof uploadOptimizedImage==='function'&&currentUser&&(typeof isMediaUploadReady!=='function'||await isMediaUploadReady())){
-          const up=await uploadOptimizedImage(pendingPeepalAttachment.file,{folder:'peepal'});
-          q.attachment={
-            type:'image',
-            data:up.media,
-            thumb:up.thumb,
-            mediaPath:up.mediaPath,
-            thumbPath:up.thumbPath,
-            width:Number(up.width)||null,
-            height:Number(up.height)||null,
-          };
-        } else if(pendingPeepalAttachment.data){
-          q.attachment={type:'image',data:pendingPeepalAttachment.data};
+    async function persistComposeAttachments(list) {
+      const out = [];
+      for (const a of list || []) {
+        const item = { type: a.type, label: a.label || a.name || a.type };
+        try {
+          if ((a.type === 'photo' || a.type === 'image') && a.file && typeof uploadOptimizedImage === 'function') {
+            if (typeof isMediaUploadReady !== 'function' || (await isMediaUploadReady())) {
+              const up = await uploadOptimizedImage(a.file, { folder: 'peepal' });
+              item.url = up.media;
+              item.media = up.media;
+              item.thumb = up.thumb || up.media;
+              item.width = up.width || null;
+              item.height = up.height || null;
+            }
+          } else if (a.type === 'video' && a.file && typeof processAndUploadMedia === 'function') {
+            const up = await processAndUploadMedia(a.file, { folder: 'peepal' });
+            item.url = up.media;
+            item.media = up.media;
+            item.thumb = up.thumb || null;
+          } else if (a.type === 'gif') {
+            item.url = a.url || a.preview;
+            item.preview = a.preview || a.url;
+          } else if (a.type === 'music' && a.song) {
+            item.song = a.song;
+            item.label = a.label || a.song.title;
+          } else if (a.type === 'link') {
+            item.url = a.url;
+            item.title = a.title || a.url;
+          } else if (a.type === 'location') {
+            item.lat = a.lat;
+            item.lng = a.lng;
+            item.label = a.label;
+          } else if (a.type === 'collab') {
+            item.collaborator = a.collaborator;
+          } else if (a.type === 'document' && a.file && typeof uploadToCloudinary === 'function') {
+            const up = await uploadToCloudinary(a.file, { folder: 'peepal-docs' });
+            item.url = up?.secure_url || up?.url || null;
+            item.name = a.file.name;
+          } else if (a.url) {
+            item.url = a.url;
+          }
+        } catch (e) {
+          if (typeof showToast === 'function') showToast('Couldn’t upload one attachment');
         }
-      }catch(e){
-        showToast(typeof friendlyError==='function'?friendlyError(e):t('peepal_image_fail'));
+        out.push(item);
       }
-      pendingPeepalAttachment=null;
-    } else if(typeof pendingPeepalAttachment!=='undefined'&&pendingPeepalAttachment?.type==='link'){
-      q.attachment=pendingPeepalAttachment;
-      pendingPeepalAttachment=null;
+      return out;
+    }
+
+    q.attachments = await persistComposeAttachments(composeAttachments);
+
+    // Optional image attachment (compressed to Storage) — legacy single attachment for feed thumb
+    const photoAtt = q.attachments.find((a) => a.type === 'photo' || a.type === 'image');
+    if (photoAtt?.media || photoAtt?.url) {
+      q.attachment = {
+        type: 'image',
+        data: photoAtt.media || photoAtt.url,
+        thumb: photoAtt.thumb || photoAtt.media || photoAtt.url,
+        width: photoAtt.width || null,
+        height: photoAtt.height || null,
+      };
+    } else if (typeof pendingPeepalAttachment !== 'undefined' && pendingPeepalAttachment?.type === 'link') {
+      q.attachment = pendingPeepalAttachment;
+      pendingPeepalAttachment = null;
+    } else {
+      const linkAtt = q.attachments.find((a) => a.type === 'link');
+      if (linkAtt) q.attachment = { type: 'link', url: linkAtt.url, title: linkAtt.title };
     }
 
     if(db&&currentUser){
@@ -1085,7 +1391,9 @@ function openPeepalAskSheet(editPost = null){
           totalResponses:0,comments:0,tag:q.tag,user:q.user,anonymous:!!isAnon,
           uid:currentUser.uid,deleted:false,
           audience:q.audience||'everyone',
-          responseLimitMode:q.responseLimitMode||'algorithm',
+          customAudienceText: q.customAudienceText || '',
+          formSchema: q.formSchema || null,
+          responseLimitMode:q.responseLimitMode||'manual',
           responseCap:q.responseCap??null,
           audienceSegments:q.audienceSegments||[],
           segmentDistributionActive:!!q.segmentDistributionActive,
@@ -1224,12 +1532,7 @@ function openPeepalAskSheet(editPost = null){
     }
   });
 
-  wireAiKbToInput(document.getElementById('peepalQText'),'Composing a Peepal question for the community');
-  setTimeout(()=>{
-    if(typeof wirePeepalAttachments==='function') wirePeepalAttachments(sheet);
-    if(typeof wirePeepalAskAiTarget==='function') wirePeepalAskAiTarget();
-  }, 50);
-}
+  };
 
 function openPeepalEditSheet(post){
   if(!post) return;

@@ -1,6 +1,6 @@
 /* Duniya stories — Chaupaal gathered light, not Instagram chrome */
 
-.duniya-story-item{position:relative;}
+.duniya-story-item{position:relative;overflow:visible;}
 .duniya-story-item.is-seen .duniya-story-ring{
   background:var(--line);
 }
@@ -10,8 +10,11 @@
 .duniya-story-item.is-empty .duniya-story-ring{
   background:var(--line);
 }
+.duniya-story-ring-wrap{
+  position:relative;width:64px;height:64px;flex-shrink:0;overflow:visible;
+}
 .duniya-story-add-badge{
-  position:absolute;right:-2px;bottom:14px;z-index:5;
+  position:absolute;right:-2px;bottom:-2px;z-index:6;
   width:36px;height:36px;min-width:36px;min-height:36px;border-radius:50%;
   background:var(--brand-red,#E63946);color:#fff;
   border:2.5px solid var(--surface-page,#fff);

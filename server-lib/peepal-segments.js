@@ -16,11 +16,70 @@ const STALL_MIN_VIEWS = 8;
 const STALL_MIN_RESPONSES = 1;
 
 const CAP_PRESETS = {
-  algorithm: null, // unlimited / AI decides
+  algorithm: null,
   '10': 10,
+  '25': 25,
   '50': 50,
   '100': 100,
+  '500': 500,
 };
+
+const CITY_HINTS = [
+  'bangalore',
+  'bengaluru',
+  'mumbai',
+  'delhi',
+  'hyderabad',
+  'chennai',
+  'kolkata',
+  'pune',
+  'jaipur',
+  'ahmedabad',
+  'gurgaon',
+  'gurugram',
+  'noida',
+  'lucknow',
+  'kochi',
+  'goa',
+];
+
+function parseCustomAudienceText(text) {
+  const raw = String(text || '').trim();
+  const lower = raw.toLowerCase();
+  const keywords = raw
+    .split(/[,\n;/]+/)
+    .map((s) => String(s || '').trim())
+    .filter(Boolean)
+    .slice(0, 16);
+  const cityHit = CITY_HINTS.find((c) => lower.includes(c)) || null;
+  const ageMatch = lower.match(/\b(\d{2})\s*(?:-|to)\s*(\d{2})\b/) || lower.match(/\b(\d{2})\s*\+/);
+  const ageRange = { min: null, max: null };
+  if (ageMatch) {
+    if (ageMatch[2]) {
+      ageRange.min = Number(ageMatch[1]);
+      ageRange.max = Number(ageMatch[2]);
+    } else ageRange.min = Number(ageMatch[1]);
+  }
+  let gender = 'any';
+  if (/\b(women|woman|female|ladies)\b/.test(lower)) gender = 'female';
+  else if (/\b(men|man|male|guys)\b/.test(lower)) gender = 'male';
+  const interests = keywords
+    .filter((k) => k.length > 2 && !CITY_HINTS.includes(k.toLowerCase()))
+    .slice(0, 12);
+  return {
+    customAudienceText: raw.slice(0, 400),
+    audienceKeywords: keywords,
+    criteria: {
+      interests,
+      ageRange,
+      gender,
+      city: cityHit,
+      personality: null,
+      searchIntent: 'any',
+      vibe: raw.slice(0, 160),
+    },
+  };
+}
 
 function clampInt(n, min, max, fallback) {
   const v = Number(n);
@@ -63,20 +122,26 @@ function resolveCap(mode, custom) {
  * @param {array} [opts.segments] raw segment drafts from composer
  */
 function buildAudienceSegments(opts = {}) {
-  const mode = opts.responseLimitMode || 'algorithm';
+  const mode = opts.responseLimitMode || 'manual';
   const defaultCap = resolveCap(mode, opts.customCap);
-  const drafts = Array.isArray(opts.segments) && opts.segments.length
-    ? opts.segments.slice(0, 15)
-    : [
-        {
-          criteria: {
-            searchIntent: opts.legacyAudience === 'friends' ? 'friendship' : 'any',
-            // friends-only is enforced via audience field; criteria stay broad
+  const legacyRaw = opts.legacyAudience === 'friends' ? 'followers' : opts.legacyAudience === 'ai' ? 'everyone' : opts.legacyAudience;
+  const drafts =
+    Array.isArray(opts.segments) && opts.segments.length
+      ? opts.segments.slice(0, 15)
+      : [
+          {
+            criteria:
+              legacyRaw === 'custom'
+                ? parseCustomAudienceText(opts.customAudienceText || '').criteria
+                : {
+                    searchIntent: legacyRaw === 'followers' ? 'friendship' : 'any',
+                  },
+            cap: defaultCap,
+            label: legacyRaw === 'followers' ? 'Followers' : legacyRaw === 'custom' ? 'Custom' : 'Everyone',
+            audience: legacyRaw || 'everyone',
+            customAudienceText: opts.customAudienceText || '',
           },
-          cap: defaultCap,
-          label: opts.legacyAudience === 'friends' ? 'Friends' : 'Everyone',
-        },
-      ];
+        ];
 
   return drafts.map((d, i) => {
     const cap =
@@ -87,8 +152,12 @@ function buildAudienceSegments(opts = {}) {
       id: String(d.id || `seg_${i + 1}`),
       order: i,
       label: String(d.label || `Segment ${i + 1}`).slice(0, 60),
-      criteria: normalizeCriteria(d.criteria || {}),
+      criteria: normalizeCriteria(
+        d.criteria || (d.customAudienceText ? parseCustomAudienceText(d.customAudienceText).criteria : {})
+      ),
       cap, // null = unlimited for this segment
+      audience: d.audience || legacyRaw || 'everyone',
+      customAudienceText: String(d.customAudienceText || '').slice(0, 400),
       fulfilledCount: 0,
       viewsShown: 0,
       responsesInWindow: 0,
@@ -219,6 +288,7 @@ async function advanceStalledPeepalSegments(db, { limit = 30 } = {}) {
 
 module.exports = {
   buildAudienceSegments,
+  parseCustomAudienceText,
   normalizeCriteria,
   resolveCap,
   recordSegmentResponse,

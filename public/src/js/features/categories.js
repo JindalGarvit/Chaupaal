@@ -842,6 +842,9 @@ function mapPeepalDoc(raw){
     saveOnly: raw.saveOnly === true,
     shares: Number(raw.shares) || 0,
     attachments: Array.isArray(raw.attachments) ? raw.attachments : [],
+    formSchema: raw.formSchema && typeof raw.formSchema === 'object' ? raw.formSchema : null,
+    customAudienceText: raw.customAudienceText || '',
+    topics: Array.isArray(raw.topics) ? raw.topics : [],
   };
 }
 
@@ -1337,16 +1340,7 @@ function renderPeepalFeed(){
   sorted.forEach(q=>{
    try{
     const card=document.createElement('div');card.className='peepal-card';
-    const attachmentWidth=Number(q.attachment?.width)||0;
-    const attachmentHeight=Number(q.attachment?.height)||0;
-    const attachmentHasSize=attachmentWidth>0&&attachmentHeight>0;
-    const attachmentWrapAttrs=attachmentHasSize?` data-has-ratio="1" style="--media-ratio:${attachmentWidth}/${attachmentHeight};"`:'';
-    const attachmentSizeAttrs=attachmentHasSize?` width="${attachmentWidth}" height="${attachmentHeight}" style="aspect-ratio:${attachmentWidth}/${attachmentHeight};"`:'';
-    const mediaHtml = q.attachment?.type==='image'
-      ? `<div class="peepal-media"${attachmentWrapAttrs}><img src="${typeof mediaUrlFor==='function'?mediaUrlFor({media:q.attachment.data,thumb:q.attachment.thumb},'list'):(q.attachment.thumb||q.attachment.data)}" loading="lazy" decoding="async" alt="Image for ${escPeepalText(q.user?.name||'Peepal')} post"${attachmentSizeAttrs}></div>`
-      : q.attachment?.type==='link'
-      ? `<a class="peepal-link-card" href="${/^https?:\/\//i.test(q.attachment.url||'')?escPeepalText(q.attachment.url):'#'}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()"><div class="peepal-link-thumb">🔗</div><div class="peepal-link-info"><div class="peepal-link-title">${escPeepalText(q.attachment.title)}</div><div class="peepal-link-url">${escPeepalText(q.attachment.url)}</div></div></a>`
-      : '';
+    const mediaHtml = typeof renderPeepalAttachmentsHtml==='function'?renderPeepalAttachmentsHtml(q):'';
     const canDelete=currentUser&&(q.user?.uid===currentUser.uid||q.uid===currentUser.uid)&&!q.anonymous;
     const collab = Array.isArray(q.attachments) ? q.attachments.find((a) => a.type === 'collab') : null;
     card.innerHTML = `
@@ -1384,6 +1378,15 @@ function renderPeepalFeed(){
         const idx=Number(btn.getAttribute('data-peepal-opt'));
         if(Number.isFinite(idx)) answerPeepal(q.id, idx, e);
       });
+    });
+    card.querySelector('.peepal-form-respond')?.addEventListener('submit',(e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      submitPeepalForm(q, e.currentTarget);
+    });
+    card.querySelector('[data-form-view]')?.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      openPeepalFormResponses(q);
     });
     card.querySelector('.peepal-speak-btn')?.addEventListener('click',(e)=>{
       e.stopPropagation();
@@ -1487,10 +1490,65 @@ function renderPeepalFeed(){
       },
     });
   }
+  if(typeof mountMusicCards==='function') mountMusicCards(feed);
+}
+
+function renderPeepalAttachmentsHtml(q){
+  const bits=[];
+  if(q.attachment?.type==='image'){
+    const attachmentWidth=Number(q.attachment?.width)||0;
+    const attachmentHeight=Number(q.attachment?.height)||0;
+    const attachmentHasSize=attachmentWidth>0&&attachmentHeight>0;
+    const attachmentWrapAttrs=attachmentHasSize?` data-has-ratio="1" style="--media-ratio:${attachmentWidth}/${attachmentHeight};"`:'';
+    const attachmentSizeAttrs=attachmentHasSize?` width="${attachmentWidth}" height="${attachmentHeight}" style="aspect-ratio:${attachmentWidth}/${attachmentHeight};"`:'';
+    bits.push(`<div class="peepal-media"${attachmentWrapAttrs}><img src="${typeof mediaUrlFor==='function'?mediaUrlFor({media:q.attachment.data,thumb:q.attachment.thumb},'list'):(q.attachment.thumb||q.attachment.data)}" loading="lazy" decoding="async" alt=""${attachmentSizeAttrs}></div>`);
+  } else if(q.attachment?.type==='link'){
+    bits.push(`<a class="peepal-link-card" href="${/^https?:\/\//i.test(q.attachment.url||'')?escPeepalText(q.attachment.url):'#'}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()"><div class="peepal-link-thumb">🔗</div><div class="peepal-link-info"><div class="peepal-link-title">${escPeepalText(q.attachment.title)}</div><div class="peepal-link-url">${escPeepalText(q.attachment.url)}</div></div></a>`);
+  }
+  const atts=Array.isArray(q.attachments)?q.attachments:[];
+  atts.forEach((a)=>{
+    if(!a||!a.type) return;
+    if((a.type==='photo'||a.type==='image')&&(a.url||a.media||a.thumb)&&q.attachment?.type!=='image'){
+      bits.push(`<div class="peepal-media"><img src="${escPeepalText(a.thumb||a.media||a.url)}" alt=""></div>`);
+    } else if(a.type==='video'&&(a.url||a.media)){
+      bits.push(`<div class="peepal-media peepal-media--video"><video src="${escPeepalText(a.media||a.url)}" controls playsinline preload="metadata"${a.thumb?` poster="${escPeepalText(a.thumb)}"`:''}></video></div>`);
+    } else if(a.type==='gif'&&(a.url||a.preview)){
+      bits.push(`<div class="peepal-media"><img src="${escPeepalText(a.preview||a.url)}" alt="GIF"></div>`);
+    } else if(a.type==='music'&&a.song&&typeof renderMusicCard==='function'){
+      bits.push(`<div class="peepal-music-slot">${renderMusicCard(a.song,{variant:'chat'})}</div>`);
+    } else if(a.type==='link'&&a.url&&q.attachment?.type!=='link'){
+      bits.push(`<a class="peepal-link-card" href="${escPeepalText(a.url)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()"><div class="peepal-link-thumb">🔗</div><div class="peepal-link-info"><div class="peepal-link-title">${escPeepalText(a.title||a.url)}</div></div></a>`);
+    } else if(a.type==='location'){
+      bits.push(`<div class="peepal-loc-chip">${escPeepalText(a.label||'Location')}</div>`);
+    } else if(a.type==='document'&&a.url){
+      bits.push(`<a class="peepal-doc-chip" href="${escPeepalText(a.url)}" target="_blank" rel="noopener">${escPeepalText(a.name||'Document')}</a>`);
+    }
+  });
+  return bits.join('');
+}
+
+function renderPeepalFormHtml(q){
+  const questions=Array.isArray(q.formSchema?.questions)?q.formSchema.questions:[];
+  const own=currentUser&&(q.uid===currentUser.uid||q.user?.uid===currentUser.uid)&&!q.anonymous;
+  if(own){
+    return `<button type="button" class="peepal-submit-btn peepal-form-view" data-form-view="${escPeepalText(q.id)}">View responses (${q.totalResponses||0})</button>`;
+  }
+  if(q.answered){
+    return `<div style="font-size:13px;color:var(--muted);padding:4px 0;">You submitted this form · ${q.totalResponses||0} responses</div>`;
+  }
+  const fields=questions.map((qq)=>{
+    const id=`f_${q.id}_${qq.id}`;
+    if(qq.type==='long') return `<label class="peepal-form-field">${escPeepalText(qq.prompt)}${qq.required?' *':''}<textarea data-fid="${escPeepalText(qq.id)}" rows="3" ${qq.required?'required':''}></textarea></label>`;
+    if(qq.type==='choice') return `<fieldset class="peepal-form-field"><legend>${escPeepalText(qq.prompt)}${qq.required?' *':''}</legend>${(qq.options||[]).map((o,i)=>`<label><input type="radio" name="${id}" data-fid="${escPeepalText(qq.id)}" value="${escPeepalText(o)}"> ${escPeepalText(o)}</label>`).join('')}</fieldset>`;
+    if(qq.type==='checks') return `<fieldset class="peepal-form-field"><legend>${escPeepalText(qq.prompt)}${qq.required?' *':''}</legend>${(qq.options||[]).map((o)=>`<label><input type="checkbox" data-fid="${escPeepalText(qq.id)}" value="${escPeepalText(o)}"> ${escPeepalText(o)}</label>`).join('')}</fieldset>`;
+    return `<label class="peepal-form-field">${escPeepalText(qq.prompt)}${qq.required?' *':''}<input type="text" data-fid="${escPeepalText(qq.id)}" ${qq.required?'required':''}></label>`;
+  }).join('');
+  return `<form class="peepal-form-respond" data-form-post="${escPeepalText(q.id)}">${fields}<button type="submit" class="peepal-submit-btn">Submit</button></form>`;
 }
 
 function renderPeepalOptions(q){
   try{
+    if(q.format==='form') return renderPeepalFormHtml(q);
     const typingSection=(promptText)=>`
       <div class="peepal-typing-section" id="typing_${q.id}" style="${q.answered===false?'display:none;':''}margin-top:10px;border-top:1px solid var(--line);padding-top:10px;">
         <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;">💭 Want to add your thoughts? (optional)</div>
@@ -1585,28 +1643,118 @@ async function updatePersonalityFromPeepalAnswer(q, typedAnswer){
 }
 
 
+function peepalCapReached(q){
+  const cap=q?.responseCap;
+  if(cap==null||cap==='unlimited'||cap==='algorithm'||cap==='') return false;
+  const n=Number(cap);
+  if(!Number.isFinite(n)||n<=0) return false;
+  return Number(q.totalResponses||0)>=n;
+}
+
+async function persistPeepalAnswer(q, extra){
+  const postId=q?.firestoreId||q?.id;
+  if(!postId||typeof apiFetch!=='function') return { ok:true, local:true };
+  try{
+    const env=await apiFetch('/api/peepal-reactions',{
+      method:'POST', needAuth:true,
+      body: Object.assign({ action:'record_peepal_answer', postId }, extra||{}),
+    });
+    if(env?.ok===false){
+      const code=env?.error?.code;
+      if(code==='CAP_REACHED') return { ok:false, cap:true, message: env.error?.message };
+      if(code==='ALREADY_ANSWERED') return { ok:false, already:true };
+      return { ok:false, message: env.error?.message };
+    }
+    return { ok:true };
+  }catch(e){
+    return { ok:false, message: e?.message };
+  }
+}
+
 function answerPeepal(id,optIdx,e){
   e.stopPropagation();
   const q=peepalQuestions.find(q=>q.id===id);if(!q||q.answered!==false)return;
-  q.answered=optIdx;q.responses[optIdx]++;q.totalResponses++;
-  if(typeof recordPeepalSegmentResponse==='function') recordPeepalSegmentResponse(q);
-  renderPeepalFeed();
-  // Show typing section with a slight delay
-  setTimeout(()=>{
-    const typingEl=document.getElementById(`typing_${id}`);
-    if(typingEl){typingEl.style.display='block';document.getElementById(`typing_input_${id}`)?.focus();}
-    showToast(t('cat_see_comments'));
-  },300);
+  if(peepalCapReached(q)){ if(typeof showToast==='function') showToast('This discussion is no longer collecting responses'); return; }
+  persistPeepalAnswer(q,{ optionIndex: optIdx }).then((r)=>{
+    if(r.cap){ showToast(r.message||'Responses are full'); return; }
+    if(!r.ok && !r.already){ /* still paint locally */ }
+    if(!q.responses) q.responses=[];
+    q.answered=optIdx;q.responses[optIdx]=(q.responses[optIdx]||0)+1;q.totalResponses++;
+    renderPeepalFeed();
+    setTimeout(()=>{
+      const typingEl=document.getElementById(`typing_${id}`);
+      if(typingEl){typingEl.style.display='block';document.getElementById(`typing_input_${id}`)?.focus();}
+      showToast(t('cat_see_comments'));
+    },300);
+  });
 }
 
 function submitPeepalOpen(id){
   const input=document.getElementById(`open_${id}`);
   if(!input||!input.value.trim())return;
   const q=peepalQuestions.find(q=>q.id===id);if(!q)return;
-  q.answered=true;q.totalResponses++;
-  if(typeof recordPeepalSegmentResponse==='function') recordPeepalSegmentResponse(q);
-  renderPeepalFeed();
-  showToast(t('cat_response_in'));
+  if(peepalCapReached(q)){ if(typeof showToast==='function') showToast('This discussion is no longer collecting responses'); return; }
+  const text=input.value.trim();
+  persistPeepalAnswer(q,{ text }).then((r)=>{
+    if(r.cap){ showToast(r.message||'Responses are full'); return; }
+    q.answered=true;q.totalResponses++;
+    q.myTypedAnswer=text;
+    renderPeepalFeed();
+    showToast(t('cat_response_in'));
+  });
+}
+
+async function submitPeepalForm(q, form){
+  if(!q||!form) return;
+  if(peepalCapReached(q)){ showToast('This discussion is no longer collecting responses'); return; }
+  const answers={};
+  q.formSchema?.questions?.forEach((qq)=>{
+    if(qq.type==='checks'){
+      answers[qq.id]=[...form.querySelectorAll(`[data-fid="${qq.id}"]:checked`)].map((el)=>el.value);
+    } else if(qq.type==='choice'){
+      answers[qq.id]=form.querySelector(`[data-fid="${qq.id}"]:checked`)?.value||'';
+    } else {
+      answers[qq.id]=form.querySelector(`[data-fid="${qq.id}"]`)?.value||'';
+    }
+  });
+  const postId=q.firestoreId||q.id;
+  try{
+    const env=await apiFetch('/api/peepal-reactions',{
+      method:'POST', needAuth:true,
+      body:{ action:'submit_form', postId, answers },
+    });
+    if(env?.ok===false){
+      showToast(env.error?.message||'Couldn’t submit');
+      return;
+    }
+    q.answered=true;q.totalResponses++;
+    renderPeepalFeed();
+    showToast('Response sent');
+  }catch(e){
+    showToast('Couldn’t submit');
+  }
+}
+
+async function openPeepalFormResponses(q){
+  const postId=q.firestoreId||q.id;
+  if(!postId||typeof apiFetch!=='function') return;
+  try{
+    const env=await apiFetch('/api/peepal-reactions',{
+      method:'POST', needAuth:true,
+      body:{ action:'list_form_responses', postId },
+    });
+    const data=env?.data||env||{};
+    const items=data.items||[];
+    const qs=data.formSchema?.questions||q.formSchema?.questions||[];
+    const sheet=document.createElement('div');
+    sheet.className='peepal-ask-sheet open';
+    sheet.innerHTML=`<div class="peepal-ask-header"><button type="button" data-close style="border:0;background:none;font-size:18px;">✕</button><div class="peepal-ask-title">Responses</div><span></span></div>
+      <div class="peepal-ask-body">${items.length?items.map((it)=>`<div class="peepal-form-resp">${qs.map((qq)=>`<p><strong>${escPeepalText(qq.prompt)}</strong><br>${escPeepalText(Array.isArray(it.answers?.[qq.id])?it.answers[qq.id].join(', '):(it.answers?.[qq.id]||'—'))}</p>`).join('')}</div>`).join(''):'<p class="peepal-compat-empty">No responses yet.</p>'}</div>`;
+    document.querySelector('.device')?.appendChild(sheet);
+    sheet.querySelector('[data-close]')?.addEventListener('click',()=>sheet.remove());
+  }catch(e){
+    showToast('Couldn’t load responses');
+  }
 }
 
 /** Persist segment fulfilled count via payments/reactions API (cascade tracking). */
@@ -1648,6 +1796,8 @@ async function openPeepalBoostComingSoon(q){
 }
 window.openPeepalBoostComingSoon=openPeepalBoostComingSoon;
 window.recordPeepalSegmentResponse=recordPeepalSegmentResponse;
+window.submitPeepalOpen=submitPeepalOpen;
+window.answerPeepal=answerPeepal;
 // Feed-render boundary (CONVENTIONS 4c) — dynamic list from network content
 if (typeof safeFeature === 'function') renderPeepalFeed = safeFeature('peepal_feed', renderPeepalFeed);
 
