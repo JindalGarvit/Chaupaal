@@ -421,6 +421,12 @@
 
     const selfEl = row.querySelector('[data-self]');
     if (selfEl) {
+      if (typeof onLongPress === 'function') {
+        onLongPress(selfEl.querySelector('.duniya-story-avatar') || selfEl, () => {
+          selfEl.dataset.suppressClick = '1';
+          if (typeof openDuniyaPostSheet === 'function') openDuniyaPostSheet('post');
+        });
+      }
       selfEl.querySelector('[data-add]')?.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
