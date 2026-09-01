@@ -30,6 +30,7 @@ const LIMITS = {
   post: { minute: 6, hour: 40 },
   // AI calls (Anthropic / Chaupaal chat) — expensive per request
   ai: { minute: 10, hour: 120 },
+  chaupaal_nav: { minute: 40, hour: 400 },
   // Intent people discovery (Khoj / Vriksha) — LLM parse when AI on + Firestore retrieve
   discovery: { minute: 20, hour: 200 },
   dangal: { minute: 40, hour: 400 },

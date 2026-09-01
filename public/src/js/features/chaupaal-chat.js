@@ -30,7 +30,7 @@
         SAMPLE_MESSAGES[id] = [
           {
             from: 'them',
-            text: "Hey — I'm Chaupaal. Ask me anything, share feedback, or just say how your day's going.",
+            text: "Hey — I'm Chaupaal. Type what you'd like to do — post a story, open archive, wish a friend — or just say how your day's going.",
             time: 'Pinned',
             avatar: '🏠',
           },
@@ -48,7 +48,7 @@
       displayName: 'Chaupaal',
       avatar: '🏠',
       photoURL: null,
-      preview: 'Talk with Chaupaal · recommendations & check-ins',
+      preview: 'Type what you want to do · Chaupaal will guide you',
       time: 'Pinned',
       unread: 0,
       duelStreak: 0,
@@ -188,22 +188,27 @@
   }
 
   /**
-   * Quiet mode keeps the tab intentionally calm: history stays visible, the
-   * composer stays usable, and any send gets a warm in-voice "back soon" reply
-   * instead of an error state.
+   * Navigator mode when AI is off: composer stays active; Chaupaal routes via intents.
    */
   function applyQuietComposer(screen, quiet) {
     if (!screen) return;
     const input = screen.querySelector('#chatMsgInput');
     const status = screen.querySelector('#chatActivityStatus');
     if (quiet) {
-      if (input) input.placeholder = 'Chaupaal is resting — back soon…';
-      if (status) status.textContent = 'Resting · will be back soon';
+      if (input) {
+        input.placeholder =
+          typeof t === 'function'
+            ? t('chaupaal_cmd_placeholder', "Tell me what you'd like to do…")
+            : "Tell me what you'd like to do…";
+      }
+      if (status) status.textContent = 'Navigator · tap an action or type a request';
       screen.dataset.chaupaalQuiet = '1';
+      screen.dataset.chaupaalNavigator = '1';
     } else {
       if (input) input.placeholder = 'Talk with Chaupaal…';
       if (status) status.textContent = 'Your space with Chaupaal';
       delete screen.dataset.chaupaalQuiet;
+      delete screen.dataset.chaupaalNavigator;
     }
   }
 
@@ -251,7 +256,7 @@
       SAMPLE_MESSAGES[chaupaalChatId()] = [
         {
           from: 'them',
-          text: "Hey — I'm Chaupaal. Ask me anything, share feedback, or just say how your day's going.",
+          text: "Hey — I'm Chaupaal. Type what you'd like to do — post a story, open archive, wish a friend — or just say how your day's going.",
           time: 'Pinned',
           avatar: '🏠',
         },

@@ -300,6 +300,11 @@ const I18N = {
     membership_professional_sarpanch_only:'Professional profiles: Sarpanch only.',
     paywall_limit_body:'Add Chaupaal Money or join Pradhan / Sarpanch for more.',
     chat_commerce_nudge:"You've hit your free limit. See membership or your Chaupaal Money account.",
+    chaupaal_cmd_placeholder:"Tell me what you'd like to do…",
+    chaupaal_cmd_help_intro:"I can help you get around Chaupaal — pick something below.",
+    chaupaal_cmd_no_match:"I can help you get around Chaupaal — pick something below or describe what you want.",
+    chaupaal_cmd_disambig:"A few things match — which one did you mean?",
+    chaupaal_cmd_wish_title:"Wish a friend",
     teen_purchase_block:'Ask a parent or turn off Teen Mode to purchase.',
     // —— Mehfil ——
     mehfil_title:'Mehfil',

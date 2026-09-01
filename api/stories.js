@@ -22,6 +22,7 @@ const {
   publicInteractive,
   tallyResponses,
 } = require('../server-lib/story-overlays');
+const { resolveActiveProfileName, resolveDisplayNameFromData } = require('../server-lib/profile-display');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const COLLECTIONS = {
@@ -318,6 +319,18 @@ async function createStory(db, admin, uid, body) {
   const highlightId = saveOnly ? cleanText(body.highlightId, 180) : '';
   const userSnap = await db.collection('users').doc(uid).get();
   const user = userSnap.data() || {};
+  const profileName = await resolveActiveProfileName(db, uid, user);
+  let profileAvatar = '';
+  const activeId = user.activeProfileId || user.profileId;
+  if (activeId) {
+    try {
+      const pSnap = await db.collection('users').doc(uid).collection('profiles').doc(activeId).get();
+      if (pSnap.exists) {
+        const pd = pSnap.data() || {};
+        profileAvatar = cleanMedia(pd.photoThumb || pd.photoURL) || '';
+      }
+    } catch (e) {}
+  }
   const now = admin.firestore.Timestamp.now();
   const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + DAY_MS);
   const story = {
@@ -327,8 +340,8 @@ async function createStory(db, admin, uid, body) {
     visibility: saveOnly ? 'archive_only' : visibility,
     kind,
     type: cleanText(body.type, 30) || 'media',
-    name: cleanText(user.name || user.displayName || user.username, 100) || 'Someone',
-    avatar: cleanMedia(user.photoThumb || user.photoURL) || cleanText(body.avatar, 12),
+    name: cleanText(resolveDisplayNameFromData(user, profileName), 100) || 'Someone',
+    avatar: cleanMedia(user.photoThumb || user.photoURL) || profileAvatar || cleanText(body.avatar, 12),
     profileType:
       String(user.profileType || user.profile?.profileType || 'personal').toLowerCase() === 'professional'
         ? 'professional'

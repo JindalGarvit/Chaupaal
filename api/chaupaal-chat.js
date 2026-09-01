@@ -10,8 +10,11 @@ const {
   CHAUPAAL_SYSTEM_PROMPT,
   CRISIS_REPLY,
   detectCrisis,
+  isDirectIdentityQuestion,
+  heuristicFeedbackTag,
   normalizeReply,
 } = require('../server-lib/chaupaal-persona');
+const { parseChaupaalIntents, buildNavigatorReply } = require('../server-lib/chaupaal-intents');
 
 function chatIdFor(uid) {
   return `chat_chaupaal_${uid}`;
@@ -135,16 +138,6 @@ module.exports = async function handler(req, res) {
   const user = await requireUser(req, res, { allowWeak: false });
   if (!user) return;
 
-  try {
-    const { checkActionRateLimit } = require('../server-lib/rate-limit');
-    const rate = await checkActionRateLimit(user.uid, 'ai');
-    if (!rate.ok) {
-      return sendError(res, 429, 'RATE_LIMITED', 'Too many messages. Try again shortly.');
-    }
-  } catch (e) {
-    console.warn('[chaupaal-chat] rate-limit check failed', e?.message || e);
-  }
-
   let body = {};
   try {
     body = parseJsonBody(req);
@@ -201,33 +194,95 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const QUIET_TEXT =
-      "Chaupaal is resting right now — your messages and history are safe here, and Chaupaal will be back soon.";
+    const IDENTITY_REPLY =
+      "I'm Chaupaal — part of the app, here to help you get around, check in, and share feedback. Not a separate human on the other end, but I'm listening.";
 
-    async function persistQuietReply() {
+    async function persistNavigatorReply(navPayload) {
+      const { reply, attachment, intents } = navPayload || {};
+      const feedbackTag = heuristicFeedbackTag(text);
+      const isFeedback = !!feedbackTag;
       const replyId = await appendMessage(db, chatRef, {
-        text: QUIET_TEXT,
+        text: reply,
         uid: 'chaupaal',
         from: 'chaupaal',
         name: 'Chaupaal',
         role: 'assistant',
         avatar: '🏠',
         serverOwned: true,
-        quiet: true,
+        navigator: true,
+        attachment: attachment || null,
+        intents: intents || null,
+        isFeedback,
+        feedbackTag: feedbackTag || null,
       });
+      if (isFeedback) {
+        try {
+          await writeFeedback(db, {
+            uid: user.uid,
+            message: text,
+            tag: feedbackTag || 'other',
+            messageId: userMsgId,
+          });
+        } catch (fe) {
+          console.warn('[chaupaal-chat] navigator feedback write failed', fe?.message || fe);
+        }
+      }
       return replyId;
     }
 
-    if (!aiOn) {
-      const replyId = await persistQuietReply();
+    async function respondNavigator() {
+      try {
+        const { checkActionRateLimit } = require('../server-lib/rate-limit');
+        const rate = await checkActionRateLimit(user.uid, 'chaupaal_nav');
+        if (!rate.ok) {
+          return sendError(res, 429, 'RATE_LIMITED', 'Too many messages. Try again shortly.');
+        }
+      } catch (e) {
+        console.warn('[chaupaal-chat] nav rate-limit check failed', e?.message || e);
+      }
+
+      if (isDirectIdentityQuestion(text)) {
+        const replyId = await appendMessage(db, chatRef, {
+          text: IDENTITY_REPLY,
+          uid: 'chaupaal',
+          from: 'chaupaal',
+          name: 'Chaupaal',
+          role: 'assistant',
+          avatar: '🏠',
+          serverOwned: true,
+          navigator: true,
+        });
+        return sendSuccess(res, {
+          reply: IDENTITY_REPLY,
+          navigator: true,
+          userMessageId: userMsgId,
+          replyMessageId: replyId,
+          chatId: chatIdFor(user.uid),
+        });
+      }
+
+      const parsed = parseChaupaalIntents(text);
+      const nav = buildNavigatorReply(parsed);
+      const replyId = await persistNavigatorReply(nav);
       return sendSuccess(res, {
-        reply: QUIET_TEXT,
-        quiet: true,
-        message: QUIET_TEXT,
+        reply: nav.reply,
+        attachment: nav.attachment || null,
+        intents: nav.intents || null,
+        navigator: true,
+        quiet: false,
         userMessageId: userMsgId,
         replyMessageId: replyId,
         chatId: chatIdFor(user.uid),
       });
+    }
+
+    if (!aiOn) {
+      return respondNavigator();
+    }
+
+    const parsedForAi = parseChaupaalIntents(text);
+    if ((parsedForAi.confidence === 'high' || parsedForAi.confidence === 'med') && parsedForAi.best) {
+      return respondNavigator();
     }
 
     const history = Array.isArray(body.history) ? body.history.slice(-12) : [];
@@ -257,6 +312,16 @@ module.exports = async function handler(req, res) {
       { role: 'user', content: text },
     ];
 
+    try {
+      const { checkActionRateLimit } = require('../server-lib/rate-limit');
+      const rate = await checkActionRateLimit(user.uid, 'ai');
+      if (!rate.ok) {
+        return sendError(res, 429, 'RATE_LIMITED', 'Too many messages. Try again shortly.');
+      }
+    } catch (e) {
+      console.warn('[chaupaal-chat] ai rate-limit check failed', e?.message || e);
+    }
+
     let rawText = '';
     try {
       const result = await callAI({
@@ -269,15 +334,7 @@ module.exports = async function handler(req, res) {
       rawText = result.text || '';
     } catch (e) {
       if (e instanceof AiDisabledError || e?.code === 'AI_DISABLED') {
-        const replyId = await persistQuietReply();
-        return sendSuccess(res, {
-          reply: QUIET_TEXT,
-          quiet: true,
-          message: QUIET_TEXT,
-          userMessageId: userMsgId,
-          replyMessageId: replyId,
-          chatId: chatIdFor(user.uid),
-        });
+        return respondNavigator();
       }
       throw e;
     }

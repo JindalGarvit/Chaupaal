@@ -412,6 +412,7 @@
           id: 'post',
           label: tt('shortcut_duniya_post', 'Create post'),
           run: () => {
+            if (typeof ChaupaalIntents !== 'undefined' && ChaupaalIntents.run('duniya.post')) return;
             if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
             switchTo('duniya');
             if (typeof openDuniyaPostSheet === 'function') openDuniyaPostSheet('post');
@@ -445,6 +446,7 @@
           id: 'story',
           label: tt('shortcut_duniya_story', 'Create Story'),
           run: () => {
+            if (typeof ChaupaalIntents !== 'undefined' && ChaupaalIntents.run('duniya.story')) return;
             if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
             switchTo('duniya');
             if (typeof DuniyaStory !== 'undefined' && typeof DuniyaStory.startCreate === 'function') DuniyaStory.startCreate();
@@ -457,6 +459,7 @@
           id: 'instant',
           label: tt('shortcut_baithak_instant', 'New split'),
           run: () => {
+            if (typeof ChaupaalIntents !== 'undefined' && ChaupaalIntents.run('baithak.split')) return;
             if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
             switchTo('baithak');
             if (typeof expandBaithakSplitComposer === 'function') expandBaithakSplitComposer();
@@ -1291,6 +1294,7 @@
   window.openRelevantTodaySheet = openRelevantTodaySheet;
   window.openSafarSheet = openSafarSheet;
   window.openDangalPulseSheet = openDangalPulseSheet;
+  window.openDangalOpponentPicker = openDangalOpponentPicker;
   window.getTabScrollRoot = getTabScrollRoot;
   window.refreshTabContent = refreshTabContent;
 

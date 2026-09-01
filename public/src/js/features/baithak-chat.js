@@ -1001,12 +1001,12 @@ function openChatScreen(chat){
   });
   // Live presence → header badge + join banner (total participants ≥ 2)
   if (!isSelf && !isChaupaal && typeof watchMehfilPresence === 'function') {
-    const chatId = typeof mehfilPresenceChatId === 'function' ? mehfilPresenceChatId(chat) : (chat.firestoreId || chat.id);
+    const chatId = chat.firestoreId || chat.id;
     const unsub = watchMehfilPresence(chatId, ({ count, live, totalCount }) => {
       const btn = document.getElementById('chatMehfilBtn');
       const banner = document.getElementById('mehfilLiveBanner');
       const total = totalCount != null ? totalCount : count;
-      const isLive = live === true;
+      const isLive = live != null ? !!live : false;
       btn?.classList.toggle('is-live', isLive);
       if (banner) {
         const inRoom = typeof isMehfilOpen === 'function' && isMehfilOpen();
@@ -1665,7 +1665,7 @@ function safeStoryText(value){
 }
 
 function openBaithakStoryViewer(story, allStories){
-  const stories=allStories||[story];
+  const stories=[...(allStories||[story])];
   let currentIdx=stories.indexOf(story);if(currentIdx<0)currentIdx=0;
   let progressInterval=null;
 
@@ -1678,21 +1678,41 @@ function openBaithakStoryViewer(story, allStories){
     if(typeof pauseAllMusic==='function') pauseAllMusic();
   });
 
+  function storyHeaderName(s){
+    if(typeof splitOwnerLabel==='function') return splitOwnerLabel(s);
+    if(s.own||s.uid===currentUser?.uid){
+      const n=typeof selfDisplayName==='function'?selfDisplayName():(s.name||'');
+      const clean=String(n||'').trim();
+      if(clean&&!/^(you|someone)$/i.test(clean)) return `You (${clean})`;
+      return 'You';
+    }
+    const name=typeof resolvePersonDisplayName==='function'?resolvePersonDisplayName(s):(s.name||'');
+    const cleaned=String(name||'').trim();
+    if(!cleaned||/^(someone|friend|member)$/i.test(cleaned)){
+      if(s.username) return `@${String(s.username).replace(/^@/,'')}`;
+      return 'Friend';
+    }
+    return cleaned;
+  }
+
   function renderStory(idx){
     clearInterval(progressInterval);
     if(typeof pauseAllMusic==='function') pauseAllMusic();
     const s=stories[idx];s.seen=true;
-    const isMedia=s.type==='media'||s.type==='duniya_story';
+    const isSplit=s.kind==='split'||s.kind==='instant';
+    const hasVisualMedia=!!(s.media||s.thumb);
+    const isRenderableMedia=hasVisualMedia&&(['media','duniya_story','gif','photo','video'].includes(s.type||'')||isSplit);
     const isScore=s.type==='score';
     const isBirthday=s.type==='birthday';
     const isDuel=s.type==='duel';
     const hasMusic=!!(s.music&&s.music.title);
     const hasLocation=!!(s.location&&Number.isFinite(Number(s.location.lat))&&Number.isFinite(Number(s.location.lng)));
-    const musicOnly=hasMusic&&!(isMedia&&s.media)&&!hasLocation;
-    const locationOnly=hasLocation&&!(isMedia&&s.media)&&!hasMusic;
+    const musicOnly=hasMusic&&!(isRenderableMedia&&hasVisualMedia)&&!hasLocation;
+    const locationOnly=hasLocation&&!(isRenderableMedia&&hasVisualMedia)&&!hasMusic;
+    const splitTextNote=isSplit&&s.text&&!isRenderableMedia&&!hasMusic&&!hasLocation;
     const timeAgo=(s.ts||s.createdAt)?timeAgoStr(s.ts||s.createdAt):'now';
     const destinationLabel=s.destination==='duniya'?'Duniya':s.destination==='baithak'?'Baithak':'';
-    const ownerAudience=s.own&&(s.kind==='split'||s.kind==='instant')?' · Split':'';
+    const headerName=storyHeaderName(s);
     const musicOverlay=hasMusic&&typeof renderMusicCard==='function'
       ?renderMusicCard(s.music,{variant:'story'})
       :'';
@@ -1711,8 +1731,12 @@ function openBaithakStoryViewer(story, allStories){
           <div style="width:100%;height:100%;border-radius:50%;background:#222;display:flex;align-items:center;justify-content:center;font-size:16px;">${s.photoURL||/^https:/.test(s.avatar||'')?`<img src="${s.photoURL||s.avatar}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:s.avatar}</div>
         </div>
         <div style="flex:1;">
-          <div style="color:#fff;font-weight:700;font-size:14px;">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(s.name,s):s.name}</div>
-          <div style="color:rgba(255,255,255,0.6);font-size:11px;">${timeAgo}${destinationLabel?` · <span class="story-destination-tag story-destination-tag--${s.destination}">${destinationLabel}${ownerAudience}</span>`:''}</div>
+          <div style="color:#fff;font-weight:700;font-size:14px;">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(headerName,s):safeStoryText(headerName)}</div>
+          <div style="color:rgba(255,255,255,0.6);font-size:11px;">${
+            isSplit
+              ? timeAgo
+              : `${timeAgo}${destinationLabel?` · <span class="story-destination-tag story-destination-tag--${s.destination}">${destinationLabel}</span>`:''}`
+          }</div>
         </div>
         ${s.deletable?`<button id="storyDelete" style="background:none;border:none;color:rgba(255,255,255,0.7);font-size:18px;cursor:pointer;">🗑️</button>`:''}
         <button id="storyClose" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;padding:4px;">✕</button>
@@ -1720,10 +1744,11 @@ function openBaithakStoryViewer(story, allStories){
       <!-- Content -->
       <div style="flex:1;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;" id="storyContent">
         ${musicOnly||locationOnly?`<div class="story-music-backdrop" aria-hidden="true"></div>`:
-          isMedia&&s.media?(
+          splitTextNote?`<div class="story-split-note"><p>${safeStoryText(s.text)}</p></div>`:
+          isRenderableMedia&&hasVisualMedia?(
           s.mediaType==='video'
-            ?`<video src="${s.media}" autoplay loop muted playsinline style="width:100%;height:100%;object-fit:cover;"></video>`
-            :`<img src="${s.media}" style="width:100%;height:100%;object-fit:${s.rotation?'contain':'cover'};transform:rotate(${Number(s.rotation)||0}deg);">`
+            ?`<video src="${s.media||s.thumb}" autoplay loop muted playsinline style="width:100%;height:100%;object-fit:cover;"></video>`
+            :`<img src="${s.media||s.thumb}" style="width:100%;height:100%;object-fit:${s.rotation?'contain':'cover'};transform:rotate(${Number(s.rotation)||0}deg);">`
         ):isScore?`
           <div style="background:linear-gradient(160deg,var(--navy),#E63946);width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;">
             <div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:16px;">⚡ Today's Akhbaar</div>
@@ -1737,16 +1762,16 @@ function openBaithakStoryViewer(story, allStories){
         `:isBirthday?`
           <div style="background:linear-gradient(160deg,var(--gold),#FF9A3C);width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center;">
             <div style="font-size:72px;margin-bottom:16px;">🎂</div>
-            <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:28px;color:var(--ink);">Happy Birthday ${s.name}!</div>
+            <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:28px;color:var(--ink);">Happy Birthday ${safeStoryText(s.name)}!</div>
             <div style="font-size:15px;color:rgba(43,39,48,0.7);margin-top:12px;line-height:1.5;">Wishing you a wonderful day filled with joy 🎉</div>
           </div>
         `:isDuel?`
           <div style="background:linear-gradient(160deg,var(--navy),#2A3158);width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center;">
             <div style="font-size:52px;margin-bottom:16px;">⚔️</div>
-            <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:22px;color:#fff;">${s.text||'Duel result'}</div>
+            <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:22px;color:#fff;">${safeStoryText(s.text||'Duel result')}</div>
           </div>
-        `:`<div style="width:100%;height:100%;background:#111;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.3);font-size:14px;">Story</div>`}
-        ${s.text?`<div class="story-viewer-text">${safeStoryText(s.text)}</div>`:''}
+        `:isSplit?'':`<div style="width:100%;height:100%;background:#111;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.3);font-size:14px;">Story</div>`}
+        ${s.text&&!splitTextNote?`<div class="story-viewer-text">${safeStoryText(s.text)}</div>`:''}
         ${musicOverlay}
         ${locationOverlay}
         ${s.sharedGameId?`<button type="button" class="story-game-card" id="storyGameCard">Play ${safeStoryText(typeof getGame==='function'?(getGame(s.sharedGameId)?.name||'game'):'game')}</button>`:''}
@@ -1786,7 +1811,8 @@ function openBaithakStoryViewer(story, allStories){
         catch(error){showToast(error?.message||'Could not delete story');return;}
       }
       viewer.remove();
-      if(typeof renderLiveBaithakStories==='function') renderLiveBaithakStories();
+      if(typeof renderBaithakInstants==='function') renderBaithakInstants();
+      else if(typeof renderLiveBaithakStories==='function') renderLiveBaithakStories();
     });
     document.getElementById('tapPrev').addEventListener('click',()=>{if(idx>0){clearInterval(progressInterval);renderStory(idx-1);}else{clearInterval(progressInterval);if(typeof pauseAllMusic==='function')pauseAllMusic();viewer.remove();}});
     document.getElementById('tapNext').addEventListener('click',()=>{if(idx<stories.length-1){clearInterval(progressInterval);renderStory(idx+1);}else{clearInterval(progressInterval);if(typeof pauseAllMusic==='function')pauseAllMusic();viewer.remove();}});
@@ -1860,7 +1886,19 @@ function openBaithakStoryViewer(story, allStories){
     }
   }
 
-  renderStory(currentIdx);
+  (async () => {
+    const startId = story?.id || stories[currentIdx]?.id;
+    stories.sort((a, b) => (Number(b.createdAt || b.ts) || 0) - (Number(a.createdAt || a.ts) || 0));
+    currentIdx = stories.findIndex((s) => s === story || (startId && s.id === startId));
+    if (currentIdx < 0) currentIdx = 0;
+    if (typeof enrichUsersWithProfileType === 'function') {
+      const needsNames = stories.some(
+        (s) => !s.name || /^(someone|friend|member|chat)$/i.test(String(s.name || '').trim())
+      );
+      if (needsNames) await enrichUsersWithProfileType(stories, { names: true });
+    }
+    renderStory(currentIdx);
+  })();
 }
 
 window.openBaithakStoryViewer = openBaithakStoryViewer;
@@ -1931,7 +1969,7 @@ function showBaithakShareMenu(){
   if (!anchor || !row) {
     if (typeof showActionSheet === 'function') {
       showActionSheet('Share in Baithak', [
-        {label:'Split',icon:'zap',hint:'Shares with Friends in 5s. No editing.',fn:openBaithakInstantCamera},
+        {label:'Split',icon:'zap',hint:'Shares instantly with Friends.',fn:openBaithakInstantCamera},
         {label:'Create a story',icon:'camera',hint:'Camera with text, stickers, games, and audience controls.',fn:()=>openBaithakStoryComposer('camera')},
         {label:'Upload a story',icon:'image',hint:'Pick from gallery, then edit before sharing with Friends.',fn:()=>openBaithakStoryComposer('gallery')},
         {label:'Share a song',icon:'music',hint:'In-app music card — searchable, playable preview. No external apps.',fn:shareBaithakSongStory},
@@ -2123,62 +2161,30 @@ function openBaithakInstantCamera(){
   const hint = typeof t==='function' && t('instants_camera_hint')!=='instants_camera_hint'
     ? t('instants_camera_hint')
     : 'Split · Friends';
-  openInAppCamera({hint,onCapture:(file)=>{
-    const preview=URL.createObjectURL(file);
-    const share = async ()=>{
+  openInAppCamera({hint,onCapture:async (file)=>{
+    try{
       if(typeof processAndUploadMedia!=='function') throw new Error('Media upload unavailable');
       const up=await processAndUploadMedia(file,{folder:'splits'});
-      const created = typeof shareBaithakSplit==='function'
-        ? await shareBaithakSplit({
-            type:'media',
-            media:up.media||up.url||up.secure_url,
-            thumb:up.thumb,
-            mediaType:file.type.startsWith('video')?'video':'image',
-          })
-        : await createPlatformStory({
-            destination:'baithak',kind:'split',visibility:'close_friends',
-            type:'media',media:up.media,thumb:up.thumb,
-            mediaType:file.type.startsWith('video')?'video':'image',
-          });
-      if(typeof renderBaithakInstants==='function') renderBaithakInstants();
-      else if(typeof renderLiveBaithakStories==='function') renderLiveBaithakStories();
-      return created;
-    };
-    if(typeof showSplitUndoBar==='function'){
-      showSplitUndoBar({
-        previewUrl:preview,
-        onCommit:async()=>{
-          await share();
-          URL.revokeObjectURL(preview);
-        },
-        onCancel:()=>URL.revokeObjectURL(preview),
-      });
-      return;
-    }
-    const pending=document.createElement('div');
-    pending.className='instant-pending';
-    pending.setAttribute('data-nav-ignore','1');
-    pending.innerHTML=`<img src="${preview}" alt=""><div><strong>Split ready</strong><span>Sharing with Friends in 5s…</span></div><button type="button">Undo</button>`;
-    document.querySelector('.device')?.appendChild(pending);
-    let cancelled=false;
-    const timer=setTimeout(async()=>{
-      if(cancelled)return;
-      pending.querySelector('span').textContent='Sharing…';
-      try{
-        await share();
-        pending.remove();
-        URL.revokeObjectURL(preview);
-        showToast(typeof t==='function'?t('instants_shared'):'Split shared');
-      }catch(error){
-        pending.remove();
-        URL.revokeObjectURL(preview);
-        showToast(error?.message||'Could not share Split');
+      if(typeof shareBaithakSplit==='function'){
+        await shareBaithakSplit({
+          type: file.type.startsWith('video') ? 'video' : 'photo',
+          media: up.media || up.url || up.secure_url,
+          thumb: up.thumb,
+          mediaType: file.type.startsWith('video') ? 'video' : 'image',
+        });
+      } else if(typeof createPlatformStory==='function'){
+        await createPlatformStory({
+          destination:'baithak',kind:'split',visibility:'close_friends',
+          type: file.type.startsWith('video') ? 'video' : 'photo',
+          media: up.media || up.url || up.secure_url,
+          thumb: up.thumb,
+          mediaType: file.type.startsWith('video') ? 'video' : 'image',
+        });
+        if(typeof renderBaithakInstants==='function') renderBaithakInstants();
       }
-    },5000);
-    pending.querySelector('button').addEventListener('click',()=>{
-      cancelled=true;clearTimeout(timer);pending.remove();URL.revokeObjectURL(preview);
-      showToast(typeof t==='function'?t('instants_undone'):'Split undone');
-    });
+    }catch(error){
+      if(typeof showToast==='function') showToast(error?.message||'Could not share Split');
+    }
   }});
 }
 

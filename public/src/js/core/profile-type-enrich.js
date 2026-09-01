@@ -67,12 +67,27 @@
     return cachedEntry(uid)?.type || null;
   }
 
-  function putCache(uid, type, theme) {
+  function isGenericDisplayName(name) {
+    const cleaned = String(name || '').trim();
+    return !cleaned || /^(someone|friend|member|chat)$/i.test(cleaned);
+  }
+
+  function displayNameFromPublicDoc(data) {
+    if (!data) return '';
+    const d = data.displayName || data.name || '';
+    if (d && !isGenericDisplayName(d)) return String(d).trim();
+    if (data.username) return `@${String(data.username).replace(/^@/, '')}`;
+    return '';
+  }
+
+  function putCache(uid, type, theme, displayName, username) {
     if (!uid) return;
     const prev = cache.get(uid);
     cache.set(uid, {
       type: normalizeType(type || prev?.type || 'personal'),
       theme: theme !== undefined ? theme : prev?.theme ?? null,
+      displayName: displayName !== undefined ? displayName : prev?.displayName ?? '',
+      username: username !== undefined ? username : prev?.username ?? '',
       expires: Date.now() + CACHE_TTL_MS,
     });
   }
@@ -93,6 +108,7 @@
     const list = Array.isArray(objects) ? objects.filter(Boolean) : [];
     if (!list.length) return list;
     const uidKey = opts?.uidKey || 'uid';
+    const enrichNames = !!opts?.names;
 
     const missingUids = [];
     const seen = new Set();
@@ -104,15 +120,19 @@
         obj.profileType = existing;
         if (uid) putCache(uid, existing, obj.profileTheme ? slimTheme(obj.profileTheme) : undefined);
       }
-      if (obj.profileTheme) return;
-      if (!uid || uid === 'me' || uid === 'anon') return;
-      const hit = cachedEntry(uid);
+      const hit = uid ? cachedEntry(uid) : null;
       if (hit) {
         if (!obj.profileType) obj.profileType = hit.type;
         if (hit.theme && !obj.profileTheme) obj.profileTheme = hit.theme;
-        if (existing || hit.theme) return;
+        if (enrichNames && isGenericDisplayName(obj.name)) {
+          if (hit.displayName) obj.name = hit.displayName;
+          else if (hit.username) obj.name = `@${hit.username}`;
+        }
       }
-      if (!seen.has(uid)) {
+      if (!uid || uid === 'me' || uid === 'anon') return;
+      const needsTypeTheme = !obj.profileTheme && !(hit?.theme) && !existing;
+      const needsName = enrichNames && isGenericDisplayName(obj.name) && !hit?.displayName && !hit?.username;
+      if ((needsTypeTheme || needsName) && !seen.has(uid)) {
         seen.add(uid);
         missingUids.push(uid);
       }
@@ -124,6 +144,10 @@
         const hit = cachedEntry(uid);
         if (hit?.theme && !obj.profileTheme) obj.profileTheme = hit.theme;
         if (hit?.type && !obj.profileType) obj.profileType = hit.type;
+        if (enrichNames && isGenericDisplayName(obj.name)) {
+          if (hit?.displayName) obj.name = hit.displayName;
+          else if (hit?.username) obj.name = `@${hit.username}`;
+        }
       });
       return list;
     }
@@ -140,11 +164,13 @@
           const data = doc.data() || {};
           const type = typeFromUserDoc(data) || 'personal';
           const theme = themeFromUserDoc(data);
-          putCache(doc.id, type, theme);
+          const displayName = displayNameFromPublicDoc(data);
+          const username = data.username ? String(data.username).replace(/^@/, '') : '';
+          putCache(doc.id, type, theme, displayName, username);
           found.add(doc.id);
         });
         chunk.forEach((uid) => {
-          if (!found.has(uid)) putCache(uid, 'personal', null);
+          if (!found.has(uid)) putCache(uid, 'personal', null, '', '');
         });
       }
     } catch (e) {
@@ -158,6 +184,10 @@
       if (!hit) return;
       if (!readTypeFromObject(obj)) obj.profileType = hit.type;
       if (hit.theme && !obj.profileTheme) obj.profileTheme = hit.theme;
+      if (enrichNames && isGenericDisplayName(obj.name)) {
+        if (hit.displayName) obj.name = hit.displayName;
+        else if (hit.username) obj.name = `@${hit.username}`;
+      }
     });
 
     return list;

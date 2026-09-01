@@ -225,47 +225,55 @@
     return story;
   }
 
-  function showSplitUndoBar({ previewUrl, previewLabel, onCommit, onCancel } = {}) {
-    document.querySelectorAll('.instant-pending').forEach((el) => el.remove());
-    const pending = document.createElement('div');
-    pending.className = 'instant-pending';
-    pending.setAttribute('data-nav-ignore', '1');
-    const preview = previewUrl
-      ? `<img src="${safe(previewUrl)}" alt="">`
-      : `<span class="instant-pending-glyph">${safe(previewLabel || '⚡')}</span>`;
-    pending.innerHTML = `${preview}<div><strong>${splitTt('instants_ready', 'Split ready')}</strong><span>${splitTt(
-      'instants_sharing_friends',
-      'Sharing with Friends in 5s…'
-    )}</span></div><button type="button">${splitTt('instants_undo', 'Undo')}</button>`;
-    document.querySelector('.device')?.appendChild(pending);
-    let cancelled = false;
-    const timer = setTimeout(async () => {
-      if (cancelled) return;
-      const span = pending.querySelector('span');
-      if (span) span.textContent = splitTt('instants_sharing', 'Sharing…');
-      try {
-        await onCommit?.();
-        pending.remove();
-        collapseBaithakSplitComposer();
-      } catch (error) {
-        pending.remove();
-        collapseBaithakSplitComposer();
-        if (typeof showToast === 'function') {
-          showToast(error?.message || splitTt('instants_fail', 'Could not share Split'));
-        }
-      }
-    }, 5000);
-    pending.querySelector('button')?.addEventListener('click', () => {
-      cancelled = true;
-      clearTimeout(timer);
-      pending.remove();
-      collapseBaithakSplitComposer();
-      try {
-        onCancel?.();
-      } catch (e) {}
-      if (typeof showToast === 'function') showToast(splitTt('instants_undone', 'Split undone'));
-    });
-    return pending;
+  function splitOwnerLabel(story) {
+    if (!story) return '';
+    if (story.own || story.uid === currentUser?.uid) {
+      const name = typeof selfDisplayName === 'function' ? selfDisplayName() : story.name || '';
+      const clean = String(name || '').trim();
+      if (clean && !/^(you|someone)$/i.test(clean)) return `You (${clean})`;
+      return splitTt('instants_you', 'You');
+    }
+    const name =
+      typeof resolvePersonDisplayName === 'function'
+        ? resolvePersonDisplayName(story)
+        : story.name || story.username || '';
+    const cleaned = String(name || '').trim();
+    if (!cleaned || /^(someone|friend|member)$/i.test(cleaned)) {
+      if (story.username) return `@${String(story.username).replace(/^@/, '')}`;
+      return 'Friend';
+    }
+    return cleaned;
+  }
+
+  function splitPreviewForStory(story) {
+    if (!story) return { kind: 'glyph', value: '⚡' };
+    const media = story.thumb || story.media;
+    if (media) return { kind: 'image', url: media };
+    const musicThumb = story.music?.thumbnail;
+    if (musicThumb) return { kind: 'image', url: musicThumb };
+    const text = String(story.text || '').trim();
+    if (text) return { kind: 'text', value: text.slice(0, 48) };
+    if (story.music?.title) return { kind: 'music', value: story.music.title };
+    return { kind: 'glyph', value: story.type === 'music' ? '♪' : '⚡' };
+  }
+
+  function splitBundlePreview(group) {
+    for (const s of group || []) {
+      const p = splitPreviewForStory(s);
+      if (p.kind === 'image') return p;
+    }
+    return splitPreviewForStory(group?.[0]);
+  }
+
+  function splitTrayStubHtml(preview) {
+    if (preview.kind === 'image') return `<img src="${safe(preview.url)}" alt="">`;
+    if (preview.kind === 'text') {
+      return `<span class="baithak-instant-text-preview">${safe(preview.value)}</span>`;
+    }
+    if (preview.kind === 'music') {
+      return `<span class="baithak-instant-music-preview" aria-hidden="true">♪</span>`;
+    }
+    return escapeLiteText(preview.value || '⚡');
   }
 
   function collapseBaithakSplitComposer() {
@@ -299,15 +307,15 @@
     bar.addEventListener('pointerdown', () => { splitBarFocused = true; });
     bar.addEventListener('pointerup', () => { setTimeout(() => { splitBarFocused = false; }, 200); });
 
-    async function autoShare(payload, preview) {
-      showSplitUndoBar({
-        previewUrl: preview?.url,
-        previewLabel: preview?.label,
-        onCommit: async () => {
-          await shareBaithakSplit(payload);
-        },
-      });
-      collapseBaithakSplitComposer();
+    async function shareSplitPayload(payload) {
+      try {
+        await shareBaithakSplit(payload);
+        collapseBaithakSplitComposer();
+      } catch (error) {
+        if (typeof showToast === 'function') {
+          showToast(error?.message || splitTt('instants_fail', 'Could not share Split'));
+        }
+      }
     }
 
     bar.querySelector('[data-split-send]')?.addEventListener('click', async () => {
@@ -346,10 +354,12 @@
             onSelect: (gif) => {
               const url = gif?.url || gif?.mp4 || '';
               if (!url) return;
-              autoShare(
-                { text: '', media: url, thumb: gif?.preview || gif?.url || url, type: 'gif' },
-                { url: gif?.preview || gif?.url || url }
-              );
+              shareSplitPayload({
+                text: '',
+                media: url,
+                thumb: gif?.preview || gif?.url || url,
+                type: 'gif',
+              });
             },
           });
           return;
@@ -368,10 +378,7 @@
           picker({
             onSelect: (song) => {
               if (!song) return;
-              autoShare(
-                { type: 'music', music: song, text: '' },
-                { label: '♪', url: song.thumbnail || '' }
-              );
+              shareSplitPayload({ type: 'music', music: song, text: '' });
             },
           });
           return;
@@ -395,25 +402,32 @@
       const file = fileInput.files?.[0];
       fileInput.value = '';
       if (!file) return;
-      const preview = URL.createObjectURL(file);
-      showSplitUndoBar({
-        previewUrl: preview,
-        onCommit: async () => {
-          if (typeof processAndUploadMedia !== 'function') throw new Error(splitTt('instants_fail', 'Could not share Split'));
-          const up = await processAndUploadMedia(file, { folder: 'splits' });
-          const media = up?.url || up?.secure_url || up?.media;
-          const thumb = up?.thumb || media;
-          await shareBaithakSplit({
-            media,
-            thumb,
-            type: file.type.startsWith('video') ? 'video' : 'photo',
-            mediaType: file.type.startsWith('video') ? 'video' : 'image',
-          });
-          URL.revokeObjectURL(preview);
-        },
-        onCancel: () => URL.revokeObjectURL(preview),
-      });
-      collapseBaithakSplitComposer();
+      const photoBtn = bar.querySelector('[data-split-tool="photo"]');
+      const sendBtn = bar.querySelector('[data-split-send]');
+      if (photoBtn) photoBtn.disabled = true;
+      if (sendBtn) sendBtn.disabled = true;
+      try {
+        if (typeof processAndUploadMedia !== 'function') {
+          throw new Error(splitTt('instants_fail', 'Could not share Split'));
+        }
+        const up = await processAndUploadMedia(file, { folder: 'splits' });
+        const media = up?.url || up?.secure_url || up?.media;
+        const thumb = up?.thumb || media;
+        await shareBaithakSplit({
+          media,
+          thumb,
+          type: file.type.startsWith('video') ? 'video' : 'photo',
+          mediaType: file.type.startsWith('video') ? 'video' : 'image',
+        });
+        collapseBaithakSplitComposer();
+      } catch (error) {
+        if (typeof showToast === 'function') {
+          showToast(error?.message || splitTt('instants_fail', 'Could not share Split'));
+        }
+      } finally {
+        if (photoBtn) photoBtn.disabled = false;
+        if (sendBtn) sendBtn.disabled = false;
+      }
     });
   }
 
@@ -498,16 +512,20 @@
     } catch (error) {
       console.warn('[splits] Baithak feed', error);
     }
-    const pool = stories.filter((s) => isSplitKind(s));
+    const pool = stories.filter(
+      (s) => isSplitKind(s) && (!s.expiresAt || Number(s.expiresAt) > Date.now())
+    );
     if (typeof enrichUsersWithProfileType === 'function') {
-      await enrichUsersWithProfileType(pool);
+      await enrichUsersWithProfileType(pool, { names: true });
     }
     const bundles = groupByOwner(pool);
     const own = bundles.find((g) => g[0]?.own || g[0]?.uid === currentUser?.uid);
     const others = bundles.filter((g) => g !== own);
+    if (own) own.sort((a, b) => (Number(b.createdAt || b.ts) || 0) - (Number(a.createdAt || a.ts) || 0));
     const unseen = others.filter(groupHasUnseen);
     const seen = others.filter((g) => !groupHasUnseen(g));
     const ordered = [...unseen, ...seen];
+    ordered.forEach((g) => g.sort((a, b) => (Number(b.createdAt || b.ts) || 0) - (Number(a.createdAt || a.ts) || 0)));
 
     let row = strip.querySelector('.baithak-instants-row');
     if (!row) {
@@ -523,25 +541,27 @@
         </button>
         ${
           own
-            ? `<button type="button" class="baithak-instant baithak-instant--you is-own" data-bundle="own" role="listitem">
-                <span class="baithak-instant-stub">${own[0].thumb || own[0].media ? `<img src="${safe(own[0].thumb || own[0].media)}" alt="">` : '⚡'}</span>
-                <small>${splitTt('instants_you', 'You')}</small>
+            ? (() => {
+                const preview = splitBundlePreview(own);
+                return `<button type="button" class="baithak-instant baithak-instant--you is-own" data-bundle="own" role="listitem">
+                <span class="baithak-instant-stub">${splitTrayStubHtml(preview)}</span>
+                <small>${safe(splitOwnerLabel(own[0]))}</small>
                 ${own.length > 1 ? `<span class="baithak-instant-count">${own.length}</span>` : ''}
-              </button>`
+              </button>`;
+              })()
             : ''
         }
         ${ordered
           .map(
-            (group, i) => `
+            (group, i) => {
+              const preview = splitBundlePreview(group);
+              return `
           <button type="button" class="baithak-instant${groupHasUnseen(group) ? '' : ' is-seen'}" data-bundle="${i}" role="listitem">
-            <span class="baithak-instant-stub">${
-              group[0].thumb || group[0].media
-                ? `<img src="${safe(group[0].thumb || group[0].media)}" alt="">`
-                : escapeLiteText(group[0].text || '⚡').slice(0, 1)
-            }</span>
-            <small>${safe((group[0].name || '').split(' ')[0] || 'Friend')}</small>
+            <span class="baithak-instant-stub">${splitTrayStubHtml(preview)}</span>
+            <small>${safe(splitOwnerLabel(group[0]))}</small>
             ${group.length > 1 ? `<span class="baithak-instant-count">${group.length}</span>` : ''}
-          </button>`
+          </button>`;
+            }
           )
           .join('')}`;
 
@@ -808,8 +828,8 @@
   window.renderBaithakInstants = renderBaithakInstants;
   window.openBaithakInstantComposer = openBaithakInstantComposer;
   window.expandBaithakSplitComposer = expandBaithakSplitComposer;
-  window.showSplitUndoBar = showSplitUndoBar;
   window.shareBaithakSplit = shareBaithakSplit;
+  window.splitOwnerLabel = splitOwnerLabel;
   window.openBaithakAvatarMenu = openBaithakAvatarMenu;
   window.openStoryArchive = openStoryArchive;
 })();

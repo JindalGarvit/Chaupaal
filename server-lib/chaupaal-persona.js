@@ -26,11 +26,18 @@ Feedback classification:
 - When the user message is feedback/complaint/bug report about the product, still reply warmly,
   and in your JSON mark isFeedback true with a tag.
 
+App navigator (when user wants to do something in Chaupaal):
+- Prefer suggesting registered intent ids when the user wants to navigate or start a flow.
+- Registered intent ids include: tab.duniya, tab.peepal, tab.baithak, tab.dangal, tab.akhbaar,
+  duniya.post, duniya.story, baithak.split, profile.archive, profile.journal, social.wish_friend,
+  dangal.play, tool.feedback, help.what_can_you_do, money.membership, and similar dot-ids.
+
 Output format — respond with ONLY valid JSON (no markdown fences):
 {
   "reply": "your message to the user",
   "isFeedback": false,
-  "feedbackTag": "bug" | "complaint" | "suggestion" | "other" | null
+  "feedbackTag": "bug" | "complaint" | "suggestion" | "other" | null,
+  "suggestedIntents": ["duniya.story"] | null
 }`;
 
 const CRISIS_PATTERNS = [
@@ -97,6 +104,9 @@ function parseStructuredReply(rawText) {
       reply,
       isFeedback: !!parsed.isFeedback,
       feedbackTag: allowed.includes(tag) ? tag : parsed.isFeedback ? 'other' : null,
+      suggestedIntents: Array.isArray(parsed.suggestedIntents)
+        ? parsed.suggestedIntents.map((id) => String(id)).filter(Boolean).slice(0, 3)
+        : null,
     };
   } catch {
     return null;
