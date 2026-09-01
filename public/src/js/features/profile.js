@@ -444,19 +444,17 @@ function renderProfileModal(){
       });
     }
     document.getElementById('profileOpenArchiveBtn')?.addEventListener('click',()=>{
-      if(typeof openArchiveHub==='function') openArchiveHub('posts');
-      else if(typeof openArchive==='function') openArchive();
+      if(typeof openArchiveHub==='function') openArchiveHub('duniya');
     });
     document.getElementById('profileArchiveBtn')?.addEventListener('click',()=>{
-      if(typeof openArchiveHub==='function') openArchiveHub('posts');
-      else if(typeof openArchive==='function') openArchive();
+      if(typeof openArchiveHub==='function') openArchiveHub('duniya');
     });
     el.querySelectorAll('[data-dp-hub]').forEach((btn)=>{
       btn.addEventListener('click',()=>{
         const tab = btn.dataset.dpHub;
         if(typeof openArchiveHub==='function'){
-          openArchiveHub(tab === 'archive' ? 'stories' : tab);
-        } else if(typeof openArchive==='function') openArchive();
+          openArchiveHub(tab === 'archive' ? 'stories' : tab === 'posts' ? 'duniya' : tab);
+        }
       });
     });
     el.querySelector('[data-push-history]')?.addEventListener('click',()=>{

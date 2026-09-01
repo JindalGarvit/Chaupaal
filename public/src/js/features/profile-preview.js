@@ -150,8 +150,7 @@
       });
     });
     root?.querySelector?.('[data-open-archive-from-preview]')?.addEventListener('click', () => {
-      if (typeof openArchiveHub === 'function') openArchiveHub('posts');
-      else if (typeof openArchive === 'function') openArchive();
+      if (typeof openArchiveHub === 'function') openArchiveHub('duniya');
     });
     if (typeof wireTabNotificationButtons === 'function') wireTabNotificationButtons();
     const ownAvatar = root?.querySelector?.('[data-own-preview-avatar]');

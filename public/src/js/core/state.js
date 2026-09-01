@@ -281,7 +281,6 @@ document.getElementById('openExclusionListBtn')?.addEventListener('click',()=>{
 document.getElementById('settingsArchiveBtn')?.addEventListener('click',()=>{
   document.getElementById('settingsModal')?.classList.add('hidden');
   if(typeof openArchiveHub==='function') openArchiveHub('journal');
-  else if(typeof openArchive==='function') openArchive();
 });
 document.getElementById('closeSettings').addEventListener('click',()=>document.getElementById('settingsModal').classList.add('hidden'));
 document.getElementById('saveSettings').addEventListener('click',()=>{

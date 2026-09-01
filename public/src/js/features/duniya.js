@@ -1319,62 +1319,6 @@ function wireTagging(inputEl){
   document.addEventListener('click',e=>{if(!e.target.closest('.tag-dropdown')&&e.target!==inputEl){tagDropdown?.remove();tagDropdown=null;}},{capture:true});
 }
 
-// ===================== PRIVATE ARCHIVE =====================
-function openArchive(){
-  loadArchive();
-  const overlay=document.createElement('div');overlay.className='archive-overlay';
-  const peepalItems=peepalQuestions.filter(q=>q.user.uid===currentUser?.uid||q.user.name==='You');
-  const allItems=[...archiveItems,...peepalItems.map(q=>({type:'peepal_post',question:q.question,ts:q.timeAgo})),...duniyaPosts.filter(p=>p.user.uid===currentUser?.uid||p.user.name==='You').map(p=>({type:'duniya_post',...p}))];
-
-  overlay.innerHTML=`
-    <div class="archive-header">
-      <button id="archiveBack" class="cp-back-btn" aria-label="Back">${typeof iconHtml==='function'?iconHtml('arrow-left',{size:22}):''}</button>
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">🗄️ My Archive</div>
-      <button id="openRecoveryBinBtn" style="background:none;border:2px solid var(--line);border-radius:10px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer;">🗑️ Deleted</button>
-    </div>
-    <div style="flex:1;overflow-y:auto;">
-      ${allItems.length===0?`<div style="text-align:center;padding:40px;color:var(--muted);">Your archive is empty. Everything you post will appear here automatically.</div>`:''}
-      ${(()=>{
-        const journalItems=allItems.filter(i=>i.type==='journal_entry');
-        if(!journalItems.length)return'';
-        return`<div class="archive-section-title">🌙 Evening Journal <span style="font-weight:400;color:var(--muted);font-size:11px;">· private, never shown to anyone</span></div>
-        <div style="padding:0 16px 8px;display:flex;flex-direction:column;gap:8px;">
-          ${journalItems.map(item=>`
-            <div style="background:var(--white);border-radius:14px;padding:14px;border:1px solid var(--line);">
-              <div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:6px;">${new Date(item.ts).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</div>
-              <div style="font-size:13px;line-height:1.6;color:var(--ink);">${item.content}</div>
-            </div>
-          `).join('')}
-        </div>`;
-      })()}
-      ${['duniya_post','duniya_story','peepal_post','baithak_story','comment'].map(type=>{
-        const items=allItems.filter(i=>i.type===type);
-        if(!items.length)return'';
-        const labels={duniya_post:'🌍 Duniya Posts',duniya_story:'🌍 Duniya Stories',peepal_post:'🌳 Peepal Questions',baithak_story:'💬 Baithak Stories',comment:'💬 Comments',journal_entry:'🌙 Journal'};
-        return`<div class="archive-section-title">${labels[type]||type}</div>
-        <div class="archive-grid">
-          ${items.map(item=>`
-            <div class="archive-cell">
-              ${item.media?`<img src="${item.media}" loading="lazy" alt="${item.type==='peepal_post'?'Peepal':'Duniya'} archive item">`:`<div style="background:linear-gradient(135deg,var(--red),#8134AF);width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;">${item.type==='peepal_post'?'🌳':item.type==='comment'?'💬':'📝'}</div>`}
-              <div class="archive-cell-label">${item.type==='peepal_post'?'Q':item.type==='comment'?'💬':'📸'}</div>
-            </div>
-          `).join('')}
-        </div>`;
-      }).join('')}
-    </div>
-  `;
-  document.querySelector('.device').appendChild(overlay);
-  document.getElementById('archiveBack').addEventListener('click',()=>overlay.remove());
-  document.getElementById('openRecoveryBinBtn')?.addEventListener('click',()=>{
-    overlay.remove();
-    if(typeof openRecoveryBin==='function') openRecoveryBin();
-  });
-  setTimeout(()=>{
-    if(focusComposer) commentInput?.focus();
-    if(focusCommentId && typeof focusCommentRow==='function') focusCommentRow(listEl,focusCommentId);
-  },100);
-}
-
 // ===================== PEEPAL NUDGES =====================
 const PEEPAL_NUDGES=[
   {icon:'📊',label:'Market Research',text:'Get real opinions from real people',sub:'What product should we build next?',template:'Quick survey: Which of these would you pay for?',format:'mcq',options:['Option A','Option B','Option C','None of these']},

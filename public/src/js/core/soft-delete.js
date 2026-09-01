@@ -203,46 +203,73 @@
     if (typeof showToast === 'function') showToast('Restored from recovery bin ✓');
   }
 
-  function openRecoveryBin() {
-    const items = readRecoveryBin();
-    const overlay = document.createElement('div');
-    overlay.className = 'archive-overlay';
-    overlay.innerHTML = `
-      <div class="archive-header">
-        ${typeof backButtonHtml==='function'?backButtonHtml({ id: 'recoveryBack' }):'<button id="recoveryBack" class="cp-back-btn" aria-label="Back">←</button>'}
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">🗑️ Recently deleted</div>
-      </div>
-      <div style="padding:12px 16px;font-size:12px;color:var(--muted);">Items stay here for ${RECOVERY_DAYS} days, then they’re gone for good.</div>
-      <div style="flex:1;overflow-y:auto;padding:0 16px 24px;">
-        ${
-          !items.length
-            ? `<div class="ui-state ui-state-empty"><div class="ui-state-icon">🗑️</div><div class="ui-state-title">Nothing here</div><div class="ui-state-msg">Deleted posts will appear here for a limited time.</div></div>`
-            : items
-                .map(
-                  (it, i) => `
-            <div class="recovery-row" data-i="${i}">
-              <div class="recovery-preview">${(it.preview || '').slice(0, 120)}</div>
-              <div class="recovery-meta">${it.kind} · ${
-                    typeof formatRelativeTime === 'function'
-                      ? formatRelativeTime(it.deletedAtMs)
-                      : 'recently'
-                  }</div>
-              <button type="button" class="btn btn--primary ui-state-btn ui-state-btn-primary recovery-restore" data-i="${i}">Restore</button>
-            </div>`
-                )
-                .join('')
-        }
+  function recoveryBinRowsHtml(items) {
+    if (!items.length) {
+      return `<div class="archive-empty">
+        <p class="archive-empty-title">Nothing here</p>
+        <p class="archive-empty-msg">Deleted posts will appear here for a limited time.</p>
       </div>`;
-    document.querySelector('.device')?.appendChild(overlay);
-    overlay.querySelector('#recoveryBack')?.addEventListener('click', () => overlay.remove());
-    overlay.querySelectorAll('.recovery-restore').forEach((btn) => {
+    }
+    return `<div class="archive-deleted-list">${items
+      .map(
+        (it, i) => `
+      <div class="recovery-row" data-i="${i}">
+        <div class="recovery-preview">${String(it.preview || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .slice(0, 120)}</div>
+        <div class="recovery-meta">${it.kind} · ${
+          typeof formatRelativeTime === 'function' ? formatRelativeTime(it.deletedAtMs) : 'recently'
+        }</div>
+        <button type="button" class="btn btn--primary recovery-restore" data-i="${i}">Restore</button>
+      </div>`
+      )
+      .join('')}</div>`;
+  }
+
+  function wireRecoveryBinRows(host, onRefresh) {
+    if (!host) return;
+    const items = readRecoveryBin();
+    host.querySelectorAll('.recovery-restore').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const entry = items[parseInt(btn.dataset.i, 10)];
         await recoverFromBin(entry);
-        overlay.remove();
-        openRecoveryBin();
+        if (typeof onRefresh === 'function') onRefresh();
       });
     });
+  }
+
+  /** Render recovery bin into an Archive Hub tab host (no separate overlay). */
+  function renderRecoveryBinInto(host, opts) {
+    if (!host) return;
+    const items = readRecoveryBin();
+    const retention =
+      typeof t === 'function' && t('archive_deleted_retention') !== 'archive_deleted_retention'
+        ? t('archive_deleted_retention', { days: RECOVERY_DAYS })
+        : `Items stay here for ${RECOVERY_DAYS} days, then they’re gone for good.`;
+    host.innerHTML = `<p class="archive-hub-copy">${retention}</p>${recoveryBinRowsHtml(items)}`;
+    wireRecoveryBinRows(host, opts?.onRefresh);
+  }
+
+  function openRecoveryBin() {
+    document.getElementById('archiveHubSheet')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'archiveHubSheet';
+    overlay.className = 'archive-overlay archive-hub';
+    overlay.setAttribute('data-nav-managed', '1');
+    overlay.innerHTML = `
+      <div class="archive-hub-header">
+        ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-recovery-back' }) : '<button type="button" data-recovery-back class="cp-back-btn" aria-label="Back">←</button>'}
+        <div class="archive-hub-header-copy">
+          <span class="archive-hub-title">${typeof t === 'function' && t('archive_tab_deleted') !== 'archive_tab_deleted' ? t('archive_tab_deleted') : 'Deleted'}</span>
+        </div>
+      </div>
+      <div class="archive-hub-body" data-recovery-body></div>`;
+    const body = overlay.querySelector('[data-recovery-body]');
+    document.querySelector('.device')?.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.querySelector('[data-recovery-back]')?.addEventListener('click', close);
+    renderRecoveryBinInto(body, { onRefresh: () => renderRecoveryBinInto(body, { onRefresh: () => renderRecoveryBinInto(body) }) });
   }
 
   window.softDeleteDoc = softDeleteDoc;
@@ -250,6 +277,7 @@
   window.softDeleteContent = softDeleteContent;
   window.showUndoToast = showUndoToast;
   window.openRecoveryBin = openRecoveryBin;
+  window.renderRecoveryBinInto = renderRecoveryBinInto;
   window.readRecoveryBin = readRecoveryBin;
   window.RECOVERY_BIN_DAYS = RECOVERY_DAYS;
 })();
