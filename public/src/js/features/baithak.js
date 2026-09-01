@@ -78,6 +78,7 @@ function initBaithak(){
         if(typeof migrateDuplicateDmInbox==='function'){
           try{ await migrateDuplicateDmInbox(currentUser.uid); }catch(e){}
         }
+        if(typeof dedupeBaithakInbox==='function') dedupeBaithakInbox();
         if(typeof baithakChats!=='undefined') baithakChats = pinSelfChat(baithakChats);
         if(typeof setBaithakSection==='function') setBaithakSection('sabha');
         else renderChatList(baithakChats);

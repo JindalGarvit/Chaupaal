@@ -1001,12 +1001,12 @@ function openChatScreen(chat){
   });
   // Live presence → header badge + join banner (total participants ≥ 2)
   if (!isSelf && !isChaupaal && typeof watchMehfilPresence === 'function') {
-    const chatId = chat.firestoreId || chat.id;
+    const chatId = typeof mehfilPresenceChatId === 'function' ? mehfilPresenceChatId(chat) : (chat.firestoreId || chat.id);
     const unsub = watchMehfilPresence(chatId, ({ count, live, totalCount }) => {
       const btn = document.getElementById('chatMehfilBtn');
       const banner = document.getElementById('mehfilLiveBanner');
       const total = totalCount != null ? totalCount : count;
-      const isLive = live != null ? !!live : false;
+      const isLive = live === true;
       btn?.classList.toggle('is-live', isLive);
       if (banner) {
         const inRoom = typeof isMehfilOpen === 'function' && isMehfilOpen();

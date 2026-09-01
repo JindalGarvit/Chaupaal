@@ -148,7 +148,9 @@
       });
       if (!chat) return null;
       if (typeof rememberInboxChat === 'function') rememberInboxChat(chat);
-      if (typeof baithakChats !== 'undefined' && Array.isArray(baithakChats)) {
+      if (typeof upsertBaithakInboxChat === 'function') {
+        upsertBaithakInboxChat(chat);
+      } else if (typeof baithakChats !== 'undefined' && Array.isArray(baithakChats)) {
         const id = chat.firestoreId || chat.id;
         const i = baithakChats.findIndex((c) => (c.firestoreId || c.id) === id);
         if (i >= 0) baithakChats[i] = { ...baithakChats[i], ...chat };

@@ -1034,7 +1034,8 @@
     };
     try {
       if (typeof baithakChats !== 'undefined' && Array.isArray(baithakChats)) {
-        if (!baithakChats.find((c) => c.id === chat.id)) baithakChats.unshift(chat);
+        if (typeof upsertBaithakInboxChat === 'function') upsertBaithakInboxChat(chat);
+        else if (!baithakChats.find((c) => c.id === chat.id)) baithakChats.unshift(chat);
       }
     } catch (e) {}
     document.querySelectorAll('.tab-btn').forEach((b) => {

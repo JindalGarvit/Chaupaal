@@ -131,6 +131,9 @@ function renderChatList(chats, opts){
     console.warn('[self-chat] renderChatList: #chatList missing');
     return;
   }
+  if(typeof mergeBaithakInbox==='function'&&Array.isArray(chats)){
+    chats=mergeBaithakInbox([],chats);
+  }
   list.innerHTML = '';
   try {
     (list._mehfilPresenceUnsubs || []).forEach((u) => {
@@ -193,18 +196,22 @@ function renderChatList(chats, opts){
       </div>
     `;
     if(!self&&!chaupaal&&typeof watchMehfilPresence==='function'){
-      const cid=chat.firestoreId||chat.id;
+      const cid=typeof mehfilPresenceChatId==='function'?mehfilPresenceChatId(chat):(chat.firestoreId||chat.id);
       const liveEl=item.querySelector('[data-mehfil-live-row]');
       const presenceDot=item.querySelector('[data-mehfil-presence-dot]');
       if(cid&&liveEl){
-        const unsub=watchMehfilPresence(cid,({count,live,totalCount})=>{
+        const paintLive=(isLive,total)=>{
           if(!liveEl.isConnected) return;
-          const total=totalCount!=null?totalCount:count;
-          const isLive=live!=null?!!live:false;
           liveEl.hidden=!isLive;
           if(presenceDot) presenceDot.hidden=!isLive;
           const span=liveEl.querySelector('span');
           if(span) span.textContent=total>2?`Live · ${total}`:'Live';
+        };
+        paintLive(false,0);
+        const unsub=watchMehfilPresence(cid,({count,live,totalCount})=>{
+          const total=totalCount!=null?totalCount:count;
+          const isLive=live===true;
+          paintLive(isLive,total||0);
         });
         list._mehfilPresenceUnsubs.push(unsub);
       }
@@ -468,6 +475,65 @@ function peerUidOfInboxChat(c){
   return String(c.uid||c.peerUid||c.otherUid||(c.participants||[]).find((u)=>u&&u!==currentUser?.uid)||'').trim();
 }
 
+/** Canonical DM row — one Firestore id per peer (sorted uid pair). */
+function normalizeDmChatRow(c){
+  if(!c||c.type==='group') return c;
+  if(typeof isSelfChatRow==='function'&&isSelfChatRow(c)) return c;
+  if(typeof isChaupaalChatRow==='function'&&isChaupaalChatRow(c)) return c;
+  const peer=peerUidOfInboxChat(c);
+  if(!peer||typeof dmChatIdFor!=='function') return c;
+  const canon=dmChatIdFor(peer);
+  if(!canon) return c;
+  const id=chatInboxId(c);
+  if(id===canon&&c.uid===peer&&c.peerUid===peer) return c;
+  return {
+    ...c,
+    id:canon,
+    firestoreId:canon,
+    uid:peer,
+    peerUid:peer,
+    type:c.type||'dm',
+    _mergedFrom:id&&id!==canon?id:(c._mergedFrom||null),
+  };
+}
+
+function mehfilPresenceChatId(chat){
+  if(!chat||chat.type==='group') return chatInboxId(chat);
+  const peer=peerUidOfInboxChat(chat);
+  if(peer&&typeof dmChatIdFor==='function'){
+    const canon=dmChatIdFor(peer);
+    if(canon) return canon;
+  }
+  return chatInboxId(chat);
+}
+
+function isNonCanonicalDmId(id, peer){
+  if(!id||!peer||typeof dmChatIdFor!=='function') return false;
+  const canon=dmChatIdFor(peer);
+  return !!(canon&&id!==canon);
+}
+
+function dedupeBaithakInbox(){
+  if(typeof baithakChats==='undefined'||!Array.isArray(baithakChats)) return [];
+  baithakChats=mergeBaithakInbox(baithakChats,[]);
+  if(typeof pinSelfChat==='function') baithakChats=pinSelfChat(baithakChats);
+  writeInboxCache(baithakChats);
+  return baithakChats;
+}
+
+function upsertBaithakInboxChat(chat){
+  if(!chat||isLiveSampleChat(chat)) return null;
+  const row=normalizeDmChatRow(chat);
+  if(typeof baithakChats!=='undefined'&&Array.isArray(baithakChats)){
+    baithakChats=mergeBaithakInbox(baithakChats,[row]);
+    if(typeof pinSelfChat==='function') baithakChats=pinSelfChat(baithakChats);
+    writeInboxCache(baithakChats);
+  }else if(typeof rememberInboxChat==='function'){
+    rememberInboxChat(row);
+  }
+  return row;
+}
+
 function resolveBaithakTitle(chat, viewerUid){
   if(!chat) return '';
   if(typeof BaithakSearch!=='undefined'&&typeof BaithakSearch.resolveChatDisplayName==='function'){
@@ -603,6 +669,7 @@ function mergeBaithakInbox(existing, incoming){
   const byKey=new Map();
   const add=(c)=>{
     if(!c||isLiveSampleChat(c)) return;
+    c=normalizeDmChatRow(c);
     const id=chatInboxId(c);
     if(!id) return;
     const isSelf=typeof isSelfChatRow==='function'&&isSelfChatRow(c);
@@ -704,14 +771,7 @@ function forgetInboxChat(chatId){
 
 function rememberInboxChat(chat){
   if(!chat||isLiveSampleChat(chat)) return;
-  const peer=peerUidOfInboxChat(chat);
-  if(peer&&typeof dmChatIdFor==='function'){
-    const canon=dmChatIdFor(peer);
-    const id=chatInboxId(chat);
-    if(canon&&id&&id!==canon&&isStubDmId(id)){
-      chat={...chat,id:canon,firestoreId:canon,uid:peer,peerUid:peer};
-    }
-  }
+  chat=normalizeDmChatRow(chat);
   writeInboxCache(mergeBaithakInbox(readInboxCache(),[chat]));
 }
 
@@ -731,28 +791,42 @@ function msgFingerprint(m){
 async function migrateDuplicateDmInbox(uid){
   const viewer=String(uid||currentUser?.uid||'');
   if(!viewer||!db) return {merged:0};
-  const flag=`chaupaal_dm_merge_v1_${viewer}`;
-  try{ if(sessionStorage.getItem(flag)==='1') return {merged:0,skipped:true}; }catch(e){}
-  const list=mergeBaithakInbox(
-    Array.isArray(baithakChats)?baithakChats:[],
-    readInboxCache().map((c)=>typeof mapChatDoc==='function'?mapChatDoc(c):c)
-  );
+  const flag=`chaupaal_dm_merge_v3_${viewer}`;
+  try{ if(localStorage.getItem(flag)==='1'){ dedupeBaithakInbox(); return {merged:0,skipped:true}; } }catch(e){}
+  let firestoreRows=[];
+  try{
+    if(typeof fetchParticipatingChats==='function'){
+      const mem=await fetchParticipatingChats();
+      firestoreRows=(mem.items||[]).map((c)=>(typeof mapChatDoc==='function'?mapChatDoc(c):c));
+    }
+  }catch(e){
+    console.warn('[baithak] dm merge fetch', e?.message||e);
+  }
+  const rawById=new Map();
+  const collect=(c)=>{
+    if(!c||c.type==='group') return;
+    const id=chatInboxId(c);
+    if(!id) return;
+    rawById.set(id, c);
+  };
+  firestoreRows.forEach(collect);
+  (Array.isArray(baithakChats)?baithakChats:[]).forEach(collect);
+  readInboxCache().map((c)=>(typeof mapChatDoc==='function'?mapChatDoc(c):c)).forEach(collect);
   const byPeer=new Map();
-  list.forEach((c)=>{
+  rawById.forEach((c)=>{
     const peer=peerUidOfInboxChat(c);
     if(!peer) return;
-    if(!byPeer.has(peer)) byPeer.set(peer,[]);
-    byPeer.get(peer).push(c);
+    const id=chatInboxId(c);
+    if(!byPeer.has(peer)) byPeer.set(peer,new Map());
+    byPeer.get(peer).set(id,c);
   });
   let merged=0;
-  for(const [peer, rows] of byPeer){
+  for(const [peer, idMap] of byPeer){
+    const rows=[...idMap.values()];
     const canon=typeof dmChatIdFor==='function'?dmChatIdFor(peer):'';
     if(!canon) continue;
-    const stubs=rows.filter((r)=>{
-      const id=chatInboxId(r);
-      return id&&id!==canon;
-    });
-    if(!stubs.length&&rows.every((r)=>chatInboxId(r)===canon)) continue;
+    const stubs=rows.filter((r)=>isNonCanonicalDmId(chatInboxId(r),peer));
+    if(!stubs.length) continue;
     try{
       if(typeof ensurePeerDmChat==='function') await ensurePeerDmChat(peer);
       const canonRef=db.collection('chats').doc(canon);
@@ -802,11 +876,8 @@ async function migrateDuplicateDmInbox(uid){
       console.warn('[baithak] dm merge', peer, e?.message||e);
     }
   }
-  try{ sessionStorage.setItem(flag,'1'); }catch(e){}
-  if(Array.isArray(baithakChats)){
-    baithakChats=mergeBaithakInbox(baithakChats,[]);
-    writeInboxCache(baithakChats);
-  }
+  try{ localStorage.setItem(flag,'1'); }catch(e){}
+  dedupeBaithakInbox();
   return {merged};
 }
 
@@ -816,6 +887,7 @@ function hydrateInboxFromDeviceCache(){
   if(!cached.length) return [];
   const mapped=cached.map((c)=>mapChatDoc(c));
   baithakChats=typeof pinSelfChat==='function'?pinSelfChat(mergeBaithakInbox(baithakChats,mapped)):mergeBaithakInbox(baithakChats,mapped);
+  if(typeof dedupeBaithakInbox==='function') dedupeBaithakInbox();
   if(typeof BaithakSearch!=='undefined'&&typeof BaithakSearch.applyDisplayNames==='function'){
     BaithakSearch.applyDisplayNames(baithakChats);
   }
@@ -980,6 +1052,7 @@ function mapChatDoc(raw){
     description: raw.description||'',
     photoURL: raw.photoURL||null,
     uid: peerUid||raw.peerUid||null,
+    peerUid: peerUid||raw.peerUid||null,
     profileType: raw.profileType||raw.peerProfileType||peerProfile?.profileType||null,
     discoveryOrigin: raw.discoveryOrigin||raw.origin||null,
     origin: raw.origin||raw.discoveryOrigin||null,
@@ -1018,7 +1091,8 @@ async function loadBaithakChatsPage({reset=false}={}){
     return [openChat, ...(list||[])];
   };
   const applyList=(incoming, {replaceCache=false}={})=>{
-    const withPrev=mergeBaithakInbox(prevLive, incoming);
+    const base=Array.isArray(baithakChats)&&baithakChats.length?baithakChats:prevLive;
+    const withPrev=mergeBaithakInbox(base, incoming);
     baithakChats=pinSelfChat(keepOpen(withPrev));
     if(replaceCache) writeInboxCache(baithakChats);
   };
@@ -1182,6 +1256,7 @@ async function setBaithakSection(section) {
   const panel = document.getElementById('panel-baithak');
   if (panel) panel.dataset.baithakSection = baithakSection;
   if (typeof cleanupModeHeaders === 'function') cleanupModeHeaders();
+  if (typeof dedupeBaithakInbox === 'function') dedupeBaithakInbox();
   const all = typeof pinSelfChat === 'function' ? pinSelfChat(baithakChats) : baithakChats || [];
 
   if (baithakSection === 'sabha') {
@@ -1231,6 +1306,11 @@ window.resolveBaithakTitle = resolveBaithakTitle;
 window.isGenericDmTitle = isGenericDmTitle;
 window.isStubDmId = isStubDmId;
 window.mergeBaithakInbox = mergeBaithakInbox;
+window.normalizeDmChatRow = normalizeDmChatRow;
+window.mehfilPresenceChatId = mehfilPresenceChatId;
+window.dedupeBaithakInbox = dedupeBaithakInbox;
+window.upsertBaithakInboxChat = upsertBaithakInboxChat;
+window.isNonCanonicalDmId = isNonCanonicalDmId;
 window.mapChatDoc = mapChatDoc;
 window.chatRecencyMs = chatRecencyMs;
 window.hydrateInboxFromDeviceCache = hydrateInboxFromDeviceCache;

@@ -305,6 +305,10 @@
 
   function addChatToInboxCache(chat) {
     if (!chat) return;
+    if (typeof upsertBaithakInboxChat === 'function') {
+      upsertBaithakInboxChat(chat);
+      return;
+    }
     if (typeof rememberInboxChat === 'function') rememberInboxChat(chat);
     if (typeof baithakChats !== 'undefined' && Array.isArray(baithakChats)) {
       const id = chat.firestoreId || chat.id;

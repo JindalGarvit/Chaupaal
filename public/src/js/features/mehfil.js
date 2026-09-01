@@ -2361,6 +2361,13 @@
     if (!presenceWatchers.has(chatId)) presenceWatchers.set(chatId, new Set());
     presenceWatchers.get(chatId).add(cb);
 
+    const emitOff = () => {
+      try {
+        cb({ count: 0, othersCount: 0, totalCount: 0, uids: [], allUids: [], participants: {}, live: false });
+      } catch (e) {}
+    };
+    emitOff();
+
     if (!presenceUnsubs.has(chatId)) {
       const ref = rtdbRef(`mehfil/${chatId}/participants`);
       if (ref) {
@@ -2372,12 +2379,15 @@
           const liveOthers = Object.entries(val).filter(([uid, meta]) => {
             if (!uid || uid === me) return false;
             if (String(meta?.state || '') !== 'in_room') return false;
-            return now - Number(meta?.at || 0) < FRESH_MS;
+            const at = Number(meta?.at || 0);
+            if (!at || now - at >= FRESH_MS) return false;
+            return true;
           });
-          const freshAll = Object.entries(val).filter(
-            ([, meta]) =>
-              String(meta?.state || '') === 'in_room' && now - Number(meta?.at || 0) < FRESH_MS
-          );
+          const freshAll = Object.entries(val).filter(([, meta]) => {
+            if (String(meta?.state || '') !== 'in_room') return false;
+            const at = Number(meta?.at || 0);
+            return at > 0 && now - at < FRESH_MS;
+          });
           const isLive = liveOthers.length >= 1;
           const set = presenceWatchers.get(chatId);
           set?.forEach((fn) => {
