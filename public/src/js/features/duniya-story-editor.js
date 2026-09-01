@@ -849,12 +849,13 @@
           }
 
           if (!media && !item.text && !item.music && !item.location) throw new Error('EMPTY_STORY');
-          await createPlatformStory({
+          const payload = {
             destination: 'duniya',
             kind: 'story',
             type: 'media',
             media,
             thumb,
+            text: item.text || '',
             mediaType: item.mediaType,
             durationMs:
               item.mediaType === 'video'
@@ -877,7 +878,21 @@
             restoryOf: item.restoryOf,
             saveOnly: !!saveOnly,
             clientId: uid() + uid(),
-          });
+            expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+            active: true,
+          };
+          const viewable =
+            typeof NS.isStoryViewable === 'function'
+              ? NS.isStoryViewable(payload)
+              : !!(payload.media || payload.thumb || payload.text || (payload.overlays && payload.overlays.length));
+          if (!viewable) {
+            if (typeof showToast === 'function') {
+              showToast(NS.tt('story_need_content', 'Add a photo, video, or text before sharing'));
+            }
+            if (shareBtn) shareBtn.disabled = false;
+            return;
+          }
+          await createPlatformStory(payload);
         } catch (err) {
           NS.report('duniya_story_share', err);
           if (shareBtn) shareBtn.disabled = false;

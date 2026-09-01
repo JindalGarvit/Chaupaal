@@ -60,6 +60,90 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/* Library — media-first step */
+.dc-library {
+  padding: 12px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dc-camera-hero {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 120px;
+  border: 1.5px dashed var(--line, #e8e0d4);
+  border-radius: 18px;
+  background: var(--white, #fff);
+  cursor: pointer;
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--ink, #1a1a1a);
+}
+
+.dc-camera-icon {
+  font-size: 28px;
+}
+
+.dc-gallery-pick {
+  width: 100%;
+  min-height: 48px;
+  border: 1.5px solid var(--line, #e8e0d4);
+  border-radius: 14px;
+  background: var(--cream, #f6f1e8);
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--ink, #1a1a1a);
+}
+
+.dc-library-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+@media (min-width: 360px) {
+  .dc-library-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.dc-library-grid .dc-thumb {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.dc-library-grid .dc-thumb.is-active {
+  border-color: var(--red, #e63946);
+  box-shadow: 0 0 0 2px rgba(230, 57, 70, 0.25);
+}
+
+.dc-thumb-check {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--red, #e63946);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
 /* Picker */
 .dc-picker {
   padding: 16px;

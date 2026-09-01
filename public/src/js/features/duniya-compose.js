@@ -107,7 +107,7 @@
       collabInvites: [],
       firstComment: '',
       coverIndex: 0,
-      screen: 'picker',
+      screen: 'library',
       uploadPct: 0,
       uploadMsg: '',
       tagMode: false,
@@ -237,7 +237,7 @@
         return;
       }
       if (state?.screen === 'crop') {
-        showPicker();
+        showLibrary();
         return;
       }
       closeComposer();
@@ -397,9 +397,18 @@
     });
   }
 
+  function syncLibraryNext() {
+    const nEl = host?.querySelector('[data-dc-next]');
+    if (nEl && state && (state.screen === 'library' || state.screen === 'picker')) {
+      nEl.disabled = !state.slides.length;
+    }
+  }
+
   function renderFilmstrip(root) {
     const strip = root.querySelector('[data-dc-strip]');
     if (!strip) return;
+    const library = state?.screen === 'library' || state?.screen === 'picker';
+    strip.className = library ? 'dc-library-grid' : 'dc-filmstrip';
     strip.innerHTML = state.slides
       .map((s, i) => {
         const src = s.localUrl || s.gifUrl || s.remote?.thumb || '';
@@ -410,7 +419,9 @@
           s.type === 'video'
             ? `<video src="${esc(src)}" muted playsinline></video>`
             : `<img src="${esc(src)}" alt="">`;
-        return `<div class="dc-thumb${i === state.index ? ' is-active' : ''}" data-i="${i}" draggable="true">${media}<button type="button" class="dc-thumb-x" data-del="${i}" aria-label="Remove">✕</button></div>`;
+        return `<div class="dc-thumb${i === state.index ? ' is-active' : ''}" data-i="${i}" draggable="true">${media}${
+          library ? '<span class="dc-thumb-check" aria-hidden="true">✓</span>' : ''
+        }<button type="button" class="dc-thumb-x" data-del="${i}" aria-label="Remove">✕</button></div>`;
       })
       .join('');
     strip.querySelectorAll('[data-i]').forEach((el) => {
@@ -448,11 +459,12 @@
         }));
         if (state.index >= state.slides.length) state.index = Math.max(0, state.slides.length - 1);
         persistDraft();
-        if (!state.slides.length) showPicker();
+        if (!state.slides.length) showLibrary();
         else if (state.screen === 'crop') showCrop();
         else renderFilmstrip(root);
       });
     });
+    syncLibraryNext();
     let dragFrom = null;
     strip.querySelectorAll('.dc-thumb[draggable]').forEach((el) => {
       el.addEventListener('dragstart', () => {
@@ -473,33 +485,39 @@
     });
   }
 
-  function showPicker() {
+  function showLibrary() {
     if (!state) return;
-    state.screen = 'picker';
-    setTitle('New post', state.slides.length ? 'Next' : 'Next');
+    state.screen = 'library';
+    setTitle('New post', 'Next');
+    syncLibraryNext();
     const el = body();
-    el.innerHTML = `<div class="dc-picker">
-      <div class="dc-picker-tiles">
-        <button type="button" class="dc-tile" data-act="gallery"><span aria-hidden="true">🖼</span>Gallery</button>
-        <button type="button" class="dc-tile" data-act="camera"><span aria-hidden="true">📷</span>Camera</button>
-        <button type="button" class="dc-tile" data-act="gif"><span aria-hidden="true">GIF</span>GIF</button>
-      </div>
-      <div class="dc-filmstrip" data-dc-strip></div>
-      <p class="dc-hint">Photos, videos, and carousels — up to 10 slides. Cancel the system picker to stay here.</p>
-      <button type="button" class="dc-advanced-link" data-act="more">More options</button>
+    el.innerHTML = `<div class="dc-library">
+      <button type="button" class="dc-camera-hero" data-act="camera">
+        <span class="dc-camera-icon" aria-hidden="true">📷</span>
+        <span class="dc-camera-label">${tt('duniya_camera', 'Camera')}</span>
+      </button>
+      <button type="button" class="dc-gallery-pick" data-act="gallery">${tt('duniya_choose_gallery', 'Choose from gallery')}</button>
+      <div class="dc-library-grid" data-dc-strip></div>
+      <p class="dc-hint">${tt('duniya_compose_hint', 'Pick photos or videos — up to 10 slides.')}</p>
+      <button type="button" class="dc-advanced-link" data-act="more">${tt('more_options', 'More options')}</button>
       <div class="dc-advanced hidden" data-dc-advanced>
-        <button type="button" class="dc-tile dc-tile--quiet" data-act="text"><span aria-hidden="true">Aa</span>Text only</button>
+        <button type="button" class="dc-tile dc-tile--quiet" data-act="text"><span aria-hidden="true">Aa</span>${tt('text_only', 'Text only')}</button>
+        <button type="button" class="dc-tile dc-tile--quiet" data-act="gif"><span aria-hidden="true">GIF</span>GIF</button>
       </div>
     </div>`;
     renderFilmstrip(el);
     el.querySelector('[data-act="gallery"]').addEventListener('click', async () => {
       const files = await pickFiles({ multiple: true });
       addFiles(files);
-      if (state.slides.length) showCrop();
+      renderFilmstrip(el);
+      syncLibraryNext();
+      if (state.slides.length === files.length && files.length === 1) showCrop();
     });
     el.querySelector('[data-act="camera"]').addEventListener('click', async () => {
       const files = await pickFiles({ multiple: false, capture: true });
       addFiles(files);
+      renderFilmstrip(el);
+      syncLibraryNext();
       if (state.slides.length) showCrop();
     });
     el.querySelector('[data-act="more"]')?.addEventListener('click', () => {
@@ -509,7 +527,7 @@
       state.mode = 'text';
       showExtras();
     });
-    el.querySelector('[data-act="gif"]').addEventListener('click', () => {
+    el.querySelector('[data-act="gif"]')?.addEventListener('click', () => {
       if (typeof openGifPicker !== 'function') {
         toast('GIF picker unavailable');
         return;
@@ -521,6 +539,10 @@
         },
       });
     });
+  }
+
+  function showPicker() {
+    showLibrary();
   }
 
   function filterCss(id) {
@@ -583,7 +605,7 @@
 
   async function showCrop() {
     if (!state.slides.length) {
-      showPicker();
+      showLibrary();
       return;
     }
     state.screen = 'crop';
@@ -1065,9 +1087,9 @@
 
   async function onPrimary() {
     if (!state) return;
-    if (state.screen === 'picker') {
+    if (state.screen === 'library' || state.screen === 'picker') {
       if (state.slides.length) showCrop();
-      else toast('Pick media or choose Text');
+      else toast('Pick at least one photo or video');
       return;
     }
     if (state.screen === 'crop') {
@@ -1329,11 +1351,8 @@
       showExtras();
       return;
     }
-    showPicker();
-    if (state.caption || state.slides.length) {
-      if (state.slides.length) showCrop();
-      else showExtras();
-    }
+    showLibrary();
+    if (state.slides.length) showCrop();
   }
 
   function hydrateFromPost(post) {

@@ -591,6 +591,107 @@
     }
   }
 
+  async function fetchContentLikers(collection, postId) {
+    if (typeof apiFetch !== 'function') return [];
+    const envelope = await apiFetch('/api/stories', {
+      method: 'POST',
+      needAuth: true,
+      body: { action: 'list_content_likes', collection, postId },
+    });
+    if (!envelope?.ok) throw new Error(envelope?.error?.message || 'Could not load likes');
+    return envelope.data?.likers || [];
+  }
+
+  async function fetchStoryLikers(destination, storyId) {
+    if (typeof apiFetch !== 'function') return [];
+    const envelope = await apiFetch('/api/stories', {
+      method: 'POST',
+      needAuth: true,
+      body: { action: 'list_story_likes', destination: destination || 'duniya', storyId },
+    });
+    if (!envelope?.ok) throw new Error(envelope?.error?.message || 'Could not load likes');
+    return envelope.data?.likers || [];
+  }
+
+  function openLikersSheet({ title, likers, onProfileTap } = {}) {
+    document.getElementById('chaupaalLikersSheet')?.remove();
+    const sheet = document.createElement('div');
+    sheet.id = 'chaupaalLikersSheet';
+    sheet.className = 'likers-sheet';
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-label', title || 'Likes');
+    const esc = (s) =>
+      String(s ?? '').replace(/[&<>"']/g, (ch) =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch])
+      );
+    let rows = Array.isArray(likers) ? likers.slice() : [];
+    if (typeof pinYouInProfiles === 'function') rows = pinYouInProfiles(rows);
+    sheet.innerHTML = `
+      <div class="likers-sheet-handle" aria-hidden="true"></div>
+      <div class="likers-sheet-header">
+        <strong>${esc(title || 'Likes')}</strong>
+        <button type="button" data-likers-close aria-label="Close">✕</button>
+      </div>
+      <div class="likers-sheet-filter" data-list-filter-host></div>
+      <div class="likers-sheet-list" data-likers-list>${
+        rows.length
+          ? rows
+              .map((u) => {
+                const label =
+                  typeof resolvePersonDisplayName === 'function' ? resolvePersonDisplayName(u) : u.name || 'Member';
+                const nameHtml =
+                  typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml(label, u) : esc(label);
+                const filterText = `${label} ${u.username || ''}`.toLowerCase();
+                const av =
+                  typeof renderUserAvatarHtml === 'function' && u.uid
+                    ? renderUserAvatarHtml(u, { decorative: true, size: 36 })
+                    : u.avatar && /^https:/.test(u.avatar)
+                      ? `<img src="${esc(u.avatar)}" alt="" width="36" height="36">`
+                      : `<span class="likers-sheet-fallback">${esc((u.avatar || '👤').slice(0, 2))}</span>`;
+                return `<button type="button" class="likers-sheet-row" data-uid="${esc(u.uid)}" data-filter-text="${esc(filterText)}">${av}<span class="likers-sheet-meta"><strong>${nameHtml}</strong>${
+                  u.username ? `<small>@${esc(u.username)}</small>` : ''
+                }</span></button>`;
+              })
+              .join('')
+          : `<div class="comments-empty">No likes yet</div>`
+      }</div>
+      <div class="comments-empty" data-list-filter-empty hidden>No matches</div>`;
+    const host = document.querySelector('.device') || document.body;
+    host.appendChild(sheet);
+    const close = () => {
+      sheet.remove();
+      if (typeof restoreAppShell === 'function') restoreAppShell('likers_sheet');
+    };
+    sheet.querySelector('[data-likers-close]')?.addEventListener('click', close);
+    sheet.querySelectorAll('[data-uid]').forEach((row) => {
+      row.addEventListener('click', () => {
+        const uid = row.dataset.uid;
+        const profile = rows.find((r) => r.uid === uid) || { uid };
+        if (typeof onProfileTap === 'function') onProfileTap(profile);
+        else if (typeof openPublicProfile === 'function') openPublicProfile(profile);
+      });
+    });
+    const filterHost = sheet.querySelector('[data-list-filter-host]');
+    const listEl = sheet.querySelector('[data-likers-list]');
+    if (filterHost && typeof mountListFilter === 'function' && rows.length > 6) {
+      mountListFilter({
+        host: filterHost,
+        placeholder: 'Search…',
+        surfaceId: 'content_likers',
+        getRows: () => [...listEl.querySelectorAll('.likers-sheet-row')],
+        emptyEl: sheet.querySelector('[data-list-filter-empty]'),
+      });
+    } else if (filterHost) {
+      filterHost.remove();
+    }
+    if (typeof openLayer === 'function') {
+      openLayer(sheet, close, { role: 'dialog', label: title || 'Likes' });
+    } else if (typeof pushNavLayer === 'function') {
+      sheet.dataset.navManaged = '1';
+      pushNavLayer(sheet, close);
+    }
+  }
+
   window.hydrateContentLikes = hydrateContentLikes;
   window.toggleContentLike = toggleContentLike;
   window.hydratePeepalReactions = hydratePeepalReactions;
@@ -608,4 +709,7 @@
   window.toggleContentSaved = toggleContentSaved;
   window.isContentSaved = isContentSaved;
   window.hydrateContentSaved = hydrateContentSaved;
+  window.fetchContentLikers = fetchContentLikers;
+  window.fetchStoryLikers = fetchStoryLikers;
+  window.openLikersSheet = openLikersSheet;
 })();

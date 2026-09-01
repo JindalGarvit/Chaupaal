@@ -452,7 +452,7 @@ function createDuniyaPost(post, {variant='list'}={}){
       <button class="duniya-action-btn share-btn" data-id="${post.id}" aria-label="Share post">${typeof iconHtml==='function'?iconHtml('share',{size:22}):'<span aria-hidden="true">↗</span>'}</button>
       <button class="duniya-action-btn duniya-bookmark-btn ${post.savedByMe?'saved':''}" data-id="${post.id}" aria-label="Save post" aria-pressed="${post.savedByMe?'true':'false'}">${typeof iconHtml==='function'?iconHtml('bookmark',{size:22}):'<span aria-hidden="true">🔖</span>'}</button>
     </div>
-    ${hideLikes?'':`<div class="duniya-post-likes">${formatCount(post.likes||0)} likes</div>`}
+    ${hideLikes?'':`<div class="duniya-post-likes${(post.likes||0)?' is-tappable':''}" role="${(post.likes||0)?'button':''}" tabindex="${(post.likes||0)?'0':''}">${formatCount(post.likes||0)} likes</div>`}
     ${slides.length?`<div class="duniya-post-caption-row">
       <div class="duniya-post-caption"><strong class="duniya-post-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(post.user.name,post.user):duniyaEsc(post.user.name)}</strong> ${caption}</div>
       ${post.caption?`<button type="button" class="duniya-caption-speak" title="Listen to caption" aria-label="Listen to caption">${typeof iconHtml==='function'?iconHtml('volume',{size:16}):'🔊'}</button>`:''}
@@ -536,6 +536,20 @@ function createDuniyaPost(post, {variant='list'}={}){
       delete btn.dataset.busy;
     }
   });
+
+  const likesEl=el.querySelector('.duniya-post-likes');
+  if(likesEl && !hideLikes && (post.likes||0)>0){
+    likesEl.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      openDuniyaPostLikers(post);
+    });
+    likesEl.addEventListener('keydown',(e)=>{
+      if(e.key==='Enter'||e.key===' '){
+        e.preventDefault();
+        openDuniyaPostLikers(post);
+      }
+    });
+  }
 
   // Save / unsave
   const bookmarkBtn = el.querySelector('.duniya-bookmark-btn');
@@ -869,6 +883,28 @@ function createDuniyaPost(post, {variant='list'}={}){
 
 function formatCount(n){return n>=1000?(n/1000).toFixed(1)+'K':String(n);}
 
+async function openDuniyaPostLikers(post){
+  const count=Math.max(0, Number(post.likes)||0);
+  if(!count) return;
+  const postId=post.firestoreId||post.id;
+  if(!postId||String(postId).startsWith('q_')){
+    if(typeof showToast==='function') showToast('Post still saving — try again in a moment');
+    return;
+  }
+  try{
+    const likers=typeof fetchContentLikers==='function'?await fetchContentLikers('duniya', postId):[];
+    if(typeof openLikersSheet==='function'){
+      openLikersSheet({
+        title:`${formatCount(count)} likes`,
+        likers,
+        onProfileTap:(u)=>{ if(typeof openPublicProfile==='function') openPublicProfile(u); },
+      });
+    }
+  }catch(e){
+    if(typeof showToast==='function') showToast(typeof friendlyError==='function'?friendlyError(e):e.message||'Could not load likes');
+  }
+}
+
 function syncDuniyaPostUI(post){
   if(!post) return;
   const id=String(post.id||'');
@@ -934,7 +970,11 @@ function openDuniyaDetail(post,{focusCommentId=null,focusComposer=false}={}){
     <div class="duniya-comments-header">
       <div>
         <div class="duniya-comments-title">${typeof t==='function'?t('comment_sheet_title'):'Comments'}</div>
-        <div class="duniya-comments-subtitle">${post.comments||0} on ${post.user?.name||'this post'}</div>
+        <div class="duniya-comments-subtitle">${post.comments||0} on ${post.user?.name||'this post'}${
+          !post.hideLikeCount && (post.likes||0)>0
+            ? ` · <button type="button" class="duniya-detail-likes" data-duniya-likers>${formatCount(post.likes)} likes</button>`
+            : ''
+        }</div>
       </div>
       <div class="duniya-detail-actions">
         ${canEdit ? `<button type="button" class="duniya-detail-action-btn" data-duniya-edit aria-label="Edit">${typeof iconHtml==='function'?iconHtml('pen',{size:18}):'Edit'}</button>` : ''}
@@ -965,6 +1005,10 @@ function openDuniyaDetail(post,{focusCommentId=null,focusComposer=false}={}){
     if(img&&typeof openImageViewer==='function'){
       openImageViewer(img.dataset.full||post.media||img.currentSrc||img.src,{alt:img.alt});
     }
+  });
+  detail.querySelector('[data-duniya-likers]')?.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    openDuniyaPostLikers(post);
   });
   document.getElementById('duniyaDetailBack').addEventListener('click',()=>{
     if(typeof closeAiKeyboard==='function') closeAiKeyboard();

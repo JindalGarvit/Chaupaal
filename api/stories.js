@@ -23,6 +23,7 @@ const {
   tallyResponses,
 } = require('../server-lib/story-overlays');
 const { resolveActiveProfileName, resolveDisplayNameFromData } = require('../server-lib/profile-display');
+const { isStoryViewable } = require('../server-lib/story-valid');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const COLLECTIONS = {
@@ -550,6 +551,7 @@ async function feedBaithak(db, uid) {
   const unique = new Map(candidates.map((snap) => [snap.id, snap]));
   const allowed = [];
   for (const story of unique.values()) {
+    if (!isStoryViewable(story)) continue;
     if (await canView(db, story, uid, false)) allowed.push(serializeStory(story, uid));
   }
   return allowed.sort((a, b) => b.createdAt - a.createdAt);
@@ -563,6 +565,7 @@ async function feedDuniya(db, uid) {
   const following = new Set(followingSnap.docs.map((d) => d.id));
   const output = [];
   for (const story of snap.docs) {
+    if (!isStoryViewable(story)) continue;
     if (await canView(db, story, uid, false)) {
       const serialized = serializeStory(story, uid);
       const owner = serialized.uid;
@@ -590,6 +593,7 @@ async function profileStories(db, uid, targetUid) {
       // Live ring only — expired / save-only / archived stories stay out of the live ring.
       if (data.active === false || data.archived === true || data.saveOnly === true) continue;
       if (expires && expires <= now) continue;
+      if (!isStoryViewable(story)) continue;
       if (await canView(db, story, uid, false)) result[destination].push(serializeStory(story, uid));
     }
     result[destination].sort((a, b) => a.createdAt - b.createdAt);
@@ -864,6 +868,46 @@ async function profilesMap(db, ids) {
       ];
     })
   );
+}
+
+async function listStoryLikes(db, uid, destination, storyId) {
+  const story = await getStory(db, destination, storyId);
+  if (!story || !(await canView(db, story, uid, story?.data()?.uid === uid))) throw new Error('STORY_NOT_FOUND');
+  if (!isStoryViewable(story)) throw new Error('STORY_NOT_FOUND');
+  const likes = await story.ref.collection('likes').limit(100).get();
+  const profiles = await profilesMap(db, likes.docs.map((doc) => doc.id));
+  return {
+    likers: likes.docs.map((doc) => ({
+      uid: doc.id,
+      name: profiles[doc.id]?.name || 'Someone',
+      username: profiles[doc.id]?.username || '',
+      avatar: profiles[doc.id]?.photoURL || '',
+      profileType: profiles[doc.id]?.profileType || 'personal',
+    })),
+  };
+}
+
+async function listContentLikes(db, uid, collection, postId) {
+  const col = collection === 'peepal' ? 'peepal' : 'duniya';
+  const id = cleanText(postId, 180);
+  if (!id) throw new Error('STORY_NOT_FOUND');
+  const snap = await db.collection(col).doc(id).get();
+  if (!snap.exists) throw new Error('STORY_NOT_FOUND');
+  const data = snap.data() || {};
+  if (data.deleted) throw new Error('STORY_NOT_FOUND');
+  const owner = data.uid === uid;
+  if ((data.archived || data.saveOnly) && !owner) throw new Error('FORBIDDEN');
+  const likes = await snap.ref.collection('likes').limit(100).get();
+  const profiles = await profilesMap(db, likes.docs.map((doc) => doc.id));
+  return {
+    likers: likes.docs.map((doc) => ({
+      uid: doc.id,
+      name: profiles[doc.id]?.name || 'Someone',
+      username: profiles[doc.id]?.username || '',
+      avatar: profiles[doc.id]?.photoURL || '',
+      profileType: profiles[doc.id]?.profileType || 'personal',
+    })),
+  };
 }
 
 async function recordView(db, admin, uid, destination, storyId) {
@@ -1301,6 +1345,24 @@ module.exports = async function handler(req, res) {
           cleanText(body.storyId, 180),
           cleanText(body.commentId, 180)
         )
+      );
+    }
+    if (action === 'list_story_likes') {
+      return sendSuccess(
+        res,
+        await listStoryLikes(
+          db,
+          user.uid,
+          cleanDestination(body.destination),
+          cleanText(body.storyId, 180)
+        )
+      );
+    }
+    if (action === 'list_content_likes') {
+      const collection = body.collection === 'peepal' ? 'peepal' : 'duniya';
+      return sendSuccess(
+        res,
+        await listContentLikes(db, user.uid, collection, cleanText(body.postId, 180))
       );
     }
     return sendError(res, 400, 'VALIDATION_ERROR', 'Unknown story action');

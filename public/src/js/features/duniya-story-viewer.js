@@ -7,8 +7,14 @@
   const IMAGE_MS = 6000;
 
   NS.openViewerImpl = function openViewerImpl(story, list, opts) {
-    const tray = (opts?.tray && opts.tray.length ? opts.tray : NS.bundleTray(list || [story])).filter((g) => g?.length);
-    if (!tray.length) return;
+    const viewable = (s) => (typeof NS.isStoryViewable === 'function' ? NS.isStoryViewable(s) : !!s?.id);
+    const tray = (opts?.tray && opts.tray.length ? opts.tray : NS.bundleTray(list || [story]))
+      .map((g) => (g || []).filter(viewable))
+      .filter((g) => g.length);
+    if (!tray.length || !viewable(story)) {
+      if (typeof showToast === 'function') showToast(NS.tt('story_unavailable', 'Story unavailable'));
+      return;
+    }
     let bundleIdx = Math.max(
       0,
       tray.findIndex((g) => g.some((s) => s.id === story?.id) || g[0]?.uid === story?.uid)
@@ -55,7 +61,37 @@
     if (typeof openLayer === 'function') layer = openLayer(root, teardown, { host: device, remove: true, label: 'Story' });
 
     function current() {
-      return tray[bundleIdx][itemIdx];
+      const bundle = tray[bundleIdx] || [];
+      let item = bundle[itemIdx];
+      if (!viewable(item)) {
+        const nextIdx = bundle.findIndex((s, i) => i >= itemIdx && viewable(s));
+        if (nextIdx >= 0) itemIdx = nextIdx;
+        else {
+          const alt = bundle.findIndex(viewable);
+          if (alt >= 0) itemIdx = alt;
+        }
+        item = bundle[itemIdx];
+      }
+      return item;
+    }
+
+    function stageFallbackHtml(s) {
+      const text = String(s.text || '').trim();
+      if (s.type === 'score') {
+        const score = Number(s.score) || 0;
+        const total = Number(s.total) || 0;
+        return `<div class="ds-text-fallback ds-text-fallback--score"><strong>${score}${total ? ` / ${total}` : ''}</strong><span>Score story</span></div>`;
+      }
+      if (text) {
+        return `<div class="ds-text-fallback"><p>${NS.esc(text)}</p></div>`;
+      }
+      if (s.music?.title) {
+        return `<div class="ds-text-fallback ds-text-fallback--music"><span aria-hidden="true">♪</span><p>${NS.esc(s.music.title)}</p></div>`;
+      }
+      if (s.location?.placeName || s.location?.label) {
+        return `<div class="ds-text-fallback"><p>${NS.esc(s.location.placeName || s.location.label)}</p></div>`;
+      }
+      return `<div class="ds-text-fallback"><p>${NS.tt('story_unavailable', 'Story unavailable')}</p></div>`;
     }
 
     function setPaused(v) {
@@ -92,31 +128,45 @@
     }
 
     function next(fromTimer) {
-      const bundle = tray[bundleIdx];
-      if (itemIdx < bundle.length - 1) {
+      const bundle = tray[bundleIdx] || [];
+      while (itemIdx < bundle.length - 1) {
         itemIdx += 1;
-        paint();
-        return;
+        if (viewable(bundle[itemIdx])) {
+          paint();
+          return;
+        }
       }
-      if (bundleIdx < tray.length - 1) {
+      while (bundleIdx < tray.length - 1) {
         bundleIdx += 1;
         itemIdx = NS.firstUnwatchedIndex(tray[bundleIdx]);
-        paint();
-        return;
+        const b = tray[bundleIdx] || [];
+        if (b.some(viewable)) {
+          if (!viewable(b[itemIdx])) itemIdx = Math.max(0, b.findIndex(viewable));
+          paint();
+          return;
+        }
       }
       if (fromTimer) layer.close();
     }
 
     function prev() {
-      if (itemIdx > 0) {
+      const bundle = tray[bundleIdx] || [];
+      while (itemIdx > 0) {
         itemIdx -= 1;
-        paint();
-        return;
+        if (viewable(bundle[itemIdx])) {
+          paint();
+          return;
+        }
       }
-      if (bundleIdx > 0) {
+      while (bundleIdx > 0) {
         bundleIdx -= 1;
-        itemIdx = tray[bundleIdx].length - 1;
-        paint();
+        const b = tray[bundleIdx] || [];
+        itemIdx = b.length - 1;
+        while (itemIdx >= 0 && !viewable(b[itemIdx])) itemIdx -= 1;
+        if (itemIdx >= 0) {
+          paint();
+          return;
+        }
       }
     }
 
@@ -146,6 +196,11 @@
     async function paint() {
       clearInterval(progressTimer);
       const s = current();
+      if (!s || !viewable(s)) {
+        if (typeof showToast === 'function') showToast(NS.tt('story_unavailable', 'Story unavailable'));
+        layer.close();
+        return;
+      }
       const own = !!(s.own || (typeof currentUser !== 'undefined' && s.uid === currentUser?.uid));
       NS.markStorySeen(s);
       const name =
@@ -154,12 +209,14 @@
       const av = typeof renderUserAvatarHtml==='function'&&s.uid&&String(s.uid).length>12
         ? renderUserAvatarHtml(s,{decorative:true})
         :(s.avatar && /^https:/.test(s.avatar) ? `<img src="${NS.esc(s.avatar)}" alt="">` : `<div class="ds-av">${NS.esc((s.avatar || '👤').slice(0, 2))}</div>`);
+      const hasMedia = !!(s.media && String(s.media).trim());
       const media =
-        s.mediaType === 'video' && s.media
+        hasMedia && s.mediaType === 'video'
           ? `<video src="${NS.esc(s.media)}" playsinline ${muted ? 'muted' : ''} autoplay></video>`
-          : s.media
+          : hasMedia
             ? `<img src="${NS.esc(s.media)}" alt="">`
-            : '';
+            : stageFallbackHtml(s);
+      const likeCount = Number(s.likeCount || s._ix?.likeCount) || 0;
       root.innerHTML = `
         <div class="ds-progress">${tray[bundleIdx]
           .map(
@@ -190,6 +247,7 @@
                  <button type="button" class="ds-icon-btn" data-comments aria-label="Comments">💬</button>
                  <button type="button" class="ds-icon-btn" data-send aria-label="Send">✈</button>`
               : `<button type="button" class="ds-icon-btn" data-like aria-label="Like">♡</button>
+                 ${likeCount ? `<button type="button" class="ds-like-count" data-likers>${likeCount}</button>` : ''}
                  <button type="button" class="ds-icon-btn" data-comments aria-label="Comments">💬</button>
                  <form class="ds-compose" data-reply><input type="text" maxlength="280" placeholder="${NS.esc(NS.tt('story_reply', 'Message ') + (name.split(' ')[0] || ''))}"><button type="submit" class="ds-icon-btn" aria-label="Send reply">➤</button></form>
                  <button type="button" class="ds-icon-btn" data-send aria-label="Send">✈</button>`
@@ -251,6 +309,26 @@
         } catch (e) {
           NS.report('duniya_story_like', e);
         }
+      });
+      if (typeof onLongPress === 'function') {
+        const likeBtn = root.querySelector('[data-like]');
+        if (likeBtn) {
+          onLongPress(likeBtn, () => {
+            likeBtn.dataset.suppressClick = '1';
+            showLikers(s);
+          });
+        }
+      }
+      root.querySelector('[data-likers]')?.addEventListener('click', () => showLikers(s));
+      stage?.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        if (own) return;
+        const likeBtn = root.querySelector('[data-like]');
+        if (!likeBtn || liked) return;
+        liked = true;
+        likeBtn.textContent = '❤';
+        likePlatformStory(s, true).catch((err) => NS.report('duniya_story_like', err));
+        if (typeof haptic === 'function') haptic('light');
       });
       root.querySelector('[data-reply]')?.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -317,6 +395,7 @@
         liked = !!ix.liked;
         const likeBtn = root.querySelector('[data-like]');
         if (likeBtn) likeBtn.textContent = liked ? '❤' : '♡';
+        s.likeCount = Number(ix.likeCount) || 0;
         s._ix = ix;
         if (ix.addYoursFaces) s.addYoursFaces = ix.addYoursFaces;
       } catch (e) {
@@ -486,23 +565,112 @@
       );
     }
 
+    async function showLikers(s) {
+      openSheet(
+        `<h3>${NS.tt('story_likes', 'Likes')}</h3>
+         <div data-list-filter-host></div>
+         <div data-list class="ds-empty">…</div>
+         <div class="ds-empty" data-list-filter-empty hidden>No matches</div>`,
+        (sheet) => {
+          const listEl = sheet.querySelector('[data-list]');
+          const filterHost = sheet.querySelector('[data-list-filter-host]');
+          const paint = (rows) => {
+            let list = rows || [];
+            if (typeof pinYouInProfiles === 'function') list = pinYouInProfiles(list);
+            listEl.className = '';
+            listEl.innerHTML = list.length
+              ? list
+                  .map((u) => {
+                    const label =
+                      typeof resolvePersonDisplayName === 'function' ? resolvePersonDisplayName(u) : u.name || 'Member';
+                    const filterText = `${label} ${u.username || ''}`.toLowerCase();
+                    const av =
+                      typeof renderUserAvatarHtml === 'function' && u.uid
+                        ? renderUserAvatarHtml(u, { decorative: true })
+                        : u.avatar && /^https:/.test(u.avatar)
+                          ? `<img src="${NS.esc(u.avatar)}" alt="">`
+                          : '';
+                    const nameHtml =
+                      typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml(label, u) : NS.esc(label);
+                    return `<div class="ds-row" data-uid="${NS.esc(u.uid)}" data-filter-text="${NS.esc(filterText)}">${av}<div><strong>${nameHtml}</strong>${
+                      u.username ? `<small style="display:block;color:var(--muted)">@${NS.esc(u.username)}</small>` : ''
+                    }</div></div>`;
+                  })
+                  .join('')
+              : `<div class="ds-empty">${NS.tt('no_likes', 'No likes yet')}</div>`;
+            listEl.querySelectorAll('[data-uid]').forEach((row) =>
+              row.addEventListener('click', () => {
+                const uid = row.dataset.uid;
+                if (typeof openPublicProfile === 'function') openPublicProfile({ uid, name: row.textContent });
+                else if (typeof openUserProfile === 'function') openUserProfile({ uid }, { uid });
+              })
+            );
+            if (filterHost && typeof mountListFilter === 'function' && !filterHost.dataset.wired) {
+              filterHost.dataset.wired = '1';
+              mountListFilter({
+                host: filterHost,
+                placeholder: NS.tt('search_likes', 'Search…'),
+                surfaceId: 'story_likes',
+                getRows: () => [...listEl.querySelectorAll('.ds-row')],
+                emptyEl: sheet.querySelector('[data-list-filter-empty]'),
+              });
+            }
+          };
+          (async () => {
+            try {
+              const likers =
+                typeof fetchStoryLikers === 'function'
+                  ? await fetchStoryLikers(s.destination || 'duniya', s.id)
+                  : [];
+              paint(likers);
+            } catch (e) {
+              NS.report('duniya_story_likers', e);
+              listEl.innerHTML = `<div class="ds-empty">${NS.tt('no_likes', 'No likes yet')}</div>`;
+            }
+          })();
+        }
+      );
+    }
+
     async function showComments(s, own) {
       const ix = s._ix || (typeof getStoryInteractions === 'function' ? await getStoryInteractions(s) : { comments: [] });
       s._ix = ix;
+      const comments = ix.comments || [];
       openSheet(
         `<h3>${NS.tt('comments', 'Comments')}</h3>
-         <div data-list>${(ix.comments || [])
-           .map(
-             (c) =>
-               `<div class="ds-row" data-cid="${NS.esc(c.id)}"><div><strong>${NS.esc(c.name)}</strong> ${NS.esc(c.text)}</div>${
-                 own || c.uid === currentUser?.uid
-                   ? `<button type="button" data-del="${NS.esc(c.id)}" aria-label="Delete">✕</button>`
-                   : ''
-               }</div>`
-           )
-           .join('') || `<div class="ds-empty">${NS.tt('no_comments', 'No comments yet')}</div>`}</div>
+         ${comments.length > 8 ? '<div data-list-filter-host></div>' : ''}
+         <div data-list>${comments.length
+           ? comments
+               .map((c) => {
+                 const cName =
+                   typeof resolvePersonDisplayName === 'function'
+                     ? resolvePersonDisplayName(c)
+                     : c.name || 'Member';
+                 const nameHtml =
+                   typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml(cName, c) : NS.esc(cName);
+                 const filterText = `${cName} ${c.username || ''} ${c.text || ''}`.toLowerCase();
+                 return `<div class="ds-row" data-cid="${NS.esc(c.id)}" data-filter-text="${NS.esc(filterText)}"><div><strong>${nameHtml}</strong> ${NS.esc(c.text)}</div>${
+                   own || c.uid === currentUser?.uid
+                     ? `<button type="button" data-del="${NS.esc(c.id)}" aria-label="Delete">✕</button>`
+                     : ''
+                 }</div>`;
+               })
+               .join('')
+           : `<div class="ds-empty">${NS.tt('no_comments', 'No comments yet')}</div>`}</div>
+         ${comments.length > 8 ? '<div class="ds-empty" data-list-filter-empty hidden>No matches</div>' : ''}
          <form data-cform class="ds-compose" style="margin-top:8px;"><input type="text" maxlength="500" placeholder="${NS.tt('write_comment', 'Write a comment')}"><button class="ds-cta" type="submit">Send</button></form>`,
         (sheet) => {
+          if (comments.length > 8 && typeof mountListFilter === 'function') {
+            const filterHost = sheet.querySelector('[data-list-filter-host]');
+            const listEl = sheet.querySelector('[data-list]');
+            mountListFilter({
+              host: filterHost,
+              placeholder: NS.tt('search_comments', 'Search comments…'),
+              surfaceId: 'story_comments',
+              getRows: () => [...listEl.querySelectorAll('.ds-row')],
+              emptyEl: sheet.querySelector('[data-list-filter-empty]'),
+            });
+          }
           sheet.querySelector('[data-cform]').addEventListener('submit', async (e) => {
             e.preventDefault();
             const text = sheet.querySelector('input').value.trim();

@@ -113,6 +113,44 @@
     return i < 0 ? 0 : i;
   }
 
+  function isStoryViewable(story, now = Date.now()) {
+    if (!story?.id) return false;
+    if (story.active === false) return false;
+    if (story.archived === true || story.saveOnly === true) return false;
+    const exp = Number(story.expiresAt) || 0;
+    if (exp && exp <= now) return false;
+    const hasMedia = !!String(story.media || '').trim();
+    const hasThumb = !!String(story.thumb || '').trim();
+    const hasText = !!String(story.text || '').trim();
+    const hasOverlays = Array.isArray(story.overlays) && story.overlays.length > 0;
+    const hasScore =
+      story.type === 'score' &&
+      (Number(story.score) > 0 || Number(story.total) > 0 || Number(story.streak) > 0);
+    const hasMusic = !!(story.music && (story.music.previewUrl || story.music.title));
+    const hasLocation = !!(story.location && (story.location.placeName || story.location.label));
+    return hasMedia || hasThumb || hasText || hasOverlays || hasScore || hasMusic || hasLocation;
+  }
+
+  function pruneSeenMap(liveIds) {
+    const valid = liveIds instanceof Set ? liveIds : new Set(liveIds || []);
+    const { all, mine, uid } = seenStore();
+    let changed = false;
+    Object.keys(mine).forEach((id) => {
+      if (!valid.has(id)) {
+        delete mine[id];
+        changed = true;
+      }
+    });
+    if (changed) {
+      all[uid] = mine;
+      writeMap(SEEN_KEY, all);
+    }
+  }
+
+  function firstViewableStory(stories) {
+    return (stories || []).find((s) => isStoryViewable(s)) || null;
+  }
+
   function overlayStyle(ov) {
     const x = Math.max(0, Math.min(1, Number(ov.x) || 0.5));
     const y = Math.max(0, Math.min(1, Number(ov.y) || 0.5));
@@ -307,7 +345,9 @@
       report('duniya_stories_feed', error);
     }
     const muted = mutedSet();
-    stories = (stories || []).filter((s) => !muted.has(s.uid) || s.uid === currentUser.uid);
+    stories = (stories || []).filter((s) => isStoryViewable(s));
+    stories = stories.filter((s) => !muted.has(s.uid) || s.uid === currentUser.uid);
+    pruneSeenMap(new Set(stories.map((s) => s.id)));
     if (stories.length && typeof enrichUsersWithProfileType === 'function') {
       await enrichUsersWithProfileType(stories);
     }
@@ -315,7 +355,7 @@
     if (stories.length && typeof hydrateRelationships === 'function') {
       followStates = await hydrateRelationships(stories.map((s) => s.uid)).catch(() => ({}));
     }
-    const groups = bundleTray(stories);
+    const groups = bundleTray(stories).map((g) => g.filter(isStoryViewable)).filter((g) => g.length);
     const own = groups.find((g) => g[0]?.uid === currentUser.uid) || [];
     const others = groups.filter((g) => g[0]?.uid !== currentUser.uid);
     const unseen = others.filter((g) => !bundleFullySeen(g) && followStates[g[0].uid]?.following);
@@ -324,15 +364,16 @@
     const discoverySeen = others.filter((g) => bundleFullySeen(g) && !followStates[g[0].uid]?.following);
     const ordered = unseen.concat(seenFollow, discoveryUnseen, discoverySeen);
 
-    const selfHas = own.length > 0;
+    const selfHas = own.filter(isStoryViewable).length > 0;
     const selfName = tt('duniya_your_story', 'Your story');
     const me = typeof userProfile !== 'undefined' ? userProfile : {};
     const myAvatar = me.photoURL || currentUser.photoURL || '';
     const first = (me.name || 'You').split(' ')[0];
+    const selfLive = selfHas ? firstViewableStory(own) || own[0] : null;
 
     const selfThumb =
-      selfHas && (own[0].thumb || own[0].media)
-        ? `<img src="${esc(own[0].thumb || own[0].media)}" alt="">`
+      selfHas && selfLive && (selfLive.thumb || selfLive.media)
+        ? `<img src="${esc(selfLive.thumb || selfLive.media)}" alt="">`
         : typeof renderUserAvatarHtml === 'function'
           ? renderUserAvatarHtml(
               typeof ownProfileForAvatar === 'function'
@@ -358,6 +399,10 @@
       .map((group, i) => {
         const u = group[0];
         const seen = bundleFullySeen(group);
+        const displayName =
+          (typeof resolvePersonDisplayName === 'function' ? resolvePersonDisplayName(u) : u.name) ||
+          u.username ||
+          'Story';
         const av = typeof renderUserAvatarHtml==='function'&&u.uid&&String(u.uid).length>12
           ? renderUserAvatarHtml(u,{decorative:true})
           :(u.avatar && /^https:/.test(u.avatar) ? `<img src="${esc(u.avatar)}" alt="">` : `<span>${esc(u.avatar || '👤')}</span>`);
@@ -366,7 +411,7 @@
           <div class="duniya-story-ring">
             <div class="duniya-story-avatar">${av}</div>
           </div>
-          <div class="duniya-story-name">${esc((u.name || '').split(' ')[0] || 'Story')}</div>
+          <div class="duniya-story-name">${esc(String(displayName).split(' ')[0] || 'Story')}</div>
         </div>`;
       })
       .join('');
@@ -376,12 +421,6 @@
 
     const selfEl = row.querySelector('[data-self]');
     if (selfEl) {
-      if (typeof onLongPress === 'function') {
-        onLongPress(selfEl.querySelector('.duniya-story-avatar') || selfEl, () => {
-          selfEl.dataset.suppressClick = '1';
-          if (typeof openDuniyaPostSheet === 'function') openDuniyaPostSheet('text');
-        });
-      }
       selfEl.querySelector('[data-add]')?.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -392,8 +431,11 @@
           selfEl.dataset.suppressClick = '0';
           return;
         }
-        if (own.length) openViewer(own[firstUnwatchedIndex(own)], own, { tray: NS._tray });
-        else startCreate();
+        if (selfHas) {
+          const start = own[firstUnwatchedIndex(own)];
+          if (start && isStoryViewable(start)) openViewer(start, own, { tray: NS._tray });
+          else startCreate();
+        } else startCreate();
       });
     }
     row.querySelectorAll('[data-bundle]').forEach((item) => {
@@ -412,7 +454,12 @@
           item.dataset.suppressClick = '0';
           return;
         }
-        openViewer(group[firstUnwatchedIndex(group)], group, { tray: NS._tray });
+        const start = group[firstUnwatchedIndex(group)];
+        if (!start || !isStoryViewable(start)) {
+          if (typeof showToast === 'function') showToast(tt('story_unavailable', 'Story unavailable'));
+          return;
+        }
+        openViewer(start, group, { tray: NS._tray });
       });
     });
   }
@@ -434,6 +481,10 @@
   }
 
   function openViewer(story, list, opts) {
+    if (!isStoryViewable(story)) {
+      if (typeof showToast === 'function') showToast(tt('story_unavailable', 'Story unavailable'));
+      return;
+    }
     if (typeof NS.openViewerImpl === 'function') return NS.openViewerImpl(story, list, opts);
     if (typeof openBaithakStoryViewer === 'function') return openBaithakStoryViewer(story, list);
   }
@@ -441,7 +492,7 @@
   async function openById(storyId) {
     try {
       const story = typeof getPlatformStory === 'function' ? await getPlatformStory(storyId, 'duniya') : null;
-      if (!story) {
+      if (!story || !isStoryViewable(story)) {
         if (typeof showToast === 'function') showToast(tt('story_unavailable', 'Story unavailable'));
         return;
       }
@@ -487,6 +538,7 @@
   NS.filterClass = filterClass;
   NS.renderOverlaysInto = renderOverlaysInto;
   NS.bundleTray = bundleTray;
+  NS.isStoryViewable = isStoryViewable;
   NS.pickGallery = pickGallery;
   NS.renderStrip = renderStrip;
   NS.startCreate = startCreate;
@@ -496,4 +548,12 @@
 
   window.renderDuniyaStories = renderStrip;
   window.openDuniyaStoryAddSheet = startCreate;
+  window.isStoryViewable = isStoryViewable;
+
+  document.addEventListener('chaupaal:story-created', () => {
+    renderStrip().catch(() => {});
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) renderStrip().catch(() => {});
+  });
 })();

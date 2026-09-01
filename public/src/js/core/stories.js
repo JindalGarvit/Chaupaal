@@ -132,6 +132,16 @@
     return data.story || null;
   }
 
+  async function fetchStoryLikersFromApi(destination, storyId) {
+    const data = await storyCall('list_story_likes', { destination: destination || 'duniya', storyId });
+    return data.likers || [];
+  }
+
+  async function fetchContentLikersFromApi(collection, postId) {
+    const data = await storyCall('list_content_likes', { collection, postId });
+    return data.likers || [];
+  }
+
   async function openProfileStories(targetUid) {
     if (!targetUid || !currentUser) return;
     const data = await storyCall('profile', { targetUid });
@@ -823,6 +833,8 @@
   window.sendStoryToPeers = sendStoryToPeers;
   window.deleteStoryComment = deleteStoryComment;
   window.getPlatformStory = getPlatformStory;
+  if (typeof window.fetchStoryLikers !== 'function') window.fetchStoryLikers = fetchStoryLikersFromApi;
+  if (typeof window.fetchContentLikers !== 'function') window.fetchContentLikers = fetchContentLikersFromApi;
   window.openProfileStories = openProfileStories;
   window.renderLiveBaithakStories = renderLiveBaithakStories;
   window.renderBaithakInstants = renderBaithakInstants;

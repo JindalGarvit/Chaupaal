@@ -526,9 +526,7 @@ button[style*="background:var(--red)"] {
   height: 58px !important;
 }
 .story-ring.seen { background: var(--line) !important; }
-.duniya-story-ring {
-  background: var(--grad-hero) !important;
-}
+/* Duniya story ring states live in duniya-story.css (.is-empty / .is-seen / .is-own) — no global override */
 
 /* ============================================================
    PROFILE MODAL ? social-first layout
