@@ -113,7 +113,7 @@
     savePrefs(prefs);
   }
 
-  function addUserCategory(name, emoji, kind = 'user') {
+  function addUserCategory(name, emoji, kind = 'user', opts = {}) {
     const prefs = loadPrefs();
     const n = String(name || '').trim();
     if (!n) return null;
@@ -124,12 +124,13 @@
       return null;
     }
     const id = `${kind}_${Date.now()}`;
+    const pinned = kind === 'core' ? true : opts.pinned !== undefined ? !!opts.pinned : false;
     const item = {
       id,
       name: n,
       emoji: emoji || (typeof getCategoryEmoji === 'function' ? getCategoryEmoji(n) : '✨'),
       kind,
-      pinned: kind === 'core',
+      pinned,
       addedAt: now(),
       lastUsedAt: now(),
     };
@@ -236,185 +237,135 @@
     return getOrderedCategories();
   }
 
-  function openCategoryManageSheet() {
-    document.querySelector('.cat-manage-sheet')?.remove();
-    document.querySelector('.cat-manage-scrim')?.remove();
+  function refreshAkhbaarCatBarFromPrefs() {
+    try {
+      if (typeof refreshAkhbaarCatBar === 'function') {
+        refreshAkhbaarCatBar();
+        return;
+      }
+      const bar = document.getElementById('akhbaarCatBar');
+      if (bar) {
+        bar.querySelectorAll('.akhbaar-cat-chip[data-cat-kind]').forEach((el) => el.remove());
+        delete bar.dataset.wired;
+        if (typeof initAkhbaarCatBar === 'function') initAkhbaarCatBar();
+      }
+    } catch (e) {}
+  }
 
-    const cats = getOrderedCategories().filter((c) => c.name !== 'all' && c.name !== 'saathi');
-    const suggestions = heuristicSuggestions(6);
+  function escHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, (ch) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    })[ch]);
+  }
 
-    const scrim = document.createElement('div');
-    scrim.className = 'music-picker-scrim cat-manage-scrim';
-    scrim.dataset.navIgnore = '1';
+  function openAddCategorySheet() {
+    document.querySelector('.akh-add-cat-overlay')?.remove();
 
-    const sheet = document.createElement('div');
-    sheet.className = 'music-picker-sheet cat-manage-sheet';
-    sheet.dataset.navManaged = '1';
-    sheet.setAttribute('role', 'dialog');
-    sheet.setAttribute('aria-label', 'Manage categories');
-    sheet.innerHTML = `
-      <div class="music-picker-handle" aria-hidden="true"></div>
-      <div class="music-picker-head">
-        <div class="music-picker-title">Categories</div>
-        <button type="button" class="music-picker-close" data-cat-manage-close aria-label="Close">✕</button>
-      </div>
-      <p class="cat-manage-hint">Long-press chips to reorder. Suggested ones fade if unused for 2 weeks. Suggested categories you haven't tapped in 2 weeks are removed automatically.</p>
-      <div class="cat-manage-list" data-cat-manage-list>
-        ${cats
-          .map(
-            (c, i) => `<div class="cat-manage-row" draggable="true" data-id="${c.id}" data-i="${i}">
-            <span class="cat-manage-grip" aria-hidden="true">⋮⋮</span>
-            <span class="cat-manage-emoji">${c.emoji || '✨'}</span>
-            <span class="cat-manage-name">${c.name}</span>
-            <span class="cat-manage-kind">${c.kind === 'core' ? 'Pinned' : c.kind === 'suggested' ? 'Suggested' : 'Yours'}</span>
-            ${
-              c.kind === 'core' || c.pinned
-                ? ''
-                : `<button type="button" class="cat-manage-del" data-del="${c.id}" aria-label="Remove">✕</button>`
-            }
+    const suggestions = heuristicSuggestions(4);
+    const overlay = document.createElement('div');
+    overlay.className = 'akh-add-cat-overlay';
+    overlay.dataset.navManaged = '1';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-label', 'Add category');
+    overlay.innerHTML = `
+      <div class="akh-add-cat-screen">
+        <header class="akh-add-cat-head">
+          <button type="button" class="akh-add-cat-back" data-add-cat-close aria-label="Close">←</button>
+          <div class="akh-add-cat-title-wrap">
+            <span class="akh-add-cat-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7B2CBF" stroke-width="2" stroke-linecap="round"><path d="M12 8v8M8 12h8"/></svg>
+            </span>
+            <h2>Add category</h2>
+          </div>
+        </header>
+        <div class="akh-add-cat-body">
+          <input type="text" class="akh-add-cat-input" data-add-cat-name placeholder="Category name…" maxlength="40" autocomplete="off">
+          <label class="akh-add-cat-pin">
+            <input type="checkbox" data-add-cat-pin checked>
+            <span>Show on Akhbaar bar</span>
+          </label>
+          ${
+            suggestions.length
+              ? `<p class="akh-add-cat-sug-label">Suggestions</p>
+          <div class="akh-add-cat-sug-grid">
+            ${suggestions
+              .map(
+                (s) =>
+                  `<button type="button" class="akh-add-cat-sug" data-add-sug-name="${escHtml(s.name)}" data-add-sug-emoji="${escHtml(s.emoji || '✨')}">${escHtml(s.emoji || '✨')} ${escHtml(s.name)}</button>`
+              )
+              .join('')}
           </div>`
-          )
-          .join('')}
-      </div>
-      <div class="cat-manage-add">
-        <div class="cat-manage-add-title">Add</div>
-        <div class="cat-manage-suggestions">
-          ${suggestions
-            .map(
-              (s) =>
-                `<button type="button" class="cat-manage-sug" data-add-name="${s.name}" data-add-emoji="${s.emoji}" data-add-kind="suggested">${s.emoji} ${s.name}</button>`
-            )
-            .join('')}
+              : ''
+          }
+          <button type="button" class="akh-add-cat-cta" data-add-cat-submit disabled>Add</button>
         </div>
-        <div class="cat-manage-custom">
-          <input type="text" class="music-picker-input" data-cat-custom placeholder="Your category…" maxlength="40">
-          <button type="button" class="music-hub-cta" data-cat-custom-add>Add</button>
-        </div>
-      </div>
-      <button type="button" class="cat-manage-refresh" data-cat-refresh>Refresh suggestions</button>`;
+      </div>`;
 
     const device = document.querySelector('.device');
     if (!device) return;
-    device.appendChild(scrim);
-    device.appendChild(sheet);
-    requestAnimationFrame(() => {
-      scrim.classList.add('is-open');
-      sheet.classList.add('is-open');
-    });
+    device.appendChild(overlay);
 
     let closed = false;
     const close = () => {
       if (closed) return;
       closed = true;
-      sheet.classList.remove('is-open');
-      scrim.classList.remove('is-open');
       try {
-        if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
-      } catch (e) {
-        sheet.remove();
-      }
-      setTimeout(() => {
-        sheet.remove();
-        scrim.remove();
-      }, 220);
-      try {
-        if (typeof initAkhbaarCatBar === 'function') {
-          const bar = document.getElementById('akhbaarCatBar');
-          if (bar) {
-            bar.dataset.wired = '';
-            initAkhbaarCatBar();
-          }
-        }
+        if (typeof removeNavLayer === 'function') removeNavLayer(overlay);
       } catch (e) {}
+      overlay.remove();
+      refreshAkhbaarCatBarFromPrefs();
     };
-    if (typeof pushNavLayer === 'function') pushNavLayer(sheet, close);
-    sheet.querySelector('[data-cat-manage-close]')?.addEventListener('click', close);
-    scrim.addEventListener('click', close);
 
-    const list = sheet.querySelector('[data-cat-manage-list]');
-    let dragId = null;
-    list?.querySelectorAll('.cat-manage-row').forEach((row) => {
-      row.addEventListener('dragstart', () => {
-        dragId = row.dataset.id;
-        row.classList.add('is-dragging');
-      });
-      row.addEventListener('dragend', () => row.classList.remove('is-dragging'));
-      row.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        const over = e.currentTarget;
-        if (!dragId || over.dataset.id === dragId) return;
-        const ids = [...list.querySelectorAll('.cat-manage-row')].map((r) => r.dataset.id);
-        const from = ids.indexOf(dragId);
-        const to = ids.indexOf(over.dataset.id);
-        if (from < 0 || to < 0) return;
-        ids.splice(to, 0, ids.splice(from, 1)[0]);
-        reorderCategories(ids);
-        // Re-order DOM
-        const map = new Map([...list.children].map((el) => [el.dataset.id, el]));
-        ids.forEach((id) => {
-          const el = map.get(id);
-          if (el) list.appendChild(el);
-        });
-      });
-    });
+    if (typeof pushNavLayer === 'function') pushNavLayer(overlay, close);
 
-    sheet.querySelectorAll('[data-del]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        if (removeCategoryPref(btn.dataset.del)) {
-          btn.closest('.cat-manage-row')?.remove();
-        }
-      });
-    });
+    const nameInput = overlay.querySelector('[data-add-cat-name]');
+    const submitBtn = overlay.querySelector('[data-add-cat-submit]');
+    const pinToggle = overlay.querySelector('[data-add-cat-pin]');
 
-    sheet.querySelectorAll('[data-add-name]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        addUserCategory(btn.dataset.addName, btn.dataset.addEmoji, btn.dataset.addKind || 'suggested');
-        close();
-        openCategoryManageSheet();
-      });
-    });
+    const syncSubmit = () => {
+      if (submitBtn) submitBtn.disabled = !(nameInput?.value?.trim());
+    };
 
-    sheet.querySelector('[data-cat-custom-add]')?.addEventListener('click', () => {
-      const input = sheet.querySelector('[data-cat-custom]');
-      const name = input?.value?.trim();
+    nameInput?.addEventListener('input', syncSubmit);
+    requestAnimationFrame(() => nameInput?.focus());
+
+    const commitAdd = (name, emoji, kind = 'user') => {
+      const pinned = pinToggle?.checked !== false;
+      const item = addUserCategory(name, emoji, kind, { pinned });
+      if (item) close();
+    };
+
+    overlay.querySelector('[data-add-cat-close]')?.addEventListener('click', close);
+    submitBtn?.addEventListener('click', () => {
+      const name = nameInput?.value?.trim();
       if (!name) return;
-      addUserCategory(name, null, 'user');
-      close();
-      openCategoryManageSheet();
+      commitAdd(name, null, 'user');
+    });
+    nameInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && nameInput.value?.trim()) {
+        e.preventDefault();
+        commitAdd(nameInput.value.trim(), null, 'user');
+      }
     });
 
-    sheet.querySelector('[data-cat-refresh]')?.addEventListener('click', () => {
-      refreshSuggested();
-      close();
-      openCategoryManageSheet();
+    overlay.querySelectorAll('[data-add-sug-name]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        commitAdd(btn.dataset.addSugName, btn.dataset.addSugEmoji, 'user');
+      });
     });
   }
 
-  /** Wire long-press on a category bar to open manage sheet */
-  function bindCategoryLongPress(bar) {
-    if (!bar || bar.dataset.catLp === '1') return;
-    bar.dataset.catLp = '1';
-    let timer = null;
-    const start = (e) => {
-      const chip = e.target.closest?.('.akhbaar-cat-chip,[data-cat]');
-      if (!chip || chip.dataset.cat === 'add') return;
-      timer = setTimeout(() => {
-        if (typeof Haptic !== 'undefined' && Haptic.tap) Haptic.tap();
-        else if (navigator.vibrate) navigator.vibrate(12);
-        openCategoryManageSheet();
-      }, 480);
-    };
-    const clear = () => {
-      clearTimeout(timer);
-      timer = null;
-    };
-    bar.addEventListener('touchstart', start, { passive: true });
-    bar.addEventListener('touchend', clear);
-    bar.addEventListener('touchmove', clear);
-    bar.addEventListener('mousedown', start);
-    bar.addEventListener('mouseup', clear);
-    bar.addEventListener('mouseleave', clear);
+  /** @deprecated Use openAddCategorySheet */
+  function openCategoryManageSheet() {
+    openAddCategorySheet();
   }
+
+  /** Long-press manage removed — add via Add chip, swipe, or morph shortcut only. */
+  function bindCategoryLongPress(_bar) {}
 
   window.CategoryPrefs = {
     getOrderedCategories,
@@ -424,6 +375,7 @@
     reorderCategories,
     refreshSuggested,
     heuristicSuggestions,
+    openAddCategorySheet,
     openCategoryManageSheet,
     bindCategoryLongPress,
     SUGGEST_TTL_MS,

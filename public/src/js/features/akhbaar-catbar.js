@@ -48,6 +48,24 @@ function tintAkhbaarChip(chip) {
   }
 }
 
+function openAddCategoryFlow() {
+  const fn = window.CategoryPrefs?.openAddCategorySheet || window.CategoryPrefs?.openCategoryManageSheet;
+  if (typeof fn === 'function') {
+    fn();
+    return true;
+  }
+  return false;
+}
+
+function refreshAkhbaarCatBar() {
+  const bar = document.getElementById('akhbaarCatBar');
+  if (!bar) return;
+  bar.querySelectorAll('.akhbaar-cat-chip[data-cat-kind]').forEach((el) => el.remove());
+  bar.querySelectorAll('.akhbaar-cat-chip').forEach((chip) => chip.replaceWith(chip.cloneNode(true)));
+  delete bar.dataset.wired;
+  initAkhbaarCatBar();
+}
+
 function initAkhbaarCatBar() {
   const bar = document.getElementById('akhbaarCatBar');
   if (!bar || bar.dataset.wired) return;
@@ -93,11 +111,7 @@ function initAkhbaarCatBar() {
     tintAkhbaarChip(chip);
     chip.addEventListener('click', () => {
       if (chip.dataset.cat === 'add') {
-        if (typeof CategoryPrefs !== 'undefined' && CategoryPrefs.openCategoryManageSheet) {
-          CategoryPrefs.openCategoryManageSheet();
-        } else {
-          openAkhbaarCatAdd();
-        }
+        openAddCategoryFlow();
         return;
       }
       bar.querySelectorAll('.akhbaar-cat-chip').forEach((c) => c.classList.remove('active'));
@@ -129,11 +143,7 @@ function initAkhbaarCatBar() {
     (e) => {
       const dx = (e.changedTouches[0]?.clientX || 0) - sx;
       if (dx < -64 && bar.scrollLeft + bar.clientWidth >= bar.scrollWidth - 8) {
-        if (typeof CategoryPrefs !== 'undefined' && CategoryPrefs.openCategoryManageSheet) {
-          CategoryPrefs.openCategoryManageSheet();
-        } else {
-          openAkhbaarCatAdd();
-        }
+        openAddCategoryFlow();
       }
     },
     { passive: true }
@@ -169,12 +179,7 @@ function filterReelByCategory(cat) {
 }
 
 function openAkhbaarCatAdd() {
-  const fn = window.CategoryPrefs?.openCategoryManageSheet;
-  if (typeof fn === 'function') {
-    fn();
-    return;
-  }
-  // true fallback only if CategoryPrefs not loaded yet
+  if (openAddCategoryFlow()) return;
   openHalfSheet?.({
     id: 'akhbaarCatAddSheet',
     title: 'Add category',
@@ -183,6 +188,7 @@ function openAkhbaarCatAdd() {
   });
 }
 
+window.refreshAkhbaarCatBar = refreshAkhbaarCatBar;
 window.initAkhbaarCatBar = initAkhbaarCatBar;
 window.filterReelByCategory = filterReelByCategory;
 window.openAkhbaarCatAdd = openAkhbaarCatAdd;

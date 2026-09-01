@@ -371,6 +371,58 @@ button[style*="background:var(--red)"] {
   transform: scale(1.02);
 }
 .akhbaar-cat-chip:active { transform: scale(0.95); }
+.akhbaar-cat-chip--add{
+  border-style:dashed!important;
+  border-color:#7B2CBF!important;
+  background:#EDE4FF!important;
+  color:#5A189A!important;
+}
+.akhbaar-cat-chip--add [data-icon],.akhbaar-cat-chip--add .cp-icon,.akhbaar-cat-chip--add svg{
+  color:#7B2CBF!important;stroke:#7B2CBF!important;
+}
+
+/* Akhbaar — minimal Add category screen */
+.akh-add-cat-overlay{
+  position:absolute;inset:0;z-index:280;display:flex;flex-direction:column;
+  background:linear-gradient(180deg,#F7F0FF 0%,#fff 42%);
+}
+.akh-add-cat-screen{flex:1;display:flex;flex-direction:column;min-height:0;}
+.akh-add-cat-head{
+  display:flex;align-items:center;gap:10px;padding:12px 14px 8px;
+  border-bottom:1px solid rgba(123,44,191,.12);
+}
+.akh-add-cat-back{
+  border:0;background:transparent;font-size:22px;line-height:1;cursor:pointer;color:#5A189A;padding:4px 8px;
+}
+.akh-add-cat-title-wrap{display:flex;align-items:center;gap:10px;flex:1;}
+.akh-add-cat-icon{
+  width:32px;height:32px;border-radius:10px;background:#EDE4FF;border:1px solid rgba(123,44,191,.25);
+  display:grid;place-items:center;color:#7B2CBF;
+}
+.akh-add-cat-title-wrap h2{margin:0;font:700 17px 'Space Grotesk',sans-serif;color:#5A189A;}
+.akh-add-cat-body{padding:16px 14px 24px;overflow-y:auto;}
+.akh-add-cat-input{
+  width:100%;box-sizing:border-box;padding:12px 14px;border:2px solid rgba(123,44,191,.2);
+  border-radius:14px;font-size:15px;background:#fff;margin-bottom:14px;
+}
+.akh-add-cat-input:focus{outline:none;border-color:#7B2CBF;box-shadow:0 0 0 3px rgba(123,44,191,.12);}
+.akh-add-cat-pin{
+  display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:#5A189A;
+  margin-bottom:16px;cursor:pointer;
+}
+.akh-add-cat-pin input{accent-color:#7B2CBF;width:18px;height:18px;}
+.akh-add-cat-sug-label{font:700 11px 'Space Grotesk',sans-serif;text-transform:uppercase;letter-spacing:.05em;color:#9B5DE5;margin:0 0 8px;}
+.akh-add-cat-sug-grid{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px;}
+.akh-add-cat-sug{
+  padding:8px 12px;border-radius:999px;border:1.5px solid rgba(123,44,191,.25);
+  background:#EDE4FF;color:#5A189A;font:600 12px 'Space Grotesk',sans-serif;cursor:pointer;
+}
+.akh-add-cat-sug:active{transform:scale(.97);}
+.akh-add-cat-cta{
+  width:100%;padding:13px;border:0;border-radius:14px;background:#7B2CBF;color:#fff;
+  font:700 15px 'Space Grotesk',sans-serif;cursor:pointer;
+}
+.akh-add-cat-cta:disabled{opacity:.45;cursor:not-allowed;}
 
 /* ============================================================
    CHAT LIST & ITEMS
@@ -5028,12 +5080,12 @@ html.quiet-mode [data-decorative-motion]{animation:none!important;transition:non
 .dangal-filter-chip{display:inline-flex;align-items:center;gap:6px;color:var(--chip-tint,#E85D04);border-color:color-mix(in srgb, var(--chip-tint,#E85D04) 35%, var(--line));}
 .dangal-filter-chip .dangal-filter-ico{font-size:13px;line-height:1;}
 .dangal-filter-chip.is-active{background:color-mix(in srgb, var(--chip-tint,#E85D04) 14%, var(--white));border-color:var(--chip-tint,#E85D04);color:var(--ink);font-weight:700;}
-.safar-hero{text-align:center;padding:8px 8px 16px;background:linear-gradient(165deg,rgba(155,93,229,.12),rgba(255,209,102,.1) 55%,transparent);border-radius:18px;margin-bottom:14px;}
+.safar-hero{text-align:center;padding:8px 8px 16px;background:linear-gradient(165deg,rgba(155,93,229,.14),rgba(237,228,255,.35) 55%,transparent);border-radius:18px;margin-bottom:14px;}
 .safar-hero.is-quiet{background:var(--cream);}
 .safar-hero-emoji{font-size:36px;line-height:1;margin-bottom:6px;}
 .safar-hero-phase{font:700 13px 'Space Grotesk',sans-serif;color:#7B2CBF;letter-spacing:.04em;text-transform:uppercase;}
 .safar-hero-streak{font:700 28px/1.15 'Space Grotesk',sans-serif;margin:6px 0;}
-.safar-hero-streak strong{color:var(--red);}
+.safar-hero-streak strong{color:#7B2CBF;}
 .safar-hero-sub{font-size:13px;color:var(--muted);margin:0;line-height:1.4;}
 .safar-milestones{display:flex;justify-content:space-between;gap:6px;margin-bottom:14px;}
 .safar-milestone{flex:1;text-align:center;padding:8px 4px;border-radius:12px;background:var(--cream);border:1px solid var(--line);font-size:11px;}

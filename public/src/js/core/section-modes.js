@@ -714,7 +714,7 @@
         if (idx < 0) idx = 0;
         if (dir > 0) {
           if (idx >= cats.length - 1) {
-            const fn = window.CategoryPrefs?.openCategoryManageSheet;
+            const fn = window.CategoryPrefs?.openAddCategorySheet || window.CategoryPrefs?.openCategoryManageSheet;
             if (typeof fn === 'function') fn();
             else if (typeof openAkhbaarCatAdd === 'function') openAkhbaarCatAdd();
             return;
