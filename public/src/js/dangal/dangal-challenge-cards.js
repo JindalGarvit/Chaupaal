@@ -147,18 +147,28 @@
         }
       }
       const opp = iAmHost ? att.toUid : att.fromUid;
+      let mid = att.matchId || card.dataset.challengeMatch || '';
+      if (!mid && typeof dangalMatchId === 'function') {
+        mid = dangalMatchId(att.gameType, { uid: opp, peerUid: opp, opponentUid: opp });
+      }
+      if (!mid || (typeof isPersistableUid === 'function' && !isPersistableUid(opp))) {
+        if (typeof showToast === 'function') {
+          showToast('Challenge link broken — try Practice from Manch');
+        }
+        return;
+      }
       const chat = {
         name: openChat.name || att.gameName || 'Opponent',
         id: openChat.id,
         firestoreId: openChat.firestoreId || openChat.id,
         uid: opp,
         peerUid: opp,
-        dangalMatchId: att.matchId || card.dataset.challengeMatch || '',
+        dangalMatchId: mid,
       };
       if (g?.launch) {
         g.launch({
           source: iAmHost ? 'challenge_host' : 'challenge',
-          matchId: chat.dangalMatchId,
+          matchId: mid,
           opponentUid: opp,
           chat,
           mode: 'live',

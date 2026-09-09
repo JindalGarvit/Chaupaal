@@ -4,12 +4,19 @@
  *
  * Schema: players{}, playerA, playerB, turn, state|fen|board, version|seq,
  *   stake, status, winner, lastMoveAt, presence{}, updatedAt,
- *   quiz: { questions?, answers{}, scores{} }
+ *   quiz: { questions?, answers{}, scores{}, qIdx? }
+ *
+ * Quiz merge rules:
+ * - Host seeds questions once (join transaction: only if quiz missing).
+ * - Later pushes must deep-merge answers[uid] and never clobber opponent answers
+ *   or overwrite an existing questions array.
  */
 (function () {
   'use strict';
 
   const PRESENCE_FORFEIT_MS = 90000;
+  /** Guest waits this long for host quiz seed before Retry UI. */
+  const QUIZ_SEED_TIMEOUT_MS = 18000;
 
   function rtdbRef(path) {
     if (typeof rtdb === 'undefined' || !rtdb) return null;
@@ -23,8 +30,11 @@
       (typeof opponentUidFromChat === 'function' ? opponentUidFromChat(chat) : '') ||
       ctx.opponentUid ||
       '';
-    const mid = (chat && chat.dangalMatchId) || ctx.matchId || '';
-    return !!(opp && mid && typeof isPersistableUid === 'function' && isPersistableUid(opp));
+    if (!opp || /^(ai|practice|random)$/i.test(String(opp))) return false;
+    if (typeof isPersistableUid === 'function' && !isPersistableUid(opp)) return false;
+    const mid = String((chat && chat.dangalMatchId) || ctx.matchId || '').trim();
+    if (!mid) return false;
+    return true;
   }
 
   function roles(chat, launch) {
@@ -34,7 +44,8 @@
       (typeof opponentUidFromChat === 'function' ? opponentUidFromChat(chat) : '') ||
       ctx.opponentUid ||
       '';
-    const src = ctx.source || (chat && chat.dangalSource) || '';
+    const src = String(ctx.source || (chat && chat.dangalSource) || '');
+    // Acceptor (source === 'challenge') is guest; challenger / finder / host is host.
     const host = src !== 'challenge';
     const playerA = host ? me : opp;
     const playerB = host ? opp : me;
@@ -46,6 +57,28 @@
       myColor: me === playerA ? 'w' : 'b',
       host,
     };
+  }
+
+  /** Deep-merge quiz patches without wiping opponent answers or reseeding questions. */
+  function mergeQuiz(curQuiz, patchQuiz) {
+    const cq = curQuiz && typeof curQuiz === 'object' ? curQuiz : {};
+    const pq = patchQuiz && typeof patchQuiz === 'object' ? patchQuiz : {};
+    const answers = Object.assign({}, cq.answers || {});
+    const pqAnswers = pq.answers || {};
+    Object.keys(pqAnswers).forEach((uid) => {
+      answers[uid] = Object.assign({}, answers[uid] || {}, pqAnswers[uid] || {});
+    });
+    const hasCurQs = Array.isArray(cq.questions) && cq.questions.length > 0;
+    const hasPatchQs = Array.isArray(pq.questions) && pq.questions.length > 0;
+    const questions = hasCurQs ? cq.questions : hasPatchQs ? pq.questions : cq.questions || null;
+    const out = {
+      questions,
+      answers,
+      scores: Object.assign({}, cq.scores || {}, pq.scores || {}),
+    };
+    if (pq.qIdx != null) out.qIdx = pq.qIdx;
+    else if (cq.qIdx != null) out.qIdx = cq.qIdx;
+    return out;
   }
 
   function join(opts) {
@@ -61,6 +94,7 @@
     const now = Date.now();
     let presenceWatch = null;
     let forfeited = false;
+    let detached = false;
 
     ref.transaction((cur) => {
       if (cur) {
@@ -72,9 +106,17 @@
         if (!next.playerA) next.playerA = o.playerA;
         if (!next.playerB) next.playerB = o.playerB;
         if (stake > 0 && !next.stake) next.stake = stake;
-        if (o.quizSeed && !next.quiz) next.quiz = o.quizSeed;
+        // Seed quiz only when missing — guest must never overwrite host questions.
+        if (o.quizSeed && !(cur.quiz && Array.isArray(cur.quiz.questions) && cur.quiz.questions.length)) {
+          next.quiz = o.quizSeed;
+        }
         next.lastMoveAt = next.lastMoveAt || now;
         next.version = Number(next.version || next.seq) || 0;
+        // Do not resurrect a finished match
+        if (cur.status === 'over' || cur.status === 'forfeit') {
+          next.status = cur.status;
+          next.winner = cur.winner || null;
+        }
         return next;
       }
       const players = {};
@@ -82,7 +124,7 @@
       players[o.playerB] = true;
       const presence = {};
       presence[o.playerA] = { at: now, online: true };
-      presence[o.playerB] = { at: now, online: false };
+      presence[o.playerB] = { at: now, online: me === o.playerB };
       return {
         playerA: o.playerA,
         playerB: o.playerB,
@@ -110,23 +152,17 @@
       matchId,
       gameType,
       push(patch) {
+        if (detached) return Promise.resolve(null);
         return ref.transaction((cur) => {
           if (!cur) return cur;
-          const next = Object.assign({}, cur, patch || {});
-          if (patch && patch.quiz && cur.quiz) {
-            const cq = cur.quiz || {};
-            const pq = patch.quiz || {};
-            next.quiz = Object.assign({}, cq, pq);
-            next.quiz.answers = Object.assign({}, cq.answers || {}, pq.answers || {});
-            Object.keys(next.quiz.answers).forEach((uid) => {
-              next.quiz.answers[uid] = Object.assign(
-                {},
-                (cq.answers && cq.answers[uid]) || {},
-                (pq.answers && pq.answers[uid]) || {}
-              );
-            });
-            next.quiz.scores = Object.assign({}, cq.scores || {}, pq.scores || {});
-            if (!next.quiz.questions && cq.questions) next.quiz.questions = cq.questions;
+          const patchObj = patch || {};
+          const next = Object.assign({}, cur);
+          Object.keys(patchObj).forEach((k) => {
+            if (k === 'quiz') return;
+            next[k] = patchObj[k];
+          });
+          if (patchObj.quiz) {
+            next.quiz = mergeQuiz(cur.quiz, patchObj.quiz);
           }
           next.seq = (Number(cur.seq) || 0) + 1;
           next.version = next.seq;
@@ -148,7 +184,7 @@
         });
       },
       forfeit() {
-        if (forfeited || !me) return Promise.resolve();
+        if (forfeited || !me || detached) return Promise.resolve();
         forfeited = true;
         const winner = me === o.playerA ? o.playerB : o.playerA;
         return api.setStatus('forfeit', winner);
@@ -162,6 +198,7 @@
           presenceWatch = null;
         }
         const finish = () => {
+          detached = true;
           if (me) {
             try {
               ref.child('presence/' + me).set({ at: Date.now(), online: false });
@@ -174,7 +211,7 @@
             handler = null;
           }
         };
-        if (doForfeit) {
+        if (doForfeit && !forfeited) {
           return Promise.resolve(api.forfeit()).then(finish).catch(finish);
         }
         finish();
@@ -184,6 +221,7 @@
 
     if (typeof o.onSnap === 'function') {
       handler = ref.on('value', (snap) => {
+        if (detached) return;
         try {
           o.onSnap(snap.val() || null, api);
         } catch (e) {
@@ -195,9 +233,11 @@
     // Soft presence forfeit: if opponent offline > PRESENCE_FORFEIT_MS while playing
     if (o.watchForfeit !== false && me) {
       presenceWatch = setInterval(() => {
+        if (detached || forfeited) return;
         ref.once('value', (snap) => {
+          if (detached || forfeited) return;
           const val = snap.val();
-          if (!val || val.status !== 'playing' || forfeited) return;
+          if (!val || val.status !== 'playing') return;
           const oppUid = me === val.playerA ? val.playerB : val.playerA;
           const p = (val.presence && val.presence[oppUid]) || {};
           if (p.online === false && p.at && Date.now() - Number(p.at) > PRESENCE_FORFEIT_MS) {
@@ -259,5 +299,15 @@
     return true;
   }
 
-  window.DangalLive = { isLive, roles, join, pingTurn, modeChromeLabel, requestLeave, PRESENCE_FORFEIT_MS };
+  window.DangalLive = {
+    isLive,
+    roles,
+    join,
+    pingTurn,
+    modeChromeLabel,
+    requestLeave,
+    mergeQuiz,
+    PRESENCE_FORFEIT_MS,
+    QUIZ_SEED_TIMEOUT_MS,
+  };
 })();

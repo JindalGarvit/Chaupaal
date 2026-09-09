@@ -614,7 +614,7 @@
     launchDangalWithOpponent(gameId);
   }
 
-  // Muqabala / quiz — registry launch; engine + content sources in dangal.js / baithak.js (Phase 2C).
+  // Muqabala / quiz — registry launch; engine + content sources in dangal.js / baithak.js.
   registerGame({
     id: 'quiz',
     name: 'Quiz Muqabala',
@@ -624,7 +624,7 @@
     genre: 'quiz',
     ratingKey: null,
     dangal: true,
-    chat1v1: false,
+    chat1v1: true,
     chatGroup: false,
     selfChat: false,
     order: 0,
@@ -635,10 +635,45 @@
       timers: '10/15/20/30s (default 20)',
       aiQuiz: 'generateMuqabalaQuestionsAI via callAI; gated by isAiFeaturesEnabled',
       session: 'createGameSession type=quiz',
+      live: 'DangalLive games/quiz/{matchId} — Phase B lockstep',
     },
     launch(ctx) {
+      const c = ctx || window.__dangalLaunchCtx || {};
+      const liveIntent =
+        c.mode === 'live' ||
+        c.source === 'challenge' ||
+        c.source === 'challenge_host';
+      const opp = c.opponentUid || (c.chat && typeof opponentUidFromChat === 'function' ? opponentUidFromChat(c.chat) : '');
+      const mid = String(c.matchId || (c.chat && c.chat.dangalMatchId) || '').trim();
+      if (liveIntent && opp) {
+        if (!mid || (typeof isPersistableUid === 'function' && !isPersistableUid(opp))) {
+          if (typeof showToast === 'function') {
+            showToast('Challenge link broken — open Practice instead');
+          }
+          if (typeof openQuizCategorySheet === 'function') openQuizCategorySheet();
+          else if (typeof startMuqabala === 'function') {
+            startMuqabala(null, c.category || 'GK', { practice: true, simulated: true, skipMatchmaking: true, skipCredit: true });
+          }
+          return;
+        }
+        const name =
+          (c.chat && (c.chat.name || c.chat.peerName || c.chat.displayName)) || 'Opponent';
+        if (typeof startMuqabala === 'function') {
+          startMuqabala(name, c.category || 'GK', {
+            skipMatchmaking: true,
+            opponentUid: opp,
+            matchId: mid,
+            source: c.source === 'challenge_host' ? 'challenge_host' : 'challenge',
+            stake: Number(c.stake) || 0,
+            practice: false,
+            simulated: false,
+            skipCredit: true,
+          });
+        }
+        return;
+      }
       if (typeof openQuizCategorySheet === 'function') openQuizCategorySheet();
-      else if (typeof startMuqabala === 'function') startMuqabala(null, (ctx && ctx.category) || 'GK');
+      else if (typeof startMuqabala === 'function') startMuqabala(null, (c && c.category) || 'GK');
     },
   });
 
