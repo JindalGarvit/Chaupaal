@@ -677,37 +677,58 @@ function openQuizCategorySheet(){
   const ratings=userProfile?.categoryRatings||{};
   sheet.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;">Choose a Quiz Category</div>
-      <button id="closeQuizCatSheet" style="background:none;border:none;font-size:22px;cursor:pointer;">✕</button>
+      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;">Quiz Muqabala</div>
+      <button type="button" id="closeQuizCatSheet" class="icon-btn" aria-label="Close" style="background:none;border:none;font-size:22px;cursor:pointer;">✕</button>
     </div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Pick a topic for your Muqabala</div>
-    <div class="quiz-cat-grid">
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Pick a topic, then Practice or find a match</div>
+    <div class="quiz-cat-grid" id="quizCatGrid">
       ${NEWS_CATEGORIES.map(cat=>`
-        <div class="quiz-cat-card" data-cat="${cat}">
+        <button type="button" class="quiz-cat-card" data-cat="${cat}" aria-pressed="false">
           <div class="quiz-cat-icon">${CATEGORY_ICONS[cat]}</div>
           <div class="quiz-cat-name">${cat}</div>
           <div class="quiz-cat-rating">★ ${ratings[cat]||1200}</div>
-        </div>
+        </button>
       `).join('')}
     </div>
-    <div class="dangal-limit-bar" id="dangalLimitBar" style="margin:4px 0 14px;">
-      <div class="dangal-limit-info"><span>Random Muqabala today</span><span class="dangal-limit-count" id="dangalLimitCount">3 / 3 remaining</span></div>
+    <div class="dangal-limit-bar" id="dangalLimitBar" style="margin:10px 0 12px;">
+      <div class="dangal-limit-info"><span>Random matches today</span><span class="dangal-limit-count" id="dangalLimitCount">3 / 3 remaining</span></div>
       <div class="dangal-limit-track"><div class="dangal-limit-fill" id="dangalLimitFill" style="width:100%"></div></div>
     </div>
-    <button class="btn btn--primary btn--block btn--lg dangal-action-btn" id="aiFindMuqabalaBtn" style="background:linear-gradient(135deg,var(--navy),#2A3158);width:100%;">Find with AI (any category)</button>
+    <div class="muqabala-sheet-actions">
+      <button type="button" class="btn btn--primary btn--block btn--lg dangal-action-btn" id="quizPracticeBtn">Practice vs AI</button>
+      <button type="button" class="btn btn--block btn--lg dangal-action-btn muqabala-sheet-find" id="quizFindBtn">Find opponent</button>
+      <button type="button" class="btn btn--block dangal-action-btn" id="aiFindMuqabalaBtn" style="background:linear-gradient(135deg,var(--navy),#2A3158);color:#fff;margin-top:8px;">Find with AI</button>
+    </div>
   `;
   sheet.classList.remove('hidden');requestAnimationFrame(()=>sheet.classList.add('open'));
-  document.getElementById('closeQuizCatSheet').addEventListener('click',()=>{sheet.classList.remove('open');setTimeout(()=>sheet.classList.add('hidden'),350);});
+  let selectedCat = NEWS_CATEGORIES[0] || 'GK';
+  const markSelected = ()=>{
+    sheet.querySelectorAll('[data-cat]').forEach(card=>{
+      const on = card.dataset.cat === selectedCat;
+      card.classList.toggle('is-selected', on);
+      card.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  };
+  markSelected();
+  const closeSheet = ()=>{ sheet.classList.remove('open'); setTimeout(()=>sheet.classList.add('hidden'),350); };
+  document.getElementById('closeQuizCatSheet').addEventListener('click', closeSheet);
   sheet.querySelectorAll('[data-cat]').forEach(card=>{
     card.addEventListener('click',()=>{
-      const cat=card.dataset.cat;
-      sheet.classList.remove('open');setTimeout(()=>sheet.classList.add('hidden'),350);
-      if(dailyMuqabalaCount>=DAILY_MUQABALA_LIMIT){showToast('Daily limit reached! Try AI finder or a friend challenge instead');return;}
-      startMuqabala(null,cat);
+      selectedCat = card.dataset.cat;
+      markSelected();
     });
   });
+  document.getElementById('quizPracticeBtn')?.addEventListener('click',()=>{
+    closeSheet();
+    startMuqabala(null, selectedCat, { skipMatchmaking:true, practice:true, simulated:true, skipCredit:true, source:'bank' });
+  });
+  document.getElementById('quizFindBtn')?.addEventListener('click',()=>{
+    if(dailyMuqabalaCount>=DAILY_MUQABALA_LIMIT){showToast('Daily match limit reached — Practice or challenge a friend instead');return;}
+    closeSheet();
+    startMuqabala(null, selectedCat);
+  });
   document.getElementById('aiFindMuqabalaBtn').addEventListener('click',()=>{
-    sheet.classList.remove('open');setTimeout(()=>sheet.classList.add('hidden'),350);
+    closeSheet();
     if(dailyMuqabalaCount>=DAILY_MUQABALA_LIMIT){showToast('Daily limit reached! Friend challenges are still unlimited');return;}
     openAIFinder();
   });

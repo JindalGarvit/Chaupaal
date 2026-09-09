@@ -290,13 +290,41 @@ function normalizeMuqabalaOptions(opts){
   const questions = Array.isArray(o.questions) && o.questions.length
     ? o.questions.map(normalizeMuqabalaQuestion).filter(q=>q.q && q.options.length>=2)
     : null;
+  const source = o.source || (questions ? 'manual' : 'bank');
+  const friendLike = source === 'friend' || source === 'manual' || source === 'challenge' || source === 'baithak';
   return {
     questions,
     timerSeconds: timer,
-    source: o.source || (questions ? 'manual' : 'bank'),
+    source,
     skipMatchmaking: !!o.skipMatchmaking,
-    skipCredit: !!o.skipCredit,
+    // Friend / custom challenges never burn stranger daily credits
+    skipCredit: !!o.skipCredit || friendLike || !!o.practice,
+    practice: !!o.practice,
+    simulated: !!o.simulated,
+    opponentUid: o.opponentUid ? String(o.opponentUid) : '',
+    matchId: o.matchId ? String(o.matchId) : '',
+    stake: Number(o.stake) || 0,
   };
+}
+
+/** Safe entry — a Muqabala throw must not blank the app shell. */
+function launchMuqabalaSafe(fn, label){
+  try{
+    return fn();
+  }catch(e){
+    console.error('[muqabala]', label || 'launch', e);
+    try{
+      const overlay = document.getElementById('muqabalaOverlay');
+      if(overlay){
+        overlay.classList.add('hidden');
+        overlay.innerHTML = '';
+      }
+    }catch(e2){}
+    if(typeof showToast === 'function'){
+      showToast(typeof t === 'function' ? t('muqabala_unavailable') : 'Muqabala hit a snag — try again');
+    }
+    return null;
+  }
 }
 
 function normalizeMuqabalaQuestion(q){
@@ -380,12 +408,16 @@ async function generateMuqabalaQuestionsAI({ category, count } = {}){
 /**
  * @param {string|null} opponentName
  * @param {string} mode - category / Custom / AI label
- * @param {object} [opts] - { questions, timerSeconds, source, skipMatchmaking, skipCredit }
+ * @param {object} [opts] - { questions, timerSeconds, source, skipMatchmaking, skipCredit, practice }
  */
 function startMuqabala(opponentName, mode, opts){
+  return launchMuqabalaSafe(()=>_startMuqabalaCore(opponentName, mode, opts), 'start');
+}
+
+function _startMuqabalaCore(opponentName, mode, opts){
   const overlay = document.getElementById('muqabalaOverlay');
   if(!overlay){ showToast(t('muqabala_unavailable')); return; }
-  if(typeof prepareGameOverlay==='function') prepareGameOverlay(overlay,{theme:'light',gameId:'muqabala'});
+  if(typeof prepareGameOverlay==='function') prepareGameOverlay(overlay,{theme:'light',gameId:'quiz'});
   const options = normalizeMuqabalaOptions(opts);
   const label = mode || 'GK';
   const qCount = options.questions ? options.questions.length : 10;
@@ -409,7 +441,11 @@ function startMuqabala(opponentName, mode, opts){
     cancelled = true;
     clearSearchTimers();
     releaseSearchScope();
-    overlay.classList.add('hidden');
+    if(typeof animateGameExit==='function'){
+      animateGameExit(overlay, ()=>overlay.classList.add('hidden'));
+    } else {
+      overlay.classList.add('hidden');
+    }
   };
   if(typeof registerScopedOverlay === 'function'){
     unregisterSearchOverlay = registerScopedOverlay(
@@ -423,13 +459,14 @@ function startMuqabala(opponentName, mode, opts){
     if(cancelled) return;
     matchFound = true;
     const merged = Object.assign({}, options, runOpts || {});
-    // Random/category: credit once at match confirm. Friend/custom challenges: unlimited.
-    if(!opponentName && !merged.skipCredit) useMuqabalaCredit();
+    // Random/category stranger queue burns credit once. Practice + friend/custom: skip.
+    const burnsCredit = !merged.skipCredit && !merged.practice && !opponentName && merged.source !== 'friend';
+    if(burnsCredit) useMuqabalaCredit();
     startTimer = setTimeout(()=>{
       if(cancelled) return;
       releaseSearchScope();
       runMuqabala(overlay, opp, label, merged);
-    }, merged.skipMatchmaking ? 400 : 900);
+    }, merged.skipMatchmaking || merged.practice ? 350 : 800);
   };
 
   const practiceAiName = 'Practice AI';
@@ -443,33 +480,41 @@ function startMuqabala(opponentName, mode, opts){
   const liveReady =
     persistable &&
     !options.simulated &&
+    !options.practice &&
     (options.matchId || launchCtx.matchId || (typeof dangalMatchId === 'function'));
 
-  if(options.skipMatchmaking){
+  const entryShell = (title, bodyHtml)=>`
+    ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:title,backId:'closeMuqabala'}):`<div class="muqabala-header"><div class="muqabala-title">Muqabala — ${label}</div>${typeof backButtonHtml==='function'?backButtonHtml({ className: 'icon-btn', id: 'closeMuqabala' }):'<button class="icon-btn cp-back-btn" id="closeMuqabala" aria-label="Back"></button>'}</div>`}
+    <div class="muqabala-entry">${bodyHtml}</div>
+  `;
+
+  if(options.skipMatchmaking || options.practice){
     const displayOpp = persistable
       ? (opponentName || 'Opponent')
-      : (options.simulated || !opponentName ? practiceAiName : opponentName);
-    const sub = persistable
-      ? (typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel
-          ? DangalLive.modeChromeLabel(true)
-          : 'Live 1v1')
+      : (options.practice || options.simulated || !opponentName ? practiceAiName : opponentName);
+    const isPractice = !persistable;
+    const sub = isPractice
+      ? 'Practice vs AI'
       : (typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel
-          ? DangalLive.modeChromeLabel(false, 'AI')
-          : 'Practice vs AI');
-    overlay.innerHTML = `
-      ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:sub+' · '+label,backId:'closeMuqabala'}):`<div class="muqabala-header"><div class="muqabala-title">Muqabala — ${label}</div>${typeof backButtonHtml==='function'?backButtonHtml({ className: 'icon-btn', id: 'closeMuqabala' }):'<button class="icon-btn cp-back-btn" id="closeMuqabala" aria-label="Back"></button>'}</div>`}
-      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;">
-        <div style="font-size:48px;">🎯</div>
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">${persistable?`Live vs ${displayOpp}`:`${sub}`}</div>
-        <div style="font-size:13px;color:var(--muted);">${label} · ${qCount} questions · ${options.timerSeconds}s each</div>
+          ? DangalLive.modeChromeLabel(true)
+          : 'Challenge');
+    overlay.innerHTML = entryShell(
+      `${sub} · ${label}`,
+      `
+      <div class="muqabala-entry-mark" aria-hidden="true"></div>
+      <div class="muqabala-entry-title">${isPractice ? 'Practice round' : `Challenge · ${displayOpp}`}</div>
+      <div class="muqabala-entry-meta">${label} · ${qCount} questions · ${options.timerSeconds}s each</div>
+      <div class="muqabala-skel" aria-hidden="true">
+        <div class="skeleton muqabala-skel-bar"></div>
+        <div class="skeleton muqabala-skel-bar muqabala-skel-bar--short"></div>
       </div>
-    `;
-    document.getElementById('closeMuqabala').addEventListener('click',()=>{
-      cancelSearch();
-    });
+      `
+    );
+    document.getElementById('closeMuqabala')?.addEventListener('click',()=>cancelSearch());
     beginRun(displayOpp, {
-      practice: !persistable,
-      simulated: !persistable,
+      practice: isPractice,
+      simulated: isPractice,
+      skipCredit: true,
       opponentUid: persistable ? oppUid : '',
       matchId:
         options.matchId ||
@@ -481,35 +526,37 @@ function startMuqabala(opponentName, mode, opts){
     return;
   }
 
-  overlay.innerHTML = `
-    ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:label,backId:'closeMuqabala'}):`<div class="muqabala-header"><div class="muqabala-title">Muqabala — ${label}</div>${typeof backButtonHtml==='function'?backButtonHtml({ className: 'icon-btn', id: 'closeMuqabala' }):'<button class="icon-btn cp-back-btn" id="closeMuqabala" aria-label="Back"></button>'}</div>`}
-    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;">
-      <div style="font-size:48px;animation:pulse 1s ease-in-out infinite;">⚡</div>
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">${opponentName?`Waiting for ${opponentName}…`:'Finding a worthy opponent…'}</div>
-      <div style="font-size:13px;color:var(--muted);">${opponentName?'Challenge sent — no fake accept. They must open it.':`${label} · ${qCount} questions · ${options.timerSeconds}s each`}</div>
-      ${opponentName?`<button type="button" id="muqPracticeInstead" class="game-tap-target" style="margin-top:8px;padding:10px 18px;border-radius:12px;border:1px solid var(--line);background:rgba(0,0,0,.04);font:600 13px Space Grotesk,sans-serif;cursor:pointer;">Practice vs AI instead</button>`:''}
-    </div>
-  `;
-  document.getElementById('closeMuqabala').addEventListener('click',()=>{
+  overlay.innerHTML = entryShell(
+    label,
+    `
+    <div class="muqabala-entry-spinner" aria-hidden="true"></div>
+    <div class="muqabala-entry-title">${opponentName?`Waiting for ${opponentName}`:'Finding an opponent'}</div>
+    <div class="muqabala-entry-meta">${opponentName
+      ? 'Challenge sent — they must open it. No fake accept.'
+      : `${label} · ${qCount} questions · ${options.timerSeconds}s each · uses 1 daily match`}</div>
+    ${opponentName?`<button type="button" id="muqPracticeInstead" class="muqabala-entry-alt game-tap-target">Practice vs AI instead</button>`:''}
+    `
+  );
+  document.getElementById('closeMuqabala')?.addEventListener('click',()=>{
     cancelSearch();
     try{ mmHandle?.cancel?.(); }catch(e){}
-    if(!matchFound) showToast(typeof t==='function'?t('muqabala_search_cancelled'):'Search cancelled — no Muqabala used 👍');
+    if(!matchFound) showToast(typeof t==='function'?t('muqabala_search_cancelled'):'Search cancelled — daily match not used');
   });
   const practiceBtn = document.getElementById('muqPracticeInstead');
   if(practiceBtn){
     practiceBtn.addEventListener('click',()=>{
       if(cancelled) return;
-      beginRun(practiceAiName, { practice:true, simulated:true, skipMatchmaking:true, opponentUid:'' });
+      beginRun(practiceAiName, { practice:true, simulated:true, skipMatchmaking:true, skipCredit:true, opponentUid:'' });
     });
   }
 
   let mmHandle = null;
   if(opponentName){
-    // Real friend challenge: stay on wait screen (accept arrives via challenge card / launch). No fake "accepted!".
     if(liveReady){
       beginRun(opponentName, {
         practice:false,
         simulated:false,
+        skipCredit:true,
         opponentUid:oppUid,
         matchId:options.matchId || launchCtx.matchId || (typeof dangalMatchId === 'function' ? dangalMatchId('quiz', { name: opponentName, opponentUid: oppUid }) : ''),
       });
@@ -517,24 +564,24 @@ function startMuqabala(opponentName, mode, opts){
     return;
   }
 
-  // Live waiting-room match; Practice AI fallback when queue times out
   if(typeof findRealOpponent==='function'){
     mmHandle = findRealOpponent({category: mode||'GK'}, (opp)=>{
       if(cancelled) return;
       matchFound = true;
       const simulated = !!opp?.simulated || !(opp?.uid && typeof isPersistableUid === 'function' && isPersistableUid(opp.uid));
       const name = simulated ? practiceAiName : (opp?.name || 'Opponent');
-      const body = overlay.children[1];
+      const body = overlay.querySelector('.muqabala-entry');
       if(body){
         body.innerHTML = `
-          <div style="font-size:48px;">🎯</div>
-          <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">${simulated?'Practice vs AI':name+' found!'}</div>
-          <div style="font-size:13px;color:var(--muted);">Starting now…</div>
+          <div class="muqabala-entry-mark" aria-hidden="true"></div>
+          <div class="muqabala-entry-title">${simulated?'No match — Practice vs AI':`${name} found`}</div>
+          <div class="muqabala-entry-meta">Starting now…</div>
         `;
       }
       beginRun(name, {
         practice: simulated,
         simulated,
+        skipCredit: simulated,
         opponentUid: simulated ? '' : (opp.uid || ''),
         matchId: !simulated && typeof dangalMatchId === 'function' ? dangalMatchId('quiz', { name, opponentUid: opp.uid }) : '',
       });
@@ -542,12 +589,16 @@ function startMuqabala(opponentName, mode, opts){
   } else {
     searchTimer = setTimeout(()=>{
       if(cancelled) return;
-      beginRun(practiceAiName, { practice:true, simulated:true });
+      beginRun(practiceAiName, { practice:true, simulated:true, skipCredit:true });
     }, 1800);
   }
 }
 
 function runMuqabala(overlay, oppName, mode, opts){
+  return launchMuqabalaSafe(()=>_runMuqabalaCore(overlay, oppName, mode, opts), 'run');
+}
+
+function _runMuqabalaCore(overlay, oppName, mode, opts){
   const options = normalizeMuqabalaOptions(opts);
   const launchCtx = window.__dangalLaunchCtx || {};
   const oppUid = options.opponentUid || launchCtx.opponentUid || '';
@@ -589,16 +640,18 @@ function runMuqabala(overlay, oppName, mode, opts){
     ? options.questions
     : pickMuqabalaQuestions(mode, 10);
   const timerSeconds = options.timerSeconds;
-  const totalQ = questions.length;
+  let totalQ = questions.length;
   let qIdx = 0, myScore = 0, oppScore = 0, timerInterval = null;
   let streak = 0, bestStreak = 0, comboFlash = '';
   const philosophicalAnswers = [];
   let sessionEnded = false;
   let sessionResult = null;
   let leaveConfirmed = false;
-  const modeChrome = liveOn
-    ? (typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel ? DangalLive.modeChromeLabel(true) : 'Live 1v1')
-    : (typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel ? DangalLive.modeChromeLabel(false, 'AI') : 'Practice vs AI');
+  const modeChrome = practice
+    ? 'Practice vs AI'
+    : (liveOn
+      ? (typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel ? DangalLive.modeChromeLabel(true) : 'Live 1v1')
+      : 'Challenge');
   const displayOpp = practice && (!oppName || /priya/i.test(String(oppName))) ? 'Practice AI' : oppName;
 
   let session = null;
@@ -657,7 +710,11 @@ function runMuqabala(overlay, oppName, mode, opts){
 
   function closeOverlay(result){
     endSession(result || 'dismissed');
-    overlay.classList.add('hidden');
+    if(typeof animateGameExit==='function'){
+      animateGameExit(overlay, ()=>overlay.classList.add('hidden'));
+    } else {
+      overlay.classList.add('hidden');
+    }
   }
 
   async function askMuqabalaLeave(){
@@ -686,12 +743,12 @@ function runMuqabala(overlay, oppName, mode, opts){
     closeOverlay('dismissed');
   }
 
-  function noteAnswer(correct){
+  function noteAnswer(correct, kind){
     if(correct){
       streak++;
       if(streak > bestStreak) bestStreak = streak;
       if(streak >= 2){
-        comboFlash = streak >= 4 ? `${streak}× streak!` : `Combo ×${streak}`;
+        comboFlash = streak >= 4 ? `${streak}× streak` : `Combo ×${streak}`;
         if(typeof gameFeedback === 'function') gameFeedback(streak >= 3 ? 'place' : 'valid');
       } else {
         comboFlash = '';
@@ -700,7 +757,7 @@ function runMuqabala(overlay, oppName, mode, opts){
     } else {
       streak = 0;
       comboFlash = '';
-      if(typeof gameFeedback === 'function') gameFeedback('invalid');
+      if(typeof gameFeedback === 'function') gameFeedback(kind === 'timeout' ? 'timeout' : 'invalid');
     }
   }
 
@@ -735,6 +792,18 @@ function runMuqabala(overlay, oppName, mode, opts){
     return null;
   }
 
+  function paintScoreboard(){
+    const board = overlay.querySelector('.game-scoreboard, .vs-row');
+    if(!board) return;
+    const html = typeof gameScoreHtml==='function'
+      ? gameScoreHtml({label:t('you')||'You',score:myScore},{label:displayOpp,score:oppScore})
+      : `<div class="vs-row"><div class="player-chip me">${t('you')||'You'} — ${myScore}</div><div class="player-chip opp">${displayOpp} — ${oppScore}</div></div>`;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    const next = tmp.firstElementChild;
+    if(next) board.replaceWith(next);
+  }
+
   if(liveOn && liveRoles && typeof DangalLive !== 'undefined'){
     const seedQs = (liveRoles.host ? questions : null);
     liveHandle = DangalLive.join({
@@ -756,6 +825,7 @@ function runMuqabala(overlay, oppName, mode, opts){
         const qz = val.quiz;
         if(Array.isArray(qz.questions) && qz.questions.length && !liveRoles.host){
           questions = qz.questions;
+          totalQ = questions.length;
           questionsReady = true;
         }
         if(liveRoles.host) questionsReady = true;
@@ -764,59 +834,96 @@ function runMuqabala(overlay, oppName, mode, opts){
         if(remoteScores[liveRoles.opp] != null) oppScore = Number(remoteScores[liveRoles.opp]) || oppScore;
         if(val.status === 'forfeit' && !sessionEnded){
           const iWon = val.winner === liveRoles.me;
-          showMuqabalaResult(overlay, myScore, iWon ? myScore + 1 : Math.max(0, myScore - 1), displayOpp, mode, philosophicalAnswers, options, endSession, { bestStreak, forfeit: true });
+          showMuqabalaResult(overlay, myScore, iWon ? myScore + 1 : Math.max(0, myScore - 1), displayOpp, mode, philosophicalAnswers, options, endSession, { bestStreak, forfeit: true, practice });
         }
       },
     });
   }
 
+  function renderEmptyBank(){
+    overlay.innerHTML = `
+      ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:modeChrome,backId:'closeMuqabala2'}):''}
+      <div class="muqabala-entry">
+        <div class="muqabala-entry-title">Couldn’t load questions</div>
+        <div class="muqabala-entry-meta">Check your connection, then retry.</div>
+        <button type="button" class="game-result-btn game-result-btn--primary game-tap-target" id="muqRetryQs">Retry</button>
+      </div>`;
+    document.getElementById('closeMuqabala2')?.addEventListener('click',()=>{askMuqabalaLeave();});
+    document.getElementById('muqRetryQs')?.addEventListener('click',()=>{
+      questions = options.questions && options.questions.length
+        ? options.questions
+        : pickMuqabalaQuestions(mode, 10);
+      totalQ = questions.length;
+      if(!totalQ){
+        if(typeof showToast==='function') showToast('Still no questions — try another category');
+        return;
+      }
+      qIdx = 0; myScore = 0; oppScore = 0; streak = 0; comboFlash = '';
+      renderQ();
+    });
+  }
+
   function renderQ(){
+    if(sessionEnded) return;
     if(liveOn && !questionsReady){
       overlay.innerHTML = `
         ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:modeChrome,backId:'closeMuqabala2'}):''}
-        <div style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;">
-          <div style="font:700 16px Space Grotesk,sans-serif;">Syncing quiz…</div>
-          <div style="font-size:13px;color:var(--muted);">Waiting for host questions</div>
+        <div class="muqabala-entry">
+          <div class="muqabala-entry-spinner" aria-hidden="true"></div>
+          <div class="muqabala-entry-title">Syncing quiz…</div>
+          <div class="muqabala-entry-meta">Waiting for host questions</div>
+          <div class="muqabala-skel" aria-hidden="true">
+            <div class="skeleton muqabala-skel-bar"></div>
+            <div class="skeleton muqabala-skel-bar muqabala-skel-bar--short"></div>
+          </div>
         </div>`;
-      const b=document.getElementById('closeMuqabala2');
-      if(b)b.addEventListener('click',()=>{askMuqabalaLeave();});
+      document.getElementById('closeMuqabala2')?.addEventListener('click',()=>{askMuqabalaLeave();});
       setTimeout(()=>{ if(!sessionEnded) renderQ(); }, 400);
       return;
     }
+    if(!questions.length){
+      return renderEmptyBank();
+    }
     if(qIdx >= questions.length){
-      return showMuqabalaResult(overlay, myScore, oppScore, displayOpp, mode, philosophicalAnswers, options, endSession, { bestStreak });
+      return showMuqabalaResult(overlay, myScore, oppScore, displayOpp, mode, philosophicalAnswers, options, endSession, { bestStreak, practice });
     }
     const data = questions[qIdx];
     let timeLeft = data.philosophical ? 999 : timerSeconds;
     let answered = false;
     let timerPaused = false;
+    let oppScoredThisQ = false;
     const urgencyAt = Math.max(3, Math.ceil(timerSeconds * 0.35));
+    const progressPct = Math.round(((qIdx + 1) / totalQ) * 100);
 
     overlay.innerHTML = `
-      ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:`${modeChrome} · Q${qIdx+1}/${totalQ} · ${mode}`,backId:'closeMuqabala2'}):`<div class="muqabala-header"><div class="muqabala-title">Q${qIdx+1}/${totalQ} · ${mode}</div>${typeof backButtonHtml==='function'?backButtonHtml({ className: 'icon-btn', id: 'closeMuqabala2' }):'<button class="icon-btn cp-back-btn" id="closeMuqabala2" aria-label="Back"></button>'}</div>`}
+      ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:`${modeChrome} · ${mode}`,backId:'closeMuqabala2'}):`<div class="muqabala-header"><div class="muqabala-title">Q${qIdx+1}/${totalQ} · ${mode}</div>${typeof backButtonHtml==='function'?backButtonHtml({ className: 'icon-btn', id: 'closeMuqabala2' }):'<button class="icon-btn cp-back-btn" id="closeMuqabala2" aria-label="Back"></button>'}</div>`}
+      <div class="muqabala-progress" role="progressbar" aria-valuenow="${qIdx+1}" aria-valuemin="1" aria-valuemax="${totalQ}" aria-label="Question ${qIdx+1} of ${totalQ}">
+        <div class="muqabala-progress-label">Q${qIdx+1}/${totalQ}</div>
+        <div class="muqabala-progress-track"><div class="muqabala-progress-fill" style="width:${progressPct}%"></div></div>
+      </div>
       ${typeof gameScoreHtml==='function'?gameScoreHtml({label:t('you')||'You',score:myScore},{label:displayOpp,score:oppScore}):`<div class="vs-row"><div class="player-chip me">${t('you')||'You'} — ${myScore}</div><div class="player-chip opp">${displayOpp} — ${oppScore}</div></div>`}
       <div class="muqabala-timer${data.philosophical?'':' muqabala-timer--live'}" id="mTimer" style="${data.philosophical?'font-size:14px;color:var(--gold);':''}">
         ${data.philosophical?t('philosophical_label'):`${timeLeft}`}
       </div>
       <div class="muqabala-combo" id="mCombo"${comboFlash?'':' hidden'}>${comboFlash||''}</div>
-      <div class="muqabala-card">
+      <div class="muqabala-card muqabala-card--enter">
         <div class="q-text">${data.q}</div>
         <div class="options" id="mOpts">
-          ${data.options.map((o,i)=>`<button class="opt" data-i="${i}"><span>${o}</span><span class="mark"></span></button>`).join('')}
+          ${data.options.map((o,i)=>`<button type="button" class="opt game-tap-target" data-i="${i}"><span>${o}</span><span class="mark" aria-hidden="true"></span></button>`).join('')}
         </div>
         ${data.philosophical?`
-          <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px;">
-            <div style="font-size:12px;color:var(--muted);font-weight:600;margin-bottom:8px;">${t('type_answer')}</div>
-            <textarea id="philoTypeInput" placeholder="${t('type_placeholder')}" rows="3" style="width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-family:Inter,sans-serif;font-size:13px;outline:none;resize:none;"></textarea>
-            <button id="philoSendBtn" style="margin-top:8px;width:100%;padding:10px;background:var(--red);color:#fff;border:none;border-radius:10px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;cursor:pointer;">${t('send')}</button>
+          <div class="muqabala-philo">
+            <div class="muqabala-philo-label">${t('type_answer')}</div>
+            <textarea id="philoTypeInput" placeholder="${t('type_placeholder')}" rows="3" class="muqabala-philo-input"></textarea>
+            <button type="button" id="philoSendBtn" class="muqabala-philo-send">${t('send')}</button>
           </div>
-          <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:10px;">${t('philosophical_score_note')}</div>
+          <div class="muqabala-philo-note">${t('philosophical_score_note')}</div>
         `:''}
         <div class="opp-indicator" id="oppInd">${liveOn?`${displayOpp} answering…`:t('opp_thinking',{name:displayOpp})}</div>
       </div>
     `;
 
-    document.getElementById('closeMuqabala2').addEventListener('click',()=>{askMuqabalaLeave();});
+    document.getElementById('closeMuqabala2')?.addEventListener('click',()=>{askMuqabalaLeave();});
 
     const optBtns = overlay.querySelectorAll('.opt');
     const tickTimerUi = ()=>{
@@ -827,9 +934,18 @@ function runMuqabala(overlay, oppName, mode, opts){
       tmr.classList.toggle('muqabala-timer--critical', timeLeft <= 3);
     };
 
+    const bumpOppIfCorrect = (correct)=>{
+      if(oppScoredThisQ) return;
+      if(correct){
+        oppScoredThisQ = true;
+        oppScore++;
+        paintScoreboard();
+      }
+    };
+
     const advanceAfterAnswer = ()=>{
       const go = ()=>{ qIdx++; renderQ(); };
-      if(!liveOn){ setTimeout(go, 900); return; }
+      if(!liveOn){ setTimeout(go, 720); return; }
       let waits = 0;
       const poll = setInterval(()=>{
         waits++;
@@ -840,7 +956,7 @@ function runMuqabala(overlay, oppName, mode, opts){
         }
         if(remote || waits > 40){
           clearInterval(poll);
-          setTimeout(go, 500);
+          setTimeout(go, 420);
         }
       }, 250);
     };
@@ -857,8 +973,9 @@ function runMuqabala(overlay, oppName, mode, opts){
         if(!quietMode && typeof SoundLib!=='undefined') SoundLib.playFeedback(true,'default');
         const oi=overlay.querySelector('#oppInd');if(oi)oi.textContent=t('opp_correct',{name:displayOpp});
         myScore++;
+        paintScoreboard();
         pushLiveAnswer(qIdx, chosen, true);
-        setTimeout(()=>{qIdx++;renderQ();},1400);
+        setTimeout(()=>{qIdx++;renderQ();},900);
       }));
 
       const typeInput=overlay.querySelector('#philoTypeInput');
@@ -880,8 +997,9 @@ function runMuqabala(overlay, oppName, mode, opts){
           noteAnswer(true);
           if(!quietMode && typeof SoundLib!=='undefined') SoundLib.playFeedback(true,'default');
           myScore++;
+          paintScoreboard();
           pushLiveAnswer(qIdx, -1, true);
-          setTimeout(()=>{qIdx++;renderQ();},1400);
+          setTimeout(()=>{qIdx++;renderQ();},900);
         });
       }
     } else {
@@ -889,7 +1007,7 @@ function runMuqabala(overlay, oppName, mode, opts){
         if(answered)return; answered=true; clearInterval(timerInterval);
         const chosen=parseInt(btn.dataset.i,10);
         const isCorrect=data.correct!==null&&chosen===data.correct;
-        if(isCorrect)myScore++;
+        if(isCorrect){ myScore++; paintScoreboard(); }
         noteAnswer(isCorrect);
         optBtns.forEach(b=>b.disabled=true);
         optBtns.forEach((b,i)=>{
@@ -897,6 +1015,8 @@ function runMuqabala(overlay, oppName, mode, opts){
           else if(i===chosen&&!isCorrect){b.classList.add('wrong');b.querySelector('.mark').textContent='✕';}
           else b.classList.add('dim');
         });
+        const card=overlay.querySelector('.muqabala-card');
+        if(card) card.classList.add(isCorrect?'muqabala-card--correct':'muqabala-card--wrong');
         if(!quietMode && typeof SoundLib!=='undefined') SoundLib.playFeedback(isCorrect,'default');
         const comboEl=overlay.querySelector('#mCombo');
         if(comboEl){
@@ -914,10 +1034,14 @@ function runMuqabala(overlay, oppName, mode, opts){
           return;
         }
         const oi=overlay.querySelector('#oppInd');
-        const oppCorrectLocal=Math.random()<0.55;
-        if(oi)oi.textContent=oppCorrectLocal?t('opp_correct',{name:displayOpp}):t('opp_wrong',{name:displayOpp});
-        if(oppCorrectLocal)oppScore++;
-        setTimeout(()=>{qIdx++;renderQ();},900);
+        if(!oppScoredThisQ){
+          const oppCorrectLocal=Math.random()<0.55;
+          if(oi)oi.textContent=oppCorrectLocal?t('opp_correct',{name:displayOpp}):t('opp_wrong',{name:displayOpp});
+          bumpOppIfCorrect(oppCorrectLocal);
+        } else if(oi){
+          oi.textContent=t('opp_correct',{name:displayOpp});
+        }
+        setTimeout(()=>{qIdx++;renderQ();},720);
       }));
 
       if(!liveOn){
@@ -925,9 +1049,10 @@ function runMuqabala(overlay, oppName, mode, opts){
         const oppDelay=1200+Math.random()*Math.max(1000, oppCapMs - 1200);
         const oppCorrect=Math.random()<0.55;
         setTimeout(()=>{
+          if(answered || oppScoredThisQ) return;
           const oi=overlay.querySelector('#oppInd');
-          if(oi&&!answered)oi.textContent=oppCorrect?t('opp_correct',{name:displayOpp}):t('opp_wrong',{name:displayOpp});
-          if(oppCorrect && !answered) oppScore++;
+          if(oi)oi.textContent=oppCorrect?t('opp_correct',{name:displayOpp}):t('opp_wrong',{name:displayOpp});
+          bumpOppIfCorrect(oppCorrect);
         }, Math.min(oppDelay, oppCapMs));
       } else {
         const livePoll = setInterval(()=>{
@@ -936,6 +1061,7 @@ function runMuqabala(overlay, oppName, mode, opts){
           if(remote){
             const oi=overlay.querySelector('#oppInd');
             if(oi) oi.textContent = remote.correct ? t('opp_correct',{name:displayOpp}) : t('opp_wrong',{name:displayOpp});
+            paintScoreboard();
           }
         }, 300);
       }
@@ -949,12 +1075,24 @@ function runMuqabala(overlay, oppName, mode, opts){
           clearInterval(timerInterval);
           if(!answered){
             answered=true;
-            noteAnswer(false);
+            noteAnswer(false, 'timeout');
             optBtns.forEach(b=>{b.disabled=true;b.classList.add('dim');});
             if(data.correct!==null){const c=optBtns[data.correct];if(c){c.classList.remove('dim');c.classList.add('correct');c.querySelector('.mark').textContent='✓';}}
+            const card=overlay.querySelector('.muqabala-card');
+            if(card) card.classList.add('muqabala-card--timeout');
+            const tmr=overlay.querySelector('#mTimer');
+            if(tmr){ tmr.textContent='0'; tmr.classList.add('muqabala-timer--timeout'); }
             pushLiveAnswer(qIdx, -1, false);
             if(liveOn) advanceAfterAnswer();
-            else setTimeout(()=>{qIdx++;renderQ();},900);
+            else {
+              if(!oppScoredThisQ){
+                const oppCorrectLocal=Math.random()<0.55;
+                const oi=overlay.querySelector('#oppInd');
+                if(oi)oi.textContent=oppCorrectLocal?t('opp_correct',{name:displayOpp}):t('opp_wrong',{name:displayOpp});
+                bumpOppIfCorrect(oppCorrectLocal);
+              }
+              setTimeout(()=>{qIdx++;renderQ();},720);
+            }
           }
         }
       },1000);
@@ -976,10 +1114,11 @@ function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalA
   const vsBest = typeof formatVsBest==='function'?formatVsBest('quiz', myScore):'';
   const duel = typeof recordDuelStreak==='function'?recordDuelStreak(oppName, won, tie):null;
   const duelLine = duel && duel.streak > 1 ? `Duel streak · ${duel.streak}` : '';
+  const isPractice = !!stats.practice || options.practice || /practice ai/i.test(String(oppName||''));
 
   const nudge=philosophicalAnswers.length>0 && typeof NUDGES_POST_MUQABALA!=='undefined'
     ? NUDGES_POST_MUQABALA[Math.floor(Math.random()*NUDGES_POST_MUQABALA.length)].replace('{answer}',philosophicalAnswers[0].answer)
-    : 'Ek acha muqabala tha! Kuch aur baatein karein?';
+    : '';
   const streakLine = [stats.bestStreak > 1 ? `Best combo · ${stats.bestStreak}` : '', duelLine].filter(Boolean).join(' · ');
   const shareStats = {
     scoreLine: `${myScore} – ${oppScore}`,
@@ -993,8 +1132,19 @@ function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalA
     ? buildGameShareCard('quiz', shareStats)
     : '';
 
+  const canShare = typeof shareGameResult === 'function' || typeof generateChallengeLink === 'function';
+  const canChallenge = typeof openFriendPickerSheet === 'function' || typeof generateChallengeLink === 'function';
+  const canStory = typeof postGameScoreStory === 'function';
+  const canChat = !isPractice && oppName && !/practice ai/i.test(String(oppName));
+
+  const actions = [{label:'Play again',primary:true,id:'again'}];
+  if(canShare) actions.push({label:'Share',primary:false,id:'share'});
+  if(canChallenge) actions.push({label:'Challenge friend',primary:false,id:'challenge'});
+  if(canStory) actions.push({label:'Post to story',primary:false,id:'story'});
+  if(canChat) actions.push({label:`Chat with ${oppName}`,primary:false,id:'chat'});
+
   overlay.innerHTML=`
-    ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:'Game over',backId:'closeMuqabala3'}):`<div class="muqabala-header"><div class="muqabala-title">Muqabala over!</div>${typeof backButtonHtml==='function'?backButtonHtml({ className: 'icon-btn', id: 'closeMuqabala3' }):'<button class="icon-btn cp-back-btn" id="closeMuqabala3" aria-label="Back"></button>'}</div>`}
+    ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Muqabala',subtitle:isPractice?'Practice over':'Game over',backId:'closeMuqabala3'}):`<div class="muqabala-header"><div class="muqabala-title">Muqabala over!</div>${typeof backButtonHtml==='function'?backButtonHtml({ className: 'icon-btn', id: 'closeMuqabala3' }):'<button class="icon-btn cp-back-btn" id="closeMuqabala3" aria-label="Back"></button>'}</div>`}
     ${typeof gameResultHtml==='function'?gameResultHtml({
       gameId:'quiz',
       glyph:tie?'=':won?'✓':'·',
@@ -1003,25 +1153,26 @@ function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalA
       vsBest: vsBest||undefined,
       you:myScore,opp:oppScore,oppLabel:oppName,
       shareCardHtml: shareCard,
-      actions:[
-        {label:'Play again',primary:true,id:'again'},
-        {label:'Share',primary:false,id:'share'},
-        {label:'Challenge friend',primary:false,id:'challenge'},
-        {label:'Post to story',primary:false,id:'story'},
-        {label:`Chat with ${oppName}`,primary:false,id:'chat'},
-      ],
+      actions,
     }):`<div class="muqabala-result"><div>${tie?"It's a tie!":(won?'You won!':`${oppName} won`)}</div></div>`}
-    ${philosophicalAnswers.length>0?`<div class="nudge-box" style="margin:0 16px 16px;"><div class="nudge-label">Baithak mein baat karein</div><div class="nudge-text">${nudge}</div></div>`:''}
+    ${philosophicalAnswers.length>0 && nudge?`<div class="nudge-box" style="margin:0 16px 16px;"><div class="nudge-label">Baithak mein baat karein</div><div class="nudge-text">${nudge}</div></div>`:''}
   `;
-  document.getElementById('closeMuqabala3').addEventListener('click',()=>overlay.classList.add('hidden'));
+  document.getElementById('closeMuqabala3')?.addEventListener('click',()=>{
+    if(typeof animateGameExit==='function') animateGameExit(overlay, ()=>overlay.classList.add('hidden'));
+    else overlay.classList.add('hidden');
+  });
   if(typeof wireGameResultActions==='function'){
     wireGameResultActions(overlay,{
       again:()=>{
-        startMuqabala(oppName, mode, {
+        startMuqabala(isPractice ? null : oppName, mode, {
           questions: options.questions || undefined,
           timerSeconds: options.timerSeconds,
-          source: options.source,
-          skipMatchmaking: options.source === 'manual' || options.source === 'ai',
+          source: isPractice ? 'bank' : (options.source || 'bank'),
+          skipMatchmaking: true,
+          practice: isPractice,
+          simulated: isPractice,
+          skipCredit: true,
+          opponentUid: isPractice ? '' : (options.opponentUid || ''),
         });
       },
       share:()=>{
@@ -1032,7 +1183,12 @@ function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalA
         if(typeof openFriendPickerSheet==='function'){
           const friend=await openFriendPickerSheet({title:'Challenge a friend',subtitle:'Start a Muqabala'});
           if(friend){
-            startMuqabala(friend.name, mode, {skipMatchmaking:true, source:'friend'});
+            startMuqabala(friend.name, mode, {
+              skipMatchmaking:true,
+              source:'friend',
+              skipCredit:true,
+              opponentUid: friend.uid || friend.id || '',
+            });
           }
         } else if(typeof generateChallengeLink==='function'){
           generateChallengeLink(myScore,mode);
@@ -1043,7 +1199,14 @@ function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalA
           postGameScoreStory('quiz',{score:myScore,total:10,scoreLine:`${myScore}–${oppScore}`,meta:mode,text:shareStats.text});
         }
       },
-      chat:()=>{overlay.classList.add('hidden');showToast(t('muqabala_check_baithak'));},
+      chat:()=>{
+        overlay.classList.add('hidden');
+        if(typeof openPeerDm==='function' && options.opponentUid){
+          openPeerDm({ peerUid: options.opponentUid, peerName: oppName, seedHello: false });
+        } else if(typeof showToast==='function'){
+          showToast(t('muqabala_check_baithak'));
+        }
+      },
     });
   }
   if(myScore>0 && typeof broadcastDuelResult==='function') setTimeout(()=>broadcastDuelResult(oppName,myScore,oppScore),600);

@@ -27,6 +27,7 @@
     kick: { sound: 'kick', haptic: 'medium' },
     bat: { sound: 'bat', haptic: 'medium' },
     check: { sound: 'check', haptic: 'medium' },
+    timeout: { sound: 'wrongTone', haptic: 'error' },
   };
 
   const GAME_ACCENTS = {
@@ -117,7 +118,7 @@
   }
 
   const COACH_TIPS = {
-    quiz: ['Answer before the timer runs out', 'Combos build when you stay correct', 'Friend challenges skip the daily limit'],
+    quiz: ['Answer before the timer ends — late taps don’t count', 'Stay correct to build combo streaks', 'Practice is free; friend challenges skip the daily match limit'],
     chess: ['Tap a piece, then a highlighted square', 'Fischer Random shuffles the back rank', 'Harder AI thinks a little longer'],
     snakes: ['Roll when it is your turn', 'Ladders climb up · snakes slide down', 'Reach the last square to win'],
     ludo: ['Roll six to enter a piece', 'Tap a glowing piece to move', 'Capture rivals by landing on them'],
