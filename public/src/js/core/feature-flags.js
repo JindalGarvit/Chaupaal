@@ -108,7 +108,7 @@
       percent: 0,
       allowList: [],
       denyList: [],
-      note: 'Live Klipy GIF search via POST /api/media-config gif_search. Needs KLIPY_API_KEY. Off = local Giphy pack.',
+      note: 'Live Klipy GIF/sticker/meme/clip search via POST /api/media-config gif_search (+ kind). Needs KLIPY_API_KEY. Off = local GIF pack + emoji stickers.',
     },
   };
 

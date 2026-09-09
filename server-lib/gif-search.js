@@ -1,25 +1,44 @@
 /**
- * Server-side Klipy GIF search with Firestore query/trending cache.
+ * Server-side Klipy media search (GIFs, stickers, memes, clips) with Firestore cache.
  *
- * Env: KLIPY_API_KEY (never expose to client). Auth is path-based:
- *   GET https://api.klipy.com/api/v1/{API_KEY}/gifs/search?q=…
- *   GET https://api.klipy.com/api/v1/{API_KEY}/gifs/trending?per_page=…
+ * Env: KLIPY_API_KEY (never expose to client). Path-key auth:
+ *   GET https://api.klipy.com/api/v1/{API_KEY}/{kind}s/search|trending?…
+ *   kind ∈ gif | sticker | meme | clip  → path segment gifs | stickers | memes | clips
  *
- * Cache: gifCache/{docId} — Admin SDK only (see firestore.rules).
+ * Cache: klipyCache/{kind}__{docId} — Admin SDK only (see firestore.rules).
+ * Legacy GIF trending may still live under gifCache/__trending__ (read fallback).
  *
- * Degrades open when the key is unset: callers get { configured:false, results:[] }
- * so the client can fall back to the local curated Giphy pack.
+ * Soft-fail: no key → { configured:false, results:[] }. HTTP/timeout → empty + log.
  */
 
-const QUERY_CACHE_TTL_MS = 4 * 60 * 60 * 1000; // a few hours
-const TRENDING_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // daily
+const QUERY_CACHE_TTL_MS = 4 * 60 * 60 * 1000;
+const TRENDING_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_LIMIT = 24;
-/** Klipy rejects per_page below 8 / above 50 — clamp outbound requests. */
 const KLIPY_PER_PAGE_MIN = 8;
 const KLIPY_TIMEOUT_MS = 5000;
 const TRENDING_DOC_ID = '__trending__';
-/** India-first locale for trending personalization (ISO-style xx_XX). */
 const DEFAULT_LOCALE = 'in_IN';
+const KLIPY_KINDS = Object.freeze(['gif', 'sticker', 'meme', 'clip']);
+const KIND_PATH = Object.freeze({
+  gif: 'gifs',
+  sticker: 'stickers',
+  meme: 'memes',
+  clip: 'clips',
+});
+
+/** Preferred formats per kind (send URL first, then preview-friendly). */
+const KIND_SEND_FORMATS = Object.freeze({
+  gif: ['gif', 'webp', 'mp4', 'webm', 'jpg', 'png'],
+  sticker: ['webp', 'png', 'gif', 'mp4', 'webm'],
+  meme: ['webp', 'png', 'jpg', 'gif'],
+  clip: ['mp4', 'webm', 'gif', 'webp'],
+});
+const KIND_PREVIEW_FORMATS = Object.freeze({
+  gif: ['gif', 'webp', 'jpg', 'png', 'mp4'],
+  sticker: ['webp', 'png', 'gif', 'jpg'],
+  meme: ['webp', 'png', 'jpg', 'gif'],
+  clip: ['jpg', 'webp', 'png', 'gif', 'mp4', 'webm'],
+});
 
 function getKlipyKey() {
   const k = typeof process.env.KLIPY_API_KEY === 'string' ? process.env.KLIPY_API_KEY.trim() : '';
@@ -28,6 +47,17 @@ function getKlipyKey() {
 
 function isKlipyConfigured() {
   return !!getKlipyKey();
+}
+
+function normalizeKind(raw) {
+  const k = String(raw || 'gif')
+    .trim()
+    .toLowerCase();
+  if (k === 'gifs') return 'gif';
+  if (k === 'stickers') return 'sticker';
+  if (k === 'memes') return 'meme';
+  if (k === 'clips') return 'clip';
+  return KLIPY_KINDS.includes(k) ? k : 'gif';
 }
 
 function normalizeQuery(raw) {
@@ -45,9 +75,40 @@ function cacheDocIdForQuery(query) {
   return `q_${safe}`;
 }
 
+function kindCacheDocId(kind, query) {
+  return `${normalizeKind(kind)}__${cacheDocIdForQuery(query)}`;
+}
+
 function klipyPerPage(limit) {
   const lim = Math.min(MAX_LIMIT, Math.max(1, Number(limit) || MAX_LIMIT));
   return Math.min(50, Math.max(KLIPY_PER_PAGE_MIN, lim));
+}
+
+function mimeForFormat(fmt) {
+  const f = String(fmt || '').toLowerCase();
+  if (f === 'gif') return 'image/gif';
+  if (f === 'webp' || f.includes('webp')) return 'image/webp';
+  if (f === 'png') return 'image/png';
+  if (f === 'jpg' || f === 'jpeg') return 'image/jpeg';
+  if (f === 'mp4') return 'video/mp4';
+  if (f === 'webm') return 'video/webm';
+  return '';
+}
+
+function pickFromBucket(bucket, preferredFormats) {
+  if (!bucket || typeof bucket !== 'object') return null;
+  for (const fmt of preferredFormats) {
+    const media = bucket[fmt];
+    if (media && typeof media === 'object' && media.url) {
+      return { media, format: fmt };
+    }
+  }
+  for (const [fmt, media] of Object.entries(bucket)) {
+    if (media && typeof media === 'object' && media.url) {
+      return { media, format: fmt };
+    }
+  }
+  return null;
 }
 
 /** Prefer gif under a size bucket; tolerate `file` or legacy `files`. */
@@ -61,36 +122,70 @@ function pickSizeMedia(files, sizeKey) {
 }
 
 /**
- * Normalize one Klipy item → { id, url, previewUrl, width, height, title }.
- * Full send URL: md.gif (chat-friendly). Preview: sm/xs.
+ * Normalize one Klipy item → { id, title, kind, url, previewUrl, width, height, mime?, duration? }.
  */
-function normalizeKlipyItem(r) {
+function normalizeKlipyItem(r, kind = 'gif') {
   if (!r || typeof r !== 'object') return null;
+  const k = normalizeKind(kind);
   const files = r.file || r.files || {};
-  const full = pickSizeMedia(files, 'md') || pickSizeMedia(files, 'hd') || pickSizeMedia(files, 'sm');
-  if (!full?.url) return null;
-  const preview =
-    pickSizeMedia(files, 'sm') || pickSizeMedia(files, 'xs') || pickSizeMedia(files, 'md') || full;
-  return {
+  const sendPrefs = KIND_SEND_FORMATS[k] || KIND_SEND_FORMATS.gif;
+  const previewPrefs = KIND_PREVIEW_FORMATS[k] || KIND_PREVIEW_FORMATS.gif;
+  const sizeOrder = k === 'clip' ? ['md', 'hd', 'sm', 'xs'] : ['md', 'hd', 'sm', 'xs'];
+
+  let fullPick = null;
+  for (const sizeKey of sizeOrder) {
+    const bucket = files[sizeKey];
+    const picked = pickFromBucket(bucket, sendPrefs);
+    if (picked) {
+      fullPick = picked;
+      break;
+    }
+  }
+  if (!fullPick?.media?.url) return null;
+
+  let previewPick = null;
+  const previewOrder = ['sm', 'xs', 'md', 'hd'];
+  for (const sizeKey of previewOrder) {
+    const bucket = files[sizeKey];
+    const picked = pickFromBucket(bucket, previewPrefs);
+    if (picked) {
+      previewPick = picked;
+      break;
+    }
+  }
+  if (!previewPick) previewPick = fullPick;
+
+  const full = fullPick.media;
+  const preview = previewPick.media;
+  const durationRaw = Number(r.duration ?? full.duration ?? preview.duration);
+  const out = {
     id: String(r.id ?? r.slug ?? ''),
+    title: String(r.title || r.slug || k.toUpperCase()).slice(0, 120),
+    kind: k,
     url: String(full.url),
     previewUrl: String(preview.url || full.url),
     width: Number(full.width) || null,
     height: Number(full.height) || null,
-    title: String(r.title || r.slug || 'GIF').slice(0, 120),
+    mime: mimeForFormat(fullPick.format) || undefined,
   };
+  if (Number.isFinite(durationRaw) && durationRaw > 0) {
+    out.duration = Math.round(durationRaw * 10) / 10;
+  }
+  return out;
 }
 
 function extractKlipyList(data) {
-  // Envelope: { result: true, data: { data: [...], current_page, per_page, has_next } }
   if (Array.isArray(data?.data?.data)) return data.data.data;
   if (Array.isArray(data?.data) && !data.data.data) return data.data;
   if (Array.isArray(data?.results)) return data.results;
   return [];
 }
 
-function normalizeKlipyResponse(data) {
-  return extractKlipyList(data).map(normalizeKlipyItem).filter(Boolean);
+function normalizeKlipyResponse(data, kind = 'gif') {
+  const k = normalizeKind(kind);
+  return extractKlipyList(data)
+    .map((item) => normalizeKlipyItem(item, k))
+    .filter(Boolean);
 }
 
 async function fetchKlipy(pathAndQuery) {
@@ -100,7 +195,6 @@ async function fetchKlipy(pathAndQuery) {
     err.code = 'KLIPY_UNCONFIGURED';
     throw err;
   }
-  // Key lives in the path — never return it to the client.
   const url = `https://api.klipy.com/api/v1/${encodeURIComponent(key)}/${pathAndQuery}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), KLIPY_TIMEOUT_MS);
@@ -122,9 +216,9 @@ async function fetchKlipy(pathAndQuery) {
   }
 }
 
-async function readCache(db, docId, { allowStale = false } = {}) {
+async function readCache(db, collectionName, docId, { allowStale = false } = {}) {
   try {
-    const snap = await db.collection('gifCache').doc(docId).get();
+    const snap = await db.collection(collectionName).doc(docId).get();
     if (!snap.exists) return null;
     const data = snap.data() || {};
     const expiresAt = Number(data.expiresAt) || 0;
@@ -139,18 +233,19 @@ async function readCache(db, docId, { allowStale = false } = {}) {
       stale: !!expired,
     };
   } catch (e) {
-    console.warn('[gif-search] cache read', e?.message || e);
+    console.warn('[klipy-search] cache read', e?.message || e);
     return null;
   }
 }
 
-async function writeCache(db, FieldValue, docId, { query, results, source, ttlMs }) {
+async function writeCache(db, FieldValue, docId, { kind, query, results, source, ttlMs }) {
   try {
     await db
-      .collection('gifCache')
+      .collection('klipyCache')
       .doc(docId)
       .set(
         {
+          kind: normalizeKind(kind),
           query: query || '',
           results: results || [],
           source: source || 'klipy',
@@ -160,20 +255,41 @@ async function writeCache(db, FieldValue, docId, { query, results, source, ttlMs
         { merge: true }
       );
   } catch (e) {
-    console.warn('[gif-search] cache write', e?.message || e);
+    console.warn('[klipy-search] cache write', e?.message || e);
   }
 }
 
-async function fetchAndCacheTrending(adminApp) {
+async function readKindCache(db, kind, query, opts) {
+  const k = normalizeKind(kind);
+  const docId = kindCacheDocId(k, query);
+  let hit = await readCache(db, 'klipyCache', docId, opts);
+  if (hit) return hit;
+  // Legacy GIF cache (pre–multi-kind) — trending / query without kind prefix
+  if (k === 'gif') {
+    const legacyId = cacheDocIdForQuery(query);
+    hit = await readCache(db, 'gifCache', legacyId, opts);
+    if (hit) {
+      hit.results = (hit.results || []).map((r) =>
+        r && !r.kind ? Object.assign({}, r, { kind: 'gif' }) : r
+      );
+    }
+  }
+  return hit;
+}
+
+async function fetchAndCacheTrending(adminApp, kind) {
+  const k = normalizeKind(kind);
+  const pathSeg = KIND_PATH[k];
   const db = adminApp.firestore();
   const FieldValue = adminApp.firestore.FieldValue;
   const perPage = klipyPerPage(MAX_LIMIT);
   const data = await fetchKlipy(
-    `gifs/trending?per_page=${perPage}&page=1&locale=${encodeURIComponent(DEFAULT_LOCALE)}`
+    `${pathSeg}/trending?per_page=${perPage}&page=1&locale=${encodeURIComponent(DEFAULT_LOCALE)}`
   );
-  const results = normalizeKlipyResponse(data);
+  const results = normalizeKlipyResponse(data, k);
   if (results.length) {
-    await writeCache(db, FieldValue, TRENDING_DOC_ID, {
+    await writeCache(db, FieldValue, kindCacheDocId(k, ''), {
+      kind: k,
       query: '',
       results,
       source: 'klipy_trending',
@@ -188,60 +304,64 @@ async function fetchAndCacheTrending(adminApp) {
  *   results: object[],
  *   source: string,
  *   configured: boolean,
+ *   kind: string,
  *   cached?: boolean,
  *   query?: string
  * }>}
  */
-async function searchGifs(adminApp, { query = '', limit = 24 } = {}) {
+async function searchKlipyMedia(adminApp, { kind = 'gif', query = '', limit = 24 } = {}) {
+  const k = normalizeKind(kind);
   const configured = isKlipyConfigured();
   const lim = Math.min(MAX_LIMIT, Math.max(1, Number(limit) || 24));
   const q = normalizeQuery(query);
 
   if (!configured) {
-    return { results: [], source: 'unconfigured', configured: false, query: q };
+    return { results: [], source: 'unconfigured', configured: false, kind: k, query: q };
   }
 
   if (!adminApp) {
-    return { results: [], source: 'unavailable', configured: true, query: q };
+    return { results: [], source: 'unavailable', configured: true, kind: k, query: q };
   }
 
   const db = adminApp.firestore();
   const FieldValue = adminApp.firestore.FieldValue;
-  const docId = cacheDocIdForQuery(q);
+  const pathSeg = KIND_PATH[k];
 
-  // Empty query → trending (cached daily)
   if (!q) {
-    const cached = await readCache(db, TRENDING_DOC_ID);
+    const cached = await readKindCache(db, k, '');
     if (cached) {
       return {
         results: cached.results.slice(0, lim),
         source: 'trending',
         configured: true,
+        kind: k,
         cached: true,
         query: '',
       };
     }
     try {
-      const results = await fetchAndCacheTrending(adminApp);
+      const results = await fetchAndCacheTrending(adminApp, k);
       return {
         results: results.slice(0, lim),
         source: 'trending',
         configured: true,
+        kind: k,
         cached: false,
         query: '',
       };
     } catch (e) {
-      console.warn('[gif-search] trending', e?.message || e);
-      return { results: [], source: 'error', configured: true, query: '' };
+      console.warn(`[klipy-search] ${k} trending`, e?.message || e);
+      return { results: [], source: 'error', configured: true, kind: k, query: '' };
     }
   }
 
-  const hit = await readCache(db, docId);
+  const hit = await readKindCache(db, k, q);
   if (hit) {
     return {
       results: hit.results.slice(0, lim),
       source: 'cache',
       configured: true,
+      kind: k,
       cached: true,
       query: q,
     };
@@ -250,11 +370,12 @@ async function searchGifs(adminApp, { query = '', limit = 24 } = {}) {
   try {
     const perPage = klipyPerPage(lim);
     const data = await fetchKlipy(
-      `gifs/search?q=${encodeURIComponent(q)}&per_page=${perPage}&page=1&locale=${encodeURIComponent(DEFAULT_LOCALE)}`
+      `${pathSeg}/search?q=${encodeURIComponent(q)}&per_page=${perPage}&page=1&locale=${encodeURIComponent(DEFAULT_LOCALE)}`
     );
-    const results = normalizeKlipyResponse(data);
+    const results = normalizeKlipyResponse(data, k);
     if (results.length) {
-      await writeCache(db, FieldValue, docId, {
+      await writeCache(db, FieldValue, kindCacheDocId(k, q), {
+        kind: k,
         query: q,
         results,
         source: 'klipy',
@@ -265,24 +386,30 @@ async function searchGifs(adminApp, { query = '', limit = 24 } = {}) {
       results: results.slice(0, lim),
       source: 'klipy',
       configured: true,
+      kind: k,
       cached: false,
       query: q,
     };
   } catch (e) {
-    console.warn('[gif-search] search failed', e?.message || e);
-    // Soft-stale trending so a Klipy blip still yields something live-feeling.
-    const trending = await readCache(db, TRENDING_DOC_ID, { allowStale: true });
+    console.warn(`[klipy-search] ${k} search failed`, e?.message || e);
+    const trending = await readKindCache(db, k, '', { allowStale: true });
     if (trending) {
       return {
         results: trending.results.slice(0, lim),
         source: 'trending',
         configured: true,
+        kind: k,
         cached: true,
         query: q,
       };
     }
-    return { results: [], source: 'error', configured: true, query: q };
+    return { results: [], source: 'error', configured: true, kind: k, query: q };
   }
+}
+
+/** Back-compat wrapper — same as searchKlipyMedia({ kind: 'gif' }). */
+async function searchGifs(adminApp, opts) {
+  return searchKlipyMedia(adminApp, Object.assign({}, opts, { kind: 'gif' }));
 }
 
 module.exports = {
@@ -291,12 +418,18 @@ module.exports = {
   MAX_LIMIT,
   TRENDING_DOC_ID,
   DEFAULT_LOCALE,
+  KLIPY_KINDS,
+  KIND_PATH,
   getKlipyKey,
   isKlipyConfigured,
+  normalizeKind,
   normalizeQuery,
   cacheDocIdForQuery,
+  kindCacheDocId,
   klipyPerPage,
+  pickSizeMedia,
   normalizeKlipyItem,
   normalizeKlipyResponse,
+  searchKlipyMedia,
   searchGifs,
 };

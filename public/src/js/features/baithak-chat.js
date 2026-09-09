@@ -472,6 +472,10 @@ function openChatScreen(chat){
         <span class="chat-attach-icon chat-attach-icon--photo">${typeof iconHtml==='function'?iconHtml('camera',{size:22}):''}</span>
         <span class="chat-attach-label">${typeof t==='function'?t('attach_photo','Photo'):'Photo'}</span>
       </button>
+      <button type="button" class="chat-attach-option" id="attachMedia" role="menuitem">
+        <span class="chat-attach-icon chat-attach-icon--media">${typeof iconHtml==='function'?iconHtml('image',{size:22}):''}</span>
+        <span class="chat-attach-label">${typeof t==='function'?t('attach_gif_more','GIF & more'):'GIF & more'}</span>
+      </button>
       <button type="button" class="chat-attach-option" id="attachFile" role="menuitem">
         <span class="chat-attach-icon chat-attach-icon--file">${typeof iconHtml==='function'?iconHtml('file',{size:22}):''}</span>
         <span class="chat-attach-label">${typeof t==='function'?t('attach_file','File'):'File'}</span>
@@ -718,6 +722,51 @@ function openChatScreen(chat){
   document.getElementById('attachPhoto').addEventListener('click',()=>{
     attachMenu.classList.remove('show');
     document.getElementById('chatPhotoInput').click();
+  });
+  document.getElementById('attachMedia')?.addEventListener('click',()=>{
+    attachMenu.classList.remove('show');
+    const openPicker = typeof openKlipyMediaPicker === 'function' ? openKlipyMediaPicker : openGifPicker;
+    if(typeof openPicker !== 'function'){
+      showToast(typeof t==='function'?t('baithak_gif_unavailable','Media picker unavailable'):'Media picker unavailable');
+      return;
+    }
+    openPicker({
+      kind: 'gif',
+      onSelect: async (item)=>{
+        if(!item) return;
+        if(item.emoji && !item.url){
+          const emoji = String(item.emoji);
+          const pending = addMsgBubble({from:'me',text:emoji,time:'now',pending:true}, isGroup);
+          if(typeof sendRealtimeMessage==='function'){
+            try{ await sendRealtimeMessage(chat.firestoreId||chat.id, emoji, isGroup); }
+            catch(e){ pending?.remove?.(); showToast(typeof friendlyError==='function'?friendlyError(e):'Could not send'); }
+          }
+          return;
+        }
+        if(!item.url) return;
+        const kind = ['gif','sticker','meme','clip'].includes(item.kind||item.type) ? (item.kind||item.type) : 'gif';
+        const label = kind === 'gif' ? 'GIF' : kind === 'sticker' ? 'Sticker' : kind === 'meme' ? 'Meme' : 'Clip';
+        const att = {
+          type: kind,
+          kind,
+          url: item.url,
+          previewUrl: item.preview || item.previewUrl || item.url,
+          title: item.title || label,
+          mime: item.mime || '',
+          width: item.width || null,
+          height: item.height || null,
+          duration: item.duration || null,
+        };
+        const pendingRow = addMsgBubble({from:'me',text:label,attachment:att,time:'now',pending:true}, isGroup);
+        if(typeof sendRealtimeMessage!=='function') return;
+        try{
+          await sendRealtimeMessage(chat.firestoreId||chat.id, label, isGroup, null, att);
+        }catch(e){
+          pendingRow?.remove?.();
+          showToast(typeof friendlyError==='function'?friendlyError(e):'Could not send');
+        }
+      },
+    });
   });
   document.getElementById('chatPhotoInput').addEventListener('change', async e=>{
     const file=e.target.files[0];if(!file)return;
@@ -1113,6 +1162,14 @@ function renderMsgBubble(m, isGroup){
   } else if(att && att.type==='photo' && att.url){
     const sizeAttrs='';
     body=`<div class="chat-img-wrap baithak-3d-edge"><img class="chat-img-msg" src="${chatEsc(att.url)}" decoding="async" alt=""${sizeAttrs}></div>`;
+    rich=true;
+  } else if(att && (att.type==='gif' || att.type==='sticker' || att.type==='meme') && att.url){
+    const alt = chatEsc(att.title || att.type || 'media');
+    body=`<div class="chat-img-wrap chat-klipy-wrap baithak-3d-edge" data-klipy-kind="${chatEsc(att.type)}"><img class="chat-img-msg chat-klipy-img" src="${chatEsc(att.url)}" decoding="async" alt="${alt}" loading="lazy"></div>`;
+    rich=true;
+  } else if(att && att.type==='clip' && att.url){
+    const poster = att.previewUrl || att.thumb || '';
+    body=`<div class="chat-clip-wrap baithak-3d-edge"><video class="chat-clip-msg" src="${chatEsc(att.url)}"${poster?` poster="${chatEsc(poster)}"`:''} muted playsinline controls preload="metadata"></video></div>`;
     rich=true;
   } else if(att && att.type==='file'){
     body=`<div class="chat-file-msg baithak-3d-edge">${typeof iconHtml==='function'?iconHtml('file',{size:18}):''}<span class="chat-file-name">${chatEsc(att.name||'File')}</span></div>`;

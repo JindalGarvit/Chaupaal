@@ -4,7 +4,8 @@
  * GET  → Cloudinary unsigned upload config (existing)
  * POST → { action: 'music_search' | 'music_resolve' | 'gif_search' | 'get_game_of_day' | … }
  *
- * Music + GIF + GOTD live here (not a new api/*.js) to stay under the Hobby 12-function cap.
+ * gif_search also accepts { kind: 'gif'|'sticker'|'meme'|'clip' } (default gif) — one action,
+ * shared gif_search rate limit. Music + Klipy + GOTD stay here (Hobby 12-function cap).
  */
 const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
 const { requireUser, initAdmin } = require('../server-lib/auth');
@@ -16,7 +17,7 @@ const {
 } = require('../server-lib/music-radio');
 const { searchPlaces } = require('../server-lib/geocode');
 const { checkUrlWithWebRisk } = require('../server-lib/url-safety');
-const { searchGifs } = require('../server-lib/gif-search');
+const { searchKlipyMedia, normalizeKind } = require('../server-lib/gif-search');
 const {
   normalizeUsername,
   validateUsername,
@@ -263,7 +264,7 @@ async function handlePost(req, res) {
       const { checkActionRateLimit } = require('../server-lib/rate-limit');
       const rate = await checkActionRateLimit(user.uid, 'gif_search');
       if (!rate.ok) {
-        return sendError(res, 429, 'RATE_LIMITED', 'Too many GIF searches. Try again shortly.');
+        return sendError(res, 429, 'RATE_LIMITED', 'Too many media searches. Try again shortly.');
       }
     } catch (e) {
       console.warn('[media-config] gif_search rate-limit check failed', e?.message || e);
@@ -561,19 +562,24 @@ async function handlePost(req, res) {
   }
 
   if (action === 'gif_search') {
+    // Extended: optional body.kind = gif | sticker | meme | clip (default gif).
+    // Same action keeps Hobby function count + one rate-limit bucket.
     const adminApp = initAdmin();
+    const kind = normalizeKind(body.kind || 'gif');
     try {
-      const result = await searchGifs(adminApp, {
+      const result = await searchKlipyMedia(adminApp, {
+        kind,
         query: body.query,
         limit: body.limit,
       });
       return sendSuccess(res, result);
     } catch (e) {
       console.warn('[media-config] gif_search', e?.message || e);
-      // Soft degrade — never 500 for an optional GIF dependency
+      // Soft degrade — never 500 for an optional Klipy dependency
       return sendSuccess(res, {
         results: [],
         source: 'error',
+        kind,
         configured: !!process.env.KLIPY_API_KEY,
         query: String(body.query || '').trim().toLowerCase(),
       });

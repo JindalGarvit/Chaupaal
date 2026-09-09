@@ -410,7 +410,7 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment, opt
   const body=String(text||'').trim();
   if(!body && !(music&&music.title) && !attachment) return;
   const payload={
-    text:body||(music?.title?`🎵 ${music.title}`:(attachment?.type==='photo'?'📷 Photo':attachment?.type==='file'?'📄 File':attachment?.type==='location'?'📍 Location':attachment?.type==='radio_share'?'📻 Radio':attachment?.type==='muqabala_challenge'?'⚔️ Challenge':attachment?.type==='game_challenge'?'🎮 Challenge':attachment?.type==='story'?'Sent a story':attachment?.type==='duniya_post'?'Sent a post':attachment?.type==='peepal_post'?'Sent a discussion':attachment?.type==='mehfil_invite'?(body||'Join Mehfil'):'')),
+    text:body||(music?.title?`🎵 ${music.title}`:(attachment?.type==='photo'?'📷 Photo':attachment?.type==='file'?'📄 File':attachment?.type==='location'?'📍 Location':attachment?.type==='radio_share'?'📻 Radio':attachment?.type==='muqabala_challenge'?'⚔️ Challenge':attachment?.type==='game_challenge'?'🎮 Challenge':attachment?.type==='story'?'Sent a story':attachment?.type==='duniya_post'?'Sent a post':attachment?.type==='peepal_post'?'Sent a discussion':attachment?.type==='mehfil_invite'?(body||'Join Mehfil'):attachment?.type==='gif'?'GIF':attachment?.type==='sticker'?'Sticker':attachment?.type==='meme'?'Meme':attachment?.type==='clip'?'Clip':'')),
     uid:currentUser.uid,
     name:userProfile?.name||currentUser.displayName||'You',
     avatar:currentUser.photoURL||'',
@@ -455,6 +455,11 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment, opt
         name:attachment.name?String(attachment.name).slice(0,160):null,
         width:Number(attachment.width)||null,
         height:Number(attachment.height)||null,
+        kind:attachment.kind?String(attachment.kind).slice(0,16):null,
+        previewUrl:attachment.previewUrl?String(attachment.previewUrl).slice(0,2048):(attachment.preview?String(attachment.preview).slice(0,2048):null),
+        title:attachment.title?String(attachment.title).slice(0,120):null,
+        mime:attachment.mime?String(attachment.mime).slice(0,64):null,
+        duration:Number(attachment.duration)||null,
         challengeId:attachment.challengeId?String(attachment.challengeId).slice(0,80):null,
         questions:Array.isArray(attachment.questions)?attachment.questions.slice(0,20):null,
         timerSeconds:Number(attachment.timerSeconds)||null,

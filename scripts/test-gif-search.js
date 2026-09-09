@@ -5,10 +5,13 @@ const assert = require('assert');
 const {
   normalizeQuery,
   cacheDocIdForQuery,
+  kindCacheDocId,
+  normalizeKind,
   normalizeKlipyItem,
   normalizeKlipyResponse,
   isKlipyConfigured,
   searchGifs,
+  searchKlipyMedia,
   klipyPerPage,
   MAX_LIMIT,
   TRENDING_DOC_ID,
@@ -55,14 +58,72 @@ async function main() {
         sm: { gif: { url: 'https://cdn.klipy.com/sm.gif', width: 220, height: 220 } },
       },
     });
-    assert.deepStrictEqual(item, {
-      id: '42',
-      url: 'https://cdn.klipy.com/md.gif',
-      previewUrl: 'https://cdn.klipy.com/sm.gif',
-      width: 300,
-      height: 300,
-      title: 'Cat dance',
-    });
+    assert.equal(item.id, '42');
+    assert.equal(item.kind, 'gif');
+    assert.equal(item.url, 'https://cdn.klipy.com/md.gif');
+    assert.equal(item.previewUrl, 'https://cdn.klipy.com/sm.gif');
+    assert.equal(item.width, 300);
+    assert.equal(item.height, 300);
+    assert.equal(item.title, 'Cat dance');
+    assert.equal(item.mime, 'image/gif');
+  });
+
+  await test('normalizeKind + kindCacheDocId separate namespaces', () => {
+    assert.equal(normalizeKind('STICKERS'), 'sticker');
+    assert.equal(kindCacheDocId('gif', ''), 'gif____trending__');
+    assert.equal(kindCacheDocId('sticker', 'lol'), 'sticker__q_lol');
+    assert.notEqual(kindCacheDocId('gif', 'lol'), kindCacheDocId('meme', 'lol'));
+  });
+
+  await test('sticker prefers webp; clip prefers mp4', () => {
+    const sticker = normalizeKlipyItem(
+      {
+        id: 's1',
+        title: 'Wave',
+        file: {
+          md: {
+            webp: { url: 'https://cdn.klipy.com/s.webp', width: 100, height: 100 },
+            gif: { url: 'https://cdn.klipy.com/s.gif', width: 100, height: 100 },
+          },
+        },
+      },
+      'sticker'
+    );
+    assert.equal(sticker.kind, 'sticker');
+    assert.equal(sticker.url, 'https://cdn.klipy.com/s.webp');
+    assert.equal(sticker.mime, 'image/webp');
+
+    const clip = normalizeKlipyItem(
+      {
+        id: 'c1',
+        title: 'Clip',
+        duration: 2.5,
+        file: {
+          md: {
+            mp4: { url: 'https://cdn.klipy.com/c.mp4', width: 320, height: 180 },
+            jpg: { url: 'https://cdn.klipy.com/c.jpg', width: 160, height: 90 },
+          },
+          sm: { jpg: { url: 'https://cdn.klipy.com/c-sm.jpg', width: 80, height: 45 } },
+        },
+      },
+      'clip'
+    );
+    assert.equal(clip.kind, 'clip');
+    assert.equal(clip.url, 'https://cdn.klipy.com/c.mp4');
+    assert.equal(clip.previewUrl, 'https://cdn.klipy.com/c-sm.jpg');
+    assert.equal(clip.mime, 'video/mp4');
+    assert.equal(clip.duration, 2.5);
+  });
+
+  await test('searchKlipyMedia degrades open for stickers when unset', async () => {
+    const prev = process.env.KLIPY_API_KEY;
+    delete process.env.KLIPY_API_KEY;
+    const out = await searchKlipyMedia(null, { kind: 'sticker', query: 'hi' });
+    assert.equal(out.configured, false);
+    assert.equal(out.kind, 'sticker');
+    assert.deepStrictEqual(out.results, []);
+    if (prev === undefined) delete process.env.KLIPY_API_KEY;
+    else process.env.KLIPY_API_KEY = prev;
   });
 
   await test('normalizeKlipyResponse reads nested data.data envelope', () => {
@@ -130,7 +191,7 @@ async function main() {
       firestore() {
         return {
           collection(name) {
-            assert.equal(name, 'gifCache');
+            assert.ok(name === 'klipyCache' || name === 'gifCache', 'unexpected cache collection');
             return {
               doc(id) {
                 return {
