@@ -558,6 +558,20 @@
       });
       document.getElementById('dgFriendOpp').addEventListener('click', async () => {
         const stake = stakesOk ? readDangalStake(sheet) : 0;
+        if (stake > 0 && window.DangalEconomy && typeof DangalEconomy.canAffordStake === 'function') {
+          try {
+            const ok = await DangalEconomy.canAffordStake(stake);
+            if (!ok) {
+              if (typeof showToast === 'function') {
+                showToast('Not enough virtual chips — pick Friendly (0) or a lower stake');
+              }
+              return;
+            }
+          } catch (e) {
+            if (typeof showToast === 'function') showToast('Couldn’t check chip balance — try Friendly (0)');
+            return;
+          }
+        }
         if (typeof openFriendPickerSheet !== 'function') {
           if (typeof showToast === 'function') showToast('Sign in and add friends to challenge someone');
           return;
@@ -612,7 +626,7 @@
           openLudoGame(
             { name: friend.name, id: uid, uid, peerUid: uid, dangalMatchId: mid },
             2,
-            { mode: 'classic' }
+            { mode: 'classic', stake }
           );
         }
       });
