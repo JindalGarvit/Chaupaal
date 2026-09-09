@@ -148,7 +148,12 @@
     sattepe: ['Play next to a seven chain', 'Empty your hand first', 'Sevens can always start a suit'],
     andarbaahar: ['Joker sets the rank', 'Pick Andar or Bahar', 'First matching rank wins the side'],
     patangbaazi: ['Hold to climb, drag to steer', 'Overlap cuts the slower kite', 'Don’t stall at the top'],
-    brickbreaker: ['Drag the paddle under your finger — or hold arrows / A-D', 'Tap Serve (or the canvas) to launch at a fair angle', 'Break every brick · catch power-ups · steel never breaks', 'Multi-ball caps at three — don’t panic'],
+    brickbreaker: [
+      'Campaign or Score Attack — pick before you Serve',
+      'Steel takes two hits · Gold scores big · Bombs clear neighbours',
+      'Moving bricks shift while you play — pause freezes them',
+      'Catch Magnet for one sticky serve · Multi caps at three balls',
+    ],
   };
 
   const PB_KEYS = {
@@ -167,6 +172,7 @@
     carrom: { key: 'chaupaal_pb_carrom', label: 'coins', higherBetter: true },
     pool: { key: 'chaupaal_pb_pool', label: 'balls', higherBetter: true },
     brickbreaker: { key: 'chaupaal_pb_brickbreaker', label: 'pts', higherBetter: true },
+    brickbreaker_endless: { key: 'chaupaal_pb_brickbreaker_endless', label: 'pts', higherBetter: true },
   };
 
   function gameFeedback(action, opts) {

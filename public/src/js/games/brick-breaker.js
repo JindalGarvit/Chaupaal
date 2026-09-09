@@ -1,5 +1,76 @@
-// ===================== BRICK BREAKER (Breakout) — Prompt 1 arcade feel =====================
-function openBrickBreaker() {
+// ===================== BRICK BREAKER — Campaign + Score Attack (Prompt 2) =====================
+/**
+ * Layout alphabet:
+ *   0 / . / space = empty
+ *   1 = normal brick (1 hit)
+ *   2 = steel (2 hits)
+ *   P = power brick (drops power-up)
+ *   X = explosive (clears 1-tile neighbours on break)
+ *   M = moving (row drifts L/R; pause freezes)
+ *   U = unbreakable wall (layout tooling)
+ *   G = gold (fragile, high score)
+ *
+ * Persist: chaupaal_bb_campaign_level = last cleared index (0-based next to play)
+ * Lives: never auto-refill between campaign levels (run tension).
+ * PB: brickbreaker (campaign) · brickbreaker_endless (Score Attack)
+ */
+function openBrickBreakerModeSheet() {
+  const device = document.querySelector('.device');
+  if (!device) {
+    openBrickBreaker({ mode: 'campaign' });
+    return;
+  }
+  const campaignBest =
+    (typeof getGamePB === 'function' ? getGamePB('brickbreaker') : null) ??
+    (parseInt(localStorage.getItem('chaupaal_pb_brickbreaker') || '0', 10) || 0);
+  const endlessBest =
+    (typeof getGamePB === 'function' ? getGamePB('brickbreaker_endless') : null) ??
+    (parseInt(localStorage.getItem('chaupaal_pb_brickbreaker_endless') || '0', 10) || 0);
+  let continueAt = 0;
+  try {
+    continueAt = Math.max(0, parseInt(localStorage.getItem('chaupaal_bb_campaign_level') || '0', 10) || 0);
+  } catch (e) {}
+  const sheet = document.createElement('div');
+  sheet.style.cssText =
+    'position:absolute;bottom:0;left:0;right:0;background:var(--white,#fff);border-radius:24px 24px 0 0;padding:20px;z-index:100;max-height:82vh;overflow:auto;';
+  sheet.innerHTML = `
+    <div style="font-family:Space Grotesk,sans-serif;font-weight:800;font-size:18px;margin-bottom:4px;">Brick Breaker</div>
+    <div style="font-size:13px;color:var(--muted,#666);margin-bottom:14px;">Solo arcade — Campaign or endless Score Attack.</div>
+    <button type="button" data-bb-mode="campaign" class="game-tap-target" style="width:100%;text-align:left;padding:14px;margin-bottom:8px;border-radius:14px;border:2px solid var(--line,#ddd);background:#0d0a18;color:#fff;cursor:pointer;">
+      <div style="font-weight:800;font-size:15px;">Campaign</div>
+      <div style="font-size:12px;opacity:.75;margin-top:2px;">Clear handcrafted levels · 3 lives · Best ${campaignBest} pts</div>
+    </button>
+    ${
+      continueAt > 0
+        ? `<button type="button" data-bb-mode="continue" class="game-tap-target" style="width:100%;text-align:left;padding:14px;margin-bottom:8px;border-radius:14px;border:2px solid var(--line,#ddd);background:var(--cream,#f5f0e8);color:var(--ink,#1a1a2e);cursor:pointer;">
+      <div style="font-weight:800;font-size:15px;">Continue campaign</div>
+      <div style="font-size:12px;opacity:.75;margin-top:2px;">Resume at Level ${continueAt + 1}</div>
+    </button>`
+        : ''
+    }
+    <button type="button" data-bb-mode="endless" class="game-tap-target" style="width:100%;text-align:left;padding:14px;margin-bottom:8px;border-radius:14px;border:2px solid var(--line,#ddd);background:var(--cream,#f5f0e8);color:var(--ink,#1a1a2e);cursor:pointer;">
+      <div style="font-weight:800;font-size:15px;">Score Attack</div>
+      <div style="font-size:12px;opacity:.75;margin-top:2px;">How far can you go · 3 lives · Best ${endlessBest} pts</div>
+    </button>
+    <button type="button" id="bbModeCancel" style="width:100%;padding:12px;background:none;border:none;color:var(--muted,#666);font-size:14px;cursor:pointer;">Cancel</button>`;
+  device.appendChild(sheet);
+  sheet.querySelectorAll('[data-bb-mode]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const m = btn.dataset.bbMode;
+      sheet.remove();
+      if (m === 'endless') openBrickBreaker({ mode: 'endless' });
+      else if (m === 'continue') openBrickBreaker({ mode: 'campaign', startLevel: continueAt });
+      else openBrickBreaker({ mode: 'campaign', startLevel: 0 });
+    });
+  });
+  sheet.querySelector('#bbModeCancel')?.addEventListener('click', () => sheet.remove());
+}
+
+function openBrickBreaker(opts) {
+  const o = opts && typeof opts === 'object' ? opts : {};
+  const playMode = o.mode === 'endless' ? 'endless' : 'campaign';
+  const startLevel = Math.max(0, Number(o.startLevel) || 0);
+
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:absolute;inset:0;z-index:80;display:flex;flex-direction:column;';
 
@@ -13,27 +84,41 @@ function openBrickBreaker() {
   const BASE_SPEED = 4.6;
   const MAX_SPEED = 8.2;
   const MIN_VX = 0.85;
-  const POWER_TYPES = ['wide', 'slow', 'multi', 'life'];
+  const POWER_TYPES = ['wide', 'slow', 'multi', 'life', 'magnet'];
   const ACCENT = '#7C4DFF';
   const SUBSTEPS = 3;
+  const PB_ID = playMode === 'endless' ? 'brickbreaker_endless' : 'brickbreaker';
+  const SAVE_KEY = 'chaupaal_bb_campaign_level';
 
-  /** Fixed layouts: 1=normal, 2=steel, P=power brick — content expansion in Prompt 2 */
+  /**
+   * 20 authored campaign levels — early teach → mid steel/power/gaps → late density.
+   * Alphabet: 0 empty · 1 normal · 2 steel(2hp) · P power · X bomb · M moving · U wall · G gold
+   */
   const LEVEL_LAYOUTS = [
+    ['1111111111', '1111111111'],
     ['1111111111', '1111111111', '1111111111'],
-    ['1111111111', '1222222221', '1111111111', '1111111111'],
-    ['1P111111P1', '1111111111', '1222222221', '1111111111'],
-    ['2222222222', '1111111111', '111P111P11', '1111111111', '1111111111'],
-    ['1212121212', '2121212121', '1212121212', '1111111111'],
-    ['1111111111', '122P222P221', '1111111111', '1111111111', '1111111111'],
-    ['2222222222', '2111111112', '211P11P112', '2111111112', '2222222222'],
-    ['1P1P1P1P1P', '1111111111', '1222222221', '1111111111', '1111111111'],
-    ['2222222222', '2111111112', '21P1111P12', '2111111112', '2222222222', '1111111111'],
-    ['1212121212', '2121212121', '121P121P12', '2121212121', '1212121212'],
-    ['2222222222', '2P111111P2', '2111111112', '2111111112', '2P111111P2', '2222222222'],
-    ['1P1P1P1P1P', '1111111111', '1222222221', '12P22P2221', '1111111111', '1111111111'],
+    ['1110011111', '1110011111', '1111111111'],
+    ['1111111111', '1222222221', '1111111111'],
+    ['1P111111P1', '1111111111', '1111111111'],
+    ['1212121212', '2121212121', '1111111111'],
+    ['1111G11111', '1111111111', '1111111111', '1111111111'],
+    ['1111111111', '1111X11111', '1111111111'],
+    ['U11111111U', 'U11111111U', '1111111111', '1111111111'],
+    ['MMMMMMMMMM', '1111111111', '1111111111'],
+    ['2222222222', '2P111111P2', '2111111112', '1111111111'],
+    ['0011111100', '0111111110', '1111G11111', '0111111110', '0011111100'],
+    ['1111111111', '1X111111X1', '1222222221', '1111111111'],
+    ['1212121212', '2P12121P12', '1212G21212', '1111111111'],
+    ['2222222222', 'M0M0M0M0M0', '1111111111', '111P111P11'],
+    ['1111111111', '1G1G1G1G1G', '2222222222', '1111111111'],
+    ['UU111111UU', 'U21111112U', 'U21P11P12U', 'U21111112U', '1111111111'],
+    ['1111111111', '11X11X11X1', '1X111111X1', '1222222221', '1111111111'],
+    ['MMMMMMMMMM', '2P111111P2', '1212121212', '1111G11111', '1111111111'],
+    ['2222222222', '2X1P11P1X2', '2M111111M2', '2G111111G2', '2111111112', '1111111111'],
   ];
 
-  let level = 0;
+  let level = playMode === 'campaign' ? Math.min(startLevel, LEVEL_LAYOUTS.length - 1) : 0;
+  let wave = 0;
   let lives = 3;
   let score = 0;
   let bricks = [];
@@ -46,6 +131,7 @@ function openBrickBreaker() {
   let basePaddleW = 72;
   let wideTimer = 0;
   let slowTimer = 0;
+  let magnetCharges = 0;
   let started = false;
   let gameOver = false;
   let won = false;
@@ -66,10 +152,16 @@ function openBrickBreaker() {
   let lifeResetUntil = 0;
   let keysHeld = { left: false, right: false };
   let serveAngleSign = 1;
+  let movePhase = 0;
 
   let bestScore =
-    (typeof getGamePB === 'function' ? getGamePB('brickbreaker') : null) ??
-    (parseInt(localStorage.getItem('chaupaal_pb_brickbreaker') || '0', 10) || 0);
+    (typeof getGamePB === 'function' ? getGamePB(PB_ID) : null) ??
+    (parseInt(
+      localStorage.getItem(
+        PB_ID === 'brickbreaker_endless' ? 'chaupaal_pb_brickbreaker_endless' : 'chaupaal_pb_brickbreaker'
+      ) || '0',
+      10
+    ) || 0);
 
   const reduceMotion = typeof shouldReduceGameMotion === 'function' && shouldReduceGameMotion();
   const maxParticles = reduceMotion ? 8 : MAX_PARTICLES;
@@ -132,10 +224,15 @@ function openBrickBreaker() {
     if (typeof gameFeedback === 'function') gameFeedback(a);
   };
 
+  function modeSubtitle() {
+    if (playMode === 'endless') return 'Score Attack · Wave ' + (wave + 1);
+    return 'Campaign · Level ' + (level + 1) + '/' + LEVEL_LAYOUTS.length;
+  }
+
   overlay.innerHTML = `
     ${gameChromeHtml({
       title: 'Brick Breaker',
-      subtitle: 'Level 1',
+      subtitle: modeSubtitle(),
       backId: 'bbBack',
       pauseId: 'bbPause',
       rightHtml: '<span class="game-chrome-metric" id="bbScore">0</span>',
@@ -143,12 +240,17 @@ function openBrickBreaker() {
     <div class="bb-stage" id="bbGame">
       <canvas id="bbCanvas" aria-label="Brick Breaker playfield"></canvas>
       <div class="rr-hud-chip" id="bbLives" aria-live="polite">♥ 3</div>
+      <div class="rr-hud-chip" id="bbDepth" style="top:auto;bottom:10px;left:10px;right:auto;">${
+        playMode === 'endless' ? 'Wave 1' : 'Lv 1'
+      }</div>
       <div id="bbOverlay" class="rr-start">
         <div class="rr-start-mark" aria-hidden="true"></div>
-        <div class="rr-start-title">Brick Breaker</div>
-        <div class="rr-start-sub">Break every brick</div>
+        <div class="rr-start-title">${playMode === 'endless' ? 'Score Attack' : 'Campaign'}</div>
+        <div class="rr-start-sub">${
+          playMode === 'endless' ? 'Endless waves · 3 lives' : 'Level ' + (level + 1) + ' of ' + LEVEL_LAYOUTS.length
+        }</div>
         <div class="rr-start-best">Best ${bestScore} pts</div>
-        <div class="rr-start-hint">Drag paddle · arrows / A-D · tap Serve</div>
+        <div class="rr-start-hint">Drag · arrows · Serve · Magnet sticks once</div>
         <button type="button" id="bbStart" class="game-tap-target rr-start-btn">Serve</button>
       </div>
     </div>`;
@@ -180,6 +282,13 @@ function openBrickBreaker() {
     cssH = size.h;
     if (!paddleX) paddleX = cssW / 2;
     clampPaddle();
+    const bw = brickWidth();
+    bricks.forEach((br) => {
+      if (br.ci == null) return;
+      br.w = bw;
+      br.baseX = BRICK_GAP + br.ci * (bw + BRICK_GAP);
+      if (!br.moving) br.x = br.baseX;
+    });
   }
   resize();
   if (typeof ResizeObserver === 'function') {
@@ -190,22 +299,20 @@ function openBrickBreaker() {
   function brickTop() {
     return 52;
   }
-
   function brickWidth() {
     return (cssW - BRICK_GAP * (COLS + 1)) / COLS;
   }
-
   function clampPaddle() {
     const half = paddleW / 2 + 4;
     paddleX = Math.max(half, Math.min(cssW - half, paddleX));
   }
-
-  function targetSpeed() {
-    const fromLevel = BASE_SPEED + level * 0.28;
-    const fromHits = Math.min(1.6, hitCount * 0.012);
-    return Math.min(MAX_SPEED, fromLevel + fromHits);
+  function depthIndex() {
+    return playMode === 'endless' ? wave : level;
   }
-
+  function targetSpeed() {
+    const d = depthIndex();
+    return Math.min(MAX_SPEED, BASE_SPEED + d * 0.22 + Math.min(1.6, hitCount * 0.012));
+  }
   function normalizeBall(ball, speed) {
     const sp = Math.hypot(ball.vx, ball.vy) || 1;
     const s = speed != null ? speed : targetSpeed();
@@ -218,37 +325,121 @@ function openBrickBreaker() {
     }
   }
 
-  function loadLevel(idx) {
-    const layout = LEVEL_LAYOUTS[Math.min(idx, LEVEL_LAYOUTS.length - 1)];
+  function parseBrickChar(ch, ci, ri, bw) {
+    if (!ch || ch === '0' || ch === '.' || ch === ' ') return null;
+    const base = {
+      x: BRICK_GAP + ci * (bw + BRICK_GAP),
+      y: brickTop() + ri * (BRICK_H + BRICK_GAP),
+      w: bw,
+      h: BRICK_H,
+      ci,
+      ri,
+      baseX: BRICK_GAP + ci * (bw + BRICK_GAP),
+      alive: true,
+      hp: 1,
+      steel: false,
+      power: false,
+      explosive: false,
+      moving: false,
+      unbreakable: false,
+      gold: false,
+      kind: '1',
+    };
+    if (ch === '1') base.kind = '1';
+    else if (ch === '2') {
+      base.kind = '2';
+      base.steel = true;
+      base.hp = 2;
+    } else if (ch === 'P') {
+      base.kind = 'P';
+      base.power = true;
+    } else if (ch === 'X') {
+      base.kind = 'X';
+      base.explosive = true;
+    } else if (ch === 'M') {
+      base.kind = 'M';
+      base.moving = true;
+    } else if (ch === 'U') {
+      base.kind = 'U';
+      base.unbreakable = true;
+      base.hp = 999;
+    } else if (ch === 'G') {
+      base.kind = 'G';
+      base.gold = true;
+    } else return null;
+    return base;
+  }
+
+  function applyLayout(layout) {
     const bw = brickWidth();
     bricks = [];
+    movePhase = 0;
     layout.forEach((row, ri) => {
-      for (let ci = 0; ci < row.length && ci < COLS; ci++) {
-        const ch = row[ci];
-        if (ch === '1' || ch === '2' || ch === 'P') {
-          bricks.push({
-            x: BRICK_GAP + ci * (bw + BRICK_GAP),
-            y: brickTop() + ri * (BRICK_H + BRICK_GAP),
-            w: bw,
-            h: BRICK_H,
-            steel: ch === '2',
-            power: ch === 'P',
-            alive: true,
-          });
-        }
+      const cells = String(row).padEnd(COLS, '0').slice(0, COLS);
+      for (let ci = 0; ci < COLS; ci++) {
+        const br = parseBrickChar(cells[ci], ci, ri, bw);
+        if (br) bricks.push(br);
       }
     });
-    const sub = overlay.querySelector('.game-chrome-subtitle');
-    if (sub) sub.textContent = 'Level ' + (idx + 1);
     hitCount = 0;
     combo = 0;
+    syncChrome();
+  }
+
+  function loadLevel(idx) {
+    applyLayout(LEVEL_LAYOUTS[Math.min(idx, LEVEL_LAYOUTS.length - 1)]);
+  }
+
+  function buildEndlessWave(w) {
+    const rows = Math.min(7, 3 + Math.floor(w / 2));
+    const steelChance = Math.min(0.45, 0.08 + w * 0.03);
+    const specialChance = Math.min(0.22, 0.04 + w * 0.015);
+    const layout = [];
+    for (let ri = 0; ri < rows; ri++) {
+      let row = '';
+      for (let ci = 0; ci < COLS; ci++) {
+        if (w % 3 === 2 && (ci === 4 || ci === 5) && ri < rows - 1) {
+          row += '0';
+          continue;
+        }
+        const r = Math.random();
+        if (r < 0.06 && w > 1) row += '0';
+        else if (r < 0.06 + specialChance * 0.25) row += 'G';
+        else if (r < 0.06 + specialChance * 0.45) row += 'X';
+        else if (r < 0.06 + specialChance * 0.6) row += 'P';
+        else if (r < 0.06 + specialChance * 0.75 && ri === 0) row += 'M';
+        else if (r < 0.06 + specialChance + steelChance) row += '2';
+        else if (w > 4 && r < 0.06 + specialChance + steelChance + 0.04 && (ci === 0 || ci === COLS - 1))
+          row += 'U';
+        else row += '1';
+      }
+      layout.push(row);
+    }
+    return layout;
+  }
+
+  function loadEndlessWave() {
+    applyLayout(buildEndlessWave(wave));
+  }
+
+  function syncChrome() {
+    const sub = overlay.querySelector('.game-chrome-subtitle');
+    if (sub) sub.textContent = modeSubtitle();
+    const depth = document.getElementById('bbDepth');
+    if (depth) depth.textContent = playMode === 'endless' ? 'Wave ' + (wave + 1) : 'Lv ' + (level + 1);
+  }
+
+  function saveCampaignProgress(clearedIndex) {
+    if (playMode !== 'campaign') return;
+    try {
+      localStorage.setItem(SAVE_KEY, String(Math.min(LEVEL_LAYOUTS.length - 1, clearedIndex + 1)));
+    } catch (e) {}
   }
 
   function resetBall(onPaddle) {
     serveAngleSign = Math.random() > 0.5 ? 1 : -1;
-    const sp = Math.min(BASE_SPEED + level * 0.15, MAX_SPEED * 0.75);
-    // Readable serve: ~58° loft, never pure vertical / extreme horizontal
-    const angle = (-Math.PI / 2) + serveAngleSign * 0.55;
+    const sp = Math.min(BASE_SPEED + depthIndex() * 0.12, MAX_SPEED * 0.75);
+    const angle = -Math.PI / 2 + serveAngleSign * 0.55;
     balls = [
       {
         x: paddleX,
@@ -289,29 +480,30 @@ function openBrickBreaker() {
     shakeUntil = performance.now() + ms;
   }
 
-  function dropPowerup(x, y) {
-    if (Math.random() > 0.35) return;
+  function dropPowerup(x, y, force) {
+    if (!force && Math.random() > 0.42) return;
     const type = POWER_TYPES[Math.floor(Math.random() * POWER_TYPES.length)];
-    powerups.push({ x, y, vy: 2.2, type, w: 18, h: 10 });
+    powerups.push({ x, y, vy: 2.2, type, w: 22, h: 12 });
   }
 
   function applyPower(type) {
-    buzz(type === 'life' ? 'complete' : 'valid');
-    spawnParticleBurst(paddleX, cssH - 28, '#FFD166', 8);
+    buzz(type === 'life' || type === 'magnet' ? 'complete' : 'valid');
+    spawnParticleBurst(paddleX, cssH - 28, type === 'magnet' ? '#7C4DFF' : '#FFD166', 8);
     if (type === 'wide') {
       wideTimer = 10;
       paddleW = basePaddleW * 1.55;
       clampPaddle();
-    } else if (type === 'slow') {
-      slowTimer = 8;
+    } else if (type === 'slow') slowTimer = 8;
+    else if (type === 'magnet') {
+      magnetCharges = Math.min(2, magnetCharges + 1);
+      addFloat(paddleX, cssH - 40, 'MAGNET');
     } else if (type === 'multi') {
       const active = balls.filter((b) => !b.dead && !b.stuck);
       const room = MAX_BALLS - balls.filter((b) => !b.dead).length;
       if (room <= 0 || !active.length) return;
       const b = active[0];
       const sp = Math.hypot(b.vx, b.vy) || targetSpeed();
-      const add = Math.min(room, 2);
-      for (let i = 0; i < add; i++) {
+      for (let i = 0; i < Math.min(room, 2); i++) {
         const sign = i === 0 ? -1 : 1;
         const nb = {
           x: b.x,
@@ -334,19 +526,62 @@ function openBrickBreaker() {
     const scoreEl = document.getElementById('bbScore');
     if (scoreEl) scoreEl.textContent = String(score);
     const livesEl = document.getElementById('bbLives');
-    if (livesEl) livesEl.textContent = '♥ ' + lives;
+    if (livesEl) livesEl.textContent = '♥ ' + lives + (magnetCharges > 0 ? ' · M' + magnetCharges : '');
+    syncChrome();
+  }
+
+  function clearableLeft() {
+    return bricks.some((b) => b.alive && !b.unbreakable);
+  }
+
+  function showInterstitial(title, sub, onServe) {
+    const ov = document.getElementById('bbOverlay');
+    if (!ov) return;
+    ov.className = 'rr-start';
+    ov.style.display = 'flex';
+    ov.innerHTML = `<div class="rr-start-title">${title}</div>
+      <div class="rr-start-sub">${sub}</div>
+      <button type="button" id="bbStart" class="game-tap-target rr-start-btn">Continue</button>`;
+    document.getElementById('bbStart')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onServe();
+    });
   }
 
   function levelClear() {
     if (clearingLevel || gameOver) return;
     clearingLevel = true;
+
+    if (playMode === 'endless') {
+      score += 80 + wave * 15;
+      wave += 1;
+      powerups = [];
+      particles = [];
+      floatTexts = [];
+      wideTimer = 0;
+      slowTimer = 0;
+      paddleW = basePaddleW;
+      loadEndlessWave();
+      resetBall(true);
+      started = false;
+      showInterstitial('Wave ' + (wave + 1), score + ' pts · ' + lives + ' lives', launchBall);
+      updateHud();
+      buzz('complete');
+      clearingLevel = false;
+      return;
+    }
+
+    saveCampaignProgress(level);
     level += 1;
     if (level >= LEVEL_LAYOUTS.length) {
       clearingLevel = false;
+      try {
+        localStorage.setItem(SAVE_KEY, '0');
+      } catch (e) {}
       winGame();
       return;
     }
-    score += 100;
+    score += 100 + Math.floor(level * 5);
     powerups = [];
     particles = [];
     floatTexts = [];
@@ -356,26 +591,19 @@ function openBrickBreaker() {
     loadLevel(level);
     resetBall(true);
     started = false;
-    const ov = document.getElementById('bbOverlay');
-    if (ov) {
-      ov.className = 'rr-start';
-      ov.style.display = 'flex';
-      ov.innerHTML = `<div class="rr-start-title">Level ${level + 1}</div>
-        <div class="rr-start-sub">${score} pts · ${lives} lives</div>
-        <button type="button" id="bbStart" class="game-tap-target rr-start-btn">Continue</button>`;
-      document.getElementById('bbStart')?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        launchBall();
-      });
-    }
+    showInterstitial(
+      'Level ' + (level + 1),
+      score + ' pts · ' + lives + ' lives · no life refill',
+      launchBall
+    );
     updateHud();
     buzz('complete');
-    // Allow next clear after interstitial is shown (guarded by started/bricks)
     clearingLevel = false;
   }
 
   function loseLife() {
     lives -= 1;
+    magnetCharges = 0;
     updateHud();
     buzz('lose');
     powerups = [];
@@ -398,7 +626,7 @@ function openBrickBreaker() {
         <div class="rr-start-sub">${lives} left · ${score} pts</div>
         <button type="button" id="bbStart" class="game-tap-target rr-start-btn" disabled style="opacity:.55">Serve again</button>`;
       const btn = document.getElementById('bbStart');
-      const unlock = () => {
+      setTimeout(() => {
         if (!btn || !alive() || gameOver) return;
         btn.disabled = false;
         btn.style.opacity = '';
@@ -406,8 +634,7 @@ function openBrickBreaker() {
           e.stopPropagation();
           launchBall();
         });
-      };
-      setTimeout(unlock, 420);
+      }, 420);
     }
   }
 
@@ -420,7 +647,7 @@ function openBrickBreaker() {
     lastTime = performance.now();
     balls.forEach((b) => {
       b.stuck = false;
-      normalizeBall(b, Math.min(BASE_SPEED + level * 0.15, MAX_SPEED * 0.75));
+      normalizeBall(b, Math.min(BASE_SPEED + depthIndex() * 0.12, MAX_SPEED * 0.75));
     });
     ensureLoop();
     buzz('select');
@@ -442,45 +669,61 @@ function openBrickBreaker() {
       raf = null;
     }
     if (typeof setGamePB === 'function') {
-      bestScore = setGamePB('brickbreaker', score) ?? Math.max(bestScore, score);
+      bestScore = setGamePB(PB_ID, score) ?? Math.max(bestScore, score);
     } else if (score > bestScore) {
       bestScore = score;
-      localStorage.setItem('chaupaal_pb_brickbreaker', String(bestScore));
+      try {
+        localStorage.setItem(
+          PB_ID === 'brickbreaker_endless' ? 'chaupaal_pb_brickbreaker_endless' : 'chaupaal_pb_brickbreaker',
+          String(bestScore)
+        );
+      } catch (e) {}
     }
     if (gs) gs.setOutcome(didWin ? 'won' : 'lost');
     if (typeof recordGameResult === 'function') {
-      recordGameResult('brickbreaker', didWin, false, { score, scoreOnly: true });
+      recordGameResult('brickbreaker', didWin, false, {
+        score,
+        scoreOnly: true,
+        mode: playMode,
+      });
     }
     buzz(didWin ? 'win' : 'lose');
     const vsBest =
-      typeof formatVsBest === 'function' ? formatVsBest('brickbreaker', score) : `Best ${bestScore} pts`;
+      typeof formatVsBest === 'function' ? formatVsBest(PB_ID, score) : `Best ${bestScore} pts`;
     const div = document.getElementById('bbOverlay');
     if (!div) return;
     div.className = 'rr-start rr-start--over';
     div.style.display = 'flex';
+    const depthLine =
+      playMode === 'endless'
+        ? `Wave ${wave + 1} · Score Attack`
+        : didWin
+          ? 'Campaign cleared'
+          : `Level ${level + 1} · Campaign`;
     const shareStats = {
       scoreLine: `${score} pts`,
       score,
-      meta: vsBest,
-      text: `I scored ${score} in Brick Breaker on Chaupaal!`,
+      meta: `${depthLine} · ${vsBest}`,
+      text: `I scored ${score} in Brick Breaker (${playMode === 'endless' ? 'Score Attack' : 'Campaign'}) on Chaupaal!`,
     };
     const shareCard =
       typeof buildGameShareCard === 'function' ? buildGameShareCard('brickbreaker', shareStats) : '';
-    const actions = [{ label: 'Play again', primary: true, id: 'again' }];
+    const actions = [
+      { label: 'Play again', primary: true, id: 'again' },
+      { label: 'Modes', primary: false, id: 'modes' },
+    ];
     if (typeof shareGameResult === 'function') actions.push({ label: 'Share', primary: false, id: 'share' });
-    if (typeof openFriendPickerSheet === 'function') {
+    if (typeof openFriendPickerSheet === 'function')
       actions.push({ label: 'Challenge friend', primary: false, id: 'challenge' });
-    }
-    if (typeof postGameScoreStory === 'function') {
+    if (typeof postGameScoreStory === 'function')
       actions.push({ label: 'Post to story', primary: false, id: 'story' });
-    }
     div.innerHTML =
       typeof gameResultHtml === 'function'
         ? gameResultHtml({
             gameId: 'brickbreaker',
             glyph: '🧱',
             title: didWin ? 'All levels cleared!' : `${score} pts`,
-            subtitle: didWin ? `${score} pts · ${vsBest}` : `Level ${level + 1} · ${vsBest}`,
+            subtitle: `${depthLine} · ${vsBest}`,
             vsBest,
             shareCardHtml: shareCard,
             actions,
@@ -490,23 +733,26 @@ function openBrickBreaker() {
       wireGameResultActions(div, {
         again: () => {
           close();
-          openBrickBreaker();
+          openBrickBreaker({ mode: playMode });
+        },
+        modes: () => {
+          close();
+          openBrickBreakerModeSheet();
         },
         share: () => {
           if (typeof shareGameResult === 'function') shareGameResult('brickbreaker', shareStats);
         },
         challenge: async () => {
-          if (typeof openFriendPickerSheet === 'function') {
-            const f = await openFriendPickerSheet({
-              title: 'Beat my Brick Breaker score',
-              subtitle: `Challenge with ${score} pts`,
+          if (typeof openFriendPickerSheet !== 'function') return;
+          const f = await openFriendPickerSheet({
+            title: 'Beat my Brick Breaker score',
+            subtitle: `Challenge with ${score} pts`,
+          });
+          if (f && typeof shareGameResult === 'function') {
+            shareGameResult('brickbreaker', {
+              ...shareStats,
+              text: `Hey ${f.name} — beat my ${score} pts on Brick Breaker!`,
             });
-            if (f && typeof shareGameResult === 'function') {
-              shareGameResult('brickbreaker', {
-                ...shareStats,
-                text: `Hey ${f.name} — beat my ${score} pts on Brick Breaker!`,
-              });
-            }
           }
         },
         story: () => {
@@ -518,7 +764,7 @@ function openBrickBreaker() {
     } else {
       document.getElementById('bbRestart')?.addEventListener('click', () => {
         close();
-        openBrickBreaker();
+        openBrickBreaker({ mode: playMode });
       });
     }
   }
@@ -530,9 +776,7 @@ function openBrickBreaker() {
   function setPaddleFromClientX(clientX) {
     const r = canvas.getBoundingClientRect();
     if (!r.width) return;
-    // Map CSS pixels → game space; paddle center under finger
-    const x = ((clientX - r.left) / r.width) * cssW;
-    paddleX = x;
+    paddleX = ((clientX - r.left) / r.width) * cssW;
     clampPaddle();
     balls.forEach((b) => {
       if (b.stuck) b.x = paddleX;
@@ -548,9 +792,20 @@ function openBrickBreaker() {
   }
 
   function bounceOffPaddle(ball, paddleY) {
+    if (magnetCharges > 0) {
+      magnetCharges -= 1;
+      ball.stuck = true;
+      ball.x = paddleX;
+      ball.y = cssH - 36;
+      started = false;
+      updateHud();
+      buzz('complete');
+      addFloat(paddleX, paddleY - 12, 'STUCK');
+      showInterstitial('Magnet catch', 'Aim · then Serve', launchBall);
+      return;
+    }
     const half = paddleW / 2;
     const hit = Math.max(-1, Math.min(1, (ball.x - paddleX) / half));
-    // Classic Breakout: edge → loft, center → steep
     const angle = -Math.PI / 2 + hit * 1.05;
     const sp = Math.min(MAX_SPEED, Math.max(targetSpeed(), Math.hypot(ball.vx, ball.vy) * 1.02));
     ball.vx = Math.cos(angle) * sp;
@@ -563,7 +818,6 @@ function openBrickBreaker() {
   }
 
   function resolveBrickCollision(ball, br) {
-    const prevX = ball.x - ball.vx * 0.15;
     const prevY = ball.y - ball.vy * 0.15;
     const overlapL = ball.x + BALL_R - br.x;
     const overlapR = br.x + br.w - (ball.x - BALL_R);
@@ -579,22 +833,17 @@ function openBrickBreaker() {
         ball.x = br.x + br.w + BALL_R;
         ball.vx = Math.abs(ball.vx);
       }
+    } else if (overlapT < overlapB || prevY < br.y) {
+      ball.y = br.y - BALL_R;
+      ball.vy = -Math.abs(ball.vy);
     } else {
-      if (overlapT < overlapB || prevY < br.y) {
-        ball.y = br.y - BALL_R;
-        ball.vy = -Math.abs(ball.vy);
-      } else {
-        ball.y = br.y + br.h + BALL_R;
-        ball.vy = Math.abs(ball.vy);
-      }
+      ball.y = br.y + br.h + BALL_R;
+      ball.vy = Math.abs(ball.vy);
     }
-    // Escape near-zero bounce (corner vibration)
     if (Math.abs(ball.vx) < MIN_VX) {
       ball.cornerHits = (ball.cornerHits || 0) + 1;
       ball.vx = (ball.x < br.x + br.w / 2 ? -1 : 1) * MIN_VX * 1.2;
-    } else {
-      ball.cornerHits = 0;
-    }
+    } else ball.cornerHits = 0;
     if (ball.cornerHits >= 3) {
       ball.vx += (Math.random() > 0.5 ? 1 : -1) * 1.4;
       ball.vy = -Math.abs(ball.vy) - 0.5;
@@ -603,17 +852,14 @@ function openBrickBreaker() {
     normalizeBall(ball);
   }
 
-  function hitBrick(ball, br) {
-    hitCount += 1;
-    if (br.steel) {
-      resolveBrickCollision(ball, br);
-      buzz('invalid');
-      triggerShake(2.5, 80);
-      spawnParticleBurst(ball.x, ball.y, '#888', 3);
-      return;
-    }
+  function destroyBrick(br, fromExplosion) {
+    if (!br.alive || br.unbreakable) return;
     br.alive = false;
-    const pts = br.power ? 50 : 10;
+    let pts = 10;
+    if (br.gold) pts = 75;
+    else if (br.power) pts = 50;
+    else if (br.explosive) pts = 30;
+    else if (br.steel) pts = 20;
     score += pts;
     const now = performance.now();
     if (now - comboAt < 700) combo += 1;
@@ -624,13 +870,49 @@ function openBrickBreaker() {
       score += bonus;
       addFloat(br.x + br.w / 2, br.y, '+' + (pts + bonus));
     }
-    updateHud();
-    resolveBrickCollision(ball, br);
-    spawnParticleBurst(br.x + br.w / 2, br.y + br.h / 2, br.power ? '#FFD166' : ACCENT, br.power ? 10 : 7);
-    if (br.power) dropPowerup(br.x + br.w / 2, br.y + br.h);
-    else if (Math.random() < 0.08) dropPowerup(br.x + br.w / 2, br.y + br.h);
-    buzz('place');
+    const color = br.gold ? '#FFD700' : br.explosive ? '#FF6B35' : br.power ? '#FFD166' : ACCENT;
+    spawnParticleBurst(br.x + br.w / 2, br.y + br.h / 2, color, br.explosive ? 12 : 7);
+    if (br.power) dropPowerup(br.x + br.w / 2, br.y + br.h, true);
+    else if (!fromExplosion && Math.random() < 0.07) dropPowerup(br.x + br.w / 2, br.y + br.h);
+    if (br.explosive && !fromExplosion) {
+      triggerShake(4, 120);
+      bricks.forEach((n) => {
+        if (!n.alive || n === br || n.unbreakable) return;
+        if (Math.abs(n.ci - br.ci) <= 1 && Math.abs(n.ri - br.ri) <= 1) destroyBrick(n, true);
+      });
+    }
     if (combo >= 4) triggerShake(1.5, 60);
+  }
+
+  function hitBrick(ball, br) {
+    hitCount += 1;
+    if (br.unbreakable) {
+      resolveBrickCollision(ball, br);
+      buzz('invalid');
+      return;
+    }
+    if (br.steel && br.hp > 1) {
+      br.hp -= 1;
+      resolveBrickCollision(ball, br);
+      buzz('invalid');
+      triggerShake(2.5, 80);
+      spawnParticleBurst(ball.x, ball.y, '#888', 3);
+      addFloat(br.x + br.w / 2, br.y, '!');
+      return;
+    }
+    resolveBrickCollision(ball, br);
+    destroyBrick(br, false);
+    updateHud();
+    buzz(br.gold ? 'complete' : 'place');
+  }
+
+  function stepMovingBricks(dt) {
+    movePhase += dt * 0.035;
+    const amp = Math.min(brickWidth() * 0.85, 18);
+    bricks.forEach((br) => {
+      if (!br.alive || !br.moving) return;
+      br.x = br.baseX + Math.sin(movePhase + br.ci * 0.45) * amp;
+    });
   }
 
   function stepBall(ball, dt, paddleY, speedMul) {
@@ -643,22 +925,17 @@ function openBrickBreaker() {
     for (let s = 0; s < SUBSTEPS; s++) {
       ball.x += ball.vx * step * speedMul;
       ball.y += ball.vy * step * speedMul;
-
       if (ball.x - BALL_R < 0) {
         ball.x = BALL_R;
-        ball.vx = Math.abs(ball.vx);
-        if (Math.abs(ball.vx) < MIN_VX) ball.vx = MIN_VX;
+        ball.vx = Math.abs(ball.vx) || MIN_VX;
       } else if (ball.x + BALL_R > cssW) {
         ball.x = cssW - BALL_R;
-        ball.vx = -Math.abs(ball.vx);
-        if (Math.abs(ball.vx) < MIN_VX) ball.vx = -MIN_VX;
+        ball.vx = -Math.abs(ball.vx) || -MIN_VX;
       }
       if (ball.y - BALL_R < 40) {
         ball.y = 40 + BALL_R;
         ball.vy = Math.abs(ball.vy);
       }
-
-      // Paddle
       if (
         ball.vy > 0 &&
         ball.y + BALL_R >= paddleY &&
@@ -667,13 +944,12 @@ function openBrickBreaker() {
         ball.x <= paddleX + paddleW / 2 + 2
       ) {
         bounceOffPaddle(ball, paddleY);
+        if (ball.stuck) return;
       }
-
       if (ball.y - BALL_R > cssH + 8) {
         ball.dead = true;
         return;
       }
-
       for (let i = 0; i < bricks.length; i++) {
         const br = bricks[i];
         if (!br.alive) continue;
@@ -688,12 +964,10 @@ function openBrickBreaker() {
         }
       }
     }
-    // Soft speed toward target (slow power handled outside)
     const sp = Math.hypot(ball.vx, ball.vy);
     const want = targetSpeed();
     if (sp > 0.1 && Math.abs(sp - want) > 0.15) {
-      const blend = sp < want ? 0.04 : 0.02;
-      normalizeBall(ball, sp + (want - sp) * blend);
+      normalizeBall(ball, sp + (want - sp) * (sp < want ? 0.04 : 0.02));
     }
   }
 
@@ -710,12 +984,10 @@ function openBrickBreaker() {
     lastTime = ts;
     const dt = dtMs / 16.67;
 
-    // Smooth keyboard hold
     if (keysHeld.left || keysHeld.right) {
       const dir = (keysHeld.right ? 1 : 0) - (keysHeld.left ? 1 : 0);
       if (dir) movePaddle(dir * 7.2 * dt);
     }
-
     if (wideTimer > 0) {
       wideTimer -= dtMs / 1000;
       if (wideTimer <= 0) {
@@ -733,6 +1005,7 @@ function openBrickBreaker() {
     const paddleY = cssH - 28;
 
     if (started) {
+      stepMovingBricks(dt);
       balls.forEach((ball) => stepBall(ball, dt, paddleY, speedMul));
       balls = balls.filter((b) => !b.dead);
       if (!balls.length && started) {
@@ -745,18 +1018,14 @@ function openBrickBreaker() {
         raf = null;
         return;
       }
-
-      if (!clearingLevel && started && !bricks.some((b) => !b.steel && b.alive)) {
-        levelClear();
-      }
-
+      if (!clearingLevel && started && !clearableLeft()) levelClear();
       powerups.forEach((p) => {
         p.y += p.vy * dt;
         if (
           p.y + p.h >= paddleY &&
-          p.y <= paddleY + PADDLE_H + 6 &&
-          p.x + 9 >= paddleX - paddleW / 2 &&
-          p.x - 9 <= paddleX + paddleW / 2
+          p.y <= paddleY + PADDLE_H + 8 &&
+          p.x + 11 >= paddleX - paddleW / 2 &&
+          p.x - 11 <= paddleX + paddleW / 2
         ) {
           p.dead = true;
           applyPower(p.type);
@@ -779,7 +1048,6 @@ function openBrickBreaker() {
       pt.life -= 0.045 * dt;
     });
     particles = particles.filter((pt) => pt.life > 0);
-
     floatTexts.forEach((ft) => {
       ft.y += ft.vy * dt;
       ft.life -= 0.035 * dt;
@@ -787,11 +1055,19 @@ function openBrickBreaker() {
     floatTexts = floatTexts.filter((ft) => ft.life > 0);
 
     draw();
-    if (!gameOver && alive() && !(pauseCtrl && pauseCtrl.isPaused())) {
-      raf = requestAnimationFrame(update);
-    } else {
-      raf = null;
-    }
+    if (!gameOver && alive() && !(pauseCtrl && pauseCtrl.isPaused())) raf = requestAnimationFrame(update);
+    else raf = null;
+  }
+
+  function brickStyle(br) {
+    if (br.unbreakable) return { fill: '#2a2a35', stroke: '#555' };
+    if (br.gold) return { fill: '#E6B422', stroke: '#FFF3A0' };
+    if (br.explosive) return { fill: '#E85D04', stroke: '#FFBA08' };
+    if (br.moving) return { fill: '#4CC9F0', stroke: '#90E0EF' };
+    if (br.steel)
+      return br.hp > 1 ? { fill: '#6c757d', stroke: '#adb5bd' } : { fill: '#495057', stroke: '#868e96' };
+    if (br.power) return { fill: '#FFD166', stroke: '#fff' };
+    return { fill: ACCENT, stroke: '#B39DFF' };
   }
 
   function draw() {
@@ -812,25 +1088,26 @@ function openBrickBreaker() {
 
     bricks.forEach((br) => {
       if (!br.alive) return;
-      if (br.steel) {
-        ctx.fillStyle = '#5c5c6e';
-        ctx.strokeStyle = '#888';
-      } else if (br.power) {
-        ctx.fillStyle = '#FFD166';
-        ctx.strokeStyle = '#fff';
-      } else {
-        ctx.fillStyle = ACCENT;
-        ctx.strokeStyle = '#B39DFF';
-      }
+      const st = brickStyle(br);
+      ctx.fillStyle = st.fill;
+      ctx.strokeStyle = st.stroke;
       ctx.fillRect(br.x, br.y, br.w, br.h);
       ctx.strokeRect(br.x + 0.5, br.y + 0.5, br.w - 1, br.h - 1);
+      if (br.explosive) {
+        ctx.fillStyle = '#fff';
+        ctx.font = '9px sans-serif';
+        ctx.fillText('✱', br.x + br.w / 2 - 4, br.y + 11);
+      } else if (br.gold) {
+        ctx.fillStyle = '#fff';
+        ctx.font = '9px sans-serif';
+        ctx.fillText('◆', br.x + br.w / 2 - 4, br.y + 11);
+      }
     });
 
-    // Paddle
     ctx.fillStyle = '#fff';
     ctx.fillRect(paddleX - paddleW / 2, cssH - 28, paddleW, PADDLE_H);
-    if (wideTimer > 0) {
-      ctx.strokeStyle = ACCENT;
+    if (wideTimer > 0 || magnetCharges > 0) {
+      ctx.strokeStyle = magnetCharges > 0 ? '#4CC9F0' : ACCENT;
       ctx.lineWidth = 1.5;
       ctx.strokeRect(paddleX - paddleW / 2 - 1, cssH - 29, paddleW + 2, PADDLE_H + 2);
     }
@@ -843,12 +1120,12 @@ function openBrickBreaker() {
     });
 
     powerups.forEach((p) => {
-      const colors = { wide: '#7C4DFF', slow: '#2A9D8F', multi: '#E63946', life: '#FFD166' };
+      const colors = { wide: '#7C4DFF', slow: '#2A9D8F', multi: '#E63946', life: '#FFD166', magnet: '#4CC9F0' };
       ctx.fillStyle = colors[p.type] || ACCENT;
-      ctx.fillRect(p.x - 9, p.y, 18, 10);
+      ctx.fillRect(p.x - 11, p.y, 22, 12);
       ctx.fillStyle = '#fff';
       ctx.font = '8px sans-serif';
-      ctx.fillText(p.type[0].toUpperCase(), p.x - 3, p.y + 8);
+      ctx.fillText(p.type === 'magnet' ? 'M' : p.type[0].toUpperCase(), p.x - 3, p.y + 9);
     });
 
     particles.forEach((pt) => {
@@ -859,7 +1136,6 @@ function openBrickBreaker() {
       ctx.fill();
       ctx.globalAlpha = 1;
     });
-
     floatTexts.forEach((ft) => {
       ctx.globalAlpha = Math.max(0, ft.life);
       ctx.fillStyle = '#FFD166';
@@ -869,7 +1145,6 @@ function openBrickBreaker() {
       ctx.textAlign = 'left';
       ctx.globalAlpha = 1;
     });
-
     if (!started && !gameOver && balls[0] && balls[0].stuck) {
       ctx.fillStyle = 'rgba(255,255,255,0.45)';
       ctx.font = '12px Space Grotesk,sans-serif';
@@ -877,11 +1152,13 @@ function openBrickBreaker() {
       ctx.fillText('Tap Serve or canvas to launch', cssW / 2, cssH - 48);
       ctx.textAlign = 'left';
     }
-
     ctx.restore();
   }
 
-  loadLevel(0);
+  if (playMode === 'endless') {
+    wave = 0;
+    loadEndlessWave();
+  } else loadLevel(level);
   resetBall(true);
   paddleX = cssW / 2;
   updateHud();
@@ -905,7 +1182,6 @@ function openBrickBreaker() {
         })
       : null;
 
-  // Smooth keyboard: hold tracking + bindGameKeyboardPaddle fallback nudge
   const keyDown = (e) => {
     if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
       keysHeld.left = true;
@@ -937,10 +1213,7 @@ function openBrickBreaker() {
       canvas.setPointerCapture(e.pointerId);
     } catch (err) {}
     setPaddleFromClientX(e.clientX);
-    // Tap to serve when ball is stuck
-    if (!started && !gameOver && balls[0] && balls[0].stuck && performance.now() >= lifeResetUntil) {
-      launchBall();
-    }
+    if (!started && !gameOver && balls[0] && balls[0].stuck && performance.now() >= lifeResetUntil) launchBall();
   });
   canvas.addEventListener('pointermove', (e) => {
     if (!pointerDown) return;
@@ -956,20 +1229,20 @@ function openBrickBreaker() {
   canvas.addEventListener('pointercancel', () => {
     pointerDown = false;
   });
-
-  // Chrome taps must not steal paddle drag
-  overlay.querySelector('.game-chrome')?.addEventListener('pointerdown', (e) => {
-    e.stopPropagation();
-  });
+  overlay.querySelector('.game-chrome')?.addEventListener('pointerdown', (e) => e.stopPropagation());
 
   document.getElementById('bbBack')?.addEventListener('click', () => {
-    if (gameOver) {
+    const leaveToSheet = () => {
       close();
+      openBrickBreakerModeSheet();
+    };
+    if (gameOver) {
+      leaveToSheet();
       return;
     }
-    const inProgress = started || level > 0 || score > 0;
+    const inProgress = started || score > 0 || (playMode === 'campaign' ? level > startLevel : wave > 0);
     if (!inProgress) {
-      close();
+      leaveToSheet();
       return;
     }
     const ask =
@@ -977,7 +1250,7 @@ function openBrickBreaker() {
         ? confirmLeaveGame({ title: 'Leave Brick Breaker?', body: 'Progress on this run will be lost.' })
         : Promise.resolve(window.confirm('Leave Brick Breaker? Progress on this run will be lost.'));
     Promise.resolve(ask).then((ok) => {
-      if (ok) close();
+      if (ok) leaveToSheet();
     });
   });
   document.getElementById('bbStart')?.addEventListener('click', (e) => {
@@ -992,7 +1265,7 @@ if (typeof registerGame === 'function') {
   registerGame({
     id: 'brickbreaker',
     name: 'Brick Breaker',
-    desc: 'Classic Breakout · 12 levels · Solo',
+    desc: 'Campaign · Score Attack · Solo',
     icon: '🧱',
     ratingKey: 'brickbreaker',
     gameType: 'solo',
@@ -1000,10 +1273,10 @@ if (typeof registerGame === 'function') {
     solo: true,
     selfChat: true,
     order: 105,
-    meta: { graduated: true, phase: 1 },
+    meta: { graduated: true, phase: 2 },
     launch() {
       try {
-        openBrickBreaker();
+        openBrickBreakerModeSheet();
       } catch (err) {
         console.error('[brickbreaker] launch failed', err);
         try {
@@ -1013,3 +1286,6 @@ if (typeof registerGame === 'function') {
     },
   });
 }
+
+window.openBrickBreaker = openBrickBreaker;
+window.openBrickBreakerModeSheet = openBrickBreakerModeSheet;
