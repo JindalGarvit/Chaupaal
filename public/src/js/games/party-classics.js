@@ -490,7 +490,7 @@
     const cueSub = liveOn
       ? liveSub()
       : isCarrom
-        ? 'Practice · rules'
+        ? 'Practice · AI'
         : practiceSub(spec.subtitle || spec.title || 'vs AI');
     const shell = openShell({
       id: spec.id,
@@ -502,6 +502,7 @@
       bg: spec.bg,
       pauseId,
       chat,
+      leaveBody: isCarrom && !liveOn ? 'Resign counts as a loss vs AI.' : undefined,
       cleanup: () => {
         cancelAnimationFrame(raf);
         raf = 0;
@@ -520,33 +521,96 @@
     });
     if (!shell) return;
 
-    // Carrom Practice: colour pick before board (Live skips — random seat)
+    const DIFF_LABEL = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
+    let difficulty =
+      spec.difficulty === 'easy' || spec.difficulty === 'hard' || spec.difficulty === 'medium'
+        ? spec.difficulty
+        : 'medium';
+    let breakerPick = spec.breakerPick === 'opp' || spec.breakerPick === 'random' || spec.breakerPick === 'you' ? spec.breakerPick : 'you';
     let youColor =
       spec.youColor === 'black' || spec.youColor === 'white'
         ? spec.youColor
-        : isCarrom && !liveOn
+        : isCarrom && !liveOn && !spec.skipSheet
           ? null
           : isCarrom
             ? Math.random() < 0.5
               ? 'white'
               : 'black'
             : null;
-    if (isCarrom && !youColor) {
+
+    function setChromeSubtitle(text) {
+      const el = shell.overlay && shell.overlay.querySelector('.game-chrome-subtitle');
+      if (el) el.textContent = text;
+    }
+
+    // Carrom Practice sheet: colour + difficulty + who breaks (Live skips)
+    if (isCarrom && !liveOn && !spec.skipSheet && !youColor) {
+      let pickColor = 'random';
+      let pickDiff = difficulty || 'medium';
+      let pickBreak = breakerPick || 'you';
       shell.body.innerHTML = `<div class="pc-carrom-pick">
-        <p class="pc-carrom-pick-title">Your colour</p>
-        <p class="pc-carrom-pick-sub">Pocket your men. Cover the Queen. Striker in pocket is a foul.</p>
-        <div class="pc-carrom-pick-row">
-          <button type="button" class="pc-carrom-pick-btn pc-carrom-pick-btn--white" data-pick="white">White</button>
-          <button type="button" class="pc-carrom-pick-btn pc-carrom-pick-btn--black" data-pick="black">Black</button>
-          <button type="button" class="pc-carrom-pick-btn" data-pick="random">Random</button>
+        <p class="pc-carrom-pick-title">Carrom Practice</p>
+        <p class="pc-carrom-pick-sub">Same rules for you and AI. Cover the Queen. Striker pocket is a foul.</p>
+        <div class="pc-carrom-field">
+          <span class="pc-carrom-field-label">Your colour</span>
+          <div class="pc-carrom-pick-row" data-field="color">
+            <button type="button" class="pc-carrom-pick-btn pc-carrom-pick-btn--white is-on" data-color="white">White</button>
+            <button type="button" class="pc-carrom-pick-btn pc-carrom-pick-btn--black" data-color="black">Black</button>
+            <button type="button" class="pc-carrom-pick-btn" data-color="random">Random</button>
+          </div>
         </div>
+        <div class="pc-carrom-field">
+          <span class="pc-carrom-field-label">Difficulty</span>
+          <div class="pc-carrom-pick-row" data-field="diff">
+            <button type="button" class="pc-carrom-pick-btn" data-diff="easy">Easy</button>
+            <button type="button" class="pc-carrom-pick-btn is-on" data-diff="medium">Medium</button>
+            <button type="button" class="pc-carrom-pick-btn" data-diff="hard">Hard</button>
+          </div>
+        </div>
+        <div class="pc-carrom-field">
+          <span class="pc-carrom-field-label">Who breaks</span>
+          <div class="pc-carrom-pick-row" data-field="break">
+            <button type="button" class="pc-carrom-pick-btn is-on" data-break="you">You</button>
+            <button type="button" class="pc-carrom-pick-btn" data-break="opp">AI</button>
+            <button type="button" class="pc-carrom-pick-btn" data-break="random">Random</button>
+          </div>
+        </div>
+        <button type="button" class="pc-carrom-start" data-carrom-start>Start</button>
       </div>`;
-      shell.body.querySelectorAll('[data-pick]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const v = btn.getAttribute('data-pick');
-          youColor = v === 'random' ? (Math.random() < 0.5 ? 'white' : 'black') : v;
-          bootBoard();
+      const syncOn = (row, attr, val) => {
+        row.querySelectorAll('button').forEach((b) => {
+          b.classList.toggle('is-on', b.getAttribute(attr) === val);
         });
+      };
+      const colorRow = shell.body.querySelector('[data-field="color"]');
+      const diffRow = shell.body.querySelector('[data-field="diff"]');
+      const breakRow = shell.body.querySelector('[data-field="break"]');
+      colorRow.querySelectorAll('[data-color]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          pickColor = btn.getAttribute('data-color');
+          syncOn(colorRow, 'data-color', pickColor);
+        });
+      });
+      syncOn(colorRow, 'data-color', pickColor);
+      diffRow.querySelectorAll('[data-diff]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          pickDiff = btn.getAttribute('data-diff');
+          syncOn(diffRow, 'data-diff', pickDiff);
+        });
+      });
+      syncOn(diffRow, 'data-diff', pickDiff);
+      breakRow.querySelectorAll('[data-break]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          pickBreak = btn.getAttribute('data-break');
+          syncOn(breakRow, 'data-break', pickBreak);
+        });
+      });
+      syncOn(breakRow, 'data-break', pickBreak);
+      shell.body.querySelector('[data-carrom-start]')?.addEventListener('click', () => {
+        youColor = pickColor === 'random' ? (Math.random() < 0.5 ? 'white' : 'black') : pickColor;
+        difficulty = pickDiff;
+        breakerPick = pickBreak;
+        bootBoard();
       });
       return;
     }
@@ -555,10 +619,20 @@
 
     function bootBoard() {
     const oppColor = youColor === 'white' ? 'black' : 'white';
-    let queenCoveredBy = null; // 'you' | 'opp'
-    let queenPendingCoverFor = null; // 'you' | 'opp'
+    const breaker =
+      breakerPick === 'random' ? (Math.random() < 0.5 ? 'you' : 'opp') : breakerPick === 'opp' ? 'opp' : 'you';
+    let queenCoveredBy = null;
+    let queenPendingCoverFor = null;
     let strokeSeat = 'you';
     let strokePocketed = [];
+    let movingFrames = 0;
+    let aiAim = null; // { x, y, until }
+
+    if (isCarrom && !liveOn) {
+      setChromeSubtitle(
+        'Practice · ' + (DIFF_LABEL[difficulty] || 'Medium') + ' · ' + (youColor === 'white' ? 'White' : 'Black')
+      );
+    }
 
     let coachDismissed = false;
     try {
@@ -566,14 +640,14 @@
     } catch (e) {}
 
     const coachCopy = isCarrom
-      ? 'Pocket your colour. Queen only after ≥1 of yours, then cover. Striker pocket = foul.'
+      ? 'You shoot from the near baseline; AI from the far. Cover the Queen after one of yours.'
       : 'Drag back on the cue ball to aim, release to shoot.';
 
     shell.body.innerHTML = `<div class="pc-cue${isCarrom ? ' pc-cue--carrom' : ''}">
       ${!coachDismissed && isCarrom ? `<div class="pc-cue-coach" data-cue-coach><span>${coachCopy}</span><button type="button" data-cue-coach-x>Got it</button></div>` : ''}
       <div class="pc-cue-hud" data-cue-hud>You 0 · Opp 0</div>
       <canvas data-cue aria-label="${spec.title || 'Cue'} board"></canvas>
-      <p class="pc-hint" data-cue-hint>${isCarrom ? 'Your shot — drag back on the striker.' : 'Drag back on the cue ball to aim, release to shoot.'}</p>
+      <p class="pc-hint" data-cue-hint>${isCarrom ? (breaker === 'you' ? 'Your break — drag back on the striker.' : 'AI breaks…') : 'Drag back on the cue ball to aim, release to shoot.'}</p>
     </div>`;
     const canvas = shell.body.querySelector('[data-cue]');
     const hint = shell.body.querySelector('[data-cue-hint]');
@@ -598,7 +672,10 @@
     const wallRest = spec.wallRest != null ? spec.wallRest : isCarrom ? 0.72 : 0.8;
     const stopEps = spec.stopEps != null ? spec.stopEps : 0.055;
     const pockets = spec.pockets;
-    const baselineY = () => H * (spec.baselineY || 0.82);
+    const youBaseFrac = spec.baselineY || 0.82;
+    const oppBaseFrac = 1 - youBaseFrac;
+    const seatBaselineY = (seat) => H * (seat === 'opp' ? oppBaseFrac : youBaseFrac);
+    const baselineY = () => seatBaselineY('you');
     const baselineXMin = () => W * 0.18;
     const baselineXMax = () => W * 0.82;
     const centerX = () => W / 2;
@@ -610,12 +687,13 @@
     let oppPocketed = 0;
     let moving = false;
     let ended = false;
-    let myTurn = true;
+    let myTurn = !isCarrom || liveOn ? true : breaker === 'you';
     let applying = false;
     let liveRoles = null;
     let liveHandle = null;
     let seq = 0;
     let cueHomeX = null;
+    let cueHomeXOpp = null;
     let strikerFoulHint = 0;
     let layoutReady = false;
     let ballSeq = 1;
@@ -637,10 +715,10 @@
     }
 
     function queenStatusLabel() {
-      if (queenCoveredBy === 'you') return 'Covered by You';
-      if (queenCoveredBy === 'opp') return 'Covered by Opp';
+      if (queenCoveredBy === 'you') return 'Covered (You)';
+      if (queenCoveredBy === 'opp') return 'Covered (AI)';
       if (queenPendingCoverFor === 'you') return 'Pending cover (You)';
-      if (queenPendingCoverFor === 'opp') return 'Pending cover (Opp)';
+      if (queenPendingCoverFor === 'opp') return 'Pending cover (AI)';
       return 'On board';
     }
 
@@ -649,13 +727,22 @@
       if (isCarrom) {
         const yLeft = countOnBoard(youColor);
         const oLeft = countOnBoard(oppColor);
-        const sw = youColor === 'white' ? '○' : '●';
+        const yIn = countPocketed(youColor);
+        const oIn = countPocketed(oppColor);
+        const turn = ended ? 'Over' : moving ? 'Moving…' : myTurn ? 'Your turn' : 'AI turn';
         hud.innerHTML =
-          `<span class="pc-cue-swatch pc-cue-swatch--${youColor}" title="You">${sw}</span> You ${yLeft} left` +
-          ` · Opp ${oLeft} left · Queen: ${queenStatusLabel()}`;
+          `<div class="pc-cue-hud-row"><span class="pc-cue-swatch pc-cue-swatch--${youColor}"></span>You · ${colorLabel(youColor)} · ${yLeft} left (${yIn})` +
+          ` · <span class="pc-cue-swatch pc-cue-swatch--${oppColor}"></span>AI · ${colorLabel(oppColor)} · ${oLeft} left (${oIn})</div>` +
+          `<div class="pc-cue-hud-row">Queen: ${queenStatusLabel()} · ${turn}` +
+          (liveOn ? '' : ' · ' + (DIFF_LABEL[difficulty] || 'Medium')) +
+          `</div>`;
       } else {
         hud.textContent = `You ${youPocketed} · Opp ${oppPocketed}`;
       }
+    }
+
+    function colorLabel(c) {
+      return c === 'white' ? 'White' : 'Black';
     }
 
     function resize() {
@@ -747,12 +834,15 @@
 
     function resetCueToBaseline(opts) {
       const o = opts || {};
+      const seat = o.seat || (myTurn ? 'you' : 'opp');
+      const by = isCarrom ? seatBaselineY(seat) : baselineY();
+      const home = seat === 'opp' ? cueHomeXOpp : cueHomeX;
       let c = balls.find((b) => b.cue);
       if (!c) {
         c = {
           id: 'b' + ballSeq++,
-          x: Math.min(baselineXMax(), Math.max(baselineXMin(), cueHomeX != null ? cueHomeX : W / 2)),
-          y: baselineY(),
+          x: Math.min(baselineXMax(), Math.max(baselineXMin(), home != null ? home : W / 2)),
+          y: by,
           vx: 0,
           vy: 0,
           cue: true,
@@ -765,11 +855,13 @@
       c.dead = false;
       c.x = Math.min(
         baselineXMax(),
-        Math.max(baselineXMin(), o.x != null ? o.x : cueHomeX != null ? cueHomeX : W / 2)
+        Math.max(baselineXMin(), o.x != null ? o.x : home != null ? home : W / 2)
       );
-      c.y = baselineY();
+      c.y = by;
       c.vx = 0;
       c.vy = 0;
+      if (seat === 'opp') cueHomeXOpp = c.x;
+      else cueHomeX = c.x;
       if (o.foul) {
         strikerFoulHint = 90;
         buzz('reject');
@@ -870,11 +962,11 @@
       const c = cueBall();
       if (!c || !isCarrom) return;
       const pull = Math.hypot(c.x - x, c.y - y);
-      const nearBase = Math.abs(c.y - baselineY()) < 28;
+      const nearBase = Math.abs(c.y - seatBaselineY('you')) < 28;
       if (nearBase && pull < 28 && Math.abs(x - c.x) > Math.abs(y - c.y)) {
         dragging.mode = 'place';
         c.x = Math.min(baselineXMax(), Math.max(baselineXMin(), x));
-        c.y = baselineY();
+        c.y = seatBaselineY('you');
         cueHomeX = c.x;
         dragging.placed = true;
       } else if (pull >= 28) {
@@ -899,10 +991,12 @@
       const p = Math.min(maxP, mag / 9);
       strokeSeat = 'you';
       strokePocketed = [];
+      movingFrames = 0;
       c.vx = (dx / mag) * p;
       c.vy = (dy / mag) * p;
       moving = true;
       hint.textContent = 'Balls moving…';
+      updateHud();
       buzz('stone');
     });
     canvas.addEventListener('pointercancel', () => {
@@ -1010,10 +1104,6 @@
       return balls.filter((b) => !b.cue && !b.dead).length;
     }
 
-    function colorLabel(c) {
-      return c === 'white' ? 'White' : 'Black';
-    }
-
     function resolveCarromStroke() {
       const seat = strokeSeat;
       const color = seatColor(seat);
@@ -1027,15 +1117,15 @@
       let foul = false;
       let msg = '';
       let keepTurn = false;
+      const who = seat === 'you' ? 'You' : 'AI';
 
-      // Chaupaal casual: opponent C/m you pocket always return to center
       const bounceOpp = () => returnPieces(oppHit);
 
       if (strikerHit) {
         foul = true;
         msg = queenHit.length
-          ? 'Foul — striker + Queen. Queen back.'
-          : 'Foul — striker pocketed.';
+          ? who + ': foul — striker + Queen. Queen back.'
+          : who + ': foul — striker pocketed.';
         returnPieces(ownHit);
         bounceOpp();
         returnPieces(queenHit);
@@ -1045,37 +1135,27 @@
           queenPendingCoverFor = null;
         }
         returnPenaltyOwn(color);
-        resetCueToBaseline({ foul: true });
       } else if (queenHit.length) {
         const legalQueen = priorOwn >= 1;
         if (!legalQueen) {
           foul = true;
-          msg = 'Queen illegal — need one of yours first.';
+          msg = who + ': Queen illegal — need one of yours first.';
           returnPieces(queenHit);
           bounceOpp();
-          // keep ownHit? Illegal queen typically returns queen; own may stay if pocketed — ICF often returns queen only.
-          // Keep ownHit pocketed if any; turn ends.
-          if (priorOwn >= 1 || ownHit.length) {
-            /* own stays */
-          }
           if (priorOwn >= 1) returnPenaltyOwn(color);
           queenPendingCoverFor = null;
-          resetCueToBaseline({});
         } else if (ownHit.length) {
-          // Queen + own cover same stroke
           queenCoveredBy = seat;
           queenPendingCoverFor = null;
           bounceOpp();
           keepTurn = true;
-          msg = 'Queen covered!';
+          msg = who + ': Queen covered!';
           buzz('win');
-          resetCueToBaseline({});
         } else {
           queenPendingCoverFor = seat;
           bounceOpp();
           keepTurn = true;
-          msg = 'Queen pocketed — cover next shot.';
-          resetCueToBaseline({});
+          msg = who + ': Queen pocketed — cover next shot.';
         }
       } else if (coveringNow) {
         bounceOpp();
@@ -1083,43 +1163,38 @@
           queenCoveredBy = seat;
           queenPendingCoverFor = null;
           keepTurn = true;
-          msg = 'Queen covered!';
+          msg = who + ': Queen covered!';
           buzz('win');
-          resetCueToBaseline({});
         } else {
           foul = true;
-          msg = 'Cover failed — Queen returns.';
+          msg = who + ': cover failed — Queen returns.';
           const q = balls.find((b) => b.kind === 'queen');
           if (q && q.dead && !queenCoveredBy) placeAtCenter(q);
           queenPendingCoverFor = null;
-          resetCueToBaseline({});
         }
       } else {
         bounceOpp();
         if (ownHit.length) {
           keepTurn = true;
-          msg = oppHit.length ? 'Your man in — opp coin returned.' : 'Nice — keep shooting.';
+          msg = who + (oppHit.length ? ': man in — opp coin returned.' : ': nice — keep shooting.');
         } else if (oppHit.length) {
-          msg = 'Opp coin returned — turn ends.';
+          msg = who + ': opp coin returned — turn ends.';
         } else {
-          msg = 'Miss — turn ends.';
+          msg = who + ': miss — turn ends.';
         }
-        resetCueToBaseline({});
       }
 
-      // Last-man without your Queen cover: cannot win
       if (!foul && countOnBoard(color) === 0 && queenCoveredBy !== seat) {
         if (queenCoveredBy && queenCoveredBy !== seat) {
-          // Opp has Queen — still require you covered it per product bar
           const revive = balls.filter((b) => b.dead && b.kind === color);
           if (revive.length) placeAtCenter(revive[revive.length - 1]);
           keepTurn = false;
-          msg = 'Need Queen covered by you to finish.';
+          msg = who + ': need Queen covered by you to finish.';
         } else if (!queenCoveredBy) {
           const revive = balls.filter((b) => b.dead && b.kind === color);
           if (revive.length) placeAtCenter(revive[revive.length - 1]);
           keepTurn = false;
-          msg = 'Cover the Queen before your last man.';
+          msg = who + ': cover the Queen before your last man.';
           if (queenPendingCoverFor === seat) {
             const q = balls.find((b) => b.kind === 'queen');
             if (q && q.dead) placeAtCenter(q);
@@ -1129,73 +1204,233 @@
       }
 
       updateHud();
-      hint.textContent = msg || (keepTurn ? 'Your shot.' : '…');
 
       if (countOnBoard(color) === 0 && queenCoveredBy === seat) {
         finish(seat === 'you');
         return;
       }
-      if (countOnBoard(seat === 'you' ? oppColor : youColor) === 0 && queenCoveredBy === (seat === 'you' ? 'opp' : 'you')) {
+      if (
+        countOnBoard(seat === 'you' ? oppColor : youColor) === 0 &&
+        queenCoveredBy === (seat === 'you' ? 'opp' : 'you')
+      ) {
         finish(seat !== 'you');
         return;
       }
 
-      if (keepTurn && !foul) {
-        myTurn = seat === 'you';
-        if (myTurn) hint.textContent = (msg ? msg + ' ' : '') + 'Your shot.';
-        else scheduleWeakOpp();
-        return;
-      }
+      const nextSeat = keepTurn && !foul ? seat : seat === 'you' ? 'opp' : 'you';
+      myTurn = nextSeat === 'you';
+      resetCueToBaseline({ seat: nextSeat, foul: foul && strikerHit });
+      hint.textContent = msg + (myTurn ? ' Your shot.' : '');
+      updateHud();
 
-      // End turn → other seat
-      if (seat === 'you') {
-        myTurn = false;
-        scheduleWeakOpp();
-      } else {
-        myTurn = true;
-        hint.textContent = (msg ? msg + ' ' : '') + 'Your shot.';
-        resetCueToBaseline({});
-      }
+      if (!myTurn) scheduleAiTurn();
+      else if (myTurn && !msg.includes('Your shot')) hint.textContent = (msg ? msg + ' ' : '') + 'Your shot.';
     }
 
-    function scheduleWeakOpp() {
-      if (ended || liveOn) return;
-      hint.textContent = 'Opp (weak)…';
+    function distPointSeg(px, py, x1, y1, x2, y2) {
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const len2 = dx * dx + dy * dy || 1;
+      let t = ((px - x1) * dx + (py - y1) * dy) / len2;
+      t = Math.max(0, Math.min(1, t));
+      return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+    }
+
+    function planAiShot() {
+      const c = cueBall();
+      if (!c) return { vx: 0, vy: 4 };
+      const color = oppColor;
+      const priorOwn = countPocketed(color);
+      const pending = queenPendingCoverFor === 'opp';
+      const diff = difficulty;
+      const jitter = diff === 'easy' ? 0.42 : diff === 'hard' ? 0.07 : 0.18;
+      const maxP = diff === 'easy' ? 7.2 : diff === 'hard' ? 11.8 : 9.6;
+      const minP = diff === 'easy' ? 2.8 : 4.2;
+      const candidates = [];
+
+      function foulRiskToward(dx, dy) {
+        const mag = Math.hypot(dx, dy) || 1;
+        let risk = 0;
+        (pockets || []).forEach((p) => {
+          const px = p[0] * W;
+          const py = p[1] * H;
+          if (Math.hypot(c.x - px, c.y - py) > pocketR * 3.2) return;
+          const along = ((px - c.x) * dx + (py - c.y) * dy) / mag;
+          if (along > 0) risk += 1;
+        });
+        return risk;
+      }
+
+      function addCand(tx, ty, power, score, tag) {
+        const dx = tx - c.x;
+        const dy = ty - c.y;
+        const mag = Math.hypot(dx, dy) || 1;
+        const p = Math.max(minP, Math.min(maxP, power));
+        const risk = foulRiskToward(dx, dy);
+        candidates.push({
+          vx: (dx / mag) * p,
+          vy: (dy / mag) * p,
+          score: score - risk * (diff === 'easy' ? 0.5 : 4),
+          tag,
+          tx,
+          ty,
+        });
+      }
+
+      const own = balls.filter((b) => !b.dead && !b.cue && b.kind === color);
+      const queen = balls.find((b) => !b.dead && b.kind === 'queen');
+
+      function clearish(x1, y1, x2, y2, skip) {
+        let hits = 0;
+        balls.forEach((o) => {
+          if (o.dead || o.cue || o === skip) return;
+          if (distPointSeg(o.x, o.y, x1, y1, x2, y2) < ballRadius(o) + ballR * 0.85) hits += 1;
+        });
+        return hits;
+      }
+
+      own.forEach((coin) => {
+        (pockets || []).forEach((p) => {
+          const px = p[0] * W;
+          const py = p[1] * H;
+          const pdx = px - coin.x;
+          const pdy = py - coin.y;
+          const pmag = Math.hypot(pdx, pdy) || 1;
+          const ux = pdx / pmag;
+          const uy = pdy / pmag;
+          const sep = ballR + cueR;
+          const gx = coin.x - ux * sep;
+          const gy = coin.y - uy * sep;
+          const blocked =
+            clearish(c.x, c.y, gx, gy, coin) + clearish(coin.x, coin.y, px, py, coin);
+          const dist = Math.hypot(gx - c.x, gy - c.y);
+          const power = dist / 26 + pmag / 42;
+          let score = 24 - blocked * 6 - pmag / 28;
+          if (pending) score += 18;
+          if (diff === 'easy') score += (Math.random() - 0.5) * 20;
+          addCand(gx, gy, power, score, 'own');
+        });
+      });
+
+      // Queen only when legal (and cover pending prefers own above)
+      if (queen && priorOwn >= 1 && !pending && diff !== 'easy') {
+        (pockets || []).forEach((p) => {
+          const px = p[0] * W;
+          const py = p[1] * H;
+          const pdx = px - queen.x;
+          const pdy = py - queen.y;
+          const pmag = Math.hypot(pdx, pdy) || 1;
+          const ux = pdx / pmag;
+          const uy = pdy / pmag;
+          const sep = ballR + cueR;
+          const gx = queen.x - ux * sep;
+          const gy = queen.y - uy * sep;
+          const blocked = clearish(c.x, c.y, gx, gy, queen);
+          // Hard prefers queen when path clear; Medium only if very clear
+          let score = (diff === 'hard' ? 22 : 12) - blocked * 8 - pmag / 30;
+          if (own.length <= 2) score += 8;
+          addCand(gx, gy, Math.hypot(gx - c.x, gy - c.y) / 24 + pmag / 40, score, 'queen');
+        });
+      }
+
+      // Easy / fallback scatter
+      {
+        const t = own[Math.floor(Math.random() * Math.max(1, own.length))] || {
+          x: centerX(),
+          y: centerY(),
+        };
+        addCand(
+          t.x + (Math.random() - 0.5) * (diff === 'easy' ? 70 : 28),
+          t.y + (Math.random() - 0.5) * (diff === 'easy' ? 70 : 28),
+          minP + Math.random() * (maxP - minP) * (diff === 'easy' ? 0.55 : 0.75),
+          diff === 'easy' ? 8 : 2,
+          'scatter'
+        );
+      }
+
+      candidates.sort((a, b) => b.score - a.score);
+      let pick = candidates[0] || { vx: 0, vy: 5, score: 0 };
+
+      if (diff === 'hard') {
+        const pool = candidates.slice(0, Math.min(10, candidates.length));
+        for (let i = 0; i < 12; i++) {
+          const base = pool[i % pool.length];
+          const ang0 = Math.atan2(base.vy, base.vx);
+          const ang = ang0 + (Math.random() - 0.5) * 0.28;
+          const pow = Math.hypot(base.vx, base.vy) * (0.88 + Math.random() * 0.24);
+          const score = base.score - Math.abs(ang - ang0) * 8;
+          if (score > pick.score) {
+            pick = { vx: Math.cos(ang) * pow, vy: Math.sin(ang) * pow, score, tag: 'sample' };
+          }
+        }
+      } else if (diff === 'medium') {
+        const n = Math.min(4, candidates.length);
+        pick = candidates[Math.floor(Math.random() * n)];
+      } else {
+        pick = candidates[Math.floor(Math.random() * candidates.length)] || pick;
+      }
+
+      const ang = Math.atan2(pick.vy, pick.vx) + (Math.random() - 0.5) * jitter * 2;
+      let pow = Math.hypot(pick.vx, pick.vy) * (1 + (Math.random() - 0.5) * jitter);
+      pow = Math.max(2.4, Math.min(12.5, pow));
+      return { vx: Math.cos(ang) * pow, vy: Math.sin(ang) * pow, tag: pick.tag };
+    }
+
+    function scheduleAiTurn() {
+      if (ended || liveOn || !isCarrom) return;
       myTurn = false;
+      hint.textContent = 'AI thinking…';
+      updateHud();
       if (oppTimer) clearTimeout(oppTimer);
+      const think =
+        difficulty === 'easy' ? 220 + Math.random() * 200 : difficulty === 'hard' ? 420 + Math.random() * 180 : 300 + Math.random() * 220;
       oppTimer = setTimeout(() => {
         oppTimer = 0;
-        if (ended || !shell.alive()) return;
-        weakOppFlick();
-      }, 650);
+        if (ended || !shell.alive() || moving) return;
+        fireAiShot();
+      }, think);
     }
 
-    function weakOppFlick() {
+    function fireAiShot() {
       if (ended || moving) return;
-      resetCueToBaseline({
-        x: baselineXMin() + Math.random() * (baselineXMax() - baselineXMin()),
-      });
+      const own = balls.filter((b) => !b.dead && !b.cue && b.kind === oppColor);
+      const align = own[Math.floor(Math.random() * Math.max(1, own.length))];
+      let sx =
+        difficulty === 'easy'
+          ? baselineXMin() + Math.random() * (baselineXMax() - baselineXMin())
+          : align
+            ? Math.min(baselineXMax(), Math.max(baselineXMin(), align.x + (Math.random() - 0.5) * (difficulty === 'hard' ? 18 : 36)))
+            : W / 2;
+      // keep striker clear of coins on baseline
+      for (let tries = 0; tries < 8; tries++) {
+        const blocked = balls.some(
+          (b) => !b.dead && !b.cue && Math.hypot(b.x - sx, b.y - seatBaselineY('opp')) < ballRadius(b) + cueR + 2
+        );
+        if (!blocked) break;
+        sx = baselineXMin() + Math.random() * (baselineXMax() - baselineXMin());
+      }
+      resetCueToBaseline({ seat: 'opp', x: sx });
       const c = cueBall();
       if (!c) {
         myTurn = true;
         hint.textContent = 'Your shot.';
+        updateHud();
         return;
       }
-      const targets = balls.filter((b) => !b.dead && !b.cue && b.kind === oppColor);
-      const fallback = balls.filter((b) => !b.dead && !b.cue);
-      const pick = targets[Math.floor(Math.random() * Math.max(1, targets.length))] || fallback[0];
-      const tx = (pick ? pick.x : centerX()) + (Math.random() - 0.5) * 36;
-      const ty = (pick ? pick.y : centerY()) + (Math.random() - 0.5) * 36;
-      const dx = tx - c.x;
-      const dy = ty - c.y;
-      const mag = Math.hypot(dx, dy) || 1;
-      const p = 3.2 + Math.random() * 3.8;
+      const shot = planAiShot();
+      aiAim = {
+        x: c.x - shot.vx * 10,
+        y: c.y - shot.vy * 10,
+        until: (typeof performance !== 'undefined' ? performance.now() : Date.now()) + 320,
+      };
       strokeSeat = 'opp';
       strokePocketed = [];
-      c.vx = (dx / mag) * p;
-      c.vy = (dy / mag) * p;
+      movingFrames = 0;
+      c.vx = shot.vx;
+      c.vy = shot.vy;
       moving = true;
-      hint.textContent = 'Opp shooting…';
+      hint.textContent = 'AI shooting…';
+      updateHud();
       buzz('stone');
     }
 
@@ -1213,7 +1448,17 @@
       if (!remaining()) finish(youPocketed >= oppPocketed);
     }
 
-    function finish(won) {
+    function rematchOpts() {
+      return {
+        chat,
+        youColor,
+        difficulty,
+        breakerPick,
+        skipSheet: true,
+      };
+    }
+
+    function finish(won, meta) {
       if (ended) return;
       ended = true;
       cancelAnimationFrame(raf);
@@ -1233,25 +1478,36 @@
         recordDangalSession('carrom', {
           won: !!won,
           score: countPocketed(youColor),
+          difficulty,
         });
       }
       const winColor = won ? youColor : oppColor;
+      const resign = meta && meta.resign;
       showDuelResult(shell, {
         id: spec.id,
         you: won ? 1 : 0,
         opp: won ? 0 : 1,
         glyph: spec.glyph,
         pbScore: isCarrom ? countPocketed(youColor) : youPocketed,
-        title: isCarrom ? colorLabel(winColor) + ' won' : won ? 'You win' : 'Defeat',
+        title: isCarrom
+          ? resign
+            ? 'You resigned'
+            : colorLabel(winColor) + ' won'
+          : won
+            ? 'You win'
+            : 'Defeat',
         subtitle: isCarrom
-          ? (won ? 'You' : 'Opp') +
-            ' cleared ' +
+          ? (resign ? 'Loss vs AI · ' : (won ? 'You' : 'AI') + ' · ') +
             colorLabel(winColor) +
-            (queenCoveredBy ? ' · Queen covered' : '')
+            (queenCoveredBy ? ' · Queen covered' : '') +
+            ' · ' +
+            (DIFF_LABEL[difficulty] || 'Medium') +
+            ' · You pocketed ' +
+            countPocketed(youColor)
           : 'Pocketed ' + youPocketed + ' · opponent ' + oppPocketed,
         shareText: (spec.title || 'Game') + ' on Chaupaal',
         onAgain: () => {
-          if (isCarrom) openCarrom(chat);
+          if (isCarrom) openCueGame(Object.assign({}, spec, rematchOpts()));
           else openCueGame(Object.assign({}, spec, { chat }));
         },
       });
@@ -1324,6 +1580,22 @@
           }
         }
       }
+      if (aiAim) {
+        const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        const c = cueBall();
+        if (c && now < aiAim.until) {
+          ctx2d.strokeStyle = 'rgba(255,200,120,.65)';
+          ctx2d.lineWidth = 2;
+          ctx2d.setLineDash([5, 5]);
+          ctx2d.beginPath();
+          ctx2d.moveTo(c.x, c.y);
+          ctx2d.lineTo(aiAim.x, aiAim.y);
+          ctx2d.stroke();
+          ctx2d.setLineDash([]);
+        } else if (now >= aiAim.until) {
+          aiAim = null;
+        }
+      }
       if (strikerFoulHint > 0) strikerFoulHint--;
     }
 
@@ -1352,7 +1624,14 @@
         return;
       }
       if (moving) {
+        movingFrames += 1;
         step();
+        if (movingFrames > 900) {
+          balls.forEach((b) => {
+            b.vx = 0;
+            b.vy = 0;
+          });
+        }
         moving = balls.some((b) => !b.dead && Math.hypot(b.vx, b.vy) > stopEps);
         if (!moving) onSettle();
       }
@@ -1370,8 +1649,35 @@
         onResume() {
           if (!ended && !raf) raf = requestAnimationFrame(loop);
         },
-        onQuit: () => shell.close('dismissed'),
+        onQuit: () => {
+          if (isCarrom && !liveOn && !ended) finish(false, { resign: true });
+          else shell.close('dismissed');
+        },
       });
+    }
+
+    // Resign via back → loss vs AI
+    if (isCarrom && !liveOn) {
+      const back = shell.overlay.querySelector('#pcBack');
+      if (back) {
+        const neu = back.cloneNode(true);
+        back.parentNode.replaceChild(neu, back);
+        neu.addEventListener('click', async () => {
+          if (ended) {
+            shell.close('dismissed');
+            return;
+          }
+          const ok =
+            typeof confirmLeaveGame === 'function'
+              ? await confirmLeaveGame({
+                  title: 'Resign Carrom?',
+                  body: 'This counts as a loss vs AI.',
+                })
+              : true;
+          if (!ok) return;
+          finish(false, { resign: true });
+        });
+      }
     }
 
     if (liveOn) {
@@ -1412,6 +1718,13 @@
           });
         }
       }
+    }
+
+    // Place striker for breaker; AI opens if needed
+    if (isCarrom && !liveOn) {
+      resetCueToBaseline({ seat: breaker, x: W / 2 });
+      updateHud();
+      if (breaker === 'opp') scheduleAiTurn();
     }
 
     raf = requestAnimationFrame(loop);
@@ -1518,12 +1831,13 @@
   }
 
   function openCarrom(ctx) {
+    const o = ctx && ctx.youColor ? ctx : { chat: ctx };
     openCueGame({
       id: 'carrom',
       variant: 'carrom',
       title: 'Carrom',
-      subtitle: 'Practice · rules',
-      chat: ctx,
+      subtitle: 'Practice · AI',
+      chat: o.chat != null ? o.chat : ctx,
       accent: '#8D6E63',
       bg: '#1A0F00',
       felt: '#c4a574',
@@ -1536,7 +1850,11 @@
       stopEps: 0.055,
       baselineY: 0.82,
       soloPractice: true,
-      coachKey: 'chaupaal_carrom_coach_v2',
+      coachKey: 'chaupaal_carrom_coach_v3',
+      youColor: o.youColor,
+      difficulty: o.difficulty,
+      breakerPick: o.breakerPick,
+      skipSheet: !!o.skipSheet,
       pockets: [
         [0.055, 0.055],
         [0.945, 0.055],
@@ -2649,7 +2967,7 @@
   if (typeof registerGame === 'function') {
     const games = [
       { id: 'tambola', name: 'Tambola', desc: 'Ticket · full house', icon: '🎱', genre: 'party', launch: openTambola, order: 30 },
-      { id: 'carrom', name: 'Carrom', desc: 'Black & White rules', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
+      { id: 'carrom', name: 'Carrom', desc: 'Practice vs AI', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
       { id: 'pool', name: 'Pool', desc: 'Clear the felt', icon: '🎱', genre: 'board', launch: openPool, order: 32 },
       { id: 'rummy', name: 'Rummy', desc: 'Runs and sets', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
       { id: 'teenpatti', name: 'Teen Patti', desc: 'Three-card show', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
