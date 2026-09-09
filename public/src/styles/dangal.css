@@ -318,6 +318,8 @@
 .uno-message{color:var(--gold,#FCC13B);background:rgba(252,193,59,0.12);border-top:1px solid rgba(252,193,59,0.15);border-bottom:1px solid rgba(252,193,59,0.15);}
 .uno-ohno-btn{font-weight:800;letter-spacing:0.02em;transition:background 200ms,box-shadow 200ms,transform 120ms;}
 .uno-ohno-btn.is-active{background:var(--red,#E74C3C)!important;color:#fff!important;box-shadow:0 0 14px rgba(231,76,60,0.7);transform:scale(1.08);}
+.uno-house-btn{transition:transform 120ms ease,box-shadow 180ms ease;}
+.uno-house-btn:active{transform:scale(.98);}
 .uno-color-btn:hover{opacity:0.88;transform:scale(1.06);}
 @keyframes uno-pulse{from{box-shadow:0 0 6px rgba(231,76,60,0.5);}to{box-shadow:0 0 18px rgba(231,76,60,0.95);}}
 

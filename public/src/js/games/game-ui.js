@@ -140,7 +140,7 @@
     kabaddi: ['Tag defenders, then tap Home', 'Breath bar is your raid clock', 'Empty tags still concede a point'],
     tambola: ['Numbers auto-daub on your ticket', 'Claim full house at 15', 'Caller races another ticket'],
     carrom: ['Pocket your colour', 'Queen then cover', 'Striker pocket is a foul'],
-    uno: ['Match colour or number to play', 'Wilds let you pick any colour', "Shout 'Oh No!' when you're at 1 card"],
+    uno: ['Match colour or number to play', 'Classic has optional house-rule toggles', "Shout 'Oh No!' when you're at 1 card"],
     pool: ['Drag the cue ball to aim', 'Clear object balls', 'Scratch returns the cue'],
     rummy: ['Draw or take the discard', 'Discard one card', 'Declare when you have runs and sets'],
     teenpatti: ['Three cards, then Show or Fold', 'Trail beats sequence beats colour', 'Practice vs AI — chips stay virtual'],
