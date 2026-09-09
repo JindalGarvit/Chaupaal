@@ -148,7 +148,7 @@
     sattepe: ['Play next to a seven chain', 'Empty your hand first', 'Sevens can always start a suit'],
     andarbaahar: ['Joker sets the rank', 'Pick Andar or Bahar', 'First matching rank wins the side'],
     patangbaazi: ['Hold to climb, drag to steer', 'Overlap cuts the slower kite', 'Don’t stall at the top'],
-    brickbreaker: ['Drag or use arrows to move the paddle', 'Break every brick to clear the level', 'Catch falling power-ups — wide paddle and multi-ball help most', 'Steel bricks bounce the ball but never break'],
+    brickbreaker: ['Drag the paddle under your finger — or hold arrows / A-D', 'Tap Serve (or the canvas) to launch at a fair angle', 'Break every brick · catch power-ups · steel never breaks', 'Multi-ball caps at three — don’t panic'],
   };
 
   const PB_KEYS = {
