@@ -2357,14 +2357,21 @@ function openSnakesVersion(chat, version){
 }
 
 // ===================== LUDO ENGINE =====================
-/** Practice pre-game: Classic vs Quick + player count. Live stays Classic/2p until Prompt 3. */
+/** Practice / Live pre-game: Classic vs Quick + player count. Live locks 2p; mode still selectable. */
 function openLudoPracticeSheet(chat, sheetOpts){
   sheetOpts=sheetOpts&&typeof sheetOpts==='object'?sheetOpts:{};
   chat=chat||{name:'AI',id:'ai'};
-  const liveHint=!!sheetOpts.liveOnly;
-  const fixedN=sheetOpts.playerCount!=null?Math.min(Math.max(Number(sheetOpts.playerCount)||2,2),4):null;
-  const source=sheetOpts.source||'dangal';
-  let pickMode='classic';
+  const launchCtx=window.__dangalLaunchCtx||{};
+  const liveHint=!!(
+    sheetOpts.liveOnly||
+    sheetOpts.mode==='live'||
+    launchCtx.mode==='live'||
+    (typeof DangalLive!=='undefined'&&DangalLive.isLive&&DangalLive.isLive(chat,Object.assign({},launchCtx,sheetOpts)))
+  );
+  const fixedN=liveHint?2:(sheetOpts.playerCount!=null?Math.min(Math.max(Number(sheetOpts.playerCount)||2,2),4):null);
+  const source=sheetOpts.source||launchCtx.source||'dangal';
+  let pickMode=(sheetOpts.ludoMode||sheetOpts.mode||launchCtx.ludoMode)==='quick'?'quick':'classic';
+  if(pickMode!=='quick')pickMode='classic';
   let pickN=fixedN||2;
   const host=document.querySelector('.device')||document.body;
   const scrim=document.createElement('div');
@@ -2378,16 +2385,16 @@ function openLudoPracticeSheet(chat, sheetOpts){
     const playersLocked=fixedN!=null||liveHint;
     s.innerHTML=`
       <div class="ludo-entry-title">Ludo</div>
-      <div class="ludo-entry-sub">${liveHint?'Live · 2 players (Classic for now)':'Practice vs AI — pick mode, then seats'}</div>
+      <div class="ludo-entry-sub">${liveHint?'Live 1v1 — pick Classic or Quick · 2 players':'Practice vs AI — pick mode, then seats'}</div>
       <div class="ludo-entry-label">Mode</div>
       <div class="ludo-mode-cards" role="group" aria-label="Game mode">
         <button type="button" class="ludo-mode-card${pickMode==='classic'?' is-selected':''}" data-mode="classic">
           <div class="ludo-mode-card-name">Classic</div>
           <div class="ludo-mode-card-blurb">All 4 tokens home · full race</div>
         </button>
-        <button type="button" class="ludo-mode-card${pickMode==='quick'?' is-selected':''}" data-mode="quick" ${liveHint?'disabled aria-disabled="true"':''}>
+        <button type="button" class="ludo-mode-card${pickMode==='quick'?' is-selected':''}" data-mode="quick">
           <div class="ludo-mode-card-name">Quick</div>
-          <div class="ludo-mode-card-blurb">${liveHint?'Live uses Classic for now':'First token home wins · shorter race'}</div>
+          <div class="ludo-mode-card-blurb">First token home wins · shorter race</div>
         </button>
       </div>
       <div class="ludo-entry-label">Players</div>
@@ -2398,13 +2405,12 @@ function openLudoPracticeSheet(chat, sheetOpts){
           return `<button type="button" class="ludo-player-chip${sel?' is-selected':''}" data-n="${n}" ${disabled?'disabled':''}>${n}p</button>`;
         }).join('')}
       </div>
-      ${liveHint?'<div class="ludo-entry-note">Live · 2 players</div>':''}
+      ${liveHint?'<div class="ludo-entry-note">Live · 2 players (3–4 party sync later)</div>':''}
       <button type="button" id="ludoEntryStart" class="ludo-entry-start game-tap-target">Start</button>
       <button type="button" id="ludoEntryCancel" class="ludo-entry-cancel">Back</button>
     `;
     s.querySelectorAll('[data-mode]').forEach(btn=>{
       btn.addEventListener('click',()=>{
-        if(btn.disabled)return;
         pickMode=btn.dataset.mode==='quick'?'quick':'classic';
         paint();
       });
@@ -2416,20 +2422,87 @@ function openLudoPracticeSheet(chat, sheetOpts){
         paint();
       });
     });
-    s.querySelector('#ludoEntryStart').addEventListener('click',()=>{
+    s.querySelector('#ludoEntryStart').addEventListener('click',async()=>{
       try{
-        const mode=liveHint?'classic':(pickMode==='quick'?'quick':'classic');
+        const mode=pickMode==='quick'?'quick':'classic';
         const n=liveHint?2:pickN;
+        const oppUid=
+          sheetOpts.opponentUid||
+          launchCtx.opponentUid||
+          (typeof opponentUidFromChat==='function'?opponentUidFromChat(chat):'')||
+          (chat&&(chat.uid||chat.peerUid||chat.id))||
+          '';
+        let mid=String(
+          sheetOpts.matchId||
+          (chat&&chat.dangalMatchId)||
+          launchCtx.matchId||
+          ''
+        ).trim();
+        const chatId=
+          sheetOpts.chatId||
+          launchCtx.chatId||
+          (chat&&(chat.firestoreId||chat.id))||
+          (window.currentOpenChat&&(window.currentOpenChat.firestoreId||window.currentOpenChat.id))||
+          '';
+        const stake=Number(sheetOpts.stake??launchCtx.stake)||0;
+        if(liveHint){
+          const persistable=typeof isPersistableUid==='function'&&isPersistableUid(oppUid);
+          if(!persistable){
+            if(typeof showToast==='function')showToast('Challenge link broken — try Practice from Manch');
+            close();
+            openLudoGame({name:'AI',id:'ai'},n,{mode});
+            return;
+          }
+          if(!mid&&typeof dangalMatchId==='function'){
+            mid=dangalMatchId('ludo',{name:chat.name,opponentUid:oppUid});
+          }
+          if(!mid){
+            if(typeof showToast==='function')showToast('Could not start Live match');
+            return;
+          }
+          if(chat)chat.dangalMatchId=mid;
+          window.__dangalLaunchCtx=Object.assign({},launchCtx,{
+            gameId:'ludo',
+            gameType:'ludo',
+            mode:'live',
+            ludoMode:mode,
+            playerCount:2,
+            matchId:mid,
+            opponentUid:oppUid,
+            stake,
+            chatId,
+            source:source==='challenge'?'challenge':(source||'challenge_host'),
+            startedAt:Date.now(),
+          });
+          if(typeof sendChallengeCard==='function'&&chatId&&source!=='challenge'){
+            try{
+              await sendChallengeCard(oppUid,'ludo',{chatId,matchId:mid,stake,ludoMode:mode,mode});
+            }catch(e){}
+          }
+          close();
+          openLudoGame(
+            Object.assign({},chat,{
+              id:oppUid,
+              uid:oppUid,
+              peerUid:oppUid,
+              dangalMatchId:mid,
+              dangalSource:window.__dangalLaunchCtx.source,
+            }),
+            2,
+            {mode,ludoMode:mode}
+          );
+          return;
+        }
         window.__dangalLaunchCtx=Object.assign({},window.__dangalLaunchCtx||{},{
           gameId:'ludo',
           gameType:'ludo',
-          mode:liveHint?'live':'practice',
+          mode:'practice',
           ludoMode:mode,
           playerCount:n,
-          matchId:(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.matchId)||'',
-          opponentUid:(chat&&chat.id)||'ai',
-          stake:Number((window.__dangalLaunchCtx&&window.__dangalLaunchCtx.stake)||0)||0,
-          chatId:(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.chatId)||'',
+          matchId:'',
+          opponentUid:'ai',
+          stake:0,
+          chatId:'',
           source,
           startedAt:Date.now(),
         });
@@ -2460,30 +2533,35 @@ function openLudoPracticeSheet(chat, sheetOpts){
 function openLudoGame(chat, playerCount, opts){
   opts=opts&&typeof opts==='object'?opts:{};
   playerCount = Math.min(Math.max(playerCount||2,2),4);
-  const liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat);
+  const launchCtx=window.__dangalLaunchCtx||{};
+  const wantLive=launchCtx.mode==='live'||opts.live===true||(chat&&chat.dangalMatchId&&launchCtx.mode!=='practice');
+  let liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat,launchCtx);
+  if(wantLive&&!liveOn){
+    try{if(typeof showToast==='function')showToast('Challenge link broken — opening Practice');}catch(e){}
+  }
   if(liveOn)playerCount=2;
   let sessionMode=String(
-    opts.mode||opts.ludoMode||(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.ludoMode)||'classic'
+    opts.mode||opts.ludoMode||launchCtx.ludoMode||'classic'
   ).toLowerCase();
   if(sessionMode!=='quick')sessionMode='classic';
-  // Live stays Classic-only until Prompt 3 wires mode sync
-  if(liveOn)sessionMode='classic';
-  const tokensToWin=sessionMode==='quick'?1:4;
-  const modeLabel=sessionMode==='quick'?'Quick':'Classic';
+  let tokensToWin=sessionMode==='quick'?1:4;
+  let modeLabel=sessionMode==='quick'?'Quick':'Classic';
   const sessionOpts={mode:sessionMode};
   try{
-    window.__dangalLaunchCtx=Object.assign({},window.__dangalLaunchCtx||{},{
+    window.__dangalLaunchCtx=Object.assign({},launchCtx,{
       ludoMode:sessionMode,
       playerCount,
     });
+    if(liveOn)window.__dangalLaunchCtx.mode='live';
   }catch(e){}
-  const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat):null;
+  const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat,window.__dangalLaunchCtx):null;
   let liveHandle=null;let applyingLive=false;let leaveConfirmed=false;
+  let lastAppliedSeq=-1;
+  let resultsShown=false;
   const mySeat=!liveRoles||liveRoles.myColor==='w'?0:1;
+  // Seat 0 = host = playerA = red; seat 1 = guest = playerB = blue
   const MODE_SUB=liveOn
-    ?(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel
-      ? (DangalLive.modeChromeLabel(true)+' · '+modeLabel)
-      : ('Live 1v1 · '+modeLabel))
+    ?('Live 1v1 · '+modeLabel)
     :('Practice · '+modeLabel+' · '+playerCount+'p');
   const COLORS=['red','blue','green','yellow'];
   const COLOR_STYLES={red:'#E74C3C',blue:'#3498DB',green:'#2ECC71',yellow:'#F1C40F'};
@@ -2556,6 +2634,46 @@ function openLudoGame(chat, playerCount, opts){
   }
   function homeCountLabel(color){
     return `${finishedCount(color)}/${tokensToWin} 🏠`;
+  }
+
+  function applySessionMode(m){
+    const next=String(m||'').toLowerCase()==='quick'?'quick':'classic';
+    if(next===sessionMode)return;
+    sessionMode=next;
+    tokensToWin=sessionMode==='quick'?1:4;
+    modeLabel=sessionMode==='quick'?'Quick':'Classic';
+    sessionOpts.mode=sessionMode;
+    try{window.__dangalLaunchCtx=Object.assign({},window.__dangalLaunchCtx||{},{ludoMode:sessionMode});}catch(e){}
+    try{
+      const sub=overlay&&overlay.querySelector('.game-chrome-subtitle');
+      if(sub)sub.textContent=liveOn?('Live 1v1 · '+modeLabel):('Practice · '+modeLabel+' · '+playerCount+'p');
+      const chip=overlay&&overlay.querySelector('.ludo-mode-chip');
+      if(chip){
+        chip.className='ludo-mode-chip'+(sessionMode==='classic'?' ludo-mode-chip--classic':'');
+        chip.textContent=sessionMode==='quick'?'Quick · first home wins':'Classic · 4 home';
+      }
+    }catch(e){}
+  }
+
+  function winnerUidForSeat(seat){
+    if(!liveRoles)return null;
+    return seat===0?liveRoles.playerA:liveRoles.playerB;
+  }
+
+  function buildLudoSnapshot(){
+    return{
+      pieces:serializeLudoPieces(),
+      currentPlayer,
+      diceVal,
+      phase:phase==='anim'?'move':phase,
+      message,
+      gameOver,
+      winnerSeat:gameOver?currentPlayer:null,
+      consecutiveSixes,
+      ludoMode:sessionMode,
+      playerCount,
+      moveable:[...moveableSet],
+    };
   }
 
   function pieceCell(color,p){
@@ -2672,17 +2790,88 @@ function openLudoGame(chat, playerCount, opts){
 
   function pushLudo(){
     if(!liveOn||!liveHandle||!liveRoles||applyingLive)return;
-    liveHandle.push({
-      state:{
-        pieces:serializeLudoPieces(),
-        currentPlayer,diceVal,phase,message,gameOver,moveable:[...moveableSet],
-      },
+    const snap=buildLudoSnapshot();
+    const winSeat=gameOver?(snap.winnerSeat!=null?snap.winnerSeat:currentPlayer):null;
+    const patch={
+      state:snap,
+      ludoMode:sessionMode,
       turn:gameOver?null:(currentPlayer===0?liveRoles.playerA:liveRoles.playerB),
       status:gameOver?'over':'playing',
-      winner:gameOver?(currentPlayer===0?liveRoles.playerA:liveRoles.playerB):null,
-    });
+      winner:gameOver?winnerUidForSeat(winSeat):null,
+      baseVersion:lastAppliedSeq>=0?lastAppliedSeq:undefined,
+    };
+    if(patch.baseVersion==null)delete patch.baseVersion;
+    try{
+      const p=liveHandle.push(patch);
+      if(p&&typeof p.then==='function'){
+        p.then((res)=>{
+          try{
+            const committed=res&&res.snapshot&&res.snapshot.val&&res.snapshot.val();
+            if(committed&&committed.version!=null)lastAppliedSeq=Number(committed.version)||lastAppliedSeq;
+          }catch(e){}
+        }).catch(()=>{});
+      }
+    }catch(e){console.warn('[ludo] push failed',e);}
     if(!gameOver&&typeof DangalLive!=='undefined'&&DangalLive.pingTurn&&currentPlayer!==mySeat){
       DangalLive.pingTurn(liveRoles.opp,'ludo',{chatId:chat&&(chat.firestoreId||chat.id)});
+    }
+  }
+
+  function applyLiveSnapshot(val){
+    if(!val||!gs.alive())return;
+    const ver=Number(val.version||val.seq)||0;
+    if(ver<lastAppliedSeq)return;
+    lastAppliedSeq=ver;
+    const remoteMode=val.ludoMode||(val.state&&val.state.ludoMode);
+    if(remoteMode)applySessionMode(remoteMode);
+
+    if(gameOver&&resultsShown&&val.status==='playing')return;
+
+    if((val.status==='forfeit'||val.status==='over'||val.status==='timeout')&&!gameOver){
+      gameOver=true;
+      const iWon=val.winner===liveRoles.me;
+      if(val.state&&val.state.pieces)applyLudoPieces(val.state.pieces);
+      if(val.state&&val.state.currentPlayer!=null)currentPlayer=Number(val.state.currentPlayer)||currentPlayer;
+      message=val.status==='forfeit'
+        ?(iWon?'Opponent left — you win!':'Forfeit')
+        :(val.state&&val.state.message)||(iWon?'You win!':'Defeat');
+      gs.setOutcome(iWon?'won':'lost');
+      if(typeof recordGameResult==='function')recordGameResult('ludo',iWon);
+      if(typeof recordDangalSession==='function')recordDangalSession('ludo',{won:iWon,drew:false,score:iWon?1:0,playerCount,mode:sessionMode});
+      if(typeof gameFeedback==='function')gameFeedback(iWon?'win':'lose');
+      updateHud();placeTokens();
+      if(!resultsShown){resultsShown=true;showLudoResult(iWon);}
+      return;
+    }
+
+    const s=val.state;
+    if(!s||!s.pieces)return;
+    applyingLive=true;
+    try{
+      if(animating||rolling){
+        if(diceIv){clearInterval(diceIv);diceIv=null;}
+        rolling=false;animating=false;
+      }
+      applyLudoPieces(s.pieces);
+      currentPlayer=Number(s.currentPlayer)||0;
+      diceVal=s.diceVal==null?null:s.diceVal;
+      phase=s.phase==='anim'?'move':(s.phase||'roll');
+      message=s.message||'';
+      if(s.consecutiveSixes!=null)consecutiveSixes=Number(s.consecutiveSixes)||0;
+      gameOver=!!s.gameOver||val.status==='over';
+      if(s.moveable&&s.moveable.length)moveableSet=new Set(s.moveable);
+      else{refreshMoveable();}
+      placeTokens();updateHud();
+      if(gameOver&&!resultsShown){
+        resultsShown=true;
+        const iWon=(s.winnerSeat!=null?Number(s.winnerSeat):currentPlayer)===mySeat||val.winner===liveRoles.me;
+        gs.setOutcome(iWon?'won':'lost');
+        if(typeof recordGameResult==='function')recordGameResult('ludo',iWon);
+        if(typeof recordDangalSession==='function')recordDangalSession('ludo',{won:iWon,drew:false,score:iWon?1:0,playerCount,mode:sessionMode});
+        showLudoResult(iWon);
+      }
+    }finally{
+      applyingLive=false;
     }
   }
 
@@ -2763,7 +2952,7 @@ function openLudoGame(chat, playerCount, opts){
     if(typeof gameFeedback==='function')gameFeedback(humanWon?'win':'lose');
     phase='roll';updateHud();
     if(liveOn&&!applyingLive)pushLudo();
-    showLudoResult(humanWon);
+    if(!resultsShown){resultsShown=true;showLudoResult(humanWon);}
     return true;
   }
 
@@ -2888,6 +3077,7 @@ function openLudoGame(chat, playerCount, opts){
   }
 
   function showLudoResult(won){
+    resultsShown=true;
     const host=overlay.querySelector('#ludoResultHost')||(()=>{
       const d=document.createElement('div');d.id='ludoResultHost';d.style.cssText='padding:8px 12px 16px;flex-shrink:0;';overlay.appendChild(d);return d;
     })();
@@ -2901,7 +3091,7 @@ function openLudoGame(chat, playerCount, opts){
       modeLabel,
       playerCount,
     };
-    const actions=[{label:'Play again',primary:true,id:'again'}];
+    const actions=[{label:liveOn?'Rematch':'Play again',primary:true,id:'again'}];
     if(typeof shareGameResult==='function')actions.push({label:'Share',primary:false,id:'share'});
     if(typeof openFriendPickerSheet==='function')actions.push({label:'Challenge friend',primary:false,id:'challenge'});
     if(typeof postGameScoreStory==='function')actions.push({label:'Post to story',primary:false,id:'story'});
@@ -2909,24 +3099,93 @@ function openLudoGame(chat, playerCount, opts){
       gameId:'ludo',
       glyph:won?'✓':'·',
       title:won?'You win':(NAMES[currentPlayer]==='You'?'Defeat':`${NAMES[currentPlayer]} wins`),
-      subtitle:duel&&duel.streak>1?`Duel streak · ${duel.streak}`:`${modeLabel} · ${playerCount} players`,
+      subtitle:duel&&duel.streak>1?`Duel streak · ${duel.streak}`:`${liveOn?'Live · ':''}${modeLabel} · ${playerCount} players`,
       shareCardHtml: typeof buildGameShareCard==='function'?buildGameShareCard('ludo',shareStats):'',
       actions,
-    }):`<button type="button" id="ludoRematch">Play again</button>`;
+    }):`<button type="button" id="ludoRematch">${liveOn?'Rematch':'Play again'}</button>`;
+
+    async function startLudoLiveRematch(){
+      const oppUid=(liveRoles&&liveRoles.opp)||(typeof opponentUidFromChat==='function'?opponentUidFromChat(chat):'')||'';
+      const rematchId=
+        oppUid&&typeof dangalMatchId==='function'
+          ?dangalMatchId('ludo',{name:chat.name||'Friend',opponentUid:oppUid})
+          :'ludo_'+Date.now();
+      const chatId=
+        (window.__dangalLaunchCtx&&window.__dangalLaunchCtx.chatId)||
+        (window.currentOpenChat&&(window.currentOpenChat.firestoreId||window.currentOpenChat.id))||
+        (chat&&(chat.firestoreId||chat.id))||
+        '';
+      leaveConfirmed=true;
+      try{if(liveHandle)await liveHandle.leave({forfeit:false});}catch(e){}
+      liveHandle=null;
+      try{
+        window.__dangalLaunchCtx=Object.assign({},window.__dangalLaunchCtx||{},{
+          gameId:'ludo',
+          gameType:'ludo',
+          matchId:rematchId,
+          mode:'live',
+          ludoMode:sessionMode,
+          playerCount:2,
+          opponentUid:oppUid,
+          source:'challenge_host',
+          chatId,
+          startedAt:Date.now(),
+        });
+      }catch(e){}
+      if(typeof sendChallengeCard==='function'&&oppUid&&chatId){
+        try{
+          await sendChallengeCard(oppUid,'ludo',{chatId,matchId:rematchId,stake:Number((window.__dangalLaunchCtx&&window.__dangalLaunchCtx.stake)||0)||0,ludoMode:sessionMode,mode:sessionMode});
+          if(typeof showToast==='function')showToast('Rematch sent — they Accept to join');
+        }catch(e){}
+      }
+      gs.close();
+      openLudoGame({
+        name:chat.name||'Friend',
+        id:oppUid,
+        uid:oppUid,
+        peerUid:oppUid,
+        dangalMatchId:rematchId,
+        dangalSource:'challenge_host',
+      },2,{mode:sessionMode,ludoMode:sessionMode});
+    }
+
     if(typeof wireGameResultActions==='function'){
       wireGameResultActions(host,{
-        again:()=>{gs.close('restart');openLudoGame(chat, playerCount, sessionOpts);},
+        again:async()=>{
+          if(liveOn){
+            await startLudoLiveRematch();
+            return;
+          }
+          gs.close('restart');openLudoGame(chat, playerCount, sessionOpts);
+        },
         share:()=>{if(typeof shareGameResult==='function')shareGameResult('ludo',shareStats);},
         challenge:async()=>{
           if(typeof openFriendPickerSheet==='function'){
             const f=await openFriendPickerSheet({title:'Challenge · Ludo'});
-            if(f){gs.close();openLudoGame({name:f.name,id:f.id||f.uid}, playerCount, sessionOpts);}
+            if(f){
+              gs.close();
+              const uid=f.uid||f.id||'';
+              if(typeof isPersistableUid==='function'&&isPersistableUid(uid)&&typeof openLudoPracticeSheet==='function'){
+                openLudoPracticeSheet({name:f.name,id:uid,uid,peerUid:uid},{
+                  liveOnly:true,
+                  source:'challenge_host',
+                  opponentUid:uid,
+                  chatId:f.chatId||f.firestoreId||'',
+                  ludoMode:sessionMode,
+                });
+              }else{
+                openLudoGame({name:f.name,id:uid}, playerCount, sessionOpts);
+              }
+            }
           }
         },
         story:()=>{if(typeof postGameScoreStory==='function')postGameScoreStory('ludo',shareStats);},
       });
     } else {
-      host.querySelector('#ludoRematch')?.addEventListener('click',()=>{gs.close('restart');openLudoGame(chat, playerCount, sessionOpts);});
+      host.querySelector('#ludoRematch')?.addEventListener('click',async()=>{
+        if(liveOn){await startLudoLiveRematch();return;}
+        gs.close('restart');openLudoGame(chat, playerCount, sessionOpts);
+      });
     }
   }
 
@@ -3145,40 +3404,54 @@ function openLudoGame(chat, playerCount, opts){
     updateHud();
   }
   if(liveOn&&liveRoles&&typeof DangalLive!=='undefined'){
-    liveHandle=DangalLive.join({
-      gameType:'ludo',
-      matchId:(chat&&chat.dangalMatchId)||(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.matchId),
-      me:liveRoles.me,playerA:liveRoles.playerA,playerB:liveRoles.playerB,
-      state:{pieces:serializeLudoPieces(),currentPlayer:0,diceVal:null,phase:'roll',message:'',gameOver:false,moveable:[]},
-      onSnap(val){
-        if(!val||applyingLive||!gs.alive())return;
-        if(val.status==='forfeit'&&!gameOver){
-          gameOver=true;
-          const iWon=val.winner===liveRoles.me;
-          gs.setOutcome(iWon?'won':'lost');
-          if(typeof recordGameResult==='function')recordGameResult('ludo',iWon);
-          if(typeof recordDangalSession==='function')recordDangalSession('ludo',{won:iWon,drew:false,score:iWon?1:0,playerCount,mode:sessionMode});
-          message=iWon?'Opponent left — you win!':'Forfeit';
-          updateHud();showLudoResult(iWon);return;
-        }
-        const s=val.state;if(!s||!s.pieces)return;
-        applyingLive=true;
-        applyLudoPieces(s.pieces);
-        currentPlayer=Number(s.currentPlayer)||0;
-        diceVal=s.diceVal==null?null:s.diceVal;
-        phase=s.phase||'roll';
-        message=s.message||'';
-        gameOver=!!s.gameOver||val.status==='over';
-        moveableSet=new Set(s.moveable||[]);
-        placeTokens();updateHud();
-        if(gameOver&&!overlay.querySelector('#ludoResultHost')){
-          showLudoResult(currentPlayer===mySeat);
-        }
-        applyingLive=false;
-      },
-    });
+    const matchId=String((chat&&chat.dangalMatchId)||(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.matchId)||'').trim();
+    if(!matchId){
+      try{if(typeof showToast==='function')showToast('Challenge link broken — opening Practice');}catch(e){}
+      liveOn=false;
+    } else {
+      const hostSeed=!!(liveRoles.host);
+      const seedState=hostSeed?{
+        pieces:serializeLudoPieces(),
+        currentPlayer:0,
+        diceVal:null,
+        phase:'roll',
+        message:`${NAMES[0]}'s turn — roll to start`,
+        gameOver:false,
+        winnerSeat:null,
+        consecutiveSixes:0,
+        ludoMode:sessionMode,
+        playerCount:2,
+        moveable:[],
+      }:null;
+      liveHandle=DangalLive.join({
+        gameType:'ludo',
+        matchId,
+        me:liveRoles.me,playerA:liveRoles.playerA,playerB:liveRoles.playerB,
+        state:seedState,
+        ludoMode:hostSeed?sessionMode:null,
+        onSnap(val){
+          if(!val||!gs.alive())return;
+          applyLiveSnapshot(val);
+        },
+        onForfeit(info){
+          if(gameOver||!gs.alive())return;
+          const winnerUid=info&&typeof info==='object'&&info.winner!=null?info.winner:info;
+          applyLiveSnapshot({
+            status:'forfeit',
+            winner:winnerUid,
+            version:lastAppliedSeq+1,
+            ludoMode:sessionMode,
+            state:buildLudoSnapshot(),
+          });
+        },
+      });
+    }
   }
-  message=`${NAMES[currentPlayer]}'s turn — roll to start`;
+  if(!liveOn){
+    message=`${NAMES[currentPlayer]}'s turn — roll to start`;
+  }else{
+    message=mySeat===0?`${NAMES[0]}'s turn — roll to start`:'Waiting for host…';
+  }
   try{renderLudo();}catch(err){
     console.error('[ludo] render failed',err);
     try{if(typeof showToast==='function')showToast('Could not open Ludo');}catch(e2){}
@@ -4190,7 +4463,7 @@ if (typeof registerGame === 'function') {
   registerGame({
     id: 'ludo',
     name: 'Ludo',
-    desc: 'Classic or Quick · 2–4 players',
+    desc: 'Classic or Quick · Live 1v1 or Practice',
     icon: '🎯',
     ratingKey: 'ludo',
     gameType: 'multiplayer',
@@ -4200,9 +4473,42 @@ if (typeof registerGame === 'function') {
     order: 30,
     launch(ctx) {
       try{
-        if (ctx.isGroup) openGroupGameSetup(ctx.chat, 'ludo');
-        else if (typeof openLudoPracticeSheet === 'function') openLudoPracticeSheet(ctx.chat, { source: 'baithak' });
-        else openLudoGame(ctx.chat, 2, { mode: 'classic' });
+        const launch=window.__dangalLaunchCtx||{};
+        const chat=typeof chatFromLaunch==='function'?chatFromLaunch(ctx):ctx.chat;
+        const liveWanted=
+          ctx.mode==='live'||
+          launch.mode==='live'||
+          (typeof DangalLive!=='undefined'&&DangalLive.isLive&&DangalLive.isLive(chat,Object.assign({},launch,ctx)));
+        const ludoMode=
+          ctx.ludoMode||
+          launch.ludoMode||
+          (ctx.mode==='quick'||ctx.mode==='classic'?ctx.mode:'')||
+          'classic';
+        if(ctx.isGroup){
+          openGroupGameSetup(ctx.chat,'ludo');
+          return;
+        }
+        if(liveWanted){
+          // Guest with known mode opens board; host without mode uses Live sheet
+          if(ctx.source==='challenge'||(ludoMode&&(ctx.matchId||launch.matchId||(chat&&chat.dangalMatchId)))){
+            openLudoGame(chat,2,{mode:ludoMode==='quick'?'quick':'classic',ludoMode});
+            return;
+          }
+          if(typeof openLudoPracticeSheet==='function'){
+            openLudoPracticeSheet(chat,{
+              liveOnly:true,
+              source:ctx.source||'challenge_host',
+              matchId:ctx.matchId||launch.matchId||'',
+              opponentUid:ctx.opponentUid||launch.opponentUid||'',
+              chatId:ctx.chatId||launch.chatId||'',
+              stake:ctx.stake||launch.stake||0,
+              ludoMode,
+            });
+            return;
+          }
+        }
+        if(typeof openLudoPracticeSheet==='function')openLudoPracticeSheet(chat,{source:ctx.source||'baithak'});
+        else openLudoGame(chat,2,{mode:'classic'});
       }catch(err){
         console.error('[ludo] launch failed',err);
         try{if(typeof showToast==='function')showToast('Could not open Ludo');}catch(e2){}

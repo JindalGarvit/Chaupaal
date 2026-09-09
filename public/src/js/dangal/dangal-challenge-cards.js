@@ -21,6 +21,8 @@
       standard: 'Standard',
       fischer_random: 'Fischer Random',
       renju: 'Renju',
+      classic: 'Classic',
+      quick: 'Quick',
     };
     return labels[mode] || mode || '';
   }
@@ -48,6 +50,7 @@
       gameColor: identity.primary || '#E63946',
       matchId: cfg.matchId || '',
       mode: cfg.mode || '',
+      ludoMode: cfg.ludoMode || (cfg.mode === 'quick' || cfg.mode === 'classic' ? cfg.mode : ''),
       stake: Number(cfg.stake) || 0,
       timeControl: cfg.timeControl?.label || cfg.timeControl || '',
       timeMin: Number(cfg.timeMin ?? cfg.min ?? cfg.timeControl?.min) || 0,
@@ -81,7 +84,7 @@
     const expired = Date.now() > Number(att.expiresAt || 0);
     const pending = att.status === 'pending' && !expired;
     const color = att.gameColor || '#E63946';
-    const detail = [att.timeControl, formatMode(att.mode), att.stake > 0 ? '⚡' + att.stake + ' virtual' : 'Friendly']
+      const detail = [att.timeControl, formatMode(att.ludoMode || att.mode), att.stake > 0 ? '⚡' + att.stake + ' virtual' : 'Friendly']
       .filter(Boolean)
       .join(' · ');
     const statusMap = { accepted: 'Accepted', declined: 'Declined', pending: expired ? 'Expired' : 'Awaiting…' };
@@ -184,12 +187,17 @@
         dangalMatchId: mid,
       };
       if (g?.launch) {
+        const ludoMode =
+          att.ludoMode ||
+          (att.mode === 'quick' || att.mode === 'classic' ? att.mode : '') ||
+          'classic';
         g.launch({
           source: iAmHost ? 'challenge_host' : 'challenge',
           matchId: mid,
           opponentUid: opp,
           chat,
           mode: 'live',
+          ludoMode: att.gameType === 'ludo' ? ludoMode : att.ludoMode || '',
           stake: stakeWanted,
           min: Number(att.timeMin) || 0,
           inc: Number(att.timeInc) || 0,

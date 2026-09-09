@@ -277,6 +277,10 @@
       chatId: o.chatId || chat?.firestoreId || chat?.id || '',
       source: o.source || '',
       startedAt: Date.now(),
+      ludoMode:
+        o.ludoMode ||
+        (o.mode === 'quick' || o.mode === 'classic' ? o.mode : '') ||
+        '',
       min: Number(o.min ?? o.timeMin) || 0,
       inc: Number(o.inc ?? o.timeInc) || 0,
       timeMin: Number(o.timeMin ?? o.min) || 0,
@@ -295,6 +299,7 @@
       stake,
       mode,
       source: o.source || '',
+      ludoMode: window.__dangalLaunchCtx.ludoMode || o.ludoMode || '',
     });
     delete ctx._userLaunch;
     delete ctx._descriptor;
@@ -525,12 +530,92 @@
     const game = getGame(gameId);
     if (!game) return;
 
-    if (gameId === 'ludo' && typeof openLudoPracticeSheet === 'function') {
-      openLudoPracticeSheet({ name: 'AI', id: 'ai' }, { source: 'dangal' });
-      return;
-    }
-    if (gameId === 'ludo' && typeof openLudoGame === 'function') {
-      openLudoGame({ name: 'AI', id: 'ai' }, 2, { mode: 'classic' });
+    if (gameId === 'ludo') {
+      // Practice vs AI or Live challenge friend (same honesty as Chess).
+      const liveOk = typeof isLiveCapable === 'function' ? isLiveCapable('ludo') : true;
+      const stakesOk =
+        liveOk && typeof stakesEnabledForGame === 'function' && stakesEnabledForGame('ludo');
+      const sheet = document.createElement('div');
+      sheet.style.cssText =
+        'position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:22px;z-index:100;';
+      sheet.innerHTML = `
+    <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;margin-bottom:4px;">🎯 Ludo</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">Practice vs AI anytime — or challenge a real friend for Live 1v1.</div>
+    <button id="dgPracticeAi" style="width:100%;padding:14px;background:var(--cream);border:2px solid var(--line);border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;">🤖 Practice vs AI</button>
+    ${stakesOk ? dangalStakePickerHtml('ludo', 0) : ''}
+    <button id="dgFriendOpp" style="width:100%;padding:14px;background:var(--game-accent,var(--red));color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;${stakesOk ? 'margin-top:10px;' : ''}">👤 Challenge a friend · Live</button>
+    <button id="dgCancelGame" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>`;
+      document.querySelector('.device').appendChild(sheet);
+      if (stakesOk) wireDangalStakePicker(sheet);
+      document.getElementById('dgCancelGame').addEventListener('click', () => sheet.remove());
+      document.getElementById('dgPracticeAi').addEventListener('click', () => {
+        sheet.remove();
+        if (typeof openLudoPracticeSheet === 'function') {
+          openLudoPracticeSheet({ name: 'AI', id: 'ai' }, { source: 'dangal' });
+        } else {
+          openLudoGame({ name: 'AI', id: 'ai' }, 2, { mode: 'classic' });
+        }
+      });
+      document.getElementById('dgFriendOpp').addEventListener('click', async () => {
+        const stake = stakesOk ? readDangalStake(sheet) : 0;
+        if (typeof openFriendPickerSheet !== 'function') {
+          if (typeof showToast === 'function') showToast('Sign in and add friends to challenge someone');
+          return;
+        }
+        sheet.remove();
+        const friend = await openFriendPickerSheet({
+          title: 'Challenge · Ludo',
+          subtitle: stake > 0 ? `Live 1v1 · ⚡${stake} virtual chips` : 'Live 1v1 · 2 players',
+        });
+        if (!friend) return;
+        const uid = friend.uid || friend.id || '';
+        const persistable = typeof isPersistableUid === 'function' && isPersistableUid(uid);
+        if (!persistable) {
+          if (typeof showToast === 'function') showToast('That friend can’t play Live yet — try Practice');
+          return;
+        }
+        const mid =
+          typeof dangalMatchId === 'function'
+            ? dangalMatchId('ludo', { name: friend.name, opponentUid: uid })
+            : 'ludo_' + Date.now();
+        const chatId = friend.chatId || friend.firestoreId || '';
+        if (typeof openLudoPracticeSheet === 'function') {
+          openLudoPracticeSheet(
+            { name: friend.name, id: uid, uid, peerUid: uid, dangalMatchId: mid },
+            {
+              liveOnly: true,
+              source: 'challenge_host',
+              matchId: mid,
+              opponentUid: uid,
+              chatId,
+              stake,
+            }
+          );
+        } else {
+          window.__dangalLaunchCtx = {
+            gameId: 'ludo',
+            gameType: 'ludo',
+            mode: 'live',
+            ludoMode: 'classic',
+            matchId: mid,
+            opponentUid: uid,
+            stake,
+            chatId,
+            source: 'challenge_host',
+            startedAt: Date.now(),
+          };
+          if (typeof sendChallengeCard === 'function' && chatId) {
+            try {
+              await sendChallengeCard(uid, 'ludo', { chatId, matchId: mid, stake, ludoMode: 'classic', mode: 'classic' });
+            } catch (e) {}
+          }
+          openLudoGame(
+            { name: friend.name, id: uid, uid, peerUid: uid, dangalMatchId: mid },
+            2,
+            { mode: 'classic' }
+          );
+        }
+      });
       return;
     }
 
@@ -686,11 +771,7 @@
     }
 
     if (gameId === 'ludo') {
-      if (typeof openLudoPracticeSheet === 'function') {
-        openLudoPracticeSheet({ name: 'AI', id: 'ai' }, { source: 'manch' });
-      } else {
-        launchDangalWithOpponent('ludo');
-      }
+      launchDangalWithOpponent('ludo');
       return;
     }
 

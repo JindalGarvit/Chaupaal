@@ -5,11 +5,16 @@
  * Schema: players{}, playerA, playerB, turn, state|fen|board, version|seq,
  *   stake, status, winner, lastMoveAt, presence{}, updatedAt,
  *   clocks{w,b}, clockAt, clockTurn, timeControl,
- *   quiz: { questions?, answers{}, scores{}, qIdx? }
+ *   quiz: { questions?, answers{}, scores{}, qIdx? },
+ *   ludoMode: 'classic'|'quick' (host seeds once)
  *
  * Chess merge rules:
  * - Host seeds fen once (join: only if fen missing). Guest never overwrites.
  * - Move push may include baseVersion; stale versions abort the transaction.
+ *
+ * Ludo merge rules:
+ * - Host seeds state + ludoMode once (join: only if state/pieces missing). Guest never resets.
+ * - Push replaces full state snapshot (authoritative); use baseVersion to reject stale writes.
  *
  * Quiz merge rules:
  * - Host seeds questions once (join transaction: only if quiz missing).
@@ -135,6 +140,18 @@
         if (o.quizSeed && !(cur.quiz && Array.isArray(cur.quiz.questions) && cur.quiz.questions.length)) {
           next.quiz = o.quizSeed;
         }
+        // Seed Ludo state + mode once — guest must never reset yards mid-match.
+        const curHasLudo =
+          cur.state &&
+          cur.state.pieces &&
+          typeof cur.state.pieces === 'object' &&
+          Object.keys(cur.state.pieces).length > 0;
+        if (o.state && o.state.pieces && !curHasLudo) {
+          next.state = o.state;
+        }
+        if (o.ludoMode && !cur.ludoMode) {
+          next.ludoMode = o.ludoMode === 'quick' ? 'quick' : 'classic';
+        }
         next.lastMoveAt = next.lastMoveAt || now;
         next.version = Number(next.version || next.seq) || 0;
         // Do not resurrect a finished match
@@ -160,6 +177,7 @@
         board: o.board || '',
         state: o.state || null,
         quiz: o.quizSeed || null,
+        ludoMode: o.ludoMode === 'quick' ? 'quick' : o.ludoMode === 'classic' ? 'classic' : null,
         clocks: o.clocks || null,
         clockAt: o.clockAt || (o.clocks ? now : null),
         clockTurn: o.clockTurn || (o.clocks ? 'w' : null),
@@ -190,7 +208,7 @@
             // Stale move — abort transaction
             return;
           }
-          // Finished matches: allow status/winner/presence only, not fen rewinds
+          // Finished matches: allow status/winner/presence only, not fen/state rewinds
           const finished =
             cur.status === 'over' ||
             cur.status === 'forfeit' ||
@@ -203,9 +221,18 @@
           if (finished && patchObj.fen && patchObj.fen !== cur.fen) {
             return;
           }
+          if (finished && patchObj.state && cur.state) {
+            // Allow terminal status patches; block board rewinds after over/forfeit
+            if (patchObj.status == null || patchObj.status === 'playing') return;
+          }
           const next = Object.assign({}, cur);
           Object.keys(patchObj).forEach((k) => {
             if (k === 'quiz' || k === 'baseVersion') return;
+            // Host-written ludoMode sticks unless missing
+            if (k === 'ludoMode' && cur.ludoMode && patchObj.ludoMode) {
+              next.ludoMode = cur.ludoMode;
+              return;
+            }
             next[k] = patchObj[k];
           });
           if (patchObj.quiz) {
