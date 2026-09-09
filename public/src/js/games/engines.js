@@ -3615,6 +3615,8 @@ function openUnoGame(chat, variant='normal', opts){
   const ACTION_CARDS=['skip','skip','reverse','reverse','draw2','draw2'];
   const FLIP_DARK_ACTIONS=['skip_all','draw_all_5','wild_dark'];
   const HOUSE_DEFAULTS={stackDraw2:false,challengeDraw4:true,catchOhNo:true};
+  const DIFF_LABELS={easy:'Easy',medium:'Medium',hard:'Hard'};
+  const isClassicRules=variant==='classic'||variant==='normal';
   const storedHouse=(()=>{
     try{
       const raw=localStorage.getItem('chaupaal_uno_house');
@@ -3622,16 +3624,23 @@ function openUnoGame(chat, variant='normal', opts){
       return Object.assign({},HOUSE_DEFAULTS,JSON.parse(raw));
     }catch(e){return HOUSE_DEFAULTS;}
   })();
-  const house=Object.assign({},storedHouse,(opts&&opts.house)||{});
-  const isClassicRules=variant==='classic'||variant==='normal';
+  // House rules are Classic-only; Blaze/Flip use built-in chaos rules
+  const house=isClassicRules
+    ?Object.assign({},HOUSE_DEFAULTS,storedHouse,(opts&&opts.house)||{})
+    :{stackDraw2:false,challengeDraw4:false,catchOhNo:false};
+  const storedDiff=(()=>{
+    try{return localStorage.getItem('chaupaal_uno_diff')||'medium';}catch(e){return'medium';}
+  })();
+  const difficulty=(opts&&opts.difficulty)||storedDiff;
+  const diffKey=DIFF_LABELS[difficulty]?difficulty:'medium';
+  const aiDelay=diffKey==='easy'?850:diffKey==='hard'?420:600;
   const liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat);
   const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat):null;
   let liveHandle=null;let applyingLive=false;let leaveConfirmed=false;
+  const variantLabel=variant==='doublesided'?'Flip':variant==='blaze'?'Blaze':'Classic';
   const MODE_SUB=liveOn
     ?(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel?DangalLive.modeChromeLabel(true):'Live 1v1')
-    :(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel
-      ?DangalLive.modeChromeLabel(false,variant==='doublesided'?'Flip':variant==='blaze'?'Blaze':'Classic')
-      :('Practice · '+(variant==='doublesided'?'Flip':variant==='blaze'?'Blaze':'Classic')));
+    :('Practice · '+variantLabel+' · '+DIFF_LABELS[diffKey]);
 
   function buildDeck(variant){
     const deck=[];
@@ -3669,7 +3678,11 @@ function openUnoGame(chat, variant='normal', opts){
     deck=shuffle(buildDeck(variant));
     for(let i=0;i<7;i++){hands.me.push(deck.pop());hands.opp.push(deck.pop());}
     let firstCard=deck.pop();
-    while(firstCard&&firstCard.type==='wild'){deck.unshift(firstCard);firstCard=deck.pop();}
+    // Start with a plain number when possible (avoid wild / flip / dark openers)
+    let guard=0;
+    while(firstCard&&(firstCard.type==='wild'||firstCard.type==='flip'||firstCard.type==='flip_action'||firstCard.value==='flip')&&guard++<20){
+      deck.unshift(firstCard);firstCard=deck.pop();
+    }
     if(firstCard){discardPile.push(firstCard);currentColor=firstCard.color;currentValue=firstCard.value;}
   }
 
@@ -3738,13 +3751,31 @@ function openUnoGame(chat, variant='normal', opts){
     }
   }
 
+  function needsColorPick(card){
+    if(!card)return false;
+    return card.type==='wild'||card.value==='wild'||card.value==='wild_draw4'||card.value==='wild_draw6'||card.value==='wild_dark';
+  }
+
   function canPlay(card){
+    if(!card)return false;
     if(drawStack>0&&isClassicRules){
-      if(house.stackDraw2&&drawStackType==='draw2')return card&&card.value==='draw2';
+      if(house.stackDraw2&&drawStackType==='draw2')return card.value==='draw2';
       return false;
     }
-    if(card.type==='wild')return true;
-    if(variant==='blaze'&&card.value==='draw4')return true;
+    // Flip: dark actions only while Dark side is up; Flip card always legal
+    if(variant==='doublesided'){
+      if(card.type==='flip'||card.value==='flip')return true;
+      if(card.type==='flip_action'){
+        if(!flipped)return false;
+        if(card.value==='wild_dark')return true;
+        return card.color===currentColor||card.value===currentValue;
+      }
+    }
+    if(card.type==='wild'||card.value==='wild'||card.value==='wild_draw4'||card.value==='wild_draw6')return true;
+    // Blaze coloured +4: match colour or another +4 — not a free play
+    if(variant==='blaze'&&card.value==='draw4'){
+      return card.color===currentColor||currentValue==='draw4'||currentValue==='wild_draw4'||currentValue==='wild_draw6';
+    }
     if(card.color===currentColor)return true;
     if(card.value===currentValue)return true;
     return false;
@@ -3754,58 +3785,114 @@ function openUnoGame(chat, variant='normal', opts){
     if(typeof gameFeedback==='function')gameFeedback(who==='me'?'card':'place');
     const prevColor=currentColor;
     discardPile.push(card);
-    currentColor=card.type==='wild'?(chosenColor||'red'):card.color;
+    if(needsColorPick(card))currentColor=chosenColor||'red';
+    else if(card.color==='black'||card.type==='flip'){/* keep colour on Flip */}
+    else currentColor=card.color;
     currentValue=card.value;
     const opp=who==='me'?'opp':'me';
     pendingChallenge=null;
     drewPlayableIndex=-1;
     switch(card.value){
-      case 'skip':myTurn=who==='me';message=`${who==='me'?chat.name:NAMES[0]} skipped!`;break;
-      // In 2-player Classic, Reverse acts like Skip (direction flip still recorded for 3+ player future)
-      case 'reverse':direction*=-1;message='Direction reversed!';
-        if(variant==='blaze')myTurn=who==='me';
-        else myTurn=who==='me'; // 2p: same player goes again
+      case 'skip':
+        myTurn=who==='me';
+        message=`${who==='me'?chat.name:NAMES[0]} skipped!`;
+        break;
+      case 'reverse':
+        direction*=-1;
+        // 2p: Reverse keeps the turn (acts like Skip). Blaze same — snappy reverse.
+        myTurn=who==='me';
+        message=variant==='blaze'?'⚡ Reverse — play again!':'Direction reversed!';
         break;
       case 'draw2':
-        if(variant==='blaze'){drawCard(opp,2);message=`+2! ${opp==='me'?'You':chat.name} draws 2`;myTurn=who!=='me';}
-        else{
+        if(variant==='blaze'){
+          drawCard(opp,2);
+          message=`+2! ${opp==='me'?'You':chat.name} draws 2`;
+          myTurn=who!=='me';
+        }else{
           drawStack+=2;drawStackType='draw2';
           message=house.stackDraw2?`Stacked +2 pending ${drawStack}`:`+2! ${opp==='me'?'You':chat.name} must draw 2`;
           myTurn=who!=='me';
         }
         break;
-      case 'draw4':case 'wild_draw4':
-        if(variant==='blaze'){drawCard(opp,4);message=`+4! ${opp==='me'?'You':chat.name} draws 4`;}
-        else{
+      case 'draw4':
+        // Blaze coloured +4 — instant draw, no challenge
+        drawCard(opp,4);
+        message=`Blaze +4! ${opp==='me'?'You':chat.name} draws 4`;
+        myTurn=who!=='me';
+        break;
+      case 'wild_draw4':
+        if(variant==='blaze'){
+          drawCard(opp,4);
+          message=`+4! ${opp==='me'?'You':chat.name} draws 4 · colour ${currentColor}`;
+          myTurn=who!=='me';
+        }else{
           drawStack+=4;drawStackType='wild_draw4';
           message=house.challengeDraw4&&opp==='me'&&!liveOn?`Wild +4! Challenge or draw 4`:`+4! ${opp==='me'?'You':chat.name} must draw 4`;
           if(house.challengeDraw4&&!liveOn){
             pendingChallenge={
-              offender:who,
-              victim:opp,
-              priorColor:prevColor,
+              offender:who,victim:opp,priorColor:prevColor,
               illegal:!!hands[who].some(c=>c&&c.color===prevColor),
             };
           }
+          myTurn=who!=='me';
         }
-        myTurn=who!=='me';break;
-      case 'wild_draw6':drawCard(opp,6);message=`💀 +6! ${opp==='me'?'You':chat.name} draws 6!`;myTurn=who!=='me';break;
-      case 'draw_all_5':drawCard(opp,5);message=`+5! ${opp==='me'?'You':chat.name} draws 5`;myTurn=who!=='me';break;
-      case 'wild_dark':currentColor=chosenColor||card.color||'red';myTurn=who!=='me';break;
-      case 'skip_all':message='Skip all! Play again!';break;
-      case 'flip':flipped=!flipped;message=`🔄 Deck flipped! ${flipped?'Dark side':'Light side'}`;break;
-      case 'wild':myTurn=who!=='me';break;
-      default:myTurn=who!=='me';
+        break;
+      case 'wild_draw6':
+        drawCard(opp,6);
+        message=`💀 Blaze +6! ${opp==='me'?'You':chat.name} draws 6 · colour ${currentColor}`;
+        myTurn=who!=='me';
+        break;
+      case 'draw_all_5':
+        drawCard(opp,5);
+        message=`Dark +5! ${opp==='me'?'You':chat.name} draws 5`;
+        myTurn=who!=='me';
+        break;
+      case 'wild_dark':
+        message=`Dark wild · colour ${currentColor}`;
+        myTurn=who!=='me';
+        break;
+      case 'skip_all':
+        // 2p: same as Skip — you play again
+        myTurn=who==='me';
+        message='Skip all! Play again!';
+        break;
+      case 'flip':
+        flipped=!flipped;
+        message=`Deck flipped! ${flipped?'Dark side':'Light side'}`;
+        myTurn=who!=='me';
+        break;
+      case 'wild':
+        message=`Wild · colour ${currentColor}`;
+        myTurn=who!=='me';
+        break;
+      default:
+        myTurn=who!=='me';
     }
-    // Check UNO — "Oh No!" call window
+    // Oh No! call window
     if(hands[who].length===1){
+      const aiCalls=who==='opp'&&(diffKey!=='easy'||Math.random()<0.35);
       unoCallWindow=true;
       pendingOhNoFor=who;
-      if(who==='opp'){
+      if(who==='opp'&&aiCalls){
         pendingOhNoFor='';
-        message=`${chat.name} shouts 'Oh, No!' 🗣️`;
+        message=`${chat.name} shouts 'Oh, No!'`;
         gs.schedule(()=>{unoCallWindow=false;render();},1800);
-      } else {
+      }else if(who==='opp'){
+        message=`${chat.name} is at 1 card…`;
+        gs.schedule(()=>{
+          if(!gs.alive()||gameOver||pendingOhNoFor!=='opp')return;
+          unoCallWindow=false;
+          if(house.catchOhNo&&hands.opp.length===1){
+            drawCard('opp',2);
+            pendingOhNoFor='';
+            message='Caught! AI missed Oh No — draws 2';
+          }else{
+            pendingOhNoFor='';
+            message='';
+          }
+          render();
+        },2500);
+      }else{
         message="You're at 1 card — shout 'Oh No!'";
         gs.schedule(()=>{
           if(!gs.alive()||gameOver||pendingOhNoFor!=='me')return;
@@ -3825,10 +3912,10 @@ function openUnoGame(chat, variant='normal', opts){
     if(hands[who].length===0){
       gameOver=true;
       const won=who==='me';
-      message=(won?'🎉 You win!':chat.name+' wins!')+' Oh, No!';
+      message=(won?'You win!':chat.name+' wins!')+' Oh, No!';
       gs.setOutcome(won?'won':'lost');
       if(typeof recordGameResult==='function')recordGameResult('uno',won);
-      if(typeof recordDangalSession==='function')recordDangalSession('uno',{won,variant,mode:'practice'});
+      if(typeof recordDangalSession==='function')recordDangalSession('uno',{won,variant,difficulty:diffKey,mode:liveOn?'live':'practice'});
     }
     if(liveOn&&who==='me'&&!applyingLive)pushUno();
   }
@@ -3866,25 +3953,37 @@ function openUnoGame(chat, variant='normal', opts){
     pickingColor=false;
     if(liveOn&&!applyingLive)pushUno();
     render();
-    if(!gameOver&&!myTurn&&!liveOn)gs.schedule(aiPlayUno,900);
+    if(!gameOver&&!myTurn&&!liveOn)gs.schedule(aiPlayUno,aiDelay);
     return true;
   }
 
   function cardBg(card){
+    if(card.value==='wild_draw6')return'linear-gradient(135deg,#8e0000,#c0392b,#f39c12)';
+    if(card.value==='wild_dark')return'linear-gradient(135deg,#0d0d1a,#2C3E50,#4a148c)';
     if(card.type==='wild'||card.color==='wild')return'linear-gradient(135deg,#E74C3C,#F1C40F,#2ECC71,#3498DB)';
-    if(card.color==='black')return'#2C3E50';
+    if(card.color==='black'||card.type==='flip')return flipped?'#0a0a14':'#2C3E50';
+    if(card.type==='flip_action')return flipped
+      ?`linear-gradient(160deg,#0d0d1a,${COLOR_HEX[card.color]||'#333'})`
+      :(COLOR_HEX[card.color]||'#666');
     return COLOR_HEX[card.color]||'#666';
   }
 
   function cardLabel(card){
-    const labels={'skip':'🚫','reverse':'🔄','draw2':'+2','wild':'🌈','wild_draw4':'+4','wild_draw6':'+6','skip_all':'🚫ALL','draw_all_5':'+5ALL','wild_dark':'🌑','flip':'🔄FLIP','draw4':'+4'};
+    const labels={
+      skip:'SKIP',reverse:'REV',draw2:'+2',wild:'WILD',wild_draw4:'+4',
+      wild_draw6:'+6',skip_all:'SKIP*',draw_all_5:'+5*',wild_dark:'DARK',
+      flip:'FLIP',draw4:'+4',
+    };
     return labels[card.value]||card.value;
   }
 
   function renderCard(card,small=false,selected=false,playable=false){
-    const colorName=card.type==='wild'||card.color==='wild'?'wild':(card.color||'');
-    const pattern=colorName&&colorName!=='wild'?` background-image:repeating-linear-gradient(${colorName==='red'||colorName==='yellow'?'45deg':'-45deg'},transparent,transparent 3px,rgba(255,255,255,0.18) 3px,rgba(255,255,255,0.18) 4px);`:'';
-    return `<div class="uno-card" role="img" aria-label="${colorName} ${cardLabel(card)}" style="width:${small?'36px':'52px'};height:${small?'52px':'76px'};min-width:${small?36:44}px;background:${cardBg(card)};${pattern}border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:${small?'11px':'15px'};color:#fff;text-shadow:0 1px 4px rgba(0,0,0,0.5);border:${selected?'3px solid white':playable?'2px solid rgba(255,255,255,0.6)':'2px solid rgba(0,0,0,0.2)'};cursor:${playable?'pointer':'default'};flex-shrink:0;transform:${selected?'translateY(-10px)':'none'};transition:transform var(--duration-fast,150ms) var(--ease-spring,cubic-bezier(0.34,1.56,0.64,1));box-shadow:${selected?'0 4px 12px rgba(0,0,0,0.5)':''}"><span>${cardLabel(card)}</span>${!small&&colorName&&colorName!=='wild'?`<span style="font-size:8px;letter-spacing:0.04em;opacity:0.9;text-transform:uppercase;">${colorName.slice(0,1)}</span>`:''}</div>`;
+    if(!card)return'';
+    const colorName=card.type==='wild'||card.color==='wild'||card.value==='wild_dark'?'wild':(card.color||'');
+    const isDarkFace=variant==='doublesided'&&(flipped||card.type==='flip_action'||card.type==='flip');
+    const pattern=colorName&&colorName!=='wild'&&!isDarkFace?` background-image:repeating-linear-gradient(${colorName==='red'||colorName==='yellow'?'45deg':'-45deg'},transparent,transparent 3px,rgba(255,255,255,0.18) 3px,rgba(255,255,255,0.18) 4px);`:'';
+    const darkRing=isDarkFace?'box-shadow:inset 0 0 0 2px rgba(180,140,255,0.45);':'';
+    return `<div class="uno-card${isDarkFace?' uno-card--dark':''}${variant==='blaze'&&(card.value==='wild_draw6'||card.value==='draw4')?' uno-card--blaze':''}" role="img" aria-label="${colorName} ${cardLabel(card)}" style="width:${small?'36px':'52px'};height:${small?'52px':'76px'};min-width:${small?36:44}px;background:${cardBg(card)};${pattern}${darkRing}border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:${small?'10px':'14px'};color:#fff;text-shadow:0 1px 4px rgba(0,0,0,0.5);border:${selected?'3px solid white':playable?'2px solid rgba(255,255,255,0.6)':'2px solid rgba(0,0,0,0.2)'};cursor:${playable?'pointer':'default'};flex-shrink:0;transform:${selected?'translateY(-10px)':'none'};transition:transform var(--duration-fast,150ms) var(--ease-spring,cubic-bezier(0.34,1.56,0.64,1));box-shadow:${selected?'0 4px 12px rgba(0,0,0,0.5)':''}"><span>${cardLabel(card)}</span>${!small&&colorName&&colorName!=='wild'?`<span style="font-size:8px;letter-spacing:0.04em;opacity:0.9;text-transform:uppercase;">${colorName.slice(0,1)}</span>`:''}</div>`;
   }
 
   function flyCardToDiscard(fromEl,card,done){
@@ -3932,11 +4031,12 @@ function openUnoGame(chat, variant='normal', opts){
     }
     if(gameOver&&typeof gameResultHtml==='function'){
       const won=hands.me.length===0;
+      const rulesBit=houseRulesSummary();
       const shareStats={
         scoreLine:won?'Win':'Loss',
         vs:`vs ${chat.name}`,
-        meta:(variant==='classic'?'Classic':variant==='doublesided'?'Double Sided':'Blaze')+(houseRulesSummary()?` · ${houseRulesSummary()}`:''),
-        text:`Chaupaal Oh, No!: ${won?'I won':'tough loss'} vs ${chat.name}`,
+        meta:`${variantLabel} · ${DIFF_LABELS[diffKey]}${rulesBit?` · ${rulesBit}`:''}`,
+        text:`Chaupaal Oh, No! (${variantLabel}): ${won?'I won':'tough loss'} vs ${chat.name}`,
       };
       overlay.innerHTML=`
         ${gameChromeHtml({title:'Oh, No!',subtitle:MODE_SUB+' · Game over',backId:'unoBack'})}
@@ -3944,7 +4044,7 @@ function openUnoGame(chat, variant='normal', opts){
           gameId:'uno',
           glyph:won?'✓':'·',
           title:won?'You win':`${chat.name} wins`,
-          subtitle:message||undefined,
+          subtitle:`${variantLabel} · ${DIFF_LABELS[diffKey]}${rulesBit?` · ${rulesBit}`:''}${message?` · ${message}`:''}`,
           shareCardHtml:typeof buildGameShareCard==='function'?buildGameShareCard('uno',shareStats):'',
           actions:[
             {label:'Play again',primary:true,id:'again'},
@@ -3955,7 +4055,11 @@ function openUnoGame(chat, variant='normal', opts){
       document.getElementById('unoBack')?.addEventListener('click',()=>{askUnoLeave();});
       if(typeof wireGameResultActions==='function'){
         wireGameResultActions(overlay,{
-          again:()=>{gs.close();if(typeof openUnoVariantPicker==='function')openUnoVariantPicker(chat,{variant,house});else if(typeof openUnoGame==='function')openUnoGame(chat,variant,{house});},
+          again:()=>{
+            gs.close();
+            if(typeof openUnoGame==='function')openUnoGame(chat,variant,{house,difficulty:diffKey});
+            else if(typeof openUnoVariantPicker==='function')openUnoVariantPicker(chat,{variant,house,difficulty:diffKey});
+          },
           share:()=>{if(typeof shareGameResult==='function')shareGameResult('uno',shareStats);},
           challenge:async()=>{
             if(typeof openFriendPickerSheet==='function'){
@@ -3970,10 +4074,12 @@ function openUnoGame(chat, variant='normal', opts){
     const ohNoBtnStyle=unoCallWindow
       ?'background:var(--red,#E74C3C);color:#fff;border:2px solid rgba(255,255,255,0.4);animation:uno-pulse 0.6s ease-in-out infinite alternate;'
       :'';
+    const flipChrome=variant==='doublesided'?(flipped?' · Dark':' · Light'):'';
+    const tableTint=variant==='doublesided'&&flipped?'background:radial-gradient(ellipse at center,rgba(90,40,160,0.25),transparent 70%);':'';
     overlay.innerHTML=`
-      ${gameChromeHtml({title:'Oh, No!',subtitle:MODE_SUB+(variant==='doublesided'?(flipped?' · Dark':' · Light'):''),backId:'unoBack',rightHtml:`<button id="unoUnoBtn" class="game-chrome-action uno-ohno-btn${unoCallWindow?' is-active':''}" style="${ohNoBtnStyle}">Oh No!</button>`})}
+      ${gameChromeHtml({title:'Oh, No!',subtitle:MODE_SUB+flipChrome,backId:'unoBack',rightHtml:`<button id="unoUnoBtn" class="game-chrome-action uno-ohno-btn${unoCallWindow?' is-active':''}" style="${ohNoBtnStyle}">Oh No!</button>`})}
 
-      <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative;">
+      <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative;${tableTint}">
 
         <!-- Opponent hand -->
         <div style="padding:8px 12px 4px;flex-shrink:0;">
@@ -4061,7 +4167,7 @@ function openUnoGame(chat, variant='normal', opts){
       myTurn=false;
       if(liveOn)pushUno();
       render();
-      if(!liveOn)gs.schedule(aiPlayUno,900);
+      if(!liveOn)gs.schedule(aiPlayUno,aiDelay);
     });
 
     function playFromHand(i,chosenColor){
@@ -4075,7 +4181,7 @@ function openUnoGame(chat, variant='normal', opts){
         applyCard(card,'me',chosenColor);
         selectedCard=null;pickingColor=false;
         render();
-        if(!gameOver&&!myTurn&&!liveOn)gs.schedule(aiPlayUno,900);
+        if(!gameOver&&!myTurn&&!liveOn)gs.schedule(aiPlayUno,aiDelay);
       });
     }
 
@@ -4092,7 +4198,7 @@ function openUnoGame(chat, variant='normal', opts){
           else message='Card does not match colour or value';
           render();return;
         }
-        if(card.type==='wild'||card.color==='wild'){selectedCard=i;pickingColor=true;render();}
+        if(needsColorPick(card)){selectedCard=i;pickingColor=true;render();}
         else playFromHand(i);
       });
     });
@@ -4110,17 +4216,17 @@ function openUnoGame(chat, variant='normal', opts){
         clearDrawStack();
         pendingChallenge=null;
         myTurn=false;
-        if(liveOn)pushUno();render();if(!liveOn)gs.schedule(aiPlayUno,900);return;
+        if(liveOn)pushUno();render();if(!liveOn)gs.schedule(aiPlayUno,aiDelay);return;
       }
       if(drawStack>0){
         const n=drawStack;drawCard('me',n);message=`You drew ${n} cards!`;clearDrawStack();myTurn=false;
-        if(liveOn)pushUno();render();if(!liveOn)gs.schedule(aiPlayUno,900);return;
+        if(liveOn)pushUno();render();if(!liveOn)gs.schedule(aiPlayUno,aiDelay);return;
       }
       if(drewPlayableIndex===hands.me.length-1&&drewPlayableIndex>=0){
         drewPlayableIndex=-1;
         message='Passed the drawn card';
         myTurn=false;
-        if(liveOn)pushUno();render();if(!liveOn)gs.schedule(aiPlayUno,900);return;
+        if(liveOn)pushUno();render();if(!liveOn)gs.schedule(aiPlayUno,aiDelay);return;
       }
       drawCard('me',1);
       const drawn=hands.me[hands.me.length-1];
@@ -4132,16 +4238,57 @@ function openUnoGame(chat, variant='normal', opts){
         if(liveOn)pushUno();render();
       } else {
         message='No playable card drawn — passing turn';myTurn=false;
-        if(liveOn)pushUno();render();if(!liveOn)gs.schedule(aiPlayUno,900);
+        if(liveOn)pushUno();render();if(!liveOn)gs.schedule(aiPlayUno,aiDelay);
       }
     });
+  }
+
+  function aiChooseColor(who){
+    const counts={red:0,yellow:0,green:0,blue:0};
+    hands[who].forEach(c=>{if(counts[c.color]!==undefined)counts[c.color]++;});
+    const ranked=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+    if(diffKey==='hard'){
+      // Prefer a colour the opponent is less likely to hold (we only know our hand — bias to our strongest)
+      return ranked[0][0];
+    }
+    if(diffKey==='easy'&&Math.random()<0.45)return COLORS_UNO[Math.floor(Math.random()*4)];
+    return ranked[0][0];
+  }
+
+  function aiStackChance(){
+    if(diffKey==='easy')return 0.25;
+    if(diffKey==='medium')return 0.65;
+    return 0.92;
+  }
+
+  function aiChallengeChance(illegal){
+    if(diffKey==='easy')return 0.2;
+    if(diffKey==='medium')return 0.55;
+    return illegal?0.95:0.18;
+  }
+
+  function aiPickFrom(playable){
+    if(!playable.length)return null;
+    if(diffKey==='easy')return playable[Math.floor(Math.random()*playable.length)];
+    const oppLow=hands.me.length<=3;
+    const scored=playable.map(card=>{
+      let score=2;
+      const v=card.value;
+      if(v==='draw2'||v==='draw4'||v==='wild_draw4'||v==='wild_draw6'||v==='draw_all_5')score=oppLow?9:6;
+      else if(v==='skip'||v==='skip_all'||v==='reverse')score=oppLow?8:5;
+      else if(v==='flip')score=flipped?3:6;
+      else if(v==='wild'||v==='wild_dark')score=diffKey==='hard'?1:3;
+      else if(card.color===currentColor)score=4;
+      if(diffKey==='hard'&&(v==='wild'||v==='wild_draw4'||v==='wild_draw6'||v==='wild_dark')&&playable.some(c=>!needsColorPick(c)))score-=2;
+      return{card,score};
+    }).sort((a,b)=>b.score-a.score);
+    return scored[0].card;
   }
 
   function aiPlayUno(){
     if(!gs.alive()||gameOver||myTurn||liveOn)return;
     if(pendingChallenge&&pendingChallenge.victim==='opp'){
-      const shouldChallenge=Math.random()<0.75;
-      if(shouldChallenge){resolveChallenge('opp');return;}
+      if(Math.random()<aiChallengeChance(!!pendingChallenge.illegal)){resolveChallenge('opp');return;}
       const n=drawStack||4;
       drawCard('opp',n);
       message=`${chat.name} takes the draw ${n}`;
@@ -4151,20 +4298,18 @@ function openUnoGame(chat, variant='normal', opts){
       render();
       return;
     }
-    // Classic: must draw stack immediately, cannot play into it
     if(drawStack>0){
       if(house.stackDraw2&&drawStackType==='draw2'){
         const stackers=hands.opp.filter(c=>c&&c.value==='draw2');
-        if(stackers.length){
-          const pickStack=Math.random()<0.85?stackers[0]:null;
-          if(pickStack){
-            const idxStack=hands.opp.indexOf(pickStack);
-            hands.opp.splice(idxStack,1);
-            applyCard(pickStack,'opp',null);
-            message=`${chat.name} stacked +2 — pending +${drawStack}`;
-            render();
-            return;
-          }
+        if(stackers.length&&Math.random()<aiStackChance()){
+          const pickStack=stackers[0];
+          const idxStack=hands.opp.indexOf(pickStack);
+          hands.opp.splice(idxStack,1);
+          applyCard(pickStack,'opp',null);
+          message=`${chat.name} stacked +2 — pending +${drawStack}`;
+          render();
+          if(!gameOver&&!myTurn)gs.schedule(aiPlayUno,aiDelay);
+          return;
         }
       }
       const n=drawStack;drawCard('opp',n);message=`${chat.name} drew ${n} cards!`;clearDrawStack();myTurn=true;
@@ -4174,29 +4319,18 @@ function openUnoGame(chat, variant='normal', opts){
     if(!playable.length){
       drawCard('opp',1);
       const drawn=hands.opp[hands.opp.length-1];
-      // After drawing, check if drawn card is playable (drawStack still 0)
       if(!canPlay(drawn)){message=`${chat.name} draws — no play`;myTurn=true;render();return;}
+      // Medium/Hard often play the drawn card; Easy sometimes keeps it
+      if(diffKey==='easy'&&Math.random()<0.4){message=`${chat.name} draws and keeps`;myTurn=true;render();return;}
       const idx=hands.opp.indexOf(drawn);hands.opp.splice(idx,1);
-      // AI chooses best color when playing wild (most common in own remaining hand)
       const aiColor=aiChooseColor('opp');
-      applyCard(drawn,'opp',aiColor);render();if(!gameOver&&!myTurn)gs.schedule(aiPlayUno,900);return;
+      applyCard(drawn,'opp',aiColor);render();if(!gameOver&&!myTurn)gs.schedule(aiPlayUno,aiDelay);return;
     }
-    // Prioritise: wilds last (save them), action cards next, numbers OK
-    const pick=playable.sort((a,b)=>{
-      const priority={'draw2':6,'skip':5,'reverse':4,'wild_draw4':3,'wild':1};
-      return(priority[b.value]||2)-(priority[a.value]||2);
-    })[0];
+    const pick=aiPickFrom(playable);
     const idx=hands.opp.indexOf(pick);hands.opp.splice(idx,1);
     const aiColor=aiChooseColor('opp');
     applyCard(pick,'opp',aiColor);render();
-    if(!gameOver&&!myTurn)gs.schedule(aiPlayUno,900);
-  }
-
-  function aiChooseColor(who){
-    // Pick the color the AI has most of in its remaining hand
-    const counts={red:0,yellow:0,green:0,blue:0};
-    hands[who].forEach(c=>{if(counts[c.color]!==undefined)counts[c.color]++;});
-    return Object.entries(counts).sort((a,b)=>b[1]-a[1])[0][0];
+    if(!gameOver&&!myTurn)gs.schedule(aiPlayUno,aiDelay);
   }
 
   if(liveOn&&liveRoles&&typeof DangalLive!=='undefined'){
@@ -4242,6 +4376,17 @@ function openUnoGame(chat, variant='normal', opts){
     });
     if(isLiveHost)pushUno();
   }
+  // First-open coach for Blaze / Flip
+  try{
+    const coachKey='chaupaal_coach_uno_'+variant;
+    if(!localStorage.getItem(coachKey)){
+      const tip=variant==='blaze'
+        ?'Draws hit harder — stay alert.'
+        :(variant==='doublesided'?'Flip switches the deck\'s dark side.':'');
+      if(tip&&typeof showToast==='function')showToast(tip);
+      localStorage.setItem(coachKey,'1');
+    }
+  }catch(e){}
   render();
 }
 
@@ -4803,50 +4948,85 @@ function openUnoVariantPicker(chat, defaults){
     }catch(e){return HOUSE_DEFAULTS;}
   })();
   const selectedHouse=Object.assign({},savedHouse,(defaults&&defaults.house)||{});
+  const savedDiff=(()=>{
+    try{return localStorage.getItem('chaupaal_uno_diff')||'medium';}catch(e){return'medium';}
+  })();
+  let selectedDiff=(defaults&&defaults.difficulty)||savedDiff;
+  if(!['easy','medium','hard'].includes(selectedDiff))selectedDiff='medium';
+  let selectedVariant=(defaults&&defaults.variant)||'classic';
+  if(!['classic','blaze','doublesided'].includes(selectedVariant))selectedVariant='classic';
+
   const variants=[
-    {label:'🃏 Classic',desc:'Classic Oh, No! rules with optional house toggles',v:'classic'},
-    {label:'🔄 Double Sided',desc:'Light & dark side mechanics',v:'doublesided'},
-    {label:'💀 Blaze Mode',desc:'+6 cards, relentless stacking',v:'blaze'},
+    {label:'Classic',desc:'Standard Oh, No! with optional house rules',v:'classic'},
+    {label:'Blaze',desc:'Harsher draws · snappier reverses · +6 wilds',v:'blaze'},
+    {label:'Flip',desc:'Light & dark deck sides — Flip card switches',v:'doublesided'},
   ];
-  sheet.innerHTML=`
-    <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;margin-bottom:14px;">🃏 Oh, No! Cards — Pick a variant</div>
-    ${variants.map((v,i)=>`<button data-i="${i}" style="width:100%;padding:13px 14px;background:var(--cream);border:2px solid var(--line);border-radius:14px;margin-bottom:8px;text-align:left;cursor:pointer;"><div style="font-weight:700;font-size:14px;">${v.label}</div><div style="font-size:12px;color:var(--muted);">${v.desc}</div></button>`).join('')}
-    <div id="unoClassicRules" style="margin:10px 0 12px;padding:14px;background:#f8f4ec;border:1px solid var(--line);border-radius:16px;">
-      <div style="font:700 15px Space Grotesk,sans-serif;margin-bottom:4px;">Classic house rules</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Simple by default, optional where players expect it.</div>
-      <label style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid rgba(0,0,0,.06);">
-        <div><div style="font-weight:700;font-size:13px;">Stack +2</div><div style="font-size:12px;color:var(--muted);">Allow +2 on +2 only. Default off.</div></div>
-        <input id="unoHouseStack" type="checkbox" ${selectedHouse.stackDraw2?'checked':''}>
-      </label>
-      <label style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid rgba(0,0,0,.06);">
-        <div><div style="font-weight:700;font-size:13px;">Challenge Wild +4</div><div style="font-size:12px;color:var(--muted);">Challenge succeeds if they held the old colour. Default on.</div></div>
-        <input id="unoHouseChallenge" type="checkbox" ${selectedHouse.challengeDraw4?'checked':''}>
-      </label>
-      <label style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid rgba(0,0,0,.06);">
-        <div><div style="font-weight:700;font-size:13px;">Catch missed Oh No!</div><div style="font-size:12px;color:var(--muted);">Miss the call at 1 card and draw 2. Default on.</div></div>
-        <input id="unoHouseCatch" type="checkbox" ${selectedHouse.catchOhNo?'checked':''}>
-      </label>
-      <button id="unoClassicStart" type="button" style="width:100%;margin-top:10px;min-height:46px;border-radius:14px;border:0;background:#1a1a2e;color:#fff;font:800 14px Space Grotesk,sans-serif;cursor:pointer;">Start Classic</button>
-    </div>
-    <button id="closeUnoVariant" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>
-  `;
+
+  function paint(){
+    const isClassic=selectedVariant==='classic';
+    sheet.innerHTML=`
+      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;margin-bottom:6px;">Oh, No! Cards</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Pick a variant, then set AI difficulty.</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">
+        ${variants.map(v=>`
+          <button type="button" data-v="${v.v}" class="uno-pick-variant" style="width:100%;padding:14px 14px;background:${selectedVariant===v.v?'#1a1a2e':'var(--cream)'};color:${selectedVariant===v.v?'#fff':'var(--ink)'};border:2px solid ${selectedVariant===v.v?'#1a1a2e':'var(--line)'};border-radius:14px;text-align:left;cursor:pointer;">
+            <div style="font-weight:800;font-size:14px;">${v.label}</div>
+            <div style="font-size:12px;opacity:.75;margin-top:2px;">${v.desc}</div>
+          </button>`).join('')}
+      </div>
+      <div style="margin-bottom:12px;">
+        <div style="font:700 13px Space Grotesk,sans-serif;margin-bottom:8px;">AI difficulty</div>
+        <div style="display:flex;gap:8px;">
+          ${['easy','medium','hard'].map(d=>`
+            <button type="button" data-d="${d}" class="uno-pick-diff" style="flex:1;min-height:42px;border-radius:12px;border:2px solid ${selectedDiff===d?'#1a1a2e':'var(--line)'};background:${selectedDiff===d?'#1a1a2e':'var(--cream)'};color:${selectedDiff===d?'#fff':'var(--ink)'};font-weight:800;font-size:13px;cursor:pointer;text-transform:capitalize;">${d}</button>`).join('')}
+        </div>
+      </div>
+      ${isClassic?`
+      <div id="unoClassicRules" style="margin:4px 0 12px;padding:14px;background:#f8f4ec;border:1px solid var(--line);border-radius:16px;">
+        <div style="font:700 14px Space Grotesk,sans-serif;margin-bottom:4px;">Classic house rules</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Optional — Blaze & Flip use built-in chaos rules.</div>
+        <label style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid rgba(0,0,0,.06);">
+          <div><div style="font-weight:700;font-size:13px;">Stack +2</div><div style="font-size:12px;color:var(--muted);">Allow +2 on +2 only. Default off.</div></div>
+          <input id="unoHouseStack" type="checkbox" ${selectedHouse.stackDraw2?'checked':''}>
+        </label>
+        <label style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid rgba(0,0,0,.06);">
+          <div><div style="font-weight:700;font-size:13px;">Challenge Wild +4</div><div style="font-size:12px;color:var(--muted);">Success if they held the old colour. Default on.</div></div>
+          <input id="unoHouseChallenge" type="checkbox" ${selectedHouse.challengeDraw4?'checked':''}>
+        </label>
+        <label style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid rgba(0,0,0,.06);">
+          <div><div style="font-weight:700;font-size:13px;">Catch missed Oh No!</div><div style="font-size:12px;color:var(--muted);">Miss the call at 1 card → draw 2. Default on.</div></div>
+          <input id="unoHouseCatch" type="checkbox" ${selectedHouse.catchOhNo?'checked':''}>
+        </label>
+      </div>`:`
+      <div style="margin:4px 0 12px;padding:12px 14px;background:#f0eef8;border:1px solid var(--line);border-radius:14px;font-size:12px;color:var(--muted);">
+        <strong style="color:var(--ink);">Built-in chaos rules</strong> — house toggles are Classic-only. ${selectedVariant==='blaze'?'Blaze draws hit immediately.':'Flip dark actions only work on the Dark side.'}
+      </div>`}
+      <button id="unoStartBtn" type="button" style="width:100%;min-height:48px;border-radius:14px;border:0;background:#1a1a2e;color:#fff;font:800 15px Space Grotesk,sans-serif;cursor:pointer;">Start ${variants.find(v=>v.v===selectedVariant).label}</button>
+      <button id="closeUnoVariant" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>
+    `;
+    sheet.querySelectorAll('[data-v]').forEach(btn=>{
+      btn.addEventListener('click',()=>{selectedVariant=btn.dataset.v;paint();});
+    });
+    sheet.querySelectorAll('[data-d]').forEach(btn=>{
+      btn.addEventListener('click',()=>{selectedDiff=btn.dataset.d;paint();});
+    });
+    sheet.querySelector('#unoStartBtn')?.addEventListener('click',()=>{
+      const house=isClassic?{
+        stackDraw2:!!sheet.querySelector('#unoHouseStack')?.checked,
+        challengeDraw4:!!sheet.querySelector('#unoHouseChallenge')?.checked,
+        catchOhNo:!!sheet.querySelector('#unoHouseCatch')?.checked,
+      }:undefined;
+      try{
+        localStorage.setItem('chaupaal_uno_diff',selectedDiff);
+        if(house)localStorage.setItem('chaupaal_uno_house',JSON.stringify(house));
+      }catch(e){}
+      sheet.remove();
+      openUnoGame(chat,selectedVariant,{house,difficulty:selectedDiff});
+    });
+    sheet.querySelector('#closeUnoVariant')?.addEventListener('click',()=>sheet.remove());
+  }
   document.querySelector('.device').appendChild(sheet);
-  variants.forEach((v,i)=>sheet.querySelector(`[data-i="${i}"]`).addEventListener('click',()=>{
-    if(v.v==='classic')return;
-    sheet.remove();
-    openUnoGame(chat,v.v);
-  }));
-  sheet.querySelector('#unoClassicStart')?.addEventListener('click',()=>{
-    const house={
-      stackDraw2:!!sheet.querySelector('#unoHouseStack')?.checked,
-      challengeDraw4:!!sheet.querySelector('#unoHouseChallenge')?.checked,
-      catchOhNo:!!sheet.querySelector('#unoHouseCatch')?.checked,
-    };
-    try{localStorage.setItem('chaupaal_uno_house',JSON.stringify(house));}catch(e){}
-    sheet.remove();
-    openUnoGame(chat,'classic',{house});
-  });
-  document.getElementById('closeUnoVariant').addEventListener('click',()=>sheet.remove());
+  paint();
 }
 
 // --- Game registry self-registration (engines.js) ---
