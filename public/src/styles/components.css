@@ -3835,33 +3835,52 @@ select:focus-visible,
 
 /* ===== Ludo / Snakes boards (engines.js) ===== */
 .ludo-board-wrap,.snakes-board-wrap{
-  flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:6px 10px;
+  flex:1;min-height:0;display:flex;align-items:center;justify-content:center;
+  padding:6px 10px;padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right));
 }
 .ludo-board{
-  position:relative;width:min(360px,92vw);aspect-ratio:1;
+  position:relative;width:min(420px,96vw,100%);aspect-ratio:1;
   display:grid;grid-template-columns:repeat(15,1fr);grid-template-rows:repeat(15,1fr);
   border-radius:10px;overflow:hidden;background:#0f1324;box-shadow:0 8px 28px rgba(0,0,0,.45);
 }
-.ludo-cell{min-width:0;min-height:0;border:0.5px solid rgba(255,255,255,.06);}
+.ludo-cell{position:relative;min-width:0;min-height:0;border:0.5px solid rgba(255,255,255,.06);}
 .ludo-cell--void{background:transparent;border-color:transparent;}
-.ludo-cell--path{background:rgba(255,255,255,.08);}
+.ludo-cell--path{background:rgba(255,255,255,.1);}
 .ludo-cell--pathfill{background:rgba(255,255,255,.05);}
-.ludo-cell--safe{box-shadow:inset 0 0 0 1px rgba(255,201,60,.55);}
+.ludo-cell--safe{
+  background:rgba(255,201,60,.14);
+  box-shadow:inset 0 0 0 1.5px rgba(255,201,60,.7);
+}
+.ludo-safe-star{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:clamp(7px,1.8vw,11px);color:rgba(255,201,60,.95);line-height:1;pointer-events:none;
+}
 .ludo-cell--center{
   background:conic-gradient(from 45deg,#E74C3C 0 25%,#3498DB 0 50%,#2ECC71 0 75%,#F1C40F 0);
 }
+.ludo-coach{
+  display:flex;align-items:center;gap:8px;margin:0 12px 4px;padding:8px 10px;
+  background:rgba(255,201,60,.12);border:1px solid rgba(255,201,60,.35);border-radius:10px;flex-shrink:0;
+}
+.ludo-coach-text{flex:1;font-size:11px;line-height:1.35;color:rgba(255,255,255,.88);font-weight:600;}
+.ludo-coach-x{
+  flex-shrink:0;border:none;border-radius:8px;padding:6px 10px;min-height:36px;
+  background:rgba(255,255,255,.12);color:#fff;font-size:11px;font-weight:700;cursor:pointer;
+}
+.ludo-seat--active{box-shadow:0 0 0 1px rgba(255,255,255,.2);}
 .ludo-tokens{position:absolute;inset:0;pointer-events:none;}
 .ludo-token{
-  position:absolute;width:12%;height:12%;max-width:28px;max-height:28px;
-  border-radius:50%;border:2px solid rgba(255,255,255,.85);
+  position:absolute;width:14%;height:14%;max-width:34px;max-height:34px;min-width:22px;min-height:22px;
+  border-radius:50%;border:2.5px solid rgba(255,255,255,.9);
   transform:translate(-50%,-50%);pointer-events:auto;padding:0;cursor:pointer;
-  box-shadow:0 2px 6px rgba(0,0,0,.4);z-index:2;transition:left .08s linear,top .08s linear;
+  box-shadow:0 2px 8px rgba(0,0,0,.45);z-index:2;transition:left .08s linear,top .08s linear;
 }
-.ludo-token--moveable{outline:2px solid #fff;box-shadow:0 0 0 4px rgba(255,201,60,.55);animation:ludoPulse 1s ease-in-out infinite;}
-.ludo-token--home{opacity:.85;border-color:var(--gold);}
+.ludo-token--yard{box-shadow:0 0 0 2px rgba(255,255,255,.25),0 2px 6px rgba(0,0,0,.4);}
+.ludo-token--moveable{outline:2px solid #fff;box-shadow:0 0 0 4px rgba(255,201,60,.55);animation:ludoPulse 1s ease-in-out infinite;z-index:3;}
+.ludo-token--home{opacity:.9;border-color:var(--gold);box-shadow:0 0 0 2px rgba(255,201,60,.45);}
 .ludo-token--hop{animation:ludoHop .12s ease;}
 .ludo-token--captured{animation:ludoCapture .4s ease;}
-@keyframes ludoPulse{50%{transform:translate(-50%,-50%) scale(1.12)}}
+@keyframes ludoPulse{50%{transform:translate(-50%,-50%) scale(1.14)}}
 @keyframes ludoHop{50%{transform:translate(-50%,-70%) scale(1.08)}}
 @keyframes ludoCapture{50%{transform:translate(-50%,-50%) scale(.2);opacity:.2}}
 
