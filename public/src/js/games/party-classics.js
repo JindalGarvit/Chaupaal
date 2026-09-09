@@ -527,16 +527,21 @@
         ? spec.difficulty
         : 'medium';
     let breakerPick = spec.breakerPick === 'opp' || spec.breakerPick === 'random' || spec.breakerPick === 'you' ? spec.breakerPick : 'you';
-    let youColor =
-      spec.youColor === 'black' || spec.youColor === 'white'
-        ? spec.youColor
-        : isCarrom && !liveOn && !spec.skipSheet
-          ? null
-          : isCarrom
-            ? Math.random() < 0.5
-              ? 'white'
-              : 'black'
-            : null;
+    // Live Carrom: White = playerA (host), Black = playerB (joiner). Skip AI sheet.
+    let youColor = null;
+    if (isCarrom && liveOn) {
+      const roles0 = typeof DangalLive !== 'undefined' && DangalLive.roles ? DangalLive.roles(chat) : null;
+      if (!roles0 || !roles0.me || !roles0.playerA) {
+        if (typeof showToast === 'function') showToast('Live Carrom unavailable — try Practice');
+      }
+      youColor = roles0 && roles0.me === roles0.playerA ? 'white' : 'black';
+    } else if (spec.youColor === 'black' || spec.youColor === 'white') {
+      youColor = spec.youColor;
+    } else if (isCarrom && !liveOn && !spec.skipSheet) {
+      youColor = null;
+    } else if (isCarrom) {
+      youColor = Math.random() < 0.5 ? 'white' : 'black';
+    }
 
     function setChromeSubtitle(text) {
       const el = shell.overlay && shell.overlay.querySelector('.game-chrome-subtitle');
@@ -632,6 +637,8 @@
       setChromeSubtitle(
         'Practice · ' + (DIFF_LABEL[difficulty] || 'Medium') + ' · ' + (youColor === 'white' ? 'White' : 'Black')
       );
+    } else if (isCarrom && liveOn) {
+      setChromeSubtitle('Live 1v1 · ' + (youColor === 'white' ? 'White' : 'Black'));
     }
 
     let coachDismissed = false;
@@ -640,14 +647,26 @@
     } catch (e) {}
 
     const coachCopy = isCarrom
-      ? 'You shoot from the near baseline; AI from the far. Cover the Queen after one of yours.'
+      ? liveOn
+        ? 'You are ' +
+          (youColor === 'white' ? 'White (host breaks)' : 'Black') +
+          '. Same Queen/foul rules. Only shoot on your turn.'
+        : 'You shoot from the near baseline; AI from the far. Cover the Queen after one of yours.'
       : 'Drag back on the cue ball to aim, release to shoot.';
 
     shell.body.innerHTML = `<div class="pc-cue${isCarrom ? ' pc-cue--carrom' : ''}">
       ${!coachDismissed && isCarrom ? `<div class="pc-cue-coach" data-cue-coach><span>${coachCopy}</span><button type="button" data-cue-coach-x>Got it</button></div>` : ''}
       <div class="pc-cue-hud" data-cue-hud>You 0 · Opp 0</div>
       <canvas data-cue aria-label="${spec.title || 'Cue'} board"></canvas>
-      <p class="pc-hint" data-cue-hint>${isCarrom ? (breaker === 'you' ? 'Your break — drag back on the striker.' : 'AI breaks…') : 'Drag back on the cue ball to aim, release to shoot.'}</p>
+      <p class="pc-hint" data-cue-hint>${
+        isCarrom
+          ? liveOn
+            ? 'Connecting…'
+            : breaker === 'you'
+              ? 'Your break — drag back on the striker.'
+              : 'AI breaks…'
+          : 'Drag back on the cue ball to aim, release to shoot.'
+      }</p>
     </div>`;
     const canvas = shell.body.querySelector('[data-cue]');
     const hint = shell.body.querySelector('[data-cue-hint]');
@@ -674,7 +693,14 @@
     const pockets = spec.pockets;
     const youBaseFrac = spec.baselineY || 0.82;
     const oppBaseFrac = 1 - youBaseFrac;
-    const seatBaselineY = (seat) => H * (seat === 'opp' ? oppBaseFrac : youBaseFrac);
+    // Live shared coords: White (playerA) near y=0.82, Black far y=0.18. Practice: you near, AI far.
+    const seatBaselineY = (seat) => {
+      if (isCarrom && liveOn) {
+        const col = seatColor(seat);
+        return H * (col === 'white' ? youBaseFrac : oppBaseFrac);
+      }
+      return H * (seat === 'opp' ? oppBaseFrac : youBaseFrac);
+    };
     const baselineY = () => seatBaselineY('you');
     const baselineXMin = () => W * 0.18;
     const baselineXMax = () => W * 0.82;
@@ -687,7 +713,7 @@
     let oppPocketed = 0;
     let moving = false;
     let ended = false;
-    let myTurn = !isCarrom || liveOn ? true : breaker === 'you';
+    let myTurn = isCarrom && liveOn ? false : !isCarrom ? true : breaker === 'you';
     let applying = false;
     let liveRoles = null;
     let liveHandle = null;
@@ -697,6 +723,9 @@
     let strikerFoulHint = 0;
     let layoutReady = false;
     let ballSeq = 1;
+    let lastHint = '';
+    let breakDone = false;
+    let liveSeeded = false;
 
     function ballRadius(b) {
       return b.r || (b.cue ? cueR : ballR);
@@ -716,9 +745,9 @@
 
     function queenStatusLabel() {
       if (queenCoveredBy === 'you') return 'Covered (You)';
-      if (queenCoveredBy === 'opp') return 'Covered (AI)';
+      if (queenCoveredBy === 'opp') return liveOn ? 'Covered (Opp)' : 'Covered (AI)';
       if (queenPendingCoverFor === 'you') return 'Pending cover (You)';
-      if (queenPendingCoverFor === 'opp') return 'Pending cover (AI)';
+      if (queenPendingCoverFor === 'opp') return liveOn ? 'Pending cover (Opp)' : 'Pending cover (AI)';
       return 'On board';
     }
 
@@ -729,10 +758,19 @@
         const oLeft = countOnBoard(oppColor);
         const yIn = countPocketed(youColor);
         const oIn = countPocketed(oppColor);
-        const turn = ended ? 'Over' : moving ? 'Moving…' : myTurn ? 'Your turn' : 'AI turn';
+        const oppName = liveOn ? 'Opp' : 'AI';
+        const turn = ended
+          ? 'Over'
+          : moving
+            ? 'Balls moving…'
+            : myTurn
+              ? 'Your turn'
+              : liveOn
+                ? 'Opp turn'
+                : 'AI turn';
         hud.innerHTML =
           `<div class="pc-cue-hud-row"><span class="pc-cue-swatch pc-cue-swatch--${youColor}"></span>You · ${colorLabel(youColor)} · ${yLeft} left (${yIn})` +
-          ` · <span class="pc-cue-swatch pc-cue-swatch--${oppColor}"></span>AI · ${colorLabel(oppColor)} · ${oLeft} left (${oIn})</div>` +
+          ` · <span class="pc-cue-swatch pc-cue-swatch--${oppColor}"></span>${oppName} · ${colorLabel(oppColor)} · ${oLeft} left (${oIn})</div>` +
           `<div class="pc-cue-hud-row">Queen: ${queenStatusLabel()} · ${turn}` +
           (liveOn ? '' : ' · ' + (DIFF_LABEL[difficulty] || 'Medium')) +
           `</div>`;
@@ -875,10 +913,79 @@
         dead: !!b.dead,
         cue: !!b.cue,
         color: b.color,
-        kind: b.kind || '',
-        r: ballRadius(b),
+        kind: b.kind || (b.cue ? 'striker' : ''),
+        side: b.cue ? 'striker' : b.kind === 'queen' ? 'queen' : b.kind || '',
+        r: ballRadius(b) / Math.min(W, H),
         id: b.id,
       }));
+    }
+
+    function queenToAbsolute() {
+      const coveredCol =
+        queenCoveredBy === 'you' ? youColor : queenCoveredBy === 'opp' ? oppColor : null;
+      const pendingCol =
+        queenPendingCoverFor === 'you'
+          ? youColor
+          : queenPendingCoverFor === 'opp'
+            ? oppColor
+            : null;
+      let status = 'board';
+      if (coveredCol) status = 'covered';
+      else if (pendingCol) status = 'pending';
+      const out = {
+        status,
+        pendingColor: pendingCol || null,
+        coveredBy: coveredCol || null,
+        pendingUid: null,
+        coveredByUid: null,
+      };
+      if (liveRoles) {
+        if (pendingCol) out.pendingUid = pendingCol === youColor ? liveRoles.me : liveRoles.opp;
+        if (coveredCol) out.coveredByUid = coveredCol === youColor ? liveRoles.me : liveRoles.opp;
+      }
+      return out;
+    }
+
+    function applyQueenAbsolute(q) {
+      if (!q) {
+        queenCoveredBy = null;
+        queenPendingCoverFor = null;
+        return;
+      }
+      if (q.status === 'covered' || q.coveredBy || q.coveredByUid) {
+        let col = q.coveredBy;
+        if (!col && q.coveredByUid && liveRoles) {
+          col = q.coveredByUid === liveRoles.me ? youColor : oppColor;
+        }
+        queenCoveredBy = col === youColor ? 'you' : col === oppColor ? 'opp' : null;
+        queenPendingCoverFor = null;
+      } else if (q.status === 'pending' || q.pendingColor || q.pendingUid) {
+        let col = q.pendingColor;
+        if (!col && q.pendingUid && liveRoles) {
+          col = q.pendingUid === liveRoles.me ? youColor : oppColor;
+        }
+        queenPendingCoverFor = col === youColor ? 'you' : col === oppColor ? 'opp' : null;
+        queenCoveredBy = null;
+      } else {
+        queenCoveredBy = null;
+        queenPendingCoverFor = null;
+      }
+    }
+
+    function buildCarromState(extra) {
+      return Object.assign(
+        {
+          balls: snapshotBalls(),
+          pocketed: { white: countPocketed('white'), black: countPocketed('black') },
+          queen: queenToAbsolute(),
+          playerAColor: 'white',
+          playerBColor: 'black',
+          breakDone: !!breakDone,
+          hint: lastHint || '',
+          phase: 'settled',
+        },
+        extra || {}
+      );
     }
 
     function applySnapshot(list, scores, turnUid) {
@@ -891,37 +998,95 @@
         dead: !!b.dead,
         cue: !!b.cue,
         color: b.color,
-        kind: b.kind,
-        r: b.r || (b.cue ? cueR : ballR),
+        kind: b.kind || b.side || '',
+        r: b.r != null && b.r < 1 ? b.r * Math.min(W, H) : b.r || (b.cue ? cueR : ballR),
         id: b.id || 'b' + ballSeq++,
       }));
-      if (scores) {
+      if (scores && !isCarrom) {
         youPocketed = liveRoles.me === liveRoles.playerA ? scores.a | 0 : scores.b | 0;
         oppPocketed = liveRoles.me === liveRoles.playerA ? scores.b | 0 : scores.a | 0;
-        updateHud();
       }
-      if (turnUid) myTurn = turnUid === liveRoles.me;
+      if (turnUid && liveRoles) myTurn = turnUid === liveRoles.me;
       moving = false;
-      hint.textContent = myTurn ? 'Your shot.' : 'Opponent’s turn…';
+      dragging = null;
+      updateHud();
+      hint.textContent = myTurn ? 'Your shot.' : liveOn ? 'Opponent’s shot…' : 'Opponent’s turn…';
+    }
+
+    function applyCarromLiveVal(val) {
+      if (!val || !liveRoles) return;
+      const ver = Number(val.version != null ? val.version : val.seq) || 0;
+      if (ver < seq) return;
+      const st = val.state || {};
+      seq = ver;
+      applying = true;
+      dragging = null;
+      moving = false;
+      movingFrames = 0;
+      aiAim = null;
+      if (st.balls && Array.isArray(st.balls) && st.balls.length) {
+        applySnapshot(st.balls, null, val.turn);
+      }
+      if (st.queen) applyQueenAbsolute(st.queen);
+      if (st.breakDone != null) breakDone = !!st.breakDone;
+      if (st.hint) lastHint = String(st.hint);
+      myTurn = val.turn === liveRoles.me && val.status === 'playing';
+      if (val.status === 'playing') {
+        if (myTurn) {
+          const c = cueBall();
+          if (!c || Math.abs(c.y - seatBaselineY('you')) > 36) {
+            resetCueToBaseline({ seat: 'you' });
+          }
+          hint.textContent = lastHint ? lastHint + ' Your shot.' : 'Your shot.';
+        } else {
+          hint.textContent = lastHint ? lastHint + ' Opponent’s shot…' : 'Opponent’s shot…';
+        }
+      }
+      updateHud();
+      applying = false;
     }
 
     function pushSettle() {
       if (!liveOn || !liveHandle || !liveRoles || applying) return;
+      if (isCarrom) return; // carrom uses pushCarromLive
       const scores =
         liveRoles.me === liveRoles.playerA
           ? { a: youPocketed, b: oppPocketed }
           : { a: oppPocketed, b: youPocketed };
-      seq += 1;
       liveHandle.push({
+        baseVersion: seq,
         status: 'playing',
         turn: liveRoles.opp,
-        state: { balls: snapshotBalls(), scores, seq, phase: 'settled' },
+        state: { balls: snapshotBalls(), scores, phase: 'settled' },
       });
       if (typeof DangalLive !== 'undefined' && DangalLive.pingTurn) {
         DangalLive.pingTurn(liveRoles.opp, spec.id, { chatId: chat && (chat.firestoreId || chat.id) });
       }
       myTurn = false;
-      hint.textContent = 'Opponent’s turn…';
+      hint.textContent = 'Opponent’s shot…';
+    }
+
+    function pushCarromLive(opts) {
+      if (!liveOn || !liveHandle || !liveRoles || applying) return;
+      const o = opts || {};
+      const turnUid = o.turnUid || (myTurn ? liveRoles.me : liveRoles.opp);
+      lastHint = o.msg || lastHint;
+      breakDone = true;
+      const patch = {
+        baseVersion: seq,
+        status: o.status || 'playing',
+        turn: turnUid,
+        state: buildCarromState({
+          phase: o.phase || 'settled',
+          hint: lastHint,
+          breakDone: true,
+        }),
+      };
+      if (o.winner) patch.winner = o.winner;
+      liveHandle.push(patch);
+      if (patch.status === 'playing' && typeof DangalLive !== 'undefined' && DangalLive.pingTurn) {
+        DangalLive.pingTurn(turnUid, 'carrom', { chatId: chat && (chat.firestoreId || chat.id) });
+      }
     }
 
     function pointerPos(e) {
@@ -1044,7 +1209,7 @@
         if (!b.cue && pocketed(b)) {
           b.dead = true;
           b.vx = b.vy = 0;
-          if (isCarrom && !liveOn) {
+          if (isCarrom) {
             strokePocketed.push(b);
           } else {
             youPocketed += 1;
@@ -1054,7 +1219,7 @@
         }
         if (b.cue && pocketed(b)) {
           b.vx = b.vy = 0;
-          if (isCarrom && !liveOn) {
+          if (isCarrom) {
             b.dead = true;
             strokePocketed.push(b);
           } else {
@@ -1117,7 +1282,7 @@
       let foul = false;
       let msg = '';
       let keepTurn = false;
-      const who = seat === 'you' ? 'You' : 'AI';
+      const who = seat === 'you' ? 'You' : liveOn ? 'Opp' : 'AI';
 
       const bounceOpp = () => returnPieces(oppHit);
 
@@ -1206,22 +1371,51 @@
       updateHud();
 
       if (countOnBoard(color) === 0 && queenCoveredBy === seat) {
-        finish(seat === 'you');
+        lastHint = msg;
+        if (liveOn) {
+          const winnerUid = seat === 'you' ? liveRoles.me : liveRoles.opp;
+          pushCarromLive({
+            status: 'over',
+            winner: winnerUid,
+            turnUid: winnerUid,
+            msg,
+            phase: 'over',
+          });
+        }
+        finish(seat === 'you', { skipLivePush: true });
         return;
       }
       if (
         countOnBoard(seat === 'you' ? oppColor : youColor) === 0 &&
         queenCoveredBy === (seat === 'you' ? 'opp' : 'you')
       ) {
-        finish(seat !== 'you');
+        lastHint = msg;
+        if (liveOn) {
+          const winnerUid = seat === 'you' ? liveRoles.opp : liveRoles.me;
+          pushCarromLive({
+            status: 'over',
+            winner: winnerUid,
+            turnUid: winnerUid,
+            msg,
+            phase: 'over',
+          });
+        }
+        finish(seat !== 'you', { skipLivePush: true });
         return;
       }
 
       const nextSeat = keepTurn && !foul ? seat : seat === 'you' ? 'opp' : 'you';
       myTurn = nextSeat === 'you';
       resetCueToBaseline({ seat: nextSeat, foul: foul && strikerHit });
-      hint.textContent = msg + (myTurn ? ' Your shot.' : '');
+      lastHint = msg;
+      hint.textContent = msg + (myTurn ? ' Your shot.' : liveOn ? ' Opponent’s shot…' : '');
       updateHud();
+
+      if (liveOn) {
+        const turnUid = myTurn ? liveRoles.me : liveRoles.opp;
+        pushCarromLive({ turnUid, msg, phase: 'settled' });
+        return;
+      }
 
       if (!myTurn) scheduleAiTurn();
       else if (myTurn && !msg.includes('Your shot')) hint.textContent = (msg ? msg + ' ' : '') + 'Your shot.';
@@ -1467,22 +1661,34 @@
         clearTimeout(oppTimer);
         oppTimer = 0;
       }
-      if (liveOn && liveHandle && liveRoles && !applying) {
-        liveHandle.push({
-          status: 'over',
-          winner: won ? liveRoles.me : liveRoles.opp,
-          state: { balls: snapshotBalls(), scores: { a: youPocketed, b: oppPocketed }, phase: 'over' },
-        });
+      const m = meta || {};
+      if (liveOn && liveHandle && liveRoles && !applying && !m.skipLivePush) {
+        if (isCarrom) {
+          pushCarromLive({
+            status: 'over',
+            winner: won ? liveRoles.me : liveRoles.opp,
+            turnUid: won ? liveRoles.me : liveRoles.opp,
+            msg: lastHint,
+            phase: 'over',
+          });
+        } else {
+          liveHandle.push({
+            status: 'over',
+            winner: won ? liveRoles.me : liveRoles.opp,
+            state: { balls: snapshotBalls(), scores: { a: youPocketed, b: oppPocketed }, phase: 'over' },
+          });
+        }
       }
-      if (isCarrom && !liveOn && typeof recordDangalSession === 'function') {
+      if (isCarrom && typeof recordDangalSession === 'function') {
         recordDangalSession('carrom', {
           won: !!won,
           score: countPocketed(youColor),
-          difficulty,
+          difficulty: liveOn ? 'live' : difficulty,
+          live: !!liveOn,
         });
       }
       const winColor = won ? youColor : oppColor;
-      const resign = meta && meta.resign;
+      const resign = m.resign;
       showDuelResult(shell, {
         id: spec.id,
         you: won ? 1 : 0,
@@ -1491,22 +1697,45 @@
         pbScore: isCarrom ? countPocketed(youColor) : youPocketed,
         title: isCarrom
           ? resign
-            ? 'You resigned'
+            ? liveOn
+              ? 'You forfeited'
+              : 'You resigned'
             : colorLabel(winColor) + ' won'
           : won
             ? 'You win'
             : 'Defeat',
         subtitle: isCarrom
-          ? (resign ? 'Loss vs AI · ' : (won ? 'You' : 'AI') + ' · ') +
+          ? (resign
+              ? liveOn
+                ? 'Forfeit · '
+                : 'Loss vs AI · '
+              : (won ? 'You' : liveOn ? 'Opp' : 'AI') + ' · ') +
             colorLabel(winColor) +
             (queenCoveredBy ? ' · Queen covered' : '') +
-            ' · ' +
-            (DIFF_LABEL[difficulty] || 'Medium') +
+            (liveOn ? ' · Live' : ' · ' + (DIFF_LABEL[difficulty] || 'Medium')) +
             ' · You pocketed ' +
             countPocketed(youColor)
           : 'Pocketed ' + youPocketed + ' · opponent ' + oppPocketed,
         shareText: (spec.title || 'Game') + ' on Chaupaal',
         onAgain: () => {
+          if (isCarrom && liveOn) {
+            // Prompt 4 minimum: new matchId only — never revive an `over` RTDB node
+            const oppUid = liveRoles && liveRoles.opp;
+            const rematchId =
+              oppUid && typeof dangalMatchId === 'function'
+                ? dangalMatchId('carrom', { name: 'Opp', opponentUid: oppUid })
+                : 'carrom_' + Date.now();
+            try {
+              window.__dangalLaunchCtx = Object.assign({}, window.__dangalLaunchCtx || {}, {
+                matchId: rematchId,
+                mode: 'live',
+                opponentUid: oppUid,
+                source: 'challenge_host',
+              });
+            } catch (e) {}
+            openCarrom(Object.assign({}, chat, { dangalMatchId: rematchId, opponentUid: oppUid }));
+            return;
+          }
           if (isCarrom) openCueGame(Object.assign({}, spec, rematchOpts()));
           else openCueGame(Object.assign({}, spec, { chat }));
         },
@@ -1600,7 +1829,8 @@
     }
 
     function onSettle() {
-      if (isCarrom && !liveOn) {
+      if (isCarrom) {
+        // Practice + Live: shooter resolves rules; Live peers only apply remote snaps
         resolveCarromStroke();
         return;
       }
@@ -1681,46 +1911,110 @@
     }
 
     if (liveOn) {
-      const joined = joinLive(shell, chat, spec.id, (val) => {
-        if (!val || ended) return;
-        if (val.status === 'forfeit' || val.status === 'over') {
-          const iWon = val.winner === liveRoles.me;
-          if (val.status === 'over' && val.state && val.state.scores) {
-            const sc = val.state.scores;
-            youPocketed = liveRoles.me === liveRoles.playerA ? sc.a | 0 : sc.b | 0;
-            oppPocketed = liveRoles.me === liveRoles.playerA ? sc.b | 0 : sc.a | 0;
-            updateHud();
+      const seedState =
+        isCarrom && youColor === 'white'
+          ? buildCarromState({
+              phase: 'deal',
+              breakDone: false,
+              hint: 'Host breaks — White.',
+              pocketed: { white: 0, black: 0 },
+              queen: { status: 'board', pendingColor: null, coveredBy: null },
+            })
+          : null;
+
+      // Host places striker on white baseline before seed
+      if (isCarrom && youColor === 'white') {
+        resetCueToBaseline({ seat: 'you', x: W / 2 });
+        seedState.balls = snapshotBalls();
+      }
+
+      const joined = joinLive(
+        shell,
+        chat,
+        spec.id,
+        (val) => {
+          if (!val || ended) return;
+          if (val.status === 'forfeit' || val.status === 'over') {
+            const iWon = val.winner === liveRoles.me;
+            if (isCarrom && val.state) {
+              applying = true;
+              if (val.state.balls) applySnapshot(val.state.balls, null, val.turn);
+              if (val.state.queen) applyQueenAbsolute(val.state.queen);
+              applying = false;
+            } else if (val.status === 'over' && val.state && val.state.scores) {
+              const sc = val.state.scores;
+              youPocketed = liveRoles.me === liveRoles.playerA ? sc.a | 0 : sc.b | 0;
+              oppPocketed = liveRoles.me === liveRoles.playerA ? sc.b | 0 : sc.a | 0;
+              updateHud();
+            }
+            applying = true;
+            finish(iWon, { skipLivePush: true });
+            applying = false;
+            return;
           }
-          applying = true;
-          finish(iWon);
-          applying = false;
-          return;
-        }
-        const st = val.state || {};
-        if (st.seq != null && st.seq <= seq && st.phase === 'settled' && val.turn !== liveRoles.me) return;
-        if (st.balls && Array.isArray(st.balls)) {
-          applying = true;
-          if (st.seq != null) seq = st.seq;
-          applySnapshot(st.balls, st.scores, val.turn);
-          applying = false;
-        }
-      });
+          if (isCarrom) {
+            applyCarromLiveVal(val);
+            liveSeeded = !!(val.state && val.state.balls && val.state.balls.length);
+            return;
+          }
+          const st = val.state || {};
+          const ver = Number(val.version != null ? val.version : val.seq) || 0;
+          if (ver < seq) return;
+          if (st.balls && Array.isArray(st.balls)) {
+            applying = true;
+            seq = ver;
+            applySnapshot(st.balls, st.scores, val.turn);
+            applying = false;
+          }
+        },
+        seedState
+      );
       if (joined) {
         liveHandle = joined.handle;
         liveRoles = joined.roles;
-        myTurn = !!liveRoles.host;
-        hint.textContent = myTurn ? 'Your shot.' : 'Waiting for opponent…';
-        if (liveRoles.host) {
-          liveHandle.push({
-            status: 'playing',
-            turn: liveRoles.me,
-            state: { balls: snapshotBalls(), scores: { a: 0, b: 0 }, seq: 0, phase: 'deal' },
-          });
+        myTurn = isCarrom ? youColor === 'white' && !!liveRoles.host : !!liveRoles.host;
+        if (isCarrom) {
+          if (youColor === 'white') {
+            resetCueToBaseline({ seat: 'you', x: W / 2 });
+            hint.textContent = 'Your break — drag back on the striker.';
+            myTurn = true;
+            // Ensure deal snap is published (join seed + explicit push for turn)
+            liveHandle.push({
+              baseVersion: 0,
+              status: 'playing',
+              turn: liveRoles.me,
+              state: buildCarromState({
+                phase: 'deal',
+                breakDone: false,
+                hint: 'Host breaks — White.',
+              }),
+            });
+            liveSeeded = true;
+          } else {
+            myTurn = false;
+            hint.textContent = 'Waiting for board… White breaks.';
+          }
+          updateHud();
+        } else {
+          hint.textContent = myTurn ? 'Your shot.' : 'Waiting for opponent…';
+          if (liveRoles.host) {
+            liveHandle.push({
+              status: 'playing',
+              turn: liveRoles.me,
+              state: { balls: snapshotBalls(), scores: { a: 0, b: 0 }, phase: 'deal' },
+            });
+          }
         }
+      } else if (isCarrom) {
+        if (typeof showToast === 'function') showToast('Couldn’t join Live — opening Practice');
+        // Keep board playable solo without AI live path
+        myTurn = true;
+        resetCueToBaseline({ seat: 'you' });
+        hint.textContent = 'Your shot (Practice fallback).';
       }
     }
 
-    // Place striker for breaker; AI opens if needed
+    // Place striker for breaker; AI opens if needed (Practice only)
     if (isCarrom && !liveOn) {
       resetCueToBaseline({ seat: breaker, x: W / 2 });
       updateHud();
@@ -1850,7 +2144,7 @@
       stopEps: 0.055,
       baselineY: 0.82,
       soloPractice: true,
-      coachKey: 'chaupaal_carrom_coach_v3',
+      coachKey: 'chaupaal_carrom_coach_v4',
       youColor: o.youColor,
       difficulty: o.difficulty,
       breakerPick: o.breakerPick,
@@ -2967,7 +3261,7 @@
   if (typeof registerGame === 'function') {
     const games = [
       { id: 'tambola', name: 'Tambola', desc: 'Ticket · full house', icon: '🎱', genre: 'party', launch: openTambola, order: 30 },
-      { id: 'carrom', name: 'Carrom', desc: 'Practice vs AI', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
+      { id: 'carrom', name: 'Carrom', desc: 'Live 1v1 · Practice AI', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
       { id: 'pool', name: 'Pool', desc: 'Clear the felt', icon: '🎱', genre: 'board', launch: openPool, order: 32 },
       { id: 'rummy', name: 'Rummy', desc: 'Runs and sets', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
       { id: 'teenpatti', name: 'Teen Patti', desc: 'Three-card show', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },

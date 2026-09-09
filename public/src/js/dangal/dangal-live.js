@@ -7,6 +7,7 @@
  *   clocks{w,b}, clockAt, clockTurn, timeControl,
  *   quiz: { questions?, answers{}, scores{}, qIdx? },
  *   ludoMode: 'classic'|'quick' (host seeds once)
+ *   carrom/pool cue: state.balls[] seeded once by host; shooter pushes full settle snaps
  *
  * Chess merge rules:
  * - Host seeds fen once (join: only if fen missing). Guest never overwrites.
@@ -147,6 +148,12 @@
           typeof cur.state.pieces === 'object' &&
           Object.keys(cur.state.pieces).length > 0;
         if (o.state && o.state.pieces && !curHasLudo) {
+          next.state = o.state;
+        }
+        // Seed cue/carrom balls once — guest must never reset the break cluster.
+        const curHasCueBalls =
+          cur.state && Array.isArray(cur.state.balls) && cur.state.balls.length > 0;
+        if (o.state && Array.isArray(o.state.balls) && o.state.balls.length > 0 && !curHasCueBalls) {
           next.state = o.state;
         }
         if (o.ludoMode && !cur.ludoMode) {
