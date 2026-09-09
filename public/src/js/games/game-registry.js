@@ -590,17 +590,30 @@
         if (friend) {
           const uid = friend.uid || friend.id || '';
           const persistable = typeof isPersistableUid === 'function' && isPersistableUid(uid);
+          const mid =
+            persistable && liveOk && typeof dangalMatchId === 'function'
+              ? dangalMatchId(gameId, { name: friend.name, opponentUid: uid })
+              : '';
+          const chatId = friend.chatId || friend.firestoreId || '';
+          if (persistable && liveOk && mid && typeof sendChallengeCard === 'function' && chatId) {
+            try {
+              await sendChallengeCard(uid, gameId, { chatId, matchId: mid, stake });
+            } catch (e) {}
+          }
           game.launch({
             chat: {
               name: friend.name,
               id: persistable ? uid : 'friend_' + (friend.name || 'x'),
               uid: persistable ? uid : undefined,
               peerUid: persistable ? uid : undefined,
+              dangalMatchId: mid || undefined,
             },
-            source: 'dangal',
+            source: persistable && liveOk ? 'challenge_host' : 'dangal',
             mode: persistable && liveOk ? 'live' : 'practice',
             opponentUid: persistable ? uid : '',
             stake: persistable && liveOk ? stake : 0,
+            matchId: mid || '',
+            chatId,
           });
         }
         return;

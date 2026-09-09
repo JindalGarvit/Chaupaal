@@ -126,7 +126,7 @@
         next.lastMoveAt = next.lastMoveAt || now;
         next.version = Number(next.version || next.seq) || 0;
         // Do not resurrect a finished match
-        if (cur.status === 'over' || cur.status === 'forfeit' || cur.status === 'timeout' || cur.status === 'checkmate') {
+        if (cur.status === 'over' || cur.status === 'forfeit' || cur.status === 'timeout' || cur.status === 'checkmate' || cur.status === 'aborted' || cur.status === 'draw' || cur.status === 'stalemate') {
           next.status = cur.status;
           next.winner = cur.winner || null;
         }
@@ -185,7 +185,9 @@
             cur.status === 'timeout' ||
             cur.status === 'checkmate' ||
             cur.status === 'stalemate' ||
-            cur.status === 'draw';
+            cur.status === 'draw' ||
+            cur.status === 'aborted' ||
+            cur.status === 'resign';
           if (finished && patchObj.fen && patchObj.fen !== cur.fen) {
             return;
           }
