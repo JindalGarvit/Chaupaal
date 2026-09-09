@@ -31,6 +31,13 @@ const SEEDS = {
     denyList: [],
     note: 'Mehfil rooms. Voice needs AGORA_APP_ID + AGORA_APP_CERTIFICATE on Vercel.',
   },
+  gif_live_search: {
+    enabled: true,
+    percent: 100,
+    allowList: [],
+    denyList: [],
+    note: 'Live Klipy search via media-config gif_search. KLIPY_API_KEY is server-only.',
+  },
 };
 
 function toFirestoreFields(obj) {
@@ -88,30 +95,56 @@ async function main() {
     return;
   }
 
-  let getAccessToken;
+  let auth;
   try {
-    ({ getAccessToken } = require(path.join(FT_ROOT, 'apiv2.js')));
+    auth = require(path.join(FT_ROOT, 'auth.js'));
   } catch (e) {
     console.error('firebase-tools not found at', FT_ROOT);
     console.error('Install: npm i -g firebase-tools && firebase login');
     process.exit(1);
   }
 
-  const token = await getAccessToken();
+  const account = typeof auth.getGlobalDefaultAccount === 'function' ? auth.getGlobalDefaultAccount() : null;
+  if (!account) {
+    console.error('No Firebase CLI account. Run: firebase login');
+    process.exit(1);
+  }
+
+  const scopes = [
+    'email',
+    'openid',
+    'https://www.googleapis.com/auth/cloudplatformprojects.readonly',
+    'https://www.googleapis.com/auth/firebase',
+    'https://www.googleapis.com/auth/cloud-platform',
+    'https://www.googleapis.com/auth/datastore',
+  ];
+
+  let token;
+  try {
+    const tok = await auth.getAccessToken(account, scopes);
+    token = (tok && tok.access_token) || tok;
+  } catch (e) {
+    console.error(e.message || e);
+    console.error('Re-auth: firebase login --reauth');
+    process.exit(1);
+  }
   if (!token) {
-    console.error('No Firebase CLI access token. Run: firebase login');
+    console.error('No Firebase CLI access token. Run: firebase login --reauth');
     process.exit(1);
   }
 
   const mask =
     'updateMask.fieldPaths=enabled&updateMask.fieldPaths=percent&updateMask.fieldPaths=allowList&updateMask.fieldPaths=denyList&updateMask.fieldPaths=note';
 
-  for (const [id, data] of Object.entries(SEEDS)) {
+  // Prefer seeding only gif_live_search when GIF_FLAG_ONLY=1 (ops enable without touching others).
+  const only = process.env.GIF_FLAG_ONLY === '1' ? { gif_live_search: SEEDS.gif_live_search } : SEEDS;
+
+  for (const [id, data] of Object.entries(only)) {
     const docPath = `projects/${PROJECT}/databases/(default)/documents/feature_flags/${id}`;
     const url = `https://firestore.googleapis.com/v1/${docPath}?${mask}`;
     const body = JSON.stringify({ fields: toFirestoreFields(data) });
     await requestJson('PATCH', url, token, body);
-    console.log('seeded', id);
+    console.log('seeded', id, data.enabled ? 'enabled' : 'disabled');
   }
   console.log('done');
 }

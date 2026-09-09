@@ -579,7 +579,7 @@ function openPeepalAskSheet(editPost = null){
     { type: 'video', icon: '🎬', label: 'Video' },
     { type: 'music', icon: '🎵', label: 'Music' },
     { type: 'voice', icon: '🎤', label: 'Voice' },
-    { type: 'gif', icon: 'GIF', label: 'GIF' },
+    { type: 'gif', icon: 'GIF', label: 'GIF & more' },
     { type: 'sticker', icon: '😄', label: 'Sticker' },
     { type: 'link', icon: '🔗', label: 'Link' },
     { type: 'location', icon: '📍', label: 'Location' },
@@ -937,16 +937,66 @@ function openPeepalAskSheet(editPost = null){
       return document.getElementById('peepalAudioInput')?.click();
     }
     if (type === 'gif') {
-      if (typeof openGifPicker === 'function') {
-        return openGifPicker({ onSelect: (gif) => gif && addAttachment({ type: 'gif', label: 'GIF', url: gif.url, preview: gif.preview || gif.url }) });
-      }
-      return toastSoon('GIF');
+      const openPicker =
+        typeof openKlipyMediaPicker === 'function'
+          ? openKlipyMediaPicker
+          : typeof openGifPicker === 'function'
+            ? openGifPicker
+            : null;
+      if (!openPicker) return toastSoon('GIF');
+      return openPicker({
+        onSelect: (gif) => {
+          if (!gif) return;
+          if (gif.emoji && !gif.url) {
+            addAttachment({ type: 'sticker', label: `${gif.emoji} Sticker`, emoji: gif.emoji });
+            return;
+          }
+          if (!gif.url) return;
+          const kind = String(gif.kind || gif.type || 'gif').toLowerCase();
+          const label =
+            kind === 'sticker' ? 'Sticker' : kind === 'meme' ? 'Meme' : kind === 'clip' ? 'Clip' : 'GIF';
+          addAttachment({
+            type: kind,
+            label,
+            url: gif.url,
+            preview: gif.preview || gif.previewUrl || gif.url,
+            mime: gif.mime || '',
+            duration: gif.duration || null,
+            title: gif.title || label,
+          });
+        },
+      });
     }
     if (type === 'sticker') {
-      if (typeof openStickerPicker === 'function') {
-        return openStickerPicker({ onSelect: (sticker) => sticker && addAttachment({ type: 'sticker', label: '😄 Sticker', sticker }) });
-      }
-      return toastSoon('Sticker');
+      const openStickers =
+        typeof openStickerPicker === 'function'
+          ? openStickerPicker
+          : typeof openKlipyMediaPicker === 'function'
+            ? (opts) => openKlipyMediaPicker(Object.assign({ kind: 'sticker' }, opts || {}))
+            : null;
+      if (!openStickers) return toastSoon('Sticker');
+      return openStickers({
+        onSelect: (sticker) => {
+          if (!sticker) return;
+          if (typeof sticker === 'string') {
+            addAttachment({ type: 'sticker', label: `${sticker} Sticker`, emoji: sticker });
+            return;
+          }
+          if (sticker.emoji && !sticker.url) {
+            addAttachment({ type: 'sticker', label: `${sticker.emoji} Sticker`, emoji: sticker.emoji });
+            return;
+          }
+          if (sticker.url) {
+            addAttachment({
+              type: 'sticker',
+              label: 'Sticker',
+              url: sticker.url,
+              preview: sticker.preview || sticker.previewUrl || sticker.url,
+              title: sticker.title || 'Sticker',
+            });
+          }
+        },
+      });
     }
     if (type === 'voice') {
       if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') return toastSoon('Voice');
@@ -1333,9 +1383,13 @@ function openPeepalAskSheet(editPost = null){
             item.url = up.media;
             item.media = up.media;
             item.thumb = up.thumb || null;
-          } else if (a.type === 'gif') {
+          } else if (a.type === 'gif' || a.type === 'sticker' || a.type === 'meme' || a.type === 'clip') {
             item.url = a.url || a.preview;
             item.preview = a.preview || a.url;
+            item.mime = a.mime || '';
+            item.duration = a.duration || null;
+            item.title = a.title || a.label || a.type;
+            if (a.emoji) item.emoji = a.emoji;
           } else if (a.type === 'music' && a.song) {
             item.song = a.song;
             item.label = a.label || a.song.title;

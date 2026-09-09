@@ -15,6 +15,13 @@ const SEEDS = {
     denyList: [],
     note: 'Mehfil rooms. Voice needs AGORA_APP_ID + AGORA_APP_CERTIFICATE on Vercel.',
   },
+  gif_live_search: {
+    enabled: true,
+    percent: 100,
+    allowList: [],
+    denyList: [],
+    note: 'Live Klipy search via media-config gif_search. KLIPY_API_KEY is server-only.',
+  },
 };
 
 async function main() {

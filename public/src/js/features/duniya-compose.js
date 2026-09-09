@@ -336,32 +336,59 @@
   }
 
   function addGifSlide(gif) {
-    const url = gif?.url || gif?.preview;
+    const url = gif?.url || gif?.preview || gif?.previewUrl;
     if (!url || !/^https:\/\//i.test(url)) return;
     if (state.slides.length >= MAX_SLIDES) {
       toast('Up to 10 slides');
       return;
     }
-    state.slides.push({
-      id: uid(),
-      type: 'gif',
-      file: null,
-      localUrl: url,
-      remote: { media: url, thumb: url, width: 0, height: 0 },
-      gifUrl: url,
-      crop: { x: 0.5, y: 0.5, scale: 1, rotate: 0 },
-      filter: 'normal',
-      alt: gif.title || '',
-      muted: true,
-      trimStart: 0,
-      trimEnd: 0,
-      durationMs: 0,
-      width: 0,
-      height: 0,
-      posterUrl: '',
-      posterTime: 0,
-      needsReattach: false,
-    });
+    const kind = String(gif?.kind || gif?.type || 'gif').toLowerCase();
+    const preview = gif?.preview || gif?.previewUrl || url;
+    if (kind === 'clip') {
+      state.slides.push({
+        id: uid(),
+        type: 'video',
+        file: null,
+        localUrl: url,
+        remote: { media: url, thumb: preview, width: 0, height: 0 },
+        gifUrl: '',
+        crop: { x: 0.5, y: 0.5, scale: 1, rotate: 0 },
+        filter: 'normal',
+        alt: gif.title || 'Clip',
+        muted: true,
+        trimStart: 0,
+        trimEnd: 0,
+        durationMs: Number(gif.duration) > 0 ? Number(gif.duration) * 1000 : 0,
+        width: 0,
+        height: 0,
+        posterUrl: preview,
+        posterTime: 0,
+        needsReattach: false,
+        klipyKind: 'clip',
+      });
+    } else {
+      state.slides.push({
+        id: uid(),
+        type: 'gif',
+        file: null,
+        localUrl: url,
+        remote: { media: url, thumb: preview, width: 0, height: 0 },
+        gifUrl: url,
+        crop: { x: 0.5, y: 0.5, scale: 1, rotate: 0 },
+        filter: 'normal',
+        alt: gif.title || kind,
+        muted: true,
+        trimStart: 0,
+        trimEnd: 0,
+        durationMs: 0,
+        width: 0,
+        height: 0,
+        posterUrl: '',
+        posterTime: 0,
+        needsReattach: false,
+        klipyKind: kind,
+      });
+    }
     persistDraft();
   }
 
@@ -528,12 +555,22 @@
       showExtras();
     });
     el.querySelector('[data-act="gif"]')?.addEventListener('click', () => {
-      if (typeof openGifPicker !== 'function') {
+      const openPicker =
+        typeof openKlipyMediaPicker === 'function'
+          ? openKlipyMediaPicker
+          : typeof openGifPicker === 'function'
+            ? openGifPicker
+            : null;
+      if (!openPicker) {
         toast('GIF picker unavailable');
         return;
       }
-      openGifPicker({
+      openPicker({
         onSelect: (gif) => {
+          if (gif?.emoji && !gif?.url) {
+            toast('Pick a media GIF/sticker for a slide');
+            return;
+          }
           addGifSlide(gif);
           showCrop();
         },

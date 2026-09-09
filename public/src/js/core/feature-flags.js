@@ -45,12 +45,12 @@
   }
 
   /**
-   * @param {string} flagId
-   * @param {{ uid?: string, defaultValue?: boolean }} [opts]
+   * Evaluate a flag document (or seed) against uid.
+   * @param {object|null} doc
+   * @param {string|null} userId
+   * @param {boolean} defaultValue
    */
-  async function isFeatureEnabled(flagId, { uid, defaultValue = false } = {}) {
-    const userId = uid || (typeof currentUser !== 'undefined' && currentUser?.uid) || auth?.currentUser?.uid || null;
-    const doc = await fetchFlagDoc(flagId);
+  function evaluateFlagDoc(doc, userId, defaultValue) {
     if (!doc) return defaultValue;
     if (doc.enabled === false) return false;
     if (Array.isArray(doc.denyList) && userId && doc.denyList.includes(userId)) return false;
@@ -59,9 +59,27 @@
       if (doc.percent <= 0) return false;
       if (doc.percent >= 100) return true;
       if (!userId) return defaultValue;
-      return hashPercent(userId, flagId) < doc.percent;
+      return hashPercent(userId, String(doc._flagId || '')) < doc.percent;
     }
     return doc.enabled === true ? true : defaultValue;
+  }
+
+  /**
+   * @param {string} flagId
+   * @param {{ uid?: string, defaultValue?: boolean }} [opts]
+   */
+  async function isFeatureEnabled(flagId, { uid, defaultValue = false } = {}) {
+    const userId = uid || (typeof currentUser !== 'undefined' && currentUser?.uid) || auth?.currentUser?.uid || null;
+    const doc = await fetchFlagDoc(flagId);
+    if (doc) {
+      return evaluateFlagDoc(Object.assign({ _flagId: flagId }, doc), userId, defaultValue);
+    }
+    // No Firestore doc yet — honor FLAG_SEEDS so ops can flip seeds without a seed script.
+    const seed = FLAG_SEEDS[flagId];
+    if (seed) {
+      return evaluateFlagDoc(Object.assign({ _flagId: flagId }, seed), userId, defaultValue);
+    }
+    return defaultValue;
   }
 
   function invalidateFeatureFlag(flagId) {
@@ -104,11 +122,11 @@
       note: 'Ambient sound pads for sensory theme. Independent of sensory_theme; off by default for users too.',
     },
     gif_live_search: {
-      enabled: false,
-      percent: 0,
+      enabled: true,
+      percent: 100,
       allowList: [],
       denyList: [],
-      note: 'Live Klipy GIF/sticker/meme/clip search via POST /api/media-config gif_search (+ kind). Needs KLIPY_API_KEY. Off = local GIF pack + emoji stickers.',
+      note: 'Live Klipy GIF/sticker/meme/clip search via POST /api/media-config gif_search (+ kind). Needs KLIPY_API_KEY (server-only). Off = local GIF pack + emoji stickers.',
     },
   };
 

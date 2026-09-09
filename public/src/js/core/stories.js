@@ -359,16 +359,33 @@
           if (typeof openBaithakInstantCamera === 'function') openBaithakInstantCamera();
           return;
         }
-        if (tool === 'gif' && typeof openGifPicker === 'function') {
-          openGifPicker({
-            onSelect: (gif) => {
-              const url = gif?.url || gif?.mp4 || '';
+        if (tool === 'gif') {
+          const openPicker =
+            typeof openKlipyMediaPicker === 'function'
+              ? openKlipyMediaPicker
+              : typeof openGifPicker === 'function'
+                ? openGifPicker
+                : null;
+          if (!openPicker) return;
+          openPicker({
+            onSelect: (item) => {
+              if (!item) return;
+              if (item.emoji && !item.url) {
+                if (ta) {
+                  ta.value = (ta.value || '') + item.emoji;
+                  ta.focus();
+                }
+                return;
+              }
+              const url = item.url || item.mp4 || '';
               if (!url) return;
+              const kind = String(item.kind || item.type || 'gif').toLowerCase();
               shareSplitPayload({
                 text: '',
                 media: url,
-                thumb: gif?.preview || gif?.url || url,
-                type: 'gif',
+                thumb: item.preview || item.previewUrl || item.url || url,
+                type: kind === 'clip' ? 'video' : kind,
+                mediaType: kind === 'clip' ? 'video' : 'image',
               });
             },
           });
@@ -394,16 +411,44 @@
           return;
         }
         if (tool === 'sticker') {
-          const insert = (emoji) => {
+          const insertEmoji = (emoji) => {
             if (!ta || !emoji) return;
             ta.value = (ta.value || '') + emoji;
             ta.focus();
           };
-          if (typeof openStickerPicker === 'function') {
-            openStickerPicker({ onSelect: insert });
-          } else {
-            insert('✨');
+          const openStickers =
+            typeof openStickerPicker === 'function'
+              ? openStickerPicker
+              : typeof openKlipyMediaPicker === 'function'
+                ? (opts) => openKlipyMediaPicker(Object.assign({ kind: 'sticker' }, opts || {}))
+                : null;
+          if (!openStickers) {
+            insertEmoji('✨');
+            return;
           }
+          openStickers({
+            onSelect: (item) => {
+              if (!item) return;
+              if (typeof item === 'string') {
+                insertEmoji(item);
+                return;
+              }
+              if (item.emoji && !item.url) {
+                insertEmoji(item.emoji);
+                return;
+              }
+              if (item.url) {
+                const kind = String(item.kind || item.type || 'sticker').toLowerCase();
+                shareSplitPayload({
+                  text: '',
+                  media: item.url,
+                  thumb: item.preview || item.previewUrl || item.url,
+                  type: kind === 'clip' ? 'video' : kind,
+                  mediaType: kind === 'clip' ? 'video' : 'image',
+                });
+              }
+            },
+          });
         }
       });
     });

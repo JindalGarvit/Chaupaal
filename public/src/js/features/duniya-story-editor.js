@@ -569,24 +569,49 @@
             );
             sheet.querySelector('[data-gif]')?.addEventListener('click', () => {
               done();
-              if (typeof openGifPicker === 'function') {
-                openGifPicker({
-                  onSelect: (gif) => {
+              const openPicker =
+                typeof openKlipyMediaPicker === 'function'
+                  ? openKlipyMediaPicker
+                  : typeof openGifPicker === 'function'
+                    ? openGifPicker
+                    : null;
+              if (!openPicker) return;
+              openPicker({
+                onSelect: (gif) => {
+                  if (!gif) return;
+                  if (gif.emoji && !gif.url) {
                     item.overlays.push({
                       id: uid(),
-                      type: 'gif',
-                      url: gif.url,
-                      preview: gif.preview || gif.url,
+                      type: 'emoji',
+                      emoji: gif.emoji,
                       x: 0.5,
-                      y: 0.5,
+                      y: 0.45,
                       scale: 1,
                       rotate: 0,
                       z: 7,
                     });
                     render();
-                  },
-                });
-              }
+                    return;
+                  }
+                  const url = gif.url || gif.preview || gif.previewUrl;
+                  if (!url) return;
+                  const kind = String(gif.kind || gif.type || 'gif').toLowerCase();
+                  // Story canvas draws image overlays; clips use poster/preview.
+                  item.overlays.push({
+                    id: uid(),
+                    type: 'gif',
+                    url: kind === 'clip' ? gif.preview || gif.previewUrl || url : url,
+                    preview: gif.preview || gif.previewUrl || url,
+                    klipyKind: kind,
+                    x: 0.5,
+                    y: 0.5,
+                    scale: 1,
+                    rotate: 0,
+                    z: 7,
+                  });
+                  render();
+                },
+              });
             });
           }
         );

@@ -93,7 +93,7 @@
    */
   async function fetchServerKlipy(kind, query) {
     if (typeof isFeatureEnabled === 'function') {
-      const live = await isFeatureEnabled('gif_live_search', { defaultValue: false });
+      const live = await isFeatureEnabled('gif_live_search', { defaultValue: true });
       if (!live) return null;
     } else {
       return null;
