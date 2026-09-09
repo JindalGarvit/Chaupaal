@@ -139,7 +139,7 @@
     tennis: ['Serve to start each point', 'First to 4 games', 'Time the return'],
     kabaddi: ['Tag defenders, then tap Home', 'Breath bar is your raid clock', 'Empty tags still concede a point'],
     tambola: ['Numbers auto-daub on your ticket', 'Claim full house at 15', 'Caller races another ticket'],
-    carrom: ['Drag back on the striker to aim', 'Release to shoot', 'Pocket coins before the opponent'],
+    carrom: ['Pocket your colour', 'Queen then cover', 'Striker pocket is a foul'],
     pool: ['Drag the cue ball to aim', 'Clear object balls', 'Scratch returns the cue'],
     rummy: ['Draw or take the discard', 'Discard one card', 'Declare when you have runs and sets'],
     teenpatti: ['Three cards, then Show or Fold', 'Trail beats sequence beats colour', 'Practice vs AI — chips stay virtual'],

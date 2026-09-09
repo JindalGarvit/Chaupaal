@@ -241,10 +241,11 @@
     }
   }
 
-  function joinLive(shell, chat, gameType, onSnap, seedState) {
+  function joinLive(shell, chat, gameType, onSnap, seedState, extra) {
     if (!chatLiveOn(chat) || typeof DangalLive === 'undefined' || !DangalLive.join) return null;
     const roles = DangalLive.roles(chat);
     if (!roles || !roles.me) return null;
+    const x = extra || {};
     const handle = DangalLive.join({
       gameType,
       matchId: matchIdFor(chat, gameType),
@@ -252,6 +253,7 @@
       playerA: roles.playerA,
       playerB: roles.playerB,
       state: seedState || null,
+      stake: Number(x.stake != null ? x.stake : (window.__dangalLaunchCtx && window.__dangalLaunchCtx.stake)) || 0,
       onSnap(val, api) {
         if (!shell.alive()) return;
         try {
@@ -262,6 +264,14 @@
       },
       onForfeit(info) {
         if (!shell.alive() || shell.gameOver) return;
+        if (typeof x.onForfeit === 'function') {
+          try {
+            x.onForfeit(info, roles);
+          } catch (e) {
+            console.warn('[party-classics forfeit]', gameType, e);
+          }
+          return;
+        }
         const iWon = info && info.winner === roles.me;
         showDuelResult(shell, {
           id: gameType,
@@ -626,6 +636,17 @@
     const oppColor = youColor === 'white' ? 'black' : 'white';
     const breaker =
       breakerPick === 'random' ? (Math.random() < 0.5 ? 'you' : 'opp') : breakerPick === 'opp' ? 'opp' : 'you';
+    const liveStake = liveOn
+      ? Math.max(
+          0,
+          Number(spec.stake != null ? spec.stake : window.__dangalLaunchCtx && window.__dangalLaunchCtx.stake) || 0
+        )
+      : 0;
+    const settleMatchId = liveOn ? String(matchIdFor(chat, 'carrom') || '').trim() : '';
+    let settleOppUid = '';
+    let settleDone = false;
+    let sessionRecorded = false;
+    let leaveTornDown = false;
     let queenCoveredBy = null;
     let queenPendingCoverFor = null;
     let strokeSeat = 'you';
@@ -638,7 +659,11 @@
         'Practice · ' + (DIFF_LABEL[difficulty] || 'Medium') + ' · ' + (youColor === 'white' ? 'White' : 'Black')
       );
     } else if (isCarrom && liveOn) {
-      setChromeSubtitle('Live 1v1 · ' + (youColor === 'white' ? 'White' : 'Black'));
+      setChromeSubtitle(
+        'Live 1v1 · ' +
+          (youColor === 'white' ? 'White' : 'Black') +
+          (liveStake > 0 ? ' · Stake ⚡' + liveStake : ' · Friendly')
+      );
     }
 
     let coachDismissed = false;
@@ -1649,7 +1674,195 @@
         difficulty,
         breakerPick,
         skipSheet: true,
+        stake: 0,
       };
+    }
+
+    function noteCarromSession(won) {
+      if (sessionRecorded) return;
+      sessionRecorded = true;
+      if (typeof recordDangalSession === 'function') {
+        recordDangalSession('carrom', {
+          won: !!won,
+          score: countPocketed(youColor),
+          difficulty: liveOn ? 'live' : difficulty,
+          stake: liveStake,
+          live: !!liveOn,
+        });
+      }
+    }
+
+    function paintCarromSettle(settle) {
+      const el = shell.body.querySelector('#carromChipDelta');
+      if (!el || !settle || settle.error) return;
+      const delta = Number(settle.chipDelta);
+      const bal = settle.chips != null ? Number(settle.chips) : null;
+      const parts = [];
+      if (Number.isFinite(delta) && (delta !== 0 || liveStake > 0)) {
+        parts.push(
+          delta === 0
+            ? `Virtual chips · balance ${bal != null ? bal : '—'}`
+            : `Virtual chips ${delta > 0 ? '+' : ''}${delta}${bal != null ? ` · balance ${bal}` : ''}`
+        );
+      }
+      if (!parts.length && liveOn) parts.push('Settled · virtual chips only — not real money');
+      if (!parts.length) return;
+      el.hidden = false;
+      el.textContent = parts.join(' · ') + ' · not real money';
+    }
+
+    async function settleCarromOnce(won) {
+      if (!liveOn || settleDone || !window.DangalEconomy || typeof DangalEconomy.reportGameEnd !== 'function') {
+        return null;
+      }
+      if (!settleMatchId) return null;
+      settleDone = true;
+      try {
+        const me = typeof getCurrentUid === 'function' ? getCurrentUid() : '';
+        const opp = settleOppUid || (liveRoles && liveRoles.opp) || '';
+        const settle = await DangalEconomy.reportGameEnd({
+          gameType: 'carrom',
+          result: won ? 'win' : 'loss',
+          won: !!won,
+          isDraw: false,
+          matchId: settleMatchId,
+          sessionId: settleMatchId,
+          opponentUid: opp,
+          stake: liveStake,
+          winnerUid: won ? me : opp,
+        });
+        if (settle && settle.error) {
+          settleDone = false;
+          const el = shell.body.querySelector('#carromChipDelta');
+          if (el) {
+            el.hidden = false;
+            el.innerHTML =
+              `Couldn’t update chips <button type="button" id="carromChipRetry" class="game-tap-target" style="margin-left:8px;">Retry</button>`;
+            el.querySelector('#carromChipRetry')?.addEventListener('click', () => {
+              settleCarromOnce(won);
+            });
+          }
+          if (typeof showToast === 'function') showToast('Couldn’t update chips — tap Retry');
+          return settle;
+        }
+        paintCarromSettle(settle);
+        return settle;
+      } catch (e) {
+        settleDone = false;
+        if (typeof showToast === 'function') showToast('Couldn’t update chips — try Retry');
+        return null;
+      }
+    }
+
+    async function tearDownLiveHandle() {
+      if (leaveTornDown) return;
+      leaveTornDown = true;
+      try {
+        if (liveHandle) await liveHandle.leave({ forfeit: false });
+      } catch (e) {
+        try {
+          if (liveHandle) liveHandle.leave();
+        } catch (e2) {}
+      }
+      liveHandle = null;
+      shell.liveHandle = null;
+    }
+
+    async function startCarromLiveRematch(nextStake) {
+      const oppUid = settleOppUid || (liveRoles && liveRoles.opp) || '';
+      const chatId =
+        (window.__dangalLaunchCtx && window.__dangalLaunchCtx.chatId) ||
+        (window.currentOpenChat && (window.currentOpenChat.firestoreId || window.currentOpenChat.id)) ||
+        (chat && (chat.firestoreId || chat.id)) ||
+        '';
+      if (!oppUid || (typeof isPersistableUid === 'function' && !isPersistableUid(oppUid))) {
+        if (typeof showToast === 'function') showToast('Opponent left — challenge them again from friends');
+        if (typeof openFriendPickerSheet === 'function') {
+          const f = await openFriendPickerSheet({
+            title: 'Challenge · Carrom',
+            subtitle: 'Live 1v1 · virtual chips only',
+          });
+          if (f) {
+            await tearDownLiveHandle();
+            shell.close('rematch');
+            const uid = f.uid || f.id || '';
+            const mid =
+              typeof dangalMatchId === 'function'
+                ? dangalMatchId('carrom', { name: f.name, opponentUid: uid })
+                : 'carrom_' + Date.now();
+            try {
+              window.__dangalLaunchCtx = Object.assign({}, window.__dangalLaunchCtx || {}, {
+                gameId: 'carrom',
+                gameType: 'carrom',
+                matchId: mid,
+                mode: 'live',
+                opponentUid: uid,
+                stake: nextStake,
+                source: 'challenge_host',
+                chatId: f.chatId || f.firestoreId || '',
+                startedAt: Date.now(),
+              });
+            } catch (e) {}
+            if (typeof sendChallengeCard === 'function' && (f.chatId || f.firestoreId)) {
+              try {
+                await sendChallengeCard(uid, 'carrom', {
+                  chatId: f.chatId || f.firestoreId,
+                  matchId: mid,
+                  stake: nextStake,
+                });
+              } catch (e) {}
+            }
+            openCarrom({
+              name: f.name,
+              id: uid,
+              uid,
+              peerUid: uid,
+              opponentUid: uid,
+              dangalMatchId: mid,
+              dangalSource: 'challenge_host',
+              stake: nextStake,
+            });
+          }
+        }
+        return;
+      }
+      const rematchId =
+        typeof dangalMatchId === 'function'
+          ? dangalMatchId('carrom', { name: chat.name || 'Friend', opponentUid: oppUid })
+          : 'carrom_' + Date.now();
+      await tearDownLiveHandle();
+      try {
+        window.__dangalLaunchCtx = Object.assign({}, window.__dangalLaunchCtx || {}, {
+          gameId: 'carrom',
+          gameType: 'carrom',
+          matchId: rematchId,
+          mode: 'live',
+          opponentUid: oppUid,
+          stake: nextStake,
+          source: 'challenge_host',
+          chatId,
+          startedAt: Date.now(),
+        });
+      } catch (e) {}
+      if (typeof sendChallengeCard === 'function' && oppUid && chatId) {
+        try {
+          await sendChallengeCard(oppUid, 'carrom', { chatId, matchId: rematchId, stake: nextStake });
+          if (typeof showToast === 'function') showToast('Rematch sent — they Accept to join');
+        } catch (e) {}
+      } else if (typeof showToast === 'function') {
+        showToast('Rematch ready — ask your friend to join from Baithak');
+      }
+      shell.close('rematch');
+      openCarrom({
+        name: chat.name || 'Friend',
+        id: oppUid,
+        uid: oppUid,
+        peerUid: oppUid,
+        opponentUid: oppUid,
+        dangalMatchId: rematchId,
+        dangalSource: 'challenge_host',
+        stake: nextStake,
+      });
     }
 
     function finish(won, meta) {
@@ -1662,10 +1875,11 @@
         oppTimer = 0;
       }
       const m = meta || {};
+      if (liveRoles && liveRoles.opp) settleOppUid = liveRoles.opp;
       if (liveOn && liveHandle && liveRoles && !applying && !m.skipLivePush) {
         if (isCarrom) {
           pushCarromLive({
-            status: 'over',
+            status: m.forfeit ? 'forfeit' : 'over',
             winner: won ? liveRoles.me : liveRoles.opp,
             turnUid: won ? liveRoles.me : liveRoles.opp,
             msg: lastHint,
@@ -1679,67 +1893,209 @@
           });
         }
       }
-      if (isCarrom && typeof recordDangalSession === 'function') {
-        recordDangalSession('carrom', {
-          won: !!won,
-          score: countPocketed(youColor),
-          difficulty: liveOn ? 'live' : difficulty,
-          live: !!liveOn,
+
+      if (!isCarrom) {
+        showDuelResult(shell, {
+          id: spec.id,
+          you: won ? 1 : 0,
+          opp: won ? 0 : 1,
+          glyph: spec.glyph,
+          pbScore: youPocketed,
+          title: won ? 'You win' : 'Defeat',
+          subtitle: 'Pocketed ' + youPocketed + ' · opponent ' + oppPocketed,
+          shareText: (spec.title || 'Game') + ' on Chaupaal',
+          onAgain: () => openCueGame(Object.assign({}, spec, { chat })),
         });
+        return;
       }
+
+      noteCarromSession(won);
       const winColor = won ? youColor : oppColor;
-      const resign = m.resign;
-      showDuelResult(shell, {
-        id: spec.id,
-        you: won ? 1 : 0,
-        opp: won ? 0 : 1,
-        glyph: spec.glyph,
-        pbScore: isCarrom ? countPocketed(youColor) : youPocketed,
-        title: isCarrom
-          ? resign
-            ? liveOn
-              ? 'You forfeited'
-              : 'You resigned'
-            : colorLabel(winColor) + ' won'
-          : won
-            ? 'You win'
-            : 'Defeat',
-        subtitle: isCarrom
-          ? (resign
-              ? liveOn
-                ? 'Forfeit · '
-                : 'Loss vs AI · '
-              : (won ? 'You' : liveOn ? 'Opp' : 'AI') + ' · ') +
-            colorLabel(winColor) +
-            (queenCoveredBy ? ' · Queen covered' : '') +
-            (liveOn ? ' · Live' : ' · ' + (DIFF_LABEL[difficulty] || 'Medium')) +
-            ' · You pocketed ' +
-            countPocketed(youColor)
-          : 'Pocketed ' + youPocketed + ' · opponent ' + oppPocketed,
-        shareText: (spec.title || 'Game') + ' on Chaupaal',
-        onAgain: () => {
-          if (isCarrom && liveOn) {
-            // Prompt 4 minimum: new matchId only — never revive an `over` RTDB node
-            const oppUid = liveRoles && liveRoles.opp;
-            const rematchId =
-              oppUid && typeof dangalMatchId === 'function'
-                ? dangalMatchId('carrom', { name: 'Opp', opponentUid: oppUid })
+      const resign = m.resign || m.forfeit;
+      const stakeLine = liveOn ? (liveStake > 0 ? `⚡${liveStake} virtual` : 'Friendly') : '';
+      const shareStats = {
+        scoreLine: won ? 'Win' : 'Loss',
+        meta: [
+          colorLabel(youColor),
+          queenCoveredBy ? 'Queen covered' : '',
+          liveOn ? 'Live' : DIFF_LABEL[difficulty] || 'Medium',
+          stakeLine,
+        ]
+          .filter(Boolean)
+          .join(' · '),
+        vs: liveOn ? 'vs Friend' : 'vs AI',
+        stake: liveStake,
+        text:
+          `Chaupaal Carrom · ${won ? 'Win' : 'Loss'} · ${colorLabel(youColor)}` +
+          (queenCoveredBy ? ' · Queen covered' : '') +
+          (liveOn
+            ? liveStake > 0
+              ? ` · Live · Stake ⚡${liveStake} (virtual chips)`
+              : ' · Live · Friendly'
+            : ` · Practice · ${DIFF_LABEL[difficulty] || 'Medium'}`) +
+          ' · not real money',
+      };
+      const chatId =
+        (window.__dangalLaunchCtx && window.__dangalLaunchCtx.chatId) ||
+        (window.currentOpenChat && (window.currentOpenChat.firestoreId || window.currentOpenChat.id)) ||
+        (chat && (chat.firestoreId || chat.id)) ||
+        '';
+      const actions = [{ label: liveOn ? 'Rematch' : 'Play again', primary: true, id: 'again' }];
+      if (typeof shareGameResult === 'function' || typeof openUnifiedShareSheet === 'function') {
+        actions.push({ label: 'Share', primary: false, id: 'share' });
+      }
+      if (typeof openFriendPickerSheet === 'function') {
+        actions.push({ label: 'Challenge friend', primary: false, id: 'challenge' });
+      }
+      if (typeof postGameScoreStory === 'function') {
+        actions.push({ label: 'Post to story', primary: false, id: 'story' });
+      }
+      if (chatId && typeof openChatScreen === 'function') {
+        actions.push({ label: 'Chat', primary: false, id: 'chat' });
+      }
+      const stakeSub = liveOn ? (liveStake > 0 ? ` · Stake ⚡${liveStake} (virtual)` : ' · Friendly') : '';
+      if (shell && typeof shell.markOver === 'function') shell.markOver();
+      if (shell.gs && typeof shell.gs.setOutcome === 'function') {
+        shell.gs.setOutcome(won ? 'won' : 'lost');
+      }
+      buzz(won ? 'win' : 'lose');
+      if (typeof setGamePB === 'function') setGamePB('carrom', countPocketed(youColor));
+      shell.body.innerHTML =
+        (typeof gameResultHtml === 'function'
+          ? gameResultHtml({
+              gameId: 'carrom',
+              glyph: spec.glyph || '🪙',
+              title: resign
+                ? liveOn
+                  ? won
+                    ? 'Opponent left'
+                    : 'You forfeited'
+                  : 'You resigned'
+                : colorLabel(winColor) + ' won',
+              subtitle:
+                (resign
+                  ? liveOn
+                    ? won
+                      ? 'Forfeit win · '
+                      : 'Forfeit · '
+                    : 'Resign · '
+                  : (won ? 'You' : liveOn ? 'Opp' : 'AI') + ' · ') +
+                colorLabel(winColor) +
+                (queenCoveredBy ? ' · Queen covered' : '') +
+                (liveOn ? ' · Live' : ' · ' + (DIFF_LABEL[difficulty] || 'Medium')) +
+                stakeSub +
+                ' · You pocketed ' +
+                countPocketed(youColor),
+              you: won ? 1 : 0,
+              opp: won ? 0 : 1,
+              shareCardHtml:
+                typeof buildGameShareCard === 'function' ? buildGameShareCard('carrom', shareStats) : '',
+              actions,
+              challenge: false,
+              share: false,
+            })
+          : '') +
+        `<div id="carromChipDelta" class="carrom-chip-delta" hidden style="margin-top:8px;font-size:12px;color:rgba(255,255,255,.75);text-align:center;"></div>`;
+
+      settleCarromOnce(won);
+
+      if (typeof wireGameResultActions === 'function') {
+        wireGameResultActions(shell.body, {
+          again: async () => {
+            if (liveOn) {
+              let nextStake = liveStake;
+              if (
+                typeof stakesEnabledForGame === 'function' &&
+                stakesEnabledForGame('carrom') &&
+                typeof openDangalStakeSheet === 'function'
+              ) {
+                const picked = await openDangalStakeSheet('carrom', { defaultStake: liveStake });
+                if (picked == null) return;
+                nextStake = picked;
+              }
+              await startCarromLiveRematch(nextStake);
+              return;
+            }
+            shell.close('restart');
+            openCueGame(Object.assign({}, spec, rematchOpts()));
+          },
+          share: () => {
+            if (typeof shareGameResult === 'function') shareGameResult('carrom', shareStats);
+            else if (typeof openUnifiedShareSheet === 'function') {
+              openUnifiedShareSheet({ gameId: 'carrom', stats: shareStats });
+            }
+          },
+          challenge: async () => {
+            if (typeof openFriendPickerSheet !== 'function') return;
+            const f = await openFriendPickerSheet({
+              title: 'Challenge · Carrom',
+              subtitle: 'Live 1v1 · virtual chips only — not real money',
+            });
+            if (!f) return;
+            const uid = f.uid || f.id || '';
+            if (!uid || (typeof isPersistableUid === 'function' && !isPersistableUid(uid))) {
+              if (typeof showToast === 'function') showToast('Pick a real friend to challenge');
+              return;
+            }
+            let stakePick = 0;
+            if (
+              typeof stakesEnabledForGame === 'function' &&
+              stakesEnabledForGame('carrom') &&
+              typeof openDangalStakeSheet === 'function'
+            ) {
+              const picked = await openDangalStakeSheet('carrom', { defaultStake: 0 });
+              if (picked == null) return;
+              stakePick = picked;
+            }
+            const mid =
+              typeof dangalMatchId === 'function'
+                ? dangalMatchId('carrom', { name: f.name, opponentUid: uid })
                 : 'carrom_' + Date.now();
+            const fid = f.chatId || f.firestoreId || '';
             try {
               window.__dangalLaunchCtx = Object.assign({}, window.__dangalLaunchCtx || {}, {
-                matchId: rematchId,
+                gameId: 'carrom',
+                gameType: 'carrom',
                 mode: 'live',
-                opponentUid: oppUid,
+                matchId: mid,
+                opponentUid: uid,
+                stake: stakePick,
+                chatId: fid,
                 source: 'challenge_host',
+                startedAt: Date.now(),
               });
             } catch (e) {}
-            openCarrom(Object.assign({}, chat, { dangalMatchId: rematchId, opponentUid: oppUid }));
-            return;
-          }
-          if (isCarrom) openCueGame(Object.assign({}, spec, rematchOpts()));
-          else openCueGame(Object.assign({}, spec, { chat }));
-        },
-      });
+            if (typeof sendChallengeCard === 'function' && fid) {
+              try {
+                await sendChallengeCard(uid, 'carrom', { chatId: fid, matchId: mid, stake: stakePick });
+              } catch (e) {}
+            }
+            await tearDownLiveHandle();
+            shell.close('challenge');
+            openCarrom({
+              name: f.name,
+              id: uid,
+              uid,
+              peerUid: uid,
+              opponentUid: uid,
+              dangalMatchId: mid,
+              dangalSource: 'challenge_host',
+              stake: stakePick,
+            });
+          },
+          story: () => {
+            if (typeof postGameScoreStory === 'function') postGameScoreStory('carrom', shareStats);
+          },
+          chat: () => {
+            shell.close('chat');
+            if (typeof openPeerDm === 'function' && settleOppUid) {
+              openPeerDm({ peerUid: settleOppUid, peerName: chat.name || 'Friend', seedHello: false });
+            } else if (typeof openChatScreen === 'function' && chatId) {
+              openChatScreen(chatId);
+            }
+          },
+        });
+      }
     }
 
     function drawBoard() {
@@ -1948,7 +2304,7 @@
               updateHud();
             }
             applying = true;
-            finish(iWon, { skipLivePush: true });
+            finish(iWon, { skipLivePush: true, forfeit: val.status === 'forfeit', resign: val.status === 'forfeit' && !iWon });
             applying = false;
             return;
           }
@@ -1967,11 +2323,22 @@
             applying = false;
           }
         },
-        seedState
+        seedState,
+        {
+          stake: liveStake,
+          onForfeit(info, roles) {
+            if (ended) return;
+            liveRoles = roles || liveRoles;
+            if (liveRoles && liveRoles.opp) settleOppUid = liveRoles.opp;
+            const iWon = info && info.winner === (liveRoles && liveRoles.me);
+            finish(iWon, { skipLivePush: true, forfeit: true, resign: !iWon });
+          },
+        }
       );
       if (joined) {
         liveHandle = joined.handle;
         liveRoles = joined.roles;
+        settleOppUid = liveRoles.opp || settleOppUid;
         myTurn = isCarrom ? youColor === 'white' && !!liveRoles.host : !!liveRoles.host;
         if (isCarrom) {
           if (youColor === 'white') {
@@ -2125,13 +2492,37 @@
   }
 
   function openCarrom(ctx) {
-    const o = ctx && ctx.youColor ? ctx : { chat: ctx };
+    const raw = ctx && typeof ctx === 'object' ? ctx : {};
+    const chat = resolveChat(raw.chat != null ? raw.chat : ctx);
+    const launch = window.__dangalLaunchCtx || {};
+    const liveWanted = chatLiveOn(chat);
+    const stake = liveWanted
+      ? Math.max(0, Number(raw.stake != null ? raw.stake : launch.stake) || 0)
+      : 0;
+    const oppUid =
+      (typeof opponentUidFromChat === 'function' ? opponentUidFromChat(chat) : '') ||
+      raw.opponentUid ||
+      raw.uid ||
+      launch.opponentUid ||
+      '';
+    try {
+      window.__dangalLaunchCtx = Object.assign({}, launch, {
+        gameId: 'carrom',
+        gameType: 'carrom',
+        mode: liveWanted ? 'live' : 'practice',
+        matchId: (chat && chat.dangalMatchId) || raw.dangalMatchId || launch.matchId || '',
+        opponentUid: liveWanted ? oppUid : '',
+        stake: liveWanted ? stake : 0,
+        source: raw.dangalSource || raw.source || launch.source || (liveWanted ? 'challenge_host' : 'dangal'),
+        startedAt: Date.now(),
+      });
+    } catch (e) {}
     openCueGame({
       id: 'carrom',
       variant: 'carrom',
       title: 'Carrom',
-      subtitle: 'Practice · AI',
-      chat: o.chat != null ? o.chat : ctx,
+      subtitle: liveWanted ? 'Live 1v1' : 'Practice · AI',
+      chat,
       accent: '#8D6E63',
       bg: '#1A0F00',
       felt: '#c4a574',
@@ -2144,11 +2535,12 @@
       stopEps: 0.055,
       baselineY: 0.82,
       soloPractice: true,
-      coachKey: 'chaupaal_carrom_coach_v4',
-      youColor: o.youColor,
-      difficulty: o.difficulty,
-      breakerPick: o.breakerPick,
-      skipSheet: !!o.skipSheet,
+      coachKey: 'chaupaal_carrom_coach_v5',
+      youColor: raw.youColor,
+      difficulty: raw.difficulty,
+      breakerPick: raw.breakerPick,
+      skipSheet: !!raw.skipSheet,
+      stake,
       pockets: [
         [0.055, 0.055],
         [0.945, 0.055],
@@ -3261,7 +3653,7 @@
   if (typeof registerGame === 'function') {
     const games = [
       { id: 'tambola', name: 'Tambola', desc: 'Ticket · full house', icon: '🎱', genre: 'party', launch: openTambola, order: 30 },
-      { id: 'carrom', name: 'Carrom', desc: 'Live 1v1 · Practice AI', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
+      { id: 'carrom', name: 'Carrom', desc: 'Live · stakes · AI', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
       { id: 'pool', name: 'Pool', desc: 'Clear the felt', icon: '🎱', genre: 'board', launch: openPool, order: 32 },
       { id: 'rummy', name: 'Rummy', desc: 'Runs and sets', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
       { id: 'teenpatti', name: 'Teen Patti', desc: 'Three-card show', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
