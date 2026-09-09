@@ -115,7 +115,7 @@
     }
     const sel = Number(selected) || 0;
     return `<div class="dangal-stake-picker" data-dangal-stake-picker>
-      <div class="dangal-stake-picker__label">Stake · applies to Live only</div>
+      <div class="dangal-stake-picker__label">Stake · virtual chips only (not real money)</div>
       <div class="dangal-stake-picker__row">
         ${DANGAL_STAKE_OPTIONS.map(
           (s) =>
@@ -146,8 +146,15 @@
     return sel ? Number(sel.dataset.stake) || 0 : 0;
   }
 
-  /** Compact stake sheet before Live challenge send. Resolves stake number or null if cancelled. */
-  function openDangalStakeSheet(gameId) {
+  /** Compact stake sheet before Live challenge send. Resolves stake number or null if cancelled.
+   * @param {string} gameId
+   * @param {{ defaultStake?: number }} [opts]
+   */
+  function openDangalStakeSheet(gameId, opts) {
+    const o = opts || {};
+    const defaultStake = Number(o.defaultStake);
+    const initial =
+      DANGAL_STAKE_OPTIONS.indexOf(defaultStake) >= 0 ? defaultStake : 0;
     return new Promise((resolve) => {
       if (typeof stakesEnabledForGame !== 'function' || !stakesEnabledForGame(gameId)) {
         resolve(0);
@@ -158,8 +165,8 @@
         'position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:20px;z-index:110;';
       sheet.innerHTML = `
         <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;margin-bottom:4px;">Stake chips</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Friendly (0) or wager virtual chips. Teen-safe — not real money.</div>
-        ${dangalStakePickerHtml(gameId, 0)}
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Friendly (0) or wager <strong>virtual chips</strong> — not real money. Teen-safe.</div>
+        ${dangalStakePickerHtml(gameId, initial)}
         <button type="button" id="dgStakeContinue" style="width:100%;margin-top:14px;padding:14px;background:var(--game-accent,var(--red));color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;">Continue</button>
         <button type="button" id="dgStakeCancel" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>`;
       const device = document.querySelector('.device');
@@ -169,8 +176,28 @@
       }
       device.appendChild(sheet);
       wireDangalStakePicker(sheet);
-      document.getElementById('dgStakeContinue')?.addEventListener('click', () => {
+      document.getElementById('dgStakeContinue')?.addEventListener('click', async () => {
         const stake = readDangalStake(sheet);
+        if (stake > 0 && window.DangalEconomy && typeof DangalEconomy.canAffordStake === 'function') {
+          const btn = document.getElementById('dgStakeContinue');
+          if (btn) btn.disabled = true;
+          try {
+            const ok = await DangalEconomy.canAffordStake(stake);
+            if (!ok) {
+              if (typeof showToast === 'function') {
+                showToast('Not enough virtual chips — pick Friendly (0) or a lower stake');
+              }
+              if (btn) btn.disabled = false;
+              return;
+            }
+          } catch (e) {
+            if (typeof showToast === 'function') {
+              showToast('Couldn’t check chip balance — try Friendly (0)');
+            }
+            if (btn) btn.disabled = false;
+            return;
+          }
+        }
         sheet.remove();
         resolve(stake);
       });
@@ -536,13 +563,27 @@
     });
     document.getElementById('dgFriendOpp').addEventListener('click', async () => {
       const stake = stakesOk ? readDangalStake(sheet) : 0;
+      if (stake > 0 && window.DangalEconomy && typeof DangalEconomy.canAffordStake === 'function') {
+        try {
+          const ok = await DangalEconomy.canAffordStake(stake);
+          if (!ok) {
+            if (typeof showToast === 'function') {
+              showToast('Not enough virtual chips — pick Friendly (0) or a lower stake');
+            }
+            return;
+          }
+        } catch (e) {
+          if (typeof showToast === 'function') showToast('Couldn’t check chip balance — try Friendly (0)');
+          return;
+        }
+      }
       if (typeof openFriendPickerSheet === 'function') {
         sheet.remove();
         const friend = await openFriendPickerSheet({
           title: `Challenge · ${game.name}`,
           subtitle: liveOk
             ? stake > 0
-              ? `Live 1v1 · ⚡${stake} stake`
+              ? `Live 1v1 · ⚡${stake} virtual chips`
               : 'Live 1v1 with a real friend'
             : 'Friend challenge (Practice until Live ships)',
         });
@@ -635,7 +676,8 @@
       timers: '10/15/20/30s (default 20)',
       aiQuiz: 'generateMuqabalaQuestionsAI via callAI; gated by isAiFeaturesEnabled',
       session: 'createGameSession type=quiz',
-      live: 'DangalLive games/quiz/{matchId} — Phase B lockstep',
+      live: 'DangalLive games/quiz/{matchId} — Phase B lockstep + Phase C stakes',
+      stakes: 'DangalEconomy.reportGameEnd once per matchId; Friendly=0',
     },
     launch(ctx) {
       const c = ctx || window.__dangalLaunchCtx || {};
@@ -656,20 +698,38 @@
           }
           return;
         }
+        const stakeWanted = Number(c.stake) || 0;
         const name =
           (c.chat && (c.chat.name || c.chat.peerName || c.chat.displayName)) || 'Opponent';
-        if (typeof startMuqabala === 'function') {
-          startMuqabala(name, c.category || 'GK', {
-            skipMatchmaking: true,
-            opponentUid: opp,
-            matchId: mid,
-            source: c.source === 'challenge_host' ? 'challenge_host' : 'challenge',
-            stake: Number(c.stake) || 0,
-            practice: false,
-            simulated: false,
-            skipCredit: true,
+        const goLive = () => {
+          if (typeof startMuqabala === 'function') {
+            startMuqabala(name, c.category || 'GK', {
+              skipMatchmaking: true,
+              opponentUid: opp,
+              matchId: mid,
+              source: c.source === 'challenge_host' ? 'challenge_host' : 'challenge',
+              stake: stakeWanted,
+              practice: false,
+              simulated: false,
+              skipCredit: true,
+            });
+          }
+        };
+        if (stakeWanted > 0 && window.DangalEconomy && typeof DangalEconomy.canAffordStake === 'function') {
+          Promise.resolve(DangalEconomy.canAffordStake(stakeWanted)).then((ok) => {
+            if (!ok) {
+              if (typeof showToast === 'function') {
+                showToast('Not enough virtual chips for ⚡' + stakeWanted + ' — ask for Friendly (0)');
+              }
+              return;
+            }
+            goLive();
+          }).catch(() => {
+            if (typeof showToast === 'function') showToast('Couldn’t check chip balance — try again');
           });
+          return;
         }
+        goLive();
         return;
       }
       if (typeof openQuizCategorySheet === 'function') openQuizCategorySheet();

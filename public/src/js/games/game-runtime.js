@@ -209,9 +209,11 @@
             console.warn('[game-runtime] end hook error', e);
           }
         }
-        const skipReport = !normalizeDangalResult
-          ? result === 'dismissed' || result === 'aborted' || result === 'error'
-          : !normalizeDangalResult(result);
+        const skipReport =
+          !!config.skipEconomyReport ||
+          (!normalizeDangalResult
+            ? result === 'dismissed' || result === 'aborted' || result === 'error'
+            : !normalizeDangalResult(result));
         if (!skipReport && window.DangalEconomy && typeof DangalEconomy.reportGameEnd === 'function') {
           try {
             DangalEconomy.reportGameEnd({

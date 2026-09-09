@@ -78,7 +78,7 @@
     const expired = Date.now() > Number(att.expiresAt || 0);
     const pending = att.status === 'pending' && !expired;
     const color = att.gameColor || '#E63946';
-    const detail = [att.timeControl, formatMode(att.mode), att.stake > 0 ? '⚡' + att.stake : '']
+    const detail = [att.timeControl, formatMode(att.mode), att.stake > 0 ? '⚡' + att.stake + ' virtual' : 'Friendly']
       .filter(Boolean)
       .join(' · ');
     const statusMap = { accepted: 'Accepted', declined: 'Declined', pending: expired ? 'Expired' : 'Awaiting…' };
@@ -123,11 +123,26 @@
     card.dataset.wired = '1';
     const att = message.attachment || message;
     const myUid = typeof getCurrentUid === 'function' ? getCurrentUid() : null;
-    card.querySelector('.dangal-challenge-accept')?.addEventListener('click', () => {
+    card.querySelector('.dangal-challenge-accept')?.addEventListener('click', async () => {
       const joinOnly = card.querySelector('.dangal-challenge-accept')?.dataset.join === '1';
       const openChat = window.currentOpenChat || {};
       const g = typeof getGame === 'function' ? getGame(att.gameType) : null;
       const iAmHost = att.fromUid === myUid;
+      const stakeWanted = Number(att.stake) || 0;
+      if (stakeWanted > 0 && window.DangalEconomy && typeof DangalEconomy.canAffordStake === 'function') {
+        try {
+          const ok = await DangalEconomy.canAffordStake(stakeWanted);
+          if (!ok) {
+            if (typeof showToast === 'function') {
+              showToast('Not enough virtual chips for ⚡' + stakeWanted + ' — ask for Friendly (0)');
+            }
+            return;
+          }
+        } catch (e) {
+          if (typeof showToast === 'function') showToast('Couldn’t check chip balance — try again');
+          return;
+        }
+      }
       if (!joinOnly) {
         att.status = 'accepted';
         try {
@@ -172,7 +187,7 @@
           opponentUid: opp,
           chat,
           mode: 'live',
-          stake: Number(att.stake) || 0,
+          stake: stakeWanted,
         });
       } else if (typeof showToast === 'function') showToast('Opening ' + (att.gameName || 'game'));
     });
