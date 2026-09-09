@@ -715,9 +715,12 @@
               }
             : {};
           if (persistable && liveOk && mid && typeof sendChallengeCard === 'function' && chatId) {
-            try {
-              await sendChallengeCard(uid, gameId, Object.assign({ chatId, matchId: mid, stake }, tcPayload));
-            } catch (e) {}
+            // Oh No!: host picks variant/house first — challenge sent from Live picker Start
+            if (gameId !== 'uno') {
+              try {
+                await sendChallengeCard(uid, gameId, Object.assign({ chatId, matchId: mid, stake }, tcPayload));
+              } catch (e) {}
+            }
           }
           game.launch(
             Object.assign(
@@ -768,19 +771,8 @@
       return;
     }
 
-    if (gameId === 'uno' && typeof openUnoVariantPicker === 'function') {
-      window.__dangalLaunchCtx = {
-        gameId: 'uno',
-        gameType: 'uno',
-        mode: 'practice',
-        matchId: '',
-        opponentUid: 'ai',
-        stake: 0,
-        chatId: '',
-        source: 'manch',
-        startedAt: Date.now(),
-      };
-      openUnoVariantPicker({ name: 'AI', id: 'ai' });
+    if (gameId === 'uno') {
+      launchDangalWithOpponent('uno');
       return;
     }
 

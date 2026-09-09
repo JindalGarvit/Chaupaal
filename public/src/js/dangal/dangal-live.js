@@ -8,6 +8,8 @@
  *   quiz: { questions?, answers{}, scores{}, qIdx? },
  *   ludoMode: 'classic'|'quick' (host seeds once)
  *   carrom/pool cue: state.balls[] seeded once by host; shooter pushes full settle snaps
+ *   uno / Oh No!: host seeds dealt handA/handB + full deck[] + discard once; actor pushes after each play.
+ *   Friend Live v1: full deck in RTDB state (UI never paints opp cards; FOW via RTDB read accepted).
  *
  * Chess merge rules:
  * - Host seeds fen once (join: only if fen missing). Guest never overwrites.
@@ -154,6 +156,19 @@
         const curHasCueBalls =
           cur.state && Array.isArray(cur.state.balls) && cur.state.balls.length > 0;
         if (o.state && Array.isArray(o.state.balls) && o.state.balls.length > 0 && !curHasCueBalls) {
+          next.state = o.state;
+        }
+        // Seed Oh No! deal once — guest must never reshuffle over host.
+        const curHasUno =
+          cur.state &&
+          (cur.state.dealt === true ||
+            (Array.isArray(cur.state.discardPile) && cur.state.discardPile.length > 0));
+        if (
+          o.state &&
+          (o.state.dealt === true ||
+            (Array.isArray(o.state.handA) && Array.isArray(o.state.discardPile))) &&
+          !curHasUno
+        ) {
           next.state = o.state;
         }
         if (o.ludoMode && !cur.ludoMode) {

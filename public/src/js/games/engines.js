@@ -3616,7 +3616,16 @@ function openUnoGame(chat, variant='normal', opts){
   const FLIP_DARK_ACTIONS=['skip_all','draw_all_5','wild_dark'];
   const HOUSE_DEFAULTS={stackDraw2:false,challengeDraw4:true,catchOhNo:true};
   const DIFF_LABELS={easy:'Easy',medium:'Medium',hard:'Hard'};
-  const isClassicRules=variant==='classic'||variant==='normal';
+  const launchCtx=(typeof window!=='undefined'&&window.__dangalLaunchCtx)||{};
+  const liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat,launchCtx);
+  const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat,launchCtx):null;
+  let gameVariant=variant==='normal'?'classic':variant;
+  if(liveOn){
+    const lv=launchCtx.unoVariant||launchCtx.variant||(opts&&opts.variant);
+    if(lv&&['classic','blaze','doublesided','normal'].includes(lv))gameVariant=lv==='normal'?'classic':lv;
+  }
+  variant=gameVariant;
+  let isClassicRules=variant==='classic'||variant==='normal';
   const storedHouse=(()=>{
     try{
       const raw=localStorage.getItem('chaupaal_uno_house');
@@ -3626,21 +3635,29 @@ function openUnoGame(chat, variant='normal', opts){
   })();
   // House rules are Classic-only; Blaze/Flip use built-in chaos rules
   const house=isClassicRules
-    ?Object.assign({},HOUSE_DEFAULTS,storedHouse,(opts&&opts.house)||{})
+    ?Object.assign({},HOUSE_DEFAULTS,storedHouse,(opts&&opts.house)||{},(liveOn&&launchCtx.unoHouse&&typeof launchCtx.unoHouse==='object')?launchCtx.unoHouse:{})
     :{stackDraw2:false,challengeDraw4:false,catchOhNo:false};
   const storedDiff=(()=>{
     try{return localStorage.getItem('chaupaal_uno_diff')||'medium';}catch(e){return'medium';}
   })();
-  const difficulty=(opts&&opts.difficulty)||storedDiff;
+  const difficulty=liveOn?'medium':((opts&&opts.difficulty)||storedDiff);
   const diffKey=DIFF_LABELS[difficulty]?difficulty:'medium';
   const aiDelay=diffKey==='easy'?850:diffKey==='hard'?420:600;
-  const liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat);
-  const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat):null;
   let liveHandle=null;let applyingLive=false;let leaveConfirmed=false;
-  const variantLabel=variant==='doublesided'?'Flip':variant==='blaze'?'Blaze':'Classic';
-  const MODE_SUB=liveOn
-    ?(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel?DangalLive.modeChromeLabel(true):'Live 1v1')
-    :('Practice · '+variantLabel+' · '+DIFF_LABELS[diffKey]);
+  let liveSeq=0;let resultsShown=false;let presenceHint='';
+  function modeSubNow(){
+    const vl=variant==='doublesided'?'Flip':variant==='blaze'?'Blaze':'Classic';
+    if(liveOn){
+      return(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel)
+        ?DangalLive.modeChromeLabel(true)+' · '+vl
+        :('Live 1v1 · '+vl);
+    }
+    return'Practice · '+vl+' · '+DIFF_LABELS[diffKey];
+  }
+  function variantLabelNow(){
+    return variant==='doublesided'?'Flip':variant==='blaze'?'Blaze':'Classic';
+  }
+  const MODE_SUB=modeSubNow();
 
   function buildDeck(variant){
     const deck=[];
@@ -3726,18 +3743,58 @@ function openUnoGame(chat, variant='normal', opts){
     else{hands.me=(handB||[]).slice();hands.opp=(handA||[]).slice();}
   }
 
+  function serializePendingChallenge(){
+    if(!pendingChallenge||!liveRoles)return null;
+    return{
+      offenderUid:pendingChallenge.offender==='me'?liveRoles.me:liveRoles.opp,
+      victimUid:pendingChallenge.victim==='me'?liveRoles.me:liveRoles.opp,
+      priorColor:pendingChallenge.priorColor||'',
+      illegal:!!pendingChallenge.illegal,
+    };
+  }
+
+  function applyPendingChallenge(raw){
+    if(!raw||!liveRoles){pendingChallenge=null;return;}
+    pendingChallenge={
+      offender:raw.offenderUid===liveRoles.me?'me':'opp',
+      victim:raw.victimUid===liveRoles.me?'me':'opp',
+      priorColor:raw.priorColor||'',
+      illegal:!!raw.illegal,
+    };
+  }
+
+  function buildUnoState(){
+    const hs=serializeUnoHands();
+    const top=discardPile[discardPile.length-1]||null;
+    return{
+      dealt:true,
+      deck:deck.slice(),
+      deckCount:deck.length,
+      discardPile:discardPile.slice(),
+      discardTop:top,
+      handA:hs.handA,
+      handB:hs.handB,
+      currentColor,currentValue,
+      drawStack,drawStackType,
+      direction,flipped,message,
+      gameOver,variant,house,
+      pendingChallenge:serializePendingChallenge(),
+      unoCallNeeded:pendingOhNoFor==='me'?liveRoles&&liveRoles.me:(pendingOhNoFor==='opp'?liveRoles&&liveRoles.opp:null),
+      unoSafe:pendingOhNoFor?'':(liveRoles&&hands.me.length===1?liveRoles.me:null),
+    };
+  }
+
   function pushUno(){
     if(!liveOn||!liveHandle||!liveRoles||applyingLive)return;
-    const hs=serializeUnoHands();
+    const winnerUid=gameOver
+      ?(hands.me.length===0?liveRoles.me:(hands.opp.length===0?liveRoles.opp:null))
+      :null;
     liveHandle.push({
-      state:{
-        deck:deck.slice(),discardPile:discardPile.slice(),
-        handA:hs.handA,handB:hs.handB,
-        currentColor,currentValue,drawStack,drawStackType,direction,flipped,message,gameOver,variant,house,
-      },
+      baseVersion:liveSeq,
+      state:buildUnoState(),
       turn:gameOver?null:(myTurn?liveRoles.me:liveRoles.opp),
       status:gameOver?'over':'playing',
-      winner:gameOver?(hands.me.length===0?liveRoles.me:liveRoles.opp):null,
+      winner:winnerUid,
     });
     if(!gameOver&&!myTurn&&typeof DangalLive!=='undefined'&&DangalLive.pingTurn){
       DangalLive.pingTurn(liveRoles.opp,'uno',{chatId:chat&&(chat.firestoreId||chat.id)});
@@ -3779,6 +3836,25 @@ function openUnoGame(chat, variant='normal', opts){
     if(card.color===currentColor)return true;
     if(card.value===currentValue)return true;
     return false;
+  }
+
+  function scheduleOhNoCatch(who){
+    if(who!=='me')return;
+    gs.schedule(()=>{
+      if(!gs.alive()||gameOver||pendingOhNoFor!=='me')return;
+      unoCallWindow=false;
+      if(house.catchOhNo&&hands.me.length===1){
+        drawCard('me',2);
+        pendingOhNoFor='';
+        drewPlayableIndex=-1;
+        message='Caught! Draw 2 for missing Oh No!';
+        if(liveOn&&!applyingLive)pushUno();
+      }else{
+        pendingOhNoFor='';
+        message='';
+      }
+      render();
+    },2500);
   }
 
   function applyCard(card,who,chosenColor){
@@ -3827,8 +3903,11 @@ function openUnoGame(chat, variant='normal', opts){
           myTurn=who!=='me';
         }else{
           drawStack+=4;drawStackType='wild_draw4';
-          message=house.challengeDraw4&&opp==='me'&&!liveOn?`Wild +4! Challenge or draw 4`:`+4! ${opp==='me'?'You':chat.name} must draw 4`;
-          if(house.challengeDraw4&&!liveOn){
+          message=house.challengeDraw4&&opp==='me'
+            ?`Wild +4! Challenge or draw 4`
+            :`+4! ${opp==='me'?'You':chat.name} must draw 4`;
+          if(house.challengeDraw4){
+            // illegal = offender still held a card of the previous discard colour
             pendingChallenge={
               offender:who,victim:opp,priorColor:prevColor,
               illegal:!!hands[who].some(c=>c&&c.color===prevColor),
@@ -3870,13 +3949,18 @@ function openUnoGame(chat, variant='normal', opts){
     }
     // Oh No! call window
     if(hands[who].length===1){
-      const aiCalls=who==='opp'&&(diffKey!=='easy'||Math.random()<0.35);
+      const aiCalls=!liveOn&&who==='opp'&&(diffKey!=='easy'||Math.random()<0.35);
       unoCallWindow=true;
       pendingOhNoFor=who;
-      if(who==='opp'&&aiCalls){
-        pendingOhNoFor='';
-        message=`${chat.name} shouts 'Oh, No!'`;
-        gs.schedule(()=>{unoCallWindow=false;render();},1800);
+      if(who==='opp'&&(liveOn||aiCalls)){
+        // Live peer must call themselves; Practice AI usually auto-calls
+        if(liveOn){
+          message=`${chat.name} is at 1 card…`;
+        }else{
+          pendingOhNoFor='';
+          message=`${chat.name} shouts 'Oh, No!'`;
+          gs.schedule(()=>{unoCallWindow=false;render();},1800);
+        }
       }else if(who==='opp'){
         message=`${chat.name} is at 1 card…`;
         gs.schedule(()=>{
@@ -3886,6 +3970,7 @@ function openUnoGame(chat, variant='normal', opts){
             drawCard('opp',2);
             pendingOhNoFor='';
             message='Caught! AI missed Oh No — draws 2';
+            if(liveOn)pushUno();
           }else{
             pendingOhNoFor='';
             message='';
@@ -3894,19 +3979,7 @@ function openUnoGame(chat, variant='normal', opts){
         },2500);
       }else{
         message="You're at 1 card — shout 'Oh No!'";
-        gs.schedule(()=>{
-          if(!gs.alive()||gameOver||pendingOhNoFor!=='me')return;
-          unoCallWindow=false;
-          if(house.catchOhNo&&hands.me.length===1){
-            drawCard('me',2);
-            pendingOhNoFor='';
-            drewPlayableIndex=-1;
-            message='Caught! Draw 2 for missing Oh No!';
-          }else{
-            message='';
-          }
-          render();
-        },2500);
+        scheduleOhNoCatch('me');
       }
     }
     if(hands[who].length===0){
@@ -3915,7 +3988,6 @@ function openUnoGame(chat, variant='normal', opts){
       message=(won?'You win!':chat.name+' wins!')+' Oh, No!';
       gs.setOutcome(won?'won':'lost');
       if(typeof recordGameResult==='function')recordGameResult('uno',won);
-      if(typeof recordDangalSession==='function')recordDangalSession('uno',{won,variant,difficulty:diffKey,mode:liveOn?'live':'practice'});
     }
     if(liveOn&&who==='me'&&!applyingLive)pushUno();
   }
@@ -4024,30 +4096,37 @@ function openUnoGame(chat, variant='normal', opts){
     overlay.style.background=bgColor;
     if(liveOn&&!topCard&&!gameOver){
       overlay.innerHTML=`
-        ${gameChromeHtml({title:'Oh, No!',subtitle:MODE_SUB,backId:'unoBack'})}
+        ${gameChromeHtml({title:'Oh, No!',subtitle:modeSubNow()+(presenceHint?' · '+presenceHint:''),backId:'unoBack'})}
         <div style="flex:1;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.7);font-weight:700;">Waiting for deal…</div>`;
       document.getElementById('unoBack')?.addEventListener('click',()=>{askUnoLeave();});
       return;
     }
     if(gameOver&&typeof gameResultHtml==='function'){
+      if(!resultsShown){
+        resultsShown=true;
+        const wonEnd=hands.me.length===0;
+        if(typeof recordDangalSession==='function'){
+          recordDangalSession('uno',{won:wonEnd,variant,difficulty:diffKey,mode:liveOn?'live':'practice'});
+        }
+      }
       const won=hands.me.length===0;
       const rulesBit=houseRulesSummary();
       const shareStats={
         scoreLine:won?'Win':'Loss',
         vs:`vs ${chat.name}`,
-        meta:`${variantLabel} · ${DIFF_LABELS[diffKey]}${rulesBit?` · ${rulesBit}`:''}`,
-        text:`Chaupaal Oh, No! (${variantLabel}): ${won?'I won':'tough loss'} vs ${chat.name}`,
+        meta:`${variantLabelNow()} · ${liveOn?'Live':DIFF_LABELS[diffKey]}${rulesBit?` · ${rulesBit}`:''}`,
+        text:`Chaupaal Oh, No! (${variantLabelNow()}): ${won?'I won':'tough loss'} vs ${chat.name}`,
       };
       overlay.innerHTML=`
-        ${gameChromeHtml({title:'Oh, No!',subtitle:MODE_SUB+' · Game over',backId:'unoBack'})}
+        ${gameChromeHtml({title:'Oh, No!',subtitle:modeSubNow()+' · Game over',backId:'unoBack'})}
         <div class="uno-result-mount">${gameResultHtml({
           gameId:'uno',
           glyph:won?'✓':'·',
           title:won?'You win':`${chat.name} wins`,
-          subtitle:`${variantLabel} · ${DIFF_LABELS[diffKey]}${rulesBit?` · ${rulesBit}`:''}${message?` · ${message}`:''}`,
+          subtitle:`${variantLabelNow()} · ${liveOn?'Live 1v1':DIFF_LABELS[diffKey]}${rulesBit?` · ${rulesBit}`:''}${message?` · ${message}`:''}`,
           shareCardHtml:typeof buildGameShareCard==='function'?buildGameShareCard('uno',shareStats):'',
           actions:[
-            {label:'Play again',primary:true,id:'again'},
+            {label:liveOn?'Rematch':'Play again',primary:true,id:'again'},
             {label:'Share',primary:false,id:'share'},
             {label:'Challenge friend',primary:false,id:'challenge'},
           ],
@@ -4055,10 +4134,36 @@ function openUnoGame(chat, variant='normal', opts){
       document.getElementById('unoBack')?.addEventListener('click',()=>{askUnoLeave();});
       if(typeof wireGameResultActions==='function'){
         wireGameResultActions(overlay,{
-          again:()=>{
+          again:async()=>{
             gs.close();
-            if(typeof openUnoGame==='function')openUnoGame(chat,variant,{house,difficulty:diffKey});
-            else if(typeof openUnoVariantPicker==='function')openUnoVariantPicker(chat,{variant,house,difficulty:diffKey});
+            if(liveOn){
+              const oppUid=(liveRoles&&liveRoles.opp)||launchCtx.opponentUid||'';
+              const mid=typeof dangalMatchId==='function'
+                ?dangalMatchId('uno',{name:chat.name,opponentUid:oppUid})
+                :('uno_'+Date.now());
+              if(chat)chat.dangalMatchId=mid;
+              const houseSnap=isClassicRules?Object.assign({},house):undefined;
+              window.__dangalLaunchCtx=Object.assign({},window.__dangalLaunchCtx||{},{
+                gameId:'uno',gameType:'uno',mode:'live',matchId:mid,
+                opponentUid:oppUid,
+                unoVariant:variant,unoHouse:houseSnap,
+                stake:Number(launchCtx.stake)||0,source:'challenge_host',
+              });
+              const chatId=launchCtx.chatId||(chat&&(chat.firestoreId||chat.id))||'';
+              if(typeof sendChallengeCard==='function'&&oppUid&&chatId){
+                try{
+                  await sendChallengeCard(oppUid,'uno',{
+                    chatId,matchId:mid,stake:Number(launchCtx.stake)||0,
+                    unoVariant:variant,variant,unoHouse:houseSnap,mode:'live',
+                  });
+                }catch(e){}
+              }
+              openUnoGame(Object.assign({},chat,{dangalMatchId:mid}),variant,{house:houseSnap});
+            }else if(typeof openUnoGame==='function'){
+              openUnoGame(chat,variant,{house,difficulty:diffKey});
+            }else if(typeof openUnoVariantPicker==='function'){
+              openUnoVariantPicker(chat,{variant,house,difficulty:diffKey});
+            }
           },
           share:()=>{if(typeof shareGameResult==='function')shareGameResult('uno',shareStats);},
           challenge:async()=>{
@@ -4076,8 +4181,9 @@ function openUnoGame(chat, variant='normal', opts){
       :'';
     const flipChrome=variant==='doublesided'?(flipped?' · Dark':' · Light'):'';
     const tableTint=variant==='doublesided'&&flipped?'background:radial-gradient(ellipse at center,rgba(90,40,160,0.25),transparent 70%);':'';
+    const presenceBit=presenceHint?' · '+presenceHint:'';
     overlay.innerHTML=`
-      ${gameChromeHtml({title:'Oh, No!',subtitle:MODE_SUB+flipChrome,backId:'unoBack',rightHtml:`<button id="unoUnoBtn" class="game-chrome-action uno-ohno-btn${unoCallWindow?' is-active':''}" style="${ohNoBtnStyle}">Oh No!</button>`})}
+      ${gameChromeHtml({title:'Oh, No!',subtitle:modeSubNow()+flipChrome+presenceBit,backId:'unoBack',rightHtml:`<button id="unoUnoBtn" class="game-chrome-action uno-ohno-btn${unoCallWindow?' is-active':''}" style="${ohNoBtnStyle}">Oh No!</button>`})}
 
       <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative;${tableTint}">
 
@@ -4116,7 +4222,7 @@ function openUnoGame(chat, variant='normal', opts){
         <!-- Message / status line -->
         ${message?`<div class="uno-message" style="padding:6px 16px;text-align:center;font-weight:700;font-size:13px;flex-shrink:0;">${message}</div>`:''}
 
-        ${pendingChallenge&&pendingChallenge.victim==='me'&&!liveOn?`
+        ${pendingChallenge&&pendingChallenge.victim==='me'?`
         <div style="padding:8px 12px;flex-shrink:0;background:rgba(255,255,255,0.08);display:flex;gap:8px;justify-content:center;">
           <button id="unoChallengeBtn" type="button" class="game-tap-target uno-house-btn" style="min-height:44px;padding:0 16px;border-radius:12px;border:2px solid rgba(255,255,255,0.22);background:#fff;color:#1a1a2e;font-weight:800;">Challenge</button>
           <button id="unoAcceptDrawBtn" type="button" class="game-tap-target uno-house-btn" style="min-height:44px;padding:0 16px;border-radius:12px;border:2px solid rgba(255,255,255,0.22);background:rgba(255,255,255,0.12);color:#fff;font-weight:800;">Draw 4</button>
@@ -4151,7 +4257,9 @@ function openUnoGame(chat, variant='normal', opts){
     document.getElementById('unoBack').addEventListener('click',()=>{askUnoLeave();});
     document.getElementById('unoUnoBtn').addEventListener('click',()=>{
       if(unoCallWindow&&hands.me.length===1){
-        unoCallWindow=false;pendingOhNoFor='';message="'Oh, No!' called! ✅";render();
+        unoCallWindow=false;pendingOhNoFor='';message="'Oh, No!' called! ✅";
+        if(liveOn&&!applyingLive)pushUno();
+        render();
       }else if(hands.me.length!==1&&typeof showToast==='function'){
         showToast('Only use Oh No at 1 card');
       }
@@ -4334,30 +4442,64 @@ function openUnoGame(chat, variant='normal', opts){
   }
 
   if(liveOn&&liveRoles&&typeof DangalLive!=='undefined'){
-    const hs0=serializeUnoHands();
+    const seedState=isLiveHost?buildUnoState():null;
     liveHandle=DangalLive.join({
       gameType:'uno',
       matchId:(chat&&chat.dangalMatchId)||(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.matchId),
       me:liveRoles.me,playerA:liveRoles.playerA,playerB:liveRoles.playerB,
-      state:isLiveHost?{
-        deck:deck.slice(),discardPile:discardPile.slice(),
-        handA:hs0.handA,handB:hs0.handB,
-        currentColor,currentValue,drawStack,drawStackType,direction,flipped,message,gameOver,variant,house,
-      }:null,
+      state:seedState,
+      onForfeit({winner}){
+        if(gameOver||!gs.alive())return;
+        gameOver=true;
+        const iWon=winner===liveRoles.me;
+        gs.setOutcome(iWon?'won':'lost');
+        if(typeof recordGameResult==='function')recordGameResult('uno',iWon);
+        message=iWon?'Opponent left — you win!':'Forfeit';
+        render();
+      },
+      onPresence(info){
+        if(!info||gameOver)return;
+        presenceHint=info.warn?(info.forfeitSoon?'Opponent reconnecting…':'Opponent away…'):'';
+      },
       onSnap(val){
-        if(!val||applyingLive||!gs.alive())return;
-        if(val.status==='forfeit'&&!gameOver){
+        if(!val||!gs.alive())return;
+        const incomingSeq=Number(val.version||val.seq)||0;
+        if(incomingSeq&&incomingSeq<liveSeq)return;
+        liveSeq=Math.max(liveSeq,incomingSeq);
+
+        if((val.status==='forfeit'||val.status==='over')&&!gameOver){
+          applyingLive=true;
+          const s0=val.state;
+          if(s0){
+            if(Array.isArray(s0.deck))deck=s0.deck.slice();
+            if(Array.isArray(s0.discardPile))discardPile=s0.discardPile.slice();
+            applyUnoHands(s0.handA,s0.handB);
+            if(s0.house&&isClassicRules)Object.assign(house,s0.house);
+            if(s0.variant){/* host variant sticks after seed */}
+          }
           gameOver=true;
-          const iWon=val.winner===liveRoles.me;
+          const iWon=val.winner===liveRoles.me||(hands.me.length===0&&val.status==='over');
           gs.setOutcome(iWon?'won':'lost');
           if(typeof recordGameResult==='function')recordGameResult('uno',iWon);
-          message=iWon?'Opponent left — you win!':'Forfeit';
-          render();return;
+          message=val.status==='forfeit'
+            ?(iWon?'Opponent left — you win!':'Forfeit')
+            :(iWon?'You win!':chat.name+' wins!');
+          applyingLive=false;
+          render();
+          return;
         }
-        const s=val.state;if(!s)return;
+
+        const s=val.state;
+        if(!s){
+          // Guest waiting for host deal
+          if(!isLiveHost)render();
+          return;
+        }
+        if(applyingLive)return;
         applyingLive=true;
-        deck=Array.isArray(s.deck)?s.deck.slice():deck;
-        discardPile=Array.isArray(s.discardPile)?s.discardPile.slice():discardPile;
+        if(Array.isArray(s.deck))deck=s.deck.slice();
+        if(Array.isArray(s.discardPile))discardPile=s.discardPile.slice();
+        else if(s.discardTop)discardPile=[s.discardTop];
         applyUnoHands(s.handA,s.handB);
         currentColor=s.currentColor||currentColor;
         currentValue=s.currentValue||currentValue;
@@ -4366,10 +4508,40 @@ function openUnoGame(chat, variant='normal', opts){
         direction=s.direction==null?direction:s.direction;
         flipped=!!s.flipped;
         message=s.message||'';
+        if(s.house&&typeof s.house==='object'){
+          Object.keys(house).forEach(k=>delete house[k]);
+          Object.assign(house,HOUSE_DEFAULTS,s.house);
+        }
+        if(s.variant&&['classic','blaze','doublesided'].includes(s.variant)){
+          variant=s.variant;
+          isClassicRules=variant==='classic'||variant==='normal';
+          if(!isClassicRules){
+            house.stackDraw2=false;house.challengeDraw4=false;house.catchOhNo=false;
+          }
+        }
+        applyPendingChallenge(s.pendingChallenge);
+        if(s.unoCallNeeded===liveRoles.me&&hands.me.length===1){
+          const already=unoCallWindow&&pendingOhNoFor==='me';
+          unoCallWindow=true;pendingOhNoFor='me';
+          if(!already)scheduleOhNoCatch('me');
+        }else if(s.unoCallNeeded&&s.unoCallNeeded!==liveRoles.me){
+          unoCallWindow=false;pendingOhNoFor='';
+        }else if(!s.unoCallNeeded){
+          // cleared after call/catch
+          if(pendingOhNoFor==='me'&&hands.me.length!==1){unoCallWindow=false;pendingOhNoFor='';}
+          else if(hands.me.length!==1){unoCallWindow=false;pendingOhNoFor='';}
+        }
         gameOver=!!s.gameOver||val.status==='over';
-        if(s.house)Object.assign(house,s.house);
         myTurn=!gameOver&&val.turn===liveRoles.me;
-        selectedCard=null;pickingColor=false;
+        // Never run Practice AI on Live
+        selectedCard=null;
+        // Keep colour picker if we still need to pick and it's our action — otherwise clear
+        if(!(myTurn&&pickingColor))pickingColor=false;
+        if(gameOver){
+          const iWon=hands.me.length===0||val.winner===liveRoles.me;
+          gs.setOutcome(iWon?'won':'lost');
+          if(typeof recordGameResult==='function')recordGameResult('uno',iWon);
+        }
         render();
         applyingLive=false;
       },
@@ -4955,6 +5127,10 @@ function openUnoVariantPicker(chat, defaults){
   if(!['easy','medium','hard'].includes(selectedDiff))selectedDiff='medium';
   let selectedVariant=(defaults&&defaults.variant)||'classic';
   if(!['classic','blaze','doublesided'].includes(selectedVariant))selectedVariant='classic';
+  const launchCtx=(typeof window!=='undefined'&&window.__dangalLaunchCtx)||{};
+  const liveWanted=!!(defaults&&defaults.live)||
+    (typeof DangalLive!=='undefined'&&DangalLive.isLive&&DangalLive.isLive(chat,launchCtx))||
+    launchCtx.mode==='live';
 
   const variants=[
     {label:'Classic',desc:'Standard Oh, No! with optional house rules',v:'classic'},
@@ -4964,9 +5140,14 @@ function openUnoVariantPicker(chat, defaults){
 
   function paint(){
     const isClassic=selectedVariant==='classic';
+    const startLabel=liveWanted
+      ?`Start Live · ${variants.find(v=>v.v===selectedVariant).label}`
+      :`Start ${variants.find(v=>v.v===selectedVariant).label}`;
     sheet.innerHTML=`
       <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;margin-bottom:6px;">Oh, No! Cards</div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Pick a variant, then set AI difficulty.</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">${liveWanted
+        ?'Live 1v1 — pick a variant. Friend follows your house rules. No AI.'
+        :'Pick a variant, then set AI difficulty.'}</div>
       <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">
         ${variants.map(v=>`
           <button type="button" data-v="${v.v}" class="uno-pick-variant" style="width:100%;padding:14px 14px;background:${selectedVariant===v.v?'#1a1a2e':'var(--cream)'};color:${selectedVariant===v.v?'#fff':'var(--ink)'};border:2px solid ${selectedVariant===v.v?'#1a1a2e':'var(--line)'};border-radius:14px;text-align:left;cursor:pointer;">
@@ -4974,17 +5155,18 @@ function openUnoVariantPicker(chat, defaults){
             <div style="font-size:12px;opacity:.75;margin-top:2px;">${v.desc}</div>
           </button>`).join('')}
       </div>
+      ${liveWanted?'':`
       <div style="margin-bottom:12px;">
         <div style="font:700 13px Space Grotesk,sans-serif;margin-bottom:8px;">AI difficulty</div>
         <div style="display:flex;gap:8px;">
           ${['easy','medium','hard'].map(d=>`
             <button type="button" data-d="${d}" class="uno-pick-diff" style="flex:1;min-height:42px;border-radius:12px;border:2px solid ${selectedDiff===d?'#1a1a2e':'var(--line)'};background:${selectedDiff===d?'#1a1a2e':'var(--cream)'};color:${selectedDiff===d?'#fff':'var(--ink)'};font-weight:800;font-size:13px;cursor:pointer;text-transform:capitalize;">${d}</button>`).join('')}
         </div>
-      </div>
+      </div>`}
       ${isClassic?`
       <div id="unoClassicRules" style="margin:4px 0 12px;padding:14px;background:#f8f4ec;border:1px solid var(--line);border-radius:16px;">
         <div style="font:700 14px Space Grotesk,sans-serif;margin-bottom:4px;">Classic house rules</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Optional — Blaze & Flip use built-in chaos rules.</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">${liveWanted?'Host sets these — guest follows.':'Optional — Blaze & Flip use built-in chaos rules.'}</div>
         <label style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid rgba(0,0,0,.06);">
           <div><div style="font-weight:700;font-size:13px;">Stack +2</div><div style="font-size:12px;color:var(--muted);">Allow +2 on +2 only. Default off.</div></div>
           <input id="unoHouseStack" type="checkbox" ${selectedHouse.stackDraw2?'checked':''}>
@@ -5001,7 +5183,7 @@ function openUnoVariantPicker(chat, defaults){
       <div style="margin:4px 0 12px;padding:12px 14px;background:#f0eef8;border:1px solid var(--line);border-radius:14px;font-size:12px;color:var(--muted);">
         <strong style="color:var(--ink);">Built-in chaos rules</strong> — house toggles are Classic-only. ${selectedVariant==='blaze'?'Blaze draws hit immediately.':'Flip dark actions only work on the Dark side.'}
       </div>`}
-      <button id="unoStartBtn" type="button" style="width:100%;min-height:48px;border-radius:14px;border:0;background:#1a1a2e;color:#fff;font:800 15px Space Grotesk,sans-serif;cursor:pointer;">Start ${variants.find(v=>v.v===selectedVariant).label}</button>
+      <button id="unoStartBtn" type="button" style="width:100%;min-height:48px;border-radius:14px;border:0;background:#1a1a2e;color:#fff;font:800 15px Space Grotesk,sans-serif;cursor:pointer;">${startLabel}</button>
       <button id="closeUnoVariant" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>
     `;
     sheet.querySelectorAll('[data-v]').forEach(btn=>{
@@ -5010,18 +5192,43 @@ function openUnoVariantPicker(chat, defaults){
     sheet.querySelectorAll('[data-d]').forEach(btn=>{
       btn.addEventListener('click',()=>{selectedDiff=btn.dataset.d;paint();});
     });
-    sheet.querySelector('#unoStartBtn')?.addEventListener('click',()=>{
+    sheet.querySelector('#unoStartBtn')?.addEventListener('click',async()=>{
       const house=isClassic?{
         stackDraw2:!!sheet.querySelector('#unoHouseStack')?.checked,
         challengeDraw4:!!sheet.querySelector('#unoHouseChallenge')?.checked,
         catchOhNo:!!sheet.querySelector('#unoHouseCatch')?.checked,
       }:undefined;
       try{
-        localStorage.setItem('chaupaal_uno_diff',selectedDiff);
+        if(!liveWanted)localStorage.setItem('chaupaal_uno_diff',selectedDiff);
         if(house)localStorage.setItem('chaupaal_uno_house',JSON.stringify(house));
       }catch(e){}
+      if(liveWanted){
+        const prev=window.__dangalLaunchCtx||{};
+        const oppUid=prev.opponentUid||(typeof opponentUidFromChat==='function'?opponentUidFromChat(chat):'')||'';
+        const chatId=prev.chatId||(chat&&(chat.firestoreId||chat.id))||'';
+        let mid=prev.matchId||(chat&&chat.dangalMatchId)||'';
+        if(!mid&&oppUid&&typeof dangalMatchId==='function'){
+          mid=dangalMatchId('uno',{name:chat&&chat.name,opponentUid:oppUid});
+          if(chat)chat.dangalMatchId=mid;
+        }
+        window.__dangalLaunchCtx=Object.assign({},prev,{
+          gameId:'uno',gameType:'uno',mode:'live',
+          matchId:mid,opponentUid:oppUid,chatId,
+          unoVariant:selectedVariant,variant:selectedVariant,
+          unoHouse:house,source:prev.source||'challenge_host',
+        });
+        if(typeof sendChallengeCard==='function'&&oppUid&&chatId&&mid){
+          try{
+            await sendChallengeCard(oppUid,'uno',{
+              chatId,matchId:mid,stake:Number(prev.stake)||0,
+              unoVariant:selectedVariant,variant:selectedVariant,
+              unoHouse:house,mode:'live',
+            });
+          }catch(e){}
+        }
+      }
       sheet.remove();
-      openUnoGame(chat,selectedVariant,{house,difficulty:selectedDiff});
+      openUnoGame(chat,selectedVariant,{house,difficulty:liveWanted?'medium':selectedDiff,live:liveWanted});
     });
     sheet.querySelector('#closeUnoVariant')?.addEventListener('click',()=>sheet.remove());
   }
@@ -5122,17 +5329,63 @@ if (typeof registerGame === 'function') {
   registerGame({
     id: 'uno',
     name: 'Oh, No! Cards',
-    desc: 'Classic · Double Sided · Blaze Mode',
+    desc: 'Classic · Blaze · Flip · Live 1v1',
     icon: '🃏',
     ratingKey: 'uno',
     gameType: 'multiplayer',
+    liveDuel: true,
     genre: 'party',
     chat1v1: true,
     chatGroup: true,
     order: 40,
     launch(ctx) {
-      if (ctx.isGroup) openGroupGameSetup(ctx.chat, 'uno');
-      else openUnoVariantPicker(ctx.chat);
+      try{
+        const launch=window.__dangalLaunchCtx||{};
+        const chat=typeof chatFromLaunch==='function'?chatFromLaunch(ctx):ctx.chat;
+        const liveWanted=
+          ctx.mode==='live'||
+          launch.mode==='live'||
+          (typeof DangalLive!=='undefined'&&DangalLive.isLive&&DangalLive.isLive(chat,Object.assign({},launch,ctx)));
+        const unoVariant=ctx.unoVariant||ctx.variant||launch.unoVariant||launch.variant||'';
+        const unoHouse=ctx.unoHouse||launch.unoHouse;
+        window.__dangalLaunchCtx=Object.assign({},launch,{
+          gameId:'uno',gameType:'uno',
+          mode:liveWanted?'live':(ctx.mode||launch.mode||'practice'),
+          matchId:ctx.matchId||launch.matchId||(chat&&chat.dangalMatchId)||'',
+          opponentUid:ctx.opponentUid||launch.opponentUid||'',
+          chatId:ctx.chatId||launch.chatId||'',
+          stake:Number(ctx.stake??launch.stake)||0,
+          source:ctx.source||launch.source||'',
+          unoVariant:unoVariant||undefined,
+          unoHouse:unoHouse||undefined,
+          startedAt:Date.now(),
+        });
+        if(ctx.isGroup){
+          if(liveWanted){
+            if(typeof showToast==='function')showToast('Oh, No! Live is 1v1 for now — challenge from a DM');
+            return;
+          }
+          openGroupGameSetup(ctx.chat,'uno');
+          return;
+        }
+        if(liveWanted){
+          // Guest / rematch with known match: open board (host deal or wait)
+          if(ctx.source==='challenge'||(unoVariant&&(ctx.matchId||launch.matchId||(chat&&chat.dangalMatchId)))){
+            openUnoGame(chat,unoVariant||'classic',{house:unoHouse,variant:unoVariant||'classic'});
+            return;
+          }
+          openUnoVariantPicker(chat,{live:true,variant:unoVariant||'classic',house:unoHouse});
+          return;
+        }
+        openUnoVariantPicker(chat,{
+          variant:unoVariant||undefined,
+          house:unoHouse,
+          difficulty:ctx.difficulty||launch.difficulty,
+        });
+      }catch(err){
+        console.error('[uno] launch failed',err);
+        try{if(typeof showToast==='function')showToast('Could not open Oh, No!');}catch(e2){}
+      }
     },
   });
   registerGame({

@@ -23,6 +23,9 @@
       renju: 'Renju',
       classic: 'Classic',
       quick: 'Quick',
+      blaze: 'Blaze',
+      doublesided: 'Flip',
+      flip: 'Flip',
     };
     return labels[mode] || mode || '';
   }
@@ -51,6 +54,8 @@
       matchId: cfg.matchId || '',
       mode: cfg.mode || '',
       ludoMode: cfg.ludoMode || (cfg.mode === 'quick' || cfg.mode === 'classic' ? cfg.mode : ''),
+      unoVariant: cfg.unoVariant || cfg.variant || '',
+      unoHouse: cfg.unoHouse && typeof cfg.unoHouse === 'object' ? cfg.unoHouse : null,
       stake: Number(cfg.stake) || 0,
       timeControl: cfg.timeControl?.label || cfg.timeControl || '',
       timeMin: Number(cfg.timeMin ?? cfg.min ?? cfg.timeControl?.min) || 0,
@@ -84,7 +89,11 @@
     const expired = Date.now() > Number(att.expiresAt || 0);
     const pending = att.status === 'pending' && !expired;
     const color = att.gameColor || '#E63946';
-      const detail = [att.timeControl, formatMode(att.ludoMode || att.mode), att.stake > 0 ? '⚡' + att.stake + ' virtual' : 'Friendly']
+      const detail = [
+      att.timeControl,
+      formatMode(att.unoVariant || att.ludoMode || att.mode),
+      att.stake > 0 ? '⚡' + att.stake + ' virtual' : 'Friendly',
+    ]
       .filter(Boolean)
       .join(' · ');
     const statusMap = { accepted: 'Accepted', declined: 'Declined', pending: expired ? 'Expired' : 'Awaiting…' };
@@ -198,6 +207,9 @@
           chat,
           mode: 'live',
           ludoMode: att.gameType === 'ludo' ? ludoMode : att.ludoMode || '',
+          unoVariant: att.unoVariant || att.variant || '',
+          unoHouse: att.unoHouse || null,
+          variant: att.unoVariant || att.variant || '',
           stake: stakeWanted,
           min: Number(att.timeMin) || 0,
           inc: Number(att.timeInc) || 0,
@@ -206,6 +218,7 @@
           chess960: !!att.chess960,
           timeControl: att.timeControl || '',
           timeControlLabel: att.timeControl || '',
+          chatId: openChat.firestoreId || openChat.id || '',
         });
       } else if (typeof showToast === 'function') showToast('Opening ' + (att.gameName || 'game'));
     });
