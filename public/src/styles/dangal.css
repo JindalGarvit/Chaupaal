@@ -311,4 +311,14 @@
 .pc-sevens,.pc-ab-cols{display:flex;gap:12px;font-size:13px;}
 .pc-row{display:flex;align-items:center;gap:8px;}
 
+/* ===== OH NO! (UNO) ===== */
+.uno-hand-card{display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:transform 180ms cubic-bezier(0.34,1.56,0.64,1);}
+.uno-hand-card--playable .uno-card{box-shadow:0 0 10px rgba(255,255,255,0.45),0 4px 14px rgba(0,0,0,0.4);}
+.uno-card{user-select:none;-webkit-user-select:none;}
+.uno-message{color:var(--gold,#FCC13B);background:rgba(252,193,59,0.12);border-top:1px solid rgba(252,193,59,0.15);border-bottom:1px solid rgba(252,193,59,0.15);}
+.uno-ohno-btn{font-weight:800;letter-spacing:0.02em;transition:background 200ms,box-shadow 200ms,transform 120ms;}
+.uno-ohno-btn.is-active{background:var(--red,#E74C3C)!important;color:#fff!important;box-shadow:0 0 14px rgba(231,76,60,0.7);transform:scale(1.08);}
+.uno-color-btn:hover{opacity:0.88;transform:scale(1.06);}
+@keyframes uno-pulse{from{box-shadow:0 0 6px rgba(231,76,60,0.5);}to{box-shadow:0 0 18px rgba(231,76,60,0.95);}}
+
 

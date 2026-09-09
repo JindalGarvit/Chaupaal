@@ -3727,6 +3727,8 @@ function openUnoGame(chat, variant='normal'){
   }
 
   function canPlay(card){
+    // Classic/normal: when drawStack > 0 you MUST draw — no stacking (Prompt 2)
+    if(drawStack>0&&variant!=='blaze')return false;
     if(card.type==='wild')return true;
     if(variant==='blaze'&&card.value==='draw4')return true;
     if(card.color===currentColor)return true;
@@ -3742,11 +3744,18 @@ function openUnoGame(chat, variant='normal'){
     const opp=who==='me'?'opp':'me';
     switch(card.value){
       case 'skip':myTurn=who==='me';message=`${who==='me'?chat.name:NAMES[0]} skipped!`;break;
-      case 'reverse':direction*=-1;message='Direction reversed!';if(variant==='blaze')myTurn=who==='me';break;
-      case 'draw2':drawStack+=2;if(variant==='blaze'){drawCard(opp,2);message=`+2! ${opp==='me'?'You':chat.name} draws 2`;myTurn=who!=='me';}else{message=`+2 pending!`;myTurn=who!=='me';}break;
+      // In 2-player Classic, Reverse acts like Skip (direction flip still recorded for 3+ player future)
+      case 'reverse':direction*=-1;message='Direction reversed!';
+        if(variant==='blaze')myTurn=who==='me';
+        else myTurn=who==='me'; // 2p: same player goes again
+        break;
+      case 'draw2':
+        if(variant==='blaze'){drawCard(opp,2);message=`+2! ${opp==='me'?'You':chat.name} draws 2`;myTurn=who!=='me';}
+        else{drawStack+=2;message=`+2! ${opp==='me'?'You':chat.name} must draw 2`;myTurn=who!=='me';}
+        break;
       case 'draw4':case 'wild_draw4':
         if(variant==='blaze'){drawCard(opp,4);message=`+4! ${opp==='me'?'You':chat.name} draws 4`;}
-        else{drawStack+=4;message=`+4 pending!`;}
+        else{drawStack+=4;message=`+4! ${opp==='me'?'You':chat.name} must draw 4`;}
         myTurn=who!=='me';break;
       case 'wild_draw6':drawCard(opp,6);message=`💀 +6! ${opp==='me'?'You':chat.name} draws 6!`;myTurn=who!=='me';break;
       case 'draw_all_5':drawCard(opp,5);message=`+5! ${opp==='me'?'You':chat.name} draws 5`;myTurn=who!=='me';break;
@@ -3756,12 +3765,25 @@ function openUnoGame(chat, variant='normal'){
       case 'wild':myTurn=who!=='me';break;
       default:myTurn=who!=='me';
     }
-    // Check UNO
-    if(hands[who].length===1){unoCallWindow=true;message=(who==='me'?'You call':'AI calls')+' \'Oh, No!\' 🗣️';gs.schedule(()=>{unoCallWindow=false;},2000);}
+    // Check UNO — "Oh No!" call window
+    if(hands[who].length===1){
+      unoCallWindow=true;
+      if(who==='opp'){
+        // AI auto-calls immediately
+        message=`${chat.name} shouts 'Oh, No!' 🗣️`;
+        gs.schedule(()=>{unoCallWindow=false;},1800);
+      } else {
+        message="You're at 1 card — shout 'Oh No!'";
+        gs.schedule(()=>{unoCallWindow=false;message='';render();},2500);
+      }
+    }
     if(hands[who].length===0){
-      gameOver=true;message=(who==='me'?'🎉 You win!':chat.name+' wins!')+' Oh, No!';
-      gs.setOutcome(who==='me'?'won':'lost');
-      if(typeof recordGameResult==='function')recordGameResult('uno',who==='me');
+      gameOver=true;
+      const won=who==='me';
+      message=(won?'🎉 You win!':chat.name+' wins!')+' Oh, No!';
+      gs.setOutcome(won?'won':'lost');
+      if(typeof recordGameResult==='function')recordGameResult('uno',won);
+      if(typeof recordDangalSession==='function')recordDangalSession('uno',{won,variant,mode:'practice'});
     }
     if(liveOn&&who==='me'&&!applyingLive)pushUno();
   }
@@ -3804,13 +3826,14 @@ function openUnoGame(chat, variant='normal'){
 
   function fanHandHtml(){
     const n=hands.me.length||1;
-    const spread=Math.min(42,220/n);
+    const spread=Math.min(42,200/n);
     return hands.me.map((card,i)=>{
-      const playable=myTurn&&!pickingColor&&canPlay(card)&&(!drawStack||card.value==='draw2'||card.value.includes('draw'));
+      const playable=myTurn&&!pickingColor&&canPlay(card);
       const mid=(n-1)/2;
-      const rot=(i-mid)*spread*0.08;
-      const y=Math.abs(i-mid)*1.5;
-      return `<div data-i="${i}" class="uno-hand-card" style="transform:rotate(${rot}deg) translateY(${selectedCard===i?-14:y}px);scroll-snap-align:center;">${renderCard(card,false,selectedCard===i,playable)}</div>`;
+      const rot=(i-mid)*spread*0.07;
+      const y=Math.abs(i-mid)*1.8;
+      const liftY=selectedCard===i?-16:(playable?-4:y);
+      return `<div data-i="${i}" class="uno-hand-card${playable?' uno-hand-card--playable':''}" style="transform:rotate(${rot}deg) translateY(${liftY}px);scroll-snap-align:center;">${renderCard(card,false,selectedCard===i,playable)}</div>`;
     }).join('');
   }
 
@@ -3862,55 +3885,80 @@ function openUnoGame(chat, variant='normal'){
       }
       return;
     }
+    const ohNoBtnStyle=unoCallWindow
+      ?'background:var(--red,#E74C3C);color:#fff;border:2px solid rgba(255,255,255,0.4);animation:uno-pulse 0.6s ease-in-out infinite alternate;'
+      :'';
     overlay.innerHTML=`
-      ${gameChromeHtml({title:'Oh, No!',subtitle:MODE_SUB+(variant==='doublesided'?(flipped?' · Dark':' · Light'):''),backId:'unoBack',rightHtml:`<button id="unoUnoBtn" class="game-chrome-action ${unoCallWindow?'is-active':''}">Oh No!</button>`})}
+      ${gameChromeHtml({title:'Oh, No!',subtitle:MODE_SUB+(variant==='doublesided'?(flipped?' · Dark':' · Light'):''),backId:'unoBack',rightHtml:`<button id="unoUnoBtn" class="game-chrome-action uno-ohno-btn${unoCallWindow?' is-active':''}" style="${ohNoBtnStyle}">Oh No!</button>`})}
 
       <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative;">
-        <div style="padding:10px 16px;flex-shrink:0;">
-          <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:6px;">${chat.name} — ${hands.opp.length} cards</div>
-          <div style="display:flex;justify-content:center;height:56px;">
-            ${hands.opp.map((_,i)=>{const mid=(hands.opp.length-1)/2;const rot=(i-mid)*4;return`<div style="width:36px;height:52px;background:linear-gradient(135deg,#c0392b,#8e44ad);border-radius:6px;border:2px solid rgba(255,255,255,0.2);flex-shrink:0;margin-right:-18px;transform:rotate(${rot}deg);"></div>`;}).join('')}
+
+        <!-- Opponent hand -->
+        <div style="padding:8px 12px 4px;flex-shrink:0;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.55);">${chat.name}</div>
+            <div style="background:rgba(255,255,255,0.1);border-radius:8px;padding:1px 8px;font-size:11px;font-weight:700;color:rgba(255,255,255,0.7);">${hands.opp.length} cards</div>
+          </div>
+          <div style="display:flex;justify-content:center;height:48px;overflow:hidden;">
+            ${(()=>{const n=hands.opp.length;const maxShow=Math.min(n,14);const cards=[];for(let i=0;i<maxShow;i++){const mid=(maxShow-1)/2;const rot=(i-mid)*3.5;cards.push(`<div style="width:32px;height:46px;background:linear-gradient(150deg,#6c2bb3,#9b2335);border-radius:5px;border:1.5px solid rgba(255,255,255,0.18);flex-shrink:0;margin-right:-20px;transform:rotate(${rot}deg);box-shadow:0 2px 6px rgba(0,0,0,0.35);"></div>`);}return cards.join('');})()}
           </div>
         </div>
 
-        <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:20px;padding:10px;">
-          <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
-            <div id="deckBtn" class="game-tap-target" style="width:52px;height:76px;background:linear-gradient(135deg,#c0392b,#8e44ad);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:22px;cursor:${myTurn&&!pickingColor?'pointer':'default'};border:2px solid rgba(255,255,255,0.3);">🃏</div>
-            <div style="font-size:10px;color:rgba(255,255,255,0.4);">${deck.length} left</div>
+        <!-- Table area: draw pile + discard -->
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:18px;padding:6px 10px;min-height:0;">
+          <!-- Draw pile -->
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+            <div id="deckBtn" class="game-tap-target" style="width:56px;height:82px;background:linear-gradient(150deg,#6c2bb3,#9b2335);border-radius:9px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:20px;cursor:${myTurn&&!pickingColor?'pointer':'default'};border:${myTurn&&!pickingColor&&!hands.me.some(canPlay)?'3px solid var(--gold,#FCC13B)':'2px solid rgba(255,255,255,0.22)'};box-shadow:${myTurn&&!pickingColor&&!hands.me.some(canPlay)?'0 0 12px rgba(252,193,59,0.5)':'0 3px 10px rgba(0,0,0,0.35)'};">
+              🃏
+              ${drawStack>0?`<span style="font-size:10px;font-weight:700;color:#fff;background:var(--red,#E74C3C);border-radius:6px;padding:0 4px;">+${drawStack}</span>`:''}
+            </div>
+            <div style="font-size:9px;color:rgba(255,255,255,0.35);">${deck.length} in deck</div>
           </div>
-          <div id="unoDiscard" style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+          <!-- Discard pile -->
+          <div id="unoDiscard" style="display:flex;flex-direction:column;align-items:center;gap:5px;">
             ${renderCard(topCard,false,false,false)}
-            <div style="display:flex;align-items:center;gap:6px;">
-              <div style="width:14px;height:14px;border-radius:50%;background:${COLOR_HEX[currentColor]};border:2px solid rgba(255,255,255,0.4);"></div>
-              <div style="font-size:10px;color:rgba(255,255,255,0.5);">${currentColor}</div>
+            <div style="display:flex;align-items:center;gap:5px;">
+              <div style="width:12px;height:12px;border-radius:50%;background:${COLOR_HEX[currentColor]||'#666'};border:2px solid rgba(255,255,255,0.35);"></div>
+              <div style="font-size:9px;color:rgba(255,255,255,0.45);font-weight:700;text-transform:capitalize;">${currentColor}</div>
             </div>
           </div>
         </div>
 
-        ${message?`<div style="padding:8px 16px;text-align:center;color:var(--gold);font-weight:700;font-size:13px;background:rgba(255,201,60,0.1);flex-shrink:0;">${message}</div>`:''}
+        <!-- Message / status line -->
+        ${message?`<div class="uno-message" style="padding:6px 16px;text-align:center;font-weight:700;font-size:13px;flex-shrink:0;">${message}</div>`:''}
 
+        <!-- Color picker -->
         ${pickingColor?`
-        <div style="padding:10px 16px;flex-shrink:0;">
-          <div style="font-size:12px;color:rgba(255,255,255,0.7);margin-bottom:8px;text-align:center;font-weight:700;">Choose a color:</div>
+        <div style="padding:8px 12px;flex-shrink:0;background:rgba(0,0,0,0.3);">
+          <div style="font-size:12px;color:#fff;margin-bottom:8px;text-align:center;font-weight:700;">Choose a colour:</div>
           <div style="display:flex;gap:8px;justify-content:center;">
-            ${COLORS_UNO.map(c=>`<button data-color="${c}" class="game-tap-target" aria-label="${c}" style="min-width:52px;min-height:52px;padding:6px 8px;background:${COLOR_HEX[c]};border:none;border-radius:12px;cursor:pointer;font-size:11px;font-weight:700;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.5);box-shadow:0 2px 8px rgba(0,0,0,0.4);background-image:repeating-linear-gradient(${c==='red'||c==='yellow'?'45deg':'-45deg'},transparent,transparent 3px,rgba(255,255,255,0.2) 3px,rgba(255,255,255,0.2) 4px);">${c.slice(0,1).toUpperCase()}</button>`).join('')}
+            ${COLORS_UNO.map(c=>`<button data-color="${c}" class="game-tap-target uno-color-btn" aria-label="${c}" style="min-width:56px;min-height:56px;background:${COLOR_HEX[c]};border:3px solid rgba(255,255,255,0.5);border-radius:14px;cursor:pointer;font-size:13px;font-weight:700;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.6);box-shadow:0 4px 12px rgba(0,0,0,0.5);">${c[0].toUpperCase()+c.slice(1)}</button>`).join('')}
           </div>
         </div>`:''}
 
-        <div style="padding:10px 8px max(16px,env(safe-area-inset-bottom));flex-shrink:0;">
-          <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:6px;padding:0 8px;">Your hand — ${hands.me.length} cards${drawStack>0?` · <span style="color:#E74C3C;font-weight:700;">+${drawStack} pending!</span>`:''}</div>
-          <div id="unoHand" style="display:flex;gap:0;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;padding:18px 20px 8px;justify-content:${hands.me.length<6?'center':'flex-start'};">
+        <!-- Your hand -->
+        <div style="padding:6px 8px max(14px,env(safe-area-inset-bottom));flex-shrink:0;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;padding:0 4px;">
+            <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.55);">Your hand</div>
+            <div style="background:rgba(255,255,255,0.1);border-radius:8px;padding:1px 8px;font-size:11px;font-weight:700;color:rgba(255,255,255,0.7);">${hands.me.length} cards</div>
+            ${drawStack>0?`<div style="background:var(--red,#E74C3C);border-radius:8px;padding:1px 8px;font-size:11px;font-weight:700;color:#fff;">Draw +${drawStack}!</div>`:''}
+          </div>
+          <div id="unoHand" style="display:flex;gap:0;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;padding:14px 16px 6px;justify-content:${hands.me.length<7?'center':'flex-start'};">
             ${fanHandHtml()}
           </div>
           ${typeof gameTurnBannerHtml==='function'
-            ? gameTurnBannerHtml({ mode: myTurn&&!pickingColor?'yours':(gameOver?'over':'waiting'), label: myTurn&&!pickingColor?'Your turn — tap a card':(pickingColor?'Pick a color':'Waiting for opponent…'), pulse: myTurn&&!pickingColor })
-            : `<div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:6px;text-align:center;">${myTurn&&!pickingColor?'Tap a card to play':'Waiting...'}</div>`}
+            ? gameTurnBannerHtml({mode:myTurn&&!pickingColor?'yours':(gameOver?'over':'waiting'),label:myTurn&&!pickingColor?(drawStack>0?`Tap deck to draw ${drawStack} cards`:'Your turn — tap a highlighted card'):(pickingColor?'Pick a colour':'Opponent thinking…'),pulse:myTurn&&!pickingColor})
+            : `<div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:4px;text-align:center;">${myTurn&&!pickingColor?'Your turn':'Opponent thinking…'}</div>`}
         </div>
       </div>
     `;
 
     document.getElementById('unoBack').addEventListener('click',()=>{askUnoLeave();});
-    document.getElementById('unoUnoBtn').addEventListener('click',()=>{if(hands.me.length===2)unoCallWindow=true;});
+    document.getElementById('unoUnoBtn').addEventListener('click',()=>{
+      if(unoCallWindow&&hands.me.length===1){
+        unoCallWindow=false;message="'Oh, No!' called! ✅";render();
+      }
+    });
 
     function playFromHand(i,chosenColor){
       const card=hands.me[i];
@@ -3928,8 +3976,17 @@ function openUnoGame(chat, variant='normal'){
 
     overlay.querySelectorAll('[data-i]').forEach(el=>{
       const i=parseInt(el.dataset.i);const card=hands.me[i];
-      const playable=myTurn&&!pickingColor&&canPlay(card)&&(!drawStack||card.value==='draw2'||card.value.includes('draw'));
-      if(playable)el.addEventListener('click',()=>{
+      const playable=myTurn&&!pickingColor&&canPlay(card);
+      el.addEventListener('click',()=>{
+        if(!myTurn){message='Wait for your turn!';render();return;}
+        if(pickingColor){return;}
+        if(!playable){
+          // Gentle reject: shake and show message
+          el.animate&&el.animate([{transform:'translateX(-5px)'},{transform:'translateX(5px)'},{transform:'translateX(-3px)'},{transform:'translateX(0)'}],{duration:280,easing:'ease-out'});
+          if(drawStack>0)message=`Draw ${drawStack} cards first!`;
+          else message='Card does not match colour or value';
+          render();return;
+        }
         if(card.type==='wild'||card.color==='wild'){selectedCard=i;pickingColor=true;render();}
         else playFromHand(i);
       });
@@ -3941,27 +3998,58 @@ function openUnoGame(chat, variant='normal'){
 
     document.getElementById('deckBtn').addEventListener('click',()=>{
       if(!myTurn||pickingColor)return;
-      if(drawStack>0){drawCard('me',drawStack);message=`You drew ${drawStack} cards!`;drawStack=0;myTurn=false;if(liveOn)pushUno();render();if(!liveOn)gs.schedule(aiPlayUno,900);return;}
+      if(drawStack>0){
+        const n=drawStack;drawCard('me',n);message=`You drew ${n} cards!`;drawStack=0;myTurn=false;
+        if(liveOn)pushUno();render();if(!liveOn)gs.schedule(aiPlayUno,900);return;
+      }
       drawCard('me',1);
       const drawn=hands.me[hands.me.length-1];
-      if(canPlay(drawn)){selectedCard=hands.me.length-1;message='Drew a playable card — tap it to play or skip';if(liveOn)pushUno();render();}
-      else{message='No playable card — passing';myTurn=false;if(liveOn)pushUno();render();if(!liveOn)gs.schedule(aiPlayUno,900);}
+      // canPlay re-evaluates with drawStack=0 now, so wild/color/value check works
+      if(canPlay(drawn)){
+        selectedCard=hands.me.length-1;
+        message='Drew a playable card — tap it to play, or tap deck to pass';
+        if(liveOn)pushUno();render();
+      } else {
+        message='No playable card drawn — passing turn';myTurn=false;
+        if(liveOn)pushUno();render();if(!liveOn)gs.schedule(aiPlayUno,900);
+      }
     });
   }
 
   function aiPlayUno(){
     if(!gs.alive()||gameOver||myTurn||liveOn)return;
-    if(drawStack>0){drawCard('opp',drawStack);message=`${chat.name} drew ${drawStack} cards!`;drawStack=0;myTurn=true;render();return;}
+    // Classic: must draw stack immediately, cannot play into it
+    if(drawStack>0){
+      const n=drawStack;drawCard('opp',n);message=`${chat.name} drew ${n} cards!`;drawStack=0;myTurn=true;
+      render();return;
+    }
     const playable=hands.opp.filter(canPlay);
-    if(!playable.length){drawCard('opp',1);const drawn=hands.opp[hands.opp.length-1];
-      if(!canPlay(drawn)){message=`${chat.name} can't play — draws`;myTurn=true;render();return;}
+    if(!playable.length){
+      drawCard('opp',1);
+      const drawn=hands.opp[hands.opp.length-1];
+      // After drawing, check if drawn card is playable (drawStack still 0)
+      if(!canPlay(drawn)){message=`${chat.name} draws — no play`;myTurn=true;render();return;}
       const idx=hands.opp.indexOf(drawn);hands.opp.splice(idx,1);
-      applyCard(drawn,'opp',COLORS_UNO[Math.floor(Math.random()*4)]);render();if(!gameOver&&!myTurn)gs.schedule(aiPlayUno,900);return;}
-    const pick=playable.sort((a,b)=>{const priority={'wild_draw6':9,'wild_draw4':8,'draw4':7,'draw2':6,'skip':5,'reverse':4,'wild':3};return(priority[b.value]||0)-(priority[a.value]||0);})[0];
+      // AI chooses best color when playing wild (most common in own remaining hand)
+      const aiColor=aiChooseColor('opp');
+      applyCard(drawn,'opp',aiColor);render();if(!gameOver&&!myTurn)gs.schedule(aiPlayUno,900);return;
+    }
+    // Prioritise: wilds last (save them), action cards next, numbers OK
+    const pick=playable.sort((a,b)=>{
+      const priority={'draw2':6,'skip':5,'reverse':4,'wild_draw4':3,'wild':1};
+      return(priority[b.value]||2)-(priority[a.value]||2);
+    })[0];
     const idx=hands.opp.indexOf(pick);hands.opp.splice(idx,1);
-    const chosenColor=COLORS_UNO[Math.floor(Math.random()*4)];
-    applyCard(pick,'opp',chosenColor);render();
+    const aiColor=aiChooseColor('opp');
+    applyCard(pick,'opp',aiColor);render();
     if(!gameOver&&!myTurn)gs.schedule(aiPlayUno,900);
+  }
+
+  function aiChooseColor(who){
+    // Pick the color the AI has most of in its remaining hand
+    const counts={red:0,yellow:0,green:0,blue:0};
+    hands[who].forEach(c=>{if(counts[c.color]!==undefined)counts[c.color]++;});
+    return Object.entries(counts).sort((a,b)=>b[1]-a[1])[0][0];
   }
 
   if(liveOn&&liveRoles&&typeof DangalLive!=='undefined'){
