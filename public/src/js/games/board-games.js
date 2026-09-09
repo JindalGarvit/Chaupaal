@@ -1207,7 +1207,10 @@ function openGroupGameSetup(groupChat, gameId){
       const playerList=[{name:'You',isMe:true,profileType:ownType},...[...selectedPlayers].map(n=>{const m=members.find(x=>x.name===n);return{name:n,avatar:m?.avatar||'👤',isMe:false,profileType:m?.profileType||null,uid:m?.uid||null};})];
       const playerCount=playerList.length;
       const fakeChat={name:playerList[1]?.name||'Opponent',id:'group_game',profileType:playerList[1]?.profileType||null};
-      if(gameId==='ludo')openLudoGame(fakeChat,playerCount);
+      if(gameId==='ludo'){
+        if(typeof openLudoPracticeSheet==='function')openLudoPracticeSheet(fakeChat,{playerCount,source:'baithak'});
+        else openLudoGame(fakeChat,playerCount,{mode:'classic'});
+      }
       else if(gameId==='scribble')openScribbleGame(fakeChat,playerList.slice(1));
       else if(gameId==='business')openBusinessGame(fakeChat,playerCount);
       else if(gameId==='uno')openUnoVariantPicker(fakeChat);

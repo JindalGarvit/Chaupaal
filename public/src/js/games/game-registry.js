@@ -525,39 +525,12 @@
     const game = getGame(gameId);
     if (!game) return;
 
+    if (gameId === 'ludo' && typeof openLudoPracticeSheet === 'function') {
+      openLudoPracticeSheet({ name: 'AI', id: 'ai' }, { source: 'dangal' });
+      return;
+    }
     if (gameId === 'ludo' && typeof openLudoGame === 'function') {
-      const s = document.createElement('div');
-      s.style.cssText =
-        'position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:20px;z-index:100;';
-      s.innerHTML = `<div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;margin-bottom:6px;">🎯 Ludo</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Practice vs AI — Live friends coming as this title graduates.</div>
-      ${[2, 3, 4]
-        .map(
-          (n) =>
-            `<button data-n="${n}" style="width:100%;padding:13px;background:var(--cream);border:2px solid var(--line);border-radius:14px;margin-bottom:8px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;cursor:pointer;">${n} Players · Practice</button>`
-        )
-        .join('')}
-      <button id="closeLudoPick" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>`;
-      document.querySelector('.device').appendChild(s);
-      s.querySelectorAll('[data-n]').forEach((btn) =>
-        btn.addEventListener('click', () => {
-          s.remove();
-          const n = parseInt(btn.dataset.n, 10);
-          window.__dangalLaunchCtx = {
-            gameId: 'ludo',
-            gameType: 'ludo',
-            mode: 'practice',
-            matchId: '',
-            opponentUid: 'ai',
-            stake: 0,
-            chatId: '',
-            source: 'dangal',
-            startedAt: Date.now(),
-          };
-          openLudoGame({ name: 'AI', id: 'ai' }, n);
-        })
-      );
-      document.getElementById('closeLudoPick').addEventListener('click', () => s.remove());
+      openLudoGame({ name: 'AI', id: 'ai' }, 2, { mode: 'classic' });
       return;
     }
 
@@ -713,7 +686,11 @@
     }
 
     if (gameId === 'ludo') {
-      launchDangalWithOpponent('ludo');
+      if (typeof openLudoPracticeSheet === 'function') {
+        openLudoPracticeSheet({ name: 'AI', id: 'ai' }, { source: 'manch' });
+      } else {
+        launchDangalWithOpponent('ludo');
+      }
       return;
     }
 
