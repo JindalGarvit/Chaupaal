@@ -4,7 +4,12 @@
  *
  * Schema: players{}, playerA, playerB, turn, state|fen|board, version|seq,
  *   stake, status, winner, lastMoveAt, presence{}, updatedAt,
+ *   clocks{w,b}, clockAt, clockTurn, timeControl,
  *   quiz: { questions?, answers{}, scores{}, qIdx? }
+ *
+ * Chess merge rules:
+ * - Host seeds fen once (join: only if fen missing). Guest never overwrites.
+ * - Move push may include baseVersion; stale versions abort the transaction.
  *
  * Quiz merge rules:
  * - Host seeds questions once (join transaction: only if quiz missing).
@@ -106,6 +111,14 @@
         if (!next.playerA) next.playerA = o.playerA;
         if (!next.playerB) next.playerB = o.playerB;
         if (stake > 0 && !next.stake) next.stake = stake;
+        // Seed fen only when missing — guest must never overwrite host Chess960/standard.
+        if (o.fen && !String(cur.fen || '').trim()) {
+          next.fen = o.fen;
+        }
+        if (o.clocks && !cur.clocks) next.clocks = o.clocks;
+        if (o.timeControl && !cur.timeControl) next.timeControl = o.timeControl;
+        if (o.clockTurn && !cur.clockTurn) next.clockTurn = o.clockTurn;
+        if (o.clockAt && !cur.clockAt) next.clockAt = o.clockAt;
         // Seed quiz only when missing — guest must never overwrite host questions.
         if (o.quizSeed && !(cur.quiz && Array.isArray(cur.quiz.questions) && cur.quiz.questions.length)) {
           next.quiz = o.quizSeed;
@@ -113,7 +126,7 @@
         next.lastMoveAt = next.lastMoveAt || now;
         next.version = Number(next.version || next.seq) || 0;
         // Do not resurrect a finished match
-        if (cur.status === 'over' || cur.status === 'forfeit') {
+        if (cur.status === 'over' || cur.status === 'forfeit' || cur.status === 'timeout' || cur.status === 'checkmate') {
           next.status = cur.status;
           next.winner = cur.winner || null;
         }
@@ -135,6 +148,10 @@
         board: o.board || '',
         state: o.state || null,
         quiz: o.quizSeed || null,
+        clocks: o.clocks || null,
+        clockAt: o.clockAt || (o.clocks ? now : null),
+        clockTurn: o.clockTurn || (o.clocks ? 'w' : null),
+        timeControl: o.timeControl || null,
         seq: 0,
         version: 0,
         stake,
@@ -156,15 +173,31 @@
         return ref.transaction((cur) => {
           if (!cur) return cur;
           const patchObj = patch || {};
+          const curVer = Number(cur.version || cur.seq) || 0;
+          if (patchObj.baseVersion != null && Number(patchObj.baseVersion) !== curVer) {
+            // Stale move — abort transaction
+            return;
+          }
+          // Finished matches: allow status/winner/presence only, not fen rewinds
+          const finished =
+            cur.status === 'over' ||
+            cur.status === 'forfeit' ||
+            cur.status === 'timeout' ||
+            cur.status === 'checkmate' ||
+            cur.status === 'stalemate' ||
+            cur.status === 'draw';
+          if (finished && patchObj.fen && patchObj.fen !== cur.fen) {
+            return;
+          }
           const next = Object.assign({}, cur);
           Object.keys(patchObj).forEach((k) => {
-            if (k === 'quiz') return;
+            if (k === 'quiz' || k === 'baseVersion') return;
             next[k] = patchObj[k];
           });
           if (patchObj.quiz) {
             next.quiz = mergeQuiz(cur.quiz, patchObj.quiz);
           }
-          next.seq = (Number(cur.seq) || 0) + 1;
+          next.seq = curVer + 1;
           next.version = next.seq;
           next.updatedAt = Date.now();
           next.lastMoveAt = Date.now();

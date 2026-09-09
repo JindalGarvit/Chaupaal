@@ -242,8 +242,29 @@ function openChessGame(chat){
 
   // Live only with real opponent — never invent Live vs AI
   if(liveReady){
-    startChessGame(raw,{min:0,inc:0,difficulty:'live',aiDepth:0,chess960:false,playAs:null});
-    return;
+    const mid=String(raw.dangalMatchId||launch.matchId||'').trim();
+    if(!mid){
+      if(typeof showToast==='function')showToast('Challenge link broken — open Practice instead');
+    }else{
+      const liveChat=Object.assign({},raw,{
+        dangalMatchId:mid,
+        uid:oppUid,
+        peerUid:oppUid,
+        opponentUid:oppUid,
+        dangalSource:launch.source||raw.dangalSource||'',
+      });
+      const tcLive={
+        min:Number(launch.min||launch.timeMin||0)||0,
+        inc:Number(launch.inc||launch.timeInc||0)||0,
+        difficulty:'live',
+        aiDepth:0,
+        chess960:!!launch.chess960,
+        playAs:null,
+        matchId:mid,
+      };
+      startChessGame(liveChat,tcLive);
+      return;
+    }
   }
 
   const practiceChat={
@@ -463,8 +484,24 @@ function boardFromChess(chessInst){
 
 let chess;
 let used960=false;
+const liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat,window.__dangalLaunchCtx);
+const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat,window.__dangalLaunchCtx):null;
+const myChessColor=liveRoles?liveRoles.myColor:(tc.playAs==='b'?'b':'w');
+let liveHandle=null;
+let applyingLive=false;
+let leaveConfirmed=false;
+let aiThinking=false;
+let liveVersion=0;
+let liveEnded=false;
+let fenReady=!liveOn||!(liveRoles&&!liveRoles.host);
+let syncWaitStarted=0;
+
 try{
-  if(tc.chess960){
+  // Guest Live waits for host fen — don't invent a different Chess960
+  if(liveOn&&liveRoles&&!liveRoles.host){
+    chess=new Chess();
+    used960=false;
+  }else if(tc.chess960){
     chess=new Chess(chess960Fen(),{skipValidation:true});
     used960=true;
   }else{
@@ -477,54 +514,10 @@ try{
   chess=new Chess();
   used960=false;
 }
-const liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat,window.__dangalLaunchCtx);
-const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat,window.__dangalLaunchCtx):null;
-const myChessColor=liveRoles?liveRoles.myColor:(tc.playAs==='b'?'b':'w');
-let liveHandle=null;
-let applyingLive=false;
-let leaveConfirmed=false;
-let aiThinking=false;
-if(liveOn&&liveRoles){
-  liveHandle=DangalLive.join({
-    gameType:'chess',
-    matchId:(chat&&chat.dangalMatchId)||(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.matchId),
-    me:liveRoles.me,
-    playerA:liveRoles.playerA,
-    playerB:liveRoles.playerB,
-    fen:chess.fen(),
-    onSnap(val){
-      if(!val||applyingLive||!gs||!gs.alive())return;
-      if(val.fen&&val.fen!==chess.fen()){
-        applyingLive=true;
-        try{
-          chess.load(val.fen);
-          syncFromChess();
-          if(val.lastMove)state.lastMove=val.lastMove;
-          render();
-          if(typeof gameFeedback==='function')gameFeedback('move');
-        }catch(e){}
-        applyingLive=false;
-      }
-      if(val.status&&val.status!=='playing'){
-        syncFromChess();
-        if(val.status==='forfeit'||val.status==='over'||val.status==='checkmate'||val.status==='stalemate'){
-          if(val.winner&&liveRoles){
-            const iWon=val.winner===liveRoles.me;
-            if(val.status==='forfeit'){
-              state.status='resign';
-              if(!state.ratingRecorded){
-                state.ratingRecorded=true;
-                if(typeof recordGameResult==='function')recordGameResult('chess',iWon,false);
-                if(gs)gs.setOutcome(iWon?'won':'lost');
-              }
-            }
-          }
-        }
-        render();
-      }
-    },
-  });
-}
+
+const HAS_TIMER=tc.min>0;
+let clocks={w:tc.min*60,b:tc.min*60};
+
 let state={
   board:boardFromChess(chess),
   turn:chess.turn(),
@@ -690,6 +683,146 @@ const gs=beginGameOverlaySession({
 });
 if(!gs.alive())return;
 
+function applyRemoteClocks(val){
+  if(!HAS_TIMER||!val||!val.clocks)return;
+  let w=Math.max(0,Number(val.clocks.w));
+  let b=Math.max(0,Number(val.clocks.b));
+  if(!Number.isFinite(w))w=clocks.w;
+  if(!Number.isFinite(b))b=clocks.b;
+  const active=val.clockTurn||(typeof val.fen==='string'&&val.fen.split(' ')[1])||state.turn;
+  if(val.clockAt&&active&&(!val.status||val.status==='playing')){
+    const elapsed=Math.max(0,Math.floor((Date.now()-Number(val.clockAt))/1000));
+    if(active==='w')w=Math.max(0,w-elapsed);
+    else if(active==='b')b=Math.max(0,b-elapsed);
+  }
+  clocks.w=w;
+  clocks.b=b;
+  stopClock();
+  if((!val.status||val.status==='playing')&&!gameEndedStatus()&&fenReady&&gs.alive()){
+    startClock(active==='b'?'b':'w');
+  }
+}
+
+function handleLiveEnd(val){
+  if(!val||liveEnded)return;
+  liveEnded=true;
+  stopClock();
+  aiThinking=false;
+  const status=String(val.status||'');
+  if(status==='forfeit'||status==='resign'){
+    state.status='resign';
+    const iWon=liveRoles&&val.winner===liveRoles.me;
+    state.endDetail=iWon?'Opponent left — you win':'You left — forfeit';
+  }else if(status==='timeout'){
+    state.status='timeout';
+    // timed-out side is the loser; state.turn = side that flagged (for outcomeFlags)
+    if(liveRoles&&val.winner){
+      state.turn=val.winner===liveRoles.playerA?'b':'w';
+    }
+    state.endDetail=state.turn===myChessColor?'You flagged':'Opponent flagged';
+  }else if(status==='checkmate'){
+    state.status='checkmate';
+    state.endDetail='Checkmate';
+  }else if(status==='stalemate'){
+    state.status='stalemate';
+    state.endDetail='Stalemate';
+  }else if(status==='draw'){
+    state.status='draw';
+    state.endDetail=val.endDetail||'Draw';
+  }else{
+    state.status=status||'over';
+  }
+  if(val.fen&&val.fen!==chess.fen()){
+    try{chess.load(val.fen);syncFromChess();}catch(e){}
+  }else if(status!=='forfeit'&&status!=='resign'&&status!=='timeout'){
+    syncFromChess();
+  }
+  if(val.lastMove)state.lastMove=val.lastMove;
+  if(!state.ratingRecorded){
+    const iWon=liveRoles&&val.winner===liveRoles.me;
+    const drew=status==='draw'||status==='stalemate';
+    if(status==='forfeit'||status==='resign'||status==='timeout'||status==='checkmate'||drew){
+      state.ratingRecorded=true;
+      if(drew)gs.setOutcome('draw');
+      else gs.setOutcome(iWon?'won':'lost');
+      if(typeof recordGameResult==='function')recordGameResult('chess',!!iWon&&!drew,!!drew);
+    }
+  }
+  leaveConfirmed=true;
+  try{if(liveHandle)liveHandle.leave({forfeit:false});}catch(e){}
+  liveHandle=null;
+  render();
+}
+
+if(liveOn&&liveRoles){
+  const matchId=String(
+    tc.matchId||
+    (chat&&chat.dangalMatchId)||
+    (window.__dangalLaunchCtx&&window.__dangalLaunchCtx.matchId)||
+    ''
+  ).trim();
+  syncWaitStarted=Date.now();
+  liveHandle=DangalLive.join({
+    gameType:'chess',
+    matchId,
+    me:liveRoles.me,
+    playerA:liveRoles.playerA,
+    playerB:liveRoles.playerB,
+    // Host seeds fen/clocks once; guest joins empty so host Chess960 wins
+    fen:liveRoles.host?chess.fen():null,
+    clocks:liveRoles.host&&HAS_TIMER?{w:clocks.w,b:clocks.b}:null,
+    clockAt:liveRoles.host&&HAS_TIMER?Date.now():null,
+    clockTurn:liveRoles.host&&HAS_TIMER?'w':null,
+    timeControl:liveRoles.host&&HAS_TIMER?{min:tc.min,inc:tc.inc}:null,
+    onForfeit(){
+      handleLiveEnd({status:'forfeit',winner:liveRoles.me});
+    },
+    onSnap(val){
+      if(!val||!gs.alive()||applyingLive||liveEnded)return;
+      liveVersion=Number(val.version||val.seq)||liveVersion;
+      const st=String(val.status||'playing');
+      if(st&&st!=='playing'){
+        handleLiveEnd(val);
+        return;
+      }
+      // Finished match rematch reuse: refuse to play on over docs without fen reset
+      if(st==='playing'&&val.winner&&!String(val.fen||'').trim()){
+        console.warn('[chess] stale finished match without fen');
+        return;
+      }
+      if(val.fen&&String(val.fen).trim()){
+        fenReady=true;
+        if(val.fen!==chess.fen()){
+          applyingLive=true;
+          try{
+            const ok=chess.load(val.fen);
+            if(ok===false)throw new Error('load rejected');
+            syncFromChess();
+            if(val.lastMove)state.lastMove=val.lastMove;
+            if(typeof gameFeedback==='function')gameFeedback('move');
+          }catch(e){
+            console.warn('[chess] ignore bad remote fen',e?.message||e);
+          }
+          applyingLive=false;
+        }else if(val.lastMove){
+          state.lastMove=val.lastMove;
+        }
+      }
+      if(HAS_TIMER&&fenReady)applyRemoteClocks(val);
+      else if(fenReady)syncFromChess();
+      render();
+    },
+  });
+  if(!liveHandle&&typeof showToast==='function'){
+    showToast('Could not join Live chess — try again');
+  }else if(liveHandle&&!fenReady){
+    gs.schedule(()=>{
+      if(!gs.alive()||fenReady||liveEnded)return;
+      if(typeof showToast==='function')showToast('Still waiting for the host board…');
+    },18000);
+  }
+}
+
 function gameEndedStatus(){
   return state.status==='checkmate'||state.status==='stalemate'||state.status==='timeout'||state.status==='resign'||state.status==='draw';
 }
@@ -745,6 +878,7 @@ async function askChessResign(){
   if(liveOn&&liveHandle){
     try{await Promise.resolve(liveHandle.forfeit());}catch(e){}
     leaveConfirmed=true;
+    liveEnded=true;
   }
   recordEndIfNeeded();
   render();
@@ -780,6 +914,7 @@ function capturedPieces(){
 }
 
 function statusLabel(){
+  if(liveOn&&!fenReady)return 'Waiting for opponent…';
   if(state.status==='checkmate'){
     return state.turn===myChessColor?`${chat.name} wins by checkmate`:'You won by checkmate';
   }
@@ -811,7 +946,7 @@ function render(){
   const gameEnded=gameEndedStatus();
   if(gameEnded)recordEndIfNeeded();
   const{chessWon,chessDrew}=outcomeFlags();
-  const turnMode=gameEnded?'over':state.check&&state.turn===myChessColor?'over':(aiThinking||state.turn!==myChessColor)?'theirs':'yours';
+  const turnMode=gameEnded?'over':!fenReady?'theirs':state.check&&state.turn===myChessColor?'over':(aiThinking||state.turn!==myChessColor)?'theirs':'yours';
   const turnBanner=typeof gameTurnBannerHtml==='function'
     ? gameTurnBannerHtml({ mode: turnMode, label: statusText, pulse: turnMode==='yours' })
     : `<div style="padding:10px 16px;text-align:center;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;color:#fff;flex-shrink:0;">${statusText}</div>`;
@@ -830,7 +965,7 @@ function render(){
       vs:`vs ${oppLabel}`,
       text:`Chaupaal Chess (${DIFF_LABEL}): ${chessDrew?'draw':chessWon?'I won':'tough loss'} vs ${oppLabel}`,
     };
-    const actions=[{label:'Play again',primary:true,id:'again'}];
+    const actions=[{label:liveOn?'New challenge':'Play again',primary:true,id:'again'}];
     if(canShare)actions.push({label:'Share',primary:false,id:'share'});
     if(canChallenge)actions.push({label:'Challenge friend',primary:false,id:'challenge'});
     if(canStory)actions.push({label:'Post to story',primary:false,id:'story'});
@@ -868,7 +1003,17 @@ function render(){
   document.getElementById('chessBack')?.addEventListener('click',()=>{askChessLeave();});
   if(resultBlock&&typeof wireGameResultActions==='function'){
     const rematch=()=>{
-      if(typeof openChessGame==='function'){gs.close();openChessGame(liveOn?chat:{name:'Practice AI',id:'ai'});}
+      // Never reopen the same finished matchId as playing
+      try{window.__dangalLaunchCtx=null;}catch(e){}
+      if(liveOn){
+        gs.close();
+        if(typeof showToast==='function')showToast('Challenge again for a new Live game');
+        if(typeof openFriendPickerSheet==='function'){
+          openFriendPickerSheet({title:'Chess challenge',subtitle:'Pick a friend for a new match'});
+        }
+        return;
+      }
+      if(typeof openChessGame==='function'){gs.close();openChessGame({name:'Practice AI',id:'ai'});}
       else gs.close();
     };
     const shareStats={
@@ -931,26 +1076,39 @@ function render(){
 
 let renderFlipped=myChessColor==='b';
 
-const HAS_TIMER=tc.min>0;
-let clocks={w:tc.min*60,b:tc.min*60};
-
 function formatClock(s){const m=Math.floor(Math.max(0,s)/60);const sec=Math.max(0,s)%60;return m+':'+(sec<10?'0':'')+sec;}
 function startClock(color){
-  if(!HAS_TIMER||!gs.alive())return;
+  if(!HAS_TIMER||!gs.alive()||!fenReady)return;
   clearInterval(clockInterval);
   clockInterval=setInterval(()=>{
-    if(!gs.alive()||gameEndedStatus()){clearInterval(clockInterval);return;}
+    if(!gs.alive()||gameEndedStatus()||liveEnded){clearInterval(clockInterval);return;}
     clocks[color]--;
     const el=document.getElementById('clock_'+color);
     if(el){el.textContent=formatClock(clocks[color]);el.style.color=clocks[color]<=10?'#E74C3C':'var(--gold)';}
     if(clocks[color]<=0){
       clocks[color]=0;clearInterval(clockInterval);
+      const winnerUid=liveRoles?(color==='w'?liveRoles.playerB:liveRoles.playerA):null;
       state.status='timeout';
       state.endDetail=color===myChessColor?'You flagged':'Opponent flagged';
       state.turn=color;
-      recordEndIfNeeded();
-      render();
-      if(typeof showToast==='function')showToast(color===myChessColor?`${chat.name||'Opponent'} wins on time`:'You won on time');
+      if(liveOn&&liveHandle&&!liveEnded){
+        try{
+          liveHandle.push({
+            status:'timeout',
+            winner:winnerUid,
+            fen:chess.fen(),
+            clocks:{w:clocks.w,b:clocks.b},
+            clockAt:Date.now(),
+            clockTurn:color,
+            baseVersion:liveVersion,
+          });
+        }catch(e){}
+        handleLiveEnd({status:'timeout',winner:winnerUid,fen:chess.fen()});
+      }else{
+        recordEndIfNeeded();
+        render();
+        if(typeof showToast==='function')showToast(color===myChessColor?`${chat.name||'Opponent'} wins on time`:'You won on time');
+      }
     }
   },1000);
 }
@@ -1017,7 +1175,7 @@ function showPromotionPicker(candidates, onPick){
 }
 
 function handleClick(r,c){
-  if(!gs.alive()||state.status!=='playing'||state.turn!==myChessColor||state.animating||aiThinking)return;
+  if(!gs.alive()||!fenReady||state.status!=='playing'||state.turn!==myChessColor||state.animating||aiThinking||liveEnded)return;
   const p=state.board[r][c];
   if(state.selected){
     const destMoves=state.legalMoves.filter(m=>m.from[0]===state.selected[0]&&m.from[1]===state.selected[1]&&m.to[0]===r&&m.to[1]===c);
@@ -1038,24 +1196,77 @@ function handleClick(r,c){
   else if(p&&typeof gameFeedback==='function')gameFeedback('invalid');
 }
 
-function afterHumanMove(){
-  if(liveOn&&liveHandle){
-    const nextTurnUid=liveRoles?(state.turn==='w'?liveRoles.playerA:liveRoles.playerB):null;
-    const winnerUid=
-      state.status==='checkmate'&&liveRoles
-        ?(state.turn==='w'?liveRoles.playerB:liveRoles.playerA)
-        :null;
-    liveHandle.push({
-      fen:chess.fen(),
-      turn:nextTurnUid,
-      lastMove:state.lastMove,
-      status:state.status==='playing'?'playing':state.status,
-      winner:winnerUid||null,
-    });
-    if(state.status==='playing'&&typeof DangalLive!=='undefined'&&DangalLive.pingTurn&&liveRoles){
-      DangalLive.pingTurn(liveRoles.opp,'chess',{chatId:chat&&(chat.firestoreId||chat.id)});
+function pushLiveState(extra){
+  if(!liveOn||!liveHandle||liveEnded)return;
+  const nextTurnUid=liveRoles?(state.turn==='w'?liveRoles.playerA:liveRoles.playerB):null;
+  let winnerUid=null;
+  if(state.status==='checkmate'&&liveRoles){
+    winnerUid=state.turn==='w'?liveRoles.playerB:liveRoles.playerA;
+  }else if(state.status==='timeout'&&liveRoles){
+    winnerUid=state.turn==='w'?liveRoles.playerB:liveRoles.playerA;
+  }
+  const patch=Object.assign({
+    fen:chess.fen(),
+    turn:nextTurnUid,
+    lastMove:state.lastMove,
+    status:state.status==='playing'?'playing':state.status,
+    winner:winnerUid,
+    baseVersion:liveVersion,
+    endDetail:state.endDetail||null,
+  },extra||{});
+  if(HAS_TIMER){
+    patch.clocks={w:clocks.w,b:clocks.b};
+    patch.clockAt=Date.now();
+    patch.clockTurn=state.turn;
+  }
+  const expectedFen=chess.fen();
+  Promise.resolve(liveHandle.push(patch)).then((result)=>{
+    if(result&&result.committed===false){
+      console.warn('[chess] stale live push aborted — resync');
+      const cur=result.snapshot&&result.snapshot.val?result.snapshot.val():null;
+      if(cur&&cur.fen&&cur.fen!==expectedFen){
+        applyingLive=true;
+        try{
+          chess.load(cur.fen);
+          syncFromChess();
+          if(cur.lastMove)state.lastMove=cur.lastMove;
+          liveVersion=Number(cur.version||cur.seq)||liveVersion;
+          if(HAS_TIMER)applyRemoteClocks(cur);
+          render();
+        }catch(e){}
+        applyingLive=false;
+      }
+    }else if(result&&result.snapshot){
+      const cur=result.snapshot.val?result.snapshot.val():null;
+      if(cur)liveVersion=Number(cur.version||cur.seq)||liveVersion+1;
     }
-    if(state.status!=='playing'){stopClock();return;}
+  }).catch((e)=>console.warn('[chess] live push failed',e));
+  if(state.status==='playing'&&typeof DangalLive!=='undefined'&&DangalLive.pingTurn&&liveRoles){
+    DangalLive.pingTurn(liveRoles.opp,'chess',{chatId:chat&&(chat.firestoreId||chat.id)});
+  }
+}
+
+function afterHumanMove(){
+  if(liveOn){
+    pushLiveState();
+    if(state.status!=='playing'){
+      stopClock();
+      // Local end — wait for RTDB echo or apply immediately
+      if(!liveEnded){
+        const winnerUid=
+          state.status==='checkmate'&&liveRoles
+            ?(state.turn==='w'?liveRoles.playerB:liveRoles.playerA)
+            :null;
+        handleLiveEnd({
+          status:state.status,
+          winner:winnerUid,
+          fen:chess.fen(),
+          lastMove:state.lastMove,
+          endDetail:state.endDetail,
+        });
+      }
+      return;
+    }
     return;
   }
   if(state.status!=='playing'){stopClock();return;}
@@ -1063,7 +1274,7 @@ function afterHumanMove(){
   aiThinking=true;
   render();
   gs.schedule(()=>{
-    if(!gs.alive())return;
+    if(!gs.alive()||liveOn)return;
     const aiMoves=chess.moves({verbose:true});
     if(!aiMoves.length){aiThinking=false;syncFromChess();render();return;}
     const mapped=aiMoves.map(m=>({from:sqToRC(m.from),to:sqToRC(m.to),promo:m.promotion?(m.color==='w'?m.promotion.toUpperCase():m.promotion.toLowerCase()):null}));
@@ -1073,7 +1284,7 @@ function afterHumanMove(){
     const aiPiece=state.board[aiMove.from[0]][aiMove.from[1]];
     state.animating=true;
     animatePieceSlide(aiMove.from,aiMove.to,aiPiece,()=>{
-      if(!gs.alive())return;
+      if(!gs.alive()||liveOn)return;
       const promo=(aiMove.promo||'q').toLowerCase();
       const aiResult=chess.move({from:rcToSq(aiMove.from[0],aiMove.from[1]),to:rcToSq(aiMove.to[0],aiMove.to[1]),promotion:promo});
       if(!aiResult){
@@ -1125,8 +1336,8 @@ function makeMove(move){
 }
 
 render();
-if(HAS_TIMER)startClock(chess.turn());
-// Practice as Black: AI (White) moves first
+if(HAS_TIMER&&fenReady)startClock(chess.turn());
+// Practice as Black: AI (White) moves first — never when Live
 if(!liveOn&&myChessColor==='b'&&state.status==='playing'&&state.turn==='w'){
   afterHumanMove();
 }
