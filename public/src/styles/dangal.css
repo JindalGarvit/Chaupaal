@@ -264,7 +264,17 @@
 .cs-breath i{display:block;height:100%;background:#FFB300;}
 .cs-defenders{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:min(280px,90%);}
 .cs-def{height:56px;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);font-size:22px;cursor:pointer;}
-.cs-patang canvas,.pc-cue canvas{width:100%;height:min(52vh,420px);border-radius:16px;touch-action:none;background:#01579B;}
+.cs-patang canvas,.pc-cue canvas{width:100%;height:min(56vh,460px);border-radius:16px;touch-action:none;background:#01579B;}
+.pc-cue--carrom canvas{background:#5d4037;max-width:100%;aspect-ratio:1/1.15;height:auto;max-height:min(62vh,480px);}
+.pc-cue-hud{font-size:12px;font-weight:700;opacity:.9;margin:0;letter-spacing:.02em;}
+.pc-cue-coach{
+  display:flex;align-items:center;gap:8px;width:min(100%,360px);padding:8px 10px;margin:0 0 4px;
+  background:rgba(255,248,225,.12);border:1px solid rgba(255,248,225,.28);border-radius:10px;font-size:11px;line-height:1.35;
+}
+.pc-cue-coach button{
+  flex-shrink:0;border:0;border-radius:8px;padding:6px 10px;min-height:36px;cursor:pointer;
+  background:rgba(255,255,255,.14);color:#fff;font-size:11px;font-weight:700;
+}
 .pc-ticket{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;width:min(300px,100%);}
 .pc-tcell{text-align:center;padding:10px 0;border-radius:10px;background:rgba(255,255,255,.1);font-weight:700;}
 .pc-tcell.is-on{background:#E91E8C;}

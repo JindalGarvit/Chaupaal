@@ -480,11 +480,17 @@
   /* ---------- Cue physics (carrom + pool) — snapshot Live after settle ---------- */
   function openCueGame(spec) {
     let raf = 0;
+    let ro = null;
     let pauseCtrl = null;
     const pauseId = 'pcCuePause_' + (spec.id || 'game');
     const chat = resolveChat(spec.chat || arguments[0]);
     const liveOn = chatLiveOn(chat);
-    const cueSub = liveOn ? liveSub() : practiceSub(spec.subtitle || spec.title || 'vs AI');
+    const isCarrom = spec.id === 'carrom' || spec.variant === 'carrom';
+    const cueSub = liveOn
+      ? liveSub()
+      : isCarrom
+        ? 'Practice · physics'
+        : practiceSub(spec.subtitle || spec.title || 'vs AI');
     const shell = openShell({
       id: spec.id,
       title: spec.title,
@@ -497,21 +503,57 @@
       chat,
       cleanup: () => {
         cancelAnimationFrame(raf);
+        raf = 0;
         if (pauseCtrl) pauseCtrl.destroy();
+        if (ro) {
+          try {
+            ro.disconnect();
+          } catch (e) {}
+          ro = null;
+        }
       },
     });
     if (!shell) return;
 
-    shell.body.innerHTML = `<div class="pc-cue"><canvas data-cue></canvas><p class="pc-hint" data-cue-hint>Drag back on the striker to aim, release to shoot.</p></div>`;
+    let coachDismissed = false;
+    try {
+      coachDismissed = localStorage.getItem(spec.coachKey || 'chaupaal_cue_coach_v1') === '1';
+    } catch (e) {}
+
+    shell.body.innerHTML = `<div class="pc-cue${isCarrom ? ' pc-cue--carrom' : ''}">
+      ${!coachDismissed && isCarrom ? `<div class="pc-cue-coach" data-cue-coach><span>Drag back on the striker to aim, release to shoot. Slide it on the baseline to place.</span><button type="button" data-cue-coach-x>Got it</button></div>` : ''}
+      <div class="pc-cue-hud" data-cue-hud>You 0 · Opp 0</div>
+      <canvas data-cue aria-label="${spec.title || 'Cue'} board"></canvas>
+      <p class="pc-hint" data-cue-hint>Drag back on the striker to aim, release to shoot.</p>
+    </div>`;
     const canvas = shell.body.querySelector('[data-cue]');
     const hint = shell.body.querySelector('[data-cue-hint]');
-    let ctx = canvas.getContext('2d');
+    const hud = shell.body.querySelector('[data-cue-hud]');
+    const coachEl = shell.body.querySelector('[data-cue-coach]');
+    if (coachEl) {
+      coachEl.querySelector('[data-cue-coach-x]')?.addEventListener('click', () => {
+        coachDismissed = true;
+        try {
+          localStorage.setItem(spec.coachKey || 'chaupaal_cue_coach_v1', '1');
+        } catch (e) {}
+        coachEl.remove();
+      });
+    }
+    let ctx2d = canvas.getContext('2d');
     let W = 320;
     let H = 420;
-    const R = spec.ballR || 9;
+    const ballR = spec.ballR || (isCarrom ? 8 : 9);
+    const cueR = spec.cueR || (isCarrom ? 13 : 10);
+    const pocketR = spec.pocketR || (isCarrom ? 22 : 16);
+    const friction = spec.friction != null ? spec.friction : isCarrom ? 0.981 : 0.985;
+    const wallRest = spec.wallRest != null ? spec.wallRest : isCarrom ? 0.72 : 0.8;
+    const stopEps = spec.stopEps != null ? spec.stopEps : 0.055;
     const pockets = spec.pockets;
+    const baselineY = () => H * (spec.baselineY || 0.82);
+    const baselineXMin = () => W * 0.18;
+    const baselineXMax = () => W * 0.82;
     let balls = [];
-    let dragging = null;
+    let dragging = null; // { mode:'place'|'aim', sx, sy }
     let aim = { x: 0, y: 0 };
     let youPocketed = 0;
     let oppPocketed = 0;
@@ -522,23 +564,86 @@
     let liveRoles = null;
     let liveHandle = null;
     let seq = 0;
+    let cueHomeX = null;
+    let strikerFoulHint = 0;
+    let layoutReady = false;
+
+    function ballRadius(b) {
+      return b.r || (b.cue ? cueR : ballR);
+    }
 
     function resize() {
       const r = canvas.getBoundingClientRect();
-      W = Math.max(260, r.width || 300);
-      H = Math.max(320, r.height || 400);
+      const nW = Math.max(260, r.width || 300);
+      const nH = Math.max(340, r.height || 400);
+      if (layoutReady && Math.abs(nW - W) < 1 && Math.abs(nH - H) < 1) return;
+      const sx = layoutReady ? nW / W : 1;
+      const sy = layoutReady ? nH / H : 1;
+      W = nW;
+      H = nH;
       if (typeof ensureGameCanvas === 'function') ensureGameCanvas(canvas, W, H);
       else {
         canvas.width = W;
         canvas.height = H;
       }
-      ctx = canvas.getContext('2d');
+      ctx2d = canvas.getContext('2d');
+      if (layoutReady && balls.length) {
+        balls.forEach((b) => {
+          b.x *= sx;
+          b.y *= sy;
+        });
+        if (cueHomeX != null) cueHomeX *= sx;
+      }
     }
     resize();
-    balls = spec.makeBalls(W, H);
+    balls = spec.makeBalls(W, H, { ballR, cueR });
+    layoutReady = true;
+    const cue0 = balls.find((b) => b.cue);
+    if (cue0) cueHomeX = cue0.x;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => resize());
+      ro.observe(canvas);
+    }
 
     function cueBall() {
       return balls.find((b) => b.cue && !b.dead);
+    }
+
+    function updateHud() {
+      if (!hud) return;
+      if (isCarrom && !liveOn) {
+        hud.textContent = `Pocketed ${youPocketed} · Practice · physics`;
+      } else {
+        hud.textContent = `You ${youPocketed} · Opp ${oppPocketed}`;
+      }
+    }
+    updateHud();
+
+    function resetCueToBaseline(foul) {
+      const c = cueBall();
+      if (!c) {
+        balls.push({
+          x: Math.min(baselineXMax(), Math.max(baselineXMin(), cueHomeX != null ? cueHomeX : W / 2)),
+          y: baselineY(),
+          vx: 0,
+          vy: 0,
+          cue: true,
+          color: isCarrom ? '#eceff1' : '#fafafa',
+          kind: 'striker',
+          r: cueR,
+        });
+        return;
+      }
+      c.dead = false;
+      c.x = Math.min(baselineXMax(), Math.max(baselineXMin(), cueHomeX != null ? cueHomeX : W / 2));
+      c.y = baselineY();
+      c.vx = 0;
+      c.vy = 0;
+      if (foul) {
+        hint.textContent = 'Striker pocketed — reset to baseline.';
+        strikerFoulHint = 90;
+        buzz('reject');
+      }
     }
 
     function snapshotBalls() {
@@ -548,6 +653,8 @@
         dead: !!b.dead,
         cue: !!b.cue,
         color: b.color,
+        kind: b.kind || '',
+        r: ballRadius(b),
       }));
     }
 
@@ -561,10 +668,13 @@
         dead: !!b.dead,
         cue: !!b.cue,
         color: b.color,
+        kind: b.kind,
+        r: b.r || (b.cue ? cueR : ballR),
       }));
       if (scores) {
         youPocketed = liveRoles.me === liveRoles.playerA ? scores.a | 0 : scores.b | 0;
         oppPocketed = liveRoles.me === liveRoles.playerA ? scores.b | 0 : scores.a | 0;
+        updateHud();
       }
       if (turnUid) myTurn = turnUid === liveRoles.me;
       moving = false;
@@ -590,106 +700,160 @@
       hint.textContent = 'Opponent’s turn…';
     }
 
+    function pointerPos(e) {
+      const r = canvas.getBoundingClientRect();
+      return {
+        x: ((e.clientX - r.left) / r.width) * W,
+        y: ((e.clientY - r.top) / r.height) * H,
+      };
+    }
+
     canvas.addEventListener('pointerdown', (e) => {
       if (moving || ended || (liveOn && !myTurn)) return;
-      const r = canvas.getBoundingClientRect();
-      const x = ((e.clientX - r.left) / r.width) * W;
-      const y = ((e.clientY - r.top) / r.height) * H;
+      const { x, y } = pointerPos(e);
       const c = cueBall();
       if (!c) return;
       const dx = x - c.x;
       const dy = y - c.y;
-      if (dx * dx + dy * dy < 22 * 22) {
-        dragging = { sx: x, sy: y };
+      const hitR = ballRadius(c) + 10;
+      if (dx * dx + dy * dy < hitR * hitR) {
+        dragging = { mode: 'aim', sx: x, sy: y, placed: false };
+        aim.x = x;
+        aim.y = y;
         canvas.setPointerCapture(e.pointerId);
       }
     });
     canvas.addEventListener('pointermove', (e) => {
       if (!dragging) return;
-      const r = canvas.getBoundingClientRect();
-      aim.x = ((e.clientX - r.left) / r.width) * W;
-      aim.y = ((e.clientY - r.top) / r.height) * H;
+      const { x, y } = pointerPos(e);
+      aim.x = x;
+      aim.y = y;
+      const c = cueBall();
+      if (!c || !isCarrom) return;
+      // Place along baseline when drag is mostly sideways near the line
+      const pull = Math.hypot(c.x - x, c.y - y);
+      const nearBase = Math.abs(c.y - baselineY()) < 28;
+      if (nearBase && pull < 28 && Math.abs(x - c.x) > Math.abs(y - c.y)) {
+        dragging.mode = 'place';
+        c.x = Math.min(baselineXMax(), Math.max(baselineXMin(), x));
+        c.y = baselineY();
+        cueHomeX = c.x;
+        dragging.placed = true;
+      } else if (pull >= 28) {
+        dragging.mode = 'aim';
+      }
     });
     canvas.addEventListener('pointerup', () => {
       if (!dragging) return;
       const c = cueBall();
+      const wasPlace = dragging.mode === 'place' && dragging.placed;
       dragging = null;
       if (!c || (liveOn && !myTurn)) return;
+      if (wasPlace) {
+        hint.textContent = 'Striker placed — drag back to shoot.';
+        return;
+      }
       const dx = c.x - aim.x;
       const dy = c.y - aim.y;
       const mag = Math.hypot(dx, dy);
-      if (mag < 8) return;
-      const p = Math.min(14, mag / 8);
+      if (mag < 10) return;
+      const maxP = isCarrom ? 12.5 : 14;
+      const p = Math.min(maxP, mag / 9);
       c.vx = (dx / mag) * p;
       c.vy = (dy / mag) * p;
       moving = true;
+      hint.textContent = 'Balls moving…';
       buzz('stone');
+    });
+    canvas.addEventListener('pointercancel', () => {
+      dragging = null;
     });
 
     function pocketed(b) {
-      return pockets.some((p) => Math.hypot(b.x - p[0] * W, b.y - p[1] * H) < 18);
+      const pr = pocketR;
+      return pockets.some((p) => Math.hypot(b.x - p[0] * W, b.y - p[1] * H) < pr);
     }
 
     function step() {
+      const margin = isCarrom ? Math.min(W, H) * 0.06 + 2 : 0;
       balls.forEach((b) => {
         if (b.dead) return;
+        const r = ballRadius(b);
         b.x += b.vx;
         b.y += b.vy;
-        b.vx *= 0.985;
-        b.vy *= 0.985;
-        if (Math.hypot(b.vx, b.vy) < 0.04) {
+        b.vx *= friction;
+        b.vy *= friction;
+        if (Math.hypot(b.vx, b.vy) < stopEps) {
           b.vx = 0;
           b.vy = 0;
         }
-        if (b.x < R) {
-          b.x = R;
-          b.vx *= -0.8;
+        const minX = margin + r;
+        const maxX = W - margin - r;
+        const minY = margin + r;
+        const maxY = H - margin - r;
+        if (b.x < minX) {
+          b.x = minX;
+          b.vx *= -wallRest;
         }
-        if (b.x > W - R) {
-          b.x = W - R;
-          b.vx *= -0.8;
+        if (b.x > maxX) {
+          b.x = maxX;
+          b.vx *= -wallRest;
         }
-        if (b.y < R) {
-          b.y = R;
-          b.vy *= -0.8;
+        if (b.y < minY) {
+          b.y = minY;
+          b.vy *= -wallRest;
         }
-        if (b.y > H - R) {
-          b.y = H - R;
-          b.vy *= -0.8;
+        if (b.y > maxY) {
+          b.y = maxY;
+          b.vy *= -wallRest;
         }
         if (!b.cue && pocketed(b)) {
           b.dead = true;
           b.vx = b.vy = 0;
           youPocketed += 1;
+          updateHud();
           buzz('coin');
         }
         if (b.cue && pocketed(b)) {
-          b.x = W / 2;
-          b.y = H * 0.82;
           b.vx = b.vy = 0;
+          resetCueToBaseline(true);
         }
       });
-      for (let i = 0; i < balls.length; i++) {
-        for (let j = i + 1; j < balls.length; j++) {
-          const a = balls[i];
-          const b = balls[j];
-          if (a.dead || b.dead) continue;
-          const dx = b.x - a.x;
-          const dy = b.y - a.y;
-          const d = Math.hypot(dx, dy) || 1;
-          if (d < R * 2) {
-            const nx = dx / d;
-            const ny = dy / d;
-            const p = a.vx * nx + a.vy * ny - (b.vx * nx + b.vy * ny);
-            a.vx -= p * nx;
-            a.vy -= p * ny;
-            b.vx += p * nx;
-            b.vy += p * ny;
-            const ov = R * 2 - d;
-            a.x -= nx * ov * 0.5;
-            a.y -= ny * ov * 0.5;
-            b.x += nx * ov * 0.5;
-            b.y += ny * ov * 0.5;
+      // Collisions — a few solver passes to reduce tunneling / sticking
+      for (let pass = 0; pass < 3; pass++) {
+        for (let i = 0; i < balls.length; i++) {
+          for (let j = i + 1; j < balls.length; j++) {
+            const a = balls[i];
+            const b = balls[j];
+            if (a.dead || b.dead) continue;
+            const ra = ballRadius(a);
+            const rb = ballRadius(b);
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const d = Math.hypot(dx, dy) || 0.0001;
+            const minD = ra + rb;
+            if (d < minD) {
+              const nx = dx / d;
+              const ny = dy / d;
+              const rvx = a.vx - b.vx;
+              const rvy = a.vy - b.vy;
+              const velAlong = rvx * nx + rvy * ny;
+              if (velAlong > 0) {
+                // separating — still push out overlap
+              } else {
+                const impulse = velAlong;
+                a.vx -= impulse * nx;
+                a.vy -= impulse * ny;
+                b.vx += impulse * nx;
+                b.vy += impulse * ny;
+                if (pass === 0 && Math.abs(impulse) > 0.35) buzz('stone');
+              }
+              const ov = (minD - d) * 0.51;
+              a.x -= nx * ov;
+              a.y -= ny * ov;
+              b.x += nx * ov;
+              b.y += ny * ov;
+            }
           }
         }
       }
@@ -700,12 +864,13 @@
     }
 
     function aiTurn() {
-      if (liveOn) return;
+      if (liveOn || isCarrom) return;
       const live = balls.filter((b) => !b.cue && !b.dead);
       if (!live.length) return finish(true);
       const pick = live[Math.floor(Math.random() * live.length)];
       pick.dead = true;
       oppPocketed += 1;
+      updateHud();
       buzz('place');
       hint.textContent = 'Opponent pocketed one.';
       myTurn = true;
@@ -716,6 +881,7 @@
       if (ended) return;
       ended = true;
       cancelAnimationFrame(raf);
+      raf = 0;
       if (liveOn && liveHandle && liveRoles && !applying) {
         liveHandle.push({
           status: 'over',
@@ -729,42 +895,106 @@
         opp: won ? 0 : 1,
         glyph: spec.glyph,
         pbScore: youPocketed,
-        subtitle: 'Pocketed ' + youPocketed + ' · opponent ' + oppPocketed,
-        shareText: spec.title + ' on Chaupaal',
+        title: isCarrom && won ? 'Table cleared' : won ? 'You win' : 'Defeat',
+        subtitle: isCarrom
+          ? 'Physics practice · pocketed ' + youPocketed + ' coins'
+          : 'Pocketed ' + youPocketed + ' · opponent ' + oppPocketed,
+        shareText: (spec.title || 'Game') + ' on Chaupaal',
         onAgain: () => openCueGame(Object.assign({}, spec, { chat })),
       });
     }
 
-    function draw() {
-      ctx.fillStyle = spec.felt;
-      ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = '#1a1a1a';
+    function drawBoard() {
+      if (typeof spec.drawBoard === 'function') {
+        spec.drawBoard(ctx2d, W, H, { pockets, pocketR, baselineY: baselineY() });
+        return;
+      }
+      ctx2d.fillStyle = spec.felt;
+      ctx2d.fillRect(0, 0, W, H);
+      ctx2d.fillStyle = '#1a1a1a';
       pockets.forEach((p) => {
-        ctx.beginPath();
-        ctx.arc(p[0] * W, p[1] * H, 14, 0, Math.PI * 2);
-        ctx.fill();
+        ctx2d.beginPath();
+        ctx2d.arc(p[0] * W, p[1] * H, pocketR * 0.75, 0, Math.PI * 2);
+        ctx2d.fill();
       });
+    }
+
+    function draw() {
+      drawBoard();
       balls.forEach((b) => {
         if (b.dead) return;
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, R, 0, Math.PI * 2);
-        ctx.fillStyle = b.color;
-        ctx.fill();
+        const r = ballRadius(b);
+        ctx2d.beginPath();
+        ctx2d.arc(b.x, b.y, r, 0, Math.PI * 2);
+        ctx2d.fillStyle = b.color;
+        ctx2d.fill();
         if (b.cue) {
-          ctx.strokeStyle = '#fff';
-          ctx.stroke();
+          ctx2d.strokeStyle = 'rgba(255,255,255,.9)';
+          ctx2d.lineWidth = 2;
+          ctx2d.stroke();
+          ctx2d.beginPath();
+          ctx2d.arc(b.x, b.y, r * 0.35, 0, Math.PI * 2);
+          ctx2d.fillStyle = 'rgba(0,0,0,.12)';
+          ctx2d.fill();
+        } else if (b.kind === 'queen' || b.color === '#c62828' || b.color === '#d32f2f') {
+          ctx2d.strokeStyle = 'rgba(255,215,0,.7)';
+          ctx2d.lineWidth = 1.5;
+          ctx2d.stroke();
+        } else {
+          ctx2d.strokeStyle = 'rgba(0,0,0,.15)';
+          ctx2d.lineWidth = 1;
+          ctx2d.stroke();
         }
       });
-      if (dragging) {
+      if (dragging && dragging.mode !== 'place') {
         const c = cueBall();
         if (c) {
-          ctx.strokeStyle = 'rgba(255,255,255,.7)';
-          ctx.beginPath();
-          ctx.moveTo(c.x, c.y);
-          ctx.lineTo(c.x * 2 - aim.x, c.y * 2 - aim.y);
-          ctx.stroke();
+          const dx = c.x - aim.x;
+          const dy = c.y - aim.y;
+          const mag = Math.hypot(dx, dy);
+          if (mag > 6) {
+            const tx = c.x + (dx / mag) * Math.min(110, mag * 1.4);
+            const ty = c.y + (dy / mag) * Math.min(110, mag * 1.4);
+            ctx2d.strokeStyle = 'rgba(255,255,255,.55)';
+            ctx2d.lineWidth = 2;
+            ctx2d.setLineDash([6, 5]);
+            ctx2d.beginPath();
+            ctx2d.moveTo(c.x, c.y);
+            ctx2d.lineTo(tx, ty);
+            ctx2d.stroke();
+            ctx2d.setLineDash([]);
+            // power tick
+            const pow = Math.min(1, mag / 90);
+            ctx2d.strokeStyle = `rgba(255,${Math.floor(200 - pow * 120)},60,.85)`;
+            ctx2d.beginPath();
+            ctx2d.arc(c.x, c.y, ballRadius(c) + 6 + pow * 10, -Math.PI / 2, -Math.PI / 2 + pow * Math.PI * 2);
+            ctx2d.stroke();
+          }
         }
       }
+      if (strikerFoulHint > 0) strikerFoulHint--;
+    }
+
+    function onSettle() {
+      if (!remaining()) {
+        finish(true);
+        return;
+      }
+      if (liveOn) {
+        pushSettle();
+        return;
+      }
+      if (isCarrom || spec.soloPractice) {
+        resetCueToBaseline(false);
+        const c = cueBall();
+        if (c) c.y = baselineY();
+        hint.textContent = 'Your shot.';
+        myTurn = true;
+        return;
+      }
+      hint.textContent = 'Opponent’s turn…';
+      if (shell.gs && shell.gs.schedule) shell.gs.schedule(aiTurn, 700);
+      else setTimeout(aiTurn, 700);
     }
 
     function loop() {
@@ -775,15 +1005,8 @@
       }
       if (moving) {
         step();
-        moving = balls.some((b) => !b.dead && Math.hypot(b.vx, b.vy) > 0.05);
-        if (!moving) {
-          if (!remaining()) finish(true);
-          else if (liveOn) pushSettle();
-          else {
-            hint.textContent = 'Opponent’s turn…';
-            shell.gs && shell.gs.schedule ? shell.gs.schedule(aiTurn, 700) : setTimeout(aiTurn, 700);
-          }
-        }
+        moving = balls.some((b) => !b.dead && Math.hypot(b.vx, b.vy) > stopEps);
+        if (!moving) onSettle();
       }
       draw();
       raf = requestAnimationFrame(loop);
@@ -812,6 +1035,7 @@
             const sc = val.state.scores;
             youPocketed = liveRoles.me === liveRoles.playerA ? sc.a | 0 : sc.b | 0;
             oppPocketed = liveRoles.me === liveRoles.playerA ? sc.b | 0 : sc.a | 0;
+            updateHud();
           }
           applying = true;
           finish(iWon);
@@ -845,43 +1069,140 @@
     raf = requestAnimationFrame(loop);
   }
 
+  function drawCarromBoard(ctx2d, W, H, opts) {
+    const o = opts || {};
+    const pockets = o.pockets || [];
+    const pocketR = o.pocketR || 22;
+    const by = o.baselineY != null ? o.baselineY : H * 0.82;
+    // Outer wood rail
+    const wood = ctx2d.createLinearGradient(0, 0, W, H);
+    wood.addColorStop(0, '#6d4c41');
+    wood.addColorStop(0.5, '#5d4037');
+    wood.addColorStop(1, '#4e342e');
+    ctx2d.fillStyle = wood;
+    ctx2d.fillRect(0, 0, W, H);
+    const m = Math.min(W, H) * 0.055;
+    // Felt
+    const felt = ctx2d.createRadialGradient(W * 0.5, H * 0.42, 10, W * 0.5, H * 0.45, Math.max(W, H) * 0.7);
+    felt.addColorStop(0, '#dbc3a3');
+    felt.addColorStop(1, '#c4a574');
+    ctx2d.fillStyle = felt;
+    ctx2d.fillRect(m, m, W - 2 * m, H - 2 * m);
+    // Inner rail shadow
+    ctx2d.strokeStyle = 'rgba(40,25,15,.35)';
+    ctx2d.lineWidth = 3;
+    ctx2d.strokeRect(m + 1, m + 1, W - 2 * m - 2, H - 2 * m - 2);
+    // Center circle + cross guides
+    const cx = W / 2;
+    const cy = H * 0.42;
+    ctx2d.strokeStyle = 'rgba(80,50,20,.4)';
+    ctx2d.lineWidth = 1.5;
+    ctx2d.beginPath();
+    ctx2d.arc(cx, cy, Math.min(W, H) * 0.11, 0, Math.PI * 2);
+    ctx2d.stroke();
+    ctx2d.beginPath();
+    ctx2d.arc(cx, cy, Math.min(W, H) * 0.028, 0, Math.PI * 2);
+    ctx2d.stroke();
+    // Baselines (near / far)
+    ctx2d.strokeStyle = 'rgba(80,50,20,.45)';
+    ctx2d.lineWidth = 2;
+    [by, H - by].forEach((y) => {
+      ctx2d.beginPath();
+      ctx2d.moveTo(W * 0.18, y);
+      ctx2d.lineTo(W * 0.82, y);
+      ctx2d.stroke();
+    });
+    // Corner pockets
+    pockets.forEach((p) => {
+      const px = p[0] * W;
+      const py = p[1] * H;
+      ctx2d.beginPath();
+      ctx2d.arc(px, py, pocketR, 0, Math.PI * 2);
+      ctx2d.fillStyle = '#1a120c';
+      ctx2d.fill();
+      ctx2d.strokeStyle = 'rgba(255,220,180,.25)';
+      ctx2d.lineWidth = 2;
+      ctx2d.stroke();
+    });
+  }
+
+  function makeCarromBalls(W, H, sizes) {
+    const coinR = (sizes && sizes.ballR) || 8;
+    const strikerR = (sizes && sizes.cueR) || 13;
+    const cx = W / 2;
+    const cy = H * 0.42;
+    const list = [];
+    // Queen center
+    list.push({ x: cx, y: cy, vx: 0, vy: 0, color: '#c62828', kind: 'queen', r: coinR });
+    // 18 men: ring of 6 + ring of 12, alternating white/black
+    let idx = 0;
+    for (let ring = 1; ring <= 2; ring++) {
+      const n = ring === 1 ? 6 : 12;
+      const rad = ring === 1 ? coinR * 2.2 : coinR * 4.35;
+      const rot = ring === 2 ? Math.PI / n : 0;
+      for (let i = 0; i < n; i++) {
+        const ang = (i / n) * Math.PI * 2 + rot;
+        const black = idx % 2 === 1;
+        idx++;
+        list.push({
+          x: cx + Math.cos(ang) * rad,
+          y: cy + Math.sin(ang) * rad,
+          vx: 0,
+          vy: 0,
+          color: black ? '#212121' : '#fff8e1',
+          kind: black ? 'black' : 'white',
+          r: coinR,
+        });
+      }
+    }
+    list.push({
+      x: W / 2,
+      y: H * 0.82,
+      vx: 0,
+      vy: 0,
+      cue: true,
+      color: '#eceff1',
+      kind: 'striker',
+      r: strikerR,
+    });
+    return list;
+  }
+
   function openCarrom(ctx) {
     openCueGame({
       id: 'carrom',
+      variant: 'carrom',
       title: 'Carrom',
-      subtitle: 'Pocket the coins',
+      subtitle: 'Practice · physics',
       chat: ctx,
       accent: '#8D6E63',
       bg: '#1A0F00',
       felt: '#c4a574',
       glyph: '🪙',
+      ballR: 8,
+      cueR: 13,
+      pocketR: 22,
+      friction: 0.981,
+      wallRest: 0.72,
+      stopEps: 0.055,
+      baselineY: 0.82,
+      soloPractice: true,
+      coachKey: 'chaupaal_carrom_coach_v1',
       pockets: [
-        [0.06, 0.06],
-        [0.94, 0.06],
-        [0.06, 0.94],
-        [0.94, 0.94],
+        [0.055, 0.055],
+        [0.945, 0.055],
+        [0.055, 0.945],
+        [0.945, 0.945],
       ],
-      makeBalls(W, H) {
-        const list = [{ x: W / 2, y: H * 0.82, vx: 0, vy: 0, cue: true, color: '#fafafa' }];
-        const cols = ['#fff8e1', '#111', '#fff8e1', '#111', '#fff8e1', '#111', '#d32f2f', '#111', '#fff8e1'];
-        cols.forEach((color, i) => {
-          const ang = (i / cols.length) * Math.PI * 2;
-          list.push({
-            x: W / 2 + Math.cos(ang) * 28,
-            y: H * 0.42 + Math.sin(ang) * 28,
-            vx: 0,
-            vy: 0,
-            color,
-          });
-        });
-        return list;
-      },
+      drawBoard: drawCarromBoard,
+      makeBalls: makeCarromBalls,
     });
   }
 
   function openPool(ctx) {
     openCueGame({
       id: 'pool',
+      variant: 'pool',
       title: 'Pool',
       subtitle: 'Clear the table',
       chat: ctx,
@@ -889,6 +1210,9 @@
       bg: '#0A1A10',
       felt: '#1b5e20',
       glyph: '🎱',
+      ballR: 9,
+      cueR: 10,
+      pocketR: 16,
       pockets: [
         [0.06, 0.06],
         [0.5, 0.04],
@@ -897,9 +1221,11 @@
         [0.5, 0.96],
         [0.94, 0.94],
       ],
-      makeBalls(W, H) {
+      makeBalls(W, H, sizes) {
+        const r = (sizes && sizes.ballR) || 9;
+        const cr = (sizes && sizes.cueR) || 10;
         const colors = ['#f44336', '#ffeb3b', '#2196f3', '#4caf50', '#ff9800', '#9c27b0', '#111'];
-        const list = [{ x: W / 2, y: H * 0.84, vx: 0, vy: 0, cue: true, color: '#fafafa' }];
+        const list = [{ x: W / 2, y: H * 0.84, vx: 0, vy: 0, cue: true, color: '#fafafa', r: cr }];
         colors.forEach((color, i) => {
           list.push({
             x: W / 2 - 22 + (i % 3) * 22,
@@ -907,6 +1233,7 @@
             vx: 0,
             vy: 0,
             color,
+            r,
           });
         });
         return list;
@@ -1973,7 +2300,7 @@
   if (typeof registerGame === 'function') {
     const games = [
       { id: 'tambola', name: 'Tambola', desc: 'Ticket · full house', icon: '🎱', genre: 'party', launch: openTambola, order: 30 },
-      { id: 'carrom', name: 'Carrom', desc: 'Aim the striker', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
+      { id: 'carrom', name: 'Carrom', desc: 'Drag-aim Practice', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
       { id: 'pool', name: 'Pool', desc: 'Clear the felt', icon: '🎱', genre: 'board', launch: openPool, order: 32 },
       { id: 'rummy', name: 'Rummy', desc: 'Runs and sets', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
       { id: 'teenpatti', name: 'Teen Patti', desc: 'Three-card show', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
