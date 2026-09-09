@@ -184,6 +184,7 @@
   }
 
   function peerOf(chat) {
+    if (typeof getDmPeerUid === 'function') return getDmPeerUid(chat, viewerUid());
     if (typeof peerUidOfChat === 'function') return peerUidOfChat(chat);
     return chat?.uid || chat?.peerUid || chat?.otherUid || '';
   }

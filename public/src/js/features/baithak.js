@@ -80,6 +80,10 @@ function initBaithak(){
         }
         if(typeof dedupeBaithakInbox==='function') dedupeBaithakInbox();
         if(typeof baithakChats!=='undefined') baithakChats = pinSelfChat(baithakChats);
+        if(typeof assertBaithakDmIntegrity==='function'&&Array.isArray(baithakChats)){
+          const report=assertBaithakDmIntegrity(baithakChats,{viewerUid:currentUser.uid});
+          if(!report.ok) console.warn('[baithak] dm integrity after load', report);
+        }
         if(typeof setBaithakSection==='function') setBaithakSection('sabha');
         else renderChatList(baithakChats);
         if(typeof mountBaithakFriendRequests==='function') mountBaithakFriendRequests();

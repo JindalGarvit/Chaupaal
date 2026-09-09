@@ -111,7 +111,7 @@
       else if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('rel_sign_in') : 'Sign in');
       return null;
     }
-    if (typeof bootstrapDmChat !== 'function') {
+    if (typeof bootstrapDmChat !== 'function' && typeof openPeerDm !== 'function') {
       if (typeof showToast === 'function') showToast('Open Baithak to message');
       return null;
     }
@@ -123,14 +123,32 @@
       if (typeof setButtonLoading === 'function') setButtonLoading(messageBtn, true, 'Opening…');
     }
     try {
+      let peerName = displayNameFor(profile);
+      if (!peerName || /^(someone|friend|chaupaal member|member|chat)$/i.test(String(peerName).trim())) {
+        peerName = profile.username ? '@' + String(profile.username).replace(/^@/, '') : peerName || 'Chat';
+      }
+      const openFn = typeof openPeerDm === 'function' ? openPeerDm : null;
+      if (openFn) {
+        return await openFn({
+          uid,
+          name: peerName,
+          username: profile.username,
+          photoURL: profile.photoURL,
+          avatar: profile.avatar || profile.photoURL,
+          origin: 'profile',
+          peerProfileType: profile.profileType,
+          matchMeta: {
+            teenMode: profile.teenMode,
+            isMinor: profile.isMinor,
+            age: profile.age,
+          },
+          seedHello: false,
+        });
+      }
       const baithakBtn = document.querySelector('.bottom-tabs .tab-btn[data-tab="baithak"]');
       if (baithakBtn && !baithakBtn.classList.contains('active')) {
         baithakBtn.click();
         await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 40)));
-      }
-      let peerName = displayNameFor(profile);
-      if (!peerName || /^(someone|friend|chaupaal member|member|chat)$/i.test(String(peerName).trim())) {
-        peerName = profile.username ? '@' + String(profile.username).replace(/^@/, '') : peerName || 'Chat';
       }
       const chat = await bootstrapDmChat({
         uid,
@@ -147,15 +165,8 @@
         },
       });
       if (!chat) return null;
-      if (typeof rememberInboxChat === 'function') rememberInboxChat(chat);
-      if (typeof upsertBaithakInboxChat === 'function') {
-        upsertBaithakInboxChat(chat);
-      } else if (typeof baithakChats !== 'undefined' && Array.isArray(baithakChats)) {
-        const id = chat.firestoreId || chat.id;
-        const i = baithakChats.findIndex((c) => (c.firestoreId || c.id) === id);
-        if (i >= 0) baithakChats[i] = { ...baithakChats[i], ...chat };
-        else baithakChats.unshift(chat);
-      }
+      if (typeof upsertBaithakInboxChat === 'function') upsertBaithakInboxChat(chat);
+      else if (typeof rememberInboxChat === 'function') rememberInboxChat(chat);
       if (typeof openChatScreen === 'function') openChatScreen(chat);
       return chat;
     } catch (e) {

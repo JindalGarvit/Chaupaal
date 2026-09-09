@@ -844,4 +844,8 @@
   window.splitOwnerLabel = splitOwnerLabel;
   window.openBaithakAvatarMenu = openBaithakAvatarMenu;
   window.openStoryArchive = openStoryArchive;
+  // Prefer stories-owned openStoryViewer for Splits; keep legacy Baithak viewer as fallback only
+  if (typeof window.openBaithakStoryViewer === 'function' && !window.openBaithakStoryViewerImpl) {
+    /* baithak-chat shim delegates here via openStoryViewer when set */
+  }
 })();

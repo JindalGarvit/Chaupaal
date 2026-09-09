@@ -587,33 +587,17 @@
       sheet.querySelector('#dlSayHi')?.addEventListener('click', async () => {
         sheet.remove();
         const display = u.name || u.displayName || '';
-        if (typeof openDmWithSharedHello === 'function') {
-          await openDmWithSharedHello({
+        const openFn = typeof openPeerDm === 'function' ? openPeerDm : typeof openDmWithSharedHello === 'function' ? openDmWithSharedHello : null;
+        if (openFn) {
+          await openFn({
             uid,
             name: display || uname,
             username: uname,
             photoURL: u.photoURL || '',
             avatar: u.photoURL || '👤',
             origin: 'deeplink_profile',
+            seedHello: true,
           });
-          return;
-        }
-        if (typeof bootstrapDmChat === 'function') {
-          try {
-            const chat = await bootstrapDmChat({
-              uid,
-              name: display || uname,
-              username: uname,
-              photoURL: u.photoURL || '',
-              origin: 'deeplink_profile',
-            });
-            if (chat && typeof openChatScreen === 'function') {
-              switchTab('baithak');
-              setTimeout(() => openChatScreen(chat), 80);
-            }
-          } catch (e) {
-            if (typeof showToast === 'function') showToast('Could not open chat');
-          }
           return;
         }
         if (typeof showToast === 'function') showToast('Sign in to message');
@@ -687,25 +671,50 @@
     if (open && openId && String(openId) === String(id)) return;
 
     switchTab('baithak');
-    const local =
+    let local =
       typeof baithakChats !== 'undefined'
         ? baithakChats.find((c) => c.id === id || c.firestoreId === id)
         : typeof SAMPLE_CHATS !== 'undefined'
           ? SAMPLE_CHATS.find((c) => c.id === id)
           : null;
+
+    if (!local && typeof db !== 'undefined' && db) {
+      try {
+        const snap = await db.collection('chats').doc(id).get();
+        if (snap.exists) {
+          const raw = { id: snap.id, ...snap.data() };
+          if (raw.mergedInto) {
+            return openChatById(raw.mergedInto, opts);
+          }
+          local = typeof mapChatDoc === 'function' ? mapChatDoc(raw) : raw;
+        } else {
+          const me = typeof currentUser !== 'undefined' ? currentUser?.uid : '';
+          if (me && id.includes('_') && !id.startsWith('chat_')) {
+            const peer = id.split('_').find((p) => p && p !== me) || '';
+            if (peer && typeof openPeerDm === 'function') {
+              await openPeerDm({ uid: peer, origin: 'deeplink_chat', seedHello: false });
+              return;
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
     setTimeout(() => {
       if (typeof initBaithak === 'function') initBaithak();
-      const chat = local || { id, type: 'dm', name: 'Chat', avatar: '💬', preview: '', time: '', unread: 0 };
-      // Re-check after delay — user may have closed meanwhile
+      if (!local) {
+        if (typeof showToast === 'function') showToast('Chat unavailable');
+        return;
+      }
       const still = document.getElementById('activeChatScreen');
       const stillId = still?.dataset?.chatId;
       if (still && stillId && String(stillId) === String(id)) return;
       setTimeout(() => {
-        openChatScreen?.(chat);
+        openChatScreen?.(local);
         if (wantMehfil && typeof openMehfil === 'function' && currentUser) {
-          if (typeof mehfilEligible === 'function' && !mehfilEligible(chat)) return;
+          if (typeof mehfilEligible === 'function' && !mehfilEligible(local)) return;
           if (typeof isMehfilOpen === 'function' && isMehfilOpen()) return;
-          setTimeout(() => openMehfil(chat), 500);
+          setTimeout(() => openMehfil(local), 500);
         }
       }, 250);
     }, 100);

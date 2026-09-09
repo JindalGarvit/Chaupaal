@@ -103,6 +103,13 @@ function setChatComposerReady(screen, ready, statusText) {
 }
 
 function scheduleChatInboxRefresh() {
+  if (typeof refreshBaithakInbox === 'function') {
+    if (typeof rememberInboxChat === 'function' && window.currentOpenChat) {
+      rememberInboxChat(window.currentOpenChat);
+    }
+    refreshBaithakInbox({ reason: 'send' });
+    return;
+  }
   clearTimeout(chatInboxRefreshTimer);
   chatInboxRefreshTimer = setTimeout(() => {
     if (typeof rememberInboxChat === 'function' && window.currentOpenChat) {
@@ -169,45 +176,8 @@ async function prepareChatThread(chat, screen, { isGroup, isSelf, isChaupaal }) 
     setChatComposerReady(screen, false, 'Connecting…');
   }
 
-  // Paint IDB cache before any network wait
-  if (typeof baithakMsgCache?.get === 'function' && chatId) {
-    try {
-      const cached = await baithakMsgCache.get(chatId);
-      if (cached?.messages?.length) {
-        area.querySelectorAll('.ui-skeleton-stack').forEach((el) => el.remove());
-        if (!area.querySelector('.msg-row')) {
-          cached.messages.forEach((m) => {
-            const mine = m.uid === currentUser?.uid;
-            const node = addMsgBubble(
-              {
-                from: mine ? 'me' : 'them',
-                text: m.text,
-                time: m.ts ? new Date(m.ts).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '',
-                avatar: m.avatar || '👤',
-                name: m.name,
-                profileType: m.profileType,
-                music: m.music,
-                attachment: m.attachment,
-                uid: m.uid,
-              },
-              isGroup
-            );
-            if (node && m.id) {
-              node.dataset.msgId = m.id;
-              node.setAttribute('data-msg-id', m.id);
-            }
-            if (node && m.clientTempId) node.dataset.clientTempId = m.clientTempId;
-          });
-        }
-      } else if (needsBootstrap && !area.querySelector('.msg-row') && typeof renderSkeleton === 'function') {
-        renderSkeleton(area, { variant: 'list', count: 3 });
-      }
-    } catch (e) {
-      if (needsBootstrap && !area.querySelector('.msg-row') && typeof renderSkeleton === 'function') {
-        renderSkeleton(area, { variant: 'list', count: 3 });
-      }
-    }
-  } else if (needsBootstrap && typeof renderSkeleton === 'function') {
+  // Paint IDB cache deferred to loadRealtimeMessages (single warm path)
+  if (needsBootstrap && !area.querySelector('.msg-row') && typeof renderSkeleton === 'function') {
     renderSkeleton(area, { variant: 'list', count: 3 });
   }
 
@@ -231,7 +201,15 @@ async function prepareChatThread(chat, screen, { isGroup, isSelf, isChaupaal }) 
     } else if (needsBootstrap) {
       const peer = peerEarly;
       if (peer) {
-        if (typeof bootstrapDmChat === 'function') {
+        const alreadyCanon =
+          typeof dmChatIdFor === 'function' && chatId && chatId === dmChatIdFor(peer);
+        const alreadyEnsured =
+          alreadyCanon && typeof isPeerDmEnsured === 'function' && isPeerDmEnsured(chatId);
+        if (alreadyEnsured) {
+          // Session-verified canonical DM — skip second bootstrap
+          if (typeof rememberInboxChat === 'function') rememberInboxChat(chat);
+          else if (typeof upsertBaithakInboxChat === 'function') upsertBaithakInboxChat(chat);
+        } else if (typeof bootstrapDmChat === 'function') {
           const boot = await bootstrapDmChat({
             uid: peer,
             name: chat._realName || chat.name,
@@ -251,7 +229,8 @@ async function prepareChatThread(chat, screen, { isGroup, isSelf, isChaupaal }) 
             }
             chatId = boot.firestoreId || boot.id;
             window.currentOpenChat = chat;
-            if (typeof rememberInboxChat === 'function') rememberInboxChat(chat);
+            if (typeof upsertBaithakInboxChat === 'function') upsertBaithakInboxChat(chat);
+            else if (typeof rememberInboxChat === 'function') rememberInboxChat(chat);
           }
         } else if (typeof ensurePeerDmChat === 'function') {
           const id = await ensurePeerDmChat(peer);
@@ -262,7 +241,8 @@ async function prepareChatThread(chat, screen, { isGroup, isSelf, isChaupaal }) 
             chat.uid = chat.uid || peer;
             chat.participants = currentUser?.uid ? [currentUser.uid, peer].sort() : chat.participants;
             window.currentOpenChat = chat;
-            if (typeof rememberInboxChat === 'function') rememberInboxChat(chat);
+            if (typeof upsertBaithakInboxChat === 'function') upsertBaithakInboxChat(chat);
+            else if (typeof rememberInboxChat === 'function') rememberInboxChat(chat);
           }
         }
       }
@@ -295,6 +275,18 @@ async function prepareChatThread(chat, screen, { isGroup, isSelf, isChaupaal }) 
 
   area.scrollTop = area.scrollHeight;
   loadRealtimeMessages(chatId, area, isGroup);
+
+  // Mark read for badge (IG-style)
+  try {
+    if (db && currentUser && chatId && !String(chatId).startsWith('chat_riya')) {
+      const now = Date.now();
+      localStorage.setItem('chaupaal_read_' + chatId, String(now));
+      db.collection('chats')
+        .doc(chatId)
+        .set({ [`reads.${currentUser.uid}`]: now }, { merge: true })
+        .catch(() => {});
+    }
+  } catch (e) {}
 
   const peerUid =
     chat.uid ||
@@ -1532,26 +1524,21 @@ async function sendMsg(chat){
 
 function leaveGroupChat(chat){
   if(!chat||chat.type!=='group') return;
+  if(typeof leaveGroupPersist==='function'){
+    leaveGroupPersist(chat).catch((e)=>{
+      if(typeof showToast==='function') showToast(e?.message||'Could not leave group');
+    });
+    return;
+  }
   if(typeof baithakChats==='undefined'||!Array.isArray(baithakChats)) return;
   const idx=baithakChats.findIndex(c=>c.id===chat.id||c.firestoreId===chat.firestoreId);
   if(idx<0) return;
-  const item=baithakChats[idx];
   baithakChats.splice(idx,1);
   if(typeof forgetInboxChat==='function') forgetInboxChat(chat.firestoreId||chat.id);
   closeChatScreen({ updateHistory:true, animate:true });
-  if(typeof renderChatList==='function') renderChatList(baithakChats);
-  if(typeof showUndoToast==='function'){
-    showUndoToast({
-      message:`Left ${chat.name||'group'}`,
-      onUndo:()=>{
-        baithakChats.splice(idx,0,item);
-        if(typeof renderChatList==='function') renderChatList(baithakChats);
-        if(typeof showToast==='function') showToast(t('baithak_back_group'));
-      },
-    });
-  } else if(typeof showToast==='function'){
-    showToast(t('baithak_left_group',{name:chat.name||'group'}));
-  }
+  if(typeof refreshBaithakInbox==='function') refreshBaithakInbox({ reason: 'leave_group' });
+  else if(typeof renderChatList==='function') renderChatList(baithakChats);
+  if(typeof showToast==='function') showToast(t('baithak_left_group',{name:chat.name||'group'}));
 }
 
 // ===================== DAILY DUEL RITUAL =====================
@@ -1659,422 +1646,76 @@ function startDailyDuelRitual(chat){
   renderRitualQ();
 }
 
-// ===================== STORY VIEWER =====================
-function safeStoryText(value){
-  return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+// ===================== SPLITS / STORIES (delegates — no duplicate viewer) =====================
+function timeAgoStr(ts) {
+  if (!ts) return '';
+  const d = typeof ts === 'number' ? ts : ts?.toMillis?.() || Date.parse(ts) || 0;
+  if (!d) return '';
+  const mins = Math.floor((Date.now() - d) / 60000);
+  if (mins < 1) return 'now';
+  if (mins < 60) return mins + 'm';
+  if (mins < 1440) return Math.floor(mins / 60) + 'h';
+  return Math.floor(mins / 1440) + 'd';
 }
 
-function openBaithakStoryViewer(story, allStories){
-  const stories=[...(allStories||[story])];
-  let currentIdx=stories.indexOf(story);if(currentIdx<0)currentIdx=0;
-  let progressInterval=null;
-
-  const viewer=document.createElement('div');
-  viewer.className='story-viewer';
-  viewer.style.cssText='position:absolute;inset:0;background:#000;z-index:200;display:flex;flex-direction:column;';
-  document.querySelector('.device').appendChild(viewer);
-  viewer.addEventListener('chaupaal:dismiss', () => {
-    clearInterval(progressInterval);
-    if(typeof pauseAllMusic==='function') pauseAllMusic();
-  });
-
-  function storyHeaderName(s){
-    if(typeof splitOwnerLabel==='function') return splitOwnerLabel(s);
-    if(s.own||s.uid===currentUser?.uid){
-      const n=typeof selfDisplayName==='function'?selfDisplayName():(s.name||'');
-      const clean=String(n||'').trim();
-      if(clean&&!/^(you|someone)$/i.test(clean)) return `You (${clean})`;
-      return 'You';
-    }
-    const name=typeof resolvePersonDisplayName==='function'?resolvePersonDisplayName(s):(s.name||'');
-    const cleaned=String(name||'').trim();
-    if(!cleaned||/^(someone|friend|member)$/i.test(cleaned)){
-      if(s.username) return `@${String(s.username).replace(/^@/,'')}`;
-      return 'Friend';
-    }
-    return cleaned;
+function openBaithakStoryViewer(story, allStories) {
+  if (typeof window.openBaithakStoryViewerImpl === 'function') {
+    return window.openBaithakStoryViewerImpl(story, allStories);
   }
-
-  function renderStory(idx){
-    clearInterval(progressInterval);
-    if(typeof pauseAllMusic==='function') pauseAllMusic();
-    const s=stories[idx];s.seen=true;
-    const isSplit=s.kind==='split'||s.kind==='instant';
-    const hasVisualMedia=!!(s.media||s.thumb);
-    const isRenderableMedia=hasVisualMedia&&(['media','duniya_story','gif','photo','video'].includes(s.type||'')||isSplit);
-    const isScore=s.type==='score';
-    const isBirthday=s.type==='birthday';
-    const isDuel=s.type==='duel';
-    const hasMusic=!!(s.music&&s.music.title);
-    const hasLocation=!!(s.location&&Number.isFinite(Number(s.location.lat))&&Number.isFinite(Number(s.location.lng)));
-    const musicOnly=hasMusic&&!(isRenderableMedia&&hasVisualMedia)&&!hasLocation;
-    const locationOnly=hasLocation&&!(isRenderableMedia&&hasVisualMedia)&&!hasMusic;
-    const splitTextNote=isSplit&&s.text&&!isRenderableMedia&&!hasMusic&&!hasLocation;
-    const timeAgo=(s.ts||s.createdAt)?timeAgoStr(s.ts||s.createdAt):'now';
-    const destinationLabel=s.destination==='duniya'?'Duniya':s.destination==='baithak'?'Baithak':'';
-    const headerName=storyHeaderName(s);
-    const musicOverlay=hasMusic&&typeof renderMusicCard==='function'
-      ?renderMusicCard(s.music,{variant:'story'})
-      :'';
-    const locationOverlay=hasLocation&&typeof renderLocationCard==='function'
-      ?renderLocationCard(s.location,{variant:'story'})
-      :'';
-
-    viewer.innerHTML=`
-      <!-- Progress bars -->
-      <div style="display:flex;gap:3px;padding:10px 12px 6px;flex-shrink:0;position:relative;z-index:2;">
-        ${stories.map((_,i)=>`<div style="flex:1;height:3px;background:rgba(255,255,255,0.35);border-radius:99px;overflow:hidden;"><div id="sp_${i}" style="height:100%;background:#fff;width:${i<idx?'100':i===idx?'0':'0'}%;transition:none;"></div></div>`).join('')}
-      </div>
-      <!-- Header -->
-      <div style="display:flex;align-items:center;gap:10px;padding:4px 14px 10px;position:relative;z-index:2;">
-        <div class="story-viewer-avatar" style="width:36px;height:36px;border-radius:50%;background:linear-gradient(45deg,#E63946,#8134AF);padding:2px;flex-shrink:0;">
-          <div style="width:100%;height:100%;border-radius:50%;background:#222;display:flex;align-items:center;justify-content:center;font-size:16px;">${s.photoURL||/^https:/.test(s.avatar||'')?`<img src="${s.photoURL||s.avatar}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:s.avatar}</div>
-        </div>
-        <div style="flex:1;">
-          <div style="color:#fff;font-weight:700;font-size:14px;">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(headerName,s):safeStoryText(headerName)}</div>
-          <div style="color:rgba(255,255,255,0.6);font-size:11px;">${
-            isSplit
-              ? timeAgo
-              : `${timeAgo}${destinationLabel?` · <span class="story-destination-tag story-destination-tag--${s.destination}">${destinationLabel}</span>`:''}`
-          }</div>
-        </div>
-        ${s.deletable?`<button id="storyDelete" style="background:none;border:none;color:rgba(255,255,255,0.7);font-size:18px;cursor:pointer;">🗑️</button>`:''}
-        <button id="storyClose" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;padding:4px;">✕</button>
-      </div>
-      <!-- Content -->
-      <div style="flex:1;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;" id="storyContent">
-        ${musicOnly||locationOnly?`<div class="story-music-backdrop" aria-hidden="true"></div>`:
-          splitTextNote?`<div class="story-split-note"><p>${safeStoryText(s.text)}</p></div>`:
-          isRenderableMedia&&hasVisualMedia?(
-          s.mediaType==='video'
-            ?`<video src="${s.media||s.thumb}" autoplay loop muted playsinline style="width:100%;height:100%;object-fit:cover;"></video>`
-            :`<img src="${s.media||s.thumb}" style="width:100%;height:100%;object-fit:${s.rotation?'contain':'cover'};transform:rotate(${Number(s.rotation)||0}deg);">`
-        ):isScore?`
-          <div style="background:linear-gradient(160deg,var(--navy),#E63946);width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;">
-            <div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:16px;">⚡ Today's Akhbaar</div>
-            <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:80px;color:#fff;line-height:1;">${s.score}</div>
-            <div style="font-size:18px;color:rgba(255,255,255,0.7);margin-top:4px;">out of ${s.total}</div>
-            <div style="margin-top:24px;background:rgba(255,255,255,0.12);border-radius:16px;padding:14px 24px;text-align:center;">
-              <div style="font-size:28px;">🔥 ${s.streak} day streak</div>
-            </div>
-            <div style="margin-top:20px;font-size:13px;color:rgba(255,255,255,0.5);">Chaupaal · chaupaal-chaupaal.web.app</div>
-          </div>
-        `:isBirthday?`
-          <div style="background:linear-gradient(160deg,var(--gold),#FF9A3C);width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center;">
-            <div style="font-size:72px;margin-bottom:16px;">🎂</div>
-            <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:28px;color:var(--ink);">Happy Birthday ${safeStoryText(s.name)}!</div>
-            <div style="font-size:15px;color:rgba(43,39,48,0.7);margin-top:12px;line-height:1.5;">Wishing you a wonderful day filled with joy 🎉</div>
-          </div>
-        `:isDuel?`
-          <div style="background:linear-gradient(160deg,var(--navy),#2A3158);width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center;">
-            <div style="font-size:52px;margin-bottom:16px;">⚔️</div>
-            <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:22px;color:#fff;">${safeStoryText(s.text||'Duel result')}</div>
-          </div>
-        `:isSplit?'':`<div style="width:100%;height:100%;background:#111;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.3);font-size:14px;">Story</div>`}
-        ${s.text&&!splitTextNote?`<div class="story-viewer-text">${safeStoryText(s.text)}</div>`:''}
-        ${musicOverlay}
-        ${locationOverlay}
-        ${s.sharedGameId?`<button type="button" class="story-game-card" id="storyGameCard">Play ${safeStoryText(typeof getGame==='function'?(getGame(s.sharedGameId)?.name||'game'):'game')}</button>`:''}
-        <!-- Tap zones (below music/location cards — z-index 1 vs card z-index 3) -->
-        <div id="tapPrev" style="position:absolute;left:0;top:0;width:35%;height:100%;cursor:pointer;z-index:1;"></div>
-        <div id="tapNext" style="position:absolute;right:0;top:0;width:35%;height:100%;cursor:pointer;z-index:1;"></div>
-      </div>
-      ${s.id&&s.destination?`
-      <div class="story-interactions">
-        <div class="story-interaction-actions">
-          <button type="button" id="storyLike" aria-label="Like story">♡ <span id="storyLikeCount">0</span></button>
-          <button type="button" id="storyCommentsToggle">Comments</button>
-        </div>
-        <div id="storyComments" class="story-comments hidden"></div>
-        <div class="story-comment-compose">
-          <input id="storyReplyInput" maxlength="500" placeholder="Comment on this story…">
-          <button type="button" id="storyReplySend">↑</button>
-        </div>
-      </div>`:(s.name!=='You'&&!s.deletable?`
-      <div style="display:flex;gap:8px;padding:12px 14px;flex-shrink:0;">
-        <input id="storyReplyInput" placeholder="Reply to ${s.name}..." style="flex:1;padding:10px 14px;border-radius:999px;border:none;background:rgba(255,255,255,0.12);color:#fff;font-size:14px;outline:none;">
-        <button id="storyReplySend" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;">↑</button>
-      </div>`:'')}
-    `;
-
-    document.getElementById('storyClose').addEventListener('click',()=>{clearInterval(progressInterval);if(typeof pauseAllMusic==='function')pauseAllMusic();viewer.remove();});
-    if(!s.own&&s.uid&&typeof bindProfileLongPress==='function'){
-      bindProfileLongPress(viewer.querySelector('.story-viewer-avatar'),{
-        uid:s.uid,name:s.name,avatar:s.avatar,
-        photoURL:s.photoURL||(/^https:/.test(s.avatar||'')?s.avatar:''),
-      });
-    }
-    document.getElementById('storyDelete')?.addEventListener('click',async()=>{
-      clearInterval(progressInterval);
-      if(s.id&&s.destination&&typeof deletePlatformStory==='function'){
-        try{await deletePlatformStory(s);showToast('Story removed from live view');}
-        catch(error){showToast(error?.message||'Could not delete story');return;}
-      }
-      viewer.remove();
-      if(typeof renderBaithakInstants==='function') renderBaithakInstants();
-      else if(typeof renderLiveBaithakStories==='function') renderLiveBaithakStories();
-    });
-    document.getElementById('tapPrev').addEventListener('click',()=>{if(idx>0){clearInterval(progressInterval);renderStory(idx-1);}else{clearInterval(progressInterval);if(typeof pauseAllMusic==='function')pauseAllMusic();viewer.remove();}});
-    document.getElementById('tapNext').addEventListener('click',()=>{if(idx<stories.length-1){clearInterval(progressInterval);renderStory(idx+1);}else{clearInterval(progressInterval);if(typeof pauseAllMusic==='function')pauseAllMusic();viewer.remove();}});
-    if(typeof mountMusicCards==='function') mountMusicCards(viewer);
-    if(typeof mountLocationCards==='function') mountLocationCards(viewer);
-    if(typeof enhanceMediaIn==='function') enhanceMediaIn(viewer);
-    document.getElementById('storyReplySend')?.addEventListener('click',async()=>{
-      const txt=document.getElementById('storyReplyInput')?.value.trim();
-      if(!txt)return;
-      if(s.id&&s.destination&&typeof commentPlatformStory==='function'){
-        try{
-          await commentPlatformStory(s,txt);
-          document.getElementById('storyReplyInput').value='';
-          await hydrateStoryInteractions();
-          document.getElementById('storyComments')?.classList.remove('hidden');
-        }catch(error){showToast(error?.message||'Comment could not be sent');}
-        return;
-      }
-      const chat=SAMPLE_CHATS.find(c=>c.name===s.name)||{id:'r_'+s.name,name:s.name,avatar:s.avatar||'👤',type:'dm'};
-      clearInterval(progressInterval);viewer.remove();
-      document.querySelectorAll('.tab-btn').forEach(b=>{if(b.dataset.tab==='baithak')b.click();});
-      setTimeout(()=>{initBaithak();setTimeout(()=>openChatScreen(chat),300);},200);
-    });
-
-    let storyLiked=false;
-    async function hydrateStoryInteractions(){
-      if(!s.id||!s.destination||typeof getStoryInteractions!=='function')return;
-      try{
-        const info=await getStoryInteractions(s);
-        storyLiked=!!info.liked;
-        const like=document.getElementById('storyLike');
-        if(like) like.firstChild.textContent=storyLiked?'♥ ':'♡ ';
-        const count=document.getElementById('storyLikeCount');
-        if(count) count.textContent=info.likeCount||0;
-        const comments=document.getElementById('storyComments');
-        if(info.comments?.length && typeof enrichUsersWithProfileType==='function'){
-          await enrichUsersWithProfileType(info.comments);
-        }
-        if(comments) comments.innerHTML=info.comments?.length
-          ?info.comments.map(c=>`<div class="story-comment"><strong>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(c.name,c):safeStoryText(c.name)}</strong><span>${safeStoryText(c.text)}</span></div>`).join('')
-          :'<div class="story-comment-empty">No comments yet.</div>';
-      }catch(error){}
-    }
-    document.getElementById('storyLike')?.addEventListener('click',async()=>{
-      const next=!storyLiked;
-      try{await likePlatformStory(s,next);storyLiked=next;await hydrateStoryInteractions();}
-      catch(error){showToast(error?.message||'Like could not be saved');}
-    });
-    document.getElementById('storyCommentsToggle')?.addEventListener('click',()=>{
-      clearInterval(progressInterval);
-      document.getElementById('storyComments')?.classList.toggle('hidden');
-    });
-    document.getElementById('storyReplyInput')?.addEventListener('focus',()=>clearInterval(progressInterval));
-    document.getElementById('storyGameCard')?.addEventListener('click',()=>{
-      clearInterval(progressInterval);
-      const game=typeof getGame==='function'?getGame(s.sharedGameId):null;
-      if(game){viewer.remove();game.launch({source:'story'});}
-      else showToast(t('baithak_game_unavailable'));
-    });
-    hydrateStoryInteractions();
-
-    // Animate progress bar
-    const fill=document.getElementById(`sp_${idx}`);
-    if(fill){
-      let w=0;
-      progressInterval=setInterval(()=>{
-        w+=100/50; // 5 seconds total (100ms interval × 50 = 5000ms)
-        fill.style.width=Math.min(w,100)+'%';
-        if(w>=100){clearInterval(progressInterval);if(idx<stories.length-1)renderStory(idx+1);else viewer.remove();}
-      },100);
-    }
+  if (typeof openStoryViewer === 'function') {
+    return openStoryViewer(story, allStories, { destination: 'baithak' });
   }
+  if (typeof showToast === 'function') showToast('Story viewer unavailable');
+}
 
-  (async () => {
-    const startId = story?.id || stories[currentIdx]?.id;
-    stories.sort((a, b) => (Number(b.createdAt || b.ts) || 0) - (Number(a.createdAt || a.ts) || 0));
-    currentIdx = stories.findIndex((s) => s === story || (startId && s.id === startId));
-    if (currentIdx < 0) currentIdx = 0;
-    if (typeof enrichUsersWithProfileType === 'function') {
-      const needsNames = stories.some(
-        (s) => !s.name || /^(someone|friend|member|chat)$/i.test(String(s.name || '').trim())
-      );
-      if (needsNames) await enrichUsersWithProfileType(stories, { names: true });
-    }
-    renderStory(currentIdx);
-  })();
+function showAddStoryOptions() {
+  if (typeof expandBaithakSplitComposer === 'function') expandBaithakSplitComposer();
+  else if (typeof openBaithakInstantComposer === 'function') openBaithakInstantComposer();
+  else if (typeof showToast === 'function') showToast('Splits unavailable');
+}
+
+function openBaithakStoryComposer(mode) {
+  if (mode === 'camera' && typeof openBaithakInstantCamera === 'function') openBaithakInstantCamera();
+  else if (typeof expandBaithakSplitComposer === 'function') expandBaithakSplitComposer();
+  else showAddStoryOptions();
+}
+
+function showBaithakShareMenu() {
+  if (typeof expandBaithakSplitComposer === 'function') expandBaithakSplitComposer();
+  else showAddStoryOptions();
+}
+
+async function addBaithakStory(story) {
+  if (typeof createPlatformStory === 'function') {
+    return createPlatformStory({
+      destination: 'baithak',
+      kind: 'split',
+      visibility: 'close_friends',
+      ...(story || {}),
+    });
+  }
+  throw new Error('Story create unavailable');
+}
+
+async function shareAkhbaarScore() {
+  if (typeof shareBaithakSplit === 'function') {
+    return shareBaithakSplit({
+      text: '',
+      type: 'score',
+      score: parseInt(document.getElementById('streakNum')?.textContent, 10) || 0,
+    });
+  }
+  if (typeof showToast === 'function') showToast('Could not share');
 }
 
 window.openBaithakStoryViewer = openBaithakStoryViewer;
-function openStoryViewer(story, allStories, tray) {
-  if (typeof DuniyaStory !== 'undefined' && DuniyaStory.openViewer && (story?.destination === 'duniya' || tray?.tray)) {
-    return DuniyaStory.openViewer(story, allStories, tray);
-  }
-  return openBaithakStoryViewer(story, allStories);
-}
-window.openStoryViewer = openStoryViewer;
-
-// Prefer shared helper from ui-states.js; keep a tiny local fallback.
-function timeAgoStr(ts){
-  if(typeof formatRelativeTime==='function') return formatRelativeTime(ts);
-  const diff=Date.now()-ts;
-  if(diff<3600000)return Math.floor(diff/60000)+'m ago';
-  if(diff<86400000)return Math.floor(diff/3600000)+'h ago';
-  return Math.floor(diff/86400000)+'d ago';
-}
-
-// Open Duniya story viewer
-function openDuniyaStoryViewer(userItem){
-  const storyData={name:userItem.name,avatar:userItem.avatar||'👤',type:'duniya_story',media:null,seen:false,visibility:'public',ts:Date.now()-3600000};
-  openStoryViewer(storyData,[storyData]);
-}
-
-function showAddStoryOptions(){
-  showBaithakShareMenu();
-}
-
-async function addBaithakStory(story){
-  if(typeof createPlatformStory!=='function')throw new Error('Story service unavailable');
-  const created=await createPlatformStory({destination:'baithak',kind:'story',...story});
-  if(typeof renderLiveBaithakStories==='function')renderLiveBaithakStories();
-  return created;
-}
-
-async function shareAkhbaarScore(visibility='friends'){
-  try{
-    const stats=typeof getAkhbaarShareStats==='function'?getAkhbaarShareStats():{
-      score,total:QUESTIONS.length,
-      streak:parseInt(document.getElementById('streakNum')?.textContent,10)||0,
-      scoreLine:`${score}/${QUESTIONS.length}`,
-    };
-    if(typeof postGameScoreStory==='function'){
-      const created=await postGameScoreStory('akhbaar',{
-        ...stats,
-        destination:'baithak',
-        visibility,
-      });
-      if(created&&typeof openStoryViewer==='function') openStoryViewer(created,[created]);
-      return created;
-    }
-    const created=await addBaithakStory({
-      type:'score',visibility,
-      score,total:QUESTIONS.length,
-      streak:parseInt(document.getElementById('streakNum')?.textContent,10)||0,
-    });
-    openStoryViewer(created,[created]);
-    return created;
-  }catch(error){showToast(error?.message||'Score story could not be shared');}
-}
-
-// ===================== BAITHAK STORY CREATION =====================
-function showBaithakShareMenu(){
-  const anchor = document.getElementById('addStoryBtn');
-  const row = document.getElementById('storiesRow');
-  if (!anchor || !row) {
-    if (typeof showActionSheet === 'function') {
-      showActionSheet('Share in Baithak', [
-        {label:'Split',icon:'zap',hint:'Shares instantly with Friends.',fn:openBaithakInstantCamera},
-        {label:'Create a story',icon:'camera',hint:'Camera with text, stickers, games, and audience controls.',fn:()=>openBaithakStoryComposer('camera')},
-        {label:'Upload a story',icon:'image',hint:'Pick from gallery, then edit before sharing with Friends.',fn:()=>openBaithakStoryComposer('gallery')},
-        {label:'Share a song',icon:'music',hint:'In-app music card — searchable, playable preview. No external apps.',fn:shareBaithakSongStory},
-        {label:'Share a location',icon:'map-pin',hint:'Current place, search, pin drop, or live share — map card in Stories.',fn:shareBaithakLocationStory},
-      ]);
-    } else openBaithakStoryComposer('camera');
-    return;
-  }
-
-  document.getElementById('storyShareExpand')?.remove();
-  const expand = document.createElement('div');
-  expand.id = 'storyShareExpand';
-  expand.className = 'story-share-expand';
-  expand.setAttribute('role', 'menu');
-  const items = [
-    {label:'Split',icon:'zap',fn:openBaithakInstantCamera},
-    {label:'Create',icon:'camera',fn:()=>openBaithakStoryComposer('camera')},
-    {label:'Upload',icon:'image',fn:()=>openBaithakStoryComposer('gallery')},
-    {label:'Song',icon:'music',fn:shareBaithakSongStory},
-    {label:'Location',icon:'map-pin',fn:shareBaithakLocationStory},
-  ];
-  expand.innerHTML = items.map((it,i)=>`
-    <button type="button" class="story-share-expand-item" data-i="${i}" role="menuitem">
-      <span class="story-share-expand-icon">${typeof iconHtml==='function'?iconHtml(it.icon,{size:16}):''}</span>
-      <span>${it.label}</span>
-    </button>`).join('');
-
-  // Insert directly under the add-story ring (expand from the story)
-  if (anchor.nextSibling) row.insertBefore(expand, anchor.nextSibling);
-  else row.appendChild(expand);
-
-  requestAnimationFrame(() => expand.classList.add('is-open'));
-
-  const close = () => {
-    expand.classList.remove('is-open');
-    setTimeout(() => expand.remove(), 180);
-    document.removeEventListener('pointerdown', onOutside, true);
-  };
-  const onOutside = (e) => {
-    if (!expand.contains(e.target) && e.target !== anchor && !anchor.contains(e.target)) close();
-  };
-  setTimeout(() => document.addEventListener('pointerdown', onOutside, true), 0);
-
-  expand.querySelectorAll('.story-share-expand-item').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const idx = Number(btn.dataset.i);
-      close();
-      const fn = items[idx]?.fn;
-      if (typeof fn === 'function') setTimeout(fn, 60);
-    });
-  });
-}
-
-async function shareBaithakSongStory(){
-  if(typeof openSongPicker!=='function'){showToast(t('baithak_song_unavailable'));return;}
-  openSongPicker({
-    title:'Share a song to Stories',
-    onSelect:async(music)=>{
-      try{
-        showToast('Sharing song…');
-        const created=await createPlatformStory({
-          destination:'baithak',
-          kind:'story',
-          visibility:'friends',
-          type:'media',
-          text:'',
-          music,
-        });
-        if(typeof renderLiveBaithakStories==='function') renderLiveBaithakStories();
-        if(typeof haptic==='function') haptic('success');
-        showToast(t('baithak_song_shared'));
-        if(created&&typeof openStoryViewer==='function') openStoryViewer(created,[created]);
-      }catch(error){
-        showToast(error?.message||'Could not share song');
-      }
-    },
-  });
-}
-
-async function shareBaithakLocationStory(){
-  if(typeof openLocationComposer!=='function'){showToast(t('baithak_loc_unavailable'));return;}
-  openLocationComposer({
-    title:'Share location to Stories',
-    onSelect:async(location)=>{
-      try{
-        showToast('Sharing location…');
-        const created=await createPlatformStory({
-          destination:'baithak',
-          kind:'story',
-          visibility:'friends',
-          type:'media',
-          text:'',
-          location,
-        });
-        if(typeof renderLiveBaithakStories==='function') renderLiveBaithakStories();
-        if(typeof haptic==='function') haptic('success');
-        showToast(t('baithak_loc_shared'));
-        if(created&&typeof openStoryViewer==='function') openStoryViewer(created,[created]);
-      }catch(error){
-        showToast(error?.message||'Could not share location');
-      }
-    },
-  });
-}
+window.showAddStoryOptions = showAddStoryOptions;
+window.openBaithakStoryComposer = openBaithakStoryComposer;
+window.showBaithakShareMenu = showBaithakShareMenu;
+window.addBaithakStory = addBaithakStory;
+window.shareAkhbaarScore = shareAkhbaarScore;
+window.timeAgoStr = timeAgoStr;
+// Do NOT assign window.openStoryViewer here — Duniya/stories own that global.
 
 function chooseBaithakMedia(mode,onFile){
   const input=document.createElement('input');
@@ -2188,292 +1829,7 @@ function openBaithakInstantCamera(){
   }});
 }
 
-function openBaithakStoryComposer(mode){
-  if(!currentUser){showToast(t('baithak_sign_in_story'));return;}
-  if(mode==='camera'){
-    openInAppCamera({
-      onCapture:(file)=>showBaithakStoryEditor(file,'camera'),
-    });
-    return;
-  }
-  chooseBaithakMedia(mode,(file)=>showBaithakStoryEditor(file,mode));
-}
 
-function showBaithakStoryEditor(file,mode){
-  const preview=URL.createObjectURL(file);
-  const editor=document.createElement('div');
-  editor.className='story-editor';
-  let rotation=0;
-  let filter='none';
-  let textColor='#ffffff';
-  editor.innerHTML=`
-    <div class="story-editor-header">
-      ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-story-cancel' }):'<button type="button" data-story-cancel class="cp-back-btn" aria-label="Back"></button>'}
-      <strong>${mode==='camera'?'Create a story':'Upload a story'}</strong>
-      <button type="button" data-story-share>Share</button>
-    </div>
-    <div class="story-editor-preview" data-story-preview>
-      ${file.type.startsWith('video')?`<video src="${preview}" controls playsinline></video>`:`<img src="${preview}" alt="" data-story-img>`}
-      <canvas class="story-draw-canvas" data-story-draw></canvas>
-      <div class="story-sticker-layer" data-story-stickers></div>
-      <div data-story-overlay class="story-viewer-text"></div>
-    </div>
-    <div class="story-editor-tools">
-      <div class="story-editor-tool-row">
-        <label class="story-editor-field">Text
-          <input maxlength="160" placeholder="Add text" data-story-text>
-        </label>
-        <button type="button" data-story-text-color title="Text colour">Aa</button>
-        ${file.type.startsWith('image')?'<button type="button" data-story-rotate>↻</button>':''}
-      </div>
-      <div class="story-editor-filters" data-story-filters>
-        ${[['none','Original'],['warm','Warm'],['cool','Cool'],['mono','Mono'],['vivid','Vivid']].map(([id,label])=>
-          `<button type="button" data-filter="${id}" class="${id==='none'?'is-active':''}">${label}</button>`
-        ).join('')}
-      </div>
-      <div class="story-sticker-pack" data-story-sticker-pack aria-label="Stickers">
-        ${['🔥','✨','❤️','😂','🙏','☕','🏏','🎵'].map(s=>`<button type="button" class="story-sticker-btn" data-sticker="${s}">${s}</button>`).join('')}
-      </div>
-      <div class="story-draw-row">
-        <button type="button" class="btn" data-story-draw-toggle>Draw</button>
-        <button type="button" class="btn" data-story-draw-clear>Clear draw</button>
-        <span style="font-size:11px;color:var(--muted);">Light doodle on top of media</span>
-      </div>
-      <label class="story-editor-field">Audience
-        <select data-story-audience>
-          <option value="friends">Friends — mutual connections only</option>
-          <option value="save_only">💾 Save without posting</option>
-          <option value="highlights_only">◎ Add directly to Highlights</option>
-        </select>
-      </label>
-      <div class="story-editor-field hidden" data-story-highlight-wrap>
-        <label>Highlight collection
-          <select data-story-highlight></select>
-        </label>
-      </div>
-      <p class="story-editor-note">Save without posting / Highlights never appear as a live story.</p>
-      <label class="story-editor-field">Game card
-        <select data-story-game>
-          <option value="">No game attached</option>
-          ${typeof getGames==='function'?getGames({dangal:true}).map(game=>`<option value="${game.id}">${game.icon} ${game.name}</option>`).join(''):''}
-        </select>
-      </label>
-      <div class="story-editor-tool-row" style="align-items:center;gap:10px;">
-        <button type="button" class="btn" data-story-song aria-label="Share a song">🎵 Song</button>
-        <span data-story-song-label style="font-size:12px;color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">No song attached</span>
-        <button type="button" class="btn hidden" data-story-song-clear aria-label="Remove song">✕</button>
-      </div>
-      <div class="story-editor-tool-row" style="align-items:center;gap:10px;">
-        <button type="button" class="btn" data-story-location aria-label="Share a location">📍 Location</button>
-        <span data-story-location-label style="font-size:12px;color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">No location attached</span>
-        <button type="button" class="btn hidden" data-story-location-clear aria-label="Remove location">✕</button>
-      </div>
-      <div class="story-editor-plus-row">
-        <button type="button" class="story-plus-btn" data-story-plus aria-label="Add more">＋</button>
-        <span>Tap for camera · long-press for Split / Create / Upload</span>
-      </div>
-    </div>`;
-  document.querySelector('.device')?.appendChild(editor);
-  let selectedMusic=null;
-  let selectedLocation=null;
-  const songLabel=editor.querySelector('[data-story-song-label]');
-  const songClear=editor.querySelector('[data-story-song-clear]');
-  const locLabel=editor.querySelector('[data-story-location-label]');
-  const locClear=editor.querySelector('[data-story-location-clear]');
-  const updateSongLabel=()=>{
-    if(selectedMusic){
-      songLabel.textContent=`${selectedMusic.title} · ${selectedMusic.artist}`;
-      songClear?.classList.remove('hidden');
-    }else{
-      songLabel.textContent='No song attached';
-      songClear?.classList.add('hidden');
-    }
-  };
-  const updateLocLabel=()=>{
-    if(selectedLocation){
-      locLabel.textContent=selectedLocation.placeName||selectedLocation.label||'Location';
-      locClear?.classList.remove('hidden');
-    }else{
-      locLabel.textContent='No location attached';
-      locClear?.classList.add('hidden');
-    }
-  };
-  editor.querySelector('[data-story-song]')?.addEventListener('click',()=>{
-    if(typeof openSongPicker!=='function'){showToast(t('baithak_song_unavailable'));return;}
-    openSongPicker({
-      title:'Attach a song',
-      onSelect:(music)=>{
-        selectedMusic=music;
-        updateSongLabel();
-      },
-    });
-  });
-  songClear?.addEventListener('click',()=>{
-    selectedMusic=null;
-    updateSongLabel();
-  });
-  editor.querySelector('[data-story-location]')?.addEventListener('click',()=>{
-    if(typeof openLocationComposer!=='function'){showToast(t('baithak_loc_unavailable'));return;}
-    openLocationComposer({
-      title:'Attach a location',
-      onSelect:(loc)=>{
-        selectedLocation=loc;
-        updateLocLabel();
-      },
-    });
-  });
-  locClear?.addEventListener('click',()=>{
-    selectedLocation=null;
-    updateLocLabel();
-  });
-  const img=editor.querySelector('[data-story-img]');
-  const stickerLayer=editor.querySelector('[data-story-stickers]');
-  const drawCanvas=editor.querySelector('[data-story-draw]');
-  const previewBox=editor.querySelector('[data-story-preview]');
-  let drawing=false;
-  let drawOn=false;
-  const stickersPlaced=[];
-  const sizeCanvas=()=>{
-    if(!drawCanvas||!previewBox)return;
-    const r=previewBox.getBoundingClientRect();
-    drawCanvas.width=Math.max(1,Math.floor(r.width));
-    drawCanvas.height=Math.max(1,Math.floor(r.height));
-  };
-  sizeCanvas();
-  const ctx=drawCanvas?.getContext('2d');
-  if(ctx){ctx.strokeStyle='#FFE66D';ctx.lineWidth=3;ctx.lineCap='round';}
-  const pointerPos=(e)=>{
-    const r=drawCanvas.getBoundingClientRect();
-    const t=e.touches?.[0]||e;
-    return {x:t.clientX-r.left,y:t.clientY-r.top};
-  };
-  const startDraw=(e)=>{if(!drawOn||!ctx)return;drawing=true;const p=pointerPos(e);ctx.beginPath();ctx.moveTo(p.x,p.y);e.preventDefault();};
-  const moveDraw=(e)=>{if(!drawing||!ctx)return;const p=pointerPos(e);ctx.lineTo(p.x,p.y);ctx.stroke();e.preventDefault();};
-  const endDraw=()=>{drawing=false;};
-  drawCanvas?.addEventListener('mousedown',startDraw);
-  drawCanvas?.addEventListener('mousemove',moveDraw);
-  drawCanvas?.addEventListener('mouseup',endDraw);
-  drawCanvas?.addEventListener('mouseleave',endDraw);
-  drawCanvas?.addEventListener('touchstart',startDraw,{passive:false});
-  drawCanvas?.addEventListener('touchmove',moveDraw,{passive:false});
-  drawCanvas?.addEventListener('touchend',endDraw);
-  editor.querySelector('[data-story-draw-toggle]')?.addEventListener('click',(e)=>{
-    drawOn=!drawOn;
-    drawCanvas?.classList.toggle('is-drawing',drawOn);
-    e.currentTarget.textContent=drawOn?'Drawing…':'Draw';
-    e.currentTarget.classList.toggle('btn--primary',drawOn);
-  });
-  editor.querySelector('[data-story-draw-clear]')?.addEventListener('click',()=>{
-    if(ctx&&drawCanvas)ctx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
-  });
-  editor.querySelectorAll('[data-sticker]').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      const emoji=btn.dataset.sticker;
-      const x=30+Math.random()*40;
-      const y=30+Math.random()*40;
-      stickersPlaced.push({emoji,x,y});
-      const el=document.createElement('span');
-      el.className='story-sticker-float';
-      el.textContent=emoji;
-      el.style.left=x+'%';
-      el.style.top=y+'%';
-      stickerLayer?.appendChild(el);
-      btn.classList.add('is-active');
-      setTimeout(()=>btn.classList.remove('is-active'),200);
-    });
-  });
-  const applyFilter=()=>{
-    if(!img)return;
-    const map={none:'none',warm:'sepia(.35) saturate(1.2)',cool:'hue-rotate(20deg) saturate(1.1)',mono:'grayscale(1)',vivid:'contrast(1.2) saturate(1.35)'};
-    img.style.filter=map[filter]||'none';
-  };
-  const cleanup=()=>{editor.remove();URL.revokeObjectURL(preview);};
-  editor.querySelector('[data-story-cancel]').addEventListener('click',cleanup);
-  editor.querySelector('[data-story-text]').addEventListener('input',(event)=>{
-    editor.querySelector('[data-story-overlay]').textContent=event.target.value;
-    editor.querySelector('[data-story-overlay]').style.color=textColor;
-  });
-  editor.querySelector('[data-story-text-color]')?.addEventListener('click',()=>{
-    const colors=['#ffffff','#FFE66D','#E63946','#2A9D8F','#000000'];
-    textColor=colors[(colors.indexOf(textColor)+1)%colors.length];
-    editor.querySelector('[data-story-overlay]').style.color=textColor;
-  });
-  editor.querySelector('[data-story-rotate]')?.addEventListener('click',()=>{
-    rotation=(rotation+90)%360;
-    if(img) img.style.transform=`rotate(${rotation}deg)`;
-  });
-  editor.querySelectorAll('[data-filter]').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      filter=btn.dataset.filter;
-      editor.querySelectorAll('[data-filter]').forEach(b=>b.classList.toggle('is-active',b===btn));
-      applyFilter();
-    });
-  });
-  const plus=editor.querySelector('[data-story-plus]');
-  plus?.addEventListener('click',()=>{cleanup();openBaithakStoryComposer('camera');});
-  if(typeof onLongPress==='function'&&plus){
-    onLongPress(plus,()=>{cleanup();showBaithakShareMenu();});
-  }
-  editor.querySelector('[data-story-share]').addEventListener('click',async(buttonEvent)=>{
-    const button=buttonEvent.currentTarget;
-    button.disabled=true;button.textContent='Sharing…';
-    try{
-      if(typeof processAndUploadMedia!=='function') throw new Error('Media upload unavailable');
-      const up=await processAndUploadMedia(file,{folder:'stories'});
-      const stickerNote=stickersPlaced.map(s=>s.emoji).join('');
-      const baseText=editor.querySelector('[data-story-text]').value||'';
-      const audience=editor.querySelector('[data-story-audience]').value;
-      const saveOnly=audience==='save_only'||audience==='highlights_only';
-      let highlightId=editor.querySelector('[data-story-highlight]')?.value||'';
-      if(audience==='highlights_only' && !highlightId && typeof storyCall==='function'){
-        const createdHl=await storyCall('create_highlight',{title:'Favorites'});
-        highlightId=createdHl?.id||createdHl?.highlight?.id||'';
-      }
-      const created=await createPlatformStory({
-        destination:'baithak',kind:'story',
-        visibility:saveOnly?'archive_only':audience,
-        saveOnly,
-        highlightId:audience==='highlights_only'?highlightId:undefined,
-        type:'media',media:up.media,thumb:up.thumb,
-        mediaType:file.type.startsWith('video')?'video':'image',
-        rotation,
-        text:stickerNote?`${baseText}${baseText?' ':''}${stickerNote}`.trim():baseText,
-        sharedGameId:editor.querySelector('[data-story-game]').value,
-        music:selectedMusic||undefined,
-        location:selectedLocation||undefined,
-      });
-      cleanup();
-      renderLiveBaithakStories();
-      if(typeof haptic==='function') haptic('success');
-      if(saveOnly){
-        showToast(audience==='highlights_only'?'Added to Highlights (private until shared)':'Saved privately to Archive');
-      }else{
-        showToast(t('baithak_story_friends'));
-      }
-    }catch(error){
-      button.disabled=false;button.textContent='Share';
-      showToast(error?.message||t('baithak_story_fail'));
-    }
-  });
-  const audSel=editor.querySelector('[data-story-audience]');
-  const hlWrap=editor.querySelector('[data-story-highlight-wrap]');
-  const hlSel=editor.querySelector('[data-story-highlight]');
-  const refreshHl=async()=>{
-    if(!hlSel||typeof storyCall!=='function') return;
-    try{
-      const data=await storyCall('list_highlights',{});
-      const list=data.highlights||[];
-      hlSel.innerHTML=list.length
-        ? list.map(h=>`<option value="${h.id}">${h.title}</option>`).join('')
-        : '<option value=\"\">Create on share</option>';
-    }catch(e){
-      hlSel.innerHTML='<option value=\"\">Create on share</option>';
-    }
-  };
-  audSel?.addEventListener('change',()=>{
-    const show=audSel.value==='highlights_only';
-    hlWrap?.classList.toggle('hidden',!show);
-    if(show) refreshHl();
-  });
-}
-
+window.openBaithakInstantCamera = openBaithakInstantCamera;
+window.openInAppCamera = openInAppCamera;
+window.chooseBaithakMedia = chooseBaithakMedia;

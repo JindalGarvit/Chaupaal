@@ -310,12 +310,6 @@
       return;
     }
     if (typeof rememberInboxChat === 'function') rememberInboxChat(chat);
-    if (typeof baithakChats !== 'undefined' && Array.isArray(baithakChats)) {
-      const id = chat.firestoreId || chat.id;
-      const i = baithakChats.findIndex((c) => (c.firestoreId || c.id) === id);
-      if (i >= 0) baithakChats[i] = { ...baithakChats[i], ...chat };
-      else baithakChats.unshift(chat);
-    }
   }
 
   function openBaithakTabIfNeeded() {
@@ -323,7 +317,29 @@
     if (baithakBtn && !baithakBtn.classList.contains('active')) baithakBtn.click();
   }
 
-  async function openDmWithSharedHello({
+  async function hasSharedHelloAlready(chatId, chatMeta) {
+    if (chatMeta?.sharedFirstHello) return true;
+    if (!db || !chatId) return false;
+    try {
+      const snap = await db.collection('chats').doc(chatId).get();
+      if (snap.exists && snap.data()?.sharedFirstHello) return true;
+      const helloSnap = await db
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .where('kind', '==', 'shared_first_hello')
+        .limit(1)
+        .get();
+      return !helloSnap.empty;
+    } catch (e) {
+      return !!chatMeta?.sharedFirstHello;
+    }
+  }
+
+  /**
+   * Canonical peer DM open — Instagram-grade: one id, one row, hello at most once.
+   */
+  async function openPeerDm({
     uid,
     name,
     avatar,
@@ -334,8 +350,8 @@
     matchMeta,
     username,
     photoURL,
-  }) {
-    const hello = pickSharedHello();
+    seedHello = false,
+  } = {}) {
     let chat;
     try {
       chat = await bootstrapDmChat({
@@ -351,29 +367,33 @@
       });
     } catch (e) {
       if (typeof reportClientError === 'function') {
-        reportClientError({ feature: 'open_dm', message: e?.message || String(e) });
+        reportClientError({ feature: 'open_peer_dm', message: e?.message || String(e) });
       }
       if (typeof showToast === 'function') showToast(friendlyDmError(e));
       return null;
     }
     if (!chat) return null;
 
-    chat.theirIcebreakers = theirIcebreakers || [];
-    chat.icebreakers = theirIcebreakers || [];
-    chat.sharedFirstHello = hello;
-    chat.preview = 'Say hi — shared starter waiting';
+    if (Array.isArray(theirIcebreakers) && theirIcebreakers.length) {
+      chat.theirIcebreakers = theirIcebreakers;
+      chat.icebreakers = theirIcebreakers;
+    }
 
-    if (db && currentUser && uid) {
-      const extras = {
-        sharedFirstHello: hello,
-        preview: hello,
-        firstMessageAt: Date.now(),
-      };
-      try {
-        await ensurePeerDmChat(uid, extras);
-        const ref = db.collection('chats').doc(chat.firestoreId);
+    const chatId = chat.firestoreId || chat.id;
+    let seededHello = false;
+    if (seedHello && db && currentUser && uid) {
+      const already = await hasSharedHelloAlready(chatId, chat);
+      if (!already) {
+        const hello = pickSharedHello();
+        chat.sharedFirstHello = hello;
+        chat.preview = hello;
         try {
-          await ref.collection('messages').add({
+          await ensurePeerDmChat(uid, {
+            sharedFirstHello: hello,
+            preview: hello,
+            firstMessageAt: Date.now(),
+          });
+          await db.collection('chats').doc(chatId).collection('messages').add({
             text: `Shared starter for both of you:\n"${hello}"`,
             uid: currentUser.uid,
             name: 'Chaupaal',
@@ -382,24 +402,24 @@
             kind: 'shared_first_hello',
             ts: firebase.firestore.FieldValue.serverTimestamp(),
           });
+          seededHello = true;
         } catch (e) {
           if (typeof reportClientError === 'function') {
             reportClientError({ feature: 'shared_hello_msg', message: e?.message || String(e) });
           }
         }
-      } catch (e) {
-        if (typeof reportClientError === 'function') {
-          reportClientError({ feature: 'open_dm', message: e?.message || String(e) });
-        }
-        if (typeof showToast === 'function') showToast(friendlyDmError(e));
-        return null;
       }
+    }
+
+    if (starterText && String(starterText).trim()) {
+      chat.preview = chat.preview || String(starterText).slice(0, 80);
     }
 
     addChatToInboxCache(chat);
 
-    if (typeof SAMPLE_MESSAGES !== 'undefined') {
-      SAMPLE_MESSAGES[chat.firestoreId] = SAMPLE_MESSAGES[chat.firestoreId] || [
+    if (seededHello && typeof SAMPLE_MESSAGES !== 'undefined') {
+      const hello = chat.sharedFirstHello;
+      SAMPLE_MESSAGES[chatId] = SAMPLE_MESSAGES[chatId] || [
         {
           from: 'them',
           text: `🏠 Shared starter for both of you:\n"${hello}"`,
@@ -418,11 +438,20 @@
         if (msgInput && !msgInput.value) msgInput.value = starterText;
       }, 300);
     }
-    if (typeof loadBaithakChatsPage === 'function') {
+    if (typeof refreshBaithakInbox === 'function') {
+      refreshBaithakInbox({ reason: 'open_peer_dm' });
+    } else if (typeof loadBaithakChatsPage === 'function') {
       loadBaithakChatsPage({ reset: false }).catch(() => {});
     }
-
     return chat;
+  }
+
+  async function openDmWithSharedHello(opts) {
+    return openPeerDm({ ...(opts || {}), seedHello: true });
+  }
+
+  function isPeerDmEnsured(chatId) {
+    return !!(chatId && ensuredDmIds.has(String(chatId)));
   }
 
   function mountConversationRepairChips(screen, chat) {
@@ -533,7 +562,9 @@
   window.ensurePeerDmChat = ensurePeerDmChat;
   window.bootstrapDmChat = bootstrapDmChat;
   window.friendlyDmError = friendlyDmError;
+  window.openPeerDm = openPeerDm;
   window.openDmWithSharedHello = openDmWithSharedHello;
+  window.isPeerDmEnsured = isPeerDmEnsured;
   window.mountConversationRepairChips = mountConversationRepairChips;
   window.markGameInviteDeclined = markGameInviteDeclined;
   window.onChaupaalJournalCompleted = onJournalCompleted;
