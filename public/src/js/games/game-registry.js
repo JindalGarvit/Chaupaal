@@ -277,6 +277,13 @@
       chatId: o.chatId || chat?.firestoreId || chat?.id || '',
       source: o.source || '',
       startedAt: Date.now(),
+      min: Number(o.min ?? o.timeMin) || 0,
+      inc: Number(o.inc ?? o.timeInc) || 0,
+      timeMin: Number(o.timeMin ?? o.min) || 0,
+      timeInc: Number(o.timeInc ?? o.inc) || 0,
+      chess960: !!o.chess960,
+      timeControl: o.timeControl || o.timeControlLabel || '',
+      timeControlLabel: o.timeControlLabel || o.timeControl || '',
     };
 
     if (chat && matchId) chat.dangalMatchId = matchId;
@@ -471,7 +478,31 @@
             }
             stake = picked;
           }
-          await sendChallengeCard(toUid, gid, { chatId, matchId, stake });
+          let chessTc = null;
+          if (gid === 'chess' && typeof openChessLiveTimeSheet === 'function') {
+            chessTc = await openChessLiveTimeSheet({ defaultMin: 5, defaultInc: 0 });
+            if (chessTc == null) {
+              btn.disabled = false;
+              return;
+            }
+          }
+          await sendChallengeCard(
+            toUid,
+            gid,
+            Object.assign(
+              { chatId, matchId, stake },
+              chessTc
+                ? {
+                    timeControl: chessTc.label,
+                    timeMin: chessTc.min,
+                    timeInc: chessTc.inc,
+                    min: chessTc.min,
+                    inc: chessTc.inc,
+                    chess960: !!chessTc.chess960,
+                  }
+                : {}
+            )
+          );
           sheet.remove();
           if (typeof showToast === 'function') showToast('Challenge sent');
         } catch (err) {
@@ -595,26 +626,47 @@
               ? dangalMatchId(gameId, { name: friend.name, opponentUid: uid })
               : '';
           const chatId = friend.chatId || friend.firestoreId || '';
+          let chessTc = null;
+          if (gameId === 'chess' && persistable && liveOk && typeof openChessLiveTimeSheet === 'function') {
+            chessTc = await openChessLiveTimeSheet({ defaultMin: 5, defaultInc: 0 });
+            if (chessTc == null) return;
+          }
+          const tcPayload = chessTc
+            ? {
+                timeControl: chessTc.label,
+                timeMin: chessTc.min,
+                timeInc: chessTc.inc,
+                min: chessTc.min,
+                inc: chessTc.inc,
+                chess960: !!chessTc.chess960,
+                timeControlLabel: chessTc.label,
+              }
+            : {};
           if (persistable && liveOk && mid && typeof sendChallengeCard === 'function' && chatId) {
             try {
-              await sendChallengeCard(uid, gameId, { chatId, matchId: mid, stake });
+              await sendChallengeCard(uid, gameId, Object.assign({ chatId, matchId: mid, stake }, tcPayload));
             } catch (e) {}
           }
-          game.launch({
-            chat: {
-              name: friend.name,
-              id: persistable ? uid : 'friend_' + (friend.name || 'x'),
-              uid: persistable ? uid : undefined,
-              peerUid: persistable ? uid : undefined,
-              dangalMatchId: mid || undefined,
-            },
-            source: persistable && liveOk ? 'challenge_host' : 'dangal',
-            mode: persistable && liveOk ? 'live' : 'practice',
-            opponentUid: persistable ? uid : '',
-            stake: persistable && liveOk ? stake : 0,
-            matchId: mid || '',
-            chatId,
-          });
+          game.launch(
+            Object.assign(
+              {
+                chat: {
+                  name: friend.name,
+                  id: persistable ? uid : 'friend_' + (friend.name || 'x'),
+                  uid: persistable ? uid : undefined,
+                  peerUid: persistable ? uid : undefined,
+                  dangalMatchId: mid || undefined,
+                },
+                source: persistable && liveOk ? 'challenge_host' : 'dangal',
+                mode: persistable && liveOk ? 'live' : 'practice',
+                opponentUid: persistable ? uid : '',
+                stake: persistable && liveOk ? stake : 0,
+                matchId: mid || '',
+                chatId,
+              },
+              persistable && liveOk ? tcPayload : {}
+            )
+          );
         }
         return;
       }

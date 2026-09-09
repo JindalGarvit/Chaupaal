@@ -20,6 +20,9 @@
   'use strict';
 
   const PRESENCE_FORFEIT_MS = 90000;
+  /** Soft "reconnecting" banner before forfeit. */
+  const PRESENCE_WARN_MS = 12000;
+  const PRESENCE_HEARTBEAT_MS = 20000;
   /** Guest waits this long for host quiz seed before Retry UI. */
   const QUIZ_SEED_TIMEOUT_MS = 18000;
 
@@ -98,8 +101,17 @@
     const stake = Number(o.stake) || Number(window.__dangalLaunchCtx?.stake) || 0;
     const now = Date.now();
     let presenceWatch = null;
+    let presenceHeartbeat = null;
+    let visibilityHandler = null;
     let forfeited = false;
     let detached = false;
+
+    function bumpPresence(online) {
+      if (!me || detached) return;
+      try {
+        ref.child('presence/' + me).set({ at: Date.now(), online: online !== false });
+      } catch (e) {}
+    }
 
     ref.transaction((cur) => {
       if (cur) {
@@ -232,6 +244,18 @@
           } catch (e) {}
           presenceWatch = null;
         }
+        if (presenceHeartbeat) {
+          try {
+            clearInterval(presenceHeartbeat);
+          } catch (e) {}
+          presenceHeartbeat = null;
+        }
+        if (visibilityHandler) {
+          try {
+            document.removeEventListener('visibilitychange', visibilityHandler);
+          } catch (e) {}
+          visibilityHandler = null;
+        }
         const finish = () => {
           detached = true;
           if (me) {
@@ -258,11 +282,46 @@
       handler = ref.on('value', (snap) => {
         if (detached) return;
         try {
-          o.onSnap(snap.val() || null, api);
+          const val = snap.val() || null;
+          o.onSnap(val, api);
+          if (val && me && typeof o.onPresence === 'function' && !detached) {
+            const oppUid = me === val.playerA ? val.playerB : val.playerA;
+            const p = (val.presence && val.presence[oppUid]) || {};
+            const online = p.online !== false;
+            const at = Number(p.at) || 0;
+            const msOffline = !online && at ? Math.max(0, Date.now() - at) : 0;
+            try {
+              o.onPresence({
+                oppUid,
+                online,
+                at,
+                msOffline,
+                warn: !online && msOffline >= PRESENCE_WARN_MS,
+                forfeitSoon: !online && msOffline >= PRESENCE_WARN_MS && msOffline < PRESENCE_FORFEIT_MS,
+                forfeitMsLeft: !online ? Math.max(0, PRESENCE_FORFEIT_MS - msOffline) : PRESENCE_FORFEIT_MS,
+              });
+            } catch (e) {}
+          }
         } catch (e) {
           console.warn('[dangal-live]', e);
         }
       });
+    }
+
+    // Keep own presence fresh so brief tab blips don't look like a leave
+    if (me) {
+      bumpPresence(true);
+      presenceHeartbeat = setInterval(() => {
+        if (detached || forfeited) return;
+        bumpPresence(typeof document === 'undefined' || document.visibilityState !== 'hidden');
+      }, PRESENCE_HEARTBEAT_MS);
+      visibilityHandler = () => {
+        if (detached) return;
+        bumpPresence(document.visibilityState !== 'hidden');
+      };
+      try {
+        document.addEventListener('visibilitychange', visibilityHandler);
+      } catch (e) {}
     }
 
     // Soft presence forfeit: if opponent offline > PRESENCE_FORFEIT_MS while playing
@@ -275,7 +334,22 @@
           if (!val || val.status !== 'playing') return;
           const oppUid = me === val.playerA ? val.playerB : val.playerA;
           const p = (val.presence && val.presence[oppUid]) || {};
-          if (p.online === false && p.at && Date.now() - Number(p.at) > PRESENCE_FORFEIT_MS) {
+          const msOffline =
+            p.online === false && p.at ? Date.now() - Number(p.at) : 0;
+          if (typeof o.onPresence === 'function' && p.online === false && msOffline >= PRESENCE_WARN_MS) {
+            try {
+              o.onPresence({
+                oppUid,
+                online: false,
+                at: Number(p.at) || 0,
+                msOffline,
+                warn: true,
+                forfeitSoon: msOffline < PRESENCE_FORFEIT_MS,
+                forfeitMsLeft: Math.max(0, PRESENCE_FORFEIT_MS - msOffline),
+              });
+            } catch (e) {}
+          }
+          if (p.online === false && p.at && msOffline > PRESENCE_FORFEIT_MS) {
             forfeited = true;
             api.setStatus('forfeit', me).then(() => {
               if (typeof o.onForfeit === 'function') {
@@ -286,7 +360,7 @@
             });
           }
         });
-      }, 15000);
+      }, 5000);
     }
 
     return api;
@@ -343,6 +417,7 @@
     requestLeave,
     mergeQuiz,
     PRESENCE_FORFEIT_MS,
+    PRESENCE_WARN_MS,
     QUIZ_SEED_TIMEOUT_MS,
   };
 })();

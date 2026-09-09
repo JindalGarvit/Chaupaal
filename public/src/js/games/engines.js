@@ -223,6 +223,109 @@ function ensureGameCanvas(canvas, cssW, cssH) {
 }
 window.ensureGameCanvas = ensureGameCanvas;
 
+/** Shared Live chess time controls (challenge + rematch). */
+const CHESS_LIVE_TC_OPTIONS = [
+  { cat: 'Bullet', time: '1+0', min: 1, inc: 0 },
+  { cat: 'Bullet', time: '2+1', min: 2, inc: 1 },
+  { cat: 'Blitz', time: '3+0', min: 3, inc: 0 },
+  { cat: 'Blitz', time: '3+2', min: 3, inc: 2 },
+  { cat: 'Blitz', time: '5+0', min: 5, inc: 0 },
+  { cat: 'Blitz', time: '5+3', min: 5, inc: 3 },
+  { cat: 'Rapid', time: '10+0', min: 10, inc: 0 },
+  { cat: 'Rapid', time: '15+10', min: 15, inc: 10 },
+  { cat: 'Rapid', time: '30+0', min: 30, inc: 0 },
+  { cat: 'Classical', time: '60+0', min: 60, inc: 0 },
+  { cat: 'No Limit', time: '∞', min: 0, inc: 0 },
+];
+const CHESS_LIVE_TC_ICONS = { Bullet: '⚡', Blitz: '🔥', Rapid: '⏱️', Classical: '🏆', 'No Limit': '♾️' };
+
+/**
+ * Compact Live time + Chess960 sheet before challenge/rematch.
+ * @returns {Promise<{min:number,inc:number,label:string,chess960:boolean}|null>}
+ */
+function openChessLiveTimeSheet(opts) {
+  const o = opts || {};
+  const defaultMin = Number(o.defaultMin);
+  const defaultInc = Number(o.defaultInc);
+  const default960 = !!o.defaultChess960;
+  return new Promise((resolve) => {
+    const device = document.querySelector('.device');
+    if (!device) {
+      resolve({ min: 0, inc: 0, label: '∞', chess960: false });
+      return;
+    }
+    let picked960 = default960;
+    const sheet = document.createElement('div');
+    sheet.className = 'chess-live-tc-sheet game-overlay game-overlay--dark';
+    sheet.style.cssText =
+      'position:absolute;inset:0;background:rgba(10,12,24,0.92);z-index:120;display:flex;flex-direction:column;justify-content:flex-end;padding-top:env(safe-area-inset-top,0px);';
+    const cats = [...new Set(CHESS_LIVE_TC_OPTIONS.map((t) => t.cat))];
+    const isDefault = (t) =>
+      Number.isFinite(defaultMin) && t.min === defaultMin && t.inc === (Number.isFinite(defaultInc) ? defaultInc : t.inc);
+    sheet.innerHTML = `
+      <div class="chess-live-tc-panel" style="background:#15192e;border-radius:24px 24px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px));max-height:85%;overflow:auto;">
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;color:#fff;margin-bottom:4px;">Live time control</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:14px;">Both players get the same clocks. ∞ = untimed.</div>
+        <button type="button" id="chessLive960" class="game-tap-target" aria-pressed="${picked960 ? 'true' : 'false'}" style="width:100%;padding:12px;margin-bottom:14px;background:${picked960 ? 'rgba(201,162,39,0.25)' : 'rgba(255,255,255,0.07)'};border:2px solid ${picked960 ? 'var(--gold)' : 'rgba(255,255,255,0.12)'};border-radius:14px;color:#fff;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;cursor:pointer;text-align:left;">${picked960 ? 'Fischer Random (Chess960)' : 'Standard starting position'}</button>
+        ${cats
+          .map((cat) => {
+            const optsCat = CHESS_LIVE_TC_OPTIONS.filter((t) => t.cat === cat);
+            return `<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">${CHESS_LIVE_TC_ICONS[cat] || ''} ${cat}</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">${optsCat
+              .map((t) => {
+                const on = isDefault(t);
+                return `<button type="button" class="chess-live-tc-btn game-tap-target" data-min="${t.min}" data-inc="${t.inc}" data-label="${t.time}" style="padding:12px 6px;background:${on ? 'rgba(201,162,39,0.25)' : 'rgba(255,255,255,0.07)'};border:2px solid ${on ? 'var(--gold)' : 'rgba(255,255,255,0.12)'};border-radius:14px;color:#fff;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;cursor:pointer;">${t.time}</button>`;
+              })
+              .join('')}</div></div>`;
+          })
+          .join('')}
+        <button type="button" id="chessLiveTcCancel" style="width:100%;padding:12px;background:none;border:none;color:rgba(255,255,255,0.5);font-size:14px;cursor:pointer;">Cancel</button>
+      </div>`;
+    device.appendChild(sheet);
+    const finish = (val) => {
+      sheet.remove();
+      resolve(val);
+    };
+    sheet.querySelector('#chessLive960')?.addEventListener('click', () => {
+      picked960 = !picked960;
+      const btn = sheet.querySelector('#chessLive960');
+      if (!btn) return;
+      btn.textContent = picked960 ? 'Fischer Random (Chess960)' : 'Standard starting position';
+      btn.style.borderColor = picked960 ? 'var(--gold)' : 'rgba(255,255,255,0.12)';
+      btn.style.background = picked960 ? 'rgba(201,162,39,0.25)' : 'rgba(255,255,255,0.07)';
+      btn.setAttribute('aria-pressed', picked960 ? 'true' : 'false');
+    });
+    sheet.querySelectorAll('.chess-live-tc-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        finish({
+          min: parseInt(btn.dataset.min, 10) || 0,
+          inc: parseInt(btn.dataset.inc, 10) || 0,
+          label: btn.dataset.label || '∞',
+          chess960: picked960,
+        });
+      });
+    });
+    sheet.querySelector('#chessLiveTcCancel')?.addEventListener('click', () => finish(null));
+  });
+}
+window.openChessLiveTimeSheet = openChessLiveTimeSheet;
+
+function chessTcFromLaunch(launch, att) {
+  const L = launch || {};
+  const A = att || {};
+  const tcObj = L.timeControl && typeof L.timeControl === 'object' ? L.timeControl : null;
+  const min =
+    Number(L.min ?? L.timeMin ?? tcObj?.min ?? A.timeMin ?? A.min) || 0;
+  const inc =
+    Number(L.inc ?? L.timeInc ?? tcObj?.inc ?? A.timeInc ?? A.inc) || 0;
+  const chess960 = !!(L.chess960 ?? A.chess960 ?? tcObj?.chess960);
+  const label =
+    L.timeControlLabel ||
+    (typeof L.timeControl === 'string' ? L.timeControl : '') ||
+    A.timeControl ||
+    (min > 0 ? min + '+' + inc : '∞');
+  return { min, inc, chess960, label };
+}
+
 // ===================== PROFESSIONAL CHESS ENGINE =====================
 function openChessGame(chat){
   const launch=window.__dangalLaunchCtx||{};
@@ -253,15 +356,17 @@ function openChessGame(chat){
         opponentUid:oppUid,
         dangalSource:launch.source||raw.dangalSource||'',
       });
+      const fromLaunch=chessTcFromLaunch(launch,raw);
       const tcLive={
-        min:Number(launch.min||launch.timeMin||0)||0,
-        inc:Number(launch.inc||launch.timeInc||0)||0,
+        min:fromLaunch.min,
+        inc:fromLaunch.inc,
         difficulty:'live',
         aiDepth:0,
-        chess960:!!launch.chess960,
+        chess960:fromLaunch.chess960,
         playAs:null,
         matchId:mid,
         stake:Number(launch.stake)||0,
+        timeLabel:fromLaunch.label,
       };
       startChessGame(liveChat,tcLive);
       return;
@@ -502,6 +607,7 @@ let drawOfferCooldownUntil=0;
 let historyExpanded=false;
 let activeClockColor=null;
 let renderFlipped=myChessColor==='b';
+let reconnectTick=null;
 const liveStake=Number((window.__dangalLaunchCtx&&window.__dangalLaunchCtx.stake)||tc.stake||0)||0;
 const DRAW_OFFER_COOLDOWN_MS=30000;
 const ABORT_MAX_PLIES=4;
@@ -545,6 +651,8 @@ let state={
   localDrew:false,
   incomingDrawOffer:false,
   outgoingDrawOffer:false,
+  oppReconnecting:false,
+  oppForfeitMsLeft:0,
 };
 
 function syncFromChess(){
@@ -690,6 +798,7 @@ const gs=beginGameOverlaySession({
   stake:liveOn?liveStake:0,
   cleanup(){
     clearInterval(clockInterval);clockInterval=null;
+    if(reconnectTick){clearInterval(reconnectTick);reconnectTick=null;}
     aiThinking=false;
     if(liveHandle&&!leaveConfirmed){
       const stillPlaying=state&&state.status==='playing';
@@ -727,6 +836,8 @@ function handleLiveEnd(val){
   aiThinking=false;
   state.incomingDrawOffer=false;
   state.outgoingDrawOffer=false;
+  state.oppReconnecting=false;
+  if(reconnectTick){clearInterval(reconnectTick);reconnectTick=null;}
   const status=String(val.status||'');
   if(status==='aborted'){
     state.status='aborted';
@@ -815,9 +926,30 @@ if(liveOn&&liveRoles){
     clocks:liveRoles.host&&HAS_TIMER?{w:clocks.w,b:clocks.b}:null,
     clockAt:liveRoles.host&&HAS_TIMER?Date.now():null,
     clockTurn:liveRoles.host&&HAS_TIMER?'w':null,
-    timeControl:liveRoles.host&&HAS_TIMER?{min:tc.min,inc:tc.inc}:null,
+    timeControl:liveRoles.host?(HAS_TIMER?{min:tc.min,inc:tc.inc,label:tc.timeLabel||(tc.min+'+'+tc.inc)}:{min:0,inc:0,label:'∞'}):null,
     onForfeit(){
       handleLiveEnd({status:'forfeit',winner:liveRoles.me});
+    },
+    onPresence(info){
+      if(!gs.alive()||liveEnded||gameEndedStatus())return;
+      const warn=!!(info&&(info.warn||info.forfeitSoon)&&info.online===false);
+      const left=Math.max(0,Number(info&&info.forfeitMsLeft)||0);
+      const changed=state.oppReconnecting!==warn||Math.abs((state.oppForfeitMsLeft||0)-left)>900;
+      state.oppReconnecting=warn;
+      state.oppForfeitMsLeft=left;
+      if(warn&&!reconnectTick){
+        reconnectTick=setInterval(()=>{
+          if(!gs.alive()||liveEnded||!state.oppReconnecting){
+            clearInterval(reconnectTick);reconnectTick=null;return;
+          }
+          state.oppForfeitMsLeft=Math.max(0,(state.oppForfeitMsLeft||0)-1000);
+          const el=overlay.querySelector('#chessReconnectSecs');
+          if(el)el.textContent=String(Math.ceil((state.oppForfeitMsLeft||0)/1000));
+          if(state.oppForfeitMsLeft<=0){clearInterval(reconnectTick);reconnectTick=null;}
+        },1000);
+      }
+      if(!warn&&reconnectTick){clearInterval(reconnectTick);reconnectTick=null;}
+      if(changed)render();
     },
     onSnap(val){
       if(!val||!gs.alive()||applyingLive||liveEnded)return;
@@ -1153,8 +1285,8 @@ function render(){
   const canChallenge=typeof openFriendPickerSheet==='function'||typeof generateChallengeLink==='function';
   const canStory=typeof postGameScoreStory==='function';
   const canChat=liveOn&&liveRoles&&liveRoles.opp;
-  const stakeLine=liveOn&&liveStake>0?` · ⚡${liveStake}`:'';
-  const chromeLiveSub=chromeSub+(used960?' · 960':'')+stakeLine;
+  const timeBit=liveOn?(tc.timeLabel||(HAS_TIMER?`${tc.min}+${tc.inc}`:'∞')):'';
+  const chromeLiveSub=[chromeSub+(used960?' · 960':''),timeBit,liveOn&&liveStake>0?`⚡${liveStake}`:''].filter(Boolean).join(' · ');
 
   let pgnSnippet='';
   try{pgnSnippet=chess.pgn({maxWidth:60,newline:' '})||chess.history().join(' ');}catch(e){
@@ -1199,10 +1331,14 @@ function render(){
         <button type="button" id="chessDrawAccept" class="game-tap-target">Accept</button>
         <button type="button" id="chessDrawDecline" class="game-tap-target">Decline</button>
       </div>`:'';
+  const reconnectBanner=state.oppReconnecting&&!gameEnded
+    ?`<div class="chess-reconnect-banner" role="status">Opponent reconnecting… <span id="chessReconnectSecs">${Math.ceil((state.oppForfeitMsLeft||0)/1000)}</span>s until forfeit</div>`
+    :'';
 
   overlay.innerHTML=`
     ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Chess',subtitle:chromeLiveSub,backId:'chessBack',rightHtml:chromeRight}):''}
     ${resultBlock?`<div class="chess-result-mount">${resultBlock}<div class="chess-chip-delta" id="chessChipDelta" hidden></div></div>`:`
+    ${reconnectBanner}
     ${drawBanner}
     <div class="chess-rail chess-rail--top" style="background:var(--game-panel,#1F2542);padding:8px 16px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;gap:8px;">
       <div style="color:#ccc;font-size:13px;min-width:0;"><span aria-hidden="true">${myChessColor==='w'?'●':'○'}</span> ${oppLabel} <span style="opacity:.6;font-size:11px;">(${myChessColor==='w'?'Black':'White'})</span></div>
@@ -1288,7 +1424,7 @@ function render(){
     }
     settleChessOnce();
 
-    async function startChessLiveRematch(nextStake){
+    async function startChessLiveRematch(nextStake, chessTc){
       const rematchId=
         settleOppUid&&typeof dangalMatchId==='function'
           ?dangalMatchId('chess',{name:oppLabel,opponentUid:settleOppUid})
@@ -1297,6 +1433,17 @@ function render(){
         (window.__dangalLaunchCtx&&window.__dangalLaunchCtx.chatId)||
         (window.currentOpenChat&&(window.currentOpenChat.firestoreId||window.currentOpenChat.id))||
         '';
+      const tcPayload=chessTc
+        ?{
+            min:chessTc.min,
+            inc:chessTc.inc,
+            timeMin:chessTc.min,
+            timeInc:chessTc.inc,
+            chess960:!!chessTc.chess960,
+            timeControl:chessTc.label,
+            timeControlLabel:chessTc.label,
+          }
+        :{};
       try{
         window.__dangalLaunchCtx=Object.assign({},window.__dangalLaunchCtx||{},{
           gameId:'chess',
@@ -1308,11 +1455,11 @@ function render(){
           source:'challenge_host',
           chatId,
           startedAt:Date.now(),
-        });
+        },tcPayload);
       }catch(e){}
       if(typeof sendChallengeCard==='function'&&settleOppUid&&chatId){
         try{
-          await sendChallengeCard(settleOppUid,'chess',{chatId,matchId:rematchId,stake:nextStake});
+          await sendChallengeCard(settleOppUid,'chess',Object.assign({chatId,matchId:rematchId,stake:nextStake},tcPayload));
           if(typeof showToast==='function')showToast('Rematch sent — they Accept to join');
         }catch(e){}
       }
@@ -1342,7 +1489,17 @@ function render(){
           if(picked==null)return;
           nextStake=picked;
         }
-        await startChessLiveRematch(nextStake);
+        let chessTc={min:tc.min||0,inc:tc.inc||0,label:tc.timeLabel||(tc.min?tc.min+'+'+tc.inc:'∞'),chess960:!!used960};
+        if(typeof openChessLiveTimeSheet==='function'){
+          const pickedTc=await openChessLiveTimeSheet({
+            defaultMin:tc.min||5,
+            defaultInc:tc.inc||0,
+            defaultChess960:!!used960,
+          });
+          if(pickedTc==null)return;
+          chessTc=pickedTc;
+        }
+        await startChessLiveRematch(nextStake,chessTc);
       },
       share:()=>{if(typeof shareGameResult==='function')shareGameResult('chess',shareStats);},
       challenge:async()=>{
@@ -1363,16 +1520,26 @@ function render(){
           if(picked==null)return;
           stakePick=picked;
         }
+        let chessTc={min:5,inc:0,label:'5+0',chess960:false};
+        if(typeof openChessLiveTimeSheet==='function'){
+          const pickedTc=await openChessLiveTimeSheet({defaultMin:5,defaultInc:0});
+          if(pickedTc==null)return;
+          chessTc=pickedTc;
+        }
         const mid=typeof dangalMatchId==='function'?dangalMatchId('chess',{name:friend.name,opponentUid:uid}):'chess_'+Date.now();
         const chatId=friend.chatId||friend.firestoreId||'';
+        const tcPayload={
+          min:chessTc.min,inc:chessTc.inc,timeMin:chessTc.min,timeInc:chessTc.inc,
+          chess960:!!chessTc.chess960,timeControl:chessTc.label,timeControlLabel:chessTc.label,
+        };
         try{
-          window.__dangalLaunchCtx={
+          window.__dangalLaunchCtx=Object.assign({
             gameId:'chess',gameType:'chess',mode:'live',matchId:mid,opponentUid:uid,stake:stakePick,
             chatId,source:'challenge_host',startedAt:Date.now(),
-          };
+          },tcPayload);
         }catch(e){}
         if(typeof sendChallengeCard==='function'&&chatId){
-          try{await sendChallengeCard(uid,'chess',{chatId,matchId:mid,stake:stakePick});}catch(e){}
+          try{await sendChallengeCard(uid,'chess',Object.assign({chatId,matchId:mid,stake:stakePick},tcPayload));}catch(e){}
         }
         gs.close();
         openChessGame({

@@ -50,6 +50,9 @@
       mode: cfg.mode || '',
       stake: Number(cfg.stake) || 0,
       timeControl: cfg.timeControl?.label || cfg.timeControl || '',
+      timeMin: Number(cfg.timeMin ?? cfg.min ?? cfg.timeControl?.min) || 0,
+      timeInc: Number(cfg.timeInc ?? cfg.inc ?? cfg.timeControl?.inc) || 0,
+      chess960: !!(cfg.chess960 ?? cfg.timeControl?.chess960),
     };
     const text = identity.label ? 'Challenge: ' + identity.label : 'Game challenge';
     if (typeof sendRealtimeMessage === 'function') {
@@ -188,6 +191,13 @@
           chat,
           mode: 'live',
           stake: stakeWanted,
+          min: Number(att.timeMin) || 0,
+          inc: Number(att.timeInc) || 0,
+          timeMin: Number(att.timeMin) || 0,
+          timeInc: Number(att.timeInc) || 0,
+          chess960: !!att.chess960,
+          timeControl: att.timeControl || '',
+          timeControlLabel: att.timeControl || '',
         });
       } else if (typeof showToast === 'function') showToast('Opening ' + (att.gameName || 'game'));
     });
