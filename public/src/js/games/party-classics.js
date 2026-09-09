@@ -482,6 +482,7 @@
     let raf = 0;
     let ro = null;
     let pauseCtrl = null;
+    let oppTimer = 0;
     const pauseId = 'pcCuePause_' + (spec.id || 'game');
     const chat = resolveChat(spec.chat || arguments[0]);
     const liveOn = chatLiveOn(chat);
@@ -489,7 +490,7 @@
     const cueSub = liveOn
       ? liveSub()
       : isCarrom
-        ? 'Practice · physics'
+        ? 'Practice · rules'
         : practiceSub(spec.subtitle || spec.title || 'vs AI');
     const shell = openShell({
       id: spec.id,
@@ -504,6 +505,10 @@
       cleanup: () => {
         cancelAnimationFrame(raf);
         raf = 0;
+        if (oppTimer) {
+          clearTimeout(oppTimer);
+          oppTimer = 0;
+        }
         if (pauseCtrl) pauseCtrl.destroy();
         if (ro) {
           try {
@@ -515,16 +520,60 @@
     });
     if (!shell) return;
 
+    // Carrom Practice: colour pick before board (Live skips — random seat)
+    let youColor =
+      spec.youColor === 'black' || spec.youColor === 'white'
+        ? spec.youColor
+        : isCarrom && !liveOn
+          ? null
+          : isCarrom
+            ? Math.random() < 0.5
+              ? 'white'
+              : 'black'
+            : null;
+    if (isCarrom && !youColor) {
+      shell.body.innerHTML = `<div class="pc-carrom-pick">
+        <p class="pc-carrom-pick-title">Your colour</p>
+        <p class="pc-carrom-pick-sub">Pocket your men. Cover the Queen. Striker in pocket is a foul.</p>
+        <div class="pc-carrom-pick-row">
+          <button type="button" class="pc-carrom-pick-btn pc-carrom-pick-btn--white" data-pick="white">White</button>
+          <button type="button" class="pc-carrom-pick-btn pc-carrom-pick-btn--black" data-pick="black">Black</button>
+          <button type="button" class="pc-carrom-pick-btn" data-pick="random">Random</button>
+        </div>
+      </div>`;
+      shell.body.querySelectorAll('[data-pick]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const v = btn.getAttribute('data-pick');
+          youColor = v === 'random' ? (Math.random() < 0.5 ? 'white' : 'black') : v;
+          bootBoard();
+        });
+      });
+      return;
+    }
+
+    bootBoard();
+
+    function bootBoard() {
+    const oppColor = youColor === 'white' ? 'black' : 'white';
+    let queenCoveredBy = null; // 'you' | 'opp'
+    let queenPendingCoverFor = null; // 'you' | 'opp'
+    let strokeSeat = 'you';
+    let strokePocketed = [];
+
     let coachDismissed = false;
     try {
       coachDismissed = localStorage.getItem(spec.coachKey || 'chaupaal_cue_coach_v1') === '1';
     } catch (e) {}
 
+    const coachCopy = isCarrom
+      ? 'Pocket your colour. Queen only after ≥1 of yours, then cover. Striker pocket = foul.'
+      : 'Drag back on the cue ball to aim, release to shoot.';
+
     shell.body.innerHTML = `<div class="pc-cue${isCarrom ? ' pc-cue--carrom' : ''}">
-      ${!coachDismissed && isCarrom ? `<div class="pc-cue-coach" data-cue-coach><span>Drag back on the striker to aim, release to shoot. Slide it on the baseline to place.</span><button type="button" data-cue-coach-x>Got it</button></div>` : ''}
+      ${!coachDismissed && isCarrom ? `<div class="pc-cue-coach" data-cue-coach><span>${coachCopy}</span><button type="button" data-cue-coach-x>Got it</button></div>` : ''}
       <div class="pc-cue-hud" data-cue-hud>You 0 · Opp 0</div>
       <canvas data-cue aria-label="${spec.title || 'Cue'} board"></canvas>
-      <p class="pc-hint" data-cue-hint>Drag back on the striker to aim, release to shoot.</p>
+      <p class="pc-hint" data-cue-hint>${isCarrom ? 'Your shot — drag back on the striker.' : 'Drag back on the cue ball to aim, release to shoot.'}</p>
     </div>`;
     const canvas = shell.body.querySelector('[data-cue]');
     const hint = shell.body.querySelector('[data-cue-hint]');
@@ -552,8 +601,10 @@
     const baselineY = () => H * (spec.baselineY || 0.82);
     const baselineXMin = () => W * 0.18;
     const baselineXMax = () => W * 0.82;
+    const centerX = () => W / 2;
+    const centerY = () => H * 0.42;
     let balls = [];
-    let dragging = null; // { mode:'place'|'aim', sx, sy }
+    let dragging = null;
     let aim = { x: 0, y: 0 };
     let youPocketed = 0;
     let oppPocketed = 0;
@@ -567,9 +618,44 @@
     let cueHomeX = null;
     let strikerFoulHint = 0;
     let layoutReady = false;
+    let ballSeq = 1;
 
     function ballRadius(b) {
       return b.r || (b.cue ? cueR : ballR);
+    }
+
+    function seatColor(seat) {
+      return seat === 'you' ? youColor : oppColor;
+    }
+
+    function countOnBoard(kind) {
+      return balls.filter((b) => !b.dead && !b.cue && b.kind === kind).length;
+    }
+
+    function countPocketed(kind) {
+      return balls.filter((b) => b.dead && !b.cue && b.kind === kind).length;
+    }
+
+    function queenStatusLabel() {
+      if (queenCoveredBy === 'you') return 'Covered by You';
+      if (queenCoveredBy === 'opp') return 'Covered by Opp';
+      if (queenPendingCoverFor === 'you') return 'Pending cover (You)';
+      if (queenPendingCoverFor === 'opp') return 'Pending cover (Opp)';
+      return 'On board';
+    }
+
+    function updateHud() {
+      if (!hud) return;
+      if (isCarrom) {
+        const yLeft = countOnBoard(youColor);
+        const oLeft = countOnBoard(oppColor);
+        const sw = youColor === 'white' ? '○' : '●';
+        hud.innerHTML =
+          `<span class="pc-cue-swatch pc-cue-swatch--${youColor}" title="You">${sw}</span> You ${yLeft} left` +
+          ` · Opp ${oLeft} left · Queen: ${queenStatusLabel()}`;
+      } else {
+        hud.textContent = `You ${youPocketed} · Opp ${oppPocketed}`;
+      }
     }
 
     function resize() {
@@ -597,6 +683,9 @@
     }
     resize();
     balls = spec.makeBalls(W, H, { ballR, cueR });
+    balls.forEach((b) => {
+      if (!b.id) b.id = 'b' + ballSeq++;
+    });
     layoutReady = true;
     const cue0 = balls.find((b) => b.cue);
     if (cue0) cueHomeX = cue0.x;
@@ -604,25 +693,64 @@
       ro = new ResizeObserver(() => resize());
       ro.observe(canvas);
     }
+    updateHud();
 
     function cueBall() {
       return balls.find((b) => b.cue && !b.dead);
     }
 
-    function updateHud() {
-      if (!hud) return;
-      if (isCarrom && !liveOn) {
-        hud.textContent = `Pocketed ${youPocketed} · Practice · physics`;
-      } else {
-        hud.textContent = `You ${youPocketed} · Opp ${oppPocketed}`;
-      }
+    function spotFree(x, y, r, skip) {
+      return !balls.some((b) => {
+        if (b.dead || b === skip) return false;
+        return Math.hypot(b.x - x, b.y - y) < ballRadius(b) + r + 1;
+      });
     }
-    updateHud();
 
-    function resetCueToBaseline(foul) {
-      const c = cueBall();
+    function placeAtCenter(ball) {
+      if (!ball || ball.cue) return;
+      const r = ballRadius(ball);
+      const cx = centerX();
+      const cy = centerY();
+      let placed = false;
+      for (let ring = 0; ring < 8 && !placed; ring++) {
+        const rad = ring === 0 ? 0 : r * 2.15 * ring;
+        const n = ring === 0 ? 1 : Math.max(6, ring * 6);
+        for (let i = 0; i < n; i++) {
+          const ang = (i / n) * Math.PI * 2 + ring * 0.2;
+          const x = cx + Math.cos(ang) * rad;
+          const y = cy + Math.sin(ang) * rad;
+          if (spotFree(x, y, r, ball)) {
+            ball.x = x;
+            ball.y = y;
+            placed = true;
+            break;
+          }
+        }
+      }
+      if (!placed) {
+        ball.x = cx + (Math.random() - 0.5) * r * 4;
+        ball.y = cy + (Math.random() - 0.5) * r * 4;
+      }
+      ball.dead = false;
+      ball.vx = 0;
+      ball.vy = 0;
+    }
+
+    function returnPieces(list) {
+      (list || []).forEach(placeAtCenter);
+    }
+
+    function returnPenaltyOwn(color) {
+      const prior = balls.filter((b) => b.dead && !b.cue && b.kind === color);
+      if (prior.length) placeAtCenter(prior[prior.length - 1]);
+    }
+
+    function resetCueToBaseline(opts) {
+      const o = opts || {};
+      let c = balls.find((b) => b.cue);
       if (!c) {
-        balls.push({
+        c = {
+          id: 'b' + ballSeq++,
           x: Math.min(baselineXMax(), Math.max(baselineXMin(), cueHomeX != null ? cueHomeX : W / 2)),
           y: baselineY(),
           vx: 0,
@@ -631,16 +759,18 @@
           color: isCarrom ? '#eceff1' : '#fafafa',
           kind: 'striker',
           r: cueR,
-        });
-        return;
+        };
+        balls.push(c);
       }
       c.dead = false;
-      c.x = Math.min(baselineXMax(), Math.max(baselineXMin(), cueHomeX != null ? cueHomeX : W / 2));
+      c.x = Math.min(
+        baselineXMax(),
+        Math.max(baselineXMin(), o.x != null ? o.x : cueHomeX != null ? cueHomeX : W / 2)
+      );
       c.y = baselineY();
       c.vx = 0;
       c.vy = 0;
-      if (foul) {
-        hint.textContent = 'Striker pocketed — reset to baseline.';
+      if (o.foul) {
         strikerFoulHint = 90;
         buzz('reject');
       }
@@ -655,6 +785,7 @@
         color: b.color,
         kind: b.kind || '',
         r: ballRadius(b),
+        id: b.id,
       }));
     }
 
@@ -670,6 +801,7 @@
         color: b.color,
         kind: b.kind,
         r: b.r || (b.cue ? cueR : ballR),
+        id: b.id || 'b' + ballSeq++,
       }));
       if (scores) {
         youPocketed = liveRoles.me === liveRoles.playerA ? scores.a | 0 : scores.b | 0;
@@ -708,8 +840,15 @@
       };
     }
 
+    function canHumanAim() {
+      if (moving || ended) return false;
+      if (liveOn && !myTurn) return false;
+      if (isCarrom && !myTurn) return false;
+      return true;
+    }
+
     canvas.addEventListener('pointerdown', (e) => {
-      if (moving || ended || (liveOn && !myTurn)) return;
+      if (!canHumanAim()) return;
       const { x, y } = pointerPos(e);
       const c = cueBall();
       if (!c) return;
@@ -730,7 +869,6 @@
       aim.y = y;
       const c = cueBall();
       if (!c || !isCarrom) return;
-      // Place along baseline when drag is mostly sideways near the line
       const pull = Math.hypot(c.x - x, c.y - y);
       const nearBase = Math.abs(c.y - baselineY()) < 28;
       if (nearBase && pull < 28 && Math.abs(x - c.x) > Math.abs(y - c.y)) {
@@ -748,7 +886,7 @@
       const c = cueBall();
       const wasPlace = dragging.mode === 'place' && dragging.placed;
       dragging = null;
-      if (!c || (liveOn && !myTurn)) return;
+      if (!c || !canHumanAim()) return;
       if (wasPlace) {
         hint.textContent = 'Striker placed — drag back to shoot.';
         return;
@@ -759,6 +897,8 @@
       if (mag < 10) return;
       const maxP = isCarrom ? 12.5 : 14;
       const p = Math.min(maxP, mag / 9);
+      strokeSeat = 'you';
+      strokePocketed = [];
       c.vx = (dx / mag) * p;
       c.vy = (dy / mag) * p;
       moving = true;
@@ -810,16 +950,25 @@
         if (!b.cue && pocketed(b)) {
           b.dead = true;
           b.vx = b.vy = 0;
-          youPocketed += 1;
-          updateHud();
+          if (isCarrom && !liveOn) {
+            strokePocketed.push(b);
+          } else {
+            youPocketed += 1;
+            updateHud();
+          }
           buzz('coin');
         }
         if (b.cue && pocketed(b)) {
           b.vx = b.vy = 0;
-          resetCueToBaseline(true);
+          if (isCarrom && !liveOn) {
+            b.dead = true;
+            strokePocketed.push(b);
+          } else {
+            resetCueToBaseline({ foul: true });
+            hint.textContent = 'Cue pocketed — reset.';
+          }
         }
       });
-      // Collisions — a few solver passes to reduce tunneling / sticking
       for (let pass = 0; pass < 3; pass++) {
         for (let i = 0; i < balls.length; i++) {
           for (let j = i + 1; j < balls.length; j++) {
@@ -838,9 +987,7 @@
               const rvx = a.vx - b.vx;
               const rvy = a.vy - b.vy;
               const velAlong = rvx * nx + rvy * ny;
-              if (velAlong > 0) {
-                // separating — still push out overlap
-              } else {
+              if (velAlong <= 0) {
                 const impulse = velAlong;
                 a.vx -= impulse * nx;
                 a.vy -= impulse * ny;
@@ -863,6 +1010,195 @@
       return balls.filter((b) => !b.cue && !b.dead).length;
     }
 
+    function colorLabel(c) {
+      return c === 'white' ? 'White' : 'Black';
+    }
+
+    function resolveCarromStroke() {
+      const seat = strokeSeat;
+      const color = seatColor(seat);
+      const other = color === 'white' ? 'black' : 'white';
+      const ownHit = strokePocketed.filter((b) => b.kind === color);
+      const oppHit = strokePocketed.filter((b) => b.kind === other);
+      const queenHit = strokePocketed.filter((b) => b.kind === 'queen');
+      const strikerHit = strokePocketed.some((b) => b.cue);
+      const priorOwn = countPocketed(color) - ownHit.length;
+      const coveringNow = queenPendingCoverFor === seat;
+      let foul = false;
+      let msg = '';
+      let keepTurn = false;
+
+      // Chaupaal casual: opponent C/m you pocket always return to center
+      const bounceOpp = () => returnPieces(oppHit);
+
+      if (strikerHit) {
+        foul = true;
+        msg = queenHit.length
+          ? 'Foul — striker + Queen. Queen back.'
+          : 'Foul — striker pocketed.';
+        returnPieces(ownHit);
+        bounceOpp();
+        returnPieces(queenHit);
+        if (coveringNow) {
+          const q = balls.find((b) => b.kind === 'queen');
+          if (q && q.dead && !queenCoveredBy) placeAtCenter(q);
+          queenPendingCoverFor = null;
+        }
+        returnPenaltyOwn(color);
+        resetCueToBaseline({ foul: true });
+      } else if (queenHit.length) {
+        const legalQueen = priorOwn >= 1;
+        if (!legalQueen) {
+          foul = true;
+          msg = 'Queen illegal — need one of yours first.';
+          returnPieces(queenHit);
+          bounceOpp();
+          // keep ownHit? Illegal queen typically returns queen; own may stay if pocketed — ICF often returns queen only.
+          // Keep ownHit pocketed if any; turn ends.
+          if (priorOwn >= 1 || ownHit.length) {
+            /* own stays */
+          }
+          if (priorOwn >= 1) returnPenaltyOwn(color);
+          queenPendingCoverFor = null;
+          resetCueToBaseline({});
+        } else if (ownHit.length) {
+          // Queen + own cover same stroke
+          queenCoveredBy = seat;
+          queenPendingCoverFor = null;
+          bounceOpp();
+          keepTurn = true;
+          msg = 'Queen covered!';
+          buzz('win');
+          resetCueToBaseline({});
+        } else {
+          queenPendingCoverFor = seat;
+          bounceOpp();
+          keepTurn = true;
+          msg = 'Queen pocketed — cover next shot.';
+          resetCueToBaseline({});
+        }
+      } else if (coveringNow) {
+        bounceOpp();
+        if (ownHit.length) {
+          queenCoveredBy = seat;
+          queenPendingCoverFor = null;
+          keepTurn = true;
+          msg = 'Queen covered!';
+          buzz('win');
+          resetCueToBaseline({});
+        } else {
+          foul = true;
+          msg = 'Cover failed — Queen returns.';
+          const q = balls.find((b) => b.kind === 'queen');
+          if (q && q.dead && !queenCoveredBy) placeAtCenter(q);
+          queenPendingCoverFor = null;
+          resetCueToBaseline({});
+        }
+      } else {
+        bounceOpp();
+        if (ownHit.length) {
+          keepTurn = true;
+          msg = oppHit.length ? 'Your man in — opp coin returned.' : 'Nice — keep shooting.';
+        } else if (oppHit.length) {
+          msg = 'Opp coin returned — turn ends.';
+        } else {
+          msg = 'Miss — turn ends.';
+        }
+        resetCueToBaseline({});
+      }
+
+      // Last-man without your Queen cover: cannot win
+      if (!foul && countOnBoard(color) === 0 && queenCoveredBy !== seat) {
+        if (queenCoveredBy && queenCoveredBy !== seat) {
+          // Opp has Queen — still require you covered it per product bar
+          const revive = balls.filter((b) => b.dead && b.kind === color);
+          if (revive.length) placeAtCenter(revive[revive.length - 1]);
+          keepTurn = false;
+          msg = 'Need Queen covered by you to finish.';
+        } else if (!queenCoveredBy) {
+          const revive = balls.filter((b) => b.dead && b.kind === color);
+          if (revive.length) placeAtCenter(revive[revive.length - 1]);
+          keepTurn = false;
+          msg = 'Cover the Queen before your last man.';
+          if (queenPendingCoverFor === seat) {
+            const q = balls.find((b) => b.kind === 'queen');
+            if (q && q.dead) placeAtCenter(q);
+            queenPendingCoverFor = null;
+          }
+        }
+      }
+
+      updateHud();
+      hint.textContent = msg || (keepTurn ? 'Your shot.' : '…');
+
+      if (countOnBoard(color) === 0 && queenCoveredBy === seat) {
+        finish(seat === 'you');
+        return;
+      }
+      if (countOnBoard(seat === 'you' ? oppColor : youColor) === 0 && queenCoveredBy === (seat === 'you' ? 'opp' : 'you')) {
+        finish(seat !== 'you');
+        return;
+      }
+
+      if (keepTurn && !foul) {
+        myTurn = seat === 'you';
+        if (myTurn) hint.textContent = (msg ? msg + ' ' : '') + 'Your shot.';
+        else scheduleWeakOpp();
+        return;
+      }
+
+      // End turn → other seat
+      if (seat === 'you') {
+        myTurn = false;
+        scheduleWeakOpp();
+      } else {
+        myTurn = true;
+        hint.textContent = (msg ? msg + ' ' : '') + 'Your shot.';
+        resetCueToBaseline({});
+      }
+    }
+
+    function scheduleWeakOpp() {
+      if (ended || liveOn) return;
+      hint.textContent = 'Opp (weak)…';
+      myTurn = false;
+      if (oppTimer) clearTimeout(oppTimer);
+      oppTimer = setTimeout(() => {
+        oppTimer = 0;
+        if (ended || !shell.alive()) return;
+        weakOppFlick();
+      }, 650);
+    }
+
+    function weakOppFlick() {
+      if (ended || moving) return;
+      resetCueToBaseline({
+        x: baselineXMin() + Math.random() * (baselineXMax() - baselineXMin()),
+      });
+      const c = cueBall();
+      if (!c) {
+        myTurn = true;
+        hint.textContent = 'Your shot.';
+        return;
+      }
+      const targets = balls.filter((b) => !b.dead && !b.cue && b.kind === oppColor);
+      const fallback = balls.filter((b) => !b.dead && !b.cue);
+      const pick = targets[Math.floor(Math.random() * Math.max(1, targets.length))] || fallback[0];
+      const tx = (pick ? pick.x : centerX()) + (Math.random() - 0.5) * 36;
+      const ty = (pick ? pick.y : centerY()) + (Math.random() - 0.5) * 36;
+      const dx = tx - c.x;
+      const dy = ty - c.y;
+      const mag = Math.hypot(dx, dy) || 1;
+      const p = 3.2 + Math.random() * 3.8;
+      strokeSeat = 'opp';
+      strokePocketed = [];
+      c.vx = (dx / mag) * p;
+      c.vy = (dy / mag) * p;
+      moving = true;
+      hint.textContent = 'Opp shooting…';
+      buzz('stone');
+    }
+
     function aiTurn() {
       if (liveOn || isCarrom) return;
       const live = balls.filter((b) => !b.cue && !b.dead);
@@ -882,6 +1218,10 @@
       ended = true;
       cancelAnimationFrame(raf);
       raf = 0;
+      if (oppTimer) {
+        clearTimeout(oppTimer);
+        oppTimer = 0;
+      }
       if (liveOn && liveHandle && liveRoles && !applying) {
         liveHandle.push({
           status: 'over',
@@ -889,18 +1229,31 @@
           state: { balls: snapshotBalls(), scores: { a: youPocketed, b: oppPocketed }, phase: 'over' },
         });
       }
+      if (isCarrom && !liveOn && typeof recordDangalSession === 'function') {
+        recordDangalSession('carrom', {
+          won: !!won,
+          score: countPocketed(youColor),
+        });
+      }
+      const winColor = won ? youColor : oppColor;
       showDuelResult(shell, {
         id: spec.id,
         you: won ? 1 : 0,
         opp: won ? 0 : 1,
         glyph: spec.glyph,
-        pbScore: youPocketed,
-        title: isCarrom && won ? 'Table cleared' : won ? 'You win' : 'Defeat',
+        pbScore: isCarrom ? countPocketed(youColor) : youPocketed,
+        title: isCarrom ? colorLabel(winColor) + ' won' : won ? 'You win' : 'Defeat',
         subtitle: isCarrom
-          ? 'Physics practice · pocketed ' + youPocketed + ' coins'
+          ? (won ? 'You' : 'Opp') +
+            ' cleared ' +
+            colorLabel(winColor) +
+            (queenCoveredBy ? ' · Queen covered' : '')
           : 'Pocketed ' + youPocketed + ' · opponent ' + oppPocketed,
         shareText: (spec.title || 'Game') + ' on Chaupaal',
-        onAgain: () => openCueGame(Object.assign({}, spec, { chat })),
+        onAgain: () => {
+          if (isCarrom) openCarrom(chat);
+          else openCueGame(Object.assign({}, spec, { chat }));
+        },
       });
     }
 
@@ -936,7 +1289,7 @@
           ctx2d.arc(b.x, b.y, r * 0.35, 0, Math.PI * 2);
           ctx2d.fillStyle = 'rgba(0,0,0,.12)';
           ctx2d.fill();
-        } else if (b.kind === 'queen' || b.color === '#c62828' || b.color === '#d32f2f') {
+        } else if (b.kind === 'queen') {
           ctx2d.strokeStyle = 'rgba(255,215,0,.7)';
           ctx2d.lineWidth = 1.5;
           ctx2d.stroke();
@@ -963,7 +1316,6 @@
             ctx2d.lineTo(tx, ty);
             ctx2d.stroke();
             ctx2d.setLineDash([]);
-            // power tick
             const pow = Math.min(1, mag / 90);
             ctx2d.strokeStyle = `rgba(255,${Math.floor(200 - pow * 120)},60,.85)`;
             ctx2d.beginPath();
@@ -976,20 +1328,16 @@
     }
 
     function onSettle() {
+      if (isCarrom && !liveOn) {
+        resolveCarromStroke();
+        return;
+      }
       if (!remaining()) {
         finish(true);
         return;
       }
       if (liveOn) {
         pushSettle();
-        return;
-      }
-      if (isCarrom || spec.soloPractice) {
-        resetCueToBaseline(false);
-        const c = cueBall();
-        if (c) c.y = baselineY();
-        hint.textContent = 'Your shot.';
-        myTurn = true;
         return;
       }
       hint.textContent = 'Opponent’s turn…';
@@ -1067,6 +1415,7 @@
     }
 
     raf = requestAnimationFrame(loop);
+    } // bootBoard
   }
 
   function drawCarromBoard(ctx2d, W, H, opts) {
@@ -1173,7 +1522,7 @@
       id: 'carrom',
       variant: 'carrom',
       title: 'Carrom',
-      subtitle: 'Practice · physics',
+      subtitle: 'Practice · rules',
       chat: ctx,
       accent: '#8D6E63',
       bg: '#1A0F00',
@@ -1187,7 +1536,7 @@
       stopEps: 0.055,
       baselineY: 0.82,
       soloPractice: true,
-      coachKey: 'chaupaal_carrom_coach_v1',
+      coachKey: 'chaupaal_carrom_coach_v2',
       pockets: [
         [0.055, 0.055],
         [0.945, 0.055],
@@ -2300,7 +2649,7 @@
   if (typeof registerGame === 'function') {
     const games = [
       { id: 'tambola', name: 'Tambola', desc: 'Ticket · full house', icon: '🎱', genre: 'party', launch: openTambola, order: 30 },
-      { id: 'carrom', name: 'Carrom', desc: 'Drag-aim Practice', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
+      { id: 'carrom', name: 'Carrom', desc: 'Black & White rules', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
       { id: 'pool', name: 'Pool', desc: 'Clear the felt', icon: '🎱', genre: 'board', launch: openPool, order: 32 },
       { id: 'rummy', name: 'Rummy', desc: 'Runs and sets', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
       { id: 'teenpatti', name: 'Teen Patti', desc: 'Three-card show', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
