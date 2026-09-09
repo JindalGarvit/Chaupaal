@@ -667,6 +667,11 @@ async function recordGameResult(key,won,drew,extra){
       score:e.score,
       scoreOnly,
       gotd:!!e.gotd,
+      variant:e.variant,
+      difficulty:e.difficulty,
+      stake:e.stake,
+      mode:e.mode,
+      live:e.live,
     });
   }
   if(typeof markGamePlayed==='function') markGamePlayed(key==='wordguess'?'wordguess':key);

@@ -1117,6 +1117,7 @@
         if (id === 'challenge' && h.challenge) return h.challenge(btn);
         if (id === 'again' && h.again) return h.again(btn);
         if (id === 'story' && h.story) return h.story(btn);
+        if (id === 'chat' && h.chat) return h.chat(btn);
       });
     });
   }

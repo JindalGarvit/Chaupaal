@@ -3643,14 +3643,36 @@ function openUnoGame(chat, variant='normal', opts){
   const difficulty=liveOn?'medium':((opts&&opts.difficulty)||storedDiff);
   const diffKey=DIFF_LABELS[difficulty]?difficulty:'medium';
   const aiDelay=diffKey==='easy'?850:diffKey==='hard'?420:600;
+  let liveStake=liveOn?Math.max(0,Number((opts&&opts.stake)??launchCtx.stake)||0):0;
+  if(!liveOn)liveStake=0;
+  const settleMatchId=String((chat&&chat.dangalMatchId)||launchCtx.matchId||'').trim();
+  const settleOppUid=
+    (liveRoles&&liveRoles.opp)||
+    launchCtx.opponentUid||
+    (typeof opponentUidFromChat==='function'?opponentUidFromChat(chat):'')||
+    '';
+  try{
+    window.__dangalLaunchCtx=Object.assign({},launchCtx,{
+      gameId:'uno',gameType:'uno',
+      stake:liveOn?liveStake:0,
+      unoVariant:variant,
+      unoHouse:isClassicRules?Object.assign({},house):undefined,
+      matchId:settleMatchId||launchCtx.matchId||'',
+      opponentUid:settleOppUid||launchCtx.opponentUid||'',
+    });
+    if(liveOn)window.__dangalLaunchCtx.mode='live';
+  }catch(e){}
   let liveHandle=null;let applyingLive=false;let leaveConfirmed=false;
   let liveSeq=0;let resultsShown=false;let presenceHint='';
+  let sessionRecorded=false;let settleDone=false;
   function modeSubNow(){
     const vl=variant==='doublesided'?'Flip':variant==='blaze'?'Blaze':'Classic';
     if(liveOn){
-      return(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel)
+      const stakeBit=liveStake>0?` · Stake ⚡${liveStake}`:' · Friendly';
+      const base=(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel)
         ?DangalLive.modeChromeLabel(true)+' · '+vl
         :('Live 1v1 · '+vl);
+      return base+stakeBit;
     }
     return'Practice · '+vl+' · '+DIFF_LABELS[diffKey];
   }
@@ -3658,6 +3680,141 @@ function openUnoGame(chat, variant='normal', opts){
     return variant==='doublesided'?'Flip':variant==='blaze'?'Blaze':'Classic';
   }
   const MODE_SUB=modeSubNow();
+
+  function noteUnoSession(won){
+    if(sessionRecorded)return;
+    sessionRecorded=true;
+    if(typeof recordDuelStreak==='function'&&liveOn)recordDuelStreak(chat.id||chat.name,!!won,false);
+    if(typeof recordGameResult==='function'){
+      recordGameResult('uno',!!won,false,{
+        variant,difficulty:diffKey,stake:liveStake,
+        mode:liveOn?'live':'practice',live:!!liveOn,
+      });
+    }else if(typeof recordDangalSession==='function'){
+      recordDangalSession('uno',{
+        won:!!won,variant,difficulty:diffKey,
+        mode:liveOn?'live':'practice',stake:liveStake,live:!!liveOn,
+      });
+    }
+  }
+
+  function paintUnoSettle(settle){
+    const el=overlay.querySelector('#unoChipDelta');
+    if(!el||!settle||settle.error)return;
+    const delta=Number(settle.chipDelta);
+    const bal=settle.chips!=null?Number(settle.chips):null;
+    const parts=[];
+    if(Number.isFinite(delta)&&(delta!==0||liveStake>0)){
+      parts.push(delta===0?`Virtual chips · balance ${bal!=null?bal:'—'}`:`Virtual chips ${delta>0?'+':''}${delta}${bal!=null?` · balance ${bal}`:''}`);
+    }
+    if(!parts.length&&liveOn)parts.push('Settled · virtual chips only — not real money');
+    if(!parts.length)return;
+    el.hidden=false;
+    el.textContent=parts.join(' · ')+' · not real money';
+  }
+
+  async function settleUnoOnce(won){
+    if(!liveOn||settleDone||!window.DangalEconomy||typeof DangalEconomy.reportGameEnd!=='function'||!settleMatchId)return null;
+    settleDone=true;
+    try{
+      const me=typeof getCurrentUid==='function'?getCurrentUid():'';
+      const opp=settleOppUid||(liveRoles&&liveRoles.opp)||'';
+      const settle=await DangalEconomy.reportGameEnd({
+        gameType:'uno',
+        result:won?'win':'loss',
+        won:!!won,
+        isDraw:false,
+        matchId:settleMatchId,
+        sessionId:settleMatchId,
+        opponentUid:opp,
+        stake:liveStake,
+        winnerUid:won?me:opp,
+        variant,
+      });
+      if(settle&&settle.error){
+        settleDone=false;
+        const el=overlay.querySelector('#unoChipDelta');
+        if(el){
+          el.hidden=false;
+          el.innerHTML=`Couldn’t update chips <button type="button" id="unoChipRetry" class="game-tap-target" style="margin-left:8px;">Retry</button>`;
+          el.querySelector('#unoChipRetry')?.addEventListener('click',()=>{settleUnoOnce(won);});
+        }
+        if(typeof showToast==='function')showToast('Couldn’t update chips — tap Retry');
+        return settle;
+      }
+      paintUnoSettle(settle);
+      return settle;
+    }catch(e){
+      settleDone=false;
+      if(typeof showToast==='function')showToast('Couldn’t update chips — try Retry');
+      return null;
+    }
+  }
+
+  async function tearDownUnoLive(){
+    leaveConfirmed=true;
+    try{if(liveHandle)await liveHandle.leave({forfeit:false});}catch(e){
+      try{if(liveHandle)liveHandle.leave();}catch(e2){}
+    }
+    liveHandle=null;
+  }
+
+  async function startUnoLiveRematch(nextStake){
+    const oppUid=settleOppUid||(liveRoles&&liveRoles.opp)||launchCtx.opponentUid||'';
+    const chatId=
+      (window.__dangalLaunchCtx&&window.__dangalLaunchCtx.chatId)||
+      (window.currentOpenChat&&(window.currentOpenChat.firestoreId||window.currentOpenChat.id))||
+      (chat&&(chat.firestoreId||chat.id))||
+      '';
+    const houseSnap=isClassicRules?Object.assign({},house):undefined;
+    if(!oppUid||(typeof isPersistableUid==='function'&&!isPersistableUid(oppUid))){
+      if(typeof showToast==='function')showToast('Opponent left — challenge them again from friends');
+      if(typeof openFriendPickerSheet==='function'){
+        const f=await openFriendPickerSheet({title:'Challenge · Oh, No!',subtitle:'Live 1v1 · virtual chips only — not real money'});
+        if(f){
+          await tearDownUnoLive();
+          gs.close();
+          const uid=f.uid||f.id||'';
+          const mid=typeof dangalMatchId==='function'?dangalMatchId('uno',{name:f.name,opponentUid:uid}):('uno_'+Date.now());
+          const fid=f.chatId||f.firestoreId||'';
+          window.__dangalLaunchCtx=Object.assign({},window.__dangalLaunchCtx||{},{
+            gameId:'uno',gameType:'uno',mode:'live',matchId:mid,opponentUid:uid,stake:nextStake,
+            unoVariant:variant,unoHouse:houseSnap,chatId:fid,source:'challenge_host',startedAt:Date.now(),
+          });
+          if(typeof sendChallengeCard==='function'&&fid){
+            try{await sendChallengeCard(uid,'uno',{chatId:fid,matchId:mid,stake:nextStake,unoVariant:variant,unoHouse:houseSnap,mode:'live'});}catch(e){}
+          }
+          openUnoGame({name:f.name,id:uid,uid,peerUid:uid,dangalMatchId:mid},variant,{house:houseSnap,stake:nextStake});
+        }
+      }
+      return;
+    }
+    const rematchId=typeof dangalMatchId==='function'
+      ?dangalMatchId('uno',{name:chat.name||'Friend',opponentUid:oppUid})
+      :('uno_'+Date.now());
+    await tearDownUnoLive();
+    window.__dangalLaunchCtx=Object.assign({},window.__dangalLaunchCtx||{},{
+      gameId:'uno',gameType:'uno',mode:'live',matchId:rematchId,
+      opponentUid:oppUid,stake:nextStake,unoVariant:variant,unoHouse:houseSnap,
+      chatId,source:'challenge_host',startedAt:Date.now(),
+    });
+    if(typeof sendChallengeCard==='function'&&oppUid&&chatId){
+      try{
+        await sendChallengeCard(oppUid,'uno',{
+          chatId,matchId:rematchId,stake:nextStake,
+          unoVariant:variant,variant,unoHouse:houseSnap,mode:'live',
+        });
+        if(typeof showToast==='function')showToast('Rematch sent — they Accept to join');
+      }catch(e){}
+    }else if(typeof showToast==='function'){
+      showToast('Rematch ready — ask your friend to join from Baithak');
+    }
+    gs.close();
+    openUnoGame({
+      name:chat.name||'Friend',id:oppUid,uid:oppUid,peerUid:oppUid,
+      dangalMatchId:rematchId,dangalSource:'challenge_host',
+    },variant,{house:houseSnap,stake:nextStake});
+  }
 
   function buildDeck(variant){
     const deck=[];
@@ -3987,7 +4144,6 @@ function openUnoGame(chat, variant='normal', opts){
       const won=who==='me';
       message=(won?'You win!':chat.name+' wins!')+' Oh, No!';
       gs.setOutcome(won?'won':'lost');
-      if(typeof recordGameResult==='function')recordGameResult('uno',won);
     }
     if(liveOn&&who==='me'&&!applyingLive)pushUno();
   }
@@ -4102,75 +4258,109 @@ function openUnoGame(chat, variant='normal', opts){
       return;
     }
     if(gameOver&&typeof gameResultHtml==='function'){
+      const wonFinal=hands.me.length===0||/you win/i.test(String(message||''));
       if(!resultsShown){
         resultsShown=true;
-        const wonEnd=hands.me.length===0;
-        if(typeof recordDangalSession==='function'){
-          recordDangalSession('uno',{won:wonEnd,variant,difficulty:diffKey,mode:liveOn?'live':'practice'});
-        }
+        noteUnoSession(wonFinal);
       }
-      const won=hands.me.length===0;
       const rulesBit=houseRulesSummary();
+      const stakeLine=liveOn?(liveStake>0?`⚡${liveStake} virtual`:'Friendly'):'';
+      const modeBit=liveOn?'Live':DIFF_LABELS[diffKey];
       const shareStats={
-        scoreLine:won?'Win':'Loss',
+        scoreLine:wonFinal?'Win':'Loss',
         vs:`vs ${chat.name}`,
-        meta:`${variantLabelNow()} · ${liveOn?'Live':DIFF_LABELS[diffKey]}${rulesBit?` · ${rulesBit}`:''}`,
-        text:`Chaupaal Oh, No! (${variantLabelNow()}): ${won?'I won':'tough loss'} vs ${chat.name}`,
+        meta:`${variantLabelNow()} · ${modeBit}${rulesBit?` · ${rulesBit}`:''}${stakeLine?` · ${stakeLine}`:''}`,
+        mode:liveOn?'live':'practice',
+        variant,
+        stake:liveStake,
+        text:`Chaupaal Oh, No! (${variantLabelNow()}): ${wonFinal?'I won':'tough loss'} vs ${chat.name}${liveOn?(liveStake>0?` · Stake ⚡${liveStake} (virtual chips)`:' · Friendly Live'):` · Practice · ${DIFF_LABELS[diffKey]}`} · not real money`,
       };
+      const chatId=
+        (window.__dangalLaunchCtx&&window.__dangalLaunchCtx.chatId)||
+        (window.currentOpenChat&&(window.currentOpenChat.firestoreId||window.currentOpenChat.id))||
+        (chat&&(chat.firestoreId||chat.id))||
+        '';
+      const actions=[{label:liveOn?'Rematch':'Play again',primary:true,id:'again'}];
+      if(typeof shareGameResult==='function')actions.push({label:'Share',primary:false,id:'share'});
+      if(typeof openFriendPickerSheet==='function')actions.push({label:'Challenge friend',primary:false,id:'challenge'});
+      if(typeof postGameScoreStory==='function')actions.push({label:'Post to story',primary:false,id:'story'});
+      if(chatId&&typeof openChatScreen==='function')actions.push({label:'Chat',primary:false,id:'chat'});
+      const stakeSub=liveOn?(liveStake>0?` · Stake ⚡${liveStake} (virtual)`:' · Friendly'):'';
       overlay.innerHTML=`
         ${gameChromeHtml({title:'Oh, No!',subtitle:modeSubNow()+' · Game over',backId:'unoBack'})}
         <div class="uno-result-mount">${gameResultHtml({
           gameId:'uno',
-          glyph:won?'✓':'·',
-          title:won?'You win':`${chat.name} wins`,
-          subtitle:`${variantLabelNow()} · ${liveOn?'Live 1v1':DIFF_LABELS[diffKey]}${rulesBit?` · ${rulesBit}`:''}${message?` · ${message}`:''}`,
+          glyph:wonFinal?'✓':'·',
+          title:wonFinal?'You win':`${chat.name} wins`,
+          subtitle:`${variantLabelNow()} · ${liveOn?'Live 1v1':DIFF_LABELS[diffKey]}${rulesBit?` · ${rulesBit}`:''}${stakeSub}${message?` · ${message}`:''}`,
           shareCardHtml:typeof buildGameShareCard==='function'?buildGameShareCard('uno',shareStats):'',
-          actions:[
-            {label:liveOn?'Rematch':'Play again',primary:true,id:'again'},
-            {label:'Share',primary:false,id:'share'},
-            {label:'Challenge friend',primary:false,id:'challenge'},
-          ],
-        })}</div>`;
+          actions,
+        })}<div id="unoChipDelta" class="uno-chip-delta" hidden style="margin-top:8px;font-size:12px;color:rgba(255,255,255,.75);text-align:center;"></div></div>`;
       document.getElementById('unoBack')?.addEventListener('click',()=>{askUnoLeave();});
+      settleUnoOnce(wonFinal);
       if(typeof wireGameResultActions==='function'){
         wireGameResultActions(overlay,{
           again:async()=>{
-            gs.close();
             if(liveOn){
-              const oppUid=(liveRoles&&liveRoles.opp)||launchCtx.opponentUid||'';
-              const mid=typeof dangalMatchId==='function'
-                ?dangalMatchId('uno',{name:chat.name,opponentUid:oppUid})
-                :('uno_'+Date.now());
-              if(chat)chat.dangalMatchId=mid;
-              const houseSnap=isClassicRules?Object.assign({},house):undefined;
-              window.__dangalLaunchCtx=Object.assign({},window.__dangalLaunchCtx||{},{
-                gameId:'uno',gameType:'uno',mode:'live',matchId:mid,
-                opponentUid:oppUid,
-                unoVariant:variant,unoHouse:houseSnap,
-                stake:Number(launchCtx.stake)||0,source:'challenge_host',
-              });
-              const chatId=launchCtx.chatId||(chat&&(chat.firestoreId||chat.id))||'';
-              if(typeof sendChallengeCard==='function'&&oppUid&&chatId){
-                try{
-                  await sendChallengeCard(oppUid,'uno',{
-                    chatId,matchId:mid,stake:Number(launchCtx.stake)||0,
-                    unoVariant:variant,variant,unoHouse:houseSnap,mode:'live',
-                  });
-                }catch(e){}
+              let nextStake=liveStake;
+              if(typeof stakesEnabledForGame==='function'&&stakesEnabledForGame('uno')&&typeof openDangalStakeSheet==='function'){
+                const picked=await openDangalStakeSheet('uno',{defaultStake:liveStake});
+                if(picked==null)return;
+                nextStake=picked;
               }
-              openUnoGame(Object.assign({},chat,{dangalMatchId:mid}),variant,{house:houseSnap});
-            }else if(typeof openUnoGame==='function'){
-              openUnoGame(chat,variant,{house,difficulty:diffKey});
-            }else if(typeof openUnoVariantPicker==='function'){
-              openUnoVariantPicker(chat,{variant,house,difficulty:diffKey});
+              await startUnoLiveRematch(nextStake);
+              return;
             }
+            gs.close();
+            openUnoGame(chat,variant,{house:isClassicRules?Object.assign({},house):undefined,difficulty:diffKey});
           },
-          share:()=>{if(typeof shareGameResult==='function')shareGameResult('uno',shareStats);},
+          share:()=>{
+            if(typeof shareGameResult==='function')shareGameResult('uno',shareStats);
+            else if(typeof openUnifiedShareSheet==='function')openUnifiedShareSheet({gameId:'uno',stats:shareStats});
+          },
           challenge:async()=>{
-            if(typeof openFriendPickerSheet==='function'){
-              const f=await openFriendPickerSheet({title:'Oh, No! challenge',subtitle:'Pick a friend'});
-              if(f&&typeof shareGameResult==='function')shareGameResult('uno',{...shareStats,text:`Hey ${f.name} — Oh, No! on Chaupaal?`});
+            if(typeof openFriendPickerSheet!=='function')return;
+            const f=await openFriendPickerSheet({
+              title:'Challenge · Oh, No!',
+              subtitle:'Live 1v1 · virtual chips only — not real money',
+            });
+            if(!f)return;
+            const uid=f.uid||f.id||'';
+            if(!uid||(typeof isPersistableUid==='function'&&!isPersistableUid(uid))){
+              if(typeof showToast==='function')showToast('Pick a real friend to challenge');
+              return;
             }
+            let stakePick=0;
+            if(typeof stakesEnabledForGame==='function'&&stakesEnabledForGame('uno')&&typeof openDangalStakeSheet==='function'){
+              const picked=await openDangalStakeSheet('uno',{defaultStake:0});
+              if(picked==null)return;
+              stakePick=picked;
+            }
+            const mid=typeof dangalMatchId==='function'?dangalMatchId('uno',{name:f.name,opponentUid:uid}):('uno_'+Date.now());
+            const fid=f.chatId||f.firestoreId||'';
+            const houseSnap=isClassicRules?Object.assign({},house):undefined;
+            try{
+              window.__dangalLaunchCtx=Object.assign({},window.__dangalLaunchCtx||{},{
+                gameId:'uno',gameType:'uno',mode:'live',matchId:mid,opponentUid:uid,stake:stakePick,
+                unoVariant:variant,unoHouse:houseSnap,chatId:fid,source:'challenge_host',startedAt:Date.now(),
+              });
+            }catch(e){}
+            if(typeof sendChallengeCard==='function'&&fid){
+              try{await sendChallengeCard(uid,'uno',{chatId:fid,matchId:mid,stake:stakePick,unoVariant:variant,unoHouse:houseSnap,mode:'live'});}catch(e){}
+            }
+            if(liveOn)await tearDownUnoLive();
+            gs.close();
+            openUnoGame({name:f.name,id:uid,uid,peerUid:uid,dangalMatchId:mid},variant,{house:houseSnap,stake:stakePick});
+          },
+          story:()=>{if(typeof postGameScoreStory==='function')postGameScoreStory('uno',shareStats);},
+          chat:()=>{
+            gs.close();
+            try{
+              const thread=window.currentOpenChat||{firestoreId:chatId,id:chatId,name:chat.name||'Friend'};
+              if(typeof openChatScreen==='function')openChatScreen(thread);
+              else if(typeof showScreen==='function')showScreen('baithak');
+              else if(typeof showToast==='function')showToast('Open Baithak to continue the chat');
+            }catch(e){}
           },
         });
       }
@@ -4448,12 +4638,12 @@ function openUnoGame(chat, variant='normal', opts){
       matchId:(chat&&chat.dangalMatchId)||(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.matchId),
       me:liveRoles.me,playerA:liveRoles.playerA,playerB:liveRoles.playerB,
       state:seedState,
+      stake:liveStake,
       onForfeit({winner}){
         if(gameOver||!gs.alive())return;
         gameOver=true;
         const iWon=winner===liveRoles.me;
         gs.setOutcome(iWon?'won':'lost');
-        if(typeof recordGameResult==='function')recordGameResult('uno',iWon);
         message=iWon?'Opponent left — you win!':'Forfeit';
         render();
       },
@@ -4466,6 +4656,7 @@ function openUnoGame(chat, variant='normal', opts){
         const incomingSeq=Number(val.version||val.seq)||0;
         if(incomingSeq&&incomingSeq<liveSeq)return;
         liveSeq=Math.max(liveSeq,incomingSeq);
+        if(val.stake!=null)liveStake=Math.max(0,Number(val.stake)||0);
 
         if((val.status==='forfeit'||val.status==='over')&&!gameOver){
           applyingLive=true;
@@ -4480,7 +4671,6 @@ function openUnoGame(chat, variant='normal', opts){
           gameOver=true;
           const iWon=val.winner===liveRoles.me||(hands.me.length===0&&val.status==='over');
           gs.setOutcome(iWon?'won':'lost');
-          if(typeof recordGameResult==='function')recordGameResult('uno',iWon);
           message=val.status==='forfeit'
             ?(iWon?'Opponent left — you win!':'Forfeit')
             :(iWon?'You win!':chat.name+' wins!');
@@ -4540,7 +4730,8 @@ function openUnoGame(chat, variant='normal', opts){
         if(gameOver){
           const iWon=hands.me.length===0||val.winner===liveRoles.me;
           gs.setOutcome(iWon?'won':'lost');
-          if(typeof recordGameResult==='function')recordGameResult('uno',iWon);
+          if(iWon)message=message||'You win!';
+          else if(!message)message=chat.name+' wins!';
         }
         render();
         applyingLive=false;
@@ -5211,24 +5402,35 @@ function openUnoVariantPicker(chat, defaults){
           mid=dangalMatchId('uno',{name:chat&&chat.name,opponentUid:oppUid});
           if(chat)chat.dangalMatchId=mid;
         }
+        let stakePick=Math.max(0,Number(prev.stake)||0);
+        // Host sets stake after variant/house (guest keeps challenge stake)
+        const isHost=prev.source!=='challenge';
+        if(isHost&&typeof stakesEnabledForGame==='function'&&stakesEnabledForGame('uno')&&typeof openDangalStakeSheet==='function'){
+          const picked=await openDangalStakeSheet('uno',{defaultStake:stakePick});
+          if(picked==null)return;
+          stakePick=picked;
+        }
         window.__dangalLaunchCtx=Object.assign({},prev,{
           gameId:'uno',gameType:'uno',mode:'live',
-          matchId:mid,opponentUid:oppUid,chatId,
+          matchId:mid,opponentUid:oppUid,chatId,stake:stakePick,
           unoVariant:selectedVariant,variant:selectedVariant,
           unoHouse:house,source:prev.source||'challenge_host',
         });
-        if(typeof sendChallengeCard==='function'&&oppUid&&chatId&&mid){
+        if(typeof sendChallengeCard==='function'&&oppUid&&chatId&&mid&&isHost){
           try{
             await sendChallengeCard(oppUid,'uno',{
-              chatId,matchId:mid,stake:Number(prev.stake)||0,
+              chatId,matchId:mid,stake:stakePick,
               unoVariant:selectedVariant,variant:selectedVariant,
               unoHouse:house,mode:'live',
             });
           }catch(e){}
         }
+        sheet.remove();
+        openUnoGame(chat,selectedVariant,{house,difficulty:'medium',live:true,stake:stakePick});
+        return;
       }
       sheet.remove();
-      openUnoGame(chat,selectedVariant,{house,difficulty:liveWanted?'medium':selectedDiff,live:liveWanted});
+      openUnoGame(chat,selectedVariant,{house,difficulty:selectedDiff});
     });
     sheet.querySelector('#closeUnoVariant')?.addEventListener('click',()=>sheet.remove());
   }
@@ -5338,6 +5540,13 @@ if (typeof registerGame === 'function') {
     chat1v1: true,
     chatGroup: true,
     order: 40,
+    meta: {
+      phaseA: 'Classic UX + house rules',
+      phaseB: 'Blaze / Flip + Practice AI',
+      phaseC: 'complete — Live 1v1, stakes, rematch, share',
+      complete: true,
+      liveLimit: '2p',
+    },
     launch(ctx) {
       try{
         const launch=window.__dangalLaunchCtx||{};
@@ -5371,7 +5580,11 @@ if (typeof registerGame === 'function') {
         if(liveWanted){
           // Guest / rematch with known match: open board (host deal or wait)
           if(ctx.source==='challenge'||(unoVariant&&(ctx.matchId||launch.matchId||(chat&&chat.dangalMatchId)))){
-            openUnoGame(chat,unoVariant||'classic',{house:unoHouse,variant:unoVariant||'classic'});
+            openUnoGame(chat,unoVariant||'classic',{
+              house:unoHouse,
+              variant:unoVariant||'classic',
+              stake:Number(ctx.stake??launch.stake)||0,
+            });
             return;
           }
           openUnoVariantPicker(chat,{live:true,variant:unoVariant||'classic',house:unoHouse});

@@ -634,8 +634,12 @@
     }
 
     const liveOk = typeof isLiveCapable === 'function' ? isLiveCapable(gameId) : !!game.liveDuel;
+    // Oh No!: stake sheet runs after variant/house in the Live picker (Prompt 5 entry order)
     const stakesOk =
-      liveOk && typeof stakesEnabledForGame === 'function' && stakesEnabledForGame(gameId);
+      liveOk &&
+      gameId !== 'uno' &&
+      typeof stakesEnabledForGame === 'function' &&
+      stakesEnabledForGame(gameId);
     const sheet = document.createElement('div');
     sheet.style.cssText =
       'position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:22px;z-index:100;';
