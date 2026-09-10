@@ -2854,6 +2854,7 @@
     return v[1] === v[0] + 1 && v[2] === v[1] + 1;
   }
   function tpScore(cards) {
+    if (!cards || cards.length < 3) return 0;
     const vals = cards.map((c) => rankVal(c.r));
     const flush = cards[0].s === cards[1].s && cards[1].s === cards[2].s;
     const trail = vals[0] === vals[1] && vals[1] === vals[2];
@@ -2868,155 +2869,555 @@
     return hi;
   }
 
+  function cardBacks(n) {
+    let html = '';
+    for (let i = 0; i < n; i++) html += '<span class="pc-card pc-back" aria-hidden="true"></span>';
+    return html;
+  }
+
   function openTeenPatti() {
     const chat = resolveChat(arguments[0]);
     const liveOn = chatLiveOn(chat);
     const rng = rngFn();
+    const STACK0 = 1000; // virtual chips — per-hand reset (career in Prompt 4)
+    const BOOT = 10;
+    const SEE_FEE = BOOT * 2; // Prompt 1: fixed see tied to boot (chaal ladder = Prompt 2)
+    const BLIND_CHAAL = BOOT; // stub ante bump while blind
+    let aiTimer = 0;
     const shell = openShell({
       id: 'teenpatti',
       title: 'Teen Patti',
-      subtitle: liveOn ? liveSub() : practiceSub('Best of three cards'),
+      subtitle: liveOn ? liveSub() : practiceSub('Boot · blind · see'),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
       accent: '#FFD700',
       bg: '#0D0018',
+      cleanup: () => {
+        if (aiTimer) {
+          clearTimeout(aiTimer);
+          aiTimer = 0;
+        }
+      },
     });
     if (!shell) return;
 
     let handA = [];
     let handB = [];
+    let stackA = STACK0;
+    let stackB = STACK0;
+    let pot = 0;
+    let seenA = false;
+    let seenB = false;
+    let packedA = false;
+    let packedB = false;
+    let boot = BOOT;
+    let phase = 'idle'; // idle | dealt | over
     let ended = false;
     let applying = false;
     let liveRoles = null;
     let liveHandle = null;
-    let revealed = false;
+    let dealtOnce = false;
 
+    function iAmA() {
+      return !liveOn || !liveRoles || liveRoles.me === liveRoles.playerA;
+    }
     function myCards() {
-      if (!liveOn || !liveRoles) return handA;
-      return liveRoles.me === liveRoles.playerA ? handA : handB;
+      return iAmA() ? handA : handB;
     }
     function oppCards() {
-      if (!liveOn || !liveRoles) return handB;
-      return liveRoles.me === liveRoles.playerA ? handB : handA;
+      return iAmA() ? handB : handA;
+    }
+    function mySeen() {
+      return iAmA() ? seenA : seenB;
+    }
+    function oppSeen() {
+      return iAmA() ? seenB : seenA;
+    }
+    function myStack() {
+      return iAmA() ? stackA : stackB;
+    }
+    function setMySeen(v) {
+      if (iAmA()) seenA = !!v;
+      else seenB = !!v;
+    }
+    function setOppSeen(v) {
+      if (iAmA()) seenB = !!v;
+      else seenA = !!v;
+    }
+    function setMyStack(n) {
+      if (iAmA()) stackA = n;
+      else stackB = n;
+    }
+    function setOppStack(n) {
+      if (iAmA()) stackB = n;
+      else stackA = n;
+    }
+    function setMyPacked(v) {
+      if (iAmA()) packedA = !!v;
+      else packedB = !!v;
+    }
+    function myPacked() {
+      return iAmA() ? packedA : packedB;
+    }
+    function oppPacked() {
+      return iAmA() ? packedB : packedA;
     }
 
-    function paint(hidden) {
-      if (ended) return;
+    function snapshot() {
+      return {
+        handA,
+        handB,
+        pot,
+        stackA,
+        stackB,
+        seenA,
+        seenB,
+        packedA,
+        packedB,
+        boot,
+        phase,
+        seeFee: SEE_FEE,
+      };
+    }
+
+    function applySnapshot(st) {
+      if (!st || typeof st !== 'object') return;
+      if (Array.isArray(st.handA) && st.handA.length) handA = st.handA;
+      if (Array.isArray(st.handB) && st.handB.length) handB = st.handB;
+      if (st.pot != null) pot = Math.max(0, Number(st.pot) || 0);
+      if (st.stackA != null) stackA = Math.max(0, Number(st.stackA) || 0);
+      if (st.stackB != null) stackB = Math.max(0, Number(st.stackB) || 0);
+      if (st.seenA != null) seenA = !!st.seenA;
+      if (st.seenB != null) seenB = !!st.seenB;
+      if (st.packedA != null) packedA = !!st.packedA;
+      if (st.packedB != null) packedB = !!st.packedB;
+      if (st.boot != null) boot = Math.max(1, Number(st.boot) || BOOT);
+      if (st.phase) phase = st.phase;
+    }
+
+    function pushLive(extra) {
+      if (!liveOn || !liveHandle || applying || ended) return;
+      liveHandle.push(
+        Object.assign(
+          {
+            status: phase === 'over' ? 'over' : 'playing',
+            turn: liveRoles.me,
+            state: snapshot(),
+          },
+          extra || {}
+        )
+      );
+    }
+
+    /** Live FOW: never paint opp faces until show/over. RTDB may still hold both hands (Uno-style). */
+    function paintOppHand(revealAll) {
+      if (revealAll || phase === 'over') return oppCards().map(cardFace).join('');
+      return cardBacks(3);
+    }
+
+    function paintMyHand() {
       const you = myCards();
-      const opp = oppCards();
+      if (!you.length) return cardBacks(3);
+      if (!mySeen()) return cardBacks(3);
+      return you.map(cardFace).join('');
+    }
+
+    function clearAi() {
+      if (aiTimer) {
+        clearTimeout(aiTimer);
+        aiTimer = 0;
+      }
+    }
+
+    function paint(msg) {
+      if (ended) return;
+      const seen = mySeen();
+      const canSee = !seen && myStack() >= SEE_FEE && !myPacked() && phase === 'dealt';
+      const canBlind = !seen && myStack() >= BLIND_CHAAL && !myPacked() && phase === 'dealt';
+      const canShow = seen && !myPacked() && phase === 'dealt';
+      const canPack = !myPacked() && phase === 'dealt';
+      const badge = seen ? 'Seen' : 'Blind';
+      const oppBadge = oppSeen() ? 'seen' : 'blind';
       shell.body.innerHTML = `
         <div class="pc-tp">
-          <p class="pc-hint">Opponent</p>
-          <div class="pc-hand">${
-            hidden
-              ? '<span class="pc-card pc-back">?</span><span class="pc-card pc-back">?</span><span class="pc-card pc-back">?</span>'
-              : opp.map(cardFace).join('')
-          }</div>
-          <p class="pc-hint">You</p>
-          <div class="pc-hand">${you.map(cardFace).join('')}</div>
-          <div class="pc-actions">
-            <button type="button" class="cs-hit" data-show>Show</button>
-            <button type="button" class="cs-hit" data-fold>Fold</button>
+          <div class="pc-tp-hud" aria-live="polite">
+            <span>You <b>${myStack()}</b></span>
+            <span class="pc-tp-pot">Pot <b>${pot}</b></span>
+            <span class="pc-tp-badge ${seen ? 'is-seen' : 'is-blind'}">${badge}</span>
           </div>
+          <p class="pc-hint">Opponent · ${oppBadge}${liveOn ? ' · Live' : ''}</p>
+          <div class="pc-hand pc-hand--opp">${paintOppHand(false)}</div>
+          <p class="pc-hint">You · ${badge.toLowerCase()}${msg ? ' · ' + esc(msg) : ''}</p>
+          <div class="pc-hand pc-hand--you">${paintMyHand()}</div>
+          <div class="pc-actions pc-tp-actions">
+            ${canSee ? `<button type="button" class="cs-hit" data-see>See (−${SEE_FEE})</button>` : ''}
+            ${canBlind ? `<button type="button" class="cs-hit cs-hit--ghost" data-blind>Blind chaal (−${BLIND_CHAAL})</button>` : ''}
+            ${canShow ? `<button type="button" class="cs-hit" data-show>Show</button>` : ''}
+            ${canPack ? `<button type="button" class="cs-hit" data-pack>Pack</button>` : ''}
+          </div>
+          <p class="pc-hint pc-tp-boot">Boot ${boot} · see ${SEE_FEE} · chips virtual</p>
         </div>`;
-      shell.body.querySelector('[data-show]')?.addEventListener('click', () => doShow());
-      shell.body.querySelector('[data-fold]')?.addEventListener('click', () => doFold());
+      shell.body.querySelector('[data-see]')?.addEventListener('click', () => doSee(false));
+      shell.body.querySelector('[data-blind]')?.addEventListener('click', () => doBlindChaal(false));
+      shell.body.querySelector('[data-show]')?.addEventListener('click', () => doShow(false));
+      shell.body.querySelector('[data-pack]')?.addEventListener('click', () => doPack(false));
+      if (!liveOn && phase === 'dealt' && !ended) scheduleAi();
     }
 
-    function finish(youWin, title, fromRemote) {
+    function awardPotSeat(toA) {
+      if (toA) stackA += pot;
+      else stackB += pot;
+      pot = 0;
+    }
+
+    function finishHand(youWin, title, subtitle, fromRemote, reveal) {
       if (ended) return;
       ended = true;
+      phase = 'over';
+      clearAi();
+      if (shell && typeof shell.markOver === 'function') shell.markOver();
+      if (reveal) {
+        shell.body.innerHTML = `
+          <div class="pc-tp">
+            <p class="pc-hint">Show</p>
+            <div class="pc-hand">${oppCards().map(cardFace).join('')}</div>
+            <div class="pc-hand">${myCards().map(cardFace).join('')}</div>
+          </div>`;
+      }
       if (liveOn && liveHandle && !fromRemote && !applying) {
         liveHandle.push({
           status: 'over',
           winner: youWin ? liveRoles.me : liveRoles.opp,
-          state: { handA, handB, phase: 'over', revealed: true },
+          state: Object.assign(snapshot(), { phase: 'over', revealed: !!reveal }),
         });
       }
-      showDuelResult(shell, {
-        id: 'teenpatti',
-        you: youWin ? 1 : 0,
-        opp: youWin ? 0 : 1,
-        glyph: '♠',
-        title: title || (youWin ? 'You win' : 'Opponent wins'),
-        shareText: 'Teen Patti on Chaupaal',
-        onAgain: () => openTeenPatti(chat),
-      });
+      const go = () => {
+        showDuelResult(shell, {
+          id: 'teenpatti',
+          you: youWin ? 1 : 0,
+          opp: youWin ? 0 : 1,
+          glyph: '♠',
+          title: title || (youWin ? 'You win' : 'Opponent wins'),
+          subtitle: subtitle || '',
+          shareText: 'Teen Patti on Chaupaal',
+          onAgain: () => openTeenPatti(chat),
+        });
+      };
+      if (reveal) setTimeout(go, 700);
+      else go();
     }
 
-    function doShow() {
-      if (ended) return;
-      revealed = true;
-      const ys = tpScore(myCards());
-      const as = tpScore(oppCards());
-      paint(false);
-      if (liveOn && liveHandle) {
+    function postBoots() {
+      stackA = STACK0;
+      stackB = STACK0;
+      if (stackA < BOOT || stackB < BOOT) {
+        stackA = STACK0;
+        stackB = STACK0;
+      }
+      stackA -= BOOT;
+      stackB -= BOOT;
+      pot = BOOT * 2;
+      boot = BOOT;
+      seenA = false;
+      seenB = false;
+      packedA = false;
+      packedB = false;
+    }
+
+    function dealFresh() {
+      const deck = makeDeck(rng);
+      handA = deck.splice(0, 3);
+      handB = deck.splice(0, 3);
+      postBoots();
+      phase = 'dealt';
+      dealtOnce = true;
+    }
+
+    function doSee(fromRemote) {
+      if (ended || phase !== 'dealt' || myPacked()) return;
+      if (mySeen()) return;
+      if (myStack() < SEE_FEE) {
+        paint('Need ' + SEE_FEE + ' to see');
+        return;
+      }
+      setMyStack(myStack() - SEE_FEE);
+      pot += SEE_FEE;
+      setMySeen(true);
+      buzz('select');
+      if (!fromRemote) pushLive({ act: 'see', by: liveRoles && liveRoles.me });
+      paint('Cards up — you paid to see');
+    }
+
+    function doBlindChaal(fromRemote) {
+      if (ended || phase !== 'dealt' || myPacked() || mySeen()) return;
+      if (myStack() < BLIND_CHAAL) return;
+      setMyStack(myStack() - BLIND_CHAAL);
+      pot += BLIND_CHAAL;
+      buzz('select');
+      if (!fromRemote) pushLive({ act: 'blind', by: liveRoles && liveRoles.me });
+      paint('Blind chaal in the pot');
+    }
+
+    function doPack(fromRemote) {
+      if (ended || phase !== 'dealt' || myPacked()) return;
+      setMyPacked(true);
+      if (iAmA()) awardPotSeat(false);
+      else awardPotSeat(true);
+      buzz('lose');
+      if (!fromRemote && liveOn && liveHandle && !applying) {
         liveHandle.push({
           status: 'over',
-          winner: ys >= as ? liveRoles.me : liveRoles.opp,
-          state: { handA, handB, phase: 'show', revealed: true, scores: { you: ys, opp: as } },
+          winner: liveRoles.opp,
+          act: 'pack',
+          state: Object.assign(snapshot(), { phase: 'over' }),
         });
       }
-      ended = true;
-      showDuelResult(shell, {
-        id: 'teenpatti',
-        you: ys >= as ? 1 : 0,
-        opp: as >= ys ? 1 : 0,
-        glyph: '♠',
-        title: ys > as ? 'You win the show' : ys === as ? 'Split' : 'Opponent wins',
-        shareText: 'Teen Patti on Chaupaal',
-        onAgain: () => openTeenPatti(chat),
-      });
+      finishHand(false, 'Packed', 'Opponent takes the pot', true, false);
     }
 
-    function doFold() {
-      finish(false, 'Folded');
+    function doShow(fromRemote) {
+      if (ended || phase !== 'dealt' || myPacked()) return;
+      if (!mySeen()) {
+        paint('See your cards before Show');
+        return;
+      }
+      const ys = tpScore(myCards());
+      const os = tpScore(oppCards());
+      const split = ys === os;
+      const youWin = ys > os;
+      if (split) {
+        const half = Math.floor(pot / 2);
+        if (iAmA()) {
+          stackA += half;
+          stackB += pot - half;
+        } else {
+          stackB += half;
+          stackA += pot - half;
+        }
+        pot = 0;
+      } else if ((youWin && iAmA()) || (!youWin && !iAmA())) {
+        awardPotSeat(true);
+      } else {
+        awardPotSeat(false);
+      }
+      phase = 'over';
+      if (!fromRemote && liveOn && liveHandle && !applying) {
+        liveHandle.push({
+          status: 'over',
+          winner: split ? null : youWin ? liveRoles.me : liveRoles.opp,
+          act: 'show',
+          state: Object.assign(snapshot(), {
+            phase: 'over',
+            revealed: true,
+            scores: { a: tpScore(handA), b: tpScore(handB) },
+          }),
+        });
+      }
+      if (ended) return;
+      ended = true;
+      clearAi();
+      if (shell && typeof shell.markOver === 'function') shell.markOver();
+      shell.body.innerHTML = `
+        <div class="pc-tp">
+          <p class="pc-hint">Show</p>
+          <div class="pc-hand">${oppCards().map(cardFace).join('')}</div>
+          <div class="pc-hand">${myCards().map(cardFace).join('')}</div>
+        </div>`;
+      const title = split ? 'Split pot' : youWin ? 'You win the show' : 'Opponent wins the show';
+      setTimeout(() => {
+        showDuelResult(shell, {
+          id: 'teenpatti',
+          you: split ? 1 : youWin ? 1 : 0,
+          opp: split ? 1 : youWin ? 0 : 1,
+          glyph: '♠',
+          title,
+          subtitle: 'Pot settled · trail > sequence > colour',
+          shareText: 'Teen Patti on Chaupaal',
+          onAgain: () => openTeenPatti(chat),
+        });
+      }, 700);
+    }
+
+    function remotePackWin() {
+      finishHand(true, 'Opponent packed', 'You take the pot', true, false);
+    }
+
+    function applyRemoteAct(val) {
+      const st = val.state || {};
+      applySnapshot(st);
+      const act = val.act;
+      const by = val.by;
+      if (ended) return;
+      if (act === 'see' || act === 'blind') {
+        if (by && liveRoles && by !== liveRoles.me) {
+          paint(act === 'see' ? 'Opponent paid to see' : 'Opponent blind chaal');
+        } else {
+          paint();
+        }
+        return;
+      }
+      if (val.status === 'over' || st.phase === 'over' || act === 'pack' || act === 'show') {
+        applying = true;
+        if (act === 'pack' || st.packedA || st.packedB) {
+          if (myPacked()) finishHand(false, 'Packed', 'Opponent takes the pot', true, false);
+          else remotePackWin();
+        } else if (act === 'show' || st.revealed) {
+          const ys = tpScore(myCards());
+          const os = tpScore(oppCards());
+          const split = ys === os;
+          const youWin = ys > os;
+          ended = true;
+          phase = 'over';
+          if (shell && typeof shell.markOver === 'function') shell.markOver();
+          shell.body.innerHTML = `
+            <div class="pc-tp">
+              <p class="pc-hint">Show</p>
+              <div class="pc-hand">${oppCards().map(cardFace).join('')}</div>
+              <div class="pc-hand">${myCards().map(cardFace).join('')}</div>
+            </div>`;
+          setTimeout(() => {
+            showDuelResult(shell, {
+              id: 'teenpatti',
+              you: split ? 1 : youWin ? 1 : 0,
+              opp: split ? 1 : youWin ? 0 : 1,
+              glyph: '♠',
+              title: split ? 'Split pot' : youWin ? 'You win the show' : 'Opponent wins the show',
+              subtitle: 'Pot settled',
+              shareText: 'Teen Patti on Chaupaal',
+              onAgain: () => openTeenPatti(chat),
+            });
+          }, 700);
+        } else {
+          const iWon = val.winner === liveRoles.me;
+          finishHand(
+            iWon,
+            val.status === 'forfeit' ? (iWon ? 'Opponent left' : 'You forfeited') : undefined,
+            '',
+            true,
+            !!st.revealed
+          );
+        }
+        applying = false;
+        return;
+      }
+      if (st.handA && st.handB && phase === 'dealt') {
+        dealtOnce = true;
+        paint(dealtOnce ? '' : 'Boot posted — both blind');
+        return;
+      }
+      paint();
+    }
+
+    /** Practice AI — may stay blind or see; packs weak, shows strong once seen. */
+    function scheduleAi() {
+      clearAi();
+      if (liveOn || ended || phase !== 'dealt' || packedB) return;
+      aiTimer = setTimeout(() => {
+        aiTimer = 0;
+        if (ended || phase !== 'dealt' || packedB) return;
+        runAi();
+      }, 900 + Math.floor(rng() * 900));
+    }
+
+    function runAi() {
+      if (ended || packedB) return;
+      const strength = tpScore(handB); // Practice-only secret eval
+      if (!seenB) {
+        const wantSee = strength >= 2000 || rng() < 0.45;
+        if (wantSee && stackB >= SEE_FEE) {
+          stackB -= SEE_FEE;
+          pot += SEE_FEE;
+          seenB = true;
+          paint('Opponent paid to see');
+          scheduleAi();
+          return;
+        }
+        if (rng() < 0.2 && stackB >= BLIND_CHAAL) {
+          stackB -= BLIND_CHAAL;
+          pot += BLIND_CHAAL;
+          paint('Opponent blind chaal');
+          scheduleAi();
+          return;
+        }
+        if (rng() < 0.12) {
+          packedB = true;
+          awardPotSeat(true);
+          finishHand(true, 'Opponent packed', 'You take the pot', false, false);
+          return;
+        }
+        return;
+      }
+      // Seen
+      if (strength < 14 + Math.floor(rng() * 8) && rng() < 0.55) {
+        packedB = true;
+        awardPotSeat(true);
+        finishHand(true, 'Opponent packed', 'You take the pot', false, false);
+        return;
+      }
+      if (strength >= 2000 || rng() < 0.35) {
+        // AI show — must be seen
+        const ys = tpScore(handA);
+        const os = strength;
+        const split = ys === os;
+        const youWin = ys > os;
+        if (split) {
+          const half = Math.floor(pot / 2);
+          stackA += half;
+          stackB += pot - half;
+          pot = 0;
+        } else if (youWin) awardPotSeat(true);
+        else awardPotSeat(false);
+        phase = 'over';
+        ended = true;
+        clearAi();
+        shell.body.innerHTML = `
+          <div class="pc-tp">
+            <p class="pc-hint">Show</p>
+            <div class="pc-hand">${handB.map(cardFace).join('')}</div>
+            <div class="pc-hand">${handA.map(cardFace).join('')}</div>
+          </div>`;
+        setTimeout(() => {
+          showDuelResult(shell, {
+            id: 'teenpatti',
+            you: split ? 1 : youWin ? 1 : 0,
+            opp: split ? 1 : youWin ? 0 : 1,
+            glyph: '♠',
+            title: split ? 'Split pot' : youWin ? 'You win the show' : 'Opponent wins the show',
+            subtitle: 'Opponent showed',
+            shareText: 'Teen Patti on Chaupaal',
+            onAgain: () => openTeenPatti(chat),
+          });
+        }, 700);
+      }
     }
 
     if (liveOn) {
       const joined = joinLive(shell, chat, 'teenpatti', (val) => {
         if (!val || ended) return;
-        if (val.status === 'forfeit' || val.status === 'over') {
+        if (val.status === 'forfeit') {
           applying = true;
-          const st = val.state || {};
-          if (st.handA) handA = st.handA;
-          if (st.handB) handB = st.handB;
-          if (st.phase === 'show' || st.revealed) paint(false);
           const iWon = val.winner === liveRoles.me;
-          finish(iWon, val.status === 'forfeit' ? (iWon ? 'Opponent left' : 'You forfeited') : undefined, true);
+          finishHand(iWon, iWon ? 'Opponent left' : 'You forfeited', '', true, false);
           applying = false;
           return;
         }
-        const st = val.state || {};
-        if (st.handA && st.handB && !handA.length) {
-          handA = st.handA;
-          handB = st.handB;
-          paint(true);
-        }
+        applyRemoteAct(val);
       });
       if (joined) {
         liveHandle = joined.handle;
         liveRoles = joined.roles;
         if (liveRoles.host) {
-          const deck = makeDeck(rng);
-          handA = deck.splice(0, 3);
-          handB = deck.splice(0, 3);
-          liveHandle.push({
-            status: 'playing',
-            turn: liveRoles.me,
-            state: { handA, handB, phase: 'dealt' },
-          });
-          paint(true);
+          dealFresh();
+          pushLive({ status: 'playing' });
+          paint('Boot posted — both blind');
         } else {
           shell.body.innerHTML = `<p class="pc-hint">Waiting for deal…</p>`;
         }
       }
     } else {
-      const deck = makeDeck(rng);
-      handA = deck.splice(0, 3);
-      handB = deck.splice(0, 3);
-      paint(true);
+      dealFresh();
+      paint('Boot posted — both blind');
     }
   }
 
@@ -3656,7 +4057,7 @@
       { id: 'carrom', name: 'Carrom', desc: 'Live · stakes · AI', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
       { id: 'pool', name: 'Pool', desc: 'Clear the felt', icon: '🎱', genre: 'board', launch: openPool, order: 32 },
       { id: 'rummy', name: 'Rummy', desc: 'Runs and sets', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
-      { id: 'teenpatti', name: 'Teen Patti', desc: 'Three-card show', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
+      { id: 'teenpatti', name: 'Teen Patti', desc: 'Boot · blind · see', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
       { id: 'bluff', name: 'Bluff', desc: 'Play face-down', icon: '🎭', genre: 'party', launch: openBluff, order: 35 },
       { id: 'sattepe', name: 'Satte pe Satta', desc: 'Build off sevens', icon: '7️⃣', genre: 'party', launch: openSatte, order: 36 },
       { id: 'andarbaahar', name: 'Andar Bahar', desc: 'Pick a side', icon: '🃏', genre: 'party', launch: openAndarBahar, order: 37 },

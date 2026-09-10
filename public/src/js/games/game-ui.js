@@ -171,7 +171,11 @@
     uno: ['Match colour or number to play', 'Classic has optional house-rule toggles', "Shout 'Oh No!' at 1 card · Blaze hits harder · Flip switches sides"],
     pool: ['Drag the cue ball to aim', 'Clear object balls', 'Scratch returns the cue'],
     rummy: ['Draw or take the discard', 'Discard one card', 'Declare when you have runs and sets'],
-    teenpatti: ['Three cards, then Show or Fold', 'Trail beats sequence beats colour', 'Practice vs AI — chips stay virtual'],
+    teenpatti: [
+      'Both post a boot — cards stay blind until you pay to See',
+      'While blind: Blind chaal, Pack, or See (Show only after seen)',
+      'Practice vs AI or Live 1v1 — chips stay virtual; chaal ladders next',
+    ],
     bluff: ['Select 1–3 cards and a claimed rank', 'Opponent may call', 'Three lives each'],
     sattepe: ['Play next to a seven chain', 'Empty your hand first', 'Sevens can always start a suit'],
     andarbaahar: ['Joker sets the rank', 'Pick Andar or Bahar', 'First matching rank wins the side'],
