@@ -134,7 +134,11 @@
       'Swap specials to fire them · finish every goal before moves run out',
       'Continue your campaign · replay cleared levels anytime',
     ],
-    ankjod: ['Each row & column sums to the clue', 'Pencil notes help narrow digits', 'Check when you think you are done'],
+    ankjod: [
+      'Tap a cell to light its across/down runs and clues',
+      'Dimmed keypad digits cannot fit the selected run',
+      'Pencil for notes · Undo to step back · Check when ready',
+    ],
     streetcricket: ['Tap Bowl, then Hit in the green window', 'Six balls · two wickets ends the over', 'Practice timing — full matches later'],
     gullykick: ['Pick left, center, or right', 'Beat the keeper’s dive', 'Five kicks per shootout'],
     badminton: ['Serve, then smash in the timing window', 'Rallies get faster', 'First to 7'],

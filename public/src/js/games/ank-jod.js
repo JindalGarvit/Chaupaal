@@ -87,6 +87,59 @@
     return idx;
   }
 
+  /**
+   * Legal digits for cell (r,c), treating that cell as empty so overwrite is allowed.
+   * Intersects combo possibilities across all runs containing the cell.
+   */
+  function candidatesForCell(values, runs, runIdx, r, c) {
+    const runIds = runIdx[r][c];
+    if (!runIds || !runIds.length) return [1, 2, 3, 4, 5, 6, 7, 8, 9];
+    let possible = null;
+    for (let i = 0; i < runIds.length; i++) {
+      const run = runs[runIds[i]];
+      const used = new Set();
+      let emptySlots = 0;
+      let filledSum = 0;
+      for (let j = 0; j < run.cells.length; j++) {
+        const [rr, cc] = run.cells[j];
+        const v = rr === r && cc === c ? 0 : values[rr][cc];
+        if (v) {
+          if (used.has(v)) return [];
+          used.add(v);
+          filledSum += v;
+        } else emptySlots++;
+      }
+      const remSum = run.sum - filledSum;
+      if (remSum < emptySlots || remSum > 9 * emptySlots) return [];
+      const ok = new Set();
+      const combos = combosFor(run.sum, run.cells.length);
+      for (let k = 0; k < combos.length; k++) {
+        const combo = combos[k];
+        let match = true;
+        for (const f of used) {
+          if (combo.indexOf(f) === -1) {
+            match = false;
+            break;
+          }
+        }
+        if (!match) continue;
+        for (let d = 0; d < combo.length; d++) {
+          if (!used.has(combo[d])) ok.add(combo[d]);
+        }
+      }
+      if (possible == null) possible = ok;
+      else {
+        const next = new Set();
+        possible.forEach((d) => {
+          if (ok.has(d)) next.add(d);
+        });
+        possible = next;
+      }
+      if (!possible.size) return [];
+    }
+    return possible ? Array.from(possible).sort((a, b) => a - b) : [1, 2, 3, 4, 5, 6, 7, 8, 9];
+  }
+
   // ─── Solver / uniqueness ───────────────────────────────────────────────────
 
   /**
@@ -1121,6 +1174,9 @@
     const board = puzzle.board;
     const rows = board.length;
     const cols = board[0].length;
+    const runs = extractRuns(board);
+    const runIdx = cellRunsIndex(runs, rows, cols);
+
     let values = emptyValues(rows, cols);
     let pencil = Array.from({ length: rows }, () => Array.from({ length: cols }, () => new Set()));
     let selected = null; // [r,c]
@@ -1131,11 +1187,20 @@
     let winShown = false;
     let timerId = null;
     let session = null;
+    let pauseCtrl = null;
+    let shellBuilt = false;
+    let cellSize = 36;
+
+    const UNDO_MAX = 40;
+    let undoStack = [];
+    let redoStack = [];
 
     const root = document.createElement('div');
     root.style.cssText =
       'position:absolute;inset:0;background:var(--cream,#F7F3EC);z-index:80;display:flex;flex-direction:column;';
     if (typeof prepareGameOverlay === 'function') prepareGameOverlay(root, { theme: 'light', gameId: 'ankjod' });
+
+    const diffMeta = DIFFS.find((d) => d.id === puzzle.difficulty) || DIFFS[0];
 
     function computeCellSize() {
       const availW = Math.max(240, (root.clientWidth || 360) - 28);
@@ -1145,31 +1210,215 @@
       return Math.max(28, Math.min(52, byW, byH));
     }
 
-    function paint() {
+    function snapCell(r, c) {
+      return { r, c, value: values[r][c], pencil: [...(pencil[r][c] || [])] };
+    }
+
+    function applyCellSnap(s) {
+      values[s.r][s.c] = s.value;
+      pencil[s.r][s.c] = new Set(s.pencil || []);
+    }
+
+    function pushHistory(beforeCells) {
+      undoStack.push({
+        cells: beforeCells,
+        selected: selected ? selected.slice() : null,
+        pencilMode,
+        showMistakes,
+      });
+      if (undoStack.length > UNDO_MAX) undoStack.shift();
+      redoStack = [];
+      updateUndoButtons();
+    }
+
+    function captureSelectionMutations(mutateFn) {
+      if (won || !selected) return false;
+      const [r, c] = selected;
+      const before = [snapCell(r, c)];
+      mutateFn(r, c);
+      pushHistory(before);
+      return true;
+    }
+
+    function undo() {
+      if (won || !undoStack.length) return;
+      const entry = undoStack.pop();
+      const reverse = entry.cells.map((s) => snapCell(s.r, s.c));
+      redoStack.push({
+        cells: reverse,
+        selected: selected ? selected.slice() : null,
+        pencilMode,
+        showMistakes,
+      });
+      entry.cells.forEach(applyCellSnap);
+      selected = entry.selected;
+      showMistakes = false;
+      statusMsg = '';
+      updateUndoButtons();
+      if (typeof gameFeedback === 'function') gameFeedback('select');
+      refreshPlay();
+    }
+
+    function redo() {
+      if (won || !redoStack.length) return;
+      const entry = redoStack.pop();
+      const reverse = entry.cells.map((s) => snapCell(s.r, s.c));
+      undoStack.push({
+        cells: reverse,
+        selected: selected ? selected.slice() : null,
+        pencilMode,
+        showMistakes,
+      });
+      if (undoStack.length > UNDO_MAX) undoStack.shift();
+      entry.cells.forEach(applyCellSnap);
+      selected = entry.selected;
+      showMistakes = false;
+      statusMsg = '';
+      updateUndoButtons();
+      if (typeof gameFeedback === 'function') gameFeedback('select');
+      refreshPlay();
+    }
+
+    function updateUndoButtons() {
+      const u = root.querySelector('#kkUndo');
+      const r = root.querySelector('#kkRedo');
+      if (u) u.disabled = !undoStack.length || won;
+      if (r) r.disabled = !redoStack.length || won;
+    }
+
+    function legalDigits(r, c) {
+      const set = new Set(candidatesForCell(values, runs, runIdx, r, c));
+      const cur = values[r][c];
+      if (cur) set.add(cur); // allow overwrite / keep current
+      return set;
+    }
+
+    function highlightSets() {
+      const runKeys = new Set();
+      const clueMeta = new Map(); // "r,c" -> { across, down }
+      if (!selected || won) return { runKeys, clueMeta };
+      const [sr, sc] = selected;
+      const ids = runIdx[sr][sc] || [];
+      ids.forEach((i) => {
+        const run = runs[i];
+        run.cells.forEach(([r, c]) => {
+          if (r !== sr || c !== sc) runKeys.add(r + ',' + c);
+        });
+        const ck = run.clueR + ',' + run.clueC;
+        const meta = clueMeta.get(ck) || { across: false, down: false };
+        if (run.dir === 'across') meta.across = true;
+        else meta.down = true;
+        clueMeta.set(ck, meta);
+      });
+      return { runKeys, clueMeta };
+    }
+
+    function statusForSelection() {
+      if (won) return 'Puzzle solved!';
+      if (statusMsg) return statusMsg;
+      if (!selected) return pencilMode ? 'Pencil mode — tap digits for notes' : 'Tap a cell, then a digit';
+      const [sr, sc] = selected;
+      const bits = [];
+      (runIdx[sr][sc] || []).forEach((i) => {
+        const run = runs[i];
+        bits.push((run.dir === 'across' ? 'Across ' : 'Down ') + run.sum);
+      });
+      return bits.join(' · ') || (pencilMode ? 'Pencil mode' : 'Enter a digit');
+    }
+
+    function cellInnerHtml(r, c, pencilFs) {
+      const v = values[r][c];
+      if (v) return String(v);
+      const marks = [...(pencil[r][c] || [])].sort((a, b) => a - b);
+      if (!marks.length) return '';
+      return `<span class="kk-pencil" style="font-size:${pencilFs}px;">${[1, 2, 3, 4, 5, 6, 7, 8, 9]
+        .map((n) => `<i>${marks.includes(n) ? n : ''}</i>`)
+        .join('')}</span>`;
+    }
+
+    function refreshPlay() {
       if (won && winShown) {
         paintWinResult();
         return;
       }
+      if (!shellBuilt) {
+        buildShell();
+        shellBuilt = true;
+      }
       const analysis = analyzeMistakes(board, values);
       const bad = showMistakes || won ? analysis.bad : new Set();
-      const elapsed = session ? session.getElapsedMs() : 0;
-      const diffMeta = DIFFS.find((d) => d.id === puzzle.difficulty) || DIFFS[0];
-      const cellSize = computeCellSize();
-      const clueFs = Math.max(8, Math.floor(cellSize * 0.26));
+      const { runKeys, clueMeta } = highlightSets();
       const digitFs = Math.max(14, Math.floor(cellSize * 0.42));
       const pencilFs = Math.max(7, Math.floor(cellSize * 0.22));
+      const clueFs = Math.max(8, Math.floor(cellSize * 0.26));
 
+      root.querySelectorAll('.kk-cell--play').forEach((btn) => {
+        const r = +btn.dataset.r;
+        const c = +btn.dataset.c;
+        const key = r + ',' + c;
+        const isSel = selected && selected[0] === r && selected[1] === c;
+        btn.className =
+          'kk-cell kk-cell--play' +
+          (isSel ? ' is-selected' : '') +
+          (runKeys.has(key) ? ' is-run' : '') +
+          (bad.has(key) ? ' is-bad' : '') +
+          (won ? ' is-won' : '');
+        btn.style.fontSize = digitFs + 'px';
+        btn.innerHTML = cellInnerHtml(r, c, pencilFs);
+      });
+
+      root.querySelectorAll('.kk-cell--clue').forEach((el) => {
+        const r = +el.dataset.r;
+        const c = +el.dataset.c;
+        const key = r + ',' + c;
+        const meta = clueMeta.get(key);
+        el.classList.toggle('is-clue-hot', !!meta);
+        el.style.fontSize = clueFs + 'px';
+        const da = el.querySelector('.kk-clue-d');
+        const aa = el.querySelector('.kk-clue-a');
+        if (da) da.classList.toggle('is-hot', !!(meta && meta.down));
+        if (aa) aa.classList.toggle('is-hot', !!(meta && meta.across));
+      });
+
+      const statusEl = root.querySelector('#kkStatus');
+      if (statusEl) {
+        statusEl.className = 'kk-status' + (won ? ' kk-status--won' : '');
+        statusEl.textContent = statusForSelection();
+      }
+
+      const legal = selected ? legalDigits(selected[0], selected[1]) : null;
+      root.querySelectorAll('.kk-num').forEach((btn) => {
+        const n = +btn.dataset.n;
+        const ok = !selected || !legal || legal.has(n);
+        btn.disabled = !ok || won;
+        btn.classList.toggle('is-dim', !ok);
+      });
+
+      const pen = root.querySelector('#kkPencil');
+      if (pen) {
+        pen.classList.toggle('is-active', pencilMode);
+        pen.textContent = pencilMode ? 'Pencil on' : 'Pencil';
+      }
+      updateUndoButtons();
+    }
+
+    function paint() {
+      refreshPlay();
+    }
+
+    function buildShell() {
+      cellSize = computeCellSize();
+      const clueFs = Math.max(8, Math.floor(cellSize * 0.26));
       let gridHtml = '';
       for (let r = 0; r < rows; r++) {
         gridHtml += '<div class="kk-row">';
         for (let c = 0; c < cols; c++) {
           const cell = board[r][c];
-          const key = r + ',' + c;
           if (cell.kind === 'wall') {
             gridHtml += `<div class="kk-cell kk-cell--wall" style="width:${cellSize}px;height:${cellSize}px;"></div>`;
           } else if (cell.kind === 'clue') {
             const lab = clueLabel(cell);
-            gridHtml += `<div class="kk-cell kk-cell--clue" style="width:${cellSize}px;height:${cellSize}px;font-size:${clueFs}px;">
+            gridHtml += `<div class="kk-cell kk-cell--clue" data-r="${r}" data-c="${c}" style="width:${cellSize}px;height:${cellSize}px;font-size:${clueFs}px;">
               <svg width="100%" height="100%" viewBox="0 0 40 40" preserveAspectRatio="none" aria-hidden="true">
                 <line x1="0" y1="0" x2="40" y2="40" stroke="#5A5348" stroke-width="1"/>
               </svg>
@@ -1177,17 +1426,7 @@
               ${lab.a ? `<span class="kk-clue-a">${lab.a}</span>` : ''}
             </div>`;
           } else {
-            const v = values[r][c];
-            const marks = [...(pencil[r][c] || [])].sort((a, b) => a - b);
-            const isSel = selected && selected[0] === r && selected[1] === c;
-            const isBad = bad.has(key);
-            const markHtml =
-              !v && marks.length
-                ? `<span class="kk-pencil" style="font-size:${pencilFs}px;">${[1, 2, 3, 4, 5, 6, 7, 8, 9]
-                    .map((n) => `<i>${marks.includes(n) ? n : ''}</i>`)
-                    .join('')}</span>`
-                : '';
-            gridHtml += `<button type="button" data-r="${r}" data-c="${c}" class="kk-cell kk-cell--play${isSel ? ' is-selected' : ''}${isBad ? ' is-bad' : ''}${won ? ' is-won' : ''}" style="width:${cellSize}px;height:${cellSize}px;font-size:${digitFs}px;">${v || markHtml}</button>`;
+            gridHtml += `<button type="button" data-r="${r}" data-c="${c}" class="kk-cell kk-cell--play" style="width:${cellSize}px;height:${cellSize}px;"></button>`;
           }
         }
         gridHtml += '</div>';
@@ -1197,31 +1436,225 @@
         .map((n) => `<button type="button" data-n="${n}" class="kk-num game-tap-target">${n}</button>`)
         .join('');
 
+      const elapsed = session ? session.getElapsedMs() : 0;
       root.innerHTML = `
-        ${gameChromeHtml({ title: 'Ank Jod', subtitle: diffMeta.label, backId: 'kkBack', pauseId: 'kkPause', rightHtml: `<button id="kkNew" class="game-chrome-action">New</button>` })}
+        ${gameChromeHtml({
+          title: 'Ank Jod',
+          subtitle: diffMeta.label,
+          backId: 'kkBack',
+          pauseId: 'kkPause',
+          rightHtml: `<button type="button" id="kkNew" class="game-chrome-action">New</button>`,
+        })}
         <div id="kkTimer" class="game-turn game-turn--waiting">${formatTime(elapsed)}</div>
         <div class="kk-board-area">
-          <div id="kkStatus" class="kk-status${won ? ' kk-status--won' : ''}">${
-            won ? 'Puzzle solved!' : statusMsg || (pencilMode ? 'Pencil mode — tap digits for notes' : 'Tap a cell, then a digit')
-          }</div>
+          <div id="kkStatus" class="kk-status"></div>
           <div id="kkGrid" class="kk-grid">${gridHtml}</div>
         </div>
         <div class="kk-keypad">
           <div class="kk-num-row">${padBtns}</div>
           <div class="kk-action-row">
-            <button type="button" id="kkPencil" class="kk-action game-tap-target${pencilMode ? ' is-active' : ''}">${pencilMode ? 'Pencil on' : 'Pencil'}</button>
-            <button type="button" id="kkClear" class="kk-action game-tap-target">Clear</button>
+            <button type="button" id="kkPencil" class="kk-action game-tap-target">Pencil</button>
+            <button type="button" id="kkUndo" class="kk-action game-tap-target" disabled>Undo</button>
             <button type="button" id="kkErase" class="kk-action game-tap-target">Erase</button>
             <button type="button" id="kkCheck" class="kk-action kk-action--primary game-tap-target">Check</button>
           </div>
+          <div class="kk-action-row kk-action-row--secondary">
+            <button type="button" id="kkRedo" class="kk-action game-tap-target" disabled>Redo</button>
+            <button type="button" id="kkClear" class="kk-action game-tap-target">Clear all</button>
+          </div>
         </div>`;
 
-      wirePaintHandlers();
+      wireShellHandlers();
+    }
+
+    function wireShellHandlers() {
+      if (pauseCtrl) {
+        try {
+          pauseCtrl.destroy();
+        } catch (e) {}
+        pauseCtrl = null;
+      }
+      if (typeof createGamePauseController === 'function' && !won) {
+        pauseCtrl = createGamePauseController({
+          host: root,
+          pauseBtnId: 'kkPause',
+          onQuit: () => {
+            if (session) session.end(won ? 'won' : 'quit');
+          },
+        });
+      }
+
+      root.querySelector('#kkBack')?.addEventListener('click', () => {
+        if (won) {
+          if (session) session.end('won');
+          return;
+        }
+        const ask =
+          typeof confirmLeaveGame === 'function'
+            ? confirmLeaveGame({ title: 'Leave Ank Jod?', body: 'Puzzle progress will be lost.' })
+            : Promise.resolve(window.confirm('Leave Ank Jod?'));
+        Promise.resolve(ask).then((ok) => {
+          if (ok && session) session.end('quit');
+        });
+      });
+      root.querySelector('#kkNew')?.addEventListener('click', () => {
+        if (session) session.end('restart');
+        openDifficultyPicker(ctx);
+      });
+
+      root.querySelector('#kkGrid')?.addEventListener('click', (e) => {
+        const btn = e.target.closest?.('.kk-cell--play');
+        if (!btn || won) return;
+        selected = [+btn.dataset.r, +btn.dataset.c];
+        statusMsg = '';
+        if (typeof gameFeedback === 'function') gameFeedback('select');
+        refreshPlay();
+      });
+
+      root.querySelectorAll('.kk-num').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (btn.disabled) {
+            if (typeof gameFeedback === 'function') gameFeedback('invalid');
+            return;
+          }
+          placeDigit(+btn.dataset.n);
+        });
+      });
+
+      root.querySelector('#kkErase')?.addEventListener('click', eraseCell);
+      root.querySelector('#kkUndo')?.addEventListener('click', undo);
+      root.querySelector('#kkRedo')?.addEventListener('click', redo);
+      root.querySelector('#kkClear')?.addEventListener('click', () => {
+        if (won) return;
+        const ask =
+          typeof confirmLeaveGame === 'function'
+            ? confirmLeaveGame({ title: 'Clear all cells?', body: 'Every digit and pencil note on this board will be erased.' })
+            : Promise.resolve(window.confirm('Clear the entire board?'));
+        Promise.resolve(ask).then((ok) => {
+          if (!ok) return;
+          const before = [];
+          for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+              if (board[r][c].kind !== 'cell') continue;
+              if (values[r][c] || (pencil[r][c] && pencil[r][c].size)) before.push(snapCell(r, c));
+            }
+          }
+          if (before.length) pushHistory(before);
+          values = emptyValues(rows, cols);
+          pencil = Array.from({ length: rows }, () => Array.from({ length: cols }, () => new Set()));
+          showMistakes = false;
+          statusMsg = 'Board cleared';
+          refreshPlay();
+        });
+      });
+      root.querySelector('#kkPencil')?.addEventListener('click', () => {
+        pencilMode = !pencilMode;
+        statusMsg = pencilMode ? 'Pencil mode on' : 'Digit mode';
+        if (typeof gameFeedback === 'function') gameFeedback('select');
+        refreshPlay();
+      });
+      root.querySelector('#kkCheck')?.addEventListener('click', () => {
+        if (won) return;
+        const a = analyzeMistakes(board, values);
+        showMistakes = true;
+        if (a.won) finishWin();
+        else if (!a.allFilled) {
+          statusMsg = a.bad.size ? 'Some digits conflict — keep going' : 'Not finished yet';
+          refreshPlay();
+        } else {
+          statusMsg = 'Check the red cells — sums or repeats are off';
+          refreshPlay();
+        }
+      });
+    }
+
+    function advanceAfterPlace(r, c) {
+      const ids = runIdx[r][c] || [];
+      let across = null;
+      let down = null;
+      ids.forEach((i) => {
+        if (runs[i].dir === 'across') across = runs[i];
+        else down = runs[i];
+      });
+      const primary = across || down;
+      if (!primary) return;
+      const cells = primary.cells;
+      const idx = cells.findIndex(([rr, cc]) => rr === r && cc === c);
+      for (let i = idx + 1; i < cells.length; i++) {
+        const [rr, cc] = cells[i];
+        if (!values[rr][cc]) {
+          selected = [rr, cc];
+          return;
+        }
+      }
+      for (let i = 0; i < idx; i++) {
+        const [rr, cc] = cells[i];
+        if (!values[rr][cc]) {
+          selected = [rr, cc];
+          return;
+        }
+      }
+    }
+
+    function placeDigit(n) {
+      if (won || !selected) return;
+      const [r, c] = selected;
+      const legal = legalDigits(r, c);
+      if (!legal.has(n)) {
+        if (typeof gameFeedback === 'function') gameFeedback('invalid');
+        statusMsg = 'That digit can’t fit this run';
+        refreshPlay();
+        return;
+      }
+      if (pencilMode) {
+        captureSelectionMutations(() => {
+          values[r][c] = 0;
+          const set = pencil[r][c];
+          if (set.has(n)) set.delete(n);
+          else set.add(n);
+        });
+        showMistakes = false;
+        statusMsg = '';
+        if (typeof gameFeedback === 'function') gameFeedback('select');
+        refreshPlay();
+        return;
+      }
+      if (values[r][c] === n) {
+        // no-op overwrite
+        return;
+      }
+      captureSelectionMutations(() => {
+        values[r][c] = n;
+        pencil[r][c].clear();
+      });
+      showMistakes = false;
+      statusMsg = '';
+      if (typeof gameFeedback === 'function') gameFeedback('place');
+      const a = analyzeMistakes(board, values);
+      if (a.won) finishWin();
+      else {
+        advanceAfterPlace(r, c);
+        refreshPlay();
+      }
+    }
+
+    function eraseCell() {
+      if (won || !selected) return;
+      const [r, c] = selected;
+      if (!values[r][c] && !(pencil[r][c] && pencil[r][c].size)) return;
+      captureSelectionMutations(() => {
+        values[r][c] = 0;
+        pencil[r][c].clear();
+      });
+      showMistakes = false;
+      statusMsg = '';
+      if (typeof gameFeedback === 'function') gameFeedback('select');
+      refreshPlay();
     }
 
     function paintWinResult() {
+      shellBuilt = false;
       const elapsed = session ? session.getElapsedMs() : 0;
-      const diffMeta = DIFFS.find((d) => d.id === puzzle.difficulty) || DIFFS[0];
       const secs = Math.round(elapsed / 1000);
       if (typeof setGamePB === 'function') setGamePB('ankjod', secs);
       const vsBest = typeof formatVsBest === 'function' ? formatVsBest('ankjod', secs) : '';
@@ -1230,6 +1663,12 @@
         score: secs,
         meta: `${diffMeta.label}${vsBest ? ` · ${vsBest}` : ''}`,
       };
+      if (pauseCtrl) {
+        try {
+          pauseCtrl.destroy();
+        } catch (e) {}
+        pauseCtrl = null;
+      }
       root.innerHTML = `
         ${gameChromeHtml({ title: 'Ank Jod', subtitle: diffMeta.label, backId: 'kkBack' })}
         ${
@@ -1265,125 +1704,7 @@
             if (session) session.end('won');
           },
         });
-      } else {
-        const actions = root.querySelectorAll('[data-result-action]');
-        actions[0]?.addEventListener('click', () => {
-          if (session) session.end('restart');
-          openDifficultyPicker(ctx);
-        });
-        actions[1]?.addEventListener('click', () => {
-          if (session) session.end('won');
-        });
       }
-    }
-
-    function placeDigit(n) {
-      if (won || !selected) return;
-      const [r, c] = selected;
-      if (pencilMode) {
-        values[r][c] = 0;
-        const set = pencil[r][c];
-        if (set.has(n)) set.delete(n);
-        else set.add(n);
-        showMistakes = false;
-        statusMsg = '';
-        if (typeof gameFeedback === 'function') gameFeedback('select');
-        paint();
-        return;
-      }
-      values[r][c] = n;
-      pencil[r][c].clear();
-      showMistakes = false;
-      statusMsg = '';
-      if (typeof gameFeedback === 'function') gameFeedback('place');
-      const a = analyzeMistakes(board, values);
-      if (a.won) finishWin();
-      else paint();
-    }
-
-    function eraseCell() {
-      if (won || !selected) return;
-      const [r, c] = selected;
-      values[r][c] = 0;
-      pencil[r][c].clear();
-      showMistakes = false;
-      statusMsg = '';
-      paint();
-    }
-
-    let pauseCtrl = null;
-
-    function wirePaintHandlers() {
-      if (pauseCtrl) {
-        try {
-          pauseCtrl.destroy();
-        } catch (e) {}
-        pauseCtrl = null;
-      }
-      if (typeof createGamePauseController === 'function' && !won) {
-        pauseCtrl = createGamePauseController({
-          host: root,
-          pauseBtnId: 'kkPause',
-          onQuit: () => {
-            if (session) session.end(won ? 'won' : 'quit');
-          },
-        });
-      }
-      root.querySelector('#kkBack')?.addEventListener('click', () => {
-        if (won) {
-          if (session) session.end('won');
-          return;
-        }
-        const ask =
-          typeof confirmLeaveGame === 'function'
-            ? confirmLeaveGame({ title: 'Leave Ank Jod?', body: 'Puzzle progress will be lost.' })
-            : Promise.resolve(window.confirm('Leave Ank Jod?'));
-        Promise.resolve(ask).then((ok) => {
-          if (ok && session) session.end('quit');
-        });
-      });
-      root.querySelector('#kkNew')?.addEventListener('click', () => {
-        if (session) session.end('restart');
-        openDifficultyPicker(ctx);
-      });
-      root.querySelectorAll('.kk-cell--play').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          if (won) return;
-          selected = [+btn.getAttribute('data-r'), +btn.getAttribute('data-c')];
-          statusMsg = '';
-          paint();
-        });
-      });
-      root.querySelectorAll('.kk-num').forEach((btn) => {
-        btn.addEventListener('click', () => placeDigit(+btn.getAttribute('data-n')));
-      });
-      root.querySelector('#kkErase')?.addEventListener('click', eraseCell);
-      root.querySelector('#kkClear')?.addEventListener('click', () => {
-        if (won) return;
-        values = emptyValues(rows, cols);
-        pencil = Array.from({ length: rows }, () => Array.from({ length: cols }, () => new Set()));
-        showMistakes = false;
-        statusMsg = 'Board cleared';
-        paint();
-      });
-      root.querySelector('#kkPencil')?.addEventListener('click', () => {
-        pencilMode = !pencilMode;
-        statusMsg = pencilMode ? 'Pencil mode on' : 'Digit mode';
-        paint();
-      });
-      root.querySelector('#kkCheck')?.addEventListener('click', () => {
-        if (won) return;
-        const a = analyzeMistakes(board, values);
-        showMistakes = true;
-        if (a.won) finishWin();
-        else if (!a.allFilled) {
-          statusMsg = a.bad.size ? 'Some digits conflict — keep going' : 'Not finished yet';
-          paint();
-        } else {
-          statusMsg = 'Check the red cells — sums or repeats are off';
-          paint();
-        }
-      });
     }
 
     function finishWin() {
@@ -1392,7 +1713,7 @@
       winShown = true;
       showMistakes = false;
       statusMsg = 'Puzzle solved!';
-      paint();
+      paintWinResult();
       if (typeof gameFeedback === 'function') gameFeedback('win');
       if (typeof recordGameResult === 'function') {
         try {
@@ -1414,13 +1735,26 @@
 
     function onKey(e) {
       if (won) return;
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if (mod && (e.key === 'y' || e.key === 'Y')) {
+        e.preventDefault();
+        redo();
+        return;
+      }
       if (e.key >= '1' && e.key <= '9' && selected) {
         placeDigit(+e.key);
       } else if ((e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') && selected) {
         eraseCell();
       } else if (e.key === 'p' || e.key === 'P') {
         pencilMode = !pencilMode;
-        paint();
+        statusMsg = pencilMode ? 'Pencil mode on' : 'Digit mode';
+        refreshPlay();
       } else if (e.key === 'ArrowUp' && selected) {
         moveSel(-1, 0);
       } else if (e.key === 'ArrowDown' && selected) {
@@ -1442,7 +1776,9 @@
         if (c >= cols) c = 0;
         if (board[r][c].kind === 'cell') {
           selected = [r, c];
-          paint();
+          statusMsg = '';
+          if (typeof gameFeedback === 'function') gameFeedback('select');
+          refreshPlay();
           return;
         }
         r += dr;
@@ -1451,10 +1787,17 @@
     }
 
     if (typeof createGameSession !== 'function') {
-      // Fallback without runtime (should not happen in production)
       const device = document.querySelector('.device');
       if (device) device.appendChild(root);
       document.addEventListener('keydown', onKey);
+      outer: for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (board[r][c].kind === 'cell') {
+            selected = [r, c];
+            break outer;
+          }
+        }
+      }
       paint();
       root.querySelector('#kkBack')?.addEventListener('click', () => {
         document.removeEventListener('keydown', onKey);
@@ -1481,7 +1824,6 @@
       },
       init() {
         document.addEventListener('keydown', onKey);
-        // Select first white cell
         outer: for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
             if (board[r][c].kind === 'cell') {
@@ -1501,16 +1843,10 @@
       onAction(action) {
         if (!action) return;
         if (action.type === 'set' && selected) {
-          values[selected[0]][selected[1]] = action.n;
-          paint();
+          placeDigit(action.n);
         }
       },
-      end(result) {
-        // rating already recorded on win
-        if (result === 'won' && typeof recordGameResult === 'function') {
-          // idempotent-ish: recordGameResult may be called twice; dangal typically increments — only call once via finishWin
-        }
-      },
+      end() {},
       cleanup() {
         document.removeEventListener('keydown', onKey);
         if (timerId) {
@@ -1530,6 +1866,7 @@
 
     session.init();
   }
+
 
   function openAnkJod(ctx) {
     openDifficultyPicker(ctx || { source: 'unknown' });
