@@ -3938,6 +3938,95 @@ select:focus-visible,
 }
 .rw-sports-ball.is-live{opacity:1;left:62%;}
 .rw-sports-batter{position:absolute;right:18px;top:36%;font-size:32px;}
+
+/* Street Cricket delivery cinema (Prompt 1) — ball flight ↔ hit zone */
+.rw-sc-card h2{margin-top:0;}
+.rw-sc-pitch{
+  height:168px;border-radius:16px;margin:0 0 14px;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.12),transparent 28%),
+    linear-gradient(180deg,#7CB342 0%,#558B2F 55%,#33691E 100%);
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);
+  overflow:hidden;
+}
+.rw-sc-lane{
+  position:absolute;left:8%;right:8%;top:58%;height:10px;border-radius:6px;
+  background:linear-gradient(90deg,rgba(255,236,179,.55),rgba(255,224,130,.85),rgba(255,236,179,.55));
+  box-shadow:0 1px 0 rgba(0,0,0,.12);
+}
+.rw-sc-zone{
+  position:absolute;top:18%;bottom:18%;
+  left:calc(12% + (76% - 12%) * var(--sc-zone-start,0.4));
+  width:calc((76% - 12%) * (var(--sc-zone-end,0.68) - var(--sc-zone-start,0.4)));
+  border-radius:12px;
+  background:rgba(255,255,255,.08);
+  border:1px dashed rgba(255,255,255,.28);
+  opacity:.55;pointer-events:none;transition:background .12s,opacity .12s,border-color .12s;
+}
+.rw-sc-pitch.is-window .rw-sc-zone{
+  opacity:1;
+  background:rgba(129,199,132,.42);
+  border:2px solid rgba(232,245,233,.9);
+  box-shadow:0 0 0 1px rgba(46,125,50,.35),inset 0 0 12px rgba(200,230,201,.35);
+}
+.rw-sc-bowler{
+  position:absolute;left:10%;top:34%;width:28px;height:44px;
+  transition:transform var(--sc-runup-ms,420ms) cubic-bezier(.2,.8,.2,1);
+}
+.rw-sc-bowler-mark{
+  display:block;width:100%;height:100%;border-radius:10px 10px 6px 6px;
+  background:linear-gradient(180deg,#37474F,#263238);
+  position:relative;
+}
+.rw-sc-bowler-mark::before{
+  content:'';position:absolute;left:50%;top:6px;width:12px;height:12px;border-radius:50%;
+  background:#CFD8DC;transform:translateX(-50%);
+}
+.rw-sc-pitch.is-runup .rw-sc-bowler{transform:translateX(36px);}
+.rw-sc-ball{
+  position:absolute;left:12%;top:52%;width:16px;height:16px;margin-top:-8px;
+  border-radius:50%;background:#F5F5F5;border:2px solid #455A64;
+  box-shadow:inset -2px -2px 0 rgba(0,0,0,.12),0 2px 4px rgba(0,0,0,.2);
+  opacity:0;z-index:2;
+}
+.rw-sc-ball::after{
+  content:'';position:absolute;left:50%;top:2px;bottom:2px;width:2px;margin-left:-1px;
+  background:rgba(198,40,40,.75);border-radius:1px;
+}
+.rw-sc-pitch.is-flight .rw-sc-ball{
+  opacity:1;
+  animation:rw-sc-flight var(--sc-flight-ms,1000ms) linear forwards;
+}
+@keyframes rw-sc-flight{
+  0%{left:18%;top:48%;}
+  55%{top:44%;}
+  100%{left:76%;top:50%;}
+}
+.rw-sc-batter{
+  position:absolute;right:11%;top:30%;width:26px;height:48px;z-index:1;
+}
+.rw-sc-bat{
+  display:block;width:8px;height:36px;margin:8px auto 0;border-radius:3px;
+  background:linear-gradient(180deg,#FFE082,#F9A825);transform-origin:50% 90%;
+  box-shadow:0 1px 2px rgba(0,0,0,.2);
+}
+.rw-sc-pitch.is-window .rw-sc-bat{animation:rw-sc-ready .35s ease;}
+@keyframes rw-sc-ready{
+  0%,100%{transform:rotate(-8deg);}
+  50%{transform:rotate(6deg);}
+}
+.rw-sc-stumps{
+  position:absolute;right:7%;bottom:22%;width:16px;height:28px;
+  background:
+    linear-gradient(#ECEFF1,#ECEFF1) 0 0/3px 100% no-repeat,
+    linear-gradient(#ECEFF1,#ECEFF1) 6px 0/3px 100% no-repeat,
+    linear-gradient(#ECEFF1,#ECEFF1) 12px 0/3px 100% no-repeat,
+    linear-gradient(#FF8A65,#FF8A65) 0 0/16px 3px no-repeat;
+  opacity:.9;
+}
+.rw-sc-pitch.is-flight{box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);}
+.rw-sc-pitch.is-window{box-shadow:inset 0 0 0 3px rgba(46,125,50,.5);}
+
 .rw-sports-goal{
   position:relative;height:100px;margin:0 0 12px;border-radius:14px;
   background:linear-gradient(180deg,#a5d6a7,#66bb6a);overflow:hidden;

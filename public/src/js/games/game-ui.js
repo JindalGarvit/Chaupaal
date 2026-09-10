@@ -147,7 +147,11 @@
       'Pencil notes · Check finds conflicts · Hint teaches when stuck · long-press Pencil for auto-notes',
       'Continue mid-puzzle · best times per difficulty · Daily is one seeded board',
     ],
-    streetcricket: ['Tap Bowl, then Hit in the green window', 'Six balls · two wickets ends the over', 'Practice timing — full matches later'],
+    streetcricket: [
+      'Tap Bowl — watch the ball fly, Hit when it reaches the striking zone',
+      'Early / perfect / late timing decides the shot — six balls · two wickets',
+      'Practice over — fuller bowling bags and modes come later',
+    ],
     gullykick: ['Pick left, center, or right', 'Beat the keeper’s dive', 'Five kicks per shootout'],
     badminton: ['Serve, then smash in the timing window', 'Rallies get faster', 'First to 7'],
     tabletennis: ['Short window — stay early, not late', 'First to 11', 'Opponent misses if you keep returning'],
