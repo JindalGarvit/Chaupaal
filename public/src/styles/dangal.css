@@ -326,6 +326,21 @@
 .pc-tp-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
 .pc-tp .cs-hit--ghost{opacity:.85;background:transparent;border:1px solid rgba(255,215,0,.4);color:#FFD700;}
 .pc-tp-boot{opacity:.55;font-size:11px!important;}
+.pc-bluff-pile{
+  position:relative;width:72px;height:88px;margin:4px auto 2px;
+  display:flex;align-items:center;justify-content:center;
+}
+.pc-bluff-pile.is-empty{
+  border:1px dashed rgba(255,255,255,.28);border-radius:10px;
+  flex-direction:column;gap:2px;font-size:11px;opacity:.7;
+}
+.pc-bluff-pile b{
+  position:relative;z-index:6;font:800 18px var(--font-display,'Space Grotesk',sans-serif);
+  color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.55);
+}
+.pc-bluff-pile.is-empty b{position:static;text-shadow:none;font-size:16px;}
+.pc-bluff-layer{position:absolute;left:12px;top:10px;pointer-events:none;z-index:1;}
+.pc-bluff-claim{margin:0;font-size:14px;font-weight:700;text-align:center;color:#FFD600;}
 .pc-tp-bust{color:#FFD180;font-weight:700;}
 .pc-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
 .pc-sevens,.pc-ab-cols{display:flex;gap:12px;font-size:13px;}

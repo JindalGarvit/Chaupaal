@@ -176,7 +176,11 @@
       'Blind chaal = S, seen = 2S; side-show compares — loser packs',
       'Show when 2 remain and both seen · Live is 1v1 · not real money',
     ],
-    bluff: ['Select 1–3 cards and a claimed rank', 'Opponent may call', 'Three lives each'],
+    bluff: [
+      'Play 1–3 cards face-down onto a shared pile',
+      'Claim a rank — first play locks it until someone Calls',
+      'Call when you think they lied · three lives each',
+    ],
     sattepe: ['Play next to a seven chain', 'Empty your hand first', 'Sevens can always start a suit'],
     andarbaahar: ['Joker sets the rank', 'Pick Andar or Bahar', 'First matching rank wins the side'],
     patangbaazi: [
