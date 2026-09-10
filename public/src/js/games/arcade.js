@@ -604,7 +604,7 @@ function openTipTap(){
     fx:reduceMotion?380:650,
   };
 
-  let level=parseInt(localStorage.getItem('tiptap_level')||localStorage.getItem('candyburst_level')||'1',10)||1;
+  let level=1; // set from hub / continue
   let board=[],score=0,moves=0,targetScore=0,maxMoves=0;
   let selected=null,animating=false,gameOver=false;
   let combo=0,cascadeTimer=null,cascadeResume=null,fxLayer=null;
@@ -616,39 +616,58 @@ function openTipTap(){
   let goals=[];
   let goalProgress=[];
 
-  /** Prompt 2 sample curve (1–15); 16–100 stay score-formula for Prompt 3. */
-  const EARLY_LEVELS=[
-    {moves:26,goals:[{type:'score',amount:450}]},
-    {moves:24,goals:[{type:'score',amount:650}]},
-    {moves:24,goals:[{type:'score',amount:850}]},
-    {moves:28,goals:[{type:'collect',color:0,amount:12}]},
-    {moves:26,goals:[{type:'collect',color:2,amount:14}]},
-    {moves:26,goals:[{type:'collect',color:3,amount:15}]},
-    {moves:28,goals:[{type:'score',amount:900},{type:'collect',color:1,amount:10}]},
-    {moves:28,goals:[{type:'collect',color:4,amount:16}]},
-    {moves:26,goals:[{type:'score',amount:1100}]},
-    {moves:30,goals:[{type:'specials',kind:'line',amount:2}]},
-    {moves:28,goals:[{type:'specials',kind:'bomb',amount:1}]},
-    {moves:30,goals:[{type:'collect',color:0,amount:10},{type:'specials',kind:'line',amount:1}]},
-    {moves:28,goals:[{type:'score',amount:1200},{type:'collect',color:5,amount:12}]},
-    {moves:32,goals:[{type:'specials',kind:'bomb',amount:2}]},
-    {moves:30,goals:[{type:'specials',kind:'rainbow',amount:1},{type:'collect',color:2,amount:8}]},
-  ];
-  const LEVELS=Array.from({length:100},(_,i)=>{
-    if(i<EARLY_LEVELS.length){
-      const e=EARLY_LEVELS[i];
-      const scoreGoal=e.goals.find(g=>g.type==='score');
-      return {level:i+1,moves:e.moves,goals:e.goals.map(g=>({...g})),target:scoreGoal?scoreGoal.amount:0,board:ROWS};
-    }
-    const target=500*(i+1)+Math.floor(i/5)*1000;
-    return {
-      level:i+1,
-      moves:20+Math.floor(i/3)*2,
-      target,
-      goals:[{type:'score',amount:target}],
-      board:ROWS,
-    };
-  });
+  const ACT_LABELS = {
+    1: 'Act 1 · Basics',
+    2: 'Act 2 · Specials',
+    3: 'Act 3 · Dual goals',
+    4: 'Act 4 · Master',
+  };
+  function actOfLevel(n) {
+    if (n <= 20) return 1;
+    if (n <= 50) return 2;
+    if (n <= 80) return 3;
+    return 4;
+  }
+  function actLabel(n) {
+    return ACT_LABELS[actOfLevel(n)] || '';
+  }
+
+  /** Campaign: Acts 1–2 authored; Acts 3–4 templated rotations (Prompt 3). */
+  const LEVELS = [{"level":1,"moves":28,"goals":[{"type":"score","amount":400}],"target":400,"board":8},{"level":2,"moves":26,"goals":[{"type":"score","amount":550}],"target":550,"board":8},{"level":3,"moves":26,"goals":[{"type":"score","amount":700}],"target":700,"board":8},{"level":4,"moves":28,"goals":[{"type":"collect","color":0,"amount":10}],"target":0,"board":8},{"level":5,"moves":28,"goals":[{"type":"collect","color":2,"amount":12}],"target":0,"board":8},{"level":6,"moves":26,"goals":[{"type":"collect","color":3,"amount":12}],"target":0,"board":8},{"level":7,"moves":28,"goals":[{"type":"score","amount":800},{"type":"collect","color":1,"amount":8}],"target":800,"board":8},{"level":8,"moves":28,"goals":[{"type":"collect","color":4,"amount":14}],"target":0,"board":8},{"level":9,"moves":26,"goals":[{"type":"score","amount":1000}],"target":1000,"board":8},{"level":10,"moves":30,"goals":[{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":11,"moves":28,"goals":[{"type":"specials","kind":"line","amount":2}],"target":0,"board":8},{"level":12,"moves":28,"goals":[{"type":"specials","kind":"bomb","amount":1}],"target":0,"board":8},{"level":13,"moves":30,"goals":[{"type":"collect","color":0,"amount":10},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":14,"moves":28,"goals":[{"type":"score","amount":1100},{"type":"collect","color":5,"amount":10}],"target":1100,"board":8},{"level":15,"moves":30,"goals":[{"type":"specials","kind":"bomb","amount":1},{"type":"collect","color":2,"amount":8}],"target":0,"board":8},{"level":16,"moves":30,"goals":[{"type":"specials","kind":"rainbow","amount":1}],"target":0,"board":8},{"level":17,"moves":28,"goals":[{"type":"collect","color":1,"amount":16}],"target":0,"board":8},{"level":18,"moves":26,"goals":[{"type":"score","amount":1200}],"target":1200,"board":8},{"level":19,"moves":30,"goals":[{"type":"collect","color":3,"amount":12},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":20,"moves":28,"goals":[{"type":"score","amount":1000},{"type":"collect","color":0,"amount":8}],"target":1000,"board":8},{"level":21,"moves":28,"goals":[{"type":"collect","color":0,"amount":18}],"target":0,"board":8},{"level":22,"moves":28,"goals":[{"type":"collect","color":2,"amount":18}],"target":0,"board":8},{"level":23,"moves":26,"goals":[{"type":"specials","kind":"line","amount":2}],"target":0,"board":8},{"level":24,"moves":28,"goals":[{"type":"specials","kind":"bomb","amount":1}],"target":0,"board":8},{"level":25,"moves":28,"goals":[{"type":"score","amount":1400}],"target":1400,"board":8},{"level":26,"moves":30,"goals":[{"type":"collect","color":4,"amount":16},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":27,"moves":28,"goals":[{"type":"collect","color":5,"amount":20}],"target":0,"board":8},{"level":28,"moves":30,"goals":[{"type":"specials","kind":"bomb","amount":2}],"target":0,"board":8},{"level":29,"moves":26,"goals":[{"type":"score","amount":1600}],"target":1600,"board":8},{"level":30,"moves":30,"goals":[{"type":"collect","color":1,"amount":14},{"type":"specials","kind":"bomb","amount":1}],"target":0,"board":8},{"level":31,"moves":28,"goals":[{"type":"specials","kind":"rainbow","amount":1}],"target":0,"board":8},{"level":32,"moves":28,"goals":[{"type":"collect","color":3,"amount":22}],"target":0,"board":8},{"level":33,"moves":30,"goals":[{"type":"specials","kind":"line","amount":3}],"target":0,"board":8},{"level":34,"moves":28,"goals":[{"type":"score","amount":1500},{"type":"collect","color":2,"amount":12}],"target":1500,"board":8},{"level":35,"moves":30,"goals":[{"type":"collect","color":0,"amount":15},{"type":"specials","kind":"line","amount":2}],"target":0,"board":8},{"level":36,"moves":28,"goals":[{"type":"specials","kind":"bomb","amount":2}],"target":0,"board":8},{"level":37,"moves":26,"goals":[{"type":"collect","color":4,"amount":24}],"target":0,"board":8},{"level":38,"moves":30,"goals":[{"type":"specials","kind":"rainbow","amount":1},{"type":"collect","color":1,"amount":10}],"target":0,"board":8},{"level":39,"moves":28,"goals":[{"type":"score","amount":1800}],"target":1800,"board":8},{"level":40,"moves":30,"goals":[{"type":"collect","color":5,"amount":16},{"type":"specials","kind":"bomb","amount":1}],"target":0,"board":8},{"level":41,"moves":28,"goals":[{"type":"specials","kind":"line","amount":2},{"type":"collect","color":3,"amount":12}],"target":0,"board":8},{"level":42,"moves":26,"goals":[{"type":"score","amount":1700}],"target":1700,"board":8},{"level":43,"moves":30,"goals":[{"type":"specials","kind":"bomb","amount":2},{"type":"collect","color":0,"amount":10}],"target":0,"board":8},{"level":44,"moves":28,"goals":[{"type":"collect","color":2,"amount":20}],"target":0,"board":8},{"level":45,"moves":30,"goals":[{"type":"specials","kind":"rainbow","amount":1},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":46,"moves":28,"goals":[{"type":"score","amount":1900},{"type":"collect","color":4,"amount":10}],"target":1900,"board":8},{"level":47,"moves":30,"goals":[{"type":"collect","color":1,"amount":18},{"type":"specials","kind":"bomb","amount":1}],"target":0,"board":8},{"level":48,"moves":28,"goals":[{"type":"specials","kind":"line","amount":3}],"target":0,"board":8},{"level":49,"moves":30,"goals":[{"type":"collect","color":5,"amount":14},{"type":"specials","kind":"rainbow","amount":1}],"target":0,"board":8},{"level":50,"moves":28,"goals":[{"type":"score","amount":2000}],"target":2000,"board":8},{"level":51,"moves":32,"goals":[{"type":"score","amount":2000}],"target":2000,"board":8},{"level":52,"moves":32,"goals":[{"type":"collect","color":1,"amount":18},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":53,"moves":32,"goals":[{"type":"specials","kind":"bomb","amount":1},{"type":"collect","color":5,"amount":12}],"target":0,"board":8},{"level":54,"moves":32,"goals":[{"type":"score","amount":1980},{"type":"specials","kind":"line","amount":2}],"target":1980,"board":8},{"level":55,"moves":31,"goals":[{"type":"collect","color":4,"amount":14},{"type":"collect","color":1,"amount":10}],"target":0,"board":8},{"level":56,"moves":31,"goals":[{"type":"score","amount":2000},{"type":"collect","color":5,"amount":13}],"target":2000,"board":8},{"level":57,"moves":31,"goals":[{"type":"collect","color":0,"amount":21},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":58,"moves":31,"goals":[{"type":"score","amount":2280}],"target":2280,"board":8},{"level":59,"moves":30,"goals":[{"type":"score","amount":2280},{"type":"specials","kind":"line","amount":2}],"target":2280,"board":8},{"level":60,"moves":30,"goals":[{"type":"collect","color":3,"amount":14},{"type":"collect","color":0,"amount":10}],"target":0,"board":8},{"level":61,"moves":30,"goals":[{"type":"score","amount":2400},{"type":"collect","color":4,"amount":15}],"target":2400,"board":8},{"level":62,"moves":30,"goals":[{"type":"collect","color":5,"amount":23},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":63,"moves":29,"goals":[{"type":"specials","kind":"bomb","amount":1},{"type":"collect","color":3,"amount":12}],"target":0,"board":8},{"level":64,"moves":29,"goals":[{"type":"score","amount":2580},{"type":"specials","kind":"line","amount":2}],"target":2580,"board":8},{"level":65,"moves":29,"goals":[{"type":"score","amount":2560}],"target":2560,"board":8},{"level":66,"moves":29,"goals":[{"type":"score","amount":2800},{"type":"collect","color":3,"amount":17}],"target":2800,"board":8},{"level":67,"moves":28,"goals":[{"type":"collect","color":4,"amount":26},{"type":"specials","kind":"line","amount":2}],"target":0,"board":8},{"level":68,"moves":28,"goals":[{"type":"specials","kind":"bomb","amount":1},{"type":"collect","color":2,"amount":12}],"target":0,"board":8},{"level":69,"moves":28,"goals":[{"type":"score","amount":2880},{"type":"specials","kind":"line","amount":2}],"target":2880,"board":8},{"level":70,"moves":28,"goals":[{"type":"collect","color":1,"amount":14},{"type":"collect","color":4,"amount":10}],"target":0,"board":8},{"level":71,"moves":27,"goals":[{"type":"score","amount":3200},{"type":"collect","color":2,"amount":18}],"target":3200,"board":8},{"level":72,"moves":27,"goals":[{"type":"score","amount":2840}],"target":2840,"board":8},{"level":73,"moves":27,"goals":[{"type":"specials","kind":"bomb","amount":1},{"type":"collect","color":1,"amount":12}],"target":0,"board":8},{"level":74,"moves":27,"goals":[{"type":"score","amount":3180},{"type":"specials","kind":"line","amount":2}],"target":3180,"board":8},{"level":75,"moves":26,"goals":[{"type":"collect","color":0,"amount":14},{"type":"collect","color":3,"amount":10}],"target":0,"board":8},{"level":76,"moves":26,"goals":[{"type":"score","amount":3600},{"type":"collect","color":1,"amount":20}],"target":3600,"board":8},{"level":77,"moves":26,"goals":[{"type":"collect","color":2,"amount":31},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":78,"moves":26,"goals":[{"type":"specials","kind":"bomb","amount":1},{"type":"collect","color":0,"amount":12}],"target":0,"board":8},{"level":79,"moves":25,"goals":[{"type":"score","amount":3120}],"target":3120,"board":8},{"level":80,"moves":25,"goals":[{"type":"collect","color":5,"amount":14},{"type":"collect","color":2,"amount":10}],"target":0,"board":8},{"level":81,"moves":28,"goals":[{"type":"score","amount":2400},{"type":"collect","color":0,"amount":14},{"type":"specials","kind":"line","amount":1}],"target":2400,"board":8},{"level":82,"moves":28,"goals":[{"type":"collect","color":1,"amount":16},{"type":"specials","kind":"bomb","amount":2}],"target":0,"board":8},{"level":83,"moves":28,"goals":[{"type":"specials","kind":"rainbow","amount":1},{"type":"collect","color":4,"amount":12},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":84,"moves":27,"goals":[{"type":"score","amount":2840},{"type":"collect","color":3,"amount":12},{"type":"collect","color":5,"amount":10}],"target":2840,"board":8},{"level":85,"moves":27,"goals":[{"type":"score","amount":2800},{"type":"collect","color":4,"amount":14},{"type":"specials","kind":"line","amount":1}],"target":2800,"board":8},{"level":86,"moves":27,"goals":[{"type":"collect","color":5,"amount":16},{"type":"specials","kind":"bomb","amount":2}],"target":0,"board":8},{"level":87,"moves":26,"goals":[{"type":"specials","kind":"rainbow","amount":1},{"type":"collect","color":2,"amount":12},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":88,"moves":26,"goals":[{"type":"score","amount":3160},{"type":"collect","color":1,"amount":12},{"type":"collect","color":3,"amount":10}],"target":3160,"board":8},{"level":89,"moves":26,"goals":[{"type":"score","amount":3200},{"type":"collect","color":2,"amount":14},{"type":"specials","kind":"line","amount":1}],"target":3200,"board":8},{"level":90,"moves":25,"goals":[{"type":"score","amount":2650}],"target":2650,"board":8},{"level":91,"moves":25,"goals":[{"type":"specials","kind":"rainbow","amount":1},{"type":"collect","color":0,"amount":12},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":92,"moves":25,"goals":[{"type":"score","amount":3480},{"type":"collect","color":5,"amount":12},{"type":"collect","color":1,"amount":10}],"target":3480,"board":8},{"level":93,"moves":24,"goals":[{"type":"score","amount":3600},{"type":"collect","color":0,"amount":14},{"type":"specials","kind":"line","amount":1}],"target":3600,"board":8},{"level":94,"moves":24,"goals":[{"type":"collect","color":1,"amount":16},{"type":"specials","kind":"bomb","amount":2}],"target":0,"board":8},{"level":95,"moves":24,"goals":[{"type":"specials","kind":"rainbow","amount":1},{"type":"collect","color":4,"amount":12},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":96,"moves":24,"goals":[{"type":"score","amount":3800},{"type":"collect","color":3,"amount":12},{"type":"collect","color":5,"amount":10}],"target":3800,"board":8},{"level":97,"moves":24,"goals":[{"type":"score","amount":4000},{"type":"collect","color":4,"amount":14},{"type":"specials","kind":"line","amount":1}],"target":4000,"board":8},{"level":98,"moves":24,"goals":[{"type":"collect","color":5,"amount":16},{"type":"specials","kind":"bomb","amount":2}],"target":0,"board":8},{"level":99,"moves":24,"goals":[{"type":"specials","kind":"rainbow","amount":1},{"type":"collect","color":2,"amount":12},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":100,"moves":26,"goals":[{"type":"score","amount":2800},{"type":"collect","color":0,"amount":10}],"target":2800,"board":8}].map((cfg) => ({
+    level: cfg.level,
+    moves: cfg.moves,
+    goals: (cfg.goals || []).map((g) => ({ ...g })),
+    target: cfg.target || 0,
+    board: cfg.board || ROWS,
+    act: actOfLevel(cfg.level),
+  }));
+
+  const SAVE_NEXT = 'tiptap_level';
+  const SAVE_BEST_LVL = 'tiptap_best_level';
+  const SAVE_LEGACY = 'candyburst_level';
+
+  function readNextLevel() {
+    let n = parseInt(localStorage.getItem(SAVE_NEXT) || localStorage.getItem(SAVE_LEGACY) || '1', 10) || 1;
+    if (n < 1) n = 1;
+    if (n > LEVELS.length) n = LEVELS.length;
+    return n;
+  }
+  function readBestCleared() {
+    return Math.max(0, parseInt(localStorage.getItem(SAVE_BEST_LVL) || '0', 10) || 0);
+  }
+  function persistUnlock(clearedLevel) {
+    try {
+      const nextWanted = Math.min(LEVELS.length + 1, clearedLevel + 1);
+      const stored = parseInt(localStorage.getItem(SAVE_NEXT) || localStorage.getItem(SAVE_LEGACY) || '1', 10) || 1;
+      const next = Math.max(stored, nextWanted);
+      localStorage.setItem(SAVE_NEXT, String(Math.min(next, LEVELS.length + 1)));
+      const prevBest = readBestCleared();
+      if (clearedLevel > prevBest) localStorage.setItem(SAVE_BEST_LVL, String(clearedLevel));
+    } catch (e) {}
+  }
+  function canPlayLevel(n) {
+    return n >= 1 && n <= readNextLevel() && n <= LEVELS.length;
+  }
 
   const overlay=document.createElement('div');
   overlay.style.cssText='position:absolute;inset:0;z-index:80;display:flex;flex-direction:column;';
@@ -1070,7 +1089,8 @@ function openTipTap(){
   function startLevel(lvl){
     if(!alive())return;
     clearCascadeTimers();
-    const cfg=LEVELS[Math.min(lvl-1,LEVELS.length-1)];
+    level=Math.min(Math.max(1,lvl|0),LEVELS.length);
+    const cfg=LEVELS[level-1];
     goals=(cfg.goals||[{type:'score',amount:cfg.target||500}]).map(g=>({...g}));
     goalProgress=goals.map(()=>0);
     const scoreGoal=goals.find(g=>g.type==='score');
@@ -1078,8 +1098,18 @@ function openTipTap(){
     maxMoves=cfg.moves;moves=cfg.moves;score=0;combo=0;
     gameOver=false;selected=null;animating=false;hintPair=null;lastSwapCell=null;
     ensurePlayableStart();
+    const hub=document.getElementById('ttHub');
+    if(hub)hub.hidden=true;
+    const play=document.getElementById('ttPlay');
+    if(play)play.hidden=false;
+    const pick=document.getElementById('ttPicker');
+    if(pick)pick.hidden=true;
     const sub=document.getElementById('cbSub');
-    if(sub)sub.textContent='Level '+level;
+    if(sub)sub.textContent='Level '+level+' · '+actLabel(level);
+    const pauseBtn=document.getElementById('cbPause');
+    if(pauseBtn)pauseBtn.style.visibility='';
+    const hintBtn=document.getElementById('cbHint');
+    if(hintBtn)hintBtn.style.visibility='';
     updateGoalsHud();
     updateComboHud();
     render({fresh:true});
@@ -1384,101 +1414,185 @@ function openTipTap(){
     }).filter(Boolean).join(' · ');
   }
 
+  function goalsChecklistHtml(){
+    return '<ul class="tt-goals-check">' + goals.map((g, i) => {
+      const cur = goalProgress[i] || 0;
+      const ok = cur >= g.amount;
+      let label = '';
+      if (g.type === 'score') label = 'Score ' + cur.toLocaleString() + '/' + g.amount.toLocaleString();
+      else if (g.type === 'collect') label = ((PALETTE[g.color] || {}).name || 'Gem') + ' ' + cur + '/' + g.amount;
+      else if (g.type === 'specials') label = (g.kind === 'line' ? 'Lines' : g.kind === 'bomb' ? 'Bombs' : 'Prisms') + ' ' + cur + '/' + g.amount;
+      return '<li class="' + (ok ? 'is-done' : 'is-miss') + '">' + (ok ? '✓ ' : '· ') + label + '</li>';
+    }).join('') + '</ul>';
+  }
+
+  function hideResult(){
+    const div = document.getElementById('cbOverlay');
+    if (div) { div.style.display = 'none'; div.innerHTML = ''; }
+  }
+
+  function shareHandlers(shareStats){
+    return {
+      share: () => { if (typeof shareGameResult === 'function') shareGameResult('tiptap', shareStats); },
+      challenge: async () => {
+        if (typeof openFriendPickerSheet === 'function') {
+          const f = await openFriendPickerSheet({ title: 'Challenge · Tip Tap' });
+          if (f && typeof openFriendShareFollowup === 'function') {
+            await openFriendShareFollowup(f, 'tiptap', { ...shareStats, friendText: 'Hey ' + f.name + ' — beat my Tip Tap score!' });
+          } else if (f && typeof shareGameResult === 'function') {
+            shareGameResult('tiptap', { ...shareStats, text: 'Hey ' + f.name + ' — beat my Tip Tap score!' });
+          } else if (typeof shareGameResult === 'function') shareGameResult('tiptap', shareStats);
+        } else if (typeof shareGameResult === 'function') shareGameResult('tiptap', shareStats);
+      },
+      story: () => { if (typeof postGameScoreStory === 'function') postGameScoreStory('tiptap', { ...shareStats, score }); },
+    };
+  }
+
   function showLevelComplete(){
-    gameOver=true;
-    animating=false;
+    gameOver = true;
+    animating = false;
     clearCascadeTimers();
-    localStorage.setItem('tiptap_level',String(level+1));
-    if(typeof setGamePB==='function') setGamePB('tiptap', score);
-    const vsBest=typeof formatVsBest==='function'?formatVsBest('tiptap', score):'';
-    if(gs)gs.setOutcome('won');
-    if(typeof recordGameResult==='function')recordGameResult('tiptap',true,false,{score});
+    persistUnlock(level);
+    const prevPb = typeof getGamePB === 'function' ? getGamePB('tiptap') : null;
+    const vsBestRaw = typeof formatVsBest === 'function' ? formatVsBest('tiptap', score) : '';
+    const isNewBest = score > 0 && (prevPb == null || score > prevPb);
+    if (typeof setGamePB === 'function') setGamePB('tiptap', score);
+    const vsBest = isNewBest
+      ? ('New best · ' + score.toLocaleString() + ' pts' + (prevPb != null ? ' (was ' + prevPb.toLocaleString() + ')' : ''))
+      : vsBestRaw;
+    if (gs) gs.setOutcome('won');
+    if (typeof recordGameResult === 'function') {
+      recordGameResult('tiptap', true, false, { score, level, goals: goalSummaryLine(), scoreOnly: true });
+    }
     buzz('complete');
-    const div=document.getElementById('cbOverlay');if(!div)return;div.style.display='flex';
-    const shareStats={scoreLine:score.toLocaleString(),score,meta:`Level ${level} · ${vsBest||''}`,text:`Cleared Tip Tap level ${level} with ${score.toLocaleString()} on Chaupaal!`};
-    const shareCard=typeof buildGameShareCard==='function'?buildGameShareCard('tiptap',shareStats):'';
-    const actions=[{label:`Level ${level+1}`,primary:true,id:'again'}];
-    if(typeof shareGameResult==='function')actions.push({label:'Share',primary:false,id:'share'});
-    if(typeof openFriendPickerSheet==='function')actions.push({label:'Challenge friend',primary:false,id:'challenge'});
-    if(typeof postGameScoreStory==='function')actions.push({label:'Post to story',primary:false,id:'story'});
-    div.innerHTML=`
-      ${typeof gameResultHtml==='function'?gameResultHtml({
-        gameId:'tiptap',
-        glyph:'✓',
-        title:`Level ${level} complete`,
-        subtitle:`Score ${score.toLocaleString()} · ${goalSummaryLine()}`,
-        vsBest:vsBest||undefined,
-        shareCardHtml:shareCard,
-        actions,
-      }):`<div><button type="button" id="cbNext">Next</button></div>`}
-    `;
-    if(typeof wireGameResultActions==='function'){
-      wireGameResultActions(div,{
-        again:()=>{level++;startLevel(level);document.getElementById('cbOverlay').style.display='none';},
-        share:()=>{if(typeof shareGameResult==='function')shareGameResult('tiptap',shareStats);},
-        challenge:async()=>{
-          if(typeof openFriendPickerSheet==='function'){
-            const f=await openFriendPickerSheet({title:'Challenge · Tip Tap'});
-            if(f&&typeof openFriendShareFollowup==='function'){
-              await openFriendShareFollowup(f,'tiptap',{...shareStats,friendText:`Hey ${f.name} — beat my Tip Tap score!`});
-            } else if(f&&typeof shareGameResult==='function'){
-              shareGameResult('tiptap',{...shareStats,text:`Hey ${f.name} — beat my Tip Tap score!`});
-            } else if(typeof shareGameResult==='function') shareGameResult('tiptap',shareStats);
-          } else if(typeof shareGameResult==='function') shareGameResult('tiptap',shareStats);
+    if (isNewBest) toast('New best · ' + score.toLocaleString() + ' pts');
+    const div = document.getElementById('cbOverlay');
+    if (!div) return;
+    div.style.display = 'flex';
+    const nextExists = level < LEVELS.length;
+    const shareStats = {
+      scoreLine: score.toLocaleString() + ' pts',
+      score,
+      meta: 'Level ' + level + ' cleared · ' + (vsBest || ''),
+      text: 'Cleared Tip Tap level ' + level + ' with ' + score.toLocaleString() + ' on Chaupaal!',
+    };
+    const shareCard = typeof buildGameShareCard === 'function' ? buildGameShareCard('tiptap', shareStats) : '';
+    const actions = [];
+    if (nextExists) actions.push({ label: 'Next level', primary: true, id: 'again' });
+    else actions.push({ label: 'Campaign complete', primary: true, id: 'hub' });
+    actions.push({ label: 'Replay', primary: false, id: 'replay' });
+    actions.push({ label: 'Levels', primary: false, id: 'levels' });
+    if (typeof shareGameResult === 'function') actions.push({ label: 'Share', primary: false, id: 'share' });
+    if (typeof openFriendPickerSheet === 'function') actions.push({ label: 'Challenge friend', primary: false, id: 'challenge' });
+    if (typeof postGameScoreStory === 'function') actions.push({ label: 'Post to story', primary: false, id: 'story' });
+    const subBits = [
+      'Score ' + score.toLocaleString(),
+      moves + ' moves left',
+      goalSummaryLine(),
+    ].filter(Boolean).join(' · ');
+    div.innerHTML =
+      (typeof gameResultHtml === 'function'
+        ? gameResultHtml({
+            gameId: 'tiptap',
+            glyph: '✓',
+            title: 'Level ' + level + ' complete',
+            subtitle: subBits,
+            vsBest: vsBest || undefined,
+            shareCardHtml: shareCard + (isNewBest ? '<div class="tt-new-best" role="status">New personal best</div>' : '') + goalsChecklistHtml(),
+            actions,
+            hideStats: false,
+          })
+        : '<div><button type="button" id="cbNext">Next</button></div>');
+    const sh = shareHandlers(shareStats);
+    if (typeof wireGameResultActions === 'function') {
+      wireGameResultActions(div, {
+        ...sh,
+        again: () => {
+          hideResult();
+          if (nextExists) startLevel(level + 1);
+          else showHub();
         },
-        story:()=>{if(typeof postGameScoreStory==='function')postGameScoreStory('tiptap',{...shareStats,score});},
+        hub: () => { hideResult(); showHub(); },
+        replay: () => { hideResult(); startLevel(level); },
+        levels: () => { hideResult(); openLevelPicker(); },
       });
     } else {
-      (div.querySelector('[data-result-action]')||document.getElementById('cbNext'))?.addEventListener('click',()=>{
-        level++;startLevel(level);document.getElementById('cbOverlay').style.display='none';
+      (div.querySelector('[data-result-action]') || document.getElementById('cbNext'))?.addEventListener('click', () => {
+        hideResult();
+        if (nextExists) startLevel(level + 1);
+        else showHub();
       });
     }
   }
 
   function showGameOver(){
-    gameOver=true;
-    animating=false;
+    gameOver = true;
+    animating = false;
     clearCascadeTimers();
-    if(typeof setGamePB==='function') setGamePB('tiptap', score);
-    const vsBest=typeof formatVsBest==='function'?formatVsBest('tiptap', score):'';
-    if(gs)gs.setOutcome('lost');
-    if(typeof recordGameResult==='function')recordGameResult('tiptap',false,false,{score});
+    const prevPb = typeof getGamePB === 'function' ? getGamePB('tiptap') : null;
+    const vsBestRaw = typeof formatVsBest === 'function' ? formatVsBest('tiptap', score) : '';
+    const isNewBest = score > 0 && (prevPb == null || score > prevPb);
+    if (typeof setGamePB === 'function') setGamePB('tiptap', score);
+    const vsBest = isNewBest
+      ? ('New best · ' + score.toLocaleString() + ' pts' + (prevPb != null ? ' (was ' + prevPb.toLocaleString() + ')' : ''))
+      : vsBestRaw;
+    if (gs) gs.setOutcome('lost');
+    if (typeof recordGameResult === 'function') {
+      recordGameResult('tiptap', false, false, { score, level, goals: goalSummaryLine(), scoreOnly: true });
+    }
     buzz('lose');
-    const div=document.getElementById('cbOverlay');if(!div)return;div.style.display='flex';
-    const shareStats={scoreLine:score.toLocaleString(),score,meta:`Level ${level} · ${vsBest||''}`,text:`Scored ${score.toLocaleString()} on Tip Tap (Chaupaal). Can you beat me?`};
-    const shareCard=typeof buildGameShareCard==='function'?buildGameShareCard('tiptap',shareStats):'';
-    const actions=[{label:'Play again',primary:true,id:'again'}];
-    if(typeof shareGameResult==='function')actions.push({label:'Share',primary:false,id:'share'});
-    if(typeof openFriendPickerSheet==='function')actions.push({label:'Challenge friend',primary:false,id:'challenge'});
-    if(typeof postGameScoreStory==='function')actions.push({label:'Post to story',primary:false,id:'story'});
-    div.innerHTML=`
-      ${typeof gameResultHtml==='function'?gameResultHtml({
-        gameId:'tiptap',
-        glyph:'·',
-        title:'Out of moves',
-        subtitle:`${goalSummaryLine()} · Level ${level}`,
-        vsBest:vsBest||undefined,
-        shareCardHtml:shareCard,
-        actions,
-      }):`<div><button type="button" id="cbRetry">Retry</button></div>`}
-    `;
-    if(typeof wireGameResultActions==='function'){
-      wireGameResultActions(div,{
-        again:()=>{startLevel(level);document.getElementById('cbOverlay').style.display='none';},
-        share:()=>{if(typeof shareGameResult==='function')shareGameResult('tiptap',shareStats);},
-        challenge:async()=>{
-          if(typeof openFriendPickerSheet==='function'){
-            const f=await openFriendPickerSheet({title:'Challenge · Tip Tap'});
-            if(f&&typeof openFriendShareFollowup==='function'){
-              await openFriendShareFollowup(f,'tiptap',{...shareStats,friendText:`Hey ${f.name} — beat my Tip Tap score!`});
-            } else if(f&&typeof shareGameResult==='function') shareGameResult('tiptap',{...shareStats,text:`Hey ${f.name} — beat my Tip Tap score!`});
-          } else if(typeof shareGameResult==='function') shareGameResult('tiptap',shareStats);
-        },
-        story:()=>{if(typeof postGameScoreStory==='function')postGameScoreStory('tiptap',{...shareStats,score});},
+    if (isNewBest) toast('New best · ' + score.toLocaleString() + ' pts');
+    const div = document.getElementById('cbOverlay');
+    if (!div) return;
+    div.style.display = 'flex';
+    const unmet = goals
+      .map((g, i) => {
+        const cur = goalProgress[i] || 0;
+        if (cur >= g.amount) return null;
+        if (g.type === 'score') return 'Score ' + cur + '/' + g.amount;
+        if (g.type === 'collect') return ((PALETTE[g.color] || {}).name || 'Gem') + ' ' + cur + '/' + g.amount;
+        if (g.type === 'specials') return g.kind + ' ' + cur + '/' + g.amount;
+        return null;
+      })
+      .filter(Boolean)
+      .join(', ');
+    const shareStats = {
+      scoreLine: score.toLocaleString() + ' pts',
+      score,
+      meta: 'Level ' + level + ' attempt · ' + (vsBest || ''),
+      text: 'Tried Tip Tap level ' + level + ' — scored ' + score.toLocaleString() + ' on Chaupaal. Can you clear it?',
+    };
+    const shareCard = typeof buildGameShareCard === 'function' ? buildGameShareCard('tiptap', shareStats) : '';
+    const actions = [
+      { label: 'Retry', primary: true, id: 'again' },
+      { label: 'Levels', primary: false, id: 'levels' },
+    ];
+    if (typeof shareGameResult === 'function') actions.push({ label: 'Share', primary: false, id: 'share' });
+    if (typeof openFriendPickerSheet === 'function') actions.push({ label: 'Challenge friend', primary: false, id: 'challenge' });
+    if (typeof postGameScoreStory === 'function') actions.push({ label: 'Post to story', primary: false, id: 'story' });
+    div.innerHTML =
+      (typeof gameResultHtml === 'function'
+        ? gameResultHtml({
+            gameId: 'tiptap',
+            glyph: '·',
+            title: 'Out of moves',
+            subtitle: (unmet ? 'Still need: ' + unmet : goalSummaryLine()) + ' · Level ' + level,
+            vsBest: vsBest || undefined,
+            shareCardHtml: shareCard + (isNewBest ? '<div class="tt-new-best" role="status">New personal best</div>' : '') + goalsChecklistHtml(),
+            actions,
+          })
+        : '<div><button type="button" id="cbRetry">Retry</button></div>');
+    const sh = shareHandlers(shareStats);
+    if (typeof wireGameResultActions === 'function') {
+      wireGameResultActions(div, {
+        ...sh,
+        again: () => { hideResult(); startLevel(level); },
+        levels: () => { hideResult(); openLevelPicker(); },
       });
     } else {
-      (div.querySelector('[data-result-action]')||document.getElementById('cbRetry'))?.addEventListener('click',()=>{
-        startLevel(level);document.getElementById('cbOverlay').style.display='none';
+      (div.querySelector('[data-result-action]') || document.getElementById('cbRetry'))?.addEventListener('click', () => {
+        hideResult();
+        startLevel(level);
       });
     }
   }
@@ -1549,89 +1663,248 @@ function openTipTap(){
     if(sample)cellSize=sample.getBoundingClientRect().height||40;
   }
 
-  const lvl0=LEVELS[Math.min(level-1,99)];
-  overlay.innerHTML=`
-    ${gameChromeHtml({title:'Tip Tap',subtitle:`Level ${level}`,backId:'cbBack',pauseId:'cbPause',rightHtml:'<button type="button" id="cbHint" class="game-chrome-action game-tap-target" aria-label="Hint">Hint</button><span class="game-chrome-metric" id="cbScore">0</span>'})}
-    <div class="tt-meter">
-      <div class="tt-meter-row">
-        <span>Moves: <strong id="cbMoves">${lvl0.moves}</strong></span>
-        <span id="cbCombo" class="tt-combo" hidden></span>
-      </div>
-      <div id="cbGoals" class="tt-goals" aria-live="polite"></div>
-      <div id="cbProgressTrack" class="tt-meter-track"><div id="cbProgress" class="tt-meter-fill"></div></div>
+  function showHub(){
+    gameOver = true;
+    animating = false;
+    clearCascadeTimers();
+    hideResult();
+    const hub = document.getElementById('ttHub');
+    const play = document.getElementById('ttPlay');
+    const pick = document.getElementById('ttPicker');
+    if (play) play.hidden = true;
+    if (pick) pick.hidden = true;
+    if (hub) hub.hidden = false;
+    const cont = readNextLevel();
+    const bestLvl = readBestCleared();
+    const pb = typeof getGamePB === 'function' ? getGamePB('tiptap') : null;
+    const sub = document.getElementById('cbSub');
+    if (sub) sub.textContent = 'Campaign · 100 levels';
+    const pauseBtn = document.getElementById('cbPause');
+    if (pauseBtn) pauseBtn.style.visibility = 'hidden';
+    const hintBtn = document.getElementById('cbHint');
+    if (hintBtn) hintBtn.style.visibility = 'hidden';
+    const contBtn = document.getElementById('ttContinue');
+    if (contBtn) {
+      contBtn.textContent = bestLvl >= LEVELS.length ? 'Replay level ' + LEVELS.length : 'Continue · Level ' + cont;
+    }
+    const meta = document.getElementById('ttHubMeta');
+    if (meta) {
+      meta.textContent =
+        (pb != null ? 'Best ' + Number(pb).toLocaleString() + ' pts' : 'No PB yet') +
+        (bestLvl ? ' · Cleared Lv ' + bestLvl : '') +
+        ' · ' + actLabel(cont);
+    }
+  }
+
+  function openLevelPicker(){
+    const hub = document.getElementById('ttHub');
+    const play = document.getElementById('ttPlay');
+    const pick = document.getElementById('ttPicker');
+    if (hub) hub.hidden = true;
+    if (play) play.hidden = true;
+    if (!pick) return;
+    pick.hidden = false;
+    hideResult();
+    const unlocked = readNextLevel();
+    const bestLvl = readBestCleared();
+    const grid = document.getElementById('ttPickerGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    for (let n = 1; n <= LEVELS.length; n++) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      const locked = n > unlocked;
+      const cleared = n <= bestLvl || n < unlocked;
+      const current = n === unlocked && bestLvl < n;
+      btn.className =
+        'tt-pick-cell game-tap-target' +
+        (locked ? ' is-locked' : '') +
+        (cleared ? ' is-cleared' : '') +
+        (current ? ' is-current' : '');
+      btn.textContent = locked ? '·' : String(n);
+      btn.disabled = locked;
+      btn.setAttribute('aria-label', locked ? 'Level ' + n + ' locked' : 'Level ' + n);
+      if (!locked) {
+        btn.addEventListener('click', () => {
+          pick.hidden = true;
+          startLevel(n);
+        });
+      }
+      grid.appendChild(btn);
+    }
+    const sub = document.getElementById('cbSub');
+    if (sub) sub.textContent = 'Choose a level';
+  }
+
+  overlay.innerHTML = `
+    ${gameChromeHtml({
+      title: 'Tip Tap',
+      subtitle: 'Campaign · 100 levels',
+      backId: 'cbBack',
+      pauseId: 'cbPause',
+      rightHtml:
+        '<button type="button" id="cbLevels" class="game-chrome-action game-tap-target" aria-label="Levels">Levels</button>' +
+        '<button type="button" id="cbHint" class="game-chrome-action game-tap-target" aria-label="Hint" style="visibility:hidden">Hint</button>' +
+        '<span class="game-chrome-metric" id="cbScore">0</span>',
+    })}
+    <div id="ttHub" class="tt-hub">
+      <div class="tt-hub-title">Tip Tap</div>
+      <div class="tt-hub-sub">Solo match-3 · 100 levels · no Live</div>
+      <div id="ttHubMeta" class="tt-hub-meta"></div>
+      <button type="button" id="ttContinue" class="tt-hub-cta game-tap-target">Continue</button>
+      <button type="button" id="ttOpenLevels" class="tt-hub-secondary game-tap-target">Level select</button>
     </div>
-    <div class="tt-board-wrap">
-      <div id="cbGrid" class="tt-grid" style="grid-template-columns:repeat(${COLS},1fr)"></div>
-      <div id="cbFx" class="tt-fx-layer" aria-hidden="true"></div>
+    <div id="ttPicker" class="tt-picker" hidden>
+      <div class="tt-picker-head">Levels</div>
+      <div id="ttPickerGrid" class="tt-picker-grid"></div>
+      <button type="button" id="ttPickerBack" class="tt-hub-secondary game-tap-target">Back</button>
+    </div>
+    <div id="ttPlay" class="tt-play" hidden>
+      <div class="tt-meter">
+        <div class="tt-meter-row">
+          <span>Moves: <strong id="cbMoves">0</strong></span>
+          <span id="cbCombo" class="tt-combo" hidden></span>
+        </div>
+        <div id="cbGoals" class="tt-goals" aria-live="polite"></div>
+        <div id="cbProgressTrack" class="tt-meter-track"><div id="cbProgress" class="tt-meter-fill"></div></div>
+      </div>
+      <div class="tt-board-wrap">
+        <div id="cbGrid" class="tt-grid" style="grid-template-columns:repeat(${COLS},1fr)"></div>
+        <div id="cbFx" class="tt-fx-layer" aria-hidden="true"></div>
+      </div>
     </div>
     <div id="cbOverlay" class="tt-result-overlay"></div>
   `;
-  const subEl=overlay.querySelector('.game-chrome-subtitle');
-  if(subEl)subEl.id='cbSub';
+  const subEl = overlay.querySelector('.game-chrome-subtitle');
+  if (subEl) subEl.id = 'cbSub';
 
-  fxLayer=document.getElementById('cbFx');
-  document.getElementById('cbBack').addEventListener('click',()=>{
-    if(gameOver){close();return;}
-    const ask=typeof confirmLeaveGame==='function'
-      ?confirmLeaveGame({title:'Leave Tip Tap?',body:'Level progress for this run will be lost.'})
-      :Promise.resolve(window.confirm('Leave Tip Tap?'));
-    Promise.resolve(ask).then((ok)=>{if(ok)close();});
+  fxLayer = document.getElementById('cbFx');
+  document.getElementById('cbBack').addEventListener('click', () => {
+    const hub = document.getElementById('ttHub');
+    const pick = document.getElementById('ttPicker');
+    const play = document.getElementById('ttPlay');
+    if (pick && !pick.hidden) {
+      showHub();
+      return;
+    }
+    if (hub && !hub.hidden) {
+      close();
+      return;
+    }
+    if (gameOver) {
+      showHub();
+      return;
+    }
+    const ask =
+      typeof confirmLeaveGame === 'function'
+        ? confirmLeaveGame({ title: 'Leave Tip Tap?', body: 'Level progress for this run will be lost.' })
+        : Promise.resolve(window.confirm('Leave Tip Tap?'));
+    Promise.resolve(ask).then((ok) => {
+      if (ok) showHub();
+    });
   });
-  document.getElementById('cbHint')?.addEventListener('click',(e)=>{
+  document.getElementById('cbHint')?.addEventListener('click', (e) => {
     e.stopPropagation();
     applyHint();
   });
-  if(typeof createGamePauseController==='function'){
-    pauseCtrl=createGamePauseController({
-      host:overlay,
-      pauseBtnId:'cbPause',
-      onPause(){},
-      onResume(){
-        if(cascadeResume){
-          const fn=cascadeResume;cascadeResume=null;
-          scheduleCascade(fn,40);
+  document.getElementById('cbLevels')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const hubEl = document.getElementById('ttHub');
+    const playEl = document.getElementById('ttPlay');
+    if (hubEl && !hubEl.hidden) {
+      openLevelPicker();
+      return;
+    }
+    if (playEl && !playEl.hidden && !gameOver) {
+      const ask =
+        typeof confirmLeaveGame === 'function'
+          ? confirmLeaveGame({ title: 'Leave this level?', body: 'Open level select — this run will be lost.' })
+          : Promise.resolve(window.confirm('Leave this level for level select?'));
+      Promise.resolve(ask).then((ok) => {
+        if (!ok) return;
+        clearCascadeTimers();
+        animating = false;
+        openLevelPicker();
+      });
+      return;
+    }
+    openLevelPicker();
+  });
+  document.getElementById('ttContinue')?.addEventListener('click', () => startLevel(readNextLevel()));
+  document.getElementById('ttOpenLevels')?.addEventListener('click', () => openLevelPicker());
+  document.getElementById('ttPickerBack')?.addEventListener('click', () => showHub());
+
+  if (typeof createGamePauseController === 'function') {
+    pauseCtrl = createGamePauseController({
+      host: overlay,
+      pauseBtnId: 'cbPause',
+      onPause() {},
+      onResume() {
+        if (cascadeResume) {
+          const fn = cascadeResume;
+          cascadeResume = null;
+          scheduleCascade(fn, 40);
         }
       },
-      onQuit:close,
+      onQuit: close,
     });
   }
 
-  const gridEl=document.getElementById('cbGrid');
-  let sx=0,sy=0,sCell=null,pointerSwiping=false;
-  function beginSwipe(clientX,clientY,el){
-    if(!el||animating||gameOver||isPaused())return;
-    sx=clientX;sy=clientY;sCell=el;pointerSwiping=true;
+  const gridEl = document.getElementById('cbGrid');
+  let sx = 0,
+    sy = 0,
+    sCell = null,
+    pointerSwiping = false;
+  function beginSwipe(clientX, clientY, el) {
+    if (!el || animating || gameOver || isPaused()) return;
+    sx = clientX;
+    sy = clientY;
+    sCell = el;
+    pointerSwiping = true;
   }
-  function endSwipe(clientX,clientY){
-    if(!sCell||!pointerSwiping){sCell=null;pointerSwiping=false;return;}
-    const dx=clientX-sx,dy=clientY-sy;
-    const r=+sCell.dataset.r,c=+sCell.dataset.c;
-    sCell=null;pointerSwiping=false;
-    if(animating||gameOver||isPaused())return;
-    if(Math.abs(dx)<22&&Math.abs(dy)<22)return;
-    let nr=r,nc=c;
-    if(Math.abs(dx)>Math.abs(dy))nc+=dx>0?1:-1;
-    else nr+=dy>0?1:-1;
-    if(nr<0||nr>=ROWS||nc<0||nc>=COLS)return;
-    suppressClickUntil=Date.now()+350;
-    selected=null;hintPair=null;
-    trySwap(r,c,nr,nc);
+  function endSwipe(clientX, clientY) {
+    if (!sCell || !pointerSwiping) {
+      sCell = null;
+      pointerSwiping = false;
+      return;
+    }
+    const dx = clientX - sx,
+      dy = clientY - sy;
+    const r = +sCell.dataset.r,
+      c = +sCell.dataset.c;
+    sCell = null;
+    pointerSwiping = false;
+    if (animating || gameOver || isPaused()) return;
+    if (Math.abs(dx) < 22 && Math.abs(dy) < 22) return;
+    let nr = r,
+      nc = c;
+    if (Math.abs(dx) > Math.abs(dy)) nc += dx > 0 ? 1 : -1;
+    else nr += dy > 0 ? 1 : -1;
+    if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) return;
+    suppressClickUntil = Date.now() + 350;
+    selected = null;
+    hintPair = null;
+    trySwap(r, c, nr, nc);
   }
-  gridEl.addEventListener('pointerdown',e=>{
-    if(e.pointerType==='mouse'&&e.button!==0)return;
-    const el=e.target.closest?.('.tt-cell');
-    if(!el)return;
-    beginSwipe(e.clientX,e.clientY,el);
-    try{gridEl.setPointerCapture(e.pointerId);}catch(err){}
+  gridEl.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const el = e.target.closest?.('.tt-cell');
+    if (!el) return;
+    beginSwipe(e.clientX, e.clientY, el);
+    try {
+      gridEl.setPointerCapture(e.pointerId);
+    } catch (err) {}
   });
-  gridEl.addEventListener('pointerup',e=>{
-    endSwipe(e.clientX,e.clientY);
+  gridEl.addEventListener('pointerup', (e) => {
+    endSwipe(e.clientX, e.clientY);
   });
-  gridEl.addEventListener('pointercancel',()=>{sCell=null;pointerSwiping=false;});
+  gridEl.addEventListener('pointercancel', () => {
+    sCell = null;
+    pointerSwiping = false;
+  });
 
-  startLevel(level);
+  showHub();
 }
-
 
 // --- Game registry self-registration (arcade.js) ---
 if (typeof registerGame === 'function') {
@@ -1652,7 +1925,7 @@ if (typeof registerGame === 'function') {
   registerGame({
     id: 'tiptap',
     name: 'Tip Tap',
-    desc: 'Match-3 · 100 levels · Solo',
+    desc: 'Match-3 campaign · 100 levels · Solo',
     icon: '✨',
     ratingKey: 'tiptap',
     gameType: 'solo',
@@ -1664,3 +1937,4 @@ if (typeof registerGame === 'function') {
     launch() { openTipTap(); },
   });
 }
+

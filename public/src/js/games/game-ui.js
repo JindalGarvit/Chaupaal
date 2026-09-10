@@ -131,8 +131,8 @@
     rushrunner: ['Tap or swipe up to jump', 'Collect coins · avoid obstacles', 'Distance is your score'],
     tiptap: [
       'Match 4 → Line · 5 or L/T → Bomb · 6+ one colour → Prism',
-      'Swap a special with a gem to fire it · two specials combo',
-      'Clear every goal before moves run out',
+      'Swap specials to fire them · finish every goal before moves run out',
+      'Continue your campaign · replay cleared levels anytime',
     ],
     ankjod: ['Each row & column sums to the clue', 'Pencil notes help narrow digits', 'Check when you think you are done'],
     streetcricket: ['Tap Bowl, then Hit in the green window', 'Six balls · two wickets ends the over', 'Practice timing — full matches later'],
