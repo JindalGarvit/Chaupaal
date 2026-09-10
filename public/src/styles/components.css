@@ -4503,7 +4503,17 @@ select:focus-visible,
 .bus-rent-row:nth-child(even){background:#fff;}
 .bus-rent-row.is-current{background:#F3E8D0;font-weight:700;color:#1a1714;}
 .bus-deed-badge{margin:0 16px 8px;font:700 11px/1.3 "Space Grotesk",sans-serif;color:#6b6258;}
-.bus-deed-badge.is-mono{color:#8a5a12;}
+.bus-deed-badge.is-mort{color:#c0392b;}
+.bus-auction-bar,.bus-distress-bar{margin:0 14px 8px;padding:10px 12px;border-radius:14px;flex-shrink:0;}
+.bus-auction-bar{background:rgba(185,137,50,.14);border:1.5px solid rgba(185,137,50,.4);}
+.bus-distress-bar{background:rgba(231,76,60,.12);border:1.5px solid rgba(231,76,60,.35);}
+.bus-auction-title{font:700 13px "Space Grotesk",sans-serif;color:#fff;margin-bottom:4px;}
+.bus-auction-meta{font-size:11px;color:rgba(255,255,255,.7);margin-bottom:8px;}
+.bus-auction-actions{display:flex;gap:8px;}
+.bus-auction-actions .bus-deed-btn{flex:1;min-height:44px;border-radius:12px;border:2px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font:700 13px "Space Grotesk",sans-serif;cursor:pointer;}
+.bus-auction-actions .bus-deed-btn--primary{background:var(--game-accent,#B98932);border-color:transparent;}
+.bus-liq-list{display:flex;flex-direction:column;gap:6px;margin-top:8px;max-height:140px;overflow:auto;}
+.bus-mini-tile.is-mort .bus-mini-imp{color:#ff8a80;}
 .bus-holdings{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 8px;}
 .bus-hold-chip{display:inline-flex;align-items:center;min-height:22px;padding:2px 8px;border-radius:999px;font:700 10px/1 "Space Grotesk",sans-serif;color:#1a1714;background:color-mix(in srgb,var(--gc,#888) 35%,#fff);border:1.5px solid var(--gc,#888);}
 .bus-hold-chip.is-mono{background:var(--gc,#888);color:#fff;}

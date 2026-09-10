@@ -408,16 +408,23 @@ function openBusinessGame(chat,playerCount){
     profileType:i===mySeat?ownType:(i===(mySeat===0?1:0)?(chat?.profileType||null):null),
   }));
   let currentPlayer=0;let diceVal=[1,1];let rolling=false;let gameOver=false;let message='';
-  let awaitingBuy=false;let awaitingJailChoice=false;let focusPos=0;let buildOpen=false;
+  let awaitingBuy=false;let awaitingJailChoice=false;let focusPos=0;let buildOpen=false;let liqOpen=false;
   let doublesStreak=0;let pendingExtraTurn=false;
   /** Per-tile improvements: { houses:0–4, hotel:bool }. Hotel = 5th purchase. */
   let improvements={}; // idx -> { houses:0, hotel:false }
+  /** Mortgaged tile indexes → true. Mortgage = 50% price; unmortgage = mortgage + 10%. */
+  let mortgaged={};
+  /** Active auction or null. Once-around Raise/Pass. */
+  let auction=null;
+  /** Distress: raise cash for rent/tax/fine before bankrupt. */
+  let distress=null;
   /** House cost by colour group (₹15k start). Hotel = one more same cost. No bank scarcity. */
   const HOUSE_COST={0:500,1:500,2:1000,3:1000,4:1500,5:1500,6:2000,7:2000};
   const JAIL_IDX=10;
   const GO_SALARY=2000; // keep Prompt-era Start cash
   const JAIL_FINE=500;  // scaled classic fine for ₹15k start
-  const BUS_SECS=20;let busTimer=BUS_SECS;let busInterval=null;let diceIv=null;
+  const AUCTION_SECS=12;
+  const BUS_SECS=20;let busTimer=BUS_SECS;let busInterval=null;let diceIv=null;let auctionInterval=null;
 
   const overlay=document.createElement('div');
   overlay.style.cssText='position:absolute;inset:0;background:#1a1a2e;z-index:80;display:flex;flex-direction:column;';
@@ -425,7 +432,7 @@ function openBusinessGame(chat,playerCount){
   const gs=begin?begin({
     type:'business',title:'Business',mode:liveOn?'live':'practice',chat,overlay,
     cleanup(){
-      stopBusTimer();if(diceIv){clearInterval(diceIv);diceIv=null;}
+      stopBusTimer();stopAuctionTimer();if(diceIv){clearInterval(diceIv);diceIv=null;}
       if(liveHandle&&!leaveConfirmed){
         try{liveHandle.leave({forfeit:!gameOver});}catch(e){try{liveHandle.leave();}catch(e2){}}
       }
@@ -440,8 +447,10 @@ function openBusinessGame(chat,playerCount){
   if(typeof prepareGameOverlay==='function') prepareGameOverlay(overlay,{theme:'dark',gameId:'business'});
   const alive=()=>gs?gs.alive():true;
   const schedule=(fn,ms)=>gs?gs.schedule(fn,ms):setTimeout(fn,ms);
-  const close=()=>{if(gs)gs.close();else{stopBusTimer();if(diceIv)clearInterval(diceIv);overlay.remove();}};
+  const close=()=>{if(gs)gs.close();else{stopBusTimer();stopAuctionTimer();if(diceIv)clearInterval(diceIv);overlay.remove();}};
   const isMyControl=()=>currentPlayer===mySeat;
+  const isAuctionControl=()=>!!(auction&&auction.turnSeat===mySeat);
+  const isDistressControl=()=>!!(distress&&distress.payerSeat===mySeat);
 
   async function askBusLeave(){
     if(gameOver){close();return;}
@@ -476,6 +485,62 @@ function openBusinessGame(chat,playerCount){
       };
     });
   }
+  function serializeMortgaged(){
+    const out={};
+    Object.keys(mortgaged).forEach((k)=>{if(mortgaged[k])out[k]=true;});
+    return out;
+  }
+  function applyMortgaged(raw){
+    const next={};
+    if(raw&&typeof raw==='object'){
+      Object.keys(raw).forEach((k)=>{if(raw[k])next[k]=true;});
+    }
+    mortgaged=next;
+  }
+  function serializeAuction(){
+    if(!auction)return null;
+    return {
+      tileIdx:auction.tileIdx,
+      minBid:auction.minBid,
+      raiseBy:auction.raiseBy,
+      highBid:auction.highBid,
+      highBidder:auction.highBidder,
+      turnSeat:auction.turnSeat,
+      passed:Array.isArray(auction.passed)?auction.passed.slice():[],
+    };
+  }
+  function applyAuction(raw){
+    if(!raw||typeof raw!=='object'){auction=null;return;}
+    auction={
+      tileIdx:Number(raw.tileIdx),
+      minBid:Number(raw.minBid)||100,
+      raiseBy:Number(raw.raiseBy)||100,
+      highBid:Number(raw.highBid)||0,
+      highBidder:raw.highBidder==null?null:Number(raw.highBidder),
+      turnSeat:Number(raw.turnSeat)||0,
+      passed:Array.isArray(raw.passed)?raw.passed.map(Number):[],
+    };
+  }
+  function serializeDistress(){
+    if(!distress)return null;
+    return {
+      payerSeat:distress.payerSeat,
+      amount:distress.amount,
+      creditorSeat:distress.creditorSeat,
+      kind:distress.kind||'debt',
+      note:distress.note||'',
+    };
+  }
+  function applyDistress(raw){
+    if(!raw||typeof raw!=='object'){distress=null;return;}
+    distress={
+      payerSeat:Number(raw.payerSeat),
+      amount:Number(raw.amount)||0,
+      creditorSeat:raw.creditorSeat==null?null:Number(raw.creditorSeat),
+      kind:raw.kind||'debt',
+      note:raw.note||'',
+    };
+  }
   function serializeImprovements(){
     const out={};
     Object.keys(improvements).forEach((k)=>{
@@ -509,26 +574,37 @@ function openBusinessGame(chat,playerCount){
       normalizeJailFields(players[i]);
     });
   }
+  function liveTurnUid(){
+    if(gameOver||!liveRoles)return null;
+    if(auction)return auction.turnSeat===0?liveRoles.playerA:liveRoles.playerB;
+    if(distress)return distress.payerSeat===0?liveRoles.playerA:liveRoles.playerB;
+    return currentPlayer===0?liveRoles.playerA:liveRoles.playerB;
+  }
   function pushBusiness(){
     if(!liveOn||!liveHandle||!liveRoles||applyingLive)return;
     const winnerSeat=gameOver?players.findIndex(p=>!p.bankrupt):-1;
+    const turnUid=liveTurnUid();
     liveHandle.push({
       state:{
         players:serializeBusPlayers(),
         improvements:serializeImprovements(),
+        mortgaged:serializeMortgaged(),
+        auction:serializeAuction(),
+        distress:serializeDistress(),
         currentPlayer,diceVal:diceVal.slice(),message,gameOver,
         awaitingBuy,awaitingJailChoice,focusPos,doublesStreak,pendingExtraTurn,
       },
-      turn:gameOver?null:(currentPlayer===0?liveRoles.playerA:liveRoles.playerB),
+      turn:turnUid,
       status:gameOver?'over':'playing',
       winner:winnerSeat===0?liveRoles.playerA:(winnerSeat===1?liveRoles.playerB:null),
     });
-    if(!gameOver&&currentPlayer!==mySeat&&typeof DangalLive!=='undefined'&&DangalLive.pingTurn){
+    if(!gameOver&&turnUid&&turnUid!==liveRoles.me&&typeof DangalLive!=='undefined'&&DangalLive.pingTurn){
       DangalLive.pingTurn(liveRoles.opp,'business',{chatId:chat&&(chat.firestoreId||chat.id)});
     }
   }
 
   function startBusTimer(){
+    if(auction||distress)return;
     if(!isMyControl()||!alive()||awaitingBuy)return;
     clearInterval(busInterval);busTimer=BUS_SECS;
     busInterval=setInterval(()=>{
@@ -538,13 +614,30 @@ function openBusinessGame(chat,playerCount){
       if(el)el.textContent=busTimer+'s';
       if(busTimer<=0){
         clearInterval(busInterval);
-        if(rolling||gameOver||awaitingBuy)return;
+        if(rolling||gameOver||awaitingBuy||auction||distress)return;
         if(awaitingJailChoice)jailRollAttempt();
         else rollBusDice();
       }
     },1000);
   }
   function stopBusTimer(){clearInterval(busInterval);busInterval=null;}
+  function stopAuctionTimer(){clearInterval(auctionInterval);auctionInterval=null;}
+  function startAuctionTimer(){
+    stopAuctionTimer();
+    if(!auction||!alive()||gameOver)return;
+    if(liveOn&&!isAuctionControl())return;
+    busTimer=AUCTION_SECS;
+    auctionInterval=setInterval(()=>{
+      if(!alive()||!auction){stopAuctionTimer();return;}
+      busTimer--;
+      const el=document.getElementById('busTimerEl');
+      if(el)el.textContent=busTimer+'s';
+      if(busTimer<=0){
+        stopAuctionTimer();
+        auctionPass();
+      }
+    },1000);
+  }
 
   function sendToJail(player,reason){
     if(!player)return;
@@ -569,13 +662,12 @@ function openBusinessGame(chat,playerCount){
   function payJailFine(){
     if(!isMyControl()&&liveOn)return;
     const p=players[currentPlayer];
-    if(!p||!p.inJail||rolling||gameOver||awaitingBuy)return;
-    p.money-=JAIL_FINE;
+    if(!p||!p.inJail||rolling||gameOver||awaitingBuy||auction||distress)return;
+    if(!tryCollectPayment(p,JAIL_FINE,null,'jail',`jail fine ₹${JAIL_FINE}`))return;
     leaveJail(p);
     message=`Paid ₹${JAIL_FINE} to leave jail — roll to move`;
     if(liveOn)pushBusiness();
     render();
-    if(p.money<0){finishMoveResolution();return;}
     if(isMyControl())startBusTimer();
     else if(!liveOn)schedule(rollBusDice,500);
   }
@@ -611,8 +703,21 @@ function openBusinessGame(chat,playerCount){
     }
     p.jailAttempts=(Number(p.jailAttempts)||0)+1;
     if(p.jailAttempts>=3){
-      p.money-=JAIL_FINE;
       leaveJail(p);
+      liquidateHousesToBank(p);
+      let guard=0;
+      while(p.money<JAIL_FINE&&guard++<40){
+        const morts=listMortgageOptions(p);
+        if(!morts.length)break;
+        mortgageTile(p,morts[0].idx,{quiet:true});
+      }
+      if(p.money<JAIL_FINE){
+        bankruptPlayer(p,null);
+        if(checkBankruptcyAndWinner())return;
+        finishMoveResolution();
+        return;
+      }
+      p.money-=JAIL_FINE;
       message=`3rd try — paid ₹${JAIL_FINE} and left`;
       movePlayerToken(sum,{noDoublesExtra:true});
       return;
@@ -718,7 +823,7 @@ function openBusinessGame(chat,playerCount){
     if(!player||player.bankrupt)return 0;
     let n=0;
     (player.properties||[]).forEach((i)=>{
-      if(BOARD[i]&&BOARD[i].type===type)n++;
+      if(BOARD[i]&&BOARD[i].type===type&&!isMortgaged(i))n++;
     });
     return n;
   }
@@ -730,10 +835,31 @@ function openBusinessGame(chat,playerCount){
     return HOUSE_COST[groupId]!=null?HOUSE_COST[groupId]:1000;
   }
 
+  function isMortgaged(idx){return !!mortgaged[idx];}
+
+  function mortgageValue(tile){return Math.floor((Number(tile&&tile.price)||0)/2);}
+
+  function unmortgageCost(tile){return Math.floor(mortgageValue(tile)*1.1);}
+
+  function houseSellRefund(groupId){return Math.floor(houseCostFor(groupId)/2);}
+
+  function groupHasMortgage(groupId){
+    return groupPropertyIndices(groupId).some((i)=>isMortgaged(i));
+  }
+
+  function groupImprovementCount(groupId){
+    return groupPropertyIndices(groupId).reduce((n,i)=>n+improvementTier(i),0);
+  }
+
+  function monopolyActive(player,groupId){
+    return ownsFullGroup(player,groupId)&&!groupHasMortgage(groupId);
+  }
+
   function canBuildOn(player,tileIdx){
     const tile=BOARD[tileIdx];
     if(!player||player.bankrupt||!tile||tile.type!=='property')return false;
     if(!(player.properties||[]).includes(tileIdx))return false;
+    if(isMortgaged(tileIdx)||groupHasMortgage(tile.group))return false;
     if(!ownsFullGroup(player,tile.group))return false;
     const cost=houseCostFor(tile.group);
     if(player.money<cost)return false;
@@ -742,6 +868,141 @@ function openBusinessGame(chat,playerCount){
     const tiers=idxs.map((i)=>improvementTier(i));
     const min=Math.min.apply(null,tiers);
     return improvementTier(tileIdx)===min;
+  }
+
+  function canSellHouseOn(player,tileIdx){
+    const tile=BOARD[tileIdx];
+    if(!player||player.bankrupt||!tile||tile.type!=='property')return false;
+    if(!(player.properties||[]).includes(tileIdx))return false;
+    if(improvementTier(tileIdx)<=0)return false;
+    const idxs=groupPropertyIndices(tile.group);
+    const tiers=idxs.map((i)=>improvementTier(i));
+    const max=Math.max.apply(null,tiers);
+    return improvementTier(tileIdx)===max;
+  }
+
+  function sellHouseOn(player,tileIdx,opts){
+    const quiet=opts&&opts.quiet;
+    if(!canSellHouseOn(player,tileIdx))return 0;
+    const tile=BOARD[tileIdx];
+    const refund=houseSellRefund(tile.group);
+    const imp=tileImp(tileIdx);
+    if(imp.hotel){imp.hotel=false;imp.houses=4;}
+    else{imp.houses=Math.max(0,(Number(imp.houses)||0)-1);imp.hotel=false;}
+    player.money+=refund;
+    if(!quiet)message=`Sold improvement on ${tile.name} (+₹${refund})`;
+    return refund;
+  }
+
+  function canMortgage(player,tileIdx){
+    const tile=BOARD[tileIdx];
+    if(!player||player.bankrupt||!tile||!isBuyable(tile))return false;
+    if(!(player.properties||[]).includes(tileIdx))return false;
+    if(isMortgaged(tileIdx))return false;
+    if(tile.type==='property'&&groupImprovementCount(tile.group)>0)return false;
+    return true;
+  }
+
+  function mortgageTile(player,tileIdx,opts){
+    const quiet=opts&&opts.quiet;
+    if(!canMortgage(player,tileIdx))return 0;
+    const tile=BOARD[tileIdx];
+    const val=mortgageValue(tile);
+    mortgaged[tileIdx]=true;
+    player.money+=val;
+    if(!quiet)message=`Mortgaged ${tile.name} (+₹${val})`;
+    return val;
+  }
+
+  function canUnmortgage(player,tileIdx){
+    const tile=BOARD[tileIdx];
+    if(!player||player.bankrupt||!tile)return false;
+    if(!(player.properties||[]).includes(tileIdx))return false;
+    if(!isMortgaged(tileIdx))return false;
+    return player.money>=unmortgageCost(tile);
+  }
+
+  function unmortgageTile(player,tileIdx,opts){
+    const quiet=opts&&opts.quiet;
+    if(!canUnmortgage(player,tileIdx))return false;
+    const tile=BOARD[tileIdx];
+    const cost=unmortgageCost(tile);
+    player.money-=cost;
+    delete mortgaged[tileIdx];
+    if(!quiet)message=`Unmortgaged ${tile.name} (−₹${cost})`;
+    return true;
+  }
+
+  function listSellOptions(player){
+    const opts=[];
+    (player.properties||[]).forEach((idx)=>{
+      if(!canSellHouseOn(player,idx))return;
+      const tile=BOARD[idx];
+      opts.push({idx,name:tile.name,refund:houseSellRefund(tile.group),color:tile.color||'#888',kind:'sell'});
+    });
+    return opts;
+  }
+
+  function listMortgageOptions(player){
+    const opts=[];
+    (player.properties||[]).forEach((idx)=>{
+      if(!canMortgage(player,idx))return;
+      const tile=BOARD[idx];
+      opts.push({idx,name:tile.name,value:mortgageValue(tile),color:tile.color||'#888',kind:'mortgage'});
+    });
+    return opts;
+  }
+
+  function listUnmortgageOptions(player){
+    const opts=[];
+    (player.properties||[]).forEach((idx)=>{
+      if(!isMortgaged(idx))return;
+      const tile=BOARD[idx];
+      const cost=unmortgageCost(tile);
+      opts.push({idx,name:tile.name,cost,afford:player.money>=cost,color:tile.color||'#888',kind:'unmortgage'});
+    });
+    return opts;
+  }
+
+  function canRaiseMore(player){
+    return listSellOptions(player).length>0||listMortgageOptions(player).length>0;
+  }
+
+  function liquidateHousesToBank(player){
+    let gained=0;
+    let guard=0;
+    while(guard++<80){
+      const opts=listSellOptions(player);
+      if(!opts.length)break;
+      gained+=sellHouseOn(player,opts[0].idx,{quiet:true});
+    }
+    return gained;
+  }
+
+  function bankruptPlayer(payer,creditorSeat){
+    if(!payer||payer.bankrupt)return;
+    liquidateHousesToBank(payer);
+    const creditor=creditorSeat!=null?players[creditorSeat]:null;
+    const cash=Math.max(0,payer.money);
+    if(creditor&&!creditor.bankrupt){
+      creditor.money+=cash;
+      (payer.properties||[]).forEach((idx)=>{
+        if(!creditor.properties.includes(idx))creditor.properties.push(idx);
+        tileImp(idx);
+      });
+    } else {
+      (payer.properties||[]).forEach((idx)=>{
+        delete mortgaged[idx];
+        if(improvements[idx])improvements[idx]={houses:0,hotel:false};
+      });
+    }
+    payer.money=0;
+    payer.properties=[];
+    payer.bankrupt=true;
+    payer.inJail=false;
+    payer.jailAttempts=0;
+    normalizeJailFields(payer);
+    message=`${payer.name} went bankrupt`+(creditor?` — assets to ${creditor.name}`:'');
   }
 
   function listBuildOptions(player){
@@ -804,15 +1065,16 @@ function openBusinessGame(chat,playerCount){
    */
   function rentFor(tile,tileIdx,owner,diceTotal){
     if(!tile||!owner||owner.bankrupt)return 0;
+    if(isMortgaged(tileIdx))return 0;
     if(tile.type==='property'){
       const ladder=Array.isArray(tile.rent)?tile.rent:[0];
       const tier=improvementTier(tileIdx);
       let rent=Number(ladder[Math.min(tier,ladder.length-1)])||0;
-      if(tier===0&&ownsFullGroup(owner,tile.group))rent*=2;
+      if(tier===0&&monopolyActive(owner,tile.group))rent*=2;
       return rent;
     }
     if(tile.type==='railway'){
-      const n=Math.min(4,Math.max(1,countRailways(owner)));
+      const n=Math.min(4,Math.max(1,countRailways(owner)||1));
       return [0,250,500,1000,2000][n]||2000;
     }
     if(tile.type==='utility'){
@@ -825,25 +1087,277 @@ function openBusinessGame(chat,playerCount){
 
   function rentBreakdown(tile,tileIdx,owner,diceTotal){
     const rent=rentFor(tile,tileIdx,owner,diceTotal);
-    if(!tile||!owner)return {rent,monopoly:false,tier:0,railCount:0,utilCount:0};
+    if(!tile||!owner)return {rent,monopoly:false,tier:0,railCount:0,utilCount:0,mortgaged:false};
+    if(isMortgaged(tileIdx))return {rent:0,monopoly:false,tier:improvementTier(tileIdx),railCount:0,utilCount:0,mortgaged:true};
     if(tile.type==='property'){
       const tier=improvementTier(tileIdx);
-      const monopoly=tier===0&&ownsFullGroup(owner,tile.group);
-      return {rent,monopoly,tier,railCount:0,utilCount:0};
+      const monopoly=tier===0&&monopolyActive(owner,tile.group);
+      return {rent,monopoly,tier,railCount:0,utilCount:0,mortgaged:false};
     }
-    if(tile.type==='railway')return {rent,monopoly:false,tier:0,railCount:countRailways(owner),utilCount:0};
-    if(tile.type==='utility')return {rent,monopoly:false,tier:0,railCount:0,utilCount:countUtilities(owner)};
-    return {rent,monopoly:false,tier:0,railCount:0,utilCount:0};
+    if(tile.type==='railway')return {rent,monopoly:false,tier:0,railCount:countRailways(owner),utilCount:0,mortgaged:false};
+    if(tile.type==='utility')return {rent,monopoly:false,tier:0,railCount:0,utilCount:countUtilities(owner),mortgaged:false};
+    return {rent,monopoly:false,tier:0,railCount:0,utilCount:0,mortgaged:false};
   }
 
   function rentPaidMessage(br,tile,owner,diceTotal){
     const rent=br.rent;
+    if(br.mortgaged)return `${tile.name} is mortgaged — no rent`;
     if(tile.type==='railway')return `Paid ₹${rent} station rent (${br.railCount}/4) to ${owner.name}`;
     if(tile.type==='utility')return `Paid ₹${rent} utility rent (${br.utilCount}/2 · ${diceTotal} dice) to ${owner.name}`;
     if(br.tier===5)return `Paid ₹${rent} rent (hotel) to ${owner.name}`;
     if(br.tier>0)return `Paid ₹${rent} rent (${br.tier} house${br.tier>1?'s':''}) to ${owner.name}`;
     if(br.monopoly)return `Paid ₹${rent} rent (monopoly) to ${owner.name}`;
     return `Paid ₹${rent} rent to ${owner.name}`;
+  }
+
+  function seatIndex(player){return players.indexOf(player);}
+
+  function tryCollectPayment(payer,amount,creditor,kind,note){
+    amount=Math.max(0,Number(amount)||0);
+    if(amount<=0)return true;
+    if(payer.money>=amount){
+      payer.money-=amount;
+      if(creditor&&!creditor.bankrupt)creditor.money+=amount;
+      return true;
+    }
+    startDistress(payer,amount,creditor,kind,note);
+    return false;
+  }
+
+  function startDistress(payer,amount,creditor,kind,note){
+    const payerSeat=seatIndex(payer);
+    const creditorSeat=creditor?seatIndex(creditor):-1;
+    distress={
+      payerSeat,
+      amount,
+      creditorSeat:creditorSeat>=0?creditorSeat:null,
+      kind:kind||'debt',
+      note:note||`Need ₹${amount}`,
+    };
+    stopBusTimer();
+    message=`Raise funds — owe ₹${amount}`+(note?` (${note})`:'');
+    if(liveOn)pushBusiness();
+    render();
+    const controlled=liveOn?isDistressControl():(payerSeat===mySeat);
+    if(!controlled||(!liveOn&&payerSeat!==mySeat)){
+      schedule(()=>aiResolveDistress(),400);
+    }
+  }
+
+  function afterDistressRaise(){
+    if(!distress)return;
+    const payer=players[distress.payerSeat];
+    if(!payer||payer.bankrupt){distress=null;finishMoveResolution();return;}
+    if(payer.money>=distress.amount){
+      const owed=distress.amount;
+      const creditor=distress.creditorSeat!=null?players[distress.creditorSeat]:null;
+      payer.money-=owed;
+      if(creditor&&!creditor.bankrupt)creditor.money+=owed;
+      message=`Paid ₹${owed}`+(distress.note?` — ${distress.note}`:'');
+      distress=null;
+      if(liveOn)pushBusiness();
+      finishMoveResolution();
+      return;
+    }
+    if(!canRaiseMore(payer)){
+      bankruptPlayer(payer,distress.creditorSeat);
+      distress=null;
+      if(checkBankruptcyAndWinner())return;
+      if(liveOn)pushBusiness();
+      finishMoveResolution();
+      return;
+    }
+    if(liveOn)pushBusiness();
+    render();
+  }
+
+  function aiResolveDistress(){
+    if(!distress||gameOver)return;
+    const payer=players[distress.payerSeat];
+    if(!payer||payer.bankrupt){distress=null;finishMoveResolution();return;}
+    let guard=0;
+    while(payer.money<distress.amount&&guard++<40){
+      const sells=listSellOptions(payer);
+      if(sells.length){sellHouseOn(payer,sells[0].idx,{quiet:true});continue;}
+      const morts=listMortgageOptions(payer);
+      if(morts.length){mortgageTile(payer,morts[0].idx,{quiet:true});continue;}
+      break;
+    }
+    afterDistressRaise();
+  }
+
+  function playerDistressAction(kind,idx){
+    if(!distress||gameOver)return;
+    if(liveOn&&!isDistressControl())return;
+    const payer=players[distress.payerSeat];
+    if(!payer)return;
+    if(kind==='sell')sellHouseOn(payer,idx);
+    else if(kind==='mortgage')mortgageTile(payer,idx);
+    afterDistressRaise();
+  }
+
+  function declareDistressBankrupt(){
+    if(!distress||gameOver)return;
+    if(liveOn&&!isDistressControl())return;
+    const payer=players[distress.payerSeat];
+    bankruptPlayer(payer,distress.creditorSeat);
+    distress=null;
+    if(checkBankruptcyAndWinner())return;
+    if(liveOn)pushBusiness();
+    finishMoveResolution();
+  }
+
+  function auctionMinBid(tile){
+    return Math.max(100,Math.floor((Number(tile.price)||0)*0.1));
+  }
+
+  function nextAuctionSeat(fromSeat){
+    let s=fromSeat;
+    for(let i=0;i<playerCount;i++){
+      s=(s+1)%playerCount;
+      if(!players[s].bankrupt)return s;
+    }
+    return fromSeat;
+  }
+
+  function startAuction(tileIdx){
+    const tile=BOARD[tileIdx];
+    if(!tile||!isBuyable(tile)){finishMoveResolution();return;}
+    if(players.some(pl=>!pl.bankrupt&&(pl.properties||[]).includes(tileIdx))){finishMoveResolution();return;}
+    awaitingBuy=false;
+    stopBusTimer();
+    const minBid=auctionMinBid(tile);
+    auction={
+      tileIdx,
+      minBid,
+      raiseBy:Math.max(100,Math.floor(minBid/2)),
+      highBid:0,
+      highBidder:null,
+      turnSeat:nextAuctionSeat(currentPlayer),
+      passed:[],
+    };
+    focusPos=tileIdx;
+    message=`Auction: ${tile.name} · min ₹${minBid}`;
+    if(liveOn)pushBusiness();
+    render();
+    advanceAuctionActor();
+  }
+
+  function advanceAuctionActor(){
+    if(!auction)return;
+    const seat=auction.turnSeat;
+    if(liveOn){
+      if(isAuctionControl())startAuctionTimer();
+      return;
+    }
+    if(seat===mySeat){
+      startAuctionTimer();
+      return;
+    }
+    schedule(()=>aiAuctionAct(),500);
+  }
+
+  function auctionEligibleSeats(){
+    return players.map((p,i)=>({p,i})).filter(x=>!x.p.bankrupt).map(x=>x.i);
+  }
+
+  function auctionRaise(){
+    if(!auction||gameOver)return;
+    if(liveOn&&!isAuctionControl())return;
+    if(!liveOn&&auction.turnSeat!==mySeat)return;
+    auctionRaiseFor(auction.turnSeat);
+  }
+
+  function auctionRaiseFor(seat){
+    if(!auction||gameOver)return;
+    const bidder=players[seat];
+    if(!bidder||bidder.bankrupt){auctionPassFor(seat);return;}
+    const nextBid=auction.highBid>0?auction.highBid+auction.raiseBy:auction.minBid;
+    if(bidder.money<nextBid){auctionPassFor(seat);return;}
+    stopAuctionTimer();
+    auction.highBid=nextBid;
+    auction.highBidder=seat;
+    auction.passed=[];
+    message=`${bidder.name} bids ₹${nextBid}`;
+    auction.turnSeat=nextAuctionSeat(seat);
+    if(liveOn)pushBusiness();
+    render();
+    advanceAuctionActor();
+  }
+
+  function auctionPass(){
+    if(!auction)return;
+    if(liveOn&&!isAuctionControl())return;
+    auctionPassFor(auction.turnSeat);
+  }
+
+  function auctionPassFor(seat){
+    if(!auction||gameOver)return;
+    stopAuctionTimer();
+    if(!auction.passed.includes(seat))auction.passed.push(seat);
+    const eligible=auctionEligibleSeats();
+    const others=eligible.filter((i)=>i!==auction.highBidder);
+    const allOthersPassed=auction.highBidder!=null&&others.every((i)=>auction.passed.includes(i));
+    const everyonePassed=auction.highBidder==null&&eligible.every((i)=>auction.passed.includes(i));
+    if(allOthersPassed||everyonePassed){
+      endAuction();
+      return;
+    }
+    message=`${players[seat].name} passes`;
+    auction.turnSeat=nextAuctionSeat(seat);
+    // skip seats already passed until someone can act — still rotate
+    let guard=0;
+    while(guard++<playerCount&&auction.passed.includes(auction.turnSeat)&&auction.turnSeat!==auction.highBidder){
+      // if highBidder exists, passed bidders stay out until a new raise clears passed
+      auction.turnSeat=nextAuctionSeat(auction.turnSeat);
+    }
+    if(liveOn)pushBusiness();
+    render();
+    advanceAuctionActor();
+  }
+
+  function endAuction(){
+    stopAuctionTimer();
+    if(!auction){finishMoveResolution();return;}
+    const tile=BOARD[auction.tileIdx];
+    const winner=auction.highBidder!=null?players[auction.highBidder]:null;
+    const bid=auction.highBid;
+    const idx=auction.tileIdx;
+    auction=null;
+    if(winner&&bid>0&&winner.money>=bid){
+      winner.money-=bid;
+      if(!winner.properties.includes(idx))winner.properties.push(idx);
+      tileImp(idx);
+      message=`${winner.name} won ${tile.name} for ₹${bid}`;
+      if(typeof gameFeedback==='function')gameFeedback('card');
+    } else {
+      message=`Auction ended — ${tile.name} unsold`;
+    }
+    if(liveOn)pushBusiness();
+    render();
+    finishMoveResolution();
+  }
+
+  function aiAuctionAct(){
+    if(!auction||gameOver)return;
+    const seat=auction.turnSeat;
+    const p=players[seat];
+    if(!p||p.bankrupt){auctionPassFor(seat);return;}
+    const tile=BOARD[auction.tileIdx];
+    const nextBid=auction.highBid>0?auction.highBid+auction.raiseBy:auction.minBid;
+    const cushion=1500;
+    let want=false;
+    if(p.money>=nextBid+cushion){
+      if(tile.type==='property'){
+        const idxs=groupPropertyIndices(tile.group);
+        const owned=idxs.filter((i)=>(p.properties||[]).includes(i)).length;
+        if(owned===idxs.length-1)want=true;
+        else if(owned>=1&&nextBid<=tile.price*0.7)want=Math.random()<0.55;
+        else if(nextBid<=tile.price*0.45)want=Math.random()<0.35;
+      } else if(nextBid<=(tile.price||0)*0.5)want=Math.random()<0.4;
+    }
+    if(want)auctionRaiseFor(seat);
+    else auctionPassFor(seat);
   }
 
   function movePlayerToken(steps,opts){
@@ -863,7 +1377,6 @@ function openBusinessGame(chat,playerCount){
     pendingExtraTurn=!!opts.wasDouble&&!opts.noDoublesExtra;
 
     if(tile.type==='gotojail'){
-      // Collect Start if the move wrapped, then jail with no further GO.
       sendToJail(p,msgs.length?`${msgs[0]} · Go To Jail`:'Go To Jail — no Start cash');
       pendingExtraTurn=false;
       if(liveOn)pushBusiness();
@@ -874,26 +1387,45 @@ function openBusinessGame(chat,playerCount){
 
     if(tile.type==='go'){
       message=msgs[0]||`Landed on Start +₹${GO_SALARY}`;
-      // Salary already applied via wrap when landing on 0 from a full circuit.
     } else if(tile.type==='tax'){
-      p.money-=tile.amount;
-      msgs.push(`Paid ₹${tile.amount} tax`);
+      const amt=tile.amount;
+      if(!tryCollectPayment(p,amt,null,'tax',`tax ₹${amt}`)){
+        if(msgs.length)message=msgs.join(' · ')+' · '+message;
+        return;
+      }
+      msgs.push(`Paid ₹${amt} tax`);
       message=msgs.join(' · ');
     } else if(tile.type==='jail'){
       msgs.push(p.inJail?'In jail':'Just visiting');
       message=msgs.join(' · ');
     } else if(tile.type==='chance'||tile.type==='chest'){
       const events=[{m:'Bonus payout!',amt:500},{m:'Repair bill',amt:-300},{m:'Lottery win!',amt:1000},{m:'Fine for jaywalking',amt:-150}];
-      const e=events[Math.floor(Math.random()*events.length)];p.money+=e.amt;
-      msgs.push(`${e.m} ${e.amt>0?'+':''}₹${e.amt}`);
+      const e=events[Math.floor(Math.random()*events.length)];
+      if(e.amt<0){
+        if(!tryCollectPayment(p,-e.amt,null,'fine',e.m)){
+          if(msgs.length)message=msgs.join(' · ')+' · '+message;
+          return;
+        }
+        msgs.push(`${e.m} −₹${-e.amt}`);
+      } else {
+        p.money+=e.amt;
+        msgs.push(`${e.m} +₹${e.amt}`);
+      }
       message=msgs.join(' · ');
     } else if(isBuyable(tile)){
       const owner=players.find(pl=>!pl.bankrupt&&pl.properties.includes(p.pos));
       if(owner&&owner!==p){
         const br=rentBreakdown(tile,p.pos,owner,diceTotal);
         const rent=br.rent;
-        p.money-=rent;owner.money+=rent;
-        msgs.push(rentPaidMessage(br,tile,owner,diceTotal));
+        if(rent>0){
+          if(!tryCollectPayment(p,rent,owner,'rent',tile.name)){
+            if(msgs.length)message=msgs.join(' · ')+' · '+message;
+            return;
+          }
+          msgs.push(rentPaidMessage(br,tile,owner,diceTotal));
+        } else if(br.mortgaged){
+          msgs.push(rentPaidMessage(br,tile,owner,diceTotal));
+        }
       }
       message=msgs.join(' · ');
     } else if(msgs.length){
@@ -903,8 +1435,10 @@ function openBusinessGame(chat,playerCount){
     }
 
     render();
-    if(isBuyable(tile)&&!players.find(pl=>!pl.bankrupt&&pl.properties.includes(p.pos))&&p.money>=tile.price){
-      offerBuy(tile,p);
+    const ownerNow=players.find(pl=>!pl.bankrupt&&pl.properties.includes(p.pos));
+    if(isBuyable(tile)&&!ownerNow){
+      if(p.money>=tile.price)offerBuy(tile,p);
+      else startAuction(p.pos);
     } else {
       finishMoveResolution();
     }
@@ -932,8 +1466,11 @@ function openBusinessGame(chat,playerCount){
         tileImp(player.pos);
         message=`${player.name} bought ${tile.name}!`;
         if(typeof gameFeedback==='function')gameFeedback('card');
+        render();finishMoveResolution();return;
       }
-      render();finishMoveResolution();return;
+      render();
+      startAuction(player.pos);
+      return;
     }
     awaitingBuy=true;
     stopBusTimer();
@@ -952,15 +1489,14 @@ function openBusinessGame(chat,playerCount){
       tileImp(p.pos);
       message=`You bought ${tile.name}!`;
       if(typeof gameFeedback==='function')gameFeedback('card');
-    } else if(!yes){
-      message='Skipped purchase';
+      finishMoveResolution();
+      return;
     }
-    finishMoveResolution();
+    message='Skipped — going to auction';
+    startAuction(p.pos);
   }
 
   function checkBankruptcyAndWinner(){
-    const p=players[currentPlayer];
-    if(p&&p.money<0){p.bankrupt=true;message=`${p.name} went bankrupt`;}
     const active=players.filter(pl=>!pl.bankrupt);
     if(active.length===1){
       gameOver=true;
@@ -977,10 +1513,17 @@ function openBusinessGame(chat,playerCount){
 
   function finishMoveResolution(){
     if(!alive())return;
+    if(distress||auction)return;
     awaitingBuy=false;
     buildOpen=false;
+    liqOpen=false;
     if(checkBankruptcyAndWinner())return;
-    if(pendingExtraTurn&&players[currentPlayer]&&!players[currentPlayer].inJail&&!players[currentPlayer].bankrupt){
+    const p=players[currentPlayer];
+    if(p&&p.money<0&&!p.bankrupt){
+      bankruptPlayer(p,null);
+      if(checkBankruptcyAndWinner())return;
+    }
+    if(pendingExtraTurn&&p&&!p.inJail&&!p.bankrupt){
       pendingExtraTurn=false;
       message=(message?message+' · ':'')+'Doubles — roll again';
       if(liveOn)pushBusiness();
@@ -1022,9 +1565,11 @@ function openBusinessGame(chat,playerCount){
 
   function endBusTurn(){
     if(!alive())return;
+    if(distress||auction)return;
     awaitingBuy=false;
     awaitingJailChoice=false;
     buildOpen=false;
+    liqOpen=false;
     doublesStreak=0;
     pendingExtraTurn=false;
     if(checkBankruptcyAndWinner())return;
@@ -1033,8 +1578,7 @@ function openBusinessGame(chat,playerCount){
   }
 
   function tryPlayerBuild(tileIdx){
-    if(!isMyControl()||awaitingBuy||rolling||gameOver)return;
-    // Allow build while jailed (classic), but not mid-buy.
+    if(!isMyControl()||awaitingBuy||rolling||gameOver||auction||distress)return;
     const p=players[currentPlayer];
     if(!buildOn(p,tileIdx))return;
     focusPos=tileIdx;
@@ -1042,10 +1586,28 @@ function openBusinessGame(chat,playerCount){
     render();
   }
 
+  function tryPlayerLiquidity(kind,idx){
+    if(gameOver||rolling||awaitingBuy||auction)return;
+    if(distress){
+      playerDistressAction(kind,idx);
+      return;
+    }
+    if(!isMyControl())return;
+    const p=players[currentPlayer];
+    if(kind==='sell')sellHouseOn(p,idx);
+    else if(kind==='mortgage')mortgageTile(p,idx);
+    else if(kind==='unmortgage')unmortgageTile(p,idx);
+    if(liveOn)pushBusiness();
+    render();
+  }
+
   function rentLadderHtml(tile,idx,owner){
+    if(isMortgaged(idx)){
+      return `<div class="bus-deed-badge is-mort">Mortgaged — no rent · lift ₹${unmortgageCost(tile)}</div>`;
+    }
     if(tile.type==='property'&&Array.isArray(tile.rent)){
       const tier=improvementTier(idx);
-      const fullSet=owner&&ownsFullGroup(owner,tile.group);
+      const fullSet=owner&&monopolyActive(owner,tile.group);
       const labels=['Base','1 house','2 houses','3 houses','4 houses','Hotel'];
       const rows=tile.rent.map((r,i)=>{
         const active=i===tier;
@@ -1055,7 +1617,8 @@ function openBusinessGame(chat,playerCount){
       }).join('');
       const cost=houseCostFor(tile.group);
       let badge='Colour set incomplete';
-      if(fullSet){
+      if(owner&&ownsFullGroup(owner,tile.group)&&groupHasMortgage(tile.group))badge='Set mortgaged — no monopoly / build';
+      else if(fullSet){
         if(tier===5)badge='Hotel · top rent';
         else if(tier>0)badge=`Monopoly · ${tier} house${tier>1?'s':''} · build ₹${cost}`;
         else badge=`Monopoly! · 2× base · house ₹${cost}`;
@@ -1112,8 +1675,8 @@ function openBusinessGame(chat,playerCount){
     if(isBuyable(tile)){
       const br=owner?rentBreakdown(tile,idx,owner):(null);
       body=`
-        <div class="bus-deed-meta">Price <strong>₹${tile.price}</strong>${br?` · Now ₹${br.rent}`:''}</div>
-        <div class="bus-deed-owner">${owner?`Owned by ${owner.name}`:'Unowned'}</div>
+        <div class="bus-deed-meta">Price <strong>₹${tile.price}</strong>${br?` · Now ₹${br.rent}`:''}${isMortgaged(idx)?' · Mortgaged':''}</div>
+        <div class="bus-deed-owner">${owner?`Owned by ${owner.name}`:'Unowned'}${isMortgaged(idx)?' · mortgaged':''}</div>
         ${rentLadderHtml(tile,idx,owner)}`;
     } else if(tile.type==='tax'){
       body=`<div class="bus-deed-meta">Pay <strong>₹${tile.amount}</strong></div>`;
@@ -1128,27 +1691,36 @@ function openBusinessGame(chat,playerCount){
     const buyActions=awaitingBuy&&isMyControl()?`
       <div class="bus-deed-actions">
         <button type="button" id="busBuyYes" class="game-tap-target bus-deed-btn bus-deed-btn--primary">Buy ₹${tile.price}</button>
-        <button type="button" id="busBuyNo" class="game-tap-target bus-deed-btn">Skip</button>
+        <button type="button" id="busBuyNo" class="game-tap-target bus-deed-btn">Skip → auction</button>
       </div>`:'';
-    const deedBuild=(!awaitingBuy&&isMyControl()&&!rolling&&canBuildOn(players[currentPlayer],idx))?`
+    const deedBuild=(!awaitingBuy&&!auction&&!distress&&isMyControl()&&!rolling&&canBuildOn(players[currentPlayer],idx))?`
       <div class="bus-deed-actions">
         <button type="button" id="busDeedBuild" class="game-tap-target bus-deed-btn bus-deed-btn--primary" data-build-idx="${idx}">
           ${improvementTier(idx)===4?`Hotel ₹${houseCostFor(tile.group)}`:`House ₹${houseCostFor(tile.group)}`}
         </button>
       </div>`:'';
+    let deedLiq='';
+    if(!awaitingBuy&&!auction&&!rolling&&isBuyable(tile)&&owner&&((distress&&isDistressControl()&&distress.payerSeat===players.indexOf(owner))||(isMyControl()&&owner===players[currentPlayer]))){
+      const acts=[];
+      if(canSellHouseOn(owner,idx))acts.push(`<button type="button" class="game-tap-target bus-deed-btn" data-liq="sell" data-liq-idx="${idx}">Sell house ₹${houseSellRefund(tile.group)}</button>`);
+      if(canMortgage(owner,idx))acts.push(`<button type="button" class="game-tap-target bus-deed-btn" data-liq="mortgage" data-liq-idx="${idx}">Mortgage ₹${mortgageValue(tile)}</button>`);
+      if(canUnmortgage(owner,idx)&&!distress)acts.push(`<button type="button" class="game-tap-target bus-deed-btn bus-deed-btn--primary" data-liq="unmortgage" data-liq-idx="${idx}">Unmortgage ₹${unmortgageCost(tile)}</button>`);
+      if(acts.length)deedLiq=`<div class="bus-deed-actions">${acts.join('')}</div>`;
+    }
     return `<div class="bus-deed" style="--bus-band:${band}">
       <div class="bus-deed-band"></div>
-      <div class="bus-deed-type">${typeLabel}</div>
+      <div class="bus-deed-type">${typeLabel}${isMortgaged(idx)?' · Mortgaged':''}</div>
       <div class="bus-deed-name">${tile.name}</div>
       ${body}
-      ${message&&!awaitingBuy&&!awaitingJailChoice?`<div class="bus-deed-msg">${message}</div>`:''}
+      ${message&&!awaitingBuy&&!awaitingJailChoice&&!auction?`<div class="bus-deed-msg">${message}</div>`:''}
       ${buyActions}
       ${deedBuild}
+      ${deedLiq}
     </div>`;
   }
 
   function jailPanelHtml(){
-    if(!awaitingJailChoice||!isMyControl()||rolling||gameOver||awaitingBuy)return '';
+    if(!awaitingJailChoice||!isMyControl()||rolling||gameOver||awaitingBuy||auction||distress)return '';
     const p=players[currentPlayer];
     if(!p||!p.inJail)return '';
     const mustNote=p.jailAttempts>=2?'Last try — fail and you pay to leave.':'';
@@ -1162,8 +1734,51 @@ function openBusinessGame(chat,playerCount){
     </div>`;
   }
 
+  function auctionPanelHtml(){
+    if(!auction)return '';
+    const tile=BOARD[auction.tileIdx];
+    const turnName=players[auction.turnSeat]?players[auction.turnSeat].name:'—';
+    const highName=auction.highBidder!=null&&players[auction.highBidder]?players[auction.highBidder].name:'none';
+    const nextBid=auction.highBid>0?auction.highBid+auction.raiseBy:auction.minBid;
+    const myTurn=isAuctionControl()||(!liveOn&&auction.turnSeat===mySeat);
+    return `<div class="bus-auction-bar">
+      <div class="bus-auction-title">Auction · ${tile?tile.name:''}</div>
+      <div class="bus-auction-meta">High ₹${auction.highBid||0} (${highName}) · ${turnName}'s bid · raise +₹${auction.raiseBy}</div>
+      ${myTurn?`<div class="bus-auction-actions">
+        <button type="button" id="busAuctionRaise" class="game-tap-target bus-deed-btn bus-deed-btn--primary"${players[auction.turnSeat].money<nextBid?' disabled':''}>Raise to ₹${nextBid}</button>
+        <button type="button" id="busAuctionPass" class="game-tap-target bus-deed-btn">Pass</button>
+      </div>`:`<div class="bus-auction-meta">Waiting for ${turnName}…</div>`}
+    </div>`;
+  }
+
+  function distressPanelHtml(){
+    if(!distress)return '';
+    const payer=players[distress.payerSeat];
+    if(!payer)return '';
+    const need=Math.max(0,distress.amount-payer.money);
+    const mine=isDistressControl()||(!liveOn&&distress.payerSeat===mySeat);
+    const sells=listSellOptions(payer);
+    const morts=listMortgageOptions(payer);
+    const list=mine?`<div class="bus-liq-list">
+      ${sells.map((o)=>`<button type="button" class="game-tap-target bus-build-opt" data-liq="sell" data-liq-idx="${o.idx}" style="--gc:${o.color}">
+        <span class="bus-build-opt-name">Sell · ${o.name}</span>
+        <span class="bus-build-opt-meta">+₹${o.refund}</span>
+      </button>`).join('')}
+      ${morts.map((o)=>`<button type="button" class="game-tap-target bus-build-opt" data-liq="mortgage" data-liq-idx="${o.idx}" style="--gc:${o.color}">
+        <span class="bus-build-opt-name">Mortgage · ${o.name}</span>
+        <span class="bus-build-opt-meta">+₹${o.value}</span>
+      </button>`).join('')}
+    </div>`:'';
+    return `<div class="bus-distress-bar">
+      <div class="bus-jail-title">${payer.name} must raise ₹${distress.amount} · have ₹${payer.money}${need?` · need ₹${need}`:''}</div>
+      <div class="bus-jail-hint">${distress.note||'Sell houses, then mortgage'}</div>
+      ${list}
+      ${mine?`<button type="button" id="busDistressBust" class="game-tap-target bus-build-toggle" style="margin-top:8px">Can't pay — bankrupt</button>`:''}
+    </div>`;
+  }
+
   function buildPanelHtml(){
-    if(!isMyControl()||awaitingBuy||rolling||gameOver)return '';
+    if(!isMyControl()||awaitingBuy||rolling||gameOver||auction||distress)return '';
     const opts=listBuildOptions(players[currentPlayer]);
     if(!opts.length&&!buildOpen)return '';
     if(!opts.length){
@@ -1181,6 +1796,31 @@ function openBusinessGame(chat,playerCount){
     </div>`;
   }
 
+  function liquidityPanelHtml(){
+    if(distress||auction||awaitingBuy||rolling||gameOver||!isMyControl())return '';
+    const p=players[currentPlayer];
+    const sells=listSellOptions(p);
+    const morts=listMortgageOptions(p);
+    const unmorts=listUnmortgageOptions(p);
+    const n=sells.length+morts.length+unmorts.length;
+    if(!n&&!liqOpen)return '';
+    const list=liqOpen?`<div class="bus-liq-list">
+      ${sells.map((o)=>`<button type="button" class="game-tap-target bus-build-opt" data-liq="sell" data-liq-idx="${o.idx}" style="--gc:${o.color}">
+        <span class="bus-build-opt-name">Sell · ${o.name}</span><span class="bus-build-opt-meta">+₹${o.refund}</span>
+      </button>`).join('')}
+      ${morts.map((o)=>`<button type="button" class="game-tap-target bus-build-opt" data-liq="mortgage" data-liq-idx="${o.idx}" style="--gc:${o.color}">
+        <span class="bus-build-opt-name">Mortgage · ${o.name}</span><span class="bus-build-opt-meta">+₹${o.value}</span>
+      </button>`).join('')}
+      ${unmorts.map((o)=>`<button type="button" class="game-tap-target bus-build-opt" data-liq="unmortgage" data-liq-idx="${o.idx}" style="--gc:${o.color}" ${o.afford?'':'disabled'}>
+        <span class="bus-build-opt-name">Lift · ${o.name}</span><span class="bus-build-opt-meta">−₹${o.cost}</span>
+      </button>`).join('')}
+    </div>`:'';
+    return `<div class="bus-build-bar">
+      <button type="button" id="busLiqToggle" class="game-tap-target bus-build-toggle">${liqOpen?'Hide cash tools':'Cash tools'} · ${n}</button>
+      ${list}
+    </div>`;
+  }
+
   function miniBoardHtml(){
     const perSide=Math.ceil(BOARD.length/4);
     return `<div class="bus-mini" aria-hidden="true">
@@ -1191,8 +1831,8 @@ function openBusinessGame(chat,playerCount){
         const here=players.some(pl=>pl.pos===idx&&!pl.bankrupt);
         const focus=idx===focusPos;
         const tier=tile.type==='property'?improvementTier(idx):0;
-        const mark=tier>=5?'H':(tier>0?String(tier):'');
-        return `<span class="bus-mini-tile bus-mini-tile--${side}${focus?' is-focus':''}${here?' is-here':''}${mark?' has-imp':''}" style="--i:${i};--n:${perSide};background:${tile.color||'#3d4f61'};${owner?`box-shadow:inset 0 0 0 1.5px ${owner.color};`:''}">${mark?`<em class="bus-mini-imp">${mark}</em>`:''}</span>`;
+        const mark=isMortgaged(idx)?'M':(tier>=5?'H':(tier>0?String(tier):''));
+        return `<span class="bus-mini-tile bus-mini-tile--${side}${focus?' is-focus':''}${here?' is-here':''}${mark?' has-imp':''}${isMortgaged(idx)?' is-mort':''}" style="--i:${i};--n:${perSide};background:${tile.color||'#3d4f61'};${owner?`box-shadow:inset 0 0 0 1.5px ${owner.color};`:''}">${mark?`<em class="bus-mini-imp">${mark}</em>`:''}</span>`;
       }).join('')}
       <div class="bus-mini-center">
         <div class="bus-dice">${diceVal[0]} · ${diceVal[1]}</div>
@@ -1235,8 +1875,9 @@ function openBusinessGame(chat,playerCount){
       }
       return;
     }
+    const showTimer=(isMyControl()&&!awaitingBuy&&!auction&&!distress)||isAuctionControl()||isDistressControl();
     overlay.innerHTML=`
-      ${gameChromeHtml({title:'Business',subtitle:MODE_SUB+(doublesStreak?` · Doubles ${doublesStreak}`:''),backId:'busBack',rightHtml:isMyControl()&&!awaitingBuy?`<span id="busTimerEl" class="game-chrome-metric">${busTimer}s</span>`:undefined})}
+      ${gameChromeHtml({title:'Business',subtitle:MODE_SUB+(doublesStreak?` · Doubles ${doublesStreak}`:'')+(auction?' · Auction':''),backId:'busBack',rightHtml:showTimer?`<span id="busTimerEl" class="game-chrome-metric">${busTimer}s</span>`:undefined})}
       <div class="bus-players">
         ${players.map((p,i)=>`<div class="bus-player${currentPlayer===i?' is-active':''}${p.bankrupt?' is-out':''}${p.inJail?' is-jail':''}" style="--pc:${p.color}">
           <div class="bus-player-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(p.name,p):p.name}</div>
@@ -1249,28 +1890,45 @@ function openBusinessGame(chat,playerCount){
         ${deedHtml(tile,focusPos)}
         ${miniBoardHtml()}
       </div>
+      ${auctionPanelHtml()}
+      ${distressPanelHtml()}
       ${jailPanelHtml()}
       ${buildPanelHtml()}
+      ${liquidityPanelHtml()}
       <div class="bus-controls">
-        <button type="button" id="busRollBtn" class="game-tap-target bus-roll-btn"${!isMyControl()||rolling||awaitingBuy||awaitingJailChoice?' disabled':''}>
-          ${awaitingBuy?'Choose Buy or Skip':awaitingJailChoice?'Jail: Pay or Roll':isMyControl()?(rolling?'Rolling…':(pendingExtraTurn||doublesStreak?'Roll again':'Roll dice')):`${players[currentPlayer].name} playing…`}
+        <button type="button" id="busRollBtn" class="game-tap-target bus-roll-btn"${!isMyControl()||rolling||awaitingBuy||awaitingJailChoice||auction||distress?' disabled':''}>
+          ${awaitingBuy?'Buy or auction':auction?'Auction in play':distress?'Raise funds':awaitingJailChoice?'Jail: Pay or Roll':isMyControl()?(rolling?'Rolling…':(pendingExtraTurn||doublesStreak?'Roll again':'Roll dice')):`${players[currentPlayer].name} playing…`}
         </button>
       </div>
     `;
     document.getElementById('busBack').addEventListener('click',()=>{askBusLeave();});
-    document.getElementById('busRollBtn')?.addEventListener('click',()=>{if(isMyControl()&&!rolling&&!awaitingBuy&&!awaitingJailChoice&&!gameOver)rollBusDice();});
+    document.getElementById('busRollBtn')?.addEventListener('click',()=>{if(isMyControl()&&!rolling&&!awaitingBuy&&!awaitingJailChoice&&!auction&&!distress&&!gameOver)rollBusDice();});
     document.getElementById('busBuyYes')?.addEventListener('click',()=>resolveBuy(true));
     document.getElementById('busBuyNo')?.addEventListener('click',()=>resolveBuy(false));
     document.getElementById('busJailPay')?.addEventListener('click',()=>payJailFine());
     document.getElementById('busJailRoll')?.addEventListener('click',()=>jailRollAttempt());
+    document.getElementById('busAuctionRaise')?.addEventListener('click',()=>auctionRaise());
+    document.getElementById('busAuctionPass')?.addEventListener('click',()=>auctionPass());
+    document.getElementById('busDistressBust')?.addEventListener('click',()=>declareDistressBankrupt());
     document.getElementById('busBuildToggle')?.addEventListener('click',()=>{
-      if(!isMyControl()||awaitingBuy||rolling)return;
-      buildOpen=!buildOpen;render();
+      if(!isMyControl()||awaitingBuy||rolling||auction||distress)return;
+      buildOpen=!buildOpen;liqOpen=false;render();
+    });
+    document.getElementById('busLiqToggle')?.addEventListener('click',()=>{
+      if(!isMyControl()||awaitingBuy||rolling||auction||distress)return;
+      liqOpen=!liqOpen;buildOpen=false;render();
     });
     overlay.querySelectorAll('[data-build-idx]').forEach((btn)=>{
       btn.addEventListener('click',()=>{
         const idx=Number(btn.getAttribute('data-build-idx'));
         if(Number.isFinite(idx))tryPlayerBuild(idx);
+      });
+    });
+    overlay.querySelectorAll('[data-liq-idx]').forEach((btn)=>{
+      btn.addEventListener('click',()=>{
+        const idx=Number(btn.getAttribute('data-liq-idx'));
+        const kind=btn.getAttribute('data-liq');
+        if(Number.isFinite(idx)&&kind)tryPlayerLiquidity(kind,idx);
       });
     });
   }
@@ -1280,11 +1938,11 @@ function openBusinessGame(chat,playerCount){
       gameType:'business',
       matchId:(chat&&chat.dangalMatchId)||(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.matchId),
       me:liveRoles.me,playerA:liveRoles.playerA,playerB:liveRoles.playerB,
-      state:{players:serializeBusPlayers(),improvements:serializeImprovements(),currentPlayer:0,diceVal:[1,1],message:'',gameOver:false,awaitingBuy:false,awaitingJailChoice:false,focusPos:0,doublesStreak:0,pendingExtraTurn:false},
+      state:{players:serializeBusPlayers(),improvements:serializeImprovements(),mortgaged:serializeMortgaged(),auction:null,distress:null,currentPlayer:0,diceVal:[1,1],message:'',gameOver:false,awaitingBuy:false,awaitingJailChoice:false,focusPos:0,doublesStreak:0,pendingExtraTurn:false},
       onSnap(val){
         if(!val||applyingLive||!alive())return;
         if(val.status==='forfeit'&&!gameOver){
-          gameOver=true;stopBusTimer();
+          gameOver=true;stopBusTimer();stopAuctionTimer();
           const iWon=val.winner===liveRoles.me;
           if(gs)gs.setOutcome(iWon?'won':'lost');
           if(typeof recordGameResult==='function')recordGameResult('business',iWon);
@@ -1295,6 +1953,9 @@ function openBusinessGame(chat,playerCount){
         applyingLive=true;
         applyBusPlayers(s.players);
         if(s.improvements)applyImprovements(s.improvements);
+        applyMortgaged(s.mortgaged);
+        applyAuction(s.auction);
+        applyDistress(s.distress);
         currentPlayer=Number(s.currentPlayer)||0;
         if(Array.isArray(s.diceVal))diceVal=s.diceVal.slice();
         message=s.message||'';
@@ -1304,9 +1965,12 @@ function openBusinessGame(chat,playerCount){
         doublesStreak=Number(s.doublesStreak)||0;
         pendingExtraTurn=!!s.pendingExtraTurn;
         focusPos=s.focusPos!=null?Number(s.focusPos):players[currentPlayer].pos;
-        stopBusTimer();
+        stopBusTimer();stopAuctionTimer();
         render();
-        if(!gameOver&&isMyControl()&&!awaitingBuy)startBusTimer();
+        if(!gameOver){
+          if(auction&&isAuctionControl())startAuctionTimer();
+          else if(!awaitingBuy&&!distress&&isMyControl())startBusTimer();
+        }
         applyingLive=false;
       },
     });
