@@ -4,29 +4,38 @@ function openRushRunner(){
   overlay.style.cssText='position:absolute;inset:0;z-index:80;display:flex;flex-direction:column;';
 
   const LANES=3;
-  const LANE_LERP_MS=150;
+  const LANE_LERP_MS=130;
   const FAR=42;
   const FOCAL=9;
   const PLAYER_Z=2.4;
-  const BASE_SPEED=11;
+  const BASE_SPEED=9.5;
   const MAX_SPEED=26;
-  const RAMP_UNTIL=450;
+  const RAMP_UNTIL=520;
+  /** Collision: interpolated laneX + forgiving lane width; depth matches visible contact. */
+  const HIT_LANE=0.40;
+  const HIT_DEPTH=0.70;
+  const COYOTE_MS=90;
+  const BUFFER_MS=110;
 
   let lane=1,laneX=1,laneFrom=1,laneTo=1,laneT=1;
-  let score=0,coins=0,dist=0,speed=BASE_SPEED,gameOver=false,started=false;
+  let score=0,coins=0,dist=0,speed=BASE_SPEED,gameOver=false,started=false,dying=false;
   let obstacles=[],coinItems=[],powerups=[],particles=[];
   let jumping=false,sliding=false,jumpT=0,slideT=0,squash=1;
   let hitFlash=0,shield=false,shieldTimer=0,magnet=false,magnetTimer=0;
+  let shieldPulse=0,saveBanner=0,deathFocus=null,deathStall=0;
+  let landCoyote=0,jumpBuffer=0,slideBuffer=0;
   let bestScore=(typeof getGamePB==='function'?getGamePB('rushrunner'):null) ?? (parseInt(localStorage.getItem('rushrunner_best')||'0',10)||0);
   let raf=null,lastTime=0,spawnAcc=0,coinAcc=0,powerAcc=0,scroll=0;
   let resizeObs=null,cssW=320,cssH=480,shake=0;
   let keyHandler=null;
   let pauseCtrl=null;
+  let teachPhase=0;
 
+  // Dark roads + bright rails/lines so every theme stays readable at speed
   const THEMES=[
-    {name:'Mumbai Streets',skyTop:'#FFB347',skyBot:'#FF6B35',road:'#2A2A32',roadEdge:'#F4A261',line:'#FFE08A',accent:'#E8663D',bldg:['#5C4033','#8B5A2B','#3D2B1F','#6B4423']},
-    {name:'Delhi Metro',skyTop:'#89CFF0',skyBot:'#4CC9F0',road:'#1E1E2E',roadEdge:'#7209B7',line:'#C77DFF',accent:'#4CC9F0',bldg:['#3A0CA3','#4361EE','#1B1B3A','#4A4E69']},
-    {name:'Jaipur Fort',skyTop:'#FFB4A2',skyBot:'#E76F51',road:'#2C1810',roadEdge:'#F4A261',line:'#FFD166',accent:'#F72585',bldg:['#9B2226','#BB3E03','#6A040F','#AE2012']},
+    {name:'Mumbai Streets',skyTop:'#FFC56A',skyBot:'#FF7A3D',road:'#1C1C24',roadAlt:'#252530',roadEdge:'#FFB86B',line:'#FFE9A0',accent:'#E8663D',bldg:['#4A3228','#6B4634','#2E221C','#5A3A28']},
+    {name:'Delhi Metro',skyTop:'#9AD4F5',skyBot:'#4CC9F0',road:'#14141E',roadAlt:'#1C1C2A',roadEdge:'#C77DFF',line:'#E0B8FF',accent:'#4CC9F0',bldg:['#2A1B6E','#3548B8','#16162A','#3A3E55']},
+    {name:'Jaipur Fort',skyTop:'#FFC4B0',skyBot:'#E76F51',road:'#1A100C',roadAlt:'#261810',roadEdge:'#FFC857',line:'#FFE08A',accent:'#F72585',bldg:['#7A1C20','#9A3208','#4A0A12','#8A1C18']},
   ];
   const theme=THEMES[Math.floor(Math.random()*THEMES.length)];
 
@@ -78,12 +87,13 @@ function openRushRunner(){
       <canvas id="rrCanvas" aria-label="Rush Runner playfield"></canvas>
       <div class="rr-hud-chip" id="rrCoins" aria-live="polite">◆ 0</div>
       <div class="rr-power" id="rrPower" hidden></div>
+      <div class="rr-banner" id="rrBanner" hidden></div>
       <div id="rrOverlay" class="rr-start">
         <div class="rr-start-mark" aria-hidden="true"></div>
         <div class="rr-start-title">Rush Runner</div>
         <div class="rr-start-sub">${theme.name}</div>
         <div class="rr-start-best">Best ${bestScore}m</div>
-        <div class="rr-start-hint">Swipe or tap lanes · Up jump · Down slide</div>
+        <div class="rr-start-hint">Swipe or buttons · ◀▶ lanes · ⬆ jump over lows · ⬇ slide under highs</div>
         <button type="button" id="rrStart" class="game-tap-target rr-start-btn">Start running</button>
       </div>
     </div>
@@ -150,19 +160,33 @@ function openRushRunner(){
   }
 
   function setLane(next){
-    if(next===laneTo||next<0||next>=LANES)return;
+    if(!started||gameOver||dying)return;
+    if(next===laneTo){buzz('select');return;}
+    if(next<0||next>=LANES){buzz('invalid');return;}
     laneFrom=laneX;laneTo=next;lane=next;laneT=0;
     buzz('select');
   }
-  function doJump(){
-    if(!started||gameOver||jumping||sliding)return;
-    jumping=true;jumpT=0;squash=1.15;
+  function tryJump(){
+    if(!started||gameOver||dying)return;
+    if(jumping){jumpBuffer=BUFFER_MS;buzz('invalid');return;}
+    if(sliding&&slideT<0.75){jumpBuffer=BUFFER_MS;buzz('invalid');return;}
+    jumping=true;jumpT=0;squash=1.15;sliding=false;slideT=0;landCoyote=0;jumpBuffer=0;
     buzz('move');
   }
-  function doSlide(){
-    if(!started||gameOver||sliding)return;
-    sliding=true;slideT=0;jumping=false;jumpT=0;squash=0.7;
+  function trySlide(){
+    if(!started||gameOver||dying)return;
+    if(sliding){slideBuffer=BUFFER_MS;buzz('invalid');return;}
+    sliding=true;slideT=0;jumping=false;jumpT=0;squash=0.7;slideBuffer=0;
     buzz('move');
+  }
+  function doJump(){tryJump();}
+  function doSlide(){trySlide();}
+
+  function showBanner(text,ms){
+    const el=document.getElementById('rrBanner');
+    if(!el)return;
+    el.hidden=false;el.textContent=text;
+    saveBanner=ms||0.9;
   }
 
   function drawSky(){
@@ -174,7 +198,7 @@ function openRushRunner(){
       ctx.fillStyle=b.color;
       ctx.fillRect(b.x,horizon-b.h,b.w,b.h);
       if(b.win){
-        ctx.fillStyle='rgba(255,220,120,0.35)';
+        ctx.fillStyle='rgba(255,220,120,0.28)';
         const cols=Math.max(1,Math.floor(b.w/14));
         const rows=Math.max(1,Math.floor(b.h/16));
         for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
@@ -182,34 +206,41 @@ function openRushRunner(){
         }
       }
     });
+    // Horizon haze — keeps far clutter from competing with hazards
+    const haze=ctx.createLinearGradient(0,horizon-24,0,horizon+36);
+    haze.addColorStop(0,'rgba(12,12,18,0)');
+    haze.addColorStop(0.55,'rgba(12,12,18,0.35)');
+    haze.addColorStop(1,'rgba(12,12,18,0.55)');
+    ctx.fillStyle=haze;ctx.fillRect(0,horizon-24,cssW,60);
   }
 
   function drawRoad(){
-    const segs=18;
+    const segs=20;
     for(let i=0;i<segs;i++){
       const z0=PLAYER_Z+(i/segs)*(FAR-PLAYER_Z);
       const z1=PLAYER_Z+((i+1)/segs)*(FAR-PLAYER_Z);
-      const a=project(-1.6,z0),b=project(1.6,z0),c=project(1.6,z1),d=project(-1.6,z1);
-      const shade=i%2===0?theme.road:'#23232c';
-      ctx.fillStyle=shade;
+      const a=project(-1.65,z0),b=project(1.65,z0),c=project(1.65,z1),d=project(-1.65,z1);
+      ctx.fillStyle=i%2===0?theme.road:theme.roadAlt;
       ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.lineTo(c.x,c.y);ctx.lineTo(d.x,d.y);ctx.closePath();ctx.fill();
     }
-    // Edge rails
+    // Outer edge rails (double stroke for read at speed)
     for(const side of [-1,1]){
-      const near=project(side*1.55,PLAYER_Z),far=project(side*1.55,FAR*0.95);
-      ctx.strokeStyle=theme.roadEdge;ctx.lineWidth=3;ctx.beginPath();
-      ctx.moveTo(near.x,near.y);ctx.lineTo(far.x,far.y);ctx.stroke();
+      const near=project(side*1.58,PLAYER_Z),far=project(side*1.58,FAR*0.92);
+      ctx.strokeStyle='rgba(0,0,0,0.55)';ctx.lineWidth=6;ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(near.x,near.y);ctx.lineTo(far.x,far.y);ctx.stroke();
+      ctx.strokeStyle=theme.roadEdge;ctx.lineWidth=3.2;
+      ctx.beginPath();ctx.moveTo(near.x,near.y);ctx.lineTo(far.x,far.y);ctx.stroke();
     }
-    // Scrolling dashed lane lines
+    // Lane separators — brighter dashes
     const dashPhase=scroll%3.2;
     for(let laneLine=0;laneLine<2;laneLine++){
       const wx=laneWorldX(laneLine+0.5);
       for(let k=0;k<14;k++){
         const zA=PLAYER_Z+((k+dashPhase)%14)*(FAR-PLAYER_Z)/14;
-        const zB=zA+1.1;
+        const zB=zA+1.25;
         if(zB>FAR)continue;
         const p0=project(wx,zA),p1=project(wx,zB);
-        ctx.strokeStyle=theme.line;ctx.globalAlpha=0.55;ctx.lineWidth=Math.max(1.2,p0.scale*2.2);
+        ctx.strokeStyle=theme.line;ctx.globalAlpha=0.85;ctx.lineWidth=Math.max(1.6,p0.scale*2.8);
         ctx.beginPath();ctx.moveTo(p0.x,p0.y);ctx.lineTo(p1.x,p1.y);ctx.stroke();
         ctx.globalAlpha=1;
       }
@@ -230,28 +261,91 @@ function openRushRunner(){
     }
   }
 
+  /** Distinct silhouettes: low = jump-over barrier; high = slide-under tall block. */
+  function drawObstacle(o,p,emphasize){
+    const low=o.type==='low';
+    const hw=(low?0.72:0.52)*p.scale*28;
+    const hh=(low?0.32:0.92)*p.scale*36;
+    const x=p.x,y=p.y;
+    if(emphasize){
+      ctx.fillStyle='rgba(255,70,70,0.35)';
+      ctx.beginPath();ctx.ellipse(x,y-hh*0.4,hw*1.35,hh*0.85,0,0,Math.PI*2);ctx.fill();
+    }
+    if(low){
+      // Wide short barrier + hazard stripes (read: jump)
+      ctx.fillStyle='#1A1A1A';
+      ctx.beginPath();
+      ctx.moveTo(x-hw,y);ctx.lineTo(x-hw*0.92,y-hh);ctx.lineTo(x+hw*0.92,y-hh);ctx.lineTo(x+hw,y);
+      ctx.closePath();ctx.fill();
+      ctx.fillStyle='#FFB020';
+      ctx.beginPath();
+      ctx.moveTo(x-hw*0.92,y-hh);ctx.lineTo(x-hw*0.92,y-hh*0.35);ctx.lineTo(x+hw*0.92,y-hh*0.35);ctx.lineTo(x+hw*0.92,y-hh);
+      ctx.closePath();ctx.fill();
+      ctx.strokeStyle='#1A1A1A';ctx.lineWidth=Math.max(1.5,p.scale*2);
+      for(let i=-2;i<=2;i++){
+        const sx=x+i*hw*0.32;
+        ctx.beginPath();ctx.moveTo(sx-hw*0.12,y-hh);ctx.lineTo(sx+hw*0.08,y-hh*0.35);ctx.stroke();
+      }
+      // Jump cue chevron
+      ctx.fillStyle='rgba(255,255,255,0.85)';
+      ctx.beginPath();
+      ctx.moveTo(x,y-hh-8*p.scale);ctx.lineTo(x-7*p.scale,y-hh+2*p.scale);ctx.lineTo(x+7*p.scale,y-hh+2*p.scale);
+      ctx.closePath();ctx.fill();
+    }else{
+      // Tall block with open lower band cue (read: slide)
+      ctx.fillStyle='#3D4654';
+      ctx.beginPath();
+      ctx.moveTo(x-hw,y);ctx.lineTo(x-hw*0.82,y-hh);ctx.lineTo(x+hw*0.82,y-hh);ctx.lineTo(x+hw,y);
+      ctx.closePath();ctx.fill();
+      ctx.fillStyle='#6B778A';
+      ctx.beginPath();
+      ctx.moveTo(x-hw*0.82,y-hh);ctx.lineTo(x,y-hh-hh*0.14);ctx.lineTo(x+hw*0.82,y-hh);ctx.closePath();ctx.fill();
+      // Lower “gap” stripe — slide under
+      ctx.fillStyle='rgba(20,24,32,0.85)';
+      ctx.fillRect(x-hw*0.75,y-hh*0.28,hw*1.5,hh*0.28);
+      ctx.strokeStyle='#A8B4C4';ctx.lineWidth=Math.max(1.2,p.scale*1.8);
+      ctx.strokeRect(x-hw*0.75,y-hh*0.28,hw*1.5,hh*0.28);
+      ctx.fillStyle='rgba(255,255,255,0.8)';
+      ctx.beginPath();
+      ctx.moveTo(x,y-4*p.scale);ctx.lineTo(x-7*p.scale,y-14*p.scale);ctx.lineTo(x+7*p.scale,y-14*p.scale);
+      ctx.closePath();ctx.fill();
+    }
+    if(o.z>16){
+      ctx.fillStyle=low?'rgba(255,176,32,0.22)':'rgba(160,180,210,0.2)';
+      ctx.beginPath();ctx.arc(x,y-hh*0.5,5+p.scale*5,0,Math.PI*2);ctx.fill();
+    }
+  }
+
   function drawCoin(p,spin){
-    const r=Math.max(4,10*p.scale);
-    ctx.save();ctx.translate(p.x,p.y-r*1.2);ctx.rotate(spin);
-    const g=ctx.createRadialGradient(0,0,1,0,0,r);
-    g.addColorStop(0,'#FFE566');g.addColorStop(1,'#E0A100');
+    const r=Math.max(5,12*p.scale);
+    ctx.save();ctx.translate(p.x,p.y-r*1.55);ctx.rotate(spin);
+    ctx.fillStyle='rgba(0,0,0,0.35)';
+    ctx.beginPath();ctx.ellipse(1,r*0.9,r*0.85,r*0.35,0,0,Math.PI*2);ctx.fill();
+    const g=ctx.createRadialGradient(-r*0.2,-r*0.2,1,0,0,r);
+    g.addColorStop(0,'#FFF1A0');g.addColorStop(0.55,'#FFD166');g.addColorStop(1,'#C88600');
     ctx.fillStyle=g;ctx.beginPath();ctx.ellipse(0,0,r,r*0.72,0,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle='rgba(255,255,255,0.55)';ctx.lineWidth=1.5;ctx.stroke();
+    ctx.strokeStyle='rgba(255,255,255,0.75)';ctx.lineWidth=2;ctx.stroke();
     ctx.restore();
   }
 
   function drawPower(p,type){
-    const r=Math.max(6,12*p.scale);
-    ctx.save();ctx.translate(p.x,p.y-r*1.4);
+    const r=Math.max(7,14*p.scale);
+    ctx.save();ctx.translate(p.x,p.y-r*1.7);
+    ctx.fillStyle='rgba(0,0,0,0.3)';
+    ctx.beginPath();ctx.ellipse(0,r*1.1,r*0.9,r*0.35,0,0,Math.PI*2);ctx.fill();
     if(type==='shield'){
-      ctx.fillStyle='rgba(100,200,255,0.85)';
+      ctx.fillStyle='rgba(80,200,255,0.35)';
+      ctx.beginPath();ctx.arc(0,0,r*1.35,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='rgba(100,210,255,0.95)';
       ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.fill();
-      ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();
+      ctx.strokeStyle='#fff';ctx.lineWidth=2.5;ctx.beginPath();
       ctx.moveTo(-r*0.4,0);ctx.lineTo(-r*0.05,r*0.45);ctx.lineTo(r*0.5,-r*0.35);ctx.stroke();
     }else{
-      ctx.fillStyle='rgba(255,80,120,0.9)';
+      ctx.fillStyle='rgba(255,90,130,0.35)';
+      ctx.beginPath();ctx.arc(0,0,r*1.35,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='rgba(255,90,130,0.95)';
       ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.fill();
-      ctx.strokeStyle='#fff';ctx.lineWidth=2;
+      ctx.strokeStyle='#fff';ctx.lineWidth=2.5;
       ctx.beginPath();ctx.arc(0,0,r*0.45,0,Math.PI*1.4);ctx.stroke();
     }
     ctx.restore();
@@ -259,11 +353,10 @@ function openRushRunner(){
 
   function playerJumpOffset(){
     if(!jumping)return 0;
-    // Hang arc: up fast, hang, down
     const t=jumpT;
-    if(t<0.35)return -easeOutCubic(t/0.35)*52;
-    if(t<0.55)return -52;
-    return -52*(1-easeOutCubic((t-0.55)/0.45));
+    if(t<0.32)return -easeOutCubic(t/0.32)*56;
+    if(t<0.58)return -56;
+    return -56*(1-easeOutCubic((t-0.58)/0.42));
   }
 
   function drawPlayer(){
@@ -276,17 +369,17 @@ function openRushRunner(){
     const y=p.y+jumpY;
 
     if(shield){
-      ctx.fillStyle='rgba(100,200,255,0.22)';
-      ctx.beginPath();ctx.ellipse(p.x,y-28*p.scale,28*p.scale,34*p.scale,0,0,Math.PI*2);ctx.fill();
-      ctx.strokeStyle='rgba(160,230,255,0.7)';ctx.lineWidth=2;
-      ctx.beginPath();ctx.ellipse(p.x,y-28*p.scale,28*p.scale,34*p.scale,0,0,Math.PI*2);ctx.stroke();
+      const pulse=1+Math.sin(scroll*6)*0.06+(shieldPulse>0?0.12:0);
+      ctx.fillStyle=`rgba(100,200,255,${0.18+shieldPulse*0.25})`;
+      ctx.beginPath();ctx.ellipse(p.x,y-28*p.scale,30*p.scale*pulse,36*p.scale*pulse,0,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle=`rgba(160,230,255,${0.65+shieldPulse*0.3})`;ctx.lineWidth=2.5;
+      ctx.beginPath();ctx.ellipse(p.x,y-28*p.scale,30*p.scale*pulse,36*p.scale*pulse,0,0,Math.PI*2);ctx.stroke();
     }
     if(hitFlash>0){
       ctx.fillStyle=`rgba(255,40,40,${Math.min(0.55,hitFlash/12)})`;
-      ctx.beginPath();ctx.arc(p.x,y-20*p.scale,32*p.scale,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(p.x,y-20*p.scale,34*p.scale,0,Math.PI*2);ctx.fill();
     }
 
-    // Geometric runner: legs + torso + head
     const s=p.scale;
     const legPhase=started&&!jumping&&!sliding?Math.sin(scroll*8)*6*s:0;
     ctx.fillStyle='#1A1714';
@@ -299,7 +392,6 @@ function openRushRunner(){
     ctx.closePath();ctx.fill();
     ctx.fillStyle='#FFE0C2';
     ctx.beginPath();ctx.arc(p.x,y-10*s-th-8*s,9*s,0,Math.PI*2);ctx.fill();
-    // Shadow
     ctx.fillStyle='rgba(0,0,0,0.28)';
     ctx.beginPath();ctx.ellipse(p.x,p.y+2,16*s*(sliding?1.2:1),5*s,0,0,Math.PI*2);ctx.fill();
   }
@@ -327,15 +419,39 @@ function openRushRunner(){
     const el=document.getElementById('rrPower');
     if(!el)return;
     const bits=[];
-    if(shield)bits.push('Shield');
-    if(magnet)bits.push('Magnet');
-    if(bits.length){el.hidden=false;el.textContent=bits.join(' · ');}
-    else el.hidden=true;
+    if(shield)bits.push('Shield '+Math.ceil(Math.max(0,shieldTimer))+'s');
+    if(magnet)bits.push('Magnet '+Math.ceil(Math.max(0,magnetTimer))+'s');
+    if(bits.length){
+      el.hidden=false;
+      el.textContent=bits.join(' · ');
+      el.classList.toggle('rr-power--hot', shieldPulse>0 || shield || magnet);
+    }else{
+      el.hidden=true;
+      el.classList.remove('rr-power--hot');
+    }
+    const ban=document.getElementById('rrBanner');
+    if(ban && saveBanner<=0) ban.hidden=true;
+  }
+
+  function clearsObstacle(o){
+    if(o.type==='low') return jumping && jumpT>0.10 && jumpT<0.90;
+    if(o.type==='high') return sliding && slideT<0.88;
+    return false;
+  }
+
+  function beginDeath(o){
+    if(dying||gameOver)return;
+    dying=true;
+    deathFocus=o;
+    deathStall=0.28;
+    hitFlash=16;
+    shake=1.6;
+    buzz('lose');
   }
 
   function endGame(){
     if(gameOver)return;
-    gameOver=true;cancelAnimationFrame(raf);raf=null;
+    gameOver=true;dying=false;cancelAnimationFrame(raf);raf=null;
     if(keyHandler){window.removeEventListener('keydown',keyHandler);keyHandler=null;}
     const final=Math.floor(dist);
     if(typeof setGamePB==='function') bestScore=setGamePB('rushrunner', final) ?? Math.max(bestScore, final);
@@ -343,7 +459,9 @@ function openRushRunner(){
     const vsBest=typeof formatVsBest==='function'?formatVsBest('rushrunner', final):`Best ${bestScore}m`;
     if(gs)gs.setOutcome('lost');
     if(typeof recordGameResult==='function')recordGameResult('rushrunner',false,false,{score:final,scoreOnly:true});
-    buzz('lose');
+    // lose buzz already fired in beginDeath when applicable
+    if(!deathFocus)buzz('lose');
+    deathFocus=null;
     const div=document.getElementById('rrOverlay');
     if(!div)return;
     div.className='rr-start rr-start--over';
@@ -392,9 +510,43 @@ function openRushRunner(){
     const dtMs=Math.min(ts-lastTime,40);lastTime=ts;
     const dt=dtMs/1000;
 
-    // Ramp then plateau
+    if(dying){
+      deathStall-=dt;
+      if(hitFlash>0)hitFlash-=dt*18;
+      if(shake>0)shake=Math.max(0,shake-dt*6);
+      // Keep drawing during death beat
+      ctx.save();
+      if(shake>0)ctx.translate((Math.random()-0.5)*shake*10,(Math.random()-0.5)*shake*6);
+      ctx.clearRect(0,0,cssW,cssH);
+      drawSky();drawRoad();
+      const drawList=[];
+      obstacles.forEach(o=>drawList.push({z:o.z,kind:'obs',o}));
+      coinItems.forEach(c=>{if(!c.collected)drawList.push({z:c.z,kind:'coin',c});});
+      powerups.forEach(p=>drawList.push({z:p.z,kind:'pow',p}));
+      drawList.sort((a,b)=>b.z-a.z);
+      drawList.forEach(item=>{
+        if(item.kind==='obs'){
+          const o=item.o;const p=project(laneWorldX(o.lane),o.z);
+          drawObstacle(o,p,deathFocus===o);
+        }else if(item.kind==='coin'){
+          drawCoin(project(laneWorldX(item.c.lane),item.c.z),scroll*3+item.c.z);
+        }else{
+          drawPower(project(laneWorldX(item.p.lane),item.p.z),item.p.type);
+        }
+      });
+      drawPlayer();
+      drawParticles();
+      ctx.restore();
+      if(deathStall<=0){endGame();return;}
+      raf=requestAnimationFrame(update);
+      return;
+    }
+
+    // Soft early ramp — first ~80m stays readable
     const ramp=Math.min(1,dist/RAMP_UNTIL);
-    speed=BASE_SPEED+(MAX_SPEED-BASE_SPEED)*(1-Math.pow(1-ramp,2));
+    const early=Math.min(1,dist/80);
+    const soft=0.72+0.28*early;
+    speed=(BASE_SPEED+(MAX_SPEED-BASE_SPEED)*(1-Math.pow(1-ramp,2)))*soft;
     dist+=speed*dt*3.2;
     scroll+=speed*dt;
     score=Math.floor(dist);
@@ -404,22 +556,43 @@ function openRushRunner(){
     const coinEl=document.getElementById('rrCoins');
     if(coinEl)coinEl.textContent='◆ '+coins;
 
-    // Lane lerp 120–180ms
     if(laneT<1){
       laneT=Math.min(1,laneT+dtMs/LANE_LERP_MS);
       laneX=laneFrom+(laneTo-laneFrom)*easeOutCubic(laneT);
     }else laneX=laneTo;
 
     if(jumping){
-      jumpT+=dt/0.62;
-      if(jumpT>=1){jumping=false;jumpT=0;squash=0.85;schedule(()=>{if(alive())squash=1;},120);}
+      jumpT+=dt/0.58;
+      if(jumpT>=1){
+        jumping=false;jumpT=0;squash=0.85;landCoyote=COYOTE_MS;
+        schedule(()=>{if(alive())squash=1;},120);
+        if(jumpBuffer>0){jumpBuffer=0;tryJump();}
+      }
     }
     if(sliding){
-      slideT+=dt/0.55;
-      if(slideT>=1){sliding=false;slideT=0;squash=1;}
+      slideT+=dt/0.50;
+      if(slideT>=1){
+        sliding=false;slideT=0;squash=1;
+        if(slideBuffer>0){slideBuffer=0;trySlide();}
+        else if(jumpBuffer>0){jumpBuffer=0;tryJump();}
+      }
     }
+    if(landCoyote>0){
+      landCoyote-=dtMs;
+      if(jumpBuffer>0&&!jumping&&!sliding){jumpBuffer=0;landCoyote=0;tryJump();}
+    }
+    if(jumpBuffer>0)jumpBuffer-=dtMs;
+    if(slideBuffer>0)slideBuffer-=dtMs;
     if(hitFlash>0)hitFlash-=dt*18;
     if(shake>0)shake=Math.max(0,shake-dt*8);
+    if(shieldPulse>0)shieldPulse=Math.max(0,shieldPulse-dt*2.2);
+    if(saveBanner>0){
+      saveBanner-=dt;
+      if(saveBanner<=0){
+        const ban=document.getElementById('rrBanner');
+        if(ban)ban.hidden=true;
+      }
+    }
     if(shieldTimer>0){shieldTimer-=dt;if(shieldTimer<=0)shield=false;}
     if(magnetTimer>0){magnetTimer-=dt;if(magnetTimer<=0)magnet=false;}
     updatePowerHud();
@@ -429,7 +602,6 @@ function openRushRunner(){
     coinItems.forEach(c=>{
       c.z-=dz;
       if(magnet&&!c.collected){
-        // Pull toward player lane & depth
         c.lane+=(laneX-c.lane)*Math.min(1,dt*4.5);
         c.z+=(PLAYER_Z+0.4-c.z)*Math.min(1,dt*3.2);
       }
@@ -443,38 +615,43 @@ function openRushRunner(){
     powerups=powerups.filter(p=>p.z>-1);
 
     spawnAcc+=dt;coinAcc+=dt;powerAcc+=dt;
-    const obsInterval=Math.max(0.55,1.15-ramp*0.5);
-    if(spawnAcc>=obsInterval){spawnAcc=0;spawnObstacle(FAR+Math.random()*4);
-      // Foreshadow twin obstacle sometimes with a clear lane
-      if(Math.random()<0.28){
+    // Delay heavy twin packs until player settles
+    const obsInterval=Math.max(0.62,1.25-ramp*0.48);
+    if(spawnAcc>=obsInterval){
+      spawnAcc=0;
+      spawnObstacle(FAR+Math.random()*4);
+      if(dist>90&&Math.random()<0.26){
         const other=(obstacles[obstacles.length-1].lane+1+Math.floor(Math.random()*2))%LANES;
         obstacles.push({lane:other,z:FAR+2+Math.random()*2,type:Math.random()<0.4?'low':'high',kind:'crate',w:0.55,h:Math.random()<0.4?0.35:0.85});
       }
     }
-    if(coinAcc>=1.1){coinAcc=0;spawnCoinRow(FAR+Math.random()*3);}
-    if(powerAcc>=7.5){powerAcc=0;spawnPowerup(FAR+1);}
+    if(coinAcc>=1.15){coinAcc=0;spawnCoinRow(FAR+Math.random()*3);}
+    if(powerAcc>=7.5&&dist>40){powerAcc=0;spawnPowerup(FAR+1);}
 
-    // Fair hitboxes at player depth
+    // Collision — interpolated laneX, forgiving lane width, depth = visible contact
     const pz=PLAYER_Z;
     for(let i=0;i<obstacles.length;i++){
       const o=obstacles[i];
-      if(Math.abs(o.z-pz)>0.85)continue;
-      if(Math.abs(o.lane-laneX)>0.55)continue;
-      const clearLow=jumping&&o.type==='low'&&jumpT>0.12&&jumpT<0.88;
-      const clearHigh=sliding&&o.type==='high';
-      if(clearLow||clearHigh)continue;
+      if(Math.abs(o.z-pz)>HIT_DEPTH)continue;
+      if(Math.abs(o.lane-laneX)>HIT_LANE)continue;
+      if(clearsObstacle(o))continue;
       if(shield){
-        shield=false;shieldTimer=0;hitFlash=10;shake=1;buzz('invalid');
-        o.z=-2;burst(cssW/2,cssH*0.7,'#7DD3FC',10);
+        shield=false;shieldTimer=0;shieldPulse=1;hitFlash=6;shake=0.8;
+        showBanner('Shield saved you!',1.1);
+        buzz('valid');
+        o.z=-2;
+        const scr=project(laneWorldX(laneX),pz);
+        burst(scr.x,scr.y-24,'#7DD3FC',18);
         continue;
       }
-      hitFlash=14;shake=1.4;endGame();
+      beginDeath(o);
+      raf=requestAnimationFrame(update);
       return;
     }
 
     coinItems.forEach(c=>{
       if(c.collected)return;
-      const near=Math.abs(c.z-pz)<1.1&&Math.abs(c.lane-laneX)<0.65;
+      const near=Math.abs(c.z-pz)<1.05&&Math.abs(c.lane-laneX)<0.58;
       if(!near)return;
       c.collected=true;coins++;score+=5;dist+=2;
       const p=project(laneWorldX(c.lane),Math.max(0.5,c.z));
@@ -484,21 +661,19 @@ function openRushRunner(){
 
     for(let i=powerups.length-1;i>=0;i--){
       const p=powerups[i];
-      if(Math.abs(p.z-pz)>1||Math.abs(p.lane-laneX)>0.6)continue;
-      if(p.type==='shield'){shield=true;shieldTimer=6.5;}
-      else{magnet=true;magnetTimer=5.5;}
+      if(Math.abs(p.z-pz)>1||Math.abs(p.lane-laneX)>0.55)continue;
+      if(p.type==='shield'){shield=true;shieldTimer=6.5;shieldPulse=1;showBanner('Shield up!',0.8);}
+      else{magnet=true;magnetTimer=5.5;showBanner('Magnet on!',0.8);}
       powerups.splice(i,1);buzz('valid');
       const scr=project(laneWorldX(p.lane),pz);
-      burst(scr.x,scr.y-20,p.type==='shield'?'#7DD3FC':'#FF6B8A',12);
+      burst(scr.x,scr.y-20,p.type==='shield'?'#7DD3FC':'#FF6B8A',14);
     }
 
-    // Draw
     ctx.save();
     if(shake>0)ctx.translate((Math.random()-0.5)*shake*10,(Math.random()-0.5)*shake*6);
     ctx.clearRect(0,0,cssW,cssH);
     drawSky();drawRoad();
 
-    // Depth sort drawables
     const drawList=[];
     obstacles.forEach(o=>drawList.push({z:o.z,kind:'obs',o}));
     coinItems.forEach(c=>{if(!c.collected)drawList.push({z:c.z,kind:'coin',c});});
@@ -507,14 +682,7 @@ function openRushRunner(){
     drawList.forEach(item=>{
       if(item.kind==='obs'){
         const o=item.o;const p=project(laneWorldX(o.lane),o.z);
-        const col=o.type==='low'?'#C45C26':'#4A5568';
-        const top=o.type==='low'?'#E07A3D':'#718096';
-        drawMeshBox(p,o.w,o.h,col,top);
-        // Foreshadow silhouette when far
-        if(o.z>18){
-          ctx.fillStyle='rgba(255,80,80,0.15)';
-          ctx.beginPath();ctx.arc(p.x,p.y-8,6+p.scale*4,0,Math.PI*2);ctx.fill();
-        }
+        drawObstacle(o,p,false);
       }else if(item.kind==='coin'){
         drawCoin(project(laneWorldX(item.c.lane),item.c.z),scroll*3+item.c.z);
       }else{
@@ -534,7 +702,12 @@ function openRushRunner(){
     if(ov)ov.style.display='none';
     started=true;lastTime=performance.now();
     obstacles=[];coinItems=[];powerups=[];particles=[];
-    spawnObstacle(22);spawnObstacle(32);spawnCoinRow(26);
+    dying=false;deathFocus=null;teachPhase=1;
+    // Teach rhythm: coins → low (jump) → high (slide), clear lanes
+    spawnCoinRow(18);
+    obstacles.push({lane:1,z:26,type:'low',kind:'barrier',w:0.55,h:0.35});
+    obstacles.push({lane:0,z:34,type:'high',kind:'sign',w:0.55,h:0.85});
+    spawnCoinRow(30);
     buzz('select');
     raf=requestAnimationFrame(update);
   }

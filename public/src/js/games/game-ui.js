@@ -128,7 +128,11 @@
     fiveinrow: ['Connect five in a line', 'Watch diagonals as well as rows', 'Block threats before extending yours'],
     business: ['Buy when you land on empty lots', 'Pay rent on owned properties', 'Richest player at the end wins'],
     scribble: ['Draw clearly — keep it simple', 'Guessers type in the chat box', 'Rounds rotate who draws'],
-    rushrunner: ['Tap or swipe up to jump', 'Collect coins · avoid obstacles', 'Distance is your score'],
+    rushrunner: [
+      'Swipe or buttons: ◀▶ lanes · ⬆ jump over lows · ⬇ slide under highs',
+      'Yellow barriers jump · tall blocks slide · shield absorbs one hit',
+      'Distance is your score · collect coins on the run',
+    ],
     tiptap: [
       'Match 4 → Line · 5 or L/T → Bomb · 6+ one colour → Prism',
       'Swap specials to fire them · finish every goal before moves run out',

@@ -2328,9 +2328,10 @@ html.theme-dark .lehar-empty{color:#fff;}
 .game-lane-btn {
   flex: 1;
   max-width: 88px;
+  min-height: 48px;
   border: none;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.14);
   color: #fff;
   font-size: 18px;
   cursor: pointer;
@@ -2405,13 +2406,93 @@ html.theme-dark .lehar-empty{color:#fff;}
   top: 10px;
   left: 10px;
   z-index: 2;
-  padding: 6px 10px;
+  padding: 7px 12px;
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.45);
-  font: 700 12px 'Space Grotesk', sans-serif;
+  background: rgba(0, 0, 0, 0.58);
+  border: 1px solid rgba(255, 209, 102, 0.35);
+  font: 700 13px 'Space Grotesk', sans-serif;
   color: #FFD166;
   pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
+.rr-power {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  padding: 7px 12px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.58);
+  border: 1px solid rgba(125, 211, 252, 0.4);
+  font: 700 12px 'Space Grotesk', sans-serif;
+  color: #7DD3FC;
+  pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+.rr-power--hot {
+  box-shadow: 0 0 0 1px rgba(125, 211, 252, 0.35), 0 0 18px rgba(125, 211, 252, 0.25);
+  color: #B8ECFF;
+}
+.rr-banner {
+  position: absolute;
+  top: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.62);
+  border: 1px solid rgba(125, 211, 252, 0.45);
+  color: #E8F7FF;
+  font: 700 12px 'Space Grotesk', sans-serif;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.rr-start {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: rgba(10, 12, 24, 0.58);
+  text-align: center;
+  padding: 24px;
+}
+.rr-start--over { background: rgba(0, 0, 0, 0.72); }
+.rr-start-mark {
+  width: 56px;
+  height: 56px;
+  margin-bottom: 14px;
+  border-radius: 16px;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--game-accent, #E8663D) 80%, #fff), var(--game-accent, #E8663D));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.rr-start-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+  margin-bottom: 6px;
+}
+.rr-start-sub { font-size: 13px; color: rgba(255, 255, 255, 0.7); margin-bottom: 4px; }
+.rr-start-best { font-size: 12px; color: rgba(255, 255, 255, 0.5); margin-bottom: 16px; }
+.rr-start-hint { font-size: 12px; color: rgba(255, 255, 255, 0.55); margin-bottom: 20px; line-height: 1.45; max-width: 260px; }
+.rr-start-btn {
+  background: var(--game-accent, #E8663D);
+  color: #fff;
+  border: none;
+  border-radius: 16px;
+  padding: 14px 36px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+}
+.rr-start-btn:active { transform: scale(0.97); }
 .bb-hud-depth {
   top: auto;
   bottom: 10px;
@@ -2434,61 +2515,6 @@ html.theme-dark .lehar-empty{color:#fff;}
   font: 800 13px 'Space Grotesk', sans-serif;
   letter-spacing: 0.02em;
   text-align: center;
-}
-.rr-power {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 2;
-  padding: 6px 10px;
-  border-radius: 12px;
-  background: rgba(0, 0, 0, 0.45);
-  font: 700 11px 'Space Grotesk', sans-serif;
-  color: #7DD3FC;
-  pointer-events: none;
-}
-.rr-start {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  background: rgba(10, 12, 24, 0.55);
-  text-align: center;
-  padding: 24px;
-}
-.rr-start--over { background: rgba(0, 0, 0, 0.72); }
-.rr-start-mark {
-  width: 56px;
-  height: 56px;
-  margin-bottom: 14px;
-  border-radius: 16px;
-  background:
-    linear-gradient(145deg, color-mix(in srgb, var(--game-accent, #E8663D) 80%, #fff), var(--game-accent, #E8663D));
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-}
-.rr-start-title {
-  font-family: 'Space Grotesk', sans-serif;
-  font-weight: 700;
-  font-size: 22px;
-  margin-bottom: 6px;
-}
-.rr-start-sub { font-size: 13px; color: rgba(255, 255, 255, 0.7); margin-bottom: 4px; }
-.rr-start-best { font-size: 12px; color: rgba(255, 255, 255, 0.5); margin-bottom: 16px; }
-.rr-start-hint { font-size: 12px; color: rgba(255, 255, 255, 0.55); margin-bottom: 20px; line-height: 1.45; }
-.rr-start-btn {
-  background: var(--game-accent, #E8663D);
-  color: #fff;
-  border: none;
-  border-radius: 16px;
-  padding: 14px 36px;
-  font-family: 'Space Grotesk', sans-serif;
-  font-weight: 700;
-  font-size: 16px;
-  cursor: pointer;
 }
 
 /* Tip Tap ? gems, fall/pop, FX */
