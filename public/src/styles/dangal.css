@@ -532,6 +532,13 @@
 .pc-ab-joker b{font-size:22px;line-height:1;}
 .pc-ab-joker span{font-size:18px;line-height:1;}
 .pc-ab-house-sub{font-size:9px;opacity:.7;text-align:center;line-height:1.25;max-width:96px;}
+.pc-ab-stakes{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;width:100%;margin:2px 0 4px;}
+.pc-ab-stake{
+  border:0;border-radius:999px;padding:8px 12px;min-height:36px;cursor:pointer;
+  background:rgba(255,255,255,.1);color:#E8F5E9;font-size:12px;font-weight:800;
+}
+.pc-ab-stake.is-on{background:#FF6B35;color:#fff;}
+.pc-ab-stake:disabled{opacity:.45;cursor:default;}
 @media (max-width:360px){
   .pc-ab-table{grid-template-columns:1fr; }
   .pc-ab-house{order:-1;}

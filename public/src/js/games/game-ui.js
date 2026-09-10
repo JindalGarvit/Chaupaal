@@ -203,9 +203,9 @@
       'Practice chain AI · Live hides hands · Ace high · virtual stakes only',
     ],
     andarbaahar: [
-      'House card in the middle — black leads Andar, red leads Bahar, then alternate',
-      'Pick Andar or Bahar · rank match (not suit) wins that pile',
-      'Practice or Live — same deal law on both seats',
+      'Black house → Andar leads (0.9:1) · red → Bahar leads · other pile pays 1:1',
+      'Pick a virtual stake, then Andar or Bahar · rank match wins that pile',
+      'Practice vs house bankroll · Live each seat settles vs the same piles · not real money',
     ],
     patangbaazi: [
       'Hold to tension — climb with weight, ease through gusts',

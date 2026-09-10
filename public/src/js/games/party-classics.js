@@ -9702,20 +9702,72 @@
     return n % 2 === 0 ? first : andarBaharOtherLane(first);
   }
 
+  /**
+   * Virtual paytable (Prompt 2).
+   * Lead pile (firstLane) pays floor(0.9 * stake) profit; other pile pays 1:1; miss loses stake.
+   */
+  function andarBaharPayout(input) {
+    const o = input || {};
+    const stake = Math.max(0, Math.floor(Number(o.stake) || 0));
+    const pick = o.pick;
+    const winningLane = o.winningLane;
+    const firstLane = o.firstLane === 'bahar' ? 'bahar' : 'andar';
+    if (!pick || !winningLane || stake <= 0) {
+      return { net: 0, paid: 0, won: false, profit: 0, stake: 0 };
+    }
+    if (pick !== winningLane) {
+      return { net: -stake, paid: 0, won: false, profit: 0, stake };
+    }
+    if (pick === firstLane) {
+      const profit = Math.floor(0.9 * stake);
+      return { net: profit, paid: stake + profit, won: true, profit, stake };
+    }
+    const profit = stake;
+    return { net: profit, paid: stake + profit, won: true, profit, stake };
+  }
+
+  const ANDAR_BAHAR_STAKE_PRESETS = [10, 25, 50, 100];
+
   function openAndarBahar() {
     const chat = resolveChat(arguments[0]);
     const liveOn = chatLiveOn(chat);
     const rng = rngFn();
     const dealTimers = [];
+    const launchStake = Math.max(
+      0,
+      Number(
+        (chat && chat.stake) ||
+          (window.__dangalLaunchCtx && window.__dangalLaunchCtx.stake) ||
+          0
+      ) || 0
+    );
+    const settleMatchId = liveOn ? String(matchIdFor(chat, 'andarbaahar') || '').trim() : '';
+    let settleOppUid = '';
+    let settleDone = false;
+    let resultReported = false;
+    let resultShown = false;
+
     let deck = makeDeck(rng);
     let joker = deck.pop();
     let firstLane = andarBaharFirstLane(joker);
+
+    /** Practice session bankroll vs house (virtual). */
+    let sessionBank = 500;
+    try {
+      if (window.DangalEconomy && typeof DangalEconomy.getCachedBalance === 'function') {
+        const bal = DangalEconomy.getCachedBalance();
+        if (bal && bal.balance != null) sessionBank = Math.max(0, Number(bal.balance) || 500);
+      }
+    } catch (e) {}
+
     const shell = openShell({
       id: 'andarbaahar',
       title: 'Andar Bahar',
       subtitle: liveOn
-        ? liveSub() + ' · Colour leads'
-        : practiceSub('House card · colour leads first pile'),
+        ? liveSub() +
+          (launchStake > 0 ? ' · Stake ⚡' + launchStake + ' (virtual)' : ' · Friendly / pick stake') +
+          ' · 0.9 / 1'
+        : practiceSub('Virtual stakes · 0.9:1 lead · 1:1 other'),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
@@ -9738,16 +9790,44 @@
     let side = null;
     let sideA = null;
     let sideB = null;
+    let stake = launchStake > 0 ? launchStake : 25;
+    let stakeA = launchStake > 0 ? launchStake : null;
+    let stakeB = launchStake > 0 ? launchStake : null;
+    let stakeLocked = launchStake > 0;
     const andar = [];
     const bahar = [];
     let ended = false;
     let applying = false;
     let dealing = false;
+    let dealStarted = false;
     let liveRoles = null;
     let liveHandle = null;
     let dealN = 0;
     let lastLane = null;
     let lastCard = null;
+    let lastNet = 0;
+
+    function mySide() {
+      if (!liveOn || !liveRoles) return side;
+      return liveRoles.me === liveRoles.playerA ? sideA : sideB;
+    }
+
+    function myStake() {
+      if (!liveOn || !liveRoles) return stake;
+      const s = liveRoles.me === liveRoles.playerA ? stakeA : stakeB;
+      return s != null ? s | 0 : stake | 0;
+    }
+
+    function bothLocked() {
+      if (!liveOn) return !!side && stake > 0;
+      return !!(sideA && sideB && stakeA != null && stakeB != null);
+    }
+
+    function oddsLine() {
+      const lead = firstLane === 'andar' ? 'Andar' : 'Bahar';
+      const other = firstLane === 'andar' ? 'Bahar' : 'Andar';
+      return lead + ' leads — 0.9:1 · ' + other + ' 1:1';
+    }
 
     function leadLabel() {
       return firstLane === 'andar' ? 'Andar leads this hand' : 'Bahar leads this hand';
@@ -9759,15 +9839,112 @@
         : 'Red house → Bahar gets card #1';
     }
 
-    function mySide() {
-      if (!liveOn || !liveRoles) return side;
-      return liveRoles.me === liveRoles.playerA ? sideA : sideB;
+    function publicState(extra) {
+      return Object.assign(
+        {
+          joker,
+          deck,
+          andar: andar.slice(),
+          bahar: bahar.slice(),
+          sideA,
+          sideB,
+          stakeA,
+          stakeB,
+          firstLane,
+          n: dealN,
+          lastLane,
+          lastCard,
+          dealing: !!dealing,
+        },
+        extra || {}
+      );
+    }
+
+    function freshRematch() {
+      if (!liveOn) {
+        openAndarBahar(
+          Object.assign({}, chat, { stake: stake, _abBank: sessionBank })
+        );
+        return;
+      }
+      try {
+        const mid =
+          typeof dangalMatchId === 'function'
+            ? dangalMatchId('andarbaahar', chat)
+            : 'andarbaahar_' + Date.now();
+        if (window.__dangalLaunchCtx) {
+          window.__dangalLaunchCtx = Object.assign({}, window.__dangalLaunchCtx, {
+            matchId: mid,
+            gameId: 'andarbaahar',
+            gameType: 'andarbaahar',
+            stake: launchStake || stake,
+          });
+        }
+        if (chat) {
+          chat.dangalMatchId = mid;
+          chat.stake = launchStake || stake;
+        }
+      } catch (e) {}
+      openAndarBahar(chat);
+    }
+
+    // Carry Practice bank across Again within session
+    if (!liveOn && chat && chat._abBank != null) {
+      sessionBank = Math.max(0, Number(chat._abBank) || sessionBank);
+    }
+
+    function reportResult(won, path) {
+      if (resultReported) return;
+      resultReported = true;
+      if (typeof recordGameResult === 'function') {
+        try {
+          recordGameResult('andarbaahar', !!won, false, {
+            live: !!liveOn,
+            stake: myStake(),
+            mode: liveOn ? 'live' : 'practice',
+            path: path || '',
+          });
+        } catch (e) {}
+      }
+    }
+
+    async function settleAbOnce(won) {
+      if (!liveOn || settleDone) return null;
+      const st = myStake();
+      if (!settleMatchId || st <= 0) {
+        settleDone = true;
+        return null;
+      }
+      if (!window.DangalEconomy || typeof DangalEconomy.reportGameEnd !== 'function') {
+        settleDone = true;
+        return null;
+      }
+      settleDone = true;
+      try {
+        const me = typeof getCurrentUid === 'function' ? getCurrentUid() : '';
+        const oppU = settleOppUid || (liveRoles && liveRoles.opp) || '';
+        return await DangalEconomy.reportGameEnd({
+          gameType: 'andarbaahar',
+          result: won ? 'win' : 'loss',
+          won: !!won,
+          isDraw: false,
+          matchId: settleMatchId,
+          sessionId: settleMatchId,
+          opponentUid: oppU,
+          stake: st,
+          winnerUid: won ? me : oppU,
+        });
+      } catch (e) {
+        settleDone = false;
+        return null;
+      }
     }
 
     function pileHtml(lane, cards) {
       const active = lastLane === lane ? ' is-active' : '';
       const title = lane === 'andar' ? 'Andar' : 'Bahar';
       const lead = firstLane === lane ? ' · leads' : '';
+      const odds = firstLane === lane ? ' · 0.9:1' : ' · 1:1';
       return (
         '<div class="pc-ab-pile' +
         active +
@@ -9780,6 +9957,7 @@
         cards.length +
         ')</span>' +
         lead +
+        odds +
         '</h4>' +
         '<div class="pc-ab-stack">' +
         (cards.length
@@ -9801,6 +9979,41 @@
       );
     }
 
+    function stakeBarHtml() {
+      if (mySide() || dealing || ended) {
+        return (
+          '<p class="pc-hint">Stake ⚡' +
+          myStake() +
+          (liveOn ? '' : ' · bank ⚡' + sessionBank) +
+          '</p>'
+        );
+      }
+      const presets = ANDAR_BAHAR_STAKE_PRESETS.slice();
+      if (launchStake > 0 && presets.indexOf(launchStake) < 0) presets.unshift(launchStake);
+      let html = '<div class="pc-ab-stakes" role="group" aria-label="Virtual stake">';
+      presets.forEach((s) => {
+        const on = (liveOn ? (liveRoles && liveRoles.me === liveRoles.playerA ? stakeA : stakeB) || stake : stake) === s;
+        html +=
+          '<button type="button" class="pc-ab-stake' +
+          (on ? ' is-on' : '') +
+          '" data-stake="' +
+          s +
+          '"' +
+          (stakeLocked && launchStake > 0 ? ' disabled' : '') +
+          '>⚡' +
+          s +
+          '</button>';
+      });
+      if (!liveOn || !(launchStake > 0)) {
+        html +=
+          '<button type="button" class="pc-ab-stake' +
+          (stake === 0 ? ' is-on' : '') +
+          '" data-stake="0">Friendly</button>';
+      }
+      html += '</div>';
+      return html;
+    }
+
     function paint(msg) {
       if (ended) return;
       const pick = mySide();
@@ -9810,10 +10023,14 @@
         '<p class="pc-hint pc-ab-lead">' +
         esc(leadLabel()) +
         ' · ' +
-        esc(colourHint()) +
+        esc(oddsLine()) +
         '</p>' +
         '<p class="pc-hint">' +
-        esc(msg || (pick ? (dealing ? 'Dealing…' : 'Ready') : 'Pick Andar or Bahar')) +
+        esc(colourHint()) +
+        '</p>' +
+        stakeBarHtml() +
+        '<p class="pc-hint">' +
+        esc(msg || (pick ? (dealing ? 'Dealing…' : 'Locked in') : 'Choose stake, then Andar or Bahar')) +
         (pick ? ' · you: ' + pick : '') +
         '</p>' +
         '<div class="pc-ab-table" role="group" aria-label="Andar Bahar table">' +
@@ -9835,51 +10052,144 @@
           ? ''
           : '<div class="pc-actions"><button type="button" class="cs-hit" data-a>Andar</button><button type="button" class="cs-hit" data-b>Bahar</button></div>') +
         '</div>';
+
+      shell.body.querySelectorAll('[data-stake]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (mySide() || dealing || ended) return;
+          if (stakeLocked && launchStake > 0) return;
+          const s = Math.max(0, btn.getAttribute('data-stake') | 0);
+          stake = s;
+          if (liveOn && liveRoles) {
+            if (liveRoles.me === liveRoles.playerA) stakeA = s;
+            else stakeB = s;
+            if (liveHandle) {
+              liveHandle.push({
+                status: 'playing',
+                state: publicState({ picking: true }),
+              });
+            }
+          }
+          paint('Stake ⚡' + s + ' — pick a side');
+        });
+      });
       shell.body.querySelector('[data-a]')?.addEventListener('click', () => start('andar'));
       shell.body.querySelector('[data-b]')?.addEventListener('click', () => start('bahar'));
     }
 
-    function finish(lane, fromRemote) {
-      if (ended) return;
+    function finish(lane, opts) {
+      const o = opts || {};
+      if (resultShown) return;
+      resultShown = true;
       ended = true;
       dealing = false;
       dealTimers.forEach((t) => clearTimeout(t));
       dealTimers.length = 0;
+
       const pick = mySide();
-      const won = lane === pick;
-      if (liveOn && liveHandle && !fromRemote && !applying) {
-        liveHandle.push({
-          status: 'over',
-          winner: won ? liveRoles.me : liveRoles.opp,
-          state: {
-            joker,
-            andar: andar.slice(),
-            bahar: bahar.slice(),
-            lane,
-            firstLane,
-            sideA,
-            sideB,
-            deck,
-            n: dealN,
-            lastLane,
-            lastCard,
-          },
+      const st = myStake();
+      const forfeit = !!o.forfeit;
+      let pay;
+      if (forfeit) {
+        // Mid-deal leave: lose stake. Pick-phase cancel handled before finish.
+        pay = { net: st > 0 ? -st : 0, paid: 0, won: false, profit: 0, stake: st };
+      } else {
+        pay = andarBaharPayout({
+          stake: st,
+          pick,
+          winningLane: lane,
+          firstLane,
         });
       }
-      showDuelResult(shell, {
-        id: 'andarbaahar',
-        you: won ? 1 : 0,
-        opp: won ? 0 : 1,
-        glyph: '🃏',
-        subtitle: 'House card hit ' + (lane === 'andar' ? 'Andar' : 'Bahar'),
-        shareText: 'Andar Bahar on Chaupaal',
-        onAgain: () => openAndarBahar(chat),
+      lastNet = pay.net;
+      if (!liveOn) sessionBank = Math.max(0, sessionBank + pay.net);
+
+      const won = forfeit ? !!o.iWon : !!pay.won;
+      reportResult(won, forfeit ? 'forfeit' : 'house:' + lane);
+
+      if (liveRoles && liveRoles.opp) settleOppUid = liveRoles.opp;
+
+      if (liveOn && liveHandle && liveRoles && !o.skipLivePush && !applying) {
+        try {
+          liveHandle.push({
+            status: forfeit ? 'forfeit' : 'over',
+            winner: forfeit
+              ? o.iWon
+                ? liveRoles.me
+                : liveRoles.opp
+              : won
+                ? liveRoles.me
+                : liveRoles.opp,
+            state: publicState({
+              lane,
+              msg: 'House hit ' + (lane === 'andar' ? 'Andar' : 'Bahar'),
+            }),
+          });
+        } catch (e) {}
+      }
+
+      const doSettle = liveOn && st > 0 && (dealStarted || forfeit);
+      const settlePromise = doSettle ? settleAbOnce(won) : Promise.resolve(null);
+      if (!doSettle) settleDone = true;
+
+      settlePromise.then((settle) => {
+        const pileName = lane === 'bahar' ? 'Bahar' : lane === 'andar' ? 'Andar' : '—';
+        let sub =
+          (forfeit
+            ? o.iWon
+              ? 'Opponent left'
+              : 'You forfeited'
+            : 'House hit ' + pileName) +
+          ' · lead ' +
+          (firstLane === 'andar' ? 'Andar' : 'Bahar') +
+          ' · you ' +
+          (pick || '—') +
+          ' · stake ⚡' +
+          st;
+        if (st > 0) {
+          sub +=
+            ' · net ' +
+            (pay.net > 0 ? '+' : '') +
+            pay.net +
+            (liveOn ? '' : ' · bank ⚡' + sessionBank);
+        }
+        if (liveOn && st > 0) {
+          const cd = settle && settle.chipDelta != null ? Number(settle.chipDelta) : null;
+          if (Number.isFinite(cd) && cd !== 0) {
+            sub += ' · settle ' + (cd > 0 ? '+' : '') + cd;
+          } else if (!settle || settle.error) {
+            sub += ' · virtual stakes';
+          }
+        }
+        showDuelResult(shell, {
+          id: 'andarbaahar',
+          you: won ? 1 : 0,
+          opp: won ? 0 : 1,
+          glyph: '🃏',
+          pbScore: Math.max(0, sessionBank),
+          title: forfeit
+            ? o.iWon
+              ? 'Opponent left'
+              : 'You forfeited'
+            : won
+              ? 'You win'
+              : 'House wins',
+          subtitle: sub,
+          shareText:
+            'Andar Bahar on Chaupaal · ' +
+            (won ? 'hit' : 'miss') +
+            ' · ⚡' +
+            st +
+            (pay.net ? ' · ' + (pay.net > 0 ? '+' : '') + pay.net : ''),
+          onAgain: freshRematch,
+        });
       });
     }
 
     function startDeal() {
-      if (dealing || ended) return;
+      if (dealing || ended || resultShown) return;
+      if (liveOn && !bothLocked()) return;
       dealing = true;
+      dealStarted = true;
       dealN = 0;
       lastLane = null;
       lastCard = null;
@@ -9888,7 +10198,6 @@
       const deal = () => {
         if (!shell.alive() || ended) return;
         if (!deck.length) {
-          // Exhausted without a rank hit (rare) — credit last pile that received a card
           return finish(lastLane || firstLane);
         }
         const c = deck.pop();
@@ -9901,19 +10210,7 @@
         if (liveOn && liveHandle && liveRoles && liveRoles.host) {
           liveHandle.push({
             status: 'playing',
-            state: {
-              joker,
-              andar: andar.slice(),
-              bahar: bahar.slice(),
-              sideA,
-              sideB,
-              deck,
-              n: dealN,
-              firstLane,
-              lastLane,
-              lastCard,
-              dealing: true,
-            },
+            state: publicState({ dealing: true }),
           });
         }
         if (c.r === joker.r) {
@@ -9926,124 +10223,176 @@
     }
 
     function start(pick) {
-      if (ended || dealing) return;
+      if (ended || dealing || resultShown) return;
       if (liveOn && liveRoles) {
+        const curStake =
+          liveRoles.me === liveRoles.playerA
+            ? stakeA != null
+              ? stakeA
+              : stake
+            : stakeB != null
+              ? stakeB
+              : stake;
+        if (curStake == null) {
+          paint('Pick a stake first');
+          return;
+        }
         if (liveRoles.me === liveRoles.playerA) {
           if (sideA) return;
           sideA = pick;
+          if (stakeA == null) stakeA = curStake;
         } else {
           if (sideB) return;
           sideB = pick;
+          if (stakeB == null) stakeB = curStake;
         }
         side = pick;
+        stake = curStake;
+        stakeLocked = true;
         buzz('card');
         if (liveHandle) {
           liveHandle.push({
             status: 'playing',
-            state: {
-              joker,
-              andar: andar.slice(),
-              bahar: bahar.slice(),
-              sideA,
-              sideB,
-              deck,
-              firstLane,
-              picking: true,
-            },
+            state: publicState({ picking: true }),
           });
         }
-        if (liveRoles.host && sideA && sideB) startDeal();
+        if (liveRoles.host && bothLocked()) startDeal();
         else if (!liveRoles.host) paint('Locked in — waiting for deal…');
         else paint('Waiting for opponent’s pick…');
         return;
       }
       side = pick;
-      sideA = pick;
+      stakeLocked = true;
       buzz('card');
       startDeal();
     }
 
     if (liveOn) {
-      const joined = joinLive(shell, chat, 'andarbaahar', (val) => {
-        if (!val || ended) return;
-        if (val.status === 'forfeit' || val.status === 'over') {
+      const joined = joinLive(
+        shell,
+        chat,
+        'andarbaahar',
+        (val) => {
+          if (!val || ended || resultShown) return;
+          if (val.status === 'forfeit' || val.status === 'over') {
+            applying = true;
+            const st = val.state || {};
+            if (st.sideA) sideA = st.sideA;
+            if (st.sideB) sideB = st.sideB;
+            if (st.stakeA != null) stakeA = st.stakeA | 0;
+            if (st.stakeB != null) stakeB = st.stakeB | 0;
+            if (st.lane) {
+              finish(st.lane, { skipLivePush: true });
+            } else {
+              const iWon = val.winner === liveRoles.me;
+              finish(null, {
+                forfeit: true,
+                iWon,
+                skipLivePush: true,
+              });
+            }
+            applying = false;
+            return;
+          }
           const st = val.state || {};
           applying = true;
-          if (st.lane) finish(st.lane, true);
-          else {
-            const iWon = val.winner === liveRoles.me;
-            ended = true;
-            showDuelResult(shell, {
-              id: 'andarbaahar',
-              you: iWon ? 1 : 0,
-              opp: iWon ? 0 : 1,
-              glyph: '🃏',
-              subtitle: 'Forfeit',
-              shareText: 'Andar Bahar on Chaupaal',
-              onAgain: () => openAndarBahar(chat),
-            });
+          if (st.joker) {
+            joker = st.joker;
+            firstLane = andarBaharFirstLane(joker);
+          }
+          if (st.deck) deck = st.deck;
+          if (st.firstLane === 'andar' || st.firstLane === 'bahar') firstLane = st.firstLane;
+          if (st.andar) {
+            andar.length = 0;
+            st.andar.forEach((c) => andar.push(c));
+          }
+          if (st.bahar) {
+            bahar.length = 0;
+            st.bahar.forEach((c) => bahar.push(c));
+          }
+          if (st.sideA) sideA = st.sideA;
+          if (st.sideB) sideB = st.sideB;
+          if (st.stakeA != null) stakeA = st.stakeA | 0;
+          if (st.stakeB != null) stakeB = st.stakeB | 0;
+          if (st.n != null) dealN = st.n | 0;
+          if (st.lastLane) lastLane = st.lastLane;
+          if (st.lastCard) lastCard = st.lastCard;
+          if (st.dealing) {
+            dealing = true;
+            dealStarted = true;
           }
           applying = false;
-          return;
-        }
-        const st = val.state || {};
-        applying = true;
-        if (st.joker) {
-          joker = st.joker;
-          firstLane = andarBaharFirstLane(joker);
-        }
-        if (st.deck) deck = st.deck;
-        if (st.firstLane === 'andar' || st.firstLane === 'bahar') {
-          firstLane = st.firstLane;
-        }
-        if (st.andar) {
-          andar.length = 0;
-          st.andar.forEach((c) => andar.push(c));
-        }
-        if (st.bahar) {
-          bahar.length = 0;
-          st.bahar.forEach((c) => bahar.push(c));
-        }
-        if (st.sideA) sideA = st.sideA;
-        if (st.sideB) sideB = st.sideB;
-        if (st.n != null) dealN = st.n | 0;
-        if (st.lastLane) lastLane = st.lastLane;
-        if (st.lastCard) lastCard = st.lastCard;
-        if (st.dealing) dealing = true;
-        applying = false;
 
-        // Guest never re-deals — only paint host snaps
-        if (!liveRoles.host) {
-          if (sideA && sideB && (andar.length || bahar.length || dealing)) {
-            paint('Dealing onto ' + (lastLane === 'bahar' ? 'Bahar' : lastLane === 'andar' ? 'Andar' : '…') + '…');
-          } else if (mySide()) {
-            paint('Locked in — waiting for deal…');
+          if (!liveRoles.host) {
+            if (sideA && sideB && (andar.length || bahar.length || dealing)) {
+              paint(
+                'Dealing onto ' +
+                  (lastLane === 'bahar' ? 'Bahar' : lastLane === 'andar' ? 'Andar' : '…') +
+                  '…'
+              );
+            } else if (mySide()) {
+              paint('Locked in — waiting for deal…');
+            } else {
+              paint('Choose stake, then Andar or Bahar');
+            }
           } else {
-            paint('Andar or Bahar?');
+            paint(
+              mySide()
+                ? dealing
+                  ? 'Dealing…'
+                  : 'Waiting for opponent’s pick…'
+                : 'Choose stake, then Andar or Bahar'
+            );
           }
-        } else {
-          paint(mySide() ? (dealing ? 'Dealing…' : 'Waiting for opponent’s pick…') : 'Andar or Bahar?');
-        }
 
-        if (liveRoles.host && sideA && sideB && !dealing && !andar.length && !bahar.length && st.picking) {
-          startDeal();
+          if (liveRoles.host && bothLocked() && !dealing && !andar.length && !bahar.length && st.picking) {
+            startDeal();
+          }
+        },
+        null,
+        {
+          stake: launchStake,
+          onForfeit(info, roles) {
+            if (ended || resultShown) return;
+            if (roles && roles.opp) settleOppUid = roles.opp;
+            // Pick phase: cancel without settle. Deal started: lose stake.
+            if (!dealStarted && !dealing) {
+              resultShown = true;
+              ended = true;
+              settleDone = true;
+              showDuelResult(shell, {
+                id: 'andarbaahar',
+                you: 0,
+                opp: 0,
+                glyph: '🃏',
+                title: 'Hand cancelled',
+                subtitle: 'Left before deal — no stake settled',
+                shareText: 'Andar Bahar on Chaupaal',
+                onAgain: freshRematch,
+              });
+              return;
+            }
+            finish(lastLane || firstLane, {
+              forfeit: true,
+              iWon: !!(info && info.winner === (roles && roles.me)),
+              skipLivePush: true,
+            });
+          },
         }
-      });
+      );
       if (joined) {
         liveHandle = joined.handle;
         liveRoles = joined.roles;
+        if (liveRoles.opp) settleOppUid = liveRoles.opp;
         if (liveRoles.host) {
           liveHandle.push({
             status: 'playing',
-            state: {
-              joker,
-              deck,
-              andar: [],
-              bahar: [],
+            state: publicState({
               sideA: null,
               sideB: null,
-              firstLane,
-            },
+              stakeA: launchStake > 0 ? launchStake : null,
+              stakeB: launchStake > 0 ? launchStake : null,
+            }),
           });
         }
         paint();
@@ -10052,6 +10401,7 @@
       paint();
     }
   }
+
 
   if (typeof registerGame === 'function') {
     const games = [
@@ -10062,7 +10412,7 @@
       { id: 'teenpatti', name: 'Teen Patti', desc: 'Boot, chaal, side-show · virtual chips', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
       { id: 'bluff', name: 'Bluff', desc: 'Pile claims · call · empty hand', icon: '🎭', genre: 'party', launch: openBluff, order: 35 },
       { id: 'sattepe', name: 'Satte pe Satta', desc: 'Seven chains · Live hands private', icon: '7️⃣', genre: 'party', launch: openSatte, order: 36 },
-      { id: 'andarbaahar', name: 'Andar Bahar', desc: 'House card · colour leads', icon: '🃏', genre: 'party', launch: openAndarBahar, order: 37 },
+      { id: 'andarbaahar', name: 'Andar Bahar', desc: '0.9 / 1 stakes · colour leads', icon: '🃏', genre: 'party', launch: openAndarBahar, order: 37 },
     ];
     games.forEach((g) => {
       registerGame({
