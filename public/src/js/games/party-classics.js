@@ -7824,30 +7824,90 @@
   }
 
   /* ---------- Satte pe Satta ---------- */
+  /**
+   * Ace policy (Prompt 1): Ace is HIGH only (rankVal A=14).
+   * Chains: 2–3–4–5–6–7–8–9–T–J–Q–K–A. Ace extends above King; cannot sit below 2.
+   * Starter: prefer seat that holds any 7; if both, player A / host; if neither (impossible with full deal), random.
+   */
+  function emptySatteTable() {
+    const t = {};
+    SUITS.forEach((s) => {
+      t[s] = { open: false, lo: null, hi: null, cards: [] };
+    });
+    return t;
+  }
+
+  function cloneSatteTable(src) {
+    const t = emptySatteTable();
+    SUITS.forEach((s) => {
+      const o = src && src[s];
+      if (!o) return;
+      t[s] = {
+        open: !!o.open,
+        lo: o.lo == null ? null : o.lo | 0,
+        hi: o.hi == null ? null : o.hi | 0,
+        cards: Array.isArray(o.cards)
+          ? o.cards.map((c) => ({ r: c.r, s: c.s, id: c.id || c.r + c.s }))
+          : [],
+      };
+    });
+    return t;
+  }
+
   function openSatte() {
     const chat = resolveChat(arguments[0]);
     const liveOn = chatLiveOn(chat);
     const rng = rngFn();
-    const deck = makeDeck(rng);
-    let handA = deck.splice(0, 8);
-    let handB = deck.splice(0, 8);
-    const table = { '♠': { lo: 7, hi: 7 }, '♥': { lo: 7, hi: 7 }, '♦': { lo: 7, hi: 7 }, '♣': { lo: 7, hi: 7 } };
+    let passTimer = 0;
+    let aiTimer = 0;
     const shell = openShell({
       id: 'sattepe',
       title: 'Satte pe Satta',
-      subtitle: liveOn ? liveSub() : practiceSub('Build off the sevens'),
+      subtitle: liveOn ? liveSub() : practiceSub('Open with sevens · build up or down'),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
       accent: '#FFD600',
       bg: '#000A1A',
+      cleanup: () => {
+        if (passTimer) clearTimeout(passTimer);
+        if (aiTimer) clearTimeout(aiTimer);
+        passTimer = aiTimer = 0;
+      },
     });
     if (!shell) return;
+
+    let handA = [];
+    let handB = [];
+    /** @type {Record<string,{open:boolean,lo:number|null,hi:number|null,cards:Array}>} */
+    let table = emptySatteTable();
     let myTurn = true;
     let ended = false;
     let applying = false;
     let liveRoles = null;
     let liveHandle = null;
+
+    function dealFresh() {
+      const deck = makeDeck(rng);
+      handA = deck.splice(0, 26);
+      handB = deck.splice(0, 26);
+      table = emptySatteTable();
+      ended = false;
+    }
+
+    function seatHasSeven(hand) {
+      return (hand || []).some((c) => c && c.r === '7');
+    }
+
+    /** Prefer any seat with a 7; both → A; none → random. */
+    function pickStarterIsA() {
+      const a7 = seatHasSeven(handA);
+      const b7 = seatHasSeven(handB);
+      if (a7 && !b7) return true;
+      if (b7 && !a7) return false;
+      if (a7 && b7) return true;
+      return rng() < 0.5;
+    }
 
     function myHand() {
       if (!liveOn || !liveRoles) return handA;
@@ -7861,43 +7921,254 @@
       if (liveRoles.me === liveRoles.playerA) handA = h;
       else handB = h;
     }
+    function oppHand() {
+      if (!liveOn || !liveRoles) return handB;
+      return liveRoles.me === liveRoles.playerA ? handB : handA;
+    }
+
     function canPlay(c) {
+      if (!c || !table[c.s]) return false;
       const t = table[c.s];
       const v = rankVal(c.r);
-      return v === t.lo - 1 || v === t.hi + 1 || c.r === '7';
+      // Closed suit: only a seven opens it
+      if (!t.open) return c.r === '7';
+      // Open: one seven per suit already placed — no duplicate 7
+      if (c.r === '7') return false;
+      return v === (t.lo | 0) - 1 || v === (t.hi | 0) + 1;
     }
+
     function apply(c) {
       const t = table[c.s];
+      if (!t) return;
       const v = rankVal(c.r);
+      // Seven opens a closed suit at 7–7
+      if (!t.open) {
+        if (c.r !== '7') return;
+        t.open = true;
+        t.lo = 7;
+        t.hi = 7;
+        t.cards = [{ r: c.r, s: c.s, id: c.id }];
+        return;
+      }
       if (c.r === '7') return;
-      if (v === t.lo - 1) t.lo = v;
-      if (v === t.hi + 1) t.hi = v;
+      if (v === (t.lo | 0) - 1) {
+        t.lo = v;
+        t.cards = [{ r: c.r, s: c.s, id: c.id }].concat(t.cards);
+      } else if (v === (t.hi | 0) + 1) {
+        t.hi = v;
+        t.cards = t.cards.concat([{ r: c.r, s: c.s, id: c.id }]);
+      }
+    }
+
+    function rankLabel(v) {
+      if (v == null) return '—';
+      const n = v | 0;
+      if (n === 14) return 'A';
+      if (n === 13) return 'K';
+      if (n === 12) return 'Q';
+      if (n === 11) return 'J';
+      if (n === 10) return 'T';
+      return String(n);
+    }
+
+    function pileHtml(suit) {
+      const t = table[suit] || { open: false, lo: null, hi: null, cards: [] };
+      const col = SUIT_COLOR[suit] || '#fff';
+      if (!t.open) {
+        return (
+          '<div class="pc-satte-pile is-closed" style="color:' +
+          col +
+          '">' +
+          '<span class="pc-satte-pile-suit">' +
+          esc(suit) +
+          '</span>' +
+          '<span class="pc-satte-pile-meta">Closed<br>need 7</span>' +
+          '</div>'
+        );
+      }
+      const cards = t.cards || [];
+      const show = cards.length <= 5 ? cards : [cards[0]].concat(cards.slice(-3));
+      const faces = show
+        .map((c) =>
+          cardFace(c).replace('<button', '<button disabled').replace('pc-card', 'pc-card is-locked')
+        )
+        .join('');
+      return (
+        '<div class="pc-satte-pile" style="color:' +
+        col +
+        '">' +
+        '<span class="pc-satte-pile-suit">' +
+        esc(suit) +
+        '</span>' +
+        '<span class="pc-satte-pile-meta">' +
+        esc(rankLabel(t.lo)) +
+        '–' +
+        esc(rankLabel(t.hi)) +
+        ' · ' +
+        cards.length +
+        '</span>' +
+        '<div class="pc-satte-pile-cards">' +
+        faces +
+        '</div>' +
+        '</div>'
+      );
     }
 
     function pushState(extra) {
-      if (!liveOn || !liveHandle || applying) return;
+      if (!liveOn || !liveHandle || !liveRoles || applying) return;
       liveHandle.push(
         Object.assign(
           {
             status: 'playing',
             turn: myTurn ? liveRoles.me : liveRoles.opp,
-            state: { handA, handB, table },
+            state: { handA, handB, table: cloneSatteTable(table) },
           },
           extra || {}
         )
       );
     }
 
-    function paint(msg) {
+    function endWin(youWin) {
       if (ended) return;
+      ended = true;
+      if (passTimer) clearTimeout(passTimer);
+      if (aiTimer) clearTimeout(aiTimer);
+      passTimer = aiTimer = 0;
+      if (liveOn && liveHandle && liveRoles) {
+        liveHandle.push({
+          status: 'over',
+          winner: youWin ? liveRoles.me : liveRoles.opp,
+          state: { handA, handB, table: cloneSatteTable(table) },
+        });
+      }
+      showDuelResult(shell, {
+        id: 'sattepe',
+        you: youWin ? 1 : 0,
+        opp: youWin ? 0 : 1,
+        glyph: '7️⃣',
+        title: youWin ? 'You win' : 'Opponent wins',
+        subtitle: 'Empty hand · Ace high chains',
+        shareText: 'Satte pe Satta on Chaupaal',
+        onAgain: () => openSatte(chat),
+      });
+    }
+
+    function passTurn() {
+      if (ended || !myTurn) return;
+      buzz('card');
+      if (liveOn) {
+        myTurn = false;
+        pushState({ turn: liveRoles.opp, act: 'pass' });
+        paint('Passed — no legal card.');
+        return;
+      }
+      myTurn = false;
+      paint('Passed — no legal card.');
+      scheduleAi();
+    }
+
+    function scheduleAi() {
+      if (liveOn || ended) return;
+      if (aiTimer) clearTimeout(aiTimer);
+      aiTimer = setTimeout(() => {
+        aiTimer = 0;
+        if (ended || !shell.alive()) return;
+        aiPlayOnce();
+      }, 420 + Math.floor(rng() * 280));
+    }
+
+    function aiPlayOnce() {
+      if (liveOn || ended) return;
+      const playable = handB.filter(canPlay);
+      if (!playable.length) {
+        myTurn = true;
+        paint('AI passed — your turn.');
+        maybeOfferPass();
+        return;
+      }
+      const pick = playable[Math.floor(rng() * playable.length)];
+      handB.splice(handB.indexOf(pick), 1);
+      apply(pick);
+      if (!handB.length) {
+        endWin(false);
+        return;
+      }
+      myTurn = true;
+      paint('AI played ' + pick.r + pick.s);
+      maybeOfferPass();
+    }
+
+    function maybeOfferPass() {
+      if (ended || !myTurn) return;
       const you = myHand();
-      shell.body.innerHTML = `
-        <div class="pc-satte">
-          <p class="pc-hint">${esc(msg || (liveOn && !myTurn ? 'Opponent’s turn…' : 'Play a card next to a seven chain.'))}</p>
-          <div class="pc-sevens">${SUITS.map((s) => `<span>${s} ${table[s].lo}–${table[s].hi}</span>`).join('')}</div>
-          <div class="pc-hand">${you.map(cardFace).join('')}</div>
-        </div>`;
-      shell.body.querySelectorAll('.pc-card').forEach((btn) => {
+      if (you.length && !you.some(canPlay)) {
+        if (passTimer) clearTimeout(passTimer);
+        // Soft auto-pass so Practice never softlocks (Prompt 2 = real pass rules)
+        passTimer = setTimeout(() => {
+          passTimer = 0;
+          if (ended || !myTurn || !shell.alive()) return;
+          if (myHand().some(canPlay)) return;
+          passTurn();
+        }, 900);
+      }
+    }
+
+    function paint(msg) {
+      if (ended || !shell.alive()) return;
+      const you = myHand();
+      const legalIds = {};
+      you.forEach((c) => {
+        if (canPlay(c)) legalIds[c.id] = true;
+      });
+      const noLegal = myTurn && you.length > 0 && !you.some(canPlay);
+      const hint =
+        msg ||
+        (liveOn && !myTurn
+          ? 'Opponent’s turn…'
+          : noLegal
+            ? 'No legal card — Pass (stub until Prompt 2).'
+            : 'Open with a seven, then build up or down.');
+
+      const handHtml = you
+        .map((c) => {
+          let html = cardFace(c);
+          if (legalIds[c.id]) html = html.replace('pc-card', 'pc-card is-legal');
+          if (!myTurn) html = html.replace('<button', '<button disabled');
+          return html;
+        })
+        .join('');
+
+      shell.body.innerHTML =
+        '<div class="pc-satte">' +
+        '<p class="pc-hint">' +
+        esc(hint) +
+        '</p>' +
+        '<div class="pc-satte-board" aria-label="Suit chains">' +
+        SUITS.map(pileHtml).join('') +
+        '</div>' +
+        '<div class="pc-hand">' +
+        handHtml +
+        '</div>' +
+        '<div class="pc-actions">' +
+        (noLegal ? '<button type="button" class="cs-hit" data-pass>Pass</button>' : '') +
+        '<span class="pc-hint" style="width:100%;text-align:center;font-size:12px;opacity:.8">You ' +
+        you.length +
+        ' · Opp ' +
+        oppHand().length +
+        ' · Ace high</span>' +
+        '</div>' +
+        '</div>';
+
+      shell.body.querySelector('[data-pass]')?.addEventListener('click', () => {
+        if (!myTurn || ended) return;
+        if (passTimer) {
+          clearTimeout(passTimer);
+          passTimer = 0;
+        }
+        passTurn();
+      });
+
+      shell.body.querySelectorAll('.pc-hand .pc-card').forEach((btn) => {
         btn.addEventListener('click', () => {
           if (!myTurn || ended) return;
           const hand = myHand().slice();
@@ -7906,52 +8177,31 @@
             buzz('invalid');
             return;
           }
+          if (passTimer) {
+            clearTimeout(passTimer);
+            passTimer = 0;
+          }
           hand.splice(hand.indexOf(c), 1);
           setMyHand(hand);
           apply(c);
           buzz('card');
           if (!hand.length) {
-            ended = true;
-            if (liveOn && liveHandle) {
-              liveHandle.push({ status: 'over', winner: liveRoles.me, state: { handA, handB, table } });
-            }
-            showDuelResult(shell, {
-              id: 'sattepe',
-              you: 1,
-              opp: 0,
-              glyph: '7️⃣',
-              shareText: 'Satte pe Satta on Chaupaal',
-              onAgain: () => openSatte(chat),
-            });
+            endWin(true);
             return;
           }
           if (liveOn) {
             myTurn = false;
-            pushState({ turn: liveRoles.opp });
+            pushState({ turn: liveRoles.opp, act: 'play', card: { r: c.r, s: c.s, id: c.id } });
             paint('Played ' + c.r + c.s);
             return;
           }
-          const playable = handB.filter(canPlay);
-          if (playable.length) {
-            const pick = playable[0];
-            handB.splice(handB.indexOf(pick), 1);
-            apply(pick);
-          }
-          if (!handA.length || !handB.length) {
-            ended = true;
-            showDuelResult(shell, {
-              id: 'sattepe',
-              you: handA.length === 0 ? 1 : 0,
-              opp: handB.length === 0 && handA.length ? 1 : 0,
-              glyph: '7️⃣',
-              shareText: 'Satte pe Satta on Chaupaal',
-              onAgain: () => openSatte(chat),
-            });
-            return;
-          }
+          myTurn = false;
           paint('Played ' + c.r + c.s);
+          scheduleAi();
         });
       });
+
+      if (myTurn && noLegal) maybeOfferPass();
     }
 
     if (liveOn) {
@@ -7965,6 +8215,8 @@
             you: iWon ? 1 : 0,
             opp: iWon ? 0 : 1,
             glyph: '7️⃣',
+            title: iWon ? 'You win' : 'Opponent wins',
+            subtitle: val.status === 'forfeit' ? 'Forfeit' : 'Empty hand',
             shareText: 'Satte pe Satta on Chaupaal',
             onAgain: () => openSatte(chat),
           });
@@ -7974,7 +8226,7 @@
         applying = true;
         if (st.handA) handA = st.handA;
         if (st.handB) handB = st.handB;
-        if (st.table) Object.assign(table, st.table);
+        if (st.table) table = cloneSatteTable(st.table);
         myTurn = val.turn === liveRoles.me;
         applying = false;
         paint();
@@ -7983,21 +8235,32 @@
         liveHandle = joined.handle;
         liveRoles = joined.roles;
         if (liveRoles.host) {
-          SUITS.forEach((s) => {
-            table[s] = { lo: 7, hi: 7 };
-          });
-          myTurn = true;
-          pushState({ turn: liveRoles.me });
-          paint('Sevens are live. Empty your hand.');
+          dealFresh();
+          const startA = pickStarterIsA();
+          const starterUid = startA ? liveRoles.playerA : liveRoles.playerB;
+          myTurn = liveRoles.me === starterUid;
+          pushState({ turn: starterUid });
+          paint(
+            myTurn ? 'Your break — open with a seven.' : 'Opponent opens — suits start closed.'
+          );
         } else {
-          shell.body.innerHTML = `<p class="pc-hint">Waiting for deal…</p>`;
+          shell.body.innerHTML = '<p class="pc-hint">Waiting for deal…</p>';
         }
       }
     } else {
-      deck.filter((c) => c.r === '7').forEach(apply);
-      paint('Sevens are live. Empty your hand.');
+      dealFresh();
+      const startA = pickStarterIsA();
+      myTurn = startA;
+      if (myTurn) {
+        paint('Your break — open with a seven, then build up or down.');
+        maybeOfferPass();
+      } else {
+        paint('AI opens — suits start closed.');
+        scheduleAi();
+      }
     }
   }
+
 
   /* ---------- Andar Bahar ---------- */
   function openAndarBahar() {
@@ -8195,7 +8458,7 @@
       { id: 'rummy', name: 'Rummy', desc: 'Indian 13-card · jokers · points', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
       { id: 'teenpatti', name: 'Teen Patti', desc: 'Boot, chaal, side-show · virtual chips', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
       { id: 'bluff', name: 'Bluff', desc: 'Pile claims · call · empty hand', icon: '🎭', genre: 'party', launch: openBluff, order: 35 },
-      { id: 'sattepe', name: 'Satte pe Satta', desc: 'Build off sevens', icon: '7️⃣', genre: 'party', launch: openSatte, order: 36 },
+      { id: 'sattepe', name: 'Satte pe Satta', desc: 'Full deal · seven chains', icon: '7️⃣', genre: 'party', launch: openSatte, order: 36 },
       { id: 'andarbaahar', name: 'Andar Bahar', desc: 'Pick a side', icon: '🃏', genre: 'party', launch: openAndarBahar, order: 37 },
     ];
     games.forEach((g) => {

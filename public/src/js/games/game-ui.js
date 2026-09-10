@@ -189,7 +189,11 @@
       'Call or play mid-hand; last play needs Call or Pass before empty-hand win',
       'Three lives · 0 lives loses · Live never shows honesty before Call',
     ],
-    sattepe: ['Play next to a seven chain', 'Empty your hand first', 'Sevens can always start a suit'],
+    sattepe: [
+      'Deal all 52 — suits start closed until a seven opens them',
+      'Build up or down from each seven · Ace is high (above King)',
+      'Empty your hand to win · Pass stub if stuck (rules deepen next)',
+    ],
     andarbaahar: ['Joker sets the rank', 'Pick Andar or Bahar', 'First matching rank wins the side'],
     patangbaazi: [
       'Hold to tension — climb with weight, ease through gusts',

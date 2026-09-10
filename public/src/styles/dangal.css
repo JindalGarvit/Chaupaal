@@ -401,6 +401,48 @@
 .pc-tp-bust{color:#FFD180;font-weight:700;}
 .pc-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
 .pc-sevens,.pc-ab-cols{display:flex;gap:12px;font-size:13px;}
+.pc-satte{width:100%;max-width:420px;padding:0 8px;box-sizing:border-box;}
+.pc-satte-board{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:6px;
+  width:100%;
+  margin:4px 0 8px;
+}
+.pc-satte-pile{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:4px;
+  min-height:88px;
+  padding:6px 4px;
+  border-radius:10px;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,214,0,.22);
+}
+.pc-satte-pile.is-closed{opacity:.72;border-style:dashed;}
+.pc-satte-pile-suit{font-size:16px;font-weight:800;line-height:1;}
+.pc-satte-pile-meta{font-size:10px;opacity:.85;text-align:center;line-height:1.2;}
+.pc-satte-pile-cards{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:2px;
+  max-height:120px;
+  overflow:hidden;
+}
+.pc-satte-pile-cards .pc-card{
+  width:36px;height:48px;font-size:11px;cursor:default;pointer-events:none;
+}
+.pc-satte-pile-cards .pc-card span{font-size:10px;}
+.pc-satte .pc-hand{
+  display:flex;flex-wrap:wrap;justify-content:center;gap:6px;width:100%;
+}
+.pc-satte .pc-card.is-legal{
+  outline:2px solid rgba(255,214,0,.85);
+  outline-offset:1px;
+  box-shadow:0 0 10px rgba(255,214,0,.35);
+}
 .pc-row{display:flex;align-items:center;gap:8px;}
 
 /* ===== OH NO! (UNO) ===== */
