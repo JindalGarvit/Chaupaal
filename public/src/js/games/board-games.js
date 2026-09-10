@@ -407,6 +407,8 @@ function openBusinessGame(chat,playerCount){
   }));
   let currentPlayer=0;let diceVal=[1,1];let rolling=false;let gameOver=false;let message='';
   let awaitingBuy=false;let focusPos=0;
+  /** Prompt 2 hook: per-tile improvements. Prompt 1 keeps houses at 0. */
+  let improvements={}; // idx -> { houses:0, hotel:false }
   const BUS_SECS=20;let busTimer=BUS_SECS;let busInterval=null;let diceIv=null;
 
   const overlay=document.createElement('div');
@@ -454,6 +456,23 @@ function openBusinessGame(chat,playerCount){
       jailed:p.jailed||0,bankrupt:!!p.bankrupt,
     }));
   }
+  function serializeImprovements(){
+    const out={};
+    Object.keys(improvements).forEach((k)=>{
+      const imp=improvements[k]||{};
+      out[k]={houses:Math.max(0,Number(imp.houses)||0),hotel:!!imp.hotel};
+    });
+    return out;
+  }
+  function applyImprovements(raw){
+    if(!raw||typeof raw!=='object')return;
+    const next={};
+    Object.keys(raw).forEach((k)=>{
+      const imp=raw[k]||{};
+      next[k]={houses:Math.max(0,Number(imp.houses)||0),hotel:!!imp.hotel};
+    });
+    improvements=next;
+  }
   function applyBusPlayers(raw){
     if(!Array.isArray(raw))return;
     raw.forEach((rp,i)=>{
@@ -471,6 +490,7 @@ function openBusinessGame(chat,playerCount){
     liveHandle.push({
       state:{
         players:serializeBusPlayers(),
+        improvements:serializeImprovements(),
         currentPlayer,diceVal:diceVal.slice(),message,gameOver,awaitingBuy,focusPos,
       },
       turn:gameOver?null:(currentPlayer===0?liveRoles.playerA:liveRoles.playerB),
@@ -512,11 +532,83 @@ function openBusinessGame(chat,playerCount){
     return tile&&(tile.type==='property'||tile.type==='railway'||tile.type==='utility');
   }
 
-  function rentFor(tile){
-    if(!tile)return 0;
-    if(tile.type==='property')return tile.rent[0];
-    if(tile.type==='railway')return 500;
-    return 200;
+  function tileImp(idx){
+    if(improvements[idx]==null)improvements[idx]={houses:0,hotel:false};
+    return improvements[idx];
+  }
+
+  /** Prompt 2 reads houses/hotel; Prompt 1 always returns 0 unless state set. */
+  function improvementTier(idx){
+    const imp=tileImp(idx);
+    if(imp.hotel)return 5;
+    return Math.min(4,Math.max(0,Number(imp.houses)||0));
+  }
+
+  function groupPropertyIndices(groupId){
+    const out=[];
+    BOARD.forEach((t,i)=>{
+      if(t&&t.type==='property'&&t.group===groupId)out.push(i);
+    });
+    return out;
+  }
+
+  function ownsFullGroup(player,groupId){
+    if(!player||player.bankrupt||groupId==null||groupId==='rail'||groupId==='util')return false;
+    const idxs=groupPropertyIndices(groupId);
+    if(!idxs.length)return false;
+    return idxs.every((i)=>(player.properties||[]).includes(i));
+  }
+
+  function countOwnedOfType(player,type){
+    if(!player||player.bankrupt)return 0;
+    let n=0;
+    (player.properties||[]).forEach((i)=>{
+      if(BOARD[i]&&BOARD[i].type===type)n++;
+    });
+    return n;
+  }
+
+  function countRailways(player){return countOwnedOfType(player,'railway');}
+  function countUtilities(player){return countOwnedOfType(player,'utility');}
+
+  /**
+   * Rent rules (Prompt 1):
+   * - Property: rent[tier] from houses/hotel (default tier 0); full colour set unimproved → 2× base.
+   * - Railway: 250 / 500 / 1000 / 2000 by count owned (1–4).
+   * - Utility: 40×dice if 1 owned, 100×dice if both (dice = last roll total).
+   */
+  function rentFor(tile,tileIdx,owner,diceTotal){
+    if(!tile||!owner||owner.bankrupt)return 0;
+    if(tile.type==='property'){
+      const ladder=Array.isArray(tile.rent)?tile.rent:[0];
+      const tier=improvementTier(tileIdx);
+      let rent=Number(ladder[Math.min(tier,ladder.length-1)])||0;
+      if(tier===0&&ownsFullGroup(owner,tile.group))rent*=2;
+      return rent;
+    }
+    if(tile.type==='railway'){
+      const n=Math.min(4,Math.max(1,countRailways(owner)));
+      return [0,250,500,1000,2000][n]||2000;
+    }
+    if(tile.type==='utility'){
+      const n=countUtilities(owner);
+      const dice=Math.max(2,Number(diceTotal)||((diceVal[0]||1)+(diceVal[1]||1)));
+      return n>=2?100*dice:40*dice;
+    }
+    return 0;
+  }
+
+  function rentBreakdown(tile,tileIdx,owner,diceTotal){
+    const rent=rentFor(tile,tileIdx,owner,diceTotal);
+    if(!tile||!owner)return {rent,monopoly:false,tier:0,railCount:0,utilCount:0};
+    if(tile.type==='property'){
+      const tier=improvementTier(tileIdx);
+      const monopoly=tier===0&&ownsFullGroup(owner,tile.group);
+      return {rent,monopoly,tier,railCount:0,utilCount:0};
+    }
+    if(tile.type==='railway')return {rent,monopoly:false,tier:0,railCount:countRailways(owner),utilCount:0};
+    if(tile.type==='utility')return {rent,monopoly:false,tier:0,railCount:0,utilCount:countUtilities(owner)};
+    return {rent,monopoly:false,tier:0,railCount:0,utilCount:0};
   }
 
   function movePlayerToken(steps){
@@ -524,6 +616,7 @@ function openBusinessGame(chat,playerCount){
     p.pos=(p.pos+steps)%BOARD.length;
     focusPos=p.pos;
     const tile=BOARD[p.pos];
+    const diceTotal=steps;
     message='';
     if(tile.type==='go'){p.money+=2000;message='Passed Start! +₹2000';}
     else if(tile.type==='tax'){p.money-=tile.amount;message=`Paid ₹${tile.amount} tax`;}
@@ -533,24 +626,45 @@ function openBusinessGame(chat,playerCount){
       const e=events[Math.floor(Math.random()*events.length)];p.money+=e.amt;message=`${e.m} ${e.amt>0?'+':''}₹${e.amt}`;
     }
     else if(isBuyable(tile)){
-      const owner=players.find(pl=>pl.properties.includes(p.pos));
+      const owner=players.find(pl=>!pl.bankrupt&&pl.properties.includes(p.pos));
       if(owner&&owner!==p){
-        const rent=rentFor(tile);
-        p.money-=rent;owner.money+=rent;message=`Paid ₹${rent} rent to ${owner.name}`;
+        const br=rentBreakdown(tile,p.pos,owner,diceTotal);
+        const rent=br.rent;
+        p.money-=rent;owner.money+=rent;
+        if(br.monopoly)message=`Paid ₹${rent} rent (monopoly) to ${owner.name}`;
+        else if(tile.type==='railway')message=`Paid ₹${rent} station rent (${br.railCount}/4) to ${owner.name}`;
+        else if(tile.type==='utility')message=`Paid ₹${rent} utility rent (${br.utilCount}/2 · ${diceTotal} dice) to ${owner.name}`;
+        else message=`Paid ₹${rent} rent to ${owner.name}`;
       }
     }
     render();
-    if(isBuyable(tile)&&!players.find(pl=>pl.properties.includes(p.pos))&&p.money>=tile.price){
+    if(isBuyable(tile)&&!players.find(pl=>!pl.bankrupt&&pl.properties.includes(p.pos))&&p.money>=tile.price){
       offerBuy(tile,p);
     } else {
       endBusTurn();
     }
   }
 
+  function aiWantsBuy(tile,player){
+    if(!tile||!player||player.money<tile.price)return false;
+    if(tile.type==='property'){
+      const idxs=groupPropertyIndices(tile.group);
+      const owned=idxs.filter((i)=>(player.properties||[]).includes(i)).length;
+      if(owned===idxs.length-1)return Math.random()<0.92;
+      if(owned>=1)return Math.random()<0.8;
+    }
+    if(tile.type==='railway'||tile.type==='utility'){
+      const n=countOwnedOfType(player,tile.type);
+      if(n>=1)return Math.random()<0.85;
+    }
+    return Math.random()<0.7;
+  }
+
   function offerBuy(tile,player){
     if(!isMyControl()){
-      if(!liveOn&&Math.random()<0.7&&player.money>=tile.price){
+      if(!liveOn&&aiWantsBuy(tile,player)){
         player.money-=tile.price;player.properties.push(player.pos);
+        tileImp(player.pos);
         message=`${player.name} bought ${tile.name}!`;
         if(typeof gameFeedback==='function')gameFeedback('card');
       }
@@ -568,8 +682,9 @@ function openBusinessGame(chat,playerCount){
     const p=players[currentPlayer];
     const tile=BOARD[p.pos];
     awaitingBuy=false;
-    if(yes&&isBuyable(tile)&&p.money>=tile.price&&!players.find(pl=>pl.properties.includes(p.pos))){
+    if(yes&&isBuyable(tile)&&p.money>=tile.price&&!players.find(pl=>!pl.bankrupt&&pl.properties.includes(p.pos))){
       p.money-=tile.price;p.properties.push(p.pos);
+      tileImp(p.pos);
       message=`You bought ${tile.name}!`;
       if(typeof gameFeedback==='function')gameFeedback('card');
     } else if(!yes){
@@ -601,15 +716,72 @@ function openBusinessGame(chat,playerCount){
     else if(!liveOn)schedule(rollBusDice,900);
   }
 
+  function rentLadderHtml(tile,idx,owner){
+    if(tile.type==='property'&&Array.isArray(tile.rent)){
+      const tier=improvementTier(idx);
+      const mono=owner&&ownsFullGroup(owner,tile.group);
+      const labels=['Base','1 house','2 houses','3 houses','4 houses','Hotel'];
+      const rows=tile.rent.map((r,i)=>{
+        const active=i===tier;
+        let shown=r;
+        if(i===0&&mono)shown=r*2;
+        return `<div class="bus-rent-row${active?' is-current':''}"><span>${labels[i]||`Tier ${i}`}</span><strong>₹${shown}${i===0&&mono?' ×2':''}</strong></div>`;
+      }).join('');
+      return `<div class="bus-rent-ladder">${rows}</div>
+        <div class="bus-deed-badge${mono?' is-mono':''}">${mono?'Monopoly! · 2× base rent':'Colour set incomplete'}</div>`;
+    }
+    if(tile.type==='railway'){
+      const n=owner?countRailways(owner):0;
+      const tiers=[250,500,1000,2000];
+      const rows=tiers.map((r,i)=>{
+        const count=i+1;
+        return `<div class="bus-rent-row${n===count?' is-current':''}"><span>${count} station${count>1?'s':''}</span><strong>₹${r}</strong></div>`;
+      }).join('');
+      return `<div class="bus-rent-ladder">${rows}</div>
+        <div class="bus-deed-badge">${n?`Owner holds ${n}/4 stations`:'Rent scales with stations owned'}</div>`;
+    }
+    if(tile.type==='utility'){
+      const n=owner?countUtilities(owner):0;
+      const dice=(diceVal[0]||1)+(diceVal[1]||1);
+      return `<div class="bus-rent-ladder">
+          <div class="bus-rent-row${n===1?' is-current':''}"><span>1 utility</span><strong>40 × dice</strong></div>
+          <div class="bus-rent-row${n>=2?' is-current':''}"><span>Both utilities</span><strong>100 × dice</strong></div>
+        </div>
+        <div class="bus-deed-badge">${n?`Owner holds ${n}/2 · last dice ${dice}`:'Rent = multiplier × dice rolled'}</div>`;
+    }
+    return '';
+  }
+
+  function holdingsStripHtml(){
+    const groups=[];
+    const seen=new Set();
+    BOARD.forEach((t)=>{
+      if(t&&t.type==='property'&&t.group!=null&&!seen.has(t.group)){
+        seen.add(t.group);
+        groups.push({id:t.group,color:t.color||'#888',name:t.name});
+      }
+    });
+    const chips=groups.map((g)=>{
+      const idxs=groupPropertyIndices(g.id);
+      const owner=players.find((pl)=>!pl.bankrupt&&ownsFullGroup(pl,g.id));
+      const ownedByMe=idxs.filter((i)=>(players[0].properties||[]).includes(i)).length;
+      const label=owner?(owner.name==='You'?'You':'AI'):`${ownedByMe}/${idxs.length}`;
+      return `<span class="bus-hold-chip${owner?' is-mono':''}" style="--gc:${g.color}" title="${g.id}">${label}${owner?' ★':''}</span>`;
+    }).join('');
+    return `<div class="bus-holdings" aria-label="Colour sets">${chips}</div>`;
+  }
+
   function deedHtml(tile,idx){
-    const owner=players.find(pl=>pl.properties.includes(idx));
+    const owner=players.find(pl=>!pl.bankrupt&&pl.properties.includes(idx));
     const band=tile.color||'#34495e';
     const typeLabel=tile.type==='property'?'Property':tile.type==='railway'?'Railway':tile.type==='utility'?'Utility':tile.type==='tax'?'Tax':tile.type==='go'?'Start':tile.type==='jail'?'Jail':tile.type==='gotojail'?'Go to Jail':tile.type==='chance'?'Twist':tile.type==='chest'?'Community':tile.type==='parking'?'Rest':'Tile';
     let body='';
     if(isBuyable(tile)){
+      const br=owner?rentBreakdown(tile,idx,owner):(null);
       body=`
-        <div class="bus-deed-meta">Price <strong>₹${tile.price}</strong>${tile.rent?` · Rent ₹${tile.rent[0]}`:''}</div>
-        <div class="bus-deed-owner">${owner?`Owned by ${owner.name}`:'Unowned'}</div>`;
+        <div class="bus-deed-meta">Price <strong>₹${tile.price}</strong>${br?` · Now ₹${br.rent}`:''}</div>
+        <div class="bus-deed-owner">${owner?`Owned by ${owner.name}`:'Unowned'}</div>
+        ${rentLadderHtml(tile,idx,owner)}`;
     } else if(tile.type==='tax'){
       body=`<div class="bus-deed-meta">Pay <strong>₹${tile.amount}</strong></div>`;
     } else {
@@ -691,6 +863,7 @@ function openBusinessGame(chat,playerCount){
           <div class="bus-player-props">${p.properties.length} props</div>
         </div>`).join('')}
       </div>
+      ${holdingsStripHtml()}
       <div class="bus-main">
         ${deedHtml(tile,focusPos)}
         ${miniBoardHtml()}
@@ -712,7 +885,7 @@ function openBusinessGame(chat,playerCount){
       gameType:'business',
       matchId:(chat&&chat.dangalMatchId)||(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.matchId),
       me:liveRoles.me,playerA:liveRoles.playerA,playerB:liveRoles.playerB,
-      state:{players:serializeBusPlayers(),currentPlayer:0,diceVal:[1,1],message:'',gameOver:false,awaitingBuy:false,focusPos:0},
+      state:{players:serializeBusPlayers(),improvements:serializeImprovements(),currentPlayer:0,diceVal:[1,1],message:'',gameOver:false,awaitingBuy:false,focusPos:0},
       onSnap(val){
         if(!val||applyingLive||!alive())return;
         if(val.status==='forfeit'&&!gameOver){
@@ -726,6 +899,7 @@ function openBusinessGame(chat,playerCount){
         const s=val.state;if(!s||!s.players)return;
         applyingLive=true;
         applyBusPlayers(s.players);
+        if(s.improvements)applyImprovements(s.improvements);
         currentPlayer=Number(s.currentPlayer)||0;
         if(Array.isArray(s.diceVal))diceVal=s.diceVal.slice();
         message=s.message||'';
