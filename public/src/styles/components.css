@@ -4575,6 +4575,10 @@ select:focus-visible,
 .bus-roll-btn{width:100%;min-height:48px;border:0;border-radius:14px;background:var(--game-accent,#B98932);color:#fff;font:700 15px "Space Grotesk",sans-serif;cursor:pointer;}
 .bus-roll-btn:disabled{opacity:.45;cursor:default;}
 
+.scribble-pick-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:8px;}
+.scribble-pick-chip{min-height:40px;padding:8px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--cream);font:700 13px "Space Grotesk",sans-serif;cursor:pointer;color:var(--ink);}
+.scribble-pick-chip:active,.scribble-pick-chip:hover{border-color:var(--game-accent,#8B5CF6);background:color-mix(in srgb,var(--game-accent,#8B5CF6) 12%,var(--cream));}
+.scribble-pick-left{font-weight:600;color:var(--muted);font-size:12px;margin-left:6px;}
 .scribble-prompt{padding:8px 14px;text-align:center;border-bottom:1px solid var(--line);flex-shrink:0;background:var(--white);}
 .scribble-prompt--draw{background:color-mix(in srgb,var(--game-accent,#8B5CF6) 8%,var(--white));}
 .scribble-word{font:700 15px "Space Grotesk",sans-serif;}

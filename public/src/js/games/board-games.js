@@ -2384,6 +2384,14 @@ function openBusinessGame(chat,playerCount){
 // ===================== SCRIBBLE (draw & guess) =====================
 const SCRIBBLE_WORDS=["elephant", "dolphin", "penguin", "butterfly", "jellyfish", "crocodile", "flamingo", "kangaroo", "cheetah", "gorilla", "giraffe", "porcupine", "chameleon", "octopus", "seahorse", "platypus", "armadillo", "orangutan", "chimpanzee", "rhinoceros", "hippopotamus", "peacock", "pelican", "toucan", "parrot", "cobra", "python", "eagle", "falcon", "owl", "whale", "shark", "starfish", "lobster", "crab", "scorpion", "tarantula", "dragonfly", "firefly", "squirrel", "hedgehog", "beaver", "badger", "raccoon", "skunk", "meerkat", "lemur", "sloth", "anteater", "guitar", "telescope", "umbrella", "bicycle", "lighthouse", "helicopter", "submarine", "microscope", "compass", "thermometer", "calculator", "binoculars", "periscope", "sundial", "hourglass", "protractor", "abacus", "typewriter", "lantern", "canteen", "hammock", "backpack", "suitcase", "parachute", "magnifying glass", "flashlight", "walkie talkie", "megaphone", "trophy", "diploma", "passport", "anchor", "stethoscope", "scissors", "screwdriver", "wrench", "pliers", "saw", "drill", "hammer", "chisel", "level", "ruler", "tape measure", "pizza", "sunflower", "watermelon", "pineapple", "strawberry", "broccoli", "avocado", "croissant", "pretzel", "sushi", "dumpling", "burrito", "taco", "waffle", "pancake", "macaron", "cheesecake", "tiramisu", "baguette", "donut", "bagel", "muffin", "cupcake", "brownie", "\u00e9clair", "meringue", "sorbet", "pudding", "lasagna", "paella", "risotto", "ramen", "pho", "biryani", "curry", "samosa", "chapati", "naan", "mountain", "rainbow", "waterfall", "volcano", "glacier", "tornado", "blizzard", "hurricane", "earthquake", "tsunami", "aurora", "eclipse", "meteor", "comet", "asteroid", "nebula", "galaxy", "constellation", "supernova", "quasar", "canyon", "plateau", "delta", "estuary", "peninsula", "archipelago", "atoll", "fjord", "savanna", "tundra", "mangrove", "coral reef", "geyser", "lagoon", "oasis", "quicksand", "avalanche", "landslide", "drought", "flood", "rocket", "hot air balloon", "spaceship", "sailboat", "hovercraft", "snowmobile", "rickshaw", "tram", "monorail", "gondola", "kayak", "canoe", "catamaran", "ferry", "blimp", "zeppelin", "glider", "hang glider", "paraglider", "skateboard", "scooter", "unicycle", "tricycle", "wheelchair", "ambulance", "fire truck", "bulldozer", "crane", "excavator", "castle", "pyramid", "igloo", "pagoda", "mosque", "cathedral", "amphitheatre", "colosseum", "aqueduct", "treehouse", "windmill", "cottage", "mansion", "skyscraper", "observatory", "planetarium", "aquarium", "museum", "library", "stadium", "arena", "circus tent", "barn", "silo", "greenhouse", "gazebo", "kiosk", "bungalow", "villa", "swimming", "climbing", "juggling", "skateboarding", "surfing", "snowboarding", "parachuting", "scuba diving", "bungee jumping", "rock climbing", "meditation", "yoga", "archery", "fencing", "wrestling", "boxing", "karate", "ballet", "breakdancing", "hula hooping", "fishing", "gardening", "painting", "sculpting", "knitting", "weaving", "pottery", "woodcarving", "origami", "calligraphy", "firefighter", "astronaut", "surgeon", "chef", "detective", "magician", "acrobat", "conductor", "archaeologist", "geologist", "beekeeper", "shepherd", "lumberjack", "blacksmith", "glassblower", "taxidermist", "sommelier", "puppeteer", "falconer", "cartographer", "pillow", "blanket", "curtain", "chandelier", "fireplace", "bathtub", "rocking chair", "bookshelf", "clock", "mirror", "candle", "teapot", "mug", "colander", "whisk", "ladle", "spatula", "tongs", "mortar", "pestle", "soap", "toothbrush", "hairdryer", "iron", "vacuum", "blender", "toaster", "kettle", "microwave", "dishwasher", "sombrero", "beret", "turban", "tiara", "crown", "veil", "monocle", "bowtie", "suspenders", "cufflinks", "kimono", "sari", "kilt", "poncho", "cape", "toga", "tuxedo", "trench coat", "overalls", "jumpsuit", "violin", "cello", "harp", "accordion", "bagpipes", "didgeridoo", "xylophone", "marimba", "tambourine", "castanets", "trombone", "tuba", "flugelhorn", "oboe", "clarinet", "bassoon", "harmonica", "ukulele", "banjo", "sitar", "dragon", "unicorn", "mermaid", "werewolf", "vampire", "wizard", "witch", "goblin", "troll", "fairy", "centaur", "phoenix", "griffin", "kraken", "cyclops", "sphinx", "minotaur", "leprechaun", "genie", "surfboard", "snowboard", "hockey stick", "cricket bat", "polo mallet", "lacrosse stick", "javelin", "discus", "vaulting pole", "boomerang", "badminton racket", "ping pong paddle", "frisbee", "bowling pin", "dumbbell", "kettlebell", "barbell", "punching bag", "balance beam", "pommel horse", "robot", "drone", "satellite", "antenna", "circuit board", "battery", "magnet", "prism", "bunsen burner", "test tube", "petri dish", "centrifuge", "oscilloscope", "spectrometer", "voltmeter", "transistor", "capacitor", "resistor", "solar panel", "wind turbine", "peace", "freedom", "gravity", "time", "silence", "echo", "shadow", "reflection", "balance", "chaos", "infinity", "paradox", "evolution", "revolution", "democracy", "justice", "equality", "courage", "wisdom", "loyalty", "wombat", "quokka", "axolotl", "pangolin", "tapir", "capybara", "narwhal", "manatee", "dugong", "walrus", "puffin", "albatross", "booby", "frigate bird", "secretary bird", "shoebill", "cassowary", "emu", "kiwi", "roadrunner", "mudskipper", "archerfish", "leafy sea dragon", "mantis shrimp", "pistol shrimp", "vampire squid", "bioluminescent jellyfish", "flying fish", "electric eel", "anglerfish", "auto rickshaw", "diya", "rangoli", "tabla", "veena", "kolam", "mehendi", "kurta", "dhol", "shehnai", "mridangam", "tanpura", "sarangi", "jalra", "dholak", "nagara", "pungi", "been", "chai stall", "paan", "lassi", "chaat", "thali", "dosa", "idli", "vada", "sambar", "rasam", "holi", "diwali", "durga puja", "kite festival", "onam", "baisakhi", "pongal", "ganesh chaturthi", "navratri", "eid", "mahal", "haveli", "ghat", "ashram", "mandir", "gurudwara", "dargah", "stepwell", "jharokha", "chhatri", "cotton candy", "caramel apple", "candy floss", "lollipop", "toffee", "fudge", "nougat", "marzipan", "praline", "truffle", "fondue", "raclette", "quiche", "cr\u00eape", "galette", "falafel", "hummus", "tzatziki", "baklava", "halva", "ceviche", "poke bowl", "acai bowl", "smoothie bowl", "granola", "overnight oats", "french toast", "eggs benedict", "shakshuka", "congee", "kaleidoscope", "snow globe", "music box", "cuckoo clock", "grandfather clock", "astrolabe", "sextant", "chronometer", "spinning top", "yo yo", "kite", "slinky", "rubik's cube", "jigsaw puzzle", "domino", "dartboard", "piggy bank", "treasure chest", "lockbox", "safe", "vault", "filing cabinet", "inbox tray", "bulletin board", "chalkboard", "whiteboard", "cherry blossom", "lotus", "magnolia", "hibiscus", "orchid", "poppy", "dahlia", "chrysanthemum", "anthurium", "baobab tree", "banyan tree", "redwood", "bonsai", "cactus", "venus flytrap", "pitcher plant", "sundew", "rafflesia", "corpse flower", "termite mound", "bird's nest", "beehive", "spider web", "burrow", "dam", "anthill", "warren", "den", "lair", "facepalm", "thumbs up", "shrug", "wink", "eyeroll", "double take", "bow", "curtsy", "salute", "namaste", "black hole", "pulsar", "wormhole", "space station", "moon landing", "asteroid belt", "solar flare", "cosmic ray", "thunderstorm", "hailstorm", "sandstorm", "whirlwind", "waterspout", "fog", "smog", "double rainbow", "sundog", "tangled headphones", "empty fridge", "wifi signal", "loading spinner", "battery low", "notification ping", "autocorrect fail", "selfie stick", "power bank", "phone case", "flat tire", "traffic jam", "road rage", "parking ticket", "speed bump", "roundabout", "u turn", "dead end", "shortcut", "detour", "lost luggage", "missed flight", "jet lag", "culture shock", "language barrier", "homesickness", "wanderlust", "bucket list", "souvenir", "postcard", "gymnastics", "acrobatics", "trapeze", "alpaca", "llama", "bison", "moose", "reindeer", "caribou", "yak", "ibex", "otter", "mink", "ferret", "stoat", "weasel", "vole", "shrew", "mole", "macaw", "cockatoo", "lorikeet", "canary", "finch", "sparrow", "robin", "wren", "swallow", "stork", "heron", "egret", "ibis", "kingfisher", "woodpecker", "hoopoe", "hornbill", "sunbird", "starling", "piranha", "barracuda", "tuna", "swordfish", "salamander", "newt", "toad", "gecko", "iguana", "skink", "millipede", "centipede", "earwig", "silverfish", "jackhammer", "forklift", "tractor", "harvester", "plough", "watermill", "sawmill", "printing press", "loom", "spinning wheel", "sewing machine", "easel", "palette", "paintbrush", "charcoal", "pastel", "canvas", "fountain pen", "quill", "inkwell", "scroll", "metronome", "tuning fork", "gramophone", "jukebox", "turntable", "tightrope", "puppet", "marionette", "carousel", "roller coaster", "bumper car", "wok", "tagine", "pressure cooker", "steamer basket", "tandoor", "bread maker", "pasta machine", "ice cream maker", "butter dish", "gravy boat", "piping bag", "cookie cutter", "rolling pin", "pastry brush", "zester", "mandoline", "trampoline", "springboard", "diving board", "hurdle", "croquet", "rowing oar", "luge", "bobsled", "chess piece", "checkers", "backgammon", "billiards", "flying buttress", "gargoyle", "battlement", "portcullis", "drawbridge", "moat", "turret", "keystone", "atrium", "clerestory", "apse", "transept", "nave", "crypt", "retort stand", "burette", "pipette", "distillation", "electroscope", "galvanometer", "ammeter", "solenoid", "spectroscope", "polarimeter", "fascinator", "pillbox hat", "cloche", "fez", "ruff", "pauldron", "gauntlet", "greave", "muff", "stole", "boa", "cravat", "ascot", "mesa", "butte", "drumlin", "sinkhole", "cenote", "stalactite", "stalagmite", "fumarole", "salt flat", "funicular", "cable car", "chairlift", "zipline", "rope bridge", "jetty", "pier", "wharf", "quay", "promenade", "boardwalk", "chaise longue", "daybed", "futon", "tatami", "footstool", "ottoman", "pavlova", "kimchi", "harissa", "chutney", "pickle", "relish", "brigadeiro", "lamington", "sambal", "dukkah", "sumac", "miso", "doenjang", "vegemite", "marmite", "chicha", "treadmill", "elliptical", "gymnastic ring", "rubik cube", "stapler", "hole punch", "shredder", "label maker", "pencil case", "baobab", "banyan", "bird nest", "jack in the box", "top hat", "crepe", "satellite dish", "peace sign", "shadow puppet", "balance scale", "compass rose", "anchor chain", "ship wheel", "sword swallower", "fire breather", "contortionist", "stilt walker", "escape artist", "plate spinner", "knife thrower", "hypnotist", "tightrope walker", "manta ray", "hammerhead", "orca", "pomegranate", "dragonfruit", "lychee", "jackfruit", "rambutan", "durian", "starfruit", "mangosteen", "soursop", "papaya", "guava", "passion fruit", "kumquat", "yuzu", "tamarind", "jujube", "longan", "carambola", "sapodilla", "cherimoya", "lathe", "band saw", "jigsaw", "router", "planer", "jointer", "pile driver", "milling machine", "drill press", "ketchup", "mustard", "mayonnaise", "vinegar", "soy sauce", "worcestershire", "tabasco", "sriracha", "pesto", "tahini", "jambalaya", "gumbo", "chowder", "bisque", "gazpacho", "minestrone", "bouillabaisse", "vichyssoise", "souvlaki", "gyro", "shawarma", "kebab", "satay", "tempura", "teriyaki", "bulgogi", "bibimbap", "banh mi", "injera", "jollof", "couscous", "moussaka", "dolma", "spanakopita", "pierogi", "borscht", "stroganoff", "bretzel", "knish", "blini", "socca", "farinata", "piadina", "flatbread", "windsurfer", "parasailor", "kitesurfer", "wakeboard", "skimboard", "bodyboard", "paddleboard", "outrigger", "trimaran", "hydrofoil", "escalator", "dumbwaiter", "revolving door", "trapdoor", "secret passage", "hidden room", "panic room", "anvil", "bellows", "crucible", "mould", "ingot", "forge", "kiln", "pottery wheel", "glazing", "sandcastle", "snow fort", "lean to", "debris hut", "snow cave", "quinzhee", "bivouac", "hammock tent", "floating cabin", "percolator", "french press", "aeropress", "moka pot", "drip filter", "siphon", "cold brew", "espresso", "lungo", "ristretto", "cappuccino", "macchiato", "affogato", "cortado", "nitro coffee", "cold drip", "turkish coffee", "chai latte", "matcha latte"];
 
+/** Light category bias for pick-3 (words must exist in SCRIBBLE_WORDS). */
+const SCRIBBLE_CATS={
+  animals:['elephant','dolphin','penguin','butterfly','kangaroo','peacock','cobra','owl','capybara','narwhal','macaw','otter'],
+  objects:['guitar','umbrella','bicycle','telescope','backpack','passport','scissors','hammer','pillow','mirror','robot','drone'],
+  food:['pizza','biryani','samosa','dosa','idli','sushi','waffle','avocado','chai latte','lassi','chaat','pomegranate'],
+  india:['auto rickshaw','diya','rangoli','tabla','sari','holi','diwali','mandir','ghat','mehendi','dhol','naan'],
+};
+
 function openScribbleGame(chat,playerList,opts){
   const options=opts||{};
   const list=(playerList||[]).filter(p=>p&&p.name!==undefined);
@@ -2400,13 +2408,20 @@ function openScribbleGame(chat,playerList,opts){
   if(!practiceMode&&players.length<2)players.push({name:(chat&&chat.name)||'Friend',isMe:false,profileType:chat?.profileType||null});
 
   let round=1;const maxRounds=practiceMode?1:3;let currentDrawerIdx=0;let currentWord='';
-  let liveWordKey='';let liveWordLen=0;
+  let liveWordKey='';let liveWordLen=0;let blankMask='';let revealWord='';
+  let phase='pick'; // pick | draw | reveal
+  let pickChoices=[];let pickSecondsLeft=10;let pickInterval=null;
   let scores={};players.forEach(p=>scores[p.name]=0);
   let roundTimer=practiceMode?120:60;let roundInterval=null;let guessedCorrectly=new Set();
+  let drawerBonusGiven=false;let hintLetterIdx=-1;let roundClosing=false;
   let strokes=[];let isDrawing=false;let currentColor='#1a1a2e';
   const BRUSH_SIZES=[3,7,14];let currentSize=BRUSH_SIZES[1];
   let canvasW=320;let canvasH=240;
   let aiGuessIv=null;
+  /** Points: 1st 100 · 2nd 75 · 3rd+ 50; drawer +50 if ≥1 correct. Pick timer 10s. */
+  const PTS_FIRST=100,PTS_SECOND=75,PTS_REST=50,PTS_DRAWER=50;
+  const PICK_SECS=10;
+  const DRAW_SECS=practiceMode?120:60;
   /** Ink stream: ~14 Hz while drawing; payload keeps newest ≤INK_MAX pts (drop oldest full strokes). */
   const INK_MAX=700;
   const INK_STREAM_MS=70;
@@ -2416,6 +2431,7 @@ function openScribbleGame(chat,playerList,opts){
   let inkDirty=false;
   let lastAppliedStrokeLen=0;
   let pointerIdActive=null;
+  let lastHandledGuessSig='';
 
   const overlay=document.createElement('div');
   overlay.style.cssText='position:absolute;inset:0;background:var(--cream);z-index:80;display:flex;flex-direction:column;';
@@ -2424,6 +2440,7 @@ function openScribbleGame(chat,playerList,opts){
     type:'scribble',title:practiceMode?'Scribble Practice':'Scribble',mode:liveOn?'live':(practiceMode?'solo':(players.length>2?'group':'practice')),chat,overlay,
     cleanup(){
       clearInterval(roundInterval);roundInterval=null;
+      clearInterval(pickInterval);pickInterval=null;
       stopInkStream();
       if(aiGuessIv){clearInterval(aiGuessIv);aiGuessIv=null;}
       if(liveHandle&&!leaveConfirmed){
@@ -2442,6 +2459,7 @@ function openScribbleGame(chat,playerList,opts){
   const schedule=(fn,ms)=>gs?gs.schedule(fn,ms):setTimeout(fn,ms);
   const close=(result)=>{
     clearInterval(roundInterval);roundInterval=null;
+    clearInterval(pickInterval);pickInterval=null;
     stopInkStream();
     if(aiGuessIv){clearInterval(aiGuessIv);aiGuessIv=null;}
     if(gs)gs.close(result);else overlay.remove();
@@ -2462,10 +2480,12 @@ function openScribbleGame(chat,playerList,opts){
     close();
   }
 
-  function pickWord(){return SCRIBBLE_WORDS[Math.floor(Math.random()*SCRIBBLE_WORDS.length)];}
+  function normalizeGuess(t){
+    return String(t||'').toLowerCase().replace(/\s+/g,' ').trim();
+  }
 
   function scribbleWordKey(w){
-    const s=String(w||'').toLowerCase().trim();
+    const s=normalizeGuess(w);
     let h=2166136261;
     for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}
     return (h>>>0).toString(36)+':'+s.length;
@@ -2475,6 +2495,90 @@ function openScribbleGame(chat,playerList,opts){
     currentWord=String(w||'');
     liveWordKey=scribbleWordKey(currentWord);
     liveWordLen=currentWord.length;
+    blankMask=maskFromWord(currentWord,hintLetterIdx);
+    revealWord='';
+  }
+
+  function maskFromWord(word,hintIdx){
+    const w=String(word||'');
+    if(!w)return '';
+    return w.split('').map((ch,i)=>{
+      if(ch===' ')return ' ';
+      if(hintIdx===i)return ch;
+      return /[a-z]/i.test(ch)?'_':ch;
+    }).join('');
+  }
+
+  function samplePick3(){
+    const bank=SCRIBBLE_WORDS.slice();
+    const picked=[];
+    const used=new Set();
+    const catKeys=Object.keys(SCRIBBLE_CATS);
+    for(let i=catKeys.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=catKeys[i];catKeys[i]=catKeys[j];catKeys[j]=t;}
+    catKeys.forEach(cat=>{
+      if(picked.length>=3)return;
+      const pool=(SCRIBBLE_CATS[cat]||[]).filter(w=>bank.includes(w)&&!used.has(w));
+      if(!pool.length)return;
+      const w=pool[Math.floor(Math.random()*pool.length)];
+      used.add(w);picked.push(w);
+    });
+    while(picked.length<3){
+      const w=bank[Math.floor(Math.random()*bank.length)];
+      if(used.has(w))continue;
+      used.add(w);picked.push(w);
+    }
+    return picked.slice(0,3);
+  }
+
+  function guesserCount(){
+    if(liveOn)return 1;
+    return Math.max(0,players.length-1);
+  }
+
+  function allGuessersScored(){
+    const need=guesserCount();
+    if(need<=0)return false;
+    return guessedCorrectly.size>=need;
+  }
+
+  function drawerScoreName(){
+    if(liveOn)return iAmDrawer()?'You':((chat&&chat.name)||'Friend');
+    return(players[currentDrawerIdx]&&players[currentDrawerIdx].name)||'Friend';
+  }
+
+  function pointsForGuessOrder(order){
+    if(order<=0)return PTS_FIRST;
+    if(order===1)return PTS_SECOND;
+    return PTS_REST;
+  }
+
+  function levenshtein(a,b){
+    const s=String(a||'');const t=String(b||'');
+    if(s===t)return 0;
+    if(!s.length)return t.length;
+    if(!t.length)return s.length;
+    if(Math.abs(s.length-t.length)>2)return 99;
+    const row=new Array(t.length+1);
+    for(let j=0;j<=t.length;j++)row[j]=j;
+    for(let i=1;i<=s.length;i++){
+      let prev=row[0];row[0]=i;
+      for(let j=1;j<=t.length;j++){
+        const tmp=row[j];
+        const cost=s[i-1]===t[j-1]?0:1;
+        row[j]=Math.min(row[j]+1,row[j-1]+1,prev+cost);
+        prev=tmp;
+      }
+    }
+    return row[t.length];
+  }
+
+  function isNearMiss(guess,word){
+    const g=normalizeGuess(guess);const w=normalizeGuess(word);
+    if(!g||!w||g===w)return false;
+    if(w.length>=4&&levenshtein(g,w)===1)return true;
+    if(w.length>=6&&levenshtein(g,w)===2)return true;
+    if(g.length>=4&&(w.includes(g)||g.includes(w))&&Math.abs(g.length-w.length)<=2)return true;
+    return false;
   }
 
   function iAmDrawer(){
@@ -2514,6 +2618,10 @@ function openScribbleGame(chat,playerList,opts){
     inkDirty=false;
   }
 
+  function stopPickTimer(){
+    if(pickInterval){clearInterval(pickInterval);pickInterval=null;}
+  }
+
   function pushScribble(extra){
     if(!liveOn||!liveHandle||!liveRoles||applyingLive)return;
     const compact=compactInk(strokes);
@@ -2525,16 +2633,23 @@ function openScribbleGame(chat,playerList,opts){
     const state=Object.assign({
       strokes:compact,
       inkLen:strokes.length,
-      wordKey:liveWordKey||scribbleWordKey(currentWord),
-      wordLen:liveWordLen||(currentWord?currentWord.length:0),
+      // Privacy: never put plaintext word mid-round — only wordKey / wordLen / blankMask.
+      wordKey:liveWordKey||'',
+      wordLen:liveWordLen||0,
+      blankMask:blankMask||'',
+      phase,
+      pickLeft:phase==='pick'?pickSecondsLeft:0,
       scoreA,scoreB,
       drawer:currentDrawerIdx,
       round,roundTimer,
       guessed:[...guessedCorrectly],
+      hintIdx:hintLetterIdx,
       ended:liveEnded,
     },extra||{});
-    // Keep raw word on the wire for the drawer seat; guessers never copy it into UI state (wordKey for checks).
-    if(currentWord)state.word=currentWord;
+    // Reveal only when round ends (timeout / skip / all guessed).
+    if(phase==='reveal'&&revealWord)state.revealWord=revealWord;
+    else delete state.revealWord;
+    delete state.word;
     liveHandle.push({
       state,
       turn:liveEnded?null:(iAmDrawer()?liveRoles.me:liveRoles.opp),
@@ -2543,17 +2658,17 @@ function openScribbleGame(chat,playerList,opts){
   }
 
   function flushInkStream(){
-    if(!liveOn||!iAmDrawer())return;
+    if(!liveOn||!iAmDrawer()||phase!=='draw')return;
     inkDirty=false;
     pushScribble({inkFlush:true});
   }
 
   function scheduleInkStream(){
-    if(!liveOn||!iAmDrawer())return;
+    if(!liveOn||!iAmDrawer()||phase!=='draw')return;
     inkDirty=true;
     if(inkStreamTimer)return;
     inkStreamTimer=setInterval(()=>{
-      if(!alive()||!isDrawing){
+      if(!alive()||!isDrawing||phase!=='draw'){
         if(inkDirty)flushInkStream();
         stopInkStream();
         return;
@@ -2583,42 +2698,195 @@ function openScribbleGame(chat,playerList,opts){
     return ctx;
   }
 
-  function startRound(){
+  function maybeAwardDrawerBonus(){
+    if(drawerBonusGiven||guessedCorrectly.size<1)return;
+    drawerBonusGiven=true;
+    const dn=drawerScoreName();
+    scores[dn]=(scores[dn]||0)+PTS_DRAWER;
+  }
+
+  function beginDrawPhase(){
     if(!alive())return;
-    stopInkStream();
-    const hostPicks=!liveOn||(liveRoles&&liveRoles.myColor==='w');
-    if(hostPicks)setRoundWord(pickWord());
-    else if(!currentWord&&!liveWordKey){
-      render();
-      return;
-    }
-    roundTimer=practiceMode?120:60;guessedCorrectly.clear();strokes=[];lastAppliedStrokeLen=0;
-    if(aiGuessIv){clearInterval(aiGuessIv);aiGuessIv=null;}
-    const isMyTurn=iAmDrawer();
-    render();
+    stopPickTimer();
+    phase='draw';
+    roundClosing=false;
+    strokes=[];lastAppliedStrokeLen=0;hintLetterIdx=-1;
+    blankMask=maskFromWord(currentWord,-1);
+    roundTimer=DRAW_SECS;
     clearInterval(roundInterval);
+    render();
     roundInterval=setInterval(()=>{
-      if(!alive()){clearInterval(roundInterval);return;}
+      if(!alive()||phase!=='draw'){clearInterval(roundInterval);return;}
       roundTimer--;
       const el=document.getElementById('scribbleTimer');if(el)el.textContent=roundTimer+'s';
-      if(roundTimer<=0){clearInterval(roundInterval);if(practiceMode)endScribbleGame();else nextTurn();}
+      if(roundTimer===20&&hintLetterIdx<0&&currentWord){
+        const letters=[];
+        for(let i=0;i<currentWord.length;i++){
+          if(/[a-z]/i.test(currentWord[i]))letters.push(i);
+        }
+        if(letters.length){
+          hintLetterIdx=letters[Math.floor(Math.random()*letters.length)];
+          blankMask=maskFromWord(currentWord,hintLetterIdx);
+          const blanksEl=overlay.querySelector('.scribble-blanks');
+          if(blanksEl)blanksEl.textContent=guessBlanks();
+          if(liveOn&&iAmDrawer())pushScribble({hintIdx:hintLetterIdx,blankMask});
+        }
+      }
+      if(roundTimer<=0){
+        clearInterval(roundInterval);
+        finishRound({reason:'timeout'});
+      }
     },1000);
-    if(liveOn&&hostPicks)pushScribble();
-    // Honest loop: never fake AI drawings. When opponent draws, canvas stays blank; AI may guess your art.
-    if(isMyTurn&&!practiceMode&&!liveOn){
+    if(liveOn&&iAmDrawer())pushScribble({phase:'draw'});
+    // Practice vs AI: AI may guess your drawing — never fake AI doodles.
+    if(iAmDrawer()&&!practiceMode&&!liveOn){
       players.forEach((p,i)=>{
         if(i===currentDrawerIdx||p.isMe)return;
         schedule(()=>{
-          if(!alive()||guessedCorrectly.has(p.name)||Math.random()>=0.55)return;
-          guessedCorrectly.add(p.name);
-          scores[p.name]=(scores[p.name]||0)+Math.max(10,roundTimer);
-          scores[players[currentDrawerIdx].name]=(scores[players[currentDrawerIdx].name]||0)+5;
-          addScribbleMessage(`${p.name} guessed correctly!`,true);
-          if(typeof gameFeedback==='function')gameFeedback('valid');
-          renderScoresOnly();
-        },4000+Math.random()*28000);
+          if(!alive()||phase!=='draw'||guessedCorrectly.has(p.name)||Math.random()>=0.55)return;
+          applyCorrectGuess(p.name,currentWord,true);
+        },5000+Math.random()*25000);
       });
     }
+  }
+
+  function chooseWord(word){
+    if(phase!=='pick'||!iAmDrawer())return;
+    setRoundWord(word);
+    pickChoices=[];
+    beginDrawPhase();
+  }
+
+  function startPickPhase(){
+    if(!alive())return;
+    stopInkStream();
+    stopPickTimer();
+    clearInterval(roundInterval);roundInterval=null;
+    phase='pick';
+    roundClosing=false;
+    guessedCorrectly.clear();
+    drawerBonusGiven=false;
+    hintLetterIdx=-1;
+    strokes=[];lastAppliedStrokeLen=0;
+    currentWord='';liveWordKey='';liveWordLen=0;blankMask='';revealWord='';
+    if(aiGuessIv){clearInterval(aiGuessIv);aiGuessIv=null;}
+
+    // Non-drawer Live: wait for peer pick (phase draw + wordKey).
+    if(liveOn&&!iAmDrawer()){
+      pickChoices=[];
+      render();
+      if(!liveWordKey)pushScribble({phase:'pick',waitingPick:true});
+      return;
+    }
+
+    // Practice AI draw seat: honest blank — secret word for AI “draw”, no doodle.
+    if(!liveOn&&!practiceMode&&!iAmDrawer()){
+      setRoundWord(samplePick3()[0]);
+      phase='draw';
+      roundTimer=DRAW_SECS;
+      render();
+      clearInterval(roundInterval);
+      roundInterval=setInterval(()=>{
+        if(!alive()){clearInterval(roundInterval);return;}
+        roundTimer--;
+        const el=document.getElementById('scribbleTimer');if(el)el.textContent=roundTimer+'s';
+        if(roundTimer<=0){clearInterval(roundInterval);finishRound({reason:'timeout'});}
+      },1000);
+      return;
+    }
+
+    pickChoices=samplePick3();
+    pickSecondsLeft=PICK_SECS;
+    render();
+    if(liveOn)pushScribble({phase:'pick'});
+    pickInterval=setInterval(()=>{
+      if(!alive()||phase!=='pick'){stopPickTimer();return;}
+      pickSecondsLeft--;
+      const el=document.getElementById('scribblePickTimer');
+      if(el)el.textContent=pickSecondsLeft+'s';
+      if(pickSecondsLeft<=0){
+        stopPickTimer();
+        const auto=pickChoices[Math.floor(Math.random()*pickChoices.length)]||samplePick3()[0];
+        chooseWord(auto);
+      }
+    },1000);
+  }
+
+  function startRound(){
+    startPickPhase();
+  }
+
+  function afterRevealAdvance(){
+    schedule(()=>{
+      if(!alive()||liveEnded)return;
+      roundClosing=false;
+      if(practiceMode){endScribbleGame();return;}
+      // Live: host (seat w) owns turn rotation to avoid double nextTurn.
+      if(liveOn&&liveRoles&&liveRoles.myColor!=='w')return;
+      nextTurn();
+    },1600);
+  }
+
+  function finishRound(optsFinish){
+    if(roundClosing||liveEnded)return;
+    roundClosing=true;
+    stopInkStream();
+    stopPickTimer();
+    clearInterval(roundInterval);roundInterval=null;
+    if(aiGuessIv){clearInterval(aiGuessIv);aiGuessIv=null;}
+    const reason=(optsFinish&&optsFinish.reason)||'timeout';
+    if(reason!=='skip')maybeAwardDrawerBonus();
+    phase='reveal';
+    revealWord=currentWord||revealWord||'';
+    blankMask=revealWord||blankMask;
+    if(liveOn){
+      // Only drawer (has plaintext) may publish revealWord.
+      if(iAmDrawer()&&revealWord)pushScribble({phase:'reveal',revealWord,reason});
+      else if(!iAmDrawer())pushScribble({phase:'reveal',reason,needReveal:true});
+    }
+    renderScoresOnly();
+    const msg=revealWord?('Word was “'+revealWord+'”'):'Round over';
+    if(typeof showToast==='function')showToast(msg);
+    addScribbleMessage(msg,true);
+    render();
+    afterRevealAdvance();
+  }
+
+  function applyCorrectGuess(playerName,text,fromAi){
+    if(phase!=='draw'||guessedCorrectly.has(playerName))return null;
+    const order=guessedCorrectly.size;
+    const pts=pointsForGuessOrder(order);
+    guessedCorrectly.add(playerName);
+    scores[playerName]=(scores[playerName]||0)+pts;
+    maybeAwardDrawerBonus();
+    if(fromAi)addScribbleMessage(playerName+' guessed correctly! +'+pts,true);
+    else addScribbleMessage((playerName==='You'?'You':playerName)+' got it! +'+pts,true);
+    if(typeof gameFeedback==='function')gameFeedback(playerName==='You'?'complete':'valid');
+    renderScoresOnly();
+    if(liveOn){
+      pushScribble({
+        lastGuess:{by:playerName==='You'?'You':(chat.name||'Friend'),ok:true,text:playerName==='You'?text:'***',pts},
+      });
+    }
+    if(allGuessersScored()){
+      if(iAmDrawer())schedule(()=>finishRound({reason:'allGuessed'}),400);
+      else if(liveOn)pushScribble({allGuessed:true});
+      else schedule(()=>finishRound({reason:'allGuessed'}),400);
+    }
+    return{result:'correct',pts};
+  }
+
+  /** Central guess scorer — correct | close | wrong. */
+  function tryGuess(playerName,text){
+    const g=normalizeGuess(text);
+    if(!g||phase!=='draw')return{result:'wrong'};
+    if(guessedCorrectly.has(playerName))return{result:'already'};
+    const exact=currentWord
+      ?g===normalizeGuess(currentWord)
+      :(liveWordKey&&scribbleWordKey(g)===liveWordKey);
+    if(exact)return applyCorrectGuess(playerName,g,false)||{result:'correct'};
+    if(currentWord&&isNearMiss(g,currentWord))return{result:'close'};
+    return{result:'wrong'};
   }
 
   function renderScoresOnly(){
@@ -2629,12 +2897,15 @@ function openScribbleGame(chat,playerList,opts){
   function nextTurn(){
     if(!alive())return;
     clearInterval(roundInterval);roundInterval=null;
+    stopPickTimer();
     stopInkStream();
     if(aiGuessIv){clearInterval(aiGuessIv);aiGuessIv=null;}
+    revealWord='';
+    currentWord='';liveWordKey='';liveWordLen=0;blankMask='';
+    phase='pick';
     if(liveOn){
       currentDrawerIdx=(currentDrawerIdx+1)%2;
       if(currentDrawerIdx===0)round++;
-      if(!(liveRoles&&liveRoles.myColor==='w')){currentWord='';liveWordKey='';liveWordLen=0;}
     } else {
       currentDrawerIdx++;
       if(currentDrawerIdx>=players.length){currentDrawerIdx=0;round++;}
@@ -2645,16 +2916,18 @@ function openScribbleGame(chat,playerList,opts){
 
   function endScribbleGame(){
     clearInterval(roundInterval);roundInterval=null;
+    stopPickTimer();
     stopInkStream();
     if(aiGuessIv){clearInterval(aiGuessIv);aiGuessIv=null;}
     liveEnded=true;
-    if(liveOn&&!applyingLive)pushScribble({ended:true});
+    phase='reveal';
+    if(liveOn&&!applyingLive)pushScribble({ended:true,phase:'reveal',revealWord:revealWord||currentWord||''});
     const sorted=Object.entries(scores).sort((a,b)=>b[1]-a[1]);
     const won=practiceMode||sorted[0]?.[0]==='You';
     if(gs)gs.setOutcome(practiceMode?'complete':(won?'won':'lost'));
     if(typeof recordGameResult==='function')recordGameResult('scribble',won);
     if(typeof gameFeedback==='function')gameFeedback(practiceMode?'complete':(won?'win':'lose'));
-    const wordReveal=currentWord||'(hidden)';
+    const wordReveal=revealWord||currentWord||'';
     overlay.innerHTML=`
       ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Scribble',subtitle:MODE_SUB+(practiceMode?' · done':' · Results'),backId:'scribbleClose'}):''}
       ${typeof gameResultHtml==='function'?gameResultHtml({
@@ -2662,9 +2935,9 @@ function openScribbleGame(chat,playerList,opts){
         glyph:practiceMode?'✓':(won?'✓':'·'),
         title:practiceMode?'Nice practice':`${sorted[0]?.[0]||'Someone'} wins`,
         subtitle:practiceMode
-          ?`Word was “${wordReveal}” · keep those brush skills sharp`
+          ?`Word was “${wordReveal||'—'}” · pick from 3, guess fast`
           :sorted.map(([name,score],i)=>`${i+1}. ${name} · ${score} pts`).join(' · '),
-        shareCardHtml: typeof buildGameShareCard==='function'?buildGameShareCard('scribble',{scoreLine:practiceMode?'Practice':`${sorted[0]?.[0]} wins`,meta:currentWord||''}):'',
+        shareCardHtml: typeof buildGameShareCard==='function'?buildGameShareCard('scribble',{scoreLine:practiceMode?'Practice':`${sorted[0]?.[0]} wins`,meta:wordReveal||''}):'',
         actions:[
           {label:'Play again',primary:true,id:'again'},
           {label:'Share',primary:false,id:'share'},
@@ -2676,7 +2949,7 @@ function openScribbleGame(chat,playerList,opts){
     const done=()=>close(practiceMode?'complete':(won?'won':'lost'));
     document.getElementById('scribbleClose')?.addEventListener('click',done);
     if(typeof wireGameResultActions==='function'){
-      const shareStats={scoreLine:practiceMode?'Practice':`${sorted[0]?.[0]} wins`,meta:currentWord||''};
+      const shareStats={scoreLine:practiceMode?'Practice':`${sorted[0]?.[0]} wins`,meta:wordReveal||''};
       wireGameResultActions(overlay,{
         again:()=>{close();openScribbleGame(chat,playerList,opts);},
         share:()=>{if(typeof shareGameResult==='function')shareGameResult('scribble',shareStats);},
@@ -2707,7 +2980,9 @@ function openScribbleGame(chat,playerList,opts){
   }
 
   function guessBlanks(){
-    if(iAmDrawer()&&currentWord)return currentWord.replace(/[a-z]/gi,'_');
+    if(phase==='reveal'&&(revealWord||currentWord))return revealWord||currentWord;
+    if(blankMask)return blankMask;
+    if(iAmDrawer()&&currentWord)return maskFromWord(currentWord,hintLetterIdx);
     const n=liveWordLen||(currentWord?currentWord.length:0);
     return n>0?'_'.repeat(n):'_____';
   }
@@ -2717,19 +2992,36 @@ function openScribbleGame(chat,playerList,opts){
     const isMyTurn=iAmDrawer();
     const blanks=guessBlanks();
     const drawerName=drawerDisplayName();
+    const timerLabel=phase==='pick'?pickSecondsLeft:roundTimer;
+    const picking=phase==='pick'&&isMyTurn&&pickChoices.length>0;
+    const waitingPick=phase==='pick'&&!isMyTurn;
+
     overlay.innerHTML=`
-      ${gameChromeHtml({title:practiceMode?'Scribble Practice':'Scribble',subtitle:MODE_SUB+(practiceMode?'':` · Round ${round}/${maxRounds}`),backId:'scribbleBack',rightHtml:`<span id="scribbleTimer" class="game-chrome-metric">${roundTimer}s</span>`})}
-      <div class="scribble-prompt${isMyTurn?' scribble-prompt--draw':''}">
-        ${isMyTurn
-          ?`<div class="scribble-word">Draw: <strong>${currentWord||'…'}</strong></div>`
-          :`<div class="scribble-word">${drawerName} is drawing</div><div class="scribble-blanks">${blanks||'_____'}</div><div class="scribble-honest-note">${liveOn?'Guess from the drawing':'No fake doodles — guess from the blanks'}</div>`}
+      ${gameChromeHtml({title:practiceMode?'Scribble Practice':'Scribble',subtitle:MODE_SUB+(practiceMode?'':` · Round ${round}/${maxRounds}`),backId:'scribbleBack',rightHtml:`<span id="scribbleTimer" class="game-chrome-metric">${timerLabel}s</span>`})}
+      <div class="scribble-prompt${isMyTurn&&phase==='draw'?' scribble-prompt--draw':''}">
+        ${picking?`
+          <div class="scribble-word">Pick a word <span id="scribblePickTimer" class="scribble-pick-left">${pickSecondsLeft}s</span></div>
+          <div class="scribble-pick-row">
+            ${pickChoices.map((w,i)=>`<button type="button" class="scribble-pick-chip game-tap-target" data-pick-idx="${i}">${String(w).replace(/</g,'&lt;')}</button>`).join('')}
+          </div>
+        `:phase==='reveal'?`
+          <div class="scribble-word">It was <strong>${revealWord||currentWord||'—'}</strong></div>
+        `:isMyTurn&&phase==='draw'?`
+          <div class="scribble-word">Draw: <strong>${currentWord||'…'}</strong></div>
+        `:waitingPick?`
+          <div class="scribble-word">${drawerName} is picking a word…</div>
+        `:`
+          <div class="scribble-word">${drawerName} is drawing</div>
+          <div class="scribble-blanks">${blanks||'_____'}</div>
+          <div class="scribble-honest-note">${liveOn?'Word stays secret — guess from the drawing':'No fake doodles — guess from the blanks'}</div>
+        `}
         <div id="scribbleScoreStrip" class="scribble-scores">${Object.entries(scores).map(([n,s])=>`<span>${n} ${s}</span>`).join('')}</div>
       </div>
       <div class="scribble-stage">
-        <canvas id="scribbleCanvas" class="scribble-canvas" style="cursor:${isMyTurn?'crosshair':'default'};touch-action:none;"></canvas>
-        ${!isMyTurn?`<div class="scribble-waiting" id="scribbleWaiting">Waiting for drawing…</div>`:''}
+        <canvas id="scribbleCanvas" class="scribble-canvas" style="cursor:${isMyTurn&&phase==='draw'?'crosshair':'default'};touch-action:none;"></canvas>
+        ${(!isMyTurn||phase==='pick')&&phase!=='reveal'?`<div class="scribble-waiting" id="scribbleWaiting">${waitingPick?'Waiting for word…':(phase==='pick'?'Pick above to start':'Waiting for drawing…')}</div>`:''}
       </div>
-      ${isMyTurn?`
+      ${isMyTurn&&phase==='draw'?`
       <div class="scribble-tools">
         <div class="scribble-colors">
           ${['#1a1a2e','#E74C3C','#3498DB','#2ECC71','#F1C40F','#9B59B6','#ffffff'].map(c=>`<button type="button" data-color="${c}" class="scribble-swatch${currentColor===c?' is-active':''}" style="background:${c};${c==='#ffffff'?'border:1px solid #ccc;':''}" aria-label="Color"></button>`).join('')}
@@ -2740,21 +3032,31 @@ function openScribbleGame(chat,playerList,opts){
         <div class="scribble-tool-actions">
           <button type="button" id="scribbleUndo" class="game-tap-target scribble-tool-btn">Undo</button>
           <button type="button" id="scribbleClear" class="game-tap-target scribble-tool-btn">Clear</button>
+          ${!practiceMode?`<button type="button" id="scribbleSkip" class="game-tap-target scribble-tool-btn">Skip</button>`:''}
           ${practiceMode?`<button type="button" id="scribbleDonePractice" class="game-tap-target scribble-tool-btn scribble-tool-btn--primary">Done</button>`:''}
         </div>
       </div>`:''}
       ${!practiceMode?`
       <div class="scribble-chat">
         <div id="scribbleChatList" class="scribble-chat-list"></div>
-        ${!isMyTurn?`<div class="scribble-guess-row"><input id="scribbleGuessInput" placeholder="Type your guess…" autocomplete="off"><button type="button" id="scribbleGuessBtn" class="game-tap-target">Guess</button></div>`:''}
+        ${!isMyTurn&&phase==='draw'?`<div class="scribble-guess-row"><input id="scribbleGuessInput" placeholder="Type your guess…" autocomplete="off"><button type="button" id="scribbleGuessBtn" class="game-tap-target">Guess</button></div>`:''}
       </div>`:''}
     `;
     document.getElementById('scribbleBack').addEventListener('click',()=>{askScribbleLeave();});
+    if(picking){
+      overlay.querySelectorAll('[data-pick-idx]').forEach(btn=>{
+        btn.addEventListener('click',()=>{
+          const idx=Number(btn.getAttribute('data-pick-idx'));
+          const w=pickChoices[idx];
+          if(w)chooseWord(w);
+        });
+      });
+    }
     wireCanvas();
-    if(!isMyTurn&&!practiceMode){
+    if(!isMyTurn&&phase==='draw'&&!practiceMode){
       document.getElementById('scribbleGuessBtn')?.addEventListener('click',submitGuess);
       document.getElementById('scribbleGuessInput')?.addEventListener('keypress',e=>{if(e.key==='Enter')submitGuess();});
-    } else if(isMyTurn){
+    } else if(isMyTurn&&phase==='draw'){
       overlay.querySelectorAll('[data-color]').forEach(btn=>btn.addEventListener('click',()=>{currentColor=btn.dataset.color;overlay.querySelectorAll('[data-color]').forEach(b=>b.classList.toggle('is-active',b.dataset.color===currentColor));}));
       overlay.querySelectorAll('[data-size]').forEach(btn=>btn.addEventListener('click',()=>{currentSize=+btn.dataset.size;overlay.querySelectorAll('[data-size]').forEach(b=>b.classList.toggle('is-active',+b.dataset.size===currentSize));}));
       document.getElementById('scribbleClear')?.addEventListener('click',()=>{
@@ -2764,38 +3066,36 @@ function openScribbleGame(chat,playerList,opts){
       document.getElementById('scribbleUndo')?.addEventListener('click',()=>{
         undoStroke();stopInkStream();if(liveOn)pushScribble({inkUndo:true});
       });
+      document.getElementById('scribbleSkip')?.addEventListener('click',()=>{
+        finishRound({reason:'skip'});
+      });
       document.getElementById('scribbleDonePractice')?.addEventListener('click',()=>endScribbleGame());
     }
   }
 
-  function guessMatchesWord(val){
-    const g=String(val||'').toLowerCase().trim();
-    if(!g)return false;
-    if(currentWord&&g===currentWord.toLowerCase())return true;
-    if(liveWordKey&&scribbleWordKey(g)===liveWordKey)return true;
-    return false;
-  }
-
   function submitGuess(){
     const inp=document.getElementById('scribbleGuessInput');
-    if(!inp)return;
-    const val=inp.value.trim().toLowerCase();if(!val)return;
-    addScribbleMessage(`You: ${val}`);
-    if(guessMatchesWord(val)&&!guessedCorrectly.has('You')){
-      guessedCorrectly.add('You');
-      scores['You']=(scores['You']||0)+Math.max(10,roundTimer);
-      const drawerLabel=drawerDisplayName();
-      scores[drawerLabel]=(scores[drawerLabel]||0)+5;
-      addScribbleMessage('You guessed correctly!',true);
-      if(typeof gameFeedback==='function')gameFeedback('complete');
-      if(typeof showToast==='function')showToast('Correct! +'+Math.max(10,roundTimer)+' points');
-      renderScoresOnly();
-      if(liveOn)pushScribble({lastGuess:{by:'You',ok:true,text:val}});
-    } else if(typeof gameFeedback==='function'){
-      gameFeedback('invalid');
-      if(liveOn)pushScribble({lastGuess:{by:'You',ok:false,text:val}});
-    }
+    if(!inp||phase!=='draw')return;
+    const val=normalizeGuess(inp.value);if(!val)return;
     inp.value='';
+    addScribbleMessage('You: '+val);
+    const res=tryGuess('You',val);
+    if(res.result==='correct'){
+      if(typeof showToast==='function')showToast('Correct! +'+(res.pts||PTS_FIRST));
+      return;
+    }
+    if(res.result==='close'){
+      if(typeof showToast==='function')showToast('Close!');
+      if(typeof gameFeedback==='function')gameFeedback('select');
+      if(liveOn)pushScribble({lastGuess:{by:'You',ok:false,close:true,text:val}});
+      return;
+    }
+    if(res.result==='already')return;
+    if(typeof gameFeedback==='function')gameFeedback('invalid');
+    if(liveOn){
+      // Drawer may flag near-miss without ever sending plaintext word.
+      pushScribble({lastGuess:{by:'You',ok:false,text:val,checkClose:true}});
+    }
   }
 
   function appendInkPoint(x,y,isNew){
@@ -2830,7 +3130,7 @@ function openScribbleGame(chat,playerList,opts){
     setupCanvasSurface(canvas);
     lastAppliedStrokeLen=0;
     renderCanvas();
-    if(!iAmDrawer())return;
+    if(!iAmDrawer()||phase!=='draw')return;
 
     const getPos=e=>{
       const rect=canvas.getBoundingClientRect();
@@ -2983,39 +3283,116 @@ function openScribbleGame(chat,playerList,opts){
           return;
         }
         const s=val.state;if(!s)return;
-        const waitingForWord=!roundInterval&&!currentWord&&!liveWordKey;
         applyingLive=true;
+        const prevPhase=phase;
+        if(s.drawer!=null)currentDrawerIdx=Number(s.drawer)||0;
+        if(s.round!=null)round=Number(s.round)||round;
+
         if(s.wordKey)liveWordKey=s.wordKey;
         if(s.wordLen!=null)liveWordLen=Number(s.wordLen)||0;
-        if(s.drawer!=null)currentDrawerIdx=Number(s.drawer)||0;
-        // Privacy: guessers keep wordKey/wordLen only — do not assign s.word into currentWord.
-        if(s.word&&iAmDrawer()){
-          const had=!!currentWord;
-          setRoundWord(s.word);
-          if(!had){
-            const el=overlay.querySelector('.scribble-word strong');
-            if(el)el.textContent=currentWord;
-          }
-        }
-        const remoteDrawer=!iAmDrawer();
-        if(Array.isArray(s.strokes)&&remoteDrawer&&!waitingForWord){
-          applyRemoteStrokes(s.strokes);
-        }
+        if(typeof s.blankMask==='string'&&s.blankMask)blankMask=s.blankMask;
+        if(s.hintIdx!=null)hintLetterIdx=Number(s.hintIdx);
+
         if(s.scoreA!=null||s.scoreB!=null){
           const oppN=(chat&&chat.name)||'Friend';
           scores['You']=liveRoles.myColor==='w'?(s.scoreA||0):(s.scoreB||0);
           scores[oppN]=liveRoles.myColor==='w'?(s.scoreB||0):(s.scoreA||0);
         }
-        if(s.round!=null)round=Number(s.round)||round;
         if(Array.isArray(s.guessed))guessedCorrectly=new Set(s.guessed);
-        if(s.lastGuess&&s.lastGuess.by!=='You'){
-          addScribbleMessage((chat.name||'Friend')+': '+s.lastGuess.text,!!s.lastGuess.ok);
+
+        // Drawer publishes reveal when peer signals needReveal / allGuessed
+        if(iAmDrawer()&&currentWord&&phase==='draw'&&!roundClosing){
+          if(s.needReveal||s.allGuessed||s.reason==='allGuessed'){
+            applyingLive=false;
+            finishRound({reason:s.allGuessed||s.reason==='allGuessed'?'allGuessed':(s.reason||'timeout')});
+            return;
+          }
         }
+
+        if(s.phase==='pick'||s.phase==='draw'||s.phase==='reveal')phase=s.phase;
+
+        if(s.phase==='reveal'&&s.revealWord){
+          revealWord=String(s.revealWord);
+          blankMask=revealWord;
+        }
+
+        const remoteDrawer=!iAmDrawer();
+        if(Array.isArray(s.strokes)&&remoteDrawer&&(phase==='draw'||s.phase==='draw')){
+          applyRemoteStrokes(s.strokes);
+        }
+
+        if(s.lastGuess){
+          const lg=s.lastGuess;
+          const sig=(lg.by||'')+'|'+(lg.text||'')+'|'+(lg.ok?'1':'0')+'|'+(lg.close?'1':'0')+'|'+(lg.checkClose?'1':'0');
+          if(sig!==lastHandledGuessSig){
+            lastHandledGuessSig=sig;
+            if(lg.by!=='You'){
+              if(!lg.ok)addScribbleMessage((chat.name||'Friend')+': '+(lg.text||''),false);
+              if(lg.ok)addScribbleMessage((chat.name||'Friend')+' got it!'+(lg.pts?' +'+lg.pts:''),true);
+              if(lg.close&&typeof showToast==='function'){/* drawer ignores peer close toast */}
+            } else if(lg.close){
+              if(typeof showToast==='function')showToast('Close!');
+            }
+            if(iAmDrawer()&&currentWord&&lg.checkClose&&!lg.ok&&lg.by!=='You'&&lg.text){
+              if(isNearMiss(lg.text,currentWord)){
+                applyingLive=false;
+                pushScribble({lastGuess:{by:lg.by,ok:false,close:true,text:lg.text}});
+                applyingLive=true;
+              }
+            }
+          }
+        }
+
         if(s.ended&&!liveEnded){liveEnded=true;applyingLive=false;endScribbleGame();return;}
         applyingLive=false;
-        if(waitingForWord&&(currentWord||liveWordKey)){startRound();return;}
+
+        // Enter draw as guesser when drawer locked wordKey
+        if(remoteDrawer&&s.phase==='draw'&&liveWordKey&&prevPhase!=='draw'){
+          phase='draw';
+          roundTimer=typeof s.roundTimer==='number'?s.roundTimer:DRAW_SECS;
+          clearInterval(roundInterval);
+          render();
+          roundInterval=setInterval(()=>{
+            if(!alive()||phase!=='draw'){clearInterval(roundInterval);return;}
+            if(typeof s.roundTimer==='number'){/* drawer drives */}
+            roundTimer=Math.max(0,roundTimer-1);
+            const el=document.getElementById('scribbleTimer');if(el)el.textContent=roundTimer+'s';
+          },1000);
+          return;
+        }
+
+        // Peer reveal — host advances turns
+        if(s.phase==='reveal'&&prevPhase!=='reveal'){
+          roundClosing=true;
+          stopInkStream();
+          clearInterval(roundInterval);roundInterval=null;
+          revealWord=s.revealWord||revealWord||'';
+          phase='reveal';
+          render();
+          if(typeof showToast==='function'&&revealWord)showToast('Word was “'+revealWord+'”');
+          if(liveRoles.myColor==='w')afterRevealAdvance();
+          else schedule(()=>{roundClosing=false;},1700);
+          return;
+        }
+
+        // New pick phase: drawer starts local pick-3
+        if(s.phase==='pick'&&iAmDrawer()&&prevPhase!=='pick'&&!pickInterval){
+          startPickPhase();
+          return;
+        }
+        if(s.phase==='pick'&&iAmDrawer()&&!pickChoices.length&&!pickInterval&&!currentWord&&phase==='pick'){
+          startPickPhase();
+          return;
+        }
+        if(s.phase==='pick'&&remoteDrawer&&prevPhase!=='pick'){
+          stopInkStream();
+          clearInterval(roundInterval);roundInterval=null;
+          currentWord='';
+          phase='pick';
+          render();
+        }
+
         renderScoresOnly();
-        // Host may still need wordLen blanks refresh when not drawer
         if(!iAmDrawer()){
           const blanksEl=overlay.querySelector('.scribble-blanks');
           if(blanksEl)blanksEl.textContent=guessBlanks();

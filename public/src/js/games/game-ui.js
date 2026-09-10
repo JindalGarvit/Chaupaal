@@ -136,9 +136,9 @@
       'Deal deeds ± cash on your turn — Live is 1v1, Practice up to 6',
     ],
     scribble: [
-      'Draw with smooth ink — Live guessers see strokes as you move',
-      'Guessers type in the chat box (word stays hidden until you nail it)',
-      'Rounds rotate who draws',
+      'Drawer picks 1 of 3 words (Animals / Objects / Food / India mix)',
+      'Guessers race — 100 / 75 / 50 pts; drawer +50 if someone scores',
+      'Word stays secret on Live until reveal · near-miss says “close!”',
     ],
     rushrunner: [
       'Classic or Daily run · each theme has a named flavor (Coin Rush, Heavy Traffic, Long Sprint)',
