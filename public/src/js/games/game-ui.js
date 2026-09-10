@@ -148,9 +148,9 @@
       'Continue mid-puzzle · best times per difficulty · Daily is one seeded board',
     ],
     streetcricket: [
-      'Pick Defend, Push, or Loft — then Bowl and time the Hit',
-      'Wrong shot vs Quick or Spin gets honest outs — Caught, Bowled, Beaten',
-      'Six balls · two wickets — nets and chase modes later',
+      'Pick Gully Over, Nets, or Chase — then Defend / Push / Loft and time the Hit',
+      'Nets: survive 12 balls · Chase: reach the target before balls or wickets run out',
+      'Same bowling bag every format — Practice only (no Live yet)',
     ],
     gullykick: ['Pick left, center, or right', 'Beat the keeper’s dive', 'Five kicks per shootout'],
     badminton: ['Serve, then smash in the timing window', 'Rallies get faster', 'First to 7'],

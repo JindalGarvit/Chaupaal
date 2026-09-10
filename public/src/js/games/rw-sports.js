@@ -103,11 +103,15 @@
   function finishPractice(gameId, score, body, opts) {
     const o = opts || {};
     const vsBest =
-      typeof formatVsBest === 'function'
-        ? formatVsBest(gameId, score)
-        : `Best ${score}${o.unit || ''}`;
+      o.vsBest != null
+        ? o.vsBest
+        : typeof formatVsBest === 'function'
+          ? formatVsBest(gameId, score)
+          : `Best ${score}${o.unit || ''}`;
     let best = score;
-    if (typeof setGamePB === 'function') best = setGamePB(gameId, score) ?? score;
+    if (o.updatePb !== false && typeof setGamePB === 'function') {
+      best = setGamePB(gameId, score) ?? score;
+    }
     if (typeof recordGameResult === 'function') {
       recordGameResult(gameId, false, false, { score, scoreOnly: true });
     } else if (typeof markGamePlayed === 'function') {
@@ -123,29 +127,37 @@
     };
     const shareCard =
       typeof buildGameShareCard === 'function' ? buildGameShareCard(gameId, shareStats) : '';
+    const actions =
+      Array.isArray(o.actions) && o.actions.length
+        ? o.actions
+        : [
+            { label: o.againLabel || 'Play again', primary: true, id: 'again' },
+            { label: 'Share', primary: false, id: 'share' },
+          ];
     if (typeof gameResultHtml === 'function') {
       body.innerHTML = gameResultHtml({
         gameId,
         glyph: o.glyph || '·',
         title: o.resultTitle || 'Practice over',
         subtitle: o.subtitle || '',
-        vsBest,
+        vsBest: o.hideVsBest ? '' : vsBest,
         shareCardHtml: shareCard,
         challenge: false,
-        actions: [
-          { label: o.againLabel || 'Play again', primary: true, id: 'again' },
-          { label: 'Share', primary: false, id: 'share' },
-        ],
+        actions,
       });
       if (typeof wireGameResultActions === 'function') {
-        wireGameResultActions(body, {
+        const handlers = {
           again: () => {
             if (typeof o.onAgain === 'function') o.onAgain();
           },
           share: () => {
             if (typeof shareGameResult === 'function') shareGameResult(gameId, shareStats);
           },
-        });
+        };
+        if (typeof o.onChangeFormat === 'function') {
+          handlers.changeFormat = () => o.onChangeFormat();
+        }
+        wireGameResultActions(body, handlers);
       }
       return;
     }
@@ -155,18 +167,27 @@
         <p class="rw-sports-score">${esc(o.subtitle || String(score))}</p>
         <p class="rw-sports-hint">${esc(vsBest)}</p>
         <button type="button" class="btn btn--primary" data-rw-again>${esc(o.againLabel || 'Play again')}</button>
+        ${
+          typeof o.onChangeFormat === 'function'
+            ? '<button type="button" class="btn" data-rw-change-format>Change format</button>'
+            : ''
+        }
       </div>`;
     body.querySelector('[data-rw-again]')?.addEventListener('click', () => {
       if (typeof o.onAgain === 'function') o.onAgain();
     });
+    body.querySelector('[data-rw-change-format]')?.addEventListener('click', () => {
+      if (typeof o.onChangeFormat === 'function') o.onChangeFormat();
+    });
   }
 
-  /** Street Cricket — Practice: flight + bag + shot book (Prompt 3/5). */
+  /** Street Cricket — Practice formats: Over / Nets / Chase (Prompt 4/5). */
   function openStreetCricket() {
     let runs = 0;
     let balls = 0;
     let wickets = 0;
-    let phase = 'idle'; // idle | runup | flight | result | done
+    let perfects = 0;
+    let phase = 'pick'; // pick | idle | runup | flight | result | done
     let bowlTimer = null;
     let missTimer = null;
     let resultTimer = null;
@@ -178,12 +199,40 @@
     let streakSame = 0;
     let coachShown = false;
     let armedShot = 'push';
-    /** @type {null | object} */
     let lastBall = null;
     const ballLog = [];
-    const MAX_BALLS = 6;
-    const MAX_WICKETS = 2;
+    let formatId = 'over';
+    let maxBalls = 6;
+    let maxWickets = 2;
+    let chaseTarget = 0;
+    let endReason = '';
+    let sessionWon = false;
+    const FORMAT_KEY = 'chaupaal_sc_format_v4';
     const COACH_KEY = 'chaupaal_sc_coach_v3';
+
+    const FORMATS = {
+      over: {
+        id: 'over',
+        label: 'Gully Over',
+        blurb: '6 balls · 2 wickets — score big',
+        maxBalls: 6,
+        maxWickets: 2,
+      },
+      nets: {
+        id: 'nets',
+        label: 'Nets',
+        blurb: '12 balls · 3 wickets — survive & time',
+        maxBalls: 12,
+        maxWickets: 3,
+      },
+      chase: {
+        id: 'chase',
+        label: 'Chase',
+        blurb: 'Hit the target before balls or wickets run out',
+        maxBalls: 6,
+        maxWickets: 2,
+      },
+    };
 
     const SHOTS = {
       defend: { id: 'defend', label: 'Defend' },
@@ -191,7 +240,6 @@
       loft: { id: 'loft', label: 'Loft' },
     };
 
-    // Prompt 2 bag — fields used by Prompt 3 shot×ball resolver
     const DELIVERY_TYPES = {
       medium: {
         id: 'medium',
@@ -249,9 +297,7 @@
 
     const cloneDelivery = (type) => {
       const d = DELIVERY_TYPES[type] || DELIVERY_TYPES.medium;
-      return Object.assign({}, d, {
-        durationMs: d.runupMs + d.flightMs,
-      });
+      return Object.assign({}, d, { durationMs: d.runupMs + d.flightMs });
     };
 
     const mulberry32 = (a) => () => {
@@ -261,11 +307,92 @@
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
 
+    const loadSavedFormat = () => {
+      try {
+        const v = localStorage.getItem(FORMAT_KEY);
+        if (v && FORMATS[v]) return v;
+      } catch (e) {}
+      return 'over';
+    };
+
+    const saveFormat = (id) => {
+      try {
+        localStorage.setItem(FORMAT_KEY, id);
+      } catch (e) {}
+    };
+
+    const fmt = () => FORMATS[formatId] || FORMATS.over;
+
+    const rollChaseTarget = () => {
+      const rnd = mulberry32(overSeed + 41);
+      return 16 + Math.floor(rnd() * 7); // 16–22
+    };
+
+    const beginSession = () => {
+      const f = fmt();
+      maxBalls = f.maxBalls;
+      maxWickets = f.maxWickets;
+      chaseTarget = formatId === 'chase' ? rollChaseTarget() : 0;
+      runs = 0;
+      balls = 0;
+      wickets = 0;
+      perfects = 0;
+      endReason = '';
+      sessionWon = false;
+      lastOutcome = '';
+      lastBall = null;
+      ballLog.length = 0;
+      deliveryMeta = null;
+      deliveryStartedAt = 0;
+      lastDeliveryId = '';
+      streakSame = 0;
+      overSeed = (Date.now() ^ (Math.random() * 0xffff)) >>> 0;
+      armedShot = 'push';
+      setChromeSub('Practice · ' + f.label);
+    };
+
+    /** Format-aware bag: nets teachable; chase/over spicier later. */
     const pickDelivery = () => {
       const rnd = mulberry32(overSeed + balls * 97 + 13);
       const r = rnd();
       let pool;
-      if (balls <= 1) {
+      if (formatId === 'nets') {
+        if (balls <= 3) {
+          pool = r < 0.7 ? ['medium', 'medium', 'flight'] : ['medium', 'flight', 'spin'];
+        } else if (balls <= 7) {
+          pool =
+            r < 0.45
+              ? ['medium', 'flight', 'spin']
+              : r < 0.75
+                ? ['flight', 'medium', 'quick']
+                : ['spin', 'medium', 'flight'];
+        } else {
+          pool =
+            r < 0.4
+              ? ['medium', 'quick', 'flight']
+              : r < 0.7
+                ? ['spin', 'flight', 'medium']
+                : ['quick', 'spin', 'medium'];
+        }
+      } else if (formatId === 'chase') {
+        if (balls <= 1) {
+          pool = r < 0.5 ? ['medium', 'flight', 'medium'] : ['medium', 'quick', 'flight'];
+        } else if (balls <= 3) {
+          pool =
+            r < 0.35
+              ? ['quick', 'medium', 'flight']
+              : r < 0.7
+                ? ['spin', 'flight', 'medium']
+                : ['quick', 'spin', 'flight'];
+        } else {
+          pool =
+            r < 0.4
+              ? ['quick', 'spin', 'flight']
+              : r < 0.7
+                ? ['spin', 'quick', 'medium']
+                : ['flight', 'quick', 'spin'];
+        }
+      } else if (balls <= 1) {
         pool =
           r < 0.55
             ? ['medium', 'medium', 'flight']
@@ -555,6 +682,8 @@
       return ok(1, 'loft', 'loft_late_survive', `Loft late · ${dLabel} — got away with 1`);
     };
 
+
+
     let deliveryRaf = null;
     const clearTimers = () => {
       if (bowlTimer) clearTimeout(bowlTimer);
@@ -567,7 +696,7 @@
       deliveryRaf = null;
     };
 
-    const { body, gs } = mountSportsShell({
+    const { overlay, body, gs } = mountSportsShell({
       gameId: 'streetcricket',
       title: 'Street Cricket',
       accent: '#1B7A4E',
@@ -575,11 +704,19 @@
     });
     if (!body) return;
 
+    const setChromeSub = (text) => {
+      const el =
+        overlay.querySelector('.game-chrome-subtitle') ||
+        overlay.querySelector('.game-chrome-sub');
+      if (el) el.textContent = text;
+    };
+
     try {
       coachShown = localStorage.getItem(COACH_KEY) === '1';
     } catch (e) {
       coachShown = false;
     }
+    formatId = loadSavedFormat();
 
     const cur = () => deliveryMeta || DELIVERY_TYPES.medium;
     const shotMeta = () => SHOTS[armedShot] || SHOTS.push;
@@ -619,22 +756,42 @@
 
     const canChangeShot = () => phase === 'idle' || phase === 'runup';
 
+    const scoreHud = () => {
+      if (formatId === 'nets') {
+        return `${balls}/${maxBalls} faced · ${wickets}/${maxWickets} out · ${perfects} clean · ${runs} runs`;
+      }
+      if (formatId === 'chase') {
+        const left = Math.max(0, maxBalls - balls);
+        const wkLeft = Math.max(0, maxWickets - wickets);
+        return `${runs}/${chaseTarget} · ${left} ball${left === 1 ? '' : 's'} left · ${wkLeft} wkt${wkLeft === 1 ? '' : 's'}`;
+      }
+      const pb =
+        typeof getGamePB === 'function' && getGamePB('streetcricket') != null
+          ? ` · Best ${getGamePB('streetcricket')}`
+          : '';
+      return `${runs} runs · ${balls}/${maxBalls} balls · ${wickets} out${pb}`;
+    };
+
+    const showPicker = () => {
+      clearTimers();
+      phase = 'pick';
+      setChromeSub('Practice · pick format');
+      render();
+    };
+
     const reset = () => {
       clearTimers();
-      runs = 0;
-      balls = 0;
-      wickets = 0;
+      beginSession();
       phase = 'idle';
-      lastOutcome = '';
-      deliveryStartedAt = 0;
-      deliveryMeta = null;
-      overSeed = (Date.now() ^ (Math.random() * 0xffff)) >>> 0;
-      lastDeliveryId = '';
-      streakSame = 0;
-      lastBall = null;
-      ballLog.length = 0;
-      armedShot = 'push';
       render();
+    };
+
+    const startSelected = () => {
+      saveFormat(formatId);
+      beginSession();
+      phase = 'idle';
+      render();
+      if (typeof gameFeedback === 'function') gameFeedback('select');
     };
 
     const paintPitchState = () => {
@@ -664,9 +821,13 @@
         if (phase === 'idle') {
           hint.textContent =
             lastOutcome ||
-            (coachShown
-              ? `${shotMeta().label} armed — Bowl, then time the Hit.`
-              : 'Pick Defend, Push, or Loft — then time the Hit.');
+            (formatId === 'chase'
+              ? `Chase ${chaseTarget} — ${shotMeta().label} armed.`
+              : formatId === 'nets'
+                ? `Nets — ${shotMeta().label} armed. Stay in.`
+                : coachShown
+                  ? `${shotMeta().label} armed — Bowl, then time the Hit.`
+                  : 'Pick Defend, Push, or Loft — then time the Hit.');
         } else if (phase === 'runup') hint.textContent = `${shotMeta().label} ready — run-up…`;
         else if (phase === 'flight')
           hint.textContent = inZone
@@ -674,6 +835,8 @@
             : `Watch the flight — ${shotMeta().label}`;
         else if (phase === 'result') hint.textContent = lastOutcome;
       }
+      const hud = body.querySelector('[data-rw-hud]');
+      if (hud) hud.textContent = scoreHud();
     };
 
     const wireControls = () => {
@@ -689,34 +852,129 @@
         });
       });
       body.querySelector('[data-rw-action]')?.addEventListener('click', onAction);
+      body.querySelectorAll('[data-format]').forEach((el) => {
+        el.addEventListener('click', () => {
+          const id = el.getAttribute('data-format');
+          if (!FORMATS[id]) return;
+          formatId = id;
+          body.querySelectorAll('[data-format]').forEach((b) => {
+            b.classList.toggle('is-selected', b.getAttribute('data-format') === formatId);
+          });
+        });
+      });
+      body.querySelector('[data-rw-start]')?.addEventListener('click', startSelected);
+    };
+
+    const buildResultOpts = () => {
+      const f = fmt();
+      const innings = {
+        formatId,
+        label: f.label,
+        runs,
+        wickets,
+        balls,
+        maxBalls,
+        maxWickets,
+        chaseTarget,
+        perfects,
+        won: sessionWon,
+        endReason,
+        ballLog: ballLog.slice(),
+      };
+      try {
+        if (typeof window !== 'undefined') window.__scLastInnings = innings;
+      } catch (e) {}
+
+      const actions = [
+        { label: 'Play again', primary: true, id: 'again' },
+        { label: 'Change format', primary: false, id: 'changeFormat' },
+        { label: 'Share', primary: false, id: 'share' },
+      ];
+      const base = {
+        title: 'Street Cricket',
+        glyph: '🏏',
+        onAgain: reset,
+        onChangeFormat: showPicker,
+        actions,
+        challenge: false,
+        gs,
+      };
+
+      if (formatId === 'nets') {
+        return Object.assign(base, {
+          updatePb: false,
+          hideVsBest: true,
+          unit: ' clean',
+          resultTitle: endReason === 'wickets' ? 'Nets — all out' : 'Nets session over',
+          subtitle: `${balls} balls · ${perfects} clean hits · ${runs} runs · ${wickets} out`,
+          scoreLine: `${perfects} clean`,
+          score: perfects,
+          shareText: `Nets on Chaupaal: ${perfects} clean hits in ${balls} balls (${runs} runs).`,
+          againLabel: 'Nets again',
+        });
+      }
+      if (formatId === 'chase') {
+        const shortBy = Math.max(0, chaseTarget - runs);
+        return Object.assign(base, {
+          updatePb: false,
+          hideVsBest: true,
+          unit: '',
+          resultTitle: sessionWon ? 'Chase done!' : 'Chase fell short',
+          subtitle: sessionWon
+            ? `Won chasing ${chaseTarget} — ${runs} off ${balls} · ${wickets} out`
+            : `Needed ${chaseTarget}, made ${runs} (short by ${shortBy}) · ${balls} balls · ${wickets} out`,
+          scoreLine: sessionWon ? `Chased ${chaseTarget}` : `${runs}/${chaseTarget}`,
+          score: runs,
+          shareText: sessionWon
+            ? `Chased down ${chaseTarget} in Street Cricket on Chaupaal!`
+            : `Fell short of ${chaseTarget} in Street Cricket on Chaupaal (${runs}).`,
+          againLabel: 'Chase again',
+        });
+      }
+      return Object.assign(base, {
+        updatePb: true,
+        unit: ' runs',
+        resultTitle: 'Gully Over over',
+        subtitle: `${runs} runs · ${wickets} wicket${wickets === 1 ? '' : 's'} · ${balls} balls`,
+        scoreLine: `${runs} runs`,
+        score: runs,
+        shareText: `I scored ${runs} runs in a Gully Over on Chaupaal!`,
+        againLabel: 'Bat again',
+      });
     };
 
     const render = () => {
-      if (phase === 'done') {
-        finishPractice('streetcricket', runs, body, {
-          title: 'Street Cricket',
-          glyph: '🏏',
-          unit: ' runs',
-          resultTitle: 'Innings over',
-          subtitle: `${runs} runs · ${wickets} wicket${wickets === 1 ? '' : 's'} · ${balls} balls`,
-          scoreLine: `${runs} runs`,
-          shareText: `I scored ${runs} runs in Street Cricket on Chaupaal!`,
-          againLabel: 'Bat again',
-          onAgain: reset,
-          gs,
-        });
+      if (phase === 'pick') {
+        const cards = ['over', 'nets', 'chase']
+          .map((id) => {
+            const f = FORMATS[id];
+            return `<button type="button" class="rw-sc-format${formatId === id ? ' is-selected' : ''}" data-format="${id}">
+              <span class="rw-sc-format-title">${f.label}</span>
+              <span class="rw-sc-format-blurb">${f.blurb}</span>
+            </button>`;
+          })
+          .join('');
+        body.innerHTML = `
+          <div class="rw-sports-card rw-sc-card rw-sc-picker">
+            <h2>Street Cricket</h2>
+            <p class="rw-sports-hint">Pick a practice shape — same bowling bag & shots.</p>
+            <div class="rw-sc-formats" role="listbox" aria-label="Format">${cards}</div>
+            <button type="button" class="btn btn--primary rw-sc-main" data-rw-start>Start</button>
+          </div>`;
+        wireControls();
         return;
       }
-      const pb =
-        typeof getGamePB === 'function' && getGamePB('streetcricket') != null
-          ? ` · Best ${getGamePB('streetcricket')}`
-          : '';
+      if (phase === 'done') {
+        const opts = buildResultOpts();
+        finishPractice('streetcricket', opts.score != null ? opts.score : runs, body, opts);
+        return;
+      }
       const d = cur();
       const shotLock = canChangeShot() ? '' : 'disabled';
       body.innerHTML = `
         <div class="rw-sports-card rw-sc-card">
-          <h2>Street Cricket</h2>
-          <p class="rw-sports-score">${runs} runs · ${balls}/${MAX_BALLS} balls · ${wickets} out${pb}</p>
+          <h2>${fmt().label}</h2>
+          <p class="rw-sports-score" data-rw-hud>${scoreHud()}</p>
           <div class="rw-sports-pitch rw-sc-pitch is-del-${d.id || 'medium'}" data-rw-pitch
             data-delivery="${d.id || 'medium'}" data-path="${d.path || 'straight'}"
             style="--sc-runup-ms:${d.runupMs}ms;--sc-flight-ms:${d.flightMs}ms;--sc-zone-start:${d.zoneStart};--sc-zone-end:${d.zoneEnd};--sc-accent:${d.accent || '#81C784'}">
@@ -738,44 +996,62 @@
         </div>`;
       paintPitchState();
       if (lastOutcome && (phase === 'idle' || phase === 'result')) {
-        const kind = lastBall && lastBall.out
-          ? 'out'
-          : lastBall && lastBall.runs >= 4
-            ? 'boundary'
-            : /out|caught|bowled|beaten|cleaned|mistimed/i.test(lastOutcome)
-              ? 'out'
-              : /six|four|boundary/i.test(lastOutcome)
-                ? 'boundary'
-                : 'run';
+        const kind =
+          lastBall && lastBall.out
+            ? 'out'
+            : lastBall && lastBall.runs >= 4
+              ? 'boundary'
+              : /out|caught|bowled|beaten|cleaned|mistimed/i.test(lastOutcome)
+                ? 'out'
+                : /six|four|boundary/i.test(lastOutcome)
+                  ? 'boundary'
+                  : 'run';
         flashOutcome(body, lastOutcome, kind);
       }
       wireControls();
     };
 
-    const endIfNeeded = () => {
-      if (balls >= MAX_BALLS || wickets >= MAX_WICKETS) {
-        phase = 'done';
+    const evaluateEnd = () => {
+      if (formatId === 'chase' && runs >= chaseTarget) {
+        return { done: true, won: true, reason: 'chase_won' };
       }
+      if (wickets >= maxWickets) {
+        return { done: true, won: false, reason: 'wickets' };
+      }
+      if (balls >= maxBalls) {
+        const won = formatId === 'chase' ? runs >= chaseTarget : true;
+        return { done: true, won, reason: 'balls' };
+      }
+      return { done: false, won: false, reason: '' };
     };
 
     const afterBall = (outcome) => {
       lastOutcome = outcome;
       phase = 'result';
       deliveryStartedAt = 0;
+      const end = evaluateEnd();
+      if (end.done) {
+        sessionWon = !!end.won;
+        endReason = end.reason;
+        if (end.reason === 'chase_won' && typeof gameFeedback === 'function') {
+          gameFeedback('win');
+        }
+      }
       render();
+      const delay = end.done && end.reason === 'chase_won' ? 650 : 950;
       resultTimer = setTimeout(() => {
         resultTimer = null;
-        if (phase !== 'result') return;
         deliveryMeta = null;
-        endIfNeeded();
-        if (phase !== 'done') phase = 'idle';
+        if (end.done) phase = 'done';
+        else if (phase === 'result') phase = 'idle';
         render();
-      }, 950);
+      }, delay);
     };
 
     const applyResolved = (res) => {
       clearTimers();
       balls += 1;
+      if (res.timing === 'perfect' && !res.out) perfects += 1;
       lastBall = Object.assign({}, res, {
         ballIndex: balls,
         deliveryLabel: cur().label,
@@ -847,6 +1123,7 @@
       }
     };
 
+    setChromeSub('Practice · pick format');
     render();
   }
 
@@ -973,7 +1250,7 @@
     registerGame({
       id: 'streetcricket',
       name: 'Street Cricket',
-      desc: 'Practice · shot book',
+      desc: 'Practice · Over / Nets / Chase',
       icon: '🏏',
       ratingKey: 'streetcricket',
       gameType: 'solo',
