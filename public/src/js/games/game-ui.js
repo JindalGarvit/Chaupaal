@@ -177,8 +177,8 @@
     andarbaahar: ['Joker sets the rank', 'Pick Andar or Bahar', 'First matching rank wins the side'],
     patangbaazi: [
       'Hold to tension the manjha — climb with weight, release to float',
-      'Gusts shove the sail — ease through them, don’t yank at the zenith',
-      'Overlap still ends the duel for now; real cut geometry comes next',
+      'Cross their string to saw: orthogonal + high tension cuts faster',
+      'Break away to cancel abrasion; zenith yank still snaps your line',
     ],
     brickbreaker: [
       'Campaign or Score Attack — pick before you Serve',

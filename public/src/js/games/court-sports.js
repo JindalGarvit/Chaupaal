@@ -831,7 +831,7 @@
 
     shell.body.innerHTML = `
       <div class="cs-patang">
-        <p class="cs-rally-msg">Hold to tension the manjha. Drag to steer. Ease through gusts.</p>
+        <p class="cs-rally-msg">Hold to tension. Cross their string to saw — angle and pull decide the cut.</p>
         <canvas data-patang></canvas>
         <p class="cs-rally-hint" data-patang-hint>Hold the sky — pull to climb</p>
       </div>`;
@@ -856,19 +856,27 @@
     }
     const you = makeKite(0.35, 0.62, '#FF6D00', '#FFD180');
     const opp = makeKite(0.68, 0.5, '#29B6F6', '#B3E5FC');
+    const YOU_ANCHOR = 0.42;
+    const OPP_ANCHOR = 0.58;
     let holding = false;
     let ended = false;
+    let ending = null; // { won, why, t, fallYou, fallOpp }
     let t = 0;
     let windX = 0.06;
     let windY = -0.01;
     let gust = 0;
     let cloudOff = 0;
     let pointerId = null;
+    /** Abrasion duel state — Prompt 3 can reset between wave kites. */
+    let abrasion = { active: false, x: 0.5, y: 0.5, youDmg: 0, oppDmg: 0, flash: 0, sparks: [] };
+    let hapticCool = 0;
 
     const ZENITH = 0.13;
     const GROUND = 0.9;
-    const CUT_R2 = 0.011;
-    // Wind defaults: gentle base ~0.05–0.12 + gust peaks to ~0.35 for ~1.2s
+    const ABRASION_MAX = 1;
+    const STRING_SAMPLES = 6;
+    // Cut law: string–string cross starts abrasion; rate ∝ |sin θ| × tension × relative motion.
+    // Slack (<0.35 tension) while crossed takes +35% damage. Parallel shallow cuts saw slowly.
 
     function size() {
       const r = canvas.getBoundingClientRect();
@@ -933,25 +941,41 @@
     });
 
     function end(won, why) {
-      if (ended) return;
+      if (ended || ending) return;
+      ending = {
+        won: !!won,
+        why: why || (won ? 'You cut their manjha!' : 'Your manjha was cut.'),
+        t: 0,
+        fallYou: !won,
+        fallOpp: !!won,
+      };
+      if (typeof gameFeedback === 'function') gameFeedback(won ? 'win' : 'lose');
+    }
+
+    function finishEnd() {
+      if (ended || !ending) return;
       ended = true;
       cancelAnimationFrame(raf);
       raf = 0;
       showDuelResult(shell, {
         id: 'patangbaazi',
-        you: won ? 1 : 0,
-        opp: won ? 0 : 1,
-        glyph: won ? '✓' : '·',
-        pbScore: won ? 1 : 0,
-        subtitle: why || (won ? 'String cut!' : 'Your manjha snapped.'),
-        shareText: won ? 'I cut a kite on Chaupaal Patang Baazi!' : 'Patang Baazi on Chaupaal',
+        you: ending.won ? 1 : 0,
+        opp: ending.won ? 0 : 1,
+        glyph: ending.won ? '✓' : '·',
+        pbScore: ending.won ? 1 : 0,
+        subtitle: ending.why,
+        shareText: ending.won ? 'I cut a kite on Chaupaal Patang Baazi!' : 'Patang Baazi on Chaupaal',
         onAgain: openPatang,
       });
     }
 
+    /** Prompt 3 hook: one kite cut mid-wave. */
+    function onCutResolved(playerWon, detail) {
+      end(playerWon, detail);
+    }
+
     function updateWind(dt) {
       const base = 0.05 + 0.04 * Math.sin(t * 0.35) + 0.02 * Math.sin(t * 0.11);
-      // Gust envelope: rises every ~5–7s
       const cycle = (t % 6.4) / 6.4;
       let gAmp = 0;
       if (cycle > 0.55 && cycle < 0.78) {
@@ -964,21 +988,143 @@
       cloudOff += (windX * 28 + 6) * dt;
     }
 
-    function cutPower(k) {
-      // Prompt 2 can replace with angle/abrasion; Prompt 1 uses tension + speed proxy.
-      const spd = Math.hypot(k.vx, k.vy);
-      return k.tension * 0.65 + spd * 7.5 + Math.abs(k.heading) * 0.15;
+    function stringControlPoint(k, anchorX) {
+      const ax = anchorX;
+      const ay = 0.98;
+      const bow = windX * 0.14 * (0.5 + k.tension * 0.5);
+      return {
+        ax, ay,
+        mx: (ax + k.x) * 0.5 + bow,
+        my: (ay + k.y) * 0.5 + 0.03,
+        kx: k.x,
+        ky: k.y,
+      };
     }
 
-    function tryResolveCut(a, b) {
+    function stringPolyline(k, anchorX) {
+      const c = stringControlPoint(k, anchorX);
+      const pts = [];
+      for (let i = 0; i <= STRING_SAMPLES; i++) {
+        const u = i / STRING_SAMPLES;
+        const omu = 1 - u;
+        pts.push({
+          x: omu * omu * c.ax + 2 * omu * u * c.mx + u * u * c.kx,
+          y: omu * omu * c.ay + 2 * omu * u * c.my + u * u * c.ky,
+        });
+      }
+      return pts;
+    }
+
+    function segIntersect(a, b, c, d) {
+      const den = (b.x - a.x) * (d.y - c.y) - (b.y - a.y) * (d.x - c.x);
+      if (Math.abs(den) < 1e-9) return null;
+      const t1 = ((c.x - a.x) * (d.y - c.y) - (c.y - a.y) * (d.x - c.x)) / den;
+      const t2 = ((c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x)) / den;
+      if (t1 < 0.02 || t1 > 0.98 || t2 < 0.02 || t2 > 0.98) return null;
+      return {
+        x: a.x + t1 * (b.x - a.x),
+        y: a.y + t1 * (b.y - a.y),
+        t1, t2,
+      };
+    }
+
+    function findStringCross(polyA, polyB) {
+      for (let i = 0; i < polyA.length - 1; i++) {
+        for (let j = 0; j < polyB.length - 1; j++) {
+          const hit = segIntersect(polyA[i], polyA[i + 1], polyB[j], polyB[j + 1]);
+          if (hit) {
+            const ax = polyA[i + 1].x - polyA[i].x;
+            const ay = polyA[i + 1].y - polyA[i].y;
+            const bx = polyB[j + 1].x - polyB[j].x;
+            const by = polyB[j + 1].y - polyB[j].y;
+            const lenA = Math.hypot(ax, ay) || 1;
+            const lenB = Math.hypot(bx, by) || 1;
+            const cross = Math.abs(ax * by - ay * bx) / (lenA * lenB);
+            // |sin θ| via 2D cross of unit dirs
+            return { x: hit.x, y: hit.y, angleQuality: Math.min(1, cross) };
+          }
+        }
+      }
+      return null;
+    }
+
+    function sailsBump(a, b) {
       const dx = a.x - b.x;
       const dy = a.y - b.y;
-      if (dx * dx + dy * dy >= CUT_R2) return null;
-      const pa = cutPower(a);
-      const pb = cutPower(b);
-      if (pa > pb + 0.04) return true;
-      if (pb > pa + 0.04) return false;
-      return pa >= pb;
+      return dx * dx + dy * dy < 0.007;
+    }
+
+    function tickAbrasion(dt) {
+      const polyYou = stringPolyline(you, YOU_ANCHOR);
+      const polyOpp = stringPolyline(opp, OPP_ANCHOR);
+      const cross = findStringCross(polyYou, polyOpp);
+      hapticCool = Math.max(0, hapticCool - dt);
+
+      if (!cross) {
+        abrasion.active = false;
+        abrasion.youDmg = Math.max(0, abrasion.youDmg - dt * 1.1);
+        abrasion.oppDmg = Math.max(0, abrasion.oppDmg - dt * 1.1);
+        abrasion.flash = Math.max(0, abrasion.flash - dt * 3);
+        abrasion.sparks = abrasion.sparks.filter((s) => (s.life -= dt) > 0);
+        return null;
+      }
+
+      abrasion.active = true;
+      abrasion.x = cross.x;
+      abrasion.y = cross.y;
+      abrasion.flash = Math.min(1, abrasion.flash + dt * 4);
+
+      const relSpd = Math.hypot(you.vx - opp.vx, you.vy - opp.vy);
+      const motion = 0.35 + Math.min(1.4, relSpd * 9);
+      const angle = 0.2 + 0.8 * cross.angleQuality; // shallow parallel = weak saw
+      const base = motion * angle * 0.85;
+
+      // Damage to a kite scales with the *other* kite's tension (they're sawing you)
+      let dmgYou = base * (0.45 + opp.tension * 0.9) * dt;
+      let dmgOpp = base * (0.45 + you.tension * 0.9) * dt;
+      if (you.tension < 0.35) dmgYou *= 1.35;
+      if (opp.tension < 0.35) dmgOpp *= 1.35;
+      // Holding strong tension while orthogonal helps you saw them faster
+      if (you.tension > 0.7 && cross.angleQuality > 0.55) dmgOpp *= 1.2;
+      if (opp.tension > 0.7 && cross.angleQuality > 0.55) dmgYou *= 1.2;
+
+      abrasion.youDmg = Math.min(ABRASION_MAX, abrasion.youDmg + dmgYou);
+      abrasion.oppDmg = Math.min(ABRASION_MAX, abrasion.oppDmg + dmgOpp);
+
+      if (abrasion.sparks.length < 18 && Math.random() < 0.55) {
+        abrasion.sparks.push({
+          x: cross.x + (Math.random() - 0.5) * 0.02,
+          y: cross.y + (Math.random() - 0.5) * 0.02,
+          vx: (Math.random() - 0.5) * 0.15,
+          vy: (Math.random() - 0.5) * 0.15,
+          life: 0.25 + Math.random() * 0.25,
+        });
+      }
+      abrasion.sparks.forEach((s) => {
+        s.x += s.vx * dt;
+        s.y += s.vy * dt;
+        s.life -= dt;
+      });
+      abrasion.sparks = abrasion.sparks.filter((s) => s.life > 0);
+
+      if (hapticCool <= 0 && (abrasion.youDmg > 0.25 || abrasion.oppDmg > 0.25)) {
+        hapticCool = 0.18;
+        if (typeof gameFeedback === 'function') gameFeedback('select');
+      }
+
+      if (abrasion.oppDmg >= ABRASION_MAX && abrasion.youDmg >= ABRASION_MAX) {
+        // Mutual — higher tension wins the fray
+        return you.tension >= opp.tension
+          ? { playerWon: true, why: 'Strings frayed — your manjha held!' }
+          : { playerWon: false, why: 'Mutual saw — their manjha held.' };
+      }
+      if (abrasion.oppDmg >= ABRASION_MAX) {
+        return { playerWon: true, why: 'You cut their manjha!' };
+      }
+      if (abrasion.youDmg >= ABRASION_MAX) {
+        return { playerWon: false, why: 'Rival cut your manjha.' };
+      }
+      return null;
     }
 
     function stepKite(k, dt, isPlayer, pull) {
@@ -1012,24 +1158,23 @@
           k.zenithRisk += dt;
           if (k.zenithRisk > 1.15) {
             end(false, 'Manjha snapped at the zenith — ease off next time.');
-            return false;
+            return;
           }
         } else {
           k.zenithRisk = Math.max(0, k.zenithRisk - dt * 0.55);
         }
         if (k.y >= GROUND && k.tension < 0.2) {
           end(false, 'Kite dumped into the rooftops.');
-          return false;
         }
       }
-      return true;
     }
 
     function stepRival(dt) {
-      // Dumb sine pilot — Prompt 3 replaces with hunter AI
-      opp.targetX = 0.52 + Math.sin(t * 1.15) * 0.28 + windX * 0.35;
-      const wantPull = Math.sin(t * 0.9) > -0.15 || opp.y > 0.7;
-      return stepKite(opp, dt, false, wantPull);
+      // Light bias toward player's sky lane so crosses happen; Prompt 3 = hunter AI
+      const hunt = you.x * 0.45 + Math.sin(t * 1.05) * 0.22 + windX * 0.3;
+      opp.targetX = Math.max(0.1, Math.min(0.9, hunt));
+      const wantPull = Math.sin(t * 0.9) > -0.2 || opp.y > 0.68 || Math.abs(opp.x - you.x) < 0.12;
+      stepKite(opp, dt, false, wantPull);
     }
 
     function drawSky() {
@@ -1086,20 +1231,71 @@
       ctx.fill();
     }
 
-    function drawString(k, anchorX) {
-      const ax = anchorX * w;
-      const ay = h * 0.98;
-      const kx = k.x * w;
-      const ky = k.y * h;
-      const bow = windX * 55 * (0.5 + k.tension * 0.5);
-      const mx = (ax + kx) * 0.5 + bow;
-      const my = (ay + ky) * 0.5 + 12;
-      ctx.strokeStyle = 'rgba(255,236,179,' + (0.35 + k.tension * 0.45) + ')';
-      ctx.lineWidth = 1.2 + k.tension * 1.4;
+    function drawString(k, anchorX, fray) {
+      const c = stringControlPoint(k, anchorX);
+      const ax = c.ax * w;
+      const ay = c.ay * h;
+      const mx = c.mx * w;
+      const my = c.my * h;
+      const kx = c.kx * w;
+      const ky = c.ky * h;
+      const hot = abrasion.active ? abrasion.flash : 0;
+      const alpha = 0.35 + k.tension * 0.45 + hot * 0.35;
+      ctx.strokeStyle = fray > 0.55
+        ? 'rgba(255,120,80,' + alpha + ')'
+        : hot > 0.2
+          ? 'rgba(255,255,200,' + alpha + ')'
+          : 'rgba(255,236,179,' + alpha + ')';
+      ctx.lineWidth = 1.2 + k.tension * 1.4 + hot * 1.2;
       ctx.beginPath();
       ctx.moveTo(ax, ay);
       ctx.quadraticCurveTo(mx, my, kx, ky);
       ctx.stroke();
+      if (fray > 0.4) {
+        ctx.save();
+        ctx.setLineDash([3, 4]);
+        ctx.strokeStyle = 'rgba(255,80,40,' + (0.3 + fray * 0.5) + ')';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.quadraticCurveTo(mx, my, kx, ky);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    function drawAbrasionFx() {
+      if (!abrasion.active && abrasion.sparks.length === 0) return;
+      if (abrasion.active) {
+        const px = abrasion.x * w;
+        const py = abrasion.y * h;
+        ctx.save();
+        ctx.globalAlpha = 0.35 + abrasion.flash * 0.55;
+        ctx.fillStyle = '#FFF59D';
+        ctx.beginPath();
+        ctx.arc(px, py, 5 + abrasion.flash * 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#FF6D00';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(px, py, 8 + abrasion.flash * 14, 0, Math.PI * 2);
+        ctx.stroke();
+        // Fray meters
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = 'rgba(0,0,0,.35)';
+        ctx.fillRect(px - 22, py - 28, 44, 6);
+        ctx.fillStyle = '#29B6F6';
+        ctx.fillRect(px - 22, py - 28, 44 * abrasion.oppDmg, 3);
+        ctx.fillStyle = '#FF6D00';
+        ctx.fillRect(px - 22, py - 25, 44 * abrasion.youDmg, 3);
+        ctx.restore();
+      }
+      abrasion.sparks.forEach((s) => {
+        ctx.globalAlpha = Math.max(0, s.life * 3);
+        ctx.fillStyle = '#FFE082';
+        ctx.fillRect(s.x * w - 1.5, s.y * h - 1.5, 3, 3);
+      });
+      ctx.globalAlpha = 1;
     }
 
     function drawKite(k) {
@@ -1156,14 +1352,20 @@
     }
 
     function updateHint() {
-      if (you.zenithRisk > 0.35) {
+      if (abrasion.active) {
+        const ahead = abrasion.oppDmg >= abrasion.youDmg;
+        hint.textContent = ahead
+          ? 'Sawing — hold tension! Keep the cross.'
+          : 'Their manjha is biting — pull hard or break away!';
+        hint.classList.add('is-warn');
+      } else if (you.zenithRisk > 0.35) {
         hint.textContent = 'Ease off — manjha screaming at the top';
         hint.classList.add('is-warn');
       } else if (gust > 0.14) {
         hint.textContent = 'Gust — ease tension, don’t yank';
         hint.classList.remove('is-warn');
       } else if (holding && you.tension > 0.7) {
-        hint.textContent = 'Climbing — drag to cut across their line';
+        hint.textContent = 'Climbing — cross their string to saw';
         hint.classList.remove('is-warn');
       } else if (!holding) {
         hint.textContent = 'Floating — hold to pull manjha';
@@ -1187,31 +1389,69 @@
       dt = Math.min(0.05, Math.max(0.001, dt));
       t += dt;
 
-      updateWind(dt);
-      if (!stepKite(you, dt, true, holding)) return;
-      stepRival(dt);
-
-      const cut = tryResolveCut(you, opp);
-      if (cut === true) {
-        end(true, 'You cut their string!');
+      if (ending) {
+        ending.t += dt;
+        if (ending.fallOpp) {
+          opp.vy += 0.9 * dt;
+          opp.y = Math.min(1.05, opp.y + opp.vy * dt);
+          opp.heading += dt * 2.5;
+        }
+        if (ending.fallYou) {
+          you.vy += 0.9 * dt;
+          you.y = Math.min(1.05, you.y + you.vy * dt);
+          you.heading -= dt * 2.5;
+        }
+        drawSky();
+        if (!ending.fallOpp) drawString(opp, OPP_ANCHOR, abrasion.oppDmg);
+        if (!ending.fallYou) drawString(you, YOU_ANCHOR, abrasion.youDmg);
+        drawKite(opp);
+        drawKite(you);
+        drawAbrasionFx();
+        if (ending.t > 0.85) finishEnd();
+        else raf = requestAnimationFrame(loop);
         return;
       }
-      if (cut === false) {
-        end(false, 'Rival cut your manjha.');
+
+      updateWind(dt);
+      stepKite(you, dt, true, holding);
+      if (!ending) stepRival(dt);
+      if (ending) {
+        raf = requestAnimationFrame(loop);
         return;
+      }
+
+      const cut = tickAbrasion(dt);
+      if (cut) {
+        onCutResolved(cut.playerWon, cut.why);
+        raf = requestAnimationFrame(loop);
+        return;
+      }
+
+      // Sail bump without string cross — no cut (telegraph only)
+      if (!abrasion.active && sailsBump(you, opp) && Math.random() < 0.08) {
+        abrasion.sparks.push({
+          x: (you.x + opp.x) * 0.5,
+          y: (you.y + opp.y) * 0.5,
+          vx: (Math.random() - 0.5) * 0.1,
+          vy: (Math.random() - 0.5) * 0.1,
+          life: 0.2,
+        });
       }
 
       updateHint();
       drawSky();
-      drawString(opp, 0.58);
-      drawString(you, 0.42);
+      drawString(opp, OPP_ANCHOR, abrasion.oppDmg);
+      drawString(you, YOU_ANCHOR, abrasion.youDmg);
       drawKite(opp);
       drawKite(you);
+      drawAbrasionFx();
 
-      // Wind compass tick
       ctx.fillStyle = 'rgba(255,255,255,.55)';
       ctx.font = '11px "Space Grotesk",sans-serif';
       ctx.fillText(gust > 0.12 ? 'Wind · gust' : 'Wind · steady', 12, 18);
+      if (abrasion.active) {
+        ctx.fillText('Cut in progress', 12, 34);
+      }
 
       raf = requestAnimationFrame(loop);
     }
