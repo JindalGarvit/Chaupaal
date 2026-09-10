@@ -176,9 +176,9 @@
     sattepe: ['Play next to a seven chain', 'Empty your hand first', 'Sevens can always start a suit'],
     andarbaahar: ['Joker sets the rank', 'Pick Andar or Bahar', 'First matching rank wins the side'],
     patangbaazi: [
-      'Hold to tension the manjha — climb with weight, release to float',
-      'Hunters chase your string — cross to saw, bail if they’re biting',
-      'Cut two rivals to clear the sky; zenith yank still snaps your line',
+      'Hold to tension — climb with weight, ease through gusts',
+      'Cross strings to saw; watch the hunter tip toward your manjha',
+      'Duel clears the sky · Festival is heat that never ends — try both',
     ],
     brickbreaker: [
       'Campaign or Score Attack — pick before you Serve',
@@ -217,6 +217,9 @@
     pool: { key: 'chaupaal_pb_pool', label: 'balls', higherBetter: true },
     brickbreaker: { key: 'chaupaal_pb_brickbreaker', label: 'pts', higherBetter: true },
     brickbreaker_endless: { key: 'chaupaal_pb_brickbreaker_endless', label: 'pts', higherBetter: true },
+    patangbaazi_duel: { key: 'chaupaal_pb_patang_duel', label: ' streak', higherBetter: true },
+    patangbaazi_festival: { key: 'chaupaal_pb_patang_festival', label: 's', higherBetter: true },
+    patangbaazi_festival_cuts: { key: 'chaupaal_pb_patang_festival_cuts', label: ' cuts', higherBetter: true },
   };
 
   function gameFeedback(action, opts) {
@@ -583,6 +586,14 @@
       }
       if (gameId === 'gullykick') {
         return getGamePB('gullykick_classic');
+      }
+      // Legacy Prompt 2–3 cuts score (if any) → festival cuts only
+      if (gameId === 'patangbaazi_festival_cuts') {
+        const legacy = localStorage.getItem('chaupaal_pb_patangbaazi');
+        if (legacy != null && legacy !== '') {
+          const n = Number(legacy);
+          return Number.isFinite(n) ? n : null;
+        }
       }
       return null;
     }

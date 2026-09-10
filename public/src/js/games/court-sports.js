@@ -808,14 +808,95 @@
     startRaid();
   }
 
-  function openPatang() {
+  const PATANG_LAST_MODE_KEY = 'chaupaal_patang_last_mode';
+  const PATANG_STREAK_KEY = 'chaupaal_patang_duel_streak';
+
+  function patangLastMode() {
+    try {
+      const m = localStorage.getItem(PATANG_LAST_MODE_KEY);
+      if (m === 'festival' || m === 'duel') return m;
+    } catch (e) {}
+    return 'duel';
+  }
+
+  function patangSaveMode(mode) {
+    try {
+      localStorage.setItem(PATANG_LAST_MODE_KEY, mode);
+    } catch (e) {}
+  }
+
+  function patangDuelStreak() {
+    try {
+      return Math.max(0, parseInt(localStorage.getItem(PATANG_STREAK_KEY) || '0', 10) || 0);
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  function patangSetDuelStreak(n) {
+    try {
+      localStorage.setItem(PATANG_STREAK_KEY, String(Math.max(0, n | 0)));
+    } catch (e) {}
+  }
+
+  function openPatangModeSheet() {
+    const device = document.querySelector('.device');
+    const duelBest = typeof getGamePB === 'function' ? getGamePB('patangbaazi_duel') : null;
+    const festBest = typeof getGamePB === 'function' ? getGamePB('patangbaazi_festival') : null;
+    const festCuts = typeof getGamePB === 'function' ? getGamePB('patangbaazi_festival_cuts') : null;
+    const last = patangLastMode();
+    const duelLine =
+      duelBest != null ? 'Best streak ' + duelBest : 'Cut the hunter · clear the sky';
+    const festLine =
+      festBest != null
+        ? 'Best ' + festBest + 's' + (festCuts != null ? ' · ' + festCuts + ' cuts' : '')
+        : 'Last as long as you can against the heat';
+
+    function pick(mode) {
+      if (sheet && sheet.parentNode) sheet.remove();
+      openPatang({ mode: mode });
+    }
+
+    if (!device) {
+      pick(last);
+      return;
+    }
+
+    const sheet = document.createElement('div');
+    sheet.className = 'cs-patang-pick';
+    sheet.innerHTML = `
+      <div class="cs-patang-pick-card" role="dialog" aria-label="Choose a sky">
+        <div class="cs-patang-pick-title">Patang Baazi</div>
+        <div class="cs-patang-pick-sub">Practice rooftop skies — climb, cut, survive. No Live · no stakes.</div>
+        <button type="button" class="cs-patang-pick-btn${last === 'duel' ? ' is-last' : ''}" data-patang-mode="duel">
+          <span class="cs-patang-pick-name">Duel</span>
+          <span class="cs-patang-pick-desc">${esc(duelLine)}</span>
+        </button>
+        <button type="button" class="cs-patang-pick-btn${last === 'festival' ? ' is-last' : ''}" data-patang-mode="festival">
+          <span class="cs-patang-pick-name">Festival</span>
+          <span class="cs-patang-pick-desc">${esc(festLine)}</span>
+        </button>
+        <button type="button" class="cs-patang-pick-cancel" data-patang-cancel>Cancel</button>
+      </div>`;
+    device.appendChild(sheet);
+    sheet.querySelectorAll('[data-patang-mode]').forEach((btn) => {
+      btn.addEventListener('click', () => pick(btn.dataset.patangMode));
+    });
+    sheet.querySelector('[data-patang-cancel]')?.addEventListener('click', () => sheet.remove());
+  }
+
+  function openPatang(opts) {
+    const o = opts && typeof opts === 'object' ? opts : {};
+    const playMode = o.mode === 'festival' ? 'festival' : 'duel';
+    patangSaveMode(playMode);
+    const isFestival = playMode === 'festival';
     let raf = 0;
     let pauseCtrl = null;
     let lastTs = 0;
     const shell = openShell({
       id: 'patangbaazi',
       title: 'Patang Baazi',
-      subtitle: practiceSub('Manjha · hunter · cut'),
+      subtitle: practiceSub(isFestival ? 'Festival · survive the heat' : 'Duel · cut the hunter'),
       mode: 'practice',
       accent: '#FF6D00',
       bg: '#001018',
@@ -831,7 +912,11 @@
 
     shell.body.innerHTML = `
       <div class="cs-patang">
-        <p class="cs-rally-msg">A hunter is in the sky — cross strings to saw, or get hunted.</p>
+        <p class="cs-rally-msg">${
+          isFestival
+            ? 'Festival heat — stay up, cut what you can, pressure never sleeps.'
+            : 'Duel sky — cross their string, cut the hunter, clear two.'
+        }</p>
         <canvas data-patang></canvas>
         <p class="cs-rally-hint" data-patang-hint>Hold the sky — pull to climb</p>
       </div>`;
@@ -845,11 +930,10 @@
     const GROUND = 0.9;
     const ABRASION_MAX = 1;
     const STRING_SAMPLES = 6;
-    const TEACH_SEC = 2.8;
-    const WAVES_TO_WIN = 2; // sequential hunters (max 1 active) — clarity over swarm
+    const TEACH_SEC = isFestival ? 2.2 : 2.8;
+    const WAVES_TO_WIN = 2; // duel only
     const YOU_ANCHOR = 0.42;
-    // Cut law (Prompt 2): cross + abrasion. Rival uses same rules — no instant cuts.
-    // AI policy: hold→hunt→saw→bail→recover; reaction delay; soft zenith snap (1.4s vs 1.15).
+    // Cut law (Prompt 2) + hunter AI (Prompt 3) intact. Prompt 4 = skies + records.
 
     const RIVAL_LOOKS = [
       { color: '#29B6F6', accent: '#B3E5FC', anchor: 0.58, label: 'Hunter' },
@@ -871,21 +955,22 @@
     }
 
     function makeRival(waveIndex) {
-      const look = RIVAL_LOOKS[Math.min(waveIndex, RIVAL_LOOKS.length - 1)];
+      const look = RIVAL_LOOKS[Math.min(waveIndex % RIVAL_LOOKS.length, RIVAL_LOOKS.length - 1)];
       const side = waveIndex % 2 === 0 ? 0.72 : 0.22;
-      const k = makeKite(side, 0.48 + waveIndex * 0.04, look.color, look.accent);
+      const k = makeKite(side, 0.48 + (waveIndex % 3) * 0.03, look.color, look.accent);
       k.anchorX = look.anchor;
       k.wave = waveIndex + 1;
-      k.label = look.label;
+      k.label = isFestival && waveIndex > 0 ? 'Heat ' + (waveIndex + 1) : look.label;
+      const ramp = isFestival ? Math.min(1.35, 0.9 + waveIndex * 0.12) : 0.85 + Math.min(0.35, waveIndex * 0.2);
       k.ai = {
         state: 'hold',
         stateT: 0,
-        react: 0.18 + Math.random() * 0.12,
+        react: Math.max(0.1, 0.2 - (isFestival ? waveIndex * 0.012 : 0) + Math.random() * 0.1),
         reactT: 0,
         wantX: side,
         wantPull: true,
         huntSide: side > 0.5 ? -1 : 1,
-        aggression: 0.85 + waveIndex * 0.2,
+        aggression: ramp,
       };
       return k;
     }
@@ -985,28 +1070,113 @@
       if (typeof gameFeedback === 'function') gameFeedback(won ? 'win' : 'lose');
     }
 
+    function deathLabel(kind) {
+      if (kind === 'snap') return 'manjha snapped';
+      if (kind === 'stall') return 'rooftop dump';
+      if (kind === 'cut') return 'string cut';
+      return kind || 'down';
+    }
+
+    function resultTitle(won, deathKind) {
+      if (won) return 'String cut!';
+      if (deathKind === 'snap') return 'Manjha snapped';
+      if (isFestival) return 'Festival run over';
+      if (deathKind === 'stall') return 'Dumped on the roofs';
+      return 'Your manjha was cut';
+    }
+
     function finishEnd() {
       if (ended || !ending) return;
       ended = true;
       cancelAnimationFrame(raf);
       raf = 0;
-      const secs = Math.max(1, Math.round(stats.aliveSec));
-      const line = ending.won
-        ? stats.cuts + ' cut' + (stats.cuts === 1 ? '' : 's') + ' · ' + secs + 's'
-        : (stats.death || 'down') + ' · ' + stats.cuts + ' cut' + (stats.cuts === 1 ? '' : 's') + ' · ' + secs + 's';
-      showDuelResult(shell, {
-        id: 'patangbaazi',
-        you: ending.won ? 1 : 0,
-        opp: ending.won ? 0 : 1,
-        glyph: ending.won ? '✓' : '·',
-        pbScore: ending.won ? Math.max(1, stats.cuts) : stats.cuts,
-        subtitle: ending.why + ' · ' + line,
-        shareText: ending.won
-          ? 'I cut ' + stats.cuts + ' kite' + (stats.cuts === 1 ? '' : 's') + ' on Chaupaal Patang Baazi!'
-          : 'Patang Baazi on Chaupaal',
-        onAgain: openPatang,
-        meta: { cuts: stats.cuts, aliveSec: secs, death: stats.death },
-      });
+      const secs = Math.max(0, Math.round(stats.aliveSec));
+      const cuts = stats.cuts | 0;
+      const death = ending.won ? null : stats.death;
+      const modeLabel = isFestival ? 'Festival' : 'Duel';
+
+      let pbId = isFestival ? 'patangbaazi_festival' : 'patangbaazi_duel';
+      let vsBest = '';
+      let streak = patangDuelStreak();
+
+      if (isFestival) {
+        if (typeof formatVsBest === 'function') vsBest = formatVsBest('patangbaazi_festival', secs);
+        if (typeof setGamePB === 'function') {
+          setGamePB('patangbaazi_festival', secs);
+          if (cuts > 0) setGamePB('patangbaazi_festival_cuts', cuts);
+        }
+      } else if (ending.won) {
+        streak += 1;
+        if (typeof formatVsBest === 'function') vsBest = formatVsBest('patangbaazi_duel', streak);
+        patangSetDuelStreak(streak);
+        if (typeof setGamePB === 'function') setGamePB('patangbaazi_duel', streak);
+      } else {
+        patangSetDuelStreak(0);
+        if (typeof getGamePB === 'function') {
+          const best = getGamePB('patangbaazi_duel');
+          vsBest = best != null ? 'Streak broken · Best ' + best : 'Streak broken';
+        }
+      }
+
+      const causeLine = ending.won
+        ? cuts + ' cut' + (cuts === 1 ? '' : 's') + ' · ' + secs + 's aloft'
+        : deathLabel(death) + ' · ' + cuts + ' cut' + (cuts === 1 ? '' : 's') + ' · ' + secs + 's';
+      const subtitle = modeLabel + ' · ' + (ending.why || '') + ' · ' + causeLine;
+      const shareText = ending.won
+        ? isFestival
+          ? 'Cut ' + cuts + ' in Festival on Chaupaal Patang Baazi · ' + secs + 's aloft'
+          : 'Duel win — string cut! Streak ' + streak + ' on Chaupaal Patang Baazi'
+        : isFestival
+          ? 'Festival run · ' + cuts + ' cuts · ' + secs + 's on Chaupaal Patang Baazi'
+          : 'Patang Baazi Duel on Chaupaal — ' + deathLabel(death);
+
+      if (shell.gs && typeof shell.gs.setOutcome === 'function') {
+        shell.gs.setOutcome(ending.won ? 'won' : 'lost');
+      }
+      if (shell && typeof shell.markOver === 'function') shell.markOver();
+
+      const actions = [
+        { label: 'Fly again', primary: true, id: 'again' },
+        { label: 'Change sky', primary: false, id: 'modes' },
+        { label: 'Share', primary: false, id: 'share' },
+      ];
+      const html =
+        typeof gameResultHtml === 'function'
+          ? gameResultHtml({
+              gameId: pbId,
+              glyph: ending.won ? '✓' : '·',
+              title: resultTitle(ending.won, death),
+              subtitle,
+              vsBest: vsBest || undefined,
+              hideStats: true,
+              challenge: false,
+              actions,
+            })
+          : `<p>${esc(subtitle)}</p>`;
+      shell.body.innerHTML = html;
+      if (typeof wireGameResultActions === 'function') {
+        wireGameResultActions(shell.body, {
+          again: () => {
+            shell.close('again');
+            openPatang({ mode: playMode });
+          },
+          modes: () => {
+            shell.close('modes');
+            openPatangModeSheet();
+          },
+          share: () => {
+            if (typeof openUnifiedShareSheet === 'function') {
+              openUnifiedShareSheet({
+                gameId: 'patangbaazi',
+                stats: {
+                  scoreLine: modeLabel + ' · ' + cuts + ' cuts · ' + secs + 's',
+                  text: shareText,
+                },
+              });
+            }
+          },
+        });
+      }
     }
 
     function beginWaveClear(detail) {
@@ -1015,13 +1185,16 @@
       if (opp) opp.alive = false;
       waveClear = { t: 0, why: detail || 'You cut their manjha!', fallKite: opp };
       resetAbrasion();
-      if (typeof gameFeedback === 'function') gameFeedback('win');
+      if (typeof gameFeedback === 'function') {
+        if (isFestival) gameFeedback('select');
+        else if (stats.cuts < WAVES_TO_WIN) gameFeedback('win');
+      }
     }
 
     function spawnNextWave() {
-      if (stats.cuts >= WAVES_TO_WIN) {
+      if (!isFestival && stats.cuts >= WAVES_TO_WIN) {
         waveClear = null;
-        end(true, 'Sky cleared — hunters down!', null);
+        end(true, 'String cut! Hunters down.', null);
         return;
       }
       opp = makeRival(stats.cuts);
@@ -1567,15 +1740,19 @@
       ctx.fillStyle = 'rgba(255,255,255,.55)';
       ctx.font = '11px "Space Grotesk",sans-serif';
       ctx.fillText(gust > 0.12 ? 'Wind · gust' : 'Wind · steady', 12, 18);
-      const waveLabel = stats.cuts + '/' + WAVES_TO_WIN + ' cuts';
-      ctx.fillText(waveLabel, 12, 34);
+      if (isFestival) {
+        const threat = Math.min(5, 1 + stats.cuts);
+        ctx.fillText(Math.floor(stats.aliveSec) + 's · ' + stats.cuts + ' cuts · heat ' + threat, 12, 34);
+      } else {
+        ctx.fillText(stats.cuts + '/' + WAVES_TO_WIN + ' cuts', 12, 34);
+      }
       if (opp && opp.ai && t >= TEACH_SEC) {
         ctx.fillStyle = 'rgba(255,255,255,.4)';
-        ctx.fillText(opp.label + ' · ' + opp.ai.state, 12, 50);
+        ctx.fillText((opp.label || 'Hunter') + ' · ' + opp.ai.state, 12, 50);
       }
       if (abrasion.active) {
         ctx.fillStyle = 'rgba(255,236,179,.75)';
-        ctx.fillText('Cut in progress', 12, 66);
+        ctx.fillText('Sawing', 12, 66);
       }
     }
 
@@ -1620,7 +1797,11 @@
           fk.tension = Math.max(0, fk.tension - dt);
         }
         if (hint) {
-          hint.textContent = waveClear.why + (stats.cuts < WAVES_TO_WIN ? ' — next hunter incoming' : ' — sky clearing');
+          const more =
+            isFestival || stats.cuts < WAVES_TO_WIN
+              ? ' — next hunter incoming'
+              : ' — sky clearing';
+          hint.textContent = waveClear.why + more;
           hint.classList.remove('is-warn');
         }
         drawSky();
@@ -1632,7 +1813,11 @@
         drawKite(you);
         ctx.fillStyle = 'rgba(255,255,255,.55)';
         ctx.font = '11px "Space Grotesk",sans-serif';
-        ctx.fillText(stats.cuts + '/' + WAVES_TO_WIN + ' cuts', 12, 18);
+        if (isFestival) {
+          ctx.fillText(Math.floor(stats.aliveSec) + 's · ' + stats.cuts + ' cuts', 12, 18);
+        } else {
+          ctx.fillText(stats.cuts + '/' + WAVES_TO_WIN + ' cuts', 12, 18);
+        }
         if (waveClear.t > 0.95) spawnNextWave();
         raf = requestAnimationFrame(loop);
         return;
@@ -1776,7 +1961,7 @@
     registerGame({
       id: 'patangbaazi',
       name: 'Patang Baazi',
-      desc: 'Practice · hunter sky & manjha cuts',
+      desc: 'Practice · climb, cut, survive',
       icon: '🪁',
       gameType: 'solo',
       genre: 'arcade',
@@ -1785,7 +1970,19 @@
       dangal: true,
       chat1v1: true,
       order: 25,
-      launch: openPatang,
+      launch(ctx) {
+        try {
+          const o = ctx && typeof ctx === 'object' ? ctx : {};
+          if (o.mode === 'duel' || o.mode === 'festival') {
+            openPatang({ mode: o.mode });
+            return;
+          }
+          openPatangModeSheet();
+        } catch (err) {
+          console.error('[patangbaazi] launch failed', err);
+          openPatang({ mode: 'duel' });
+        }
+      },
     });
   }
 
@@ -1794,5 +1991,10 @@
   window.openPickleball = (ctx) => openRallySport(Object.assign({}, RALLIES[2], { chat: ctx }));
   window.openTennis = (ctx) => openRallySport(Object.assign({}, RALLIES[3], { chat: ctx }));
   window.openKabaddi = openKabaddi;
-  window.openPatangBaazi = openPatang;
+  window.openPatangBaazi = (ctx) => {
+    const o = ctx && typeof ctx === 'object' ? ctx : {};
+    if (o.mode === 'duel' || o.mode === 'festival') openPatang({ mode: o.mode });
+    else openPatangModeSheet();
+  };
+  window.openPatangModeSheet = openPatangModeSheet;
 })();

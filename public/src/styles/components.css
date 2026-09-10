@@ -2428,6 +2428,26 @@ html.theme-dark .lehar-empty{color:#fff;}
 .pc-cue canvas,
 .cs-patang .cs-rally-hint.is-warn{color:#FFD180;font-weight:700;}
 .cs-patang canvas{background:transparent;}
+.cs-patang-pick{
+  position:absolute;inset:0;z-index:100;display:flex;align-items:flex-end;justify-content:center;
+  background:rgba(0,10,20,.55);backdrop-filter:blur(3px);
+}
+.cs-patang-pick-card{
+  width:100%;max-width:420px;background:#fff;border-radius:24px 24px 0 0;padding:20px 18px 16px;
+  font-family:"Space Grotesk",sans-serif;color:#1a1a2e;
+}
+.cs-patang-pick-title{font-weight:800;font-size:18px;margin-bottom:4px;}
+.cs-patang-pick-sub{font-size:13px;color:#666;margin-bottom:14px;line-height:1.4;}
+.cs-patang-pick-btn{
+  width:100%;text-align:left;padding:14px;margin-bottom:8px;border-radius:14px;
+  border:2px solid #e5e5e5;background:#f7f4ef;color:#1a1a2e;cursor:pointer;
+}
+.cs-patang-pick-btn.is-last{border-color:#FF6D00;background:#fff8f0;}
+.cs-patang-pick-name{display:block;font-weight:800;font-size:15px;}
+.cs-patang-pick-desc{display:block;font-size:12px;opacity:.75;margin-top:2px;}
+.cs-patang-pick-cancel{
+  width:100%;padding:12px;background:none;border:none;color:#666;font-size:14px;cursor:pointer;
+}
 .game-pause-scrim {
   position: absolute;
   inset: 0;
