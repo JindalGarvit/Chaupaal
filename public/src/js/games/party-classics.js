@@ -7830,6 +7830,7 @@
    * Starter: prefer seat that holds any 7; if both, player A / host; if neither (impossible with full deal), random.
    * Stuck (Prompt 2): consecutive passes ≥ active seats (2p) → fewest cards wins; equal count = draw.
    * Must play if able — Pass only when zero legal cards.
+   * Live privacy (Prompt 4): host deal via handFor; mid-hand wire = table + counts + lastPlay/pass only — never residual hands.
    */
   function emptySatteTable() {
     const t = {};
@@ -7997,10 +7998,33 @@
     const ACTIVE_SEATS = 2;
     let aiTimer = 0;
     let coachShown = false;
+    // Live stakes: settle ONCE on over/forfeit (virtual chips — not real money).
+    const liveStake = liveOn
+      ? Number(
+          (chat && chat.stake) ||
+            (window.__dangalLaunchCtx && window.__dangalLaunchCtx.stake) ||
+            0
+        ) || 0
+      : 0;
+    const settleMatchId = liveOn ? String(matchIdFor(chat, 'sattepe') || '').trim() : '';
+    let settleOppUid = '';
+    let settleDone = false;
+    let resultReported = false;
+    let seq = 0;
+    let dealtLive = false;
+    let lastPlay = null;
+    let lastAction = null;
+    let countA = 0;
+    let countB = 0;
+
     const shell = openShell({
       id: 'sattepe',
       title: 'Satte pe Satta',
-      subtitle: liveOn ? liveSub() : practiceSub('Chain AI · must play if able'),
+      subtitle: liveOn
+        ? liveSub() +
+          (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') +
+          ' · Seven chains'
+        : practiceSub('Chain AI · must play if able'),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
@@ -8025,6 +8049,13 @@
     /** Consecutive passes with no play; reset on successful play. Stuck at >= ACTIVE_SEATS. */
     let passesInRow = 0;
 
+    function isHost() {
+      return !!(liveRoles && liveRoles.host);
+    }
+    function iAmA() {
+      return !liveOn || !liveRoles || liveRoles.me === liveRoles.playerA;
+    }
+
     function dealFresh() {
       const deck = makeDeck(rng);
       handA = deck.splice(0, 26);
@@ -8033,10 +8064,18 @@
       ended = false;
       passesInRow = 0;
       coachShown = false;
+      countA = handA.length;
+      countB = handB.length;
+      lastPlay = null;
+      lastAction = null;
+      seq = 0;
+      dealtLive = false;
+      settleDone = false;
+      resultReported = false;
     }
 
     function seatHasSeven(hand) {
-      return (hand || []).some((c) => c && c.r === '7');
+      return (hand || []).some((c) => c && c.r === '7' && c.r !== '?');
     }
 
     /** Prefer any seat with a 7; both → A; none → random. */
@@ -8051,19 +8090,41 @@
 
     function myHand() {
       if (!liveOn || !liveRoles) return handA;
-      return liveRoles.me === liveRoles.playerA ? handA : handB;
+      return iAmA() ? handA : handB;
     }
     function setMyHand(h) {
       if (!liveOn || !liveRoles) {
         handA = h;
         return;
       }
-      if (liveRoles.me === liveRoles.playerA) handA = h;
+      if (iAmA()) handA = h;
       else handB = h;
     }
     function oppHand() {
+      // Practice only — Live uses oppCount() (masked / no faces)
       if (!liveOn || !liveRoles) return handB;
-      return liveRoles.me === liveRoles.playerA ? handB : handA;
+      return iAmA() ? handB : handA;
+    }
+    function oppCount() {
+      if (!liveOn || !liveRoles) return handB.length;
+      return iAmA() ? countB : countA;
+    }
+    function syncMyCount() {
+      const n = myHand().filter((c) => c && c.r !== '?').length;
+      if (!liveOn || !liveRoles) {
+        countA = handA.length;
+        countB = handB.length;
+        return;
+      }
+      if (iAmA()) countA = n;
+      else countB = n;
+    }
+    function maskOppFaces(n) {
+      const count = Math.max(0, n | 0);
+      const masked = [];
+      for (let i = 0; i < count; i++) masked.push({ r: '?', s: '?', id: 'hid' + i });
+      if (iAmA()) handB = masked;
+      else handA = masked;
     }
 
     function canPlay(c) {
@@ -8128,28 +8189,173 @@
       );
     }
 
-    function pushState(extra) {
-      if (!liveOn || !liveHandle || !liveRoles || applying) return;
+    /** Public mid-hand — never opp/own residual hand faces. Laid pile cards are public. */
+    function publicState() {
+      return {
+        table: cloneSatteTable(table),
+        counts: { A: countA | 0, B: countB | 0 },
+        passesInRow: passesInRow | 0,
+        lastPlay: lastPlay
+          ? { seat: lastPlay.seat, r: lastPlay.r, s: lastPlay.s, id: lastPlay.id }
+          : null,
+        lastAction: lastAction,
+        seq,
+      };
+    }
+
+    function pushPublic(extra) {
+      if (!liveOn || !liveHandle || !liveRoles || applying || ended) return;
+      seq += 1;
+      const st = publicState();
+      st.seq = seq;
       liveHandle.push(
         Object.assign(
           {
             status: 'playing',
             turn: myTurn ? liveRoles.me : liveRoles.opp,
-            state: {
-              handA,
-              handB,
-              table: cloneSatteTable(table),
-              passesInRow,
-            },
+            state: st,
           },
           extra || {}
         )
       );
     }
 
+    function applyPublic(st) {
+      if (!st) return;
+      if (st.table) table = cloneSatteTable(st.table);
+      if (st.counts) {
+        if (st.counts.A != null) countA = st.counts.A | 0;
+        if (st.counts.B != null) countB = st.counts.B | 0;
+      }
+      if (st.passesInRow != null) passesInRow = st.passesInRow | 0;
+      if (st.lastPlay !== undefined) lastPlay = st.lastPlay;
+      if (st.lastAction !== undefined) lastAction = st.lastAction;
+      if (st.seq != null) seq = Math.max(seq, Number(st.seq) || 0);
+      // Keep opp seat as backs matching public count
+      if (liveOn) maskOppFaces(oppCount());
+    }
+
+    /**
+     * Host deals: guest gets handFor private payload; host keeps own hand,
+     * masks opp faces, tracks counts only for the other seat mid-hand.
+     */
+    function publishPrivateDeal(starterUid) {
+      if (!liveOn || !liveHandle || !liveRoles || !isHost()) return;
+      const guestUid = liveRoles.opp;
+      const guestHand = (iAmA() ? handB : handA).map((c) => ({ r: c.r, s: c.s, id: c.id }));
+      // Drop guest faces from host memory mid-hand (counts remain)
+      maskOppFaces(26);
+      countA = 26;
+      countB = 26;
+      dealtLive = true;
+      seq += 1;
+      myTurn = liveRoles.me === starterUid;
+      lastPlay = null;
+      lastAction = 'deal';
+      liveHandle.push({
+        status: 'playing',
+        turn: starterUid,
+        act: 'deal',
+        handFor: guestUid,
+        hand: guestHand,
+        state: Object.assign(publicState(), { seq }),
+      });
+    }
+
+    function freshRematch() {
+      try {
+        const mid =
+          typeof dangalMatchId === 'function'
+            ? dangalMatchId('sattepe', chat)
+            : 'sattepe_' + Date.now();
+        if (window.__dangalLaunchCtx) {
+          window.__dangalLaunchCtx = Object.assign({}, window.__dangalLaunchCtx, {
+            matchId: mid,
+            gameId: 'sattepe',
+            gameType: 'sattepe',
+          });
+        }
+        if (chat) chat.dangalMatchId = mid;
+      } catch (e) {}
+      openSatte(chat);
+    }
+
     function clearTimers() {
       if (aiTimer) clearTimeout(aiTimer);
       aiTimer = 0;
+    }
+
+    async function settleSatteOnce(won, isDraw) {
+      if (!liveOn || settleDone) return null;
+      if (!settleMatchId || liveStake <= 0) {
+        settleDone = true;
+        return null;
+      }
+      if (!window.DangalEconomy || typeof DangalEconomy.reportGameEnd !== 'function') {
+        settleDone = true;
+        return null;
+      }
+      settleDone = true;
+      try {
+        const me = typeof getCurrentUid === 'function' ? getCurrentUid() : '';
+        const opp = settleOppUid || (liveRoles && liveRoles.opp) || '';
+        return await DangalEconomy.reportGameEnd({
+          gameType: 'sattepe',
+          result: isDraw ? 'draw' : won ? 'win' : 'loss',
+          won: !!won && !isDraw,
+          isDraw: !!isDraw,
+          matchId: settleMatchId,
+          sessionId: settleMatchId,
+          opponentUid: opp,
+          stake: liveStake,
+          winnerUid: isDraw ? null : won ? me : opp,
+        });
+      } catch (e) {
+        settleDone = false;
+        return null;
+      }
+    }
+
+    function reportSatteResult(won, path, isDraw) {
+      if (resultReported) return;
+      resultReported = true;
+      if (typeof recordGameResult === 'function') {
+        try {
+          recordGameResult('sattepe', !!won && !isDraw, !!isDraw, {
+            live: !!liveOn,
+            stake: liveStake,
+            mode: liveOn ? 'live' : 'practice',
+            path: path || '',
+          });
+        } catch (e) {}
+      }
+    }
+
+    function finishSheet(spec) {
+      const s = spec || {};
+      if (liveRoles && liveRoles.opp) settleOppUid = liveRoles.opp;
+      reportSatteResult(!!s.won, s.path || s.subtitle, !!s.draw);
+      settleSatteOnce(!!s.won, !!s.draw).then((settle) => {
+        let sub = s.subtitle || '';
+        if (liveOn && liveStake > 0) {
+          const cd = settle && settle.chipDelta != null ? Number(settle.chipDelta) : null;
+          sub +=
+            (sub ? ' · ' : '') +
+            (Number.isFinite(cd) && cd !== 0
+              ? 'Stake ' + (cd > 0 ? '+' : '') + cd + ' virtual'
+              : 'Virtual stakes · not real money');
+        }
+        showDuelResult(shell, {
+          id: 'sattepe',
+          you: s.draw ? 1 : s.won ? 1 : 0,
+          opp: s.draw ? 1 : s.won ? 0 : 1,
+          glyph: '7️⃣',
+          title: s.title,
+          subtitle: sub,
+          shareText: s.shareText || 'Satte pe Satta on Chaupaal · seven chains (virtual)',
+          onAgain: freshRematch,
+        });
+      });
     }
 
     /** Empty-hand win — instant; beats stuck. */
@@ -8158,74 +8364,84 @@
       ended = true;
       clearTimers();
       const o = opts || {};
+      syncMyCount();
       if (liveOn && liveHandle && liveRoles && !o.skipLivePush) {
         liveHandle.push({
           status: 'over',
           winner: youWin ? liveRoles.me : liveRoles.opp,
-          state: {
-            handA,
-            handB,
-            table: cloneSatteTable(table),
+          state: Object.assign(publicState(), {
             reason: 'wentOut',
             passesInRow: 0,
-          },
+            // Optional end reveal: only own hand faces (never required mid-hand)
+            revealHand: myHand()
+              .filter((c) => c.r !== '?')
+              .map((c) => ({ r: c.r, s: c.s, id: c.id })),
+            revealSeat: liveRoles.me,
+          }),
         });
       }
-      showDuelResult(shell, {
-        id: 'sattepe',
-        you: youWin ? 1 : 0,
-        opp: youWin ? 0 : 1,
-        glyph: '7️⃣',
+      finishSheet({
+        won: youWin,
+        draw: false,
         title: youWin ? 'You win' : 'Opponent wins',
         subtitle: o.subtitle || (youWin ? 'Went out!' : 'Opponent went out'),
-        shareText: 'Satte pe Satta on Chaupaal · went out',
-        onAgain: () => openSatte(chat),
+        shareText: 'Satte pe Satta on Chaupaal · went out · seven chains',
+        path: 'wentOut',
       });
     }
 
     /**
      * Stuck end: both seats passed back-to-back (2p).
      * Tie-break: fewest cards wins; equal remaining cards → draw.
+     * Uses public counts on Live (no opp faces).
      */
     function endStuck(opts) {
       if (ended) return;
       ended = true;
       clearTimers();
       const o = opts || {};
-      const youN = myHand().length;
-      const oppN = oppHand().length;
+      syncMyCount();
+      const youN = liveOn ? (iAmA() ? countA : countB) : myHand().length;
+      const oppN = liveOn ? oppCount() : handB.length;
       const isDraw = youN === oppN;
       const youWin = youN < oppN;
       if (liveOn && liveHandle && liveRoles && !o.skipLivePush) {
         liveHandle.push({
           status: 'over',
           winner: isDraw ? null : youWin ? liveRoles.me : liveRoles.opp,
-          state: {
-            handA,
-            handB,
-            table: cloneSatteTable(table),
+          state: Object.assign(publicState(), {
             reason: 'stuck',
             stuck: true,
             draw: isDraw,
             cardsYou: youN,
             cardsOpp: oppN,
-            cardsA: handA.length,
-            cardsB: handB.length,
-            passesInRow,
-          },
+            cardsA: countA,
+            cardsB: countB,
+          }),
         });
       }
-      showDuelResult(shell, {
-        id: 'sattepe',
-        you: isDraw ? 1 : youWin ? 1 : 0,
-        opp: isDraw ? 1 : youWin ? 0 : 1,
-        glyph: '7️⃣',
+      finishSheet({
+        won: youWin,
+        draw: isDraw,
         title: isDraw ? 'Draw' : youWin ? 'You win' : 'Opponent wins',
-        subtitle:
-          'Table locked — fewest cards wins · You ' + youN + ' · Opp ' + oppN,
+        subtitle: 'Table locked — fewest cards wins · You ' + youN + ' · Opp ' + oppN,
         shareText:
           'Satte pe Satta on Chaupaal · stuck ' + youN + '–' + oppN + (isDraw ? ' draw' : ''),
-        onAgain: () => openSatte(chat),
+        path: 'stuck',
+      });
+    }
+
+    function endForfeit(youWin) {
+      if (ended) return;
+      ended = true;
+      clearTimers();
+      finishSheet({
+        won: youWin,
+        draw: false,
+        title: youWin ? 'Opponent left' : 'You forfeited',
+        subtitle: 'Forfeit',
+        shareText: 'Satte pe Satta on Chaupaal · forfeit',
+        path: 'forfeit',
       });
     }
 
@@ -8233,20 +8449,22 @@
       const o = opts || {};
       if (ended) return;
       if (!o.fromRemote && !myTurn) return;
-      // Must play if able — block voluntary pass
-      if (!o.fromRemote && myHand().some(canPlay)) {
+      if (!o.fromRemote && myHand().filter((c) => c.r !== '?').some(canPlay)) {
         buzz('invalid');
         if (typeof showToast === 'function') showToast('You have a legal card — must play');
         return;
       }
       if (!o.fromRemote) {
         passesInRow += 1;
+        lastAction = 'pass';
+        lastPlay = null;
+        syncMyCount();
       } else if (o.passesInRow != null) {
         passesInRow = o.passesInRow | 0;
       }
       buzz('card');
       if (passesInRow >= ACTIVE_SEATS) {
-        endStuck({ skipLivePush: !!o.fromRemote && o.skipEndPush });
+        endStuck({ skipLivePush: !!o.fromRemote });
         return;
       }
       if (o.fromRemote) {
@@ -8256,11 +8474,12 @@
       }
       myTurn = false;
       if (liveOn) {
-        pushState({
+        pushPublic({
           turn: liveRoles.opp,
           act: 'pass',
           type: 'pass',
           by: liveRoles.me,
+          lastAction: 'pass',
         });
         paint('No moves — passed.');
         return;
@@ -8272,13 +8491,12 @@
     function scheduleAi() {
       if (liveOn || ended) return;
       if (aiTimer) clearTimeout(aiTimer);
-      // Deliberate think delay — AI never on the Live wire
       paint(ended ? undefined : 'Thinking…');
       const delay = 400 + Math.floor(rng() * 500);
       aiTimer = setTimeout(() => {
         aiTimer = 0;
         if (ended || !shell.alive()) return;
-        if (myTurn) return; // human seat — do not double-act
+        if (myTurn) return;
         aiPlayOnce();
       }, delay);
     }
@@ -8294,8 +8512,8 @@
       });
       if (!pick) {
         applying = false;
-        // Honest Pass — same Prompt 2 counter / stuck path
         passesInRow += 1;
+        lastAction = 'pass';
         if (passesInRow >= ACTIVE_SEATS) {
           endStuck();
           return;
@@ -8306,8 +8524,8 @@
       }
       if (!satteCanPlayOn(table, pick)) {
         applying = false;
-        // Safety: never soft-cheat; treat as pass
         passesInRow += 1;
+        lastAction = 'pass';
         if (passesInRow >= ACTIVE_SEATS) {
           endStuck();
           return;
@@ -8325,7 +8543,11 @@
       }
       handB.splice(ix, 1);
       apply(pick);
+      countB = handB.length;
+      countA = handA.length;
       passesInRow = 0;
+      lastAction = 'play';
+      lastPlay = { seat: 'B', r: pick.r, s: pick.s, id: pick.id };
       applying = false;
       buzz('card');
       if (!handB.length) {
@@ -8338,7 +8560,7 @@
 
     function paint(msg) {
       if (ended || !shell.alive()) return;
-      const you = myHand();
+      const you = myHand().filter((c) => c && c.r !== '?');
       const legalIds = {};
       you.forEach((c) => {
         if (canPlay(c)) legalIds[c.id] = true;
@@ -8353,7 +8575,7 @@
         else if (!coachShown) {
           coachShown = true;
           hint = liveOn
-            ? 'If you can’t extend a chain, Pass. If everyone passes, fewest cards wins.'
+            ? 'Build off sevens · must play if able · Pass when stuck · Live hides hands.'
             : 'AI dumps runway chains and holds naked opens — Pass when you’re stuck.';
         } else hint = 'Open with a seven, then build up or down. Must play if able.';
       }
@@ -8366,6 +8588,12 @@
           return html;
         })
         .join('');
+
+      const lastLine = lastPlay
+        ? 'Last: ' + lastPlay.r + lastPlay.s
+        : lastAction === 'pass'
+          ? 'Last: Pass'
+          : '';
 
       shell.body.innerHTML =
         '<div class="pc-satte">' +
@@ -8385,11 +8613,12 @@
         '<span class="pc-hint" style="width:100%;text-align:center;font-size:12px;opacity:.8">You ' +
         you.length +
         ' · Opp ' +
-        oppHand().length +
+        oppCount() +
         ' · Passes ' +
         passesInRow +
         '/' +
         ACTIVE_SEATS +
+        (lastLine ? ' · ' + lastLine : '') +
         ' · Ace high</span>' +
         '</div>' +
         '</div>';
@@ -8411,7 +8640,9 @@
             buzz('invalid');
             return;
           }
-          const hand = myHand().slice();
+          const hand = myHand()
+            .filter((c) => c.r !== '?')
+            .slice();
           const c = hand.find((x) => x.id === btn.dataset.cid);
           if (!c || !canPlay(c)) {
             buzz('invalid');
@@ -8421,6 +8652,14 @@
           setMyHand(hand);
           apply(c);
           passesInRow = 0;
+          lastAction = 'play';
+          lastPlay = {
+            seat: liveRoles ? liveRoles.me : 'A',
+            r: c.r,
+            s: c.s,
+            id: c.id,
+          };
+          syncMyCount();
           buzz('card');
           if (!hand.length) {
             endWin(true);
@@ -8428,16 +8667,24 @@
           }
           if (liveOn) {
             myTurn = false;
-            pushState({
+            pushPublic({
               turn: liveRoles.opp,
               act: 'play',
               type: 'play',
               by: liveRoles.me,
               card: { r: c.r, s: c.s, id: c.id },
+              lastAction: 'play',
             });
+            if (typeof DangalLive !== 'undefined' && DangalLive.pingTurn) {
+              DangalLive.pingTurn(liveRoles.opp, 'sattepe', {
+                chatId: chat && (chat.firestoreId || chat.id),
+              });
+            }
             paint('Played ' + c.r + c.s);
             return;
           }
+          countA = handA.length;
+          countB = handB.length;
           myTurn = false;
           paint('Played ' + c.r + c.s);
           scheduleAi();
@@ -8445,85 +8692,169 @@
       });
     }
 
-    if (liveOn) {
-      const joined = joinLive(shell, chat, 'sattepe', (val) => {
-        if (!val || ended) return;
-        if (val.status === 'forfeit' || val.status === 'over') {
-          const st = val.state || {};
-          if (st.reason === 'stuck' || st.stuck) {
-            applying = true;
-            if (st.handA) handA = st.handA;
-            if (st.handB) handB = st.handB;
-            if (st.table) table = cloneSatteTable(st.table);
-            if (st.passesInRow != null) passesInRow = st.passesInRow | 0;
-            applying = false;
-            endStuck({ skipLivePush: true });
-            return;
-          }
-          const iWon = val.winner === liveRoles.me;
-          endWin(iWon, {
-            skipLivePush: true,
-            subtitle:
-              val.status === 'forfeit'
-                ? 'Forfeit'
-                : iWon
-                  ? 'Went out!'
-                  : 'Opponent went out',
-          });
+    function applyRemote(val) {
+      if (!val || ended) return;
+      const st = val.state || {};
+      const act = val.act || val.type;
+
+      if (val.status === 'forfeit') {
+        endForfeit(val.winner === liveRoles.me);
+        return;
+      }
+      if (val.status === 'over') {
+        applying = true;
+        applyPublic(st);
+        applying = false;
+        if (st.reason === 'stuck' || st.stuck) {
+          endStuck({ skipLivePush: true });
           return;
         }
-        const st = val.state || {};
-        const act = val.act || val.type;
-        // Stale pass / play from wrong seat
-        if ((act === 'pass' || act === 'play') && val.by) {
-          if (val.by === liveRoles.me) {
-            // Own echo — sync public counters only
-            applying = true;
-            if (st.passesInRow != null) passesInRow = st.passesInRow | 0;
-            if (st.table) table = cloneSatteTable(st.table);
-            if (st.handA) handA = st.handA;
-            if (st.handB) handB = st.handB;
-            myTurn = val.turn === liveRoles.me;
-            applying = false;
-            paint(act === 'pass' ? 'No moves — passed.' : undefined);
-            return;
-          }
-          // Opp action must arrive when it was their turn (turn field is next seat)
-          if (val.by !== liveRoles.opp) return;
-        }
+        const iWon = val.winner === liveRoles.me;
+        endWin(iWon, {
+          skipLivePush: true,
+          subtitle: iWon ? 'Went out!' : 'Opponent went out',
+        });
+        return;
+      }
+
+      // Private deal
+      if (act === 'deal') {
         applying = true;
-        if (st.handA) handA = st.handA;
-        if (st.handB) handB = st.handB;
-        if (st.table) table = cloneSatteTable(st.table);
-        if (st.passesInRow != null) passesInRow = st.passesInRow | 0;
+        if (val.handFor === liveRoles.me && Array.isArray(val.hand)) {
+          const mine = val.hand.map((c) => ({ r: c.r, s: c.s, id: c.id || c.r + c.s }));
+          setMyHand(mine);
+          dealtLive = true;
+          applyPublic(st);
+          maskOppFaces(oppCount());
+          myTurn = val.turn === liveRoles.me;
+          applying = false;
+          paint(
+            myTurn
+              ? 'Your break — open with a seven.'
+              : 'Opponent opens — suits start closed.'
+          );
+          return;
+        }
+        if (isHost() && dealtLive) {
+          applyPublic(st);
+          myTurn = val.turn === liveRoles.me;
+          applying = false;
+          paint(
+            myTurn
+              ? 'Your break — open with a seven.'
+              : 'Opponent opens — suits start closed.'
+          );
+          return;
+        }
+        applying = false;
+        return;
+      }
+
+      // Stale / wrong seat
+      if ((act === 'pass' || act === 'play') && val.by) {
+        if (val.by !== liveRoles.me && val.by !== liveRoles.opp) return;
+        if (val.by === liveRoles.me) {
+          // Own echo — public sync only; never re-apply hand faces from wire
+          applying = true;
+          applyPublic(st);
+          myTurn = val.turn === liveRoles.me;
+          applying = false;
+          paint(act === 'pass' ? 'No moves — passed.' : undefined);
+          return;
+        }
+      }
+
+      applying = true;
+
+      if (act === 'play' && val.by === liveRoles.opp && val.card) {
+        const card = { r: val.card.r, s: val.card.s, id: val.card.id || val.card.r + val.card.s };
+        if (!satteCanPlayOn(table, card)) {
+          applying = false;
+          return; // reject illegal / stale
+        }
+        satteApplyOn(table, card);
+        applyPublic(st);
+        // Prefer authoritative counts from state; fallback decrement
+        if (!st.counts) {
+          if (val.by === liveRoles.playerA) countA = Math.max(0, countA - 1);
+          else countB = Math.max(0, countB - 1);
+        }
+        maskOppFaces(oppCount());
+        passesInRow = st.passesInRow != null ? st.passesInRow | 0 : 0;
+        lastPlay = {
+          seat: val.by,
+          r: card.r,
+          s: card.s,
+          id: card.id,
+        };
+        lastAction = 'play';
         myTurn = val.turn === liveRoles.me;
         applying = false;
+        buzz('card');
+        paint('Opponent played ' + card.r + card.s);
+        return;
+      }
 
-        if (act === 'pass' && val.by === liveRoles.opp) {
-          // Opp already incremented in their push; check stuck
-          if (passesInRow >= ACTIVE_SEATS) {
-            endStuck({ skipLivePush: true });
-            return;
-          }
-          paint('Opponent passed — your turn.');
+      if (act === 'pass' && val.by === liveRoles.opp) {
+        applyPublic(st);
+        maskOppFaces(oppCount());
+        myTurn = true;
+        applying = false;
+        if (passesInRow >= ACTIVE_SEATS) {
+          endStuck({ skipLivePush: true });
           return;
         }
-        paint();
-      });
+        paint('Opponent passed — your turn.');
+        return;
+      }
+
+      // Generic public snap (no hand faces)
+      if (st.handA || st.handB) {
+        delete st.handA;
+        delete st.handB;
+      }
+      applyPublic(st);
+      myTurn = val.turn === liveRoles.me;
+      applying = false;
+      paint();
+    }
+
+    if (liveOn) {
+      const joined = joinLive(
+        shell,
+        chat,
+        'sattepe',
+        (val) => {
+          if (!val || ended) return;
+          applyRemote(val);
+        },
+        null,
+        {
+          stake: liveStake,
+          onForfeit(info, roles) {
+            if (ended) return;
+            if (roles && roles.opp) settleOppUid = roles.opp;
+            endForfeit(!!(info && info.winner === (roles && roles.me)));
+          },
+        }
+      );
       if (joined) {
         liveHandle = joined.handle;
         liveRoles = joined.roles;
+        if (liveRoles.opp) settleOppUid = liveRoles.opp;
         if (liveRoles.host) {
           dealFresh();
           const startA = pickStarterIsA();
           const starterUid = startA ? liveRoles.playerA : liveRoles.playerB;
-          myTurn = liveRoles.me === starterUid;
-          pushState({ turn: starterUid });
+          publishPrivateDeal(starterUid);
           paint(
-            myTurn ? 'Your break — open with a seven.' : 'Opponent opens — suits start closed.'
+            myTurn
+              ? 'Your break — open with a seven.'
+              : 'Opponent opens — suits start closed.'
           );
         } else {
-          shell.body.innerHTML = '<p class="pc-hint">Waiting for deal…</p>';
+          shell.body.innerHTML =
+            '<p class="pc-hint">Waiting for deal… · Live hands stay private</p>';
         }
       }
     } else {
@@ -8736,7 +9067,7 @@
       { id: 'rummy', name: 'Rummy', desc: 'Indian 13-card · jokers · points', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
       { id: 'teenpatti', name: 'Teen Patti', desc: 'Boot, chaal, side-show · virtual chips', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
       { id: 'bluff', name: 'Bluff', desc: 'Pile claims · call · empty hand', icon: '🎭', genre: 'party', launch: openBluff, order: 35 },
-      { id: 'sattepe', name: 'Satte pe Satta', desc: 'Seven chains · Practice chain AI', icon: '7️⃣', genre: 'party', launch: openSatte, order: 36 },
+      { id: 'sattepe', name: 'Satte pe Satta', desc: 'Seven chains · Live hands private', icon: '7️⃣', genre: 'party', launch: openSatte, order: 36 },
       { id: 'andarbaahar', name: 'Andar Bahar', desc: 'Pick a side', icon: '🃏', genre: 'party', launch: openAndarBahar, order: 37 },
     ];
     games.forEach((g) => {

@@ -190,9 +190,9 @@
       'Three lives · 0 lives loses · Live never shows honesty before Call',
     ],
     sattepe: [
-      'Deal all 52 — suits start closed until a seven opens them',
-      'Must play if able · Pass only with no legal card · stuck = fewest cards',
-      'Practice AI dumps runway chains and holds naked opens · Ace high',
+      'Deal all 52 — suits start closed until a seven opens the chain',
+      'Must play if able · Pass when stuck · table lock = fewest cards (tie draw)',
+      'Practice chain AI · Live hides hands · Ace high · virtual stakes only',
     ],
     andarbaahar: ['Joker sets the rank', 'Pick Andar or Bahar', 'First matching rank wins the side'],
     patangbaazi: [
