@@ -161,7 +161,7 @@
     });
   }
 
-  /** Street Cricket — Practice delivery cinema: flight ↔ hit window (Prompt 1/5). */
+  /** Street Cricket — Practice: flight cinema + bowler's bag (Prompt 2/5). */
   function openStreetCricket() {
     let runs = 0;
     let balls = 0;
@@ -173,16 +173,134 @@
     let lastOutcome = '';
     let deliveryStartedAt = 0;
     let deliveryMeta = null;
+    let overSeed = (Date.now() ^ (Math.random() * 0xffff)) >>> 0;
+    let lastDeliveryId = '';
+    let streakSame = 0;
+    let coachShown = false;
     const MAX_BALLS = 6;
     const MAX_WICKETS = 2;
-    // Prompt 1 delivery cinema — Prompt 2 can vary durationMs / zone
-    const DELIVERY = {
-      runupMs: 420,
-      flightMs: 1000,
-      zoneStart: 0.4,
-      zoneEnd: 0.68,
-      lateEnd: 0.94,
-      durationMs: 1420,
+    const COACH_KEY = 'chaupaal_sc_coach_v2';
+
+    // Prompt 2 bag — id/label/family/path ready for Prompt 3 shot×ball
+    const DELIVERY_TYPES = {
+      medium: {
+        id: 'medium',
+        label: 'Medium',
+        family: 'pace',
+        runupMs: 420,
+        flightMs: 1000,
+        zoneStart: 0.4,
+        zoneEnd: 0.68,
+        lateEnd: 0.94,
+        path: 'straight',
+        accent: '#81C784',
+        earlyOut: 0.4,
+        lateOut: 0.36,
+        perfectCatch: 0.08,
+        mistimeHint: 'Mistimed the ball',
+      },
+      quick: {
+        id: 'quick',
+        label: 'Quick',
+        family: 'pace',
+        runupMs: 260,
+        flightMs: 700,
+        zoneStart: 0.5,
+        zoneEnd: 0.64,
+        lateEnd: 0.9,
+        path: 'skiddy',
+        accent: '#EF5350',
+        earlyOut: 0.48,
+        lateOut: 0.5,
+        perfectCatch: 0.1,
+        mistimeHint: 'Beaten for pace',
+      },
+      flight: {
+        id: 'flight',
+        label: 'Flight',
+        family: 'length',
+        runupMs: 560,
+        flightMs: 1280,
+        zoneStart: 0.5,
+        zoneEnd: 0.78,
+        lateEnd: 0.96,
+        path: 'loopy',
+        accent: '#42A5F5',
+        earlyOut: 0.36,
+        lateOut: 0.32,
+        perfectCatch: 0.07,
+        mistimeHint: 'Through the flight',
+      },
+      spin: {
+        id: 'spin',
+        label: 'Spin',
+        family: 'spin',
+        runupMs: 500,
+        flightMs: 1120,
+        zoneStart: 0.46,
+        zoneEnd: 0.72,
+        lateEnd: 0.95,
+        path: 'curve',
+        accent: '#AB47BC',
+        earlyOut: 0.44,
+        lateOut: 0.4,
+        perfectCatch: 0.09,
+        mistimeHint: 'Turned past the bat',
+      },
+    };
+
+    const cloneDelivery = (type) => {
+      const d = DELIVERY_TYPES[type] || DELIVERY_TYPES.medium;
+      return Object.assign({}, d, {
+        durationMs: d.runupMs + d.flightMs,
+      });
+    };
+
+    const mulberry32 = (a) => () => {
+      let t = (a += 0x6d2b79f5);
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+
+    /** Teachable bag: early medium/flight, later spice; avoid triple-same hard balls. */
+    const pickDelivery = () => {
+      const rnd = mulberry32(overSeed + balls * 97 + 13);
+      const r = rnd();
+      let pool;
+      if (balls <= 1) {
+        pool =
+          r < 0.55
+            ? ['medium', 'medium', 'flight']
+            : r < 0.85
+              ? ['medium', 'flight', 'spin']
+              : ['medium', 'quick', 'flight'];
+      } else if (balls <= 3) {
+        pool =
+          r < 0.35
+            ? ['medium', 'flight', 'spin']
+            : r < 0.7
+              ? ['quick', 'medium', 'flight']
+              : ['spin', 'flight', 'medium'];
+      } else {
+        pool =
+          r < 0.3
+            ? ['quick', 'spin', 'flight']
+            : r < 0.6
+              ? ['spin', 'quick', 'medium']
+              : ['flight', 'quick', 'spin'];
+      }
+      let id = pool[Math.floor(rnd() * pool.length)] || 'medium';
+      if (id === lastDeliveryId && streakSame >= 1 && (id === 'quick' || id === 'spin')) {
+        const soft = pool.find((x) => x === 'medium' || x === 'flight') || 'medium';
+        id = soft;
+      }
+      if (id === lastDeliveryId) streakSame += 1;
+      else {
+        lastDeliveryId = id;
+        streakSame = 1;
+      }
+      return cloneDelivery(id);
     };
 
     let deliveryRaf = null;
@@ -205,22 +323,45 @@
     });
     if (!body) return;
 
+    try {
+      coachShown = localStorage.getItem(COACH_KEY) === '1';
+    } catch (e) {
+      coachShown = false;
+    }
+
+    const cur = () => deliveryMeta || DELIVERY_TYPES.medium;
+
     const flightElapsed = () => {
       if (!deliveryStartedAt) return 0;
-      return Math.max(0, Date.now() - deliveryStartedAt - DELIVERY.runupMs);
+      return Math.max(0, Date.now() - deliveryStartedAt - cur().runupMs);
     };
 
     const flightProgress = () => {
       const e = flightElapsed();
+      const fm = cur().flightMs || 1000;
       if (e <= 0) return 0;
-      return Math.min(1, e / DELIVERY.flightMs);
+      return Math.min(1, e / fm);
     };
 
     const classifyTiming = (progress) => {
-      if (progress < DELIVERY.zoneStart) return 'early';
-      if (progress <= DELIVERY.zoneEnd) return 'perfect';
-      if (progress <= DELIVERY.lateEnd) return 'late';
+      const d = cur();
+      if (progress < d.zoneStart) return 'early';
+      if (progress <= d.zoneEnd) return 'perfect';
+      if (progress <= d.lateEnd) return 'late';
       return 'miss';
+    };
+
+    const applyPitchVars = (pitch, d) => {
+      if (!pitch || !d) return;
+      pitch.style.setProperty('--sc-runup-ms', d.runupMs + 'ms');
+      pitch.style.setProperty('--sc-flight-ms', d.flightMs + 'ms');
+      pitch.style.setProperty('--sc-zone-start', String(d.zoneStart));
+      pitch.style.setProperty('--sc-zone-end', String(d.zoneEnd));
+      pitch.style.setProperty('--sc-accent', d.accent || '#81C784');
+      pitch.dataset.delivery = d.id || 'medium';
+      pitch.dataset.path = d.path || 'straight';
+      pitch.classList.remove('is-del-medium', 'is-del-quick', 'is-del-flight', 'is-del-spin');
+      pitch.classList.add('is-del-' + (d.id || 'medium'));
     };
 
     const reset = () => {
@@ -232,19 +373,22 @@
       lastOutcome = '';
       deliveryStartedAt = 0;
       deliveryMeta = null;
+      overSeed = (Date.now() ^ (Math.random() * 0xffff)) >>> 0;
+      lastDeliveryId = '';
+      streakSame = 0;
       render();
     };
 
     const paintPitchState = () => {
       const pitch = body.querySelector('[data-rw-pitch]');
       if (!pitch) return;
+      const d = cur();
+      applyPitchVars(pitch, d);
       pitch.classList.toggle('is-runup', phase === 'runup' || phase === 'flight');
       pitch.classList.toggle('is-flight', phase === 'flight');
       const p = phase === 'flight' ? flightProgress() : 0;
-      const inZone = phase === 'flight' && p >= DELIVERY.zoneStart && p <= DELIVERY.zoneEnd;
+      const inZone = phase === 'flight' && p >= d.zoneStart && p <= d.zoneEnd;
       pitch.classList.toggle('is-window', inZone);
-      pitch.style.setProperty('--sc-runup-ms', DELIVERY.runupMs + 'ms');
-      pitch.style.setProperty('--sc-flight-ms', DELIVERY.flightMs + 'ms');
       const btn = body.querySelector('[data-rw-action]');
       if (btn) {
         const canBowl = phase === 'idle';
@@ -254,9 +398,15 @@
       }
       const hint = body.querySelector('[data-rw-hint]');
       if (hint) {
-        if (phase === 'idle') hint.textContent = lastOutcome || 'Tap Bowl — watch the ball, Hit as it reaches you.';
-        else if (phase === 'runup') hint.textContent = 'Run-up…';
-        else if (phase === 'flight') hint.textContent = inZone ? 'HIT — ball in the striking zone!' : 'Watch the flight…';
+        if (phase === 'idle') {
+          hint.textContent =
+            lastOutcome ||
+            (coachShown
+              ? 'Tap Bowl — read the arm, Hit in the striking zone.'
+              : 'Watch the arm — quick balls come on faster.');
+        } else if (phase === 'runup') hint.textContent = 'Run-up…';
+        else if (phase === 'flight')
+          hint.textContent = inZone ? 'HIT — ball in the striking zone!' : 'Watch the flight…';
         else if (phase === 'result') hint.textContent = lastOutcome;
       }
     };
@@ -281,12 +431,14 @@
         typeof getGamePB === 'function' && getGamePB('streetcricket') != null
           ? ` · Best ${getGamePB('streetcricket')}`
           : '';
+      const d = cur();
       body.innerHTML = `
         <div class="rw-sports-card rw-sc-card">
           <h2>Street Cricket</h2>
           <p class="rw-sports-score">${runs} runs · ${balls}/${MAX_BALLS} balls · ${wickets} out${pb}</p>
-          <div class="rw-sports-pitch rw-sc-pitch" data-rw-pitch
-            style="--sc-runup-ms:${DELIVERY.runupMs}ms;--sc-flight-ms:${DELIVERY.flightMs}ms;--sc-zone-start:${DELIVERY.zoneStart};--sc-zone-end:${DELIVERY.zoneEnd}">
+          <div class="rw-sports-pitch rw-sc-pitch is-del-${d.id || 'medium'}" data-rw-pitch
+            data-delivery="${d.id || 'medium'}" data-path="${d.path || 'straight'}"
+            style="--sc-runup-ms:${d.runupMs}ms;--sc-flight-ms:${d.flightMs}ms;--sc-zone-start:${d.zoneStart};--sc-zone-end:${d.zoneEnd};--sc-accent:${d.accent || '#81C784'}">
             <div class="rw-sc-lane" aria-hidden="true"></div>
             <div class="rw-sc-zone" aria-hidden="true"></div>
             <div class="rw-sc-bowler" aria-hidden="true"><span class="rw-sc-bowler-mark"></span></div>
@@ -320,71 +472,91 @@
       lastOutcome = outcome;
       phase = 'result';
       deliveryStartedAt = 0;
-      deliveryMeta = null;
       render();
       resultTimer = setTimeout(() => {
         resultTimer = null;
         if (phase !== 'result') return;
+        deliveryMeta = null;
         endIfNeeded();
         if (phase !== 'done') phase = 'idle';
         render();
-      }, 800);
+      }, 900);
     };
 
     const resolveHit = (timing) => {
       clearTimers();
+      const d = cur();
       const roll = Math.random();
-      // Timing is the hero — light spice only
+      const earlyOut = d.earlyOut != null ? d.earlyOut : 0.4;
+      const lateOut = d.lateOut != null ? d.lateOut : 0.36;
+      const catchP = d.perfectCatch != null ? d.perfectCatch : 0.08;
+
       if (timing === 'early') {
-        if (roll < 0.42) {
+        if (roll < earlyOut) {
           wickets += 1;
           balls += 1;
           if (typeof gameFeedback === 'function') gameFeedback('lose');
-          afterBall('Early — edged, Out!');
+          afterBall(
+            d.id === 'quick' ? 'Early vs Quick — edged, Out!' : `Early — edged, Out! (${d.label})`
+          );
           return;
         }
         const gained = roll < 0.75 ? 1 : 2;
         runs += gained;
         balls += 1;
         if (typeof gameFeedback === 'function') gameFeedback('bat');
-        afterBall(gained === 2 ? 'Early — scrambled 2' : 'Early — jabbed 1');
+        afterBall(
+          gained === 2
+            ? `Early vs ${d.label} — scrambled 2`
+            : `Early vs ${d.label} — jabbed 1`
+        );
         return;
       }
       if (timing === 'late') {
-        if (roll < 0.38) {
+        if (roll < lateOut) {
           wickets += 1;
           balls += 1;
           if (typeof gameFeedback === 'function') gameFeedback('lose');
-          afterBall('Late — bowled / Out!');
+          afterBall(
+            d.id === 'quick'
+              ? 'Beaten for pace — Out!'
+              : d.id === 'spin'
+                ? 'Late — spun past, Out!'
+                : `Late — bowled / Out! (${d.label})`
+          );
           return;
         }
         const gained = roll < 0.7 ? 1 : 2;
         runs += gained;
         balls += 1;
         if (typeof gameFeedback === 'function') gameFeedback('bat');
-        afterBall(gained === 2 ? 'Late — thick edge, 2' : 'Late — kept out, 1');
+        afterBall(
+          gained === 2
+            ? `Late vs ${d.label} — thick edge, 2`
+            : `Late vs ${d.label} — kept out, 1`
+        );
         return;
       }
       // perfect
       if (typeof gameFeedback === 'function') gameFeedback('bat');
-      if (roll < 0.08) {
+      if (roll < catchP) {
         wickets += 1;
         balls += 1;
         if (typeof gameFeedback === 'function') gameFeedback('lose');
-        afterBall('Perfect timing — but caught!');
+        afterBall(`Perfect vs ${d.label} — but caught!`);
         return;
       }
       let gained = 1;
-      let label = 'Perfect timing — 1 run';
+      let label = `Perfect vs ${d.label} — 1 run`;
       if (roll < 0.32) {
         gained = 6;
-        label = 'Perfect timing — SIX!';
+        label = `Perfect vs ${d.label} — SIX!`;
       } else if (roll < 0.62) {
         gained = 4;
-        label = 'Perfect timing — FOUR!';
+        label = `Perfect vs ${d.label} — FOUR!`;
       } else if (roll < 0.82) {
         gained = 2;
-        label = 'Perfect timing — 2 runs';
+        label = `Perfect vs ${d.label} — 2 runs`;
       }
       runs += gained;
       balls += 1;
@@ -396,7 +568,13 @@
       if (phase === 'idle') {
         lastOutcome = '';
         clearTimers();
-        deliveryMeta = Object.assign({}, DELIVERY);
+        if (!coachShown) {
+          coachShown = true;
+          try {
+            localStorage.setItem(COACH_KEY, '1');
+          } catch (e) {}
+        }
+        deliveryMeta = pickDelivery();
         deliveryStartedAt = Date.now();
         phase = 'runup';
         render();
@@ -404,12 +582,12 @@
         try {
           if (typeof window !== 'undefined') window.__scLastDelivery = deliveryMeta;
         } catch (e) {}
+        const d = cur();
         bowlTimer = setTimeout(() => {
           bowlTimer = null;
           if (phase !== 'runup') return;
           phase = 'flight';
           paintPitchState();
-          // Keep zone highlight in sync without full rebuild
           const tick = () => {
             if (phase !== 'flight') {
               deliveryRaf = null;
@@ -425,9 +603,10 @@
             wickets += 1;
             balls += 1;
             if (typeof gameFeedback === 'function') gameFeedback('lose');
-            afterBall('Out! Mistimed the ball');
-          }, DELIVERY.flightMs);
-        }, DELIVERY.runupMs);
+            const miss = cur();
+            afterBall(`Out! ${miss.mistimeHint || 'Mistimed the ball'}`);
+          }, d.flightMs);
+        }, d.runupMs);
         return;
       }
       if (phase === 'flight') {
@@ -438,7 +617,7 @@
           wickets += 1;
           balls += 1;
           if (typeof gameFeedback === 'function') gameFeedback('lose');
-          afterBall('Out! Mistimed the ball');
+          afterBall(`Out! ${cur().mistimeHint || 'Mistimed the ball'}`);
           return;
         }
         resolveHit(timing);
@@ -447,6 +626,7 @@
 
     render();
   }
+
 
   /** Gully Kick — 5 penalties; aim left/center/right vs keeper dive. */
   function openGullyKick() {
@@ -570,7 +750,7 @@
     registerGame({
       id: 'streetcricket',
       name: 'Street Cricket',
-      desc: 'Practice · six-ball innings',
+      desc: 'Practice · read the delivery',
       icon: '🏏',
       ratingKey: 'streetcricket',
       gameType: 'solo',

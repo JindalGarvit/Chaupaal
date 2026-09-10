@@ -3983,6 +3983,9 @@ select:focus-visible,
   background:#CFD8DC;transform:translateX(-50%);
 }
 .rw-sc-pitch.is-runup .rw-sc-bowler{transform:translateX(36px);}
+.rw-sc-pitch.is-del-quick.is-runup .rw-sc-bowler{transform:translateX(52px);}
+.rw-sc-pitch.is-del-flight.is-runup .rw-sc-bowler{transform:translateX(28px);}
+.rw-sc-pitch.is-del-spin.is-runup .rw-sc-bowler{transform:translateX(32px) rotate(-6deg);}
 .rw-sc-ball{
   position:absolute;left:12%;top:52%;width:16px;height:16px;margin-top:-8px;
   border-radius:50%;background:#F5F5F5;border:2px solid #455A64;
@@ -3993,14 +3996,57 @@ select:focus-visible,
   content:'';position:absolute;left:50%;top:2px;bottom:2px;width:2px;margin-left:-1px;
   background:rgba(198,40,40,.75);border-radius:1px;
 }
+.rw-sc-pitch.is-del-quick .rw-sc-ball{border-color:#C62828;}
+.rw-sc-pitch.is-del-flight .rw-sc-ball{border-color:#1565C0;}
+.rw-sc-pitch.is-del-spin .rw-sc-ball{border-color:#6A1B9A;}
 .rw-sc-pitch.is-flight .rw-sc-ball{
   opacity:1;
   animation:rw-sc-flight var(--sc-flight-ms,1000ms) linear forwards;
+}
+.rw-sc-pitch.is-del-quick.is-flight .rw-sc-ball{
+  animation-name:rw-sc-flight-skiddy;
+  animation-timing-function:cubic-bezier(.2,.05,.8,.95);
+}
+.rw-sc-pitch.is-del-flight.is-flight .rw-sc-ball{
+  animation-name:rw-sc-flight-loopy;
+  animation-timing-function:cubic-bezier(.35,.15,.45,1);
+}
+.rw-sc-pitch.is-del-spin.is-flight .rw-sc-ball{
+  animation-name:rw-sc-flight-curve;
+  animation-timing-function:cubic-bezier(.25,.2,.55,1);
 }
 @keyframes rw-sc-flight{
   0%{left:18%;top:48%;}
   55%{top:44%;}
   100%{left:76%;top:50%;}
+}
+@keyframes rw-sc-flight-skiddy{
+  0%{left:18%;top:52%;}
+  40%{top:50%;}
+  100%{left:78%;top:51%;}
+}
+@keyframes rw-sc-flight-loopy{
+  0%{left:16%;top:50%;}
+  45%{left:42%;top:28%;}
+  100%{left:74%;top:50%;}
+}
+@keyframes rw-sc-flight-curve{
+  0%{left:17%;top:48%;}
+  40%{left:40%;top:42%;}
+  70%{left:58%;top:46%;}
+  100%{left:76%;top:54%;transform:translateY(4px);}
+}
+.rw-sc-pitch.is-del-quick .rw-sc-zone{border-color:rgba(239,83,80,.35);}
+.rw-sc-pitch.is-del-flight .rw-sc-zone{border-color:rgba(66,165,245,.4);}
+.rw-sc-pitch.is-del-spin .rw-sc-zone{border-color:rgba(171,71,188,.4);}
+.rw-sc-pitch.is-window.is-del-quick .rw-sc-zone{
+  background:rgba(239,83,80,.28);border-color:rgba(255,205,210,.9);
+}
+.rw-sc-pitch.is-window.is-del-flight .rw-sc-zone{
+  background:rgba(66,165,245,.3);border-color:rgba(187,222,251,.95);
+}
+.rw-sc-pitch.is-window.is-del-spin .rw-sc-zone{
+  background:rgba(171,71,188,.28);border-color:rgba(225,190,231,.95);
 }
 .rw-sc-batter{
   position:absolute;right:11%;top:30%;width:26px;height:48px;z-index:1;
