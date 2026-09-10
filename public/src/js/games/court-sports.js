@@ -550,6 +550,17 @@
    * Zones (y: 0=anti top … 1=home bottom): anti ≤0.48 · mid 0.5 · own ≥0.52 · bonus line ~0.22 visual only.
    * TO_WIN=5 · PKL bonus/DoD/all-out = Prompt 3 · tackle AI = Prompt 2 · Live defense sync = Prompt 4.
    */
+  /**
+   * Kabaddi Prompt 1–2 — raid court + interactive defense/tackle.
+   * Control (raid): tap-to-move raider.
+   * Control (defend): select one living defender (focus), tap court to move them, Tackle when in range.
+   * Breath: starts on first mid-line cross (prep in own half free).
+   * Tackle: raider past mid / in anti, living defender within TACKLE_R for HOLD_NEED (shorter if 2+ in range).
+   * Authority: raider client (or local Practice sim) commits Home / breath / tackle / empty outcomes.
+   * Live: raidUid raids; other seat defends — no waiting-only screen.
+   * Zones (y: 0=anti top … 1=home bottom): anti ≤0.48 · mid 0.5 · own ≥0.52 · bonus ~0.22 visual.
+   * TO_WIN=5 · PKL bonus/DoD/all-out = Prompt 3 · stakes/rematch meta = Prompt 4.
+   */
   function openKabaddi() {
     const chat = resolveChat(arguments[0]);
     const liveOn = chatLiveOn(chat);
@@ -557,10 +568,15 @@
     let raidPaused = false;
     let activeRaf = 0;
     let coachShown = false;
+    let defCoachShown = false;
+    let syncAcc = 0;
+    let lastPushAt = 0;
     const shell = openShell({
       id: 'kabaddi',
       title: 'Kabaddi',
-      subtitle: liveOn ? liveSub() : practiceSub('Cross · tag · Home before breath dies'),
+      subtitle: liveOn
+        ? liveSub() + ' · Raid & defend'
+        : practiceSub('Raid · defend · tackle'),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
@@ -581,7 +597,6 @@
         host: shell.host || shell.overlay,
         pauseBtnId: 'csKabaddiPause',
         onPause() {
-          // Freeze breath + motion; keep RAF so resume continues cleanly
           raidPaused = true;
         },
         onResume() {
@@ -590,18 +605,31 @@
         onQuit: () => shell.close('dismissed'),
       });
     }
+
     const TO_WIN = 5;
     const BREATH_MS = 8000;
     const TOUCH_R = 0.09;
-    const MOVE_SPEED = 1.35; // court-fractions per second
+    const TACKLE_R = 0.12;
+    const HOLD_NEED = 0.32;
+    const HOLD_NEED_CHAIN = 0.18;
+    const MOVE_SPEED = 1.35;
+    const DEF_SPEED = 1.2;
+    const AI_RAID_SPEED = 1.1;
+    const SYNC_MS = 100;
+
     let you = 0;
     let opp = 0;
     let ended = false;
     let applying = false;
     let liveRoles = null;
     let liveHandle = null;
-    let myRaid = true;
+    let myRaid = true; // next/current local role: true = we are raider
     let eventSeq = 0;
+    let phase = 'between'; // between | raiding | resolving
+    /** @type {null | object} */
+    let activeRaid = null;
+    let remoteDefInput = null;
+    let lastAppliedOutcomeSeq = -1;
 
     function scoresForPush() {
       if (!liveRoles) return { a: you, b: opp };
@@ -622,14 +650,53 @@
     function crossedMid(y) {
       return y < 0.5;
     }
+    function dist2(ax, ay, bx, by) {
+      const dx = ax - bx;
+      const dy = ay - by;
+      return dx * dx + dy * dy;
+    }
 
     function defaultDefenders() {
       return [
-        { id: 0, x: 0.22, y: 0.16, alive: true },
-        { id: 1, x: 0.42, y: 0.28, alive: true },
-        { id: 2, x: 0.58, y: 0.28, alive: true },
-        { id: 3, x: 0.78, y: 0.16, alive: true },
+        { id: 0, x: 0.22, y: 0.16, tx: 0.22, ty: 0.16, alive: true },
+        { id: 1, x: 0.42, y: 0.28, tx: 0.42, ty: 0.28, alive: true },
+        { id: 2, x: 0.58, y: 0.28, tx: 0.58, ty: 0.28, alive: true },
+        { id: 3, x: 0.78, y: 0.16, tx: 0.78, ty: 0.16, alive: true },
       ];
+    }
+
+    function livingDefs(raid) {
+      return (raid.defenders || []).filter((d) => d.alive);
+    }
+
+    function nearestLiving(raid, x, y) {
+      let best = null;
+      let bestD = Infinity;
+      livingDefs(raid).forEach((d) => {
+        const d2 = dist2(d.x, d.y, x, y);
+        if (d2 < bestD) {
+          bestD = d2;
+          best = d;
+        }
+      });
+      return best;
+    }
+
+    function defsInTackleRange(raid) {
+      return livingDefs(raid).filter(
+        (d) => dist2(d.x, d.y, raid.rx, raid.ry) <= TACKLE_R * TACKLE_R
+      );
+    }
+
+    function canAttemptTackle(raid) {
+      if (!raid || raid.over) return false;
+      if (inOwnHalf(raid.ry)) return false;
+      if (!crossedMid(raid.ry) && !inAntiHalf(raid.ry)) return false;
+      return defsInTackleRange(raid).length > 0;
+    }
+
+    function holdNeedFor(raid) {
+      return defsInTackleRange(raid).length >= 2 ? HOLD_NEED_CHAIN : HOLD_NEED;
     }
 
     function publicRaidStub(raid) {
@@ -639,30 +706,264 @@
         raider: { x: +raid.rx.toFixed(3), y: +raid.ry.toFixed(3) },
         defenders: raid.defenders.map((d) => ({
           id: d.id,
-          x: d.x,
-          y: d.y,
+          x: +d.x.toFixed(3),
+          y: +d.y.toFixed(3),
           alive: !!d.alive,
         })),
         breathPct: Math.max(0, Math.min(1, raid.breath / BREATH_MS)),
         tagged: raid.tagged | 0,
         breathLive: !!raid.breathLive,
+        allOut: livingDefs(raid).length === 0,
+        hold: +(raid.holdAcc || 0).toFixed(3),
+        activeDef: raid.activeDef | 0,
       };
     }
 
-    function startRaid() {
-      if (!shell.alive() || ended) return;
-      if (liveOn && !myRaid) {
-        shell.body.innerHTML =
-          '<div class="cs-kabaddi">' +
-          '<div class="cs-rally-score">💪 <strong>' +
-          you +
-          '</strong> – <strong>' +
-          opp +
-          '</strong></div>' +
-          '<p class="cs-rally-msg">Opponent is raiding…</p>' +
-          '</div>';
+    function pushLive(extraState, extraTop) {
+      if (!liveOn || !liveHandle || !liveRoles || applying || ended) return;
+      const now = Date.now();
+      if (extraTop && extraTop.force) {
+        /* always */
+      } else if (now - lastPushAt < SYNC_MS && !(extraTop && extraTop.outcome)) {
         return;
       }
+      lastPushAt = now;
+      liveHandle.push(
+        Object.assign(
+          {
+            status: you >= TO_WIN || opp >= TO_WIN ? 'over' : 'playing',
+            winner:
+              you >= TO_WIN ? liveRoles.me : opp >= TO_WIN ? liveRoles.opp : null,
+            turn: myRaid ? liveRoles.me : liveRoles.opp,
+            state: Object.assign(
+              {
+                scores: scoresForPush(),
+                raidUid: myRaid ? liveRoles.me : liveRoles.opp,
+                eventSeq,
+                phase,
+                raid: activeRaid ? publicRaidStub(activeRaid) : null,
+              },
+              extraState || {}
+            ),
+          },
+          extraTop || {}
+        )
+      );
+    }
+
+    function moveToward(ent, tx, ty, speed, dt) {
+      const mdx = tx - ent.x;
+      const mdy = ty - ent.y;
+      const dist = Math.sqrt(mdx * mdx + mdy * mdy);
+      if (dist <= 0.004) return;
+      const step = Math.min(dist, speed * dt);
+      ent.x += (mdx / dist) * step;
+      ent.y += (mdy / dist) * step;
+      ent.x = Math.max(0.06, Math.min(0.94, ent.x));
+      ent.y = Math.max(0.06, Math.min(0.94, ent.y));
+    }
+
+    function tickTags(raid) {
+      raid.defenders.forEach((d) => {
+        if (!d.alive) return;
+        if (dist2(raid.rx, raid.ry, d.x, d.y) <= TOUCH_R * TOUCH_R) {
+          d.alive = false;
+          raid.tagged += 1;
+          buzz('kick');
+          raid.msg = 'Tagged ' + raid.tagged + ' — get Home!';
+          if (raid.activeDef === d.id) {
+            const next = livingDefs(raid)[0];
+            raid.activeDef = next ? next.id : 0;
+          }
+        }
+      });
+    }
+
+    function aiDefenseStep(raid, dt) {
+      const alive = livingDefs(raid);
+      if (!alive.length) return;
+      // Closest closes; others shade mid
+      let closer = alive[0];
+      let best = dist2(closer.x, closer.y, raid.rx, raid.ry);
+      alive.forEach((d) => {
+        const d2 = dist2(d.x, d.y, raid.rx, raid.ry);
+        if (d2 < best) {
+          best = d2;
+          closer = d;
+        }
+      });
+      closer.tx = raid.rx;
+      closer.ty = Math.min(0.46, raid.ry + 0.02);
+      alive.forEach((d) => {
+        if (d === closer) return;
+        d.tx = d.x * 0.85 + raid.rx * 0.15;
+        d.ty = Math.min(0.4, Math.max(0.12, d.y));
+      });
+      alive.forEach((d) => {
+        moveToward(d, d.tx, d.ty, DEF_SPEED * 0.92, dt);
+      });
+      // Auto-commit tackle when in window
+      if (canAttemptTackle(raid) && raid.breathLive) {
+        raid.holdAcc += dt;
+        if (raid.holdAcc >= holdNeedFor(raid)) {
+          raid.tackleArmed = true;
+        }
+      } else {
+        raid.holdAcc = Math.max(0, raid.holdAcc - dt * 1.5);
+      }
+    }
+
+    function aiRaidStep(raid, dt) {
+      const alive = livingDefs(raid);
+      // Plan: cross mid → tag nearest → Home
+      if (!raid.breathLive) {
+        raid.rtx = 0.5;
+        raid.rty = 0.42;
+      } else if (raid.tagged < 1 && alive.length) {
+        const t = nearestLiving(raid, raid.rx, raid.ry);
+        if (t) {
+          raid.rtx = t.x;
+          raid.rty = t.y;
+        }
+      } else if (raid.tagged < 2 && alive.length && raid.breath > BREATH_MS * 0.45) {
+        const t = nearestLiving(raid, raid.rx, raid.ry);
+        if (t && Math.random() < 0.55) {
+          raid.rtx = t.x;
+          raid.rty = t.y;
+        } else {
+          raid.rtx = 0.5;
+          raid.rty = 0.78;
+        }
+      } else {
+        raid.rtx = 0.5;
+        raid.rty = 0.82;
+      }
+      const mdx = raid.rtx - raid.rx;
+      const mdy = raid.rty - raid.ry;
+      const dist = Math.sqrt(mdx * mdx + mdy * mdy);
+      if (dist > 0.004) {
+        const step = Math.min(dist, AI_RAID_SPEED * dt);
+        raid.rx += (mdx / dist) * step;
+        raid.ry += (mdy / dist) * step;
+      }
+      // Auto Home when safe with tags or low breath
+      if (
+        inOwnHalf(raid.ry) &&
+        (raid.tagged > 0 || raid.breath < BREATH_MS * 0.22 || livingDefs(raid).length === 0)
+      ) {
+        raid.aiWantHome = true;
+      }
+    }
+
+    function applyRemoteDefInput(raid, input) {
+      if (!input || !raid) return;
+      if (input.activeDef != null) raid.activeDef = input.activeDef | 0;
+      if (input.defs && Array.isArray(input.defs)) {
+        input.defs.forEach((rd) => {
+          const d = raid.defenders.find((x) => x.id === rd.id);
+          if (!d || !d.alive) return;
+          if (rd.tx != null) d.tx = rd.tx;
+          if (rd.ty != null) d.ty = rd.ty;
+          // Soft snap if far desync
+          if (rd.x != null && Math.abs(d.x - rd.x) > 0.2) d.x = rd.x;
+          if (rd.y != null && Math.abs(d.y - rd.y) > 0.2) d.y = rd.y;
+        });
+      }
+      if (input.tackle) raid.tackleArmed = true;
+    }
+
+    function endRaid(raid, kind, endMsg, opts) {
+      const o = opts || {};
+      if (!raid || raid.over) return;
+      raid.over = true;
+      raid.phase = kind === 'home' ? 'home' : 'caught';
+      phase = 'resolving';
+      activeRaid = null;
+      if (activeRaf) {
+        cancelAnimationFrame(activeRaf);
+        activeRaf = 0;
+      }
+
+      const iRaid = !!raid.iAmRaider;
+      const pts = kind === 'home' ? raid.tagged | 0 : 0;
+      if (kind === 'home') {
+        if (pts > 0) {
+          if (iRaid) you += pts;
+          else opp += pts;
+          buzz('win', { noConfetti: true });
+        } else {
+          if (iRaid) opp += 1;
+          else you += 1;
+          buzz('lose', { noConfetti: true });
+        }
+      } else {
+        // breath | tackle
+        if (iRaid) opp += 1;
+        else you += 1;
+        buzz(kind === 'tackle' && !iRaid ? 'win' : 'lose', { noConfetti: true });
+      }
+
+      eventSeq += 1;
+      const outcome = {
+        seq: eventSeq,
+        kind,
+        msg: endMsg,
+        tagged: raid.tagged | 0,
+        allOut: livingDefs(raid).length === 0,
+      };
+
+      if (liveOn && liveHandle && liveRoles && !o.skipLivePush) {
+        // Flip raidUid to the other seat
+        const nextRaidUid = iRaid ? liveRoles.opp : liveRoles.me;
+        myRaid = nextRaidUid === liveRoles.me;
+        lastPushAt = 0;
+        liveHandle.push({
+          status: you >= TO_WIN || opp >= TO_WIN ? 'over' : 'playing',
+          winner: you >= TO_WIN ? liveRoles.me : opp >= TO_WIN ? liveRoles.opp : null,
+          turn: nextRaidUid,
+          state: {
+            scores: scoresForPush(),
+            raidUid: nextRaidUid,
+            eventSeq,
+            phase: 'between',
+            outcome,
+            raid: publicRaidStub(raid),
+            msg: endMsg,
+          },
+        });
+      } else if (!liveOn) {
+        myRaid = !iRaid; // flip for Practice
+      }
+
+      phase = 'between';
+      next(endMsg);
+    }
+
+    function applyOutcomeRemote(st) {
+      const oc = st && st.outcome;
+      if (!oc || oc.seq == null) return false;
+      if ((oc.seq | 0) <= lastAppliedOutcomeSeq) return true;
+      lastAppliedOutcomeSeq = oc.seq | 0;
+      if (st.scores) applyScores(st.scores);
+      if (st.eventSeq != null) eventSeq = Math.max(eventSeq, st.eventSeq | 0);
+      if (st.raidUid != null) myRaid = st.raidUid === liveRoles.me;
+      phase = 'between';
+      activeRaid = null;
+      if (activeRaf) {
+        cancelAnimationFrame(activeRaf);
+        activeRaf = 0;
+      }
+      next(oc.msg || st.msg || 'Raid over.');
+      return true;
+    }
+
+    /**
+     * @param {{ iAmRaider: boolean }} role
+     */
+    function startRaid(role) {
+      if (!shell.alive() || ended) return;
+      const iAmRaider = role && role.iAmRaider != null ? !!role.iAmRaider : !!myRaid;
+      myRaid = iAmRaider;
 
       if (activeRaf) {
         cancelAnimationFrame(activeRaf);
@@ -670,7 +971,8 @@
       }
 
       const raid = {
-        phase: 'prep', // prep | raiding | over
+        iAmRaider,
+        phase: 'prep',
         breath: BREATH_MS,
         breathLive: false,
         tagged: 0,
@@ -679,83 +981,87 @@
         ry: 0.84,
         tx: 0.5,
         ty: 0.84,
+        rtx: 0.5,
+        rty: 0.84,
         defenders: defaultDefenders(),
+        activeDef: 0,
+        holdAcc: 0,
+        tackleArmed: false,
+        aiWantHome: false,
+        msg: '',
+        painted: false,
       };
-      let last = performance.now();
-      let msg =
-        coachShown
-          ? 'Tap the court to move. Tag, then Home in your half.'
-          : 'Cross, tag, get Home before breath dies.';
-      if (!coachShown) coachShown = true;
+      activeRaid = raid;
+      phase = 'raiding';
+      remoteDefInput = null;
+      syncAcc = 0;
 
-      function endRaid(kind, endMsg) {
-        if (raid.over) return;
-        raid.over = true;
-        raid.phase = kind === 'home' ? 'home' : 'caught';
-        if (activeRaf) {
-          cancelAnimationFrame(activeRaf);
-          activeRaf = 0;
-        }
-        const pts = kind === 'home' ? raid.tagged | 0 : 0;
-        if (kind === 'home') {
-          if (pts > 0) {
-            you += pts;
-            buzz('win', { noConfetti: true });
-          } else {
-            opp += 1;
-            buzz('lose', { noConfetti: true });
-          }
+      if (iAmRaider) {
+        if (!coachShown) {
+          coachShown = true;
+          raid.msg = liveOn
+            ? 'You raid — they defend. Cross, tag, Home before breath or tackle.'
+            : 'Cross, tag, get Home — AI will try to tackle.';
         } else {
-          opp += 1;
-          buzz('lose', { noConfetti: true });
+          raid.msg = 'Your raid — tap to move.';
         }
-        if (liveOn && liveHandle && liveRoles) {
-          eventSeq += 1;
-          myRaid = false;
-          liveHandle.push({
-            status: you >= TO_WIN || opp >= TO_WIN ? 'over' : 'playing',
-            winner:
-              you >= TO_WIN ? liveRoles.me : opp >= TO_WIN ? liveRoles.opp : null,
-            turn: liveRoles.opp,
-            state: {
-              scores: scoresForPush(),
-              raidUid: liveRoles.opp,
-              eventSeq,
-              msg: endMsg,
-              raid: publicRaidStub(raid),
-            },
-          });
+      } else {
+        if (!defCoachShown) {
+          defCoachShown = true;
+          raid.msg = 'On defense, close and tackle before they reach Home.';
+        } else {
+          raid.msg = 'Defend — pick a shield, close, Tackle.';
         }
-        next(endMsg);
       }
 
+      let last = performance.now();
+
       function tryHome() {
-        if (raid.over) return;
+        if (!raid.iAmRaider || raid.over) return;
         if (!inOwnHalf(raid.ry)) {
           buzz('invalid');
-          msg = 'Reach your half before Home.';
-          paintRaid();
+          raid.msg = 'Reach your half before Home.';
+          paintRaid(true);
           return;
         }
         const pts = raid.tagged | 0;
         endRaid(
+          raid,
           'home',
           pts > 0
             ? 'Home with ' + pts + ' point' + (pts === 1 ? '' : 's') + '.'
-            : 'Empty raid — opponent +1.'
+            : 'Empty raid — defense +1.'
         );
       }
 
-      function paintRaid() {
+      function tryTackleCommit() {
+        if (raid.over || raid.iAmRaider) return;
+        if (!canAttemptTackle(raid)) {
+          buzz('invalid');
+          raid.msg = 'Get in range in the anti half to tackle.';
+          paintRaid(true);
+          return;
+        }
+        raid.tackleArmed = true;
+        // Human defense: start/continue hold
+        if (raid.holdAcc < 0.05) raid.holdAcc = 0.05;
+      }
+
+      function paintRaid(force) {
         if (!shell.alive() || raid.over) return;
+        if (raid.painted && !force) return;
+        raid.painted = true;
         const breathPct = Math.max(0, (raid.breath / BREATH_MS) * 100);
-        const canHome = inOwnHalf(raid.ry);
+        const canHome = raid.iAmRaider && inOwnHalf(raid.ry);
+        const tackleReady = !raid.iAmRaider && canAttemptTackle(raid);
         const defsHtml = raid.defenders
           .map((d) => {
             const cls =
-              'cs-kb-def' + (d.alive ? '' : ' is-out') + (d.alive ? '' : '');
+              'cs-kb-def' +
+              (d.alive ? '' : ' is-out') +
+              (d.alive && d.id === raid.activeDef ? ' is-active' : '');
             return (
-              '<span class="' +
+              '<button type="button" class="' +
               cls +
               '" data-def="' +
               d.id +
@@ -763,12 +1069,17 @@
               d.x * 100 +
               '%;top:' +
               d.y * 100 +
-              '%" aria-hidden="true">' +
+              '%"' +
+              (d.alive ? '' : ' disabled') +
+              '>' +
               (d.alive ? '🛡' : '✓') +
-              '</span>'
+              '</button>'
             );
           })
           .join('');
+
+        const roleLine = raid.iAmRaider ? 'Raiding' : 'Defending';
+        const holdPct = Math.min(100, (raid.holdAcc / holdNeedFor(raid)) * 100);
 
         shell.body.innerHTML =
           '<div class="cs-kabaddi">' +
@@ -779,16 +1090,19 @@
           '</strong> · first to ' +
           TO_WIN +
           '</div>' +
+          '<div class="cs-kb-role">' +
+          esc(roleLine) +
+          (raidPaused ? ' · Paused' : '') +
+          '</div>' +
           '<div class="cs-breath' +
           (raid.breathLive ? ' is-live' : '') +
           '" aria-label="Breath"><i style="width:' +
           breathPct +
           '%"></i></div>' +
           '<p class="cs-rally-msg">' +
-          esc(msg) +
-          (raid.breathLive ? '' : ' · Breath waits until you cross mid') +
+          esc(raid.msg) +
           '</p>' +
-          '<div class="cs-kb-court" data-court role="application" aria-label="Kabaddi court — tap to move">' +
+          '<div class="cs-kb-court" data-court role="application" aria-label="Kabaddi court">' +
           '<div class="cs-kb-zone cs-kb-anti" aria-hidden="true"><span>Anti</span></div>' +
           '<div class="cs-kb-line cs-kb-bonus" aria-hidden="true"><span>Bonus</span></div>' +
           '<div class="cs-kb-line cs-kb-mid" aria-hidden="true"><span>Mid</span></div>' +
@@ -799,15 +1113,24 @@
           '%;top:' +
           raid.ry * 100 +
           '%" aria-label="Raider">🏃</span>' +
+          (raid.holdAcc > 0.02
+            ? '<div class="cs-kb-hold" style="width:' + holdPct + '%"></div>'
+            : '') +
           '</div>' +
           '<div class="cs-kb-meta">Tagged <b>' +
           raid.tagged +
           '</b>' +
-          (raidPaused ? ' · Paused' : '') +
+          (livingDefs(raid).length === 0 ? ' · all out' : '') +
           '</div>' +
-          '<button type="button" class="cs-hit cs-kb-home" data-home' +
-          (canHome ? '' : ' disabled') +
-          '>Home</button>' +
+          '<div class="cs-kb-actions">' +
+          (raid.iAmRaider
+            ? '<button type="button" class="cs-hit cs-kb-home" data-home' +
+              (canHome ? '' : ' disabled') +
+              '>Home</button>'
+            : '<button type="button" class="cs-hit cs-kb-tackle" data-tackle' +
+              (tackleReady ? '' : ' disabled') +
+              '>Tackle</button>') +
+          '</div>' +
           '</div>';
 
         const court = shell.body.querySelector('[data-court]');
@@ -815,10 +1138,18 @@
           if (raid.over || raidPaused || !court) return;
           const rect = court.getBoundingClientRect();
           if (rect.width < 8 || rect.height < 8) return;
-          let x = (clientX - rect.left) / rect.width;
-          let y = (clientY - rect.top) / rect.height;
-          raid.tx = Math.max(0.06, Math.min(0.94, x));
-          raid.ty = Math.max(0.06, Math.min(0.94, y));
+          const x = Math.max(0.06, Math.min(0.94, (clientX - rect.left) / rect.width));
+          const y = Math.max(0.06, Math.min(0.94, (clientY - rect.top) / rect.height));
+          if (raid.iAmRaider) {
+            raid.tx = x;
+            raid.ty = y;
+          } else {
+            const d = raid.defenders.find((z) => z.id === raid.activeDef && z.alive);
+            if (d) {
+              d.tx = x;
+              d.ty = Math.min(0.48, y); // keep defenders mostly anti/mid
+            }
+          }
         };
         court?.addEventListener('pointerdown', (e) => {
           e.preventDefault();
@@ -831,23 +1162,106 @@
           if (e.buttons || e.pressure > 0) setTarget(e.clientX, e.clientY);
         });
 
-        shell.body.querySelector('[data-home]')?.addEventListener('click', () => {
-          tryHome();
+        shell.body.querySelectorAll('[data-def]').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (raid.iAmRaider || raid.over) return;
+            const id = +btn.dataset.def;
+            const d = raid.defenders.find((z) => z.id === id);
+            if (!d || !d.alive) return;
+            raid.activeDef = id;
+            paintRaid(true);
+          });
         });
+
+        shell.body.querySelector('[data-home]')?.addEventListener('click', () => tryHome());
+        shell.body.querySelector('[data-tackle]')?.addEventListener('click', () => tryTackleCommit());
       }
 
-      function tickTags() {
+      function softDom() {
+        const ri = shell.body.querySelector('.cs-kb-raider');
+        if (ri) {
+          ri.style.left = raid.rx * 100 + '%';
+          ri.style.top = raid.ry * 100 + '%';
+        }
+        const bar = shell.body.querySelector('.cs-breath i');
+        if (bar) bar.style.width = Math.max(0, (raid.breath / BREATH_MS) * 100) + '%';
+        const breathEl = shell.body.querySelector('.cs-breath');
+        if (breathEl) {
+          if (raid.breathLive) breathEl.classList.add('is-live');
+          else breathEl.classList.remove('is-live');
+        }
         raid.defenders.forEach((d) => {
-          if (!d.alive) return;
-          const dx = raid.rx - d.x;
-          const dy = raid.ry - d.y;
-          if (dx * dx + dy * dy <= TOUCH_R * TOUCH_R) {
-            d.alive = false;
-            raid.tagged += 1;
-            buzz('kick');
-            msg = 'Tagged ' + raid.tagged + ' — get Home!';
-          }
+          const el = shell.body.querySelector('.cs-kb-def[data-def="' + d.id + '"]');
+          if (!el) return;
+          el.style.left = d.x * 100 + '%';
+          el.style.top = d.y * 100 + '%';
+          el.classList.toggle('is-out', !d.alive);
+          el.classList.toggle('is-active', d.alive && d.id === raid.activeDef);
+          if (!d.alive) el.textContent = '✓';
         });
+        const homeBtn = shell.body.querySelector('[data-home]');
+        if (homeBtn) homeBtn.disabled = !(raid.iAmRaider && inOwnHalf(raid.ry));
+        const tackleBtn = shell.body.querySelector('[data-tackle]');
+        if (tackleBtn) tackleBtn.disabled = !(!raid.iAmRaider && canAttemptTackle(raid));
+        const meta = shell.body.querySelector('.cs-kb-meta');
+        if (meta) {
+          meta.innerHTML =
+            'Tagged <b>' +
+            raid.tagged +
+            '</b>' +
+            (livingDefs(raid).length === 0 ? ' · all out' : '') +
+            (raidPaused ? ' · Paused' : '');
+        }
+        const msgEl = shell.body.querySelector('.cs-rally-msg');
+        if (msgEl) msgEl.textContent = raid.msg;
+        let hold = shell.body.querySelector('.cs-kb-hold');
+        const holdPct = Math.min(100, (raid.holdAcc / Math.max(0.01, holdNeedFor(raid))) * 100);
+        if (raid.holdAcc > 0.02) {
+          if (!hold) {
+            const court = shell.body.querySelector('[data-court]');
+            if (court) {
+              hold = document.createElement('div');
+              hold.className = 'cs-kb-hold';
+              court.appendChild(hold);
+            }
+          }
+          if (hold) hold.style.width = holdPct + '%';
+        } else if (hold) {
+          hold.remove();
+        }
+      }
+
+      function pushDefenderInput() {
+        if (!liveOn || raid.iAmRaider || !liveHandle) return;
+        const now = Date.now();
+        if (now - lastPushAt < SYNC_MS) return;
+        lastPushAt = now;
+        liveHandle.push({
+          status: 'playing',
+          turn: liveRoles.opp,
+          state: {
+            scores: scoresForPush(),
+            raidUid: liveRoles.opp,
+            eventSeq,
+            phase: 'raiding',
+            defInput: {
+              by: liveRoles.me,
+              activeDef: raid.activeDef,
+              tackle: !!raid.tackleArmed,
+              defs: raid.defenders.map((d) => ({
+                id: d.id,
+                x: +d.x.toFixed(3),
+                y: +d.y.toFixed(3),
+                tx: +d.tx.toFixed(3),
+                ty: +d.ty.toFixed(3),
+                alive: !!d.alive,
+              })),
+            },
+            raid: publicRaidStub(raid),
+          },
+        });
+        raid.tackleArmed = false;
       }
 
       function loop(now) {
@@ -863,92 +1277,124 @@
         const dt = Math.min(0.05, (now - last) / 1000);
         last = now;
 
-        // Move toward tap target
-        const mdx = raid.tx - raid.rx;
-        const mdy = raid.ty - raid.ry;
-        const dist = Math.sqrt(mdx * mdx + mdy * mdy);
-        if (dist > 0.004) {
-          const step = Math.min(dist, MOVE_SPEED * dt);
-          raid.rx += (mdx / dist) * step;
-          raid.ry += (mdy / dist) * step;
+        // Live defender: mostly follow authority snap; still move local defenders
+        if (liveOn && !raid.iAmRaider) {
+          // Apply latest public raid from snaps into local for display — handled in onSnap
+          livingDefs(raid).forEach((d) => moveToward(d, d.tx, d.ty, DEF_SPEED, dt));
+          if (raid.tackleArmed && canAttemptTackle(raid)) {
+            raid.holdAcc += dt;
+          } else if (!raid.tackleArmed) {
+            raid.holdAcc = Math.max(0, raid.holdAcc - dt);
+          }
+          pushDefenderInput();
+          softDom();
+          activeRaf = requestAnimationFrame(loop);
+          return;
         }
 
-        // Breath starts on first mid cross
+        // === Authority / Practice full sim (local raider OR practice AI raid) ===
+        if (liveOn && remoteDefInput) {
+          applyRemoteDefInput(raid, remoteDefInput);
+          remoteDefInput = null;
+        }
+
+        if (raid.iAmRaider) {
+          // Human raider move
+          const mdx = raid.tx - raid.rx;
+          const mdy = raid.ty - raid.ry;
+          const dist = Math.sqrt(mdx * mdx + mdy * mdy);
+          if (dist > 0.004) {
+            const step = Math.min(dist, MOVE_SPEED * dt);
+            raid.rx += (mdx / dist) * step;
+            raid.ry += (mdy / dist) * step;
+          }
+          if (!liveOn) aiDefenseStep(raid, dt);
+          else {
+            livingDefs(raid).forEach((d) => moveToward(d, d.tx, d.ty, DEF_SPEED, dt));
+            if (raid.tackleArmed && canAttemptTackle(raid)) {
+              raid.holdAcc += dt;
+            } else {
+              raid.holdAcc = Math.max(0, raid.holdAcc - dt * 1.2);
+              if (!canAttemptTackle(raid)) raid.tackleArmed = false;
+            }
+          }
+        } else {
+          // Practice: AI raids, human defends
+          aiRaidStep(raid, dt);
+          livingDefs(raid).forEach((d) => moveToward(d, d.tx, d.ty, DEF_SPEED, dt));
+          if (raid.tackleArmed && canAttemptTackle(raid)) {
+            raid.holdAcc += dt;
+          } else if (!raid.tackleArmed) {
+            raid.holdAcc = Math.max(0, raid.holdAcc - dt);
+          }
+        }
+
         if (!raid.breathLive && crossedMid(raid.ry)) {
           raid.breathLive = true;
           raid.phase = 'raiding';
-          msg = 'Breath is live — tag and get Home!';
+          if (raid.iAmRaider) raid.msg = 'Breath is live — tag and get Home!';
+          else raid.msg = 'Breath live — close and Tackle!';
         }
-        if (raid.breathLive) {
-          raid.breath -= dt * 1000;
+        if (raid.breathLive) raid.breath -= dt * 1000;
+
+        tickTags(raid);
+
+        // Tackle success
+        if (raid.holdAcc >= holdNeedFor(raid) && canAttemptTackle(raid)) {
+          endRaid(raid, 'tackle', raid.iAmRaider ? 'Caught — tackled!' : 'Tackle! Raider out.');
+          return;
         }
 
-        tickTags();
-
-        // Soft update positions without full rebuild every frame when possible
-        const ri = shell.body.querySelector('.cs-kb-raider');
-        const bar = shell.body.querySelector('.cs-breath i');
-        const breathEl = shell.body.querySelector('.cs-breath');
-        if (ri) {
-          ri.style.left = raid.rx * 100 + '%';
-          ri.style.top = raid.ry * 100 + '%';
-        }
-        if (bar) bar.style.width = Math.max(0, (raid.breath / BREATH_MS) * 100) + '%';
-        if (breathEl) {
-          if (raid.breathLive) breathEl.classList.add('is-live');
-          else breathEl.classList.remove('is-live');
-        }
-        raid.defenders.forEach((d) => {
-          const el = shell.body.querySelector('.cs-kb-def[data-def="' + d.id + '"]');
-          if (!el) return;
-          if (!d.alive && !el.classList.contains('is-out')) {
-            el.classList.add('is-out');
-            el.textContent = '✓';
-          }
-        });
-        const homeBtn = shell.body.querySelector('[data-home]');
-        if (homeBtn) homeBtn.disabled = !inOwnHalf(raid.ry);
-        const meta = shell.body.querySelector('.cs-kb-meta');
-        if (meta) {
-          meta.innerHTML =
-            'Tagged <b>' + raid.tagged + '</b>' + (raidPaused ? ' · Paused' : '');
-        }
-        const msgEl = shell.body.querySelector('.cs-rally-msg');
-        if (msgEl) {
-          msgEl.textContent =
-            msg + (raid.breathLive ? '' : ' · Breath waits until you cross mid');
+        if (!raid.iAmRaider && raid.aiWantHome && inOwnHalf(raid.ry)) {
+          const pts = raid.tagged | 0;
+          endRaid(
+            raid,
+            'home',
+            pts > 0
+              ? 'AI Home with ' + pts + ' point' + (pts === 1 ? '' : 's') + '.'
+              : 'AI empty raid — you +1.'
+          );
+          return;
         }
 
         if (raid.breathLive && raid.breath <= 0) {
-          endRaid('caught', 'Caught — breath ran out.');
+          endRaid(
+            raid,
+            'breath',
+            raid.iAmRaider ? 'Caught — breath ran out.' : 'Breath out — you +1.'
+          );
           return;
+        }
+
+        softDom();
+
+        // Live raider publishes throttled state
+        if (liveOn && raid.iAmRaider) {
+          syncAcc += dt * 1000;
+          if (syncAcc >= SYNC_MS) {
+            syncAcc = 0;
+            lastPushAt = 0;
+            pushLive({ raid: publicRaidStub(raid), phase: 'raiding' }, { force: true });
+          }
         }
 
         activeRaf = requestAnimationFrame(loop);
       }
 
-      paintRaid();
+      paintRaid(true);
       last = performance.now();
       activeRaf = requestAnimationFrame(loop);
 
-      // Seed Live stub so Prompt 2 can extend defense inputs
-      if (liveOn && liveHandle && liveRoles && !applying) {
-        liveHandle.push({
-          status: 'playing',
-          turn: liveRoles.me,
-          state: {
-            scores: scoresForPush(),
-            raidUid: liveRoles.me,
-            eventSeq,
-            raid: publicRaidStub(raid),
-          },
-        });
+      if (liveOn && raid.iAmRaider) {
+        lastPushAt = 0;
+        pushLive({ raid: publicRaidStub(raid), phase: 'raiding', msg: raid.msg }, { force: true });
       }
     }
 
     function next(msg) {
       if (you >= TO_WIN || opp >= TO_WIN) {
         ended = true;
+        phase = 'between';
         if (activeRaf) {
           cancelAnimationFrame(activeRaf);
           activeRaf = 0;
@@ -965,7 +1411,9 @@
         });
         return;
       }
-      if (liveOn && !myRaid) {
+
+      if (liveOn) {
+        // Ready for our role on next raidUid — snap may already say go
         shell.body.innerHTML =
           '<div class="cs-kabaddi">' +
           '<div class="cs-rally-score">💪 <strong>' +
@@ -976,10 +1424,18 @@
           '<p class="cs-rally-msg">' +
           esc(msg) +
           '</p>' +
-          '<p class="cs-rally-hint">Waiting for opponent’s raid…</p>' +
+          '<p class="cs-rally-hint">' +
+          (myRaid ? 'Your raid next — get ready.' : 'Your defense next — get ready.') +
+          '</p>' +
+          '<button type="button" class="cs-hit" data-ready>Ready</button>' +
           '</div>';
+        shell.body.querySelector('[data-ready]')?.addEventListener('click', () => {
+          startRaid({ iAmRaider: myRaid });
+        });
         return;
       }
+
+      // Practice: flip already applied in endRaid
       shell.body.innerHTML =
         '<div class="cs-kabaddi">' +
         '<div class="cs-rally-score">💪 <strong>' +
@@ -990,9 +1446,13 @@
         '<p class="cs-rally-msg">' +
         esc(msg) +
         '</p>' +
-        '<button type="button" class="cs-hit" data-raid-again>Raid again</button>' +
+        '<button type="button" class="cs-hit" data-raid-again>' +
+        (myRaid ? 'Your raid' : 'Defend next') +
+        '</button>' +
         '</div>';
-      shell.body.querySelector('[data-raid-again]')?.addEventListener('click', () => startRaid());
+      shell.body.querySelector('[data-raid-again]')?.addEventListener('click', () => {
+        startRaid({ iAmRaider: myRaid });
+      });
     }
 
     if (liveOn && typeof DangalLive !== 'undefined') {
@@ -1029,14 +1489,50 @@
           }
           const st = val.state || {};
           if (st.scores) applyScores(st.scores);
-          if (st.eventSeq != null) eventSeq = Math.max(eventSeq, st.eventSeq);
-          if (st.raidUid === liveRoles.me && !myRaid) {
+          if (st.eventSeq != null) eventSeq = Math.max(eventSeq, st.eventSeq | 0);
+
+          if (st.outcome && applyOutcomeRemote(st)) return;
+
+          // Defender input → raider authority
+          if (st.defInput && st.defInput.by === liveRoles.opp && activeRaid && activeRaid.iAmRaider) {
+            remoteDefInput = st.defInput;
+          }
+
+          // Mirror raid state onto defender client
+          if (st.raid && activeRaid && !activeRaid.iAmRaider && !activeRaid.over) {
+            const r = st.raid;
+            if (r.raider) {
+              activeRaid.rx = r.raider.x;
+              activeRaid.ry = r.raider.y;
+            }
+            if (typeof r.breathPct === 'number') {
+              activeRaid.breath = r.breathPct * BREATH_MS;
+              activeRaid.breathLive = !!r.breathLive;
+            }
+            if (r.tagged != null) activeRaid.tagged = r.tagged | 0;
+            if (typeof r.hold === 'number') activeRaid.holdAcc = r.hold;
+            if (Array.isArray(r.defenders)) {
+              r.defenders.forEach((rd) => {
+                const d = activeRaid.defenders.find((x) => x.id === rd.id);
+                if (!d) return;
+                if (rd.alive === false) d.alive = false;
+                if (rd.x != null) d.x = d.x * 0.35 + rd.x * 0.65;
+                if (rd.y != null) d.y = d.y * 0.35 + rd.y * 0.65;
+              });
+            }
+            if (r.raidPhase) activeRaid.phase = r.raidPhase;
+          }
+
+          if (st.raidUid === liveRoles.me) {
             myRaid = true;
-            next(st.msg || 'Your raid.');
-            startRaid();
-          } else if (st.raidUid && st.raidUid !== liveRoles.me) {
+            if (!(activeRaid && !activeRaid.over && activeRaid.iAmRaider)) {
+              startRaid({ iAmRaider: true });
+            }
+          } else if (st.raidUid) {
             myRaid = false;
-            next(st.msg || 'Opponent’s turn.');
+            if (!(activeRaid && !activeRaid.over && !activeRaid.iAmRaider)) {
+              startRaid({ iAmRaider: false });
+            }
           }
         },
       });
@@ -1049,13 +1545,23 @@
             scores: { a: 0, b: 0 },
             raidUid: liveRoles.me,
             eventSeq: 0,
-            raid: { raidPhase: 'prep', raider: { x: 0.5, y: 0.84 }, defenders: defaultDefenders(), breathPct: 1, tagged: 0, breathLive: false },
+            phase: 'between',
+            raid: null,
           },
         });
       }
     }
 
-    startRaid();
+    // Kick off first raid (Practice: you raid; Live host raids, guest defends via snap)
+    if (!liveOn) {
+      myRaid = true;
+      startRaid({ iAmRaider: true });
+    } else if (liveRoles && liveRoles.host) {
+      startRaid({ iAmRaider: true });
+    } else {
+      shell.body.innerHTML =
+        '<div class="cs-kabaddi"><p class="cs-rally-msg">Get ready to defend…</p></div>';
+    }
   }
 
 
@@ -2198,7 +2704,7 @@
     registerGame({
       id: 'kabaddi',
       name: 'Kabaddi',
-      desc: 'Raid court · tag · Home before breath',
+      desc: 'Raid & defend · tackle windows',
       icon: '💪',
       gameType: 'solo',
       genre: 'rw_sports',

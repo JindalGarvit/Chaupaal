@@ -166,9 +166,9 @@
     pickleball: ['Dink in the green window', 'First to 7', 'Patience beats panic taps'],
     tennis: ['Serve to start each point', 'First to 4 games', 'Time the return'],
     kabaddi: [
-      'Tap the court to move — cross mid to start your breath',
-      'Tag defenders by reaching them, then Home in your half',
-      'Empty Home or breath-out concedes · first to 5',
+      'Tap court to move — cross mid to start breath; Home only in your half',
+      'On defense: select a shield, close in, hold Tackle before they Home',
+      'Tag / tackle / breath-out / empty — first to 5 · Live both seats play every raid',
     ],
     tambola: ['Numbers auto-daub on your ticket', 'Claim full house at 15', 'Caller races another ticket'],
     carrom: ['Pocket your colour', 'Queen then cover', 'Striker pocket is a foul'],
