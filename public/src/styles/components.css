@@ -2250,6 +2250,25 @@ html.theme-dark .lehar-empty{color:#fff;}
 .shabd-cal-cell.is-hard{box-shadow:inset 0 0 0 2px #B59F3B;}
 .shabd-cal-cell.is-today{outline:1px solid rgba(255,255,255,.35);}
 .shabd-stats-foot{font-size:11px;color:rgba(255,255,255,.4);margin:0;text-align:center;}
+
+/* Shabd Five reveal (Prompt 5) */
+.shabd-reveal{margin:8px 0 4px;text-align:center;max-width:280px;}
+.shabd-reveal-word{
+  margin:0 0 6px;font:700 15px 'Space Grotesk',sans-serif;
+  color:#F2F2F2;letter-spacing:.02em;
+}
+.shabd-reveal-gloss{
+  margin:0 0 8px;font:500 13px 'Space Grotesk',sans-serif;
+  color:rgba(255,220,160,.92);line-height:1.35;
+}
+.shabd-reveal-voice{
+  margin:0;font:500 12px 'Space Grotesk',sans-serif;
+  color:rgba(255,255,255,.62);line-height:1.4;
+}
+.game-overlay--dark .shabd-reveal-word,
+.game-result .shabd-reveal-word{color:#F5F5F5;}
+.game-result .shabd-reveal-gloss{color:#E8C56A;}
+.game-result .shabd-reveal-voice{color:rgba(255,255,255,.68);}
 .game-back-btn,
 .game-overlay .game-tap-target {
   min-width: var(--game-tap-min);

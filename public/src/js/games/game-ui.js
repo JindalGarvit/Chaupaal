@@ -126,8 +126,8 @@
     ttt: ['Get three in a row', 'Block your opponent early', 'Center is often strongest'],
     wordguess: [
       'One Daily puzzle per local day — progress saves; finished days stay locked',
-      'Optional Hard Mode: greens stay put · ambers must be reused (locks after guess 1)',
-      'Stats show guess bars, streak, and a month calendar — Practice never counts',
+      'Hard Mode reuses greens & ambers · Stats show bars, streak, and a month calendar',
+      'Practice is a sealed sandbox — never touches streak or Daily stats',
     ],
     fiveinrow: ['Connect five in a line', 'Watch diagonals as well as rows', 'Block threats before extending yours'],
     business: ['Buy when you land on empty lots', 'Pay rent on owned properties', 'Richest player at the end wins'],

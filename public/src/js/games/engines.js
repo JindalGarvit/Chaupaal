@@ -5360,9 +5360,18 @@ function render(){
       })
     : '';
   const againLabel=useDaily?'Practice a random word':'Play again';
-  const resultSub=won
-    ?(`Solved in ${guesses.length}`+(hardMode?' · Hard':''))
-    :(`Word was ${target}`+(hardMode?' · Hard':''));
+  const reveal=typeof buildShabdReveal==='function'
+    ?buildShabdReveal({won,word:target,guesses:guesses.length,hard:hardMode,daily:useDaily})
+    :null;
+  const resultTitle=reveal?reveal.title:(won?'Brilliant!':'Kal phir try');
+  const resultSub=reveal
+    ?(reveal.wordLine+(reveal.gloss?' — '+reveal.gloss:''))
+    :(won
+      ?(`The shabd was ${target}`+(hardMode?' · Hard':''))
+      :(`The shabd was ${target}`+(hardMode?' · Hard':'')));
+  const revealHtml=typeof shabdRevealHtml==='function'
+    ?shabdRevealHtml({won,word:target,guesses:guesses.length,hard:hardMode,daily:useDaily})
+    :(reveal&&reveal.voice?`<p class="shabd-reveal-voice">${reveal.voice}</p>`:'');
   const resultActions=[
     {label:'Share',primary:true,id:'share'},
   ];
@@ -5376,9 +5385,11 @@ function render(){
     ? gameResultHtml({
         gameId: 'wordguess',
         glyph: won?'✓':'·',
-        title: won?'Brilliant!':'Nice try',
+        title: resultTitle,
         subtitle: resultSub,
         vsBest: (typeof formatVsBest==='function'&&won&&useDaily)?formatVsBest('wordguess', guesses.length):undefined,
+        missionHtml: revealHtml,
+        hideMissions: true,
         shareCardHtml: shareCard,
         actions: resultActions,
       })
@@ -5402,7 +5413,7 @@ function render(){
     ${gameChromeHtml({title:'Shabd Five',subtitle:dayLabel+hardBit+streakBit,backId:'wgBack',rightHtml:chromeRight})}
     ${hud}
     <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:10px;" id="wgGrid"></div>
-    ${resultBlock||(gameOver?`<div style="text-align:center;padding:8px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;color:${won?'#538D4E':'#B59F3B'};flex-shrink:0;">${won?'Brilliant!':'The word was '+target}${hardMode?' · Hard':''}</div>`:'')}
+    ${resultBlock||(gameOver?`<div style="text-align:center;padding:8px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;color:${won?'#538D4E':'#B59F3B'};flex-shrink:0;">${resultTitle}<div class="shabd-reveal">${resultSub}</div></div>`:'')}
     ${gameOver?'':`<div style="flex-shrink:0;padding:8px;padding-bottom:max(8px,env(safe-area-inset-bottom));" id="wgKeyboard"></div>`}
   `;
   document.getElementById('wgBack').addEventListener('click',()=>{askWordGuessLeave();});
@@ -5900,7 +5911,7 @@ if (typeof registerGame === 'function') {
   registerGame({
     id: 'wordguess',
     name: 'Shabd Five',
-    desc: '5-letter daily puzzle · Solo',
+    desc: '5-letter Daily · Practice · Hard Mode · Solo',
     icon: '📝',
     ratingKey: 'wordguess',
     gameType: 'solo',
