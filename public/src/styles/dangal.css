@@ -341,6 +341,27 @@
 .pc-bluff-pile.is-empty b{position:static;text-shadow:none;font-size:16px;}
 .pc-bluff-layer{position:absolute;left:12px;top:10px;pointer-events:none;z-index:1;}
 .pc-bluff-claim{margin:0;font-size:14px;font-weight:700;text-align:center;color:#FFD600;}
+.pc-bluff .cs-hit--ghost{
+  opacity:.9;background:transparent;border:1px solid rgba(255,23,68,.55);color:#FF8A80;
+}
+.pc-bluff-reveal{
+  display:flex;flex-direction:column;align-items:center;gap:12px;
+  width:min(100%,340px);padding:18px 16px;border-radius:16px;
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);
+  animation:pc-bluff-pop .35s ease-out;
+}
+.pc-bluff-reveal.is-caught{border-color:rgba(255,82,82,.55);background:rgba(255,23,68,.12);}
+.pc-bluff-reveal.is-honest{border-color:rgba(102,187,106,.5);background:rgba(67,160,71,.12);}
+.pc-bluff-reveal-verdict{
+  margin:0;font:800 22px var(--font-display,'Space Grotesk',sans-serif);letter-spacing:.02em;
+}
+.pc-bluff-reveal.is-caught .pc-bluff-reveal-verdict{color:#FF8A80;}
+.pc-bluff-reveal.is-honest .pc-bluff-reveal-verdict{color:#A5D6A7;}
+.pc-bluff-reveal-cards .pc-card{cursor:default;pointer-events:none;transform:scale(1.05);}
+@keyframes pc-bluff-pop{
+  from{opacity:0;transform:translateY(8px) scale(.96);}
+  to{opacity:1;transform:none;}
+}
 .pc-tp-bust{color:#FFD180;font-weight:700;}
 .pc-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
 .pc-sevens,.pc-ab-cols{display:flex;gap:12px;font-size:13px;}

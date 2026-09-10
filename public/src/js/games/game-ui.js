@@ -177,9 +177,9 @@
       'Show when 2 remain and both seen · Live is 1v1 · not real money',
     ],
     bluff: [
-      'Play 1–3 cards face-down onto a shared pile',
-      'Claim a rank — first play locks it until someone Calls',
-      'Call when you think they lied · three lives each',
+      'Play 1–3 cards face-down — claim locks until Call',
+      'Call or play: playing accepts the claim',
+      'Call reveals only the last play — liar or false caller loses a life',
     ],
     sattepe: ['Play next to a seven chain', 'Empty your hand first', 'Sevens can always start a suit'],
     andarbaahar: ['Joker sets the rank', 'Pick Andar or Bahar', 'First matching rank wins the side'],

@@ -4009,13 +4009,15 @@
     const chat = resolveChat(arguments[0]);
     const liveOn = chatLiveOn(chat);
     const rng = rngFn();
-    // HOUSE RULE: first play of a round sets lockedRank; later plays must claim
-    // that same rank until Call clears the pile (same rank until challenged).
+    // HOUSE RULE: first play locks rank until Call clears.
+    // UX (Prompt 2): Call or Play — playing accepts the standing claim (no separate Pass).
+    // Reveal scope: last play only (not the whole pile).
     let aiTimer = 0;
+    let revealTimer = 0;
     const shell = openShell({
       id: 'bluff',
       title: 'Bluff',
-      subtitle: liveOn ? liveSub() + ' · 1v1' : practiceSub('Pile · claim · call'),
+      subtitle: liveOn ? liveSub() + ' · 1v1' : practiceSub('Call · reveal · clear'),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
@@ -4025,6 +4027,10 @@
         if (aiTimer) {
           clearTimeout(aiTimer);
           aiTimer = 0;
+        }
+        if (revealTimer) {
+          clearTimeout(revealTimer);
+          revealTimer = 0;
         }
       },
     });
@@ -4042,11 +4048,14 @@
     let applying = false;
     let liveRoles = null;
     let liveHandle = null;
-    /** Local-only honesty of my last play — never pushed to Live. */
-    let myPendingPlay = null; // { honest }
+    /** Local-only last play secret — never in shared state until reveal. */
+    let myPendingPlay = null; // { honest, cards: Card[] }
     let claimPick = 'A';
     let seq = 0;
     let dealtLive = false;
+    let callInFlight = false;
+    let revealing = false;
+    let lastRevealId = '';
 
     function iAmA() {
       return !liveOn || !liveRoles || liveRoles.me === liveRoles.playerA;
@@ -4068,7 +4077,7 @@
       return iAmA() ? handB.length : handA.length;
     }
     function myTurn() {
-      if (ended) return false;
+      if (ended || revealing || callInFlight) return false;
       if (!liveOn) return turnIsA;
       return turnIsA ? iAmA() : !iAmA();
     }
@@ -4090,7 +4099,6 @@
       for (let i = 0; i < n; i++) out.push({ r: '?', s: '?', id: prefix + i });
       return out;
     }
-    /** After Live deal: keep only own faces; opp is count + backs. */
     function maskOppFaces() {
       if (!liveOn) return;
       if (iAmA()) handB = hidePlaceholders(handB.length, 'oppB');
@@ -4116,7 +4124,6 @@
         handCountB: handB.length,
         seq,
       };
-      // Hands only on deal — never re-push faces (avoids play-diff leak + honest/cards).
       if (includeHands) {
         st.handA = handA;
         st.handB = handB;
@@ -4150,6 +4157,9 @@
       seq = 0;
       livesA = 3;
       livesB = 3;
+      callInFlight = false;
+      revealing = false;
+      lastRevealId = '';
     }
 
     function clearPileRound() {
@@ -4217,11 +4227,11 @@
     }
 
     function paint(msg) {
-      if (ended) return;
+      if (ended || revealing) return;
       const you = myHand();
       const mine = myTurn();
-      const canCall = mine && lastClaim && lastClaim.seatA !== iAmA() && pile.length > 0;
-      const canPlay = mine && you.length > 0;
+      const canCall = mine && lastClaim && lastClaim.seatA !== iAmA() && pile.length > 0 && !callInFlight;
+      const canPlay = mine && you.length > 0 && !callInFlight;
       shell.body.innerHTML = `
         <div class="pc-bluff">
           <p class="pc-hint">Lives you ${myLives()} · opp ${oppLives()} · opp hand ${oppHandCount()}${
@@ -4229,7 +4239,14 @@
           }</p>
           ${pileGraphic()}
           <p class="pc-bluff-claim" role="status">${esc(claimBanner())}</p>
-          <p class="pc-hint">${esc(msg || (mine ? 'Select 1–3 cards · claim the locked rank' : 'Waiting…'))}</p>
+          <p class="pc-hint">${esc(
+            msg ||
+              (mine
+                ? canCall
+                  ? 'Call the claim — or play to accept it'
+                  : 'Select 1–3 cards · claim the locked rank'
+                : 'Waiting…')
+          )}</p>
           <div class="pc-hand">${you.map(cardFace).join('')}</div>
           ${
             canPlay
@@ -4239,8 +4256,12 @@
           <button type="button" class="cs-hit" data-play>Play on pile</button>`
               : ''
           }
-          ${canCall ? `<button type="button" class="cs-hit" data-call>Call bluff</button>` : ''}
-          <p class="pc-hint pc-tp-boot">Same rank until call clears · pile stays face-down</p>
+          ${
+            canCall
+              ? `<button type="button" class="cs-hit cs-hit--ghost" data-call>Call bluff</button>`
+              : ''
+          }
+          <p class="pc-hint pc-tp-boot">Call or play · reveal last play only · pile clears on call</p>
         </div>`;
       const rankEl = shell.body.querySelector('[data-rank]');
       if (rankEl) {
@@ -4253,7 +4274,7 @@
       const selected = new Set();
       shell.body.querySelectorAll('.pc-hand .pc-card').forEach((btn) => {
         btn.addEventListener('click', () => {
-          if (!mine) return;
+          if (!mine || callInFlight) return;
           if (selected.has(btn.dataset.cid)) {
             selected.delete(btn.dataset.cid);
             btn.classList.remove('is-sel');
@@ -4266,6 +4287,83 @@
       shell.body.querySelector('[data-play]')?.addEventListener('click', () => doPlay(selected));
       shell.body.querySelector('[data-call]')?.addEventListener('click', () => doCall());
       if (!liveOn && !mine && !ended) scheduleAi();
+    }
+
+    function showReveal(payload, thenFn) {
+      revealing = true;
+      callInFlight = false;
+      const cards = (payload.cards || []).slice();
+      const honest = !!payload.honest;
+      const verdict = honest ? 'False call!' : 'Caught!';
+      const detail =
+        payload.msg ||
+        (honest ? 'Claim was true — caller loses a life.' : 'Claim was a bluff — claimer loses a life.');
+      if (honest) buzz('win', { noConfetti: true });
+      else buzz('lose', { noConfetti: true });
+      shell.body.innerHTML = `
+        <div class="pc-bluff">
+          <div class="pc-bluff-reveal ${honest ? 'is-honest' : 'is-caught'}" role="status">
+            <p class="pc-bluff-reveal-verdict">${esc(verdict)}</p>
+            <div class="pc-hand pc-bluff-reveal-cards">${cards.map(cardFace).join('') || '<span class="pc-hint">—</span>'}</div>
+            <p class="pc-hint">${esc(detail)}</p>
+            <p class="pc-hint">Lives you ${myLives()} · opp ${oppLives()}</p>
+          </div>
+        </div>`;
+      if (revealTimer) clearTimeout(revealTimer);
+      revealTimer = setTimeout(() => {
+        revealTimer = 0;
+        revealing = false;
+        if (typeof thenFn === 'function') thenFn();
+      }, 1600);
+    }
+
+    /**
+     * Evaluate + score a call. Cards = last play only.
+     * Live: only the claimer (with myPendingPlay) can evaluate.
+     */
+    function resolveCall(callerIsMe) {
+      if (!lastClaim || !pile.length) return null;
+      const claimerIsA = lastClaim.seatA;
+      const count = lastClaim.count;
+      let cards;
+      let honest;
+      if (claimerIsA === iAmA() && myPendingPlay && myPendingPlay.cards) {
+        cards = myPendingPlay.cards.map((c) => ({ r: c.r, s: c.s, id: c.id }));
+        honest = cards.every((c) => c.r === lastClaim.rank);
+      } else if (!liveOn) {
+        cards = pile.slice(-count).map((c) => ({ r: c.r, s: c.s, id: c.id }));
+        honest = cards.every((c) => c.r === lastClaim.rank);
+      } else {
+        return null;
+      }
+
+      if (honest) {
+        if (callerIsMe) setLives(-1, 0);
+        else setLives(0, -1);
+        turnIsA = claimerIsA;
+      } else {
+        if (claimerIsA === iAmA()) setLives(-1, 0);
+        else setLives(0, -1);
+        turnIsA = callerIsMe ? iAmA() : true;
+      }
+      seq += 1;
+      clearPileRound();
+      const msg = honest
+        ? 'False call! Claim was true — caller loses a life.'
+        : 'Caught! Bluff revealed — claimer loses a life.';
+      return {
+        honest,
+        cards,
+        msg,
+        claimerIsA,
+        callerIsMe,
+        revealId: 'r' + seq + '-' + Date.now(),
+      };
+    }
+
+    function finishAfterReveal(result) {
+      if (checkEnd(result.msg)) return;
+      paint(result.msg + ' Fresh claim window.');
     }
 
     function doPlay(selectedSet) {
@@ -4293,61 +4391,82 @@
         if (ix >= 0) hand.splice(ix, 1);
       });
       setMyHand(hand);
-      const honest = played.every((c) => c.r === rank);
+      const cards = played.map((c) => ({ r: c.r, s: c.s, id: c.id }));
+      const honest = cards.every((c) => c.r === rank);
       pile = pile.concat(played);
       if (!lockedRank) lockedRank = rank;
-      lastClaim = { seatA: iAmA(), rank, count: played.length };
-      myPendingPlay = { honest };
+      lastClaim = { seatA: iAmA(), rank, count: cards.length };
+      myPendingPlay = { honest, cards };
       claimPick = rank;
       buzz('card');
       passTurn();
+      // Shared: claim + counts only — no honest, no card faces
       pushLive({ act: 'play', by: liveRoles && liveRoles.me }, false);
       if (checkEnd('Played out')) return;
-      paint(`Played ${played.length}× ${rank} face-down`);
-    }
-
-    function resolveCall(callerIsMe) {
-      if (!lastClaim || !pile.length) return null;
-      const claimerIsA = lastClaim.seatA;
-      let honest = true;
-      if (claimerIsA === iAmA() && myPendingPlay) {
-        honest = !!myPendingPlay.honest;
-      } else if (!liveOn) {
-        const tip = pile.slice(-lastClaim.count);
-        honest = tip.every((c) => c.r === lastClaim.rank);
-      } else {
-        return null;
-      }
-
-      clearPileRound();
-      if (honest) {
-        if (callerIsMe) setLives(-1, 0);
-        else setLives(0, -1);
-        buzz('win', { noConfetti: true });
-        turnIsA = claimerIsA;
-        seq += 1;
-        return { honest: true, msg: 'False call — caller loses a life. Pile cleared.' };
-      }
-      if (claimerIsA === iAmA()) setLives(-1, 0);
-      else setLives(0, -1);
-      buzz('lose', { noConfetti: true });
-      // Caller plays next (Practice AI catch → human)
-      turnIsA = callerIsMe ? iAmA() : true;
-      seq += 1;
-      return { honest: false, msg: 'Bluff caught! Claimer loses a life. Pile cleared.' };
+      paint(
+        lastClaim.seatA === iAmA()
+          ? `Played ${cards.length}× ${rank} face-down`
+          : `Played ${cards.length}× ${rank} face-down`
+      );
     }
 
     function doCall() {
-      if (!myTurn() || ended || !lastClaim || lastClaim.seatA === iAmA()) return;
+      if (!myTurn() || ended || callInFlight || revealing) return;
+      if (!lastClaim || lastClaim.seatA === iAmA() || !pile.length) return;
+      callInFlight = true;
       if (liveOn) {
-        pushLive({ act: 'call', by: liveRoles.me, callBy: liveRoles.me }, false);
+        pushLive({ act: 'call', callBy: liveRoles.me }, false);
         paint('Calling…');
         return;
       }
       const result = resolveCall(true);
-      if (!result) return;
-      if (checkEnd(result.msg)) return;
-      paint(result.msg);
+      if (!result) {
+        callInFlight = false;
+        return;
+      }
+      lastRevealId = result.revealId;
+      showReveal(result, () => finishAfterReveal(result));
+    }
+
+    function publishReveal(result) {
+      lastRevealId = result.revealId;
+      if (!liveOn || !liveHandle || ended) return;
+      // Must push even when inside applyRemote (applying=true would block pushLive)
+      liveHandle.push({
+        status: 'playing',
+        turn: turnIsA ? liveRoles.playerA : liveRoles.playerB,
+        act: 'reveal',
+        reveal: {
+          id: result.revealId,
+          cards: result.cards,
+          honest: result.honest,
+          livesA,
+          livesB,
+          msg: result.msg,
+          turnIsA,
+          seq,
+        },
+        state: publicState(false),
+      });
+    }
+
+    function applyReveal(rev, fromRemote) {
+      if (!rev || !rev.id || rev.id === lastRevealId) return;
+      lastRevealId = rev.id;
+      if (fromRemote) {
+        if (rev.livesA != null) livesA = rev.livesA;
+        if (rev.livesB != null) livesB = rev.livesB;
+        if (rev.turnIsA != null) turnIsA = !!rev.turnIsA;
+        if (rev.seq != null) seq = Math.max(seq, Number(rev.seq) || 0);
+        clearPileRound();
+      }
+      callInFlight = false;
+      const payload = {
+        honest: !!rev.honest,
+        cards: (rev.cards || []).map((c) => ({ r: c.r, s: c.s, id: c.id || c.r + c.s })),
+        msg: rev.msg,
+      };
+      showReveal(payload, () => finishAfterReveal(payload));
     }
 
     function applyRemote(val) {
@@ -4362,95 +4481,113 @@
         dealtLive = true;
       }
 
-      if (st.livesA != null) livesA = st.livesA;
-      if (st.livesB != null) livesB = st.livesB;
-      if (st.pileCount != null) {
-        if (st.pileCount === 0) pile = [];
-        else if (st.pileCount > pile.length) {
-          while (pile.length < st.pileCount) pile.push({ r: '?', s: '?', id: 'hid' + pile.length });
-        } else if (st.pileCount < pile.length) {
-          pile = pile.slice(0, st.pileCount);
+      if (act !== 'reveal') {
+        if (st.livesA != null) livesA = st.livesA;
+        if (st.livesB != null) livesB = st.livesB;
+        if (st.pileCount != null) {
+          if (st.pileCount === 0) pile = [];
+          else if (st.pileCount > pile.length) {
+            while (pile.length < st.pileCount) pile.push({ r: '?', s: '?', id: 'hid' + pile.length });
+          } else if (st.pileCount < pile.length) {
+            pile = pile.slice(0, st.pileCount);
+          }
+        }
+        if (st.lastClaim) {
+          lastClaim = {
+            seatA: !!st.lastClaim.seatA,
+            rank: st.lastClaim.rank,
+            count: st.lastClaim.count,
+          };
+        } else if (st.lastClaim === null) lastClaim = null;
+        if (st.lockedRank !== undefined) lockedRank = st.lockedRank;
+        if (st.turnIsA != null) turnIsA = !!st.turnIsA;
+        if (st.seq != null) seq = Math.max(seq, Number(st.seq) || 0);
+        if (dealtLive) {
+          if (iAmA() && st.handCountB != null) syncOppCount(st.handCountB);
+          if (!iAmA() && st.handCountA != null) syncOppCount(st.handCountA);
         }
       }
-      if (st.lastClaim) {
-        lastClaim = {
-          seatA: !!st.lastClaim.seatA,
-          rank: st.lastClaim.rank,
-          count: st.lastClaim.count,
-        };
-      } else if (st.lastClaim === null) lastClaim = null;
-      if (st.lockedRank !== undefined) lockedRank = st.lockedRank;
-      if (st.turnIsA != null) turnIsA = !!st.turnIsA;
-      if (st.seq != null) seq = Math.max(seq, Number(st.seq) || 0);
-      if (st.handCountA != null && !iAmA()) syncOppCount(st.handCountA);
-      if (st.handCountB != null && iAmA()) syncOppCount(st.handCountB);
-      // Prefer explicit counts from either seat when present
-      if (dealtLive) {
-        if (iAmA() && st.handCountB != null) syncOppCount(st.handCountB);
-        if (!iAmA() && st.handCountA != null) syncOppCount(st.handCountA);
-      }
 
+      // Call → claimer evaluates secretly, then pushes reveal once
       if (act === 'call' && val.callBy && val.callBy !== liveRoles.me) {
-        if (lastClaim && lastClaim.seatA === iAmA() && myPendingPlay) {
+        if (lastClaim && lastClaim.seatA === iAmA() && myPendingPlay && myPendingPlay.cards) {
           const result = resolveCall(false);
           if (result) {
-            pushLive(
-              {
-                act: 'callResult',
-                callResult: { honest: result.honest, livesA, livesB, msg: result.msg },
-              },
-              false
-            );
+            publishReveal(result);
             applying = false;
-            if (checkEnd(result.msg)) return;
-            paint(result.msg);
+            showReveal(result, () => finishAfterReveal(result));
             return;
           }
         }
-      }
-      if (act === 'callResult' && val.callResult) {
-        if (val.callResult.livesA != null) livesA = val.callResult.livesA;
-        if (val.callResult.livesB != null) livesB = val.callResult.livesB;
-        if (st.turnIsA != null) turnIsA = !!st.turnIsA;
-        if (val.turn != null) turnIsA = val.turn === liveRoles.playerA;
-        clearPileRound();
-        myPendingPlay = null;
         applying = false;
-        if (checkEnd(val.callResult.msg || 'Call resolved')) return;
-        paint(val.callResult.msg || (val.callResult.honest ? 'False call' : 'Bluff caught'));
+        paint('Call pending…');
         return;
       }
 
-      if (act === 'play') myPendingPlay = null;
+      if (act === 'reveal' && val.reveal) {
+        applying = false;
+        if (val.turn != null) turnIsA = val.turn === liveRoles.playerA;
+        applyReveal(val.reveal, true);
+        return;
+      }
+
+      // Legacy callResult → treat as reveal without cards if somehow present
+      if (act === 'callResult' && val.callResult) {
+        applying = false;
+        applyReveal(
+          {
+            id: 'legacy-' + seq,
+            honest: val.callResult.honest,
+            cards: [],
+            livesA: val.callResult.livesA,
+            livesB: val.callResult.livesB,
+            msg: val.callResult.msg,
+            turnIsA: st.turnIsA,
+            seq,
+          },
+          true
+        );
+        return;
+      }
+
+      if (act === 'play') {
+        // Own play echo must keep myPendingPlay secret until Call/reveal
+        if (val.by && val.by !== liveRoles.me) myPendingPlay = null;
+        callInFlight = false;
+      }
 
       applying = false;
       if (val.turn != null) turnIsA = val.turn === liveRoles.playerA;
-      paint(act === 'play' ? 'Opponent played on the pile' : act === 'deal' ? 'Dealt — first play sets the rank' : undefined);
+      paint(
+        act === 'play'
+          ? 'Opponent played — Call or play to accept'
+          : act === 'deal'
+            ? 'Dealt — first play sets the rank'
+            : undefined
+      );
     }
 
     function scheduleAi() {
       if (aiTimer) clearTimeout(aiTimer);
       aiTimer = setTimeout(() => {
         aiTimer = 0;
-        if (ended || myTurn() || liveOn) return;
+        if (ended || myTurn() || liveOn || revealing || callInFlight) return;
         runAi();
       }, 700 + Math.floor(rng() * 600));
     }
 
     function runAi() {
-      if (ended || turnIsA) return;
-      if (lastClaim && lastClaim.seatA === true && pile.length && rng() < 0.35) {
+      if (ended || turnIsA || revealing) return;
+      // Mild Call bias — still uses fair reveal (reads pile tip only at call time)
+      if (lastClaim && lastClaim.seatA === true && pile.length && rng() < 0.32) {
         const result = resolveCall(false);
         if (result) {
-          if (checkEnd(result.msg)) return;
-          paint(
-            result.honest
-              ? 'Opponent called — you were honest. Pile cleared.'
-              : 'Opponent called — bluff caught!'
-          );
+          lastRevealId = result.revealId;
+          showReveal(result, () => finishAfterReveal(result));
           return;
         }
       }
+      // Playing accepts prior claim
       if (!handB.length) {
         checkEnd('Opponent empty');
         return;
@@ -4468,13 +4605,14 @@
         const ix = handB.findIndex((x) => x.id === c.id);
         if (ix >= 0) handB.splice(ix, 1);
       });
+      const cards = played.map((c) => ({ r: c.r, s: c.s, id: c.id }));
       pile = pile.concat(played);
       if (!lockedRank) lockedRank = rank;
-      lastClaim = { seatA: false, rank, count: played.length };
+      lastClaim = { seatA: false, rank, count: cards.length };
       buzz('card');
       passTurn();
       if (checkEnd('Opponent played out')) return;
-      paint(`Opponent played ${played.length}× ${rank}`);
+      paint(`Opponent played ${cards.length}× ${rank} — Call or play`);
     }
 
     if (liveOn) {
@@ -4518,7 +4656,7 @@
       }
     } else {
       dealBoth();
-      paint('Dealt — first play sets the rank · claim stays until call');
+      paint('Dealt — Call or play · last play reveals on call');
     }
   }
 
@@ -4893,7 +5031,7 @@
       { id: 'pool', name: 'Pool', desc: 'Clear the felt', icon: '🎱', genre: 'board', launch: openPool, order: 32 },
       { id: 'rummy', name: 'Rummy', desc: 'Runs and sets', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
       { id: 'teenpatti', name: 'Teen Patti', desc: 'Boot, chaal, side-show · virtual chips', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
-      { id: 'bluff', name: 'Bluff', desc: 'Pile · claim · call', icon: '🎭', genre: 'party', launch: openBluff, order: 35 },
+      { id: 'bluff', name: 'Bluff', desc: 'Call · reveal · clear', icon: '🎭', genre: 'party', launch: openBluff, order: 35 },
       { id: 'sattepe', name: 'Satte pe Satta', desc: 'Build off sevens', icon: '7️⃣', genre: 'party', launch: openSatte, order: 36 },
       { id: 'andarbaahar', name: 'Andar Bahar', desc: 'Pick a side', icon: '🃏', genre: 'party', launch: openAndarBahar, order: 37 },
     ];
