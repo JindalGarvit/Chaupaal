@@ -326,6 +326,7 @@
 .pc-tp-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
 .pc-tp .cs-hit--ghost{opacity:.85;background:transparent;border:1px solid rgba(255,215,0,.4);color:#FFD700;}
 .pc-tp-boot{opacity:.55;font-size:11px!important;}
+.pc-tp-bust{color:#FFD180;font-weight:700;}
 .pc-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
 .pc-sevens,.pc-ab-cols{display:flex;gap:12px;font-size:13px;}
 .pc-row{display:flex;align-items:center;gap:8px;}

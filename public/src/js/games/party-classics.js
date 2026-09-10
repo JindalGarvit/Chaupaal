@@ -2889,34 +2889,46 @@
     const chat = resolveChat(arguments[0]);
     const liveOn = chatLiveOn(chat);
     const rng = rngFn();
-    // Chips virtual · per-hand reset (career = Prompt 4)
+    // Virtual chips · ring session (stacks persist until leave / bust)
     const STACK0 = 1000;
     const BOOT = 10;
-    const MAX_STAKE = BOOT * 8; // raise cap
+    const REBUY_AMT = 1000;
+    const MAX_REBUY = 1; // Practice only — one rebuy per seat per table
+    const MAX_STAKE = BOOT * 8;
     const MAX_RAISES = 6;
-    const SS_TIMEOUT_MS = 18000; // Live unanswered side-show → auto-refuse
-    // RULE: blind chaal = S; seen chaal = 2S. See fee = 2S. Side-show: free refuse, no fee.
-    // Final Show: free when exactly 2 active + both seen + your turn.
+    const SS_TIMEOUT_MS = 18000;
+    // RULE: blind = S, seen = 2S. Side-show free refuse. Final Show free when 2 seen.
+    // Live stakes: settle ONCE per table leave/bust — not per hand.
+    const liveStake = liveOn
+      ? Number(
+          (chat && chat.stake) ||
+            (window.__dangalLaunchCtx && window.__dangalLaunchCtx.stake) ||
+            0
+        ) || 0
+      : 0;
+    const settleMatchId = liveOn ? String(matchIdFor(chat, 'teenpatti') || '').trim() : '';
+    let settleOppUid = '';
+    let settleDone = false;
     let aiTimer = 0;
     let ssTimer = 0;
+    let betweenTimer = 0;
+
     const shell = openShell({
       id: 'teenpatti',
       title: 'Teen Patti',
-      subtitle: liveOn ? liveSub() : practiceSub('Side-show · chaal'),
+      subtitle: liveOn
+        ? liveSub() + (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') + ' · 1v1'
+        : practiceSub('Ring · virtual chips'),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
       accent: '#FFD700',
       bg: '#0D0018',
       cleanup: () => {
-        if (aiTimer) {
-          clearTimeout(aiTimer);
-          aiTimer = 0;
-        }
-        if (ssTimer) {
-          clearTimeout(ssTimer);
-          ssTimer = 0;
-        }
+        if (aiTimer) clearTimeout(aiTimer);
+        if (ssTimer) clearTimeout(ssTimer);
+        if (betweenTimer) clearTimeout(betweenTimer);
+        aiTimer = ssTimer = betweenTimer = 0;
       },
     });
     if (!shell) return;
@@ -2931,17 +2943,21 @@
     let packedA = false;
     let packedB = false;
     let boot = BOOT;
-    let stake = BOOT; // S = blind chaal unit
+    let stake = BOOT;
     let raiseCount = 0;
     let turnIsA = true;
     let betSeq = 0;
-    let phase = 'idle'; // idle | dealt | over
-    let ended = false;
+    let phase = 'idle'; // idle | dealt | between | over
+    let handOver = false;
+    let tableClosed = false;
     let applying = false;
     let liveRoles = null;
     let liveHandle = null;
-    /** @type {null | { fromA: boolean, status: string, at: number }} */
     let sideShow = null;
+    let handNum = 0;
+    let rebuyA = 0;
+    let rebuyB = 0;
+    let lastHandTitle = '';
 
     function iAmA() {
       return !liveOn || !liveRoles || liveRoles.me === liveRoles.playerA;
@@ -2961,14 +2977,12 @@
     function myStack() {
       return iAmA() ? stackA : stackB;
     }
+    function oppStack() {
+      return iAmA() ? stackB : stackA;
+    }
     function setMySeen(v) {
       if (iAmA()) seenA = !!v;
       else seenB = !!v;
-    }
-    function setMyStack(n) {
-      n = Math.max(0, Math.floor(Number(n) || 0));
-      if (iAmA()) stackA = n;
-      else stackB = n;
     }
     function setMyPacked(v) {
       if (iAmA()) packedA = !!v;
@@ -2981,8 +2995,8 @@
       return iAmA() ? packedB : packedA;
     }
     function myTurn() {
-      if (ended || phase !== 'dealt' || myPacked()) return false;
-      if (!liveOn) return turnIsA; // Practice: you are seat A
+      if (tableClosed || handOver || phase !== 'dealt' || myPacked()) return false;
+      if (!liveOn) return turnIsA;
       if (!liveRoles) return false;
       return turnIsA ? liveRoles.me === liveRoles.playerA : liveRoles.me === liveRoles.playerB;
     }
@@ -2995,13 +3009,19 @@
       return seen ? s * 2 : s;
     }
     function seeFee() {
-      return chaalCost(true); // 2S
+      return chaalCost(true);
     }
     function activeCount() {
       return (packedA ? 0 : 1) + (packedB ? 0 : 1);
     }
     function bothSeen() {
       return seenA && seenB;
+    }
+    function sessionDelta() {
+      return myStack() - STACK0;
+    }
+    function bothCanBoot() {
+      return stackA >= BOOT && stackB >= BOOT;
     }
 
     function snapshot() {
@@ -3021,6 +3041,9 @@
         turnIsA,
         betSeq,
         phase,
+        handNum,
+        rebuyA,
+        rebuyB,
         active: [!packedA, !packedB],
         sideShow: sideShow ? { fromA: sideShow.fromA, status: sideShow.status, at: sideShow.at } : null,
       };
@@ -3042,6 +3065,9 @@
       if (st.raiseCount != null) raiseCount = Math.max(0, Number(st.raiseCount) || 0);
       if (st.turnIsA != null) turnIsA = !!st.turnIsA;
       if (st.betSeq != null) betSeq = Math.max(betSeq, Number(st.betSeq) || 0);
+      if (st.handNum != null) handNum = Math.max(handNum, Number(st.handNum) || 0);
+      if (st.rebuyA != null) rebuyA = Number(st.rebuyA) || 0;
+      if (st.rebuyB != null) rebuyB = Number(st.rebuyB) || 0;
       if (st.phase) phase = st.phase;
       if (st.sideShow && st.sideShow.status === 'pending') {
         sideShow = {
@@ -3055,11 +3081,11 @@
     }
 
     function pushLive(extra) {
-      if (!liveOn || !liveHandle || applying || ended) return;
+      if (!liveOn || !liveHandle || applying || tableClosed) return;
       liveHandle.push(
         Object.assign(
           {
-            status: phase === 'over' ? 'over' : 'playing',
+            status: phase === 'over' && handOver ? 'playing' : phase === 'between' ? 'playing' : 'playing',
             turn: turnUid(),
             state: snapshot(),
           },
@@ -3083,27 +3109,22 @@
         aiTimer = 0;
       }
     }
-
     function clearSsTimer() {
       if (ssTimer) {
         clearTimeout(ssTimer);
         ssTimer = 0;
       }
     }
-
     function clearSideShow() {
       sideShow = null;
       clearSsTimer();
     }
-
     function iAmSideShowTarget() {
       return !!(sideShow && sideShow.status === 'pending' && sideShow.fromA !== iAmA());
     }
-
     function iAmSideShowAsker() {
       return !!(sideShow && sideShow.status === 'pending' && sideShow.fromA === iAmA());
     }
-
     function startSsTimeout() {
       clearSsTimer();
       ssTimer = setTimeout(() => {
@@ -3154,74 +3175,54 @@
       return { split, aWins, sa, sb };
     }
 
-    function showResultScreen(title, youScore, oppScore, draw, subExtra) {
-      if (shell && typeof shell.markOver === 'function') shell.markOver();
-      const youRank = tpRankName(myCards());
-      const oppRank = tpRankName(oppCards());
-      shell.body.innerHTML = `
-        <div class="pc-tp">
-          <p class="pc-hint">Show · ${esc(youRank)} vs ${esc(oppRank)}</p>
-          <div class="pc-hand">${oppCards().map(cardFace).join('')}</div>
-          <p class="pc-hint">Opponent · ${esc(oppRank)}</p>
-          <div class="pc-hand">${myCards().map(cardFace).join('')}</div>
-          <p class="pc-hint">You · ${esc(youRank)}</p>
-        </div>`;
-      setTimeout(() => {
-        showDuelResult(shell, {
-          id: 'teenpatti',
-          you: draw ? 1 : youScore,
-          opp: draw ? 1 : oppScore,
-          glyph: '♠',
-          title,
-          subtitle:
-            (subExtra || youRank + ' vs ' + oppRank) +
-            (draw ? ' · split pot' : ''),
-          shareText: 'Teen Patti on Chaupaal',
-          onAgain: () => openTeenPatti(chat),
+    async function settleTableOnce(won) {
+      if (!liveOn || settleDone || !window.DangalEconomy || typeof DangalEconomy.reportGameEnd !== 'function') {
+        return null;
+      }
+      if (!settleMatchId || liveStake <= 0) {
+        settleDone = true;
+        return null;
+      }
+      settleDone = true;
+      try {
+        const me = typeof getCurrentUid === 'function' ? getCurrentUid() : '';
+        const opp = settleOppUid || (liveRoles && liveRoles.opp) || '';
+        return await DangalEconomy.reportGameEnd({
+          gameType: 'teenpatti',
+          result: won ? 'win' : 'loss',
+          won: !!won,
+          isDraw: false,
+          matchId: settleMatchId,
+          sessionId: settleMatchId,
+          opponentUid: opp,
+          stake: liveStake,
+          winnerUid: won ? me : opp,
         });
-      }, 800);
+      } catch (e) {
+        settleDone = false;
+        return null;
+      }
     }
 
-    function finishHand(youWin, title, subtitle, fromRemote, reveal) {
-      if (ended) return;
-      ended = true;
-      phase = 'over';
-      clearAi();
-      if (shell && typeof shell.markOver === 'function') shell.markOver();
-      if (reveal) {
-        shell.body.innerHTML = `
-          <div class="pc-tp">
-            <p class="pc-hint">Show</p>
-            <div class="pc-hand">${oppCards().map(cardFace).join('')}</div>
-            <div class="pc-hand">${myCards().map(cardFace).join('')}</div>
-          </div>`;
+    function tryPracticeRebuy() {
+      if (liveOn) return false;
+      let changed = false;
+      if (stackA < BOOT && rebuyA < MAX_REBUY) {
+        stackA += REBUY_AMT;
+        rebuyA += 1;
+        changed = true;
       }
-      if (liveOn && liveHandle && !fromRemote && !applying) {
-        liveHandle.push({
-          status: 'over',
-          winner: youWin ? liveRoles.me : liveRoles.opp,
-          state: Object.assign(snapshot(), { phase: 'over', revealed: !!reveal }),
-        });
+      if (stackB < BOOT && rebuyB < MAX_REBUY) {
+        stackB += REBUY_AMT;
+        rebuyB += 1;
+        changed = true;
       }
-      const go = () => {
-        showDuelResult(shell, {
-          id: 'teenpatti',
-          you: youWin ? 1 : 0,
-          opp: youWin ? 0 : 1,
-          glyph: '♠',
-          title: title || (youWin ? 'You win' : 'Opponent wins'),
-          subtitle: subtitle || '',
-          shareText: 'Teen Patti on Chaupaal',
-          onAgain: () => openTeenPatti(chat),
-        });
-      };
-      if (reveal) setTimeout(go, 700);
-      else go();
+      return changed;
     }
 
-    function postBoots() {
-      stackA = STACK0;
-      stackB = STACK0;
+    /** Deduct boot from existing stacks — never reset ring stacks. */
+    function postBootsForHand() {
+      if (stackA < BOOT || stackB < BOOT) return false;
       stackA -= BOOT;
       stackB -= BOOT;
       pot = BOOT * 2;
@@ -3235,18 +3236,35 @@
       turnIsA = true;
       betSeq = 0;
       clearSideShow();
+      handNum += 1;
+      return true;
     }
 
     function dealFresh() {
+      if (!postBootsForHand()) return false;
       const deck = makeDeck(rng);
       handA = deck.splice(0, 3);
       handB = deck.splice(0, 3);
-      postBoots();
       phase = 'dealt';
+      handOver = false;
+      return true;
+    }
+
+    function sessionHudLine() {
+      const d = sessionDelta();
+      const dStr = d === 0 ? '±0' : d > 0 ? '+' + d : String(d);
+      return (
+        'Hand ' +
+        Math.max(1, handNum) +
+        ' · session ' +
+        dStr +
+        (liveOn ? ' · Live 1v1' : ' · Practice') +
+        ' · virtual'
+      );
     }
 
     function paint(msg) {
-      if (ended) return;
+      if (tableClosed || handOver) return;
       const seen = mySeen();
       const pending = !!(sideShow && sideShow.status === 'pending');
       const mine = myTurn() && !pending;
@@ -3257,14 +3275,7 @@
       const canRaise =
         mine && !myPacked() && phase === 'dealt' && raiseCount < MAX_RAISES && stake < MAX_STAKE;
       const canSide =
-        mine &&
-        seen &&
-        oppSeen() &&
-        !myPacked() &&
-        !oppPacked() &&
-        activeCount() === 2 &&
-        phase === 'dealt';
-      // Free Show when 2 active + both seen + your turn (no 2× fee)
+        mine && seen && oppSeen() && !myPacked() && !oppPacked() && activeCount() === 2 && phase === 'dealt';
       const canShow = mine && seen && oppSeen() && activeCount() === 2 && phase === 'dealt';
       const canPack = mine && !myPacked() && phase === 'dealt';
       const badge = seen ? 'Seen' : 'Blind';
@@ -3306,16 +3317,19 @@
           <div class="pc-tp-hud" aria-live="polite">
             <span>You <b>${myStack()}</b></span>
             <span class="pc-tp-pot">Pot <b>${pot}</b></span>
-            <span>Call <b>${Math.min(cost, myStack())}</b>${allInNote}</span>
+            <span>Opp <b>${oppStack()}</b></span>
             <span class="pc-tp-badge ${seen ? 'is-seen' : 'is-blind'}">${badge}</span>
           </div>
-          <p class="pc-hint">${esc(turnLabel)} · stake S=${stake} · blind ${stake} / seen ${stake * 2}${liveOn ? ' · Live' : ''}</p>
+          <p class="pc-hint">${esc(sessionHudLine())}</p>
+          <p class="pc-hint">${esc(turnLabel)} · S=${stake} · call ${Math.min(cost, myStack())}${allInNote}${
+            liveStake > 0 ? ' · stake ⚡' + liveStake : ''
+          }</p>
           <p class="pc-hint">Opponent · ${oppBadge}</p>
           <div class="pc-hand pc-hand--opp">${paintOppHand()}</div>
           <p class="pc-hint">You · ${badge.toLowerCase()}${msg ? ' · ' + esc(msg) : ''}</p>
           <div class="pc-hand pc-hand--you">${paintMyHand()}</div>
           <div class="pc-actions pc-tp-actions">${actionsHtml}</div>
-          <p class="pc-hint pc-tp-boot">Boot ${boot} · side-show compares — loser packs · chips virtual</p>
+          <p class="pc-hint pc-tp-boot">Boot ${boot} · virtual chips only — not real money</p>
         </div>`;
       shell.body.querySelector('[data-see]')?.addEventListener('click', () => doSee());
       shell.body.querySelector('[data-chaal]')?.addEventListener('click', () => doChaal());
@@ -3327,17 +3341,245 @@
       shell.body.querySelector('[data-ss-refuse]')?.addEventListener('click', () => doSideShowRefuse(false));
       shell.body.querySelector('[data-show]')?.addEventListener('click', () => doShow());
       shell.body.querySelector('[data-pack]')?.addEventListener('click', () => doPack());
-      if (!liveOn && phase === 'dealt' && !ended) {
+      if (!liveOn && phase === 'dealt' && !handOver && !tableClosed) {
         if (pending && sideShow && sideShow.fromA === true) scheduleAiSideShow();
         else if (!pending && !turnIsA) scheduleAi();
       }
     }
 
+    function showBetweenHands(opts) {
+      const o = opts || {};
+      handOver = true;
+      phase = 'between';
+      clearAi();
+      clearSideShow();
+      const youWin = !!o.youWin;
+      const draw = !!o.draw;
+      const title = o.title || (draw ? 'Split pot' : youWin ? 'You win the hand' : 'Opponent wins the hand');
+      const sub = o.subtitle || '';
+      lastHandTitle = title;
+      const iBust = myStack() < BOOT;
+      const oBust = oppStack() < BOOT;
+      const canRebuy = !liveOn && iBust && (iAmA() ? rebuyA : rebuyB) < MAX_REBUY;
+      const canNext = bothCanBoot();
+      const d = sessionDelta();
+      const dStr = d === 0 ? '±0' : d > 0 ? '+' + d : String(d);
+
+      let bodyActions = '';
+      if (tableClosed) {
+        bodyActions = '';
+      } else if (canNext) {
+        if (!liveOn || (liveRoles && liveRoles.host)) {
+          bodyActions = `<button type="button" class="cs-hit" data-next>Next hand</button>`;
+        } else {
+          bodyActions = `<p class="pc-hint">Waiting for host to deal…</p>`;
+        }
+        bodyActions += `<button type="button" class="cs-hit cs-hit--ghost" data-leave>Leave table</button>`;
+      } else if (canRebuy) {
+        bodyActions = `
+          <p class="pc-hint pc-tp-bust">Bust — need ${BOOT} for boot</p>
+          <button type="button" class="cs-hit" data-rebuy>Rebuy +${REBUY_AMT}</button>
+          <button type="button" class="cs-hit cs-hit--ghost" data-leave>Leave table</button>`;
+      } else {
+        bodyActions = `
+          <p class="pc-hint pc-tp-bust">${iBust ? 'You’re bust' : oBust ? 'Opponent bust' : 'Can’t continue'} — table over</p>
+          <button type="button" class="cs-hit" data-leave>Cash out table</button>`;
+      }
+
+      const rankBit = o.rankLine ? `<p class="pc-hint">${esc(o.rankLine)}</p>` : '';
+      shell.body.innerHTML = `
+        <div class="pc-tp">
+          <p class="pc-hint">${esc(title)}</p>
+          ${rankBit}
+          <p class="pc-hint">${esc(sub)}</p>
+          <div class="pc-tp-hud">
+            <span>You <b>${myStack()}</b></span>
+            <span>Opp <b>${oppStack()}</b></span>
+            <span>Session <b>${dStr}</b></span>
+          </div>
+          <p class="pc-hint">Hands played ${handNum} · virtual chips only</p>
+          <div class="pc-actions pc-tp-actions">${bodyActions}</div>
+          <div id="tpChipDelta" class="pc-hint" hidden></div>
+        </div>`;
+
+      if (liveOn && liveHandle && !o.fromRemote && !applying) {
+        pushLive({
+          act: 'between',
+          handResult: { title, youWin, draw },
+          state: Object.assign(snapshot(), { phase: 'between' }),
+        });
+      }
+
+      shell.body.querySelector('[data-next]')?.addEventListener('click', () => beginNextHand());
+      shell.body.querySelector('[data-rebuy]')?.addEventListener('click', () => {
+        if (iAmA()) {
+          if (rebuyA >= MAX_REBUY) return;
+          stackA += REBUY_AMT;
+          rebuyA += 1;
+        } else {
+          if (rebuyB >= MAX_REBUY) return;
+          stackB += REBUY_AMT;
+          rebuyB += 1;
+        }
+        buzz('select');
+        showBetweenHands(o);
+      });
+      shell.body.querySelector('[data-leave]')?.addEventListener('click', () => leaveTable(youWin || d > 0));
+
+      // Practice: auto-rebuy AI if needed, then soft pause before human action
+      if (!liveOn && oBust && rebuyB < MAX_REBUY) {
+        stackB += REBUY_AMT;
+        rebuyB += 1;
+      }
+    }
+
+    function beginNextHand() {
+      if (tableClosed) return;
+      if (!bothCanBoot()) {
+        if (!liveOn) tryPracticeRebuy();
+        if (!bothCanBoot()) {
+          showBetweenHands({
+            title: 'Table stuck',
+            subtitle: 'Not enough chips for boot',
+            youWin: myStack() >= oppStack(),
+            fromRemote: true,
+          });
+          return;
+        }
+      }
+      handOver = false;
+      if (!dealFresh()) {
+        showBetweenHands({ title: 'Deal failed', subtitle: 'Boot short', youWin: false, fromRemote: true });
+        return;
+      }
+      buzz('select');
+      if (liveOn && liveRoles && liveRoles.host) {
+        pushLive({ act: 'redeal', status: 'playing' });
+      }
+      paint('Hand ' + handNum + ' · boot posted — both blind');
+    }
+
+    async function leaveTable(wonHint) {
+      if (tableClosed) return;
+      tableClosed = true;
+      handOver = true;
+      phase = 'over';
+      clearAi();
+      clearSideShow();
+      if (shell && typeof shell.markOver === 'function') shell.markOver();
+      const d = sessionDelta();
+      const won = wonHint != null ? !!wonHint : d > 0;
+      if (liveRoles && liveRoles.opp) settleOppUid = liveRoles.opp;
+      const settle = await settleTableOnce(won);
+      let settleLine = 'Virtual chips only — not real money';
+      if (settle && settle.chipDelta != null) {
+        const cd = Number(settle.chipDelta);
+        settleLine =
+          (Number.isFinite(cd) ? 'Stake settle ' + (cd > 0 ? '+' : '') + cd + ' · ' : '') + settleLine;
+      }
+      if (typeof recordDangalSession === 'function') {
+        try {
+          recordDangalSession('teenpatti', {
+            won,
+            score: Math.max(0, d),
+            difficulty: liveOn ? 'live' : 'practice',
+            stake: liveStake,
+            live: !!liveOn,
+          });
+        } catch (e) {}
+      }
+      const dStr = d === 0 ? '±0' : d > 0 ? '+' + d : String(d);
+      showDuelResult(shell, {
+        id: 'teenpatti',
+        you: won ? 1 : 0,
+        opp: won ? 0 : 1,
+        glyph: '♠',
+        title: 'Table closed',
+        subtitle: 'Session ' + dStr + ' · ' + handNum + ' hands · ' + settleLine,
+        shareText:
+          (d >= 0 ? 'Won ' : 'Lost ') +
+          Math.abs(d) +
+          ' virtual chips on Chaupaal Teen Patti (not real money)',
+        onAgain: () => openTeenPatti(chat),
+      });
+    }
+
+    function endHand(opts) {
+      const o = opts || {};
+      if (handOver || tableClosed) return;
+      handOver = true;
+      phase = 'between';
+      clearAi();
+      clearSideShow();
+
+      const reveal = !!o.reveal;
+      const go = () => {
+        // Live bust ends table for that seat
+        if (liveOn && (myStack() < BOOT || oppStack() < BOOT)) {
+          const youWin = oppStack() < BOOT && myStack() >= BOOT;
+          showBetweenHands({
+            title: o.title || (youWin ? 'Opponent bust' : myStack() < BOOT ? 'You’re bust' : 'Hand over'),
+            subtitle: o.subtitle || 'Live table ends when a seat can’t post boot',
+            youWin,
+            draw: !!o.draw,
+            rankLine: o.rankLine,
+            fromRemote: o.fromRemote,
+          });
+          return;
+        }
+        showBetweenHands({
+          title: o.title,
+          subtitle: o.subtitle,
+          youWin: !!o.youWin,
+          draw: !!o.draw,
+          rankLine: o.rankLine,
+          fromRemote: o.fromRemote,
+        });
+      };
+
+      if (reveal) {
+        const youRank = tpRankName(myCards());
+        const oppRank = tpRankName(oppCards());
+        shell.body.innerHTML = `
+          <div class="pc-tp">
+            <p class="pc-hint">Show · ${esc(youRank)} vs ${esc(oppRank)}</p>
+            <div class="pc-hand">${oppCards().map(cardFace).join('')}</div>
+            <div class="pc-hand">${myCards().map(cardFace).join('')}</div>
+          </div>`;
+        if (!o.fromRemote && liveOn && liveHandle && !applying) {
+          liveHandle.push({
+            status: 'playing',
+            act: o.act || 'show',
+            winner: o.draw ? null : o.youWin ? liveRoles.me : liveRoles.opp,
+            state: Object.assign(snapshot(), {
+              phase: 'between',
+              revealed: true,
+              ranks: { a: tpRankName(handA), b: tpRankName(handB) },
+            }),
+          });
+        }
+        betweenTimer = setTimeout(() => {
+          betweenTimer = 0;
+          go();
+        }, 800);
+      } else {
+        if (!o.fromRemote && liveOn && liveHandle && !applying) {
+          liveHandle.push({
+            status: 'playing',
+            act: o.act || 'pack',
+            winner: o.youWin ? liveRoles.me : liveRoles.opp,
+            state: Object.assign(snapshot(), { phase: 'between' }),
+          });
+        }
+        go();
+      }
+    }
+
     function doSee() {
-      if (ended || phase !== 'dealt' || myPacked() || mySeen() || !myTurn() || sideShow) return;
+      if (handOver || tableClosed || phase !== 'dealt' || myPacked() || mySeen() || !myTurn() || sideShow) return;
       const fee = seeFee();
       if (myStack() <= 0) {
-        paint('No chips to see');
+        paint('Need chips to see');
         return;
       }
       if (iAmA()) debit(true, fee);
@@ -3350,7 +3592,7 @@
     }
 
     function doChaal() {
-      if (ended || phase !== 'dealt' || myPacked() || !myTurn() || sideShow) return;
+      if (handOver || tableClosed || phase !== 'dealt' || myPacked() || !myTurn() || sideShow) return;
       const cost = chaalCost(mySeen());
       if (myStack() <= 0) {
         paint('No chips left');
@@ -3365,14 +3607,13 @@
     }
 
     function doRaise(steps) {
-      if (ended || phase !== 'dealt' || myPacked() || !myTurn() || sideShow) return;
+      if (handOver || tableClosed || phase !== 'dealt' || myPacked() || !myTurn() || sideShow) return;
       steps = steps === 2 ? 2 : 1;
       if (raiseCount >= MAX_RAISES || stake >= MAX_STAKE) {
         paint('Raise cap hit');
         return;
       }
-      const bump = BOOT * steps;
-      stake = Math.min(MAX_STAKE, stake + bump);
+      stake = Math.min(MAX_STAKE, stake + BOOT * steps);
       raiseCount += 1;
       const cost = chaalCost(mySeen());
       if (iAmA()) debit(true, cost);
@@ -3384,61 +3625,46 @@
     }
 
     function doPack() {
-      if (ended || phase !== 'dealt' || myPacked() || !myTurn() || sideShow) return;
+      if (handOver || tableClosed || phase !== 'dealt' || myPacked() || !myTurn() || sideShow) return;
       setMyPacked(true);
-      // Other seat wins pot
       if (iAmA()) awardPotSeat(false);
       else awardPotSeat(true);
       buzz('lose');
-      phase = 'over';
       betSeq += 1;
-      if (liveOn && liveHandle && !applying) {
-        liveHandle.push({
-          status: 'over',
-          winner: liveRoles.opp,
-          act: 'pack',
-          state: Object.assign(snapshot(), { phase: 'over' }),
-        });
-      }
-      finishHand(false, 'Packed', 'Opponent takes the pot', true, false);
+      endHand({
+        youWin: false,
+        title: 'Packed',
+        subtitle: 'Opponent takes the pot · ' + sessionHudLine(),
+        act: 'pack',
+        fromRemote: false,
+      });
     }
 
     function doShow() {
-      if (ended || phase !== 'dealt' || myPacked() || !myTurn() || sideShow) return;
+      if (handOver || tableClosed || phase !== 'dealt' || myPacked() || !myTurn() || sideShow) return;
       if (!mySeen() || !oppSeen() || activeCount() !== 2) {
         paint('Show needs both seen · 2 players');
         return;
       }
-      // Free show when 2 remain (no 2× chaal fee)
       const settled = settleShow();
-      phase = 'over';
       betSeq += 1;
-      clearSideShow();
       const youWin = iAmA() ? settled.aWins : !settled.aWins;
       const youRank = tpRankName(myCards());
       const oppRank = tpRankName(oppCards());
-      if (liveOn && liveHandle && !applying) {
-        liveHandle.push({
-          status: 'over',
-          winner: settled.split ? null : youWin ? liveRoles.me : liveRoles.opp,
-          act: 'show',
-          state: Object.assign(snapshot(), {
-            phase: 'over',
-            revealed: true,
-            scores: { a: settled.sa, b: settled.sb },
-            ranks: { a: tpRankName(handA), b: tpRankName(handB) },
-          }),
-        });
-      }
-      if (ended) return;
-      ended = true;
-      clearAi();
-      const title = settled.split ? 'Split pot' : youWin ? 'You win the show' : 'Opponent wins the show';
-      showResultScreen(title, youWin ? 1 : 0, youWin ? 0 : 1, settled.split, youRank + ' vs ' + oppRank);
+      endHand({
+        youWin,
+        draw: settled.split,
+        title: settled.split ? 'Split pot' : youWin ? 'You win the show' : 'Opponent wins the show',
+        subtitle: youRank + ' vs ' + oppRank,
+        rankLine: youRank + ' vs ' + oppRank,
+        reveal: true,
+        act: 'show',
+        fromRemote: false,
+      });
     }
 
     function doSideShowAsk() {
-      if (ended || phase !== 'dealt' || sideShow || !myTurn()) return;
+      if (handOver || tableClosed || phase !== 'dealt' || sideShow || !myTurn()) return;
       if (!mySeen() || !oppSeen() || myPacked() || oppPacked() || activeCount() !== 2) {
         paint('Side-show needs both seen');
         return;
@@ -3452,7 +3678,7 @@
     }
 
     function resolveSideShowCompare() {
-      if (ended || phase !== 'dealt' || !sideShow || sideShow.status !== 'pending') return;
+      if (handOver || tableClosed || phase !== 'dealt' || !sideShow || sideShow.status !== 'pending') return;
       const sa = tpScore(handA);
       const sb = tpScore(handB);
       const askerA = sideShow.fromA;
@@ -3461,7 +3687,7 @@
 
       if (sa === sb) {
         clearSideShow();
-        turnIsA = askerA; // asker keeps turn
+        turnIsA = askerA;
         pushLive({ act: 'sideshow_tie' });
         paint('Side-show tied — both stay');
         return;
@@ -3477,55 +3703,48 @@
         <div class="pc-tp">
           <p class="pc-hint">${esc(iLost ? 'You packed — weaker hand' : 'Opponent packed on side-show')}</p>
           <div class="pc-hand">${oppCards().map(cardFace).join('')}</div>
-          <p class="pc-hint">Opponent · ${esc(tpRankName(oppCards()))}</p>
           <div class="pc-hand">${myCards().map(cardFace).join('')}</div>
-          <p class="pc-hint">You · ${esc(tpRankName(myCards()))}</p>
         </div>`;
 
       if (activeCount() < 2) {
         if (packedA) awardPotSeat(false);
         else awardPotSeat(true);
-        phase = 'over';
-        const youWin = !iLost;
-        setTimeout(() => {
-          if (liveOn && liveHandle && !applying) {
-            liveHandle.push({
-              status: 'over',
-              winner: youWin ? liveRoles.me : liveRoles.opp,
-              act: 'sideshow',
-              state: Object.assign(snapshot(), { phase: 'over', sideShow: null }),
-            });
-          }
-          finishHand(
-            youWin,
-            iLost ? 'Packed on side-show' : 'Won side-show',
-            iLost ? 'Weaker hand — opponent takes the pot' : 'Opponent packed — you take the pot',
-            true,
-            false
-          );
+        betweenTimer = setTimeout(() => {
+          betweenTimer = 0;
+          endHand({
+            youWin: !iLost,
+            title: iLost ? 'Packed on side-show' : 'Won side-show',
+            subtitle: iLost ? 'Weaker hand — opponent takes the pot' : 'Opponent packed — you take the pot',
+            act: 'sideshow',
+            fromRemote: false,
+          });
         }, 900);
         return;
       }
 
       turnIsA = !askerA;
       pushLive({ act: 'sideshow_done' });
-      setTimeout(() => paint(iLost ? 'You packed — weaker hand' : 'Opponent packed on side-show'), 900);
+      setTimeout(() => {
+        handOver = false;
+        phase = 'dealt';
+        paint(iLost ? 'You packed — weaker hand' : 'Opponent packed on side-show');
+      }, 900);
     }
 
     function doSideShowAccept() {
-      if (ended || phase !== 'dealt' || !sideShow || sideShow.status !== 'pending') return;
+      if (handOver || tableClosed || !sideShow || sideShow.status !== 'pending') return;
       if (liveOn && !iAmSideShowTarget()) return;
       buzz('select');
       resolveSideShowCompare();
     }
 
     function doSideShowRefuse(auto) {
-      if (ended || phase !== 'dealt' || !sideShow || sideShow.status !== 'pending') return;
+      if (handOver || tableClosed || !sideShow || sideShow.status !== 'pending') return;
       if (!auto && liveOn && !iAmSideShowTarget()) return;
       const askerA = sideShow.fromA;
       clearSideShow();
       betSeq += 1;
-      turnIsA = askerA; // free refuse — asker keeps the turn
+      turnIsA = askerA;
       buzz('select');
       pushLive({ act: 'sideshow_refuse', by: liveRoles && liveRoles.me, auto: !!auto });
       paint(auto ? 'Side-show timed out — refused' : 'Side-show refused — hand continues');
@@ -3534,13 +3753,42 @@
     function applyRemoteAct(val) {
       const st = val.state || {};
       const incomingSeq = st.betSeq != null ? Number(st.betSeq) : -1;
-      if (incomingSeq >= 0 && incomingSeq < betSeq && val.status !== 'over' && st.phase !== 'over') {
-        return; // stale
+      if (
+        incomingSeq >= 0 &&
+        incomingSeq < betSeq &&
+        val.act !== 'redeal' &&
+        val.act !== 'between' &&
+        st.phase !== 'between' &&
+        st.phase !== 'over'
+      ) {
+        return;
       }
       applySnapshot(st);
       const act = val.act;
-      const by = val.by;
-      if (ended) return;
+      if (tableClosed) return;
+
+      if (act === 'redeal' || (st.phase === 'dealt' && Array.isArray(st.handA) && st.handA.length && handOver)) {
+        handOver = false;
+        phase = 'dealt';
+        paint('Hand ' + handNum + ' · boot posted');
+        return;
+      }
+
+      if (act === 'between' || st.phase === 'between') {
+        handOver = true;
+        phase = 'between';
+        const hr = val.handResult || {};
+        showBetweenHands({
+          title: hr.title || lastHandTitle || 'Hand over',
+          subtitle: sessionHudLine(),
+          youWin: hr.youWin != null ? hr.youWin : val.winner === (liveRoles && liveRoles.me),
+          draw: !!hr.draw,
+          fromRemote: true,
+        });
+        return;
+      }
+
+      if (handOver) return;
 
       if (act === 'sideshow_ask' || (st.sideShow && st.sideShow.status === 'pending')) {
         if (sideShow && sideShow.status === 'pending') startSsTimeout();
@@ -3558,47 +3806,40 @@
         return;
       }
 
-      if (val.status === 'over' || st.phase === 'over' || act === 'pack' || act === 'show' || act === 'sideshow') {
+      if (val.status === 'over' || act === 'pack' || act === 'show' || act === 'sideshow') {
         applying = true;
-        if (act === 'pack' || st.packedA || st.packedB) {
-          if (myPacked()) finishHand(false, 'Packed', 'Opponent takes the pot', true, false);
-          else finishHand(true, 'Opponent packed', 'You take the pot', true, false);
-        } else if (act === 'show' || st.revealed) {
+        if (act === 'show' || st.revealed) {
           const ys = tpScore(myCards());
           const os = tpScore(oppCards());
           const split = ys === os;
           const youWin = ys > os;
-          ended = true;
-          phase = 'over';
-          showResultScreen(
-            split ? 'Split pot' : youWin ? 'You win the show' : 'Opponent wins the show',
-            youWin ? 1 : 0,
-            youWin ? 0 : 1,
-            split
-          );
-        } else {
-          const iWon = val.winner === liveRoles.me;
-          finishHand(
-            iWon,
-            val.status === 'forfeit' ? (iWon ? 'Opponent left' : 'You forfeited') : undefined,
-            '',
-            true,
-            !!st.revealed
-          );
+          endHand({
+            youWin,
+            draw: split,
+            title: split ? 'Split pot' : youWin ? 'You win the show' : 'Opponent wins the show',
+            rankLine: tpRankName(myCards()) + ' vs ' + tpRankName(oppCards()),
+            reveal: true,
+            fromRemote: true,
+          });
+        } else if (act === 'pack' || act === 'sideshow' || st.packedA || st.packedB) {
+          const iWon = val.winner === liveRoles.me || (myPacked() ? false : true);
+          endHand({
+            youWin: !!iWon && !myPacked(),
+            title: myPacked() ? 'Packed' : 'Opponent packed',
+            subtitle: sessionHudLine(),
+            fromRemote: true,
+          });
         }
         applying = false;
         return;
       }
 
-      if (act === 'see' && by && liveRoles && by !== liveRoles.me) {
-        paint('Opponent paid to see');
-        return;
-      }
-      if (act === 'chaal' || act === 'raise' || act === 'see' || act === 'blind') {
+      if (act === 'see' || act === 'chaal' || act === 'raise' || act === 'blind') {
         paint(act === 'raise' ? 'Opponent raised' : act === 'chaal' ? 'Opponent chaaled' : '');
         return;
       }
       if (st.handA && st.handB && phase === 'dealt') {
+        handOver = false;
         paint('Boot posted — chaal when ready');
         return;
       }
@@ -3607,17 +3848,17 @@
 
     function scheduleAi() {
       clearAi();
-      if (liveOn || ended || phase !== 'dealt' || packedB || turnIsA || sideShow) return;
+      if (liveOn || handOver || tableClosed || phase !== 'dealt' || packedB || turnIsA || sideShow) return;
       aiTimer = setTimeout(() => {
         aiTimer = 0;
-        if (ended || phase !== 'dealt' || packedB || turnIsA || sideShow) return;
+        if (handOver || tableClosed || phase !== 'dealt' || packedB || turnIsA || sideShow) return;
         runAi();
       }, 700 + Math.floor(rng() * 800));
     }
 
     function scheduleAiSideShow() {
       clearAi();
-      if (liveOn || ended || !sideShow || sideShow.status !== 'pending' || sideShow.fromA !== true) return;
+      if (liveOn || handOver || !sideShow || sideShow.status !== 'pending' || sideShow.fromA !== true) return;
       aiTimer = setTimeout(() => {
         aiTimer = 0;
         if (!sideShow || sideShow.status !== 'pending') return;
@@ -3628,11 +3869,10 @@
     }
 
     function runAi() {
-      if (ended || packedB || turnIsA || sideShow) return;
-      const strength = tpScore(handB); // Practice-only
+      if (handOver || tableClosed || packedB || turnIsA || sideShow) return;
+      const strength = tpScore(handB);
       const cost = chaalCost(seenB);
 
-      // Blind: often chaal; see if pot large or strong-unknown bias
       if (!seenB) {
         if ((pot >= BOOT * 6 || rng() < 0.35) && stackB >= seeFee()) {
           debit(false, seeFee());
@@ -3645,7 +3885,12 @@
         if (rng() < 0.1) {
           packedB = true;
           awardPotSeat(true);
-          finishHand(true, 'Opponent packed', 'You take the pot', false, false);
+          endHand({
+            youWin: true,
+            title: 'Opponent packed',
+            subtitle: 'You take the pot',
+            fromRemote: false,
+          });
           return;
         }
         if (raiseCount < 2 && stake < MAX_STAKE && rng() < 0.12 && stackB > cost) {
@@ -3662,15 +3907,7 @@
         return;
       }
 
-      // Seen — side-show when medium-strong and pot large
-      if (
-        bothSeen() &&
-        !packedA &&
-        strength >= 2000 &&
-        strength < 5000 &&
-        pot >= BOOT * 8 &&
-        rng() < 0.45
-      ) {
+      if (bothSeen() && !packedA && strength >= 2000 && strength < 5000 && pot >= BOOT * 8 && rng() < 0.45) {
         sideShow = { fromA: false, status: 'pending', at: Date.now() };
         betSeq += 1;
         startSsTimeout();
@@ -3678,35 +3915,31 @@
         return;
       }
 
-      if (strength >= 5000) {
-        if (raiseCount < MAX_RAISES && stake < MAX_STAKE && rng() < 0.7) {
-          stake = Math.min(MAX_STAKE, stake + BOOT * (rng() < 0.4 ? 2 : 1));
-          raiseCount += 1;
-          debit(false, chaalCost(true));
-          passTurn();
-          paint('Opponent raised');
-          return;
-        }
+      if (strength >= 5000 && raiseCount < MAX_RAISES && stake < MAX_STAKE && rng() < 0.7) {
+        stake = Math.min(MAX_STAKE, stake + BOOT * (rng() < 0.4 ? 2 : 1));
+        raiseCount += 1;
+        debit(false, chaalCost(true));
+        passTurn();
+        paint('Opponent raised');
+        return;
       }
       if (strength < 20 && (pot > BOOT * 8 || rng() < 0.5)) {
         packedB = true;
         awardPotSeat(true);
-        finishHand(true, 'Opponent packed', 'You take the pot', false, false);
+        endHand({ youWin: true, title: 'Opponent packed', subtitle: 'You take the pot', fromRemote: false });
         return;
       }
       if (strength >= 2000 && bothSeen() && rng() < 0.35) {
         const settled = settleShow();
-        phase = 'over';
-        ended = true;
-        clearAi();
-        clearSideShow();
         const youWin = settled.split ? false : settled.aWins;
-        showResultScreen(
-          settled.split ? 'Split pot' : youWin ? 'You win the show' : 'Opponent wins the show',
-          settled.split ? 1 : youWin ? 1 : 0,
-          settled.split ? 1 : youWin ? 0 : 1,
-          settled.split
-        );
+        endHand({
+          youWin,
+          draw: settled.split,
+          title: settled.split ? 'Split pot' : youWin ? 'You win the show' : 'Opponent wins the show',
+          rankLine: tpRankName(handA) + ' vs ' + tpRankName(handB),
+          reveal: true,
+          fromRemote: false,
+        });
         return;
       }
       if (strength >= 3000 && raiseCount < MAX_RAISES && stake < MAX_STAKE && rng() < 0.35) {
@@ -3723,31 +3956,51 @@
     }
 
     if (liveOn) {
-      const joined = joinLive(shell, chat, 'teenpatti', (val) => {
-        if (!val || ended) return;
-        if (val.status === 'forfeit') {
-          applying = true;
-          const iWon = val.winner === liveRoles.me;
-          finishHand(iWon, iWon ? 'Opponent left' : 'You forfeited', '', true, false);
-          applying = false;
-          return;
-        }
-        applyRemoteAct(val);
-      });
+      const joined = joinLive(
+        shell,
+        chat,
+        'teenpatti',
+        (val) => {
+          if (!val || tableClosed) return;
+          if (val.status === 'forfeit') {
+            applying = true;
+            if (liveRoles && liveRoles.opp) settleOppUid = liveRoles.opp;
+            const iWon = val.winner === liveRoles.me;
+            if (!handOver && phase === 'dealt' && pot > 0) {
+              if (iWon) {
+                if (iAmA()) awardPotSeat(true);
+                else awardPotSeat(false);
+              }
+            }
+            endHand({
+              youWin: iWon,
+              title: iWon ? 'Opponent left' : 'You forfeited',
+              subtitle: 'Forfeit · pot to remaining seat',
+              fromRemote: true,
+            });
+            applying = false;
+            return;
+          }
+          applyRemoteAct(val);
+        },
+        null,
+        { stake: liveStake }
+      );
       if (joined) {
         liveHandle = joined.handle;
         liveRoles = joined.roles;
+        if (liveRoles.opp) settleOppUid = liveRoles.opp;
         if (liveRoles.host) {
           dealFresh();
-          pushLive({ status: 'playing' });
-          paint('Boot posted — both blind');
+          pushLive({ status: 'playing', act: 'deal' });
+          paint('Hand ' + handNum + ' · boot posted — both blind');
         } else {
-          shell.body.innerHTML = `<p class="pc-hint">Waiting for deal…</p>`;
+          shell.body.innerHTML = `<p class="pc-hint">Waiting for deal… · Live 1v1 · virtual chips</p>`;
         }
       }
     } else {
       dealFresh();
-      paint('Boot posted — both blind');
+      paint('Hand ' + handNum + ' · boot posted — both blind');
     }
   }
 
@@ -4387,7 +4640,7 @@
       { id: 'carrom', name: 'Carrom', desc: 'Live · stakes · AI', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
       { id: 'pool', name: 'Pool', desc: 'Clear the felt', icon: '🎱', genre: 'board', launch: openPool, order: 32 },
       { id: 'rummy', name: 'Rummy', desc: 'Runs and sets', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
-      { id: 'teenpatti', name: 'Teen Patti', desc: 'Chaal · side-show · pack', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
+      { id: 'teenpatti', name: 'Teen Patti', desc: 'Boot, chaal, side-show · virtual chips', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
       { id: 'bluff', name: 'Bluff', desc: 'Play face-down', icon: '🎭', genre: 'party', launch: openBluff, order: 35 },
       { id: 'sattepe', name: 'Satte pe Satta', desc: 'Build off sevens', icon: '7️⃣', genre: 'party', launch: openSatte, order: 36 },
       { id: 'andarbaahar', name: 'Andar Bahar', desc: 'Pick a side', icon: '🃏', genre: 'party', launch: openAndarBahar, order: 37 },
