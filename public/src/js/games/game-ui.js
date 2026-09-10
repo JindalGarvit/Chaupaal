@@ -126,8 +126,8 @@
     ttt: ['Get three in a row', 'Block your opponent early', 'Center is often strongest'],
     wordguess: [
       'One Daily puzzle per local day — progress saves; finished days stay locked',
+      'Optional Hard Mode: greens stay put · ambers must be reused (locks after guess 1)',
       'Practice is a separate sandbox and never touches your Daily streak',
-      'Green = right spot · amber = elsewhere · grey = not in the word',
     ],
     fiveinrow: ['Connect five in a line', 'Watch diagonals as well as rows', 'Block threats before extending yours'],
     business: ['Buy when you land on empty lots', 'Pay rent on owned properties', 'Richest player at the end wins'],
@@ -987,10 +987,10 @@
   }
 
   /* ── Wordle-style grid share for Shabd ── */
-  function buildShabdGridShare(guesses, target) {
+  function buildShabdGridShare(guesses, target, opts) {
+    const o = opts || {};
     const emoji = { correct: '🟩', present: '🟨', absent: '⬛' };
     const lines = (guesses || []).map((guess) => {
-      const row = [];
       const targetArr = String(target).split('');
       const guessArr = String(guess).split('');
       const states = Array(5).fill('absent');
@@ -1017,7 +1017,8 @@
       const d = new Date();
       return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
     })();
-    return `Chaupaal Shabd Five ${day} ${guesses.length}/6\n\n${lines.join('\n')}`;
+    const hardMark = o.hard ? ' Hard' : '';
+    return `Chaupaal Shabd Five ${day} ${guesses.length}/6${hardMark}\n\n${lines.join('\n')}`;
   }
 
   /** Upload share-card PNG when Cloudinary is available (for story media). */

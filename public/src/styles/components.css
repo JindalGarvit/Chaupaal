@@ -2212,6 +2212,8 @@ html.theme-dark .lehar-empty{color:#fff;}
 .game-overlay--dark .game-chrome-subtitle{color:rgba(255,255,255,.52);}
 .game-chrome-right,.game-chrome-spacer{width:44px;min-width:44px;display:flex;justify-content:flex-end;align-items:center;}
 .game-chrome-action{min-height:36px;border:0;border-radius:10px;padding:7px 10px;background:rgba(255,255,255,.1);color:inherit;font:700 11px 'Space Grotesk',sans-serif;cursor:pointer}.game-chrome-action.is-active{background:var(--game-accent);color:#fff}.game-chrome-metric{font:700 13px 'Space Grotesk',sans-serif;color:var(--game-accent);}
+.wg-hard-btn.is-on{background:#B59F3B;color:#1a1a1a}
+.wg-hard-btn:disabled{opacity:.55;cursor:default}
 .game-back-btn,
 .game-overlay .game-tap-target {
   min-width: var(--game-tap-min);

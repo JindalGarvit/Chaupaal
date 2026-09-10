@@ -5029,11 +5029,12 @@ render();
 }
 
 // ===================== SHABD FIVE =====================
-// Lexicon: Prompt 1 banks. Daily contract (Prompt 2): save / one-shot lock / Practice sealed.
+// Lexicon (1) · Daily save/lock (2) · Hard Mode clue discipline (3)
 const SHABD_ANSWER_BANK=(typeof SHABD_ANSWERS!=='undefined'&&Array.isArray(SHABD_ANSWERS)&&SHABD_ANSWERS.length)
   ?SHABD_ANSWERS
   :['HOUSE','WORLD','HEART','DREAM','LIGHT','OCEAN','RIVER','MUSIC','STONE','POWER'];
 const SHABD_DAILY_KEY='chaupaal_shabd_daily_v1';
+const SHABD_HARD_PREF='chaupaal_shabd_hard_v1';
 
 function shabdDayKey(){
   if(typeof shabdLocalDayKey==='function')return shabdLocalDayKey();
@@ -5064,6 +5065,63 @@ function isShabdAnswerWord(w){
   if(!/^[A-Z]{5}$/.test(u))return false;
   if(typeof SHABD_ANSWERS!=='undefined'&&Array.isArray(SHABD_ANSWERS))return SHABD_ANSWERS.indexOf(u)!==-1;
   return SHABD_ANSWER_BANK.indexOf(u)!==-1;
+}
+function loadShabdHardPref(){
+  try{return localStorage.getItem(SHABD_HARD_PREF)==='1';}catch(e){return false;}
+}
+function saveShabdHardPref(on){
+  try{localStorage.setItem(SHABD_HARD_PREF,on?'1':'0');}catch(e){}
+}
+/** Classic Hard Mode eval (green/present/absent) for a guess vs target. */
+function shabdEvalStates(guess,answer){
+  const states=Array(5);
+  const targetArr=String(answer||'').toUpperCase().split('');
+  const guessArr=String(guess||'').toUpperCase().split('');
+  for(let i=0;i<5;i++){
+    if(guessArr[i]===targetArr[i]){states[i]='correct';targetArr[i]=null;guessArr[i]=null;}
+  }
+  for(let i=0;i<5;i++){
+    if(guessArr[i]==null){if(!states[i])states[i]='correct';continue;}
+    const idx=targetArr.indexOf(guessArr[i]);
+    if(idx!==-1){states[i]='present';targetArr[idx]=null;}
+    else states[i]='absent';
+  }
+  return states;
+}
+/**
+ * Hard Mode: greens stay fixed; present+correct letter counts from each prior row
+ * require at least that many of each letter in the new guess (Wordle-class).
+ * Returns null if legal, else a short reason string.
+ */
+function shabdHardModeViolation(guess,priorGuesses,answer){
+  if(!priorGuesses||!priorGuesses.length)return null;
+  const g=String(guess||'').toUpperCase();
+  if(g.length!==5)return null;
+  const greens=[null,null,null,null,null];
+  const need={};
+  for(let r=0;r<priorGuesses.length;r++){
+    const prev=String(priorGuesses[r]||'').toUpperCase();
+    if(prev.length!==5)continue;
+    const states=shabdEvalStates(prev,answer);
+    const cnt={};
+    for(let i=0;i<5;i++){
+      if(states[i]==='correct')greens[i]=prev[i];
+      if(states[i]==='correct'||states[i]==='present')cnt[prev[i]]=(cnt[prev[i]]||0)+1;
+    }
+    Object.keys(cnt).forEach((L)=>{need[L]=Math.max(need[L]||0,cnt[L]);});
+  }
+  for(let i=0;i<5;i++){
+    if(greens[i]&&g[i]!==greens[i])return 'Guess must use '+greens[i]+' in spot '+(i+1);
+  }
+  const have={};
+  for(let i=0;i<5;i++)have[g[i]]=(have[g[i]]||0)+1;
+  const letters=Object.keys(need).sort();
+  for(let i=0;i<letters.length;i++){
+    const L=letters[i];
+    const n=need[L];
+    if((have[L]||0)<n)return n>1?('Guess must include '+L+' ×'+n):('Guess must include '+L);
+  }
+  return null;
 }
 function loadShabdDailyState(){
   try{
@@ -5104,6 +5162,7 @@ function validateShabdDailySave(o,today){
     currentGuess:o.gameOver?'':current.slice(0,5),
     gameOver:!!o.gameOver,
     won:!!o.won,
+    hardMode:!!o.hardMode,
     keyColors:o.keyColors&&typeof o.keyColors==='object'?o.keyColors:{},
     streakRecorded:!!o.streakRecorded,
     updatedAt:o.updatedAt||Date.now(),
@@ -5115,6 +5174,7 @@ function getShabdDailyState(){
 if(typeof window!=='undefined'){
   window.getShabdDailyState=getShabdDailyState;
   window.shabdDayKey=shabdDayKey;
+  window.shabdHardModeViolation=shabdHardModeViolation;
 }
 
 function openWordGuess(chat,opts){
@@ -5128,6 +5188,8 @@ let guesses=[];let currentGuess='';let gameOver=false;let shake=false;
 let keyColors={};let flippingRow=-1;let revealedCols=0;
 let target='';let streakRecorded=false;
 let restoredFinished=false;
+let hardMode=loadShabdHardPref();
+let hardLocked=false; // lock toggle after first submitted guess
 
 function rebuildKeyColorsFromGuesses(){
   keyColors={};
@@ -5144,6 +5206,7 @@ function persistDaily(extra){
     currentGuess:gameOver?'':String(currentGuess||'').toUpperCase().slice(0,5),
     gameOver:!!gameOver,
     won:!!(gameOver&&guesses.length&&guesses[guesses.length-1]===target),
+    hardMode:!!hardMode,
     keyColors:Object.assign({},keyColors),
     streakRecorded:!!streakRecorded,
     updatedAt:Date.now(),
@@ -5159,6 +5222,8 @@ if(useDaily){
     currentGuess=saved.currentGuess||'';
     gameOver=!!saved.gameOver;
     streakRecorded=!!saved.streakRecorded;
+    hardMode=!!saved.hardMode;
+    hardLocked=guesses.length>0||gameOver;
     keyColors=saved.keyColors&&Object.keys(saved.keyColors).length?Object.assign({},saved.keyColors):{};
     if(!Object.keys(keyColors).length&&guesses.length)rebuildKeyColorsFromGuesses();
     restoredFinished=gameOver;
@@ -5167,10 +5232,14 @@ if(useDaily){
     const stale=loadShabdDailyState();
     if(stale&&stale.day&&stale.day!==todayKey)clearShabdDailyState();
     target=shabdPickDaily();
+    hardMode=loadShabdHardPref();
+    hardLocked=false;
     persistDaily();
   }
 }else{
   target=pickShabdPractice();
+  hardMode=loadShabdHardPref();
+  hardLocked=false;
 }
 
 const kbHandler=e=>{
@@ -5249,6 +5318,22 @@ function letterHaptic(kind){
   }catch(e){}
 }
 
+function rejectGuess(msg){
+  shake=true;
+  if(typeof shakeInvalidMove==='function')shakeInvalidMove(document.getElementById('wgGrid'),{toast:msg});
+  else{if(typeof showToast==='function')showToast(msg);if(typeof gameFeedback==='function')gameFeedback('invalid');}
+  render();
+  gs.schedule(()=>{shake=false;render();},500);
+}
+
+function setHardMode(next){
+  if(hardLocked||gameOver)return;
+  hardMode=!!next;
+  saveShabdHardPref(hardMode);
+  if(useDaily)persistDaily();
+  render();
+}
+
 function finishDailyIfNeeded(won){
   if(!useDaily)return;
   gameOver=true;
@@ -5256,28 +5341,32 @@ function finishDailyIfNeeded(won){
     if(typeof recordShabdDailyResult==='function')recordShabdDailyResult(won);
     streakRecorded=true;
   }
-  persistDaily({gameOver:true,won:!!won,streakRecorded:true,currentGuess:''});
+  persistDaily({gameOver:true,won:!!won,streakRecorded:true,currentGuess:'',hardMode:!!hardMode});
 }
 
 function render(){
   if(!gs.alive())return;
   const dayLabel=useDaily?`Daily · ${shabdDailySeed()}`:'Practice';
+  const hardBit=hardMode?' · Hard':'';
   const streak=typeof getShabdStreak==='function'?getShabdStreak():null;
   const streakBit=useDaily&&streak&&streak.streak?` · Streak ${streak.streak}`:'';
   const won=gameOver&&guesses.length>0&&guesses[guesses.length-1]===target;
   const shareCard=gameOver&&typeof buildGameShareCard==='function'
     ? buildGameShareCard('wordguess',{
         scoreLine: won?`${guesses.length}/6`:'X/6',
-        meta: dayLabel+(streak&&streak.streak?` · streak ${streak.streak}`:''),
+        meta: dayLabel+hardBit+(streak&&streak.streak?` · streak ${streak.streak}`:''),
       })
     : '';
   const againLabel=useDaily?'Practice a random word':'Play again';
+  const resultSub=won
+    ?(`Solved in ${guesses.length}`+(hardMode?' · Hard':''))
+    :(`Word was ${target}`+(hardMode?' · Hard':''));
   const resultBlock=gameOver&&typeof gameResultHtml==='function'
     ? gameResultHtml({
         gameId: 'wordguess',
         glyph: won?'✓':'·',
         title: won?'Brilliant!':'Nice try',
-        subtitle: won?`Solved in ${guesses.length}`:`Word was ${target}`,
+        subtitle: resultSub,
         vsBest: (typeof formatVsBest==='function'&&won)?formatVsBest('wordguess', guesses.length):undefined,
         shareCardHtml: shareCard,
         actions: [
@@ -5291,28 +5380,37 @@ function render(){
   const hud=typeof gameHudHtml==='function'&&!gameOver
     ? gameHudHtml([
         {label:'Guess',value:`${guesses.length+1}/6`},
+        hardMode?{label:'Mode',value:'Hard'}:null,
         useDaily&&streak?{label:'Streak',value:String(streak.streak||0)}:null,
       ])
     : '';
+  const hardDisabled=hardLocked||gameOver;
+  const hardToggle=`<button type="button" id="wgHard" class="game-chrome-action wg-hard-btn${hardMode?' is-on':''}" ${hardDisabled?'disabled':''} title="${hardDisabled?'Locked for this puzzle':'Must use revealed hints'}" aria-pressed="${hardMode?'true':'false'}">${hardMode?'Hard ✓':'Hard'}</button>`;
   const chromeRight=gameOver
-    ?''
-    :'<button type="button" id="wgNew" class="game-chrome-action">Practice</button>';
+    ? (hardMode?'<span class="game-chrome-action" style="opacity:.85;pointer-events:none;">Hard</span>':'')
+    : `${hardToggle}<button type="button" id="wgNew" class="game-chrome-action">Practice</button>`;
   overlay.innerHTML=`
-    ${gameChromeHtml({title:'Shabd Five',subtitle:dayLabel+streakBit,backId:'wgBack',rightHtml:chromeRight})}
+    ${gameChromeHtml({title:'Shabd Five',subtitle:dayLabel+hardBit+streakBit,backId:'wgBack',rightHtml:chromeRight})}
     ${hud}
     <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:10px;" id="wgGrid"></div>
-    ${resultBlock||(gameOver?`<div style="text-align:center;padding:8px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;color:${won?'#538D4E':'#B59F3B'};flex-shrink:0;">${won?'Brilliant!':'The word was '+target}</div>`:'')}
+    ${resultBlock||(gameOver?`<div style="text-align:center;padding:8px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;color:${won?'#538D4E':'#B59F3B'};flex-shrink:0;">${won?'Brilliant!':'The word was '+target}${hardMode?' · Hard':''}</div>`:'')}
     ${gameOver?'':`<div style="flex-shrink:0;padding:8px;padding-bottom:max(8px,env(safe-area-inset-bottom));" id="wgKeyboard"></div>`}
   `;
   document.getElementById('wgBack').addEventListener('click',()=>{askWordGuessLeave();});
   document.getElementById('wgNew')?.addEventListener('click',()=>{goToPractice(false);});
+  document.getElementById('wgHard')?.addEventListener('click',()=>{
+    if(hardDisabled)return;
+    setHardMode(!hardMode);
+  });
 
   if(gameOver&&typeof wireGameResultActions==='function'){
-    const gridText=typeof buildShabdGridShare==='function'?buildShabdGridShare(guesses,target):`Chaupaal Shabd Five ${guesses.length}/6`;
+    const gridText=typeof buildShabdGridShare==='function'
+      ?buildShabdGridShare(guesses,target,{hard:hardMode})
+      :`Chaupaal Shabd Five ${guesses.length}/6`;
     const shareStats={
       scoreLine: won?`${guesses.length}/6`:'X/6',
       score: won?guesses.length:6,
-      meta: dayLabel,
+      meta: dayLabel+hardBit,
       text: gridText+`\n\nPlay on Chaupaal`,
       includeImage: false,
     };
@@ -5419,10 +5517,16 @@ function handleInput(k){
     try{if(typeof haptic==='function')haptic('light');}catch(e){}
   }
   else if(k==='↵'||k==='Enter'){
-    if(currentGuess.length!==5){shake=true;if(typeof shakeInvalidMove==='function')shakeInvalidMove(document.getElementById('wgGrid'));else if(typeof gameFeedback==='function')gameFeedback('invalid');render();gs.schedule(()=>{shake=false;render();},500);return;}
-    if(!isShabdGuessAllowed(currentGuess)){if(typeof shakeInvalidMove==='function')shakeInvalidMove(document.getElementById('wgGrid'),{toast:'Not in word list'});else{showToast('Not in word list');if(typeof gameFeedback==='function')gameFeedback('invalid');}shake=true;render();gs.schedule(()=>{shake=false;render();},500);return;}
+    if(currentGuess.length!==5){rejectGuess('Need 5 letters');return;}
+    if(!isShabdGuessAllowed(currentGuess)){rejectGuess('Not in word list');return;}
+    if(hardMode){
+      const hardErr=shabdHardModeViolation(currentGuess,guesses,target);
+      if(hardErr){rejectGuess(hardErr);return;}
+    }
     const guess=currentGuess;
     guesses.push(guess);currentGuess='';
+    hardLocked=true;
+    saveShabdHardPref(hardMode);
     if(useDaily)persistDaily();
     staggerReveal(guess,()=>{
       if(guess===target||guesses.length===6){
