@@ -290,31 +290,223 @@
   }
 
   /* ---------- Tambola ---------- */
-  function tambolaTicket(rng) {
-    const nums = Array.from({ length: 90 }, (_, i) => i + 1);
-    const picked = typeof shuffleArray === 'function' ? shuffleArray(nums, rng).slice(0, 15) : nums.slice(0, 15);
-    picked.sort((a, b) => a - b);
+  /**
+   * Authentic Housie ticket (Prompt 1/3).
+   * Columns j=0..8 → bands (10*j+1)..(10*j+10) i.e. 1–10 … 81–90.
+   * Exactly 15 numbers; 5 filled cells per row; column counts 1–2 (six doubles, three singles).
+   * Placement: numbers in a column top→bottom ascending; backtracking so each row gets 5.
+   */
+  function tambolaColBand(j) {
+    const lo = 10 * j + 1;
+    const hi = 10 * j + 10;
+    return { lo, hi };
+  }
+
+  function tambolaTicketLegal(t) {
+    if (!t || !t.grid || t.grid.length !== 3) return false;
+    const seen = Object.create(null);
+    let filled = 0;
+    for (let r = 0; r < 3; r++) {
+      if (!t.grid[r] || t.grid[r].length !== 9) return false;
+      let rowN = 0;
+      for (let c = 0; c < 9; c++) {
+        const v = t.grid[r][c];
+        if (v == null) continue;
+        const n = v | 0;
+        if (n < 1 || n > 90 || seen[n]) return false;
+        const band = tambolaColBand(c);
+        if (n < band.lo || n > band.hi) return false;
+        seen[n] = true;
+        rowN++;
+        filled++;
+      }
+      if (rowN !== 5) return false;
+    }
+    if (filled !== 15) return false;
+    if (!t.cells || t.cells.length !== 15) return false;
+    for (let i = 0; i < t.cells.length; i++) {
+      if (!seen[t.cells[i]]) return false;
+    }
+    // Column ascending when multiple
+    for (let c = 0; c < 9; c++) {
+      let prev = 0;
+      for (let r = 0; r < 3; r++) {
+        const v = t.grid[r][c];
+        if (v == null) continue;
+        if ((v | 0) <= prev) return false;
+        prev = v | 0;
+      }
+    }
+    return true;
+  }
+
+  function tambolaPickColCounts(rng) {
+    // 9 columns start at 1 → add 6 extras (cap 2) ⇒ six columns with 2, three with 1.
+    const counts = [1, 1, 1, 1, 1, 1, 1, 1, 1];
+    let extras = 6;
+    let guard = 0;
+    while (extras > 0 && guard++ < 80) {
+      const cands = [];
+      for (let c = 0; c < 9; c++) if (counts[c] < 2) cands.push(c);
+      if (!cands.length) break;
+      const c = cands[(rng() * cands.length) | 0];
+      counts[c] += 1;
+      extras -= 1;
+    }
+    return counts;
+  }
+
+  function tambolaCombinations(n, k) {
+    const out = [];
+    function rec(start, acc) {
+      if (acc.length === k) {
+        out.push(acc.slice());
+        return;
+      }
+      for (let i = start; i < n; i++) {
+        acc.push(i);
+        rec(i + 1, acc);
+        acc.pop();
+      }
+    }
+    rec(0, []);
+    return out;
+  }
+
+  function tambolaPlaceGrid(colNums, rng) {
+    const grid = [
+      [null, null, null, null, null, null, null, null, null],
+      [null, null, null, null, null, null, null, null, null],
+      [null, null, null, null, null, null, null, null, null],
+    ];
+    const rowFill = [0, 0, 0];
+    const order = [0, 1, 2, 3, 4, 5, 6, 7, 8].sort((a, b) => colNums[b].length - colNums[a].length);
+
+    function bt(oi) {
+      if (oi >= 9) return rowFill[0] === 5 && rowFill[1] === 5 && rowFill[2] === 5;
+      const c = order[oi];
+      const nums = colNums[c];
+      const need = nums.length;
+      const combos = tambolaCombinations(3, need);
+      // Prefer random order among valid combos
+      for (let i = combos.length - 1; i > 0; i--) {
+        const j = (rng() * (i + 1)) | 0;
+        const tmp = combos[i];
+        combos[i] = combos[j];
+        combos[j] = tmp;
+      }
+      for (let ci = 0; ci < combos.length; ci++) {
+        const rows = combos[ci];
+        let ok = true;
+        for (let k = 0; k < rows.length; k++) {
+          if (rowFill[rows[k]] >= 5) {
+            ok = false;
+            break;
+          }
+        }
+        if (!ok) continue;
+        for (let k = 0; k < rows.length; k++) {
+          grid[rows[k]][c] = nums[k];
+          rowFill[rows[k]] += 1;
+        }
+        if (bt(oi + 1)) return true;
+        for (let k = 0; k < rows.length; k++) {
+          grid[rows[k]][c] = null;
+          rowFill[rows[k]] -= 1;
+        }
+      }
+      return false;
+    }
+
+    return bt(0) ? grid : null;
+  }
+
+  function tambolaTicketFromGrid(grid) {
+    const cells = [];
     const rows = [[], [], []];
-    picked.forEach((n, i) => rows[i % 3].push(n));
-    rows.forEach((r) => r.sort((a, b) => a - b));
-    return { cells: picked, rows, marked: {} };
+    for (let r = 0; r < 3; r++) {
+      for (let c = 0; c < 9; c++) {
+        const v = grid[r][c];
+        if (v != null) {
+          cells.push(v);
+          rows[r].push(v);
+        }
+      }
+    }
+    cells.sort((a, b) => a - b);
+    return {
+      grid: grid.map((row) => row.slice()),
+      cells,
+      rows,
+      marked: {},
+    };
+  }
+
+  function tambolaTicket(rng) {
+    const r = typeof rng === 'function' ? rng : Math.random;
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const counts = tambolaPickColCounts(r);
+      const colNums = [];
+      for (let c = 0; c < 9; c++) {
+        const band = tambolaColBand(c);
+        const pool = [];
+        for (let n = band.lo; n <= band.hi; n++) pool.push(n);
+        const shuffled =
+          typeof shuffleArray === 'function' ? shuffleArray(pool, r) : pool.slice().sort(() => r() - 0.5);
+        const pick = shuffled.slice(0, counts[c]).sort((a, b) => a - b);
+        colNums.push(pick);
+      }
+      const grid = tambolaPlaceGrid(colNums, r);
+      if (!grid) continue;
+      const ticket = tambolaTicketFromGrid(grid);
+      if (tambolaTicketLegal(ticket)) return ticket;
+    }
+    throw new Error('Tambola: could not build a legal 3×9 Housie ticket');
+  }
+
+  function hydrateTambolaTicket(raw) {
+    if (!raw || !raw.grid || !Array.isArray(raw.grid) || raw.grid.length !== 3) return null;
+    const t = tambolaTicketFromGrid(raw.grid);
+    t.marked = Object.assign({}, raw.marked || {});
+    return tambolaTicketLegal(t) ? t : null;
+  }
+
+  function serializeTambolaTicket(t) {
+    return {
+      grid: t.grid.map((row) => row.slice()),
+      cells: t.cells.slice(),
+      rows: t.rows.map((row) => row.slice()),
+    };
   }
 
   function openTambola() {
     const chat = resolveChat(arguments[0]);
     const liveOn = chatLiveOn(chat);
     const rng = rngFn();
+    const callTimers = [];
     const shell = openShell({
       id: 'tambola',
       title: 'Tambola',
-      subtitle: liveOn ? liveSub() : practiceSub('Full house vs caller'),
+      subtitle: liveOn ? liveSub() : practiceSub('3×9 ticket · full house'),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
       accent: '#E91E8C',
       bg: '#1A0010',
+      cleanup: () => {
+        callTimers.forEach((t) => clearTimeout(t));
+        callTimers.length = 0;
+      },
     });
     if (!shell) return;
+
+    function scheduleCall(fn, ms) {
+      if (shell.gs && typeof shell.gs.schedule === 'function') return shell.gs.schedule(fn, ms);
+      const t = setTimeout(fn, ms);
+      callTimers.push(t);
+      return t;
+    }
+
     let ticket = tambolaTicket(rng);
     let bag =
       typeof shuffleArray === 'function' ? shuffleArray(Array.from({ length: 90 }, (_, i) => i + 1), rng) : [];
@@ -327,26 +519,81 @@
     let liveRoles = null;
     let liveHandle = null;
     let myTicketKey = 'ticketA';
+    let ticketA = null;
+    let ticketB = null;
+
+    function markedCountOf(t) {
+      return Object.keys((t && t.marked) || {}).length;
+    }
+
+    function ticketGridHtml(t) {
+      if (!t || !t.grid) return '';
+      return t.grid
+        .map((row, ri) => {
+          const cells = row
+            .map((v) => {
+              if (v == null) return '<span class="pc-tcell is-blank" aria-hidden="true"></span>';
+              const on = t.marked && t.marked[v] ? ' is-on' : '';
+              return '<span class="pc-tcell' + on + '">' + v + '</span>';
+            })
+            .join('');
+          return '<div class="pc-trow" data-row="' + ri + '">' + cells + '</div>';
+        })
+        .join('');
+    }
+
+    function callBoardHtml() {
+      const called = Object.create(null);
+      for (let i = 0; i < idx && i < bag.length; i++) called[bag[i]] = true;
+      const lastN = last !== '—' && last != null ? last | 0 : 0;
+      let html = '<div class="pc-callboard" aria-label="Numbers called">';
+      for (let decade = 0; decade < 9; decade++) {
+        html += '<div class="pc-callboard-row">';
+        for (let k = 1; k <= 10; k++) {
+          const n = decade * 10 + k;
+          if (n > 90) continue;
+          const cls =
+            'pc-boardcell' +
+            (called[n] ? ' is-called' : '') +
+            (n === lastN ? ' is-current' : '');
+          html += '<span class="' + cls + '">' + n + '</span>';
+        }
+        html += '</div>';
+      }
+      html += '</div>';
+      return html;
+    }
 
     function paint() {
-      const markedCount = Object.keys(ticket.marked).length;
-      shell.body.innerHTML = `
-        <div class="pc-tambola">
-          <div class="pc-call">${esc(String(last))}</div>
-          <p class="pc-hint">Marked ${markedCount}/15 · caller ${idx}/90${liveOn ? ' · Live' : ''}</p>
-          <div class="pc-ticket">
-            ${ticket.cells
-              .map((n) => `<span class="pc-tcell${ticket.marked[n] ? ' is-on' : ''}">${n}</span>`)
-              .join('')}
-          </div>
-          <button type="button" class="cs-hit" data-house ${markedCount < 15 ? 'disabled' : ''}>Claim full house</button>
-        </div>`;
+      const markedCount = markedCountOf(ticket);
+      shell.body.innerHTML =
+        '<div class="pc-tambola">' +
+        '<div class="pc-call" aria-live="polite">' +
+        esc(String(last)) +
+        '</div>' +
+        '<p class="pc-hint">Marked ' +
+        markedCount +
+        '/15 · caller ' +
+        idx +
+        '/90' +
+        (liveOn ? ' · Live' : '') +
+        '</p>' +
+        callBoardHtml() +
+        '<div class="pc-ticket pc-ticket--housie" role="grid" aria-label="Your Tambola ticket">' +
+        ticketGridHtml(ticket) +
+        '</div>' +
+        '<button type="button" class="cs-hit" data-house' +
+        (markedCount < 15 ? ' disabled' : '') +
+        '>Claim full house</button>' +
+        '</div>';
       shell.body.querySelector('[data-house]')?.addEventListener('click', () => claim(true));
     }
 
     function claim(player, fromRemote) {
       if (claimed) return;
       claimed = true;
+      callTimers.forEach((t) => clearTimeout(t));
+      callTimers.length = 0;
       if (liveOn && liveHandle && !fromRemote && !applying) {
         liveHandle.push({
           status: 'over',
@@ -371,13 +618,13 @@
       buzz('dice');
       if (ticket.cells.indexOf(last) >= 0) ticket.marked[last] = true;
       paint();
-      if (Object.keys(ticket.marked).length >= 15) claim(true);
+      if (markedCountOf(ticket) >= 15) claim(true);
     }
 
     function tick() {
       if (!shell.alive() || claimed || liveOn) return;
       if (idx >= bag.length) {
-        claim(Object.keys(ticket.marked).length >= 15);
+        claim(markedCountOf(ticket) >= 15);
         return;
       }
       last = bag[idx++];
@@ -385,7 +632,7 @@
       if (ticket.cells.indexOf(last) >= 0) ticket.marked[last] = true;
       if (rng() > 0.72) aiMarked += 1;
       paint();
-      if (Object.keys(ticket.marked).length >= 15) {
+      if (markedCountOf(ticket) >= 15) {
         claim(true);
         return;
       }
@@ -393,7 +640,7 @@
         claim(false);
         return;
       }
-      shell.gs && shell.gs.schedule ? shell.gs.schedule(tick, 700) : setTimeout(tick, 700);
+      scheduleCall(tick, 700);
     }
 
     if (liveOn) {
@@ -424,27 +671,51 @@
         const st = val.state || {};
         if (st.bag && Array.isArray(st.bag)) bag = st.bag;
         if (st.ticketA && st.ticketB) {
-          const mine = liveRoles.me === liveRoles.playerA ? st.ticketA : st.ticketB;
-          ticket = { cells: mine.cells, rows: mine.rows || [], marked: ticket.marked || {} };
+          const mineRaw = liveRoles.me === liveRoles.playerA ? st.ticketA : st.ticketB;
+          const hydrated = hydrateTambolaTicket(mineRaw);
+          if (hydrated) {
+            const keepMarked = ticket && ticket.marked ? ticket.marked : {};
+            ticket = hydrated;
+            // Re-daub any already-called numbers on new/synced ticket
+            for (let i = 0; i < idx && i < bag.length; i++) {
+              const n = bag[i];
+              if (ticket.cells.indexOf(n) >= 0) ticket.marked[n] = true;
+            }
+            Object.keys(keepMarked).forEach((k) => {
+              const n = +k;
+              if (ticket.cells.indexOf(n) >= 0) ticket.marked[n] = true;
+            });
+          }
           myTicketKey = liveRoles.me === liveRoles.playerA ? 'ticketA' : 'ticketB';
+          ticketA = st.ticketA;
+          ticketB = st.ticketB;
         }
         if (typeof st.idx === 'number' && st.idx > idx) {
           for (let i = idx; i < st.idx; i++) {
-            if (bag[i] != null) applyCall(bag[i]);
+            if (bag[i] == null) continue;
+            last = bag[i];
+            if (ticket.cells.indexOf(last) >= 0) ticket.marked[last] = true;
           }
           idx = st.idx;
+          buzz('dice');
+          paint();
+          if (markedCountOf(ticket) >= 15) claim(true);
         } else if (st.last != null && st.last !== last && st.idx != null) {
-          idx = st.idx;
+          idx = st.idx | 0;
           applyCall(st.last);
+        } else if (ticket && ticket.grid) {
+          paint();
         }
       });
       if (joined) {
         liveHandle = joined.handle;
         liveRoles = joined.roles;
         if (liveRoles.host) {
-          const tA = tambolaTicket(rng);
-          const tB = tambolaTicket(rng);
-          ticket = tA;
+          ticketA = serializeTambolaTicket(tambolaTicket(rng));
+          ticketB = serializeTambolaTicket(tambolaTicket(rng));
+          ticket = hydrateTambolaTicket(
+            liveRoles.me === liveRoles.playerA ? ticketA : ticketB
+          );
           bag =
             typeof shuffleArray === 'function'
               ? shuffleArray(Array.from({ length: 90 }, (_, i) => i + 1), rng)
@@ -454,31 +725,36 @@
             turn: liveRoles.me,
             state: {
               bag,
-              ticketA: { cells: tA.cells, rows: tA.rows },
-              ticketB: { cells: tB.cells, rows: tB.rows },
+              ticketA,
+              ticketB,
               idx: 0,
               last: '—',
             },
           });
+          paint();
           const hostTick = () => {
             if (!shell.alive() || claimed) return;
             if (idx >= bag.length) {
-              claim(Object.keys(ticket.marked).length >= 15);
+              claim(markedCountOf(ticket) >= 15);
               return;
             }
             const n = bag[idx++];
             applyCall(n);
             liveHandle.push({
               status: 'playing',
-              state: { bag, ticketA: { cells: tA.cells, rows: tA.rows }, ticketB: { cells: tB.cells, rows: tB.rows }, idx, last: n },
+              state: {
+                bag,
+                ticketA,
+                ticketB,
+                idx,
+                last: n,
+              },
             });
-            if (!claimed) {
-              shell.gs && shell.gs.schedule ? shell.gs.schedule(hostTick, 700) : setTimeout(hostTick, 700);
-            }
+            if (!claimed) scheduleCall(hostTick, 700);
           };
-          shell.gs && shell.gs.schedule ? shell.gs.schedule(hostTick, 900) : setTimeout(hostTick, 900);
+          scheduleCall(hostTick, 900);
         } else {
-          shell.body.innerHTML = `<p class="pc-hint">Waiting for caller…</p>`;
+          shell.body.innerHTML = '<p class="pc-hint">Waiting for caller…</p>';
         }
       }
     } else {
@@ -9061,7 +9337,7 @@
 
   if (typeof registerGame === 'function') {
     const games = [
-      { id: 'tambola', name: 'Tambola', desc: 'Ticket · full house', icon: '🎱', genre: 'party', launch: openTambola, order: 30 },
+      { id: 'tambola', name: 'Tambola', desc: '3×9 Housie · call board', icon: '🎱', genre: 'party', launch: openTambola, order: 30 },
       { id: 'carrom', name: 'Carrom', desc: 'Live · stakes · AI', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
       { id: 'pool', name: 'Pool', desc: '8-ball · solids & stripes', icon: '🎱', genre: 'board', launch: openPool, order: 32 },
       { id: 'rummy', name: 'Rummy', desc: 'Indian 13-card · jokers · points', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },

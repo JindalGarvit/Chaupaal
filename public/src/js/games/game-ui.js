@@ -170,7 +170,11 @@
       'All-out +2 · 2 empties → DO OR DIE · ≤2 alive tackle = super (+2) · mat revives',
       'Live: both seats raid & defend · leave = forfeit · rematch is a fresh court · virtual stakes',
     ],
-    tambola: ['Numbers auto-daub on your ticket', 'Claim full house at 15', 'Caller races another ticket'],
+    tambola: [
+      'Your ticket is a real 3×9 Housie card — 15 numbers, five per row',
+      'Numbers auto-daub when called · watch the 1–90 call board',
+      'Claim full house at 15 marked · Live host calls the bag',
+    ],
     carrom: ['Pocket your colour', 'Queen then cover', 'Striker pocket is a foul'],
     uno: ['Match colour or number to play', 'Classic has optional house-rule toggles', "Shout 'Oh No!' at 1 card · Blaze hits harder · Flip switches sides"],
     pool: [
