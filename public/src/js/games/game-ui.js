@@ -130,7 +130,11 @@
       'Practice is a sealed sandbox — never touches streak or Daily stats',
     ],
     fiveinrow: ['Connect five in a line', 'Watch diagonals as well as rows', 'Block threats before extending yours'],
-    business: ['Skip a buy and it goes to auction — Raise or Pass', 'Mortgage (½ price) or sell houses (½ cost) when cash is tight', 'Doubles, jail, and Start ₹2000 still apply — last standing wins'],
+    business: [
+      'Complete colour sets, build houses evenly, collect rent',
+      'Jail, doubles, auctions, mortgage/sell-back when cash is tight',
+      'Deal deeds ± cash on your turn — Live is 1v1, Practice up to 6',
+    ],
     scribble: ['Draw clearly — keep it simple', 'Guessers type in the chat box', 'Rounds rotate who draws'],
     rushrunner: [
       'Classic or Daily run · each theme has a named flavor (Coin Rush, Heavy Traffic, Long Sprint)',

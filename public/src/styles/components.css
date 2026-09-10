@@ -4539,6 +4539,20 @@ select:focus-visible,
 .bus-mini-tile.is-focus{outline:2px solid #FFC93C;z-index:2;}
 .bus-mini-tile.is-here::after{content:"";position:absolute;inset:30%;border-radius:50%;background:#fff;}
 .bus-controls{padding:10px 16px calc(12px + env(safe-area-inset-bottom,0px));flex-shrink:0;}
+.bus-controls--row{display:flex;gap:8px;align-items:stretch;}
+.bus-controls--row .bus-roll-btn{flex:1;}
+.bus-side-btn{flex:0 0 auto;min-width:72px;min-height:48px;border-radius:14px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font:700 13px "Space Grotesk",sans-serif;cursor:pointer;}
+.bus-trade-bar{margin:0 14px 8px;padding:10px 12px;border-radius:14px;background:rgba(52,152,219,.12);border:1.5px solid rgba(52,152,219,.4);flex-shrink:0;max-height:42vh;overflow:auto;}
+.bus-trade-title{font:700 13px "Space Grotesk",sans-serif;color:#fff;margin-bottom:6px;}
+.bus-trade-meta,.bus-trade-hint,.bus-trade-section{font-size:11px;color:rgba(255,255,255,.7);margin-bottom:6px;}
+.bus-trade-hint{opacity:.8;}
+.bus-trade-partners,.bus-trade-deeds{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+.bus-trade-chip{min-height:32px;padding:4px 10px;border-radius:999px;border:1.5px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:#fff;font:700 11px "Space Grotesk",sans-serif;cursor:pointer;}
+.bus-trade-chip.is-on{background:var(--game-accent,#B98932);border-color:transparent;}
+.bus-trade-cash{width:88px;margin-left:6px;padding:4px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:#12121c;color:#fff;font:700 12px "Space Grotesk",sans-serif;}
+.bus-trade-actions{display:flex;gap:8px;margin-top:6px;}
+.bus-trade-actions .bus-deed-btn{flex:1;min-height:44px;border-radius:12px;border:2px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font:700 13px "Space Grotesk",sans-serif;cursor:pointer;}
+.bus-trade-actions .bus-deed-btn--primary{background:var(--game-accent,#B98932);border-color:transparent;}
 .bus-roll-btn{width:100%;min-height:48px;border:0;border-radius:14px;background:var(--game-accent,#B98932);color:#fff;font:700 15px "Space Grotesk",sans-serif;cursor:pointer;}
 .bus-roll-btn:disabled{opacity:.45;cursor:default;}
 

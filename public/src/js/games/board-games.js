@@ -418,13 +418,19 @@ function openBusinessGame(chat,playerCount){
   let auction=null;
   /** Distress: raise cash for rent/tax/fine before bankrupt. */
   let distress=null;
+  /** Pending trade proposal between two seats. */
+  let trade=null;
+  /** Local compose sheet (not synced until Propose). */
+  let tradeDraft=null;
+  let tradeOpen=false;
   /** House cost by colour group (₹15k start). Hotel = one more same cost. No bank scarcity. */
   const HOUSE_COST={0:500,1:500,2:1000,3:1000,4:1500,5:1500,6:2000,7:2000};
   const JAIL_IDX=10;
   const GO_SALARY=2000; // keep Prompt-era Start cash
   const JAIL_FINE=500;  // scaled classic fine for ₹15k start
   const AUCTION_SECS=12;
-  const BUS_SECS=20;let busTimer=BUS_SECS;let busInterval=null;let diceIv=null;let auctionInterval=null;
+  const TRADE_SECS=25;
+  const BUS_SECS=20;let busTimer=BUS_SECS;let busInterval=null;let diceIv=null;let auctionInterval=null;let tradeInterval=null;
 
   const overlay=document.createElement('div');
   overlay.style.cssText='position:absolute;inset:0;background:#1a1a2e;z-index:80;display:flex;flex-direction:column;';
@@ -432,7 +438,8 @@ function openBusinessGame(chat,playerCount){
   const gs=begin?begin({
     type:'business',title:'Business',mode:liveOn?'live':'practice',chat,overlay,
     cleanup(){
-      stopBusTimer();stopAuctionTimer();if(diceIv){clearInterval(diceIv);diceIv=null;}
+      stopBusTimer();stopAuctionTimer();stopTradeTimer();if(diceIv){clearInterval(diceIv);diceIv=null;}
+      trade=null;tradeDraft=null;
       if(liveHandle&&!leaveConfirmed){
         try{liveHandle.leave({forfeit:!gameOver});}catch(e){try{liveHandle.leave();}catch(e2){}}
       }
@@ -447,10 +454,12 @@ function openBusinessGame(chat,playerCount){
   if(typeof prepareGameOverlay==='function') prepareGameOverlay(overlay,{theme:'dark',gameId:'business'});
   const alive=()=>gs?gs.alive():true;
   const schedule=(fn,ms)=>gs?gs.schedule(fn,ms):setTimeout(fn,ms);
-  const close=()=>{if(gs)gs.close();else{stopBusTimer();stopAuctionTimer();if(diceIv)clearInterval(diceIv);overlay.remove();}};
+  const close=()=>{if(gs)gs.close();else{stopBusTimer();stopAuctionTimer();stopTradeTimer();if(diceIv)clearInterval(diceIv);overlay.remove();}};
   const isMyControl=()=>currentPlayer===mySeat;
   const isAuctionControl=()=>!!(auction&&auction.turnSeat===mySeat);
   const isDistressControl=()=>!!(distress&&distress.payerSeat===mySeat);
+  const isTradeResponder=()=>!!(trade&&trade.status==='pending'&&trade.to===mySeat);
+  const isTradeProposer=()=>!!(trade&&trade.status==='pending'&&trade.from===mySeat);
 
   async function askBusLeave(){
     if(gameOver){close();return;}
@@ -541,6 +550,30 @@ function openBusinessGame(chat,playerCount){
       note:raw.note||'',
     };
   }
+  function serializeTrade(){
+    if(!trade)return null;
+    return {
+      from:Number(trade.from),
+      to:Number(trade.to),
+      offerProps:Array.isArray(trade.offerProps)?trade.offerProps.map(Number):[],
+      offerCash:Math.max(0,Number(trade.offerCash)||0),
+      askProps:Array.isArray(trade.askProps)?trade.askProps.map(Number):[],
+      askCash:Math.max(0,Number(trade.askCash)||0),
+      status:trade.status||'pending',
+    };
+  }
+  function applyTrade(raw){
+    if(!raw||typeof raw!=='object'){trade=null;return;}
+    trade={
+      from:Number(raw.from),
+      to:Number(raw.to),
+      offerProps:Array.isArray(raw.offerProps)?raw.offerProps.map(Number):[],
+      offerCash:Math.max(0,Number(raw.offerCash)||0),
+      askProps:Array.isArray(raw.askProps)?raw.askProps.map(Number):[],
+      askCash:Math.max(0,Number(raw.askCash)||0),
+      status:raw.status||'pending',
+    };
+  }
   function serializeImprovements(){
     const out={};
     Object.keys(improvements).forEach((k)=>{
@@ -576,6 +609,7 @@ function openBusinessGame(chat,playerCount){
   }
   function liveTurnUid(){
     if(gameOver||!liveRoles)return null;
+    if(trade&&trade.status==='pending')return trade.to===0?liveRoles.playerA:liveRoles.playerB;
     if(auction)return auction.turnSeat===0?liveRoles.playerA:liveRoles.playerB;
     if(distress)return distress.payerSeat===0?liveRoles.playerA:liveRoles.playerB;
     return currentPlayer===0?liveRoles.playerA:liveRoles.playerB;
@@ -591,6 +625,7 @@ function openBusinessGame(chat,playerCount){
         mortgaged:serializeMortgaged(),
         auction:serializeAuction(),
         distress:serializeDistress(),
+        trade:serializeTrade(),
         currentPlayer,diceVal:diceVal.slice(),message,gameOver,
         awaitingBuy,awaitingJailChoice,focusPos,doublesStreak,pendingExtraTurn,
       },
@@ -604,7 +639,7 @@ function openBusinessGame(chat,playerCount){
   }
 
   function startBusTimer(){
-    if(auction||distress)return;
+    if(auction||distress||trade)return;
     if(!isMyControl()||!alive()||awaitingBuy)return;
     clearInterval(busInterval);busTimer=BUS_SECS;
     busInterval=setInterval(()=>{
@@ -614,7 +649,7 @@ function openBusinessGame(chat,playerCount){
       if(el)el.textContent=busTimer+'s';
       if(busTimer<=0){
         clearInterval(busInterval);
-        if(rolling||gameOver||awaitingBuy||auction||distress)return;
+        if(rolling||gameOver||awaitingBuy||auction||distress||trade)return;
         if(awaitingJailChoice)jailRollAttempt();
         else rollBusDice();
       }
@@ -622,6 +657,32 @@ function openBusinessGame(chat,playerCount){
   }
   function stopBusTimer(){clearInterval(busInterval);busInterval=null;}
   function stopAuctionTimer(){clearInterval(auctionInterval);auctionInterval=null;}
+  function stopTradeTimer(){clearInterval(tradeInterval);tradeInterval=null;}
+  function startTradeTimer(){
+    stopTradeTimer();
+    if(!trade||trade.status!=='pending'||!alive()||gameOver)return;
+    if(liveOn&&!isTradeResponder())return;
+    if(!liveOn&&trade.to!==mySeat)return;
+    busTimer=TRADE_SECS;
+    tradeInterval=setInterval(()=>{
+      if(!alive()||!trade){stopTradeTimer();return;}
+      busTimer--;
+      const el=document.getElementById('busTimerEl');
+      if(el)el.textContent=busTimer+'s';
+      if(busTimer<=0){
+        stopTradeTimer();
+        if(liveOn&&isTradeResponder())declineTrade('Trade timed out');
+        else if(!liveOn&&trade&&trade.to===mySeat)declineTrade('Trade timed out');
+        else if(!liveOn&&trade){
+          const to=players[trade.to];
+          trade=null;
+          message='Trade timed out';
+          render();
+          if(isMyControl())startBusTimer();
+        }
+      }
+    },1000);
+  }
   function startAuctionTimer(){
     stopAuctionTimer();
     if(!auction||!alive()||gameOver)return;
@@ -1565,11 +1626,13 @@ function openBusinessGame(chat,playerCount){
 
   function endBusTurn(){
     if(!alive())return;
-    if(distress||auction)return;
+    if(distress||auction||trade)return;
     awaitingBuy=false;
     awaitingJailChoice=false;
     buildOpen=false;
     liqOpen=false;
+    tradeOpen=false;
+    tradeDraft=null;
     doublesStreak=0;
     pendingExtraTurn=false;
     if(checkBankruptcyAndWinner())return;
@@ -1578,7 +1641,7 @@ function openBusinessGame(chat,playerCount){
   }
 
   function tryPlayerBuild(tileIdx){
-    if(!isMyControl()||awaitingBuy||rolling||gameOver||auction||distress)return;
+    if(!isMyControl()||awaitingBuy||rolling||gameOver||auction||distress||trade)return;
     const p=players[currentPlayer];
     if(!buildOn(p,tileIdx))return;
     focusPos=tileIdx;
@@ -1587,7 +1650,7 @@ function openBusinessGame(chat,playerCount){
   }
 
   function tryPlayerLiquidity(kind,idx){
-    if(gameOver||rolling||awaitingBuy||auction)return;
+    if(gameOver||rolling||awaitingBuy||auction||trade)return;
     if(distress){
       playerDistressAction(kind,idx);
       return;
@@ -1599,6 +1662,312 @@ function openBusinessGame(chat,playerCount){
     else if(kind==='unmortgage')unmortgageTile(p,idx);
     if(liveOn)pushBusiness();
     render();
+  }
+
+  function isTradeableDeed(player,idx){
+    if(!player||player.bankrupt)return false;
+    if(!(player.properties||[]).includes(idx))return false;
+    const tile=BOARD[idx];
+    if(!tile||!isBuyable(tile))return false;
+    if(tile.type==='property'&&groupImprovementCount(tile.group)>0)return false;
+    return true;
+  }
+
+  function listTradeableDeeds(player){
+    return (player.properties||[]).filter((idx)=>isTradeableDeed(player,idx));
+  }
+
+  function deedLabel(idx){
+    const tile=BOARD[idx];
+    if(!tile)return `#${idx}`;
+    return tile.name+(isMortgaged(idx)?' (M)':'');
+  }
+
+  function netWorth(p){
+    if(!p)return 0;
+    let w=Math.max(0,Number(p.money)||0);
+    (p.properties||[]).forEach((idx)=>{
+      const tile=BOARD[idx];
+      if(!tile)return;
+      w+=isMortgaged(idx)?mortgageValue(tile):(Number(tile.price)||0);
+      if(tile.type==='property'){
+        const tier=improvementTier(idx);
+        w+=houseCostFor(tile.group)*Math.min(5,tier);
+      }
+    });
+    return w;
+  }
+
+  function wouldCompleteMonopoly(player,incomingIdxs){
+    const have=new Set(player.properties||[]);
+    (incomingIdxs||[]).forEach((i)=>have.add(i));
+    const groups=new Set();
+    (incomingIdxs||[]).forEach((i)=>{
+      const t=BOARD[i];
+      if(t&&t.type==='property')groups.add(t.group);
+    });
+    for(const g of groups){
+      const idxs=groupPropertyIndices(g);
+      if(idxs.length&&idxs.every((i)=>have.has(i)))return true;
+    }
+    return false;
+  }
+
+  function openTradeSheet(){
+    if(!isMyControl()||gameOver||rolling||awaitingBuy||auction||distress||trade)return;
+    const others=players.map((p,i)=>({p,i})).filter((x)=>!x.p.bankrupt&&x.i!==mySeat);
+    if(!others.length)return;
+    stopBusTimer();
+    tradeOpen=true;
+    buildOpen=false;
+    liqOpen=false;
+    tradeDraft={
+      to:others[0].i,
+      offerProps:[],
+      offerCash:0,
+      askProps:[],
+      askCash:0,
+    };
+    render();
+  }
+
+  function closeTradeSheet(){
+    tradeOpen=false;
+    tradeDraft=null;
+    if(isMyControl()&&!awaitingBuy&&!auction&&!distress&&!trade)startBusTimer();
+    render();
+  }
+
+  function toggleDraftProp(side,idx){
+    if(!tradeDraft)return;
+    const key=side==='offer'?'offerProps':'askProps';
+    const arr=tradeDraft[key];
+    const i=arr.indexOf(idx);
+    if(i>=0)arr.splice(i,1);
+    else arr.push(idx);
+    render();
+  }
+
+  function setDraftCash(side,val){
+    if(!tradeDraft)return;
+    const n=Math.max(0,Math.floor(Number(val)||0));
+    if(side==='offer')tradeDraft.offerCash=n;
+    else tradeDraft.askCash=n;
+  }
+
+  function setDraftPartner(seat){
+    if(!tradeDraft)return;
+    tradeDraft.to=Number(seat);
+    tradeDraft.askProps=[];
+    render();
+  }
+
+  function validateTradePayload(fromSeat,toSeat,offerProps,offerCash,askProps,askCash){
+    const from=players[fromSeat];
+    const to=players[toSeat];
+    if(!from||!to||from.bankrupt||to.bankrupt||fromSeat===toSeat)return 'Invalid seats';
+    offerCash=Math.max(0,Number(offerCash)||0);
+    askCash=Math.max(0,Number(askCash)||0);
+    if(offerCash>from.money)return 'Not enough cash to offer';
+    if(askCash>to.money)return 'They cannot pay that cash';
+    if(!(offerProps||[]).length&&!(askProps||[]).length&&offerCash<=0&&askCash<=0)return 'Empty deal';
+    for(const idx of (offerProps||[])){
+      if(!isTradeableDeed(from,idx))return `Cannot trade ${deedLabel(idx)} — sell houses on that set first`;
+    }
+    for(const idx of (askProps||[])){
+      if(!isTradeableDeed(to,idx))return `Cannot request ${deedLabel(idx)} — houses still on that set`;
+    }
+    return null;
+  }
+
+  function proposeTrade(){
+    if(!tradeDraft||!isMyControl()||trade)return;
+    const from=mySeat;
+    const to=tradeDraft.to;
+    const offerProps=tradeDraft.offerProps.slice();
+    const askProps=tradeDraft.askProps.slice();
+    const offerCash=tradeDraft.offerCash;
+    const askCash=tradeDraft.askCash;
+    const err=validateTradePayload(from,to,offerProps,offerCash,askProps,askCash);
+    if(err){
+      message=err;
+      render();
+      return;
+    }
+    trade={from,to,offerProps,offerCash,askProps,askCash,status:'pending'};
+    tradeOpen=false;
+    tradeDraft=null;
+    stopBusTimer();
+    message=`Deal proposed to ${players[to].name}`;
+    if(liveOn)pushBusiness();
+    render();
+    if(!liveOn&&to!==mySeat)schedule(()=>aiRespondToTrade(),700);
+  }
+
+  function transferDeeds(fromPlayer,toPlayer,idxs){
+    (idxs||[]).forEach((idx)=>{
+      const i=(fromPlayer.properties||[]).indexOf(idx);
+      if(i>=0)fromPlayer.properties.splice(i,1);
+      if(!toPlayer.properties.includes(idx))toPlayer.properties.push(idx);
+      tileImp(idx);
+      // mortgaged flag stays on tile index
+    });
+  }
+
+  function acceptTrade(){
+    if(!trade||trade.status!=='pending')return;
+    if(liveOn&&!isTradeResponder())return;
+    if(!liveOn&&trade.to!==mySeat)return;
+    executeTradeAccept();
+  }
+
+  function executeTradeAccept(){
+    if(!trade||trade.status!=='pending')return;
+    const err=validateTradePayload(trade.from,trade.to,trade.offerProps,trade.offerCash,trade.askProps,trade.askCash);
+    if(err){
+      stopTradeTimer();
+      trade=null;
+      message=err;
+      if(liveOn)pushBusiness();
+      render();
+      if(isMyControl()&&!awaitingBuy&&!auction&&!distress)startBusTimer();
+      return;
+    }
+    stopTradeTimer();
+    const from=players[trade.from];
+    const to=players[trade.to];
+    const offerProps=trade.offerProps.slice();
+    const askProps=trade.askProps.slice();
+    const offerCash=trade.offerCash;
+    const askCash=trade.askCash;
+    from.money-=offerCash;to.money+=offerCash;
+    to.money-=askCash;from.money+=askCash;
+    transferDeeds(from,to,offerProps);
+    transferDeeds(to,from,askProps);
+    message=`Deal done: ${from.name} ⇄ ${to.name}`;
+    trade=null;
+    if(typeof gameFeedback==='function')gameFeedback('card');
+    if(liveOn)pushBusiness();
+    render();
+    if(isMyControl()&&!awaitingBuy&&!auction&&!distress)startBusTimer();
+  }
+
+  function declineTrade(reason){
+    if(!trade)return;
+    if(liveOn&&!isTradeResponder())return;
+    if(!liveOn&&trade.to!==mySeat)return;
+    stopTradeTimer();
+    const who=players[trade.to]?players[trade.to].name:'Partner';
+    trade=null;
+    message=reason||`${who} declined the deal`;
+    if(liveOn)pushBusiness();
+    render();
+    if(isMyControl()&&!awaitingBuy&&!auction&&!distress)startBusTimer();
+  }
+
+  function cancelTradeProposal(){
+    if(!trade||trade.status!=='pending')return;
+    if(liveOn&&!isTradeProposer())return;
+    if(!liveOn&&trade.from!==mySeat)return;
+    stopTradeTimer();
+    trade=null;
+    message='Deal cancelled';
+    if(liveOn)pushBusiness();
+    render();
+    if(isMyControl()&&!awaitingBuy&&!auction&&!distress)startBusTimer();
+  }
+
+  function aiRespondToTrade(){
+    if(!trade||trade.status!=='pending'||gameOver)return;
+    const to=players[trade.to];
+    if(!to||to.bankrupt){
+      stopTradeTimer();trade=null;message='No partner';render();
+      if(isMyControl())startBusTimer();
+      return;
+    }
+    if(trade.to===mySeat)return;
+    if(aiShouldAcceptTrade(trade))executeTradeAccept();
+    else {
+      stopTradeTimer();
+      message=`${to.name} declined the deal`;
+      trade=null;
+      render();
+      if(isMyControl())startBusTimer();
+    }
+  }
+
+  function aiShouldAcceptTrade(t){
+    const from=players[t.from];
+    const to=players[t.to];
+    if(!from||!to)return false;
+    const err=validateTradePayload(t.from,t.to,t.offerProps,t.offerCash,t.askProps,t.askCash);
+    if(err)return false;
+    const completesMe=wouldCompleteMonopoly(to,t.offerProps);
+    const completesThem=wouldCompleteMonopoly(from,t.askProps);
+    const cashDelta=(t.offerCash||0)-(t.askCash||0); // net cash to `to`
+    if(completesThem&&!completesMe&&cashDelta<1500)return false;
+    if(completesMe&&(t.askCash||0)<=2500)return true;
+    if(completesMe&&cashDelta>=-500)return Math.random()<0.85;
+    if(completesThem)return cashDelta>=2000&&Math.random()<0.25;
+    // modest fair-ish swap
+    const offerVal=(t.offerProps||[]).reduce((s,i)=>s+(BOARD[i]&&BOARD[i].price||0),0)+(t.offerCash||0);
+    const askVal=(t.askProps||[]).reduce((s,i)=>s+(BOARD[i]&&BOARD[i].price||0),0)+(t.askCash||0);
+    if(askVal<=0)return offerVal>0&&Math.random()<0.4;
+    const ratio=offerVal/Math.max(1,askVal);
+    if(ratio>=0.85&&ratio<=1.25)return Math.random()<0.45;
+    if(ratio>=1.3)return Math.random()<0.55;
+    return Math.random()<0.08;
+  }
+
+  function tradePanelHtml(){
+    if(trade&&trade.status==='pending'){
+      const from=players[trade.from];
+      const to=players[trade.to];
+      const offerBits=[
+        ...(trade.offerProps||[]).map(deedLabel),
+        trade.offerCash?`₹${trade.offerCash}`:null,
+      ].filter(Boolean).join(', ')||'—';
+      const askBits=[
+        ...(trade.askProps||[]).map(deedLabel),
+        trade.askCash?`₹${trade.askCash}`:null,
+      ].filter(Boolean).join(', ')||'—';
+      const respond=isTradeResponder()||(!liveOn&&trade.to===mySeat);
+      const proposeWait=isTradeProposer()||(!liveOn&&trade.from===mySeat&&trade.to!==mySeat);
+      return `<div class="bus-trade-bar">
+        <div class="bus-trade-title">Deal · ${from?from.name:'?'} → ${to?to.name:'?'}</div>
+        <div class="bus-trade-meta">Offers: ${offerBits}</div>
+        <div class="bus-trade-meta">Wants: ${askBits}</div>
+        ${respond?`<div class="bus-trade-actions">
+          <button type="button" id="busTradeAccept" class="game-tap-target bus-deed-btn bus-deed-btn--primary">Accept</button>
+          <button type="button" id="busTradeDecline" class="game-tap-target bus-deed-btn">Decline</button>
+        </div>`:proposeWait?`<div class="bus-trade-actions">
+          <button type="button" id="busTradeCancel" class="game-tap-target bus-deed-btn">Cancel deal</button>
+        </div>`:`<div class="bus-trade-meta">Waiting…</div>`}
+      </div>`;
+    }
+    if(!tradeOpen||!tradeDraft||!isMyControl())return '';
+    const me=players[mySeat];
+    const partner=players[tradeDraft.to];
+    const others=players.map((p,i)=>({p,i})).filter((x)=>!x.p.bankrupt&&x.i!==mySeat);
+    const myDeeds=listTradeableDeeds(me);
+    const theirDeeds=partner?listTradeableDeeds(partner):[];
+    return `<div class="bus-trade-bar bus-trade-bar--compose">
+      <div class="bus-trade-title">Propose a deal</div>
+      ${others.length>1?`<div class="bus-trade-partners">${others.map((o)=>`<button type="button" class="game-tap-target bus-trade-chip${tradeDraft.to===o.i?' is-on':''}" data-trade-to="${o.i}">${o.p.name}</button>`).join('')}</div>`:`<div class="bus-trade-meta">With ${partner?partner.name:'—'}</div>`}
+      <div class="bus-trade-section">You offer · cash ₹
+        <input id="busTradeOfferCash" class="bus-trade-cash" type="number" min="0" step="100" value="${tradeDraft.offerCash}" />
+      </div>
+      <div class="bus-trade-deeds">${myDeeds.length?myDeeds.map((idx)=>`<button type="button" class="game-tap-target bus-trade-chip${tradeDraft.offerProps.includes(idx)?' is-on':''}" data-trade-offer="${idx}">${deedLabel(idx)}</button>`).join(''):'<span class="bus-trade-meta">No unimproved deeds (sell houses first)</span>'}</div>
+      <div class="bus-trade-section">You want · cash ₹
+        <input id="busTradeAskCash" class="bus-trade-cash" type="number" min="0" step="100" value="${tradeDraft.askCash}" />
+      </div>
+      <div class="bus-trade-deeds">${theirDeeds.length?theirDeeds.map((idx)=>`<button type="button" class="game-tap-target bus-trade-chip${tradeDraft.askProps.includes(idx)?' is-on':''}" data-trade-ask="${idx}">${deedLabel(idx)}</button>`).join(''):'<span class="bus-trade-meta">Nothing tradeable yet</span>'}</div>
+      <div class="bus-trade-hint">Mortgaged deeds stay mortgaged. Sets with houses must be sold down first.</div>
+      <div class="bus-trade-actions">
+        <button type="button" id="busTradePropose" class="game-tap-target bus-deed-btn bus-deed-btn--primary">Propose</button>
+        <button type="button" id="busTradeClose" class="game-tap-target bus-deed-btn">Close</button>
+      </div>
+    </div>`;
   }
 
   function rentLadderHtml(tile,idx,owner){
@@ -1778,7 +2147,7 @@ function openBusinessGame(chat,playerCount){
   }
 
   function buildPanelHtml(){
-    if(!isMyControl()||awaitingBuy||rolling||gameOver||auction||distress)return '';
+    if(!isMyControl()||awaitingBuy||rolling||gameOver||auction||distress||trade||tradeOpen)return '';
     const opts=listBuildOptions(players[currentPlayer]);
     if(!opts.length&&!buildOpen)return '';
     if(!opts.length){
@@ -1797,7 +2166,7 @@ function openBusinessGame(chat,playerCount){
   }
 
   function liquidityPanelHtml(){
-    if(distress||auction||awaitingBuy||rolling||gameOver||!isMyControl())return '';
+    if(distress||auction||trade||tradeOpen||awaitingBuy||rolling||gameOver||!isMyControl())return '';
     const p=players[currentPlayer];
     const sells=listSellOptions(p);
     const morts=listMortgageOptions(p);
@@ -1845,14 +2214,17 @@ function openBusinessGame(chat,playerCount){
     const tile=BOARD[focusPos]||BOARD[0];
     if(gameOver){
       const winner=players.find(p=>!p.bankrupt);
+      const worthLine=players.map(p=>`${p.name}: ₹${netWorth(p)} NW`).join(' · ');
+      const shareMeta=liveOn?'Live 1v1':'Practice';
+      const shareLine=winner?(winner.name==='You'?`I won Business on Chaupaal (${shareMeta})`:`${winner.name} won Business (${shareMeta})`):'Business over';
       overlay.innerHTML=`
         ${gameChromeHtml({title:'Business',subtitle:MODE_SUB+' · Results',backId:'busBack'})}
         ${typeof gameResultHtml==='function'?gameResultHtml({
           gameId:'business',
           glyph:winner&&winner.name==='You'?'✓':'·',
           title:winner?(winner.name==='You'?'You win':`${winner.name} wins`):'Game over',
-          subtitle:players.map(p=>`${p.name}: ₹${Math.max(0,p.money)} · ${p.properties.length} props`).join(' · '),
-          shareCardHtml: typeof buildGameShareCard==='function'?buildGameShareCard('business',{scoreLine:winner?`${winner.name} wins`:'Over',meta:'Business'}):'',
+          subtitle:worthLine,
+          shareCardHtml: typeof buildGameShareCard==='function'?buildGameShareCard('business',{scoreLine:shareLine,meta:shareMeta}):'',
           actions:[
             {label:'Play again',primary:true,id:'again'},
             {label:'Share',primary:false,id:'share'},
@@ -1863,9 +2235,9 @@ function openBusinessGame(chat,playerCount){
       `;
       document.getElementById('busBack')?.addEventListener('click',()=>{askBusLeave();});
       if(typeof wireGameResultActions==='function'){
-        const shareStats={scoreLine:winner?`${winner.name} wins`:'Over',meta:'Business'};
+        const shareStats={scoreLine:shareLine,meta:shareMeta};
         wireGameResultActions(overlay,{
-          again:()=>{close();openBusinessGame(chat);},
+          again:()=>{close();openBusinessGame(chat,liveOn?2:playerCount);},
           share:()=>{if(typeof shareGameResult==='function')shareGameResult('business',shareStats);},
           story:()=>{if(typeof postGameScoreStory==='function')postGameScoreStory('business',shareStats);},
           done:()=>close(),
@@ -1875,9 +2247,10 @@ function openBusinessGame(chat,playerCount){
       }
       return;
     }
-    const showTimer=(isMyControl()&&!awaitingBuy&&!auction&&!distress)||isAuctionControl()||isDistressControl();
+    const showTimer=(isMyControl()&&!awaitingBuy&&!auction&&!distress&&!trade&&!tradeOpen)||isAuctionControl()||isDistressControl()||isTradeResponder();
+    const canDeal=isMyControl()&&!rolling&&!awaitingBuy&&!awaitingJailChoice&&!auction&&!distress&&!trade&&!tradeOpen&&!gameOver;
     overlay.innerHTML=`
-      ${gameChromeHtml({title:'Business',subtitle:MODE_SUB+(doublesStreak?` · Doubles ${doublesStreak}`:'')+(auction?' · Auction':''),backId:'busBack',rightHtml:showTimer?`<span id="busTimerEl" class="game-chrome-metric">${busTimer}s</span>`:undefined})}
+      ${gameChromeHtml({title:'Business',subtitle:MODE_SUB+(doublesStreak?` · Doubles ${doublesStreak}`:'')+(auction?' · Auction':'')+(trade?' · Deal':''),backId:'busBack',rightHtml:showTimer?`<span id="busTimerEl" class="game-chrome-metric">${busTimer}s</span>`:undefined})}
       <div class="bus-players">
         ${players.map((p,i)=>`<div class="bus-player${currentPlayer===i?' is-active':''}${p.bankrupt?' is-out':''}${p.inJail?' is-jail':''}" style="--pc:${p.color}">
           <div class="bus-player-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(p.name,p):p.name}</div>
@@ -1890,19 +2263,22 @@ function openBusinessGame(chat,playerCount){
         ${deedHtml(tile,focusPos)}
         ${miniBoardHtml()}
       </div>
+      ${tradePanelHtml()}
       ${auctionPanelHtml()}
       ${distressPanelHtml()}
       ${jailPanelHtml()}
       ${buildPanelHtml()}
       ${liquidityPanelHtml()}
-      <div class="bus-controls">
-        <button type="button" id="busRollBtn" class="game-tap-target bus-roll-btn"${!isMyControl()||rolling||awaitingBuy||awaitingJailChoice||auction||distress?' disabled':''}>
-          ${awaitingBuy?'Buy or auction':auction?'Auction in play':distress?'Raise funds':awaitingJailChoice?'Jail: Pay or Roll':isMyControl()?(rolling?'Rolling…':(pendingExtraTurn||doublesStreak?'Roll again':'Roll dice')):`${players[currentPlayer].name} playing…`}
+      <div class="bus-controls bus-controls--row">
+        ${canDeal?`<button type="button" id="busDealBtn" class="game-tap-target bus-side-btn">Deal</button>`:''}
+        <button type="button" id="busRollBtn" class="game-tap-target bus-roll-btn"${!isMyControl()||rolling||awaitingBuy||awaitingJailChoice||auction||distress||trade||tradeOpen?' disabled':''}>
+          ${awaitingBuy?'Buy or auction':trade?'Deal pending':tradeOpen?'Finish or close deal':auction?'Auction in play':distress?'Raise funds':awaitingJailChoice?'Jail: Pay or Roll':isMyControl()?(rolling?'Rolling…':(pendingExtraTurn||doublesStreak?'Roll again':'Roll dice')):`${players[currentPlayer].name} playing…`}
         </button>
       </div>
     `;
     document.getElementById('busBack').addEventListener('click',()=>{askBusLeave();});
-    document.getElementById('busRollBtn')?.addEventListener('click',()=>{if(isMyControl()&&!rolling&&!awaitingBuy&&!awaitingJailChoice&&!auction&&!distress&&!gameOver)rollBusDice();});
+    document.getElementById('busRollBtn')?.addEventListener('click',()=>{if(isMyControl()&&!rolling&&!awaitingBuy&&!awaitingJailChoice&&!auction&&!distress&&!trade&&!tradeOpen&&!gameOver)rollBusDice();});
+    document.getElementById('busDealBtn')?.addEventListener('click',()=>openTradeSheet());
     document.getElementById('busBuyYes')?.addEventListener('click',()=>resolveBuy(true));
     document.getElementById('busBuyNo')?.addEventListener('click',()=>resolveBuy(false));
     document.getElementById('busJailPay')?.addEventListener('click',()=>payJailFine());
@@ -1910,12 +2286,25 @@ function openBusinessGame(chat,playerCount){
     document.getElementById('busAuctionRaise')?.addEventListener('click',()=>auctionRaise());
     document.getElementById('busAuctionPass')?.addEventListener('click',()=>auctionPass());
     document.getElementById('busDistressBust')?.addEventListener('click',()=>declareDistressBankrupt());
+    document.getElementById('busTradeAccept')?.addEventListener('click',()=>acceptTrade());
+    document.getElementById('busTradeDecline')?.addEventListener('click',()=>declineTrade());
+    document.getElementById('busTradeCancel')?.addEventListener('click',()=>cancelTradeProposal());
+    document.getElementById('busTradePropose')?.addEventListener('click',()=>{
+      const offerEl=document.getElementById('busTradeOfferCash');
+      const askEl=document.getElementById('busTradeAskCash');
+      if(tradeDraft){
+        setDraftCash('offer',offerEl?offerEl.value:0);
+        setDraftCash('ask',askEl?askEl.value:0);
+      }
+      proposeTrade();
+    });
+    document.getElementById('busTradeClose')?.addEventListener('click',()=>closeTradeSheet());
     document.getElementById('busBuildToggle')?.addEventListener('click',()=>{
-      if(!isMyControl()||awaitingBuy||rolling||auction||distress)return;
+      if(!isMyControl()||awaitingBuy||rolling||auction||distress||trade||tradeOpen)return;
       buildOpen=!buildOpen;liqOpen=false;render();
     });
     document.getElementById('busLiqToggle')?.addEventListener('click',()=>{
-      if(!isMyControl()||awaitingBuy||rolling||auction||distress)return;
+      if(!isMyControl()||awaitingBuy||rolling||auction||distress||trade||tradeOpen)return;
       liqOpen=!liqOpen;buildOpen=false;render();
     });
     overlay.querySelectorAll('[data-build-idx]').forEach((btn)=>{
@@ -1931,6 +2320,15 @@ function openBusinessGame(chat,playerCount){
         if(Number.isFinite(idx)&&kind)tryPlayerLiquidity(kind,idx);
       });
     });
+    overlay.querySelectorAll('[data-trade-to]').forEach((btn)=>{
+      btn.addEventListener('click',()=>setDraftPartner(Number(btn.getAttribute('data-trade-to'))));
+    });
+    overlay.querySelectorAll('[data-trade-offer]').forEach((btn)=>{
+      btn.addEventListener('click',()=>toggleDraftProp('offer',Number(btn.getAttribute('data-trade-offer'))));
+    });
+    overlay.querySelectorAll('[data-trade-ask]').forEach((btn)=>{
+      btn.addEventListener('click',()=>toggleDraftProp('ask',Number(btn.getAttribute('data-trade-ask'))));
+    });
   }
 
   if(liveOn&&liveRoles&&typeof DangalLive!=='undefined'){
@@ -1938,11 +2336,12 @@ function openBusinessGame(chat,playerCount){
       gameType:'business',
       matchId:(chat&&chat.dangalMatchId)||(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.matchId),
       me:liveRoles.me,playerA:liveRoles.playerA,playerB:liveRoles.playerB,
-      state:{players:serializeBusPlayers(),improvements:serializeImprovements(),mortgaged:serializeMortgaged(),auction:null,distress:null,currentPlayer:0,diceVal:[1,1],message:'',gameOver:false,awaitingBuy:false,awaitingJailChoice:false,focusPos:0,doublesStreak:0,pendingExtraTurn:false},
+      state:{players:serializeBusPlayers(),improvements:serializeImprovements(),mortgaged:serializeMortgaged(),auction:null,distress:null,trade:null,currentPlayer:0,diceVal:[1,1],message:'',gameOver:false,awaitingBuy:false,awaitingJailChoice:false,focusPos:0,doublesStreak:0,pendingExtraTurn:false},
       onSnap(val){
         if(!val||applyingLive||!alive())return;
         if(val.status==='forfeit'&&!gameOver){
-          gameOver=true;stopBusTimer();stopAuctionTimer();
+          gameOver=true;stopBusTimer();stopAuctionTimer();stopTradeTimer();
+          trade=null;tradeDraft=null;
           const iWon=val.winner===liveRoles.me;
           if(gs)gs.setOutcome(iWon?'won':'lost');
           if(typeof recordGameResult==='function')recordGameResult('business',iWon);
@@ -1956,6 +2355,8 @@ function openBusinessGame(chat,playerCount){
         applyMortgaged(s.mortgaged);
         applyAuction(s.auction);
         applyDistress(s.distress);
+        applyTrade(s.trade);
+        if(!trade){tradeOpen=false;tradeDraft=null;}
         currentPlayer=Number(s.currentPlayer)||0;
         if(Array.isArray(s.diceVal))diceVal=s.diceVal.slice();
         message=s.message||'';
@@ -1965,11 +2366,12 @@ function openBusinessGame(chat,playerCount){
         doublesStreak=Number(s.doublesStreak)||0;
         pendingExtraTurn=!!s.pendingExtraTurn;
         focusPos=s.focusPos!=null?Number(s.focusPos):players[currentPlayer].pos;
-        stopBusTimer();stopAuctionTimer();
+        stopBusTimer();stopAuctionTimer();stopTradeTimer();
         render();
         if(!gameOver){
-          if(auction&&isAuctionControl())startAuctionTimer();
-          else if(!awaitingBuy&&!distress&&isMyControl())startBusTimer();
+          if(trade&&trade.status==='pending'&&isTradeResponder())startTradeTimer();
+          else if(auction&&isAuctionControl())startAuctionTimer();
+          else if(!awaitingBuy&&!distress&&!trade&&isMyControl())startBusTimer();
         }
         applyingLive=false;
       },
@@ -2481,7 +2883,7 @@ if (typeof registerGame === 'function') {
   registerGame({
     id: 'business',
     name: 'Business',
-    desc: 'Buy, build & bankrupt — 2-6 players',
+    desc: 'Buy, build, deal & bankrupt — Practice 2–6 · Live 1v1',
     icon: '🏙️',
     ratingKey: 'business',
     gameType: 'multiplayer',
