@@ -32,7 +32,7 @@
     ludo: { grade: 'live', sync: 'liveParty', stakes: true },
     uno: { grade: 'live', sync: 'liveParty', stakes: true },
     business: { grade: 'live', sync: 'live1v1', stakes: true },
-    scribble: { grade: 'live', sync: 'liveParty', stakes: true },
+    scribble: { grade: 'live', sync: 'live1v1', stakes: true, label: 'Live 1v1' },
 
     // Classics + court — Live 1v1 state sync (snapshot / score events)
     carrom: { grade: 'live', sync: 'live1v1', stakes: true },
