@@ -2514,6 +2514,36 @@ html.theme-dark .lehar-empty{color:#fff;}
   color: #FFD166;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
+.tt-goals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.tt-goal-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+}
+.tt-goal-chip.is-done {
+  background: rgba(46, 204, 113, 0.28);
+  color: #D1FAE5;
+}
+.tt-goal-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 28%, rgba(255, 255, 255, 0.55), transparent 42%),
+    radial-gradient(circle at 50% 55%, var(--tt-glow, #fff), var(--tt-fill, #E63946));
+  flex-shrink: 0;
+}
 .tt-meter-track {
   height: 6px;
   background: rgba(255, 255, 255, 0.2);
@@ -2599,6 +2629,12 @@ html.theme-dark .lehar-empty{color:#fff;}
   border-radius: 8px;
   background: linear-gradient(180deg, #F8FAFC, #94A3B8 40%, #334155);
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35);
+}
+.tt-gem--line-h {
+  background: linear-gradient(90deg, #F8FAFC, #94A3B8 40%, #334155);
+}
+.tt-gem--line-v {
+  background: linear-gradient(180deg, #F8FAFC, #94A3B8 40%, #334155);
 }
 .tt-piece--enter .tt-gem {
   animation: ttEnter 280ms var(--game-ease-spring) both;

@@ -129,7 +129,11 @@
     business: ['Buy when you land on empty lots', 'Pay rent on owned properties', 'Richest player at the end wins'],
     scribble: ['Draw clearly — keep it simple', 'Guessers type in the chat box', 'Rounds rotate who draws'],
     rushrunner: ['Tap or swipe up to jump', 'Collect coins · avoid obstacles', 'Distance is your score'],
-    tiptap: ['Swap adjacent gems to match 3+', 'Special gems clear more of the board', 'Beat the target before moves run out'],
+    tiptap: [
+      'Match 4 → Line · 5 or L/T → Bomb · 6+ one colour → Prism',
+      'Swap a special with a gem to fire it · two specials combo',
+      'Clear every goal before moves run out',
+    ],
     ankjod: ['Each row & column sums to the clue', 'Pencil notes help narrow digits', 'Check when you think you are done'],
     streetcricket: ['Tap Bowl, then Hit in the green window', 'Six balls · two wickets ends the over', 'Practice timing — full matches later'],
     gullykick: ['Pick left, center, or right', 'Beat the keeper’s dive', 'Five kicks per shootout'],

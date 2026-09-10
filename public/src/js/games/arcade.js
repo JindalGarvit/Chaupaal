@@ -586,14 +586,15 @@ function openRushRunner(){
 function openTipTap(){
   const COLS=8,ROWS=8;
   const PALETTE=[
-    {id:0,fill:'#E63946',glow:'#FF6B6B'},
-    {id:1,fill:'#F4A261',glow:'#FFD166'},
-    {id:2,fill:'#2A9D8F',glow:'#5EEAD4'},
-    {id:3,fill:'#4C75D9',glow:'#93C5FD'},
-    {id:4,fill:'#9B5DE5',glow:'#D8B4FE'},
-    {id:5,fill:'#E76F51',glow:'#FDBA74'},
+    {id:0,name:'Red',fill:'#E63946',glow:'#FF6B6B'},
+    {id:1,name:'Amber',fill:'#F4A261',glow:'#FFD166'},
+    {id:2,name:'Teal',fill:'#2A9D8F',glow:'#5EEAD4'},
+    {id:3,name:'Blue',fill:'#4C75D9',glow:'#93C5FD'},
+    {id:4,name:'Violet',fill:'#9B5DE5',glow:'#D8B4FE'},
+    {id:5,name:'Coral',fill:'#E76F51',glow:'#FDBA74'},
   ];
   const SPECIAL={bomb:'bomb',rainbow:'rainbow',line:'line'};
+  const TIER={rainbow:3,bomb:2,line:1};
   const reduceMotion=typeof shouldReduceGameMotion==='function'&&shouldReduceGameMotion();
   const T={
     pop:reduceMotion?100:220,
@@ -611,13 +612,43 @@ function openTipTap(){
   let pauseCtrl=null;
   let hintPair=null;
   let suppressClickUntil=0;
+  let lastSwapCell=null;
+  let goals=[];
+  let goalProgress=[];
 
-  const LEVELS=Array.from({length:100},(_,i)=>({
-    level:i+1,
-    target:500*(i+1)+Math.floor(i/5)*1000,
-    moves:20+Math.floor(i/3)*2,
-    board:ROWS,
-  }));
+  /** Prompt 2 sample curve (1–15); 16–100 stay score-formula for Prompt 3. */
+  const EARLY_LEVELS=[
+    {moves:26,goals:[{type:'score',amount:450}]},
+    {moves:24,goals:[{type:'score',amount:650}]},
+    {moves:24,goals:[{type:'score',amount:850}]},
+    {moves:28,goals:[{type:'collect',color:0,amount:12}]},
+    {moves:26,goals:[{type:'collect',color:2,amount:14}]},
+    {moves:26,goals:[{type:'collect',color:3,amount:15}]},
+    {moves:28,goals:[{type:'score',amount:900},{type:'collect',color:1,amount:10}]},
+    {moves:28,goals:[{type:'collect',color:4,amount:16}]},
+    {moves:26,goals:[{type:'score',amount:1100}]},
+    {moves:30,goals:[{type:'specials',kind:'line',amount:2}]},
+    {moves:28,goals:[{type:'specials',kind:'bomb',amount:1}]},
+    {moves:30,goals:[{type:'collect',color:0,amount:10},{type:'specials',kind:'line',amount:1}]},
+    {moves:28,goals:[{type:'score',amount:1200},{type:'collect',color:5,amount:12}]},
+    {moves:32,goals:[{type:'specials',kind:'bomb',amount:2}]},
+    {moves:30,goals:[{type:'specials',kind:'rainbow',amount:1},{type:'collect',color:2,amount:8}]},
+  ];
+  const LEVELS=Array.from({length:100},(_,i)=>{
+    if(i<EARLY_LEVELS.length){
+      const e=EARLY_LEVELS[i];
+      const scoreGoal=e.goals.find(g=>g.type==='score');
+      return {level:i+1,moves:e.moves,goals:e.goals.map(g=>({...g})),target:scoreGoal?scoreGoal.amount:0,board:ROWS};
+    }
+    const target=500*(i+1)+Math.floor(i/5)*1000;
+    return {
+      level:i+1,
+      moves:20+Math.floor(i/3)*2,
+      target,
+      goals:[{type:'score',amount:target}],
+      board:ROWS,
+    };
+  });
 
   const overlay=document.createElement('div');
   overlay.style.cssText='position:absolute;inset:0;z-index:80;display:flex;flex-direction:column;';
@@ -657,8 +688,8 @@ function openTipTap(){
   };
   const buzz=(a)=>{if(typeof gameFeedback==='function')gameFeedback(a);};
   const isPaused=()=>!!(pauseCtrl&&pauseCtrl.isPaused&&pauseCtrl.isPaused());
+  const toast=(msg)=>{if(typeof showToast==='function'&&msg)showToast(msg);};
 
-  /** Pause-aware cascade beat — never stacks overlapping timers. */
   function scheduleCascade(fn,ms){
     if(cascadeTimer){
       try{clearTimeout(cascadeTimer);}catch(e){}
@@ -673,15 +704,17 @@ function openTipTap(){
     cascadeTimer=schedule(run,ms);
   }
 
+  let _uid=1;function uid(){return _uid++;}
+
   function randomPiece(allowSpecial){
-    if(allowSpecial&&Math.random()<0.04){
-      const kinds=[SPECIAL.bomb,SPECIAL.line,SPECIAL.rainbow];
-      return {color:null,special:kinds[Math.floor(Math.random()*kinds.length)],id:uid()};
+    // Rare refill specials only — goals must not trivialize
+    if(allowSpecial&&Math.random()<0.012){
+      const kind=Math.random()<0.65?SPECIAL.line:SPECIAL.bomb;
+      return {color:null,special:kind,axis:Math.random()<0.5?'h':'v',id:uid()};
     }
     const c=PALETTE[Math.floor(Math.random()*PALETTE.length)];
-    return {color:c.id,special:null,id:uid()};
+    return {color:c.id,special:null,axis:null,id:uid()};
   }
-  let _uid=1;function uid(){return _uid++;}
 
   function swapCells(r1,c1,r2,c2){
     const tmp=board[r1][c1];board[r1][c1]=board[r2][c2];board[r2][c2]=tmp;
@@ -706,7 +739,266 @@ function openTipTap(){
     return [...matches].map(k=>{const[r,c]=k.split(',').map(Number);return{r,c};});
   }
 
-  /** Brute-force one legal orthogonal swap on 8×8. */
+  /** Creation rules: 4→line, 5 or L/T→bomb, 6+ same colour→rainbow. Highest tier once. */
+  function classifySpawn(matchCells){
+    if(!matchCells||!matchCells.length)return null;
+    const byColor=new Map();
+    for(const {r,c} of matchCells){
+      const p=board[r]?.[c];
+      if(!p||p.color==null)continue;
+      if(!byColor.has(p.color))byColor.set(p.color,[]);
+      byColor.get(p.color).push({r,c});
+    }
+    let best=null;
+    for(const[color,cells] of byColor){
+      const set=new Set(cells.map(x=>`${x.r},${x.c}`));
+      let maxH=0,maxV=0,bestHCells=[],bestVCells=[];
+      const rowMap=new Map();
+      const colMap=new Map();
+      cells.forEach(({r,c})=>{
+        if(!rowMap.has(r))rowMap.set(r,[]);
+        rowMap.get(r).push(c);
+        if(!colMap.has(c))colMap.set(c,[]);
+        colMap.get(c).push(r);
+      });
+      for(const[r,cols] of rowMap){
+        cols.sort((a,b)=>a-b);
+        let i=0;
+        while(i<cols.length){
+          let j=i;
+          while(j+1<cols.length&&cols[j+1]===cols[j]+1)j++;
+          const len=j-i+1;
+          if(len>maxH){
+            maxH=len;
+            bestHCells=[];
+            for(let k=i;k<=j;k++)bestHCells.push({r,c:cols[k]});
+          }
+          i=j+1;
+        }
+      }
+      for(const[c,rows] of colMap){
+        rows.sort((a,b)=>a-b);
+        let i=0;
+        while(i<rows.length){
+          let j=i;
+          while(j+1<rows.length&&rows[j+1]===rows[j]+1)j++;
+          const len=j-i+1;
+          if(len>maxV){
+            maxV=len;
+            bestVCells=[];
+            for(let k=i;k<=j;k++)bestVCells.push({r:rows[k],c});
+          }
+          i=j+1;
+        }
+      }
+      let hasLT=false;
+      for(const {r,c} of cells){
+        let hl=1,vl=1;
+        for(let cc=c-1;cc>=0&&set.has(`${r},${cc}`);cc--)hl++;
+        for(let cc=c+1;cc<COLS&&set.has(`${r},${cc}`);cc++)hl++;
+        for(let rr=r-1;rr>=0&&set.has(`${rr},${c}`);rr--)vl++;
+        for(let rr=r+1;rr<ROWS&&set.has(`${rr},${c}`);rr++)vl++;
+        if(hl>=3&&vl>=3){hasLT=true;break;}
+      }
+      const n=cells.length;
+      let kind=null,axis=null,anchorCells=cells;
+      if(n>=6||maxH>=6||maxV>=6){
+        kind=SPECIAL.rainbow;
+        anchorCells=cells;
+      }else if(maxH===5||maxV===5||hasLT){
+        kind=SPECIAL.bomb;
+        anchorCells=hasLT?cells:(maxH===5?bestHCells:bestVCells);
+      }else if(maxH===4&&maxV<4){
+        kind=SPECIAL.line;axis='h';anchorCells=bestHCells;
+      }else if(maxV===4&&maxH<4){
+        kind=SPECIAL.line;axis='v';anchorCells=bestVCells;
+      }
+      if(!kind)continue;
+      const cand={kind,axis,color,cells:anchorCells,tier:TIER[kind]};
+      if(!best||cand.tier>best.tier)best=cand;
+    }
+    if(!best)return null;
+    let anchor=best.cells[Math.floor(best.cells.length/2)]||best.cells[0];
+    if(lastSwapCell&&best.cells.some(x=>x.r===lastSwapCell.r&&x.c===lastSwapCell.c)){
+      anchor=lastSwapCell;
+    }
+    return {kind:best.kind,axis:best.axis||null,anchor,color:best.color};
+  }
+
+  function teachSpecial(kind){
+    const key='tiptap_teach_'+kind;
+    try{if(localStorage.getItem(key))return;}catch(e){return;}
+    try{localStorage.setItem(key,'1');}catch(e){}
+    const msgs={
+      line:'Line: match 4 in a row — swap it to clear that row or column',
+      bomb:'Bomb: match 5 or an L/T — swap to blast a 3×3',
+      rainbow:'Prism: match 6+ of one colour — swap onto a gem to clear that colour',
+    };
+    toast(msgs[kind]||'');
+  }
+
+  function noteColorCleared(color,n){
+    if(color==null)return;
+    const add=n||1;
+    goals.forEach((g,i)=>{
+      if(g.type==='collect'&&g.color===color){
+        goalProgress[i]=Math.min(g.amount,(goalProgress[i]||0)+add);
+      }
+    });
+  }
+  function noteSpecialDetonated(kind){
+    goals.forEach((g,i)=>{
+      if(g.type==='specials'&&g.kind===kind){
+        goalProgress[i]=Math.min(g.amount,(goalProgress[i]||0)+1);
+      }
+    });
+  }
+  function syncScoreGoals(){
+    goals.forEach((g,i)=>{
+      if(g.type==='score')goalProgress[i]=Math.min(g.amount,score);
+    });
+  }
+  function goalsComplete(){
+    if(!goals.length)return score>=targetScore;
+    return goals.every((g,i)=>(goalProgress[i]||0)>=g.amount);
+  }
+  function addScore(pts){
+    if(pts<=0)return;
+    score+=pts;
+    syncScoreGoals();
+    spawnScorePop(pts);
+  }
+
+  function clearCellAt(r,c){
+    if(r<0||r>=ROWS||c<0||c>=COLS)return;
+    const p=board[r][c];
+    if(p==null)return;
+    if(p.color!=null)noteColorCleared(p.color);
+    board[r][c]=null;
+  }
+
+  function clearRow(r){
+    if(r<0||r>=ROWS)return;
+    for(let c=0;c<COLS;c++)clearCellAt(r,c);
+  }
+  function clearCol(c){
+    if(c<0||c>=COLS)return;
+    for(let r=0;r<ROWS;r++)clearCellAt(r,c);
+  }
+  function clearCross(r,c){
+    clearRow(r);clearCol(c);
+  }
+  function countColorsOnBoard(){
+    const counts=new Array(PALETTE.length).fill(0);
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+      const p=board[r][c];
+      if(p&&p.color!=null)counts[p.color]++;
+    }
+    return counts;
+  }
+  function clearColour(color){
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+      if(board[r][c]?.color===color)clearCellAt(r,c);
+    }
+  }
+
+  function detonateBomb(r,c){
+    noteSpecialDetonated(SPECIAL.bomb);
+    spawnFx(r,c,'bomb');
+    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)clearCellAt(r+dr,c+dc);
+  }
+  function detonateLine(r,c,axis){
+    noteSpecialDetonated(SPECIAL.line);
+    spawnFx(r,c,'line');
+    if(axis==='v')clearCol(c);
+    else clearRow(r);
+  }
+  function detonateRainbow(r,c,color){
+    noteSpecialDetonated(SPECIAL.rainbow);
+    spawnFx(r,c,'rainbow');
+    board[r][c]=null;
+    if(color==null){
+      const counts=countColorsOnBoard();
+      let best=0,bestN=-1;
+      counts.forEach((n,i)=>{if(n>bestN){bestN=n;best=i;}});
+      color=best;
+    }
+    clearColour(color);
+  }
+
+  /** Activate special at its current cell; otherPiece is the swapped partner (may be null). */
+  function activateSpecialAt(r,c,kind,piece,otherPiece){
+    if(!board[r]||board[r][c]==null)return;
+    const axis=piece?.axis||'h';
+    if(kind===SPECIAL.bomb)detonateBomb(r,c);
+    else if(kind===SPECIAL.line)detonateLine(r,c,axis);
+    else if(kind===SPECIAL.rainbow){
+      const col=otherPiece&&otherPiece.color!=null?otherPiece.color:null;
+      detonateRainbow(r,c,col);
+      if(otherPiece&&!otherPiece.special){
+        // partner gem may still sit adjacent — clear it if same colour already wiped
+        const or=otherPiece._atR,oc=otherPiece._atC;
+        if(or!=null&&board[or]?.[oc])clearCellAt(or,oc);
+      }
+    }
+  }
+
+  function resolveSpecialCombo(r1,c1,r2,c2,sa,sb,pa,pb){
+    // After swap: pa is at (r2,c2), pb at (r1,c1)
+    const aPos={r:r2,c:c2,kind:sa,piece:pa};
+    const bPos={r:r1,c:c1,kind:sb,piece:pb};
+
+    if(sa===SPECIAL.line&&sb===SPECIAL.line){
+      toast('Cross clear!');
+      noteSpecialDetonated(SPECIAL.line);
+      noteSpecialDetonated(SPECIAL.line);
+      spawnFx(r1,c1,'line');spawnFx(r2,c2,'line');
+      clearCross(r1,c1);clearCross(r2,c2);
+      return;
+    }
+    if((sa===SPECIAL.bomb&&sb===SPECIAL.line)||(sa===SPECIAL.line&&sb===SPECIAL.bomb)){
+      toast('Bomb cross!');
+      const linePos=sa===SPECIAL.line?aPos:bPos;
+      const bombPos=sa===SPECIAL.bomb?aPos:bPos;
+      noteSpecialDetonated(SPECIAL.line);
+      noteSpecialDetonated(SPECIAL.bomb);
+      spawnFx(linePos.r,linePos.c,'line');
+      spawnFx(bombPos.r,bombPos.c,'bomb');
+      const axis=linePos.piece?.axis||'h';
+      if(axis==='v'){
+        for(let cc=linePos.c-1;cc<=linePos.c+1;cc++)clearCol(cc);
+      }else{
+        for(let rr=linePos.r-1;rr<=linePos.r+1;rr++)clearRow(rr);
+      }
+      for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)clearCellAt(bombPos.r+dr,bombPos.c+dc);
+      return;
+    }
+    if(sa===SPECIAL.rainbow&&sb===SPECIAL.rainbow){
+      toast('Board clear!');
+      noteSpecialDetonated(SPECIAL.rainbow);
+      noteSpecialDetonated(SPECIAL.rainbow);
+      spawnFx(r1,c1,'rainbow');spawnFx(r2,c2,'rainbow');
+      for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)clearCellAt(r,c);
+      return;
+    }
+    if((sa===SPECIAL.rainbow&&sb===SPECIAL.bomb)||(sa===SPECIAL.bomb&&sb===SPECIAL.rainbow)){
+      toast('Colour blast!');
+      noteSpecialDetonated(SPECIAL.rainbow);
+      noteSpecialDetonated(SPECIAL.bomb);
+      spawnFx(r1,c1,'rainbow');spawnFx(r2,c2,'bomb');
+      board[r1][c1]=null;board[r2][c2]=null;
+      const counts=countColorsOnBoard();
+      const ranked=counts.map((n,i)=>({i,n})).sort((a,b)=>b.n-a.n);
+      clearColour(ranked[0].i);
+      if(ranked[1]&&ranked[1].n>0)clearColour(ranked[1].i);
+      return;
+    }
+    // Fallback: fire both (no half-wired rainbow+line toast)
+    pb._atR=r1;pb._atC=c1;pa._atR=r2;pa._atC=c2;
+    activateSpecialAt(r2,c2,sa,pa,pb);
+    activateSpecialAt(r1,c1,sb,pb,pa);
+  }
+
   function findHintMove(){
     for(let r=0;r<ROWS;r++){
       for(let c=0;c<COLS;c++){
@@ -715,6 +1007,7 @@ function openTipTap(){
           const r2=r+dr,c2=c+dc;
           if(r2>=ROWS||c2>=COLS)continue;
           if(!board[r][c]||!board[r2][c2])continue;
+          if(board[r][c].special||board[r2][c2].special)return{r1:r,c1:c,r2,c2};
           swapCells(r,c,r2,c2);
           const ok=findMatches().length>0;
           swapCells(r,c,r2,c2);
@@ -736,7 +1029,6 @@ function openTipTap(){
       guard++;
     }while((findMatches().length>0||!findHintMove())&&guard<60);
     if(findMatches().length||!findHintMove()){
-      // Last resort: accept no-immediate-match board then shuffle until playable
       guard=0;
       while((findMatches().length>0||!findHintMove())&&guard++<40)shuffleGems(true);
     }
@@ -756,7 +1048,7 @@ function openTipTap(){
     for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
       const p=board[r][c];
       if(p&&!p.special&&p.color!=null){
-        board[r][c]={color:colors[k++],special:null,id:uid()};
+        board[r][c]={color:colors[k++],special:null,axis:null,id:uid()};
       }
     }
     let guard=0;
@@ -768,10 +1060,10 @@ function openTipTap(){
       k=0;
       for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
         const p=board[r][c];
-        if(p&&!p.special&&p.color!=null)board[r][c]={color:colors[k++],special:null,id:uid()};
+        if(p&&!p.special&&p.color!=null)board[r][c]={color:colors[k++],special:null,axis:null,id:uid()};
       }
     }
-    if(!silent&&typeof showToast==='function')showToast('No moves — shuffled');
+    if(!silent)toast('No moves — shuffled');
     buzz('turn');
   }
 
@@ -779,13 +1071,16 @@ function openTipTap(){
     if(!alive())return;
     clearCascadeTimers();
     const cfg=LEVELS[Math.min(lvl-1,LEVELS.length-1)];
-    targetScore=cfg.target;maxMoves=cfg.moves;moves=cfg.moves;score=0;combo=0;
-    gameOver=false;selected=null;animating=false;hintPair=null;
+    goals=(cfg.goals||[{type:'score',amount:cfg.target||500}]).map(g=>({...g}));
+    goalProgress=goals.map(()=>0);
+    const scoreGoal=goals.find(g=>g.type==='score');
+    targetScore=scoreGoal?scoreGoal.amount:(cfg.target||0);
+    maxMoves=cfg.moves;moves=cfg.moves;score=0;combo=0;
+    gameOver=false;selected=null;animating=false;hintPair=null;lastSwapCell=null;
     ensurePlayableStart();
     const sub=document.getElementById('cbSub');
     if(sub)sub.textContent='Level '+level;
-    const tgt=document.getElementById('cbTarget');
-    if(tgt)tgt.textContent=targetScore.toLocaleString();
+    updateGoalsHud();
     updateComboHud();
     render({fresh:true});
   }
@@ -800,6 +1095,45 @@ function openTipTap(){
       el.hidden=true;
       el.textContent='';
     }
+  }
+
+  function updateGoalsHud(){
+    syncScoreGoals();
+    const host=document.getElementById('cbGoals');
+    if(host){
+      host.innerHTML=goals.map((g,i)=>{
+        const cur=goalProgress[i]||0;
+        const done=cur>=g.amount?' is-done':'';
+        if(g.type==='score'){
+          return `<span class="tt-goal-chip${done}">Score ${cur.toLocaleString()}/${g.amount.toLocaleString()}</span>`;
+        }
+        if(g.type==='collect'){
+          const pal=PALETTE[g.color]||PALETTE[0];
+          return `<span class="tt-goal-chip${done}"><i class="tt-goal-swatch" style="--tt-fill:${pal.fill};--tt-glow:${pal.glow}"></i>${pal.name} ${cur}/${g.amount}</span>`;
+        }
+        if(g.type==='specials'){
+          const label=g.kind==='line'?'Lines':g.kind==='bomb'?'Bombs':'Prisms';
+          return `<span class="tt-goal-chip${done}">${label} ${cur}/${g.amount}</span>`;
+        }
+        return '';
+      }).join('');
+    }
+    const scoreGoal=goals.find(g=>g.type==='score');
+    const progEl=document.getElementById('cbProgress');
+    const track=document.getElementById('cbProgressTrack');
+    if(scoreGoal&&progEl){
+      if(track)track.hidden=false;
+      progEl.style.width=Math.min(100,(score/Math.max(1,scoreGoal.amount))*100)+'%';
+    }else if(track&&progEl){
+      const total=goals.reduce((s,g)=>s+g.amount,0)||1;
+      const got=goalProgress.reduce((s,n)=>s+(n||0),0);
+      progEl.style.width=Math.min(100,(got/total)*100)+'%';
+      track.hidden=false;
+    }
+    const movesEl=document.getElementById('cbMoves');
+    if(movesEl)movesEl.textContent=String(moves);
+    const scoreEl=document.getElementById('cbScore');
+    if(scoreEl)scoreEl.textContent=score.toLocaleString();
   }
 
   function spawnFx(r,c,type){
@@ -838,46 +1172,55 @@ function openTipTap(){
     animating=true;
     combo++;
     updateComboHud();
-    const pts=matches.length*10*combo;score+=pts;
-    spawnScorePop(pts);
+
+    // Detonate specials sitting on or orthogonally touching the match
+    const clearSet=new Set(matches.map(m=>`${m.r},${m.c}`));
+    const expanded=matches.slice();
+    const tryAdd=(r,c)=>{
+      const key=`${r},${c}`;
+      if(clearSet.has(key))return;
+      const p=board[r]?.[c];
+      if(!p?.special)return;
+      clearSet.add(key);
+      expanded.push({r,c});
+    };
+    matches.forEach(({r,c})=>{
+      tryAdd(r,c);
+      tryAdd(r-1,c);tryAdd(r+1,c);tryAdd(r,c-1);tryAdd(r,c+1);
+    });
+
+    const pts=expanded.length*10*combo;
+    addScore(pts);
     if(combo>1)buzz('valid');else buzz('place');
 
-    matches.forEach(({r,c})=>{
+    expanded.forEach(({r,c})=>{
       const cell=document.querySelector(`#cbGrid [data-r="${r}"][data-c="${c}"]`);
       if(cell)cell.classList.add('tt-piece--pop');
       spawnFx(r,c,'spark');
     });
 
-    const leaveSpecial=matches.length>=5;
-    const specialKind=matches.length>=8?SPECIAL.rainbow:SPECIAL.bomb;
-    const anchor=matches[0];
+    const spawn=classifySpawn(matches);
 
     scheduleCascade(()=>{
       if(!alive())return;
-      const snap=matches.map(({r,c})=>({r,c,p:board[r]?.[c]}));
-      const rainColor=snap.find(x=>x.p&&x.p.color!=null)?.p?.color ?? 0;
+      const snap=expanded.map(({r,c})=>({r,c,p:board[r]?.[c]}));
       snap.forEach(({r,c,p})=>{
-        if(p?.special===SPECIAL.bomb){
-          spawnFx(r,c,'bomb');
-          for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
-            if(board[r+dr]?.[c+dc]!=null)board[r+dr][c+dc]=null;
-          }
-        }else if(p?.special===SPECIAL.line){
-          spawnFx(r,c,'line');
-          for(let rr=0;rr<ROWS;rr++)if(board[rr])board[rr][c]=null;
-          for(let cc=0;cc<COLS;cc++)if(board[r])board[r][cc]=null;
-        }else if(p?.special===SPECIAL.rainbow){
-          spawnFx(r,c,'rainbow');
-          for(let rr=0;rr<ROWS;rr++)for(let cc=0;cc<COLS;cc++){
-            if(board[rr][cc]?.color===rainColor)board[rr][cc]=null;
-          }
-        }else if(board[r]?.[c]){
-          board[r][c]=null;
+        if(!p)return;
+        if(p.special===SPECIAL.bomb)detonateBomb(r,c);
+        else if(p.special===SPECIAL.line)detonateLine(r,c,p.axis||'h');
+        else if(p.special===SPECIAL.rainbow){
+          const rainColor=snap.find(x=>x.p&&x.p.color!=null)?.p?.color ?? 0;
+          detonateRainbow(r,c,rainColor);
+        }else{
+          clearCellAt(r,c);
         }
       });
-      if(leaveSpecial&&anchor&&board[anchor.r]){
-        board[anchor.r][anchor.c]={color:null,special:specialKind,id:uid()};
+      if(spawn&&spawn.anchor){
+        const {r,c}=spawn.anchor;
+        board[r][c]={color:null,special:spawn.kind,axis:spawn.axis,id:uid()};
+        teachSpecial(spawn.kind);
       }
+      updateGoalsHud();
       dropPieces();
     },T.pop);
   }
@@ -917,8 +1260,9 @@ function openTipTap(){
     updateComboHud();
     animating=false;
     hintPair=null;
+    lastSwapCell=null;
+    updateGoalsHud();
     if(checkGameOver())return;
-    // Deadlock assist: shuffle when zero legal swaps
     if(!findHintMove()){
       shuffleGems(false);
       let g=0;
@@ -931,39 +1275,87 @@ function openTipTap(){
   function trySwap(r1,c1,r2,c2){
     if(!alive()||animating||gameOver||isPaused())return;
     if(Math.abs(r1-r2)+Math.abs(c1-c2)!==1)return;
-    if(!board[r1]?.[c1]||!board[r2]?.[c2])return;
+    const a=board[r1]?.[c1],b=board[r2]?.[c2];
+    if(!a||!b)return;
     hintPair=null;
     animating=true;
     selected=null;
+    const sa=a.special,sb=b.special;
     swapCells(r1,c1,r2,c2);
+    lastSwapCell={r:r2,c:c2};
     render({swap:[[r1,c1],[r2,c2]]});
+
+    // Special activation / combo — costs a move
+    if(sa&&sb){
+      moves--;
+      updateGoalsHud();
+      combo=0;
+      scheduleCascade(()=>{
+        if(!alive())return;
+        combo=1;updateComboHud();
+        const before=countFilled();
+        resolveSpecialCombo(r1,c1,r2,c2,sa,sb,a,b);
+        const cleared=Math.max(0,before-countFilled());
+        addScore(Math.max(cleared,1)*12);
+        buzz('valid');
+        updateGoalsHud();
+        dropPieces();
+      },T.swap);
+      return;
+    }
+    if(sa||sb){
+      moves--;
+      updateGoalsHud();
+      combo=0;
+      scheduleCascade(()=>{
+        if(!alive())return;
+        combo=1;updateComboHud();
+        // After swap: a at (r2,c2), b at (r1,c1)
+        b._atR=r1;b._atC=c1;a._atR=r2;a._atC=c2;
+        const before=countFilled();
+        if(sa)activateSpecialAt(r2,c2,sa,a,b);
+        else activateSpecialAt(r1,c1,sb,b,a);
+        const cleared=Math.max(0,before-countFilled());
+        addScore(Math.max(cleared,1)*12);
+        buzz('valid');
+        updateGoalsHud();
+        dropPieces();
+      },T.swap);
+      return;
+    }
+
     const matches=findMatches();
     if(matches.length){
-      moves--; // only successful match consumes a move
-      updateHudMeters();
+      moves--;
+      updateGoalsHud();
       scheduleCascade(()=>clearMatches(matches),T.swap);
     }else{
-      // Illegal: animate back — 0 moves
       scheduleCascade(()=>{
         swapCells(r1,c1,r2,c2);
+        lastSwapCell=null;
         render({swap:[[r1,c1],[r2,c2]]});
         animating=false;
         buzz('invalid');
         const grid=document.getElementById('cbGrid');
         if(typeof shakeInvalidMove==='function')shakeInvalidMove(grid,{toast:'No match'});
-        else if(typeof showToast==='function')showToast('No match');
+        else toast('No match');
       },T.swapBack);
     }
   }
 
+  function countFilled(){
+    let n=0;
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)if(board[r][c]!=null)n++;
+    return n;
+  }
+
   function updateHudMeters(){
-    const scoreEl=document.getElementById('cbScore');if(scoreEl)scoreEl.textContent=score.toLocaleString();
-    const movesEl=document.getElementById('cbMoves');if(movesEl)movesEl.textContent=String(moves);
-    const progEl=document.getElementById('cbProgress');if(progEl)progEl.style.width=Math.min(100,(score/Math.max(1,targetScore))*100)+'%';
+    updateGoalsHud();
   }
 
   function checkGameOver(){
-    if(score>=targetScore){showLevelComplete();return true;}
+    syncScoreGoals();
+    if(goalsComplete()){showLevelComplete();return true;}
     if(moves<=0){showGameOver();return true;}
     return false;
   }
@@ -980,6 +1372,16 @@ function openTipTap(){
     selected=null;
     buzz('select');
     render();
+  }
+
+  function goalSummaryLine(){
+    return goals.map((g,i)=>{
+      const cur=goalProgress[i]||0;
+      if(g.type==='score')return `${cur}/${g.amount} pts`;
+      if(g.type==='collect')return `${(PALETTE[g.color]||{}).name||'Gem'} ${cur}/${g.amount}`;
+      if(g.type==='specials')return `${g.kind} ${cur}/${g.amount}`;
+      return '';
+    }).filter(Boolean).join(' · ');
   }
 
   function showLevelComplete(){
@@ -1004,7 +1406,7 @@ function openTipTap(){
         gameId:'tiptap',
         glyph:'✓',
         title:`Level ${level} complete`,
-        subtitle:`Score ${score.toLocaleString()}`,
+        subtitle:`Score ${score.toLocaleString()} · ${goalSummaryLine()}`,
         vsBest:vsBest||undefined,
         shareCardHtml:shareCard,
         actions,
@@ -1054,7 +1456,7 @@ function openTipTap(){
         gameId:'tiptap',
         glyph:'·',
         title:'Out of moves',
-        subtitle:`Score ${score.toLocaleString()} / ${targetScore.toLocaleString()} · Level ${level}`,
+        subtitle:`${goalSummaryLine()} · Level ${level}`,
         vsBest:vsBest||undefined,
         shareCardHtml:shareCard,
         actions,
@@ -1085,7 +1487,10 @@ function openTipTap(){
     if(!p)return '';
     if(p.special===SPECIAL.bomb)return '<span class="tt-gem tt-gem--bomb" aria-hidden="true"></span>';
     if(p.special===SPECIAL.rainbow)return '<span class="tt-gem tt-gem--rainbow" aria-hidden="true"></span>';
-    if(p.special===SPECIAL.line)return '<span class="tt-gem tt-gem--line" aria-hidden="true"></span>';
+    if(p.special===SPECIAL.line){
+      const ax=p.axis==='v'?'tt-gem--line-v':'tt-gem--line-h';
+      return `<span class="tt-gem tt-gem--line ${ax}" aria-hidden="true"></span>`;
+    }
     const pal=PALETTE[p.color]||PALETTE[0];
     return `<span class="tt-gem" style="--tt-fill:${pal.fill};--tt-glow:${pal.glow}" aria-hidden="true"></span>`;
   }
@@ -1129,7 +1534,7 @@ function openTipTap(){
         if(animating||gameOver||isPaused())return;
         const nr=+cell.dataset.r,nc=+cell.dataset.c;
         if(!selected){selected=[nr,nc];hintPair=null;buzz('select');render();}
-        else if(selected[0]===nr&&selected[1]===nc){selected=null;render();} // double-tap deselect
+        else if(selected[0]===nr&&selected[1]===nc){selected=null;render();}
         else if(Math.abs(selected[0]-nr)+Math.abs(selected[1]-nc)===1){
           const sr=selected[0],sc=selected[1];
           selected=null;
@@ -1144,15 +1549,16 @@ function openTipTap(){
     if(sample)cellSize=sample.getBoundingClientRect().height||40;
   }
 
+  const lvl0=LEVELS[Math.min(level-1,99)];
   overlay.innerHTML=`
     ${gameChromeHtml({title:'Tip Tap',subtitle:`Level ${level}`,backId:'cbBack',pauseId:'cbPause',rightHtml:'<button type="button" id="cbHint" class="game-chrome-action game-tap-target" aria-label="Hint">Hint</button><span class="game-chrome-metric" id="cbScore">0</span>'})}
     <div class="tt-meter">
       <div class="tt-meter-row">
-        <span>Target: <strong id="cbTarget">${LEVELS[Math.min(level-1,99)].target.toLocaleString()}</strong></span>
+        <span>Moves: <strong id="cbMoves">${lvl0.moves}</strong></span>
         <span id="cbCombo" class="tt-combo" hidden></span>
-        <span>Moves: <strong id="cbMoves">${LEVELS[Math.min(level-1,99)].moves}</strong></span>
       </div>
-      <div class="tt-meter-track"><div id="cbProgress" class="tt-meter-fill"></div></div>
+      <div id="cbGoals" class="tt-goals" aria-live="polite"></div>
+      <div id="cbProgressTrack" class="tt-meter-track"><div id="cbProgress" class="tt-meter-fill"></div></div>
     </div>
     <div class="tt-board-wrap">
       <div id="cbGrid" class="tt-grid" style="grid-template-columns:repeat(${COLS},1fr)"></div>
@@ -1179,9 +1585,7 @@ function openTipTap(){
     pauseCtrl=createGamePauseController({
       host:overlay,
       pauseBtnId:'cbPause',
-      onPause(){
-        // Keep cascade beat pending; scheduleCascade parks fn in cascadeResume if it fires while paused
-      },
+      onPause(){},
       onResume(){
         if(cascadeResume){
           const fn=cascadeResume;cascadeResume=null;
@@ -1192,7 +1596,6 @@ function openTipTap(){
     });
   }
 
-  // Pointer swipe between adjacent cells (tap still via click)
   const gridEl=document.getElementById('cbGrid');
   let sx=0,sy=0,sCell=null,pointerSwiping=false;
   function beginSwipe(clientX,clientY,el){
@@ -1205,7 +1608,7 @@ function openTipTap(){
     const r=+sCell.dataset.r,c=+sCell.dataset.c;
     sCell=null;pointerSwiping=false;
     if(animating||gameOver||isPaused())return;
-    if(Math.abs(dx)<22&&Math.abs(dy)<22)return; // tap handled by click
+    if(Math.abs(dx)<22&&Math.abs(dy)<22)return;
     let nr=r,nc=c;
     if(Math.abs(dx)>Math.abs(dy))nc+=dx>0?1:-1;
     else nr+=dy>0?1:-1;
@@ -1228,6 +1631,7 @@ function openTipTap(){
 
   startLevel(level);
 }
+
 
 // --- Game registry self-registration (arcade.js) ---
 if (typeof registerGame === 'function') {
