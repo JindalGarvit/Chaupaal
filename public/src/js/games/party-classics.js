@@ -685,7 +685,7 @@
           '. Same Queen/foul rules. Only shoot on your turn.'
         : 'You shoot from the near baseline; AI from the far. Cover the Queen after one of yours.'
       : isPool
-        ? 'Break from the kitchen (behind the head string). Drag back on the cue to shoot.'
+        ? 'Break from the kitchen. Open → solids/stripes → 8 last. Scratch: cue back in kitchen. Early 8 or scratch on 8 loses (8 on break is re-spotted).'
         : 'Drag back on the cue ball to aim, release to shoot.';
 
     shell.body.innerHTML = `<div class="pc-cue${isCarrom ? ' pc-cue--carrom' : ''}${isPool ? ' pc-cue--pool' : ''}">
@@ -772,6 +772,13 @@
     let lastHint = '';
     let breakDone = false;
     let liveSeeded = false;
+    // Pool 8-ball law (Prompt 2)
+    let openTable = true;
+    let youGroup = null; // 'solid' | 'stripe'
+    let oppGroup = null;
+    let scratchThisStroke = false;
+    let strokeIsBreak = false;
+    let firstContactGroup = null;
 
     function ballRadius(b) {
       return b.r || (b.cue ? cueR : ballR);
@@ -821,10 +828,15 @@
           (liveOn ? '' : ' · ' + (DIFF_LABEL[difficulty] || 'Medium')) +
           `</div>`;
       } else if (isPool) {
-        const left = remaining();
-        const solids = balls.filter((b) => !b.dead && !b.cue && b.group === 'solid').length;
-        const stripes = balls.filter((b) => !b.dead && !b.cue && b.group === 'stripe').length;
-        const eightOut = balls.some((b) => b.dead && (b.kind === 'eight' || b.num === 8));
+        const gLabel = (g) => (g === 'solid' ? 'Solids' : g === 'stripe' ? 'Stripes' : 'Open');
+        const yLeft = youGroup
+          ? balls.filter((b) => !b.dead && !b.cue && poolBallGroup(b) === youGroup).length
+          : '—';
+        const oLeft = oppGroup
+          ? balls.filter((b) => !b.dead && !b.cue && poolBallGroup(b) === oppGroup).length
+          : '—';
+        const eightLive = balls.some((b) => !b.dead && (b.kind === 'eight' || b.num === 8));
+        const eightOn = !!(youGroup && groupIsClear('you'));
         const turn = ended
           ? 'Over'
           : moving
@@ -837,12 +849,66 @@
                 ? 'Opp turn'
                 : 'Opp turn';
         hud.innerHTML =
-          `<div class="pc-cue-hud-row">On table <b>${left}</b> · solids ${solids} · stripes ${stripes}` +
-          (eightOut ? '' : ' · <b>8</b> live') +
-          `</div><div class="pc-cue-hud-row">You ${youPocketed} · Opp ${oppPocketed} · ${turn}</div>`;
+          `<div class="pc-cue-hud-row">You: <b>${gLabel(youGroup)}</b> (${yLeft}) · Opp: <b>${gLabel(oppGroup)}</b> (${oLeft})` +
+          (openTable ? ' · table open' : '') +
+          `</div><div class="pc-cue-hud-row">${
+            eightOn ? '<b>8-ball is on</b> · ' : eightLive ? '8 live · ' : '8 down · '
+          }${turn}</div>`;
       } else {
         hud.textContent = `You ${youPocketed} · Opp ${oppPocketed}`;
       }
+    }
+
+    function poolBallGroup(b) {
+      if (!b || b.cue) return '';
+      if (b.kind === 'eight' || b.num === 8) return 'eight';
+      if (b.group === 'stripe' || b.stripe || (b.num != null && b.num >= 9)) return 'stripe';
+      return 'solid';
+    }
+
+    function groupIsClear(seat) {
+      const g = seat === 'you' ? youGroup : oppGroup;
+      if (!g) return false;
+      return !balls.some((b) => !b.dead && !b.cue && poolBallGroup(b) === g);
+    }
+
+    function assignPoolGroups(seat, group) {
+      openTable = false;
+      if (seat === 'you') {
+        youGroup = group;
+        oppGroup = group === 'solid' ? 'stripe' : 'solid';
+      } else {
+        oppGroup = group;
+        youGroup = group === 'solid' ? 'stripe' : 'solid';
+      }
+    }
+
+    function poolLiveGroups() {
+      if (!liveRoles) return { groupA: youGroup, groupB: oppGroup, openTable };
+      if (liveRoles.me === liveRoles.playerA) {
+        return { groupA: youGroup, groupB: oppGroup, openTable };
+      }
+      return { groupA: oppGroup, groupB: youGroup, openTable };
+    }
+
+    function applyPoolGroupsFromState(st) {
+      if (!st || !liveRoles) return;
+      if (st.openTable != null) openTable = !!st.openTable;
+      const gA = st.groupA || null;
+      const gB = st.groupB || null;
+      if (liveRoles.me === liveRoles.playerA) {
+        youGroup = gA;
+        oppGroup = gB;
+      } else {
+        youGroup = gB;
+        oppGroup = gA;
+      }
+    }
+
+    function countGroupPocketed(seat) {
+      const g = seat === 'you' ? youGroup : oppGroup;
+      if (!g) return 0;
+      return balls.filter((b) => b.dead && !b.cue && poolBallGroup(b) === g).length;
     }
 
     function colorLabel(c) {
@@ -1124,19 +1190,30 @@
       if (isCarrom) return; // carrom uses pushCarromLive
       const scores =
         liveRoles.me === liveRoles.playerA
-          ? { a: youPocketed, b: oppPocketed }
-          : { a: oppPocketed, b: youPocketed };
+          ? { a: isPool ? countGroupPocketed('you') : youPocketed, b: isPool ? countGroupPocketed('opp') : oppPocketed }
+          : { a: isPool ? countGroupPocketed('opp') : oppPocketed, b: isPool ? countGroupPocketed('you') : youPocketed };
+      const groups = isPool ? poolLiveGroups() : {};
       liveHandle.push({
         baseVersion: seq,
         status: 'playing',
         turn: liveRoles.opp,
-        state: { balls: snapshotBalls(), scores, phase: 'settled' },
+        state: Object.assign(
+          {
+            balls: snapshotBalls(),
+            scores,
+            phase: 'settled',
+            breakDone: !!breakDone,
+            hint: lastHint || '',
+          },
+          groups
+        ),
       });
       if (typeof DangalLive !== 'undefined' && DangalLive.pingTurn) {
         DangalLive.pingTurn(liveRoles.opp, spec.id, { chatId: chat && (chat.firestoreId || chat.id) });
       }
       myTurn = false;
-      hint.textContent = 'Opponent’s shot…';
+      hint.textContent = lastHint ? lastHint + ' Opponent’s shot…' : 'Opponent’s shot…';
+      updateHud();
     }
 
     function pushCarromLive(opts) {
@@ -1251,6 +1328,9 @@
       strokeSeat = 'you';
       strokePocketed = [];
       movingFrames = 0;
+      scratchThisStroke = false;
+      firstContactGroup = null;
+      strokeIsBreak = isPool && !breakDone;
       if (isPool && !breakDone) breakDone = true;
       c.vx = (dx / mag) * p;
       c.vy = (dy / mag) * p;
@@ -1302,37 +1382,27 @@
           b.vy *= -wallRest;
         }
         if (!b.cue && pocketed(b)) {
-          // Prompt 1 light rule: early 8 (others still out) → spot back, no score
-          if (
-            isPool &&
-            (b.kind === 'eight' || b.num === 8) &&
-            balls.some((o) => !o.dead && !o.cue && o !== b && o.kind !== 'eight' && o.num !== 8)
-          ) {
-            b.vx = 0;
-            b.vy = 0;
-            placeAtCenter(b);
-            hint.textContent = 'Early 8 — spotted back (full 8-ball rules next).';
-            buzz('reject');
+          b.dead = true;
+          b.vx = b.vy = 0;
+          if (isCarrom || isPool) {
+            strokePocketed.push(b);
           } else {
-            b.dead = true;
-            b.vx = b.vy = 0;
-            if (isCarrom) {
-              strokePocketed.push(b);
-            } else {
-              youPocketed += 1;
-              updateHud();
-            }
-            buzz('coin');
+            youPocketed += 1;
+            updateHud();
           }
+          buzz('coin');
         }
         if (b.cue && pocketed(b)) {
           b.vx = b.vy = 0;
           if (isCarrom) {
             b.dead = true;
             strokePocketed.push(b);
+          } else if (isPool) {
+            scratchThisStroke = true;
+            b.dead = true;
           } else {
             resetCueToBaseline({ foul: true });
-            if (!isPool) hint.textContent = 'Cue pocketed — reset.';
+            hint.textContent = 'Cue pocketed — reset.';
           }
         }
       });
@@ -1349,6 +1419,10 @@
             const d = Math.hypot(dx, dy) || 0.0001;
             const minD = ra + rb;
             if (d < minD) {
+              if (isPool && !firstContactGroup) {
+                if (a.cue && !b.cue) firstContactGroup = poolBallGroup(b);
+                else if (b.cue && !a.cue) firstContactGroup = poolBallGroup(a);
+              }
               const nx = dx / d;
               const ny = dy / d;
               const rvx = a.vx - b.vx;
@@ -1375,6 +1449,174 @@
 
     function remaining() {
       return balls.filter((b) => !b.cue && !b.dead).length;
+    }
+
+    function passPoolTurn(msg) {
+      lastHint = msg || '';
+      hint.textContent = msg || '';
+      youPocketed = countGroupPocketed('you');
+      oppPocketed = countGroupPocketed('opp');
+      updateHud();
+      scratchThisStroke = false;
+      strokePocketed = [];
+      firstContactGroup = null;
+      strokeIsBreak = false;
+      if (liveOn) {
+        pushSettle();
+        return;
+      }
+      if (strokeSeat === 'you') {
+        myTurn = false;
+        hint.textContent = (msg ? msg + ' ' : '') + 'Opponent’s turn…';
+        if (shell.gs && shell.gs.schedule) shell.gs.schedule(aiTurn, 650);
+        else setTimeout(aiTurn, 650);
+      } else {
+        myTurn = true;
+        hint.textContent = (msg ? msg + ' ' : '') + 'Your shot.';
+        updateHud();
+      }
+    }
+
+    function keepPoolTurn(msg) {
+      lastHint = msg || '';
+      hint.textContent = msg || 'Nice — shoot again.';
+      youPocketed = countGroupPocketed('you');
+      oppPocketed = countGroupPocketed('opp');
+      scratchThisStroke = false;
+      strokePocketed = [];
+      firstContactGroup = null;
+      strokeIsBreak = false;
+      myTurn = strokeSeat === 'you';
+      updateHud();
+      if (liveOn && strokeSeat === 'you' && liveHandle && liveRoles && !applying) {
+        const scores =
+          liveRoles.me === liveRoles.playerA
+            ? { a: countGroupPocketed('you'), b: countGroupPocketed('opp') }
+            : { a: countGroupPocketed('opp'), b: countGroupPocketed('you') };
+        liveHandle.push({
+          baseVersion: seq,
+          status: 'playing',
+          turn: liveRoles.me,
+          state: Object.assign(
+            {
+              balls: snapshotBalls(),
+              scores,
+              phase: 'settled',
+              breakDone: true,
+              hint: lastHint,
+            },
+            poolLiveGroups()
+          ),
+        });
+      } else if (!liveOn && strokeSeat === 'opp') {
+        if (shell.gs && shell.gs.schedule) shell.gs.schedule(aiTurn, 500);
+        else setTimeout(aiTurn, 500);
+      }
+    }
+
+    /**
+     * Pool 8-ball settle.
+     * House: 8 on break → re-spot (no loss). Ball-in-hand = kitchen.
+     * Early 8 after break → loss. Scratch on 8 → loss.
+     */
+    function resolvePoolStroke() {
+      const seat = strokeSeat;
+      const pocketed = strokePocketed.filter((b) => b && !b.cue);
+      const solidsHit = pocketed.filter((b) => poolBallGroup(b) === 'solid');
+      const stripesHit = pocketed.filter((b) => poolBallGroup(b) === 'stripe');
+      const eightHit = pocketed.filter((b) => poolBallGroup(b) === 'eight');
+      const scratched = scratchThisStroke;
+      const who = seat === 'you' ? 'You' : 'Opp';
+      const seatGroup = seat === 'you' ? youGroup : oppGroup;
+
+      if (scratched) {
+        resetCueToBaseline({ foul: true, seat: seat === 'you' ? 'you' : 'opp' });
+      }
+
+      if (eightHit.length) {
+        if (strokeIsBreak) {
+          eightHit.forEach((b) => {
+            b.dead = false;
+            placeAtCenter(b);
+          });
+          if (!scratched) {
+            if (solidsHit.length && !stripesHit.length) assignPoolGroups(seat, 'solid');
+            else if (stripesHit.length && !solidsHit.length) assignPoolGroups(seat, 'stripe');
+          }
+          if (scratched) {
+            passPoolTurn('Foul — cue in kitchen. 8 re-spotted.');
+            return;
+          }
+          if (solidsHit.length || stripesHit.length) {
+            keepPoolTurn(
+              openTable
+                ? who + ' pocketed on the break — table still open (8 re-spotted).'
+                : who + ': group set — 8 re-spotted. Shoot again.'
+            );
+            return;
+          }
+          passPoolTurn('Break — 8 re-spotted.');
+          return;
+        }
+
+        if (scratched) {
+          if (seatGroup && groupIsClear(seat)) {
+            finish(seat !== 'you', { reason: 'Scratch on the 8' });
+            return;
+          }
+          finish(seat !== 'you', { reason: 'Foul on the 8' });
+          return;
+        }
+
+        if (!seatGroup || !groupIsClear(seat)) {
+          finish(seat !== 'you', { reason: 'Early 8-ball — loss' });
+          return;
+        }
+
+        finish(seat === 'you', { reason: '8-ball' });
+        return;
+      }
+
+      if (scratched) {
+        passPoolTurn('Foul — cue in kitchen.');
+        return;
+      }
+
+      if (openTable) {
+        if (solidsHit.length && !stripesHit.length) {
+          assignPoolGroups(seat, 'solid');
+          keepPoolTurn(who + ': Solids. Opp has Stripes.');
+          return;
+        }
+        if (stripesHit.length && !solidsHit.length) {
+          assignPoolGroups(seat, 'stripe');
+          keepPoolTurn(who + ': Stripes. Opp has Solids.');
+          return;
+        }
+        if (solidsHit.length && stripesHit.length) {
+          passPoolTurn(who + ': mixed colours — table still open.');
+          return;
+        }
+        passPoolTurn(who + ': miss.');
+        return;
+      }
+
+      const ownHit = pocketed.filter((b) => poolBallGroup(b) === seatGroup);
+      const oppG = seat === 'you' ? oppGroup : youGroup;
+      const oppHit = pocketed.filter((b) => poolBallGroup(b) === oppG);
+
+      if (ownHit.length) {
+        const msg = groupIsClear(seat)
+          ? who + ': group clear — 8-ball is on.'
+          : who + ': nice — keep shooting.';
+        keepPoolTurn(msg);
+        return;
+      }
+      if (oppHit.length) {
+        passPoolTurn(who + ': opponent ball — turn ends.');
+        return;
+      }
+      passPoolTurn(who + ': miss.');
     }
 
     function resolveCarromStroke() {
@@ -1738,6 +1980,36 @@
 
     function aiTurn() {
       if (liveOn || isCarrom) return;
+      if (isPool) {
+        if (ended) return;
+        strokeSeat = 'opp';
+        strokePocketed = [];
+        scratchThisStroke = false;
+        firstContactGroup = null;
+        strokeIsBreak = !breakDone;
+        if (!breakDone) breakDone = true;
+
+        let targets;
+        if (openTable) {
+          targets = balls.filter((b) => !b.dead && !b.cue && poolBallGroup(b) !== 'eight');
+        } else if (groupIsClear('opp')) {
+          targets = balls.filter((b) => !b.dead && poolBallGroup(b) === 'eight');
+        } else {
+          targets = balls.filter((b) => !b.dead && !b.cue && poolBallGroup(b) === oppGroup);
+        }
+        if (!targets.length) {
+          myTurn = true;
+          hint.textContent = 'Your shot.';
+          updateHud();
+          return;
+        }
+        const pick = targets[Math.floor(Math.random() * targets.length)];
+        pick.dead = true;
+        strokePocketed.push(pick);
+        buzz('place');
+        resolvePoolStroke();
+        return;
+      }
       const live = balls.filter((b) => !b.cue && !b.dead);
       if (!live.length) return finish(true);
       const pick = live[Math.floor(Math.random() * live.length)];
@@ -1972,27 +2244,69 @@
           liveHandle.push({
             status: 'over',
             winner: won ? liveRoles.me : liveRoles.opp,
-            state: { balls: snapshotBalls(), scores: { a: youPocketed, b: oppPocketed }, phase: 'over' },
+            state: Object.assign(
+              {
+                balls: snapshotBalls(),
+                scores: {
+                  a:
+                    liveRoles.me === liveRoles.playerA
+                      ? isPool
+                        ? countGroupPocketed('you')
+                        : youPocketed
+                      : isPool
+                        ? countGroupPocketed('opp')
+                        : oppPocketed,
+                  b:
+                    liveRoles.me === liveRoles.playerA
+                      ? isPool
+                        ? countGroupPocketed('opp')
+                        : oppPocketed
+                      : isPool
+                        ? countGroupPocketed('you')
+                        : youPocketed,
+                },
+                phase: 'over',
+                breakDone: true,
+              },
+              isPool ? poolLiveGroups() : {}
+            ),
           });
         }
       }
 
       if (!isCarrom) {
-        const sub =
-          (isPool ? 'Temporary clear-table score · ' : '') +
-          'Pocketed ' +
-          youPocketed +
-          ' · opponent ' +
-          oppPocketed;
+        const reason = m.reason || '';
+        let sub;
+        if (isPool) {
+          if (reason === '8-ball') sub = won ? 'Legal 8-ball — you win' : 'Opponent sank the 8';
+          else if (reason === 'Early 8-ball — loss')
+            sub = won ? 'Opponent sank the 8 early' : 'Early 8-ball — loss';
+          else if (reason === 'Scratch on the 8')
+            sub = won ? 'Opponent scratched on the 8' : 'Scratch on the 8 — loss';
+          else if (reason === 'Foul on the 8')
+            sub = won ? 'Opponent fouled on the 8' : 'Foul on the 8 — loss';
+          else if (m.forfeit || m.resign) sub = won ? 'Opponent left' : 'Forfeit';
+          else
+            sub =
+              (youGroup ? 'You: ' + (youGroup === 'solid' ? 'Solids' : 'Stripes') : 'Open table') +
+              ' · ' +
+              (won ? 'Win' : 'Loss');
+        } else {
+          sub = 'Pocketed ' + youPocketed + ' · opponent ' + oppPocketed;
+        }
         showDuelResult(shell, {
           id: spec.id,
           you: won ? 1 : 0,
           opp: won ? 0 : 1,
           glyph: spec.glyph,
-          pbScore: youPocketed,
+          pbScore: isPool ? countGroupPocketed('you') : youPocketed,
           title: won ? 'You win' : 'Defeat',
           subtitle: sub,
-          shareText: (spec.title || 'Game') + ' on Chaupaal',
+          shareText: isPool
+            ? won
+              ? 'I won Pool on Chaupaal — cleared my group and the 8'
+              : 'Pool on Chaupaal — rematch?'
+            : (spec.title || 'Game') + ' on Chaupaal',
           onAgain: () => openCueGame(Object.assign({}, spec, { chat })),
         });
         return;
@@ -2331,6 +2645,10 @@
         resolveCarromStroke();
         return;
       }
+      if (isPool) {
+        resolvePoolStroke();
+        return;
+      }
       if (!remaining()) {
         finish(true);
         return;
@@ -2461,6 +2779,14 @@
             applying = true;
             seq = ver;
             applySnapshot(st.balls, st.scores, val.turn);
+            if (isPool) {
+              applyPoolGroupsFromState(st);
+              if (st.breakDone != null) breakDone = !!st.breakDone;
+              if (st.hint) lastHint = st.hint;
+              youPocketed = countGroupPocketed('you');
+              oppPocketed = countGroupPocketed('opp');
+              updateHud();
+            }
             applying = false;
           }
         },
@@ -2844,7 +3170,7 @@
       id: 'pool',
       variant: 'pool',
       title: 'Pool',
-      subtitle: '8-ball · kitchen break',
+      subtitle: '8-ball · solids & stripes',
       chat: ctx,
       accent: '#1B3A2D',
       bg: '#0A1A10',
@@ -5714,7 +6040,7 @@
     const games = [
       { id: 'tambola', name: 'Tambola', desc: 'Ticket · full house', icon: '🎱', genre: 'party', launch: openTambola, order: 30 },
       { id: 'carrom', name: 'Carrom', desc: 'Live · stakes · AI', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
-      { id: 'pool', name: 'Pool', desc: '8-ball rack · kitchen break', icon: '🎱', genre: 'board', launch: openPool, order: 32 },
+      { id: 'pool', name: 'Pool', desc: '8-ball · solids & stripes', icon: '🎱', genre: 'board', launch: openPool, order: 32 },
       { id: 'rummy', name: 'Rummy', desc: 'Runs and sets', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
       { id: 'teenpatti', name: 'Teen Patti', desc: 'Boot, chaal, side-show · virtual chips', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
       { id: 'bluff', name: 'Bluff', desc: 'Pile claims · call · empty hand', icon: '🎭', genre: 'party', launch: openBluff, order: 35 },

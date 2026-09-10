@@ -170,9 +170,9 @@
     carrom: ['Pocket your colour', 'Queen then cover', 'Striker pocket is a foul'],
     uno: ['Match colour or number to play', 'Classic has optional house-rule toggles', "Shout 'Oh No!' at 1 card · Blaze hits harder · Flip switches sides"],
     pool: [
-      'Break from the kitchen — place the cue behind the head string',
-      '15-ball rack with the 8 in the center (solids & stripes)',
-      'Scratch returns the cue to the kitchen · full 8-ball rules next',
+      'Break from the kitchen — table stays open until a clean solid or stripe',
+      'Clear your group, then the 8 — early 8 or scratch on 8 is a loss',
+      'Scratch: foul — cue back in the kitchen · 8 on break is re-spotted',
     ],
     rummy: ['Draw or take the discard', 'Discard one card', 'Declare when you have runs and sets'],
     teenpatti: [
