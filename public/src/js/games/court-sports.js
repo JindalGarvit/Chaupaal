@@ -505,8 +505,20 @@
     const showKitchen = !!spec.kitchen;
     const launchDiff = String(spec.aiDiff || spec.difficulty || 'normal').toLowerCase();
     let aiDiff = launchDiff === 'easy' ? 'easy' : launchDiff === 'sharp' ? 'sharp' : 'normal';
+    /** Live stakes: settle ONCE on over/forfeit (virtual — not real money). Practice never charges. */
+    const liveStake = liveOn
+      ? Number(
+          (chat && chat.stake) != null
+            ? chat.stake
+            : (window.__dangalLaunchCtx && window.__dangalLaunchCtx.stake) || 0
+        ) || 0
+      : 0;
+    const settleMatchId = liveOn ? String(matchIdFor(chat, spec.id) || '').trim() : '';
+    let settleOppUid = '';
+    let settleDone = false;
     let pauseCtrl = null;
     let rallyPaused = false;
+    let peerPaused = false;
     let activeRaf = 0;
     let flashContact = false;
     let coachShown = false;
@@ -516,6 +528,10 @@
     let contactsSinceSoft = 0;
     let aiTok = 0;
     let diffLocked = false;
+    /** Contact authority: contacting client proposes; peers apply once by contactSeq / eventSeq. */
+    let contactSeq = 0;
+    let appliedContactSeq = 0;
+    let appliedPointSeq = 0;
     try {
       coachShown = !!(typeof localStorage !== 'undefined' && localStorage.getItem('chaupaal_rally_coach_' + (spec.id || '')));
     } catch (e) {}
@@ -523,7 +539,7 @@
       id: spec.id,
       title: spec.name,
       subtitle: liveOn
-        ? liveSub()
+        ? liveSub() + (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly')
         : practiceSub(matchSub + ' · ' + (aiDiff === 'easy' ? 'Easy' : aiDiff === 'sharp' ? 'Sharp' : 'Normal')),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
@@ -531,6 +547,7 @@
       accent: spec.accent,
       bg: spec.bg,
       pauseId,
+      leaveBody: liveOn ? 'You’ll forfeit this Live match.' : 'This practice run will end.',
       cleanup: () => {
         aiTok += 1;
         if (activeRaf) {
@@ -542,15 +559,43 @@
     });
     if (!shell) return;
 
+    function isFrozen() {
+      return !!(rallyPaused || peerPaused);
+    }
+
+    function pushPauseState(paused) {
+      if (!liveOn || !liveHandle || !liveRoles || ended) return;
+      try {
+        liveHandle.push({
+          status: 'playing',
+          turn: myServe ? liveRoles.me : liveRoles.opp,
+          state: {
+            paused: !!paused,
+            scores: scoresForPush(),
+            book: serializeRallyBook(book, liveRoles),
+            servingUid: book.serverIsMe ? liveRoles.me : liveRoles.opp,
+            contactSeq,
+            eventSeq,
+            rally,
+            windowMs,
+            scoreModel: scoreModel,
+            hud: rallyHudParts(book).line,
+          },
+        });
+      } catch (e) {}
+    }
+
     if (typeof createGamePauseController === 'function') {
       pauseCtrl = createGamePauseController({
         host: shell.host || shell.overlay,
         pauseBtnId: pauseId,
         onPause() {
           rallyPaused = true;
+          pushPauseState(true);
         },
         onResume() {
           rallyPaused = false;
+          pushPauseState(false);
         },
         onQuit: () => shell.close('dismissed'),
       });
@@ -637,26 +682,86 @@
     function pushPoint(whoScored, msg) {
       if (!liveOn || !liveHandle || !liveRoles || applying) return;
       eventSeq += 1;
+      appliedPointSeq = Math.max(appliedPointSeq, eventSeq);
       serving = true;
       const sum = bookSummaryScores(book);
       const iWon = sum.you > sum.opp;
       liveHandle.push({
         status: ended ? 'over' : 'playing',
         winner: ended ? (iWon ? liveRoles.me : liveRoles.opp) : null,
-        turn: liveRoles.me,
+        turn: book.serverIsMe ? liveRoles.me : liveRoles.opp,
         state: {
           scores: scoresForPush(),
           book: serializeRallyBook(book, liveRoles),
           hud: rallyHudParts(book).line,
           servingUid: book.serverIsMe ? liveRoles.me : liveRoles.opp,
-          rally,
+          rally: 0,
           windowMs: spec.windowMs || 720,
           eventSeq,
+          contactSeq,
           msg: msg || '',
           pointBy: whoScored === 'me' ? liveRoles.me : liveRoles.opp,
           scoreModel: scoreModel,
+          paused: false,
         },
       });
+    }
+
+    async function settleRallyOnce(won, isDraw) {
+      if (!liveOn || settleDone) return null;
+      if (!settleMatchId || liveStake <= 0) {
+        settleDone = true;
+        return null;
+      }
+      if (!window.DangalEconomy || typeof DangalEconomy.reportGameEnd !== 'function') {
+        settleDone = true;
+        return null;
+      }
+      settleDone = true;
+      try {
+        const me = typeof getCurrentUid === 'function' ? getCurrentUid() : '';
+        const oppU = settleOppUid || (liveRoles && liveRoles.opp) || '';
+        return await DangalEconomy.reportGameEnd({
+          gameType: spec.id,
+          result: isDraw ? 'draw' : won ? 'win' : 'loss',
+          won: !!won && !isDraw,
+          isDraw: !!isDraw,
+          matchId: settleMatchId,
+          sessionId: settleMatchId,
+          opponentUid: oppU,
+          stake: liveStake,
+          winnerUid: isDraw ? null : won ? me : oppU,
+        });
+      } catch (e) {
+        settleDone = false;
+        return null;
+      }
+    }
+
+    function freshRematch() {
+      if (!liveOn) {
+        openRallySport(Object.assign({}, spec, { chat, aiDiff }));
+        return;
+      }
+      try {
+        const mid =
+          typeof dangalMatchId === 'function'
+            ? dangalMatchId(spec.id, chat)
+            : spec.id + '_' + Date.now();
+        if (window.__dangalLaunchCtx) {
+          window.__dangalLaunchCtx = Object.assign({}, window.__dangalLaunchCtx, {
+            matchId: mid,
+            gameId: spec.id,
+            gameType: spec.id,
+            stake: liveStake,
+          });
+        }
+        if (chat) {
+          chat.dangalMatchId = mid;
+          chat.stake = liveStake;
+        }
+      } catch (e) {}
+      openRallySport(Object.assign({}, spec, { chat, aiDiff }));
     }
 
     function awardPoint(who, msg) {
@@ -848,6 +953,11 @@
             activeRaf = requestAnimationFrame(aiTick);
             return;
           }
+          if (peerPaused) {
+            if (!pauseAnchor) pauseAnchor = now;
+            activeRaf = requestAnimationFrame(aiTick);
+            return;
+          }
           if (pauseAnchor) {
             if (t0) t0 += now - pauseAnchor;
             pauseAnchor = 0;
@@ -894,7 +1004,7 @@
           activeRaf = 0;
           return;
         }
-        if (rallyPaused) {
+        if (isFrozen()) {
           if (!pauseAnchor) pauseAnchor = now;
           activeRaf = requestAnimationFrame(tick);
           return;
@@ -917,7 +1027,7 @@
       activeRaf = requestAnimationFrame(tick);
 
       hit?.addEventListener('click', () => {
-        if (locked || !iAmActive || rallyPaused || practiceAiTurn) return;
+        if (locked || !iAmActive || isFrozen() || practiceAiTurn) return;
         const elapsedBase = t0 ? performance.now() - t0 : 0;
         const pauseExtra = pauseAnchor ? performance.now() - pauseAnchor : 0;
         const p = t0 ? Math.min(1, (elapsedBase - pauseExtra) / duration) : 0;
@@ -944,26 +1054,31 @@
         serving = false;
         windowMs = Math.max(380, windowMs * (spec.shrink || 0.94));
         if (liveOn) {
-          // Successful contact — opponent must return; push "in play" so they get a timing window
-          eventSeq += 1;
+          // Authority: contacting client proposes sweet hit + contactSeq; peer applies once.
+          contactSeq += 1;
+          appliedContactSeq = contactSeq;
           liveHandle.push({
             status: 'playing',
             turn: liveRoles.opp,
             state: {
               scores: scoresForPush(),
               book: serializeRallyBook(book, liveRoles),
-              servingUid: liveRoles.opp,
+              servingUid: book.serverIsMe ? liveRoles.me : liveRoles.opp,
               inPlay: true,
+              contactSeq,
+              contactBy: liveRoles.me,
+              contactQuality: 'sweet',
               rally,
               windowMs,
               eventSeq,
               msg: spec.goodLine || 'In! Keep the rally going.',
               scoreModel: scoreModel,
               hud: rallyHudParts(book).line,
+              paused: false,
             },
           });
           myServe = false;
-          serving = true;
+          serving = false;
           renderPlay(spec.goodLine || 'In! Keep the rally going.');
           return;
         }
@@ -991,6 +1106,7 @@
       if (resultPainted) return;
       resultPainted = true;
       ended = true;
+      if (shell && typeof shell.markOver === 'function') shell.markOver();
       aiTok += 1;
       practiceAiTurn = false;
       if (activeRaf) {
@@ -998,38 +1114,61 @@
         activeRaf = 0;
       }
       syncFromBook();
+      if (liveRoles && liveRoles.opp) settleOppUid = liveRoles.opp;
       const hud = rallyHudParts(book);
+      const sum = bookSummaryScores(book);
+      const forfeit = !!o.forfeit;
+      const draw = !forfeit && sum.you === sum.opp;
+      const won = forfeit ? !!o.iWon : sum.you > sum.opp;
       if (liveOn && liveHandle && liveRoles && !applying && !o.skipPush) {
         liveHandle.push({
-          status: 'over',
-          winner: you > opp ? liveRoles.me : opp > you ? liveRoles.opp : null,
+          status: forfeit ? 'forfeit' : 'over',
+          winner: draw ? null : won ? liveRoles.me : liveRoles.opp,
           state: {
             scores: scoresForPush(),
             book: serializeRallyBook(book, liveRoles),
             hud: hud.line,
             eventSeq,
+            contactSeq,
             scoreModel: scoreModel,
+            msg: o.msg || hud.line,
           },
         });
       }
-      showDuelResult(shell, {
-        id: spec.id,
-        you,
-        opp,
-        glyph: spec.icon,
-        pbScore: you,
-        subtitle: hud.line + ' · ' + matchSub,
-        shareText: 'I played ' + spec.name + ' on Chaupaal: ' + hud.line,
-        onAgain: () => openRallySport(Object.assign({}, spec, { chat, aiDiff })),
+      const baseSub = (o.msg ? o.msg + ' · ' : '') + hud.line + ' · ' + matchSub;
+      settleRallyOnce(won, draw).then((settle) => {
+        let sub = baseSub;
+        if (liveOn && liveStake > 0) {
+          const cd = settle && settle.chipDelta != null ? Number(settle.chipDelta) : null;
+          sub +=
+            ' · ' +
+            (Number.isFinite(cd) && cd !== 0
+              ? 'Stake ' + (cd > 0 ? '+' : '') + cd + ' virtual'
+              : 'Virtual stakes · not real money');
+        } else if (liveOn) {
+          sub += ' · Live 1v1 · Friendly';
+        }
+        showDuelResult(shell, {
+          id: spec.id,
+          you: sum.you,
+          opp: sum.opp,
+          glyph: spec.icon,
+          pbScore: sum.you,
+          subtitle: sub,
+          shareText: 'I played ' + spec.name + ' on Chaupaal: ' + hud.line,
+          onAgain: freshRematch,
+        });
       });
     }
 
     if (liveOn && typeof DangalLive !== 'undefined') {
       const roles = DangalLive.roles(chat);
       liveRoles = roles;
+      settleOppUid = roles.opp || '';
       book = createRallyScoreState(scoreModel, !!roles.host);
       syncFromBook();
       serving = true;
+      practiceAiTurn = false; // never Practice AI on Live seats
       liveHandle = DangalLive.join({
         gameType: spec.id,
         matchId: matchIdFor(chat, spec.id),
@@ -1038,7 +1177,7 @@
         playerB: roles.playerB,
         onSnap(val) {
           if (!val || ended || !shell.alive()) return;
-          if (val.status === 'forfeit' || (val.status === 'over' && val.winner != null)) {
+          if (val.status === 'forfeit' || val.status === 'over') {
             applying = true;
             const st0 = val.state || {};
             if (st0.book) {
@@ -1057,45 +1196,91 @@
               }
               syncFromBook();
             }
-            finish();
+            const iWonEnd = val.winner == null ? you > opp : val.winner === roles.me;
+            finish({
+              skipPush: true,
+              forfeit: val.status === 'forfeit',
+              iWon: iWonEnd,
+              msg: val.status === 'forfeit' ? (iWonEnd ? 'Opponent left' : 'You left') : '',
+            });
             applying = false;
             return;
           }
           const st = val.state || {};
-          if (st.eventSeq != null) eventSeq = Math.max(eventSeq, st.eventSeq);
-          if (st.book) {
-            book = deserializeRallyBook(st.book, roles, scoreModel);
-            syncFromBook();
-          } else if (st.scores) applyScores(st.scores);
-          if (st.pointBy && st.pointBy !== roles.me) {
+          if (st.paused != null) {
+            peerPaused = !!st.paused && val.turn !== undefined;
+            // Peer pause freezes both; local pause already in rallyPaused
+            if (st.paused && !rallyPaused) peerPaused = true;
+            if (!st.paused) peerPaused = false;
+          }
+          if (st.eventSeq != null) eventSeq = Math.max(eventSeq, st.eventSeq | 0);
+          if (st.contactSeq != null) contactSeq = Math.max(contactSeq, st.contactSeq | 0);
+
+          // Point award — apply canonical book once (no double applyRallyWin)
+          if (st.pointBy && st.eventSeq != null) {
+            const seq = st.eventSeq | 0;
+            if (seq <= appliedPointSeq) return;
+            appliedPointSeq = seq;
+            if (st.book) {
+              book = deserializeRallyBook(st.book, roles, scoreModel);
+              syncFromBook();
+            } else if (st.scores) applyScores(st.scores);
             rally = 0;
             windowMs = spec.windowMs || 720;
             serving = true;
-            if (st.servingUid) myServe = st.servingUid === roles.me;
-            else myServe = !!book.serverIsMe;
-            book.serverIsMe = myServe;
+            practiceAiTurn = false;
+            if (st.servingUid) {
+              myServe = st.servingUid === roles.me;
+              book.serverIsMe = myServe;
+            }
+            peerPaused = false;
+            if (val.status === 'over') return finish({ skipPush: true });
             const sum = bookSummaryScores(book);
             const matchOver =
-              book.model === 'tennisGames'
-                ? sum.you >= 2 || sum.opp >= 2
-                : false;
-            // Prefer remote status/book ended signals
-            if (val.status === 'over' || matchOver) return finish();
+              book.model === 'tennisGames' ? sum.you >= 2 || sum.opp >= 2 : false;
+            if (matchOver) return finish({ skipPush: true });
             renderPlay(st.msg || st.hud || 'Point — next serve.');
             return;
           }
+
+          // In-rally contact — contacting client proposes; apply once by contactSeq
+          if (st.inPlay && st.contactSeq != null) {
+            const cseq = st.contactSeq | 0;
+            if (cseq <= appliedContactSeq) return;
+            appliedContactSeq = cseq;
+            if (st.book) {
+              book = deserializeRallyBook(st.book, roles, scoreModel);
+              // Keep scorebook server; mid-rally contact doesn't flip serve law
+              syncFromBook();
+            }
+            if (st.rally != null) rally = st.rally | 0;
+            if (st.windowMs) windowMs = st.windowMs;
+            serving = false;
+            practiceAiTurn = false;
+            peerPaused = !!st.paused;
+            myServe = val.turn === roles.me;
+            if (myServe) renderPlay(st.msg || 'Return!');
+            else renderPlay(st.msg || 'In play…');
+            return;
+          }
+
           if (st.inPlay && val.turn === roles.me) {
-            serving = false; // return contact, not a fresh scorebook serve
+            // Legacy snap without contactSeq
+            serving = false;
             myServe = true;
+            practiceAiTurn = false;
             if (st.windowMs) windowMs = st.windowMs;
             if (st.rally != null) rally = st.rally;
             renderPlay(st.msg || 'Return!');
             return;
           }
-          if (st.servingUid) {
+          if (st.book && !st.inPlay && !st.pointBy) {
+            book = deserializeRallyBook(st.book, roles, scoreModel);
+            syncFromBook();
+          }
+          if (st.servingUid && !st.inPlay) {
             myServe = st.servingUid === roles.me;
-            // Only adopt scorebook server from dedicated point snaps / book payload
-            if (!st.inPlay) book.serverIsMe = myServe;
+            book.serverIsMe = myServe;
             serving = true;
           }
         },
@@ -1111,7 +1296,7 @@
             book.opp = iWon ? book.opp | 0 : tgt;
           }
           syncFromBook();
-          finish();
+          finish({ skipPush: true, forfeit: true, iWon: !!iWon, msg: iWon ? 'Opponent left' : 'You left' });
         },
       });
       shell.liveHandle = liveHandle;
@@ -1124,8 +1309,10 @@
             book: serializeRallyBook(book, roles),
             servingUid: roles.me,
             eventSeq: 0,
+            contactSeq: 0,
             scoreModel: scoreModel,
             hud: rallyHudParts(book).line,
+            paused: false,
           },
         });
       }
@@ -3668,11 +3855,12 @@
       registerGame({
         id: g.id,
         name: g.name,
-        desc: rallyMatchSubtitle(g) + ' · timing rally',
+        desc: rallyMatchSubtitle(g) + ' · Live 1v1 timing duel',
         icon: g.icon,
-        gameType: 'solo',
+        ratingKey: g.id,
+        gameType: 'dual',
+        liveDuel: true,
         genre: 'rw_sports',
-        solo: true,
         selfChat: true,
         dangal: true,
         chat1v1: true,

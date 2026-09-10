@@ -81,16 +81,17 @@
     if (info.grade === 'practice') {
       return '<span class="dangal-honesty-tag dangal-honesty-tag--practice">Practice</span>';
     }
+    // Live graduation wins over stale solo registry flags (rally sports, etc.).
+    if (info.grade === 'live' && (info.sync === 'live1v1' || info.sync === 'liveParty')) {
+      const liveLabel = info.sync === 'liveParty' ? 'Live' : 'Live 1v1';
+      return `<span class="dangal-honesty-tag dangal-honesty-tag--live">${liveLabel}</span>`;
+    }
     if (info.grade === 'graduated' || g.solo || g.gameType === 'solo') {
       // Graduated solos + graduated Practice sports (honest Practice, quality bar met)
       if (info.sync === 'none' && info.label === 'Practice') {
         return '<span class="dangal-honesty-tag dangal-honesty-tag--practice">Practice</span>';
       }
       return '<span class="dangal-honesty-tag dangal-honesty-tag--solo">Solo</span>';
-    }
-    if (info.grade === 'live' && (info.sync === 'live1v1' || info.sync === 'liveParty')) {
-      const liveLabel = info.sync === 'liveParty' ? 'Live' : 'Live 1v1';
-      return `<span class="dangal-honesty-tag dangal-honesty-tag--live">${liveLabel}</span>`;
     }
     return '<span class="dangal-honesty-tag dangal-honesty-tag--practice">Practice</span>';
   }
