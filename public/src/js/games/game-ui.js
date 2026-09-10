@@ -120,7 +120,11 @@
   const COACH_TIPS = {
     quiz: ['Answer before the timer ends — late taps don’t count', 'Stay correct to build combo streaks', 'Practice is free; friend challenges skip the daily match limit'],
     chess: ['Tap a piece, then a highlighted square', 'Fischer Random shuffles the back rank', 'Harder AI thinks a little longer'],
-    snakes: ['Roll when it is your turn', 'Ladders climb up · snakes slide down', 'Reach the last square to win'],
+    snakes: [
+      'Roll on your turn · ladders climb · snakes slide',
+      'Moksha Patam: 72 squares, exact finish for Moksha · labeled virtues & vices',
+      'Classic / Vedic / Speed / Chaos keep their own boards & rules',
+    ],
     ludo: ['Roll six to enter a piece', 'Tap a glowing piece to move', 'Capture rivals by landing on them'],
     uno: ['Match color or number', 'Tap Oh No! when you have one card', 'Wilds let you pick the next color'],
     ttt: ['Get three in a row', 'Block your opponent early', 'Center is often strongest'],

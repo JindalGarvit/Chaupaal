@@ -1875,63 +1875,159 @@ if(!liveOn&&myChessColor==='b'&&state.status==='playing'&&state.turn==='w'){
 // ===================== PROFESSIONAL SNAKES & LADDERS =====================
 // ===================== SNAKES & LADDERS — MULTIPLE VERSIONS =====================
 
+/** Sanitize snakes/ladders: endpoints in 1..squares, from≠to, no duplicate start keys (snake wins over ladder). */
+function sanitizeSLMaps(squares, snakes, ladders) {
+  const n = Math.max(1, squares | 0);
+  const sn = {};
+  const ld = {};
+  const used = new Set();
+  function take(map, dest, preferDown) {
+    Object.keys(map || {}).forEach((k) => {
+      const from = Number(k);
+      const to = Number(map[k]);
+      if (!Number.isFinite(from) || !Number.isFinite(to)) return;
+      if (from < 1 || from > n || to < 1 || to > n || from === to) return;
+      if (preferDown && to >= from) return;
+      if (!preferDown && to <= from) return;
+      if (used.has(from)) return;
+      used.add(from);
+      dest[from] = to;
+    });
+  }
+  take(snakes, sn, true);
+  take(ladders, ld, false);
+  return { snakes: sn, ladders: ld };
+}
+
+function sanitizeSLVersion(version) {
+  const v = version || {};
+  const squares = Math.max(1, v.squares | 0);
+  const maps = sanitizeSLMaps(squares, v.snakes, v.ladders);
+  const labels = {};
+  if (v.labels && typeof v.labels === 'object') {
+    Object.keys(v.labels).forEach((k) => {
+      const sq = Number(k);
+      if (sq >= 1 && sq <= squares && v.labels[k]) labels[sq] = String(v.labels[k]);
+    });
+  }
+  return Object.assign({}, v, {
+    squares,
+    snakes: maps.snakes,
+    ladders: maps.ladders,
+    labels,
+    specialRules: Array.isArray(v.specialRules) ? v.specialRules.slice() : [],
+  });
+}
+
 const SL_VERSIONS = [
   {
     name: 'Classic',
     emoji: '🐍',
-    desc: 'Standard 100-square board',
+    desc: 'Standard 100-square board · 10 snakes, 9 ladders',
     squares: 100,
-    snakes: {16:6,47:26,49:11,56:53,62:19,64:60,87:24,93:73,95:75,99:78},
-    ladders: {1:38,4:14,9:31,20:38,28:84,40:59,51:67,63:81,71:91},
+    snakes: { 16: 6, 47: 26, 49: 11, 56: 53, 62: 19, 64: 60, 87: 24, 93: 73, 95: 75, 99: 78 },
+    ladders: { 1: 38, 4: 14, 9: 31, 20: 38, 28: 84, 40: 59, 51: 67, 63: 81, 71: 91 },
     dice: 1,
     exact: true,
-    specialRules: []
+    specialRules: [],
   },
   {
     name: 'Vedic',
     emoji: '🕉️',
-    desc: 'Ancient Indian version — more snakes, virtue & vice themed',
+    desc: 'Ancient Indian feel — more snakes · bounce overshoot',
     squares: 100,
-    snakes: {12:2,29:8,44:9,52:37,57:3,62:19,63:22,74:53,85:11,92:51,95:23,99:5},
-    ladders: {3:16,10:20,22:60,28:74,36:70,51:67,55:82,63:81,68:91,71:90},
+    // Note: removed snake head 63 (conflicted with ladder 63→81)
+    snakes: { 12: 2, 29: 8, 44: 9, 52: 37, 57: 3, 62: 19, 74: 53, 85: 11, 92: 51, 95: 23, 99: 5 },
+    ladders: { 3: 16, 10: 20, 22: 60, 28: 74, 36: 70, 51: 67, 55: 82, 63: 81, 68: 91, 71: 90 },
     dice: 1,
     exact: false,
-    specialRules: ['bounce']
+    specialRules: ['bounce'],
   },
   {
     name: 'Speed',
     emoji: '⚡',
-    desc: 'Two dice, 50-square board — fast & furious',
+    desc: 'Two dice, 50-square board — 6 snakes, 6 ladders',
     squares: 50,
-    snakes: {8:3,14:7,22:11,30:20,42:28,47:36},
-    ladders: {2:12,5:18,10:24,15:30,25:38,35:42},
+    snakes: { 8: 3, 14: 7, 22: 11, 30: 20, 42: 28, 47: 36 },
+    ladders: { 2: 12, 5: 18, 10: 24, 15: 30, 25: 38, 35: 42 },
     dice: 2,
     exact: false,
-    specialRules: ['double_roll']
+    specialRules: ['double_roll'],
   },
   {
     name: 'Chaos',
     emoji: '🎲',
     desc: 'Snakes become ladders randomly — fate changes every turn!',
     squares: 100,
-    snakes: {16:6,47:26,49:11,56:53,62:19,64:60,87:24,93:73,95:75,99:78},
-    ladders: {1:38,4:14,9:31,20:38,28:84,40:59,51:67,63:81,71:91},
+    snakes: { 16: 6, 47: 26, 49: 11, 56: 53, 62: 19, 64: 60, 87: 24, 93: 73, 95: 75, 99: 78 },
+    ladders: { 1: 38, 4: 14, 9: 31, 20: 38, 28: 84, 40: 59, 51: 67, 63: 81, 71: 91 },
     dice: 1,
     exact: false,
-    specialRules: ['chaos']
+    specialRules: ['chaos'],
   },
   {
+    // Moksha Patam lite — inspired by traditional Indian Patam / Gyan Chaupar moral boards
+    // (simplified 72-square layout; not a full historical Gyan Chaupar / Jain 84 board).
     name: 'Moksha Patam',
     emoji: '🪔',
-    desc: 'The original — 72 snakes, 12 ladders. Only the virtuous win.',
+    desc: '72-square Patam — 14 snakes, 8 ladders · exact Moksha on 72',
     squares: 72,
-    snakes: {8:2,16:10,24:6,29:4,44:9,52:37,57:3,62:19,63:22,74:53,85:11,92:51,95:23,99:5,71:30,68:11,66:22,57:32,49:22,45:8,40:22,34:3,32:12,28:14,24:4,18:9,15:8},
-    ladders: {3:16,10:20,22:60,28:74,36:70,51:67,55:82,63:81},
+    snakes: {
+      16: 4,
+      21: 9,
+      25: 5,
+      28: 3,
+      33: 8,
+      36: 6,
+      41: 18,
+      48: 11,
+      55: 29,
+      58: 35,
+      62: 22,
+      64: 38,
+      67: 14,
+      70: 45,
+    },
+    ladders: {
+      2: 15,
+      7: 24,
+      10: 30,
+      17: 42,
+      23: 46,
+      31: 50,
+      39: 57,
+      47: 66,
+    },
+    labels: {
+      16: 'Ignorance',
+      21: 'Doubt',
+      25: 'Apathy',
+      28: 'Wrath',
+      33: 'Deceit',
+      36: 'Envy',
+      41: 'Lust',
+      48: 'Greed',
+      55: 'Anger',
+      58: 'Hatred',
+      62: 'Pride',
+      64: 'Illusion',
+      67: 'Ego',
+      70: 'Attachment',
+      2: 'Faith',
+      7: 'Charity',
+      10: 'Truth',
+      17: 'Patience',
+      23: 'Humility',
+      31: 'Devotion',
+      39: 'Wisdom',
+      47: 'Liberation',
+      72: 'Moksha',
+    },
     dice: 1,
     exact: true,
-    specialRules: ['moksha']
-  }
-];
+    specialRules: ['moksha'],
+  },
+].map(sanitizeSLVersion);
 
 function openSnakesGame(chat){
   const version = SL_VERSIONS[Math.floor(Math.random()*SL_VERSIONS.length)];
@@ -1960,9 +2056,13 @@ function openSnakesVersionPicker(chat){
 }
 
 function openSnakesVersion(chat, version){
+  version = sanitizeSLVersion(version || SL_VERSIONS[0]);
   const SQUARES = version.squares;
-  const SNAKES = {...version.snakes};
-  let LADDERS = {...version.ladders};
+  const SNAKES = Object.assign({}, version.snakes);
+  let LADDERS = Object.assign({}, version.ladders);
+  const LABELS = Object.assign({}, version.labels || {});
+  const isMoksha = version.specialRules.includes('moksha');
+  const needExact = !!version.exact || isMoksha;
   const liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat);
   const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat):null;
   let liveHandle=null;let applyingLive=false;let leaveConfirmed=false;
@@ -2157,15 +2257,32 @@ function openSnakesVersion(chat, version){
     if(!gs.alive())return;
     const start=pos[who];
     let newPos=start+roll;
+    // Moksha + Classic exact: must land exactly on finish (overshoot = miss turn).
+    // Bounce (Vedic): reflect. Else clamp to finish (Speed/Chaos default).
     if(version.specialRules.includes('bounce')&&newPos>SQUARES){newPos=SQUARES*2-newPos;}
-    else if(!version.exact&&newPos>SQUARES){newPos=SQUARES;}
-    else if(version.exact&&newPos>SQUARES){message=`Need exactly ${SQUARES-start} to finish. Miss!`;updateHud();endTurn(who);return;}
+    else if(needExact&&newPos>SQUARES){
+      message=isMoksha
+        ?(`Need exactly ${SQUARES-start} for Moksha. Miss!`)
+        :(`Need exactly ${SQUARES-start} to finish. Miss!`);
+      updateHud();endTurn(who);return;
+    }
+    else if(!needExact&&newPos>SQUARES){newPos=SQUARES;}
 
     hopToken(who,start,newPos,()=>{
       const dest=SNAKES[newPos]||LADDERS[newPos];
       if(dest){
         const isSnake=!!SNAKES[newPos];
-        message=isSnake?`🐍 Snake! ${newPos}→${dest}`:`🪜 Ladder! ${newPos}→${dest}`;
+        const label=LABELS[newPos]||'';
+        if(isMoksha&&label){
+          message=isSnake
+            ?(`🐍 ${label} — ${newPos}→${dest}`)
+            :(`🪜 ${label} — ${newPos}→${dest}`);
+          if(typeof showToast==='function'){
+            showToast(isSnake?('Vice: '+label):('Virtue: '+label));
+          }
+        } else {
+          message=isSnake?`🐍 Snake! ${newPos}→${dest}`:`🪜 Ladder! ${newPos}→${dest}`;
+        }
         updateHud();
         hopToken(who,newPos,dest,()=>finishMove(who));
       } else finishMove(who);
@@ -2175,11 +2292,15 @@ function openSnakesVersion(chat, version){
   function finishMove(who){
     if(!gs.alive())return;
     if(pos[who]>=SQUARES){
-      gameOver=true;message=who==='me'?'You win!':chat.name+' wins!';
+      gameOver=true;
+      message=isMoksha
+        ?(who==='me'?'🪔 Moksha! You win!':('🪔 Moksha! '+chat.name+' wins!'))
+        :(who==='me'?'You win!':chat.name+' wins!');
       gs.setOutcome(who==='me'?'won':'lost');
       if(typeof recordGameResult==='function')recordGameResult('snakes',who==='me');
       if(typeof recordDuelStreak==='function') recordDuelStreak(chat.id||chat.name, who==='me', false);
       if(typeof gameFeedback==='function') gameFeedback(who==='me'?'win':'lose');
+      if(isMoksha&&typeof showToast==='function'&&who==='me')showToast('Moksha!');
       updateHud();
       if(liveOn&&who==='me'&&!applyingLive)pushSnakes();
       showSnakesResult(who==='me');
@@ -2196,8 +2317,8 @@ function openSnakesVersion(chat, version){
     const shareStats={scoreLine:won?'Win':'Loss',meta:version.name+(duel&&duel.streak?` · streak ${duel.streak}`:''),vs:`You vs ${chat.name}`};
     host.innerHTML=typeof gameResultHtml==='function'?gameResultHtml({
       gameId:'snakes',
-      glyph:won?'✓':'·',
-      title:won?'You win':'Defeat',
+      glyph:won?(isMoksha?'🪔':'✓'):'·',
+      title:won?(isMoksha?'Moksha!':'You win'):'Defeat',
       subtitle:version.name+(duel&&duel.streak>1?` · Duel streak ${duel.streak}`:''),
       shareCardHtml: typeof buildGameShareCard==='function'?buildGameShareCard('snakes',shareStats):'',
       actions:[
@@ -2281,8 +2402,14 @@ function openSnakesVersion(chat, version){
         const n=sqNum(r,c,totalRows);
         if(n>SQUARES){cells+=`<div class="snakes-cell snakes-cell--empty"></div>`;continue;}
         const hasSnake=SNAKES[n];const hasLadder=LADDERS[n];
-        const cls=n===SQUARES?'snakes-cell--finish':hasSnake?'snakes-cell--snake':hasLadder?'snakes-cell--ladder':'';
-        cells+=`<div class="snakes-cell ${cls}" data-n="${n}"><span class="snakes-cell-num">${n}</span></div>`;
+        const label=LABELS[n]||'';
+        const cls=n===SQUARES
+          ?('snakes-cell--finish'+(isMoksha?' snakes-cell--moksha':''))
+          :hasSnake?'snakes-cell--snake':hasLadder?'snakes-cell--ladder':'';
+        const tip=label?(isMoksha&&n===SQUARES?'Moksha':label):'';
+        cells+=`<div class="snakes-cell ${cls}" data-n="${n}"${tip?` title="${tip.replace(/"/g,'&quot;')}"`:''}><span class="snakes-cell-num">${n}</span>${
+          tip&&(hasSnake||hasLadder||n===SQUARES)?`<span class="snakes-cell-label">${tip}</span>`:''
+        }</div>`;
       }
     }
     overlay.innerHTML=`

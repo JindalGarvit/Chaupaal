@@ -4756,7 +4756,8 @@ select:focus-visible,
 @keyframes ludoCapture{50%{transform:translate(-50%,-50%) scale(.2);opacity:.2}}
 
 .snakes-board{
-  position:relative;width:min(360px,94vw);aspect-ratio:1;
+  position:relative;width:min(360px,94vw);
+  aspect-ratio:10 / var(--sl-rows,10);
   --sl-rows:10;
 }
 .snakes-grid{
@@ -4766,13 +4767,23 @@ select:focus-visible,
 }
 .snakes-cell{
   position:relative;border-radius:3px;background:rgba(255,255,255,.06);
-  border:1px solid rgba(255,255,255,.05);aspect-ratio:1;
+  border:1px solid rgba(255,255,255,.05);min-height:0;
 }
 .snakes-cell--empty{background:transparent;border:0;}
 .snakes-cell--snake{background:rgba(220,50,50,.22);}
 .snakes-cell--ladder{background:rgba(50,200,80,.18);}
 .snakes-cell--finish{background:rgba(255,201,60,.28);border-color:var(--gold);}
+.snakes-cell--moksha{
+  background:radial-gradient(circle at 50% 40%,rgba(255,236,179,.45),rgba(255,160,0,.22));
+  border-color:#FFD54F;
+}
 .snakes-cell-num{position:absolute;top:1px;left:2px;font-size:clamp(5px,1.4vw,9px);color:rgba(255,255,255,.4);line-height:1;}
+.snakes-cell-label{
+  position:absolute;left:1px;right:1px;bottom:1px;
+  font-size:clamp(4px,1.1vw,7px);line-height:1.05;font-weight:700;
+  color:rgba(255,255,255,.55);text-align:center;overflow:hidden;
+  white-space:nowrap;text-overflow:ellipsis;pointer-events:none;
+}
 .snakes-paths{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;}
 .snakes-tokens{position:absolute;inset:0;pointer-events:none;z-index:2;}
 .snakes-token{
