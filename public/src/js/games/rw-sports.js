@@ -102,18 +102,29 @@
 
   function finishPractice(gameId, score, body, opts) {
     const o = opts || {};
+    const pbId = o.pbGameId || gameId;
     const vsBest =
       o.vsBest != null
         ? o.vsBest
         : typeof formatVsBest === 'function'
-          ? formatVsBest(gameId, score)
+          ? formatVsBest(pbId, score)
           : `Best ${score}${o.unit || ''}`;
     let best = score;
     if (o.updatePb !== false && typeof setGamePB === 'function') {
-      best = setGamePB(gameId, score) ?? score;
+      best = setGamePB(pbId, score) ?? score;
+    }
+    if (typeof o.onAfterPb === 'function') {
+      try {
+        o.onAfterPb({ score, best, pbId });
+      } catch (e) {}
     }
     if (typeof recordGameResult === 'function') {
-      recordGameResult(gameId, false, false, { score, scoreOnly: true });
+      recordGameResult(
+        gameId,
+        !!o.won,
+        false,
+        Object.assign({ score, scoreOnly: true }, o.recordExtra || {})
+      );
     } else if (typeof markGamePlayed === 'function') {
       markGamePlayed(gameId);
     }
@@ -141,8 +152,11 @@
         title: o.resultTitle || 'Practice over',
         subtitle: o.subtitle || '',
         vsBest: o.hideVsBest ? '' : vsBest,
+        scoreHtml: o.scoreHtml || '',
         shareCardHtml: shareCard,
         challenge: false,
+        hideStats: !!o.hideStats,
+        hideMissions: !!o.hideMissions,
         actions,
       });
       if (typeof wireGameResultActions === 'function') {
@@ -165,6 +179,7 @@
       <div class="rw-sports-card">
         <h2>${esc(o.resultTitle || 'Practice over')}</h2>
         <p class="rw-sports-score">${esc(o.subtitle || String(score))}</p>
+        ${o.scoreHtml || ''}
         <p class="rw-sports-hint">${esc(vsBest)}</p>
         <button type="button" class="btn btn--primary" data-rw-again>${esc(o.againLabel || 'Play again')}</button>
         ${
@@ -181,7 +196,7 @@
     });
   }
 
-  /** Street Cricket — Practice formats: Over / Nets / Chase (Prompt 4/5). */
+  /** Street Cricket — Practice complete: formats + per-mode records (Prompt 5/5). */
   function openStreetCricket() {
     let runs = 0;
     let balls = 0;
@@ -716,6 +731,7 @@
     } catch (e) {
       coachShown = false;
     }
+    if (typeof migrateStreetCricketPb === 'function') migrateStreetCricketPb();
     formatId = loadSavedFormat();
 
     const cur = () => deliveryMeta || DELIVERY_TYPES.medium;
@@ -766,8 +782,8 @@
         return `${runs}/${chaseTarget} · ${left} ball${left === 1 ? '' : 's'} left · ${wkLeft} wkt${wkLeft === 1 ? '' : 's'}`;
       }
       const pb =
-        typeof getGamePB === 'function' && getGamePB('streetcricket') != null
-          ? ` · Best ${getGamePB('streetcricket')}`
+        typeof getGamePB === 'function' && getGamePB('streetcricket_over') != null
+          ? ` · Best ${getGamePB('streetcricket_over')}`
           : '';
       return `${runs} runs · ${balls}/${maxBalls} balls · ${wickets} out${pb}`;
     };
@@ -865,8 +881,60 @@
       body.querySelector('[data-rw-start]')?.addEventListener('click', startSelected);
     };
 
+    const buildBallStripHtml = () => {
+      if (!ballLog.length) return '';
+      const pills = ballLog
+        .map((b) => {
+          if (b.out) return '<span class="rw-sc-pill is-w" title="Wicket">W</span>';
+          const r = Number(b.runs) || 0;
+          if (r <= 0) return '<span class="rw-sc-pill is-dot" title="Dot">·</span>';
+          const cls = r >= 4 ? ' is-b' : '';
+          return `<span class="rw-sc-pill${cls}" title="${r}">${r}</span>`;
+        })
+        .join('');
+      return `<div class="rw-sc-ballstrip" aria-label="Ball by ball">${pills}</div>`;
+    };
+
+    const pickMomentLine = () => {
+      if (!ballLog.length) return '';
+      const six = ballLog.find((b) => !b.out && b.runs === 6);
+      if (six) return six.label || 'Lofted a six in the gully';
+      const four = ballLog.find((b) => !b.out && b.runs === 4);
+      if (four) return four.label || 'Found the gap for four';
+      const wicket = ballLog.find((b) => b.out);
+      if (wicket) return wicket.label || 'One gone';
+      const last = ballLog[ballLog.length - 1];
+      return (last && last.label) || '';
+    };
+
+    const formatBestBlurb = (id) => {
+      if (typeof getGamePB !== 'function') return 'No best yet';
+      if (id === 'nets') {
+        const p = getGamePB('streetcricket_nets');
+        return p != null ? `Best ${p} clean` : 'No best yet';
+      }
+      if (id === 'chase') {
+        const wins = getGamePB('streetcricket_chase_wins');
+        const best = getGamePB('streetcricket_chase');
+        if (wins != null && wins > 0 && best != null) return `${wins} win${wins === 1 ? '' : 's'} · best ${best}`;
+        if (wins != null && wins > 0) return `${wins} chase win${wins === 1 ? '' : 's'}`;
+        if (best != null) return `Best chase ${best} runs`;
+        return 'No chase yet';
+      }
+      const p = getGamePB('streetcricket_over');
+      return p != null ? `Best ${p} runs` : 'No best yet';
+    };
+
+    const pbIdForFormat = () => {
+      if (typeof streetCricketPbGameId === 'function') return streetCricketPbGameId(formatId);
+      if (formatId === 'nets') return 'streetcricket_nets';
+      if (formatId === 'chase') return 'streetcricket_chase';
+      return 'streetcricket_over';
+    };
+
     const buildResultOpts = () => {
       const f = fmt();
+      const pbGameId = pbIdForFormat();
       const innings = {
         formatId,
         label: f.label,
@@ -885,8 +953,16 @@
         if (typeof window !== 'undefined') window.__scLastInnings = innings;
       } catch (e) {}
 
+      const moment = pickMomentLine();
+      const strip = buildBallStripHtml();
+      const scoreHtml =
+        `${strip}` +
+        (moment ? `<p class="rw-sc-moment">${esc(moment)}</p>` : '');
+
+      const againLabel =
+        formatId === 'nets' ? 'Nets again' : formatId === 'chase' ? 'Chase again' : 'Bat again';
       const actions = [
-        { label: 'Play again', primary: true, id: 'again' },
+        { label: againLabel, primary: true, id: 'again' },
         { label: 'Change format', primary: false, id: 'changeFormat' },
         { label: 'Share', primary: false, id: 'share' },
       ];
@@ -897,67 +973,107 @@
         onChangeFormat: showPicker,
         actions,
         challenge: false,
+        hideStats: true,
+        hideMissions: true,
+        scoreHtml,
+        againLabel,
+        recordExtra: {
+          format: formatId,
+          formatId,
+          mode: formatId,
+          variant: formatId,
+          wickets,
+          balls,
+          perfects,
+          chaseTarget,
+        },
         gs,
       };
 
       if (formatId === 'nets') {
         return Object.assign(base, {
-          updatePb: false,
-          hideVsBest: true,
+          updatePb: true,
+          pbGameId,
           unit: ' clean',
-          resultTitle: endReason === 'wickets' ? 'Nets — all out' : 'Nets session over',
-          subtitle: `${balls} balls · ${perfects} clean hits · ${runs} runs · ${wickets} out`,
-          scoreLine: `${perfects} clean`,
+          resultTitle: endReason === 'wickets' ? 'Nets done — all out' : 'Nets done',
+          subtitle: `${balls} balls · ${perfects} clean · ${runs} runs · ${wickets} down`,
+          scoreLine: `Nets: ${perfects} clean`,
           score: perfects,
-          shareText: `Nets on Chaupaal: ${perfects} clean hits in ${balls} balls (${runs} runs).`,
-          againLabel: 'Nets again',
+          vsBest: typeof formatVsBest === 'function' ? formatVsBest(pbGameId, perfects) : '',
+          shareText: `Nets: ${balls} balls, ${wickets} down, ${perfects} clean — Street Cricket on Chaupaal`,
+          won: false,
         });
       }
       if (formatId === 'chase') {
         const shortBy = Math.max(0, chaseTarget - runs);
+        const scoreVs =
+          typeof formatVsBest === 'function' ? formatVsBest(pbGameId, runs) : '';
+        const winsPrev =
+          typeof getGamePB === 'function' ? getGamePB('streetcricket_chase_wins') || 0 : 0;
+        const winsNow = sessionWon ? winsPrev + 1 : winsPrev;
+        let vsBest = scoreVs;
+        if (sessionWon) {
+          vsBest = scoreVs
+            ? `${scoreVs} · ${winsNow} win${winsNow === 1 ? '' : 's'}`
+            : `${winsNow} chase win${winsNow === 1 ? '' : 's'}`;
+        } else if (winsPrev > 0) {
+          vsBest = scoreVs
+            ? `${scoreVs} · ${winsPrev} win${winsPrev === 1 ? '' : 's'}`
+            : scoreVs;
+        }
         return Object.assign(base, {
-          updatePb: false,
-          hideVsBest: true,
-          unit: '',
-          resultTitle: sessionWon ? 'Chase done!' : 'Chase fell short',
+          updatePb: true,
+          pbGameId,
+          unit: ' runs',
+          resultTitle: sessionWon ? 'Chase done — got it' : 'Chase fallen short',
           subtitle: sessionWon
-            ? `Won chasing ${chaseTarget} — ${runs} off ${balls} · ${wickets} out`
-            : `Needed ${chaseTarget}, made ${runs} (short by ${shortBy}) · ${balls} balls · ${wickets} out`,
-          scoreLine: sessionWon ? `Chased ${chaseTarget}` : `${runs}/${chaseTarget}`,
+            ? `${runs} off ${balls} · chased ${chaseTarget} · ${wickets} down`
+            : `Needed ${chaseTarget}, made ${runs} (short by ${shortBy}) · ${balls} balls · ${wickets} down`,
+          scoreLine: sessionWon ? `Chase: ${runs} off ${balls}` : `Chase: ${runs}/${chaseTarget}`,
           score: runs,
+          vsBest,
           shareText: sessionWon
-            ? `Chased down ${chaseTarget} in Street Cricket on Chaupaal!`
-            : `Fell short of ${chaseTarget} in Street Cricket on Chaupaal (${runs}).`,
-          againLabel: 'Chase again',
+            ? `Chase: ${runs} off ${balls} (needed ${chaseTarget}) in Street Cricket on Chaupaal`
+            : `Chase fallen short: ${runs}/${chaseTarget} in Street Cricket on Chaupaal`,
+          won: sessionWon,
+          onAfterPb: () => {
+            if (sessionWon && typeof setGamePB === 'function') {
+              setGamePB('streetcricket_chase_wins', winsNow);
+            }
+          },
         });
       }
       return Object.assign(base, {
         updatePb: true,
+        pbGameId,
         unit: ' runs',
-        resultTitle: 'Gully Over over',
-        subtitle: `${runs} runs · ${wickets} wicket${wickets === 1 ? '' : 's'} · ${balls} balls`,
-        scoreLine: `${runs} runs`,
+        resultTitle: 'Over done',
+        subtitle: `${runs} runs · ${wickets} down · ${balls} balls`,
+        scoreLine: `Over: ${runs} runs`,
         score: runs,
-        shareText: `I scored ${runs} runs in a Gully Over on Chaupaal!`,
-        againLabel: 'Bat again',
+        vsBest: typeof formatVsBest === 'function' ? formatVsBest(pbGameId, runs) : '',
+        shareText: `Gully Over: ${runs} runs off ${balls} in Street Cricket on Chaupaal`,
+        won: false,
       });
     };
 
     const render = () => {
       if (phase === 'pick') {
+        if (typeof migrateStreetCricketPb === 'function') migrateStreetCricketPb();
         const cards = ['over', 'nets', 'chase']
           .map((id) => {
             const f = FORMATS[id];
             return `<button type="button" class="rw-sc-format${formatId === id ? ' is-selected' : ''}" data-format="${id}">
               <span class="rw-sc-format-title">${f.label}</span>
               <span class="rw-sc-format-blurb">${f.blurb}</span>
+              <span class="rw-sc-format-best">${formatBestBlurb(id)}</span>
             </button>`;
           })
           .join('');
         body.innerHTML = `
           <div class="rw-sports-card rw-sc-card rw-sc-picker">
             <h2>Street Cricket</h2>
-            <p class="rw-sports-hint">Pick a practice shape — same bowling bag & shots.</p>
+            <p class="rw-sports-hint">Gully practice — Over, Nets, or Chase. Same bag, same shots.</p>
             <div class="rw-sc-formats" role="listbox" aria-label="Format">${cards}</div>
             <button type="button" class="btn btn--primary rw-sc-main" data-rw-start>Start</button>
           </div>`;
@@ -1250,7 +1366,7 @@
     registerGame({
       id: 'streetcricket',
       name: 'Street Cricket',
-      desc: 'Practice · Over / Nets / Chase',
+      desc: 'Practice · Over, Nets & Chase',
       icon: '🏏',
       ratingKey: 'streetcricket',
       gameType: 'solo',

@@ -148,9 +148,9 @@
       'Continue mid-puzzle · best times per difficulty · Daily is one seeded board',
     ],
     streetcricket: [
-      'Pick Gully Over, Nets, or Chase — then Defend / Push / Loft and time the Hit',
-      'Nets: survive 12 balls · Chase: reach the target before balls or wickets run out',
-      'Same bowling bag every format — Practice only (no Live yet)',
+      'Watch the flight, read the bag, pick Defend / Push / Loft, then time the Hit',
+      'Try Gully Over, Nets (survive), or Chase (hit the target) — Practice formats now',
+      'Per-format bests on your card — Live friend bowling later',
     ],
     gullykick: ['Pick left, center, or right', 'Beat the keeper’s dive', 'Five kicks per shootout'],
     badminton: ['Serve, then smash in the timing window', 'Rallies get faster', 'First to 7'],
@@ -187,7 +187,11 @@
     ankjod_hard: { key: 'chaupaal_pb_ankjod_hard', label: 's', higherBetter: false },
     ankjod_daily: { key: 'chaupaal_pb_ankjod_daily', label: 's', higherBetter: false },
     quiz: { key: 'chaupaal_pb_quiz', label: '/10', higherBetter: true },
-    streetcricket: { key: 'chaupaal_pb_streetcricket', label: 'runs', higherBetter: true },
+    streetcricket: { key: 'chaupaal_pb_streetcricket', label: ' runs', higherBetter: true },
+    streetcricket_over: { key: 'chaupaal_pb_streetcricket_over', label: ' runs', higherBetter: true },
+    streetcricket_nets: { key: 'chaupaal_pb_streetcricket_nets', label: ' clean', higherBetter: true },
+    streetcricket_chase: { key: 'chaupaal_pb_streetcricket_chase', label: ' runs', higherBetter: true },
+    streetcricket_chase_wins: { key: 'chaupaal_pb_streetcricket_chase_wins', label: ' wins', higherBetter: true },
     gullykick: { key: 'chaupaal_pb_gullykick', label: 'goals', higherBetter: true },
     badminton: { key: 'chaupaal_pb_badminton', label: 'pts', higherBetter: true },
     tabletennis: { key: 'chaupaal_pb_tabletennis', label: 'pts', higherBetter: true },
@@ -494,7 +498,27 @@
     return 'ankjod';
   }
 
+  /** Street Cricket per-format PB ids. Legacy `streetcricket` maps to Over. */
+  function streetCricketPbGameId(format) {
+    const f = String(format || 'over').toLowerCase();
+    if (f === 'nets') return 'streetcricket_nets';
+    if (f === 'chase') return 'streetcricket_chase';
+    return 'streetcricket_over';
+  }
+
+  function migrateStreetCricketPb() {
+    try {
+      const overKey = 'chaupaal_pb_streetcricket_over';
+      const legacyKey = 'chaupaal_pb_streetcricket';
+      if (localStorage.getItem(overKey) == null || localStorage.getItem(overKey) === '') {
+        const legacy = localStorage.getItem(legacyKey);
+        if (legacy != null && legacy !== '') localStorage.setItem(overKey, legacy);
+      }
+    } catch (e) {}
+  }
+
   function getGamePB(gameId) {
+    if (gameId === 'streetcricket_over' || gameId === 'streetcricket') migrateStreetCricketPb();
     const meta = PB_KEYS[gameId];
     if (!meta) return null;
     const raw = localStorage.getItem(meta.key);
@@ -503,6 +527,17 @@
       if (gameId === 'rushrunner') {
         const legacy = localStorage.getItem('rushrunner_best');
         if (legacy != null) return Number(legacy);
+      }
+      // Legacy street cricket runs → Over
+      if (gameId === 'streetcricket_over') {
+        const legacy = localStorage.getItem('chaupaal_pb_streetcricket');
+        if (legacy != null && legacy !== '') {
+          const n = Number(legacy);
+          return Number.isFinite(n) ? n : null;
+        }
+      }
+      if (gameId === 'streetcricket') {
+        return getGamePB('streetcricket_over');
       }
       return null;
     }
@@ -524,6 +559,12 @@
       // Per-diff Ank Jod wins also refresh overall legacy key (lower time = better)
       if (String(gameId).indexOf('ankjod_') === 0) {
         setGamePB('ankjod', next);
+      }
+      // Over best keeps legacy streetcricket key in sync for hub tiles
+      if (gameId === 'streetcricket_over') {
+        try {
+          localStorage.setItem('chaupaal_pb_streetcricket', String(next));
+        } catch (e) {}
       }
       return next;
     }
@@ -2291,6 +2332,8 @@
   window.setGamePB = setGamePB;
   window.formatVsBest = formatVsBest;
   window.ankJodPbGameId = ankJodPbGameId;
+  window.streetCricketPbGameId = streetCricketPbGameId;
+  window.migrateStreetCricketPb = migrateStreetCricketPb;
   window.buildGameShareCard = buildGameShareCard;
   window.buildBeatScoreLink = buildBeatScoreLink;
   window.shareGameResult = shareGameResult;

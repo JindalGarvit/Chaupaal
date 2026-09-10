@@ -4100,7 +4100,24 @@ select:focus-visible,
 }
 .rw-sc-format-title{display:block;font:700 15px/1.25 var(--font-display,system-ui);color:var(--ink,#1a1a1a);}
 .rw-sc-format-blurb{display:block;margin-top:4px;font:500 12px/1.35 var(--font-ui,system-ui);color:var(--muted,#666);}
+.rw-sc-format-best{display:block;margin-top:6px;font:600 11px/1.3 var(--font-ui,system-ui);color:#1B7A4E;}
 .rw-sc-picker h2{margin-top:0;}
+.rw-sc-ballstrip{
+  display:flex;flex-wrap:wrap;gap:6px;justify-content:center;
+  margin:10px 0 6px;padding:0 4px;
+}
+.rw-sc-pill{
+  min-width:28px;height:28px;padding:0 6px;border-radius:8px;
+  display:inline-flex;align-items:center;justify-content:center;
+  font:700 12px/1 var(--font-ui,system-ui);background:rgba(27,122,78,.1);color:var(--ink,#1a1a1a);
+}
+.rw-sc-pill.is-w{background:rgba(198,40,40,.14);color:#B71C1C;}
+.rw-sc-pill.is-b{background:rgba(27,122,78,.22);color:#1B5E20;}
+.rw-sc-pill.is-dot{opacity:.7;}
+.rw-sc-moment{
+  margin:4px 0 0;text-align:center;font:500 13px/1.35 var(--font-ui,system-ui);
+  color:var(--muted,#555);
+}
 
 .rw-sports-goal{
   position:relative;height:100px;margin:0 0 12px;border-radius:14px;
