@@ -2869,6 +2869,16 @@
     return hi;
   }
 
+  function tpRankName(cards) {
+    const s = tpScore(cards);
+    if (s >= 6000) return 'Trail';
+    if (s >= 5000) return 'Pure sequence';
+    if (s >= 4000) return 'Sequence';
+    if (s >= 3000) return 'Colour';
+    if (s >= 2000) return 'Pair';
+    return 'High card';
+  }
+
   function cardBacks(n) {
     let html = '';
     for (let i = 0; i < n; i++) html += '<span class="pc-card pc-back" aria-hidden="true"></span>';
@@ -2884,12 +2894,15 @@
     const BOOT = 10;
     const MAX_STAKE = BOOT * 8; // raise cap
     const MAX_RAISES = 6;
-    // RULE: blind chaal = S; seen chaal = 2S (common house). See fee = 2S into pot.
+    const SS_TIMEOUT_MS = 18000; // Live unanswered side-show → auto-refuse
+    // RULE: blind chaal = S; seen chaal = 2S. See fee = 2S. Side-show: free refuse, no fee.
+    // Final Show: free when exactly 2 active + both seen + your turn.
     let aiTimer = 0;
+    let ssTimer = 0;
     const shell = openShell({
       id: 'teenpatti',
       title: 'Teen Patti',
-      subtitle: liveOn ? liveSub() : practiceSub('Chaal · pot · pack'),
+      subtitle: liveOn ? liveSub() : practiceSub('Side-show · chaal'),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
@@ -2899,6 +2912,10 @@
         if (aiTimer) {
           clearTimeout(aiTimer);
           aiTimer = 0;
+        }
+        if (ssTimer) {
+          clearTimeout(ssTimer);
+          ssTimer = 0;
         }
       },
     });
@@ -2923,6 +2940,8 @@
     let applying = false;
     let liveRoles = null;
     let liveHandle = null;
+    /** @type {null | { fromA: boolean, status: string, at: number }} */
+    let sideShow = null;
 
     function iAmA() {
       return !liveOn || !liveRoles || liveRoles.me === liveRoles.playerA;
@@ -3003,6 +3022,7 @@
         betSeq,
         phase,
         active: [!packedA, !packedB],
+        sideShow: sideShow ? { fromA: sideShow.fromA, status: sideShow.status, at: sideShow.at } : null,
       };
     }
 
@@ -3023,6 +3043,15 @@
       if (st.turnIsA != null) turnIsA = !!st.turnIsA;
       if (st.betSeq != null) betSeq = Math.max(betSeq, Number(st.betSeq) || 0);
       if (st.phase) phase = st.phase;
+      if (st.sideShow && st.sideShow.status === 'pending') {
+        sideShow = {
+          fromA: !!st.sideShow.fromA,
+          status: 'pending',
+          at: Number(st.sideShow.at) || Date.now(),
+        };
+      } else if (st.sideShow === null || (st.sideShow && st.sideShow.status !== 'pending')) {
+        sideShow = null;
+      }
     }
 
     function pushLive(extra) {
@@ -3053,6 +3082,34 @@
         clearTimeout(aiTimer);
         aiTimer = 0;
       }
+    }
+
+    function clearSsTimer() {
+      if (ssTimer) {
+        clearTimeout(ssTimer);
+        ssTimer = 0;
+      }
+    }
+
+    function clearSideShow() {
+      sideShow = null;
+      clearSsTimer();
+    }
+
+    function iAmSideShowTarget() {
+      return !!(sideShow && sideShow.status === 'pending' && sideShow.fromA !== iAmA());
+    }
+
+    function iAmSideShowAsker() {
+      return !!(sideShow && sideShow.status === 'pending' && sideShow.fromA === iAmA());
+    }
+
+    function startSsTimeout() {
+      clearSsTimer();
+      ssTimer = setTimeout(() => {
+        ssTimer = 0;
+        if (sideShow && sideShow.status === 'pending') doSideShowRefuse(true);
+      }, SS_TIMEOUT_MS);
     }
 
     function debit(seatA, amount) {
@@ -3097,13 +3154,17 @@
       return { split, aWins, sa, sb };
     }
 
-    function showResultScreen(title, youScore, oppScore, draw) {
+    function showResultScreen(title, youScore, oppScore, draw, subExtra) {
       if (shell && typeof shell.markOver === 'function') shell.markOver();
+      const youRank = tpRankName(myCards());
+      const oppRank = tpRankName(oppCards());
       shell.body.innerHTML = `
         <div class="pc-tp">
-          <p class="pc-hint">Show</p>
+          <p class="pc-hint">Show · ${esc(youRank)} vs ${esc(oppRank)}</p>
           <div class="pc-hand">${oppCards().map(cardFace).join('')}</div>
+          <p class="pc-hint">Opponent · ${esc(oppRank)}</p>
           <div class="pc-hand">${myCards().map(cardFace).join('')}</div>
+          <p class="pc-hint">You · ${esc(youRank)}</p>
         </div>`;
       setTimeout(() => {
         showDuelResult(shell, {
@@ -3112,11 +3173,13 @@
           opp: draw ? 1 : oppScore,
           glyph: '♠',
           title,
-          subtitle: 'Pot settled · trail > sequence > colour',
+          subtitle:
+            (subExtra || youRank + ' vs ' + oppRank) +
+            (draw ? ' · split pot' : ''),
           shareText: 'Teen Patti on Chaupaal',
           onAgain: () => openTeenPatti(chat),
         });
-      }, 700);
+      }, 800);
     }
 
     function finishHand(youWin, title, subtitle, fromRemote, reveal) {
@@ -3171,6 +3234,7 @@
       packedB = false;
       turnIsA = true;
       betSeq = 0;
+      clearSideShow();
     }
 
     function dealFresh() {
@@ -3184,19 +3248,59 @@
     function paint(msg) {
       if (ended) return;
       const seen = mySeen();
-      const mine = myTurn();
+      const pending = !!(sideShow && sideShow.status === 'pending');
+      const mine = myTurn() && !pending;
       const cost = chaalCost(seen);
       const fee = seeFee();
       const canSee = mine && !seen && !myPacked() && phase === 'dealt';
       const canChaal = mine && !myPacked() && phase === 'dealt';
       const canRaise =
         mine && !myPacked() && phase === 'dealt' && raiseCount < MAX_RAISES && stake < MAX_STAKE;
+      const canSide =
+        mine &&
+        seen &&
+        oppSeen() &&
+        !myPacked() &&
+        !oppPacked() &&
+        activeCount() === 2 &&
+        phase === 'dealt';
+      // Free Show when 2 active + both seen + your turn (no 2× fee)
       const canShow = mine && seen && oppSeen() && activeCount() === 2 && phase === 'dealt';
       const canPack = mine && !myPacked() && phase === 'dealt';
       const badge = seen ? 'Seen' : 'Blind';
       const oppBadge = oppSeen() ? 'seen' : 'blind';
-      const turnLabel = mine ? 'Your turn' : liveOn ? 'Their turn' : 'Opponent thinking…';
+      const turnLabel = pending
+        ? iAmSideShowTarget()
+          ? 'Side-show request'
+          : 'Waiting on side-show…'
+        : mine
+          ? 'Your turn'
+          : liveOn
+            ? 'Their turn'
+            : 'Opponent thinking…';
       const allInNote = myStack() > 0 && myStack() < cost ? ' · all-in' : '';
+      let actionsHtml = '';
+      if (pending && iAmSideShowTarget()) {
+        actionsHtml = `
+          <p class="pc-hint">Side-show compares hands — loser packs. Refuse is free.</p>
+          <button type="button" class="cs-hit" data-ss-accept>Accept</button>
+          <button type="button" class="cs-hit cs-hit--ghost" data-ss-refuse>Refuse</button>`;
+      } else if (pending && iAmSideShowAsker()) {
+        actionsHtml = `<p class="pc-hint">Waiting for accept or refuse…</p>`;
+      } else {
+        actionsHtml = `
+            ${canSee ? `<button type="button" class="cs-hit" data-see>See (−${Math.min(fee, myStack())})</button>` : ''}
+            ${canChaal ? `<button type="button" class="cs-hit" data-chaal>${seen ? 'Chaal' : 'Blind chaal'} (−${Math.min(cost, myStack())})</button>` : ''}
+            ${
+              canRaise
+                ? `<button type="button" class="cs-hit cs-hit--ghost" data-raise="1">Raise +${BOOT}</button>
+                   <button type="button" class="cs-hit cs-hit--ghost" data-raise="2">Raise +${BOOT * 2}</button>`
+                : ''
+            }
+            ${canSide ? `<button type="button" class="cs-hit cs-hit--ghost" data-ss>Side-show</button>` : ''}
+            ${canShow ? `<button type="button" class="cs-hit" data-show>Show</button>` : ''}
+            ${canPack ? `<button type="button" class="cs-hit" data-pack>Pack</button>` : ''}`;
+      }
       shell.body.innerHTML = `
         <div class="pc-tp">
           <div class="pc-tp-hud" aria-live="polite">
@@ -3210,32 +3314,27 @@
           <div class="pc-hand pc-hand--opp">${paintOppHand()}</div>
           <p class="pc-hint">You · ${badge.toLowerCase()}${msg ? ' · ' + esc(msg) : ''}</p>
           <div class="pc-hand pc-hand--you">${paintMyHand()}</div>
-          <div class="pc-actions pc-tp-actions">
-            ${canSee ? `<button type="button" class="cs-hit" data-see>See (−${Math.min(fee, myStack())})</button>` : ''}
-            ${canChaal ? `<button type="button" class="cs-hit" data-chaal>${seen ? 'Chaal' : 'Blind chaal'} (−${Math.min(cost, myStack())})</button>` : ''}
-            ${
-              canRaise
-                ? `<button type="button" class="cs-hit cs-hit--ghost" data-raise="1">Raise +${BOOT}</button>
-                   <button type="button" class="cs-hit cs-hit--ghost" data-raise="2">Raise +${BOOT * 2}</button>`
-                : ''
-            }
-            ${canShow ? `<button type="button" class="cs-hit" data-show>Show</button>` : ''}
-            ${canPack ? `<button type="button" class="cs-hit" data-pack>Pack</button>` : ''}
-          </div>
-          <p class="pc-hint pc-tp-boot">Boot ${boot} · raises ${raiseCount}/${MAX_RAISES} · chips virtual</p>
+          <div class="pc-actions pc-tp-actions">${actionsHtml}</div>
+          <p class="pc-hint pc-tp-boot">Boot ${boot} · side-show compares — loser packs · chips virtual</p>
         </div>`;
       shell.body.querySelector('[data-see]')?.addEventListener('click', () => doSee());
       shell.body.querySelector('[data-chaal]')?.addEventListener('click', () => doChaal());
       shell.body.querySelectorAll('[data-raise]').forEach((btn) => {
         btn.addEventListener('click', () => doRaise(Number(btn.dataset.raise) || 1));
       });
+      shell.body.querySelector('[data-ss]')?.addEventListener('click', () => doSideShowAsk());
+      shell.body.querySelector('[data-ss-accept]')?.addEventListener('click', () => doSideShowAccept());
+      shell.body.querySelector('[data-ss-refuse]')?.addEventListener('click', () => doSideShowRefuse(false));
       shell.body.querySelector('[data-show]')?.addEventListener('click', () => doShow());
       shell.body.querySelector('[data-pack]')?.addEventListener('click', () => doPack());
-      if (!liveOn && phase === 'dealt' && !ended && !turnIsA) scheduleAi();
+      if (!liveOn && phase === 'dealt' && !ended) {
+        if (pending && sideShow && sideShow.fromA === true) scheduleAiSideShow();
+        else if (!pending && !turnIsA) scheduleAi();
+      }
     }
 
     function doSee() {
-      if (ended || phase !== 'dealt' || myPacked() || mySeen() || !myTurn()) return;
+      if (ended || phase !== 'dealt' || myPacked() || mySeen() || !myTurn() || sideShow) return;
       const fee = seeFee();
       if (myStack() <= 0) {
         paint('No chips to see');
@@ -3251,7 +3350,7 @@
     }
 
     function doChaal() {
-      if (ended || phase !== 'dealt' || myPacked() || !myTurn()) return;
+      if (ended || phase !== 'dealt' || myPacked() || !myTurn() || sideShow) return;
       const cost = chaalCost(mySeen());
       if (myStack() <= 0) {
         paint('No chips left');
@@ -3266,7 +3365,7 @@
     }
 
     function doRaise(steps) {
-      if (ended || phase !== 'dealt' || myPacked() || !myTurn()) return;
+      if (ended || phase !== 'dealt' || myPacked() || !myTurn() || sideShow) return;
       steps = steps === 2 ? 2 : 1;
       if (raiseCount >= MAX_RAISES || stake >= MAX_STAKE) {
         paint('Raise cap hit');
@@ -3285,7 +3384,7 @@
     }
 
     function doPack() {
-      if (ended || phase !== 'dealt' || myPacked() || !myTurn()) return;
+      if (ended || phase !== 'dealt' || myPacked() || !myTurn() || sideShow) return;
       setMyPacked(true);
       // Other seat wins pot
       if (iAmA()) awardPotSeat(false);
@@ -3305,15 +3404,19 @@
     }
 
     function doShow() {
-      if (ended || phase !== 'dealt' || myPacked() || !myTurn()) return;
+      if (ended || phase !== 'dealt' || myPacked() || !myTurn() || sideShow) return;
       if (!mySeen() || !oppSeen() || activeCount() !== 2) {
-        paint('Show needs both seen');
+        paint('Show needs both seen · 2 players');
         return;
       }
+      // Free show when 2 remain (no 2× chaal fee)
       const settled = settleShow();
       phase = 'over';
       betSeq += 1;
+      clearSideShow();
       const youWin = iAmA() ? settled.aWins : !settled.aWins;
+      const youRank = tpRankName(myCards());
+      const oppRank = tpRankName(oppCards());
       if (liveOn && liveHandle && !applying) {
         liveHandle.push({
           status: 'over',
@@ -3323,6 +3426,7 @@
             phase: 'over',
             revealed: true,
             scores: { a: settled.sa, b: settled.sb },
+            ranks: { a: tpRankName(handA), b: tpRankName(handB) },
           }),
         });
       }
@@ -3330,7 +3434,101 @@
       ended = true;
       clearAi();
       const title = settled.split ? 'Split pot' : youWin ? 'You win the show' : 'Opponent wins the show';
-      showResultScreen(title, youWin ? 1 : 0, youWin ? 0 : 1, settled.split);
+      showResultScreen(title, youWin ? 1 : 0, youWin ? 0 : 1, settled.split, youRank + ' vs ' + oppRank);
+    }
+
+    function doSideShowAsk() {
+      if (ended || phase !== 'dealt' || sideShow || !myTurn()) return;
+      if (!mySeen() || !oppSeen() || myPacked() || oppPacked() || activeCount() !== 2) {
+        paint('Side-show needs both seen');
+        return;
+      }
+      sideShow = { fromA: iAmA(), status: 'pending', at: Date.now() };
+      betSeq += 1;
+      buzz('select');
+      startSsTimeout();
+      pushLive({ act: 'sideshow_ask', by: liveRoles && liveRoles.me });
+      paint('Side-show asked');
+    }
+
+    function resolveSideShowCompare() {
+      if (ended || phase !== 'dealt' || !sideShow || sideShow.status !== 'pending') return;
+      const sa = tpScore(handA);
+      const sb = tpScore(handB);
+      const askerA = sideShow.fromA;
+      betSeq += 1;
+      clearSsTimer();
+
+      if (sa === sb) {
+        clearSideShow();
+        turnIsA = askerA; // asker keeps turn
+        pushLive({ act: 'sideshow_tie' });
+        paint('Side-show tied — both stay');
+        return;
+      }
+
+      const loserA = sa < sb;
+      if (loserA) packedA = true;
+      else packedB = true;
+      const iLost = (loserA && iAmA()) || (!loserA && !iAmA());
+      clearSideShow();
+
+      shell.body.innerHTML = `
+        <div class="pc-tp">
+          <p class="pc-hint">${esc(iLost ? 'You packed — weaker hand' : 'Opponent packed on side-show')}</p>
+          <div class="pc-hand">${oppCards().map(cardFace).join('')}</div>
+          <p class="pc-hint">Opponent · ${esc(tpRankName(oppCards()))}</p>
+          <div class="pc-hand">${myCards().map(cardFace).join('')}</div>
+          <p class="pc-hint">You · ${esc(tpRankName(myCards()))}</p>
+        </div>`;
+
+      if (activeCount() < 2) {
+        if (packedA) awardPotSeat(false);
+        else awardPotSeat(true);
+        phase = 'over';
+        const youWin = !iLost;
+        setTimeout(() => {
+          if (liveOn && liveHandle && !applying) {
+            liveHandle.push({
+              status: 'over',
+              winner: youWin ? liveRoles.me : liveRoles.opp,
+              act: 'sideshow',
+              state: Object.assign(snapshot(), { phase: 'over', sideShow: null }),
+            });
+          }
+          finishHand(
+            youWin,
+            iLost ? 'Packed on side-show' : 'Won side-show',
+            iLost ? 'Weaker hand — opponent takes the pot' : 'Opponent packed — you take the pot',
+            true,
+            false
+          );
+        }, 900);
+        return;
+      }
+
+      turnIsA = !askerA;
+      pushLive({ act: 'sideshow_done' });
+      setTimeout(() => paint(iLost ? 'You packed — weaker hand' : 'Opponent packed on side-show'), 900);
+    }
+
+    function doSideShowAccept() {
+      if (ended || phase !== 'dealt' || !sideShow || sideShow.status !== 'pending') return;
+      if (liveOn && !iAmSideShowTarget()) return;
+      buzz('select');
+      resolveSideShowCompare();
+    }
+
+    function doSideShowRefuse(auto) {
+      if (ended || phase !== 'dealt' || !sideShow || sideShow.status !== 'pending') return;
+      if (!auto && liveOn && !iAmSideShowTarget()) return;
+      const askerA = sideShow.fromA;
+      clearSideShow();
+      betSeq += 1;
+      turnIsA = askerA; // free refuse — asker keeps the turn
+      buzz('select');
+      pushLive({ act: 'sideshow_refuse', by: liveRoles && liveRoles.me, auto: !!auto });
+      paint(auto ? 'Side-show timed out — refused' : 'Side-show refused — hand continues');
     }
 
     function applyRemoteAct(val) {
@@ -3344,7 +3542,23 @@
       const by = val.by;
       if (ended) return;
 
-      if (val.status === 'over' || st.phase === 'over' || act === 'pack' || act === 'show') {
+      if (act === 'sideshow_ask' || (st.sideShow && st.sideShow.status === 'pending')) {
+        if (sideShow && sideShow.status === 'pending') startSsTimeout();
+        paint('Side-show requested');
+        return;
+      }
+      if (act === 'sideshow_refuse' || act === 'sideshow_tie') {
+        clearSsTimer();
+        paint(act === 'sideshow_tie' ? 'Side-show tied — both stay' : 'Side-show refused');
+        return;
+      }
+      if (act === 'sideshow_done') {
+        clearSsTimer();
+        paint('Side-show resolved');
+        return;
+      }
+
+      if (val.status === 'over' || st.phase === 'over' || act === 'pack' || act === 'show' || act === 'sideshow') {
         applying = true;
         if (act === 'pack' || st.packedA || st.packedB) {
           if (myPacked()) finishHand(false, 'Packed', 'Opponent takes the pot', true, false);
@@ -3393,16 +3607,28 @@
 
     function scheduleAi() {
       clearAi();
-      if (liveOn || ended || phase !== 'dealt' || packedB || turnIsA) return;
+      if (liveOn || ended || phase !== 'dealt' || packedB || turnIsA || sideShow) return;
       aiTimer = setTimeout(() => {
         aiTimer = 0;
-        if (ended || phase !== 'dealt' || packedB || turnIsA) return;
+        if (ended || phase !== 'dealt' || packedB || turnIsA || sideShow) return;
         runAi();
       }, 700 + Math.floor(rng() * 800));
     }
 
+    function scheduleAiSideShow() {
+      clearAi();
+      if (liveOn || ended || !sideShow || sideShow.status !== 'pending' || sideShow.fromA !== true) return;
+      aiTimer = setTimeout(() => {
+        aiTimer = 0;
+        if (!sideShow || sideShow.status !== 'pending') return;
+        const strength = tpScore(handB);
+        if (strength >= 2000 || (strength >= 14 && rng() < 0.4)) resolveSideShowCompare();
+        else doSideShowRefuse(false);
+      }, 550 + Math.floor(rng() * 500));
+    }
+
     function runAi() {
-      if (ended || packedB || turnIsA) return;
+      if (ended || packedB || turnIsA || sideShow) return;
       const strength = tpScore(handB); // Practice-only
       const cost = chaalCost(seenB);
 
@@ -3436,7 +3662,22 @@
         return;
       }
 
-      // Seen — strength map
+      // Seen — side-show when medium-strong and pot large
+      if (
+        bothSeen() &&
+        !packedA &&
+        strength >= 2000 &&
+        strength < 5000 &&
+        pot >= BOOT * 8 &&
+        rng() < 0.45
+      ) {
+        sideShow = { fromA: false, status: 'pending', at: Date.now() };
+        betSeq += 1;
+        startSsTimeout();
+        paint('Opponent asks for a side-show');
+        return;
+      }
+
       if (strength >= 5000) {
         if (raiseCount < MAX_RAISES && stake < MAX_STAKE && rng() < 0.7) {
           stake = Math.min(MAX_STAKE, stake + BOOT * (rng() < 0.4 ? 2 : 1));
@@ -3453,11 +3694,12 @@
         finishHand(true, 'Opponent packed', 'You take the pot', false, false);
         return;
       }
-      if (strength >= 2000 && bothSeen() && rng() < 0.4) {
+      if (strength >= 2000 && bothSeen() && rng() < 0.35) {
         const settled = settleShow();
         phase = 'over';
         ended = true;
         clearAi();
+        clearSideShow();
         const youWin = settled.split ? false : settled.aWins;
         showResultScreen(
           settled.split ? 'Split pot' : youWin ? 'You win the show' : 'Opponent wins the show',
@@ -4145,7 +4387,7 @@
       { id: 'carrom', name: 'Carrom', desc: 'Live · stakes · AI', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
       { id: 'pool', name: 'Pool', desc: 'Clear the felt', icon: '🎱', genre: 'board', launch: openPool, order: 32 },
       { id: 'rummy', name: 'Rummy', desc: 'Runs and sets', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
-      { id: 'teenpatti', name: 'Teen Patti', desc: 'Chaal · raise · pack', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
+      { id: 'teenpatti', name: 'Teen Patti', desc: 'Chaal · side-show · pack', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
       { id: 'bluff', name: 'Bluff', desc: 'Play face-down', icon: '🎭', genre: 'party', launch: openBluff, order: 35 },
       { id: 'sattepe', name: 'Satte pe Satta', desc: 'Build off sevens', icon: '7️⃣', genre: 'party', launch: openSatte, order: 36 },
       { id: 'andarbaahar', name: 'Andar Bahar', desc: 'Pick a side', icon: '🃏', genre: 'party', launch: openAndarBahar, order: 37 },

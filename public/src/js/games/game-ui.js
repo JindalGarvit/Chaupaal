@@ -172,9 +172,9 @@
     pool: ['Drag the cue ball to aim', 'Clear object balls', 'Scratch returns the cue'],
     rummy: ['Draw or take the discard', 'Discard one card', 'Declare when you have runs and sets'],
     teenpatti: [
-      'Boot into the pot — blind chaal costs S, seen costs 2S',
-      'Raise steps up S (capped); Pack folds; Show only when both seen',
-      'See flips your cards for a 2S fee — chips stay virtual',
+      'Blind chaal costs S, seen costs 2S — raise steps up the stake',
+      'Side-show (both seen): compare mid-hand — loser packs; refuse is free',
+      'Final Show when 2 remain and both seen — ranks named on reveal',
     ],
     bluff: ['Select 1–3 cards and a claimed rank', 'Opponent may call', 'Three lives each'],
     sattepe: ['Play next to a seven chain', 'Empty your hand first', 'Sevens can always start a suit'],
