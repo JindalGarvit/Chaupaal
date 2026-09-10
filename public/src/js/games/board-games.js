@@ -2400,12 +2400,22 @@ function openScribbleGame(chat,playerList,opts){
   if(!practiceMode&&players.length<2)players.push({name:(chat&&chat.name)||'Friend',isMe:false,profileType:chat?.profileType||null});
 
   let round=1;const maxRounds=practiceMode?1:3;let currentDrawerIdx=0;let currentWord='';
+  let liveWordKey='';let liveWordLen=0;
   let scores={};players.forEach(p=>scores[p.name]=0);
   let roundTimer=practiceMode?120:60;let roundInterval=null;let guessedCorrectly=new Set();
   let strokes=[];let isDrawing=false;let currentColor='#1a1a2e';
   const BRUSH_SIZES=[3,7,14];let currentSize=BRUSH_SIZES[1];
   let canvasW=320;let canvasH=240;
   let aiGuessIv=null;
+  /** Ink stream: ~14 Hz while drawing; payload keeps newest ≤INK_MAX pts (drop oldest full strokes). */
+  const INK_MAX=700;
+  const INK_STREAM_MS=70;
+  const INK_SAMPLE_MIN=1.6;
+  const INK_INTERP=4;
+  let inkStreamTimer=null;
+  let inkDirty=false;
+  let lastAppliedStrokeLen=0;
+  let pointerIdActive=null;
 
   const overlay=document.createElement('div');
   overlay.style.cssText='position:absolute;inset:0;background:var(--cream);z-index:80;display:flex;flex-direction:column;';
@@ -2414,6 +2424,7 @@ function openScribbleGame(chat,playerList,opts){
     type:'scribble',title:practiceMode?'Scribble Practice':'Scribble',mode:liveOn?'live':(practiceMode?'solo':(players.length>2?'group':'practice')),chat,overlay,
     cleanup(){
       clearInterval(roundInterval);roundInterval=null;
+      stopInkStream();
       if(aiGuessIv){clearInterval(aiGuessIv);aiGuessIv=null;}
       if(liveHandle&&!leaveConfirmed){
         try{liveHandle.leave({forfeit:!liveEnded});}catch(e){try{liveHandle.leave();}catch(e2){}}
@@ -2431,6 +2442,7 @@ function openScribbleGame(chat,playerList,opts){
   const schedule=(fn,ms)=>gs?gs.schedule(fn,ms):setTimeout(fn,ms);
   const close=(result)=>{
     clearInterval(roundInterval);roundInterval=null;
+    stopInkStream();
     if(aiGuessIv){clearInterval(aiGuessIv);aiGuessIv=null;}
     if(gs)gs.close(result);else overlay.remove();
   };
@@ -2452,6 +2464,19 @@ function openScribbleGame(chat,playerList,opts){
 
   function pickWord(){return SCRIBBLE_WORDS[Math.floor(Math.random()*SCRIBBLE_WORDS.length)];}
 
+  function scribbleWordKey(w){
+    const s=String(w||'').toLowerCase().trim();
+    let h=2166136261;
+    for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}
+    return (h>>>0).toString(36)+':'+s.length;
+  }
+
+  function setRoundWord(w){
+    currentWord=String(w||'');
+    liveWordKey=scribbleWordKey(currentWord);
+    liveWordLen=currentWord.length;
+  }
+
   function iAmDrawer(){
     if(practiceMode)return true;
     if(!liveOn)return players[currentDrawerIdx].isMe;
@@ -2464,37 +2489,87 @@ function openScribbleGame(chat,playerList,opts){
     return iAmDrawer()?'You':(chat.name||'Friend');
   }
 
+  function quantizeInkPt(p){
+    return{
+      x:Math.round(p.x*10)/10,
+      y:Math.round(p.y*10)/10,
+      color:p.color,
+      size:p.size,
+      newStroke:!!p.newStroke,
+    };
+  }
+
+  /** Compact policy: keep newest ≤INK_MAX points; cut on a stroke boundary when possible. */
+  function compactInk(list){
+    const src=list||[];
+    if(src.length<=INK_MAX)return src.map(quantizeInkPt);
+    let cut=src.length-INK_MAX;
+    while(cut<src.length&&!src[cut].newStroke)cut++;
+    if(cut>=src.length)cut=Math.max(0,src.length-INK_MAX);
+    return src.slice(cut).map(quantizeInkPt);
+  }
+
+  function stopInkStream(){
+    if(inkStreamTimer){clearInterval(inkStreamTimer);inkStreamTimer=null;}
+    inkDirty=false;
+  }
+
   function pushScribble(extra){
     if(!liveOn||!liveHandle||!liveRoles||applyingLive)return;
-    const compact=strokes.length>800?strokes.slice(-800):strokes;
+    const compact=compactInk(strokes);
     const myScore=scores['You']||0;
     const oppKey=Object.keys(scores).find(k=>k!=='You')||(chat&&chat.name)||'Friend';
     const oppScore=scores[oppKey]||0;
     const scoreA=liveRoles.myColor==='w'?myScore:oppScore;
     const scoreB=liveRoles.myColor==='w'?oppScore:myScore;
+    const state=Object.assign({
+      strokes:compact,
+      inkLen:strokes.length,
+      wordKey:liveWordKey||scribbleWordKey(currentWord),
+      wordLen:liveWordLen||(currentWord?currentWord.length:0),
+      scoreA,scoreB,
+      drawer:currentDrawerIdx,
+      round,roundTimer,
+      guessed:[...guessedCorrectly],
+      ended:liveEnded,
+    },extra||{});
+    // Keep raw word on the wire for the drawer seat; guessers never copy it into UI state (wordKey for checks).
+    if(currentWord)state.word=currentWord;
     liveHandle.push({
-      state:Object.assign({
-        strokes:compact,
-        word:currentWord,
-        scoreA,scoreB,
-        drawer:currentDrawerIdx,
-        round,roundTimer,
-        guessed:[...guessedCorrectly],
-        ended:liveEnded,
-      },extra||{}),
+      state,
       turn:liveEnded?null:(iAmDrawer()?liveRoles.me:liveRoles.opp),
       status:liveEnded?'over':'playing',
     });
+  }
+
+  function flushInkStream(){
+    if(!liveOn||!iAmDrawer())return;
+    inkDirty=false;
+    pushScribble({inkFlush:true});
+  }
+
+  function scheduleInkStream(){
+    if(!liveOn||!iAmDrawer())return;
+    inkDirty=true;
+    if(inkStreamTimer)return;
+    inkStreamTimer=setInterval(()=>{
+      if(!alive()||!isDrawing){
+        if(inkDirty)flushInkStream();
+        stopInkStream();
+        return;
+      }
+      if(inkDirty){inkDirty=false;pushScribble({inkStream:true});}
+    },INK_STREAM_MS);
   }
 
   function setupCanvasSurface(canvas){
     if(!canvas)return null;
     if(typeof setupGameCanvas==='function'){
       const res=setupGameCanvas(canvas);
-      if(res&&res.ctx){
-        canvasW=res.width||canvasW;
-        canvasH=res.height||canvasH;
-        return res.ctx;
+      if(res){
+        canvasW=res.w||res.width||canvasW;
+        canvasH=res.h||res.height||canvasH;
+        return canvas.getContext('2d');
       }
     }
     const dpr=Math.min(window.devicePixelRatio||1,2.5);
@@ -2510,13 +2585,14 @@ function openScribbleGame(chat,playerList,opts){
 
   function startRound(){
     if(!alive())return;
+    stopInkStream();
     const hostPicks=!liveOn||(liveRoles&&liveRoles.myColor==='w');
-    if(hostPicks)currentWord=pickWord();
-    else if(!currentWord){
+    if(hostPicks)setRoundWord(pickWord());
+    else if(!currentWord&&!liveWordKey){
       render();
       return;
     }
-    roundTimer=practiceMode?120:60;guessedCorrectly.clear();strokes=[];
+    roundTimer=practiceMode?120:60;guessedCorrectly.clear();strokes=[];lastAppliedStrokeLen=0;
     if(aiGuessIv){clearInterval(aiGuessIv);aiGuessIv=null;}
     const isMyTurn=iAmDrawer();
     render();
@@ -2553,11 +2629,12 @@ function openScribbleGame(chat,playerList,opts){
   function nextTurn(){
     if(!alive())return;
     clearInterval(roundInterval);roundInterval=null;
+    stopInkStream();
     if(aiGuessIv){clearInterval(aiGuessIv);aiGuessIv=null;}
     if(liveOn){
       currentDrawerIdx=(currentDrawerIdx+1)%2;
       if(currentDrawerIdx===0)round++;
-      if(!(liveRoles&&liveRoles.myColor==='w'))currentWord='';
+      if(!(liveRoles&&liveRoles.myColor==='w')){currentWord='';liveWordKey='';liveWordLen=0;}
     } else {
       currentDrawerIdx++;
       if(currentDrawerIdx>=players.length){currentDrawerIdx=0;round++;}
@@ -2568,6 +2645,7 @@ function openScribbleGame(chat,playerList,opts){
 
   function endScribbleGame(){
     clearInterval(roundInterval);roundInterval=null;
+    stopInkStream();
     if(aiGuessIv){clearInterval(aiGuessIv);aiGuessIv=null;}
     liveEnded=true;
     if(liveOn&&!applyingLive)pushScribble({ended:true});
@@ -2576,6 +2654,7 @@ function openScribbleGame(chat,playerList,opts){
     if(gs)gs.setOutcome(practiceMode?'complete':(won?'won':'lost'));
     if(typeof recordGameResult==='function')recordGameResult('scribble',won);
     if(typeof gameFeedback==='function')gameFeedback(practiceMode?'complete':(won?'win':'lose'));
+    const wordReveal=currentWord||'(hidden)';
     overlay.innerHTML=`
       ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Scribble',subtitle:MODE_SUB+(practiceMode?' · done':' · Results'),backId:'scribbleClose'}):''}
       ${typeof gameResultHtml==='function'?gameResultHtml({
@@ -2583,9 +2662,9 @@ function openScribbleGame(chat,playerList,opts){
         glyph:practiceMode?'✓':(won?'✓':'·'),
         title:practiceMode?'Nice practice':`${sorted[0]?.[0]||'Someone'} wins`,
         subtitle:practiceMode
-          ?`Word was “${currentWord}” · keep those brush skills sharp`
+          ?`Word was “${wordReveal}” · keep those brush skills sharp`
           :sorted.map(([name,score],i)=>`${i+1}. ${name} · ${score} pts`).join(' · '),
-        shareCardHtml: typeof buildGameShareCard==='function'?buildGameShareCard('scribble',{scoreLine:practiceMode?'Practice':`${sorted[0]?.[0]} wins`,meta:currentWord}):'',
+        shareCardHtml: typeof buildGameShareCard==='function'?buildGameShareCard('scribble',{scoreLine:practiceMode?'Practice':`${sorted[0]?.[0]} wins`,meta:currentWord||''}):'',
         actions:[
           {label:'Play again',primary:true,id:'again'},
           {label:'Share',primary:false,id:'share'},
@@ -2597,7 +2676,7 @@ function openScribbleGame(chat,playerList,opts){
     const done=()=>close(practiceMode?'complete':(won?'won':'lost'));
     document.getElementById('scribbleClose')?.addEventListener('click',done);
     if(typeof wireGameResultActions==='function'){
-      const shareStats={scoreLine:practiceMode?'Practice':`${sorted[0]?.[0]} wins`,meta:currentWord};
+      const shareStats={scoreLine:practiceMode?'Practice':`${sorted[0]?.[0]} wins`,meta:currentWord||''};
       wireGameResultActions(overlay,{
         again:()=>{close();openScribbleGame(chat,playerList,opts);},
         share:()=>{if(typeof shareGameResult==='function')shareGameResult('scribble',shareStats);},
@@ -2622,14 +2701,21 @@ function openScribbleGame(chat,playerList,opts){
     let i=strokes.length-1;
     while(i>0&&!strokes[i].newStroke)i--;
     strokes=strokes.slice(0,i);
+    lastAppliedStrokeLen=0;
     renderCanvas();
     if(typeof gameFeedback==='function')gameFeedback('select');
+  }
+
+  function guessBlanks(){
+    if(iAmDrawer()&&currentWord)return currentWord.replace(/[a-z]/gi,'_');
+    const n=liveWordLen||(currentWord?currentWord.length:0);
+    return n>0?'_'.repeat(n):'_____';
   }
 
   function render(){
     if(!alive())return;
     const isMyTurn=iAmDrawer();
-    const blanks=currentWord.replace(/[a-z]/gi,'_');
+    const blanks=guessBlanks();
     const drawerName=drawerDisplayName();
     overlay.innerHTML=`
       ${gameChromeHtml({title:practiceMode?'Scribble Practice':'Scribble',subtitle:MODE_SUB+(practiceMode?'':` · Round ${round}/${maxRounds}`),backId:'scribbleBack',rightHtml:`<span id="scribbleTimer" class="game-chrome-metric">${roundTimer}s</span>`})}
@@ -2640,7 +2726,7 @@ function openScribbleGame(chat,playerList,opts){
         <div id="scribbleScoreStrip" class="scribble-scores">${Object.entries(scores).map(([n,s])=>`<span>${n} ${s}</span>`).join('')}</div>
       </div>
       <div class="scribble-stage">
-        <canvas id="scribbleCanvas" class="scribble-canvas" style="cursor:${isMyTurn?'crosshair':'default'};"></canvas>
+        <canvas id="scribbleCanvas" class="scribble-canvas" style="cursor:${isMyTurn?'crosshair':'default'};touch-action:none;"></canvas>
         ${!isMyTurn?`<div class="scribble-waiting" id="scribbleWaiting">Waiting for drawing…</div>`:''}
       </div>
       ${isMyTurn?`
@@ -2671,10 +2757,23 @@ function openScribbleGame(chat,playerList,opts){
     } else if(isMyTurn){
       overlay.querySelectorAll('[data-color]').forEach(btn=>btn.addEventListener('click',()=>{currentColor=btn.dataset.color;overlay.querySelectorAll('[data-color]').forEach(b=>b.classList.toggle('is-active',b.dataset.color===currentColor));}));
       overlay.querySelectorAll('[data-size]').forEach(btn=>btn.addEventListener('click',()=>{currentSize=+btn.dataset.size;overlay.querySelectorAll('[data-size]').forEach(b=>b.classList.toggle('is-active',+b.dataset.size===currentSize));}));
-      document.getElementById('scribbleClear')?.addEventListener('click',()=>{strokes=[];renderCanvas();if(liveOn)pushScribble();});
-      document.getElementById('scribbleUndo')?.addEventListener('click',()=>{undoStroke();if(liveOn)pushScribble();});
+      document.getElementById('scribbleClear')?.addEventListener('click',()=>{
+        strokes=[];lastAppliedStrokeLen=0;stopInkStream();renderCanvas();
+        if(liveOn)pushScribble({inkClear:true});
+      });
+      document.getElementById('scribbleUndo')?.addEventListener('click',()=>{
+        undoStroke();stopInkStream();if(liveOn)pushScribble({inkUndo:true});
+      });
       document.getElementById('scribbleDonePractice')?.addEventListener('click',()=>endScribbleGame());
     }
+  }
+
+  function guessMatchesWord(val){
+    const g=String(val||'').toLowerCase().trim();
+    if(!g)return false;
+    if(currentWord&&g===currentWord.toLowerCase())return true;
+    if(liveWordKey&&scribbleWordKey(g)===liveWordKey)return true;
+    return false;
   }
 
   function submitGuess(){
@@ -2682,7 +2781,7 @@ function openScribbleGame(chat,playerList,opts){
     if(!inp)return;
     const val=inp.value.trim().toLowerCase();if(!val)return;
     addScribbleMessage(`You: ${val}`);
-    if(val===currentWord.toLowerCase()&&!guessedCorrectly.has('You')){
+    if(guessMatchesWord(val)&&!guessedCorrectly.has('You')){
       guessedCorrectly.add('You');
       scores['You']=(scores['You']||0)+Math.max(10,roundTimer);
       const drawerLabel=drawerDisplayName();
@@ -2699,44 +2798,172 @@ function openScribbleGame(chat,playerList,opts){
     inp.value='';
   }
 
+  function appendInkPoint(x,y,isNew){
+    const pt={x,y,color:currentColor,size:currentSize,newStroke:!!isNew};
+    if(isNew||!strokes.length){
+      strokes.push(pt);
+      return;
+    }
+    const last=strokes[strokes.length-1];
+    const dx=x-last.x;const dy=y-last.y;
+    const dist=Math.hypot(dx,dy);
+    if(dist<INK_SAMPLE_MIN)return;
+    if(dist>INK_INTERP*2){
+      const steps=Math.min(24,Math.floor(dist/INK_INTERP));
+      for(let i=1;i<=steps;i++){
+        const t=i/steps;
+        strokes.push({
+          x:last.x+dx*t,
+          y:last.y+dy*t,
+          color:currentColor,
+          size:currentSize,
+          newStroke:false,
+        });
+      }
+      return;
+    }
+    strokes.push(pt);
+  }
+
   function wireCanvas(){
     const canvas=document.getElementById('scribbleCanvas');if(!canvas)return;
     setupCanvasSurface(canvas);
+    lastAppliedStrokeLen=0;
     renderCanvas();
     if(!iAmDrawer())return;
+
     const getPos=e=>{
       const rect=canvas.getBoundingClientRect();
-      const cx=(e.touches?e.touches[0].clientX:e.clientX)-rect.left;
-      const cy=(e.touches?e.touches[0].clientY:e.clientY)-rect.top;
-      return{x:cx*(canvasW/rect.width),y:cy*(canvasH/rect.height)};
+      const src=e.touches&&e.touches[0]?e.touches[0]:e;
+      const cx=src.clientX-rect.left;
+      const cy=src.clientY-rect.top;
+      return{x:cx*(canvasW/Math.max(1,rect.width)),y:cy*(canvasH/Math.max(1,rect.height))};
     };
-    const start=e=>{e.preventDefault();isDrawing=true;const p=getPos(e);strokes.push({x:p.x,y:p.y,color:currentColor,size:currentSize,newStroke:true});};
-    const move=e=>{if(!isDrawing)return;e.preventDefault();const p=getPos(e);strokes.push({x:p.x,y:p.y,color:currentColor,size:currentSize,newStroke:false});renderCanvas();};
-    const end=()=>{isDrawing=false;if(liveOn)pushScribble();};
-    canvas.addEventListener('mousedown',start);canvas.addEventListener('mousemove',move);canvas.addEventListener('mouseup',end);canvas.addEventListener('mouseleave',end);
-    canvas.addEventListener('touchstart',start,{passive:false});canvas.addEventListener('touchmove',move,{passive:false});canvas.addEventListener('touchend',end);
+
+    const start=e=>{
+      if(e.pointerType==='mouse'&&e.button!=null&&e.button!==0)return;
+      e.preventDefault();
+      try{if(e.pointerId!=null)canvas.setPointerCapture(e.pointerId);}catch(err){}
+      pointerIdActive=e.pointerId!=null?e.pointerId:true;
+      isDrawing=true;
+      const p=getPos(e);
+      appendInkPoint(p.x,p.y,true);
+      renderCanvas(true);
+      scheduleInkStream();
+    };
+    const move=e=>{
+      if(!isDrawing)return;
+      if(pointerIdActive!=null&&e.pointerId!=null&&e.pointerId!==pointerIdActive)return;
+      e.preventDefault();
+      const p=getPos(e);
+      const before=strokes.length;
+      appendInkPoint(p.x,p.y,false);
+      if(strokes.length!==before){
+        renderCanvas(true);
+        scheduleInkStream();
+      }
+    };
+    const end=e=>{
+      if(!isDrawing)return;
+      if(e&&pointerIdActive!=null&&e.pointerId!=null&&e.pointerId!==pointerIdActive)return;
+      isDrawing=false;
+      pointerIdActive=null;
+      try{if(e&&e.pointerId!=null)canvas.releasePointerCapture(e.pointerId);}catch(err){}
+      flushInkStream();
+      stopInkStream();
+    };
+
+    if(window.PointerEvent){
+      canvas.addEventListener('pointerdown',start);
+      canvas.addEventListener('pointermove',move);
+      canvas.addEventListener('pointerup',end);
+      canvas.addEventListener('pointercancel',end);
+    } else {
+      canvas.addEventListener('mousedown',start);
+      canvas.addEventListener('mousemove',move);
+      canvas.addEventListener('mouseup',end);
+      canvas.addEventListener('mouseleave',end);
+      canvas.addEventListener('touchstart',start,{passive:false});
+      canvas.addEventListener('touchmove',move,{passive:false});
+      canvas.addEventListener('touchend',end);
+      canvas.addEventListener('touchcancel',end);
+    }
   }
 
-  function renderCanvas(){
+  function drawStrokeSegment(ctx,a,b){
+    if(!a||!b)return;
+    ctx.strokeStyle=b.color;ctx.lineWidth=b.size;
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+  }
+
+  function renderCanvas(incremental){
     const canvas=document.getElementById('scribbleCanvas');if(!canvas)return;
     let ctx=canvas.getContext('2d');
     if(!canvas.width){ctx=setupCanvasSurface(canvas)||ctx;}
+    const dpr=canvas.width/Math.max(1,canvasW);
+    ctx.lineCap='round';ctx.lineJoin='round';
+
+    const canAppend=incremental&&lastAppliedStrokeLen>0&&strokes.length>=lastAppliedStrokeLen;
+    if(canAppend){
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      for(let i=lastAppliedStrokeLen;i<strokes.length;i++){
+        const s=strokes[i];
+        if(s.newStroke)continue;
+        const prev=strokes[i-1];
+        if(!prev||prev.newStroke&&!(prev.x===s.x&&prev.y===s.y)){
+          // first segment after stroke start uses start point as move
+        }
+        if(prev)drawStrokeSegment(ctx,prev,s);
+      }
+      lastAppliedStrokeLen=strokes.length;
+      const wait=document.getElementById('scribbleWaiting');
+      if(wait&&strokes.length)wait.style.display='none';
+      return;
+    }
+
     ctx.save();
     ctx.setTransform(1,0,0,1,0,0);
     ctx.clearRect(0,0,canvas.width,canvas.height);
     ctx.restore();
-    const dpr=canvas.width/Math.max(1,canvasW);
     ctx.setTransform(dpr,0,0,dpr,0,0);
     ctx.fillStyle='#fff';
     ctx.fillRect(0,0,canvasW,canvasH);
-    ctx.lineCap='round';ctx.lineJoin='round';
-    let lastX=null,lastY=null;
-    strokes.forEach(s=>{
-      if(s.newStroke||lastX===null){lastX=s.x;lastY=s.y;return;}
-      ctx.strokeStyle=s.color;ctx.lineWidth=s.size;
-      ctx.beginPath();ctx.moveTo(lastX,lastY);ctx.lineTo(s.x,s.y);ctx.stroke();
-      lastX=s.x;lastY=s.y;
+    for(let i=0;i<strokes.length;i++){
+      const s=strokes[i];
+      if(s.newStroke||i===0)continue;
+      drawStrokeSegment(ctx,strokes[i-1],s);
+    }
+    // Dots for single-point strokes
+    for(let i=0;i<strokes.length;i++){
+      const s=strokes[i];
+      if(!s.newStroke)continue;
+      const next=strokes[i+1];
+      if(next&&!next.newStroke)continue;
+      ctx.fillStyle=s.color;
+      ctx.beginPath();
+      ctx.arc(s.x,s.y,Math.max(0.5,s.size/2),0,Math.PI*2);
+      ctx.fill();
+    }
+    lastAppliedStrokeLen=strokes.length;
+    const wait=document.getElementById('scribbleWaiting');
+    if(wait)wait.style.display=strokes.length?'none':'';
+  }
+
+  function applyRemoteStrokes(next){
+    if(!Array.isArray(next))return;
+    const prevLen=strokes.length;
+    const samePrefix=next.length>=prevLen&&prevLen>0&&strokes.every((p,i)=>{
+      const q=next[i];
+      return q&&Math.abs(q.x-p.x)<0.2&&Math.abs(q.y-p.y)<0.2&&!!q.newStroke===!!p.newStroke;
     });
+    strokes=next.slice();
+    if(samePrefix&&next.length>=prevLen){
+      lastAppliedStrokeLen=prevLen;
+      renderCanvas(true);
+    } else {
+      lastAppliedStrokeLen=0;
+      renderCanvas(false);
+    }
   }
 
   if(liveOn&&liveRoles&&typeof DangalLive!=='undefined'){
@@ -2756,16 +2983,29 @@ function openScribbleGame(chat,playerList,opts){
           return;
         }
         const s=val.state;if(!s)return;
-        const waitingForWord=!roundInterval&&!currentWord;
+        const waitingForWord=!roundInterval&&!currentWord&&!liveWordKey;
         applyingLive=true;
-        if(s.word)currentWord=s.word;
-        if(Array.isArray(s.strokes)&&!waitingForWord){strokes=s.strokes.slice();renderCanvas();}
+        if(s.wordKey)liveWordKey=s.wordKey;
+        if(s.wordLen!=null)liveWordLen=Number(s.wordLen)||0;
+        if(s.drawer!=null)currentDrawerIdx=Number(s.drawer)||0;
+        // Privacy: guessers keep wordKey/wordLen only — do not assign s.word into currentWord.
+        if(s.word&&iAmDrawer()){
+          const had=!!currentWord;
+          setRoundWord(s.word);
+          if(!had){
+            const el=overlay.querySelector('.scribble-word strong');
+            if(el)el.textContent=currentWord;
+          }
+        }
+        const remoteDrawer=!iAmDrawer();
+        if(Array.isArray(s.strokes)&&remoteDrawer&&!waitingForWord){
+          applyRemoteStrokes(s.strokes);
+        }
         if(s.scoreA!=null||s.scoreB!=null){
           const oppN=(chat&&chat.name)||'Friend';
           scores['You']=liveRoles.myColor==='w'?(s.scoreA||0):(s.scoreB||0);
           scores[oppN]=liveRoles.myColor==='w'?(s.scoreB||0):(s.scoreA||0);
         }
-        if(s.drawer!=null)currentDrawerIdx=Number(s.drawer)||0;
         if(s.round!=null)round=Number(s.round)||round;
         if(Array.isArray(s.guessed))guessedCorrectly=new Set(s.guessed);
         if(s.lastGuess&&s.lastGuess.by!=='You'){
@@ -2773,9 +3013,13 @@ function openScribbleGame(chat,playerList,opts){
         }
         if(s.ended&&!liveEnded){liveEnded=true;applyingLive=false;endScribbleGame();return;}
         applyingLive=false;
-        if(waitingForWord&&currentWord){startRound();return;}
+        if(waitingForWord&&(currentWord||liveWordKey)){startRound();return;}
         renderScoresOnly();
-        if(Array.isArray(s.strokes)){strokes=s.strokes.slice();renderCanvas();}
+        // Host may still need wordLen blanks refresh when not drawer
+        if(!iAmDrawer()){
+          const blanksEl=overlay.querySelector('.scribble-blanks');
+          if(blanksEl)blanksEl.textContent=guessBlanks();
+        }
       },
     });
   }

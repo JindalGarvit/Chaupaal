@@ -135,7 +135,11 @@
       'Jail, doubles, auctions, mortgage/sell-back when cash is tight',
       'Deal deeds ± cash on your turn — Live is 1v1, Practice up to 6',
     ],
-    scribble: ['Draw clearly — keep it simple', 'Guessers type in the chat box', 'Rounds rotate who draws'],
+    scribble: [
+      'Draw with smooth ink — Live guessers see strokes as you move',
+      'Guessers type in the chat box (word stays hidden until you nail it)',
+      'Rounds rotate who draws',
+    ],
     rushrunner: [
       'Classic or Daily run · each theme has a named flavor (Coin Rush, Heavy Traffic, Long Sprint)',
       'Clear 2 light missions for a reason to run again · progress saves between sessions',
