@@ -172,7 +172,7 @@
     pool: [
       'Break from the kitchen — table stays open until a clean solid or stripe',
       'Clear your group, then the 8 — early 8 or scratch on 8 is a loss',
-      'Scratch: foul — cue back in the kitchen · 8 on break is re-spotted',
+      'Scratch: cue back in kitchen · Practice AI aims and shoots for real',
     ],
     rummy: ['Draw or take the discard', 'Discard one card', 'Declare when you have runs and sets'],
     teenpatti: [

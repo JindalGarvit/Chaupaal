@@ -670,7 +670,7 @@
     } else if (isPool && liveOn) {
       setChromeSubtitle('Live 1v1 · Pool' + (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly'));
     } else if (isPool) {
-      setChromeSubtitle('Practice · 8-ball rack · kitchen break');
+      setChromeSubtitle('Practice · 8-ball · ' + (DIFF_LABEL[difficulty] || 'Medium') + ' AI');
     }
 
     let coachDismissed = false;
@@ -685,7 +685,7 @@
           '. Same Queen/foul rules. Only shoot on your turn.'
         : 'You shoot from the near baseline; AI from the far. Cover the Queen after one of yours.'
       : isPool
-        ? 'Break from the kitchen. Open → solids/stripes → 8 last. Scratch: cue back in kitchen. Early 8 or scratch on 8 loses (8 on break is re-spotted).'
+        ? 'Break from the kitchen. Open → solids/stripes → 8 last. Practice AI aims and shoots for real — same physics as you.'
         : 'Drag back on the cue ball to aim, release to shoot.';
 
     shell.body.innerHTML = `<div class="pc-cue${isCarrom ? ' pc-cue--carrom' : ''}${isPool ? ' pc-cue--pool' : ''}">
@@ -847,7 +847,7 @@
                 : 'Your break'
               : liveOn
                 ? 'Opp turn'
-                : 'Opp turn';
+                : 'AI turn';
         hud.innerHTML =
           `<div class="pc-cue-hud-row">You: <b>${gLabel(youGroup)}</b> (${yLeft}) · Opp: <b>${gLabel(oppGroup)}</b> (${oLeft})` +
           (openTable ? ' · table open' : '') +
@@ -1468,7 +1468,8 @@
       if (strokeSeat === 'you') {
         myTurn = false;
         hint.textContent = (msg ? msg + ' ' : '') + 'Opponent’s turn…';
-        if (shell.gs && shell.gs.schedule) shell.gs.schedule(aiTurn, 650);
+        if (isPool) schedulePoolAiTurn();
+        else if (shell.gs && shell.gs.schedule) shell.gs.schedule(aiTurn, 650);
         else setTimeout(aiTurn, 650);
       } else {
         myTurn = true;
@@ -1509,7 +1510,8 @@
           ),
         });
       } else if (!liveOn && strokeSeat === 'opp') {
-        if (shell.gs && shell.gs.schedule) shell.gs.schedule(aiTurn, 500);
+        if (isPool) schedulePoolAiTurn();
+        else if (shell.gs && shell.gs.schedule) shell.gs.schedule(aiTurn, 500);
         else setTimeout(aiTurn, 500);
       }
     }
@@ -1978,36 +1980,230 @@
       buzz('stone');
     }
 
-    function aiTurn() {
-      if (liveOn || isCarrom) return;
-      if (isPool) {
-        if (ended) return;
+
+    function poolAiLegalTargets() {
+      if (openTable) {
+        return balls.filter((b) => !b.dead && !b.cue && poolBallGroup(b) !== 'eight');
+      }
+      if (oppGroup && groupIsClear('opp')) {
+        return balls.filter((b) => !b.dead && poolBallGroup(b) === 'eight');
+      }
+      if (oppGroup) {
+        return balls.filter((b) => !b.dead && !b.cue && poolBallGroup(b) === oppGroup);
+      }
+      return balls.filter((b) => !b.dead && !b.cue && poolBallGroup(b) !== 'eight');
+    }
+
+    /** After scratch foul, cue is in kitchen; if missing/dead, auto-place in kitchen. */
+    function ensurePoolAiCue() {
+      let c = cueBall();
+      if (c && !c.dead) return c;
+      let sx = W * (0.38 + Math.random() * 0.24);
+      for (let tries = 0; tries < 10; tries++) {
+        const blocked = balls.some(
+          (b) => !b.dead && !b.cue && Math.hypot(b.x - sx, b.y - kitchenY()) < ballRadius(b) + cueR + 2
+        );
+        if (!blocked) break;
+        sx = baselineXMin() + Math.random() * (baselineXMax() - baselineXMin());
+      }
+      resetCueToBaseline({ seat: 'you', x: sx });
+      return cueBall();
+    }
+
+    function planPoolAiShot() {
+      const c = cueBall();
+      if (!c) return { vx: 0, vy: -6, aimX: centerX(), aimY: centerY() };
+      const diff = difficulty;
+      const jitter = diff === 'easy' ? 0.4 : diff === 'hard' ? 0.08 : 0.2;
+      const maxP = diff === 'easy' ? 8.2 : diff === 'hard' ? 12.2 : 10.2;
+      const minP = diff === 'easy' ? 3.4 : 4.6;
+      const targets = poolAiLegalTargets();
+      const candidates = [];
+
+      function foulRiskToward(dx, dy) {
+        const mag = Math.hypot(dx, dy) || 1;
+        let risk = 0;
+        (pockets || []).forEach((p) => {
+          const px = p[0] * W;
+          const py = p[1] * H;
+          if (Math.hypot(c.x - px, c.y - py) > pocketR * 3.5) return;
+          const along = ((px - c.x) * dx + (py - c.y) * dy) / mag;
+          if (along > 0) risk += 1;
+        });
+        return risk;
+      }
+
+      function clearish(x1, y1, x2, y2, skip) {
+        let hits = 0;
+        balls.forEach((o) => {
+          if (o.dead || o.cue || o === skip) return;
+          if (distPointSeg(o.x, o.y, x1, y1, x2, y2) < ballRadius(o) + ballR * 0.9) hits += 1;
+        });
+        return hits;
+      }
+
+      function addCand(tx, ty, power, score, tag) {
+        const dx = tx - c.x;
+        const dy = ty - c.y;
+        const mag = Math.hypot(dx, dy) || 1;
+        const p = Math.max(minP, Math.min(maxP, power));
+        const risk = foulRiskToward(dx, dy);
+        candidates.push({
+          vx: (dx / mag) * p,
+          vy: (dy / mag) * p,
+          score: score - risk * (diff === 'easy' ? 0.8 : 5),
+          tag,
+          tx,
+          ty,
+        });
+      }
+
+      targets.forEach((ball) => {
+        (pockets || []).forEach((p) => {
+          const px = p[0] * W;
+          const py = p[1] * H;
+          const pdx = px - ball.x;
+          const pdy = py - ball.y;
+          const pmag = Math.hypot(pdx, pdy) || 1;
+          const ux = pdx / pmag;
+          const uy = pdy / pmag;
+          const sep = ballRadius(ball) + cueR;
+          const gx = ball.x - ux * sep;
+          const gy = ball.y - uy * sep;
+          const blocked =
+            clearish(c.x, c.y, gx, gy, ball) + clearish(ball.x, ball.y, px, py, ball);
+          const dist = Math.hypot(gx - c.x, gy - c.y);
+          const power = dist / 22 + pmag / 38;
+          let score = 26 - blocked * 7 - pmag / 26;
+          if (poolBallGroup(ball) === 'eight') score += diff === 'hard' ? 12 : 5;
+          if (diff === 'easy') score += (Math.random() - 0.5) * 22;
+          addCand(gx, gy, power, score, 'pocket');
+        });
+        addCand(
+          ball.x + (Math.random() - 0.5) * (diff === 'easy' ? 44 : 14),
+          ball.y + (Math.random() - 0.5) * (diff === 'easy' ? 44 : 14),
+          minP + Math.random() * 2.2,
+          7 - clearish(c.x, c.y, ball.x, ball.y, ball) * 3,
+          'contact'
+        );
+      });
+
+      if (!candidates.length) {
+        const any = balls.find((b) => !b.dead && !b.cue) || { x: centerX(), y: centerY() };
+        addCand(any.x, any.y, minP + 1.2, 1, 'nudge');
+      }
+
+      candidates.sort((a, b) => b.score - a.score);
+      let pick = candidates[0] || { vx: 0, vy: -5, score: 0, tx: centerX(), ty: centerY() };
+
+      if (diff === 'hard') {
+        const top = candidates.slice(0, Math.min(6, candidates.length));
+        pick = top[Math.floor(Math.random() * Math.min(3, top.length))] || pick;
+      } else if (diff === 'medium') {
+        const n = Math.min(5, candidates.length);
+        pick = candidates[Math.floor(Math.random() * n)] || pick;
+      } else {
+        pick = candidates[Math.floor(Math.random() * candidates.length)] || pick;
+      }
+
+      const ang = Math.atan2(pick.vy, pick.vx) + (Math.random() - 0.5) * jitter * 2;
+      let pow = Math.hypot(pick.vx, pick.vy) * (1 + (Math.random() - 0.5) * jitter);
+      pow = Math.max(2.8, Math.min(14, pow));
+      return {
+        vx: Math.cos(ang) * pow,
+        vy: Math.sin(ang) * pow,
+        tag: pick.tag,
+        aimX: pick.tx != null ? pick.tx : c.x + Math.cos(ang) * 90,
+        aimY: pick.ty != null ? pick.ty : c.y + Math.sin(ang) * 90,
+      };
+    }
+
+    function schedulePoolAiTurn() {
+      if (ended || liveOn || !isPool) return;
+      myTurn = false;
+      hint.textContent = 'AI aiming…';
+      updateHud();
+      if (oppTimer) clearTimeout(oppTimer);
+      const think =
+        difficulty === 'easy'
+          ? 400 + Math.random() * 280
+          : difficulty === 'hard'
+            ? 520 + Math.random() * 320
+            : 450 + Math.random() * 380;
+      oppTimer = setTimeout(() => {
+        oppTimer = 0;
+        if (ended || !shell.alive() || liveOn) return;
+        if (pauseCtrl && pauseCtrl.isPaused()) {
+          schedulePoolAiTurn();
+          return;
+        }
+        if (moving) {
+          oppTimer = setTimeout(() => {
+            oppTimer = 0;
+            if (!ended && !moving && !liveOn) firePoolAiShot();
+          }, 260);
+          return;
+        }
+        firePoolAiShot();
+      }, Math.min(900, Math.max(400, think)));
+    }
+
+    function firePoolAiShot() {
+      if (ended || liveOn || moving || !isPool) return;
+      const c0 = ensurePoolAiCue();
+      if (!c0) {
+        myTurn = true;
+        hint.textContent = 'Your shot.';
+        updateHud();
+        return;
+      }
+      const shot = planPoolAiShot();
+      aiAim = {
+        x: shot.aimX,
+        y: shot.aimY,
+        until: (typeof performance !== 'undefined' ? performance.now() : Date.now()) + 420,
+      };
+      hint.textContent = 'AI aiming…';
+      updateHud();
+      if (oppTimer) clearTimeout(oppTimer);
+      oppTimer = setTimeout(() => {
+        oppTimer = 0;
+        if (ended || !shell.alive() || moving || liveOn) return;
         strokeSeat = 'opp';
         strokePocketed = [];
         scratchThisStroke = false;
         firstContactGroup = null;
         strokeIsBreak = !breakDone;
         if (!breakDone) breakDone = true;
-
-        let targets;
-        if (openTable) {
-          targets = balls.filter((b) => !b.dead && !b.cue && poolBallGroup(b) !== 'eight');
-        } else if (groupIsClear('opp')) {
-          targets = balls.filter((b) => !b.dead && poolBallGroup(b) === 'eight');
-        } else {
-          targets = balls.filter((b) => !b.dead && !b.cue && poolBallGroup(b) === oppGroup);
-        }
-        if (!targets.length) {
+        movingFrames = 0;
+        const cue = cueBall();
+        if (!cue || cue.dead) {
           myTurn = true;
           hint.textContent = 'Your shot.';
           updateHud();
           return;
         }
-        const pick = targets[Math.floor(Math.random() * targets.length)];
-        pick.dead = true;
-        strokePocketed.push(pick);
-        buzz('place');
-        resolvePoolStroke();
+        let vx = shot.vx;
+        let vy = shot.vy;
+        if (Math.hypot(vx, vy) < 2.6) {
+          const ang = Math.atan2(vy || -1, vx || 0);
+          vx = Math.cos(ang) * 3.4;
+          vy = Math.sin(ang) * 3.4;
+        }
+        cue.vx = vx;
+        cue.vy = vy;
+        moving = true;
+        hint.textContent = 'AI shooting…';
+        updateHud();
+        buzz('stone');
+      }, 380);
+    }
+
+
+    function aiTurn() {
+      if (liveOn || isCarrom) return;
+      if (isPool) {
+        schedulePoolAiTurn();
         return;
       }
       const live = balls.filter((b) => !b.cue && !b.dead);
