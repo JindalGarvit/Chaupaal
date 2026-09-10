@@ -4466,6 +4466,11 @@ select:focus-visible,
 .profile-media-scrub>i{display:block;height:100%;width:0;background:var(--red);}
 
 /* ===== Five in a Row / Business / Scribble / Ank Jod ===== */
+.fir-setup-bars{display:flex;flex-direction:column;gap:4px;flex-shrink:0;}
+.fir-law-chip{text-align:center;font:600 11px "Space Grotesk",sans-serif;color:rgba(255,201,60,.9);padding:0 12px 4px;flex-shrink:0;}
+.fir-cell--illegal::after{content:"";position:absolute;inset:22%;border-radius:50%;border:1.5px dashed rgba(231,76,60,.55);pointer-events:none;z-index:1;}
+.fir-stone--ghost-illegal{opacity:.28!important;filter:hue-rotate(-20deg);box-shadow:0 0 0 1px rgba(231,76,60,.5)!important;}
+.fir-cell--ghost-illegal{outline:none;}
 .fir-size-bar{display:flex;gap:8px;justify-content:center;padding:6px 12px 0;flex-shrink:0;}
 .fir-size-btn{min-height:36px;padding:6px 12px;border-radius:10px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:rgba(255,255,255,.75);font:700 12px "Space Grotesk",sans-serif;cursor:pointer;}
 .fir-size-btn.is-active{border-color:#FFC93C;color:#FFC93C;background:rgba(255,201,60,.12);}

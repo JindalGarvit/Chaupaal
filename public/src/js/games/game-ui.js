@@ -130,9 +130,9 @@
       'Practice is a sealed sandbox — never touches streak or Daily stats',
     ],
     fiveinrow: [
-      '15×15 goban (Quick 13 in Practice) — connect five in a line',
-      'Ghost preview on empty points · last stone pulses · red dots flag fours',
-      'Watch diagonals as well as rows — block threats before extending yours',
+      'Freestyle: five+ wins (overlines count) · Renju: Black can’t double-three / double-four / overline',
+      '15×15 goban (Quick 13 in Practice) · ghost preview · last stone pulses',
+      'Exact five always wins for Black even if other patterns tangle',
     ],
     business: [
       'Complete colour sets, build houses evenly, collect rent',
