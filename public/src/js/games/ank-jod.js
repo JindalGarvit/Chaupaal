@@ -7,9 +7,10 @@
   'use strict';
 
   const DIFFS = [
-    { id: 'easy', label: 'Easy', desc: 'Short runs · small grid', emoji: '🌱' },
-    { id: 'medium', label: 'Medium', desc: 'Mixed runs · mid grid', emoji: '🔥' },
-    { id: 'hard', label: 'Hard', desc: 'Long runs · dense grid', emoji: '💀' },
+    { id: 'easy', label: 'Easy', desc: 'Short runs · small connected grid', emoji: '🌱' },
+    { id: 'medium', label: 'Medium', desc: 'Mid grid · connected runs', emoji: '🔥' },
+    { id: 'hard', label: 'Hard', desc: 'Denser whites · longer runs', emoji: '💀' },
+    { id: 'daily', label: 'Daily', desc: 'One seeded puzzle for today', emoji: '📅' },
   ];
 
   /** @type {Map<string, number[][]>} sum|len → combinations (sorted ascending) */
@@ -369,10 +370,6 @@
   // ─── Masks & generator ─────────────────────────────────────────────────────
 
   /**
-   * Mask chars: # wall, X clue seat, . white cell
-   * Clue seats become walls with across/down sums after a fill.
-   */
-  /**
    * Mask chars: # wall, X clue seat, . white cell.
    * Geometry: top-row X's sit on white columns; left-col X's start each across run.
    */
@@ -382,98 +379,103 @@
       ['######', '##XXX#', '#X...#', '#X...#', '######'],
       ['######', '##XX##', '#X..X#', '#X..##', '######'],
       ['#######', '##XXX##', '#X...X#', '#X...##', '#######'],
+      ['######', '##XX##', '#X..##', '#X..X#', '######'],
     ],
     medium: [
-      [
-        '########',
-        '##XX#XX#',
-        '#X..X..#',
-        '#X..X..#',
-        '##XX#XX#',
-        '#X..X..#',
-        '#X..X..#',
-        '########',
-      ],
-      [
-        '#######',
-        '##XX#XX',
-        '#X..X..',
-        '#X..X..',
-        '##XX#XX',
-        '#X..X..',
-        '#X..X##',
-        '#######',
-      ],
-      [
-        '########',
-        '##XXX#X#',
-        '#X...X.#',
-        '#X...X.#',
-        '##XXX#X#',
-        '#X...X.#',
-        '#X...X##',
-        '########',
-      ],
-      [
-        '#########',
-        '##XX#XX##',
-        '#X..X..##',
-        '#X..X..##',
-        '##XX#XX##',
-        '#X..X..##',
-        '#X..X..##',
-        '#########',
-      ],
+      ['#######', '##XXXX#', '#X....#', '#X...X#', '##XXX##', '#######'],
+      ['#######', '##XXX##', '#X...X#', '#X...##', '##XX###', '#######'],
+      ['########', '##XXXX##', '#X....X#', '#X....##', '##XXX###', '########'],
+      ['########', '##XXXXX#', '#X.....#', '#X....X#', '##XXXX##', '########'],
+      ['#######', '##XXXX#', '#X...X#', '#X...##', '#X..X##', '##XX###', '#######'],
     ],
     hard: [
-      [
-        '#########',
-        '##XXX#XX#',
-        '#X...X..#',
-        '#X...X..#',
-        '##XXX#XX#',
-        '#X...X..#',
-        '#X...X..#',
-        '#########',
-      ],
-      [
-        '##########',
-        '##XX#XX#X#',
-        '#X..X..X.#',
-        '#X..X..X.#',
-        '##XX#XX#X#',
-        '#X..X..X.#',
-        '#X..X..X.#',
-        '##########',
-      ],
-      [
-        '#########',
-        '##XXXX#X#',
-        '#X....X.#',
-        '#X....X.#',
-        '##XXXX#X#',
-        '#X....X.#',
-        '#X....X##',
-        '#########',
-      ],
-      [
-        '##########',
-        '##XXX#XXX#',
-        '#X...X...#',
-        '#X...X...#',
-        '##XXX#XXX#',
-        '#X...X...#',
-        '#X...X..##',
-        '##########',
-      ],
+      ['#########', '##XXXXXX#', '#X......#', '#X.....X#', '##XXXXX##', '#########'],
+      ['#########', '##XXXXX##', '#X.....X#', '#X.....##', '##XXXX###', '#########'],
+      ['########', '##XXXXX#', '#X.....#', '#X....X#', '##XXXX##', '########'],
+      ['##########', '##XXXXXXX#', '#X.......#', '#X......X#', '##XXXXXX##', '##########'],
+      ['#######', '##XXXX#', '#X....#', '#X...X#', '##XXX##', '#######'],
+      ['########', '##XXXX##', '#X....X#', '#X....##', '##XXX###', '########'],
     ],
   };
 
   const QUALITY = {
-    easy: { minWhites: 4, minRun: 2 },
-    medium: { minWhites: 12, minRun: 2 },
-    hard: { minWhites: 16, minRun: 2 },
+    easy: { minWhites: 4, minRun: 2, maxDim: 9 },
+    medium: { minWhites: 8, minRun: 2, maxDim: 12 },
+    hard: { minWhites: 10, minRun: 2, maxDim: 14 },
   };
+
+  function countWhites(board) {
+    let n = 0;
+    for (let r = 0; r < board.length; r++) {
+      for (let c = 0; c < board[0].length; c++) {
+        if (board[r][c].kind === 'cell') n++;
+      }
+    }
+    return n;
+  }
+
+  /** Orthogonal connectivity of all white cells — rejects island postage stamps. */
+  function whitesConnected(board) {
+    const rows = board.length;
+    const cols = board[0].length;
+    const whites = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (board[r][c].kind === 'cell') whites.push([r, c]);
+      }
+    }
+    if (!whites.length) return false;
+    const key = (r, c) => r + ',' + c;
+    const set = new Set(whites.map(([r, c]) => key(r, c)));
+    const seen = new Set([key(whites[0][0], whites[0][1])]);
+    const q = [whites[0]];
+    const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+    while (q.length) {
+      const [r, c] = q.shift();
+      for (let i = 0; i < dirs.length; i++) {
+        const rr = r + dirs[i][0];
+        const cc = c + dirs[i][1];
+        const k = key(rr, cc);
+        if (!set.has(k) || seen.has(k)) continue;
+        seen.add(k);
+        q.push([rr, cc]);
+      }
+    }
+    return seen.size === whites.length;
+  }
+
+  function structuralOk(board, minWhites) {
+    const runs = extractRuns(board);
+    if (!runs.length || runs.some((run) => run.cells.length < 2)) return false;
+    let whites = 0;
+    const coverCount = {};
+    for (let r = 0; r < board.length; r++) {
+      for (let c = 0; c < board[0].length; c++) {
+        if (board[r][c].kind === 'cell') {
+          whites++;
+          coverCount[r + ',' + c] = 0;
+        }
+      }
+    }
+    if (whites < (minWhites || 4)) return false;
+    if (board.length > 14 || board[0].length > 14) return false;
+    runs.forEach((run) =>
+      run.cells.forEach(([rr, cc]) => {
+        coverCount[rr + ',' + cc] = (coverCount[rr + ',' + cc] || 0) + 1;
+      })
+    );
+    if (!Object.keys(coverCount).every((k) => coverCount[k] >= 2)) return false;
+    for (let i = 0; i < runs.length; i++) {
+      if (!combosFor(runs[i].sum, runs[i].cells.length).length) return false;
+    }
+    return whitesConnected(board);
+  }
+
+  function puzzleQualityOk(board, difficulty) {
+    const q = QUALITY[difficulty] || QUALITY.easy;
+    if (board.length > q.maxDim || board[0].length > q.maxDim) return false;
+    return structuralOk(board, q.minWhites);
+  }
 
   function maskToSkeleton(mask) {
     return mask.map((row) =>
@@ -585,41 +587,14 @@
         }
         if (acrossN) board[r][c].across = acrossSum;
         if (downN) board[r][c].down = downSum;
-        // Clue seat with no runs → plain wall
+        // Clue seat with no runs -> plain wall
         if (!acrossN && !downN) board[r][c] = { kind: 'wall' };
       }
     }
     return board;
   }
 
-  function structuralOk(board, minWhites) {
-    const runs = extractRuns(board);
-    if (!runs.length || runs.some((run) => run.cells.length < 2)) return false;
-    let whites = 0;
-    const coverCount = {};
-    for (let r = 0; r < board.length; r++) {
-      for (let c = 0; c < board[0].length; c++) {
-        if (board[r][c].kind === 'cell') {
-          whites++;
-          coverCount[r + ',' + c] = 0;
-        }
-      }
-    }
-    if (whites < (minWhites || 4)) return false;
-    runs.forEach((run) =>
-      run.cells.forEach(([rr, cc]) => {
-        coverCount[rr + ',' + cc] = (coverCount[rr + ',' + cc] || 0) + 1;
-      })
-    );
-    return Object.keys(coverCount).every((k) => coverCount[k] >= 2);
-  }
-
-  function puzzleQualityOk(board, difficulty) {
-    const q = QUALITY[difficulty] || QUALITY.easy;
-    return structuralOk(board, q.minWhites);
-  }
-
-  /** Generate one unique puzzle from a single mask (retry until unique). */
+/** Generate one unique puzzle from a single mask (retry until unique). */
   function generateFromMask(mask, attempts) {
     const maxAttempts = attempts || 80;
     for (let n = 0; n < maxAttempts; n++) {
@@ -638,130 +613,32 @@
     return null;
   }
 
-  const BLOCK_MASKS = [
-    ['#####', '##XX#', '#X..#', '#X..#', '#####'],
-    ['######', '##XXX#', '#X...#', '#X...#', '######'],
-    ['######', '##XX##', '#X..X#', '#X..X#', '######'],
-  ];
-
-  /**
-   * Stamp a small unique block into a larger canvas at (row0,col0).
-   * Block boards include their own border walls.
-   */
-  function stampBlock(canvasBoard, canvasSol, block, row0, col0) {
-    const br = block.board.length;
-    const bc = block.board[0].length;
-    for (let r = 0; r < br; r++) {
-      for (let c = 0; c < bc; c++) {
-        const cell = block.board[r][c];
-        const tr = row0 + r;
-        const tc = col0 + c;
-        if (tr >= canvasBoard.length || tc >= canvasBoard[0].length) continue;
-        if (cell.kind === 'wall') {
-          // Don't overwrite existing clues/cells with walls when overlapping borders
-          if (canvasBoard[tr][tc].kind === 'wall') continue;
-          continue;
-        }
-        if (cell.kind === 'clue') {
-          canvasBoard[tr][tc] = { kind: 'clue', across: cell.across, down: cell.down };
-        } else if (cell.kind === 'cell') {
-          canvasBoard[tr][tc] = { kind: 'cell' };
-          canvasSol[tr][tc] = block.solution[r][c];
-        }
-      }
-    }
-  }
-
-  function makeCanvas(rows, cols) {
-    const board = Array.from({ length: rows }, () =>
-      Array.from({ length: cols }, () => ({ kind: 'wall' }))
-    );
-    const solution = emptyValues(rows, cols);
-    return { board, solution };
-  }
-
-  function trimBoard(board, solution) {
-    let r0 = 0;
-    let r1 = board.length - 1;
-    let c0 = 0;
-    let c1 = board[0].length - 1;
-    const rowEmpty = (r) => board[r].every((c) => c.kind === 'wall');
-    const colEmpty = (c) => board.every((row) => row[c].kind === 'wall');
-    while (r0 < r1 && rowEmpty(r0)) r0++;
-    while (r1 > r0 && rowEmpty(r1)) r1--;
-    while (c0 < c1 && colEmpty(c0)) c0++;
-    while (c1 > c0 && colEmpty(c1)) c1--;
-    // Keep content bounds (walls between islands stay)
-    const nb = [];
-    const ns = [];
-    for (let r = r0; r <= r1; r++) {
-      nb.push(board[r].slice(c0, c1 + 1));
-      ns.push(solution[r].slice(c0, c1 + 1));
-    }
-    return { board: nb, solution: ns };
-  }
-
+  /** Prefer single connected masks — composed stamps produced island seas. */
   function generateComposed(difficulty) {
-    const layouts =
-      difficulty === 'hard'
-        ? [
-            { rows: 12, cols: 13, positions: [[0, 0], [0, 6], [6, 0], [6, 6]] },
-            { rows: 12, cols: 14, positions: [[0, 0], [0, 7], [6, 0], [6, 7]] },
-          ]
-        : [
-            { rows: 11, cols: 13, positions: [[0, 0], [0, 6], [5, 3]] },
-            { rows: 12, cols: 12, positions: [[0, 0], [0, 6], [6, 0]] },
-          ];
-
-    const layout = layouts[Math.floor(Math.random() * layouts.length)];
-    const canvas = makeCanvas(layout.rows, layout.cols);
-
-    for (let i = 0; i < layout.positions.length; i++) {
-      const mask = BLOCK_MASKS[Math.floor(Math.random() * BLOCK_MASKS.length)];
-      const block = generateFromMask(mask, 150);
-      if (!block) return null;
-      stampBlock(canvas.board, canvas.solution, block, layout.positions[i][0], layout.positions[i][1]);
-    }
-
-    const trimmed = trimBoard(canvas.board, canvas.solution);
-    const minW = difficulty === 'hard' ? 16 : 12;
-    if (!structuralOk(trimmed.board, minW)) return null;
-
-    const blank = emptyValues(trimmed.board.length, trimmed.board[0].length);
-    if (!isUnique(trimmed.board, blank)) return null;
-    return {
-      board: trimmed.board,
-      solution: trimmed.solution,
-      source: 'composed',
-      difficulty,
-    };
+    return null;
   }
 
   function generateUniquePuzzle(difficulty, attempts) {
-    const diff = difficulty || 'easy';
-    const maxAttempts = attempts || (diff === 'hard' ? 40 : 30);
-    let stats = { fill: 0, quality: 0, unique: 0, solve: 0, composed: 0 };
-
-    if (diff === 'medium' || diff === 'hard') {
-      for (let n = 0; n < maxAttempts; n++) {
-        const composed = generateComposed(diff);
-        if (composed) return composed;
-        stats.composed++;
-      }
-    }
-
+    const diff = difficulty === 'daily' ? 'medium' : difficulty || 'easy';
+    const maxAttempts = attempts || (diff === 'hard' ? 50 : 36);
+    const q = QUALITY[diff] || QUALITY.easy;
     const masks = MASKS[diff] || MASKS.easy;
     for (let n = 0; n < maxAttempts; n++) {
       const mask = masks[Math.floor(Math.random() * masks.length)];
-      const got = generateFromMask(mask, 1);
-      if (got) {
-        return { board: got.board, solution: got.solution, source: 'generated', difficulty: diff };
-      }
-      stats.unique++;
+      const got = generateFromMask(mask, 3);
+      if (!got) continue;
+      if (!puzzleQualityOk(got.board, diff)) continue;
+      return { board: got.board, solution: got.solution, source: 'generated', difficulty: diff };
     }
-
-    if (typeof window !== 'undefined' && window.__ankJodLastGenStats) {
-      window.__ankJodLastGenStats[diff] = stats;
+    // Soft fallback: easier mask pool still unique + connected
+    if (diff !== 'easy') {
+      for (let n = 0; n < 20; n++) {
+        const mask = (MASKS.medium || MASKS.easy)[Math.floor(Math.random() * (MASKS.medium || MASKS.easy).length)];
+        const got = generateFromMask(mask, 4);
+        if (got && structuralOk(got.board, Math.max(6, q.minWhites - 2)) && whitesConnected(got.board)) {
+          return { board: got.board, solution: got.solution, source: 'generated', difficulty: diff };
+        }
+      }
     }
     return null;
   }
@@ -784,186 +661,386 @@
     return { board, solution: values };
   }
 
-  /** Verified unique banks (clues re-derived from digits; uniqueness gated in buildBank). */
+  /** Verified unique banks (clues re-derived; uniqueness + connectivity gated in buildBank). */
   const BANK_STRINGS = {
-    "easy": [
-      [
-        "######",
-        "##XXX#",
-        "#X317#",
-        "#X839#",
-        "######"
-      ],
-      [
-        "#####",
-        "##XX#",
-        "#X57#",
-        "#X91#",
-        "#####"
-      ],
-      [
-        "#####",
-        "##XX#",
-        "#X98#",
-        "#X73#",
-        "#####"
-      ],
-      [
-        "#####",
-        "##XX#",
-        "#X97#",
-        "#X83#",
-        "#####"
-      ],
-      [
-        "#####",
-        "##XX#",
-        "#X13#",
-        "#X57#",
-        "#####"
-      ],
-      [
-        "#####",
-        "##XX#",
-        "#X46#",
-        "#X98#",
-        "#####"
-      ]
+  easy: [
+    [
+      "#####",
+      "##XX#",
+      "#X68#",
+      "#X24#",
+      "#####"
     ],
-    "medium": [
-      [
-        "#XX####XX",
-        "X15###X89",
-        "X79###X47",
-        "#########",
-        "#########",
-        "#########",
-        "#XX######",
-        "X62######",
-        "X84######"
-      ],
-      [
-        "#XX####XX",
-        "X61###X97",
-        "X93###X83",
-        "#########",
-        "#########",
-        "#########",
-        "#XX######",
-        "X98######",
-        "X41######"
-      ],
-      [
-        "#XXX###XXX",
-        "X924##X617",
-        "X748##X849",
-        "##########",
-        "##########",
-        "####XX####",
-        "###X15####",
-        "###X38####"
-      ],
-      [
-        "#XX####XX",
-        "X97###X37",
-        "X72###X12",
-        "#########",
-        "#########",
-        "#########",
-        "#XX######",
-        "X91######",
-        "X83######"
-      ],
-      [
-        "#XX####XX",
-        "X17###X79",
-        "X39###X18",
-        "#########",
-        "#########",
-        "####XXX##",
-        "###X895##",
-        "###X231##"
-      ],
-      [
-        "#XX####XX",
-        "X53###X18",
-        "X91###X69",
-        "#########",
-        "#########",
-        "####XX###",
-        "###X21###",
-        "###X98###"
-      ]
+    [
+      "######",
+      "##XX##",
+      "#X17##",
+      "#X25X#",
+      "######"
     ],
-    "hard": [
-      [
-        "#XX#####XX",
-        "X76####X31",
-        "X98####X96",
-        "##########",
-        "##########",
-        "##########",
-        "#XXX####XX",
-        "X968###X93",
-        "X312###X61"
-      ],
-      [
-        "#XX####XX",
-        "X94###X72",
-        "X21###X91",
-        "#########",
-        "#########",
-        "#########",
-        "#XXX###XX",
-        "X614##X17",
-        "X859##X49"
-      ],
-      [
-        "#XXX###XX",
-        "X795##X97",
-        "X142##X54",
-        "#########",
-        "#########",
-        "#########",
-        "#XX####XX",
-        "X49###X49",
-        "X18###X87"
-      ],
-      [
-        "#XXX###XXX",
-        "X412##X249",
-        "X531##X187",
-        "##########",
-        "##########",
-        "##########",
-        "#XX####XX#",
-        "X23###X59#",
-        "X15###X78#"
-      ],
-      [
-        "#XX#####XX#",
-        "X38####X14#",
-        "X13####X29#",
-        "###########",
-        "###########",
-        "###########",
-        "#XX#####XXX",
-        "X94####X897",
-        "X71####X471"
-      ],
-      [
-        "#XX#####XXX",
-        "X71####X973",
-        "X97####X731",
-        "###########",
-        "###########",
-        "###########",
-        "#XXX####XX#",
-        "X183###X17#",
-        "X397###X39#"
-      ]
+    [
+      "######",
+      "##XXX#",
+      "#X984#",
+      "#X351#",
+      "######"
+    ],
+    [
+      "#####",
+      "##XX#",
+      "#X57#",
+      "#X89#",
+      "#####"
+    ],
+    [
+      "#####",
+      "##XX#",
+      "#X53#",
+      "#X89#",
+      "#####"
+    ],
+    [
+      "#####",
+      "##XX#",
+      "#X97#",
+      "#X32#",
+      "#####"
+    ],
+    [
+      "######",
+      "##XXX#",
+      "#X678#",
+      "#X289#",
+      "######"
+    ],
+    [
+      "######",
+      "##XXX#",
+      "#X298#",
+      "#X182#",
+      "######"
+    ],
+    [
+      "#####",
+      "##XX#",
+      "#X13#",
+      "#X52#",
+      "#####"
+    ],
+    [
+      "######",
+      "##XX##",
+      "#X18X#",
+      "#X39##",
+      "######"
+    ],
+    [
+      "######",
+      "##XXX#",
+      "#X279#",
+      "#X896#",
+      "######"
+    ],
+    [
+      "######",
+      "##XX##",
+      "#X21##",
+      "#X92X#",
+      "######"
+    ],
+    [
+      "######",
+      "##XX##",
+      "#X71X#",
+      "#X52##",
+      "######"
+    ],
+    [
+      "#######",
+      "##XXX##",
+      "#X214X#",
+      "#X132##",
+      "#######"
+    ],
+    [
+      "#####",
+      "##XX#",
+      "#X76#",
+      "#X98#",
+      "#####"
+    ],
+    [
+      "######",
+      "##XXX#",
+      "#X174#",
+      "#X298#",
+      "######"
+    ],
+    [
+      "#######",
+      "##XXX##",
+      "#X896X#",
+      "#X472##",
+      "#######"
+    ],
+    [
+      "######",
+      "##XXX#",
+      "#X986#",
+      "#X721#",
+      "######"
+    ],
+    [
+      "#####",
+      "##XX#",
+      "#X49#",
+      "#X68#",
+      "#####"
+    ],
+    [
+      "#####",
+      "##XX#",
+      "#X27#",
+      "#X19#",
+      "#####"
     ]
-  };
+  ],
+  medium: [
+    [
+      "########",
+      "##XXXX##",
+      "#X4169X#",
+      "#X2316##",
+      "##XXX###",
+      "########"
+    ],
+    [
+      "#######",
+      "##XXXX#",
+      "#X423X#",
+      "#X846##",
+      "#X91X##",
+      "##XX###",
+      "#######"
+    ],
+    [
+      "########",
+      "##XXXX##",
+      "#X1563X#",
+      "#X4978##",
+      "##XXX###",
+      "########"
+    ],
+    [
+      "########",
+      "##XXXX##",
+      "#X4261X#",
+      "#X7695##",
+      "##XXX###",
+      "########"
+    ],
+    [
+      "#######",
+      "##XXXX#",
+      "#X321X#",
+      "#X978##",
+      "#X81X##",
+      "##XX###",
+      "#######"
+    ],
+    [
+      "#######",
+      "##XXXX#",
+      "#X498X#",
+      "#X265##",
+      "#X58X##",
+      "##XX###",
+      "#######"
+    ],
+    [
+      "#######",
+      "##XXXX#",
+      "#X796X#",
+      "#X142##",
+      "#X27X##",
+      "##XX###",
+      "#######"
+    ],
+    [
+      "#######",
+      "##XXXX#",
+      "#X261X#",
+      "#X492##",
+      "#X12X##",
+      "##XX###",
+      "#######"
+    ],
+    [
+      "########",
+      "##XXXX##",
+      "#X7596X#",
+      "#X3182##",
+      "##XXX###",
+      "########"
+    ],
+    [
+      "########",
+      "##XXXX##",
+      "#X9371X#",
+      "#X8693##",
+      "##XXX###",
+      "########"
+    ],
+    [
+      "#######",
+      "##XXXX#",
+      "#X925X#",
+      "#X731##",
+      "#X31X##",
+      "##XX###",
+      "#######"
+    ],
+    [
+      "#######",
+      "##XXXX#",
+      "#X193X#",
+      "#X241##",
+      "#X32X##",
+      "##XX###",
+      "#######"
+    ],
+    [
+      "########",
+      "##XXXX##",
+      "#X9875X#",
+      "#X1523##",
+      "##XXX###",
+      "########"
+    ],
+    [
+      "########",
+      "##XXXX##",
+      "#X5798X#",
+      "#X2179##",
+      "##XXX###",
+      "########"
+    ],
+    [
+      "########",
+      "##XXXX##",
+      "#X7489X#",
+      "#X6195##",
+      "##XXX###",
+      "########"
+    ],
+    [
+      "########",
+      "##XXXX##",
+      "#X3241X#",
+      "#X8793##",
+      "##XXX###",
+      "########"
+    ]
+  ],
+  hard: [
+    [
+      "#########",
+      "##XXXXX##",
+      "#X12893X#",
+      "#X51682##",
+      "##XXXX###",
+      "#########"
+    ],
+    [
+      "#########",
+      "##XXXXX##",
+      "#X24613X#",
+      "#X76829##",
+      "##XXXX###",
+      "#########"
+    ],
+    [
+      "#########",
+      "##XXXXX##",
+      "#X18795X#",
+      "#X32571##",
+      "##XXXX###",
+      "#########"
+    ],
+    [
+      "#########",
+      "##XXXXX##",
+      "#X87935X#",
+      "#X65821##",
+      "##XXXX###",
+      "#########"
+    ],
+    [
+      "#########",
+      "##XXXXX##",
+      "#X31895X#",
+      "#X14632##",
+      "##XXXX###",
+      "#########"
+    ],
+    [
+      "#########",
+      "##XXXXX##",
+      "#X13257X#",
+      "#X37498##",
+      "##XXXX###",
+      "#########"
+    ],
+    [
+      "#########",
+      "##XXXXX##",
+      "#X51327X#",
+      "#X72689##",
+      "##XXXX###",
+      "#########"
+    ],
+    [
+      "#########",
+      "##XXXXX##",
+      "#X98613X#",
+      "#X36241##",
+      "##XXXX###",
+      "#########"
+    ],
+    [
+      "#########",
+      "##XXXXX##",
+      "#X39785X#",
+      "#X16398##",
+      "##XXXX###",
+      "#########"
+    ],
+    [
+      "#########",
+      "##XXXXX##",
+      "#X26135X#",
+      "#X87629##",
+      "##XXXX###",
+      "#########"
+    ],
+    [
+      "#########",
+      "##XXXXX##",
+      "#X18954X#",
+      "#X29713##",
+      "##XXXX###",
+      "#########"
+    ],
+    [
+      "#########",
+      "##XXXXX##",
+      "#X21375X#",
+      "#X65798##",
+      "##XXXX###",
+      "#########"
+    ]
+  ]
+};
 
   function buildBank() {
     const bank = { easy: [], medium: [], hard: [] };
@@ -973,7 +1050,7 @@
           const parsed = parseBankString(rows);
           const blank = emptyValues(parsed.board.length, parsed.board[0].length);
           const n = countSolutions(parsed.board, blank.map((r) => r.slice()), 2);
-          if (n === 1 && structuralOk(parsed.board, 4)) {
+          if (n === 1 && puzzleQualityOk(parsed.board, diff)) {
             bank[diff].push({
               board: parsed.board,
               solution: parsed.solution,
@@ -981,11 +1058,11 @@
               difficulty: diff,
               id: diff + '_' + i,
             });
-          } else {
+          } else if (typeof console !== 'undefined' && console.warn) {
             console.warn('[ank-jod] bank puzzle rejected (solutions=' + n + '):', diff, i);
           }
         } catch (e) {
-          console.warn('[ank-jod] bank parse failed', diff, i, e);
+          if (typeof console !== 'undefined' && console.warn) console.warn('[ank-jod] bank parse failed', diff, i, e);
         }
       });
     });
@@ -993,49 +1070,142 @@
   }
 
   const BANK = buildBank();
+  const usedBankIds = { easy: new Set(), medium: new Set(), hard: new Set() };
+  const GEN_CACHE = { easy: [], medium: [], hard: [] };
 
   function ensureBankFallback(diff) {
     if (BANK[diff] && BANK[diff].length) return;
-    const g = generateUniquePuzzle(diff, 40);
-    if (g) {
+    for (let i = 0; i < 3; i++) {
+      const g = generateUniquePuzzle(diff, 60);
+      if (g && puzzleQualityOk(g.board, diff)) {
+        BANK[diff] = [
+          {
+            board: g.board,
+            solution: g.solution,
+            source: 'fallback',
+            difficulty: diff,
+            id: diff + '_fallback_' + i,
+          },
+        ];
+        return;
+      }
+    }
+    // Last resort: known unique connected easy (still gates for connectivity)
+    const emergency = parseBankString(['#####', '##XX#', '#X12#', '#X35#', '#####']);
+    if (isUnique(emergency.board, emptyValues(5, 5)) && whitesConnected(emergency.board)) {
       BANK[diff] = [
         {
-          board: g.board,
-          solution: g.solution,
+          board: emergency.board,
+          solution: emergency.solution,
           source: 'fallback',
           difficulty: diff,
           id: diff + '_fallback',
         },
       ];
-      return;
     }
-    const emergency = parseBankString(['#####', '##XX#', '#X12#', '#X35#', '#####']);
-    BANK[diff] = [
-      {
-        board: emergency.board,
-        solution: emergency.solution,
-        source: 'fallback',
-        difficulty: diff,
-        id: diff + '_fallback',
-      },
-    ];
   }
 
   ['easy', 'medium', 'hard'].forEach(ensureBankFallback);
 
-  function pickPuzzle(difficulty) {
-    const diff = DIFFS.some((d) => d.id === difficulty) ? difficulty : 'easy';
-    // Prefer generator for variety; fall back to verified bank
-    const gen = generateUniquePuzzle(diff);
-    if (gen) return gen;
-    const list = BANK[diff] || BANK.easy;
-    const item = list[Math.floor(Math.random() * list.length)];
+  function dateSeedKey(d) {
+    const dt = d || new Date();
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, '0');
+    const day = String(dt.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  }
+
+  function hashSeed(str) {
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+
+  function pickDailyPuzzle() {
+    const key = dateSeedKey();
+    const seed = hashSeed('ankjod-daily-' + key);
+    const pool = [...(BANK.medium || []), ...(BANK.easy || []), ...(BANK.hard || [])];
+    if (pool.length) {
+      const item = pool[seed % pool.length];
+      return {
+        board: cloneBoard(item.board),
+        solution: item.solution.map((r) => r.slice()),
+        source: 'daily',
+        difficulty: 'daily',
+        id: 'daily_' + key,
+        dailyKey: key,
+      };
+    }
+    const gen = generateUniquePuzzle('medium', 40);
+    if (gen) {
+      return {
+        board: gen.board,
+        solution: gen.solution,
+        source: 'daily',
+        difficulty: 'daily',
+        id: 'daily_' + key,
+        dailyKey: key,
+      };
+    }
+    return pickPuzzle('easy');
+  }
+
+  function pickFromBank(diff) {
+    const list = BANK[diff] || [];
+    if (!list.length) return null;
+    const used = usedBankIds[diff] || (usedBankIds[diff] = new Set());
+    let unused = list.filter((p) => !used.has(p.id));
+    if (!unused.length) {
+      used.clear();
+      unused = list.slice();
+    }
+    const item = unused[Math.floor(Math.random() * unused.length)];
+    used.add(item.id);
     return {
       board: cloneBoard(item.board),
       solution: item.solution.map((r) => r.slice()),
       source: item.source,
       difficulty: diff,
       id: item.id,
+    };
+  }
+
+  function pickPuzzle(difficulty) {
+    if (difficulty === 'daily') return pickDailyPuzzle();
+    const diff = DIFFS.some((d) => d.id === difficulty) ? difficulty : 'easy';
+    // Prefer unused bank for variety, then fresh generation, then any bank
+    const fromBank = pickFromBank(diff);
+    const preferGen = Math.random() < 0.35;
+    if (!preferGen && fromBank) return fromBank;
+    const gen = generateUniquePuzzle(diff);
+    if (gen && puzzleQualityOk(gen.board, diff)) {
+      if (GEN_CACHE[diff] && GEN_CACHE[diff].length < 8) {
+        GEN_CACHE[diff].push(gen);
+      }
+      return gen;
+    }
+    if (fromBank) return fromBank;
+    if (GEN_CACHE[diff] && GEN_CACHE[diff].length) {
+      const g = GEN_CACHE[diff][Math.floor(Math.random() * GEN_CACHE[diff].length)];
+      return {
+        board: cloneBoard(g.board),
+        solution: g.solution.map((r) => r.slice()),
+        source: g.source || 'cache',
+        difficulty: diff,
+      };
+    }
+    const any = pickFromBank(diff) || pickFromBank('easy');
+    if (any) return any;
+    const emergency = parseBankString(['#####', '##XX#', '#X12#', '#X35#', '#####']);
+    return {
+      board: emergency.board,
+      solution: emergency.solution,
+      source: 'fallback',
+      difficulty: diff,
+      id: diff + '_emergency',
     };
   }
 
@@ -1141,7 +1311,7 @@
       ${gameChromeHtml({title:'Ank Jod',subtitle:'Choose difficulty',backId:'kkDiffBack'})}
       <div style="flex:1;overflow-y:auto;padding:20px 16px;">
         <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:22px;margin-bottom:6px;">Pick a challenge</div>
-        <div style="font-size:13px;color:var(--muted,#8A7F72);margin-bottom:18px;line-height:1.4;">Fill white cells with 1–9. No repeats in a run — and each run must add up to its clue.</div>
+        <div style="font-size:13px;color:var(--muted,#8A7F72);margin-bottom:18px;line-height:1.4;">Fill white cells with 1–9. No repeats in a run — each clue is that run’s sum. Pick Daily for today’s seeded board.</div>
         ${DIFFS.map(
           (d) => `
           <button data-diff="${d.id}" class="kk-diff-btn" style="width:100%;padding:16px;background:var(--white,#fff);border:2px solid var(--line,#E8E0D4);border-radius:16px;margin-bottom:10px;text-align:left;display:flex;align-items:center;gap:14px;cursor:pointer;">
@@ -1192,7 +1362,12 @@
   }
 
   function startAnkJodGame(ctx, difficulty) {
-    const puzzle = pickPuzzle(difficulty);
+    let puzzle;
+    try {
+      puzzle = pickPuzzle(difficulty);
+    } catch (e) {
+      puzzle = pickPuzzle('easy');
+    }
     const board = puzzle.board;
     const rows = board.length;
     const cols = board[0].length;
@@ -2244,7 +2419,7 @@
     registerGame({
       id: 'ankjod',
       name: 'Ank Jod',
-      desc: 'Cross-sums · easy / medium / hard · Solo',
+      desc: 'Cross-sums · Easy / Medium / Hard / Daily · Solo',
       icon: '🔢',
       ratingKey: 'ankjod',
       gameType: 'solo',
