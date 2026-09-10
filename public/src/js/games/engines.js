@@ -5028,22 +5028,12 @@ if(liveOn&&liveRoles){
 render();
 }
 
-// ===================== PROFESSIONAL SHABD FIVE =====================
-const VALID_WORDS=[
-  'PRESS','CHAIN','BLADE','FLINT','GROAN','PLUMB','CRATE','SWING','BRAVE','SHAFT','TROVE','QUILL','CHEST','FLAME','STORM','PRIDE','GLOBE','CRISP','BLOOM','DRAFT',
-  'CIVIC','GRAND','CLAIM','PIVOT','GRACE','CLOUD','EARTH','FAITH','LIGHT','MIGHT','NIGHT','PLAIN','QUEEN','RAISE','SAINT','TRAIL','UNITE','VOICE','WASTE','YIELD',
-  'ZONES','ABOUT','BEACH','CANDY','DENSE','EARLY','FANCY','GHOST','HAPPY','INDIE','JUICE','KNEEL','LASER','MAGIC','NAIVE','OCEAN','PIANO','QUIET','RIVER','SUGAR',
-  'TOUCH','ULTRA','VENOM','WORRY','XERIC','YOUNG','ZEBRA','ANGER','BLEND','CROSS','DAILY','EAGLE','FRESH','GREAT','HURRY','IDEAL','JOINT','KNOCK','LEGAL','MATCH',
-  'NOBLE','OFTEN','PAINT','RANGE','SLEEP','TRADE','UNDER','VITAL','WATER','APPLE','BREAD','BRICK','CHARM','DANCE','DREAM','FIELD','FOCUS','FORGE','FRUIT','GLASS',
-  'GRAIN','HEART','HONEY','HOUSE','IMAGE','IVORY','JELLY','JUDGE','LEMON','LEVEL','LUNAR','MANGO','METAL','MINTY','MOUSE','MUSIC','NORTH','NOVEL','OLIVE','OPERA',
-  'ORBIT','PEARL','PLANT','POISE','POWER','PRISM','RADIO','RIDGE','ROYAL','SCALE','SCOUT','SHARE','SHINE','SKILL','SOLID','SPICE','STONE','STORY','SWEET','TABLE',
-  'THORN','TIGER','TODAY','TOKEN','TREND','TRUST','URBAN','VALUE','VIVID','WHEAT','WIDOW','WORLD','WRIST','YACHT','YEAST','ADORE','ALERT','AMBER','ARROW','ATLAS',
-  'AUDIO','BASIL','BERRY','BOUND','BRAIN','BROOK','CABLE','CAMEL','CEDAR','CHALK','CIDER','CORAL','CROWN','DELTA','DIARY','DRIFT','EMBER','FABLE','FEAST','FLORA',
-  'ALBUM','ANGLE','APRON','BADGE','BASIN','BATCH','BISON','BLISS','BRUSH','CABIN','CANOE','CLOAK','CLOVE','COMET','CRANE','CREST','CURVE','DEITY','DOUBT','DWARF',
-  'ELBOW','EPOCH','EQUIP','FENCE','FJORD','FLUTE','FROST','GLINT','GRAPH','GROVE','GUARD','HAVEN','HEDGE','HIKER','HUMOR','INLET','JOKER','KARMA','LODGE','MOSSY'
-];
-const COMMON=VALID_WORDS.filter((w,i)=>i%2===0||['PRESS','CHAIN','BLADE','CRATE','CHEST','FLAME','STORM','PRIDE','CLOUD','EARTH','LIGHT','OCEAN','RIVER','MUSIC','STONE','HEART','DREAM','POWER','WORLD','TODAY'].includes(w));
-
+// ===================== SHABD FIVE =====================
+// Lexicon banks: data/shabd-answers.js + data/shabd-allowed.js via shabd-lexicon.js
+// Daily/Practice → answers; guess validation → allowed Set (O(1)).
+const SHABD_ANSWER_BANK=(typeof SHABD_ANSWERS!=='undefined'&&Array.isArray(SHABD_ANSWERS)&&SHABD_ANSWERS.length)
+  ?SHABD_ANSWERS
+  :['HOUSE','WORLD','HEART','DREAM','LIGHT','OCEAN','RIVER','MUSIC','STONE','POWER'];
 function shabdDailySeed(){
   const d=new Date();
   return d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate();
@@ -5052,14 +5042,24 @@ function shabdPickDaily(){
   const seed=shabdDailySeed();
   let x=Math.sin(seed*12.9898)*43758.5453;
   x=x-Math.floor(x);
-  return COMMON[Math.floor(x*COMMON.length)];
+  if(typeof pickShabdAnswer==='function')return pickShabdAnswer(()=>x);
+  return SHABD_ANSWER_BANK[Math.floor(x*SHABD_ANSWER_BANK.length)];
+}
+function isShabdGuessAllowed(guess){
+  if(typeof isAllowedShabd==='function')return isAllowedShabd(guess);
+  const w=String(guess||'').trim().toUpperCase();
+  return SHABD_ANSWER_BANK.indexOf(w)!==-1;
+}
+function pickShabdPractice(){
+  if(typeof pickShabdAnswer==='function')return pickShabdAnswer(Math.random);
+  return SHABD_ANSWER_BANK[Math.floor(Math.random()*SHABD_ANSWER_BANK.length)];
 }
 
 function openWordGuess(chat,opts){
 const overlay=document.createElement('div');
 overlay.style.cssText='position:absolute;inset:0;background:#121213;z-index:80;display:flex;flex-direction:column;';
 const useDaily=!opts||opts.daily!==false;
-const target=useDaily?shabdPickDaily():COMMON[Math.floor(Math.random()*COMMON.length)];
+const target=useDaily?shabdPickDaily():pickShabdPractice();
 let guesses=[];let currentGuess='';let gameOver=false;let shake=false;
 let keyColors={};let flippingRow=-1;let revealedCols=0;
 const kbHandler=e=>{
@@ -5271,7 +5271,7 @@ function handleInput(k){
   }
   else if(k==='↵'||k==='Enter'){
     if(currentGuess.length!==5){shake=true;if(typeof shakeInvalidMove==='function')shakeInvalidMove(document.getElementById('wgGrid'));else if(typeof gameFeedback==='function')gameFeedback('invalid');render();gs.schedule(()=>{shake=false;render();},500);return;}
-    if(!VALID_WORDS.includes(currentGuess)){if(typeof shakeInvalidMove==='function')shakeInvalidMove(document.getElementById('wgGrid'),{toast:'Not in word list'});else{showToast('Not in word list');if(typeof gameFeedback==='function')gameFeedback('invalid');}shake=true;render();gs.schedule(()=>{shake=false;render();},500);return;}
+    if(!isShabdGuessAllowed(currentGuess)){if(typeof shakeInvalidMove==='function')shakeInvalidMove(document.getElementById('wgGrid'),{toast:'Not in word list'});else{showToast('Not in word list');if(typeof gameFeedback==='function')gameFeedback('invalid');}shake=true;render();gs.schedule(()=>{shake=false;render();},500);return;}
     const guess=currentGuess;
     guesses.push(guess);currentGuess='';
     staggerReveal(guess,()=>{

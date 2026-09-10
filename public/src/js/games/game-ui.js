@@ -124,7 +124,11 @@
     ludo: ['Roll six to enter a piece', 'Tap a glowing piece to move', 'Capture rivals by landing on them'],
     uno: ['Match color or number', 'Tap Oh No! when you have one card', 'Wilds let you pick the next color'],
     ttt: ['Get three in a row', 'Block your opponent early', 'Center is often strongest'],
-    wordguess: ['Guess a valid 5-letter word', 'Green = right spot · amber = elsewhere', 'Daily word resets at midnight'],
+    wordguess: [
+      'Guess any real 5-letter word — answers are common; the guess list is huge',
+      'Green = right spot · amber = elsewhere · grey = not in the word',
+      'Daily word resets at midnight · Practice is a random answer anytime',
+    ],
     fiveinrow: ['Connect five in a line', 'Watch diagonals as well as rows', 'Block threats before extending yours'],
     business: ['Buy when you land on empty lots', 'Pay rent on owned properties', 'Richest player at the end wins'],
     scribble: ['Draw clearly — keep it simple', 'Guessers type in the chat box', 'Rounds rotate who draws'],
