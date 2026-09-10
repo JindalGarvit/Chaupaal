@@ -497,11 +497,14 @@
     const chat = resolveChat(spec.chat || arguments[0]);
     const liveOn = chatLiveOn(chat);
     const isCarrom = spec.id === 'carrom' || spec.variant === 'carrom';
+    const isPool = spec.id === 'pool' || spec.variant === 'pool';
     const cueSub = liveOn
       ? liveSub()
       : isCarrom
         ? 'Practice · AI'
-        : practiceSub(spec.subtitle || spec.title || 'vs AI');
+        : isPool
+          ? practiceSub(spec.subtitle || '8-ball · kitchen break')
+          : practiceSub(spec.subtitle || spec.title || 'vs AI');
     const shell = openShell({
       id: spec.id,
       title: spec.title,
@@ -642,7 +645,7 @@
           Number(spec.stake != null ? spec.stake : window.__dangalLaunchCtx && window.__dangalLaunchCtx.stake) || 0
         )
       : 0;
-    const settleMatchId = liveOn ? String(matchIdFor(chat, 'carrom') || '').trim() : '';
+    const settleMatchId = liveOn ? String(matchIdFor(chat, spec.id || 'carrom') || '').trim() : '';
     let settleOppUid = '';
     let settleDone = false;
     let sessionRecorded = false;
@@ -664,11 +667,15 @@
           (youColor === 'white' ? 'White' : 'Black') +
           (liveStake > 0 ? ' · Stake ⚡' + liveStake : ' · Friendly')
       );
+    } else if (isPool && liveOn) {
+      setChromeSubtitle('Live 1v1 · Pool' + (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly'));
+    } else if (isPool) {
+      setChromeSubtitle('Practice · 8-ball rack · kitchen break');
     }
 
     let coachDismissed = false;
     try {
-      coachDismissed = localStorage.getItem(spec.coachKey || 'chaupaal_cue_coach_v1') === '1';
+      coachDismissed = localStorage.getItem(spec.coachKey || (isPool ? 'chaupaal_pool_coach_v1' : 'chaupaal_cue_coach_v1')) === '1';
     } catch (e) {}
 
     const coachCopy = isCarrom
@@ -677,10 +684,16 @@
           (youColor === 'white' ? 'White (host breaks)' : 'Black') +
           '. Same Queen/foul rules. Only shoot on your turn.'
         : 'You shoot from the near baseline; AI from the far. Cover the Queen after one of yours.'
-      : 'Drag back on the cue ball to aim, release to shoot.';
+      : isPool
+        ? 'Break from the kitchen (behind the head string). Drag back on the cue to shoot.'
+        : 'Drag back on the cue ball to aim, release to shoot.';
 
-    shell.body.innerHTML = `<div class="pc-cue${isCarrom ? ' pc-cue--carrom' : ''}">
-      ${!coachDismissed && isCarrom ? `<div class="pc-cue-coach" data-cue-coach><span>${coachCopy}</span><button type="button" data-cue-coach-x>Got it</button></div>` : ''}
+    shell.body.innerHTML = `<div class="pc-cue${isCarrom ? ' pc-cue--carrom' : ''}${isPool ? ' pc-cue--pool' : ''}">
+      ${
+        !coachDismissed && (isCarrom || isPool)
+          ? `<div class="pc-cue-coach" data-cue-coach><span>${coachCopy}</span><button type="button" data-cue-coach-x>Got it</button></div>`
+          : ''
+      }
       <div class="pc-cue-hud" data-cue-hud>You 0 · Opp 0</div>
       <canvas data-cue aria-label="${spec.title || 'Cue'} board"></canvas>
       <p class="pc-hint" data-cue-hint>${
@@ -690,7 +703,9 @@
             : breaker === 'you'
               ? 'Your break — drag back on the striker.'
               : 'AI breaks…'
-          : 'Drag back on the cue ball to aim, release to shoot.'
+          : isPool
+            ? 'Break from the kitchen — drag cue sideways to place, then pull back to shoot.'
+            : 'Drag back on the cue ball to aim, release to shoot.'
       }</p>
     </div>`;
     const canvas = shell.body.querySelector('[data-cue]');
@@ -701,7 +716,10 @@
       coachEl.querySelector('[data-cue-coach-x]')?.addEventListener('click', () => {
         coachDismissed = true;
         try {
-          localStorage.setItem(spec.coachKey || 'chaupaal_cue_coach_v1', '1');
+          localStorage.setItem(
+            spec.coachKey || (isPool ? 'chaupaal_pool_coach_v1' : 'chaupaal_cue_coach_v1'),
+            '1'
+          );
         } catch (e) {}
         coachEl.remove();
       });
@@ -729,6 +747,9 @@
     const baselineY = () => seatBaselineY('you');
     const baselineXMin = () => W * 0.18;
     const baselineXMax = () => W * 0.82;
+    /** Pool: head at bottom; kitchen is behind (below) the head string. */
+    const headStringY = () => H * (spec.headStringY != null ? spec.headStringY : 0.72);
+    const kitchenY = () => H * (spec.kitchenY != null ? spec.kitchenY : youBaseFrac);
     const centerX = () => W / 2;
     const centerY = () => H * 0.42;
     let balls = [];
@@ -799,6 +820,26 @@
           `<div class="pc-cue-hud-row">Queen: ${queenStatusLabel()} · ${turn}` +
           (liveOn ? '' : ' · ' + (DIFF_LABEL[difficulty] || 'Medium')) +
           `</div>`;
+      } else if (isPool) {
+        const left = remaining();
+        const solids = balls.filter((b) => !b.dead && !b.cue && b.group === 'solid').length;
+        const stripes = balls.filter((b) => !b.dead && !b.cue && b.group === 'stripe').length;
+        const eightOut = balls.some((b) => b.dead && (b.kind === 'eight' || b.num === 8));
+        const turn = ended
+          ? 'Over'
+          : moving
+            ? 'Balls moving…'
+            : myTurn
+              ? breakDone
+                ? 'Your shot'
+                : 'Your break'
+              : liveOn
+                ? 'Opp turn'
+                : 'Opp turn';
+        hud.innerHTML =
+          `<div class="pc-cue-hud-row">On table <b>${left}</b> · solids ${solids} · stripes ${stripes}` +
+          (eightOut ? '' : ' · <b>8</b> live') +
+          `</div><div class="pc-cue-hud-row">You ${youPocketed} · Opp ${oppPocketed} · ${turn}</div>`;
       } else {
         hud.textContent = `You ${youPocketed} · Opp ${oppPocketed}`;
       }
@@ -898,7 +939,7 @@
     function resetCueToBaseline(opts) {
       const o = opts || {};
       const seat = o.seat || (myTurn ? 'you' : 'opp');
-      const by = isCarrom ? seatBaselineY(seat) : baselineY();
+      const by = isCarrom ? seatBaselineY(seat) : isPool ? kitchenY() : baselineY();
       const home = seat === 'opp' ? cueHomeXOpp : cueHomeX;
       let c = balls.find((b) => b.cue);
       if (!c) {
@@ -928,6 +969,7 @@
       if (o.foul) {
         strikerFoulHint = 90;
         buzz('reject');
+        if (isPool) hint.textContent = 'Scratch — cue ball back in the kitchen.';
       }
     }
 
@@ -940,6 +982,9 @@
         color: b.color,
         kind: b.kind || (b.cue ? 'striker' : ''),
         side: b.cue ? 'striker' : b.kind === 'queen' ? 'queen' : b.kind || '',
+        group: b.group || '',
+        num: b.num != null ? b.num : null,
+        stripe: !!b.stripe,
         r: ballRadius(b) / Math.min(W, H),
         id: b.id,
       }));
@@ -1024,6 +1069,9 @@
         cue: !!b.cue,
         color: b.color,
         kind: b.kind || b.side || '',
+        group: b.group || '',
+        num: b.num != null ? b.num : null,
+        stripe: !!b.stripe,
         r: b.r != null && b.r < 1 ? b.r * Math.min(W, H) : b.r || (b.cue ? cueR : ballR),
         id: b.id || 'b' + ballSeq++,
       }));
@@ -1150,17 +1198,34 @@
       aim.x = x;
       aim.y = y;
       const c = cueBall();
-      if (!c || !isCarrom) return;
-      const pull = Math.hypot(c.x - x, c.y - y);
-      const nearBase = Math.abs(c.y - seatBaselineY('you')) < 28;
-      if (nearBase && pull < 28 && Math.abs(x - c.x) > Math.abs(y - c.y)) {
-        dragging.mode = 'place';
-        c.x = Math.min(baselineXMax(), Math.max(baselineXMin(), x));
-        c.y = seatBaselineY('you');
-        cueHomeX = c.x;
-        dragging.placed = true;
-      } else if (pull >= 28) {
-        dragging.mode = 'aim';
+      if (!c) return;
+      // Pool: lateral place in kitchen (esp. before/during break); Carrom: baseline place
+      if (isCarrom) {
+        const pull = Math.hypot(c.x - x, c.y - y);
+        const nearBase = Math.abs(c.y - seatBaselineY('you')) < 28;
+        if (nearBase && pull < 28 && Math.abs(x - c.x) > Math.abs(y - c.y)) {
+          dragging.mode = 'place';
+          c.x = Math.min(baselineXMax(), Math.max(baselineXMin(), x));
+          c.y = seatBaselineY('you');
+          cueHomeX = c.x;
+          dragging.placed = true;
+        } else if (pull >= 28) {
+          dragging.mode = 'aim';
+        }
+        return;
+      }
+      if (isPool) {
+        const pull = Math.hypot(c.x - x, c.y - y);
+        const inKitchen = c.y >= headStringY() - 6;
+        if (inKitchen && pull < 30 && Math.abs(x - c.x) > Math.abs(y - c.y) * 0.85) {
+          dragging.mode = 'place';
+          c.x = Math.min(baselineXMax(), Math.max(baselineXMin(), x));
+          c.y = Math.min(H - cueR - 4, Math.max(headStringY() + cueR + 2, kitchenY()));
+          cueHomeX = c.x;
+          dragging.placed = true;
+        } else if (pull >= 30) {
+          dragging.mode = 'aim';
+        }
       }
     });
     canvas.addEventListener('pointerup', () => {
@@ -1170,7 +1235,11 @@
       dragging = null;
       if (!c || !canHumanAim()) return;
       if (wasPlace) {
-        hint.textContent = 'Striker placed — drag back to shoot.';
+        hint.textContent = isPool
+          ? breakDone
+            ? 'Cue placed in kitchen — drag back to shoot.'
+            : 'Break placed — drag back to shoot.'
+          : 'Striker placed — drag back to shoot.';
         return;
       }
       const dx = c.x - aim.x;
@@ -1182,6 +1251,7 @@
       strokeSeat = 'you';
       strokePocketed = [];
       movingFrames = 0;
+      if (isPool && !breakDone) breakDone = true;
       c.vx = (dx / mag) * p;
       c.vy = (dy / mag) * p;
       moving = true;
@@ -1232,15 +1302,28 @@
           b.vy *= -wallRest;
         }
         if (!b.cue && pocketed(b)) {
-          b.dead = true;
-          b.vx = b.vy = 0;
-          if (isCarrom) {
-            strokePocketed.push(b);
+          // Prompt 1 light rule: early 8 (others still out) → spot back, no score
+          if (
+            isPool &&
+            (b.kind === 'eight' || b.num === 8) &&
+            balls.some((o) => !o.dead && !o.cue && o !== b && o.kind !== 'eight' && o.num !== 8)
+          ) {
+            b.vx = 0;
+            b.vy = 0;
+            placeAtCenter(b);
+            hint.textContent = 'Early 8 — spotted back (full 8-ball rules next).';
+            buzz('reject');
           } else {
-            youPocketed += 1;
-            updateHud();
+            b.dead = true;
+            b.vx = b.vy = 0;
+            if (isCarrom) {
+              strokePocketed.push(b);
+            } else {
+              youPocketed += 1;
+              updateHud();
+            }
+            buzz('coin');
           }
-          buzz('coin');
         }
         if (b.cue && pocketed(b)) {
           b.vx = b.vy = 0;
@@ -1249,7 +1332,7 @@
             strokePocketed.push(b);
           } else {
             resetCueToBaseline({ foul: true });
-            hint.textContent = 'Cue pocketed — reset.';
+            if (!isPool) hint.textContent = 'Cue pocketed — reset.';
           }
         }
       });
@@ -1895,6 +1978,12 @@
       }
 
       if (!isCarrom) {
+        const sub =
+          (isPool ? 'Temporary clear-table score · ' : '') +
+          'Pocketed ' +
+          youPocketed +
+          ' · opponent ' +
+          oppPocketed;
         showDuelResult(shell, {
           id: spec.id,
           you: won ? 1 : 0,
@@ -1902,7 +1991,7 @@
           glyph: spec.glyph,
           pbScore: youPocketed,
           title: won ? 'You win' : 'Defeat',
-          subtitle: 'Pocketed ' + youPocketed + ' · opponent ' + oppPocketed,
+          subtitle: sub,
           shareText: (spec.title || 'Game') + ' on Chaupaal',
           onAgain: () => openCueGame(Object.assign({}, spec, { chat })),
         });
@@ -2100,7 +2189,13 @@
 
     function drawBoard() {
       if (typeof spec.drawBoard === 'function') {
-        spec.drawBoard(ctx2d, W, H, { pockets, pocketR, baselineY: baselineY() });
+        spec.drawBoard(ctx2d, W, H, {
+          pockets,
+          pocketR,
+          baselineY: baselineY(),
+          headStringY: isPool ? headStringY() : null,
+          kitchenY: isPool ? kitchenY() : null,
+        });
         return;
       }
       ctx2d.fillStyle = spec.felt;
@@ -2113,33 +2208,79 @@
       });
     }
 
+    function drawBallFace(b, r) {
+      ctx2d.beginPath();
+      ctx2d.arc(b.x, b.y, r, 0, Math.PI * 2);
+      ctx2d.fillStyle = b.color || '#ccc';
+      ctx2d.fill();
+      if (b.cue) {
+        ctx2d.strokeStyle = 'rgba(255,255,255,.9)';
+        ctx2d.lineWidth = 2;
+        ctx2d.stroke();
+        ctx2d.beginPath();
+        ctx2d.arc(b.x, b.y, r * 0.35, 0, Math.PI * 2);
+        ctx2d.fillStyle = 'rgba(0,0,0,.12)';
+        ctx2d.fill();
+        return;
+      }
+      if (b.kind === 'queen') {
+        ctx2d.strokeStyle = 'rgba(255,215,0,.7)';
+        ctx2d.lineWidth = 1.5;
+        ctx2d.stroke();
+        return;
+      }
+      // Pool numbered balls
+      if (isPool && b.num != null) {
+        if (b.stripe || b.group === 'stripe') {
+          ctx2d.fillStyle = '#f5f5f5';
+          ctx2d.fillRect(b.x - r, b.y - r * 0.38, r * 2, r * 0.76);
+          ctx2d.beginPath();
+          ctx2d.arc(b.x, b.y, r, 0, Math.PI * 2);
+          ctx2d.strokeStyle = 'rgba(0,0,0,.2)';
+          ctx2d.lineWidth = 1;
+          ctx2d.stroke();
+        }
+        if (b.kind === 'eight' || b.num === 8) {
+          ctx2d.strokeStyle = '#FFD600';
+          ctx2d.lineWidth = 2;
+          ctx2d.beginPath();
+          ctx2d.arc(b.x, b.y, r - 1, 0, Math.PI * 2);
+          ctx2d.stroke();
+        }
+        const spot = Math.max(5, r * 0.55);
+        ctx2d.beginPath();
+        ctx2d.arc(b.x, b.y, spot, 0, Math.PI * 2);
+        ctx2d.fillStyle = '#fff';
+        ctx2d.fill();
+        ctx2d.fillStyle = b.kind === 'eight' || b.num === 8 ? '#111' : '#111';
+        ctx2d.font = `bold ${Math.max(8, Math.floor(r * 0.85))}px sans-serif`;
+        ctx2d.textAlign = 'center';
+        ctx2d.textBaseline = 'middle';
+        ctx2d.fillText(String(b.num), b.x, b.y + 0.5);
+        return;
+      }
+      ctx2d.strokeStyle = 'rgba(0,0,0,.15)';
+      ctx2d.lineWidth = 1;
+      ctx2d.stroke();
+    }
+
     function draw() {
       drawBoard();
       balls.forEach((b) => {
         if (b.dead) return;
-        const r = ballRadius(b);
-        ctx2d.beginPath();
-        ctx2d.arc(b.x, b.y, r, 0, Math.PI * 2);
-        ctx2d.fillStyle = b.color;
-        ctx2d.fill();
-        if (b.cue) {
-          ctx2d.strokeStyle = 'rgba(255,255,255,.9)';
-          ctx2d.lineWidth = 2;
-          ctx2d.stroke();
-          ctx2d.beginPath();
-          ctx2d.arc(b.x, b.y, r * 0.35, 0, Math.PI * 2);
-          ctx2d.fillStyle = 'rgba(0,0,0,.12)';
-          ctx2d.fill();
-        } else if (b.kind === 'queen') {
-          ctx2d.strokeStyle = 'rgba(255,215,0,.7)';
-          ctx2d.lineWidth = 1.5;
-          ctx2d.stroke();
-        } else {
-          ctx2d.strokeStyle = 'rgba(0,0,0,.15)';
-          ctx2d.lineWidth = 1;
-          ctx2d.stroke();
-        }
+        drawBallFace(b, ballRadius(b));
       });
+      if (isPool && !breakDone) {
+        const hy = headStringY();
+        ctx2d.strokeStyle = 'rgba(255,255,255,.28)';
+        ctx2d.lineWidth = 1;
+        ctx2d.setLineDash([4, 4]);
+        ctx2d.beginPath();
+        ctx2d.moveTo(W * 0.1, hy);
+        ctx2d.lineTo(W * 0.9, hy);
+        ctx2d.stroke();
+        ctx2d.setLineDash([]);
+      }
       if (dragging && dragging.mode !== 'place') {
         const c = cueBall();
         if (c) {
@@ -2552,20 +2693,169 @@
     });
   }
 
+  function drawPoolBoard(ctx2d, W, H, opts) {
+    const o = opts || {};
+    const pockets = o.pockets || [];
+    const pocketR = o.pocketR || 18;
+    const hy = o.headStringY != null ? o.headStringY : H * 0.72;
+    // Rail
+    ctx2d.fillStyle = '#2e1a0f';
+    ctx2d.fillRect(0, 0, W, H);
+    const m = Math.min(W, H) * 0.035;
+    const felt = ctx2d.createLinearGradient(0, 0, 0, H);
+    felt.addColorStop(0, '#1b5e20');
+    felt.addColorStop(0.55, '#145a1f');
+    felt.addColorStop(1, '#0d3d14');
+    ctx2d.fillStyle = felt;
+    ctx2d.fillRect(m, m, W - 2 * m, H - 2 * m);
+    // Head string (kitchen behind it toward bottom)
+    ctx2d.strokeStyle = 'rgba(255,255,255,.22)';
+    ctx2d.lineWidth = 1.5;
+    ctx2d.beginPath();
+    ctx2d.moveTo(W * 0.12, hy);
+    ctx2d.lineTo(W * 0.88, hy);
+    ctx2d.stroke();
+    ctx2d.fillStyle = 'rgba(255,255,255,.2)';
+    ctx2d.font = '10px sans-serif';
+    ctx2d.textAlign = 'center';
+    ctx2d.fillText('kitchen', W / 2, Math.min(H - 8, hy + 14));
+    // Foot spot hint
+    ctx2d.beginPath();
+    ctx2d.arc(W / 2, H * 0.22, 2.5, 0, Math.PI * 2);
+    ctx2d.fillStyle = 'rgba(255,255,255,.25)';
+    ctx2d.fill();
+    pockets.forEach((p) => {
+      const px = p[0] * W;
+      const py = p[1] * H;
+      ctx2d.beginPath();
+      ctx2d.arc(px, py, pocketR, 0, Math.PI * 2);
+      ctx2d.fillStyle = '#0a0a0a';
+      ctx2d.fill();
+      ctx2d.strokeStyle = 'rgba(255,255,255,.12)';
+      ctx2d.lineWidth = 2;
+      ctx2d.stroke();
+    });
+  }
+
+  /** Full 15-ball triangle: solids 1–7, 8 center, stripes 9–15. Apex toward kitchen. */
+  function makePoolBalls(W, H, sizes) {
+    const r = (sizes && sizes.ballR) || 8;
+    const cr = (sizes && sizes.cueR) || 10;
+    const gap = r * 2.08;
+    const solidColors = {
+      1: '#f1c40f',
+      2: '#2980b9',
+      3: '#c0392b',
+      4: '#8e44ad',
+      5: '#e67e22',
+      6: '#27ae60',
+      7: '#6d1b1b',
+    };
+    const stripeColors = {
+      9: '#f1c40f',
+      10: '#2980b9',
+      11: '#c0392b',
+      12: '#8e44ad',
+      13: '#e67e22',
+      14: '#27ae60',
+      15: '#6d1b1b',
+    };
+    const apexX = W / 2;
+    const apexY = H * 0.18;
+    const slots = [];
+    for (let row = 0; row < 5; row++) {
+      const n = row + 1;
+      const y = apexY + row * gap * 0.866;
+      const rowW = (n - 1) * gap;
+      for (let i = 0; i < n; i++) {
+        slots.push({ x: apexX - rowW / 2 + i * gap, y, row, i, n });
+      }
+    }
+    const centerIdx = slots.findIndex((s) => s.row === 2 && s.i === 1);
+    const cornerL = slots.findIndex((s) => s.row === 4 && s.i === 0);
+    const cornerR = slots.findIndex((s) => s.row === 4 && s.i === 4);
+    const solids = [1, 2, 3, 4, 5, 6, 7];
+    const stripes = [9, 10, 11, 12, 13, 14, 15];
+    // Shuffle lightly for variety but keep corners different groups
+    for (let i = solids.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = solids[i];
+      solids[i] = solids[j];
+      solids[j] = t;
+    }
+    for (let i = stripes.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = stripes[i];
+      stripes[i] = stripes[j];
+      stripes[j] = t;
+    }
+    const assign = new Array(slots.length);
+    assign[centerIdx] = 8;
+    assign[cornerL] = solids.pop();
+    assign[cornerR] = stripes.pop();
+    const rest = solids.concat(stripes);
+    for (let i = rest.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = rest[i];
+      rest[i] = rest[j];
+      rest[j] = t;
+    }
+    let ri = 0;
+    for (let i = 0; i < assign.length; i++) {
+      if (assign[i] == null) assign[i] = rest[ri++];
+    }
+    const list = [];
+    // Cue in kitchen
+    list.push({
+      x: W / 2,
+      y: H * 0.84,
+      vx: 0,
+      vy: 0,
+      cue: true,
+      color: '#fafafa',
+      kind: 'striker',
+      r: cr,
+      id: 'cue',
+    });
+    slots.forEach((s, idx) => {
+      const num = assign[idx];
+      const isEight = num === 8;
+      const isStripe = num >= 9;
+      const color = isEight ? '#111111' : isStripe ? stripeColors[num] : solidColors[num];
+      list.push({
+        x: s.x,
+        y: s.y,
+        vx: 0,
+        vy: 0,
+        color,
+        num,
+        group: isEight ? 'eight' : isStripe ? 'stripe' : 'solid',
+        kind: isEight ? 'eight' : isStripe ? 'stripe' : 'solid',
+        stripe: isStripe,
+        r,
+        id: 'ball' + num,
+      });
+    });
+    return list;
+  }
+
   function openPool(ctx) {
     openCueGame({
       id: 'pool',
       variant: 'pool',
       title: 'Pool',
-      subtitle: 'Clear the table',
+      subtitle: '8-ball · kitchen break',
       chat: ctx,
       accent: '#1B3A2D',
       bg: '#0A1A10',
       felt: '#1b5e20',
       glyph: '🎱',
-      ballR: 9,
+      coachKey: 'chaupaal_pool_coach_v1',
+      ballR: 8,
       cueR: 10,
-      pocketR: 16,
+      pocketR: 18,
+      headStringY: 0.72,
+      kitchenY: 0.84,
       pockets: [
         [0.06, 0.06],
         [0.5, 0.04],
@@ -2574,23 +2864,8 @@
         [0.5, 0.96],
         [0.94, 0.94],
       ],
-      makeBalls(W, H, sizes) {
-        const r = (sizes && sizes.ballR) || 9;
-        const cr = (sizes && sizes.cueR) || 10;
-        const colors = ['#f44336', '#ffeb3b', '#2196f3', '#4caf50', '#ff9800', '#9c27b0', '#111'];
-        const list = [{ x: W / 2, y: H * 0.84, vx: 0, vy: 0, cue: true, color: '#fafafa', r: cr }];
-        colors.forEach((color, i) => {
-          list.push({
-            x: W / 2 - 22 + (i % 3) * 22,
-            y: H * 0.28 + Math.floor(i / 3) * 22,
-            vx: 0,
-            vy: 0,
-            color,
-            r,
-          });
-        });
-        return list;
-      },
+      drawBoard: drawPoolBoard,
+      makeBalls: makePoolBalls,
     });
   }
 
@@ -5439,7 +5714,7 @@
     const games = [
       { id: 'tambola', name: 'Tambola', desc: 'Ticket · full house', icon: '🎱', genre: 'party', launch: openTambola, order: 30 },
       { id: 'carrom', name: 'Carrom', desc: 'Live · stakes · AI', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
-      { id: 'pool', name: 'Pool', desc: 'Clear the felt', icon: '🎱', genre: 'board', launch: openPool, order: 32 },
+      { id: 'pool', name: 'Pool', desc: '8-ball rack · kitchen break', icon: '🎱', genre: 'board', launch: openPool, order: 32 },
       { id: 'rummy', name: 'Rummy', desc: 'Runs and sets', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
       { id: 'teenpatti', name: 'Teen Patti', desc: 'Boot, chaal, side-show · virtual chips', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
       { id: 'bluff', name: 'Bluff', desc: 'Pile claims · call · empty hand', icon: '🎭', genre: 'party', launch: openBluff, order: 35 },

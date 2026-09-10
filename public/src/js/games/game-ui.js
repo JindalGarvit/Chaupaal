@@ -169,7 +169,11 @@
     tambola: ['Numbers auto-daub on your ticket', 'Claim full house at 15', 'Caller races another ticket'],
     carrom: ['Pocket your colour', 'Queen then cover', 'Striker pocket is a foul'],
     uno: ['Match colour or number to play', 'Classic has optional house-rule toggles', "Shout 'Oh No!' at 1 card · Blaze hits harder · Flip switches sides"],
-    pool: ['Drag the cue ball to aim', 'Clear object balls', 'Scratch returns the cue'],
+    pool: [
+      'Break from the kitchen — place the cue behind the head string',
+      '15-ball rack with the 8 in the center (solids & stripes)',
+      'Scratch returns the cue to the kitchen · full 8-ball rules next',
+    ],
     rummy: ['Draw or take the discard', 'Discard one card', 'Declare when you have runs and sets'],
     teenpatti: [
       'Boot each hand — stacks carry across the ring (virtual chips)',
