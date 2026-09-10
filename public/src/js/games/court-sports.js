@@ -624,15 +624,15 @@
   }
 
   /**
-   * Kabaddi Prompt 1–3 — raid court, defense/tackle, PKL-lite scoring.
+   * Kabaddi Prompt 1–4 — raid court, defense/tackle, PKL-lite scoring, Live session.
    * Control (raid): tap-to-move raider.
    * Control (defend): select one living defender (focus), tap court to move them, Tackle when in range.
    * Breath: starts on first mid-line cross (prep in own half free).
    * Tackle: raider past mid / in anti, living defender within TACKLE_R for HOLD_NEED (shorter if 2+ in range).
    * Authority: raider client (or local Practice sim) commits outcomes via resolveKabaddiRaidEnd.
-   * Live: raidUid raids; other seat defends — no waiting-only screen.
+   * Live: raidUid raids; other seat defends — auto between-raid; settle once; rematch = new matchId.
    * Zones (y: 0=anti top … 1=home bottom): anti ≤0.48 · mid 0.5 · own ≥0.52 · bonus ~0.22.
-   * TO_WIN=5 · stakes/rematch meta = Prompt 4.
+   * TO_WIN=5 · Prompt 4: Live session + virtual stakes settle · Kabaddi v1 complete.
    */
   function openKabaddi() {
     const chat = resolveChat(arguments[0]);
@@ -644,11 +644,28 @@
     let defCoachShown = false;
     let syncAcc = 0;
     let lastPushAt = 0;
+    let betweenTimer = 0;
+    // Live stakes: settle ONCE on over/forfeit (virtual chips — not real money).
+    const liveStake = liveOn
+      ? Number(
+          (chat && chat.stake) ||
+            (window.__dangalLaunchCtx && window.__dangalLaunchCtx.stake) ||
+            0
+        ) || 0
+      : 0;
+    const settleMatchId = liveOn ? String(matchIdFor(chat, 'kabaddi') || '').trim() : '';
+    let settleOppUid = '';
+    let settleDone = false;
+    let resultReported = false;
+    let resultShown = false;
+
     const shell = openShell({
       id: 'kabaddi',
       title: 'Kabaddi',
       subtitle: liveOn
-        ? liveSub() + ' · Raid & defend'
+        ? liveSub() +
+          (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') +
+          ' · Raid & defend'
         : practiceSub('PKL-lite · raid · defend · DoD'),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
@@ -657,6 +674,10 @@
       bg: '#1A0800',
       pauseId: 'csKabaddiPause',
       cleanup: () => {
+        if (betweenTimer) {
+          clearTimeout(betweenTimer);
+          betweenTimer = 0;
+        }
         if (activeRaf) {
           cancelAnimationFrame(activeRaf);
           activeRaf = 0;
@@ -671,11 +692,41 @@
         pauseBtnId: 'csKabaddiPause',
         onPause() {
           raidPaused = true;
+          if (liveOn && liveHandle && !ended) {
+            lastPushAt = 0;
+            pushLive(
+              {
+                paused: true,
+                phase: phase,
+                raid: activeRaid ? publicRaidStub(activeRaid) : null,
+              },
+              { force: true }
+            );
+          }
         },
         onResume() {
           raidPaused = false;
+          if (liveOn && liveHandle && !ended) {
+            lastPushAt = 0;
+            pushLive(
+              {
+                paused: false,
+                phase: phase,
+                raid: activeRaid ? publicRaidStub(activeRaid) : null,
+              },
+              { force: true }
+            );
+          }
         },
-        onQuit: () => shell.close('dismissed'),
+        onQuit: () => {
+          confirmAndClose(shell, {
+            live: liveOn,
+            liveHandle: shell.liveHandle,
+            isPlaying: !ended && !resultShown,
+            title: 'Leave Kabaddi?',
+            body: 'This practice run will end.',
+          });
+        },
       });
     }
 
@@ -764,6 +815,146 @@
       if (typeof showToast === 'function') showToast(bits.join(' · '));
     }
 
+    function freshRematch() {
+      if (!liveOn) {
+        openKabaddi(chat);
+        return;
+      }
+      try {
+        const mid =
+          typeof dangalMatchId === 'function'
+            ? dangalMatchId('kabaddi', chat)
+            : 'kabaddi_' + Date.now();
+        if (window.__dangalLaunchCtx) {
+          window.__dangalLaunchCtx = Object.assign({}, window.__dangalLaunchCtx, {
+            matchId: mid,
+            gameId: 'kabaddi',
+            gameType: 'kabaddi',
+            stake: liveStake,
+          });
+        }
+        if (chat) {
+          chat.dangalMatchId = mid;
+          chat.stake = liveStake;
+        }
+      } catch (e) {}
+      openKabaddi(chat);
+    }
+
+    function reportKabaddiResult(won, isDraw, path) {
+      if (resultReported) return;
+      resultReported = true;
+      if (typeof recordGameResult === 'function') {
+        try {
+          recordGameResult('kabaddi', !!won && !isDraw, !!isDraw, {
+            live: !!liveOn,
+            stake: liveStake,
+            mode: liveOn ? 'live' : 'practice',
+            path: path || '',
+            score: you,
+          });
+        } catch (e) {}
+      }
+    }
+
+    async function settleKabaddiOnce(won, isDraw) {
+      if (!liveOn || settleDone) return null;
+      if (!settleMatchId || liveStake <= 0) {
+        settleDone = true;
+        return null;
+      }
+      if (!window.DangalEconomy || typeof DangalEconomy.reportGameEnd !== 'function') {
+        settleDone = true;
+        return null;
+      }
+      settleDone = true;
+      try {
+        const me = typeof getCurrentUid === 'function' ? getCurrentUid() : '';
+        const oppU = settleOppUid || (liveRoles && liveRoles.opp) || '';
+        return await DangalEconomy.reportGameEnd({
+          gameType: 'kabaddi',
+          result: isDraw ? 'draw' : won ? 'win' : 'loss',
+          won: !!won && !isDraw,
+          isDraw: !!isDraw,
+          matchId: settleMatchId,
+          sessionId: settleMatchId,
+          opponentUid: oppU,
+          stake: liveStake,
+          winnerUid: isDraw ? null : won ? me : oppU,
+        });
+      } catch (e) {
+        settleDone = false;
+        return null;
+      }
+    }
+
+    function finishMatch(opts) {
+      const o = opts || {};
+      if (resultShown) return;
+      resultShown = true;
+      ended = true;
+      phase = 'over';
+      if (betweenTimer) {
+        clearTimeout(betweenTimer);
+        betweenTimer = 0;
+      }
+      if (activeRaf) {
+        cancelAnimationFrame(activeRaf);
+        activeRaf = 0;
+      }
+      activeRaid = null;
+      if (liveRoles && liveRoles.opp) settleOppUid = liveRoles.opp;
+
+      const forfeit = !!o.forfeit;
+      const draw = !forfeit && you === opp;
+      const won = forfeit ? !!o.iWon : you > opp;
+      const baseSub = o.subtitle || '';
+      reportKabaddiResult(won, draw, baseSub);
+
+      if (liveOn && liveHandle && liveRoles && !o.skipLivePush && !applying) {
+        try {
+          liveHandle.push({
+            status: forfeit ? 'forfeit' : 'over',
+            winner: draw ? null : won ? liveRoles.me : liveRoles.opp,
+            state: {
+              scores: scoresForPush(),
+              emptyStreak: streakStateForPush(),
+              eventSeq,
+              phase: 'over',
+              msg: baseSub,
+            },
+          });
+        } catch (e) {}
+      }
+
+      settleKabaddiOnce(won, draw).then((settle) => {
+        let sub = baseSub;
+        if (liveOn && liveStake > 0) {
+          const cd = settle && settle.chipDelta != null ? Number(settle.chipDelta) : null;
+          sub +=
+            (sub ? ' · ' : '') +
+            (Number.isFinite(cd) && cd !== 0
+              ? 'Stake ' + (cd > 0 ? '+' : '') + cd + ' virtual'
+              : 'Virtual stakes · not real money');
+        }
+        showDuelResult(shell, {
+          id: 'kabaddi',
+          you: forfeit ? (won ? Math.max(you, TO_WIN) : you) : you,
+          opp: forfeit ? (won ? opp : Math.max(opp, TO_WIN)) : opp,
+          glyph: '💪',
+          pbScore: you,
+          subtitle: sub,
+          shareText:
+            'Kabaddi on Chaupaal: ' +
+            you +
+            '–' +
+            opp +
+            (liveOn && liveStake > 0 ? ' · virtual stakes' : ''),
+          onAgain: freshRematch,
+        });
+      });
+    }
+
     function inOwnHalf(y) {
       return y >= 0.52;
     }
@@ -834,6 +1025,7 @@
           alive: !!d.alive,
         })),
         breathPct: Math.max(0, Math.min(1, raid.breath / BREATH_MS)),
+        breathMs: Math.max(0, Math.round(raid.breath)),
         tagged: raid.tagged | 0,
         breathLive: !!raid.breathLive,
         allOut: livingDefs(raid).length === 0,
@@ -841,6 +1033,7 @@
         activeDef: raid.activeDef | 0,
         dod: !!raid.dod,
         crossedBonus: !!raid.crossedBonus,
+        paused: !!raidPaused,
       };
     }
 
@@ -1055,6 +1248,7 @@
 
       const summary = resolved.summary || endMsg || 'Raid over.';
       eventSeq += 1;
+      lastAppliedOutcomeSeq = eventSeq;
       const outcome = {
         seq: eventSeq,
         kind,
@@ -1119,7 +1313,11 @@
      * @param {{ iAmRaider: boolean }} role
      */
     function startRaid(role) {
-      if (!shell.alive() || ended) return;
+      if (!shell.alive() || ended || resultShown) return;
+      if (betweenTimer) {
+        clearTimeout(betweenTimer);
+        betweenTimer = 0;
+      }
       const iAmRaider = role && role.iAmRaider != null ? !!role.iAmRaider : !!myRaid;
       myRaid = iAmRaider;
 
@@ -1547,27 +1745,20 @@
 
     function next(msg) {
       if (you >= TO_WIN || opp >= TO_WIN) {
-        ended = true;
-        phase = 'between';
-        if (activeRaf) {
-          cancelAnimationFrame(activeRaf);
-          activeRaf = 0;
-        }
-        showDuelResult(shell, {
-          id: 'kabaddi',
-          you,
-          opp,
-          glyph: '💪',
-          pbScore: you,
-          subtitle: msg,
-          shareText: 'Kabaddi on Chaupaal: ' + you + '–' + opp,
-          onAgain: () => openKabaddi(chat),
-        });
+        finishMatch({ subtitle: msg || '', skipLivePush: true });
         return;
       }
 
+      phase = 'between';
+      const hint = myRaid
+        ? emptyStreakFor(true) >= DOD_EMPTY_NEED
+          ? 'Your raid next — DO OR DIE.'
+          : 'Your raid next.'
+        : emptyStreakFor(false) >= DOD_EMPTY_NEED
+          ? 'Defend next — they face DO OR DIE.'
+          : 'Your defense next.';
+
       if (liveOn) {
-        // Ready for our role on next raidUid — snap may already say go
         shell.body.innerHTML =
           '<div class="cs-kabaddi">' +
           '<div class="cs-rally-score">💪 <strong>' +
@@ -1579,17 +1770,20 @@
           esc(msg) +
           '</p>' +
           '<p class="cs-rally-hint">' +
-          (myRaid
-            ? emptyStreakFor(true) >= DOD_EMPTY_NEED
-              ? 'Your raid next — DO OR DIE.'
-              : 'Your raid next — get ready.'
-            : 'Your defense next — get ready.') +
-          '</p>' +
-          '<button type="button" class="cs-hit" data-ready>Ready</button>' +
+          esc(hint) +
+          ' Starting…</p>' +
+          '<button type="button" class="cs-hit" data-ready>Go</button>' +
           '</div>';
-        shell.body.querySelector('[data-ready]')?.addEventListener('click', () => {
+        const go = () => {
+          if (betweenTimer) {
+            clearTimeout(betweenTimer);
+            betweenTimer = 0;
+          }
           startRaid({ iAmRaider: myRaid });
-        });
+        };
+        shell.body.querySelector('[data-ready]')?.addEventListener('click', go);
+        if (betweenTimer) clearTimeout(betweenTimer);
+        betweenTimer = setTimeout(go, 850);
         return;
       }
 
@@ -1620,31 +1814,30 @@
     if (liveOn && typeof DangalLive !== 'undefined') {
       liveRoles = DangalLive.roles(chat);
       myRaid = !!liveRoles.host;
+      if (liveRoles.opp) settleOppUid = liveRoles.opp;
       liveHandle = DangalLive.join({
         gameType: 'kabaddi',
-        matchId: matchIdFor(chat, 'kabaddi'),
+        matchId: settleMatchId || matchIdFor(chat, 'kabaddi'),
         me: liveRoles.me,
         playerA: liveRoles.playerA,
         playerB: liveRoles.playerB,
         onSnap(val) {
-          if (!val || ended || !shell.alive()) return;
+          if (!val || ended || resultShown || !shell.alive()) return;
           if (val.status === 'forfeit' || val.status === 'over') {
             applying = true;
             if (val.state && val.state.scores) applyScores(val.state.scores);
-            ended = true;
-            if (activeRaf) {
-              cancelAnimationFrame(activeRaf);
-              activeRaf = 0;
-            }
-            showDuelResult(shell, {
-              id: 'kabaddi',
-              you,
-              opp,
-              glyph: '💪',
-              pbScore: you,
-              subtitle: val.status === 'forfeit' ? 'Forfeit' : '',
-              shareText: 'Kabaddi on Chaupaal: ' + you + '–' + opp,
-              onAgain: () => openKabaddi(chat),
+            applyStreakState(val.state || {});
+            const iWon = val.winner === liveRoles.me;
+            finishMatch({
+              subtitle:
+                val.status === 'forfeit'
+                  ? iWon
+                    ? 'Opponent left'
+                    : 'You forfeited'
+                  : (val.state && (val.state.msg || val.state.lastMsg)) || '',
+              forfeit: val.status === 'forfeit',
+              iWon,
+              skipLivePush: true,
             });
             applying = false;
             return;
@@ -1653,11 +1846,18 @@
           if (st.scores) applyScores(st.scores);
           applyStreakState(st);
           if (st.eventSeq != null) eventSeq = Math.max(eventSeq, st.eventSeq | 0);
+          if (st.paused != null) raidPaused = !!st.paused;
 
           if (st.outcome && applyOutcomeRemote(st)) return;
 
-          // Defender input → raider authority
-          if (st.defInput && st.defInput.by === liveRoles.opp && activeRaid && activeRaid.iAmRaider) {
+          // Defender input → raider authority (reject wrong seat)
+          if (
+            st.defInput &&
+            st.defInput.by === liveRoles.opp &&
+            activeRaid &&
+            activeRaid.iAmRaider &&
+            !activeRaid.over
+          ) {
             remoteDefInput = st.defInput;
           }
 
@@ -1670,6 +1870,9 @@
             }
             if (typeof r.breathPct === 'number') {
               activeRaid.breath = r.breathPct * BREATH_MS;
+              activeRaid.breathLive = !!r.breathLive;
+            } else if (typeof r.breathMs === 'number') {
+              activeRaid.breath = r.breathMs;
               activeRaid.breathLive = !!r.breathLive;
             }
             if (r.tagged != null) activeRaid.tagged = r.tagged | 0;
@@ -1688,16 +1891,19 @@
             if (r.crossedBonus) activeRaid.crossedBonus = true;
           }
 
-          if (st.raidUid === liveRoles.me) {
+          // Only auto-enter mat when phase is actively raiding (avoid between-raid zombies)
+          if (st.phase === 'raiding' && st.raidUid === liveRoles.me) {
             myRaid = true;
             if (!(activeRaid && !activeRaid.over && activeRaid.iAmRaider)) {
               startRaid({ iAmRaider: true });
             }
-          } else if (st.raidUid) {
+          } else if (st.phase === 'raiding' && st.raidUid) {
             myRaid = false;
             if (!(activeRaid && !activeRaid.over && !activeRaid.iAmRaider)) {
               startRaid({ iAmRaider: false });
             }
+          } else if (st.raidUid != null) {
+            myRaid = st.raidUid === liveRoles.me;
           }
         },
       });
@@ -1712,7 +1918,9 @@
             raidUid: liveRoles.me,
             eventSeq: 0,
             phase: 'between',
+            paused: false,
             raid: null,
+            stake: liveStake,
           },
         });
       }
@@ -2870,7 +3078,7 @@
     registerGame({
       id: 'kabaddi',
       name: 'Kabaddi',
-      desc: 'PKL-lite · empty · bonus · DoD · all-out',
+      desc: 'Raid, tackle, home · PKL-lite Live',
       icon: '💪',
       gameType: 'solo',
       genre: 'rw_sports',
