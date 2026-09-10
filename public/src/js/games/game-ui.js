@@ -153,9 +153,9 @@
       'Per-format bests on your card — Live friend bowling later',
     ],
     gullykick: [
-      'Drag the net to aim · hold Kick and watch the keeper’s lean',
-      'Blast the opposite corner · soft same-side chips get saved',
-      'Five kicks · Practice — shootout shapes next',
+      'Drag aim, hold Kick, read the keeper’s lean — then strike',
+      'Classic 5 · Sudden Death (streak until miss) · Pressure (need 4/5)',
+      'Practice shootout — per-format bests on your card',
     ],
     badminton: ['Serve, then smash in the timing window', 'Rallies get faster', 'First to 7'],
     tabletennis: ['Short window — stay early, not late', 'First to 11', 'Opponent misses if you keep returning'],
@@ -196,7 +196,10 @@
     streetcricket_nets: { key: 'chaupaal_pb_streetcricket_nets', label: ' clean', higherBetter: true },
     streetcricket_chase: { key: 'chaupaal_pb_streetcricket_chase', label: ' runs', higherBetter: true },
     streetcricket_chase_wins: { key: 'chaupaal_pb_streetcricket_chase_wins', label: ' wins', higherBetter: true },
-    gullykick: { key: 'chaupaal_pb_gullykick', label: 'goals', higherBetter: true },
+    gullykick: { key: 'chaupaal_pb_gullykick', label: ' goals', higherBetter: true },
+    gullykick_classic: { key: 'chaupaal_pb_gullykick_classic', label: '/5', higherBetter: true },
+    gullykick_sd: { key: 'chaupaal_pb_gullykick_sd', label: ' streak', higherBetter: true },
+    gullykick_pressure: { key: 'chaupaal_pb_gullykick_pressure', label: ' clears', higherBetter: true },
     badminton: { key: 'chaupaal_pb_badminton', label: 'pts', higherBetter: true },
     tabletennis: { key: 'chaupaal_pb_tabletennis', label: 'pts', higherBetter: true },
     pickleball: { key: 'chaupaal_pb_pickleball', label: 'pts', higherBetter: true },
@@ -521,8 +524,28 @@
     } catch (e) {}
   }
 
+  /** Gully Kick per-format PB ids. Legacy `gullykick` maps to Classic. */
+  function gullyKickPbGameId(format) {
+    const f = String(format || 'classic').toLowerCase();
+    if (f === 'sudden' || f === 'sd') return 'gullykick_sd';
+    if (f === 'pressure') return 'gullykick_pressure';
+    return 'gullykick_classic';
+  }
+
+  function migrateGullyKickPb() {
+    try {
+      const classicKey = 'chaupaal_pb_gullykick_classic';
+      const legacyKey = 'chaupaal_pb_gullykick';
+      if (localStorage.getItem(classicKey) == null || localStorage.getItem(classicKey) === '') {
+        const legacy = localStorage.getItem(legacyKey);
+        if (legacy != null && legacy !== '') localStorage.setItem(classicKey, legacy);
+      }
+    } catch (e) {}
+  }
+
   function getGamePB(gameId) {
     if (gameId === 'streetcricket_over' || gameId === 'streetcricket') migrateStreetCricketPb();
+    if (gameId === 'gullykick_classic' || gameId === 'gullykick') migrateGullyKickPb();
     const meta = PB_KEYS[gameId];
     if (!meta) return null;
     const raw = localStorage.getItem(meta.key);
@@ -542,6 +565,16 @@
       }
       if (gameId === 'streetcricket') {
         return getGamePB('streetcricket_over');
+      }
+      if (gameId === 'gullykick_classic') {
+        const legacy = localStorage.getItem('chaupaal_pb_gullykick');
+        if (legacy != null && legacy !== '') {
+          const n = Number(legacy);
+          return Number.isFinite(n) ? n : null;
+        }
+      }
+      if (gameId === 'gullykick') {
+        return getGamePB('gullykick_classic');
       }
       return null;
     }
@@ -568,6 +601,11 @@
       if (gameId === 'streetcricket_over') {
         try {
           localStorage.setItem('chaupaal_pb_streetcricket', String(next));
+        } catch (e) {}
+      }
+      if (gameId === 'gullykick_classic') {
+        try {
+          localStorage.setItem('chaupaal_pb_gullykick', String(next));
         } catch (e) {}
       }
       return next;
@@ -2338,6 +2376,8 @@
   window.ankJodPbGameId = ankJodPbGameId;
   window.streetCricketPbGameId = streetCricketPbGameId;
   window.migrateStreetCricketPb = migrateStreetCricketPb;
+  window.gullyKickPbGameId = gullyKickPbGameId;
+  window.migrateGullyKickPb = migrateGullyKickPb;
   window.buildGameShareCard = buildGameShareCard;
   window.buildBeatScoreLink = buildBeatScoreLink;
   window.shareGameResult = shareGameResult;

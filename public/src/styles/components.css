@@ -4245,6 +4245,11 @@ select:focus-visible,
   text-align:center;
 }
 .rw-gk-kick{width:100%;min-height:48px;touch-action:none;user-select:none;}
+.rw-gk-moment{
+  margin:6px 0 0;text-align:center;font:500 13px/1.35 var(--font-ui,system-ui);
+  color:var(--muted,#555);
+}
+.rw-gk-picker h2{margin-top:0;}
 
 .rw-sports-outcome{
   font:700 18px/1.2 var(--font-display);min-height:1.2em;margin:0 0 8px;

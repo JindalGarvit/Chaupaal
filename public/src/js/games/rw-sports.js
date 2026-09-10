@@ -1244,12 +1244,18 @@
   }
 
 
-  /** Gully Kick — Practice: strike craft + keeper mind (Prompt 2/3). */
+  /** Gully Kick — Practice shootout: Classic / SD / Pressure (Prompt 3/3). */
   function openGullyKick() {
     let scored = 0;
     let taken = 0;
     const MAX = 5;
-    let phase = 'aim'; // aim | flight | result | done
+    const PRESSURE_NEED = 4;
+    let formatId = 'classic';
+    let streak = 0;
+    let runBestStreak = 0;
+    let sessionWon = false;
+    let endReason = '';
+    let phase = 'pick'; // pick | aim | flight | result | done
     let lastResult = '';
     let lastDive = 'C';
     let lastDiveHeight = 'mid';
@@ -1268,6 +1274,49 @@
     let pendingDive = null;
     let coachShown = false;
     const COACH_KEY = 'chaupaal_gk_coach_v2';
+    const FORMAT_KEY = 'chaupaal_gk_format_v3';
+
+    const FORMATS = {
+      classic: {
+        id: 'classic',
+        label: 'Classic',
+        blurb: '5 kicks — score as many as you can',
+      },
+      sudden: {
+        id: 'sudden',
+        label: 'Sudden Death',
+        blurb: 'Survive until the first miss',
+      },
+      pressure: {
+        id: 'pressure',
+        label: 'Pressure',
+        blurb: 'Need 4 goals from 5 kicks',
+      },
+    };
+
+    const loadSavedFormat = () => {
+      try {
+        const v = localStorage.getItem(FORMAT_KEY);
+        if (v && FORMATS[v]) return v;
+      } catch (e) {}
+      return 'classic';
+    };
+
+    const saveFormat = (id) => {
+      try {
+        localStorage.setItem(FORMAT_KEY, id);
+      } catch (e) {}
+    };
+
+    const fmt = () => FORMATS[formatId] || FORMATS.classic;
+
+    const pbIdForFormat = (id) => {
+      const f = id || formatId;
+      if (typeof gullyKickPbGameId === 'function') return gullyKickPbGameId(f);
+      if (f === 'sudden') return 'gullykick_sd';
+      if (f === 'pressure') return 'gullykick_pressure';
+      return 'gullykick_classic';
+    };
 
     try {
       coachShown = localStorage.getItem(COACH_KEY) === '1';
@@ -1285,13 +1334,23 @@
       charging = false;
     };
 
-    const { body, gs } = mountSportsShell({
+    const { overlay, body, gs } = mountSportsShell({
       gameId: 'gullykick',
       title: 'Gully Kick',
       accent: '#2D6A4F',
       onClose: clearTimers,
     });
     if (!body) return;
+
+    const setChromeSub = (text) => {
+      const el =
+        overlay.querySelector('.game-chrome-subtitle') ||
+        overlay.querySelector('.game-chrome-sub');
+      if (el) el.textContent = text;
+    };
+
+    if (typeof migrateGullyKickPb === 'function') migrateGullyKickPb();
+    formatId = loadSavedFormat();
 
     const diveLabel = (d) => (d === 'L' ? 'left' : d === 'R' ? 'right' : 'center');
     const heightLabel = (h) => (h === 'low' ? 'low' : h === 'high' ? 'high' : 'mid');
@@ -1398,11 +1457,13 @@
       if (pendingDive.tellStrength === 'strong') el.classList.add('is-tell-strong');
     };
 
-    const reset = () => {
-      clearTimers();
+    const beginSession = () => {
       scored = 0;
       taken = 0;
-      phase = 'aim';
+      streak = 0;
+      runBestStreak = 0;
+      sessionWon = false;
+      endReason = '';
       lastResult = '';
       lastDive = 'C';
       lastDiveHeight = 'mid';
@@ -1414,7 +1475,205 @@
       power = 0.55;
       locked = false;
       pendingDive = null;
+      setChromeSub('Practice · ' + fmt().label);
+    };
+
+    const reset = () => {
+      clearTimers();
+      beginSession();
+      phase = 'aim';
       render();
+    };
+
+    const showPicker = () => {
+      clearTimers();
+      phase = 'pick';
+      setChromeSub('Practice · pick format');
+      render();
+    };
+
+    const startSelected = () => {
+      saveFormat(formatId);
+      beginSession();
+      phase = 'aim';
+      render();
+      if (typeof gameFeedback === 'function') gameFeedback('select');
+    };
+
+    const formatBestBlurb = (id) => {
+      if (typeof getGamePB !== 'function') return 'No best yet';
+      const pbId = pbIdForFormat(id);
+      const p = getGamePB(pbId);
+      if (id === 'sudden') return p != null ? `Best streak ${p}` : 'No best yet';
+      if (id === 'pressure') return p != null ? `Best ${p} clear${p === 1 ? '' : 's'}` : 'No clears yet';
+      return p != null ? `Best ${p}/5` : 'No best yet';
+    };
+
+    const scoreHud = () => {
+      if (formatId === 'sudden') {
+        const allTime =
+          typeof getGamePB === 'function' && getGamePB('gullykick_sd') != null
+            ? ` · Best ${getGamePB('gullykick_sd')}`
+            : '';
+        return `Streak ${streak} · best this run ${runBestStreak}${allTime}`;
+      }
+      if (formatId === 'pressure') {
+        const left = Math.max(0, MAX - taken);
+        const clears =
+          typeof getGamePB === 'function' && getGamePB('gullykick_pressure') != null
+            ? ` · Best ${getGamePB('gullykick_pressure')} clears`
+            : '';
+        return `${scored}/${PRESSURE_NEED} needed · ${left} kick${left === 1 ? '' : 's'} left${clears}`;
+      }
+      const pb =
+        typeof getGamePB === 'function' && getGamePB('gullykick_classic') != null
+          ? ` · Best ${getGamePB('gullykick_classic')}/${MAX}`
+          : '';
+      return `${scored} scored · ${taken}/${MAX} taken${pb}`;
+    };
+
+    const evaluateEnd = () => {
+      if (formatId === 'sudden') {
+        if (!lastGoal) {
+          return { done: true, won: false, reason: lastOutcomeKind === 'over' ? 'over' : 'save' };
+        }
+        return { done: false, won: false, reason: '' };
+      }
+      if (formatId === 'pressure') {
+        if (scored >= PRESSURE_NEED) {
+          return { done: true, won: true, reason: 'cleared' };
+        }
+        const left = MAX - taken;
+        if (scored + left < PRESSURE_NEED) {
+          return { done: true, won: false, reason: 'impossible' };
+        }
+        if (taken >= MAX) {
+          return { done: true, won: false, reason: 'kicks' };
+        }
+        return { done: false, won: false, reason: '' };
+      }
+      // classic
+      if (taken >= MAX) {
+        return { done: true, won: false, reason: 'kicks' };
+      }
+      return { done: false, won: false, reason: '' };
+    };
+
+    const pickMomentLine = () => {
+      if (!lastKick) return lastResult || '';
+      if (
+        lastKick.goal &&
+        lastKick.tell &&
+        lastKick.tell !== 'N' &&
+        lastKick.side &&
+        lastKick.side !== lastKick.tell
+      ) {
+        return 'Wrong-footed the lean';
+      }
+      return lastResult || lastKick.label || '';
+    };
+
+    const buildResultOpts = () => {
+      const f = fmt();
+      const pbGameId = pbIdForFormat();
+      const moment = pickMomentLine();
+      const scoreHtml = moment ? `<p class="rw-gk-moment">${esc(moment)}</p>` : '';
+      const actions = [
+        { label: 'Kick again', primary: true, id: 'again' },
+        { label: 'Change format', primary: false, id: 'changeFormat' },
+        { label: 'Share', primary: false, id: 'share' },
+      ];
+      const base = {
+        title: 'Gully Kick',
+        glyph: '⚽',
+        onAgain: reset,
+        onChangeFormat: showPicker,
+        actions,
+        challenge: false,
+        hideStats: true,
+        hideMissions: true,
+        scoreHtml,
+        againLabel: 'Kick again',
+        recordExtra: {
+          format: formatId,
+          formatId,
+          mode: formatId,
+          variant: formatId,
+        },
+        gs,
+      };
+
+      if (formatId === 'sudden') {
+        return Object.assign(base, {
+          updatePb: streak > 0,
+          pbGameId,
+          unit: ' streak',
+          resultTitle: 'Sudden death — run ended',
+          subtitle: `Streak ${streak}`,
+          scoreLine: `SD streak ${streak}`,
+          score: streak,
+          vsBest:
+            streak > 0 && typeof formatVsBest === 'function'
+              ? formatVsBest(pbGameId, streak)
+              : typeof getGamePB === 'function' && getGamePB(pbGameId) != null
+                ? `Best ${getGamePB(pbGameId)} streak`
+                : '',
+          shareText: `SD streak ${streak} — Gully Kick on Chaupaal`,
+          won: false,
+        });
+      }
+
+      if (formatId === 'pressure') {
+        const clearsPrev =
+          typeof getGamePB === 'function' ? getGamePB('gullykick_pressure') || 0 : 0;
+        const clearsNow = sessionWon ? clearsPrev + 1 : clearsPrev;
+        let vsBest = '';
+        if (typeof formatVsBest === 'function') {
+          vsBest = formatVsBest(pbGameId, clearsNow > 0 ? clearsNow : clearsPrev || 0);
+        }
+        if (!vsBest && clearsPrev > 0) {
+          vsBest = `Best ${clearsPrev} clear${clearsPrev === 1 ? '' : 's'}`;
+        } else if (sessionWon) {
+          vsBest = vsBest || `${clearsNow} clear${clearsNow === 1 ? '' : 's'}`;
+        }
+        return Object.assign(base, {
+          updatePb: false,
+          pbGameId,
+          unit: ' clears',
+          resultTitle: sessionWon ? 'Pressure cleared' : 'Pressure failed',
+          subtitle: `${scored}/${MAX} · need ${PRESSURE_NEED}`,
+          scoreLine: sessionWon
+            ? `Pressure cleared ${scored}/${MAX}`
+            : `Pressure ${scored}/${MAX}`,
+          score: scored,
+          vsBest,
+          shareText: sessionWon
+            ? `Pressure cleared ${scored}/${MAX} — Gully Kick on Chaupaal`
+            : `Pressure ${scored}/${MAX} — Gully Kick on Chaupaal`,
+          won: sessionWon,
+          onAfterPb: () => {
+            if (sessionWon && typeof setGamePB === 'function') {
+              const prev =
+                typeof getGamePB === 'function' ? getGamePB('gullykick_pressure') || 0 : 0;
+              setGamePB('gullykick_pressure', prev + 1);
+            }
+          },
+        });
+      }
+
+      // classic
+      return Object.assign(base, {
+        updatePb: true,
+        pbGameId,
+        unit: '/5',
+        resultTitle: scored === 0 ? 'No goals this round' : 'Shootout over',
+        subtitle: `${scored} / ${MAX} goals`,
+        scoreLine: `${scored}/${MAX}`,
+        score: scored,
+        vsBest: typeof formatVsBest === 'function' ? formatVsBest(pbGameId, scored) : '',
+        shareText: `${scored}/${MAX} Classic Gully Kick on Chaupaal`,
+        won: false,
+      });
     };
 
     const paintAimMarker = () => {
@@ -1637,6 +1896,10 @@
           if (typeof gameFeedback === 'function') gameFeedback('lose', { noConfetti: true });
         } else if (resolved.goal) {
           scored += 1;
+          if (formatId === 'sudden') {
+            streak += 1;
+            if (streak > runBestStreak) runBestStreak = streak;
+          }
           if (typeof gameFeedback === 'function') gameFeedback('win', { noConfetti: true });
         } else if (typeof gameFeedback === 'function') {
           gameFeedback('lose', { noConfetti: true });
@@ -1647,13 +1910,18 @@
             window.__gkKickLog = kickLog.slice();
           }
         } catch (e) {}
+        const endEval = evaluateEnd();
+        if (endEval.done) {
+          sessionWon = !!endEval.won;
+          endReason = endEval.reason || '';
+        }
         phase = 'result';
         locked = false;
         render();
         resultTimer = setTimeout(() => {
           resultTimer = null;
           if (phase !== 'result') return;
-          if (taken >= MAX) phase = 'done';
+          if (endEval.done) phase = 'done';
           else {
             phase = 'aim';
             power = 0.55;
@@ -1759,28 +2027,49 @@
       }
     };
 
-    const render = () => {
-      if (phase === 'done') {
-        clearTimers();
-        const empty = scored === 0;
-        finishPractice('gullykick', scored, body, {
-          title: 'Gully Kick',
-          glyph: '⚽',
-          unit: ' goals',
-          resultTitle: empty ? 'No goals this round' : 'Shootout over',
-          subtitle: `${scored} / ${MAX} goals`,
-          scoreLine: `${scored}/${MAX}`,
-          shareText: `I scored ${scored}/${MAX} in Gully Kick on Chaupaal!`,
-          againLabel: 'Kick again',
-          onAgain: reset,
-          gs,
+    const wirePicker = () => {
+      body.querySelectorAll('[data-format]').forEach((el) => {
+        el.addEventListener('click', () => {
+          const id = el.getAttribute('data-format');
+          if (!FORMATS[id]) return;
+          formatId = id;
+          body.querySelectorAll('[data-format]').forEach((b) => {
+            b.classList.toggle('is-selected', b.getAttribute('data-format') === formatId);
+          });
         });
+      });
+      body.querySelector('[data-rw-start]')?.addEventListener('click', startSelected);
+    };
+
+    const render = () => {
+      if (phase === 'pick') {
+        if (typeof migrateGullyKickPb === 'function') migrateGullyKickPb();
+        const cards = ['classic', 'sudden', 'pressure']
+          .map((id) => {
+            const f = FORMATS[id];
+            return `<button type="button" class="rw-sc-format${formatId === id ? ' is-selected' : ''}" data-format="${id}">
+              <span class="rw-sc-format-title">${f.label}</span>
+              <span class="rw-sc-format-blurb">${f.blurb}</span>
+              <span class="rw-sc-format-best">${formatBestBlurb(id)}</span>
+            </button>`;
+          })
+          .join('');
+        body.innerHTML = `
+          <div class="rw-sports-card rw-gk-card rw-gk-picker">
+            <h2>Gully Kick</h2>
+            <p class="rw-sports-hint">Practice shootout — Classic, Sudden Death, or Pressure.</p>
+            <div class="rw-sc-formats" role="listbox" aria-label="Format">${cards}</div>
+            <button type="button" class="btn btn--primary rw-gk-kick" data-rw-start>Start</button>
+          </div>`;
+        wirePicker();
         return;
       }
-      const pb =
-        typeof getGamePB === 'function' && getGamePB('gullykick') != null
-          ? ` · Best ${getGamePB('gullykick')}/${MAX}`
-          : '';
+      if (phase === 'done') {
+        clearTimers();
+        const opts = buildResultOpts();
+        finishPractice('gullykick', opts.score != null ? opts.score : scored, body, opts);
+        return;
+      }
       const end = lastKick
         ? lastKick.over
           ? { x: lastKick.endX != null ? lastKick.endX : 50, y: -8 }
@@ -1820,8 +2109,8 @@
 
       body.innerHTML = `
         <div class="rw-sports-card rw-gk-card">
-          <h2>Gully Kick</h2>
-          <p class="rw-sports-score">${scored} scored · ${taken}/${MAX} taken${pb}</p>
+          <h2>${esc(fmt().label)}</h2>
+          <p class="rw-sports-score" data-rw-hud>${scoreHud()}</p>
           <div class="rw-sports-goal rw-gk-goal" data-gk-goal>
             <div class="rw-gk-pitch" aria-hidden="true"></div>
             <div class="rw-sports-net rw-gk-net" data-gk-net
@@ -1857,6 +2146,7 @@
       if (phase === 'aim') wireAim();
     };
 
+    setChromeSub('Practice · pick format');
     render();
   }
 
@@ -1882,7 +2172,7 @@
     registerGame({
       id: 'gullykick',
       name: 'Gully Kick',
-      desc: 'Practice · read the keeper',
+      desc: 'Practice · Classic / SD / Pressure',
       icon: '⚽',
       ratingKey: 'gullykick',
       gameType: 'solo',
