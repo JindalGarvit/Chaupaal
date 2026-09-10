@@ -5262,8 +5262,18 @@ function startTicTacToe(chat, difficulty){
 const diff=difficulty||'hard';
 const liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat);
 const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat):null;
+const liveStake=liveOn
+  ?Number((chat&&chat.stake)!=null?chat.stake:(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.stake)||0)||0
+  :0;
+const settleMatchId=liveOn
+  ?String((chat&&chat.dangalMatchId)||(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.matchId)||'').trim()
+  :'';
+let settleOppUid=(liveRoles&&liveRoles.opp)||'';
+let settleDone=false;
+let resultSettling=false;
+let sessionRecorded=false;
 const DIFF_LABEL=liveOn
-  ?(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel?DangalLive.modeChromeLabel(true):'Live 1v1')
+  ?(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel?DangalLive.modeChromeLabel(true):'Live 1v1')+(liveStake>0?` · Stake ⚡${liveStake}`:'')
   :(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel
     ?DangalLive.modeChromeLabel(false,diff==='easy'?'Easy':diff==='medium'?'Medium':'Hard')
     :('Practice · '+(diff==='easy'?'Easy':diff==='medium'?'Medium':'Hard')));
@@ -5275,7 +5285,10 @@ const gs=beginGameOverlaySession({
   type:'ttt',title:'Tic-Tac-Toe',mode:liveOn?'live':'practice',chat,overlay,
   cleanup(){
     if(liveHandle&&!leaveConfirmed){
-      try{liveHandle.leave({forfeit:!gameOver});}catch(e){try{liveHandle.leave();}catch(e2){}}
+      try{
+        if(liveOn&&!gameOver)settleTttOnce(false,false);
+        liveHandle.leave({forfeit:!gameOver});
+      }catch(e){try{liveHandle.leave();}catch(e2){}}
     }
   },
 });
@@ -5286,18 +5299,120 @@ let applyingLive=false;
 const myMark=(!liveRoles||liveRoles.myColor==='w')?'X':'O';
 const oppMark=myMark==='X'?'O':'X';
 
+async function settleTttOnce(won,isDraw){
+  if(!liveOn||settleDone)return null;
+  if(!settleMatchId||liveStake<=0){
+    settleDone=true;
+    return null;
+  }
+  if(!window.DangalEconomy||typeof DangalEconomy.reportGameEnd!=='function'){
+    settleDone=true;
+    return null;
+  }
+  settleDone=true;
+  try{
+    const me=typeof getCurrentUid==='function'?getCurrentUid():'';
+    const oppU=settleOppUid||(liveRoles&&liveRoles.opp)||'';
+    return await DangalEconomy.reportGameEnd({
+      gameType:'ttt',
+      result:isDraw?'draw':won?'win':'loss',
+      won:!!won&&!isDraw,
+      isDraw:!!isDraw,
+      matchId:settleMatchId,
+      sessionId:settleMatchId,
+      opponentUid:oppU,
+      stake:liveStake,
+      winnerUid:isDraw?null:(won?me:oppU),
+    });
+  }catch(e){
+    settleDone=false;
+    return null;
+  }
+}
+
+function noteTttSession(won,isDraw){
+  if(sessionRecorded)return;
+  sessionRecorded=true;
+  if(typeof recordGameResult==='function')recordGameResult('ttt',!!won,!!isDraw);
+  if(typeof recordDuelStreak==='function')recordDuelStreak(chat.id||chat.name,!!won,!!isDraw);
+  if(typeof recordDangalSession==='function'){
+    recordDangalSession('ttt',{
+      won:!!won&&!isDraw,
+      drew:!!isDraw,
+      score:isDraw?0:(won?1:0),
+      stake:liveStake,
+      live:!!liveOn,
+    });
+  }
+}
+
+function paintTttSettle(settle){
+  const el=overlay.querySelector('.game-result-sub')||overlay.querySelector('#tttSettleNote');
+  if(!el||!liveOn)return;
+  el.id='tttSettleNote';
+  if(liveStake>0){
+    const cd=settle&&settle.chipDelta!=null?Number(settle.chipDelta):null;
+    el.textContent=Number.isFinite(cd)&&cd!==0
+      ?('Stake '+(cd>0?'+':'')+cd+' virtual · not real money')
+      :'Virtual stakes · not real money';
+  } else {
+    el.textContent='Live 1v1 · Friendly';
+  }
+}
+
+function queueTttSettle(won,isDraw){
+  if(!liveOn||resultSettling)return;
+  resultSettling=true;
+  settleTttOnce(won,isDraw).then(settle=>{
+    if(!gs.alive())return;
+    paintTttSettle(settle);
+  });
+}
+
+/** Settle-per-board: one 3×3 = one matchId settle; Live rematch = new matchId + scores 0–0. */
+function freshTttRematch(){
+  if(!liveOn){
+    resetTtt();
+    return;
+  }
+  try{
+    const mid=typeof dangalMatchId==='function'
+      ?dangalMatchId('ttt',chat)
+      :'ttt_'+Date.now();
+    if(window.__dangalLaunchCtx){
+      window.__dangalLaunchCtx=Object.assign({},window.__dangalLaunchCtx,{
+        matchId:mid,
+        gameId:'ttt',
+        gameType:'ttt',
+        stake:liveStake,
+      });
+    }
+    if(chat){
+      chat.dangalMatchId=mid;
+      chat.stake=liveStake;
+    }
+  }catch(e){}
+  leaveConfirmed=true;
+  try{if(liveHandle)liveHandle.leave({forfeit:false});}catch(e){}
+  liveHandle=null;
+  gs.close('restart');
+  startTicTacToe(chat,'live');
+}
+
 async function askTttLeave(){
-  if(!liveHandle&&showResult){gs.close();return;}
+  if(gameOver||showResult){gs.close();return;}
+  const leaveBody=liveOn?'You’ll forfeit this Live match.':'This run will end.';
   if(typeof DangalLive!=='undefined'&&DangalLive.requestLeave){
     const ok=await DangalLive.requestLeave({
-      liveHandle,isPlaying:!!liveHandle||!gameOver,title:'Leave Tic-Tac-Toe?',body:'This run will end.',
+      liveHandle,isPlaying:!gameOver,title:'Leave Tic-Tac-Toe?',body:leaveBody,
       onLeave:()=>{leaveConfirmed=true;liveHandle=null;},
     });
     if(!ok)return;
   }else if(typeof confirmLeaveGame==='function'){
-    const ok=await confirmLeaveGame({title:'Leave Tic-Tac-Toe?',body:'This run will end.'});
+    const ok=await confirmLeaveGame({title:'Leave Tic-Tac-Toe?',body:leaveBody});
     if(!ok)return;
   }
+  if(liveOn&&!gameOver)settleTttOnce(false,false);
   gs.close();
 }
 
@@ -5336,6 +5451,10 @@ function winLineSvg(){
 
 function endRound(outcome){
   showResult=true;
+  const isDraw=outcome==='draw';
+  const won=outcome==='won';
+  noteTttSession(won,isDraw);
+  queueTttSettle(won,isDraw);
   gs.setOutcome(outcome);
   render();
 }
@@ -5352,7 +5471,7 @@ function render(){
     ? gameResultHtml({
         gameId: 'ttt',
         title: winLine?(board[winLine[0]]===myMark?'You win!':`${chat.name} wins`):"It's a draw",
-        subtitle: DIFF_LABEL+(typeof getDuelStreak==='function'&&getDuelStreak(chat.id||chat.name)?.streak>1?` · Streak ${getDuelStreak(chat.id||chat.name).streak}`:''),
+        subtitle: DIFF_LABEL+(typeof getDuelStreak==='function'&&getDuelStreak(chat.id||chat.name)?.streak>1?` · Streak ${getDuelStreak(chat.id||chat.name).streak}`:'')+(liveOn&&liveStake>0?' · settling…':''),
         you: scores.me,
         opp: scores.opp,
         youLabel: 'You',
@@ -5360,7 +5479,7 @@ function render(){
         glyph: winLine?(board[winLine[0]]===myMark?'✕':'⭕'):'—',
         shareCardHtml: typeof buildGameShareCard==='function'?buildGameShareCard('ttt',{scoreLine:`${scores.me}–${scores.opp}`,vs:`vs ${chat.name}`,meta:DIFF_LABEL}):'',
         actions: [
-          {label:'Play again',primary:true,id:'again'},
+          {label:liveOn?'Rematch':'Play again',primary:true,id:'again'},
           {label:'Share',primary:false,id:'share'},
           {label:'Challenge friend',primary:false,id:'challenge'},
           {label:'Post to story',primary:false,id:'story'},
@@ -5377,9 +5496,17 @@ function render(){
       ${winLineSvg()}
     </div>
     ${showResult?resultBlock:turnBanner}
-    ${!showResult?`<button id="tttNew" class="game-tap-target" style="padding:12px 32px;background:${gameOver?'var(--game-accent,var(--red))':'rgba(255,255,255,0.1)'};color:#fff;border:none;border-radius:var(--game-btn-radius,14px);font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;cursor:pointer;min-height:44px;">New game</button>`:''}
+    ${!showResult&&!liveOn?`<button id="tttNew" class="game-tap-target" style="padding:12px 32px;background:${gameOver?'var(--game-accent,var(--red))':'rgba(255,255,255,0.1)'};color:#fff;border:none;border-radius:var(--game-btn-radius,14px);font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;cursor:pointer;min-height:44px;">New game</button>`:''}
   `;
   if(typeof prepareGameOverlay==='function') prepareGameOverlay(overlay,{theme:'dark',gameId:'ttt'});
+  if(typeof GameUI!=='undefined'&&GameUI.attachHowTo){
+    GameUI.attachHowTo(overlay,{
+      title:'Tic-Tac-Toe',
+      body:liveOn
+        ?'Live 1v1 · get three in a row. Virtual stakes settle once per board; Rematch starts a fresh match.'
+        :'Get three in a row. Easy / Medium / Hard AI. Practice is free.',
+    });
+  }
   document.getElementById('tttBack').addEventListener('click',()=>{askTttLeave();});
   const newBtn=document.getElementById('tttNew');
   if(newBtn)newBtn.addEventListener('click',()=>resetTtt());
@@ -5387,7 +5514,7 @@ function render(){
     if(typeof wireGameResultActions==='function'){
       const tttShare={scoreLine:`${scores.me}–${scores.opp}`,vs:`vs ${chat.name}`,meta:DIFF_LABEL};
       wireGameResultActions(overlay,{
-        again:()=>resetTtt(),
+        again:()=>freshTttRematch(),
         share:()=>{
           if(typeof shareGameResult==='function'){
             shareGameResult('ttt',tttShare);
@@ -5404,11 +5531,12 @@ function render(){
     } else {
       overlay.querySelectorAll('[data-result-action]').forEach(btn=>{
         btn.addEventListener('click',()=>{
-          if(btn.dataset.resultAction==='0')resetTtt();
+          if(btn.dataset.resultAction==='0')freshTttRematch();
           else gs.close();
         });
       });
     }
+    if(liveOn&&settleDone)paintTttSettle(null);
   }
   const boardEl=document.getElementById('tttBoard');
   board.forEach((cell,i)=>{
@@ -5426,8 +5554,10 @@ function render(){
 }
 
 function resetTtt(){
-  board=Array(9).fill(null);myTurn=myMark==='X';gameOver=false;winLine=null;showResult=false;render();
-  if(liveOn&&liveHandle)pushTtt();
+  // Practice only — Live rematch uses freshTttRematch (new matchId).
+  board=Array(9).fill(null);myTurn=myMark==='X';gameOver=false;winLine=null;showResult=false;
+  sessionRecorded=false;settleDone=false;resultSettling=false;
+  render();
 }
 
 function placeTtt(i,mark,fromRemote){
@@ -5437,8 +5567,20 @@ function placeTtt(i,mark,fromRemote){
       board[i]=mark;
       const w2=checkWin(board,mark);
       const iWon=mark===myMark;
-      if(w2){winLine=w2;gameOver=true;if(iWon)scores.me++;else scores.opp++;if(typeof recordGameResult==='function')recordGameResult('ttt',iWon,false);if(typeof recordDuelStreak==='function')recordDuelStreak(chat.id||chat.name,iWon,false);if(liveOn&&liveHandle&&!fromRemote)pushTtt();endRound(iWon?'won':'lost');return;}
-      if(board.every(Boolean)){gameOver=true;scores.draw++;if(typeof recordGameResult==='function')recordGameResult('ttt',false,true);if(typeof recordDuelStreak==='function')recordDuelStreak(chat.id||chat.name,false,true);if(liveOn&&liveHandle&&!fromRemote)pushTtt();endRound('draw');return;}
+      if(w2){
+        winLine=w2;gameOver=true;
+        if(iWon)scores.me++;else scores.opp++;
+        if(liveOn&&liveHandle&&!fromRemote)pushTtt();
+        if(typeof gameFeedback==='function')gameFeedback(iWon?'win':'lose');
+        endRound(iWon?'won':'lost');
+        return;
+      }
+      if(board.every(Boolean)){
+        gameOver=true;scores.draw++;
+        if(liveOn&&liveHandle&&!fromRemote)pushTtt();
+        endRound('draw');
+        return;
+      }
       myTurn=mark!==myMark;
       render();
       if(liveOn){
@@ -5454,17 +5596,22 @@ function placeTtt(i,mark,fromRemote){
 }
 
 function pushTtt(){
+  if(!liveHandle||!liveRoles||applyingLive)return;
   const winnerUid=gameOver&&winLine
-    ?(board[winLine[0]]===myMark?(liveRoles&&liveRoles.me):(liveRoles&&liveRoles.opp))
+    ?(board[winLine[0]]===myMark?liveRoles.me:liveRoles.opp)
     :null;
+  const nextTurn=gameOver?null:(myTurn?liveRoles.me:liveRoles.opp);
   liveHandle.push({
     board:board.map((c)=>c||'.').join(''),
-    turn:gameOver?null:(liveRoles&&liveRoles.opp),
+    turn:nextTurn,
     lastMove:{board:board.slice()},
     status:gameOver?'over':'playing',
     winner:winnerUid||null,
+    isDraw:!!(gameOver&&!winLine),
   });
-  if(!gameOver&&typeof DangalLive!=='undefined'&&DangalLive.pingTurn&&liveRoles)DangalLive.pingTurn(liveRoles.opp,'ttt',{chatId:chat&&(chat.firestoreId||chat.id)});
+  if(!gameOver&&typeof DangalLive!=='undefined'&&DangalLive.pingTurn){
+    DangalLive.pingTurn(liveRoles.opp,'ttt',{chatId:chat&&(chat.firestoreId||chat.id)});
+  }
 }
 if(liveOn&&liveRoles){
   liveHandle=DangalLive.join({
@@ -5477,25 +5624,35 @@ if(liveOn&&liveRoles){
         gameOver=true;
         const iWon=val.winner===liveRoles.me;
         if(iWon)scores.me++;else scores.opp++;
-        if(typeof recordGameResult==='function')recordGameResult('ttt',iWon,false);
+        if(typeof gameFeedback==='function')gameFeedback(iWon?'win':'lose');
         endRound(iWon?'won':'lost');
         return;
       }
       if(!val.board)return;
       const next=String(val.board).split('').map((ch)=>ch==='.'||ch===' '?null:ch);
       if(next.length!==9)return;
-      if(next.join('')===board.map((c)=>c||'').join(''))return;
+      if(next.join('')===board.map((c)=>c||'').join('')&&!!(val.status==='over')===gameOver){
+        if(val.status==='over'&&gameOver&&!showResult){
+          if(winLine)endRound(board[winLine[0]]===myMark?'won':'lost');
+          else endRound('draw');
+        }
+        return;
+      }
       applyingLive=true;
       board=next.map((c)=>c||null);
       const wX=checkWin(board,'X');const wO=checkWin(board,'O');
       winLine=wX||wO;
       gameOver=!!winLine||board.every(Boolean)||val.status==='over';
-      myTurn=(board.filter(Boolean).length%2===0)?(myMark==='X'):(myMark==='O');
+      myTurn=!gameOver&&((board.filter(Boolean).length%2===0)?(myMark==='X'):(myMark==='O'));
       if(gameOver&&!showResult){
-        if(winLine){
-          const iWon=board[winLine[0]]===myMark;
-          endRound(iWon?'won':'lost');
-        } else endRound('draw');
+          if(winLine){
+            const iWon=board[winLine[0]]===myMark;
+            if(!sessionRecorded){if(iWon)scores.me++;else scores.opp++;}
+            endRound(iWon?'won':'lost');
+          } else {
+            if(!sessionRecorded)scores.draw++;
+            endRound('draw');
+          }
       } else render();
       applyingLive=false;
     },
@@ -6380,7 +6537,7 @@ if (typeof registerGame === 'function') {
   registerGame({
     id: 'ttt',
     name: 'Tic-Tac-Toe',
-    desc: 'Live vs a friend · or quick AI',
+    desc: 'Live 1v1 · Practice AI · virtual stakes',
     icon: '⭕',
     ratingKey: 'ttt',
     gameType: 'dual',
@@ -6389,6 +6546,11 @@ if (typeof registerGame === 'function') {
     chat1v1: true,
     selfChat: true,
     order: 50,
+    meta: {
+      phaseA: 'Practice Easy/Medium/Hard + Live sync',
+      phaseB: 'complete — once-settle virtual stakes, rematch new matchId',
+      complete: true,
+    },
     launch(ctx) { openTicTacToe(typeof chatFromLaunch === 'function' ? chatFromLaunch(ctx) : ctx.chat); },
   });
   registerGame({

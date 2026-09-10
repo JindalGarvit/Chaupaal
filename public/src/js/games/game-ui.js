@@ -127,7 +127,11 @@
     ],
     ludo: ['Roll six to enter a piece', 'Tap a glowing piece to move', 'Capture rivals by landing on them'],
     uno: ['Match color or number', 'Tap Oh No! when you have one card', 'Wilds let you pick the next color'],
-    ttt: ['Get three in a row', 'Block your opponent early', 'Center is often strongest'],
+    ttt: [
+      'Get three in a row · block early · center is strong',
+      'Practice Easy / Medium / Hard AI',
+      'Live 1v1: virtual stakes settle once per board · Rematch = fresh match',
+    ],
     wordguess: [
       'One Daily puzzle per local day — progress saves; finished days stay locked',
       'Hard Mode reuses greens & ambers · Stats show bars, streak, and a month calendar',
