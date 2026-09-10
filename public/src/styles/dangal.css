@@ -329,6 +329,7 @@
   pointer-events:none;z-index:4;
 }
 .cs-rally-score{font:700 28px var(--font-display,'Space Grotesk',sans-serif);}
+.cs-rally-score-sub{font-size:12px;font-weight:700;opacity:.7;margin:-6px 0 0;letter-spacing:.02em;}
 .cs-rally-msg,.pc-hint{font-size:13px;opacity:.85;text-align:center;margin:0;}
 .cs-rally-hint{font-size:11px;opacity:.55;margin:0;}
 .cs-rally{width:100%;max-width:360px;gap:10px;}

@@ -236,10 +236,239 @@
     }
   }
 
+  /**
+   * Per-sport rally scorebook (Prompt 2) — rally-point everywhere (no old badminton side-out).
+   * Models: bwf21 | ittf11 | pickle11 | tennisGames
+   * Simplifications vs federation law are noted on each RALLIES entry / how-to.
+   */
+  const RALLY_POINT_LABELS = ['0', '15', '30', '40'];
+
+  function rallyScoreModel(spec) {
+    if (spec && spec.scoreModel) return spec.scoreModel;
+    const id = spec && spec.id;
+    if (id === 'tabletennis') return 'ittf11';
+    if (id === 'pickleball') return 'pickle11';
+    if (id === 'tennis') return 'tennisGames';
+    return 'bwf21';
+  }
+
+  function rallyMatchSubtitle(spec) {
+    const m = rallyScoreModel(spec);
+    if (m === 'bwf21') return 'Game to 21';
+    if (m === 'ittf11' || m === 'pickle11') return 'Game to 11';
+    if (m === 'tennisGames') return 'First to 2 games';
+    return 'Rally';
+  }
+
+  function createRallyScoreState(model, serverIsMe) {
+    const m = model || 'bwf21';
+    if (m === 'tennisGames') {
+      return {
+        model: m,
+        youPts: 0,
+        oppPts: 0,
+        youGames: 0,
+        oppGames: 0,
+        serverIsMe: !!serverIsMe,
+        initialServerIsMe: !!serverIsMe,
+      };
+    }
+    return {
+      model: m,
+      you: 0,
+      opp: 0,
+      serverIsMe: !!serverIsMe,
+      initialServerIsMe: !!serverIsMe,
+    };
+  }
+
+  function rallyHudParts(state) {
+    const st = state || {};
+    if (st.model === 'tennisGames') {
+      const yg = st.youGames | 0;
+      const og = st.oppGames | 0;
+      const yp = st.youPts | 0;
+      const op = st.oppPts | 0;
+      let main;
+      if (yp >= 3 && op >= 3) {
+        if (yp === op) main = 'Deuce';
+        else if (yp > op) main = 'Ad–40';
+        else main = '40–Ad';
+      } else {
+        main =
+          (RALLY_POINT_LABELS[Math.min(yp, 3)] || '0') +
+          '–' +
+          (RALLY_POINT_LABELS[Math.min(op, 3)] || '0');
+      }
+      return { main: main, sub: 'Games ' + yg + '–' + og, line: main + ' · Games ' + yg + '–' + og };
+    }
+    const y = st.you | 0;
+    const o = st.opp | 0;
+    let note = '';
+    if (st.model === 'bwf21' && y >= 20 && o >= 20) {
+      note = y === 29 && o === 29 ? 'Next point wins' : 'Win by 2';
+    } else if ((st.model === 'ittf11' || st.model === 'pickle11') && y >= 10 && o >= 10) {
+      note = y >= 19 && o >= 19 ? 'Cap — next wins' : 'Win by 2';
+    }
+    return { main: y + '–' + o, sub: note, line: y + '–' + o + (note ? ' · ' + note : '') };
+  }
+
+  function updateIttfServe(state) {
+    const total = (state.you | 0) + (state.opp | 0);
+    const init = !!state.initialServerIsMe;
+    if ((state.you | 0) >= 10 && (state.opp | 0) >= 10) {
+      // Deuce: every 1 point. At 10–10 (total 20) initial server.
+      state.serverIsMe = (total - 20) % 2 === 0 ? init : !init;
+      return;
+    }
+    // Every 2 points.
+    const block = Math.floor(total / 2);
+    state.serverIsMe = block % 2 === 0 ? init : !init;
+  }
+
+  /**
+   * @param {object} state
+   * @param {'me'|'opp'} who — winner of the timing rally
+   * @returns {{ state: object, ended: boolean, winner: 'me'|'opp'|null, hud: object, note: string }}
+   */
+  function applyRallyWin(state, who) {
+    const next = Object.assign({}, state);
+    const w = who === 'opp' ? 'opp' : 'me';
+    let ended = false;
+    let winner = null;
+    let note = '';
+
+    if (next.model === 'tennisGames') {
+      if (w === 'me') next.youPts = (next.youPts | 0) + 1;
+      else next.oppPts = (next.oppPts | 0) + 1;
+      const yp = next.youPts | 0;
+      const op = next.oppPts | 0;
+      let gameWinner = null;
+      // 0–15–30–40; deuce/Ad via lead-by-2 once either side has ≥4 point ticks
+      if ((yp >= 4 || op >= 4) && Math.abs(yp - op) >= 2) {
+        gameWinner = yp > op ? 'me' : 'opp';
+      }
+      if (gameWinner) {
+        if (gameWinner === 'me') next.youGames = (next.youGames | 0) + 1;
+        else next.oppGames = (next.oppGames | 0) + 1;
+        next.youPts = 0;
+        next.oppPts = 0;
+        next.serverIsMe = !next.serverIsMe; // alternate serve each game
+        note = 'Game';
+        if ((next.youGames | 0) >= 2 || (next.oppGames | 0) >= 2) {
+          ended = true;
+          winner = (next.youGames | 0) > (next.oppGames | 0) ? 'me' : 'opp';
+          note = 'Match';
+        }
+      }
+      // Mid-game: server unchanged
+    } else {
+      if (w === 'me') next.you = (next.you | 0) + 1;
+      else next.opp = (next.opp | 0) + 1;
+      const y = next.you | 0;
+      const o = next.opp | 0;
+
+      if (next.model === 'bwf21') {
+        // BWF-lite: 21, win by 2 after 20-all; 29-all → next point (30) wins. Winner serves.
+        next.serverIsMe = w === 'me';
+        if (y >= 30 || o >= 30) {
+          ended = true;
+          winner = y > o ? 'me' : 'opp';
+        } else if ((y >= 21 || o >= 21) && Math.abs(y - o) >= 2) {
+          ended = true;
+          winner = y > o ? 'me' : 'opp';
+        }
+      } else if (next.model === 'ittf11') {
+        // ITTF-lite: 11 win by 2; hard cap 20 (19-all next wins). Serve every 2 (every 1 at deuce).
+        updateIttfServe(next);
+        if (y >= 20 || o >= 20) {
+          ended = true;
+          winner = y > o ? 'me' : 'opp';
+        } else if ((y >= 11 || o >= 11) && Math.abs(y - o) >= 2) {
+          ended = true;
+          winner = y > o ? 'me' : 'opp';
+        }
+      } else {
+        // pickle11 — rally-point to 11 win-by-2, soft cap 20; winner serves. Kitchen visual-only.
+        next.serverIsMe = w === 'me';
+        if (y >= 20 || o >= 20) {
+          ended = true;
+          winner = y > o ? 'me' : 'opp';
+        } else if ((y >= 11 || o >= 11) && Math.abs(y - o) >= 2) {
+          ended = true;
+          winner = y > o ? 'me' : 'opp';
+        }
+      }
+    }
+
+    const hud = rallyHudParts(next);
+    return { state: next, ended: ended, winner: winner, hud: hud, note: note };
+  }
+
+  function bookSummaryScores(book) {
+    if (!book) return { you: 0, opp: 0 };
+    if (book.model === 'tennisGames') return { you: book.youGames | 0, opp: book.oppGames | 0 };
+    return { you: book.you | 0, opp: book.opp | 0 };
+  }
+
+  function serializeRallyBook(book, liveRoles) {
+    if (!book) return null;
+    const meIsA = !liveRoles || liveRoles.me === liveRoles.playerA;
+    const flip = (me, opp) => (meIsA ? { a: me, b: opp } : { a: opp, b: me });
+    if (book.model === 'tennisGames') {
+      const g = flip(book.youGames | 0, book.oppGames | 0);
+      const p = flip(book.youPts | 0, book.oppPts | 0);
+      return {
+        model: book.model,
+        aGames: g.a,
+        bGames: g.b,
+        aPts: p.a,
+        bPts: p.b,
+        serverIsA: book.serverIsMe ? meIsA : !meIsA,
+        initialServerIsA: book.initialServerIsMe ? meIsA : !meIsA,
+      };
+    }
+    const s = flip(book.you | 0, book.opp | 0);
+    return {
+      model: book.model,
+      a: s.a,
+      b: s.b,
+      serverIsA: book.serverIsMe ? meIsA : !meIsA,
+      initialServerIsA: book.initialServerIsMe ? meIsA : !meIsA,
+    };
+  }
+
+  function deserializeRallyBook(raw, liveRoles, fallbackModel) {
+    if (!raw || typeof raw !== 'object') {
+      return createRallyScoreState(fallbackModel, true);
+    }
+    const meIsA = !liveRoles || liveRoles.me === liveRoles.playerA;
+    const model = raw.model || fallbackModel || 'bwf21';
+    if (model === 'tennisGames') {
+      return {
+        model: model,
+        youGames: meIsA ? raw.aGames | 0 : raw.bGames | 0,
+        oppGames: meIsA ? raw.bGames | 0 : raw.aGames | 0,
+        youPts: meIsA ? raw.aPts | 0 : raw.bPts | 0,
+        oppPts: meIsA ? raw.bPts | 0 : raw.aPts | 0,
+        serverIsMe: raw.serverIsA == null ? true : !!raw.serverIsA === meIsA,
+        initialServerIsMe: raw.initialServerIsA == null ? true : !!raw.initialServerIsA === meIsA,
+      };
+    }
+    return {
+      model: model,
+      you: meIsA ? raw.a | 0 : raw.b | 0,
+      opp: meIsA ? raw.b | 0 : raw.a | 0,
+      serverIsMe: raw.serverIsA == null ? true : !!raw.serverIsA === meIsA,
+      initialServerIsMe: raw.initialServerIsA == null ? true : !!raw.initialServerIsA === meIsA,
+    };
+  }
+
   function openRallySport(spec) {
     const chat = resolveChat(spec.chat || arguments[0]);
     const liveOn = chatLiveOn(chat);
-    const toWin = spec.toWin || 7;
+    const scoreModel = rallyScoreModel(spec);
+    const matchSub = rallyMatchSubtitle(spec);
     const pauseId = 'csRallyPause_' + (spec.id || 'sport');
     const projKind = spec.projectile === 'shuttle' ? 'shuttle' : 'ball';
     const courtTint = spec.courtTint || spec.accent || '#2E7D32';
@@ -248,10 +477,14 @@
     let rallyPaused = false;
     let activeRaf = 0;
     let flashContact = false;
+    let coachShown = false;
+    try {
+      coachShown = !!(typeof localStorage !== 'undefined' && localStorage.getItem('chaupaal_rally_coach_' + (spec.id || '')));
+    } catch (e) {}
     const shell = openShell({
       id: spec.id,
       title: spec.name,
-      subtitle: liveOn ? liveSub() : practiceSub('First to ' + toWin),
+      subtitle: liveOn ? liveSub() : practiceSub(matchSub),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
@@ -274,7 +507,6 @@
         pauseBtnId: pauseId,
         onPause() {
           rallyPaused = true;
-          // Keep RAF alive — tick freezes progress via pauseAnchor (no window reset).
         },
         onResume() {
           rallyPaused = false;
@@ -283,6 +515,7 @@
       });
     }
 
+    let book = createRallyScoreState(scoreModel, true);
     let you = 0;
     let opp = 0;
     let rally = 0;
@@ -295,38 +528,102 @@
     let liveRoles = null;
     let liveHandle = null;
     let eventSeq = 0;
+    let resultPainted = false;
+
+    function syncFromBook() {
+      const sum = bookSummaryScores(book);
+      you = sum.you;
+      opp = sum.opp;
+      myServe = !!book.serverIsMe;
+    }
+
+    function maybeCoach() {
+      if (coachShown || liveOn) return;
+      coachShown = true;
+      try {
+        if (typeof localStorage !== 'undefined') localStorage.setItem('chaupaal_rally_coach_' + (spec.id || ''), '1');
+      } catch (e) {}
+      const tips = {
+        badminton: 'Rally point to 21 — win by 2; at 29-all next point wins.',
+        tabletennis: 'Game to 11, win by 2. Serve switches every 2 points (every 1 at deuce).',
+        pickleball: 'Rally point to 11, win by 2. Kitchen line is visual only for now.',
+        tennis: '0–15–30–40–game. First to 2 games wins the match.',
+      };
+      const tip = tips[spec.id] || matchSub;
+      if (typeof showToast === 'function') showToast(tip);
+    }
 
     function scoresForPush() {
-      if (!liveRoles) return { a: you, b: opp };
-      return liveRoles.me === liveRoles.playerA ? { a: you, b: opp } : { a: opp, b: you };
+      const packed = serializeRallyBook(book, liveRoles);
+      if (!packed) return { a: 0, b: 0 };
+      if (book.model === 'tennisGames') return { a: packed.aGames | 0, b: packed.bGames | 0 };
+      return { a: packed.a | 0, b: packed.b | 0 };
     }
 
     function applyScores(sc) {
+      // Legacy numeric-only snaps — keep as fallback.
       if (!sc || !liveRoles) return;
-      you = liveRoles.me === liveRoles.playerA ? sc.a | 0 : sc.b | 0;
-      opp = liveRoles.me === liveRoles.playerA ? sc.b | 0 : sc.a | 0;
+      if (book.model === 'tennisGames') {
+        if (liveRoles.me === liveRoles.playerA) {
+          book.youGames = sc.a | 0;
+          book.oppGames = sc.b | 0;
+        } else {
+          book.youGames = sc.b | 0;
+          book.oppGames = sc.a | 0;
+        }
+      } else if (liveRoles.me === liveRoles.playerA) {
+        book.you = sc.a | 0;
+        book.opp = sc.b | 0;
+      } else {
+        book.you = sc.b | 0;
+        book.opp = sc.a | 0;
+      }
+      syncFromBook();
     }
 
     function pushPoint(whoScored, msg) {
       if (!liveOn || !liveHandle || !liveRoles || applying) return;
       eventSeq += 1;
-      const nextServe = whoScored === 'me';
-      myServe = nextServe;
       serving = true;
+      const sum = bookSummaryScores(book);
+      const iWon = sum.you > sum.opp;
       liveHandle.push({
-        status: you >= toWin || opp >= toWin ? 'over' : 'playing',
-        winner: you >= toWin ? liveRoles.me : opp >= toWin ? liveRoles.opp : null,
+        status: ended ? 'over' : 'playing',
+        winner: ended ? (iWon ? liveRoles.me : liveRoles.opp) : null,
         turn: liveRoles.me,
         state: {
           scores: scoresForPush(),
-          servingUid: nextServe ? liveRoles.me : liveRoles.opp,
+          book: serializeRallyBook(book, liveRoles),
+          hud: rallyHudParts(book).line,
+          servingUid: book.serverIsMe ? liveRoles.me : liveRoles.opp,
           rally,
           windowMs: spec.windowMs || 720,
           eventSeq,
           msg: msg || '',
           pointBy: whoScored === 'me' ? liveRoles.me : liveRoles.opp,
+          scoreModel: scoreModel,
         },
       });
+    }
+
+    function awardPoint(who, msg) {
+      const res = applyRallyWin(book, who);
+      book = res.state;
+      syncFromBook();
+      rally = 0;
+      serving = true;
+      windowMs = spec.windowMs || 720;
+      const hud = res.hud || rallyHudParts(book);
+      const line =
+        (msg || (who === 'me' ? 'Your point.' : 'Opponent point.')) +
+        (res.note ? ' · ' + res.note : '');
+      if (res.ended) {
+        ended = true;
+        if (liveOn) pushPoint(who, line);
+        return finish({ skipPush: true });
+      }
+      if (liveOn) pushPoint(who, line);
+      renderPlay(line);
     }
 
     function renderPlay(msg) {
@@ -335,24 +632,30 @@
         cancelAnimationFrame(activeRaf);
         activeRaf = 0;
       }
-      // Live: contact when it is your serve/return window; Practice: always active vs AI.
+      maybeCoach();
+      syncFromBook();
+      // Live: contact when it is your window; Practice: always active vs AI.
+      // book.serverIsMe = scorebook server for this point; myServe = who has the timing window.
       const iAmActive = !liveOn || myServe;
+      const pointServerNear = !!book.serverIsMe;
       const hitLabel = serving ? spec.serveLabel || 'Serve' : spec.hitLabel || 'Hit';
       const doFlash = flashContact;
       flashContact = false;
       const sportMod = 'cs-rally--' + (spec.id || 'sport');
+      const hud = rallyHudParts(book);
       shell.body.innerHTML = `
         <div class="cs-rally ${esc(sportMod)}" style="--rally-accent:${esc(spec.accent || '#E63946')};--rally-court:${esc(courtTint)};">
-          <div class="cs-rally-score">${esc(spec.icon)} <strong>${you}</strong> – <strong>${opp}</strong></div>
+          <div class="cs-rally-score">${esc(spec.icon)} <strong>${esc(hud.main)}</strong></div>
+          ${hud.sub ? `<p class="cs-rally-score-sub">${esc(hud.sub)}</p>` : ''}
           <p class="cs-rally-msg">${esc(msg || spec.prompt)}</p>
-          <div class="cs-rally-court${doFlash ? ' is-flash' : ''}${!iAmActive ? ' is-waiting' : ''}" data-server="${myServe ? 'near' : 'far'}" aria-hidden="true">
-            <div class="cs-rally-half cs-rally-half--far${myServe ? '' : ' is-server'}">
-              <span class="cs-rally-side-label">${myServe ? 'Them' : 'Serve'}</span>
+          <div class="cs-rally-court${doFlash ? ' is-flash' : ''}${!iAmActive ? ' is-waiting' : ''}" data-server="${pointServerNear ? 'near' : 'far'}" aria-hidden="true">
+            <div class="cs-rally-half cs-rally-half--far${pointServerNear ? '' : ' is-server'}">
+              <span class="cs-rally-side-label">${pointServerNear ? 'Them' : 'Serve'}</span>
             </div>
             <div class="cs-rally-net"></div>
-            <div class="cs-rally-half cs-rally-half--near${myServe ? ' is-server' : ''}">
-              ${showKitchen ? '<div class="cs-rally-kitchen" title="Kitchen (cosmetic)"></div>' : ''}
-              <span class="cs-rally-side-label">${myServe ? 'Serve' : 'You'}</span>
+            <div class="cs-rally-half cs-rally-half--near${pointServerNear ? ' is-server' : ''}">
+              ${showKitchen ? '<div class="cs-rally-kitchen" title="Kitchen (visual)"></div>' : ''}
+              <span class="cs-rally-side-label">${pointServerNear ? 'Serve' : 'You'}</span>
             </div>
             <div class="cs-rally-proj cs-rally-proj--${esc(projKind)}${iAmActive ? '' : ' is-idle'}" data-cs-proj>
               ${
@@ -370,7 +673,11 @@
           <button type="button" class="cs-hit" data-cs-hit ${!iAmActive ? 'disabled' : ''}>${esc(hitLabel)}</button>
           <p class="cs-rally-hint">${
             iAmActive
-              ? 'Rally ' + rally + ' · window ' + Math.round(windowMs) + 'ms' + (liveOn ? ' · your contact' : '')
+              ? 'Rally ' +
+                rally +
+                ' · ' +
+                esc(matchSub) +
+                (liveOn ? ' · your contact' : '')
               : 'Waiting for opponent · court live'
           }</p>
         </div>`;
@@ -464,12 +771,15 @@
             turn: liveRoles.opp,
             state: {
               scores: scoresForPush(),
+              book: serializeRallyBook(book, liveRoles),
               servingUid: liveRoles.opp,
               inPlay: true,
               rally,
               windowMs,
               eventSeq,
               msg: spec.goodLine || 'In! Keep the rally going.',
+              scoreModel: scoreModel,
+              hud: rallyHudParts(book).line,
             },
           });
           myServe = false;
@@ -478,14 +788,7 @@
           return;
         }
         if (Math.random() < 0.26 + rally * 0.04) {
-          you += 1;
-          rally = 0;
-          serving = true;
-          myServe = true;
-          windowMs = spec.windowMs || 720;
-          if (you >= toWin || opp >= toWin) return finish();
-          renderPlay('Opponent missed — your point.');
-          return;
+          return awardPoint('me', 'Opponent missed — your point.');
         }
         renderPlay(spec.goodLine || 'In! Keep the rally going.');
       });
@@ -498,35 +801,32 @@
           activeRaf = 0;
         }
         buzz('lose', { noConfetti: true });
-        opp += 1;
-        rally = 0;
-        serving = true;
-        windowMs = spec.windowMs || 720;
-        if (liveOn) {
-          myServe = false;
-          pushPoint('opp', why + ' — opponent point.');
-          if (opp >= toWin || you >= toWin) return finish();
-          renderPlay(why + ' — opponent point.');
-          return;
-        }
-        myServe = true;
-        if (opp >= toWin || you >= toWin) return finish();
-        renderPlay(why + ' — opponent point.');
+        awardPoint('opp', why + ' — opponent point.');
       }
     }
 
-    function finish() {
-      if (ended) return;
+    function finish(opts) {
+      const o = opts || {};
+      if (resultPainted) return;
+      resultPainted = true;
       ended = true;
       if (activeRaf) {
         cancelAnimationFrame(activeRaf);
         activeRaf = 0;
       }
-      if (liveOn && liveHandle && liveRoles && !applying) {
+      syncFromBook();
+      const hud = rallyHudParts(book);
+      if (liveOn && liveHandle && liveRoles && !applying && !o.skipPush) {
         liveHandle.push({
           status: 'over',
           winner: you > opp ? liveRoles.me : opp > you ? liveRoles.opp : null,
-          state: { scores: scoresForPush(), eventSeq },
+          state: {
+            scores: scoresForPush(),
+            book: serializeRallyBook(book, liveRoles),
+            hud: hud.line,
+            eventSeq,
+            scoreModel: scoreModel,
+          },
         });
       }
       showDuelResult(shell, {
@@ -535,8 +835,8 @@
         opp,
         glyph: spec.icon,
         pbScore: you,
-        subtitle: 'Rally best ' + rally,
-        shareText: 'I played ' + spec.name + ' on Chaupaal: ' + you + '–' + opp,
+        subtitle: hud.line + ' · ' + matchSub,
+        shareText: 'I played ' + spec.name + ' on Chaupaal: ' + hud.line,
         onAgain: () => openRallySport(Object.assign({}, spec, { chat })),
       });
     }
@@ -544,7 +844,8 @@
     if (liveOn && typeof DangalLive !== 'undefined') {
       const roles = DangalLive.roles(chat);
       liveRoles = roles;
-      myServe = !!roles.host;
+      book = createRallyScoreState(scoreModel, !!roles.host);
+      syncFromBook();
       serving = true;
       liveHandle = DangalLive.join({
         gameType: spec.id,
@@ -556,33 +857,52 @@
           if (!val || ended || !shell.alive()) return;
           if (val.status === 'forfeit' || (val.status === 'over' && val.winner != null)) {
             applying = true;
-            if (val.state && val.state.scores) applyScores(val.state.scores);
+            const st0 = val.state || {};
+            if (st0.book) {
+              book = deserializeRallyBook(st0.book, roles, scoreModel);
+              syncFromBook();
+            } else if (st0.scores) applyScores(st0.scores);
             else if (val.winner != null) {
               const iWon = val.winner === roles.me;
-              you = iWon ? Math.max(you, toWin) : you;
-              opp = iWon ? opp : Math.max(opp, toWin);
+              if (book.model === 'tennisGames') {
+                book.youGames = iWon ? Math.max(book.youGames | 0, 2) : book.youGames | 0;
+                book.oppGames = iWon ? book.oppGames | 0 : Math.max(book.oppGames | 0, 2);
+              } else {
+                const tgt = book.model === 'bwf21' ? 21 : 11;
+                book.you = iWon ? Math.max(book.you | 0, tgt) : book.you | 0;
+                book.opp = iWon ? book.opp | 0 : Math.max(book.opp | 0, tgt);
+              }
+              syncFromBook();
             }
             finish();
             applying = false;
             return;
           }
           const st = val.state || {};
-          if (st.eventSeq != null && st.eventSeq <= eventSeq && st.pointBy !== roles.me) {
-            // still apply newer remote points
-          }
-          if (st.scores) applyScores(st.scores);
           if (st.eventSeq != null) eventSeq = Math.max(eventSeq, st.eventSeq);
+          if (st.book) {
+            book = deserializeRallyBook(st.book, roles, scoreModel);
+            syncFromBook();
+          } else if (st.scores) applyScores(st.scores);
           if (st.pointBy && st.pointBy !== roles.me) {
             rally = 0;
             windowMs = spec.windowMs || 720;
             serving = true;
-            myServe = st.servingUid === roles.me;
-            if (you >= toWin || opp >= toWin) return finish();
-            renderPlay(st.msg || 'Point — next serve.');
+            if (st.servingUid) myServe = st.servingUid === roles.me;
+            else myServe = !!book.serverIsMe;
+            book.serverIsMe = myServe;
+            const sum = bookSummaryScores(book);
+            const matchOver =
+              book.model === 'tennisGames'
+                ? sum.you >= 2 || sum.opp >= 2
+                : false;
+            // Prefer remote status/book ended signals
+            if (val.status === 'over' || matchOver) return finish();
+            renderPlay(st.msg || st.hud || 'Point — next serve.');
             return;
           }
           if (st.inPlay && val.turn === roles.me) {
-            serving = true;
+            serving = false; // return contact, not a fresh scorebook serve
             myServe = true;
             if (st.windowMs) windowMs = st.windowMs;
             if (st.rally != null) rally = st.rally;
@@ -591,14 +911,23 @@
           }
           if (st.servingUid) {
             myServe = st.servingUid === roles.me;
+            // Only adopt scorebook server from dedicated point snaps / book payload
+            if (!st.inPlay) book.serverIsMe = myServe;
             serving = true;
           }
         },
         onForfeit(info) {
           if (ended) return;
           const iWon = info && info.winner === roles.me;
-          you = iWon ? toWin : you;
-          opp = iWon ? opp : toWin;
+          if (book.model === 'tennisGames') {
+            book.youGames = iWon ? 2 : book.youGames | 0;
+            book.oppGames = iWon ? book.oppGames | 0 : 2;
+          } else {
+            const tgt = book.model === 'bwf21' ? 21 : 11;
+            book.you = iWon ? tgt : book.you | 0;
+            book.opp = iWon ? book.opp | 0 : tgt;
+          }
+          syncFromBook();
           finish();
         },
       });
@@ -607,7 +936,14 @@
         liveHandle.push({
           status: 'playing',
           turn: roles.me,
-          state: { scores: { a: 0, b: 0 }, servingUid: roles.me, eventSeq: 0 },
+          state: {
+            scores: scoresForPush(),
+            book: serializeRallyBook(book, roles),
+            servingUid: roles.me,
+            eventSeq: 0,
+            scoreModel: scoreModel,
+            hud: rallyHudParts(book).line,
+          },
         });
       }
     }
@@ -3088,7 +3424,8 @@
       bg: '#000D1A',
       courtTint: '#0a3d5c',
       projectile: 'shuttle',
-      toWin: 7,
+      scoreModel: 'bwf21',
+      // BWF-lite: one game to 21, win by 2 after 20-all, 29-all→30. Rally point; winner serves. No best-of-3.
       windowMs: 700,
       prompt: 'Serve, then smash in the green window.',
       serveLabel: 'Serve',
@@ -3102,7 +3439,8 @@
       bg: '#000A1A',
       courtTint: '#1a2a3a',
       projectile: 'ball',
-      toWin: 11,
+      scoreModel: 'ittf11',
+      // ITTF-lite: 11 win-by-2, hard cap 20. Serve every 2 pts (every 1 at deuce).
       windowMs: 560,
       shrink: 0.93,
       prompt: 'Short rallies — tap in the timing window.',
@@ -3117,8 +3455,9 @@
       bg: '#0A1200',
       courtTint: '#1b3d12',
       projectile: 'ball',
-      kitchen: true,
-      toWin: 7,
+      kitchen: true, // visual only — no zone foul yet
+      scoreModel: 'pickle11',
+      // Rally-point to 11 win-by-2 (cap 20); winner serves. Not side-out.
       windowMs: 640,
       prompt: 'Dink and drive. Time the paddle.',
       serveLabel: 'Serve',
@@ -3132,9 +3471,10 @@
       bg: '#0A1A0A',
       courtTint: '#1a4a28',
       projectile: 'ball',
-      toWin: 4,
+      scoreModel: 'tennisGames',
+      // Games-lite: 0–15–30–40–Ad; match = first to 2 games. No sets/tiebreak.
       windowMs: 680,
-      prompt: 'Serve, then return. First to 4 games.',
+      prompt: 'Serve, then return. Win games — first to 2.',
       hitLabel: 'Return',
       serveLabel: 'Serve',
     },
@@ -3145,7 +3485,7 @@
       registerGame({
         id: g.id,
         name: g.name,
-        desc: 'Timing rally to ' + (g.toWin || 7),
+        desc: rallyMatchSubtitle(g) + ' · timing rally',
         icon: g.icon,
         gameType: 'solo',
         genre: 'rw_sports',
