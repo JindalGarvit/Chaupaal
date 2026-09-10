@@ -28,7 +28,7 @@
 
     // Dual / party — Muqabala Live + stakes (Phase 6)
     quiz: { grade: 'live', sync: 'live1v1', stakes: true, label: 'Live 1v1' },
-    snakes: { grade: 'live', sync: 'liveParty', stakes: true },
+    snakes: { grade: 'live', sync: 'live1v1', stakes: true },
     ludo: { grade: 'live', sync: 'liveParty', stakes: true },
     uno: { grade: 'live', sync: 'liveParty', stakes: true },
     business: { grade: 'live', sync: 'live1v1', stakes: true },

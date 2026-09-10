@@ -121,9 +121,9 @@
     quiz: ['Answer before the timer ends — late taps don’t count', 'Stay correct to build combo streaks', 'Practice is free; friend challenges skip the daily match limit'],
     chess: ['Tap a piece, then a highlighted square', 'Fischer Random shuffles the back rank', 'Harder AI thinks a little longer'],
     snakes: [
-      'Roll on your turn · ladders climb · snakes slide',
-      'Moksha Patam: 72 squares, exact finish for Moksha · labeled virtues & vices',
-      'Classic / Vedic / Speed / Chaos keep their own boards & rules',
+      'One shared board · take turns · snakes down · ladders up',
+      'Live 1v1: host locks the version — guest follows that recipe',
+      'Moksha Patam: exact finish on 72 · Practice still picks any of the 5 boards',
     ],
     ludo: ['Roll six to enter a piece', 'Tap a glowing piece to move', 'Capture rivals by landing on them'],
     uno: ['Match color or number', 'Tap Oh No! when you have one card', 'Wilds let you pick the next color'],

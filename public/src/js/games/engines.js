@@ -1921,6 +1921,7 @@ function sanitizeSLVersion(version) {
 
 const SL_VERSIONS = [
   {
+    id: 'classic',
     name: 'Classic',
     emoji: '🐍',
     desc: 'Standard 100-square board · 10 snakes, 9 ladders',
@@ -1932,6 +1933,7 @@ const SL_VERSIONS = [
     specialRules: [],
   },
   {
+    id: 'vedic',
     name: 'Vedic',
     emoji: '🕉️',
     desc: 'Ancient Indian feel — more snakes · bounce overshoot',
@@ -1944,6 +1946,7 @@ const SL_VERSIONS = [
     specialRules: ['bounce'],
   },
   {
+    id: 'speed',
     name: 'Speed',
     emoji: '⚡',
     desc: 'Two dice, 50-square board — 6 snakes, 6 ladders',
@@ -1955,6 +1958,7 @@ const SL_VERSIONS = [
     specialRules: ['double_roll'],
   },
   {
+    id: 'chaos',
     name: 'Chaos',
     emoji: '🎲',
     desc: 'Snakes become ladders randomly — fate changes every turn!',
@@ -1968,6 +1972,7 @@ const SL_VERSIONS = [
   {
     // Moksha Patam lite — inspired by traditional Indian Patam / Gyan Chaupar moral boards
     // (simplified 72-square layout; not a full historical Gyan Chaupar / Jain 84 board).
+    id: 'moksha',
     name: 'Moksha Patam',
     emoji: '🪔',
     desc: '72-square Patam — 14 snakes, 8 ladders · exact Moksha on 72',
@@ -2029,17 +2034,51 @@ const SL_VERSIONS = [
   },
 ].map(sanitizeSLVersion);
 
+function slVersionById(id) {
+  const key = String(id || '').toLowerCase();
+  return SL_VERSIONS.find((v) => v.id === key || v.name.toLowerCase() === key) || null;
+}
+
+function snapshotSLVersion(v) {
+  const clean = sanitizeSLVersion(v || SL_VERSIONS[0]);
+  return {
+    id: clean.id || clean.name,
+    name: clean.name,
+    emoji: clean.emoji,
+    desc: clean.desc,
+    squares: clean.squares,
+    snakes: Object.assign({}, clean.snakes),
+    ladders: Object.assign({}, clean.ladders),
+    labels: Object.assign({}, clean.labels || {}),
+    dice: clean.dice || 1,
+    exact: !!clean.exact,
+    specialRules: (clean.specialRules || []).slice(),
+  };
+}
+
 function openSnakesGame(chat){
   const version = SL_VERSIONS[Math.floor(Math.random()*SL_VERSIONS.length)];
   openSnakesVersion(chat, version);
 }
 
 function openSnakesVersionPicker(chat){
+  const liveOn = typeof DangalLive !== 'undefined' && DangalLive.isLive(chat);
+  const liveRoles = liveOn && DangalLive.roles ? DangalLive.roles(chat) : null;
+  const iAmHost = !liveOn || !!(liveRoles && (liveRoles.host || liveRoles.myColor === 'w'));
+  // Live guest: never open an independent picker — follow host board recipe.
+  if (liveOn && !iAmHost) {
+    openSnakesVersion(chat, null, { awaitHost: true });
+    return;
+  }
   const sheet = document.createElement('div');
   sheet.style.cssText = 'position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:20px;z-index:100;max-height:80vh;overflow-y:auto;';
   sheet.innerHTML = `
     <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;margin-bottom:4px;">🐍 Choose a version</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">Or tap "Random" to let fate decide!</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">${
+      liveOn
+        ? 'Live 1v1 — you lock the board for both players.'
+        : 'Or tap "Random" to let fate decide!'
+    }</div>
     <button style="width:100%;padding:14px;background:linear-gradient(135deg,var(--game-accent,var(--red)),#8134AF);color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:12px;" id="randomSL">🎲 Random version</button>
     ${SL_VERSIONS.map((v,i)=>`
       <button data-i="${i}" style="width:100%;padding:14px;background:var(--cream);border:2px solid var(--line);border-radius:14px;font-size:14px;font-weight:600;cursor:pointer;text-align:left;margin-bottom:8px;display:flex;align-items:center;gap:12px;">
@@ -2055,32 +2094,55 @@ function openSnakesVersionPicker(chat){
   sheet.querySelectorAll('[data-i]').forEach(btn=>btn.addEventListener('click',()=>{sheet.remove();openSnakesVersion(chat,SL_VERSIONS[parseInt(btn.dataset.i)]);}));
 }
 
-function openSnakesVersion(chat, version){
-  version = sanitizeSLVersion(version || SL_VERSIONS[0]);
-  const SQUARES = version.squares;
-  const SNAKES = Object.assign({}, version.snakes);
-  let LADDERS = Object.assign({}, version.ladders);
-  const LABELS = Object.assign({}, version.labels || {});
-  const isMoksha = version.specialRules.includes('moksha');
-  const needExact = !!version.exact || isMoksha;
+function openSnakesVersion(chat, version, opts){
+  opts = opts || {};
   const liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat);
   const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat):null;
+  const iAmHost=!liveOn||!!(liveRoles&&(liveRoles.host||liveRoles.myColor==='w'));
+  const awaitHost=!!(liveOn&&(opts.awaitHost||!version)&&!iAmHost);
+  let versionObj=sanitizeSLVersion(version||SL_VERSIONS[0]);
+  let recipeReady=!awaitHost;
+  let SQUARES=versionObj.squares;
+  let SNAKES=Object.assign({},versionObj.snakes);
+  let LADDERS=Object.assign({},versionObj.ladders);
+  let LABELS=Object.assign({},versionObj.labels||{});
+  let isMoksha=versionObj.specialRules.includes('moksha');
+  let needExact=!!versionObj.exact||isMoksha;
+  let totalRows=Math.ceil(SQUARES/10);
+  const cols=10;
   let liveHandle=null;let applyingLive=false;let leaveConfirmed=false;
   let pos={me:0,opp:0};let myTurn=!liveRoles||liveRoles.myColor==='w';let rolling=false;let gameOver=false;
-  let diceVals=[null,null];let message='';let doubleRoll=false;
+  let diceVals=[null,null];let message=awaitHost?'Waiting for host to choose a board…':'';
+  let doubleRoll=false;
   let diceIv=null;let hopping=false;
-  const MODE_SUB=liveOn
-    ?(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel?DangalLive.modeChromeLabel(true):'Live 1v1')
-    :(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel
-      ?DangalLive.modeChromeLabel(false,version.name||'vs AI')
-      :('Practice · '+(version.name||'vs AI')));
+  let eventSeq=0;let appliedSeq=0;
+  let recipePushed=false;
 
-  function sqNum(r,c,totalRows){
-    const row=totalRows-1-r;return row%2===0?row*10+c+1:row*10+(9-c)+1;
+  function MODE_SUB(){
+    return liveOn
+      ?(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel?DangalLive.modeChromeLabel(true):'Live 1v1')
+      :(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel
+        ?DangalLive.modeChromeLabel(false,versionObj.name||'vs AI')
+        :('Practice · '+(versionObj.name||'vs AI')));
   }
 
-  const totalRows=Math.ceil(SQUARES/10);
-  const cols=10;
+  function applyRecipe(raw){
+    const snap=raw&&(raw.version||raw);
+    const next=sanitizeSLVersion(snap&&snap.squares?snap:(slVersionById(raw&&raw.versionId)||versionObj));
+    versionObj=next;
+    SQUARES=next.squares;
+    Object.keys(SNAKES).forEach(k=>delete SNAKES[k]);Object.assign(SNAKES,next.snakes||{});
+    Object.keys(LADDERS).forEach(k=>delete LADDERS[k]);Object.assign(LADDERS,next.ladders||{});
+    Object.keys(LABELS).forEach(k=>delete LABELS[k]);Object.assign(LABELS,next.labels||{});
+    isMoksha=next.specialRules.includes('moksha');
+    needExact=!!next.exact||isMoksha;
+    totalRows=Math.ceil(SQUARES/10);
+    recipeReady=true;
+  }
+
+  function sqNum(r,c,rows){
+    const row=rows-1-r;return row%2===0?row*10+c+1:row*10+(9-c)+1;
+  }
 
   function getCell(n){
     if(!n||n<1)return null;
@@ -2140,19 +2202,29 @@ function openSnakesVersion(chat, version){
 
   function diceEmoji(v){return v?['⚀','⚁','⚂','⚃','⚄','⚅'][v-1]:'🎲';}
 
-  function pushSnakes(){
-    if(!liveOn||!liveHandle||!liveRoles||applyingLive)return;
+  function pushSnakes(extra){
+    if(!liveOn||!liveHandle||!liveRoles||applyingLive||!recipeReady)return;
     const posA=liveRoles.myColor==='w'?pos.me:pos.opp;
     const posB=liveRoles.myColor==='w'?pos.opp:pos.me;
     const winnerUid=gameOver?(pos.me>=SQUARES?liveRoles.me:liveRoles.opp):null;
+    const state=Object.assign({
+      versionId:versionObj.id||versionObj.name,
+      version:snapshotSLVersion(versionObj),
+      squares:SQUARES,
+      specialRules:(versionObj.specialRules||[]).slice(),
+      dice:versionObj.dice||1,
+      exact:!!needExact,
+      labels:Object.assign({},LABELS),
+      posA,posB,
+      snakes:Object.assign({},SNAKES),
+      ladders:Object.assign({},LADDERS),
+      diceVals:diceVals.slice(),
+      message,doubleRoll,gameOver,
+      eventSeq,
+      recipeLocked:true,
+    },extra||{});
     liveHandle.push({
-      state:{
-        posA,posB,
-        snakes:Object.assign({},SNAKES),
-        ladders:Object.assign({},LADDERS),
-        diceVals:diceVals.slice(),
-        message,doubleRoll,gameOver,
-      },
+      state,
       turn:gameOver?null:(myTurn?liveRoles.me:liveRoles.opp),
       status:gameOver?'over':'playing',
       winner:winnerUid,
@@ -2160,6 +2232,12 @@ function openSnakesVersion(chat, version){
     if(!gameOver&&typeof DangalLive!=='undefined'&&DangalLive.pingTurn){
       DangalLive.pingTurn(liveRoles.opp,'snakes',{chatId:chat&&(chat.firestoreId||chat.id)});
     }
+  }
+
+  function ensureHostRecipe(){
+    if(!liveOn||!iAmHost||!recipeReady||recipePushed||!liveHandle)return;
+    recipePushed=true;
+    pushSnakes({hostRecipe:true});
   }
 
   function buildPathsSvg(){
@@ -2225,28 +2303,60 @@ function openSnakesVersion(chat, version){
     step();
   }
 
+  function applyChaosFlip(payload){
+    if(!payload||payload.k==null)return;
+    const k=Number(payload.k);
+    if(payload.toLadder&&SNAKES[k]){const v=SNAKES[k];delete SNAKES[k];LADDERS[k]=v;message=`🌀 Chaos! Square ${k} flipped!`;}
+    else if(payload.toSnake&&LADDERS[k]){const v=LADDERS[k];delete LADDERS[k];SNAKES[k]=v;message=`🌀 Chaos! Square ${k} flipped!`;}
+    rebuildBoardArt();
+  }
+
+  function pickChaosFlip(){
+    if(!versionObj.specialRules.includes('chaos')||Math.random()>=0.2)return null;
+    const allKeys=[...Object.keys(SNAKES),...Object.keys(LADDERS)].map(Number);
+    if(!allKeys.length)return null;
+    const k=allKeys[Math.floor(Math.random()*allKeys.length)];
+    if(SNAKES[k])return{k,toLadder:true};
+    if(LADDERS[k])return{k,toSnake:true};
+    return null;
+  }
+
   function rollDice(){
-    if(!gs.alive()||!myTurn||rolling||gameOver||hopping)return;rolling=true;
+    if(!gs.alive()||!recipeReady||!myTurn||rolling||gameOver||hopping)return;
+    if(liveOn&&liveRoles&&liveHandle){
+      // Wrong-seat / stale turn: only active seat may roll.
+      // (myTurn already mirrors RTDB turn; double-guard for desync)
+    }
+    rolling=true;
     if(typeof gameFeedback==='function')gameFeedback('dice');
     let ticks=0;
     if(diceIv)clearInterval(diceIv);
     diceIv=setInterval(()=>{
       if(!gs.alive()){clearInterval(diceIv);diceIv=null;return;}
       diceVals[0]=Math.floor(Math.random()*6)+1;
-      if(version.dice===2)diceVals[1]=Math.floor(Math.random()*6)+1;
+      if(versionObj.dice===2)diceVals[1]=Math.floor(Math.random()*6)+1;
+      else diceVals[1]=null;
       updateHud();ticks++;
       if(ticks>10){
         clearInterval(diceIv);diceIv=null;rolling=false;
-        const total=diceVals[0]+(diceVals[1]||0);
-        if(version.specialRules.includes('chaos')&&Math.random()<0.2){
-          const allKeys=[...Object.keys(SNAKES),...Object.keys(LADDERS)].map(Number);
-          const k=allKeys[Math.floor(Math.random()*allKeys.length)];
-          if(SNAKES[k]){const v=SNAKES[k];delete SNAKES[k];LADDERS[k]=v;message=`🌀 Chaos! Square ${k} flipped!`;}
-          else if(LADDERS[k]){const v=LADDERS[k];delete LADDERS[k];SNAKES[k]=v;message=`🌀 Chaos! Square ${k} flipped!`;}
-          rebuildBoardArt();
-        }
-        if(version.specialRules.includes('double_roll')&&diceVals[0]===diceVals[1]){
+        const final0=diceVals[0];
+        const final1=versionObj.dice===2?(diceVals[1]||Math.floor(Math.random()*6)+1):null;
+        diceVals=[final0,final1];
+        const chaos=pickChaosFlip();
+        if(chaos)applyChaosFlip(chaos);
+        if(versionObj.specialRules.includes('double_roll')&&final0===final1){
           doubleRoll=true;message=`🎲 Doubles! Roll again after this move.`;
+        }
+        const total=final0+(final1||0);
+        if(liveOn&&!applyingLive){
+          eventSeq+=1;
+          appliedSeq=eventSeq;
+          pushSnakes({
+            roller:liveRoles.me,
+            lastRoll:total,
+            chaosFlip:chaos||null,
+            eventSeq,
+          });
         }
         processMove('me',total);
       }
@@ -2259,7 +2369,7 @@ function openSnakesVersion(chat, version){
     let newPos=start+roll;
     // Moksha + Classic exact: must land exactly on finish (overshoot = miss turn).
     // Bounce (Vedic): reflect. Else clamp to finish (Speed/Chaos default).
-    if(version.specialRules.includes('bounce')&&newPos>SQUARES){newPos=SQUARES*2-newPos;}
+    if(versionObj.specialRules.includes('bounce')&&newPos>SQUARES){newPos=SQUARES*2-newPos;}
     else if(needExact&&newPos>SQUARES){
       message=isMoksha
         ?(`Need exactly ${SQUARES-start} for Moksha. Miss!`)
@@ -2314,12 +2424,12 @@ function openSnakesVersion(chat, version){
       const d=document.createElement('div');d.id='slResultHost';d.style.cssText='padding:8px 12px 16px;flex-shrink:0;';overlay.appendChild(d);return d;
     })();
     const duel=typeof getDuelStreak==='function'?getDuelStreak(chat.id||chat.name):null;
-    const shareStats={scoreLine:won?'Win':'Loss',meta:version.name+(duel&&duel.streak?` · streak ${duel.streak}`:''),vs:`You vs ${chat.name}`};
+    const shareStats={scoreLine:won?'Win':'Loss',meta:versionObj.name+(duel&&duel.streak?` · streak ${duel.streak}`:''),vs:`You vs ${chat.name}`};
     host.innerHTML=typeof gameResultHtml==='function'?gameResultHtml({
       gameId:'snakes',
       glyph:won?(isMoksha?'🪔':'✓'):'·',
       title:won?(isMoksha?'Moksha!':'You win'):'Defeat',
-      subtitle:version.name+(duel&&duel.streak>1?` · Duel streak ${duel.streak}`:''),
+      subtitle:versionObj.name+(duel&&duel.streak>1?` · Duel streak ${duel.streak}`:''),
       shareCardHtml: typeof buildGameShareCard==='function'?buildGameShareCard('snakes',shareStats):'',
       actions:[
         {label:'Rematch',primary:true,id:'again'},
@@ -2330,18 +2440,18 @@ function openSnakesVersion(chat, version){
     }):`<button type="button" id="slRematch">Rematch</button>`;
     if(typeof wireGameResultActions==='function'){
       wireGameResultActions(host,{
-        again:()=>{gs.close('restart');openSnakesVersion(chat, version);},
+        again:()=>{gs.close('restart');openSnakesVersion(chat, versionObj);},
         share:()=>{if(typeof shareGameResult==='function')shareGameResult('snakes',shareStats);},
         challenge:async()=>{
           if(typeof openFriendPickerSheet==='function'){
             const f=await openFriendPickerSheet({title:'Challenge · Snakes'});
-            if(f){gs.close();openSnakesVersion({name:f.name,id:f.id||f.uid}, version);}
+            if(f){gs.close();openSnakesVersion({name:f.name,id:f.id||f.uid}, versionObj);}
           }
         },
         story:()=>{if(typeof postGameScoreStory==='function')postGameScoreStory('snakes',shareStats);},
       });
     } else {
-      host.querySelector('#slRematch')?.addEventListener('click',()=>{gs.close('restart');openSnakesVersion(chat, version);});
+      host.querySelector('#slRematch')?.addEventListener('click',()=>{gs.close('restart');openSnakesVersion(chat, versionObj);});
     }
   }
 
@@ -2353,9 +2463,10 @@ function openSnakesVersion(chat, version){
       if(liveOn){if(!applyingLive)pushSnakes();return;}
       gs.schedule(()=>{
         if(!gs.alive())return;
-        const r=Math.floor(Math.random()*6)+1+(version.dice===2?Math.floor(Math.random()*6)+1:0);
+        const r=Math.floor(Math.random()*6)+1+(versionObj.dice===2?Math.floor(Math.random()*6)+1:0);
         diceVals[0]=((r-1)%6)+1;
-        if(version.dice===2)diceVals[1]=Math.floor(Math.random()*6)+1;
+        if(versionObj.dice===2)diceVals[1]=Math.floor(Math.random()*6)+1;
+        else diceVals[1]=null;
         updateHud();
         processMove('opp',r);
       },700);
@@ -2384,9 +2495,12 @@ function openSnakesVersion(chat, version){
     if(dice1)dice1.textContent=diceEmoji(diceVals[1]);
     const rollBtn=overlay.querySelector('#rollBtn');
     if(rollBtn){
-      rollBtn.disabled=!(myTurn&&!gameOver&&!rolling&&!hopping);
-      rollBtn.style.background=myTurn&&!gameOver?'var(--game-accent,var(--red))':'rgba(255,255,255,0.1)';
-      rollBtn.textContent=gameOver?'Game Over!':(myTurn?`🎲 Roll${doubleRoll?' Again!':''}`:chat.name.split(' ')[0]+' rolling...');
+      const canRoll=recipeReady&&myTurn&&!gameOver&&!rolling&&!hopping;
+      rollBtn.disabled=!canRoll;
+      rollBtn.style.background=canRoll?'var(--game-accent,var(--red))':'rgba(255,255,255,0.1)';
+      rollBtn.textContent=!recipeReady
+        ?'Waiting for host…'
+        :(gameOver?'Game Over!':(myTurn?`🎲 Roll${doubleRoll?' Again!':''}`:chat.name.split(' ')[0]+' rolling...'));
     }
     const meCard=overlay.querySelector('#slMeCard');
     const oppCard=overlay.querySelector('#slOppCard');
@@ -2412,16 +2526,18 @@ function openSnakesVersion(chat, version){
         }</div>`;
       }
     }
+    const sub=MODE_SUB()+(versionObj.desc?' · '+versionObj.desc:'');
+    const title=awaitHost&&!recipeReady?'Snakes & Ladders':versionObj.name;
     overlay.innerHTML=`
-      ${gameChromeHtml({title:version.name,subtitle:MODE_SUB+(version.desc?' · '+version.desc:''),backId:'slBack'})}
+      ${gameChromeHtml({title,subtitle:sub,backId:'slBack'})}
       <div style="display:flex;gap:8px;padding:8px 12px;flex-shrink:0;">
         <div id="slMeCard" style="flex:1;background:${myTurn&&!gameOver?'color-mix(in srgb,var(--game-accent,var(--red)) 28%,transparent)':'rgba(255,255,255,0.05)'};border:2px solid ${myTurn&&!gameOver?'var(--game-accent,var(--red))':'transparent'};border-radius:12px;padding:8px;text-align:center;">
           <div style="color:#ccc;font-size:11px;font-weight:700;">🔴 You</div>
           <div id="slPosMe" style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:22px;color:var(--gold);">${pos.me}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;flex:0 0 70px;">
-          <span id="slDice0" style="font-size:${version.dice===2?'28px':'36px'};">${diceEmoji(diceVals[0])}</span>
-          ${version.dice===2?`<span id="slDice1" style="font-size:28px;">${diceEmoji(diceVals[1])}</span>`:''}
+          <span id="slDice0" style="font-size:${versionObj.dice===2?'28px':'36px'};">${diceEmoji(diceVals[0])}</span>
+          ${versionObj.dice===2?`<span id="slDice1" style="font-size:28px;">${diceEmoji(diceVals[1])}</span>`:''}
         </div>
         <div id="slOppCard" style="flex:1;background:${!myTurn&&!gameOver?'rgba(91,163,217,0.3)':'rgba(255,255,255,0.05)'};border:2px solid ${!myTurn&&!gameOver?'#5BA3D9':'transparent'};border-radius:12px;padding:8px;text-align:center;">
           <div style="color:#ccc;font-size:11px;font-weight:700;">🔵 ${chat.name.split(' ')[0]}</div>
@@ -2431,29 +2547,65 @@ function openSnakesVersion(chat, version){
       <div class="snakes-board-wrap">
         <div class="snakes-board" style="--sl-rows:${totalRows}">
           <div class="snakes-grid">${cells}</div>
-          <div id="slPathsHost">${buildPathsSvg()}</div>
+          <div id="slPathsHost">${recipeReady?buildPathsSvg():''}</div>
           <div id="slTokens" class="snakes-tokens"></div>
         </div>
       </div>
       <div id="slMsg" style="padding:8px 16px;text-align:center;color:var(--gold);font-weight:700;font-size:13px;background:rgba(255,201,60,0.1);border-top:1px solid rgba(255,201,60,0.2);flex-shrink:0;display:${message?'block':'none'};">${message}</div>
       <div style="padding:10px 12px;padding-bottom:max(10px,env(safe-area-inset-bottom));flex-shrink:0;">
-        <button id="rollBtn" class="game-tap-target" style="width:100%;padding:13px;background:${myTurn&&!gameOver?'var(--game-accent,var(--red))':'rgba(255,255,255,0.1)'};color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;">
-          ${gameOver?'Game Over!':(myTurn?`🎲 Roll${doubleRoll?' Again!':''}`:chat.name.split(' ')[0]+' rolling...')}
+        <button id="rollBtn" class="game-tap-target" style="width:100%;padding:13px;background:${recipeReady&&myTurn&&!gameOver?'var(--game-accent,var(--red))':'rgba(255,255,255,0.1)'};color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;" ${!recipeReady||!myTurn||gameOver?'disabled':''}>
+          ${!recipeReady?'Waiting for host…':(gameOver?'Game Over!':(myTurn?`🎲 Roll${doubleRoll?' Again!':''}`:chat.name.split(' ')[0]+' rolling...'))}
         </button>
       </div>
     `;
     document.getElementById('slBack').addEventListener('click',()=>{askSnakesLeave();});
     document.getElementById('rollBtn').addEventListener('click',rollDice);
+    if(typeof GameUI!=='undefined'&&GameUI.attachHowTo){
+      GameUI.attachHowTo(overlay,{
+        title:versionObj.name||'Snakes & Ladders',
+        body:liveOn
+          ?('One shared board · Live 1v1. Host locks the version; take turns. Snakes slide down, ladders climb up.'+(isMoksha?' Moksha: exact finish required.':''))
+          :(versionObj.desc||'Roll, climb ladders, slide on snakes. First to the finish wins.'),
+      });
+    }
     placeTokens();
   }
+
+  function applyRemoteRoll(s,rollerIsMe){
+    if(Array.isArray(s.diceVals))diceVals=s.diceVals.slice();
+    // Chaos already baked into pushed snakes/ladders — do not flip again.
+    if(s.message)message=s.message;
+    doubleRoll=!!s.doubleRoll;
+    updateHud();
+    const total=(diceVals[0]||0)+(diceVals[1]||0);
+    if(!total)return false;
+    const who=rollerIsMe?'me':'opp';
+    // Prefer hop playback for remote (and echo-safe local skip handled by caller).
+    processMove(who,total);
+    return true;
+  }
+
   if(liveOn&&liveRoles&&typeof DangalLive!=='undefined'){
     liveHandle=DangalLive.join({
       gameType:'snakes',
       matchId:(chat&&chat.dangalMatchId)||(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.matchId),
       me:liveRoles.me,playerA:liveRoles.playerA,playerB:liveRoles.playerB,
-      state:{posA:0,posB:0,snakes:Object.assign({},SNAKES),ladders:Object.assign({},LADDERS),diceVals:[null,null],message:'',doubleRoll:false,gameOver:false},
+      state:{
+        versionId:recipeReady?(versionObj.id||versionObj.name):null,
+        version:recipeReady?snapshotSLVersion(versionObj):null,
+        squares:recipeReady?SQUARES:null,
+        specialRules:recipeReady?(versionObj.specialRules||[]).slice():[],
+        dice:versionObj.dice||1,
+        exact:!!needExact,
+        labels:Object.assign({},LABELS),
+        posA:0,posB:0,
+        snakes:Object.assign({},SNAKES),
+        ladders:Object.assign({},LADDERS),
+        diceVals:[null,null],message:awaitHost?'Waiting for host to choose a board…':'',
+        doubleRoll:false,gameOver:false,eventSeq:0,recipeLocked:recipeReady,
+      },
       onSnap(val){
-        if(!val||applyingLive||!gs.alive())return;
+        if(!val||!gs.alive())return;
         if(val.status==='forfeit'&&!gameOver){
           gameOver=true;
           const iWon=val.winner===liveRoles.me;
@@ -2463,22 +2615,89 @@ function openSnakesVersion(chat, version){
           updateHud();showSnakesResult(iWon);return;
         }
         const s=val.state;if(!s)return;
+        const seq=s.eventSeq!=null?(s.eventSeq|0):0;
+
+        // Host-locked recipe: guest applies once (or when version id changes).
+        const incomingId=(s.versionId||(s.version&&(s.version.id||s.version.name))||'');
+        const haveId=versionObj.id||versionObj.name;
+        if(s.version||s.versionId||s.squares){
+          const needRecipe=!recipeReady||(incomingId&&incomingId!==haveId)||(s.squares&&s.squares!==SQUARES);
+          if(needRecipe&&(s.version||s.versionId||(s.snakes&&s.squares))){
+            applyRecipe(s);
+            if(!iAmHost){
+              message='Host chose '+(versionObj.name||'a board')+(versionObj.emoji?(' '+versionObj.emoji):'')+'…';
+            }
+            render();
+          }
+        }
+        if(!recipeReady)return;
+        if(iAmHost&&!recipePushed)ensureHostRecipe();
+
+        // Stale / already-applied roll events.
+        if(seq>0&&seq<appliedSeq)return;
+        if(seq>0&&seq===appliedSeq&&!s.gameOver&&val.status!=='over'){
+          // Echo of our own push while hopping — ignore position teleport.
+          if(hopping||rolling)return;
+        }
+
         const nextMe=liveRoles.myColor==='w'?s.posA:s.posB;
         const nextOpp=liveRoles.myColor==='w'?s.posB:s.posA;
-        if(nextMe===pos.me&&nextOpp===pos.opp&&!!s.gameOver===gameOver&&(val.turn===liveRoles.me)===myTurn&&val.status!=='over')return;
+        const rollerUid=s.roller||null;
+        const rollerIsMe=rollerUid===liveRoles.me;
+        const isNewRoll=seq>appliedSeq&&Array.isArray(s.diceVals)&&s.diceVals[0];
+
+        if(isNewRoll&&!rollerIsMe&&!hopping&&!rolling){
+          appliedSeq=seq;
+          if(s.eventSeq!=null)eventSeq=Math.max(eventSeq,seq);
+          applyingLive=true;
+          // Keep current tokens; hop from dice via shared resolver (no silent teleport).
+          Object.keys(SNAKES).forEach(k=>delete SNAKES[k]);Object.assign(SNAKES,s.snakes||SNAKES);
+          Object.keys(LADDERS).forEach(k=>delete LADDERS[k]);Object.assign(LADDERS,s.ladders||LADDERS);
+          rebuildBoardArt();
+          applyRemoteRoll(s,false);
+          gameOver=!!s.gameOver||val.status==='over';
+          if(gameOver){
+            pos.me=Number(nextMe)||pos.me;pos.opp=Number(nextOpp)||pos.opp;
+            myTurn=false;placeTokens();updateHud();
+            if(!overlay.querySelector('#slResultHost'))showSnakesResult(pos.me>=SQUARES);
+            applyingLive=false;
+          } else {
+            // Stay applying until hop finishes so endTurn soft-reconcile snaps don't fight.
+            const release=()=>{if(!hopping){applyingLive=false;}else{gs.schedule(release,80);}};
+            gs.schedule(release,100);
+          }
+          return;
+        }
+
+        if(isNewRoll&&rollerIsMe){
+          appliedSeq=seq;
+          if(s.eventSeq!=null)eventSeq=Math.max(eventSeq,seq);
+          return;
+        }
+
+        if(nextMe===pos.me&&nextOpp===pos.opp&&!!s.gameOver===gameOver&&(val.turn===liveRoles.me)===myTurn&&val.status!=='over'&&seq<=appliedSeq)return;
+        if(hopping||rolling)return;
+
         applyingLive=true;
         Object.keys(SNAKES).forEach(k=>delete SNAKES[k]);Object.assign(SNAKES,s.snakes||{});
         Object.keys(LADDERS).forEach(k=>delete LADDERS[k]);Object.assign(LADDERS,s.ladders||{});
-        pos.me=Number(nextMe)||0;pos.opp=Number(nextOpp)||0;
         if(Array.isArray(s.diceVals))diceVals=s.diceVals.slice();
-        message=s.message||'';doubleRoll=!!s.doubleRoll;
+        message=s.message||message;
+        doubleRoll=!!s.doubleRoll;
+        // Soft reconcile positions when not mid-hop (join / double-roll / end).
+        pos.me=Number(nextMe)||0;pos.opp=Number(nextOpp)||0;
         gameOver=!!s.gameOver||val.status==='over';
         myTurn=!gameOver&&val.turn===liveRoles.me;
+        if(s.eventSeq!=null){eventSeq=Math.max(eventSeq,seq);appliedSeq=Math.max(appliedSeq,seq);}
         rebuildBoardArt();placeTokens();updateHud();
         if(gameOver&&!overlay.querySelector('#slResultHost'))showSnakesResult(pos.me>=SQUARES);
         applyingLive=false;
       },
     });
+    if(iAmHost&&recipeReady){
+      // Push host board recipe once seats are live.
+      setTimeout(()=>ensureHostRecipe(),120);
+    }
   }
   render();
 }
@@ -5883,10 +6102,11 @@ if (typeof registerGame === 'function') {
   registerGame({
     id: 'snakes',
     name: 'Snakes & Ladders',
-    desc: '5 versions, picked at random',
+    desc: '5 board versions · Live 1v1',
     icon: '🐍',
     ratingKey: 'snakes',
     gameType: 'dual',
+    liveDuel: true,
     genre: 'board',
     chat1v1: true,
     selfChat: true,
