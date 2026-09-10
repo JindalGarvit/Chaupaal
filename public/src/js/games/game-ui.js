@@ -130,8 +130,8 @@
     scribble: ['Draw clearly — keep it simple', 'Guessers type in the chat box', 'Rounds rotate who draws'],
     rushrunner: [
       'Swipe or buttons: ◀▶ lanes · ⬆ jump over lows · ⬇ slide under highs',
-      'Yellow barriers jump · tall blocks slide · shield absorbs one hit',
-      'Distance is your score · collect coins on the run',
+      'Coin lines show safe routes · magnet pulls zigzags · shield buys one mistake',
+      'Runs ramp: teach → pressure → intensity — distance is your score',
     ],
     tiptap: [
       'Match 4 → Line · 5 or L/T → Bomb · 6+ one colour → Prism',

@@ -25,19 +25,39 @@ function openRushRunner(){
   let shieldPulse=0,saveBanner=0,deathFocus=null,deathStall=0;
   let landCoyote=0,jumpBuffer=0,slideBuffer=0;
   let bestScore=(typeof getGamePB==='function'?getGamePB('rushrunner'):null) ?? (parseInt(localStorage.getItem('rushrunner_best')||'0',10)||0);
-  let raf=null,lastTime=0,spawnAcc=0,coinAcc=0,powerAcc=0,scroll=0;
+  let raf=null,lastTime=0,directorAcc=0,scroll=0;
   let resizeObs=null,cssW=320,cssH=480,shake=0;
   let keyHandler=null;
   let pauseCtrl=null;
-  let teachPhase=0;
+  let runSeed=(Date.now()^((Math.random()*1e9)|0))>>>0;
+  let rng=()=>Math.random();
+  let lastPattern='';
+  let lastPatternAt=0;
+  let upcomingCoinZ=0; // magnet staging: richest coin z ahead
 
-  // Dark roads + bright rails/lines so every theme stays readable at speed
+  // Dark roads + brighter rails/lines so every theme stays readable at speed
   const THEMES=[
     {name:'Mumbai Streets',skyTop:'#FFC56A',skyBot:'#FF7A3D',road:'#1C1C24',roadAlt:'#252530',roadEdge:'#FFB86B',line:'#FFE9A0',accent:'#E8663D',bldg:['#4A3228','#6B4634','#2E221C','#5A3A28']},
     {name:'Delhi Metro',skyTop:'#9AD4F5',skyBot:'#4CC9F0',road:'#14141E',roadAlt:'#1C1C2A',roadEdge:'#C77DFF',line:'#E0B8FF',accent:'#4CC9F0',bldg:['#2A1B6E','#3548B8','#16162A','#3A3E55']},
     {name:'Jaipur Fort',skyTop:'#FFC4B0',skyBot:'#E76F51',road:'#1A100C',roadAlt:'#261810',roadEdge:'#FFC857',line:'#FFE08A',accent:'#F72585',bldg:['#7A1C20','#9A3208','#4A0A12','#8A1C18']},
   ];
   const theme=THEMES[Math.floor(Math.random()*THEMES.length)];
+
+  function makeRng(seed){
+    let s=seed>>>0;
+    return function(){
+      s=(s+0x6D2B79F5)>>>0;
+      let t=Math.imul(s^(s>>>15),1|s);
+      t^=t+Math.imul(t^(t>>>7),61|t);
+      return ((t^(t>>>14))>>>0)/4294967296;
+    };
+  }
+  function pick(arr){return arr[Math.floor(rng()*arr.length)];}
+  function shuffle(arr){
+    const a=arr.slice();
+    for(let i=a.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;}
+    return a;
+  }
 
   // Cached skyline (built once — no per-frame Math.random flicker)
   let skyline=[];
@@ -139,24 +159,250 @@ function openRushRunner(){
     return {x,y,scale:Math.max(0.08,scale),roadHalf};
   }
 
+  /**
+   * Obstacle ecology (4 roles):
+   * barrier = low jump · crate = wide low jump · sign = high slide · train = wide/tall high slide
+   * Never block all 3 lanes in one depth window.
+   */
+  const MIN_OBS_GAP=7.5;
+  const MIN_SAME_LANE=9.5;
+  const LOCK_WINDOW=5.5;
+
+  function pacingTier(){
+    if(dist<75)return 'teach';
+    if(dist<200)return 'early';
+    if(dist<420)return 'mid';
+    return 'late';
+  }
+
+  function obsSpec(type,kind){
+    const wide=kind==='crate'||kind==='train';
+    if(type==='low')return{w:wide?0.78:0.58,h:wide?0.38:0.32};
+    return{w:wide?0.64:0.52,h:wide?1.05:0.88};
+  }
+
+  function pushObs(lane,z,type,kind){
+    const s=obsSpec(type,kind);
+    obstacles.push({lane,z,type,kind,w:s.w,h:s.h});
+  }
+
+  function occupiedLanesNear(z,window){
+    const set=new Set();
+    obstacles.forEach(o=>{
+      if(Math.abs(o.z-z)<=window)set.add(o.lane|0);
+    });
+    return set;
+  }
+
+  function canPlaceObs(lane,z){
+    for(let i=0;i<obstacles.length;i++){
+      const o=obstacles[i];
+      if(Math.abs(o.z-z)<MIN_OBS_GAP&&o.lane===lane)return false;
+      if(o.lane===lane&&Math.abs(o.z-z)<MIN_SAME_LANE)return false;
+    }
+    const near=occupiedLanesNear(z,LOCK_WINDOW);
+    near.add(lane|0);
+    if(near.size>=3)return false; // never full wipe
+    return true;
+  }
+
+  function pushObsSafe(lane,z,type,kind){
+    if(!canPlaceObs(lane,z)){
+      // try other lanes before giving up
+      const order=shuffle([0,1,2].filter(l=>l!==lane));
+      for(let i=0;i<order.length;i++){
+        if(canPlaceObs(order[i],z)){pushObs(order[i],z,type,kind);return true;}
+      }
+      return false;
+    }
+    pushObs(lane,z,type,kind);
+    return true;
+  }
+
+  function spawnCoinLine(lane,z0,n,gap){
+    const g=gap==null?1.05:gap;
+    const count=n||4;
+    for(let i=0;i<count;i++){
+      coinItems.push({lane,z:z0+i*g,collected:false,pull:0});
+    }
+    upcomingCoinZ=Math.max(upcomingCoinZ,z0+count*g);
+  }
+
+  function spawnCoinZig(z0,n){
+    // Magnet feast: zig across lanes
+    const seq=shuffle([0,1,2]);
+    for(let i=0;i<(n||7);i++){
+      coinItems.push({lane:seq[i%3],z:z0+i*0.95,collected:false,pull:0});
+    }
+    upcomingCoinZ=Math.max(upcomingCoinZ,z0+(n||7)*0.95);
+  }
+
+  function spawnCoinArc(lane,z0){
+    // Jump-arc temptation: denser coins in mid of jump window
+    const offs=[-0.2,0.9,1.9,2.9,3.9];
+    offs.forEach((dz,i)=>{
+      coinItems.push({lane,z:z0+dz,collected:false,pull:0,arc:i===2});
+    });
+    upcomingCoinZ=Math.max(upcomingCoinZ,z0+4);
+  }
+
+  function spawnPowerAt(lane,z,type){
+    powerups.push({lane,z,type});
+  }
+
+  function safeLaneAway(blocked){
+    const free=[0,1,2].filter(l=>!blocked.has(l));
+    return free.length?pick(free):1;
+  }
+
+  function patternPool(tier){
+    if(tier==='teach')return['breather','single_jump','single_slide','safe_coins'];
+    if(tier==='early')return['single_jump','single_slide','safe_coins','side_pair','tempt_mid','breather','jump_slide'];
+    if(tier==='mid')return['side_pair','jump_slide','slide_jump','tempt_mid','risk_coins','coin_arc','wide_ask','breather','shield_gate','magnet_feast'];
+    return['side_pair','jump_slide','slide_jump','tempt_mid','risk_coins','coin_arc','wide_ask','pressure_pair','shield_gate','magnet_feast'];
+  }
+
+  function pickPattern(tier){
+    let pool=patternPool(tier).filter(p=>p!==lastPattern||patternPool(tier).length<2);
+    // Avoid stacking two breathers
+    if(lastPattern==='breather')pool=pool.filter(p=>p!=='breather');
+    if(!pool.length)pool=patternPool(tier);
+    return pick(pool);
+  }
+
+  function firePattern(id,baseZ){
+    lastPattern=id;
+    lastPatternAt=dist;
+    const z=baseZ||FAR+2+rng()*3;
+    const lowKind=rng()<0.45?'crate':'barrier';
+    const highKind=rng()<0.4?'train':'sign';
+
+    if(id==='breather'){
+      spawnCoinLine(pick([0,1,2]),z,3+Math.floor(rng()*2),1.2);
+      return;
+    }
+    if(id==='safe_coins'){
+      spawnCoinLine(1,z,5,1.0);
+      return;
+    }
+    if(id==='single_jump'){
+      const L=pick([0,1,2]);
+      pushObsSafe(L,z,'low',lowKind);
+      spawnCoinLine(safeLaneAway(new Set([L])),z-1.2,3,1.1);
+      return;
+    }
+    if(id==='single_slide'){
+      const L=pick([0,1,2]);
+      pushObsSafe(L,z,'high',highKind);
+      spawnCoinLine(safeLaneAway(new Set([L])),z+0.8,3,1.1);
+      return;
+    }
+    if(id==='side_pair'){
+      // Two lanes blocked — one escape
+      const escape=pick([0,1,2]);
+      const blocked=[0,1,2].filter(l=>l!==escape);
+      pushObsSafe(blocked[0],z,rng()<0.5?'low':'high',rng()<0.5?lowKind:highKind);
+      pushObsSafe(blocked[1],z+0.4,rng()<0.5?'low':'high',rng()<0.5?lowKind:highKind);
+      spawnCoinLine(escape,z-1.5,4,1.0);
+      return;
+    }
+    if(id==='tempt_mid'){
+      pushObsSafe(1,z,rng()<0.55?'low':'high',rng()<0.5?lowKind:highKind);
+      // Risky coins on mid approach, safe coins on a side
+      spawnCoinLine(1,z-3.2,3,0.95);
+      spawnCoinLine(pick([0,2]),z+1.2,3,1.05);
+      return;
+    }
+    if(id==='jump_slide'){
+      const L=pick([0,1,2]);
+      pushObsSafe(L,z,'low',lowKind);
+      pushObsSafe(L,z+9.5,'high',highKind); // recovery gap
+      spawnCoinLine(safeLaneAway(new Set([L])),z+4.5,3,1.0);
+      return;
+    }
+    if(id==='slide_jump'){
+      const L=pick([0,1,2]);
+      pushObsSafe(L,z,'high',highKind);
+      pushObsSafe(L,z+9.5,'low',lowKind);
+      spawnCoinLine(safeLaneAway(new Set([L])),z+4.5,3,1.0);
+      return;
+    }
+    if(id==='risk_coins'){
+      const risk=pick([0,1,2]);
+      spawnCoinLine(risk,z,4,0.9);
+      pushObsSafe(risk,z+5.2,rng()<0.5?'low':'high',rng()<0.5?lowKind:highKind);
+      spawnCoinLine(safeLaneAway(new Set([risk])),z+7.5,3,1.05);
+      return;
+    }
+    if(id==='coin_arc'){
+      const L=pick([0,1,2]);
+      spawnCoinArc(L,z);
+      pushObsSafe(L,z+2.2,'low','barrier');
+      return;
+    }
+    if(id==='wide_ask'){
+      const L=pick([0,1,2]);
+      const t=rng()<0.5?'low':'high';
+      pushObsSafe(L,z,t,t==='low'?'crate':'train');
+      spawnCoinLine(safeLaneAway(new Set([L])),z-1,3,1.1);
+      return;
+    }
+    if(id==='pressure_pair'){
+      // Late: staggered pair + escape coins
+      const escape=pick([0,1,2]);
+      const blocked=shuffle([0,1,2].filter(l=>l!==escape));
+      pushObsSafe(blocked[0],z,'low',lowKind);
+      pushObsSafe(blocked[1],z+3.2,'high',highKind);
+      spawnCoinLine(escape,z-1.2,5,0.95);
+      return;
+    }
+    if(id==='shield_gate'){
+      const safe=pick([0,1,2]);
+      spawnPowerAt(safe,z,'shield');
+      // Pressure after pickup travel — still one+ escape lanes
+      pushObsSafe(pick([0,1,2]),z+11,rng()<0.5?'low':'high',highKind);
+      pushObsSafe(pick([0,1,2]),z+15.5,rng()<0.5?'low':'high',lowKind);
+      spawnCoinLine(safe,z+6,3,1.0);
+      return;
+    }
+    if(id==='magnet_feast'){
+      const safe=pick([0,1,2]);
+      spawnPowerAt(safe,z,'magnet');
+      spawnCoinZig(z+3.5,8);
+      // Light ask after feast so magnet isn't empty
+      if(rng()<0.7)pushObsSafe(pick([0,1,2]),z+14,'low','barrier');
+      return;
+    }
+    // Fallback
+    pushObsSafe(pick([0,1,2]),z,'low','barrier');
+  }
+
+  function directorInterval(tier){
+    if(tier==='teach')return 1.55;
+    if(tier==='early')return 1.25;
+    if(tier==='mid')return 1.02;
+    return 0.88;
+  }
+
+  function tickDirector(dt){
+    directorAcc+=dt;
+    const tier=pacingTier();
+    const need=directorInterval(tier);
+    if(directorAcc<need)return;
+    directorAcc=0;
+    const id=pickPattern(tier);
+    firePattern(id,FAR+1.5+rng()*2.5);
+  }
+
+  // Kept for teach opener / debug
   function spawnObstacle(z){
-    const l=Math.floor(Math.random()*LANES);
-    // Foreshadow: prefer empty lane relative to player path occasionally leave a gap
-    const type=Math.random()<0.38?'low':'high';
-    const kind=type==='low'?(Math.random()<0.5?'barrier':'crate'):(Math.random()<0.5?'sign':'train');
-    obstacles.push({lane:l,z:z||FAR,type,kind,w:0.55,h:type==='low'?0.35:0.85});
+    firePattern(rng()<0.5?'single_jump':'single_slide',z||FAR);
   }
   function spawnCoinRow(z){
-    const l=Math.floor(Math.random()*LANES);
-    const n=3+Math.floor(Math.random()*3);
-    for(let i=0;i<n;i++)coinItems.push({lane:l,z:(z||FAR)+i*1.1,collected:false,pull:0});
+    spawnCoinLine(pick([0,1,2]),z||FAR,4,1.05);
   }
   function spawnPowerup(z){
-    powerups.push({
-      lane:Math.floor(Math.random()*LANES),
-      z:z||FAR,
-      type:Math.random()<0.5?'shield':'magnet',
-    });
+    spawnPowerAt(pick([0,1,2]),z||FAR,rng()<0.5?'shield':'magnet');
   }
 
   function setLane(next){
@@ -261,50 +507,52 @@ function openRushRunner(){
     }
   }
 
-  /** Distinct silhouettes: low = jump-over barrier; high = slide-under tall block. */
+  /** Distinct silhouettes: low = jump-over; high = slide-under. Footprint from ecology roles. */
   function drawObstacle(o,p,emphasize){
     const low=o.type==='low';
-    const hw=(low?0.72:0.52)*p.scale*28;
-    const hh=(low?0.32:0.92)*p.scale*36;
+    const wide=o.kind==='crate'||o.kind==='train';
+    const hw=(o.w||(low?0.72:0.52))*p.scale*28;
+    const hh=(o.h||(low?0.32:0.92))*p.scale*36;
     const x=p.x,y=p.y;
     if(emphasize){
       ctx.fillStyle='rgba(255,70,70,0.35)';
       ctx.beginPath();ctx.ellipse(x,y-hh*0.4,hw*1.35,hh*0.85,0,0,Math.PI*2);ctx.fill();
     }
     if(low){
-      // Wide short barrier + hazard stripes (read: jump)
       ctx.fillStyle='#1A1A1A';
       ctx.beginPath();
       ctx.moveTo(x-hw,y);ctx.lineTo(x-hw*0.92,y-hh);ctx.lineTo(x+hw*0.92,y-hh);ctx.lineTo(x+hw,y);
       ctx.closePath();ctx.fill();
-      ctx.fillStyle='#FFB020';
+      ctx.fillStyle=wide?'#FF8A1A':'#FFB020';
       ctx.beginPath();
       ctx.moveTo(x-hw*0.92,y-hh);ctx.lineTo(x-hw*0.92,y-hh*0.35);ctx.lineTo(x+hw*0.92,y-hh*0.35);ctx.lineTo(x+hw*0.92,y-hh);
       ctx.closePath();ctx.fill();
       ctx.strokeStyle='#1A1A1A';ctx.lineWidth=Math.max(1.5,p.scale*2);
-      for(let i=-2;i<=2;i++){
-        const sx=x+i*hw*0.32;
-        ctx.beginPath();ctx.moveTo(sx-hw*0.12,y-hh);ctx.lineTo(sx+hw*0.08,y-hh*0.35);ctx.stroke();
+      const stripes=wide?4:3;
+      for(let i=-stripes;i<=stripes;i++){
+        const sx=x+i*hw*(wide?0.22:0.28);
+        ctx.beginPath();ctx.moveTo(sx-hw*0.1,y-hh);ctx.lineTo(sx+hw*0.08,y-hh*0.35);ctx.stroke();
       }
-      // Jump cue chevron
       ctx.fillStyle='rgba(255,255,255,0.85)';
       ctx.beginPath();
       ctx.moveTo(x,y-hh-8*p.scale);ctx.lineTo(x-7*p.scale,y-hh+2*p.scale);ctx.lineTo(x+7*p.scale,y-hh+2*p.scale);
       ctx.closePath();ctx.fill();
     }else{
-      // Tall block with open lower band cue (read: slide)
-      ctx.fillStyle='#3D4654';
+      ctx.fillStyle=wide?'#2C3340':'#3D4654';
       ctx.beginPath();
       ctx.moveTo(x-hw,y);ctx.lineTo(x-hw*0.82,y-hh);ctx.lineTo(x+hw*0.82,y-hh);ctx.lineTo(x+hw,y);
       ctx.closePath();ctx.fill();
-      ctx.fillStyle='#6B778A';
+      ctx.fillStyle=wide?'#8A96A8':'#6B778A';
       ctx.beginPath();
       ctx.moveTo(x-hw*0.82,y-hh);ctx.lineTo(x,y-hh-hh*0.14);ctx.lineTo(x+hw*0.82,y-hh);ctx.closePath();ctx.fill();
-      // Lower “gap” stripe — slide under
       ctx.fillStyle='rgba(20,24,32,0.85)';
       ctx.fillRect(x-hw*0.75,y-hh*0.28,hw*1.5,hh*0.28);
       ctx.strokeStyle='#A8B4C4';ctx.lineWidth=Math.max(1.2,p.scale*1.8);
       ctx.strokeRect(x-hw*0.75,y-hh*0.28,hw*1.5,hh*0.28);
+      if(wide){
+        ctx.fillStyle='rgba(255,200,80,0.35)';
+        ctx.fillRect(x-hw*0.55,y-hh*0.92,hw*1.1,hh*0.12);
+      }
       ctx.fillStyle='rgba(255,255,255,0.8)';
       ctx.beginPath();
       ctx.moveTo(x,y-4*p.scale);ctx.lineTo(x-7*p.scale,y-14*p.scale);ctx.lineTo(x+7*p.scale,y-14*p.scale);
@@ -542,11 +790,13 @@ function openRushRunner(){
       return;
     }
 
-    // Soft early ramp — first ~80m stays readable
+    // Soft early ramp — first ~90m stays readable; late denser via director + slight speed
     const ramp=Math.min(1,dist/RAMP_UNTIL);
-    const early=Math.min(1,dist/80);
-    const soft=0.72+0.28*early;
-    speed=(BASE_SPEED+(MAX_SPEED-BASE_SPEED)*(1-Math.pow(1-ramp,2)))*soft;
+    const early=Math.min(1,dist/90);
+    const soft=0.68+0.32*early;
+    const tier=pacingTier();
+    const tierBoost=tier==='late'?1.06:tier==='mid'?1.02:1;
+    speed=(BASE_SPEED+(MAX_SPEED-BASE_SPEED)*(1-Math.pow(1-ramp,2)))*soft*tierBoost;
     dist+=speed*dt*3.2;
     scroll+=speed*dt;
     score=Math.floor(dist);
@@ -614,19 +864,7 @@ function openRushRunner(){
     coinItems=coinItems.filter(c=>c.z>-1&&!c.collected);
     powerups=powerups.filter(p=>p.z>-1);
 
-    spawnAcc+=dt;coinAcc+=dt;powerAcc+=dt;
-    // Delay heavy twin packs until player settles
-    const obsInterval=Math.max(0.62,1.25-ramp*0.48);
-    if(spawnAcc>=obsInterval){
-      spawnAcc=0;
-      spawnObstacle(FAR+Math.random()*4);
-      if(dist>90&&Math.random()<0.26){
-        const other=(obstacles[obstacles.length-1].lane+1+Math.floor(Math.random()*2))%LANES;
-        obstacles.push({lane:other,z:FAR+2+Math.random()*2,type:Math.random()<0.4?'low':'high',kind:'crate',w:0.55,h:Math.random()<0.4?0.35:0.85});
-      }
-    }
-    if(coinAcc>=1.15){coinAcc=0;spawnCoinRow(FAR+Math.random()*3);}
-    if(powerAcc>=7.5&&dist>40){powerAcc=0;spawnPowerup(FAR+1);}
+    tickDirector(dt);
 
     // Collision — interpolated laneX, forgiving lane width, depth = visible contact
     const pz=PLAYER_Z;
@@ -662,8 +900,8 @@ function openRushRunner(){
     for(let i=powerups.length-1;i>=0;i--){
       const p=powerups[i];
       if(Math.abs(p.z-pz)>1||Math.abs(p.lane-laneX)>0.55)continue;
-      if(p.type==='shield'){shield=true;shieldTimer=6.5;shieldPulse=1;showBanner('Shield up!',0.8);}
-      else{magnet=true;magnetTimer=5.5;showBanner('Magnet on!',0.8);}
+      if(p.type==='shield'){shield=true;shieldTimer=7.5;shieldPulse=1;showBanner('Shield up!',0.8);}
+      else{magnet=true;magnetTimer=6.8;showBanner('Magnet on!',0.8);}
       powerups.splice(i,1);buzz('valid');
       const scr=project(laneWorldX(p.lane),pz);
       burst(scr.x,scr.y-20,p.type==='shield'?'#7DD3FC':'#FF6B8A',14);
@@ -702,13 +940,21 @@ function openRushRunner(){
     if(ov)ov.style.display='none';
     started=true;lastTime=performance.now();
     obstacles=[];coinItems=[];powerups=[];particles=[];
-    dying=false;deathFocus=null;teachPhase=1;
-    // Teach rhythm: coins → low (jump) → high (slide), clear lanes
-    spawnCoinRow(18);
-    obstacles.push({lane:1,z:26,type:'low',kind:'barrier',w:0.55,h:0.35});
-    obstacles.push({lane:0,z:34,type:'high',kind:'sign',w:0.55,h:0.85});
-    spawnCoinRow(30);
+    dying=false;deathFocus=null;
+    runSeed=(Date.now()^((Math.random()*1e9)|0))>>>0;
+    rng=makeRng(runSeed);
+    lastPattern='';lastPatternAt=0;directorAcc=0;upcomingCoinZ=0;
+    // Authored opener (varies lightly by seed) — teach jump then slide
+    const openLane=Math.floor(rng()*3);
+    const other=(openLane+1+Math.floor(rng()*2))%3;
+    spawnCoinLine(1,16,4,1.05);
+    pushObs(openLane,24,'low','barrier');
+    spawnCoinLine((openLane+1)%3,27,3,1.0);
+    pushObs(other,33,'high','sign');
+    spawnCoinLine(1,36,3,1.1);
+    if(rng()<0.35)spawnPowerAt((openLane+2)%3,40,'magnet');
     buzz('select');
+    if(typeof window!=='undefined')window.__rrLastSeed=runSeed;
     raf=requestAnimationFrame(update);
   }
 
