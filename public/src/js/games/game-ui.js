@@ -171,8 +171,8 @@
     uno: ['Match colour or number to play', 'Classic has optional house-rule toggles', "Shout 'Oh No!' at 1 card · Blaze hits harder · Flip switches sides"],
     pool: [
       'Break from the kitchen — table stays open until a clean solid or stripe',
-      'Clear your group, then the 8 — early 8 or scratch on 8 is a loss',
-      'Scratch: cue back in kitchen · Practice AI aims and shoots for real',
+      'Clear your group, then the 8 last — early 8 or scratch on 8 loses',
+      'Scratch: cue back in kitchen · Practice AI shoots for real · Live syncs groups',
     ],
     rummy: ['Draw or take the discard', 'Discard one card', 'Declare when you have runs and sets'],
     teenpatti: [
@@ -226,7 +226,7 @@
     tennis: { key: 'chaupaal_pb_tennis', label: 'games', higherBetter: true },
     kabaddi: { key: 'chaupaal_pb_kabaddi', label: 'pts', higherBetter: true },
     carrom: { key: 'chaupaal_pb_carrom', label: 'coins', higherBetter: true },
-    pool: { key: 'chaupaal_pb_pool', label: 'balls', higherBetter: true },
+    pool: { key: 'chaupaal_pb_pool_wins', label: 'wins', higherBetter: true },
     brickbreaker: { key: 'chaupaal_pb_brickbreaker', label: 'pts', higherBetter: true },
     brickbreaker_endless: { key: 'chaupaal_pb_brickbreaker_endless', label: 'pts', higherBetter: true },
     patangbaazi_duel: { key: 'chaupaal_pb_patang_duel', label: ' streak', higherBetter: true },

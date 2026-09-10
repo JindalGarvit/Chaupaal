@@ -515,7 +515,7 @@
       bg: spec.bg,
       pauseId,
       chat,
-      leaveBody: isCarrom && !liveOn ? 'Resign counts as a loss vs AI.' : undefined,
+      leaveBody: (isCarrom || isPool) && !liveOn ? 'Resign counts as a loss vs AI.' : undefined,
       cleanup: () => {
         cancelAnimationFrame(raf);
         raf = 0;
@@ -685,7 +685,7 @@
           '. Same Queen/foul rules. Only shoot on your turn.'
         : 'You shoot from the near baseline; AI from the far. Cover the Queen after one of yours.'
       : isPool
-        ? 'Break from the kitchen. Open → solids/stripes → 8 last. Practice AI aims and shoots for real — same physics as you.'
+        ? 'Break from the kitchen. Open → solids/stripes → 8 last. Live syncs groups. Practice AI shoots for real.'
         : 'Drag back on the cue ball to aim, release to shoot.';
 
     shell.body.innerHTML = `<div class="pc-cue${isCarrom ? ' pc-cue--carrom' : ''}${isPool ? ' pc-cue--pool' : ''}">
@@ -759,7 +759,8 @@
     let oppPocketed = 0;
     let moving = false;
     let ended = false;
-    let myTurn = isCarrom && liveOn ? false : !isCarrom ? true : breaker === 'you';
+    let myTurn =
+      isCarrom && liveOn ? false : isPool && !liveOn ? breaker === 'you' : !isCarrom ? true : breaker === 'you';
     let applying = false;
     let liveRoles = null;
     let liveHandle = null;
@@ -884,11 +885,58 @@
     }
 
     function poolLiveGroups() {
-      if (!liveRoles) return { groupA: youGroup, groupB: oppGroup, openTable };
+      if (!liveRoles) return { groupA: youGroup, groupB: oppGroup, openTable: !!openTable };
       if (liveRoles.me === liveRoles.playerA) {
-        return { groupA: youGroup, groupB: oppGroup, openTable };
+        return { groupA: youGroup, groupB: oppGroup, openTable: !!openTable };
       }
-      return { groupA: oppGroup, groupB: youGroup, openTable };
+      return { groupA: oppGroup, groupB: youGroup, openTable: !!openTable };
+    }
+
+    function buildPoolLiveState(extra) {
+      const e = extra || {};
+      const scores =
+        liveRoles && liveRoles.me === liveRoles.playerA
+          ? { a: countGroupPocketed('you'), b: countGroupPocketed('opp') }
+          : liveRoles
+            ? { a: countGroupPocketed('opp'), b: countGroupPocketed('you') }
+            : { a: countGroupPocketed('you'), b: countGroupPocketed('opp') };
+      const cue = cueBall();
+      const cueInKitchen = !!(cue && !cue.dead && cue.y >= kitchenY() - 10);
+      return Object.assign(
+        {
+          balls: snapshotBalls(),
+          scores,
+          phase: 'settled',
+          breakDone: !!breakDone,
+          hint: lastHint || '',
+          cueInKitchen,
+          eightLive: balls.some((b) => !b.dead && poolBallGroup(b) === 'eight'),
+        },
+        poolLiveGroups(),
+        e
+      );
+    }
+
+    function poolReasonCode(meta) {
+      const m = meta || {};
+      if (m.forfeit || m.resign) return 'forfeit';
+      if (m.reasonCode) return String(m.reasonCode);
+      const r = String(m.reason || '');
+      if (r === '8-ball' || r === 'eight') return 'eight';
+      if (r.indexOf('Early') >= 0 || r === 'earlyEight') return 'earlyEight';
+      if (r.indexOf('Scratch') >= 0 || r === 'scratchEight') return 'scratchEight';
+      if (r.indexOf('Foul on the 8') >= 0 || r === 'foulEight') return 'foulEight';
+      return r || 'eight';
+    }
+
+    function poolReasonLabel(code, won) {
+      const c = String(code || '');
+      if (c === 'forfeit') return won ? 'Opponent left' : 'Forfeit';
+      if (c === 'eight') return won ? '8-ball in' : 'Opponent sank the 8';
+      if (c === 'earlyEight') return won ? 'Opponent early 8' : 'Early 8 — loss';
+      if (c === 'scratchEight') return won ? 'Opponent scratched on the 8' : 'Scratch on the 8 — loss';
+      if (c === 'foulEight') return won ? 'Opponent fouled on the 8' : 'Foul on the 8 — loss';
+      return won ? 'Win' : 'Loss';
     }
 
     function applyPoolGroupsFromState(st) {
@@ -1192,21 +1240,19 @@
         liveRoles.me === liveRoles.playerA
           ? { a: isPool ? countGroupPocketed('you') : youPocketed, b: isPool ? countGroupPocketed('opp') : oppPocketed }
           : { a: isPool ? countGroupPocketed('opp') : oppPocketed, b: isPool ? countGroupPocketed('you') : youPocketed };
-      const groups = isPool ? poolLiveGroups() : {};
       liveHandle.push({
         baseVersion: seq,
         status: 'playing',
         turn: liveRoles.opp,
-        state: Object.assign(
-          {
-            balls: snapshotBalls(),
-            scores,
-            phase: 'settled',
-            breakDone: !!breakDone,
-            hint: lastHint || '',
-          },
-          groups
-        ),
+        state: isPool
+          ? buildPoolLiveState({ phase: 'settled', scores })
+          : {
+              balls: snapshotBalls(),
+              scores,
+              phase: 'settled',
+              breakDone: !!breakDone,
+              hint: lastHint || '',
+            },
       });
       if (typeof DangalLive !== 'undefined' && DangalLive.pingTurn) {
         DangalLive.pingTurn(liveRoles.opp, spec.id, { chatId: chat && (chat.firestoreId || chat.id) });
@@ -1490,24 +1536,11 @@
       myTurn = strokeSeat === 'you';
       updateHud();
       if (liveOn && strokeSeat === 'you' && liveHandle && liveRoles && !applying) {
-        const scores =
-          liveRoles.me === liveRoles.playerA
-            ? { a: countGroupPocketed('you'), b: countGroupPocketed('opp') }
-            : { a: countGroupPocketed('opp'), b: countGroupPocketed('you') };
         liveHandle.push({
           baseVersion: seq,
           status: 'playing',
           turn: liveRoles.me,
-          state: Object.assign(
-            {
-              balls: snapshotBalls(),
-              scores,
-              phase: 'settled',
-              breakDone: true,
-              hint: lastHint,
-            },
-            poolLiveGroups()
-          ),
+          state: buildPoolLiveState({ phase: 'settled', breakDone: true, hint: lastHint }),
         });
       } else if (!liveOn && strokeSeat === 'opp') {
         if (isPool) schedulePoolAiTurn();
@@ -1563,19 +1596,19 @@
 
         if (scratched) {
           if (seatGroup && groupIsClear(seat)) {
-            finish(seat !== 'you', { reason: 'Scratch on the 8' });
+            finish(seat !== 'you', { reason: 'Scratch on the 8', reasonCode: 'scratchEight' });
             return;
           }
-          finish(seat !== 'you', { reason: 'Foul on the 8' });
+          finish(seat !== 'you', { reason: 'Foul on the 8', reasonCode: 'foulEight' });
           return;
         }
 
         if (!seatGroup || !groupIsClear(seat)) {
-          finish(seat !== 'you', { reason: 'Early 8-ball — loss' });
+          finish(seat !== 'you', { reason: 'Early 8-ball — loss', reasonCode: 'earlyEight' });
           return;
         }
 
-        finish(seat === 'you', { reason: '8-ball' });
+        finish(seat === 'you', { reason: '8-ball', reasonCode: 'eight' });
         return;
       }
 
@@ -2219,13 +2252,17 @@
     }
 
     function rematchOpts() {
+      let nextBreak = breakerPick;
+      if (isPool) {
+        nextBreak = breakerPick === 'you' ? 'opp' : breakerPick === 'opp' ? 'you' : Math.random() < 0.5 ? 'you' : 'opp';
+      }
       return {
         chat,
         youColor,
         difficulty,
-        breakerPick,
+        breakerPick: nextBreak,
         skipSheet: true,
-        stake: 0,
+        stake: liveOn ? liveStake : 0,
       };
     }
 
@@ -2303,6 +2340,179 @@
         if (typeof showToast === 'function') showToast('Couldn’t update chips — try Retry');
         return null;
       }
+    }
+
+    function notePoolSession(won) {
+      if (sessionRecorded) return;
+      sessionRecorded = true;
+      if (typeof recordDangalSession === 'function') {
+        recordDangalSession('pool', {
+          won: !!won,
+          score: won ? 1 : 0,
+          difficulty: liveOn ? 'live' : difficulty,
+          stake: liveStake,
+          live: !!liveOn,
+        });
+      }
+    }
+
+    function paintPoolSettle(settle) {
+      const el = shell.body.querySelector('#poolChipDelta');
+      if (!el || !settle || settle.error) return;
+      const delta = Number(settle.chipDelta);
+      const bal = settle.chips != null ? Number(settle.chips) : null;
+      const parts = [];
+      if (Number.isFinite(delta) && (delta !== 0 || liveStake > 0)) {
+        parts.push(
+          delta === 0
+            ? 'Virtual chips · balance ' + (bal != null ? bal : '—')
+            : 'Virtual chips ' + (delta > 0 ? '+' : '') + delta + (bal != null ? ' · balance ' + bal : '')
+        );
+      }
+      if (!parts.length && liveOn) parts.push('Settled · virtual chips only — not real money');
+      if (!parts.length) return;
+      el.hidden = false;
+      el.textContent = parts.join(' · ') + ' · not real money';
+    }
+
+    async function settlePoolOnce(won) {
+      if (!isPool || !liveOn || settleDone || !window.DangalEconomy || typeof DangalEconomy.reportGameEnd !== 'function') {
+        return null;
+      }
+      if (!settleMatchId) return null;
+      settleDone = true;
+      try {
+        const me = typeof getCurrentUid === 'function' ? getCurrentUid() : '';
+        const opp = settleOppUid || (liveRoles && liveRoles.opp) || '';
+        const settle = await DangalEconomy.reportGameEnd({
+          gameType: 'pool',
+          result: won ? 'win' : 'loss',
+          won: !!won,
+          isDraw: false,
+          matchId: settleMatchId,
+          sessionId: settleMatchId,
+          opponentUid: opp,
+          stake: liveStake,
+          winnerUid: won ? me : opp,
+        });
+        if (settle && settle.error) {
+          settleDone = false;
+          const el = shell.body.querySelector('#poolChipDelta');
+          if (el) {
+            el.hidden = false;
+            el.innerHTML =
+              'Couldn’t update chips <button type="button" id="poolChipRetry" class="game-tap-target" style="margin-left:8px;">Retry</button>';
+            el.querySelector('#poolChipRetry')?.addEventListener('click', () => {
+              settlePoolOnce(won);
+            });
+          }
+          if (typeof showToast === 'function') showToast('Couldn’t update chips — tap Retry');
+          return settle;
+        }
+        paintPoolSettle(settle);
+        return settle;
+      } catch (e) {
+        settleDone = false;
+        if (typeof showToast === 'function') showToast('Couldn’t update chips — try Retry');
+        return null;
+      }
+    }
+
+    async function startPoolLiveRematch(nextStake) {
+      const oppUid = settleOppUid || (liveRoles && liveRoles.opp) || '';
+      const chatId =
+        (window.__dangalLaunchCtx && window.__dangalLaunchCtx.chatId) ||
+        (window.currentOpenChat && (window.currentOpenChat.firestoreId || window.currentOpenChat.id)) ||
+        (chat && (chat.firestoreId || chat.id)) ||
+        '';
+      if (!oppUid || (typeof isPersistableUid === 'function' && !isPersistableUid(oppUid))) {
+        if (typeof showToast === 'function') showToast('Opponent left — challenge them again from friends');
+        if (typeof openFriendPickerSheet === 'function') {
+          const f = await openFriendPickerSheet({
+            title: 'Challenge · Pool',
+            subtitle: 'Live 1v1 · virtual chips only',
+          });
+          if (f) {
+            await tearDownLiveHandle();
+            shell.close('rematch');
+            const uid = f.uid || f.id || '';
+            const mid =
+              typeof dangalMatchId === 'function'
+                ? dangalMatchId('pool', { name: f.name, opponentUid: uid })
+                : 'pool_' + Date.now();
+            try {
+              window.__dangalLaunchCtx = Object.assign({}, window.__dangalLaunchCtx || {}, {
+                gameId: 'pool',
+                gameType: 'pool',
+                matchId: mid,
+                mode: 'live',
+                opponentUid: uid,
+                stake: nextStake,
+                source: 'challenge_host',
+                chatId: f.chatId || f.firestoreId || '',
+                startedAt: Date.now(),
+              });
+            } catch (e) {}
+            if (typeof sendChallengeCard === 'function' && (f.chatId || f.firestoreId)) {
+              try {
+                await sendChallengeCard(uid, 'pool', {
+                  chatId: f.chatId || f.firestoreId,
+                  matchId: mid,
+                  stake: nextStake,
+                });
+              } catch (e) {}
+            }
+            openPool({
+              name: f.name,
+              id: uid,
+              uid,
+              peerUid: uid,
+              opponentUid: uid,
+              dangalMatchId: mid,
+              dangalSource: 'challenge_host',
+              stake: nextStake,
+            });
+          }
+        }
+        return;
+      }
+      const rematchId =
+        typeof dangalMatchId === 'function'
+          ? dangalMatchId('pool', { name: chat.name || 'Friend', opponentUid: oppUid })
+          : 'pool_' + Date.now();
+      await tearDownLiveHandle();
+      try {
+        window.__dangalLaunchCtx = Object.assign({}, window.__dangalLaunchCtx || {}, {
+          gameId: 'pool',
+          gameType: 'pool',
+          matchId: rematchId,
+          mode: 'live',
+          opponentUid: oppUid,
+          stake: nextStake,
+          source: 'challenge_host',
+          chatId,
+          startedAt: Date.now(),
+        });
+      } catch (e) {}
+      if (typeof sendChallengeCard === 'function' && oppUid && chatId) {
+        try {
+          await sendChallengeCard(oppUid, 'pool', { chatId, matchId: rematchId, stake: nextStake });
+          if (typeof showToast === 'function') showToast('Rematch sent — they Accept to join');
+        } catch (e) {}
+      } else if (typeof showToast === 'function') {
+        showToast('Rematch ready — ask your friend to join from Baithak');
+      }
+      shell.close('rematch');
+      openPool({
+        name: chat.name || 'Friend',
+        id: oppUid,
+        uid: oppUid,
+        peerUid: oppUid,
+        opponentUid: oppUid,
+        dangalMatchId: rematchId,
+        dangalSource: 'challenge_host',
+        stake: nextStake,
+      });
     }
 
     async function tearDownLiveHandle() {
@@ -2437,74 +2647,224 @@
             phase: 'over',
           });
         } else {
+          const overCode = isPool ? poolReasonCode(m) : '';
           liveHandle.push({
-            status: 'over',
+            status: m.forfeit ? 'forfeit' : 'over',
             winner: won ? liveRoles.me : liveRoles.opp,
-            state: Object.assign(
-              {
-                balls: snapshotBalls(),
-                scores: {
-                  a:
-                    liveRoles.me === liveRoles.playerA
-                      ? isPool
-                        ? countGroupPocketed('you')
-                        : youPocketed
-                      : isPool
-                        ? countGroupPocketed('opp')
-                        : oppPocketed,
-                  b:
-                    liveRoles.me === liveRoles.playerA
-                      ? isPool
-                        ? countGroupPocketed('opp')
-                        : oppPocketed
-                      : isPool
-                        ? countGroupPocketed('you')
-                        : youPocketed,
+            state: isPool
+              ? buildPoolLiveState({
+                  phase: 'over',
+                  breakDone: true,
+                  reasonCode: overCode,
+                  reason: m.reason || poolReasonLabel(overCode, won),
+                })
+              : {
+                  balls: snapshotBalls(),
+                  scores: {
+                    a:
+                      liveRoles.me === liveRoles.playerA ? youPocketed : oppPocketed,
+                    b:
+                      liveRoles.me === liveRoles.playerA ? oppPocketed : youPocketed,
+                  },
+                  phase: 'over',
+                  breakDone: true,
                 },
-                phase: 'over',
-                breakDone: true,
-              },
-              isPool ? poolLiveGroups() : {}
-            ),
           });
         }
       }
 
       if (!isCarrom) {
-        const reason = m.reason || '';
-        let sub;
-        if (isPool) {
-          if (reason === '8-ball') sub = won ? 'Legal 8-ball — you win' : 'Opponent sank the 8';
-          else if (reason === 'Early 8-ball — loss')
-            sub = won ? 'Opponent sank the 8 early' : 'Early 8-ball — loss';
-          else if (reason === 'Scratch on the 8')
-            sub = won ? 'Opponent scratched on the 8' : 'Scratch on the 8 — loss';
-          else if (reason === 'Foul on the 8')
-            sub = won ? 'Opponent fouled on the 8' : 'Foul on the 8 — loss';
-          else if (m.forfeit || m.resign) sub = won ? 'Opponent left' : 'Forfeit';
-          else
-            sub =
-              (youGroup ? 'You: ' + (youGroup === 'solid' ? 'Solids' : 'Stripes') : 'Open table') +
-              ' · ' +
-              (won ? 'Win' : 'Loss');
-        } else {
-          sub = 'Pocketed ' + youPocketed + ' · opponent ' + oppPocketed;
+        if (!isPool) {
+          showDuelResult(shell, {
+            id: spec.id,
+            you: won ? 1 : 0,
+            opp: won ? 0 : 1,
+            glyph: spec.glyph,
+            pbScore: youPocketed,
+            title: won ? 'You win' : 'Defeat',
+            subtitle: 'Pocketed ' + youPocketed + ' · opponent ' + oppPocketed,
+            shareText: (spec.title || 'Game') + ' on Chaupaal',
+            onAgain: () => openCueGame(Object.assign({}, spec, { chat })),
+          });
+          return;
         }
-        showDuelResult(shell, {
-          id: spec.id,
-          you: won ? 1 : 0,
-          opp: won ? 0 : 1,
-          glyph: spec.glyph,
-          pbScore: isPool ? countGroupPocketed('you') : youPocketed,
-          title: won ? 'You win' : 'Defeat',
-          subtitle: sub,
-          shareText: isPool
+
+        const code = poolReasonCode(m);
+        const groupWord = youGroup === 'solid' ? 'Solids' : youGroup === 'stripe' ? 'Stripes' : 'Open';
+        const resign = m.resign || m.forfeit;
+        const stakeLine = liveOn ? (liveStake > 0 ? '⚡' + liveStake + ' virtual' : 'Friendly') : '';
+        const title = resign
+          ? liveOn
             ? won
-              ? 'I won Pool on Chaupaal — cleared my group and the 8'
-              : 'Pool on Chaupaal — rematch?'
-            : (spec.title || 'Game') + ' on Chaupaal',
-          onAgain: () => openCueGame(Object.assign({}, spec, { chat })),
-        });
+              ? 'Opponent left'
+              : 'You forfeited'
+            : 'You resigned'
+          : poolReasonLabel(code, won);
+        const subtitle =
+          (youGroup ? 'You: ' + groupWord + ' · ' : 'Open table · ') +
+          (liveOn ? 'Live' : 'Practice · ' + (DIFF_LABEL[difficulty] || 'Medium')) +
+          (liveOn ? (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') : '') +
+          (code === 'eight' && won ? ' · 8-ball in' : '');
+        const shareStats = {
+          scoreLine: won ? 'Win' : 'Loss',
+          meta: [groupWord, liveOn ? 'Live' : DIFF_LABEL[difficulty] || 'Medium', stakeLine]
+            .filter(Boolean)
+            .join(' · '),
+          vs: liveOn ? 'vs Friend' : 'vs AI',
+          stake: liveStake,
+          text:
+            'Chaupaal Pool · 8-ball ' +
+            (won ? 'win' : 'loss') +
+            ' · ' +
+            groupWord +
+            (liveOn
+              ? liveStake > 0
+                ? ' · Live · Stake ⚡' + liveStake + ' (virtual chips)'
+                : ' · Live · Friendly'
+              : ' · Practice · ' + (DIFF_LABEL[difficulty] || 'Medium')) +
+            ' · not real money',
+        };
+        const chatId =
+          (window.__dangalLaunchCtx && window.__dangalLaunchCtx.chatId) ||
+          (window.currentOpenChat && (window.currentOpenChat.firestoreId || window.currentOpenChat.id)) ||
+          (chat && (chat.firestoreId || chat.id)) ||
+          '';
+        const actions = [{ label: liveOn ? 'Rematch' : 'Play again', primary: true, id: 'again' }];
+        if (typeof shareGameResult === 'function' || typeof openUnifiedShareSheet === 'function') {
+          actions.push({ label: 'Share', primary: false, id: 'share' });
+        }
+        if (typeof openFriendPickerSheet === 'function') {
+          actions.push({ label: 'Challenge friend', primary: false, id: 'challenge' });
+        }
+        if (typeof postGameScoreStory === 'function') {
+          actions.push({ label: 'Post to story', primary: false, id: 'story' });
+        }
+        if (chatId && typeof openChatScreen === 'function') {
+          actions.push({ label: 'Chat', primary: false, id: 'chat' });
+        }
+
+        notePoolSession(won);
+        if (shell && typeof shell.markOver === 'function') shell.markOver();
+        if (shell.gs && typeof shell.gs.setOutcome === 'function') {
+          shell.gs.setOutcome(won ? 'won' : 'lost');
+        }
+        buzz(won ? 'win' : 'lose');
+        if (won && typeof setGamePB === 'function') {
+          const prev = typeof getGamePB === 'function' ? getGamePB('pool') : null;
+          setGamePB('pool', (prev || 0) + 1);
+        }
+        shell.body.innerHTML =
+          (typeof gameResultHtml === 'function'
+            ? gameResultHtml({
+                gameId: 'pool',
+                glyph: spec.glyph || '🎱',
+                title,
+                subtitle,
+                you: won ? 1 : 0,
+                opp: won ? 0 : 1,
+                shareCardHtml:
+                  typeof buildGameShareCard === 'function' ? buildGameShareCard('pool', shareStats) : '',
+                actions,
+                challenge: false,
+                share: false,
+              })
+            : '') +
+          '<div id="poolChipDelta" class="carrom-chip-delta" hidden style="margin-top:8px;font-size:12px;color:rgba(255,255,255,.75);text-align:center;"></div>';
+
+        settlePoolOnce(won);
+
+        if (typeof wireGameResultActions === 'function') {
+          wireGameResultActions(shell.body, {
+            again: async () => {
+              if (liveOn) {
+                let nextStake = liveStake;
+                if (
+                  typeof stakesEnabledForGame === 'function' &&
+                  stakesEnabledForGame('pool') &&
+                  typeof openDangalStakeSheet === 'function'
+                ) {
+                  const picked = await openDangalStakeSheet('pool', { defaultStake: liveStake });
+                  if (picked == null) return;
+                  nextStake = picked;
+                }
+                await startPoolLiveRematch(nextStake);
+                return;
+              }
+              shell.close('restart');
+              openCueGame(Object.assign({}, spec, rematchOpts()));
+            },
+            share: () => {
+              if (typeof shareGameResult === 'function') shareGameResult('pool', shareStats);
+              else if (typeof openUnifiedShareSheet === 'function') {
+                openUnifiedShareSheet({ gameId: 'pool', stats: shareStats });
+              }
+            },
+            challenge: async () => {
+              if (typeof openFriendPickerSheet !== 'function') return;
+              const f = await openFriendPickerSheet({
+                title: 'Challenge · Pool',
+                subtitle: 'Live 1v1 · virtual chips only — not real money',
+              });
+              if (!f) return;
+              const uid = f.uid || f.id || '';
+              let nextStake = 0;
+              if (
+                typeof stakesEnabledForGame === 'function' &&
+                stakesEnabledForGame('pool') &&
+                typeof openDangalStakeSheet === 'function'
+              ) {
+                const picked = await openDangalStakeSheet('pool', { defaultStake: 0 });
+                if (picked == null) return;
+                nextStake = picked;
+              }
+              await tearDownLiveHandle();
+              shell.close('challenge');
+              const mid =
+                typeof dangalMatchId === 'function'
+                  ? dangalMatchId('pool', { name: f.name, opponentUid: uid })
+                  : 'pool_' + Date.now();
+              try {
+                window.__dangalLaunchCtx = Object.assign({}, window.__dangalLaunchCtx || {}, {
+                  gameId: 'pool',
+                  gameType: 'pool',
+                  matchId: mid,
+                  mode: 'live',
+                  opponentUid: uid,
+                  stake: nextStake,
+                  source: 'challenge_host',
+                  chatId: f.chatId || f.firestoreId || '',
+                  startedAt: Date.now(),
+                });
+              } catch (e) {}
+              if (typeof sendChallengeCard === 'function' && (f.chatId || f.firestoreId)) {
+                try {
+                  await sendChallengeCard(uid, 'pool', {
+                    chatId: f.chatId || f.firestoreId,
+                    matchId: mid,
+                    stake: nextStake,
+                  });
+                  if (typeof showToast === 'function') showToast('Challenge sent');
+                } catch (e) {}
+              }
+              openPool({
+                name: f.name,
+                id: uid,
+                uid,
+                peerUid: uid,
+                opponentUid: uid,
+                dangalMatchId: mid,
+                dangalSource: 'challenge_host',
+                stake: nextStake,
+              });
+            },
+            story: () => {
+              if (typeof postGameScoreStory === 'function') postGameScoreStory('pool', shareStats);
+            },
+            chat: () => {
+              if (chatId && typeof openChatScreen === 'function') openChatScreen(chatId);
+            },
+          });
+        }
         return;
       }
 
@@ -2947,19 +3307,34 @@
           if (!val || ended) return;
           if (val.status === 'forfeit' || val.status === 'over') {
             const iWon = val.winner === liveRoles.me;
+            const stOver = val.state || {};
+            applying = true;
             if (isCarrom && val.state) {
-              applying = true;
               if (val.state.balls) applySnapshot(val.state.balls, null, val.turn);
               if (val.state.queen) applyQueenAbsolute(val.state.queen);
-              applying = false;
+            } else if (isPool && val.state) {
+              if (val.state.balls) applySnapshot(val.state.balls, val.state.scores, val.turn);
+              applyPoolGroupsFromState(val.state);
+              if (val.state.breakDone != null) breakDone = !!val.state.breakDone;
+              if (val.state.hint) lastHint = val.state.hint;
+              youPocketed = countGroupPocketed('you');
+              oppPocketed = countGroupPocketed('opp');
+              updateHud();
             } else if (val.status === 'over' && val.state && val.state.scores) {
               const sc = val.state.scores;
               youPocketed = liveRoles.me === liveRoles.playerA ? sc.a | 0 : sc.b | 0;
               oppPocketed = liveRoles.me === liveRoles.playerA ? sc.b | 0 : sc.a | 0;
               updateHud();
             }
+            applying = false;
             applying = true;
-            finish(iWon, { skipLivePush: true, forfeit: val.status === 'forfeit', resign: val.status === 'forfeit' && !iWon });
+            finish(iWon, {
+              skipLivePush: true,
+              forfeit: val.status === 'forfeit',
+              resign: val.status === 'forfeit' && !iWon,
+              reasonCode: stOver.reasonCode || (val.status === 'forfeit' ? 'forfeit' : ''),
+              reason: stOver.reason || '',
+            });
             applying = false;
             return;
           }
@@ -3026,13 +3401,35 @@
           }
           updateHud();
         } else {
-          hint.textContent = myTurn ? 'Your shot.' : 'Waiting for opponent…';
+          hint.textContent = myTurn
+            ? isPool
+              ? 'Your break — kitchen.'
+              : 'Your shot.'
+            : 'Waiting for opponent…';
           if (liveRoles.host) {
-            liveHandle.push({
-              status: 'playing',
-              turn: liveRoles.me,
-              state: { balls: snapshotBalls(), scores: { a: 0, b: 0 }, phase: 'deal' },
-            });
+            if (isPool) {
+              openTable = true;
+              youGroup = null;
+              oppGroup = null;
+              breakDone = false;
+              resetCueToBaseline({ seat: 'you', x: W / 2 });
+              liveHandle.push({
+                status: 'playing',
+                turn: liveRoles.me,
+                state: buildPoolLiveState({
+                  phase: 'deal',
+                  breakDone: false,
+                  hint: 'Host breaks from the kitchen.',
+                  scores: { a: 0, b: 0 },
+                }),
+              });
+            } else {
+              liveHandle.push({
+                status: 'playing',
+                turn: liveRoles.me,
+                state: { balls: snapshotBalls(), scores: { a: 0, b: 0 }, phase: 'deal' },
+              });
+            }
           }
         }
       } else if (isCarrom) {
@@ -3049,6 +3446,38 @@
       resetCueToBaseline({ seat: breaker, x: W / 2 });
       updateHud();
       if (breaker === 'opp') scheduleAiTurn();
+    } else if (isPool && !liveOn) {
+      resetCueToBaseline({ seat: 'you', x: W / 2 });
+      updateHud();
+      if (breaker === 'opp') {
+        myTurn = false;
+        hint.textContent = 'AI breaks…';
+        schedulePoolAiTurn();
+      }
+    }
+
+    // Resign Practice Pool
+    if (isPool && !liveOn) {
+      const back = shell.overlay.querySelector('#pcBack');
+      if (back) {
+        const neu = back.cloneNode(true);
+        back.parentNode.replaceChild(neu, back);
+        neu.addEventListener('click', async () => {
+          if (ended) {
+            shell.close('dismissed');
+            return;
+          }
+          const ok =
+            typeof confirmLeaveGame === 'function'
+              ? await confirmLeaveGame({
+                  title: 'Resign Pool?',
+                  body: 'This counts as a loss vs AI.',
+                })
+              : true;
+          if (!ok) return;
+          finish(false, { resign: true, reasonCode: 'forfeit' });
+        });
+      }
     }
 
     raf = requestAnimationFrame(loop);
@@ -3362,12 +3791,16 @@
   }
 
   function openPool(ctx) {
+    const raw = ctx || {};
+    const chat = resolveChat(raw);
+    const stake =
+      Math.max(0, Number(raw.stake != null ? raw.stake : window.__dangalLaunchCtx && window.__dangalLaunchCtx.stake) || 0);
     openCueGame({
       id: 'pool',
       variant: 'pool',
       title: 'Pool',
       subtitle: '8-ball · solids & stripes',
-      chat: ctx,
+      chat,
       accent: '#1B3A2D',
       bg: '#0A1A10',
       felt: '#1b5e20',
@@ -3378,6 +3811,10 @@
       pocketR: 18,
       headStringY: 0.72,
       kitchenY: 0.84,
+      difficulty: raw.difficulty,
+      breakerPick: raw.breakerPick,
+      skipSheet: !!raw.skipSheet,
+      stake,
       pockets: [
         [0.06, 0.06],
         [0.5, 0.04],
