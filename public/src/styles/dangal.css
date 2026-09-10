@@ -443,6 +443,14 @@
   outline-offset:1px;
   box-shadow:0 0 10px rgba(255,214,0,.35);
 }
+.pc-satte-pass{
+  min-width:min(100%,220px);
+  min-height:48px;
+  padding:12px 28px;
+  font-size:16px;
+  font-weight:800;
+  letter-spacing:.02em;
+}
 .pc-row{display:flex;align-items:center;gap:8px;}
 
 /* ===== OH NO! (UNO) ===== */

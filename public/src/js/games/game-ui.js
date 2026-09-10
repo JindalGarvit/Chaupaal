@@ -191,8 +191,8 @@
     ],
     sattepe: [
       'Deal all 52 — suits start closed until a seven opens them',
-      'Build up or down from each seven · Ace is high (above King)',
-      'Empty your hand to win · Pass stub if stuck (rules deepen next)',
+      'Must play if able · Pass only with no legal card',
+      'Two passes lock the table — fewest cards wins (tie = draw) · Ace high',
     ],
     andarbaahar: ['Joker sets the rank', 'Pick Andar or Bahar', 'First matching rank wins the side'],
     patangbaazi: [
