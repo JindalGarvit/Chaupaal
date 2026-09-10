@@ -152,7 +152,11 @@
       'Try Gully Over, Nets (survive), or Chase (hit the target) — Practice formats now',
       'Per-format bests on your card — Live friend bowling later',
     ],
-    gullykick: ['Pick left, center, or right', 'Beat the keeper’s dive', 'Five kicks per shootout'],
+    gullykick: [
+      'Drag the net to pick a corner and height',
+      'Hold Kick to charge power — release to strike',
+      'Five kicks · Practice shootout — keeper reads come later',
+    ],
     badminton: ['Serve, then smash in the timing window', 'Rallies get faster', 'First to 7'],
     tabletennis: ['Short window — stay early, not late', 'First to 11', 'Opponent misses if you keep returning'],
     pickleball: ['Dink in the green window', 'First to 7', 'Patience beats panic taps'],

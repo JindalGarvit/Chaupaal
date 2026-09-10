@@ -1244,38 +1244,294 @@
   }
 
 
-  /** Gully Kick — 5 penalties; aim left/center/right vs keeper dive. */
+  /** Gully Kick — Practice strike craft: aim + power + flight (Prompt 1/3). */
   function openGullyKick() {
+    let scored = 0;
+    let taken = 0;
+    const MAX = 5;
+    let phase = 'aim'; // aim | flight | result | done
+    let lastResult = '';
+    let lastDive = 'C';
+    let lastGoal = false;
+    let lastKick = null;
+    const kickLog = [];
+    let aim = { side: 'C', height: 'mid', nx: 0.5, ny: 0.45 };
+    let power = 0.55;
+    let chargeRaf = null;
+    let chargeStartedAt = 0;
+    let charging = false;
+    let flightTimer = null;
+    let resultTimer = null;
+    let locked = false;
+
+    const clearTimers = () => {
+      if (flightTimer) clearTimeout(flightTimer);
+      if (resultTimer) clearTimeout(resultTimer);
+      if (chargeRaf) cancelAnimationFrame(chargeRaf);
+      flightTimer = null;
+      resultTimer = null;
+      chargeRaf = null;
+      charging = false;
+    };
+
     const { body, gs } = mountSportsShell({
       gameId: 'gullykick',
       title: 'Gully Kick',
       accent: '#2D6A4F',
+      onClose: clearTimers,
     });
     if (!body) return;
-    let scored = 0;
-    let taken = 0;
-    const MAX = 5;
-    let phase = 'aim'; // aim | result | done
-    let lastResult = '';
-    let lastDive = 'C';
-    let lastAim = 'C';
-    let lastGoal = false;
+
+    const diveLabel = (d) => (d === 'L' ? 'left' : d === 'R' ? 'right' : 'center');
+    const heightLabel = (h) => (h === 'low' ? 'low' : h === 'high' ? 'high' : 'mid');
+
+    const snapAim = (nx, ny) => {
+      const x = Math.max(0.08, Math.min(0.92, nx));
+      const y = Math.max(0.08, Math.min(0.92, ny));
+      const side = x < 0.34 ? 'L' : x > 0.66 ? 'R' : 'C';
+      const height = y < 0.34 ? 'high' : y > 0.66 ? 'low' : 'mid';
+      // Snap marker toward zone centers for readability
+      const sx = side === 'L' ? 0.2 : side === 'R' ? 0.8 : 0.5;
+      const sy = height === 'high' ? 0.22 : height === 'low' ? 0.78 : 0.5;
+      return {
+        side,
+        height,
+        nx: sx * 0.72 + x * 0.28,
+        ny: sy * 0.55 + y * 0.45,
+        rawNx: x,
+        rawNy: y,
+      };
+    };
 
     const reset = () => {
+      clearTimers();
       scored = 0;
       taken = 0;
       phase = 'aim';
       lastResult = '';
       lastDive = 'C';
-      lastAim = 'C';
       lastGoal = false;
+      lastKick = null;
+      kickLog.length = 0;
+      aim = { side: 'C', height: 'mid', nx: 0.5, ny: 0.45 };
+      power = 0.55;
+      locked = false;
       render();
     };
 
-    const diveLabel = (d) => (d === 'L' ? 'left' : d === 'R' ? 'right' : 'center');
+    const paintAimMarker = () => {
+      const marker = body.querySelector('[data-gk-marker]');
+      const net = body.querySelector('[data-gk-net]');
+      if (!marker || !net) return;
+      marker.style.left = aim.nx * 100 + '%';
+      marker.style.top = aim.ny * 100 + '%';
+      marker.dataset.side = aim.side;
+      marker.dataset.height = aim.height;
+      const label = body.querySelector('[data-gk-aim-label]');
+      if (label) {
+        label.textContent =
+          (aim.side === 'L' ? 'Left' : aim.side === 'R' ? 'Right' : 'Center') +
+          ' · ' +
+          heightLabel(aim.height);
+      }
+    };
+
+    const paintPower = () => {
+      const fill = body.querySelector('[data-gk-power-fill]');
+      if (fill) fill.style.width = Math.round(power * 100) + '%';
+      const txt = body.querySelector('[data-gk-power-label]');
+      if (txt) {
+        const tier = power < 0.4 ? 'Chip' : power < 0.7 ? 'Firm' : 'Blast';
+        txt.textContent = tier + ' · ' + Math.round(power * 100) + '%';
+      }
+    };
+
+    const setAimFromEvent = (ev, netEl, buzz) => {
+      const rect = netEl.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const clientX = ev.clientX != null ? ev.clientX : ev.touches && ev.touches[0] && ev.touches[0].clientX;
+      const clientY = ev.clientY != null ? ev.clientY : ev.touches && ev.touches[0] && ev.touches[0].clientY;
+      if (clientX == null || clientY == null) return;
+      const nx = (clientX - rect.left) / rect.width;
+      const ny = (clientY - rect.top) / rect.height;
+      aim = snapAim(nx, ny);
+      paintAimMarker();
+      if (buzz && typeof gameFeedback === 'function') gameFeedback('select');
+    };
+
+    const endPosForAim = (a, pwr) => {
+      // CSS % inside net box; power pulls slightly toward posts on blast
+      let x = a.side === 'L' ? 18 : a.side === 'R' ? 82 : 50;
+      let y = a.height === 'high' ? 18 : a.height === 'low' ? 72 : 42;
+      if (pwr > 0.75) {
+        if (a.side === 'L') x -= 4;
+        if (a.side === 'R') x += 4;
+        if (a.height === 'high') y -= 4;
+      }
+      if (pwr < 0.4) {
+        y = Math.min(78, y + 8);
+      }
+      return { x, y };
+    };
+
+    const resolveKick = (kick) => {
+      // Prompt 1: temporary zone vs random dive — Prompt 2 replaces this table
+      const goal = kick.side !== kick.dive;
+      return Object.assign({}, kick, {
+        goal,
+        reason: goal ? 'beat_dive' : 'same_side_save',
+        label: goal
+          ? `Goal! ${kick.side === 'L' ? 'Left' : kick.side === 'R' ? 'Right' : 'Center'} ${heightLabel(kick.height)} · keeper went ${diveLabel(kick.dive)}`
+          : `Saved! Same side — keeper guessed ${diveLabel(kick.dive)}`,
+      });
+    };
+
+    const commitKick = (pwr) => {
+      if (phase !== 'aim' || locked) return;
+      locked = true;
+      clearTimers();
+      power = Math.max(0.28, Math.min(1, pwr));
+      const dive = ['L', 'C', 'R'][Math.floor(Math.random() * 3)];
+      const end = endPosForAim(aim, power);
+      const flightMs = Math.round(520 + (1 - power) * 380); // blast = quicker
+      const kick = {
+        index: taken + 1,
+        side: aim.side,
+        height: aim.height,
+        power: Math.round(power * 100) / 100,
+        nx: aim.nx,
+        ny: aim.ny,
+        endX: end.x,
+        endY: end.y,
+        dive,
+        flightMs,
+        // Prompt 2 hooks
+        zones: { side: aim.side, height: aim.height },
+      };
+      lastKick = kick;
+      lastDive = dive;
+      phase = 'flight';
+      if (typeof gameFeedback === 'function') gameFeedback('kick');
+      try {
+        if (typeof window !== 'undefined') {
+          window.__gkLastKick = kick;
+          window.__gkKickLog = kickLog.slice();
+        }
+      } catch (e) {}
+      render();
+      flightTimer = setTimeout(() => {
+        flightTimer = null;
+        if (phase !== 'flight') return;
+        const resolved = resolveKick(kick);
+        lastKick = resolved;
+        kickLog.push(resolved);
+        taken += 1;
+        lastGoal = !!resolved.goal;
+        lastResult = resolved.label;
+        if (resolved.goal) {
+          scored += 1;
+          if (typeof gameFeedback === 'function') gameFeedback('win', { noConfetti: true });
+        } else if (typeof gameFeedback === 'function') {
+          gameFeedback('lose', { noConfetti: true });
+        }
+        try {
+          if (typeof window !== 'undefined') {
+            window.__gkLastKick = resolved;
+            window.__gkKickLog = kickLog.slice();
+          }
+        } catch (e) {}
+        phase = 'result';
+        locked = false;
+        render();
+        resultTimer = setTimeout(() => {
+          resultTimer = null;
+          if (phase !== 'result') return;
+          if (taken >= MAX) phase = 'done';
+          else {
+            phase = 'aim';
+            power = 0.55;
+            locked = false;
+          }
+          render();
+        }, 950);
+      }, flightMs);
+    };
+
+    const stopCharge = (commit) => {
+      if (!charging) return;
+      charging = false;
+      if (chargeRaf) cancelAnimationFrame(chargeRaf);
+      chargeRaf = null;
+      const elapsed = Date.now() - chargeStartedAt;
+      const p = Math.max(0.28, Math.min(1, 0.28 + elapsed / 900));
+      power = p;
+      paintPower();
+      if (commit) commitKick(p);
+    };
+
+    const startCharge = () => {
+      if (phase !== 'aim' || locked || charging) return;
+      charging = true;
+      chargeStartedAt = Date.now();
+      power = 0.28;
+      paintPower();
+      const tick = () => {
+        if (!charging) return;
+        const elapsed = Date.now() - chargeStartedAt;
+        power = Math.max(0.28, Math.min(1, 0.28 + elapsed / 900));
+        paintPower();
+        chargeRaf = requestAnimationFrame(tick);
+      };
+      chargeRaf = requestAnimationFrame(tick);
+      if (typeof gameFeedback === 'function') gameFeedback('place');
+    };
+
+    const wireAim = () => {
+      const net = body.querySelector('[data-gk-net]');
+      if (!net) return;
+      let dragging = false;
+      const onDown = (ev) => {
+        if (phase !== 'aim' || locked) return;
+        dragging = true;
+        if (ev.cancelable) ev.preventDefault();
+        setAimFromEvent(ev.touches ? ev.touches[0] : ev, net, true);
+      };
+      const onMove = (ev) => {
+        if (!dragging || phase !== 'aim') return;
+        if (ev.cancelable) ev.preventDefault();
+        const pt = ev.touches ? ev.touches[0] : ev;
+        setAimFromEvent(pt, net, false);
+      };
+      const onUp = () => {
+        dragging = false;
+      };
+      net.addEventListener('pointerdown', onDown);
+      net.addEventListener('pointermove', onMove);
+      net.addEventListener('pointerup', onUp);
+      net.addEventListener('pointercancel', onUp);
+      net.addEventListener('pointerleave', onUp);
+
+      const kickBtn = body.querySelector('[data-gk-kick]');
+      if (kickBtn) {
+        kickBtn.addEventListener('pointerdown', (ev) => {
+          if (phase !== 'aim' || locked) return;
+          ev.preventDefault();
+          try {
+            kickBtn.setPointerCapture(ev.pointerId);
+          } catch (e) {}
+          startCharge();
+        });
+        kickBtn.addEventListener('pointerup', (ev) => {
+          ev.preventDefault();
+          stopCharge(true);
+        });
+        kickBtn.addEventListener('pointercancel', () => stopCharge(false));
+      }
+    };
 
     const render = () => {
       if (phase === 'done') {
+        clearTimers();
         const empty = scored === 0;
         finishPractice('gullykick', scored, body, {
           title: 'Gully Kick',
@@ -1295,72 +1551,65 @@
         typeof getGamePB === 'function' && getGamePB('gullykick') != null
           ? ` · Best ${getGamePB('gullykick')}/${MAX}`
           : '';
+      const end = lastKick ? endPosForAim(lastKick, lastKick.power || power) : endPosForAim(aim, power);
       const keeperClass =
-        phase === 'result' ? `is-dive-${lastDive.toLowerCase()}${lastGoal ? '' : ' is-save'}` : '';
+        phase === 'flight' || phase === 'result'
+          ? `is-dive-${lastDive.toLowerCase()}${phase === 'result' && !lastGoal ? ' is-save' : ''}`
+          : '';
+      const ballClass =
+        phase === 'flight'
+          ? 'is-flight'
+          : phase === 'result'
+            ? `is-landed ${lastGoal ? 'is-goal' : 'is-saved'}`
+            : 'is-ready';
+      const flightMs = (lastKick && lastKick.flightMs) || 700;
+      const tip =
+        phase === 'result'
+          ? lastResult
+          : phase === 'flight'
+            ? 'Ball in flight…'
+            : 'Drag the net to aim · hold Kick to charge power';
+
       body.innerHTML = `
-        <div class="rw-sports-card">
-          <div class="rw-sports-hero" aria-hidden="true">⚽</div>
+        <div class="rw-sports-card rw-gk-card">
           <h2>Gully Kick</h2>
           <p class="rw-sports-score">${scored} scored · ${taken}/${MAX} taken${pb}</p>
-          <div class="rw-sports-goal" aria-hidden="true">
-            <div class="rw-sports-net"></div>
-            <div class="rw-sports-keeper ${keeperClass}">🧤</div>
-            ${
-              phase === 'result'
-                ? `<div class="rw-sports-ball-kick is-aim-${lastAim.toLowerCase()}${
-                    lastGoal ? ' is-goal' : ' is-saved'
-                  }"></div>`
-                : ''
-            }
+          <div class="rw-sports-goal rw-gk-goal" data-gk-goal>
+            <div class="rw-gk-pitch" aria-hidden="true"></div>
+            <div class="rw-sports-net rw-gk-net" data-gk-net
+              style="touch-action:none"
+              role="img" aria-label="Goal — drag to aim">
+              <div class="rw-gk-grid" aria-hidden="true"></div>
+              <div class="rw-gk-marker" data-gk-marker style="left:${aim.nx * 100}%;top:${aim.ny * 100}%"></div>
+              <div class="rw-sports-keeper rw-gk-keeper ${keeperClass}" aria-hidden="true">
+                <span class="rw-gk-keeper-mark"></span>
+              </div>
+              <div class="rw-sports-ball-kick rw-gk-ball ${ballClass}" data-gk-ball
+                style="--gk-end-x:${end.x}%;--gk-end-y:${end.y}%;--gk-flight-ms:${flightMs}ms;--gk-arc:${Math.round(18 + power * 22)}px"
+                aria-hidden="true"></div>
+            </div>
+          </div>
+          <p class="rw-gk-aim-label" data-gk-aim-label></p>
+          <div class="rw-gk-power" aria-hidden="true">
+            <div class="rw-gk-power-track"><div class="rw-gk-power-fill" data-gk-power-fill></div></div>
+            <span class="rw-gk-power-label" data-gk-power-label></span>
           </div>
           <div class="rw-sports-outcome" data-rw-outcome aria-live="polite"></div>
-          <p class="rw-sports-hint">${
-            phase === 'result' ? lastResult : lastResult || 'Pick a corner — beat the keeper.'
-          }</p>
-          <div class="rw-sports-aim">
-            <button type="button" class="btn" data-aim="L" ${phase !== 'aim' ? 'disabled' : ''}>Left</button>
-            <button type="button" class="btn btn--primary" data-aim="C" ${
-              phase !== 'aim' ? 'disabled' : ''
-            }>Center</button>
-            <button type="button" class="btn" data-aim="R" ${phase !== 'aim' ? 'disabled' : ''}>Right</button>
-          </div>
+          <p class="rw-sports-hint" data-gk-hint>${esc(tip)}</p>
+          <button type="button" class="btn btn--primary rw-gk-kick" data-gk-kick
+            ${phase !== 'aim' || locked ? 'disabled' : ''}>Hold to Kick</button>
         </div>`;
+      paintAimMarker();
+      paintPower();
       if (phase === 'result' && lastResult) {
         flashOutcome(body, lastGoal ? 'Goal!' : 'Saved!', lastGoal ? 'goal' : 'out');
       }
-      body.querySelectorAll('[data-aim]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          if (phase !== 'aim') return;
-          const aim = btn.dataset.aim;
-          const dive = ['L', 'C', 'R'][Math.floor(Math.random() * 3)];
-          lastAim = aim;
-          lastDive = dive;
-          taken += 1;
-          if (typeof gameFeedback === 'function') gameFeedback('kick');
-          if (aim !== dive) {
-            scored += 1;
-            lastGoal = true;
-            lastResult = `Goal! Keeper dove ${diveLabel(dive)}.`;
-            if (typeof gameFeedback === 'function') gameFeedback('win', { noConfetti: true });
-          } else {
-            lastGoal = false;
-            lastResult = 'Saved! Same corner as the keeper.';
-            if (typeof gameFeedback === 'function') gameFeedback('lose', { noConfetti: true });
-          }
-          phase = 'result';
-          render();
-          setTimeout(() => {
-            if (phase !== 'result') return;
-            if (taken >= MAX) phase = 'done';
-            else phase = 'aim';
-            render();
-          }, 900);
-        });
-      });
+      if (phase === 'aim') wireAim();
     };
 
     render();
   }
+
 
   if (typeof registerGame === 'function') {
     registerGame({
@@ -1383,7 +1632,7 @@
     registerGame({
       id: 'gullykick',
       name: 'Gully Kick',
-      desc: 'Practice · penalty shootout',
+      desc: 'Practice · aim & strike',
       icon: '⚽',
       ratingKey: 'gullykick',
       gameType: 'solo',
