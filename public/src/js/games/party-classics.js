@@ -2879,15 +2879,17 @@
     const chat = resolveChat(arguments[0]);
     const liveOn = chatLiveOn(chat);
     const rng = rngFn();
-    const STACK0 = 1000; // virtual chips — per-hand reset (career in Prompt 4)
+    // Chips virtual · per-hand reset (career = Prompt 4)
+    const STACK0 = 1000;
     const BOOT = 10;
-    const SEE_FEE = BOOT * 2; // Prompt 1: fixed see tied to boot (chaal ladder = Prompt 2)
-    const BLIND_CHAAL = BOOT; // stub ante bump while blind
+    const MAX_STAKE = BOOT * 8; // raise cap
+    const MAX_RAISES = 6;
+    // RULE: blind chaal = S; seen chaal = 2S (common house). See fee = 2S into pot.
     let aiTimer = 0;
     const shell = openShell({
       id: 'teenpatti',
       title: 'Teen Patti',
-      subtitle: liveOn ? liveSub() : practiceSub('Boot · blind · see'),
+      subtitle: liveOn ? liveSub() : practiceSub('Chaal · pot · pack'),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
@@ -2912,12 +2914,15 @@
     let packedA = false;
     let packedB = false;
     let boot = BOOT;
+    let stake = BOOT; // S = blind chaal unit
+    let raiseCount = 0;
+    let turnIsA = true;
+    let betSeq = 0;
     let phase = 'idle'; // idle | dealt | over
     let ended = false;
     let applying = false;
     let liveRoles = null;
     let liveHandle = null;
-    let dealtOnce = false;
 
     function iAmA() {
       return !liveOn || !liveRoles || liveRoles.me === liveRoles.playerA;
@@ -2941,17 +2946,10 @@
       if (iAmA()) seenA = !!v;
       else seenB = !!v;
     }
-    function setOppSeen(v) {
-      if (iAmA()) seenB = !!v;
-      else seenA = !!v;
-    }
     function setMyStack(n) {
+      n = Math.max(0, Math.floor(Number(n) || 0));
       if (iAmA()) stackA = n;
       else stackB = n;
-    }
-    function setOppStack(n) {
-      if (iAmA()) stackB = n;
-      else stackA = n;
     }
     function setMyPacked(v) {
       if (iAmA()) packedA = !!v;
@@ -2962,6 +2960,29 @@
     }
     function oppPacked() {
       return iAmA() ? packedB : packedA;
+    }
+    function myTurn() {
+      if (ended || phase !== 'dealt' || myPacked()) return false;
+      if (!liveOn) return turnIsA; // Practice: you are seat A
+      if (!liveRoles) return false;
+      return turnIsA ? liveRoles.me === liveRoles.playerA : liveRoles.me === liveRoles.playerB;
+    }
+    function turnUid() {
+      if (!liveOn || !liveRoles) return turnIsA ? 'A' : 'B';
+      return turnIsA ? liveRoles.playerA : liveRoles.playerB;
+    }
+    function chaalCost(seen) {
+      const s = Math.max(BOOT, stake | 0);
+      return seen ? s * 2 : s;
+    }
+    function seeFee() {
+      return chaalCost(true); // 2S
+    }
+    function activeCount() {
+      return (packedA ? 0 : 1) + (packedB ? 0 : 1);
+    }
+    function bothSeen() {
+      return seenA && seenB;
     }
 
     function snapshot() {
@@ -2976,8 +2997,12 @@
         packedA,
         packedB,
         boot,
+        stake,
+        raiseCount,
+        turnIsA,
+        betSeq,
         phase,
-        seeFee: SEE_FEE,
+        active: [!packedA, !packedB],
       };
     }
 
@@ -2993,6 +3018,10 @@
       if (st.packedA != null) packedA = !!st.packedA;
       if (st.packedB != null) packedB = !!st.packedB;
       if (st.boot != null) boot = Math.max(1, Number(st.boot) || BOOT);
+      if (st.stake != null) stake = Math.max(BOOT, Number(st.stake) || BOOT);
+      if (st.raiseCount != null) raiseCount = Math.max(0, Number(st.raiseCount) || 0);
+      if (st.turnIsA != null) turnIsA = !!st.turnIsA;
+      if (st.betSeq != null) betSeq = Math.max(betSeq, Number(st.betSeq) || 0);
       if (st.phase) phase = st.phase;
     }
 
@@ -3002,7 +3031,7 @@
         Object.assign(
           {
             status: phase === 'over' ? 'over' : 'playing',
-            turn: liveRoles.me,
+            turn: turnUid(),
             state: snapshot(),
           },
           extra || {}
@@ -3010,16 +3039,12 @@
       );
     }
 
-    /** Live FOW: never paint opp faces until show/over. RTDB may still hold both hands (Uno-style). */
-    function paintOppHand(revealAll) {
-      if (revealAll || phase === 'over') return oppCards().map(cardFace).join('');
+    function paintOppHand() {
       return cardBacks(3);
     }
-
     function paintMyHand() {
       const you = myCards();
-      if (!you.length) return cardBacks(3);
-      if (!mySeen()) return cardBacks(3);
+      if (!you.length || !mySeen()) return cardBacks(3);
       return you.map(cardFace).join('');
     }
 
@@ -3030,45 +3055,68 @@
       }
     }
 
-    function paint(msg) {
-      if (ended) return;
-      const seen = mySeen();
-      const canSee = !seen && myStack() >= SEE_FEE && !myPacked() && phase === 'dealt';
-      const canBlind = !seen && myStack() >= BLIND_CHAAL && !myPacked() && phase === 'dealt';
-      const canShow = seen && !myPacked() && phase === 'dealt';
-      const canPack = !myPacked() && phase === 'dealt';
-      const badge = seen ? 'Seen' : 'Blind';
-      const oppBadge = oppSeen() ? 'seen' : 'blind';
-      shell.body.innerHTML = `
-        <div class="pc-tp">
-          <div class="pc-tp-hud" aria-live="polite">
-            <span>You <b>${myStack()}</b></span>
-            <span class="pc-tp-pot">Pot <b>${pot}</b></span>
-            <span class="pc-tp-badge ${seen ? 'is-seen' : 'is-blind'}">${badge}</span>
-          </div>
-          <p class="pc-hint">Opponent · ${oppBadge}${liveOn ? ' · Live' : ''}</p>
-          <div class="pc-hand pc-hand--opp">${paintOppHand(false)}</div>
-          <p class="pc-hint">You · ${badge.toLowerCase()}${msg ? ' · ' + esc(msg) : ''}</p>
-          <div class="pc-hand pc-hand--you">${paintMyHand()}</div>
-          <div class="pc-actions pc-tp-actions">
-            ${canSee ? `<button type="button" class="cs-hit" data-see>See (−${SEE_FEE})</button>` : ''}
-            ${canBlind ? `<button type="button" class="cs-hit cs-hit--ghost" data-blind>Blind chaal (−${BLIND_CHAAL})</button>` : ''}
-            ${canShow ? `<button type="button" class="cs-hit" data-show>Show</button>` : ''}
-            ${canPack ? `<button type="button" class="cs-hit" data-pack>Pack</button>` : ''}
-          </div>
-          <p class="pc-hint pc-tp-boot">Boot ${boot} · see ${SEE_FEE} · chips virtual</p>
-        </div>`;
-      shell.body.querySelector('[data-see]')?.addEventListener('click', () => doSee(false));
-      shell.body.querySelector('[data-blind]')?.addEventListener('click', () => doBlindChaal(false));
-      shell.body.querySelector('[data-show]')?.addEventListener('click', () => doShow(false));
-      shell.body.querySelector('[data-pack]')?.addEventListener('click', () => doPack(false));
-      if (!liveOn && phase === 'dealt' && !ended) scheduleAi();
+    function debit(seatA, amount) {
+      amount = Math.max(0, Math.floor(amount));
+      if (seatA) {
+        const pay = Math.min(stackA, amount);
+        stackA -= pay;
+        pot += pay;
+        return pay;
+      }
+      const pay = Math.min(stackB, amount);
+      stackB -= pay;
+      pot += pay;
+      return pay;
+    }
+
+    function passTurn() {
+      if (packedA && !packedB) turnIsA = false;
+      else if (packedB && !packedA) turnIsA = true;
+      else turnIsA = !turnIsA;
+      betSeq += 1;
     }
 
     function awardPotSeat(toA) {
       if (toA) stackA += pot;
       else stackB += pot;
       pot = 0;
+    }
+
+    function settleShow() {
+      const sa = tpScore(handA);
+      const sb = tpScore(handB);
+      const split = sa === sb;
+      const aWins = sa > sb;
+      if (split) {
+        const half = Math.floor(pot / 2);
+        stackA += half;
+        stackB += pot - half;
+        pot = 0;
+      } else if (aWins) awardPotSeat(true);
+      else awardPotSeat(false);
+      return { split, aWins, sa, sb };
+    }
+
+    function showResultScreen(title, youScore, oppScore, draw) {
+      if (shell && typeof shell.markOver === 'function') shell.markOver();
+      shell.body.innerHTML = `
+        <div class="pc-tp">
+          <p class="pc-hint">Show</p>
+          <div class="pc-hand">${oppCards().map(cardFace).join('')}</div>
+          <div class="pc-hand">${myCards().map(cardFace).join('')}</div>
+        </div>`;
+      setTimeout(() => {
+        showDuelResult(shell, {
+          id: 'teenpatti',
+          you: draw ? 1 : youScore,
+          opp: draw ? 1 : oppScore,
+          glyph: '♠',
+          title,
+          subtitle: 'Pot settled · trail > sequence > colour',
+          shareText: 'Teen Patti on Chaupaal',
+          onAgain: () => openTeenPatti(chat),
+        });
+      }, 700);
     }
 
     function finishHand(youWin, title, subtitle, fromRemote, reveal) {
@@ -3111,18 +3159,18 @@
     function postBoots() {
       stackA = STACK0;
       stackB = STACK0;
-      if (stackA < BOOT || stackB < BOOT) {
-        stackA = STACK0;
-        stackB = STACK0;
-      }
       stackA -= BOOT;
       stackB -= BOOT;
       pot = BOOT * 2;
       boot = BOOT;
+      stake = BOOT;
+      raiseCount = 0;
       seenA = false;
       seenB = false;
       packedA = false;
       packedB = false;
+      turnIsA = true;
+      betSeq = 0;
     }
 
     function dealFresh() {
@@ -3131,41 +3179,121 @@
       handB = deck.splice(0, 3);
       postBoots();
       phase = 'dealt';
-      dealtOnce = true;
     }
 
-    function doSee(fromRemote) {
-      if (ended || phase !== 'dealt' || myPacked()) return;
-      if (mySeen()) return;
-      if (myStack() < SEE_FEE) {
-        paint('Need ' + SEE_FEE + ' to see');
+    function paint(msg) {
+      if (ended) return;
+      const seen = mySeen();
+      const mine = myTurn();
+      const cost = chaalCost(seen);
+      const fee = seeFee();
+      const canSee = mine && !seen && !myPacked() && phase === 'dealt';
+      const canChaal = mine && !myPacked() && phase === 'dealt';
+      const canRaise =
+        mine && !myPacked() && phase === 'dealt' && raiseCount < MAX_RAISES && stake < MAX_STAKE;
+      const canShow = mine && seen && oppSeen() && activeCount() === 2 && phase === 'dealt';
+      const canPack = mine && !myPacked() && phase === 'dealt';
+      const badge = seen ? 'Seen' : 'Blind';
+      const oppBadge = oppSeen() ? 'seen' : 'blind';
+      const turnLabel = mine ? 'Your turn' : liveOn ? 'Their turn' : 'Opponent thinking…';
+      const allInNote = myStack() > 0 && myStack() < cost ? ' · all-in' : '';
+      shell.body.innerHTML = `
+        <div class="pc-tp">
+          <div class="pc-tp-hud" aria-live="polite">
+            <span>You <b>${myStack()}</b></span>
+            <span class="pc-tp-pot">Pot <b>${pot}</b></span>
+            <span>Call <b>${Math.min(cost, myStack())}</b>${allInNote}</span>
+            <span class="pc-tp-badge ${seen ? 'is-seen' : 'is-blind'}">${badge}</span>
+          </div>
+          <p class="pc-hint">${esc(turnLabel)} · stake S=${stake} · blind ${stake} / seen ${stake * 2}${liveOn ? ' · Live' : ''}</p>
+          <p class="pc-hint">Opponent · ${oppBadge}</p>
+          <div class="pc-hand pc-hand--opp">${paintOppHand()}</div>
+          <p class="pc-hint">You · ${badge.toLowerCase()}${msg ? ' · ' + esc(msg) : ''}</p>
+          <div class="pc-hand pc-hand--you">${paintMyHand()}</div>
+          <div class="pc-actions pc-tp-actions">
+            ${canSee ? `<button type="button" class="cs-hit" data-see>See (−${Math.min(fee, myStack())})</button>` : ''}
+            ${canChaal ? `<button type="button" class="cs-hit" data-chaal>${seen ? 'Chaal' : 'Blind chaal'} (−${Math.min(cost, myStack())})</button>` : ''}
+            ${
+              canRaise
+                ? `<button type="button" class="cs-hit cs-hit--ghost" data-raise="1">Raise +${BOOT}</button>
+                   <button type="button" class="cs-hit cs-hit--ghost" data-raise="2">Raise +${BOOT * 2}</button>`
+                : ''
+            }
+            ${canShow ? `<button type="button" class="cs-hit" data-show>Show</button>` : ''}
+            ${canPack ? `<button type="button" class="cs-hit" data-pack>Pack</button>` : ''}
+          </div>
+          <p class="pc-hint pc-tp-boot">Boot ${boot} · raises ${raiseCount}/${MAX_RAISES} · chips virtual</p>
+        </div>`;
+      shell.body.querySelector('[data-see]')?.addEventListener('click', () => doSee());
+      shell.body.querySelector('[data-chaal]')?.addEventListener('click', () => doChaal());
+      shell.body.querySelectorAll('[data-raise]').forEach((btn) => {
+        btn.addEventListener('click', () => doRaise(Number(btn.dataset.raise) || 1));
+      });
+      shell.body.querySelector('[data-show]')?.addEventListener('click', () => doShow());
+      shell.body.querySelector('[data-pack]')?.addEventListener('click', () => doPack());
+      if (!liveOn && phase === 'dealt' && !ended && !turnIsA) scheduleAi();
+    }
+
+    function doSee() {
+      if (ended || phase !== 'dealt' || myPacked() || mySeen() || !myTurn()) return;
+      const fee = seeFee();
+      if (myStack() <= 0) {
+        paint('No chips to see');
         return;
       }
-      setMyStack(myStack() - SEE_FEE);
-      pot += SEE_FEE;
+      if (iAmA()) debit(true, fee);
+      else debit(false, fee);
       setMySeen(true);
+      betSeq += 1;
       buzz('select');
-      if (!fromRemote) pushLive({ act: 'see', by: liveRoles && liveRoles.me });
-      paint('Cards up — you paid to see');
+      pushLive({ act: 'see', by: liveRoles && liveRoles.me });
+      paint('Cards up — still your turn');
     }
 
-    function doBlindChaal(fromRemote) {
-      if (ended || phase !== 'dealt' || myPacked() || mySeen()) return;
-      if (myStack() < BLIND_CHAAL) return;
-      setMyStack(myStack() - BLIND_CHAAL);
-      pot += BLIND_CHAAL;
+    function doChaal() {
+      if (ended || phase !== 'dealt' || myPacked() || !myTurn()) return;
+      const cost = chaalCost(mySeen());
+      if (myStack() <= 0) {
+        paint('No chips left');
+        return;
+      }
+      if (iAmA()) debit(true, cost);
+      else debit(false, cost);
       buzz('select');
-      if (!fromRemote) pushLive({ act: 'blind', by: liveRoles && liveRoles.me });
-      paint('Blind chaal in the pot');
+      passTurn();
+      pushLive({ act: 'chaal', by: liveRoles && liveRoles.me });
+      paint('Chaal in');
     }
 
-    function doPack(fromRemote) {
-      if (ended || phase !== 'dealt' || myPacked()) return;
+    function doRaise(steps) {
+      if (ended || phase !== 'dealt' || myPacked() || !myTurn()) return;
+      steps = steps === 2 ? 2 : 1;
+      if (raiseCount >= MAX_RAISES || stake >= MAX_STAKE) {
+        paint('Raise cap hit');
+        return;
+      }
+      const bump = BOOT * steps;
+      stake = Math.min(MAX_STAKE, stake + bump);
+      raiseCount += 1;
+      const cost = chaalCost(mySeen());
+      if (iAmA()) debit(true, cost);
+      else debit(false, cost);
+      buzz('select');
+      passTurn();
+      pushLive({ act: 'raise', by: liveRoles && liveRoles.me, steps });
+      paint('Raised · S=' + stake);
+    }
+
+    function doPack() {
+      if (ended || phase !== 'dealt' || myPacked() || !myTurn()) return;
       setMyPacked(true);
+      // Other seat wins pot
       if (iAmA()) awardPotSeat(false);
       else awardPotSeat(true);
       buzz('lose');
-      if (!fromRemote && liveOn && liveHandle && !applying) {
+      phase = 'over';
+      betSeq += 1;
+      if (liveOn && liveHandle && !applying) {
         liveHandle.push({
           status: 'over',
           winner: liveRoles.opp,
@@ -3176,92 +3304,51 @@
       finishHand(false, 'Packed', 'Opponent takes the pot', true, false);
     }
 
-    function doShow(fromRemote) {
-      if (ended || phase !== 'dealt' || myPacked()) return;
-      if (!mySeen()) {
-        paint('See your cards before Show');
+    function doShow() {
+      if (ended || phase !== 'dealt' || myPacked() || !myTurn()) return;
+      if (!mySeen() || !oppSeen() || activeCount() !== 2) {
+        paint('Show needs both seen');
         return;
       }
-      const ys = tpScore(myCards());
-      const os = tpScore(oppCards());
-      const split = ys === os;
-      const youWin = ys > os;
-      if (split) {
-        const half = Math.floor(pot / 2);
-        if (iAmA()) {
-          stackA += half;
-          stackB += pot - half;
-        } else {
-          stackB += half;
-          stackA += pot - half;
-        }
-        pot = 0;
-      } else if ((youWin && iAmA()) || (!youWin && !iAmA())) {
-        awardPotSeat(true);
-      } else {
-        awardPotSeat(false);
-      }
+      const settled = settleShow();
       phase = 'over';
-      if (!fromRemote && liveOn && liveHandle && !applying) {
+      betSeq += 1;
+      const youWin = iAmA() ? settled.aWins : !settled.aWins;
+      if (liveOn && liveHandle && !applying) {
         liveHandle.push({
           status: 'over',
-          winner: split ? null : youWin ? liveRoles.me : liveRoles.opp,
+          winner: settled.split ? null : youWin ? liveRoles.me : liveRoles.opp,
           act: 'show',
           state: Object.assign(snapshot(), {
             phase: 'over',
             revealed: true,
-            scores: { a: tpScore(handA), b: tpScore(handB) },
+            scores: { a: settled.sa, b: settled.sb },
           }),
         });
       }
       if (ended) return;
       ended = true;
       clearAi();
-      if (shell && typeof shell.markOver === 'function') shell.markOver();
-      shell.body.innerHTML = `
-        <div class="pc-tp">
-          <p class="pc-hint">Show</p>
-          <div class="pc-hand">${oppCards().map(cardFace).join('')}</div>
-          <div class="pc-hand">${myCards().map(cardFace).join('')}</div>
-        </div>`;
-      const title = split ? 'Split pot' : youWin ? 'You win the show' : 'Opponent wins the show';
-      setTimeout(() => {
-        showDuelResult(shell, {
-          id: 'teenpatti',
-          you: split ? 1 : youWin ? 1 : 0,
-          opp: split ? 1 : youWin ? 0 : 1,
-          glyph: '♠',
-          title,
-          subtitle: 'Pot settled · trail > sequence > colour',
-          shareText: 'Teen Patti on Chaupaal',
-          onAgain: () => openTeenPatti(chat),
-        });
-      }, 700);
-    }
-
-    function remotePackWin() {
-      finishHand(true, 'Opponent packed', 'You take the pot', true, false);
+      const title = settled.split ? 'Split pot' : youWin ? 'You win the show' : 'Opponent wins the show';
+      showResultScreen(title, youWin ? 1 : 0, youWin ? 0 : 1, settled.split);
     }
 
     function applyRemoteAct(val) {
       const st = val.state || {};
+      const incomingSeq = st.betSeq != null ? Number(st.betSeq) : -1;
+      if (incomingSeq >= 0 && incomingSeq < betSeq && val.status !== 'over' && st.phase !== 'over') {
+        return; // stale
+      }
       applySnapshot(st);
       const act = val.act;
       const by = val.by;
       if (ended) return;
-      if (act === 'see' || act === 'blind') {
-        if (by && liveRoles && by !== liveRoles.me) {
-          paint(act === 'see' ? 'Opponent paid to see' : 'Opponent blind chaal');
-        } else {
-          paint();
-        }
-        return;
-      }
+
       if (val.status === 'over' || st.phase === 'over' || act === 'pack' || act === 'show') {
         applying = true;
         if (act === 'pack' || st.packedA || st.packedB) {
           if (myPacked()) finishHand(false, 'Packed', 'Opponent takes the pot', true, false);
-          else remotePackWin();
+          else finishHand(true, 'Opponent packed', 'You take the pot', true, false);
         } else if (act === 'show' || st.revealed) {
           const ys = tpScore(myCards());
           const os = tpScore(oppCards());
@@ -3269,25 +3356,12 @@
           const youWin = ys > os;
           ended = true;
           phase = 'over';
-          if (shell && typeof shell.markOver === 'function') shell.markOver();
-          shell.body.innerHTML = `
-            <div class="pc-tp">
-              <p class="pc-hint">Show</p>
-              <div class="pc-hand">${oppCards().map(cardFace).join('')}</div>
-              <div class="pc-hand">${myCards().map(cardFace).join('')}</div>
-            </div>`;
-          setTimeout(() => {
-            showDuelResult(shell, {
-              id: 'teenpatti',
-              you: split ? 1 : youWin ? 1 : 0,
-              opp: split ? 1 : youWin ? 0 : 1,
-              glyph: '♠',
-              title: split ? 'Split pot' : youWin ? 'You win the show' : 'Opponent wins the show',
-              subtitle: 'Pot settled',
-              shareText: 'Teen Patti on Chaupaal',
-              onAgain: () => openTeenPatti(chat),
-            });
-          }, 700);
+          showResultScreen(
+            split ? 'Split pot' : youWin ? 'You win the show' : 'Opponent wins the show',
+            youWin ? 1 : 0,
+            youWin ? 0 : 1,
+            split
+          );
         } else {
           const iWon = val.winner === liveRoles.me;
           finishHand(
@@ -3301,95 +3375,109 @@
         applying = false;
         return;
       }
+
+      if (act === 'see' && by && liveRoles && by !== liveRoles.me) {
+        paint('Opponent paid to see');
+        return;
+      }
+      if (act === 'chaal' || act === 'raise' || act === 'see' || act === 'blind') {
+        paint(act === 'raise' ? 'Opponent raised' : act === 'chaal' ? 'Opponent chaaled' : '');
+        return;
+      }
       if (st.handA && st.handB && phase === 'dealt') {
-        dealtOnce = true;
-        paint(dealtOnce ? '' : 'Boot posted — both blind');
+        paint('Boot posted — chaal when ready');
         return;
       }
       paint();
     }
 
-    /** Practice AI — may stay blind or see; packs weak, shows strong once seen. */
     function scheduleAi() {
       clearAi();
-      if (liveOn || ended || phase !== 'dealt' || packedB) return;
+      if (liveOn || ended || phase !== 'dealt' || packedB || turnIsA) return;
       aiTimer = setTimeout(() => {
         aiTimer = 0;
-        if (ended || phase !== 'dealt' || packedB) return;
+        if (ended || phase !== 'dealt' || packedB || turnIsA) return;
         runAi();
-      }, 900 + Math.floor(rng() * 900));
+      }, 700 + Math.floor(rng() * 800));
     }
 
     function runAi() {
-      if (ended || packedB) return;
-      const strength = tpScore(handB); // Practice-only secret eval
+      if (ended || packedB || turnIsA) return;
+      const strength = tpScore(handB); // Practice-only
+      const cost = chaalCost(seenB);
+
+      // Blind: often chaal; see if pot large or strong-unknown bias
       if (!seenB) {
-        const wantSee = strength >= 2000 || rng() < 0.45;
-        if (wantSee && stackB >= SEE_FEE) {
-          stackB -= SEE_FEE;
-          pot += SEE_FEE;
+        if ((pot >= BOOT * 6 || rng() < 0.35) && stackB >= seeFee()) {
+          debit(false, seeFee());
           seenB = true;
+          betSeq += 1;
           paint('Opponent paid to see');
           scheduleAi();
           return;
         }
-        if (rng() < 0.2 && stackB >= BLIND_CHAAL) {
-          stackB -= BLIND_CHAAL;
-          pot += BLIND_CHAAL;
-          paint('Opponent blind chaal');
-          scheduleAi();
-          return;
-        }
-        if (rng() < 0.12) {
+        if (rng() < 0.1) {
           packedB = true;
           awardPotSeat(true);
           finishHand(true, 'Opponent packed', 'You take the pot', false, false);
           return;
         }
+        if (raiseCount < 2 && stake < MAX_STAKE && rng() < 0.12 && stackB > cost) {
+          stake = Math.min(MAX_STAKE, stake + BOOT);
+          raiseCount += 1;
+          debit(false, chaalCost(false));
+          passTurn();
+          paint('Opponent raised blind');
+          return;
+        }
+        debit(false, cost);
+        passTurn();
+        paint('Opponent blind chaal');
         return;
       }
-      // Seen
-      if (strength < 14 + Math.floor(rng() * 8) && rng() < 0.55) {
+
+      // Seen — strength map
+      if (strength >= 5000) {
+        if (raiseCount < MAX_RAISES && stake < MAX_STAKE && rng() < 0.7) {
+          stake = Math.min(MAX_STAKE, stake + BOOT * (rng() < 0.4 ? 2 : 1));
+          raiseCount += 1;
+          debit(false, chaalCost(true));
+          passTurn();
+          paint('Opponent raised');
+          return;
+        }
+      }
+      if (strength < 20 && (pot > BOOT * 8 || rng() < 0.5)) {
         packedB = true;
         awardPotSeat(true);
         finishHand(true, 'Opponent packed', 'You take the pot', false, false);
         return;
       }
-      if (strength >= 2000 || rng() < 0.35) {
-        // AI show — must be seen
-        const ys = tpScore(handA);
-        const os = strength;
-        const split = ys === os;
-        const youWin = ys > os;
-        if (split) {
-          const half = Math.floor(pot / 2);
-          stackA += half;
-          stackB += pot - half;
-          pot = 0;
-        } else if (youWin) awardPotSeat(true);
-        else awardPotSeat(false);
+      if (strength >= 2000 && bothSeen() && rng() < 0.4) {
+        const settled = settleShow();
         phase = 'over';
         ended = true;
         clearAi();
-        shell.body.innerHTML = `
-          <div class="pc-tp">
-            <p class="pc-hint">Show</p>
-            <div class="pc-hand">${handB.map(cardFace).join('')}</div>
-            <div class="pc-hand">${handA.map(cardFace).join('')}</div>
-          </div>`;
-        setTimeout(() => {
-          showDuelResult(shell, {
-            id: 'teenpatti',
-            you: split ? 1 : youWin ? 1 : 0,
-            opp: split ? 1 : youWin ? 0 : 1,
-            glyph: '♠',
-            title: split ? 'Split pot' : youWin ? 'You win the show' : 'Opponent wins the show',
-            subtitle: 'Opponent showed',
-            shareText: 'Teen Patti on Chaupaal',
-            onAgain: () => openTeenPatti(chat),
-          });
-        }, 700);
+        const youWin = settled.split ? false : settled.aWins;
+        showResultScreen(
+          settled.split ? 'Split pot' : youWin ? 'You win the show' : 'Opponent wins the show',
+          settled.split ? 1 : youWin ? 1 : 0,
+          settled.split ? 1 : youWin ? 0 : 1,
+          settled.split
+        );
+        return;
       }
+      if (strength >= 3000 && raiseCount < MAX_RAISES && stake < MAX_STAKE && rng() < 0.35) {
+        stake = Math.min(MAX_STAKE, stake + BOOT);
+        raiseCount += 1;
+        debit(false, chaalCost(true));
+        passTurn();
+        paint('Opponent raised');
+        return;
+      }
+      debit(false, cost);
+      passTurn();
+      paint('Opponent chaal');
     }
 
     if (liveOn) {
@@ -4057,7 +4145,7 @@
       { id: 'carrom', name: 'Carrom', desc: 'Live · stakes · AI', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
       { id: 'pool', name: 'Pool', desc: 'Clear the felt', icon: '🎱', genre: 'board', launch: openPool, order: 32 },
       { id: 'rummy', name: 'Rummy', desc: 'Runs and sets', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
-      { id: 'teenpatti', name: 'Teen Patti', desc: 'Boot · blind · see', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
+      { id: 'teenpatti', name: 'Teen Patti', desc: 'Chaal · raise · pack', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
       { id: 'bluff', name: 'Bluff', desc: 'Play face-down', icon: '🎭', genre: 'party', launch: openBluff, order: 35 },
       { id: 'sattepe', name: 'Satte pe Satta', desc: 'Build off sevens', icon: '7️⃣', genre: 'party', launch: openSatte, order: 36 },
       { id: 'andarbaahar', name: 'Andar Bahar', desc: 'Pick a side', icon: '🃏', genre: 'party', launch: openAndarBahar, order: 37 },
