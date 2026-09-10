@@ -165,7 +165,11 @@
     tabletennis: ['Short window — stay early, not late', 'First to 11', 'Opponent misses if you keep returning'],
     pickleball: ['Dink in the green window', 'First to 7', 'Patience beats panic taps'],
     tennis: ['Serve to start each point', 'First to 4 games', 'Time the return'],
-    kabaddi: ['Tag defenders, then tap Home', 'Breath bar is your raid clock', 'Empty tags still concede a point'],
+    kabaddi: [
+      'Tap the court to move — cross mid to start your breath',
+      'Tag defenders by reaching them, then Home in your half',
+      'Empty Home or breath-out concedes · first to 5',
+    ],
     tambola: ['Numbers auto-daub on your ticket', 'Claim full house at 15', 'Caller races another ticket'],
     carrom: ['Pocket your colour', 'Queen then cover', 'Striker pocket is a foul'],
     uno: ['Match colour or number to play', 'Classic has optional house-rule toggles', "Shout 'Oh No!' at 1 card · Blaze hits harder · Flip switches sides"],

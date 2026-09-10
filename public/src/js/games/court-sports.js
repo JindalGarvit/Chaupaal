@@ -543,16 +543,24 @@
     renderPlay(spec.prompt);
   }
 
+  /**
+   * Kabaddi Prompt 1 — raid court & breath craft.
+   * Control: tap-to-move on the court surface.
+   * Breath: starts on first mid-line cross (prep in own half is free).
+   * Zones (y: 0=anti top … 1=home bottom): anti ≤0.48 · mid 0.5 · own ≥0.52 · bonus line ~0.22 visual only.
+   * TO_WIN=5 · PKL bonus/DoD/all-out = Prompt 3 · tackle AI = Prompt 2 · Live defense sync = Prompt 4.
+   */
   function openKabaddi() {
     const chat = resolveChat(arguments[0]);
     const liveOn = chatLiveOn(chat);
     let shellPauseCtrl = null;
     let raidPaused = false;
     let activeRaf = 0;
+    let coachShown = false;
     const shell = openShell({
       id: 'kabaddi',
       title: 'Kabaddi',
-      subtitle: liveOn ? liveSub() : practiceSub('Raid · tag · make it home'),
+      subtitle: liveOn ? liveSub() : practiceSub('Cross · tag · Home before breath dies'),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
@@ -560,7 +568,10 @@
       bg: '#1A0800',
       pauseId: 'csKabaddiPause',
       cleanup: () => {
-        if (activeRaf) cancelAnimationFrame(activeRaf);
+        if (activeRaf) {
+          cancelAnimationFrame(activeRaf);
+          activeRaf = 0;
+        }
         if (shellPauseCtrl) shellPauseCtrl.destroy();
       },
     });
@@ -570,11 +581,8 @@
         host: shell.host || shell.overlay,
         pauseBtnId: 'csKabaddiPause',
         onPause() {
+          // Freeze breath + motion; keep RAF so resume continues cleanly
           raidPaused = true;
-          if (activeRaf) {
-            cancelAnimationFrame(activeRaf);
-            activeRaf = 0;
-          }
         },
         onResume() {
           raidPaused = false;
@@ -583,6 +591,9 @@
       });
     }
     const TO_WIN = 5;
+    const BREATH_MS = 8000;
+    const TOUCH_R = 0.09;
+    const MOVE_SPEED = 1.35; // court-fractions per second
     let you = 0;
     let opp = 0;
     let ended = false;
@@ -602,57 +613,91 @@
       opp = liveRoles.me === liveRoles.playerA ? sc.b | 0 : sc.a | 0;
     }
 
+    function inOwnHalf(y) {
+      return y >= 0.52;
+    }
+    function inAntiHalf(y) {
+      return y <= 0.48;
+    }
+    function crossedMid(y) {
+      return y < 0.5;
+    }
+
+    function defaultDefenders() {
+      return [
+        { id: 0, x: 0.22, y: 0.16, alive: true },
+        { id: 1, x: 0.42, y: 0.28, alive: true },
+        { id: 2, x: 0.58, y: 0.28, alive: true },
+        { id: 3, x: 0.78, y: 0.16, alive: true },
+      ];
+    }
+
+    function publicRaidStub(raid) {
+      if (!raid) return null;
+      return {
+        raidPhase: raid.phase,
+        raider: { x: +raid.rx.toFixed(3), y: +raid.ry.toFixed(3) },
+        defenders: raid.defenders.map((d) => ({
+          id: d.id,
+          x: d.x,
+          y: d.y,
+          alive: !!d.alive,
+        })),
+        breathPct: Math.max(0, Math.min(1, raid.breath / BREATH_MS)),
+        tagged: raid.tagged | 0,
+        breathLive: !!raid.breathLive,
+      };
+    }
+
     function startRaid() {
       if (!shell.alive() || ended) return;
       if (liveOn && !myRaid) {
-        shell.body.innerHTML = `
-          <div class="cs-kabaddi">
-            <div class="cs-rally-score">💪 <strong>${you}</strong> – <strong>${opp}</strong></div>
-            <p class="cs-rally-msg">Opponent is raiding…</p>
-          </div>`;
+        shell.body.innerHTML =
+          '<div class="cs-kabaddi">' +
+          '<div class="cs-rally-score">💪 <strong>' +
+          you +
+          '</strong> – <strong>' +
+          opp +
+          '</strong></div>' +
+          '<p class="cs-rally-msg">Opponent is raiding…</p>' +
+          '</div>';
         return;
       }
-      const breathMax = 8000;
-      let breath = breathMax;
-      let tagged = 0;
-      let home = false;
-      const defenders = [0, 1, 2, 3].map((i) => ({ id: i, alive: true }));
-      let last = performance.now();
-      let raf = 0;
 
-      function paint(msg) {
-        shell.body.innerHTML = `
-          <div class="cs-kabaddi">
-            <div class="cs-rally-score">💪 <strong>${you}</strong> – <strong>${opp}</strong></div>
-            <div class="cs-breath"><i style="width:${Math.max(0, (breath / breathMax) * 100)}%"></i></div>
-            <p class="cs-rally-msg">${esc(msg || 'Tap defenders to tag, then Home before the breath runs out.')}</p>
-            <div class="cs-defenders">
-              ${defenders
-                .map(
-                  (d) =>
-                    `<button type="button" class="cs-def" data-def="${d.id}" ${d.alive ? '' : 'disabled'}>${
-                      d.alive ? '🛡️' : '✓'
-                    }</button>`
-                )
-                .join('')}
-            </div>
-            <button type="button" class="cs-hit" data-home>Home</button>
-          </div>`;
-        shell.body.querySelectorAll('[data-def]').forEach((btn) => {
-          btn.addEventListener('click', () => {
-            const d = defenders[+btn.dataset.def];
-            if (!d || !d.alive || home) return;
-            d.alive = false;
-            tagged += 1;
-            buzz('kick');
-            paint('Tagged ' + tagged + '. Get home!');
-          });
-        });
-        shell.body.querySelector('[data-home]')?.addEventListener('click', () => {
-          if (home) return;
-          home = true;
-          cancelAnimationFrame(raf);
-          const pts = tagged || 0;
+      if (activeRaf) {
+        cancelAnimationFrame(activeRaf);
+        activeRaf = 0;
+      }
+
+      const raid = {
+        phase: 'prep', // prep | raiding | over
+        breath: BREATH_MS,
+        breathLive: false,
+        tagged: 0,
+        over: false,
+        rx: 0.5,
+        ry: 0.84,
+        tx: 0.5,
+        ty: 0.84,
+        defenders: defaultDefenders(),
+      };
+      let last = performance.now();
+      let msg =
+        coachShown
+          ? 'Tap the court to move. Tag, then Home in your half.'
+          : 'Cross, tag, get Home before breath dies.';
+      if (!coachShown) coachShown = true;
+
+      function endRaid(kind, endMsg) {
+        if (raid.over) return;
+        raid.over = true;
+        raid.phase = kind === 'home' ? 'home' : 'caught';
+        if (activeRaf) {
+          cancelAnimationFrame(activeRaf);
+          activeRaf = 0;
+        }
+        const pts = kind === 'home' ? raid.tagged | 0 : 0;
+        if (kind === 'home') {
           if (pts > 0) {
             you += pts;
             buzz('win', { noConfetti: true });
@@ -660,71 +705,254 @@
             opp += 1;
             buzz('lose', { noConfetti: true });
           }
-          if (liveOn && liveHandle && liveRoles) {
-            eventSeq += 1;
-            myRaid = false;
-            liveHandle.push({
-              status: you >= TO_WIN || opp >= TO_WIN ? 'over' : 'playing',
-              winner: you >= TO_WIN ? liveRoles.me : opp >= TO_WIN ? liveRoles.opp : null,
-              turn: liveRoles.opp,
-              state: {
-                scores: scoresForPush(),
-                raidUid: liveRoles.opp,
-                eventSeq,
-                msg: 'Home with ' + pts + ' point' + (pts === 1 ? '' : 's') + '.',
-              },
-            });
+        } else {
+          opp += 1;
+          buzz('lose', { noConfetti: true });
+        }
+        if (liveOn && liveHandle && liveRoles) {
+          eventSeq += 1;
+          myRaid = false;
+          liveHandle.push({
+            status: you >= TO_WIN || opp >= TO_WIN ? 'over' : 'playing',
+            winner:
+              you >= TO_WIN ? liveRoles.me : opp >= TO_WIN ? liveRoles.opp : null,
+            turn: liveRoles.opp,
+            state: {
+              scores: scoresForPush(),
+              raidUid: liveRoles.opp,
+              eventSeq,
+              msg: endMsg,
+              raid: publicRaidStub(raid),
+            },
+          });
+        }
+        next(endMsg);
+      }
+
+      function tryHome() {
+        if (raid.over) return;
+        if (!inOwnHalf(raid.ry)) {
+          buzz('invalid');
+          msg = 'Reach your half before Home.';
+          paintRaid();
+          return;
+        }
+        const pts = raid.tagged | 0;
+        endRaid(
+          'home',
+          pts > 0
+            ? 'Home with ' + pts + ' point' + (pts === 1 ? '' : 's') + '.'
+            : 'Empty raid — opponent +1.'
+        );
+      }
+
+      function paintRaid() {
+        if (!shell.alive() || raid.over) return;
+        const breathPct = Math.max(0, (raid.breath / BREATH_MS) * 100);
+        const canHome = inOwnHalf(raid.ry);
+        const defsHtml = raid.defenders
+          .map((d) => {
+            const cls =
+              'cs-kb-def' + (d.alive ? '' : ' is-out') + (d.alive ? '' : '');
+            return (
+              '<span class="' +
+              cls +
+              '" data-def="' +
+              d.id +
+              '" style="left:' +
+              d.x * 100 +
+              '%;top:' +
+              d.y * 100 +
+              '%" aria-hidden="true">' +
+              (d.alive ? '🛡' : '✓') +
+              '</span>'
+            );
+          })
+          .join('');
+
+        shell.body.innerHTML =
+          '<div class="cs-kabaddi">' +
+          '<div class="cs-rally-score">💪 <strong>' +
+          you +
+          '</strong> – <strong>' +
+          opp +
+          '</strong> · first to ' +
+          TO_WIN +
+          '</div>' +
+          '<div class="cs-breath' +
+          (raid.breathLive ? ' is-live' : '') +
+          '" aria-label="Breath"><i style="width:' +
+          breathPct +
+          '%"></i></div>' +
+          '<p class="cs-rally-msg">' +
+          esc(msg) +
+          (raid.breathLive ? '' : ' · Breath waits until you cross mid') +
+          '</p>' +
+          '<div class="cs-kb-court" data-court role="application" aria-label="Kabaddi court — tap to move">' +
+          '<div class="cs-kb-zone cs-kb-anti" aria-hidden="true"><span>Anti</span></div>' +
+          '<div class="cs-kb-line cs-kb-bonus" aria-hidden="true"><span>Bonus</span></div>' +
+          '<div class="cs-kb-line cs-kb-mid" aria-hidden="true"><span>Mid</span></div>' +
+          '<div class="cs-kb-zone cs-kb-own" aria-hidden="true"><span>Home half</span></div>' +
+          defsHtml +
+          '<span class="cs-kb-raider" style="left:' +
+          raid.rx * 100 +
+          '%;top:' +
+          raid.ry * 100 +
+          '%" aria-label="Raider">🏃</span>' +
+          '</div>' +
+          '<div class="cs-kb-meta">Tagged <b>' +
+          raid.tagged +
+          '</b>' +
+          (raidPaused ? ' · Paused' : '') +
+          '</div>' +
+          '<button type="button" class="cs-hit cs-kb-home" data-home' +
+          (canHome ? '' : ' disabled') +
+          '>Home</button>' +
+          '</div>';
+
+        const court = shell.body.querySelector('[data-court]');
+        const setTarget = (clientX, clientY) => {
+          if (raid.over || raidPaused || !court) return;
+          const rect = court.getBoundingClientRect();
+          if (rect.width < 8 || rect.height < 8) return;
+          let x = (clientX - rect.left) / rect.width;
+          let y = (clientY - rect.top) / rect.height;
+          raid.tx = Math.max(0.06, Math.min(0.94, x));
+          raid.ty = Math.max(0.06, Math.min(0.94, y));
+        };
+        court?.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          try {
+            court.setPointerCapture(e.pointerId);
+          } catch (err) {}
+          setTarget(e.clientX, e.clientY);
+        });
+        court?.addEventListener('pointermove', (e) => {
+          if (e.buttons || e.pressure > 0) setTarget(e.clientX, e.clientY);
+        });
+
+        shell.body.querySelector('[data-home]')?.addEventListener('click', () => {
+          tryHome();
+        });
+      }
+
+      function tickTags() {
+        raid.defenders.forEach((d) => {
+          if (!d.alive) return;
+          const dx = raid.rx - d.x;
+          const dy = raid.ry - d.y;
+          if (dx * dx + dy * dy <= TOUCH_R * TOUCH_R) {
+            d.alive = false;
+            raid.tagged += 1;
+            buzz('kick');
+            msg = 'Tagged ' + raid.tagged + ' — get Home!';
           }
-          next('Home with ' + pts + ' point' + (pts === 1 ? '' : 's') + '.');
         });
       }
 
       function loop(now) {
+        if (!shell.alive() || raid.over || ended) {
+          activeRaf = 0;
+          return;
+        }
         if (raidPaused) {
           last = now;
           activeRaf = requestAnimationFrame(loop);
           return;
         }
-        const dt = now - last;
+        const dt = Math.min(0.05, (now - last) / 1000);
         last = now;
-        breath -= dt;
+
+        // Move toward tap target
+        const mdx = raid.tx - raid.rx;
+        const mdy = raid.ty - raid.ry;
+        const dist = Math.sqrt(mdx * mdx + mdy * mdy);
+        if (dist > 0.004) {
+          const step = Math.min(dist, MOVE_SPEED * dt);
+          raid.rx += (mdx / dist) * step;
+          raid.ry += (mdy / dist) * step;
+        }
+
+        // Breath starts on first mid cross
+        if (!raid.breathLive && crossedMid(raid.ry)) {
+          raid.breathLive = true;
+          raid.phase = 'raiding';
+          msg = 'Breath is live — tag and get Home!';
+        }
+        if (raid.breathLive) {
+          raid.breath -= dt * 1000;
+        }
+
+        tickTags();
+
+        // Soft update positions without full rebuild every frame when possible
+        const ri = shell.body.querySelector('.cs-kb-raider');
         const bar = shell.body.querySelector('.cs-breath i');
-        if (bar) bar.style.width = Math.max(0, (breath / breathMax) * 100) + '%';
-        if (breath <= 0 && !home) {
-          home = true;
-          cancelAnimationFrame(raf);
-          opp += 1;
-          buzz('lose', { noConfetti: true });
-          if (liveOn && liveHandle && liveRoles) {
-            eventSeq += 1;
-            myRaid = false;
-            liveHandle.push({
-              status: opp >= TO_WIN ? 'over' : 'playing',
-              winner: opp >= TO_WIN ? liveRoles.opp : null,
-              turn: liveRoles.opp,
-              state: {
-                scores: scoresForPush(),
-                raidUid: liveRoles.opp,
-                eventSeq,
-                msg: 'Caught — breath ran out.',
-              },
-            });
+        const breathEl = shell.body.querySelector('.cs-breath');
+        if (ri) {
+          ri.style.left = raid.rx * 100 + '%';
+          ri.style.top = raid.ry * 100 + '%';
+        }
+        if (bar) bar.style.width = Math.max(0, (raid.breath / BREATH_MS) * 100) + '%';
+        if (breathEl) {
+          if (raid.breathLive) breathEl.classList.add('is-live');
+          else breathEl.classList.remove('is-live');
+        }
+        raid.defenders.forEach((d) => {
+          const el = shell.body.querySelector('.cs-kb-def[data-def="' + d.id + '"]');
+          if (!el) return;
+          if (!d.alive && !el.classList.contains('is-out')) {
+            el.classList.add('is-out');
+            el.textContent = '✓';
           }
-          next('Caught — breath ran out.');
+        });
+        const homeBtn = shell.body.querySelector('[data-home]');
+        if (homeBtn) homeBtn.disabled = !inOwnHalf(raid.ry);
+        const meta = shell.body.querySelector('.cs-kb-meta');
+        if (meta) {
+          meta.innerHTML =
+            'Tagged <b>' + raid.tagged + '</b>' + (raidPaused ? ' · Paused' : '');
+        }
+        const msgEl = shell.body.querySelector('.cs-rally-msg');
+        if (msgEl) {
+          msgEl.textContent =
+            msg + (raid.breathLive ? '' : ' · Breath waits until you cross mid');
+        }
+
+        if (raid.breathLive && raid.breath <= 0) {
+          endRaid('caught', 'Caught — breath ran out.');
           return;
         }
-        raf = requestAnimationFrame(loop);
-        activeRaf = raf;
+
+        activeRaf = requestAnimationFrame(loop);
       }
 
-      paint();
-      raf = requestAnimationFrame(loop);
-      activeRaf = raf;
+      paintRaid();
+      last = performance.now();
+      activeRaf = requestAnimationFrame(loop);
+
+      // Seed Live stub so Prompt 2 can extend defense inputs
+      if (liveOn && liveHandle && liveRoles && !applying) {
+        liveHandle.push({
+          status: 'playing',
+          turn: liveRoles.me,
+          state: {
+            scores: scoresForPush(),
+            raidUid: liveRoles.me,
+            eventSeq,
+            raid: publicRaidStub(raid),
+          },
+        });
+      }
     }
 
     function next(msg) {
       if (you >= TO_WIN || opp >= TO_WIN) {
         ended = true;
+        if (activeRaf) {
+          cancelAnimationFrame(activeRaf);
+          activeRaf = 0;
+        }
         showDuelResult(shell, {
           id: 'kabaddi',
           you,
@@ -738,20 +966,33 @@
         return;
       }
       if (liveOn && !myRaid) {
-        shell.body.innerHTML = `
-          <div class="cs-kabaddi">
-            <div class="cs-rally-score">💪 <strong>${you}</strong> – <strong>${opp}</strong></div>
-            <p class="cs-rally-msg">${esc(msg)}</p>
-            <p class="cs-rally-hint">Waiting for opponent’s raid…</p>
-          </div>`;
+        shell.body.innerHTML =
+          '<div class="cs-kabaddi">' +
+          '<div class="cs-rally-score">💪 <strong>' +
+          you +
+          '</strong> – <strong>' +
+          opp +
+          '</strong></div>' +
+          '<p class="cs-rally-msg">' +
+          esc(msg) +
+          '</p>' +
+          '<p class="cs-rally-hint">Waiting for opponent’s raid…</p>' +
+          '</div>';
         return;
       }
-      shell.body.insertAdjacentHTML(
-        'beforeend',
-        `<p class="cs-rally-hint">${esc(msg)} Tap to raid again.</p>`
-      );
-      const go = () => startRaid();
-      shell.body.addEventListener('click', go, { once: true });
+      shell.body.innerHTML =
+        '<div class="cs-kabaddi">' +
+        '<div class="cs-rally-score">💪 <strong>' +
+        you +
+        '</strong> – <strong>' +
+        opp +
+        '</strong></div>' +
+        '<p class="cs-rally-msg">' +
+        esc(msg) +
+        '</p>' +
+        '<button type="button" class="cs-hit" data-raid-again>Raid again</button>' +
+        '</div>';
+      shell.body.querySelector('[data-raid-again]')?.addEventListener('click', () => startRaid());
     }
 
     if (liveOn && typeof DangalLive !== 'undefined') {
@@ -769,6 +1010,10 @@
             applying = true;
             if (val.state && val.state.scores) applyScores(val.state.scores);
             ended = true;
+            if (activeRaf) {
+              cancelAnimationFrame(activeRaf);
+              activeRaf = 0;
+            }
             showDuelResult(shell, {
               id: 'kabaddi',
               you,
@@ -800,13 +1045,19 @@
         liveHandle.push({
           status: 'playing',
           turn: liveRoles.me,
-          state: { scores: { a: 0, b: 0 }, raidUid: liveRoles.me, eventSeq: 0 },
+          state: {
+            scores: { a: 0, b: 0 },
+            raidUid: liveRoles.me,
+            eventSeq: 0,
+            raid: { raidPhase: 'prep', raider: { x: 0.5, y: 0.84 }, defenders: defaultDefenders(), breathPct: 1, tagged: 0, breathLive: false },
+          },
         });
       }
     }
 
     startRaid();
   }
+
 
   const PATANG_LAST_MODE_KEY = 'chaupaal_patang_last_mode';
   const PATANG_STREAK_KEY = 'chaupaal_patang_duel_streak';
@@ -1947,7 +2198,7 @@
     registerGame({
       id: 'kabaddi',
       name: 'Kabaddi',
-      desc: 'Raid, tag, home',
+      desc: 'Raid court · tag · Home before breath',
       icon: '💪',
       gameType: 'solo',
       genre: 'rw_sports',

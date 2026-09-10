@@ -253,6 +253,59 @@
 .play-comm-video{width:88px;height:118px;border-radius:12px;overflow:hidden;background:#111;pointer-events:auto;}
 .play-comm-video--me{width:64px;height:86px;margin-left:auto;}
 .cs-rally,.cs-kabaddi,.cs-patang,.pc-tambola,.pc-rummy,.pc-tp,.pc-bluff,.pc-satte,.pc-ab,.pc-cue{display:flex;flex-direction:column;align-items:center;gap:12px;}
+.cs-breath{width:100%;max-width:320px;height:10px;border-radius:999px;background:rgba(255,255,255,.12);overflow:hidden;}
+.cs-breath i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#FF8A65,#FFD54F);border-radius:inherit;transition:width 80ms linear;}
+.cs-breath.is-live i{background:linear-gradient(90deg,#FF7043,#FFCA28);}
+.cs-kb-court{
+  position:relative;
+  width:100%;
+  max-width:340px;
+  aspect-ratio:3/4;
+  max-height:min(58vh,420px);
+  border-radius:14px;
+  border:2px solid rgba(255,171,64,.45);
+  background:
+    linear-gradient(180deg,rgba(183,28,28,.35) 0%,rgba(183,28,28,.18) 48%,rgba(46,125,50,.2) 52%,rgba(46,125,50,.38) 100%);
+  overflow:hidden;
+  touch-action:none;
+  user-select:none;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.25);
+}
+.cs-kb-zone{position:absolute;left:0;right:0;pointer-events:none;display:flex;align-items:flex-start;justify-content:center;padding-top:4px;}
+.cs-kb-zone span,.cs-kb-line span{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;opacity:.75;color:#FFE0B2;}
+.cs-kb-anti{top:0;height:48%;}
+.cs-kb-own{bottom:0;height:48%;align-items:flex-end;padding-bottom:6px;}
+.cs-kb-line{position:absolute;left:4%;right:4%;height:0;border-top:2px dashed rgba(255,236,179,.55);pointer-events:none;display:flex;justify-content:center;}
+.cs-kb-line span{transform:translateY(-10px);background:rgba(26,8,0,.55);padding:0 6px;border-radius:4px;}
+.cs-kb-mid{top:50%;}
+.cs-kb-bonus{top:22%;border-top-color:rgba(255,213,79,.4);}
+.cs-kb-bonus span{color:#FFE082;}
+.cs-kb-def,.cs-kb-raider{
+  position:absolute;
+  width:44px;height:44px;
+  margin:-22px 0 0 -22px;
+  border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:22px;
+  pointer-events:none;
+  z-index:2;
+}
+.cs-kb-def{
+  background:rgba(255,255,255,.14);
+  border:2px solid rgba(255,255,255,.35);
+  box-shadow:0 2px 8px rgba(0,0,0,.35);
+}
+.cs-kb-def.is-out{opacity:.4;filter:grayscale(1);border-color:rgba(129,199,132,.5);}
+.cs-kb-raider{
+  background:rgba(255,112,67,.92);
+  border:2px solid #FFECB3;
+  box-shadow:0 0 12px rgba(255,112,67,.55);
+  z-index:3;
+  transition:left 40ms linear, top 40ms linear;
+}
+.cs-kb-home{min-width:min(100%,200px);min-height:48px;font-weight:800;font-size:16px;}
+.cs-kb-home:disabled{opacity:.45;}
+.cs-kb-meta{font-size:13px;opacity:.9;color:#FFE0B2;}
 .cs-rally-score{font:700 28px var(--font-display,'Space Grotesk',sans-serif);}
 .cs-rally-msg,.pc-hint{font-size:13px;opacity:.85;text-align:center;margin:0;}
 .cs-rally-hint{font-size:11px;opacity:.55;margin:0;}
@@ -260,10 +313,6 @@
 .cs-timing i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#66bb6a,#ffeb3b 55%,#ef5350);transform-origin:left;transform:scaleX(0);}
 .cs-hit{min-width:160px;padding:14px 18px;border:0;border-radius:14px;background:var(--game-primary,#E63946);color:#fff;font:700 16px var(--font-display,'Space Grotesk',sans-serif);cursor:pointer;}
 .cs-hit:disabled{opacity:.4;}
-.cs-breath{width:min(280px,90%);height:8px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden;}
-.cs-breath i{display:block;height:100%;background:#FFB300;}
-.cs-defenders{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:min(280px,90%);}
-.cs-def{height:56px;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);font-size:22px;cursor:pointer;}
 .cs-patang canvas,.pc-cue canvas{width:100%;height:min(56vh,460px);border-radius:16px;touch-action:none;background:#01579B;}
 .pc-cue--carrom canvas{background:#5d4037;max-width:100%;aspect-ratio:1/1.15;height:auto;max-height:min(62vh,480px);}
 .pc-cue-hud{font-size:11px;font-weight:700;opacity:.92;margin:0;letter-spacing:.02em;text-align:center;line-height:1.35;max-width:100%;}
