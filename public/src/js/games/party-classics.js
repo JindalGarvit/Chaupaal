@@ -479,6 +479,106 @@
     };
   }
 
+  /** Dividend ladder (Prompt 2) — interim claims = 1 pt each; Full House ends the match. */
+  const TAMBOLA_DIVIDEND_META = {
+    earlyFive: { key: 'earlyFive', label: 'Early Five', pts: 1 },
+    top: { key: 'top', label: 'Top line', pts: 1, row: 0 },
+    mid: { key: 'mid', label: 'Middle line', pts: 1, row: 1 },
+    bottom: { key: 'bottom', label: 'Bottom line', pts: 1, row: 2 },
+    corners: { key: 'corners', label: 'Four corners', pts: 1 },
+    fullHouse: { key: 'fullHouse', label: 'Full house', pts: 0 },
+  };
+  const TAMBOLA_DIVIDEND_ORDER = ['earlyFive', 'top', 'mid', 'bottom', 'corners', 'fullHouse'];
+
+  function tambolaCalledMap(bag, callIdx) {
+    const called = Object.create(null);
+    for (let i = 0; i < callIdx && i < bag.length; i++) called[bag[i]] = true;
+    return called;
+  }
+
+  function tambolaRowNums(ticket, rowIndex) {
+    if (!ticket) return [];
+    if (ticket.rows && ticket.rows[rowIndex] && ticket.rows[rowIndex].length) {
+      return ticket.rows[rowIndex].slice();
+    }
+    if (!ticket.grid || !ticket.grid[rowIndex]) return [];
+    return ticket.grid[rowIndex].filter((v) => v != null);
+  }
+
+  /** Four extremal numbers: first/last filled on top & bottom rows (not blank grid corners). */
+  function tambolaCornerNums(ticket) {
+    const out = [];
+    if (!ticket || !ticket.grid) return out;
+    [0, 2].forEach((r) => {
+      const row = ticket.grid[r] || [];
+      let first = null;
+      let last = null;
+      for (let c = 0; c < 9; c++) {
+        if (row[c] == null) continue;
+        if (first == null) first = row[c];
+        last = row[c];
+      }
+      if (first != null) out.push(first);
+      if (last != null && last !== first) out.push(last);
+    });
+    return out;
+  }
+
+  function tambolaAllCalledAndMarked(nums, ticket, called) {
+    if (!nums || !nums.length) return false;
+    for (let i = 0; i < nums.length; i++) {
+      const n = nums[i];
+      if (!called[n] || !ticket.marked || !ticket.marked[n]) return false;
+    }
+    return true;
+  }
+
+  function canEarlyFive(ticket, called) {
+    if (!ticket || !ticket.cells) return false;
+    let n = 0;
+    for (let i = 0; i < ticket.cells.length; i++) {
+      const c = ticket.cells[i];
+      if (called[c] && ticket.marked && ticket.marked[c]) n++;
+    }
+    return n >= 5;
+  }
+
+  function canLine(ticket, rowIndex, called) {
+    const nums = tambolaRowNums(ticket, rowIndex);
+    return nums.length === 5 && tambolaAllCalledAndMarked(nums, ticket, called);
+  }
+
+  function canCorners(ticket, called) {
+    const nums = tambolaCornerNums(ticket);
+    return nums.length === 4 && tambolaAllCalledAndMarked(nums, ticket, called);
+  }
+
+  function canFullHouse(ticket, called) {
+    if (!ticket || !ticket.cells || ticket.cells.length !== 15) return false;
+    return tambolaAllCalledAndMarked(ticket.cells, ticket, called);
+  }
+
+  function tambolaDividendReady(key, ticket, called) {
+    if (key === 'earlyFive') return canEarlyFive(ticket, called);
+    if (key === 'top') return canLine(ticket, 0, called);
+    if (key === 'mid') return canLine(ticket, 1, called);
+    if (key === 'bottom') return canLine(ticket, 2, called);
+    if (key === 'corners') return canCorners(ticket, called);
+    if (key === 'fullHouse') return canFullHouse(ticket, called);
+    return false;
+  }
+
+  function emptyTambolaTaken() {
+    return {
+      earlyFive: null,
+      top: null,
+      mid: null,
+      bottom: null,
+      corners: null,
+      fullHouse: null,
+    };
+  }
+
   function openTambola() {
     const chat = resolveChat(arguments[0]);
     const liveOn = chatLiveOn(chat);
@@ -487,7 +587,9 @@
     const shell = openShell({
       id: 'tambola',
       title: 'Tambola',
-      subtitle: liveOn ? liveSub() : practiceSub('3×9 ticket · full house'),
+      subtitle: liveOn
+        ? liveSub() + ' · Claim ladder'
+        : practiceSub('Early Five · lines · corners · house'),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
@@ -512,18 +614,85 @@
       typeof shuffleArray === 'function' ? shuffleArray(Array.from({ length: 90 }, (_, i) => i + 1), rng) : [];
     let idx = 0;
     let last = '—';
-    let claimed = false;
-    const aiNeed = 15;
-    let aiMarked = 0;
+    let ended = false;
     let applying = false;
     let liveRoles = null;
     let liveHandle = null;
     let myTicketKey = 'ticketA';
     let ticketA = null;
     let ticketB = null;
+    let taken = emptyTambolaTaken();
+    let youPts = 0;
+    let oppPts = 0;
+    /** Claims open between calls; brief lock when a new number fires. */
+    let claimsOpen = true;
+    let bogeyUntil = 0;
+    /** Practice stub rival — steals interim dividends / FH with heuristics (real 2nd ticket = Prompt 3). */
+    let stubMarks = 0;
 
     function markedCountOf(t) {
       return Object.keys((t && t.marked) || {}).length;
+    }
+
+    function calledNow() {
+      return tambolaCalledMap(bag, idx);
+    }
+
+    function seatLabel(isYou) {
+      if (!liveOn || !liveRoles) return isYou ? 'you' : 'opp';
+      return isYou ? liveRoles.me : liveRoles.opp;
+    }
+
+    function isMySeat(seat) {
+      if (seat == null) return false;
+      if (!liveOn || !liveRoles) return seat === 'you';
+      return seat === liveRoles.me;
+    }
+
+    function pointsForPush() {
+      if (!liveRoles) return { you: youPts, opp: oppPts };
+      return liveRoles.me === liveRoles.playerA
+        ? { A: youPts, B: oppPts }
+        : { A: oppPts, B: youPts };
+    }
+
+    function applyPointsState(st) {
+      if (!st || !st.points) return;
+      const p = st.points;
+      if (!liveRoles) {
+        if (p.you != null) youPts = p.you | 0;
+        if (p.opp != null) oppPts = p.opp | 0;
+        return;
+      }
+      if (p.A != null && p.B != null) {
+        if (liveRoles.me === liveRoles.playerA) {
+          youPts = p.A | 0;
+          oppPts = p.B | 0;
+        } else {
+          youPts = p.B | 0;
+          oppPts = p.A | 0;
+        }
+      }
+    }
+
+    function takenForPush() {
+      return Object.assign({}, taken);
+    }
+
+    function publicTambolaState(extra) {
+      return Object.assign(
+        {
+          bag,
+          ticketA,
+          ticketB,
+          idx,
+          last,
+          taken: takenForPush(),
+          points: pointsForPush(),
+          claimsOpen: !!claimsOpen,
+        },
+        extra || {}
+      );
     }
 
     function ticketGridHtml(t) {
@@ -543,8 +712,7 @@
     }
 
     function callBoardHtml() {
-      const called = Object.create(null);
-      for (let i = 0; i < idx && i < bag.length; i++) called[bag[i]] = true;
+      const called = calledNow();
       const lastN = last !== '—' && last != null ? last | 0 : 0;
       let html = '<div class="pc-callboard" aria-label="Numbers called">';
       for (let decade = 0; decade < 9; decade++) {
@@ -564,6 +732,40 @@
       return html;
     }
 
+    function takenChip(key) {
+      const seat = taken[key];
+      if (!seat) return '';
+      return isMySeat(seat) ? ' · you' : ' · opp';
+    }
+
+    function claimBarHtml() {
+      const called = calledNow();
+      const locked = !claimsOpen || Date.now() < bogeyUntil || ended;
+      let html = '<div class="pc-claimbar" role="group" aria-label="Claim dividends">';
+      TAMBOLA_DIVIDEND_ORDER.forEach((key) => {
+        const meta = TAMBOLA_DIVIDEND_META[key];
+        const already = taken[key];
+        const ready = !already && tambolaDividendReady(key, ticket, called);
+        const soft = ready ? ' is-ready' : '';
+        const dead = already ? ' is-taken' : '';
+        const disabled = locked || already || !ready;
+        html +=
+          '<button type="button" class="pc-claimbtn' +
+          soft +
+          dead +
+          '" data-claim="' +
+          key +
+          '"' +
+          (disabled ? ' disabled' : '') +
+          '>' +
+          esc(meta.label) +
+          (already ? takenChip(key) : ready ? ' ✓' : '') +
+          '</button>';
+      });
+      html += '</div>';
+      return html;
+    }
+
     function paint() {
       const markedCount = markedCountOf(ticket);
       shell.body.innerHTML =
@@ -575,108 +777,267 @@
         markedCount +
         '/15 · caller ' +
         idx +
-        '/90' +
+        '/90 · pts <b>' +
+        youPts +
+        '</b>–<b>' +
+        oppPts +
+        '</b>' +
         (liveOn ? ' · Live' : '') +
+        (!claimsOpen ? ' · …' : '') +
         '</p>' +
         callBoardHtml() +
         '<div class="pc-ticket pc-ticket--housie" role="grid" aria-label="Your Tambola ticket">' +
         ticketGridHtml(ticket) +
         '</div>' +
-        '<button type="button" class="cs-hit" data-house' +
-        (markedCount < 15 ? ' disabled' : '') +
-        '>Claim full house</button>' +
+        claimBarHtml() +
         '</div>';
-      shell.body.querySelector('[data-house]')?.addEventListener('click', () => claim(true));
+      shell.body.querySelectorAll('[data-claim]').forEach((btn) => {
+        btn.addEventListener('click', () => tryClaim(btn.getAttribute('data-claim'), true));
+      });
     }
 
-    function claim(player, fromRemote) {
-      if (claimed) return;
-      claimed = true;
+    function bogey(msg) {
+      buzz('invalid');
+      bogeyUntil = Date.now() + 1200;
+      if (typeof showToast === 'function') showToast(msg || 'Bogey — not ready');
+      paint();
+    }
+
+    function endMatch(winnerIsYou, subtitle) {
+      if (ended) return;
+      ended = true;
+      claimsOpen = false;
       callTimers.forEach((t) => clearTimeout(t));
       callTimers.length = 0;
-      if (liveOn && liveHandle && !fromRemote && !applying) {
-        liveHandle.push({
-          status: 'over',
-          winner: player ? liveRoles.me : liveRoles.opp,
-          state: { idx, last, claimedBy: player ? liveRoles.me : liveRoles.opp },
-        });
+      const sub =
+        (subtitle || (winnerIsYou ? 'Full house!' : 'Opponent full house')) +
+        ' · pts ' +
+        youPts +
+        '–' +
+        oppPts;
+      if (liveOn && liveHandle && liveRoles && !applying) {
+        try {
+          liveHandle.push({
+            status: 'over',
+            winner: winnerIsYou ? liveRoles.me : liveRoles.opp,
+            state: publicTambolaState({
+              claimedBy: winnerIsYou ? liveRoles.me : liveRoles.opp,
+              msg: sub,
+            }),
+          });
+        } catch (e) {}
       }
       showDuelResult(shell, {
         id: 'tambola',
-        you: player ? 1 : 0,
-        opp: player ? 0 : 1,
+        you: winnerIsYou ? Math.max(1, youPts) : youPts,
+        opp: winnerIsYou ? oppPts : Math.max(1, oppPts),
         glyph: '🎱',
-        pbScore: player ? 1 : 0,
-        subtitle: player ? 'Full house!' : 'House went to the other ticket.',
-        shareText: 'Tambola on Chaupaal',
+        pbScore: youPts,
+        title: winnerIsYou ? 'Full house — you win' : 'Full house — opponent',
+        subtitle: sub,
+        shareText: 'Tambola on Chaupaal: ' + youPts + '–' + oppPts + ' · full house',
         onAgain: () => openTambola(chat),
       });
+    }
+
+    /**
+     * @param {string} key
+     * @param {boolean} isYou
+     * @param {{ fromRemote?: boolean, skipPush?: boolean }} [opts]
+     */
+    function tryClaim(key, isYou, opts) {
+      const o = opts || {};
+      if (ended) return false;
+      if (!TAMBOLA_DIVIDEND_META[key]) return false;
+      if (taken[key]) {
+        if (isYou && !o.fromRemote) bogey('Already claimed');
+        return false;
+      }
+      if (isYou && !o.fromRemote) {
+        if (!claimsOpen || Date.now() < bogeyUntil) {
+          bogey('Too late — wait for the next call window');
+          return false;
+        }
+        const called = calledNow();
+        if (!tambolaDividendReady(key, ticket, called)) {
+          bogey('Bogey — pattern not complete');
+          return false;
+        }
+      }
+
+      const seat = seatLabel(isYou);
+      taken[key] = seat;
+      const meta = TAMBOLA_DIVIDEND_META[key];
+      if (key !== 'fullHouse' && meta.pts) {
+        if (isYou) youPts += meta.pts;
+        else oppPts += meta.pts;
+      }
+
+      if (typeof showToast === 'function') {
+        showToast(meta.label + '!' + (isYou ? '' : ' (opp)'));
+      }
+      buzz(isYou ? 'win' : 'lose', { noConfetti: true });
+
+      if (liveOn && liveHandle && liveRoles && !o.fromRemote && !o.skipPush && !applying) {
+        liveHandle.push({
+          status: 'playing',
+          state: publicTambolaState({
+            claim: {
+              type: 'claim',
+              dividend: key,
+              by: liveRoles.me,
+              idx,
+              last,
+            },
+          }),
+        });
+      }
+
+      if (key === 'fullHouse') {
+        endMatch(isYou, meta.label + (isYou ? '!' : ' — opponent'));
+        return true;
+      }
+
+      paint();
+      return true;
+    }
+
+    function applyRemoteClaim(st) {
+      const c = st && st.claim;
+      if (!c || c.type !== 'claim' || !c.dividend) return false;
+      if (taken[c.dividend]) return true;
+      if (liveRoles && c.by === liveRoles.me) return true;
+      if (st.taken) Object.assign(taken, st.taken);
+      applyPointsState(st);
+      if (!taken[c.dividend] && c.by) {
+        taken[c.dividend] = c.by;
+        if (c.dividend !== 'fullHouse' && !st.points) {
+          const pts = TAMBOLA_DIVIDEND_META[c.dividend].pts | 0;
+          if (c.by === liveRoles.me) youPts += pts;
+          else oppPts += pts;
+        }
+      }
+      if (c.dividend === 'fullHouse' || taken.fullHouse) {
+        applying = true;
+        endMatch(taken.fullHouse === liveRoles.me || c.by === liveRoles.me, 'Full house');
+        applying = false;
+        return true;
+      }
+      paint();
+      return true;
+    }
+
+    function openClaimWindow() {
+      claimsOpen = true;
+      if (!ended) paint();
+    }
+
+    function closeClaimWindowBrief() {
+      claimsOpen = false;
+    }
+
+    function daubNumber(n) {
+      if (ticket.cells.indexOf(n) >= 0) ticket.marked[n] = true;
     }
 
     function applyCall(n) {
       last = n;
       buzz('dice');
-      if (ticket.cells.indexOf(last) >= 0) ticket.marked[last] = true;
+      closeClaimWindowBrief();
+      daubNumber(n);
       paint();
-      if (markedCountOf(ticket) >= 15) claim(true);
+      scheduleCall(openClaimWindow, 220);
+    }
+
+    function stubMaybeClaim() {
+      if (ended || liveOn) return;
+      const free = (k) => !taken[k];
+      if (stubMarks >= 5 && free('earlyFive') && rng() < 0.55) {
+        tryClaim('earlyFive', false, { skipPush: true });
+        return;
+      }
+      if (stubMarks >= 8) {
+        const lines = ['top', 'mid', 'bottom'].filter(free);
+        if (lines.length && rng() < 0.4) {
+          tryClaim(lines[(rng() * lines.length) | 0], false, { skipPush: true });
+          return;
+        }
+      }
+      if (stubMarks >= 11 && free('corners') && rng() < 0.35) {
+        tryClaim('corners', false, { skipPush: true });
+        return;
+      }
+      if (stubMarks >= 15 && free('fullHouse') && rng() < 0.7) {
+        tryClaim('fullHouse', false, { skipPush: true });
+      }
     }
 
     function tick() {
-      if (!shell.alive() || claimed || liveOn) return;
+      if (!shell.alive() || ended || liveOn) return;
       if (idx >= bag.length) {
-        claim(markedCountOf(ticket) >= 15);
+        if (!taken.fullHouse) {
+          const youWin = markedCountOf(ticket) >= 15 || youPts > oppPts;
+          endMatch(youWin, 'Bag exhausted');
+        }
         return;
       }
       last = bag[idx++];
       buzz('dice');
-      if (ticket.cells.indexOf(last) >= 0) ticket.marked[last] = true;
-      if (rng() > 0.72) aiMarked += 1;
+      closeClaimWindowBrief();
+      daubNumber(last);
+      if (rng() > 0.62) stubMarks += 1;
       paint();
-      if (markedCountOf(ticket) >= 15) {
-        claim(true);
-        return;
-      }
-      if (aiMarked >= aiNeed) {
-        claim(false);
-        return;
-      }
-      scheduleCall(tick, 700);
+      stubMaybeClaim();
+      if (ended) return;
+      scheduleCall(() => {
+        openClaimWindow();
+        if (!ended) scheduleCall(tick, 700);
+      }, 220);
     }
 
     if (liveOn) {
       const joined = joinLive(shell, chat, 'tambola', (val) => {
-        if (!val || claimed) return;
+        if (!val || ended) return;
         if (val.status === 'forfeit' || val.status === 'over') {
           if (val.status === 'forfeit') {
             const iWon = val.winner === liveRoles.me;
-            claimed = true;
+            ended = true;
             showDuelResult(shell, {
               id: 'tambola',
-              you: iWon ? 1 : 0,
-              opp: iWon ? 0 : 1,
+              you: iWon ? Math.max(1, youPts) : youPts,
+              opp: iWon ? oppPts : Math.max(1, oppPts),
               glyph: '🎱',
               title: iWon ? 'Opponent left' : 'You forfeited',
+              subtitle: 'pts ' + youPts + '–' + oppPts,
               shareText: 'Tambola on Chaupaal',
               onAgain: () => openTambola(chat),
             });
             return;
           }
+          if (val.state) {
+            applyPointsState(val.state);
+            if (val.state.taken) Object.assign(taken, val.state.taken);
+          }
           if (val.winner) {
             applying = true;
-            claim(val.winner === liveRoles.me, true);
+            endMatch(val.winner === liveRoles.me, (val.state && val.state.msg) || 'Full house');
             applying = false;
           }
           return;
         }
         const st = val.state || {};
         if (st.bag && Array.isArray(st.bag)) bag = st.bag;
+        if (st.taken) Object.assign(taken, st.taken);
+        applyPointsState(st);
+        if (st.claim) {
+          if (applyRemoteClaim(st)) return;
+        }
         if (st.ticketA && st.ticketB) {
           const mineRaw = liveRoles.me === liveRoles.playerA ? st.ticketA : st.ticketB;
           const hydrated = hydrateTambolaTicket(mineRaw);
           if (hydrated) {
             const keepMarked = ticket && ticket.marked ? ticket.marked : {};
             ticket = hydrated;
-            // Re-daub any already-called numbers on new/synced ticket
             for (let i = 0; i < idx && i < bag.length; i++) {
               const n = bag[i];
               if (ticket.cells.indexOf(n) >= 0) ticket.marked[n] = true;
@@ -691,19 +1052,21 @@
           ticketB = st.ticketB;
         }
         if (typeof st.idx === 'number' && st.idx > idx) {
+          closeClaimWindowBrief();
           for (let i = idx; i < st.idx; i++) {
             if (bag[i] == null) continue;
             last = bag[i];
-            if (ticket.cells.indexOf(last) >= 0) ticket.marked[last] = true;
+            daubNumber(last);
           }
           idx = st.idx;
           buzz('dice');
           paint();
-          if (markedCountOf(ticket) >= 15) claim(true);
+          scheduleCall(openClaimWindow, 220);
         } else if (st.last != null && st.last !== last && st.idx != null) {
           idx = st.idx | 0;
           applyCall(st.last);
         } else if (ticket && ticket.grid) {
+          if (st.claimsOpen != null) claimsOpen = !!st.claimsOpen;
           paint();
         }
       });
@@ -723,34 +1086,28 @@
           liveHandle.push({
             status: 'playing',
             turn: liveRoles.me,
-            state: {
-              bag,
-              ticketA,
-              ticketB,
-              idx: 0,
-              last: '—',
-            },
+            state: publicTambolaState({ idx: 0, last: '—' }),
           });
           paint();
           const hostTick = () => {
-            if (!shell.alive() || claimed) return;
+            if (!shell.alive() || ended) return;
             if (idx >= bag.length) {
-              claim(markedCountOf(ticket) >= 15);
+              if (!taken.fullHouse) {
+                endMatch(youPts >= oppPts, 'Bag exhausted');
+              }
               return;
             }
             const n = bag[idx++];
             applyCall(n);
             liveHandle.push({
               status: 'playing',
-              state: {
-                bag,
-                ticketA,
-                ticketB,
-                idx,
-                last: n,
-              },
+              state: publicTambolaState({ last: n }),
             });
-            if (!claimed) scheduleCall(hostTick, 700);
+            if (!ended) {
+              scheduleCall(() => {
+                if (!ended) scheduleCall(hostTick, 700);
+              }, 220);
+            }
           };
           scheduleCall(hostTick, 900);
         } else {
@@ -762,6 +1119,7 @@
       tick();
     }
   }
+
 
   /* ---------- Cue physics (carrom + pool) — snapshot Live after settle ---------- */
   function openCueGame(spec) {
@@ -9337,7 +9695,7 @@
 
   if (typeof registerGame === 'function') {
     const games = [
-      { id: 'tambola', name: 'Tambola', desc: '3×9 Housie · call board', icon: '🎱', genre: 'party', launch: openTambola, order: 30 },
+      { id: 'tambola', name: 'Tambola', desc: 'Claim ladder · Early Five to house', icon: '🎱', genre: 'party', launch: openTambola, order: 30 },
       { id: 'carrom', name: 'Carrom', desc: 'Live · stakes · AI', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
       { id: 'pool', name: 'Pool', desc: '8-ball · solids & stripes', icon: '🎱', genre: 'board', launch: openPool, order: 32 },
       { id: 'rummy', name: 'Rummy', desc: 'Indian 13-card · jokers · points', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },

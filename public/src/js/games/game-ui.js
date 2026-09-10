@@ -171,9 +171,9 @@
       'Live: both seats raid & defend · leave = forfeit · rematch is a fresh court · virtual stakes',
     ],
     tambola: [
-      'Your ticket is a real 3×9 Housie card — 15 numbers, five per row',
-      'Numbers auto-daub when called · watch the 1–90 call board',
-      'Claim full house at 15 marked · Live host calls the bag',
+      '3×9 Housie ticket — claim Early Five, lines, four corners, then Full House',
+      'Tap Claim when ready · bogey if wrong · first valid Full House ends the match',
+      'Interim claims score 1 pt each · auto-daub · Live both seats can claim',
     ],
     carrom: ['Pocket your colour', 'Queen then cover', 'Striker pocket is a foul'],
     uno: ['Match colour or number to play', 'Classic has optional house-rule toggles', "Shout 'Oh No!' at 1 card · Blaze hits harder · Flip switches sides"],
