@@ -2117,13 +2117,25 @@ function openSnakesVersion(chat, version, opts){
   let diceIv=null;let hopping=false;
   let eventSeq=0;let appliedSeq=0;
   let recipePushed=false;
+  let settleDone=false;
+  let resultSettling=false;
+  let sessionRecorded=false;
+  const liveStake=liveOn
+    ?Number((chat&&chat.stake)!=null?chat.stake:(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.stake)||0)||0
+    :0;
+  const settleMatchId=liveOn
+    ?String((chat&&chat.dangalMatchId)||(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.matchId)||'').trim()
+    :'';
+  let settleOppUid=(liveRoles&&liveRoles.opp)||'';
 
   function MODE_SUB(){
-    return liveOn
+    const base=liveOn
       ?(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel?DangalLive.modeChromeLabel(true):'Live 1v1')
       :(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel
         ?DangalLive.modeChromeLabel(false,versionObj.name||'vs AI')
         :('Practice · '+(versionObj.name||'vs AI')));
+    if(liveOn&&liveStake>0)return base+' · Stake ⚡'+liveStake;
+    return base;
   }
 
   function applyRecipe(raw){
@@ -2179,24 +2191,133 @@ function openSnakesVersion(chat, version, opts){
     cleanup(){
       if(diceIv){clearInterval(diceIv);diceIv=null;}
       if(liveHandle&&!leaveConfirmed){
-        try{liveHandle.leave({forfeit:!gameOver});}catch(e){try{liveHandle.leave();}catch(e2){}}
+        try{
+          if(liveOn&&!gameOver)settleSnakesOnce(false);
+          liveHandle.leave({forfeit:!gameOver});
+        }catch(e){try{liveHandle.leave();}catch(e2){}}
       }
     },
   });
   if(!gs.alive())return;
 
+  async function settleSnakesOnce(won){
+    if(!liveOn||settleDone)return null;
+    if(!settleMatchId||liveStake<=0){
+      settleDone=true;
+      return null;
+    }
+    if(!window.DangalEconomy||typeof DangalEconomy.reportGameEnd!=='function'){
+      settleDone=true;
+      return null;
+    }
+    settleDone=true;
+    try{
+      const me=typeof getCurrentUid==='function'?getCurrentUid():'';
+      const oppU=settleOppUid||(liveRoles&&liveRoles.opp)||'';
+      return await DangalEconomy.reportGameEnd({
+        gameType:'snakes',
+        result:won?'win':'loss',
+        won:!!won,
+        isDraw:false,
+        matchId:settleMatchId,
+        sessionId:settleMatchId,
+        opponentUid:oppU,
+        stake:liveStake,
+        winnerUid:won?me:oppU,
+      });
+    }catch(e){
+      settleDone=false;
+      return null;
+    }
+  }
+
+  function noteSnakesSession(won){
+    if(sessionRecorded)return;
+    sessionRecorded=true;
+    if(typeof recordGameResult==='function')recordGameResult('snakes',!!won);
+    if(typeof recordDuelStreak==='function')recordDuelStreak(chat.id||chat.name,!!won,false);
+    if(typeof recordDangalSession==='function'){
+      recordDangalSession('snakes',{
+        won:!!won,
+        drew:false,
+        score:won?1:0,
+        stake:liveStake,
+        live:!!liveOn,
+        version:versionObj.id||versionObj.name,
+      });
+    }
+  }
+
+  function paintSnakesSettle(settle){
+    const el=overlay.querySelector('.game-result-sub')||overlay.querySelector('#slSettleNote');
+    if(!el)return;
+    el.id='slSettleNote';
+    if(!liveOn)return;
+    if(liveStake>0){
+      const cd=settle&&settle.chipDelta!=null?Number(settle.chipDelta):null;
+      el.textContent=Number.isFinite(cd)&&cd!==0
+        ?('Stake '+(cd>0?'+':'')+cd+' virtual · not real money')
+        :'Virtual stakes · not real money';
+    } else {
+      el.textContent=(versionObj.name||'Snakes')+' · Live 1v1 · Friendly';
+    }
+  }
+
+  function queueSnakesSettle(won){
+    if(!liveOn||resultSettling)return;
+    resultSettling=true;
+    settleSnakesOnce(won).then(settle=>{
+      if(!gs.alive())return;
+      paintSnakesSettle(settle);
+    });
+  }
+
+  /** Live Rematch: new matchId + same board version (host re-locks recipe). Practice: keep version. */
+  function freshSnakesRematch(){
+    if(!liveOn){
+      gs.close('restart');
+      openSnakesVersion(chat, versionObj);
+      return;
+    }
+    try{
+      const mid=typeof dangalMatchId==='function'
+        ?dangalMatchId('snakes',chat)
+        :'snakes_'+Date.now();
+      if(window.__dangalLaunchCtx){
+        window.__dangalLaunchCtx=Object.assign({},window.__dangalLaunchCtx,{
+          matchId:mid,
+          gameId:'snakes',
+          gameType:'snakes',
+          stake:liveStake,
+          snakesVersion:versionObj.id||versionObj.name,
+        });
+      }
+      if(chat){
+        chat.dangalMatchId=mid;
+        chat.stake=liveStake;
+      }
+    }catch(e){}
+    leaveConfirmed=true;
+    try{if(liveHandle)liveHandle.leave({forfeit:false});}catch(e){}
+    liveHandle=null;
+    gs.close('restart');
+    openSnakesVersion(chat, versionObj, { rematch: true });
+  }
+
   async function askSnakesLeave(){
     if(gameOver){gs.close();return;}
+    const leaveBody=liveOn?'You’ll forfeit this Live match.':'This run will end.';
     if(typeof DangalLive!=='undefined'&&DangalLive.requestLeave){
       const ok=await DangalLive.requestLeave({
-        liveHandle,isPlaying:!gameOver,title:'Leave Snakes & Ladders?',body:'This run will end.',
+        liveHandle,isPlaying:!gameOver,title:'Leave Snakes & Ladders?',body:leaveBody,
         onLeave:()=>{leaveConfirmed=true;liveHandle=null;},
       });
       if(!ok)return;
     }else if(typeof confirmLeaveGame==='function'){
-      const ok=await confirmLeaveGame({title:'Leave Snakes & Ladders?',body:'This run will end.'});
+      const ok=await confirmLeaveGame({title:'Leave Snakes & Ladders?',body:leaveBody});
       if(!ok)return;
     }
+    if(liveOn&&!gameOver)settleSnakesOnce(false);
     gs.close();
   }
 
@@ -2399,21 +2520,27 @@ function openSnakesVersion(chat, version, opts){
     });
   }
 
+  function ensureSnakesTerminal(won){
+    noteSnakesSession(won);
+    queueSnakesSettle(won);
+    if(!overlay.querySelector('#slResultHost'))showSnakesResult(won);
+    else if(liveOn&&settleDone)paintSnakesSettle(null);
+  }
+
   function finishMove(who){
     if(!gs.alive())return;
     if(pos[who]>=SQUARES){
       gameOver=true;
+      const iWon=who==='me';
       message=isMoksha
-        ?(who==='me'?'🪔 Moksha! You win!':('🪔 Moksha! '+chat.name+' wins!'))
-        :(who==='me'?'You win!':chat.name+' wins!');
-      gs.setOutcome(who==='me'?'won':'lost');
-      if(typeof recordGameResult==='function')recordGameResult('snakes',who==='me');
-      if(typeof recordDuelStreak==='function') recordDuelStreak(chat.id||chat.name, who==='me', false);
-      if(typeof gameFeedback==='function') gameFeedback(who==='me'?'win':'lose');
-      if(isMoksha&&typeof showToast==='function'&&who==='me')showToast('Moksha!');
+        ?(iWon?'🪔 Moksha! You win!':('🪔 Moksha! '+chat.name+' wins!'))
+        :(iWon?'You win!':chat.name+' wins!');
+      gs.setOutcome(iWon?'won':'lost');
+      if(typeof gameFeedback==='function') gameFeedback(iWon?'win':'lose');
+      if(isMoksha&&typeof showToast==='function'&&iWon)showToast('Moksha!');
       updateHud();
       if(liveOn&&who==='me'&&!applyingLive)pushSnakes();
-      showSnakesResult(who==='me');
+      ensureSnakesTerminal(iWon);
       return;
     }
     endTurn(who);
@@ -2424,12 +2551,13 @@ function openSnakesVersion(chat, version, opts){
       const d=document.createElement('div');d.id='slResultHost';d.style.cssText='padding:8px 12px 16px;flex-shrink:0;';overlay.appendChild(d);return d;
     })();
     const duel=typeof getDuelStreak==='function'?getDuelStreak(chat.id||chat.name):null;
-    const shareStats={scoreLine:won?'Win':'Loss',meta:versionObj.name+(duel&&duel.streak?` · streak ${duel.streak}`:''),vs:`You vs ${chat.name}`};
+    const stakeHint=liveOn?(liveStake>0?' · virtual stakes':' · Friendly'):'';
+    const shareStats={scoreLine:won?'Win':'Loss',meta:versionObj.name+(duel&&duel.streak?` · streak ${duel.streak}`:'')+stakeHint,vs:`You vs ${chat.name}`};
     host.innerHTML=typeof gameResultHtml==='function'?gameResultHtml({
       gameId:'snakes',
       glyph:won?(isMoksha?'🪔':'✓'):'·',
       title:won?(isMoksha?'Moksha!':'You win'):'Defeat',
-      subtitle:versionObj.name+(duel&&duel.streak>1?` · Duel streak ${duel.streak}`:''),
+      subtitle:versionObj.name+(duel&&duel.streak>1?` · Duel streak ${duel.streak}`:'')+(liveOn?(liveStake>0?' · settling…':' · Live 1v1'):''),
       shareCardHtml: typeof buildGameShareCard==='function'?buildGameShareCard('snakes',shareStats):'',
       actions:[
         {label:'Rematch',primary:true,id:'again'},
@@ -2440,7 +2568,7 @@ function openSnakesVersion(chat, version, opts){
     }):`<button type="button" id="slRematch">Rematch</button>`;
     if(typeof wireGameResultActions==='function'){
       wireGameResultActions(host,{
-        again:()=>{gs.close('restart');openSnakesVersion(chat, versionObj);},
+        again:()=>freshSnakesRematch(),
         share:()=>{if(typeof shareGameResult==='function')shareGameResult('snakes',shareStats);},
         challenge:async()=>{
           if(typeof openFriendPickerSheet==='function'){
@@ -2451,8 +2579,9 @@ function openSnakesVersion(chat, version, opts){
         story:()=>{if(typeof postGameScoreStory==='function')postGameScoreStory('snakes',shareStats);},
       });
     } else {
-      host.querySelector('#slRematch')?.addEventListener('click',()=>{gs.close('restart');openSnakesVersion(chat, versionObj);});
+      host.querySelector('#slRematch')?.addEventListener('click',()=>freshSnakesRematch());
     }
+    if(liveOn&&settleDone)paintSnakesSettle(null);
   }
 
   function endTurn(who){
@@ -2564,7 +2693,7 @@ function openSnakesVersion(chat, version, opts){
       GameUI.attachHowTo(overlay,{
         title:versionObj.name||'Snakes & Ladders',
         body:liveOn
-          ?('One shared board · Live 1v1. Host locks the version; take turns. Snakes slide down, ladders climb up.'+(isMoksha?' Moksha: exact finish required.':''))
+          ?('One shared board · Live 1v1 · virtual stakes. Host locks the version; take turns. Snakes down, ladders up.'+(isMoksha?' Moksha: exact finish on 72.':''))
           :(versionObj.desc||'Roll, climb ladders, slide on snakes. First to the finish wins.'),
       });
     }
@@ -2610,9 +2739,10 @@ function openSnakesVersion(chat, version, opts){
           gameOver=true;
           const iWon=val.winner===liveRoles.me;
           gs.setOutcome(iWon?'won':'lost');
-          if(typeof recordGameResult==='function')recordGameResult('snakes',iWon);
+          if(typeof gameFeedback==='function')gameFeedback(iWon?'win':'lose');
           message=iWon?'Opponent left — you win!':(chat.name+' wins by forfeit');
-          updateHud();showSnakesResult(iWon);return;
+          updateHud();
+          ensureSnakesTerminal(iWon);return;
         }
         const s=val.state;if(!s)return;
         const seq=s.eventSeq!=null?(s.eventSeq|0):0;
@@ -2659,7 +2789,7 @@ function openSnakesVersion(chat, version, opts){
           if(gameOver){
             pos.me=Number(nextMe)||pos.me;pos.opp=Number(nextOpp)||pos.opp;
             myTurn=false;placeTokens();updateHud();
-            if(!overlay.querySelector('#slResultHost'))showSnakesResult(pos.me>=SQUARES);
+            if(!overlay.querySelector('#slResultHost'))ensureSnakesTerminal(pos.me>=SQUARES);
             applyingLive=false;
           } else {
             // Stay applying until hop finishes so endTurn soft-reconcile snaps don't fight.
@@ -2690,7 +2820,7 @@ function openSnakesVersion(chat, version, opts){
         myTurn=!gameOver&&val.turn===liveRoles.me;
         if(s.eventSeq!=null){eventSeq=Math.max(eventSeq,seq);appliedSeq=Math.max(appliedSeq,seq);}
         rebuildBoardArt();placeTokens();updateHud();
-        if(gameOver&&!overlay.querySelector('#slResultHost'))showSnakesResult(pos.me>=SQUARES);
+        if(gameOver&&!overlay.querySelector('#slResultHost'))ensureSnakesTerminal(pos.me>=SQUARES);
         applyingLive=false;
       },
     });
@@ -6102,7 +6232,7 @@ if (typeof registerGame === 'function') {
   registerGame({
     id: 'snakes',
     name: 'Snakes & Ladders',
-    desc: '5 board versions · Live 1v1',
+    desc: '5 board versions · Live 1v1 · virtual stakes',
     icon: '🐍',
     ratingKey: 'snakes',
     gameType: 'dual',
@@ -6111,6 +6241,12 @@ if (typeof registerGame === 'function') {
     chat1v1: true,
     selfChat: true,
     order: 20,
+    meta: {
+      phaseA: 'Practice boards — Classic / Vedic / Speed / Chaos / Moksha Patam 72',
+      phaseB: 'Live 1v1 host-locked version + shared dice/turn',
+      phaseC: 'complete — virtual stakes settle, rematch new matchId, session',
+      complete: true,
+    },
     launch(ctx) { openSnakesVersionPicker(ctx.chat); },
   });
   registerGame({
