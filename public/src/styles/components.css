@@ -2500,10 +2500,19 @@ html.theme-dark .lehar-empty{color:#fff;}
 .tt-meter-row {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  gap: 8px;
   font-size: 11px;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.8);
   margin-bottom: 6px;
+}
+.tt-combo {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #FFD166;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 .tt-meter-track {
   height: 6px;
@@ -2524,6 +2533,9 @@ html.theme-dark .lehar-empty{color:#fff;}
   align-items: center;
   justify-content: center;
   padding: 10px;
+  padding-left: max(10px, var(--safe-left, 0px));
+  padding-right: max(10px, var(--safe-right, 0px));
+  padding-bottom: max(10px, var(--safe-bottom, 0px));
   min-height: 0;
   position: relative;
   background: var(--game-bg-dark, #1a1a2e);
@@ -2532,11 +2544,14 @@ html.theme-dark .lehar-empty{color:#fff;}
   display: grid;
   gap: 4px;
   width: min(360px, 94vw);
+  max-width: 100%;
   position: relative;
   z-index: 1;
 }
 .tt-cell {
   aspect-ratio: 1;
+  min-width: 0;
+  min-height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2547,10 +2562,20 @@ html.theme-dark .lehar-empty{color:#fff;}
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   overflow: hidden;
+  touch-action: none;
 }
 .tt-cell.is-selected {
   background: rgba(255, 255, 255, 0.22);
   border-color: #fff;
+}
+.tt-cell.is-hint {
+  background: rgba(255, 209, 102, 0.28);
+  border-color: #FFD166;
+  box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.35);
+  z-index: 1;
+}
+.tt-cell.is-dim {
+  opacity: 0.38;
 }
 .tt-gem {
   width: 68%;
@@ -2584,6 +2609,9 @@ html.theme-dark .lehar-empty{color:#fff;}
 .tt-piece--pop .tt-gem {
   animation: ttPop 220ms var(--game-ease) forwards;
 }
+.tt-piece--swap .tt-gem {
+  animation: ttSwapPulse 160ms var(--game-ease) both;
+}
 @keyframes ttEnter {
   from { transform: scale(0.4); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
@@ -2595,6 +2623,10 @@ html.theme-dark .lehar-empty{color:#fff;}
 @keyframes ttPop {
   0% { transform: scale(1); opacity: 1; }
   100% { transform: scale(1.4); opacity: 0; }
+}
+@keyframes ttSwapPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
 }
 .tt-fx-layer {
   position: absolute;
@@ -2639,6 +2671,20 @@ html.theme-dark .lehar-empty{color:#fff;}
   opacity: 0.7;
   animation: ttBoom 600ms ease-out forwards;
 }
+.tt-fx--short {
+  animation-duration: 220ms !important;
+}
+.tt-score-pop {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 22px;
+  font-weight: 800;
+  color: #FFD166;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  animation: ttScorePop 900ms ease-out forwards;
+  z-index: 3;
+}
 @keyframes ttSpark {
   to { transform: scale(2.4); opacity: 0; }
 }
@@ -2648,6 +2694,29 @@ html.theme-dark .lehar-empty{color:#fff;}
 @keyframes ttLine {
   from { opacity: 1; transform: scaleX(0.2); }
   to { opacity: 0; transform: scaleX(1); }
+}
+@keyframes ttScorePop {
+  0% { opacity: 0; transform: translate(-50%, -40%) scale(0.85); }
+  18% { opacity: 1; transform: translate(-50%, -55%) scale(1.05); }
+  100% { opacity: 0; transform: translate(-50%, -120%) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tt-piece--enter .tt-gem,
+  .tt-piece--fall .tt-gem,
+  .tt-piece--pop .tt-gem,
+  .tt-piece--swap .tt-gem {
+    animation-duration: 90ms !important;
+  }
+  .tt-fx--spark,
+  .tt-fx--bomb,
+  .tt-fx--line,
+  .tt-fx--rainbow {
+    animation-duration: 200ms !important;
+  }
+  .tt-score-pop {
+    animation: none;
+    opacity: 0;
+  }
 }
 .tt-result-overlay {
   position: absolute;

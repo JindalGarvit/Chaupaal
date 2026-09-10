@@ -594,13 +594,23 @@ function openTipTap(){
     {id:5,fill:'#E76F51',glow:'#FDBA74'},
   ];
   const SPECIAL={bomb:'bomb',rainbow:'rainbow',line:'line'};
+  const reduceMotion=typeof shouldReduceGameMotion==='function'&&shouldReduceGameMotion();
+  const T={
+    pop:reduceMotion?100:220,
+    swap:reduceMotion?90:160,
+    swapBack:reduceMotion?110:180,
+    cascade:reduceMotion?90:240,
+    fx:reduceMotion?380:650,
+  };
 
   let level=parseInt(localStorage.getItem('tiptap_level')||localStorage.getItem('candyburst_level')||'1',10)||1;
   let board=[],score=0,moves=0,targetScore=0,maxMoves=0;
   let selected=null,animating=false,gameOver=false;
-  let combo=0,cascadeTimer=null,fxLayer=null;
+  let combo=0,cascadeTimer=null,cascadeResume=null,fxLayer=null;
   let cellSize=40;
   let pauseCtrl=null;
+  let hintPair=null;
+  let suppressClickUntil=0;
 
   const LEVELS=Array.from({length:100},(_,i)=>({
     level:i+1,
@@ -616,7 +626,7 @@ function openTipTap(){
   const gs=begin?begin({
     type:'tiptap',title:'Tip Tap',mode:'solo',overlay,
     cleanup(){
-      if(cascadeTimer){clearTimeout(cascadeTimer);cascadeTimer=null;}
+      clearCascadeTimers();
       if(pauseCtrl){pauseCtrl.destroy();pauseCtrl=null;}
     },
   }):null;
@@ -633,12 +643,35 @@ function openTipTap(){
     if(gs)return gs.schedule(fn,ms);
     return setTimeout(fn,ms);
   };
+  function clearCascadeTimers(){
+    if(cascadeTimer){
+      try{clearTimeout(cascadeTimer);}catch(e){}
+      cascadeTimer=null;
+    }
+    cascadeResume=null;
+  }
   const close=()=>{
-    if(cascadeTimer){clearTimeout(cascadeTimer);cascadeTimer=null;}
+    clearCascadeTimers();
     if(pauseCtrl){pauseCtrl.destroy();pauseCtrl=null;}
     if(gs)gs.close();else overlay.remove();
   };
   const buzz=(a)=>{if(typeof gameFeedback==='function')gameFeedback(a);};
+  const isPaused=()=>!!(pauseCtrl&&pauseCtrl.isPaused&&pauseCtrl.isPaused());
+
+  /** Pause-aware cascade beat — never stacks overlapping timers. */
+  function scheduleCascade(fn,ms){
+    if(cascadeTimer){
+      try{clearTimeout(cascadeTimer);}catch(e){}
+      cascadeTimer=null;
+    }
+    const run=()=>{
+      cascadeTimer=null;
+      if(!alive()||gameOver)return;
+      if(isPaused()){cascadeResume=fn;return;}
+      fn();
+    };
+    cascadeTimer=schedule(run,ms);
+  }
 
   function randomPiece(allowSpecial){
     if(allowSpecial&&Math.random()<0.04){
@@ -650,18 +683,8 @@ function openTipTap(){
   }
   let _uid=1;function uid(){return _uid++;}
 
-  function startLevel(lvl){
-    if(!alive())return;
-    const cfg=LEVELS[Math.min(lvl-1,LEVELS.length-1)];
-    targetScore=cfg.target;maxMoves=cfg.moves;moves=cfg.moves;score=0;combo=0;gameOver=false;selected=null;animating=false;
-    board=Array(ROWS).fill(null).map(()=>Array(COLS).fill(null).map(()=>randomPiece()));
-    let guard=0;
-    while(findMatches().length&&guard++<40)board=Array(ROWS).fill(null).map(()=>Array(COLS).fill(null).map(()=>randomPiece()));
-    const sub=document.getElementById('cbSub');
-    if(sub)sub.textContent='Level '+level;
-    const tgt=document.getElementById('cbTarget');
-    if(tgt)tgt.textContent=targetScore.toLocaleString();
-    render({fresh:true});
+  function swapCells(r1,c1,r2,c2){
+    const tmp=board[r1][c1];board[r1][c1]=board[r2][c2];board[r2][c2]=tmp;
   }
 
   function findMatches(){
@@ -683,8 +706,104 @@ function openTipTap(){
     return [...matches].map(k=>{const[r,c]=k.split(',').map(Number);return{r,c};});
   }
 
+  /** Brute-force one legal orthogonal swap on 8×8. */
+  function findHintMove(){
+    for(let r=0;r<ROWS;r++){
+      for(let c=0;c<COLS;c++){
+        const dirs=[[0,1],[1,0]];
+        for(const[dr,dc] of dirs){
+          const r2=r+dr,c2=c+dc;
+          if(r2>=ROWS||c2>=COLS)continue;
+          if(!board[r][c]||!board[r2][c2])continue;
+          swapCells(r,c,r2,c2);
+          const ok=findMatches().length>0;
+          swapCells(r,c,r2,c2);
+          if(ok)return{r1:r,c1:c,r2,c2};
+        }
+      }
+    }
+    return null;
+  }
+
+  function fillRandomBoard(){
+    board=Array(ROWS).fill(null).map(()=>Array(COLS).fill(null).map(()=>randomPiece(false)));
+  }
+
+  function ensurePlayableStart(){
+    let guard=0;
+    do{
+      fillRandomBoard();
+      guard++;
+    }while((findMatches().length>0||!findHintMove())&&guard<60);
+    if(findMatches().length||!findHintMove()){
+      // Last resort: accept no-immediate-match board then shuffle until playable
+      guard=0;
+      while((findMatches().length>0||!findHintMove())&&guard++<40)shuffleGems(true);
+    }
+  }
+
+  function shuffleGems(silent){
+    const colors=[];
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+      const p=board[r][c];
+      if(p&&!p.special&&p.color!=null)colors.push(p.color);
+    }
+    for(let i=colors.length-1;i>0;i--){
+      const j=Math.floor(Math.random()*(i+1));
+      const t=colors[i];colors[i]=colors[j];colors[j]=t;
+    }
+    let k=0;
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+      const p=board[r][c];
+      if(p&&!p.special&&p.color!=null){
+        board[r][c]={color:colors[k++],special:null,id:uid()};
+      }
+    }
+    let guard=0;
+    while(findMatches().length&&guard++<30){
+      for(let i=colors.length-1;i>0;i--){
+        const j=Math.floor(Math.random()*(i+1));
+        const t=colors[i];colors[i]=colors[j];colors[j]=t;
+      }
+      k=0;
+      for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+        const p=board[r][c];
+        if(p&&!p.special&&p.color!=null)board[r][c]={color:colors[k++],special:null,id:uid()};
+      }
+    }
+    if(!silent&&typeof showToast==='function')showToast('No moves — shuffled');
+    buzz('turn');
+  }
+
+  function startLevel(lvl){
+    if(!alive())return;
+    clearCascadeTimers();
+    const cfg=LEVELS[Math.min(lvl-1,LEVELS.length-1)];
+    targetScore=cfg.target;maxMoves=cfg.moves;moves=cfg.moves;score=0;combo=0;
+    gameOver=false;selected=null;animating=false;hintPair=null;
+    ensurePlayableStart();
+    const sub=document.getElementById('cbSub');
+    if(sub)sub.textContent='Level '+level;
+    const tgt=document.getElementById('cbTarget');
+    if(tgt)tgt.textContent=targetScore.toLocaleString();
+    updateComboHud();
+    render({fresh:true});
+  }
+
+  function updateComboHud(){
+    const el=document.getElementById('cbCombo');
+    if(!el)return;
+    if(combo>1){
+      el.hidden=false;
+      el.textContent='Combo ×'+combo;
+    }else{
+      el.hidden=true;
+      el.textContent='';
+    }
+  }
+
   function spawnFx(r,c,type){
-    if(!fxLayer)return;
+    if(!fxLayer||(reduceMotion&&type==='spark'))return;
     const grid=document.getElementById('cbGrid');
     if(!grid)return;
     const cell=grid.querySelector(`[data-r="${r}"][data-c="${c}"]`);
@@ -692,22 +811,40 @@ function openTipTap(){
     const rect=host.getBoundingClientRect();
     const layerRect=fxLayer.getBoundingClientRect();
     const el=document.createElement('div');
-    el.className='tt-fx tt-fx--'+type;
+    el.className='tt-fx tt-fx--'+type+(reduceMotion?' tt-fx--short':'');
     el.style.left=(rect.left-layerRect.left+rect.width/2)+'px';
     el.style.top=(rect.top-layerRect.top+rect.height/2)+'px';
     fxLayer.appendChild(el);
-    schedule(()=>{el.remove();},700);
+    schedule(()=>{el.remove();},T.fx);
+  }
+
+  function spawnScorePop(pts){
+    if(reduceMotion||!fxLayer||pts<=0)return;
+    const grid=document.getElementById('cbGrid');
+    if(!grid)return;
+    const rect=grid.getBoundingClientRect();
+    const layerRect=fxLayer.getBoundingClientRect();
+    const el=document.createElement('div');
+    el.className='tt-score-pop';
+    el.textContent='+'+pts;
+    el.style.left=(rect.left-layerRect.left+rect.width/2)+'px';
+    el.style.top=(rect.top-layerRect.top+rect.height*0.38)+'px';
+    fxLayer.appendChild(el);
+    schedule(()=>{el.remove();},900);
   }
 
   function clearMatches(matches){
-    if(!alive())return;
+    if(!alive()||!matches||!matches.length)return;
+    animating=true;
     combo++;
+    updateComboHud();
     const pts=matches.length*10*combo;score+=pts;
+    spawnScorePop(pts);
     if(combo>1)buzz('valid');else buzz('place');
 
     matches.forEach(({r,c})=>{
       const cell=document.querySelector(`#cbGrid [data-r="${r}"][data-c="${c}"]`);
-      if(cell){cell.classList.add('tt-piece--pop');}
+      if(cell)cell.classList.add('tt-piece--pop');
       spawnFx(r,c,'spark');
     });
 
@@ -715,9 +852,9 @@ function openTipTap(){
     const specialKind=matches.length>=8?SPECIAL.rainbow:SPECIAL.bomb;
     const anchor=matches[0];
 
-    schedule(()=>{
+    scheduleCascade(()=>{
       if(!alive())return;
-      const snap=matches.map(({r,c})=>({r,c,p:board[r][c]}));
+      const snap=matches.map(({r,c})=>({r,c,p:board[r]?.[c]}));
       const rainColor=snap.find(x=>x.p&&x.p.color!=null)?.p?.color ?? 0;
       snap.forEach(({r,c,p})=>{
         if(p?.special===SPECIAL.bomb){
@@ -727,8 +864,8 @@ function openTipTap(){
           }
         }else if(p?.special===SPECIAL.line){
           spawnFx(r,c,'line');
-          for(let rr=0;rr<ROWS;rr++)board[rr][c]=null;
-          for(let cc=0;cc<COLS;cc++)board[r][cc]=null;
+          for(let rr=0;rr<ROWS;rr++)if(board[rr])board[rr][c]=null;
+          for(let cc=0;cc<COLS;cc++)if(board[r])board[r][cc]=null;
         }else if(p?.special===SPECIAL.rainbow){
           spawnFx(r,c,'rainbow');
           for(let rr=0;rr<ROWS;rr++)for(let cc=0;cc<COLS;cc++){
@@ -742,11 +879,12 @@ function openTipTap(){
         board[anchor.r][anchor.c]={color:null,special:specialKind,id:uid()};
       }
       dropPieces();
-    },220);
+    },T.pop);
   }
 
   function dropPieces(){
     if(!alive())return;
+    animating=true;
     const fell=[];
     for(let c=0;c<COLS;c++){
       let write=ROWS-1;
@@ -768,42 +906,86 @@ function openTipTap(){
     render({fall:fell});
     const newMatches=findMatches();
     if(newMatches.length){
-      if(cascadeTimer)clearTimeout(cascadeTimer);
-      cascadeTimer=schedule(()=>{cascadeTimer=null;clearMatches(newMatches);},320);
+      scheduleCascade(()=>clearMatches(newMatches),T.cascade);
     }else{
-      combo=0;animating=false;checkGameOver();
+      finishCascade();
+    }
+  }
+
+  function finishCascade(){
+    combo=0;
+    updateComboHud();
+    animating=false;
+    hintPair=null;
+    if(checkGameOver())return;
+    // Deadlock assist: shuffle when zero legal swaps
+    if(!findHintMove()){
+      shuffleGems(false);
+      let g=0;
+      while(!findHintMove()&&g++<12)shuffleGems(true);
+      render({fresh:true});
+      checkGameOver();
     }
   }
 
   function trySwap(r1,c1,r2,c2){
-    if(!alive()||animating||gameOver)return;
+    if(!alive()||animating||gameOver||isPaused())return;
     if(Math.abs(r1-r2)+Math.abs(c1-c2)!==1)return;
+    if(!board[r1]?.[c1]||!board[r2]?.[c2])return;
+    hintPair=null;
     animating=true;
-    const tmp=board[r1][c1];board[r1][c1]=board[r2][c2];board[r2][c2]=tmp;
+    selected=null;
+    swapCells(r1,c1,r2,c2);
     render({swap:[[r1,c1],[r2,c2]]});
     const matches=findMatches();
     if(matches.length){
-      moves--;
-      schedule(()=>clearMatches(matches),160);
+      moves--; // only successful match consumes a move
+      updateHudMeters();
+      scheduleCascade(()=>clearMatches(matches),T.swap);
     }else{
-      schedule(()=>{
-        const t2=board[r1][c1];board[r1][c1]=board[r2][c2];board[r2][c2]=t2;
+      // Illegal: animate back — 0 moves
+      scheduleCascade(()=>{
+        swapCells(r1,c1,r2,c2);
         render({swap:[[r1,c1],[r2,c2]]});
-        animating=false;selected=null;
+        animating=false;
+        buzz('invalid');
         const grid=document.getElementById('cbGrid');
-        if(typeof shakeInvalidMove==='function') shakeInvalidMove(grid,{toast:'No match'});
-        else {buzz('invalid');if(typeof showToast==='function')showToast('No match');}
-      },180);
+        if(typeof shakeInvalidMove==='function')shakeInvalidMove(grid,{toast:'No match'});
+        else if(typeof showToast==='function')showToast('No match');
+      },T.swapBack);
     }
   }
 
+  function updateHudMeters(){
+    const scoreEl=document.getElementById('cbScore');if(scoreEl)scoreEl.textContent=score.toLocaleString();
+    const movesEl=document.getElementById('cbMoves');if(movesEl)movesEl.textContent=String(moves);
+    const progEl=document.getElementById('cbProgress');if(progEl)progEl.style.width=Math.min(100,(score/Math.max(1,targetScore))*100)+'%';
+  }
+
   function checkGameOver(){
-    if(score>=targetScore){showLevelComplete();return;}
-    if(moves<=0){showGameOver();return;}
+    if(score>=targetScore){showLevelComplete();return true;}
+    if(moves<=0){showGameOver();return true;}
+    return false;
+  }
+
+  function applyHint(){
+    if(animating||gameOver||isPaused())return;
+    const move=findHintMove();
+    if(!move){
+      shuffleGems(false);
+      render({fresh:true});
+      return;
+    }
+    hintPair=move;
+    selected=null;
+    buzz('select');
+    render();
   }
 
   function showLevelComplete(){
     gameOver=true;
+    animating=false;
+    clearCascadeTimers();
     localStorage.setItem('tiptap_level',String(level+1));
     if(typeof setGamePB==='function') setGamePB('tiptap', score);
     const vsBest=typeof formatVsBest==='function'?formatVsBest('tiptap', score):'';
@@ -813,6 +995,10 @@ function openTipTap(){
     const div=document.getElementById('cbOverlay');if(!div)return;div.style.display='flex';
     const shareStats={scoreLine:score.toLocaleString(),score,meta:`Level ${level} · ${vsBest||''}`,text:`Cleared Tip Tap level ${level} with ${score.toLocaleString()} on Chaupaal!`};
     const shareCard=typeof buildGameShareCard==='function'?buildGameShareCard('tiptap',shareStats):'';
+    const actions=[{label:`Level ${level+1}`,primary:true,id:'again'}];
+    if(typeof shareGameResult==='function')actions.push({label:'Share',primary:false,id:'share'});
+    if(typeof openFriendPickerSheet==='function')actions.push({label:'Challenge friend',primary:false,id:'challenge'});
+    if(typeof postGameScoreStory==='function')actions.push({label:'Post to story',primary:false,id:'story'});
     div.innerHTML=`
       ${typeof gameResultHtml==='function'?gameResultHtml({
         gameId:'tiptap',
@@ -821,12 +1007,7 @@ function openTipTap(){
         subtitle:`Score ${score.toLocaleString()}`,
         vsBest:vsBest||undefined,
         shareCardHtml:shareCard,
-        actions:[
-          {label:`Level ${level+1}`,primary:true,id:'again'},
-          {label:'Share',primary:false,id:'share'},
-          {label:'Challenge friend',primary:false,id:'challenge'},
-          {label:'Post to story',primary:false,id:'story'},
-        ],
+        actions,
       }):`<div><button type="button" id="cbNext">Next</button></div>`}
     `;
     if(typeof wireGameResultActions==='function'){
@@ -854,6 +1035,8 @@ function openTipTap(){
 
   function showGameOver(){
     gameOver=true;
+    animating=false;
+    clearCascadeTimers();
     if(typeof setGamePB==='function') setGamePB('tiptap', score);
     const vsBest=typeof formatVsBest==='function'?formatVsBest('tiptap', score):'';
     if(gs)gs.setOutcome('lost');
@@ -862,6 +1045,10 @@ function openTipTap(){
     const div=document.getElementById('cbOverlay');if(!div)return;div.style.display='flex';
     const shareStats={scoreLine:score.toLocaleString(),score,meta:`Level ${level} · ${vsBest||''}`,text:`Scored ${score.toLocaleString()} on Tip Tap (Chaupaal). Can you beat me?`};
     const shareCard=typeof buildGameShareCard==='function'?buildGameShareCard('tiptap',shareStats):'';
+    const actions=[{label:'Play again',primary:true,id:'again'}];
+    if(typeof shareGameResult==='function')actions.push({label:'Share',primary:false,id:'share'});
+    if(typeof openFriendPickerSheet==='function')actions.push({label:'Challenge friend',primary:false,id:'challenge'});
+    if(typeof postGameScoreStory==='function')actions.push({label:'Post to story',primary:false,id:'story'});
     div.innerHTML=`
       ${typeof gameResultHtml==='function'?gameResultHtml({
         gameId:'tiptap',
@@ -870,12 +1057,7 @@ function openTipTap(){
         subtitle:`Score ${score.toLocaleString()} / ${targetScore.toLocaleString()} · Level ${level}`,
         vsBest:vsBest||undefined,
         shareCardHtml:shareCard,
-        actions:[
-          {label:'Play again',primary:true,id:'again'},
-          {label:'Share',primary:false,id:'share'},
-          {label:'Challenge friend',primary:false,id:'challenge'},
-          {label:'Post to story',primary:false,id:'story'},
-        ],
+        actions,
       }):`<div><button type="button" id="cbRetry">Retry</button></div>`}
     `;
     if(typeof wireGameResultActions==='function'){
@@ -908,13 +1090,17 @@ function openTipTap(){
     return `<span class="tt-gem" style="--tt-fill:${pal.fill};--tt-glow:${pal.glow}" aria-hidden="true"></span>`;
   }
 
+  function isHintCell(r,c){
+    if(!hintPair)return false;
+    return(hintPair.r1===r&&hintPair.c1===c)||(hintPair.r2===r&&hintPair.c2===c);
+  }
+
   function render(opts){
     if(!alive())return;
     const o=opts||{};
     const grid=document.getElementById('cbGrid');if(!grid)return;
-    const scoreEl=document.getElementById('cbScore');if(scoreEl)scoreEl.textContent=score.toLocaleString();
-    const movesEl=document.getElementById('cbMoves');if(movesEl)movesEl.textContent=String(moves);
-    const progEl=document.getElementById('cbProgress');if(progEl)progEl.style.width=Math.min(100,(score/targetScore)*100)+'%';
+    updateHudMeters();
+    updateComboHud();
 
     grid.innerHTML='';
     for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
@@ -922,8 +1108,10 @@ function openTipTap(){
       cell.type='button';
       const p=board[r][c];
       const isSel=selected&&selected[0]===r&&selected[1]===c;
-      cell.className='tt-cell game-tap-target'+(isSel?' is-selected':'');
+      const isHint=isHintCell(r,c);
+      cell.className='tt-cell game-tap-target'+(isSel?' is-selected':'')+(isHint?' is-hint':'')+(hintPair&&!isHint?' is-dim':'');
       cell.dataset.r=r;cell.dataset.c=c;
+      cell.setAttribute('aria-label',p?(p.special||('gem '+(p.color+1))):'empty');
       cell.innerHTML=pieceHtml(p);
       if(o.fresh)cell.classList.add('tt-piece--enter');
       if(o.fall){
@@ -934,25 +1122,34 @@ function openTipTap(){
           cell.style.setProperty('--tt-fall',Math.min(12,Math.max(1,dist))*cellSize+'px');
         }
       }
-      cell.addEventListener('click',()=>{
-        if(animating||gameOver)return;
+      if(o.swap&&o.swap.some(p=>p[0]===r&&p[1]===c))cell.classList.add('tt-piece--swap');
+      cell.addEventListener('click',(ev)=>{
+        ev.preventDefault();
+        if(Date.now()<suppressClickUntil)return;
+        if(animating||gameOver||isPaused())return;
         const nr=+cell.dataset.r,nc=+cell.dataset.c;
-        if(!selected){selected=[nr,nc];buzz('select');render();}
-        else if(selected[0]===nr&&selected[1]===nc){selected=null;render();}
-        else{trySwap(selected[0],selected[1],nr,nc);selected=null;}
+        if(!selected){selected=[nr,nc];hintPair=null;buzz('select');render();}
+        else if(selected[0]===nr&&selected[1]===nc){selected=null;render();} // double-tap deselect
+        else if(Math.abs(selected[0]-nr)+Math.abs(selected[1]-nc)===1){
+          const sr=selected[0],sc=selected[1];
+          selected=null;
+          trySwap(sr,sc,nr,nc);
+        }else{
+          selected=[nr,nc];hintPair=null;buzz('select');render();
+        }
       });
       grid.appendChild(cell);
     }
-    // Measure cell for fall distance
     const sample=grid.querySelector('.tt-cell');
     if(sample)cellSize=sample.getBoundingClientRect().height||40;
   }
 
   overlay.innerHTML=`
-    ${gameChromeHtml({title:'Tip Tap',subtitle:`Level ${level}`,backId:'cbBack',pauseId:'cbPause',rightHtml:'<span class="game-chrome-metric" id="cbScore">0</span>'})}
+    ${gameChromeHtml({title:'Tip Tap',subtitle:`Level ${level}`,backId:'cbBack',pauseId:'cbPause',rightHtml:'<button type="button" id="cbHint" class="game-chrome-action game-tap-target" aria-label="Hint">Hint</button><span class="game-chrome-metric" id="cbScore">0</span>'})}
     <div class="tt-meter">
       <div class="tt-meter-row">
         <span>Target: <strong id="cbTarget">${LEVELS[Math.min(level-1,99)].target.toLocaleString()}</strong></span>
+        <span id="cbCombo" class="tt-combo" hidden></span>
         <span>Moves: <strong id="cbMoves">${LEVELS[Math.min(level-1,99)].moves}</strong></span>
       </div>
       <div class="tt-meter-track"><div id="cbProgress" class="tt-meter-fill"></div></div>
@@ -963,7 +1160,6 @@ function openTipTap(){
     </div>
     <div id="cbOverlay" class="tt-result-overlay"></div>
   `;
-  // Fix subtitle id for level updates
   const subEl=overlay.querySelector('.game-chrome-subtitle');
   if(subEl)subEl.id='cbSub';
 
@@ -975,39 +1171,60 @@ function openTipTap(){
       :Promise.resolve(window.confirm('Leave Tip Tap?'));
     Promise.resolve(ask).then((ok)=>{if(ok)close();});
   });
+  document.getElementById('cbHint')?.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    applyHint();
+  });
   if(typeof createGamePauseController==='function'){
     pauseCtrl=createGamePauseController({
       host:overlay,
       pauseBtnId:'cbPause',
-      onPause(){if(cascadeTimer){clearTimeout(cascadeTimer);cascadeTimer=null;}},
-      onResume(){},
+      onPause(){
+        // Keep cascade beat pending; scheduleCascade parks fn in cascadeResume if it fires while paused
+      },
+      onResume(){
+        if(cascadeResume){
+          const fn=cascadeResume;cascadeResume=null;
+          scheduleCascade(fn,40);
+        }
+      },
       onQuit:close,
     });
   }
 
-  // Swipe-to-swap on grid
+  // Pointer swipe between adjacent cells (tap still via click)
   const gridEl=document.getElementById('cbGrid');
-  let sx=0,sy=0,sCell=null;
-  gridEl.addEventListener('touchstart',e=>{
-    const t=e.touches[0];
-    const el=document.elementFromPoint(t.clientX,t.clientY)?.closest?.('.tt-cell');
-    if(!el)return;
-    sx=t.clientX;sy=t.clientY;sCell=el;
-  },{passive:true});
-  gridEl.addEventListener('touchend',e=>{
-    if(!sCell||animating||gameOver){sCell=null;return;}
-    const t=e.changedTouches[0];
-    const dx=t.clientX-sx,dy=t.clientY-sy;
+  let sx=0,sy=0,sCell=null,pointerSwiping=false;
+  function beginSwipe(clientX,clientY,el){
+    if(!el||animating||gameOver||isPaused())return;
+    sx=clientX;sy=clientY;sCell=el;pointerSwiping=true;
+  }
+  function endSwipe(clientX,clientY){
+    if(!sCell||!pointerSwiping){sCell=null;pointerSwiping=false;return;}
+    const dx=clientX-sx,dy=clientY-sy;
     const r=+sCell.dataset.r,c=+sCell.dataset.c;
-    sCell=null;
-    if(Math.abs(dx)<22&&Math.abs(dy)<22)return;
+    sCell=null;pointerSwiping=false;
+    if(animating||gameOver||isPaused())return;
+    if(Math.abs(dx)<22&&Math.abs(dy)<22)return; // tap handled by click
     let nr=r,nc=c;
     if(Math.abs(dx)>Math.abs(dy))nc+=dx>0?1:-1;
     else nr+=dy>0?1:-1;
     if(nr<0||nr>=ROWS||nc<0||nc>=COLS)return;
-    selected=null;
+    suppressClickUntil=Date.now()+350;
+    selected=null;hintPair=null;
     trySwap(r,c,nr,nc);
-  },{passive:true});
+  }
+  gridEl.addEventListener('pointerdown',e=>{
+    if(e.pointerType==='mouse'&&e.button!==0)return;
+    const el=e.target.closest?.('.tt-cell');
+    if(!el)return;
+    beginSwipe(e.clientX,e.clientY,el);
+    try{gridEl.setPointerCapture(e.pointerId);}catch(err){}
+  });
+  gridEl.addEventListener('pointerup',e=>{
+    endSwipe(e.clientX,e.clientY);
+  });
+  gridEl.addEventListener('pointercancel',()=>{sCell=null;pointerSwiping=false;});
 
   startLevel(level);
 }
