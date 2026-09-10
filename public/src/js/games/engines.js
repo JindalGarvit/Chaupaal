@@ -5029,14 +5029,19 @@ render();
 }
 
 // ===================== SHABD FIVE =====================
-// Lexicon banks: data/shabd-answers.js + data/shabd-allowed.js via shabd-lexicon.js
-// Daily/Practice → answers; guess validation → allowed Set (O(1)).
+// Lexicon: Prompt 1 banks. Daily contract (Prompt 2): save / one-shot lock / Practice sealed.
 const SHABD_ANSWER_BANK=(typeof SHABD_ANSWERS!=='undefined'&&Array.isArray(SHABD_ANSWERS)&&SHABD_ANSWERS.length)
   ?SHABD_ANSWERS
   :['HOUSE','WORLD','HEART','DREAM','LIGHT','OCEAN','RIVER','MUSIC','STONE','POWER'];
-function shabdDailySeed(){
+const SHABD_DAILY_KEY='chaupaal_shabd_daily_v1';
+
+function shabdDayKey(){
+  if(typeof shabdLocalDayKey==='function')return shabdLocalDayKey();
   const d=new Date();
-  return d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function shabdDailySeed(){
+  return Number(String(shabdDayKey()).replace(/-/g,''));
 }
 function shabdPickDaily(){
   const seed=shabdDailySeed();
@@ -5054,14 +5059,120 @@ function pickShabdPractice(){
   if(typeof pickShabdAnswer==='function')return pickShabdAnswer(Math.random);
   return SHABD_ANSWER_BANK[Math.floor(Math.random()*SHABD_ANSWER_BANK.length)];
 }
+function isShabdAnswerWord(w){
+  const u=String(w||'').trim().toUpperCase();
+  if(!/^[A-Z]{5}$/.test(u))return false;
+  if(typeof SHABD_ANSWERS!=='undefined'&&Array.isArray(SHABD_ANSWERS))return SHABD_ANSWERS.indexOf(u)!==-1;
+  return SHABD_ANSWER_BANK.indexOf(u)!==-1;
+}
+function loadShabdDailyState(){
+  try{
+    const raw=localStorage.getItem(SHABD_DAILY_KEY);
+    if(!raw)return null;
+    const o=JSON.parse(raw);
+    if(!o||typeof o!=='object')return null;
+    return o;
+  }catch(e){return null;}
+}
+function saveShabdDailyState(state){
+  try{localStorage.setItem(SHABD_DAILY_KEY,JSON.stringify(state));}catch(e){}
+  try{if(typeof window!=='undefined')window.__shabdDailyState=state;}catch(e){}
+}
+function clearShabdDailyState(){
+  try{localStorage.removeItem(SHABD_DAILY_KEY);}catch(e){}
+}
+function validateShabdDailySave(o,today){
+  if(!o||o.day!==today)return null;
+  const target=String(o.target||'').toUpperCase();
+  if(!/^[A-Z]{5}$/.test(target))return null;
+  // Mid-run requires answer-bank target; finished lock may keep a legacy 5-letter target
+  if(!o.gameOver&&!isShabdAnswerWord(target))return null;
+  if(!Array.isArray(o.guesses))return null;
+  if(o.guesses.length>6)return null;
+  for(let i=0;i<o.guesses.length;i++){
+    const g=String(o.guesses[i]||'').toUpperCase();
+    if(g.length!==5)return null;
+  }
+  if(o.gameOver&&!o.guesses.length)return null;
+  const current=String(o.currentGuess||'').toUpperCase().replace(/[^A-Z]/g,'');
+  if(current.length>5)return null;
+  return{
+    day:today,
+    seed:o.seed!=null?Number(o.seed):shabdDailySeed(),
+    target,
+    guesses:o.guesses.map(g=>String(g).toUpperCase()),
+    currentGuess:o.gameOver?'':current.slice(0,5),
+    gameOver:!!o.gameOver,
+    won:!!o.won,
+    keyColors:o.keyColors&&typeof o.keyColors==='object'?o.keyColors:{},
+    streakRecorded:!!o.streakRecorded,
+    updatedAt:o.updatedAt||Date.now(),
+  };
+}
+function getShabdDailyState(){
+  return validateShabdDailySave(loadShabdDailyState(),shabdDayKey());
+}
+if(typeof window!=='undefined'){
+  window.getShabdDailyState=getShabdDailyState;
+  window.shabdDayKey=shabdDayKey;
+}
 
 function openWordGuess(chat,opts){
 const overlay=document.createElement('div');
 overlay.style.cssText='position:absolute;inset:0;background:#121213;z-index:80;display:flex;flex-direction:column;';
 const useDaily=!opts||opts.daily!==false;
-const target=useDaily?shabdPickDaily():pickShabdPractice();
+const todayKey=shabdDayKey();
+const todaySeed=shabdDailySeed();
+
 let guesses=[];let currentGuess='';let gameOver=false;let shake=false;
 let keyColors={};let flippingRow=-1;let revealedCols=0;
+let target='';let streakRecorded=false;
+let restoredFinished=false;
+
+function rebuildKeyColorsFromGuesses(){
+  keyColors={};
+  for(let i=0;i<guesses.length;i++)updateKeyColors(guesses[i]);
+}
+
+function persistDaily(extra){
+  if(!useDaily)return;
+  const payload=Object.assign({
+    day:todayKey,
+    seed:todaySeed,
+    target,
+    guesses:guesses.slice(),
+    currentGuess:gameOver?'':String(currentGuess||'').toUpperCase().slice(0,5),
+    gameOver:!!gameOver,
+    won:!!(gameOver&&guesses.length&&guesses[guesses.length-1]===target),
+    keyColors:Object.assign({},keyColors),
+    streakRecorded:!!streakRecorded,
+    updatedAt:Date.now(),
+  },extra||{});
+  saveShabdDailyState(payload);
+}
+
+if(useDaily){
+  const saved=validateShabdDailySave(loadShabdDailyState(),todayKey);
+  if(saved){
+    target=saved.target;
+    guesses=saved.guesses.slice();
+    currentGuess=saved.currentGuess||'';
+    gameOver=!!saved.gameOver;
+    streakRecorded=!!saved.streakRecorded;
+    keyColors=saved.keyColors&&Object.keys(saved.keyColors).length?Object.assign({},saved.keyColors):{};
+    if(!Object.keys(keyColors).length&&guesses.length)rebuildKeyColorsFromGuesses();
+    restoredFinished=gameOver;
+  }else{
+    // Stale other-day save: rotate cleanly
+    const stale=loadShabdDailyState();
+    if(stale&&stale.day&&stale.day!==todayKey)clearShabdDailyState();
+    target=shabdPickDaily();
+    persistDaily();
+  }
+}else{
+  target=pickShabdPractice();
+}
+
 const kbHandler=e=>{
   if(!gs.alive())return;
   if(e.key==='Backspace')handleInput('⌫');
@@ -5070,25 +5181,46 @@ const kbHandler=e=>{
 };
 const gs=beginGameOverlaySession({
   type:'wordguess',title:'Shabd Five',mode:'solo',chat,overlay,
-  cleanup(){document.removeEventListener('keydown',kbHandler);},
+  cleanup(){
+    document.removeEventListener('keydown',kbHandler);
+    if(useDaily)persistDaily();
+  },
 });
 if(!gs.alive())return;
 if(typeof prepareGameOverlay==='function') prepareGameOverlay(overlay,{theme:'dark',gameId:'wordguess'});
 if(typeof markGamePlayed==='function') markGamePlayed('wordguess');
 
 async function askWordGuessLeave(){
+  if(useDaily)persistDaily();
   if(gameOver){gs.close();return;}
+  const title='Leave Shabd Five?';
+  const body=useDaily
+    ?'Progress is saved — leave?'
+    :'Practice progress will be discarded.';
   if(typeof DangalLive!=='undefined'&&DangalLive.requestLeave){
-    const ok=await DangalLive.requestLeave({
-      title:'Leave Shabd Five?',body:'Puzzle progress will be lost.',
-      onLeave:()=>{},
-    });
+    const ok=await DangalLive.requestLeave({title,body,onLeave:()=>{}});
     if(!ok)return;
   }else if(typeof confirmLeaveGame==='function'){
-    const ok=await confirmLeaveGame({title:'Leave Shabd Five?',body:'Puzzle progress will be lost.'});
+    const ok=await confirmLeaveGame({title,body});
     if(!ok)return;
   }
   gs.close();
+}
+
+async function goToPractice(fromResult){
+  if(useDaily)persistDaily();
+  if(useDaily&&!gameOver){
+    const ask=typeof confirmLeaveGame==='function'
+      ?confirmLeaveGame({
+        title:'Switch to Practice?',
+        body:"Today's Daily stays saved. Open a random Practice word instead?",
+      })
+      :Promise.resolve(window.confirm('Open Practice? Daily progress stays saved.'));
+    const ok=await Promise.resolve(ask);
+    if(!ok)return;
+  }
+  gs.close('restart');
+  openWordGuess(chat,{daily:false});
 }
 
 function getTileState(guess,pos){
@@ -5117,18 +5249,29 @@ function letterHaptic(kind){
   }catch(e){}
 }
 
+function finishDailyIfNeeded(won){
+  if(!useDaily)return;
+  gameOver=true;
+  if(!streakRecorded){
+    if(typeof recordShabdDailyResult==='function')recordShabdDailyResult(won);
+    streakRecorded=true;
+  }
+  persistDaily({gameOver:true,won:!!won,streakRecorded:true,currentGuess:''});
+}
+
 function render(){
   if(!gs.alive())return;
   const dayLabel=useDaily?`Daily · ${shabdDailySeed()}`:'Practice';
   const streak=typeof getShabdStreak==='function'?getShabdStreak():null;
   const streakBit=useDaily&&streak&&streak.streak?` · Streak ${streak.streak}`:'';
-  const won=gameOver&&guesses[guesses.length-1]===target;
+  const won=gameOver&&guesses.length>0&&guesses[guesses.length-1]===target;
   const shareCard=gameOver&&typeof buildGameShareCard==='function'
     ? buildGameShareCard('wordguess',{
         scoreLine: won?`${guesses.length}/6`:'X/6',
         meta: dayLabel+(streak&&streak.streak?` · streak ${streak.streak}`:''),
       })
     : '';
+  const againLabel=useDaily?'Practice a random word':'Play again';
   const resultBlock=gameOver&&typeof gameResultHtml==='function'
     ? gameResultHtml({
         gameId: 'wordguess',
@@ -5139,7 +5282,7 @@ function render(){
         shareCardHtml: shareCard,
         actions: [
           {label:'Share',primary:true,id:'share'},
-          {label:'Play again',primary:false,id:'again'},
+          {label:againLabel,primary:false,id:'again'},
           {label:'Challenge friend',primary:false,id:'challenge'},
           {label:'Post to story',primary:false,id:'story'},
         ],
@@ -5151,15 +5294,18 @@ function render(){
         useDaily&&streak?{label:'Streak',value:String(streak.streak||0)}:null,
       ])
     : '';
+  const chromeRight=gameOver
+    ?''
+    :'<button type="button" id="wgNew" class="game-chrome-action">Practice</button>';
   overlay.innerHTML=`
-    ${gameChromeHtml({title:'Shabd Five',subtitle:dayLabel+streakBit,backId:'wgBack',rightHtml:'<button id="wgNew" class="game-chrome-action">New</button>'})}
+    ${gameChromeHtml({title:'Shabd Five',subtitle:dayLabel+streakBit,backId:'wgBack',rightHtml:chromeRight})}
     ${hud}
     <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:10px;" id="wgGrid"></div>
     ${resultBlock||(gameOver?`<div style="text-align:center;padding:8px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;color:${won?'#538D4E':'#B59F3B'};flex-shrink:0;">${won?'Brilliant!':'The word was '+target}</div>`:'')}
     ${gameOver?'':`<div style="flex-shrink:0;padding:8px;padding-bottom:max(8px,env(safe-area-inset-bottom));" id="wgKeyboard"></div>`}
   `;
   document.getElementById('wgBack').addEventListener('click',()=>{askWordGuessLeave();});
-  document.getElementById('wgNew')?.addEventListener('click',()=>{gs.close('restart');openWordGuess(chat,{daily:false});});
+  document.getElementById('wgNew')?.addEventListener('click',()=>{goToPractice(false);});
 
   if(gameOver&&typeof wireGameResultActions==='function'){
     const gridText=typeof buildShabdGridShare==='function'?buildShabdGridShare(guesses,target):`Chaupaal Shabd Five ${guesses.length}/6`;
@@ -5171,7 +5317,10 @@ function render(){
       includeImage: false,
     };
     wireGameResultActions(overlay,{
-      again:()=>{gs.close('restart');openWordGuess(chat,{daily:useDaily});},
+      again:()=>{
+        if(useDaily)goToPractice(true);
+        else{gs.close('restart');openWordGuess(chat,{daily:false});}
+      },
       share:()=>{
         if(typeof shareGameResult==='function') shareGameResult('wordguess', shareStats);
         else if(navigator.clipboard) navigator.clipboard.writeText(gridText);
@@ -5210,7 +5359,7 @@ function render(){
         } else {
           text=guesses[r][c];border='2px solid #999';
         }
-      } else if(r===guesses.length){
+      } else if(r===guesses.length&&!gameOver){
         text=currentGuess[c]||'';border=currentGuess[c]?'2px solid #999':'2px solid #3a3a3c';
         if(shake&&r===guesses.length)extra='animation:shakeRow .5s ease;';
       }
@@ -5274,15 +5423,18 @@ function handleInput(k){
     if(!isShabdGuessAllowed(currentGuess)){if(typeof shakeInvalidMove==='function')shakeInvalidMove(document.getElementById('wgGrid'),{toast:'Not in word list'});else{showToast('Not in word list');if(typeof gameFeedback==='function')gameFeedback('invalid');}shake=true;render();gs.schedule(()=>{shake=false;render();},500);return;}
     const guess=currentGuess;
     guesses.push(guess);currentGuess='';
+    if(useDaily)persistDaily();
     staggerReveal(guess,()=>{
       if(guess===target||guesses.length===6){
-        gameOver=true;
         const won=guess===target;
         gs.setOutcome(won?'won':'lost');
         if(typeof recordGameResult==='function')recordGameResult('wordguess',won);
         if(typeof gameFeedback==='function')gameFeedback(won?'win':'lose');
-        if(useDaily&&typeof recordShabdDailyResult==='function') recordShabdDailyResult(won);
+        if(useDaily)finishDailyIfNeeded(won);
+        else gameOver=true;
         if(won&&typeof setGamePB==='function') setGamePB('wordguess', guesses.length);
+      }else if(useDaily){
+        persistDaily();
       }
     });
     return;
@@ -5295,6 +5447,10 @@ function handleInput(k){
 
 document.addEventListener('keydown',kbHandler);
 render();
+// Re-opening a finished Daily: keep result surface (already gameOver)
+if(restoredFinished&&typeof gs.setOutcome==='function'){
+  try{gs.setOutcome(guesses[guesses.length-1]===target?'won':'lost');}catch(e){}
+}
 }
 
 

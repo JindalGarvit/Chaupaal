@@ -125,9 +125,9 @@
     uno: ['Match color or number', 'Tap Oh No! when you have one card', 'Wilds let you pick the next color'],
     ttt: ['Get three in a row', 'Block your opponent early', 'Center is often strongest'],
     wordguess: [
-      'Guess any real 5-letter word — answers are common; the guess list is huge',
+      'One Daily puzzle per local day — progress saves; finished days stay locked',
+      'Practice is a separate sandbox and never touches your Daily streak',
       'Green = right spot · amber = elsewhere · grey = not in the word',
-      'Daily word resets at midnight · Practice is a random answer anytime',
     ],
     fiveinrow: ['Connect five in a line', 'Watch diagonals as well as rows', 'Block threats before extending yours'],
     business: ['Buy when you land on empty lots', 'Pay rent on owned properties', 'Richest player at the end wins'],
@@ -941,9 +941,17 @@
     }
   }
 
-  /* ── Shabd daily streak ── */
+  /* ── Shabd daily streak (local YYYY-MM-DD — same day key as Daily save) ── */
+  function shabdLocalDayKey() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  }
+
   function recordShabdDailyResult(won) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = shabdLocalDayKey();
     let data = { streak: 0, last: '', best: 0 };
     try {
       data = JSON.parse(localStorage.getItem('chaupaal_shabd_streak') || '{}') || data;
@@ -952,7 +960,12 @@
     if (won) {
       const y = new Date();
       y.setDate(y.getDate() - 1);
-      const yesterday = y.toISOString().split('T')[0];
+      const yesterday =
+        y.getFullYear() +
+        '-' +
+        String(y.getMonth() + 1).padStart(2, '0') +
+        '-' +
+        String(y.getDate()).padStart(2, '0');
       data.streak = data.last === yesterday ? (data.streak || 0) + 1 : 1;
       data.best = Math.max(data.best || 0, data.streak);
     } else {
@@ -999,6 +1012,8 @@
       return states.map((s) => emoji[s]).join('');
     });
     const day = (() => {
+      if (typeof shabdDailySeed === 'function') return shabdDailySeed();
+      if (typeof shabdLocalDayKey === 'function') return Number(String(shabdLocalDayKey()).replace(/-/g, ''));
       const d = new Date();
       return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
     })();
@@ -2112,6 +2127,7 @@
   window.getDuelStreak = getDuelStreak;
   window.recordShabdDailyResult = recordShabdDailyResult;
   window.getShabdStreak = getShabdStreak;
+  window.shabdLocalDayKey = shabdLocalDayKey;
   window.buildShabdGridShare = buildShabdGridShare;
   window.postGameScoreStory = postGameScoreStory;
   window.wireGameResultActions = wireGameResultActions;

@@ -65,8 +65,20 @@
   })();
 
   function shabdDailySeed() {
-    const d = new Date();
-    return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+    const key =
+      typeof g.shabdLocalDayKey === 'function'
+        ? g.shabdLocalDayKey()
+        : (function () {
+            const d = new Date();
+            return (
+              d.getFullYear() +
+              '-' +
+              String(d.getMonth() + 1).padStart(2, '0') +
+              '-' +
+              String(d.getDate()).padStart(2, '0')
+            );
+          })();
+    return Number(String(key).replace(/-/g, ''));
   }
 
   function pickShabdAnswer(rng) {
