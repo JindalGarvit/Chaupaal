@@ -175,9 +175,9 @@
       'Scratch: cue back in kitchen · Practice AI shoots for real · Live syncs groups',
     ],
     rummy: [
-      '13 cards · draw or take discard, then discard — or Declare with a finishing card',
-      'Need a pure sequence (no joker) plus another sequence; sets OK with jokers',
-      'Wild rank from the open card · printed jokers are always wild',
+      'Declare valid melds (pure sequence required) — opponent pays deadwood ≤80',
+      'Wrong Show costs 80 · First Drop 20 · Middle Drop 40 (before you draw)',
+      'Jokers/wilds score 0 · Ace/face = 10 · virtual points only',
     ],
     teenpatti: [
       'Boot each hand — stacks carry across the ring (virtual chips)',

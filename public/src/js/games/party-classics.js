@@ -4064,6 +4064,98 @@
     return evaluateRummyHand(hand, { wildRank: wildRank || null }).ok;
   }
 
+
+  const RUMMY_POINT_CAP = 80;
+  const RUMMY_FIRST_DROP = 20;
+  const RUMMY_MIDDLE_DROP = 40;
+  const RUMMY_WRONG_SHOW = 80;
+
+  /** Ace/J/Q/K/T = 10; 2–9 face; jokers & wild rank = 0. */
+  function rummyCardPoints(c, wildRank) {
+    if (!c || isRummyWild(c, wildRank)) return 0;
+    if (c.r === 'A' || c.r === 'J' || c.r === 'Q' || c.r === 'K' || c.r === 'T') return 10;
+    const n = parseInt(c.r, 10);
+    return Number.isFinite(n) ? n : 10;
+  }
+
+  function rummySumPoints(cards, wildRank) {
+    return (cards || []).reduce((sum, c) => sum + rummyCardPoints(c, wildRank), 0);
+  }
+
+  /**
+   * Deadwood after best melds. Without a pure sequence, entire hand counts (capped).
+   * With pure sequence, only unmelded cards count (capped at 80).
+   */
+  function scoreRummyDeadwood(hand, wildRank) {
+    const cards = (hand || []).slice();
+    if (!cards.length) return { points: 0, melds: [], unmelded: [], hasPure: true };
+    const full = evaluateRummyHand(cards, { wildRank });
+    if (full.ok) return { points: 0, melds: full.melds, unmelded: [], hasPure: true };
+
+    let bestPts = null;
+    let bestMelds = [];
+    let bestUnmelded = cards.slice();
+
+    function search(remaining, melds, hasPure) {
+      if (hasPure) {
+        const pts = Math.min(RUMMY_POINT_CAP, rummySumPoints(remaining, wildRank));
+        if (bestPts == null || pts < bestPts) {
+          bestPts = pts;
+          bestMelds = melds.slice();
+          bestUnmelded = remaining.slice();
+        }
+        if (pts === 0 || remaining.length < 3) return;
+      }
+      if (remaining.length < 3) return;
+      const maxLen = Math.min(6, remaining.length);
+      const anchor = remaining[0];
+      const pool = remaining.slice(1);
+      for (let len = 3; len <= maxLen; len++) {
+        const chosen = [];
+        const rec = (start) => {
+          if (chosen.length === len - 1) {
+            const group = [anchor].concat(chosen);
+            const meld = rummyClassifyMeld(group, wildRank);
+            if (!meld) return;
+            const ids = new Set(group.map((c) => c.id));
+            const next = remaining.filter((c) => !ids.has(c.id));
+            melds.push(meld);
+            search(next, melds, hasPure || !!meld.pure);
+            melds.pop();
+            return;
+          }
+          for (let i = start; i < pool.length; i++) {
+            chosen.push(pool[i]);
+            rec(i + 1);
+            chosen.pop();
+          }
+        };
+        rec(0);
+      }
+    }
+
+    search(cards, [], false);
+    if (bestPts == null) {
+      return {
+        points: Math.min(RUMMY_POINT_CAP, rummySumPoints(cards, wildRank)),
+        melds: [],
+        unmelded: cards.slice(),
+        hasPure: false,
+      };
+    }
+    return { points: bestPts, melds: bestMelds, unmelded: bestUnmelded, hasPure: true };
+  }
+
+  function rummyReasonLabel(reason) {
+    const r = String(reason || '');
+    if (r === 'declare') return 'Declare';
+    if (r === 'wrongShow') return 'Wrong show';
+    if (r === 'drop') return 'Drop';
+    if (r === 'oppDrop') return 'Opponent drop';
+    if (r === 'forfeit') return 'Forfeit';
+    return r || 'Hand over';
+  }
+
   function openRummy() {
     const chat = resolveChat(arguments[0]);
     const liveOn = chatLiveOn(chat);
@@ -4072,7 +4164,7 @@
     const shell = openShell({
       id: 'rummy',
       title: 'Rummy',
-      subtitle: liveOn ? liveSub() + ' · 13-card Rummy' : practiceSub('13-card Rummy'),
+      subtitle: liveOn ? liveSub() + ' · Points Rummy' : practiceSub('Points Rummy · 13-card'),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
@@ -4104,6 +4196,9 @@
     let liveRoles = null;
     let liveHandle = null;
     let ended = false;
+    let drewA = false;
+    let drewB = false;
+    let lastResult = null;
 
     function myHand() {
       if (!liveOn || !liveRoles) return handA;
@@ -4178,6 +4273,28 @@
       drawnId = null;
       selectedId = null;
       highlightIds = [];
+      drewA = false;
+      drewB = false;
+      lastResult = null;
+    }
+
+    function iHaveDrawn() {
+      if (!liveOn || !liveRoles) return drewA;
+      return liveRoles.me === liveRoles.playerA ? drewA : drewB;
+    }
+
+    function markIDrew() {
+      if (!liveOn || !liveRoles) {
+        drewA = true;
+        return;
+      }
+      if (liveRoles.me === liveRoles.playerA) drewA = true;
+      else drewB = true;
+    }
+
+    function oppHand() {
+      if (!liveOn || !liveRoles) return handB;
+      return liveRoles.me === liveRoles.playerA ? handB : handA;
     }
 
     function wildChrome() {
@@ -4212,6 +4329,8 @@
               drawnId,
               wildRank,
               wildShow,
+              drewA,
+              drewB,
             },
           },
           extra || {}
@@ -4221,8 +4340,105 @@
 
     function phaseHint() {
       if (liveOn && !myTurn) return 'Opponent\u2019s turn\u2026';
-      if (phase === 'needDraw') return 'Draw from stock or take the discard.';
-      return 'Discard one, or select finishing card + Declare.';
+      if (phase === 'needDraw') {
+        return iHaveDrawn()
+          ? 'Draw/take, Discard later — or Middle Drop (40).'
+          : 'Draw/take — or First Drop (20).';
+      }
+      return 'Discard, Declare (valid), or Show anyway (wrong show = 80).';
+    }
+
+    function meldSummary(melds) {
+      return (melds || [])
+        .map(
+          (m) =>
+            (m.pure ? 'Pure ' : '') +
+            (m.type === 'run' ? 'seq' : 'set') +
+            ' ' +
+            m.cards.map(rummyCardLabel).join('')
+        )
+        .join(' · ');
+    }
+
+    function endRummyHand(opts) {
+      if (ended) return;
+      ended = true;
+      if (aiTimer) {
+        clearTimeout(aiTimer);
+        aiTimer = 0;
+      }
+      const o = opts || {};
+      const youPoints = Math.min(RUMMY_POINT_CAP, Math.max(0, o.youPoints | 0));
+      const oppPoints = Math.min(RUMMY_POINT_CAP, Math.max(0, o.oppPoints | 0));
+      const reason = o.reason || 'declare';
+      const winnerIsYou = o.winnerIsYou != null ? !!o.winnerIsYou : youPoints < oppPoints;
+      const title =
+        reason === 'wrongShow'
+          ? winnerIsYou
+            ? 'Opponent wrong show'
+            : 'Wrong show'
+          : reason === 'drop' || reason === 'oppDrop'
+            ? winnerIsYou
+              ? 'Opponent dropped'
+              : 'You dropped'
+            : winnerIsYou
+              ? 'You win'
+              : 'Opponent wins';
+      const sub =
+        'You ' +
+        youPoints +
+        ' · Opp ' +
+        oppPoints +
+        ' · ' +
+        rummyReasonLabel(reason) +
+        (o.detail ? ' · ' + o.detail : '');
+      lastResult = {
+        youPoints,
+        oppPoints,
+        reason,
+        scoreA:
+          liveRoles && liveRoles.me === liveRoles.playerB ? oppPoints : youPoints,
+        scoreB:
+          liveRoles && liveRoles.me === liveRoles.playerB ? youPoints : oppPoints,
+      };
+      if (liveOn && liveHandle && liveRoles && !o.skipLivePush && !applying) {
+        liveHandle.push({
+          status: 'over',
+          winner: winnerIsYou ? liveRoles.me : liveRoles.opp,
+          state: {
+            handA,
+            handB,
+            discard,
+            deck,
+            wildRank,
+            wildShow,
+            scoreA: lastResult.scoreA,
+            scoreB: lastResult.scoreB,
+            reason,
+            youPoints,
+            oppPoints,
+            declared: reason === 'declare' || reason === 'wrongShow',
+            valid: reason === 'declare',
+            melds: o.melds || [],
+          },
+        });
+      }
+      showDuelResult(shell, {
+        id: 'rummy',
+        you: winnerIsYou ? 1 : 0,
+        opp: winnerIsYou ? 0 : 1,
+        glyph: '🃏',
+        title,
+        subtitle: sub,
+        shareText:
+          'Chaupaal Rummy · ' +
+          rummyReasonLabel(reason) +
+          ' · You ' +
+          youPoints +
+          ' Opp ' +
+          oppPoints,
+        onAgain: () => openRummy(chat),
+      });
     }
 
     function paint(msg) {
@@ -4234,6 +4450,11 @@
       const canDiscard = myTurn && phase === 'needDiscard' && !!selectedId;
       // Declare after draw (14): select finishing discard, validate remaining 13
       const canDeclare = myTurn && phase === 'needDiscard' && you.length === 14 && !!selectedId;
+      const canShow = canDeclare; // same gate; Show may wrong-show after confirm
+      const canFirstDrop = myTurn && phase === 'needDraw' && you.length === 13 && !iHaveDrawn();
+      const canMiddleDrop = myTurn && phase === 'needDraw' && you.length === 13 && iHaveDrawn();
+      const canDrop = canFirstDrop || canMiddleDrop;
+      const dropPts = canFirstDrop ? RUMMY_FIRST_DROP : RUMMY_MIDDLE_DROP;
       if (!highlightIds.length && you.length) {
         highlightIds = rummySuggestHighlightIds(you, wildRank);
       }
@@ -4305,8 +4526,16 @@
         '<button type="button" class="cs-hit" data-declare' +
         (canDeclare ? '' : ' disabled') +
         '>Declare</button>' +
+        '<button type="button" class="cs-hit cs-hit--ghost" data-show' +
+        (canShow ? '' : ' disabled') +
+        '>Show</button>' +
+        '<button type="button" class="cs-hit cs-hit--ghost" data-drop' +
+        (canDrop ? '' : ' disabled') +
+        '>' +
+        (canDrop ? 'Drop ' + dropPts : 'Drop') +
+        '</button>' +
         '</div>' +
-        '<p class="pc-hint pc-rummy-declare-hint">After draw: select finishing discard, then Declare (needs pure sequence).</p>' +
+        '<p class="pc-hint pc-rummy-declare-hint">Declare = valid only. Show = may cost 80 if invalid. Drop before drawing (20 first / 40 middle).</p>' +
         '</div>';
 
       shell.body.querySelectorAll('[data-sort]').forEach((btn) => {
@@ -4342,6 +4571,7 @@
         phase = 'needDiscard';
         selectedId = null;
         highlightIds = [];
+        markIDrew();
         buzz('card');
         if (liveOn) pushState();
         paint('Drawn — select a card to discard or declare.');
@@ -4361,6 +4591,7 @@
         phase = 'needDiscard';
         selectedId = null;
         highlightIds = [];
+        markIDrew();
         buzz('card');
         if (liveOn) pushState();
         paint('Took discard — select a card to discard or declare.');
@@ -4406,7 +4637,7 @@
         }, 450 + Math.floor(rng() * 350));
       });
 
-      shell.body.querySelector('[data-declare]')?.addEventListener('click', () => {
+      async function runDeclare(forceWrong) {
         if (!myTurn || ended || phase !== 'needDiscard' || !selectedId) return;
         const hand14 = myHand().slice();
         if (hand14.length !== 14) {
@@ -4417,58 +4648,99 @@
         const remaining = hand14.filter((c) => c.id !== selectedId);
         const result = evaluateRummyHand(remaining, { wildRank });
         if (!result.ok) {
-          buzz('invalid');
-          const err = (result.errors && result.errors[0]) || 'Need a pure sequence…';
-          if (typeof showToast === 'function') showToast(err);
-          paint(err + ' — hand continues.');
+          if (!forceWrong) {
+            buzz('invalid');
+            const err = (result.errors && result.errors[0]) || 'Need a pure sequence…';
+            if (typeof showToast === 'function') showToast(err);
+            paint(err + ' — keep playing, or Show to risk 80.');
+            return;
+          }
+          discard.push(finish);
+          setMyHand(remaining);
+          drawnId = null;
+          selectedId = null;
+          endRummyHand({
+            reason: 'wrongShow',
+            youPoints: RUMMY_WRONG_SHOW,
+            oppPoints: 0,
+            winnerIsYou: false,
+            detail: 'Wrong show',
+          });
           return;
         }
         discard.push(finish);
         setMyHand(remaining);
         drawnId = null;
         selectedId = null;
-        ended = true;
-        if (aiTimer) clearTimeout(aiTimer);
-        buzz('win');
-        const meldLine = result.melds
-          .map(
-            (m) =>
-              (m.pure ? 'Pure ' : '') +
-              (m.type === 'run' ? 'seq' : 'set') +
-              ' ' +
-              m.cards.map(rummyCardLabel).join('')
-          )
-          .join(' · ');
-        if (liveOn && liveHandle && liveRoles) {
-          liveHandle.push({
-            status: 'over',
-            winner: liveRoles.me,
-            state: {
-              handA,
-              handB,
-              discard,
-              deck,
-              wildRank,
-              declared: true,
-              valid: true,
-              melds: result.melds,
-            },
+        const oppDead = scoreRummyDeadwood(oppHand(), wildRank);
+        endRummyHand({
+          reason: 'declare',
+          youPoints: 0,
+          oppPoints: oppDead.points,
+          winnerIsYou: true,
+          melds: result.melds,
+          detail: meldSummary(result.melds) || 'Valid declare',
+        });
+      }
+
+      shell.body.querySelector('[data-declare]')?.addEventListener('click', () => {
+        runDeclare(false);
+      });
+
+      shell.body.querySelector('[data-show]')?.addEventListener('click', async () => {
+        if (!myTurn || ended || phase !== 'needDiscard' || !selectedId) return;
+        const hand14 = myHand().slice();
+        const remaining = hand14.filter((c) => c.id !== selectedId);
+        const result = evaluateRummyHand(remaining, { wildRank });
+        if (result.ok) {
+          runDeclare(false);
+          return;
+        }
+        let ok = false;
+        if (typeof confirmSheet === 'function') {
+          ok = await confirmSheet({
+            title: 'Wrong show?',
+            message: 'Hand is not valid. Show anyway for 80 points and end the hand?',
+            confirmLabel: 'Show (80)',
+            cancelLabel: 'Keep playing',
+            danger: true,
+          });
+        } else {
+          ok = typeof confirm === 'function' && confirm('Show anyway for 80 points?');
+        }
+        if (!ok) {
+          paint('Kept playing — fix melds or discard.');
+          return;
+        }
+        runDeclare(true);
+      });
+
+      shell.body.querySelector('[data-drop]')?.addEventListener('click', async () => {
+        if (!myTurn || ended || phase !== 'needDraw' || myHand().length !== 13) return;
+        const first = !iHaveDrawn();
+        const pts = first ? RUMMY_FIRST_DROP : RUMMY_MIDDLE_DROP;
+        let ok = true;
+        if (typeof confirmSheet === 'function') {
+          ok = await confirmSheet({
+            title: first ? 'First drop?' : 'Middle drop?',
+            message: 'Drop for ' + pts + ' points? Opponent scores 0.',
+            confirmLabel: 'Drop ' + pts,
+            cancelLabel: 'Cancel',
+            danger: false,
           });
         }
-        showDuelResult(shell, {
-          id: 'rummy',
-          you: 1,
-          opp: 0,
-          glyph: '🃏',
-          title: 'Valid declare',
-          subtitle: meldLine || 'Pure sequence secured',
-          shareText: 'Rummy on Chaupaal — valid declare',
-          onAgain: () => openRummy(chat),
+        if (!ok) return;
+        endRummyHand({
+          reason: 'drop',
+          youPoints: pts,
+          oppPoints: 0,
+          winnerIsYou: false,
+          detail: first ? 'First drop' : 'Middle drop',
         });
       });
     }
 
-    /** Dumb Practice AI: one acquire + one discard; keeps 13. */
+    /** Dumb Practice AI: one acquire + one discard; keeps 13. Never auto-declares. */
     function aiPlay() {
       if (handB.length !== 13) {
         while (handB.length > 13 && handB.length) discard.push(handB.pop());
@@ -4485,6 +4757,7 @@
         took = discard.pop();
         handB.push(took);
       }
+      drewB = true;
       if (handB.length > 13) {
         let ix = Math.floor(rng() * handB.length);
         if (took && handB.length > 1 && handB[ix].id === took.id) {
@@ -4503,6 +4776,8 @@
       if (st.deck) deck = st.deck;
       if (st.wildRank) wildRank = st.wildRank;
       if (st.wildShow) wildShow = st.wildShow;
+      if (st.drewA != null) drewA = !!st.drewA;
+      if (st.drewB != null) drewB = !!st.drewB;
       phase = st.phase === 'needDiscard' ? 'needDiscard' : 'needDraw';
       drawnId = st.drawnId || null;
       if (st.drawn && st.drawnId && !st.phase) {
@@ -4521,24 +4796,30 @@
         if (!val || ended) return;
         if (val.status === 'forfeit' || val.status === 'over') {
           const iWon = val.winner === liveRoles.me;
-          ended = true;
-          if (aiTimer) clearTimeout(aiTimer);
-          showDuelResult(shell, {
-            id: 'rummy',
-            you: iWon ? 1 : 0,
-            opp: iWon ? 0 : 1,
-            glyph: '🃏',
-            title:
-              val.status === 'forfeit'
-                ? iWon
-                  ? 'Opponent left'
-                  : 'You forfeited'
-                : iWon
-                  ? 'You win'
-                  : 'Opponent wins',
-            subtitle: '13-card Rummy',
-            shareText: 'Rummy on Chaupaal',
-            onAgain: () => openRummy(chat),
+          const st = val.state || {};
+          if (st.handA) handA = st.handA;
+          if (st.handB) handB = st.handB;
+          let youPoints = st.youPoints;
+          let oppPoints = st.oppPoints;
+          if (youPoints == null && st.scoreA != null && liveRoles) {
+            youPoints = liveRoles.me === liveRoles.playerA ? st.scoreA | 0 : st.scoreB | 0;
+            oppPoints = liveRoles.me === liveRoles.playerA ? st.scoreB | 0 : st.scoreA | 0;
+          }
+          if (youPoints == null) {
+            youPoints = iWon ? 0 : 80;
+            oppPoints = iWon ? 80 : 0;
+          }
+          let reason = st.reason || (val.status === 'forfeit' ? 'forfeit' : 'declare');
+          if (reason === 'drop' && !iWon) reason = 'drop';
+          if (reason === 'drop' && iWon) reason = 'oppDrop';
+          endRummyHand({
+            reason,
+            youPoints: youPoints | 0,
+            oppPoints: oppPoints | 0,
+            winnerIsYou: iWon,
+            skipLivePush: true,
+            melds: st.melds || [],
+            detail: rummyReasonLabel(reason),
           });
           return;
         }
@@ -7161,7 +7442,7 @@
       { id: 'tambola', name: 'Tambola', desc: 'Ticket · full house', icon: '🎱', genre: 'party', launch: openTambola, order: 30 },
       { id: 'carrom', name: 'Carrom', desc: 'Live · stakes · AI', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
       { id: 'pool', name: 'Pool', desc: '8-ball · solids & stripes', icon: '🎱', genre: 'board', launch: openPool, order: 32 },
-      { id: 'rummy', name: 'Rummy', desc: '13-card · pure sequence · jokers', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
+      { id: 'rummy', name: 'Rummy', desc: 'Points · drop · wrong show', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
       { id: 'teenpatti', name: 'Teen Patti', desc: 'Boot, chaal, side-show · virtual chips', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
       { id: 'bluff', name: 'Bluff', desc: 'Pile claims · call · empty hand', icon: '🎭', genre: 'party', launch: openBluff, order: 35 },
       { id: 'sattepe', name: 'Satte pe Satta', desc: 'Build off sevens', icon: '7️⃣', genre: 'party', launch: openSatte, order: 36 },
@@ -7190,6 +7471,7 @@
   window.openPool = openPool;
   window.openRummy = openRummy;
   window.evaluateRummyHand = evaluateRummyHand;
+  window.scoreRummyDeadwood = scoreRummyDeadwood;
   window.openTeenPatti = openTeenPatti;
   window.openBluff = openBluff;
   window.openSattePeSatta = openSatte;
