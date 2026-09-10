@@ -148,9 +148,9 @@
       'Continue mid-puzzle · best times per difficulty · Daily is one seeded board',
     ],
     streetcricket: [
-      'Tap Bowl — read the arm: Quick skids, Flight hangs, Spin drifts',
-      'Hit in the striking zone — each delivery moves the window',
-      'Six balls · two wickets — shot choices come later',
+      'Pick Defend, Push, or Loft — then Bowl and time the Hit',
+      'Wrong shot vs Quick or Spin gets honest outs — Caught, Bowled, Beaten',
+      'Six balls · two wickets — nets and chase modes later',
     ],
     gullykick: ['Pick left, center, or right', 'Beat the keeper’s dive', 'Five kicks per shootout'],
     badminton: ['Serve, then smash in the timing window', 'Rallies get faster', 'First to 7'],

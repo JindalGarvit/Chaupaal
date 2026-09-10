@@ -161,7 +161,7 @@
     });
   }
 
-  /** Street Cricket — Practice: flight cinema + bowler's bag (Prompt 2/5). */
+  /** Street Cricket — Practice: flight + bag + shot book (Prompt 3/5). */
   function openStreetCricket() {
     let runs = 0;
     let balls = 0;
@@ -177,11 +177,21 @@
     let lastDeliveryId = '';
     let streakSame = 0;
     let coachShown = false;
+    let armedShot = 'push';
+    /** @type {null | object} */
+    let lastBall = null;
+    const ballLog = [];
     const MAX_BALLS = 6;
     const MAX_WICKETS = 2;
-    const COACH_KEY = 'chaupaal_sc_coach_v2';
+    const COACH_KEY = 'chaupaal_sc_coach_v3';
 
-    // Prompt 2 bag — id/label/family/path ready for Prompt 3 shot×ball
+    const SHOTS = {
+      defend: { id: 'defend', label: 'Defend' },
+      push: { id: 'push', label: 'Push' },
+      loft: { id: 'loft', label: 'Loft' },
+    };
+
+    // Prompt 2 bag — fields used by Prompt 3 shot×ball resolver
     const DELIVERY_TYPES = {
       medium: {
         id: 'medium',
@@ -194,9 +204,6 @@
         lateEnd: 0.94,
         path: 'straight',
         accent: '#81C784',
-        earlyOut: 0.4,
-        lateOut: 0.36,
-        perfectCatch: 0.08,
         mistimeHint: 'Mistimed the ball',
       },
       quick: {
@@ -210,9 +217,6 @@
         lateEnd: 0.9,
         path: 'skiddy',
         accent: '#EF5350',
-        earlyOut: 0.48,
-        lateOut: 0.5,
-        perfectCatch: 0.1,
         mistimeHint: 'Beaten for pace',
       },
       flight: {
@@ -226,9 +230,6 @@
         lateEnd: 0.96,
         path: 'loopy',
         accent: '#42A5F5',
-        earlyOut: 0.36,
-        lateOut: 0.32,
-        perfectCatch: 0.07,
         mistimeHint: 'Through the flight',
       },
       spin: {
@@ -242,9 +243,6 @@
         lateEnd: 0.95,
         path: 'curve',
         accent: '#AB47BC',
-        earlyOut: 0.44,
-        lateOut: 0.4,
-        perfectCatch: 0.09,
         mistimeHint: 'Turned past the bat',
       },
     };
@@ -263,7 +261,6 @@
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
 
-    /** Teachable bag: early medium/flight, later spice; avoid triple-same hard balls. */
     const pickDelivery = () => {
       const rnd = mulberry32(overSeed + balls * 97 + 13);
       const r = rnd();
@@ -303,6 +300,261 @@
       return cloneDelivery(id);
     };
 
+    const pickWeighted = (entries, roll) => {
+      let acc = 0;
+      for (let i = 0; i < entries.length; i++) {
+        acc += entries[i][0];
+        if (roll < acc) return entries[i][1];
+      }
+      return entries[entries.length - 1][1];
+    };
+
+    /**
+     * Explicit resolver: timing × shot × delivery → runs/out.
+     * Light street variance only inside weighted buckets — never defend-six like loft.
+     */
+    const resolveStreetBall = (delivery, timing, shotId) => {
+      const del = delivery || DELIVERY_TYPES.medium;
+      const shot = SHOTS[shotId] || SHOTS.push;
+      const dLabel = del.label || 'Medium';
+      const sLabel = shot.label;
+      const roll = Math.random();
+      const out = (reason, code, label) => ({
+        runs: 0,
+        out: true,
+        reason,
+        code,
+        label,
+        shotId: shot.id,
+        deliveryId: del.id,
+        timing,
+      });
+      const ok = (runsVal, reason, code, label) => ({
+        runs: runsVal,
+        out: false,
+        reason,
+        code,
+        label,
+        shotId: shot.id,
+        deliveryId: del.id,
+        timing,
+      });
+
+      if (timing === 'miss') {
+        const hint = del.mistimeHint || 'Mistimed the ball';
+        return out(
+          'beaten',
+          'miss_window',
+          `Out! ${hint} — left the ${dLabel}`
+        );
+      }
+
+      // —— Defend: safe floor, capped upside ——
+      if (shot.id === 'defend') {
+        if (timing === 'perfect') {
+          if (roll < 0.03) {
+            return out(
+              'caught',
+              'defend_perfect_catch',
+              `Caught — soft hands popped the ${dLabel}`
+            );
+          }
+          const runsVal = pickWeighted(
+            [
+              [0.45, 0],
+              [0.45, 1],
+              [0.1, 2],
+            ],
+            (roll - 0.03) / 0.97
+          );
+          return ok(
+            runsVal,
+            runsVal === 0 ? 'dot' : 'nudge',
+            'defend_perfect',
+            runsVal === 0
+              ? `Defend · ${dLabel} — solid block`
+              : `Defend · ${dLabel} — ${runsVal} run${runsVal === 1 ? '' : 's'}`
+          );
+        }
+        if (timing === 'early') {
+          const outP = del.id === 'quick' ? 0.18 : del.id === 'spin' ? 0.22 : 0.14;
+          if (roll < outP) {
+            return out(
+              'edge',
+              'defend_early_edge',
+              `Mistimed edge — Defend early vs ${dLabel}`
+            );
+          }
+          return ok(
+            roll < outP + 0.55 ? 0 : 1,
+            'nudge',
+            'defend_early',
+            `Defend early · ${dLabel} — kept out`
+          );
+        }
+        // late
+        const lateOut = del.id === 'quick' ? 0.22 : 0.16;
+        if (roll < lateOut) {
+          return out(
+            'bowled',
+            'defend_late_bowled',
+            `Bowled — Defend late, ${dLabel} sneaked through`
+          );
+        }
+        return ok(
+          0,
+          'dot',
+          'defend_late',
+          `Defend late · ${dLabel} — jammed the bat down`
+        );
+      }
+
+      // —— Push: singles machine ——
+      if (shot.id === 'push') {
+        if (timing === 'perfect') {
+          if (roll < 0.05) {
+            return out(
+              'caught',
+              'push_perfect_catch',
+              `Caught — Push popped up vs ${dLabel}`
+            );
+          }
+          const r2 = (roll - 0.05) / 0.95;
+          const runsVal = pickWeighted(
+            [
+              [0.12, 0],
+              [0.48, 1],
+              [0.28, 2],
+              [0.12, 4],
+            ],
+            r2
+          );
+          return ok(
+            runsVal,
+            runsVal >= 4 ? 'boundary' : 'push',
+            'push_perfect',
+            runsVal >= 4
+              ? `Push · ${dLabel} — FOUR!`
+              : runsVal === 0
+                ? `Push · ${dLabel} — no run`
+                : `Push · ${dLabel} — ${runsVal} run${runsVal === 1 ? '' : 's'}`
+          );
+        }
+        if (timing === 'early') {
+          const outP = del.id === 'quick' ? 0.38 : 0.28;
+          if (roll < outP) {
+            return out(
+              'edge',
+              'push_early_edge',
+              `Mistimed — edged the Push early vs ${dLabel}`
+            );
+          }
+          return ok(
+            roll < outP + 0.5 ? 1 : 0,
+            'nudge',
+            'push_early',
+            `Push early · ${dLabel} — scrambled`
+          );
+        }
+        const lateOut = del.id === 'spin' ? 0.36 : del.id === 'quick' ? 0.4 : 0.3;
+        if (roll < lateOut) {
+          return out(
+            del.id === 'quick' ? 'beaten' : 'bowled',
+            'push_late_out',
+            del.id === 'quick'
+              ? `Beaten for pace — Push late vs Quick`
+              : `Bowled — Push late vs ${dLabel}`
+          );
+        }
+        return ok(1, 'push', 'push_late', `Push late · ${dLabel} — thick edge, 1`);
+      }
+
+      // —— Loft: boundary hunt, pays for greed ——
+      if (timing === 'perfect') {
+        let catchP = 0.1;
+        if (del.id === 'quick') catchP = 0.16;
+        else if (del.id === 'flight') catchP = 0.07;
+        else if (del.id === 'spin') catchP = 0.12;
+        if (roll < catchP) {
+          return out(
+            'caught',
+            'loft_perfect_catch',
+            `Caught — Loft found the fielder vs ${dLabel}`
+          );
+        }
+        const r2 = (roll - catchP) / (1 - catchP);
+        let weights;
+        if (del.id === 'flight') {
+          weights = [
+            [0.08, 1],
+            [0.12, 2],
+            [0.4, 4],
+            [0.4, 6],
+          ];
+        } else if (del.id === 'quick') {
+          weights = [
+            [0.18, 1],
+            [0.22, 2],
+            [0.35, 4],
+            [0.25, 6],
+          ];
+        } else {
+          weights = [
+            [0.12, 1],
+            [0.18, 2],
+            [0.38, 4],
+            [0.32, 6],
+          ];
+        }
+        const runsVal = pickWeighted(weights, r2);
+        return ok(
+          runsVal,
+          runsVal >= 4 ? 'boundary' : 'loft',
+          'loft_perfect',
+          runsVal === 6
+            ? `Loft · ${dLabel} — SIX!`
+            : runsVal === 4
+              ? `Loft · ${dLabel} — FOUR!`
+              : `Loft · ${dLabel} — ${runsVal} runs`
+        );
+      }
+      if (timing === 'early') {
+        let outP = 0.55;
+        if (del.id === 'quick') outP = 0.72;
+        else if (del.id === 'spin') outP = 0.62;
+        else if (del.id === 'flight') outP = 0.48;
+        if (roll < outP) {
+          return out(
+            'caught',
+            'loft_early_catch',
+            del.id === 'quick'
+              ? 'Caught — lofted the Quick one early'
+              : `Caught — Loft early vs ${dLabel}`
+          );
+        }
+        return ok(
+          roll < outP + 0.25 ? 1 : 2,
+          'loft',
+          'loft_early_survive',
+          `Loft early · ${dLabel} — skied, dropped`
+        );
+      }
+      // late loft
+      let lateOut = 0.52;
+      if (del.id === 'quick') lateOut = 0.62;
+      else if (del.id === 'spin') lateOut = 0.58;
+      if (roll < lateOut) {
+        return out(
+          roll < lateOut * 0.55 ? 'bowled' : 'caught',
+          'loft_late_out',
+          roll < lateOut * 0.55
+            ? `Cleaned up — Loft late vs ${dLabel}`
+            : `Caught — mistimed slog vs ${dLabel}`
+        );
+      }
+      return ok(1, 'loft', 'loft_late_survive', `Loft late · ${dLabel} — got away with 1`);
+    };
+
     let deliveryRaf = null;
     const clearTimers = () => {
       if (bowlTimer) clearTimeout(bowlTimer);
@@ -330,6 +582,7 @@
     }
 
     const cur = () => deliveryMeta || DELIVERY_TYPES.medium;
+    const shotMeta = () => SHOTS[armedShot] || SHOTS.push;
 
     const flightElapsed = () => {
       if (!deliveryStartedAt) return 0;
@@ -364,6 +617,8 @@
       pitch.classList.add('is-del-' + (d.id || 'medium'));
     };
 
+    const canChangeShot = () => phase === 'idle' || phase === 'runup';
+
     const reset = () => {
       clearTimers();
       runs = 0;
@@ -376,6 +631,9 @@
       overSeed = (Date.now() ^ (Math.random() * 0xffff)) >>> 0;
       lastDeliveryId = '';
       streakSame = 0;
+      lastBall = null;
+      ballLog.length = 0;
+      armedShot = 'push';
       render();
     };
 
@@ -389,6 +647,11 @@
       const p = phase === 'flight' ? flightProgress() : 0;
       const inZone = phase === 'flight' && p >= d.zoneStart && p <= d.zoneEnd;
       pitch.classList.toggle('is-window', inZone);
+      body.querySelectorAll('[data-shot]').forEach((el) => {
+        const id = el.getAttribute('data-shot');
+        el.classList.toggle('is-armed', id === armedShot);
+        el.disabled = !canChangeShot();
+      });
       const btn = body.querySelector('[data-rw-action]');
       if (btn) {
         const canBowl = phase === 'idle';
@@ -402,13 +665,30 @@
           hint.textContent =
             lastOutcome ||
             (coachShown
-              ? 'Tap Bowl — read the arm, Hit in the striking zone.'
-              : 'Watch the arm — quick balls come on faster.');
-        } else if (phase === 'runup') hint.textContent = 'Run-up…';
+              ? `${shotMeta().label} armed — Bowl, then time the Hit.`
+              : 'Pick Defend, Push, or Loft — then time the Hit.');
+        } else if (phase === 'runup') hint.textContent = `${shotMeta().label} ready — run-up…`;
         else if (phase === 'flight')
-          hint.textContent = inZone ? 'HIT — ball in the striking zone!' : 'Watch the flight…';
+          hint.textContent = inZone
+            ? `HIT — ${shotMeta().label}!`
+            : `Watch the flight — ${shotMeta().label}`;
         else if (phase === 'result') hint.textContent = lastOutcome;
       }
+    };
+
+    const wireControls = () => {
+      body.querySelectorAll('[data-shot]').forEach((el) => {
+        el.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          if (!canChangeShot()) return;
+          const id = el.getAttribute('data-shot');
+          if (!SHOTS[id]) return;
+          armedShot = id;
+          paintPitchState();
+          if (typeof gameFeedback === 'function') gameFeedback('select');
+        });
+      });
+      body.querySelector('[data-rw-action]')?.addEventListener('click', onAction);
     };
 
     const render = () => {
@@ -432,6 +712,7 @@
           ? ` · Best ${getGamePB('streetcricket')}`
           : '';
       const d = cur();
+      const shotLock = canChangeShot() ? '' : 'disabled';
       body.innerHTML = `
         <div class="rw-sports-card rw-sc-card">
           <h2>Street Cricket</h2>
@@ -448,18 +729,27 @@
           </div>
           <div class="rw-sports-outcome" data-rw-outcome aria-live="polite"></div>
           <p class="rw-sports-hint" data-rw-hint></p>
-          <button type="button" class="btn btn--primary" data-rw-action>Bowl</button>
+          <div class="rw-sc-shots" role="group" aria-label="Shot">
+            <button type="button" class="rw-sc-shot${armedShot === 'defend' ? ' is-armed' : ''}" data-shot="defend" ${shotLock}>Defend</button>
+            <button type="button" class="rw-sc-shot${armedShot === 'push' ? ' is-armed' : ''}" data-shot="push" ${shotLock}>Push</button>
+            <button type="button" class="rw-sc-shot${armedShot === 'loft' ? ' is-armed' : ''}" data-shot="loft" ${shotLock}>Loft</button>
+          </div>
+          <button type="button" class="btn btn--primary rw-sc-main" data-rw-action>Bowl</button>
         </div>`;
       paintPitchState();
       if (lastOutcome && (phase === 'idle' || phase === 'result')) {
-        const kind = /out/i.test(lastOutcome)
+        const kind = lastBall && lastBall.out
           ? 'out'
-          : /six|four|boundary/i.test(lastOutcome)
+          : lastBall && lastBall.runs >= 4
             ? 'boundary'
-            : 'run';
+            : /out|caught|bowled|beaten|cleaned|mistimed/i.test(lastOutcome)
+              ? 'out'
+              : /six|four|boundary/i.test(lastOutcome)
+                ? 'boundary'
+                : 'run';
         flashOutcome(body, lastOutcome, kind);
       }
-      body.querySelector('[data-rw-action]')?.addEventListener('click', onAction);
+      wireControls();
     };
 
     const endIfNeeded = () => {
@@ -480,88 +770,33 @@
         endIfNeeded();
         if (phase !== 'done') phase = 'idle';
         render();
-      }, 900);
+      }, 950);
     };
 
-    const resolveHit = (timing) => {
+    const applyResolved = (res) => {
       clearTimers();
-      const d = cur();
-      const roll = Math.random();
-      const earlyOut = d.earlyOut != null ? d.earlyOut : 0.4;
-      const lateOut = d.lateOut != null ? d.lateOut : 0.36;
-      const catchP = d.perfectCatch != null ? d.perfectCatch : 0.08;
-
-      if (timing === 'early') {
-        if (roll < earlyOut) {
-          wickets += 1;
-          balls += 1;
-          if (typeof gameFeedback === 'function') gameFeedback('lose');
-          afterBall(
-            d.id === 'quick' ? 'Early vs Quick — edged, Out!' : `Early — edged, Out! (${d.label})`
-          );
-          return;
-        }
-        const gained = roll < 0.75 ? 1 : 2;
-        runs += gained;
-        balls += 1;
-        if (typeof gameFeedback === 'function') gameFeedback('bat');
-        afterBall(
-          gained === 2
-            ? `Early vs ${d.label} — scrambled 2`
-            : `Early vs ${d.label} — jabbed 1`
-        );
-        return;
-      }
-      if (timing === 'late') {
-        if (roll < lateOut) {
-          wickets += 1;
-          balls += 1;
-          if (typeof gameFeedback === 'function') gameFeedback('lose');
-          afterBall(
-            d.id === 'quick'
-              ? 'Beaten for pace — Out!'
-              : d.id === 'spin'
-                ? 'Late — spun past, Out!'
-                : `Late — bowled / Out! (${d.label})`
-          );
-          return;
-        }
-        const gained = roll < 0.7 ? 1 : 2;
-        runs += gained;
-        balls += 1;
-        if (typeof gameFeedback === 'function') gameFeedback('bat');
-        afterBall(
-          gained === 2
-            ? `Late vs ${d.label} — thick edge, 2`
-            : `Late vs ${d.label} — kept out, 1`
-        );
-        return;
-      }
-      // perfect
-      if (typeof gameFeedback === 'function') gameFeedback('bat');
-      if (roll < catchP) {
-        wickets += 1;
-        balls += 1;
-        if (typeof gameFeedback === 'function') gameFeedback('lose');
-        afterBall(`Perfect vs ${d.label} — but caught!`);
-        return;
-      }
-      let gained = 1;
-      let label = `Perfect vs ${d.label} — 1 run`;
-      if (roll < 0.32) {
-        gained = 6;
-        label = `Perfect vs ${d.label} — SIX!`;
-      } else if (roll < 0.62) {
-        gained = 4;
-        label = `Perfect vs ${d.label} — FOUR!`;
-      } else if (roll < 0.82) {
-        gained = 2;
-        label = `Perfect vs ${d.label} — 2 runs`;
-      }
-      runs += gained;
       balls += 1;
-      if (gained >= 4 && typeof gameFeedback === 'function') gameFeedback('win');
-      afterBall(label);
+      lastBall = Object.assign({}, res, {
+        ballIndex: balls,
+        deliveryLabel: cur().label,
+        shotLabel: (SHOTS[res.shotId] || SHOTS.push).label,
+      });
+      ballLog.push(lastBall);
+      try {
+        if (typeof window !== 'undefined') {
+          window.__scLastBall = lastBall;
+          window.__scBallLog = ballLog.slice();
+        }
+      } catch (e) {}
+      if (res.out) {
+        wickets += 1;
+        if (typeof gameFeedback === 'function') gameFeedback('lose');
+      } else {
+        runs += res.runs || 0;
+        if (res.runs >= 4 && typeof gameFeedback === 'function') gameFeedback('win');
+        else if (typeof gameFeedback === 'function') gameFeedback('bat');
+      }
+      afterBall(res.label);
     };
 
     const onAction = () => {
@@ -600,11 +835,7 @@
           missTimer = setTimeout(() => {
             missTimer = null;
             if (phase !== 'flight') return;
-            wickets += 1;
-            balls += 1;
-            if (typeof gameFeedback === 'function') gameFeedback('lose');
-            const miss = cur();
-            afterBall(`Out! ${miss.mistimeHint || 'Mistimed the ball'}`);
+            applyResolved(resolveStreetBall(cur(), 'miss', armedShot));
           }, d.flightMs);
         }, d.runupMs);
         return;
@@ -612,15 +843,7 @@
       if (phase === 'flight') {
         const progress = flightProgress();
         const timing = classifyTiming(progress);
-        if (timing === 'miss') {
-          clearTimers();
-          wickets += 1;
-          balls += 1;
-          if (typeof gameFeedback === 'function') gameFeedback('lose');
-          afterBall(`Out! ${cur().mistimeHint || 'Mistimed the ball'}`);
-          return;
-        }
-        resolveHit(timing);
+        applyResolved(resolveStreetBall(cur(), timing, armedShot));
       }
     };
 
@@ -750,7 +973,7 @@
     registerGame({
       id: 'streetcricket',
       name: 'Street Cricket',
-      desc: 'Practice · read the delivery',
+      desc: 'Practice · shot book',
       icon: '🏏',
       ratingKey: 'streetcricket',
       gameType: 'solo',
