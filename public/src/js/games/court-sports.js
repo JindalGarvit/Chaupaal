@@ -464,6 +464,36 @@
     };
   }
 
+  /**
+   * Practice return craft (Prompt 3) — not used on Live seats.
+   * Normal curve: base ~0.70 at full window; falls with shrink; −0.04/3 rallies pressure;
+   * −0.08 after player sweet; serve +0.12; softForced +0.20. Easy +0.15 vs Normal; Sharp −0.10 + rarer soft.
+   * Floor 0.28 / ceil 0.92. Returns 'sweet'|'early'|'late'|'miss'.
+   */
+  function aiContact(opts) {
+    const o = opts || {};
+    const diff = o.difficulty === 'easy' ? 'easy' : o.difficulty === 'sharp' ? 'sharp' : 'normal';
+    const baseWin = Math.max(1, o.baseWindowMs || 720);
+    const win = Math.max(280, o.windowMs || baseWin);
+    const widthFactor = Math.min(1.2, win / baseWin);
+    let success = diff === 'easy' ? 0.85 : diff === 'sharp' ? 0.6 : 0.7;
+    success *= 0.55 + 0.45 * widthFactor;
+    success -= Math.min(0.2, Math.floor((o.rally || 0) / 3) * 0.04);
+    if (o.lastPlayerQuality === 'sweet') {
+      success -= diff === 'easy' ? 0.04 : diff === 'sharp' ? 0.1 : 0.08;
+    }
+    if (o.serving) success += 0.12;
+    if (o.softForced) success = Math.min(0.95, success + 0.22);
+    success = Math.max(0.28, Math.min(0.92, success));
+    if (Math.random() > success) {
+      const r = Math.random();
+      if (r < 0.4) return 'early';
+      if (r < 0.85) return 'late';
+      return 'miss';
+    }
+    return 'sweet';
+  }
+
   function openRallySport(spec) {
     const chat = resolveChat(spec.chat || arguments[0]);
     const liveOn = chatLiveOn(chat);
@@ -473,18 +503,28 @@
     const projKind = spec.projectile === 'shuttle' ? 'shuttle' : 'ball';
     const courtTint = spec.courtTint || spec.accent || '#2E7D32';
     const showKitchen = !!spec.kitchen;
+    const launchDiff = String(spec.aiDiff || spec.difficulty || 'normal').toLowerCase();
+    let aiDiff = launchDiff === 'easy' ? 'easy' : launchDiff === 'sharp' ? 'sharp' : 'normal';
     let pauseCtrl = null;
     let rallyPaused = false;
     let activeRaf = 0;
     let flashContact = false;
     let coachShown = false;
+    let practiceAiTurn = false;
+    let lastPlayerQuality = 'ok';
+    let softPlayerWindow = false;
+    let contactsSinceSoft = 0;
+    let aiTok = 0;
+    let diffLocked = false;
     try {
       coachShown = !!(typeof localStorage !== 'undefined' && localStorage.getItem('chaupaal_rally_coach_' + (spec.id || '')));
     } catch (e) {}
     const shell = openShell({
       id: spec.id,
       title: spec.name,
-      subtitle: liveOn ? liveSub() : practiceSub(matchSub),
+      subtitle: liveOn
+        ? liveSub()
+        : practiceSub(matchSub + ' · ' + (aiDiff === 'easy' ? 'Easy' : aiDiff === 'sharp' ? 'Sharp' : 'Normal')),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
@@ -492,6 +532,7 @@
       bg: spec.bg,
       pauseId,
       cleanup: () => {
+        aiTok += 1;
         if (activeRaf) {
           cancelAnimationFrame(activeRaf);
           activeRaf = 0;
@@ -544,13 +585,25 @@
         if (typeof localStorage !== 'undefined') localStorage.setItem('chaupaal_rally_coach_' + (spec.id || ''), '1');
       } catch (e) {}
       const tips = {
-        badminton: 'Rally point to 21 — win by 2; at 29-all next point wins.',
-        tabletennis: 'Game to 11, win by 2. Serve switches every 2 points (every 1 at deuce).',
-        pickleball: 'Rally point to 11, win by 2. Kitchen line is visual only for now.',
-        tennis: '0–15–30–40–game. First to 2 games wins the match.',
+        badminton: 'Sweet hits tighten the rally — AI will push back. Game to 21.',
+        tabletennis: 'Sweet hits tighten the rally — AI will push back. Game to 11.',
+        pickleball: 'Sweet hits tighten the rally — AI will push back. Kitchen is visual only.',
+        tennis: 'Sweet hits tighten the rally — AI will push back. First to 2 games.',
       };
-      const tip = tips[spec.id] || matchSub;
+      const tip = tips[spec.id] || 'Sweet hits tighten the rally — AI will push back.';
       if (typeof showToast === 'function') showToast(tip);
+    }
+
+    function setAiDiff(d) {
+      if (liveOn || diffLocked || ended) return;
+      aiDiff = d === 'easy' ? 'easy' : d === 'sharp' ? 'sharp' : 'normal';
+      if (typeof gameFeedback === 'function') gameFeedback('select');
+      try {
+        if (shell.setSubtitle) {
+          shell.setSubtitle(practiceSub(matchSub + ' · ' + (aiDiff === 'easy' ? 'Easy' : aiDiff === 'sharp' ? 'Sharp' : 'Normal')));
+        }
+      } catch (e) {}
+      renderPlay(spec.prompt);
     }
 
     function scoresForPush() {
@@ -607,13 +660,16 @@
     }
 
     function awardPoint(who, msg) {
+      aiTok += 1;
+      practiceAiTurn = false;
+      softPlayerWindow = false;
+      contactsSinceSoft = 0;
       const res = applyRallyWin(book, who);
       book = res.state;
       syncFromBook();
       rally = 0;
       serving = true;
       windowMs = spec.windowMs || 720;
-      const hud = res.hud || rallyHudParts(book);
       const line =
         (msg || (who === 'me' ? 'Your point.' : 'Opponent point.')) +
         (res.note ? ' · ' + res.note : '');
@@ -623,32 +679,52 @@
         return finish({ skipPush: true });
       }
       if (liveOn) pushPoint(who, line);
+      // Practice: AI serve window when they own the scorebook serve (never Live).
+      if (!liveOn && !book.serverIsMe) {
+        practiceAiTurn = true;
+        renderPlay(line + ' · Opponent serves');
+        return;
+      }
+      practiceAiTurn = false;
       renderPlay(line);
     }
 
     function renderPlay(msg) {
       if (!shell.alive() || ended) return;
+      aiTok += 1;
       if (activeRaf) {
         cancelAnimationFrame(activeRaf);
         activeRaf = 0;
       }
       maybeCoach();
       syncFromBook();
-      // Live: contact when it is your window; Practice: always active vs AI.
-      // book.serverIsMe = scorebook server for this point; myServe = who has the timing window.
-      const iAmActive = !liveOn || myServe;
+      // Live: human contact only. Practice: player unless practiceAiTurn.
+      const iAmActive = liveOn ? !!myServe : !practiceAiTurn;
       const pointServerNear = !!book.serverIsMe;
       const hitLabel = serving ? spec.serveLabel || 'Serve' : spec.hitLabel || 'Hit';
       const doFlash = flashContact;
       flashContact = false;
       const sportMod = 'cs-rally--' + (spec.id || 'sport');
       const hud = rallyHudParts(book);
+      const showDiffPick = !liveOn && !diffLocked && rally === 0 && serving && !practiceAiTurn && !ended;
+      const baseWin = spec.windowMs || 720;
       shell.body.innerHTML = `
         <div class="cs-rally ${esc(sportMod)}" style="--rally-accent:${esc(spec.accent || '#E63946')};--rally-court:${esc(courtTint)};">
           <div class="cs-rally-score">${esc(spec.icon)} <strong>${esc(hud.main)}</strong></div>
           ${hud.sub ? `<p class="cs-rally-score-sub">${esc(hud.sub)}</p>` : ''}
+          ${
+            showDiffPick
+              ? `<div class="cs-rally-diff" role="group" aria-label="AI difficulty">
+            <button type="button" class="cs-rally-diff-btn${aiDiff === 'easy' ? ' is-active' : ''}" data-rally-diff="easy">Easy</button>
+            <button type="button" class="cs-rally-diff-btn${aiDiff === 'normal' ? ' is-active' : ''}" data-rally-diff="normal">Normal</button>
+            <button type="button" class="cs-rally-diff-btn${aiDiff === 'sharp' ? ' is-active' : ''}" data-rally-diff="sharp">Sharp</button>
+          </div>`
+              : ''
+          }
           <p class="cs-rally-msg">${esc(msg || spec.prompt)}</p>
-          <div class="cs-rally-court${doFlash ? ' is-flash' : ''}${!iAmActive ? ' is-waiting' : ''}" data-server="${pointServerNear ? 'near' : 'far'}" aria-hidden="true">
+          <div class="cs-rally-court${doFlash ? ' is-flash' : ''}${!iAmActive ? ' is-waiting' : ''}${
+            practiceAiTurn && !liveOn ? ' is-ai' : ''
+          }" data-server="${pointServerNear ? 'near' : 'far'}" aria-hidden="true">
             <div class="cs-rally-half cs-rally-half--far${pointServerNear ? '' : ' is-server'}">
               <span class="cs-rally-side-label">${pointServerNear ? 'Them' : 'Serve'}</span>
             </div>
@@ -670,17 +746,24 @@
               <div class="cs-timing" aria-hidden="true"><i data-cs-bar></i><b class="cs-rally-sweet"></b></div>
             </div>
           </div>
-          <button type="button" class="cs-hit" data-cs-hit ${!iAmActive ? 'disabled' : ''}>${esc(hitLabel)}</button>
+          <button type="button" class="cs-hit" data-cs-hit ${!iAmActive ? 'disabled' : ''}>${esc(
+            !iAmActive && !liveOn ? 'Opponent…' : hitLabel
+          )}</button>
           <p class="cs-rally-hint">${
-            iAmActive
-              ? 'Rally ' +
-                rally +
-                ' · ' +
-                esc(matchSub) +
-                (liveOn ? ' · your contact' : '')
-              : 'Waiting for opponent · court live'
+            liveOn
+              ? iAmActive
+                ? 'Rally ' + rally + ' · ' + esc(matchSub) + ' · your contact'
+                : 'Waiting for opponent · court live'
+              : practiceAiTurn
+                ? 'Opponent contact · ' + (aiDiff === 'easy' ? 'Easy' : aiDiff === 'sharp' ? 'Sharp' : 'Normal')
+                : 'Rally ' + rally + ' · ' + esc(matchSub) + (softPlayerWindow ? ' · soft ball' : '')
           }</p>
         </div>`;
+      if (showDiffPick) {
+        shell.body.querySelectorAll('[data-rally-diff]').forEach((btn) => {
+          btn.addEventListener('click', () => setAiDiff(btn.getAttribute('data-rally-diff')));
+        });
+      }
       const bar = shell.body.querySelector('[data-cs-bar]');
       const proj = shell.body.querySelector('[data-cs-proj]');
       const hit = shell.body.querySelector('[data-cs-hit]');
@@ -689,10 +772,10 @@
       let pauseAnchor = 0;
       locked = false;
 
-      function setProjectile(p) {
+      function setProjectile(p, towardNear) {
         if (!proj) return;
-        // Far (top) → near contact zone as window fills; sweet band ~42–78%.
-        const y = 14 + p * 62;
+        const near = towardNear !== false;
+        const y = near ? 14 + p * 62 : 76 - p * 62;
         const x = 50 + Math.sin(p * Math.PI) * (projKind === 'shuttle' ? 10 : 6);
         proj.style.setProperty('--rally-x', x + '%');
         proj.style.setProperty('--rally-y', y + '%');
@@ -701,15 +784,110 @@
         if (court) court.classList.toggle('is-sweet', p >= 0.42 && p <= 0.78);
       }
 
-      if (!iAmActive) {
-        setProjectile(0.18);
+      // Practice AI contact — never on Live seats
+      if (!liveOn && practiceAiTurn) {
+        const tok = aiTok;
+        contactsSinceSoft += 1;
+        const softEvery = aiDiff === 'sharp' ? 5 : aiDiff === 'easy' ? 3 : 4;
+        const forceSoft = !serving && contactsSinceSoft >= softEvery;
+        if (forceSoft) contactsSinceSoft = 0;
+        let duration = serving ? Math.max(950, windowMs + 220) : windowMs;
+        if (forceSoft) duration = Math.min(baseWin * 1.2, duration * 1.35);
+        const decision = aiContact({
+          windowMs: duration,
+          baseWindowMs: baseWin,
+          rally: rally,
+          serving: serving,
+          difficulty: aiDiff,
+          lastPlayerQuality: lastPlayerQuality,
+          softForced: forceSoft,
+        });
+        const targetP =
+          decision === 'sweet'
+            ? 0.48 + Math.random() * 0.22
+            : decision === 'early'
+              ? 0.18 + Math.random() * 0.18
+              : decision === 'late'
+                ? 0.82 + Math.random() * 0.12
+                : 0.96;
+        const resolveAt = Math.max(0.32, Math.min(0.98, targetP));
+        setProjectile(0, false);
+
+        function resolveAi() {
+          if (tok !== aiTok || !shell.alive() || ended || locked) return;
+          locked = true;
+          if (activeRaf) {
+            cancelAnimationFrame(activeRaf);
+            activeRaf = 0;
+          }
+          if (decision === 'sweet') {
+            flashContact = true;
+            if (proj) proj.classList.add('is-hit');
+            if (court) court.classList.add('is-flash');
+            buzz('move');
+            rally += 1;
+            serving = false;
+            practiceAiTurn = false;
+            softPlayerWindow = !!forceSoft;
+            windowMs = Math.max(380, windowMs * (spec.shrink || 0.94));
+            renderPlay(forceSoft ? 'Soft return — attack!' : 'Returned — your shot.');
+            return;
+          }
+          buzz('lose', { noConfetti: true });
+          const why = decision === 'early' ? 'Early' : decision === 'late' ? 'Late' : 'Miss';
+          awardPoint('me', 'Opponent ' + why.toLowerCase() + ' — your point.');
+        }
+
+        function aiTick(now) {
+          if (tok !== aiTok || !shell.alive() || ended || locked) {
+            activeRaf = 0;
+            return;
+          }
+          if (rallyPaused) {
+            if (!pauseAnchor) pauseAnchor = now;
+            activeRaf = requestAnimationFrame(aiTick);
+            return;
+          }
+          if (pauseAnchor) {
+            if (t0) t0 += now - pauseAnchor;
+            pauseAnchor = 0;
+          }
+          if (!t0) t0 = now;
+          const p = Math.min(1, (now - t0) / duration);
+          if (bar) bar.style.transform = 'scaleX(' + p + ')';
+          setProjectile(p, false);
+          if (p >= resolveAt) {
+            activeRaf = 0;
+            resolveAi();
+            return;
+          }
+          if (p >= 1) {
+            activeRaf = 0;
+            if (!locked) {
+              locked = true;
+              awardPoint('me', 'Opponent late — your point.');
+            }
+            return;
+          }
+          activeRaf = requestAnimationFrame(aiTick);
+        }
+        activeRaf = requestAnimationFrame(aiTick);
         return;
       }
 
-      const duration = serving ? Math.max(900, windowMs + 200) : windowMs;
+      if (!iAmActive) {
+        setProjectile(0.18, true);
+        return;
+      }
+
+      let duration = serving ? Math.max(900, windowMs + 200) : windowMs;
+      if (softPlayerWindow) {
+        duration = Math.min(baseWin * 1.25, duration * 1.3);
+        softPlayerWindow = false;
+      }
       const sweet0 = 0.42;
       const sweet1 = 0.78;
-      setProjectile(0);
+      setProjectile(0, true);
 
       function tick(now) {
         if (!shell.alive() || ended || locked) {
@@ -728,7 +906,7 @@
         if (!t0) t0 = now;
         const p = Math.min(1, (now - t0) / duration);
         if (bar) bar.style.transform = 'scaleX(' + p + ')';
-        setProjectile(p);
+        setProjectile(p, true);
         if (p >= 1) {
           activeRaf = 0;
           if (!locked) miss('Late');
@@ -739,7 +917,7 @@
       activeRaf = requestAnimationFrame(tick);
 
       hit?.addEventListener('click', () => {
-        if (locked || !iAmActive || rallyPaused) return;
+        if (locked || !iAmActive || rallyPaused || practiceAiTurn) return;
         const elapsedBase = t0 ? performance.now() - t0 : 0;
         const pauseExtra = pauseAnchor ? performance.now() - pauseAnchor : 0;
         const p = t0 ? Math.min(1, (elapsedBase - pauseExtra) / duration) : 0;
@@ -752,6 +930,7 @@
           return;
         }
         locked = true;
+        diffLocked = true;
         if (activeRaf) {
           cancelAnimationFrame(activeRaf);
           activeRaf = 0;
@@ -760,6 +939,7 @@
         if (proj) proj.classList.add('is-hit');
         if (court) court.classList.add('is-flash');
         buzz('kick');
+        lastPlayerQuality = 'sweet';
         rally += 1;
         serving = false;
         windowMs = Math.max(380, windowMs * (spec.shrink || 0.94));
@@ -787,15 +967,16 @@
           renderPlay(spec.goodLine || 'In! Keep the rally going.');
           return;
         }
-        if (Math.random() < 0.26 + rally * 0.04) {
-          return awardPoint('me', 'Opponent missed — your point.');
-        }
-        renderPlay(spec.goodLine || 'In! Keep the rally going.');
+        // Practice: hand contact to return-craft AI (never coin-flip / never Live).
+        practiceAiTurn = true;
+        renderPlay('In — opponent returning…');
       });
 
       function miss(why) {
         if (locked) return;
         locked = true;
+        diffLocked = true;
+        lastPlayerQuality = why === 'Early' ? 'early' : 'late';
         if (activeRaf) {
           cancelAnimationFrame(activeRaf);
           activeRaf = 0;
@@ -810,6 +991,8 @@
       if (resultPainted) return;
       resultPainted = true;
       ended = true;
+      aiTok += 1;
+      practiceAiTurn = false;
       if (activeRaf) {
         cancelAnimationFrame(activeRaf);
         activeRaf = 0;
@@ -837,7 +1020,7 @@
         pbScore: you,
         subtitle: hud.line + ' · ' + matchSub,
         shareText: 'I played ' + spec.name + ' on Chaupaal: ' + hud.line,
-        onAgain: () => openRallySport(Object.assign({}, spec, { chat })),
+        onAgain: () => openRallySport(Object.assign({}, spec, { chat, aiDiff })),
       });
     }
 

@@ -171,22 +171,22 @@
     ],
     badminton: [
       'Rally point to 21 — win by 2 after 20-all; at 29-all next point wins (30)',
-      'Winner of the rally serves next · one game (no best-of-3 yet)',
-      'Court + shuttle — smash in the green timing window',
+      'Sweet hits tighten the rally — Practice AI pushes back (Easy / Normal / Sharp)',
+      'Winner serves next · court + shuttle timing window',
     ],
     tabletennis: [
-      'Game to 11, win by 2 (hard cap 20)',
-      'Serve every 2 points — every 1 at deuce',
+      'Game to 11, win by 2 (hard cap 20) · serve every 2 (every 1 at deuce)',
+      'Sweet hits tighten the rally — Practice AI pushes back',
       'Table court + ball — stay in the short window',
     ],
     pickleball: [
       'Rally point to 11, win by 2 (cap 20) — not side-out',
+      'Sweet hits tighten the rally — Practice AI pushes back',
       'Kitchen zone is visual only for now',
-      'Court + dink in the green window',
     ],
     tennis: [
-      'Point labels 0–15–30–40 · deuce then Ad · win the game',
-      'Match: first to 2 games (no full sets/tiebreak)',
+      '0–15–30–40 · deuce/Ad · first to 2 games',
+      'Sweet hits tighten the rally — Practice AI pushes back',
       'Server stays for the game, then switches',
     ],
     kabaddi: [
