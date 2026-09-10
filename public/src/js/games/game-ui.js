@@ -169,10 +169,26 @@
       'Classic 5 · Sudden Death (streak until miss) · Pressure (need 4/5)',
       'Practice shootout — per-format bests on your card',
     ],
-    badminton: ['Serve, then smash in the timing window', 'Rallies get faster', 'First to 7'],
-    tabletennis: ['Short window — stay early, not late', 'First to 11', 'Opponent misses if you keep returning'],
-    pickleball: ['Dink in the green window', 'First to 7', 'Patience beats panic taps'],
-    tennis: ['Serve to start each point', 'First to 4 games', 'Time the return'],
+    badminton: [
+      'Court + shuttle — smash in the green timing window',
+      'Serve side highlights; rallies get faster',
+      'First to 7',
+    ],
+    tabletennis: [
+      'Table court + ball — stay in the short window',
+      'First to 11',
+      'Opponent misses if you keep returning',
+    ],
+    pickleball: [
+      'Court + kitchen tint (look only) · dink in the green window',
+      'First to 7',
+      'Patience beats panic taps',
+    ],
+    tennis: [
+      'Court + ball — serve to start each point',
+      'First to 4 games',
+      'Time the return in the sweet band',
+    ],
     kabaddi: [
       'Touch +1/tag on Home · empty = defense +1 · bonus line + tag = +1 · first to 5',
       'All-out +2 · 2 empties → DO OR DIE · ≤2 alive tackle = super (+2) · mat revives',

@@ -241,9 +241,13 @@
     const liveOn = chatLiveOn(chat);
     const toWin = spec.toWin || 7;
     const pauseId = 'csRallyPause_' + (spec.id || 'sport');
+    const projKind = spec.projectile === 'shuttle' ? 'shuttle' : 'ball';
+    const courtTint = spec.courtTint || spec.accent || '#2E7D32';
+    const showKitchen = !!spec.kitchen;
     let pauseCtrl = null;
     let rallyPaused = false;
     let activeRaf = 0;
+    let flashContact = false;
     const shell = openShell({
       id: spec.id,
       title: spec.name,
@@ -255,7 +259,10 @@
       bg: spec.bg,
       pauseId,
       cleanup: () => {
-        if (activeRaf) cancelAnimationFrame(activeRaf);
+        if (activeRaf) {
+          cancelAnimationFrame(activeRaf);
+          activeRaf = 0;
+        }
         if (pauseCtrl) pauseCtrl.destroy();
       },
     });
@@ -267,10 +274,7 @@
         pauseBtnId: pauseId,
         onPause() {
           rallyPaused = true;
-          if (activeRaf) {
-            cancelAnimationFrame(activeRaf);
-            activeRaf = 0;
-          }
+          // Keep RAF alive — tick freezes progress via pauseAnchor (no window reset).
         },
         onResume() {
           rallyPaused = false;
@@ -327,54 +331,111 @@
 
     function renderPlay(msg) {
       if (!shell.alive() || ended) return;
+      if (activeRaf) {
+        cancelAnimationFrame(activeRaf);
+        activeRaf = 0;
+      }
       // Live: contact when it is your serve/return window; Practice: always active vs AI.
       const iAmActive = !liveOn || myServe;
+      const hitLabel = serving ? spec.serveLabel || 'Serve' : spec.hitLabel || 'Hit';
+      const doFlash = flashContact;
+      flashContact = false;
+      const sportMod = 'cs-rally--' + (spec.id || 'sport');
       shell.body.innerHTML = `
-        <div class="cs-rally">
+        <div class="cs-rally ${esc(sportMod)}" style="--rally-accent:${esc(spec.accent || '#E63946')};--rally-court:${esc(courtTint)};">
           <div class="cs-rally-score">${esc(spec.icon)} <strong>${you}</strong> – <strong>${opp}</strong></div>
           <p class="cs-rally-msg">${esc(msg || spec.prompt)}</p>
-          <div class="cs-timing" aria-hidden="true"><i data-cs-bar></i></div>
-          <button type="button" class="cs-hit" data-cs-hit ${!iAmActive ? 'disabled' : ''}>${esc(
-            serving ? spec.serveLabel || 'Serve' : spec.hitLabel || 'Hit'
-          )}</button>
-          <p class="cs-rally-hint">Rally ${rally} · window ${Math.round(windowMs)}ms${
-            liveOn ? (iAmActive ? ' · your contact' : ' · waiting') : ''
+          <div class="cs-rally-court${doFlash ? ' is-flash' : ''}${!iAmActive ? ' is-waiting' : ''}" data-server="${myServe ? 'near' : 'far'}" aria-hidden="true">
+            <div class="cs-rally-half cs-rally-half--far${myServe ? '' : ' is-server'}">
+              <span class="cs-rally-side-label">${myServe ? 'Them' : 'Serve'}</span>
+            </div>
+            <div class="cs-rally-net"></div>
+            <div class="cs-rally-half cs-rally-half--near${myServe ? ' is-server' : ''}">
+              ${showKitchen ? '<div class="cs-rally-kitchen" title="Kitchen (cosmetic)"></div>' : ''}
+              <span class="cs-rally-side-label">${myServe ? 'Serve' : 'You'}</span>
+            </div>
+            <div class="cs-rally-proj cs-rally-proj--${esc(projKind)}${iAmActive ? '' : ' is-idle'}" data-cs-proj>
+              ${
+                projKind === 'shuttle'
+                  ? '<span class="cs-rally-proj-glyph" aria-hidden="true">🏸</span>'
+                  : spec.id === 'tennis'
+                    ? '<span class="cs-rally-proj-glyph" aria-hidden="true">🎾</span>'
+                    : '<span class="cs-rally-proj-orb" aria-hidden="true"></span>'
+              }
+            </div>
+            <div class="cs-rally-window">
+              <div class="cs-timing" aria-hidden="true"><i data-cs-bar></i><b class="cs-rally-sweet"></b></div>
+            </div>
+          </div>
+          <button type="button" class="cs-hit" data-cs-hit ${!iAmActive ? 'disabled' : ''}>${esc(hitLabel)}</button>
+          <p class="cs-rally-hint">${
+            iAmActive
+              ? 'Rally ' + rally + ' · window ' + Math.round(windowMs) + 'ms' + (liveOn ? ' · your contact' : '')
+              : 'Waiting for opponent · court live'
           }</p>
         </div>`;
       const bar = shell.body.querySelector('[data-cs-bar]');
+      const proj = shell.body.querySelector('[data-cs-proj]');
       const hit = shell.body.querySelector('[data-cs-hit]');
+      const court = shell.body.querySelector('.cs-rally-court');
       let t0 = 0;
-      let raf = 0;
+      let pauseAnchor = 0;
       locked = false;
+
+      function setProjectile(p) {
+        if (!proj) return;
+        // Far (top) → near contact zone as window fills; sweet band ~42–78%.
+        const y = 14 + p * 62;
+        const x = 50 + Math.sin(p * Math.PI) * (projKind === 'shuttle' ? 10 : 6);
+        proj.style.setProperty('--rally-x', x + '%');
+        proj.style.setProperty('--rally-y', y + '%');
+        proj.classList.toggle('is-sweet', p >= 0.42 && p <= 0.78);
+        proj.classList.toggle('is-late', p > 0.78);
+        if (court) court.classList.toggle('is-sweet', p >= 0.42 && p <= 0.78);
+      }
+
       if (!iAmActive) {
+        setProjectile(0.18);
         return;
       }
+
       const duration = serving ? Math.max(900, windowMs + 200) : windowMs;
       const sweet0 = 0.42;
       const sweet1 = 0.78;
+      setProjectile(0);
 
       function tick(now) {
+        if (!shell.alive() || ended || locked) {
+          activeRaf = 0;
+          return;
+        }
         if (rallyPaused) {
-          t0 = 0;
+          if (!pauseAnchor) pauseAnchor = now;
           activeRaf = requestAnimationFrame(tick);
           return;
+        }
+        if (pauseAnchor) {
+          if (t0) t0 += now - pauseAnchor;
+          pauseAnchor = 0;
         }
         if (!t0) t0 = now;
         const p = Math.min(1, (now - t0) / duration);
         if (bar) bar.style.transform = 'scaleX(' + p + ')';
+        setProjectile(p);
         if (p >= 1) {
+          activeRaf = 0;
           if (!locked) miss('Late');
           return;
         }
-        raf = requestAnimationFrame(tick);
-        activeRaf = raf;
+        activeRaf = requestAnimationFrame(tick);
       }
-      raf = requestAnimationFrame(tick);
-      activeRaf = raf;
+      activeRaf = requestAnimationFrame(tick);
 
       hit?.addEventListener('click', () => {
-        if (locked || !iAmActive) return;
-        const p = t0 ? Math.min(1, (performance.now() - t0) / duration) : 0;
+        if (locked || !iAmActive || rallyPaused) return;
+        const elapsedBase = t0 ? performance.now() - t0 : 0;
+        const pauseExtra = pauseAnchor ? performance.now() - pauseAnchor : 0;
+        const p = t0 ? Math.min(1, (elapsedBase - pauseExtra) / duration) : 0;
         if (p < sweet0) {
           miss('Early');
           return;
@@ -384,8 +445,13 @@
           return;
         }
         locked = true;
-        cancelAnimationFrame(raf);
-        activeRaf = 0;
+        if (activeRaf) {
+          cancelAnimationFrame(activeRaf);
+          activeRaf = 0;
+        }
+        flashContact = true;
+        if (proj) proj.classList.add('is-hit');
+        if (court) court.classList.add('is-flash');
         buzz('kick');
         rally += 1;
         serving = false;
@@ -427,8 +493,10 @@
       function miss(why) {
         if (locked) return;
         locked = true;
-        cancelAnimationFrame(raf);
-        activeRaf = 0;
+        if (activeRaf) {
+          cancelAnimationFrame(activeRaf);
+          activeRaf = 0;
+        }
         buzz('lose', { noConfetti: true });
         opp += 1;
         rally = 0;
@@ -450,6 +518,10 @@
     function finish() {
       if (ended) return;
       ended = true;
+      if (activeRaf) {
+        cancelAnimationFrame(activeRaf);
+        activeRaf = 0;
+      }
       if (liveOn && liveHandle && liveRoles && !applying) {
         liveHandle.push({
           status: 'over',
@@ -3014,9 +3086,12 @@
       icon: '🏸',
       accent: '#01579B',
       bg: '#000D1A',
+      courtTint: '#0a3d5c',
+      projectile: 'shuttle',
       toWin: 7,
       windowMs: 700,
       prompt: 'Serve, then smash in the green window.',
+      serveLabel: 'Serve',
       hitLabel: 'Smash',
     },
     {
@@ -3025,10 +3100,13 @@
       icon: '🏓',
       accent: '#FF6F00',
       bg: '#000A1A',
+      courtTint: '#1a2a3a',
+      projectile: 'ball',
       toWin: 11,
       windowMs: 560,
       shrink: 0.93,
       prompt: 'Short rallies — tap in the timing window.',
+      serveLabel: 'Serve',
       hitLabel: 'Return',
     },
     {
@@ -3037,9 +3115,13 @@
       icon: '🥒',
       accent: '#33691E',
       bg: '#0A1200',
+      courtTint: '#1b3d12',
+      projectile: 'ball',
+      kitchen: true,
       toWin: 7,
       windowMs: 640,
       prompt: 'Dink and drive. Time the paddle.',
+      serveLabel: 'Serve',
       hitLabel: 'Dink',
     },
     {
@@ -3048,6 +3130,8 @@
       icon: '🎾',
       accent: '#2E7D32',
       bg: '#0A1A0A',
+      courtTint: '#1a4a28',
+      projectile: 'ball',
       toWin: 4,
       windowMs: 680,
       prompt: 'Serve, then return. First to 4 games.',
