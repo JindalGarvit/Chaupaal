@@ -9682,23 +9682,59 @@
 
 
   /* ---------- Andar Bahar ---------- */
+  /** Black house card → Andar leads; red → Bahar leads; then strict alternate. */
+  function andarBaharIsBlack(card) {
+    const s = card && card.s;
+    return s === '♠' || s === '♣';
+  }
+
+  function andarBaharFirstLane(joker) {
+    return andarBaharIsBlack(joker) ? 'andar' : 'bahar';
+  }
+
+  function andarBaharOtherLane(lane) {
+    return lane === 'andar' ? 'bahar' : 'andar';
+  }
+
+  /** n is 0-based deal index into the remaining deck after the house card. */
+  function andarBaharLaneAt(n, firstLane) {
+    const first = firstLane === 'bahar' ? 'bahar' : 'andar';
+    return n % 2 === 0 ? first : andarBaharOtherLane(first);
+  }
+
   function openAndarBahar() {
     const chat = resolveChat(arguments[0]);
     const liveOn = chatLiveOn(chat);
     const rng = rngFn();
+    const dealTimers = [];
     let deck = makeDeck(rng);
     let joker = deck.pop();
+    let firstLane = andarBaharFirstLane(joker);
     const shell = openShell({
       id: 'andarbaahar',
       title: 'Andar Bahar',
-      subtitle: liveOn ? liveSub() : practiceSub('Pick a side · match the joker'),
+      subtitle: liveOn
+        ? liveSub() + ' · Colour leads'
+        : practiceSub('House card · colour leads first pile'),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
       accent: '#FF6B35',
       bg: '#001A00',
+      cleanup: () => {
+        dealTimers.forEach((t) => clearTimeout(t));
+        dealTimers.length = 0;
+      },
     });
     if (!shell) return;
+
+    function scheduleDeal(fn, ms) {
+      if (shell.gs && typeof shell.gs.schedule === 'function') return shell.gs.schedule(fn, ms);
+      const t = setTimeout(fn, ms);
+      dealTimers.push(t);
+      return t;
+    }
+
     let side = null;
     let sideA = null;
     let sideB = null;
@@ -9706,31 +9742,99 @@
     const bahar = [];
     let ended = false;
     let applying = false;
+    let dealing = false;
     let liveRoles = null;
     let liveHandle = null;
+    let dealN = 0;
+    let lastLane = null;
+    let lastCard = null;
+
+    function leadLabel() {
+      return firstLane === 'andar' ? 'Andar leads this hand' : 'Bahar leads this hand';
+    }
+
+    function colourHint() {
+      return andarBaharIsBlack(joker)
+        ? 'Black house → Andar gets card #1'
+        : 'Red house → Bahar gets card #1';
+    }
 
     function mySide() {
       if (!liveOn || !liveRoles) return side;
       return liveRoles.me === liveRoles.playerA ? sideA : sideB;
     }
 
+    function pileHtml(lane, cards) {
+      const active = lastLane === lane ? ' is-active' : '';
+      const title = lane === 'andar' ? 'Andar' : 'Bahar';
+      const lead = firstLane === lane ? ' · leads' : '';
+      return (
+        '<div class="pc-ab-pile' +
+        active +
+        '" data-pile="' +
+        lane +
+        '">' +
+        '<h4>' +
+        title +
+        ' <span>(' +
+        cards.length +
+        ')</span>' +
+        lead +
+        '</h4>' +
+        '<div class="pc-ab-stack">' +
+        (cards.length
+          ? cards
+              .slice(-4)
+              .map((c, i, arr) => {
+                const isLast = i === arr.length - 1 && lastLane === lane;
+                return (
+                  '<span class="pc-ab-cardwrap' +
+                  (isLast ? ' is-last' : '') +
+                  '">' +
+                  cardFace(c) +
+                  '</span>'
+                );
+              })
+              .join('')
+          : '<span class="pc-ab-empty">—</span>') +
+        '</div></div>'
+      );
+    }
+
     function paint(msg) {
       if (ended) return;
       const pick = mySide();
-      shell.body.innerHTML = `
-        <div class="pc-ab">
-          <p class="pc-hint">Joker ${esc(joker.r + joker.s)}</p>
-          <p class="pc-hint">${esc(msg || (pick ? 'Dealing…' : 'Andar or Bahar?'))}</p>
-          <div class="pc-ab-cols">
-            <div><h4>Andar (${andar.length})</h4>${andar.slice(-3).map(cardFace).join('')}</div>
-            <div><h4>Bahar (${bahar.length})</h4>${bahar.slice(-3).map(cardFace).join('')}</div>
-          </div>
-          ${
-            pick
-              ? ''
-              : `<div class="pc-actions"><button type="button" class="cs-hit" data-a>Andar</button><button type="button" class="cs-hit" data-b>Bahar</button></div>`
-          }
-        </div>`;
+      const jCol = SUIT_COLOR[joker.s] || '#111';
+      shell.body.innerHTML =
+        '<div class="pc-ab">' +
+        '<p class="pc-hint pc-ab-lead">' +
+        esc(leadLabel()) +
+        ' · ' +
+        esc(colourHint()) +
+        '</p>' +
+        '<p class="pc-hint">' +
+        esc(msg || (pick ? (dealing ? 'Dealing…' : 'Ready') : 'Pick Andar or Bahar')) +
+        (pick ? ' · you: ' + pick : '') +
+        '</p>' +
+        '<div class="pc-ab-table" role="group" aria-label="Andar Bahar table">' +
+        pileHtml('andar', andar) +
+        '<div class="pc-ab-house">' +
+        '<div class="pc-ab-house-label">House card</div>' +
+        '<div class="pc-ab-joker" style="color:' +
+        jCol +
+        '"><b>' +
+        esc(joker.r) +
+        '</b><span>' +
+        esc(joker.s) +
+        '</span></div>' +
+        '<div class="pc-ab-house-sub">Rank only · suit sets lead</div>' +
+        '</div>' +
+        pileHtml('bahar', bahar) +
+        '</div>' +
+        (pick
+          ? ''
+          : '<div class="pc-actions"><button type="button" class="cs-hit" data-a>Andar</button><button type="button" class="cs-hit" data-b>Bahar</button></div>') +
+        '</div>';
       shell.body.querySelector('[data-a]')?.addEventListener('click', () => start('andar'));
       shell.body.querySelector('[data-b]')?.addEventListener('click', () => start('bahar'));
     }
@@ -9738,13 +9842,28 @@
     function finish(lane, fromRemote) {
       if (ended) return;
       ended = true;
+      dealing = false;
+      dealTimers.forEach((t) => clearTimeout(t));
+      dealTimers.length = 0;
       const pick = mySide();
       const won = lane === pick;
       if (liveOn && liveHandle && !fromRemote && !applying) {
         liveHandle.push({
           status: 'over',
           winner: won ? liveRoles.me : liveRoles.opp,
-          state: { joker, andar, bahar, lane, sideA, sideB, deck },
+          state: {
+            joker,
+            andar: andar.slice(),
+            bahar: bahar.slice(),
+            lane,
+            firstLane,
+            sideA,
+            sideB,
+            deck,
+            n: dealN,
+            lastLane,
+            lastCard,
+          },
         });
       }
       showDuelResult(shell, {
@@ -9752,51 +9871,89 @@
         you: won ? 1 : 0,
         opp: won ? 0 : 1,
         glyph: '🃏',
-        subtitle: 'Joker hit ' + lane,
+        subtitle: 'House card hit ' + (lane === 'andar' ? 'Andar' : 'Bahar'),
         shareText: 'Andar Bahar on Chaupaal',
         onAgain: () => openAndarBahar(chat),
       });
     }
 
     function startDeal() {
-      let n = 0;
+      if (dealing || ended) return;
+      dealing = true;
+      dealN = 0;
+      lastLane = null;
+      lastCard = null;
+      paint(leadLabel() + ' — dealing…');
+
       const deal = () => {
-        if (!shell.alive() || ended || !deck.length) return finish('bahar');
+        if (!shell.alive() || ended) return;
+        if (!deck.length) {
+          // Exhausted without a rank hit (rare) — credit last pile that received a card
+          return finish(lastLane || firstLane);
+        }
         const c = deck.pop();
-        const lane = n % 2 === 0 ? 'andar' : 'bahar';
+        const lane = andarBaharLaneAt(dealN, firstLane);
         (lane === 'andar' ? andar : bahar).push(c);
-        n += 1;
-        paint('Dealing…');
+        lastLane = lane;
+        lastCard = c;
+        dealN += 1;
+        paint('Dealing onto ' + (lane === 'andar' ? 'Andar' : 'Bahar') + '…');
         if (liveOn && liveHandle && liveRoles && liveRoles.host) {
           liveHandle.push({
             status: 'playing',
-            state: { joker, andar, bahar, sideA, sideB, deck, n },
+            state: {
+              joker,
+              andar: andar.slice(),
+              bahar: bahar.slice(),
+              sideA,
+              sideB,
+              deck,
+              n: dealN,
+              firstLane,
+              lastLane,
+              lastCard,
+              dealing: true,
+            },
           });
         }
         if (c.r === joker.r) {
           finish(lane);
           return;
         }
-        shell.gs && shell.gs.schedule ? shell.gs.schedule(deal, 280) : setTimeout(deal, 280);
+        scheduleDeal(deal, 320);
       };
-      deal();
+      scheduleDeal(deal, 280);
     }
 
     function start(pick) {
+      if (ended || dealing) return;
       if (liveOn && liveRoles) {
-        if (liveRoles.me === liveRoles.playerA) sideA = pick;
-        else sideB = pick;
+        if (liveRoles.me === liveRoles.playerA) {
+          if (sideA) return;
+          sideA = pick;
+        } else {
+          if (sideB) return;
+          sideB = pick;
+        }
         side = pick;
         buzz('card');
         if (liveHandle) {
           liveHandle.push({
             status: 'playing',
-            state: { joker, andar, bahar, sideA, sideB, deck, picking: true },
+            state: {
+              joker,
+              andar: andar.slice(),
+              bahar: bahar.slice(),
+              sideA,
+              sideB,
+              deck,
+              firstLane,
+              picking: true,
+            },
           });
         }
-        // Host starts deal once both sides chosen
         if (liveRoles.host && sideA && sideB) startDeal();
-        else if (!liveRoles.host) paint('Locked in — waiting…');
+        else if (!liveRoles.host) paint('Locked in — waiting for deal…');
         else paint('Waiting for opponent’s pick…');
         return;
       }
@@ -9821,6 +9978,7 @@
               you: iWon ? 1 : 0,
               opp: iWon ? 0 : 1,
               glyph: '🃏',
+              subtitle: 'Forfeit',
               shareText: 'Andar Bahar on Chaupaal',
               onAgain: () => openAndarBahar(chat),
             });
@@ -9830,8 +9988,14 @@
         }
         const st = val.state || {};
         applying = true;
-        if (st.joker) joker = st.joker;
+        if (st.joker) {
+          joker = st.joker;
+          firstLane = andarBaharFirstLane(joker);
+        }
         if (st.deck) deck = st.deck;
+        if (st.firstLane === 'andar' || st.firstLane === 'bahar') {
+          firstLane = st.firstLane;
+        }
         if (st.andar) {
           andar.length = 0;
           st.andar.forEach((c) => andar.push(c));
@@ -9842,14 +10006,26 @@
         }
         if (st.sideA) sideA = st.sideA;
         if (st.sideB) sideB = st.sideB;
+        if (st.n != null) dealN = st.n | 0;
+        if (st.lastLane) lastLane = st.lastLane;
+        if (st.lastCard) lastCard = st.lastCard;
+        if (st.dealing) dealing = true;
         applying = false;
-        if (!liveRoles.host && sideA && sideB && !andar.length && !bahar.length) {
-          // guest waits for host deal snaps
-          paint('Dealing…');
+
+        // Guest never re-deals — only paint host snaps
+        if (!liveRoles.host) {
+          if (sideA && sideB && (andar.length || bahar.length || dealing)) {
+            paint('Dealing onto ' + (lastLane === 'bahar' ? 'Bahar' : lastLane === 'andar' ? 'Andar' : '…') + '…');
+          } else if (mySide()) {
+            paint('Locked in — waiting for deal…');
+          } else {
+            paint('Andar or Bahar?');
+          }
         } else {
-          paint(mySide() ? 'Dealing…' : 'Andar or Bahar?');
+          paint(mySide() ? (dealing ? 'Dealing…' : 'Waiting for opponent’s pick…') : 'Andar or Bahar?');
         }
-        if (liveRoles.host && sideA && sideB && !andar.length && !bahar.length && st.picking) {
+
+        if (liveRoles.host && sideA && sideB && !dealing && !andar.length && !bahar.length && st.picking) {
           startDeal();
         }
       });
@@ -9859,7 +10035,15 @@
         if (liveRoles.host) {
           liveHandle.push({
             status: 'playing',
-            state: { joker, deck, andar: [], bahar: [], sideA: null, sideB: null },
+            state: {
+              joker,
+              deck,
+              andar: [],
+              bahar: [],
+              sideA: null,
+              sideB: null,
+              firstLane,
+            },
           });
         }
         paint();
@@ -9878,7 +10062,7 @@
       { id: 'teenpatti', name: 'Teen Patti', desc: 'Boot, chaal, side-show · virtual chips', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
       { id: 'bluff', name: 'Bluff', desc: 'Pile claims · call · empty hand', icon: '🎭', genre: 'party', launch: openBluff, order: 35 },
       { id: 'sattepe', name: 'Satte pe Satta', desc: 'Seven chains · Live hands private', icon: '7️⃣', genre: 'party', launch: openSatte, order: 36 },
-      { id: 'andarbaahar', name: 'Andar Bahar', desc: 'Pick a side', icon: '🃏', genre: 'party', launch: openAndarBahar, order: 37 },
+      { id: 'andarbaahar', name: 'Andar Bahar', desc: 'House card · colour leads', icon: '🃏', genre: 'party', launch: openAndarBahar, order: 37 },
     ];
     games.forEach((g) => {
       registerGame({

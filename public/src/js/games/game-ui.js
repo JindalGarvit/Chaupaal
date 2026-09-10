@@ -202,7 +202,11 @@
       'Must play if able · Pass when stuck · table lock = fewest cards (tie draw)',
       'Practice chain AI · Live hides hands · Ace high · virtual stakes only',
     ],
-    andarbaahar: ['Joker sets the rank', 'Pick Andar or Bahar', 'First matching rank wins the side'],
+    andarbaahar: [
+      'House card in the middle — black leads Andar, red leads Bahar, then alternate',
+      'Pick Andar or Bahar · rank match (not suit) wins that pile',
+      'Practice or Live — same deal law on both seats',
+    ],
     patangbaazi: [
       'Hold to tension — climb with weight, ease through gusts',
       'Cross strings to saw; watch the hunter tip toward your manjha',
