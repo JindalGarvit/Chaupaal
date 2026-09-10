@@ -1301,34 +1301,189 @@
     return m + ':' + String(r).padStart(2, '0');
   }
 
+  // ─── Save / resume (per difficulty) ────────────────────────────────────────
+  const SAVE_VER = 1;
+  const SAVE_LAST_KEY = 'ankjod_save_last_diff';
+
+  function saveStorageKey(diff) {
+    return 'ankjod_save_' + (diff || 'easy');
+  }
+
+  function packBoardRows(board, solution) {
+    return board.map((row, r) =>
+      row
+        .map((cell, c) => {
+          if (cell.kind === 'cell') return String((solution[r] && solution[r][c]) || '1');
+          if (cell.kind === 'clue') return 'X';
+          return '#';
+        })
+        .join('')
+    );
+  }
+
+  function pencilToJSON(pencil) {
+    return pencil.map((row) => row.map((set) => (set && set.size ? Array.from(set).sort((a, b) => a - b) : [])));
+  }
+
+  function pencilFromJSON(raw, rows, cols) {
+    const out = Array.from({ length: rows }, () => Array.from({ length: cols }, () => new Set()));
+    if (!Array.isArray(raw)) return out;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const list = raw[r] && raw[r][c];
+        if (Array.isArray(list)) {
+          list.forEach((n) => {
+            if (n >= 1 && n <= 9) out[r][c].add(n);
+          });
+        }
+      }
+    }
+    return out;
+  }
+
+  function clearAnkSave(diff) {
+    try {
+      localStorage.removeItem(saveStorageKey(diff));
+      const last = localStorage.getItem(SAVE_LAST_KEY);
+      if (last === diff) localStorage.removeItem(SAVE_LAST_KEY);
+    } catch (e) {}
+  }
+
+  function readAnkSave(diff) {
+    try {
+      const raw = localStorage.getItem(saveStorageKey(diff));
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      if (!data || data.v !== SAVE_VER || !Array.isArray(data.rows) || !data.rows.length) {
+        clearAnkSave(diff);
+        return null;
+      }
+      if (!data.values || !Array.isArray(data.values)) {
+        clearAnkSave(diff);
+        return null;
+      }
+      const parsed = parseBankString(data.rows);
+      const rows = parsed.board.length;
+      const cols = parsed.board[0].length;
+      if (data.values.length !== rows || (data.values[0] && data.values[0].length !== cols)) {
+        clearAnkSave(diff);
+        return null;
+      }
+      const qualityDiff = data.difficulty === 'daily' ? 'medium' : data.difficulty || diff;
+      if (!whitesConnected(parsed.board) || !structuralOk(parsed.board, (QUALITY[qualityDiff] || QUALITY.easy).minWhites)) {
+        clearAnkSave(diff);
+        return null;
+      }
+      return data;
+    } catch (e) {
+      clearAnkSave(diff);
+      return null;
+    }
+  }
+
+  function writeAnkSave(diff, payload) {
+    try {
+      localStorage.setItem(saveStorageKey(diff), JSON.stringify(payload));
+      localStorage.setItem(SAVE_LAST_KEY, diff);
+    } catch (e) {}
+  }
+
+  function puzzleFromSave(data) {
+    const parsed = parseBankString(data.rows);
+    return {
+      board: parsed.board,
+      solution: parsed.solution,
+      source: data.source || 'save',
+      difficulty: data.difficulty || 'easy',
+      id: data.id || 'resume',
+      dailyKey: data.dailyKey,
+    };
+  }
+
+  function formatPbBestLine(diff) {
+    if (typeof getGamePB !== 'function') return '';
+    const pbId = typeof ankJodPbGameId === 'function' ? ankJodPbGameId(diff) : 'ankjod';
+    const pb = getGamePB(pbId);
+    if (pb == null) return '';
+    return 'Best ' + formatTime(pb * 1000);
+  }
+
+  function offerContinueOrNew(ctx, diff, save, onDone) {
+    const sheet = document.createElement('div');
+    sheet.className = 'game-pause-scrim';
+    sheet.style.zIndex = '90';
+    const label = (DIFFS.find((d) => d.id === diff) || {}).label || diff;
+    const elapsed = formatTime(Math.max(0, Number(save.elapsedMs) || 0));
+    sheet.innerHTML = `<div class="game-pause-card" role="dialog" aria-label="Continue puzzle">
+      <h3 class="game-pause-title">${label} in progress</h3>
+      <p style="font-size:13px;color:var(--muted,#8A7F72);margin:0 0 16px;line-height:1.4;">Saved at ${elapsed}. Continue where you left off, or start a new board.</p>
+      <button type="button" class="game-result-btn game-result-btn--primary" data-aj-cont>Continue</button>
+      <button type="button" class="game-result-btn" data-aj-new style="margin-top:8px;">New puzzle</button>
+      <button type="button" class="game-result-btn" data-aj-cancel style="margin-top:8px;">Cancel</button>
+    </div>`;
+    const device = document.querySelector('.device') || document.body;
+    device.appendChild(sheet);
+    const close = () => sheet.remove();
+    sheet.querySelector('[data-aj-cont]')?.addEventListener('click', () => {
+      close();
+      if (onDone) onDone();
+      startAnkJodGame(ctx, diff, { resume: save });
+    });
+    sheet.querySelector('[data-aj-new]')?.addEventListener('click', () => {
+      clearAnkSave(diff);
+      close();
+      if (onDone) onDone();
+      startAnkJodGame(ctx, diff);
+    });
+    sheet.querySelector('[data-aj-cancel]')?.addEventListener('click', close);
+    sheet.addEventListener('click', (e) => {
+      if (e.target === sheet) close();
+    });
+  }
+
   // ─── Screens ───────────────────────────────────────────────────────────────
 
   function openDifficultyPicker(ctx) {
     const overlay = document.createElement('div');
     overlay.style.cssText =
       'position:absolute;inset:0;background:var(--cream,#F7F3EC);z-index:80;display:flex;flex-direction:column;';
+    let lastDiff = null;
+    try {
+      lastDiff = localStorage.getItem(SAVE_LAST_KEY);
+    } catch (e) {}
+    const lastSave = lastDiff ? readAnkSave(lastDiff) : null;
+    const continueBanner = lastSave
+      ? `<button type="button" id="kkContinueLast" class="kk-diff-btn" style="width:100%;padding:14px 16px;background:var(--white,#fff);border:2px solid var(--line,#E8E0D4);border-radius:16px;margin-bottom:14px;text-align:left;cursor:pointer;">
+          <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;">Continue last puzzle</div>
+          <div style="font-size:12px;color:var(--muted,#8A7F72);margin-top:2px;">${(DIFFS.find((d) => d.id === lastDiff) || {}).label || lastDiff} · ${formatTime(Math.max(0, Number(lastSave.elapsedMs) || 0))}</div>
+        </button>`
+      : '';
     overlay.innerHTML = `
-      ${gameChromeHtml({title:'Ank Jod',subtitle:'Choose difficulty',backId:'kkDiffBack'})}
+      ${gameChromeHtml({ title: 'Ank Jod', subtitle: 'Choose difficulty', backId: 'kkDiffBack' })}
       <div style="flex:1;overflow-y:auto;padding:20px 16px;">
         <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:22px;margin-bottom:6px;">Pick a challenge</div>
-        <div style="font-size:13px;color:var(--muted,#8A7F72);margin-bottom:18px;line-height:1.4;">Fill white cells with 1–9. No repeats in a run — each clue is that run’s sum. Pick Daily for today’s seeded board.</div>
-        ${DIFFS.map(
-          (d) => `
+        <div style="font-size:13px;color:var(--muted,#8A7F72);margin-bottom:18px;line-height:1.4;">Fill white cells with 1–9. No repeats in a run — each clue is that run’s sum. Progress saves per difficulty.</div>
+        ${continueBanner}
+        ${DIFFS.map((d) => {
+          const save = readAnkSave(d.id);
+          const best = formatPbBestLine(d.id);
+          const metaBits = [d.desc, best, save ? 'In progress' : ''].filter(Boolean).join(' · ');
+          return `
           <button data-diff="${d.id}" class="kk-diff-btn" style="width:100%;padding:16px;background:var(--white,#fff);border:2px solid var(--line,#E8E0D4);border-radius:16px;margin-bottom:10px;text-align:left;display:flex;align-items:center;gap:14px;cursor:pointer;">
             <span style="font-size:28px;flex-shrink:0;">${d.emoji}</span>
             <span style="flex:1;">
               <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;">${d.label}</div>
-              <div style="font-size:12px;color:var(--muted,#8A7F72);margin-top:2px;">${d.desc}</div>
+              <div style="font-size:12px;color:var(--muted,#8A7F72);margin-top:2px;">${metaBits}</div>
             </span>
             <span style="font-size:18px;color:var(--muted,#8A7F72);">›</span>
-          </button>`
-        ).join('')}
+          </button>`;
+        }).join('')}
       </div>`;
 
     const device = document.querySelector('.device');
     if (device) device.appendChild(overlay);
     else document.body.appendChild(overlay);
-    if(typeof prepareGameOverlay==='function') prepareGameOverlay(overlay,{theme:'light',gameId:'ankjod'});
+    if (typeof prepareGameOverlay === 'function') prepareGameOverlay(overlay, { theme: 'light', gameId: 'ankjod' });
 
     let unreg = null;
     const scopeId =
@@ -1352,21 +1507,57 @@
     }
 
     overlay.querySelector('#kkDiffBack').addEventListener('click', close);
-    overlay.querySelectorAll('.kk-diff-btn').forEach((btn) => {
+    overlay.querySelector('#kkContinueLast')?.addEventListener('click', () => {
+      if (!lastSave || !lastDiff) return;
+      close();
+      startAnkJodGame(ctx, lastDiff, { resume: lastSave });
+    });
+    overlay.querySelectorAll('.kk-diff-btn[data-diff]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const diff = btn.getAttribute('data-diff');
+        const save = readAnkSave(diff);
+        if (save) {
+          offerContinueOrNew(ctx, diff, save, close);
+          return;
+        }
         close();
         startAnkJodGame(ctx, diff);
       });
     });
   }
 
-  function startAnkJodGame(ctx, difficulty) {
+  function startAnkJodGame(ctx, difficulty, opts) {
+    const options = opts || {};
     let puzzle;
-    try {
-      puzzle = pickPuzzle(difficulty);
-    } catch (e) {
-      puzzle = pickPuzzle('easy');
+    let resumeElapsed = 0;
+    let resumeValues = null;
+    let resumePencil = null;
+    let resumeSelected = null;
+    let resumeLive = false;
+    let resumePencilMode = false;
+    let resumeHints = 0;
+
+    if (options.resume) {
+      try {
+        puzzle = puzzleFromSave(options.resume);
+        resumeElapsed = Math.max(0, Number(options.resume.elapsedMs) || 0);
+        resumeValues = options.resume.values;
+        resumePencil = options.resume.pencil;
+        resumeSelected = Array.isArray(options.resume.selected) ? options.resume.selected : null;
+        resumeLive = !!options.resume.liveConflict;
+        resumePencilMode = !!options.resume.pencilMode;
+        resumeHints = Math.max(0, Number(options.resume.hintsUsed) || 0);
+      } catch (e) {
+        clearAnkSave(difficulty);
+        puzzle = null;
+      }
+    }
+    if (!puzzle) {
+      try {
+        puzzle = pickPuzzle(difficulty);
+      } catch (e) {
+        puzzle = pickPuzzle('easy');
+      }
     }
     const board = puzzle.board;
     const rows = board.length;
@@ -1374,13 +1565,15 @@
     const runs = extractRuns(board);
     const runIdx = cellRunsIndex(runs, rows, cols);
 
-    let values = emptyValues(rows, cols);
-    let pencil = Array.from({ length: rows }, () => Array.from({ length: cols }, () => new Set()));
+    let values = resumeValues
+      ? resumeValues.map((row) => row.map((v) => (v >= 1 && v <= 9 ? v : 0)))
+      : emptyValues(rows, cols);
+    let pencil = resumePencil ? pencilFromJSON(resumePencil, rows, cols) : Array.from({ length: rows }, () => Array.from({ length: cols }, () => new Set()));
     let selected = null; // [r,c]
     let showMistakes = false;
-    let liveConflict = false; // default OFF — Check remains the hardcore gate
-    let pencilMode = false;
-    let statusMsg = '';
+    let liveConflict = resumeLive; // default OFF — Check remains the hardcore gate
+    let pencilMode = resumePencilMode;
+    let statusMsg = options.resume ? 'Resumed' : '';
     let won = false;
     let winShown = false;
     let timerId = null;
@@ -1390,9 +1583,10 @@
     let cellSize = 36;
     let hintFocusRun = null; // run index for Hint step 1
     let lastHintWasFocus = false;
-    let hintsUsed = 0;
+    let hintsUsed = resumeHints;
     let hintFilled = new Set(); // "r,c" subtle style
     let coachEl = null;
+    let saveTimer = null;
 
     const UNDO_MAX = 40;
     let undoStack = [];
@@ -1404,6 +1598,48 @@
     if (typeof prepareGameOverlay === 'function') prepareGameOverlay(root, { theme: 'light', gameId: 'ankjod', coach: false });
 
     const diffMeta = DIFFS.find((d) => d.id === puzzle.difficulty) || DIFFS[0];
+    const saveDiff = puzzle.difficulty || difficulty || 'easy';
+
+    function getPlayElapsed() {
+      return session ? session.getElapsedMs() : resumeElapsed;
+    }
+
+    function persistSave() {
+      if (won) return;
+      const rowsPack = packBoardRows(board, puzzle.solution);
+      writeAnkSave(saveDiff, {
+        v: SAVE_VER,
+        difficulty: saveDiff,
+        id: puzzle.id || fingerprintRowsSafe(rowsPack),
+        dailyKey: puzzle.dailyKey || null,
+        source: puzzle.source || 'play',
+        rows: rowsPack,
+        values: values.map((row) => row.slice()),
+        pencil: pencilToJSON(pencil),
+        elapsedMs: getPlayElapsed(),
+        selected: selected ? [selected[0], selected[1]] : null,
+        liveConflict,
+        pencilMode,
+        hintsUsed,
+        savedAt: Date.now(),
+      });
+    }
+
+    function scheduleSave() {
+      if (saveTimer) clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        saveTimer = null;
+        persistSave();
+      }, 280);
+    }
+
+    function fingerprintRowsSafe(rowList) {
+      try {
+        return 'gen_' + hashSeed(rowList.join('|')).toString(16);
+      } catch (e) {
+        return 'gen_' + Date.now();
+      }
+    }
 
     function computeCellSize() {
       const availW = Math.max(240, (root.clientWidth || 360) - 28);
@@ -1471,6 +1707,7 @@
       restoreMeta(entry);
       updateUndoButtons();
       if (typeof gameFeedback === 'function') gameFeedback('select');
+      scheduleSave();
       refreshPlay();
     }
 
@@ -1491,6 +1728,7 @@
       restoreMeta(entry);
       updateUndoButtons();
       if (typeof gameFeedback === 'function') gameFeedback('select');
+      scheduleSave();
       refreshPlay();
     }
 
@@ -1591,7 +1829,10 @@
         if (typeof gameFeedback === 'function') gameFeedback('valid');
         const a = analyzeMistakes(board, values);
         if (a.won) finishWin();
-        else refreshPlay();
+        else {
+          scheduleSave();
+          refreshPlay();
+        }
         return;
       }
 
@@ -1703,6 +1944,7 @@
       pushHistory(before);
       statusMsg = scope === 'run' ? 'Auto-notes on this run' : 'Auto-notes on empty cells';
       if (typeof gameFeedback === 'function') gameFeedback('place');
+      scheduleSave();
       refreshPlay();
     }
 
@@ -1747,6 +1989,7 @@
       pushHistory(before);
       statusMsg = 'Cleaned impossible pencil notes';
       if (typeof gameFeedback === 'function') gameFeedback('select');
+      scheduleSave();
       refreshPlay();
     }
 
@@ -1769,6 +2012,8 @@
           <ul class="kk-coach-tips">
             <li>Digits 1–9 · no repeats inside a run</li>
             <li>Each clue is the sum of its across or down run</li>
+            <li>Check finds conflicts · Hint teaches · Pencil long-press for auto-notes</li>
+            <li>Leave anytime — Continue restores your board and timer</li>
             <li>Pencil for notes · Check for conflicts · Hint when stuck</li>
           </ul>
           <button type="button" class="kk-coach-dismiss game-tap-target" data-kk-coach-ok>Got it</button>
@@ -1921,7 +2166,7 @@
         .map((n) => `<button type="button" data-n="${n}" class="kk-num game-tap-target">${n}</button>`)
         .join('');
 
-      const elapsed = session ? session.getElapsedMs() : 0;
+      const elapsed = getPlayElapsed();
       root.innerHTML = `
         ${gameChromeHtml({
           title: 'Ank Jod',
@@ -1969,7 +2214,14 @@
         pauseCtrl = createGamePauseController({
           host: root,
           pauseBtnId: 'kkPause',
+          onPause: () => {
+            if (session && typeof session.pauseClock === 'function') session.pauseClock();
+          },
+          onResume: () => {
+            if (session && typeof session.resumeClock === 'function') session.resumeClock();
+          },
           onQuit: () => {
+            persistSave();
             if (session) session.end(won ? 'won' : 'quit');
           },
         });
@@ -1982,13 +2234,16 @@
         }
         const ask =
           typeof confirmLeaveGame === 'function'
-            ? confirmLeaveGame({ title: 'Leave Ank Jod?', body: 'Puzzle progress will be lost.' })
-            : Promise.resolve(window.confirm('Leave Ank Jod?'));
+            ? confirmLeaveGame({ title: 'Leave Ank Jod?', body: 'Progress will be saved — you can Continue later.' })
+            : Promise.resolve(window.confirm('Leave Ank Jod? Progress will be saved.'));
         Promise.resolve(ask).then((ok) => {
-          if (ok && session) session.end('quit');
+          if (!ok) return;
+          persistSave();
+          if (session) session.end('quit');
         });
       });
       root.querySelector('#kkNew')?.addEventListener('click', () => {
+        clearAnkSave(saveDiff);
         if (session) session.end('restart');
         openDifficultyPicker(ctx);
       });
@@ -2045,6 +2300,7 @@
           hintFocusRun = null;
           hintFilled = new Set();
           statusMsg = 'Board cleared';
+          scheduleSave();
           refreshPlay();
         });
       });
@@ -2144,6 +2400,7 @@
         showMistakes = false;
         statusMsg = '';
         if (typeof gameFeedback === 'function') gameFeedback('select');
+        scheduleSave();
         refreshPlay();
         return;
       }
@@ -2162,6 +2419,7 @@
       if (a.won) finishWin();
       else {
         advanceAfterPlace(r, c);
+        scheduleSave();
         refreshPlay();
       }
     }
@@ -2177,19 +2435,24 @@
       showMistakes = false;
       statusMsg = '';
       if (typeof gameFeedback === 'function') gameFeedback('select');
+      scheduleSave();
       refreshPlay();
     }
 
     function paintWinResult() {
       shellBuilt = false;
-      const elapsed = session ? session.getElapsedMs() : 0;
+      clearAnkSave(saveDiff);
+      const elapsed = getPlayElapsed();
       const secs = Math.round(elapsed / 1000);
-      if (typeof setGamePB === 'function') setGamePB('ankjod', secs);
-      const vsBest = typeof formatVsBest === 'function' ? formatVsBest('ankjod', secs) : '';
+      const pbId = typeof ankJodPbGameId === 'function' ? ankJodPbGameId(saveDiff) : 'ankjod';
+      if (typeof setGamePB === 'function') setGamePB(pbId, secs);
+      const vsBest = typeof formatVsBest === 'function' ? formatVsBest(pbId, secs) : '';
+      const dailyBit = saveDiff === 'daily' && puzzle.dailyKey ? ` · ${puzzle.dailyKey}` : '';
       const shareStats = {
         scoreLine: formatTime(elapsed),
         score: secs,
-        meta: `${diffMeta.label}${vsBest ? ` · ${vsBest}` : ''}`,
+        meta: `${diffMeta.label}${dailyBit}${vsBest ? ` · ${vsBest}` : ''}`,
+        text: `I solved Ank Jod (${diffMeta.label}${dailyBit}) in ${formatTime(elapsed)} on Chaupaal. Can you beat that?`,
       };
       if (pauseCtrl) {
         try {
@@ -2205,12 +2468,13 @@
                 gameId: 'ankjod',
                 glyph: '✓',
                 title: 'Puzzle solved',
-                subtitle: `${diffMeta.label} · ${formatTime(elapsed)}`,
+                subtitle: `${diffMeta.label}${dailyBit} · ${formatTime(elapsed)}`,
                 vsBest: vsBest || undefined,
                 shareCardHtml: typeof buildGameShareCard === 'function' ? buildGameShareCard('ankjod', shareStats) : '',
                 actions: [
                   { label: 'Play again', primary: true, id: 'again' },
                   { label: 'Share', primary: false, id: 'share' },
+                  { label: 'Challenge friend', primary: false, id: 'challenge' },
                   { label: 'Done', primary: false, id: 'done' },
                 ],
               })
@@ -2228,6 +2492,22 @@
           share: () => {
             if (typeof shareGameResult === 'function') shareGameResult('ankjod', shareStats);
           },
+          challenge: async () => {
+            if (typeof openFriendPickerSheet === 'function') {
+              const f = await openFriendPickerSheet({
+                title: 'Challenge a friend',
+                subtitle: `Beat my ${diffMeta.label} time · ${formatTime(elapsed)}`,
+              });
+              if (f && typeof shareGameResult === 'function') {
+                shareGameResult('ankjod', {
+                  ...shareStats,
+                  text: `Hey ${f.name} — beat my Ank Jod ${diffMeta.label} time of ${formatTime(elapsed)} on Chaupaal!`,
+                });
+              }
+            } else if (typeof shareGameResult === 'function') {
+              shareGameResult('ankjod', shareStats);
+            }
+          },
           done: () => {
             if (session) session.end('won');
           },
@@ -2241,24 +2521,21 @@
       winShown = true;
       showMistakes = false;
       statusMsg = 'Puzzle solved!';
+      clearAnkSave(saveDiff);
       paintWinResult();
       if (typeof gameFeedback === 'function') gameFeedback('win');
+      const secs = Math.round(getPlayElapsed() / 1000);
       if (typeof recordGameResult === 'function') {
         try {
-          recordGameResult('ankjod', true);
-        } catch (e) {}
-      }
-      if (window.DangalEconomy && typeof DangalEconomy.reportGameEnd === 'function') {
-        try {
-          DangalEconomy.reportGameEnd({
-            gameType: 'ankjod',
-            result: 'won',
-            sessionId: session?.id || 'ankjod_' + Date.now(),
-            matchId: session?.id || '',
-            stake: 0,
+          recordGameResult('ankjod', true, false, {
+            score: secs,
+            difficulty: saveDiff,
+            daily: saveDiff === 'daily',
+            dailyKey: puzzle.dailyKey || null,
           });
         } catch (e) {}
       }
+      // Economy reported once via session.end('won') — avoid double-count
     }
 
     function onKey(e) {
@@ -2339,6 +2616,7 @@
       type: 'ankjod',
       title: 'Ank Jod',
       mode: 'solo',
+      elapsedOffsetMs: resumeElapsed,
       context: {
         chat: ctx && ctx.chat,
         overlayScope:
@@ -2352,18 +2630,29 @@
       },
       init() {
         document.addEventListener('keydown', onKey);
-        outer: for (let r = 0; r < rows; r++) {
-          for (let c = 0; c < cols; c++) {
-            if (board[r][c].kind === 'cell') {
-              selected = [r, c];
-              break outer;
+        if (resumeSelected && board[resumeSelected[0]] && board[resumeSelected[0]][resumeSelected[1]]?.kind === 'cell') {
+          selected = [resumeSelected[0], resumeSelected[1]];
+        } else {
+          outer: for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+              if (board[r][c].kind === 'cell') {
+                selected = [r, c];
+                break outer;
+              }
             }
           }
         }
+        if (typeof markGamePlayed === 'function') {
+          try {
+            markGamePlayed('ankjod');
+          } catch (e) {}
+        }
         timerId = setInterval(() => {
+          if (pauseCtrl && pauseCtrl.isPaused()) return;
           const el = root.querySelector('#kkTimer');
           if (el && session) el.textContent = formatTime(session.getElapsedMs());
         }, 1000);
+        scheduleSave();
       },
       render() {
         paint();
@@ -2380,6 +2669,10 @@
         if (timerId) {
           clearInterval(timerId);
           timerId = null;
+        }
+        if (saveTimer) {
+          clearTimeout(saveTimer);
+          saveTimer = null;
         }
         if (pauseCtrl) {
           try {

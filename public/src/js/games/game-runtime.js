@@ -38,6 +38,9 @@
       (typeof window.OVERLAY_SCOPE_CHAT !== 'undefined' ? window.OVERLAY_SCOPE_CHAT : 'chat');
 
     let startedAt = 0;
+    let elapsedOffset = Math.max(0, Number(config.elapsedOffsetMs) || 0);
+    let pausedAt = 0;
+    let pausedAccum = 0;
     let ended = false;
     let cleaning = false;
     let cleaned = false;
@@ -48,8 +51,20 @@
     const userEnd = typeof config.end === 'function' ? config.end : null;
 
     function getElapsedMs() {
-      if (!startedAt) return 0;
-      return Date.now() - startedAt;
+      if (!startedAt) return elapsedOffset;
+      const end = pausedAt || Date.now();
+      return elapsedOffset + Math.max(0, end - startedAt - pausedAccum);
+    }
+
+    function pauseClock() {
+      if (!startedAt || pausedAt || ended) return;
+      pausedAt = Date.now();
+    }
+
+    function resumeClock() {
+      if (!pausedAt) return;
+      pausedAccum += Date.now() - pausedAt;
+      pausedAt = 0;
     }
 
     function trackComplete(result) {
@@ -239,6 +254,8 @@
       },
 
       getElapsedMs,
+      pauseClock,
+      resumeClock,
       getRoot() {
         return rootEl;
       },

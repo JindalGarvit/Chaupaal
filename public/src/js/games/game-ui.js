@@ -136,8 +136,8 @@
     ],
     ankjod: [
       'Across/down runs must sum to the clue — digits 1–9, no repeats in a run',
-      'Pencil notes · Check for conflicts · Hint teaches combos when stuck',
-      'Daily is one seeded board · Easy → Hard steps up density',
+      'Pencil notes · Check finds conflicts · Hint teaches when stuck · long-press Pencil for auto-notes',
+      'Continue mid-puzzle · best times per difficulty · Daily is one seeded board',
     ],
     streetcricket: ['Tap Bowl, then Hit in the green window', 'Six balls · two wickets ends the over', 'Practice timing — full matches later'],
     gullykick: ['Pick left, center, or right', 'Beat the keeper’s dive', 'Five kicks per shootout'],
@@ -169,6 +169,10 @@
     tiptap: { key: 'chaupaal_pb_tiptap', label: 'pts', higherBetter: true },
     wordguess: { key: 'chaupaal_pb_wordguess', label: 'guesses', higherBetter: false },
     ankjod: { key: 'chaupaal_pb_ankjod', label: 's', higherBetter: false },
+    ankjod_easy: { key: 'chaupaal_pb_ankjod_easy', label: 's', higherBetter: false },
+    ankjod_medium: { key: 'chaupaal_pb_ankjod_medium', label: 's', higherBetter: false },
+    ankjod_hard: { key: 'chaupaal_pb_ankjod_hard', label: 's', higherBetter: false },
+    ankjod_daily: { key: 'chaupaal_pb_ankjod_daily', label: 's', higherBetter: false },
     quiz: { key: 'chaupaal_pb_quiz', label: '/10', higherBetter: true },
     streetcricket: { key: 'chaupaal_pb_streetcricket', label: 'runs', higherBetter: true },
     gullykick: { key: 'chaupaal_pb_gullykick', label: 'goals', higherBetter: true },
@@ -470,6 +474,13 @@
   }
 
   /* ── Personal bests ── */
+  /** Ank Jod per-difficulty PB ids (legacy overall stays `ankjod`). */
+  function ankJodPbGameId(difficulty) {
+    const d = String(difficulty || '').toLowerCase();
+    if (d === 'easy' || d === 'medium' || d === 'hard' || d === 'daily') return 'ankjod_' + d;
+    return 'ankjod';
+  }
+
   function getGamePB(gameId) {
     const meta = PB_KEYS[gameId];
     if (!meta) return null;
@@ -497,6 +508,10 @@
     if (better) {
       localStorage.setItem(meta.key, String(next));
       if (gameId === 'rushrunner') localStorage.setItem('rushrunner_best', String(next));
+      // Per-diff Ank Jod wins also refresh overall legacy key (lower time = better)
+      if (String(gameId).indexOf('ankjod_') === 0) {
+        setGamePB('ankjod', next);
+      }
       return next;
     }
     return prev;
@@ -507,12 +522,20 @@
     if (!meta || value == null) return '';
     const pb = getGamePB(gameId);
     const unit = meta.label || '';
-    if (pb == null) return `First score · ${value}${unit}`;
+    const fmt =
+      String(gameId).indexOf('ankjod') === 0
+        ? (n) => {
+            const s = Math.max(0, Math.round(Number(n) || 0));
+            const m = Math.floor(s / 60);
+            return m + ':' + String(s % 60).padStart(2, '0');
+          }
+        : (n) => n + unit;
+    if (pb == null) return `First score · ${fmt(value)}`;
     const better =
       meta.higherBetter ? Number(value) > pb : Number(value) < pb;
-    if (better) return `New best · ${value}${unit} (was ${pb}${unit})`;
-    if (Number(value) === pb) return `Tied best · ${pb}${unit}`;
-    return `${value}${unit} · Best ${pb}${unit}`;
+    if (better) return `New best · ${fmt(value)} (was ${fmt(pb)})`;
+    if (Number(value) === pb) return `Tied best · ${fmt(pb)}`;
+    return `${fmt(value)} · Best ${fmt(pb)}`;
   }
 
   /* ── Share card + share helpers ── */
@@ -2061,6 +2084,7 @@
   window.getGamePB = getGamePB;
   window.setGamePB = setGamePB;
   window.formatVsBest = formatVsBest;
+  window.ankJodPbGameId = ankJodPbGameId;
   window.buildGameShareCard = buildGameShareCard;
   window.buildBeatScoreLink = buildBeatScoreLink;
   window.shareGameResult = shareGameResult;
