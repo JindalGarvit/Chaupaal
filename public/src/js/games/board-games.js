@@ -1,9 +1,13 @@
 // ===================== FIVE IN A ROW (Gomoku) =====================
-function openFiveInRowGame(chat){
-  const SIZE=13;
+function openFiveInRowGame(chat, opts){
+  const options=opts||{};
+  const launchSize=Number(options.size!=null?options.size:(chat&&chat.firSize)!=null?chat.firSize:(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.firSize))||15;
+  let SIZE=launchSize===13?13:15;
   let board=Array(SIZE).fill(null).map(()=>Array(SIZE).fill(null));
   let gameOver=false;let winLine=null;
   let lastMove=null;let dropCell=null;let statusNote='';
+  let ghostRC=null; // [r,c] translucent preview
+  let threatKeys=new Set();
   const FIR_SECS=18;let firTimer=FIR_SECS;let firInterval=null;let warned=false;
   const liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat);
   const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat):null;
@@ -11,6 +15,7 @@ function openFiveInRowGame(chat){
   let liveHandle=null;
   let applyingLive=false;
   let leaveConfirmed=false;
+  let sizeLocked=liveOn; // Live size fixed at match start; Practice can Quick-toggle while empty
 
   const overlay=document.createElement('div');
   overlay.style.cssText='position:absolute;inset:0;background:#1a1a2e;z-index:80;display:flex;flex-direction:column;';
@@ -35,6 +40,30 @@ function openFiveInRowGame(chat){
   const schedule=(fn,ms)=>gs?gs.schedule(fn,ms):setTimeout(fn,ms);
   const close=()=>{if(gs)gs.close();else{stopFirTimer();overlay.remove();}};
 
+  function boardEmpty(){
+    for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++)if(board[r][c])return false;
+    return true;
+  }
+
+  function serializeBoard(){
+    return board.map(row=>row.map(cell=>cell||'.').join('')).join('|');
+  }
+
+  function adoptSize(n){
+    const next=n===13?13:15;
+    if(next===SIZE)return;
+    SIZE=next;
+    board=Array(SIZE).fill(null).map(()=>Array(SIZE).fill(null));
+    lastMove=null;dropCell=null;winLine=null;ghostRC=null;threatKeys=new Set();
+  }
+
+  function setBoardSize(n){
+    if(sizeLocked||!boardEmpty()||gameOver)return;
+    adoptSize(n);
+    if(typeof gameFeedback==='function')gameFeedback('select');
+    render();
+  }
+
   async function askFirLeave(){
     if(gameOver){close();return;}
     if(typeof DangalLive!=='undefined'&&DangalLive.requestLeave){
@@ -53,13 +82,20 @@ function openFiveInRowGame(chat){
   function passTurnSoft(){
     if(!myTurn||gameOver)return;
     statusNote='Time up — turn passed';
+    ghostRC=null;
     if(typeof gameFeedback==='function')gameFeedback('invalid');
     if(typeof showToast==='function')showToast('Time’s up — your turn passed');
     myTurn=false;stopFirTimer();
     render();
     if(liveOn){
       if(liveHandle&&liveRoles){
-        liveHandle.push({status:'playing',turn:liveRoles.opp,lastMove:lastMove?{r:lastMove[0],c:lastMove[1],uid:liveRoles.me}:null});
+        liveHandle.push({
+          status:'playing',
+          turn:liveRoles.opp,
+          size:SIZE,
+          lastMove:lastMove?{r:lastMove[0],c:lastMove[1],uid:liveRoles.me}:null,
+          board:serializeBoard(),
+        });
         if(typeof DangalLive!=='undefined'&&DangalLive.pingTurn)DangalLive.pingTurn(liveRoles.opp,'fiveinrow',{chatId:chat&&(chat.firestoreId||chat.id)});
       }
       return;
@@ -92,6 +128,21 @@ function openFiveInRowGame(chat){
   }
   function stopFirTimer(){clearInterval(firInterval);firInterval=null;}
 
+  function lineLenThrough(r,c,sym,dr,dc){
+    let count=1;
+    for(let s=1;s<SIZE;s++){
+      const nr=r+dr*s,nc=c+dc*s;
+      if(nr<0||nr>=SIZE||nc<0||nc>=SIZE||board[nr][nc]!==sym)break;
+      count++;
+    }
+    for(let s=1;s<SIZE;s++){
+      const nr=r-dr*s,nc=c-dc*s;
+      if(nr<0||nr>=SIZE||nc<0||nc>=SIZE||board[nr][nc]!==sym)break;
+      count++;
+    }
+    return count;
+  }
+
   function checkFiveWin(r,c,sym){
     const dirs=[[0,1],[1,0],[1,1],[1,-1]];
     for(const[dr,dc] of dirs){
@@ -101,6 +152,26 @@ function openFiveInRowGame(chat){
       if(cells.length>=5)return cells.slice(0,5);
     }
     return null;
+  }
+
+  /** Lightweight threat cues: empties that make 4-in-a-row for either side (visual only). */
+  function recomputeThreats(){
+    const next=new Set();
+    if(gameOver){threatKeys=next;return;}
+    const dirs=[[0,1],[1,0],[1,1],[1,-1]];
+    for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
+      if(board[r][c])continue;
+      for(const sym of ['X','O']){
+        board[r][c]=sym;
+        let hot=false;
+        for(const[dr,dc] of dirs){
+          if(lineLenThrough(r,c,sym,dr,dc)>=4){hot=true;break;}
+        }
+        board[r][c]=null;
+        if(hot){next.add(r+'_'+c);break;}
+      }
+    }
+    threatKeys=next;
   }
 
   function getAIMoveFIR(){
@@ -128,7 +199,9 @@ function openFiveInRowGame(chat){
   }
 
   function playMove(r,c,who){
-    if(!alive()||board[r][c]||gameOver)return;
+    if(!alive()||r<0||c<0||r>=SIZE||c>=SIZE||board[r][c]||gameOver)return;
+    sizeLocked=true;
+    ghostRC=null;
     const sym=who==='me'?'X':'O';
     board[r][c]=sym;
     lastMove=[r,c];
@@ -137,8 +210,9 @@ function openFiveInRowGame(chat){
     if(typeof gameFeedback==='function')gameFeedback(who==='me'?'stone':'move');
     if(typeof DSL!=='undefined'&&DSL.onMove)DSL.onMove('fiveinrow');
     const win=checkFiveWin(r,c,sym);
+    recomputeThreats();
     if(win){
-      gameOver=true;winLine=win;stopFirTimer();
+      gameOver=true;winLine=win;threatKeys=new Set();stopFirTimer();
       if(gs)gs.setOutcome(who==='me'?'won':'lost');
       if(typeof recordGameResult==='function')recordGameResult('fiveinrow',who==='me');
       if(typeof gameFeedback==='function')gameFeedback(who==='me'?'win':'lose');
@@ -147,14 +221,15 @@ function openFiveInRowGame(chat){
           lastMove:{r,c,uid:liveRoles&&liveRoles.me},
           status:'over',
           turn:null,
+          size:SIZE,
           winner:who==='me'?(liveRoles&&liveRoles.me):(liveRoles&&liveRoles.opp),
-          board:board.map(row=>row.map(c=>c||'.').join('')).join('|'),
+          board:serializeBoard(),
         });
       }
       render();return;
     }
     if(board.every(row=>row.every(Boolean))){
-      gameOver=true;stopFirTimer();
+      gameOver=true;threatKeys=new Set();stopFirTimer();
       if(gs)gs.setOutcome('draw');
       if(typeof recordGameResult==='function')recordGameResult('fiveinrow',false,true);
       if(typeof gameFeedback==='function')gameFeedback('draw');
@@ -163,8 +238,9 @@ function openFiveInRowGame(chat){
           lastMove:{r,c,uid:liveRoles&&liveRoles.me},
           status:'over',
           turn:null,
+          size:SIZE,
           winner:null,
-          board:board.map(row=>row.map(c=>c||'.').join('')).join('|'),
+          board:serializeBoard(),
         });
       }
       render();return;
@@ -177,7 +253,8 @@ function openFiveInRowGame(chat){
         lastMove:{r,c,uid:liveRoles&&liveRoles.me},
         status:'playing',
         turn:liveRoles?liveRoles.opp:'',
-        board:board.map(row=>row.map(c=>c||'.').join('')).join('|'),
+        size:SIZE,
+        board:serializeBoard(),
       });
       if(typeof DangalLive!=='undefined'&&DangalLive.pingTurn&&liveRoles){
         DangalLive.pingTurn(liveRoles.opp,'fiveinrow',{chatId:chat&&(chat.firestoreId||chat.id)});
@@ -185,6 +262,74 @@ function openFiveInRowGame(chat){
       return;
     }
     if(!myTurn&&!gameOver&&!liveOn)schedule(()=>{if(!alive())return;const[ar,ac]=getAIMoveFIR();playMove(ar,ac,'opp');},700);
+  }
+
+  function cellFromPointer(boardEl,clientX,clientY){
+    const rect=boardEl.getBoundingClientRect();
+    if(rect.width<=0||rect.height<=0)return null;
+    const x=clientX-rect.left;
+    const y=clientY-rect.top;
+    if(x<0||y<0||x>=rect.width||y>=rect.height)return null;
+    const c=Math.min(SIZE-1,Math.max(0,Math.floor(x/(rect.width/SIZE))));
+    const r=Math.min(SIZE-1,Math.max(0,Math.floor(y/(rect.height/SIZE))));
+    return[r,c];
+  }
+
+  function setGhost(r,c){
+    if(!myTurn||gameOver||board[r][c]){
+      if(ghostRC){ghostRC=null;paintGhostOnly();}
+      return;
+    }
+    if(ghostRC&&ghostRC[0]===r&&ghostRC[1]===c)return;
+    ghostRC=[r,c];
+    paintGhostOnly();
+  }
+
+  function clearGhost(){
+    if(!ghostRC)return;
+    ghostRC=null;
+    paintGhostOnly();
+  }
+
+  function paintGhostOnly(){
+    const boardEl=document.getElementById('firBoard');
+    if(!boardEl)return;
+    boardEl.querySelectorAll('.fir-stone--ghost').forEach(el=>el.remove());
+    boardEl.querySelectorAll('.fir-cell--ghost').forEach(el=>el.classList.remove('fir-cell--ghost'));
+    if(!ghostRC||!myTurn||gameOver)return;
+    const[r,c]=ghostRC;
+    if(board[r][c])return;
+    const sq=boardEl.children[r*SIZE+c];
+    if(!sq)return;
+    sq.classList.add('fir-cell--ghost');
+    const stone=document.createElement('span');
+    stone.className='fir-stone fir-stone--ghost fir-stone--black';
+    stone.setAttribute('aria-hidden','true');
+    sq.appendChild(stone);
+  }
+
+  function wireBoardInteractions(boardEl){
+    if(!boardEl||gameOver)return;
+    boardEl.style.touchAction='none';
+    const onMove=e=>{
+      if(!myTurn||gameOver)return;
+      const src=e.touches&&e.touches[0]?e.touches[0]:e;
+      if(src.clientX==null)return;
+      const rc=cellFromPointer(boardEl,src.clientX,src.clientY);
+      if(!rc){clearGhost();return;}
+      setGhost(rc[0],rc[1]);
+    };
+    const onLeave=()=>clearGhost();
+    if(window.PointerEvent){
+      boardEl.addEventListener('pointermove',onMove);
+      boardEl.addEventListener('pointerleave',onLeave);
+      boardEl.addEventListener('pointercancel',onLeave);
+    } else {
+      boardEl.addEventListener('mousemove',onMove);
+      boardEl.addEventListener('mouseleave',onLeave);
+      boardEl.addEventListener('touchmove',e=>{e.preventDefault();onMove(e);},{passive:false});
+      boardEl.addEventListener('touchend',onLeave);
+    }
   }
 
   function render(){
@@ -197,7 +342,7 @@ function openFiveInRowGame(chat){
       const shareStats={
         scoreLine:firDrew?'Draw':(firWon?'Win':'Loss'),
         vs:`vs ${chat.name||'Opp'}`,
-        meta:'Five in a Row',
+        meta:'Five in a Row · '+SIZE+'×'+SIZE,
         text:`Chaupaal Five in a Row: ${firDrew?'draw':firWon?'I won':'tough loss'} vs ${chat.name||'Opp'}`,
       };
       resultBlock=gameResultHtml({
@@ -215,16 +360,22 @@ function openFiveInRowGame(chat){
     const modeSub=liveOn
       ?(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel?DangalLive.modeChromeLabel(true):'Live 1v1')
       :(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel?DangalLive.modeChromeLabel(false,'vs AI'):'Practice vs AI');
+    const sizeLabel=SIZE+'×'+SIZE;
+    const showSizePick=!liveOn&&!sizeLocked&&boardEmpty()&&!gameOver;
     overlay.innerHTML=`
-      ${gameChromeHtml({title:'Five in a Row',subtitle:modeSub,backId:'firBack',rightHtml:!gameOver?`<span id="firTimerEl" class="game-chrome-metric ${timerClass}">${firTimer}s</span>`:undefined})}
+      ${gameChromeHtml({title:'Five in a Row',subtitle:modeSub+' · '+sizeLabel,backId:'firBack',rightHtml:!gameOver?`<span id="firTimerEl" class="game-chrome-metric ${timerClass}">${firTimer}s</span>`:undefined})}
       ${resultBlock?`<div class="fir-result-mount">${resultBlock}</div>`:`
+      ${showSizePick?`<div class="fir-size-bar" role="group" aria-label="Board size">
+        <button type="button" class="fir-size-btn${SIZE===15?' is-active':''}" data-fir-size="15">Standard 15</button>
+        <button type="button" class="fir-size-btn${SIZE===13?' is-active':''}" data-fir-size="13">Quick 13</button>
+      </div>`:''}
       <div class="fir-hud">
         <div class="fir-hud-side fir-hud-side--you">● You</div>
         <div id="firStatusNote" class="fir-hud-note">${statusNote||(myTurn?'Place a stone':'Waiting…')}</div>
         <div class="fir-hud-side fir-hud-side--opp">○ ${chat.name||'Opp'}</div>
       </div>
       <div class="fir-board-wrap">
-        <div id="firBoard" class="fir-board" style="--fir-n:${SIZE};" role="grid" aria-label="Five in a Row board"></div>
+        <div id="firBoard" class="fir-board" style="--fir-n:${SIZE};" role="grid" aria-label="Five in a Row ${sizeLabel} board"></div>
       </div>
       ${typeof gameTurnBannerHtml==='function'
         ? gameTurnBannerHtml({
@@ -239,11 +390,11 @@ function openFiveInRowGame(chat){
       const shareStats={
         scoreLine:firDrew?'Draw':(firWon?'Win':'Loss'),
         vs:`vs ${chat.name||'Opp'}`,
-        meta:'Five in a Row',
+        meta:'Five in a Row · '+SIZE+'×'+SIZE,
         text:`Chaupaal Five in a Row: ${firDrew?'draw':firWon?'I won':'tough loss'} vs ${chat.name||'Opp'}`,
       };
       wireGameResultActions(overlay,{
-        again:()=>{close();if(typeof openFiveInRowGame==='function')openFiveInRowGame(chat);},
+        again:()=>{close();openFiveInRowGame(chat,{size:SIZE});},
         share:()=>{if(typeof shareGameResult==='function')shareGameResult('fiveinrow',shareStats);},
         challenge:async()=>{
           if(typeof openFriendPickerSheet==='function'){
@@ -254,22 +405,29 @@ function openFiveInRowGame(chat){
       });
       return;
     }
+    if(showSizePick){
+      overlay.querySelectorAll('[data-fir-size]').forEach(btn=>{
+        btn.addEventListener('click',()=>setBoardSize(Number(btn.getAttribute('data-fir-size'))));
+      });
+    }
     const boardEl=document.getElementById('firBoard');
     if(!boardEl)return;
     const winSet=new Set((winLine||[]).map(([r,c])=>r+'_'+c));
     const lastKey=lastMove?lastMove[0]+'_'+lastMove[1]:'';
     for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
+      const key=r+'_'+c;
       const sq=document.createElement('button');
       sq.type='button';
       sq.className='fir-cell';
       sq.setAttribute('role','gridcell');
       sq.setAttribute('aria-label',`Row ${r+1} column ${c+1}`);
-      if(winSet.has(r+'_'+c))sq.classList.add('fir-cell--win');
+      if(winSet.has(key))sq.classList.add('fir-cell--win');
+      if(threatKeys.has(key)&&!board[r][c])sq.classList.add('fir-cell--threat');
       if(board[r][c]){
         const stone=document.createElement('span');
         stone.className='fir-stone fir-stone--'+(board[r][c]==='X'?'black':'white');
-        if(dropCell===r+'_'+c)stone.classList.add('fir-stone--drop');
-        if(lastKey===r+'_'+c)stone.classList.add('fir-stone--last');
+        if(dropCell===key)stone.classList.add('fir-stone--drop');
+        if(lastKey===key)stone.classList.add('fir-stone--last');
         sq.appendChild(stone);
       } else if(myTurn&&!gameOver){
         sq.classList.add('fir-cell--open');
@@ -278,7 +436,28 @@ function openFiveInRowGame(chat){
       boardEl.appendChild(sq);
     }
     dropCell=null;
+    wireBoardInteractions(boardEl);
+    if(ghostRC)paintGhostOnly();
   }
+
+  function applyLiveBoard(val){
+    if(!val.board||typeof val.board!=='string'||!val.board.includes('|'))return false;
+    const rows=val.board.split('|');
+    const n=Number(val.size)||rows.length;
+    if(n!==13&&n!==15)return false;
+    if(rows.length!==n)return false;
+    if(n!==SIZE)adoptSize(n);
+    sizeLocked=true;
+    for(let r=0;r<SIZE;r++){
+      const cells=rows[r].split('');
+      for(let c=0;c<SIZE;c++){
+        const ch=cells[c];
+        board[r][c]=(ch==='X'||ch==='O')?ch:null;
+      }
+    }
+    return true;
+  }
+
   if(liveOn&&liveRoles&&typeof DangalLive!=='undefined'){
     liveHandle=DangalLive.join({
       gameType:'fiveinrow',
@@ -289,47 +468,52 @@ function openFiveInRowGame(chat){
       onSnap(val){
         if(!val||applyingLive||!alive())return;
         if(val.status==='forfeit'&&!gameOver){
-          gameOver=true;stopFirTimer();
+          gameOver=true;stopFirTimer();ghostRC=null;threatKeys=new Set();
           const iWon=val.winner===liveRoles.me;
           if(gs)gs.setOutcome(iWon?'won':'lost');
           if(typeof recordGameResult==='function')recordGameResult('fiveinrow',iWon);
           render();
           return;
         }
-        if(val.board&&typeof val.board==='string'&&val.board.includes('|')){
-          const rows=val.board.split('|');
-          if(rows.length===SIZE){
-            applyingLive=true;
-            for(let r=0;r<SIZE;r++){
-              const cells=rows[r].split('');
-              for(let c=0;c<SIZE;c++){
-                const ch=cells[c];
-                board[r][c]=(ch==='X'||ch==='O')?ch:null;
-              }
-            }
-            if(val.lastMove&&val.lastMove.r!=null)lastMove=[val.lastMove.r,val.lastMove.c];
-            if(lastMove){
-              const sym=board[lastMove[0]][lastMove[1]];
-              if(sym)winLine=checkFiveWin(lastMove[0],lastMove[1],sym);
-            }
-            gameOver=val.status==='over'||!!winLine||board.every(row=>row.every(Boolean));
-            myTurn=!gameOver&&val.turn===liveRoles.me;
-            if(myTurn)startFirTimer();else stopFirTimer();
-            render();
-            applyingLive=false;
-            return;
+        if(val.size===13||val.size===15){
+          if(boardEmpty()&&Number(val.size)!==SIZE)adoptSize(Number(val.size));
+          sizeLocked=true;
+        }
+        if(applyLiveBoard(val)){
+          applyingLive=true;
+          ghostRC=null;
+          if(val.lastMove&&val.lastMove.r!=null)lastMove=[val.lastMove.r,val.lastMove.c];
+          winLine=null;
+          if(lastMove&&board[lastMove[0]]&&board[lastMove[0]][lastMove[1]]){
+            const sym=board[lastMove[0]][lastMove[1]];
+            if(sym)winLine=checkFiveWin(lastMove[0],lastMove[1],sym);
           }
+          gameOver=val.status==='over'||!!winLine||board.every(row=>row.every(Boolean));
+          if(!gameOver)recomputeThreats();else threatKeys=new Set();
+          myTurn=!gameOver&&val.turn===liveRoles.me;
+          if(myTurn)startFirTimer();else stopFirTimer();
+          render();
+          applyingLive=false;
+          return;
         }
         if(!val.lastMove)return;
         const lm=val.lastMove;
         if(!lm||lm.uid===liveRoles.me)return;
+        if(lm.r==null||lm.c==null||lm.r>=SIZE||lm.c>=SIZE)return;
         if(board[lm.r]&&board[lm.r][lm.c])return;
         applyingLive=true;
         playMove(lm.r,lm.c,'opp');
         applyingLive=false;
       },
     });
+    // Host announces size so peer goban matches before first stone
+    if(liveRoles.myColor==='w'&&liveHandle){
+      try{
+        liveHandle.push({status:'playing',turn:liveRoles.me,size:SIZE,board:serializeBoard()});
+      }catch(e){}
+    }
   }
+  recomputeThreats();
   render();if(myTurn)startFirTimer();
 }
 
@@ -3654,7 +3838,7 @@ if (typeof registerGame === 'function') {
   registerGame({
     id: 'fiveinrow',
     name: 'Five in a Row',
-    desc: 'Connect 5 · live vs a friend',
+    desc: 'Connect 5 on a 15×15 goban · live vs a friend',
     icon: '🔵',
     ratingKey: 'fiveinrow',
     gameType: 'dual',

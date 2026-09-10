@@ -129,7 +129,11 @@
       'Hard Mode reuses greens & ambers · Stats show bars, streak, and a month calendar',
       'Practice is a sealed sandbox — never touches streak or Daily stats',
     ],
-    fiveinrow: ['Connect five in a line', 'Watch diagonals as well as rows', 'Block threats before extending yours'],
+    fiveinrow: [
+      '15×15 goban (Quick 13 in Practice) — connect five in a line',
+      'Ghost preview on empty points · last stone pulses · red dots flag fours',
+      'Watch diagonals as well as rows — block threats before extending yours',
+    ],
     business: [
       'Complete colour sets, build houses evenly, collect rent',
       'Jail, doubles, auctions, mortgage/sell-back when cash is tight',
