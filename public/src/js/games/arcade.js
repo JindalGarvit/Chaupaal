@@ -25,6 +25,7 @@ function openRushRunner(){
   let shieldPulse=0,saveBanner=0,deathFocus=null,deathStall=0;
   let landCoyote=0,jumpBuffer=0,slideBuffer=0;
   let bestScore=(typeof getGamePB==='function'?getGamePB('rushrunner'):null) ?? (parseInt(localStorage.getItem('rushrunner_best')||'0',10)||0);
+  let dailyBest=(typeof getGamePB==='function'?getGamePB('rushrunner_daily'):null) ?? (parseInt(localStorage.getItem('chaupaal_pb_rushrunner_daily')||'0',10)||0);
   let raf=null,lastTime=0,directorAcc=0,scroll=0;
   let resizeObs=null,cssW=320,cssH=480,shake=0;
   let keyHandler=null;
@@ -33,15 +34,146 @@ function openRushRunner(){
   let rng=()=>Math.random();
   let lastPattern='';
   let lastPatternAt=0;
-  let upcomingCoinZ=0; // magnet staging: richest coin z ahead
+  let upcomingCoinZ=0;
+  let playMode='classic'; // classic | daily
+  let runJumps=0,runSlides=0,runPowers=0;
+  let missionFlash=0;
 
-  // Dark roads + brighter rails/lines so every theme stays readable at speed
+  const MISSION_KEY='chaupaal_rr_missions_v1';
+  const DAILY_KEY='chaupaal_rr_daily_v1';
+
+  // Theme = look + light named modifier (surfaced; subtle fair tuning)
   const THEMES=[
-    {name:'Mumbai Streets',skyTop:'#FFC56A',skyBot:'#FF7A3D',road:'#1C1C24',roadAlt:'#252530',roadEdge:'#FFB86B',line:'#FFE9A0',accent:'#E8663D',bldg:['#4A3228','#6B4634','#2E221C','#5A3A28']},
-    {name:'Delhi Metro',skyTop:'#9AD4F5',skyBot:'#4CC9F0',road:'#14141E',roadAlt:'#1C1C2A',roadEdge:'#C77DFF',line:'#E0B8FF',accent:'#4CC9F0',bldg:['#2A1B6E','#3548B8','#16162A','#3A3E55']},
-    {name:'Jaipur Fort',skyTop:'#FFC4B0',skyBot:'#E76F51',road:'#1A100C',roadAlt:'#261810',roadEdge:'#FFC857',line:'#FFE08A',accent:'#F72585',bldg:['#7A1C20','#9A3208','#4A0A12','#8A1C18']},
+    {name:'Mumbai Streets',skyTop:'#FFC56A',skyBot:'#FF7A3D',road:'#1C1C24',roadAlt:'#252530',roadEdge:'#FFB86B',line:'#FFE9A0',accent:'#E8663D',bldg:['#4A3228','#6B4634','#2E221C','#5A3A28'],modId:'coin_rush',modLabel:'Coin Rush',modHint:'Richer coin lines',coinBias:1.4,trafficBias:1.06,speedBias:1},
+    {name:'Delhi Metro',skyTop:'#9AD4F5',skyBot:'#4CC9F0',road:'#14141E',roadAlt:'#1C1C2A',roadEdge:'#C77DFF',line:'#E0B8FF',accent:'#4CC9F0',bldg:['#2A1B6E','#3548B8','#16162A','#3A3E55'],modId:'long_sprint',modLabel:'Long Sprint',modHint:'Cleaner lanes · slightly faster',coinBias:1,trafficBias:1.04,speedBias:1.08},
+    {name:'Jaipur Fort',skyTop:'#FFC4B0',skyBot:'#E76F51',road:'#1A100C',roadAlt:'#261810',roadEdge:'#FFC857',line:'#FFE08A',accent:'#F72585',bldg:['#7A1C20','#9A3208','#4A0A12','#8A1C18'],modId:'heavy_traffic',modLabel:'Heavy Traffic',modHint:'Tighter pattern cadence',coinBias:0.95,trafficBias:0.86,speedBias:1},
   ];
-  const theme=THEMES[Math.floor(Math.random()*THEMES.length)];
+  let theme=THEMES[Math.floor(Math.random()*THEMES.length)];
+
+  function dateKey(d){
+    const dt=d||new Date();
+    return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+  }
+  function hashStr(str){
+    let h=2166136261;
+    for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619);}
+    return h>>>0;
+  }
+  function loadDailyMeta(){
+    const day=dateKey();
+    try{
+      const raw=localStorage.getItem(DAILY_KEY);
+      if(raw){
+        const o=JSON.parse(raw);
+        if(o&&o.day===day&&typeof o.themeIdx==='number')return o;
+      }
+    }catch(e){}
+    const seed=hashStr('rr-daily-'+day);
+    const themeIdx=seed%THEMES.length;
+    const o={day,seed,themeIdx,best:dailyBest||0};
+    try{localStorage.setItem(DAILY_KEY,JSON.stringify(o));}catch(e){}
+    return o;
+  }
+  function saveDailyBest(meters){
+    const meta=loadDailyMeta();
+    if(meters> (meta.best||0)){
+      meta.best=meters;
+      try{localStorage.setItem(DAILY_KEY,JSON.stringify(meta));}catch(e){}
+    }
+    dailyBest=Math.max(dailyBest||0,meters);
+    if(typeof setGamePB==='function')setGamePB('rushrunner_daily',meters);
+    else try{localStorage.setItem('chaupaal_pb_rushrunner_daily',String(dailyBest));}catch(e){}
+  }
+
+  const MISSION_POOL=[
+    {type:'reach',targets:[250,400,600,800],label:(t)=>'Reach '+t+'m'},
+    {type:'coins',targets:[15,25,40,55],label:(t)=>'Collect '+t+' coins'},
+    {type:'jumps',targets:[8,12,18],label:(t)=>'Land '+t+' jumps'},
+    {type:'slides',targets:[6,10,14],label:(t)=>'Land '+t+' slides'},
+    {type:'powers',targets:[2,3,4],label:(t)=>'Grab '+t+' powerups'},
+  ];
+  function loadMissionState(){
+    try{
+      const o=JSON.parse(localStorage.getItem(MISSION_KEY)||'null');
+      if(o&&Array.isArray(o.active))return o;
+    }catch(e){}
+    return{active:[],rolled:0};
+  }
+  function saveMissionState(st){
+    try{localStorage.setItem(MISSION_KEY,JSON.stringify(st));}catch(e){}
+  }
+  function rollMission(avoidTypes){
+    const avoid=avoidTypes||[];
+    let pool=MISSION_POOL.filter(d=>avoid.indexOf(d.type)===-1);
+    if(!pool.length)pool=MISSION_POOL.slice();
+    const def=pool[Math.floor(Math.random()*pool.length)];
+    const target=def.targets[Math.floor(Math.random()*def.targets.length)];
+    return{id:'rr_'+Date.now().toString(36)+'_'+Math.floor(Math.random()*999),type:def.type,target,progress:0,label:def.label(target)};
+  }
+  function ensureMissions(){
+    const st=loadMissionState();
+    st.active=(st.active||[]).filter(m=>m&&m.type&&m.target);
+    const types=st.active.map(m=>m.type);
+    while(st.active.length<2){
+      const m=rollMission(types);
+      st.active.push(m);
+      types.push(m.type);
+    }
+    saveMissionState(st);
+    return st;
+  }
+  function missionLiveValue(m){
+    if(m.type==='reach')return Math.min(m.target,Math.floor(dist));
+    if(m.type==='coins')return Math.min(m.target,m.progress+coins);
+    if(m.type==='jumps')return Math.min(m.target,m.progress+runJumps);
+    if(m.type==='slides')return Math.min(m.target,m.progress+runSlides);
+    if(m.type==='powers')return Math.min(m.target,m.progress+runPowers);
+    return m.progress;
+  }
+  function commitMissions(){
+    const st=ensureMissions();
+    const completed=[];
+    const kept=[];
+    st.active.forEach(m=>{
+      if(m.type==='reach'){
+        if(Math.floor(dist)>=m.target)completed.push(Object.assign({},m,{progress:m.target}));
+        else kept.push(m);
+        return;
+      }
+      let delta=0;
+      if(m.type==='coins')delta=coins;
+      else if(m.type==='jumps')delta=runJumps;
+      else if(m.type==='slides')delta=runSlides;
+      else if(m.type==='powers')delta=runPowers;
+      const next=Math.min(m.target,(m.progress||0)+delta);
+      if(next>=m.target)completed.push(Object.assign({},m,{progress:m.target}));
+      else kept.push(Object.assign({},m,{progress:next}));
+    });
+    const types=kept.map(m=>m.type);
+    while(kept.length<2){
+      const m=rollMission(types);
+      kept.push(m);
+      types.push(m.type);
+    }
+    st.active=kept;
+    st.rolled=(st.rolled||0)+completed.length;
+    saveMissionState(st);
+    return completed;
+  }
+  function missionListHtml(){
+    const st=ensureMissions();
+    return st.active.map(m=>{
+      const v=started?missionLiveValue(m):(m.progress||0);
+      const pct=Math.min(100,Math.round((v/m.target)*100));
+      return `<div class="rr-mission"><div class="rr-mission-top"><span>${m.label}</span><span>${v}/${m.target}</span></div><div class="rr-mission-track"><div class="rr-mission-fill" style="width:${pct}%"></div></div></div>`;
+    }).join('');
+  }
+  function updateMissionHud(){
+    const el=document.getElementById('rrMissions');
+    if(!el||!started)return;
+    el.innerHTML=missionListHtml();
+    el.hidden=false;
+  }
 
   function makeRng(seed){
     let s=seed>>>0;
@@ -101,20 +233,28 @@ function openRushRunner(){
   const close=()=>{stopLoop();if(gs)gs.close();else overlay.remove();};
   const buzz=(a)=>{if(typeof gameFeedback==='function')gameFeedback(a);};
 
+  ensureMissions();
+  const dailyMeta=loadDailyMeta();
+  const dailyThemePreview=THEMES[dailyMeta.themeIdx%THEMES.length];
+
   overlay.innerHTML=`
     ${gameChromeHtml({title:'Rush Runner',subtitle:theme.name,backId:'rrBack',pauseId:'rrPause',rightHtml:'<span class="game-chrome-metric" id="rrScore">0m</span>'})}
     <div class="rr-stage" id="rrGame">
       <canvas id="rrCanvas" aria-label="Rush Runner playfield"></canvas>
       <div class="rr-hud-chip" id="rrCoins" aria-live="polite">◆ 0</div>
       <div class="rr-power" id="rrPower" hidden></div>
+      <div class="rr-missions" id="rrMissions" hidden></div>
       <div class="rr-banner" id="rrBanner" hidden></div>
       <div id="rrOverlay" class="rr-start">
         <div class="rr-start-mark" aria-hidden="true"></div>
         <div class="rr-start-title">Rush Runner</div>
-        <div class="rr-start-sub">${theme.name}</div>
-        <div class="rr-start-best">Best ${bestScore}m</div>
-        <div class="rr-start-hint">Swipe or buttons · ◀▶ lanes · ⬆ jump over lows · ⬇ slide under highs</div>
-        <button type="button" id="rrStart" class="game-tap-target rr-start-btn">Start running</button>
+        <div class="rr-start-sub" id="rrStartSub">${theme.name} · ${theme.modLabel}</div>
+        <div class="rr-start-mod" id="rrStartMod">${theme.modHint}</div>
+        <div class="rr-start-best">Best ${bestScore}m · Daily best ${dailyMeta.best||dailyBest||0}m</div>
+        <div class="rr-start-missions" id="rrStartMissions">${missionListHtml()}</div>
+        <div class="rr-start-hint">Swipe or buttons · ◀▶ lanes · ⬆ jump · ⬇ slide</div>
+        <button type="button" id="rrStart" class="game-tap-target rr-start-btn">Classic run</button>
+        <button type="button" id="rrDaily" class="game-tap-target rr-start-btn rr-start-btn--ghost">Daily · ${dailyThemePreview.modLabel}</button>
       </div>
     </div>
     <div class="game-lane-bar" role="group" aria-label="Lane controls">
@@ -220,8 +360,9 @@ function openRushRunner(){
   }
 
   function spawnCoinLine(lane,z0,n,gap){
+    const bias=theme.coinBias||1;
     const g=gap==null?1.05:gap;
-    const count=n||4;
+    const count=Math.max(2,Math.round((n||4)*bias));
     for(let i=0;i<count;i++){
       coinItems.push({lane,z:z0+i*g,collected:false,pull:0});
     }
@@ -229,12 +370,13 @@ function openRushRunner(){
   }
 
   function spawnCoinZig(z0,n){
-    // Magnet feast: zig across lanes
+    const bias=theme.coinBias||1;
+    const count=Math.max(5,Math.round((n||7)*bias));
     const seq=shuffle([0,1,2]);
-    for(let i=0;i<(n||7);i++){
+    for(let i=0;i<count;i++){
       coinItems.push({lane:seq[i%3],z:z0+i*0.95,collected:false,pull:0});
     }
-    upcomingCoinZ=Math.max(upcomingCoinZ,z0+(n||7)*0.95);
+    upcomingCoinZ=Math.max(upcomingCoinZ,z0+count*0.95);
   }
 
   function spawnCoinArc(lane,z0){
@@ -378,10 +520,14 @@ function openRushRunner(){
   }
 
   function directorInterval(tier){
-    if(tier==='teach')return 1.55;
-    if(tier==='early')return 1.25;
-    if(tier==='mid')return 1.02;
-    return 0.88;
+    const traffic=theme.trafficBias||1;
+    let base=1.25;
+    if(tier==='teach')base=1.55;
+    else if(tier==='early')base=1.25;
+    else if(tier==='mid')base=1.02;
+    else base=0.88;
+    // trafficBias < 1 = denser asks (Heavy Traffic)
+    return Math.max(0.72,base*traffic);
   }
 
   function tickDirector(dt){
@@ -417,12 +563,14 @@ function openRushRunner(){
     if(jumping){jumpBuffer=BUFFER_MS;buzz('invalid');return;}
     if(sliding&&slideT<0.75){jumpBuffer=BUFFER_MS;buzz('invalid');return;}
     jumping=true;jumpT=0;squash=1.15;sliding=false;slideT=0;landCoyote=0;jumpBuffer=0;
+    runJumps++;
     buzz('move');
   }
   function trySlide(){
     if(!started||gameOver||dying)return;
     if(sliding){slideBuffer=BUFFER_MS;buzz('invalid');return;}
     sliding=true;slideT=0;jumping=false;jumpT=0;squash=0.7;slideBuffer=0;
+    runSlides++;
     buzz('move');
   }
   function doJump(){tryJump();}
@@ -702,27 +850,58 @@ function openRushRunner(){
     gameOver=true;dying=false;cancelAnimationFrame(raf);raf=null;
     if(keyHandler){window.removeEventListener('keydown',keyHandler);keyHandler=null;}
     const final=Math.floor(dist);
-    if(typeof setGamePB==='function') bestScore=setGamePB('rushrunner', final) ?? Math.max(bestScore, final);
-    else if(final>bestScore){bestScore=final;localStorage.setItem('rushrunner_best',String(bestScore));}
-    const vsBest=typeof formatVsBest==='function'?formatVsBest('rushrunner', final):`Best ${bestScore}m`;
+    const pbId=playMode==='daily'?'rushrunner_daily':'rushrunner';
+    if(playMode==='daily'){
+      saveDailyBest(final);
+      dailyBest=Math.max(dailyBest||0,final);
+    }else{
+      if(typeof setGamePB==='function') bestScore=setGamePB('rushrunner', final) ?? Math.max(bestScore, final);
+      else if(final>bestScore){bestScore=final;localStorage.setItem('rushrunner_best',String(bestScore));}
+    }
+    const vsBest=typeof formatVsBest==='function'?formatVsBest(pbId, final):(playMode==='daily'?`Daily best ${dailyBest}m`:`Best ${bestScore}m`);
+    const completed=commitMissions();
+    if(completed.length){
+      buzz('win');
+      showBanner(completed.length>1?'Missions cleared!':'Mission complete: '+completed[0].label,1.6);
+    }
     if(gs)gs.setOutcome('lost');
-    if(typeof recordGameResult==='function')recordGameResult('rushrunner',false,false,{score:final,scoreOnly:true});
-    // lose buzz already fired in beginDeath when applicable
-    if(!deathFocus)buzz('lose');
+    if(typeof recordGameResult==='function'){
+      recordGameResult('rushrunner',false,false,{
+        score:final,
+        scoreOnly:true,
+        mode:playMode,
+        difficulty:theme.modId,
+        missionsDone:completed.length,
+      });
+    }
+    if(!deathFocus&&!completed.length)buzz('lose');
     deathFocus=null;
     const div=document.getElementById('rrOverlay');
     if(!div)return;
     div.className='rr-start rr-start--over';
     div.style.display='flex';
-    const shareStats={scoreLine:`${final}m`,score:final,meta:`${coins} coins · ${vsBest}`,text:`I ran ${final}m on Chaupaal Rush Runner! Can you beat me?`};
+    const missionNote=completed.length
+      ? completed.map(m=>'✓ '+m.label).join(' · ')
+      : ensureMissions().active.map(m=>m.label+' '+m.progress+'/'+m.target).join(' · ');
+    const modeLine=playMode==='daily'?'Daily · '+theme.modLabel:theme.name+' · '+theme.modLabel;
+    const shareStats={
+      scoreLine:`${final}m`,
+      score:final,
+      meta:`${coins} coins · ${modeLine} · ${vsBest}`,
+      text:playMode==='daily'
+        ?`I ran ${final}m on Chaupaal Rush Runner Daily (${theme.modLabel})!`
+        :`I ran ${final}m on Chaupaal Rush Runner! Can you beat me?`,
+    };
     const shareCard=typeof buildGameShareCard==='function'?buildGameShareCard('rushrunner',shareStats):'';
     div.innerHTML=`
       ${typeof gameResultHtml==='function'?gameResultHtml({
         gameId:'rushrunner',
         glyph:'·',
         title:`${final}m run`,
-        subtitle:`${coins} coins`,
+        subtitle:`${coins} coins · ${modeLine}`,
         vsBest,
+        hideMissions:true,
+        missionHtml:missionNote?`<p class="game-result-mission">${missionNote}</p>`:'',
         shareCardHtml:shareCard,
         actions:[
           {label:'Play again',primary:true,id:'again'},
@@ -750,6 +929,61 @@ function openRushRunner(){
       const actions=div.querySelectorAll('[data-result-action]');
       (actions[0]||document.getElementById('rrRestart'))?.addEventListener('click',()=>{close();openRushRunner();});
     }
+  }
+
+  function applyThemeChrome(){
+    const sub=document.querySelector('.game-chrome-sub')||document.querySelector('.game-chrome-subtitle');
+    // subtitle lives in chrome — refresh via data attributes on overlay
+    try{
+      const titleRow=overlay.querySelector('.game-chrome-sub, .game-turn, [data-chrome-sub]');
+      if(titleRow&&titleRow.classList.contains('game-chrome-sub'))titleRow.textContent=theme.name+' · '+theme.modLabel;
+    }catch(e){}
+    if(typeof prepareGameOverlay==='function')prepareGameOverlay(overlay,{theme:'dark',gameId:'rushrunner',accent:theme.accent});
+    buildSkyline(cssW,cssH);
+  }
+
+  function startGame(mode){
+    if(!alive())return;
+    playMode=mode==='daily'?'daily':'classic';
+    runJumps=0;runSlides=0;runPowers=0;
+    if(playMode==='daily'){
+      const meta=loadDailyMeta();
+      theme=THEMES[meta.themeIdx%THEMES.length];
+      runSeed=meta.seed>>>0;
+    }else{
+      theme=THEMES[Math.floor(Math.random()*THEMES.length)];
+      runSeed=(Date.now()^((Math.random()*1e9)|0))>>>0;
+    }
+    rng=makeRng(runSeed);
+    applyThemeChrome();
+    const ov=document.getElementById('rrOverlay');
+    if(ov)ov.style.display='none';
+    started=true;lastTime=performance.now();
+    obstacles=[];coinItems=[];powerups=[];particles=[];
+    dying=false;deathFocus=null;
+    lastPattern='';lastPatternAt=0;directorAcc=0;upcomingCoinZ=0;
+    score=0;coins=0;dist=0;speed=BASE_SPEED;
+    jumping=false;sliding=false;jumpT=0;slideT=0;
+    shield=false;shieldTimer=0;magnet=false;magnetTimer=0;
+    lane=1;laneX=1;laneFrom=1;laneTo=1;laneT=1;
+    // Authored opener (seeded) — teach jump then slide
+    const openLane=Math.floor(rng()*3);
+    const other=(openLane+1+Math.floor(rng()*2))%3;
+    spawnCoinLine(1,16,4,1.05);
+    pushObs(openLane,24,'low','barrier');
+    spawnCoinLine((openLane+1)%3,27,3,1.0);
+    pushObs(other,33,'high','sign');
+    spawnCoinLine(1,36,3,1.1);
+    if(theme.modId==='coin_rush'||rng()<0.35)spawnPowerAt((openLane+2)%3,40,'magnet');
+    if(theme.modId==='heavy_traffic'&&rng()<0.4)spawnPowerAt(openLane,42,'shield');
+    updateMissionHud();
+    buzz('select');
+    if(typeof window!=='undefined'){
+      window.__rrLastSeed=runSeed;
+      window.__rrMode=playMode;
+      window.__rrMod=theme.modId;
+    }
+    raf=requestAnimationFrame(update);
   }
 
   function update(ts){
@@ -796,7 +1030,8 @@ function openRushRunner(){
     const soft=0.68+0.32*early;
     const tier=pacingTier();
     const tierBoost=tier==='late'?1.06:tier==='mid'?1.02:1;
-    speed=(BASE_SPEED+(MAX_SPEED-BASE_SPEED)*(1-Math.pow(1-ramp,2)))*soft*tierBoost;
+    const modSpeed=theme.speedBias||1;
+    speed=(BASE_SPEED+(MAX_SPEED-BASE_SPEED)*(1-Math.pow(1-ramp,2)))*soft*tierBoost*modSpeed;
     dist+=speed*dt*3.2;
     scroll+=speed*dt;
     score=Math.floor(dist);
@@ -865,6 +1100,7 @@ function openRushRunner(){
     powerups=powerups.filter(p=>p.z>-1);
 
     tickDirector(dt);
+    if(Math.floor(dist*2)%3===0)updateMissionHud();
 
     // Collision — interpolated laneX, forgiving lane width, depth = visible contact
     const pz=PLAYER_Z;
@@ -902,6 +1138,7 @@ function openRushRunner(){
       if(Math.abs(p.z-pz)>1||Math.abs(p.lane-laneX)>0.55)continue;
       if(p.type==='shield'){shield=true;shieldTimer=7.5;shieldPulse=1;showBanner('Shield up!',0.8);}
       else{magnet=true;magnetTimer=6.8;showBanner('Magnet on!',0.8);}
+      runPowers++;
       powerups.splice(i,1);buzz('valid');
       const scr=project(laneWorldX(p.lane),pz);
       burst(scr.x,scr.y-20,p.type==='shield'?'#7DD3FC':'#FF6B8A',14);
@@ -934,30 +1171,6 @@ function openRushRunner(){
     if(!gameOver&&alive())raf=requestAnimationFrame(update);
   }
 
-  function startGame(){
-    if(!alive())return;
-    const ov=document.getElementById('rrOverlay');
-    if(ov)ov.style.display='none';
-    started=true;lastTime=performance.now();
-    obstacles=[];coinItems=[];powerups=[];particles=[];
-    dying=false;deathFocus=null;
-    runSeed=(Date.now()^((Math.random()*1e9)|0))>>>0;
-    rng=makeRng(runSeed);
-    lastPattern='';lastPatternAt=0;directorAcc=0;upcomingCoinZ=0;
-    // Authored opener (varies lightly by seed) — teach jump then slide
-    const openLane=Math.floor(rng()*3);
-    const other=(openLane+1+Math.floor(rng()*2))%3;
-    spawnCoinLine(1,16,4,1.05);
-    pushObs(openLane,24,'low','barrier');
-    spawnCoinLine((openLane+1)%3,27,3,1.0);
-    pushObs(other,33,'high','sign');
-    spawnCoinLine(1,36,3,1.1);
-    if(rng()<0.35)spawnPowerAt((openLane+2)%3,40,'magnet');
-    buzz('select');
-    if(typeof window!=='undefined')window.__rrLastSeed=runSeed;
-    raf=requestAnimationFrame(update);
-  }
-
   document.getElementById('rrBack').addEventListener('click',()=>{
     if(gameOver){close();return;}
     const ask=typeof confirmLeaveGame==='function'
@@ -965,7 +1178,8 @@ function openRushRunner(){
       :Promise.resolve(window.confirm('Leave Rush Runner?'));
     Promise.resolve(ask).then((ok)=>{if(ok)close();});
   });
-  document.getElementById('rrStart').addEventListener('click',startGame);
+  document.getElementById('rrStart').addEventListener('click',()=>startGame('classic'));
+  document.getElementById('rrDaily')?.addEventListener('click',()=>startGame('daily'));
   document.getElementById('rrLeft').addEventListener('click',()=>{if(started&&!gameOver)setLane(laneTo-1);});
   document.getElementById('rrRight').addEventListener('click',()=>{if(started&&!gameOver)setLane(laneTo+1);});
   document.getElementById('rrJump').addEventListener('click',doJump);

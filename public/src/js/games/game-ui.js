@@ -129,9 +129,9 @@
     business: ['Buy when you land on empty lots', 'Pay rent on owned properties', 'Richest player at the end wins'],
     scribble: ['Draw clearly — keep it simple', 'Guessers type in the chat box', 'Rounds rotate who draws'],
     rushrunner: [
-      'Swipe or buttons: ◀▶ lanes · ⬆ jump over lows · ⬇ slide under highs',
-      'Coin lines show safe routes · magnet pulls zigzags · shield buys one mistake',
-      'Runs ramp: teach → pressure → intensity — distance is your score',
+      'Classic or Daily run · each theme has a named flavor (Coin Rush, Heavy Traffic, Long Sprint)',
+      'Clear 2 light missions for a reason to run again · progress saves between sessions',
+      '◀▶ lanes · ⬆ jump lows · ⬇ slide highs · magnet pulls coin zigzags',
     ],
     tiptap: [
       'Match 4 → Line · 5 or L/T → Bomb · 6+ one colour → Prism',
@@ -170,6 +170,7 @@
 
   const PB_KEYS = {
     rushrunner: { key: 'chaupaal_pb_rushrunner', label: 'm', higherBetter: true },
+    rushrunner_daily: { key: 'chaupaal_pb_rushrunner_daily', label: 'm', higherBetter: true },
     tiptap: { key: 'chaupaal_pb_tiptap', label: 'pts', higherBetter: true },
     wordguess: { key: 'chaupaal_pb_wordguess', label: 'guesses', higherBetter: false },
     ankjod: { key: 'chaupaal_pb_ankjod', label: 's', higherBetter: false },
