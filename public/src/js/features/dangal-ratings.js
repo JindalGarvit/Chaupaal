@@ -554,6 +554,14 @@ function renderDangalGamesGrid() {
   wireDangalTiles(grid);
   maidan.querySelector('[data-dangal-resume]')?.addEventListener('click', (e) => {
     const id = e.currentTarget.dataset.dangalResume;
+    if (id === 'brickbreaker' && typeof openBrickBreaker === 'function') {
+      let last = 'campaign';
+      try {
+        last = localStorage.getItem('chaupaal_bb_last_mode') || 'campaign';
+      } catch (err) {}
+      openBrickBreaker({ mode: last === 'endless' ? 'endless' : 'campaign' });
+      return;
+    }
     if (typeof handleDangalGameTap === 'function') handleDangalGameTap(id);
   });
   grid.querySelectorAll('[data-dangal-maidan="muqabala"]').forEach((btn) => {
@@ -672,6 +680,8 @@ async function recordGameResult(key,won,drew,extra){
       stake:e.stake,
       mode:e.mode,
       live:e.live,
+      level:e.level,
+      wave:e.wave,
     });
   }
   if(typeof markGamePlayed==='function') markGamePlayed(key==='wordguess'?'wordguess':key);

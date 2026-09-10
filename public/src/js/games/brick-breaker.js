@@ -10,7 +10,9 @@
  *   U = unbreakable wall (layout tooling)
  *   G = gold (fragile, high score)
  *
- * Persist: chaupaal_bb_campaign_level = last cleared index (0-based next to play)
+ * Persist: chaupaal_bb_campaign_level = next campaign index (0-based)
+ *          chaupaal_bb_campaign_best_level = deepest levels cleared count
+ *          chaupaal_bb_last_mode = 'campaign'|'endless' (Maidan Play again)
  * Lives: never auto-refill between campaign levels (run tension).
  * PB: brickbreaker (campaign) · brickbreaker_endless (Score Attack)
  */
@@ -27,18 +29,20 @@ function openBrickBreakerModeSheet() {
     (typeof getGamePB === 'function' ? getGamePB('brickbreaker_endless') : null) ??
     (parseInt(localStorage.getItem('chaupaal_pb_brickbreaker_endless') || '0', 10) || 0);
   let continueAt = 0;
+  let bestClear = 0;
   try {
     continueAt = Math.max(0, parseInt(localStorage.getItem('chaupaal_bb_campaign_level') || '0', 10) || 0);
+    bestClear = Math.max(0, parseInt(localStorage.getItem('chaupaal_bb_campaign_best_level') || '0', 10) || 0);
   } catch (e) {}
   const sheet = document.createElement('div');
   sheet.style.cssText =
     'position:absolute;bottom:0;left:0;right:0;background:var(--white,#fff);border-radius:24px 24px 0 0;padding:20px;z-index:100;max-height:82vh;overflow:auto;';
   sheet.innerHTML = `
     <div style="font-family:Space Grotesk,sans-serif;font-weight:800;font-size:18px;margin-bottom:4px;">Brick Breaker</div>
-    <div style="font-size:13px;color:var(--muted,#666);margin-bottom:14px;">Solo arcade — Campaign or endless Score Attack.</div>
+    <div style="font-size:13px;color:var(--muted,#666);margin-bottom:14px;">Solo arcade — Campaign or endless Score Attack. No Live · no stakes.</div>
     <button type="button" data-bb-mode="campaign" class="game-tap-target" style="width:100%;text-align:left;padding:14px;margin-bottom:8px;border-radius:14px;border:2px solid var(--line,#ddd);background:#0d0a18;color:#fff;cursor:pointer;">
       <div style="font-weight:800;font-size:15px;">Campaign</div>
-      <div style="font-size:12px;opacity:.75;margin-top:2px;">Clear handcrafted levels · 3 lives · Best ${campaignBest} pts</div>
+      <div style="font-size:12px;opacity:.75;margin-top:2px;">Clear handcrafted levels · 3 lives · Best ${campaignBest} pts${bestClear ? ` · Cleared Lv ${bestClear}` : ''}</div>
     </button>
     ${
       continueAt > 0
@@ -70,6 +74,9 @@ function openBrickBreaker(opts) {
   const o = opts && typeof opts === 'object' ? opts : {};
   const playMode = o.mode === 'endless' ? 'endless' : 'campaign';
   const startLevel = Math.max(0, Number(o.startLevel) || 0);
+  try {
+    localStorage.setItem('chaupaal_bb_last_mode', playMode);
+  } catch (e) {}
 
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:absolute;inset:0;z-index:80;display:flex;flex-direction:column;';
@@ -240,8 +247,8 @@ function openBrickBreaker(opts) {
     <div class="bb-stage" id="bbGame">
       <canvas id="bbCanvas" aria-label="Brick Breaker playfield"></canvas>
       <div class="rr-hud-chip" id="bbLives" aria-live="polite">♥ 3</div>
-      <div class="rr-hud-chip" id="bbDepth" style="top:auto;bottom:10px;left:10px;right:auto;">${
-        playMode === 'endless' ? 'Wave 1' : 'Lv 1'
+      <div class="rr-hud-chip bb-hud-depth" id="bbDepth">${
+        playMode === 'endless' ? 'Score Attack · Wave 1' : 'Campaign · Lv 1'
       }</div>
       <div id="bbOverlay" class="rr-start">
         <div class="rr-start-mark" aria-hidden="true"></div>
@@ -426,7 +433,10 @@ function openBrickBreaker(opts) {
     const sub = overlay.querySelector('.game-chrome-subtitle');
     if (sub) sub.textContent = modeSubtitle();
     const depth = document.getElementById('bbDepth');
-    if (depth) depth.textContent = playMode === 'endless' ? 'Wave ' + (wave + 1) : 'Lv ' + (level + 1);
+    if (depth) {
+      depth.textContent =
+        playMode === 'endless' ? 'Score Attack · Wave ' + (wave + 1) : 'Campaign · Lv ' + (level + 1);
+    }
   }
 
   function saveCampaignProgress(clearedIndex) {
@@ -668,6 +678,30 @@ function openBrickBreaker(opts) {
       cancelAnimationFrame(raf);
       raf = null;
     }
+
+    // Persist last mode for Maidan "Play again"
+    try {
+      localStorage.setItem('chaupaal_bb_last_mode', playMode);
+    } catch (e) {}
+
+    // Campaign: track deepest level cleared (1-based count of finished levels)
+    if (playMode === 'campaign') {
+      try {
+        const clearedCount = didWin ? LEVEL_LAYOUTS.length : level;
+        const prevCleared = Math.max(0, parseInt(localStorage.getItem('chaupaal_bb_campaign_best_level') || '0', 10) || 0);
+        if (clearedCount > prevCleared) {
+          localStorage.setItem('chaupaal_bb_campaign_best_level', String(clearedCount));
+        }
+      } catch (e) {}
+    }
+
+    // Format vs best BEFORE writing PB so "New best!" can show
+    const prevPb = typeof getGamePB === 'function' ? getGamePB(PB_ID) : bestScore || null;
+    const vsBestRaw =
+      typeof formatVsBest === 'function' ? formatVsBest(PB_ID, score) : `Best ${bestScore} pts`;
+    const isNewBest =
+      score > 0 && (prevPb == null || (Number.isFinite(prevPb) ? score > prevPb : score > (bestScore || 0)));
+
     if (typeof setGamePB === 'function') {
       bestScore = setGamePB(PB_ID, score) ?? Math.max(bestScore, score);
     } else if (score > bestScore) {
@@ -679,35 +713,68 @@ function openBrickBreaker(opts) {
         );
       } catch (e) {}
     }
+
     if (gs) gs.setOutcome(didWin ? 'won' : 'lost');
     if (typeof recordGameResult === 'function') {
       recordGameResult('brickbreaker', didWin, false, {
         score,
         scoreOnly: true,
         mode: playMode,
+        level: playMode === 'campaign' ? level + 1 : undefined,
+        wave: playMode === 'endless' ? wave + 1 : undefined,
+      });
+    } else if (typeof recordDangalSession === 'function') {
+      recordDangalSession('brickbreaker', {
+        score,
+        scoreOnly: true,
+        won: didWin ? true : undefined,
+        mode: playMode,
+        level: playMode === 'campaign' ? level + 1 : undefined,
+        wave: playMode === 'endless' ? wave + 1 : undefined,
       });
     }
+
     buzz(didWin ? 'win' : 'lose');
-    const vsBest =
-      typeof formatVsBest === 'function' ? formatVsBest(PB_ID, score) : `Best ${bestScore} pts`;
+    if (isNewBest && typeof showToast === 'function') {
+      showToast('New best · ' + score + ' pts');
+    }
+
+    const vsBest = isNewBest
+      ? `New best · ${score} pts` + (prevPb != null ? ` (was ${prevPb})` : '')
+      : vsBestRaw;
     const div = document.getElementById('bbOverlay');
     if (!div) return;
     div.className = 'rr-start rr-start--over';
     div.style.display = 'flex';
+
+    let bestLevelBit = '';
+    if (playMode === 'campaign') {
+      try {
+        const bl = parseInt(localStorage.getItem('chaupaal_bb_campaign_best_level') || '0', 10) || 0;
+        if (bl > 0) bestLevelBit = ` · Best clear Lv ${bl}`;
+      } catch (e) {}
+    }
+
     const depthLine =
       playMode === 'endless'
         ? `Wave ${wave + 1} · Score Attack`
         : didWin
           ? 'Campaign cleared'
-          : `Level ${level + 1} · Campaign`;
+          : `Level ${level + 1}/${LEVEL_LAYOUTS.length} · Campaign`;
+    const modeLabel = playMode === 'endless' ? 'Score Attack' : 'Campaign';
     const shareStats = {
       scoreLine: `${score} pts`,
       score,
-      meta: `${depthLine} · ${vsBest}`,
-      text: `I scored ${score} in Brick Breaker (${playMode === 'endless' ? 'Score Attack' : 'Campaign'}) on Chaupaal!`,
+      meta: `${depthLine} · ${vsBest}${bestLevelBit}`,
+      text: `I scored ${score} pts in Brick Breaker (${modeLabel}) on Chaupaal · ${depthLine} · not a wager`,
     };
     const shareCard =
       typeof buildGameShareCard === 'function' ? buildGameShareCard('brickbreaker', shareStats) : '';
+    const title = didWin
+      ? 'All levels cleared!'
+      : playMode === 'endless'
+        ? `${score} pts · Wave ${wave + 1}`
+        : `${score} pts`;
     const actions = [
       { label: 'Play again', primary: true, id: 'again' },
       { label: 'Modes', primary: false, id: 'modes' },
@@ -717,56 +784,84 @@ function openBrickBreaker(opts) {
       actions.push({ label: 'Challenge friend', primary: false, id: 'challenge' });
     if (typeof postGameScoreStory === 'function')
       actions.push({ label: 'Post to story', primary: false, id: 'story' });
+
+    const newBestBanner = isNewBest
+      ? `<div class="bb-new-best" role="status">New personal best</div>`
+      : '';
+
     div.innerHTML =
       typeof gameResultHtml === 'function'
-        ? gameResultHtml({
+        ? newBestBanner +
+          gameResultHtml({
             gameId: 'brickbreaker',
             glyph: '🧱',
-            title: didWin ? 'All levels cleared!' : `${score} pts`,
-            subtitle: `${depthLine} · ${vsBest}`,
+            title,
+            subtitle: `${depthLine} · ${vsBest}${bestLevelBit}`,
             vsBest,
             shareCardHtml: shareCard,
             actions,
           })
-        : `<div style="color:#fff;text-align:center;"><div>${score} pts</div><button type="button" id="bbRestart">Again</button></div>`;
-    if (typeof wireGameResultActions === 'function') {
-      wireGameResultActions(div, {
-        again: () => {
+        : `${newBestBanner}<div style="color:#fff;text-align:center;"><div>${score} pts</div><button type="button" id="bbRestart">Again</button></div>`;
+
+    // Beat to read PB before actions feel urgent
+    const actionsRoot = div;
+    const wire = () => {
+      if (gs && !alive()) return;
+      if (typeof wireGameResultActions === 'function') {
+        wireGameResultActions(actionsRoot, {
+          again: () => {
+            close();
+            openBrickBreaker({ mode: playMode, startLevel: 0 });
+          },
+          modes: () => {
+            close();
+            openBrickBreakerModeSheet();
+          },
+          share: () => {
+            if (typeof shareGameResult === 'function') shareGameResult('brickbreaker', shareStats);
+          },
+          challenge: async () => {
+            if (typeof openFriendPickerSheet !== 'function') return;
+            const f = await openFriendPickerSheet({
+              title: 'Beat my Brick Breaker score',
+              subtitle: `${score} pts · ${modeLabel} (solo — not Live)`,
+            });
+            if (f && typeof shareGameResult === 'function') {
+              shareGameResult('brickbreaker', {
+                ...shareStats,
+                text: `Hey ${f.name} — beat my ${score} pts on Brick Breaker (${modeLabel})!`,
+              });
+            }
+          },
+          story: () => {
+            if (typeof postGameScoreStory === 'function') {
+              postGameScoreStory('brickbreaker', {
+                score,
+                scoreLine: `${score} pts`,
+                meta: `${depthLine} · ${vsBest}`,
+              });
+            }
+          },
+        });
+      } else {
+        document.getElementById('bbRestart')?.addEventListener('click', () => {
           close();
           openBrickBreaker({ mode: playMode });
-        },
-        modes: () => {
-          close();
-          openBrickBreakerModeSheet();
-        },
-        share: () => {
-          if (typeof shareGameResult === 'function') shareGameResult('brickbreaker', shareStats);
-        },
-        challenge: async () => {
-          if (typeof openFriendPickerSheet !== 'function') return;
-          const f = await openFriendPickerSheet({
-            title: 'Beat my Brick Breaker score',
-            subtitle: `Challenge with ${score} pts`,
-          });
-          if (f && typeof shareGameResult === 'function') {
-            shareGameResult('brickbreaker', {
-              ...shareStats,
-              text: `Hey ${f.name} — beat my ${score} pts on Brick Breaker!`,
-            });
-          }
-        },
-        story: () => {
-          if (typeof postGameScoreStory === 'function') {
-            postGameScoreStory('brickbreaker', { score, scoreLine: `${score} pts`, meta: vsBest });
-          }
-        },
+        });
+      }
+    };
+    // Soft lock: disable buttons briefly so the result can be read
+    div.querySelectorAll('[data-result-action],button').forEach((btn) => {
+      btn.style.pointerEvents = 'none';
+      btn.style.opacity = '0.55';
+    });
+    setTimeout(() => {
+      div.querySelectorAll('[data-result-action],button').forEach((btn) => {
+        btn.style.pointerEvents = '';
+        btn.style.opacity = '';
       });
-    } else {
-      document.getElementById('bbRestart')?.addEventListener('click', () => {
-        close();
-        openBrickBreaker({ mode: playMode });
-      });
-    }
+      wire();
+    }, 650);
   }
 
   function winGame() {
@@ -1273,9 +1368,23 @@ if (typeof registerGame === 'function') {
     solo: true,
     selfChat: true,
     order: 105,
-    meta: { graduated: true, phase: 2 },
-    launch() {
+    meta: { graduated: true, phase: 3, complete: true, live: false },
+    launch(ctx) {
       try {
+        // Maidan / resume may pass mode; GOTD / Manch → sheet
+        const mode = ctx && (ctx.bbMode || ctx.mode);
+        if (mode === 'endless' || mode === 'campaign') {
+          openBrickBreaker({ mode: mode === 'endless' ? 'endless' : 'campaign', startLevel: ctx.startLevel });
+          return;
+        }
+        if (ctx && (ctx.source === 'maidan' || ctx.resume)) {
+          let last = 'campaign';
+          try {
+            last = localStorage.getItem('chaupaal_bb_last_mode') || 'campaign';
+          } catch (e) {}
+          openBrickBreaker({ mode: last === 'endless' ? 'endless' : 'campaign' });
+          return;
+        }
         openBrickBreakerModeSheet();
       } catch (err) {
         console.error('[brickbreaker] launch failed', err);
