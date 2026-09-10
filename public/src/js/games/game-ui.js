@@ -153,9 +153,9 @@
       'Per-format bests on your card — Live friend bowling later',
     ],
     gullykick: [
-      'Drag the net to pick a corner and height',
-      'Hold Kick to charge power — release to strike',
-      'Five kicks · Practice shootout — keeper reads come later',
+      'Drag the net to aim · hold Kick and watch the keeper’s lean',
+      'Blast the opposite corner · soft same-side chips get saved',
+      'Five kicks · Practice — shootout shapes next',
     ],
     badminton: ['Serve, then smash in the timing window', 'Rallies get faster', 'First to 7'],
     tabletennis: ['Short window — stay early, not late', 'First to 11', 'Opponent misses if you keep returning'],

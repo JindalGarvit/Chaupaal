@@ -4196,6 +4196,14 @@ select:focus-visible,
 .rw-gk-keeper.is-dive-l{transform:translateX(-130%);}
 .rw-gk-keeper.is-dive-r{transform:translateX(30%);}
 .rw-gk-keeper.is-dive-c{transform:translateX(-50%) scale(1.06);}
+.rw-gk-keeper.is-dive-h-low{margin-bottom:-4px;}
+.rw-gk-keeper.is-dive-h-high{margin-bottom:8px;}
+.rw-gk-keeper.is-tell-l{transform:translateX(-78%);}
+.rw-gk-keeper.is-tell-r{transform:translateX(-22%);}
+.rw-gk-keeper.is-tell-c{transform:translateX(-50%) scale(1.04);}
+.rw-gk-keeper.is-tell-n{transform:translateX(-50%);}
+.rw-gk-keeper.is-tell-soft{opacity:.92;}
+.rw-gk-keeper.is-tell-strong .rw-gk-keeper-mark{box-shadow:0 0 0 2px rgba(255,235,59,.55);}
 .rw-gk-keeper.is-save .rw-gk-keeper-mark{box-shadow:0 0 0 2px rgba(255,255,255,.5);}
 .rw-gk-ball{
   position:absolute;left:50%;bottom:4%;width:14px;height:14px;margin-left:-7px;
@@ -4213,6 +4221,7 @@ select:focus-visible,
 }
 .rw-gk-ball.is-goal{box-shadow:0 0 0 3px rgba(255,255,255,.45),0 2px 8px rgba(0,0,0,.25);}
 .rw-gk-ball.is-saved{opacity:.4;filter:grayscale(.2);}
+.rw-gk-ball.is-over{opacity:.55;top:-6% !important;}
 @keyframes rw-gk-flight{
   0%{left:50%;bottom:4%;top:auto;opacity:1;transform:translateY(0) scale(1);}
   45%{transform:translateY(calc(var(--gk-arc,28px) * -1)) scale(1.05);}
@@ -4243,7 +4252,7 @@ select:focus-visible,
 }
 .rw-sports-outcome.is-show{opacity:1;transform:scale(1);}
 .rw-sports-outcome.is-boundary,.rw-sports-outcome.is-goal{color:#1B7A4E;}
-.rw-sports-outcome.is-out{color:var(--red);}
+.rw-sports-outcome.is-out,.rw-sports-outcome.is-over{color:var(--red);}
 .rw-sports-aim{display:flex;gap:8px;justify-content:center;}
 .rw-sports-aim .btn{min-width:72px;}
 .rw-sports-aim .btn:disabled{opacity:.45;}

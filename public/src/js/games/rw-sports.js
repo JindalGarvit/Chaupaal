@@ -1244,7 +1244,7 @@
   }
 
 
-  /** Gully Kick — Practice strike craft: aim + power + flight (Prompt 1/3). */
+  /** Gully Kick — Practice: strike craft + keeper mind (Prompt 2/3). */
   function openGullyKick() {
     let scored = 0;
     let taken = 0;
@@ -1252,7 +1252,9 @@
     let phase = 'aim'; // aim | flight | result | done
     let lastResult = '';
     let lastDive = 'C';
+    let lastDiveHeight = 'mid';
     let lastGoal = false;
+    let lastOutcomeKind = '';
     let lastKick = null;
     const kickLog = [];
     let aim = { side: 'C', height: 'mid', nx: 0.5, ny: 0.45 };
@@ -1263,6 +1265,15 @@
     let flightTimer = null;
     let resultTimer = null;
     let locked = false;
+    let pendingDive = null;
+    let coachShown = false;
+    const COACH_KEY = 'chaupaal_gk_coach_v2';
+
+    try {
+      coachShown = localStorage.getItem(COACH_KEY) === '1';
+    } catch (e) {
+      coachShown = false;
+    }
 
     const clearTimers = () => {
       if (flightTimer) clearTimeout(flightTimer);
@@ -1284,13 +1295,33 @@
 
     const diveLabel = (d) => (d === 'L' ? 'left' : d === 'R' ? 'right' : 'center');
     const heightLabel = (h) => (h === 'low' ? 'low' : h === 'high' ? 'high' : 'mid');
+    const sideWord = (s) => (s === 'L' ? 'Left' : s === 'R' ? 'Right' : 'Center');
+
+    const markCoach = () => {
+      if (coachShown) return;
+      coachShown = true;
+      try {
+        localStorage.setItem(COACH_KEY, '1');
+      } catch (e) {}
+    };
+
+    const weightedPick = (items) => {
+      let total = 0;
+      for (let i = 0; i < items.length; i++) total += items[i].w;
+      if (total <= 0) return items[0] && items[0].v;
+      let r = Math.random() * total;
+      for (let i = 0; i < items.length; i++) {
+        r -= items[i].w;
+        if (r <= 0) return items[i].v;
+      }
+      return items[items.length - 1].v;
+    };
 
     const snapAim = (nx, ny) => {
       const x = Math.max(0.08, Math.min(0.92, nx));
       const y = Math.max(0.08, Math.min(0.92, ny));
       const side = x < 0.34 ? 'L' : x > 0.66 ? 'R' : 'C';
       const height = y < 0.34 ? 'high' : y > 0.66 ? 'low' : 'mid';
-      // Snap marker toward zone centers for readability
       const sx = side === 'L' ? 0.2 : side === 'R' ? 0.8 : 0.5;
       const sy = height === 'high' ? 0.22 : height === 'low' ? 0.78 : 0.5;
       return {
@@ -1303,6 +1334,70 @@
       };
     };
 
+    const pickKeeperPlan = () => {
+      const weights = { L: 1, C: 1.05, R: 1 };
+      const recent = kickLog.slice(-3);
+      for (let i = 0; i < recent.length; i++) {
+        const s = recent[i] && recent[i].side;
+        if (s && weights[s] != null) weights[s] += 1.8 + i * 0.35;
+      }
+      if (kickLog.length) {
+        const last = kickLog[kickLog.length - 1];
+        if (last && last.side && weights[last.side] != null) weights[last.side] += 1.4;
+      }
+
+      let side;
+      if (Math.random() < 0.12) {
+        // Spice: pick against the biased read
+        const spice = [
+          { v: 'L', w: 1 / weights.L },
+          { v: 'C', w: 1 / weights.C },
+          { v: 'R', w: 1 / weights.R },
+        ];
+        side = weightedPick(spice);
+      } else {
+        side = weightedPick([
+          { v: 'L', w: weights.L },
+          { v: 'C', w: weights.C },
+          { v: 'R', w: weights.R },
+        ]);
+      }
+
+      const height = weightedPick([
+        { v: 'low', w: 0.3 },
+        { v: 'mid', w: 0.42 },
+        { v: 'high', w: 0.28 },
+      ]);
+
+      // Honest tells only: lean = dive side, or neutral N (never opposite).
+      const tellRoll = Math.random();
+      let tell = 'N';
+      let tellStrength = 'neutral';
+      if (tellRoll < 0.34) {
+        tell = 'N';
+        tellStrength = 'neutral';
+      } else if (tellRoll < 0.62) {
+        tell = side;
+        tellStrength = 'soft';
+      } else {
+        tell = side;
+        tellStrength = 'strong';
+      }
+
+      return { side, height, tell, tellStrength };
+    };
+
+    const paintKeeperTell = () => {
+      const el = body.querySelector('[data-gk-keeper]');
+      if (!el) return;
+      el.className = 'rw-sports-keeper rw-gk-keeper';
+      if (!pendingDive || !charging || phase !== 'aim') return;
+      const t = (pendingDive.tell || 'N').toLowerCase();
+      el.classList.add('is-tell-' + t);
+      if (pendingDive.tellStrength === 'soft') el.classList.add('is-tell-soft');
+      if (pendingDive.tellStrength === 'strong') el.classList.add('is-tell-strong');
+    };
+
     const reset = () => {
       clearTimers();
       scored = 0;
@@ -1310,12 +1405,15 @@
       phase = 'aim';
       lastResult = '';
       lastDive = 'C';
+      lastDiveHeight = 'mid';
       lastGoal = false;
+      lastOutcomeKind = '';
       lastKick = null;
       kickLog.length = 0;
       aim = { side: 'C', height: 'mid', nx: 0.5, ny: 0.45 };
       power = 0.55;
       locked = false;
+      pendingDive = null;
       render();
     };
 
@@ -1330,9 +1428,7 @@
       const label = body.querySelector('[data-gk-aim-label]');
       if (label) {
         label.textContent =
-          (aim.side === 'L' ? 'Left' : aim.side === 'R' ? 'Right' : 'Center') +
-          ' · ' +
-          heightLabel(aim.height);
+          sideWord(aim.side) + ' · ' + heightLabel(aim.height);
       }
     };
 
@@ -1360,7 +1456,6 @@
     };
 
     const endPosForAim = (a, pwr) => {
-      // CSS % inside net box; power pulls slightly toward posts on blast
       let x = a.side === 'L' ? 18 : a.side === 'R' ? 82 : 50;
       let y = a.height === 'high' ? 18 : a.height === 'low' ? 72 : 42;
       if (pwr > 0.75) {
@@ -1374,15 +1469,117 @@
       return { x, y };
     };
 
+    const goalChance = (kick) => {
+      const side = kick.side;
+      const height = kick.height;
+      const pwr = kick.power;
+      const dive = kick.dive;
+      const diveH = kick.diveHeight || 'mid';
+      const same = side === dive;
+
+      // Soft high floater — rare over-the-bar handled in resolveKick
+      if (side === 'C' && pwr < 0.48) {
+        if (dive === 'C') return 0.14 + pwr * 0.2; // stay home: low
+        return 0.74 + pwr * 0.12; // dive away: high
+      }
+
+      if (!same) {
+        return 0.52 + pwr * 0.38;
+      }
+
+      // Same side
+      let c = 0.1 + pwr * 0.28;
+      if (height === diveH) {
+        c *= 0.42;
+      } else if (pwr >= 0.78) {
+        // Blast over a wrong-height dive can still score
+        c += 0.24;
+      } else {
+        c *= 0.72;
+      }
+      return c;
+    };
+
     const resolveKick = (kick) => {
-      // Prompt 1: temporary zone vs random dive — Prompt 2 replaces this table
-      const goal = kick.side !== kick.dive;
+      const pwr = kick.power;
+      const same = kick.side === kick.dive;
+      const diveH = kick.diveHeight || 'mid';
+
+      // Soft high floater: rare over the bar
+      if (kick.height === 'high' && pwr < 0.42) {
+        const overP = 0.12 + (0.42 - pwr) * 0.55;
+        if (Math.random() < overP) {
+          return Object.assign({}, kick, {
+            goal: false,
+            over: true,
+            reason: 'over_bar',
+            label: 'Over the bar — soft high floater',
+            outcomeKind: 'over',
+            chance: 0,
+          });
+        }
+      }
+
+      let chance = goalChance(kick);
+      chance = Math.max(0.08, Math.min(0.92, chance));
+      const goal = Math.random() < chance;
+      let reason = 'chance';
+      let label = '';
+
+      if (goal) {
+        if (!same) {
+          reason = 'beat_dive';
+          label =
+            'Goal! Beat the dive — ' +
+            sideWord(kick.side) +
+            ' ' +
+            heightLabel(kick.height) +
+            ' · keeper went ' +
+            diveLabel(kick.dive);
+        } else if (pwr >= 0.78 && kick.height !== diveH) {
+          reason = 'blast_wrong_height';
+          label = 'Goal! Blast over the dive height';
+        } else if (kick.side === 'C' && pwr < 0.48 && kick.dive !== 'C') {
+          reason = 'soft_center_away';
+          label = 'Goal! Soft center — keeper dived away';
+        } else {
+          reason = 'squeak';
+          label =
+            'Goal! Squeaked past — ' +
+            sideWord(kick.side) +
+            ' ' +
+            heightLabel(kick.height);
+        }
+      } else {
+        if (same && pwr < 0.5) {
+          reason = 'same_soft';
+          label = 'Saved — same side, too soft';
+        } else if (same && kick.height === diveH) {
+          reason = 'same_height';
+          label = 'Saved — same side, height matched';
+        } else if (same) {
+          reason = 'same_side_save';
+          label = 'Saved — same side · keeper read ' + diveLabel(kick.dive);
+        } else if (kick.side === 'C' && pwr < 0.48 && kick.dive === 'C') {
+          reason = 'soft_center_home';
+          label = 'Saved — soft center, keeper stayed home';
+        } else {
+          reason = 'reach_save';
+          label =
+            'Saved! Keeper stretched ' +
+            diveLabel(kick.dive) +
+            ' · ' +
+            heightLabel(diveH);
+        }
+      }
+
       return Object.assign({}, kick, {
         goal,
-        reason: goal ? 'beat_dive' : 'same_side_save',
-        label: goal
-          ? `Goal! ${kick.side === 'L' ? 'Left' : kick.side === 'R' ? 'Right' : 'Center'} ${heightLabel(kick.height)} · keeper went ${diveLabel(kick.dive)}`
-          : `Saved! Same side — keeper guessed ${diveLabel(kick.dive)}`,
+        over: false,
+        reason,
+        label,
+        chance,
+        outcomeKind: goal ? 'goal' : 'save',
       });
     };
 
@@ -1391,9 +1588,12 @@
       locked = true;
       clearTimers();
       power = Math.max(0.28, Math.min(1, pwr));
-      const dive = ['L', 'C', 'R'][Math.floor(Math.random() * 3)];
+      const plan = pendingDive || pickKeeperPlan();
+      pendingDive = null;
+      const dive = plan.side;
+      const diveHeight = plan.height || 'mid';
       const end = endPosForAim(aim, power);
-      const flightMs = Math.round(520 + (1 - power) * 380); // blast = quicker
+      const flightMs = Math.round(520 + (1 - power) * 380);
       const kick = {
         index: taken + 1,
         side: aim.side,
@@ -1404,12 +1604,16 @@
         endX: end.x,
         endY: end.y,
         dive,
+        diveHeight,
+        tell: plan.tell,
+        tellStrength: plan.tellStrength,
         flightMs,
-        // Prompt 2 hooks
         zones: { side: aim.side, height: aim.height },
       };
       lastKick = kick;
       lastDive = dive;
+      lastDiveHeight = diveHeight;
+      lastOutcomeKind = '';
       phase = 'flight';
       if (typeof gameFeedback === 'function') gameFeedback('kick');
       try {
@@ -1427,8 +1631,11 @@
         kickLog.push(resolved);
         taken += 1;
         lastGoal = !!resolved.goal;
+        lastOutcomeKind = resolved.outcomeKind || (resolved.goal ? 'goal' : 'save');
         lastResult = resolved.label;
-        if (resolved.goal) {
+        if (resolved.over) {
+          if (typeof gameFeedback === 'function') gameFeedback('lose', { noConfetti: true });
+        } else if (resolved.goal) {
           scored += 1;
           if (typeof gameFeedback === 'function') gameFeedback('win', { noConfetti: true });
         } else if (typeof gameFeedback === 'function') {
@@ -1451,6 +1658,7 @@
             phase = 'aim';
             power = 0.55;
             locked = false;
+            pendingDive = null;
           }
           render();
         }, 950);
@@ -1466,15 +1674,37 @@
       const p = Math.max(0.28, Math.min(1, 0.28 + elapsed / 900));
       power = p;
       paintPower();
-      if (commit) commitKick(p);
+      if (commit) {
+        commitKick(p);
+      } else {
+        pendingDive = null;
+        paintKeeperTell();
+        const hint = body.querySelector('[data-gk-hint]');
+        if (hint && phase === 'aim') {
+          hint.textContent = coachShown
+            ? 'Drag the net to aim · hold Kick to charge power'
+            : 'Watch the keeper lean while you charge — then pick your corner.';
+        }
+      }
     };
 
     const startCharge = () => {
       if (phase !== 'aim' || locked || charging) return;
+      markCoach();
       charging = true;
       chargeStartedAt = Date.now();
       power = 0.28;
+      pendingDive = pickKeeperPlan();
       paintPower();
+      paintKeeperTell();
+      const hint = body.querySelector('[data-gk-hint]');
+      if (hint) {
+        const lean =
+          pendingDive.tell === 'N'
+            ? 'Keeper squared up…'
+            : 'Keeper leaning ' + diveLabel(pendingDive.tell) + '…';
+        hint.textContent = lean + ' hold Kick, release to shoot';
+      }
       const tick = () => {
         if (!charging) return;
         const elapsed = Date.now() - chargeStartedAt;
@@ -1551,16 +1781,32 @@
         typeof getGamePB === 'function' && getGamePB('gullykick') != null
           ? ` · Best ${getGamePB('gullykick')}/${MAX}`
           : '';
-      const end = lastKick ? endPosForAim(lastKick, lastKick.power || power) : endPosForAim(aim, power);
-      const keeperClass =
-        phase === 'flight' || phase === 'result'
-          ? `is-dive-${lastDive.toLowerCase()}${phase === 'result' && !lastGoal ? ' is-save' : ''}`
-          : '';
+      const end = lastKick
+        ? lastKick.over
+          ? { x: lastKick.endX != null ? lastKick.endX : 50, y: -8 }
+          : endPosForAim(lastKick, lastKick.power || power)
+        : endPosForAim(aim, power);
+
+      let keeperClass = '';
+      if (charging && pendingDive && phase === 'aim') {
+        keeperClass = 'is-tell-' + (pendingDive.tell || 'N').toLowerCase();
+        if (pendingDive.tellStrength === 'soft') keeperClass += ' is-tell-soft';
+        if (pendingDive.tellStrength === 'strong') keeperClass += ' is-tell-strong';
+      } else if (phase === 'flight' || phase === 'result') {
+        keeperClass = 'is-dive-' + lastDive.toLowerCase();
+        if (lastDiveHeight === 'low') keeperClass += ' is-dive-h-low';
+        if (lastDiveHeight === 'high') keeperClass += ' is-dive-h-high';
+        if (phase === 'result' && !lastGoal && lastOutcomeKind !== 'over') {
+          keeperClass += ' is-save';
+        }
+      }
+
       const ballClass =
         phase === 'flight'
           ? 'is-flight'
           : phase === 'result'
-            ? `is-landed ${lastGoal ? 'is-goal' : 'is-saved'}`
+            ? 'is-landed ' +
+              (lastOutcomeKind === 'over' ? 'is-over' : lastGoal ? 'is-goal' : 'is-saved')
             : 'is-ready';
       const flightMs = (lastKick && lastKick.flightMs) || 700;
       const tip =
@@ -1568,7 +1814,9 @@
           ? lastResult
           : phase === 'flight'
             ? 'Ball in flight…'
-            : 'Drag the net to aim · hold Kick to charge power';
+            : !coachShown
+              ? 'Watch the keeper lean while you charge — then pick your corner.'
+              : 'Drag the net to aim · hold Kick to charge power';
 
       body.innerHTML = `
         <div class="rw-sports-card rw-gk-card">
@@ -1581,7 +1829,7 @@
               role="img" aria-label="Goal — drag to aim">
               <div class="rw-gk-grid" aria-hidden="true"></div>
               <div class="rw-gk-marker" data-gk-marker style="left:${aim.nx * 100}%;top:${aim.ny * 100}%"></div>
-              <div class="rw-sports-keeper rw-gk-keeper ${keeperClass}" aria-hidden="true">
+              <div class="rw-sports-keeper rw-gk-keeper ${keeperClass}" data-gk-keeper aria-hidden="true">
                 <span class="rw-gk-keeper-mark"></span>
               </div>
               <div class="rw-sports-ball-kick rw-gk-ball ${ballClass}" data-gk-ball
@@ -1601,8 +1849,10 @@
         </div>`;
       paintAimMarker();
       paintPower();
+      if (charging && pendingDive) paintKeeperTell();
       if (phase === 'result' && lastResult) {
-        flashOutcome(body, lastGoal ? 'Goal!' : 'Saved!', lastGoal ? 'goal' : 'out');
+        if (lastOutcomeKind === 'over') flashOutcome(body, 'Over!', 'over');
+        else flashOutcome(body, lastGoal ? 'Goal!' : 'Saved!', lastGoal ? 'goal' : 'out');
       }
       if (phase === 'aim') wireAim();
     };
@@ -1632,7 +1882,7 @@
     registerGame({
       id: 'gullykick',
       name: 'Gully Kick',
-      desc: 'Practice · aim & strike',
+      desc: 'Practice · read the keeper',
       icon: '⚽',
       ratingKey: 'gullykick',
       gameType: 'solo',
