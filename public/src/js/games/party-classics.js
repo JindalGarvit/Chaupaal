@@ -3866,15 +3866,22 @@
     const chat = resolveChat(arguments[0]);
     const liveOn = chatLiveOn(chat);
     const rng = rngFn();
+    let aiTimer = 0;
     const shell = openShell({
       id: 'rummy',
       title: 'Rummy',
-      subtitle: liveOn ? liveSub() : practiceSub('Meld runs and sets'),
+      subtitle: liveOn ? liveSub() + ' · 13-card Rummy' : practiceSub('13-card Rummy'),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
       accent: '#6A1B9A',
       bg: '#100018',
+      cleanup: () => {
+        if (aiTimer) {
+          clearTimeout(aiTimer);
+          aiTimer = 0;
+        }
+      },
     });
     if (!shell) return;
 
@@ -3882,7 +3889,11 @@
     let handA = [];
     let handB = [];
     let discard = [];
-    let drawn = null;
+    /** @type {'needDraw'|'needDiscard'} */
+    let phase = 'needDraw';
+    let drawnId = null;
+    let selectedId = null;
+    let sortMode = 'suit';
     let myTurn = true;
     let applying = false;
     let liveRoles = null;
@@ -3906,6 +3917,35 @@
       return liveRoles.me === liveRoles.playerA ? handB.length : handA.length;
     }
 
+    function suitOrder(s) {
+      const o = { '♠': 0, '♥': 1, '♦': 2, '♣': 3 };
+      return o[s] != null ? o[s] : 9;
+    }
+
+    function sortHand(hand) {
+      const h = hand.slice();
+      if (sortMode === 'rank') {
+        h.sort((a, b) => rankVal(a.r) - rankVal(b.r) || suitOrder(a.s) - suitOrder(b.s));
+      } else {
+        h.sort((a, b) => suitOrder(a.s) - suitOrder(b.s) || rankVal(a.r) - rankVal(b.r));
+      }
+      return h;
+    }
+
+    function dealFresh() {
+      deck = makeDeck(rng);
+      handA = deck.splice(0, 13);
+      handB = deck.splice(0, 13);
+      discard = deck.length ? [deck.pop()] : [];
+      phase = 'needDraw';
+      drawnId = null;
+      selectedId = null;
+    }
+
+    /**
+     * Live Prompt 1: still syncs full hands/deck until Prompt 5 hidden-hand protocol.
+     * TODO(Rummy Prompt 5): sync only discard + deckCount + turn + handCounts + phase; never opp faces.
+     */
     function pushState(extra) {
       if (!liveOn || !liveHandle || !liveRoles || applying) return;
       liveHandle.push(
@@ -3914,13 +3954,16 @@
             status: 'playing',
             turn: myTurn ? liveRoles.me : liveRoles.opp,
             state: {
+              // TODO(Rummy Prompt 5): remove handA/handB/deck leak — keep public fields only
               handA,
               handB,
               discard,
               deck,
               deckCount: deck.length,
-              drawn: !!drawn,
-              drawnId: drawn ? drawn.id : null,
+              handCountA: handA.length,
+              handCountB: handB.length,
+              phase,
+              drawnId,
             },
           },
           extra || {}
@@ -3928,99 +3971,219 @@
       );
     }
 
+    function phaseHint() {
+      if (liveOn && !myTurn) return 'Opponent\u2019s turn\u2026';
+      if (phase === 'needDraw') return 'Draw from stock or take the discard.';
+      return 'Tap a card, then Discard. Keep 13.';
+    }
+
     function paint(msg) {
       if (ended || !shell.alive()) return;
-      const you = myHand();
+      const you = sortHand(myHand());
       const top = discard[discard.length - 1];
-      shell.body.innerHTML = `
-        <div class="pc-rummy">
-          <p class="pc-hint">${esc(msg || (liveOn && !myTurn ? 'Opponent’s turn…' : 'Draw, then discard. Declare when you have melds.'))}</p>
-          <p class="pc-hint">Opp hand ${oppHandCount()} · deck ${deck.length}</p>
-          <div class="pc-row"><span>Discard</span>${top ? cardFace(top) : '—'}</div>
-          <div class="pc-hand">${you.map(cardFace).join('')}</div>
-          <div class="pc-actions">
-            <button type="button" class="cs-hit" data-draw ${!myTurn || drawn ? 'disabled' : ''}>Draw</button>
-            <button type="button" class="cs-hit" data-take ${!myTurn || drawn || !discard.length ? 'disabled' : ''}>Take discard</button>
-            <button type="button" class="cs-hit" data-declare ${!myTurn ? 'disabled' : ''}>Declare</button>
-          </div>
-        </div>`;
-      shell.body.querySelectorAll('.pc-card').forEach((btn) => {
+      const canDraw = myTurn && phase === 'needDraw' && deck.length > 0;
+      const canTake = myTurn && phase === 'needDraw' && discard.length > 0;
+      const canDiscard = myTurn && phase === 'needDiscard' && !!selectedId;
+      const handHtml = you
+        .map((c) => {
+          const col = SUIT_COLOR[c.s] || '#111';
+          const sel = c.id === selectedId ? ' is-sel' : '';
+          const locked = phase !== 'needDiscard' || !myTurn;
+          return (
+            '<button type="button" class="pc-card' +
+            sel +
+            (locked ? ' is-locked' : '') +
+            '" data-cid="' +
+            esc(c.id) +
+            '" style="color:' +
+            col +
+            '"' +
+            (locked ? ' disabled' : '') +
+            '><b>' +
+            esc(c.r) +
+            '</b><span>' +
+            esc(c.s) +
+            '</span></button>'
+          );
+        })
+        .join('');
+
+      const topHtml = top
+        ? '<button type="button" class="pc-card" disabled style="color:' +
+          (SUIT_COLOR[top.s] || '#111') +
+          '"><b>' +
+          esc(top.r) +
+          '</b><span>' +
+          esc(top.s) +
+          '</span></button>'
+        : '<span class="pc-rummy-empty">\u2014</span>';
+
+      shell.body.innerHTML =
+        '<div class="pc-rummy">' +
+        '<p class="pc-hint">' +
+        esc(msg || phaseHint()) +
+        '</p>' +
+        '<div class="pc-rummy-meta">' +
+        '<span>Opp <b>' +
+        oppHandCount() +
+        '</b></span>' +
+        '<span>Stock <b>' +
+        deck.length +
+        '</b></span>' +
+        '<span>You <b>' +
+        you.length +
+        '</b></span>' +
+        '</div>' +
+        '<div class="pc-rummy-piles">' +
+        '<div class="pc-rummy-pile"><span class="pc-rummy-pile-label">Stock</span>' +
+        '<span class="pc-card pc-back" aria-hidden="true"></span>' +
+        '<span class="pc-rummy-pile-count">' +
+        deck.length +
+        '</span></div>' +
+        '<div class="pc-rummy-pile"><span class="pc-rummy-pile-label">Discard</span>' +
+        topHtml +
+        '</div></div>' +
+        '<div class="pc-rummy-sort" role="group" aria-label="Sort hand">' +
+        '<button type="button" class="pc-rummy-sort-btn' +
+        (sortMode === 'suit' ? ' is-on' : '') +
+        '" data-sort="suit">Suit</button>' +
+        '<button type="button" class="pc-rummy-sort-btn' +
+        (sortMode === 'rank' ? ' is-on' : '') +
+        '" data-sort="rank">Rank</button>' +
+        '</div>' +
+        '<div class="pc-hand pc-rummy-hand">' +
+        handHtml +
+        '</div>' +
+        '<div class="pc-actions pc-rummy-actions">' +
+        '<button type="button" class="cs-hit" data-draw' +
+        (canDraw ? '' : ' disabled') +
+        '>Draw</button>' +
+        '<button type="button" class="cs-hit" data-take' +
+        (canTake ? '' : ' disabled') +
+        '>Take discard</button>' +
+        '<button type="button" class="cs-hit" data-discard' +
+        (canDiscard ? '' : ' disabled') +
+        '>Discard</button>' +
+        '<button type="button" class="cs-hit cs-hit--ghost" data-declare disabled title="Melds next">Declare</button>' +
+        '</div>' +
+        '<p class="pc-hint pc-rummy-declare-hint">Declare locked \u2014 melds &amp; jokers come next.</p>' +
+        '</div>';
+
+      shell.body.querySelectorAll('[data-sort]').forEach((btn) => {
         btn.addEventListener('click', () => {
-          if (!myTurn || ended) return;
-          const id = btn.dataset.cid;
-          const hand = myHand().slice();
-          const ix = hand.findIndex((c) => c.id === id);
-          if (ix < 0) return;
-          if (hand.length < 14 && !drawn) {
-            buzz('invalid');
-            return;
+          sortMode = btn.getAttribute('data-sort') === 'rank' ? 'rank' : 'suit';
+          paint(msg);
+        });
+      });
+
+      shell.body.querySelectorAll('.pc-rummy-hand .pc-card').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (!myTurn || ended || phase !== 'needDiscard') return;
+          selectedId = btn.dataset.cid;
+          paint('Selected \u2014 tap Discard.');
+        });
+      });
+
+      shell.body.querySelector('[data-draw]')?.addEventListener('click', () => {
+        if (!myTurn || ended || phase !== 'needDraw' || !deck.length) return;
+        if (myHand().length !== 13) {
+          buzz('invalid');
+          return;
+        }
+        const c = deck.pop();
+        const hand = myHand();
+        hand.push(c);
+        setMyHand(hand);
+        drawnId = c.id;
+        phase = 'needDiscard';
+        selectedId = null;
+        buzz('card');
+        if (liveOn) pushState();
+        paint('Drawn \u2014 select a card to discard.');
+      });
+
+      shell.body.querySelector('[data-take]')?.addEventListener('click', () => {
+        if (!myTurn || ended || phase !== 'needDraw' || !discard.length) return;
+        if (myHand().length !== 13) {
+          buzz('invalid');
+          return;
+        }
+        const c = discard.pop();
+        const hand = myHand();
+        hand.push(c);
+        setMyHand(hand);
+        drawnId = c.id;
+        phase = 'needDiscard';
+        selectedId = null;
+        buzz('card');
+        if (liveOn) pushState();
+        paint('Took discard \u2014 select a card to discard.');
+      });
+
+      shell.body.querySelector('[data-discard]')?.addEventListener('click', () => {
+        if (!myTurn || ended || phase !== 'needDiscard' || !selectedId) return;
+        const hand = myHand().slice();
+        if (hand.length !== 14) {
+          buzz('invalid');
+          return;
+        }
+        const ix = hand.findIndex((c) => c.id === selectedId);
+        if (ix < 0) return;
+        discard.push(hand.splice(ix, 1)[0]);
+        setMyHand(hand);
+        drawnId = null;
+        selectedId = null;
+        phase = 'needDraw';
+        buzz('card');
+        myTurn = false;
+        if (liveOn) {
+          pushState({ turn: liveRoles.opp });
+          if (typeof DangalLive !== 'undefined' && DangalLive.pingTurn) {
+            DangalLive.pingTurn(liveRoles.opp, 'rummy', { chatId: chat && (chat.firestoreId || chat.id) });
           }
-          discard.push(hand.splice(ix, 1)[0]);
-          setMyHand(hand);
-          drawn = null;
-          buzz('card');
-          myTurn = false;
-          if (liveOn) {
-            pushState({ turn: liveRoles.opp });
-            if (typeof DangalLive !== 'undefined' && DangalLive.pingTurn) {
-              DangalLive.pingTurn(liveRoles.opp, 'rummy', { chatId: chat && (chat.firestoreId || chat.id) });
-            }
-            paint('Discarded. Waiting…');
-            return;
-          }
+          paint('Discarded. Waiting\u2026');
+          return;
+        }
+        paint('Opponent\u2019s turn\u2026');
+        if (aiTimer) clearTimeout(aiTimer);
+        aiTimer = setTimeout(() => {
+          aiTimer = 0;
+          if (ended || !shell.alive()) return;
           aiPlay();
           myTurn = true;
-          paint('Discarded. Opponent played.');
-        });
-      });
-      shell.body.querySelector('[data-draw]')?.addEventListener('click', () => {
-        if (!myTurn || drawn || !deck.length) return;
-        drawn = deck.pop();
-        const hand = myHand();
-        hand.push(drawn);
-        setMyHand(hand);
-        buzz('card');
-        if (liveOn) pushState();
-        paint('Drawn — tap a card to discard.');
-      });
-      shell.body.querySelector('[data-take]')?.addEventListener('click', () => {
-        if (!myTurn || drawn || !discard.length) return;
-        drawn = discard.pop();
-        const hand = myHand();
-        hand.push(drawn);
-        setMyHand(hand);
-        buzz('card');
-        if (liveOn) pushState();
-        paint('Took discard — tap a card to discard.');
-      });
-      shell.body.querySelector('[data-declare]')?.addEventListener('click', () => {
-        if (!myTurn) return;
-        const ok = rummyOk(myHand());
-        ended = true;
-        if (liveOn && liveHandle) {
-          liveHandle.push({
-            status: 'over',
-            winner: ok ? liveRoles.me : liveRoles.opp,
-            state: { handA, handB, discard, deck, declared: true, valid: ok },
-          });
-        }
-        showDuelResult(shell, {
-          id: 'rummy',
-          you: ok ? 1 : 0,
-          opp: ok ? 0 : 1,
-          glyph: '🃏',
-          title: ok ? 'Valid declare' : 'Invalid declare',
-          subtitle: ok ? 'Melds accepted.' : 'Need runs and sets covering most of the hand.',
-          shareText: 'Rummy on Chaupaal',
-          onAgain: () => openRummy(chat),
-        });
+          phase = 'needDraw';
+          drawnId = null;
+          selectedId = null;
+          paint('Your turn \u2014 draw or take discard.');
+        }, 450 + Math.floor(rng() * 350));
       });
     }
 
+    /** Dumb Practice AI: one acquire + one discard; keeps 13. */
     function aiPlay() {
-      if (deck.length) handB.push(deck.pop());
-      handB.sort((a, b) => rankVal(a.r) - rankVal(b.r));
-      if (handB.length) discard.push(handB.pop());
+      if (handB.length !== 13) {
+        while (handB.length > 13 && handB.length) discard.push(handB.pop());
+        while (handB.length < 13 && deck.length) handB.push(deck.pop());
+      }
+      let took = null;
+      if (discard.length && rng() < 0.4) {
+        took = discard.pop();
+        handB.push(took);
+      } else if (deck.length) {
+        took = deck.pop();
+        handB.push(took);
+      } else if (discard.length) {
+        took = discard.pop();
+        handB.push(took);
+      }
+      if (handB.length > 13) {
+        let ix = Math.floor(rng() * handB.length);
+        if (took && handB.length > 1 && handB[ix].id === took.id) {
+          ix = (ix + 1) % handB.length;
+        }
+        discard.push(handB.splice(ix, 1)[0]);
+      }
+      while (handB.length > 13) discard.push(handB.pop());
     }
 
     function hydrate(st, turn) {
@@ -4029,12 +4192,16 @@
       if (st.handB) handB = st.handB;
       if (st.discard) discard = st.discard;
       if (st.deck) deck = st.deck;
-      drawn = null;
-      if (st.drawn && st.drawnId) {
-        const h = myHand();
-        drawn = h.find((c) => c.id === st.drawnId) || null;
+      phase = st.phase === 'needDiscard' ? 'needDiscard' : 'needDraw';
+      drawnId = st.drawnId || null;
+      if (st.drawn && st.drawnId && !st.phase) {
+        phase = 'needDiscard';
+        drawnId = st.drawnId;
       }
+      selectedId = null;
       myTurn = turn === liveRoles.me;
+      if (myTurn && phase === 'needDraw' && myHand().length === 14) phase = 'needDiscard';
+      if (myTurn && phase === 'needDiscard' && myHand().length === 13) phase = 'needDraw';
     }
 
     if (liveOn) {
@@ -4043,12 +4210,21 @@
         if (val.status === 'forfeit' || val.status === 'over') {
           const iWon = val.winner === liveRoles.me;
           ended = true;
+          if (aiTimer) clearTimeout(aiTimer);
           showDuelResult(shell, {
             id: 'rummy',
             you: iWon ? 1 : 0,
             opp: iWon ? 0 : 1,
             glyph: '🃏',
-            title: val.status === 'forfeit' ? (iWon ? 'Opponent left' : 'You forfeited') : iWon ? 'You win' : 'Opponent wins',
+            title:
+              val.status === 'forfeit'
+                ? iWon
+                  ? 'Opponent left'
+                  : 'You forfeited'
+                : iWon
+                  ? 'You win'
+                  : 'Opponent wins',
+            subtitle: '13-card Rummy',
             shareText: 'Rummy on Chaupaal',
             onAgain: () => openRummy(chat),
           });
@@ -4063,23 +4239,22 @@
         liveHandle = joined.handle;
         liveRoles = joined.roles;
         if (liveRoles.host) {
-          handA = deck.splice(0, 13);
-          handB = deck.splice(0, 13);
-          discard = [deck.pop()];
+          dealFresh();
           myTurn = true;
+          phase = 'needDraw';
           pushState({ turn: liveRoles.me });
-          paint();
+          paint('Your break \u2014 draw or take the open discard.');
         } else {
-          shell.body.innerHTML = `<p class="pc-hint">Waiting for deal…</p>`;
+          shell.body.innerHTML = '<p class="pc-hint">Waiting for deal\u2026</p>';
         }
       }
     } else {
-      handA = deck.splice(0, 13);
-      handB = deck.splice(0, 13);
-      discard = [deck.pop()];
-      paint();
+      dealFresh();
+      myTurn = true;
+      paint('Your turn \u2014 draw or take the open discard.');
     }
   }
+
 
   /* ---------- Teen Patti ---------- */
   function isSeqVals(vals) {
@@ -6674,7 +6849,7 @@
       { id: 'tambola', name: 'Tambola', desc: 'Ticket · full house', icon: '🎱', genre: 'party', launch: openTambola, order: 30 },
       { id: 'carrom', name: 'Carrom', desc: 'Live · stakes · AI', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
       { id: 'pool', name: 'Pool', desc: '8-ball · solids & stripes', icon: '🎱', genre: 'board', launch: openPool, order: 32 },
-      { id: 'rummy', name: 'Rummy', desc: 'Runs and sets', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
+      { id: 'rummy', name: 'Rummy', desc: '13-card · draw then discard', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
       { id: 'teenpatti', name: 'Teen Patti', desc: 'Boot, chaal, side-show · virtual chips', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
       { id: 'bluff', name: 'Bluff', desc: 'Pile claims · call · empty hand', icon: '🎭', genre: 'party', launch: openBluff, order: 35 },
       { id: 'sattepe', name: 'Satte pe Satta', desc: 'Build off sevens', icon: '7️⃣', genre: 'party', launch: openSatte, order: 36 },

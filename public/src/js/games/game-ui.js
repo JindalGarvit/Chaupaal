@@ -174,7 +174,11 @@
       'Clear your group, then the 8 last — early 8 or scratch on 8 loses',
       'Scratch: cue back in kitchen · Practice AI shoots for real · Live syncs groups',
     ],
-    rummy: ['Draw or take the discard', 'Discard one card', 'Declare when you have runs and sets'],
+    rummy: [
+      '13 cards each — draw from stock or take discard, then discard one',
+      'Sort by suit or rank · opponent shows count only',
+      'Declare / melds & jokers come in the next updates',
+    ],
     teenpatti: [
       'Boot each hand — stacks carry across the ring (virtual chips)',
       'Blind chaal = S, seen = 2S; side-show compares — loser packs',
