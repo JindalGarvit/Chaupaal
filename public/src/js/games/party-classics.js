@@ -4010,19 +4010,36 @@
     const liveOn = chatLiveOn(chat);
     const rng = rngFn();
     // HOUSE RULE: first play locks rank until Call clears.
-    // UX: Call or Play accepts mid-hand; empty-hand finish → Call or Pass window.
-    // Reveal scope: last play only. Empty-hand win only after that window.
+    // UX: Call or Play mid-hand; empty-hand finish → Call or Pass window.
+    // Live privacy: public state never carries opp faces / honest / pre-reveal cards.
+    // Deal: host sends only the guest's hand (handFor); host keeps own locally.
+    // Stakes: settle once per matchId (table) via reportGameEnd; rematch Again is idempotent.
+    const liveStake = liveOn
+      ? Number(
+          (chat && chat.stake) ||
+            (window.__dangalLaunchCtx && window.__dangalLaunchCtx.stake) ||
+            0
+        ) || 0
+      : 0;
+    const settleMatchId = liveOn ? String(matchIdFor(chat, 'bluff') || '').trim() : '';
+    let settleOppUid = '';
+    let settleDone = false;
+    let resultReported = false;
+    let phase = 'playing'; // playing | over
     let aiTimer = 0;
     let revealTimer = 0;
     const shell = openShell({
       id: 'bluff',
       title: 'Bluff',
-      subtitle: liveOn ? liveSub() + ' · 1v1' : practiceSub('Empty hand · pressure'),
+      subtitle: liveOn
+        ? liveSub() + (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') + ' · 1v1'
+        : practiceSub('Empty hand · pressure'),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
       accent: '#FF1744',
       bg: '#0A0E10',
+      leaveBody: 'Forfeit this Bluff hand?',
       cleanup: () => {
         if (aiTimer) {
           clearTimeout(aiTimer);
@@ -4032,6 +4049,7 @@
           clearTimeout(revealTimer);
           revealTimer = 0;
         }
+        myPendingPlay = null;
       },
     });
     if (!shell) return;
@@ -4061,6 +4079,7 @@
     let coachShown = false;
     let aiBluffStreak = 0;
     let aiKnownGone = {}; // rank -> count AI saw leave play (from reveals)
+    let lastAppliedSeq = -1;
 
     function iAmA() {
       return !liveOn || !liveRoles || liveRoles.me === liveRoles.playerA;
@@ -4123,8 +4142,9 @@
       else handB = handB.concat(add);
     }
 
-    function publicState(includeHands) {
-      const st = {
+    function publicState() {
+      return {
+        phase,
         livesA,
         livesB,
         pileCount: pile.length,
@@ -4137,22 +4157,18 @@
         handCountB: handB.length,
         pendingOutSeatA: pendingOutSeatA,
         seq,
+        // Never: handA/handB, honest, pre-reveal cards
       };
-      if (includeHands) {
-        st.handA = handA;
-        st.handB = handB;
-      }
-      return st;
     }
 
-    function pushLive(extra, includeHands) {
+    function pushLive(extra) {
       if (!liveOn || !liveHandle || applying || ended) return;
       liveHandle.push(
         Object.assign(
           {
-            status: 'playing',
+            status: phase === 'over' ? 'over' : 'playing',
             turn: turnIsA ? liveRoles.playerA : liveRoles.playerB,
-            state: publicState(!!includeHands),
+            state: publicState(),
           },
           extra || {}
         )
@@ -4177,6 +4193,25 @@
       pendingOutSeatA = null;
       aiBluffStreak = 0;
       aiKnownGone = {};
+      phase = 'playing';
+      lastAppliedSeq = -1;
+    }
+
+    /** Host-only: guest receives their hand; host hand never enters RTDB. */
+    function publishPrivateDeal() {
+      if (!liveOn || !liveHandle || !liveRoles) return;
+      const guestUid = liveRoles.opp;
+      const guestHand = (iAmA() ? handB : handA).map((c) => ({ r: c.r, s: c.s, id: c.id }));
+      maskOppFaces();
+      dealtLive = true;
+      liveHandle.push({
+        status: 'playing',
+        turn: liveRoles.playerA,
+        act: 'deal',
+        handFor: guestUid,
+        hand: guestHand,
+        state: publicState(),
+      });
     }
 
     function clearPileRound() {
@@ -4233,25 +4268,102 @@
       </div>`;
     }
 
+    function bluffShareText(finalWin, pathMsg) {
+      const path = String(pathMsg || '');
+      if (finalWin && /Emptied/i.test(path)) {
+        return 'I emptied my hand on Chaupaal Bluff — called the pile (virtual stakes)';
+      }
+      if (finalWin && /lives/i.test(path)) {
+        return 'I won Bluff on Chaupaal — outlasted on lives (virtual stakes)';
+      }
+      if (finalWin) return 'I won Bluff on Chaupaal — called the pile';
+      if (/Forfeit/i.test(path)) return 'Bluff on Chaupaal — rematch?';
+      return 'Bluff on Chaupaal — next time I call the pile';
+    }
+
+    async function settleBluffOnce(won) {
+      if (!liveOn || settleDone) return null;
+      if (!settleMatchId || liveStake <= 0) {
+        settleDone = true;
+        return null;
+      }
+      if (!window.DangalEconomy || typeof DangalEconomy.reportGameEnd !== 'function') {
+        settleDone = true;
+        return null;
+      }
+      settleDone = true;
+      try {
+        const me = typeof getCurrentUid === 'function' ? getCurrentUid() : '';
+        const opp = settleOppUid || (liveRoles && liveRoles.opp) || '';
+        return await DangalEconomy.reportGameEnd({
+          gameType: 'bluff',
+          result: won ? 'win' : 'loss',
+          won: !!won,
+          isDraw: false,
+          matchId: settleMatchId,
+          sessionId: settleMatchId,
+          opponentUid: opp,
+          stake: liveStake,
+          winnerUid: won ? me : opp,
+        });
+      } catch (e) {
+        settleDone = false;
+        return null;
+      }
+    }
+
+    function reportBluffResult(finalWin, pathMsg) {
+      if (resultReported) return;
+      resultReported = true;
+      if (typeof recordGameResult === 'function') {
+        try {
+          recordGameResult('bluff', !!finalWin, false, {
+            live: !!liveOn,
+            stake: liveStake,
+            mode: liveOn ? 'live' : 'practice',
+            path: pathMsg || '',
+          });
+        } catch (e) {}
+      }
+    }
+
     function endGame(finalWin, pathMsg) {
       if (ended) return true;
       ended = true;
+      phase = 'over';
       pendingOutSeatA = null;
-      if (liveOn && liveHandle) {
-        liveHandle.push({
-          status: 'over',
-          winner: finalWin ? liveRoles.me : liveRoles.opp,
-          state: publicState(false),
+      myPendingPlay = null;
+      if (liveRoles && liveRoles.opp) settleOppUid = liveRoles.opp;
+      reportBluffResult(finalWin, pathMsg);
+      // Economy: settleBluffOnce + setOutcome (idempotent on matchId)
+      settleBluffOnce(finalWin).then((settle) => {
+        let sub = pathMsg || '';
+        if (liveOn && liveStake > 0) {
+          const cd = settle && settle.chipDelta != null ? Number(settle.chipDelta) : null;
+          sub +=
+            (sub ? ' · ' : '') +
+            (Number.isFinite(cd) && cd !== 0
+              ? 'Stake ' + (cd > 0 ? '+' : '') + cd + ' virtual'
+              : 'Virtual stakes · not real money');
+        }
+        if (liveOn && liveHandle && !applying) {
+          try {
+            liveHandle.push({
+              status: 'over',
+              winner: finalWin ? liveRoles.me : liveRoles.opp,
+              state: publicState(),
+            });
+          } catch (e) {}
+        }
+        showDuelResult(shell, {
+          id: 'bluff',
+          you: finalWin ? 1 : 0,
+          opp: finalWin ? 0 : 1,
+          glyph: '🎭',
+          subtitle: sub,
+          shareText: bluffShareText(finalWin, pathMsg),
+          onAgain: () => openBluff(chat),
         });
-      }
-      showDuelResult(shell, {
-        id: 'bluff',
-        you: finalWin ? 1 : 0,
-        opp: finalWin ? 0 : 1,
-        glyph: '🎭',
-        subtitle: pathMsg || '',
-        shareText: 'Bluff on Chaupaal',
-        onAgain: () => openBluff(chat),
       });
       return true;
     }
@@ -4315,7 +4427,7 @@
             ${canCall ? `<button type="button" class="cs-hit cs-hit--ghost" data-call>Call bluff</button>` : ''}
             ${canPassOut ? `<button type="button" class="cs-hit" data-pass>Pass — they empty</button>` : ''}
           </div>
-          <p class="pc-hint pc-tp-boot">Empty hand wins after Call/Pass · 0 lives loses</p>
+          <p class="pc-hint pc-tp-boot">Pile · claim · call/pass · last-card risk · virtual stakes</p>
         </div>`;
       const rankEl = shell.body.querySelector('[data-rank]');
       if (rankEl) {
@@ -4422,7 +4534,7 @@
       // Bluff caught
       if (claimerIsA === iAmA()) setLives(-1, 0);
       else setLives(0, -1);
-      turnIsA = callerIsMe ? iAmA() : true;
+      turnIsA = callerIsMe ? iAmA() : !claimerIsA;
       clearPileRound();
       // Restore last play to claimer if they had emptied (no instant empty win after catch)
       const claimerEmpty =
@@ -4490,7 +4602,7 @@
       pendingOutSeatA = emptied ? iAmA() : null;
       buzz('card');
       passTurn();
-      pushLive({ act: 'play', by: liveRoles && liveRoles.me }, false);
+      pushLive({ act: 'play', by: liveRoles && liveRoles.me, seq });
       // Never end on empty here — opponent gets Call/Pass window
       if (checkLivesEnd()) return;
       paint(
@@ -4514,7 +4626,7 @@
           act: 'passOut',
           passOutSeatA: seat,
           by: liveRoles.me,
-          state: publicState(false),
+          state: publicState(),
         });
       }
       awardEmptyWin(seat);
@@ -4525,7 +4637,7 @@
       if (!lastClaim || lastClaim.seatA === iAmA() || !pile.length) return;
       callInFlight = true;
       if (liveOn) {
-        pushLive({ act: 'call', callBy: liveRoles.me }, false);
+        pushLive({ act: 'call', callBy: liveRoles.me, by: liveRoles.me, seq });
         paint('Calling…');
         return;
       }
@@ -4559,7 +4671,7 @@
           handCountA: handA.length,
           handCountB: handB.length,
         },
-        state: publicState(false),
+        state: publicState(),
       });
     }
 
@@ -4593,14 +4705,47 @@
       const act = val.act;
       applying = true;
 
-      if (act === 'deal' && st.handA && st.handB) {
-        handA = st.handA.slice();
-        handB = st.handB.slice();
-        maskOppFaces();
-        dealtLive = true;
+      // Stale / wrong-seat: ignore plays & calls from non-actors
+      if ((act === 'play' || act === 'call' || act === 'passOut') && val.by) {
+        if (act === 'play' && val.by === liveRoles.me) {
+          // own echo — keep secret, sync public only below
+        } else if (act === 'call' && val.callBy === liveRoles.me) {
+          // own call echo
+        } else if (st.seq != null && Number(st.seq) < lastAppliedSeq) {
+          applying = false;
+          return;
+        }
+      }
+      if (st.seq != null) lastAppliedSeq = Math.max(lastAppliedSeq, Number(st.seq) || 0);
+
+      // Private deal: only apply hand when addressed to me (never both hands in state)
+      if (act === 'deal') {
+        if (val.handFor === liveRoles.me && Array.isArray(val.hand)) {
+          const mine = val.hand.map((c) => ({ r: c.r, s: c.s, id: c.id || c.r + c.s }));
+          setMyHand(mine);
+          dealtLive = true;
+        } else if (liveRoles.host && dealtLive) {
+          // host echo — already has local hands
+        } else if (Array.isArray(st.handA) || Array.isArray(st.handB)) {
+          // Legacy leaky deal — take only own seat if present, mask opp
+          if (iAmA() && Array.isArray(st.handA)) handA = st.handA.slice();
+          if (!iAmA() && Array.isArray(st.handB)) handB = st.handB.slice();
+          maskOppFaces();
+          dealtLive = true;
+        }
+        if (st.handCountA != null && !iAmA()) syncOppCount(st.handCountA);
+        if (st.handCountB != null && iAmA()) syncOppCount(st.handCountB);
+        if (st.livesA != null) livesA = st.livesA;
+        if (st.livesB != null) livesB = st.livesB;
+        if (st.turnIsA != null) turnIsA = !!st.turnIsA;
+        phase = 'playing';
+        applying = false;
+        paint('Dealt — empty your hand, watch lives');
+        return;
       }
 
       if (act !== 'reveal') {
+        if (st.phase) phase = st.phase;
         if (st.livesA != null) livesA = st.livesA;
         if (st.livesB != null) livesB = st.livesB;
         if (st.pileCount != null) {
@@ -4632,6 +4777,7 @@
 
       if (act === 'passOut') {
         applying = false;
+        if (val.by && val.by === liveRoles.me) return; // own echo — already awarded
         if (val.passOutSeatA != null) {
           awardEmptyWin(!!val.passOutSeatA);
           return;
@@ -4692,9 +4838,7 @@
           ? pendingOutSeatA != null && lastClaim && lastClaim.seatA !== iAmA()
             ? 'Last play — Call or Pass'
             : 'Opponent played — Call or play to accept'
-          : act === 'deal'
-            ? 'Dealt — empty your hand, watch lives'
-            : undefined
+          : undefined
       );
     }
 
@@ -4873,39 +5017,48 @@
     }
 
     if (liveOn) {
-      const joined = joinLive(shell, chat, 'bluff', (val) => {
-        if (!val || ended) return;
-        if (val.status === 'forfeit' || val.status === 'over') {
-          ended = true;
-          const iWon = val.winner === liveRoles.me;
-          showDuelResult(shell, {
-            id: 'bluff',
-            you: iWon ? 1 : 0,
-            opp: iWon ? 0 : 1,
-            glyph: '🎭',
-            title:
+      const joined = joinLive(
+        shell,
+        chat,
+        'bluff',
+        (val) => {
+          if (!val || ended) return;
+          if (liveRoles && liveRoles.opp) settleOppUid = liveRoles.opp;
+          if (val.status === 'forfeit' || val.status === 'over') {
+            const iWon = val.winner === liveRoles.me;
+            endGame(
+              iWon,
               val.status === 'forfeit'
                 ? iWon
-                  ? 'Opponent left'
-                  : 'You forfeited'
+                  ? 'Opponent forfeited'
+                  : 'Forfeit'
                 : iWon
-                  ? 'You win'
-                  : 'You lose',
-            shareText: 'Bluff on Chaupaal',
-            onAgain: () => openBluff(chat),
-          });
-          return;
+                  ? 'Emptied hand'
+                  : 'Opponent emptied hand'
+            );
+            return;
+          }
+          applyRemote(val);
+        },
+        null,
+        {
+          stake: liveStake,
+          onForfeit(info, roles) {
+            if (ended) return;
+            if (roles && roles.opp) settleOppUid = roles.opp;
+            const iWon = !!(info && info.winner === roles.me);
+            myPendingPlay = null;
+            endGame(iWon, iWon ? 'Opponent forfeited' : 'Forfeit');
+          },
         }
-        applyRemote(val);
-      });
+      );
       if (joined) {
         liveHandle = joined.handle;
         liveRoles = joined.roles;
+        settleOppUid = liveRoles.opp || settleOppUid;
         if (liveRoles.host) {
           dealBoth();
-          pushLive({ act: 'deal' }, true);
-          maskOppFaces();
-          dealtLive = true;
+          publishPrivateDeal();
           paint('Dealt — empty your hand, watch lives');
         } else {
           shell.body.innerHTML = `<p class="pc-hint">Waiting for deal…</p>`;
@@ -5289,7 +5442,7 @@
       { id: 'pool', name: 'Pool', desc: 'Clear the felt', icon: '🎱', genre: 'board', launch: openPool, order: 32 },
       { id: 'rummy', name: 'Rummy', desc: 'Runs and sets', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
       { id: 'teenpatti', name: 'Teen Patti', desc: 'Boot, chaal, side-show · virtual chips', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
-      { id: 'bluff', name: 'Bluff', desc: 'Empty hand · pressure', icon: '🎭', genre: 'party', launch: openBluff, order: 35 },
+      { id: 'bluff', name: 'Bluff', desc: 'Pile claims · call · empty hand', icon: '🎭', genre: 'party', launch: openBluff, order: 35 },
       { id: 'sattepe', name: 'Satte pe Satta', desc: 'Build off sevens', icon: '7️⃣', genre: 'party', launch: openSatte, order: 36 },
       { id: 'andarbaahar', name: 'Andar Bahar', desc: 'Pick a side', icon: '🃏', genre: 'party', launch: openAndarBahar, order: 37 },
     ];
