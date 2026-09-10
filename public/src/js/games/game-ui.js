@@ -171,9 +171,9 @@
       'Live: both seats raid & defend · leave = forfeit · rematch is a fresh court · virtual stakes',
     ],
     tambola: [
-      '3×9 Housie ticket — claim Early Five, lines, four corners, then Full House',
-      'Tap Claim when ready · bogey if wrong · first valid Full House ends the match',
-      'Interim claims score 1 pt each · auto-daub · Live both seats can claim',
+      'Auto-daub on a real 3×9 ticket — claim Early Five, lines, corners, then Full House',
+      'Practice races a real rival ticket · Live shares one bag; claim before the next call',
+      'First valid Full House ends · interim pts shown · virtual stakes on Live only',
     ],
     carrom: ['Pocket your colour', 'Queen then cover', 'Striker pocket is a foul'],
     uno: ['Match colour or number to play', 'Classic has optional house-rule toggles', "Shout 'Oh No!' at 1 card · Blaze hits harder · Flip switches sides"],
