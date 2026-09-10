@@ -175,9 +175,9 @@
       'Scratch: cue back in kitchen · Practice AI shoots for real · Live syncs groups',
     ],
     rummy: [
-      'Declare valid melds — opponent pays deadwood ≤80 · Drop 20/40',
-      'Practice AI takes useful discards, holds jokers, declares when valid',
-      'Jokers/wilds score 0 · Ace/face = 10 · Live is human vs human',
+      'Indian 13-card · pure sequence required · jokers + wild rank from open card',
+      'Declare valid · Drop 20 first / 40 middle · Wrong show 80 · points capped at 80',
+      'Live hides hands mid-table · Practice AI · virtual stakes only — not real money',
     ],
     teenpatti: [
       'Boot each hand — stacks carry across the ring (virtual chips)',

@@ -4298,11 +4298,30 @@
       'medium';
     if (difficulty !== 'easy' && difficulty !== 'hard') difficulty = 'medium';
     let aiTurns = 0;
+    // Live stakes: settle ONCE per hand end (virtual chips — not real money).
+    const liveStake = liveOn
+      ? Number(
+          (chat && chat.stake) ||
+            (window.__dangalLaunchCtx && window.__dangalLaunchCtx.stake) ||
+            0
+        ) || 0
+      : 0;
+    const settleMatchId = liveOn ? String(matchIdFor(chat, 'rummy') || '').trim() : '';
+    let settleOppUid = '';
+    let settleDone = false;
+    let resultReported = false;
+    let seq = 0;
+    let lastAppliedSeq = -1;
+    let deckCount = 0;
+    let dealtLive = false;
+
     const shell = openShell({
       id: 'rummy',
       title: 'Rummy',
       subtitle: liveOn
-        ? liveSub() + ' · Points Rummy'
+        ? liveSub() +
+          (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') +
+          ' · Points Rummy'
         : practiceSub('Points Rummy · ' + (DIFF_LABEL[difficulty] || 'Medium') + ' AI'),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
@@ -4339,21 +4358,53 @@
     let drewB = false;
     let lastResult = null;
 
+    function isHost() {
+      return !!(liveRoles && liveRoles.host);
+    }
+    function iAmA() {
+      return !liveOn || !liveRoles || liveRoles.me === liveRoles.playerA;
+    }
     function myHand() {
       if (!liveOn || !liveRoles) return handA;
-      return liveRoles.me === liveRoles.playerA ? handA : handB;
+      return iAmA() ? handA : handB;
     }
     function setMyHand(h) {
       if (!liveOn || !liveRoles) {
         handA = h;
         return;
       }
-      if (liveRoles.me === liveRoles.playerA) handA = h;
+      if (iAmA()) handA = h;
       else handB = h;
+    }
+    function oppHand() {
+      if (!liveOn || !liveRoles) return handB;
+      return iAmA() ? handB : handA;
+    }
+    function stockLen() {
+      if (liveOn && !isHost()) return deckCount | 0;
+      return deck.length;
     }
     function oppHandCount() {
       if (!liveOn || !liveRoles) return handB.length;
-      return liveRoles.me === liveRoles.playerA ? handB.length : handA.length;
+      return iAmA() ? handB.length : handA.length;
+    }
+    function maskOppFaces(n) {
+      const count = Math.max(0, n | 0);
+      const masked = [];
+      for (let i = 0; i < count; i++) masked.push({ r: '?', s: '?', id: 'hid' + i });
+      if (iAmA()) handB = masked;
+      else handA = masked;
+    }
+    function authHandForUid(uid) {
+      if (!liveRoles) return null;
+      if (uid === liveRoles.playerA) return handA;
+      if (uid === liveRoles.playerB) return handB;
+      return null;
+    }
+    function setAuthHandForUid(uid, h) {
+      if (!liveRoles) return;
+      if (uid === liveRoles.playerA) handA = h;
+      else if (uid === liveRoles.playerB) handB = h;
     }
 
     function suitOrder(s) {
@@ -4394,6 +4445,7 @@
       } else if (isPrintedJoker(open)) {
         discard = [open];
         let wr = 'A';
+        wildShow = null;
         for (let i = deck.length - 1; i >= 0; i--) {
           if (!isPrintedJoker(deck[i])) {
             wr = deck[i].r;
@@ -4408,6 +4460,7 @@
         wildShow = open;
         discard = [open];
       }
+      deckCount = deck.length;
       phase = 'needDraw';
       drawnId = null;
       selectedId = null;
@@ -4416,11 +4469,16 @@
       drewB = false;
       lastResult = null;
       aiTurns = 0;
+      ended = false;
+      settleDone = false;
+      resultReported = false;
+      seq = 0;
+      lastAppliedSeq = -1;
     }
 
     function iHaveDrawn() {
       if (!liveOn || !liveRoles) return drewA;
-      return liveRoles.me === liveRoles.playerA ? drewA : drewB;
+      return iAmA() ? drewA : drewB;
     }
 
     function markIDrew() {
@@ -4428,13 +4486,14 @@
         drewA = true;
         return;
       }
-      if (liveRoles.me === liveRoles.playerA) drewA = true;
+      if (iAmA()) drewA = true;
       else drewB = true;
     }
 
-    function oppHand() {
-      if (!liveOn || !liveRoles) return handB;
-      return liveRoles.me === liveRoles.playerA ? handB : handA;
+    function markUidDrew(uid) {
+      if (!liveRoles) return;
+      if (uid === liveRoles.playerA) drewA = true;
+      else if (uid === liveRoles.playerB) drewB = true;
     }
 
     function wildChrome() {
@@ -4445,37 +4504,100 @@
       return 'Wild: ' + wildRank + 's';
     }
 
-    /**
-     * Live Prompt 1: still syncs full hands/deck until Prompt 5 hidden-hand protocol.
-     * TODO(Rummy Prompt 5): sync only discard + deckCount + turn + handCounts + phase; never opp faces.
-     */
-    function pushState(extra) {
-      if (!liveOn || !liveHandle || !liveRoles || applying) return;
+    /** Public mid-hand snapshot — never handA/handB/deck faces. */
+    function publicState() {
+      const dc = isHost() ? deck.length : deckCount | 0;
+      return {
+        discard: (discard || []).map((c) => ({ r: c.r, s: c.s, id: c.id })),
+        deckCount: dc,
+        handCountA: handA.length,
+        handCountB: handB.length,
+        phase,
+        wildRank,
+        wildShow: wildShow ? { r: wildShow.r, s: wildShow.s, id: wildShow.id } : null,
+        drewA: !!drewA,
+        drewB: !!drewB,
+        seq,
+      };
+    }
+
+    function turnUid() {
+      if (!liveRoles) return null;
+      return myTurn ? liveRoles.me : liveRoles.opp;
+    }
+
+    function hostPush(extra) {
+      if (!liveOn || !liveHandle || !liveRoles || applying || !isHost() || ended) return;
+      seq += 1;
+      const st = publicState();
+      st.seq = seq;
       liveHandle.push(
         Object.assign(
           {
             status: 'playing',
-            turn: myTurn ? liveRoles.me : liveRoles.opp,
-            state: {
-              // TODO(Rummy Prompt 5): remove handA/handB/deck leak — keep public fields only
-              handA,
-              handB,
-              discard,
-              deck,
-              deckCount: deck.length,
-              handCountA: handA.length,
-              handCountB: handB.length,
-              phase,
-              drawnId,
-              wildRank,
-              wildShow,
-              drewA,
-              drewB,
-            },
+            turn: turnUid(),
+            state: st,
           },
           extra || {}
         )
       );
+    }
+
+    function guestReq(act, payload) {
+      if (!liveOn || !liveHandle || !liveRoles || applying || isHost() || ended) return;
+      liveHandle.push(
+        Object.assign(
+          {
+            status: 'playing',
+            act,
+            by: liveRoles.me,
+            turn: liveRoles.me,
+          },
+          payload || {}
+        )
+      );
+    }
+
+    /** Host-only: guest receives their hand; host keeps both real hands locally (never mid-hand on wire). */
+    function publishPrivateDeal() {
+      if (!liveOn || !liveHandle || !liveRoles || !isHost()) return;
+      const guestUid = liveRoles.opp;
+      const guestHand = (iAmA() ? handB : handA).map((c) => ({ r: c.r, s: c.s, id: c.id }));
+      dealtLive = true;
+      deckCount = deck.length;
+      seq += 1;
+      myTurn = true;
+      phase = 'needDraw';
+      liveHandle.push({
+        status: 'playing',
+        turn: liveRoles.me,
+        act: 'deal',
+        handFor: guestUid,
+        hand: guestHand,
+        state: Object.assign(publicState(), { seq }),
+      });
+    }
+
+    function applyPublic(st) {
+      if (!st) return;
+      if (Array.isArray(st.discard)) discard = st.discard.map((c) => ({ r: c.r, s: c.s, id: c.id }));
+      if (st.deckCount != null) deckCount = st.deckCount | 0;
+      if (st.wildRank) wildRank = st.wildRank;
+      if (st.wildShow) wildShow = { r: st.wildShow.r, s: st.wildShow.s, id: st.wildShow.id };
+      if (st.drewA != null) drewA = !!st.drewA;
+      if (st.drewB != null) drewB = !!st.drewB;
+      if (st.phase === 'needDiscard' || st.phase === 'needDraw') phase = st.phase;
+      if (st.seq != null) {
+        seq = Math.max(seq, Number(st.seq) || 0);
+        lastAppliedSeq = Math.max(lastAppliedSeq, Number(st.seq) || 0);
+      }
+      // Sync opp seat to public counts only (faces stay masked for non-host)
+      if (!isHost()) {
+        if (iAmA() && st.handCountB != null) maskOppFaces(st.handCountB | 0);
+        if (!iAmA() && st.handCountA != null) maskOppFaces(st.handCountA | 0);
+      } else {
+        // Host already has real hands; still clamp guest mask unused
+      }
     }
 
     function phaseHint() {
@@ -4500,6 +4622,63 @@
         .join(' · ');
     }
 
+    function shareReasonBits(reason, melds) {
+      if (reason === 'declare') {
+        const pure = (melds || []).some((m) => m.pure);
+        return pure ? 'pure sequence' : 'valid declare';
+      }
+      if (reason === 'wrongShow') return 'wrong show';
+      if (reason === 'drop' || reason === 'oppDrop') return 'drop';
+      if (reason === 'forfeit') return 'forfeit';
+      return rummyReasonLabel(reason).toLowerCase();
+    }
+
+    async function settleRummyOnce(won) {
+      if (!liveOn || settleDone) return null;
+      if (!settleMatchId || liveStake <= 0) {
+        settleDone = true;
+        return null;
+      }
+      if (!window.DangalEconomy || typeof DangalEconomy.reportGameEnd !== 'function') {
+        settleDone = true;
+        return null;
+      }
+      settleDone = true;
+      try {
+        const me = typeof getCurrentUid === 'function' ? getCurrentUid() : '';
+        const opp = settleOppUid || (liveRoles && liveRoles.opp) || '';
+        return await DangalEconomy.reportGameEnd({
+          gameType: 'rummy',
+          result: won ? 'win' : 'loss',
+          won: !!won,
+          isDraw: false,
+          matchId: settleMatchId,
+          sessionId: settleMatchId,
+          opponentUid: opp,
+          stake: liveStake,
+          winnerUid: won ? me : opp,
+        });
+      } catch (e) {
+        settleDone = false;
+        return null;
+      }
+    }
+
+    function reportRummyResult(winnerIsYou, reason) {
+      if (resultReported) return;
+      resultReported = true;
+      if (typeof recordGameResult === 'function') {
+        try {
+          recordGameResult('rummy', !!winnerIsYou, false, {
+            live: !!liveOn,
+            stake: liveStake,
+            mode: liveOn ? 'live' : 'practice',
+            reason: reason || '',
+          });
+        } catch (e) {}
+      }
+    }
+
     function endRummyHand(opts) {
       if (ended) return;
       ended = true;
@@ -4521,9 +4700,13 @@
             ? winnerIsYou
               ? 'Opponent dropped'
               : 'You dropped'
-            : winnerIsYou
-              ? 'You win'
-              : 'Opponent wins';
+            : reason === 'forfeit'
+              ? winnerIsYou
+                ? 'Opponent left'
+                : 'You forfeited'
+              : winnerIsYou
+                ? 'You win'
+                : 'Opponent wins';
       const sub =
         'You ' +
         youPoints +
@@ -4531,17 +4714,21 @@
         oppPoints +
         ' · ' +
         rummyReasonLabel(reason) +
-        (o.detail ? ' · ' + o.detail : '');
+        (wildRank ? ' · Wild ' + wildRank + 's' : '') +
+        (o.detail ? ' · ' + o.detail : '') +
+        (liveOn && liveStake > 0 ? ' · virtual stakes' : '');
       lastResult = {
         youPoints,
         oppPoints,
         reason,
-        scoreA:
-          liveRoles && liveRoles.me === liveRoles.playerB ? oppPoints : youPoints,
-        scoreB:
-          liveRoles && liveRoles.me === liveRoles.playerB ? youPoints : oppPoints,
+        scoreA: liveRoles && liveRoles.me === liveRoles.playerB ? oppPoints : youPoints,
+        scoreB: liveRoles && liveRoles.me === liveRoles.playerB ? youPoints : oppPoints,
       };
-      if (liveOn && liveHandle && liveRoles && !o.skipLivePush && !applying) {
+      if (liveRoles && liveRoles.opp) settleOppUid = liveRoles.opp;
+      reportRummyResult(winnerIsYou, reason);
+
+      // End reveal: both hands OK on wire only at hand-end
+      if (liveOn && liveHandle && liveRoles && !o.skipLivePush && !applying && isHost()) {
         liveHandle.push({
           status: 'over',
           winner: winnerIsYou ? liveRoles.me : liveRoles.opp,
@@ -4549,7 +4736,6 @@
             handA,
             handB,
             discard,
-            deck,
             wildRank,
             wildShow,
             scoreA: lastResult.scoreA,
@@ -4560,37 +4746,113 @@
             declared: reason === 'declare' || reason === 'wrongShow',
             valid: reason === 'declare',
             melds: o.melds || [],
+            reveal: true,
           },
         });
+      } else if (liveOn && liveHandle && liveRoles && !o.skipLivePush && !applying && !isHost()) {
+        // Guest ends (drop/wrong on own seat): ask host to settle/validate
+        // Host path handles declare; guest drop pushes req already — host ends.
       }
-      showDuelResult(shell, {
-        id: 'rummy',
-        you: winnerIsYou ? 1 : 0,
-        opp: winnerIsYou ? 0 : 1,
-        glyph: '🃏',
-        title,
-        subtitle: sub,
-        shareText:
-          'Chaupaal Rummy · ' +
-          rummyReasonLabel(reason) +
-          ' · You ' +
-          youPoints +
-          ' Opp ' +
-          oppPoints,
-        onAgain: () => openRummy(chat),
+
+      settleRummyOnce(winnerIsYou).then((settle) => {
+        let subtitle = sub;
+        if (liveOn && liveStake > 0) {
+          const cd = settle && settle.chipDelta != null ? Number(settle.chipDelta) : null;
+          if (Number.isFinite(cd) && cd !== 0) {
+            subtitle += ' · ' + (cd > 0 ? '+' : '') + cd + ' chips';
+          }
+        }
+        showDuelResult(shell, {
+          id: 'rummy',
+          you: winnerIsYou ? 1 : 0,
+          opp: winnerIsYou ? 0 : 1,
+          glyph: '🃏',
+          title,
+          subtitle,
+          shareText:
+            'Chaupaal Rummy · +' +
+            youPoints +
+            ' vs ' +
+            oppPoints +
+            ' · ' +
+            shareReasonBits(reason, o.melds) +
+            (liveOn ? ' (virtual)' : ''),
+          onAgain: () => openRummy(chat),
+        });
+      });
+    }
+
+    /** Host validates declare/wrong-show for either seat. */
+    function hostResolveDeclare(actorUid, finishId, forceWrong) {
+      if (!isHost() || ended) return;
+      const hand14 = (authHandForUid(actorUid) || []).slice();
+      if (hand14.length !== 14) return;
+      const finish = hand14.find((c) => c.id === finishId);
+      if (!finish) return;
+      const remaining = hand14.filter((c) => c.id !== finishId);
+      const result = evaluateRummyHand(remaining, { wildRank });
+      const actorIsMe = actorUid === liveRoles.me;
+      const oppUid = actorUid === liveRoles.playerA ? liveRoles.playerB : liveRoles.playerA;
+      discard.push(finish);
+      setAuthHandForUid(actorUid, remaining);
+      drawnId = null;
+      selectedId = null;
+      if (!result.ok) {
+        if (!forceWrong) {
+          // Reject tampered/invalid — tell actor to keep playing
+          hostPush({ act: 'declareReject', for: actorUid, err: (result.errors && result.errors[0]) || 'Invalid' });
+          // Restore hand on host
+          setAuthHandForUid(actorUid, hand14);
+          discard.pop();
+          return;
+        }
+        const youPts = actorIsMe ? RUMMY_WRONG_SHOW : 0;
+        const oppPts = actorIsMe ? 0 : RUMMY_WRONG_SHOW;
+        endRummyHand({
+          reason: 'wrongShow',
+          youPoints: youPts,
+          oppPoints: oppPts,
+          winnerIsYou: !actorIsMe,
+          detail: 'Wrong show',
+        });
+        return;
+      }
+      const oppDead = scoreRummyDeadwood(authHandForUid(oppUid) || [], wildRank);
+      endRummyHand({
+        reason: 'declare',
+        youPoints: actorIsMe ? 0 : oppDead.points,
+        oppPoints: actorIsMe ? oppDead.points : 0,
+        winnerIsYou: actorIsMe,
+        melds: result.melds,
+        detail: meldSummary(result.melds) || 'Valid declare',
+      });
+    }
+
+    function hostResolveDrop(actorUid) {
+      if (!isHost() || ended) return;
+      const first =
+        actorUid === liveRoles.playerA ? !drewA : !drewB;
+      const pts = first ? RUMMY_FIRST_DROP : RUMMY_MIDDLE_DROP;
+      const actorIsMe = actorUid === liveRoles.me;
+      endRummyHand({
+        reason: actorIsMe ? 'drop' : 'oppDrop',
+        youPoints: actorIsMe ? pts : 0,
+        oppPoints: actorIsMe ? 0 : pts,
+        winnerIsYou: !actorIsMe,
+        detail: first ? 'First drop' : 'Middle drop',
       });
     }
 
     function paint(msg) {
       if (ended || !shell.alive()) return;
-      const you = sortHand(myHand());
+      const you = sortHand(myHand().filter((c) => c && c.r !== '?'));
       const top = discard[discard.length - 1];
-      const canDraw = myTurn && phase === 'needDraw' && deck.length > 0;
+      const stock = stockLen();
+      const canDraw = myTurn && phase === 'needDraw' && stock > 0;
       const canTake = myTurn && phase === 'needDraw' && discard.length > 0;
       const canDiscard = myTurn && phase === 'needDiscard' && !!selectedId;
-      // Declare after draw (14): select finishing discard, validate remaining 13
       const canDeclare = myTurn && phase === 'needDiscard' && you.length === 14 && !!selectedId;
-      const canShow = canDeclare; // same gate; Show may wrong-show after confirm
+      const canShow = canDeclare;
       const canFirstDrop = myTurn && phase === 'needDraw' && you.length === 13 && !iHaveDrawn();
       const canMiddleDrop = myTurn && phase === 'needDraw' && you.length === 13 && iHaveDrawn();
       const canDrop = canFirstDrop || canMiddleDrop;
@@ -4626,7 +4888,7 @@
         oppHandCount() +
         '</b></span>' +
         '<span>Stock <b>' +
-        deck.length +
+        stock +
         '</b></span>' +
         '<span>You <b>' +
         you.length +
@@ -4636,7 +4898,7 @@
         '<div class="pc-rummy-pile"><span class="pc-rummy-pile-label">Stock</span>' +
         '<span class="pc-card pc-back" aria-hidden="true"></span>' +
         '<span class="pc-rummy-pile-count">' +
-        deck.length +
+        stock +
         '</span></div>' +
         '<div class="pc-rummy-pile"><span class="pc-rummy-pile-label">Discard</span>' +
         topHtml +
@@ -4675,7 +4937,7 @@
         (canDrop ? 'Drop ' + dropPts : 'Drop') +
         '</button>' +
         '</div>' +
-        '<p class="pc-hint pc-rummy-declare-hint">Declare = valid only. Show = may cost 80 if invalid. Drop before drawing (20 first / 40 middle).</p>' +
+        '<p class="pc-hint pc-rummy-declare-hint">Declare = valid only. Show = may cost 80 if invalid. Drop before drawing (20 first / 40 middle). Live hides hands until reveal.</p>' +
         '</div>';
 
       shell.body.querySelectorAll('[data-sort]').forEach((btn) => {
@@ -4698,9 +4960,31 @@
       });
 
       shell.body.querySelector('[data-draw]')?.addEventListener('click', () => {
-        if (!myTurn || ended || phase !== 'needDraw' || !deck.length) return;
-        if (myHand().length !== 13) {
+        if (!myTurn || ended || phase !== 'needDraw' || stockLen() <= 0) return;
+        if (myHand().filter((c) => c.r !== '?').length !== 13) {
           buzz('invalid');
+          return;
+        }
+        if (liveOn && !isHost()) {
+          guestReq('reqDrawStock');
+          paint('Drawing…');
+          return;
+        }
+        if (liveOn && isHost()) {
+          if (!deck.length) return;
+          const c = deck.pop();
+          const hand = myHand();
+          hand.push(c);
+          setMyHand(hand);
+          drawnId = c.id;
+          phase = 'needDiscard';
+          selectedId = null;
+          highlightIds = [];
+          markIDrew();
+          deckCount = deck.length;
+          buzz('card');
+          hostPush({ act: 'drawStock' });
+          paint('Drawn — select a card to discard or declare.');
           return;
         }
         const c = deck.pop();
@@ -4713,14 +4997,18 @@
         highlightIds = [];
         markIDrew();
         buzz('card');
-        if (liveOn) pushState();
         paint('Drawn — select a card to discard or declare.');
       });
 
       shell.body.querySelector('[data-take]')?.addEventListener('click', () => {
         if (!myTurn || ended || phase !== 'needDraw' || !discard.length) return;
-        if (myHand().length !== 13) {
+        if (myHand().filter((c) => c.r !== '?').length !== 13) {
           buzz('invalid');
+          return;
+        }
+        if (liveOn && !isHost()) {
+          guestReq('reqTakeDiscard');
+          paint('Taking…');
           return;
         }
         const c = discard.pop();
@@ -4733,19 +5021,28 @@
         highlightIds = [];
         markIDrew();
         buzz('card');
-        if (liveOn) pushState();
+        if (liveOn && isHost()) {
+          deckCount = deck.length;
+          hostPush({ act: 'takeDiscard' });
+        }
         paint('Took discard — select a card to discard or declare.');
       });
 
       shell.body.querySelector('[data-discard]')?.addEventListener('click', () => {
         if (!myTurn || ended || phase !== 'needDiscard' || !selectedId) return;
-        const hand = myHand().slice();
+        const hand = myHand().filter((c) => c.r !== '?').slice();
         if (hand.length !== 14) {
           buzz('invalid');
           return;
         }
         const ix = hand.findIndex((c) => c.id === selectedId);
         if (ix < 0) return;
+        const card = hand[ix];
+        if (liveOn && !isHost()) {
+          guestReq('reqDiscard', { cardId: card.id, card: { r: card.r, s: card.s, id: card.id } });
+          paint('Discarding…');
+          return;
+        }
         discard.push(hand.splice(ix, 1)[0]);
         setMyHand(hand);
         drawnId = null;
@@ -4754,8 +5051,8 @@
         highlightIds = [];
         buzz('card');
         myTurn = false;
-        if (liveOn) {
-          pushState({ turn: liveRoles.opp });
+        if (liveOn && isHost()) {
+          hostPush({ act: 'discard', card: { r: card.r, s: card.s, id: card.id }, turn: liveRoles.opp });
           if (typeof DangalLive !== 'undefined' && DangalLive.pingTurn) {
             DangalLive.pingTurn(liveRoles.opp, 'rummy', { chatId: chat && (chat.firestoreId || chat.id) });
           }
@@ -4786,7 +5083,7 @@
 
       async function runDeclare(forceWrong) {
         if (!myTurn || ended || phase !== 'needDiscard' || !selectedId) return;
-        const hand14 = myHand().slice();
+        const hand14 = myHand().filter((c) => c.r !== '?').slice();
         if (hand14.length !== 14) {
           buzz('invalid');
           return;
@@ -4802,6 +5099,18 @@
             paint(err + ' — keep playing, or Show to risk 80.');
             return;
           }
+        }
+        if (liveOn && !isHost()) {
+          guestReq('reqDeclare', { finishId: selectedId, forceWrong: !!forceWrong });
+          paint(forceWrong ? 'Showing…' : 'Declaring…');
+          return;
+        }
+        if (liveOn && isHost()) {
+          hostResolveDeclare(liveRoles.me, selectedId, !!forceWrong);
+          return;
+        }
+        // Practice
+        if (!result.ok && forceWrong) {
           discard.push(finish);
           setMyHand(remaining);
           drawnId = null;
@@ -4836,7 +5145,7 @@
 
       shell.body.querySelector('[data-show]')?.addEventListener('click', async () => {
         if (!myTurn || ended || phase !== 'needDiscard' || !selectedId) return;
-        const hand14 = myHand().slice();
+        const hand14 = myHand().filter((c) => c.r !== '?').slice();
         const remaining = hand14.filter((c) => c.id !== selectedId);
         const result = evaluateRummyHand(remaining, { wildRank });
         if (result.ok) {
@@ -4863,7 +5172,8 @@
       });
 
       shell.body.querySelector('[data-drop]')?.addEventListener('click', async () => {
-        if (!myTurn || ended || phase !== 'needDraw' || myHand().length !== 13) return;
+        if (!myTurn || ended || phase !== 'needDraw' || myHand().filter((c) => c.r !== '?').length !== 13)
+          return;
         const first = !iHaveDrawn();
         const pts = first ? RUMMY_FIRST_DROP : RUMMY_MIDDLE_DROP;
         let ok = true;
@@ -4877,6 +5187,15 @@
           });
         }
         if (!ok) return;
+        if (liveOn && !isHost()) {
+          guestReq('reqDrop');
+          paint('Dropping…');
+          return;
+        }
+        if (liveOn && isHost()) {
+          hostResolveDrop(liveRoles.me);
+          return;
+        }
         endRummyHand({
           reason: 'drop',
           youPoints: pts,
@@ -4983,85 +5302,299 @@
       while (handB.length > 13) discard.push(handB.pop());
     }
 
+    function applyRemote(val) {
+      if (!val || ended) return;
+      const st = val.state || {};
+      const act = val.act;
 
-
-    function hydrate(st, turn) {
-      if (!st) return;
-      if (st.handA) handA = st.handA;
-      if (st.handB) handB = st.handB;
-      if (st.discard) discard = st.discard;
-      if (st.deck) deck = st.deck;
-      if (st.wildRank) wildRank = st.wildRank;
-      if (st.wildShow) wildShow = st.wildShow;
-      if (st.drewA != null) drewA = !!st.drewA;
-      if (st.drewB != null) drewB = !!st.drewB;
-      phase = st.phase === 'needDiscard' ? 'needDiscard' : 'needDraw';
-      drawnId = st.drawnId || null;
-      if (st.drawn && st.drawnId && !st.phase) {
-        phase = 'needDiscard';
-        drawnId = st.drawnId;
+      // --- Hand end / forfeit ---
+      if (val.status === 'forfeit' || val.status === 'over') {
+        const iWon = val.winner === liveRoles.me;
+        if (st.handA) handA = st.handA;
+        if (st.handB) handB = st.handB;
+        let youPoints = st.youPoints;
+        let oppPoints = st.oppPoints;
+        if (youPoints == null && st.scoreA != null && liveRoles) {
+          youPoints = liveRoles.me === liveRoles.playerA ? st.scoreA | 0 : st.scoreB | 0;
+          oppPoints = liveRoles.me === liveRoles.playerA ? st.scoreB | 0 : st.scoreA | 0;
+        }
+        if (youPoints == null) {
+          // Leave mid-hand: leaver gets 80 (forfeit), remaining seat 0
+          youPoints = iWon ? 0 : 80;
+          oppPoints = iWon ? 80 : 0;
+        }
+        let reason = st.reason || (val.status === 'forfeit' ? 'forfeit' : 'declare');
+        if (reason === 'drop' && !iWon) reason = 'drop';
+        if (reason === 'drop' && iWon) reason = 'oppDrop';
+        endRummyHand({
+          reason,
+          youPoints: youPoints | 0,
+          oppPoints: oppPoints | 0,
+          winnerIsYou: iWon,
+          skipLivePush: true,
+          melds: st.melds || [],
+          detail: rummyReasonLabel(reason),
+        });
+        return;
       }
-      selectedId = null;
-      highlightIds = [];
-      myTurn = turn === liveRoles.me;
-      if (myTurn && phase === 'needDraw' && myHand().length === 14) phase = 'needDiscard';
-      if (myTurn && phase === 'needDiscard' && myHand().length === 13) phase = 'needDraw';
+
+      applying = true;
+
+      // Private deal: only apply hand when addressed to me
+      if (act === 'deal') {
+        if (val.handFor === liveRoles.me && Array.isArray(val.hand)) {
+          const mine = val.hand.map((c) => ({ r: c.r, s: c.s, id: c.id || c.r + c.s }));
+          setMyHand(mine);
+          dealtLive = true;
+          applyPublic(st);
+          const oppN = iAmA()
+            ? st.handCountB != null
+              ? st.handCountB | 0
+              : 13
+            : st.handCountA != null
+              ? st.handCountA | 0
+              : 13;
+          maskOppFaces(oppN);
+          myTurn = val.turn === liveRoles.me;
+          phase = 'needDraw';
+          applying = false;
+          paint('Dealt — draw or take the open discard.');
+          return;
+        }
+        if (isHost() && dealtLive) {
+          applyPublic(st);
+          applying = false;
+          paint('Your break — draw or take the open discard.');
+          return;
+        }
+        // Legacy leaky deal — take only own seat if present
+        if (Array.isArray(st.handA) || Array.isArray(st.handB)) {
+          if (iAmA() && Array.isArray(st.handA)) handA = st.handA.slice();
+          if (!iAmA() && Array.isArray(st.handB)) handB = st.handB.slice();
+          maskOppFaces(13);
+          dealtLive = true;
+          applyPublic(st);
+          myTurn = val.turn === liveRoles.me;
+          applying = false;
+          paint('Dealt — draw or take the open discard.');
+          return;
+        }
+        applying = false;
+        return;
+      }
+
+      // Host handles guest requests
+      if (isHost() && val.by && val.by === liveRoles.opp) {
+        const guestUid = liveRoles.opp;
+        // Stale turn: ignore guest actions while it is still host's turn
+        if (
+          myTurn &&
+          (act === 'reqDrawStock' ||
+            act === 'reqTakeDiscard' ||
+            act === 'reqDiscard' ||
+            act === 'reqDeclare' ||
+            act === 'reqDrop')
+        ) {
+          applying = false;
+          return;
+        }
+        if (act === 'reqDrawStock') {
+          if (deck.length && (authHandForUid(guestUid) || []).length === 13) {
+            const c = deck.pop();
+            const gh = (authHandForUid(guestUid) || []).slice();
+            gh.push(c);
+            setAuthHandForUid(guestUid, gh);
+            markUidDrew(guestUid);
+            phase = 'needDiscard';
+            myTurn = false;
+            deckCount = deck.length;
+            hostPush({
+              act: 'giveCard',
+              handFor: guestUid,
+              card: { r: c.r, s: c.s, id: c.id },
+              source: 'stock',
+              turn: guestUid,
+            });
+          }
+          applying = false;
+          paint('Opponent drawing…');
+          return;
+        }
+        if (act === 'reqTakeDiscard') {
+          if (discard.length && (authHandForUid(guestUid) || []).length === 13) {
+            const c = discard.pop();
+            const gh = (authHandForUid(guestUid) || []).slice();
+            gh.push(c);
+            setAuthHandForUid(guestUid, gh);
+            markUidDrew(guestUid);
+            phase = 'needDiscard';
+            myTurn = false;
+            hostPush({
+              act: 'giveCard',
+              handFor: guestUid,
+              card: { r: c.r, s: c.s, id: c.id },
+              source: 'discard',
+              turn: guestUid,
+            });
+          }
+          applying = false;
+          paint('Opponent took discard…');
+          return;
+        }
+        if (act === 'reqDiscard' && val.cardId) {
+          const gh = (authHandForUid(guestUid) || []).slice();
+          const ix = gh.findIndex((c) => c.id === val.cardId);
+          if (ix >= 0 && gh.length === 14) {
+            const card = gh.splice(ix, 1)[0];
+            discard.push(card);
+            setAuthHandForUid(guestUid, gh);
+            phase = 'needDraw';
+            myTurn = true;
+            drawnId = null;
+            hostPush({
+              act: 'discard',
+              card: { r: card.r, s: card.s, id: card.id },
+              turn: liveRoles.me,
+            });
+            if (typeof DangalLive !== 'undefined' && DangalLive.pingTurn) {
+              DangalLive.pingTurn(liveRoles.me, 'rummy', { chatId: chat && (chat.firestoreId || chat.id) });
+            }
+            applying = false;
+            paint('Your turn — draw or take discard.');
+            return;
+          }
+          applying = false;
+          return;
+        }
+        if (act === 'reqDeclare') {
+          hostResolveDeclare(guestUid, val.finishId, !!val.forceWrong);
+          applying = false;
+          return;
+        }
+        if (act === 'reqDrop') {
+          hostResolveDrop(guestUid);
+          applying = false;
+          return;
+        }
+      }
+
+      // Guest / both: apply public + private giveCard
+      if (act === 'giveCard' && val.handFor === liveRoles.me && val.card) {
+        const hand = myHand().filter((c) => c.r !== '?').slice();
+        if (!hand.some((c) => c.id === val.card.id)) {
+          hand.push({ r: val.card.r, s: val.card.s, id: val.card.id });
+          setMyHand(hand);
+        }
+        drawnId = val.card.id;
+        phase = 'needDiscard';
+        selectedId = null;
+        highlightIds = [];
+        markIDrew();
+        applyPublic(st);
+        myTurn = true;
+        applying = false;
+        buzz('card');
+        paint(
+          val.source === 'discard'
+            ? 'Took discard — select a card to discard or declare.'
+            : 'Drawn — select a card to discard or declare.'
+        );
+        return;
+      }
+
+      if (act === 'declareReject' && val.for === liveRoles.me) {
+        applying = false;
+        const err = val.err || 'Invalid declare';
+        if (typeof showToast === 'function') showToast(err);
+        paint(err + ' — keep playing.');
+        return;
+      }
+
+      // Public mid-hand updates (host echo or opp actions) — never apply opp faces
+      if (st.handA || st.handB || st.deck) {
+        // Strip leaks if any legacy payload sneaks in
+        delete st.handA;
+        delete st.handB;
+        delete st.deck;
+      }
+      applyPublic(st);
+      if (val.turn != null) myTurn = val.turn === liveRoles.me;
+      else if (st && false) {
+        /* noop */
+      }
+
+      if (act === 'discard' && val.card && !isHost()) {
+        const hand = myHand()
+          .filter((c) => c.r !== '?')
+          .slice();
+        const ix = hand.findIndex((c) => c.id === val.card.id);
+        if (ix >= 0 && hand.length === 14) {
+          hand.splice(ix, 1);
+          setMyHand(hand);
+        }
+        phase = 'needDraw';
+        selectedId = null;
+        drawnId = null;
+        highlightIds = [];
+      }
+      if (act === 'drawStock' || act === 'takeDiscard') {
+        if (!myTurn) {
+          // Opp drew — counts updated via public
+        }
+      }
+
+      applying = false;
+      if (myTurn) paint(phaseHint());
+      else paint('Opponent\u2019s turn\u2026');
     }
 
     if (liveOn) {
-      const joined = joinLive(shell, chat, 'rummy', (val) => {
-        if (!val || ended) return;
-        if (val.status === 'forfeit' || val.status === 'over') {
-          const iWon = val.winner === liveRoles.me;
-          const st = val.state || {};
-          if (st.handA) handA = st.handA;
-          if (st.handB) handB = st.handB;
-          let youPoints = st.youPoints;
-          let oppPoints = st.oppPoints;
-          if (youPoints == null && st.scoreA != null && liveRoles) {
-            youPoints = liveRoles.me === liveRoles.playerA ? st.scoreA | 0 : st.scoreB | 0;
-            oppPoints = liveRoles.me === liveRoles.playerA ? st.scoreB | 0 : st.scoreA | 0;
-          }
-          if (youPoints == null) {
-            youPoints = iWon ? 0 : 80;
-            oppPoints = iWon ? 80 : 0;
-          }
-          let reason = st.reason || (val.status === 'forfeit' ? 'forfeit' : 'declare');
-          if (reason === 'drop' && !iWon) reason = 'drop';
-          if (reason === 'drop' && iWon) reason = 'oppDrop';
-          endRummyHand({
-            reason,
-            youPoints: youPoints | 0,
-            oppPoints: oppPoints | 0,
-            winnerIsYou: iWon,
-            skipLivePush: true,
-            melds: st.melds || [],
-            detail: rummyReasonLabel(reason),
-          });
-          return;
+      const joined = joinLive(
+        shell,
+        chat,
+        'rummy',
+        (val) => {
+          if (!val || ended) return;
+          applyRemote(val);
+        },
+        null,
+        {
+          stake: liveStake,
+          onForfeit(info, roles) {
+            if (ended) return;
+            const iWon = info && info.winner === (roles && roles.me);
+            if (roles && roles.opp) settleOppUid = roles.opp;
+            endRummyHand({
+              reason: 'forfeit',
+              youPoints: iWon ? 0 : 80,
+              oppPoints: iWon ? 80 : 0,
+              winnerIsYou: !!iWon,
+              skipLivePush: true,
+              detail: 'Leave mid-hand · forfeit 80',
+            });
+          },
         }
-        applying = true;
-        hydrate(val.state, val.turn);
-        applying = false;
-        paint();
-      });
+      );
       if (joined) {
         liveHandle = joined.handle;
         liveRoles = joined.roles;
+        if (liveRoles.opp) settleOppUid = liveRoles.opp;
         if (liveRoles.host) {
           dealFresh();
           myTurn = true;
           phase = 'needDraw';
-          pushState({ turn: liveRoles.me });
-          paint('Your break \u2014 draw or take the open discard.');
+          // Host keeps both real hands; mask only for paint opp via counts — host uses real oppHand for score
+          publishPrivateDeal();
+          paint('Your break — draw or take the open discard.');
         } else {
-          shell.body.innerHTML = '<p class="pc-hint">Waiting for deal\u2026</p>';
+          shell.body.innerHTML =
+            '<p class="pc-hint">Waiting for deal\u2026 · Live hands stay private mid-table</p>';
         }
       }
     } else {
       dealFresh();
       myTurn = true;
-      paint('Your turn \u2014 draw or take the open discard.');
+      paint('Your turn — draw or take the open discard.');
     }
   }
 
@@ -7659,7 +8192,7 @@
       { id: 'tambola', name: 'Tambola', desc: 'Ticket · full house', icon: '🎱', genre: 'party', launch: openTambola, order: 30 },
       { id: 'carrom', name: 'Carrom', desc: 'Live · stakes · AI', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
       { id: 'pool', name: 'Pool', desc: '8-ball · solids & stripes', icon: '🎱', genre: 'board', launch: openPool, order: 32 },
-      { id: 'rummy', name: 'Rummy', desc: 'Points · meld-aware AI', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
+      { id: 'rummy', name: 'Rummy', desc: 'Indian 13-card · jokers · points', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
       { id: 'teenpatti', name: 'Teen Patti', desc: 'Boot, chaal, side-show · virtual chips', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
       { id: 'bluff', name: 'Bluff', desc: 'Pile claims · call · empty hand', icon: '🎭', genre: 'party', launch: openBluff, order: 35 },
       { id: 'sattepe', name: 'Satte pe Satta', desc: 'Build off sevens', icon: '7️⃣', genre: 'party', launch: openSatte, order: 36 },
