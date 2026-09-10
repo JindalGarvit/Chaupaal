@@ -3828,38 +3828,240 @@
     });
   }
 
+
   /* ---------- Rummy ---------- */
+  /** 1×52 + 2 printed jokers (2p Points). */
+  function makeRummyDeck(rng) {
+    const d = [];
+    SUITS.forEach((s) => RANKS.forEach((r) => d.push({ r, s, id: r + s })));
+    d.push({ r: 'JOK', s: '★', id: 'JOK1', joker: true });
+    d.push({ r: 'JOK', s: '★', id: 'JOK2', joker: true });
+    return typeof shuffleArray === 'function' ? shuffleArray(d, rng) : d.sort(() => rng() - 0.5);
+  }
+
+  function isPrintedJoker(c) {
+    return !!(c && (c.joker || c.r === 'JOK'));
+  }
+
+  function isRummyWild(c, wildRank) {
+    if (!c) return false;
+    if (isPrintedJoker(c)) return true;
+    return !!(wildRank && c.r === wildRank);
+  }
+
+  function rummyCardLabel(c) {
+    if (!c) return '—';
+    if (isPrintedJoker(c)) return 'Joker';
+    return String(c.r) + String(c.s || '');
+  }
+
+  /** Ace: A-2-3 (low) and Q-K-A (high) OK; K-A-2 wrap forbidden. */
+  function rummyNaturalVals(card, aceHigh) {
+    if (isPrintedJoker(card)) return null;
+    if (card.r === 'A') return aceHigh ? 14 : 1;
+    return rankVal(card.r);
+  }
+
+  function rummySequenceOk(cards, wildRank, requirePure) {
+    if (!cards || cards.length < 3) return false;
+    const jokers = cards.filter((c) => isRummyWild(c, wildRank));
+    const naturals = cards.filter((c) => !isRummyWild(c, wildRank));
+    if (requirePure && jokers.length) return false;
+    if (!naturals.length) return false;
+    const suit = naturals[0].s;
+    if (!naturals.every((c) => c.s === suit)) return false;
+    const ranks = naturals.map((c) => c.r);
+    if (new Set(ranks).size !== ranks.length) return false;
+
+    function fits(aceHigh) {
+      const vals = naturals.map((c) => rummyNaturalVals(c, aceHigh)).sort((a, b) => a - b);
+      for (let i = 1; i < vals.length; i++) if (vals[i] === vals[i - 1]) return false;
+      const span = vals[vals.length - 1] - vals[0] + 1;
+      const gaps = span - vals.length;
+      if (gaps < 0 || gaps > jokers.length) return false;
+      return naturals.length + jokers.length >= 3;
+    }
+    const hasAce = naturals.some((c) => c.r === 'A');
+    if (hasAce) return fits(false) || fits(true);
+    return fits(true);
+  }
+
+  function rummySetOk(cards, wildRank) {
+    if (!cards || cards.length < 3 || cards.length > 4) return false;
+    const jokers = cards.filter((c) => isRummyWild(c, wildRank));
+    const naturals = cards.filter((c) => !isRummyWild(c, wildRank));
+    if (!naturals.length) return false;
+    const rank = naturals[0].r;
+    if (!naturals.every((c) => c.r === rank)) return false;
+    const suits = naturals.map((c) => c.s);
+    if (new Set(suits).size !== suits.length) return false;
+    return naturals.length + jokers.length === cards.length;
+  }
+
+  function rummyClassifyMeld(cards, wildRank) {
+    if (rummySequenceOk(cards, wildRank, true)) return { type: 'run', pure: true, cards: cards.slice() };
+    if (rummySequenceOk(cards, wildRank, false)) return { type: 'run', pure: false, cards: cards.slice() };
+    if (rummySetOk(cards, wildRank)) return { type: 'set', pure: false, cards: cards.slice() };
+    return null;
+  }
+
+  /**
+   * Indian Rummy (13 cards): ≥1 pure sequence, ≥2 sequences total, rest valid sets/runs, nothing left.
+   */
+  function evaluateRummyHand(hand, opts) {
+    const o = opts || {};
+    const wildRank = o.wildRank || null;
+    const cards = (hand || []).slice();
+    const fail = (errors, unmelded) => ({
+      ok: false,
+      pureSequences: [],
+      sequences: [],
+      sets: [],
+      unmelded: unmelded || cards.slice(),
+      errors: errors || [],
+      melds: [],
+    });
+    if (cards.length !== 13) return fail(['Need exactly 13 cards to declare']);
+
+    let solution = null;
+
+    function search(remaining, melds) {
+      if (solution) return true;
+      if (!remaining.length) {
+        const sequences = melds.filter((m) => m.type === 'run');
+        const pureSequences = sequences.filter((m) => m.pure);
+        const sets = melds.filter((m) => m.type === 'set');
+        if (pureSequences.length < 1 || sequences.length < 2) return false;
+        solution = {
+          ok: true,
+          pureSequences,
+          sequences,
+          sets,
+          unmelded: [],
+          errors: [],
+          melds: melds.slice(),
+        };
+        return true;
+      }
+      if (remaining.length < 3) return false;
+      const maxLen = Math.min(6, remaining.length);
+      const anchor = remaining[0];
+      const pool = remaining.slice(1);
+      for (let len = 3; len <= maxLen; len++) {
+        const chosen = [];
+        const rec = (start) => {
+          if (solution) return;
+          if (chosen.length === len - 1) {
+            const group = [anchor].concat(chosen);
+            const meld = rummyClassifyMeld(group, wildRank);
+            if (!meld) return;
+            const ids = new Set(group.map((c) => c.id));
+            const next = remaining.filter((c) => !ids.has(c.id));
+            melds.push(meld);
+            search(next, melds);
+            melds.pop();
+            return;
+          }
+          for (let i = start; i < pool.length; i++) {
+            chosen.push(pool[i]);
+            rec(i + 1);
+            chosen.pop();
+            if (solution) return;
+          }
+        };
+        rec(0);
+        if (solution) return true;
+      }
+      return false;
+    }
+
+    search(cards, []);
+    if (solution) return solution;
+
+    let foundPure = false;
+    const n = cards.length;
+    for (let len = 3; len <= Math.min(5, n) && !foundPure; len++) {
+      const idxs = [];
+      const rec = (start) => {
+        if (foundPure) return;
+        if (idxs.length === len) {
+          if (rummySequenceOk(idxs.map((i) => cards[i]), wildRank, true)) foundPure = true;
+          return;
+        }
+        for (let i = start; i < n; i++) {
+          idxs.push(i);
+          rec(i + 1);
+          idxs.pop();
+        }
+      };
+      rec(0);
+    }
+    const errors = [];
+    if (!foundPure) errors.push('Missing pure sequence');
+    else errors.push('Need a second sequence and all cards melded');
+    return fail(errors);
+  }
+
+  function rummySuggestHighlightIds(hand, wildRank) {
+    const cards = hand || [];
+    const n = cards.length;
+    for (let len = 3; len <= Math.min(5, n); len++) {
+      const idxs = [];
+      let hit = null;
+      const rec = (start) => {
+        if (hit) return;
+        if (idxs.length === len) {
+          const group = idxs.map((i) => cards[i]);
+          if (rummySequenceOk(group, wildRank, true)) hit = group.map((c) => c.id);
+          return;
+        }
+        for (let i = start; i < n; i++) {
+          idxs.push(i);
+          rec(i + 1);
+          idxs.pop();
+        }
+      };
+      rec(0);
+      if (hit) return hit;
+    }
+    return [];
+  }
+
+  function rummyFaceHtml(c, wildRank, extraClass) {
+    const isJok = isPrintedJoker(c);
+    const isWild = isRummyWild(c, wildRank);
+    const col = isJok ? '#6A1B9A' : isWild && c.r === wildRank ? '#6A1B9A' : SUIT_COLOR[c.s] || '#111';
+    const cls =
+      'pc-card' +
+      (extraClass ? ' ' + extraClass : '') +
+      (isJok ? ' pc-card--joker' : '') +
+      (isWild && !isJok ? ' pc-card--wild' : '');
+    const top = isJok ? 'JK' : esc(c.r);
+    const bot = isJok ? '★' : esc(c.s);
+    return (
+      '<button type="button" class="' +
+      cls +
+      '" data-cid="' +
+      esc(c.id) +
+      '" style="color:' +
+      col +
+      '"><b>' +
+      top +
+      '</b><span>' +
+      bot +
+      '</span></button>'
+    );
+  }
+
+  // Legacy names kept for any stray callers — Indian law lives in evaluateRummyHand.
   function isRun(cards) {
-    if (cards.length < 3) return false;
-    const suit = cards[0].s;
-    if (!cards.every((c) => c.s === suit)) return false;
-    const vs = cards.map((c) => rankVal(c.r)).sort((a, b) => a - b);
-    for (let i = 1; i < vs.length; i++) if (vs[i] !== vs[i - 1] + 1) return false;
-    return true;
+    return rummySequenceOk(cards, null, true);
   }
   function isSet(cards) {
-    if (cards.length < 3) return false;
-    return cards.every((c) => c.r === cards[0].r);
+    return rummySetOk(cards, null);
   }
-  function rummyOk(hand) {
-    const used = new Set();
-    let melded = 0;
-    const tryMeld = (pred) => {
-      for (let i = 0; i < hand.length; i++) {
-        for (let j = i + 1; j < hand.length; j++) {
-          for (let k = j + 1; k < hand.length; k++) {
-            const trio = [hand[i], hand[j], hand[k]];
-            if (trio.some((c) => used.has(c.id))) continue;
-            if (!pred(trio)) continue;
-            trio.forEach((c) => used.add(c.id));
-            melded += 3;
-          }
-        }
-      }
-    };
-    tryMeld(isRun);
-    tryMeld(isSet);
-    return melded >= 9;
+  function rummyOk(hand, wildRank) {
+    return evaluateRummyHand(hand, { wildRank: wildRank || null }).ok;
   }
 
   function openRummy() {
@@ -3885,15 +4087,18 @@
     });
     if (!shell) return;
 
-    let deck = makeDeck(rng);
+    let deck = makeRummyDeck(rng);
     let handA = [];
     let handB = [];
     let discard = [];
+    let wildRank = null;
+    let wildShow = null; // card used to display wild chrome
     /** @type {'needDraw'|'needDiscard'} */
     let phase = 'needDraw';
     let drawnId = null;
     let selectedId = null;
     let sortMode = 'suit';
+    let highlightIds = [];
     let myTurn = true;
     let applying = false;
     let liveRoles = null;
@@ -3924,22 +4129,63 @@
 
     function sortHand(hand) {
       const h = hand.slice();
+      const jokerKey = (c) => (isPrintedJoker(c) ? 2 : isRummyWild(c, wildRank) ? 1 : 0);
       if (sortMode === 'rank') {
-        h.sort((a, b) => rankVal(a.r) - rankVal(b.r) || suitOrder(a.s) - suitOrder(b.s));
+        h.sort(
+          (a, b) =>
+            jokerKey(a) - jokerKey(b) ||
+            rankVal(a.r === 'JOK' ? '2' : a.r) - rankVal(b.r === 'JOK' ? '2' : b.r) ||
+            suitOrder(a.s) - suitOrder(b.s)
+        );
       } else {
-        h.sort((a, b) => suitOrder(a.s) - suitOrder(b.s) || rankVal(a.r) - rankVal(b.r));
+        h.sort(
+          (a, b) =>
+            jokerKey(a) - jokerKey(b) ||
+            suitOrder(a.s) - suitOrder(b.s) ||
+            rankVal(a.r === 'JOK' ? '2' : a.r) - rankVal(b.r === 'JOK' ? '2' : b.r)
+        );
       }
       return h;
     }
 
     function dealFresh() {
-      deck = makeDeck(rng);
+      deck = makeRummyDeck(rng);
       handA = deck.splice(0, 13);
       handB = deck.splice(0, 13);
-      discard = deck.length ? [deck.pop()] : [];
+      const open = deck.length ? deck.pop() : null;
+      if (!open) {
+        discard = [];
+        wildRank = 'A';
+        wildShow = { r: 'A', s: '♠', id: 'wildA' };
+      } else if (isPrintedJoker(open)) {
+        discard = [open];
+        let wr = 'A';
+        for (let i = deck.length - 1; i >= 0; i--) {
+          if (!isPrintedJoker(deck[i])) {
+            wr = deck[i].r;
+            wildShow = deck[i];
+            break;
+          }
+        }
+        wildRank = wr;
+        if (!wildShow) wildShow = { r: wr, s: '♠', id: 'wild' + wr };
+      } else {
+        wildRank = open.r;
+        wildShow = open;
+        discard = [open];
+      }
       phase = 'needDraw';
       drawnId = null;
       selectedId = null;
+      highlightIds = [];
+    }
+
+    function wildChrome() {
+      if (!wildRank) return 'Wild: —';
+      if (wildShow && !isPrintedJoker(wildShow) && wildShow.r === wildRank) {
+        return 'Wild: ' + rummyCardLabel(wildShow);
+      }
+      return 'Wild: ' + wildRank + 's';
     }
 
     /**
@@ -3964,6 +4210,8 @@
               handCountB: handB.length,
               phase,
               drawnId,
+              wildRank,
+              wildShow,
             },
           },
           extra || {}
@@ -3974,7 +4222,7 @@
     function phaseHint() {
       if (liveOn && !myTurn) return 'Opponent\u2019s turn\u2026';
       if (phase === 'needDraw') return 'Draw from stock or take the discard.';
-      return 'Tap a card, then Discard. Keep 13.';
+      return 'Discard one, or select finishing card + Declare.';
     }
 
     function paint(msg) {
@@ -3984,39 +4232,25 @@
       const canDraw = myTurn && phase === 'needDraw' && deck.length > 0;
       const canTake = myTurn && phase === 'needDraw' && discard.length > 0;
       const canDiscard = myTurn && phase === 'needDiscard' && !!selectedId;
+      // Declare after draw (14): select finishing discard, validate remaining 13
+      const canDeclare = myTurn && phase === 'needDiscard' && you.length === 14 && !!selectedId;
+      if (!highlightIds.length && you.length) {
+        highlightIds = rummySuggestHighlightIds(you, wildRank);
+      }
       const handHtml = you
         .map((c) => {
-          const col = SUIT_COLOR[c.s] || '#111';
           const sel = c.id === selectedId ? ' is-sel' : '';
+          const hi = highlightIds.indexOf(c.id) >= 0 ? ' is-hint' : '';
           const locked = phase !== 'needDiscard' || !myTurn;
-          return (
-            '<button type="button" class="pc-card' +
-            sel +
-            (locked ? ' is-locked' : '') +
-            '" data-cid="' +
-            esc(c.id) +
-            '" style="color:' +
-            col +
-            '"' +
-            (locked ? ' disabled' : '') +
-            '><b>' +
-            esc(c.r) +
-            '</b><span>' +
-            esc(c.s) +
-            '</span></button>'
-          );
+          let html = rummyFaceHtml(c, wildRank, (sel + hi + (locked ? ' is-locked' : '')).trim());
+          if (locked) html = html.replace('<button', '<button disabled');
+          return html;
         })
         .join('');
 
       const topHtml = top
-        ? '<button type="button" class="pc-card" disabled style="color:' +
-          (SUIT_COLOR[top.s] || '#111') +
-          '"><b>' +
-          esc(top.r) +
-          '</b><span>' +
-          esc(top.s) +
-          '</span></button>'
-        : '<span class="pc-rummy-empty">\u2014</span>';
+        ? rummyFaceHtml(top, wildRank, '').replace('<button', '<button disabled')
+        : '<span class="pc-rummy-empty">—</span>';
 
       shell.body.innerHTML =
         '<div class="pc-rummy">' +
@@ -4024,6 +4258,9 @@
         esc(msg || phaseHint()) +
         '</p>' +
         '<div class="pc-rummy-meta">' +
+        '<span class="pc-rummy-wild"><b>' +
+        esc(wildChrome()) +
+        '</b></span>' +
         '<span>Opp <b>' +
         oppHandCount() +
         '</b></span>' +
@@ -4050,6 +4287,7 @@
         '<button type="button" class="pc-rummy-sort-btn' +
         (sortMode === 'rank' ? ' is-on' : '') +
         '" data-sort="rank">Rank</button>' +
+        '<button type="button" class="pc-rummy-sort-btn" data-suggest>Hint pure</button>' +
         '</div>' +
         '<div class="pc-hand pc-rummy-hand">' +
         handHtml +
@@ -4064,9 +4302,11 @@
         '<button type="button" class="cs-hit" data-discard' +
         (canDiscard ? '' : ' disabled') +
         '>Discard</button>' +
-        '<button type="button" class="cs-hit cs-hit--ghost" data-declare disabled title="Melds next">Declare</button>' +
+        '<button type="button" class="cs-hit" data-declare' +
+        (canDeclare ? '' : ' disabled') +
+        '>Declare</button>' +
         '</div>' +
-        '<p class="pc-hint pc-rummy-declare-hint">Declare locked \u2014 melds &amp; jokers come next.</p>' +
+        '<p class="pc-hint pc-rummy-declare-hint">After draw: select finishing discard, then Declare (needs pure sequence).</p>' +
         '</div>';
 
       shell.body.querySelectorAll('[data-sort]').forEach((btn) => {
@@ -4075,12 +4315,16 @@
           paint(msg);
         });
       });
+      shell.body.querySelector('[data-suggest]')?.addEventListener('click', () => {
+        highlightIds = rummySuggestHighlightIds(myHand(), wildRank);
+        paint(highlightIds.length ? 'Possible pure sequence highlighted.' : 'No pure sequence spotted yet.');
+      });
 
       shell.body.querySelectorAll('.pc-rummy-hand .pc-card').forEach((btn) => {
         btn.addEventListener('click', () => {
           if (!myTurn || ended || phase !== 'needDiscard') return;
           selectedId = btn.dataset.cid;
-          paint('Selected \u2014 tap Discard.');
+          paint('Selected — Discard or Declare.');
         });
       });
 
@@ -4097,9 +4341,10 @@
         drawnId = c.id;
         phase = 'needDiscard';
         selectedId = null;
+        highlightIds = [];
         buzz('card');
         if (liveOn) pushState();
-        paint('Drawn \u2014 select a card to discard.');
+        paint('Drawn — select a card to discard or declare.');
       });
 
       shell.body.querySelector('[data-take]')?.addEventListener('click', () => {
@@ -4115,9 +4360,10 @@
         drawnId = c.id;
         phase = 'needDiscard';
         selectedId = null;
+        highlightIds = [];
         buzz('card');
         if (liveOn) pushState();
-        paint('Took discard \u2014 select a card to discard.');
+        paint('Took discard — select a card to discard or declare.');
       });
 
       shell.body.querySelector('[data-discard]')?.addEventListener('click', () => {
@@ -4134,6 +4380,7 @@
         drawnId = null;
         selectedId = null;
         phase = 'needDraw';
+        highlightIds = [];
         buzz('card');
         myTurn = false;
         if (liveOn) {
@@ -4141,10 +4388,10 @@
           if (typeof DangalLive !== 'undefined' && DangalLive.pingTurn) {
             DangalLive.pingTurn(liveRoles.opp, 'rummy', { chatId: chat && (chat.firestoreId || chat.id) });
           }
-          paint('Discarded. Waiting\u2026');
+          paint('Discarded. Waiting…');
           return;
         }
-        paint('Opponent\u2019s turn\u2026');
+        paint('Opponent’s turn…');
         if (aiTimer) clearTimeout(aiTimer);
         aiTimer = setTimeout(() => {
           aiTimer = 0;
@@ -4154,8 +4401,70 @@
           phase = 'needDraw';
           drawnId = null;
           selectedId = null;
-          paint('Your turn \u2014 draw or take discard.');
+          highlightIds = [];
+          paint('Your turn — draw or take discard.');
         }, 450 + Math.floor(rng() * 350));
+      });
+
+      shell.body.querySelector('[data-declare]')?.addEventListener('click', () => {
+        if (!myTurn || ended || phase !== 'needDiscard' || !selectedId) return;
+        const hand14 = myHand().slice();
+        if (hand14.length !== 14) {
+          buzz('invalid');
+          return;
+        }
+        const finish = hand14.find((c) => c.id === selectedId);
+        const remaining = hand14.filter((c) => c.id !== selectedId);
+        const result = evaluateRummyHand(remaining, { wildRank });
+        if (!result.ok) {
+          buzz('invalid');
+          const err = (result.errors && result.errors[0]) || 'Need a pure sequence…';
+          if (typeof showToast === 'function') showToast(err);
+          paint(err + ' — hand continues.');
+          return;
+        }
+        discard.push(finish);
+        setMyHand(remaining);
+        drawnId = null;
+        selectedId = null;
+        ended = true;
+        if (aiTimer) clearTimeout(aiTimer);
+        buzz('win');
+        const meldLine = result.melds
+          .map(
+            (m) =>
+              (m.pure ? 'Pure ' : '') +
+              (m.type === 'run' ? 'seq' : 'set') +
+              ' ' +
+              m.cards.map(rummyCardLabel).join('')
+          )
+          .join(' · ');
+        if (liveOn && liveHandle && liveRoles) {
+          liveHandle.push({
+            status: 'over',
+            winner: liveRoles.me,
+            state: {
+              handA,
+              handB,
+              discard,
+              deck,
+              wildRank,
+              declared: true,
+              valid: true,
+              melds: result.melds,
+            },
+          });
+        }
+        showDuelResult(shell, {
+          id: 'rummy',
+          you: 1,
+          opp: 0,
+          glyph: '🃏',
+          title: 'Valid declare',
+          subtitle: meldLine || 'Pure sequence secured',
+          shareText: 'Rummy on Chaupaal — valid declare',
+          onAgain: () => openRummy(chat),
+        });
       });
     }
 
@@ -4192,6 +4501,8 @@
       if (st.handB) handB = st.handB;
       if (st.discard) discard = st.discard;
       if (st.deck) deck = st.deck;
+      if (st.wildRank) wildRank = st.wildRank;
+      if (st.wildShow) wildShow = st.wildShow;
       phase = st.phase === 'needDiscard' ? 'needDiscard' : 'needDraw';
       drawnId = st.drawnId || null;
       if (st.drawn && st.drawnId && !st.phase) {
@@ -4199,6 +4510,7 @@
         drawnId = st.drawnId;
       }
       selectedId = null;
+      highlightIds = [];
       myTurn = turn === liveRoles.me;
       if (myTurn && phase === 'needDraw' && myHand().length === 14) phase = 'needDiscard';
       if (myTurn && phase === 'needDiscard' && myHand().length === 13) phase = 'needDraw';
@@ -6849,7 +7161,7 @@
       { id: 'tambola', name: 'Tambola', desc: 'Ticket · full house', icon: '🎱', genre: 'party', launch: openTambola, order: 30 },
       { id: 'carrom', name: 'Carrom', desc: 'Live · stakes · AI', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
       { id: 'pool', name: 'Pool', desc: '8-ball · solids & stripes', icon: '🎱', genre: 'board', launch: openPool, order: 32 },
-      { id: 'rummy', name: 'Rummy', desc: '13-card · draw then discard', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
+      { id: 'rummy', name: 'Rummy', desc: '13-card · pure sequence · jokers', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
       { id: 'teenpatti', name: 'Teen Patti', desc: 'Boot, chaal, side-show · virtual chips', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
       { id: 'bluff', name: 'Bluff', desc: 'Pile claims · call · empty hand', icon: '🎭', genre: 'party', launch: openBluff, order: 35 },
       { id: 'sattepe', name: 'Satte pe Satta', desc: 'Build off sevens', icon: '7️⃣', genre: 'party', launch: openSatte, order: 36 },
@@ -6877,6 +7189,7 @@
   window.openCarrom = openCarrom;
   window.openPool = openPool;
   window.openRummy = openRummy;
+  window.evaluateRummyHand = evaluateRummyHand;
   window.openTeenPatti = openTeenPatti;
   window.openBluff = openBluff;
   window.openSattePeSatta = openSatte;

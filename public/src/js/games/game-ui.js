@@ -175,9 +175,9 @@
       'Scratch: cue back in kitchen · Practice AI shoots for real · Live syncs groups',
     ],
     rummy: [
-      '13 cards each — draw from stock or take discard, then discard one',
-      'Sort by suit or rank · opponent shows count only',
-      'Declare / melds & jokers come in the next updates',
+      '13 cards · draw or take discard, then discard — or Declare with a finishing card',
+      'Need a pure sequence (no joker) plus another sequence; sets OK with jokers',
+      'Wild rank from the open card · printed jokers are always wild',
     ],
     teenpatti: [
       'Boot each hand — stacks carry across the ring (virtual chips)',

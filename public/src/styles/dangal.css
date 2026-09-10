@@ -332,6 +332,10 @@
 .pc-rummy-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
 .pc-rummy .cs-hit{min-width:0;padding:12px 14px;font-size:14px;}
 .pc-rummy .cs-hit--ghost{opacity:.75;background:transparent;border:1px solid rgba(225,190,231,.4);color:#E1BEE7;}
+.pc-rummy-wild{color:#E1BEE7;}
+.pc-card--joker{background:linear-gradient(160deg,#f3e5f5,#fff);border-color:#8e24aa;}
+.pc-card--wild{box-shadow:inset 0 0 0 2px rgba(106,27,154,.45);}
+.pc-card.is-hint{outline:2px dashed rgba(255,214,0,.75);outline-offset:1px;}
 .pc-rummy-declare-hint{font-size:11px;opacity:.55;margin:0;}
 .pc-tp-hud{
   display:flex;gap:14px;align-items:center;justify-content:center;flex-wrap:wrap;
