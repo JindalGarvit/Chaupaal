@@ -2555,6 +2555,46 @@ html.theme-dark .lehar-empty{color:#fff;}
   border: 1px solid rgba(255, 255, 255, 0.18);
 }
 .rr-start-btn:active { transform: scale(0.97); }
+
+/* Rush Runner result meta (Prompt 4) */
+.rr-new-best {
+  display: inline-block;
+  margin: 0 0 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #1a1208;
+  background: linear-gradient(135deg, #ffd36a, #f0a43a);
+  box-shadow: 0 0 0 1px rgba(255, 210, 120, 0.35);
+}
+.rr-result-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  justify-content: center;
+  margin: 0 0 12px;
+  max-width: 280px;
+}
+.rr-result-stat {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.72);
+  white-space: nowrap;
+}
+.rr-result-stat strong {
+  color: #fff;
+  font-weight: 700;
+}
+.rr-start--over .game-result-mission {
+  margin: 0 0 12px;
+  max-width: 280px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(255, 220, 160, 0.9);
+  text-align: center;
+}
 .bb-hud-depth {
   top: auto;
   bottom: 10px;

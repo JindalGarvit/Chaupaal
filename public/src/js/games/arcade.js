@@ -845,12 +845,43 @@ function openRushRunner(){
     buzz('lose');
   }
 
+  function buildRunShareText(final, completed, isNewPb){
+    const mod=theme.modLabel||'Run';
+    if(completed.length&&isNewPb){
+      return 'Cleared "'+completed[0].label+'" and set a '+final+'m'+(playMode==='daily'?' Daily':'')+' PB on Chaupaal Rush Runner!';
+    }
+    if(completed.length){
+      return 'Cleared "'+completed[0].label+'" with a '+final+'m run on Rush Runner ('+mod+')!';
+    }
+    if(isNewPb){
+      return (playMode==='daily'?'New Daily PB — ':'New Rush Runner PB — ')+final+'m. Can you beat it?';
+    }
+    if(coins>=40){
+      return final+'m and '+coins+' coins on Rush Runner ('+mod+'). Beat that haul!';
+    }
+    if(playMode==='daily'){
+      return 'Daily Rush ('+mod+'): '+final+'m. Your turn!';
+    }
+    return final+'m through '+theme.name+' ('+mod+') on Chaupaal Rush Runner!';
+  }
+
   function endGame(){
     if(gameOver)return;
     gameOver=true;dying=false;cancelAnimationFrame(raf);raf=null;
     if(keyHandler){window.removeEventListener('keydown',keyHandler);keyHandler=null;}
+    const missHud=document.getElementById('rrMissions');
+    if(missHud){missHud.hidden=true;missHud.innerHTML='';}
+
     const final=Math.floor(dist);
     const pbId=playMode==='daily'?'rushrunner_daily':'rushrunner';
+    const prevPb=typeof getGamePB==='function'?getGamePB(pbId):(playMode==='daily'?dailyBest:bestScore);
+    // format vs best BEFORE writing PB so "New best" is honest
+    let vsBest=typeof formatVsBest==='function'
+      ?formatVsBest(pbId, final)
+      :(prevPb==null?`First best · ${final}m`:(final>(prevPb||0)?`New best · ${final}m (was ${prevPb}m)`:`${final}m · Best ${prevPb}m`));
+    if(playMode==='daily'&&vsBest)vsBest=vsBest.replace(/^New best/,'New Daily best').replace(/^First score/,'First Daily').replace(/ · Best /,' · Daily best ');
+    const isNewPb=prevPb==null||final>Number(prevPb);
+
     if(playMode==='daily'){
       saveDailyBest(final);
       dailyBest=Math.max(dailyBest||0,final);
@@ -858,85 +889,131 @@ function openRushRunner(){
       if(typeof setGamePB==='function') bestScore=setGamePB('rushrunner', final) ?? Math.max(bestScore, final);
       else if(final>bestScore){bestScore=final;localStorage.setItem('rushrunner_best',String(bestScore));}
     }
-    const vsBest=typeof formatVsBest==='function'?formatVsBest(pbId, final):(playMode==='daily'?`Daily best ${dailyBest}m`:`Best ${bestScore}m`);
+
     const completed=commitMissions();
-    if(completed.length){
-      buzz('win');
-      showBanner(completed.length>1?'Missions cleared!':'Mission complete: '+completed[0].label,1.6);
-    }
-    if(gs)gs.setOutcome('lost');
+    const missionNote=completed.length
+      ? completed.map(m=>'✓ '+m.label).join(' · ')
+      : ensureMissions().active.map(m=>m.label+' · '+m.progress+'/'+m.target).join(' · ');
+    const modeLine=playMode==='daily'?'Daily · '+theme.modLabel:theme.name+' · '+theme.modLabel;
+    const title=isNewPb?(playMode==='daily'?'New Daily best':'New personal best'):(completed.length?'Mission clear':'Run over');
+    const subtitleBits=[final+'m',coins+' coins',runPowers?runPowers+' power'+(runPowers===1?'':'s'):'',modeLine].filter(Boolean);
+
+    if(gs)gs.setOutcome(isNewPb||completed.length?'won':'lost');
     if(typeof recordGameResult==='function'){
-      recordGameResult('rushrunner',false,false,{
+      recordGameResult('rushrunner',!!(isNewPb||completed.length),false,{
         score:final,
         scoreOnly:true,
         mode:playMode,
         difficulty:theme.modId,
+        theme:theme.name,
+        coins,
+        powerups:runPowers,
+        jumps:runJumps,
+        slides:runSlides,
         missionsDone:completed.length,
+        newPb:!!isNewPb,
       });
     }
-    if(!deathFocus&&!completed.length)buzz('lose');
+    if(completed.length||isNewPb)buzz('win');
+    else if(!deathFocus)buzz('lose');
     deathFocus=null;
+
+    const shareText=buildRunShareText(final,completed,isNewPb);
+    const shareStats={
+      scoreLine:final+'m',
+      score:final,
+      meta:[coins+' coins',modeLine,vsBest].filter(Boolean).join(' · '),
+      text:shareText,
+      friendText:shareText,
+    };
+    const shareCard=typeof buildGameShareCard==='function'?buildGameShareCard('rushrunner',shareStats):'';
+    const pbBadge=isNewPb?'<div class="rr-new-best">New best</div>':'';
+    const statsHtml=`<div class="rr-result-stats" aria-label="Run stats">
+      <span class="rr-result-stat"><strong>${final}</strong>m</span>
+      <span class="rr-result-stat">◆ <strong>${coins}</strong></span>
+      <span class="rr-result-stat"><strong>${runPowers}</strong> power${runPowers===1?'':'s'}</span>
+      <span class="rr-result-stat">${theme.modLabel}</span>
+    </div>`;
+
     const div=document.getElementById('rrOverlay');
     if(!div)return;
     div.className='rr-start rr-start--over';
     div.style.display='flex';
-    const missionNote=completed.length
-      ? completed.map(m=>'✓ '+m.label).join(' · ')
-      : ensureMissions().active.map(m=>m.label+' '+m.progress+'/'+m.target).join(' · ');
-    const modeLine=playMode==='daily'?'Daily · '+theme.modLabel:theme.name+' · '+theme.modLabel;
-    const shareStats={
-      scoreLine:`${final}m`,
-      score:final,
-      meta:`${coins} coins · ${modeLine} · ${vsBest}`,
-      text:playMode==='daily'
-        ?`I ran ${final}m on Chaupaal Rush Runner Daily (${theme.modLabel})!`
-        :`I ran ${final}m on Chaupaal Rush Runner! Can you beat me?`,
-    };
-    const shareCard=typeof buildGameShareCard==='function'?buildGameShareCard('rushrunner',shareStats):'';
+    const againLabel=playMode==='daily'?'Retry Daily':'Run again';
+    const altLabel=playMode==='daily'?'Classic run':'Daily run';
+    const resultActions=[
+      {label:againLabel,primary:true,id:'again'},
+      {label:altLabel,primary:false,id:'alt'},
+      {label:'Share',primary:false,id:'share'},
+    ];
+    if(typeof openFriendPickerSheet==='function')resultActions.push({label:'Challenge friend',primary:false,id:'challenge'});
+    if(typeof postGameScoreStory==='function')resultActions.push({label:'Post to story',primary:false,id:'story'});
+    resultActions.push({label:'Hub',primary:false,id:'hub'});
+    const storyMeta=[modeLine,coins+' coins',completed.length?'Mission ✓':'',vsBest].filter(Boolean).join(' · ');
     div.innerHTML=`
       ${typeof gameResultHtml==='function'?gameResultHtml({
         gameId:'rushrunner',
-        glyph:'·',
-        title:`${final}m run`,
-        subtitle:`${coins} coins · ${modeLine}`,
+        glyph:isNewPb?'★':(completed.length?'✓':'·'),
+        title,
+        subtitle:subtitleBits.join(' · '),
         vsBest,
         hideMissions:true,
+        hideStats:true,
+        statsHtml:pbBadge+statsHtml,
         missionHtml:missionNote?`<p class="game-result-mission">${missionNote}</p>`:'',
         shareCardHtml:shareCard,
-        actions:[
-          {label:'Play again',primary:true,id:'again'},
-          {label:'Share',primary:false,id:'share'},
-          {label:'Challenge friend',primary:false,id:'challenge'},
-          {label:'Post to story',primary:false,id:'story'},
-        ],
+        actions:resultActions,
       }):`<div style="color:#fff;text-align:center;"><div>${final}m</div><button type="button" id="rrRestart">Run again</button></div>`}
     `;
     if(typeof wireGameResultActions==='function'){
       wireGameResultActions(div,{
-        again:()=>{close();openRushRunner();},
+        again:()=>startGame(playMode),
+        alt:()=>startGame(playMode==='daily'?'classic':'daily'),
+        hub:()=>{close();openRushRunner();},
         share:()=>{if(typeof shareGameResult==='function')shareGameResult('rushrunner',shareStats);},
         challenge:async()=>{
           if(typeof openFriendPickerSheet==='function'){
-            const f=await openFriendPickerSheet({title:'Beat my Rush score',subtitle:`Challenge with ${final}m`});
+            const f=await openFriendPickerSheet({title:'Beat this run',subtitle:shareText});
             if(f&&typeof shareGameResult==='function'){
-              shareGameResult('rushrunner',{...shareStats,text:`Hey ${f.name} — beat my ${final}m on Rush Runner!`});
+              shareGameResult('rushrunner',{
+                ...shareStats,
+                text:'Hey '+f.name+' — '+shareText+' Your move.',
+              });
             }
           } else if(typeof shareGameResult==='function') shareGameResult('rushrunner',shareStats);
         },
-        story:()=>{if(typeof postGameScoreStory==='function')postGameScoreStory('rushrunner',{score:final,scoreLine:`${final}m`,meta:vsBest});},
+        story:()=>{
+          if(typeof postGameScoreStory==='function'){
+            postGameScoreStory('rushrunner',{
+              score:final,
+              scoreLine:shareText.length>72?final+'m · '+modeLine:shareText,
+              meta:storyMeta,
+              text:shareText,
+            });
+          }
+        },
       });
     } else {
-      const actions=div.querySelectorAll('[data-result-action]');
-      (actions[0]||document.getElementById('rrRestart'))?.addEventListener('click',()=>{close();openRushRunner();});
+      (document.getElementById('rrRestart'))?.addEventListener('click',()=>startGame(playMode));
     }
   }
 
+  function ensureKeyHandler(){
+    if(keyHandler)return;
+    keyHandler=(e)=>{
+      if(!alive()||gameOver||!started)return;
+      if(e.key==='ArrowLeft'){e.preventDefault();setLane(laneTo-1);}
+      else if(e.key==='ArrowRight'){e.preventDefault();setLane(laneTo+1);}
+      else if(e.key==='ArrowUp'){e.preventDefault();doJump();}
+      else if(e.key==='ArrowDown'){e.preventDefault();doSlide();}
+    };
+    window.addEventListener('keydown',keyHandler);
+  }
+
   function applyThemeChrome(){
-    const sub=document.querySelector('.game-chrome-sub')||document.querySelector('.game-chrome-subtitle');
-    // subtitle lives in chrome — refresh via data attributes on overlay
     try{
-      const titleRow=overlay.querySelector('.game-chrome-sub, .game-turn, [data-chrome-sub]');
-      if(titleRow&&titleRow.classList.contains('game-chrome-sub'))titleRow.textContent=theme.name+' · '+theme.modLabel;
+      const titleRow=overlay.querySelector('.game-chrome-sub, .game-chrome-subtitle');
+      if(titleRow)titleRow.textContent=theme.name+' · '+theme.modLabel;
     }catch(e){}
     if(typeof prepareGameOverlay==='function')prepareGameOverlay(overlay,{theme:'dark',gameId:'rushrunner',accent:theme.accent});
     buildSkyline(cssW,cssH);
@@ -944,8 +1021,12 @@ function openRushRunner(){
 
   function startGame(mode){
     if(!alive())return;
+    // Soft re-entry from results: clear prior run state
+    if(raf){cancelAnimationFrame(raf);raf=null;}
+    gameOver=false;dying=false;deathFocus=null;
     playMode=mode==='daily'?'daily':'classic';
     runJumps=0;runSlides=0;runPowers=0;
+    hitFlash=0;shake=0;shieldPulse=0;saveBanner=0;
     if(playMode==='daily'){
       const meta=loadDailyMeta();
       theme=THEMES[meta.themeIdx%THEMES.length];
@@ -957,16 +1038,14 @@ function openRushRunner(){
     rng=makeRng(runSeed);
     applyThemeChrome();
     const ov=document.getElementById('rrOverlay');
-    if(ov)ov.style.display='none';
+    if(ov){ov.style.display='none';ov.className='rr-start';ov.innerHTML='';}
     started=true;lastTime=performance.now();
     obstacles=[];coinItems=[];powerups=[];particles=[];
-    dying=false;deathFocus=null;
     lastPattern='';lastPatternAt=0;directorAcc=0;upcomingCoinZ=0;
-    score=0;coins=0;dist=0;speed=BASE_SPEED;
-    jumping=false;sliding=false;jumpT=0;slideT=0;
+    score=0;coins=0;dist=0;speed=BASE_SPEED;scroll=0;
+    jumping=false;sliding=false;jumpT=0;slideT=0;squash=1;
     shield=false;shieldTimer=0;magnet=false;magnetTimer=0;
     lane=1;laneX=1;laneFrom=1;laneTo=1;laneT=1;
-    // Authored opener (seeded) — teach jump then slide
     const openLane=Math.floor(rng()*3);
     const other=(openLane+1+Math.floor(rng()*2))%3;
     spawnCoinLine(1,16,4,1.05);
@@ -976,8 +1055,17 @@ function openRushRunner(){
     spawnCoinLine(1,36,3,1.1);
     if(theme.modId==='coin_rush'||rng()<0.35)spawnPowerAt((openLane+2)%3,40,'magnet');
     if(theme.modId==='heavy_traffic'&&rng()<0.4)spawnPowerAt(openLane,42,'shield');
+    ensureKeyHandler();
     updateMissionHud();
+    const scoreEl=document.getElementById('rrScore');
+    if(scoreEl)scoreEl.textContent='0m';
+    const coinEl=document.getElementById('rrCoins');
+    if(coinEl)coinEl.textContent='◆ 0';
+    updatePowerHud();
     buzz('select');
+    if(typeof markGamePlayed==='function'){
+      try{markGamePlayed('rushrunner');}catch(e){}
+    }
     if(typeof window!=='undefined'){
       window.__rrLastSeed=runSeed;
       window.__rrMode=playMode;
@@ -1195,14 +1283,8 @@ function openRushRunner(){
     else{if(dy<-28)doJump();else if(dy>28)doSlide();}
   },{passive:true});
 
-  keyHandler=(e)=>{
-    if(!alive()||gameOver||!started)return;
-    if(e.key==='ArrowLeft'){e.preventDefault();setLane(laneTo-1);}
-    else if(e.key==='ArrowRight'){e.preventDefault();setLane(laneTo+1);}
-    else if(e.key==='ArrowUp'){e.preventDefault();doJump();}
-    else if(e.key==='ArrowDown'){e.preventDefault();doSlide();}
-  };
-  window.addEventListener('keydown',keyHandler);
+  // Keys attached when a run starts (avoid listening before Start)
+  // ensureKeyHandler() is called from startGame
 
   if(typeof createGamePauseController==='function'){
     pauseCtrl=createGamePauseController({
