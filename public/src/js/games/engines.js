@@ -5338,7 +5338,9 @@ function finishDailyIfNeeded(won){
   if(!useDaily)return;
   gameOver=true;
   if(!streakRecorded){
-    if(typeof recordShabdDailyResult==='function')recordShabdDailyResult(won);
+    if(typeof recordShabdDailyResult==='function'){
+      recordShabdDailyResult(won,{guesses:guesses.length,hard:!!hardMode});
+    }
     streakRecorded=true;
   }
   persistDaily({gameOver:true,won:!!won,streakRecorded:true,currentGuess:'',hardMode:!!hardMode});
@@ -5361,20 +5363,24 @@ function render(){
   const resultSub=won
     ?(`Solved in ${guesses.length}`+(hardMode?' · Hard':''))
     :(`Word was ${target}`+(hardMode?' · Hard':''));
+  const resultActions=[
+    {label:'Share',primary:true,id:'share'},
+  ];
+  if(useDaily)resultActions.push({label:'Stats',primary:false,id:'stats'});
+  resultActions.push(
+    {label:againLabel,primary:false,id:'again'},
+    {label:'Challenge friend',primary:false,id:'challenge'},
+    {label:'Post to story',primary:false,id:'story'}
+  );
   const resultBlock=gameOver&&typeof gameResultHtml==='function'
     ? gameResultHtml({
         gameId: 'wordguess',
         glyph: won?'✓':'·',
         title: won?'Brilliant!':'Nice try',
         subtitle: resultSub,
-        vsBest: (typeof formatVsBest==='function'&&won)?formatVsBest('wordguess', guesses.length):undefined,
+        vsBest: (typeof formatVsBest==='function'&&won&&useDaily)?formatVsBest('wordguess', guesses.length):undefined,
         shareCardHtml: shareCard,
-        actions: [
-          {label:'Share',primary:true,id:'share'},
-          {label:againLabel,primary:false,id:'again'},
-          {label:'Challenge friend',primary:false,id:'challenge'},
-          {label:'Post to story',primary:false,id:'story'},
-        ],
+        actions: resultActions,
       })
     : '';
   const hud=typeof gameHudHtml==='function'&&!gameOver
@@ -5386,9 +5392,12 @@ function render(){
     : '';
   const hardDisabled=hardLocked||gameOver;
   const hardToggle=`<button type="button" id="wgHard" class="game-chrome-action wg-hard-btn${hardMode?' is-on':''}" ${hardDisabled?'disabled':''} title="${hardDisabled?'Locked for this puzzle':'Must use revealed hints'}" aria-pressed="${hardMode?'true':'false'}">${hardMode?'Hard ✓':'Hard'}</button>`;
+  const statsBtn=useDaily
+    ?`<button type="button" id="wgStats" class="game-chrome-action" title="Statistics" aria-label="Statistics">Stats</button>`
+    :'';
   const chromeRight=gameOver
-    ? (hardMode?'<span class="game-chrome-action" style="opacity:.85;pointer-events:none;">Hard</span>':'')
-    : `${hardToggle}<button type="button" id="wgNew" class="game-chrome-action">Practice</button>`;
+    ? `${statsBtn}${hardMode?'<span class="game-chrome-action" style="opacity:.85;pointer-events:none;">Hard</span>':''}`
+    : `${statsBtn}${hardToggle}<button type="button" id="wgNew" class="game-chrome-action">Practice</button>`;
   overlay.innerHTML=`
     ${gameChromeHtml({title:'Shabd Five',subtitle:dayLabel+hardBit+streakBit,backId:'wgBack',rightHtml:chromeRight})}
     ${hud}
@@ -5401,6 +5410,14 @@ function render(){
   document.getElementById('wgHard')?.addEventListener('click',()=>{
     if(hardDisabled)return;
     setHardMode(!hardMode);
+  });
+  document.getElementById('wgStats')?.addEventListener('click',()=>{
+    if(typeof openShabdStatsSheet==='function'){
+      openShabdStatsSheet({
+        host:overlay,
+        highlightGuess:gameOver&&won?guesses.length:null,
+      });
+    }
   });
 
   if(gameOver&&typeof wireGameResultActions==='function'){
@@ -5418,6 +5435,11 @@ function render(){
       again:()=>{
         if(useDaily)goToPractice(true);
         else{gs.close('restart');openWordGuess(chat,{daily:false});}
+      },
+      stats:()=>{
+        if(typeof openShabdStatsSheet==='function'){
+          openShabdStatsSheet({host:overlay,highlightGuess:won?guesses.length:null});
+        }
       },
       share:()=>{
         if(typeof shareGameResult==='function') shareGameResult('wordguess', shareStats);
@@ -5536,7 +5558,7 @@ function handleInput(k){
         if(typeof gameFeedback==='function')gameFeedback(won?'win':'lose');
         if(useDaily)finishDailyIfNeeded(won);
         else gameOver=true;
-        if(won&&typeof setGamePB==='function') setGamePB('wordguess', guesses.length);
+        if(useDaily&&won&&typeof setGamePB==='function') setGamePB('wordguess', guesses.length);
       }else if(useDaily){
         persistDaily();
       }

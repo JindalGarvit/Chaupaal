@@ -2214,6 +2214,42 @@ html.theme-dark .lehar-empty{color:#fff;}
 .game-chrome-action{min-height:36px;border:0;border-radius:10px;padding:7px 10px;background:rgba(255,255,255,.1);color:inherit;font:700 11px 'Space Grotesk',sans-serif;cursor:pointer}.game-chrome-action.is-active{background:var(--game-accent);color:#fff}.game-chrome-metric{font:700 13px 'Space Grotesk',sans-serif;color:var(--game-accent);}
 .wg-hard-btn.is-on{background:#B59F3B;color:#1a1a1a}
 .wg-hard-btn:disabled{opacity:.55;cursor:default}
+
+/* Shabd Five stats sheet (Prompt 4) */
+.shabd-stats-sheet{z-index:130;}
+.shabd-stats-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.55);}
+.shabd-stats-panel{
+  position:relative;width:100%;max-height:82vh;overflow:auto;
+  background:#121213;color:#fff;border-radius:22px 22px 0 0;
+  padding:16px 16px max(16px,env(safe-area-inset-bottom));
+  box-shadow:0 -12px 40px rgba(0,0,0,.45);
+}
+.shabd-stats-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.shabd-stats-head strong{font:700 16px 'Space Grotesk',sans-serif;letter-spacing:.02em;}
+.shabd-stats-empty{font-size:13px;color:rgba(255,255,255,.55);margin:0 0 12px;text-align:center;}
+.shabd-stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px;}
+.shabd-stats-metric{text-align:center;padding:10px 4px;border-radius:12px;background:rgba(255,255,255,.06);}
+.shabd-stats-metric b{display:block;font:700 20px 'Space Grotesk',sans-serif;}
+.shabd-stats-metric span{font-size:10px;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.04em;}
+.shabd-stats-section-title{font:700 12px 'Space Grotesk',sans-serif;color:rgba(255,255,255,.7);margin:0 0 8px;text-transform:uppercase;letter-spacing:.06em;}
+.shabd-stat-bars{display:flex;flex-direction:column;gap:6px;margin-bottom:16px;}
+.shabd-stat-bar-row{display:grid;grid-template-columns:18px 1fr 28px;align-items:center;gap:8px;}
+.shabd-stat-bar-label,.shabd-stat-bar-count{font:700 12px 'Space Grotesk',sans-serif;color:rgba(255,255,255,.75);}
+.shabd-stat-bar-track{height:18px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden;}
+.shabd-stat-bar-fill{height:100%;background:#538D4E;border-radius:4px;min-width:0;transition:width .25s ease;}
+.shabd-stat-bar-row.is-today .shabd-stat-bar-fill{background:#B59F3B;}
+.shabd-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:8px;}
+.shabd-cal-cell{
+  aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+  font:700 10px 'Space Grotesk',sans-serif;border-radius:6px;
+  color:rgba(255,255,255,.35);background:transparent;
+}
+.shabd-cal-cell.is-empty{visibility:hidden;}
+.shabd-cal-cell.is-win{background:#538D4E;color:#fff;}
+.shabd-cal-cell.is-loss{background:#3A3A3C;color:rgba(255,255,255,.75);}
+.shabd-cal-cell.is-hard{box-shadow:inset 0 0 0 2px #B59F3B;}
+.shabd-cal-cell.is-today{outline:1px solid rgba(255,255,255,.35);}
+.shabd-stats-foot{font-size:11px;color:rgba(255,255,255,.4);margin:0;text-align:center;}
 .game-back-btn,
 .game-overlay .game-tap-target {
   min-width: var(--game-tap-min);

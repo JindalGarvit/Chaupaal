@@ -127,7 +127,7 @@
     wordguess: [
       'One Daily puzzle per local day — progress saves; finished days stay locked',
       'Optional Hard Mode: greens stay put · ambers must be reused (locks after guess 1)',
-      'Practice is a separate sandbox and never touches your Daily streak',
+      'Stats show guess bars, streak, and a month calendar — Practice never counts',
     ],
     fiveinrow: ['Connect five in a line', 'Watch diagonals as well as rows', 'Block threats before extending yours'],
     business: ['Buy when you land on empty lots', 'Pay rent on owned properties', 'Richest player at the end wins'],
@@ -941,7 +941,10 @@
     }
   }
 
-  /* ── Shabd daily streak (local YYYY-MM-DD — same day key as Daily save) ── */
+  /* ── Shabd Five daily stats (Prompt 4) — local YYYY-MM-DD, single source of truth ── */
+  const SHABD_STATS_KEY = 'chaupaal_shabd_stats_v1';
+  const SHABD_STREAK_LEGACY = 'chaupaal_shabd_streak';
+
   function shabdLocalDayKey() {
     const d = new Date();
     const y = d.getFullYear();
@@ -950,13 +953,94 @@
     return y + '-' + m + '-' + day;
   }
 
-  function recordShabdDailyResult(won) {
-    const today = shabdLocalDayKey();
-    let data = { streak: 0, last: '', best: 0 };
+  function emptyShabdStats() {
+    return {
+      played: 0,
+      wins: 0,
+      losses: 0,
+      streak: 0,
+      bestStreak: 0,
+      distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
+      last: '',
+      days: {},
+    };
+  }
+
+  function normalizeShabdStats(raw) {
+    const base = emptyShabdStats();
+    const o = raw && typeof raw === 'object' ? raw : {};
+    const dist = Object.assign({}, base.distribution, o.distribution || {});
+    for (let i = 1; i <= 6; i++) dist[i] = Math.max(0, Number(dist[i]) || 0);
+    const days = o.days && typeof o.days === 'object' ? o.days : {};
+    return {
+      played: Math.max(0, Number(o.played) || 0),
+      wins: Math.max(0, Number(o.wins) || 0),
+      losses: Math.max(0, Number(o.losses) || 0),
+      streak: Math.max(0, Number(o.streak) || 0),
+      bestStreak: Math.max(0, Number(o.bestStreak != null ? o.bestStreak : o.best) || 0),
+      distribution: dist,
+      last: typeof o.last === 'string' ? o.last : '',
+      days,
+    };
+  }
+
+  function syncShabdStreakLegacy(stats) {
     try {
-      data = JSON.parse(localStorage.getItem('chaupaal_shabd_streak') || '{}') || data;
+      localStorage.setItem(
+        SHABD_STREAK_LEGACY,
+        JSON.stringify({
+          streak: stats.streak || 0,
+          best: stats.bestStreak || 0,
+          last: stats.last || '',
+        })
+      );
     } catch (e) {}
-    if (data.last === today) return data;
+  }
+
+  function loadShabdStats() {
+    try {
+      const raw = localStorage.getItem(SHABD_STATS_KEY);
+      if (raw) return normalizeShabdStats(JSON.parse(raw));
+    } catch (e) {}
+    // Migrate legacy streak without wiping
+    let legacy = { streak: 0, last: '', best: 0 };
+    try {
+      legacy = JSON.parse(localStorage.getItem(SHABD_STREAK_LEGACY) || '{}') || legacy;
+    } catch (e) {}
+    const migrated = emptyShabdStats();
+    migrated.streak = Math.max(0, Number(legacy.streak) || 0);
+    migrated.bestStreak = Math.max(0, Number(legacy.best) || 0);
+    migrated.last = typeof legacy.last === 'string' ? legacy.last : '';
+    try {
+      localStorage.setItem(SHABD_STATS_KEY, JSON.stringify(migrated));
+    } catch (e) {}
+    return migrated;
+  }
+
+  function saveShabdStats(stats) {
+    const data = normalizeShabdStats(stats);
+    try {
+      localStorage.setItem(SHABD_STATS_KEY, JSON.stringify(data));
+    } catch (e) {}
+    syncShabdStreakLegacy(data);
+    return data;
+  }
+
+  /**
+   * Record one Daily finish (win/loss). Idempotent per local day.
+   * @param {boolean} won
+   * @param {{ guesses?: number, hard?: boolean }} [meta]
+   */
+  function recordShabdDailyResult(won, meta) {
+    const today = shabdLocalDayKey();
+    const data = loadShabdStats();
+    if (data.last === today || (data.days && data.days[today])) {
+      // Already recorded today — keep streak chip in sync and bail
+      syncShabdStreakLegacy(data);
+      return data;
+    }
+    const m = meta || {};
+    data.played = (data.played || 0) + 1;
     if (won) {
       const y = new Date();
       y.setDate(y.getDate() - 1);
@@ -967,23 +1051,116 @@
         '-' +
         String(y.getDate()).padStart(2, '0');
       data.streak = data.last === yesterday ? (data.streak || 0) + 1 : 1;
-      data.best = Math.max(data.best || 0, data.streak);
+      data.bestStreak = Math.max(data.bestStreak || 0, data.streak);
+      data.wins = (data.wins || 0) + 1;
+      const g = Math.min(6, Math.max(1, Number(m.guesses) || 0));
+      if (g >= 1 && g <= 6) {
+        data.distribution[g] = (data.distribution[g] || 0) + 1;
+      }
     } else {
       data.streak = 0;
+      data.losses = (data.losses || 0) + 1;
     }
     data.last = today;
-    try {
-      localStorage.setItem('chaupaal_shabd_streak', JSON.stringify(data));
-    } catch (e) {}
-    return data;
+    data.days = data.days || {};
+    data.days[today] = {
+      won: !!won,
+      guesses: won ? Math.min(6, Math.max(1, Number(m.guesses) || 0)) : 0,
+      hard: !!m.hard,
+    };
+    return saveShabdStats(data);
+  }
+
+  function getShabdStats() {
+    return loadShabdStats();
   }
 
   function getShabdStreak() {
-    try {
-      return JSON.parse(localStorage.getItem('chaupaal_shabd_streak') || '{"streak":0,"best":0}');
-    } catch (e) {
-      return { streak: 0, best: 0 };
+    const s = loadShabdStats();
+    return { streak: s.streak || 0, best: s.bestStreak || 0, last: s.last || '' };
+  }
+
+  function shabdWinPct(stats) {
+    const s = stats || loadShabdStats();
+    if (!s.played) return 0;
+    return Math.round((100 * (s.wins || 0)) / s.played);
+  }
+
+  function openShabdStatsSheet(opts) {
+    const o = opts || {};
+    const host = o.host || document.querySelector('.game-overlay, .device') || document.body;
+    document.getElementById('shabdStatsSheet')?.remove();
+    const stats = loadShabdStats();
+    const highlight = o.highlightGuess != null ? Number(o.highlightGuess) : null;
+    const played = stats.played || 0;
+    const winPct = shabdWinPct(stats);
+    const dist = stats.distribution || {};
+    const maxBar = Math.max(1, ...[1, 2, 3, 4, 5, 6].map((n) => Number(dist[n]) || 0));
+    const bars = [1, 2, 3, 4, 5, 6]
+      .map((n) => {
+        const count = Number(dist[n]) || 0;
+        const pct = Math.round((100 * count) / maxBar);
+        const on = highlight === n ? ' is-today' : '';
+        return `<div class="shabd-stat-bar-row${on}"><span class="shabd-stat-bar-label">${n}</span><div class="shabd-stat-bar-track"><div class="shabd-stat-bar-fill" style="width:${count ? Math.max(8, pct) : 0}%"></div></div><span class="shabd-stat-bar-count">${count}</span></div>`;
+      })
+      .join('');
+
+    // Light current-month calendar
+    const now = new Date();
+    const y = now.getFullYear();
+    const mo = now.getMonth();
+    const daysInMonth = new Date(y, mo + 1, 0).getDate();
+    const startDow = new Date(y, mo, 1).getDay(); // 0 Sun
+    const monthLabel = now.toLocaleString(undefined, { month: 'short', year: 'numeric' });
+    let calCells = '';
+    for (let i = 0; i < startDow; i++) calCells += '<span class="shabd-cal-cell is-empty"></span>';
+    for (let d = 1; d <= daysInMonth; d++) {
+      const key =
+        y + '-' + String(mo + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+      const entry = stats.days && stats.days[key];
+      let cls = 'shabd-cal-cell';
+      let title = key;
+      if (entry) {
+        cls += entry.won ? ' is-win' : ' is-loss';
+        if (entry.hard) cls += ' is-hard';
+        title = entry.won
+          ? key + ' · ' + entry.guesses + '/6' + (entry.hard ? ' Hard' : '')
+          : key + ' · X' + (entry.hard ? ' Hard' : '');
+      }
+      if (key === shabdLocalDayKey()) cls += ' is-today';
+      calCells += `<span class="${cls}" title="${title}">${d}</span>`;
     }
+
+    const empty = !played
+      ? `<p class="shabd-stats-empty">Finish your first Daily to build stats.</p>`
+      : '';
+    const sheet = document.createElement('div');
+    sheet.id = 'shabdStatsSheet';
+    sheet.className = 'game-friend-sheet shabd-stats-sheet';
+    sheet.innerHTML = `
+      <div class="shabd-stats-backdrop" data-shabd-stats-close></div>
+      <div class="shabd-stats-panel" role="dialog" aria-label="Shabd Five statistics">
+        <div class="shabd-stats-head">
+          <strong>Statistics</strong>
+          <button type="button" class="game-chrome-action" data-shabd-stats-close aria-label="Close">✕</button>
+        </div>
+        ${empty}
+        <div class="shabd-stats-grid" aria-label="Summary">
+          <div class="shabd-stats-metric"><b>${played}</b><span>Played</span></div>
+          <div class="shabd-stats-metric"><b>${played ? winPct : 0}</b><span>Win %</span></div>
+          <div class="shabd-stats-metric"><b>${stats.streak || 0}</b><span>Current</span></div>
+          <div class="shabd-stats-metric"><b>${stats.bestStreak || 0}</b><span>Max streak</span></div>
+        </div>
+        <div class="shabd-stats-section-title">Guess distribution</div>
+        <div class="shabd-stat-bars">${bars}</div>
+        <div class="shabd-stats-section-title">${monthLabel}</div>
+        <div class="shabd-cal" aria-label="Month calendar">${calCells}</div>
+        <p class="shabd-stats-foot">Green = win · grey = miss · gold ring = Hard</p>
+      </div>`;
+    host.appendChild(sheet);
+    const close = () => sheet.remove();
+    sheet.querySelectorAll('[data-shabd-stats-close]').forEach((el) => el.addEventListener('click', close));
+    return sheet;
   }
 
   /* ── Wordle-style grid share for Shabd ── */
@@ -2128,6 +2305,8 @@
   window.getDuelStreak = getDuelStreak;
   window.recordShabdDailyResult = recordShabdDailyResult;
   window.getShabdStreak = getShabdStreak;
+  window.getShabdStats = getShabdStats;
+  window.openShabdStatsSheet = openShabdStatsSheet;
   window.shabdLocalDayKey = shabdLocalDayKey;
   window.buildShabdGridShare = buildShabdGridShare;
   window.postGameScoreStory = postGameScoreStory;
