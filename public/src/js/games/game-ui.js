@@ -175,7 +175,11 @@
     bluff: ['Select 1–3 cards and a claimed rank', 'Opponent may call', 'Three lives each'],
     sattepe: ['Play next to a seven chain', 'Empty your hand first', 'Sevens can always start a suit'],
     andarbaahar: ['Joker sets the rank', 'Pick Andar or Bahar', 'First matching rank wins the side'],
-    patangbaazi: ['Hold to climb, drag to steer', 'Overlap cuts the slower kite', 'Don’t stall at the top'],
+    patangbaazi: [
+      'Hold to tension the manjha — climb with weight, release to float',
+      'Gusts shove the sail — ease through them, don’t yank at the zenith',
+      'Overlap still ends the duel for now; real cut geometry comes next',
+    ],
     brickbreaker: [
       'Campaign or Score Attack — pick before you Serve',
       'Steel takes two hits · Gold scores big · Bombs clear neighbours',

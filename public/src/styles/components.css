@@ -2426,9 +2426,8 @@ html.theme-dark .lehar-empty{color:#fff;}
 }
 .dangal-fullgame-body canvas,
 .pc-cue canvas,
-.cs-patang canvas {
-  touch-action: none;
-}
+.cs-patang .cs-rally-hint.is-warn{color:#FFD180;font-weight:700;}
+.cs-patang canvas{background:transparent;}
 .game-pause-scrim {
   position: absolute;
   inset: 0;

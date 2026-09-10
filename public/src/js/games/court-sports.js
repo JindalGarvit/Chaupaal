@@ -811,16 +811,19 @@
   function openPatang() {
     let raf = 0;
     let pauseCtrl = null;
+    let lastTs = 0;
     const shell = openShell({
       id: 'patangbaazi',
       title: 'Patang Baazi',
-      subtitle: practiceSub('Climb · cut the rival kite'),
+      subtitle: practiceSub('Manjha · wind · cut'),
       mode: 'practice',
       accent: '#FF6D00',
       bg: '#001018',
       pauseId: 'csPatangPause',
       cleanup: () => {
         cancelAnimationFrame(raf);
+        raf = 0;
+        window.removeEventListener('resize', onResize);
         if (pauseCtrl) pauseCtrl.destroy();
       },
     });
@@ -828,103 +831,388 @@
 
     shell.body.innerHTML = `
       <div class="cs-patang">
-        <p class="cs-rally-msg">Hold to climb. Drag left / right. Faster kite cuts on overlap.</p>
+        <p class="cs-rally-msg">Hold to tension the manjha. Drag to steer. Ease through gusts.</p>
         <canvas data-patang></canvas>
-        <p class="cs-rally-hint" data-patang-hint>Hold anywhere on the sky</p>
+        <p class="cs-rally-hint" data-patang-hint>Hold the sky — pull to climb</p>
       </div>`;
     const canvas = shell.body.querySelector('[data-patang]');
     const hint = shell.body.querySelector('[data-patang-hint]');
     let ctx = canvas.getContext('2d');
     let w = 320;
     let h = 420;
-    const you = { x: 0.35, y: 0.7, vx: 0, speed: 0 };
-    const opp = { x: 0.65, y: 0.55, vx: 0, speed: 0.4 };
+
+    /** Flight state exposed for Prompt 2 cut geometry. */
+    function makeKite(x, y, color, accent) {
+      return {
+        x, y,
+        vx: 0, vy: 0,
+        tension: 0.25,
+        heading: 0,
+        targetX: x,
+        zenithRisk: 0,
+        color, accent,
+        tailPhase: Math.random() * Math.PI * 2,
+      };
+    }
+    const you = makeKite(0.35, 0.62, '#FF6D00', '#FFD180');
+    const opp = makeKite(0.68, 0.5, '#29B6F6', '#B3E5FC');
     let holding = false;
     let ended = false;
     let t = 0;
+    let windX = 0.06;
+    let windY = -0.01;
+    let gust = 0;
+    let cloudOff = 0;
+    let pointerId = null;
+
+    const ZENITH = 0.13;
+    const GROUND = 0.9;
+    const CUT_R2 = 0.011;
+    // Wind defaults: gentle base ~0.05–0.12 + gust peaks to ~0.35 for ~1.2s
 
     function size() {
       const r = canvas.getBoundingClientRect();
       w = Math.max(240, r.width || 300);
       h = Math.max(280, r.height || 360);
-      if (typeof ensureGameCanvas === 'function') ensureGameCanvas(canvas, w, h);
-      else {
-        canvas.width = w;
-        canvas.height = h;
+      if (typeof ensureGameCanvas === 'function') {
+        const sized = ensureGameCanvas(canvas, w, h);
+        if (sized && sized.ctx) ctx = sized.ctx;
+        if (sized && sized.width) w = sized.width;
+        if (sized && sized.height) h = sized.height;
+      } else {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.style.width = w + 'px';
+        canvas.style.height = h + 'px';
+        canvas.width = Math.round(w * dpr);
+        canvas.height = Math.round(h * dpr);
+        ctx = canvas.getContext('2d');
+        if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       }
-      ctx = canvas.getContext('2d');
+    }
+    function onResize() {
+      size();
     }
     size();
+    window.addEventListener('resize', onResize);
 
+    function setHolding(on, e) {
+      holding = !!on;
+      if (on && e) {
+        pointerId = e.pointerId;
+        try {
+          canvas.setPointerCapture(e.pointerId);
+        } catch (err) {}
+        aimAt(e);
+      } else {
+        pointerId = null;
+      }
+    }
+    function aimAt(e) {
+      const r = canvas.getBoundingClientRect();
+      you.targetX = Math.max(0.08, Math.min(0.92, (e.clientX - r.left) / Math.max(1, r.width)));
+    }
     canvas.addEventListener('pointerdown', (e) => {
-      holding = true;
-      canvas.setPointerCapture(e.pointerId);
-    });
-    canvas.addEventListener('pointerup', () => {
-      holding = false;
+      if (ended) return;
+      e.preventDefault();
+      setHolding(true, e);
     });
     canvas.addEventListener('pointermove', (e) => {
-      if (!holding) return;
-      const r = canvas.getBoundingClientRect();
-      you.x = Math.max(0.08, Math.min(0.92, (e.clientX - r.left) / r.width));
+      if (!holding || ended) return;
+      if (pointerId != null && e.pointerId !== pointerId) return;
+      aimAt(e);
+    });
+    function releasePtr(e) {
+      if (pointerId != null && e && e.pointerId !== pointerId) return;
+      setHolding(false);
+    }
+    canvas.addEventListener('pointerup', releasePtr);
+    canvas.addEventListener('pointercancel', releasePtr);
+    canvas.addEventListener('lostpointercapture', () => {
+      holding = false;
+      pointerId = null;
     });
 
-    function end(won) {
+    function end(won, why) {
       if (ended) return;
       ended = true;
       cancelAnimationFrame(raf);
+      raf = 0;
       showDuelResult(shell, {
         id: 'patangbaazi',
         you: won ? 1 : 0,
         opp: won ? 0 : 1,
-        glyph: '🪁',
+        glyph: won ? '✓' : '·',
         pbScore: won ? 1 : 0,
-        subtitle: won ? 'String cut!' : 'Your manjha snapped.',
+        subtitle: why || (won ? 'String cut!' : 'Your manjha snapped.'),
         shareText: won ? 'I cut a kite on Chaupaal Patang Baazi!' : 'Patang Baazi on Chaupaal',
         onAgain: openPatang,
       });
     }
 
-    function loop(now) {
-      if (!shell.alive() || ended) return;
-      if (pauseCtrl && pauseCtrl.isPaused()) {
-        raf = requestAnimationFrame(loop);
-        return;
+    function updateWind(dt) {
+      const base = 0.05 + 0.04 * Math.sin(t * 0.35) + 0.02 * Math.sin(t * 0.11);
+      // Gust envelope: rises every ~5–7s
+      const cycle = (t % 6.4) / 6.4;
+      let gAmp = 0;
+      if (cycle > 0.55 && cycle < 0.78) {
+        const u = (cycle - 0.55) / 0.23;
+        gAmp = Math.sin(u * Math.PI) * (0.22 + 0.06 * Math.sin(t * 0.7));
       }
-      t = now / 1000;
-      you.speed = holding ? Math.min(1, you.speed + 0.02) : Math.max(0.15, you.speed - 0.01);
-      you.y -= (holding ? 0.0028 : -0.0012) * (0.6 + you.speed);
-      you.y = Math.max(0.12, Math.min(0.88, you.y));
-      opp.x = 0.5 + Math.sin(t * 1.3) * 0.28;
-      opp.y = 0.42 + Math.cos(t * 0.9) * 0.18;
-      opp.speed = 0.45 + Math.abs(Math.sin(t * 2)) * 0.4;
+      gust = gust * 0.92 + gAmp * 0.08;
+      windX = base + gust * (0.85 + 0.15 * Math.sin(t * 3.1));
+      windY = -0.012 + 0.02 * Math.sin(t * 0.55) - gust * 0.04;
+      cloudOff += (windX * 28 + 6) * dt;
+    }
 
-      const dx = you.x - opp.x;
-      const dy = you.y - opp.y;
-      if (dx * dx + dy * dy < 0.012) {
-        end(you.speed > opp.speed + 0.05);
-        return;
-      }
-      if (you.y <= 0.13 && holding) {
-        hint.textContent = 'Too high — ease off';
-      }
+    function cutPower(k) {
+      // Prompt 2 can replace with angle/abrasion; Prompt 1 uses tension + speed proxy.
+      const spd = Math.hypot(k.vx, k.vy);
+      return k.tension * 0.65 + spd * 7.5 + Math.abs(k.heading) * 0.15;
+    }
 
-      ctx.clearRect(0, 0, w, h);
+    function tryResolveCut(a, b) {
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      if (dx * dx + dy * dy >= CUT_R2) return null;
+      const pa = cutPower(a);
+      const pb = cutPower(b);
+      if (pa > pb + 0.04) return true;
+      if (pb > pa + 0.04) return false;
+      return pa >= pb;
+    }
+
+    function stepKite(k, dt, isPlayer, pull) {
+      // Tension: pull rises, release decays toward float
+      const targetTen = pull ? 1 : 0.12;
+      const tenRate = pull ? 1.35 : 1.6;
+      k.tension += (targetTen - k.tension) * Math.min(1, tenRate * dt);
+
+      // Altitude: smaller y = higher. Climb harder near zenith.
+      const alt = 1 - k.y; // 0 ground-ish … ~0.87 zenith
+      const zenithFactor = Math.max(0.25, 1 - Math.pow(Math.max(0, (ZENITH + 0.08 - k.y) / 0.2), 1.4));
+      const climb = pull ? -0.42 * k.tension * zenithFactor : 0.28 * (0.55 - k.tension);
+      const float = -0.04 * (0.5 - k.y); // slight restoring toward mid sky
+      k.vy += (climb + float + windY * (0.7 + k.tension * 0.5)) * dt;
+      k.vy *= Math.pow(0.86, dt * 60);
+
+      // Steer with inertia toward targetX; wind adds lateral bias
+      const steer = (k.targetX - k.x) * 2.4;
+      k.vx += (steer + windX * (0.55 + (1 - k.tension) * 0.35)) * dt;
+      k.vx *= Math.pow(0.88, dt * 60);
+
+      k.x += k.vx * dt;
+      k.y += k.vy * dt;
+      k.x = Math.max(0.06, Math.min(0.94, k.x));
+      k.y = Math.max(0.08, Math.min(0.94, k.y));
+      k.heading = Math.atan2(k.vx * 1.2 + windX * 0.4, -k.vy * 0.8 - 0.15);
+      k.tailPhase += dt * (4 + k.tension * 6 + Math.abs(windX) * 8);
+
+      if (isPlayer) {
+        if (k.y <= ZENITH + 0.02 && k.tension > 0.82) {
+          k.zenithRisk += dt;
+          if (k.zenithRisk > 1.15) {
+            end(false, 'Manjha snapped at the zenith — ease off next time.');
+            return false;
+          }
+        } else {
+          k.zenithRisk = Math.max(0, k.zenithRisk - dt * 0.55);
+        }
+        if (k.y >= GROUND && k.tension < 0.2) {
+          end(false, 'Kite dumped into the rooftops.');
+          return false;
+        }
+      }
+      return true;
+    }
+
+    function stepRival(dt) {
+      // Dumb sine pilot — Prompt 3 replaces with hunter AI
+      opp.targetX = 0.52 + Math.sin(t * 1.15) * 0.28 + windX * 0.35;
+      const wantPull = Math.sin(t * 0.9) > -0.15 || opp.y > 0.7;
+      return stepKite(opp, dt, false, wantPull);
+    }
+
+    function drawSky() {
       const g = ctx.createLinearGradient(0, 0, 0, h);
-      g.addColorStop(0, '#4FC3F7');
+      g.addColorStop(0, '#81D4FA');
+      g.addColorStop(0.55, '#29B6F6');
       g.addColorStop(1, '#01579B');
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, w, h);
-      ctx.strokeStyle = 'rgba(255,255,255,.35)';
+
+      // Drifting cloud washes (wind tell)
+      ctx.save();
+      ctx.globalAlpha = 0.18 + gust * 0.25;
+      for (let i = 0; i < 5; i++) {
+        const cx = ((i * 0.28 * w + cloudOff * (0.4 + i * 0.08)) % (w + 120)) - 60;
+        const cy = 40 + i * 28 + Math.sin(t * 0.4 + i) * 6;
+        ctx.fillStyle = '#E1F5FE';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, 48 + i * 6, 16 + i * 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // Gust wash band
+      if (gust > 0.08) {
+        ctx.save();
+        ctx.globalAlpha = Math.min(0.35, gust * 0.9);
+        const gx = (cloudOff * 1.4) % (w + 40) - 20;
+        const wash = ctx.createLinearGradient(gx - 40, 0, gx + 80, 0);
+        wash.addColorStop(0, 'rgba(255,255,255,0)');
+        wash.addColorStop(0.5, 'rgba(255,255,255,.55)');
+        wash.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = wash;
+        ctx.fillRect(0, 0, w, h * 0.7);
+        ctx.restore();
+      }
+
+      // Rooftop silhouettes (light)
+      ctx.fillStyle = 'rgba(0,20,40,.45)';
       ctx.beginPath();
-      ctx.moveTo(w * 0.5, h);
-      ctx.lineTo(you.x * w, you.y * h);
-      ctx.moveTo(w * 0.55, h);
-      ctx.lineTo(opp.x * w, opp.y * h);
+      ctx.moveTo(0, h);
+      ctx.lineTo(0, h * 0.88);
+      const roofs = [0.08, 0.18, 0.3, 0.42, 0.55, 0.68, 0.8, 0.92];
+      roofs.forEach((rx, i) => {
+        const bh = h * (0.06 + (i % 3) * 0.025);
+        ctx.lineTo(rx * w - 8, h * 0.88);
+        ctx.lineTo(rx * w - 8, h * 0.88 - bh);
+        ctx.lineTo(rx * w + 18, h * 0.88 - bh);
+        ctx.lineTo(rx * w + 18, h * 0.88);
+      });
+      ctx.lineTo(w, h * 0.88);
+      ctx.lineTo(w, h);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    function drawString(k, anchorX) {
+      const ax = anchorX * w;
+      const ay = h * 0.98;
+      const kx = k.x * w;
+      const ky = k.y * h;
+      const bow = windX * 55 * (0.5 + k.tension * 0.5);
+      const mx = (ax + kx) * 0.5 + bow;
+      const my = (ay + ky) * 0.5 + 12;
+      ctx.strokeStyle = 'rgba(255,236,179,' + (0.35 + k.tension * 0.45) + ')';
+      ctx.lineWidth = 1.2 + k.tension * 1.4;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.quadraticCurveTo(mx, my, kx, ky);
       ctx.stroke();
-      ctx.font = '28px sans-serif';
-      ctx.fillText('🪁', you.x * w - 14, you.y * h);
-      ctx.fillText('🪁', opp.x * w - 14, opp.y * h);
+    }
+
+    function drawKite(k) {
+      const px = k.x * w;
+      const py = k.y * h;
+      const ang = k.heading * 0.65;
+      const s = Math.min(w, h) * 0.045;
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(ang);
+
+      // Tail ribbon
+      ctx.strokeStyle = k.accent;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      let tx = 0;
+      let ty = s * 0.9;
+      ctx.moveTo(tx, ty);
+      for (let i = 1; i <= 6; i++) {
+        tx = Math.sin(k.tailPhase + i * 0.7) * (4 + i * 1.2) + windX * 10;
+        ty = s * 0.9 + i * (s * 0.55);
+        ctx.lineTo(tx, ty);
+      }
+      ctx.stroke();
+      for (let i = 2; i <= 6; i += 2) {
+        const bx = Math.sin(k.tailPhase + i * 0.7) * (4 + i * 1.2) + windX * 10;
+        const by = s * 0.9 + i * (s * 0.55);
+        ctx.fillStyle = i % 4 === 0 ? k.color : k.accent;
+        ctx.fillRect(bx - 3, by - 2, 6, 4);
+      }
+
+      // Diamond sail
+      ctx.beginPath();
+      ctx.moveTo(0, -s * 1.15);
+      ctx.lineTo(s * 0.85, 0);
+      ctx.lineTo(0, s * 0.95);
+      ctx.lineTo(-s * 0.85, 0);
+      ctx.closePath();
+      ctx.fillStyle = k.color;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,.25)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, -s * 1.15);
+      ctx.lineTo(0, s * 0.95);
+      ctx.moveTo(-s * 0.85, 0);
+      ctx.lineTo(s * 0.85, 0);
+      ctx.strokeStyle = k.accent;
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function updateHint() {
+      if (you.zenithRisk > 0.35) {
+        hint.textContent = 'Ease off — manjha screaming at the top';
+        hint.classList.add('is-warn');
+      } else if (gust > 0.14) {
+        hint.textContent = 'Gust — ease tension, don’t yank';
+        hint.classList.remove('is-warn');
+      } else if (holding && you.tension > 0.7) {
+        hint.textContent = 'Climbing — drag to cut across their line';
+        hint.classList.remove('is-warn');
+      } else if (!holding) {
+        hint.textContent = 'Floating — hold to pull manjha';
+        hint.classList.remove('is-warn');
+      } else {
+        hint.textContent = 'Hold the sky — pull to climb';
+        hint.classList.remove('is-warn');
+      }
+    }
+
+    function loop(now) {
+      if (!shell.alive() || ended) return;
+      if (pauseCtrl && pauseCtrl.isPaused()) {
+        lastTs = 0;
+        raf = requestAnimationFrame(loop);
+        return;
+      }
+      if (!lastTs) lastTs = now;
+      let dt = (now - lastTs) / 1000;
+      lastTs = now;
+      dt = Math.min(0.05, Math.max(0.001, dt));
+      t += dt;
+
+      updateWind(dt);
+      if (!stepKite(you, dt, true, holding)) return;
+      stepRival(dt);
+
+      const cut = tryResolveCut(you, opp);
+      if (cut === true) {
+        end(true, 'You cut their string!');
+        return;
+      }
+      if (cut === false) {
+        end(false, 'Rival cut your manjha.');
+        return;
+      }
+
+      updateHint();
+      drawSky();
+      drawString(opp, 0.58);
+      drawString(you, 0.42);
+      drawKite(opp);
+      drawKite(you);
+
+      // Wind compass tick
+      ctx.fillStyle = 'rgba(255,255,255,.55)';
+      ctx.font = '11px "Space Grotesk",sans-serif';
+      ctx.fillText(gust > 0.12 ? 'Wind · gust' : 'Wind · steady', 12, 18);
+
       raf = requestAnimationFrame(loop);
     }
     if (typeof createGamePauseController === 'function') {
@@ -934,6 +1222,7 @@
         onPause() {
           cancelAnimationFrame(raf);
           raf = 0;
+          lastTs = 0;
         },
         onResume() {
           if (!ended && !raf) raf = requestAnimationFrame(loop);
@@ -1029,7 +1318,7 @@
     registerGame({
       id: 'patangbaazi',
       name: 'Patang Baazi',
-      desc: 'Practice · climb and cut',
+      desc: 'Practice · manjha, wind & cut',
       icon: '🪁',
       gameType: 'solo',
       genre: 'arcade',
