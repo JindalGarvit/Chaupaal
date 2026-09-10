@@ -341,6 +341,17 @@
 .pc-bluff-pile.is-empty b{position:static;text-shadow:none;font-size:16px;}
 .pc-bluff-layer{position:absolute;left:12px;top:10px;pointer-events:none;z-index:1;}
 .pc-bluff-claim{margin:0;font-size:14px;font-weight:700;text-align:center;color:#FFD600;}
+.pc-bluff-hud{
+  display:flex;flex-wrap:wrap;gap:10px 14px;justify-content:center;align-items:center;
+  font-size:12px;opacity:.9;margin:0 0 2px;
+}
+.pc-bluff-seat b{font-weight:800;color:#fff;}
+.pc-bluff-seat.is-hot{
+  color:#FF8A80;font-weight:700;
+  text-shadow:0 0 12px rgba(255,23,68,.35);
+}
+.pc-bluff-seat.is-hot b{color:#FF5252;}
+.pc-bluff-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
 .pc-bluff .cs-hit--ghost{
   opacity:.9;background:transparent;border:1px solid rgba(255,23,68,.55);color:#FF8A80;
 }
