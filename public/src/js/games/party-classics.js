@@ -4156,15 +4156,154 @@
     return r || 'Hand over';
   }
 
+
+  /** How much AI wants to keep a card (higher = keep). */
+  function rummyAiKeepValue(card, hand, wildRank) {
+    if (!card) return 0;
+    if (isRummyWild(card, wildRank)) return 120;
+    let v = 8;
+    const sameRank = hand.filter((c) => c.id !== card.id && !isRummyWild(c, wildRank) && c.r === card.r).length;
+    v += sameRank * 14;
+    const suitMates = hand.filter(
+      (c) => c.id !== card.id && !isRummyWild(c, wildRank) && c.s === card.s
+    );
+    const myVal = rankVal(card.r === 'A' ? 'A' : card.r);
+    suitMates.forEach((c) => {
+      const ov = rankVal(c.r === 'A' ? 'A' : c.r);
+      const d = Math.abs(ov - myVal);
+      // Ace as 1 vs 14 rough: also try low ace distance
+      const dLow =
+        card.r === 'A' || c.r === 'A'
+          ? Math.min(d, Math.abs((card.r === 'A' ? 1 : myVal) - (c.r === 'A' ? 1 : ov)))
+          : d;
+      if (dLow === 1) v += 22;
+      else if (dLow === 2) v += 10;
+      else if (dLow === 0) v -= 5;
+    });
+    // Prefer dumping high deadwood when not useful
+    const pts = rummyCardPoints(card, wildRank);
+    v -= pts * 0.35;
+    return v;
+  }
+
+  function rummyAiHasPureSeed(hand, wildRank) {
+    if (rummySuggestHighlightIds(hand, wildRank).length > 0) return true;
+    const cards = (hand || []).filter((c) => !isRummyWild(c, wildRank));
+    const bySuit = {};
+    cards.forEach((c) => {
+      if (!bySuit[c.s]) bySuit[c.s] = [];
+      bySuit[c.s].push(c);
+    });
+    for (const s of Object.keys(bySuit)) {
+      const list = bySuit[s];
+      if (list.length < 2) continue;
+      for (let i = 0; i < list.length; i++) {
+        for (let j = i + 1; j < list.length; j++) {
+          const a = list[i];
+          const b = list[j];
+          const va = rankVal(a.r);
+          const vb = rankVal(b.r);
+          if (Math.abs(va - vb) <= 2) return true;
+          if (
+            (a.r === 'A' || b.r === 'A') &&
+            (va === 2 || vb === 2 || va === 3 || vb === 3 || va === 13 || vb === 13 || va === 12 || vb === 12)
+          ) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  function rummyAiImprovesWith(hand, card, wildRank) {
+    if (!card) return false;
+    const before = scoreRummyDeadwood(hand, wildRank);
+    const trial = hand.concat([card]);
+    const after = scoreRummyDeadwood(trial, wildRank);
+    if (after.points < before.points - 4) return true;
+    if (!before.hasPure && after.hasPure) return true;
+    // Completes/extends pure-seq candidate in suit
+    if (!isRummyWild(card, wildRank)) {
+      const mates = hand.filter((c) => !isRummyWild(c, wildRank) && c.s === card.s);
+      const vals = mates.map((c) => rankVal(c.r)).concat([rankVal(card.r)]).sort((a, b) => a - b);
+      for (let i = 0; i < vals.length; i++) {
+        for (let j = i + 1; j < vals.length; j++) {
+          if (vals[j] - vals[i] <= 2 && j - i + 1 >= 2) {
+            // card participates in a near-run
+            const cv = rankVal(card.r);
+            if (cv >= vals[i] && cv <= vals[j]) return true;
+          }
+        }
+      }
+      // set helper
+      const same = hand.filter((c) => !isRummyWild(c, wildRank) && c.r === card.r).length;
+      if (same >= 1) return true;
+    } else {
+      return true; // joker always useful early
+    }
+    return false;
+  }
+
+  /** Pick discard from 14-card hand; prefer low keep-value, avoid dumping jokers. */
+  function rummyAiPickDiscard(hand14, wildRank, difficulty) {
+    const hand = (hand14 || []).slice();
+    if (hand.length < 2) return hand[0] || null;
+    // Prefer a discard that makes remaining evaluate ok
+    for (let i = 0; i < hand.length; i++) {
+      const rem = hand.filter((_, j) => j !== i);
+      if (evaluateRummyHand(rem, { wildRank }).ok) return hand[i];
+    }
+    let best = null;
+    let bestScore = Infinity;
+    const noise = difficulty === 'easy' ? 18 : difficulty === 'hard' ? 3 : 8;
+    hand.forEach((c) => {
+      const keep = rummyAiKeepValue(c, hand, wildRank);
+      const rem = hand.filter((x) => x.id !== c.id);
+      const dead = scoreRummyDeadwood(rem, wildRank).points;
+      // Lower score = better discard choice
+      let score = keep * 2 + dead * 0.15 - rummyCardPoints(c, wildRank) * 0.5;
+      if (isRummyWild(c, wildRank)) score += 80;
+      score += (Math.random() - 0.5) * noise;
+      if (score < bestScore) {
+        bestScore = score;
+        best = c;
+      }
+    });
+    return best || hand[hand.length - 1];
+  }
+
+  function rummyAiWantDiscard(hand, top, wildRank, difficulty) {
+    if (!top) return false;
+    // Don't greedily take high deadwood
+    const pts = rummyCardPoints(top, wildRank);
+    if (pts >= 10 && !rummyAiImprovesWith(hand, top, wildRank) && difficulty !== 'easy') return false;
+    if (rummyAiImprovesWith(hand, top, wildRank)) return true;
+    if (difficulty === 'easy' && Math.random() < 0.35) return true;
+    if (difficulty === 'hard') return false;
+    return Math.random() < 0.08;
+  }
+
   function openRummy() {
     const chat = resolveChat(arguments[0]);
     const liveOn = chatLiveOn(chat);
     const rng = rngFn();
     let aiTimer = 0;
+    const DIFF_LABEL = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
+    let difficulty =
+      (chat && (chat.difficulty === 'easy' || chat.difficulty === 'hard' || chat.difficulty === 'medium')
+        ? chat.difficulty
+        : null) ||
+      (arguments[0] && arguments[0].difficulty) ||
+      'medium';
+    if (difficulty !== 'easy' && difficulty !== 'hard') difficulty = 'medium';
+    let aiTurns = 0;
     const shell = openShell({
       id: 'rummy',
       title: 'Rummy',
-      subtitle: liveOn ? liveSub() + ' · Points Rummy' : practiceSub('Points Rummy · 13-card'),
+      subtitle: liveOn
+        ? liveSub() + ' · Points Rummy'
+        : practiceSub('Points Rummy · ' + (DIFF_LABEL[difficulty] || 'Medium') + ' AI'),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
@@ -4276,6 +4415,7 @@
       drewA = false;
       drewB = false;
       lastResult = null;
+      aiTurns = 0;
     }
 
     function iHaveDrawn() {
@@ -4622,19 +4762,26 @@
           paint('Discarded. Waiting…');
           return;
         }
-        paint('Opponent’s turn…');
+        paint('Opponent thinking…');
         if (aiTimer) clearTimeout(aiTimer);
+        const think =
+          difficulty === 'easy'
+            ? 400 + Math.floor(rng() * 250)
+            : difficulty === 'hard'
+              ? 550 + Math.floor(rng() * 350)
+              : 480 + Math.floor(rng() * 320);
         aiTimer = setTimeout(() => {
           aiTimer = 0;
           if (ended || !shell.alive()) return;
           aiPlay();
+          if (ended || !shell.alive()) return;
           myTurn = true;
           phase = 'needDraw';
           drawnId = null;
           selectedId = null;
           highlightIds = [];
           paint('Your turn — draw or take discard.');
-        }, 450 + Math.floor(rng() * 350));
+        }, Math.min(900, Math.max(400, think)));
       });
 
       async function runDeclare(forceWrong) {
@@ -4740,33 +4887,103 @@
       });
     }
 
-    /** Dumb Practice AI: one acquire + one discard; keeps 13. Never auto-declares. */
+    /** Meld-aware Practice AI — declare/drop with intent; never wrong-shows. */
     function aiPlay() {
+      if (liveOn || ended || !shell.alive()) return;
       if (handB.length !== 13) {
         while (handB.length > 13 && handB.length) discard.push(handB.pop());
         while (handB.length < 13 && deck.length) handB.push(deck.pop());
       }
+      if (handB.length !== 13) return;
+
+      aiTurns += 1;
+      const dead = scoreRummyDeadwood(handB, wildRank);
+      const hasSeed = dead.hasPure || rummyAiHasPureSeed(handB, wildRank);
+
+      // First drop — rare, only hopeless trash
+      if (!drewB) {
+        const firstHopeless = dead.points >= 70 && !hasSeed;
+        const pDrop =
+          difficulty === 'easy' ? 0.02 : difficulty === 'hard' ? 0.12 : 0.06;
+        if (firstHopeless && rng() < pDrop) {
+          endRummyHand({
+            reason: 'oppDrop',
+            youPoints: 0,
+            oppPoints: RUMMY_FIRST_DROP,
+            winnerIsYou: true,
+            detail: 'AI first drop',
+          });
+          return;
+        }
+      } else if (aiTurns >= 3) {
+        // Middle drop if still awful and drop beats likely loss
+        const midHopeless = dead.points >= 65 && !hasSeed;
+        const pMid =
+          difficulty === 'easy' ? 0.03 : difficulty === 'hard' ? 0.14 : 0.08;
+        if (midHopeless && dead.points > RUMMY_MIDDLE_DROP && rng() < pMid) {
+          endRummyHand({
+            reason: 'oppDrop',
+            youPoints: 0,
+            oppPoints: RUMMY_MIDDLE_DROP,
+            winnerIsYou: true,
+            detail: 'AI middle drop',
+          });
+          return;
+        }
+      }
+
+      const top = discard[discard.length - 1];
       let took = null;
-      if (discard.length && rng() < 0.4) {
+      if (top && rummyAiWantDiscard(handB, top, wildRank, difficulty)) {
         took = discard.pop();
         handB.push(took);
       } else if (deck.length) {
         took = deck.pop();
         handB.push(took);
-      } else if (discard.length) {
+      } else if (top) {
         took = discard.pop();
         handB.push(took);
       }
       drewB = true;
-      if (handB.length > 13) {
-        let ix = Math.floor(rng() * handB.length);
-        if (took && handB.length > 1 && handB[ix].id === took.id) {
-          ix = (ix + 1) % handB.length;
+
+      if (handB.length !== 14) {
+        while (handB.length > 14) discard.push(handB.pop());
+        while (handB.length < 14 && deck.length) handB.push(deck.pop());
+      }
+      if (handB.length !== 14) return;
+
+      // Declare if any finishing discard yields valid Indian hand
+      for (let i = 0; i < handB.length; i++) {
+        const finish = handB[i];
+        const rem = handB.filter((_, j) => j !== i);
+        const result = evaluateRummyHand(rem, { wildRank });
+        if (result.ok) {
+          discard.push(finish);
+          handB = rem;
+          const youDead = scoreRummyDeadwood(handA, wildRank);
+          endRummyHand({
+            reason: 'declare',
+            youPoints: youDead.points,
+            oppPoints: 0,
+            winnerIsYou: false,
+            melds: result.melds,
+            detail: 'AI declare',
+          });
+          return;
         }
-        discard.push(handB.splice(ix, 1)[0]);
+      }
+
+      const dump = rummyAiPickDiscard(handB, wildRank, difficulty);
+      if (dump) {
+        const ix = handB.findIndex((c) => c.id === dump.id);
+        if (ix >= 0) discard.push(handB.splice(ix, 1)[0]);
+      } else if (handB.length > 13) {
+        discard.push(handB.pop());
       }
       while (handB.length > 13) discard.push(handB.pop());
     }
+
+
 
     function hydrate(st, turn) {
       if (!st) return;
@@ -7442,7 +7659,7 @@
       { id: 'tambola', name: 'Tambola', desc: 'Ticket · full house', icon: '🎱', genre: 'party', launch: openTambola, order: 30 },
       { id: 'carrom', name: 'Carrom', desc: 'Live · stakes · AI', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
       { id: 'pool', name: 'Pool', desc: '8-ball · solids & stripes', icon: '🎱', genre: 'board', launch: openPool, order: 32 },
-      { id: 'rummy', name: 'Rummy', desc: 'Points · drop · wrong show', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
+      { id: 'rummy', name: 'Rummy', desc: 'Points · meld-aware AI', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
       { id: 'teenpatti', name: 'Teen Patti', desc: 'Boot, chaal, side-show · virtual chips', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
       { id: 'bluff', name: 'Bluff', desc: 'Pile claims · call · empty hand', icon: '🎭', genre: 'party', launch: openBluff, order: 35 },
       { id: 'sattepe', name: 'Satte pe Satta', desc: 'Build off sevens', icon: '7️⃣', genre: 'party', launch: openSatte, order: 36 },

@@ -175,9 +175,9 @@
       'Scratch: cue back in kitchen · Practice AI shoots for real · Live syncs groups',
     ],
     rummy: [
-      'Declare valid melds (pure sequence required) — opponent pays deadwood ≤80',
-      'Wrong Show costs 80 · First Drop 20 · Middle Drop 40 (before you draw)',
-      'Jokers/wilds score 0 · Ace/face = 10 · virtual points only',
+      'Declare valid melds — opponent pays deadwood ≤80 · Drop 20/40',
+      'Practice AI takes useful discards, holds jokers, declares when valid',
+      'Jokers/wilds score 0 · Ace/face = 10 · Live is human vs human',
     ],
     teenpatti: [
       'Boot each hand — stacks carry across the ring (virtual chips)',
