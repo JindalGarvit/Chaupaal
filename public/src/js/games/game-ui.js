@@ -191,8 +191,8 @@
     ],
     sattepe: [
       'Deal all 52 — suits start closed until a seven opens them',
-      'Must play if able · Pass only with no legal card',
-      'Two passes lock the table — fewest cards wins (tie = draw) · Ace high',
+      'Must play if able · Pass only with no legal card · stuck = fewest cards',
+      'Practice AI dumps runway chains and holds naked opens · Ace high',
     ],
     andarbaahar: ['Joker sets the rank', 'Pick Andar or Bahar', 'First matching rank wins the side'],
     patangbaazi: [

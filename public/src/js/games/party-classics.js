@@ -7856,6 +7856,140 @@
     return t;
   }
 
+  function satteCanPlayOn(table, c) {
+    if (!c || !table || !table[c.s]) return false;
+    const t = table[c.s];
+    const v = rankVal(c.r);
+    if (!t.open) return c.r === '7';
+    if (c.r === '7') return false;
+    return v === (t.lo | 0) - 1 || v === (t.hi | 0) + 1;
+  }
+
+  function satteApplyOn(table, c) {
+    if (!c || !table || !table[c.s]) return;
+    const t = table[c.s];
+    const v = rankVal(c.r);
+    if (!t.open) {
+      if (c.r !== '7') return;
+      t.open = true;
+      t.lo = 7;
+      t.hi = 7;
+      t.cards = [{ r: c.r, s: c.s, id: c.id }];
+      return;
+    }
+    if (c.r === '7') return;
+    if (v === (t.lo | 0) - 1) {
+      t.lo = v;
+      t.cards = [{ r: c.r, s: c.s, id: c.id }].concat(t.cards || []);
+    } else if (v === (t.hi | 0) + 1) {
+      t.hi = v;
+      t.cards = (t.cards || []).concat([{ r: c.r, s: c.s, id: c.id }]);
+    }
+  }
+
+  function legalSatteMoves(hand, table) {
+    return (hand || []).filter((c) => satteCanPlayOn(table, c));
+  }
+
+  /** Count consecutive own cards along one end of a suit (dir −1 = lo, +1 = hi). */
+  function satteChainRunway(hand, suit, fromVal, dir) {
+    const have = {};
+    (hand || []).forEach((c) => {
+      if (c && c.s === suit) have[rankVal(c.r)] = true;
+    });
+    let n = 0;
+    let need = (fromVal | 0) + dir;
+    while (need >= 2 && need <= 14 && have[need]) {
+      n += 1;
+      need += dir;
+    }
+    return n;
+  }
+
+  /**
+   * Practice AI picker (Prompt 3). Uses public table + own hand + opp card count only.
+   * Returns a legal card, or null → Pass. Never returns an illegal play.
+   * Difficulty: Normal (default) — full weights below. No mode UI shipped.
+   *
+   * Weights (final):
+   *   empty-hand win +10000; same-suit runway ×22; post-play next-legal ×18;
+   *   open-7 with 6/8 adjacent +45; naked open −60 (−85 if human shorter);
+   *   race-ahead +12/+10; dump edge ranks (A/K/Q or 2/3) +6–8; jitter ±3.
+   */
+  function pickSatteAiMove(hand, table, ctx) {
+    const c = ctx || {};
+    const roll = typeof c.rng === 'function' ? c.rng : Math.random;
+    const oppCount = c.oppCount != null ? c.oppCount | 0 : 26;
+    const mine = hand || [];
+    const legal = legalSatteMoves(mine, table);
+    if (!legal.length) return null;
+
+    let best = null;
+    let bestScore = -Infinity;
+    for (let i = 0; i < legal.length; i++) {
+      const card = legal[i];
+      const t0 = table[card.s];
+      const v = rankVal(card.r);
+      const isSevenOpen = !!(t0 && !t0.open && card.r === '7');
+      const isLo = !!(t0 && t0.open && v === (t0.lo | 0) - 1);
+      const isHi = !!(t0 && t0.open && v === (t0.hi | 0) + 1);
+
+      const rest = mine.filter((x) => x.id !== card.id);
+      let score = 0;
+
+      // Instant win
+      if (rest.length === 0) {
+        return card;
+      }
+
+      const table2 = cloneSatteTable(table);
+      satteApplyOn(table2, card);
+      const nextLegal = legalSatteMoves(rest, table2).length;
+      score += nextLegal * 18;
+
+      const t2 = table2[card.s];
+      if (t2 && t2.open) {
+        const runway =
+          satteChainRunway(rest, card.s, t2.lo, -1) + satteChainRunway(rest, card.s, t2.hi, 1);
+        score += runway * 22;
+      }
+
+      if (isSevenOpen) {
+        const hasAdj = rest.some(
+          (x) => x.s === card.s && (rankVal(x.r) === 6 || rankVal(x.r) === 8)
+        );
+        if (hasAdj) score += 45;
+        else if (mine.length > oppCount + 2) score += 8; // behind — need space
+        else score -= 60;
+        if (!hasAdj && oppCount < mine.length) score -= 25; // don't gift when human closer
+        // Prefer extending existing chains when alternatives exist
+        const hasExtend = legal.some((x) => x.id !== card.id && table[x.s] && table[x.s].open);
+        if (!hasAdj && hasExtend) score -= 35;
+      } else if (isLo || isHi) {
+        score += 14; // prefer building over naked opens
+      }
+
+      // Dump awkward edges when already legal
+      if (v >= 12) score += 8;
+      if (v <= 3) score += 6;
+
+      // Race to empty when ahead on count
+      if (mine.length < oppCount) score += 12;
+      if (mine.length <= oppCount - 3) score += 10;
+
+      // Slight preference to shed (always reduces hand by 1 — flat)
+      score += 4;
+
+      score += (roll() - 0.5) * 6;
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = card;
+      }
+    }
+    return best;
+  }
+
   function openSatte() {
     const chat = resolveChat(arguments[0]);
     const liveOn = chatLiveOn(chat);
@@ -7866,7 +8000,7 @@
     const shell = openShell({
       id: 'sattepe',
       title: 'Satte pe Satta',
-      subtitle: liveOn ? liveSub() : practiceSub('Must play if able · Pass when stuck'),
+      subtitle: liveOn ? liveSub() : practiceSub('Chain AI · must play if able'),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
@@ -7933,37 +8067,11 @@
     }
 
     function canPlay(c) {
-      if (!c || !table[c.s]) return false;
-      const t = table[c.s];
-      const v = rankVal(c.r);
-      // Closed suit: only a seven opens it
-      if (!t.open) return c.r === '7';
-      // Open: one seven per suit already placed — no duplicate 7
-      if (c.r === '7') return false;
-      return v === (t.lo | 0) - 1 || v === (t.hi | 0) + 1;
+      return satteCanPlayOn(table, c);
     }
 
     function apply(c) {
-      const t = table[c.s];
-      if (!t) return;
-      const v = rankVal(c.r);
-      // Seven opens a closed suit at 7–7
-      if (!t.open) {
-        if (c.r !== '7') return;
-        t.open = true;
-        t.lo = 7;
-        t.hi = 7;
-        t.cards = [{ r: c.r, s: c.s, id: c.id }];
-        return;
-      }
-      if (c.r === '7') return;
-      if (v === (t.lo | 0) - 1) {
-        t.lo = v;
-        t.cards = [{ r: c.r, s: c.s, id: c.id }].concat(t.cards);
-      } else if (v === (t.hi | 0) + 1) {
-        t.hi = v;
-        t.cards = t.cards.concat([{ r: c.r, s: c.s, id: c.id }]);
-      }
+      satteApplyOn(table, c);
     }
 
     function rankLabel(v) {
@@ -8164,17 +8272,29 @@
     function scheduleAi() {
       if (liveOn || ended) return;
       if (aiTimer) clearTimeout(aiTimer);
+      // Deliberate think delay — AI never on the Live wire
+      paint(ended ? undefined : 'Thinking…');
+      const delay = 400 + Math.floor(rng() * 500);
       aiTimer = setTimeout(() => {
         aiTimer = 0;
         if (ended || !shell.alive()) return;
+        if (myTurn) return; // human seat — do not double-act
         aiPlayOnce();
-      }, 420 + Math.floor(rng() * 280));
+      }, delay);
     }
 
     function aiPlayOnce() {
-      if (liveOn || ended) return;
-      const playable = handB.filter(canPlay);
-      if (!playable.length) {
+      if (liveOn || ended || !shell.alive()) return;
+      if (myTurn) return;
+      applying = true;
+      const pick = pickSatteAiMove(handB, table, {
+        rng,
+        oppCount: handA.length,
+        myCount: handB.length,
+      });
+      if (!pick) {
+        applying = false;
+        // Honest Pass — same Prompt 2 counter / stuck path
         passesInRow += 1;
         if (passesInRow >= ACTIVE_SEATS) {
           endStuck();
@@ -8184,16 +8304,36 @@
         paint('AI passed — your turn.');
         return;
       }
-      const pick = playable[Math.floor(rng() * playable.length)];
-      handB.splice(handB.indexOf(pick), 1);
+      if (!satteCanPlayOn(table, pick)) {
+        applying = false;
+        // Safety: never soft-cheat; treat as pass
+        passesInRow += 1;
+        if (passesInRow >= ACTIVE_SEATS) {
+          endStuck();
+          return;
+        }
+        myTurn = true;
+        paint('AI passed — your turn.');
+        return;
+      }
+      const ix = handB.findIndex((c) => c.id === pick.id);
+      if (ix < 0) {
+        applying = false;
+        myTurn = true;
+        paint('Your turn.');
+        return;
+      }
+      handB.splice(ix, 1);
       apply(pick);
       passesInRow = 0;
+      applying = false;
+      buzz('card');
       if (!handB.length) {
         endWin(false);
         return;
       }
       myTurn = true;
-      paint('AI played ' + pick.r + pick.s);
+      paint('Opponent played ' + pick.r + pick.s);
     }
 
     function paint(msg) {
@@ -8212,8 +8352,9 @@
         else if (noLegal) hint = 'No moves — Pass';
         else if (!coachShown) {
           coachShown = true;
-          hint =
-            'If you can’t extend a chain, Pass. If everyone passes, fewest cards wins.';
+          hint = liveOn
+            ? 'If you can’t extend a chain, Pass. If everyone passes, fewest cards wins.'
+            : 'AI dumps runway chains and holds naked opens — Pass when you’re stuck.';
         } else hint = 'Open with a seven, then build up or down. Must play if able.';
       }
 
@@ -8392,7 +8533,7 @@
       if (myTurn) {
         paint('Your break — open with a seven, then build up or down.');
       } else {
-        paint('AI opens — suits start closed.');
+        paint('AI opens — Thinking…');
         scheduleAi();
       }
     }
@@ -8595,7 +8736,7 @@
       { id: 'rummy', name: 'Rummy', desc: 'Indian 13-card · jokers · points', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
       { id: 'teenpatti', name: 'Teen Patti', desc: 'Boot, chaal, side-show · virtual chips', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
       { id: 'bluff', name: 'Bluff', desc: 'Pile claims · call · empty hand', icon: '🎭', genre: 'party', launch: openBluff, order: 35 },
-      { id: 'sattepe', name: 'Satte pe Satta', desc: 'Seven chains · pass & stuck', icon: '7️⃣', genre: 'party', launch: openSatte, order: 36 },
+      { id: 'sattepe', name: 'Satte pe Satta', desc: 'Seven chains · Practice chain AI', icon: '7️⃣', genre: 'party', launch: openSatte, order: 36 },
       { id: 'andarbaahar', name: 'Andar Bahar', desc: 'Pick a side', icon: '🃏', genre: 'party', launch: openAndarBahar, order: 37 },
     ];
     games.forEach((g) => {
