@@ -135,9 +135,9 @@
       'Continue your campaign · replay cleared levels anytime',
     ],
     ankjod: [
-      'Tap a cell to light its across/down runs and clues',
-      'Dimmed keypad digits cannot fit the selected run',
-      'Pencil for notes · Undo to step back · Check when ready',
+      'Across/down runs must sum to the clue — digits 1–9, no repeats in a run',
+      'Pencil notes · Check for conflicts · Hint teaches combos when stuck',
+      'Long-press Pencil for auto-notes · Clean notes removes impossibles',
     ],
     streetcricket: ['Tap Bowl, then Hit in the green window', 'Six balls · two wickets ends the over', 'Practice timing — full matches later'],
     gullykick: ['Pick left, center, or right', 'Beat the keeper’s dive', 'Five kicks per shootout'],

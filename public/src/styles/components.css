@@ -4073,8 +4073,11 @@ select:focus-visible,
 .kk-cell--play{background:#FFFDF8;border:1px solid #C9BFAE;font:700 1em "Space Grotesk",sans-serif;color:#1A1714;cursor:pointer;display:grid;place-items:center;-webkit-tap-highlight-color:transparent;}
 .kk-cell--play.is-selected{border:2px solid var(--game-accent,var(--red));background:#FFF5F0;z-index:1;}
 .kk-cell--play.is-run{background:#F3EAF8;border-color:#C4A8E0;}
-.kk-cell--play.is-selected.is-run{background:#FFF5F0;border:2px solid var(--game-accent,var(--red));}
+.kk-cell--play.is-hint-run{background:#EDE4F8;border-color:#9A6BCE;box-shadow:inset 0 0 0 1px rgba(154,108,206,.45);}
+.kk-cell--play.is-selected.is-run,.kk-cell--play.is-selected.is-hint-run{background:#FFF5F0;border:2px solid var(--game-accent,var(--red));}
 .kk-cell--play.is-bad{background:#FDE8E6;color:#B71C1C;}
+.kk-cell--play.is-soft-bad{background:#FFF3E8;color:#9A3412;border-color:#FDBA74;}
+.kk-cell--play.is-hint-fill{box-shadow:inset 0 0 0 2px rgba(154,108,206,.55);}
 .kk-cell--play.is-won{background:#E7F6EA;color:#1B5E20;border-color:#A5D6A7;}
 .kk-cell--clue.is-clue-hot{box-shadow:inset 0 0 0 2px #9A6BCE;}
 .kk-clue-d.is-hot,.kk-clue-a.is-hot{color:#E8D5FF;text-shadow:0 0 6px rgba(154,108,206,.55);}
@@ -4090,6 +4093,21 @@ select:focus-visible,
 .kk-action:disabled{opacity:.4;cursor:not-allowed;}
 .kk-action.is-active{border-color:var(--game-accent);background:color-mix(in srgb,var(--game-accent) 14%,var(--cream));}
 .kk-action--primary{background:var(--game-accent,var(--red));border-color:transparent;color:#fff;}
+.kk-coach{
+  position:absolute;inset:0;z-index:40;display:flex;align-items:flex-end;justify-content:center;
+  background:rgba(26,23,20,.35);padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom));
+}
+.kk-coach-card{
+  width:min(360px,100%);background:var(--white,#fff);border-radius:18px;padding:18px 16px 14px;
+  box-shadow:0 12px 40px rgba(0,0,0,.2);
+}
+.kk-coach-title{font:800 18px "Space Grotesk",sans-serif;margin-bottom:8px;color:#1A1714;}
+.kk-coach-tips{margin:0 0 14px;padding-left:18px;font-size:13px;line-height:1.45;color:#5A5348;font-weight:600;}
+.kk-coach-tips li{margin-bottom:6px;}
+.kk-coach-dismiss{
+  width:100%;min-height:44px;border:0;border-radius:12px;background:#9A6BCE;color:#fff;
+  font:800 14px "Space Grotesk",sans-serif;cursor:pointer;
+}
 
 /* ===== Ludo / Snakes boards (engines.js) ===== */
 .ludo-board-wrap,.snakes-board-wrap{

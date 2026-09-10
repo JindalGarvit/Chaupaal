@@ -1046,6 +1046,9 @@
     const bad = new Set(); // "r,c"
     let completeWrong = 0;
     let incomplete = 0;
+    let hasDup = false;
+    let hasWrongSum = false;
+    let hasImpossible = false;
 
     runs.forEach((run) => {
       const digits = [];
@@ -1064,11 +1067,13 @@
         }
       });
       if (dup) {
+        hasDup = true;
         digits.forEach(([r, c]) => bad.add(r + ',' + c));
       }
       if (empty === 0) {
         if (sum !== run.sum || dup) {
           completeWrong++;
+          if (sum !== run.sum) hasWrongSum = true;
           run.cells.forEach(([r, c]) => bad.add(r + ',' + c));
         }
       } else {
@@ -1082,7 +1087,10 @@
               if (combo.indexOf(v) === -1) return false;
               return filled.every((f) => combo.indexOf(f) !== -1);
             });
-            if (!ok) bad.add(r + ',' + c);
+            if (!ok) {
+              hasImpossible = true;
+              bad.add(r + ',' + c);
+            }
           });
         }
       }
@@ -1090,7 +1098,21 @@
 
     const allFilled = incomplete === 0;
     const won = allFilled && completeWrong === 0 && bad.size === 0;
-    return { bad, won, allFilled, completeWrong };
+    return { bad, won, allFilled, completeWrong, hasDup, hasWrongSum, hasImpossible };
+  }
+
+  function checkStatusMessage(a) {
+    if (!a) return '';
+    if (a.won) return 'Puzzle solved!';
+    if (a.bad && a.bad.size) {
+      if (a.hasDup && a.hasWrongSum) return 'Duplicates and wrong sums — see red cells';
+      if (a.hasDup) return 'Duplicate digit in a run — see red cells';
+      if (a.hasWrongSum) return 'A completed run doesn’t match its clue';
+      if (a.hasImpossible) return 'Some digits don’t fit remaining combos';
+      return 'Conflicts on the red cells';
+    }
+    if (!a.allFilled) return 'No conflicts yet — keep filling';
+    return 'Check the red cells — sums or repeats are off';
   }
 
   // ─── UI helpers ────────────────────────────────────────────────────────────
@@ -1181,6 +1203,7 @@
     let pencil = Array.from({ length: rows }, () => Array.from({ length: cols }, () => new Set()));
     let selected = null; // [r,c]
     let showMistakes = false;
+    let liveConflict = false; // default OFF — Check remains the hardcore gate
     let pencilMode = false;
     let statusMsg = '';
     let won = false;
@@ -1190,6 +1213,11 @@
     let pauseCtrl = null;
     let shellBuilt = false;
     let cellSize = 36;
+    let hintFocusRun = null; // run index for Hint step 1
+    let lastHintWasFocus = false;
+    let hintsUsed = 0;
+    let hintFilled = new Set(); // "r,c" subtle style
+    let coachEl = null;
 
     const UNDO_MAX = 40;
     let undoStack = [];
@@ -1198,7 +1226,7 @@
     const root = document.createElement('div');
     root.style.cssText =
       'position:absolute;inset:0;background:var(--cream,#F7F3EC);z-index:80;display:flex;flex-direction:column;';
-    if (typeof prepareGameOverlay === 'function') prepareGameOverlay(root, { theme: 'light', gameId: 'ankjod' });
+    if (typeof prepareGameOverlay === 'function') prepareGameOverlay(root, { theme: 'light', gameId: 'ankjod', coach: false });
 
     const diffMeta = DIFFS.find((d) => d.id === puzzle.difficulty) || DIFFS[0];
 
@@ -1219,12 +1247,16 @@
       pencil[s.r][s.c] = new Set(s.pencil || []);
     }
 
-    function pushHistory(beforeCells) {
+    function pushHistory(beforeCells, extra) {
+      const x = extra || {};
       undoStack.push({
         cells: beforeCells,
         selected: selected ? selected.slice() : null,
         pencilMode,
         showMistakes,
+        hintFocusRun,
+        hintFilled: [...hintFilled],
+        ...x,
       });
       if (undoStack.length > UNDO_MAX) undoStack.shift();
       redoStack = [];
@@ -1240,6 +1272,14 @@
       return true;
     }
 
+    function restoreMeta(entry) {
+      selected = entry.selected;
+      hintFocusRun = entry.hintFocusRun != null ? entry.hintFocusRun : null;
+      hintFilled = new Set(entry.hintFilled || []);
+      showMistakes = false;
+      statusMsg = '';
+    }
+
     function undo() {
       if (won || !undoStack.length) return;
       const entry = undoStack.pop();
@@ -1249,11 +1289,11 @@
         selected: selected ? selected.slice() : null,
         pencilMode,
         showMistakes,
+        hintFocusRun,
+        hintFilled: [...hintFilled],
       });
       entry.cells.forEach(applyCellSnap);
-      selected = entry.selected;
-      showMistakes = false;
-      statusMsg = '';
+      restoreMeta(entry);
       updateUndoButtons();
       if (typeof gameFeedback === 'function') gameFeedback('select');
       refreshPlay();
@@ -1268,12 +1308,12 @@
         selected: selected ? selected.slice() : null,
         pencilMode,
         showMistakes,
+        hintFocusRun,
+        hintFilled: [...hintFilled],
       });
       if (undoStack.length > UNDO_MAX) undoStack.shift();
       entry.cells.forEach(applyCellSnap);
-      selected = entry.selected;
-      showMistakes = false;
-      statusMsg = '';
+      restoreMeta(entry);
       updateUndoButtons();
       if (typeof gameFeedback === 'function') gameFeedback('select');
       refreshPlay();
@@ -1296,21 +1336,282 @@
     function highlightSets() {
       const runKeys = new Set();
       const clueMeta = new Map(); // "r,c" -> { across, down }
-      if (!selected || won) return { runKeys, clueMeta };
-      const [sr, sc] = selected;
-      const ids = runIdx[sr][sc] || [];
-      ids.forEach((i) => {
-        const run = runs[i];
+      const hintKeys = new Set();
+      if (won) return { runKeys, clueMeta, hintKeys };
+
+      function addRun(run, asHint) {
         run.cells.forEach(([r, c]) => {
-          if (r !== sr || c !== sc) runKeys.add(r + ',' + c);
+          const key = r + ',' + c;
+          if (asHint) hintKeys.add(key);
+          else if (!(selected && selected[0] === r && selected[1] === c)) runKeys.add(key);
         });
         const ck = run.clueR + ',' + run.clueC;
         const meta = clueMeta.get(ck) || { across: false, down: false };
         if (run.dir === 'across') meta.across = true;
         else meta.down = true;
         clueMeta.set(ck, meta);
+      }
+
+      if (hintFocusRun != null && runs[hintFocusRun]) addRun(runs[hintFocusRun], true);
+      if (selected) {
+        const [sr, sc] = selected;
+        (runIdx[sr][sc] || []).forEach((i) => addRun(runs[i], false));
+      }
+      return { runKeys, clueMeta, hintKeys };
+    }
+
+    function remainingCombos(run) {
+      const filled = [];
+      run.cells.forEach(([r, c]) => {
+        const v = values[r][c];
+        if (v) filled.push(v);
       });
-      return { runKeys, clueMeta };
+      return combosFor(run.sum, run.cells.length).filter((combo) =>
+        filled.every((f) => combo.indexOf(f) !== -1)
+      );
+    }
+
+    function findMostConstrainedRun() {
+      let best = null;
+      let bestN = Infinity;
+      runs.forEach((run, i) => {
+        const empty = run.cells.filter(([r, c]) => !values[r][c]).length;
+        if (!empty) return;
+        const rem = remainingCombos(run);
+        if (!rem.length) return;
+        if (rem.length < bestN || (rem.length === bestN && empty < (best ? best.empty : 99))) {
+          bestN = rem.length;
+          best = { i, run, rem, empty };
+        }
+      });
+      return best;
+    }
+
+    function findForcedCell() {
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (board[r][c].kind !== 'cell' || values[r][c]) continue;
+          const cands = candidatesForCell(values, runs, runIdx, r, c);
+          if (cands.length === 1) return { r, c, n: cands[0] };
+        }
+      }
+      return null;
+    }
+
+    function applyHint() {
+      if (won) return;
+      hintsUsed++;
+      const forced = findForcedCell();
+      if (forced) {
+        lastHintWasFocus = false;
+        hintFocusRun = null;
+        const before = [snapCell(forced.r, forced.c)];
+        pushHistory(before);
+        values[forced.r][forced.c] = forced.n;
+        pencil[forced.r][forced.c].clear();
+        hintFilled.add(forced.r + ',' + forced.c);
+        selected = [forced.r, forced.c];
+        showMistakes = false;
+        statusMsg = 'Hint: only ' + forced.n + ' fits here';
+        if (typeof gameFeedback === 'function') gameFeedback('valid');
+        const a = analyzeMistakes(board, values);
+        if (a.won) finishWin();
+        else refreshPlay();
+        return;
+      }
+
+      const tight = findMostConstrainedRun();
+      if (tight) {
+        const escalate = lastHintWasFocus && hintFocusRun === tight.i;
+        if (!escalate) {
+          const prevFocus = hintFocusRun;
+          const prevSel = selected ? selected.slice() : null;
+          pushHistory([], { hintFocusRun: prevFocus, selected: prevSel });
+          hintFocusRun = tight.i;
+          lastHintWasFocus = true;
+          const emptyCell = tight.run.cells.find(([r, c]) => !values[r][c]);
+          if (emptyCell) selected = emptyCell.slice();
+          const dir = tight.run.dir === 'across' ? 'across' : 'down';
+          statusMsg =
+            'This ' +
+            dir +
+            ' run of ' +
+            tight.run.cells.length +
+            ' sums to ' +
+            tight.run.sum +
+            ' — ' +
+            tight.rem.length +
+            ' combo set' +
+            (tight.rem.length === 1 ? '' : 's') +
+            ' left';
+          if (typeof gameFeedback === 'function') gameFeedback('select');
+          refreshPlay();
+          return;
+        }
+      }
+
+      // Last resort: reveal one solution digit
+      lastHintWasFocus = false;
+      hintFocusRun = null;
+      const sol = puzzle.solution;
+      if (!sol) {
+        statusMsg = 'No more hints available';
+        refreshPlay();
+        return;
+      }
+      let pick = null;
+      for (let r = 0; r < rows && !pick; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (board[r][c].kind !== 'cell') continue;
+          const want = sol[r][c];
+          if (!want) continue;
+          if (values[r][c] !== want) {
+            pick = { r, c, n: want };
+            break;
+          }
+        }
+      }
+      if (!pick) {
+        statusMsg = 'Board already matches the solution path';
+        refreshPlay();
+        return;
+      }
+      const before = [snapCell(pick.r, pick.c)];
+      pushHistory(before);
+      values[pick.r][pick.c] = pick.n;
+      pencil[pick.r][pick.c].clear();
+      hintFilled.add(pick.r + ',' + pick.c);
+      selected = [pick.r, pick.c];
+      showMistakes = false;
+      statusMsg = 'Hint: revealed a correct digit';
+      if (typeof gameFeedback === 'function') gameFeedback('valid');
+      const a = analyzeMistakes(board, values);
+      if (a.won) finishWin();
+      else refreshPlay();
+    }
+
+    function autoNotes(scope) {
+      if (won) return;
+      const before = [];
+      const cells = [];
+      if (scope === 'run' && selected) {
+        const [sr, sc] = selected;
+        const ids = runIdx[sr][sc] || [];
+        ids.forEach((i) => {
+          runs[i].cells.forEach(([r, c]) => cells.push([r, c]));
+        });
+      } else {
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            if (board[r][c].kind === 'cell') cells.push([r, c]);
+          }
+        }
+      }
+      const seen = new Set();
+      cells.forEach(([r, c]) => {
+        const key = r + ',' + c;
+        if (seen.has(key)) return;
+        seen.add(key);
+        if (values[r][c]) return;
+        const legal = candidatesForCell(values, runs, runIdx, r, c);
+        const cur = [...(pencil[r][c] || [])].sort().join(',');
+        const next = legal.slice().sort().join(',');
+        if (cur === next) return;
+        before.push(snapCell(r, c));
+        pencil[r][c] = new Set(legal);
+      });
+      if (!before.length) {
+        statusMsg = 'Notes already match candidates';
+        refreshPlay();
+        return;
+      }
+      pushHistory(before);
+      statusMsg = scope === 'run' ? 'Auto-notes on this run' : 'Auto-notes on empty cells';
+      if (typeof gameFeedback === 'function') gameFeedback('place');
+      refreshPlay();
+    }
+
+    function cleanPencils(scope) {
+      if (won) return;
+      const before = [];
+      const cells = [];
+      if (scope === 'run' && selected) {
+        const [sr, sc] = selected;
+        (runIdx[sr][sc] || []).forEach((i) => {
+          runs[i].cells.forEach(([r, c]) => cells.push([r, c]));
+        });
+      } else {
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            if (board[r][c].kind === 'cell') cells.push([r, c]);
+          }
+        }
+      }
+      const seen = new Set();
+      cells.forEach(([r, c]) => {
+        const key = r + ',' + c;
+        if (seen.has(key)) return;
+        seen.add(key);
+        if (values[r][c] || !pencil[r][c] || !pencil[r][c].size) return;
+        const legal = new Set(candidatesForCell(values, runs, runIdx, r, c));
+        let changed = false;
+        const next = new Set();
+        pencil[r][c].forEach((n) => {
+          if (legal.has(n)) next.add(n);
+          else changed = true;
+        });
+        if (!changed && next.size === pencil[r][c].size) return;
+        before.push(snapCell(r, c));
+        pencil[r][c] = next;
+      });
+      if (!before.length) {
+        statusMsg = 'No illegal notes to clean';
+        refreshPlay();
+        return;
+      }
+      pushHistory(before);
+      statusMsg = 'Cleaned impossible pencil notes';
+      if (typeof gameFeedback === 'function') gameFeedback('select');
+      refreshPlay();
+    }
+
+    function showCoach(force) {
+      const key = 'ankjod_coach_v1';
+      try {
+        if (!force && localStorage.getItem(key)) return;
+      } catch (e) {
+        return;
+      }
+      if (coachEl) {
+        coachEl.remove();
+        coachEl = null;
+      }
+      coachEl = document.createElement('div');
+      coachEl.className = 'kk-coach';
+      coachEl.innerHTML = `
+        <div class="kk-coach-card" role="dialog" aria-label="Ank Jod tips">
+          <div class="kk-coach-title">Ank Jod</div>
+          <ul class="kk-coach-tips">
+            <li>Digits 1–9 · no repeats inside a run</li>
+            <li>Each clue is the sum of its across or down run</li>
+            <li>Pencil for notes · Check for conflicts · Hint when stuck</li>
+          </ul>
+          <button type="button" class="kk-coach-dismiss game-tap-target" data-kk-coach-ok>Got it</button>
+        </div>`;
+      root.appendChild(coachEl);
+      const dismiss = () => {
+        try {
+          localStorage.setItem(key, '1');
+        } catch (e) {}
+        if (coachEl) {
+          coachEl.remove();
+          coachEl = null;
+        }
+      };
+      coachEl.querySelector('[data-kk-coach-ok]')?.addEventListener('click', dismiss);
+      coachEl.addEventListener('click', (e) => {
+        if (e.target === coachEl) dismiss();
+      });
     }
 
     function statusForSelection() {
@@ -1346,8 +1647,10 @@
         shellBuilt = true;
       }
       const analysis = analyzeMistakes(board, values);
-      const bad = showMistakes || won ? analysis.bad : new Set();
-      const { runKeys, clueMeta } = highlightSets();
+      const showBad = showMistakes || liveConflict || won;
+      const bad = showBad ? analysis.bad : new Set();
+      const softBad = liveConflict && !showMistakes && !won;
+      const { runKeys, clueMeta, hintKeys } = highlightSets();
       const digitFs = Math.max(14, Math.floor(cellSize * 0.42));
       const pencilFs = Math.max(7, Math.floor(cellSize * 0.22));
       const clueFs = Math.max(8, Math.floor(cellSize * 0.26));
@@ -1361,7 +1664,9 @@
           'kk-cell kk-cell--play' +
           (isSel ? ' is-selected' : '') +
           (runKeys.has(key) ? ' is-run' : '') +
-          (bad.has(key) ? ' is-bad' : '') +
+          (hintKeys.has(key) ? ' is-hint-run' : '') +
+          (bad.has(key) ? (softBad ? ' is-soft-bad' : ' is-bad') : '') +
+          (hintFilled.has(key) ? ' is-hint-fill' : '') +
           (won ? ' is-won' : '');
         btn.style.fontSize = digitFs + 'px';
         btn.innerHTML = cellInnerHtml(r, c, pencilFs);
@@ -1398,6 +1703,11 @@
       if (pen) {
         pen.classList.toggle('is-active', pencilMode);
         pen.textContent = pencilMode ? 'Pencil on' : 'Pencil';
+      }
+      const liveBtn = root.querySelector('#kkLive');
+      if (liveBtn) {
+        liveBtn.classList.toggle('is-active', liveConflict);
+        liveBtn.textContent = liveConflict ? 'Live on' : 'Live';
       }
       updateUndoButtons();
     }
@@ -1443,7 +1753,7 @@
           subtitle: diffMeta.label,
           backId: 'kkBack',
           pauseId: 'kkPause',
-          rightHtml: `<button type="button" id="kkNew" class="game-chrome-action">New</button>`,
+          rightHtml: `<button type="button" id="kkHelp" class="game-chrome-action game-tap-target" aria-label="How to play">?</button><button type="button" id="kkNew" class="game-chrome-action">New</button>`,
         })}
         <div id="kkTimer" class="game-turn game-turn--waiting">${formatTime(elapsed)}</div>
         <div class="kk-board-area">
@@ -1453,18 +1763,24 @@
         <div class="kk-keypad">
           <div class="kk-num-row">${padBtns}</div>
           <div class="kk-action-row">
-            <button type="button" id="kkPencil" class="kk-action game-tap-target">Pencil</button>
-            <button type="button" id="kkUndo" class="kk-action game-tap-target" disabled>Undo</button>
+            <button type="button" id="kkPencil" class="kk-action game-tap-target" title="Tap: pencil mode · Long-press: auto-notes">Pencil</button>
+            <button type="button" id="kkHint" class="kk-action game-tap-target">Hint</button>
             <button type="button" id="kkErase" class="kk-action game-tap-target">Erase</button>
             <button type="button" id="kkCheck" class="kk-action kk-action--primary game-tap-target">Check</button>
           </div>
           <div class="kk-action-row kk-action-row--secondary">
+            <button type="button" id="kkUndo" class="kk-action game-tap-target" disabled>Undo</button>
             <button type="button" id="kkRedo" class="kk-action game-tap-target" disabled>Redo</button>
+            <button type="button" id="kkClean" class="kk-action game-tap-target">Clean notes</button>
+            <button type="button" id="kkLive" class="kk-action game-tap-target">Live</button>
+          </div>
+          <div class="kk-action-row kk-action-row--secondary">
             <button type="button" id="kkClear" class="kk-action game-tap-target">Clear all</button>
           </div>
         </div>`;
 
       wireShellHandlers();
+      showCoach(false);
     }
 
     function wireShellHandlers() {
@@ -1524,6 +1840,14 @@
       root.querySelector('#kkErase')?.addEventListener('click', eraseCell);
       root.querySelector('#kkUndo')?.addEventListener('click', undo);
       root.querySelector('#kkRedo')?.addEventListener('click', redo);
+      root.querySelector('#kkHint')?.addEventListener('click', applyHint);
+      root.querySelector('#kkClean')?.addEventListener('click', () => cleanPencils(selected ? 'run' : 'board'));
+      root.querySelector('#kkLive')?.addEventListener('click', () => {
+        liveConflict = !liveConflict;
+        statusMsg = liveConflict ? 'Live conflicts on' : 'Live conflicts off — use Check';
+        refreshPlay();
+      });
+      root.querySelector('#kkHelp')?.addEventListener('click', () => showCoach(true));
       root.querySelector('#kkClear')?.addEventListener('click', () => {
         if (won) return;
         const ask =
@@ -1543,26 +1867,55 @@
           values = emptyValues(rows, cols);
           pencil = Array.from({ length: rows }, () => Array.from({ length: cols }, () => new Set()));
           showMistakes = false;
+          hintFocusRun = null;
+          hintFilled = new Set();
           statusMsg = 'Board cleared';
           refreshPlay();
         });
       });
-      root.querySelector('#kkPencil')?.addEventListener('click', () => {
-        pencilMode = !pencilMode;
-        statusMsg = pencilMode ? 'Pencil mode on' : 'Digit mode';
-        if (typeof gameFeedback === 'function') gameFeedback('select');
-        refreshPlay();
-      });
+
+      const pencilBtn = root.querySelector('#kkPencil');
+      let pencilTimer = null;
+      let pencilLong = false;
+      if (pencilBtn) {
+        const clearPencilTimer = () => {
+          if (pencilTimer) {
+            clearTimeout(pencilTimer);
+            pencilTimer = null;
+          }
+        };
+        pencilBtn.addEventListener('pointerdown', (e) => {
+          if (won) return;
+          pencilLong = false;
+          clearPencilTimer();
+          pencilTimer = setTimeout(() => {
+            pencilLong = true;
+            autoNotes(selected ? 'run' : 'board');
+            if (typeof gameFeedback === 'function') gameFeedback('valid');
+          }, 450);
+          try {
+            pencilBtn.setPointerCapture(e.pointerId);
+          } catch (err) {}
+        });
+        pencilBtn.addEventListener('pointerup', () => {
+          clearPencilTimer();
+          if (pencilLong || won) return;
+          pencilMode = !pencilMode;
+          statusMsg = pencilMode ? 'Pencil mode on · long-press for auto-notes' : 'Digit mode';
+          if (typeof gameFeedback === 'function') gameFeedback('select');
+          refreshPlay();
+        });
+        pencilBtn.addEventListener('pointercancel', clearPencilTimer);
+      }
+
       root.querySelector('#kkCheck')?.addEventListener('click', () => {
         if (won) return;
         const a = analyzeMistakes(board, values);
         showMistakes = true;
         if (a.won) finishWin();
-        else if (!a.allFilled) {
-          statusMsg = a.bad.size ? 'Some digits conflict — keep going' : 'Not finished yet';
-          refreshPlay();
-        } else {
-          statusMsg = 'Check the red cells — sums or repeats are off';
+        else {
+          statusMsg = checkStatusMessage(a);
+          if (typeof gameFeedback === 'function') gameFeedback(a.bad.size ? 'invalid' : 'select');
           refreshPlay();
         }
       });
