@@ -4481,9 +4481,17 @@ select:focus-visible,
 .bus-player{flex:1;min-width:72px;border-radius:10px;padding:6px;text-align:center;background:rgba(255,255,255,.05);border:2px solid transparent;}
 .bus-player.is-active{border-color:var(--pc);background:color-mix(in srgb,var(--pc) 22%,transparent);}
 .bus-player.is-out{opacity:.35;}
+.bus-player.is-jail .bus-player-props{color:#FFC93C;}
 .bus-player-name{color:var(--pc);font:700 10px "Space Grotesk",sans-serif;}
 .bus-player-cash{font:700 11px "Space Grotesk",sans-serif;color:#fff;}
 .bus-player-props{font-size:9px;color:rgba(255,255,255,.4);}
+.bus-jail-bar{margin:0 14px 8px;padding:10px 12px;border-radius:14px;background:rgba(231,76,60,.12);border:1.5px solid rgba(231,76,60,.35);flex-shrink:0;}
+.bus-jail-title{font:700 13px "Space Grotesk",sans-serif;color:#fff;margin-bottom:4px;}
+.bus-jail-hint{font-size:11px;color:rgba(255,255,255,.65);margin-bottom:8px;}
+.bus-jail-actions{display:flex;gap:8px;}
+.bus-jail-actions .bus-deed-btn{flex:1;min-height:44px;border-radius:12px;border:2px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font:700 13px "Space Grotesk",sans-serif;cursor:pointer;}
+.bus-jail-actions .bus-deed-btn--primary{background:var(--game-accent,#B98932);border-color:transparent;}
+.bus-jail-actions .bus-deed-btn:disabled{opacity:.4;cursor:default;}
 .bus-main{flex:1;display:flex;flex-direction:column;gap:12px;padding:8px 14px;min-height:0;overflow:auto;}
 .bus-deed{background:#fff;color:#1a1714;border-radius:16px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.25);flex-shrink:0;}
 .bus-deed-band{height:14px;background:var(--bus-band,#34495e);}

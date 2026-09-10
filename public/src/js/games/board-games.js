@@ -400,17 +400,23 @@ function openBusinessGame(chat,playerCount){
     pos:0,
     money:15000,
     properties:[],
-    jailed:0,
+    inJail:false,
+    jailAttempts:0,
+    jailed:0, // legacy mirror for older Live snaps
     bankrupt:false,
     color:PLAYER_COLORS[i],
     profileType:i===mySeat?ownType:(i===(mySeat===0?1:0)?(chat?.profileType||null):null),
   }));
   let currentPlayer=0;let diceVal=[1,1];let rolling=false;let gameOver=false;let message='';
-  let awaitingBuy=false;let focusPos=0;let buildOpen=false;
+  let awaitingBuy=false;let awaitingJailChoice=false;let focusPos=0;let buildOpen=false;
+  let doublesStreak=0;let pendingExtraTurn=false;
   /** Per-tile improvements: { houses:0–4, hotel:bool }. Hotel = 5th purchase. */
   let improvements={}; // idx -> { houses:0, hotel:false }
   /** House cost by colour group (₹15k start). Hotel = one more same cost. No bank scarcity. */
   const HOUSE_COST={0:500,1:500,2:1000,3:1000,4:1500,5:1500,6:2000,7:2000};
+  const JAIL_IDX=10;
+  const GO_SALARY=2000; // keep Prompt-era Start cash
+  const JAIL_FINE=500;  // scaled classic fine for ₹15k start
   const BUS_SECS=20;let busTimer=BUS_SECS;let busInterval=null;let diceIv=null;
 
   const overlay=document.createElement('div');
@@ -452,11 +458,23 @@ function openBusinessGame(chat,playerCount){
     close();
   }
 
+  function normalizeJailFields(p){
+    if(!p)return;
+    if(p.inJail==null&&p.jailed!=null)p.inJail=Number(p.jailed)>0;
+    p.inJail=!!p.inJail;
+    p.jailAttempts=Math.min(3,Math.max(0,Number(p.jailAttempts)||0));
+    p.jailed=p.inJail?Math.max(1,3-p.jailAttempts):0;
+  }
+
   function serializeBusPlayers(){
-    return players.map(p=>({
-      pos:p.pos,money:p.money,properties:(p.properties||[]).slice(),
-      jailed:p.jailed||0,bankrupt:!!p.bankrupt,
-    }));
+    return players.map(p=>{
+      normalizeJailFields(p);
+      return {
+        pos:p.pos,money:p.money,properties:(p.properties||[]).slice(),
+        inJail:!!p.inJail,jailAttempts:p.jailAttempts||0,
+        jailed:p.jailed||0,bankrupt:!!p.bankrupt,
+      };
+    });
   }
   function serializeImprovements(){
     const out={};
@@ -484,8 +502,11 @@ function openBusinessGame(chat,playerCount){
       players[i].pos=Number(rp.pos)||0;
       players[i].money=Number(rp.money)||0;
       players[i].properties=Array.isArray(rp.properties)?rp.properties.slice():[];
-      players[i].jailed=Number(rp.jailed)||0;
+      if(rp.inJail!=null)players[i].inJail=!!rp.inJail;
+      else players[i].inJail=Number(rp.jailed)>0;
+      players[i].jailAttempts=Number(rp.jailAttempts)||0;
       players[i].bankrupt=!!rp.bankrupt;
+      normalizeJailFields(players[i]);
     });
   }
   function pushBusiness(){
@@ -495,7 +516,8 @@ function openBusinessGame(chat,playerCount){
       state:{
         players:serializeBusPlayers(),
         improvements:serializeImprovements(),
-        currentPlayer,diceVal:diceVal.slice(),message,gameOver,awaitingBuy,focusPos,
+        currentPlayer,diceVal:diceVal.slice(),message,gameOver,
+        awaitingBuy,awaitingJailChoice,focusPos,doublesStreak,pendingExtraTurn,
       },
       turn:gameOver?null:(currentPlayer===0?liveRoles.playerA:liveRoles.playerB),
       status:gameOver?'over':'playing',
@@ -514,14 +536,56 @@ function openBusinessGame(chat,playerCount){
       busTimer--;
       const el=document.getElementById('busTimerEl');
       if(el)el.textContent=busTimer+'s';
-      if(busTimer<=0){clearInterval(busInterval);if(!rolling&&!gameOver&&!awaitingBuy)rollBusDice();}
+      if(busTimer<=0){
+        clearInterval(busInterval);
+        if(rolling||gameOver||awaitingBuy)return;
+        if(awaitingJailChoice)jailRollAttempt();
+        else rollBusDice();
+      }
     },1000);
   }
   function stopBusTimer(){clearInterval(busInterval);busInterval=null;}
 
-  function rollBusDice(){
+  function sendToJail(player,reason){
+    if(!player)return;
+    player.pos=JAIL_IDX;
+    player.inJail=true;
+    player.jailAttempts=0;
+    normalizeJailFields(player);
+    focusPos=JAIL_IDX;
+    doublesStreak=0;
+    pendingExtraTurn=false;
+    message=reason||'Sent to Jail';
+  }
+
+  function leaveJail(player){
+    if(!player)return;
+    player.inJail=false;
+    player.jailAttempts=0;
+    normalizeJailFields(player);
+    awaitingJailChoice=false;
+  }
+
+  function payJailFine(){
+    if(!isMyControl()&&liveOn)return;
+    const p=players[currentPlayer];
+    if(!p||!p.inJail||rolling||gameOver||awaitingBuy)return;
+    p.money-=JAIL_FINE;
+    leaveJail(p);
+    message=`Paid ₹${JAIL_FINE} to leave jail — roll to move`;
+    if(liveOn)pushBusiness();
+    render();
+    if(p.money<0){finishMoveResolution();return;}
+    if(isMyControl())startBusTimer();
+    else if(!liveOn)schedule(rollBusDice,500);
+  }
+
+  function jailRollAttempt(){
     if(!alive()||rolling||gameOver||awaitingBuy)return;
     if(liveOn&&!isMyControl())return;
+    const p=players[currentPlayer];
+    if(!p||!p.inJail)return;
+    awaitingJailChoice=false;
     buildOpen=false;
     stopBusTimer();rolling=true;let ticks=0;
     if(typeof gameFeedback==='function')gameFeedback('select');
@@ -529,8 +593,94 @@ function openBusinessGame(chat,playerCount){
     diceIv=setInterval(()=>{
       if(!alive()){clearInterval(diceIv);diceIv=null;return;}
       diceVal=[Math.floor(Math.random()*6)+1,Math.floor(Math.random()*6)+1];render();ticks++;
-      if(ticks>8){clearInterval(diceIv);diceIv=null;rolling=false;movePlayerToken(diceVal[0]+diceVal[1]);}
+      if(ticks>8){
+        clearInterval(diceIv);diceIv=null;rolling=false;
+        handleJailRollResult(diceVal[0]===diceVal[1],diceVal[0]+diceVal[1]);
+      }
     },80);
+  }
+
+  function handleJailRollResult(isDouble,sum){
+    const p=players[currentPlayer];
+    if(!p)return;
+    if(isDouble){
+      leaveJail(p);
+      message=`Doubles — free from jail!`;
+      movePlayerToken(sum,{noDoublesExtra:true});
+      return;
+    }
+    p.jailAttempts=(Number(p.jailAttempts)||0)+1;
+    if(p.jailAttempts>=3){
+      p.money-=JAIL_FINE;
+      leaveJail(p);
+      message=`3rd try — paid ₹${JAIL_FINE} and left`;
+      movePlayerToken(sum,{noDoublesExtra:true});
+      return;
+    }
+    normalizeJailFields(p);
+    message=`No doubles — still in jail (${p.jailAttempts}/3)`;
+    awaitingJailChoice=false;
+    if(liveOn)pushBusiness();
+    endBusTurn();
+  }
+
+  function aiJailDecision(){
+    const p=players[currentPlayer];
+    if(!p||!p.inJail||gameOver)return;
+    const forcePay=p.jailAttempts>=2&&p.money>=JAIL_FINE;
+    const richPay=p.money>=JAIL_FINE*3&&p.money>5000&&Math.random()<0.4;
+    if(forcePay||richPay){
+      p.money-=JAIL_FINE;
+      leaveJail(p);
+      message=`${p.name} paid ₹${JAIL_FINE} to leave jail`;
+      render();
+      schedule(rollBusDice,500);
+      return;
+    }
+    jailRollAttempt();
+  }
+
+  function rollBusDice(){
+    if(!alive()||rolling||gameOver||awaitingBuy)return;
+    if(liveOn&&!isMyControl())return;
+    const p=players[currentPlayer];
+    if(p&&p.inJail){
+      if(!awaitingJailChoice)awaitingJailChoice=true;
+      jailRollAttempt();
+      return;
+    }
+    buildOpen=false;
+    stopBusTimer();rolling=true;let ticks=0;
+    if(typeof gameFeedback==='function')gameFeedback('select');
+    if(diceIv)clearInterval(diceIv);
+    diceIv=setInterval(()=>{
+      if(!alive()){clearInterval(diceIv);diceIv=null;return;}
+      diceVal=[Math.floor(Math.random()*6)+1,Math.floor(Math.random()*6)+1];render();ticks++;
+      if(ticks>8){
+        clearInterval(diceIv);diceIv=null;rolling=false;
+        onDiceResolved();
+      }
+    },80);
+  }
+
+  function onDiceResolved(){
+    const p=players[currentPlayer];
+    if(!p||p.bankrupt)return;
+    const isDouble=diceVal[0]===diceVal[1];
+    const sum=diceVal[0]+diceVal[1];
+    if(isDouble){
+      doublesStreak++;
+      if(doublesStreak>=3){
+        sendToJail(p,'Three doubles — sent to jail');
+        if(liveOn)pushBusiness();
+        render();
+        endBusTurn();
+        return;
+      }
+    } else {
+      doublesStreak=0;
+    }
+    movePlayerToken(sum,{wasDouble:isDouble});
   }
 
   function isBuyable(tile){
@@ -696,34 +846,67 @@ function openBusinessGame(chat,playerCount){
     return `Paid ₹${rent} rent to ${owner.name}`;
   }
 
-  function movePlayerToken(steps){
+  function movePlayerToken(steps,opts){
+    opts=opts||{};
     const p=players[currentPlayer];
-    p.pos=(p.pos+steps)%BOARD.length;
+    if(!p||p.bankrupt)return;
+    const oldPos=p.pos;
+    const msgs=[];
+    if(oldPos+steps>=BOARD.length){
+      p.money+=GO_SALARY;
+      msgs.push(`Passed Start +₹${GO_SALARY}`);
+    }
+    p.pos=(oldPos+steps)%BOARD.length;
     focusPos=p.pos;
     const tile=BOARD[p.pos];
     const diceTotal=steps;
-    message='';
-    if(tile.type==='go'){p.money+=2000;message='Passed Start! +₹2000';}
-    else if(tile.type==='tax'){p.money-=tile.amount;message=`Paid ₹${tile.amount} tax`;}
-    else if(tile.type==='gotojail'){p.pos=10;p.jailed=2;focusPos=10;message='Sent to Jail';}
-    else if(tile.type==='chance'||tile.type==='chest'){
-      const events=[{m:'Bonus payout!',amt:500},{m:'Repair bill',amt:-300},{m:'Lottery win!',amt:1000},{m:'Fine for jaywalking',amt:-150}];
-      const e=events[Math.floor(Math.random()*events.length)];p.money+=e.amt;message=`${e.m} ${e.amt>0?'+':''}₹${e.amt}`;
+    pendingExtraTurn=!!opts.wasDouble&&!opts.noDoublesExtra;
+
+    if(tile.type==='gotojail'){
+      // Collect Start if the move wrapped, then jail with no further GO.
+      sendToJail(p,msgs.length?`${msgs[0]} · Go To Jail`:'Go To Jail — no Start cash');
+      pendingExtraTurn=false;
+      if(liveOn)pushBusiness();
+      render();
+      finishMoveResolution();
+      return;
     }
-    else if(isBuyable(tile)){
+
+    if(tile.type==='go'){
+      message=msgs[0]||`Landed on Start +₹${GO_SALARY}`;
+      // Salary already applied via wrap when landing on 0 from a full circuit.
+    } else if(tile.type==='tax'){
+      p.money-=tile.amount;
+      msgs.push(`Paid ₹${tile.amount} tax`);
+      message=msgs.join(' · ');
+    } else if(tile.type==='jail'){
+      msgs.push(p.inJail?'In jail':'Just visiting');
+      message=msgs.join(' · ');
+    } else if(tile.type==='chance'||tile.type==='chest'){
+      const events=[{m:'Bonus payout!',amt:500},{m:'Repair bill',amt:-300},{m:'Lottery win!',amt:1000},{m:'Fine for jaywalking',amt:-150}];
+      const e=events[Math.floor(Math.random()*events.length)];p.money+=e.amt;
+      msgs.push(`${e.m} ${e.amt>0?'+':''}₹${e.amt}`);
+      message=msgs.join(' · ');
+    } else if(isBuyable(tile)){
       const owner=players.find(pl=>!pl.bankrupt&&pl.properties.includes(p.pos));
       if(owner&&owner!==p){
         const br=rentBreakdown(tile,p.pos,owner,diceTotal);
         const rent=br.rent;
         p.money-=rent;owner.money+=rent;
-        message=rentPaidMessage(br,tile,owner,diceTotal);
+        msgs.push(rentPaidMessage(br,tile,owner,diceTotal));
       }
+      message=msgs.join(' · ');
+    } else if(msgs.length){
+      message=msgs.join(' · ');
+    } else {
+      message='';
     }
+
     render();
     if(isBuyable(tile)&&!players.find(pl=>!pl.bankrupt&&pl.properties.includes(p.pos))&&p.money>=tile.price){
       offerBuy(tile,p);
     } else {
-      endBusTurn();
+      finishMoveResolution();
     }
   }
 
@@ -750,7 +933,7 @@ function openBusinessGame(chat,playerCount){
         message=`${player.name} bought ${tile.name}!`;
         if(typeof gameFeedback==='function')gameFeedback('card');
       }
-      render();endBusTurn();return;
+      render();finishMoveResolution();return;
     }
     awaitingBuy=true;
     stopBusTimer();
@@ -772,15 +955,12 @@ function openBusinessGame(chat,playerCount){
     } else if(!yes){
       message='Skipped purchase';
     }
-    endBusTurn();
+    finishMoveResolution();
   }
 
-  function endBusTurn(){
-    if(!alive())return;
-    awaitingBuy=false;
-    buildOpen=false;
+  function checkBankruptcyAndWinner(){
     const p=players[currentPlayer];
-    if(p.money<0){p.bankrupt=true;message=`${p.name} went bankrupt`;}
+    if(p&&p.money<0){p.bankrupt=true;message=`${p.name} went bankrupt`;}
     const active=players.filter(pl=>!pl.bankrupt);
     if(active.length===1){
       gameOver=true;
@@ -789,10 +969,39 @@ function openBusinessGame(chat,playerCount){
       if(typeof recordGameResult==='function')recordGameResult('business',won);
       if(typeof gameFeedback==='function')gameFeedback(won?'win':'lose');
       if(liveOn)pushBusiness();
-      render();return;
+      render();
+      return true;
     }
-    do{currentPlayer=(currentPlayer+1)%playerCount;}while(players[currentPlayer].bankrupt);
-    focusPos=players[currentPlayer].pos;
+    return false;
+  }
+
+  function finishMoveResolution(){
+    if(!alive())return;
+    awaitingBuy=false;
+    buildOpen=false;
+    if(checkBankruptcyAndWinner())return;
+    if(pendingExtraTurn&&players[currentPlayer]&&!players[currentPlayer].inJail&&!players[currentPlayer].bankrupt){
+      pendingExtraTurn=false;
+      message=(message?message+' · ':'')+'Doubles — roll again';
+      if(liveOn)pushBusiness();
+      render();
+      if(isMyControl())startBusTimer();
+      else if(!liveOn)schedule(rollBusDice,700);
+      return;
+    }
+    pendingExtraTurn=false;
+    endBusTurn();
+  }
+
+  function beginSeatTurn(){
+    awaitingJailChoice=false;
+    buildOpen=false;
+    const p=players[currentPlayer];
+    focusPos=p.pos;
+    if(p.inJail){
+      awaitingJailChoice=true;
+      message=`${p.name} is in jail — Pay ₹${JAIL_FINE} or roll for doubles (${p.jailAttempts}/3)`;
+    }
     if(liveOn)pushBusiness();
     render();
     if(isMyControl())startBusTimer();
@@ -800,14 +1009,32 @@ function openBusinessGame(chat,playerCount){
       schedule(()=>{
         if(!alive()||gameOver)return;
         aiMaybeBuild(players[currentPlayer]);
-        render();
-        schedule(rollBusDice,500);
+        if(players[currentPlayer].inJail){
+          awaitingJailChoice=true;
+          render();
+          schedule(aiJailDecision,600);
+        } else {
+          schedule(rollBusDice,500);
+        }
       },700);
     }
   }
 
+  function endBusTurn(){
+    if(!alive())return;
+    awaitingBuy=false;
+    awaitingJailChoice=false;
+    buildOpen=false;
+    doublesStreak=0;
+    pendingExtraTurn=false;
+    if(checkBankruptcyAndWinner())return;
+    do{currentPlayer=(currentPlayer+1)%playerCount;}while(players[currentPlayer].bankrupt);
+    beginSeatTurn();
+  }
+
   function tryPlayerBuild(tileIdx){
     if(!isMyControl()||awaitingBuy||rolling||gameOver)return;
+    // Allow build while jailed (classic), but not mid-buy.
     const p=players[currentPlayer];
     if(!buildOn(p,tileIdx))return;
     focusPos=tileIdx;
@@ -890,6 +1117,11 @@ function openBusinessGame(chat,playerCount){
         ${rentLadderHtml(tile,idx,owner)}`;
     } else if(tile.type==='tax'){
       body=`<div class="bus-deed-meta">Pay <strong>₹${tile.amount}</strong></div>`;
+    } else if(tile.type==='jail'){
+      const inmate=players.find(pl=>pl.pos===idx&&pl.inJail&&!pl.bankrupt);
+      body=`<div class="bus-deed-meta">${inmate?`${inmate.name} imprisoned · attempt ${inmate.jailAttempts}/3`:'Just visiting — not in jail'}</div>`;
+    } else if(tile.type==='go'){
+      body=`<div class="bus-deed-meta">Salary <strong>₹${GO_SALARY}</strong> when you pass or land</div>`;
     } else {
       body=`<div class="bus-deed-meta">${message||'Land here for an event'}</div>`;
     }
@@ -909,9 +1141,24 @@ function openBusinessGame(chat,playerCount){
       <div class="bus-deed-type">${typeLabel}</div>
       <div class="bus-deed-name">${tile.name}</div>
       ${body}
-      ${message&&!awaitingBuy?`<div class="bus-deed-msg">${message}</div>`:''}
+      ${message&&!awaitingBuy&&!awaitingJailChoice?`<div class="bus-deed-msg">${message}</div>`:''}
       ${buyActions}
       ${deedBuild}
+    </div>`;
+  }
+
+  function jailPanelHtml(){
+    if(!awaitingJailChoice||!isMyControl()||rolling||gameOver||awaitingBuy)return '';
+    const p=players[currentPlayer];
+    if(!p||!p.inJail)return '';
+    const mustNote=p.jailAttempts>=2?'Last try — fail and you pay to leave.':'';
+    return `<div class="bus-jail-bar">
+      <div class="bus-jail-title">In jail · attempt ${p.jailAttempts}/3</div>
+      ${mustNote?`<div class="bus-jail-hint">${mustNote}</div>`:''}
+      <div class="bus-jail-actions">
+        <button type="button" id="busJailPay" class="game-tap-target bus-deed-btn"${p.money<JAIL_FINE&&p.jailAttempts<2?' disabled':''}>Pay ₹${JAIL_FINE}</button>
+        <button type="button" id="busJailRoll" class="game-tap-target bus-deed-btn bus-deed-btn--primary">Roll for doubles</button>
+      </div>
     </div>`;
   }
 
@@ -989,12 +1236,12 @@ function openBusinessGame(chat,playerCount){
       return;
     }
     overlay.innerHTML=`
-      ${gameChromeHtml({title:'Business',subtitle:MODE_SUB,backId:'busBack',rightHtml:isMyControl()&&!awaitingBuy?`<span id="busTimerEl" class="game-chrome-metric">${busTimer}s</span>`:undefined})}
+      ${gameChromeHtml({title:'Business',subtitle:MODE_SUB+(doublesStreak?` · Doubles ${doublesStreak}`:''),backId:'busBack',rightHtml:isMyControl()&&!awaitingBuy?`<span id="busTimerEl" class="game-chrome-metric">${busTimer}s</span>`:undefined})}
       <div class="bus-players">
-        ${players.map((p,i)=>`<div class="bus-player${currentPlayer===i?' is-active':''}${p.bankrupt?' is-out':''}" style="--pc:${p.color}">
+        ${players.map((p,i)=>`<div class="bus-player${currentPlayer===i?' is-active':''}${p.bankrupt?' is-out':''}${p.inJail?' is-jail':''}" style="--pc:${p.color}">
           <div class="bus-player-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(p.name,p):p.name}</div>
           <div class="bus-player-cash">₹${p.money}</div>
-          <div class="bus-player-props">${p.properties.length} props</div>
+          <div class="bus-player-props">${p.inJail?'Jail · ':''}${p.properties.length} props</div>
         </div>`).join('')}
       </div>
       ${holdingsStripHtml()}
@@ -1002,17 +1249,20 @@ function openBusinessGame(chat,playerCount){
         ${deedHtml(tile,focusPos)}
         ${miniBoardHtml()}
       </div>
+      ${jailPanelHtml()}
       ${buildPanelHtml()}
       <div class="bus-controls">
-        <button type="button" id="busRollBtn" class="game-tap-target bus-roll-btn"${!isMyControl()||rolling||awaitingBuy?' disabled':''}>
-          ${awaitingBuy?'Choose Buy or Skip':isMyControl()?(rolling?'Rolling…':'Roll dice'):`${players[currentPlayer].name} playing…`}
+        <button type="button" id="busRollBtn" class="game-tap-target bus-roll-btn"${!isMyControl()||rolling||awaitingBuy||awaitingJailChoice?' disabled':''}>
+          ${awaitingBuy?'Choose Buy or Skip':awaitingJailChoice?'Jail: Pay or Roll':isMyControl()?(rolling?'Rolling…':(pendingExtraTurn||doublesStreak?'Roll again':'Roll dice')):`${players[currentPlayer].name} playing…`}
         </button>
       </div>
     `;
     document.getElementById('busBack').addEventListener('click',()=>{askBusLeave();});
-    document.getElementById('busRollBtn')?.addEventListener('click',()=>{if(isMyControl()&&!rolling&&!awaitingBuy&&!gameOver)rollBusDice();});
+    document.getElementById('busRollBtn')?.addEventListener('click',()=>{if(isMyControl()&&!rolling&&!awaitingBuy&&!awaitingJailChoice&&!gameOver)rollBusDice();});
     document.getElementById('busBuyYes')?.addEventListener('click',()=>resolveBuy(true));
     document.getElementById('busBuyNo')?.addEventListener('click',()=>resolveBuy(false));
+    document.getElementById('busJailPay')?.addEventListener('click',()=>payJailFine());
+    document.getElementById('busJailRoll')?.addEventListener('click',()=>jailRollAttempt());
     document.getElementById('busBuildToggle')?.addEventListener('click',()=>{
       if(!isMyControl()||awaitingBuy||rolling)return;
       buildOpen=!buildOpen;render();
@@ -1030,7 +1280,7 @@ function openBusinessGame(chat,playerCount){
       gameType:'business',
       matchId:(chat&&chat.dangalMatchId)||(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.matchId),
       me:liveRoles.me,playerA:liveRoles.playerA,playerB:liveRoles.playerB,
-      state:{players:serializeBusPlayers(),improvements:serializeImprovements(),currentPlayer:0,diceVal:[1,1],message:'',gameOver:false,awaitingBuy:false,focusPos:0},
+      state:{players:serializeBusPlayers(),improvements:serializeImprovements(),currentPlayer:0,diceVal:[1,1],message:'',gameOver:false,awaitingBuy:false,awaitingJailChoice:false,focusPos:0,doublesStreak:0,pendingExtraTurn:false},
       onSnap(val){
         if(!val||applyingLive||!alive())return;
         if(val.status==='forfeit'&&!gameOver){
@@ -1050,6 +1300,9 @@ function openBusinessGame(chat,playerCount){
         message=s.message||'';
         gameOver=!!s.gameOver||val.status==='over';
         awaitingBuy=!!s.awaitingBuy;
+        awaitingJailChoice=!!s.awaitingJailChoice;
+        doublesStreak=Number(s.doublesStreak)||0;
+        pendingExtraTurn=!!s.pendingExtraTurn;
         focusPos=s.focusPos!=null?Number(s.focusPos):players[currentPlayer].pos;
         stopBusTimer();
         render();

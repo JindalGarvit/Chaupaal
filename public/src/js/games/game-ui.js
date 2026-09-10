@@ -130,7 +130,7 @@
       'Practice is a sealed sandbox — never touches streak or Daily stats',
     ],
     fiveinrow: ['Connect five in a line', 'Watch diagonals as well as rows', 'Block threats before extending yours'],
-    business: ['Complete a colour set, then Build houses evenly before you roll', 'Stations & utilities scale with how many you own', 'Bankrupt the others; last standing wins'],
+    business: ['Complete a colour set, then Build houses evenly before you roll', 'Doubles = extra turn; three doubles or Go To Jail = jail', 'In jail: Pay ₹500 or roll doubles — Start pays ₹2000'],
     scribble: ['Draw clearly — keep it simple', 'Guessers type in the chat box', 'Rounds rotate who draws'],
     rushrunner: [
       'Classic or Daily run · each theme has a named flavor (Coin Rush, Heavy Traffic, Long Sprint)',
