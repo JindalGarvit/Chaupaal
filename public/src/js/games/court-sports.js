@@ -544,22 +544,95 @@
   }
 
   /**
-   * Kabaddi Prompt 1 — raid court & breath craft.
-   * Control: tap-to-move on the court surface.
-   * Breath: starts on first mid-line cross (prep in own half is free).
-   * Zones (y: 0=anti top … 1=home bottom): anti ≤0.48 · mid 0.5 · own ≥0.52 · bonus line ~0.22 visual only.
-   * TO_WIN=5 · PKL bonus/DoD/all-out = Prompt 3 · tackle AI = Prompt 2 · Live defense sync = Prompt 4.
+   * PKL-lite raid law (Prompt 3) — single resolver for Practice + Live.
+   * 4-defender mat mappings:
+   *   Touch +1/tag on successful Home
+   *   Empty Home (0 tags) → defense +1
+   *   Bonus: Home after crossing bonus line (y≤0.22) with ≥1 tag → +1
+   *   DoD: 2 consecutive empties by that raiding side → next raid must score
+   *   All-out: Home with 0 living defenders → +2 (plus touches); mat revives next raid
+   *   Super tackle: tackle with ≤2 living defenders → defense +2 else +1
+   *   Breath-out / DoD fail → defense +1
    */
+  function resolveKabaddiRaidEnd(input) {
+    const i = input || {};
+    const tags = Math.max(0, i.tags | 0);
+    const crossedBonus = !!i.crossedBonus;
+    const allOut = !!i.allOut;
+    const dod = !!i.dod;
+    const endedBy = String(i.endedBy || 'home');
+    const aliveAtTackle =
+      i.defendersAliveAtTackle != null ? i.defendersAliveAtTackle | 0 : 4;
+
+    let raiderDelta = 0;
+    let defenseDelta = 0;
+    const flags = [];
+
+    if (endedBy === 'home') {
+      if (tags > 0) {
+        raiderDelta = tags;
+        flags.push('touch');
+        if (crossedBonus) {
+          raiderDelta += 1;
+          flags.push('bonus');
+        }
+        if (allOut) {
+          raiderDelta += 2;
+          flags.push('allOut');
+        }
+        if (dod) flags.push('dodSuccess');
+      } else {
+        defenseDelta = 1;
+        flags.push('empty');
+        if (dod) flags.push('dodFail');
+      }
+    } else if (endedBy === 'tackle') {
+      const superT = aliveAtTackle <= 2;
+      defenseDelta = superT ? 2 : 1;
+      flags.push('tackle');
+      if (superT) flags.push('superTackle');
+      if (dod) flags.push('dodFail');
+    } else if (endedBy === 'breath' || endedBy === 'dod_fail') {
+      defenseDelta = 1;
+      if (endedBy === 'breath') flags.push('breath');
+      if (dod || endedBy === 'dod_fail') flags.push('dodFail');
+    }
+
+    const parts = [];
+    if (flags.indexOf('superTackle') >= 0) parts.push('Super tackle!');
+    else if (flags.indexOf('tackle') >= 0) parts.push('Tackle!');
+    if (flags.indexOf('breath') >= 0) parts.push('Breath out');
+    if (flags.indexOf('empty') >= 0) parts.push('Empty raid');
+    if (flags.indexOf('dodFail') >= 0) parts.push('DoD failed');
+    if (flags.indexOf('dodSuccess') >= 0) parts.push('DoD cleared');
+    if (flags.indexOf('bonus') >= 0) parts.push('Bonus!');
+    if (flags.indexOf('allOut') >= 0) parts.push('All-out!');
+    if (flags.indexOf('touch') >= 0 && tags > 0) {
+      parts.push(tags + ' touch' + (tags === 1 ? '' : 'es'));
+    }
+    if (raiderDelta > 0) parts.push('Raider +' + raiderDelta);
+    if (defenseDelta > 0) parts.push('Defense +' + defenseDelta);
+
+    return {
+      raiderDelta,
+      defenseDelta,
+      flags,
+      summary: parts.join(' · ') || 'Raid over',
+      scored: raiderDelta > 0,
+      empty: flags.indexOf('empty') >= 0,
+    };
+  }
+
   /**
-   * Kabaddi Prompt 1–2 — raid court + interactive defense/tackle.
+   * Kabaddi Prompt 1–3 — raid court, defense/tackle, PKL-lite scoring.
    * Control (raid): tap-to-move raider.
    * Control (defend): select one living defender (focus), tap court to move them, Tackle when in range.
    * Breath: starts on first mid-line cross (prep in own half free).
    * Tackle: raider past mid / in anti, living defender within TACKLE_R for HOLD_NEED (shorter if 2+ in range).
-   * Authority: raider client (or local Practice sim) commits Home / breath / tackle / empty outcomes.
+   * Authority: raider client (or local Practice sim) commits outcomes via resolveKabaddiRaidEnd.
    * Live: raidUid raids; other seat defends — no waiting-only screen.
-   * Zones (y: 0=anti top … 1=home bottom): anti ≤0.48 · mid 0.5 · own ≥0.52 · bonus ~0.22 visual.
-   * TO_WIN=5 · PKL bonus/DoD/all-out = Prompt 3 · stakes/rematch meta = Prompt 4.
+   * Zones (y: 0=anti top … 1=home bottom): anti ≤0.48 · mid 0.5 · own ≥0.52 · bonus ~0.22.
+   * TO_WIN=5 · stakes/rematch meta = Prompt 4.
    */
   function openKabaddi() {
     const chat = resolveChat(arguments[0]);
@@ -576,7 +649,7 @@
       title: 'Kabaddi',
       subtitle: liveOn
         ? liveSub() + ' · Raid & defend'
-        : practiceSub('Raid · defend · tackle'),
+        : practiceSub('PKL-lite · raid · defend · DoD'),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
@@ -616,6 +689,8 @@
     const DEF_SPEED = 1.2;
     const AI_RAID_SPEED = 1.1;
     const SYNC_MS = 100;
+    const BONUS_Y = 0.22;
+    const DOD_EMPTY_NEED = 2;
 
     let you = 0;
     let opp = 0;
@@ -630,6 +705,9 @@
     let activeRaid = null;
     let remoteDefInput = null;
     let lastAppliedOutcomeSeq = -1;
+    /** Consecutive empty Homes by raiding side (me vs opp from local seat). */
+    let emptyStreakMe = 0;
+    let emptyStreakOpp = 0;
 
     function scoresForPush() {
       if (!liveRoles) return { a: you, b: opp };
@@ -639,6 +717,51 @@
       if (!sc || !liveRoles) return;
       you = liveRoles.me === liveRoles.playerA ? sc.a | 0 : sc.b | 0;
       opp = liveRoles.me === liveRoles.playerA ? sc.b | 0 : sc.a | 0;
+    }
+    function emptyStreakFor(iAmRaider) {
+      return iAmRaider ? emptyStreakMe : emptyStreakOpp;
+    }
+    function setEmptyStreakFor(iAmRaider, n) {
+      if (iAmRaider) emptyStreakMe = Math.max(0, n | 0);
+      else emptyStreakOpp = Math.max(0, n | 0);
+    }
+    function streakStateForPush() {
+      if (!liveRoles) return { me: emptyStreakMe, opp: emptyStreakOpp };
+      if (liveRoles.me === liveRoles.playerA) {
+        return { A: emptyStreakMe, B: emptyStreakOpp };
+      }
+      return { A: emptyStreakOpp, B: emptyStreakMe };
+    }
+    function applyStreakState(st) {
+      if (!st || !st.emptyStreak) return;
+      const es = st.emptyStreak;
+      if (!liveRoles) {
+        if (es.me != null) emptyStreakMe = es.me | 0;
+        if (es.opp != null) emptyStreakOpp = es.opp | 0;
+        return;
+      }
+      if (es.A != null && es.B != null) {
+        if (liveRoles.me === liveRoles.playerA) {
+          emptyStreakMe = es.A | 0;
+          emptyStreakOpp = es.B | 0;
+        } else {
+          emptyStreakMe = es.B | 0;
+          emptyStreakOpp = es.A | 0;
+        }
+      }
+    }
+    function flashRaidBanner(flags) {
+      const f = flags || [];
+      const bits = [];
+      if (f.indexOf('superTackle') >= 0) bits.push('Super tackle!');
+      else if (f.indexOf('tackle') >= 0) bits.push('Tackle!');
+      if (f.indexOf('bonus') >= 0) bits.push('Bonus!');
+      if (f.indexOf('allOut') >= 0) bits.push('All-out!');
+      if (f.indexOf('dodFail') >= 0) bits.push('DoD failed');
+      if (f.indexOf('dodSuccess') >= 0) bits.push('DoD cleared');
+      if (f.indexOf('empty') >= 0 && f.indexOf('dodFail') < 0) bits.push('Empty!');
+      if (!bits.length) return;
+      if (typeof showToast === 'function') showToast(bits.join(' · '));
     }
 
     function inOwnHalf(y) {
@@ -716,6 +839,8 @@
         allOut: livingDefs(raid).length === 0,
         hold: +(raid.holdAcc || 0).toFixed(3),
         activeDef: raid.activeDef | 0,
+        dod: !!raid.dod,
+        crossedBonus: !!raid.crossedBonus,
       };
     }
 
@@ -738,6 +863,7 @@
             state: Object.assign(
               {
                 scores: scoresForPush(),
+                emptyStreak: streakStateForPush(),
                 raidUid: myRaid ? liveRoles.me : liveRoles.opp,
                 eventSeq,
                 phase,
@@ -782,7 +908,9 @@
     function aiDefenseStep(raid, dt) {
       const alive = livingDefs(raid);
       if (!alive.length) return;
-      // Closest closes; others shade mid
+      const superWindow = alive.length <= 2;
+      const chaseMul = superWindow ? 1.12 : 0.92;
+      // Closest closes; others shade mid — press harder in super-tackle window
       let closer = alive[0];
       let best = dist2(closer.x, closer.y, raid.rx, raid.ry);
       alive.forEach((d) => {
@@ -800,11 +928,11 @@
         d.ty = Math.min(0.4, Math.max(0.12, d.y));
       });
       alive.forEach((d) => {
-        moveToward(d, d.tx, d.ty, DEF_SPEED * 0.92, dt);
+        moveToward(d, d.tx, d.ty, DEF_SPEED * chaseMul, dt);
       });
-      // Auto-commit tackle when in window
+      // Auto-commit tackle when in window (faster hold in super-tackle range)
       if (canAttemptTackle(raid) && raid.breathLive) {
-        raid.holdAcc += dt;
+        raid.holdAcc += dt * (superWindow ? 1.35 : 1);
         if (raid.holdAcc >= holdNeedFor(raid)) {
           raid.tackleArmed = true;
         }
@@ -815,7 +943,8 @@
 
     function aiRaidStep(raid, dt) {
       const alive = livingDefs(raid);
-      // Plan: cross mid → tag nearest → Home
+      const dod = !!raid.dod;
+      // DoD: safe single tag + Home. Else: cross → tag → (maybe greed) → Home
       if (!raid.breathLive) {
         raid.rtx = 0.5;
         raid.rty = 0.42;
@@ -825,7 +954,12 @@
           raid.rtx = t.x;
           raid.rty = t.y;
         }
-      } else if (raid.tagged < 2 && alive.length && raid.breath > BREATH_MS * 0.45) {
+      } else if (
+        !dod &&
+        raid.tagged < 2 &&
+        alive.length &&
+        raid.breath > BREATH_MS * 0.45
+      ) {
         const t = nearestLiving(raid, raid.rx, raid.ry);
         if (t && Math.random() < 0.55) {
           raid.rtx = t.x;
@@ -842,14 +976,16 @@
       const mdy = raid.rty - raid.ry;
       const dist = Math.sqrt(mdx * mdx + mdy * mdy);
       if (dist > 0.004) {
-        const step = Math.min(dist, AI_RAID_SPEED * dt);
+        const step = Math.min(dist, AI_RAID_SPEED * (dod ? 1.08 : 1) * dt);
         raid.rx += (mdx / dist) * step;
         raid.ry += (mdy / dist) * step;
       }
-      // Auto Home when safe with tags or low breath
+      // Auto Home when safe with tags or low breath (DoD: leave ASAP after one tag)
       if (
         inOwnHalf(raid.ry) &&
-        (raid.tagged > 0 || raid.breath < BREATH_MS * 0.22 || livingDefs(raid).length === 0)
+        (raid.tagged > 0 ||
+          (!dod && raid.breath < BREATH_MS * 0.22) ||
+          livingDefs(raid).length === 0)
       ) {
         raid.aiWantHome = true;
       }
@@ -885,35 +1021,54 @@
       }
 
       const iRaid = !!raid.iAmRaider;
-      const pts = kind === 'home' ? raid.tagged | 0 : 0;
-      if (kind === 'home') {
-        if (pts > 0) {
-          if (iRaid) you += pts;
-          else opp += pts;
-          buzz('win', { noConfetti: true });
-        } else {
-          if (iRaid) opp += 1;
-          else you += 1;
-          buzz('lose', { noConfetti: true });
-        }
+      const living = livingDefs(raid).length;
+      const tags = raid.tagged | 0;
+      const resolved = resolveKabaddiRaidEnd({
+        tags,
+        crossedBonus: !!raid.crossedBonus,
+        allOut: tags > 0 && living === 0,
+        dod: !!raid.dod,
+        endedBy: kind,
+        defendersAliveAtTackle: living,
+      });
+
+      if (iRaid) {
+        you += resolved.raiderDelta;
+        opp += resolved.defenseDelta;
       } else {
-        // breath | tackle
-        if (iRaid) opp += 1;
-        else you += 1;
-        buzz(kind === 'tackle' && !iRaid ? 'win' : 'lose', { noConfetti: true });
+        opp += resolved.raiderDelta;
+        you += resolved.defenseDelta;
       }
 
+      if (resolved.scored) {
+        setEmptyStreakFor(iRaid, 0);
+      } else if (resolved.flags.indexOf('dodFail') >= 0) {
+        setEmptyStreakFor(iRaid, 0);
+      } else if (resolved.empty) {
+        setEmptyStreakFor(iRaid, emptyStreakFor(iRaid) + 1);
+      }
+
+      const scoredForUs =
+        (iRaid && resolved.raiderDelta > 0) || (!iRaid && resolved.defenseDelta > 0);
+      buzz(scoredForUs ? 'win' : 'lose', { noConfetti: true });
+      flashRaidBanner(resolved.flags);
+
+      const summary = resolved.summary || endMsg || 'Raid over.';
       eventSeq += 1;
       const outcome = {
         seq: eventSeq,
         kind,
-        msg: endMsg,
-        tagged: raid.tagged | 0,
-        allOut: livingDefs(raid).length === 0,
+        msg: summary,
+        tagged: tags,
+        allOut: tags > 0 && living === 0,
+        flags: resolved.flags.slice(),
+        raiderDelta: resolved.raiderDelta,
+        defenseDelta: resolved.defenseDelta,
+        dod: !!raid.dod,
+        crossedBonus: !!raid.crossedBonus,
       };
 
       if (liveOn && liveHandle && liveRoles && !o.skipLivePush) {
-        // Flip raidUid to the other seat
         const nextRaidUid = iRaid ? liveRoles.opp : liveRoles.me;
         myRaid = nextRaidUid === liveRoles.me;
         lastPushAt = 0;
@@ -923,20 +1078,21 @@
           turn: nextRaidUid,
           state: {
             scores: scoresForPush(),
+            emptyStreak: streakStateForPush(),
             raidUid: nextRaidUid,
             eventSeq,
             phase: 'between',
             outcome,
             raid: publicRaidStub(raid),
-            msg: endMsg,
+            msg: summary,
           },
         });
       } else if (!liveOn) {
-        myRaid = !iRaid; // flip for Practice
+        myRaid = !iRaid;
       }
 
       phase = 'between';
-      next(endMsg);
+      next(summary);
     }
 
     function applyOutcomeRemote(st) {
@@ -945,6 +1101,7 @@
       if ((oc.seq | 0) <= lastAppliedOutcomeSeq) return true;
       lastAppliedOutcomeSeq = oc.seq | 0;
       if (st.scores) applyScores(st.scores);
+      applyStreakState(st);
       if (st.eventSeq != null) eventSeq = Math.max(eventSeq, st.eventSeq | 0);
       if (st.raidUid != null) myRaid = st.raidUid === liveRoles.me;
       phase = 'between';
@@ -953,6 +1110,7 @@
         cancelAnimationFrame(activeRaf);
         activeRaf = 0;
       }
+      if (oc.flags) flashRaidBanner(oc.flags);
       next(oc.msg || st.msg || 'Raid over.');
       return true;
     }
@@ -988,6 +1146,8 @@
         holdAcc: 0,
         tackleArmed: false,
         aiWantHome: false,
+        crossedBonus: false,
+        dod: emptyStreakFor(iAmRaider) >= DOD_EMPTY_NEED,
         msg: '',
         painted: false,
       };
@@ -996,7 +1156,10 @@
       remoteDefInput = null;
       syncAcc = 0;
 
-      if (iAmRaider) {
+      if (raid.dod) {
+        raid.msg = 'DO OR DIE — must score this raid.';
+        if (typeof showToast === 'function') showToast('DO OR DIE');
+      } else if (iAmRaider) {
         if (!coachShown) {
           coachShown = true;
           raid.msg = liveOn
@@ -1024,14 +1187,7 @@
           paintRaid(true);
           return;
         }
-        const pts = raid.tagged | 0;
-        endRaid(
-          raid,
-          'home',
-          pts > 0
-            ? 'Home with ' + pts + ' point' + (pts === 1 ? '' : 's') + '.'
-            : 'Empty raid — defense +1.'
-        );
+        endRaid(raid, 'home');
       }
 
       function tryTackleCommit() {
@@ -1092,8 +1248,12 @@
           '</div>' +
           '<div class="cs-kb-role">' +
           esc(roleLine) +
+          (raid.dod ? ' · DO OR DIE' : '') +
           (raidPaused ? ' · Paused' : '') +
           '</div>' +
+          (raid.dod
+            ? '<div class="cs-kb-dod" role="status">DO OR DIE — score or defense +1</div>'
+            : '') +
           '<div class="cs-breath' +
           (raid.breathLive ? ' is-live' : '') +
           '" aria-label="Breath"><i style="width:' +
@@ -1120,6 +1280,7 @@
           '<div class="cs-kb-meta">Tagged <b>' +
           raid.tagged +
           '</b>' +
+          (raid.crossedBonus ? ' · bonus line' : '') +
           (livingDefs(raid).length === 0 ? ' · all out' : '') +
           '</div>' +
           '<div class="cs-kb-actions">' +
@@ -1210,6 +1371,7 @@
             'Tagged <b>' +
             raid.tagged +
             '</b>' +
+            (raid.crossedBonus ? ' · bonus line' : '') +
             (livingDefs(raid).length === 0 ? ' · all out' : '') +
             (raidPaused ? ' · Paused' : '');
         }
@@ -1242,6 +1404,7 @@
           turn: liveRoles.opp,
           state: {
             scores: scoresForPush(),
+            emptyStreak: streakStateForPush(),
             raidUid: liveRoles.opp,
             eventSeq,
             phase: 'raiding',
@@ -1332,37 +1495,28 @@
         if (!raid.breathLive && crossedMid(raid.ry)) {
           raid.breathLive = true;
           raid.phase = 'raiding';
-          if (raid.iAmRaider) raid.msg = 'Breath is live — tag and get Home!';
+          if (raid.dod) raid.msg = 'DO OR DIE — tag and get Home!';
+          else if (raid.iAmRaider) raid.msg = 'Breath is live — tag and get Home!';
           else raid.msg = 'Breath live — close and Tackle!';
         }
         if (raid.breathLive) raid.breath -= dt * 1000;
+        if (raid.ry <= BONUS_Y) raid.crossedBonus = true;
 
         tickTags(raid);
 
         // Tackle success
         if (raid.holdAcc >= holdNeedFor(raid) && canAttemptTackle(raid)) {
-          endRaid(raid, 'tackle', raid.iAmRaider ? 'Caught — tackled!' : 'Tackle! Raider out.');
+          endRaid(raid, 'tackle');
           return;
         }
 
         if (!raid.iAmRaider && raid.aiWantHome && inOwnHalf(raid.ry)) {
-          const pts = raid.tagged | 0;
-          endRaid(
-            raid,
-            'home',
-            pts > 0
-              ? 'AI Home with ' + pts + ' point' + (pts === 1 ? '' : 's') + '.'
-              : 'AI empty raid — you +1.'
-          );
+          endRaid(raid, 'home');
           return;
         }
 
         if (raid.breathLive && raid.breath <= 0) {
-          endRaid(
-            raid,
-            'breath',
-            raid.iAmRaider ? 'Caught — breath ran out.' : 'Breath out — you +1.'
-          );
+          endRaid(raid, 'breath');
           return;
         }
 
@@ -1425,7 +1579,11 @@
           esc(msg) +
           '</p>' +
           '<p class="cs-rally-hint">' +
-          (myRaid ? 'Your raid next — get ready.' : 'Your defense next — get ready.') +
+          (myRaid
+            ? emptyStreakFor(true) >= DOD_EMPTY_NEED
+              ? 'Your raid next — DO OR DIE.'
+              : 'Your raid next — get ready.'
+            : 'Your defense next — get ready.') +
           '</p>' +
           '<button type="button" class="cs-hit" data-ready>Ready</button>' +
           '</div>';
@@ -1447,7 +1605,11 @@
         esc(msg) +
         '</p>' +
         '<button type="button" class="cs-hit" data-raid-again>' +
-        (myRaid ? 'Your raid' : 'Defend next') +
+        (myRaid
+          ? emptyStreakFor(true) >= DOD_EMPTY_NEED
+            ? 'Do or die raid'
+            : 'Your raid'
+          : 'Defend next') +
         '</button>' +
         '</div>';
       shell.body.querySelector('[data-raid-again]')?.addEventListener('click', () => {
@@ -1489,6 +1651,7 @@
           }
           const st = val.state || {};
           if (st.scores) applyScores(st.scores);
+          applyStreakState(st);
           if (st.eventSeq != null) eventSeq = Math.max(eventSeq, st.eventSeq | 0);
 
           if (st.outcome && applyOutcomeRemote(st)) return;
@@ -1521,6 +1684,8 @@
               });
             }
             if (r.raidPhase) activeRaid.phase = r.raidPhase;
+            if (r.dod != null) activeRaid.dod = !!r.dod;
+            if (r.crossedBonus) activeRaid.crossedBonus = true;
           }
 
           if (st.raidUid === liveRoles.me) {
@@ -1543,6 +1708,7 @@
           turn: liveRoles.me,
           state: {
             scores: { a: 0, b: 0 },
+            emptyStreak: { A: 0, B: 0 },
             raidUid: liveRoles.me,
             eventSeq: 0,
             phase: 'between',
@@ -2704,7 +2870,7 @@
     registerGame({
       id: 'kabaddi',
       name: 'Kabaddi',
-      desc: 'Raid & defend · tackle windows',
+      desc: 'PKL-lite · empty · bonus · DoD · all-out',
       icon: '💪',
       gameType: 'solo',
       genre: 'rw_sports',

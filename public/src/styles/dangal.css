@@ -317,6 +317,11 @@
 .cs-kb-tackle{background:#1565C0;}
 .cs-kb-meta{font-size:13px;opacity:.9;color:#FFE0B2;}
 .cs-kb-role{font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#FFCC80;}
+.cs-kb-dod{
+  width:min(100%,320px);text-align:center;padding:8px 12px;border-radius:10px;
+  background:rgba(229,57,53,.22);border:1px solid rgba(239,83,80,.55);
+  color:#FFCDD2;font-size:12px;font-weight:800;letter-spacing:.03em;
+}
 .cs-kb-actions{display:flex;gap:8px;justify-content:center;width:100%;}
 .cs-kb-hold{
   position:absolute;left:10%;bottom:8px;height:6px;max-width:80%;
