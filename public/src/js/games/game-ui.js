@@ -130,7 +130,7 @@
       'Practice is a sealed sandbox — never touches streak or Daily stats',
     ],
     fiveinrow: ['Connect five in a line', 'Watch diagonals as well as rows', 'Block threats before extending yours'],
-    business: ['Buy lots — full colour sets collect 2× base rent', 'Stations & utilities scale with how many you own', 'Bankrupt the others; last standing wins'],
+    business: ['Complete a colour set, then Build houses evenly before you roll', 'Stations & utilities scale with how many you own', 'Bankrupt the others; last standing wins'],
     scribble: ['Draw clearly — keep it simple', 'Guessers type in the chat box', 'Rounds rotate who draws'],
     rushrunner: [
       'Classic or Daily run · each theme has a named flavor (Coin Rush, Heavy Traffic, Long Sprint)',
