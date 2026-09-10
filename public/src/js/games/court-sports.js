@@ -815,7 +815,7 @@
     const shell = openShell({
       id: 'patangbaazi',
       title: 'Patang Baazi',
-      subtitle: practiceSub('Manjha · wind · cut'),
+      subtitle: practiceSub('Manjha · hunter · cut'),
       mode: 'practice',
       accent: '#FF6D00',
       bg: '#001018',
@@ -831,7 +831,7 @@
 
     shell.body.innerHTML = `
       <div class="cs-patang">
-        <p class="cs-rally-msg">Hold to tension. Cross their string to saw — angle and pull decide the cut.</p>
+        <p class="cs-rally-msg">A hunter is in the sky — cross strings to saw, or get hunted.</p>
         <canvas data-patang></canvas>
         <p class="cs-rally-hint" data-patang-hint>Hold the sky — pull to climb</p>
       </div>`;
@@ -841,7 +841,21 @@
     let w = 320;
     let h = 420;
 
-    /** Flight state exposed for Prompt 2 cut geometry. */
+    const ZENITH = 0.13;
+    const GROUND = 0.9;
+    const ABRASION_MAX = 1;
+    const STRING_SAMPLES = 6;
+    const TEACH_SEC = 2.8;
+    const WAVES_TO_WIN = 2; // sequential hunters (max 1 active) — clarity over swarm
+    const YOU_ANCHOR = 0.42;
+    // Cut law (Prompt 2): cross + abrasion. Rival uses same rules — no instant cuts.
+    // AI policy: hold→hunt→saw→bail→recover; reaction delay; soft zenith snap (1.4s vs 1.15).
+
+    const RIVAL_LOOKS = [
+      { color: '#29B6F6', accent: '#B3E5FC', anchor: 0.58, label: 'Hunter' },
+      { color: '#AB47BC', accent: '#E1BEE7', anchor: 0.72, label: 'Pressure' },
+    ];
+
     function makeKite(x, y, color, accent) {
       return {
         x, y,
@@ -852,31 +866,45 @@
         zenithRisk: 0,
         color, accent,
         tailPhase: Math.random() * Math.PI * 2,
+        alive: true,
       };
     }
+
+    function makeRival(waveIndex) {
+      const look = RIVAL_LOOKS[Math.min(waveIndex, RIVAL_LOOKS.length - 1)];
+      const side = waveIndex % 2 === 0 ? 0.72 : 0.22;
+      const k = makeKite(side, 0.48 + waveIndex * 0.04, look.color, look.accent);
+      k.anchorX = look.anchor;
+      k.wave = waveIndex + 1;
+      k.label = look.label;
+      k.ai = {
+        state: 'hold',
+        stateT: 0,
+        react: 0.18 + Math.random() * 0.12,
+        reactT: 0,
+        wantX: side,
+        wantPull: true,
+        huntSide: side > 0.5 ? -1 : 1,
+        aggression: 0.85 + waveIndex * 0.2,
+      };
+      return k;
+    }
+
     const you = makeKite(0.35, 0.62, '#FF6D00', '#FFD180');
-    const opp = makeKite(0.68, 0.5, '#29B6F6', '#B3E5FC');
-    const YOU_ANCHOR = 0.42;
-    const OPP_ANCHOR = 0.58;
+    let opp = makeRival(0);
     let holding = false;
     let ended = false;
-    let ending = null; // { won, why, t, fallYou, fallOpp }
+    let ending = null; // full duel end fall
+    let waveClear = null; // { t, rival } — cut one hunter, continue
     let t = 0;
     let windX = 0.06;
     let windY = -0.01;
     let gust = 0;
     let cloudOff = 0;
     let pointerId = null;
-    /** Abrasion duel state — Prompt 3 can reset between wave kites. */
     let abrasion = { active: false, x: 0.5, y: 0.5, youDmg: 0, oppDmg: 0, flash: 0, sparks: [] };
     let hapticCool = 0;
-
-    const ZENITH = 0.13;
-    const GROUND = 0.9;
-    const ABRASION_MAX = 1;
-    const STRING_SAMPLES = 6;
-    // Cut law: string–string cross starts abrasion; rate ∝ |sin θ| × tension × relative motion.
-    // Slack (<0.35 tension) while crossed takes +35% damage. Parallel shallow cuts saw slowly.
+    const stats = { cuts: 0, aliveSec: 0, death: null }; // Prompt 4 hooks
 
     function size() {
       const r = canvas.getBoundingClientRect();
@@ -940,14 +968,19 @@
       pointerId = null;
     });
 
-    function end(won, why) {
+    function resetAbrasion() {
+      abrasion = { active: false, x: 0.5, y: 0.5, youDmg: 0, oppDmg: 0, flash: 0, sparks: [] };
+    }
+
+    function end(won, why, deathKind) {
       if (ended || ending) return;
+      if (!won && deathKind) stats.death = deathKind;
       ending = {
         won: !!won,
-        why: why || (won ? 'You cut their manjha!' : 'Your manjha was cut.'),
+        why: why || (won ? 'You cleared the sky!' : 'Your manjha was cut.'),
         t: 0,
         fallYou: !won,
-        fallOpp: !!won,
+        fallOpp: !!won && opp && opp.alive,
       };
       if (typeof gameFeedback === 'function') gameFeedback(won ? 'win' : 'lose');
     }
@@ -957,21 +990,49 @@
       ended = true;
       cancelAnimationFrame(raf);
       raf = 0;
+      const secs = Math.max(1, Math.round(stats.aliveSec));
+      const line = ending.won
+        ? stats.cuts + ' cut' + (stats.cuts === 1 ? '' : 's') + ' · ' + secs + 's'
+        : (stats.death || 'down') + ' · ' + stats.cuts + ' cut' + (stats.cuts === 1 ? '' : 's') + ' · ' + secs + 's';
       showDuelResult(shell, {
         id: 'patangbaazi',
         you: ending.won ? 1 : 0,
         opp: ending.won ? 0 : 1,
         glyph: ending.won ? '✓' : '·',
-        pbScore: ending.won ? 1 : 0,
-        subtitle: ending.why,
-        shareText: ending.won ? 'I cut a kite on Chaupaal Patang Baazi!' : 'Patang Baazi on Chaupaal',
+        pbScore: ending.won ? Math.max(1, stats.cuts) : stats.cuts,
+        subtitle: ending.why + ' · ' + line,
+        shareText: ending.won
+          ? 'I cut ' + stats.cuts + ' kite' + (stats.cuts === 1 ? '' : 's') + ' on Chaupaal Patang Baazi!'
+          : 'Patang Baazi on Chaupaal',
         onAgain: openPatang,
+        meta: { cuts: stats.cuts, aliveSec: secs, death: stats.death },
       });
     }
 
-    /** Prompt 3 hook: one kite cut mid-wave. */
+    function beginWaveClear(detail) {
+      if (waveClear || ending || ended) return;
+      stats.cuts += 1;
+      if (opp) opp.alive = false;
+      waveClear = { t: 0, why: detail || 'You cut their manjha!', fallKite: opp };
+      resetAbrasion();
+      if (typeof gameFeedback === 'function') gameFeedback('win');
+    }
+
+    function spawnNextWave() {
+      if (stats.cuts >= WAVES_TO_WIN) {
+        waveClear = null;
+        end(true, 'Sky cleared — hunters down!', null);
+        return;
+      }
+      opp = makeRival(stats.cuts);
+      resetAbrasion();
+      waveClear = null;
+    }
+
+    /** Cut resolved vs active hunter — mid-wave continue or player loss. */
     function onCutResolved(playerWon, detail) {
-      end(playerWon, detail);
+      if (playerWon) beginWaveClear(detail);
+      else end(false, detail || 'Rival cut your manjha.', 'cut');
     }
 
     function updateWind(dt) {
@@ -1055,8 +1116,16 @@
     }
 
     function tickAbrasion(dt) {
+      if (!opp || !opp.alive) {
+        abrasion.active = false;
+        abrasion.youDmg = Math.max(0, abrasion.youDmg - dt * 1.1);
+        abrasion.oppDmg = Math.max(0, abrasion.oppDmg - dt * 1.1);
+        abrasion.flash = Math.max(0, abrasion.flash - dt * 3);
+        abrasion.sparks = abrasion.sparks.filter((s) => (s.life -= dt) > 0);
+        return null;
+      }
       const polyYou = stringPolyline(you, YOU_ANCHOR);
-      const polyOpp = stringPolyline(opp, OPP_ANCHOR);
+      const polyOpp = stringPolyline(opp, opp.anchorX);
       const cross = findStringCross(polyYou, polyOpp);
       hapticCool = Math.max(0, hapticCool - dt);
 
@@ -1076,22 +1145,20 @@
 
       const relSpd = Math.hypot(you.vx - opp.vx, you.vy - opp.vy);
       const motion = 0.35 + Math.min(1.4, relSpd * 9);
-      const angle = 0.2 + 0.8 * cross.angleQuality; // shallow parallel = weak saw
+      const angle = 0.2 + 0.8 * cross.angleQuality;
       const base = motion * angle * 0.85;
 
-      // Damage to a kite scales with the *other* kite's tension (they're sawing you)
       let dmgYou = base * (0.45 + opp.tension * 0.9) * dt;
       let dmgOpp = base * (0.45 + you.tension * 0.9) * dt;
       if (you.tension < 0.35) dmgYou *= 1.35;
       if (opp.tension < 0.35) dmgOpp *= 1.35;
-      // Holding strong tension while orthogonal helps you saw them faster
       if (you.tension > 0.7 && cross.angleQuality > 0.55) dmgOpp *= 1.2;
       if (opp.tension > 0.7 && cross.angleQuality > 0.55) dmgYou *= 1.2;
 
       abrasion.youDmg = Math.min(ABRASION_MAX, abrasion.youDmg + dmgYou);
       abrasion.oppDmg = Math.min(ABRASION_MAX, abrasion.oppDmg + dmgOpp);
 
-      if (abrasion.sparks.length < 18 && Math.random() < 0.55) {
+      if (abrasion.sparks.length < 14 && Math.random() < 0.45) {
         abrasion.sparks.push({
           x: cross.x + (Math.random() - 0.5) * 0.02,
           y: cross.y + (Math.random() - 0.5) * 0.02,
@@ -1113,7 +1180,6 @@
       }
 
       if (abrasion.oppDmg >= ABRASION_MAX && abrasion.youDmg >= ABRASION_MAX) {
-        // Mutual — higher tension wins the fray
         return you.tension >= opp.tension
           ? { playerWon: true, why: 'Strings frayed — your manjha held!' }
           : { playerWon: false, why: 'Mutual saw — their manjha held.' };
@@ -1128,20 +1194,16 @@
     }
 
     function stepKite(k, dt, isPlayer, pull) {
-      // Tension: pull rises, release decays toward float
       const targetTen = pull ? 1 : 0.12;
       const tenRate = pull ? 1.35 : 1.6;
       k.tension += (targetTen - k.tension) * Math.min(1, tenRate * dt);
 
-      // Altitude: smaller y = higher. Climb harder near zenith.
-      const alt = 1 - k.y; // 0 ground-ish … ~0.87 zenith
       const zenithFactor = Math.max(0.25, 1 - Math.pow(Math.max(0, (ZENITH + 0.08 - k.y) / 0.2), 1.4));
       const climb = pull ? -0.42 * k.tension * zenithFactor : 0.28 * (0.55 - k.tension);
-      const float = -0.04 * (0.5 - k.y); // slight restoring toward mid sky
+      const float = -0.04 * (0.5 - k.y);
       k.vy += (climb + float + windY * (0.7 + k.tension * 0.5)) * dt;
       k.vy *= Math.pow(0.86, dt * 60);
 
-      // Steer with inertia toward targetX; wind adds lateral bias
       const steer = (k.targetX - k.x) * 2.4;
       k.vx += (steer + windX * (0.55 + (1 - k.tension) * 0.35)) * dt;
       k.vx *= Math.pow(0.88, dt * 60);
@@ -1150,31 +1212,123 @@
       k.y += k.vy * dt;
       k.x = Math.max(0.06, Math.min(0.94, k.x));
       k.y = Math.max(0.08, Math.min(0.94, k.y));
-      k.heading = Math.atan2(k.vx * 1.2 + windX * 0.4, -k.vy * 0.8 - 0.15);
+      // Tip toward hunt target when aggressive (telegraph)
+      let tipBias = 0;
+      if (!isPlayer && k.ai && (k.ai.state === 'hunt' || k.ai.state === 'saw')) {
+        tipBias = (you.x - k.x) * 0.9;
+      }
+      k.heading = Math.atan2(k.vx * 1.2 + windX * 0.4 + tipBias, -k.vy * 0.8 - 0.15);
       k.tailPhase += dt * (4 + k.tension * 6 + Math.abs(windX) * 8);
 
-      if (isPlayer) {
-        if (k.y <= ZENITH + 0.02 && k.tension > 0.82) {
-          k.zenithRisk += dt;
-          if (k.zenithRisk > 1.15) {
-            end(false, 'Manjha snapped at the zenith — ease off next time.');
-            return;
+      const snapLimit = isPlayer ? 1.15 : 1.4; // AI slightly softer zenith — still mortal
+      if (k.y <= ZENITH + 0.02 && k.tension > 0.82) {
+        k.zenithRisk += dt;
+        if (k.zenithRisk > snapLimit) {
+          if (isPlayer) {
+            end(false, 'Manjha snapped at the zenith — ease off next time.', 'snap');
+          } else {
+            beginWaveClear('Hunter snapped their own manjha at the zenith!');
           }
-        } else {
-          k.zenithRisk = Math.max(0, k.zenithRisk - dt * 0.55);
+          return;
         }
-        if (k.y >= GROUND && k.tension < 0.2) {
-          end(false, 'Kite dumped into the rooftops.');
-        }
+      } else {
+        k.zenithRisk = Math.max(0, k.zenithRisk - dt * 0.55);
+      }
+      if (k.y >= GROUND && k.tension < 0.2) {
+        if (isPlayer) end(false, 'Kite dumped into the rooftops.', 'stall');
+        else beginWaveClear('Hunter dumped into the rooftops!');
       }
     }
 
-    function stepRival(dt) {
-      // Light bias toward player's sky lane so crosses happen; Prompt 3 = hunter AI
-      const hunt = you.x * 0.45 + Math.sin(t * 1.05) * 0.22 + windX * 0.3;
-      opp.targetX = Math.max(0.1, Math.min(0.9, hunt));
-      const wantPull = Math.sin(t * 0.9) > -0.2 || opp.y > 0.68 || Math.abs(opp.x - you.x) < 0.12;
-      stepKite(opp, dt, false, wantPull);
+    function setAiState(ai, next) {
+      if (ai.state === next) return;
+      ai.state = next;
+      ai.stateT = 0;
+      ai.reactT = ai.react * (0.7 + Math.random() * 0.6);
+    }
+
+    function thinkRival(dt) {
+      if (!opp || !opp.alive || !opp.ai) return;
+      const ai = opp.ai;
+      ai.stateT += dt;
+      ai.reactT = Math.max(0, ai.reactT - dt);
+
+      const teach = t < TEACH_SEC;
+      const crossed = abrasion.active;
+      const favored = abrasion.oppDmg + 0.08 >= abrasion.youDmg;
+      const losing = crossed && abrasion.youDmg > abrasion.oppDmg + 0.12;
+
+      // Desired intents (applied after reaction delay)
+      let nextState = ai.state;
+      if (teach) {
+        nextState = 'hold';
+      } else if (losing || (crossed && abrasion.youDmg > 0.55 && !favored)) {
+        nextState = 'bail';
+      } else if (crossed && favored) {
+        nextState = 'saw';
+      } else if (ai.state === 'bail') {
+        nextState = ai.stateT >= 0.9 ? 'recover' : 'bail';
+      } else if (ai.state === 'recover') {
+        nextState = ai.stateT >= 1.15 && opp.y < 0.62 && opp.tension > 0.4 ? 'hunt' : 'recover';
+      } else if (ai.state === 'saw' && !crossed) {
+        nextState = 'hunt';
+      } else if (ai.state === 'hunt') {
+        if (ai.stateT > 3.2 && !crossed) nextState = 'recover';
+        else nextState = 'hunt';
+      } else {
+        // hold → hunt when ready
+        if (opp.y > 0.72 || opp.tension < 0.28) nextState = 'recover';
+        else if (ai.stateT > 0.55) nextState = 'hunt';
+        else nextState = 'hold';
+      }
+
+      if (nextState !== ai.state && ai.reactT <= 0) {
+        setAiState(ai, nextState);
+      }
+
+      let wantX = opp.x;
+      let wantPull = true;
+      const agg = ai.aggression;
+
+      if (ai.state === 'hold') {
+        wantX = you.x + ai.huntSide * (0.22 + windX * 0.15);
+        wantPull = opp.y > 0.55 || you.tension > 0.5;
+        if (opp.y < ZENITH + 0.12) wantPull = false;
+      } else if (ai.state === 'hunt') {
+        // Cross their string: pass through player lane with overshoot for angle
+        if (Math.abs(opp.x - (you.x + ai.huntSide * 0.2)) < 0.06) {
+          ai.huntSide *= -1;
+        }
+        wantX = you.x + ai.huntSide * (0.16 + 0.08 * agg);
+        // Match altitude band for a clean cross
+        if (opp.y > you.y + 0.06) wantPull = true;
+        else if (opp.y < you.y - 0.08) wantPull = false;
+        else wantPull = you.tension > 0.4 || Math.random() < 0.55 * agg;
+        if (opp.y < ZENITH + 0.1 && opp.tension > 0.75) wantPull = false;
+      } else if (ai.state === 'saw') {
+        // Keep tension + relative lateral motion while crossed
+        wantX = you.x + ai.huntSide * 0.12 + Math.sin(t * 3.2) * 0.05;
+        wantPull = true;
+        if (opp.y < ZENITH + 0.08) wantPull = false;
+      } else if (ai.state === 'bail') {
+        wantX = Math.max(0.08, Math.min(0.92, opp.x + ai.huntSide * 0.35));
+        wantPull = false;
+        ai.huntSide = opp.x < you.x ? -1 : 1;
+      } else {
+        // recover
+        wantX = 0.5 + ai.huntSide * 0.25 + windX * 0.2;
+        wantPull = opp.y > 0.42;
+        if (opp.y < ZENITH + 0.14) wantPull = false;
+      }
+
+      // Apply delayed steering so humans can feint
+      if (ai.reactT <= 0) {
+        ai.wantX = Math.max(0.08, Math.min(0.92, wantX));
+        ai.wantPull = wantPull;
+        ai.reactT = ai.react * (0.35 + Math.random() * 0.4);
+      }
+      opp.targetX = ai.wantX;
+      stepKite(opp, dt, false, ai.wantPull);
     }
 
     function drawSky() {
@@ -1298,16 +1452,16 @@
       ctx.globalAlpha = 1;
     }
 
-    function drawKite(k) {
+    function drawKite(k, opts) {
+      if (!k) return;
       const px = k.x * w;
       const py = k.y * h;
       const ang = k.heading * 0.65;
-      const s = Math.min(w, h) * 0.045;
+      const s = Math.min(w, h) * (opts && opts.big ? 0.05 : 0.045);
       ctx.save();
       ctx.translate(px, py);
       ctx.rotate(ang);
 
-      // Tail ribbon
       ctx.strokeStyle = k.accent;
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -1327,7 +1481,6 @@
         ctx.fillRect(bx - 3, by - 2, 6, 4);
       }
 
-      // Diamond sail
       ctx.beginPath();
       ctx.moveTo(0, -s * 1.15);
       ctx.lineTo(s * 0.85, 0);
@@ -1348,16 +1501,41 @@
       ctx.lineWidth = 1.2;
       ctx.stroke();
 
+      // Aggression telegraph: taut flash on hunt/saw
+      if (k.ai && (k.ai.state === 'hunt' || k.ai.state === 'saw') && k.tension > 0.55) {
+        ctx.globalAlpha = 0.35 + 0.25 * Math.sin(t * 8);
+        ctx.strokeStyle = '#FFF59D';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, -s * 1.15);
+        ctx.lineTo(s * 0.85, 0);
+        ctx.lineTo(0, s * 0.95);
+        ctx.lineTo(-s * 0.85, 0);
+        ctx.closePath();
+        ctx.stroke();
+      }
+
       ctx.restore();
     }
 
     function updateHint() {
+      if (t < TEACH_SEC) {
+        hint.textContent = 'Hunter watching — get height, then cross to cut';
+        hint.classList.remove('is-warn');
+        return;
+      }
       if (abrasion.active) {
         const ahead = abrasion.oppDmg >= abrasion.youDmg;
         hint.textContent = ahead
           ? 'Sawing — hold tension! Keep the cross.'
           : 'Their manjha is biting — pull hard or break away!';
         hint.classList.add('is-warn');
+      } else if (opp && opp.ai && opp.ai.state === 'hunt') {
+        hint.textContent = 'Hunter closing — watch your string';
+        hint.classList.add('is-warn');
+      } else if (opp && opp.ai && opp.ai.state === 'bail') {
+        hint.textContent = 'They peeled off — chase the cut!';
+        hint.classList.remove('is-warn');
       } else if (you.zenithRisk > 0.35) {
         hint.textContent = 'Ease off — manjha screaming at the top';
         hint.classList.add('is-warn');
@@ -1365,7 +1543,7 @@
         hint.textContent = 'Gust — ease tension, don’t yank';
         hint.classList.remove('is-warn');
       } else if (holding && you.tension > 0.7) {
-        hint.textContent = 'Climbing — cross their string to saw';
+        hint.textContent = 'Climbing — cut their string before they cut yours';
         hint.classList.remove('is-warn');
       } else if (!holding) {
         hint.textContent = 'Floating — hold to pull manjha';
@@ -1373,6 +1551,31 @@
       } else {
         hint.textContent = 'Hold the sky — pull to climb';
         hint.classList.remove('is-warn');
+      }
+    }
+
+    function drawFrame() {
+      drawSky();
+      if (opp) {
+        drawString(opp, opp.anchorX, abrasion.oppDmg);
+        drawKite(opp);
+      }
+      drawString(you, YOU_ANCHOR, abrasion.youDmg);
+      drawKite(you);
+      drawAbrasionFx();
+
+      ctx.fillStyle = 'rgba(255,255,255,.55)';
+      ctx.font = '11px "Space Grotesk",sans-serif';
+      ctx.fillText(gust > 0.12 ? 'Wind · gust' : 'Wind · steady', 12, 18);
+      const waveLabel = stats.cuts + '/' + WAVES_TO_WIN + ' cuts';
+      ctx.fillText(waveLabel, 12, 34);
+      if (opp && opp.ai && t >= TEACH_SEC) {
+        ctx.fillStyle = 'rgba(255,255,255,.4)';
+        ctx.fillText(opp.label + ' · ' + opp.ai.state, 12, 50);
+      }
+      if (abrasion.active) {
+        ctx.fillStyle = 'rgba(255,236,179,.75)';
+        ctx.fillText('Cut in progress', 12, 66);
       }
     }
 
@@ -1391,7 +1594,7 @@
 
       if (ending) {
         ending.t += dt;
-        if (ending.fallOpp) {
+        if (ending.fallOpp && opp) {
           opp.vy += 0.9 * dt;
           opp.y = Math.min(1.05, opp.y + opp.vy * dt);
           opp.heading += dt * 2.5;
@@ -1401,21 +1604,49 @@
           you.y = Math.min(1.05, you.y + you.vy * dt);
           you.heading -= dt * 2.5;
         }
-        drawSky();
-        if (!ending.fallOpp) drawString(opp, OPP_ANCHOR, abrasion.oppDmg);
-        if (!ending.fallYou) drawString(you, YOU_ANCHOR, abrasion.youDmg);
-        drawKite(opp);
-        drawKite(you);
-        drawAbrasionFx();
+        drawFrame();
         if (ending.t > 0.85) finishEnd();
         else raf = requestAnimationFrame(loop);
         return;
       }
 
+      if (waveClear) {
+        waveClear.t += dt;
+        const fk = waveClear.fallKite;
+        if (fk) {
+          fk.vy += 0.95 * dt;
+          fk.y = Math.min(1.1, fk.y + fk.vy * dt);
+          fk.heading += dt * 3;
+          fk.tension = Math.max(0, fk.tension - dt);
+        }
+        if (hint) {
+          hint.textContent = waveClear.why + (stats.cuts < WAVES_TO_WIN ? ' — next hunter incoming' : ' — sky clearing');
+          hint.classList.remove('is-warn');
+        }
+        drawSky();
+        if (fk) {
+          drawString(fk, fk.anchorX, 1);
+          drawKite(fk);
+        }
+        drawString(you, YOU_ANCHOR, 0);
+        drawKite(you);
+        ctx.fillStyle = 'rgba(255,255,255,.55)';
+        ctx.font = '11px "Space Grotesk",sans-serif';
+        ctx.fillText(stats.cuts + '/' + WAVES_TO_WIN + ' cuts', 12, 18);
+        if (waveClear.t > 0.95) spawnNextWave();
+        raf = requestAnimationFrame(loop);
+        return;
+      }
+
+      stats.aliveSec += dt;
       updateWind(dt);
       stepKite(you, dt, true, holding);
-      if (!ending) stepRival(dt);
-      if (ending) {
+      if (ending || waveClear) {
+        raf = requestAnimationFrame(loop);
+        return;
+      }
+      thinkRival(dt);
+      if (ending || waveClear) {
         raf = requestAnimationFrame(loop);
         return;
       }
@@ -1427,8 +1658,7 @@
         return;
       }
 
-      // Sail bump without string cross — no cut (telegraph only)
-      if (!abrasion.active && sailsBump(you, opp) && Math.random() < 0.08) {
+      if (opp && opp.alive && !abrasion.active && sailsBump(you, opp) && Math.random() < 0.08) {
         abrasion.sparks.push({
           x: (you.x + opp.x) * 0.5,
           y: (you.y + opp.y) * 0.5,
@@ -1439,19 +1669,7 @@
       }
 
       updateHint();
-      drawSky();
-      drawString(opp, OPP_ANCHOR, abrasion.oppDmg);
-      drawString(you, YOU_ANCHOR, abrasion.youDmg);
-      drawKite(opp);
-      drawKite(you);
-      drawAbrasionFx();
-
-      ctx.fillStyle = 'rgba(255,255,255,.55)';
-      ctx.font = '11px "Space Grotesk",sans-serif';
-      ctx.fillText(gust > 0.12 ? 'Wind · gust' : 'Wind · steady', 12, 18);
-      if (abrasion.active) {
-        ctx.fillText('Cut in progress', 12, 34);
-      }
+      drawFrame();
 
       raf = requestAnimationFrame(loop);
     }
@@ -1558,7 +1776,7 @@
     registerGame({
       id: 'patangbaazi',
       name: 'Patang Baazi',
-      desc: 'Practice · manjha, wind & cut',
+      desc: 'Practice · hunter sky & manjha cuts',
       icon: '🪁',
       gameType: 'solo',
       genre: 'arcade',
