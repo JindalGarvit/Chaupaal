@@ -2717,1927 +2717,1587 @@
   }
 
   /**
-
-   * Kho Kho Prompt 4/5 — defend batches + turn clock + Practice AI.
-
-   * Match (documented): each side chases ONCE (2 turns). TURN_MS = 75s.
-
-   * Batch of 3 runners; after wipe require one Kho before tagging the next batch.
-
-   * Runner control when defending: tap a runner to focus, drag moves that runner.
-
-   * Pause freezes clock + AI. Prompt 2–3 chase/Kho law unchanged.
-
+   * Kho Kho Prompt 5/5 — Live innings + stakes (v1 complete).
+   * Match: each side chases ONCE (2 turns). TURN_MS = 75s.
+   * Live: chaseUid controls active+Kho+tags; other seat moves batch of 3.
+   * Host chases first. Shared turnEndsAt limits clock drift.
+   * Authority: chase seat for tag/kho/turn_end/batch; defend seat runInput.
+   * Practice AI unchanged. Pause freezes clock + AI / remote input.
    */
-
   function openKhoKho() {
-
     const chat = resolveChat(arguments[0]);
-
+    const liveOn = chatLiveOn(chat);
     let shellPauseCtrl = null;
-
     let paused = false;
-
+    let pauseStartedAt = 0;
     let raf = 0;
-
     let coachShown = false;
-
     let lastTs = 0;
-
     let foulFlashUntil = 0;
-
     let dirToastShown = false;
-
     let khoFlashUntil = 0;
-
     let khoBusy = false;
-
     let betweenTimer = 0;
+    let syncAcc = 0;
+    let lastPushAt = 0;
+    let applying = false;
+    let liveRoles = null;
+    let liveHandle = null;
+    let chaseUid = '';
+    let eventSeq = 0;
+    let lastAppliedEventSeq = -1;
+    let remoteRunInput = null;
+    let turnEndsAt = 0;
+    let resultReported = false;
+    let resultShown = false;
+    let settleDone = false;
+    let settleOppUid = '';
 
-
+    const liveStake = liveOn
+      ? Number(
+          (chat && chat.stake) ||
+            (window.__dangalLaunchCtx && window.__dangalLaunchCtx.stake) ||
+            0
+        ) || 0
+      : 0;
+    const settleMatchId = liveOn ? String(matchIdFor(chat, 'khokho') || '').trim() : '';
 
     const MOVE_SPEED = 1.5;
-
     const AI_CHASE_SPEED = 1.25;
-
     const AI_RUN_SPEED = 1.05;
-
     const HUMAN_RUN_SPEED = 1.35;
-
     const TAG_R = 0.085;
-
     const KHO_R = 0.13;
-
     const KHO_Y = 0.09;
-
     const LANE_L = 0.42;
-
     const LANE_R = 0.58;
-
     const POLE_N = 0.14;
-
     const POLE_S = 0.86;
-
     const LOCK_STEP = 0.028;
-
     const RISE_OFF = 0.14;
-
     const TURN_MS = 75000;
-
-    const TURNS_TOTAL = 2; // each side chases once
-
+    const TURNS_TOTAL = 2;
     const MAX_BATCHES = 6;
-
-
+    const SYNC_MS = 100;
 
     const shell = openShell({
-
       id: 'khokho',
-
       title: 'Kho Kho',
-
-      subtitle: practiceSub('Batches · 75s turns · AI'),
-
-      mode: 'practice',
-
-      live: false,
-
+      subtitle: liveOn
+        ? liveSub() +
+          (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') +
+          ' · Chase & run'
+        : practiceSub('Batches · 75s turns · AI'),
+      mode: liveOn ? 'live' : 'practice',
+      live: liveOn,
       chat,
-
       accent: '#00695C',
-
       bg: '#021A16',
-
       pauseId: 'csKhoKhoPause',
-
-      leaveBody: 'This practice run will end.',
-
+      leaveBody: liveOn
+        ? 'Leaving now counts as a forfeit for your opponent.'
+        : 'This practice run will end.',
       cleanup: () => {
-
         if (raf) {
-
           cancelAnimationFrame(raf);
-
           raf = 0;
-
         }
-
         if (betweenTimer) {
-
           clearTimeout(betweenTimer);
-
           betweenTimer = 0;
-
         }
-
         if (shellPauseCtrl) shellPauseCtrl.destroy();
-
       },
-
     });
-
     if (!shell) return;
 
-
-
-    if (typeof createGamePauseController === 'function') {
-
-      shellPauseCtrl = createGamePauseController({
-
-        host: shell.host || shell.overlay,
-
-        pauseBtnId: 'csKhoKhoPause',
-
-        onPause() {
-
-          paused = true;
-
-        },
-
-        onResume() {
-
-          paused = false;
-
-          lastTs = 0;
-
-        },
-
-        onQuit: () => {
-
-          confirmAndClose(shell, {
-
-            live: false,
-
-            isPlaying: phase !== 'over',
-
-            title: 'Leave Kho Kho?',
-
-            body: 'This practice run will end.',
-
-          });
-
-        },
-
-      });
-
-    }
-
-
-
     /** @type {'chase'|'between'|'over'} */
-
     let phase = 'chase';
-
-    /** @type {'you'|'ai'} who is chasing */
-
+    /** Practice only: who is chasing */
     let chaseSide = 'you';
-
     let turnsDone = 0;
-
-    let scores = { you: 0, ai: 0 };
-
+    let scores = { you: 0, opp: 0 };
     let turnTags = 0;
-
     let clockMs = TURN_MS;
-
     let batchIndex = 0;
-
     let needKhoBeforeTag = false;
-
     let focusRunner = 0;
-
     let msg = 'You’re chasing — hunt with Kho. Three runners at a time.';
-
     let painted = false;
-
-
-
     /** @type {{id:number,facing:'L'|'R',seated:boolean,blockId:number|null,blockY:number,x:number,y:number,tx:number,ty:number}[]} */
-
     let team = [];
-
     /** @type {{id:number,x:number,y:number,tx:number,ty:number,tagged:boolean}[]} */
-
     let defenders = [];
-
-
-
     /** @type {'N'|'S'|null} */
-
     let dir = null;
-
     /** @type {'L'|'R'} */
-
     let half = 'L';
-
     let canTurnAtPole = false;
-
     let fouling = false;
-
-
-
     const poles = [
-
       { id: 'n', x: 0.5, y: 0.06 },
-
       { id: 's', x: 0.5, y: 0.94 },
-
     ];
-
-
-
-    function youAreChasing() {
-
-      return chaseSide === 'you';
-
-    }
-
-
-
-    function resetTeam() {
-
-      team = [];
-
-      for (let i = 0; i < 8; i++) {
-
-        const blockY = Math.min(0.86, 0.14 + i * 0.095);
-
-        const facing = i % 2 === 0 ? 'L' : 'R';
-
-        team.push({
-
-          id: i,
-
-          facing,
-
-          seated: true,
-
-          blockId: i,
-
-          blockY,
-
-          x: 0.5,
-
-          y: blockY,
-
-          tx: 0.5,
-
-          ty: blockY,
-
-        });
-
-      }
-
-      team.push({
-
-        id: 8,
-
-        facing: 'L',
-
-        seated: false,
-
-        blockId: null,
-
-        blockY: 0.88,
-
-        x: 0.22,
-
-        y: 0.88,
-
-        tx: 0.22,
-
-        ty: 0.88,
-
-      });
-
-      activeId = 8;
-
-      dir = null;
-
-      half = 'L';
-
-      canTurnAtPole = false;
-
-      fouling = false;
-
-      dirToastShown = false;
-
-      khoBusy = false;
-
-    }
-
-
-
     let activeId = 8;
 
+    function iAmChasing() {
+      if (!liveOn) return chaseSide === 'you';
+      return !!(liveRoles && chaseUid && chaseUid === liveRoles.me);
+    }
+    function oppLabel() {
+      return liveOn ? 'friend' : 'AI';
+    }
+    function scoresForPush() {
+      if (!liveRoles) return { a: scores.you, b: scores.opp };
+      return liveRoles.me === liveRoles.playerA
+        ? { a: scores.you, b: scores.opp }
+        : { a: scores.opp, b: scores.you };
+    }
+    function applyScores(sc) {
+      if (!sc || !liveRoles) return;
+      if (liveRoles.me === liveRoles.playerA) {
+        scores.you = sc.a | 0;
+        scores.opp = sc.b | 0;
+      } else {
+        scores.you = sc.b | 0;
+        scores.opp = sc.a | 0;
+      }
+    }
+
+    if (typeof createGamePauseController === 'function') {
+      shellPauseCtrl = createGamePauseController({
+        host: shell.host || shell.overlay,
+        pauseBtnId: 'csKhoKhoPause',
+        onPause() {
+          paused = true;
+          pauseStartedAt = Date.now();
+          if (liveOn && turnEndsAt) {
+            clockMs = Math.max(0, turnEndsAt - Date.now());
+          }
+          if (liveOn && liveHandle && phase !== 'over') {
+            lastPushAt = 0;
+            pushLive({ paused: true, clockMs: Math.round(clockMs) }, { force: true });
+          }
+        },
+        onResume() {
+          if (pauseStartedAt && turnEndsAt) {
+            turnEndsAt += Date.now() - pauseStartedAt;
+          } else if (liveOn && phase === 'chase' && clockMs > 0) {
+            turnEndsAt = Date.now() + clockMs;
+          }
+          pauseStartedAt = 0;
+          paused = false;
+          lastTs = 0;
+          if (liveOn && liveHandle && phase !== 'over') {
+            lastPushAt = 0;
+            pushLive(
+              { paused: false, turnEndsAt, clockMs: Math.round(clockMs) },
+              { force: true }
+            );
+          }
+        },
+        onQuit: () => {
+          confirmAndClose(shell, {
+            live: liveOn,
+            liveHandle: shell.liveHandle,
+            isPlaying: phase !== 'over' && !resultShown,
+            title: 'Leave Kho Kho?',
+            body: liveOn
+              ? 'Leaving now counts as a forfeit for your opponent.'
+              : 'This practice run will end.',
+          });
+        },
+      });
+    }
+
+    function resetTeam() {
+      team = [];
+      for (let i = 0; i < 8; i++) {
+        const blockY = Math.min(0.86, 0.14 + i * 0.095);
+        const facing = i % 2 === 0 ? 'L' : 'R';
+        team.push({
+          id: i,
+          facing,
+          seated: true,
+          blockId: i,
+          blockY,
+          x: 0.5,
+          y: blockY,
+          tx: 0.5,
+          ty: blockY,
+        });
+      }
+      team.push({
+        id: 8,
+        facing: 'L',
+        seated: false,
+        blockId: null,
+        blockY: 0.88,
+        x: 0.22,
+        y: 0.88,
+        tx: 0.22,
+        ty: 0.88,
+      });
+      activeId = 8;
+      dir = null;
+      half = 'L';
+      canTurnAtPole = false;
+      fouling = false;
+      dirToastShown = false;
+      khoBusy = false;
+    }
     resetTeam();
 
-
-
     function spawnBatch(idx) {
-
       batchIndex = idx;
-
       const bases = [
-
         { x: 0.18, y: 0.28 },
-
         { x: 0.82, y: 0.5 },
-
         { x: 0.2, y: 0.74 },
-
       ];
-
       defenders = bases.map((b, i) => ({
-
         id: i,
-
         x: b.x,
-
         y: b.y,
-
         tx: b.x,
-
         ty: b.y,
-
         tagged: false,
-
       }));
-
       focusRunner = 0;
-
       needKhoBeforeTag = idx > 0;
-
       if (needKhoBeforeTag) {
-
         msg = 'Batch ' + (idx + 1) + ' — give Kho before the next tag';
-
       } else {
-
-        msg = youAreChasing()
-
+        msg = iAmChasing()
           ? 'Batch ' + (idx + 1) + ' — chase with Kho'
-
           : 'Batch ' + (idx + 1) + ' — survive the clock';
-
       }
-
     }
-
-
-
     spawnBatch(0);
 
-
-
     function active() {
-
       return team.find((p) => p.id === activeId) || team[team.length - 1];
-
     }
-
-
-
     function seatedOnly() {
-
       return team.filter((p) => p.seated);
-
     }
-
-
-
     function livingDefs() {
-
       return defenders.filter((d) => !d.tagged);
-
     }
-
-
-
     function dist(a, b) {
-
       return Math.hypot(a.x - b.x, a.y - b.y);
-
     }
-
-
-
     function halfFromX(x) {
-
       return x < 0.5 ? 'L' : 'R';
-
     }
-
-
-
     function clampToHalf(x, h) {
-
       if (h === 'L') return Math.min(x, LANE_L - 0.01);
-
       return Math.max(x, LANE_R + 0.01);
-
     }
-
-
-
     function risePos(facing, blockY) {
-
       return {
-
         x: clampToHalf(facing === 'L' ? 0.5 - RISE_OFF : 0.5 + RISE_OFF, facing),
-
         y: blockY,
-
       };
-
     }
-
-
-
     function inPoleZone(y) {
-
       return y <= POLE_N || y >= POLE_S;
-
     }
-
-
-
     function dirLabel(d) {
-
       if (d === 'N') return '↑ North pole';
-
       if (d === 'S') return '↓ South pole';
-
       return '— unlocked';
-
     }
-
-
-
+    function syncClockFromEnd() {
+      if (liveOn && turnEndsAt > 0 && !paused) {
+        clockMs = Math.max(0, turnEndsAt - Date.now());
+      }
+    }
     function clockLabel() {
-
+      syncClockFromEnd();
       const s = Math.max(0, Math.ceil(clockMs / 1000));
-
       return s + 's';
-
     }
-
-
-
     function roleLabel() {
-
       if (phase === 'between') return 'Switching roles…';
-
       if (phase === 'over') return 'Match over';
-
-      return youAreChasing() ? 'You’re chasing' : 'You’re running';
-
+      return iAmChasing() ? 'You’re chasing' : 'You’re running';
     }
-
-
-
     function hudStatus() {
-
       if (phase === 'between') return 'Roles swapping';
-
       if (khoBusy) return 'KHO! · new chaser rising';
-
       if (needKhoBeforeTag) return 'Give Kho before tagging this batch';
-
       if (canTurnAtPole) return 'Pole zone — reverse / switch half';
-
       if (!dir) return 'First move locks direction · or give Kho';
-
       return 'Dir ' + (dir === 'N' ? '↑' : '↓') + ' · to pole to reverse';
-
     }
-
-
-
     function flashFoul(reason) {
-
       fouling = true;
-
       foulFlashUntil = performance.now() + 420;
-
       buzz('invalid');
-
       msg = reason || 'Foul — no cross.';
-
       if (typeof showToast === 'function') showToast(msg);
-
     }
-
-
-
     function khoReachable(sitter) {
-
       if (!sitter || !sitter.seated) return false;
-
       const a = active();
-
       if (!a || a.seated) return false;
-
       if (fouling || performance.now() < foulFlashUntil) return false;
-
       if (Math.abs(a.y - sitter.blockY) > KHO_Y) return false;
-
       const blockPt = { x: 0.5, y: sitter.blockY };
-
       if (dist(a, blockPt) > KHO_R + 0.04 && dist(a, sitter) > KHO_R) return false;
-
       if (!inPoleZone(a.y) && halfFromX(a.x) !== sitter.facing) return false;
-
       return true;
-
     }
-
-
-
     function legalKhoTargets() {
-
       return seatedOnly().filter((s) => khoReachable(s));
-
     }
-
-
-
     function nearestLegalKho() {
-
       const a = active();
-
       const list = legalKhoTargets();
-
       if (!list.length) return null;
-
       list.sort((p, q) => dist(a, p) - dist(a, q));
-
       return list[0];
-
     }
 
-
+    function publicTeamStub() {
+      return team.map((p) => ({
+        id: p.id,
+        facing: p.facing,
+        seated: !!p.seated,
+        blockId: p.blockId,
+        blockY: +p.blockY.toFixed(3),
+        x: +p.x.toFixed(3),
+        y: +p.y.toFixed(3),
+      }));
+    }
+    function publicDefsStub() {
+      return defenders.map((d) => ({
+        id: d.id,
+        x: +d.x.toFixed(3),
+        y: +d.y.toFixed(3),
+        tx: +d.tx.toFixed(3),
+        ty: +d.ty.toFixed(3),
+        tagged: !!d.tagged,
+      }));
+    }
+    function courtStateBase() {
+      syncClockFromEnd();
+      return {
+        scores: scoresForPush(),
+        chaseUid,
+        eventSeq,
+        phase,
+        turnEndsAt,
+        clockMs: Math.round(clockMs),
+        turnTags: turnTags | 0,
+        turnsDone: turnsDone | 0,
+        batchIndex: batchIndex | 0,
+        needKhoBeforeTag: !!needKhoBeforeTag,
+        focusRunner: focusRunner | 0,
+        activeId: activeId | 0,
+        dir,
+        half,
+        canTurnAtPole: !!canTurnAtPole,
+        paused: !!paused,
+        msg,
+        team: publicTeamStub(),
+        defenders: publicDefsStub(),
+        stake: liveStake,
+      };
+    }
+    function pushLive(extraState, extraTop) {
+      if (!liveOn || !liveHandle || !liveRoles || applying || resultShown) return;
+      const now = Date.now();
+      if (extraTop && extraTop.force) {
+        /* always */
+      } else if (now - lastPushAt < SYNC_MS) {
+        return;
+      }
+      lastPushAt = now;
+      liveHandle.push(
+        Object.assign(
+          {
+            status: phase === 'over' ? 'over' : 'playing',
+            turn: chaseUid || liveRoles.me,
+            state: Object.assign(courtStateBase(), extraState || {}),
+          },
+          extraTop || {}
+        )
+      );
+    }
+    function pushChaseAuthority(extra, force) {
+      if (!liveOn || !iAmChasing()) return;
+      lastPushAt = 0;
+      pushLive(extra || {}, force ? { force: true } : { force: true });
+    }
+    function pushRunInput() {
+      if (!liveOn || iAmChasing() || !liveHandle || !liveRoles || phase !== 'chase') return;
+      const now = Date.now();
+      if (now - lastPushAt < SYNC_MS) return;
+      lastPushAt = now;
+      liveHandle.push({
+        status: 'playing',
+        turn: chaseUid,
+        state: {
+          scores: scoresForPush(),
+          chaseUid,
+          eventSeq,
+          phase,
+          turnEndsAt,
+          runInput: {
+            by: liveRoles.me,
+            focusRunner: focusRunner | 0,
+            defs: publicDefsStub(),
+          },
+        },
+      });
+    }
+    function applyRunInput(input) {
+      if (!input || !Array.isArray(input.defs)) return;
+      if (input.focusRunner != null) focusRunner = input.focusRunner | 0;
+      input.defs.forEach((rd) => {
+        const d = defenders.find((x) => x.id === rd.id);
+        if (!d || d.tagged) return;
+        if (rd.tagged) d.tagged = true;
+        if (rd.tx != null) d.tx = rd.tx;
+        if (rd.ty != null) d.ty = rd.ty;
+        if (rd.x != null) {
+          if (Math.abs(d.x - rd.x) > 0.18) d.x = rd.x;
+          else d.x = d.x * 0.4 + rd.x * 0.6;
+        }
+        if (rd.y != null) {
+          if (Math.abs(d.y - rd.y) > 0.18) d.y = rd.y;
+          else d.y = d.y * 0.4 + rd.y * 0.6;
+        }
+      });
+    }
+    function applyCourtMirror(st) {
+      if (!st) return;
+      if (st.scores) applyScores(st.scores);
+      if (st.chaseUid) chaseUid = st.chaseUid;
+      if (st.eventSeq != null) eventSeq = Math.max(eventSeq, st.eventSeq | 0);
+      if (st.turnTags != null) turnTags = st.turnTags | 0;
+      if (st.turnsDone != null) turnsDone = st.turnsDone | 0;
+      if (st.batchIndex != null) batchIndex = st.batchIndex | 0;
+      if (st.needKhoBeforeTag != null) needKhoBeforeTag = !!st.needKhoBeforeTag;
+      if (st.focusRunner != null && !iAmChasing()) focusRunner = st.focusRunner | 0;
+      if (st.activeId != null) activeId = st.activeId | 0;
+      if (st.dir !== undefined) dir = st.dir;
+      if (st.half) half = st.half;
+      if (st.canTurnAtPole != null) canTurnAtPole = !!st.canTurnAtPole;
+      if (st.msg) msg = st.msg;
+      if (st.turnEndsAt) turnEndsAt = st.turnEndsAt;
+      else if (st.clockMs != null && !turnEndsAt) clockMs = st.clockMs | 0;
+      if (st.paused != null) paused = !!st.paused;
+      if (Array.isArray(st.team)) {
+        st.team.forEach((rp) => {
+          const p = team.find((x) => x.id === rp.id);
+          if (!p) return;
+          p.facing = rp.facing || p.facing;
+          p.seated = !!rp.seated;
+          p.blockId = rp.blockId != null ? rp.blockId : null;
+          if (rp.blockY != null) p.blockY = rp.blockY;
+          if (rp.x != null) {
+            if (iAmChasing()) return;
+            p.x = Math.abs(p.x - rp.x) > 0.2 ? rp.x : p.x * 0.35 + rp.x * 0.65;
+            p.tx = p.x;
+          }
+          if (rp.y != null) {
+            if (iAmChasing()) return;
+            p.y = Math.abs(p.y - rp.y) > 0.2 ? rp.y : p.y * 0.35 + rp.y * 0.65;
+            p.ty = p.y;
+          }
+        });
+      }
+      if (Array.isArray(st.defenders)) {
+        st.defenders.forEach((rd) => {
+          let d = defenders.find((x) => x.id === rd.id);
+          if (!d) {
+            d = {
+              id: rd.id,
+              x: rd.x || 0.5,
+              y: rd.y || 0.5,
+              tx: rd.tx || rd.x || 0.5,
+              ty: rd.ty || rd.y || 0.5,
+              tagged: !!rd.tagged,
+            };
+            defenders.push(d);
+            return;
+          }
+          if (rd.tagged) d.tagged = true;
+          if (iAmChasing()) return;
+          if (rd.x != null) d.x = Math.abs(d.x - rd.x) > 0.2 ? rd.x : d.x * 0.35 + rd.x * 0.65;
+          if (rd.y != null) d.y = Math.abs(d.y - rd.y) > 0.2 ? rd.y : d.y * 0.35 + rd.y * 0.65;
+          if (rd.tx != null) d.tx = rd.tx;
+          if (rd.ty != null) d.ty = rd.ty;
+        });
+        if (st.defenders.length === 3 && defenders.length !== 3) {
+          defenders = st.defenders.map((rd) => ({
+            id: rd.id,
+            x: rd.x,
+            y: rd.y,
+            tx: rd.tx != null ? rd.tx : rd.x,
+            ty: rd.ty != null ? rd.ty : rd.y,
+            tagged: !!rd.tagged,
+          }));
+        }
+      }
+      syncClockFromEnd();
+    }
+    function applyRemoteEvent(ev, st) {
+      if (!ev || ev.seq == null || (ev.seq | 0) <= lastAppliedEventSeq) return false;
+      lastAppliedEventSeq = ev.seq | 0;
+      eventSeq = Math.max(eventSeq, lastAppliedEventSeq);
+      if (st) applyCourtMirror(st);
+      if (ev.type === 'kho') {
+        khoFlashUntil = performance.now() + 380;
+        buzz('win');
+        if (typeof showToast === 'function') showToast('KHO!');
+        paint(true);
+        return true;
+      }
+      if (ev.type === 'tag') {
+        buzz('hit');
+        if (typeof showToast === 'function') showToast('Tag! +1');
+        paint(true);
+        return true;
+      }
+      if (ev.type === 'batch') {
+        if (betweenTimer) {
+          clearTimeout(betweenTimer);
+          betweenTimer = 0;
+        }
+        phase = 'chase';
+        paint(true);
+        return true;
+      }
+      if (ev.type === 'turn_end') {
+        if (betweenTimer) {
+          clearTimeout(betweenTimer);
+          betweenTimer = 0;
+        }
+        if (turnsDone >= TURNS_TOTAL) {
+          finishMatch({ subtitle: msg || 'Match over', skipLivePush: true });
+        } else {
+          phase = 'between';
+          paint(true);
+          if (typeof showToast === 'function') {
+            showToast(iAmChasing() ? 'Now you chase!' : 'Now you run!');
+          }
+          betweenTimer = setTimeout(() => {
+            betweenTimer = 0;
+            if (!shell.alive() || phase === 'over') return;
+            beginChaseTurn({ fromRemote: true });
+          }, 1200);
+        }
+        return true;
+      }
+      return true;
+    }
 
     function tryGiveKho(toSitterId) {
-
       if (phase !== 'chase' || khoBusy) return { ok: false, reason: 'Busy' };
-
+      if (liveOn && !iAmChasing()) return { ok: false, reason: 'Not chase seat' };
       const giver = active();
-
       const sitter = team.find((p) => p.id === toSitterId);
-
       if (!giver || giver.seated) return { ok: false, reason: 'No active' };
-
       if (!sitter || !sitter.seated) return { ok: false, reason: 'Already rising' };
-
       if (fouling || performance.now() < foulFlashUntil) {
-
         buzz('invalid');
-
         return { ok: false, reason: 'Mid-foul' };
-
       }
-
       if (!khoReachable(sitter)) {
-
         buzz('invalid');
-
         msg = 'Out of Kho range';
-
         return { ok: false, reason: 'Out of range' };
-
       }
-
-
-
       khoBusy = true;
-
       khoFlashUntil = performance.now() + 380;
-
       const blockId = sitter.blockId != null ? sitter.blockId : sitter.id;
-
       const blockY = sitter.blockY;
-
       const face = sitter.facing;
-
-
-
       giver.seated = true;
-
       giver.facing = face;
-
       giver.blockId = blockId;
-
       giver.blockY = blockY;
-
       giver.x = 0.5;
-
       giver.y = blockY;
-
       giver.tx = giver.x;
-
       giver.ty = giver.y;
-
-
-
       const rise = risePos(face, blockY);
-
       sitter.seated = false;
-
       sitter.blockId = null;
-
       sitter.facing = face;
-
       sitter.blockY = blockY;
-
       sitter.x = rise.x;
-
       sitter.y = rise.y;
-
       sitter.tx = rise.x;
-
       sitter.ty = rise.y;
-
-
-
       activeId = sitter.id;
-
       team.forEach((p) => {
-
         if (p.id === activeId) {
-
           p.seated = false;
-
           p.blockId = null;
-
         }
-
       });
-
-
-
       dir = null;
-
       half = face;
-
       canTurnAtPole = inPoleZone(sitter.y);
-
       fouling = false;
-
       dirToastShown = false;
-
       needKhoBeforeTag = false;
-
-
-
       buzz('win');
-
       msg = 'KHO! · ' + (half === 'L' ? 'left' : 'right') + ' half';
-
       if (typeof showToast === 'function') showToast('KHO!');
-
       paint(true);
-
       setTimeout(() => {
-
         khoBusy = false;
-
       }, 220);
-
+      if (liveOn && iAmChasing()) {
+        eventSeq += 1;
+        lastAppliedEventSeq = eventSeq;
+        pushChaseAuthority({ event: { type: 'kho', seq: eventSeq, toSitterId: toSitterId | 0 } }, true);
+      }
       return { ok: true };
-
     }
-
-
 
     function tagDefender(d) {
-
       if (!d || d.tagged) return false;
-
+      if (liveOn && !iAmChasing()) return false;
       if (needKhoBeforeTag) {
-
         buzz('invalid');
-
         msg = 'Give Kho before tagging this batch';
-
         return false;
-
       }
-
       if (fouling || performance.now() < foulFlashUntil) return false;
-
       d.tagged = true;
-
       turnTags += 1;
-
       buzz('hit');
-
       if (typeof showToast === 'function') showToast('Tag! +1');
-
-      msg = 'Tag +1 · turn ' + turnTags + ' · match you ' + scores.you + '–' + scores.ai;
-
+      msg =
+        'Tag +1 · turn ' +
+        turnTags +
+        ' · match you ' +
+        scores.you +
+        '–' +
+        scores.opp;
       const outs = defenders.filter((x) => x.tagged).length;
-
       if (outs >= 3) {
-
         if (batchIndex + 1 >= MAX_BATCHES) {
-
           msg = 'Batch cap — keep hunting until the clock ends';
-
         } else {
-
           phase = 'between';
-
           const next = batchIndex + 1;
-
           betweenTimer = setTimeout(() => {
-
             betweenTimer = 0;
-
             if (!shell.alive() || phase === 'over') return;
-
             phase = 'chase';
-
             spawnBatch(next);
-
             paint(true);
-
+            if (liveOn && iAmChasing()) {
+              eventSeq += 1;
+              lastAppliedEventSeq = eventSeq;
+              pushChaseAuthority(
+                { event: { type: 'batch', seq: eventSeq, batchIndex: next } },
+                true
+              );
+            }
           }, 900);
-
           msg = 'Batch wiped — next three incoming…';
-
         }
-
       }
-
+      if (liveOn && iAmChasing()) {
+        eventSeq += 1;
+        lastAppliedEventSeq = eventSeq;
+        pushChaseAuthority(
+          {
+            event: {
+              type: 'tag',
+              seq: eventSeq,
+              defId: d.id,
+              turnTags,
+              batchIndex,
+              needKhoBeforeTag: !!needKhoBeforeTag,
+            },
+          },
+          true
+        );
+      }
       return true;
-
     }
-
-
-
     function tryTag() {
-
       if (phase !== 'chase' || khoBusy) return;
-
+      if (liveOn && !iAmChasing()) return;
       const a = active();
-
       if (!a || a.seated) return;
-
       livingDefs().forEach((d) => {
-
         const runnerHalf = halfFromX(d.x);
-
         if (runnerHalf !== half && !canTurnAtPole) return;
-
         if (dist(a, d) <= TAG_R) tagDefender(d);
-
       });
-
     }
 
+    function freshRematch() {
+      if (!liveOn) {
+        openKhoKho(chat);
+        return;
+      }
+      try {
+        const mid =
+          typeof dangalMatchId === 'function'
+            ? dangalMatchId('khokho', chat)
+            : 'khokho_' + Date.now();
+        if (window.__dangalLaunchCtx) {
+          window.__dangalLaunchCtx = Object.assign({}, window.__dangalLaunchCtx, {
+            matchId: mid,
+            gameId: 'khokho',
+            gameType: 'khokho',
+            stake: liveStake,
+          });
+        }
+        if (chat) {
+          chat.dangalMatchId = mid;
+          chat.stake = liveStake;
+        }
+      } catch (e) {}
+      openKhoKho(chat);
+    }
 
-
-    function endMatch() {
-
-      phase = 'over';
-
-      if (shell.markOver) shell.markOver();
-
-      const you = scores.you;
-
-      const ai = scores.ai;
-
+    function reportKhoKhoResult(won, isDraw, path) {
+      if (resultReported) return;
+      resultReported = true;
       if (typeof recordGameResult === 'function') {
-
-        recordGameResult('khokho', you > ai, you === ai);
-
+        try {
+          recordGameResult('khokho', !!won && !isDraw, !!isDraw, {
+            live: !!liveOn,
+            stake: liveStake,
+            mode: liveOn ? 'live' : 'practice',
+            path: path || '',
+            score: scores.you,
+          });
+        } catch (e) {}
       }
-
       if (typeof recordDangalSession === 'function') {
-
-        recordDangalSession('khokho', {
-
-          won: you > ai,
-
-          drew: you === ai,
-
-          score: you,
-
-          live: false,
-
-        });
-
+        try {
+          recordDangalSession('khokho', {
+            won: !!won && !isDraw,
+            drew: !!isDraw,
+            score: scores.you,
+            live: !!liveOn,
+          });
+        } catch (e) {}
       }
-
-      if (typeof setGamePB === 'function') setGamePB('khokho', you);
-
-      showDuelResult(shell, {
-
-        id: 'khokho',
-
-        glyph: '🏃',
-
-        you,
-
-        opp: ai,
-
-        subtitle: 'Practice · each side chased once · 75s turns',
-
-        shareText: 'Kho Kho ' + you + '–' + ai,
-
-        pbScore: you,
-
-        onAgain: () => {
-
-          shell.close('restart');
-
-          openKhoKho(chat);
-
-        },
-
-      });
-
+      if (typeof setGamePB === 'function') setGamePB('khokho', scores.you);
     }
 
+    async function settleKhoKhoOnce(won, isDraw) {
+      if (!liveOn || settleDone) return null;
+      if (!settleMatchId || liveStake <= 0) {
+        settleDone = true;
+        return null;
+      }
+      if (!window.DangalEconomy || typeof DangalEconomy.reportGameEnd !== 'function') {
+        settleDone = true;
+        return null;
+      }
+      settleDone = true;
+      try {
+        const me = typeof getCurrentUid === 'function' ? getCurrentUid() : '';
+        const oppU = settleOppUid || (liveRoles && liveRoles.opp) || '';
+        return await DangalEconomy.reportGameEnd({
+          gameType: 'khokho',
+          result: isDraw ? 'draw' : won ? 'win' : 'loss',
+          won: !!won && !isDraw,
+          isDraw: !!isDraw,
+          matchId: settleMatchId,
+          sessionId: settleMatchId,
+          opponentUid: oppU,
+          stake: liveStake,
+          winnerUid: isDraw ? null : won ? me : oppU,
+        });
+      } catch (e) {
+        settleDone = false;
+        return null;
+      }
+    }
 
+    function finishMatch(opts) {
+      const o = opts || {};
+      if (resultShown) return;
+      resultShown = true;
+      phase = 'over';
+      if (shell.markOver) shell.markOver();
+      if (betweenTimer) {
+        clearTimeout(betweenTimer);
+        betweenTimer = 0;
+      }
+      if (raf) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
+      if (liveRoles && liveRoles.opp) settleOppUid = liveRoles.opp;
+
+      const forfeit = !!o.forfeit;
+      const draw = !forfeit && scores.you === scores.opp;
+      const won = forfeit ? !!o.iWon : scores.you > scores.opp;
+      const baseSub =
+        o.subtitle ||
+        (liveOn
+          ? 'Live · each side chased once · 75s turns'
+          : 'Practice · each side chased once · 75s turns');
+      reportKhoKhoResult(won, draw, baseSub);
+
+      if (liveOn && liveHandle && liveRoles && !o.skipLivePush && !applying) {
+        try {
+          liveHandle.push({
+            status: forfeit ? 'forfeit' : 'over',
+            winner: draw ? null : won ? liveRoles.me : liveRoles.opp,
+            state: Object.assign(courtStateBase(), {
+              phase: 'over',
+              msg: baseSub,
+            }),
+          });
+        } catch (e) {}
+      }
+
+      settleKhoKhoOnce(won, draw).then((settle) => {
+        let sub = baseSub;
+        if (liveOn && liveStake > 0) {
+          const cd = settle && settle.chipDelta != null ? Number(settle.chipDelta) : null;
+          sub +=
+            (sub ? ' · ' : '') +
+            (Number.isFinite(cd) && cd !== 0
+              ? 'Stake ' + (cd > 0 ? '+' : '') + cd + ' virtual'
+              : 'Virtual stakes · not real money');
+        }
+        showDuelResult(shell, {
+          id: 'khokho',
+          glyph: '🏃',
+          you: scores.you,
+          opp: scores.opp,
+          subtitle: sub,
+          shareText:
+            'Kho Kho on Chaupaal: ' +
+            scores.you +
+            '–' +
+            scores.opp +
+            (liveOn && liveStake > 0 ? ' · virtual stakes' : ''),
+          pbScore: scores.you,
+          onAgain: freshRematch,
+        });
+      });
+    }
 
     function endTurn() {
-
       if (phase === 'over' || phase === 'between') return;
-
-      scores[chaseSide] += turnTags;
-
+      if (liveOn && !iAmChasing()) return;
+      if (iAmChasing()) scores.you += turnTags;
+      else scores.opp += turnTags;
       turnsDone += 1;
-
       buzz('turn');
-
       if (turnsDone >= TURNS_TOTAL) {
-
-        endMatch();
-
+        if (liveOn) {
+          eventSeq += 1;
+          lastAppliedEventSeq = eventSeq;
+          pushChaseAuthority(
+            {
+              event: { type: 'turn_end', seq: eventSeq, turnsDone },
+              phase: 'over',
+            },
+            true
+          );
+        }
+        finishMatch({
+          subtitle: 'Final · you ' + scores.you + '–' + scores.opp,
+          skipLivePush: liveOn,
+        });
         return;
-
       }
-
       phase = 'between';
-
       msg =
-
-        (chaseSide === 'you' ? 'Your chase ends · ' + turnTags + ' tags' : 'AI chase ends · ' + turnTags + ' tags') +
-
+        (iAmChasing() ? 'Your chase ends · ' + turnTags + ' tags' : 'Their chase ends · ' + turnTags + ' tags') +
         ' — switching roles';
-
       paint(true);
-
-      if (typeof showToast === 'function') showToast(chaseSide === 'you' ? 'Now you run!' : 'Now you chase!');
-
+      if (typeof showToast === 'function') {
+        showToast(iAmChasing() ? 'Now you run!' : 'Now you chase!');
+      }
+      if (liveOn && iAmChasing()) {
+        const nextUid = liveRoles.me === chaseUid ? liveRoles.opp : liveRoles.me;
+        eventSeq += 1;
+        lastAppliedEventSeq = eventSeq;
+        chaseUid = nextUid;
+        pushChaseAuthority(
+          {
+            event: { type: 'turn_end', seq: eventSeq, turnsDone, nextChaseUid: nextUid },
+            phase: 'between',
+            chaseUid: nextUid,
+          },
+          true
+        );
+      } else if (!liveOn) {
+        chaseSide = chaseSide === 'you' ? 'ai' : 'you';
+      }
       betweenTimer = setTimeout(() => {
-
         betweenTimer = 0;
-
         if (!shell.alive() || phase === 'over') return;
-
-        swapRoles();
-
+        beginChaseTurn({ fromRemote: false });
       }, 1400);
-
     }
 
-
-
-    function swapRoles() {
-
-      chaseSide = chaseSide === 'you' ? 'ai' : 'you';
-
+    function beginChaseTurn(opts) {
       resetTeam();
-
       spawnBatch(0);
-
       turnTags = 0;
-
-      clockMs = TURN_MS;
-
       needKhoBeforeTag = false;
-
       phase = 'chase';
-
       lastTs = 0;
-
-      msg = youAreChasing()
-
+      if (!liveOn) {
+        turnEndsAt = 0;
+        clockMs = TURN_MS;
+      } else if (iAmChasing()) {
+        turnEndsAt = Date.now() + TURN_MS;
+        clockMs = TURN_MS;
+      } else {
+        clockMs = turnEndsAt > 0 ? Math.max(0, turnEndsAt - Date.now()) : TURN_MS;
+      }
+      msg = iAmChasing()
         ? 'You’re chasing — hunt the batch with Kho'
-
         : 'You’re running — tap a runner, drag to dodge';
-
       paint(true);
-
+      if (liveOn && iAmChasing()) {
+        pushChaseAuthority({ phase: 'chase', turnEndsAt }, true);
+      }
     }
-
-
 
     function applyChaseStep(nx, ny) {
-
       const a = active();
-
       if (!a || a.seated || khoBusy || phase !== 'chase') return;
-
       const prevX = a.x;
-
       const prevY = a.y;
-
       let x = nx;
-
       let y = ny;
-
-
-
       if (!dir) {
-
         const mdx = x - prevX;
-
         const mdy = y - prevY;
-
         const moved = Math.hypot(mdx, mdy);
-
         if (moved >= LOCK_STEP) {
-
           if (Math.abs(mdy) >= Math.abs(mdx) * 0.35) dir = mdy < 0 ? 'N' : 'S';
-
           else dir = prevY < 0.5 ? 'S' : 'N';
-
           x = clampToHalf(x, half);
-
-          if (!dirToastShown && youAreChasing()) {
-
+          if (!dirToastShown && iAmChasing()) {
             dirToastShown = true;
-
             if (typeof showToast === 'function') showToast('Direction locked → ' + (dir === 'N' ? '↑' : '↓'));
-
           }
-
           msg = 'Direction locked → ' + dirLabel(dir);
-
         } else if (moved > 0.002) {
-
           x = clampToHalf(x, half);
-
         }
-
       }
-
-
-
       const wasInPole = inPoleZone(prevY);
-
       const nowInPole = inPoleZone(y);
-
       if (nowInPole) {
-
         canTurnAtPole = true;
-
         half = halfFromX(x);
-
         x = Math.max(0.06, Math.min(0.94, x));
-
         if (!wasInPole) buzz('select');
-
       } else if (wasInPole && !nowInPole && canTurnAtPole) {
-
         half = halfFromX(x);
-
         const ddy = y - prevY;
-
         if (Math.abs(ddy) > 0.002) dir = ddy < 0 ? 'N' : 'S';
-
         else if (!dir) dir = y < 0.5 ? 'S' : 'N';
-
         canTurnAtPole = false;
-
         x = clampToHalf(x, half);
-
       }
-
-
-
       if (dir && !canTurnAtPole) {
-
         const clamped = clampToHalf(x, half);
-
         if (Math.abs(clamped - x) > 0.012) {
-
-          if (youAreChasing()) flashFoul('Foul — no cross.');
-
+          if (iAmChasing()) flashFoul('Foul — no cross.');
           x = clamped;
-
         } else {
-
           x = clamped;
-
           fouling = false;
-
         }
-
         if (dir === 'N' && y > prevY + 0.004) y = prevY + 0.002;
-
         else if (dir === 'S' && y < prevY - 0.004) y = prevY - 0.002;
-
       }
-
-
-
       a.x = Math.max(0.06, Math.min(0.94, x));
-
       a.y = Math.max(0.05, Math.min(0.95, y));
-
       if (!canTurnAtPole && dir) a.x = clampToHalf(a.x, half);
-
     }
-
-
-
     function moveEntityToward(ent, tx, ty, speed, dt, asRunner) {
-
       const dx = tx - ent.x;
-
       const dy = ty - ent.y;
-
       const len = Math.hypot(dx, dy);
-
       if (len < 0.008) return;
-
       const step = Math.min(len, speed * dt);
-
       let nx = ent.x + (dx / len) * step;
-
       let ny = ent.y + (dy / len) * step;
-
       if (asRunner) {
-
         nx = Math.max(0.08, Math.min(0.92, nx));
-
         ny = Math.max(0.1, Math.min(0.9, ny));
-
       }
-
       ent.x = nx;
-
       ent.y = ny;
-
     }
-
-
-
     function aiThinkChaser(dt) {
-
+      if (liveOn) return;
       const a = active();
-
       if (!a || a.seated || khoBusy) return;
-
       const living = livingDefs();
-
       if (!living.length) return;
-
-
-
-      // Prefer runner on current half; else seek Kho / pole.
-
       const onHalf = living.filter((d) => halfFromX(d.x) === half);
-
       const target = (onHalf.length ? onHalf : living).slice().sort((p, q) => dist(a, p) - dist(a, q))[0];
-
       const targetHalf = halfFromX(target.x);
-
-
-
       if (targetHalf !== half && !canTurnAtPole) {
-
         const faceSitters = seatedOnly().filter((s) => s.facing === targetHalf);
-
         const khoT = faceSitters.filter((s) => khoReachable(s)).sort((p, q) => dist(a, p) - dist(a, q))[0];
-
         if (khoT) {
-
           tryGiveKho(khoT.id);
-
           return;
-
         }
-
         const nearSit = faceSitters.slice().sort((p, q) => Math.abs(p.blockY - a.y) - Math.abs(q.blockY - a.y))[0];
-
         if (nearSit) {
-
           a.tx = clampToHalf(targetHalf === 'L' ? LANE_L - 0.04 : LANE_R + 0.04, half);
-
           a.ty = nearSit.blockY;
-
         } else {
-
           a.tx = a.x;
-
           a.ty = dir === 'N' || (!dir && a.y > 0.5) ? 0.08 : 0.92;
-
         }
-
       } else if (canTurnAtPole && targetHalf !== half) {
-
         a.tx = clampToHalf(targetHalf === 'L' ? 0.2 : 0.8, targetHalf);
-
         a.ty = a.y <= POLE_N ? 0.1 : 0.9;
-
       } else {
-
         a.tx = target.x;
-
         a.ty = target.y;
-
       }
-
-
-
       const dx = a.tx - a.x;
-
       const dy = a.ty - a.y;
-
       const len = Math.hypot(dx, dy);
-
       if (len > 0.008) {
-
         const step = Math.min(len, AI_CHASE_SPEED * dt);
-
         applyChaseStep(a.x + (dx / len) * step, a.y + (dy / len) * step);
-
       }
-
     }
-
-
-
     function aiThinkRunners(dt, fleeFrom) {
-
+      if (liveOn) return;
       livingDefs().forEach((d, i) => {
-
         const awayHalf = halfFromX(fleeFrom.x) === 'L' ? 'R' : 'L';
-
         const juke = Math.sin(performance.now() / 400 + i * 2.1) * 0.08;
-
         d.tx = clampToHalf(awayHalf === 'L' ? 0.18 + juke : 0.82 + juke, awayHalf);
-
-        d.ty = Math.max(0.12, Math.min(0.88, fleeFrom.y + (i - 1) * 0.18 + Math.cos(performance.now() / 500 + i) * 0.05));
-
-        // Steer away if too close
-
+        d.ty = Math.max(
+          0.12,
+          Math.min(0.88, fleeFrom.y + (i - 1) * 0.18 + Math.cos(performance.now() / 500 + i) * 0.05)
+        );
         if (dist(d, fleeFrom) < 0.2) {
-
           d.tx = clampToHalf(d.x + (d.x - fleeFrom.x) * 2, awayHalf);
-
           d.ty = d.y + (d.y - fleeFrom.y) * 1.5;
-
         }
-
         moveEntityToward(d, d.tx, d.ty, AI_RUN_SPEED, dt, true);
-
         if (d.x > LANE_L && d.x < LANE_R) {
-
           d.x = d.x < 0.5 ? LANE_L - 0.02 : LANE_R + 0.02;
-
         }
-
       });
-
     }
-
-
 
     function paint(force) {
-
       if (!shell.alive() || phase === 'over') return;
-
       if (painted && !force) {
-
         softPaint();
-
         return;
-
       }
-
       painted = true;
-
       const a = active();
-
-      const khoReady = youAreChasing() ? legalKhoTargets() : [];
-
+      const khoReady = iAmChasing() ? legalKhoTargets() : [];
       const khoIds = new Set(khoReady.map((s) => s.id));
-
       const outs = defenders.filter((d) => d.tagged).length;
-
-
-
       const sitHtml = team
-
         .filter((p) => p.seated)
-
         .map((s) => {
-
           const ready = khoIds.has(s.id);
-
           return (
-
             '<button type="button" class="cs-kk-sitter cs-kk-face-' +
-
             s.facing.toLowerCase() +
-
             (ready ? ' is-kho-ready' : '') +
-
             '" data-sitter="' +
-
             s.id +
-
             '" style="left:' +
-
             s.x * 100 +
-
             '%;top:' +
-
             s.y * 100 +
-
             '%">' +
-
             (s.facing === 'L' ? '◀' : '▶') +
-
             '</button>'
-
           );
-
         })
-
         .join('');
-
-
-
       const poleHtml = poles
-
         .map((p) => {
-
           const hot = (p.id === 'n' && a.y <= POLE_N) || (p.id === 's' && a.y >= POLE_S);
-
           return (
-
             '<span class="cs-kk-pole' +
-
             (hot || canTurnAtPole ? ' is-hot' : '') +
-
             '" style="left:' +
-
             p.x * 100 +
-
             '%;top:' +
-
             p.y * 100 +
-
             '%"><i></i><b>Pole</b></span>'
-
           );
-
         })
-
         .join('');
-
-
-
       const defHtml = defenders
-
         .map((d) => {
-
           return (
-
             '<button type="button" class="cs-kk-runner' +
-
             (d.tagged ? ' is-tagged' : '') +
-
-            (!youAreChasing() && !d.tagged && d.id === focusRunner ? ' is-focus' : '') +
-
+            (!iAmChasing() && !d.tagged && d.id === focusRunner ? ' is-focus' : '') +
             '" data-def="' +
-
             d.id +
-
             '" style="left:' +
-
             d.x * 100 +
-
             '%;top:' +
-
             d.y * 100 +
-
             '%"' +
-
             (d.tagged ? ' disabled' : '') +
-
             '>' +
-
             (d.tagged ? '✓' : '🏃') +
-
             '</button>'
-
           );
-
         })
-
         .join('');
-
-
-
       const arrow = !dir ? '·' : dir === 'N' ? '↑' : '↓';
-
       const pips =
-
         [0, 1, 2]
-
           .map((i) => {
-
             const d = defenders[i];
-
             const out = d && d.tagged;
-
             return '<i class="cs-kk-pip' + (out ? ' is-out' : '') + '"></i>';
-
           })
-
           .join('') +
-
         '<span class="cs-kk-pip-label">Batch ' +
-
         (batchIndex + 1) +
-
         ' · ' +
-
         outs +
-
         '/3 out</span>';
-
-
-
       shell.body.innerHTML =
-
         '<div class="cs-khokho">' +
-
         '<div class="cs-rally-score"><strong>' +
-
         scores.you +
-
         '</strong> – <strong>' +
-
-        scores.ai +
-
+        scores.opp +
         '</strong>' +
-
-        '<span class="cs-rally-score-sub">you · AI · turn +' +
-
+        '<span class="cs-rally-score-sub">you · ' +
+        oppLabel() +
+        ' · turn +' +
         turnTags +
-
         '</span></div>' +
-
         '<div class="cs-kk-role" role="status">' +
-
         esc(roleLabel()) +
-
         ' · <b data-clock>' +
-
         clockLabel() +
-
         '</b></div>' +
-
         '<div class="cs-kk-batch">' +
-
         pips +
-
         '</div>' +
-
         '<div class="cs-kk-hud" role="status">' +
-
         '<span class="cs-kk-dir' +
-
         (canTurnAtPole ? ' is-turn' : dir ? ' is-locked' : '') +
-
         (performance.now() < khoFlashUntil ? ' is-kho' : '') +
-
         '">' +
-
         (performance.now() < khoFlashUntil ? 'K' : arrow) +
-
         '</span>' +
-
         '<span class="cs-kk-hud-text">' +
-
         esc(hudStatus()) +
-
         ' · ' +
-
         (half === 'L' ? 'Left' : 'Right') +
-
         ' half</span></div>' +
-
         '<p class="cs-rally-msg">' +
-
         esc(msg) +
-
         (paused ? ' · Paused' : '') +
-
         '</p>' +
-
         '<div class="cs-kk-court' +
-
         (fouling || performance.now() < foulFlashUntil ? ' is-foul' : '') +
-
         (canTurnAtPole ? ' is-pole-turn' : '') +
-
         (performance.now() < khoFlashUntil ? ' is-kho-flash' : '') +
-
         '" data-court role="application" aria-label="Kho Kho court">' +
-
         '<div class="cs-kk-free cs-kk-free-l" aria-hidden="true"><span>Free zone</span></div>' +
-
         '<div class="cs-kk-free cs-kk-free-r" aria-hidden="true"><span>Free zone</span></div>' +
-
         '<div class="cs-kk-lane" aria-hidden="true"><span>Central lane</span></div>' +
-
         '<div class="cs-kk-pole-zone cs-kk-pole-n" aria-hidden="true"></div>' +
-
         '<div class="cs-kk-pole-zone cs-kk-pole-s" aria-hidden="true"></div>' +
-
         poleHtml +
-
         sitHtml +
-
         defHtml +
-
         '<span class="cs-kk-chaser" style="left:' +
-
         a.x * 100 +
-
         '%;top:' +
-
         a.y * 100 +
-
         '%">⚡</span></div>' +
-
         '<div class="cs-kk-meta">' +
-
-        (youAreChasing()
-
+        (iAmChasing()
           ? 'Drag to chase · highlight = Kho · wipe batch then Kho again'
-
-          : 'Tap a runner to focus · drag to dodge AI chase') +
-
+          : 'Tap a runner to focus · drag to dodge') +
         '</div>' +
-
         '<div class="cs-kk-actions">' +
-
-        (youAreChasing()
-
+        (iAmChasing()
           ? '<button type="button" class="cs-hit cs-kk-kho-btn" data-kho' +
-
             (khoReady.length ? '' : ' disabled') +
-
             '>Kho!</button>'
-
           : '') +
-
         '</div></div>';
-
-
-
       const court = shell.body.querySelector('[data-court]');
-
       const setTarget = (clientX, clientY) => {
-
         if (paused || khoBusy || phase !== 'chase' || !court) return;
-
         const rect = court.getBoundingClientRect();
-
         if (rect.width < 8 || rect.height < 8) return;
-
         let tx = Math.max(0.06, Math.min(0.94, (clientX - rect.left) / rect.width));
-
         let ty = Math.max(0.06, Math.min(0.94, (clientY - rect.top) / rect.height));
-
-        if (youAreChasing()) {
-
+        if (iAmChasing()) {
           const act = active();
-
           if (!act || act.seated) return;
-
           if (dir && !canTurnAtPole && !inPoleZone(ty)) tx = clampToHalf(tx, half);
-
           act.tx = tx;
-
           act.ty = ty;
-
         } else {
-
           const d = defenders.find((z) => z.id === focusRunner && !z.tagged);
-
           if (!d) return;
-
           d.tx = tx;
-
           d.ty = ty;
-
         }
-
       };
-
       court?.addEventListener('pointerdown', (e) => {
-
         if (e.target && e.target.closest && (e.target.closest('[data-sitter]') || e.target.closest('[data-def]')))
-
           return;
-
         e.preventDefault();
-
         try {
-
           court.setPointerCapture(e.pointerId);
-
         } catch (err) {}
-
         setTarget(e.clientX, e.clientY);
-
       });
-
       court?.addEventListener('pointermove', (e) => {
-
         if (e.buttons || e.pressure > 0) setTarget(e.clientX, e.clientY);
-
       });
-
-
-
       shell.body.querySelectorAll('[data-sitter]').forEach((btn) => {
-
         btn.addEventListener('click', (e) => {
-
           e.stopPropagation();
-
-          if (!youAreChasing()) return;
-
+          if (!iAmChasing()) return;
           const id = +btn.dataset.sitter;
-
           if (!khoIds.has(id)) {
-
             buzz('invalid');
-
             return;
-
           }
-
           tryGiveKho(id);
-
         });
-
       });
-
-
-
       shell.body.querySelectorAll('[data-def]').forEach((btn) => {
-
         btn.addEventListener('click', (e) => {
-
           e.stopPropagation();
-
-          if (youAreChasing()) return;
-
+          if (iAmChasing()) return;
           const id = +btn.dataset.def;
-
           const d = defenders.find((z) => z.id === id);
-
           if (!d || d.tagged) return;
-
           focusRunner = id;
-
           buzz('select');
-
           paint(true);
-
         });
-
       });
-
-
-
       shell.body.querySelector('[data-kho]')?.addEventListener('click', () => {
-
         const t = nearestLegalKho();
-
         if (!t) {
-
           buzz('invalid');
-
           return;
-
         }
-
         tryGiveKho(t.id);
-
       });
-
-
-
       if (!coachShown) {
-
         coachShown = true;
-
         if (typeof showToast === 'function') {
-
-          showToast('Three runners at a time — survive the clock or hunt with Kho.');
-
+          showToast(
+            liveOn
+              ? 'Live: one chases, one runs the batch — then swap.'
+              : 'Three runners at a time — survive the clock or hunt with Kho.'
+          );
         }
-
       }
-
-
-
       if (typeof GameUI !== 'undefined' && GameUI.attachHowTo) {
-
         GameUI.attachHowTo(shell.overlay, {
-
           title: 'Kho Kho',
-
-          body:
-
-            'Batches of 3 · 75s chase turn · each side chases once. Give Kho to switch chasers. When running, tap a runner then drag. Wipe a batch, then Kho before tagging the next.',
-
+          body: liveOn
+            ? 'Arcade Kho Kho Live · batches of 3 · 75s turns · each side chases once. Chase seat moves active + Kho; defend seat moves runners. Leave = forfeit · rematch new match · virtual stakes.'
+            : 'Batches of 3 · 75s chase turn · each side chases once. Give Kho to switch chasers. When running, tap a runner then drag. Wipe a batch, then Kho before tagging the next.',
         });
-
       }
-
     }
-
-
-
     function softPaint() {
-
       if (phase === 'over') return;
-
       const a = active();
-
       const el = shell.body.querySelector('.cs-kk-chaser');
-
       if (el && a) {
-
         el.style.left = a.x * 100 + '%';
-
         el.style.top = a.y * 100 + '%';
-
       }
-
-      const khoReady = youAreChasing() ? legalKhoTargets() : [];
-
+      const khoReady = iAmChasing() ? legalKhoTargets() : [];
       const khoIds = new Set(khoReady.map((s) => s.id));
-
       const seatedN = seatedOnly().length;
-
       if (shell.body.querySelectorAll('[data-sitter]').length !== seatedN) {
-
         paint(true);
-
         return;
-
       }
-
       shell.body.querySelectorAll('[data-sitter]').forEach((btn) => {
-
         const id = +btn.dataset.sitter;
-
         const s = team.find((p) => p.id === id);
-
         if (!s || !s.seated) {
-
           btn.style.display = 'none';
-
           return;
-
         }
-
         btn.style.display = '';
-
         btn.style.left = s.x * 100 + '%';
-
         btn.style.top = s.y * 100 + '%';
-
         btn.classList.toggle('is-kho-ready', khoIds.has(id));
-
       });
-
       defenders.forEach((d) => {
-
         const node = shell.body.querySelector('[data-def="' + d.id + '"]');
-
         if (!node) return;
-
         node.style.left = d.x * 100 + '%';
-
         node.style.top = d.y * 100 + '%';
-
         node.classList.toggle('is-tagged', !!d.tagged);
-
-        node.classList.toggle('is-focus', !youAreChasing() && !d.tagged && d.id === focusRunner);
-
+        node.classList.toggle('is-focus', !iAmChasing() && !d.tagged && d.id === focusRunner);
         node.textContent = d.tagged ? '✓' : '🏃';
-
       });
-
       const clock = shell.body.querySelector('[data-clock]');
-
       if (clock) clock.textContent = clockLabel();
-
       const msgEl = shell.body.querySelector('.cs-rally-msg');
-
       if (msgEl) msgEl.textContent = msg + (paused ? ' · Paused' : '');
-
       const hud = shell.body.querySelector('.cs-kk-hud-text');
-
       if (hud) hud.textContent = hudStatus() + ' · ' + (half === 'L' ? 'Left' : 'Right') + ' half';
-
       const dirEl = shell.body.querySelector('.cs-kk-dir');
-
       if (dirEl) {
-
         const khoing = performance.now() < khoFlashUntil;
-
         dirEl.textContent = khoing ? 'K' : !dir ? '·' : dir === 'N' ? '↑' : '↓';
-
         dirEl.classList.toggle('is-kho', khoing);
-
         dirEl.classList.toggle('is-turn', !!canTurnAtPole);
-
         dirEl.classList.toggle('is-locked', !!dir && !canTurnAtPole);
-
       }
-
       const khoBtn = shell.body.querySelector('[data-kho]');
-
-      if (khoBtn) khoBtn.disabled = !youAreChasing() || !khoReady.length || khoBusy;
-
+      if (khoBtn) khoBtn.disabled = !iAmChasing() || !khoReady.length || khoBusy;
       shell.body.querySelectorAll('.cs-kk-pip').forEach((pip, i) => {
-
         const d = defenders[i];
-
         pip.classList.toggle('is-out', !!(d && d.tagged));
-
       });
-
       const score = shell.body.querySelector('.cs-rally-score');
-
       if (score) {
-
         score.innerHTML =
-
           '<strong>' +
-
           scores.you +
-
           '</strong> – <strong>' +
-
-          scores.ai +
-
-          '</strong><span class="cs-rally-score-sub">you · AI · turn +' +
-
+          scores.opp +
+          '</strong><span class="cs-rally-score-sub">you · ' +
+          oppLabel() +
+          ' · turn +' +
           turnTags +
-
           '</span>';
-
       }
-
       const role = shell.body.querySelector('.cs-kk-role');
-
       if (role) {
-
         role.innerHTML = esc(roleLabel()) + ' · <b data-clock>' + clockLabel() + '</b>';
-
       }
-
     }
-
-
 
     function tick(ts) {
-
       if (!shell.alive()) return;
-
       raf = requestAnimationFrame(tick);
-
       if (phase === 'over') return;
-
       if (paused) {
-
         lastTs = ts;
-
         return;
-
       }
-
       if (!lastTs) lastTs = ts;
-
       const dt = Math.min(0.05, (ts - lastTs) / 1000);
-
       lastTs = ts;
-
-
-
       if (performance.now() >= foulFlashUntil) fouling = false;
-
-
-
       if (phase === 'chase') {
-
-        clockMs -= dt * 1000;
-
-        if (clockMs <= 0) {
-
-          clockMs = 0;
-
-          endTurn();
-
-          softPaint();
-
-          return;
-
-        }
-
-
-
-        const a = active();
-
-        if (youAreChasing()) {
-
-          if (a && !a.seated && !khoBusy) {
-
-            const dx = a.tx - a.x;
-
-            const dy = a.ty - a.y;
-
-            const len = Math.hypot(dx, dy);
-
-            if (len > 0.008) {
-
-              const step = Math.min(len, MOVE_SPEED * dt);
-
-              applyChaseStep(a.x + (dx / len) * step, a.y + (dy / len) * step);
-
-            } else if (inPoleZone(a.y)) canTurnAtPole = true;
-
-          }
-
-          aiThinkRunners(dt, a);
-
+        if (liveOn && turnEndsAt > 0) {
+          clockMs = Math.max(0, turnEndsAt - Date.now());
         } else {
-
-          aiThinkChaser(dt);
-
-          const d = defenders.find((z) => z.id === focusRunner && !z.tagged);
-
-          if (d) moveEntityToward(d, d.tx, d.ty, HUMAN_RUN_SPEED, dt, true);
-
-          // Idle non-focused runners drift slightly
-
-          livingDefs().forEach((r) => {
-
-            if (r.id === focusRunner) return;
-
-            r.tx = r.x + Math.sin(ts / 700 + r.id) * 0.02;
-
-            r.ty = r.y;
-
-            moveEntityToward(r, r.tx, r.ty, 0.35, dt, true);
-
-          });
-
+          clockMs -= dt * 1000;
         }
-
-
-
-        tryTag();
-
+        if (clockMs <= 0) {
+          clockMs = 0;
+          endTurn();
+          softPaint();
+          return;
+        }
+        const a = active();
+        if (iAmChasing()) {
+          if (a && !a.seated && !khoBusy) {
+            const dx = a.tx - a.x;
+            const dy = a.ty - a.y;
+            const len = Math.hypot(dx, dy);
+            if (len > 0.008) {
+              const step = Math.min(len, MOVE_SPEED * dt);
+              applyChaseStep(a.x + (dx / len) * step, a.y + (dy / len) * step);
+            } else if (inPoleZone(a.y)) canTurnAtPole = true;
+          }
+          if (liveOn && remoteRunInput) {
+            applyRunInput(remoteRunInput);
+            // Chase seat advances runners toward their remote targets
+            livingDefs().forEach((d) => {
+              moveEntityToward(d, d.tx, d.ty, HUMAN_RUN_SPEED, dt, true);
+            });
+          } else if (!liveOn) {
+            aiThinkRunners(dt, a);
+          }
+          tryTag();
+          if (liveOn) {
+            syncAcc += dt * 1000;
+            if (syncAcc >= SYNC_MS) {
+              syncAcc = 0;
+              pushChaseAuthority({}, true);
+            }
+          }
+        } else {
+          if (!liveOn) {
+            aiThinkChaser(dt);
+          }
+          const d = defenders.find((z) => z.id === focusRunner && !z.tagged);
+          if (d) moveEntityToward(d, d.tx, d.ty, HUMAN_RUN_SPEED, dt, true);
+          livingDefs().forEach((r) => {
+            if (r.id === focusRunner) return;
+            r.tx = r.x + Math.sin(ts / 700 + r.id) * 0.02;
+            r.ty = r.y;
+            moveEntityToward(r, r.tx, r.ty, 0.35, dt, true);
+          });
+          if (liveOn) {
+            syncAcc += dt * 1000;
+            if (syncAcc >= SYNC_MS) {
+              syncAcc = 0;
+              pushRunInput();
+            }
+          } else {
+            tryTag();
+          }
+        }
       }
-
-
-
       softPaint();
-
     }
 
+    // —— Live join / Practice kickoff ——
+    if (liveOn && typeof DangalLive !== 'undefined') {
+      liveRoles = DangalLive.roles(chat);
+      chaseUid = liveRoles.host ? liveRoles.me : liveRoles.opp || liveRoles.playerA;
+      if (liveRoles.opp) settleOppUid = liveRoles.opp;
+      liveHandle = DangalLive.join({
+        gameType: 'khokho',
+        matchId: settleMatchId || matchIdFor(chat, 'khokho'),
+        me: liveRoles.me,
+        playerA: liveRoles.playerA,
+        playerB: liveRoles.playerB,
+        onSnap(val) {
+          if (!val || resultShown || !shell.alive()) return;
+          if (val.status === 'forfeit' || val.status === 'over') {
+            applying = true;
+            if (val.state && val.state.scores) applyScores(val.state.scores);
+            const iWon = val.winner === liveRoles.me;
+            finishMatch({
+              subtitle:
+                val.status === 'forfeit'
+                  ? iWon
+                    ? 'Opponent left'
+                    : 'You forfeited'
+                  : (val.state && val.state.msg) || '',
+              forfeit: val.status === 'forfeit',
+              iWon,
+              skipLivePush: true,
+            });
+            applying = false;
+            return;
+          }
+          const st = val.state || {};
+          applying = true;
+          if (st.scores) applyScores(st.scores);
+          if (st.eventSeq != null) eventSeq = Math.max(eventSeq, st.eventSeq | 0);
+          if (st.paused != null) {
+            if (st.paused && !paused) pauseStartedAt = Date.now();
+            if (!st.paused && paused && pauseStartedAt && st.turnEndsAt) {
+              turnEndsAt = st.turnEndsAt;
+            }
+            paused = !!st.paused;
+          }
 
+          // Defend input → chase authority
+          if (
+            st.runInput &&
+            st.runInput.by === liveRoles.opp &&
+            iAmChasing() &&
+            phase === 'chase'
+          ) {
+            remoteRunInput = st.runInput;
+          }
 
-    paint(true);
+          if (st.event && applyRemoteEvent(st.event, st)) {
+            applying = false;
+            return;
+          }
 
-    raf = requestAnimationFrame(tick);
-
+          // Mirror court onto defend seat (and soft sync scores/clock for both)
+          if (st.chaseUid) chaseUid = st.chaseUid;
+          if (st.phase === 'chase' || st.phase === 'between') {
+            if (st.phase === 'chase' && phase !== 'over') {
+              phase = 'chase';
+            } else if (st.phase === 'between' && phase !== 'over') {
+              phase = 'between';
+            }
+            if (!iAmChasing()) applyCourtMirror(st);
+            else {
+              if (st.turnEndsAt) turnEndsAt = st.turnEndsAt;
+              if (st.scores) applyScores(st.scores);
+            }
+          }
+          applying = false;
+        },
+      });
+      shell.liveHandle = liveHandle;
+      if (liveRoles.host) {
+        chaseUid = liveRoles.me;
+        turnEndsAt = Date.now() + TURN_MS;
+        clockMs = TURN_MS;
+        liveHandle.push({
+          status: 'playing',
+          turn: liveRoles.me,
+          state: Object.assign(courtStateBase(), {
+            chaseUid: liveRoles.me,
+            phase: 'chase',
+            turnEndsAt,
+            eventSeq: 0,
+          }),
+        });
+        paint(true);
+        raf = requestAnimationFrame(tick);
+      } else {
+        phase = 'between';
+        shell.body.innerHTML =
+          '<div class="cs-khokho"><p class="cs-rally-msg">Get ready to run the batch…</p></div>';
+        // Guest waits for host snap; start tick once chase state arrives
+        const waitTick = () => {
+          if (!shell.alive() || resultShown) return;
+          raf = requestAnimationFrame(waitTick);
+          if (phase === 'chase' && turnEndsAt > 0) {
+            cancelAnimationFrame(raf);
+            paint(true);
+            lastTs = 0;
+            raf = requestAnimationFrame(tick);
+          }
+        };
+        raf = requestAnimationFrame(waitTick);
+      }
+    } else {
+      chaseSide = 'you';
+      turnEndsAt = 0;
+      clockMs = TURN_MS;
+      paint(true);
+      raf = requestAnimationFrame(tick);
+    }
   }
-
-
-
   const PATANG_LAST_MODE_KEY = 'chaupaal_patang_last_mode';
   const PATANG_STREAK_KEY = 'chaupaal_patang_duel_streak';
 
@@ -5808,7 +5468,7 @@
     registerGame({
       id: 'khokho',
       name: 'Kho Kho',
-      desc: 'Practice · batches · 75s turns · AI',
+      desc: 'Live chase↔run · batches · 75s · stakes',
       icon: '🏃',
       gameType: 'solo',
       genre: 'rw_sports',
@@ -5818,12 +5478,12 @@
       chat1v1: true,
       order: 25,
       meta: {
-        phaseA: 'Court & posts — Practice shell',
+        phaseA: 'Court & posts',
         phaseB: 'Chase law — direction, lane, poles, tags',
         phaseC: 'Giving Kho — sit ↔ rise transfer',
-        phaseD: 'Defend batches · turn clock · AI',
-        phaseE: 'Live + stakes (Prompt 5)',
-        complete: false,
+        phaseD: 'Defend batches · turn clock · Practice AI',
+        phaseE: 'Live 1v1 innings + virtual stakes',
+        complete: true,
       },
       launch: openKhoKho,
     });

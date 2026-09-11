@@ -205,9 +205,9 @@
       'Live: both seats raid & defend · leave = forfeit · rematch is a fresh court · virtual stakes',
     ],
     khokho: [
-      'Batches of 3 · 75s chase turn · each side chases once (Practice AI)',
+      'Batches of 3 · 75s chase turn · each side chases once (arcade — not 9-minute federation)',
       'Give Kho to switch chasers · after a wipe, Kho before tagging the next batch',
-      'When running: tap a runner to focus, then drag to dodge',
+      'Live: one seat chases (active+Kho), the other runs the batch — then swap · leave=forfeit · virtual stakes',
     ],
     tambola: [
       'Auto-daub on a real 3×9 ticket — claim Early Five, lines, corners, then Full House',
