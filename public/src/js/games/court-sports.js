@@ -1,6 +1,6 @@
 /**
- * Court sports + Patang — timing / raid loops + Patang Live fair cuts (2/3).
- * Practice vs AI, or Live 1v1 (Kabaddi continuous sync + host cut authority).
+ * Court sports + Patang — timing / raid loops + Patang Live duel stakes (3/3 · Live v1).
+ * Practice vs AI, or Live 1v1 (first cut wins · virtual stakes once · rematch new matchId).
  */
 (function () {
   'use strict';
@@ -5691,21 +5691,33 @@
     try {
       document.querySelectorAll('.cs-patang-pick').forEach((el) => el.remove());
     } catch (e) {}
+    // Live/challenge never uses this sheet — Duel sky only.
+    try {
+      const liveChat = resolveChat(window.__dangalLaunchCtx || null);
+      if (chatLiveOn(liveChat)) {
+        openPatang({ mode: 'duel', chat: liveChat });
+        return;
+      }
+    } catch (e) {}
     const device = document.querySelector('.device');
     const duelBest = typeof getGamePB === 'function' ? getGamePB('patangbaazi_duel') : null;
     const festBest = typeof getGamePB === 'function' ? getGamePB('patangbaazi_festival') : null;
     const festCuts = typeof getGamePB === 'function' ? getGamePB('patangbaazi_festival_cuts') : null;
     const last = patangLastMode();
     const duelLine =
-      duelBest != null ? 'Best streak ' + duelBest : 'Cut the hunter · clear the sky';
+      duelBest != null
+        ? 'Best streak ' + duelBest + ' · Practice vs hunter'
+        : 'Practice vs hunter · Live from a challenge';
     const festLine =
       festBest != null
-        ? 'Best ' + festBest + 's' + (festCuts != null ? ' · ' + festCuts + ' cuts' : '')
-        : 'Last as long as you can against the heat';
+        ? 'Practice only · Best ' +
+          festBest +
+          's' +
+          (festCuts != null ? ' · ' + festCuts + ' cuts' : '')
+        : 'Practice only — last as long as you can against the heat';
 
     function pick(mode) {
       if (sheet && sheet.parentNode) sheet.remove();
-      // Tear down any running sky without leave-confirm (user already picked a sky)
       try {
         const active = document.querySelector('.game-overlay[data-game-id="patangbaazi"]');
         if (active) {
@@ -5719,11 +5731,12 @@
           }
         }
       } catch (e) {}
-      openPatang({ mode: mode });
+      // Festival is Practice-only — never open under Live chat.
+      openPatang({ mode: mode === 'festival' ? 'festival' : 'duel' });
     }
 
     if (!device) {
-      pick(last);
+      pick(last === 'festival' ? 'festival' : 'duel');
       return;
     }
 
@@ -5732,13 +5745,13 @@
     sheet.innerHTML = `
       <div class="cs-patang-pick-card" role="dialog" aria-label="Choose a sky">
         <div class="cs-patang-pick-title">Patang Baazi</div>
-        <div class="cs-patang-pick-sub">Practice rooftop skies — climb, cut, survive. Open from a Live challenge for dual flight.</div>
+        <div class="cs-patang-pick-sub">Practice skies below. Live challenge opens Duel (first cut wins) — Festival is Practice-only.</div>
         <button type="button" class="cs-patang-pick-btn${last === 'duel' ? ' is-last' : ''}" data-patang-mode="duel">
           <span class="cs-patang-pick-name">Duel</span>
           <span class="cs-patang-pick-desc">${esc(duelLine)}</span>
         </button>
         <button type="button" class="cs-patang-pick-btn${last === 'festival' ? ' is-last' : ''}" data-patang-mode="festival">
-          <span class="cs-patang-pick-name">Festival</span>
+          <span class="cs-patang-pick-name">Festival · Practice</span>
           <span class="cs-patang-pick-desc">${esc(festLine)}</span>
         </button>
         <button type="button" class="cs-patang-pick-cancel" data-patang-cancel>Cancel</button>
@@ -5751,19 +5764,31 @@
   }
 
   /**
-   * Patang Baazi — Practice duel/festival + Live dual flight + fair cuts (Prompt 2/3).
-   * Live: both fly at once; host seeds wind; kite sync ~100ms.
-   * Cuts: host resolves abrasion with Practice cut law; first decisive cut wins.
-   * No stakes (Prompt 3). Festival stays Practice.
+   * Patang Baazi — Practice duel/festival + Live duel with stakes (Prompt 3/3 · Live v1).
+   * Live: Duel only · first cut wins · host wind + cut authority · settle once · rematch new matchId.
+   * Festival: Practice-only (never on Live challenge).
    */
   function openPatang(opts) {
     const o = opts && typeof opts === 'object' ? opts : {};
     const chat = resolveChat(o.chat != null ? o.chat : arguments[0] != null ? arguments[0] : o);
     const liveOn = chatLiveOn(chat);
-    // Live always Duel sky — Festival Live out of scope.
+    // Live always Duel — Festival never on Live challenge.
     const playMode = liveOn ? 'duel' : o.mode === 'festival' ? 'festival' : 'duel';
     if (!liveOn) patangSaveMode(playMode);
     const isFestival = playMode === 'festival';
+    const liveStake = liveOn
+      ? Number(
+          (chat && chat.stake) != null
+            ? chat.stake
+            : (window.__dangalLaunchCtx && window.__dangalLaunchCtx.stake) || 0
+        ) || 0
+      : 0;
+    const settleMatchId = liveOn ? String(matchIdFor(chat, 'patangbaazi') || '').trim() : '';
+    let settleOppUid = '';
+    let settleDone = false;
+    let resultReported = false;
+    let resultShown = false;
+    let stakeSettleNote = '';
     let raf = 0;
     let pauseCtrl = null;
     let lastTs = 0;
@@ -5775,13 +5800,14 @@
     let peerPaused = false;
     let lastPushAt = 0;
     const SYNC_MS = 100;
-    /** Live win rule: first decisive cut wins (mobile-fast). Practice duel keeps WAVES_TO_WIN=2. */
+    /** Live win rule: first decisive cut wins (Prompt 2). Practice duel keeps WAVES_TO_WIN=2. */
     const LIVE_CUTS_TO_WIN = 1;
+    const liveWinLabel = LIVE_CUTS_TO_WIN === 1 ? 'First cut wins' : 'First to ' + LIVE_CUTS_TO_WIN + ' cuts';
     let cutSeq = 0;
     let appliedCutSeq = 0;
     let cutLocked = false;
     let liveCutArmed = false;
-    const matchId = liveOn ? String(matchIdFor(chat, 'patangbaazi') || '').trim() : '';
+    const matchId = settleMatchId;
     /** Host-authority wind + cut resolve — peer applies from snaps. */
     let iAmHost = true;
 
@@ -5789,15 +5815,30 @@
       id: 'patangbaazi',
       title: 'Patang Baazi',
       subtitle: liveOn
-        ? liveSub() + ' · Friendly · First cut wins'
-        : practiceSub(isFestival ? 'Festival · survive the heat' : 'Duel · cut the hunter'),
+        ? liveSub() +
+          (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') +
+          ' · ' +
+          liveWinLabel
+        : practiceSub(isFestival ? 'Festival · Practice heat' : 'Duel · cut the hunter'),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat: liveOn ? chat : undefined,
       accent: '#FF6D00',
       bg: '#001018',
       pauseId: 'csPatangPause',
+      leaveBody: liveOn
+        ? liveStake > 0
+          ? 'Leaving forfeits — virtual stake settles for your opponent.'
+          : 'Leaving forfeits this Live duel.'
+        : 'This practice run will end.',
       cleanup: () => {
+        if (liveOn && !settleDone && !resultShown) {
+          try {
+            if (liveRoles && liveRoles.opp) settleOppUid = liveRoles.opp;
+            reportPatangResult(false, false, 'leave');
+            settlePatangOnce(false, false);
+          } catch (e) {}
+        }
         cancelAnimationFrame(raf);
         raf = 0;
         window.removeEventListener('resize', onResize);
@@ -5812,27 +5853,99 @@
     });
     if (!shell) return;
 
+    const reportPatangResult = (won, isDraw, path) => {
+      if (resultReported) return;
+      resultReported = true;
+      if (typeof recordGameResult === 'function') {
+        try {
+          recordGameResult('patangbaazi', !!won && !isDraw, !!isDraw, {
+            live: !!liveOn,
+            stake: liveStake,
+            mode: liveOn ? 'live' : 'practice',
+            path: path || '',
+            score: 0,
+          });
+        } catch (e) {}
+      }
+    };
+
+    const settlePatangOnce = async (won, isDraw) => {
+      if (!liveOn || settleDone) return null;
+      if (!settleMatchId || liveStake <= 0) {
+        settleDone = true;
+        return null;
+      }
+      if (!window.DangalEconomy || typeof DangalEconomy.reportGameEnd !== 'function') {
+        settleDone = true;
+        return null;
+      }
+      settleDone = true;
+      try {
+        const me = typeof getCurrentUid === 'function' ? getCurrentUid() : '';
+        const oppU = settleOppUid || (liveRoles && liveRoles.opp) || '';
+        return await DangalEconomy.reportGameEnd({
+          gameType: 'patangbaazi',
+          result: isDraw ? 'draw' : won ? 'win' : 'loss',
+          won: !!won && !isDraw,
+          isDraw: !!isDraw,
+          matchId: settleMatchId,
+          sessionId: settleMatchId,
+          opponentUid: oppU,
+          stake: liveStake,
+          winnerUid: isDraw ? null : won ? me : oppU,
+        });
+      } catch (e) {
+        settleDone = false;
+        return null;
+      }
+    };
+
+    const freshRematch = () => {
+      try {
+        if (shell && typeof shell.close === 'function') shell.close('again');
+      } catch (e) {}
+      if (!liveOn) {
+        openPatang({ mode: playMode });
+        return;
+      }
+      try {
+        const mid =
+          typeof dangalMatchId === 'function'
+            ? dangalMatchId('patangbaazi', chat)
+            : 'patangbaazi_' + Date.now();
+        if (window.__dangalLaunchCtx) {
+          window.__dangalLaunchCtx = Object.assign({}, window.__dangalLaunchCtx, {
+            matchId: mid,
+            gameId: 'patangbaazi',
+            gameType: 'patangbaazi',
+            stake: liveStake,
+          });
+        }
+        if (chat) {
+          chat.dangalMatchId = mid;
+          chat.stake = liveStake;
+        }
+      } catch (e) {}
+      openPatang({ mode: 'duel', chat });
+    };
+
     shell.body.innerHTML = `
       <div class="cs-patang">
         ${courtTurnBanner(
           'yours',
           liveOn ? 'Live duel sky' : isFestival ? 'Festival sky' : 'Duel sky',
-          liveOn
-            ? 'First cut wins'
-            : isFestival
-              ? 'Survive the heat'
-              : 'Cut the hunter'
+          liveOn ? liveWinLabel : isFestival ? 'Survive the heat' : 'Cut the hunter'
         )}
         <p class="cs-rally-msg" data-patang-msg>${
           liveOn
-            ? 'Live duel — cross strings to cut. Host resolves the cut for both.'
+            ? 'Live duel — ' + liveWinLabel + '. Host resolves the cut for both.'
             : isFestival
               ? 'Festival heat — stay up, cut what you can, pressure never sleeps.'
               : 'Duel sky — cross their string, cut the hunter, clear two.'
         }</p>
         <canvas data-patang></canvas>
         <p class="cs-rally-hint" data-patang-hint>${
-          liveOn ? 'Hold the sky — first cut wins' : 'Hold the sky — pull to climb'
+          liveOn ? 'Hold the sky — ' + liveWinLabel.toLowerCase() : 'Hold the sky — pull to climb'
         }</p>
       </div>`;
     const canvas = shell.body.querySelector('[data-patang]');
@@ -6218,6 +6331,7 @@
       if (kind === 'snap') return 'manjha snapped';
       if (kind === 'stall') return 'rooftop dump';
       if (kind === 'cut') return 'string cut';
+      if (kind === 'forfeit') return 'forfeit';
       return kind || 'down';
     }
 
@@ -6231,6 +6345,7 @@
 
     function finishEnd() {
       if (ended || !ending) return;
+      if (liveOn && resultShown) return;
       ended = true;
       cancelAnimationFrame(raf);
       raf = 0;
@@ -6238,16 +6353,19 @@
       const cuts = stats.cuts | 0;
       const death = ending.won ? null : stats.death;
       const modeLabel = liveOn ? 'Live duel' : isFestival ? 'Festival' : 'Duel';
+      const won = !!ending.won;
+      const forfeit = death === 'forfeit' || (ending.why && String(ending.why).indexOf('left') >= 0);
 
       if (liveOn && shell && typeof shell.markOver === 'function') shell.markOver();
-      if (liveOn && iAmHost) {
+      if (liveOn && liveRoles && liveRoles.opp) settleOppUid = liveRoles.opp;
+      if (liveOn && iAmHost && !forfeit) {
         try {
           pushLive(
             { phase: 'done', cutSeq: appliedCutSeq },
             {
               force: true,
               status: 'over',
-              winner: ending.won ? liveRoles && liveRoles.me : liveRoles && liveRoles.opp,
+              winner: won ? liveRoles && liveRoles.me : liveRoles && liveRoles.opp,
             }
           );
         } catch (e) {}
@@ -6258,8 +6376,9 @@
       let streak = patangDuelStreak();
 
       if (liveOn) {
-        // Live: no Practice PB / streak updates (stakes = Prompt 3)
         pbId = 'patangbaazi_duel';
+        resultShown = true;
+        reportPatangResult(won, false, forfeit ? 'forfeit' : 'cut');
       } else if (isFestival) {
         if (typeof formatVsBest === 'function') vsBest = formatVsBest('patangbaazi_festival', secs);
         if (typeof setGamePB === 'function') {
@@ -6279,81 +6398,110 @@
         }
       }
 
-      const causeLine = ending.won
-        ? liveOn
-          ? 'First cut · ' + secs + 's'
-          : cuts + ' cut' + (cuts === 1 ? '' : 's') + ' · ' + secs + 's aloft'
-        : deathLabel(death) + ' · ' + secs + 's';
-      const subtitle = modeLabel + ' · ' + (ending.why || '') + ' · ' + causeLine;
-      const shareText = ending.won
-        ? liveOn
-          ? 'Cut their manjha in Live Patang Baazi on Chaupaal'
-          : isFestival
-            ? 'Cut ' + cuts + ' in Festival on Chaupaal Patang Baazi · ' + secs + 's aloft'
-            : 'Duel win — string cut! Streak ' + streak + ' on Chaupaal Patang Baazi'
-        : liveOn
-          ? 'String snapped in Live Patang Baazi on Chaupaal'
-          : isFestival
-            ? 'Festival run · ' + cuts + ' cuts · ' + secs + 's on Chaupaal Patang Baazi'
-            : 'Patang Baazi Duel on Chaupaal — ' + deathLabel(death);
+      const paintResult = () => {
+        const stakeLine = stakeSettleNote ? ' · ' + stakeSettleNote : '';
+        const causeLine = ending.won
+          ? liveOn
+            ? liveWinLabel + ' · ' + secs + 's'
+            : cuts + ' cut' + (cuts === 1 ? '' : 's') + ' · ' + secs + 's aloft'
+          : deathLabel(death) + ' · ' + secs + 's';
+        const subtitle =
+          modeLabel + ' · ' + (ending.why || '') + ' · ' + causeLine + stakeLine;
+        const shareText = ending.won
+          ? liveOn
+            ? 'Cut their manjha in Live Patang Baazi' +
+              (liveStake > 0 ? ' · virtual stakes' : '') +
+              ' on Chaupaal'
+            : isFestival
+              ? 'Cut ' + cuts + ' in Festival on Chaupaal Patang Baazi · ' + secs + 's aloft'
+              : 'Duel win — string cut! Streak ' + streak + ' on Chaupaal Patang Baazi'
+          : liveOn
+            ? 'String snapped in Live Patang Baazi on Chaupaal'
+            : isFestival
+              ? 'Festival run · ' + cuts + ' cuts · ' + secs + 's on Chaupaal Patang Baazi'
+              : 'Patang Baazi Duel on Chaupaal — ' + deathLabel(death);
 
-      if (shell.gs && typeof shell.gs.setOutcome === 'function') {
-        shell.gs.setOutcome(ending.won ? 'won' : 'lost');
-      }
-      if (shell && typeof shell.markOver === 'function') shell.markOver();
+        if (shell.gs && typeof shell.gs.setOutcome === 'function') {
+          shell.gs.setOutcome(ending.won ? 'won' : 'lost');
+        }
+        if (shell && typeof shell.markOver === 'function') shell.markOver();
 
-      const actions = liveOn
-        ? [
-            { label: 'Fly again', primary: true, id: 'again' },
-            { label: 'Share', primary: false, id: 'share' },
-          ]
-        : [
-            { label: 'Fly again', primary: true, id: 'again' },
-            { label: 'Change sky', primary: false, id: 'modes' },
-            { label: 'Share', primary: false, id: 'share' },
-          ];
-      const html =
-        typeof gameResultHtml === 'function'
-          ? gameResultHtml({
-              gameId: pbId,
-              glyph: ending.won ? '✓' : '·',
-              title: liveOn
-                ? ending.won
-                  ? 'You cut!'
-                  : 'Your string snapped!'
-                : resultTitle(ending.won, death),
-              subtitle,
-              vsBest: liveOn ? undefined : vsBest || undefined,
-              hideStats: true,
-              challenge: false,
-              updatePb: !liveOn,
-              actions,
-            })
-          : `<p>${esc(subtitle)}</p>`;
-      shell.body.innerHTML = html;
-      if (typeof wireGameResultActions === 'function') {
-        wireGameResultActions(shell.body, {
-          again: () => {
-            shell.close('again');
-            openPatang(liveOn ? { mode: 'duel', chat } : { mode: playMode });
-          },
-          modes: () => {
-            shell.close('modes');
-            openPatangModeSheet();
-          },
-          share: () => {
-            if (typeof openUnifiedShareSheet === 'function') {
-              openUnifiedShareSheet({
-                gameId: 'patangbaazi',
-                stats: {
-                  scoreLine: modeLabel + ' · ' + secs + 's',
-                  text: shareText,
-                },
-              });
-            }
-          },
+        const actions = liveOn
+          ? [
+              { label: 'Rematch', primary: true, id: 'again' },
+              { label: 'Share', primary: false, id: 'share' },
+            ]
+          : [
+              { label: 'Fly again', primary: true, id: 'again' },
+              { label: 'Change sky', primary: false, id: 'modes' },
+              { label: 'Share', primary: false, id: 'share' },
+            ];
+        const html =
+          typeof gameResultHtml === 'function'
+            ? gameResultHtml({
+                gameId: pbId,
+                glyph: ending.won ? '✓' : '·',
+                title: liveOn
+                  ? forfeit
+                    ? ending.won
+                      ? 'Opponent left'
+                      : 'You left'
+                    : ending.won
+                      ? 'You cut!'
+                      : 'Your string snapped!'
+                  : resultTitle(ending.won, death),
+                subtitle,
+                vsBest: liveOn ? undefined : vsBest || undefined,
+                hideStats: true,
+                challenge: false,
+                updatePb: !liveOn,
+                actions,
+              })
+            : `<p>${esc(subtitle)}</p>`;
+        shell.body.innerHTML = html;
+        if (typeof wireGameResultActions === 'function') {
+          wireGameResultActions(shell.body, {
+            again: () => {
+              if (liveOn) freshRematch();
+              else {
+                shell.close('again');
+                openPatang({ mode: playMode });
+              }
+            },
+            modes: () => {
+              shell.close('modes');
+              openPatangModeSheet();
+            },
+            share: () => {
+              if (typeof openUnifiedShareSheet === 'function') {
+                openUnifiedShareSheet({
+                  gameId: 'patangbaazi',
+                  stats: {
+                    scoreLine: modeLabel + ' · ' + secs + 's',
+                    text: shareText,
+                  },
+                });
+              }
+            },
+          });
+        }
+      };
+
+      if (liveOn) {
+        settlePatangOnce(won, false).then((settle) => {
+          stakeSettleNote = '';
+          if (liveStake > 0) {
+            const cd = settle && settle.chipDelta != null ? Number(settle.chipDelta) : null;
+            stakeSettleNote =
+              Number.isFinite(cd) && cd !== 0
+                ? 'Stake ' + (cd > 0 ? '+' : '') + cd + ' virtual'
+                : 'Virtual stakes · not real money';
+          }
+          paintResult();
         });
+        return;
       }
+      paintResult();
     }
 
     function beginWaveClear(detail) {
@@ -6902,7 +7050,7 @@
         if (abrasion.active) {
           const ahead = abrasion.oppDmg >= abrasion.youDmg;
           hint.textContent = ahead
-            ? 'Sawing — hold tension! First cut wins.'
+            ? 'Sawing — hold tension! ' + liveWinLabel + '.'
             : 'Their manjha is biting — pull hard or break away!';
           hint.classList.add('is-warn');
           return;
@@ -6919,7 +7067,7 @@
         }
         hint.textContent = holding
           ? 'Climbing — cross their string to cut'
-          : 'Floating — hold to pull · first cut wins';
+          : 'Floating — hold to pull · ' + liveWinLabel.toLowerCase();
         hint.classList.remove('is-warn');
         return;
       }
@@ -6982,7 +7130,7 @@
         18
       );
       if (liveOn) {
-        ctx.fillText('First cut wins', 12, 34);
+        ctx.fillText(liveWinLabel, 12, 34);
       } else if (isFestival) {
         const threat = Math.min(5, 1 + stats.cuts);
         ctx.fillText(Math.floor(stats.aliveSec) + 's · ' + stats.cuts + ' cuts · heat ' + threat, 12, 34);
@@ -7162,7 +7310,9 @@
             isPlaying: !ended,
             title: 'Leave Patang Baazi?',
             body: liveOn
-              ? 'Leaving forfeits this Live duel.'
+              ? liveStake > 0
+                ? 'Leaving forfeits — virtual stake settles for your opponent.'
+                : 'Leaving forfeits this Live duel.'
               : 'This practice run will end.',
           });
         },
@@ -7171,6 +7321,7 @@
 
     if (liveOn && typeof DangalLive !== 'undefined' && DangalLive.join) {
       liveRoles = DangalLive.roles(chat);
+      if (liveRoles.opp) settleOppUid = liveRoles.opp;
       iAmHost =
         liveRoles.host != null
           ? !!liveRoles.host
@@ -7368,7 +7519,7 @@
     registerGame({
       id: 'patangbaazi',
       name: 'Patang Baazi',
-      desc: 'Live · first cut wins',
+      desc: 'Live duel · Festival practice',
       icon: '🪁',
       gameType: 'dual',
       genre: 'arcade',
@@ -7380,7 +7531,8 @@
       meta: {
         phaseA: 'Live dual kite flight sync',
         phaseB: 'Fair human cut · first cut wins',
-        phaseC: 'Stakes + graduation next',
+        phaseC: 'Virtual stakes once · rematch new matchId',
+        complete: true,
       },
       launch(ctx) {
         try {

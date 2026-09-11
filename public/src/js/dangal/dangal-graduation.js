@@ -52,7 +52,7 @@
     kabaddi: { grade: 'live', sync: 'live1v1', stakes: true },
     khokho: { grade: 'live', sync: 'live1v1', stakes: true },
     bowling: { grade: 'live', sync: 'live1v1', stakes: true },
-    patangbaazi: { grade: 'live', sync: 'live1v1', stakes: false, label: 'Live 1v1' },
+    patangbaazi: { grade: 'live', sync: 'live1v1', stakes: true, label: 'Live 1v1' },
   };
 
   function getGameGraduation(gameId) {

@@ -254,9 +254,9 @@
       'Live hides the remaining deck · dealt piles public · virtual stakes only',
     ],
     patangbaazi: [
-      'Live: both fly at once — cross strings; first cut wins (host resolves)',
-      'Practice: Duel clears two hunters · Festival survives the heat',
-      'Leave = forfeit · virtual stakes arrive next Live prompt',
+      'Live duel: both fly — first cut wins (host resolves) · virtual stakes once',
+      'Festival is Practice-only heat — not on Live challenge',
+      'Leave = forfeit · Rematch = new match · Practice Duel still clears two hunters',
     ],
     brickbreaker: [
       'Campaign or Score Attack — pick before you Serve',
