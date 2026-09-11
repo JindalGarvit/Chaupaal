@@ -212,9 +212,9 @@
       'Live: one seat chases (active+Kho), the other runs the batch — then swap · leave=forfeit · virtual stakes',
     ],
     bowling: [
-      '10 frames · X = 10 + next two rolls · ／ = 10 + next one · open = pins down',
-      '10th: strike → two fills · spare → one fill · open ends after two',
-      'Gutter = 0 that ball · running total waits on X/／ until bonuses land',
+      'Alternate frames: you complete frame N, then opponent bowls N — through 10',
+      'X = 10 + next two · ／ = 10 + next one · 10th fill · Practice AI aims the same chart',
+      'Live 1v1 · leave = forfeit · rematch new match · virtual stakes once',
     ],
     tambola: [
       'Auto-daub on a real 3×9 ticket — claim Early Five, lines, corners, then Full House',

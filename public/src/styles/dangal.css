@@ -503,6 +503,19 @@
 .cs-bw-cum{display:block;font-size:10px;font-weight:700;color:#FFE082;line-height:1.2;min-height:12px;}
 .cs-bw-over .cs-bw-sheet{justify-content:center;flex-wrap:wrap;overflow:visible;}
 .cs-bowling{max-width:420px;}
+.cs-bw-sheet{flex-wrap:nowrap;align-items:stretch;}
+.cs-bw-sheet-lab{
+  flex:0 0 auto;align-self:center;font-size:10px;font-weight:800;color:#FFE082;
+  padding:0 4px 0 2px;min-width:52px;text-align:left;white-space:nowrap;
+}
+.cs-bw-total{min-width:32px;border-color:rgba(255,224,130,.45);}
+.cs-bw-total .cs-bw-cum{font-size:11px;color:#FFF8E1;}
+.cs-bw-diff{display:flex;gap:8px;justify-content:center;margin:0 0 6px;}
+.cs-bw-diff-btn{
+  min-height:36px;padding:6px 14px;border-radius:10px;font-weight:800;font-size:13px;
+  border:1px solid rgba(255,143,0,.45);background:rgba(0,0,0,.28);color:#FFCC80;
+}
+.cs-bw-diff-btn.is-on{background:rgba(255,143,0,.28);border-color:#FFE082;color:#FFF8E1;}
 .cs-kb-zone{position:absolute;left:0;right:0;pointer-events:none;display:flex;align-items:flex-start;justify-content:center;padding-top:4px;}
 .cs-kb-zone span,.cs-kb-line span{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;opacity:.75;color:#FFE0B2;}
 .cs-kb-anti{top:0;height:48%;}

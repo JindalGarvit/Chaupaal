@@ -4377,19 +4377,84 @@
   }
 
   /**
-   * Bowling Prompt 3/4 — ten-frame USBC scorebook (strike / spare / 10th fill).
-   * Prompt 1–2 throw + arcade pin chart unchanged; scoring is real bonuses.
-   * Max 300 possible (12 strikes). Arcade chart rarely perfect — still no soft-cap.
+   * Practice AI aim/power — same resolveBall + scorebook as the human.
+   * Easy: wider aim, weaker power, more gutters. Normal: pocket bias, can string X/／.
+   */
+  function aiThrowBowling(state) {
+    const s = state || {};
+    const rng = typeof s.rng === 'function' ? s.rng : Math.random;
+    const easy = String(s.aiDiff || 'normal').toLowerCase() === 'easy';
+    const standing = (s.standingCount | 0) || ((s.pinsUp && s.pinsUp.length) || 10);
+    const ball = s.ballInFrame === 2 || s.ballInFrame === 3 ? 2 : 1;
+    let aim = -0.08;
+    let power = 0.72;
+    if (easy) {
+      if (rng() < 0.22) {
+        aim = rng() < 0.5 ? -0.92 : 0.92;
+        power = 0.35 + rng() * 0.25;
+      } else {
+        aim = (rng() - 0.5) * 1.35;
+        power = 0.38 + rng() * 0.4;
+      }
+    } else {
+      if (rng() < 0.08) {
+        aim = rng() < 0.5 ? -0.85 : 0.85;
+        power = 0.4 + rng() * 0.25;
+      } else if (ball === 2 && standing <= 3) {
+        aim = -0.05 + (rng() - 0.5) * 0.22;
+        power = 0.62 + rng() * 0.28;
+      } else {
+        aim = -0.08 + (rng() - 0.5) * 0.28;
+        power = 0.58 + rng() * 0.35;
+      }
+    }
+    return {
+      aim: Math.max(-1, Math.min(1, aim)),
+      power: Math.max(0.28, Math.min(1, power)),
+    };
+  }
+
+  /**
+   * Bowling Prompt 4/4 — Practice AI + Live 1v1 alternate-frame duel + virtual stakes.
+   * Frame order: each bowler completes their frame N before the other bowls frame N
+   * (A F1 → B F1 → A F2 → … → A F10 → B F10). Separate USBC books; higher total wins.
+   * Pin RNG: active bowler resolves; peers apply pushed marks (no re-roll).
    */
   function openBowling() {
     const chat = resolveChat(arguments[0]);
+    const liveOn = chatLiveOn(chat);
     const rng = typeof rngFn === 'function' ? rngFn() : Math.random;
+    const arg0 = arguments[0] && typeof arguments[0] === 'object' ? arguments[0] : null;
+    const launchDiff = String((arg0 && arg0.aiDiff) || 'normal').toLowerCase();
+    let aiDiff = launchDiff === 'easy' ? 'easy' : 'normal';
+    let diffLocked = false;
+
+    const liveStake = liveOn
+      ? Number(
+          (chat && chat.stake) != null
+            ? chat.stake
+            : (window.__dangalLaunchCtx && window.__dangalLaunchCtx.stake) || 0
+        ) || 0
+      : 0;
+    const settleMatchId = liveOn ? String(matchIdFor(chat, 'bowling') || '').trim() : '';
+    let settleOppUid = '';
+    let settleDone = false;
+    let resultShown = false;
+    let applying = false;
+    let liveRoles = null;
+    let liveHandle = null;
+    let eventSeq = 0;
+    let appliedSeq = 0;
+    let aiTok = 0;
+    let peerPaused = false;
+
     let shellPauseCtrl = null;
     let paused = false;
     let raf = 0;
     let lastTs = 0;
     let coachShown = false;
     let resultTimer = 0;
+    let aiTimer = 0;
     let resolving = false;
     let gameOver = false;
 
@@ -4424,15 +4489,18 @@
     const shell = openShell({
       id: 'bowling',
       title: 'Bowling',
-      subtitle: practiceSub('10 frames · X / ／ · fill'),
-      mode: 'practice',
-      live: false,
+      subtitle: liveOn
+        ? liveSub() + (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly')
+        : practiceSub('vs AI · alternate frames · ' + (aiDiff === 'easy' ? 'Easy' : 'Normal')),
+      mode: liveOn ? 'live' : 'practice',
+      live: liveOn,
       chat,
       accent: '#FF8F00',
       bg: '#120A02',
       pauseId: 'csBowlingPause',
-      leaveBody: 'This practice game will end.',
+      leaveBody: liveOn ? 'You’ll forfeit this Live match.' : 'This practice game will end.',
       cleanup: () => {
+        aiTok += 1;
         if (raf) {
           cancelAnimationFrame(raf);
           raf = 0;
@@ -4440,6 +4508,10 @@
         if (resultTimer) {
           clearTimeout(resultTimer);
           resultTimer = 0;
+        }
+        if (aiTimer) {
+          clearTimeout(aiTimer);
+          aiTimer = 0;
         }
         if (shellPauseCtrl) shellPauseCtrl.destroy();
       },
@@ -4458,14 +4530,17 @@
     let drift = 0;
     let lastResult = '';
     let lastPinsDown = 0;
-    let msg = 'Frame 1 — hit the pocket.';
-    let frameIndex = 1;
+    let msg = liveOn ? 'Live 1v1 — alternate frames.' : 'You bowl frame 1, then the AI.';
+    /** Shared frame index both bowlers play (1–10). */
+    let frameRound = 1;
     /** @type {1|2|3} */
     let ballInFrame = 1;
+    /** Active seat within the round: A bowls first each frameRound. */
+    let bowlerSeat = 'A';
     /** @type {Record<number, 'up'|'down'>} */
     let pins = {};
-    /** @type {{balls:number[], mark:string|null, score:number|null, cumulative:number|null}[]} */
-    let frames = scoreBowling([]);
+    let bookA = scoreBowling([]);
+    let bookB = scoreBowling([]);
 
     function resetRack() {
       for (let i = 1; i <= 10; i++) pins[i] = 'up';
@@ -4487,21 +4562,76 @@
         .join(',');
       return s === '7,10' || s === '4,6' || s === '4,6,7,10' || s === '2,3';
     }
-    function runningTotal() {
+    function bookTotal(book) {
       let last = 0;
-      for (let i = 0; i < 10; i++) {
-        if (frames[i].cumulative != null) last = frames[i].cumulative;
-      }
+      (book || []).forEach((f) => {
+        if (f.cumulative != null) last = f.cumulative;
+      });
       return last;
     }
-    function countMarks() {
+    function countMarks(book) {
       let x = 0;
       let sp = 0;
-      frames.forEach((f) => {
+      (book || []).forEach((f) => {
         if (f.mark === 'X') x += 1;
         if (f.mark === '/') sp += 1;
       });
       return { strikes: x, spares: sp };
+    }
+    function mySeat() {
+      if (!liveOn || !liveRoles) return 'A';
+      return liveRoles.me === liveRoles.playerA ? 'A' : 'B';
+    }
+    function oppSeat() {
+      return mySeat() === 'A' ? 'B' : 'A';
+    }
+    function bookForSeat(seat) {
+      return seat === 'A' ? bookA : bookB;
+    }
+    function setBookForSeat(seat, book) {
+      if (seat === 'A') bookA = book;
+      else bookB = book;
+    }
+    function myBook() {
+      return bookForSeat(mySeat());
+    }
+    function oppBook() {
+      return bookForSeat(oppSeat());
+    }
+    function activeBook() {
+      return bookForSeat(bowlerSeat);
+    }
+    function uidForSeat(seat) {
+      if (!liveRoles) return '';
+      return seat === 'A' ? liveRoles.playerA : liveRoles.playerB;
+    }
+    function iAmBowling() {
+      if (gameOver) return false;
+      if (!liveOn) return bowlerSeat === 'A';
+      return !!(liveRoles && bowlerSeat === mySeat());
+    }
+    function isFrozen() {
+      return !!(paused || peerPaused);
+    }
+
+    function serializeBook(book) {
+      return (book || []).map((f) => ({
+        balls: (f.balls || []).slice(),
+        mark: f.mark || null,
+        score: f.score,
+        cumulative: f.cumulative,
+      }));
+    }
+    function serializePins() {
+      const o = {};
+      for (let i = 1; i <= 10; i++) o[i] = pins[i] === 'down' ? 'down' : 'up';
+      return o;
+    }
+    function applyPins(snap) {
+      if (!snap) return;
+      for (let i = 1; i <= 10; i++) {
+        pins[i] = snap[i] === 'down' ? 'down' : 'up';
+      }
     }
 
     function resolveBall(input) {
@@ -4577,43 +4707,18 @@
       const downIds = up.filter((id) => downSet.has(id));
       const leaveIds = up.filter((id) => !downSet.has(id));
       let flag = '';
-      if (ball === 1 && leaveIds.length === 0 && up.length === 10) flag = 'strike';
-      if (ball === 2 && leaveIds.length === 0) flag = 'spare';
+      if (ball === 1 && downIds.length === 10) flag = 'strike';
+      else if (ball === 2 && leaveIds.length === 0 && up.length > 0) flag = 'spare';
       return { downIds, leaveIds, flag };
-    }
-
-    if (typeof createGamePauseController === 'function') {
-      shellPauseCtrl = createGamePauseController({
-        host: shell.host || shell.overlay,
-        pauseBtnId: 'csBowlingPause',
-        onPause() {
-          paused = true;
-        },
-        onResume() {
-          paused = false;
-          lastTs = 0;
-        },
-        onQuit: () => {
-          confirmAndClose(shell, {
-            live: false,
-            isPlaying: !gameOver && phase === 'flying',
-            title: 'Leave Bowling?',
-            body: 'This practice game will end.',
-          });
-        },
-      });
     }
 
     function pinRackHtml() {
       let h = '';
       for (let id = 1; id <= 10; id++) {
         const p = PIN_SPOTS[id];
-        const down = pins[id] === 'down';
         h +=
           '<span class="cs-bw-pin' +
-          (down ? ' is-down' : '') +
-          '" data-pin="' +
-          id +
+          (pins[id] === 'down' ? ' is-down' : '') +
           '" style="left:' +
           p[0] * 100 +
           '%;top:' +
@@ -4635,12 +4740,22 @@
       return h;
     }
 
-    function frameStripHtml() {
-      let h = '<div class="cs-bw-sheet" role="table" aria-label="Score sheet">';
+    function frameStripHtml(book, opts) {
+      const o = opts || {};
+      const curIdx = o.current ? frameRound - 1 : -1;
+      let h =
+        '<div class="cs-bw-sheet' +
+        (o.mine ? ' is-mine' : '') +
+        '" role="table" aria-label="' +
+        esc(o.label || 'Score') +
+        '">';
+      if (o.label) {
+        h += '<div class="cs-bw-sheet-lab">' + esc(o.label) + '</div>';
+      }
       for (let i = 0; i < 10; i++) {
-        const fr = frames[i];
-        const cur = !gameOver && i === frameIndex - 1;
-        const b = fr.balls;
+        const fr = book[i] || { balls: [] };
+        const cur = !gameOver && o.current && i === curIdx;
+        const b = fr.balls || [];
         let c1 = '';
         let c2 = '';
         let c3 = '';
@@ -4655,7 +4770,6 @@
             }
           }
         } else {
-          // 10th: up to 3 cells
           if (b.length >= 1) {
             c1 = b[0] === 10 ? 'X' : b[0] === 0 ? '-' : String(b[0]);
           }
@@ -4685,31 +4799,35 @@
           esc(tot) +
           '</span></div>';
       }
+      h +=
+        '<div class="cs-bw-frame cs-bw-total"><span class="cs-bw-fn">Σ</span><span class="cs-bw-cum">' +
+        bookTotal(book) +
+        '</span></div>';
       h += '</div>';
       return h;
     }
 
     /**
-     * Record pins for current ball; returns next step.
+     * Record pins for active bowler's current ball.
      * @returns {'ball2'|'fill'|'frame'|'over'}
      */
     function applyDelivery(pinsDown) {
       const n = Math.max(0, Math.min(10, pinsDown | 0));
-      const fi = frameIndex - 1;
-      const fr = frames[fi];
-      fr.balls.push(n);
-      frames = scoreBowling(frames);
+      const fi = frameRound - 1;
+      let book = activeBook().map((f) => ({ balls: (f.balls || []).slice() }));
+      if (!book[fi]) book[fi] = { balls: [] };
+      book[fi].balls.push(n);
+      book = scoreBowling(book);
+      setBookForSeat(bowlerSeat, book);
 
+      const fr = book[fi];
+      const b = fr.balls;
       if (fi < 9) {
         if (ballInFrame === 1 && n === 10) return 'frame';
         if (ballInFrame === 1) return 'ball2';
         return 'frame';
       }
-      // 10th
-      const b = fr.balls;
-      if (b.length === 1) {
-        return n === 10 ? 'fill' : 'ball2';
-      }
+      if (b.length === 1) return n === 10 ? 'fill' : 'ball2';
       if (b.length === 2) {
         if (b[0] === 10) return 'fill';
         if (b[0] + b[1] === 10) return 'fill';
@@ -4718,91 +4836,243 @@
       return 'over';
     }
 
-    function endGame() {
-      if (gameOver) return;
+    function pushLive(status, extra) {
+      if (!liveOn || !liveHandle || !liveRoles || applying) return;
+      eventSeq += 1;
+      const youTot = bookTotal(myBook());
+      const oppTot = bookTotal(oppBook());
+      const st = Object.assign(
+        {
+          frameRound,
+          ballInFrame,
+          bowlerSeat,
+          books: { A: serializeBook(bookA), B: serializeBook(bookB) },
+          pins: serializePins(),
+          eventSeq,
+          phase: phase === 'flying' ? 'aim' : phase,
+          msg: msg || '',
+          scores: {
+            a: bookTotal(bookA),
+            b: bookTotal(bookB),
+          },
+          lastPinsDown,
+          lastResult,
+          paused: !!paused,
+          aiDiff: null,
+        },
+        extra || {}
+      );
+      try {
+        liveHandle.push({
+          status: status || (gameOver ? 'over' : 'playing'),
+          turn: uidForSeat(bowlerSeat),
+          winner:
+            status === 'over' || status === 'forfeit'
+              ? youTot === oppTot
+                ? null
+                : youTot > oppTot
+                  ? liveRoles.me
+                  : liveRoles.opp
+              : null,
+          state: st,
+        });
+        appliedSeq = Math.max(appliedSeq, eventSeq);
+      } catch (e) {}
+    }
+
+    async function settleBowlingOnce(won, isDraw) {
+      if (!liveOn || settleDone) return null;
+      if (!settleMatchId || liveStake <= 0) {
+        settleDone = true;
+        return null;
+      }
+      if (!window.DangalEconomy || typeof DangalEconomy.reportGameEnd !== 'function') {
+        settleDone = true;
+        return null;
+      }
+      settleDone = true;
+      try {
+        const me = typeof getCurrentUid === 'function' ? getCurrentUid() : '';
+        const oppU = settleOppUid || (liveRoles && liveRoles.opp) || '';
+        return await DangalEconomy.reportGameEnd({
+          gameType: 'bowling',
+          result: isDraw ? 'draw' : won ? 'win' : 'loss',
+          won: !!won && !isDraw,
+          isDraw: !!isDraw,
+          matchId: settleMatchId,
+          sessionId: settleMatchId,
+          opponentUid: oppU,
+          stake: liveStake,
+          winnerUid: isDraw ? null : won ? me : oppU,
+        });
+      } catch (e) {
+        settleDone = false;
+        return null;
+      }
+    }
+
+    function freshRematch() {
+      if (!liveOn) {
+        openBowling({ chat: chat, aiDiff: aiDiff });
+        return;
+      }
+      try {
+        const mid =
+          typeof dangalMatchId === 'function'
+            ? dangalMatchId('bowling', chat)
+            : 'bowling_' + Date.now();
+        if (window.__dangalLaunchCtx) {
+          window.__dangalLaunchCtx = Object.assign({}, window.__dangalLaunchCtx, {
+            matchId: mid,
+            gameId: 'bowling',
+            gameType: 'bowling',
+            stake: liveStake,
+          });
+        }
+        if (chat) {
+          chat.dangalMatchId = mid;
+          chat.stake = liveStake;
+        }
+      } catch (e) {}
+      openBowling(chat);
+    }
+
+    function endGame(opts) {
+      const o = opts || {};
+      if (resultShown) return;
+      resultShown = true;
       gameOver = true;
       phase = 'result';
+      aiTok += 1;
       if (raf) {
         cancelAnimationFrame(raf);
         raf = 0;
       }
+      if (aiTimer) {
+        clearTimeout(aiTimer);
+        aiTimer = 0;
+      }
       if (shell.markOver) shell.markOver();
-      const total = runningTotal();
-      const marks = countMarks();
+      if (liveRoles && liveRoles.opp) settleOppUid = liveRoles.opp;
+
+      const you = bookTotal(myBook());
+      const opp = bookTotal(oppBook());
+      const forfeit = !!o.forfeit;
+      const draw = !forfeit && you === opp;
+      const won = forfeit ? !!o.iWon : you > opp;
+      const myMarks = countMarks(myBook());
+
       if (typeof recordGameResult === 'function') {
         try {
-          recordGameResult('bowling', true, false, {
-            live: false,
-            mode: 'practice',
-            score: total,
+          recordGameResult('bowling', !!won && !draw, !!draw, {
+            live: !!liveOn,
+            stake: liveStake,
+            mode: liveOn ? 'live' : 'practice',
+            score: you,
           });
         } catch (e) {}
       }
-      if (typeof setGamePB === 'function') setGamePB('bowling', total);
-      buzz('win');
-      const sub =
-        total +
-        ' · ' +
-        marks.strikes +
-        'X · ' +
-        marks.spares +
-        '／ · Practice 10-frame';
-      shell.body.innerHTML =
-        '<div class="cs-bowling cs-bw-over">' +
-        frameStripHtml() +
-        '<p class="cs-rally-msg">Game over</p>' +
-        '<div class="cs-rally-score"><strong>' +
-        total +
-        '</strong><span class="cs-rally-score-sub">total · max 300</span></div>' +
-        '<p class="cs-bw-meta">' +
-        esc(sub) +
-        '</p>' +
-        '<div class="cs-bw-controls"><button type="button" class="cs-hit cs-bw-throw" data-again>Bowl again</button></div>' +
-        '</div>';
-      shell.body.querySelector('[data-again]')?.addEventListener('click', () => {
-        shell.close('restart');
-        openBowling(chat);
-      });
-      if (typeof wireGameResultActions === 'function') {
-        wireGameResultActions(shell.body, {
-          again: () => {
-            shell.close('restart');
-            openBowling(chat);
-          },
-          share: () => {
-            if (typeof openUnifiedShareSheet === 'function') {
-              openUnifiedShareSheet({
-                gameId: 'bowling',
-                stats: { scoreLine: String(total), text: 'Bowling ' + total + ' on Chaupaal' },
-              });
-            }
-          },
-        });
+
+      if (liveOn && liveHandle && liveRoles && !o.skipPush && !applying) {
+        pushLive(forfeit ? 'forfeit' : 'over', { msg: o.msg || '' });
       }
+
+      const baseSub =
+        (o.msg ? o.msg + ' · ' : '') +
+        you +
+        '–' +
+        opp +
+        ' · ' +
+        myMarks.strikes +
+        'X · ' +
+        myMarks.spares +
+        '／' +
+        (liveOn ? '' : ' · vs AI');
+
+      settleBowlingOnce(won, draw).then((settle) => {
+        let sub = baseSub;
+        if (liveOn && liveStake > 0) {
+          const cd = settle && settle.chipDelta != null ? Number(settle.chipDelta) : null;
+          sub +=
+            ' · ' +
+            (Number.isFinite(cd) && cd !== 0
+              ? 'Stake ' + (cd > 0 ? '+' : '') + cd + ' virtual'
+              : 'Virtual stakes · not real money');
+        } else if (liveOn) {
+          sub += ' · Live 1v1 · Friendly';
+        }
+        showDuelResult(shell, {
+          id: 'bowling',
+          you: forfeit ? (won ? Math.max(you, 1) : you) : you,
+          opp: forfeit ? (won ? opp : Math.max(opp, 1)) : opp,
+          glyph: '🎳',
+          pbScore: you,
+          subtitle: sub,
+          shareText: 'Bowling on Chaupaal: ' + you + '–' + opp,
+          onAgain: freshRematch,
+        });
+      });
+    }
+
+    function advanceAfterFrame() {
+      if (bowlerSeat === 'A') {
+        bowlerSeat = 'B';
+        ballInFrame = 1;
+        resetRack();
+        resetBallAim();
+        msg = iAmBowling()
+          ? 'Your turn — frame ' + frameRound
+          : (!liveOn ? 'AI bowls frame ' : 'Opponent bowls frame ') + frameRound;
+        if (liveOn) pushLive('playing');
+        paint();
+        scheduleAiIfNeeded();
+        return;
+      }
+      // B finished this round
+      if (frameRound >= 10) {
+        if (liveOn) pushLive('over');
+        endGame({ skipPush: true });
+        return;
+      }
+      frameRound += 1;
+      bowlerSeat = 'A';
+      ballInFrame = 1;
+      resetRack();
+      resetBallAim();
+      msg = iAmBowling()
+        ? 'Frame ' + frameRound + ' — your turn'
+        : (!liveOn ? 'AI bowls frame ' : 'Opponent bowls frame ') + frameRound;
+      if (liveOn) pushLive('playing');
+      paint();
+      scheduleAiIfNeeded();
     }
 
     function advanceAfterBall(step) {
       if (step === 'over') {
-        msg = 'Final frame locked · ' + runningTotal();
+        // Active bowler's 10th frame complete
+        msg = 'Frame 10 locked · ' + bookTotal(activeBook());
+        if (liveOn) pushLive('playing');
         resultTimer = setTimeout(() => {
           resultTimer = 0;
-          if (!shell.alive()) return;
-          endGame();
-        }, 900);
+          if (!shell.alive() || gameOver) return;
+          advanceAfterFrame();
+        }, 800);
         paint();
         return;
       }
       if (step === 'ball2') {
         msg = lastPinsDown + ' down — clean the leave (ball 2)';
-        if (typeof showToast === 'function') showToast(lastPinsDown + ' pins');
-        buzz(lastPinsDown > 0 ? 'hit' : 'lose', { noConfetti: true });
+        if (iAmBowling() && typeof showToast === 'function') showToast(lastPinsDown + ' pins');
+        if (iAmBowling()) buzz(lastPinsDown > 0 ? 'hit' : 'lose', { noConfetti: true });
         resultTimer = setTimeout(() => {
           resultTimer = 0;
           if (!shell.alive() || gameOver) return;
           ballInFrame = 2;
           resetBallAim();
+          if (liveOn) pushLive('playing');
           paint();
-        }, 850);
+          scheduleAiIfNeeded();
+        }, 750);
         paint();
         return;
       }
@@ -4813,45 +5083,42 @@
             ? 'Fill strike — new rack'
             : '10th fill · fresh rack'
           : '10th fill · clean the leave';
-        buzz(lastPinsDown === 10 ? 'win' : 'hit', { noConfetti: lastPinsDown < 10 });
-        if (typeof showToast === 'function') {
-          showToast(lastPinsDown === 10 ? 'Strike!' : lastPinsDown + ' pins');
+        if (iAmBowling()) {
+          buzz(lastPinsDown === 10 ? 'win' : 'hit', { noConfetti: lastPinsDown < 10 });
+          if (typeof showToast === 'function') {
+            showToast(lastPinsDown === 10 ? 'Strike!' : lastPinsDown + ' pins');
+          }
         }
         resultTimer = setTimeout(() => {
           resultTimer = 0;
           if (!shell.alive() || gameOver) return;
           ballInFrame = Math.min(3, ballInFrame + 1);
-          // Reset only when rack empty (strike/spare); leave stands for next fill
           if (needFresh) resetRack();
           resetBallAim();
+          if (liveOn) pushLive('playing');
           paint();
-        }, 900);
+          scheduleAiIfNeeded();
+        }, 750);
         paint();
         return;
       }
-      // next frame
+      // frame complete (1–9)
       const wasStrike = lastPinsDown === 10 && ballInFrame === 1;
-      msg = wasStrike ? 'Strike! Frame ' + (frameIndex + 1) : 'Frame locked · next rack';
-      if (wasStrike) {
-        buzz('win');
-        if (typeof showToast === 'function') showToast('Strike!');
-      } else {
-        buzz(lastPinsDown > 0 ? 'hit' : 'lose', { noConfetti: true });
+      msg = wasStrike ? 'Strike! Frame locked' : 'Frame locked';
+      if (iAmBowling()) {
+        if (wasStrike) {
+          buzz('win');
+          if (typeof showToast === 'function') showToast('Strike!');
+        } else {
+          buzz(lastPinsDown > 0 ? 'hit' : 'lose', { noConfetti: true });
+        }
       }
+      if (liveOn) pushLive('playing');
       resultTimer = setTimeout(() => {
         resultTimer = 0;
         if (!shell.alive() || gameOver) return;
-        if (frameIndex >= 10) {
-          endGame();
-          return;
-        }
-        frameIndex += 1;
-        ballInFrame = 1;
-        resetRack();
-        resetBallAim();
-        msg = 'Frame ' + frameIndex + ' — hit the pocket';
-        paint();
-      }, 900);
+        advanceAfterFrame();
+      }, 800);
       paint();
     }
 
@@ -4864,9 +5131,34 @@
       lastTs = 0;
     }
 
-    function beginThrow() {
-      if (gameOver || phase !== 'aim' || paused || resolving) return;
-      // Fill balls / fresh frame: empty rack must be reset
+    function scheduleAiIfNeeded() {
+      if (liveOn || gameOver || bowlerSeat !== 'B' || phase !== 'aim' || isFrozen()) return;
+      const tok = ++aiTok;
+      msg = 'Opponent bowling…';
+      paint();
+      if (aiTimer) clearTimeout(aiTimer);
+      aiTimer = setTimeout(() => {
+        aiTimer = 0;
+        if (tok !== aiTok || !shell.alive() || gameOver || bowlerSeat !== 'B' || phase !== 'aim') return;
+        if (standingCount() === 0) resetRack();
+        const t = aiThrowBowling({
+          aiDiff,
+          ballInFrame,
+          standingCount: standingCount(),
+          pinsUp: pinsUpList(),
+          rng,
+        });
+        aim = t.aim;
+        power = t.power;
+        beginThrow(true);
+      }, 650 + Math.floor(rng() * 400));
+    }
+
+    function beginThrow(fromAi) {
+      if (gameOver || phase !== 'aim' || isFrozen() || resolving) return;
+      if (!fromAi && !iAmBowling()) return;
+      if (!fromAi && liveOn && liveRoles && uidForSeat(bowlerSeat) !== liveRoles.me) return;
+      if (!liveOn && !fromAi) diffLocked = true;
       if (standingCount() === 0) resetRack();
       aim = Math.max(-1, Math.min(1, aim));
       power = Math.max(0.28, Math.min(1, power));
@@ -4878,8 +5170,8 @@
       flightT = 0;
       phase = 'flying';
       lastResult = '';
-      msg = 'Ball rolling…';
-      buzz('select');
+      msg = fromAi ? 'Opponent rolling…' : 'Ball rolling…';
+      if (!fromAi) buzz('select');
       lastTs = 0;
       if (!raf) raf = requestAnimationFrame(tick);
       softPaintFlying();
@@ -4887,6 +5179,8 @@
 
     function resolveThrow() {
       if (resolving || phase === 'result' || gameOver) return;
+      // Live: only active bowler resolves RNG
+      if (liveOn && !iAmBowling()) return;
       resolving = true;
       phase = 'result';
       const gutter = Math.abs(ballX - 0.5) > GUTTER_AIM * 0.42 || ballX < 0.12 || ballX > 0.88;
@@ -4904,8 +5198,8 @@
         lastPinsDown = 0;
         lastResult = 'gutter';
         msg = 'Gutter — 0';
-        if (typeof showToast === 'function') showToast('Gutter');
-        buzz('lose', { noConfetti: true });
+        if (iAmBowling() && typeof showToast === 'function') showToast('Gutter');
+        if (iAmBowling()) buzz('lose', { noConfetti: true });
       } else {
         resolved.downIds.forEach((id) => {
           pins[id] = 'down';
@@ -4920,31 +5214,95 @@
       }
       const pinsThisBall = gutter ? 0 : lastPinsDown;
       const step = applyDelivery(pinsThisBall);
+      if (liveOn) pushLive('playing');
       paint();
       advanceAfterBall(step);
+    }
+
+    function applyRemoteSnap(st, val) {
+      if (!st) return;
+      if (st.eventSeq != null) {
+        const seq = st.eventSeq | 0;
+        if (seq <= appliedSeq) return false;
+        appliedSeq = seq;
+        eventSeq = Math.max(eventSeq, seq);
+      }
+      if (st.books && st.books.A) bookA = scoreBowling(st.books.A);
+      if (st.books && st.books.B) bookB = scoreBowling(st.books.B);
+      if (st.frameRound != null) frameRound = Math.max(1, Math.min(10, st.frameRound | 0));
+      if (st.ballInFrame != null) ballInFrame = Math.max(1, Math.min(3, st.ballInFrame | 0));
+      if (st.bowlerSeat === 'A' || st.bowlerSeat === 'B') bowlerSeat = st.bowlerSeat;
+      if (st.pins) applyPins(st.pins);
+      if (st.lastPinsDown != null) lastPinsDown = st.lastPinsDown | 0;
+      if (st.lastResult) lastResult = st.lastResult;
+      if (st.msg) msg = st.msg;
+      if (st.paused != null) peerPaused = !!st.paused && !paused;
+      phase = 'aim';
+      resolving = false;
+      resetBallAim();
+      return true;
+    }
+
+    function setAiDiff(d) {
+      if (liveOn || diffLocked || gameOver) return;
+      aiDiff = d === 'easy' ? 'easy' : 'normal';
+      buzz('select');
+      try {
+        if (shell.setSubtitle) {
+          shell.setSubtitle(
+            practiceSub('vs AI · alternate frames · ' + (aiDiff === 'easy' ? 'Easy' : 'Normal'))
+          );
+        }
+      } catch (e) {}
+      paint();
     }
 
     function paint() {
       if (!shell.alive() || gameOver) return;
       const aimPct = Math.round(((aim + 1) / 2) * 100);
       const powPct = Math.round(power * 100);
-      const tot = runningTotal();
+      const youT = bookTotal(myBook());
+      const oppT = bookTotal(oppBook());
+      const active = iAmBowling() && phase === 'aim' && !isFrozen();
+      const waiting = !iAmBowling() && !gameOver;
+      const showDiff = !liveOn && !diffLocked && frameRound === 1 && bowlerSeat === 'A' && !gameOver;
+
       shell.body.innerHTML =
         '<div class="cs-bowling">' +
-        frameStripHtml() +
+        frameStripHtml(myBook(), {
+          label: 'You ' + youT,
+          mine: true,
+          current: bowlerSeat === mySeat(),
+        }) +
+        frameStripHtml(oppBook(), {
+          label: (liveOn ? 'Opp ' : 'AI ') + oppT,
+          current: bowlerSeat === oppSeat(),
+        }) +
         '<div class="cs-rally-score"><strong>' +
-        tot +
+        youT +
+        '–' +
+        oppT +
         '</strong><span class="cs-rally-score-sub">F' +
-        frameIndex +
-        ' · Ball ' +
-        ballInFrame +
+        frameRound +
         ' · ' +
-        standingCount() +
-        ' up</span></div>' +
+        (iAmBowling() ? 'Your' : waiting ? 'Their' : '') +
+        ' ball ' +
+        ballInFrame +
+        (waiting ? ' · waiting' : '') +
+        '</span></div>' +
         '<p class="cs-rally-msg">' +
-        esc(msg) +
-        (paused ? ' · Paused' : '') +
+        esc(waiting && phase === 'aim' ? 'Opponent bowling…' : msg) +
+        (isFrozen() ? ' · Paused' : '') +
         '</p>' +
+        (showDiff
+          ? '<div class="cs-bw-diff" role="group" aria-label="AI difficulty">' +
+            '<button type="button" class="cs-bw-diff-btn' +
+            (aiDiff === 'easy' ? ' is-on' : '') +
+            '" data-diff="easy">Easy</button>' +
+            '<button type="button" class="cs-bw-diff-btn' +
+            (aiDiff === 'normal' ? ' is-on' : '') +
+            '" data-diff="normal">Normal</button></div>'
+          : '') +
         '<div class="cs-bw-lane' +
         (lastResult === 'gutter' ? ' is-gutter' : '') +
         (lastResult === 'strike' || lastResult === 'spare' || lastResult === 'hit' ? ' is-pocket' : '') +
@@ -4972,7 +5330,7 @@
         '<input type="range" min="0" max="100" value="' +
         aimPct +
         '" data-aim' +
-        (phase !== 'aim' ? ' disabled' : '') +
+        (!active ? ' disabled' : '') +
         ' /></label>' +
         '<label class="cs-bw-slider">Power <b data-pow-lab>' +
         powPct +
@@ -4980,19 +5338,24 @@
         '<input type="range" min="28" max="100" value="' +
         powPct +
         '" data-power' +
-        (phase !== 'aim' ? ' disabled' : '') +
+        (!active ? ' disabled' : '') +
         ' /></label>' +
         '<button type="button" class="cs-hit cs-bw-throw" data-throw' +
-        (phase !== 'aim' || paused ? ' disabled' : '') +
-        '>Throw</button>' +
+        (!active ? ' disabled' : '') +
+        '>' +
+        (waiting ? 'Waiting…' : 'Throw') +
+        '</button>' +
         '</div>' +
-        '<p class="cs-bw-meta">X = 10 + next two · ／ = 10 + next one · 10th fill up to 3 balls</p>' +
+        '<p class="cs-bw-meta">Alternate frames · A then B each frame · X/／ USBC · Live settles once</p>' +
         '</div>';
 
+      shell.body.querySelectorAll('[data-diff]').forEach((btn) => {
+        btn.addEventListener('click', () => setAiDiff(btn.getAttribute('data-diff')));
+      });
       const aimEl = shell.body.querySelector('[data-aim]');
       const powEl = shell.body.querySelector('[data-power]');
       aimEl?.addEventListener('input', () => {
-        if (phase !== 'aim') return;
+        if (!active) return;
         aim = (aimEl.value | 0) / 50 - 1;
         ballX = 0.5 + aim * 0.12;
         const lab = shell.body.querySelector('[data-aim-lab]');
@@ -5000,23 +5363,28 @@
         softPaintFlying();
       });
       powEl?.addEventListener('input', () => {
-        if (phase !== 'aim') return;
+        if (!active) return;
         power = Math.max(0.28, (powEl.value | 0) / 100);
         const lab = shell.body.querySelector('[data-pow-lab]');
         if (lab) lab.textContent = Math.round(power * 100) + '%';
       });
-      shell.body.querySelector('[data-throw]')?.addEventListener('click', () => beginThrow());
+      shell.body.querySelector('[data-throw]')?.addEventListener('click', () => beginThrow(false));
 
       if (!coachShown) {
         coachShown = true;
         if (typeof showToast === 'function') {
-          showToast('Ten frames — strikes wait for the next two rolls.');
+          showToast(
+            liveOn
+              ? 'Alternate frames — you bowl yours, then they bowl theirs.'
+              : 'You vs AI — alternate frames through 10.'
+          );
         }
       }
       if (typeof GameUI !== 'undefined' && GameUI.attachHowTo) {
         GameUI.attachHowTo(shell.overlay, {
           title: 'Bowling',
-          body: 'X (strike) = 10 + next two deliveries. ／ (spare) = 10 + next one. Open = pins this frame. 10th: strike gets two fills, spare one fill. Gutter is 0 that ball. Arcade pins; scorebook is USBC-style.',
+          body:
+            'Alternate frames: each bowler completes frame N before the other bowls N. X = 10 + next two · ／ = 10 + next one · 10th fill. Practice AI uses aim/power. Live 1v1 · leave=forfeit · virtual stakes once.',
         });
       }
     }
@@ -5028,13 +5396,17 @@
         el.style.top = ballY * 100 + '%';
       }
       const msgEl = shell.body.querySelector('.cs-rally-msg');
-      if (msgEl) msgEl.textContent = msg + (paused ? ' · Paused' : '');
+      if (msgEl) {
+        msgEl.textContent =
+          (!iAmBowling() && phase === 'aim' ? 'Opponent bowling…' : msg) +
+          (isFrozen() ? ' · Paused' : '');
+      }
     }
 
     function tick(ts) {
       if (!shell.alive() || gameOver) return;
       raf = requestAnimationFrame(tick);
-      if (paused || phase !== 'flying') {
+      if (isFrozen() || phase !== 'flying') {
         lastTs = ts;
         return;
       }
@@ -5049,8 +5421,100 @@
       if (u >= 1) resolveThrow();
     }
 
+    function pushPauseState(p) {
+      if (!liveOn || !liveHandle || gameOver) return;
+      paused = !!p;
+      pushLive('playing', { paused: !!p });
+    }
+
+    if (typeof createGamePauseController === 'function') {
+      shellPauseCtrl = createGamePauseController({
+        host: shell.host || shell.overlay,
+        pauseBtnId: 'csBowlingPause',
+        onPause() {
+          paused = true;
+          pushPauseState(true);
+        },
+        onResume() {
+          paused = false;
+          pushPauseState(false);
+          scheduleAiIfNeeded();
+        },
+        onQuit: () => shell.close('dismissed'),
+      });
+    }
+
+    if (liveOn && typeof DangalLive !== 'undefined') {
+      const roles = DangalLive.roles(chat);
+      liveRoles = roles;
+      settleOppUid = roles.opp || '';
+      liveHandle = DangalLive.join({
+        gameType: 'bowling',
+        matchId: settleMatchId || matchIdFor(chat, 'bowling'),
+        me: roles.me,
+        playerA: roles.playerA,
+        playerB: roles.playerB,
+        onSnap(val) {
+          if (!val || gameOver || !shell.alive()) return;
+          if (val.status === 'forfeit' || val.status === 'over') {
+            applying = true;
+            const st0 = val.state || {};
+            applyRemoteSnap(st0, val);
+            const iWonEnd = val.winner == null ? bookTotal(myBook()) > bookTotal(oppBook()) : val.winner === roles.me;
+            endGame({
+              skipPush: true,
+              forfeit: val.status === 'forfeit',
+              iWon: iWonEnd,
+              msg: val.status === 'forfeit' ? (iWonEnd ? 'Opponent left' : 'You left') : '',
+            });
+            applying = false;
+            return;
+          }
+          const st = val.state || {};
+          // Ignore our own echo if we're mid-resolve (eventSeq we just pushed)
+          if (st.eventSeq != null && (st.eventSeq | 0) <= appliedSeq && iAmBowling() && phase === 'flying') {
+            return;
+          }
+          applying = true;
+          const changed = applyRemoteSnap(st, val);
+          applying = false;
+          if (changed) {
+            paint();
+            // Peer finished a ball — we only watch; if it's now our turn, enable throw
+            if (iAmBowling() && phase === 'aim') {
+              msg = st.msg || 'Your turn — frame ' + frameRound;
+            } else if (!iAmBowling()) {
+              msg = st.msg || 'Opponent bowling…';
+            }
+            paint();
+          }
+        },
+        onForfeit(info) {
+          if (gameOver) return;
+          const iWon = info && info.winner === roles.me;
+          endGame({
+            skipPush: true,
+            forfeit: true,
+            iWon: !!iWon,
+            msg: iWon ? 'Opponent left' : 'You left',
+          });
+        },
+      });
+      shell.liveHandle = liveHandle;
+      if (roles.host) {
+        bowlerSeat = 'A';
+        frameRound = 1;
+        ballInFrame = 1;
+        msg = roles.me === roles.playerA ? 'You bowl frame 1' : 'Opponent bowls frame 1';
+        pushLive('playing');
+      } else {
+        msg = 'Waiting for match sync…';
+      }
+    }
+
     paint();
     raf = requestAnimationFrame(tick);
+    scheduleAiIfNeeded();
   }
 
   const PATANG_LAST_MODE_KEY = 'chaupaal_patang_last_mode';
@@ -6245,11 +6709,11 @@
     registerGame({
       id: 'bowling',
       name: 'Bowling',
-      desc: 'Practice · 10 frames · X / ／ scorebook',
+      desc: 'Alternate frames · Practice AI · Live stakes',
       icon: '🎳',
-      gameType: 'solo',
+      gameType: 'dual',
+      liveDuel: true,
       genre: 'rw_sports',
-      solo: true,
       selfChat: true,
       dangal: true,
       chat1v1: true,
@@ -6258,8 +6722,8 @@
         phaseA: 'Lane & throw — aim / power / gutter',
         phaseB: 'Arcade pin deck — knock, leave, reset',
         phaseC: '10-frame USBC scorebook + 10th fill',
-        phaseD: 'Practice AI + Live (Prompt 4)',
-        complete: false,
+        phaseD: 'Practice AI + Live 1v1 + virtual stakes',
+        complete: true,
       },
       launch: openBowling,
     });
@@ -6299,6 +6763,7 @@
   window.openKhoKho = openKhoKho;
   window.openBowling = openBowling;
   window.scoreBowling = scoreBowling;
+  window.aiThrowBowling = aiThrowBowling;
   window.openPatangBaazi = (ctx) => {
     const o = ctx && typeof ctx === 'object' ? ctx : {};
     if (o.mode === 'duel' || o.mode === 'festival') openPatang({ mode: o.mode });
