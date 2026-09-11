@@ -1,7 +1,7 @@
 /**
  * RW Sports — Street Cricket + Gully Kick (football-style).
- * Trademark-safe names; Practice loops + Street Cricket Live 1v1 delivery sync (1/3).
- * Bowl seat / stakes graduation deferred to later prompts.
+ * Trademark-safe names; Practice loops + Street Cricket Live bowl↔bat + innings swap (2/3).
+ * Stakes graduation deferred to Prompt 3.
  */
 (function () {
   'use strict';
@@ -306,7 +306,7 @@
     });
   }
 
-  /** Street Cricket — Practice + Live 1v1 delivery sync (Prompt 1/3; auto-bowl until P2). */
+  /** Street Cricket — Practice + Live bowl↔bat roles + innings swap (Prompt 2/3). */
   function openStreetCricket(chatArg) {
     const chat = resolveRwChat(chatArg);
     const liveOn = chatLiveOn(chat);
@@ -318,6 +318,7 @@
     let bowlTimer = null;
     let missTimer = null;
     let resultTimer = null;
+    let bowlLockTimer = null;
     let lastOutcome = '';
     let deliveryStartedAt = 0;
     let deliveryMeta = null;
@@ -326,6 +327,7 @@
     let streakSame = 0;
     let coachShown = false;
     let armedShot = 'push';
+    let armedDelivery = 'medium';
     let lastBall = null;
     const ballLog = [];
     let formatId = 'over';
@@ -334,6 +336,8 @@
     let chaseTarget = 0;
     let endReason = '';
     let sessionWon = false;
+    let matchDraw = false;
+    let matchWinnerUid = '';
     let liveRoles = null;
     let liveHandle = null;
     let leaveShell = null;
@@ -341,10 +345,15 @@
     let appliedSeq = 0;
     let applying = false;
     let batUid = '';
+    let bowlUid = '';
+    let inningsIndex = 1;
+    let innings1 = null;
+    let innings2 = null;
     let peerPaused = false;
     let ended = false;
     const FORMAT_KEY = 'chaupaal_sc_format_v4';
     const COACH_KEY = 'chaupaal_sc_coach_v3';
+    const BOWL_LOCK_MS = 420;
 
     const FORMATS = {
       over: {
@@ -468,13 +477,16 @@
       const f = fmt();
       maxBalls = f.maxBalls;
       maxWickets = f.maxWickets;
-      chaseTarget = formatId === 'chase' ? rollChaseTarget() : 0;
+      // Live duel: chase target set after innings 1. Practice chase still rolls.
+      chaseTarget = !liveOn && formatId === 'chase' ? rollChaseTarget() : 0;
       runs = 0;
       balls = 0;
       wickets = 0;
       perfects = 0;
       endReason = '';
       sessionWon = false;
+      matchDraw = false;
+      matchWinnerUid = '';
       lastOutcome = '';
       lastBall = null;
       ballLog.length = 0;
@@ -484,24 +496,159 @@
       streakSame = 0;
       overSeed = (Date.now() ^ (Math.random() * 0xffff)) >>> 0;
       armedShot = 'push';
+      armedDelivery = 'medium';
       ended = false;
+      inningsIndex = 1;
+      innings1 = null;
+      innings2 = null;
+      if (liveOn && liveRoles) {
+        batUid = liveRoles.playerA || batUid;
+        bowlUid = liveRoles.playerB || bowlUid;
+      }
       setModeChrome(f.label);
     };
 
-    const iAmBatAuthority = () => {
+    const iAmHost = () => {
       if (!liveOn) return true;
       if (!liveRoles) return false;
-      const bat = batUid || liveRoles.playerA;
-      return liveRoles.me === bat;
+      if (liveRoles.host != null) return !!liveRoles.host;
+      return liveRoles.me === liveRoles.playerA;
+    };
+
+    const iAmBat = () => {
+      if (!liveOn) return true;
+      if (!liveRoles) return false;
+      return liveRoles.me === (batUid || liveRoles.playerA);
+    };
+
+    const iAmBowl = () => {
+      if (!liveOn) return false;
+      if (!liveRoles) return false;
+      return liveRoles.me === (bowlUid || liveRoles.playerB);
+    };
+
+    /** @deprecated alias — bat seat for Practice-compatible call sites */
+    const iAmBatAuthority = () => iAmBat();
+
+    const clearBowlLock = () => {
+      if (bowlLockTimer) {
+        clearTimeout(bowlLockTimer);
+        bowlLockTimer = null;
+      }
     };
 
     const setModeChrome = (formatLabel) => {
       const fLabel = formatLabel || (fmt() && fmt().label) || 'Street Cricket';
       if (liveOn) {
-        const seat = iAmBatAuthority() ? 'Batter' : 'Watching';
-        setChromeSub(liveChromeSub() + ' · Friendly · ' + fLabel + ' · ' + seat);
+        const seat = iAmBat() ? 'Batter' : iAmBowl() ? 'Bowler' : 'Live';
+        const inn =
+          inningsIndex === 2 ? ' · 2nd innings' : inningsIndex === 1 ? ' · 1st innings' : '';
+        setChromeSub(liveChromeSub() + ' · Friendly · ' + fLabel + ' · ' + seat + inn);
       } else {
         setChromeSub('Practice · ' + fLabel + ' · Batter');
+      }
+    };
+
+    const snapshotInnings = (reason) => ({
+      batUid,
+      bowlUid,
+      runs,
+      wickets,
+      balls,
+      perfects,
+      chaseTarget,
+      endReason: reason || endReason,
+      ballLog: ballLog.slice(),
+    });
+
+    const compareMatch = () => {
+      const a = innings1;
+      const b = innings2;
+      if (!a || !b || !liveRoles) {
+        return { winnerUid: '', draw: true, reason: 'balls', iWon: false };
+      }
+      let winnerUid = '';
+      let draw = false;
+      let reason = 'runs';
+      if (formatId === 'chase') {
+        const target = (a.runs | 0) + 1;
+        if ((b.runs | 0) >= target) {
+          winnerUid = b.batUid;
+          reason = 'chase_won';
+        } else {
+          winnerUid = a.batUid;
+          reason = 'defend';
+        }
+      } else if (formatId === 'nets') {
+        const pa = a.perfects | 0;
+        const pb = b.perfects | 0;
+        if (pa !== pb) {
+          winnerUid = pa > pb ? a.batUid : b.batUid;
+          reason = 'perfects';
+        } else if ((a.runs | 0) !== (b.runs | 0)) {
+          winnerUid = (a.runs | 0) > (b.runs | 0) ? a.batUid : b.batUid;
+          reason = 'runs';
+        } else {
+          draw = true;
+          reason = 'draw';
+        }
+      } else if ((a.runs | 0) !== (b.runs | 0)) {
+        winnerUid = (a.runs | 0) > (b.runs | 0) ? a.batUid : b.batUid;
+        reason = 'runs';
+      } else {
+        draw = true;
+        reason = 'draw';
+      }
+      const iWon = !draw && winnerUid === liveRoles.me;
+      return { winnerUid, draw, reason, iWon };
+    };
+
+    const beginSecondInnings = (firstSnap) => {
+      innings1 = firstSnap;
+      innings2 = null;
+      const prevBat = batUid;
+      batUid = bowlUid;
+      bowlUid = prevBat;
+      inningsIndex = 2;
+      runs = 0;
+      balls = 0;
+      wickets = 0;
+      perfects = 0;
+      ballLog.length = 0;
+      lastBall = null;
+      deliveryMeta = null;
+      deliveryStartedAt = 0;
+      endReason = '';
+      sessionWon = false;
+      matchDraw = false;
+      matchWinnerUid = '';
+      armedShot = 'push';
+      armedDelivery = 'medium';
+      overSeed = (Date.now() ^ (Math.random() * 0xffff)) >>> 0;
+      if (formatId === 'chase') {
+        chaseTarget = (firstSnap.runs | 0) + 1;
+        lastOutcome =
+          'Innings break — chase ' + chaseTarget + '. Roles swapped.';
+      } else {
+        chaseTarget = 0;
+        lastOutcome = 'Innings break — roles swapped. You’re up.';
+      }
+      phase = 'idle';
+      setModeChrome();
+    };
+
+    const finishMatchFromSecond = (secondSnap) => {
+      innings2 = secondSnap;
+      const cmp = compareMatch();
+      matchWinnerUid = cmp.winnerUid || '';
+      matchDraw = !!cmp.draw;
+      sessionWon = !!cmp.iWon;
+      endReason = cmp.reason || 'balls';
+      phase = 'done';
+      ended = true;
+      if (leaveShell) leaveShell.gameOver = true;
+      if (typeof gameFeedback === 'function') {
+        gameFeedback(matchDraw ? 'complete' : sessionWon ? 'win' : 'lose');
       }
     };
 
@@ -519,6 +666,7 @@
           perfects,
           phase,
           armedShot,
+          armedDelivery,
           delivery: deliveryMeta
             ? {
                 id: deliveryMeta.id,
@@ -537,6 +685,12 @@
           lastBall,
           ballLog: ballLog.slice(-16),
           batUid: batUid || (liveRoles && liveRoles.playerA) || '',
+          bowlUid: bowlUid || (liveRoles && liveRoles.playerB) || '',
+          inningsIndex,
+          innings1,
+          innings2,
+          matchWinnerUid,
+          matchDraw,
           eventSeq,
           endReason,
           sessionWon,
@@ -545,21 +699,35 @@
         extra || {}
       );
 
+    /**
+     * @param {object} [extra]
+     * @param {{ as?: 'bat'|'bowl'|'host'|'any', status?: string }} [top]
+     */
     const pushLive = (extra, top) => {
       if (!liveOn || !liveHandle || applying || !liveRoles) return;
-      if (!iAmBatAuthority()) return;
+      const as = (top && top.as) || 'any';
+      if (as === 'bat' && !iAmBat()) return;
+      if (as === 'bowl' && !iAmBowl()) return;
+      if (as === 'host' && !iAmHost()) return;
       eventSeq += 1;
       const st = buildLiveState(extra);
       st.eventSeq = eventSeq;
       appliedSeq = Math.max(appliedSeq, eventSeq);
       const status =
         phase === 'done' || ended ? 'over' : (top && top.status) || 'playing';
+      const turn =
+        phase === 'idle' || phase === 'pick' || phase === 'wait'
+          ? bowlUid || liveRoles.playerB
+          : phase === 'flight' || phase === 'runup'
+            ? batUid || liveRoles.playerA
+            : batUid || liveRoles.playerA;
       try {
         liveHandle.push(
           Object.assign(
             {
               status,
-              turn: batUid || liveRoles.playerA,
+              turn,
+              winner: status === 'over' && !matchDraw ? matchWinnerUid || null : undefined,
               state: st,
             },
             top || {}
@@ -912,6 +1080,7 @@
       if (missTimer) clearTimeout(missTimer);
       if (resultTimer) clearTimeout(resultTimer);
       if (deliveryRaf) cancelAnimationFrame(deliveryRaf);
+      clearBowlLock();
       bowlTimer = null;
       missTimer = null;
       resultTimer = null;
@@ -998,10 +1167,22 @@
       if (st.balls != null) balls = st.balls | 0;
       if (st.perfects != null) perfects = st.perfects | 0;
       if (st.armedShot && SHOTS[st.armedShot]) armedShot = st.armedShot;
+      if (st.armedDelivery && DELIVERY_TYPES[st.armedDelivery]) armedDelivery = st.armedDelivery;
       if (st.batUid) batUid = st.batUid;
+      if (st.bowlUid) bowlUid = st.bowlUid;
+      if (st.inningsIndex != null) inningsIndex = st.inningsIndex | 0 || 1;
+      if (st.innings1) innings1 = st.innings1;
+      if (st.innings2) innings2 = st.innings2;
+      if (st.matchWinnerUid != null) matchWinnerUid = st.matchWinnerUid || '';
+      if (st.matchDraw != null) matchDraw = !!st.matchDraw;
       if (st.delivery && st.delivery.id) {
         deliveryMeta = Object.assign({}, cloneDelivery(st.delivery.id), st.delivery);
-      } else if (st.phase === 'idle' || st.phase === 'pick' || st.phase === 'done' || st.phase === 'wait') {
+      } else if (
+        st.phase === 'idle' ||
+        st.phase === 'pick' ||
+        st.phase === 'done' ||
+        st.phase === 'wait'
+      ) {
         deliveryMeta = null;
       }
       if (st.deliveryStartedAt != null) deliveryStartedAt = st.deliveryStartedAt | 0;
@@ -1015,7 +1196,7 @@
       if (st.sessionWon != null) sessionWon = !!st.sessionWon;
       if (st.paused != null) peerPaused = !!st.paused;
       if (st.phase) {
-        if (!iAmBatAuthority() && st.phase === 'pick') phase = 'wait';
+        if (!iAmHost() && st.phase === 'pick') phase = 'wait';
         else phase = st.phase;
       }
       applying = false;
@@ -1075,15 +1256,29 @@
     };
 
     const canChangeShot = () =>
-      iAmBatAuthority() && (phase === 'idle' || phase === 'runup') && !isPaused();
+      (!liveOn || iAmBat()) && (phase === 'idle' || phase === 'runup') && !isPaused();
+
+    const canPickDelivery = () =>
+      liveOn && iAmBowl() && phase === 'idle' && !isPaused();
 
     const scoreHud = () => {
+      const innTag = liveOn ? (inningsIndex === 2 ? '2nd · ' : '1st · ') : '';
+      const vs =
+        liveOn && innings1
+          ? ` · vs ${innings1.runs}${formatId === 'nets' ? '/' + (innings1.perfects | 0) + 'c' : ''}`
+          : '';
       if (formatId === 'nets') {
-        return `${balls}/${maxBalls} faced · ${wickets}/${maxWickets} out · ${perfects} clean · ${runs} runs`;
+        return `${innTag}${balls}/${maxBalls} faced · ${wickets}/${maxWickets} out · ${perfects} clean · ${runs} runs${vs}`;
       }
       if (formatId === 'chase') {
         const left = Math.max(0, maxBalls - balls);
         const wkLeft = Math.max(0, maxWickets - wickets);
+        if (liveOn && inningsIndex === 2 && chaseTarget > 0) {
+          return `${innTag}${runs}/${chaseTarget} · ${left} ball${left === 1 ? '' : 's'} · ${wkLeft} wkt${wkLeft === 1 ? '' : 's'}`;
+        }
+        if (liveOn && inningsIndex === 1) {
+          return `${innTag}${runs} runs · ${left} ball${left === 1 ? '' : 's'} left · ${wkLeft} wkt${wkLeft === 1 ? '' : 's'} (set target)`;
+        }
         return `${runs}/${chaseTarget} · ${left} ball${left === 1 ? '' : 's'} left · ${wkLeft} wkt${wkLeft === 1 ? '' : 's'}`;
       }
       const pb =
@@ -1092,11 +1287,11 @@
         getGamePB('streetcricket_over') != null
           ? ` · Best ${getGamePB('streetcricket_over')}`
           : '';
-      return `${runs} runs · ${balls}/${maxBalls} balls · ${wickets} out${pb}`;
+      return `${innTag}${runs} runs · ${balls}/${maxBalls} balls · ${wickets} out${vs}${pb}`;
     };
 
     const showPicker = () => {
-      if (liveOn && !iAmBatAuthority()) return;
+      if (liveOn && !iAmHost()) return;
       clearTimers();
       phase = 'pick';
       setChromeSub(liveOn ? liveChromeSub() + ' · Friendly · pick format' : 'Practice · pick format');
@@ -1104,25 +1299,27 @@
     };
 
     const reset = () => {
-      if (liveOn && !iAmBatAuthority()) return;
+      if (liveOn && !iAmHost()) return;
       clearTimers();
       beginSession();
       phase = 'idle';
       if (liveOn) {
         batUid = (liveRoles && liveRoles.playerA) || batUid;
-        pushLive({ phase: 'idle' });
+        bowlUid = (liveRoles && liveRoles.playerB) || bowlUid;
+        pushLive({ phase: 'idle' }, { as: 'host' });
       }
       render();
     };
 
     const startSelected = () => {
-      if (liveOn && !iAmBatAuthority()) return;
+      if (liveOn && !iAmHost()) return;
       saveFormat(formatId);
       beginSession();
       phase = 'idle';
       if (liveOn) {
         batUid = (liveRoles && liveRoles.playerA) || '';
-        pushLive({ phase: 'idle' });
+        bowlUid = (liveRoles && liveRoles.playerB) || '';
+        pushLive({ phase: 'idle' }, { as: 'host' });
       }
       render();
       if (typeof gameFeedback === 'function') gameFeedback('select');
@@ -1143,27 +1340,54 @@
         el.classList.toggle('is-armed', id === armedShot);
         el.disabled = !canChangeShot();
       });
+      body.querySelectorAll('[data-del]').forEach((el) => {
+        const id = el.getAttribute('data-del');
+        el.classList.toggle('is-armed', id === armedDelivery);
+        el.disabled = !canPickDelivery();
+      });
       const btn = body.querySelector('[data-rw-action]');
       if (btn) {
-        const bat = iAmBatAuthority();
-        const canBowl = bat && phase === 'idle' && !isPaused();
-        const canHit = bat && phase === 'flight' && !isPaused();
-        btn.disabled = !(canBowl || canHit);
-        if (!bat && liveOn) {
-          btn.textContent =
-            phase === 'flight' ? 'Watching…' : phase === 'runup' ? 'Run-up…' : 'Watching';
+        const bowling = liveOn && iAmBowl();
+        const batting = !liveOn || iAmBat();
+        const canSend = bowling && phase === 'idle' && !isPaused();
+        const canPracticeBowl = !liveOn && phase === 'idle' && !isPaused();
+        const canHit = batting && phase === 'flight' && !isPaused();
+        btn.disabled = !(canSend || canPracticeBowl || canHit);
+        if (liveOn) {
+          if (bowling) {
+            btn.textContent =
+              phase === 'idle' ? 'Send' : phase === 'runup' ? 'Run-up…' : phase === 'flight' ? 'In flight…' : '…';
+          } else if (batting) {
+            btn.textContent =
+              phase === 'flight' ? 'Hit!' : phase === 'idle' ? 'Waiting for ball…' : phase === 'runup' ? 'Get ready…' : '…';
+          } else {
+            btn.textContent = '…';
+          }
         } else {
-          btn.textContent = canBowl ? 'Bowl' : canHit ? 'Hit!' : '…';
+          btn.textContent = canPracticeBowl ? 'Bowl' : canHit ? 'Hit!' : '…';
         }
       }
       const hint = body.querySelector('[data-rw-hint]');
       if (hint) {
-        if (!iAmBatAuthority() && liveOn) {
+        if (liveOn && iAmBowl()) {
           if (phase === 'idle')
-            hint.textContent = lastOutcome || 'Shared over — batter is on strike.';
-          else if (phase === 'runup') hint.textContent = 'Run-up — watching…';
-          else if (phase === 'flight') hint.textContent = 'Delivery in flight — watching…';
+            hint.textContent =
+              lastOutcome ||
+              `You’re bowling — pick ${(DELIVERY_TYPES[armedDelivery] || DELIVERY_TYPES.medium).label}, then Send.`;
+          else if (phase === 'runup') hint.textContent = 'Delivery on its way…';
+          else if (phase === 'flight') hint.textContent = 'Ball in flight — batter’s timing.';
           else if (phase === 'result') hint.textContent = lastOutcome || 'Ball done';
+        } else if (liveOn && iAmBat()) {
+          if (phase === 'idle')
+            hint.textContent =
+              lastOutcome ||
+              `${shotMeta().label} armed — wait for the ball, then time the Hit.`;
+          else if (phase === 'runup') hint.textContent = `${shotMeta().label} ready — run-up…`;
+          else if (phase === 'flight')
+            hint.textContent = inZone
+              ? `HIT — ${shotMeta().label}!`
+              : `Watch the flight — ${shotMeta().label}`;
+          else if (phase === 'result') hint.textContent = lastOutcome;
         } else if (phase === 'idle') {
           hint.textContent =
             lastOutcome ||
@@ -1194,14 +1418,31 @@
           if (!SHOTS[id]) return;
           armedShot = id;
           paintPitchState();
-          if (liveOn && iAmBatAuthority()) pushLive({ armedShot });
+          if (liveOn && iAmBat()) pushLive({ armedShot }, { as: 'bat' });
           if (typeof gameFeedback === 'function') gameFeedback('select');
+        });
+      });
+      body.querySelectorAll('[data-del]').forEach((el) => {
+        el.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          if (!canPickDelivery()) return;
+          const id = el.getAttribute('data-del');
+          if (!DELIVERY_TYPES[id]) return;
+          armedDelivery = id;
+          paintPitchState();
+          if (typeof gameFeedback === 'function') gameFeedback('select');
+          clearBowlLock();
+          bowlLockTimer = setTimeout(() => {
+            bowlLockTimer = null;
+            if (!sessionAlive() || isPaused() || phase !== 'idle' || !iAmBowl()) return;
+            commitLiveDelivery(armedDelivery);
+          }, BOWL_LOCK_MS);
         });
       });
       body.querySelector('[data-rw-action]')?.addEventListener('click', onAction);
       body.querySelectorAll('[data-format]').forEach((el) => {
         el.addEventListener('click', () => {
-          if (liveOn && !iAmBatAuthority()) return;
+          if (liveOn && !iAmHost()) return;
           const id = el.getAttribute('data-format');
           if (!FORMATS[id]) return;
           formatId = id;
@@ -1267,6 +1508,70 @@
     const buildResultOpts = () => {
       const f = fmt();
       const pbGameId = pbIdForFormat();
+
+      if (liveOn && innings1) {
+        const i1 = innings1;
+        const i2 = innings2 || snapshotInnings(endReason);
+        const myUid = liveRoles && liveRoles.me;
+        const myInn = i1.batUid === myUid ? i1 : i2.batUid === myUid ? i2 : null;
+        const oppInn = i1.batUid === myUid ? i2 : i1;
+        const myRuns = myInn ? myInn.runs | 0 : 0;
+        const oppRuns = oppInn ? oppInn.runs | 0 : 0;
+        const line =
+          formatId === 'nets'
+            ? `You ${myInn ? myInn.perfects | 0 : 0} clean (${myRuns}) · Opp ${oppInn ? oppInn.perfects | 0 : 0} clean (${oppRuns})`
+            : `You ${myRuns} · Opp ${oppRuns}` +
+              (formatId === 'chase' && chaseTarget ? ` · target ${chaseTarget}` : '');
+        const title = matchDraw
+          ? 'Draw'
+          : sessionWon
+            ? 'You win'
+            : 'Opponent wins';
+        const sub =
+          (inningsIndex >= 2 ? 'Both innings done · ' : '') +
+          (formatId === 'chase'
+            ? matchDraw
+              ? line
+              : sessionWon
+                ? endReason === 'chase_won'
+                  ? 'Chase done'
+                  : 'Defended the total'
+                : endReason === 'chase_won'
+                  ? 'They chased it down'
+                  : 'Couldn’t defend'
+            : line);
+        return {
+          title: 'Street Cricket',
+          glyph: '🏏',
+          onAgain: () => openStreetCricket(chat),
+          onChangeFormat: iAmHost() ? showPicker : () => openStreetCricket(chat),
+          actions: [
+            { label: 'Play again', primary: true, id: 'again' },
+            { label: 'Share', primary: false, id: 'share' },
+          ],
+          challenge: false,
+          hideStats: true,
+          hideMissions: true,
+          updatePb: false,
+          scoreHtml: `<p class="rw-sc-moment">${esc(line)}</p>`,
+          againLabel: 'Play again',
+          resultTitle: title,
+          subtitle: sub,
+          scoreLine: line,
+          score: myRuns,
+          shareText: `Street Cricket Live: ${line} on Chaupaal`,
+          won: sessionWon,
+          recordExtra: {
+            format: formatId,
+            formatId,
+            live: true,
+            innings: 2,
+            matchDraw,
+          },
+          gs,
+        };
+      }
+
       const innings = {
         formatId,
         label: f.label,
@@ -1394,8 +1699,8 @@
         body.innerHTML = `
           <div class="rw-sports-card rw-sc-card rw-sc-picker">
             <h2>Street Cricket</h2>
-            ${rwRoleBanner('waiting', 'Waiting for batter', 'Host picks the format')}
-            <p class="rw-sports-hint">Shared over sync — same balls, wickets, and outcomes.</p>
+            ${rwRoleBanner('waiting', 'Waiting for host', 'They pick the format')}
+            <p class="rw-sports-hint">Live duel — one bowls, one bats, then swap.</p>
           </div>`;
         return;
       }
@@ -1416,7 +1721,7 @@
             <h2>Street Cricket</h2>
             <p class="rw-sports-hint">${
               liveOn
-                ? 'Live 1v1 — pick a format. Auto bowl until bowl seat ships.'
+                ? 'Live 1v1 — bowl & bat, then swap innings. Host picks format.'
                 : 'Gully practice — Over, Nets, or Chase. Same bag, same shots.'
             }</p>
             <div class="rw-sc-formats" role="listbox" aria-label="Format">${cards}</div>
@@ -1431,46 +1736,87 @@
           opts.updatePb = false;
           opts.challenge = false;
           opts.onAgain = () => openStreetCricket(chat);
-          opts.onChangeFormat = iAmBatAuthority()
-            ? showPicker
-            : () => openStreetCricket(chat);
+          opts.onChangeFormat = iAmHost() ? showPicker : () => openStreetCricket(chat);
         }
         finishPractice('streetcricket', opts.score != null ? opts.score : runs, body, opts);
         return;
       }
       const d = cur();
+      const bowling = liveOn && iAmBowl();
+      const batting = !liveOn || iAmBat();
       const shotLock = canChangeShot() ? '' : 'disabled';
-      const batting = iAmBatAuthority();
-      const roleSub =
-        phase === 'idle'
-          ? batting
+      const delLock = canPickDelivery() ? '' : 'disabled';
+      let roleTitle = 'You’re batting';
+      let roleMode = 'yours';
+      let roleSub = '';
+      if (liveOn && bowling) {
+        roleTitle = 'You’re bowling';
+        if (phase === 'idle') {
+          roleMode = 'yours';
+          roleSub = 'Your action — pick a ball & Send';
+        } else if (phase === 'runup' || phase === 'flight') {
+          roleMode = 'waiting';
+          roleSub = phase === 'runup' ? 'Delivery on its way…' : 'Batter’s timing';
+        } else {
+          roleMode = 'waiting';
+          roleSub = lastOutcome || 'Ball done';
+        }
+      } else if (liveOn && batting) {
+        roleTitle = 'You’re batting';
+        if (phase === 'idle') {
+          roleMode = 'waiting';
+          roleSub = 'Waiting for the ball — arm your shot';
+        } else if (phase === 'runup') {
+          roleMode = 'waiting';
+          roleSub = 'Run-up… get ready';
+        } else if (phase === 'flight') {
+          roleMode = 'yours';
+          roleSub = 'Your action — Hit!';
+        } else {
+          roleMode = 'waiting';
+          roleSub = lastOutcome || 'Ball done';
+        }
+      } else {
+        roleSub =
+          phase === 'idle'
             ? 'Your action — Bowl'
-            : 'Batter on strike'
-          : phase === 'runup'
-            ? batting
+            : phase === 'runup'
               ? 'Run-up… get ready'
-              : 'Run-up…'
-            : phase === 'flight'
-              ? batting
+              : phase === 'flight'
                 ? 'Your action — Hit!'
-                : 'Delivery in flight'
-              : phase === 'result'
-                ? lastOutcome || 'Ball done'
-                : '';
-      const roleBanner = rwRoleBanner(
-        batting && (phase === 'idle' || phase === 'flight')
-          ? 'yours'
-          : phase === 'result'
-            ? 'waiting'
-            : batting
-              ? 'waiting'
-              : 'theirs',
-        batting ? 'You’re batting' : 'Watching the over',
-        roleSub
-      );
+                : lastOutcome || 'Ball done';
+        roleMode = phase === 'idle' || phase === 'flight' ? 'yours' : 'waiting';
+      }
+      const roleBanner = rwRoleBanner(roleMode, roleTitle, roleSub);
+      const delTypes = ['medium', 'quick', 'flight', 'spin'];
+      const deliveryRow = bowling
+        ? `<div class="rw-sc-shots rw-sc-deliveries" role="group" aria-label="Delivery">
+            ${delTypes
+              .map((id) => {
+                const dd = DELIVERY_TYPES[id];
+                return `<button type="button" class="rw-sc-shot${armedDelivery === id ? ' is-armed' : ''}" data-del="${id}" ${delLock}>${dd.label}</button>`;
+              })
+              .join('')}
+          </div>`
+        : '';
+      const shotRow = batting
+        ? `<div class="rw-sc-shots" role="group" aria-label="Shot">
+            <button type="button" class="rw-sc-shot${armedShot === 'defend' ? ' is-armed' : ''}" data-shot="defend" ${shotLock}>Defend</button>
+            <button type="button" class="rw-sc-shot${armedShot === 'push' ? ' is-armed' : ''}" data-shot="push" ${shotLock}>Push</button>
+            <button type="button" class="rw-sc-shot${armedShot === 'loft' ? ' is-armed' : ''}" data-shot="loft" ${shotLock}>Loft</button>
+          </div>`
+        : liveOn
+          ? `<p class="rw-sports-hint" style="margin:8px 0 0">Batter arms the shot on their side.</p>`
+          : '';
+      const innLabel =
+        liveOn && inningsIndex === 2
+          ? `${fmt().label} · 2nd innings`
+          : liveOn
+            ? `${fmt().label} · 1st innings`
+            : fmt().label;
       body.innerHTML = `
         <div class="rw-sports-card rw-sc-card">
-          <h2>${fmt().label}</h2>
+          <h2>${innLabel}</h2>
           ${roleBanner}
           <p class="rw-sports-score" data-rw-hud>${scoreHud()}</p>
           <div class="rw-sports-pitch rw-sc-pitch is-del-${d.id || 'medium'}" data-rw-pitch
@@ -1485,11 +1831,8 @@
           </div>
           <div class="rw-sports-outcome" data-rw-outcome aria-live="polite"></div>
           <p class="rw-sports-hint" data-rw-hint></p>
-          <div class="rw-sc-shots" role="group" aria-label="Shot">
-            <button type="button" class="rw-sc-shot${armedShot === 'defend' ? ' is-armed' : ''}" data-shot="defend" ${shotLock}>Defend</button>
-            <button type="button" class="rw-sc-shot${armedShot === 'push' ? ' is-armed' : ''}" data-shot="push" ${shotLock}>Push</button>
-            <button type="button" class="rw-sc-shot${armedShot === 'loft' ? ' is-armed' : ''}" data-shot="loft" ${shotLock}>Loft</button>
-          </div>
+          ${deliveryRow}
+          ${shotRow}
           <button type="button" class="btn btn--primary rw-sc-main" data-rw-action>Bowl</button>
         </div>`;
       paintPitchState();
@@ -1499,8 +1842,10 @@
             ? 'out'
             : lastBall && lastBall.runs >= 4
               ? 'boundary'
-              : /out|caught|bowled|beaten|cleaned|mistimed/i.test(lastOutcome)
-                ? 'out'
+              : /out|caught|bowled|beaten|cleaned|mistimed|innings break/i.test(lastOutcome)
+                ? /innings break/i.test(lastOutcome)
+                  ? 'run'
+                  : 'out'
                 : /six|four|boundary/i.test(lastOutcome)
                   ? 'boundary'
                   : 'run';
@@ -1510,17 +1855,58 @@
     };
 
     const evaluateEnd = () => {
-      if (formatId === 'chase' && runs >= chaseTarget) {
+      // Live chase innings 1: set a total (no chase win mid-innings).
+      if (formatId === 'chase' && !(liveOn && inningsIndex === 1) && runs >= chaseTarget && chaseTarget > 0) {
         return { done: true, won: true, reason: 'chase_won' };
       }
       if (wickets >= maxWickets) {
         return { done: true, won: false, reason: 'wickets' };
       }
       if (balls >= maxBalls) {
-        const won = formatId === 'chase' ? runs >= chaseTarget : true;
+        const won =
+          formatId === 'chase' && chaseTarget > 0 ? runs >= chaseTarget : true;
         return { done: true, won, reason: 'balls' };
       }
       return { done: false, won: false, reason: '' };
+    };
+
+    const advanceAfterResult = (end) => {
+      deliveryMeta = null;
+      if (!end.done) {
+        phase = 'idle';
+        if (liveOn && iAmBat()) pushLive({ phase: 'idle', delivery: null, deliveryStartedAt: 0 }, { as: 'bat' });
+        render();
+        return;
+      }
+      if (!liveOn) {
+        phase = 'done';
+        ended = true;
+        if (leaveShell) leaveShell.gameOver = true;
+        render();
+        return;
+      }
+      if (!iAmBat()) return;
+      const snap = snapshotInnings(end.reason);
+      if (inningsIndex === 1) {
+        beginSecondInnings(snap);
+        pushLive(
+          {
+            phase: 'idle',
+            inningsIndex: 2,
+            innings1,
+            batUid,
+            bowlUid,
+            delivery: null,
+            deliveryStartedAt: 0,
+          },
+          { as: 'any' }
+        );
+        render();
+        return;
+      }
+      finishMatchFromSecond(snap);
+      pushLive({ phase: 'done', innings2, matchWinnerUid, matchDraw }, { as: 'bat', status: 'over' });
+      render();
     };
 
     const afterBall = (outcome) => {
@@ -1529,13 +1915,17 @@
       deliveryStartedAt = 0;
       const end = evaluateEnd();
       if (end.done) {
-        sessionWon = !!end.won;
         endReason = end.reason;
-        if (end.reason === 'chase_won' && typeof gameFeedback === 'function') {
+        if (!liveOn) {
+          sessionWon = !!end.won;
+          if (end.reason === 'chase_won' && typeof gameFeedback === 'function') {
+            gameFeedback('win');
+          }
+        } else if (end.reason === 'chase_won' && inningsIndex === 2 && typeof gameFeedback === 'function') {
           gameFeedback('win');
         }
       }
-      if (liveOn && iAmBatAuthority()) pushLive({ phase: 'result' });
+      if (liveOn && iAmBat()) pushLive({ phase: 'result' }, { as: 'bat' });
       render();
       const delay = end.done && end.reason === 'chase_won' ? 650 : 950;
       resultTimer = setTimeout(() => {
@@ -1545,22 +1935,13 @@
           pauseRemainResult = 40;
           return;
         }
-        if (liveOn && !iAmBatAuthority()) return;
-        deliveryMeta = null;
-        if (end.done) {
-          phase = 'done';
-          ended = true;
-          if (leaveShell) leaveShell.gameOver = true;
-        } else if (phase === 'result') phase = 'idle';
-        if (liveOn && iAmBatAuthority()) {
-          pushLive({ phase, delivery: null, deliveryStartedAt: 0 });
-        }
-        render();
+        if (liveOn && !iAmBat()) return;
+        advanceAfterResult(end);
       }, delay);
     };
 
     const applyResolved = (res) => {
-      if (liveOn && !iAmBatAuthority()) return;
+      if (liveOn && !iAmBat()) return;
       clearTimers();
       balls += 1;
       if (res.timing === 'perfect' && !res.out) perfects += 1;
@@ -1607,7 +1988,7 @@
       missTimer = setTimeout(() => {
         missTimer = null;
         if (!sessionAlive() || isPaused() || phase !== 'flight') return;
-        if (!iAmBatAuthority()) return;
+        if (liveOn && !iAmBat()) return;
         applyResolved(resolveStreetBall(cur(), 'miss', armedShot));
       }, remain);
     };
@@ -1618,16 +1999,40 @@
         bowlTimer = null;
         if (!sessionAlive() || isPaused() || phase !== 'runup') return;
         phase = 'flight';
-        if (liveOn && iAmBatAuthority()) pushLive({ phase: 'flight' });
         paintPitchState();
         startFlightLoop();
       }, Math.max(40, ms));
     };
 
+    const commitLiveDelivery = (typeId) => {
+      if (!liveOn || !iAmBowl()) return;
+      if (!sessionAlive() || isPaused() || phase !== 'idle') return;
+      const id = DELIVERY_TYPES[typeId] ? typeId : armedDelivery || 'medium';
+      clearTimers();
+      clearBowlLock();
+      armedDelivery = id;
+      deliveryMeta = cloneDelivery(id);
+      deliveryStartedAt = Date.now();
+      phase = 'runup';
+      lastOutcome = '';
+      pushLive({ phase: 'runup', armedDelivery: id }, { as: 'bowl' });
+      render();
+      if (typeof gameFeedback === 'function') gameFeedback('place');
+      try {
+        if (typeof window !== 'undefined') window.__scLastDelivery = deliveryMeta;
+      } catch (e) {}
+      startRunupTimer(cur().runupMs);
+    };
+
     const onAction = () => {
       if (!sessionAlive() || isPaused()) return;
-      if (!iAmBatAuthority()) return;
       if (phase === 'idle') {
+        if (liveOn) {
+          if (!iAmBowl()) return;
+          clearBowlLock();
+          commitLiveDelivery(armedDelivery);
+          return;
+        }
         lastOutcome = '';
         clearTimers();
         if (!coachShown) {
@@ -1639,7 +2044,6 @@
         deliveryMeta = pickDelivery();
         deliveryStartedAt = Date.now();
         phase = 'runup';
-        if (liveOn) pushLive({ phase: 'runup' });
         render();
         if (typeof gameFeedback === 'function') gameFeedback('place');
         try {
@@ -1649,6 +2053,7 @@
         return;
       }
       if (phase === 'flight') {
+        if (liveOn && !iAmBat()) return;
         const progress = flightProgress();
         const timing = classifyTiming(progress);
         applyResolved(resolveStreetBall(cur(), timing, armedShot));
@@ -1662,6 +2067,7 @@
         onPause() {
           const now = Date.now();
           pauseFreezeAt = now;
+          clearBowlLock();
           if (bowlTimer && phase === 'runup') {
             pauseRemainBowl = Math.max(40, deliveryStartedAt + cur().runupMs - now);
             clearTimeout(bowlTimer);
@@ -1684,7 +2090,7 @@
             cancelAnimationFrame(deliveryRaf);
             deliveryRaf = null;
           }
-          if (liveOn && iAmBatAuthority()) pushLive({ paused: true });
+          if (liveOn) pushLive({ paused: true }, { as: 'any' });
         },
         onResume() {
           if (!sessionAlive()) return;
@@ -1692,7 +2098,7 @@
             deliveryStartedAt += Date.now() - pauseFreezeAt;
           }
           pauseFreezeAt = 0;
-          if (liveOn && iAmBatAuthority()) pushLive({ paused: false });
+          if (liveOn) pushLive({ paused: false }, { as: 'any' });
           if (phase === 'runup') {
             startRunupTimer(pauseRemainBowl || cur().runupMs);
           } else if (phase === 'flight') {
@@ -1704,15 +2110,8 @@
               resultTimer = null;
               pauseRemainResult = 0;
               if (!sessionAlive()) return;
-              if (liveOn && !iAmBatAuthority()) return;
-              deliveryMeta = null;
-              if (end.done) {
-                phase = 'done';
-                ended = true;
-                if (leaveShell) leaveShell.gameOver = true;
-              } else if (phase === 'result') phase = 'idle';
-              if (liveOn && iAmBatAuthority()) pushLive({ phase });
-              render();
+              if (liveOn && !iAmBat()) return;
+              advanceAfterResult(end);
             }, pauseRemainResult);
           }
         },
@@ -1738,6 +2137,7 @@
     if (liveOn && typeof DangalLive !== 'undefined' && DangalLive.join) {
       liveRoles = DangalLive.roles(chat);
       batUid = liveRoles.playerA || '';
+      bowlUid = liveRoles.playerB || '';
       liveHandle = DangalLive.join({
         gameType: 'streetcricket',
         matchId: matchIdFor(chat, 'streetcricket'),
@@ -1753,33 +2153,34 @@
             if (leaveShell) leaveShell.gameOver = true;
             const iWon = liveRoles && val.winner === liveRoles.me;
             phase = 'done';
-            lastOutcome = iWon ? 'Opponent left — you win the over' : 'You left';
+            sessionWon = !!iWon;
+            matchWinnerUid = iWon ? liveRoles.me : liveRoles.opp || '';
+            lastOutcome = iWon ? 'Opponent left — you win' : 'You left';
             endReason = 'forfeit';
             applying = false;
             render();
             return;
           }
           const st = val.state || {};
-          if (iAmBatAuthority()) {
-            if (st.eventSeq != null) eventSeq = Math.max(eventSeq, st.eventSeq | 0);
-            return;
-          }
           if (val.status === 'over' && st.phase && st.phase !== 'done') {
             st.phase = 'done';
           }
+          // Both seats apply higher eventSeq (own pushes already bumped appliedSeq).
           applyRemoteState(st);
         },
       });
       if (leaveShell) leaveShell.liveHandle = liveHandle;
-      if (iAmBatAuthority()) {
+      if (iAmHost()) {
         try {
           liveHandle.push({
             status: 'playing',
-            turn: batUid,
+            turn: bowlUid,
             state: {
               formatId,
               phase: 'pick',
               batUid,
+              bowlUid,
+              inningsIndex: 1,
               eventSeq: 0,
               runs: 0,
               wickets: 0,
@@ -2851,7 +3252,7 @@
     registerGame({
       id: 'streetcricket',
       name: 'Street Cricket',
-      desc: 'Live 1v1 · Over, Nets & Chase',
+      desc: 'Live 1v1 · bowl & bat · swap innings',
       icon: '🏏',
       ratingKey: 'streetcricket',
       gameType: 'dual',
