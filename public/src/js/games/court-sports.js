@@ -4499,8 +4499,8 @@
   }
 
   /**
-   * Practice AI aim/power — same resolveBall + scorebook as the human.
-   * Easy: wider aim, weaker power, more gutters. Normal: pocket bias, can string X/／.
+   * Practice AI aim/power/hook — same resolveBall + scorebook as the human.
+   * Easy: wider aim, weaker power, more gutters. Normal: pocket bias + slight house hook.
    */
   function aiThrowBowling(state) {
     const s = state || {};
@@ -4510,37 +4510,44 @@
     const ball = s.ballInFrame === 2 || s.ballInFrame === 3 ? 2 : 1;
     let aim = -0.08;
     let power = 0.72;
+    /** House default: slight left hook into the 1-3 pocket (−1…1). */
+    let hook = -0.32;
     if (easy) {
       if (rng() < 0.22) {
         aim = rng() < 0.5 ? -0.92 : 0.92;
         power = 0.35 + rng() * 0.25;
+        hook = (rng() - 0.5) * 1.2;
       } else {
         aim = (rng() - 0.5) * 1.35;
         power = 0.38 + rng() * 0.4;
+        hook = (rng() - 0.5) * 0.9;
       }
     } else {
       if (rng() < 0.08) {
         aim = rng() < 0.5 ? -0.85 : 0.85;
         power = 0.4 + rng() * 0.25;
+        hook = aim > 0 ? 0.35 : -0.35;
       } else if (ball === 2 && standing <= 3) {
         aim = -0.05 + (rng() - 0.5) * 0.22;
         power = 0.62 + rng() * 0.28;
+        hook = -0.15 + (rng() - 0.5) * 0.25;
       } else {
         aim = -0.08 + (rng() - 0.5) * 0.28;
         power = 0.58 + rng() * 0.35;
+        hook = -0.28 + (rng() - 0.5) * 0.22;
       }
     }
     return {
       aim: Math.max(-1, Math.min(1, aim)),
       power: Math.max(0.28, Math.min(1, power)),
+      hook: Math.max(-1, Math.min(1, hook)),
     };
   }
 
   /**
-   * Bowling Prompt 4/4 — Practice AI + Live 1v1 alternate-frame duel + virtual stakes.
-   * Frame order: each bowler completes their frame N before the other bowls frame N
-   * (A F1 → B F1 → A F2 → … → A F10 → B F10). Separate USBC books; higher total wins.
-   * Pin RNG: active bowler resolves; peers apply pushed marks (no re-roll).
+   * Bowling — Practice AI + Live 1v1 + residual hook curve (R1-1).
+   * Frame order: each bowler completes their frame N before the other bowls frame N.
+   * Hook (−1…1): lateral curve into pocket; default slight house hook. Oil = R1-2.
    */
   function openBowling() {
     const chat = resolveChat(arguments[0]);
@@ -4644,12 +4651,16 @@
     let phase = 'aim';
     let aim = 0;
     let power = 0.65;
+    /** Hook −1…1: negative = curve left (house into pocket), positive = right. Default slight house. */
+    let hook = -0.32;
     let ballX = 0.5;
     let ballY = FOUL_Y;
     let flightT = 0;
     let flightDur = 1.1;
     let startX = 0.5;
     let drift = 0;
+    let hookAmp = 0.18;
+    let remoteWatch = false;
     let lastResult = '';
     let lastPinsDown = 0;
     let msg = liveOn ? 'Live 1v1 — alternate frames.' : 'You bowl frame 1, then the AI.';
@@ -4764,10 +4775,21 @@
       }
       const a = Math.max(-1, Math.min(1, Number(o.aim) || 0));
       const pwr = Math.max(0.28, Math.min(1, Number(o.power) || 0.5));
+      const hk = Math.max(-1, Math.min(1, Number(o.hook) || 0));
       const ball = o.ballInFrame === 2 || o.ballInFrame === 3 ? 2 : 1;
-      const hitX = a * 1.15;
-      const pocketDist = Math.abs(a - -0.08);
-      const pocketQ = Math.max(0, 1 - pocketDist / 0.5);
+      // Hook biases entry toward pocket (house −0.08): left hook helps center/right aims.
+      const aEff = Math.max(-1, Math.min(1, a + hk * 0.2));
+      const hitX = aEff * 1.15;
+      const pocketDist = Math.abs(aEff - -0.08);
+      let pocketQ = Math.max(0, 1 - pocketDist / 0.5);
+      // Same-side hook into pocket raises strike rate vs straight light hits.
+      const hookPocket =
+        hk < 0 && aEff > -0.35 && aEff < 0.2
+          ? Math.min(0.18, -hk * 0.22)
+          : hk > 0 && aEff < 0.15 && aEff > -0.45
+            ? Math.min(0.1, hk * 0.08)
+            : 0;
+      pocketQ = Math.min(1, pocketQ + hookPocket);
       const powerQ = (pwr - 0.28) / 0.72;
       let quality = pocketQ * 0.62 + powerQ * 0.38 + (rng() - 0.5) * 0.1;
       quality = Math.max(0, Math.min(1, quality));
@@ -4792,10 +4814,11 @@
           tryKnock(10, 0.25 + quality * 0.4);
         }
       } else if (!downSet.has(1) && quality < 0.4) {
-        if (a < -0.25) {
+        // Over-hook / thin light → corner leave
+        if (aEff < -0.25 || (hk < -0.55 && a < -0.05)) {
           tryKnock(7, 0.55);
           tryKnock(4, 0.4);
-        } else if (a > 0.25) {
+        } else if (aEff > 0.25 || (hk > 0.55 && a > 0.05)) {
           tryKnock(10, 0.55);
           tryKnock(6, 0.4);
         }
@@ -4808,7 +4831,7 @@
       }
       if (downSet.size === 0 && quality > 0.35 && ball === 1) {
         tryKnock(1, 0.7);
-        tryKnock(a < 0 ? 2 : 3, 0.5);
+        tryKnock(aEff < 0 ? 2 : 3, 0.5);
       }
       if (ball === 2) {
         const n = up.length;
@@ -4963,6 +4986,7 @@
       eventSeq += 1;
       const youTot = bookTotal(myBook());
       const oppTot = bookTotal(oppBook());
+      const ex = extra || {};
       const st = Object.assign(
         {
           frameRound,
@@ -4971,7 +4995,7 @@
           books: { A: serializeBook(bookA), B: serializeBook(bookB) },
           pins: serializePins(),
           eventSeq,
-          phase: phase === 'flying' ? 'aim' : phase,
+          phase: ex.phase != null ? ex.phase : phase === 'flying' && !ex.throw ? 'aim' : phase,
           msg: msg || '',
           scores: {
             a: bookTotal(bookA),
@@ -4981,8 +5005,11 @@
           lastResult,
           paused: !!paused,
           aiDiff: null,
+          aim: +aim.toFixed(3),
+          power: +power.toFixed(3),
+          hook: +hook.toFixed(3),
         },
-        extra || {}
+        ex
       );
       try {
         liveHandle.push({
@@ -5278,6 +5305,7 @@
         });
         aim = t.aim;
         power = t.power;
+        hook = t.hook != null ? t.hook : -0.32;
         beginThrow(true);
       }, 650 + Math.floor(rng() * 400));
     }
@@ -5290,25 +5318,44 @@
       if (standingCount() === 0) resetRack();
       aim = Math.max(-1, Math.min(1, aim));
       power = Math.max(0.28, Math.min(1, power));
+      hook = Math.max(-1, Math.min(1, hook));
       startX = 0.5 + aim * 0.28;
       ballX = startX;
       ballY = FOUL_Y;
       drift = aim * (0.08 + (1 - power) * 0.18);
+      // Readable mid-lane curve; stronger hook + softer power = more arc
+      hookAmp = 0.14 + Math.abs(hook) * 0.1 + (1 - power) * 0.06;
       flightDur = 1.55 - power * 0.55;
       flightT = 0;
+      remoteWatch = false;
       phase = 'flying';
       lastResult = '';
       msg = fromAi ? 'Opponent rolling…' : 'Ball rolling…';
       if (!fromAi) buzz('select');
       lastTs = 0;
+      if (liveOn && iAmBowling()) {
+        pushLive('playing', {
+          phase: 'flying',
+          throw: {
+            aim: +aim.toFixed(3),
+            power: +power.toFixed(3),
+            hook: +hook.toFixed(3),
+            startX: +startX.toFixed(3),
+            drift: +drift.toFixed(3),
+            hookAmp: +hookAmp.toFixed(3),
+            flightDur: +flightDur.toFixed(3),
+          },
+        });
+      }
       if (!raf) raf = requestAnimationFrame(tick);
       softPaintFlying();
     }
 
     function resolveThrow() {
       if (resolving || phase === 'result' || gameOver) return;
-      // Live: only active bowler resolves RNG
+      // Live: only active bowler resolves RNG (peer watches remoteWatch flight)
       if (liveOn && !iAmBowling()) return;
+      if (remoteWatch) return;
       resolving = true;
       phase = 'result';
       const gutter = Math.abs(ballX - 0.5) > GUTTER_AIM * 0.42 || ballX < 0.12 || ballX > 0.88;
@@ -5318,6 +5365,7 @@
       const resolved = resolveBall({
         aim,
         power,
+        hook,
         gutter: !!gutter,
         pinsUp: before,
         ballInFrame: chartBall,
@@ -5342,7 +5390,7 @@
       }
       const pinsThisBall = gutter ? 0 : lastPinsDown;
       const step = applyDelivery(pinsThisBall);
-      if (liveOn) pushLive('playing');
+      if (liveOn) pushLive('playing', { phase: 'aim', throw: null });
       paint();
       advanceAfterBall(step);
     }
@@ -5355,6 +5403,29 @@
         appliedSeq = seq;
         eventSeq = Math.max(eventSeq, seq);
       }
+      // Peer watches same flight (aim/power/hook) before pin resolve lands.
+      if (st.throw && st.phase === 'flying' && !iAmBowling()) {
+        const t = st.throw;
+        aim = t.aim != null ? t.aim : aim;
+        power = t.power != null ? t.power : power;
+        hook = t.hook != null ? t.hook : hook;
+        startX = t.startX != null ? t.startX : 0.5 + aim * 0.28;
+        drift = t.drift != null ? t.drift : aim * 0.1;
+        hookAmp = t.hookAmp != null ? t.hookAmp : 0.18;
+        flightDur = t.flightDur != null ? t.flightDur : 1.1;
+        flightT = 0;
+        ballX = startX;
+        ballY = FOUL_Y;
+        remoteWatch = true;
+        resolving = false;
+        phase = 'flying';
+        msg = st.msg || 'Opponent rolling…';
+        if (st.paused != null) peerPaused = !!st.paused && !paused;
+        lastTs = 0;
+        if (!raf) raf = requestAnimationFrame(tick);
+        softPaintFlying();
+        return true;
+      }
       if (st.books && st.books.A) bookA = scoreBowling(st.books.A);
       if (st.books && st.books.B) bookB = scoreBowling(st.books.B);
       if (st.frameRound != null) frameRound = Math.max(1, Math.min(10, st.frameRound | 0));
@@ -5364,7 +5435,11 @@
       if (st.lastPinsDown != null) lastPinsDown = st.lastPinsDown | 0;
       if (st.lastResult) lastResult = st.lastResult;
       if (st.msg) msg = st.msg;
+      if (st.aim != null && !Number.isNaN(Number(st.aim))) aim = Math.max(-1, Math.min(1, Number(st.aim)));
+      if (st.power != null && !Number.isNaN(Number(st.power))) power = Math.max(0.28, Math.min(1, Number(st.power)));
+      if (st.hook != null && !Number.isNaN(Number(st.hook))) hook = Math.max(-1, Math.min(1, Number(st.hook)));
       if (st.paused != null) peerPaused = !!st.paused && !paused;
+      remoteWatch = false;
       phase = 'aim';
       resolving = false;
       resetBallAim();
@@ -5389,6 +5464,8 @@
       if (!shell.alive() || gameOver) return;
       const aimPct = Math.round(((aim + 1) / 2) * 100);
       const powPct = Math.round(power * 100);
+      const hookPct = Math.round(((hook + 1) / 2) * 100);
+      const hookLab = hook > 0.12 ? 'Right' : hook < -0.12 ? 'Left' : 'House';
       const youT = bookTotal(myBook());
       const oppT = bookTotal(oppBook());
       const active = iAmBowling() && phase === 'aim' && !isFrozen();
@@ -5479,13 +5556,21 @@
         '" data-power' +
         (!active ? ' disabled' : '') +
         ' /></label>' +
+        '<label class="cs-bw-slider cs-bw-hook">Hook <b data-hook-lab>' +
+        hookLab +
+        '</b>' +
+        '<input type="range" min="0" max="100" value="' +
+        hookPct +
+        '" data-hook' +
+        (!active ? ' disabled' : '') +
+        ' /></label>' +
         '<button type="button" class="cs-hit cs-hit--primary cs-bw-throw" data-throw' +
         (!active ? ' disabled' : '') +
         '>' +
         (waiting ? 'Waiting…' : 'Throw') +
         '</button>' +
         '</div>' +
-        '<p class="cs-bw-meta">Alternate frames · A then B each frame · X/／ USBC · Live settles once</p>' +
+        '<p class="cs-bw-meta">Aim · power · hook into the pocket · alternate frames · Live settles once</p>' +
         '</div>';
 
       shell.body.querySelectorAll('[data-diff]').forEach((btn) => {
@@ -5493,6 +5578,7 @@
       });
       const aimEl = shell.body.querySelector('[data-aim]');
       const powEl = shell.body.querySelector('[data-power]');
+      const hookEl = shell.body.querySelector('[data-hook]');
       aimEl?.addEventListener('input', () => {
         if (!active) return;
         aim = (aimEl.value | 0) / 50 - 1;
@@ -5507,6 +5593,12 @@
         const lab = shell.body.querySelector('[data-pow-lab]');
         if (lab) lab.textContent = Math.round(power * 100) + '%';
       });
+      hookEl?.addEventListener('input', () => {
+        if (!active) return;
+        hook = (hookEl.value | 0) / 50 - 1;
+        const lab = shell.body.querySelector('[data-hook-lab]');
+        if (lab) lab.textContent = hook > 0.12 ? 'Right' : hook < -0.12 ? 'Left' : 'House';
+      });
       shell.body.querySelector('[data-throw]')?.addEventListener('click', () => beginThrow(false));
 
       if (!coachShown) {
@@ -5514,8 +5606,8 @@
         if (typeof showToast === 'function') {
           showToast(
             liveOn
-              ? 'Alternate frames — you bowl yours, then they bowl theirs.'
-              : 'You vs AI — alternate frames through 10.'
+              ? 'Alternate frames — hook into the pocket for strikes.'
+              : 'Aim · power · hook — house hook curves into the pocket.'
           );
         }
       }
@@ -5523,7 +5615,7 @@
         GameUI.attachHowTo(shell.overlay, {
           title: 'Bowling',
           body:
-            'Alternate frames: each bowler completes frame N before the other bowls N. X = 10 + next two · ／ = 10 + next one · 10th fill. Practice AI uses aim/power. Live 1v1 · leave=forfeit · virtual stakes once.',
+            'Aim, power, then Hook for curve into the pocket. Over-hook risks the gutter. Alternate frames · X/／ USBC · Practice AI · Live 1v1 · virtual stakes once.',
         });
       }
     }
@@ -5533,12 +5625,15 @@
       if (el) {
         el.style.left = ballX * 100 + '%';
         el.style.top = ballY * 100 + '%';
+        el.classList.toggle('is-flying', phase === 'flying');
+      }
+      const lane = shell.body.querySelector('[data-lane]');
+      if (lane) {
+        lane.classList.toggle('is-gutter', lastResult === 'gutter');
       }
       const msgEl = shell.body.querySelector('.cs-rally-msg');
-      if (msgEl) {
-        msgEl.textContent =
-          (!iAmBowling() && phase === 'aim' ? 'Opponent bowling…' : msg) +
-          (isFrozen() ? ' · Paused' : '');
+      if (msgEl && (phase === 'flying' || phase === 'result')) {
+        msgEl.textContent = msg + (isFrozen() ? ' · Paused' : '');
       }
     }
 
@@ -5555,9 +5650,18 @@
       flightT += dt;
       const u = Math.min(1, flightT / flightDur);
       ballY = FOUL_Y + (PIN_Y - FOUL_Y) * (u * u * (3 - 2 * u));
-      ballX = startX + drift * u * u;
+      // Quadratic drift + sin mid-lane hook curve (readable, not 3D)
+      ballX = startX + drift * u * u + hook * hookAmp * Math.sin(Math.PI * u);
       softPaintFlying();
-      if (u >= 1) resolveThrow();
+      if (u >= 1) {
+        if (remoteWatch) {
+          remoteWatch = false;
+          phase = 'result';
+          msg = 'Waiting for pins…';
+          return;
+        }
+        resolveThrow();
+      }
     }
 
     function pushPauseState(p) {

@@ -212,9 +212,9 @@
       'Live: one seat chases (active+Kho), the other runs the batch — then swap · leave=forfeit · virtual stakes',
     ],
     bowling: [
-      'Alternate frames: you complete frame N, then opponent bowls N — through 10',
-      'X = 10 + next two · ／ = 10 + next one · 10th fill · Practice AI aims the same chart',
-      'Live 1v1 · leave = forfeit · rematch new match · virtual stakes once',
+      'Aim · power · Hook — house hook curves into the pocket (over-hook can gutter)',
+      'Alternate frames through 10 · X = 10 + next two · ／ = 10 + next one · 10th fill',
+      'Live 1v1 syncs aim/power/hook · leave = forfeit · virtual stakes once',
     ],
     tambola: [
       'Auto-daub on a real 3×9 ticket — claim Early Five, lines, corners, then Full House',
