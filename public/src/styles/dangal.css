@@ -479,6 +479,30 @@
 .cs-bw-throw{min-height:48px;font-weight:800;font-size:16px;background:#EF6C00;border:2px solid #FFE082;}
 .cs-bw-throw:disabled{opacity:.45;}
 .cs-bw-meta{font-size:12px;opacity:.85;color:#FFCC80;text-align:center;max-width:320px;margin:0 auto;}
+/* Score strip — compact; horizontal scroll on narrow phones */
+.cs-bw-sheet{
+  display:flex;gap:3px;overflow-x:auto;-webkit-overflow-scrolling:touch;
+  padding:4px 2px 8px;margin:0 0 6px;scrollbar-width:thin;
+}
+.cs-bw-frame{
+  flex:0 0 auto;min-width:28px;max-width:36px;padding:3px 2px 2px;
+  border:1px solid rgba(255,143,0,.4);border-radius:6px;
+  background:rgba(0,0,0,.28);text-align:center;
+  font-variant-numeric:tabular-nums;
+}
+.cs-bw-frame.is-tenth{min-width:40px;max-width:48px;}
+.cs-bw-frame.is-current{
+  border-color:#FFE082;box-shadow:0 0 0 1px rgba(255,224,130,.55);
+  background:rgba(255,143,0,.18);
+}
+.cs-bw-fn{display:block;font-size:9px;font-weight:700;color:#FFCC80;line-height:1.1;opacity:.9;}
+.cs-bw-marks{display:flex;justify-content:center;gap:1px;min-height:14px;line-height:14px;}
+.cs-bw-marks i{
+  display:inline-block;min-width:10px;font-size:11px;font-weight:800;font-style:normal;color:#FFF8E1;
+}
+.cs-bw-cum{display:block;font-size:10px;font-weight:700;color:#FFE082;line-height:1.2;min-height:12px;}
+.cs-bw-over .cs-bw-sheet{justify-content:center;flex-wrap:wrap;overflow:visible;}
+.cs-bowling{max-width:420px;}
 .cs-kb-zone{position:absolute;left:0;right:0;pointer-events:none;display:flex;align-items:flex-start;justify-content:center;padding-top:4px;}
 .cs-kb-zone span,.cs-kb-line span{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;opacity:.75;color:#FFE0B2;}
 .cs-kb-anti{top:0;height:48%;}

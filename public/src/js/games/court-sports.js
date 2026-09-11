@@ -4299,12 +4299,87 @@
     }
   }
   /**
-   * Bowling Prompt 2/4 — arcade pin deck (knock / leave / reset).
-   * Prompt 1 throw (aim+power+gutter) feeds resolveBall chart — not full physics.
-   * Frame index + ball 1/2; strike skips ball 2; rack resets. Scorebook = Prompt 3.
-   *
-   * Chart (documented): pocket ~aim −0.08 + high power → heavy/strike;
-   * off-aim/light → corner leaves (7/10) & lite splits; ball 2 spare odds scale with leave size.
+   * Pure USBC-style bowling scorer (testable).
+   * frames[i].balls = pin counts that ball (0–10). Frames 1–9: 1–2 balls; 10th: up to 3.
+   * Returns new array with mark ('X'|'/'|'open'|null), score (frame pts), cumulative.
+   * Pending strike/spare totals stay null until bonus rolls exist.
+   */
+  function scoreBowling(framesIn) {
+    const frames = [];
+    for (let i = 0; i < 10; i++) {
+      const src = framesIn && framesIn[i];
+      frames.push({
+        balls: ((src && src.balls) || [])
+          .slice(0, i === 9 ? 3 : 2)
+          .map((n) => Math.max(0, Math.min(10, n | 0))),
+        mark: null,
+        score: null,
+        cumulative: null,
+      });
+    }
+    const rolls = [];
+    frames.forEach((f) => {
+      f.balls.forEach((b) => rolls.push(b));
+    });
+
+    let ri = 0;
+    let total = 0;
+    for (let f = 0; f < 10; f++) {
+      const fr = frames[f];
+      const b = fr.balls;
+      if (f < 9) {
+        if (!b.length) break;
+        if (b[0] === 10) {
+          fr.mark = 'X';
+          if (ri + 2 < rolls.length) {
+            const pts = 10 + rolls[ri + 1] + rolls[ri + 2];
+            total += pts;
+            fr.score = pts;
+            fr.cumulative = total;
+          }
+          ri += 1;
+          continue;
+        }
+        if (b.length < 2) break;
+        if (b[0] + b[1] === 10) {
+          fr.mark = '/';
+          if (ri + 2 < rolls.length) {
+            const pts = 10 + rolls[ri + 2];
+            total += pts;
+            fr.score = pts;
+            fr.cumulative = total;
+          }
+        } else {
+          fr.mark = 'open';
+          const pts = b[0] + b[1];
+          total += pts;
+          fr.score = pts;
+          fr.cumulative = total;
+        }
+        ri += 2;
+      } else {
+        if (!b.length) break;
+        if (b[0] === 10) fr.mark = 'X';
+        else if (b.length >= 2 && b[0] + b[1] === 10) fr.mark = '/';
+        else if (b.length >= 2) fr.mark = 'open';
+
+        const need = b[0] === 10 || (b.length >= 2 && b[0] + b[1] === 10) ? 3 : 2;
+        if (b.length >= need) {
+          let pts = 0;
+          for (let k = 0; k < b.length; k++) pts += b[k];
+          total += pts;
+          fr.score = pts;
+          fr.cumulative = total;
+        }
+      }
+    }
+    return frames;
+  }
+
+  /**
+   * Bowling Prompt 3/4 — ten-frame USBC scorebook (strike / spare / 10th fill).
+   * Prompt 1–2 throw + arcade pin chart unchanged; scoring is real bonuses.
+   * Max 300 possible (12 strikes). Arcade chart rarely perfect — still no soft-cap.
    */
   function openBowling() {
     const chat = resolveChat(arguments[0]);
@@ -4316,11 +4391,11 @@
     let coachShown = false;
     let resultTimer = 0;
     let resolving = false;
+    let gameOver = false;
 
     const GUTTER_AIM = 0.78;
     const FOUL_Y = 0.9;
     const PIN_Y = 0.14;
-    /** Relative X on deck for arcade hit tests (−1.2 … 1.2). */
     const PIN_X = {
       1: 0,
       2: -0.45,
@@ -4333,7 +4408,6 @@
       9: 0.45,
       10: 1.25,
     };
-    /** Visual spots: head pin closest to foul (larger top %). */
     const PIN_SPOTS = {
       1: [0.5, 0.2],
       2: [0.42, 0.155],
@@ -4350,14 +4424,14 @@
     const shell = openShell({
       id: 'bowling',
       title: 'Bowling',
-      subtitle: practiceSub('Pins · leave · rack reset'),
+      subtitle: practiceSub('10 frames · X / ／ · fill'),
       mode: 'practice',
       live: false,
       chat,
       accent: '#FF8F00',
       bg: '#120A02',
       pauseId: 'csBowlingPause',
-      leaveBody: 'This practice run will end.',
+      leaveBody: 'This practice game will end.',
       cleanup: () => {
         if (raf) {
           cancelAnimationFrame(raf);
@@ -4384,14 +4458,14 @@
     let drift = 0;
     let lastResult = '';
     let lastPinsDown = 0;
-    let msg = 'Hit the pocket — second ball cleans the leave.';
+    let msg = 'Frame 1 — hit the pocket.';
     let frameIndex = 1;
-    /** @type {1|2} */
+    /** @type {1|2|3} */
     let ballInFrame = 1;
     /** @type {Record<number, 'up'|'down'>} */
     let pins = {};
-    let lastStrike = false;
-    let lastSpare = false;
+    /** @type {{balls:number[], mark:string|null, score:number|null, cumulative:number|null}[]} */
+    let frames = scoreBowling([]);
 
     function resetRack() {
       for (let i = 1; i <= 10; i++) pins[i] = 'up';
@@ -4407,14 +4481,29 @@
       return pinsUpList().length;
     }
     function isLiteSplit(up) {
-      const s = up.slice().sort((a, b) => a - b).join(',');
+      const s = up
+        .slice()
+        .sort((a, b) => a - b)
+        .join(',');
       return s === '7,10' || s === '4,6' || s === '4,6,7,10' || s === '2,3';
     }
+    function runningTotal() {
+      let last = 0;
+      for (let i = 0; i < 10; i++) {
+        if (frames[i].cumulative != null) last = frames[i].cumulative;
+      }
+      return last;
+    }
+    function countMarks() {
+      let x = 0;
+      let sp = 0;
+      frames.forEach((f) => {
+        if (f.mark === 'X') x += 1;
+        if (f.mark === '/') sp += 1;
+      });
+      return { strikes: x, spares: sp };
+    }
 
-    /**
-     * Arcade resolve — deterministic table + light RNG jitter.
-     * @returns {{ downIds: number[], leaveIds: number[], flag: ''|'strike'|'spare' }}
-     */
     function resolveBall(input) {
       const o = input || {};
       const up = (o.pinsUp || pinsUpList()).slice();
@@ -4423,7 +4512,7 @@
       }
       const a = Math.max(-1, Math.min(1, Number(o.aim) || 0));
       const pwr = Math.max(0.28, Math.min(1, Number(o.power) || 0.5));
-      const ball = o.ballInFrame === 2 ? 2 : 1;
+      const ball = o.ballInFrame === 2 || o.ballInFrame === 3 ? 2 : 1;
       const hitX = a * 1.15;
       const pocketDist = Math.abs(a - -0.08);
       const pocketQ = Math.max(0, 1 - pocketDist / 0.5);
@@ -4437,7 +4526,6 @@
         if (rng() < Math.max(0, Math.min(0.98, chance))) downSet.add(id);
       };
 
-      // Per-pin hit from lateral aim + power
       up.forEach((id) => {
         const dx = Math.abs(PIN_X[id] - hitX);
         let chance = Math.exp(-dx * dx * (2.4 - pwr * 0.9)) * (0.28 + pwr * 0.72);
@@ -4445,7 +4533,6 @@
         tryKnock(id, chance);
       });
 
-      // Carry: head pin + quality sweeps back row
       if (downSet.has(1) && quality > 0.55) {
         [2, 3, 4, 5, 6, 8, 9].forEach((id) => tryKnock(id, 0.35 + quality * 0.55));
         if (quality > 0.78) {
@@ -4453,7 +4540,6 @@
           tryKnock(10, 0.25 + quality * 0.4);
         }
       } else if (!downSet.has(1) && quality < 0.4) {
-        // Light / off — favor a corner leave
         if (a < -0.25) {
           tryKnock(7, 0.55);
           tryKnock(4, 0.4);
@@ -4463,21 +4549,15 @@
         }
       }
 
-      // Ball 1 strike window
       if (ball === 1 && quality > 0.8 && up.length === 10) {
-        const strikeP = 0.35 + quality * 0.55;
-        if (rng() < strikeP) {
+        if (rng() < 0.35 + quality * 0.55) {
           return { downIds: up.slice(), leaveIds: [], flag: 'strike' };
         }
       }
-
-      // Ensure weak hits still do something when quality is middling
       if (downSet.size === 0 && quality > 0.35 && ball === 1) {
         tryKnock(1, 0.7);
         tryKnock(a < 0 ? 2 : 3, 0.5);
       }
-
-      // Ball 2: spare conversion (easy leaves easier; splits harder)
       if (ball === 2) {
         const n = up.length;
         let spareP = 0.2 + quality * 0.55;
@@ -4488,7 +4568,6 @@
         if (rng() < spareP) {
           return { downIds: up.slice(), leaveIds: [], flag: 'spare' };
         }
-        // Partial clean on ball 2
         up.forEach((id) => {
           const dx = Math.abs(PIN_X[id] - hitX);
           tryKnock(id, Math.exp(-dx * dx * 2) * (0.4 + quality * 0.5));
@@ -4498,7 +4577,7 @@
       const downIds = up.filter((id) => downSet.has(id));
       const leaveIds = up.filter((id) => !downSet.has(id));
       let flag = '';
-      if (ball === 1 && leaveIds.length === 0) flag = 'strike';
+      if (ball === 1 && leaveIds.length === 0 && up.length === 10) flag = 'strike';
       if (ball === 2 && leaveIds.length === 0) flag = 'spare';
       return { downIds, leaveIds, flag };
     }
@@ -4517,9 +4596,9 @@
         onQuit: () => {
           confirmAndClose(shell, {
             live: false,
-            isPlaying: phase === 'flying',
+            isPlaying: !gameOver && phase === 'flying',
             title: 'Leave Bowling?',
-            body: 'This practice run will end.',
+            body: 'This practice game will end.',
           });
         },
       });
@@ -4556,95 +4635,239 @@
       return h;
     }
 
-    function hudLine() {
-      return (
-        'F' +
-        frameIndex +
-        ' · Ball ' +
-        ballInFrame +
-        ' · ' +
-        standingCount() +
-        ' up' +
-        (lastPinsDown ? ' · last −' + lastPinsDown : '')
-      );
+    function frameStripHtml() {
+      let h = '<div class="cs-bw-sheet" role="table" aria-label="Score sheet">';
+      for (let i = 0; i < 10; i++) {
+        const fr = frames[i];
+        const cur = !gameOver && i === frameIndex - 1;
+        const b = fr.balls;
+        let c1 = '';
+        let c2 = '';
+        let c3 = '';
+        if (i < 9) {
+          if (b[0] === 10) {
+            c1 = '';
+            c2 = 'X';
+          } else {
+            c1 = b.length >= 1 ? (b[0] === 0 ? '-' : String(b[0])) : '';
+            if (b.length >= 2) {
+              c2 = b[0] + b[1] === 10 ? '/' : b[1] === 0 ? '-' : String(b[1]);
+            }
+          }
+        } else {
+          // 10th: up to 3 cells
+          if (b.length >= 1) {
+            c1 = b[0] === 10 ? 'X' : b[0] === 0 ? '-' : String(b[0]);
+          }
+          if (b.length >= 2) {
+            if (b[0] === 10) c2 = b[1] === 10 ? 'X' : b[1] === 0 ? '-' : String(b[1]);
+            else c2 = b[0] + b[1] === 10 ? '/' : b[1] === 0 ? '-' : String(b[1]);
+          }
+          if (b.length >= 3) {
+            c3 = b[2] === 10 ? 'X' : b[2] === 0 ? '-' : String(b[2]);
+          }
+        }
+        const tot =
+          fr.cumulative != null ? String(fr.cumulative) : fr.mark === 'X' || fr.mark === '/' ? '…' : '';
+        h +=
+          '<div class="cs-bw-frame' +
+          (cur ? ' is-current' : '') +
+          (i === 9 ? ' is-tenth' : '') +
+          '"><span class="cs-bw-fn">' +
+          (i + 1) +
+          '</span><span class="cs-bw-marks"><i>' +
+          esc(c1) +
+          '</i><i>' +
+          esc(c2) +
+          '</i>' +
+          (i === 9 ? '<i>' + esc(c3) + '</i>' : '') +
+          '</span><span class="cs-bw-cum">' +
+          esc(tot) +
+          '</span></div>';
+      }
+      h += '</div>';
+      return h;
     }
 
-    function advanceAfterBall(resolved) {
-      lastStrike = resolved.flag === 'strike';
-      lastSpare = resolved.flag === 'spare';
-      if (ballInFrame === 1 && resolved.flag === 'strike') {
-        msg = 'Strike! Fresh rack.';
-        if (typeof showToast === 'function') showToast('Strike!');
-        buzz('win');
+    /**
+     * Record pins for current ball; returns next step.
+     * @returns {'ball2'|'fill'|'frame'|'over'}
+     */
+    function applyDelivery(pinsDown) {
+      const n = Math.max(0, Math.min(10, pinsDown | 0));
+      const fi = frameIndex - 1;
+      const fr = frames[fi];
+      fr.balls.push(n);
+      frames = scoreBowling(frames);
+
+      if (fi < 9) {
+        if (ballInFrame === 1 && n === 10) return 'frame';
+        if (ballInFrame === 1) return 'ball2';
+        return 'frame';
+      }
+      // 10th
+      const b = fr.balls;
+      if (b.length === 1) {
+        return n === 10 ? 'fill' : 'ball2';
+      }
+      if (b.length === 2) {
+        if (b[0] === 10) return 'fill';
+        if (b[0] + b[1] === 10) return 'fill';
+        return 'over';
+      }
+      return 'over';
+    }
+
+    function endGame() {
+      if (gameOver) return;
+      gameOver = true;
+      phase = 'result';
+      if (raf) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
+      if (shell.markOver) shell.markOver();
+      const total = runningTotal();
+      const marks = countMarks();
+      if (typeof recordGameResult === 'function') {
+        try {
+          recordGameResult('bowling', true, false, {
+            live: false,
+            mode: 'practice',
+            score: total,
+          });
+        } catch (e) {}
+      }
+      if (typeof setGamePB === 'function') setGamePB('bowling', total);
+      buzz('win');
+      const sub =
+        total +
+        ' · ' +
+        marks.strikes +
+        'X · ' +
+        marks.spares +
+        '／ · Practice 10-frame';
+      shell.body.innerHTML =
+        '<div class="cs-bowling cs-bw-over">' +
+        frameStripHtml() +
+        '<p class="cs-rally-msg">Game over</p>' +
+        '<div class="cs-rally-score"><strong>' +
+        total +
+        '</strong><span class="cs-rally-score-sub">total · max 300</span></div>' +
+        '<p class="cs-bw-meta">' +
+        esc(sub) +
+        '</p>' +
+        '<div class="cs-bw-controls"><button type="button" class="cs-hit cs-bw-throw" data-again>Bowl again</button></div>' +
+        '</div>';
+      shell.body.querySelector('[data-again]')?.addEventListener('click', () => {
+        shell.close('restart');
+        openBowling(chat);
+      });
+      if (typeof wireGameResultActions === 'function') {
+        wireGameResultActions(shell.body, {
+          again: () => {
+            shell.close('restart');
+            openBowling(chat);
+          },
+          share: () => {
+            if (typeof openUnifiedShareSheet === 'function') {
+              openUnifiedShareSheet({
+                gameId: 'bowling',
+                stats: { scoreLine: String(total), text: 'Bowling ' + total + ' on Chaupaal' },
+              });
+            }
+          },
+        });
+      }
+    }
+
+    function advanceAfterBall(step) {
+      if (step === 'over') {
+        msg = 'Final frame locked · ' + runningTotal();
         resultTimer = setTimeout(() => {
           resultTimer = 0;
           if (!shell.alive()) return;
-          frameIndex = frameIndex >= 10 ? 1 : frameIndex + 1;
-          ballInFrame = 1;
-          resetRack();
-          resetBall();
-          paint();
-        }, 1000);
+          endGame();
+        }, 900);
+        paint();
         return;
       }
-      if (ballInFrame === 1) {
-        msg =
-          lastPinsDown +
-          ' down · ' +
-          resolved.leaveIds.length +
-          ' standing — clean the leave';
+      if (step === 'ball2') {
+        msg = lastPinsDown + ' down — clean the leave (ball 2)';
         if (typeof showToast === 'function') showToast(lastPinsDown + ' pins');
         buzz(lastPinsDown > 0 ? 'hit' : 'lose', { noConfetti: true });
         resultTimer = setTimeout(() => {
           resultTimer = 0;
-          if (!shell.alive()) return;
+          if (!shell.alive() || gameOver) return;
           ballInFrame = 2;
-          resetBall();
+          resetBallAim();
           paint();
-        }, 900);
+        }, 850);
+        paint();
         return;
       }
-      // Ball 2
-      if (resolved.flag === 'spare') {
-        msg = 'Spare! Fresh rack.';
-        if (typeof showToast === 'function') showToast('Spare!');
+      if (step === 'fill') {
+        const needFresh = standingCount() === 0 || lastPinsDown === 10;
+        msg = needFresh
+          ? lastPinsDown === 10
+            ? 'Fill strike — new rack'
+            : '10th fill · fresh rack'
+          : '10th fill · clean the leave';
+        buzz(lastPinsDown === 10 ? 'win' : 'hit', { noConfetti: lastPinsDown < 10 });
+        if (typeof showToast === 'function') {
+          showToast(lastPinsDown === 10 ? 'Strike!' : lastPinsDown + ' pins');
+        }
+        resultTimer = setTimeout(() => {
+          resultTimer = 0;
+          if (!shell.alive() || gameOver) return;
+          ballInFrame = Math.min(3, ballInFrame + 1);
+          // Reset only when rack empty (strike/spare); leave stands for next fill
+          if (needFresh) resetRack();
+          resetBallAim();
+          paint();
+        }, 900);
+        paint();
+        return;
+      }
+      // next frame
+      const wasStrike = lastPinsDown === 10 && ballInFrame === 1;
+      msg = wasStrike ? 'Strike! Frame ' + (frameIndex + 1) : 'Frame locked · next rack';
+      if (wasStrike) {
         buzz('win');
+        if (typeof showToast === 'function') showToast('Strike!');
       } else {
-        msg = lastPinsDown + ' on ball 2 · open frame — rack reset';
         buzz(lastPinsDown > 0 ? 'hit' : 'lose', { noConfetti: true });
       }
       resultTimer = setTimeout(() => {
         resultTimer = 0;
-        if (!shell.alive()) return;
-        frameIndex = frameIndex >= 10 ? 1 : frameIndex + 1;
+        if (!shell.alive() || gameOver) return;
+        if (frameIndex >= 10) {
+          endGame();
+          return;
+        }
+        frameIndex += 1;
         ballInFrame = 1;
         resetRack();
-        resetBall();
+        resetBallAim();
+        msg = 'Frame ' + frameIndex + ' — hit the pocket';
         paint();
-      }, 1000);
+      }, 900);
+      paint();
     }
 
-    function resetBall() {
+    function resetBallAim() {
       phase = 'aim';
       resolving = false;
       ballX = 0.5 + aim * 0.12;
       ballY = FOUL_Y;
       flightT = 0;
       lastTs = 0;
-      if (!msg || phase === 'aim') {
-        /* keep msg from advance unless empty */
-      }
-      if (ballInFrame === 1 && standingCount() === 10 && !lastStrike && !lastSpare) {
-        msg = 'Frame ' + frameIndex + ' — hit the pocket';
-      }
     }
 
     function beginThrow() {
-      if (phase !== 'aim' || paused || resolving) return;
-      if (standingCount() === 0) {
-        resetRack();
-        ballInFrame = 1;
-      }
+      if (gameOver || phase !== 'aim' || paused || resolving) return;
+      // Fill balls / fresh frame: empty rack must be reset
+      if (standingCount() === 0) resetRack();
       aim = Math.max(-1, Math.min(1, aim));
       power = Math.max(0.28, Math.min(1, power));
       startX = 0.5 + aim * 0.28;
@@ -4655,8 +4878,6 @@
       flightT = 0;
       phase = 'flying';
       lastResult = '';
-      lastStrike = false;
-      lastSpare = false;
       msg = 'Ball rolling…';
       buzz('select');
       lastTs = 0;
@@ -4665,59 +4886,68 @@
     }
 
     function resolveThrow() {
-      if (resolving || phase === 'result') return;
+      if (resolving || phase === 'result' || gameOver) return;
       resolving = true;
       phase = 'result';
       const gutter = Math.abs(ballX - 0.5) > GUTTER_AIM * 0.42 || ballX < 0.12 || ballX > 0.88;
       const before = pinsUpList();
+      const standingBefore = before.length;
+      const chartBall = before.length >= 10 || ballInFrame === 1 ? 1 : 2;
       const resolved = resolveBall({
         aim,
         power,
         gutter: !!gutter,
         pinsUp: before,
-        ballInFrame,
+        ballInFrame: chartBall,
       });
-      resolved.downIds.forEach((id) => {
-        pins[id] = 'down';
-      });
-      lastPinsDown = resolved.downIds.length;
       if (gutter) {
-        lastResult = 'gutter';
         lastPinsDown = 0;
-        msg = 'Gutter — 0 pins';
+        lastResult = 'gutter';
+        msg = 'Gutter — 0';
         if (typeof showToast === 'function') showToast('Gutter');
         buzz('lose', { noConfetti: true });
       } else {
-        lastResult = resolved.flag === 'strike' ? 'strike' : resolved.flag === 'spare' ? 'spare' : 'hit';
+        resolved.downIds.forEach((id) => {
+          pins[id] = 'down';
+        });
+        lastPinsDown = resolved.downIds.length;
+        lastResult =
+          lastPinsDown === standingBefore && standingBefore === 10
+            ? 'strike'
+            : lastPinsDown === standingBefore
+              ? 'spare'
+              : 'hit';
       }
+      const pinsThisBall = gutter ? 0 : lastPinsDown;
+      const step = applyDelivery(pinsThisBall);
       paint();
-      advanceAfterBall(
-        gutter
-          ? { downIds: [], leaveIds: before, flag: '' }
-          : resolved
-      );
+      advanceAfterBall(step);
     }
 
     function paint() {
-      if (!shell.alive()) return;
+      if (!shell.alive() || gameOver) return;
       const aimPct = Math.round(((aim + 1) / 2) * 100);
       const powPct = Math.round(power * 100);
+      const tot = runningTotal();
       shell.body.innerHTML =
         '<div class="cs-bowling">' +
+        frameStripHtml() +
         '<div class="cs-rally-score"><strong>' +
+        tot +
+        '</strong><span class="cs-rally-score-sub">F' +
         frameIndex +
-        '</strong><span class="cs-rally-score-sub">' +
-        esc(hudLine()) +
-        '</span></div>' +
+        ' · Ball ' +
+        ballInFrame +
+        ' · ' +
+        standingCount() +
+        ' up</span></div>' +
         '<p class="cs-rally-msg">' +
         esc(msg) +
         (paused ? ' · Paused' : '') +
         '</p>' +
         '<div class="cs-bw-lane' +
         (lastResult === 'gutter' ? ' is-gutter' : '') +
-        (lastResult === 'strike' || lastResult === 'spare' || lastResult === 'hit' || lastResult === 'pocket'
-          ? ' is-pocket'
-          : '') +
+        (lastResult === 'strike' || lastResult === 'spare' || lastResult === 'hit' ? ' is-pocket' : '') +
         '" data-lane role="img" aria-label="Bowling lane">' +
         '<div class="cs-bw-gutters" aria-hidden="true"></div>' +
         '<div class="cs-bw-wood">' +
@@ -4756,7 +4986,7 @@
         (phase !== 'aim' || paused ? ' disabled' : '') +
         '>Throw</button>' +
         '</div>' +
-        '<p class="cs-bw-meta">Pocket ~slight left + power · ball 2 cleans leave · scorebook next</p>' +
+        '<p class="cs-bw-meta">X = 10 + next two · ／ = 10 + next one · 10th fill up to 3 balls</p>' +
         '</div>';
 
       const aimEl = shell.body.querySelector('[data-aim]');
@@ -4780,13 +5010,13 @@
       if (!coachShown) {
         coachShown = true;
         if (typeof showToast === 'function') {
-          showToast('Hit the pocket — second ball cleans the leave.');
+          showToast('Ten frames — strikes wait for the next two rolls.');
         }
       }
       if (typeof GameUI !== 'undefined' && GameUI.attachHowTo) {
         GameUI.attachHowTo(shell.overlay, {
           title: 'Bowling',
-          body: 'Aim and power feed an arcade pin chart. Gutter = 0. Strike resets the rack; otherwise ball 2 plays the leave. Ten-frame scorebook with bonuses comes next.',
+          body: 'X (strike) = 10 + next two deliveries. ／ (spare) = 10 + next one. Open = pins this frame. 10th: strike gets two fills, spare one fill. Gutter is 0 that ball. Arcade pins; scorebook is USBC-style.',
         });
       }
     }
@@ -4802,7 +5032,7 @@
     }
 
     function tick(ts) {
-      if (!shell.alive()) return;
+      if (!shell.alive() || gameOver) return;
       raf = requestAnimationFrame(tick);
       if (paused || phase !== 'flying') {
         lastTs = ts;
@@ -6015,7 +6245,7 @@
     registerGame({
       id: 'bowling',
       name: 'Bowling',
-      desc: 'Practice · pin deck · leave · reset',
+      desc: 'Practice · 10 frames · X / ／ scorebook',
       icon: '🎳',
       gameType: 'solo',
       genre: 'rw_sports',
@@ -6027,7 +6257,7 @@
       meta: {
         phaseA: 'Lane & throw — aim / power / gutter',
         phaseB: 'Arcade pin deck — knock, leave, reset',
-        phaseC: '10-frame scorebook (Prompt 3)',
+        phaseC: '10-frame USBC scorebook + 10th fill',
         phaseD: 'Practice AI + Live (Prompt 4)',
         complete: false,
       },
@@ -6068,6 +6298,7 @@
   window.openKabaddi = openKabaddi;
   window.openKhoKho = openKhoKho;
   window.openBowling = openBowling;
+  window.scoreBowling = scoreBowling;
   window.openPatangBaazi = (ctx) => {
     const o = ctx && typeof ctx === 'object' ? ctx : {};
     if (o.mode === 'duel' || o.mode === 'festival') openPatang({ mode: o.mode });
