@@ -212,9 +212,9 @@
       'Live: one seat chases (active+Kho), the other runs the batch — then swap · leave=forfeit · virtual stakes',
     ],
     bowling: [
-      'Aim left/right and set power, then Throw down the lane',
-      'Stay on the boards — extreme aim drifts into the gutter',
-      'Pin knock and 10-frame scoring come in later prompts',
+      'Aim + power feed an arcade pin chart — pocket hits clear more pins',
+      'Gutter = 0 · ball 2 plays the leave · strike skips to a fresh rack',
+      'Ten-frame scorebook with strike/spare bonuses comes next',
     ],
     tambola: [
       'Auto-daub on a real 3×9 ticket — claim Early Five, lines, corners, then Full House',
