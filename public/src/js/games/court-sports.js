@@ -2716,6 +2716,313 @@
     }
   }
 
+  /**
+   * Kho Kho Prompt 1/5 — court & posts Practice shell.
+   * Control: tap/drag on the field to move the active chaser (pointer target).
+   * Sitters + poles are visual; direction lock / Kho / Live come in later prompts.
+   */
+  function openKhoKho() {
+    const chat = resolveChat(arguments[0]);
+    let shellPauseCtrl = null;
+    let paused = false;
+    let raf = 0;
+    let coachShown = false;
+    let lastTs = 0;
+
+    const MOVE_SPEED = 1.55;
+    const TAG_R = 0.085;
+    const LANE_L = 0.42;
+    const LANE_R = 0.58;
+
+    const shell = openShell({
+      id: 'khokho',
+      title: 'Kho Kho',
+      subtitle: practiceSub('Court · poles · sitters'),
+      mode: 'practice',
+      live: false,
+      chat,
+      accent: '#00695C',
+      bg: '#021A16',
+      pauseId: 'csKhoKhoPause',
+      leaveBody: 'This practice run will end.',
+      cleanup: () => {
+        if (raf) {
+          cancelAnimationFrame(raf);
+          raf = 0;
+        }
+        if (shellPauseCtrl) shellPauseCtrl.destroy();
+      },
+    });
+    if (!shell) return;
+
+    if (typeof createGamePauseController === 'function') {
+      shellPauseCtrl = createGamePauseController({
+        host: shell.host || shell.overlay,
+        pauseBtnId: 'csKhoKhoPause',
+        onPause() {
+          paused = true;
+        },
+        onResume() {
+          paused = false;
+          lastTs = 0;
+        },
+        onQuit: () => {
+          confirmAndClose(shell, {
+            live: false,
+            isPlaying: true,
+            title: 'Leave Kho Kho?',
+            body: 'This practice run will end.',
+          });
+        },
+      });
+    }
+
+    // 8 sitting chasers along the central lane, alternating face L/R.
+    const sitters = [];
+    for (let i = 0; i < 8; i++) {
+      const y = 0.14 + i * 0.095;
+      sitters.push({
+        id: i,
+        x: 0.5,
+        y: Math.min(0.86, y),
+        face: i % 2 === 0 ? 'L' : 'R',
+      });
+    }
+
+    const poles = [
+      { id: 'n', x: 0.5, y: 0.06, label: 'Pole' },
+      { id: 's', x: 0.5, y: 0.94, label: 'Pole' },
+    ];
+
+    // Stub defenders (runners) in free zones — Prompt 4 will own real defend AI.
+    let defenders = [
+      { id: 0, x: 0.18, y: 0.32, tagged: false },
+      { id: 1, x: 0.82, y: 0.48, tagged: false },
+      { id: 2, x: 0.22, y: 0.72, tagged: false },
+    ];
+
+    let chaser = { x: 0.22, y: 0.88, tx: 0.22, ty: 0.88 };
+    let tags = 0;
+    let msg = 'Tap the field to chase — sitters hold the central lane.';
+    let painted = false;
+
+    function dist(a, b) {
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      return Math.hypot(dx, dy);
+    }
+
+    function tryTag() {
+      let hit = false;
+      defenders.forEach((d) => {
+        if (d.tagged) return;
+        if (dist(chaser, d) <= TAG_R) {
+          d.tagged = true;
+          tags += 1;
+          hit = true;
+          buzz('hit');
+          if (typeof showToast === 'function') showToast('Tagged! (+1 stub)');
+          msg = 'Tagged a runner · ' + tags + ' — Kho & chase law come later.';
+        }
+      });
+      if (hit) softPaint();
+    }
+
+    function paint(force) {
+      if (!shell.alive()) return;
+      if (painted && !force) {
+        softPaint();
+        return;
+      }
+      painted = true;
+
+      const sitHtml = sitters
+        .map((s) => {
+          return (
+            '<span class="cs-kk-sitter cs-kk-face-' +
+            s.face.toLowerCase() +
+            '" style="left:' +
+            s.x * 100 +
+            '%;top:' +
+            s.y * 100 +
+            '%" title="Sitter facing ' +
+            (s.face === 'L' ? 'left' : 'right') +
+            '">' +
+            (s.face === 'L' ? '◀' : '▶') +
+            '</span>'
+          );
+        })
+        .join('');
+
+      const poleHtml = poles
+        .map((p) => {
+          return (
+            '<span class="cs-kk-pole" style="left:' +
+            p.x * 100 +
+            '%;top:' +
+            p.y * 100 +
+            '%" aria-label="Pole">' +
+            '<i></i><b>Pole</b></span>'
+          );
+        })
+        .join('');
+
+      const defHtml = defenders
+        .map((d) => {
+          return (
+            '<span class="cs-kk-runner' +
+            (d.tagged ? ' is-tagged' : '') +
+            '" data-def="' +
+            d.id +
+            '" style="left:' +
+            d.x * 100 +
+            '%;top:' +
+            d.y * 100 +
+            '%">' +
+            (d.tagged ? '✓' : '🏃') +
+            '</span>'
+          );
+        })
+        .join('');
+
+      shell.body.innerHTML =
+        '<div class="cs-khokho">' +
+        '<div class="cs-rally-score">🏃 <strong>' +
+        tags +
+        '</strong> <span class="cs-rally-score-sub">stub tags</span></div>' +
+        '<p class="cs-rally-msg">' +
+        esc(msg) +
+        (paused ? ' · Paused' : '') +
+        '</p>' +
+        '<div class="cs-kk-court" data-court role="application" aria-label="Kho Kho court">' +
+        '<div class="cs-kk-free cs-kk-free-l" aria-hidden="true"><span>Free zone</span></div>' +
+        '<div class="cs-kk-free cs-kk-free-r" aria-hidden="true"><span>Free zone</span></div>' +
+        '<div class="cs-kk-lane" aria-hidden="true"><span>Central lane</span></div>' +
+        poleHtml +
+        sitHtml +
+        defHtml +
+        '<span class="cs-kk-chaser" style="left:' +
+        chaser.x * 100 +
+        '%;top:' +
+        chaser.y * 100 +
+        '%" aria-label="Active chaser">⚡</span>' +
+        '</div>' +
+        '<div class="cs-kk-meta">Tap/drag to move the active chaser · poles bookend the lane</div>' +
+        '<div class="cs-kk-actions">' +
+        '<button type="button" class="cs-hit" data-reset>Reset tags</button>' +
+        '</div>' +
+        '</div>';
+
+      const court = shell.body.querySelector('[data-court]');
+      const setTarget = (clientX, clientY) => {
+        if (paused || !court) return;
+        const rect = court.getBoundingClientRect();
+        if (rect.width < 8 || rect.height < 8) return;
+        chaser.tx = Math.max(0.06, Math.min(0.94, (clientX - rect.left) / rect.width));
+        chaser.ty = Math.max(0.06, Math.min(0.94, (clientY - rect.top) / rect.height));
+      };
+      court?.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        try {
+          court.setPointerCapture(e.pointerId);
+        } catch (err) {}
+        setTarget(e.clientX, e.clientY);
+      });
+      court?.addEventListener('pointermove', (e) => {
+        if (e.buttons || e.pressure > 0) setTarget(e.clientX, e.clientY);
+      });
+
+      shell.body.querySelector('[data-reset]')?.addEventListener('click', () => {
+        defenders.forEach((d) => {
+          d.tagged = false;
+        });
+        tags = 0;
+        msg = 'Tap the field to chase — sitters hold the central lane.';
+        paint(true);
+      });
+
+      if (!coachShown) {
+        coachShown = true;
+        if (typeof showToast === 'function') {
+          showToast('Central lane · poles at both ends');
+        }
+      }
+
+      if (typeof GameUI !== 'undefined' && GameUI.attachHowTo) {
+        GameUI.attachHowTo(shell.overlay, {
+          title: 'Kho Kho',
+          body:
+            'Eight sitters face alternate sides on the central lane. Chase from the free zones toward the poles. Giving Kho comes in a later update.',
+        });
+      }
+    }
+
+    function softPaint() {
+      const el = shell.body.querySelector('.cs-kk-chaser');
+      if (el) {
+        el.style.left = chaser.x * 100 + '%';
+        el.style.top = chaser.y * 100 + '%';
+      }
+      defenders.forEach((d) => {
+        const node = shell.body.querySelector('[data-def="' + d.id + '"]');
+        if (!node) return;
+        node.style.left = d.x * 100 + '%';
+        node.style.top = d.y * 100 + '%';
+        node.classList.toggle('is-tagged', !!d.tagged);
+        node.textContent = d.tagged ? '✓' : '🏃';
+      });
+      const score = shell.body.querySelector('.cs-rally-score strong');
+      if (score) score.textContent = String(tags);
+      const msgEl = shell.body.querySelector('.cs-rally-msg');
+      if (msgEl) msgEl.textContent = msg + (paused ? ' · Paused' : '');
+    }
+
+    function tick(ts) {
+      if (!shell.alive()) return;
+      raf = requestAnimationFrame(tick);
+      if (paused) {
+        lastTs = ts;
+        return;
+      }
+      if (!lastTs) lastTs = ts;
+      const dt = Math.min(0.05, (ts - lastTs) / 1000);
+      lastTs = ts;
+
+      const dx = chaser.tx - chaser.x;
+      const dy = chaser.ty - chaser.y;
+      const len = Math.hypot(dx, dy);
+      if (len > 0.008) {
+        const step = Math.min(len, MOVE_SPEED * dt);
+        chaser.x += (dx / len) * step;
+        chaser.y += (dy / len) * step;
+        // Soft keep-out of deep lane center (visual lane stays readable; Prompt 2 owns law).
+        if (chaser.x > LANE_L + 0.02 && chaser.x < LANE_R - 0.02) {
+          chaser.x = chaser.x < 0.5 ? LANE_L + 0.02 : LANE_R - 0.02;
+        }
+      }
+
+      // Idle wander for untagged runners (feel only).
+      defenders.forEach((d, i) => {
+        if (d.tagged) return;
+        const t = ts / 1000 + i * 1.7;
+        const baseX = i === 1 ? 0.82 : 0.18 + (i === 2 ? 0.04 : 0);
+        const baseY = 0.32 + i * 0.2;
+        d.x = baseX + Math.sin(t * 0.7) * 0.04;
+        d.y = baseY + Math.cos(t * 0.55) * 0.03;
+        d.x = Math.max(0.08, Math.min(0.92, d.x));
+        d.y = Math.max(0.12, Math.min(0.9, d.y));
+        if (d.x > LANE_L && d.x < LANE_R) {
+          d.x = d.x < 0.5 ? LANE_L - 0.02 : LANE_R + 0.02;
+        }
+      });
+
+      tryTag();
+      softPaint();
+    }
+
+    paint(true);
+    raf = requestAnimationFrame(tick);
+  }
 
   const PATANG_LAST_MODE_KEY = 'chaupaal_patang_last_mode';
   const PATANG_STREAK_KEY = 'chaupaal_patang_duel_streak';
@@ -3885,6 +4192,25 @@
       launch: openKabaddi,
     });
     registerGame({
+      id: 'khokho',
+      name: 'Kho Kho',
+      desc: 'Practice · court, poles & sitters',
+      icon: '🏃',
+      gameType: 'solo',
+      genre: 'rw_sports',
+      solo: true,
+      selfChat: true,
+      dangal: true,
+      chat1v1: true,
+      order: 25,
+      meta: {
+        phaseA: 'Court & posts — Practice shell',
+        phaseB: 'Chase law (Prompt 2)',
+        complete: false,
+      },
+      launch: openKhoKho,
+    });
+    registerGame({
       id: 'patangbaazi',
       name: 'Patang Baazi',
       desc: 'Practice · climb, cut, survive',
@@ -3895,7 +4221,7 @@
       selfChat: true,
       dangal: true,
       chat1v1: true,
-      order: 25,
+      order: 26,
       launch(ctx) {
         try {
           const o = ctx && typeof ctx === 'object' ? ctx : {};
@@ -3917,6 +4243,7 @@
   window.openPickleball = (ctx) => openRallySport(Object.assign({}, RALLIES[2], { chat: ctx }));
   window.openTennis = (ctx) => openRallySport(Object.assign({}, RALLIES[3], { chat: ctx }));
   window.openKabaddi = openKabaddi;
+  window.openKhoKho = openKhoKho;
   window.openPatangBaazi = (ctx) => {
     const o = ctx && typeof ctx === 'object' ? ctx : {};
     if (o.mode === 'duel' || o.mode === 'festival') openPatang({ mode: o.mode });

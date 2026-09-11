@@ -21,6 +21,7 @@
     tabletennis: { primary: '#0D47A1', secondary: '#FF6F00', surface: '#000A1A', label: 'Table Tennis', icon: '🏓', orientation: 'landscape' },
     pickleball: { primary: '#33691E', secondary: '#FFEA00', surface: '#0A1200', label: 'Pickleball', icon: '🥒', orientation: 'landscape' },
     kabaddi: { primary: '#BF360C', secondary: '#FFB300', surface: '#1A0800', label: 'Kabaddi', icon: '💪', orientation: 'landscape' },
+    khokho: { primary: '#00695C', secondary: '#FFE082', surface: '#021A16', label: 'Kho Kho', icon: '🏃', orientation: 'portrait' },
     tennis: { primary: '#2E7D32', secondary: '#FFFFFF', surface: '#0A1A0A', label: 'Tennis', icon: '🎾', orientation: 'landscape' },
     rummy: { primary: '#6A1B9A', secondary: '#FFD54F', surface: '#100018', label: 'Rummy', icon: '🃏', orientation: 'portrait' },
     teenpatti: { primary: '#4A148C', secondary: '#FFD700', surface: '#0D0018', label: 'Teen Patti', icon: '♠', orientation: 'portrait' },

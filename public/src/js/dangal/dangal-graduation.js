@@ -50,6 +50,7 @@
     pickleball: { grade: 'live', sync: 'live1v1', stakes: true },
     tennis: { grade: 'live', sync: 'live1v1', stakes: true },
     kabaddi: { grade: 'live', sync: 'live1v1', stakes: true },
+    khokho: { grade: 'graduated', sync: 'none', label: 'Practice' },
     patangbaazi: { grade: 'graduated', sync: 'none', label: 'Practice' },
   };
 

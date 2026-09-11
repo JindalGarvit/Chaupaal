@@ -20,6 +20,8 @@
     andarbahar: 'andarbaahar',
     sattepesatta: 'sattepe',
     kite: 'patangbaazi',
+    khokho: 'khokho',
+    'kho-kho': 'khokho',
     fischerrandom: 'chess',
     chess960: 'chess',
   };
