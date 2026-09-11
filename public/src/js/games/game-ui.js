@@ -205,9 +205,9 @@
       'Live: both seats raid & defend · leave = forfeit · rematch is a fresh court · virtual stakes',
     ],
     khokho: [
-      'Touch a highlighted sitter (or Kho!) — you sit, they rise on the half they faced',
-      'New active re-locks direction under chase law · stay off the central lane',
-      'Legal tags +1 · runners respawn for Kho practice · batches come next',
+      'Batches of 3 · 75s chase turn · each side chases once (Practice AI)',
+      'Give Kho to switch chasers · after a wipe, Kho before tagging the next batch',
+      'When running: tap a runner to focus, then drag to dodge',
     ],
     tambola: [
       'Auto-daub on a real 3×9 ticket — claim Early Five, lines, corners, then Full House',
