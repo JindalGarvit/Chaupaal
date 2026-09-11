@@ -1,6 +1,6 @@
 /**
  * RW Sports — Street Cricket + Gully Kick (football-style).
- * Street Cricket Live v1 done; Gully Kick Live kick sync (1/3 · AI dive stub).
+ * Street Cricket Live v1 done; Gully Kick Live kicker↔keeper + Classic swap (2/3).
  */
 (function () {
   'use strict';
@@ -2383,8 +2383,7 @@
   }
 
 
-  /** Gully Kick — Practice shootout: Classic / SD / Pressure (Prompt 3/3). */
-  /** Gully Kick — Practice + Live kick sync (Prompt 1/3; AI dive until P2). */
+  /** Gully Kick — Practice + Live kicker↔keeper + Classic swap (Prompt 2/3). */
   function openGullyKick(chatArg) {
     const chat = resolveRwChat(chatArg);
     const liveOn = chatLiveOn(chat);
@@ -2392,11 +2391,15 @@
     let taken = 0;
     const MAX = 5;
     const PRESSURE_NEED = 4;
+    /** Dive must lock before this fraction of flight (too late = default C/mid). */
+    const DIVE_LOCK_FRAC = 0.72;
     let formatId = 'classic';
     let streak = 0;
     let runBestStreak = 0;
     let sessionWon = false;
     let endReason = '';
+    let matchDraw = false;
+    let matchWinnerUid = '';
     let phase = 'pick'; // pick | wait | aim | flight | result | done
     let lastResult = '';
     let lastDive = 'C';
@@ -2412,6 +2415,7 @@
     let charging = false;
     let flightTimer = null;
     let resultTimer = null;
+    let diveLockTimer = null;
     let locked = false;
     let pendingDive = null;
     let coachShown = false;
@@ -2422,6 +2426,12 @@
     let appliedSeq = 0;
     let applying = false;
     let kickUid = '';
+    let keepUid = '';
+    let halfIndex = 1;
+    let half1 = null;
+    let half2 = null;
+    let diveLocked = false;
+    let armedDive = { side: 'C', height: 'mid' };
     let peerPaused = false;
     let ended = false;
     let flightStartedAt = 0;
@@ -2432,7 +2442,9 @@
       classic: {
         id: 'classic',
         label: 'Classic',
-        blurb: '5 kicks — score as many as you can',
+        blurb: liveOn
+          ? 'Live: 5 kicks each · shoot then dive · swap'
+          : '5 kicks — score as many as you can',
       },
       sudden: {
         id: 'sudden',
@@ -2479,9 +2491,11 @@
     const clearTimers = () => {
       if (flightTimer) clearTimeout(flightTimer);
       if (resultTimer) clearTimeout(resultTimer);
+      if (diveLockTimer) clearTimeout(diveLockTimer);
       if (chargeRaf) cancelAnimationFrame(chargeRaf);
       flightTimer = null;
       resultTimer = null;
+      diveLockTimer = null;
       chargeRaf = null;
       charging = false;
       clearFlashOutcome();
@@ -2505,13 +2519,101 @@
       return liveRoles.me === (kickUid || liveRoles.playerA);
     };
 
+    const iAmKeep = () => {
+      if (!liveOn) return false;
+      if (!liveRoles) return false;
+      return liveRoles.me === (keepUid || liveRoles.playerB);
+    };
+
+    const diveLockDeadline = () => {
+      const kick = lastKick;
+      if (!flightStartedAt || !kick) return 0;
+      return flightStartedAt + Math.round((kick.flightMs || 700) * DIVE_LOCK_FRAC);
+    };
+
+    const canChangeDive = () => {
+      if (!liveOn || !iAmKeep() || isPaused()) return false;
+      if (phase === 'aim') return !diveLocked;
+      if (phase !== 'flight' || diveLocked) return false;
+      return Date.now() < diveLockDeadline();
+    };
+
     const setModeChrome = (formatLabel) => {
       const fLabel = formatLabel || (fmt() && fmt().label) || 'Gully Kick';
       if (liveOn) {
-        const seat = iAmKicker() ? 'Kicker' : 'Watching';
-        setChromeSub(liveChromeSub() + ' · Friendly · ' + fLabel + ' · ' + seat);
+        const seat = iAmKicker() ? 'Kicker' : iAmKeep() ? 'Keeper' : 'Live';
+        const half = halfIndex === 2 ? ' · 2nd half' : ' · 1st half';
+        setChromeSub(liveChromeSub() + ' · Friendly · ' + fLabel + ' · ' + seat + half);
       } else {
         setChromeSub('Practice · ' + fLabel + ' · Shooter');
+      }
+    };
+
+    const snapshotHalf = () => ({
+      kickUid,
+      keepUid,
+      scored,
+      taken,
+      kickLog: kickLog.slice(),
+    });
+
+    const compareMatch = () => {
+      const a = half1;
+      const b = half2;
+      if (!a || !b || !liveRoles) {
+        return { winnerUid: '', draw: true, reason: 'kicks', iWon: false };
+      }
+      let winnerUid = '';
+      let draw = false;
+      if ((a.scored | 0) !== (b.scored | 0)) {
+        winnerUid = (a.scored | 0) > (b.scored | 0) ? a.kickUid : b.kickUid;
+      } else {
+        draw = true;
+      }
+      const iWon = !draw && winnerUid === liveRoles.me;
+      return { winnerUid, draw, reason: draw ? 'draw' : 'goals', iWon };
+    };
+
+    const beginSecondHalf = () => {
+      half1 = snapshotHalf();
+      half2 = null;
+      const prevKick = kickUid;
+      kickUid = keepUid;
+      keepUid = prevKick;
+      halfIndex = 2;
+      scored = 0;
+      taken = 0;
+      kickLog.length = 0;
+      lastKick = null;
+      lastResult = 'Half-time — roles swapped. You’re up.';
+      lastGoal = false;
+      lastOutcomeKind = '';
+      endReason = '';
+      sessionWon = false;
+      matchDraw = false;
+      matchWinnerUid = '';
+      diveLocked = false;
+      armedDive = { side: 'C', height: 'mid' };
+      power = 0.55;
+      locked = false;
+      pendingDive = null;
+      flightStartedAt = 0;
+      phase = 'aim';
+      setModeChrome();
+    };
+
+    const finishLiveMatch = () => {
+      half2 = snapshotHalf();
+      const cmp = compareMatch();
+      matchWinnerUid = cmp.winnerUid || '';
+      matchDraw = !!cmp.draw;
+      sessionWon = !!cmp.iWon;
+      endReason = cmp.reason || 'kicks';
+      phase = 'done';
+      ended = true;
+      if (leaveShell) leaveShell.gameOver = true;
+      if (typeof gameFeedback === 'function') {
+        gameFeedback(matchDraw ? 'complete' : sessionWon ? 'win' : 'lose');
       }
     };
 
@@ -2539,6 +2641,14 @@
           lastOutcomeKind,
           kickLog: kickLog.slice(-8),
           kickUid: kickUid || (liveRoles && liveRoles.playerA) || '',
+          keepUid: keepUid || (liveRoles && liveRoles.playerB) || '',
+          halfIndex,
+          half1,
+          half2,
+          diveLocked,
+          armedDive,
+          matchWinnerUid,
+          matchDraw,
           eventSeq,
           endReason,
           sessionWon,
@@ -2549,22 +2659,33 @@
         extra || {}
       );
 
+    /**
+     * @param {object} [extra]
+     * @param {{ as?: 'kick'|'keep'|'host'|'any', status?: string }} [top]
+     */
     const pushLive = (extra, top) => {
       if (!liveOn || !liveHandle || applying || !liveRoles) return;
-      if (!iAmKicker() && !(top && top.as === 'host')) return;
-      if (top && top.as === 'host' && !iAmHost()) return;
+      const as = (top && top.as) || 'any';
+      if (as === 'kick' && !iAmKicker()) return;
+      if (as === 'keep' && !iAmKeep()) return;
+      if (as === 'host' && !iAmHost()) return;
       eventSeq += 1;
       const st = buildLiveState(extra);
       st.eventSeq = eventSeq;
       appliedSeq = Math.max(appliedSeq, eventSeq);
       const status =
         phase === 'done' || ended ? 'over' : (top && top.status) || 'playing';
+      const turn =
+        phase === 'flight' && !diveLocked
+          ? keepUid || liveRoles.playerB
+          : kickUid || liveRoles.playerA;
       try {
         liveHandle.push(
           Object.assign(
             {
               status,
-              turn: kickUid || liveRoles.playerA,
+              turn,
+              winner: status === 'over' && !matchDraw ? matchWinnerUid || null : undefined,
               state: st,
             },
             top || {}
@@ -2647,10 +2768,24 @@
         };
       }
       if (st.kickUid) kickUid = st.kickUid;
+      if (st.keepUid) keepUid = st.keepUid;
+      if (st.halfIndex != null) halfIndex = st.halfIndex | 0 || 1;
+      if (st.half1) half1 = st.half1;
+      if (st.half2) half2 = st.half2;
+      if (st.diveLocked != null) diveLocked = !!st.diveLocked;
+      if (st.armedDive && st.armedDive.side) {
+        armedDive = {
+          side: st.armedDive.side,
+          height: st.armedDive.height || 'mid',
+        };
+      }
+      if (st.matchWinnerUid != null) matchWinnerUid = st.matchWinnerUid || '';
+      if (st.matchDraw != null) matchDraw = !!st.matchDraw;
       if (st.lastKick) {
         lastKick = st.lastKick;
         if (st.lastKick.dive) lastDive = st.lastKick.dive;
         if (st.lastKick.diveHeight) lastDiveHeight = st.lastKick.diveHeight;
+        if (st.lastKick.diveLocked != null) diveLocked = !!st.lastKick.diveLocked;
       }
       if (st.lastResult != null) lastResult = st.lastResult;
       if (st.lastDive) lastDive = st.lastDive;
@@ -2679,6 +2814,7 @@
         return;
       }
       render();
+      if (phase === 'flight' && liveOn) scheduleDiveLock();
     };
 
     const diveLabel = (d) => (d === 'L' ? 'left' : d === 'R' ? 'right' : 'center');
@@ -2793,6 +2929,8 @@
       runBestStreak = 0;
       sessionWon = false;
       endReason = '';
+      matchDraw = false;
+      matchWinnerUid = '';
       lastResult = '';
       lastDive = 'C';
       lastDiveHeight = 'mid';
@@ -2806,8 +2944,14 @@
       pendingDive = null;
       flightStartedAt = 0;
       ended = false;
+      halfIndex = 1;
+      half1 = null;
+      half2 = null;
+      diveLocked = false;
+      armedDive = { side: 'C', height: 'mid' };
       if (liveOn && liveRoles) {
         kickUid = liveRoles.playerA || kickUid;
+        keepUid = liveRoles.playerB || keepUid;
       }
       setModeChrome();
     };
@@ -2819,6 +2963,7 @@
       phase = 'aim';
       if (liveOn) {
         kickUid = (liveRoles && liveRoles.playerA) || kickUid;
+        keepUid = (liveRoles && liveRoles.playerB) || keepUid;
         pushLive({ phase: 'aim' }, { as: 'host' });
       }
       render();
@@ -2836,11 +2981,13 @@
 
     const startSelected = () => {
       if (liveOn && !iAmHost()) return;
+      if (liveOn) formatId = 'classic';
       saveFormat(formatId);
       beginSession();
       phase = 'aim';
       if (liveOn) {
         kickUid = (liveRoles && liveRoles.playerA) || '';
+        keepUid = (liveRoles && liveRoles.playerB) || '';
         pushLive({ phase: 'aim' }, { as: 'host' });
       }
       render();
@@ -2857,7 +3004,15 @@
     };
 
     const scoreHud = () => {
-      const pbOk = !liveOn;
+      if (liveOn) {
+        const vs =
+          half1 != null
+            ? ` · vs ${half1.scored | 0}`
+            : '';
+        const halfTag = halfIndex === 2 ? '2nd · ' : '1st · ';
+        return `${halfTag}${scored} scored · ${taken}/${MAX} taken${vs}`;
+      }
+      const pbOk = true;
       if (formatId === 'sudden') {
         const allTime =
           pbOk &&
@@ -2878,15 +3033,21 @@
         return `${scored}/${PRESSURE_NEED} needed · ${left} kick${left === 1 ? '' : 's'} left${clears}`;
       }
       const pb =
-        pbOk &&
-        typeof getGamePB === 'function' &&
-        getGamePB('gullykick_classic') != null
+        typeof getGamePB === 'function' && getGamePB('gullykick_classic') != null
           ? ` · Best ${getGamePB('gullykick_classic')}/${MAX}`
           : '';
       return `${scored} scored · ${taken}/${MAX} taken${pb}`;
     };
 
     const evaluateEnd = () => {
+      if (liveOn) {
+        // Live P2: Classic halves only (5 kicks each as kicker).
+        if (taken >= MAX) {
+          if (halfIndex === 1) return { done: true, won: false, reason: 'half' };
+          return { done: true, won: false, reason: 'kicks' };
+        }
+        return { done: false, won: false, reason: '' };
+      }
       if (formatId === 'sudden') {
         if (!lastGoal) {
           return { done: true, won: false, reason: lastOutcomeKind === 'over' ? 'over' : 'save' };
@@ -2906,7 +3067,6 @@
         }
         return { done: false, won: false, reason: '' };
       }
-      // classic
       if (taken >= MAX) {
         return { done: true, won: false, reason: 'kicks' };
       }
@@ -2930,6 +3090,45 @@
     const buildResultOpts = () => {
       const f = fmt();
       const pbGameId = pbIdForFormat();
+
+      if (liveOn && (half1 || endReason === 'forfeit')) {
+        const h1 = half1;
+        const h2 = half2 || (endReason !== 'forfeit' ? snapshotHalf() : null);
+        const myUid = liveRoles && liveRoles.me;
+        const myGoals = h1 && h1.kickUid === myUid ? h1.scored | 0 : h2 && h2.kickUid === myUid ? h2.scored | 0 : 0;
+        const oppGoals =
+          h1 && h1.kickUid !== myUid ? h1.scored | 0 : h2 && h2.kickUid !== myUid ? h2.scored | 0 : 0;
+        const line =
+          endReason === 'forfeit'
+            ? lastResult || 'Forfeit'
+            : `You ${myGoals} · Opp ${oppGoals}`;
+        const title = matchDraw ? 'Draw' : sessionWon ? 'You win' : 'Opponent wins';
+        return {
+          title: 'Gully Kick',
+          glyph: '⚽',
+          onAgain: () => openGullyKick(chat),
+          onChangeFormat: () => openGullyKick(chat),
+          actions: [
+            { label: 'Rematch', primary: true, id: 'again' },
+            { label: 'Share', primary: false, id: 'share' },
+          ],
+          challenge: false,
+          hideStats: true,
+          hideMissions: true,
+          updatePb: false,
+          scoreHtml: `<p class="rw-gk-moment">${esc(line)}</p>`,
+          againLabel: 'Rematch',
+          resultTitle: title,
+          subtitle: endReason === 'forfeit' ? lastResult || 'Forfeit' : 'Both halves done · ' + line,
+          scoreLine: line,
+          score: myGoals,
+          shareText: `Gully Kick Live: ${line} on Chaupaal`,
+          won: sessionWon,
+          recordExtra: { format: 'classic', formatId: 'classic', live: true, matchDraw },
+          gs,
+        };
+      }
+
       const moment = pickMomentLine();
       const scoreHtml = moment ? `<p class="rw-gk-moment">${esc(moment)}</p>` : '';
       const actions = [
@@ -3015,7 +3214,6 @@
         });
       }
 
-      // classic
       return Object.assign(base, {
         updatePb: true,
         pbGameId,
@@ -3203,11 +3401,13 @@
       lastGoal = !!resolved.goal;
       lastOutcomeKind = resolved.outcomeKind || (resolved.goal ? 'goal' : 'save');
       lastResult = resolved.label;
+      lastDive = resolved.dive || lastDive;
+      lastDiveHeight = resolved.diveHeight || lastDiveHeight;
       if (resolved.over) {
         if (typeof gameFeedback === 'function') gameFeedback('lose', { noConfetti: true });
       } else if (resolved.goal) {
         scored += 1;
-        if (formatId === 'sudden') {
+        if (!liveOn && formatId === 'sudden') {
           streak += 1;
           if (streak > runBestStreak) runBestStreak = streak;
         }
@@ -3222,15 +3422,16 @@
         }
       } catch (e) {}
       const endEval = evaluateEnd();
-      if (endEval.done) {
+      if (endEval.done && !(liveOn && endEval.reason === 'half')) {
         sessionWon = !!endEval.won;
         endReason = endEval.reason || '';
       }
       phase = 'result';
       locked = false;
       flightStartedAt = 0;
+      diveLocked = true;
       if (liveOn && iAmKicker()) {
-        pushLive({ phase: 'result', lastKick: resolved });
+        pushLive({ phase: 'result', lastKick: resolved }, { as: 'kick' });
       }
       render();
       resultTimer = setTimeout(() => {
@@ -3240,6 +3441,33 @@
           return;
         }
         if (liveOn && !iAmKicker()) return;
+        if (liveOn && endEval.reason === 'half') {
+          beginSecondHalf();
+          pushLive(
+            {
+              phase: 'aim',
+              halfIndex: 2,
+              half1,
+              kickUid,
+              keepUid,
+              scored: 0,
+              taken: 0,
+              lastKick: null,
+            },
+            { as: 'any' }
+          );
+          render();
+          return;
+        }
+        if (liveOn && endEval.done && halfIndex === 2) {
+          finishLiveMatch();
+          pushLive(
+            { phase: 'done', half2, matchWinnerUid, matchDraw },
+            { as: 'kick', status: 'over' }
+          );
+          render();
+          return;
+        }
         if (endEval.done) {
           phase = 'done';
           ended = true;
@@ -3250,13 +3478,19 @@
           locked = false;
           pendingDive = null;
           lastKick = null;
+          diveLocked = false;
+          armedDive = { side: 'C', height: 'mid' };
         }
         if (liveOn && iAmKicker()) {
-          pushLive({
-            phase,
-            power: 0.55,
-            lastKick: endEval.done ? lastKick : null,
-          });
+          pushLive(
+            {
+              phase,
+              power: 0.55,
+              lastKick: endEval.done ? lastKick : null,
+              diveLocked: false,
+            },
+            { as: 'kick' }
+          );
         }
         render();
       }, 950);
@@ -3273,9 +3507,128 @@
         flightTimer = null;
         if (!sessionAlive() || isPaused() || phase !== 'flight') return;
         if (liveOn && !iAmKicker()) return;
-        const resolved = resolveKick(kick);
+        // Finalize dive: armed/synced pick, else default C/mid (no pick / too late).
+        if (liveOn) {
+          const dive =
+            (lastKick && lastKick.dive) || armedDive.side || 'C';
+          const diveHeight =
+            (lastKick && lastKick.diveHeight) || armedDive.height || 'mid';
+          diveLocked = true;
+          lastKick = Object.assign({}, lastKick || kick, {
+            dive,
+            diveHeight,
+            diveLocked: true,
+            tell: 'N',
+            tellStrength: 'neutral',
+          });
+          lastDive = dive;
+          lastDiveHeight = diveHeight;
+        }
+        const resolved = resolveKick(lastKick || kick);
         applyResolvedKick(resolved);
       }, Math.max(80, flightMs));
+    };
+
+    const setHumanDive = (side, height) => {
+      if (!canChangeDive()) return;
+      const s = side === 'L' || side === 'R' || side === 'C' ? side : 'C';
+      const h = height === 'low' || height === 'high' || height === 'mid' ? height : 'mid';
+      armedDive = { side: s, height: h };
+      lastDive = s;
+      lastDiveHeight = h;
+      if (phase === 'flight' && lastKick) {
+        lastKick = Object.assign({}, lastKick, {
+          dive: s,
+          diveHeight: h,
+          diveLocked: false,
+          tell: 'N',
+          tellStrength: 'neutral',
+        });
+        pushLive(
+          {
+            phase: 'flight',
+            lastKick,
+            lastDive: s,
+            lastDiveHeight: h,
+            diveLocked: false,
+            armedDive,
+          },
+          { as: 'keep' }
+        );
+      } else {
+        pushLive({ armedDive, lastDive: s, lastDiveHeight: h }, { as: 'keep' });
+      }
+      paintKeeperTellHuman();
+      if (typeof gameFeedback === 'function') gameFeedback('select');
+      body.querySelectorAll('[data-dive-side]').forEach((el) => {
+        el.classList.toggle('is-armed', el.getAttribute('data-dive-side') === s);
+      });
+      body.querySelectorAll('[data-dive-h]').forEach((el) => {
+        el.classList.toggle('is-armed', el.getAttribute('data-dive-h') === h);
+      });
+      const hint = body.querySelector('[data-gk-hint]');
+      if (hint && phase === 'flight') {
+        hint.textContent =
+          'Dive ' + sideWord(s) + ' · ' + heightLabel(h) + ' — locks before the ball arrives';
+      }
+    };
+
+    const scheduleDiveLock = () => {
+      if (!liveOn || diveLockTimer) return;
+      const ms = Math.max(40, diveLockDeadline() - Date.now());
+      diveLockTimer = setTimeout(() => {
+        diveLockTimer = null;
+        if (!sessionAlive() || phase !== 'flight' || diveLocked) return;
+        diveLocked = true;
+        const s = (lastKick && lastKick.dive) || armedDive.side || 'C';
+        const h = (lastKick && lastKick.diveHeight) || armedDive.height || 'mid';
+        lastDive = s;
+        lastDiveHeight = h;
+        if (lastKick) {
+          lastKick = Object.assign({}, lastKick, {
+            dive: s,
+            diveHeight: h,
+            diveLocked: true,
+          });
+        }
+        if (iAmKeep()) {
+          pushLive(
+            {
+              phase: 'flight',
+              lastKick,
+              lastDive: s,
+              lastDiveHeight: h,
+              diveLocked: true,
+              armedDive: { side: s, height: h },
+            },
+            { as: 'keep' }
+          );
+        }
+        const hint = body.querySelector('[data-gk-hint]');
+        if (hint) {
+          hint.textContent = 'Dive locked — ' + sideWord(s) + ' · ' + heightLabel(h);
+        }
+        body.querySelectorAll('[data-dive-side],[data-dive-h]').forEach((el) => {
+          el.disabled = true;
+        });
+      }, ms);
+    };
+
+    const paintKeeperTellHuman = () => {
+      const el = body.querySelector('[data-gk-keeper]');
+      if (!el || !liveOn) return;
+      if (phase === 'flight' || phase === 'result') {
+        el.className =
+          'rw-sports-keeper rw-gk-keeper is-dive-' +
+          (lastDive || 'C').toLowerCase() +
+          (lastDiveHeight === 'low' ? ' is-dive-h-low' : '') +
+          (lastDiveHeight === 'high' ? ' is-dive-h-high' : '');
+        return;
+      }
+      if (phase === 'aim' && iAmKeep()) {
+        el.className =
+          'rw-sports-keeper rw-gk-keeper is-tell-' + (armedDive.side || 'C').toLowerCase() + ' is-tell-soft';
+      }
     };
 
     const commitKick = (pwr) => {
@@ -3284,11 +3637,25 @@
       locked = true;
       clearTimers();
       power = Math.max(0.28, Math.min(1, pwr));
-      // Live P1: AI dive chosen by kicker seat and synced on the wire (Prompt 2 → human keeper).
-      const plan = pendingDive || pickKeeperPlan();
-      pendingDive = null;
-      const dive = plan.side;
-      const diveHeight = plan.height || 'mid';
+      let dive = 'C';
+      let diveHeight = 'mid';
+      let tell = 'N';
+      let tellStrength = 'neutral';
+      if (liveOn) {
+        // Human keeper: carry armed dive (or C/mid); stays unlocked until lock frac.
+        pendingDive = null;
+        diveLocked = false;
+        dive = armedDive.side || 'C';
+        diveHeight = armedDive.height || 'mid';
+      } else {
+        const plan = pendingDive || pickKeeperPlan();
+        pendingDive = null;
+        dive = plan.side;
+        diveHeight = plan.height || 'mid';
+        tell = plan.tell;
+        tellStrength = plan.tellStrength;
+        diveLocked = true;
+      }
       const end = endPosForAim(aim, power);
       const flightMs = Math.round(520 + (1 - power) * 380);
       const kick = {
@@ -3302,8 +3669,9 @@
         endY: end.y,
         dive,
         diveHeight,
-        tell: plan.tell,
-        tellStrength: plan.tellStrength,
+        diveLocked: !!diveLocked,
+        tell,
+        tellStrength,
         flightMs,
         zones: { side: aim.side, height: aim.height },
       };
@@ -3320,7 +3688,10 @@
           window.__gkKickLog = kickLog.slice();
         }
       } catch (e) {}
-      if (liveOn) pushLive({ phase: 'flight', lastKick: kick, flightStartedAt });
+      if (liveOn) {
+        pushLive({ phase: 'flight', lastKick: kick, flightStartedAt, diveLocked: false }, { as: 'kick' });
+        scheduleDiveLock();
+      }
       render();
       startFlightTimer(kick);
     };
@@ -3361,16 +3732,21 @@
       charging = true;
       chargeStartedAt = Date.now();
       power = 0.28;
-      pendingDive = pickKeeperPlan();
+      // Live: no AI dive tell — human keeper.
+      pendingDive = liveOn ? null : pickKeeperPlan();
       paintPower();
       paintKeeperTell();
       const hint = body.querySelector('[data-gk-hint]');
       if (hint) {
-        const lean =
-          pendingDive.tell === 'N'
-            ? 'Keeper squared up…'
-            : 'Keeper leaning ' + diveLabel(pendingDive.tell) + '…';
-        hint.textContent = lean + ' hold Kick, release to shoot';
+        if (liveOn) {
+          hint.textContent = 'Hold Kick, release to shoot — keeper dives in flight';
+        } else {
+          const lean =
+            pendingDive.tell === 'N'
+              ? 'Keeper squared up…'
+              : 'Keeper leaning ' + diveLabel(pendingDive.tell) + '…';
+          hint.textContent = lean + ' hold Kick, release to shoot';
+        }
       }
       const tick = () => {
         if (!charging || !sessionAlive() || isPaused()) {
@@ -3433,12 +3809,30 @@
       }
     };
 
+    const wireDive = () => {
+      body.querySelectorAll('[data-dive-side]').forEach((el) => {
+        el.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          const side = el.getAttribute('data-dive-side');
+          setHumanDive(side, armedDive.height || 'mid');
+        });
+      });
+      body.querySelectorAll('[data-dive-h]').forEach((el) => {
+        el.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          const h = el.getAttribute('data-dive-h');
+          setHumanDive(armedDive.side || 'C', h);
+        });
+      });
+    };
+
     const wirePicker = () => {
       body.querySelectorAll('[data-format]').forEach((el) => {
         el.addEventListener('click', () => {
           if (liveOn && !iAmHost()) return;
           const id = el.getAttribute('data-format');
           if (!FORMATS[id]) return;
+          if (liveOn && id !== 'classic') return;
           formatId = id;
           body.querySelectorAll('[data-format]').forEach((b) => {
             b.classList.toggle('is-selected', b.getAttribute('data-format') === formatId);
@@ -3453,14 +3847,15 @@
         body.innerHTML = `
           <div class="rw-sports-card rw-gk-card rw-gk-picker">
             <h2>Gully Kick</h2>
-            ${rwRoleBanner('waiting', 'Waiting for host', 'They pick the format')}
-            <p class="rw-sports-hint">Live shootout — same kicks, same goals. Keeper is AI until next pass.</p>
+            ${rwRoleBanner('waiting', 'Waiting for host', 'They pick Classic')}
+            <p class="rw-sports-hint">Live duel — one shoots, one dives, then swap halves.</p>
           </div>`;
         return;
       }
       if (phase === 'pick') {
         if (typeof migrateGullyKickPb === 'function') migrateGullyKickPb();
-        const cards = ['classic', 'sudden', 'pressure']
+        const ids = liveOn ? ['classic'] : ['classic', 'sudden', 'pressure'];
+        const cards = ids
           .map((id) => {
             const f = FORMATS[id];
             return `<button type="button" class="rw-sc-format${formatId === id ? ' is-selected' : ''}" data-format="${id}">
@@ -3475,7 +3870,7 @@
             <h2>Gully Kick</h2>
             <p class="rw-sports-hint">${
               liveOn
-                ? 'Live 1v1 — shared shootout. Host picks format. AI keeper until keeper seat ships.'
+                ? 'Live Classic — 5 kicks each. One shoots, one dives, then swap.'
                 : 'Practice shootout — Classic, Sudden Death, or Pressure.'
             }</p>
             <div class="rw-sc-formats" role="listbox" aria-label="Format">${cards}</div>
@@ -3491,7 +3886,7 @@
           opts.updatePb = false;
           opts.challenge = false;
           opts.onAgain = () => openGullyKick(chat);
-          opts.onChangeFormat = iAmHost() ? showPicker : () => openGullyKick(chat);
+          opts.onChangeFormat = () => openGullyKick(chat);
         }
         finishPractice('gullykick', opts.score != null ? opts.score : scored, body, opts);
         return;
@@ -3503,10 +3898,12 @@
         : endPosForAim(aim, power);
 
       let keeperClass = '';
-      if (charging && pendingDive && phase === 'aim') {
+      if (!liveOn && charging && pendingDive && phase === 'aim') {
         keeperClass = 'is-tell-' + (pendingDive.tell || 'N').toLowerCase();
         if (pendingDive.tellStrength === 'soft') keeperClass += ' is-tell-soft';
         if (pendingDive.tellStrength === 'strong') keeperClass += ' is-tell-strong';
+      } else if (liveOn && phase === 'aim' && iAmKeep()) {
+        keeperClass = 'is-tell-' + (armedDive.side || 'C').toLowerCase() + ' is-tell-soft';
       } else if (phase === 'flight' || phase === 'result') {
         keeperClass = 'is-dive-' + lastDive.toLowerCase();
         if (lastDiveHeight === 'low') keeperClass += ' is-dive-h-low';
@@ -3525,6 +3922,7 @@
             : 'is-ready';
       const flightMs = (lastKick && lastKick.flightMs) || 700;
       const kicking = iAmKicker();
+      const keeping = liveOn && iAmKeep();
       let tip =
         phase === 'result'
           ? lastResult
@@ -3533,41 +3931,79 @@
             : !coachShown
               ? 'Watch the keeper lean while you charge — then pick your corner.'
               : 'Drag the net to aim · hold Kick to charge power';
-      if (liveOn && !kicking) {
-        if (phase === 'aim') tip = lastResult || 'Waiting for the kicker…';
-        else if (phase === 'flight') tip = 'Ball in flight — watching…';
+      if (liveOn && keeping) {
+        if (phase === 'aim')
+          tip = 'Arm your dive — you’ll lock it while the ball is in flight.';
+        else if (phase === 'flight')
+          tip = diveLocked
+            ? 'Dive locked — ' + sideWord(lastDive) + ' · ' + heightLabel(lastDiveHeight)
+            : 'Dive! Pick side & height before the ball arrives.';
+        else if (phase === 'result') tip = lastResult || 'Kick done';
+      } else if (liveOn && kicking) {
+        if (phase === 'aim') tip = 'Your kick — aim & hold Kick.';
+        else if (phase === 'flight') tip = 'Ball in flight — keeper diving…';
         else if (phase === 'result') tip = lastResult || 'Kick done';
       }
+
       let roleTitle = 'You’re shooting';
-      let roleMode = 'yours';
+      let roleMode = phase === 'aim' ? 'yours' : 'waiting';
       let roleSub =
         phase === 'aim'
           ? 'Your action — aim & Kick'
           : phase === 'flight'
             ? 'Keeper diving…'
-            : phase === 'result'
-              ? lastResult || 'Kick done'
-              : '';
-      if (liveOn && !kicking) {
-        roleTitle = 'Watching the shootout';
-        roleMode = phase === 'result' ? 'waiting' : 'theirs';
+            : lastResult || 'Kick done';
+      if (liveOn && keeping) {
+        roleTitle = 'You’re keeping';
+        roleMode = phase === 'flight' && !diveLocked ? 'yours' : phase === 'aim' ? 'yours' : 'waiting';
         roleSub =
           phase === 'aim'
-            ? 'Kicker aims & shoots'
+            ? 'Arm dive — wait for the shot'
             : phase === 'flight'
-              ? 'Ball in flight…'
+              ? diveLocked
+                ? 'Dive locked'
+                : 'Your action — Dive!'
               : lastResult || 'Kick done';
       } else if (liveOn && kicking) {
+        roleTitle = 'You’re shooting';
         roleMode = phase === 'aim' ? 'yours' : 'waiting';
-      } else {
-        roleMode = phase === 'aim' ? 'yours' : 'waiting';
+        roleSub =
+          phase === 'aim'
+            ? 'Your action — aim & Kick'
+            : phase === 'flight'
+              ? 'Opponent diving…'
+              : lastResult || 'Kick done';
       }
+
       const roleBanner = rwRoleBanner(roleMode, roleTitle, roleSub);
       const canKick = kicking && phase === 'aim' && !locked && !isPaused();
+      const diveOpen = canChangeDive();
+      const diveRow =
+        liveOn && keeping
+          ? `<div class="rw-sc-shots rw-gk-dives" role="group" aria-label="Dive side">
+              ${['L', 'C', 'R']
+                .map(
+                  (s) =>
+                    `<button type="button" class="rw-sc-shot${armedDive.side === s ? ' is-armed' : ''}" data-dive-side="${s}" ${diveOpen ? '' : 'disabled'}>${sideWord(s)}</button>`
+                )
+                .join('')}
+            </div>
+            <div class="rw-sc-shots rw-gk-dives" role="group" aria-label="Dive height">
+              ${['low', 'mid', 'high']
+                .map(
+                  (h) =>
+                    `<button type="button" class="rw-sc-shot${armedDive.height === h ? ' is-armed' : ''}" data-dive-h="${h}" ${diveOpen ? '' : 'disabled'}>${heightLabel(h)}</button>`
+                )
+                .join('')}
+            </div>`
+          : '';
+      const halfTitle = liveOn
+        ? `${fmt().label} · ${halfIndex === 2 ? '2nd half' : '1st half'}`
+        : fmt().label;
 
       body.innerHTML = `
         <div class="rw-sports-card rw-gk-card">
-          <h2>${esc(fmt().label)}</h2>
+          <h2>${esc(halfTitle)}</h2>
           ${roleBanner}
           <p class="rw-sports-score" data-rw-hud>${scoreHud()}</p>
           <div class="rw-sports-goal rw-gk-goal" data-gk-goal>
@@ -3592,23 +4028,30 @@
           </div>
           <div class="rw-sports-outcome" data-rw-outcome aria-live="polite"></div>
           <p class="rw-sports-hint" data-gk-hint>${esc(tip)}</p>
+          ${diveRow}
           <button type="button" class="btn btn--primary rw-gk-kick" data-gk-kick
             ${canKick ? '' : 'disabled'}>${
-              liveOn && !kicking
+              liveOn && keeping
                 ? phase === 'flight'
-                  ? 'Watching…'
-                  : 'Waiting…'
-                : 'Hold to Kick'
+                  ? diveLocked
+                    ? 'Dive locked'
+                    : 'Diving…'
+                  : 'Waiting for kick…'
+                : liveOn && !kicking
+                  ? 'Waiting…'
+                  : 'Hold to Kick'
             }</button>
         </div>`;
       paintAimMarker();
       paintPower();
-      if (charging && pendingDive) paintKeeperTell();
+      if (!liveOn && charging && pendingDive) paintKeeperTell();
+      if (liveOn && keeping) paintKeeperTellHuman();
       if (phase === 'result' && lastResult) {
         if (lastOutcomeKind === 'over') flashOutcome(body, 'Over!', 'over');
         else flashOutcome(body, lastGoal ? 'Goal!' : 'Saved!', lastGoal ? 'goal' : 'out');
       }
       if (phase === 'aim' && kicking) wireAim();
+      if (liveOn && keeping && (phase === 'aim' || phase === 'flight')) wireDive();
     };
 
     if (typeof createGamePauseController === 'function') {
@@ -3637,7 +4080,11 @@
             clearTimeout(resultTimer);
             resultTimer = null;
           }
-          if (liveOn && iAmKicker()) pushLive({ paused: true });
+          if (diveLockTimer) {
+            clearTimeout(diveLockTimer);
+            diveLockTimer = null;
+          }
+          if (liveOn) pushLive({ paused: true }, { as: 'any' });
         },
         onResume() {
           if (!sessionAlive()) return;
@@ -3645,15 +4092,45 @@
             flightStartedAt += Date.now() - pauseFreezeAt;
           }
           pauseFreezeAt = 0;
-          if (liveOn && iAmKicker()) pushLive({ paused: false });
-          if (phase === 'flight' && lastKick && !flightTimer && iAmKicker()) {
-            startFlightTimer(lastKick, pauseRemainFlight || 200);
+          if (liveOn) pushLive({ paused: false }, { as: 'any' });
+          if (phase === 'flight' && lastKick) {
+            if (liveOn) scheduleDiveLock();
+            if (!flightTimer && iAmKicker()) {
+              startFlightTimer(lastKick, pauseRemainFlight || 200);
+            }
           } else if (phase === 'result' && pauseRemainResult > 0 && iAmKicker()) {
             const endEval = evaluateEnd();
             resultTimer = setTimeout(() => {
               resultTimer = null;
               pauseRemainResult = 0;
-              if (!sessionAlive()) return;
+              if (!sessionAlive() || phase !== 'result') return;
+              if (liveOn && endEval.reason === 'half') {
+                beginSecondHalf();
+                pushLive(
+                  {
+                    phase: 'aim',
+                    halfIndex: 2,
+                    half1,
+                    kickUid,
+                    keepUid,
+                    scored: 0,
+                    taken: 0,
+                    lastKick: null,
+                  },
+                  { as: 'any' }
+                );
+                render();
+                return;
+              }
+              if (liveOn && endEval.done && halfIndex === 2) {
+                finishLiveMatch();
+                pushLive(
+                  { phase: 'done', half2, matchWinnerUid, matchDraw },
+                  { as: 'kick', status: 'over' }
+                );
+                render();
+                return;
+              }
               if (endEval.done) {
                 phase = 'done';
                 ended = true;
@@ -3664,8 +4141,12 @@
                 locked = false;
                 pendingDive = null;
                 lastKick = null;
+                diveLocked = false;
+                armedDive = { side: 'C', height: 'mid' };
               }
-              if (liveOn) pushLive({ phase });
+              if (liveOn && iAmKicker()) {
+                pushLive({ phase, power: 0.55, lastKick: endEval.done ? lastKick : null }, { as: 'kick' });
+              }
               render();
             }, pauseRemainResult);
           }
@@ -3692,6 +4173,7 @@
     if (liveOn && typeof DangalLive !== 'undefined' && DangalLive.join) {
       liveRoles = DangalLive.roles(chat);
       kickUid = liveRoles.playerA || '';
+      keepUid = liveRoles.playerB || '';
       liveHandle = DangalLive.join({
         gameType: 'gullykick',
         matchId: matchIdFor(chat, 'gullykick'),
@@ -3728,13 +4210,17 @@
             status: 'playing',
             turn: kickUid,
             state: {
-              formatId,
+              formatId: 'classic',
               phase: 'pick',
               kickUid,
+              keepUid,
+              halfIndex: 1,
               eventSeq: 0,
               scored: 0,
               taken: 0,
               streak: 0,
+              diveLocked: false,
+              armedDive: { side: 'C', height: 'mid' },
             },
           });
         } catch (e) {}
@@ -3781,7 +4267,7 @@
     registerGame({
       id: 'gullykick',
       name: 'Gully Kick',
-      desc: 'Live 1v1 · Classic / SD / Pressure',
+      desc: 'Live · kicker↔keeper · Classic swap',
       icon: '⚽',
       ratingKey: 'gullykick',
       gameType: 'dual',
@@ -3791,6 +4277,11 @@
       dangal: true,
       chat1v1: true,
       order: 6,
+      meta: {
+        phaseA: 'Live kick sync',
+        phaseB: 'Kicker↔keeper + Classic half swap',
+        phaseC: 'Stakes + graduation next',
+      },
       launch(ctx) {
         openGullyKick(ctx);
       },
