@@ -4397,6 +4397,7 @@ if (typeof registerGame === 'function') {
     icon: '🏙️',
     ratingKey: 'business',
     gameType: 'multiplayer',
+    liveDuel: true,
     genre: 'board',
     chat1v1: true,
     chatGroup: true,

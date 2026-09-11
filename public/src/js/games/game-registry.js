@@ -332,6 +332,19 @@
       gameType: inferGameType(descriptor),
       genre: inferGenre(descriptor),
     });
+    // Align registry with graduation: Live-capable titles must not stay solo.
+    if (typeof getGameGraduation === 'function') {
+      const info = getGameGraduation(next.id);
+      const liveGrad =
+        info.grade === 'live' || info.sync === 'live1v1' || info.sync === 'liveParty';
+      if (liveGrad) {
+        if (next.solo || next.gameType === 'solo') {
+          delete next.solo;
+          next.gameType = info.sync === 'liveParty' ? 'multiplayer' : 'dual';
+        }
+        if (info.sync === 'live1v1') next.liveDuel = true;
+      }
+    }
     next.__rawLaunch = descriptor.launch;
     next.launch = function (ctx) {
       return launchDangalGame(
@@ -773,7 +786,12 @@
       return;
     }
 
-    if (game.solo || game.gameType === 'solo') {
+    // Graduation wins over stale solo registry flags — Live-capable Manch taps
+    // must reach the friend / Live sheet, not silent Practice.
+    const liveCapable =
+      typeof isLiveCapable === 'function' ? isLiveCapable(gameId) : !!game.liveDuel;
+    const practiceOnly = (game.solo || game.gameType === 'solo') && !liveCapable;
+    if (practiceOnly) {
       launchDangalGame({
         gameId,
         source: 'manch',
@@ -804,6 +822,7 @@
     desc: 'GK, Sports, Tech & more — pick a category',
     icon: '🧠',
     gameType: 'dual',
+    liveDuel: true,
     genre: 'quiz',
     ratingKey: null,
     dangal: true,

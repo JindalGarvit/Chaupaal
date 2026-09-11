@@ -455,7 +455,14 @@ function renderDangalGamesGrid() {
       );
     else if (state.genre) list = list.filter((g) => g.genre === state.genre);
     else if (state.mode && state.mode !== 'all') {
-      list = list.filter((g) => g.gameType === state.mode);
+      list = list.filter((g) => {
+        if (state.mode === 'solo') {
+          const live =
+            typeof isLiveCapable === 'function' ? isLiveCapable(g.id) : !!g.liveDuel;
+          return (g.gameType === 'solo' || g.solo) && !live;
+        }
+        return g.gameType === state.mode;
+      });
     }
     return list;
   }
