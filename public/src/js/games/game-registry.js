@@ -400,7 +400,26 @@
     return GAME_GENRES.slice();
   }
 
-  /** Registry-driven chat game picker (replaces duplicated openGamePicker). */
+  /** Q2A — real group/party titles only (not Live-1v1 duals). */
+  const GROUP_PARTY_IDS = ['ludo', 'uno', 'business'];
+
+  function gameIsLiveCapable(gameId, game) {
+    if (typeof isLiveCapable === 'function') return !!isLiveCapable(gameId);
+    return !!(game && game.liveDuel);
+  }
+
+  function pickerHonestyBadge(liveCapable) {
+    if (liveCapable) {
+      return '<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:rgba(229,57,53,0.12);color:#C62828;font:700 9px Space Grotesk,sans-serif;letter-spacing:0.02em;vertical-align:middle;">Live</span>';
+    }
+    return '<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:rgba(0,137,123,0.12);color:#00695C;font:700 9px Space Grotesk,sans-serif;letter-spacing:0.02em;vertical-align:middle;">Practice</span>';
+  }
+
+  /**
+   * Registry-driven chat game picker.
+   * UX: 1:1 shows chat1v1 rows with Live vs Practice badges; Challenge only on Live.
+   *     Group allowlists Ludo / Uno / Business (Scribble stays 1:1 Live).
+   */
   function openGamePicker(chat, isGroup) {
     const isSelf = typeof isSelfChat === 'function' && isSelfChat(chat);
     const ctx = { chat, isGroup: !!isGroup, source: isSelf ? 'self' : 'chat' };
@@ -408,6 +427,7 @@
     let pickerGames;
     let title;
     let subtitle;
+    let emptyHint = '';
 
     if (isSelf) {
       pickerGames = getGames({ selfChat: true }).map((g) => ({
@@ -415,77 +435,179 @@
         emoji: g.icon,
         name: g.name,
         desc: g.desc,
+        liveCapable: false,
+        showChallenge: false,
         fn: () => g.launch(ctx),
       }));
       title = 'Solo games';
       subtitle = 'Solo games only — practice & test here';
+      emptyHint = 'No solo games registered yet — try Manch.';
     } else if (isGroup) {
-      pickerGames = getGames({ chatGroup: true }).map((g) => ({
-        id: g.id,
-        emoji: g.icon,
-        name: g.name,
-        desc: g.desc,
-        fn: () => g.launch(ctx),
-      }));
+      // Hard allowlist — chatGroup flags alone are not enough (Scribble is 1v1 Live).
+      const allow = new Set(GROUP_PARTY_IDS);
+      pickerGames = getGames({ chatGroup: true })
+        .filter((g) => allow.has(g.id))
+        .map((g) => ({
+          id: g.id,
+          emoji: g.icon,
+          name: g.name,
+          desc: g.desc,
+          liveCapable: gameIsLiveCapable(g.id, g),
+          showChallenge: false,
+          fn: () => g.launch(ctx),
+        }));
       title = 'Group games';
-      subtitle = "Select a game — you'll pick players next";
+      subtitle = 'Party games for this chat — pick players next';
+      emptyHint = 'No party games here yet — try Ludo, Oh No!, or Business from Manch.';
     } else {
-      pickerGames = getGames({ chat1v1: true }).map((g) => ({
-        id: g.id,
-        emoji: g.icon,
-        name: g.name,
-        desc: g.desc,
-        fn: () => g.launch(ctx),
-      }));
+      // 1:1 — all chat1v1; badge Live vs Practice; Challenge only when Live-capable.
+      const rows = getGames({ chat1v1: true }).map((g) => {
+        const liveCapable = gameIsLiveCapable(g.id, g);
+        return {
+          id: g.id,
+          emoji: g.icon,
+          name: g.name,
+          desc: liveCapable ? g.desc : 'Practice only — not a Live challenge',
+          liveCapable,
+          showChallenge: liveCapable,
+          fn: () => g.launch(ctx),
+        };
+      });
+      rows.sort((a, b) => Number(b.liveCapable) - Number(a.liveCapable));
+      pickerGames = rows;
       title = 'Play a game';
-      subtitle = 'Just you and ' + (chat?.name || 'your friend');
+      subtitle =
+        'Live with ' + (chat?.name || 'your friend') + ' — or open Practice titles below';
+      emptyHint = 'No chat games yet — open Manch to play.';
     }
 
     const sheet = document.createElement('div');
     sheet.style.cssText =
       'position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:20px;z-index:100;max-height:85vh;overflow-y:auto;';
 
-    sheet.innerHTML = `
-    <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;margin-bottom:4px;">🎮 ${title}</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">${subtitle}</div>
-    ${pickerGames
-      .map(
-        (g, i) => `
-      <div class="dangal-picker-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:stretch;">
-      <button data-i="${i}" type="button" style="flex:1;padding:13px 14px;background:var(--cream);border:2px solid var(--line);border-radius:14px;text-align:left;display:flex;align-items:center;gap:12px;cursor:pointer;">
-        <span style="font-size:26px;flex-shrink:0;">${g.emoji}</span>
-        <div><div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;">${g.name}</div><div style="font-size:11px;color:var(--muted);margin-top:1px;">${g.desc}</div></div>
-      </button>
-      ${
-        !isSelf && !isGroup
-          ? `<button type="button" data-challenge-i="${i}" class="dangal-picker-challenge" style="flex-shrink:0;padding:10px 12px;border-radius:14px;border:2px solid var(--line);background:var(--white);font:700 11px Space Grotesk,sans-serif;cursor:pointer;max-width:88px;">Challenge</button>`
-          : ''
-      }
-      </div>`
-      )
-      .join('')}
-    <button id="closeGP" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;margin-top:4px;">Cancel</button>
-  `;
+    let bodyHtml = '';
+    if (!pickerGames.length) {
+      bodyHtml =
+        '<div style="padding:18px 12px;text-align:center;color:var(--muted);font-size:13px;line-height:1.45;">' +
+        emptyHint +
+        '</div>';
+    } else if (!isSelf && !isGroup) {
+      let lastSection = '';
+      bodyHtml = pickerGames
+        .map((g, i) => {
+          const section = g.liveCapable ? 'live' : 'practice';
+          let head = '';
+          if (section !== lastSection) {
+            lastSection = section;
+            head =
+              section === 'live'
+                ? '<div style="font:700 11px Space Grotesk,sans-serif;color:var(--muted);letter-spacing:0.04em;text-transform:uppercase;margin:10px 2px 6px;">Live with friend</div>'
+                : '<div style="font:700 11px Space Grotesk,sans-serif;color:var(--muted);letter-spacing:0.04em;text-transform:uppercase;margin:14px 2px 6px;">Practice only</div>';
+          }
+          const challengeBtn = g.showChallenge
+            ? '<button type="button" data-challenge-i="' +
+              i +
+              '" class="dangal-picker-challenge" style="flex-shrink:0;padding:10px 12px;border-radius:14px;border:2px solid var(--line);background:var(--white);font:700 11px Space Grotesk,sans-serif;cursor:pointer;max-width:88px;">Challenge</button>'
+            : '';
+          return (
+            head +
+            '<div class="dangal-picker-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:stretch;">' +
+            '<button data-i="' +
+            i +
+            '" type="button" style="flex:1;padding:13px 14px;background:var(--cream);border:2px solid var(--line);border-radius:14px;text-align:left;display:flex;align-items:center;gap:12px;cursor:pointer;">' +
+            '<span style="font-size:26px;flex-shrink:0;">' +
+            g.emoji +
+            '</span>' +
+            '<div><div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;">' +
+            g.name +
+            pickerHonestyBadge(g.liveCapable) +
+            '</div><div style="font-size:11px;color:var(--muted);margin-top:1px;">' +
+            g.desc +
+            '</div></div></button>' +
+            challengeBtn +
+            '</div>'
+          );
+        })
+        .join('');
+    } else {
+      bodyHtml = pickerGames
+        .map((g, i) => {
+          return (
+            '<div class="dangal-picker-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:stretch;">' +
+            '<button data-i="' +
+            i +
+            '" type="button" style="flex:1;padding:13px 14px;background:var(--cream);border:2px solid var(--line);border-radius:14px;text-align:left;display:flex;align-items:center;gap:12px;cursor:pointer;">' +
+            '<span style="font-size:26px;flex-shrink:0;">' +
+            g.emoji +
+            '</span>' +
+            '<div><div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;">' +
+            g.name +
+            '</div><div style="font-size:11px;color:var(--muted);margin-top:1px;">' +
+            g.desc +
+            '</div></div></button></div>'
+          );
+        })
+        .join('');
+    }
+
+    sheet.innerHTML =
+      '<div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;margin-bottom:4px;">🎮 ' +
+      title +
+      '</div>' +
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">' +
+      subtitle +
+      '</div>' +
+      bodyHtml +
+      '<button id="closeGP" type="button" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;margin-top:4px;">Cancel</button>';
 
     const device = document.querySelector('.device');
     if (!device) return;
-    device.appendChild(sheet);
-    if (typeof enableSwipeDismiss === 'function') {
-      enableSwipeDismiss(sheet, () => sheet.remove());
-    }
-    pickerGames.forEach((g, i) =>
-      sheet.querySelector(`[data-i="${i}"]`).addEventListener('click', () => {
+
+    let closePicker = () => {
+      try {
         sheet.remove();
+      } catch (e) {}
+    };
+    if (typeof openLayer === 'function') {
+      const layer = openLayer(sheet, () => {
+        try {
+          if (sheet.parentNode) sheet.remove();
+        } catch (e) {}
+      });
+      closePicker = () => {
+        if (layer && typeof layer.close === 'function') layer.close();
+        else {
+          try {
+            sheet.remove();
+          } catch (e) {}
+        }
+      };
+    } else {
+      device.appendChild(sheet);
+      if (typeof enableSwipeDismiss === 'function') {
+        enableSwipeDismiss(sheet, closePicker);
+      }
+    }
+
+    pickerGames.forEach((g, i) => {
+      const btn = sheet.querySelector('[data-i="' + i + '"]');
+      if (!btn) return;
+      btn.addEventListener('click', () => {
+        closePicker();
         g.fn();
-      })
-    );
+      });
+    });
     sheet.querySelectorAll('[data-challenge-i]').forEach((btn) => {
       btn.addEventListener('click', async (e) => {
         e.preventDefault();
         e.stopPropagation();
         const i = Number(btn.dataset.challengeI);
         const row = pickerGames[i];
-        if (!row || !row.id) return;
+        if (!row || !row.id || !row.showChallenge) return;
+        if (!gameIsLiveCapable(row.id, getGame(row.id))) {
+          if (typeof showToast === 'function') showToast('That title is Practice only — no Live challenge');
+          return;
+        }
         const toUid = typeof opponentUidFromChat === 'function' ? opponentUidFromChat(chat) : '';
         const chatId = chat?.firestoreId || chat?.id;
         if (!toUid || !chatId || typeof sendChallengeCard !== 'function') {
@@ -530,7 +652,7 @@
                 : {}
             )
           );
-          sheet.remove();
+          closePicker();
           if (typeof showToast === 'function') showToast('Challenge sent');
         } catch (err) {
           btn.disabled = false;
@@ -539,7 +661,7 @@
       });
     });
     document.getElementById('closeGP').addEventListener('click', () => {
-      sheet.remove();
+      closePicker();
       // Soft signal for conversation-repair chips (no guilt / streak)
       if (chat && chat.type === 'dm' && typeof markGameInviteDeclined === 'function') {
         markGameInviteDeclined(chat.firestoreId || chat.id);

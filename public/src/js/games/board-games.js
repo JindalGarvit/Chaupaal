@@ -4416,12 +4416,13 @@ if (typeof registerGame === 'function') {
     gameType: 'dual',
     genre: 'party',
     chat1v1: true,
-    chatGroup: true,
+    // Q2A: not a group party title — Live is 1v1 only (use Manch / 1:1 chat).
+    chatGroup: false,
     selfChat: true,
     liveDuel: true,
     order: 90,
     launch(ctx) {
-      // Honest Path A: Live is 1v1 only — group opens Practice doodle, not fake party Live.
+      // Honest Path A: Live is 1v1 only — if somehow opened from a group, Practice doodle.
       if (ctx.isGroup) {
         if (typeof showToast === 'function') showToast('Live Scribble is 1v1 — opening Practice');
         openScribbleGame({ name: 'Practice', id: 'practice', self: true }, [], { practice: true });
