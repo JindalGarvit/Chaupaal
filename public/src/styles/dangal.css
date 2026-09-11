@@ -745,9 +745,11 @@
 .pc-boardcell.is-current{opacity:1;background:#E91E8C;color:#fff;box-shadow:0 0 0 1px #fff;}
 .pc-claimbar{
   display:flex;flex-wrap:wrap;gap:6px;justify-content:center;width:min(360px,100%);
+  position:sticky;bottom:0;z-index:2;padding:8px 4px 10px;margin-top:4px;
+  background:linear-gradient(180deg,transparent,rgba(18,8,24,.92) 28%);
 }
 .pc-claimbtn{
-  border:0;border-radius:10px;padding:8px 10px;min-height:40px;cursor:pointer;
+  border:0;border-radius:10px;padding:8px 10px;min-height:44px;cursor:pointer;
   background:rgba(255,255,255,.1);color:#fce4ec;font-size:11px;font-weight:800;
 }
 .pc-claimbtn.is-ready{background:rgba(233,30,140,.55);color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.25);}
@@ -851,6 +853,41 @@
 }
 .pc-tp-bust{color:#FFD180;font-weight:700;}
 .pc-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
+.pc-party-wait{
+  width:min(100%,420px);margin:0 auto;padding:12px 10px 20px;box-sizing:border-box;
+  display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;
+}
+.pc-party-wait .game-turn{margin-bottom:2px;}
+.pc-wait-act{opacity:.75;font-size:12px!important;text-align:center;width:100%;}
+.pc-tambola .game-turn,
+.pc-rummy .game-turn,
+.pc-tp .game-turn,
+.pc-bluff .game-turn,
+.pc-satte .game-turn,
+.pc-ab .game-turn{width:100%;max-width:420px;box-sizing:border-box;}
+.cs-hit--primary{
+  box-shadow:0 0 0 1px rgba(255,255,255,.28),0 6px 16px rgba(0,0,0,.28);
+  font-weight:800;
+}
+.pc-rummy .cs-hit,
+.pc-tp .cs-hit,
+.pc-bluff .cs-hit,
+.pc-satte .cs-hit,
+.pc-ab .cs-hit,
+.pc-ab-side-actions .cs-hit{min-height:44px;padding:12px 16px;}
+.pc-ab-side-actions{width:100%;margin-top:4px;}
+.pc-rummy-actions,
+.pc-tp-actions,
+.pc-bluff-actions{
+  position:sticky;bottom:0;z-index:2;padding:8px 0 6px;
+  background:linear-gradient(180deg,transparent,rgba(18,8,24,.9) 35%);
+}
+@media (max-height:640px){
+  .pc-call{font-size:32px;}
+  .pc-callboard{max-height:110px;}
+  .pc-rummy-declare-hint{display:none;}
+  .pc-tp-boot{display:none;}
+}
 .pc-sevens,.pc-ab-cols{display:flex;gap:12px;font-size:13px;}
 .pc-ab{width:min(100%,420px);}
 .pc-ab-lead{font-weight:700;color:#C8E6C9;}

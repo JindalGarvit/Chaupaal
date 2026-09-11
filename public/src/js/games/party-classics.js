@@ -21,6 +21,43 @@
     if (typeof gameFeedback === 'function') gameFeedback(a, extra);
   }
 
+  /** Shared turn chrome — Prompt 6 party feel */
+  function partyTurnBanner(mode, label, sub) {
+    if (typeof gameTurnBannerHtml === 'function') {
+      return gameTurnBannerHtml({
+        mode: mode || 'waiting',
+        label: label || undefined,
+        sub: sub || undefined,
+        pulse: mode === 'yours',
+      });
+    }
+    return (
+      '<p class="pc-hint" role="status">' +
+      esc(label || '') +
+      (sub ? ' · ' + esc(sub) : '') +
+      '</p>'
+    );
+  }
+
+  /** Rich wait panel — never a blank body mid-hand */
+  function partyWaitPanel(opts) {
+    const o = opts || {};
+    return (
+      '<div class="pc-party-wait" role="status" aria-live="polite">' +
+      partyTurnBanner(o.mode || 'waiting', o.title || 'Waiting…', o.sub || '') +
+      (o.hudHtml || '') +
+      '<p class="pc-hint">' +
+      esc(o.detail || 'Table stays live — opponent actions will appear here.') +
+      '</p>' +
+      '</div>'
+    );
+  }
+
+  function partyIllegal(msg) {
+    buzz('invalid');
+    if (msg && typeof showToast === 'function') showToast(msg);
+  }
+
   /** Honest Practice chrome when not in a live Dangal match */
   function practiceSub(detail) {
     if (typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel) {
@@ -238,6 +275,8 @@
     }
     buzz(draw ? 'draw' : won ? 'win' : 'lose');
     if (typeof setGamePB === 'function' && spec.pbScore != null) setGamePB(spec.id, spec.pbScore);
+    const extras = Array.isArray(spec.extraActions) ? spec.extraActions.slice() : [];
+    extras.push({ label: 'Done', primary: false, id: 'leave' });
     shell.body.innerHTML =
       typeof gameResultHtml === 'function'
         ? gameResultHtml({
@@ -248,14 +287,27 @@
             you,
             opp,
             challenge: false,
+            againLabel: spec.againLabel || 'Play again',
+            extraActions: extras,
           })
         : '';
     if (typeof wireGameResultActions === 'function') {
       wireGameResultActions(shell.body, {
         again: spec.onAgain,
+        leave: () => {
+          try {
+            if (shell.markOver) shell.markOver();
+          } catch (e) {}
+          try {
+            shell.close('result_done');
+          } catch (e2) {}
+        },
         share: () => {
           if (typeof openUnifiedShareSheet === 'function') {
-            openUnifiedShareSheet({ gameId: spec.id, stats: { scoreLine: you + '–' + opp, text: spec.shareText } });
+            openUnifiedShareSheet({
+              gameId: spec.id,
+              stats: { scoreLine: you + '–' + opp, text: spec.shareText },
+            });
           }
         },
       });
@@ -880,12 +932,39 @@
     }
 
     function paint() {
+      if (!shell.alive()) return;
       const markedCount = markedCountOf(ticketYou);
       const oppLine = !liveOn && ticketOpp
         ? ' · opp ' + markedCountOf(ticketOpp) + '/15'
         : '';
+      const claimReady = claimsOpen && Date.now() >= bogeyUntil && !ended;
+      let turnMode = 'waiting';
+      let turnLabel = 'Calling…';
+      let turnSub = 'Caller ' + idx + '/90';
+      if (ended) {
+        turnMode = 'over';
+        turnLabel = 'Match over';
+        turnSub = '';
+      } else if (!claimsOpen && last === '—') {
+        turnMode = 'waiting';
+        turnLabel = 'Dealing…';
+        turnSub = 'Ticket incoming';
+      } else if (claimReady) {
+        turnMode = 'yours';
+        turnLabel = 'Your claims';
+        turnSub = 'Tap a ready dividend';
+      } else if (!claimsOpen) {
+        turnMode = 'waiting';
+        turnLabel = 'Caller pacing…';
+        turnSub = 'Claims pause briefly';
+      } else {
+        turnMode = 'waiting';
+        turnLabel = 'Listening…';
+        turnSub = 'Mark your ticket';
+      }
       shell.body.innerHTML =
         '<div class="pc-tambola">' +
+        partyTurnBanner(turnMode, turnLabel, turnSub) +
         '<div class="pc-call" aria-live="polite">' +
         esc(String(last)) +
         '</div>' +
@@ -981,7 +1060,7 @@
           id: 'tambola',
           you: forfeit || !draw ? (won ? Math.max(1, youPts || 1) : youPts) : youPts,
           opp: forfeit || !draw ? (won ? oppPts : Math.max(1, oppPts || 1)) : oppPts,
-          glyph: '🎱',
+          glyph: '🎫',
           pbScore: youPts,
           title: forfeit
             ? won
@@ -1308,7 +1387,14 @@
           };
           scheduleCall(hostTick, 900);
         } else {
-          shell.body.innerHTML = '<p class="pc-hint">Waiting for caller…</p>';
+          shell.body.innerHTML = partyWaitPanel({
+            mode: 'waiting',
+            title: 'Waiting for caller…',
+            sub: 'Live Tambola',
+            detail: 'Your ticket appears when the host deals. Claims stay closed until numbers start.',
+            hudHtml:
+              '<div class="pc-call" aria-hidden="true">—</div><p class="pc-hint">pts <b>0</b>–<b>0</b> · virtual stakes only</p>',
+          });
         }
       }
     } else {
@@ -5706,8 +5792,28 @@
         ? rummyFaceHtml(top, wildRank, '').replace('<button', '<button disabled')
         : '<span class="pc-rummy-empty">—</span>';
 
+      const turnMode = !myTurn ? 'theirs' : phase === 'needDraw' ? 'yours' : 'yours';
+      const turnLabel = !myTurn
+        ? liveOn
+          ? 'Opponent’s turn'
+          : 'Opponent thinking…'
+        : phase === 'needDraw'
+          ? 'Your turn — draw'
+          : 'Your turn — discard';
+      const turnSub = !myTurn
+        ? 'Opp ' + oppHandCount() + ' · Stock ' + stock
+        : phase === 'needDraw'
+          ? 'Draw or take discard'
+          : selectedId
+            ? 'Discard or Declare'
+            : 'Select a card';
+
+      const drawCls = canDraw ? ' cs-hit--primary' : '';
+      const discardCls = canDiscard && !canDraw ? ' cs-hit--primary' : '';
+
       shell.body.innerHTML =
         '<div class="pc-rummy">' +
+        partyTurnBanner(turnMode, turnLabel, turnSub) +
         '<p class="pc-hint">' +
         esc(msg || phaseHint()) +
         '</p>' +
@@ -5747,13 +5853,17 @@
         handHtml +
         '</div>' +
         '<div class="pc-actions pc-rummy-actions">' +
-        '<button type="button" class="cs-hit" data-draw' +
+        '<button type="button" class="cs-hit' +
+        drawCls +
+        '" data-draw' +
         (canDraw ? '' : ' disabled') +
         '>Draw</button>' +
         '<button type="button" class="cs-hit" data-take' +
         (canTake ? '' : ' disabled') +
         '>Take discard</button>' +
-        '<button type="button" class="cs-hit" data-discard' +
+        '<button type="button" class="cs-hit' +
+        discardCls +
+        '" data-discard' +
         (canDiscard ? '' : ' disabled') +
         '>Discard</button>' +
         '<button type="button" class="cs-hit" data-declare' +
@@ -6419,7 +6529,12 @@
           paint('Your break — draw or take the open discard.');
         } else {
           shell.body.innerHTML =
-            '<p class="pc-hint">Waiting for deal\u2026 · Live hands stay private mid-table</p>';
+            shell.body.innerHTML = partyWaitPanel({
+              mode: 'waiting',
+              title: 'Waiting for deal…',
+              sub: 'Live Rummy',
+              detail: 'Hands stay private mid-table. Stock and discard appear when the host deals.',
+            });
         }
       }
     } else {
@@ -6913,21 +7028,33 @@
         : mine
           ? 'Your turn'
           : liveOn
-            ? 'Their turn'
+            ? 'Opponent’s turn'
             : 'Opponent thinking…';
+      const turnMode = pending
+        ? iAmSideShowTarget()
+          ? 'yours'
+          : 'waiting'
+        : mine
+          ? 'yours'
+          : 'theirs';
+      const turnSub = pending
+        ? 'Accept or refuse'
+        : 'Pot ' + pot + ' · S=' + stake + (liveStake > 0 ? ' · ⚡' + liveStake : '');
       const allInNote = myStack() > 0 && myStack() < cost ? ' · all-in' : '';
       let actionsHtml = '';
       if (pending && iAmSideShowTarget()) {
         actionsHtml = `
           <p class="pc-hint">Side-show compares hands — loser packs. Refuse is free.</p>
-          <button type="button" class="cs-hit" data-ss-accept>Accept</button>
+          <button type="button" class="cs-hit cs-hit--primary" data-ss-accept>Accept</button>
           <button type="button" class="cs-hit cs-hit--ghost" data-ss-refuse>Refuse</button>`;
       } else if (pending && iAmSideShowAsker()) {
-        actionsHtml = `<p class="pc-hint">Waiting for accept or refuse…</p>`;
+        actionsHtml = `<p class="pc-hint">Waiting for accept or refuse… Table stays live.</p>`;
+      } else if (!mine) {
+        actionsHtml = `<p class="pc-hint pc-wait-act">Watch the pot — your controls return on your turn.</p>`;
       } else {
         actionsHtml = `
             ${canSee ? `<button type="button" class="cs-hit" data-see>See (−${Math.min(fee, myStack())})</button>` : ''}
-            ${canChaal ? `<button type="button" class="cs-hit" data-chaal>${seen ? 'Chaal' : 'Blind chaal'} (−${Math.min(cost, myStack())})</button>` : ''}
+            ${canChaal ? `<button type="button" class="cs-hit cs-hit--primary" data-chaal>${seen ? 'Chaal' : 'Blind chaal'} (−${Math.min(cost, myStack())})</button>` : ''}
             ${
               canRaise
                 ? `<button type="button" class="cs-hit cs-hit--ghost" data-raise="1">Raise +${BOOT}</button>
@@ -6940,6 +7067,7 @@
       }
       shell.body.innerHTML = `
         <div class="pc-tp">
+          ${partyTurnBanner(turnMode, turnLabel, turnSub)}
           <div class="pc-tp-hud" aria-live="polite">
             <span>You <b>${myStack()}</b></span>
             <span class="pc-tp-pot">Pot <b>${pot}</b></span>
@@ -6947,12 +7075,12 @@
             <span class="pc-tp-badge ${seen ? 'is-seen' : 'is-blind'}">${badge}</span>
           </div>
           <p class="pc-hint">${esc(sessionHudLine())}</p>
-          <p class="pc-hint">${esc(turnLabel)} · S=${stake} · call ${Math.min(cost, myStack())}${allInNote}${
+          <p class="pc-hint">Call ${Math.min(cost, myStack())}${allInNote}${
             liveStake > 0 ? ' · stake ⚡' + liveStake : ''
-          }</p>
+          }${msg ? ' · ' + esc(msg) : ''}</p>
           <p class="pc-hint">Opponent · ${oppBadge}</p>
           <div class="pc-hand pc-hand--opp">${paintOppHand()}</div>
-          <p class="pc-hint">You · ${badge.toLowerCase()}${msg ? ' · ' + esc(msg) : ''}</p>
+          <p class="pc-hint">You · ${badge.toLowerCase()}</p>
           <div class="pc-hand pc-hand--you">${paintMyHand()}</div>
           <div class="pc-actions pc-tp-actions">${actionsHtml}</div>
           <p class="pc-hint pc-tp-boot">Boot ${boot} · virtual chips only — not real money</p>
@@ -7203,9 +7331,13 @@
     }
 
     function doSee() {
-      if (handOver || tableClosed || phase !== 'dealt' || myPacked() || mySeen() || !myTurn() || sideShow) return;
+      if (handOver || tableClosed || phase !== 'dealt' || myPacked() || mySeen() || !myTurn() || sideShow) {
+        partyIllegal('Not available now');
+        return;
+      }
       const fee = seeFee();
       if (myStack() <= 0) {
+        partyIllegal('Need chips to see');
         paint('Need chips to see');
         return;
       }
@@ -7219,9 +7351,13 @@
     }
 
     function doChaal() {
-      if (handOver || tableClosed || phase !== 'dealt' || myPacked() || !myTurn() || sideShow) return;
+      if (handOver || tableClosed || phase !== 'dealt' || myPacked() || !myTurn() || sideShow) {
+        partyIllegal('Not your chaal');
+        return;
+      }
       const cost = chaalCost(mySeen());
       if (myStack() <= 0) {
+        partyIllegal('No chips left');
         paint('No chips left');
         return;
       }
@@ -7729,7 +7865,14 @@
           publishPrivateDeal('deal');
           paint('Hand ' + handNum + ' · boot posted — both blind');
         } else {
-          shell.body.innerHTML = `<p class="pc-hint">Waiting for deal… · Live 1v1 · virtual chips</p>`;
+          shell.body.innerHTML = partyWaitPanel({
+            mode: 'waiting',
+            title: 'Waiting for deal…',
+            sub: 'Live Teen Patti · virtual chips',
+            detail: 'Pot and hands appear when the host posts boot. Stay on this screen.',
+            hudHtml:
+              '<div class="pc-tp-hud"><span>You <b>—</b></span><span class="pc-tp-pot">Pot <b>—</b></span><span>Opp <b>—</b></span></div>',
+          });
         }
       }
     } else {
@@ -8133,6 +8276,19 @@
       }
       shell.body.innerHTML = `
         <div class="pc-bluff">
+          ${partyTurnBanner(
+            mine ? 'yours' : 'theirs',
+            mine
+              ? canPassOut
+                ? 'Your turn — Call or Pass'
+                : canCall
+                  ? 'Your turn — Call or play'
+                  : 'Your turn — play'
+              : facingOut && pendingOutSeatA === iAmA()
+                ? 'Waiting — call window'
+                : 'Opponent’s turn',
+            'Pile ' + pile.length + ' · ❤' + myLives() + '–' + oppLives()
+          )}
           ${hudHtml()}
           ${pileGraphic()}
           <p class="pc-bluff-claim" role="status">${esc(claimBanner())}</p>
@@ -8146,7 +8302,7 @@
                     : 'Select 1–3 cards · claim the locked rank'
                 : facingOut && pendingOutSeatA === iAmA()
                   ? 'Waiting — they may Call your last play'
-                  : 'Waiting…')
+                  : 'Watch the pile — your controls return on your turn')
           )}</p>
           <div class="pc-hand">${you.map(cardFace).join('')}</div>
           ${
@@ -8154,12 +8310,12 @@
               ? `<label class="pc-hint">Claim
             <select data-rank ${lockedRank ? 'disabled' : ''}>${rankOptionsHtml()}</select>
           </label>
-          <button type="button" class="cs-hit" data-play>Play on pile</button>`
+          <button type="button" class="cs-hit cs-hit--primary" data-play>Play on pile</button>`
               : ''
           }
           <div class="pc-bluff-actions">
             ${canCall ? `<button type="button" class="cs-hit cs-hit--ghost" data-call>Call bluff</button>` : ''}
-            ${canPassOut ? `<button type="button" class="cs-hit" data-pass>Pass — they empty</button>` : ''}
+            ${canPassOut ? `<button type="button" class="cs-hit cs-hit--primary" data-pass>Pass — they empty</button>` : ''}
           </div>
           <p class="pc-hint pc-tp-boot">Pile · claim · call/pass · last-card risk · virtual stakes</p>
         </div>`;
@@ -8305,18 +8461,18 @@
       let rank = lockedRank || (shell.body.querySelector('[data-rank]') || {}).value || claimPick;
       if (lockedRank) rank = lockedRank;
       if (!selected.size) {
-        buzz('invalid');
+        partyIllegal('Pick 1–3 cards');
         paint('Pick 1–3 cards');
         return;
       }
       if (!rank) {
-        buzz('invalid');
+        partyIllegal('Pick a claim rank');
         return;
       }
       const hand = myHand().slice();
       const played = hand.filter((c) => selected.has(c.id));
       if (!played.length || played.length > 3) {
-        buzz('invalid');
+        partyIllegal('Pick 1–3 cards');
         return;
       }
       // Playing mid-hand accepts prior claim
@@ -8795,7 +8951,12 @@
           publishPrivateDeal();
           paint('Dealt — empty your hand, watch lives');
         } else {
-          shell.body.innerHTML = `<p class="pc-hint">Waiting for deal…</p>`;
+          shell.body.innerHTML = partyWaitPanel({
+            mode: 'waiting',
+            title: 'Waiting for deal…',
+            sub: 'Live Bluff',
+            detail: 'Pile and lives appear when cards are dealt. Call window stays honest.',
+          });
         }
       }
     } else {
@@ -9579,6 +9740,11 @@
 
       shell.body.innerHTML =
         '<div class="pc-satte">' +
+        partyTurnBanner(
+          myTurn ? 'yours' : 'theirs',
+          myTurn ? (noLegal ? 'Your turn — Pass' : 'Your turn') : 'Opponent’s turn',
+          'You ' + you.length + ' · Opp ' + oppCount()
+        ) +
         '<p class="pc-hint">' +
         esc(hint) +
         '</p>' +
@@ -9590,8 +9756,10 @@
         '</div>' +
         '<div class="pc-actions">' +
         (canPass
-          ? '<button type="button" class="cs-hit pc-satte-pass" data-pass autofocus>Pass</button>'
-          : '') +
+          ? '<button type="button" class="cs-hit cs-hit--primary pc-satte-pass" data-pass autofocus>Pass</button>'
+          : myTurn
+            ? '<p class="pc-hint pc-wait-act">Tap a highlighted card to play.</p>'
+            : '<p class="pc-hint pc-wait-act">Board stays live — wait for your seat.</p>') +
         '<span class="pc-hint" style="width:100%;text-align:center;font-size:12px;opacity:.8">You ' +
         you.length +
         ' · Opp ' +
@@ -9836,7 +10004,12 @@
           );
         } else {
           shell.body.innerHTML =
-            '<p class="pc-hint">Waiting for deal… · Live hands stay private</p>';
+            shell.body.innerHTML = partyWaitPanel({
+              mode: 'waiting',
+              title: 'Waiting for deal…',
+              sub: 'Live Satte · hands private',
+              detail: 'Suit chains open when the host deals. Must play if able.',
+            });
         }
       }
     } else {
@@ -10196,14 +10369,34 @@
     function paint(msg) {
       if (ended) return;
       if (!joker) {
-        shell.body.innerHTML =
-          '<div class="pc-ab"><p class="pc-hint">Waiting for house card… · Live 1v1 · virtual stakes</p></div>';
+        shell.body.innerHTML = partyWaitPanel({
+          mode: 'waiting',
+          title: 'Waiting for house card…',
+          sub: liveOn ? 'Live 1v1 · virtual stakes' : 'Practice',
+          detail: 'Andar / Bahar piles appear when the house card lands. Pick stake after that.',
+          hudHtml:
+            '<div class="pc-ab-table" aria-hidden="true"><div class="pc-ab-pile"><h4>Andar</h4><div class="pc-ab-stack"><span class="pc-ab-empty">—</span></div></div><div class="pc-ab-house"><div class="pc-ab-house-label">House</div><div class="pc-ab-joker"><b>?</b></div></div><div class="pc-ab-pile"><h4>Bahar</h4><div class="pc-ab-stack"><span class="pc-ab-empty">—</span></div></div></div>',
+        });
         return;
       }
       const pick = mySide();
       const jCol = SUIT_COLOR[joker.s] || '#111';
+      const turnMode = dealing ? 'waiting' : pick ? 'waiting' : 'yours';
+      const turnLabel = dealing
+        ? 'Dealing…'
+        : pick
+          ? liveOn && liveRoles && !liveRoles.host
+            ? 'Locked in — waiting'
+            : 'Locked in'
+          : 'Your pick';
+      const turnSub = dealing
+        ? 'Watch the piles'
+        : pick
+          ? 'You: ' + pick
+          : 'Choose stake, then a side';
       shell.body.innerHTML =
         '<div class="pc-ab">' +
+        partyTurnBanner(turnMode, turnLabel, turnSub) +
         '<p class="pc-hint pc-ab-lead">' +
         esc(leadLabel()) +
         ' · ' +
@@ -10214,7 +10407,7 @@
         '</p>' +
         stakeBarHtml() +
         '<p class="pc-hint">' +
-        esc(msg || (pick ? (dealing ? 'Dealing…' : 'Locked in') : 'Choose stake, then Andar or Bahar')) +
+        esc(msg || (pick ? (dealing ? 'Dealing onto the table…' : 'Locked in') : 'Choose stake, then Andar or Bahar')) +
         (pick ? ' · you: ' + pick : '') +
         '</p>' +
         '<div class="pc-ab-table" role="group" aria-label="Andar Bahar table">' +
@@ -10233,13 +10426,18 @@
         pileHtml('bahar', bahar) +
         '</div>' +
         (pick
-          ? ''
-          : '<div class="pc-actions"><button type="button" class="cs-hit" data-a>Andar</button><button type="button" class="cs-hit" data-b>Bahar</button></div>') +
+          ? dealing
+            ? '<p class="pc-hint pc-wait-act">Dealing — no more picks this round.</p>'
+            : '<p class="pc-hint pc-wait-act">Side locked — waiting for the finish.</p>'
+          : '<div class="pc-actions pc-ab-side-actions"><button type="button" class="cs-hit cs-hit--primary" data-a>Andar</button><button type="button" class="cs-hit cs-hit--primary" data-b>Bahar</button></div>') +
         '</div>';
 
       shell.body.querySelectorAll('[data-stake]').forEach((btn) => {
         btn.addEventListener('click', () => {
-          if (mySide() || dealing || ended) return;
+          if (mySide() || dealing || ended) {
+            partyIllegal('Stake locked');
+            return;
+          }
           if (stakeLocked && launchStake > 0) return;
           const s = Math.max(0, btn.getAttribute('data-stake') | 0);
           stake = s;
@@ -10600,8 +10798,12 @@
           });
           paint();
         } else {
-          shell.body.innerHTML =
-            '<div class="pc-ab"><p class="pc-hint">Waiting for house card… · Live 1v1 · virtual stakes</p></div>';
+          shell.body.innerHTML = partyWaitPanel({
+            mode: 'waiting',
+            title: 'Waiting for house card…',
+            sub: 'Live 1v1 · virtual stakes',
+            detail: 'Andar / Bahar piles appear when the host reveals the house card.',
+          });
         }
       }
     } else {
