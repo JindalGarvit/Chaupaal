@@ -172,9 +172,9 @@
       'Continue mid-puzzle · best times per difficulty · Daily is one seeded board',
     ],
     streetcricket: [
-      'Watch the flight, read the bag, pick Defend / Push / Loft, then time the Hit',
-      'Try Gully Over, Nets (survive), or Chase (hit the target) — Practice formats now',
-      'Per-format bests on your card — Live friend bowling later',
+      'Live: one friend bowls, the other bats — then swap innings for a fair duel',
+      'Formats: Gully Over, Nets, Chase — Chase target = 1st innings runs + 1',
+      'Leave = forfeit · Rematch = new match · virtual stakes (not real money)',
     ],
     gullykick: [
       'Drag aim, hold Kick, read the keeper’s lean — then strike',

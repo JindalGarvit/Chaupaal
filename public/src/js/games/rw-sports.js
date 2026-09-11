@@ -1,7 +1,6 @@
 /**
  * RW Sports — Street Cricket + Gully Kick (football-style).
- * Trademark-safe names; Practice loops + Street Cricket Live bowl↔bat + innings swap (2/3).
- * Stakes graduation deferred to Prompt 3.
+ * Trademark-safe names; Street Cricket Live v1 (Over/Nets/Chase · bowl↔bat · stakes).
  */
 (function () {
   'use strict';
@@ -306,10 +305,23 @@
     });
   }
 
-  /** Street Cricket — Practice + Live bowl↔bat roles + innings swap (Prompt 2/3). */
+  /** Street Cricket — Practice + Live Over/Nets/Chase with stakes (Prompt 3/3 · Live v1). */
   function openStreetCricket(chatArg) {
     const chat = resolveRwChat(chatArg);
     const liveOn = chatLiveOn(chat);
+    const liveStake = liveOn
+      ? Number(
+          (chat && chat.stake) != null
+            ? chat.stake
+            : (window.__dangalLaunchCtx && window.__dangalLaunchCtx.stake) || 0
+        ) || 0
+      : 0;
+    const settleMatchId = liveOn ? String(matchIdFor(chat, 'streetcricket') || '').trim() : '';
+    let settleOppUid = '';
+    let settleDone = false;
+    let resultReported = false;
+    let resultShown = false;
+    let stakeSettleNote = '';
     let runs = 0;
     let balls = 0;
     let wickets = 0;
@@ -354,6 +366,11 @@
     const FORMAT_KEY = 'chaupaal_sc_format_v4';
     const COACH_KEY = 'chaupaal_sc_coach_v3';
     const BOWL_LOCK_MS = 420;
+    let rematchFormatHint = '';
+    try {
+      const ctx = window.__dangalLaunchCtx || {};
+      if (ctx.rematchFormatId) rematchFormatHint = String(ctx.rematchFormatId);
+    } catch (e) {}
 
     const FORMATS = {
       over: {
@@ -373,7 +390,7 @@
       chase: {
         id: 'chase',
         label: 'Chase',
-        blurb: 'Hit the target before balls or wickets run out',
+        blurb: 'Practice: rolled target · Live: 1st innings sets chase (+1)',
         maxBalls: 6,
         maxWickets: 2,
       },
@@ -543,10 +560,124 @@
         const seat = iAmBat() ? 'Batter' : iAmBowl() ? 'Bowler' : 'Live';
         const inn =
           inningsIndex === 2 ? ' · 2nd innings' : inningsIndex === 1 ? ' · 1st innings' : '';
-        setChromeSub(liveChromeSub() + ' · Friendly · ' + fLabel + ' · ' + seat + inn);
+        const stakeBit =
+          liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly';
+        setChromeSub(liveChromeSub() + stakeBit + ' · ' + fLabel + ' · ' + seat + inn);
       } else {
         setChromeSub('Practice · ' + fLabel + ' · Batter');
       }
+    };
+
+    const freshRematch = () => {
+      if (!liveOn) {
+        reset();
+        return;
+      }
+      try {
+        const mid =
+          typeof dangalMatchId === 'function'
+            ? dangalMatchId('streetcricket', chat)
+            : 'streetcricket_' + Date.now();
+        if (window.__dangalLaunchCtx) {
+          window.__dangalLaunchCtx = Object.assign({}, window.__dangalLaunchCtx, {
+            matchId: mid,
+            gameId: 'streetcricket',
+            gameType: 'streetcricket',
+            stake: liveStake,
+            rematchFormatId: formatId,
+          });
+        }
+        if (chat) {
+          chat.dangalMatchId = mid;
+          chat.stake = liveStake;
+        }
+      } catch (e) {}
+      openStreetCricket(chat);
+    };
+
+    const reportStreetResult = (won, isDraw, path) => {
+      if (resultReported) return;
+      resultReported = true;
+      if (typeof recordGameResult === 'function') {
+        try {
+          recordGameResult('streetcricket', !!won && !isDraw, !!isDraw, {
+            live: !!liveOn,
+            stake: liveStake,
+            mode: liveOn ? 'live' : 'practice',
+            path: path || '',
+            formatId,
+            score: runs,
+          });
+        } catch (e) {}
+      }
+    };
+
+    const settleStreetOnce = async (won, isDraw) => {
+      if (!liveOn || settleDone) return null;
+      if (!settleMatchId || liveStake <= 0) {
+        settleDone = true;
+        return null;
+      }
+      if (!window.DangalEconomy || typeof DangalEconomy.reportGameEnd !== 'function') {
+        settleDone = true;
+        return null;
+      }
+      settleDone = true;
+      try {
+        const me = typeof getCurrentUid === 'function' ? getCurrentUid() : '';
+        const oppU = settleOppUid || (liveRoles && liveRoles.opp) || '';
+        return await DangalEconomy.reportGameEnd({
+          gameType: 'streetcricket',
+          result: isDraw ? 'draw' : won ? 'win' : 'loss',
+          won: !!won && !isDraw,
+          isDraw: !!isDraw,
+          matchId: settleMatchId,
+          sessionId: settleMatchId,
+          opponentUid: oppU,
+          stake: liveStake,
+          winnerUid: isDraw ? null : won ? me : oppU,
+        });
+      } catch (e) {
+        settleDone = false;
+        return null;
+      }
+    };
+
+    /** Idempotent Live end: settle once, then show result chrome. */
+    const showLiveDone = (opts) => {
+      const o = opts || {};
+      if (resultShown) return;
+      resultShown = true;
+      phase = 'done';
+      ended = true;
+      if (leaveShell) leaveShell.gameOver = true;
+      if (liveRoles && liveRoles.opp) settleOppUid = liveRoles.opp;
+      const forfeit = !!o.forfeit || endReason === 'forfeit';
+      const draw = !forfeit && !!matchDraw;
+      const won = forfeit ? !!o.iWon : !!sessionWon;
+      if (forfeit) {
+        sessionWon = !!won;
+        matchDraw = false;
+        matchWinnerUid = won
+          ? (liveRoles && liveRoles.me) || ''
+          : (liveRoles && liveRoles.opp) || '';
+        endReason = 'forfeit';
+      }
+      reportStreetResult(won, draw, o.path || endReason || '');
+      settleStreetOnce(won, draw).then((settle) => {
+        stakeSettleNote = '';
+        if (liveOn && liveStake > 0) {
+          const cd = settle && settle.chipDelta != null ? Number(settle.chipDelta) : null;
+          stakeSettleNote =
+            Number.isFinite(cd) && cd !== 0
+              ? 'Stake ' + (cd > 0 ? '+' : '') + cd + ' virtual'
+              : 'Virtual stakes · not real money';
+        }
+        if (typeof gameFeedback === 'function' && !o.skipFeedback) {
+          gameFeedback(draw ? 'complete' : won ? 'win' : 'lose');
+        }
+        render();
+      });
     };
 
     const snapshotInnings = (reason) => ({
@@ -644,12 +775,7 @@
       matchDraw = !!cmp.draw;
       sessionWon = !!cmp.iWon;
       endReason = cmp.reason || 'balls';
-      phase = 'done';
-      ended = true;
-      if (leaveShell) leaveShell.gameOver = true;
-      if (typeof gameFeedback === 'function') {
-        gameFeedback(matchDraw ? 'complete' : sessionWon ? 'win' : 'lose');
-      }
+      // settle + result chrome via showLiveDone (caller still pushLive)
     };
 
     const buildLiveState = (extra) =>
@@ -694,6 +820,7 @@
           eventSeq,
           endReason,
           sessionWon,
+          stake: liveStake,
           paused: !!(pauseCtrl && pauseCtrl.isPaused && pauseCtrl.isPaused()),
         },
         extra || {}
@@ -1096,7 +1223,9 @@
       !!(peerPaused || (pauseCtrl && pauseCtrl.isPaused && pauseCtrl.isPaused()));
 
     const chromeSubtitle = liveOn
-      ? liveChromeSub() + ' · Friendly · Street Cricket'
+      ? liveChromeSub() +
+        (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') +
+        ' · Street Cricket'
       : undefined;
     const mounted = mountSportsShell({
       gameId: 'streetcricket',
@@ -1106,10 +1235,20 @@
       live: liveOn,
       subtitle: chromeSubtitle,
       leaveBody: liveOn
-        ? 'Leaving now counts as a forfeit for your opponent.'
+        ? liveStake > 0
+          ? 'Leaving forfeits — virtual stake settles for your opponent.'
+          : 'Leaving now counts as a forfeit for your opponent.'
         : 'This practice run will end.',
       isPlaying: () => !ended && phase !== 'done' && phase !== 'pick' && phase !== 'wait',
       onClose: () => {
+        if (liveOn && !settleDone && !resultShown) {
+          // Local leave mid-match — settle loss once (idempotent with peer forfeit).
+          try {
+            if (liveRoles && liveRoles.opp) settleOppUid = liveRoles.opp;
+            reportStreetResult(false, false, 'leave');
+            settleStreetOnce(false, false);
+          } catch (e) {}
+        }
         ended = true;
         try {
           if (pauseCtrl) pauseCtrl.destroy();
@@ -1204,7 +1343,15 @@
       if (phase === 'done') {
         ended = true;
         if (leaveShell) leaveShell.gameOver = true;
-        render();
+        if (liveOn) {
+          showLiveDone({
+            forfeit: endReason === 'forfeit',
+            iWon: !!sessionWon,
+            path: 'remote',
+          });
+        } else {
+          render();
+        }
         return;
       }
       render();
@@ -1218,6 +1365,9 @@
     }
     if (typeof migrateStreetCricketPb === 'function') migrateStreetCricketPb();
     formatId = loadSavedFormat();
+    if (liveOn && rematchFormatHint && FORMATS[rematchFormatHint]) {
+      formatId = rematchFormatHint;
+    }
 
     const cur = () => deliveryMeta || DELIVERY_TYPES.medium;
     const shotMeta = () => SHOTS[armedShot] || SHOTS.push;
@@ -1509,26 +1659,31 @@
       const f = fmt();
       const pbGameId = pbIdForFormat();
 
-      if (liveOn && innings1) {
+      if (liveOn && (innings1 || endReason === 'forfeit' || matchWinnerUid || resultShown)) {
         const i1 = innings1;
-        const i2 = innings2 || snapshotInnings(endReason);
+        const i2 =
+          innings2 ||
+          (endReason !== 'forfeit' && innings1 ? snapshotInnings(endReason) : null);
         const myUid = liveRoles && liveRoles.me;
-        const myInn = i1.batUid === myUid ? i1 : i2.batUid === myUid ? i2 : null;
-        const oppInn = i1.batUid === myUid ? i2 : i1;
+        const myInn = i1 && i1.batUid === myUid ? i1 : i2 && i2.batUid === myUid ? i2 : null;
+        const oppInn = i1 && i1.batUid === myUid ? i2 : i1;
         const myRuns = myInn ? myInn.runs | 0 : 0;
         const oppRuns = oppInn ? oppInn.runs | 0 : 0;
         const line =
-          formatId === 'nets'
-            ? `You ${myInn ? myInn.perfects | 0 : 0} clean (${myRuns}) · Opp ${oppInn ? oppInn.perfects | 0 : 0} clean (${oppRuns})`
-            : `You ${myRuns} · Opp ${oppRuns}` +
-              (formatId === 'chase' && chaseTarget ? ` · target ${chaseTarget}` : '');
+          endReason === 'forfeit'
+            ? lastOutcome || 'Forfeit'
+            : formatId === 'nets'
+              ? `You ${myInn ? myInn.perfects | 0 : 0} clean (${myRuns}) · Opp ${oppInn ? oppInn.perfects | 0 : 0} clean (${oppRuns})`
+              : `You ${myRuns} · Opp ${oppRuns}` +
+                (formatId === 'chase' && chaseTarget ? ` · target ${chaseTarget}` : '');
         const title = matchDraw
           ? 'Draw'
           : sessionWon
             ? 'You win'
             : 'Opponent wins';
+        const stakeLine = stakeSettleNote ? ' · ' + stakeSettleNote : '';
         const sub =
-          (inningsIndex >= 2 ? 'Both innings done · ' : '') +
+          (inningsIndex >= 2 || innings2 ? 'Both innings done · ' : '') +
           (formatId === 'chase'
             ? matchDraw
               ? line
@@ -1538,15 +1693,22 @@
                   : 'Defended the total'
                 : endReason === 'chase_won'
                   ? 'They chased it down'
-                  : 'Couldn’t defend'
-            : line);
+                  : endReason === 'forfeit'
+                    ? lastOutcome || 'Forfeit'
+                    : 'Couldn’t defend'
+            : endReason === 'forfeit'
+              ? lastOutcome || 'Forfeit'
+              : line) +
+          stakeLine;
         return {
           title: 'Street Cricket',
           glyph: '🏏',
-          onAgain: () => openStreetCricket(chat),
-          onChangeFormat: iAmHost() ? showPicker : () => openStreetCricket(chat),
+          onAgain: freshRematch,
+          onChangeFormat: () => {
+            freshRematch();
+          },
           actions: [
-            { label: 'Play again', primary: true, id: 'again' },
+            { label: 'Rematch', primary: true, id: 'again' },
             { label: 'Share', primary: false, id: 'share' },
           ],
           challenge: false,
@@ -1554,17 +1716,21 @@
           hideMissions: true,
           updatePb: false,
           scoreHtml: `<p class="rw-sc-moment">${esc(line)}</p>`,
-          againLabel: 'Play again',
+          againLabel: 'Rematch',
           resultTitle: title,
           subtitle: sub,
           scoreLine: line,
           score: myRuns,
-          shareText: `Street Cricket Live: ${line} on Chaupaal`,
+          shareText:
+            `Street Cricket Live: ${line}` +
+            (liveStake > 0 ? ' · virtual stakes' : '') +
+            ' on Chaupaal',
           won: sessionWon,
           recordExtra: {
             format: formatId,
             formatId,
             live: true,
+            stake: liveStake,
             innings: 2,
             matchDraw,
           },
@@ -1721,7 +1887,7 @@
             <h2>Street Cricket</h2>
             <p class="rw-sports-hint">${
               liveOn
-                ? 'Live 1v1 — bowl & bat, then swap innings. Host picks format.'
+                ? 'Live 1v1 — one bowls, one bats, then swap. Chase: 1st innings sets the target (+1). Virtual stakes when challenged.'
                 : 'Gully practice — Over, Nets, or Chase. Same bag, same shots.'
             }</p>
             <div class="rw-sc-formats" role="listbox" aria-label="Format">${cards}</div>
@@ -1735,8 +1901,8 @@
         if (liveOn) {
           opts.updatePb = false;
           opts.challenge = false;
-          opts.onAgain = () => openStreetCricket(chat);
-          opts.onChangeFormat = iAmHost() ? showPicker : () => openStreetCricket(chat);
+          opts.onAgain = freshRematch;
+          opts.onChangeFormat = freshRematch;
         }
         finishPractice('streetcricket', opts.score != null ? opts.score : runs, body, opts);
         return;
@@ -1906,7 +2072,7 @@
       }
       finishMatchFromSecond(snap);
       pushLive({ phase: 'done', innings2, matchWinnerUid, matchDraw }, { as: 'bat', status: 'over' });
-      render();
+      showLiveDone({ forfeit: false, skipFeedback: false });
     };
 
     const afterBall = (outcome) => {
@@ -2138,6 +2304,7 @@
       liveRoles = DangalLive.roles(chat);
       batUid = liveRoles.playerA || '';
       bowlUid = liveRoles.playerB || '';
+      if (liveRoles.opp) settleOppUid = liveRoles.opp;
       liveHandle = DangalLive.join({
         gameType: 'streetcricket',
         matchId: matchIdFor(chat, 'streetcricket'),
@@ -2152,13 +2319,15 @@
             ended = true;
             if (leaveShell) leaveShell.gameOver = true;
             const iWon = liveRoles && val.winner === liveRoles.me;
-            phase = 'done';
-            sessionWon = !!iWon;
-            matchWinnerUid = iWon ? liveRoles.me : liveRoles.opp || '';
             lastOutcome = iWon ? 'Opponent left — you win' : 'You left';
             endReason = 'forfeit';
+            sessionWon = !!iWon;
+            matchDraw = false;
+            matchWinnerUid = iWon
+              ? liveRoles.me
+              : (liveRoles && liveRoles.opp) || '';
             applying = false;
-            render();
+            showLiveDone({ forfeit: true, iWon: !!iWon, path: 'forfeit' });
             return;
           }
           const st = val.state || {};
@@ -2186,6 +2355,7 @@
               wickets: 0,
               balls: 0,
               perfects: 0,
+              stake: liveStake,
             },
           });
         } catch (e) {}
@@ -2195,9 +2365,19 @@
     }
 
     if (phase === 'wait') {
-      setChromeSub(liveChromeSub() + ' · Friendly · waiting');
+      setChromeSub(
+        liveChromeSub() +
+          (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') +
+          ' · waiting'
+      );
     } else {
-      setChromeSub(liveOn ? liveChromeSub() + ' · Friendly · pick format' : 'Practice · pick format');
+      setChromeSub(
+        liveOn
+          ? liveChromeSub() +
+              (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') +
+              ' · pick format'
+          : 'Practice · pick format'
+      );
     }
     render();
   }
@@ -3252,7 +3432,7 @@
     registerGame({
       id: 'streetcricket',
       name: 'Street Cricket',
-      desc: 'Live 1v1 · bowl & bat · swap innings',
+      desc: 'Live · Over, Nets & Chase',
       icon: '🏏',
       ratingKey: 'streetcricket',
       gameType: 'dual',
@@ -3262,6 +3442,12 @@
       dangal: true,
       chat1v1: true,
       order: 5,
+      meta: {
+        phaseA: 'Formats — Gully Over, Nets, Chase',
+        phaseB: 'Live bowl↔bat + innings swap',
+        phaseC: 'Virtual stakes once · rematch new matchId',
+        complete: true,
+      },
       launch(ctx) {
         openStreetCricket(ctx);
       },
