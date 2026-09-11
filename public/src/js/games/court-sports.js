@@ -67,6 +67,17 @@
 
   async function confirmAndClose(shell, opts) {
     const o = opts || {};
+    if (typeof leaveGameShell === 'function') {
+      return leaveGameShell(shell, {
+        live: !!o.live || !!o.liveHandle,
+        liveHandle: o.liveHandle != null ? o.liveHandle : shell.liveHandle,
+        isPlaying: o.isPlaying,
+        title: o.title,
+        body: o.body,
+        forfeitBody: o.forfeitBody,
+        reason: o.reason || 'dismissed',
+      });
+    }
     const playing = o.isPlaying !== false;
     const live = !!o.live || !!o.liveHandle;
     if (typeof DangalLive !== 'undefined' && DangalLive.requestLeave) {
@@ -77,7 +88,15 @@
         title: o.title || 'Leave game?',
         body: o.body || 'This practice run will end.',
         forfeitBody: 'Leaving now counts as a forfeit for your opponent.',
-        onLeave: () => shell.close(o.reason || 'dismissed'),
+        onLeave: () => {
+          try {
+            if (shell.markOver) shell.markOver();
+          } catch (e) {}
+          try {
+            shell.liveHandle = null;
+          } catch (e) {}
+          shell.close(o.reason || 'dismissed');
+        },
       });
       return !!ok;
     }
@@ -92,14 +111,24 @@
       if (!leave) return false;
     }
     if (o.liveHandle && playing) {
-      try {
-        o.liveHandle.leave({ forfeit: true });
-      } catch (e) {
+      if (typeof detachLiveHandle === 'function') {
+        detachLiveHandle(o.liveHandle, { forfeit: true, alreadyOver: !!shell.gameOver });
+      } else {
         try {
-          o.liveHandle.leave();
-        } catch (e2) {}
+          o.liveHandle.leave({ forfeit: true });
+        } catch (e) {
+          try {
+            o.liveHandle.leave();
+          } catch (e2) {}
+        }
       }
     }
+    try {
+      if (shell.markOver) shell.markOver();
+    } catch (e) {}
+    try {
+      shell.liveHandle = null;
+    } catch (e) {}
     shell.close(o.reason || 'dismissed');
     return true;
   }
@@ -122,15 +151,22 @@
           mode: o.mode || (o.live ? 'live' : 'practice'),
           overlay,
           chat: o.chat,
+          source: o.source || (window.__dangalLaunchCtx && window.__dangalLaunchCtx.source) || '',
           cleanup() {
             if (typeof o.cleanup === 'function') o.cleanup();
+            // If leaveGameShell already ran, liveHandle is null (no second forfeit).
+            // Forced dismiss (chat scope) while still playing → forfeit once here.
             if (liveHandle) {
-              try {
-                liveHandle.leave({ forfeit: !gameOver });
-              } catch (e) {
+              if (typeof detachLiveHandle === 'function') {
+                detachLiveHandle(liveHandle, { forfeit: !gameOver, alreadyOver: !!gameOver });
+              } else {
                 try {
-                  liveHandle.leave();
-                } catch (e2) {}
+                  liveHandle.leave({ forfeit: !gameOver });
+                } catch (e) {
+                  try {
+                    liveHandle.leave();
+                  } catch (e2) {}
+                }
               }
               liveHandle = null;
             }

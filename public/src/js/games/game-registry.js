@@ -269,6 +269,13 @@
         ? Number(o.stake) || 0
         : 0;
 
+    const rawSource = o.source || '';
+    const source =
+      typeof resolveGameLaunchSource === 'function'
+        ? resolveGameLaunchSource({ source: rawSource, chat })
+        : rawSource ||
+          (chat && chat.id && String(chat.id) !== 'ai' ? 'chat' : 'manch');
+
     window.__dangalLaunchCtx = {
       gameId,
       gameType: gameId,
@@ -277,7 +284,7 @@
       opponentUid: opponentUid || '',
       stake,
       chatId: o.chatId || chat?.firestoreId || chat?.id || '',
-      source: o.source || '',
+      source,
       startedAt: Date.now(),
       ludoMode:
         o.ludoMode ||
@@ -300,7 +307,7 @@
       opponentUid,
       stake,
       mode,
-      source: o.source || '',
+      source,
       ludoMode: window.__dangalLaunchCtx.ludoMode || o.ludoMode || '',
     });
     delete ctx._userLaunch;
@@ -553,7 +560,7 @@
       document.getElementById('dgPracticeAi').addEventListener('click', () => {
         sheet.remove();
         if (typeof openLudoPracticeSheet === 'function') {
-          openLudoPracticeSheet({ name: 'AI', id: 'ai' }, { source: 'dangal' });
+          openLudoPracticeSheet({ name: 'AI', id: 'ai' }, { source: 'manch' });
         } else {
           openLudoGame({ name: 'AI', id: 'ai' }, 2, { mode: 'classic' });
         }
@@ -664,7 +671,7 @@
       sheet.remove();
       game.launch({
         chat: { name: 'AI', id: 'ai' },
-        source: 'dangal',
+        source: 'manch',
         mode: 'practice',
         opponentUid: 'ai',
         stake: 0,
@@ -738,7 +745,7 @@
                   peerUid: persistable ? uid : undefined,
                   dangalMatchId: mid || undefined,
                 },
-                source: persistable && liveOk ? 'challenge_host' : 'dangal',
+                source: persistable && liveOk ? 'challenge_host' : 'manch',
                 mode: persistable && liveOk ? 'live' : 'practice',
                 opponentUid: persistable ? uid : '',
                 stake: persistable && liveOk ? stake : 0,

@@ -65,6 +65,17 @@
 
   async function confirmAndClose(shell, opts) {
     const o = opts || {};
+    if (typeof leaveGameShell === 'function') {
+      return leaveGameShell(shell, {
+        live: !!o.live || !!o.liveHandle,
+        liveHandle: o.liveHandle != null ? o.liveHandle : shell.liveHandle,
+        isPlaying: o.isPlaying,
+        title: o.title,
+        body: o.body,
+        forfeitBody: o.forfeitBody,
+        reason: o.reason || 'dismissed',
+      });
+    }
     const playing = o.isPlaying !== false;
     const live = !!o.live;
     if (typeof confirmLeaveGame === 'function') {
@@ -85,8 +96,13 @@
           o.liveHandle.leave();
         } catch (e2) {}
       }
-      o.liveHandle = null;
     }
+    try {
+      if (shell.markOver) shell.markOver();
+    } catch (e) {}
+    try {
+      shell.liveHandle = null;
+    } catch (e) {}
     shell.close(o.reason || 'dismissed');
     return true;
   }
@@ -137,15 +153,20 @@
           mode: o.mode || (o.live ? 'live' : 'practice'),
           overlay,
           chat: o.chat,
+          source: o.source || (window.__dangalLaunchCtx && window.__dangalLaunchCtx.source) || '',
           cleanup() {
             if (typeof o.cleanup === 'function') o.cleanup();
             if (liveHandle) {
-              try {
-                liveHandle.leave({ forfeit: !gameOver });
-              } catch (e) {
+              if (typeof detachLiveHandle === 'function') {
+                detachLiveHandle(liveHandle, { forfeit: !gameOver, alreadyOver: !!gameOver });
+              } else {
                 try {
-                  liveHandle.leave();
-                } catch (e2) {}
+                  liveHandle.leave({ forfeit: !gameOver });
+                } catch (e) {
+                  try {
+                    liveHandle.leave();
+                  } catch (e2) {}
+                }
               }
               liveHandle = null;
             }

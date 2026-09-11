@@ -1,8 +1,14 @@
 /**
  * Phase 2A — wrap a game overlay with createGameSession.
- * Parent chat dismiss → cleanup (timers/listeners). Analytics via session.end.
- * Ratings: call recordGameResult at win time OR pass onEnd.
- * @returns {{ alive:()=>boolean, close:(result?:string)=>void, setOutcome:(r:string)=>void, getOutcome:()=>string|null, schedule:(fn:Function,ms:number)=>number, clearTimers:()=>void }}
+ * Parent dismiss → cleanup (timers / RAF / listeners). Analytics via session.end.
+ *
+ * Lifecycle (Polish P0):
+ *   - Prefer gs.schedule(fn, ms) for timeouts (auto-cleared).
+ *   - Prefer gs.registerAnimFrame(cb) for RAF loops (cancelled on cleanup).
+ *   - Games that keep raw requestAnimationFrame / setInterval MUST cancel them in cleanup.
+ *   - overlayScope follows launch source (Manch ≠ chat) so leave returns correctly.
+ *
+ * @returns {{ alive:()=>boolean, close:(result?:string)=>void, setOutcome:(r:string)=>void, getOutcome:()=>string|null, schedule:(fn:Function,ms:number)=>number, clearTimers:()=>void, registerAnimFrame:(cb:FrameRequestCallback)=>number, clearAnimFrames:()=>void }}
  */
 function beginGameOverlaySession(opts) {
   const type = opts.type;
@@ -10,10 +16,24 @@ function beginGameOverlaySession(opts) {
   const userCleanup = typeof opts.cleanup === 'function' ? opts.cleanup : null;
   const onEnd = typeof opts.onEnd === 'function' ? opts.onEnd : null;
   const timers = new Set();
+  const rafs = new Set();
   let alive = true;
   let outcome = null;
   let session = null;
   const launch = window.__dangalLaunchCtx || {};
+  const launchSource =
+    typeof resolveGameLaunchSource === 'function'
+      ? resolveGameLaunchSource(
+          Object.assign({}, launch, { source: opts.source || launch.source, chat: opts.chat })
+        )
+      : opts.source || launch.source || '';
+  const overlayScope =
+    opts.overlayScope ||
+    (typeof resolveGameOverlayScope === 'function'
+      ? resolveGameOverlayScope(launchSource)
+      : typeof OVERLAY_SCOPE_CHAT !== 'undefined'
+        ? OVERLAY_SCOPE_CHAT
+        : 'chat');
   const opponentUid =
     opts.opponentUid ||
     launch.opponentUid ||
@@ -27,6 +47,11 @@ function beginGameOverlaySession(opts) {
     .replace(/[^\w.-]/g, '')
     .slice(0, 120);
   const stake = Number(opts.stake || launch.stake) || 0;
+  const returnCtx = {
+    source: launchSource,
+    chat: opts.chat,
+    chatId: launch.chatId || '',
+  };
 
   if (overlay) {
     if (!overlay.innerHTML || !String(overlay.innerHTML).trim()) {
@@ -56,6 +81,15 @@ function beginGameOverlaySession(opts) {
     timers.clear();
   }
 
+  function clearAnimFrames() {
+    rafs.forEach((id) => {
+      try {
+        cancelAnimationFrame(id);
+      } catch (e) {}
+    });
+    rafs.clear();
+  }
+
   function schedule(fn, ms) {
     const id = setTimeout(() => {
       timers.delete(id);
@@ -63,6 +97,23 @@ function beginGameOverlaySession(opts) {
       fn();
     }, ms);
     timers.add(id);
+    return id;
+  }
+
+  /** Tracked RAF — cancelled automatically in cleanup. Prefer over raw requestAnimationFrame. */
+  function registerAnimFrame(cb) {
+    let id = 0;
+    const wrap = (ts) => {
+      rafs.delete(id);
+      if (!alive) return;
+      try {
+        cb(ts);
+      } catch (e) {
+        console.warn('[game] raf', e);
+      }
+    };
+    id = requestAnimationFrame(wrap);
+    rafs.add(id);
     return id;
   }
 
@@ -95,6 +146,7 @@ function beginGameOverlaySession(opts) {
 
   function runUserCleanup() {
     clearTimers();
+    clearAnimFrames();
     if (userCleanup) {
       try {
         userCleanup();
@@ -114,6 +166,9 @@ function beginGameOverlaySession(opts) {
         alive = false;
         runUserCleanup();
         if (overlay && overlay.isConnected) overlay.remove();
+        try {
+          if (typeof honorGameReturnTarget === 'function') honorGameReturnTarget(returnCtx);
+        } catch (e2) {}
       }
       return;
     }
@@ -126,6 +181,9 @@ function beginGameOverlaySession(opts) {
       } catch (e) {}
     }
     if (overlay && overlay.isConnected) overlay.remove();
+    try {
+      if (typeof honorGameReturnTarget === 'function') honorGameReturnTarget(returnCtx);
+    } catch (e) {}
   }
 
   if (typeof createGameSession === 'function') {
@@ -136,9 +194,8 @@ function beginGameOverlaySession(opts) {
       mode: opts.mode || '1v1',
       context: {
         chat: opts.chat,
-        overlayScope:
-          typeof OVERLAY_SCOPE_CHAT !== 'undefined' ? OVERLAY_SCOPE_CHAT : 'chat',
-        source: opts.source || launch.source,
+        overlayScope,
+        source: launchSource,
         opponentUid,
         matchId,
         stake,
@@ -169,6 +226,8 @@ function beginGameOverlaySession(opts) {
         getOutcome: () => outcome,
         schedule,
         clearTimers,
+        registerAnimFrame,
+        clearAnimFrames,
       };
     }
   } else {
@@ -183,6 +242,8 @@ function beginGameOverlaySession(opts) {
         getOutcome: () => outcome,
         schedule,
         clearTimers,
+        registerAnimFrame,
+        clearAnimFrames,
       };
     }
     if (overlay && !overlay.isConnected) device.appendChild(overlay);
@@ -201,9 +262,12 @@ function beginGameOverlaySession(opts) {
     getOutcome: () => outcome,
     schedule,
     clearTimers,
+    registerAnimFrame,
+    clearAnimFrames,
   };
 }
 window.beginGameOverlaySession = beginGameOverlaySession;
+
 
 /** DPR-aware canvas setup — uses shared helper when present, else local scale. */
 function ensureGameCanvas(canvas, cssW, cssH) {

@@ -212,4 +212,6 @@
   window.closeAiKeyboard = closeAiKeyboard;
   window.registerScopedOverlay = registerScopedOverlay;
   window.OVERLAY_SCOPE_CHAT = 'chat';
+  /** Manch / Battlegrounds launches — not dismissed when a chat closes. */
+  window.OVERLAY_SCOPE_MANCH = 'manch';
 })();

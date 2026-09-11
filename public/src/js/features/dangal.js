@@ -703,7 +703,12 @@ function _runMuqabalaCore(overlay, oppName, mode, opts){
         opponent: displayOpp,
         source,
         timerSeconds,
-        overlayScope: typeof OVERLAY_SCOPE_CHAT !== 'undefined' ? OVERLAY_SCOPE_CHAT : 'chat',
+        overlayScope:
+          typeof resolveGameOverlayScope === 'function'
+            ? resolveGameOverlayScope(source)
+            : typeof OVERLAY_SCOPE_CHAT !== 'undefined'
+              ? OVERLAY_SCOPE_CHAT
+              : 'chat',
         matchId,
         opponentUid: practiceFinal ? '' : oppUid,
         live: liveOn,
@@ -760,10 +765,23 @@ function _runMuqabalaCore(overlay, oppName, mode, opts){
 
   function closeOverlay(result){
     endSession(result || 'dismissed');
-    if(typeof animateGameExit==='function'){
-      animateGameExit(overlay, ()=>overlay.classList.add('hidden'));
-    } else {
+    const finishHide = () => {
       overlay.classList.add('hidden');
+      try {
+        if (typeof honorGameReturnTarget === 'function') {
+          honorGameReturnTarget({
+            source: source || (window.__dangalLaunchCtx && window.__dangalLaunchCtx.source) || 'manch',
+          });
+        }
+      } catch (e) {}
+      try {
+        if (typeof clearDangalLaunchCtx === 'function') clearDangalLaunchCtx();
+      } catch (e) {}
+    };
+    if(typeof animateGameExit==='function'){
+      animateGameExit(overlay, finishHide);
+    } else {
+      finishHide();
     }
   }
 
