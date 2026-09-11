@@ -254,6 +254,35 @@
 .play-comm-video{width:88px;height:118px;border-radius:12px;overflow:hidden;background:#111;pointer-events:auto;}
 .play-comm-video--me{width:64px;height:86px;margin-left:auto;}
 .cs-rally,.cs-kabaddi,.cs-khokho,.cs-bowling,.cs-patang,.pc-tambola,.pc-rummy,.pc-tp,.pc-bluff,.pc-satte,.pc-ab,.pc-cue{display:flex;flex-direction:column;align-items:center;gap:12px;}
+.cs-court-wait{
+  width:min(100%,420px);margin:0 auto;padding:12px 10px 20px;box-sizing:border-box;
+  display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;
+}
+.cs-court-wait .game-turn,
+.cs-rally .game-turn,
+.cs-kabaddi .game-turn,
+.cs-khokho .game-turn,
+.cs-bowling .game-turn,
+.cs-patang .game-turn{width:100%;max-width:420px;box-sizing:border-box;}
+.cs-court-actions{
+  width:100%;max-width:420px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;
+  position:sticky;bottom:0;z-index:3;padding:8px 4px 10px;
+  background:linear-gradient(180deg,transparent,rgba(10,16,24,.92) 32%);
+}
+.cs-court-actions .cs-hit,
+.cs-kb-actions .cs-hit,
+.cs-kk-actions .cs-hit,
+.cs-bw-throw{min-height:48px;padding:12px 18px;font-weight:800;}
+.cs-hit--primary{
+  box-shadow:0 0 0 1px rgba(255,255,255,.28),0 6px 16px rgba(0,0,0,.28);
+}
+.cs-hit:disabled{opacity:.42;filter:grayscale(.25);}
+@media (max-height:640px){
+  .cs-rally-score{font-size:22px;}
+  .cs-rally-court{max-height:min(48vh,240px);}
+  .cs-bw-meta,.cs-kb-meta,.cs-kk-meta{font-size:11px;opacity:.7;}
+  .cs-bowling .cs-bw-controls label{font-size:12px;}
+}
 .cs-breath{width:100%;max-width:320px;height:10px;border-radius:999px;background:rgba(255,255,255,.12);overflow:hidden;}
 .cs-breath i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#FF8A65,#FFD54F);border-radius:inherit;transition:width 80ms linear;}
 .cs-breath.is-live i{background:linear-gradient(90deg,#FF7043,#FFCA28);}

@@ -17,6 +17,37 @@
     if (typeof gameFeedback === 'function') gameFeedback(a, extra);
   }
 
+  /** Shared court turn chrome — Prompt 7 role / wait feel */
+  function courtTurnBanner(mode, label, sub) {
+    if (typeof gameTurnBannerHtml === 'function') {
+      return gameTurnBannerHtml({
+        mode: mode || 'waiting',
+        label: label || undefined,
+        sub: sub || undefined,
+        pulse: mode === 'yours',
+      });
+    }
+    return (
+      '<p class="cs-rally-msg" role="status">' +
+      esc(label || '') +
+      (sub ? ' · ' + esc(sub) : '') +
+      '</p>'
+    );
+  }
+
+  function courtWaitPanel(opts) {
+    const o = opts || {};
+    return (
+      '<div class="cs-court-wait" role="status" aria-live="polite">' +
+      courtTurnBanner(o.mode || 'waiting', o.title || 'Waiting…', o.sub || '') +
+      (o.scoreHtml || '') +
+      '<p class="cs-rally-msg">' +
+      esc(o.detail || 'Court stays live — your controls return when it’s your contact.') +
+      '</p>' +
+      '</div>'
+    );
+  }
+
   function practiceSub(detail) {
     if (typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel) {
       return DangalLive.modeChromeLabel(false, detail || 'vs AI');
@@ -851,6 +882,17 @@
       const baseWin = spec.windowMs || 720;
       shell.body.innerHTML = `
         <div class="cs-rally ${esc(sportMod)}" style="--rally-accent:${esc(spec.accent || '#E63946')};--rally-court:${esc(courtTint)};">
+          ${courtTurnBanner(
+            iAmActive ? 'yours' : 'theirs',
+            iAmActive
+              ? serving
+                ? 'Your serve'
+                : 'Your contact'
+              : liveOn
+                ? 'Opponent’s contact'
+                : 'Opponent contact…',
+            hud.main + (hud.sub ? ' · ' + hud.sub : '')
+          )}
           <div class="cs-rally-score">${esc(spec.icon)} <strong>${esc(hud.main)}</strong></div>
           ${hud.sub ? `<p class="cs-rally-score-sub">${esc(hud.sub)}</p>` : ''}
           ${
@@ -887,14 +929,16 @@
               <div class="cs-timing" aria-hidden="true"><i data-cs-bar></i><b class="cs-rally-sweet"></b></div>
             </div>
           </div>
-          <button type="button" class="cs-hit" data-cs-hit ${!iAmActive ? 'disabled' : ''}>${esc(
+          <div class="cs-court-actions">
+          <button type="button" class="cs-hit${iAmActive ? ' cs-hit--primary' : ''}" data-cs-hit ${!iAmActive ? 'disabled' : ''}>${esc(
             !iAmActive && !liveOn ? 'Opponent…' : hitLabel
           )}</button>
+          </div>
           <p class="cs-rally-hint">${
             liveOn
               ? iAmActive
                 ? 'Rally ' + rally + ' · ' + esc(matchSub) + ' · your contact'
-                : 'Waiting for opponent · court live'
+                : 'Score stays live — wait for your contact window'
               : practiceAiTurn
                 ? 'Opponent contact · ' + (aiDiff === 'easy' ? 'Easy' : aiDiff === 'sharp' ? 'Sharp' : 'Normal')
                 : 'Rally ' + rally + ' · ' + esc(matchSub) + (softPlayerWindow ? ' · soft ball' : '')
@@ -2246,11 +2290,16 @@
           })
           .join('');
 
-        const roleLine = raid.iAmRaider ? 'Raiding' : 'Defending';
+        const roleLine = raid.iAmRaider ? 'You’re raiding' : 'You’re defending';
         const holdPct = Math.min(100, (raid.holdAcc / holdNeedFor(raid)) * 100);
 
         shell.body.innerHTML =
           '<div class="cs-kabaddi">' +
+          courtTurnBanner(
+            raid.iAmRaider ? 'yours' : 'theirs',
+            roleLine + (raid.dod ? ' · DO OR DIE' : ''),
+            you + '–' + opp + ' · first to ' + TO_WIN + (raidPaused ? ' · Paused' : '')
+          ) +
           '<div class="cs-rally-score">💪 <strong>' +
           you +
           '</strong> – <strong>' +
@@ -2295,12 +2344,12 @@
           (raid.crossedBonus ? ' · bonus line' : '') +
           (livingDefs(raid).length === 0 ? ' · all out' : '') +
           '</div>' +
-          '<div class="cs-kb-actions">' +
+          '<div class="cs-kb-actions cs-court-actions">' +
           (raid.iAmRaider
-            ? '<button type="button" class="cs-hit cs-kb-home" data-home' +
+            ? '<button type="button" class="cs-hit cs-hit--primary cs-kb-home" data-home' +
               (canHome ? '' : ' disabled') +
               '>Home</button>'
-            : '<button type="button" class="cs-hit cs-kb-tackle" data-tackle' +
+            : '<button type="button" class="cs-hit cs-hit--primary cs-kb-tackle" data-tackle' +
               (tackleReady ? '' : ' disabled') +
               '>Tackle</button>') +
           '</div>' +
@@ -2575,6 +2624,11 @@
       if (liveOn) {
         shell.body.innerHTML =
           '<div class="cs-kabaddi">' +
+          courtTurnBanner(
+            'waiting',
+            'Turn over — swap',
+            you + '–' + opp
+          ) +
           '<div class="cs-rally-score">💪 <strong>' +
           you +
           '</strong> – <strong>' +
@@ -2586,7 +2640,7 @@
           '<p class="cs-rally-hint">' +
           esc(hint) +
           ' Starting…</p>' +
-          '<button type="button" class="cs-hit" data-ready>Go</button>' +
+          '<div class="cs-court-actions"><button type="button" class="cs-hit cs-hit--primary" data-ready>Go</button></div>' +
           '</div>';
         const go = () => {
           if (betweenTimer) {
@@ -2598,12 +2652,18 @@
         shell.body.querySelector('[data-ready]')?.addEventListener('click', go);
         if (betweenTimer) clearTimeout(betweenTimer);
         betweenTimer = setTimeout(go, 850);
+        if (typeof showToast === 'function') showToast(hint);
         return;
       }
 
       // Practice: flip already applied in endRaid
       shell.body.innerHTML =
         '<div class="cs-kabaddi">' +
+        courtTurnBanner(
+          myRaid ? 'yours' : 'theirs',
+          myRaid ? 'Your raid next' : 'Defend next',
+          you + '–' + opp
+        ) +
         '<div class="cs-rally-score">💪 <strong>' +
         you +
         '</strong> – <strong>' +
@@ -2612,17 +2672,18 @@
         '<p class="cs-rally-msg">' +
         esc(msg) +
         '</p>' +
-        '<button type="button" class="cs-hit" data-raid-again>' +
+        '<div class="cs-court-actions"><button type="button" class="cs-hit cs-hit--primary" data-raid-again>' +
         (myRaid
           ? emptyStreakFor(true) >= DOD_EMPTY_NEED
             ? 'Do or die raid'
             : 'Your raid'
           : 'Defend next') +
-        '</button>' +
+        '</button></div>' +
         '</div>';
       shell.body.querySelector('[data-raid-again]')?.addEventListener('click', () => {
         startRaid({ iAmRaider: myRaid });
       });
+      if (typeof showToast === 'function') showToast(hint);
     }
 
     if (liveOn && typeof DangalLive !== 'undefined') {
@@ -3447,6 +3508,7 @@
             }
           }, 900);
           msg = 'Batch wiped — next three incoming…';
+          if (typeof showToast === 'function') showToast('Batch cleared — next three');
         }
       }
       if (liveOn && iAmChasing()) {
@@ -3923,6 +3985,17 @@
         '/3 out</span>';
       shell.body.innerHTML =
         '<div class="cs-khokho">' +
+        courtTurnBanner(
+          iAmChasing() ? 'yours' : 'theirs',
+          roleLabel(),
+          scores.you +
+            '–' +
+            scores.opp +
+            ' · ' +
+            clockLabel() +
+            ' · Batch ' +
+            (batchIndex + 1)
+        ) +
         '<div class="cs-rally-score"><strong>' +
         scores.you +
         '</strong> – <strong>' +
@@ -3978,14 +4051,14 @@
         '<div class="cs-kk-meta">' +
         (iAmChasing()
           ? 'Drag to chase · highlight = Kho · wipe batch then Kho again'
-          : 'Tap a runner to focus · drag to dodge') +
+          : 'Tap a runner to focus · drag to dodge — chase seat is hunting') +
         '</div>' +
-        '<div class="cs-kk-actions">' +
+        '<div class="cs-kk-actions cs-court-actions">' +
         (iAmChasing()
-          ? '<button type="button" class="cs-hit cs-kk-kho-btn" data-kho' +
+          ? '<button type="button" class="cs-hit cs-hit--primary cs-kk-kho-btn" data-kho' +
             (khoReady.length ? '' : ' disabled') +
             '>Kho!</button>'
-          : '') +
+          : '<p class="cs-rally-hint">You’re running — survive the batch clock</p>') +
         '</div></div>';
       const court = shell.body.querySelector('[data-court]');
       const setTarget = (clientX, clientY) => {
@@ -4317,8 +4390,14 @@
         raf = requestAnimationFrame(tick);
       } else {
         phase = 'between';
-        shell.body.innerHTML =
-          '<div class="cs-khokho"><p class="cs-rally-msg">Get ready to run the batch…</p></div>';
+        shell.body.innerHTML = courtWaitPanel({
+          mode: 'waiting',
+          title: 'You’re running next',
+          sub: 'Live Kho Kho',
+          detail: 'Score and court appear when the host starts the chase. Stay ready to dodge the batch.',
+          scoreHtml:
+            '<div class="cs-rally-score"><strong>0</strong> – <strong>0</strong><span class="cs-rally-score-sub">waiting for host</span></div>',
+        });
         // Guest waits for host snap; start tick once chase state arrives
         const waitTick = () => {
           if (!shell.alive() || resultShown) return;
@@ -5147,6 +5226,9 @@
       // frame complete (1–9)
       const wasStrike = lastPinsDown === 10 && ballInFrame === 1;
       msg = wasStrike ? 'Strike! Frame locked' : 'Frame locked';
+      if (typeof showToast === 'function') {
+        showToast('Frame ' + frameRound + (wasStrike ? ' · Strike' : ' locked'));
+      }
       if (iAmBowling()) {
         if (wasStrike) {
           buzz('win');
@@ -5311,6 +5393,17 @@
 
       shell.body.innerHTML =
         '<div class="cs-bowling">' +
+        courtTurnBanner(
+          active ? 'yours' : waiting ? 'theirs' : 'waiting',
+          active
+            ? 'Your throw · frame ' + frameRound
+            : waiting
+              ? 'Opponent bowling…'
+              : phase === 'flying'
+                ? 'Ball rolling…'
+                : 'Frame ' + frameRound,
+          youT + '–' + oppT + ' · ball ' + ballInFrame
+        ) +
         frameStripHtml(myBook(), {
           label: 'You ' + youT,
           mine: true,
@@ -5333,7 +5426,7 @@
         (waiting ? ' · waiting' : '') +
         '</span></div>' +
         '<p class="cs-rally-msg">' +
-        esc(waiting && phase === 'aim' ? 'Opponent bowling…' : msg) +
+        esc(waiting && phase === 'aim' ? 'Opponent bowling — frame strip stays live' : msg) +
         (isFrozen() ? ' · Paused' : '') +
         '</p>' +
         (showDiff
@@ -5365,7 +5458,7 @@
         ballY * 100 +
         '%"></span>' +
         '</div>' +
-        '<div class="cs-bw-controls">' +
+        '<div class="cs-bw-controls cs-court-actions">' +
         '<label class="cs-bw-slider">Aim <b data-aim-lab>' +
         (aim > 0.08 ? 'Right' : aim < -0.08 ? 'Left' : 'Center') +
         '</b>' +
@@ -5382,7 +5475,7 @@
         '" data-power' +
         (!active ? ' disabled' : '') +
         ' /></label>' +
-        '<button type="button" class="cs-hit cs-bw-throw" data-throw' +
+        '<button type="button" class="cs-hit cs-hit--primary cs-bw-throw" data-throw' +
         (!active ? ' disabled' : '') +
         '>' +
         (waiting ? 'Waiting…' : 'Throw') +
@@ -5663,7 +5756,12 @@
 
     shell.body.innerHTML = `
       <div class="cs-patang">
-        <p class="cs-rally-msg">${
+        ${courtTurnBanner(
+          'yours',
+          isFestival ? 'Festival sky' : 'Duel sky',
+          isFestival ? 'Survive the heat' : 'Cut the hunter'
+        )}
+        <p class="cs-rally-msg" data-patang-msg>${
           isFestival
             ? 'Festival heat — stay up, cut what you can, pressure never sleeps.'
             : 'Duel sky — cross their string, cut the hunter, clear two.'
@@ -5673,6 +5771,7 @@
       </div>`;
     const canvas = shell.body.querySelector('[data-patang]');
     const hint = shell.body.querySelector('[data-patang-hint]');
+    const msgEl = shell.body.querySelector('[data-patang-msg]');
     let ctx = canvas.getContext('2d');
     let w = 320;
     let h = 420;
@@ -5818,6 +5917,14 @@
         fallYou: !won,
         fallOpp: !!won && opp && opp.alive,
       };
+      if (hint) hint.textContent = ending.why;
+      if (msgEl) {
+        msgEl.textContent = won
+          ? isFestival
+            ? 'Festival clear — sky is yours.'
+            : 'String cut — hunters down.'
+          : ending.why;
+      }
       if (typeof gameFeedback === 'function') gameFeedback(won ? 'win' : 'lose');
     }
 
@@ -5936,6 +6043,12 @@
       if (opp) opp.alive = false;
       waveClear = { t: 0, why: detail || 'You cut their manjha!', fallKite: opp };
       resetAbrasion();
+      if (hint) hint.textContent = waveClear.why;
+      if (msgEl) {
+        msgEl.textContent = isFestival
+          ? 'Cut ' + stats.cuts + ' — next heat incoming'
+          : 'Hunter down · ' + stats.cuts + '/' + WAVES_TO_WIN;
+      }
       if (typeof gameFeedback === 'function') {
         if (isFestival) gameFeedback('select');
         else if (stats.cuts < WAVES_TO_WIN) gameFeedback('win');
