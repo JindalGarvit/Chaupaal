@@ -2717,14 +2717,12 @@
   }
 
   /**
-   * Kho Kho Prompt 2/5 — chase law (direction, lane, poles, tags).
-   * Rules (arcade):
-   * - half 'L'|'R' = free-zone side of the central lane (hard barrier mid-chase).
-   * - dir 'N'|'S' locks on first meaningful move (toward a pole).
-   * - Pole free-zones (y≲0.14 / y≳0.86) set canTurnAtPole — reverse dir and/or switch half;
-   *   leaving the pole zone re-locks from the departure vector.
-   * - Legal tag on a living runner → +1. Tag during an illegal lane-cross foul → no point.
-   * Control: tap/drag target (same as Prompt 1). Sitters stay props until Prompt 3 Kho.
+   * Kho Kho Prompt 3/5 — giving Kho (sit ↔ rise) on top of Prompt 2 chase law.
+   * Team: 8 lane blocks + 1 active (9 chasers). Exactly one activeId.
+   * Kho range (lite): near that sitter’s y-segment, on their facing half (or pole zone),
+   * not mid-foul, target must be seated. On ok: giver sits in block (inherits facing);
+   * receiver rises onto faced half; dir cleared; half = facing; Prompt 2 re-locks on next move.
+   * Stub runners respawn when all tagged so Kho can be rehearsed continuously.
    */
   function openKhoKho() {
     const chat = resolveChat(arguments[0]);
@@ -2735,19 +2733,24 @@
     let lastTs = 0;
     let foulFlashUntil = 0;
     let dirToastShown = false;
+    let khoFlashUntil = 0;
+    let khoBusy = false;
 
     const MOVE_SPEED = 1.5;
     const TAG_R = 0.085;
+    const KHO_R = 0.13;
+    const KHO_Y = 0.09;
     const LANE_L = 0.42;
     const LANE_R = 0.58;
     const POLE_N = 0.14;
     const POLE_S = 0.86;
     const LOCK_STEP = 0.028;
+    const RISE_OFF = 0.14;
 
     const shell = openShell({
       id: 'khokho',
       title: 'Kho Kho',
-      subtitle: practiceSub('Chase law · poles · tags'),
+      subtitle: practiceSub('Give Kho · chase · tags'),
       mode: 'practice',
       live: false,
       chat,
@@ -2787,29 +2790,51 @@
       });
     }
 
-    const sitters = [];
+    /** @type {{id:number,facing:'L'|'R',seated:boolean,blockId:number|null,blockY:number,x:number,y:number,tx:number,ty:number}[]} */
+    const team = [];
     for (let i = 0; i < 8; i++) {
-      const y = 0.14 + i * 0.095;
-      sitters.push({
+      const blockY = Math.min(0.86, 0.14 + i * 0.095);
+      const facing = i % 2 === 0 ? 'L' : 'R';
+      team.push({
         id: i,
+        facing,
+        seated: true,
+        blockId: i,
+        blockY,
         x: 0.5,
-        y: Math.min(0.86, y),
-        face: i % 2 === 0 ? 'L' : 'R',
+        y: blockY,
+        tx: 0.5,
+        ty: blockY,
       });
     }
+    // Starter active (9th chaser) — begins on left free zone.
+    team.push({
+      id: 8,
+      facing: 'L',
+      seated: false,
+      blockId: null,
+      blockY: 0.88,
+      x: 0.22,
+      y: 0.88,
+      tx: 0.22,
+      ty: 0.88,
+    });
+    let activeId = 8;
 
     const poles = [
       { id: 'n', x: 0.5, y: 0.06, label: 'Pole' },
       { id: 's', x: 0.5, y: 0.94, label: 'Pole' },
     ];
 
-    let defenders = [
-      { id: 0, x: 0.18, y: 0.32, tagged: false },
-      { id: 1, x: 0.82, y: 0.48, tagged: false },
-      { id: 2, x: 0.22, y: 0.72, tagged: false },
-    ];
+    function freshDefenders() {
+      return [
+        { id: 0, x: 0.18, y: 0.32, tagged: false },
+        { id: 1, x: 0.82, y: 0.48, tagged: false },
+        { id: 2, x: 0.22, y: 0.72, tagged: false },
+      ];
+    }
+    let defenders = freshDefenders();
 
-    let chaser = { x: 0.22, y: 0.88, tx: 0.22, ty: 0.88 };
     /** @type {'N'|'S'|null} */
     let dir = null;
     /** @type {'L'|'R'} */
@@ -2817,8 +2842,16 @@
     let canTurnAtPole = false;
     let fouling = false;
     let tags = 0;
-    let msg = 'Move to lock a side & direction — then chase toward a pole.';
+    let msg = 'Chase, then touch a sitter and give Kho to switch.';
     let painted = false;
+
+    function active() {
+      return team.find((p) => p.id === activeId) || team[team.length - 1];
+    }
+
+    function seatedOnly() {
+      return team.filter((p) => p.seated);
+    }
 
     function dist(a, b) {
       return Math.hypot(a.x - b.x, a.y - b.y);
@@ -2833,6 +2866,11 @@
       return Math.max(x, LANE_R + 0.01);
     }
 
+    function risePos(facing, blockY) {
+      const x = clampToHalf(facing === 'L' ? 0.5 - RISE_OFF : 0.5 + RISE_OFF, facing);
+      return { x, y: blockY };
+    }
+
     function inPoleZone(y) {
       return y <= POLE_N || y >= POLE_S;
     }
@@ -2844,8 +2882,9 @@
     }
 
     function hudStatus() {
+      if (khoBusy) return 'KHO! · new chaser rising';
       if (canTurnAtPole) return 'Pole zone — reverse or switch half, then leave to re-lock';
-      if (!dir) return 'First move locks direction · stay on one side of the lane';
+      if (!dir) return 'First move locks direction · or give Kho to a highlighted sitter';
       return 'Direction locked ' + (dir === 'N' ? '↑' : '↓') + ' · to pole to reverse';
     }
 
@@ -2857,39 +2896,153 @@
       if (typeof showToast === 'function') showToast(msg);
     }
 
+    /** Lite Kho range: near sitter’s block Y, on their facing half (or pole zone). */
+    function khoReachable(sitter) {
+      if (!sitter || !sitter.seated) return false;
+      const a = active();
+      if (!a || a.seated) return false;
+      if (fouling || performance.now() < foulFlashUntil) return false;
+      if (Math.abs(a.y - sitter.blockY) > KHO_Y) return false;
+      const blockPt = { x: 0.5, y: sitter.blockY };
+      if (dist(a, blockPt) > KHO_R + 0.04 && dist(a, sitter) > KHO_R) return false;
+      // Must approach from the half that sitter faces (lane-side touch), unless in pole zone.
+      if (!inPoleZone(a.y) && halfFromX(a.x) !== sitter.facing) return false;
+      return true;
+    }
+
+    function legalKhoTargets() {
+      return seatedOnly().filter((s) => khoReachable(s));
+    }
+
+    function nearestLegalKho() {
+      const a = active();
+      const list = legalKhoTargets();
+      if (!list.length) return null;
+      list.sort((p, q) => dist(a, p) - dist(a, q));
+      return list[0];
+    }
+
+    /**
+     * @returns {{ok:true}|{ok:false,reason:string}}
+     */
+    function tryGiveKho(toSitterId) {
+      if (khoBusy) return { ok: false, reason: 'Kho in progress' };
+      const giver = active();
+      const sitter = team.find((p) => p.id === toSitterId);
+      if (!giver || giver.seated) return { ok: false, reason: 'No active chaser' };
+      if (!sitter || !sitter.seated) return { ok: false, reason: 'Sitter already rising' };
+      if (fouling || performance.now() < foulFlashUntil) {
+        buzz('invalid');
+        return { ok: false, reason: 'Can’t Kho mid-foul' };
+      }
+      if (!khoReachable(sitter)) {
+        buzz('invalid');
+        msg = 'Out of Kho range — get beside that sitter’s block';
+        return { ok: false, reason: 'Out of range' };
+      }
+
+      khoBusy = true;
+      khoFlashUntil = performance.now() + 380;
+
+      const blockId = sitter.blockId != null ? sitter.blockId : sitter.id;
+      const blockY = sitter.blockY;
+      const face = sitter.facing;
+
+      // Giver sits in that block, inherits facing.
+      giver.seated = true;
+      giver.facing = face;
+      giver.blockId = blockId;
+      giver.blockY = blockY;
+      giver.x = 0.5;
+      giver.y = blockY;
+      giver.tx = giver.x;
+      giver.ty = giver.y;
+
+      // Receiver rises onto faced half; Prompt 2 dir cleared.
+      const rise = risePos(face, blockY);
+      sitter.seated = false;
+      sitter.blockId = null;
+      sitter.facing = face;
+      sitter.blockY = blockY;
+      sitter.x = rise.x;
+      sitter.y = rise.y;
+      sitter.tx = rise.x;
+      sitter.ty = rise.y;
+
+      activeId = sitter.id;
+      // Exactly one active: everyone else seated in a unique block.
+      team.forEach((p) => {
+        if (p.id === activeId) {
+          p.seated = false;
+          p.blockId = null;
+        } else if (!p.seated || p.blockId == null) {
+          // Should not happen after swap — keep giver seated.
+          if (p.id === giver.id) {
+            p.seated = true;
+            p.blockId = blockId;
+            p.blockY = blockY;
+            p.x = 0.5;
+            p.y = blockY;
+          }
+        }
+      });
+
+      dir = null;
+      half = face;
+      canTurnAtPole = inPoleZone(sitter.y);
+      fouling = false;
+      dirToastShown = false;
+
+      buzz('win');
+      msg = 'KHO! · chase the ' + (half === 'L' ? 'left' : 'right') + ' half';
+      if (typeof showToast === 'function') showToast('KHO!');
+      paint(true);
+      setTimeout(() => {
+        khoBusy = false;
+      }, 220);
+      return { ok: true };
+    }
+
     function tryTag() {
+      if (khoBusy) return;
       if (fouling || performance.now() < foulFlashUntil) return;
+      const a = active();
+      if (!a || a.seated) return;
       let hit = false;
       defenders.forEach((d) => {
         if (d.tagged) return;
-        // Runner must be reachable on the chaser's half (no through-lane tags).
         const runnerHalf = halfFromX(d.x);
         if (runnerHalf !== half && !canTurnAtPole) return;
-        if (dist(chaser, d) <= TAG_R) {
+        if (dist(a, d) <= TAG_R) {
           d.tagged = true;
           tags += 1;
           hit = true;
           buzz('hit');
           if (typeof showToast === 'function') showToast('Tag! +1');
-          msg = 'Tag +1 · score ' + tags;
+          msg = 'Tag +1 · score ' + tags + ' · give Kho to keep pressure';
         }
       });
+      if (hit && defenders.every((d) => d.tagged)) {
+        defenders = freshDefenders();
+        msg = 'Runners reset — give Kho or keep chasing · score ' + tags;
+      }
       if (hit) softPaint();
     }
 
-    function applyChaseStep(nx, ny, fromPointer) {
-      const prevX = chaser.x;
-      const prevY = chaser.y;
+    function applyChaseStep(nx, ny) {
+      const a = active();
+      if (!a || a.seated || khoBusy) return;
+      const prevX = a.x;
+      const prevY = a.y;
       let x = nx;
       let y = ny;
 
-      // First meaningful move locks half + dir.
+      // First meaningful move locks dir; keep Kho-assigned half.
       if (!dir) {
         const mdx = x - prevX;
         const mdy = y - prevY;
         const moved = Math.hypot(mdx, mdy);
-        if (moved >= LOCK_STEP || fromPointer) {
-          half = halfFromX(prevX);
+        if (moved >= LOCK_STEP) {
           if (Math.abs(mdy) >= Math.abs(mdx) * 0.35) {
             dir = mdy < 0 ? 'N' : 'S';
           } else {
@@ -2902,8 +3055,6 @@
             if (typeof showToast === 'function') showToast('Direction locked → ' + (dir === 'N' ? '↑' : '↓'));
           }
         } else if (moved > 0.002) {
-          // Nudge before full lock still can't dive through the lane.
-          half = halfFromX(prevX);
           x = clampToHalf(x, half);
         }
       }
@@ -2913,10 +3064,8 @@
 
       if (nowInPole) {
         canTurnAtPole = true;
-        // In pole free-zone: may reverse and/or switch half (classic pole privilege).
         if (wasInPole || canTurnAtPole) {
           half = halfFromX(x);
-          // Allow crossing under the pole posts while turning.
           x = Math.max(0.06, Math.min(0.94, x));
         }
         if (!wasInPole) {
@@ -2924,7 +3073,6 @@
           buzz('select');
         }
       } else if (wasInPole && !nowInPole && canTurnAtPole) {
-        // Leaving pole: re-lock dir from departure, half from exit side.
         half = halfFromX(x);
         const ddy = y - prevY;
         if (Math.abs(ddy) > 0.002) dir = ddy < 0 ? 'N' : 'S';
@@ -2936,7 +3084,6 @@
       }
 
       if (dir && !canTurnAtPole) {
-        // Hard lane barrier — soft slide along edge; foul if push aims across.
         const clamped = clampToHalf(x, half);
         if (Math.abs(clamped - x) > 0.012) {
           flashFoul('Foul — no cross.');
@@ -2945,17 +3092,13 @@
           x = clamped;
           fouling = false;
         }
-        // Prefer progress along locked dir; allow lateral within half, mild reverse damp.
-        if (dir === 'N' && y > prevY + 0.004) {
-          y = prevY + 0.002; // soft block reverse mid-lane
-        } else if (dir === 'S' && y < prevY - 0.004) {
-          y = prevY - 0.002;
-        }
+        if (dir === 'N' && y > prevY + 0.004) y = prevY + 0.002;
+        else if (dir === 'S' && y < prevY - 0.004) y = prevY - 0.002;
       }
 
-      chaser.x = Math.max(0.06, Math.min(0.94, x));
-      chaser.y = Math.max(0.05, Math.min(0.95, y));
-      if (!canTurnAtPole && dir) chaser.x = clampToHalf(chaser.x, half);
+      a.x = Math.max(0.06, Math.min(0.94, x));
+      a.y = Math.max(0.05, Math.min(0.95, y));
+      if (!canTurnAtPole && dir) a.x = clampToHalf(a.x, half);
     }
 
     function paint(force) {
@@ -2965,28 +3108,36 @@
         return;
       }
       painted = true;
+      const a = active();
+      const khoReady = legalKhoTargets();
+      const khoIds = new Set(khoReady.map((s) => s.id));
 
-      const sitHtml = sitters
+      const sitHtml = team
+        .filter((p) => p.seated)
         .map((s) => {
+          const ready = khoIds.has(s.id);
           return (
-            '<span class="cs-kk-sitter cs-kk-face-' +
-            s.face.toLowerCase() +
+            '<button type="button" class="cs-kk-sitter cs-kk-face-' +
+            s.facing.toLowerCase() +
+            (ready ? ' is-kho-ready' : '') +
+            '" data-sitter="' +
+            s.id +
             '" style="left:' +
             s.x * 100 +
             '%;top:' +
             s.y * 100 +
-            '%" title="Sitter facing ' +
-            (s.face === 'L' ? 'left' : 'right') +
+            '%" title="' +
+            (ready ? 'Tap to give Kho' : 'Sitter facing ' + (s.facing === 'L' ? 'left' : 'right')) +
             '">' +
-            (s.face === 'L' ? '◀' : '▶') +
-            '</span>'
+            (s.facing === 'L' ? '◀' : '▶') +
+            '</button>'
           );
         })
         .join('');
 
       const poleHtml = poles
         .map((p) => {
-          const hot = (p.id === 'n' && chaser.y <= POLE_N) || (p.id === 's' && chaser.y >= POLE_S);
+          const hot = (p.id === 'n' && a.y <= POLE_N) || (p.id === 's' && a.y >= POLE_S);
           return (
             '<span class="cs-kk-pole' +
             (hot || canTurnAtPole ? ' is-hot' : '') +
@@ -3020,6 +3171,7 @@
 
       const arrow = !dir ? '·' : dir === 'N' ? '↑' : '↓';
       const halfMark = half === 'L' ? 'Left' : 'Right';
+      const canKho = khoReady.length > 0;
 
       shell.body.innerHTML =
         '<div class="cs-khokho">' +
@@ -3029,8 +3181,9 @@
         '<div class="cs-kk-hud" role="status">' +
         '<span class="cs-kk-dir' +
         (canTurnAtPole ? ' is-turn' : dir ? ' is-locked' : '') +
+        (performance.now() < khoFlashUntil ? ' is-kho' : '') +
         '">' +
-        arrow +
+        (performance.now() < khoFlashUntil ? 'K' : arrow) +
         '</span>' +
         '<span class="cs-kk-hud-text">' +
         esc(hudStatus()) +
@@ -3045,6 +3198,7 @@
         '<div class="cs-kk-court' +
         (fouling || performance.now() < foulFlashUntil ? ' is-foul' : '') +
         (canTurnAtPole ? ' is-pole-turn' : '') +
+        (performance.now() < khoFlashUntil ? ' is-kho-flash' : '') +
         '" data-court role="application" aria-label="Kho Kho court">' +
         '<div class="cs-kk-free cs-kk-free-l" aria-hidden="true"><span>Free zone</span></div>' +
         '<div class="cs-kk-free cs-kk-free-r" aria-hidden="true"><span>Free zone</span></div>' +
@@ -3055,32 +3209,35 @@
         sitHtml +
         defHtml +
         '<span class="cs-kk-chaser" style="left:' +
-        chaser.x * 100 +
+        a.x * 100 +
         '%;top:' +
-        chaser.y * 100 +
+        a.y * 100 +
         '%" aria-label="Active chaser">⚡</span>' +
         '</div>' +
-        '<div class="cs-kk-meta">Tap/drag to chase · lane is locked mid-run · poles unlock reverse</div>' +
+        '<div class="cs-kk-meta">Tap/drag to chase · highlighted sitters can take Kho</div>' +
         '<div class="cs-kk-actions">' +
-        '<button type="button" class="cs-hit" data-reset>Reset chase</button>' +
+        '<button type="button" class="cs-hit cs-kk-kho-btn" data-kho' +
+        (canKho ? '' : ' disabled') +
+        '>Kho!</button>' +
+        '<button type="button" class="cs-hit cs-kk-reset" data-reset>Reset</button>' +
         '</div>' +
         '</div>';
 
       const court = shell.body.querySelector('[data-court]');
       const setTarget = (clientX, clientY) => {
-        if (paused || !court) return;
+        if (paused || khoBusy || !court) return;
+        const act = active();
+        if (!act || act.seated) return;
         const rect = court.getBoundingClientRect();
         if (rect.width < 8 || rect.height < 8) return;
         let tx = Math.max(0.06, Math.min(0.94, (clientX - rect.left) / rect.width));
         let ty = Math.max(0.06, Math.min(0.94, (clientY - rect.top) / rect.height));
-        // Soft-aim: if locked mid-lane, snap illegal cross targets to lane edge.
-        if (dir && !canTurnAtPole && !inPoleZone(ty)) {
-          tx = clampToHalf(tx, half);
-        }
-        chaser.tx = tx;
-        chaser.ty = ty;
+        if (dir && !canTurnAtPole && !inPoleZone(ty)) tx = clampToHalf(tx, half);
+        act.tx = tx;
+        act.ty = ty;
       };
       court?.addEventListener('pointerdown', (e) => {
+        if (e.target && e.target.closest && e.target.closest('[data-sitter]')) return;
         e.preventDefault();
         try {
           court.setPointerCapture(e.pointerId);
@@ -3091,27 +3248,69 @@
         if (e.buttons || e.pressure > 0) setTarget(e.clientX, e.clientY);
       });
 
+      shell.body.querySelectorAll('[data-sitter]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const id = +btn.dataset.sitter;
+          if (!khoIds.has(id)) {
+            buzz('invalid');
+            msg = 'Get beside that sitter on their facing half to give Kho';
+            softPaint();
+            return;
+          }
+          tryGiveKho(id);
+        });
+      });
+
+      shell.body.querySelector('[data-kho]')?.addEventListener('click', () => {
+        const t = nearestLegalKho();
+        if (!t) {
+          buzz('invalid');
+          msg = 'No sitter in Kho range';
+          return;
+        }
+        tryGiveKho(t.id);
+      });
+
       shell.body.querySelector('[data-reset]')?.addEventListener('click', () => {
-        defenders = [
-          { id: 0, x: 0.18, y: 0.32, tagged: false },
-          { id: 1, x: 0.82, y: 0.48, tagged: false },
-          { id: 2, x: 0.22, y: 0.72, tagged: false },
-        ];
-        chaser = { x: 0.22, y: 0.88, tx: 0.22, ty: 0.88 };
+        team.forEach((p, i) => {
+          if (i < 8) {
+            p.seated = true;
+            p.facing = i % 2 === 0 ? 'L' : 'R';
+            p.blockId = i;
+            p.blockY = Math.min(0.86, 0.14 + i * 0.095);
+            p.x = 0.5;
+            p.y = p.blockY;
+            p.tx = p.x;
+            p.ty = p.y;
+          } else {
+            p.seated = false;
+            p.facing = 'L';
+            p.blockId = null;
+            p.blockY = 0.88;
+            p.x = 0.22;
+            p.y = 0.88;
+            p.tx = 0.22;
+            p.ty = 0.88;
+          }
+        });
+        activeId = 8;
+        defenders = freshDefenders();
         dir = null;
         half = 'L';
         canTurnAtPole = false;
         fouling = false;
         tags = 0;
         dirToastShown = false;
-        msg = 'Move to lock a side & direction — then chase toward a pole.';
+        khoBusy = false;
+        msg = 'Chase, then touch a sitter and give Kho to switch.';
         paint(true);
       });
 
       if (!coachShown) {
         coachShown = true;
         if (typeof showToast === 'function') {
-          showToast('Lock a side, chase, use the pole to turn — Kho comes next.');
+          showToast('Touch a sitter and give Kho to switch the chase.');
         }
       }
 
@@ -3119,16 +3318,37 @@
         GameUI.attachHowTo(shell.overlay, {
           title: 'Kho Kho',
           body:
-            'Lock a half and direction on your first move. Stay off the central lane until a pole free-zone lets you reverse or switch. Legal tags score +1. Giving Kho comes next.',
+            'Give Kho to a highlighted sitter: you sit in their block, they rise on the half they faced. Direction re-locks on their first move. Legal tags +1. Defend batches come later.',
         });
       }
     }
 
     function softPaint() {
+      const a = active();
       const el = shell.body.querySelector('.cs-kk-chaser');
-      if (el) {
-        el.style.left = chaser.x * 100 + '%';
-        el.style.top = chaser.y * 100 + '%';
+      if (el && a) {
+        el.style.left = a.x * 100 + '%';
+        el.style.top = a.y * 100 + '%';
+      }
+      const khoReady = legalKhoTargets();
+      const khoIds = new Set(khoReady.map((s) => s.id));
+      shell.body.querySelectorAll('[data-sitter]').forEach((btn) => {
+        const id = +btn.dataset.sitter;
+        const s = team.find((p) => p.id === id);
+        if (!s || !s.seated) {
+          btn.style.display = 'none';
+          return;
+        }
+        btn.style.display = '';
+        btn.style.left = s.x * 100 + '%';
+        btn.style.top = s.y * 100 + '%';
+        btn.classList.toggle('is-kho-ready', khoIds.has(id));
+      });
+      // Seated set may change after Kho — full paint if mismatch.
+      const seatedDom = shell.body.querySelectorAll('[data-sitter]').length;
+      if (seatedDom !== seatedOnly().length) {
+        paint(true);
+        return;
       }
       defenders.forEach((d) => {
         const node = shell.body.querySelector('[data-def="' + d.id + '"]');
@@ -3143,27 +3363,23 @@
       const msgEl = shell.body.querySelector('.cs-rally-msg');
       if (msgEl) msgEl.textContent = msg + (paused ? ' · Paused' : '');
       const hud = shell.body.querySelector('.cs-kk-hud-text');
-      if (hud) {
-        hud.textContent = hudStatus() + ' · ' + (half === 'L' ? 'Left' : 'Right') + ' half';
-      }
+      if (hud) hud.textContent = hudStatus() + ' · ' + (half === 'L' ? 'Left' : 'Right') + ' half';
       const dirEl = shell.body.querySelector('.cs-kk-dir');
       if (dirEl) {
-        dirEl.textContent = !dir ? '·' : dir === 'N' ? '↑' : '↓';
+        const khoing = performance.now() < khoFlashUntil;
+        dirEl.textContent = khoing ? 'K' : !dir ? '·' : dir === 'N' ? '↑' : '↓';
         dirEl.classList.toggle('is-turn', !!canTurnAtPole);
         dirEl.classList.toggle('is-locked', !!dir && !canTurnAtPole);
+        dirEl.classList.toggle('is-kho', khoing);
       }
+      const khoBtn = shell.body.querySelector('[data-kho]');
+      if (khoBtn) khoBtn.disabled = khoReady.length === 0 || khoBusy;
       const court = shell.body.querySelector('[data-court]');
       if (court) {
         court.classList.toggle('is-foul', fouling || performance.now() < foulFlashUntil);
         court.classList.toggle('is-pole-turn', !!canTurnAtPole);
+        court.classList.toggle('is-kho-flash', performance.now() < khoFlashUntil);
       }
-      shell.body.querySelectorAll('.cs-kk-pole').forEach((p, i) => {
-        const pole = poles[i];
-        const hot =
-          canTurnAtPole ||
-          (pole && ((pole.id === 'n' && chaser.y <= POLE_N) || (pole.id === 's' && chaser.y >= POLE_S)));
-        p.classList.toggle('is-hot', !!hot);
-      });
     }
 
     function tick(ts) {
@@ -3179,19 +3395,19 @@
 
       if (performance.now() >= foulFlashUntil) fouling = false;
 
-      const dx = chaser.tx - chaser.x;
-      const dy = chaser.ty - chaser.y;
-      const len = Math.hypot(dx, dy);
-      if (len > 0.008) {
-        const step = Math.min(len, MOVE_SPEED * dt);
-        const nx = chaser.x + (dx / len) * step;
-        const ny = chaser.y + (dy / len) * step;
-        applyChaseStep(nx, ny, false);
-      } else if (inPoleZone(chaser.y)) {
-        canTurnAtPole = true;
+      const a = active();
+      if (a && !a.seated && !khoBusy) {
+        const dx = a.tx - a.x;
+        const dy = a.ty - a.y;
+        const len = Math.hypot(dx, dy);
+        if (len > 0.008) {
+          const step = Math.min(len, MOVE_SPEED * dt);
+          applyChaseStep(a.x + (dx / len) * step, a.y + (dy / len) * step);
+        } else if (inPoleZone(a.y)) {
+          canTurnAtPole = true;
+        }
       }
 
-      // Stub runners wander both halves (Prompt 4 owns real defend AI).
       defenders.forEach((d, i) => {
         if (d.tagged) return;
         const t = ts / 1000 + i * 1.7;
@@ -4381,7 +4597,7 @@
     registerGame({
       id: 'khokho',
       name: 'Kho Kho',
-      desc: 'Practice · chase law · poles & tags',
+      desc: 'Practice · give Kho · chase & tags',
       icon: '🏃',
       gameType: 'solo',
       genre: 'rw_sports',
@@ -4393,7 +4609,8 @@
       meta: {
         phaseA: 'Court & posts — Practice shell',
         phaseB: 'Chase law — direction, lane, poles, tags',
-        phaseC: 'Giving Kho (Prompt 3)',
+        phaseC: 'Giving Kho — sit ↔ rise transfer',
+        phaseD: 'Defend batches + AI (Prompt 4)',
         complete: false,
       },
       launch: openKhoKho,
