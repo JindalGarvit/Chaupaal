@@ -68,6 +68,7 @@
     pickleball: 'rw_sports',
     kabaddi: 'rw_sports',
     khokho: 'rw_sports',
+    bowling: 'rw_sports',
     tennis: 'rw_sports',
     tambola: 'party',
     carrom: 'board',

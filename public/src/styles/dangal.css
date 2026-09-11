@@ -252,7 +252,7 @@
 .play-comm-videos{pointer-events:none;position:absolute;right:10px;top:56px;display:flex;flex-direction:column;gap:6px;}
 .play-comm-video{width:88px;height:118px;border-radius:12px;overflow:hidden;background:#111;pointer-events:auto;}
 .play-comm-video--me{width:64px;height:86px;margin-left:auto;}
-.cs-rally,.cs-kabaddi,.cs-khokho,.cs-patang,.pc-tambola,.pc-rummy,.pc-tp,.pc-bluff,.pc-satte,.pc-ab,.pc-cue{display:flex;flex-direction:column;align-items:center;gap:12px;}
+.cs-rally,.cs-kabaddi,.cs-khokho,.cs-bowling,.cs-patang,.pc-tambola,.pc-rummy,.pc-tp,.pc-bluff,.pc-satte,.pc-ab,.pc-cue{display:flex;flex-direction:column;align-items:center;gap:12px;}
 .cs-breath{width:100%;max-width:320px;height:10px;border-radius:999px;background:rgba(255,255,255,.12);overflow:hidden;}
 .cs-breath i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#FF8A65,#FFD54F);border-radius:inherit;transition:width 80ms linear;}
 .cs-breath.is-live i{background:linear-gradient(90deg,#FF7043,#FFCA28);}
@@ -396,6 +396,80 @@
   outline:2px solid #FFE082;outline-offset:3px;
   box-shadow:0 0 12px rgba(255,213,79,.55);
 }
+/* Bowling lane — Prompt 1/4 aim + power throw */
+.cs-bowling{width:100%;max-width:380px;padding:0 8px 12px;}
+.cs-bw-lane{
+  position:relative;
+  width:100%;
+  max-width:min(320px,88vw);
+  aspect-ratio:9/16;
+  max-height:min(52vh,440px);
+  margin:0 auto;
+  border-radius:14px;
+  border:2px solid rgba(255,143,0,.45);
+  overflow:hidden;
+  background:linear-gradient(180deg,#2a1a0a 0%,#1a1008 100%);
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.35);
+}
+.cs-bw-gutters{
+  position:absolute;inset:0;
+  background:
+    linear-gradient(90deg,#0a0604 0%,#0a0604 7%,transparent 7%,transparent 93%,#0a0604 93%,#0a0604 100%);
+  pointer-events:none;z-index:1;
+}
+.cs-bw-wood{
+  position:absolute;left:8%;right:8%;top:0;bottom:0;
+  background:linear-gradient(180deg,#c49a6c 0%,#a67c52 45%,#8d6e4a 100%);
+  z-index:0;
+}
+.cs-bw-board{
+  position:absolute;top:0;bottom:0;width:1px;
+  background:rgba(60,40,20,.22);pointer-events:none;
+}
+.cs-bw-foul{
+  position:absolute;left:8%;right:8%;top:88%;
+  border-top:3px solid rgba(255,236,179,.9);
+  z-index:2;pointer-events:none;
+  display:flex;justify-content:center;
+}
+.cs-bw-foul span{
+  transform:translateY(-12px);
+  font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  color:#FFE082;background:rgba(18,10,2,.65);padding:1px 6px;border-radius:4px;
+}
+.cs-bw-pins{position:absolute;inset:0;z-index:2;pointer-events:none;}
+.cs-bw-pin{
+  position:absolute;width:14px;height:22px;margin:-11px 0 0 -7px;
+  border-radius:40% 40% 35% 35%;
+  background:linear-gradient(180deg,#fff8e7,#e8dcc8);
+  border:1px solid rgba(255,143,0,.35);
+  box-shadow:0 1px 3px rgba(0,0,0,.35);
+}
+.cs-bw-pin::after{
+  content:'';position:absolute;left:20%;right:20%;top:28%;height:3px;
+  background:#c62828;border-radius:1px;opacity:.85;
+}
+.cs-bw-ball{
+  position:absolute;width:28px;height:28px;margin:-14px 0 0 -14px;
+  border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#ffb74d,#e65100 55%,#bf360c);
+  border:2px solid rgba(255,236,179,.5);
+  box-shadow:0 2px 8px rgba(0,0,0,.45);
+  z-index:3;transition:none;
+}
+.cs-bw-ball.is-flying{box-shadow:0 0 12px rgba(255,143,0,.55);}
+.cs-bw-lane.is-gutter{box-shadow:inset 0 0 0 2px rgba(239,83,80,.7);}
+.cs-bw-lane.is-pocket{box-shadow:inset 0 0 0 2px rgba(255,213,79,.65);}
+.cs-bw-controls{width:100%;display:flex;flex-direction:column;gap:10px;align-items:stretch;margin-top:4px;}
+.cs-bw-slider{
+  display:flex;flex-direction:column;gap:4px;
+  font-size:12px;font-weight:700;color:#FFE0B2;
+}
+.cs-bw-slider b{color:#FFE082;font-variant-numeric:tabular-nums;}
+.cs-bw-slider input[type=range]{width:100%;accent-color:#FF8F00;}
+.cs-bw-throw{min-height:48px;font-weight:800;font-size:16px;background:#EF6C00;border:2px solid #FFE082;}
+.cs-bw-throw:disabled{opacity:.45;}
+.cs-bw-meta{font-size:12px;opacity:.85;color:#FFCC80;text-align:center;max-width:320px;margin:0 auto;}
 .cs-kb-zone{position:absolute;left:0;right:0;pointer-events:none;display:flex;align-items:flex-start;justify-content:center;padding-top:4px;}
 .cs-kb-zone span,.cs-kb-line span{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;opacity:.75;color:#FFE0B2;}
 .cs-kb-anti{top:0;height:48%;}

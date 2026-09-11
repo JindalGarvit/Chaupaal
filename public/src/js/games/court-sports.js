@@ -4298,6 +4298,300 @@
       raf = requestAnimationFrame(tick);
     }
   }
+  /**
+   * Bowling Prompt 1/4 — lane & throw foundation (Practice).
+   * Control: aim slider (−1…1) + power slider → Throw. Arcade flight (not full physics).
+   * Gutter when |aim| is extreme or flight drifts past boards; else “reached pins” stub.
+   * Pin knock law / scorebook / Live = later prompts.
+   */
+  function openBowling() {
+    const chat = resolveChat(arguments[0]);
+    let shellPauseCtrl = null;
+    let paused = false;
+    let raf = 0;
+    let lastTs = 0;
+    let coachShown = false;
+    let throwCount = 0;
+    let resultTimer = 0;
+
+    const GUTTER_AIM = 0.78;
+    const BALL_R = 0.045;
+    const FOUL_Y = 0.9;
+    const PIN_Y = 0.14;
+
+    const shell = openShell({
+      id: 'bowling',
+      title: 'Bowling',
+      subtitle: practiceSub('Aim · power · avoid gutter'),
+      mode: 'practice',
+      live: false,
+      chat,
+      accent: '#FF8F00',
+      bg: '#120A02',
+      pauseId: 'csBowlingPause',
+      leaveBody: 'This practice run will end.',
+      cleanup: () => {
+        if (raf) {
+          cancelAnimationFrame(raf);
+          raf = 0;
+        }
+        if (resultTimer) {
+          clearTimeout(resultTimer);
+          resultTimer = 0;
+        }
+        if (shellPauseCtrl) shellPauseCtrl.destroy();
+      },
+    });
+    if (!shell) return;
+
+    /** @type {'aim'|'flying'|'result'} */
+    let phase = 'aim';
+    let aim = 0;
+    let power = 0.65;
+    let ballX = 0.5;
+    let ballY = FOUL_Y;
+    let flightT = 0;
+    let flightDur = 1.1;
+    let startX = 0.5;
+    let drift = 0;
+    let lastResult = '';
+    let msg = 'Aim center, set power, then throw.';
+
+    if (typeof createGamePauseController === 'function') {
+      shellPauseCtrl = createGamePauseController({
+        host: shell.host || shell.overlay,
+        pauseBtnId: 'csBowlingPause',
+        onPause() {
+          paused = true;
+        },
+        onResume() {
+          paused = false;
+          lastTs = 0;
+        },
+        onQuit: () => {
+          confirmAndClose(shell, {
+            live: false,
+            isPlaying: phase === 'flying',
+            title: 'Leave Bowling?',
+            body: 'This practice run will end.',
+          });
+        },
+      });
+    }
+
+    function pinRackHtml() {
+      // Static 10-pin silhouette (triangle) — knock law in Prompt 2
+      const spots = [
+        [0.5, 0.08],
+        [0.42, 0.12],
+        [0.58, 0.12],
+        [0.34, 0.16],
+        [0.5, 0.16],
+        [0.66, 0.16],
+        [0.26, 0.2],
+        [0.42, 0.2],
+        [0.58, 0.2],
+        [0.74, 0.2],
+      ];
+      return spots
+        .map(
+          (p, i) =>
+            '<span class="cs-bw-pin" data-pin="' +
+            (i + 1) +
+            '" style="left:' +
+            p[0] * 100 +
+            '%;top:' +
+            p[1] * 100 +
+            '%" aria-hidden="true"></span>'
+        )
+        .join('');
+    }
+
+    function boardHtml() {
+      let h = '';
+      for (let i = 0; i < 10; i++) {
+        h += '<i class="cs-bw-board" style="left:' + (8 + i * 8.4) + '%"></i>';
+      }
+      return h;
+    }
+
+    function resetBall() {
+      phase = 'aim';
+      ballX = 0.5 + aim * 0.12;
+      ballY = FOUL_Y;
+      flightT = 0;
+      lastTs = 0;
+      msg = 'Aim · set power · throw';
+    }
+
+    function beginThrow() {
+      if (phase !== 'aim' || paused) return;
+      aim = Math.max(-1, Math.min(1, aim));
+      power = Math.max(0.28, Math.min(1, power));
+      startX = 0.5 + aim * 0.28;
+      ballX = startX;
+      ballY = FOUL_Y;
+      drift = aim * (0.08 + (1 - power) * 0.18);
+      flightDur = 1.55 - power * 0.55;
+      flightT = 0;
+      phase = 'flying';
+      throwCount += 1;
+      lastResult = '';
+      msg = 'Ball rolling…';
+      buzz('select');
+      lastTs = 0;
+      if (!raf) raf = requestAnimationFrame(tick);
+    }
+
+    function resolveThrow() {
+      if (phase === 'result') return;
+      phase = 'result';
+      const gutter = Math.abs(ballX - 0.5) > GUTTER_AIM * 0.42 || ballX < 0.12 || ballX > 0.88;
+      if (gutter) {
+        lastResult = 'gutter';
+        msg = 'Gutter! Pull aim toward center.';
+        buzz('lose', { noConfetti: true });
+        if (typeof showToast === 'function') showToast('Gutter');
+      } else {
+        lastResult = 'pocket';
+        msg = 'Reached the pins — pocket stub (pin deck next).';
+        buzz('win', { noConfetti: true });
+        if (typeof showToast === 'function') showToast('Hit the pocket');
+      }
+      if (resultTimer) clearTimeout(resultTimer);
+      resultTimer = setTimeout(() => {
+        resultTimer = 0;
+        if (!shell.alive()) return;
+        resetBall();
+        paint();
+      }, 1100);
+      paint();
+    }
+
+    function paint() {
+      if (!shell.alive()) return;
+      const aimPct = Math.round(((aim + 1) / 2) * 100);
+      const powPct = Math.round(power * 100);
+      shell.body.innerHTML =
+        '<div class="cs-bowling">' +
+        '<div class="cs-rally-score"><strong>' +
+        throwCount +
+        '</strong><span class="cs-rally-score-sub">throws · Practice</span></div>' +
+        '<p class="cs-rally-msg">' +
+        esc(msg) +
+        (paused ? ' · Paused' : '') +
+        '</p>' +
+        '<div class="cs-bw-lane' +
+        (lastResult === 'gutter' ? ' is-gutter' : '') +
+        (lastResult === 'pocket' ? ' is-pocket' : '') +
+        '" data-lane role="img" aria-label="Bowling lane">' +
+        '<div class="cs-bw-gutters" aria-hidden="true"></div>' +
+        '<div class="cs-bw-wood">' +
+        boardHtml() +
+        '</div>' +
+        '<div class="cs-bw-foul"><span>Foul line</span></div>' +
+        '<div class="cs-bw-pins">' +
+        pinRackHtml() +
+        '</div>' +
+        '<span class="cs-bw-ball' +
+        (phase === 'flying' ? ' is-flying' : '') +
+        '" style="left:' +
+        ballX * 100 +
+        '%;top:' +
+        ballY * 100 +
+        '%"></span>' +
+        '</div>' +
+        '<div class="cs-bw-controls">' +
+        '<label class="cs-bw-slider">Aim <b data-aim-lab>' +
+        (aim > 0.08 ? 'Right' : aim < -0.08 ? 'Left' : 'Center') +
+        '</b>' +
+        '<input type="range" min="0" max="100" value="' +
+        aimPct +
+        '" data-aim' +
+        (phase !== 'aim' ? ' disabled' : '') +
+        ' /></label>' +
+        '<label class="cs-bw-slider">Power <b data-pow-lab>' +
+        powPct +
+        '%</b>' +
+        '<input type="range" min="28" max="100" value="' +
+        powPct +
+        '" data-power' +
+        (phase !== 'aim' ? ' disabled' : '') +
+        ' /></label>' +
+        '<button type="button" class="cs-hit cs-bw-throw" data-throw' +
+        (phase !== 'aim' || paused ? ' disabled' : '') +
+        '>Throw</button>' +
+        '</div>' +
+        '<p class="cs-bw-meta">Aim + power · gutter if you miss the boards · scoring later</p>' +
+        '</div>';
+
+      const aimEl = shell.body.querySelector('[data-aim]');
+      const powEl = shell.body.querySelector('[data-power]');
+      aimEl?.addEventListener('input', () => {
+        if (phase !== 'aim') return;
+        aim = (aimEl.value | 0) / 50 - 1;
+        ballX = 0.5 + aim * 0.12;
+        const lab = shell.body.querySelector('[data-aim-lab]');
+        if (lab) lab.textContent = aim > 0.08 ? 'Right' : aim < -0.08 ? 'Left' : 'Center';
+        softBall();
+      });
+      powEl?.addEventListener('input', () => {
+        if (phase !== 'aim') return;
+        power = Math.max(0.28, (powEl.value | 0) / 100);
+        const lab = shell.body.querySelector('[data-pow-lab]');
+        if (lab) lab.textContent = Math.round(power * 100) + '%';
+      });
+      shell.body.querySelector('[data-throw]')?.addEventListener('click', () => beginThrow());
+
+      if (!coachShown) {
+        coachShown = true;
+        if (typeof showToast === 'function') {
+          showToast('Aim and set power — keep it out of the gutter.');
+        }
+      }
+      if (typeof GameUI !== 'undefined' && GameUI.attachHowTo) {
+        GameUI.attachHowTo(shell.overlay, {
+          title: 'Bowling',
+          body: 'Aim left/right and set power, then Throw. Stay on the boards to reach the pins. Pin knock and 10-frame scoring come next — this is the lane & throw loop.',
+        });
+      }
+    }
+
+    function softBall() {
+      const el = shell.body.querySelector('.cs-bw-ball');
+      if (el) {
+        el.style.left = ballX * 100 + '%';
+        el.style.top = ballY * 100 + '%';
+      }
+      const msgEl = shell.body.querySelector('.cs-rally-msg');
+      if (msgEl) msgEl.textContent = msg + (paused ? ' · Paused' : '');
+    }
+
+    function tick(ts) {
+      if (!shell.alive()) return;
+      raf = requestAnimationFrame(tick);
+      if (paused || phase !== 'flying') {
+        lastTs = ts;
+        return;
+      }
+      if (!lastTs) lastTs = ts;
+      const dt = Math.min(0.05, (ts - lastTs) / 1000);
+      lastTs = ts;
+      flightT += dt;
+      const u = Math.min(1, flightT / flightDur);
+      // Ease toward pin deck; drift sideways (worse at low power / extreme aim)
+      ballY = FOUL_Y + (PIN_Y - FOUL_Y) * (u * u * (3 - 2 * u));
+      ballX = startX + drift * u * u;
+      softBall();
+      if (u >= 1) {
+        resolveThrow();
+      }
+    }
+
+    paint();
+    raf = requestAnimationFrame(tick);
+  }
+
   const PATANG_LAST_MODE_KEY = 'chaupaal_patang_last_mode';
   const PATANG_STREAK_KEY = 'chaupaal_patang_duel_streak';
 
@@ -5488,6 +5782,27 @@
       launch: openKhoKho,
     });
     registerGame({
+      id: 'bowling',
+      name: 'Bowling',
+      desc: 'Practice · aim · power · lane',
+      icon: '🎳',
+      gameType: 'solo',
+      genre: 'rw_sports',
+      solo: true,
+      selfChat: true,
+      dangal: true,
+      chat1v1: true,
+      order: 27,
+      meta: {
+        phaseA: 'Lane & throw — aim / power / gutter',
+        phaseB: 'Pin deck resolve (Prompt 2)',
+        phaseC: '10-frame scorebook (Prompt 3)',
+        phaseD: 'Practice AI + Live (Prompt 4)',
+        complete: false,
+      },
+      launch: openBowling,
+    });
+    registerGame({
       id: 'patangbaazi',
       name: 'Patang Baazi',
       desc: 'Practice · climb, cut, survive',
@@ -5521,6 +5836,7 @@
   window.openTennis = (ctx) => openRallySport(Object.assign({}, RALLIES[3], { chat: ctx }));
   window.openKabaddi = openKabaddi;
   window.openKhoKho = openKhoKho;
+  window.openBowling = openBowling;
   window.openPatangBaazi = (ctx) => {
     const o = ctx && typeof ctx === 'object' ? ctx : {};
     if (o.mode === 'duel' || o.mode === 'festival') openPatang({ mode: o.mode });

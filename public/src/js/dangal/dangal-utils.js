@@ -22,6 +22,7 @@
     kite: 'patangbaazi',
     khokho: 'khokho',
     'kho-kho': 'khokho',
+    bowling: 'bowling',
     fischerrandom: 'chess',
     chess960: 'chess',
   };
