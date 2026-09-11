@@ -9894,9 +9894,15 @@
     let resultReported = false;
     let resultShown = false;
 
-    let deck = makeDeck(rng);
-    let joker = deck.pop();
-    let firstLane = andarBaharFirstLane(joker);
+    let deck = [];
+    let joker = null;
+    let firstLane = 'andar';
+    // Practice (and Live host): local undealt deck. Guest never receives deck faces.
+    if (!liveOn) {
+      deck = makeDeck(rng);
+      joker = deck.pop();
+      firstLane = andarBaharFirstLane(joker);
+    }
 
     /** Practice session bankroll vs house (virtual). */
     let sessionBank = 500;
@@ -9987,10 +9993,11 @@
     }
 
     function publicState(extra) {
+      // Live mid-hand: never ship undealt deck faces — host keeps order locally.
       return Object.assign(
         {
           joker,
-          deck,
+          deckCount: deck.length,
           andar: andar.slice(),
           bahar: bahar.slice(),
           sideA,
@@ -10163,6 +10170,11 @@
 
     function paint(msg) {
       if (ended) return;
+      if (!joker) {
+        shell.body.innerHTML =
+          '<div class="pc-ab"><p class="pc-hint">Waiting for house card… · Live 1v1 · virtual stakes</p></div>';
+        return;
+      }
       const pick = mySide();
       const jCol = SUIT_COLOR[joker.s] || '#111';
       shell.body.innerHTML =
@@ -10335,6 +10347,13 @@
     function startDeal() {
       if (dealing || ended || resultShown) return;
       if (liveOn && !bothLocked()) return;
+      // Live: only host holds the undealt deck and runs the deal clock.
+      if (liveOn && liveRoles && !liveRoles.host) return;
+      if (liveOn && liveRoles && liveRoles.host && !deck.length) {
+        deck = makeDeck(rng);
+        // Keep current house card; rebuild remaining 51 around it.
+        deck = deck.filter((c) => !(c.r === joker.r && c.s === joker.s));
+      }
       dealing = true;
       dealStarted = true;
       dealN = 0;
@@ -10351,13 +10370,18 @@
         const lane = andarBaharLaneAt(dealN, firstLane);
         (lane === 'andar' ? andar : bahar).push(c);
         lastLane = lane;
-        lastCard = c;
+        lastCard = { r: c.r, s: c.s, id: c.id };
         dealN += 1;
         paint('Dealing onto ' + (lane === 'andar' ? 'Andar' : 'Bahar') + '…');
         if (liveOn && liveHandle && liveRoles && liveRoles.host) {
           liveHandle.push({
             status: 'playing',
-            state: publicState({ dealing: true }),
+            act: 'deal_card',
+            state: publicState({
+              dealing: true,
+              dealtCard: lastCard,
+              dealtLane: lane,
+            }),
           });
         }
         if (c.r === joker.r) {
@@ -10443,19 +10467,24 @@
           }
           const st = val.state || {};
           applying = true;
+          // Ignore legacy undealt deck leaks if an older client still pushes them.
+          if (st.deck) {
+            try {
+              delete st.deck;
+            } catch (e) {}
+          }
           if (st.joker) {
-            joker = st.joker;
+            joker = { r: st.joker.r, s: st.joker.s, id: st.joker.id };
             firstLane = andarBaharFirstLane(joker);
           }
-          if (st.deck) deck = st.deck;
           if (st.firstLane === 'andar' || st.firstLane === 'bahar') firstLane = st.firstLane;
           if (st.andar) {
             andar.length = 0;
-            st.andar.forEach((c) => andar.push(c));
+            st.andar.forEach((c) => andar.push({ r: c.r, s: c.s, id: c.id }));
           }
           if (st.bahar) {
             bahar.length = 0;
-            st.bahar.forEach((c) => bahar.push(c));
+            st.bahar.forEach((c) => bahar.push({ r: c.r, s: c.s, id: c.id }));
           }
           if (st.sideA) sideA = st.sideA;
           if (st.sideB) sideB = st.sideB;
@@ -10463,7 +10492,7 @@
           if (st.stakeB != null) stakeB = st.stakeB | 0;
           if (st.n != null) dealN = st.n | 0;
           if (st.lastLane) lastLane = st.lastLane;
-          if (st.lastCard) lastCard = st.lastCard;
+          if (st.lastCard) lastCard = { r: st.lastCard.r, s: st.lastCard.s, id: st.lastCard.id };
           if (st.dealing) {
             dealing = true;
             dealStarted = true;
@@ -10532,6 +10561,9 @@
         liveRoles = joined.roles;
         if (liveRoles.opp) settleOppUid = liveRoles.opp;
         if (liveRoles.host) {
+          deck = makeDeck(rng);
+          joker = deck.pop();
+          firstLane = andarBaharFirstLane(joker);
           liveHandle.push({
             status: 'playing',
             state: publicState({
@@ -10541,8 +10573,11 @@
               stakeB: launchStake > 0 ? launchStake : null,
             }),
           });
+          paint();
+        } else {
+          shell.body.innerHTML =
+            '<div class="pc-ab"><p class="pc-hint">Waiting for house card… · Live 1v1 · virtual stakes</p></div>';
         }
-        paint();
       }
     } else {
       paint();
