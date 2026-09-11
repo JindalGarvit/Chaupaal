@@ -47,6 +47,7 @@ function beginGameOverlaySession(opts) {
     .replace(/[^\w.-]/g, '')
     .slice(0, 120);
   const stake = Number(opts.stake || launch.stake) || 0;
+  const skipEconomyReport = !!opts.skipEconomyReport;
   const returnCtx = {
     source: launchSource,
     chat: opts.chat,
@@ -129,7 +130,7 @@ function beginGameOverlaySession(opts) {
           DSL.onGameOver({ gameType: type, result: r, overlay });
         } catch (e) {}
       }
-      if (window.DangalEconomy && typeof DangalEconomy.reportGameEnd === 'function') {
+      if (!skipEconomyReport && window.DangalEconomy && typeof DangalEconomy.reportGameEnd === 'function') {
         try {
           DangalEconomy.reportGameEnd({
             gameType: type,
@@ -860,6 +861,8 @@ const gs=beginGameOverlaySession({
   opponentUid:liveOn&&liveRoles?liveRoles.opp:'',
   matchId:tc.matchId||(chat&&chat.dangalMatchId)||'',
   stake:liveOn?liveStake:0,
+  // Dedicated settleChessOnce owns chips/Elo — avoid double reportGameEnd from setOutcome.
+  skipEconomyReport:!!liveOn,
   cleanup(){
     clearInterval(clockInterval);clockInterval=null;
     if(reconnectTick){clearInterval(reconnectTick);reconnectTick=null;}
@@ -1436,6 +1439,7 @@ function render(){
   if(resultBlock&&typeof wireGameResultActions==='function'){
     const settleMatchId=String(tc.matchId||(chat&&chat.dangalMatchId)||(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.matchId)||'').trim();
     const settleOppUid=liveRoles?liveRoles.opp:'';
+    let chessSettleDone=false;
     const shareStats={
       scoreLine:aborted?'Aborted':chessDrew?'Draw':(chessWon?'Win':'Loss'),
       meta:chromeLiveSub,
@@ -1444,13 +1448,8 @@ function render(){
     };
     function paintChessSettle(settle){
       const el=overlay.querySelector('#chessChipDelta');
-      if(!el||!settle||settle.error||settle.duplicate&&settle.chipDelta==null&&settle.eloDelta==null){
-        if(el&&settle&&!settle.error&&settle.duplicate&&(settle.chipDelta!=null||settle.eloDelta!=null)){/* fall through */}
-        else if(el&&settle&&settle.duplicate){
-          // still paint if cached payload has deltas
-        }else if(!settle||settle.error)return;
-      }
       if(!el||!settle||settle.error)return;
+      if(settle.duplicate&&settle.chipDelta==null&&settle.eloDelta==null)return;
       const delta=Number(settle.chipDelta);
       const elo=settle.eloDelta!=null?Number(settle.eloDelta):null;
       const bal=settle.chips!=null?Number(settle.chips):null;
@@ -1467,7 +1466,12 @@ function render(){
       el.textContent=parts.join(' · ')+' · not real money';
     }
     async function settleChessOnce(){
-      if(!liveOn||aborted||!window.DangalEconomy||typeof DangalEconomy.reportGameEnd!=='function'||!settleMatchId)return null;
+      if(!liveOn||aborted||chessSettleDone)return null;
+      if(!window.DangalEconomy||typeof DangalEconomy.reportGameEnd!=='function'||!settleMatchId){
+        chessSettleDone=true;
+        return null;
+      }
+      chessSettleDone=true;
       try{
         const me=typeof getCurrentUid==='function'?getCurrentUid():'';
         const settle=await DangalEconomy.reportGameEnd({
@@ -1482,6 +1486,7 @@ function render(){
           winnerUid:chessDrew?'':(chessWon?me:settleOppUid),
         });
         if(settle&&settle.error){
+          chessSettleDone=false;
           const el=overlay.querySelector('#chessChipDelta');
           if(el){
             el.hidden=false;
@@ -1493,6 +1498,7 @@ function render(){
         paintChessSettle(settle);
         return settle;
       }catch(e){
+        chessSettleDone=false;
         return null;
       }
     }

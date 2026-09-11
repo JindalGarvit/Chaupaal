@@ -1473,9 +1473,14 @@ function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalA
       : `Virtual chips ${sign}${delta}${bal != null ? ` · balance ${bal}` : ''} · not real money`;
   }
 
+  let muqSettleDone = false;
   async function settleMuqabalaChips(){
-    if(!isLiveResult || !window.DangalEconomy || typeof DangalEconomy.reportGameEnd !== 'function') return null;
-    if(!settleMatchId) return null;
+    if(!isLiveResult || muqSettleDone) return null;
+    if(!window.DangalEconomy || typeof DangalEconomy.reportGameEnd !== 'function' || !settleMatchId){
+      muqSettleDone = true;
+      return null;
+    }
+    muqSettleDone = true;
     try{
       const me = typeof getCurrentUid === 'function' ? getCurrentUid() : '';
       const settle = await DangalEconomy.reportGameEnd({
@@ -1490,6 +1495,7 @@ function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalA
         winnerUid: tie ? '' : (won ? me : settleOppUid),
       });
       if(settle && settle.error){
+        muqSettleDone = false;
         if(typeof showToast === 'function') showToast('Couldn’t update chips — try again');
         const el = overlay.querySelector('#muqChipDelta');
         if(el){
@@ -1503,6 +1509,7 @@ function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalA
       paintChipDelta(settle);
       return settle;
     }catch(e){
+      muqSettleDone = false;
       if(typeof showToast === 'function') showToast('Couldn’t update chips — try again');
       return null;
     }

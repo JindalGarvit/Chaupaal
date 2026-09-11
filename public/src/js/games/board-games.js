@@ -1066,6 +1066,14 @@ function openBusinessGame(chat,playerCount){
   if(liveOn)playerCount=2;
   const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat):null;
   let liveHandle=null;let applyingLive=false;let leaveConfirmed=false;
+  let settleDone=false;
+  const liveStake=liveOn
+    ?Number((chat&&chat.stake)!=null?chat.stake:(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.stake)||0)||0
+    :0;
+  const settleMatchId=liveOn
+    ?String((chat&&chat.dangalMatchId)||(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.matchId)||'').trim()
+    :'';
+  let settleOppUid=(liveRoles&&liveRoles.opp)||'';
   const mySeat=!liveRoles||liveRoles.myColor==='w'?0:1;
   const MODE_SUB=liveOn
     ?(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel?DangalLive.modeChromeLabel(true):'Live 1v1')
@@ -1163,11 +1171,19 @@ function openBusinessGame(chat,playerCount){
   const begin=typeof beginGameOverlaySession==='function'?beginGameOverlaySession:null;
   const gs=begin?begin({
     type:'business',title:'Business',mode:liveOn?'live':'practice',chat,overlay,
+    opponentUid:liveOn?settleOppUid:'',
+    matchId:settleMatchId,
+    stake:liveStake,
+    // Dedicated settleBusinessOnce owns chips — avoid double reportGameEnd from setOutcome.
+    skipEconomyReport:!!liveOn,
     cleanup(){
       stopBusTimer();stopAuctionTimer();stopTradeTimer();if(diceIv){clearInterval(diceIv);diceIv=null;}
       trade=null;tradeDraft=null;
       if(liveHandle&&!leaveConfirmed){
-        try{liveHandle.leave({forfeit:!gameOver});}catch(e){try{liveHandle.leave();}catch(e2){}}
+        try{
+          if(!gameOver)settleBusinessOnce(false);
+          liveHandle.leave({forfeit:!gameOver});
+        }catch(e){try{liveHandle.leave();}catch(e2){}}
       }
     },
   }):null;
@@ -2283,6 +2299,34 @@ function openBusinessGame(chat,playerCount){
     startAuction(p.pos);
   }
 
+  async function settleBusinessOnce(won){
+    if(!liveOn||settleDone)return null;
+    if(!settleMatchId){settleDone=true;return null;}
+    if(!window.DangalEconomy||typeof DangalEconomy.reportGameEnd!=='function'){
+      settleDone=true;
+      return null;
+    }
+    settleDone=true;
+    try{
+      const me=typeof getCurrentUid==='function'?getCurrentUid():'';
+      const oppU=settleOppUid||(liveRoles&&liveRoles.opp)||'';
+      return await DangalEconomy.reportGameEnd({
+        gameType:'business',
+        result:won?'win':'loss',
+        won:!!won,
+        isDraw:false,
+        matchId:settleMatchId,
+        sessionId:settleMatchId,
+        opponentUid:oppU,
+        stake:liveStake,
+        winnerUid:won?me:oppU,
+      });
+    }catch(e){
+      settleDone=false;
+      return null;
+    }
+  }
+
   function checkBankruptcyAndWinner(){
     const active=players.filter(pl=>!pl.bankrupt);
     if(active.length===1){
@@ -2291,6 +2335,7 @@ function openBusinessGame(chat,playerCount){
       if(gs)gs.setOutcome(won?'won':'lost');
       if(typeof recordGameResult==='function')recordGameResult('business',won);
       if(typeof gameFeedback==='function')gameFeedback(won?'win':'lose');
+      settleBusinessOnce(won);
       if(liveOn)pushBusiness();
       render();
       return true;
@@ -2990,7 +3035,7 @@ function openBusinessGame(chat,playerCount){
     if(gameOver){
       const winner=players.find(p=>!p.bankrupt);
       const worthLine=players.map(p=>`${p.name}: ₹${netWorth(p)} NW`).join(' · ');
-      const shareMeta=liveOn?'Live 1v1':'Practice';
+      const shareMeta=liveOn?(liveStake>0?`Live 1v1 · Stake ⚡${liveStake}`:'Live 1v1 · Friendly'):'Practice';
       const shareLine=winner?(winner.name==='You'?`I won Business on Chaupaal (${shareMeta})`:`${winner.name} won Business (${shareMeta})`):'Business over';
       overlay.innerHTML=`
         ${gameChromeHtml({title:'Business',subtitle:MODE_SUB+' · Results',backId:'busBack'})}
@@ -2998,7 +3043,7 @@ function openBusinessGame(chat,playerCount){
           gameId:'business',
           glyph:winner&&winner.name==='You'?'✓':'·',
           title:winner?(winner.name==='You'?'You win':`${winner.name} wins`):'Game over',
-          subtitle:worthLine,
+          subtitle:worthLine+(liveOn&&liveStake>0?' · virtual chips only':''),
           shareCardHtml: typeof buildGameShareCard==='function'?buildGameShareCard('business',{scoreLine:shareLine,meta:shareMeta}):'',
           actions:[
             {label:'Play again',primary:true,id:'again'},
@@ -3012,7 +3057,23 @@ function openBusinessGame(chat,playerCount){
       if(typeof wireGameResultActions==='function'){
         const shareStats={scoreLine:shareLine,meta:shareMeta};
         wireGameResultActions(overlay,{
-          again:()=>{close();openBusinessGame(chat,liveOn?2:playerCount);},
+          again:()=>{
+            if(liveOn){
+              try{
+                const mid=typeof dangalMatchId==='function'
+                  ?dangalMatchId('business',{name:chat&&chat.name,opponentUid:settleOppUid})
+                  :'business_'+Date.now();
+                if(window.__dangalLaunchCtx){
+                  window.__dangalLaunchCtx=Object.assign({},window.__dangalLaunchCtx,{
+                    matchId:mid,gameId:'business',stake:liveStake,mode:'live',opponentUid:settleOppUid,
+                  });
+                }
+                if(chat){chat.dangalMatchId=mid;chat.stake=liveStake;}
+              }catch(e){}
+            }
+            close();
+            openBusinessGame(chat,liveOn?2:playerCount);
+          },
           share:()=>{if(typeof shareGameResult==='function')shareGameResult('business',shareStats);},
           story:()=>{if(typeof postGameScoreStory==='function')postGameScoreStory('business',shareStats);},
           done:()=>close(),
@@ -3127,6 +3188,7 @@ function openBusinessGame(chat,playerCount){
           const iWon=val.winner===liveRoles.me;
           if(gs)gs.setOutcome(iWon?'won':'lost');
           if(typeof recordGameResult==='function')recordGameResult('business',iWon);
+          settleBusinessOnce(iWon);
           message=iWon?'Opponent left — you win!':'Forfeit';
           render();return;
         }
@@ -3149,6 +3211,10 @@ function openBusinessGame(chat,playerCount){
         pendingExtraTurn=!!s.pendingExtraTurn;
         focusPos=s.focusPos!=null?Number(s.focusPos):players[currentPlayer].pos;
         stopBusTimer();stopAuctionTimer();stopTradeTimer();
+        if(gameOver){
+          const iWon=!!players[mySeat]&&!players[mySeat].bankrupt;
+          settleBusinessOnce(iWon);
+        }
         render();
         if(!gameOver){
           if(trade&&trade.status==='pending'&&isTradeResponder())startTradeTimer();

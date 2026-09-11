@@ -6770,7 +6770,9 @@
 
     function applyPublicState(st) {
       if (!st || typeof st !== 'object') return;
-      // Never ingest mid-hand handA/handB from the public wire.
+      // Never ingest mid-hand hole faces from the public wire (strip legacy snaps).
+      if (st.handA) delete st.handA;
+      if (st.handB) delete st.handB;
       if (st.pot != null) pot = Math.max(0, Number(st.pot) || 0);
       if (st.stackA != null) stackA = Math.max(0, Number(st.stackA) || 0);
       if (st.stackB != null) stackB = Math.max(0, Number(st.stackB) || 0);
