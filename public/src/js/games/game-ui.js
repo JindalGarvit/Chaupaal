@@ -205,9 +205,9 @@
       'Live: both seats raid & defend · leave = forfeit · rematch is a fresh court · virtual stakes',
     ],
     khokho: [
-      'Eight sitters face alternate sides on the central lane',
-      'Chase in the free zones — poles bookend the lane',
-      'Giving Kho and chase direction law come later · Practice court only for now',
+      'First move locks a half + direction — stay off the central lane mid-chase',
+      'Reach a pole free-zone to reverse or switch half, then re-lock on leave',
+      'Legal tags score +1 · foul crosses don’t · Giving Kho comes next',
     ],
     tambola: [
       'Auto-daub on a real 3×9 ticket — claim Early Five, lines, corners, then Full House',

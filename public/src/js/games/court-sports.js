@@ -2717,9 +2717,14 @@
   }
 
   /**
-   * Kho Kho Prompt 1/5 — court & posts Practice shell.
-   * Control: tap/drag on the field to move the active chaser (pointer target).
-   * Sitters + poles are visual; direction lock / Kho / Live come in later prompts.
+   * Kho Kho Prompt 2/5 — chase law (direction, lane, poles, tags).
+   * Rules (arcade):
+   * - half 'L'|'R' = free-zone side of the central lane (hard barrier mid-chase).
+   * - dir 'N'|'S' locks on first meaningful move (toward a pole).
+   * - Pole free-zones (y≲0.14 / y≳0.86) set canTurnAtPole — reverse dir and/or switch half;
+   *   leaving the pole zone re-locks from the departure vector.
+   * - Legal tag on a living runner → +1. Tag during an illegal lane-cross foul → no point.
+   * Control: tap/drag target (same as Prompt 1). Sitters stay props until Prompt 3 Kho.
    */
   function openKhoKho() {
     const chat = resolveChat(arguments[0]);
@@ -2728,16 +2733,21 @@
     let raf = 0;
     let coachShown = false;
     let lastTs = 0;
+    let foulFlashUntil = 0;
+    let dirToastShown = false;
 
-    const MOVE_SPEED = 1.55;
+    const MOVE_SPEED = 1.5;
     const TAG_R = 0.085;
     const LANE_L = 0.42;
     const LANE_R = 0.58;
+    const POLE_N = 0.14;
+    const POLE_S = 0.86;
+    const LOCK_STEP = 0.028;
 
     const shell = openShell({
       id: 'khokho',
       title: 'Kho Kho',
-      subtitle: practiceSub('Court · poles · sitters'),
+      subtitle: practiceSub('Chase law · poles · tags'),
       mode: 'practice',
       live: false,
       chat,
@@ -2777,7 +2787,6 @@
       });
     }
 
-    // 8 sitting chasers along the central lane, alternating face L/R.
     const sitters = [];
     for (let i = 0; i < 8; i++) {
       const y = 0.14 + i * 0.095;
@@ -2794,7 +2803,6 @@
       { id: 's', x: 0.5, y: 0.94, label: 'Pole' },
     ];
 
-    // Stub defenders (runners) in free zones — Prompt 4 will own real defend AI.
     let defenders = [
       { id: 0, x: 0.18, y: 0.32, tagged: false },
       { id: 1, x: 0.82, y: 0.48, tagged: false },
@@ -2802,30 +2810,152 @@
     ];
 
     let chaser = { x: 0.22, y: 0.88, tx: 0.22, ty: 0.88 };
+    /** @type {'N'|'S'|null} */
+    let dir = null;
+    /** @type {'L'|'R'} */
+    let half = 'L';
+    let canTurnAtPole = false;
+    let fouling = false;
     let tags = 0;
-    let msg = 'Tap the field to chase — sitters hold the central lane.';
+    let msg = 'Move to lock a side & direction — then chase toward a pole.';
     let painted = false;
 
     function dist(a, b) {
-      const dx = a.x - b.x;
-      const dy = a.y - b.y;
-      return Math.hypot(dx, dy);
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    function halfFromX(x) {
+      return x < 0.5 ? 'L' : 'R';
+    }
+
+    function clampToHalf(x, h) {
+      if (h === 'L') return Math.min(x, LANE_L - 0.01);
+      return Math.max(x, LANE_R + 0.01);
+    }
+
+    function inPoleZone(y) {
+      return y <= POLE_N || y >= POLE_S;
+    }
+
+    function dirLabel(d) {
+      if (d === 'N') return '↑ North pole';
+      if (d === 'S') return '↓ South pole';
+      return '— unlocked';
+    }
+
+    function hudStatus() {
+      if (canTurnAtPole) return 'Pole zone — reverse or switch half, then leave to re-lock';
+      if (!dir) return 'First move locks direction · stay on one side of the lane';
+      return 'Direction locked ' + (dir === 'N' ? '↑' : '↓') + ' · to pole to reverse';
+    }
+
+    function flashFoul(reason) {
+      fouling = true;
+      foulFlashUntil = performance.now() + 420;
+      buzz('invalid');
+      msg = reason || 'Foul — no cross.';
+      if (typeof showToast === 'function') showToast(msg);
     }
 
     function tryTag() {
+      if (fouling || performance.now() < foulFlashUntil) return;
       let hit = false;
       defenders.forEach((d) => {
         if (d.tagged) return;
+        // Runner must be reachable on the chaser's half (no through-lane tags).
+        const runnerHalf = halfFromX(d.x);
+        if (runnerHalf !== half && !canTurnAtPole) return;
         if (dist(chaser, d) <= TAG_R) {
           d.tagged = true;
           tags += 1;
           hit = true;
           buzz('hit');
-          if (typeof showToast === 'function') showToast('Tagged! (+1 stub)');
-          msg = 'Tagged a runner · ' + tags + ' — Kho & chase law come later.';
+          if (typeof showToast === 'function') showToast('Tag! +1');
+          msg = 'Tag +1 · score ' + tags;
         }
       });
       if (hit) softPaint();
+    }
+
+    function applyChaseStep(nx, ny, fromPointer) {
+      const prevX = chaser.x;
+      const prevY = chaser.y;
+      let x = nx;
+      let y = ny;
+
+      // First meaningful move locks half + dir.
+      if (!dir) {
+        const mdx = x - prevX;
+        const mdy = y - prevY;
+        const moved = Math.hypot(mdx, mdy);
+        if (moved >= LOCK_STEP || fromPointer) {
+          half = halfFromX(prevX);
+          if (Math.abs(mdy) >= Math.abs(mdx) * 0.35) {
+            dir = mdy < 0 ? 'N' : 'S';
+          } else {
+            dir = prevY < 0.5 ? 'S' : 'N';
+          }
+          x = clampToHalf(x, half);
+          msg = 'Direction locked → ' + dirLabel(dir) + ' · half ' + half;
+          if (!dirToastShown) {
+            dirToastShown = true;
+            if (typeof showToast === 'function') showToast('Direction locked → ' + (dir === 'N' ? '↑' : '↓'));
+          }
+        } else if (moved > 0.002) {
+          // Nudge before full lock still can't dive through the lane.
+          half = halfFromX(prevX);
+          x = clampToHalf(x, half);
+        }
+      }
+
+      const wasInPole = inPoleZone(prevY);
+      const nowInPole = inPoleZone(y);
+
+      if (nowInPole) {
+        canTurnAtPole = true;
+        // In pole free-zone: may reverse and/or switch half (classic pole privilege).
+        if (wasInPole || canTurnAtPole) {
+          half = halfFromX(x);
+          // Allow crossing under the pole posts while turning.
+          x = Math.max(0.06, Math.min(0.94, x));
+        }
+        if (!wasInPole) {
+          msg = 'Pole — turn unlocked (reverse / switch half)';
+          buzz('select');
+        }
+      } else if (wasInPole && !nowInPole && canTurnAtPole) {
+        // Leaving pole: re-lock dir from departure, half from exit side.
+        half = halfFromX(x);
+        const ddy = y - prevY;
+        if (Math.abs(ddy) > 0.002) dir = ddy < 0 ? 'N' : 'S';
+        else if (!dir) dir = y < 0.5 ? 'S' : 'N';
+        canTurnAtPole = false;
+        x = clampToHalf(x, half);
+        msg = 'Re-locked → ' + dirLabel(dir) + ' · half ' + half;
+        if (typeof showToast === 'function') showToast('Direction locked → ' + (dir === 'N' ? '↑' : '↓'));
+      }
+
+      if (dir && !canTurnAtPole) {
+        // Hard lane barrier — soft slide along edge; foul if push aims across.
+        const clamped = clampToHalf(x, half);
+        if (Math.abs(clamped - x) > 0.012) {
+          flashFoul('Foul — no cross.');
+          x = clamped;
+        } else {
+          x = clamped;
+          fouling = false;
+        }
+        // Prefer progress along locked dir; allow lateral within half, mild reverse damp.
+        if (dir === 'N' && y > prevY + 0.004) {
+          y = prevY + 0.002; // soft block reverse mid-lane
+        } else if (dir === 'S' && y < prevY - 0.004) {
+          y = prevY - 0.002;
+        }
+      }
+
+      chaser.x = Math.max(0.06, Math.min(0.94, x));
+      chaser.y = Math.max(0.05, Math.min(0.95, y));
+      if (!canTurnAtPole && dir) chaser.x = clampToHalf(chaser.x, half);
     }
 
     function paint(force) {
@@ -2856,8 +2986,11 @@
 
       const poleHtml = poles
         .map((p) => {
+          const hot = (p.id === 'n' && chaser.y <= POLE_N) || (p.id === 's' && chaser.y >= POLE_S);
           return (
-            '<span class="cs-kk-pole" style="left:' +
+            '<span class="cs-kk-pole' +
+            (hot || canTurnAtPole ? ' is-hot' : '') +
+            '" style="left:' +
             p.x * 100 +
             '%;top:' +
             p.y * 100 +
@@ -2885,19 +3018,39 @@
         })
         .join('');
 
+      const arrow = !dir ? '·' : dir === 'N' ? '↑' : '↓';
+      const halfMark = half === 'L' ? 'Left' : 'Right';
+
       shell.body.innerHTML =
         '<div class="cs-khokho">' +
         '<div class="cs-rally-score">🏃 <strong>' +
         tags +
-        '</strong> <span class="cs-rally-score-sub">stub tags</span></div>' +
+        '</strong> <span class="cs-rally-score-sub">tags</span></div>' +
+        '<div class="cs-kk-hud" role="status">' +
+        '<span class="cs-kk-dir' +
+        (canTurnAtPole ? ' is-turn' : dir ? ' is-locked' : '') +
+        '">' +
+        arrow +
+        '</span>' +
+        '<span class="cs-kk-hud-text">' +
+        esc(hudStatus()) +
+        ' · ' +
+        halfMark +
+        ' half</span>' +
+        '</div>' +
         '<p class="cs-rally-msg">' +
         esc(msg) +
         (paused ? ' · Paused' : '') +
         '</p>' +
-        '<div class="cs-kk-court" data-court role="application" aria-label="Kho Kho court">' +
+        '<div class="cs-kk-court' +
+        (fouling || performance.now() < foulFlashUntil ? ' is-foul' : '') +
+        (canTurnAtPole ? ' is-pole-turn' : '') +
+        '" data-court role="application" aria-label="Kho Kho court">' +
         '<div class="cs-kk-free cs-kk-free-l" aria-hidden="true"><span>Free zone</span></div>' +
         '<div class="cs-kk-free cs-kk-free-r" aria-hidden="true"><span>Free zone</span></div>' +
         '<div class="cs-kk-lane" aria-hidden="true"><span>Central lane</span></div>' +
+        '<div class="cs-kk-pole-zone cs-kk-pole-n" aria-hidden="true"></div>' +
+        '<div class="cs-kk-pole-zone cs-kk-pole-s" aria-hidden="true"></div>' +
         poleHtml +
         sitHtml +
         defHtml +
@@ -2907,9 +3060,9 @@
         chaser.y * 100 +
         '%" aria-label="Active chaser">⚡</span>' +
         '</div>' +
-        '<div class="cs-kk-meta">Tap/drag to move the active chaser · poles bookend the lane</div>' +
+        '<div class="cs-kk-meta">Tap/drag to chase · lane is locked mid-run · poles unlock reverse</div>' +
         '<div class="cs-kk-actions">' +
-        '<button type="button" class="cs-hit" data-reset>Reset tags</button>' +
+        '<button type="button" class="cs-hit" data-reset>Reset chase</button>' +
         '</div>' +
         '</div>';
 
@@ -2918,8 +3071,14 @@
         if (paused || !court) return;
         const rect = court.getBoundingClientRect();
         if (rect.width < 8 || rect.height < 8) return;
-        chaser.tx = Math.max(0.06, Math.min(0.94, (clientX - rect.left) / rect.width));
-        chaser.ty = Math.max(0.06, Math.min(0.94, (clientY - rect.top) / rect.height));
+        let tx = Math.max(0.06, Math.min(0.94, (clientX - rect.left) / rect.width));
+        let ty = Math.max(0.06, Math.min(0.94, (clientY - rect.top) / rect.height));
+        // Soft-aim: if locked mid-lane, snap illegal cross targets to lane edge.
+        if (dir && !canTurnAtPole && !inPoleZone(ty)) {
+          tx = clampToHalf(tx, half);
+        }
+        chaser.tx = tx;
+        chaser.ty = ty;
       };
       court?.addEventListener('pointerdown', (e) => {
         e.preventDefault();
@@ -2933,18 +3092,26 @@
       });
 
       shell.body.querySelector('[data-reset]')?.addEventListener('click', () => {
-        defenders.forEach((d) => {
-          d.tagged = false;
-        });
+        defenders = [
+          { id: 0, x: 0.18, y: 0.32, tagged: false },
+          { id: 1, x: 0.82, y: 0.48, tagged: false },
+          { id: 2, x: 0.22, y: 0.72, tagged: false },
+        ];
+        chaser = { x: 0.22, y: 0.88, tx: 0.22, ty: 0.88 };
+        dir = null;
+        half = 'L';
+        canTurnAtPole = false;
+        fouling = false;
         tags = 0;
-        msg = 'Tap the field to chase — sitters hold the central lane.';
+        dirToastShown = false;
+        msg = 'Move to lock a side & direction — then chase toward a pole.';
         paint(true);
       });
 
       if (!coachShown) {
         coachShown = true;
         if (typeof showToast === 'function') {
-          showToast('Central lane · poles at both ends');
+          showToast('Lock a side, chase, use the pole to turn — Kho comes next.');
         }
       }
 
@@ -2952,7 +3119,7 @@
         GameUI.attachHowTo(shell.overlay, {
           title: 'Kho Kho',
           body:
-            'Eight sitters face alternate sides on the central lane. Chase from the free zones toward the poles. Giving Kho comes in a later update.',
+            'Lock a half and direction on your first move. Stay off the central lane until a pole free-zone lets you reverse or switch. Legal tags score +1. Giving Kho comes next.',
         });
       }
     }
@@ -2975,6 +3142,28 @@
       if (score) score.textContent = String(tags);
       const msgEl = shell.body.querySelector('.cs-rally-msg');
       if (msgEl) msgEl.textContent = msg + (paused ? ' · Paused' : '');
+      const hud = shell.body.querySelector('.cs-kk-hud-text');
+      if (hud) {
+        hud.textContent = hudStatus() + ' · ' + (half === 'L' ? 'Left' : 'Right') + ' half';
+      }
+      const dirEl = shell.body.querySelector('.cs-kk-dir');
+      if (dirEl) {
+        dirEl.textContent = !dir ? '·' : dir === 'N' ? '↑' : '↓';
+        dirEl.classList.toggle('is-turn', !!canTurnAtPole);
+        dirEl.classList.toggle('is-locked', !!dir && !canTurnAtPole);
+      }
+      const court = shell.body.querySelector('[data-court]');
+      if (court) {
+        court.classList.toggle('is-foul', fouling || performance.now() < foulFlashUntil);
+        court.classList.toggle('is-pole-turn', !!canTurnAtPole);
+      }
+      shell.body.querySelectorAll('.cs-kk-pole').forEach((p, i) => {
+        const pole = poles[i];
+        const hot =
+          canTurnAtPole ||
+          (pole && ((pole.id === 'n' && chaser.y <= POLE_N) || (pole.id === 's' && chaser.y >= POLE_S)));
+        p.classList.toggle('is-hot', !!hot);
+      });
     }
 
     function tick(ts) {
@@ -2988,32 +3177,30 @@
       const dt = Math.min(0.05, (ts - lastTs) / 1000);
       lastTs = ts;
 
+      if (performance.now() >= foulFlashUntil) fouling = false;
+
       const dx = chaser.tx - chaser.x;
       const dy = chaser.ty - chaser.y;
       const len = Math.hypot(dx, dy);
       if (len > 0.008) {
         const step = Math.min(len, MOVE_SPEED * dt);
-        chaser.x += (dx / len) * step;
-        chaser.y += (dy / len) * step;
-        // Soft keep-out of deep lane center (visual lane stays readable; Prompt 2 owns law).
-        if (chaser.x > LANE_L + 0.02 && chaser.x < LANE_R - 0.02) {
-          chaser.x = chaser.x < 0.5 ? LANE_L + 0.02 : LANE_R - 0.02;
-        }
+        const nx = chaser.x + (dx / len) * step;
+        const ny = chaser.y + (dy / len) * step;
+        applyChaseStep(nx, ny, false);
+      } else if (inPoleZone(chaser.y)) {
+        canTurnAtPole = true;
       }
 
-      // Idle wander for untagged runners (feel only).
+      // Stub runners wander both halves (Prompt 4 owns real defend AI).
       defenders.forEach((d, i) => {
         if (d.tagged) return;
         const t = ts / 1000 + i * 1.7;
-        const baseX = i === 1 ? 0.82 : 0.18 + (i === 2 ? 0.04 : 0);
-        const baseY = 0.32 + i * 0.2;
-        d.x = baseX + Math.sin(t * 0.7) * 0.04;
-        d.y = baseY + Math.cos(t * 0.55) * 0.03;
+        const baseX = i === 1 ? 0.78 : 0.2 + (i === 2 ? 0.06 : 0);
+        const baseY = 0.3 + i * 0.2;
+        d.x = baseX + Math.sin(t * 0.7) * 0.06;
+        d.y = baseY + Math.cos(t * 0.55) * 0.05;
         d.x = Math.max(0.08, Math.min(0.92, d.x));
         d.y = Math.max(0.12, Math.min(0.9, d.y));
-        if (d.x > LANE_L && d.x < LANE_R) {
-          d.x = d.x < 0.5 ? LANE_L - 0.02 : LANE_R + 0.02;
-        }
       });
 
       tryTag();
@@ -4194,7 +4381,7 @@
     registerGame({
       id: 'khokho',
       name: 'Kho Kho',
-      desc: 'Practice · court, poles & sitters',
+      desc: 'Practice · chase law · poles & tags',
       icon: '🏃',
       gameType: 'solo',
       genre: 'rw_sports',
@@ -4205,7 +4392,8 @@
       order: 25,
       meta: {
         phaseA: 'Court & posts — Practice shell',
-        phaseB: 'Chase law (Prompt 2)',
+        phaseB: 'Chase law — direction, lane, poles, tags',
+        phaseC: 'Giving Kho (Prompt 3)',
         complete: false,
       },
       launch: openKhoKho,
