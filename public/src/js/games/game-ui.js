@@ -229,7 +229,7 @@
     teenpatti: [
       'Boot each hand — stacks carry across the ring (virtual chips)',
       'Blind chaal = S, seen = 2S; side-show compares — loser packs',
-      'Show when 2 remain and both seen · Live is 1v1 · not real money',
+      'Show when both seen · Live hides hole cards mid-hand · virtual stakes only',
     ],
     bluff: [
       'Play 1–3 face-down onto the pile — first claim locks the rank',

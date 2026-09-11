@@ -6585,11 +6585,30 @@
     function bothCanBoot() {
       return stackA >= BOOT && stackB >= BOOT;
     }
+    function isHost() {
+      return !liveOn || !liveRoles || !!liveRoles.host;
+    }
+    function hidePlaceholders(n, prefix) {
+      const out = [];
+      for (let i = 0; i < n; i++) out.push({ r: '?', s: '?', id: (prefix || 'opp') + i });
+      return out;
+    }
+    /** Guest only — host keeps both real hands for show / side-show authority. */
+    function maskOppFaces() {
+      if (!liveOn || isHost()) return;
+      if (iAmA()) handB = hidePlaceholders(3, 'oppB');
+      else handA = hidePlaceholders(3, 'oppA');
+    }
+    function cloneHand(h) {
+      return (h || []).map((c) => ({ r: c.r, s: c.s, id: c.id }));
+    }
 
-    function snapshot() {
+    /**
+     * Mid-hand Live wire — pot/stacks/seen/packed/turn only.
+     * Never hole-card faces (handA/handB). Reveal via revealHands on show/side-show only.
+     */
+    function publicState() {
       return {
-        handA,
-        handB,
         pot,
         stackA,
         stackB,
@@ -6606,15 +6625,16 @@
         handNum,
         rebuyA,
         rebuyB,
+        handCountA: 3,
+        handCountB: 3,
         active: [!packedA, !packedB],
         sideShow: sideShow ? { fromA: sideShow.fromA, status: sideShow.status, at: sideShow.at } : null,
       };
     }
 
-    function applySnapshot(st) {
+    function applyPublicState(st) {
       if (!st || typeof st !== 'object') return;
-      if (Array.isArray(st.handA) && st.handA.length) handA = st.handA;
-      if (Array.isArray(st.handB) && st.handB.length) handB = st.handB;
+      // Never ingest mid-hand handA/handB from the public wire.
       if (st.pot != null) pot = Math.max(0, Number(st.pot) || 0);
       if (st.stackA != null) stackA = Math.max(0, Number(st.stackA) || 0);
       if (st.stackB != null) stackB = Math.max(0, Number(st.stackB) || 0);
@@ -6642,18 +6662,41 @@
       }
     }
 
+    function applyRevealHands(st) {
+      if (!st || !st.revealHands) return false;
+      const rh = st.revealHands;
+      if (Array.isArray(rh.handA) && rh.handA.length) handA = cloneHand(rh.handA);
+      if (Array.isArray(rh.handB) && rh.handB.length) handB = cloneHand(rh.handB);
+      return true;
+    }
+
     function pushLive(extra) {
       if (!liveOn || !liveHandle || applying || tableClosed) return;
       liveHandle.push(
         Object.assign(
           {
-            status: phase === 'over' && handOver ? 'playing' : phase === 'between' ? 'playing' : 'playing',
+            status: 'playing',
             turn: turnUid(),
-            state: snapshot(),
+            state: publicState(),
           },
           extra || {}
         )
       );
+    }
+
+    /** Host-only: guest receives their 3; host keeps both locally — never mid-hand on wire. */
+    function publishPrivateDeal(act) {
+      if (!liveOn || !liveHandle || !liveRoles || !isHost()) return;
+      const guestUid = liveRoles.opp;
+      const guestHand = cloneHand(iAmA() ? handB : handA);
+      liveHandle.push({
+        status: 'playing',
+        turn: turnUid(),
+        act: act || 'deal',
+        handFor: guestUid,
+        hand: guestHand,
+        state: publicState(),
+      });
     }
 
     function paintOppHand() {
@@ -6968,7 +7011,7 @@
         pushLive({
           act: 'between',
           handResult: { title, youWin, draw },
-          state: Object.assign(snapshot(), { phase: 'between' }),
+          state: Object.assign(publicState(), { phase: 'between' }),
         });
       }
 
@@ -7016,7 +7059,7 @@
       }
       buzz('select');
       if (liveOn && liveRoles && liveRoles.host) {
-        pushLive({ act: 'redeal', status: 'playing' });
+        publishPrivateDeal('redeal');
       }
       paint('Hand ' + handNum + ' · boot posted — both blind');
     }
@@ -7108,14 +7151,15 @@
             <div class="pc-hand">${oppCards().map(cardFace).join('')}</div>
             <div class="pc-hand">${myCards().map(cardFace).join('')}</div>
           </div>`;
-        if (!o.fromRemote && liveOn && liveHandle && !applying) {
+        if (!o.fromRemote && !o.skipLivePush && liveOn && liveHandle && !applying) {
           liveHandle.push({
             status: 'playing',
             act: o.act || 'show',
             winner: o.draw ? null : o.youWin ? liveRoles.me : liveRoles.opp,
-            state: Object.assign(snapshot(), {
+            state: Object.assign(publicState(), {
               phase: 'between',
               revealed: true,
+              revealHands: { handA: cloneHand(handA), handB: cloneHand(handB) },
               ranks: { a: tpRankName(handA), b: tpRankName(handB) },
             }),
           });
@@ -7125,12 +7169,12 @@
           go();
         }, 800);
       } else {
-        if (!o.fromRemote && liveOn && liveHandle && !applying) {
+        if (!o.fromRemote && !o.skipLivePush && liveOn && liveHandle && !applying) {
           liveHandle.push({
             status: 'playing',
             act: o.act || 'pack',
             winner: o.youWin ? liveRoles.me : liveRoles.opp,
-            state: Object.assign(snapshot(), { phase: 'between' }),
+            state: Object.assign(publicState(), { phase: 'between' }),
           });
         }
         go();
@@ -7208,6 +7252,12 @@
         paint('Show needs both seen · 2 players');
         return;
       }
+      // Guest lacks opp faces mid-hand — host keeps both and resolves compare.
+      if (liveOn && !isHost()) {
+        pushLive({ act: 'show_req', by: liveRoles && liveRoles.me });
+        paint('Show…');
+        return;
+      }
       const settled = settleShow();
       betSeq += 1;
       const youWin = iAmA() ? settled.aWins : !settled.aWins;
@@ -7261,6 +7311,12 @@
       const iLost = (loserA && iAmA()) || (!loserA && !iAmA());
       clearSideShow();
 
+      const handEnds = activeCount() < 2;
+      if (handEnds) {
+        if (packedA) awardPotSeat(false);
+        else awardPotSeat(true);
+      }
+
       shell.body.innerHTML = `
         <div class="pc-tp">
           <p class="pc-hint">${esc(iLost ? 'You packed — weaker hand' : 'Opponent packed on side-show')}</p>
@@ -7268,9 +7324,20 @@
           <div class="pc-hand">${myCards().map(cardFace).join('')}</div>
         </div>`;
 
-      if (activeCount() < 2) {
-        if (packedA) awardPotSeat(false);
-        else awardPotSeat(true);
+      if (liveOn && liveHandle && !applying) {
+        liveHandle.push({
+          status: 'playing',
+          act: handEnds ? 'sideshow' : 'sideshow_done',
+          winner: handEnds ? (iLost ? liveRoles.opp : liveRoles.me) : null,
+          state: Object.assign(publicState(), {
+            revealed: true,
+            revealHands: { handA: cloneHand(handA), handB: cloneHand(handB) },
+            phase: handEnds ? 'between' : 'dealt',
+          }),
+        });
+      }
+
+      if (handEnds) {
         betweenTimer = setTimeout(() => {
           betweenTimer = 0;
           endHand({
@@ -7279,16 +7346,17 @@
             subtitle: iLost ? 'Weaker hand — opponent takes the pot' : 'Opponent packed — you take the pot',
             act: 'sideshow',
             fromRemote: false,
+            skipLivePush: true,
           });
         }, 900);
         return;
       }
 
       turnIsA = !askerA;
-      pushLive({ act: 'sideshow_done' });
       setTimeout(() => {
         handOver = false;
         phase = 'dealt';
+        if (!isHost()) maskOppFaces();
         paint(iLost ? 'You packed — weaker hand' : 'Opponent packed on side-show');
       }, 900);
     }
@@ -7297,6 +7365,12 @@
       if (handOver || tableClosed || !sideShow || sideShow.status !== 'pending') return;
       if (liveOn && !iAmSideShowTarget()) return;
       buzz('select');
+      // Guest cannot score opp mid-hand — host compares with both hole cards.
+      if (liveOn && !isHost()) {
+        pushLive({ act: 'sideshow_accept', by: liveRoles && liveRoles.me });
+        paint('Comparing…');
+        return;
+      }
       resolveSideShowCompare();
     }
 
@@ -7319,19 +7393,63 @@
         incomingSeq >= 0 &&
         incomingSeq < betSeq &&
         val.act !== 'redeal' &&
+        val.act !== 'deal' &&
         val.act !== 'between' &&
+        val.act !== 'show_req' &&
+        val.act !== 'sideshow_accept' &&
         st.phase !== 'between' &&
         st.phase !== 'over'
       ) {
         return;
       }
-      applySnapshot(st);
+
+      // Private deal — guest only receives own 3 hole cards.
+      if (val.handFor && liveRoles && val.handFor === liveRoles.me && Array.isArray(val.hand)) {
+        if (iAmA()) handA = cloneHand(val.hand);
+        else handB = cloneHand(val.hand);
+        maskOppFaces();
+      }
+
+      applyPublicState(st);
+      if (st.revealed || val.act === 'show' || val.act === 'sideshow' || val.act === 'sideshow_done') {
+        applyRevealHands(st);
+      }
       const act = val.act;
       if (tableClosed) return;
 
-      if (act === 'redeal' || (st.phase === 'dealt' && Array.isArray(st.handA) && st.handA.length && handOver)) {
+      // Host resolves guest show / side-show accept (host holds both hands).
+      if (act === 'show_req' && isHost() && !handOver && phase === 'dealt') {
+        if (!seenA || !seenB || packedA || packedB) return;
+        const settled = settleShow();
+        betSeq = Math.max(betSeq, Number(st.betSeq) || 0) + 1;
+        const youWin = iAmA() ? settled.aWins : !settled.aWins;
+        endHand({
+          youWin,
+          draw: settled.split,
+          title: settled.split ? 'Split pot' : youWin ? 'You win the show' : 'Opponent wins the show',
+          subtitle: tpRankName(myCards()) + ' vs ' + tpRankName(oppCards()),
+          rankLine: tpRankName(myCards()) + ' vs ' + tpRankName(oppCards()),
+          reveal: true,
+          act: 'show',
+          fromRemote: false,
+        });
+        return;
+      }
+      if (act === 'sideshow_accept' && isHost() && sideShow && sideShow.status === 'pending') {
+        resolveSideShowCompare();
+        return;
+      }
+
+      if (
+        act === 'redeal' ||
+        act === 'deal' ||
+        (st.phase === 'dealt' &&
+          (val.handFor || (st.handCountA != null && st.handCountB != null)) &&
+          handOver)
+      ) {
         handOver = false;
         phase = 'dealt';
+        if (!isHost()) maskOppFaces();
         paint('Hand ' + handNum + ' · boot posted');
         return;
       }
@@ -7359,18 +7477,37 @@
       }
       if (act === 'sideshow_refuse' || act === 'sideshow_tie') {
         clearSsTimer();
+        if (!isHost()) maskOppFaces();
         paint(act === 'sideshow_tie' ? 'Side-show tied — both stay' : 'Side-show refused');
         return;
       }
       if (act === 'sideshow_done') {
         clearSsTimer();
-        paint('Side-show resolved');
+        const iLost = myPacked();
+        if (st.revealed || st.revealHands) {
+          shell.body.innerHTML = `
+            <div class="pc-tp">
+              <p class="pc-hint">${esc(iLost ? 'You packed — weaker hand' : 'Opponent packed on side-show')}</p>
+              <div class="pc-hand">${oppCards().map(cardFace).join('')}</div>
+              <div class="pc-hand">${myCards().map(cardFace).join('')}</div>
+            </div>`;
+          setTimeout(() => {
+            if (!isHost()) maskOppFaces();
+            handOver = false;
+            phase = 'dealt';
+            paint(iLost ? 'You packed — weaker hand' : 'Opponent packed on side-show');
+          }, 900);
+        } else {
+          if (!isHost()) maskOppFaces();
+          paint('Side-show resolved');
+        }
         return;
       }
 
       if (val.status === 'over' || act === 'pack' || act === 'show' || act === 'sideshow') {
         applying = true;
         if (act === 'show' || st.revealed) {
+          applyRevealHands(st);
           const ys = tpScore(myCards());
           const os = tpScore(oppCards());
           const split = ys === os;
@@ -7384,6 +7521,16 @@
             fromRemote: true,
           });
         } else if (act === 'pack' || act === 'sideshow' || st.packedA || st.packedB) {
+          if (act === 'sideshow' && st.revealHands) {
+            applyRevealHands(st);
+            const iLost = myPacked();
+            shell.body.innerHTML = `
+              <div class="pc-tp">
+                <p class="pc-hint">${esc(iLost ? 'You packed — weaker hand' : 'Opponent packed on side-show')}</p>
+                <div class="pc-hand">${oppCards().map(cardFace).join('')}</div>
+                <div class="pc-hand">${myCards().map(cardFace).join('')}</div>
+              </div>`;
+          }
           const iWon = val.winner === liveRoles.me || (myPacked() ? false : true);
           endHand({
             youWin: !!iWon && !myPacked(),
@@ -7400,7 +7547,7 @@
         paint(act === 'raise' ? 'Opponent raised' : act === 'chaal' ? 'Opponent chaaled' : '');
         return;
       }
-      if (st.handA && st.handB && phase === 'dealt') {
+      if (st.phase === 'dealt') {
         handOver = false;
         paint('Boot posted — chaal when ready');
         return;
@@ -7554,7 +7701,7 @@
         if (liveRoles.opp) settleOppUid = liveRoles.opp;
         if (liveRoles.host) {
           dealFresh();
-          pushLive({ status: 'playing', act: 'deal' });
+          publishPrivateDeal('deal');
           paint('Hand ' + handNum + ' · boot posted — both blind');
         } else {
           shell.body.innerHTML = `<p class="pc-hint">Waiting for deal… · Live 1v1 · virtual chips</p>`;
