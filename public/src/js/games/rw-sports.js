@@ -75,6 +75,24 @@
       else closeOverlay(overlay);
     };
     const onBack = async () => {
+      if (typeof leaveGameShell === 'function') {
+        // Synthetic shell: dismiss via confirm + cleanup
+        const fakeShell = {
+          gameOver: false,
+          liveHandle: null,
+          markOver() {},
+          close() {
+            dismiss();
+          },
+        };
+        await leaveGameShell(fakeShell, {
+          live: false,
+          isPlaying: true,
+          title: 'Leave ' + (o.title || 'practice') + '?',
+          body: 'This practice run will end.',
+        });
+        return;
+      }
       if (typeof confirmLeaveGame === 'function') {
         const leave = await confirmLeaveGame({
           title: 'Leave ' + (o.title || 'practice') + '?',
@@ -94,10 +112,18 @@
     if (!el) return;
     el.textContent = text;
     el.className = `rw-sports-outcome is-show${kind ? ` is-${kind}` : ''}`;
-    clearTimeout(flashOutcome._t);
+    if (flashOutcome._t) clearTimeout(flashOutcome._t);
     flashOutcome._t = setTimeout(() => {
+      flashOutcome._t = 0;
       el.classList.remove('is-show');
     }, 900);
+  }
+
+  function clearFlashOutcome() {
+    if (flashOutcome._t) {
+      clearTimeout(flashOutcome._t);
+      flashOutcome._t = 0;
+    }
   }
 
   function finishPractice(gameId, score, body, opts) {
@@ -709,6 +735,7 @@
       missTimer = null;
       resultTimer = null;
       deliveryRaf = null;
+      clearFlashOutcome();
     };
 
     const { overlay, body, gs } = mountSportsShell({
@@ -1332,6 +1359,7 @@
       resultTimer = null;
       chargeRaf = null;
       charging = false;
+      clearFlashOutcome();
     };
 
     const { overlay, body, gs } = mountSportsShell({

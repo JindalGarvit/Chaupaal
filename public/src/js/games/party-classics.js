@@ -2065,7 +2065,7 @@
     }
 
     function pushSettle() {
-      if (!liveOn || !liveHandle || !liveRoles || applying) return;
+      if (!liveOn || !liveHandle || !liveRoles || applying || ended || !shell.alive()) return;
       if (isCarrom) return; // carrom uses pushCarromLive
       const scores =
         liveRoles.me === liveRoles.playerA
@@ -2094,7 +2094,7 @@
     }
 
     function pushCarromLive(opts) {
-      if (!liveOn || !liveHandle || !liveRoles || applying) return;
+      if (!liveOn || !liveHandle || !liveRoles || applying || ended || !shell.alive()) return;
       const o = opts || {};
       const turnUid = o.turnUid || (myTurn ? liveRoles.me : liveRoles.opp);
       lastHint = o.msg || lastHint;
@@ -7374,7 +7374,9 @@
       }
 
       turnIsA = !askerA;
-      setTimeout(() => {
+      betweenTimer = setTimeout(() => {
+        betweenTimer = 0;
+        if (!shell.alive() || tableClosed) return;
         handOver = false;
         phase = 'dealt';
         if (!isHost()) maskOppFaces();
@@ -7512,7 +7514,9 @@
               <div class="pc-hand">${oppCards().map(cardFace).join('')}</div>
               <div class="pc-hand">${myCards().map(cardFace).join('')}</div>
             </div>`;
-          setTimeout(() => {
+          betweenTimer = setTimeout(() => {
+            betweenTimer = 0;
+            if (!shell.alive() || tableClosed) return;
             if (!isHost()) maskOppFaces();
             handOver = false;
             phase = 'dealt';

@@ -3387,7 +3387,13 @@
       msg = 'KHO! · ' + (half === 'L' ? 'left' : 'right') + ' half';
       if (typeof showToast === 'function') showToast('KHO!');
       paint(true);
-      setTimeout(() => {
+      if (betweenTimer) {
+        clearTimeout(betweenTimer);
+        betweenTimer = 0;
+      }
+      betweenTimer = setTimeout(() => {
+        betweenTimer = 0;
+        if (!shell.alive() || phase === 'over') return;
         khoBusy = false;
       }, 220);
       if (liveOn && iAmChasing()) {

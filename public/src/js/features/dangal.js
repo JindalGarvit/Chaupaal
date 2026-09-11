@@ -316,8 +316,11 @@ function launchMuqabalaSafe(fn, label){
     try{
       const overlay = document.getElementById('muqabalaOverlay');
       if(overlay){
-        overlay.classList.add('hidden');
-        overlay.innerHTML = '';
+        if (typeof destroyMuqabalaOverlay === 'function') {
+          destroyMuqabalaOverlay(overlay, { honorReturn: true, clearLaunch: true });
+        } else {
+          overlay.remove();
+        }
       }
     }catch(e2){}
     if(typeof showToast === 'function'){
@@ -410,18 +413,62 @@ async function generateMuqabalaQuestionsAI({ category, count } = {}){
  * @param {string} mode - category / Custom / AI label
  * @param {object} [opts] - { questions, timerSeconds, source, skipMatchmaking, skipCredit, practice }
  */
+function createMuqabalaOverlay() {
+  const old = document.getElementById('muqabalaOverlay');
+  if (old) {
+    try {
+      old.remove();
+    } catch (e) {}
+  }
+  const overlay = document.createElement('div');
+  overlay.id = 'muqabalaOverlay';
+  overlay.className = 'muqabala-overlay game-overlay';
+  overlay.setAttribute('data-overlay-orphan', '1');
+  const device = document.querySelector('.device') || document.body;
+  device.appendChild(overlay);
+  return overlay;
+}
+
+/** Remove Muqabala from DOM (not merely hide). Optional return-target honor. */
+function destroyMuqabalaOverlay(overlay, opts) {
+  const o = opts || {};
+  try {
+    if (overlay && overlay.isConnected) overlay.remove();
+  } catch (e) {}
+  try {
+    const leftover = document.getElementById('muqabalaOverlay');
+    if (leftover) leftover.remove();
+  } catch (e) {}
+  if (o.honorReturn !== false) {
+    try {
+      if (typeof honorGameReturnTarget === 'function') {
+        honorGameReturnTarget({
+          source:
+            o.source ||
+            (window.__dangalLaunchCtx && window.__dangalLaunchCtx.source) ||
+            'manch',
+        });
+      }
+    } catch (e) {}
+  }
+  if (o.clearLaunch !== false) {
+    try {
+      if (typeof clearDangalLaunchCtx === 'function') clearDangalLaunchCtx();
+    } catch (e) {}
+  }
+}
+
 function startMuqabala(opponentName, mode, opts){
   return launchMuqabalaSafe(()=>_startMuqabalaCore(opponentName, mode, opts), 'start');
 }
 
 function _startMuqabalaCore(opponentName, mode, opts){
-  const overlay = document.getElementById('muqabalaOverlay');
+  const overlay = createMuqabalaOverlay();
   if(!overlay){ showToast(t('muqabala_unavailable')); return; }
   if(typeof prepareGameOverlay==='function') prepareGameOverlay(overlay,{theme:'light',gameId:'quiz'});
   const options = normalizeMuqabalaOptions(opts);
   const label = mode || 'GK';
   const qCount = options.questions ? options.questions.length : 10;
-  overlay.classList.remove('hidden');
   let matchFound = false;
   let cancelled = false;
   let searchTimer = null;
@@ -441,18 +488,24 @@ function _startMuqabalaCore(opponentName, mode, opts){
     cancelled = true;
     clearSearchTimers();
     releaseSearchScope();
+    const finish = () =>
+      destroyMuqabalaOverlay(overlay, {
+        source: options.source || (window.__dangalLaunchCtx && window.__dangalLaunchCtx.source) || 'manch',
+      });
     if(typeof animateGameExit==='function'){
-      animateGameExit(overlay, ()=>overlay.classList.add('hidden'));
+      animateGameExit(overlay, finish);
     } else {
-      overlay.classList.add('hidden');
+      finish();
     }
   };
   if(typeof registerScopedOverlay === 'function'){
-    unregisterSearchOverlay = registerScopedOverlay(
-      typeof OVERLAY_SCOPE_CHAT !== 'undefined' ? OVERLAY_SCOPE_CHAT : 'chat',
-      overlay,
-      cancelSearch
-    );
+    const scope =
+      typeof resolveGameOverlayScope === 'function'
+        ? resolveGameOverlayScope(options.source || (window.__dangalLaunchCtx && window.__dangalLaunchCtx.source) || 'manch')
+        : typeof OVERLAY_SCOPE_MANCH !== 'undefined'
+          ? OVERLAY_SCOPE_MANCH
+          : 'manch';
+    unregisterSearchOverlay = registerScopedOverlay(scope, overlay, cancelSearch);
   }
 
   const beginRun = (opp, runOpts)=>{
@@ -673,6 +726,53 @@ function _runMuqabalaCore(overlay, oppName, mode, opts){
   let sessionEnded = false;
   let sessionResult = null;
   let leaveConfirmed = false;
+  /** @type {Set<number>} */
+  const pendingTimers = new Set();
+  /** @type {Set<number>} */
+  const pendingIntervals = new Set();
+  function muqSchedule(fn, ms) {
+    const id = setTimeout(() => {
+      pendingTimers.delete(id);
+      if (sessionEnded) return;
+      try {
+        fn();
+      } catch (e) {}
+    }, ms);
+    pendingTimers.add(id);
+    return id;
+  }
+  function muqInterval(fn, ms) {
+    const id = setInterval(() => {
+      if (sessionEnded) {
+        clearInterval(id);
+        pendingIntervals.delete(id);
+        return;
+      }
+      try {
+        fn();
+      } catch (e) {}
+    }, ms);
+    pendingIntervals.add(id);
+    return id;
+  }
+  function clearMuqTimers() {
+    pendingTimers.forEach((id) => {
+      try {
+        clearTimeout(id);
+      } catch (e) {}
+    });
+    pendingIntervals.forEach((id) => {
+      try {
+        clearInterval(id);
+      } catch (e) {}
+    });
+    pendingTimers.clear();
+    pendingIntervals.clear();
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+  }
   const modeChrome = practiceFinal
     ? 'Practice vs AI'
     : (liveOn
@@ -723,16 +823,17 @@ function _runMuqabalaCore(overlay, oppName, mode, opts){
         sessionResult = result;
       },
       cleanup(){
-        if(timerInterval){ clearInterval(timerInterval); timerInterval = null; }
+        clearMuqTimers();
         if(liveHandle && !leaveConfirmed){
           try{
             const aborting = !sessionEnded || ['dismissed','aborted','quit'].includes(sessionResult);
-            liveHandle.leave({ forfeit: aborting && liveOn });
+            if (typeof detachLiveHandle === 'function') {
+              detachLiveHandle(liveHandle, { forfeit: aborting && liveOn, alreadyOver: !aborting });
+            } else {
+              liveHandle.leave({ forfeit: aborting && liveOn });
+            }
           }catch(e){}
           liveHandle = null;
-        }
-        if(['dismissed','aborted','quit','error'].includes(sessionResult)){
-          overlay.classList.add('hidden');
         }
       },
     });
@@ -741,19 +842,22 @@ function _runMuqabalaCore(overlay, oppName, mode, opts){
 
   function detachLive(forfeit){
     if(!liveHandle) return;
-    try{ liveHandle.leave({ forfeit: !!forfeit }); }catch(e){ try{ liveHandle.leave(); }catch(e2){} }
+    if (typeof detachLiveHandle === 'function') {
+      detachLiveHandle(liveHandle, { forfeit: !!forfeit, alreadyOver: !forfeit });
+    } else {
+      try{ liveHandle.leave({ forfeit: !!forfeit }); }catch(e){ try{ liveHandle.leave(); }catch(e2){} }
+    }
     liveHandle = null;
   }
 
   function endSession(result){
     if(sessionEnded) return;
     sessionEnded = true;
-    if(timerInterval){ clearInterval(timerInterval); timerInterval = null; }
+    clearMuqTimers();
     if(liveHandle && (result === 'win' || result === 'loss' || result === 'draw')){
       try{
         liveHandle.setStatus('over', result === 'draw' ? null : (result === 'win' ? (liveRoles && liveRoles.me) : (liveRoles && liveRoles.opp)));
       }catch(e){}
-      // Detach listeners without forfeit — match is finished
       leaveConfirmed = true;
       detachLive(false);
     }
@@ -764,24 +868,16 @@ function _runMuqabalaCore(overlay, oppName, mode, opts){
   }
 
   function closeOverlay(result){
-    endSession(result || 'dismissed');
-    const finishHide = () => {
-      overlay.classList.add('hidden');
-      try {
-        if (typeof honorGameReturnTarget === 'function') {
-          honorGameReturnTarget({
-            source: source || (window.__dangalLaunchCtx && window.__dangalLaunchCtx.source) || 'manch',
-          });
-        }
-      } catch (e) {}
-      try {
-        if (typeof clearDangalLaunchCtx === 'function') clearDangalLaunchCtx();
-      } catch (e) {}
-    };
-    if(typeof animateGameExit==='function'){
-      animateGameExit(overlay, finishHide);
+    const src = source || (window.__dangalLaunchCtx && window.__dangalLaunchCtx.source) || 'manch';
+    if (!sessionEnded) endSession(result || 'dismissed');
+    else clearMuqTimers();
+    leaveConfirmed = true;
+    if (liveHandle) detachLive(false);
+    const finish = () => destroyMuqabalaOverlay(overlay, { source: src, honorReturn: true });
+    if(overlay && overlay.isConnected && typeof animateGameExit==='function'){
+      animateGameExit(overlay, finish);
     } else {
-      finishHide();
+      finish();
     }
   }
 
@@ -830,7 +926,7 @@ function _runMuqabalaCore(overlay, oppName, mode, opts){
 
   /** Lockstep Live: push answers/scores only — never reseed questions. */
   function pushLiveAnswer(qi, choice, correct){
-    if(!liveOn || !liveHandle || !liveRoles) return;
+    if(!liveOn || !liveHandle || !liveRoles || sessionEnded) return;
     const mine = (remoteAnswers[liveRoles.me] || {})[String(qi)] || (remoteAnswers[liveRoles.me] || {})[qi];
     if(mine) return; // late/double tap — already recorded
     const answers = {};
@@ -922,7 +1018,7 @@ function _runMuqabalaCore(overlay, oppName, mode, opts){
           handleForfeitSnap({ winner: liveRoles.me });
         },
         onSnap(val){
-          if(!val) return;
+          if(!val || sessionEnded || !liveHandle) return;
           if(val.status === 'forfeit' || val.status === 'over'){
             if(val.status === 'forfeit') handleForfeitSnap(val);
             return;
@@ -1084,11 +1180,11 @@ function _runMuqabalaCore(overlay, oppName, mode, opts){
     };
 
     const advanceAfterAnswer = ()=>{
-      const go = ()=>{ qIdx++; renderQ(); };
-      if(!liveOn){ setTimeout(go, 720); return; }
+      const go = ()=>{ if(sessionEnded) return; qIdx++; renderQ(); };
+      if(!liveOn){ muqSchedule(go, 720); return; }
       let waits = 0;
-      const poll = setInterval(()=>{
-        if(sessionEnded){ clearInterval(poll); return; }
+      const poll = muqInterval(()=>{
+        if(sessionEnded){ return; }
         waits++;
         const remote = syncOppFromRemote();
         const oi = overlay.querySelector('#oppInd');
@@ -1098,7 +1194,8 @@ function _runMuqabalaCore(overlay, oppName, mode, opts){
         }
         if(remote || waits > lockstepMaxPolls){
           clearInterval(poll);
-          setTimeout(go, 420);
+          pendingIntervals.delete(poll);
+          muqSchedule(go, 420);
         }
       }, 250);
     };
@@ -1118,7 +1215,7 @@ function _runMuqabalaCore(overlay, oppName, mode, opts){
         paintScoreboard();
         pushLiveAnswer(qIdx, chosen, true);
         if(liveOn) advanceAfterAnswer();
-        else setTimeout(()=>{qIdx++;renderQ();},900);
+        else muqSchedule(()=>{qIdx++;renderQ();},900);
       }));
 
       const typeInput=overlay.querySelector('#philoTypeInput');
@@ -1143,7 +1240,7 @@ function _runMuqabalaCore(overlay, oppName, mode, opts){
           paintScoreboard();
           pushLiveAnswer(qIdx, -1, true);
           if(liveOn) advanceAfterAnswer();
-          else setTimeout(()=>{qIdx++;renderQ();},900);
+          else muqSchedule(()=>{qIdx++;renderQ();},900);
         });
       }
     } else {
@@ -1185,22 +1282,22 @@ function _runMuqabalaCore(overlay, oppName, mode, opts){
         } else if(oi){
           oi.textContent=t('opp_correct',{name:displayOpp});
         }
-        setTimeout(()=>{qIdx++;renderQ();},720);
+        muqSchedule(()=>{qIdx++;renderQ();},720);
       }));
 
       if(!liveOn){
         const oppCapMs = Math.max(2000, (timerSeconds - 2) * 1000);
         const oppDelay=1200+Math.random()*Math.max(1000, oppCapMs - 1200);
         const oppCorrect=Math.random()<0.55;
-        setTimeout(()=>{
-          if(answered || oppScoredThisQ) return;
+        muqSchedule(()=>{
+          if(answered || oppScoredThisQ || sessionEnded) return;
           const oi=overlay.querySelector('#oppInd');
           if(oi)oi.textContent=oppCorrect?t('opp_correct',{name:displayOpp}):t('opp_wrong',{name:displayOpp});
           bumpOppIfCorrect(oppCorrect);
         }, Math.min(oppDelay, oppCapMs));
       } else {
-        const livePoll = setInterval(()=>{
-          if(answered){ clearInterval(livePoll); return; }
+        muqInterval(()=>{
+          if(answered || sessionEnded){ return; }
           const remote = syncOppFromRemote();
           if(remote){
             const oi=overlay.querySelector('#oppInd');
@@ -1212,11 +1309,13 @@ function _runMuqabalaCore(overlay, oppName, mode, opts){
 
       tickTimerUi();
       timerInterval=setInterval(()=>{
+        if(sessionEnded){ clearInterval(timerInterval); timerInterval=null; return; }
         if(timerPaused)return;
         timeLeft--;
         tickTimerUi();
         if(timeLeft<=0){
           clearInterval(timerInterval);
+          timerInterval=null;
           if(!answered){
             answered=true;
             noteAnswer(false, 'timeout');
@@ -1235,7 +1334,7 @@ function _runMuqabalaCore(overlay, oppName, mode, opts){
                 if(oi)oi.textContent=oppCorrectLocal?t('opp_correct',{name:displayOpp}):t('opp_wrong',{name:displayOpp});
                 bumpOppIfCorrect(oppCorrectLocal);
               }
-              setTimeout(()=>{qIdx++;renderQ();},720);
+              muqSchedule(()=>{qIdx++;renderQ();},720);
             }
           }
         }
@@ -1317,8 +1416,12 @@ function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalA
     ${philosophicalAnswers.length>0 && nudge?`<div class="nudge-box" style="margin:0 16px 16px;"><div class="nudge-label">Baithak mein baat karein</div><div class="nudge-text">${nudge}</div></div>`:''}
   `;
   document.getElementById('closeMuqabala3')?.addEventListener('click',()=>{
-    if(typeof animateGameExit==='function') animateGameExit(overlay, ()=>overlay.classList.add('hidden'));
-    else overlay.classList.add('hidden');
+    const finish = () =>
+      destroyMuqabalaOverlay(overlay, {
+        source: (window.__dangalLaunchCtx && window.__dangalLaunchCtx.source) || 'manch',
+      });
+    if(typeof animateGameExit==='function') animateGameExit(overlay, finish);
+    else finish();
   });
 
   function paintChipDelta(settle){
@@ -1491,7 +1594,7 @@ function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalA
         }
       },
       chat:()=>{
-        overlay.classList.add('hidden');
+        destroyMuqabalaOverlay(overlay, { honorReturn: false, clearLaunch: true });
         if(typeof openPeerDm==='function' && settleOppUid){
           openPeerDm({ peerUid: settleOppUid, peerName: oppName, seedHello: false });
         } else if(typeof showToast==='function'){
