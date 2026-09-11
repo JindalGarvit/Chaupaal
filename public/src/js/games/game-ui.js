@@ -254,9 +254,9 @@
       'Live hides the remaining deck · dealt piles public · virtual stakes only',
     ],
     patangbaazi: [
-      'Hold to tension — climb with weight, ease through gusts',
-      'Cross strings to saw; watch the hunter tip toward your manjha',
-      'Duel clears the sky · Festival is heat that never ends — try both',
+      'Live: both fly at once in one sky — hold to climb, shared wind from host',
+      'Practice: Duel cuts the hunter · Festival survives the heat',
+      'Fair string cuts + stakes arrive in later Live prompts',
     ],
     brickbreaker: [
       'Campaign or Score Attack — pick before you Serve',

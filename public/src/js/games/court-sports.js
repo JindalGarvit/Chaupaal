@@ -1,6 +1,6 @@
 /**
- * Court sports + Patang — timing / raid loops.
- * Practice vs AI, or Live 1v1 score/serve sync (not continuous ball physics).
+ * Court sports + Patang — timing / raid loops + Patang dual-flight Live (1/3).
+ * Practice vs AI, or Live 1v1 (Kabaddi continuous sync pattern for Patang kites).
  */
 (function () {
   'use strict';
@@ -5732,7 +5732,7 @@
     sheet.innerHTML = `
       <div class="cs-patang-pick-card" role="dialog" aria-label="Choose a sky">
         <div class="cs-patang-pick-title">Patang Baazi</div>
-        <div class="cs-patang-pick-sub">Practice rooftop skies — climb, cut, survive. No Live · no stakes.</div>
+        <div class="cs-patang-pick-sub">Practice rooftop skies — climb, cut, survive. Open from a Live challenge for dual flight.</div>
         <button type="button" class="cs-patang-pick-btn${last === 'duel' ? ' is-last' : ''}" data-patang-mode="duel">
           <span class="cs-patang-pick-name">Duel</span>
           <span class="cs-patang-pick-desc">${esc(duelLine)}</span>
@@ -5750,19 +5750,44 @@
     sheet.querySelector('[data-patang-cancel]')?.addEventListener('click', () => sheet.remove());
   }
 
+  /**
+   * Patang Baazi — Practice duel/festival + Live dual kite flight (Prompt 1/3).
+   * Live: both fly at once; host seeds shared wind; kite sync ~100ms.
+   * Cuts: Live abrasion visual only (fair cut win = Prompt 2). No stakes (Prompt 3).
+   */
   function openPatang(opts) {
     const o = opts && typeof opts === 'object' ? opts : {};
-    const playMode = o.mode === 'festival' ? 'festival' : 'duel';
-    patangSaveMode(playMode);
+    const chat = resolveChat(o.chat != null ? o.chat : arguments[0] != null ? arguments[0] : o);
+    const liveOn = chatLiveOn(chat);
+    // Live always Duel sky — Festival Live out of scope.
+    const playMode = liveOn ? 'duel' : o.mode === 'festival' ? 'festival' : 'duel';
+    if (!liveOn) patangSaveMode(playMode);
     const isFestival = playMode === 'festival';
     let raf = 0;
     let pauseCtrl = null;
     let lastTs = 0;
+    let liveRoles = null;
+    let liveHandle = null;
+    let eventSeq = 0;
+    let appliedSeq = 0;
+    let applying = false;
+    let peerPaused = false;
+    let lastPushAt = 0;
+    let cutStubHint = false;
+    const SYNC_MS = 100;
+    const matchId = liveOn ? String(matchIdFor(chat, 'patangbaazi') || '').trim() : '';
+    /** Host-authority wind — peer applies wind from snaps (no local wind sim). */
+    let iAmHost = true;
+
     const shell = openShell({
       id: 'patangbaazi',
       title: 'Patang Baazi',
-      subtitle: practiceSub(isFestival ? 'Festival · survive the heat' : 'Duel · cut the hunter'),
-      mode: 'practice',
+      subtitle: liveOn
+        ? liveSub() + ' · Friendly · Dual flight'
+        : practiceSub(isFestival ? 'Festival · survive the heat' : 'Duel · cut the hunter'),
+      mode: liveOn ? 'live' : 'practice',
+      live: liveOn,
+      chat: liveOn ? chat : undefined,
       accent: '#FF6D00',
       bg: '#001018',
       pauseId: 'csPatangPause',
@@ -5770,7 +5795,13 @@
         cancelAnimationFrame(raf);
         raf = 0;
         window.removeEventListener('resize', onResize);
-        if (pauseCtrl) pauseCtrl.destroy();
+        if (pauseCtrl) {
+          try {
+            pauseCtrl.destroy();
+          } catch (e) {}
+        }
+        pauseCtrl = null;
+        liveHandle = null;
       },
     });
     if (!shell) return;
@@ -5779,16 +5810,24 @@
       <div class="cs-patang">
         ${courtTurnBanner(
           'yours',
-          isFestival ? 'Festival sky' : 'Duel sky',
-          isFestival ? 'Survive the heat' : 'Cut the hunter'
+          liveOn ? 'Live duel sky' : isFestival ? 'Festival sky' : 'Duel sky',
+          liveOn
+            ? 'Both fly — cuts next prompt'
+            : isFestival
+              ? 'Survive the heat'
+              : 'Cut the hunter'
         )}
         <p class="cs-rally-msg" data-patang-msg>${
-          isFestival
-            ? 'Festival heat — stay up, cut what you can, pressure never sleeps.'
-            : 'Duel sky — cross their string, cut the hunter, clear two.'
+          liveOn
+            ? 'Live dual flight — fly your kite; friend flies theirs. Shared wind from host.'
+            : isFestival
+              ? 'Festival heat — stay up, cut what you can, pressure never sleeps.'
+              : 'Duel sky — cross their string, cut the hunter, clear two.'
         }</p>
         <canvas data-patang></canvas>
-        <p class="cs-rally-hint" data-patang-hint>Hold the sky — pull to climb</p>
+        <p class="cs-rally-hint" data-patang-hint>${
+          liveOn ? 'Hold the sky — both fly at once' : 'Hold the sky — pull to climb'
+        }</p>
       </div>`;
     const canvas = shell.body.querySelector('[data-patang]');
     const hint = shell.body.querySelector('[data-patang-hint]');
@@ -5802,9 +5841,9 @@
     const ABRASION_MAX = 1;
     const STRING_SAMPLES = 6;
     const TEACH_SEC = isFestival ? 2.2 : 2.8;
-    const WAVES_TO_WIN = 2; // duel only
+    const WAVES_TO_WIN = 2; // duel Practice only
     const YOU_ANCHOR = 0.42;
-    // Cut law (Prompt 2) + hunter AI (Prompt 3) intact. Prompt 4 = skies + records.
+    const PEER_ANCHOR = 0.58;
 
     const RIVAL_LOOKS = [
       { color: '#29B6F6', accent: '#B3E5FC', anchor: 0.58, label: 'Hunter' },
@@ -5846,8 +5885,17 @@
       return k;
     }
 
-    const you = makeKite(0.35, 0.62, '#FF6D00', '#FFD180');
-    let opp = makeRival(0);
+    function makePeerKite() {
+      const k = makeKite(0.68, 0.58, '#29B6F6', '#B3E5FC');
+      k.anchorX = PEER_ANCHOR;
+      k.label = 'Friend';
+      k.ai = null;
+      return k;
+    }
+
+    const you = makeKite(liveOn ? 0.32 : 0.35, 0.62, '#FF6D00', '#FFD180');
+    you.anchorX = YOU_ANCHOR;
+    let opp = liveOn ? makePeerKite() : makeRival(0);
     let holding = false;
     let ended = false;
     let ending = null; // full duel end fall
@@ -5860,7 +5908,129 @@
     let pointerId = null;
     let abrasion = { active: false, x: 0.5, y: 0.5, youDmg: 0, oppDmg: 0, flash: 0, sparks: [] };
     let hapticCool = 0;
-    const stats = { cuts: 0, aliveSec: 0, death: null }; // Prompt 4 hooks
+    const stats = { cuts: 0, aliveSec: 0, death: null };
+    let remoteOpp = null; // last peer kite snapshot for lerp
+
+    function isPaused() {
+      return !!(peerPaused || (pauseCtrl && pauseCtrl.isPaused && pauseCtrl.isPaused()));
+    }
+
+    function kiteStub(k) {
+      if (!k) return null;
+      return {
+        x: +k.x.toFixed(3),
+        y: +k.y.toFixed(3),
+        vx: +k.vx.toFixed(3),
+        vy: +k.vy.toFixed(3),
+        tension: +k.tension.toFixed(3),
+        heading: +k.heading.toFixed(3),
+        targetX: +k.targetX.toFixed(3),
+        holding: !!holding && k === you,
+        alive: k.alive !== false,
+      };
+    }
+
+    function applyKiteSnap(k, snap, hard) {
+      if (!k || !snap) return;
+      if (hard) {
+        k.x = snap.x;
+        k.y = snap.y;
+        k.vx = snap.vx || 0;
+        k.vy = snap.vy || 0;
+        k.tension = snap.tension != null ? snap.tension : k.tension;
+        k.heading = snap.heading != null ? snap.heading : k.heading;
+        k.targetX = snap.targetX != null ? snap.targetX : k.targetX;
+        if (snap.alive === false) k.alive = false;
+        else k.alive = true;
+        return;
+      }
+      // Soft blend — reduces rubber-banding
+      k.x += (snap.x - k.x) * 0.42;
+      k.y += (snap.y - k.y) * 0.42;
+      k.vx += ((snap.vx || 0) - k.vx) * 0.35;
+      k.vy += ((snap.vy || 0) - k.vy) * 0.35;
+      if (snap.tension != null) k.tension += (snap.tension - k.tension) * 0.4;
+      if (snap.heading != null) k.heading = snap.heading;
+      if (snap.targetX != null) k.targetX += (snap.targetX - k.targetX) * 0.5;
+      k.alive = snap.alive !== false;
+    }
+
+    function pushLive(extra, top) {
+      if (!liveOn || !liveHandle || applying || ended || !liveRoles) return;
+      const now = Date.now();
+      const force = !!(top && top.force);
+      if (!force && now - lastPushAt < SYNC_MS) return;
+      lastPushAt = now;
+      eventSeq += 1;
+      const me = liveRoles.me;
+      const oppUid = liveRoles.opp || liveRoles.playerB;
+      const kites = {};
+      kites[me] = kiteStub(you);
+      if (oppUid) kites[oppUid] = remoteOpp || kiteStub(opp);
+      const st = Object.assign(
+        {
+          eventSeq,
+          kites,
+          wind: iAmHost
+            ? {
+                windX: +windX.toFixed(4),
+                windY: +windY.toFixed(4),
+                gust: +gust.toFixed(4),
+                t: +t.toFixed(2),
+                cloudOff: +cloudOff.toFixed(1),
+              }
+            : undefined,
+          paused: isPaused(),
+          phase: 'fly',
+        },
+        extra || {}
+      );
+      if (!iAmHost) delete st.wind;
+      try {
+        liveHandle.push(
+          Object.assign(
+            {
+              status: 'playing',
+              turn: null,
+              state: st,
+            },
+            top || {}
+          )
+        );
+      } catch (e) {}
+    }
+
+    function applyRemoteState(st) {
+      if (!st || !liveOn) return;
+      const seq = st.eventSeq | 0;
+      // Accept peer updates even if seq races — keyed by kite seat.
+      if (seq > 0) {
+        if (seq <= appliedSeq && !st.kites) return;
+        appliedSeq = Math.max(appliedSeq, seq);
+        eventSeq = Math.max(eventSeq, seq);
+      }
+      applying = true;
+      if (st.paused != null) {
+        const localPaused = !!(pauseCtrl && pauseCtrl.isPaused && pauseCtrl.isPaused());
+        peerPaused = !!st.paused && !localPaused;
+      }
+      if (st.wind && !iAmHost) {
+        windX = st.wind.windX != null ? st.wind.windX : windX;
+        windY = st.wind.windY != null ? st.wind.windY : windY;
+        gust = st.wind.gust != null ? st.wind.gust : gust;
+        if (st.wind.t != null) t = st.wind.t;
+        if (st.wind.cloudOff != null) cloudOff = st.wind.cloudOff;
+      }
+      if (st.kites && liveRoles) {
+        const peerId = liveRoles.opp || liveRoles.playerB;
+        const peerSnap = peerId && st.kites[peerId];
+        if (peerSnap) {
+          remoteOpp = peerSnap;
+          applyKiteSnap(opp, peerSnap, !opp || Math.hypot(opp.x - peerSnap.x, opp.y - peerSnap.y) > 0.22);
+        }
+      }
+      applying = false;
+    }
 
     function size() {
       const r = canvas.getBoundingClientRect();
@@ -5904,12 +6074,12 @@
       you.targetX = Math.max(0.08, Math.min(0.92, (e.clientX - r.left) / Math.max(1, r.width)));
     }
     canvas.addEventListener('pointerdown', (e) => {
-      if (ended) return;
+      if (ended || isPaused()) return;
       e.preventDefault();
       setHolding(true, e);
     });
     canvas.addEventListener('pointermove', (e) => {
-      if (!holding || ended) return;
+      if (!holding || ended || isPaused()) return;
       if (pointerId != null && e.pointerId !== pointerId) return;
       aimAt(e);
     });
@@ -5929,6 +6099,7 @@
     }
 
     function end(won, why, deathKind) {
+      if (liveOn) return; // Live match finish = Prompt 2 (fair cuts)
       if (ended || ending) return;
       if (!won && deathKind) stats.death = deathKind;
       ending = {
@@ -6059,6 +6230,7 @@
     }
 
     function beginWaveClear(detail) {
+      if (liveOn) return; // No AI wave clears on Live
       if (waveClear || ending || ended) return;
       stats.cuts += 1;
       if (opp) opp.alive = false;
@@ -6087,8 +6259,17 @@
       waveClear = null;
     }
 
-    /** Cut resolved vs active hunter — mid-wave continue or player loss. */
+    /** Cut resolved vs active hunter — mid-wave continue or player loss. Live: stub (P2). */
     function onCutResolved(playerWon, detail) {
+      if (liveOn) {
+        abrasion.youDmg = Math.min(0.88, abrasion.youDmg);
+        abrasion.oppDmg = Math.min(0.88, abrasion.oppDmg);
+        if (!cutStubHint && hint) {
+          cutStubHint = true;
+          hint.textContent = 'Sawing — fair cuts land next prompt';
+        }
+        return;
+      }
       if (playerWon) beginWaveClear(detail);
       else end(false, detail || 'Rival cut your manjha.', 'cut');
     }
@@ -6182,7 +6363,7 @@
         abrasion.sparks = abrasion.sparks.filter((s) => (s.life -= dt) > 0);
         return null;
       }
-      const polyYou = stringPolyline(you, YOU_ANCHOR);
+      const polyYou = stringPolyline(you, you.anchorX != null ? you.anchorX : YOU_ANCHOR);
       const polyOpp = stringPolyline(opp, opp.anchorX);
       const cross = findStringCross(polyYou, polyOpp);
       hapticCool = Math.max(0, hapticCool - dt);
@@ -6282,6 +6463,13 @@
       if (k.y <= ZENITH + 0.02 && k.tension > 0.82) {
         k.zenithRisk += dt;
         if (k.zenithRisk > snapLimit) {
+          if (liveOn) {
+            // Soft recover — no match end until fair cuts (P2)
+            k.tension = Math.min(k.tension, 0.55);
+            k.y = Math.max(k.y, ZENITH + 0.06);
+            k.zenithRisk = 0;
+            return;
+          }
           if (isPlayer) {
             end(false, 'Manjha snapped at the zenith — ease off next time.', 'snap');
           } else {
@@ -6293,6 +6481,12 @@
         k.zenithRisk = Math.max(0, k.zenithRisk - dt * 0.55);
       }
       if (k.y >= GROUND && k.tension < 0.2) {
+        if (liveOn) {
+          k.y = GROUND - 0.04;
+          k.tension = Math.max(k.tension, 0.35);
+          k.vy = -0.08;
+          return;
+        }
         if (isPlayer) end(false, 'Kite dumped into the rooftops.', 'stall');
         else beginWaveClear('Hunter dumped into the rooftops!');
       }
@@ -6306,6 +6500,7 @@
     }
 
     function thinkRival(dt) {
+      if (liveOn) return; // Human peer kite — no AI hunter on Live
       if (!opp || !opp.alive || !opp.ai) return;
       const ai = opp.ai;
       ai.stateT += dt;
@@ -6577,6 +6772,33 @@
     }
 
     function updateHint() {
+      if (liveOn) {
+        if (cutStubHint && abrasion.active) {
+          hint.textContent = 'Sawing — fair cuts land next prompt';
+          hint.classList.add('is-warn');
+          return;
+        }
+        if (abrasion.active) {
+          hint.textContent = 'Strings crossed — fly on (cuts next prompt)';
+          hint.classList.add('is-warn');
+          return;
+        }
+        if (you.zenithRisk > 0.35) {
+          hint.textContent = 'Ease off — manjha screaming at the top';
+          hint.classList.add('is-warn');
+          return;
+        }
+        if (gust > 0.14) {
+          hint.textContent = 'Gust — ease tension, don’t yank';
+          hint.classList.remove('is-warn');
+          return;
+        }
+        hint.textContent = holding
+          ? 'Climbing — friend flies the other kite'
+          : 'Floating — hold to pull · both fly at once';
+        hint.classList.remove('is-warn');
+        return;
+      }
       if (t < TEACH_SEC) {
         hint.textContent = 'Hunter watching — get height, then cross to cut';
         hint.classList.remove('is-warn');
@@ -6618,20 +6840,37 @@
         drawString(opp, opp.anchorX, abrasion.oppDmg);
         drawKite(opp);
       }
-      drawString(you, YOU_ANCHOR, abrasion.youDmg);
+      drawString(you, you.anchorX != null ? you.anchorX : YOU_ANCHOR, abrasion.youDmg);
       drawKite(you);
       drawAbrasionFx();
 
       ctx.fillStyle = 'rgba(255,255,255,.55)';
       ctx.font = '11px "Space Grotesk",sans-serif';
-      ctx.fillText(gust > 0.12 ? 'Wind · gust' : 'Wind · steady', 12, 18);
-      if (isFestival) {
+      ctx.fillText(
+        liveOn
+          ? gust > 0.12
+            ? 'Live · gust'
+            : 'Live · dual flight'
+          : gust > 0.12
+            ? 'Wind · gust'
+            : 'Wind · steady',
+        12,
+        18
+      );
+      if (liveOn) {
+        ctx.fillText('You · Friend · cuts next', 12, 34);
+      } else       if (liveOn) {
+        ctx.fillText('You · Friend · cuts next', 12, 34);
+      } else if (isFestival) {
         const threat = Math.min(5, 1 + stats.cuts);
         ctx.fillText(Math.floor(stats.aliveSec) + 's · ' + stats.cuts + ' cuts · heat ' + threat, 12, 34);
       } else {
         ctx.fillText(stats.cuts + '/' + WAVES_TO_WIN + ' cuts', 12, 34);
       }
-      if (opp && opp.ai && t >= TEACH_SEC) {
+      if (liveOn && opp) {
+        ctx.fillStyle = 'rgba(255,255,255,.4)';
+        ctx.fillText((opp.label || 'Friend') + ' · peer', 12, 50);
+      } else if (opp && opp.ai && t >= TEACH_SEC) {
         ctx.fillStyle = 'rgba(255,255,255,.4)';
         ctx.fillText((opp.label || 'Hunter') + ' · ' + opp.ai.state, 12, 50);
       }
@@ -6643,9 +6882,9 @@
 
     function loop(now) {
       if (!shell.alive() || ended) return;
-      if (pauseCtrl && pauseCtrl.isPaused()) {
+      if (isPaused()) {
         lastTs = 0;
-        raf = 0;
+        raf = requestAnimationFrame(loop);
         return;
       }
       if (!lastTs) lastTs = now;
@@ -6694,7 +6933,7 @@
           drawString(fk, fk.anchorX, 1);
           drawKite(fk);
         }
-        drawString(you, YOU_ANCHOR, 0);
+        drawString(you, you.anchorX || YOU_ANCHOR, 0);
         drawKite(you);
         ctx.fillStyle = 'rgba(255,255,255,.55)';
         ctx.font = '11px "Space Grotesk",sans-serif';
@@ -6709,13 +6948,23 @@
       }
 
       stats.aliveSec += dt;
-      updateWind(dt);
+      // Host seeds shared wind; peer consumes wind from Live snaps.
+      if (!liveOn || iAmHost) updateWind(dt);
+      else cloudOff += (windX * 28 + 6) * dt;
+
       stepKite(you, dt, true, holding);
       if (ending || waveClear) {
         raf = requestAnimationFrame(loop);
         return;
       }
-      thinkRival(dt);
+
+      if (liveOn) {
+        // Blend peer kite toward last snap between pushes
+        if (remoteOpp) applyKiteSnap(opp, remoteOpp, false);
+        opp.tailPhase += dt * (4 + opp.tension * 6);
+      } else {
+        thinkRival(dt);
+      }
       if (ending || waveClear) {
         raf = requestAnimationFrame(loop);
         return;
@@ -6724,8 +6973,10 @@
       const cut = tickAbrasion(dt);
       if (cut) {
         onCutResolved(cut.playerWon, cut.why);
-        raf = requestAnimationFrame(loop);
-        return;
+        if (!liveOn) {
+          raf = requestAnimationFrame(loop);
+          return;
+        }
       }
 
       if (opp && opp.alive && !abrasion.active && sailsBump(you, opp) && Math.random() < 0.08) {
@@ -6740,6 +6991,7 @@
 
       updateHint();
       drawFrame();
+      if (liveOn) pushLive();
 
       raf = requestAnimationFrame(loop);
     }
@@ -6748,16 +7000,84 @@
         host: shell.host || shell.overlay,
         pauseBtnId: 'csPatangPause',
         onPause() {
-          cancelAnimationFrame(raf);
-          raf = 0;
           lastTs = 0;
+          if (liveOn) pushLive({ paused: true }, { force: true });
         },
         onResume() {
+          lastTs = 0;
+          if (liveOn) {
+            peerPaused = false;
+            pushLive({ paused: false }, { force: true });
+          }
           if (!ended && !raf) raf = requestAnimationFrame(loop);
         },
-        onQuit: () => shell.close('dismissed'),
+        onQuit: () => {
+          confirmAndClose(shell, {
+            live: liveOn,
+            liveHandle: shell.liveHandle,
+            isPlaying: !ended,
+            title: 'Leave Patang Baazi?',
+            body: liveOn
+              ? 'Leaving ends this Live dual flight for both of you.'
+              : 'This practice run will end.',
+          });
+        },
       });
     }
+
+    if (liveOn && typeof DangalLive !== 'undefined' && DangalLive.join) {
+      liveRoles = DangalLive.roles(chat);
+      iAmHost =
+        liveRoles.host != null
+          ? !!liveRoles.host
+          : liveRoles.me === liveRoles.playerA;
+      // Seat spawn: host leftish, guest rightish
+      if (!iAmHost) {
+        you.x = 0.68;
+        you.targetX = 0.68;
+        you.anchorX = PEER_ANCHOR;
+        you.color = '#29B6F6';
+        you.accent = '#B3E5FC';
+        opp.x = 0.32;
+        opp.targetX = 0.32;
+        opp.anchorX = YOU_ANCHOR;
+        opp.color = '#FF6D00';
+        opp.accent = '#FFD180';
+      }
+      liveHandle = DangalLive.join({
+        gameType: 'patangbaazi',
+        matchId: matchId || matchIdFor(chat, 'patangbaazi'),
+        me: liveRoles.me,
+        playerA: liveRoles.playerA,
+        playerB: liveRoles.playerB,
+        onSnap(val) {
+          if (!val || ended || !shell.alive()) return;
+          if (val.status === 'forfeit' || val.status === 'over') {
+            ended = true;
+            cancelAnimationFrame(raf);
+            raf = 0;
+            if (shell && typeof shell.markOver === 'function') shell.markOver();
+            if (hint) {
+              hint.textContent =
+                val.status === 'forfeit'
+                  ? liveRoles && val.winner === liveRoles.me
+                    ? 'Opponent left'
+                    : 'You left'
+                  : 'Flight over';
+            }
+            return;
+          }
+          applyRemoteState(val.state || {});
+        },
+      });
+      shell.liveHandle = liveHandle;
+      if (iAmHost) {
+        try {
+          pushLive({ phase: 'fly' }, { force: true });
+        } catch (e) {}
+      }
+    }
+
     raf = requestAnimationFrame(loop);
   }
 
@@ -6906,17 +7226,27 @@
     registerGame({
       id: 'patangbaazi',
       name: 'Patang Baazi',
-      desc: 'Practice · climb, cut, survive',
+      desc: 'Live · dual kite flight',
       icon: '🪁',
-      gameType: 'solo',
+      gameType: 'dual',
       genre: 'arcade',
-      solo: true,
+      liveDuel: true,
       selfChat: true,
       dangal: true,
       chat1v1: true,
       order: 26,
+      meta: {
+        phaseA: 'Live dual kite flight sync',
+        phaseB: 'Fair human cut win next',
+        phaseC: 'Stakes + graduation next',
+      },
       launch(ctx) {
         try {
+          const chat = resolveChat(ctx);
+          if (chatLiveOn(chat)) {
+            openPatang({ mode: 'duel', chat });
+            return;
+          }
           const o = ctx && typeof ctx === 'object' ? ctx : {};
           if (o.mode === 'duel' || o.mode === 'festival') {
             openPatang({ mode: o.mode });
@@ -6941,6 +7271,11 @@
   window.scoreBowling = scoreBowling;
   window.aiThrowBowling = aiThrowBowling;
   window.openPatangBaazi = (ctx) => {
+    const chat = resolveChat(ctx);
+    if (chatLiveOn(chat)) {
+      openPatang({ mode: 'duel', chat });
+      return;
+    }
     const o = ctx && typeof ctx === 'object' ? ctx : {};
     if (o.mode === 'duel' || o.mode === 'festival') openPatang({ mode: o.mode });
     else openPatangModeSheet();
