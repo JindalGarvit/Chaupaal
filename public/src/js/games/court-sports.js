@@ -6662,7 +6662,7 @@
     {
       id: 'pickleball',
       name: 'Pickleball',
-      icon: '🥒',
+      icon: '🟡',
       accent: '#33691E',
       bg: '#0A1200',
       courtTint: '#1b3d12',
@@ -6716,7 +6716,7 @@
       id: 'kabaddi',
       name: 'Kabaddi',
       desc: 'Raid, tackle, home · PKL-lite Live',
-      icon: '💪',
+      icon: '🤼',
       gameType: 'dual',
       liveDuel: true,
       genre: 'rw_sports',

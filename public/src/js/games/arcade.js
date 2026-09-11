@@ -2627,7 +2627,7 @@ if (typeof registerGame === 'function') {
     id: 'rushrunner',
     name: 'Rush Runner',
     desc: 'Endless runner · Solo',
-    icon: '🏃',
+    icon: '💨',
     ratingKey: 'rushrunner',
     gameType: 'solo',
     genre: 'arcade',

@@ -31,27 +31,27 @@
   };
 
   const GAME_ACCENTS = {
-    muqabala: '#E63946',
-    quiz: '#E63946',
+    muqabala: '#6200EA',
+    quiz: '#6200EA',
     akhbaar: '#E63946',
-    chess: '#C9A227',
-    snakes: '#33C481',
-    ludo: '#4C75D9',
-    uno: '#E05252',
-    tictactoe: '#8134AF',
-    ttt: '#8134AF',
-    wordguess: '#D97745',
-    fiveinrow: '#3D86C6',
-    business: '#B98932',
-    scribble: '#8B5CF6',
-    rushrunner: '#E8663D',
-    tiptap: '#2F9C95',
-    ankjod: '#9A6BCE',
-    kakuro: '#9A6BCE',
-    streetcricket: '#1B7A4E',
-    gullykick: '#2D6A4F',
+    chess: '#8B5E3C',
+    snakes: '#2E7D32',
+    ludo: '#E040FB',
+    uno: '#D32F2F',
+    tictactoe: '#1565C0',
+    ttt: '#1565C0',
+    wordguess: '#00796B',
+    fiveinrow: '#212121',
+    business: '#F9A825',
+    scribble: '#E91E63',
+    rushrunner: '#FF6D00',
+    tiptap: '#FF6D00',
+    ankjod: '#1A237E',
+    kakuro: '#1A237E',
+    streetcricket: '#2E7D32',
+    gullykick: '#1B5E20',
     badminton: '#01579B',
-    tabletennis: '#FF6F00',
+    tabletennis: '#0D47A1',
     pickleball: '#33691E',
     kabaddi: '#BF360C',
     khokho: '#00695C',
@@ -62,11 +62,11 @@
     pool: '#1B3A2D',
     rummy: '#6A1B9A',
     teenpatti: '#4A148C',
-    bluff: '#FF1744',
+    bluff: '#37474F',
     sattepe: '#1565C0',
     andarbaahar: '#1B5E20',
     patangbaazi: '#FF6D00',
-    brickbreaker: '#7C4DFF',
+    brickbreaker: '#5C6BC0',
     wrap: '#8134AF',
     duniya: '#E63946',
     peepal: '#2A9D8F',
@@ -491,6 +491,16 @@
     } catch (e) {}
   }
 
+  function resolveGameAccent(gameId, fallback) {
+    const id = String(gameId || '').toLowerCase();
+    if (typeof getGameIdentity === 'function') {
+      const ident = getGameIdentity(id);
+      if (ident && ident.primary) return ident.primary;
+    }
+    if (GAME_ACCENTS[id]) return GAME_ACCENTS[id];
+    return fallback != null ? fallback : '#E63946';
+  }
+
   function prepareGameOverlay(overlay, opts) {
     const o = opts || {};
     if (!overlay) return overlay;
@@ -502,7 +512,10 @@
     const gameId = String(o.gameId || overlay.dataset?.gameId || '').toLowerCase();
     if (gameId) {
       overlay.dataset.gameId = gameId;
-      overlay.style.setProperty('--game-accent', o.accent || GAME_ACCENTS[gameId] || '#E63946');
+      const accent = o.accent || resolveGameAccent(gameId);
+      overlay.style.setProperty('--game-accent', accent);
+      if (typeof applyGameIdentity === 'function') applyGameIdentity(gameId, overlay);
+      if (o.accent) overlay.style.setProperty('--game-accent', o.accent);
     }
     unlockGameOrientation();
     requestAnimationFrame(() => {
@@ -739,6 +752,10 @@
       const g = getGame(gameId === 'muqabala' ? 'quiz' : gameId);
       if (g && g.name) return g.name;
     }
+    if (typeof getGameIdentity === 'function') {
+      const ident = getGameIdentity(gameId === 'muqabala' ? 'quiz' : gameId);
+      if (ident && ident.label) return ident.label;
+    }
     return GAME_LABELS[gameId] || gameId || 'Game';
   }
 
@@ -749,7 +766,7 @@
     const scoreLine = safe(String(rawScore).length > 90 ? String(rawScore).slice(0, 87) + '…' : rawScore);
     const meta = safe(s.meta || '');
     const vs = s.vs ? safe(s.vs) : '';
-    const accent = GAME_ACCENTS[gameId] || GAME_ACCENTS.quiz;
+    const accent = resolveGameAccent(gameId, GAME_ACCENTS.quiz);
     return `<div class="game-share-card" data-game-share="${safe(gameId)}" style="--share-accent:${accent}">
       <div class="game-share-brand">${gameBrandMarkHtml(false)} · ${name}</div>
       <div class="game-share-score${String(rawScore).length > 40 ? ' game-share-score--caption' : ''}">${scoreLine}</div>
@@ -859,7 +876,7 @@
         canvas.height = h;
         const ctx = canvas.getContext('2d');
         if (!ctx) return resolve(null);
-        const accent = GAME_ACCENTS[gameId] || '#E63946';
+        const accent = resolveGameAccent(gameId);
         const isContent = !!(s.caption || gameId === 'duniya' || gameId === 'peepal' || gameId === 'profile');
         // Background
         const grad = ctx.createLinearGradient(0, 0, w, h);
@@ -2468,6 +2485,7 @@
   window.setGameTurnBanner = setGameTurnBanner;
   window.gameSkeletonHtml = gameSkeletonHtml;
   window.prepareGameOverlay = prepareGameOverlay;
+  window.resolveGameAccent = resolveGameAccent;
   window.animateGameExit = animateGameExit;
   window.pulseGameEl = pulseGameEl;
   window.ensureGameTapTarget = ensureGameTapTarget;

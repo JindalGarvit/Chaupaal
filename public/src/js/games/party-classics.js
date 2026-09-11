@@ -10612,14 +10612,14 @@
 
   if (typeof registerGame === 'function') {
     const games = [
-      { id: 'tambola', name: 'Tambola', desc: 'Housie · rival ticket · Live claims', icon: '🎱', genre: 'party', launch: openTambola, order: 30 },
+      { id: 'tambola', name: 'Tambola', desc: 'Housie · rival ticket · Live claims', icon: '🎫', genre: 'party', launch: openTambola, order: 30 },
       { id: 'carrom', name: 'Carrom', desc: 'Live · stakes · AI', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
       { id: 'pool', name: 'Pool', desc: '8-ball · solids & stripes', icon: '🎱', genre: 'board', launch: openPool, order: 32 },
       { id: 'rummy', name: 'Rummy', desc: 'Indian 13-card · jokers · points', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
       { id: 'teenpatti', name: 'Teen Patti', desc: 'Boot, chaal, side-show · virtual chips', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
       { id: 'bluff', name: 'Bluff', desc: 'Pile claims · call · empty hand', icon: '🎭', genre: 'party', launch: openBluff, order: 35 },
       { id: 'sattepe', name: 'Satte pe Satta', desc: 'Seven chains · Live hands private', icon: '7️⃣', genre: 'party', launch: openSatte, order: 36 },
-      { id: 'andarbaahar', name: 'Andar Bahar', desc: '0.9 / 1 stakes · colour leads', icon: '🃏', genre: 'party', launch: openAndarBahar, order: 37 },
+      { id: 'andarbaahar', name: 'Andar Bahar', desc: '0.9 / 1 stakes · colour leads', icon: '🎴', genre: 'party', launch: openAndarBahar, order: 37 },
     ];
     games.forEach((g) => {
       registerGame({

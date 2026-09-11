@@ -161,11 +161,16 @@ function dangalTileHtml(g) {
     g.genre && typeof genreLabel === 'function'
       ? `<span class="dangal-genre-tag">${genreLabel(g.genre)}</span>`
       : '';
-  const accent = (typeof GAME_ACCENTS !== 'undefined' && GAME_ACCENTS[g.id]) || 'var(--red)';
+  const accent =
+    (typeof getGameIdentity === 'function' && getGameIdentity(g.id)?.primary) ||
+    (typeof GAME_ACCENTS !== 'undefined' && GAME_ACCENTS[g.id]) ||
+    'var(--red)';
+  const icon =
+    (typeof getGameIdentity === 'function' && getGameIdentity(g.id)?.icon) || g.icon || '🎮';
   const progressPill =
     typeof tileProgressPillHtml === 'function' ? tileProgressPillHtml(g.id) : '';
   return `<div class="dangal-game-tile" data-game="${g.id}" style="--tile-accent:${accent}">
-    <div class="dangal-game-icon">${g.icon}</div>
+    <div class="dangal-game-icon">${icon}</div>
     <div>
       <div class="dangal-game-name">${g.name}${honesty}</div>
       <div class="dangal-game-desc">${g.desc}</div>

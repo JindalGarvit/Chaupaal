@@ -345,6 +345,11 @@
         if (info.sync === 'live1v1') next.liveDuel = true;
       }
     }
+    // Icon/accent identity — prefer GAME_IDENTITY when present
+    if (typeof getGameIdentity === 'function') {
+      const ident = getGameIdentity(next.id);
+      if (ident && ident.icon) next.icon = ident.icon;
+    }
     next.__rawLaunch = descriptor.launch;
     next.launch = function (ctx) {
       return launchDangalGame(
