@@ -212,9 +212,9 @@
       'Live: one seat chases (active+Kho), the other runs the batch — then swap · leave=forfeit · virtual stakes',
     ],
     bowling: [
-      'Aim · power · Hook — house hook curves into the pocket (over-hook can gutter)',
-      'Alternate frames through 10 · X = 10 + next two · ／ = 10 + next one · 10th fill',
-      'Live 1v1 syncs aim/power/hook · leave = forfeit · virtual stakes once',
+      'Lane House / Dry / Heavy — Dry grabs early, Heavy needs patience',
+      'Aim · power · Hook into the pocket · alternate frames · X/／ USBC',
+      'Live host locks lane · syncs throw + laneId · leave = forfeit · virtual stakes once',
     ],
     tambola: [
       'Auto-daub on a real 3×9 ticket — claim Early Five, lines, corners, then Full House',

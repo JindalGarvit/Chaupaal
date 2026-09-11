@@ -4508,6 +4508,7 @@
     const easy = String(s.aiDiff || 'normal').toLowerCase() === 'easy';
     const standing = (s.standingCount | 0) || ((s.pinsUp && s.pinsUp.length) || 10);
     const ball = s.ballInFrame === 2 || s.ballInFrame === 3 ? 2 : 1;
+    const lane = bowlingLaneSpec(s.laneId);
     let aim = -0.08;
     let power = 0.72;
     /** House default: slight left hook into the 1-3 pocket (−1…1). */
@@ -4534,7 +4535,16 @@
       } else {
         aim = -0.08 + (rng() - 0.5) * 0.28;
         power = 0.58 + rng() * 0.35;
-        hook = -0.28 + (rng() - 0.5) * 0.22;
+        // Dry: slightly less raw hook (lane grabs early). Heavy: commit harder + power.
+        if (lane.id === 'dry') {
+          hook = -0.22 + (rng() - 0.5) * 0.18;
+          power = 0.55 + rng() * 0.32;
+        } else if (lane.id === 'heavy') {
+          hook = -0.38 + (rng() - 0.5) * 0.2;
+          power = 0.68 + rng() * 0.28;
+        } else {
+          hook = -0.28 + (rng() - 0.5) * 0.22;
+        }
       }
     }
     return {
@@ -4545,9 +4555,84 @@
   }
 
   /**
-   * Bowling — Practice AI + Live 1v1 + residual hook curve (R1-1).
+   * Lite oil / lane conditions (residual R1-2) — arcade multipliers, not USBC patterns.
+   *
+   * | laneId | label | hookAmpMul | curveExp | driftMul | hookEntry | pocketMul |
+   * |--------|-------|------------|----------|----------|-----------|-----------|
+   * | house  | House | 1.00       | 1.00     | 1.00     | 0.20      | 1.00      |
+   * | dry    | Dry   | 1.38       | 0.68     | 1.15     | 0.28      | 1.12      |
+   * | heavy  | Heavy | 0.70       | 1.42     | 0.85     | 0.12      | 0.82      |
+   *
+   * curveExp: sin(π·u^exp) — Dry <1 peaks early (grab); Heavy >1 peaks late (skid/flip).
+   */
+  const BOWLING_LANE_KEY = 'chaupaal_bowling_lane';
+  const BOWLING_LANES = {
+    house: {
+      id: 'house',
+      label: 'House',
+      hookAmpMul: 1,
+      curveExp: 1,
+      driftMul: 1,
+      hookEntry: 0.2,
+      pocketMul: 1,
+      qualityBias: 0,
+    },
+    dry: {
+      id: 'dry',
+      label: 'Dry',
+      hookAmpMul: 1.38,
+      curveExp: 0.68,
+      driftMul: 1.15,
+      hookEntry: 0.28,
+      pocketMul: 1.12,
+      qualityBias: 0.02,
+    },
+    heavy: {
+      id: 'heavy',
+      label: 'Heavy',
+      hookAmpMul: 0.7,
+      curveExp: 1.42,
+      driftMul: 0.85,
+      hookEntry: 0.12,
+      pocketMul: 0.82,
+      qualityBias: -0.04,
+    },
+  };
+
+  function normalizeBowlingLaneId(id) {
+    const k = String(id || '').toLowerCase();
+    if (k === 'dry' || k === 'heavy' || k === 'house') return k;
+    return 'house';
+  }
+
+  function bowlingLaneSpec(id) {
+    return BOWLING_LANES[normalizeBowlingLaneId(id)] || BOWLING_LANES.house;
+  }
+
+  function readStoredBowlingLane() {
+    try {
+      return normalizeBowlingLaneId(localStorage.getItem(BOWLING_LANE_KEY));
+    } catch (e) {
+      return 'house';
+    }
+  }
+
+  function storeBowlingLane(id) {
+    try {
+      localStorage.setItem(BOWLING_LANE_KEY, normalizeBowlingLaneId(id));
+    } catch (e) {}
+  }
+
+  function bowlingHookCurve(u, curveExp) {
+    const e = curveExp > 0.2 && curveExp < 3 ? curveExp : 1;
+    const t = Math.max(0, Math.min(1, u));
+    return Math.sin(Math.PI * Math.pow(t, e));
+  }
+
+  /**
+   * Bowling — Practice AI + Live 1v1 + hook curve (R1-1) + lite oil lanes (R1-2).
    * Frame order: each bowler completes their frame N before the other bowls frame N.
-   * Hook (−1…1): lateral curve into pocket; default slight house hook. Oil = R1-2.
+   * Hook (−1…1) + laneId modulates curve bite. Scorebook / settle unchanged.
    */
   function openBowling() {
     const chat = resolveChat(arguments[0]);
@@ -4557,6 +4642,11 @@
     const launchDiff = String((arg0 && arg0.aiDiff) || 'normal').toLowerCase();
     let aiDiff = launchDiff === 'easy' ? 'easy' : 'normal';
     let diffLocked = false;
+    // Live: challenge/default House unless host already chose; Practice: last stored.
+    let laneId = normalizeBowlingLaneId(
+      (arg0 && arg0.laneId) || (liveOn ? 'house' : readStoredBowlingLane())
+    );
+    let laneLocked = false;
 
     const liveStake = liveOn
       ? Number(
@@ -4619,8 +4709,16 @@
       id: 'bowling',
       title: 'Bowling',
       subtitle: liveOn
-        ? liveSub() + (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly')
-        : practiceSub('vs AI · alternate frames · ' + (aiDiff === 'easy' ? 'Easy' : 'Normal')),
+        ? liveSub() +
+          ' · Lane ' +
+          bowlingLaneSpec(laneId).label +
+          (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly')
+        : practiceSub(
+            'vs AI · ' +
+              bowlingLaneSpec(laneId).label +
+              ' · ' +
+              (aiDiff === 'easy' ? 'Easy' : 'Normal')
+          ),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
@@ -4660,6 +4758,8 @@
     let startX = 0.5;
     let drift = 0;
     let hookAmp = 0.18;
+    /** Peak timing for hook sin curve (synced on Live throw). */
+    let curveExp = 1;
     let remoteWatch = false;
     let lastResult = '';
     let lastPinsDown = 0;
@@ -4773,25 +4873,37 @@
       if (o.gutter || !up.length) {
         return { downIds: [], leaveIds: up, flag: '' };
       }
+      const lane = bowlingLaneSpec(o.laneId != null ? o.laneId : laneId);
       const a = Math.max(-1, Math.min(1, Number(o.aim) || 0));
       const pwr = Math.max(0.28, Math.min(1, Number(o.power) || 0.5));
       const hk = Math.max(-1, Math.min(1, Number(o.hook) || 0));
       const ball = o.ballInFrame === 2 || o.ballInFrame === 3 ? 2 : 1;
-      // Hook biases entry toward pocket (house −0.08): left hook helps center/right aims.
-      const aEff = Math.max(-1, Math.min(1, a + hk * 0.2));
+      // Hook biases entry toward pocket (house −0.08); lane.hookEntry scales bite.
+      const aEff = Math.max(-1, Math.min(1, a + hk * lane.hookEntry));
       const hitX = aEff * 1.15;
       const pocketDist = Math.abs(aEff - -0.08);
       let pocketQ = Math.max(0, 1 - pocketDist / 0.5);
       // Same-side hook into pocket raises strike rate vs straight light hits.
-      const hookPocket =
+      let hookPocket =
         hk < 0 && aEff > -0.35 && aEff < 0.2
           ? Math.min(0.18, -hk * 0.22)
           : hk > 0 && aEff < 0.15 && aEff > -0.45
             ? Math.min(0.1, hk * 0.08)
             : 0;
+      hookPocket *= lane.pocketMul;
+      // Dry over-hook: early grab can miss left/right of pocket.
+      if (lane.id === 'dry' && Math.abs(hk) > 0.72) {
+        hookPocket *= 0.55;
+        pocketQ *= 0.85;
+      }
+      // Heavy: commit (power + hook) unlocks pocket; soft rolls stay light.
+      if (lane.id === 'heavy') {
+        if (pwr >= 0.7 && Math.abs(hk) >= 0.28) hookPocket += 0.06;
+        else if (pwr < 0.5 || Math.abs(hk) < 0.15) hookPocket *= 0.6;
+      }
       pocketQ = Math.min(1, pocketQ + hookPocket);
       const powerQ = (pwr - 0.28) / 0.72;
-      let quality = pocketQ * 0.62 + powerQ * 0.38 + (rng() - 0.5) * 0.1;
+      let quality = pocketQ * 0.62 + powerQ * 0.38 + lane.qualityBias + (rng() - 0.5) * 0.1;
       quality = Math.max(0, Math.min(1, quality));
 
       const downSet = new Set();
@@ -4815,10 +4927,12 @@
         }
       } else if (!downSet.has(1) && quality < 0.4) {
         // Over-hook / thin light → corner leave
-        if (aEff < -0.25 || (hk < -0.55 && a < -0.05)) {
+        const over =
+          lane.id === 'dry' ? Math.abs(hk) > 0.48 : Math.abs(hk) > 0.55;
+        if (aEff < -0.25 || (over && hk < 0 && a < -0.05)) {
           tryKnock(7, 0.55);
           tryKnock(4, 0.4);
-        } else if (aEff > 0.25 || (hk > 0.55 && a > 0.05)) {
+        } else if (aEff > 0.25 || (over && hk > 0 && a > 0.05)) {
           tryKnock(10, 0.55);
           tryKnock(6, 0.4);
         }
@@ -5008,6 +5122,7 @@
           aim: +aim.toFixed(3),
           power: +power.toFixed(3),
           hook: +hook.toFixed(3),
+          laneId: normalizeBowlingLaneId(laneId),
         },
         ex
       );
@@ -5065,7 +5180,7 @@
         if (shell && typeof shell.close === 'function') shell.close('again');
       } catch (e) {}
       if (!liveOn) {
-        openBowling({ chat: chat, aiDiff: aiDiff });
+        openBowling({ chat: chat, aiDiff: aiDiff, laneId: laneId });
         return;
       }
       try {
@@ -5301,6 +5416,7 @@
           ballInFrame,
           standingCount: standingCount(),
           pinsUp: pinsUpList(),
+          laneId,
           rng,
         });
         aim = t.aim;
@@ -5314,17 +5430,24 @@
       if (gameOver || phase !== 'aim' || isFrozen() || resolving) return;
       if (!fromAi && !iAmBowling()) return;
       if (!fromAi && liveOn && liveRoles && uidForSeat(bowlerSeat) !== liveRoles.me) return;
-      if (!liveOn && !fromAi) diffLocked = true;
+      if (!liveOn) {
+        diffLocked = true;
+        laneLocked = true;
+      } else {
+        laneLocked = true;
+      }
       if (standingCount() === 0) resetRack();
+      const lane = bowlingLaneSpec(laneId);
       aim = Math.max(-1, Math.min(1, aim));
       power = Math.max(0.28, Math.min(1, power));
       hook = Math.max(-1, Math.min(1, hook));
       startX = 0.5 + aim * 0.28;
       ballX = startX;
       ballY = FOUL_Y;
-      drift = aim * (0.08 + (1 - power) * 0.18);
-      // Readable mid-lane curve; stronger hook + softer power = more arc
-      hookAmp = 0.14 + Math.abs(hook) * 0.1 + (1 - power) * 0.06;
+      drift = aim * (0.08 + (1 - power) * 0.18) * lane.driftMul;
+      // Readable mid-lane curve; lane amp + timing (Dry early / Heavy late)
+      hookAmp = (0.14 + Math.abs(hook) * 0.1 + (1 - power) * 0.06) * lane.hookAmpMul;
+      curveExp = lane.curveExp;
       flightDur = 1.55 - power * 0.55;
       flightT = 0;
       remoteWatch = false;
@@ -5336,6 +5459,7 @@
       if (liveOn && iAmBowling()) {
         pushLive('playing', {
           phase: 'flying',
+          laneId: lane.id,
           throw: {
             aim: +aim.toFixed(3),
             power: +power.toFixed(3),
@@ -5343,7 +5467,9 @@
             startX: +startX.toFixed(3),
             drift: +drift.toFixed(3),
             hookAmp: +hookAmp.toFixed(3),
+            curveExp: +curveExp.toFixed(3),
             flightDur: +flightDur.toFixed(3),
+            laneId: lane.id,
           },
         });
       }
@@ -5366,6 +5492,7 @@
         aim,
         power,
         hook,
+        laneId,
         gutter: !!gutter,
         pinsUp: before,
         ballInFrame: chartBall,
@@ -5403,15 +5530,28 @@
         appliedSeq = seq;
         eventSeq = Math.max(eventSeq, seq);
       }
-      // Peer watches same flight (aim/power/hook) before pin resolve lands.
+      if (st.laneId) {
+        const nextLane = normalizeBowlingLaneId(st.laneId);
+        if (nextLane !== laneId) {
+          laneId = nextLane;
+          refreshBowlingSubtitle();
+        } else {
+          laneId = nextLane;
+        }
+        if (!liveRoles || !liveRoles.host) laneLocked = true;
+      }
+      // Peer watches same flight (aim/power/hook/lane) before pin resolve lands.
       if (st.throw && st.phase === 'flying' && !iAmBowling()) {
         const t = st.throw;
+        if (t.laneId) laneId = normalizeBowlingLaneId(t.laneId);
+        laneLocked = true;
         aim = t.aim != null ? t.aim : aim;
         power = t.power != null ? t.power : power;
         hook = t.hook != null ? t.hook : hook;
         startX = t.startX != null ? t.startX : 0.5 + aim * 0.28;
         drift = t.drift != null ? t.drift : aim * 0.1;
         hookAmp = t.hookAmp != null ? t.hookAmp : 0.18;
+        curveExp = t.curveExp != null ? t.curveExp : bowlingLaneSpec(laneId).curveExp;
         flightDur = t.flightDur != null ? t.flightDur : 1.1;
         flightT = 0;
         ballX = startX;
@@ -5446,22 +5586,60 @@
       return true;
     }
 
+    function refreshBowlingSubtitle() {
+      try {
+        if (!shell.setSubtitle) return;
+        if (liveOn) {
+          shell.setSubtitle(
+            liveSub() +
+              ' · Lane ' +
+              bowlingLaneSpec(laneId).label +
+              (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly')
+          );
+        } else {
+          shell.setSubtitle(
+            practiceSub(
+              'vs AI · ' +
+                bowlingLaneSpec(laneId).label +
+                ' · ' +
+                (aiDiff === 'easy' ? 'Easy' : 'Normal')
+            )
+          );
+        }
+      } catch (e) {}
+    }
+
+    function canPickLane() {
+      if (gameOver || phase !== 'aim' || laneLocked) return false;
+      if (liveOn) return !!(liveRoles && liveRoles.host);
+      return !diffLocked;
+    }
+
+    function setLaneId(id) {
+      if (!canPickLane()) return;
+      const next = normalizeBowlingLaneId(id);
+      if (next === laneId) return;
+      laneId = next;
+      if (!liveOn) storeBowlingLane(laneId);
+      buzz('select');
+      refreshBowlingSubtitle();
+      if (liveOn && liveRoles && liveRoles.host) {
+        pushLive('playing', { laneId: laneId });
+      }
+      paint();
+    }
+
     function setAiDiff(d) {
       if (liveOn || diffLocked || gameOver) return;
       aiDiff = d === 'easy' ? 'easy' : 'normal';
       buzz('select');
-      try {
-        if (shell.setSubtitle) {
-          shell.setSubtitle(
-            practiceSub('vs AI · alternate frames · ' + (aiDiff === 'easy' ? 'Easy' : 'Normal'))
-          );
-        }
-      } catch (e) {}
+      refreshBowlingSubtitle();
       paint();
     }
 
     function paint() {
       if (!shell.alive() || gameOver) return;
+      const lane = bowlingLaneSpec(laneId);
       const aimPct = Math.round(((aim + 1) / 2) * 100);
       const powPct = Math.round(power * 100);
       const hookPct = Math.round(((hook + 1) / 2) * 100);
@@ -5471,6 +5649,7 @@
       const active = iAmBowling() && phase === 'aim' && !isFrozen();
       const waiting = !iAmBowling() && !gameOver;
       const showDiff = !liveOn && !diffLocked && frameRound === 1 && bowlerSeat === 'A' && !gameOver;
+      const showLanePick = canPickLane();
 
       shell.body.innerHTML =
         '<div class="cs-bowling">' +
@@ -5506,6 +5685,9 @@
         ballInFrame +
         (waiting ? ' · waiting' : '') +
         '</span></div>' +
+        '<div class="cs-bw-lane-chip" aria-live="polite">Lane: <b>' +
+        esc(lane.label) +
+        '</b></div>' +
         '<p class="cs-rally-msg">' +
         esc(waiting && phase === 'aim' ? 'Opponent bowling — frame strip stays live' : msg) +
         (isFrozen() ? ' · Paused' : '') +
@@ -5519,10 +5701,26 @@
             (aiDiff === 'normal' ? ' is-on' : '') +
             '" data-diff="normal">Normal</button></div>'
           : '') +
+        (showLanePick
+          ? '<div class="cs-bw-diff cs-bw-oil" role="group" aria-label="Lane condition">' +
+            '<button type="button" class="cs-bw-diff-btn' +
+            (laneId === 'house' ? ' is-on' : '') +
+            '" data-lane-pick="house">House</button>' +
+            '<button type="button" class="cs-bw-diff-btn' +
+            (laneId === 'dry' ? ' is-on' : '') +
+            '" data-lane-pick="dry">Dry</button>' +
+            '<button type="button" class="cs-bw-diff-btn' +
+            (laneId === 'heavy' ? ' is-on' : '') +
+            '" data-lane-pick="heavy">Heavy</button></div>'
+          : '') +
         '<div class="cs-bw-lane' +
         (lastResult === 'gutter' ? ' is-gutter' : '') +
         (lastResult === 'strike' || lastResult === 'spare' || lastResult === 'hit' ? ' is-pocket' : '') +
-        '" data-lane role="img" aria-label="Bowling lane">' +
+        ' is-oil-' +
+        lane.id +
+        '" data-lane role="img" aria-label="Bowling lane ' +
+        esc(lane.label) +
+        '">' +
         '<div class="cs-bw-gutters" aria-hidden="true"></div>' +
         '<div class="cs-bw-wood">' +
         boardHtml() +
@@ -5570,11 +5768,14 @@
         (waiting ? 'Waiting…' : 'Throw') +
         '</button>' +
         '</div>' +
-        '<p class="cs-bw-meta">Aim · power · hook into the pocket · alternate frames · Live settles once</p>' +
+        '<p class="cs-bw-meta">Lane oil changes hook bite · aim · power · hook · Live settles once</p>' +
         '</div>';
 
       shell.body.querySelectorAll('[data-diff]').forEach((btn) => {
         btn.addEventListener('click', () => setAiDiff(btn.getAttribute('data-diff')));
+      });
+      shell.body.querySelectorAll('[data-lane-pick]').forEach((btn) => {
+        btn.addEventListener('click', () => setLaneId(btn.getAttribute('data-lane-pick')));
       });
       const aimEl = shell.body.querySelector('[data-aim]');
       const powEl = shell.body.querySelector('[data-power]');
@@ -5604,18 +5805,14 @@
       if (!coachShown) {
         coachShown = true;
         if (typeof showToast === 'function') {
-          showToast(
-            liveOn
-              ? 'Alternate frames — hook into the pocket for strikes.'
-              : 'Aim · power · hook — house hook curves into the pocket.'
-          );
+          showToast('Dry grabs early — Heavy needs patience.');
         }
       }
       if (typeof GameUI !== 'undefined' && GameUI.attachHowTo) {
         GameUI.attachHowTo(shell.overlay, {
           title: 'Bowling',
           body:
-            'Aim, power, then Hook for curve into the pocket. Over-hook risks the gutter. Alternate frames · X/／ USBC · Practice AI · Live 1v1 · virtual stakes once.',
+            'Lane: House / Dry / Heavy changes how hook bites. Aim, power, Hook into the pocket. Alternate frames · X/／ USBC · Practice AI · Live host locks lane · virtual stakes once.',
         });
       }
     }
@@ -5627,9 +5824,9 @@
         el.style.top = ballY * 100 + '%';
         el.classList.toggle('is-flying', phase === 'flying');
       }
-      const lane = shell.body.querySelector('[data-lane]');
-      if (lane) {
-        lane.classList.toggle('is-gutter', lastResult === 'gutter');
+      const laneEl = shell.body.querySelector('[data-lane]');
+      if (laneEl) {
+        laneEl.classList.toggle('is-gutter', lastResult === 'gutter');
       }
       const msgEl = shell.body.querySelector('.cs-rally-msg');
       if (msgEl && (phase === 'flying' || phase === 'result')) {
@@ -5650,8 +5847,8 @@
       flightT += dt;
       const u = Math.min(1, flightT / flightDur);
       ballY = FOUL_Y + (PIN_Y - FOUL_Y) * (u * u * (3 - 2 * u));
-      // Quadratic drift + sin mid-lane hook curve (readable, not 3D)
-      ballX = startX + drift * u * u + hook * hookAmp * Math.sin(Math.PI * u);
+      // Quadratic drift + lane-timed hook curve (Dry early / Heavy late)
+      ballX = startX + drift * u * u + hook * hookAmp * bowlingHookCurve(u, curveExp);
       softPaintFlying();
       if (u >= 1) {
         if (remoteWatch) {
@@ -7668,6 +7865,7 @@
   window.openBowling = openBowling;
   window.scoreBowling = scoreBowling;
   window.aiThrowBowling = aiThrowBowling;
+  window.bowlingLaneSpec = bowlingLaneSpec;
   window.openPatangBaazi = (ctx) => {
     const chat = resolveChat(ctx);
     if (chatLiveOn(chat)) {

@@ -548,6 +548,14 @@
   border:1px solid rgba(255,143,0,.45);background:rgba(0,0,0,.28);color:#FFCC80;
 }
 .cs-bw-diff-btn.is-on{background:rgba(255,143,0,.28);border-color:#FFE082;color:#FFF8E1;}
+.cs-bw-lane-chip{
+  font-size:11px;font-weight:700;color:#FFCC80;text-align:center;
+  margin:0 0 2px;letter-spacing:.02em;
+}
+.cs-bw-lane-chip b{color:#FFE082;font-weight:800;}
+.cs-bw-oil{margin-top:2px;}
+.cs-bw-lane.is-oil-dry .cs-bw-wood{filter:saturate(1.08) brightness(1.04);}
+.cs-bw-lane.is-oil-heavy .cs-bw-wood{filter:saturate(.88) brightness(.92);}
 .cs-kb-zone{position:absolute;left:0;right:0;pointer-events:none;display:flex;align-items:flex-start;justify-content:center;padding-top:4px;}
 .cs-kb-zone span,.cs-kb-line span{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;opacity:.75;color:#FFE0B2;}
 .cs-kb-anti{top:0;height:48%;}
