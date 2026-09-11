@@ -342,6 +342,10 @@
           delete next.solo;
           next.gameType = info.sync === 'liveParty' ? 'multiplayer' : 'dual';
         }
+        if (info.sync === 'liveParty') {
+          next.gameType = 'multiplayer';
+          next.liveDuel = true;
+        }
         if (info.sync === 'live1v1') next.liveDuel = true;
       }
     }
@@ -405,8 +409,8 @@
     return GAME_GENRES.slice();
   }
 
-  /** Q2A — real group/party titles only (not Live-1v1 duals). */
-  const GROUP_PARTY_IDS = ['ludo', 'uno', 'business'];
+  /** Q2A — real group/party titles (Live party or multi-seat Practice setup). */
+  const GROUP_PARTY_IDS = ['ludo', 'uno', 'business', 'scribble'];
 
   function gameIsLiveCapable(gameId, game) {
     if (typeof isLiveCapable === 'function') return !!isLiveCapable(gameId);
@@ -423,7 +427,7 @@
   /**
    * Registry-driven chat game picker.
    * UX: 1:1 shows chat1v1 rows with Live vs Practice badges; Challenge only on Live.
-   *     Group allowlists Ludo / Uno / Business (Scribble stays 1:1 Live).
+   *     Group allowlists Ludo / Uno / Business / Scribble (party 3–6).
    */
   function openGamePicker(chat, isGroup) {
     const isSelf = typeof isSelfChat === 'function' && isSelfChat(chat);
@@ -448,7 +452,7 @@
       subtitle = 'Solo games only — practice & test here';
       emptyHint = 'No solo games registered yet — try Manch.';
     } else if (isGroup) {
-      // Hard allowlist — chatGroup flags alone are not enough (Scribble is 1v1 Live).
+      // Hard allowlist — party Live titles only (Scribble = 1v1 or party 3–6).
       const allow = new Set(GROUP_PARTY_IDS);
       pickerGames = getGames({ chatGroup: true })
         .filter((g) => allow.has(g.id))
@@ -463,7 +467,7 @@
         }));
       title = 'Group games';
       subtitle = 'Party games for this chat — pick players next';
-      emptyHint = 'No party games here yet — try Ludo, Oh No!, or Business from Manch.';
+      emptyHint = 'No party games here yet — try Ludo, Oh No!, Business, or Scribble from Manch.';
     } else {
       // 1:1 — all chat1v1; badge Live vs Practice; Challenge only when Live-capable.
       const rows = getGames({ chat1v1: true }).map((g) => {

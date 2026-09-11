@@ -3248,7 +3248,13 @@ function openScribbleGame(chat,playerList,opts){
   let settleDone=false;
   let resultReported=false;
   const MODE_SUB=party
-    ?((liveOn?'Live party':'Party practice')+' · seats '+seatPlayers.length)
+    ?((liveOn
+        ?(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel
+          ?DangalLive.modeChromeLabel(true,null,{party:true})
+          :'Live party')
+        :'Party practice')+
+      ' · seats '+seatPlayers.length+
+      (liveOn&&liveStake>0?' · Stake ⚡'+liveStake+' (virtual)':(liveOn?' · Friendly':'')))
     :liveOn
     ?((typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel?DangalLive.modeChromeLabel(true):'Live 1v1')+
       (liveStake>0?' · Stake ⚡'+liveStake+' (virtual)':' · Friendly'))
@@ -3791,9 +3797,9 @@ function openScribbleGame(chat,playerList,opts){
     startRound();
   }
 
-  async function settleScribbleOnce(won,isDraw){
-    // Party stakes graduate in Prompt 2; keep existing settlement strictly 1v1.
-    if(!liveOn||party||settleDone)return null;
+  async function settleScribbleOnce(won,isDraw,settleMeta){
+    // Idempotent once per matchId — 1v1 and party Live both settle virtual stakes.
+    if(!liveOn||settleDone)return null;
     if(!settleMatchId||liveStake<=0){
       settleDone=true;
       return null;
@@ -3805,7 +3811,9 @@ function openScribbleGame(chat,playerList,opts){
     settleDone=true;
     try{
       const me=typeof getCurrentUid==='function'?getCurrentUid():'';
-      const oppU=settleOppUid||(liveRoles&&liveRoles.opp)||'';
+      const meta=settleMeta||{};
+      const oppU=meta.opponentUid||settleOppUid||(liveRoles&&liveRoles.opp)||'';
+      const winnerUid=isDraw?null:(meta.winnerUid||(won?me:oppU)||null);
       return await DangalEconomy.reportGameEnd({
         gameType:'scribble',
         result:isDraw?'draw':won?'win':'loss',
@@ -3815,7 +3823,7 @@ function openScribbleGame(chat,playerList,opts){
         sessionId:settleMatchId,
         opponentUid:oppU,
         stake:liveStake,
-        winnerUid:isDraw?null:(won?me:oppU),
+        winnerUid:winnerUid||'',
       });
     }catch(e){
       settleDone=false;
@@ -3832,22 +3840,30 @@ function openScribbleGame(chat,playerList,opts){
     try{
       const mid=typeof dangalMatchId==='function'
         ?dangalMatchId('scribble',chat)
-        :'scribble_'+Date.now();
+        :'scribble_'+(party?'party_':'')+Date.now();
+      const seats=(liveRoles&&Array.isArray(liveRoles.seats)&&liveRoles.seats.length)
+        ?liveRoles.seats.slice()
+        :(chat&&Array.isArray(chat.partySeats)?chat.partySeats.slice():[]);
       if(window.__dangalLaunchCtx){
         window.__dangalLaunchCtx=Object.assign({},window.__dangalLaunchCtx,{
           matchId:mid,
           gameId:'scribble',
           gameType:'scribble',
           stake:liveStake,
+          mode:'live',
+          partySeats:party&&seats.length>=3?seats:undefined,
+          scribbleParty:!!party,
+          source:party?'party':(window.__dangalLaunchCtx.source||'chat'),
         });
       }
       if(chat){
         chat.dangalMatchId=mid;
         chat.stake=liveStake;
+        if(party&&seats.length>=3)chat.partySeats=seats;
       }
     }catch(e){}
     close();
-    openScribbleGame(chat,playerList,opts);
+    openScribbleGame(chat,playerList,Object.assign({},opts||{},party?{party:true,partySeats:(chat&&chat.partySeats)||undefined}:{}));
   }
 
   function endScribbleGame(endOpts){
@@ -3871,13 +3887,19 @@ function openScribbleGame(chat,playerList,opts){
     let won=practiceMode?true:(o.won!=null?!!o.won:(party?topKeys.includes(mine):youPts>oppPts));
     let isDraw=!practiceMode&&!forfeit&&(party?topKeys.length>1:youPts===oppPts);
     if(forfeit&&o.won!=null){won=!!o.won;isDraw=false;}
+    const topSeat=seatPlayers.find(p=>p.key===((sorted[0]&&sorted[0][0])||''));
+    const partyWinnerUid=(!isDraw&&topSeat&&topSeat.uid)?String(topSeat.uid):'';
+    const settleOpp=
+      party
+        ?(seatPlayers.find(p=>p.uid&&p.uid!==myUid&&!p.out)||seatPlayers.find(p=>p.uid&&p.uid!==myUid)||{}).uid||settleOppUid||''
+        :(settleOppUid||(liveRoles&&liveRoles.opp)||'');
 
     if(liveOn&&!applyingLive&&!o.skipPush){
       try{
         if(liveHandle&&liveRoles){
           liveHandle.push({
-            status:forfeit?'forfeit':'over',
-            winner:isDraw?null:(party?((sorted[0]&&sorted[0][0])||null):(won?liveRoles.me:liveRoles.opp)),
+            status:forfeit?(party?'over':'forfeit'):'over',
+            winner:isDraw?null:(party?(partyWinnerUid||null):(won?liveRoles.me:liveRoles.opp)),
             state:{
               scoreA:liveRoles.myColor==='w'?youPts:oppPts,
               scoreB:liveRoles.myColor==='w'?oppPts:youPts,
@@ -3906,7 +3928,7 @@ function openScribbleGame(chat,playerList,opts){
         recordGameResult('scribble',!!won&&!isDraw,!!isDraw,{
           live:!!liveOn,
           stake:liveStake,
-          mode:liveOn?'live':'practice',
+          mode:liveOn?(party?'live_party':'live'):'practice',
           score:youPts,
         });
       }catch(e){}
@@ -3916,26 +3938,26 @@ function openScribbleGame(chat,playerList,opts){
     const wordReveal=revealWord||currentWord||'';
     const baseSub=practiceMode
       ?('Word was “'+(wordReveal||'—')+'” · pick from 3, guess fast')
-      :(forfeit
+      :(forfeit&&!party
         ?(won?'Opponent left — you win':'You forfeited')
         :sorted.map(([key,score],i)=> (i+1)+'. '+seatName(key)+' · '+score+' pts').join(' · ')+' · 3 rounds');
 
     const paint=(settle)=>{
       let sub=baseSub;
-      if(liveOn&&!party&&liveStake>0){
+      if(liveOn&&liveStake>0){
         const cd=settle&&settle.chipDelta!=null?Number(settle.chipDelta):null;
         sub+=(sub?' · ':'')+(Number.isFinite(cd)&&cd!==0
           ?('Stake '+(cd>0?'+':'')+cd+' virtual')
           :'Virtual stakes · not real money');
       } else if(liveOn){
-        sub+=(sub?' · ':'')+(party?'Live party':'Live 1v1 · Friendly');
+        sub+=(sub?' · ':'')+(party?'Live party · Friendly':'Live 1v1 · Friendly');
       }
       overlay.innerHTML=`
         ${typeof gameChromeHtml==='function'?gameChromeHtml({title:'Scribble',subtitle:MODE_SUB+(practiceMode?' · done':' · Results'),backId:'scribbleClose'}):''}
         ${typeof gameResultHtml==='function'?gameResultHtml({
           gameId:'scribble',
-          glyph:practiceMode?'✓':(forfeit?(won?'✓':'·'):(isDraw?'=':(won?'✓':'·'))),
-          title:practiceMode?'Nice practice':(forfeit?(won?'Opponent left':'You left'):(isDraw?'Draw':seatName((sorted[0]&&sorted[0][0])||'')+' wins')),
+          glyph:practiceMode?'✓':(forfeit&&!party?(won?'✓':'·'):(isDraw?'=':(won?'✓':'·'))),
+          title:practiceMode?'Nice practice':(forfeit&&!party?(won?'Opponent left':'You left'):(isDraw?'Draw':seatName((sorted[0]&&sorted[0][0])||'')+' wins')),
           subtitle:sub,
           shareCardHtml: typeof buildGameShareCard==='function'?buildGameShareCard('scribble',{scoreLine:practiceMode?'Practice':(party?sorted.map(([k,s])=>seatName(k)+' '+s).join(' · '):(youPts+'-'+oppPts)),meta:liveOn?(party?'Live party':'Live 1v1'):(wordReveal||'')}):'',
           actions:[
@@ -3962,7 +3984,10 @@ function openScribbleGame(chat,playerList,opts){
     };
 
     if(liveOn){
-      settleScribbleOnce(won,isDraw).then(paint).catch(()=>paint(null));
+      settleScribbleOnce(won,isDraw,{
+        winnerUid:partyWinnerUid||(won?myUid:settleOpp),
+        opponentUid:settleOpp,
+      }).then(paint).catch(()=>paint(null));
     } else {
       paint(null);
     }
@@ -4552,7 +4577,7 @@ function openGroupGameSetup(groupChat, gameId){
     ludo:{name:'🎯 Ludo',min:2,max:4},
     business:{name:'🏙️ Business',min:2,max:6},
     uno:{name:'🃏 Oh, No! Cards',min:2,max:6},
-    // Internal party path only; registry graduation remains chatGroup:false until Prompt 2.
+    // Scribble party lobby — min 3 / max 6 (Live when seats have UIDs).
     scribble:{name:'🎨 Scribble party',min:3,max:6},
   };
   const cfg=multiGames[gameId];
@@ -4688,14 +4713,13 @@ if (typeof registerGame === 'function') {
   registerGame({
     id: 'scribble',
     name: 'Scribble',
-    desc: 'Draw & guess · Live 1v1',
+    desc: 'Draw & guess · Live 1v1 or party 3–6',
     icon: '🎨',
     ratingKey: 'scribble',
-    gameType: 'dual',
+    gameType: 'multiplayer',
     genre: 'party',
     chat1v1: true,
-    // Prompt 1 keeps Manch graduation off; the internal party setup is callable directly.
-    chatGroup: false,
+    chatGroup: true,
     selfChat: true,
     liveDuel: true,
     order: 90,
@@ -4713,7 +4737,8 @@ if (typeof registerGame === 'function') {
         openScribbleGame(ctx.chat || { name: 'Practice', id: 'practice' }, [], { practice: true });
         return;
       }
-      openScribbleGame(ctx.chat, [{ name: ctx.chat?.name || 'Friend' }]);
+      // 1:1 chat / duel challenge — classic Live 1v1 path.
+      openScribbleGame(ctx.chat, [{ name: ctx.chat?.name || 'Friend', uid: ctx.chat?.uid || launch.opponentUid || '' }]);
     },
   });
 }

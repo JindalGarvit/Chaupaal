@@ -152,9 +152,9 @@
       'Deal deeds ± cash on your turn — Live is 1v1, Practice up to 6',
     ],
     scribble: [
-      'Live 1v1 or 3–6 seat party — one drawer, everyone else races to guess',
+      'Live 1v1 or party 3–6 — one drawer, everyone else races to guess',
       'Word stays secret until reveal · near-miss says “close!” · drawer +50 if someone scores',
-      '100 / 75 / 50 by guess order · 3 rounds · party play continues while 2+ remain',
+      '100 / 75 / 50 by guess order · 3 rounds · group lobby min 3 · party continues while 2+ remain',
     ],
     rushrunner: [
       'Classic or Daily run · each theme has a named flavor (Coin Rush, Heavy Traffic, Long Sprint)',
