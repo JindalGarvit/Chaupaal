@@ -1138,6 +1138,14 @@ function _runMuqabalaCore(overlay, oppName, mode, opts){
         <div class="muqabala-progress-track"><div class="muqabala-progress-fill" style="width:${progressPct}%"></div></div>
       </div>
       ${typeof gameScoreHtml==='function'?gameScoreHtml({label:t('you')||'You',score:myScore},{label:displayOpp,score:oppScore}):`<div class="vs-row"><div class="player-chip me">${t('you')||'You'} — ${myScore}</div><div class="player-chip opp">${displayOpp} — ${oppScore}</div></div>`}
+      ${typeof gameTurnBannerHtml==='function'
+        ? gameTurnBannerHtml({
+            mode:'yours',
+            label: liveOn ? 'Your turn — pick an answer' : 'Your turn',
+            sub: liveOn ? (displayOpp + ' is on the clock too') : undefined,
+            pulse: true,
+          }).replace('<div class="game-turn','<div id="muqTurnBanner" class="game-turn')
+        : `<div id="muqTurnBanner" class="game-turn game-turn--yours" role="status"><span class="game-turn-label">Your turn</span></div>`}
       <div class="muqabala-timer${data.philosophical?'':' muqabala-timer--live'}" id="mTimer" style="${data.philosophical?'font-size:14px;color:var(--gold);':''}">
         ${data.philosophical?t('philosophical_label'):`${timeLeft}`}
       </div>
@@ -1161,6 +1169,27 @@ function _runMuqabalaCore(overlay, oppName, mode, opts){
 
     document.getElementById('closeMuqabala2')?.addEventListener('click',()=>{askMuqabalaLeave();});
 
+    const setMuqTurn = (mode, label, sub)=>{
+      const el = overlay.querySelector('#muqTurnBanner');
+      if(!el) return;
+      if(typeof setGameTurnBanner==='function'){
+        setGameTurnBanner(el, { mode, label, sub, pulse: mode==='yours' });
+      } else {
+        el.className = 'game-turn game-turn--'+(mode||'waiting');
+        el.textContent = label || '';
+      }
+    };
+    const paintAnsweredWait = (remoteEntry)=>{
+      if(!liveOn) return;
+      if(remoteEntry){
+        setMuqTurn('waiting', 'Both answered', remoteEntry.correct
+          ? (displayOpp+' got it right')
+          : (displayOpp+' missed'));
+      } else {
+        setMuqTurn('theirs', 'Answer locked', 'Waiting for '+displayOpp);
+      }
+    };
+
     const optBtns = overlay.querySelectorAll('.opt');
     const tickTimerUi = ()=>{
       const tmr = overlay.querySelector('#mTimer');
@@ -1182,6 +1211,7 @@ function _runMuqabalaCore(overlay, oppName, mode, opts){
     const advanceAfterAnswer = ()=>{
       const go = ()=>{ if(sessionEnded) return; qIdx++; renderQ(); };
       if(!liveOn){ muqSchedule(go, 720); return; }
+      paintAnsweredWait(syncOppFromRemote());
       let waits = 0;
       const poll = muqInterval(()=>{
         if(sessionEnded){ return; }
@@ -1191,6 +1221,7 @@ function _runMuqabalaCore(overlay, oppName, mode, opts){
         if(remote){
           if(oi) oi.textContent = remote.correct ? t('opp_correct',{name:displayOpp}) : t('opp_wrong',{name:displayOpp});
           paintScoreboard();
+          paintAnsweredWait(remote);
         }
         if(remote || waits > lockstepMaxPolls){
           clearInterval(poll);
@@ -1271,6 +1302,7 @@ function _runMuqabalaCore(overlay, oppName, mode, opts){
           if(oi) oi.textContent = already
             ? (already.correct ? t('opp_correct',{name:displayOpp}) : t('opp_wrong',{name:displayOpp}))
             : `${displayOpp} answering…`;
+          paintAnsweredWait(already);
           advanceAfterAnswer();
           return;
         }
@@ -1326,7 +1358,10 @@ function _runMuqabalaCore(overlay, oppName, mode, opts){
             const tmr=overlay.querySelector('#mTimer');
             if(tmr){ tmr.textContent='0'; tmr.classList.add('muqabala-timer--timeout'); }
             pushLiveAnswer(qIdx, -1, false);
-            if(liveOn) advanceAfterAnswer();
+            if(liveOn){
+              paintAnsweredWait(syncOppFromRemote());
+              advanceAfterAnswer();
+            }
             else {
               if(!oppScoredThisQ){
                 const oppCorrectLocal=Math.random()<0.55;

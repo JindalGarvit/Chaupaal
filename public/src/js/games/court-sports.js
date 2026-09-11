@@ -209,6 +209,7 @@
       const device = document.querySelector('.device') || document.body;
       device.appendChild(overlay);
     }
+    overlay.dataset.gameId = o.id || '';
     if (typeof prepareGameOverlay === 'function') {
       prepareGameOverlay(overlay, { theme: 'dark', gameId: o.id, accent: o.accent });
     }
@@ -5033,6 +5034,9 @@
     }
 
     function freshRematch() {
+      try {
+        if (shell && typeof shell.close === 'function') shell.close('again');
+      } catch (e) {}
       if (!liveOn) {
         openBowling({ chat: chat, aiDiff: aiDiff });
         return;
@@ -5684,6 +5688,9 @@
   }
 
   function openPatangModeSheet() {
+    try {
+      document.querySelectorAll('.cs-patang-pick').forEach((el) => el.remove());
+    } catch (e) {}
     const device = document.querySelector('.device');
     const duelBest = typeof getGamePB === 'function' ? getGamePB('patangbaazi_duel') : null;
     const festBest = typeof getGamePB === 'function' ? getGamePB('patangbaazi_festival') : null;
@@ -5698,6 +5705,20 @@
 
     function pick(mode) {
       if (sheet && sheet.parentNode) sheet.remove();
+      // Tear down any running sky without leave-confirm (user already picked a sky)
+      try {
+        const active = document.querySelector('.game-overlay[data-game-id="patangbaazi"]');
+        if (active) {
+          try {
+            active.dispatchEvent(new CustomEvent('chaupaal:dismiss', { bubbles: true }));
+          } catch (e) {}
+          if (active.isConnected) {
+            try {
+              active.remove();
+            } catch (e2) {}
+          }
+        }
+      } catch (e) {}
       openPatang({ mode: mode });
     }
 
@@ -6624,7 +6645,7 @@
       if (!shell.alive() || ended) return;
       if (pauseCtrl && pauseCtrl.isPaused()) {
         lastTs = 0;
-        raf = requestAnimationFrame(loop);
+        raf = 0;
         return;
       }
       if (!lastTs) lastTs = now;
