@@ -1340,8 +1340,18 @@ function render(){
   if(gameEnded)recordEndIfNeeded();
   const{chessWon,chessDrew,aborted}=outcomeFlags();
   const turnMode=gameEnded?'over':!fenReady?'theirs':state.incomingDrawOffer?'over':state.check&&state.turn===myChessColor?'over':(aiThinking||state.turn!==myChessColor)?'theirs':'yours';
+  let lastSan='';
+  try{
+    const sans=chess.history({verbose:false})||[];
+    if(sans.length)lastSan=sans[sans.length-1];
+  }catch(e){lastSan='';}
   const turnBanner=typeof gameTurnBannerHtml==='function'
-    ? gameTurnBannerHtml({ mode: turnMode, label: statusText, pulse: turnMode==='yours' })
+    ? gameTurnBannerHtml({
+        mode: turnMode,
+        label: statusText,
+        sub: !gameEnded&&lastSan?('Last: '+lastSan):undefined,
+        pulse: turnMode==='yours',
+      })
     : `<div style="padding:10px 16px;text-align:center;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;color:#fff;flex-shrink:0;">${statusText}</div>`;
   const kingSq=state.check?findKingSquare(state.turn):null;
   const oppLabel=liveOn?(chat.name||'Opponent'):'Practice AI';
@@ -2672,11 +2682,21 @@ function openSnakesVersion(chat, version, opts){
     if(art)art.innerHTML=buildPathsSvg();
   }
 
+  function snakesTurnLabel(){
+    if(!recipeReady)return{mode:'waiting',label:'Waiting for host…',sub:message||'Board unlocks when host picks a version'};
+    if(gameOver)return{mode:'over',label:'Game over',sub:message||''};
+    if(myTurn)return{mode:'yours',label:doubleRoll?'Your turn — roll again':'Your turn — roll',sub:message||'Tap Roll to move'};
+    return{mode:'theirs',label:(chat.name||'Opponent').split(' ')[0]+'’s turn',sub:message||(liveOn?'Board stays live — wait for their hop':'Opponent rolling…')};
+  }
   function updateHud(){
     const msgEl=overlay.querySelector('#slMsg');
     if(msgEl){
       msgEl.style.display=message?'block':'none';
       msgEl.textContent=message;
+    }
+    const turnEl=overlay.querySelector('#slTurnBanner');
+    if(turnEl&&typeof setGameTurnBanner==='function'){
+      setGameTurnBanner(turnEl,snakesTurnLabel());
     }
     const meEl=overlay.querySelector('#slPosMe');
     const oppEl=overlay.querySelector('#slPosOpp');
@@ -2693,7 +2713,7 @@ function openSnakesVersion(chat, version, opts){
       rollBtn.style.background=canRoll?'var(--game-accent,var(--red))':'rgba(255,255,255,0.1)';
       rollBtn.textContent=!recipeReady
         ?'Waiting for host…'
-        :(gameOver?'Game Over!':(myTurn?`🎲 Roll${doubleRoll?' Again!':''}`:chat.name.split(' ')[0]+' rolling...'));
+        :(gameOver?'Game Over!':(myTurn?`🎲 Roll${doubleRoll?' Again!':''}`:chat.name.split(' ')[0]+' rolling…'));
     }
     const meCard=overlay.querySelector('#slMeCard');
     const oppCard=overlay.querySelector('#slOppCard');
@@ -2721,8 +2741,13 @@ function openSnakesVersion(chat, version, opts){
     }
     const sub=MODE_SUB()+(versionObj.desc?' · '+versionObj.desc:'');
     const title=awaitHost&&!recipeReady?'Snakes & Ladders':versionObj.name;
+    const turnMeta=snakesTurnLabel();
+    const turnBanner=typeof gameTurnBannerHtml==='function'
+      ? gameTurnBannerHtml({mode:turnMeta.mode,label:turnMeta.label,sub:turnMeta.sub,pulse:turnMeta.mode==='yours'}).replace('<div class="game-turn','<div id="slTurnBanner" class="game-turn')
+      : `<div id="slTurnBanner" class="game-turn game-turn--${turnMeta.mode}" role="status">${turnMeta.label}</div>`;
     overlay.innerHTML=`
       ${gameChromeHtml({title,subtitle:sub,backId:'slBack'})}
+      ${turnBanner}
       <div style="display:flex;gap:8px;padding:8px 12px;flex-shrink:0;">
         <div id="slMeCard" style="flex:1;background:${myTurn&&!gameOver?'color-mix(in srgb,var(--game-accent,var(--red)) 28%,transparent)':'rgba(255,255,255,0.05)'};border:2px solid ${myTurn&&!gameOver?'var(--game-accent,var(--red))':'transparent'};border-radius:12px;padding:8px;text-align:center;">
           <div style="color:#ccc;font-size:11px;font-weight:700;">🔴 You</div>
@@ -3984,6 +4009,15 @@ function openLudoGame(chat, playerCount, opts){
     }
     const msgEl=overlay.querySelector('#ludoMsg');
     if(msgEl){msgEl.style.display=message?'block':'none';msgEl.textContent=message;}
+    const turnEl=overlay.querySelector('#ludoTurnBanner');
+    if(turnEl&&typeof setGameTurnBanner==='function'){
+      setGameTurnBanner(turnEl,{
+        mode: gameOver?'over':isMyControl()?'yours':'theirs',
+        label: gameOver?'Game over':isMyControl()?(phase==='roll'?'Your turn — roll':phase==='move'?'Your turn — tap a token':'Your turn'):(liveOn?((chat.name||'Friend')+' to move'):'Waiting for opponents…'),
+        sub: message||undefined,
+        pulse: !gameOver && isMyControl(),
+      });
+    }
     const rollBtn=overlay.querySelector('#ludoRoll');
     const color=players[currentPlayer];
     if(rollBtn){
@@ -4065,8 +4099,9 @@ function openLudoGame(chat, playerCount, opts){
         ? gameTurnBannerHtml({
             mode: gameOver?'over':isMyControl()?'yours':'theirs',
             label: gameOver?'Game over':isMyControl()?(phase==='roll'?'Your turn — roll':phase==='move'?'Your turn — tap a token':'Your turn'):(liveOn?((chat.name||'Friend')+' to move'):'Waiting for opponents…'),
+            sub: message||undefined,
             pulse: !gameOver && isMyControl(),
-          })
+          }).replace('<div class="game-turn','<div id="ludoTurnBanner" class="game-turn')
         : ''}
       <div style="padding:10px 12px;padding-bottom:max(10px,env(safe-area-inset-bottom));flex-shrink:0;">
         <button id="ludoRoll" type="button" class="game-tap-target" aria-label="Roll dice" style="width:100%;min-height:48px;padding:13px;background:${phase==='roll'&&isMyControl()&&!gameOver?COLOR_STYLES[color]:'rgba(255,255,255,0.1)'};color:#fff;border:none;border-radius:var(--game-btn-radius,14px);font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;">
@@ -4978,7 +5013,12 @@ function openUnoGame(chat, variant='normal', opts){
             ${fanHandHtml()}
           </div>
           ${typeof gameTurnBannerHtml==='function'
-            ? gameTurnBannerHtml({mode:myTurn&&!pickingColor?'yours':(gameOver?'over':'waiting'),label:myTurn&&!pickingColor?(pendingChallenge&&pendingChallenge.victim==='me'?'Challenge the +4 or draw 4':drawStack>0?(house.stackDraw2&&drawStackType==='draw2'?`+${drawStack} pending — stack +2 or draw`:`Tap deck to draw ${drawStack} cards`):(drewPlayableIndex===hands.me.length-1&&drewPlayableIndex>=0?'Tap drawn card to play or tap deck to pass':'Your turn — tap a highlighted card')):(pickingColor?'Pick a colour':'Opponent thinking…'),pulse:myTurn&&!pickingColor})
+            ? gameTurnBannerHtml({
+                mode:gameOver?'over':(myTurn&&!pickingColor?'yours':'theirs'),
+                label:myTurn&&!pickingColor?(pendingChallenge&&pendingChallenge.victim==='me'?'Challenge the +4 or draw 4':drawStack>0?(house.stackDraw2&&drawStackType==='draw2'?`+${drawStack} pending — stack +2 or draw`:`Tap deck to draw ${drawStack} cards`):(drewPlayableIndex===hands.me.length-1&&drewPlayableIndex>=0?'Tap drawn card to play or tap deck to pass':'Your turn — tap a highlighted card')):(pickingColor?'Pick a colour':(liveOn?(chat.name||'Opponent')+'’s turn':'Opponent thinking…')),
+                sub:message||presenceHint||undefined,
+                pulse:myTurn&&!pickingColor,
+              })
             : `<div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:4px;text-align:center;">${myTurn&&!pickingColor?'Your turn':'Opponent thinking…'}</div>`}
         </div>
       </div>
@@ -5360,6 +5400,7 @@ if(!gs.alive())return;
 let board=Array(9).fill(null);let gameOver=false;let winLine=null;let scores={me:0,opp:0,draw:0};let showResult=false;
 let myTurn=!liveRoles||liveRoles.myColor==='w';
 let applyingLive=false;
+let lastCell=null;
 const myMark=(!liveRoles||liveRoles.myColor==='w')?'X':'O';
 const oppMark=myMark==='X'?'O':'X';
 
@@ -5528,8 +5569,9 @@ function render(){
   const w=winLine;
   const statusText=gameOver?(winLine?(board[winLine[0]]===myMark?'You won':`${chat.name} wins`):"It's a draw"):(myTurn?`Your turn (${myMark==='X'?'✕':'⭕'})`:(liveOn?`${chat.name}'s turn`:'Thinking…'));
   const turnMode=gameOver?'over':myTurn?'yours':'theirs';
+  const lastCue=lastCell!=null&&board[lastCell]?((board[lastCell]===myMark?'You':'Opponent')+' played '+(board[lastCell]==='X'?'✕':'⭕')):'';
   const turnBanner=typeof gameTurnBannerHtml==='function'
-    ? gameTurnBannerHtml({ mode: turnMode, label: statusText, pulse: turnMode==='yours' })
+    ? gameTurnBannerHtml({ mode: turnMode, label: statusText, sub: !gameOver&&lastCue?lastCue:undefined, pulse: turnMode==='yours' })
     : `<div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;color:#fff;">${statusText}</div>`;
   const resultBlock=showResult&&typeof gameResultHtml==='function'
     ? gameResultHtml({
@@ -5605,9 +5647,10 @@ function render(){
   const boardEl=document.getElementById('tttBoard');
   board.forEach((cell,i)=>{
     const isWin=w&&w.includes(i);
+    const isLast=lastCell===i&&!isWin;
     const sq=document.createElement('div');
     sq.className='game-tap-target';
-    sq.style.cssText=`aspect-ratio:1;min-height:44px;background:${isWin?'rgba(255,201,60,0.2)':'rgba(255,255,255,0.07)'};border:2px solid ${isWin?'var(--gold)':'rgba(255,255,255,0.1)'};border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:48px;cursor:${!cell&&myTurn&&!gameOver?'pointer':'default'};transition:transform var(--duration-fast,150ms) var(--ease-spring,cubic-bezier(0.34,1.56,0.64,1));`;
+    sq.style.cssText=`aspect-ratio:1;min-height:44px;background:${isWin?'rgba(255,201,60,0.2)':isLast?'rgba(255,255,255,0.14)':'rgba(255,255,255,0.07)'};border:2px solid ${isWin?'var(--gold)':isLast?'rgba(255,255,255,0.45)':'rgba(255,255,255,0.1)'};border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:48px;cursor:${!cell&&myTurn&&!gameOver?'pointer':'default'};transition:transform var(--duration-fast,150ms) var(--ease-spring,cubic-bezier(0.34,1.56,0.64,1));`;
     sq.textContent=cell==='X'?'✕':cell==='O'?'⭕':'';
     sq.setAttribute('aria-label', cell==='X'?'X':cell==='O'?'O':`Empty cell ${i+1}`);
     if(cell==='X')sq.style.color='var(--game-accent,#e74c3c)';
@@ -5619,7 +5662,7 @@ function render(){
 
 function resetTtt(){
   // Practice only — Live rematch uses freshTttRematch (new matchId).
-  board=Array(9).fill(null);myTurn=myMark==='X';gameOver=false;winLine=null;showResult=false;
+  board=Array(9).fill(null);myTurn=myMark==='X';gameOver=false;winLine=null;showResult=false;lastCell=null;
   sessionRecorded=false;settleDone=false;resultSettling=false;
   render();
 }
@@ -5629,6 +5672,7 @@ function placeTtt(i,mark,fromRemote){
       if(typeof pulseGameEl==='function')pulseGameEl(document.getElementById('tttBoard')?.children[i]);
       if(typeof gameFeedback==='function')gameFeedback('place');
       board[i]=mark;
+      lastCell=i;
       const w2=checkWin(board,mark);
       const iWon=mark===myMark;
       if(w2){
@@ -5668,7 +5712,7 @@ function pushTtt(){
   liveHandle.push({
     board:board.map((c)=>c||'.').join(''),
     turn:nextTurn,
-    lastMove:{board:board.slice()},
+    lastMove:{cell:lastCell,board:board.slice()},
     status:gameOver?'over':'playing',
     winner:winnerUid||null,
     isDraw:!!(gameOver&&!winLine),
@@ -5703,7 +5747,12 @@ if(liveOn&&liveRoles){
         return;
       }
       applyingLive=true;
+      const prev=board.slice();
       board=next.map((c)=>c||null);
+      if(val.lastMove&&val.lastMove.cell!=null)lastCell=val.lastMove.cell|0;
+      else {
+        for(let i=0;i<9;i++){if((prev[i]||null)!==(board[i]||null)){lastCell=i;break;}}
+      }
       const wX=checkWin(board,'X');const wO=checkWin(board,'O');
       winLine=wX||wO;
       gameOver=!!winLine||board.every(Boolean)||val.status==='over';

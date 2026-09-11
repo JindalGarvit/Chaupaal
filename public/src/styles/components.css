@@ -2212,6 +2212,15 @@ html.theme-dark .lehar-empty{color:#fff;}
 .game-overlay--dark .game-chrome-subtitle{color:rgba(255,255,255,.52);}
 .game-chrome-right,.game-chrome-spacer{width:44px;min-width:44px;display:flex;justify-content:flex-end;align-items:center;}
 .game-chrome-action{min-height:36px;border:0;border-radius:10px;padding:7px 10px;background:rgba(255,255,255,.1);color:inherit;font:700 11px 'Space Grotesk',sans-serif;cursor:pointer}.game-chrome-action.is-active{background:var(--game-accent);color:#fff}.game-chrome-metric{font:700 13px 'Space Grotesk',sans-serif;color:var(--game-accent);}
+.game-chrome-metric.is-warn{color:#E74C3C;animation:firPulse .7s ease infinite;}
+.bus-last-event{margin:0 14px 6px;padding:6px 10px;border-radius:10px;background:rgba(255,201,60,.1);border:1px solid rgba(255,201,60,.25);color:var(--gold,#FFC93C);font:600 12px Inter,sans-serif;text-align:center;flex-shrink:0;}
+.scribble-waiting--soft{background:rgba(247,243,236,.22);font-weight:700;}
+.game-overlay .game-turn{padding:6px 12px;font-size:13px;flex-shrink:0;}
+@media (max-height:640px){
+  .bus-trade-bar{max-height:28vh;}
+  .scribble-chat{height:72px;}
+  .fir-hud{padding:4px 10px;}
+}
 .wg-hard-btn.is-on{background:#B59F3B;color:#1a1a1a}
 .wg-hard-btn:disabled{opacity:.55;cursor:default}
 
@@ -4572,7 +4581,7 @@ select:focus-visible,
 .bus-controls--row{display:flex;gap:8px;align-items:stretch;}
 .bus-controls--row .bus-roll-btn{flex:1;}
 .bus-side-btn{flex:0 0 auto;min-width:72px;min-height:48px;border-radius:14px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font:700 13px "Space Grotesk",sans-serif;cursor:pointer;}
-.bus-trade-bar{margin:0 14px 8px;padding:10px 12px;border-radius:14px;background:rgba(52,152,219,.12);border:1.5px solid rgba(52,152,219,.4);flex-shrink:0;max-height:42vh;overflow:auto;}
+.bus-trade-bar{margin:0 14px 8px;padding:10px 12px;border-radius:14px;background:rgba(52,152,219,.12);border:1.5px solid rgba(52,152,219,.4);flex-shrink:0;max-height:34vh;overflow:auto;}
 .bus-trade-title{font:700 13px "Space Grotesk",sans-serif;color:#fff;margin-bottom:6px;}
 .bus-trade-meta,.bus-trade-hint,.bus-trade-section{font-size:11px;color:rgba(255,255,255,.7);margin-bottom:6px;}
 .bus-trade-hint{opacity:.8;}

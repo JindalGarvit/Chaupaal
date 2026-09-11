@@ -863,7 +863,7 @@ function openFiveInRowGame(chat, opts){
       </div>`:''}
       <div class="fir-hud">
         <div class="fir-hud-side fir-hud-side--you">● You</div>
-        <div id="firStatusNote" class="fir-hud-note">${statusNote||(myTurn?'Place a stone':'Waiting…')}</div>
+        <div id="firStatusNote" class="fir-hud-note">${statusNote||(myTurn?'Place a stone':(liveOn?'Their move — board stays live':'Waiting…'))}</div>
         <div class="fir-hud-side fir-hud-side--opp">○ ${chat.name||'Opp'}</div>
       </div>
       <div class="fir-law-chip" title="Line law">${lawLabel}${lawMode==='renju'?' · Black fouls':''}</div>
@@ -873,7 +873,8 @@ function openFiveInRowGame(chat, opts){
       ${typeof gameTurnBannerHtml==='function'
         ? gameTurnBannerHtml({
             mode: gameOver?'over':myTurn?'yours':'theirs',
-            label: gameOver?(winLine?(board[winLine[0][0]][winLine[0][1]]==='X'?'You won!':(chat.name||'Opponent')+' won!'):(overlineLoss?(firLostOverline?'Overline — you lose':'Overline — Black loses'):"It's a draw!")):(myTurn?'Your turn':(chat.name||'Opponent')+(liveOn?' to move':' thinking…')),
+            label: gameOver?(winLine?(board[winLine[0][0]][winLine[0][1]]==='X'?'You won!':(chat.name||'Opponent')+' won!'):(overlineLoss?(firLostOverline?'Overline — you lose':'Overline — Black loses'):"It's a draw!")):(myTurn?'Your turn — place a stone':(chat.name||'Opponent')+(liveOn?' to move':' thinking…')),
+            sub: !gameOver?(statusNote||(firTimer<=5&&myTurn?'Hurry — '+firTimer+'s':undefined)):undefined,
             pulse: !gameOver && myTurn,
           })
         : `<div class="fir-turn-fallback">${gameOver?(winLine?(board[winLine[0][0]][winLine[0][1]]==='X'?'You won!':chat.name+' won!'):"It's a draw!"):(myTurn?'Your turn':chat.name+' thinking…')}</div>`}`}
@@ -2934,6 +2935,55 @@ function openBusinessGame(chat,playerCount){
     </div>`;
   }
 
+  function busPhaseTurn(){
+    if(gameOver)return{mode:'over',label:'Game over',sub:message||''};
+    if(distress){
+      const payer=players[distress.payerSeat];
+      const mine=isDistressControl()||(!liveOn&&distress.payerSeat===mySeat);
+      return{
+        mode:mine?'yours':'theirs',
+        label:mine?'Raise funds':'Waiting — debt',
+        sub:message||((payer?payer.name:'Player')+' must raise ₹'+distress.amount+(distress.note?' · '+distress.note:'')),
+      };
+    }
+    if(trade){
+      const mine=isTradeResponder();
+      const proposeWait=isTradeProposer()||(!liveOn&&trade.from===mySeat&&trade.to!==mySeat);
+      return{
+        mode:mine?'yours':(proposeWait?'waiting':'theirs'),
+        label:mine?'Your turn — respond to deal':proposeWait?'Deal pending':'Waiting on deal',
+        sub:message||'Trade stays open — board stays live',
+      };
+    }
+    if(tradeOpen){
+      return{mode:'yours',label:'Compose a deal',sub:message||'Offer cash or deeds, then Propose'};
+    }
+    if(auction){
+      const turnName=players[auction.turnSeat]?players[auction.turnSeat].name:'—';
+      const mine=isAuctionControl()||(!liveOn&&auction.turnSeat===mySeat);
+      return{
+        mode:mine?'yours':'theirs',
+        label:mine?'Your bid':'Auction — waiting',
+        sub:message||(turnName+"'s bid · high ₹"+(auction.highBid||0)),
+      };
+    }
+    if(awaitingBuy&&isMyControl()){
+      return{mode:'yours',label:'Your turn — buy or auction',sub:message||'Buy the deed or skip to auction'};
+    }
+    if(awaitingJailChoice&&isMyControl()){
+      return{mode:'yours',label:'Your turn — jail',sub:message||'Pay fine or roll for doubles'};
+    }
+    if(isMyControl()){
+      return{
+        mode:'yours',
+        label:rolling?'Rolling…':(pendingExtraTurn||doublesStreak?'Your turn — roll again':'Your turn — roll'),
+        sub:message||'Roll dice to move',
+      };
+    }
+    const who=players[currentPlayer]?players[currentPlayer].name:'Opponent';
+    return{mode:'theirs',label:who+'’s turn',sub:message||(liveOn?'Board stays live — wait for their move':who+' playing…')};
+  }
+
   function render(){
     if(!alive())return;
     const tile=BOARD[focusPos]||BOARD[0];
@@ -2974,8 +3024,14 @@ function openBusinessGame(chat,playerCount){
     }
     const showTimer=(isMyControl()&&!awaitingBuy&&!auction&&!distress&&!trade&&!tradeOpen)||isAuctionControl()||isDistressControl()||isTradeResponder();
     const canDeal=isMyControl()&&!rolling&&!awaitingBuy&&!awaitingJailChoice&&!auction&&!distress&&!trade&&!tradeOpen&&!gameOver;
+    const turnMeta=busPhaseTurn();
+    const turnBanner=typeof gameTurnBannerHtml==='function'
+      ? gameTurnBannerHtml({mode:turnMeta.mode,label:turnMeta.label,sub:turnMeta.sub,pulse:turnMeta.mode==='yours'})
+      : '';
+    const timerWarn=showTimer&&busTimer<=5;
     overlay.innerHTML=`
-      ${gameChromeHtml({title:'Business',subtitle:MODE_SUB+(doublesStreak?` · Doubles ${doublesStreak}`:'')+(auction?' · Auction':'')+(trade?' · Deal':''),backId:'busBack',rightHtml:showTimer?`<span id="busTimerEl" class="game-chrome-metric">${busTimer}s</span>`:undefined})}
+      ${gameChromeHtml({title:'Business',subtitle:MODE_SUB+(doublesStreak?` · Doubles ${doublesStreak}`:'')+(auction?' · Auction':'')+(trade?' · Deal':''),backId:'busBack',rightHtml:showTimer?`<span id="busTimerEl" class="game-chrome-metric${timerWarn?' is-warn':''}">${busTimer}s</span>`:undefined})}
+      ${turnBanner}
       <div class="bus-players">
         ${players.map((p,i)=>`<div class="bus-player${currentPlayer===i?' is-active':''}${p.bankrupt?' is-out':''}${p.inJail?' is-jail':''}" style="--pc:${p.color}">
           <div class="bus-player-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(p.name,p):p.name}</div>
@@ -2988,6 +3044,7 @@ function openBusinessGame(chat,playerCount){
         ${deedHtml(tile,focusPos)}
         ${miniBoardHtml()}
       </div>
+      ${message?`<p class="bus-last-event" role="status">${message}</p>`:''}
       ${tradePanelHtml()}
       ${auctionPanelHtml()}
       ${distressPanelHtml()}
@@ -3856,9 +3913,42 @@ function openScribbleGame(chat,playerList,opts){
     const timerLabel=phase==='pick'?pickSecondsLeft:roundTimer;
     const picking=phase==='pick'&&isMyTurn&&pickChoices.length>0;
     const waitingPick=phase==='pick'&&!isMyTurn;
+    const timerWarn=(phase==='pick'?pickSecondsLeft:roundTimer)<=5;
+    let turnMode='waiting';
+    let turnLabel='Waiting…';
+    let turnSub='';
+    if(phase==='reveal'){
+      turnMode='over';
+      turnLabel='Round over';
+      turnSub='Word was “'+(revealWord||currentWord||'—')+'”';
+    }else if(picking){
+      turnMode='yours';
+      turnLabel='Your turn — pick a word';
+      turnSub=pickSecondsLeft+'s left';
+    }else if(waitingPick){
+      turnMode='theirs';
+      turnLabel=drawerName+' is picking…';
+      turnSub='Canvas opens when they choose';
+    }else if(isMyTurn&&phase==='draw'){
+      turnMode='yours';
+      turnLabel='You’re drawing';
+      turnSub='Draw “'+(currentWord||'…')+'” · '+roundTimer+'s';
+    }else if(phase==='draw'){
+      turnMode='theirs';
+      turnLabel='Guess — '+drawerName+' is drawing';
+      turnSub=blanks||'Watch the ink · type a guess';
+    }
+    const turnBanner=typeof gameTurnBannerHtml==='function'
+      ? gameTurnBannerHtml({mode:turnMode,label:turnLabel,sub:turnSub,pulse:turnMode==='yours'})
+      : '';
+    // Only cover canvas while waiting for word pick — never blank the draw phase.
+    const waitOverlay=waitingPick
+      ?`<div class="scribble-waiting scribble-waiting--soft" id="scribbleWaiting">${drawerName} is picking a word…</div>`
+      :'';
 
     overlay.innerHTML=`
-      ${gameChromeHtml({title:practiceMode?'Scribble Practice':'Scribble',subtitle:MODE_SUB+(practiceMode?'':` · Round ${round}/${maxRounds}`),backId:'scribbleBack',rightHtml:`<span id="scribbleTimer" class="game-chrome-metric">${timerLabel}s</span>`})}
+      ${gameChromeHtml({title:practiceMode?'Scribble Practice':'Scribble',subtitle:MODE_SUB+(practiceMode?'':` · Round ${round}/${maxRounds}`),backId:'scribbleBack',rightHtml:`<span id="scribbleTimer" class="game-chrome-metric${timerWarn?' is-warn':''}">${timerLabel}s</span>`})}
+      ${turnBanner}
       <div class="scribble-prompt${isMyTurn&&phase==='draw'?' scribble-prompt--draw':''}">
         ${picking?`
           <div class="scribble-word">Pick a word <span id="scribblePickTimer" class="scribble-pick-left">${pickSecondsLeft}s</span></div>
@@ -3880,7 +3970,7 @@ function openScribbleGame(chat,playerList,opts){
       </div>
       <div class="scribble-stage">
         <canvas id="scribbleCanvas" class="scribble-canvas" style="cursor:${isMyTurn&&phase==='draw'?'crosshair':'default'};touch-action:none;"></canvas>
-        ${(!isMyTurn||phase==='pick')&&phase!=='reveal'?`<div class="scribble-waiting" id="scribbleWaiting">${waitingPick?'Waiting for word…':(phase==='pick'?'Pick above to start':'Waiting for drawing…')}</div>`:''}
+        ${waitOverlay}
       </div>
       ${isMyTurn&&phase==='draw'?`
       <div class="scribble-tools">
