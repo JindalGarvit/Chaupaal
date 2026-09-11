@@ -1,6 +1,6 @@
 /**
  * RW Sports — Street Cricket + Gully Kick (football-style).
- * Trademark-safe names; Street Cricket Live v1 (Over/Nets/Chase · bowl↔bat · stakes).
+ * Street Cricket Live v1 done; Gully Kick Live kick sync (1/3 · AI dive stub).
  */
 (function () {
   'use strict';
@@ -2384,7 +2384,10 @@
 
 
   /** Gully Kick — Practice shootout: Classic / SD / Pressure (Prompt 3/3). */
-  function openGullyKick() {
+  /** Gully Kick — Practice + Live kick sync (Prompt 1/3; AI dive until P2). */
+  function openGullyKick(chatArg) {
+    const chat = resolveRwChat(chatArg);
+    const liveOn = chatLiveOn(chat);
     let scored = 0;
     let taken = 0;
     const MAX = 5;
@@ -2394,7 +2397,7 @@
     let runBestStreak = 0;
     let sessionWon = false;
     let endReason = '';
-    let phase = 'pick'; // pick | aim | flight | result | done
+    let phase = 'pick'; // pick | wait | aim | flight | result | done
     let lastResult = '';
     let lastDive = 'C';
     let lastDiveHeight = 'mid';
@@ -2412,6 +2415,16 @@
     let locked = false;
     let pendingDive = null;
     let coachShown = false;
+    let liveRoles = null;
+    let liveHandle = null;
+    let leaveShell = null;
+    let eventSeq = 0;
+    let appliedSeq = 0;
+    let applying = false;
+    let kickUid = '';
+    let peerPaused = false;
+    let ended = false;
+    let flightStartedAt = 0;
     const COACH_KEY = 'chaupaal_gk_coach_v2';
     const FORMAT_KEY = 'chaupaal_gk_format_v3';
 
@@ -2478,23 +2491,126 @@
     let pauseFreezeAt = 0;
     let pauseRemainFlight = 0;
     let pauseRemainResult = 0;
-    const { overlay, body, gs, pauseBtnId } = mountSportsShell({
+
+    const iAmHost = () => {
+      if (!liveOn) return true;
+      if (!liveRoles) return false;
+      if (liveRoles.host != null) return !!liveRoles.host;
+      return liveRoles.me === liveRoles.playerA;
+    };
+
+    const iAmKicker = () => {
+      if (!liveOn) return true;
+      if (!liveRoles) return false;
+      return liveRoles.me === (kickUid || liveRoles.playerA);
+    };
+
+    const setModeChrome = (formatLabel) => {
+      const fLabel = formatLabel || (fmt() && fmt().label) || 'Gully Kick';
+      if (liveOn) {
+        const seat = iAmKicker() ? 'Kicker' : 'Watching';
+        setChromeSub(liveChromeSub() + ' · Friendly · ' + fLabel + ' · ' + seat);
+      } else {
+        setChromeSub('Practice · ' + fLabel + ' · Shooter');
+      }
+    };
+
+    const buildLiveState = (extra) =>
+      Object.assign(
+        {
+          formatId,
+          scored,
+          taken,
+          streak,
+          runBestStreak,
+          phase,
+          aim: {
+            side: aim.side,
+            height: aim.height,
+            nx: aim.nx,
+            ny: aim.ny,
+          },
+          power,
+          lastKick,
+          lastResult,
+          lastDive,
+          lastDiveHeight,
+          lastGoal,
+          lastOutcomeKind,
+          kickLog: kickLog.slice(-8),
+          kickUid: kickUid || (liveRoles && liveRoles.playerA) || '',
+          eventSeq,
+          endReason,
+          sessionWon,
+          flightStartedAt,
+          locked,
+          paused: !!(pauseCtrl && pauseCtrl.isPaused && pauseCtrl.isPaused()),
+        },
+        extra || {}
+      );
+
+    const pushLive = (extra, top) => {
+      if (!liveOn || !liveHandle || applying || !liveRoles) return;
+      if (!iAmKicker() && !(top && top.as === 'host')) return;
+      if (top && top.as === 'host' && !iAmHost()) return;
+      eventSeq += 1;
+      const st = buildLiveState(extra);
+      st.eventSeq = eventSeq;
+      appliedSeq = Math.max(appliedSeq, eventSeq);
+      const status =
+        phase === 'done' || ended ? 'over' : (top && top.status) || 'playing';
+      try {
+        liveHandle.push(
+          Object.assign(
+            {
+              status,
+              turn: kickUid || liveRoles.playerA,
+              state: st,
+            },
+            top || {}
+          )
+        );
+      } catch (e) {}
+    };
+
+    const chromeSubtitle = liveOn
+      ? liveChromeSub() + ' · Friendly · Gully Kick'
+      : undefined;
+    const mounted = mountSportsShell({
       gameId: 'gullykick',
       title: 'Gully Kick',
       accent: '#2D6A4F',
       pauseId: 'gkPause',
+      live: liveOn,
+      subtitle: chromeSubtitle,
+      leaveBody: liveOn
+        ? 'Leaving now counts as a forfeit for your opponent.'
+        : 'This practice run will end.',
+      isPlaying: () => !ended && phase !== 'done' && phase !== 'pick' && phase !== 'wait',
       onClose: () => {
+        ended = true;
         try {
           if (pauseCtrl) pauseCtrl.destroy();
         } catch (e) {}
         pauseCtrl = null;
         clearTimers();
+        if (liveHandle && typeof detachLiveHandle === 'function') {
+          try {
+            detachLiveHandle(liveHandle, { alreadyOver: true });
+          } catch (e) {}
+        }
+        liveHandle = null;
+        if (leaveShell) leaveShell.liveHandle = null;
       },
     });
+    const { overlay, body, gs, pauseBtnId } = mounted;
+    leaveShell = mounted.leaveShell || null;
     if (!body) return;
 
-    const sessionAlive = () => !gs || (typeof gs.alive === 'function' ? gs.alive() : true);
-    const isPaused = () => !!(pauseCtrl && pauseCtrl.isPaused && pauseCtrl.isPaused());
+    const sessionAlive = () =>
+      !ended && (!gs || (typeof gs.alive === 'function' ? gs.alive() : true));
+    const isPaused = () =>
+      !!(peerPaused || (pauseCtrl && pauseCtrl.isPaused && pauseCtrl.isPaused()));
 
     const setChromeSub = (text) => {
       const el =
@@ -2505,6 +2621,65 @@
 
     if (typeof migrateGullyKickPb === 'function') migrateGullyKickPb();
     formatId = loadSavedFormat();
+
+    const applyRemoteState = (st) => {
+      if (!st) return;
+      const seq = st.eventSeq | 0;
+      if (seq > 0 && seq <= appliedSeq) return;
+      if (seq > 0) {
+        appliedSeq = Math.max(appliedSeq, seq);
+        eventSeq = Math.max(eventSeq, seq);
+      }
+      applying = true;
+      clearTimers();
+      if (st.formatId && FORMATS[st.formatId]) formatId = st.formatId;
+      if (st.scored != null) scored = st.scored | 0;
+      if (st.taken != null) taken = st.taken | 0;
+      if (st.streak != null) streak = st.streak | 0;
+      if (st.runBestStreak != null) runBestStreak = st.runBestStreak | 0;
+      if (st.power != null) power = Number(st.power) || power;
+      if (st.aim && st.aim.side) {
+        aim = {
+          side: st.aim.side,
+          height: st.aim.height || 'mid',
+          nx: st.aim.nx != null ? st.aim.nx : 0.5,
+          ny: st.aim.ny != null ? st.aim.ny : 0.45,
+        };
+      }
+      if (st.kickUid) kickUid = st.kickUid;
+      if (st.lastKick) {
+        lastKick = st.lastKick;
+        if (st.lastKick.dive) lastDive = st.lastKick.dive;
+        if (st.lastKick.diveHeight) lastDiveHeight = st.lastKick.diveHeight;
+      }
+      if (st.lastResult != null) lastResult = st.lastResult;
+      if (st.lastDive) lastDive = st.lastDive;
+      if (st.lastDiveHeight) lastDiveHeight = st.lastDiveHeight;
+      if (st.lastGoal != null) lastGoal = !!st.lastGoal;
+      if (st.lastOutcomeKind != null) lastOutcomeKind = st.lastOutcomeKind;
+      if (Array.isArray(st.kickLog)) {
+        kickLog.length = 0;
+        st.kickLog.forEach((k) => kickLog.push(k));
+      }
+      if (st.endReason != null) endReason = st.endReason;
+      if (st.sessionWon != null) sessionWon = !!st.sessionWon;
+      if (st.paused != null) peerPaused = !!st.paused;
+      if (st.flightStartedAt != null) flightStartedAt = st.flightStartedAt | 0;
+      if (st.locked != null) locked = !!st.locked;
+      if (st.phase) {
+        if (!iAmHost() && st.phase === 'pick') phase = 'wait';
+        else phase = st.phase;
+      }
+      applying = false;
+      setModeChrome();
+      if (phase === 'done') {
+        ended = true;
+        if (leaveShell) leaveShell.gameOver = true;
+        render();
+        return;
+      }
+      render();
+    };
 
     const diveLabel = (d) => (d === 'L' ? 'left' : d === 'R' ? 'right' : 'center');
     const heightLabel = (h) => (h === 'low' ? 'low' : h === 'high' ? 'high' : 'mid');
@@ -2629,27 +2804,45 @@
       power = 0.55;
       locked = false;
       pendingDive = null;
-      setChromeSub('Practice · ' + fmt().label + ' · Shooter');
+      flightStartedAt = 0;
+      ended = false;
+      if (liveOn && liveRoles) {
+        kickUid = liveRoles.playerA || kickUid;
+      }
+      setModeChrome();
     };
 
     const reset = () => {
+      if (liveOn && !iAmHost()) return;
       clearTimers();
       beginSession();
       phase = 'aim';
+      if (liveOn) {
+        kickUid = (liveRoles && liveRoles.playerA) || kickUid;
+        pushLive({ phase: 'aim' }, { as: 'host' });
+      }
       render();
     };
 
     const showPicker = () => {
+      if (liveOn && !iAmHost()) return;
       clearTimers();
       phase = 'pick';
-      setChromeSub('Practice · pick format');
+      setChromeSub(
+        liveOn ? liveChromeSub() + ' · Friendly · pick format' : 'Practice · pick format'
+      );
       render();
     };
 
     const startSelected = () => {
+      if (liveOn && !iAmHost()) return;
       saveFormat(formatId);
       beginSession();
       phase = 'aim';
+      if (liveOn) {
+        kickUid = (liveRoles && liveRoles.playerA) || '';
+        pushLive({ phase: 'aim' }, { as: 'host' });
+      }
       render();
       if (typeof gameFeedback === 'function') gameFeedback('select');
     };
@@ -2664,9 +2857,12 @@
     };
 
     const scoreHud = () => {
+      const pbOk = !liveOn;
       if (formatId === 'sudden') {
         const allTime =
-          typeof getGamePB === 'function' && getGamePB('gullykick_sd') != null
+          pbOk &&
+          typeof getGamePB === 'function' &&
+          getGamePB('gullykick_sd') != null
             ? ` · Best ${getGamePB('gullykick_sd')}`
             : '';
         return `Streak ${streak} · best this run ${runBestStreak}${allTime}`;
@@ -2674,13 +2870,17 @@
       if (formatId === 'pressure') {
         const left = Math.max(0, MAX - taken);
         const clears =
-          typeof getGamePB === 'function' && getGamePB('gullykick_pressure') != null
+          pbOk &&
+          typeof getGamePB === 'function' &&
+          getGamePB('gullykick_pressure') != null
             ? ` · Best ${getGamePB('gullykick_pressure')} clears`
             : '';
         return `${scored}/${PRESSURE_NEED} needed · ${left} kick${left === 1 ? '' : 's'} left${clears}`;
       }
       const pb =
-        typeof getGamePB === 'function' && getGamePB('gullykick_classic') != null
+        pbOk &&
+        typeof getGamePB === 'function' &&
+        getGamePB('gullykick_classic') != null
           ? ` · Best ${getGamePB('gullykick_classic')}/${MAX}`
           : '';
       return `${scored} scored · ${taken}/${MAX} taken${pb}`;
@@ -2996,11 +3196,95 @@
       });
     };
 
+    const applyResolvedKick = (resolved) => {
+      lastKick = resolved;
+      kickLog.push(resolved);
+      taken += 1;
+      lastGoal = !!resolved.goal;
+      lastOutcomeKind = resolved.outcomeKind || (resolved.goal ? 'goal' : 'save');
+      lastResult = resolved.label;
+      if (resolved.over) {
+        if (typeof gameFeedback === 'function') gameFeedback('lose', { noConfetti: true });
+      } else if (resolved.goal) {
+        scored += 1;
+        if (formatId === 'sudden') {
+          streak += 1;
+          if (streak > runBestStreak) runBestStreak = streak;
+        }
+        if (typeof gameFeedback === 'function') gameFeedback('win', { noConfetti: true });
+      } else if (typeof gameFeedback === 'function') {
+        gameFeedback('lose', { noConfetti: true });
+      }
+      try {
+        if (typeof window !== 'undefined') {
+          window.__gkLastKick = resolved;
+          window.__gkKickLog = kickLog.slice();
+        }
+      } catch (e) {}
+      const endEval = evaluateEnd();
+      if (endEval.done) {
+        sessionWon = !!endEval.won;
+        endReason = endEval.reason || '';
+      }
+      phase = 'result';
+      locked = false;
+      flightStartedAt = 0;
+      if (liveOn && iAmKicker()) {
+        pushLive({ phase: 'result', lastKick: resolved });
+      }
+      render();
+      resultTimer = setTimeout(() => {
+        resultTimer = null;
+        if (!sessionAlive() || isPaused() || phase !== 'result') {
+          pauseRemainResult = 80;
+          return;
+        }
+        if (liveOn && !iAmKicker()) return;
+        if (endEval.done) {
+          phase = 'done';
+          ended = true;
+          if (leaveShell) leaveShell.gameOver = true;
+        } else {
+          phase = 'aim';
+          power = 0.55;
+          locked = false;
+          pendingDive = null;
+          lastKick = null;
+        }
+        if (liveOn && iAmKicker()) {
+          pushLive({
+            phase,
+            power: 0.55,
+            lastKick: endEval.done ? lastKick : null,
+          });
+        }
+        render();
+      }, 950);
+      return endEval;
+    };
+
+    const startFlightTimer = (kick, remainMs) => {
+      const flightMs =
+        remainMs != null
+          ? remainMs
+          : Math.max(80, (kick.flightMs || 700) - (flightStartedAt ? Date.now() - flightStartedAt : 0));
+      pauseRemainFlight = 0;
+      flightTimer = setTimeout(() => {
+        flightTimer = null;
+        if (!sessionAlive() || isPaused() || phase !== 'flight') return;
+        if (liveOn && !iAmKicker()) return;
+        const resolved = resolveKick(kick);
+        applyResolvedKick(resolved);
+      }, Math.max(80, flightMs));
+    };
+
     const commitKick = (pwr) => {
       if (phase !== 'aim' || locked) return;
+      if (liveOn && !iAmKicker()) return;
       locked = true;
       clearTimers();
       power = Math.max(0.28, Math.min(1, pwr));
+      // Live P1: AI dive chosen by kicker seat and synced on the wire (Prompt 2 → human keeper).
       const plan = pendingDive || pickKeeperPlan();
       pendingDive = null;
       const dive = plan.side;
@@ -3027,6 +3311,7 @@
       lastDive = dive;
       lastDiveHeight = diveHeight;
       lastOutcomeKind = '';
+      flightStartedAt = Date.now();
       phase = 'flight';
       if (typeof gameFeedback === 'function') gameFeedback('kick');
       try {
@@ -3035,60 +3320,9 @@
           window.__gkKickLog = kickLog.slice();
         }
       } catch (e) {}
+      if (liveOn) pushLive({ phase: 'flight', lastKick: kick, flightStartedAt });
       render();
-      pauseRemainFlight = 0;
-      flightTimer = setTimeout(() => {
-        flightTimer = null;
-        if (!sessionAlive() || isPaused() || phase !== 'flight') return;
-        const resolved = resolveKick(kick);
-        lastKick = resolved;
-        kickLog.push(resolved);
-        taken += 1;
-        lastGoal = !!resolved.goal;
-        lastOutcomeKind = resolved.outcomeKind || (resolved.goal ? 'goal' : 'save');
-        lastResult = resolved.label;
-        if (resolved.over) {
-          if (typeof gameFeedback === 'function') gameFeedback('lose', { noConfetti: true });
-        } else if (resolved.goal) {
-          scored += 1;
-          if (formatId === 'sudden') {
-            streak += 1;
-            if (streak > runBestStreak) runBestStreak = streak;
-          }
-          if (typeof gameFeedback === 'function') gameFeedback('win', { noConfetti: true });
-        } else if (typeof gameFeedback === 'function') {
-          gameFeedback('lose', { noConfetti: true });
-        }
-        try {
-          if (typeof window !== 'undefined') {
-            window.__gkLastKick = resolved;
-            window.__gkKickLog = kickLog.slice();
-          }
-        } catch (e) {}
-        const endEval = evaluateEnd();
-        if (endEval.done) {
-          sessionWon = !!endEval.won;
-          endReason = endEval.reason || '';
-        }
-        phase = 'result';
-        locked = false;
-        render();
-        resultTimer = setTimeout(() => {
-          resultTimer = null;
-          if (!sessionAlive() || isPaused() || phase !== 'result') {
-            pauseRemainResult = 80;
-            return;
-          }
-          if (endEval.done) phase = 'done';
-          else {
-            phase = 'aim';
-            power = 0.55;
-            locked = false;
-            pendingDive = null;
-          }
-          render();
-        }, 950);
-      }, flightMs);
+      startFlightTimer(kick);
     };
 
     const stopCharge = (commit) => {
@@ -3122,6 +3356,7 @@
 
     const startCharge = () => {
       if (phase !== 'aim' || locked || charging || !sessionAlive() || isPaused()) return;
+      if (liveOn && !iAmKicker()) return;
       markCoach();
       charging = true;
       chargeStartedAt = Date.now();
@@ -3154,9 +3389,11 @@
     const wireAim = () => {
       const net = body.querySelector('[data-gk-net]');
       if (!net) return;
+      if (liveOn && !iAmKicker()) return;
       let dragging = false;
       const onDown = (ev) => {
         if (phase !== 'aim' || locked || isPaused()) return;
+        if (liveOn && !iAmKicker()) return;
         dragging = true;
         if (ev.cancelable) ev.preventDefault();
         setAimFromEvent(ev.touches ? ev.touches[0] : ev, net, true);
@@ -3180,6 +3417,7 @@
       if (kickBtn) {
         kickBtn.addEventListener('pointerdown', (ev) => {
           if (phase !== 'aim' || locked || isPaused()) return;
+          if (liveOn && !iAmKicker()) return;
           ev.preventDefault();
           try {
             kickBtn.setPointerCapture(ev.pointerId);
@@ -3188,6 +3426,7 @@
         });
         kickBtn.addEventListener('pointerup', (ev) => {
           ev.preventDefault();
+          if (liveOn && !iAmKicker()) return;
           stopCharge(true);
         });
         kickBtn.addEventListener('pointercancel', () => stopCharge(false));
@@ -3197,6 +3436,7 @@
     const wirePicker = () => {
       body.querySelectorAll('[data-format]').forEach((el) => {
         el.addEventListener('click', () => {
+          if (liveOn && !iAmHost()) return;
           const id = el.getAttribute('data-format');
           if (!FORMATS[id]) return;
           formatId = id;
@@ -3209,6 +3449,15 @@
     };
 
     const render = () => {
+      if (phase === 'wait') {
+        body.innerHTML = `
+          <div class="rw-sports-card rw-gk-card rw-gk-picker">
+            <h2>Gully Kick</h2>
+            ${rwRoleBanner('waiting', 'Waiting for host', 'They pick the format')}
+            <p class="rw-sports-hint">Live shootout — same kicks, same goals. Keeper is AI until next pass.</p>
+          </div>`;
+        return;
+      }
       if (phase === 'pick') {
         if (typeof migrateGullyKickPb === 'function') migrateGullyKickPb();
         const cards = ['classic', 'sudden', 'pressure']
@@ -3224,7 +3473,11 @@
         body.innerHTML = `
           <div class="rw-sports-card rw-gk-card rw-gk-picker">
             <h2>Gully Kick</h2>
-            <p class="rw-sports-hint">Practice shootout — Classic, Sudden Death, or Pressure.</p>
+            <p class="rw-sports-hint">${
+              liveOn
+                ? 'Live 1v1 — shared shootout. Host picks format. AI keeper until keeper seat ships.'
+                : 'Practice shootout — Classic, Sudden Death, or Pressure.'
+            }</p>
             <div class="rw-sc-formats" role="listbox" aria-label="Format">${cards}</div>
             <button type="button" class="btn btn--primary rw-gk-kick" data-rw-start>Start</button>
           </div>`;
@@ -3234,6 +3487,12 @@
       if (phase === 'done') {
         clearTimers();
         const opts = buildResultOpts();
+        if (liveOn) {
+          opts.updatePb = false;
+          opts.challenge = false;
+          opts.onAgain = () => openGullyKick(chat);
+          opts.onChangeFormat = iAmHost() ? showPicker : () => openGullyKick(chat);
+        }
         finishPractice('gullykick', opts.score != null ? opts.score : scored, body, opts);
         return;
       }
@@ -3265,7 +3524,8 @@
               (lastOutcomeKind === 'over' ? 'is-over' : lastGoal ? 'is-goal' : 'is-saved')
             : 'is-ready';
       const flightMs = (lastKick && lastKick.flightMs) || 700;
-      const tip =
+      const kicking = iAmKicker();
+      let tip =
         phase === 'result'
           ? lastResult
           : phase === 'flight'
@@ -3273,7 +3533,14 @@
             : !coachShown
               ? 'Watch the keeper lean while you charge — then pick your corner.'
               : 'Drag the net to aim · hold Kick to charge power';
-      const roleSub =
+      if (liveOn && !kicking) {
+        if (phase === 'aim') tip = lastResult || 'Waiting for the kicker…';
+        else if (phase === 'flight') tip = 'Ball in flight — watching…';
+        else if (phase === 'result') tip = lastResult || 'Kick done';
+      }
+      let roleTitle = 'You’re shooting';
+      let roleMode = 'yours';
+      let roleSub =
         phase === 'aim'
           ? 'Your action — aim & Kick'
           : phase === 'flight'
@@ -3281,11 +3548,22 @@
             : phase === 'result'
               ? lastResult || 'Kick done'
               : '';
-      const roleBanner = rwRoleBanner(
-        phase === 'aim' ? 'yours' : 'waiting',
-        'You’re shooting',
-        roleSub
-      );
+      if (liveOn && !kicking) {
+        roleTitle = 'Watching the shootout';
+        roleMode = phase === 'result' ? 'waiting' : 'theirs';
+        roleSub =
+          phase === 'aim'
+            ? 'Kicker aims & shoots'
+            : phase === 'flight'
+              ? 'Ball in flight…'
+              : lastResult || 'Kick done';
+      } else if (liveOn && kicking) {
+        roleMode = phase === 'aim' ? 'yours' : 'waiting';
+      } else {
+        roleMode = phase === 'aim' ? 'yours' : 'waiting';
+      }
+      const roleBanner = rwRoleBanner(roleMode, roleTitle, roleSub);
+      const canKick = kicking && phase === 'aim' && !locked && !isPaused();
 
       body.innerHTML = `
         <div class="rw-sports-card rw-gk-card">
@@ -3315,7 +3593,13 @@
           <div class="rw-sports-outcome" data-rw-outcome aria-live="polite"></div>
           <p class="rw-sports-hint" data-gk-hint>${esc(tip)}</p>
           <button type="button" class="btn btn--primary rw-gk-kick" data-gk-kick
-            ${phase !== 'aim' || locked ? 'disabled' : ''}>Hold to Kick</button>
+            ${canKick ? '' : 'disabled'}>${
+              liveOn && !kicking
+                ? phase === 'flight'
+                  ? 'Watching…'
+                  : 'Waiting…'
+                : 'Hold to Kick'
+            }</button>
         </div>`;
       paintAimMarker();
       paintPower();
@@ -3324,7 +3608,7 @@
         if (lastOutcomeKind === 'over') flashOutcome(body, 'Over!', 'over');
         else flashOutcome(body, lastGoal ? 'Goal!' : 'Saved!', lastGoal ? 'goal' : 'out');
       }
-      if (phase === 'aim') wireAim();
+      if (phase === 'aim' && kicking) wireAim();
     };
 
     if (typeof createGamePauseController === 'function') {
@@ -3340,7 +3624,11 @@
             pendingDive = null;
           }
           if (flightTimer && phase === 'flight' && lastKick) {
-            pauseRemainFlight = Math.max(80, (lastKick.flightMs || 700) * 0.45);
+            pauseRemainFlight = Math.max(
+              80,
+              (lastKick.flightMs || 700) -
+                (flightStartedAt ? Date.now() - flightStartedAt : 0) * 0.5
+            );
             clearTimeout(flightTimer);
             flightTimer = null;
           }
@@ -3349,81 +3637,119 @@
             clearTimeout(resultTimer);
             resultTimer = null;
           }
+          if (liveOn && iAmKicker()) pushLive({ paused: true });
         },
         onResume() {
           if (!sessionAlive()) return;
+          if (pauseFreezeAt && flightStartedAt) {
+            flightStartedAt += Date.now() - pauseFreezeAt;
+          }
           pauseFreezeAt = 0;
-          if (phase === 'flight' && lastKick && !flightTimer) {
-            const kick = lastKick;
-            flightTimer = setTimeout(() => {
-              flightTimer = null;
-              pauseRemainFlight = 0;
-              if (!sessionAlive() || isPaused() || phase !== 'flight') return;
-              const resolved = resolveKick(kick);
-              lastKick = resolved;
-              kickLog.push(resolved);
-              taken += 1;
-              lastGoal = !!resolved.goal;
-              lastOutcomeKind = resolved.outcomeKind || (resolved.goal ? 'goal' : 'save');
-              lastResult = resolved.label;
-              if (resolved.over) {
-                if (typeof gameFeedback === 'function') gameFeedback('lose', { noConfetti: true });
-              } else if (resolved.goal) {
-                scored += 1;
-                if (formatId === 'sudden') {
-                  streak += 1;
-                  if (streak > runBestStreak) runBestStreak = streak;
-                }
-                if (typeof gameFeedback === 'function') gameFeedback('win', { noConfetti: true });
-              } else if (typeof gameFeedback === 'function') {
-                gameFeedback('lose', { noConfetti: true });
-              }
-              const endEval = evaluateEnd();
-              if (endEval.done) {
-                sessionWon = !!endEval.won;
-                endReason = endEval.reason || '';
-              }
-              phase = 'result';
-              locked = false;
-              render();
-              resultTimer = setTimeout(() => {
-                resultTimer = null;
-                if (!sessionAlive() || isPaused() || phase !== 'result') return;
-                if (endEval.done) phase = 'done';
-                else {
-                  phase = 'aim';
-                  power = 0.55;
-                  locked = false;
-                  pendingDive = null;
-                }
-                render();
-              }, 950);
-            }, pauseRemainFlight || 200);
-          } else if (phase === 'result' && pauseRemainResult > 0) {
+          if (liveOn && iAmKicker()) pushLive({ paused: false });
+          if (phase === 'flight' && lastKick && !flightTimer && iAmKicker()) {
+            startFlightTimer(lastKick, pauseRemainFlight || 200);
+          } else if (phase === 'result' && pauseRemainResult > 0 && iAmKicker()) {
+            const endEval = evaluateEnd();
             resultTimer = setTimeout(() => {
               resultTimer = null;
               pauseRemainResult = 0;
               if (!sessionAlive()) return;
-              const endEval = evaluateEnd();
-              if (endEval.done) phase = 'done';
-              else {
+              if (endEval.done) {
+                phase = 'done';
+                ended = true;
+                if (leaveShell) leaveShell.gameOver = true;
+              } else {
                 phase = 'aim';
                 power = 0.55;
                 locked = false;
                 pendingDive = null;
+                lastKick = null;
               }
+              if (liveOn) pushLive({ phase });
               render();
             }, pauseRemainResult);
           }
         },
         onQuit() {
           clearTimers();
+          if (leaveShell && typeof leaveGameShell === 'function') {
+            leaveGameShell(leaveShell, {
+              live: liveOn,
+              liveHandle: leaveShell.liveHandle,
+              isPlaying: !ended && phase !== 'done' && phase !== 'pick' && phase !== 'wait',
+              title: 'Leave Gully Kick?',
+              body: liveOn
+                ? 'Leaving now counts as a forfeit for your opponent.'
+                : 'This practice run will end.',
+            });
+            return;
+          }
           if (gs) gs.close('dismissed');
         },
       });
     }
 
-    setChromeSub('Practice · pick format');
+    if (liveOn && typeof DangalLive !== 'undefined' && DangalLive.join) {
+      liveRoles = DangalLive.roles(chat);
+      kickUid = liveRoles.playerA || '';
+      liveHandle = DangalLive.join({
+        gameType: 'gullykick',
+        matchId: matchIdFor(chat, 'gullykick'),
+        me: liveRoles.me,
+        playerA: liveRoles.playerA,
+        playerB: liveRoles.playerB,
+        onSnap(val) {
+          if (!val || ended || !sessionAlive()) return;
+          if (val.status === 'forfeit') {
+            applying = true;
+            clearTimers();
+            ended = true;
+            if (leaveShell) leaveShell.gameOver = true;
+            const iWon = liveRoles && val.winner === liveRoles.me;
+            phase = 'done';
+            sessionWon = !!iWon;
+            lastResult = iWon ? 'Opponent left — you win' : 'You left';
+            endReason = 'forfeit';
+            applying = false;
+            render();
+            return;
+          }
+          const st = val.state || {};
+          if (val.status === 'over' && st.phase && st.phase !== 'done') {
+            st.phase = 'done';
+          }
+          applyRemoteState(st);
+        },
+      });
+      if (leaveShell) leaveShell.liveHandle = liveHandle;
+      if (iAmHost()) {
+        try {
+          liveHandle.push({
+            status: 'playing',
+            turn: kickUid,
+            state: {
+              formatId,
+              phase: 'pick',
+              kickUid,
+              eventSeq: 0,
+              scored: 0,
+              taken: 0,
+              streak: 0,
+            },
+          });
+        } catch (e) {}
+      } else {
+        phase = 'wait';
+      }
+    }
+
+    if (phase === 'wait') {
+      setChromeSub(liveChromeSub() + ' · Friendly · waiting');
+    } else {
+      setChromeSub(
+        liveOn ? liveChromeSub() + ' · Friendly · pick format' : 'Practice · pick format'
+      );
+    }
     render();
   }
 
@@ -3455,18 +3781,18 @@
     registerGame({
       id: 'gullykick',
       name: 'Gully Kick',
-      desc: 'Practice · Classic / SD / Pressure',
+      desc: 'Live 1v1 · Classic / SD / Pressure',
       icon: '⚽',
       ratingKey: 'gullykick',
-      gameType: 'solo',
+      gameType: 'dual',
       genre: 'rw_sports',
-      solo: true,
+      liveDuel: true,
       selfChat: true,
       dangal: true,
       chat1v1: true,
       order: 6,
-      launch() {
-        openGullyKick();
+      launch(ctx) {
+        openGullyKick(ctx);
       },
     });
   }
