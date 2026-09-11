@@ -177,9 +177,9 @@
       'Leave = forfeit · Rematch = new match · virtual stakes (not real money)',
     ],
     gullykick: [
-      'Drag aim, hold Kick, read the keeper’s lean — then strike',
-      'Classic 5 · Sudden Death (streak until miss) · Pressure (need 4/5)',
-      'Practice shootout — per-format bests on your card',
+      'Live: one friend shoots, the other dives — then swap halves for a fair duel',
+      'Formats: Classic (5 each · tie=draw), Sudden Death (streak until miss), Pressure (need 4/5)',
+      'Leave = forfeit · Rematch = new match · virtual stakes (not real money)',
     ],
     badminton: [
       'Live 1v1 or Practice AI · rally point to 21 (win by 2; 29-all → 30)',

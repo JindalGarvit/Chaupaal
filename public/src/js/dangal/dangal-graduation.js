@@ -44,7 +44,7 @@
     andarbaahar: { grade: 'live', sync: 'live1v1', stakes: true },
     tambola: { grade: 'live', sync: 'live1v1', stakes: true },
     streetcricket: { grade: 'live', sync: 'live1v1', stakes: true, label: 'Live 1v1' },
-    gullykick: { grade: 'live', sync: 'live1v1', stakes: false, label: 'Live 1v1' },
+    gullykick: { grade: 'live', sync: 'live1v1', stakes: true, label: 'Live 1v1' },
     badminton: { grade: 'live', sync: 'live1v1', stakes: true },
     tabletennis: { grade: 'live', sync: 'live1v1', stakes: true },
     pickleball: { grade: 'live', sync: 'live1v1', stakes: true },

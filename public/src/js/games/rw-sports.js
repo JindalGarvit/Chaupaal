@@ -1,6 +1,6 @@
 /**
  * RW Sports — Street Cricket + Gully Kick (football-style).
- * Street Cricket Live v1 done; Gully Kick Live kicker↔keeper + Classic swap (2/3).
+ * Street Cricket Live v1 done; Gully Kick Live formats + stakes (3/3 · Live v1).
  */
 (function () {
   'use strict';
@@ -2383,10 +2383,29 @@
   }
 
 
-  /** Gully Kick — Practice + Live kicker↔keeper + Classic swap (Prompt 2/3). */
+  /** Gully Kick — Practice + Live Classic/SD/Pressure with stakes (Prompt 3/3 · Live v1).
+   * Live duel rules:
+   * - Classic: 5 kicks each as kicker (swap); higher goals win; equal = draw.
+   * - Sudden Death: each side kicks until first miss (streak = goals); swap; higher streak wins; equal = draw.
+   * - Pressure: each side up to 5 kicks needing 4; swap; cleared beats not; else higher goals; else draw.
+   * Rematch: new matchId · same format carried via rematchFormatId (host can re-pick).
+   */
   function openGullyKick(chatArg) {
     const chat = resolveRwChat(chatArg);
     const liveOn = chatLiveOn(chat);
+    const liveStake = liveOn
+      ? Number(
+          (chat && chat.stake) != null
+            ? chat.stake
+            : (window.__dangalLaunchCtx && window.__dangalLaunchCtx.stake) || 0
+        ) || 0
+      : 0;
+    const settleMatchId = liveOn ? String(matchIdFor(chat, 'gullykick') || '').trim() : '';
+    let settleOppUid = '';
+    let settleDone = false;
+    let resultReported = false;
+    let resultShown = false;
+    let stakeSettleNote = '';
     let scored = 0;
     let taken = 0;
     const MAX = 5;
@@ -2437,24 +2456,33 @@
     let flightStartedAt = 0;
     const COACH_KEY = 'chaupaal_gk_coach_v2';
     const FORMAT_KEY = 'chaupaal_gk_format_v3';
+    let rematchFormatHint = '';
+    try {
+      const ctx = window.__dangalLaunchCtx || {};
+      if (ctx.rematchFormatId) rematchFormatHint = String(ctx.rematchFormatId);
+    } catch (e) {}
 
     const FORMATS = {
       classic: {
         id: 'classic',
         label: 'Classic',
         blurb: liveOn
-          ? 'Live: 5 kicks each · shoot then dive · swap'
+          ? 'Live: 5 kicks each · higher goals win · tie = draw'
           : '5 kicks — score as many as you can',
       },
       sudden: {
         id: 'sudden',
         label: 'Sudden Death',
-        blurb: 'Survive until the first miss',
+        blurb: liveOn
+          ? 'Live: kick until miss each · higher streak wins · tie = draw'
+          : 'Survive until the first miss',
       },
       pressure: {
         id: 'pressure',
         label: 'Pressure',
-        blurb: 'Need 4 goals from 5 kicks',
+        blurb: liveOn
+          ? 'Live: need 4/5 each half · cleared beats not · else goals'
+          : 'Need 4 goals from 5 kicks',
       },
     };
 
@@ -2543,10 +2571,124 @@
       if (liveOn) {
         const seat = iAmKicker() ? 'Kicker' : iAmKeep() ? 'Keeper' : 'Live';
         const half = halfIndex === 2 ? ' · 2nd half' : ' · 1st half';
-        setChromeSub(liveChromeSub() + ' · Friendly · ' + fLabel + ' · ' + seat + half);
+        const stakeBit =
+          liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly';
+        setChromeSub(liveChromeSub() + stakeBit + ' · ' + fLabel + ' · ' + seat + half);
       } else {
         setChromeSub('Practice · ' + fLabel + ' · Shooter');
       }
+    };
+
+    const freshRematch = () => {
+      if (!liveOn) {
+        reset();
+        return;
+      }
+      try {
+        const mid =
+          typeof dangalMatchId === 'function'
+            ? dangalMatchId('gullykick', chat)
+            : 'gullykick_' + Date.now();
+        if (window.__dangalLaunchCtx) {
+          window.__dangalLaunchCtx = Object.assign({}, window.__dangalLaunchCtx, {
+            matchId: mid,
+            gameId: 'gullykick',
+            gameType: 'gullykick',
+            stake: liveStake,
+            rematchFormatId: formatId,
+          });
+        }
+        if (chat) {
+          chat.dangalMatchId = mid;
+          chat.stake = liveStake;
+        }
+      } catch (e) {}
+      openGullyKick(chat);
+    };
+
+    const reportGullyResult = (won, isDraw, path) => {
+      if (resultReported) return;
+      resultReported = true;
+      if (typeof recordGameResult === 'function') {
+        try {
+          recordGameResult('gullykick', !!won && !isDraw, !!isDraw, {
+            live: !!liveOn,
+            stake: liveStake,
+            mode: liveOn ? 'live' : 'practice',
+            path: path || '',
+            formatId,
+            score: scored,
+          });
+        } catch (e) {}
+      }
+    };
+
+    const settleGullyOnce = async (won, isDraw) => {
+      if (!liveOn || settleDone) return null;
+      if (!settleMatchId || liveStake <= 0) {
+        settleDone = true;
+        return null;
+      }
+      if (!window.DangalEconomy || typeof DangalEconomy.reportGameEnd !== 'function') {
+        settleDone = true;
+        return null;
+      }
+      settleDone = true;
+      try {
+        const me = typeof getCurrentUid === 'function' ? getCurrentUid() : '';
+        const oppU = settleOppUid || (liveRoles && liveRoles.opp) || '';
+        return await DangalEconomy.reportGameEnd({
+          gameType: 'gullykick',
+          result: isDraw ? 'draw' : won ? 'win' : 'loss',
+          won: !!won && !isDraw,
+          isDraw: !!isDraw,
+          matchId: settleMatchId,
+          sessionId: settleMatchId,
+          opponentUid: oppU,
+          stake: liveStake,
+          winnerUid: isDraw ? null : won ? me : oppU,
+        });
+      } catch (e) {
+        settleDone = false;
+        return null;
+      }
+    };
+
+    /** Idempotent Live end: settle once, then show result chrome. */
+    const showLiveDone = (opts) => {
+      const o = opts || {};
+      if (resultShown) return;
+      resultShown = true;
+      phase = 'done';
+      ended = true;
+      if (leaveShell) leaveShell.gameOver = true;
+      if (liveRoles && liveRoles.opp) settleOppUid = liveRoles.opp;
+      const forfeit = !!o.forfeit || endReason === 'forfeit';
+      const draw = !forfeit && !!matchDraw;
+      const won = forfeit ? !!o.iWon : !!sessionWon;
+      if (forfeit) {
+        sessionWon = !!won;
+        matchDraw = false;
+        matchWinnerUid = won
+          ? (liveRoles && liveRoles.me) || ''
+          : (liveRoles && liveRoles.opp) || '';
+        endReason = 'forfeit';
+      }
+      reportGullyResult(won, draw, o.path || endReason || '');
+      settleGullyOnce(won, draw).then((settle) => {
+        stakeSettleNote = '';
+        if (liveOn && liveStake > 0) {
+          const cd = settle && settle.chipDelta != null ? Number(settle.chipDelta) : null;
+          stakeSettleNote =
+            Number.isFinite(cd) && cd !== 0
+              ? 'Stake ' + (cd > 0 ? '+' : '') + cd + ' virtual'
+              : 'Virtual stakes · not real money';
+        }
+        if (typeof gameFeedback === 'function' && !o.skipFeedback) {
+          gameFeedback(draw ? 'complete' : won ? 'win' : 'lose');
+        }
+        render();
+      });
     };
 
     const snapshotHalf = () => ({
@@ -2554,6 +2696,9 @@
       keepUid,
       scored,
       taken,
+      streak,
+      cleared: scored >= PRESSURE_NEED,
+      formatId,
       kickLog: kickLog.slice(),
     });
 
@@ -2565,13 +2710,39 @@
       }
       let winnerUid = '';
       let draw = false;
-      if ((a.scored | 0) !== (b.scored | 0)) {
+      let reason = 'goals';
+      if (formatId === 'sudden') {
+        const sa = a.streak != null ? a.streak | 0 : a.scored | 0;
+        const sb = b.streak != null ? b.streak | 0 : b.scored | 0;
+        if (sa !== sb) {
+          winnerUid = sa > sb ? a.kickUid : b.kickUid;
+          reason = 'streak';
+        } else {
+          draw = true;
+          reason = 'draw';
+        }
+      } else if (formatId === 'pressure') {
+        const aClear = !!(a.cleared || (a.scored | 0) >= PRESSURE_NEED);
+        const bClear = !!(b.cleared || (b.scored | 0) >= PRESSURE_NEED);
+        if (aClear !== bClear) {
+          winnerUid = aClear ? a.kickUid : b.kickUid;
+          reason = 'cleared';
+        } else if ((a.scored | 0) !== (b.scored | 0)) {
+          winnerUid = (a.scored | 0) > (b.scored | 0) ? a.kickUid : b.kickUid;
+          reason = 'goals';
+        } else {
+          draw = true;
+          reason = 'draw';
+        }
+      } else if ((a.scored | 0) !== (b.scored | 0)) {
         winnerUid = (a.scored | 0) > (b.scored | 0) ? a.kickUid : b.kickUid;
+        reason = 'goals';
       } else {
         draw = true;
+        reason = 'draw';
       }
       const iWon = !draw && winnerUid === liveRoles.me;
-      return { winnerUid, draw, reason: draw ? 'draw' : 'goals', iWon };
+      return { winnerUid, draw, reason, iWon };
     };
 
     const beginSecondHalf = () => {
@@ -2583,9 +2754,16 @@
       halfIndex = 2;
       scored = 0;
       taken = 0;
+      streak = 0;
       kickLog.length = 0;
       lastKick = null;
-      lastResult = 'Half-time — roles swapped. You’re up.';
+      if (formatId === 'sudden') {
+        lastResult = 'Half-time — your Sudden Death streak next.';
+      } else if (formatId === 'pressure') {
+        lastResult = 'Half-time — need 4 from 5. Roles swapped.';
+      } else {
+        lastResult = 'Half-time — roles swapped. You’re up.';
+      }
       lastGoal = false;
       lastOutcomeKind = '';
       endReason = '';
@@ -2609,12 +2787,7 @@
       matchDraw = !!cmp.draw;
       sessionWon = !!cmp.iWon;
       endReason = cmp.reason || 'kicks';
-      phase = 'done';
-      ended = true;
-      if (leaveShell) leaveShell.gameOver = true;
-      if (typeof gameFeedback === 'function') {
-        gameFeedback(matchDraw ? 'complete' : sessionWon ? 'win' : 'lose');
-      }
+      // settle + result chrome via showLiveDone (caller still pushLive)
     };
 
     const buildLiveState = (extra) =>
@@ -2695,7 +2868,9 @@
     };
 
     const chromeSubtitle = liveOn
-      ? liveChromeSub() + ' · Friendly · Gully Kick'
+      ? liveChromeSub() +
+        (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') +
+        ' · Gully Kick'
       : undefined;
     const mounted = mountSportsShell({
       gameId: 'gullykick',
@@ -2705,10 +2880,19 @@
       live: liveOn,
       subtitle: chromeSubtitle,
       leaveBody: liveOn
-        ? 'Leaving now counts as a forfeit for your opponent.'
+        ? liveStake > 0
+          ? 'Leaving forfeits — virtual stake settles for your opponent.'
+          : 'Leaving now counts as a forfeit for your opponent.'
         : 'This practice run will end.',
       isPlaying: () => !ended && phase !== 'done' && phase !== 'pick' && phase !== 'wait',
       onClose: () => {
+        if (liveOn && !settleDone && !resultShown) {
+          try {
+            if (liveRoles && liveRoles.opp) settleOppUid = liveRoles.opp;
+            reportGullyResult(false, false, 'leave');
+            settleGullyOnce(false, false);
+          } catch (e) {}
+        }
         ended = true;
         try {
           if (pauseCtrl) pauseCtrl.destroy();
@@ -2742,6 +2926,9 @@
 
     if (typeof migrateGullyKickPb === 'function') migrateGullyKickPb();
     formatId = loadSavedFormat();
+    if (liveOn && rematchFormatHint && FORMATS[rematchFormatHint]) {
+      formatId = rematchFormatHint;
+    }
 
     const applyRemoteState = (st) => {
       if (!st) return;
@@ -2808,9 +2995,7 @@
       applying = false;
       setModeChrome();
       if (phase === 'done') {
-        ended = true;
-        if (leaveShell) leaveShell.gameOver = true;
-        render();
+        showLiveDone({ path: endReason || 'remote' });
         return;
       }
       render();
@@ -2974,21 +3159,24 @@
       clearTimers();
       phase = 'pick';
       setChromeSub(
-        liveOn ? liveChromeSub() + ' · Friendly · pick format' : 'Practice · pick format'
+        liveOn
+          ? liveChromeSub() +
+              (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') +
+              ' · pick format'
+          : 'Practice · pick format'
       );
       render();
     };
 
     const startSelected = () => {
       if (liveOn && !iAmHost()) return;
-      if (liveOn) formatId = 'classic';
       saveFormat(formatId);
       beginSession();
       phase = 'aim';
       if (liveOn) {
         kickUid = (liveRoles && liveRoles.playerA) || '';
         keepUid = (liveRoles && liveRoles.playerB) || '';
-        pushLive({ phase: 'aim' }, { as: 'host' });
+        pushLive({ phase: 'aim', formatId }, { as: 'host' });
       }
       render();
       if (typeof gameFeedback === 'function') gameFeedback('select');
@@ -3007,9 +3195,20 @@
       if (liveOn) {
         const vs =
           half1 != null
-            ? ` · vs ${half1.scored | 0}`
+            ? formatId === 'sudden'
+              ? ` · vs streak ${half1.streak != null ? half1.streak | 0 : half1.scored | 0}`
+              : formatId === 'pressure'
+                ? ` · vs ${half1.scored | 0}/${MAX}`
+                : ` · vs ${half1.scored | 0}`
             : '';
         const halfTag = halfIndex === 2 ? '2nd · ' : '1st · ';
+        if (formatId === 'sudden') {
+          return `${halfTag}Streak ${streak}${vs}`;
+        }
+        if (formatId === 'pressure') {
+          const left = Math.max(0, MAX - taken);
+          return `${halfTag}${scored}/${PRESSURE_NEED} needed · ${left} kick${left === 1 ? '' : 's'} left${vs}`;
+        }
         return `${halfTag}${scored} scored · ${taken}/${MAX} taken${vs}`;
       }
       const pbOk = true;
@@ -3041,7 +3240,30 @@
 
     const evaluateEnd = () => {
       if (liveOn) {
-        // Live P2: Classic halves only (5 kicks each as kicker).
+        if (formatId === 'sudden') {
+          if (!lastGoal) {
+            if (halfIndex === 1) return { done: true, won: false, reason: 'half' };
+            return { done: true, won: false, reason: 'miss' };
+          }
+          return { done: false, won: false, reason: '' };
+        }
+        if (formatId === 'pressure') {
+          if (scored >= PRESSURE_NEED) {
+            if (halfIndex === 1) return { done: true, won: false, reason: 'half' };
+            return { done: true, won: true, reason: 'cleared' };
+          }
+          const left = MAX - taken;
+          if (scored + left < PRESSURE_NEED || taken >= MAX) {
+            if (halfIndex === 1) return { done: true, won: false, reason: 'half' };
+            return {
+              done: true,
+              won: false,
+              reason: taken >= MAX ? 'kicks' : 'impossible',
+            };
+          }
+          return { done: false, won: false, reason: '' };
+        }
+        // Classic: equal 5 kicks each as kicker.
         if (taken >= MAX) {
           if (halfIndex === 1) return { done: true, won: false, reason: 'half' };
           return { done: true, won: false, reason: 'kicks' };
@@ -3091,23 +3313,47 @@
       const f = fmt();
       const pbGameId = pbIdForFormat();
 
-      if (liveOn && (half1 || endReason === 'forfeit')) {
+      if (liveOn && (half1 || endReason === 'forfeit' || matchWinnerUid || resultShown)) {
         const h1 = half1;
         const h2 = half2 || (endReason !== 'forfeit' ? snapshotHalf() : null);
         const myUid = liveRoles && liveRoles.me;
-        const myGoals = h1 && h1.kickUid === myUid ? h1.scored | 0 : h2 && h2.kickUid === myUid ? h2.scored | 0 : 0;
-        const oppGoals =
-          h1 && h1.kickUid !== myUid ? h1.scored | 0 : h2 && h2.kickUid !== myUid ? h2.scored | 0 : 0;
-        const line =
+        const myHalf = h1 && h1.kickUid === myUid ? h1 : h2 && h2.kickUid === myUid ? h2 : null;
+        const oppHalf = h1 && h1.kickUid === myUid ? h2 : h1;
+        const myScore = myHalf
+          ? formatId === 'sudden'
+            ? myHalf.streak != null
+              ? myHalf.streak | 0
+              : myHalf.scored | 0
+            : myHalf.scored | 0
+          : 0;
+        const oppScore = oppHalf
+          ? formatId === 'sudden'
+            ? oppHalf.streak != null
+              ? oppHalf.streak | 0
+              : oppHalf.scored | 0
+            : oppHalf.scored | 0
+          : 0;
+        let line =
           endReason === 'forfeit'
             ? lastResult || 'Forfeit'
-            : `You ${myGoals} · Opp ${oppGoals}`;
+            : formatId === 'sudden'
+              ? `You streak ${myScore} · Opp streak ${oppScore}`
+              : formatId === 'pressure'
+                ? `You ${myScore}/${MAX}${myHalf && (myHalf.cleared || myScore >= PRESSURE_NEED) ? ' cleared' : ''} · Opp ${oppScore}/${MAX}${oppHalf && (oppHalf.cleared || oppScore >= PRESSURE_NEED) ? ' cleared' : ''}`
+                : `You ${myScore} · Opp ${oppScore}`;
         const title = matchDraw ? 'Draw' : sessionWon ? 'You win' : 'Opponent wins';
+        const stakeLine = stakeSettleNote ? ' · ' + stakeSettleNote : '';
+        const sub =
+          (halfIndex >= 2 || half2 ? 'Both halves done · ' : '') +
+          (endReason === 'forfeit' ? lastResult || 'Forfeit' : line) +
+          stakeLine;
         return {
           title: 'Gully Kick',
           glyph: '⚽',
-          onAgain: () => openGullyKick(chat),
-          onChangeFormat: () => openGullyKick(chat),
+          onAgain: freshRematch,
+          onChangeFormat: () => {
+            freshRematch();
+          },
           actions: [
             { label: 'Rematch', primary: true, id: 'again' },
             { label: 'Share', primary: false, id: 'share' },
@@ -3119,12 +3365,21 @@
           scoreHtml: `<p class="rw-gk-moment">${esc(line)}</p>`,
           againLabel: 'Rematch',
           resultTitle: title,
-          subtitle: endReason === 'forfeit' ? lastResult || 'Forfeit' : 'Both halves done · ' + line,
+          subtitle: sub,
           scoreLine: line,
-          score: myGoals,
-          shareText: `Gully Kick Live: ${line} on Chaupaal`,
+          score: myScore,
+          shareText:
+            `Gully Kick Live: ${line}` +
+            (liveStake > 0 ? ' · virtual stakes' : '') +
+            ' on Chaupaal',
           won: sessionWon,
-          recordExtra: { format: 'classic', formatId: 'classic', live: true, matchDraw },
+          recordExtra: {
+            format: formatId,
+            formatId,
+            live: true,
+            stake: liveStake,
+            matchDraw,
+          },
           gs,
         };
       }
@@ -3407,7 +3662,7 @@
         if (typeof gameFeedback === 'function') gameFeedback('lose', { noConfetti: true });
       } else if (resolved.goal) {
         scored += 1;
-        if (!liveOn && formatId === 'sudden') {
+        if (formatId === 'sudden') {
           streak += 1;
           if (streak > runBestStreak) runBestStreak = streak;
         }
@@ -3462,10 +3717,10 @@
         if (liveOn && endEval.done && halfIndex === 2) {
           finishLiveMatch();
           pushLive(
-            { phase: 'done', half2, matchWinnerUid, matchDraw },
+            { phase: 'done', half2, matchWinnerUid, matchDraw, endReason },
             { as: 'kick', status: 'over' }
           );
-          render();
+          showLiveDone({ path: endReason });
           return;
         }
         if (endEval.done) {
@@ -3832,7 +4087,6 @@
           if (liveOn && !iAmHost()) return;
           const id = el.getAttribute('data-format');
           if (!FORMATS[id]) return;
-          if (liveOn && id !== 'classic') return;
           formatId = id;
           body.querySelectorAll('[data-format]').forEach((b) => {
             b.classList.toggle('is-selected', b.getAttribute('data-format') === formatId);
@@ -3847,14 +4101,14 @@
         body.innerHTML = `
           <div class="rw-sports-card rw-gk-card rw-gk-picker">
             <h2>Gully Kick</h2>
-            ${rwRoleBanner('waiting', 'Waiting for host', 'They pick Classic')}
+            ${rwRoleBanner('waiting', 'Waiting for host', 'They pick Classic / SD / Pressure')}
             <p class="rw-sports-hint">Live duel — one shoots, one dives, then swap halves.</p>
           </div>`;
         return;
       }
       if (phase === 'pick') {
         if (typeof migrateGullyKickPb === 'function') migrateGullyKickPb();
-        const ids = liveOn ? ['classic'] : ['classic', 'sudden', 'pressure'];
+        const ids = ['classic', 'sudden', 'pressure'];
         const cards = ids
           .map((id) => {
             const f = FORMATS[id];
@@ -3870,7 +4124,8 @@
             <h2>Gully Kick</h2>
             <p class="rw-sports-hint">${
               liveOn
-                ? 'Live Classic — 5 kicks each. One shoots, one dives, then swap.'
+                ? 'Live 1v1 — Classic, Sudden Death, or Pressure. Shoot then dive, then swap.' +
+                  (liveStake > 0 ? ' Virtual stakes when challenged.' : '')
                 : 'Practice shootout — Classic, Sudden Death, or Pressure.'
             }</p>
             <div class="rw-sc-formats" role="listbox" aria-label="Format">${cards}</div>
@@ -3885,8 +4140,8 @@
         if (liveOn) {
           opts.updatePb = false;
           opts.challenge = false;
-          opts.onAgain = () => openGullyKick(chat);
-          opts.onChangeFormat = () => openGullyKick(chat);
+          opts.onAgain = freshRematch;
+          opts.onChangeFormat = freshRematch;
         }
         finishPractice('gullykick', opts.score != null ? opts.score : scored, body, opts);
         return;
@@ -4125,10 +4380,10 @@
               if (liveOn && endEval.done && halfIndex === 2) {
                 finishLiveMatch();
                 pushLive(
-                  { phase: 'done', half2, matchWinnerUid, matchDraw },
+                  { phase: 'done', half2, matchWinnerUid, matchDraw, endReason },
                   { as: 'kick', status: 'over' }
                 );
-                render();
+                showLiveDone({ path: endReason });
                 return;
               }
               if (endEval.done) {
@@ -4160,7 +4415,9 @@
               isPlaying: !ended && phase !== 'done' && phase !== 'pick' && phase !== 'wait',
               title: 'Leave Gully Kick?',
               body: liveOn
-                ? 'Leaving now counts as a forfeit for your opponent.'
+                ? liveStake > 0
+                  ? 'Leaving forfeits — virtual stake settles for your opponent.'
+                  : 'Leaving now counts as a forfeit for your opponent.'
                 : 'This practice run will end.',
             });
             return;
@@ -4174,6 +4431,7 @@
       liveRoles = DangalLive.roles(chat);
       kickUid = liveRoles.playerA || '';
       keepUid = liveRoles.playerB || '';
+      if (liveRoles.opp) settleOppUid = liveRoles.opp;
       liveHandle = DangalLive.join({
         gameType: 'gullykick',
         matchId: matchIdFor(chat, 'gullykick'),
@@ -4188,12 +4446,15 @@
             ended = true;
             if (leaveShell) leaveShell.gameOver = true;
             const iWon = liveRoles && val.winner === liveRoles.me;
-            phase = 'done';
-            sessionWon = !!iWon;
             lastResult = iWon ? 'Opponent left — you win' : 'You left';
             endReason = 'forfeit';
+            sessionWon = !!iWon;
+            matchDraw = false;
+            matchWinnerUid = iWon
+              ? liveRoles.me
+              : (liveRoles && liveRoles.opp) || '';
             applying = false;
-            render();
+            showLiveDone({ forfeit: true, iWon: !!iWon, path: 'forfeit' });
             return;
           }
           const st = val.state || {};
@@ -4210,7 +4471,7 @@
             status: 'playing',
             turn: kickUid,
             state: {
-              formatId: 'classic',
+              formatId,
               phase: 'pick',
               kickUid,
               keepUid,
@@ -4221,6 +4482,7 @@
               streak: 0,
               diveLocked: false,
               armedDive: { side: 'C', height: 'mid' },
+              stake: liveStake,
             },
           });
         } catch (e) {}
@@ -4230,10 +4492,18 @@
     }
 
     if (phase === 'wait') {
-      setChromeSub(liveChromeSub() + ' · Friendly · waiting');
+      setChromeSub(
+        liveChromeSub() +
+          (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') +
+          ' · waiting'
+      );
     } else {
       setChromeSub(
-        liveOn ? liveChromeSub() + ' · Friendly · pick format' : 'Practice · pick format'
+        liveOn
+          ? liveChromeSub() +
+              (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') +
+              ' · pick format'
+          : 'Practice · pick format'
       );
     }
     render();
@@ -4267,7 +4537,7 @@
     registerGame({
       id: 'gullykick',
       name: 'Gully Kick',
-      desc: 'Live · kicker↔keeper · Classic swap',
+      desc: 'Live · Classic, SD & Pressure',
       icon: '⚽',
       ratingKey: 'gullykick',
       gameType: 'dual',
@@ -4280,7 +4550,8 @@
       meta: {
         phaseA: 'Live kick sync',
         phaseB: 'Kicker↔keeper + Classic half swap',
-        phaseC: 'Stakes + graduation next',
+        phaseC: 'Virtual stakes once · rematch new matchId',
+        complete: true,
       },
       launch(ctx) {
         openGullyKick(ctx);
