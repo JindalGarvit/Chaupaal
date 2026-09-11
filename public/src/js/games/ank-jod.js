@@ -2170,12 +2170,12 @@
       root.innerHTML = `
         ${gameChromeHtml({
           title: 'Ank Jod',
-          subtitle: diffMeta.label,
+          subtitle: 'Practice · ' + diffMeta.label,
           backId: 'kkBack',
           pauseId: 'kkPause',
           rightHtml: `<button type="button" id="kkHelp" class="game-chrome-action game-tap-target" aria-label="How to play">?</button><button type="button" id="kkNew" class="game-chrome-action">New</button>`,
         })}
-        <div id="kkTimer" class="game-turn game-turn--waiting">${formatTime(elapsed)}</div>
+        <div id="kkTimer" class="game-turn game-turn--waiting" role="status">${formatTime(elapsed)}</div>
         <div class="kk-board-area">
           <div id="kkStatus" class="kk-status"></div>
           <div id="kkGrid" class="kk-grid">${gridHtml}</div>
@@ -2461,7 +2461,7 @@
         pauseCtrl = null;
       }
       root.innerHTML = `
-        ${gameChromeHtml({ title: 'Ank Jod', subtitle: diffMeta.label, backId: 'kkBack' })}
+        ${gameChromeHtml({ title: 'Ank Jod', subtitle: 'Practice · ' + diffMeta.label, backId: 'kkBack' })}
         ${
           typeof gameResultHtml === 'function'
             ? gameResultHtml({
@@ -2473,8 +2473,8 @@
                 shareCardHtml: typeof buildGameShareCard === 'function' ? buildGameShareCard('ankjod', shareStats) : '',
                 actions: [
                   { label: 'Play again', primary: true, id: 'again' },
+                  { label: 'Change difficulty', primary: false, id: 'changeFormat' },
                   { label: 'Share', primary: false, id: 'share' },
-                  { label: 'Challenge friend', primary: false, id: 'challenge' },
                   { label: 'Done', primary: false, id: 'done' },
                 ],
               })
@@ -2486,6 +2486,10 @@
       if (typeof wireGameResultActions === 'function') {
         wireGameResultActions(root, {
           again: () => {
+            if (session) session.end('restart');
+            openDifficultyPicker(ctx);
+          },
+          changeFormat: () => {
             if (session) session.end('restart');
             openDifficultyPicker(ctx);
           },

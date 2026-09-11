@@ -41,13 +41,14 @@
             title: o.title || 'RW Sports',
             subtitle: practiceSub,
             backId: 'rwSportsBack',
+            pauseId: o.pauseId || 'rwSportsPause',
           }) + `<div class="rw-sports-body" data-rw-body></div>`
         : `
       <div class="game-chrome">
         ${typeof backButtonHtml==='function'?backButtonHtml({ className: 'game-back-btn', label: 'Close', attrs: 'data-rw-close' }):'<button type="button" class="game-back-btn cp-back-btn" data-rw-close aria-label="Close"></button>'}
         <div class="game-chrome-title">${esc(o.title || 'RW Sports')}</div>
         <div class="game-chrome-sub" style="font-size:11px;color:var(--muted);">${esc(practiceSub)}</div>
-        <div style="width:36px"></div>
+        <button type="button" id="${esc(o.pauseId || 'rwSportsPause')}" class="game-chrome-action game-tap-target" aria-label="Pause">⏸</button>
       </div>
       <div class="rw-sports-body" data-rw-body></div>`;
     const begin = typeof beginGameOverlaySession === 'function' ? beginGameOverlaySession : null;
@@ -61,7 +62,7 @@
         })
       : null;
     if (begin && (!gs || !gs.alive())) {
-      return { overlay, body: null, dismiss() {}, gs: null };
+      return { overlay, body: null, dismiss() {}, gs: null, pauseBtnId: o.pauseId || 'rwSportsPause' };
     }
     if (!begin) {
       const device = document.querySelector('.device') || document.body;
@@ -104,7 +105,30 @@
     };
     overlay.querySelector('[data-rw-close]')?.addEventListener('click', onBack);
     overlay.querySelector('#rwSportsBack')?.addEventListener('click', onBack);
-    return { overlay, body: overlay.querySelector('[data-rw-body]'), dismiss, gs };
+    return {
+      overlay,
+      body: overlay.querySelector('[data-rw-body]'),
+      dismiss,
+      gs,
+      pauseBtnId: o.pauseId || 'rwSportsPause',
+    };
+  }
+
+  function rwRoleBanner(mode, label, sub) {
+    if (typeof gameTurnBannerHtml === 'function') {
+      return gameTurnBannerHtml({
+        mode: mode || 'yours',
+        label: label || '',
+        sub: sub || undefined,
+        pulse: mode === 'yours',
+      });
+    }
+    return (
+      '<p class="rw-sports-hint" role="status">' +
+      esc(label || '') +
+      (sub ? ' · ' + esc(sub) : '') +
+      '</p>'
+    );
   }
 
   function flashOutcome(body, text, kind) {
@@ -389,7 +413,7 @@
       streakSame = 0;
       overSeed = (Date.now() ^ (Math.random() * 0xffff)) >>> 0;
       armedShot = 'push';
-      setChromeSub('Practice · ' + f.label);
+      setChromeSub('Practice · ' + f.label + ' · Batter');
     };
 
     /** Format-aware bag: nets teachable; chase/over spicier later. */
@@ -726,6 +750,11 @@
 
 
     let deliveryRaf = null;
+    let pauseCtrl = null;
+    let pauseFreezeAt = 0;
+    let pauseRemainBowl = 0;
+    let pauseRemainMiss = 0;
+    let pauseRemainResult = 0;
     const clearTimers = () => {
       if (bowlTimer) clearTimeout(bowlTimer);
       if (missTimer) clearTimeout(missTimer);
@@ -735,14 +764,26 @@
       missTimer = null;
       resultTimer = null;
       deliveryRaf = null;
+      pauseRemainBowl = 0;
+      pauseRemainMiss = 0;
+      pauseRemainResult = 0;
       clearFlashOutcome();
     };
+    const sessionAlive = () => !gs || (typeof gs.alive === 'function' ? gs.alive() : true);
+    const isPaused = () => !!(pauseCtrl && pauseCtrl.isPaused && pauseCtrl.isPaused());
 
-    const { overlay, body, gs } = mountSportsShell({
+    const { overlay, body, gs, pauseBtnId } = mountSportsShell({
       gameId: 'streetcricket',
       title: 'Street Cricket',
       accent: '#1B7A4E',
-      onClose: clearTimers,
+      pauseId: 'scPause',
+      onClose: () => {
+        try {
+          if (pauseCtrl) pauseCtrl.destroy();
+        } catch (e) {}
+        pauseCtrl = null;
+        clearTimers();
+      },
     });
     if (!body) return;
 
@@ -1114,9 +1155,25 @@
       }
       const d = cur();
       const shotLock = canChangeShot() ? '' : 'disabled';
+      const roleSub =
+        phase === 'idle'
+          ? 'Your action — Bowl'
+          : phase === 'runup'
+            ? 'Run-up… get ready'
+            : phase === 'flight'
+              ? 'Your action — Hit!'
+              : phase === 'result'
+                ? lastOutcome || 'Ball done'
+                : '';
+      const roleBanner = rwRoleBanner(
+        phase === 'idle' || phase === 'flight' ? 'yours' : phase === 'result' ? 'waiting' : 'waiting',
+        'You’re batting',
+        roleSub
+      );
       body.innerHTML = `
         <div class="rw-sports-card rw-sc-card">
           <h2>${fmt().label}</h2>
+          ${roleBanner}
           <p class="rw-sports-score" data-rw-hud>${scoreHud()}</p>
           <div class="rw-sports-pitch rw-sc-pitch is-del-${d.id || 'medium'}" data-rw-pitch
             data-delivery="${d.id || 'medium'}" data-path="${d.path || 'straight'}"
@@ -1184,6 +1241,11 @@
       const delay = end.done && end.reason === 'chase_won' ? 650 : 950;
       resultTimer = setTimeout(() => {
         resultTimer = null;
+        if (!sessionAlive()) return;
+        if (isPaused()) {
+          pauseRemainResult = 40;
+          return;
+        }
         deliveryMeta = null;
         if (end.done) phase = 'done';
         else if (phase === 'result') phase = 'idle';
@@ -1218,7 +1280,43 @@
       afterBall(res.label);
     };
 
+    const startFlightLoop = () => {
+      if (!sessionAlive() || isPaused() || phase !== 'flight') return;
+      const d = cur();
+      const tick = () => {
+        if (!sessionAlive() || isPaused() || phase !== 'flight') {
+          deliveryRaf = null;
+          return;
+        }
+        paintPitchState();
+        deliveryRaf = requestAnimationFrame(tick);
+      };
+      deliveryRaf = requestAnimationFrame(tick);
+      const remain =
+        pauseRemainMiss > 0
+          ? pauseRemainMiss
+          : Math.max(40, d.flightMs - flightElapsed());
+      pauseRemainMiss = 0;
+      missTimer = setTimeout(() => {
+        missTimer = null;
+        if (!sessionAlive() || isPaused() || phase !== 'flight') return;
+        applyResolved(resolveStreetBall(cur(), 'miss', armedShot));
+      }, remain);
+    };
+
+    const startRunupTimer = (ms) => {
+      pauseRemainBowl = 0;
+      bowlTimer = setTimeout(() => {
+        bowlTimer = null;
+        if (!sessionAlive() || isPaused() || phase !== 'runup') return;
+        phase = 'flight';
+        paintPitchState();
+        startFlightLoop();
+      }, Math.max(40, ms));
+    };
+
     const onAction = () => {
+      if (!sessionAlive() || isPaused()) return;
       if (phase === 'idle') {
         lastOutcome = '';
         clearTimers();
@@ -1236,27 +1334,7 @@
         try {
           if (typeof window !== 'undefined') window.__scLastDelivery = deliveryMeta;
         } catch (e) {}
-        const d = cur();
-        bowlTimer = setTimeout(() => {
-          bowlTimer = null;
-          if (phase !== 'runup') return;
-          phase = 'flight';
-          paintPitchState();
-          const tick = () => {
-            if (phase !== 'flight') {
-              deliveryRaf = null;
-              return;
-            }
-            paintPitchState();
-            deliveryRaf = requestAnimationFrame(tick);
-          };
-          deliveryRaf = requestAnimationFrame(tick);
-          missTimer = setTimeout(() => {
-            missTimer = null;
-            if (phase !== 'flight') return;
-            applyResolved(resolveStreetBall(cur(), 'miss', armedShot));
-          }, d.flightMs);
-        }, d.runupMs);
+        startRunupTimer(cur().runupMs);
         return;
       }
       if (phase === 'flight') {
@@ -1265,6 +1343,67 @@
         applyResolved(resolveStreetBall(cur(), timing, armedShot));
       }
     };
+
+    if (typeof createGamePauseController === 'function') {
+      pauseCtrl = createGamePauseController({
+        host: overlay,
+        pauseBtnId: pauseBtnId || 'scPause',
+        onPause() {
+          const now = Date.now();
+          pauseFreezeAt = now;
+          if (bowlTimer && phase === 'runup') {
+            pauseRemainBowl = Math.max(40, deliveryStartedAt + cur().runupMs - now);
+            clearTimeout(bowlTimer);
+            bowlTimer = null;
+          }
+          if (missTimer && phase === 'flight') {
+            pauseRemainMiss = Math.max(
+              40,
+              deliveryStartedAt + cur().runupMs + cur().flightMs - now
+            );
+            clearTimeout(missTimer);
+            missTimer = null;
+          }
+          if (resultTimer && phase === 'result') {
+            pauseRemainResult = 120;
+            clearTimeout(resultTimer);
+            resultTimer = null;
+          }
+          if (deliveryRaf) {
+            cancelAnimationFrame(deliveryRaf);
+            deliveryRaf = null;
+          }
+        },
+        onResume() {
+          if (!sessionAlive()) return;
+          if (pauseFreezeAt && deliveryStartedAt) {
+            deliveryStartedAt += Date.now() - pauseFreezeAt;
+          }
+          pauseFreezeAt = 0;
+          if (phase === 'runup') {
+            startRunupTimer(pauseRemainBowl || cur().runupMs);
+          } else if (phase === 'flight') {
+            paintPitchState();
+            startFlightLoop();
+          } else if (phase === 'result' && pauseRemainResult > 0) {
+            const end = evaluateEnd();
+            resultTimer = setTimeout(() => {
+              resultTimer = null;
+              pauseRemainResult = 0;
+              if (!sessionAlive()) return;
+              deliveryMeta = null;
+              if (end.done) phase = 'done';
+              else if (phase === 'result') phase = 'idle';
+              render();
+            }, pauseRemainResult);
+          }
+        },
+        onQuit() {
+          clearTimers();
+          if (gs) gs.close('dismissed');
+        },
+      });
+    }
 
     setChromeSub('Practice · pick format');
     render();
@@ -1362,13 +1501,27 @@
       clearFlashOutcome();
     };
 
-    const { overlay, body, gs } = mountSportsShell({
+    let pauseCtrl = null;
+    let pauseFreezeAt = 0;
+    let pauseRemainFlight = 0;
+    let pauseRemainResult = 0;
+    const { overlay, body, gs, pauseBtnId } = mountSportsShell({
       gameId: 'gullykick',
       title: 'Gully Kick',
       accent: '#2D6A4F',
-      onClose: clearTimers,
+      pauseId: 'gkPause',
+      onClose: () => {
+        try {
+          if (pauseCtrl) pauseCtrl.destroy();
+        } catch (e) {}
+        pauseCtrl = null;
+        clearTimers();
+      },
     });
     if (!body) return;
+
+    const sessionAlive = () => !gs || (typeof gs.alive === 'function' ? gs.alive() : true);
+    const isPaused = () => !!(pauseCtrl && pauseCtrl.isPaused && pauseCtrl.isPaused());
 
     const setChromeSub = (text) => {
       const el =
@@ -1503,7 +1656,7 @@
       power = 0.55;
       locked = false;
       pendingDive = null;
-      setChromeSub('Practice · ' + fmt().label);
+      setChromeSub('Practice · ' + fmt().label + ' · Shooter');
     };
 
     const reset = () => {
@@ -1910,9 +2063,10 @@
         }
       } catch (e) {}
       render();
+      pauseRemainFlight = 0;
       flightTimer = setTimeout(() => {
         flightTimer = null;
-        if (phase !== 'flight') return;
+        if (!sessionAlive() || isPaused() || phase !== 'flight') return;
         const resolved = resolveKick(kick);
         lastKick = resolved;
         kickLog.push(resolved);
@@ -1948,7 +2102,10 @@
         render();
         resultTimer = setTimeout(() => {
           resultTimer = null;
-          if (phase !== 'result') return;
+          if (!sessionAlive() || isPaused() || phase !== 'result') {
+            pauseRemainResult = 80;
+            return;
+          }
           if (endEval.done) phase = 'done';
           else {
             phase = 'aim';
@@ -1963,6 +2120,12 @@
 
     const stopCharge = (commit) => {
       if (!charging) return;
+      if (isPaused()) {
+        charging = false;
+        if (chargeRaf) cancelAnimationFrame(chargeRaf);
+        chargeRaf = null;
+        return;
+      }
       charging = false;
       if (chargeRaf) cancelAnimationFrame(chargeRaf);
       chargeRaf = null;
@@ -1985,7 +2148,7 @@
     };
 
     const startCharge = () => {
-      if (phase !== 'aim' || locked || charging) return;
+      if (phase !== 'aim' || locked || charging || !sessionAlive() || isPaused()) return;
       markCoach();
       charging = true;
       chargeStartedAt = Date.now();
@@ -2002,7 +2165,10 @@
         hint.textContent = lean + ' hold Kick, release to shoot';
       }
       const tick = () => {
-        if (!charging) return;
+        if (!charging || !sessionAlive() || isPaused()) {
+          chargeRaf = null;
+          return;
+        }
         const elapsed = Date.now() - chargeStartedAt;
         power = Math.max(0.28, Math.min(1, 0.28 + elapsed / 900));
         paintPower();
@@ -2017,7 +2183,7 @@
       if (!net) return;
       let dragging = false;
       const onDown = (ev) => {
-        if (phase !== 'aim' || locked) return;
+        if (phase !== 'aim' || locked || isPaused()) return;
         dragging = true;
         if (ev.cancelable) ev.preventDefault();
         setAimFromEvent(ev.touches ? ev.touches[0] : ev, net, true);
@@ -2040,7 +2206,7 @@
       const kickBtn = body.querySelector('[data-gk-kick]');
       if (kickBtn) {
         kickBtn.addEventListener('pointerdown', (ev) => {
-          if (phase !== 'aim' || locked) return;
+          if (phase !== 'aim' || locked || isPaused()) return;
           ev.preventDefault();
           try {
             kickBtn.setPointerCapture(ev.pointerId);
@@ -2134,10 +2300,24 @@
             : !coachShown
               ? 'Watch the keeper lean while you charge — then pick your corner.'
               : 'Drag the net to aim · hold Kick to charge power';
+      const roleSub =
+        phase === 'aim'
+          ? 'Your action — aim & Kick'
+          : phase === 'flight'
+            ? 'Keeper diving…'
+            : phase === 'result'
+              ? lastResult || 'Kick done'
+              : '';
+      const roleBanner = rwRoleBanner(
+        phase === 'aim' ? 'yours' : 'waiting',
+        'You’re shooting',
+        roleSub
+      );
 
       body.innerHTML = `
         <div class="rw-sports-card rw-gk-card">
           <h2>${esc(fmt().label)}</h2>
+          ${roleBanner}
           <p class="rw-sports-score" data-rw-hud>${scoreHud()}</p>
           <div class="rw-sports-goal rw-gk-goal" data-gk-goal>
             <div class="rw-gk-pitch" aria-hidden="true"></div>
@@ -2173,6 +2353,102 @@
       }
       if (phase === 'aim') wireAim();
     };
+
+    if (typeof createGamePauseController === 'function') {
+      pauseCtrl = createGamePauseController({
+        host: overlay,
+        pauseBtnId: pauseBtnId || 'gkPause',
+        onPause() {
+          pauseFreezeAt = Date.now();
+          if (charging) {
+            charging = false;
+            if (chargeRaf) cancelAnimationFrame(chargeRaf);
+            chargeRaf = null;
+            pendingDive = null;
+          }
+          if (flightTimer && phase === 'flight' && lastKick) {
+            pauseRemainFlight = Math.max(80, (lastKick.flightMs || 700) * 0.45);
+            clearTimeout(flightTimer);
+            flightTimer = null;
+          }
+          if (resultTimer && phase === 'result') {
+            pauseRemainResult = 120;
+            clearTimeout(resultTimer);
+            resultTimer = null;
+          }
+        },
+        onResume() {
+          if (!sessionAlive()) return;
+          pauseFreezeAt = 0;
+          if (phase === 'flight' && lastKick && !flightTimer) {
+            const kick = lastKick;
+            flightTimer = setTimeout(() => {
+              flightTimer = null;
+              pauseRemainFlight = 0;
+              if (!sessionAlive() || isPaused() || phase !== 'flight') return;
+              const resolved = resolveKick(kick);
+              lastKick = resolved;
+              kickLog.push(resolved);
+              taken += 1;
+              lastGoal = !!resolved.goal;
+              lastOutcomeKind = resolved.outcomeKind || (resolved.goal ? 'goal' : 'save');
+              lastResult = resolved.label;
+              if (resolved.over) {
+                if (typeof gameFeedback === 'function') gameFeedback('lose', { noConfetti: true });
+              } else if (resolved.goal) {
+                scored += 1;
+                if (formatId === 'sudden') {
+                  streak += 1;
+                  if (streak > runBestStreak) runBestStreak = streak;
+                }
+                if (typeof gameFeedback === 'function') gameFeedback('win', { noConfetti: true });
+              } else if (typeof gameFeedback === 'function') {
+                gameFeedback('lose', { noConfetti: true });
+              }
+              const endEval = evaluateEnd();
+              if (endEval.done) {
+                sessionWon = !!endEval.won;
+                endReason = endEval.reason || '';
+              }
+              phase = 'result';
+              locked = false;
+              render();
+              resultTimer = setTimeout(() => {
+                resultTimer = null;
+                if (!sessionAlive() || isPaused() || phase !== 'result') return;
+                if (endEval.done) phase = 'done';
+                else {
+                  phase = 'aim';
+                  power = 0.55;
+                  locked = false;
+                  pendingDive = null;
+                }
+                render();
+              }, 950);
+            }, pauseRemainFlight || 200);
+          } else if (phase === 'result' && pauseRemainResult > 0) {
+            resultTimer = setTimeout(() => {
+              resultTimer = null;
+              pauseRemainResult = 0;
+              if (!sessionAlive()) return;
+              const endEval = evaluateEnd();
+              if (endEval.done) phase = 'done';
+              else {
+                phase = 'aim';
+                power = 0.55;
+                locked = false;
+                pendingDive = null;
+              }
+              render();
+            }, pauseRemainResult);
+          }
+        },
+        onQuit() {
+          clearTimers();
+          if (gs) gs.close('dismissed');
+        },
+      });
+    }
 
     setChromeSub('Practice · pick format');
     render();

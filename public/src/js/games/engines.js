@@ -6094,7 +6094,9 @@ function finishDailyIfNeeded(won){
 
 function render(){
   if(!gs.alive())return;
-  const dayLabel=useDaily?`Daily · ${shabdDailySeed()}`:'Practice';
+  const dayLabel=useDaily
+    ?(gameOver?`Daily done · ${shabdDailySeed()}`:`Daily · ${shabdDailySeed()}`)
+    :'Practice';
   const hardBit=hardMode?' · Hard':'';
   const streak=typeof getShabdStreak==='function'?getShabdStreak():null;
   const streakBit=useDaily&&streak&&streak.streak?` · Streak ${streak.streak}`:'';
@@ -6118,6 +6120,14 @@ function render(){
   const revealHtml=typeof shabdRevealHtml==='function'
     ?shabdRevealHtml({won,word:target,guesses:guesses.length,hard:hardMode,daily:useDaily})
     :(reveal&&reveal.voice?`<p class="shabd-reveal-voice">${reveal.voice}</p>`:'');
+  const winLoseBanner=gameOver&&typeof gameTurnBannerHtml==='function'
+    ?gameTurnBannerHtml({
+      mode:won?'yours':'over',
+      label:won?'You got it':'Out of guesses',
+      sub:useDaily?'Daily complete — Practice anytime':(won?'Nice solve':'Try again'),
+      pulse:!!won,
+    })
+    :'';
   const resultActions=[
     {label:'Share',primary:true,id:'share'},
   ];
@@ -6158,6 +6168,7 @@ function render(){
   overlay.innerHTML=`
     ${gameChromeHtml({title:'Shabd Five',subtitle:dayLabel+hardBit+streakBit,backId:'wgBack',rightHtml:chromeRight})}
     ${hud}
+    ${winLoseBanner}
     <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:10px;" id="wgGrid"></div>
     ${resultBlock||(gameOver?`<div style="text-align:center;padding:8px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;color:${won?'#538D4E':'#B59F3B'};flex-shrink:0;">${resultTitle}<div class="shabd-reveal">${resultSub}</div></div>`:'')}
     ${gameOver?'':`<div style="flex-shrink:0;padding:8px;padding-bottom:max(8px,env(safe-area-inset-bottom));" id="wgKeyboard"></div>`}

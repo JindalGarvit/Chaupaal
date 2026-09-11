@@ -843,6 +843,8 @@ function openRushRunner(){
     hitFlash=16;
     shake=1.6;
     buzz('lose');
+    const kind=o&&o.type==='high'?'High barrier':'Obstacle';
+    showBanner(kind+' — run over',0.95);
   }
 
   function buildRunShareText(final, completed, isNewPb){
@@ -1290,8 +1292,15 @@ function openRushRunner(){
     pauseCtrl=createGamePauseController({
       host:overlay,
       pauseBtnId:'rrPause',
-      onPause(){if(raf){cancelAnimationFrame(raf);raf=null;}},
-      onResume(){if(started&&!gameOver&&!raf){lastTime=performance.now();raf=requestAnimationFrame(update);}},
+      onPause(){
+        if(raf){cancelAnimationFrame(raf);raf=null;}
+      },
+      onResume(){
+        if(started&&!gameOver&&alive()&&!raf){
+          lastTime=performance.now();
+          raf=requestAnimationFrame(update);
+        }
+      },
       onQuit:close,
     });
   }
@@ -2073,6 +2082,7 @@ function openTipTap(){
     if(matches.length){
       moves--;
       updateGoalsHud();
+      if(combo<=0)toast('Match!');
       scheduleCascade(()=>clearMatches(matches),T.swap);
     }else{
       scheduleCascade(()=>{
@@ -2553,7 +2563,9 @@ function openTipTap(){
     pauseCtrl = createGamePauseController({
       host: overlay,
       pauseBtnId: 'cbPause',
-      onPause() {},
+      onPause() {
+        clearCascadeTimers();
+      },
       onResume() {
         if (cascadeResume) {
           const fn = cascadeResume;
