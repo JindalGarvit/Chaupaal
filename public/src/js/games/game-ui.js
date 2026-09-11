@@ -152,9 +152,9 @@
       'Deal deeds ± cash on your turn — Live is 1v1, Practice up to 6',
     ],
     scribble: [
-      'Live 1v1 draw duel — pick 1 of 3 words, guessers race for 100 / 75 / 50',
+      'Live 1v1 or 3–6 seat party — one drawer, everyone else races to guess',
       'Word stays secret until reveal · near-miss says “close!” · drawer +50 if someone scores',
-      'Match: 3 rounds (each draws once per round) · Practice is free solo ink',
+      '100 / 75 / 50 by guess order · 3 rounds · party play continues while 2+ remain',
     ],
     rushrunner: [
       'Classic or Daily run · each theme has a named flavor (Coin Rush, Heavy Traffic, Long Sprint)',

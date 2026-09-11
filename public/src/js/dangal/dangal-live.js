@@ -39,28 +39,82 @@
     return rtdb.ref(path);
   }
 
+  function isPersistableSeatUid(uid) {
+    const u = String(uid || '').trim();
+    if (!u || /^(ai|practice|random|you)$/i.test(u)) return false;
+    if (typeof isPersistableUid === 'function' && !isPersistableUid(u)) return false;
+    return true;
+  }
+
+  /** Party seats 3–6 (Scribble residual R2). Cap 6. Dedupes + drops invalid. */
+  function normalizePartySeats(list) {
+    const raw = Array.isArray(list) ? list : [];
+    const out = [];
+    const seen = new Set();
+    raw.forEach((item) => {
+      const uid =
+        typeof item === 'string'
+          ? String(item || '').trim()
+          : String((item && (item.uid || item.id)) || '').trim();
+      if (!uid || seen.has(uid) || !isPersistableSeatUid(uid)) return;
+      seen.add(uid);
+      out.push(uid);
+    });
+    return out.slice(0, 6);
+  }
+
   function isLive(chat, launch) {
     const ctx = launch || window.__dangalLaunchCtx || {};
     if (ctx.mode === 'practice' || ctx.mode === 'daily') return false;
+    const mid = String((chat && chat.dangalMatchId) || ctx.matchId || '').trim();
+    if (!mid) return false;
+    const partySeats = normalizePartySeats(
+      ctx.partySeats || (chat && chat.partySeats) || ctx.seats || null
+    );
+    // Party Live 3–6: matchId + ≥3 persistable seats including me.
+    if (partySeats.length >= 3) {
+      const me = typeof getCurrentUid === 'function' ? getCurrentUid() : '';
+      if (!me || partySeats.indexOf(me) < 0) return false;
+      return partySeats.length >= 3 && partySeats.length <= 6;
+    }
     const opp =
       (typeof opponentUidFromChat === 'function' ? opponentUidFromChat(chat) : '') ||
       ctx.opponentUid ||
       '';
     if (!opp || /^(ai|practice|random)$/i.test(String(opp))) return false;
     if (typeof isPersistableUid === 'function' && !isPersistableUid(opp)) return false;
-    const mid = String((chat && chat.dangalMatchId) || ctx.matchId || '').trim();
-    if (!mid) return false;
     return true;
   }
 
   function roles(chat, launch) {
     const ctx = launch || window.__dangalLaunchCtx || {};
     const me = typeof getCurrentUid === 'function' ? getCurrentUid() : '';
+    const partySeats = normalizePartySeats(
+      ctx.partySeats || (chat && chat.partySeats) || ctx.seats || null
+    );
+    const src = String(ctx.source || (chat && chat.dangalSource) || '');
+    if (partySeats.length >= 3 && me && partySeats.indexOf(me) >= 0) {
+      const hostUid = partySeats[0];
+      const host = me === hostUid;
+      const mySeat = partySeats.indexOf(me);
+      const opp = partySeats.find((u) => u !== me) || '';
+      return {
+        me,
+        opp,
+        playerA: partySeats[0],
+        playerB: partySeats[1],
+        seats: partySeats.slice(),
+        hostUid,
+        host,
+        mySeat,
+        myColor: host ? 'w' : 'b',
+        party: true,
+      };
+    }
     const opp =
       (typeof opponentUidFromChat === 'function' ? opponentUidFromChat(chat) : '') ||
       ctx.opponentUid ||
       '';
-    const src = String(ctx.source || (chat && chat.dangalSource) || '');
     // Acceptor (source === 'challenge') is guest; challenger / finder / host is host.
     const host = src !== 'challenge';
     const playerA = host ? me : opp;
@@ -70,8 +124,12 @@
       opp,
       playerA,
       playerB,
-      myColor: me === playerA ? 'w' : 'b',
+      seats: playerA && playerB ? [playerA, playerB] : [],
+      hostUid: playerA,
       host,
+      mySeat: me === playerA ? 0 : 1,
+      myColor: me === playerA ? 'w' : 'b',
+      party: false,
     };
   }
 
@@ -103,8 +161,16 @@
     const matchId = String(o.matchId || '')
       .replace(/[^\w.-]/g, '')
       .slice(0, 120);
+    const seatList = normalizePartySeats(o.seats || o.partySeats || null);
+    const partyOn = !!(o.party || seatList.length >= 3);
+    let playerA = o.playerA;
+    let playerB = o.playerB;
+    if (seatList.length >= 2) {
+      playerA = playerA || seatList[0];
+      playerB = playerB || seatList[1];
+    }
     const ref = rtdbRef('games/' + gameType + '/' + matchId);
-    if (!ref || !matchId || !o.playerA || !o.playerB) return null;
+    if (!ref || !matchId || !playerA || !playerB) return null;
     const me = o.me;
     const stake = Number(o.stake) || Number(window.__dangalLaunchCtx?.stake) || 0;
     const now = Date.now();
@@ -113,6 +179,8 @@
     let visibilityHandler = null;
     let forfeited = false;
     let detached = false;
+    o.playerA = playerA;
+    o.playerB = playerB;
 
     function bumpPresence(online) {
       if (!me || detached) return;
@@ -121,15 +189,32 @@
       } catch (e) {}
     }
 
+    function seedPlayersMap() {
+      const players = {};
+      if (seatList.length >= 2) {
+        seatList.forEach((uid) => {
+          players[uid] = true;
+        });
+      } else {
+        players[playerA] = true;
+        players[playerB] = true;
+      }
+      if (me) players[me] = true;
+      return players;
+    }
+
     ref.transaction((cur) => {
       if (cur) {
         const next = Object.assign({}, cur);
-        next.players = Object.assign({}, cur.players || {});
-        if (me) next.players[me] = true;
+        next.players = Object.assign({}, cur.players || {}, seedPlayersMap());
         next.presence = Object.assign({}, cur.presence || {});
         if (me) next.presence[me] = { at: now, online: true };
-        if (!next.playerA) next.playerA = o.playerA;
-        if (!next.playerB) next.playerB = o.playerB;
+        if (!next.playerA) next.playerA = playerA;
+        if (!next.playerB) next.playerB = playerB;
+        if (partyOn && seatList.length >= 3 && !next.partySeats) {
+          next.partySeats = seatList.slice();
+          next.party = true;
+        }
         if (stake > 0 && !next.stake) next.stake = stake;
         // Seed fen only when missing — guest must never overwrite host Chess960/standard.
         if (o.fen && !String(cur.fen || '').trim()) {
@@ -183,18 +268,20 @@
         }
         return next;
       }
-      const players = {};
-      players[o.playerA] = true;
-      players[o.playerB] = true;
+      const players = seedPlayersMap();
       const presence = {};
-      presence[o.playerA] = { at: now, online: true };
-      presence[o.playerB] = { at: now, online: me === o.playerB };
+      Object.keys(players).forEach((uid) => {
+        presence[uid] = { at: now, online: uid === me };
+      });
+      if (me) presence[me] = { at: now, online: true };
       return {
-        playerA: o.playerA,
-        playerB: o.playerB,
+        playerA,
+        playerB,
         players,
         presence,
-        turn: o.playerA,
+        party: partyOn || undefined,
+        partySeats: partyOn && seatList.length >= 3 ? seatList.slice() : undefined,
+        turn: playerA,
         fen: o.fen || '',
         board: o.board || '',
         state: o.state || null,
@@ -220,6 +307,8 @@
       ref,
       matchId,
       gameType,
+      party: partyOn,
+      seats: seatList.length >= 2 ? seatList.slice() : [playerA, playerB],
       push(patch) {
         if (detached) return Promise.resolve(null);
         return ref.transaction((cur) => {
@@ -282,7 +371,15 @@
       forfeit() {
         if (forfeited || !me || detached) return Promise.resolve();
         forfeited = true;
-        const winner = me === o.playerA ? o.playerB : o.playerA;
+        // Party: soft out — match stays playing; game layer marks seat out + may continue.
+        if (partyOn) {
+          return api.push({
+            status: 'playing',
+            leftUid: me,
+            partyLeave: true,
+          });
+        }
+        const winner = me === playerA ? playerB : playerA;
         return api.setStatus('forfeit', winner);
       },
       leave(optsLeave) {
@@ -373,8 +470,8 @@
       } catch (e) {}
     }
 
-    // Soft presence forfeit: if opponent offline > PRESENCE_FORFEIT_MS while playing
-    if (o.watchForfeit !== false && me) {
+    // Soft presence forfeit: dual only. Party leave is handled by the game (continue if ≥2).
+    if (o.watchForfeit !== false && me && !partyOn) {
       presenceWatch = setInterval(() => {
         if (detached || forfeited) return;
         ref.once('value', (snap) => {
@@ -420,8 +517,11 @@
   }
 
   /** Chrome subtitle helper — Practice vs Live honesty */
-  function modeChromeLabel(liveOn, practiceLabel) {
-    if (liveOn) return 'Live 1v1';
+  function modeChromeLabel(liveOn, practiceLabel, optsLabel) {
+    if (liveOn) {
+      if (optsLabel && optsLabel.party) return 'Live party';
+      return 'Live 1v1';
+    }
     return practiceLabel ? 'Practice · ' + practiceLabel : 'Practice vs AI';
   }
 
@@ -430,12 +530,16 @@
     const o = opts || {};
     const playing = o.isPlaying !== false;
     const live = !!(o.live || o.liveHandle);
+    const party = !!(o.party || (o.liveHandle && o.liveHandle.party));
     if (typeof confirmLeaveGame === 'function') {
       const ok = await confirmLeaveGame({
         title: o.title || 'Leave game?',
         body:
           live && playing
-            ? o.forfeitBody || 'Leaving now counts as a forfeit for your opponent.'
+            ? o.forfeitBody ||
+              (party
+                ? 'You’ll leave this party — the match continues if 2+ players remain.'
+                : 'Leaving now counts as a forfeit for your opponent.')
             : o.body || 'This run will end.',
       });
       if (!ok) return false;
@@ -465,6 +569,7 @@
     modeChromeLabel,
     requestLeave,
     mergeQuiz,
+    normalizePartySeats,
     PRESENCE_FORFEIT_MS,
     PRESENCE_WARN_MS,
     QUIZ_SEED_TIMEOUT_MS,
