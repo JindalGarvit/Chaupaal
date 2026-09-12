@@ -464,13 +464,18 @@
   }
 
   /**
-   * Shared Practice · Solo launch (Manch + self-chat).
+   * Shared Practice · Solo launch (Manch + self-chat + 1:1).
    * No opponent sheet; chrome preference Practice · Solo via practiceKind.
    */
   function launchSoloPractice(gameId, source) {
     const game = getGame(gameId);
     if (!game) return;
-    const src = source === 'self' ? 'self' : source || 'manch';
+    const src =
+      source === 'self'
+        ? 'self'
+        : source === 'chat' || source === 'chat_practice'
+          ? 'chat'
+          : source || 'manch';
     launchDangalGame({
       gameId,
       source: src,
@@ -484,14 +489,20 @@
   }
 
   /**
-   * Shared Practice vs AI contract (Manch + self-chat).
+   * Shared Practice vs AI contract (Manch + self-chat + 1:1).
    * Sets honest launch ctx; ≤1 optional setup sheet (Ludo / Uno / Chess / Patang / Snakes).
    * Always replaces prior Live ctx so Practice never waits on a stale matchId.
+   * Friend chat identity must never become the AI seat — always practiceAiChat().
    */
   function launchPracticeVsAi(gameId, source) {
     const game = getGame(gameId);
     if (!game) return;
-    const src = source === 'self' ? 'self' : source || 'manch';
+    const src =
+      source === 'self'
+        ? 'self'
+        : source === 'chat' || source === 'chat_practice'
+          ? 'chat'
+          : source || 'manch';
     const chat = practiceAiChat();
 
     // Wipe Live residue — Practice must never inherit friend matchId / mode:'live'.
@@ -566,12 +577,13 @@
 
   /**
    * Registry-driven chat game picker.
-   * UX: 1:1 shows chat1v1 rows with Live vs Practice badges; Challenge only on Live.
-   *     Group allowlists Ludo / Uno / Business / Scribble (party 3–6).
+   * UX: 1:1 — row = Practice vs AI (or Solo); Challenge = Live with this friend.
+   *     Group allowlists Ludo / Uno / Business / Scribble (party 3–6) — unchanged.
    */
   function openGamePicker(chat, isGroup) {
     const isSelf = typeof isSelfChat === 'function' && isSelfChat(chat);
     const ctx = { chat, isGroup: !!isGroup, source: isSelf ? 'self' : 'chat' };
+    const friendName = (chat && chat.name) || 'your friend';
 
     let pickerGames;
     let title;
@@ -619,24 +631,43 @@
       subtitle = 'Party games for this chat — pick players next';
       emptyHint = 'No party games here yet — try Ludo, Oh No!, Business, or Scribble from Manch.';
     } else {
-      // 1:1 — all chat1v1; badge Live vs Practice; Challenge only when Live-capable.
+      // 1:1 — row/primary = Practice vs AI (or Solo); Challenge = Live with this friend.
       const rows = getGames({ chat1v1: true }).map((g) => {
         const liveCapable = gameIsLiveCapable(g.id, g);
+        const entry = getPracticeEntryClass(g.id);
+        const solo = entry === 'soloPractice';
+        let rowDesc;
+        if (liveCapable) {
+          rowDesc = 'Practice vs AI · Challenge for Live';
+        } else if (solo) {
+          rowDesc = 'Practice · Solo';
+        } else if (g.id === 'scribble') {
+          rowDesc = 'Practice vs AI · you draw, AI guesses';
+        } else if (g.id === 'patangbaazi') {
+          rowDesc = 'Practice · Duel or Festival';
+        } else {
+          rowDesc = 'Practice vs AI';
+        }
         return {
           id: g.id,
           emoji: g.icon,
           name: g.name,
-          desc: liveCapable ? g.desc : 'Practice only — not a Live challenge',
+          desc: rowDesc,
           liveCapable,
+          practiceSolo: solo,
           showChallenge: liveCapable,
-          fn: () => g.launch(ctx),
+          fn: () => {
+            // Never launch with the friend chat as AI seat / Live wait.
+            if (solo) launchSoloPractice(g.id, 'chat');
+            else launchPracticeVsAi(g.id, 'chat');
+          },
         };
       });
       rows.sort((a, b) => Number(b.liveCapable) - Number(a.liveCapable));
       pickerGames = rows;
       title = 'Play a game';
       subtitle =
-        'Live with ' + (chat?.name || 'your friend') + ' — or open Practice titles below';
+        'Practice vs AI anytime — or Challenge for Live with ' + friendName + '.';
       emptyHint = 'No chat games yet — open Manch to play.';
     }
 
@@ -660,7 +691,7 @@
             lastSection = section;
             head =
               section === 'live'
-                ? '<div style="font:700 11px Space Grotesk,sans-serif;color:var(--muted);letter-spacing:0.04em;text-transform:uppercase;margin:10px 2px 6px;">Live with friend</div>'
+                ? '<div style="font:700 11px Space Grotesk,sans-serif;color:var(--muted);letter-spacing:0.04em;text-transform:uppercase;margin:10px 2px 6px;">Practice vs AI · Challenge Live</div>'
                 : '<div style="font:700 11px Space Grotesk,sans-serif;color:var(--muted);letter-spacing:0.04em;text-transform:uppercase;margin:14px 2px 6px;">Practice only</div>';
           }
           const challengeBtn = g.showChallenge
@@ -668,6 +699,11 @@
               i +
               '" class="dangal-picker-challenge" style="flex-shrink:0;padding:10px 12px;border-radius:14px;border:2px solid var(--line);background:var(--white);font:700 11px Space Grotesk,sans-serif;cursor:pointer;max-width:88px;">Challenge</button>'
             : '';
+          const badge = g.liveCapable
+            ? pickerHonestyBadge(true) + pickerPracticeBadge('vsAi')
+            : g.practiceSolo
+              ? pickerPracticeBadge('solo')
+              : pickerPracticeBadge('vsAi');
           return (
             head +
             '<div class="dangal-picker-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:stretch;">' +
@@ -679,7 +715,7 @@
             '</span>' +
             '<div><div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;">' +
             g.name +
-            pickerHonestyBadge(g.liveCapable) +
+            badge +
             '</div><div style="font-size:11px;color:var(--muted);margin-top:1px;">' +
             g.desc +
             '</div></div></button>' +
