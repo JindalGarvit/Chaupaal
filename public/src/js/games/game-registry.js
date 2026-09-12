@@ -294,6 +294,7 @@
               ? 'solo'
               : 'vsAi'
           : ''),
+      skipPracticeSetup: o.skipPracticeSetup != null ? !!o.skipPracticeSetup : undefined,
       startedAt: Date.now(),
       ludoMode:
         o.ludoMode ||
@@ -485,6 +486,7 @@
   /**
    * Shared Practice vs AI contract (Manch + self-chat).
    * Sets honest launch ctx; ≤1 optional setup sheet (Ludo / Uno / Chess / Patang / Snakes).
+   * Always replaces prior Live ctx so Practice never waits on a stale matchId.
    */
   function launchPracticeVsAi(gameId, source) {
     const game = getGame(gameId);
@@ -492,21 +494,27 @@
     const src = source === 'self' ? 'self' : source || 'manch';
     const chat = practiceAiChat();
 
+    // Wipe Live residue — Practice must never inherit friend matchId / mode:'live'.
+    window.__dangalLaunchCtx = {
+      gameId,
+      gameType: gameId,
+      mode: 'practice',
+      matchId: '',
+      opponentUid: 'ai',
+      stake: 0,
+      chatId: '',
+      source: src,
+      practiceKind: 'vsAi',
+      // Prefer engine defaults (Medium / Classic / 5+0) — skip setup walls when possible.
+      skipPracticeSetup: true,
+      startedAt: Date.now(),
+    };
+
     // Ludo: Classic|Quick sheet is the one allowed optional step
     if (gameId === 'ludo') {
-      window.__dangalLaunchCtx = Object.assign({}, window.__dangalLaunchCtx || {}, {
-        gameId: 'ludo',
-        gameType: 'ludo',
-        mode: 'practice',
-        opponentUid: 'ai',
-        stake: 0,
-        source: src,
-        practiceKind: 'vsAi',
-        startedAt: Date.now(),
-      });
       if (typeof openLudoPracticeSheet === 'function') {
         openLudoPracticeSheet(chat, { source: src, mode: 'practice', opponentUid: 'ai' });
-      } else {
+      } else if (typeof openLudoGame === 'function') {
         openLudoGame(chat, 2, { mode: 'classic' });
       }
       return;
@@ -526,6 +534,11 @@
       return;
     }
 
+    // Snakes / Patang: keep their one mode/version sheet (do not auto-skip).
+    if (gameId === 'snakes' || gameId === 'patangbaazi') {
+      window.__dangalLaunchCtx.skipPracticeSetup = false;
+    }
+
     game.launch({
       chat,
       source: src,
@@ -533,6 +546,7 @@
       opponentUid: 'ai',
       stake: 0,
       practiceKind: 'vsAi',
+      skipPracticeSetup: window.__dangalLaunchCtx.skipPracticeSetup !== false,
     });
   }
 

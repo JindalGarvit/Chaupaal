@@ -446,6 +446,28 @@ function openChessGame(chat){
     dangalMatchId:'',
   };
 
+  // Practice vs AI: default Medium · White · Standard · 5+0 — no setup wall / no Live clock sheet.
+  // Rematch / Again with Practice AI also uses these defaults (skipPracticeSetup or id=ai).
+  const skipSetup=
+    launch.skipPracticeSetup!==false&&
+    (launch.practiceKind==='vsAi'||
+      launch.mode==='practice'||
+      launch.skipPracticeSetup===true||
+      raw.id==='ai'||
+      /practice ai/i.test(String(raw.name||'')));
+  if(skipSetup){
+    startChessGame(practiceChat,{
+      min:5,
+      inc:0,
+      difficulty:'medium',
+      aiDepth:2,
+      chess960:false,
+      playAs:'w',
+      timeLabel:'5+0',
+    });
+    return;
+  }
+
   const device=document.querySelector('.device');
   if(!device){
     if(typeof showToast==='function')showToast('Could not open chess');
@@ -5347,8 +5369,20 @@ function openUnoGame(chat, variant='normal', opts){
 function openTicTacToe(chat){
   const device=document.querySelector('.device');
   if(!device){if(typeof showToast==='function')showToast('Could not open Tic-Tac-Toe');return;}
-  if(typeof DangalLive!=='undefined'&&DangalLive.isLive(chat)){
+  const launch=window.__dangalLaunchCtx||{};
+  if(typeof DangalLive!=='undefined'&&DangalLive.isLive(chat,launch)){
     startTicTacToe(chat,'live');
+    return;
+  }
+  // Practice vs AI: default Medium — no forced difficulty sheet.
+  const skipSetup=
+    launch.skipPracticeSetup!==false&&
+    (launch.practiceKind==='vsAi'||
+      launch.mode==='practice'||
+      launch.skipPracticeSetup===true||
+      (chat&&(chat.id==='ai'||/practice ai/i.test(String(chat.name||'')))));
+  if(skipSetup){
+    startTicTacToe(chat||{name:'Practice AI',id:'ai'},'medium');
     return;
   }
   const DIFFS=[
@@ -5359,7 +5393,7 @@ function openTicTacToe(chat){
   const pick=document.createElement('div');
   pick.style.cssText='position:absolute;inset:0;background:#1a1a2e;z-index:100;display:flex;flex-direction:column;';
   pick.innerHTML=`
-    ${gameChromeHtml({title:'Tic-Tac-Toe',subtitle:'Choose difficulty',backId:'tttDiffBack'})}
+    ${gameChromeHtml({title:'Tic-Tac-Toe',subtitle:'Practice vs AI · choose difficulty',backId:'tttDiffBack'})}
     <div style="padding:16px;display:flex;flex-direction:column;gap:10px;">
       ${DIFFS.map(d=>`<button type="button" class="ttt-diff game-tap-target" data-d="${d.id}" style="padding:16px;background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.12);border-radius:14px;color:#fff;font:700 15px Space Grotesk,sans-serif;cursor:pointer;text-align:left;">${d.label}</button>`).join('')}
     </div>`;
@@ -5387,9 +5421,7 @@ let resultSettling=false;
 let sessionRecorded=false;
 const DIFF_LABEL=liveOn
   ?(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel?DangalLive.modeChromeLabel(true):'Live 1v1')+(liveStake>0?` · Stake ⚡${liveStake}`:'')
-  :(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel
-    ?DangalLive.modeChromeLabel(false,diff==='easy'?'Easy':diff==='medium'?'Medium':'Hard')
-    :('Practice · '+(diff==='easy'?'Easy':diff==='medium'?'Medium':'Hard')));
+  :('Practice vs AI · '+(diff==='easy'?'Easy':diff==='medium'?'Medium':'Hard'));
 const overlay=document.createElement('div');
 overlay.style.cssText='position:absolute;inset:0;background:#1a1a2e;z-index:80;display:flex;flex-direction:column;align-items:center;padding:0 0 12px;gap:12px;';
 let liveHandle=null;
@@ -6654,6 +6686,26 @@ if (typeof registerGame === 'function') {
             return;
           }
           openUnoVariantPicker(chat,{live:true,variant:unoVariant||'classic',house:unoHouse});
+          return;
+        }
+        // Practice vs AI: Classic + Medium + saved house — no variant/house wall.
+        const skipSetup=
+          launch.skipPracticeSetup!==false&&
+          (ctx.skipPracticeSetup!==false)&&
+          (launch.practiceKind==='vsAi'||launch.mode==='practice'||ctx.mode==='practice'||!unoVariant);
+        if(skipSetup&&!unoVariant){
+          const HOUSE_DEFAULTS={stackDraw2:false,challengeDraw4:true,catchOhNo:true};
+          let house=unoHouse;
+          if(!house){
+            try{
+              const raw=localStorage.getItem('chaupaal_uno_house');
+              house=raw?Object.assign({},HOUSE_DEFAULTS,JSON.parse(raw)):HOUSE_DEFAULTS;
+            }catch(e){house=HOUSE_DEFAULTS;}
+          }
+          let diff=ctx.difficulty||launch.difficulty||'medium';
+          try{if(!ctx.difficulty&&!launch.difficulty)diff=localStorage.getItem('chaupaal_uno_diff')||'medium';}catch(e){}
+          if(!['easy','medium','hard'].includes(diff))diff='medium';
+          openUnoGame(chat,'classic',{house,difficulty:diff,variant:'classic'});
           return;
         }
         openUnoVariantPicker(chat,{

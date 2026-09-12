@@ -74,7 +74,7 @@
   }
 
   function chatLiveOn(chat) {
-    return typeof DangalLive !== 'undefined' && DangalLive.isLive(chat);
+    return typeof DangalLive !== 'undefined' && DangalLive.isLive(chat, window.__dangalLaunchCtx || {});
   }
 
   /** Prefer launch ctx / chatFromLaunch; fall back to fake chat for Live detection */
@@ -1418,9 +1418,9 @@
     const cueSub = liveOn
       ? liveSub()
       : isCarrom
-        ? 'Practice · AI'
+        ? 'Practice vs AI · ' + (spec.difficulty || spec.subtitle || 'Medium')
         : isPool
-          ? practiceSub(spec.subtitle || '8-ball · kitchen break')
+          ? practiceSub(spec.subtitle || '8-ball · Medium')
           : practiceSub(spec.subtitle || spec.title || 'vs AI');
     const shell = openShell({
       id: spec.id,
@@ -1576,7 +1576,7 @@
 
     if (isCarrom && !liveOn) {
       setChromeSubtitle(
-        'Practice · ' + (DIFF_LABEL[difficulty] || 'Medium') + ' · ' + (youColor === 'white' ? 'White' : 'Black')
+        'Practice vs AI · ' + (DIFF_LABEL[difficulty] || 'Medium') + ' · ' + (youColor === 'white' ? 'White' : 'Black')
       );
     } else if (isCarrom && liveOn) {
       setChromeSubtitle(
@@ -1587,7 +1587,7 @@
     } else if (isPool && liveOn) {
       setChromeSubtitle('Live 1v1 · Pool' + (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly'));
     } else if (isPool) {
-      setChromeSubtitle('Practice · 8-ball · ' + (DIFF_LABEL[difficulty] || 'Medium') + ' AI');
+      setChromeSubtitle('Practice vs AI · 8-ball · ' + (DIFF_LABEL[difficulty] || 'Medium'));
     }
 
     let coachDismissed = false;
@@ -4514,15 +4514,26 @@
       raw.uid ||
       launch.opponentUid ||
       '';
+    const practiceQuick =
+      !liveWanted &&
+      launch.skipPracticeSetup !== false &&
+      (launch.practiceKind === 'vsAi' ||
+        launch.mode === 'practice' ||
+        launch.skipPracticeSetup === true ||
+        raw.practiceKind === 'vsAi' ||
+        raw.mode === 'practice');
     try {
       window.__dangalLaunchCtx = Object.assign({}, launch, {
         gameId: 'carrom',
         gameType: 'carrom',
         mode: liveWanted ? 'live' : 'practice',
-        matchId: (chat && chat.dangalMatchId) || raw.dangalMatchId || launch.matchId || '',
-        opponentUid: liveWanted ? oppUid : '',
+        matchId: liveWanted
+          ? (chat && chat.dangalMatchId) || raw.dangalMatchId || launch.matchId || ''
+          : '',
+        opponentUid: liveWanted ? oppUid : 'ai',
         stake: liveWanted ? stake : 0,
-        source: raw.dangalSource || raw.source || launch.source || (liveWanted ? 'challenge_host' : 'dangal'),
+        practiceKind: liveWanted ? '' : 'vsAi',
+        source: raw.dangalSource || raw.source || launch.source || (liveWanted ? 'challenge_host' : 'manch'),
         startedAt: Date.now(),
       });
     } catch (e) {}
@@ -4530,7 +4541,7 @@
       id: 'carrom',
       variant: 'carrom',
       title: 'Carrom',
-      subtitle: liveWanted ? 'Live 1v1' : 'Practice · AI',
+      subtitle: liveWanted ? 'Live 1v1' : 'Medium',
       chat,
       accent: '#8D6E63',
       bg: '#1A0F00',
@@ -4545,10 +4556,12 @@
       baselineY: 0.82,
       soloPractice: true,
       coachKey: 'chaupaal_carrom_coach_v5',
-      youColor: raw.youColor,
-      difficulty: raw.difficulty,
-      breakerPick: raw.breakerPick,
-      skipSheet: !!raw.skipSheet,
+      youColor:
+        raw.youColor ||
+        (practiceQuick ? (Math.random() < 0.5 ? 'white' : 'black') : undefined),
+      difficulty: raw.difficulty || 'medium',
+      breakerPick: raw.breakerPick || (practiceQuick ? 'you' : undefined),
+      skipSheet: !!raw.skipSheet || practiceQuick,
       stake,
       pockets: [
         [0.055, 0.055],

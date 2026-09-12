@@ -66,6 +66,8 @@
   function isLive(chat, launch) {
     const ctx = launch || window.__dangalLaunchCtx || {};
     if (ctx.mode === 'practice' || ctx.mode === 'daily') return false;
+    if (ctx.practiceKind === 'vsAi' || ctx.practiceKind === 'solo') return false;
+    if (ctx.opponentUid && /^(ai|practice|random)$/i.test(String(ctx.opponentUid))) return false;
     const mid = String((chat && chat.dangalMatchId) || ctx.matchId || '').trim();
     if (!mid) return false;
     const partySeats = normalizePartySeats(
