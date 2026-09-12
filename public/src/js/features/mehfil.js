@@ -12,7 +12,12 @@
   const YT_API = 'https://www.youtube.com/iframe_api';
   const REACTIONS = ['🔥', '👏', '😂', '❤️', '😮', '🎉', '👍', '🙏'];
   const STICKERS = ['🏠', '☕', '🏏', '🎵', '🌧️', '✨', '🪷', '🪔'];
-  const SPEAK_LEVEL = 8;
+  const SPEAK_ON_LEVEL = 15;
+  const SPEAK_OFF_LEVEL = 8;
+  const MUTED_NUDGE_LEVEL = 25;
+  const MUTED_NUDGE_COOLDOWN_MS = 12000;
+  const RECONNECT_FAIL_MAX = 4;
+  const TOKEN_RENEW_LEAD_MS = 5 * 60 * 1000;
   const CHROME_DIM_MS = 4000;
   const YT_RESYNC_MS = 5000;
   const PREF_KEY = 'chaupaal_mehfil_prefs';
@@ -58,6 +63,18 @@
   let ringUiTimer = null;
   let lastKnownFreshCount = 0;
   let dmAutoRingDone = false;
+  /** full | listen | none — A/V capability after join. */
+  let avMode = 'none';
+  let tokenExpiresAtSec = 0;
+  let tokenRenewTimer = null;
+  let reconnectFailCount = 0;
+  let lastMutedNudgeAt = 0;
+  let speakingCueTimer = null;
+  let lastSpeakingLabel = '';
+  const speakingSticky = new Map();
+  const mutedByUid = new Map();
+  let deviceListenerBound = false;
+  let musicPausedForMehfil = false;
 
   /** Solo waiter label — never “Live” with one person. */
   const MEHFIL_WAITING_LABEL = 'Waiting in Mehfil';
@@ -599,6 +616,10 @@
       }
       lastKnownFreshCount = state.count;
       if (state.count > 1) setRingingChrome(false);
+      mutedByUid.clear();
+      freshEntries.forEach(([uid, meta]) => {
+        mutedByUid.set(String(uid), !!meta?.muted);
+      });
       const rows = freshEntries.map(([uid, meta]) => {
         const name = meta?.name || 'Member';
         const me = uid === currentUser?.uid;
@@ -761,10 +782,28 @@
   }
 
   function setMicUi(live) {
+    const on = !!live;
     const btn = overlayEl?.querySelector('[data-mehfil-mic]');
-    btn?.classList.toggle('is-live', live);
-    btn?.classList.toggle('is-muted', !live);
-    btn?.setAttribute('aria-pressed', live ? 'true' : 'false');
+    if (btn) {
+      btn.classList.toggle('is-live', on);
+      btn.classList.toggle('is-muted', !on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      btn.title = on ? tt('mehfil_mic_on', 'Mic on') : tt('mehfil_mic_off', 'Mic muted');
+    }
+    const tile = overlayEl?.querySelector('[data-mehfil-local-video]');
+    if (tile) {
+      tile.classList.toggle('is-mic-on', on);
+      tile.classList.toggle('is-mic-muted', !on);
+      let badge = tile.querySelector('[data-mehfil-mic-badge]');
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'mehfil-mic-badge';
+        badge.setAttribute('data-mehfil-mic-badge', '1');
+        tile.appendChild(badge);
+      }
+      badge.textContent = on ? '🎤' : '🔇';
+      badge.title = on ? tt('mehfil_mic_on', 'Mic on') : tt('mehfil_mic_off', 'Mic muted');
+    }
   }
 
   function setCamUi(live) {
@@ -782,37 +821,154 @@
     const label = btn?.querySelector('[data-mehfil-share-label]');
     if (label) label.textContent = sharing ? tt('mehfil_stop_share', 'Stop share') : tt('mehfil_share', 'Share');
     overlayEl?.querySelector('[data-mehfil-local-video]')?.classList.toggle('is-screen', sharing);
+    const chip = overlayEl?.querySelector('[data-mehfil-sharing-chip]');
+    if (chip) chip.hidden = !sharing;
+  }
+
+  function setAvControlsEnabled(mode) {
+    avMode = mode || 'none';
+    const full = avMode === 'full';
+    const listen = avMode === 'listen' || full;
+    const mic = overlayEl?.querySelector('[data-mehfil-mic]');
+    const cam = overlayEl?.querySelector('[data-mehfil-cam]');
+    const flip = overlayEl?.querySelector('[data-mehfil-flip]');
+    const share = overlayEl?.querySelector('[data-mehfil-share]');
+    if (mic) {
+      mic.disabled = !full;
+      mic.classList.toggle('is-disabled', !full);
+      if (!full) {
+        mic.title = tt('mehfil_mic_unavailable', 'Mic unavailable — listening only');
+      }
+    }
+    [cam, flip, share].forEach((el) => {
+      if (!el) return;
+      el.disabled = !full;
+      el.classList.toggle('is-disabled', !full);
+    });
+    if (!listen) {
+      /* voice stack absent */
+    }
+  }
+
+  function mehfilReducedMotion() {
+    try {
+      if (typeof quietMode !== 'undefined' && quietMode) return true;
+      return !!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    } catch (e) {
+      return false;
+    }
   }
 
   function renderLocalPlaceholder(text) {
     const tile = overlayEl?.querySelector('[data-mehfil-local-video]');
     if (!tile) return;
     tile.classList.remove('is-screen');
+    const micOn = !!micWanted && avMode === 'full';
     tile.innerHTML = `<span class="mehfil-tile-placeholder">${esc(
       text || tt('mehfil_cam_off', 'Camera off')
-    )}</span><div class="mehfil-tile-label">${esc(tt('mehfil_you_label', 'You'))}</div>`;
+    )}</span><div class="mehfil-tile-label">${esc(tt('mehfil_you_label', 'You'))}</div>
+      <span class="mehfil-mic-badge" data-mehfil-mic-badge>${micOn ? '🎤' : '🔇'}</span>`;
+    tile.classList.toggle('is-mic-on', micOn);
+    tile.classList.toggle('is-mic-muted', !micOn);
   }
 
   function playLocalOnTile(track, label) {
     const tile = overlayEl?.querySelector('[data-mehfil-local-video]');
     if (!tile || !track) return;
-    tile.innerHTML = `<div class="mehfil-tile-label">${esc(label || tt('mehfil_you_label', 'You'))}</div>`;
+    const micOn = !!micWanted && avMode === 'full';
+    tile.innerHTML = `<div class="mehfil-tile-label">${esc(label || tt('mehfil_you_label', 'You'))}</div>
+      <span class="mehfil-mic-badge" data-mehfil-mic-badge>${micOn ? '🎤' : '🔇'}</span>`;
+    tile.classList.toggle('is-mic-on', micOn);
+    tile.classList.toggle('is-mic-muted', !micOn);
     track.play(tile);
     layoutCinema();
+  }
+
+  function setSpeakingCue(name) {
+    clearTimeout(speakingCueTimer);
+    speakingCueTimer = null;
+    const cue = overlayEl?.querySelector('[data-mehfil-speaking-cue]');
+    if (!cue) return;
+    if (!name) {
+      cue.hidden = true;
+      cue.textContent = '';
+      lastSpeakingLabel = '';
+      return;
+    }
+    const label = tt('mehfil_is_speaking', '{{name}} is speaking', { name });
+    if (label === lastSpeakingLabel && !cue.hidden) return;
+    lastSpeakingLabel = label;
+    cue.textContent = label;
+    cue.hidden = false;
+    speakingCueTimer = setTimeout(() => {
+      if (cue) {
+        cue.hidden = true;
+        lastSpeakingLabel = '';
+      }
+    }, 1800);
   }
 
   function applyVolumeIndicators(volumes) {
     if (!overlayEl || !Array.isArray(volumes)) return;
     const byUid = new Map(volumes.map((v) => [String(v.uid), Number(v.level) || 0]));
+    let topSpeaker = null;
+    let topLevel = 0;
+    const reduced = mehfilReducedMotion();
+
     overlayEl.querySelectorAll('.mehfil-tile').forEach((tile) => {
-      let level = 0;
-      if (tile.classList.contains('mehfil-tile--self')) {
-        if (localUid != null) level = byUid.get(String(localUid)) || 0;
-      } else if (tile.dataset.uid != null) {
-        level = byUid.get(String(tile.dataset.uid)) || 0;
+      const isSelf = tile.classList.contains('mehfil-tile--self');
+      let uid = isSelf ? (localUid != null ? String(localUid) : '') : String(tile.dataset.uid || '');
+      let level = uid ? byUid.get(uid) || 0 : 0;
+
+      // Muted participants never show as speaking.
+      const muted = isSelf
+        ? !micWanted || !localAudio
+        : mutedByUid.get(uid) === true;
+      if (muted) level = 0;
+
+      const was = speakingSticky.get(uid) === true;
+      let speaking = was;
+      if (level >= SPEAK_ON_LEVEL) speaking = true;
+      else if (level < SPEAK_OFF_LEVEL) speaking = false;
+      if (uid) speakingSticky.set(uid, speaking);
+
+      tile.classList.toggle('is-speaking', speaking && !reduced);
+      tile.classList.toggle('is-speaking-static', speaking && reduced);
+
+      if (speaking && level > topLevel) {
+        topLevel = level;
+        topSpeaker = isSelf
+          ? tt('mehfil_you', 'You')
+          : (tile.querySelector('.mehfil-tile-label')?.textContent || '').split('·')[0].trim() ||
+            tt('mehfil_someone', 'Someone');
       }
-      tile.classList.toggle('is-speaking', level >= SPEAK_LEVEL);
     });
+
+    // Muted-but-talking nudge (self only, cooldown, calm once).
+    if (!micWanted && localAudio && localUid != null) {
+      const selfLevel = byUid.get(String(localUid)) || 0;
+      if (selfLevel >= MUTED_NUDGE_LEVEL && Date.now() - lastMutedNudgeAt > MUTED_NUDGE_COOLDOWN_MS) {
+        lastMutedNudgeAt = Date.now();
+        setMehfilStatus(tt('mehfil_you_muted', 'You’re muted'), 'warn');
+        const hint = overlayEl.querySelector('[data-mehfil-muted-hint]');
+        if (hint) {
+          hint.hidden = false;
+          clearTimeout(hint._hide);
+          hint._hide = setTimeout(() => {
+            hint.hidden = true;
+          }, 2400);
+        }
+      }
+    }
+
+    // Compact cue when media fullscreen / immersive / rail-heavy.
+    const needCue =
+      !!topSpeaker &&
+      (overlayEl.classList.contains('mehfil-immersive') ||
+        !!document.fullscreenElement ||
+        hasYoutubeOnStage());
+    if (needCue) setSpeakingCue(topSpeaker);
+    else if (!topSpeaker) setSpeakingCue('');
   }
 
   async function closeCameraTrack() {
@@ -1328,8 +1484,19 @@
     chromeTimer = null;
     clearTimeout(ringUiTimer);
     ringUiTimer = null;
+    clearTimeout(speakingCueTimer);
+    speakingCueTimer = null;
+    clearTimeout(tokenRenewTimer);
+    tokenRenewTimer = null;
+    stopMutedNudgeWatch();
     lastKnownFreshCount = 0;
     dmAutoRingDone = false;
+    reconnectFailCount = 0;
+    tokenExpiresAtSec = 0;
+    avMode = 'none';
+    speakingSticky.clear();
+    mutedByUid.clear();
+    lastSpeakingLabel = '';
     clearRtdb();
     try {
       if (localAudio) {
@@ -1377,6 +1544,7 @@
         pauseAllMusic();
       } catch (e) {}
     }
+    musicPausedForMehfil = false;
     if (activeChatId && currentUser?.uid) {
       try {
         if (window.__mehfilPresenceBeat) {
@@ -1470,24 +1638,82 @@
   }
 
   async function toggleMic() {
-    if (!localAudio || !client) return;
+    if (avMode !== 'full') {
+      if (typeof showToast === 'function') {
+        showToast(tt('mehfil_mic_unavailable', 'Mic unavailable — listening only'));
+      }
+      return;
+    }
+    if (!localAudio || !client) {
+      if (typeof showToast === 'function') {
+        showToast(tt('mehfil_mic_perm', 'Microphone permission denied — enable it in browser settings, then retry.'));
+      }
+      return;
+    }
     try {
       const next = !micWanted;
-      await localAudio.setEnabled(next);
+      // Prefer setMuted so local level still readable for “you’re muted” nudge.
+      if (typeof localAudio.setMuted === 'function') {
+        await localAudio.setMuted(!next);
+        if (typeof localAudio.setEnabled === 'function') await localAudio.setEnabled(true);
+      } else {
+        await localAudio.setEnabled(next);
+      }
       micWanted = next;
       setMicUi(next);
       writePrefs({ mic: next });
       if (activeChatId) {
         rtdbRef(`mehfil/${activeChatId}/participants/${currentUser?.uid}`)?.update({ muted: !next });
       }
+      mutedByUid.set(String(currentUser?.uid || localUid || ''), !next);
+      if (!next) startMutedNudgeWatch();
+      else stopMutedNudgeWatch();
     } catch (e) {
       if (typeof showToast === 'function') showToast(tt('mehfil_mic_fail', 'Couldn’t toggle mic'));
     }
     pokeChrome();
   }
 
+  let mutedNudgeWatch = null;
+  function stopMutedNudgeWatch() {
+    if (mutedNudgeWatch) {
+      clearInterval(mutedNudgeWatch);
+      mutedNudgeWatch = null;
+    }
+  }
+  function startMutedNudgeWatch() {
+    stopMutedNudgeWatch();
+    mutedNudgeWatch = setInterval(() => {
+      if (!overlayEl || micWanted || !localAudio) {
+        stopMutedNudgeWatch();
+        return;
+      }
+      try {
+        const raw = typeof localAudio.getVolumeLevel === 'function' ? localAudio.getVolumeLevel() : 0;
+        const level = raw <= 1 ? raw * 100 : raw;
+        if (level >= MUTED_NUDGE_LEVEL && Date.now() - lastMutedNudgeAt > MUTED_NUDGE_COOLDOWN_MS) {
+          lastMutedNudgeAt = Date.now();
+          setMehfilStatus(tt('mehfil_you_muted', 'You’re muted'), 'warn');
+          const hint = overlayEl.querySelector('[data-mehfil-muted-hint]');
+          if (hint) {
+            hint.hidden = false;
+            clearTimeout(hint._hide);
+            hint._hide = setTimeout(() => {
+              hint.hidden = true;
+            }, 2400);
+          }
+        }
+      } catch (e) {}
+    }, 400);
+  }
+
   async function toggleCam() {
-    if (!client || !window.AgoraRTC) return;
+    if (!client || !window.AgoraRTC || avMode !== 'full') {
+      if (avMode !== 'full' && typeof showToast === 'function') {
+        showToast(tt('mehfil_cam_unavailable', 'Camera unavailable in this room'));
+      }
+      return;
+    }
     try {
       if (localScreen) {
         if (typeof showToast === 'function') showToast(tt('mehfil_stop_share_first', 'Stop screen share to use camera'));
@@ -1527,7 +1753,7 @@
   }
 
   async function flipCamera() {
-    if (!client || !window.AgoraRTC) return;
+    if (!client || !window.AgoraRTC || avMode !== 'full') return;
     closeCallSheets(null);
     if (localScreen) {
       if (typeof showToast === 'function') showToast(tt('mehfil_stop_share_first', 'Stop screen share to use camera'));
@@ -1549,20 +1775,35 @@
         cams.findIndex((c) => c.deviceId === curId)
       );
       const next = cams[(idx + 1) % cams.length];
-      await localVideo.setDevice(next.deviceId);
+      try {
+        await localVideo.setDevice(next.deviceId);
+      } catch (setErr) {
+        // Recreate track if setDevice fails mid-session (some mobile browsers).
+        await closeCameraTrack();
+        localVideo = await window.AgoraRTC.createCameraVideoTrack({ cameraId: next.deviceId });
+        await client.publish([localVideo]);
+        playLocalOnTile(localVideo, tt('mehfil_you_label', 'You'));
+        setCamUi(true);
+      }
       if (typeof showToast === 'function') showToast(tt('mehfil_cam_flipped', 'Camera flipped'));
     } catch (e) {
       if (typeof showToast === 'function') showToast(tt('mehfil_cam_flip_fail', 'Couldn’t flip camera'));
+      if (camWanted && !localVideo) {
+        try {
+          await publishCamera();
+        } catch (err) {}
+      }
     }
     pokeChrome();
   }
 
   async function toggleScreenShare() {
-    if (!client || !window.AgoraRTC) return;
+    if (!client || !window.AgoraRTC || avMode !== 'full') return;
     closeCallSheets(null);
     try {
       if (localScreen) {
         await closeScreenTrack();
+        // Share replaces cam while active; restore cam only if user still wants it.
         if (camWanted) await publishCamera();
         else {
           renderLocalPlaceholder(tt('mehfil_cam_off', 'Camera off'));
@@ -1571,6 +1812,7 @@
         pokeChrome();
         return;
       }
+      // Choice: replace cam with share (one outgoing video track) — clearer on mobile.
       await closeCameraTrack();
       setCamUi(false);
       const trackOrPair = await window.AgoraRTC.createScreenVideoTrack({ encoderConfig: '1080p_1' }, 'disable');
@@ -1592,7 +1834,8 @@
       await client.publish([localScreen]);
       playLocalOnTile(localScreen, tt('mehfil_you_screen', 'You · screen'));
       setShareUi(true);
-      if (typeof showToast === 'function') showToast(tt('mehfil_sharing', 'Sharing screen'));
+      setMehfilStatus(tt('mehfil_sharing', 'You’re sharing screen'), 'live');
+      if (typeof showToast === 'function') showToast(tt('mehfil_sharing', 'You’re sharing screen'));
     } catch (e) {
       localScreen = null;
       setShareUi(false);
@@ -2109,10 +2352,152 @@
     return tile;
   }
 
+  async function fetchAgoraToken(chatId) {
+    const envelope = await withTimeout(
+      apiFetch('/api/media-config', {
+        method: 'POST',
+        needAuth: true,
+        body: { action: 'agora_token', channel: channelForChat(chatId), chatId },
+      }),
+      10000,
+      'TOKEN_TIMEOUT'
+    );
+    const tokenPayload = envelope?.ok === false ? null : envelope?.data;
+    return { envelope, tokenPayload };
+  }
+
+  function scheduleTokenRenewal(chatId, expiresAtSec) {
+    clearTimeout(tokenRenewTimer);
+    tokenRenewTimer = null;
+    tokenExpiresAtSec = Number(expiresAtSec) || 0;
+    if (!tokenExpiresAtSec || !chatId) return;
+    const msUntil = tokenExpiresAtSec * 1000 - Date.now() - TOKEN_RENEW_LEAD_MS;
+    const delay = Math.max(30_000, Math.min(msUntil, 6 * 60 * 60 * 1000));
+    tokenRenewTimer = setTimeout(() => {
+      renewAgoraToken(chatId).catch(() => {});
+    }, delay);
+  }
+
+  async function renewAgoraToken(chatId) {
+    if (!client || !chatId || !overlayEl) return;
+    try {
+      const { tokenPayload } = await fetchAgoraToken(chatId);
+      if (!tokenPayload?.token || !client) {
+        setMehfilStatus(tt('mehfil_token_fail', 'Couldn’t renew voice — reconnecting…'), 'warn');
+        return;
+      }
+      await client.renewToken(tokenPayload.token);
+      scheduleTokenRenewal(chatId, tokenPayload.expiresAt);
+      setMehfilStatus(tt('mehfil_in_call', 'In the room'), 'live');
+    } catch (e) {
+      console.warn('[mehfil] token renew', e);
+      setMehfilStatus(tt('mehfil_token_fail', 'Couldn’t renew voice — reconnecting…'), 'warn');
+    }
+  }
+
+  async function recoverMicrophone(chatId) {
+    if (!client || !window.AgoraRTC || avMode === 'none') return;
+    try {
+      if (localAudio) {
+        try {
+          await client.unpublish([localAudio]);
+        } catch (e) {}
+        try {
+          localAudio.close();
+        } catch (e) {}
+        localAudio = null;
+      }
+      localAudio = await withTimeout(window.AgoraRTC.createMicrophoneAudioTrack(), 12000, 'MIC_TIMEOUT');
+      if (typeof localAudio.setMuted === 'function') {
+        await localAudio.setMuted(!micWanted);
+        if (typeof localAudio.setEnabled === 'function') await localAudio.setEnabled(true);
+      } else {
+        await localAudio.setEnabled(micWanted);
+      }
+      await client.publish([localAudio]);
+      setMicUi(micWanted);
+      setAvControlsEnabled('full');
+      setMehfilStatus(tt('mehfil_in_call', 'In the room'), 'live');
+      await ensureMehfilParticipant(chatId);
+      if (!micWanted) startMutedNudgeWatch();
+      else stopMutedNudgeWatch();
+    } catch (e) {
+      setMehfilStatus(tt('mehfil_mic_device', 'Mic device changed — tap mic to retry'), 'warn');
+    }
+  }
+
+  function bindDeviceChangeHandlers(chatId) {
+    if (!window.AgoraRTC || deviceListenerBound) return;
+    deviceListenerBound = true;
+    const onMicChanged = async () => {
+      if (!overlayEl || activeChatId !== chatId) return;
+      setMehfilStatus(tt('mehfil_mic_device', 'Mic device changed — recovering…'), 'warn');
+      await recoverMicrophone(chatId);
+    };
+    try {
+      window.AgoraRTC.on('microphone-changed', onMicChanged);
+      rtdbUnsubs.push(() => {
+        try {
+          window.AgoraRTC.off('microphone-changed', onMicChanged);
+        } catch (e) {}
+        deviceListenerBound = false;
+      });
+    } catch (e) {
+      deviceListenerBound = false;
+    }
+  }
+
+  function handleConnectionState(cur, chatId) {
+    if (cur === 'CONNECTING') {
+      setMehfilStatus(tt('mehfil_connecting', 'Connecting…'));
+    } else if (cur === 'RECONNECTING' || cur === 'DISCONNECTING') {
+      reconnectFailCount += 1;
+      setMehfilStatus(tt('mehfil_reconnecting', 'Reconnecting…'), 'warn');
+      if (reconnectFailCount >= RECONNECT_FAIL_MAX) {
+        setMehfilStatus(tt('mehfil_left_conn', 'Left the Mehfil — connection lost'), 'warn');
+        showStageError(tt('mehfil_left_conn_msg', 'Connection lost. Rejoin when you’re ready.'), {
+          retry: true,
+          fatal: false,
+        });
+        setAvControlsEnabled('none');
+      }
+    } else if (cur === 'CONNECTED') {
+      reconnectFailCount = 0;
+      setMehfilStatus(tt('mehfil_in_call', 'In the room'), 'live');
+    } else if (cur === 'DISCONNECTED') {
+      setMehfilStatus(tt('mehfil_reconnecting', 'Reconnecting…'), 'warn');
+    }
+  }
+
+  function handleNetworkQuality(stats) {
+    // Agora: 0 unknown, 1 excellent … 6 down. uplink/downlink.
+    const up = Number(stats?.uplinkNetworkQuality);
+    const down = Number(stats?.downlinkNetworkQuality);
+    const worst = Math.max(up || 0, down || 0);
+    if (worst >= 5) {
+      setMehfilStatus(
+        tt('mehfil_weak_net', 'Weak connection — try turning off video'),
+        'warn'
+      );
+      if (camWanted && localVideo && !localScreen) {
+        // Soft suggestion only once per stretch — don’t force cam off.
+        const hint = overlayEl?.querySelector('[data-mehfil-weak-hint]');
+        if (hint && hint.hidden) {
+          hint.hidden = false;
+          clearTimeout(hint._hide);
+          hint._hide = setTimeout(() => {
+            hint.hidden = true;
+          }, 5000);
+        }
+      }
+    }
+  }
+
   async function joinAgora(chatId, gen) {
     if (typeof apiFetch !== 'function') {
       showStageError(tt('mehfil_unavailable', 'Mehfil unavailable'), { fatal: true });
       setMehfilStatus(tt('mehfil_unavailable', 'Unavailable'), 'warn');
+      setAvControlsEnabled('none');
       return;
     }
 
@@ -2120,16 +2505,7 @@
     let envelope = null;
     try {
       setMehfilStatus(tt('mehfil_connecting', 'Connecting…'));
-      envelope = await withTimeout(
-        apiFetch('/api/media-config', {
-          method: 'POST',
-          needAuth: true,
-          body: { action: 'agora_token', channel: channelForChat(chatId), chatId },
-        }),
-        10000,
-        'TOKEN_TIMEOUT'
-      );
-      tokenPayload = envelope?.ok === false ? null : envelope?.data;
+      ({ envelope, tokenPayload } = await fetchAgoraToken(chatId));
     } catch (e) {
       tokenPayload = null;
       console.warn('[mehfil] agora_token fetch', e?.message || e);
@@ -2152,25 +2528,30 @@
         { fatal: false }
       );
       setMehfilStatus(tt('mehfil_chat_media', 'Chat + media'), 'warn');
+      setAvControlsEnabled('none');
       return;
     }
 
     try {
-      if (typeof pauseAllMusic === 'function') pauseAllMusic();
+      if (typeof pauseAllMusic === 'function') {
+        pauseAllMusic();
+        musicPausedForMehfil = true;
+      }
       const AgoraRTC = await ensureAgora();
       if (gen !== joinGeneration) return;
 
       client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
       localUid = tokenPayload.uid != null ? tokenPayload.uid : null;
+      reconnectFailCount = 0;
 
-      client.on('connection-state-change', (cur) => {
-        if (cur === 'RECONNECTING' || cur === 'DISCONNECTING') {
-          setMehfilStatus(tt('mehfil_reconnecting', 'Reconnecting…'), 'warn');
-        } else if (cur === 'CONNECTED') {
-          setMehfilStatus(tt('mehfil_in_call', 'In the room'), 'live');
-        } else if (cur === 'DISCONNECTED') {
-          setMehfilStatus(tt('mehfil_reconnecting', 'Reconnecting…'), 'warn');
-        }
+      client.on('connection-state-change', (cur) => handleConnectionState(cur, chatId));
+      client.on('network-quality', handleNetworkQuality);
+      client.on('token-privilege-will-expire', () => {
+        renewAgoraToken(chatId).catch(() => {});
+      });
+      client.on('token-privilege-did-expire', () => {
+        setMehfilStatus(tt('mehfil_token_fail', 'Couldn’t renew voice — reconnecting…'), 'warn');
+        renewAgoraToken(chatId).catch(() => {});
       });
 
       client.on('user-joined', (user) => {
@@ -2213,6 +2594,7 @@
 
       client.on('user-left', (user) => {
         overlayEl?.querySelector(`[data-uid="${user.uid}"]`)?.remove();
+        speakingSticky.delete(String(user.uid));
         updateWaitingState();
       });
 
@@ -2232,40 +2614,67 @@
         return;
       }
       if (localUid == null) localUid = client.uid;
+      scheduleTokenRenewal(chatId, tokenPayload.expiresAt);
       try {
         client.enableAudioVolumeIndicator();
       } catch (e) {}
 
       const prefs = readPrefs();
       micWanted = prefs.mic !== false;
-      camWanted = !!prefs.cam;
+      // Never auto-enable cam on join — user must opt in (prefs still store last choice for later).
+      camWanted = false;
 
       setMehfilStatus(tt('mehfil_mic_prompt', 'Allow microphone to speak'));
-      localAudio = await withTimeout(AgoraRTC.createMicrophoneAudioTrack(), 12000, 'MIC_TIMEOUT');
-      await localAudio.setEnabled(micWanted);
-      await client.publish([localAudio]);
-      setMicUi(micWanted);
+      try {
+        localAudio = await withTimeout(AgoraRTC.createMicrophoneAudioTrack(), 12000, 'MIC_TIMEOUT');
+        if (typeof localAudio.setMuted === 'function') {
+          await localAudio.setMuted(!micWanted);
+          if (typeof localAudio.setEnabled === 'function') await localAudio.setEnabled(true);
+        } else {
+          await localAudio.setEnabled(micWanted);
+        }
+        await client.publish([localAudio]);
+        setAvControlsEnabled('full');
+        setMicUi(micWanted);
+        if (!micWanted) startMutedNudgeWatch();
+      } catch (micErr) {
+        console.warn('[mehfil] mic', micErr);
+        localAudio = null;
+        micWanted = false;
+        setAvControlsEnabled('listen');
+        setMicUi(false);
+        const perm =
+          micErr?.code === 'PERMISSION_DENIED' ||
+          /Permission|NotAllowed|NotFound|DEVICE/i.test(String(micErr?.message || micErr));
+        showStageError(
+          perm
+            ? tt(
+                'mehfil_mic_perm',
+                'Microphone permission denied — enable it in browser settings, then retry. You can still listen.'
+              )
+            : tt('mehfil_mic_fail_listen', 'Couldn’t start mic — listening only. Chat still works.'),
+          { retry: true }
+        );
+        setMehfilStatus(tt('mehfil_listen_only', 'Listening only'), 'warn');
+      }
+
       setCamUi(false);
       setShareUi(false);
       renderLocalPlaceholder(tt('mehfil_cam_off', 'Camera off'));
+      bindDeviceChangeHandlers(chatId);
 
-      if (camWanted) {
-        try {
-          await publishCamera();
-        } catch (e) {
-          camWanted = false;
-          writePrefs({ cam: false });
-        }
+      if (avMode === 'full') {
+        setMehfilStatus(tt('mehfil_in_call', 'In the room'), 'live');
       }
-
-      setMehfilStatus(tt('mehfil_in_call', 'In the room'), 'live');
       updateWaitingState();
       await ensureMehfilParticipant(chatId);
-      if (typeof showToast === 'function') {
+      if (!(typeof quietMode !== 'undefined' && quietMode) && typeof showToast === 'function') {
         showToast(
-          micWanted
+          avMode === 'full' && micWanted
             ? tt('mehfil_joined_mic_on', 'Joined Mehfil — mic on, camera off')
-            : tt('mehfil_joined', 'Joined Mehfil')
+            : avMode === 'listen'
+              ? tt('mehfil_joined_listen', 'Joined — listening only')
+              : tt('mehfil_joined', 'Joined Mehfil')
         );
       }
     } catch (e) {
@@ -2282,6 +2691,7 @@
         { retry: true }
       );
       setMehfilStatus(tt('mehfil_chat_media', 'Chat + media'), 'warn');
+      setAvControlsEnabled('none');
     }
   }
 
@@ -2351,6 +2761,13 @@
         <button type="button" class="mehfil-immersive-btn" data-mehfil-immersive aria-label="${esc(tt('mehfil_immersive_enter', 'Immersive mode'))}">⛶</button>
         <button type="button" class="mehfil-ring-btn" data-mehfil-ring title="${esc(tt('mehfil_ring', 'Ring'))}" aria-label="${esc(tt('mehfil_ring', 'Ring'))}">${typeof iconHtml==='function'?iconHtml('phone',{size:18}):'☎'}</button>
         <div class="mehfil-status" data-mehfil-status>${esc(tt('mehfil_joining', 'Joining…'))}</div>
+      </div>
+      <div class="mehfil-speaking-cue" data-mehfil-speaking-cue hidden></div>
+      <div class="mehfil-muted-hint" data-mehfil-muted-hint hidden>${esc(tt('mehfil_you_muted', 'You’re muted'))}</div>
+      <div class="mehfil-weak-hint" data-mehfil-weak-hint hidden>${esc(tt('mehfil_weak_net', 'Weak connection — try turning off video'))}</div>
+      <div class="mehfil-sharing-chip" data-mehfil-sharing-chip hidden>
+        <span>${esc(tt('mehfil_sharing', 'You’re sharing screen'))}</span>
+        <button type="button" data-mehfil-stop-share>${esc(tt('mehfil_stop_share', 'Stop'))}</button>
       </div>
       <div class="mehfil-ringing" data-mehfil-ringing hidden>
         <span data-mehfil-ringing-label>${esc(tt('mehfil_ringing', 'Ringing…'))}</span>
@@ -2612,6 +3029,9 @@
     el.querySelector('[data-mehfil-waiting-invite]')?.addEventListener('click', nudgeOthers);
     el.querySelector('[data-mehfil-alone-copy]')?.addEventListener('click', copyInviteLink);
     el.querySelector('[data-mehfil-ring-cancel]')?.addEventListener('click', cancelOutboundRing);
+    el.querySelector('[data-mehfil-stop-share]')?.addEventListener('click', () => {
+      if (localScreen) toggleScreenShare();
+    });
     el.querySelector('[data-mehfil-flip]')?.addEventListener('click', flipCamera);
     el.querySelector('[data-mehfil-share]')?.addEventListener('click', toggleScreenShare);
     el.querySelector('[data-mehfil-nudge]')?.addEventListener('click', nudgeOthers);
@@ -2684,6 +3104,7 @@
         { fatal: false }
       );
       setMehfilStatus(tt('mehfil_chat_only', 'Chat only'), 'warn');
+      setAvControlsEnabled('none');
       return;
     }
 

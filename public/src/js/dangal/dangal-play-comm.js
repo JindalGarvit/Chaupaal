@@ -68,9 +68,12 @@
     }
     if (typeof isMehfilOpen === 'function' && isMehfilOpen()) {
       if (typeof showToast === 'function') {
-        showToast('Already in Mehfil — leave there first, or stay in the room');
+        showToast('Already in Mehfil — leave the room first to use game voice');
       }
       return false;
+    }
+    if (callClient) {
+      await leaveCall();
     }
     if (typeof apiFetch !== 'function') return false;
     if (typeof pauseAllMusic === 'function') pauseAllMusic();

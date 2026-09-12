@@ -35,6 +35,8 @@ const checks = [
   ['freshness 25s + heartbeat 10s', mehfilJs.includes('PRESENCE_FRESH_MS = 25000') && mehfilJs.includes('PRESENCE_HEARTBEAT_MS = 10000')],
   ['abandonMehfil teardown', mehfilJs.includes('function abandonMehfil') && mehfilJs.includes('ensureOpenMehfil')],
   ['DM ring chrome + traces', mehfilJs.includes('RING_TRACE_NO_ANSWER') && mehfilJs.includes('setRingingChrome')],
+  ['mic truth + speaking hysteresis', mehfilJs.includes('SPEAK_ON_LEVEL') && mehfilJs.includes('setMicUi') && mehfilJs.includes('You’re muted')],
+  ['token renew + connection UX', mehfilJs.includes('renewAgoraToken') && mehfilJs.includes('token-privilege-will-expire')],
   ['mehfil_ensure_member action', mediaConfig.includes('mehfil_ensure_member')],
   ['agora_token membership gate', mediaConfig.includes('assertMehfilAgoraAccess')],
   ['youtube-search.js', exists('server-lib/youtube-search.js')],
@@ -56,24 +58,24 @@ console.log(`${agoraConfigured ? '✓' : '○'} AGORA_APP_ID + CERTIFICATE (opti
 console.log(`○ api/*.js count: ${apiCount} (Hobby max 12)`);
 
 console.log(`
-Manual QA checklist (M1)
+Manual QA checklist (M2)
 ------------------------
-Entry / exit
-  [ ] Header, banner, inbox Live, ?mehfil=1, ring accept, notif, invite → in-room one tap
-  [ ] Leave (button/back/swipe/chat switch/background) → mic off, presence gone, shell cleared
-  [ ] Rejoin after leave works
+Mic / speaking
+  [ ] Dock + own tile mic badge always match; toggle instant
+  [ ] Deny mic → listen-only + honest copy; muted-while-talking hint once
+  [ ] Speaking glow on right person; muted never lights; reduced-motion static
 
-DM vs group
-  [ ] DM alone → Ring + “Ringing {name}…” + cancel; decline/timeout → one thread line
-  [ ] Group → drop-in + who’s-here; ring is secondary (no auto-ring)
+Video / share
+  [ ] Cam on/off, flip, share start/stop; share replaces cam; Stop chip works
+  [ ] Leave all M1 exits → OS mic/cam indicators off
 
-Presence
-  [ ] Alone = inviting CTAs, not Live; second join → arrival feedback
-  [ ] Busy Mehfil↔Dangal → honest banner, no dual audio
+Connection
+  [ ] Brief offline → Reconnecting → recovers or “left” + rejoin
+  [ ] Long session → token renew keeps voice
+  [ ] Mehfil ↔ Dangal → no dual capture
 
 Ops
-  [ ] firebase deploy --only database (if rules changed)
-  [ ] Vercel env: AGORA_APP_ID, AGORA_APP_CERTIFICATE
+  [ ] Quiet mode → no join chimes; npm run health:mehfil
 `);
 
 process.exit(ok ? 0 : 1);
