@@ -1332,10 +1332,10 @@ function statusLabel(){
   }
   if(state.incomingDrawOffer)return `${chat.name} offers a draw`;
   if(state.outgoingDrawOffer)return 'Draw offer sent…';
-  if(aiThinking)return 'AI thinking…';
+  if(aiThinking)return 'Practice AI thinking…';
   if(state.check)return 'Check!';
   if(state.turn===myChessColor)return 'Your move';
-  return liveOn?`Opponent’s move…`:'AI to move';
+  return liveOn?`Opponent’s move…`:'Practice AI’s turn';
 }
 
 function outcomeFlags(){
@@ -3048,7 +3048,7 @@ function openLudoPracticeSheet(chat, sheetOpts){
           if(!persistable){
             if(typeof showToast==='function')showToast('Challenge link broken — try Practice from Manch');
             close();
-            openLudoGame({name:'AI',id:'ai'},n,{mode});
+            openLudoGame(typeof practiceAiChat==='function'?practiceAiChat():{name:'Practice AI',id:'ai'},n,{mode});
             return;
           }
           if(!mid&&typeof dangalMatchId==='function'){
@@ -3196,16 +3196,16 @@ function openLudoGame(chat, playerCount, opts){
   const stakeBit=liveOn&&liveStake>0?` · Stake ⚡${liveStake}`:'';
   const MODE_SUB=liveOn
     ?('Live 1v1 · '+modeLabel+stakeBit)
-    :('Practice · '+modeLabel+' · '+playerCount+'p');
+    :('Practice vs AI · '+modeLabel+' · '+playerCount+'p');
   const COLORS=['red','blue','green','yellow'];
   const COLOR_STYLES={red:'#E74C3C',blue:'#3498DB',green:'#2ECC71',yellow:'#F1C40F'};
   const NAMES=liveOn
     ?(mySeat===0?['You',chat.name||'Friend']:[chat.name||'Friend','You'])
     :[
         'You',
-        (chat&&chat.name&&!/^(ai|practice)$/i.test(String(chat.id||'')))?String(chat.name):'AI',
-        'AI 2',
-        'AI 3',
+        (typeof practiceOppLabel==='function'?practiceOppLabel(chat):'Practice AI'),
+        'Practice AI 2',
+        'Practice AI 3',
       ].slice(0,playerCount);
 
   // 15×15 path (52 squares), clockwise from red start
@@ -3775,7 +3775,7 @@ function openLudoGame(chat, playerCount, opts){
       const d=document.createElement('div');d.id='ludoResultHost';d.style.cssText='padding:8px 12px 16px;flex-shrink:0;';overlay.appendChild(d);return d;
     })();
     const duel=typeof getDuelStreak==='function'?getDuelStreak(chat.id||chat.name):null;
-    const vsLabel=liveOn?(chat.name||'Friend'):(playerCount===2?(NAMES[1]||'AI'):(playerCount+'p'));
+    const vsLabel=liveOn?(chat.name||'Friend'):(playerCount===2?(NAMES[1]||'Practice AI'):(playerCount+'p'));
     const stakeLine=liveOn?(liveStake>0?`⚡${liveStake} virtual`:'Friendly'):'';
     const shareStats={
       scoreLine:won?'Win':'Loss',
@@ -5046,11 +5046,12 @@ function openUnoGame(chat, variant='normal', opts){
           ${typeof gameTurnBannerHtml==='function'
             ? gameTurnBannerHtml({
                 mode:gameOver?'over':(myTurn&&!pickingColor?'yours':'theirs'),
-                label:myTurn&&!pickingColor?(pendingChallenge&&pendingChallenge.victim==='me'?'Challenge the +4 or draw 4':drawStack>0?(house.stackDraw2&&drawStackType==='draw2'?`+${drawStack} pending — stack +2 or draw`:`Tap deck to draw ${drawStack} cards`):(drewPlayableIndex===hands.me.length-1&&drewPlayableIndex>=0?'Tap drawn card to play or tap deck to pass':'Your turn — tap a highlighted card')):(pickingColor?'Pick a colour':(liveOn?(chat.name||'Opponent')+'’s turn':'Opponent thinking…')),
-                sub:message||presenceHint||undefined,
+                label:myTurn&&!pickingColor?(pendingChallenge&&pendingChallenge.victim==='me'?'Challenge the +4 or draw 4':drawStack>0?(house.stackDraw2&&drawStackType==='draw2'?`+${drawStack} pending — stack +2 or draw`:`Tap deck to draw ${drawStack} cards`):(drewPlayableIndex===hands.me.length-1&&drewPlayableIndex>=0?'Tap drawn card to play or tap deck to pass':'Your turn — tap a highlighted card')):(pickingColor?'Pick a colour':(liveOn?(chat.name||'Opponent')+'’s turn':(typeof practiceTurnStatus==='function'?practiceTurnStatus({myTurn:false}).label:'Practice AI thinking…'))),
+                sub:message||presenceHint||(!liveOn&&!myTurn?'Practice vs AI':undefined),
                 pulse:myTurn&&!pickingColor,
+                practice:!liveOn,
               })
-            : `<div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:4px;text-align:center;">${myTurn&&!pickingColor?'Your turn':'Opponent thinking…'}</div>`}
+            : `<div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:4px;text-align:center;">${myTurn&&!pickingColor?'Your turn':(liveOn?'Opponent thinking…':(typeof practiceTurnStatus==='function'?practiceTurnStatus({myTurn:false}).label:'Practice AI thinking…'))}</div>`}
         </div>
       </div>
     `;
@@ -5408,6 +5409,12 @@ function openTicTacToe(chat){
 function startTicTacToe(chat, difficulty){
 const diff=difficulty||'hard';
 const liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat);
+const practiceChat=!liveOn
+  ?(chat&&(chat.id==='ai'||/practice ai/i.test(String(chat.name||'')))
+      ?Object.assign({},chat,{name:typeof practiceOppLabel==='function'?practiceOppLabel(chat):'Practice AI',id:'ai'})
+      :{name:typeof practiceOppLabel==='function'?practiceOppLabel(chat):'Practice AI',id:'ai'})
+  :chat;
+chat=practiceChat||chat;
 const liveRoles=liveOn&&DangalLive.roles?DangalLive.roles(chat):null;
 const liveStake=liveOn
   ?Number((chat&&chat.stake)!=null?chat.stake:(window.__dangalLaunchCtx&&window.__dangalLaunchCtx.stake)||0)||0
@@ -5608,11 +5615,11 @@ function endRound(outcome){
 function render(){
   if(!gs.alive())return;
   const w=winLine;
-  const statusText=gameOver?(winLine?(board[winLine[0]]===myMark?'You won':`${chat.name} wins`):"It's a draw"):(myTurn?`Your turn (${myMark==='X'?'✕':'⭕'})`:(liveOn?`${chat.name}'s turn`:'Thinking…'));
+  const statusText=gameOver?(winLine?(board[winLine[0]]===myMark?'You won':`${chat.name} wins`):"It's a draw"):(myTurn?`Your turn (${myMark==='X'?'✕':'⭕'})`:(liveOn?`${chat.name}'s turn`:(typeof practiceTurnStatus==='function'?practiceTurnStatus({myTurn:false}).label:'Practice AI thinking…')));
   const turnMode=gameOver?'over':myTurn?'yours':'theirs';
-  const lastCue=lastCell!=null&&board[lastCell]?((board[lastCell]===myMark?'You':'Opponent')+' played '+(board[lastCell]==='X'?'✕':'⭕')):'';
+  const lastCue=lastCell!=null&&board[lastCell]?((board[lastCell]===myMark?'You':(liveOn?'Opponent':'Practice AI'))+' played '+(board[lastCell]==='X'?'✕':'⭕')):'';
   const turnBanner=typeof gameTurnBannerHtml==='function'
-    ? gameTurnBannerHtml({ mode: turnMode, label: statusText, sub: !gameOver&&lastCue?lastCue:undefined, pulse: turnMode==='yours' })
+    ? gameTurnBannerHtml({ mode: turnMode, label: statusText, sub: !gameOver&&lastCue?lastCue:undefined, pulse: turnMode==='yours', practice:!liveOn })
     : `<div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;color:#fff;">${statusText}</div>`;
   const resultBlock=showResult&&typeof gameResultHtml==='function'
     ? gameResultHtml({

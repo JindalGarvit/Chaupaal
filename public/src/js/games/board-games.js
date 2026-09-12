@@ -514,7 +514,7 @@ function openFiveInRowGame(chat, opts){
   function scheduleAIMove(){
     if(liveOn||gameOver||myTurn)return;
     const tok=++aiThinkTok;
-    const delay=400+Math.floor(Math.random()*400);
+    const delay=Math.max(300,400+Math.floor(Math.random()*400));
     schedule(()=>{
       if(tok!==aiThinkTok||!alive()||gameOver||myTurn||liveOn)return;
       const[ar,ac]=getAIMoveFIR();
@@ -863,8 +863,8 @@ function openFiveInRowGame(chat, opts){
       </div>`:''}
       <div class="fir-hud">
         <div class="fir-hud-side fir-hud-side--you">● You</div>
-        <div id="firStatusNote" class="fir-hud-note">${statusNote||(myTurn?'Place a stone':(liveOn?'Their move — board stays live':'Waiting…'))}</div>
-        <div class="fir-hud-side fir-hud-side--opp">○ ${chat.name||'Opp'}</div>
+        <div id="firStatusNote" class="fir-hud-note">${statusNote||(myTurn?'Place a stone':(liveOn?'Their move — board stays live':(typeof practiceTurnStatus==='function'?practiceTurnStatus({myTurn:false}).label:'Practice AI thinking…')))}</div>
+        <div class="fir-hud-side fir-hud-side--opp">○ ${liveOn?(chat.name||'Opp'):'Practice AI'}</div>
       </div>
       <div class="fir-law-chip" title="Line law">${lawLabel}${lawMode==='renju'?' · Black fouls':''}</div>
       <div class="fir-board-wrap">
@@ -873,11 +873,12 @@ function openFiveInRowGame(chat, opts){
       ${typeof gameTurnBannerHtml==='function'
         ? gameTurnBannerHtml({
             mode: gameOver?'over':myTurn?'yours':'theirs',
-            label: gameOver?(winLine?(board[winLine[0][0]][winLine[0][1]]==='X'?'You won!':(chat.name||'Opponent')+' won!'):(overlineLoss?(firLostOverline?'Overline — you lose':'Overline — Black loses'):"It's a draw!")):(myTurn?'Your turn — place a stone':(chat.name||'Opponent')+(liveOn?' to move':' thinking…')),
+            label: gameOver?(winLine?(board[winLine[0][0]][winLine[0][1]]==='X'?'You won!':(liveOn?(chat.name||'Opponent'):'Practice AI')+' won!'):(overlineLoss?(firLostOverline?'Overline — you lose':'Overline — Black loses'):"It's a draw!")):(myTurn?'Your turn — place a stone':(liveOn?(chat.name||'Opponent')+' to move':(typeof practiceTurnStatus==='function'?practiceTurnStatus({myTurn:false}).label:'Practice AI thinking…'))),
             sub: !gameOver?(statusNote||(firTimer<=5&&myTurn?'Hurry — '+firTimer+'s':undefined)):undefined,
             pulse: !gameOver && myTurn,
+            practice: !liveOn,
           })
-        : `<div class="fir-turn-fallback">${gameOver?(winLine?(board[winLine[0][0]][winLine[0][1]]==='X'?'You won!':chat.name+' won!'):"It's a draw!"):(myTurn?'Your turn':chat.name+' thinking…')}</div>`}`}
+        : `<div class="fir-turn-fallback">${gameOver?(winLine?(board[winLine[0][0]][winLine[0][1]]==='X'?'You won!':(liveOn?chat.name:'Practice AI')+' won!'):"It's a draw!"):(myTurn?'Your turn':(liveOn?(chat.name||'Opponent')+' thinking…':(typeof practiceTurnStatus==='function'?practiceTurnStatus({myTurn:false}).label:'Practice AI thinking…')))}</div>`}`}
     `;
     document.getElementById('firBack').addEventListener('click',()=>{askFirLeave();});
     if(resultBlock&&typeof wireGameResultActions==='function'){
@@ -3293,14 +3294,14 @@ function openScribbleGame(chat,playerList,opts){
     list.forEach(addLocal);
     while(seatPlayers.length<SCRIBBLE_PARTY_MIN){
       const n=seatPlayers.length+1;
-      addLocal({name:'AI '+n,uid:'',isAi:true},n-1);
+      addLocal({name:n===2?'Practice AI':('Practice AI '+n),uid:'',isAi:true},n-1);
     }
     seatPlayers=seatPlayers.slice(0,SCRIBBLE_PARTY_MAX);
   }else{
     seatPlayers=[{key:'You',uid:myUid,name:'You',isMe:true,out:false,isAi:false},...list.map((p,i)=>({
-      key:p.name||('Player '+(i+2)),uid:String(p.uid||''),name:p.name||(chat&&chat.name)||'Friend',isMe:false,out:false,isAi:!!p.isAi,
+      key:p.name||('Player '+(i+2)),uid:String(p.uid||''),name:p.name||(typeof practiceOppLabel==='function'?practiceOppLabel(chat):(chat&&chat.name))||'Practice AI',isMe:false,out:false,isAi:!!p.isAi,
     }))];
-    if(!practiceMode&&seatPlayers.length<2)seatPlayers.push({key:(chat&&chat.name)||'Friend',uid:'',name:(chat&&chat.name)||'Friend',isMe:false,out:false,isAi:true});
+    if(!practiceMode&&seatPlayers.length<2)seatPlayers.push({key:'Practice AI',uid:'',name:(typeof practiceOppLabel==='function'?practiceOppLabel(chat):'Practice AI'),isMe:false,out:false,isAi:true});
   }
   const scoreNames={};seatPlayers.forEach(p=>{scoreNames[p.key]=p.name;});
   /** Live stakes: settle ONCE on over/forfeit (virtual chips — not real money). Practice never charges. */
@@ -3362,7 +3363,7 @@ function openScribbleGame(chat,playerList,opts){
   overlay.style.cssText='position:absolute;inset:0;background:var(--cream);z-index:80;display:flex;flex-direction:column;';
   const begin=typeof beginGameOverlaySession==='function'?beginGameOverlaySession:null;
   const gs=begin?begin({
-    type:'scribble',title:practiceMode?'Scribble Practice':'Scribble',mode:liveOn?'live':(practiceMode?'solo':(players.length>2?'group':'practice')),chat,overlay,
+    type:'scribble',title:practiceMode?'Scribble Practice':(liveOn?'Scribble':'Scribble · Practice'),mode:liveOn?'live':(practiceMode?'solo':(players.length>2?'group':'practice')),chat,overlay,
     cleanup(){
       clearInterval(roundInterval);roundInterval=null;
       clearInterval(pickInterval);pickInterval=null;
@@ -4127,7 +4128,7 @@ function openScribbleGame(chat,playerList,opts){
       :'';
 
     overlay.innerHTML=`
-      ${gameChromeHtml({title:practiceMode?'Scribble Practice':'Scribble',subtitle:MODE_SUB+(practiceMode?'':` · Round ${round}/${maxRounds}`),backId:'scribbleBack',rightHtml:`<span id="scribbleTimer" class="game-chrome-metric${timerWarn?' is-warn':''}">${timerLabel}s</span>`})}
+      ${gameChromeHtml({title:practiceMode?'Scribble Practice':(liveOn?'Scribble':'Scribble · Practice'),subtitle:MODE_SUB+(practiceMode?'':` · Round ${round}/${maxRounds}`),backId:'scribbleBack',rightHtml:`<span id="scribbleTimer" class="game-chrome-metric${timerWarn?' is-warn':''}">${timerLabel}s</span>`})}
       ${turnBanner}
       <div class="scribble-prompt${isMyTurn&&phase==='draw'?' scribble-prompt--draw':''}">
         ${picking?`

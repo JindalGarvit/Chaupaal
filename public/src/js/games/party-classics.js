@@ -21,19 +21,31 @@
     if (typeof gameFeedback === 'function') gameFeedback(a, extra);
   }
 
-  /** Shared turn chrome — Prompt 6 party feel */
-  function partyTurnBanner(mode, label, sub) {
+  /** Shared turn chrome — Practice uses Practice AI, never fake “Opponent”. */
+  function partyTurnBanner(mode, label, sub, opts) {
+    const o = opts || {};
+    let lbl = label;
+    const practice = o.liveOn === false || o.practice === true;
+    if (practice && mode === 'theirs') {
+      if (!lbl || /opponent/i.test(String(lbl))) {
+        lbl =
+          typeof practiceTurnStatus === 'function'
+            ? practiceTurnStatus({ myTurn: false, sport: o.sport }).label
+            : 'Practice AI thinking…';
+      }
+    }
     if (typeof gameTurnBannerHtml === 'function') {
       return gameTurnBannerHtml({
         mode: mode || 'waiting',
-        label: label || undefined,
+        label: lbl || undefined,
         sub: sub || undefined,
         pulse: mode === 'yours',
+        practice,
       });
     }
     return (
       '<p class="pc-hint" role="status">' +
-      esc(label || '') +
+      esc(lbl || '') +
       (sub ? ' · ' + esc(sub) : '') +
       '</p>'
     );
@@ -964,7 +976,7 @@
       }
       shell.body.innerHTML =
         '<div class="pc-tambola">' +
-        partyTurnBanner(turnMode, turnLabel, turnSub) +
+        partyTurnBanner(turnMode, turnLabel, turnSub, { liveOn }) +
         '<div class="pc-call" aria-live="polite">' +
         esc(String(last)) +
         '</div>' +
@@ -2114,7 +2126,13 @@
       moving = false;
       dragging = null;
       updateHud();
-      hint.textContent = myTurn ? 'Your shot.' : liveOn ? 'Opponent’s shot…' : 'Opponent’s turn…';
+      hint.textContent = myTurn
+        ? 'Your shot.'
+        : liveOn
+          ? 'Opponent’s shot…'
+          : typeof practiceTurnStatus === 'function'
+            ? practiceTurnStatus({ myTurn: false, sport: 'aiming' }).label
+            : 'Practice AI thinking…';
     }
 
     function applyCarromLiveVal(val) {
@@ -2875,16 +2893,30 @@
     function scheduleAiTurn() {
       if (ended || liveOn || !isCarrom) return;
       myTurn = false;
-      hint.textContent = 'AI thinking…';
+      hint.textContent =
+        typeof practiceTurnStatus === 'function'
+          ? practiceTurnStatus({ myTurn: false, sport: 'aiming' }).label
+          : 'Practice AI thinking…';
       updateHud();
       if (oppTimer) clearTimeout(oppTimer);
       const think =
         difficulty === 'easy' ? 220 + Math.random() * 200 : difficulty === 'hard' ? 420 + Math.random() * 180 : 300 + Math.random() * 220;
       oppTimer = setTimeout(() => {
         oppTimer = 0;
-        if (ended || !shell.alive() || moving) return;
+        if (ended || !shell.alive() || liveOn) return;
+        if (pauseCtrl && pauseCtrl.isPaused()) {
+          scheduleAiTurn();
+          return;
+        }
+        if (moving) {
+          oppTimer = setTimeout(() => {
+            oppTimer = 0;
+            if (!ended && !moving && !liveOn && shell.alive()) fireAiShot();
+          }, 260);
+          return;
+        }
         fireAiShot();
-      }, think);
+      }, Math.max(300, think));
     }
 
     function fireAiShot() {
@@ -5809,7 +5841,9 @@
       const turnLabel = !myTurn
         ? liveOn
           ? 'Opponent’s turn'
-          : 'Opponent thinking…'
+          : typeof practiceTurnStatus === 'function'
+            ? practiceTurnStatus({ myTurn: false }).label
+            : 'Practice AI thinking…'
         : phase === 'needDraw'
           ? 'Your turn — draw'
           : 'Your turn — discard';
@@ -5826,7 +5860,7 @@
 
       shell.body.innerHTML =
         '<div class="pc-rummy">' +
-        partyTurnBanner(turnMode, turnLabel, turnSub) +
+        partyTurnBanner(turnMode, turnLabel, turnSub, { liveOn }) +
         '<p class="pc-hint">' +
         esc(msg || phaseHint()) +
         '</p>' +
@@ -6013,7 +6047,13 @@
           paint('Discarded. Waiting…');
           return;
         }
-        paint('Opponent thinking…');
+        paint(
+          liveOn
+            ? 'Discarded. Waiting…'
+            : typeof practiceTurnStatus === 'function'
+              ? practiceTurnStatus({ myTurn: false }).label
+              : 'Practice AI thinking…'
+        );
         if (aiTimer) clearTimeout(aiTimer);
         const think =
           difficulty === 'easy'
@@ -6032,7 +6072,7 @@
           selectedId = null;
           highlightIds = [];
           paint('Your turn — draw or take discard.');
-        }, Math.min(900, Math.max(400, think)));
+        }, Math.min(900, Math.max(300, think)));
       });
 
       async function runDeclare(forceWrong) {
@@ -6167,7 +6207,13 @@
         while (handB.length > 13 && handB.length) discard.push(handB.pop());
         while (handB.length < 13 && deck.length) handB.push(deck.pop());
       }
-      if (handB.length !== 13) return;
+      if (handB.length !== 13) {
+        // Softlock guard: never leave Practice with myTurn stuck false.
+        myTurn = true;
+        phase = 'needDraw';
+        paint('Your turn — draw or take discard.');
+        return;
+      }
 
       aiTurns += 1;
       const dead = scoreRummyDeadwood(handB, wildRank);
@@ -6223,7 +6269,12 @@
         while (handB.length > 14) discard.push(handB.pop());
         while (handB.length < 14 && deck.length) handB.push(deck.pop());
       }
-      if (handB.length !== 14) return;
+      if (handB.length !== 14) {
+        myTurn = true;
+        phase = 'needDraw';
+        paint('Your turn — draw or take discard.');
+        return;
+      }
 
       // Declare if any finishing discard yields valid Indian hand
       for (let i = 0; i < handB.length; i++) {
@@ -7044,7 +7095,9 @@
           ? 'Your turn'
           : liveOn
             ? 'Opponent’s turn'
-            : 'Opponent thinking…';
+            : typeof practiceTurnStatus === 'function'
+              ? practiceTurnStatus({ myTurn: false }).label
+              : 'Practice AI thinking…';
       const turnMode = pending
         ? iAmSideShowTarget()
           ? 'yours'
@@ -7082,7 +7135,7 @@
       }
       shell.body.innerHTML = `
         <div class="pc-tp">
-          ${partyTurnBanner(turnMode, turnLabel, turnSub)}
+          ${partyTurnBanner(turnMode, turnLabel, turnSub, { liveOn })}
           <div class="pc-tp-hud" aria-live="polite">
             <span>You <b>${myStack()}</b></span>
             <span class="pc-tp-pot">Pot <b>${pot}</b></span>
@@ -8301,8 +8354,13 @@
                   : 'Your turn — play'
               : facingOut && pendingOutSeatA === iAmA()
                 ? 'Waiting — call window'
-                : 'Opponent’s turn',
-            'Pile ' + pile.length + ' · ❤' + myLives() + '–' + oppLives()
+                : liveOn
+                  ? 'Opponent’s turn'
+                  : typeof practiceTurnStatus === 'function'
+                    ? practiceTurnStatus({ myTurn: false }).label
+                    : 'Practice AI thinking…',
+            'Pile ' + pile.length + ' · ❤' + myLives() + '–' + oppLives(),
+            { liveOn }
           )}
           ${hudHtml()}
           ${pileGraphic()}
@@ -9757,8 +9815,17 @@
         '<div class="pc-satte">' +
         partyTurnBanner(
           myTurn ? 'yours' : 'theirs',
-          myTurn ? (noLegal ? 'Your turn — Pass' : 'Your turn') : 'Opponent’s turn',
-          'You ' + you.length + ' · Opp ' + oppCount()
+          myTurn
+            ? noLegal
+              ? 'Your turn — Pass'
+              : 'Your turn'
+            : liveOn
+              ? 'Opponent’s turn'
+              : typeof practiceTurnStatus === 'function'
+                ? practiceTurnStatus({ myTurn: false }).label
+                : 'Practice AI thinking…',
+          'You ' + you.length + ' · Opp ' + oppCount(),
+          { liveOn }
         ) +
         '<p class="pc-hint">' +
         esc(hint) +
@@ -9774,7 +9841,11 @@
           ? '<button type="button" class="cs-hit cs-hit--primary pc-satte-pass" data-pass autofocus>Pass</button>'
           : myTurn
             ? '<p class="pc-hint pc-wait-act">Tap a highlighted card to play.</p>'
-            : '<p class="pc-hint pc-wait-act">Board stays live — wait for your seat.</p>') +
+            : '<p class="pc-hint pc-wait-act">' +
+              (liveOn
+                ? 'Board stays live — wait for your seat.'
+                : 'Practice AI is playing…') +
+              '</p>') +
         '<span class="pc-hint" style="width:100%;text-align:center;font-size:12px;opacity:.8">You ' +
         you.length +
         ' · Opp ' +
@@ -10411,7 +10482,7 @@
           : 'Choose stake, then a side';
       shell.body.innerHTML =
         '<div class="pc-ab">' +
-        partyTurnBanner(turnMode, turnLabel, turnSub) +
+        partyTurnBanner(turnMode, turnLabel, turnSub, { liveOn }) +
         '<p class="pc-hint pc-ab-lead">' +
         esc(leadLabel()) +
         ' · ' +

@@ -335,15 +335,101 @@
   }
 
   /**
-   * @param {{ mode?: 'yours'|'theirs'|'waiting'|'over', label?: string, sub?: string, pulse?: boolean }} state
+   * @param {{ mode?: 'yours'|'theirs'|'waiting'|'over', label?: string, sub?: string, pulse?: boolean, practice?: boolean }} state
    */
   function gameTurnBannerHtml(state) {
     const s = state || {};
     const mode = s.mode || 'waiting';
-    const label = s.label || (mode === 'yours' ? 'Your turn' : mode === 'theirs' ? 'Opponent thinking…' : mode === 'over' ? 'Game over' : 'Waiting…');
+    const practice = !!s.practice;
+    const defaultTheirs = practice ? 'Practice AI thinking…' : 'Opponent thinking…';
+    const label =
+      s.label ||
+      (mode === 'yours'
+        ? 'Your turn'
+        : mode === 'theirs'
+          ? defaultTheirs
+          : mode === 'over'
+            ? 'Game over'
+            : 'Waiting…');
     const sub = s.sub ? `<span class="game-turn-sub">${s.sub}</span>` : '';
     const pulse = s.pulse || mode === 'yours' ? ' game-turn--pulse' : '';
     return `<div class="game-turn game-turn--${mode}${pulse}" role="status" aria-live="polite"><span class="game-turn-dot" aria-hidden="true"></span><span class="game-turn-label">${label}</span>${sub}</div>`;
+  }
+
+  /** Canonical Practice opponent label — never Priya-style fakes. */
+  function practiceOppLabel(chatOrName) {
+    if (typeof practiceAiChat === 'function') {
+      const c = practiceAiChat();
+      if (c && c.name) return c.name;
+    }
+    const raw =
+      chatOrName && typeof chatOrName === 'object'
+        ? chatOrName.name || chatOrName.displayName || ''
+        : chatOrName;
+    const s = String(raw || '').trim();
+    if (!s || /^(ai|practice|friend|opponent)$/i.test(s) || /^ai\s*\d*$/i.test(s)) {
+      return 'Practice AI';
+    }
+    if (/practice\s*ai/i.test(s)) return 'Practice AI';
+    // Bare "AI" / human-looking leftovers from old launches → honest Practice AI
+    if (/^ai(\s|$)/i.test(s)) return 'Practice AI';
+    return s;
+  }
+
+  /**
+   * Practice turn / thinking copy for banners and hints.
+   * @param {{ myTurn?: boolean, liveOn?: boolean, thinking?: boolean, sport?: string, oppName?: string }} opts
+   */
+  function practiceTurnStatus(opts) {
+    const o = opts || {};
+    if (o.liveOn) {
+      const name = o.oppName || 'Opponent';
+      return {
+        mode: o.myTurn ? 'yours' : 'theirs',
+        label: o.myTurn ? 'Your turn' : name + '’s turn',
+        thinking: false,
+      };
+    }
+    const sport = String(o.sport || '').trim();
+    const thinkingVerb = sport
+      ? 'Practice AI ' + sport + (/\.\.\.|…$/.test(sport) ? '' : '…')
+      : 'Practice AI thinking…';
+    if (o.myTurn) {
+      return { mode: 'yours', label: 'Your turn', thinking: false };
+    }
+    return {
+      mode: 'theirs',
+      label: o.thinking !== false ? thinkingVerb : 'Practice AI’s turn',
+      thinking: true,
+    };
+  }
+
+  /** Min dwell so AI seats don’t feel frozen (Practice only). Returns clearable timer id. */
+  function schedulePracticeAiThink(fn, ms, store) {
+    const delay = Math.max(300, Number(ms) || 400);
+    const bag = store && typeof store === 'object' ? store : null;
+    if (bag && bag.timer) {
+      try {
+        clearTimeout(bag.timer);
+      } catch (e) {}
+      bag.timer = 0;
+    }
+    const id = setTimeout(() => {
+      if (bag) bag.timer = 0;
+      try {
+        if (typeof fn === 'function') fn();
+      } catch (e) {}
+    }, delay);
+    if (bag) bag.timer = id;
+    return id;
+  }
+
+  function clearPracticeAiThink(store) {
+    if (!store || !store.timer) return;
+    try {
+      clearTimeout(store.timer);
+    } catch (e) {}
+    store.timer = 0;
   }
 
   function safe(value) {
@@ -2478,6 +2564,10 @@
   window.GameFeedback = gameFeedback;
   window.gameFeedback = gameFeedback;
   window.gameTurnBannerHtml = gameTurnBannerHtml;
+  window.practiceOppLabel = practiceOppLabel;
+  window.practiceTurnStatus = practiceTurnStatus;
+  window.schedulePracticeAiThink = schedulePracticeAiThink;
+  window.clearPracticeAiThink = clearPracticeAiThink;
   window.gameChromeHtml = gameChromeHtml;
   window.gameScoreHtml = gameScoreHtml;
   window.gameResultHtml = gameResultHtml;

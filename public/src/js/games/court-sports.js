@@ -932,7 +932,7 @@
           </div>
           <div class="cs-court-actions">
           <button type="button" class="cs-hit${iAmActive ? ' cs-hit--primary' : ''}" data-cs-hit ${!iAmActive ? 'disabled' : ''}>${esc(
-            !iAmActive && !liveOn ? 'Opponent…' : hitLabel
+            !iAmActive && !liveOn ? 'Practice AI…' : hitLabel
           )}</button>
           </div>
           <p class="cs-rally-hint">${
@@ -941,7 +941,7 @@
                 ? 'Rally ' + rally + ' · ' + esc(matchSub) + ' · your contact'
                 : 'Score stays live — wait for your contact window'
               : practiceAiTurn
-                ? 'Opponent contact · ' + (aiDiff === 'easy' ? 'Easy' : aiDiff === 'sharp' ? 'Sharp' : 'Normal')
+                ? 'Practice AI contact · ' + (aiDiff === 'easy' ? 'Easy' : aiDiff === 'sharp' ? 'Sharp' : 'Normal')
                 : 'Rally ' + rally + ' · ' + esc(matchSub) + (softPlayerWindow ? ' · soft ball' : '')
           }</p>
         </div>`;
@@ -5404,7 +5404,7 @@
     function scheduleAiIfNeeded() {
       if (liveOn || gameOver || bowlerSeat !== 'B' || phase !== 'aim' || isFrozen()) return;
       const tok = ++aiTok;
-      msg = 'Opponent bowling…';
+      msg = 'Practice AI bowling…';
       paint();
       if (aiTimer) clearTimeout(aiTimer);
       aiTimer = setTimeout(() => {
@@ -5423,7 +5423,7 @@
         power = t.power;
         hook = t.hook != null ? t.hook : -0.32;
         beginThrow(true);
-      }, 650 + Math.floor(rng() * 400));
+      }, Math.max(300, 650 + Math.floor(rng() * 400)));
     }
 
     function beginThrow(fromAi) {
