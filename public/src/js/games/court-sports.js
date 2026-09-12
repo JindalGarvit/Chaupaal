@@ -544,15 +544,16 @@
     const baseWin = Math.max(1, o.baseWindowMs || 720);
     const win = Math.max(280, o.windowMs || baseWin);
     const widthFactor = Math.min(1.2, win / baseWin);
-    let success = diff === 'easy' ? 0.85 : diff === 'sharp' ? 0.6 : 0.7;
+    // Easy misses more; Sharp holds contact better under pressure
+    let success = diff === 'easy' ? 0.58 : diff === 'sharp' ? 0.78 : 0.7;
     success *= 0.55 + 0.45 * widthFactor;
-    success -= Math.min(0.2, Math.floor((o.rally || 0) / 3) * 0.04);
+    success -= Math.min(0.22, Math.floor((o.rally || 0) / 3) * (diff === 'sharp' ? 0.025 : 0.04));
     if (o.lastPlayerQuality === 'sweet') {
-      success -= diff === 'easy' ? 0.04 : diff === 'sharp' ? 0.1 : 0.08;
+      success -= diff === 'easy' ? 0.02 : diff === 'sharp' ? 0.12 : 0.08;
     }
-    if (o.serving) success += 0.12;
-    if (o.softForced) success = Math.min(0.95, success + 0.22);
-    success = Math.max(0.28, Math.min(0.92, success));
+    if (o.serving) success += diff === 'easy' ? 0.06 : 0.12;
+    if (o.softForced) success = Math.min(0.95, success + (diff === 'easy' ? 0.12 : 0.22));
+    success = Math.max(0.22, Math.min(0.92, success));
     if (Math.random() > success) {
       const r = Math.random();
       if (r < 0.4) return 'early';
@@ -1496,6 +1497,17 @@
   function openKabaddi() {
     const chat = resolveChat(arguments[0]);
     const liveOn = chatLiveOn(chat);
+    let aiDiff =
+      !liveOn &&
+      (chat && (chat.aiDiff === 'easy' || chat.aiDiff === 'hard' || chat.aiDiff === 'sharp')
+        ? chat.aiDiff === 'sharp'
+          ? 'hard'
+          : chat.aiDiff
+        : (arguments[0] && arguments[0].aiDiff) ||
+          (window.__dangalLaunchCtx && window.__dangalLaunchCtx.difficulty) ||
+          'medium');
+    if (aiDiff === 'sharp') aiDiff = 'hard';
+    if (aiDiff !== 'easy' && aiDiff !== 'hard') aiDiff = 'medium';
     let shellPauseCtrl = null;
     let raidPaused = false;
     let activeRaf = 0;
@@ -1525,7 +1537,11 @@
         ? liveSub() +
           (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') +
           ' · Raid & defend'
-        : practiceSub('PKL-lite · raid · defend · DoD'),
+        : practiceSub(
+            'PKL-lite · ' +
+              (aiDiff === 'easy' ? 'Easy' : aiDiff === 'hard' ? 'Hard' : 'Medium') +
+              ' AI'
+          ),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
@@ -1996,6 +2012,9 @@
     function aiRaidStep(raid, dt) {
       const alive = livingDefs(raid);
       const dod = !!raid.dod;
+      const greed =
+        aiDiff === 'hard' ? 0.72 : aiDiff === 'easy' ? 0.28 : 0.55;
+      const breathHome = aiDiff === 'hard' ? 0.18 : aiDiff === 'easy' ? 0.32 : 0.22;
       // DoD: safe single tag + Home. Else: cross → tag → (maybe greed) → Home
       if (!raid.breathLive) {
         raid.rtx = 0.5;
@@ -2010,10 +2029,10 @@
         !dod &&
         raid.tagged < 2 &&
         alive.length &&
-        raid.breath > BREATH_MS * 0.45
+        raid.breath > BREATH_MS * (aiDiff === 'easy' ? 0.55 : 0.45)
       ) {
         const t = nearestLiving(raid, raid.rx, raid.ry);
-        if (t && Math.random() < 0.55) {
+        if (t && Math.random() < greed) {
           raid.rtx = t.x;
           raid.rty = t.y;
         } else {
@@ -2028,7 +2047,7 @@
       const mdy = raid.rty - raid.ry;
       const dist = Math.sqrt(mdx * mdx + mdy * mdy);
       if (dist > 0.004) {
-        const step = Math.min(dist, AI_RAID_SPEED * (dod ? 1.08 : 1) * dt);
+        const step = Math.min(dist, AI_RAID_SPEED * (dod ? 1.08 : aiDiff === 'hard' ? 1.06 : 1) * dt);
         raid.rx += (mdx / dist) * step;
         raid.ry += (mdy / dist) * step;
       }
@@ -2036,7 +2055,7 @@
       if (
         inOwnHalf(raid.ry) &&
         (raid.tagged > 0 ||
-          (!dod && raid.breath < BREATH_MS * 0.22) ||
+          (!dod && raid.breath < BREATH_MS * breathHome) ||
           livingDefs(raid).length === 0)
       ) {
         raid.aiWantHome = true;
@@ -4505,7 +4524,9 @@
   function aiThrowBowling(state) {
     const s = state || {};
     const rng = typeof s.rng === 'function' ? s.rng : Math.random;
-    const easy = String(s.aiDiff || 'normal').toLowerCase() === 'easy';
+    const diff = String(s.aiDiff || 'normal').toLowerCase();
+    const easy = diff === 'easy';
+    const sharp = diff === 'sharp' || diff === 'hard';
     const standing = (s.standingCount | 0) || ((s.pinsUp && s.pinsUp.length) || 10);
     const ball = s.ballInFrame === 2 || s.ballInFrame === 3 ? 2 : 1;
     const lane = bowlingLaneSpec(s.laneId);
@@ -4514,14 +4535,36 @@
     /** House default: slight left hook into the 1-3 pocket (−1…1). */
     let hook = -0.32;
     if (easy) {
-      if (rng() < 0.22) {
-        aim = rng() < 0.5 ? -0.92 : 0.92;
-        power = 0.35 + rng() * 0.25;
-        hook = (rng() - 0.5) * 1.2;
+      if (rng() < 0.38) {
+        aim = rng() < 0.5 ? -0.95 : 0.95;
+        power = 0.28 + rng() * 0.28;
+        hook = (rng() - 0.5) * 1.35;
       } else {
-        aim = (rng() - 0.5) * 1.35;
-        power = 0.38 + rng() * 0.4;
-        hook = (rng() - 0.5) * 0.9;
+        aim = (rng() - 0.5) * 1.55;
+        power = 0.32 + rng() * 0.42;
+        hook = (rng() - 0.5) * 1.05;
+      }
+    } else if (sharp) {
+      if (rng() < 0.04) {
+        aim = rng() < 0.5 ? -0.7 : 0.7;
+        power = 0.5 + rng() * 0.2;
+        hook = aim > 0 ? 0.25 : -0.25;
+      } else if (ball === 2 && standing <= 3) {
+        aim = -0.04 + (rng() - 0.5) * 0.12;
+        power = 0.7 + rng() * 0.22;
+        hook = -0.18 + (rng() - 0.5) * 0.12;
+      } else {
+        aim = -0.08 + (rng() - 0.5) * 0.14;
+        power = 0.68 + rng() * 0.28;
+        if (lane.id === 'dry') {
+          hook = -0.24 + (rng() - 0.5) * 0.1;
+          power = 0.62 + rng() * 0.28;
+        } else if (lane.id === 'heavy') {
+          hook = -0.4 + (rng() - 0.5) * 0.12;
+          power = 0.72 + rng() * 0.24;
+        } else {
+          hook = -0.3 + (rng() - 0.5) * 0.12;
+        }
       }
     } else {
       if (rng() < 0.08) {

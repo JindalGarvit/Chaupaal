@@ -447,8 +447,11 @@ function openFiveInRowGame(chat, opts){
       const easy=aiDiff==='easy';
       // 1) Win now
       if(wouldWin(aiSym,r,c,aiBlack))return 1e9+Math.random();
-      // 2) Block opp win
-      if(wouldWin(huSym,r,c,huBlack))s+=1e8;
+      // 2) Block opp win — Easy often misses the block
+      if(wouldWin(huSym,r,c,huBlack)){
+        if(easy&&Math.random()<0.55)s+=2e4;
+        else s+=1e8;
+      }
       board[r][c]=aiSym;
       const myOpenFour=hasOpenFour(r,c,aiSym);
       const myFours=countFours(r,c,aiSym);
@@ -466,10 +469,10 @@ function openFiveInRowGame(chat, opts){
       // 4) Block opp open four / open three
       if(oppOpenFour||oppFours>=1)s+=1e6;
       if(!easy&&oppThrees>=1)s+=1.2e5;
-      if(easy&&oppThrees>=1&&Math.random()<0.45)s+=2e4; // sometimes miss soft threats
+      if(easy&&oppThrees>=1&&Math.random()<0.35)s+=2e4; // often miss soft threats
       // 5) Build
       board[r][c]=aiSym;
-      s+=scorePosition(r,c,aiSym)*(easy?4:12);
+      s+=scorePosition(r,c,aiSym)*(easy?3:12);
       board[r][c]=null;
       // Renju: prefer cells that would be illegal for Black (force foul shapes)
       if(lawMode==='renju'){
@@ -481,20 +484,26 @@ function openFiveInRowGame(chat, opts){
       // Center bias
       const mid=Math.floor(SIZE/2);
       s+=3*(SIZE-Math.abs(r-mid)-Math.abs(c-mid));
-      s+=Math.random()*(easy?40:8);
+      s+=Math.random()*(easy?55:6);
       return s;
     }
 
     let best=cands[0];
     let bestS=-1;
-    const top=[];
+    const scored=[];
     for(const[r,c] of cands){
       const sc=scoreCell(r,c);
-      if(sc>bestS+1){bestS=sc;best=[r,c];top.length=0;top.push([r,c,sc]);}
-      else if(Math.abs(sc-bestS)<=1)top.push([r,c,sc]);
+      scored.push([r,c,sc]);
+      if(sc>bestS+1){bestS=sc;best=[r,c];}
     }
-    if(top.length>1){
-      const pick=top[Math.floor(Math.random()*top.length)];
+    scored.sort((a,b)=>b[2]-a[2]);
+    if(aiDiff==='easy'&&scored.length>1&&Math.random()<0.5){
+      const pool=scored.slice(0,Math.max(2,Math.ceil(scored.length*0.45)));
+      const pick=pool[Math.floor(Math.random()*pool.length)];
+      return[pick[0],pick[1]];
+    }
+    if(scored.length>1&&Math.abs(scored[0][2]-scored[1][2])<=1){
+      const pick=scored[Math.floor(Math.random()*Math.min(2,scored.length))];
       return[pick[0],pick[1]];
     }
     return best;
@@ -3686,12 +3695,13 @@ function openScribbleGame(chat,playerList,opts){
     if(liveOn&&iAmDrawer())pushScribble({phase:'draw'});
     // Practice vs AI: AI may guess your drawing — never fake AI doodles.
     if(iAmDrawer()&&!practiceMode&&!liveOn){
+      const guessRate=0.72; // Medium-equivalent guesser (no difficulty UI on Scribble vs AI)
       players.forEach((p,i)=>{
         if(i===currentDrawerIdx||p.isMe)return;
         schedule(()=>{
-          if(!alive()||phase!=='draw'||p.out||guessedCorrectly.has(p.key)||Math.random()>=0.55)return;
+          if(!alive()||phase!=='draw'||p.out||guessedCorrectly.has(p.key)||Math.random()>=guessRate)return;
           applyCorrectGuess(p.key,currentWord,true);
-        },5000+Math.random()*25000);
+        },4200+Math.random()*22000);
       });
     }
   }

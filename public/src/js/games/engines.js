@@ -635,9 +635,7 @@ const AI_DEPTH=Math.max(1,Math.min(3,tc.aiDepth||2));
 const practiceLabel=tc.difficulty==='easy'?'Easy':tc.difficulty==='hard'?'Hard':'Medium';
 const DIFF_LABEL=tc.difficulty==='live'
   ?(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel?DangalLive.modeChromeLabel(true):'Live 1v1')
-  :(typeof DangalLive!=='undefined'&&DangalLive.modeChromeLabel
-    ?DangalLive.modeChromeLabel(false,practiceLabel)
-    :('Practice · '+practiceLabel));
+  :('Practice vs AI · '+practiceLabel);
 const eloShown=typeof getGameRating==='function'?getGameRating('chess'):null;
 const chromeSub=eloShown&&tc.difficulty!=='live'?`${DIFF_LABEL} · Elo ${eloShown}`:DIFF_LABEL;
 
@@ -837,13 +835,15 @@ function getAIMove(chessInstance,legalMoves){
     return best;
   }
   if(!legalMoves.length)return null;
-  if(AI_DEPTH===1){
+  // Easy (depth 1): often random legal; otherwise pick from top quarter of 1-ply eval.
+  if(AI_DEPTH<=1){
+    if(Math.random()<0.38)return legalMoves[Math.floor(Math.random()*legalMoves.length)];
     const scored=legalMoves.map(m=>{
       const nc=new Chess(chessInstance.fen());
       nc.move({from:rcToSq(m.from[0],m.from[1]),to:rcToSq(m.to[0],m.to[1]),promotion:(m.promo||'q').toLowerCase()});
       return{m,s:evalBoard(boardFromChess(nc))};
     }).sort((a,b)=>b.s-a.s);
-    const pool=scored.slice(0,Math.max(2,Math.ceil(scored.length/2)));
+    const pool=scored.slice(0,Math.max(1,Math.ceil(scored.length*0.28)));
     return(pool[Math.floor(Math.random()*pool.length)]||scored[0]).m;
   }
   let best=null,bestScore=-Infinity;
@@ -852,14 +852,22 @@ function getAIMove(chessInstance,legalMoves){
     const capB=board[b.to[0]][b.to[1]]?VALS[board[b.to[0]][b.to[1]].toLowerCase()]||0:0;
     return capB-capA;
   });
-  const searchDepth=AI_DEPTH===3?2:1;
-  const deadline=Date.now()+2200;
+  // Medium (depth 2): 1-ply αβ. Hard (depth 3): 2-ply αβ.
+  const searchDepth=AI_DEPTH>=3?2:1;
+  const deadline=Date.now()+(AI_DEPTH>=3?2800:2000);
+  const scoredRoots=[];
   for(const m of ordered){
     if(Date.now()>deadline)break;
     const nc=new Chess(chessInstance.fen());
     nc.move({from:rcToSq(m.from[0],m.from[1]),to:rcToSq(m.to[0],m.to[1]),promotion:(m.promo||'q').toLowerCase()});
     const score=alphaBeta(nc.fen(),searchDepth,-Infinity,Infinity,false,deadline);
+    scoredRoots.push({m,score});
     if(score>bestScore){bestScore=score;best=m;}
+  }
+  // Medium occasionally plays second-best — Hard stays on best.
+  if(scoredRoots.length>1&&AI_DEPTH===2&&Math.random()<0.22){
+    scoredRoots.sort((a,b)=>b.score-a.score);
+    return scoredRoots[1].m;
   }
   return best||ordered[0];
 }
@@ -2969,6 +2977,9 @@ function openLudoPracticeSheet(chat, sheetOpts){
   let pickMode=(sheetOpts.ludoMode||sheetOpts.mode||launchCtx.ludoMode)==='quick'?'quick':'classic';
   if(pickMode!=='quick')pickMode='classic';
   let pickN=fixedN||2;
+  let pickDiff=(sheetOpts.difficulty||launchCtx.difficulty)==='easy'||(sheetOpts.difficulty||launchCtx.difficulty)==='hard'
+    ?(sheetOpts.difficulty||launchCtx.difficulty)
+    :'medium';
   const host=document.querySelector('.device')||document.body;
   const scrim=document.createElement('div');
   scrim.className='cp-sheet-scrim';
@@ -2981,7 +2992,7 @@ function openLudoPracticeSheet(chat, sheetOpts){
     const playersLocked=fixedN!=null||liveHint;
     s.innerHTML=`
       <div class="ludo-entry-title">Ludo</div>
-      <div class="ludo-entry-sub">${liveHint?'Live 1v1 — pick Classic or Quick · 2 players':'Practice vs AI — pick mode, then seats'}</div>
+      <div class="ludo-entry-sub">${liveHint?'Live 1v1 — pick Classic or Quick · 2 players':'Practice vs AI — mode, seats, difficulty'}</div>
       <div class="ludo-entry-label">Mode</div>
       <div class="ludo-mode-cards" role="group" aria-label="Game mode">
         <button type="button" class="ludo-mode-card${pickMode==='classic'?' is-selected':''}" data-mode="classic">
@@ -3001,6 +3012,11 @@ function openLudoPracticeSheet(chat, sheetOpts){
           return `<button type="button" class="ludo-player-chip${sel?' is-selected':''}" data-n="${n}" ${disabled?'disabled':''}>${n}p</button>`;
         }).join('')}
       </div>
+      ${liveHint?'':'<div class="ludo-entry-label">AI difficulty</div><div class="ludo-player-chips" role="group" aria-label="AI difficulty">'+
+        [['easy','Easy'],['medium','Medium'],['hard','Hard']].map(([id,lab])=>{
+          const sel=pickDiff===id;
+          return `<button type="button" class="ludo-player-chip${sel?' is-selected':''}" data-diff="${id}">${lab}</button>`;
+        }).join('')+'</div>'}
       ${liveHint?'<div class="ludo-entry-note">Live · 2 players (3–4 party sync later)</div>':''}
       <button type="button" id="ludoEntryStart" class="ludo-entry-start game-tap-target">Start</button>
       <button type="button" id="ludoEntryCancel" class="ludo-entry-cancel">Back</button>
@@ -3018,10 +3034,18 @@ function openLudoPracticeSheet(chat, sheetOpts){
         paint();
       });
     });
+    s.querySelectorAll('[data-diff]').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        const d=btn.dataset.diff;
+        pickDiff=d==='easy'||d==='hard'?d:'medium';
+        paint();
+      });
+    });
     s.querySelector('#ludoEntryStart').addEventListener('click',async()=>{
       try{
         const mode=pickMode==='quick'?'quick':'classic';
         const n=liveHint?2:pickN;
+        const aiDiff=liveHint?'medium':pickDiff;
         const oppUid=
           sheetOpts.opponentUid||
           launchCtx.opponentUid||
@@ -3048,7 +3072,7 @@ function openLudoPracticeSheet(chat, sheetOpts){
           if(!persistable){
             if(typeof showToast==='function')showToast('Challenge link broken — try Practice from Manch');
             close();
-            openLudoGame(typeof practiceAiChat==='function'?practiceAiChat():{name:'Practice AI',id:'ai'},n,{mode});
+            openLudoGame(typeof practiceAiChat==='function'?practiceAiChat():{name:'Practice AI',id:'ai'},n,{mode,difficulty:'medium'});
             return;
           }
           if(!mid&&typeof dangalMatchId==='function'){
@@ -3121,6 +3145,7 @@ function openLudoPracticeSheet(chat, sheetOpts){
           mode:'practice',
           ludoMode:mode,
           playerCount:n,
+          difficulty:aiDiff,
           matchId:'',
           opponentUid:'ai',
           stake:0,
@@ -3129,7 +3154,7 @@ function openLudoPracticeSheet(chat, sheetOpts){
           startedAt:Date.now(),
         });
         close();
-        if(typeof openLudoGame==='function')openLudoGame(chat,n,{mode});
+        if(typeof openLudoGame==='function')openLudoGame(chat,n,{mode,difficulty:aiDiff});
       }catch(err){
         console.error('[ludo] entry start failed',err);
         try{if(typeof showToast==='function')showToast('Could not start Ludo');}catch(e2){}
@@ -3168,7 +3193,10 @@ function openLudoGame(chat, playerCount, opts){
   if(sessionMode!=='quick')sessionMode='classic';
   let tokensToWin=sessionMode==='quick'?1:4;
   let modeLabel=sessionMode==='quick'?'Quick':'Classic';
-  const sessionOpts={mode:sessionMode};
+  let aiDiffKey=liveOn?'medium':String(opts.difficulty||launchCtx.difficulty||'medium').toLowerCase();
+  if(aiDiffKey!=='easy'&&aiDiffKey!=='hard')aiDiffKey='medium';
+  const DIFF_LUDO={easy:'Easy',medium:'Medium',hard:'Hard'};
+  const sessionOpts={mode:sessionMode,difficulty:aiDiffKey};
   let liveStake=liveOn?Math.max(0,Number(opts.stake??launchCtx.stake)||0):0;
   if(!liveOn)liveStake=0;
   const settleMatchId=String((chat&&chat.dangalMatchId)||launchCtx.matchId||'').trim();
@@ -3196,7 +3224,7 @@ function openLudoGame(chat, playerCount, opts){
   const stakeBit=liveOn&&liveStake>0?` · Stake ⚡${liveStake}`:'';
   const MODE_SUB=liveOn
     ?('Live 1v1 · '+modeLabel+stakeBit)
-    :('Practice vs AI · '+modeLabel+' · '+playerCount+'p');
+    :('Practice vs AI · '+DIFF_LUDO[aiDiffKey]+' · '+modeLabel+' · '+playerCount+'p');
   const COLORS=['red','blue','green','yellow'];
   const COLOR_STYLES={red:'#E74C3C',blue:'#3498DB',green:'#2ECC71',yellow:'#F1C40F'};
   const NAMES=liveOn
@@ -3280,7 +3308,7 @@ function openLudoGame(chat, playerCount, opts){
     try{window.__dangalLaunchCtx=Object.assign({},window.__dangalLaunchCtx||{},{ludoMode:sessionMode});}catch(e){}
     try{
       const sub=overlay&&overlay.querySelector('.game-chrome-subtitle');
-      if(sub)sub.textContent=liveOn?('Live 1v1 · '+modeLabel+(liveStake>0?` · Stake ⚡${liveStake}`:'')):('Practice · '+modeLabel+' · '+playerCount+'p');
+      if(sub)sub.textContent=liveOn?('Live 1v1 · '+modeLabel+(liveStake>0?` · Stake ⚡${liveStake}`:'')):('Practice vs AI · '+DIFF_LUDO[aiDiffKey]+' · '+modeLabel+' · '+playerCount+'p');
       const chip=overlay&&overlay.querySelector('.ludo-mode-chip');
       if(chip){
         chip.className='ludo-mode-chip'+(sessionMode==='classic'?' ludo-mode-chip--classic':'');
@@ -3935,23 +3963,40 @@ function openLudoGame(chat, playerCount, opts){
     const dest=moveDest(color,pi);
     if(!dest)return -1e9;
     const p=pieces[color][pi];
+    const captMul=aiDiffKey==='hard'?1.35:aiDiffKey==='easy'?0.55:1;
+    const safeMul=aiDiffKey==='hard'?1.4:aiDiffKey==='easy'?0.4:1;
     let score=0;
     if(!dest.finished&&dest.progress<=51&&!SAFE_SQUARES.includes(dest.pos)&&!isBlockedFor(color,dest.pos)){
       players.forEach(c=>{
         if(c===color)return;
         pieces[c].forEach(op=>{
-          if(!op.finished&&op.pos===dest.pos&&op.progress>0&&op.progress<=51)score+=100;
+          if(!op.finished&&op.pos===dest.pos&&op.progress>0&&op.progress<=51)score+=100*captMul;
         });
       });
     }
-    if(p.pos===-1&&diceVal===6)score+=80;
+    if(p.pos===-1&&diceVal===6)score+=80*(aiDiffKey==='easy'?0.7:1);
     if(dest.finished){
       score+=sessionMode==='quick'?220:90;
-      // Would this finish win the game?
       if(finishedCount(color)+1>=tokensToWin)score+=80;
     }else if(dest.progress>51)score+=50+(sessionMode==='quick'?25:0);
-    score+=dest.progress;
-    if(dest.progress<=51&&SAFE_SQUARES.includes(dest.pos))score+=8;
+    score+=dest.progress*(aiDiffKey==='hard'?1.15:1);
+    if(dest.progress<=51&&SAFE_SQUARES.includes(dest.pos))score+=8*safeMul;
+    // Leave unsafe square when threatened (Med/Hard)
+    if(aiDiffKey!=='easy'&&p.progress>0&&p.progress<=51&&!SAFE_SQUARES.includes(p.pos)){
+      let threatened=false;
+      players.forEach(c=>{
+        if(c===color)return;
+        pieces[c].forEach(op=>{
+          if(op.finished||op.progress<=0||op.progress>51)return;
+          const d=(p.pos-op.pos+52)%52;
+          if(d>=1&&d<=6)threatened=true;
+        });
+      });
+      if(threatened)score+=aiDiffKey==='hard'?28:14;
+    }
+    if(aiDiffKey==='easy')score+=(Math.random()-0.5)*40;
+    else if(aiDiffKey==='medium')score+=(Math.random()-0.5)*10;
+    else score+=(Math.random()-0.5)*3;
     return score;
   }
 
@@ -3996,14 +4041,21 @@ function openLudoGame(chat, playerCount, opts){
       }
       if(phase==='move'){
         const color=players[currentPlayer];
-        let bestPi=-1,bestScore=-1e9;
+        const legal=[];
         pieces[color].forEach((_,pi)=>{
           if(!isMoveable(color,pi))return;
-          const s=scoreAiMove(color,pi);
-          if(s>bestScore){bestScore=s;bestPi=pi;}
+          legal.push({pi,s:scoreAiMove(color,pi)});
         });
-        if(bestPi<0){nextPlayer();return;}
-        movePiece(color,bestPi);
+        if(!legal.length){nextPlayer();return;}
+        legal.sort((a,b)=>b.s-a.s);
+        let pick=legal[0];
+        // Easy: often random legal. Medium: top-2 mix. Hard: best.
+        if(aiDiffKey==='easy'&&Math.random()<0.62){
+          pick=legal[Math.floor(Math.random()*legal.length)];
+        }else if(aiDiffKey==='medium'&&legal.length>1&&Math.random()<0.28){
+          pick=legal[1];
+        }
+        movePiece(color,pick.pi);
       }
     }catch(err){
       console.warn('[ludo] AI error — passing turn',err);
@@ -4280,7 +4332,7 @@ function openUnoGame(chat, variant='normal', opts){
         :('Live 1v1 · '+vl);
       return base+stakeBit;
     }
-    return'Practice · '+vl+' · '+DIFF_LABELS[diffKey];
+    return'Practice vs AI · '+vl+' · '+DIFF_LABELS[diffKey];
   }
   function variantLabelNow(){
     return variant==='doublesided'?'Flip':variant==='blaze'?'Blaze':'Classic';
@@ -5187,11 +5239,21 @@ function openUnoGame(chat, variant='normal', opts){
       if(v==='draw2'||v==='draw4'||v==='wild_draw4'||v==='wild_draw6'||v==='draw_all_5')score=oppLow?9:6;
       else if(v==='skip'||v==='skip_all'||v==='reverse')score=oppLow?8:5;
       else if(v==='flip')score=flipped?3:6;
-      else if(v==='wild'||v==='wild_dark')score=diffKey==='hard'?1:3;
-      else if(card.color===currentColor)score=4;
-      if(diffKey==='hard'&&(v==='wild'||v==='wild_draw4'||v==='wild_draw6'||v==='wild_dark')&&playable.some(c=>!needsColorPick(c)))score-=2;
+      else if(v==='wild'||v==='wild_dark')score=diffKey==='hard'?0:3;
+      else if(card.color===currentColor)score=4+(diffKey==='hard'?3:1);
+      // Hard: keep color continuity / dump matching value to stay in control
+      if(diffKey==='hard'&&card.color===currentColor&&v!=='wild'&&v!=='wild_dark')score+=2;
+      if(diffKey==='hard'&&(v==='wild'||v==='wild_draw4'||v==='wild_draw6'||v==='wild_dark')&&playable.some(c=>!needsColorPick(c)))score-=4;
+      // Prefer playing into a colour we hold many of (own hand only)
+      if(diffKey!=='easy'&&card.color&&card.color!=='wild'){
+        const same=hands.opp.filter(c=>c&&c.color===card.color).length;
+        score+=Math.min(3,same)*(diffKey==='hard'?1.2:0.6);
+      }
       return{card,score};
     }).sort((a,b)=>b.score-a.score);
+    // Medium: sometimes second-best. Hard: top pick (tiny noise).
+    if(diffKey==='medium'&&scored.length>1&&Math.random()<0.3)return scored[1].card;
+    if(diffKey==='hard'&&scored.length>1&&Math.random()<0.08)return scored[1].card;
     return scored[0].card;
   }
 
@@ -5407,7 +5469,7 @@ function openTicTacToe(chat){
 }
 
 function startTicTacToe(chat, difficulty){
-const diff=difficulty||'hard';
+const diff=difficulty||'medium';
 const liveOn=typeof DangalLive!=='undefined'&&DangalLive.isLive(chat);
 const practiceChat=!liveOn
   ?(chat&&(chat.id==='ai'||/practice ai/i.test(String(chat.name||'')))
@@ -5584,10 +5646,20 @@ function minimax(b,isMax,alpha,beta){
 function getAiMove(){
   const empties=board.map((v,i)=>v?null:i).filter(v=>v!=null);
   if(!empties.length)return null;
+  // Easy: mostly random; often miss an available block of player's win.
   if(diff==='easy'){
-    if(Math.random()<0.55)return empties[Math.floor(Math.random()*empties.length)];
+    if(Math.random()<0.72)return empties[Math.floor(Math.random()*empties.length)];
+    // 28%: still run minimax but 40% chance to skip a forced block
+    const block=empties.find(i=>{
+      board[i]='X';const w=checkWin(board,'X');board[i]=null;return!!w;
+    });
+    if(block!=null&&Math.random()<0.4){
+      const others=empties.filter(i=>i!==block);
+      if(others.length)return others[Math.floor(Math.random()*others.length)];
+    }
   }
-  if(diff==='medium'&&Math.random()<0.35){
+  // Medium: sometimes random fluff; Hard: pure optimal.
+  if(diff==='medium'&&Math.random()<0.32){
     return empties[Math.floor(Math.random()*empties.length)];
   }
   let best=-Infinity,move=empties[0];

@@ -2757,9 +2757,9 @@
       const priorOwn = countPocketed(color);
       const pending = queenPendingCoverFor === 'opp';
       const diff = difficulty;
-      const jitter = diff === 'easy' ? 0.42 : diff === 'hard' ? 0.07 : 0.18;
-      const maxP = diff === 'easy' ? 7.2 : diff === 'hard' ? 11.8 : 9.6;
-      const minP = diff === 'easy' ? 2.8 : 4.2;
+      const jitter = diff === 'easy' ? 0.62 : diff === 'hard' ? 0.05 : 0.18;
+      const maxP = diff === 'easy' ? 6.4 : diff === 'hard' ? 11.8 : 9.6;
+      const minP = diff === 'easy' ? 2.2 : 4.2;
       const candidates = [];
 
       function foulRiskToward(dx, dy) {
@@ -2866,19 +2866,20 @@
       let pick = candidates[0] || { vx: 0, vy: 5, score: 0 };
 
       if (diff === 'hard') {
-        const pool = candidates.slice(0, Math.min(10, candidates.length));
-        for (let i = 0; i < 12; i++) {
+        const pool = candidates.slice(0, Math.min(4, candidates.length));
+        pick = pool[0] || pick;
+        for (let i = 0; i < 14; i++) {
           const base = pool[i % pool.length];
           const ang0 = Math.atan2(base.vy, base.vx);
-          const ang = ang0 + (Math.random() - 0.5) * 0.28;
-          const pow = Math.hypot(base.vx, base.vy) * (0.88 + Math.random() * 0.24);
-          const score = base.score - Math.abs(ang - ang0) * 8;
+          const ang = ang0 + (Math.random() - 0.5) * 0.18;
+          const pow = Math.hypot(base.vx, base.vy) * (0.9 + Math.random() * 0.2);
+          const score = base.score - Math.abs(ang - ang0) * 10;
           if (score > pick.score) {
             pick = { vx: Math.cos(ang) * pow, vy: Math.sin(ang) * pow, score, tag: 'sample' };
           }
         }
       } else if (diff === 'medium') {
-        const n = Math.min(4, candidates.length);
+        const n = Math.min(3, candidates.length);
         pick = candidates[Math.floor(Math.random() * n)];
       } else {
         pick = candidates[Math.floor(Math.random() * candidates.length)] || pick;
@@ -2996,9 +2997,9 @@
       const c = cueBall();
       if (!c) return { vx: 0, vy: -6, aimX: centerX(), aimY: centerY() };
       const diff = difficulty;
-      const jitter = diff === 'easy' ? 0.4 : diff === 'hard' ? 0.08 : 0.2;
-      const maxP = diff === 'easy' ? 8.2 : diff === 'hard' ? 12.2 : 10.2;
-      const minP = diff === 'easy' ? 3.4 : 4.6;
+      const jitter = diff === 'easy' ? 0.58 : diff === 'hard' ? 0.06 : 0.2;
+      const maxP = diff === 'easy' ? 7.2 : diff === 'hard' ? 12.2 : 10.2;
+      const minP = diff === 'easy' ? 2.8 : 4.6;
       const targets = poolAiLegalTargets();
       const candidates = [];
 
@@ -3079,10 +3080,10 @@
       let pick = candidates[0] || { vx: 0, vy: -5, score: 0, tx: centerX(), ty: centerY() };
 
       if (diff === 'hard') {
-        const top = candidates.slice(0, Math.min(6, candidates.length));
-        pick = top[Math.floor(Math.random() * Math.min(3, top.length))] || pick;
+        const top = candidates.slice(0, Math.min(3, candidates.length));
+        pick = top[0] || pick;
       } else if (diff === 'medium') {
-        const n = Math.min(5, candidates.length);
+        const n = Math.min(4, candidates.length);
         pick = candidates[Math.floor(Math.random() * n)] || pick;
       } else {
         pick = candidates[Math.floor(Math.random() * candidates.length)] || pick;
@@ -5218,7 +5219,7 @@
     }
     let best = null;
     let bestScore = Infinity;
-    const noise = difficulty === 'easy' ? 18 : difficulty === 'hard' ? 3 : 8;
+    const noise = difficulty === 'easy' ? 28 : difficulty === 'hard' ? 1.5 : 8;
     hand.forEach((c) => {
       const keep = rummyAiKeepValue(c, hand, wildRank);
       const rem = hand.filter((x) => x.id !== c.id);
@@ -6651,6 +6652,14 @@
     const chat = resolveChat(arguments[0]);
     const liveOn = chatLiveOn(chat);
     const rng = rngFn();
+    let aiDiff =
+      !liveOn &&
+      (chat && (chat.difficulty === 'easy' || chat.difficulty === 'hard' || chat.difficulty === 'medium')
+        ? chat.difficulty
+        : (arguments[0] && arguments[0].difficulty) ||
+          (window.__dangalLaunchCtx && window.__dangalLaunchCtx.difficulty) ||
+          'medium');
+    if (aiDiff !== 'easy' && aiDiff !== 'hard') aiDiff = 'medium';
     // Virtual chips · ring session (stacks persist until leave / bust)
     const STACK0 = 1000;
     const BOOT = 10;
@@ -6680,7 +6689,7 @@
       title: 'Teen Patti',
       subtitle: liveOn
         ? liveSub() + (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') + ' · 1v1'
-        : practiceSub('Ring · virtual chips'),
+        : practiceSub('Ring · ' + (aiDiff === 'easy' ? 'Easy' : aiDiff === 'hard' ? 'Hard' : 'Medium') + ' AI'),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
@@ -7810,9 +7819,12 @@
       if (handOver || tableClosed || packedB || turnIsA || sideShow) return;
       const strength = tpScore(handB);
       const cost = chaalCost(seenB);
+      const loose = aiDiff === 'easy';
+      const tight = aiDiff === 'hard';
 
       if (!seenB) {
-        if ((pot >= BOOT * 6 || rng() < 0.35) && stackB >= seeFee()) {
+        const seeThresh = loose ? 0.55 : tight ? 0.22 : 0.35;
+        if ((pot >= BOOT * 6 || rng() < seeThresh) && stackB >= seeFee()) {
           debit(false, seeFee());
           seenB = true;
           betSeq += 1;
@@ -7820,7 +7832,8 @@
           scheduleAi();
           return;
         }
-        if (rng() < 0.1) {
+        const packBlind = loose ? 0.22 : tight ? 0.04 : 0.1;
+        if (rng() < packBlind) {
           packedB = true;
           awardPotSeat(true);
           endHand({
@@ -7831,7 +7844,8 @@
           });
           return;
         }
-        if (raiseCount < 2 && stake < MAX_STAKE && rng() < 0.12 && stackB > cost) {
+        const raiseBlind = loose ? 0.06 : tight ? 0.2 : 0.12;
+        if (raiseCount < 2 && stake < MAX_STAKE && rng() < raiseBlind && stackB > cost) {
           stake = Math.min(MAX_STAKE, stake + BOOT);
           raiseCount += 1;
           debit(false, chaalCost(false));
@@ -7845,7 +7859,8 @@
         return;
       }
 
-      if (bothSeen() && !packedA && strength >= 2000 && strength < 5000 && pot >= BOOT * 8 && rng() < 0.45) {
+      const ssChance = loose ? 0.2 : tight ? 0.55 : 0.45;
+      if (bothSeen() && !packedA && strength >= 2000 && strength < 5000 && pot >= BOOT * 8 && rng() < ssChance) {
         sideShow = { fromA: false, status: 'pending', at: Date.now() };
         betSeq += 1;
         startSsTimeout();
@@ -7853,7 +7868,8 @@
         return;
       }
 
-      if (strength >= 5000 && raiseCount < MAX_RAISES && stake < MAX_STAKE && rng() < 0.7) {
+      const raiseStrong = loose ? 0.45 : tight ? 0.85 : 0.7;
+      if (strength >= 5000 && raiseCount < MAX_RAISES && stake < MAX_STAKE && rng() < raiseStrong) {
         stake = Math.min(MAX_STAKE, stake + BOOT * (rng() < 0.4 ? 2 : 1));
         raiseCount += 1;
         debit(false, chaalCost(true));
@@ -7861,13 +7877,15 @@
         paint('Opponent raised');
         return;
       }
-      if (strength < 20 && (pot > BOOT * 8 || rng() < 0.5)) {
+      const packWeak = loose ? 0.72 : tight ? 0.28 : 0.5;
+      if (strength < 20 && (pot > BOOT * 8 || rng() < packWeak)) {
         packedB = true;
         awardPotSeat(true);
         endHand({ youWin: true, title: 'Opponent packed', subtitle: 'You take the pot', fromRemote: false });
         return;
       }
-      if (strength >= 2000 && bothSeen() && rng() < 0.35) {
+      const showChance = loose ? 0.2 : tight ? 0.48 : 0.35;
+      if (strength >= 2000 && bothSeen() && rng() < showChance) {
         const settled = settleShow();
         const youWin = settled.split ? false : settled.aWins;
         endHand({
@@ -7880,7 +7898,8 @@
         });
         return;
       }
-      if (strength >= 3000 && raiseCount < MAX_RAISES && stake < MAX_STAKE && rng() < 0.35) {
+      const raiseMed = loose ? 0.18 : tight ? 0.48 : 0.35;
+      if (strength >= 3000 && raiseCount < MAX_RAISES && stake < MAX_STAKE && rng() < raiseMed) {
         stake = Math.min(MAX_STAKE, stake + BOOT);
         raiseCount += 1;
         debit(false, chaalCost(true));
@@ -7954,6 +7973,14 @@
     const chat = resolveChat(arguments[0]);
     const liveOn = chatLiveOn(chat);
     const rng = rngFn();
+    let aiDiff =
+      !liveOn &&
+      (chat && (chat.difficulty === 'easy' || chat.difficulty === 'hard' || chat.difficulty === 'medium')
+        ? chat.difficulty
+        : (arguments[0] && arguments[0].difficulty) ||
+          (window.__dangalLaunchCtx && window.__dangalLaunchCtx.difficulty) ||
+          'medium');
+    if (aiDiff !== 'easy' && aiDiff !== 'hard') aiDiff = 'medium';
     // HOUSE RULE: first play locks rank until Call clears.
     // UX: Call or Play mid-hand; empty-hand finish → Call or Pass window.
     // Live privacy: public state never carries opp faces / honest / pre-reveal cards.
@@ -7978,7 +8005,9 @@
       title: 'Bluff',
       subtitle: liveOn
         ? liveSub() + (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') + ' · 1v1'
-        : practiceSub('Empty hand · pressure'),
+        : practiceSub(
+            'Empty hand · ' + (aiDiff === 'easy' ? 'Easy' : aiDiff === 'hard' ? 'Hard' : 'Medium') + ' AI'
+          ),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
@@ -8818,7 +8847,7 @@
       const count = lastClaim.count;
       const myOfRank = countRank(handB, rank);
       const gone = aiKnownGone[rank] || 0;
-      // Max 4 of a rank in a deck; AI holds myOfRank; gone seen; player claimed count
+      // Max 4 of a rank in a deck; AI holds myOfRank; gone seen; player claimed count — never peeks hole cards
       const room = 4 - myOfRank - gone;
       if (count > room) s += 0.55;
       if (count >= 3) s += 0.22;
@@ -8827,6 +8856,8 @@
       if (handA.length === 0 || pendingOutSeatA === true) s += 0.35;
       if (pile.length >= 8) s += 0.1;
       if (myOfRank >= 2 && count >= 2) s += 0.12;
+      if (aiDiff === 'easy') s *= 0.55;
+      else if (aiDiff === 'hard') s = Math.min(0.95, s * 1.25 + 0.05);
       return Math.min(0.92, s);
     }
 
@@ -8836,13 +8867,15 @@
       const behind = handB.length > handA.length + 1;
       const ending = handB.length <= 3;
       const matching = rank ? handB.filter((c) => c.r === rank) : [];
+      const honestBias = aiDiff === 'hard' ? 0.78 : aiDiff === 'easy' ? 0.38 : 0.62;
+      const bluffBias = aiDiff === 'hard' ? 0.18 : aiDiff === 'easy' ? 0.48 : 0.28;
 
       // Honest dump when holding many of claim / freely choose best dump
       if (rank && matching.length >= 2 && aiBluffStreak < 2) {
         const n = Math.min(3, matching.length, ending ? matching.length : 1 + (rng() < 0.45 ? 1 : 0));
         return { cards: matching.slice(0, n), claim: rank, bluff: false };
       }
-      if (rank && matching.length >= 1 && !behind && rng() < 0.62) {
+      if (rank && matching.length >= 1 && !behind && rng() < honestBias) {
         return { cards: matching.slice(0, 1), claim: rank, bluff: false };
       }
 
@@ -8860,20 +8893,25 @@
             best = r;
           }
         });
+        // Easy: sometimes random rank instead of densest
+        if (aiDiff === 'easy' && rng() < 0.4) {
+          best = handB[Math.floor(rng() * handB.length)].r;
+          bestN = by[best] || 1;
+        }
         const pack = handB.filter((c) => c.r === best).slice(0, Math.min(3, bestN));
         return { cards: pack, claim: best, bluff: false };
       }
 
-      // Bluff — cap streak
-      const wantBluff = aiBluffStreak < 2 && (behind || ending || matching.length === 0 || rng() < 0.28);
+      // Bluff — cap streak; Easy bluffs noisier, Hard more disciplined
+      const wantBluff =
+        aiBluffStreak < 2 && (behind || ending || matching.length === 0 || rng() < bluffBias);
       if (wantBluff || matching.length === 0) {
         const others = matching.length ? handB.filter((c) => c.r !== rank) : handB.slice();
         const pool = others.length ? others : handB.slice();
         const n = Math.min(3, pool.length, ending ? Math.min(3, pool.length) : 1 + (rng() < 0.2 ? 1 : 0));
-        // Prefer 1 unless dumping to empty
         let take = n;
         if (ending && pool.length <= 3 && rng() < 0.55) take = pool.length;
-        else take = Math.min(take, 1 + (rng() < 0.25 ? 1 : 0));
+        else take = Math.min(take, 1 + (rng() < (aiDiff === 'easy' ? 0.4 : 0.25) ? 1 : 0));
         take = Math.max(1, Math.min(3, take, pool.length));
         return { cards: pool.slice(0, take), claim: rank, bluff: true };
       }
@@ -8885,7 +8923,8 @@
       if (aiTimer) clearTimeout(aiTimer);
       const facingHumanClaim = lastClaim && lastClaim.seatA === true && pile.length;
       const sus = facingHumanClaim ? aiSuspicion() : 0;
-      const willCall = facingHumanClaim && sus > 0.42;
+      const callBar = aiDiff === 'hard' ? 0.34 : aiDiff === 'easy' ? 0.58 : 0.42;
+      const willCall = facingHumanClaim && sus > callBar;
       // Subtle tell: longer pause before bluff plays
       const think = willCall
         ? 420 + Math.floor(rng() * 280)
@@ -8903,7 +8942,8 @@
       // Finish window: Call or Pass
       if (pendingOutSeatA === true && lastClaim && lastClaim.seatA === true && pile.length) {
         const sus = aiSuspicion();
-        if (sus > 0.38 || rng() < sus) {
+        const bar = aiDiff === 'hard' ? 0.28 : aiDiff === 'easy' ? 0.52 : 0.38;
+        if (sus > bar || rng() < sus) {
           const result = resolveCall(false);
           if (result) {
             lastRevealId = result.revealId;
@@ -8921,7 +8961,8 @@
       // Mid-hand Call?
       if (lastClaim && lastClaim.seatA === true && pile.length) {
         const sus = aiSuspicion();
-        if (sus > 0.48 && rng() < sus) {
+        const bar = aiDiff === 'hard' ? 0.38 : aiDiff === 'easy' ? 0.62 : 0.48;
+        if (sus > bar && rng() < sus) {
           const result = resolveCall(false);
           if (result) {
             lastRevealId = result.revealId;
@@ -9124,25 +9165,27 @@
   }
 
   /**
-   * Practice AI picker (Prompt 3). Uses public table + own hand + opp card count only.
+   * Practice AI picker. Uses public table + own hand + opp card count only.
    * Returns a legal card, or null → Pass. Never returns an illegal play.
-   * Difficulty: Normal (default) — full weights below. No mode UI shipped.
-   *
-   * Weights (final):
-   *   empty-hand win +10000; same-suit runway ×22; post-play next-legal ×18;
-   *   open-7 with 6/8 adjacent +45; naked open −60 (−85 if human shorter);
-   *   race-ahead +12/+10; dump edge ranks (A/K/Q or 2/3) +6–8; jitter ±3.
+   * Difficulty: Easy (noisy) / Medium (default) / Hard (tighter runway).
    */
   function pickSatteAiMove(hand, table, ctx) {
     const c = ctx || {};
     const roll = typeof c.rng === 'function' ? c.rng : Math.random;
     const oppCount = c.oppCount != null ? c.oppCount | 0 : 26;
+    const diff = c.difficulty === 'easy' || c.difficulty === 'hard' ? c.difficulty : 'medium';
     const mine = hand || [];
     const legal = legalSatteMoves(mine, table);
     if (!legal.length) return null;
 
+    // Easy: often random legal
+    if (diff === 'easy' && roll() < 0.55) {
+      return legal[Math.floor(roll() * legal.length)];
+    }
+
     let best = null;
     let bestScore = -Infinity;
+    const scored = [];
     for (let i = 0; i < legal.length; i++) {
       const card = legal[i];
       const t0 = table[card.s];
@@ -9162,13 +9205,13 @@
       const table2 = cloneSatteTable(table);
       satteApplyOn(table2, card);
       const nextLegal = legalSatteMoves(rest, table2).length;
-      score += nextLegal * 18;
+      score += nextLegal * (diff === 'hard' ? 22 : 18);
 
       const t2 = table2[card.s];
       if (t2 && t2.open) {
         const runway =
           satteChainRunway(rest, card.s, t2.lo, -1) + satteChainRunway(rest, card.s, t2.hi, 1);
-        score += runway * 22;
+        score += runway * (diff === 'hard' ? 28 : 22);
       }
 
       if (isSevenOpen) {
@@ -9177,13 +9220,13 @@
         );
         if (hasAdj) score += 45;
         else if (mine.length > oppCount + 2) score += 8; // behind — need space
-        else score -= 60;
+        else score -= diff === 'hard' ? 75 : 60;
         if (!hasAdj && oppCount < mine.length) score -= 25; // don't gift when human closer
         // Prefer extending existing chains when alternatives exist
         const hasExtend = legal.some((x) => x.id !== card.id && table[x.s] && table[x.s].open);
         if (!hasAdj && hasExtend) score -= 35;
       } else if (isLo || isHi) {
-        score += 14; // prefer building over naked opens
+        score += diff === 'hard' ? 18 : 14; // prefer building over naked opens
       }
 
       // Dump awkward edges when already legal
@@ -9197,13 +9240,17 @@
       // Slight preference to shed (always reduces hand by 1 — flat)
       score += 4;
 
-      score += (roll() - 0.5) * 6;
+      const jitter = diff === 'easy' ? 18 : diff === 'hard' ? 2.5 : 6;
+      score += (roll() - 0.5) * jitter;
 
+      scored.push({ card, score });
       if (score > bestScore) {
         bestScore = score;
         best = card;
       }
     }
+    scored.sort((a, b) => b.score - a.score);
+    if (diff === 'medium' && scored.length > 1 && roll() < 0.25) return scored[1].card;
     return best;
   }
 
@@ -9211,6 +9258,14 @@
     const chat = resolveChat(arguments[0]);
     const liveOn = chatLiveOn(chat);
     const rng = rngFn();
+    let aiDiff =
+      !liveOn &&
+      (chat && (chat.difficulty === 'easy' || chat.difficulty === 'hard' || chat.difficulty === 'medium')
+        ? chat.difficulty
+        : (arguments[0] && arguments[0].difficulty) ||
+          (window.__dangalLaunchCtx && window.__dangalLaunchCtx.difficulty) ||
+          'medium');
+    if (aiDiff !== 'easy' && aiDiff !== 'hard') aiDiff = 'medium';
     const ACTIVE_SEATS = 2;
     let aiTimer = 0;
     let coachShown = false;
@@ -9240,7 +9295,9 @@
         ? liveSub() +
           (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') +
           ' · Seven chains'
-        : practiceSub('Chain AI · must play if able'),
+        : practiceSub(
+            'Chains · ' + (aiDiff === 'easy' ? 'Easy' : aiDiff === 'hard' ? 'Hard' : 'Medium') + ' AI'
+          ),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
@@ -9725,6 +9782,7 @@
         rng,
         oppCount: handA.length,
         myCount: handB.length,
+        difficulty: aiDiff,
       });
       if (!pick) {
         applying = false;
