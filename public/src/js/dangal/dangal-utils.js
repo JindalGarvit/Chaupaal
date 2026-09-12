@@ -199,9 +199,19 @@
     const c = Object.assign({}, (ctx && ctx.chat) || {});
     if (ctx && ctx.matchId) c.dangalMatchId = ctx.matchId;
     if (ctx && ctx.opponentUid) {
-      c.uid = ctx.opponentUid;
-      c.peerUid = ctx.opponentUid;
-      c.opponentUid = ctx.opponentUid;
+      const opp = String(ctx.opponentUid);
+      // Practice AI is not a Live peer — keep id for honesty, never mark persistable Live fields.
+      if (opp === 'ai' || opp === 'practice') {
+        c.id = c.id || 'ai';
+        if (!c.name || /^ai$/i.test(String(c.name))) c.name = 'Practice AI';
+        c.uid = '';
+        c.peerUid = '';
+        c.opponentUid = 'ai';
+      } else {
+        c.uid = opp;
+        c.peerUid = opp;
+        c.opponentUid = opp;
+      }
     }
     if (ctx && ctx.source) c.dangalSource = ctx.source;
     return c;

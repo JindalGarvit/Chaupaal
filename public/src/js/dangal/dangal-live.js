@@ -522,7 +522,14 @@
       if (optsLabel && optsLabel.party) return 'Live party';
       return 'Live 1v1';
     }
-    return practiceLabel ? 'Practice · ' + practiceLabel : 'Practice vs AI';
+    if (optsLabel && optsLabel.solo) return 'Practice · Solo';
+    const launch =
+      typeof window !== 'undefined' && window.__dangalLaunchCtx ? window.__dangalLaunchCtx : null;
+    if (launch && launch.practiceKind === 'solo' && !practiceLabel) return 'Practice · Solo';
+    if (!practiceLabel) return 'Practice vs AI';
+    const pl = String(practiceLabel);
+    if (/^solo$/i.test(pl)) return 'Practice · Solo';
+    return 'Practice · ' + pl;
   }
 
   /** Confirm leave; forfeit Live match if still playing. Returns true if left. */

@@ -4791,20 +4791,39 @@ if (typeof registerGame === 'function') {
     order: 90,
     launch(ctx) {
       const launch=(typeof window!=='undefined'&&window.__dangalLaunchCtx)||{};
-      if (ctx.isGroup) {
-        openGroupGameSetup(ctx.chat, 'scribble');
+      const c = ctx || {};
+      if (c.isGroup) {
+        openGroupGameSetup(c.chat, 'scribble');
         return;
       }
-      if (ctx.source === 'party' || launch.scribbleParty) {
-        openGroupGameSetup(ctx.chat || {members:[]}, 'scribble');
+      if (c.source === 'party' || launch.scribbleParty) {
+        openGroupGameSetup(c.chat || {members:[]}, 'scribble');
         return;
       }
-      if (ctx.isSelf || ctx.source === 'solo' || ctx.source === 'practice') {
-        openScribbleGame(ctx.chat || { name: 'Practice', id: 'practice' }, [], { practice: true });
+      const mode = c.mode || launch.mode || '';
+      const opp = String(c.opponentUid || launch.opponentUid || '').trim();
+      const chatId = c.chat && (c.chat.id || c.chat.uid);
+      const practiceVsAi =
+        mode === 'practice' &&
+        (opp === 'ai' || chatId === 'ai' || launch.practiceKind === 'vsAi');
+      // Practice vs AI: you draw, AI guesses — never fake AI doodles.
+      if (practiceVsAi) {
+        const aiChat =
+          c.chat && (c.chat.id === 'ai' || /practice ai/i.test(String(c.chat.name || '')))
+            ? c.chat
+            : typeof practiceAiChat === 'function'
+              ? practiceAiChat()
+              : { name: 'Practice AI', id: 'ai' };
+        openScribbleGame(aiChat, [{ name: 'Practice AI', isAi: true, uid: '' }]);
+        return;
+      }
+      // Explicit solo doodle (no opponent) — honest Solo draw, not vs AI.
+      if (c.source === 'solo' || c.practiceKind === 'solo' || launch.practiceKind === 'solo') {
+        openScribbleGame(c.chat || { name: 'Practice', id: 'practice' }, [], { practice: true });
         return;
       }
       // 1:1 chat / duel challenge — classic Live 1v1 path.
-      openScribbleGame(ctx.chat, [{ name: ctx.chat?.name || 'Friend', uid: ctx.chat?.uid || launch.opponentUid || '' }]);
+      openScribbleGame(c.chat, [{ name: c.chat?.name || 'Friend', uid: c.chat?.uid || launch.opponentUid || '' }]);
     },
   });
 }

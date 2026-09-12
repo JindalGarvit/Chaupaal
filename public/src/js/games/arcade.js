@@ -2464,7 +2464,7 @@ function openTipTap(){
   overlay.innerHTML = `
     ${gameChromeHtml({
       title: 'Tip Tap',
-      subtitle: 'Campaign · 100 levels',
+      subtitle: 'Practice · Solo · Campaign · 100 levels',
       backId: 'cbBack',
       pauseId: 'cbPause',
       rightHtml:

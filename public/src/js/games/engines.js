@@ -2931,7 +2931,10 @@ function openSnakesVersion(chat, version, opts){
 /** Practice / Live pre-game: Classic vs Quick + player count. Live locks 2p; mode still selectable. */
 function openLudoPracticeSheet(chat, sheetOpts){
   sheetOpts=sheetOpts&&typeof sheetOpts==='object'?sheetOpts:{};
-  chat=chat||{name:'AI',id:'ai'};
+  chat=chat||(typeof practiceAiChat==='function'?practiceAiChat():{name:'Practice AI',id:'ai'});
+  if(chat&&(chat.id==='ai'||chat.id==='AI')&&(!chat.name||/^ai$/i.test(String(chat.name)))){
+    chat=Object.assign({},chat,{name:'Practice AI'});
+  }
   const launchCtx=window.__dangalLaunchCtx||{};
   const liveHint=!!(
     sheetOpts.liveOnly||

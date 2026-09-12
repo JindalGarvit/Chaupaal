@@ -232,8 +232,12 @@ function openBrickBreaker(opts) {
   };
 
   function modeSubtitle() {
-    if (playMode === 'endless') return 'Score Attack · Wave ' + (wave + 1);
-    return 'Campaign · Level ' + (level + 1) + '/' + LEVEL_LAYOUTS.length;
+    const solo =
+      typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel
+        ? DangalLive.modeChromeLabel(false, 'Solo', { solo: true })
+        : 'Practice · Solo';
+    if (playMode === 'endless') return solo + ' · Score Attack · Wave ' + (wave + 1);
+    return solo + ' · Campaign · Level ' + (level + 1) + '/' + LEVEL_LAYOUTS.length;
   }
 
   overlay.innerHTML = `

@@ -73,8 +73,8 @@
     overlay.dataset.gameId = o.gameId || '';
     const practiceSub =
       typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel
-        ? DangalLive.modeChromeLabel(false, 'solo')
-        : 'Practice';
+        ? DangalLive.modeChromeLabel(false, 'Solo', { solo: true })
+        : 'Practice · Solo';
     const chromeSub = o.subtitle != null ? o.subtitle : practiceSub;
     const leaveShell = {
       gameOver: false,

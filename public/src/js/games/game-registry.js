@@ -285,6 +285,15 @@
       stake,
       chatId: o.chatId || chat?.firestoreId || chat?.id || '',
       source,
+      practiceKind:
+        o.practiceKind ||
+        (mode === 'practice'
+          ? opponentUid === 'ai' || (chat && chat.id === 'ai')
+            ? 'vsAi'
+            : game.solo || game.gameType === 'solo'
+              ? 'solo'
+              : 'vsAi'
+          : ''),
       startedAt: Date.now(),
       ludoMode:
         o.ludoMode ||
@@ -417,11 +426,128 @@
     return !!(game && game.liveDuel);
   }
 
+  /** Canonical Practice AI seat — never fake human names. */
+  function practiceAiChat() {
+    return { name: 'Practice AI', id: 'ai' };
+  }
+
+  /**
+   * Practice entry class for Manch / self-chat honesty.
+   * @returns {'soloPractice'|'duelAi'|'special'|null}
+   */
+  function getPracticeEntryClass(gameId) {
+    const id =
+      typeof canonicalGameId === 'function' ? canonicalGameId(gameId) : String(gameId || '');
+    if (!id) return null;
+    // True solos — never label or open as vs AI
+    if (
+      id === 'tiptap' ||
+      id === 'ankjod' ||
+      id === 'kakuro' ||
+      id === 'rushrunner' ||
+      id === 'wordguess' ||
+      id === 'brickbreaker'
+    ) {
+      return 'soloPractice';
+    }
+    // Category / mode / honesty quirks — still Practice-reachable
+    if (id === 'quiz' || id === 'scribble' || id === 'patangbaazi') return 'special';
+    const g = getGame(id);
+    if (!g || g.dangal === false) return null;
+    if ((g.solo || g.gameType === 'solo') && !gameIsLiveCapable(id, g)) return 'soloPractice';
+    return 'duelAi';
+  }
+
+  function isSoloPracticeGame(gameId) {
+    return getPracticeEntryClass(gameId) === 'soloPractice';
+  }
+
+  /**
+   * Shared Practice · Solo launch (Manch + self-chat).
+   * No opponent sheet; chrome preference Practice · Solo via practiceKind.
+   */
+  function launchSoloPractice(gameId, source) {
+    const game = getGame(gameId);
+    if (!game) return;
+    const src = source === 'self' ? 'self' : source || 'manch';
+    launchDangalGame({
+      gameId,
+      source: src,
+      mode: 'practice',
+      stake: 0,
+      opponentUid: '',
+      practiceKind: 'solo',
+      _userLaunch: game.__rawLaunch,
+      _descriptor: game,
+    });
+  }
+
+  /**
+   * Shared Practice vs AI contract (Manch + self-chat).
+   * Sets honest launch ctx; ≤1 optional setup sheet (Ludo / Uno / Chess / Patang / Snakes).
+   */
+  function launchPracticeVsAi(gameId, source) {
+    const game = getGame(gameId);
+    if (!game) return;
+    const src = source === 'self' ? 'self' : source || 'manch';
+    const chat = practiceAiChat();
+
+    // Ludo: Classic|Quick sheet is the one allowed optional step
+    if (gameId === 'ludo') {
+      window.__dangalLaunchCtx = Object.assign({}, window.__dangalLaunchCtx || {}, {
+        gameId: 'ludo',
+        gameType: 'ludo',
+        mode: 'practice',
+        opponentUid: 'ai',
+        stake: 0,
+        source: src,
+        practiceKind: 'vsAi',
+        startedAt: Date.now(),
+      });
+      if (typeof openLudoPracticeSheet === 'function') {
+        openLudoPracticeSheet(chat, { source: src, mode: 'practice', opponentUid: 'ai' });
+      } else {
+        openLudoGame(chat, 2, { mode: 'classic' });
+      }
+      return;
+    }
+
+    // Quiz: category sheet is the allowed optional step
+    if (gameId === 'quiz') {
+      if (typeof openQuizCategorySheet === 'function') openQuizCategorySheet();
+      else if (typeof startMuqabala === 'function') {
+        startMuqabala(null, 'GK', {
+          practice: true,
+          simulated: true,
+          skipMatchmaking: true,
+          skipCredit: true,
+        });
+      }
+      return;
+    }
+
+    game.launch({
+      chat,
+      source: src,
+      mode: 'practice',
+      opponentUid: 'ai',
+      stake: 0,
+      practiceKind: 'vsAi',
+    });
+  }
+
   function pickerHonestyBadge(liveCapable) {
     if (liveCapable) {
       return '<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:rgba(229,57,53,0.12);color:#C62828;font:700 9px Space Grotesk,sans-serif;letter-spacing:0.02em;vertical-align:middle;">Live</span>';
     }
     return '<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:rgba(0,137,123,0.12);color:#00695C;font:700 9px Space Grotesk,sans-serif;letter-spacing:0.02em;vertical-align:middle;">Practice</span>';
+  }
+
+  function pickerPracticeBadge(kind) {
+    if (kind === 'solo') {
+      return '<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:rgba(0,137,123,0.12);color:#00695C;font:700 9px Space Grotesk,sans-serif;letter-spacing:0.02em;vertical-align:middle;">Solo</span>';
+    }
+    return '<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:rgba(201,162,39,0.18);color:#8D6E00;font:700 9px Space Grotesk,sans-serif;letter-spacing:0.02em;vertical-align:middle;">vs AI</span>';
   }
 
   /**
@@ -439,18 +565,28 @@
     let emptyHint = '';
 
     if (isSelf) {
-      pickerGames = getGames({ selfChat: true }).map((g) => ({
-        id: g.id,
-        emoji: g.icon,
-        name: g.name,
-        desc: g.desc,
-        liveCapable: false,
-        showChallenge: false,
-        fn: () => g.launch(ctx),
-      }));
-      title = 'Solo games';
-      subtitle = 'Solo games only — practice & test here';
-      emptyHint = 'No solo games registered yet — try Manch.';
+      // Same Practice contract as Manch — duelAi → vs AI; solos → Practice · Solo.
+      pickerGames = getGames({ selfChat: true }).map((g) => {
+        const entry = getPracticeEntryClass(g.id);
+        const solo = entry === 'soloPractice';
+        let rowDesc = solo ? 'Practice · Solo' : 'Practice vs AI';
+        if (g.id === 'scribble') rowDesc = 'Practice vs AI · you draw, AI guesses';
+        if (g.id === 'patangbaazi') rowDesc = 'Practice · Duel or Festival';
+        return {
+          id: g.id,
+          emoji: g.icon,
+          name: g.name,
+          desc: rowDesc,
+          practiceSolo: solo,
+          fn: () => {
+            if (solo) launchSoloPractice(g.id, 'self');
+            else launchPracticeVsAi(g.id, 'self');
+          },
+        };
+      });
+      title = 'Practice';
+      subtitle = 'Practice vs AI or Solo — same paths as Manch';
+      emptyHint = 'No Practice games here yet — try Manch.';
     } else if (isGroup) {
       // Hard allowlist — party Live titles only (Scribble = 1v1 or party 3–6).
       const allow = new Set(GROUP_PARTY_IDS);
@@ -541,6 +677,10 @@
     } else {
       bodyHtml = pickerGames
         .map((g, i) => {
+          const badge =
+            isSelf && typeof g.practiceSolo === 'boolean'
+              ? pickerPracticeBadge(g.practiceSolo ? 'solo' : 'vsAi')
+              : '';
           return (
             '<div class="dangal-picker-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:stretch;">' +
             '<button data-i="' +
@@ -551,6 +691,7 @@
             '</span>' +
             '<div><div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;">' +
             g.name +
+            badge +
             '</div><div style="font-size:11px;color:var(--muted);margin-top:1px;">' +
             g.desc +
             '</div></div></button></div>'
@@ -703,11 +844,7 @@
       document.getElementById('dgCancelGame').addEventListener('click', () => sheet.remove());
       document.getElementById('dgPracticeAi').addEventListener('click', () => {
         sheet.remove();
-        if (typeof openLudoPracticeSheet === 'function') {
-          openLudoPracticeSheet({ name: 'AI', id: 'ai' }, { source: 'manch' });
-        } else {
-          openLudoGame({ name: 'AI', id: 'ai' }, 2, { mode: 'classic' });
-        }
+        launchPracticeVsAi('ludo', 'manch');
       });
       document.getElementById('dgFriendOpp').addEventListener('click', async () => {
         const stake = stakesOk ? readDangalStake(sheet) : 0;
@@ -813,13 +950,7 @@
     document.getElementById('dgCancelGame').addEventListener('click', () => sheet.remove());
     document.getElementById('dgPracticeAi').addEventListener('click', () => {
       sheet.remove();
-      game.launch({
-        chat: { name: 'AI', id: 'ai' },
-        source: 'manch',
-        mode: 'practice',
-        opponentUid: 'ai',
-        stake: 0,
-      });
+      launchPracticeVsAi(gameId, 'manch');
     });
     document.getElementById('dgFriendOpp').addEventListener('click', async () => {
       const stake = stakesOk ? readDangalStake(sheet) : 0;
@@ -921,15 +1052,10 @@
     // must reach the friend / Live sheet, not silent Practice.
     const liveCapable =
       typeof isLiveCapable === 'function' ? isLiveCapable(gameId) : !!game.liveDuel;
-    const practiceOnly = (game.solo || game.gameType === 'solo') && !liveCapable;
+    const practiceOnly =
+      isSoloPracticeGame(gameId) || ((game.solo || game.gameType === 'solo') && !liveCapable);
     if (practiceOnly) {
-      launchDangalGame({
-        gameId,
-        source: 'manch',
-        mode: 'practice',
-        _userLaunch: game.__rawLaunch,
-        _descriptor: game,
-      });
+      launchSoloPractice(gameId, 'manch');
       return;
     }
 
@@ -1042,6 +1168,11 @@
   window.openDangalStakeSheet = openDangalStakeSheet;
   window.launchDangalGame = launchDangalGame;
   window.clearDangalLaunchCtx = clearDangalLaunchCtx;
+  window.practiceAiChat = practiceAiChat;
+  window.getPracticeEntryClass = getPracticeEntryClass;
+  window.isSoloPracticeGame = isSoloPracticeGame;
+  window.launchPracticeVsAi = launchPracticeVsAi;
+  window.launchSoloPractice = launchSoloPractice;
   // Game-launch boundary (CONVENTIONS 4c) — a broken engine must not blank the shell
   const guardGame = typeof safeFeature === 'function' ? safeFeature : (n, f) => f;
   window.openGamePicker = guardGame('game_picker', openGamePicker);
