@@ -209,7 +209,7 @@ function renderChatList(chats, opts){
           if (presenceDot) presenceDot.hidden = !isLive;
           const span = liveEl.querySelector('span');
           if (span) {
-            if (isLive) span.textContent = total > 2 ? `Live · ${total}` : 'Live';
+            if (isLive) span.textContent = total > 2 ? `${total} in Mehfil` : 'Live';
             else if (waiting)
               span.textContent =
                 typeof MEHFIL_WAITING_LABEL !== 'undefined' ? MEHFIL_WAITING_LABEL : 'Waiting in Mehfil';
@@ -308,6 +308,11 @@ function renderChatList(chats, opts){
         e.preventDefault();
         e.stopPropagation();
         return;
+      }
+      const liveEl = item.querySelector('[data-mehfil-live-row]');
+      if (liveEl && !liveEl.hidden) {
+        const cid = chat.firestoreId || chat.id;
+        if (typeof requestMehfilAutoJoin === 'function') requestMehfilAutoJoin(cid);
       }
       openChatScreen(chat);
     });

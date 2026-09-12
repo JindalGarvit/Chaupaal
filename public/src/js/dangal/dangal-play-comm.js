@@ -67,7 +67,9 @@
       return false;
     }
     if (typeof isMehfilOpen === 'function' && isMehfilOpen()) {
-      if (typeof showToast === 'function') showToast('Already in Mehfil — talk there');
+      if (typeof showToast === 'function') {
+        showToast('Already in Mehfil — leave there first, or stay in the room');
+      }
       return false;
     }
     if (typeof apiFetch !== 'function') return false;
@@ -264,4 +266,5 @@
 
   window.attachDangalPlayComm = attachDangalPlayComm;
   window.leaveDangalPlayCall = leaveCall;
+  window.isDangalPlayCallOpen = () => !!callClient;
 })();

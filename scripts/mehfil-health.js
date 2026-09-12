@@ -33,6 +33,8 @@ const checks = [
   ['RTDB mehfil read gated by mehfilMembers', rules.includes("root.child('mehfilMembers')")],
   ['mehfilLiveState helper', mehfilJs.includes('function mehfilLiveState') && mehfilJs.includes('count >= 2')],
   ['freshness 25s + heartbeat 10s', mehfilJs.includes('PRESENCE_FRESH_MS = 25000') && mehfilJs.includes('PRESENCE_HEARTBEAT_MS = 10000')],
+  ['abandonMehfil teardown', mehfilJs.includes('function abandonMehfil') && mehfilJs.includes('ensureOpenMehfil')],
+  ['DM ring chrome + traces', mehfilJs.includes('RING_TRACE_NO_ANSWER') && mehfilJs.includes('setRingingChrome')],
   ['mehfil_ensure_member action', mediaConfig.includes('mehfil_ensure_member')],
   ['agora_token membership gate', mediaConfig.includes('assertMehfilAgoraAccess')],
   ['youtube-search.js', exists('server-lib/youtube-search.js')],
@@ -54,21 +56,23 @@ console.log(`${agoraConfigured ? '✓' : '○'} AGORA_APP_ID + CERTIFICATE (opti
 console.log(`○ api/*.js count: ${apiCount} (Hobby max 12)`);
 
 console.log(`
-Manual QA checklist (M0)
+Manual QA checklist (M1)
 ------------------------
-Live honesty
-  [ ] One person in room → peers see “Waiting in Mehfil” (not Live)
-  [ ] Second joins → Live on header, banner, inbox
-  [ ] Kill tab → ghost gone within ~25s; ring skips ghosts
+Entry / exit
+  [ ] Header, banner, inbox Live, ?mehfil=1, ring accept, notif, invite → in-room one tap
+  [ ] Leave (button/back/swipe/chat switch/background) → mic off, presence gone, shell cleared
+  [ ] Rejoin after leave works
 
-Security
-  [ ] Non-member agora_token → rejected
-  [ ] Non-member RTDB mehfil/{chatId} → denied
-  [ ] Self-chat / Chaupaal AI blocked client + server
-  [ ] Ring cooldown ~15s · TTL ~40s · fanout ≤20
+DM vs group
+  [ ] DM alone → Ring + “Ringing {name}…” + cancel; decline/timeout → one thread line
+  [ ] Group → drop-in + who’s-here; ring is secondary (no auto-ring)
+
+Presence
+  [ ] Alone = inviting CTAs, not Live; second join → arrival feedback
+  [ ] Busy Mehfil↔Dangal → honest banner, no dual audio
 
 Ops
-  [ ] firebase deploy --only database
+  [ ] firebase deploy --only database (if rules changed)
   [ ] Vercel env: AGORA_APP_ID, AGORA_APP_CERTIFICATE
 `);
 

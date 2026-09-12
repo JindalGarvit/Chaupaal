@@ -665,10 +665,19 @@
         return false;
       }
     })();
-    // Already open on this chat — do not pushState / remount (breaks Back after overlays/music)
+    // Already open on this chat — still honor mehfil=1 / re-tap join
     const open = document.getElementById('activeChatScreen');
     const openId = open?.dataset?.chatId || window.currentOpenChat?.firestoreId || window.currentOpenChat?.id;
-    if (open && openId && String(openId) === String(id)) return;
+    if (open && openId && String(openId) === String(id)) {
+      if (wantMehfil && currentUser) {
+        const chat = window.currentOpenChat || { id, firestoreId: id };
+        if (typeof mehfilEligible === 'function' && !mehfilEligible(chat)) return;
+        if (typeof ensureOpenMehfil === 'function') ensureOpenMehfil(chat);
+        else if (typeof openMehfil === 'function') openMehfil(chat);
+        else if (typeof requestMehfilAutoJoin === 'function') requestMehfilAutoJoin(id);
+      }
+      return;
+    }
 
     switchTab('baithak');
     let local =
@@ -708,7 +717,16 @@
       }
       const still = document.getElementById('activeChatScreen');
       const stillId = still?.dataset?.chatId;
-      if (still && stillId && String(stillId) === String(id)) return;
+      if (still && stillId && String(stillId) === String(id)) {
+        if (wantMehfil && currentUser) {
+          const chat = window.currentOpenChat || local;
+          if (!(typeof mehfilEligible === 'function' && !mehfilEligible(chat))) {
+            if (typeof ensureOpenMehfil === 'function') ensureOpenMehfil(chat);
+            else if (typeof openMehfil === 'function') openMehfil(chat);
+          }
+        }
+        return;
+      }
       setTimeout(() => {
         if (wantMehfil && currentUser) {
           if (typeof mehfilEligible === 'function' && !mehfilEligible(local)) {

@@ -245,6 +245,98 @@
   color:var(--call-chrome-muted);
   line-height:1.45;
 }
+.mehfil-waiting-actions{
+  display:flex;
+  gap:8px;
+  justify-content:center;
+  flex-wrap:wrap;
+  margin-top:var(--space-3);
+  pointer-events:auto;
+}
+.mehfil-waiting-actions button{
+  min-height:40px;
+  padding:0 14px;
+  border-radius:var(--radius-md, 10px);
+  border:1px solid var(--call-chrome-line, rgba(255,255,255,0.18));
+  background:rgba(255,255,255,0.08);
+  color:inherit;
+  font:inherit;
+  cursor:pointer;
+}
+.mehfil-waiting-ring{
+  background:var(--red,#e63946) !important;
+  border-color:transparent !important;
+  color:#fff !important;
+}
+.mehfil-who-here{
+  font-size:var(--text-xs);
+  color:var(--call-chrome-muted);
+  white-space:nowrap;
+  padding:0 6px;
+}
+.mehfil-ringing{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:12px;
+  padding:8px 12px;
+  background:rgba(230,57,70,0.16);
+  color:inherit;
+  font-size:var(--text-sm);
+  z-index:5;
+}
+.mehfil-ringing[hidden]{display:none !important;}
+.mehfil-ringing button{
+  min-height:36px;
+  padding:0 12px;
+  border-radius:8px;
+  border:1px solid rgba(255,255,255,0.25);
+  background:transparent;
+  color:inherit;
+  cursor:pointer;
+}
+.mehfil-alone-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  justify-content:center;
+  margin-top:8px;
+}
+.mehfil-alone-ring{
+  min-height:40px;
+  padding:0 14px;
+  border-radius:10px;
+  border:none;
+  background:var(--red,#e63946);
+  color:#fff;
+  font:inherit;
+  cursor:pointer;
+}
+.mehfil-alone-copy{
+  min-height:40px;
+  padding:0 12px;
+  border-radius:10px;
+  border:1px solid var(--call-chrome-line, rgba(255,255,255,0.18));
+  background:transparent;
+  color:inherit;
+  font:inherit;
+  cursor:pointer;
+}
+.mehfil-join-pending{
+  position:absolute;
+  left:50%;
+  top:40%;
+  transform:translate(-50%,-50%);
+  z-index:80;
+  padding:12px 16px;
+  border-radius:12px;
+  background:rgba(0,0,0,0.72);
+  color:#fff;
+  font-size:14px;
+}
+.mehfil-member-chip.is-cam .mehfil-member-chip-avatar{
+  box-shadow:0 0 0 2px rgba(76,175,80,0.7);
+}
 .mehfil-disabled,
 .mehfil-error{
   padding:var(--space-6);

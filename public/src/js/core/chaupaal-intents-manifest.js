@@ -393,7 +393,8 @@
     run: () => {
       if (needSignIn()) return;
       const chat = window.currentOpenChat;
-      if (chat && typeof openMehfil === 'function') openMehfil(chat);
+      if (chat && typeof ensureOpenMehfil === 'function') ensureOpenMehfil(chat);
+      else if (chat && typeof openMehfil === 'function') openMehfil(chat);
       else {
         switchTab('baithak');
         if (typeof showToast === 'function') {

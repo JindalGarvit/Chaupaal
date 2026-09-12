@@ -14,6 +14,12 @@ let activeChatAttachDocClick = null;
 function closeChatScreen(opts = {}) {
   const { updateHistory = true, animate = true } = opts;
 
+  // Mehfil must die with the chat — no orphan A/V over wrong thread
+  if (typeof isMehfilOpen === 'function' && isMehfilOpen()) {
+    if (typeof abandonMehfil === 'function') abandonMehfil('chat_close');
+    else if (typeof leaveMehfil === 'function') leaveMehfil();
+  }
+
   // Keep in-app music playing when leaving chat — mini-player owns stop/dismiss
   if (typeof stopChatPresence === 'function') stopChatPresence();
   if (typeof clearChatPresenceSubs === 'function') clearChatPresenceSubs();
@@ -1029,16 +1035,19 @@ function openChatScreen(chat){
     }
   }
   document.getElementById('chatMehfilBtn')?.addEventListener('click', () => {
-    if (typeof openMehfil === 'function') openMehfil(chat);
-    else if (typeof showToast === 'function') showToast('Mehfil loading…');
+    if (typeof ensureOpenMehfil === 'function') ensureOpenMehfil(chat);
+    else if (typeof openMehfil === 'function') openMehfil(chat);
+    else if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('mehfil_joining') : 'Joining Mehfil…');
   });
   document.getElementById('chatMehfilRingBtn')?.addEventListener('click', (e) => {
     e.stopPropagation();
     if (typeof startMehfilRing === 'function') startMehfilRing(chat);
-    else if (typeof showToast === 'function') showToast('Mehfil loading…');
+    else if (typeof ensureOpenMehfil === 'function') ensureOpenMehfil(chat);
+    else if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('mehfil_joining') : 'Joining Mehfil…');
   });
   document.getElementById('mehfilLiveJoin')?.addEventListener('click', () => {
-    if (typeof openMehfil === 'function') openMehfil(chat);
+    if (typeof ensureOpenMehfil === 'function') ensureOpenMehfil(chat);
+    else if (typeof openMehfil === 'function') openMehfil(chat);
   });
   // Live presence → header badge + join banner (Live = ≥2 fresh; solo = Waiting in Mehfil)
   if (!isSelf && !isChaupaal && typeof watchMehfilPresence === 'function') {
@@ -1066,11 +1075,19 @@ function openChatScreen(chat){
               : 'Waiting in Mehfil';
         }
         if (sub) {
-          sub.textContent = isLive
-            ? typeof t === 'function'
-              ? t('mehfil_live_sub', { n: String(total) })
-              : `${total} in the room`
-            : '1 in room — join to go Live';
+          // Group = ambient channel count; DM = still ambient but clearer join cue
+          if (isLive) {
+            sub.textContent =
+              total === 1
+                ? '1 in Mehfil'
+                : typeof t === 'function'
+                  ? t('mehfil_live_sub', { n: String(total) })
+                  : `${total} in Mehfil`;
+          } else {
+            sub.textContent = isGroup
+              ? '1 waiting — drop in anytime'
+              : '1 in room — join to go Live';
+          }
         }
       }
     });
@@ -1082,8 +1099,11 @@ function openChatScreen(chat){
     const pending =
       typeof consumeMehfilAutoJoin === 'function' ? consumeMehfilAutoJoin() : null;
     if (pending && String(pending) === String(chat.firestoreId || chat.id)) {
-      if (typeof mehfilEligible === 'function' && mehfilEligible(chat) && typeof openMehfil === 'function') {
-        setTimeout(() => openMehfil(chat), 400);
+      if (typeof mehfilEligible === 'function' && mehfilEligible(chat)) {
+        setTimeout(() => {
+          if (typeof ensureOpenMehfil === 'function') ensureOpenMehfil(chat);
+          else if (typeof openMehfil === 'function') openMehfil(chat);
+        }, 400);
       }
     }
   } catch (e) {}
@@ -1313,7 +1333,8 @@ function wireChallengeBubble(root){
     btn.dataset.wired='1';
     btn.addEventListener('click',()=>{
       const chat=window.currentOpenChat;
-      if(chat && typeof openMehfil==='function') openMehfil(chat);
+      if(chat && typeof ensureOpenMehfil==='function') ensureOpenMehfil(chat);
+      else if(chat && typeof openMehfil==='function') openMehfil(chat);
       else if(typeof showToast==='function') showToast(typeof t==='function'?t('mehfil_unavailable'):'Mehfil unavailable');
     });
   });

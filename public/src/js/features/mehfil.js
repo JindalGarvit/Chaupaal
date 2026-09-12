@@ -55,9 +55,14 @@
   let chatUnread = 0;
   let cachedMediaState = null;
   let mehfilAutoJoinPending = null;
+  let ringUiTimer = null;
+  let lastKnownFreshCount = 0;
+  let dmAutoRingDone = false;
 
   /** Solo waiter label — never “Live” with one person. */
   const MEHFIL_WAITING_LABEL = 'Waiting in Mehfil';
+  const RING_TRACE_NO_ANSWER = 'Mehfil ring · no answer';
+  const RING_TRACE_DECLINED = 'Mehfil ring · declined';
 
   function isFreshParticipant(meta, now) {
     if (!meta || typeof meta !== 'object') return false;
@@ -517,11 +522,10 @@
       if (m.hostUid !== currentUser.uid) return;
       const ps = await rtdbRef(`mehfil/${activeChatId}/participants`)?.once('value');
       const val = ps?.val() || {};
-      const others = Object.entries(val)
-        .filter(([uid]) => uid !== currentUser.uid)
-        .sort((a, b) => (Number(a[1]?.at) || 0) - (Number(b[1]?.at) || 0));
+      const state = mehfilLiveState(val);
+      const others = (state.freshUids || []).filter((uid) => uid !== currentUser.uid);
       if (others.length) {
-        await ref.update({ hostUid: others[0][0], controlUid: null, controlMode: 'host' });
+        await ref.update({ hostUid: others[0], controlUid: null, controlMode: 'host' });
       }
     } catch (e) {}
   }
@@ -570,24 +574,66 @@
     if (!chipsHost || !ref) return;
     const paint = (snap) => {
       const val = snap.val() || {};
-      const rows = Object.entries(val).map(([uid, meta]) => {
+      const state = mehfilLiveState(val);
+      if (state.staleUids && state.staleUids.length) pruneStaleParticipants(chatId, state.staleUids);
+      const freshEntries = (state.freshUids || [])
+        .map((uid) => [uid, val[uid]])
+        .filter(([, meta]) => meta);
+      // Arrival feedback when someone new joins (not on first paint).
+      if (lastKnownFreshCount > 0 && state.count > lastKnownFreshCount) {
+        const newcomers = freshEntries
+          .map(([uid, meta]) => ({ uid, name: meta?.name || 'Someone' }))
+          .filter((p) => p.uid !== currentUser?.uid);
+        const joined = newcomers[newcomers.length - 1];
+        if (joined) {
+          setMehfilStatus(
+            tt('mehfil_someone_joined', '{{name}} joined', { name: (joined.name || '').split(' ')[0] || 'Someone' }),
+            'live'
+          );
+          if (!(typeof quietMode !== 'undefined' && quietMode) && typeof haptic === 'function') {
+            try {
+              haptic('light');
+            } catch (e) {}
+          }
+        }
+      }
+      lastKnownFreshCount = state.count;
+      if (state.count > 1) setRingingChrome(false);
+      const rows = freshEntries.map(([uid, meta]) => {
         const name = meta?.name || 'Member';
         const me = uid === currentUser?.uid;
         const muted = !!meta?.muted;
+        const camOn = !!meta?.cam;
         const initial = esc((name || '?').slice(0, 1));
-        return `<button type="button" class="mehfil-member-chip${me ? ' is-me' : ''}${muted ? ' is-muted' : ''}" data-uid="${esc(uid)}" title="${esc(name)}">
+        return `<button type="button" class="mehfil-member-chip${me ? ' is-me' : ''}${muted ? ' is-muted' : ''}${camOn ? ' is-cam' : ''}" data-uid="${esc(uid)}" title="${esc(name)}">
           <span class="mehfil-member-chip-avatar">${initial}</span>
-          <span class="mehfil-member-chip-name">${esc(name.split(' ')[0])}${me ? ' · ' + tt('mehfil_you', 'you') : ''}</span>
+          <span class="mehfil-member-chip-name">${esc(name.split(' ')[0])}${me ? ' · ' + tt('mehfil_you', 'you') : ''}${muted ? ' · 🔇' : ''}</span>
         </button>`;
       });
       chipsHost.innerHTML = rows.length
         ? rows.join('')
         : `<span class="mehfil-member-chip is-empty">${esc(tt('mehfil_empty_room', 'No one here yet'))}</span>`;
-      updateWaitingState();
-      updateAloneHint(Object.keys(val).length);
+      updateWaitingState(state);
+      updateAloneHint(state.count);
+      updateWhoHereStrip(state);
     };
     ref.on('value', paint);
     rtdbUnsubs.push(() => ref.off('value', paint));
+  }
+
+  function updateWhoHereStrip(state) {
+    const el = overlayEl?.querySelector('[data-mehfil-who-here]');
+    if (!el) return;
+    const n = state?.count || 0;
+    if (n <= 0) {
+      el.hidden = true;
+      return;
+    }
+    el.hidden = false;
+    el.textContent =
+      n === 1
+        ? tt('mehfil_who_one', '1 in Mehfil')
+        : tt('mehfil_who_n', '{{n}} in Mehfil', { n: String(n) });
   }
 
   function updateAloneHint(count) {
@@ -595,6 +641,22 @@
     if (!hint) return;
     const alone = !count || count <= 1;
     hint.hidden = !alone;
+  }
+
+  function updateWaitingState(liveState) {
+    if (!overlayEl) return;
+    const grid = stageGrid();
+    const waiting = overlayEl.querySelector('[data-mehfil-waiting]');
+    if (!grid || !waiting) return;
+    const remotes = overlayEl.querySelectorAll('.mehfil-tile:not(.mehfil-tile--self)').length;
+    const blocked = !!grid.querySelector('.mehfil-disabled, .mehfil-error');
+    const fresh =
+      liveState && typeof liveState.count === 'number'
+        ? liveState.count
+        : lastKnownFreshCount;
+    // Hide waiting when peers are present (tiles or fresh presence) or media is up.
+    waiting.hidden = blocked || remotes > 0 || fresh > 1 || hasYoutubeOnStage();
+    layoutCinema();
   }
 
   function loadScript(src) {
@@ -634,17 +696,6 @@
     status.textContent = text || '';
     status.classList.toggle('is-live', tone === 'live');
     status.classList.toggle('is-warn', tone === 'warn');
-  }
-
-  function updateWaitingState() {
-    if (!overlayEl) return;
-    const grid = stageGrid();
-    const waiting = overlayEl.querySelector('[data-mehfil-waiting]');
-    if (!grid || !waiting) return;
-    const remotes = overlayEl.querySelectorAll('.mehfil-tile:not(.mehfil-tile--self)').length;
-    const blocked = !!grid.querySelector('.mehfil-disabled, .mehfil-error');
-    waiting.hidden = blocked || remotes > 0 || hasYoutubeOnStage();
-    layoutCinema();
   }
 
   function syncSheetOpenClass() {
@@ -1275,6 +1326,10 @@
   async function teardownMehfil(reason) {
     clearTimeout(chromeTimer);
     chromeTimer = null;
+    clearTimeout(ringUiTimer);
+    ringUiTimer = null;
+    lastKnownFreshCount = 0;
+    dmAutoRingDone = false;
     clearRtdb();
     try {
       if (localAudio) {
@@ -1341,6 +1396,12 @@
     clearTimeout(chatIdleTimer);
     chatIdleTimer = null;
     cachedMediaState = null;
+    try {
+      document.getElementById('mehfilBusyBanner')?.remove();
+    } catch (e) {}
+    try {
+      overlayEl?.querySelector('[data-mehfil-effects-layer]')?.replaceChildren?.();
+    } catch (e) {}
     const el = overlayEl;
     overlayEl = null;
     activeChatId = null;
@@ -1364,6 +1425,23 @@
       if (typeof restoreAppShell === 'function') restoreAppShell(reason || 'mehfil_leave');
       else if (typeof clearShellGlitches === 'function') clearShellGlitches(reason || 'mehfil_leave');
     } catch (e) {}
+  }
+
+  /**
+   * Leave without history.back — for chat switch, sign-out, pagehide.
+   */
+  async function abandonMehfil(reason) {
+    if (!overlayEl && !document.getElementById('mehfilOverlay')) return;
+    joinGeneration += 1;
+    const el = overlayEl || document.getElementById('mehfilOverlay');
+    layerHandle = null;
+    await teardownMehfil(reason || 'abandon');
+    leaving = false;
+    if (el && typeof removeNavLayer === 'function') {
+      try {
+        removeNavLayer(el);
+      } catch (e) {}
+    }
   }
 
   /**
@@ -1579,6 +1657,48 @@
     } catch (e) {}
   }
 
+  function setRingingChrome(on, peerName) {
+    clearTimeout(ringUiTimer);
+    ringUiTimer = null;
+    const banner = overlayEl?.querySelector('[data-mehfil-ringing]');
+    if (!banner) return;
+    if (!on) {
+      banner.hidden = true;
+      return;
+    }
+    banner.hidden = false;
+    const label = banner.querySelector('[data-mehfil-ringing-label]');
+    if (label) {
+      label.textContent = peerName
+        ? tt('mehfil_ringing_name', 'Ringing {{name}}…', { name: peerName })
+        : tt('mehfil_ringing', 'Ringing…');
+    }
+    ringUiTimer = setTimeout(() => setRingingChrome(false), RING_TTL_MS + 500);
+  }
+
+  function cancelOutboundRing() {
+    setRingingChrome(false);
+    ringAckUnsubs.forEach((fn) => {
+      try {
+        fn();
+      } catch (e) {}
+    });
+    ringAckUnsubs = [];
+    if (activeChatId) {
+      rtdbRef(`mehfil/${activeChatId}/ring`)?.remove().catch(() => {});
+    }
+  }
+
+  async function postRingTrace(chat, text) {
+    const chatId = chat?.firestoreId || chat?.id || activeChatId;
+    if (!chatId || !text) return;
+    try {
+      if (typeof sendRealtimeMessage === 'function') {
+        await sendRealtimeMessage(chatId, text, chat?.type === 'group', null, null);
+      }
+    } catch (e) {}
+  }
+
   function watchCallerRingAcks(chatId, targetUids) {
     ringAckUnsubs.forEach((fn) => {
       try {
@@ -1588,9 +1708,12 @@
     ringAckUnsubs = [];
     const targets = new Set((targetUids || []).map(String));
     const oneToOne = targets.size === 1;
+    const chatSnap = activeChat || { id: chatId, firestoreId: chatId, type: oneToOne ? 'dm' : 'group' };
     const timeoutId = setTimeout(() => {
-      if (typeof showToast === 'function') showToast(tt('mehfil_no_answer', 'No answer'));
+      setRingingChrome(false);
       rtdbRef(`mehfil/${chatId}/ring`)?.remove().catch(() => {});
+      if (oneToOne) postRingTrace(chatSnap, RING_TRACE_NO_ANSWER);
+      else if (typeof showToast === 'function') showToast(tt('mehfil_no_answer', 'No answer'));
     }, RING_TTL_MS);
     ringAckUnsubs.push(() => clearTimeout(timeoutId));
     const ref = rtdbRef(`mehfil/${chatId}/ringAck`);
@@ -1601,11 +1724,14 @@
       const status = snap.val()?.status;
       if (status === 'declined' && oneToOne) {
         clearTimeout(timeoutId);
-        if (typeof showToast === 'function') showToast(tt('mehfil_declined', 'Declined'));
+        setRingingChrome(false);
         rtdbRef(`mehfil/${chatId}/ring`)?.remove().catch(() => {});
+        postRingTrace(chatSnap, RING_TRACE_DECLINED);
       }
       if (status === 'accepted') {
         clearTimeout(timeoutId);
+        setRingingChrome(false);
+        setMehfilStatus(tt('mehfil_in_call', 'In the room'), 'live');
       }
     };
     ref.on('child_added', onChild);
@@ -1672,7 +1798,11 @@
       }).catch(() => {});
     }
     watchCallerRingAcks(chatId, payload.targetUids);
-    if (typeof showToast === 'function') showToast(tt('mehfil_ringing', 'Ringing…'));
+    if (overlayEl && activeChatId === chatId) {
+      const peerName =
+        payload.targetUids.length === 1 ? (chat?.name || '').split(' ')[0] || '' : '';
+      setRingingChrome(true, peerName);
+    }
     return true;
   }
 
@@ -1751,32 +1881,54 @@
     });
   }
 
-  function showMehfilBusyBanner(payload) {
-    const chatId = String(payload?.chatId || '');
-    const me = currentUser?.uid;
-    if (!chatId || !me) return;
+  function showAudioConflictBanner(opts) {
+    const o = opts || {};
     if (document.getElementById('mehfilBusyBanner')) return;
-    const name = payload.fromName || tt('mehfil_someone', 'Someone');
     const el = document.createElement('div');
     el.id = 'mehfilBusyBanner';
     el.className = 'mehfil-busy-banner';
     el.innerHTML = `
-      <span>${esc(tt('mehfil_ring_busy_banner', 'Mehfil ring from {{name}}', { name }))}</span>
-      <button type="button" data-busy-decline>${esc(tt('mehfil_decline', 'Decline'))}</button>
-      <button type="button" data-busy-accept>${esc(tt('mehfil_accept', 'Answer'))}</button>`;
-    overlayEl?.appendChild(el);
-    el.querySelector('[data-busy-decline]')?.addEventListener('click', () => {
-      ackMehfilRing(chatId, 'declined');
+      <span>${esc(o.message || tt('mehfil_busy', 'You’re busy in another call'))}</span>
+      <button type="button" data-busy-stay>${esc(o.stayLabel || tt('mehfil_stay', 'Stay'))}</button>
+      <button type="button" data-busy-switch>${esc(o.switchLabel || tt('mehfil_switch', 'Switch'))}</button>`;
+    (overlayEl || shellHost())?.appendChild(el);
+    el.querySelector('[data-busy-stay]')?.addEventListener('click', () => {
+      try {
+        o.onStay?.();
+      } catch (e) {}
       el.remove();
     });
-    el.querySelector('[data-busy-accept]')?.addEventListener('click', async () => {
-      await ackMehfilRing(chatId, 'accepted');
+    el.querySelector('[data-busy-switch]')?.addEventListener('click', async () => {
       el.remove();
-      const chat = { id: chatId, firestoreId: chatId };
-      await leaveMehfil();
-      setTimeout(() => openMehfil(chat), 400);
+      try {
+        await o.onSwitch?.();
+      } catch (e) {}
     });
     setTimeout(() => el.remove(), RING_TTL_MS);
+  }
+
+  function showMehfilBusyBanner(payload) {
+    const chatId = String(payload?.chatId || '');
+    const me = currentUser?.uid;
+    if (!chatId || !me) return;
+    const name = payload.fromName || tt('mehfil_someone', 'Someone');
+    showAudioConflictBanner({
+      message: tt('mehfil_ring_busy_banner', 'Mehfil ring from {{name}}', { name }),
+      stayLabel: tt('mehfil_decline', 'Decline'),
+      switchLabel: tt('mehfil_accept', 'Answer'),
+      onStay: () => ackMehfilRing(chatId, 'declined'),
+      onSwitch: async () => {
+        await ackMehfilRing(chatId, 'accepted');
+        const chat = { id: chatId, firestoreId: chatId };
+        await abandonMehfil('switch_room');
+        if (typeof leaveDangalPlayCall === 'function') {
+          try {
+            leaveDangalPlayCall();
+          } catch (e) {}
+        }
+        setTimeout(() => ensureOpenMehfil(chat), 350);
+      },
+    });
   }
 
   function showIncomingMehfilRing(payload) {
@@ -1804,6 +1956,29 @@
     }
     if (overlayEl && activeChatId && activeChatId !== chatId) {
       showMehfilBusyBanner(payload);
+      return;
+    }
+    if (typeof isDangalPlayCallOpen === 'function' && isDangalPlayCallOpen()) {
+      const name = payload.fromName || tt('mehfil_someone', 'Someone');
+      showAudioConflictBanner({
+        message: tt('mehfil_ring_busy_dangal', 'Mehfil from {{name}} — leave game voice?', { name }),
+        stayLabel: tt('mehfil_decline', 'Decline'),
+        switchLabel: tt('mehfil_accept', 'Answer'),
+        onStay: () => ackMehfilRing(chatId, 'declined'),
+        onSwitch: async () => {
+          await ackMehfilRing(chatId, 'accepted');
+          if (typeof leaveDangalPlayCall === 'function') {
+            try {
+              leaveDangalPlayCall();
+            } catch (e) {}
+          }
+          const chat =
+            (typeof baithakChats !== 'undefined' &&
+              baithakChats.find((c) => (c.firestoreId || c.id) === chatId)) ||
+            { id: chatId, firestoreId: chatId, name: payload.fromName, type: 'dm', uid: payload.fromUid };
+          ensureOpenMehfil(chat);
+        },
+      });
       return;
     }
     clearIncomingRingUi();
@@ -1866,10 +2041,16 @@
       clearTimeout(expireTimer);
       await ackMehfilRing(chatId, 'accepted');
       clearIncomingRingUi();
+      if (typeof leaveDangalPlayCall === 'function') {
+        try {
+          leaveDangalPlayCall();
+        } catch (e) {}
+      }
       const chat =
         (typeof baithakChats !== 'undefined' && baithakChats.find((c) => (c.firestoreId || c.id) === chatId)) ||
         { id: chatId, firestoreId: chatId, name: name, type: 'dm', uid: payload.fromUid };
-      openMehfil(chat);
+      if (typeof requestMehfilAutoJoin === 'function') requestMehfilAutoJoin(chatId);
+      ensureOpenMehfil(chat);
     });
   }
 
@@ -2126,21 +2307,33 @@
       }
     } catch (e) {}
 
+    // Mutual exclusion with Dangal play voice (same Agora stack).
+    if (typeof isDangalPlayCallOpen === 'function' && isDangalPlayCallOpen()) {
+      if (typeof leaveDangalPlayCall === 'function') {
+        try {
+          leaveDangalPlayCall();
+        } catch (e) {}
+      }
+      if (typeof showToast === 'function') {
+        showToast(tt('mehfil_left_dangal_voice', 'Left game voice for Mehfil'));
+      }
+    }
+
     // Tear down any prior room cleanly before opening
     if (overlayEl) {
       await teardownMehfil('reopen');
-      if (typeof recoverNavStack === 'function') {
-        /* only if desynced — skip */
-      }
     }
     document.getElementById('mehfilOverlay')?.remove();
 
     leaving = false;
+    lastKnownFreshCount = 0;
+    dmAutoRingDone = false;
     const gen = ++joinGeneration;
     const prefs = readPrefs();
     micWanted = prefs.mic !== false;
     camWanted = false; // always start cam off visually; prefs apply after Agora join
 
+    const isGroup = chat?.type === 'group';
     const el = document.createElement('div');
     el.id = 'mehfilOverlay';
     el.className = 'mehfil-overlay';
@@ -2152,11 +2345,16 @@
       <div class="mehfil-top">
         ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-mehfil-leave-top' }) : ''}
         <div class="mehfil-title">${mehfilMarkHtml(20)} <span>${esc(tt('mehfil_title', 'Mehfil'))} · ${esc(roomTitle)}</span></div>
+        <div class="mehfil-who-here" data-mehfil-who-here hidden></div>
         <div class="mehfil-member-chips-scroll"><div class="mehfil-member-chips" data-mehfil-member-chips></div></div>
         <button type="button" class="mehfil-theme-toggle" data-mehfil-theme-toggle aria-label="${esc(tt('mehfil_theme_follow_app', 'Room theme'))}">${esc(tt('mehfil_theme_dark', 'Dark'))}</button>
         <button type="button" class="mehfil-immersive-btn" data-mehfil-immersive aria-label="${esc(tt('mehfil_immersive_enter', 'Immersive mode'))}">⛶</button>
         <button type="button" class="mehfil-ring-btn" data-mehfil-ring title="${esc(tt('mehfil_ring', 'Ring'))}" aria-label="${esc(tt('mehfil_ring', 'Ring'))}">${typeof iconHtml==='function'?iconHtml('phone',{size:18}):'☎'}</button>
         <div class="mehfil-status" data-mehfil-status>${esc(tt('mehfil_joining', 'Joining…'))}</div>
+      </div>
+      <div class="mehfil-ringing" data-mehfil-ringing hidden>
+        <span data-mehfil-ringing-label>${esc(tt('mehfil_ringing', 'Ringing…'))}</span>
+        <button type="button" data-mehfil-ring-cancel>${esc(tt('cancel', 'Cancel'))}</button>
       </div>
       <div class="mehfil-cinema">
         <div class="mehfil-stage-main" data-mehfil-stage-main>
@@ -2169,8 +2367,20 @@
               <div class="mehfil-tile-label">${esc(tt('mehfil_you_label', 'You'))}</div>
             </div>
             <div class="mehfil-waiting" data-mehfil-waiting>
-              <div class="mehfil-waiting-title">${esc(tt('mehfil_waiting_title', 'Waiting for friends'))}</div>
-              <div class="mehfil-waiting-msg">${esc(tt('mehfil_waiting_msg', 'Mic starts on; tap camera when you want to be seen. Share YouTube from More or ring friends in.'))}</div>
+              <div class="mehfil-waiting-title">${esc(
+                isGroup
+                  ? tt('mehfil_waiting_group_title', 'You’re here first')
+                  : tt('mehfil_waiting_dm_title', 'Waiting for them')
+              )}</div>
+              <div class="mehfil-waiting-msg">${esc(
+                isGroup
+                  ? tt('mehfil_waiting_group_msg', 'Drop-in room — invite friends or start a watch while you wait.')
+                  : tt('mehfil_waiting_dm_msg', 'Ring them, send an invite, or wait a bit. You’re not Live alone.')
+              )}</div>
+              <div class="mehfil-waiting-actions">
+                <button type="button" class="mehfil-waiting-ring" data-mehfil-waiting-ring>${esc(tt('mehfil_ring', 'Ring'))}</button>
+                <button type="button" class="mehfil-waiting-invite" data-mehfil-waiting-invite>${esc(tt('mehfil_nudge', 'Invite'))}</button>
+              </div>
             </div>
           </div>
         </div>
@@ -2236,7 +2446,11 @@
       </div>
       <div class="mehfil-alone mehfil-alone-float" data-mehfil-alone hidden>
         <p>${esc(tt('mehfil_alone', 'You’re the only one here — invite friends to join.'))}</p>
-        <button type="button" class="mehfil-nudge-btn" data-mehfil-nudge>${esc(tt('mehfil_nudge', 'Invite to Mehfil'))}</button>
+        <div class="mehfil-alone-actions">
+          <button type="button" class="mehfil-alone-ring" data-mehfil-alone-ring>${esc(tt('mehfil_ring', 'Ring'))}</button>
+          <button type="button" class="mehfil-nudge-btn" data-mehfil-nudge>${esc(tt('mehfil_nudge', 'Invite to Mehfil'))}</button>
+          <button type="button" class="mehfil-alone-copy" data-mehfil-alone-copy>${esc(tt('mehfil_copy_link', 'Copy link'))}</button>
+        </div>
       </div>
       <div class="mehfil-chat-strip is-collapsed" data-mehfil-chat-strip aria-label="${esc(tt('mehfil_chat_expand', 'Room chat'))}">
         <button type="button" class="mehfil-chat-peek" data-mehfil-chat-toggle>
@@ -2264,6 +2478,9 @@
 
     const host = shellHost();
     host.classList.add('is-mehfil-open');
+    try {
+      document.documentElement.classList.add('mehfil-open');
+    } catch (e) {}
 
     overlayEl = el;
     activeChatId = chatId;
@@ -2390,6 +2607,11 @@
       if (ctrl && cachedMediaState?.hostUid === currentUser?.uid) ctrl.hidden = false;
     });
     el.querySelector('[data-mehfil-ring]')?.addEventListener('click', () => startMehfilRing(activeChat));
+    el.querySelector('[data-mehfil-waiting-ring]')?.addEventListener('click', () => startMehfilRing(activeChat));
+    el.querySelector('[data-mehfil-alone-ring]')?.addEventListener('click', () => startMehfilRing(activeChat));
+    el.querySelector('[data-mehfil-waiting-invite]')?.addEventListener('click', nudgeOthers);
+    el.querySelector('[data-mehfil-alone-copy]')?.addEventListener('click', copyInviteLink);
+    el.querySelector('[data-mehfil-ring-cancel]')?.addEventListener('click', cancelOutboundRing);
     el.querySelector('[data-mehfil-flip]')?.addEventListener('click', flipCamera);
     el.querySelector('[data-mehfil-share]')?.addEventListener('click', toggleScreenShare);
     el.querySelector('[data-mehfil-nudge]')?.addEventListener('click', nudgeOthers);
@@ -2446,6 +2668,16 @@
     bindMembersList(chatId);
     bindMediaSync();
 
+    // DM call-like: auto-ring when alone after a short presence settle.
+    if (!isGroup) {
+      setTimeout(() => {
+        if (!overlayEl || activeChatId !== chatId || dmAutoRingDone) return;
+        if (lastKnownFreshCount > 1) return;
+        dmAutoRingDone = true;
+        startMehfilRing(activeChat).catch(() => {});
+      }, 700);
+    }
+
     if (!flagAllows) {
       showStageError(
         tt('mehfil_flag_off', 'Mehfil voice is paused right now. Room chat and YouTube sync still work.'),
@@ -2456,6 +2688,40 @@
     }
 
     await joinAgora(chatId, gen);
+  }
+
+  /**
+   * Shared join entry — retries while mehfil.js finishes loading (no dead toast).
+   */
+  function ensureOpenMehfil(chat) {
+    if (!chat) return;
+    if (typeof openMehfil === 'function') {
+      return openMehfil(chat);
+    }
+    let tries = 0;
+    let pending = document.getElementById('mehfilJoinPending');
+    if (!pending) {
+      pending = document.createElement('div');
+      pending.id = 'mehfilJoinPending';
+      pending.className = 'mehfil-join-pending';
+      pending.setAttribute('role', 'status');
+      pending.textContent = tt('mehfil_joining', 'Joining Mehfil…');
+      shellHost()?.appendChild(pending);
+    }
+    const tick = setInterval(() => {
+      tries += 1;
+      if (typeof window.openMehfil === 'function') {
+        clearInterval(tick);
+        pending?.remove();
+        window.openMehfil(chat);
+      } else if (tries > 40) {
+        clearInterval(tick);
+        pending?.remove();
+        if (typeof showToast === 'function') {
+          showToast(tt('mehfil_unavailable', 'Mehfil unavailable — try again'));
+        }
+      }
+    }, 100);
   }
 
   /** Live presence — Live only if ≥2 fresh in_room participants (incl. viewer when present). */
@@ -2533,7 +2799,9 @@
 
   const guardMehfil = typeof safeFeature === 'function' ? safeFeature : (n, f) => f;
   window.openMehfil = guardMehfil('mehfil_open', openMehfil);
+  window.ensureOpenMehfil = ensureOpenMehfil;
   window.leaveMehfil = guardMehfil('mehfil_leave', leaveMehfil);
+  window.abandonMehfil = abandonMehfil;
   window.watchMehfilPresence = watchMehfilPresence;
   window.mehfilLiveState = mehfilLiveState;
   window.mehfilEligible = mehfilEligible;
@@ -2550,7 +2818,21 @@
   try {
     bindMehfilRingInbox();
     if (typeof auth !== 'undefined' && auth?.onAuthStateChanged) {
-      auth.onAuthStateChanged(() => bindMehfilRingInbox());
+      auth.onAuthStateChanged((user) => {
+        if (!user) {
+          abandonMehfil('signout').catch(() => {});
+          clearIncomingRingUi();
+        }
+        bindMehfilRingInbox();
+      });
     }
+    window.addEventListener('pagehide', () => {
+      if (overlayEl) abandonMehfil('pagehide');
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden' && overlayEl) {
+        abandonMehfil('background');
+      }
+    });
   } catch (e) {}
 })();
