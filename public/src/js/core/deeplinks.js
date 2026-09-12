@@ -710,12 +710,14 @@
       const stillId = still?.dataset?.chatId;
       if (still && stillId && String(stillId) === String(id)) return;
       setTimeout(() => {
-        openChatScreen?.(local);
-        if (wantMehfil && typeof openMehfil === 'function' && currentUser) {
-          if (typeof mehfilEligible === 'function' && !mehfilEligible(local)) return;
-          if (typeof isMehfilOpen === 'function' && isMehfilOpen()) return;
-          setTimeout(() => openMehfil(local), 500);
+        if (wantMehfil && currentUser) {
+          if (typeof mehfilEligible === 'function' && !mehfilEligible(local)) {
+            openChatScreen?.(local);
+            return;
+          }
+          if (typeof requestMehfilAutoJoin === 'function') requestMehfilAutoJoin(id);
         }
+        openChatScreen?.(local);
       }, 250);
     }, 100);
   }

@@ -38,6 +38,10 @@
   const YT_REC_QUERY = 'lofi chill';
   const RING_TTL_MS = 40000;
   const RING_COOLDOWN_MS = 15000;
+  const RING_FANOUT_MAX = 20;
+  /** Heartbeat every 10s; freshness 25s so a backgrounded tab doesn’t flicker (2.5× beat). */
+  const PRESENCE_HEARTBEAT_MS = 10000;
+  const PRESENCE_FRESH_MS = 25000;
   const THEME_OVERRIDE_KEY = 'chaupaal_mehfil_theme_override';
   const CHAT_IDLE_COLLAPSE_MS = 3000;
   let lastRingAt = new Map();
@@ -51,6 +55,78 @@
   let chatUnread = 0;
   let cachedMediaState = null;
   let mehfilAutoJoinPending = null;
+
+  /** Solo waiter label — never “Live” with one person. */
+  const MEHFIL_WAITING_LABEL = 'Waiting in Mehfil';
+
+  function isFreshParticipant(meta, now) {
+    if (!meta || typeof meta !== 'object') return false;
+    if (String(meta.state || '') !== 'in_room') return false;
+    const at = Number(meta.at || 0);
+    if (!at) return false;
+    return now - at < PRESENCE_FRESH_MS;
+  }
+
+  /**
+   * Single source of truth for Mehfil Live (2B).
+   * isLive = freshCount >= 2 (includes viewer when they are in the room / fresh).
+   */
+  function mehfilLiveState(participants, opts) {
+    const o = opts || {};
+    const now = Number(o.now) || Date.now();
+    const me = o.viewerUid != null ? String(o.viewerUid) : String(currentUser?.uid || '');
+    const val = participants && typeof participants === 'object' ? participants : {};
+    const fresh = [];
+    const stale = [];
+    Object.entries(val).forEach(([uid, meta]) => {
+      if (!uid) return;
+      if (isFreshParticipant(meta, now)) fresh.push([uid, meta]);
+      else stale.push([uid, meta]);
+    });
+    const others = fresh.filter(([uid]) => uid !== me);
+    const count = fresh.length;
+    const isLive = count >= 2;
+    return {
+      count,
+      others: others.map(([u]) => u),
+      othersCount: others.length,
+      isLive,
+      live: isLive,
+      totalCount: count,
+      uids: others.map(([u]) => u),
+      allUids: Object.keys(val),
+      freshUids: fresh.map(([u]) => u),
+      participants: val,
+      staleUids: stale.map(([u]) => u),
+      label: isLive ? (count > 2 ? `Live · ${count}` : 'Live') : count === 1 ? MEHFIL_WAITING_LABEL : '',
+      waiting: !isLive && count === 1,
+    };
+  }
+
+  /** Best-effort prune of stale participant nodes (client). */
+  function pruneStaleParticipants(chatId, staleUids) {
+    if (!chatId || !staleUids || !staleUids.length) return;
+    staleUids.slice(0, 12).forEach((uid) => {
+      try {
+        rtdbRef(`mehfil/${chatId}/participants/${uid}`)?.remove();
+      } catch (e) {}
+    });
+  }
+
+  async function ensureMehfilMemberMirror(chatId) {
+    if (!chatId || typeof apiFetch !== 'function') return false;
+    try {
+      const envelope = await apiFetch('/api/media-config', {
+        method: 'POST',
+        needAuth: true,
+        body: { action: 'mehfil_ensure_member', chatId },
+      });
+      return !!(envelope && envelope.ok !== false);
+    } catch (e) {
+      console.warn('[mehfil] mehfil_ensure_member', e?.message || e);
+      return false;
+    }
+  }
 
   function tt(key, fallback, vars) {
     if (typeof t === 'function') {
@@ -389,7 +465,11 @@
       const ref = rtdbRef(`mehfil/${chatId}/participants`);
       if (!ref) return resolve([]);
       ref.once('value', (snap) => {
-        resolve(Object.keys(snap.val() || {}));
+        const val = snap.val() || {};
+        const state = mehfilLiveState(val);
+        if (state.staleUids && state.staleUids.length) pruneStaleParticipants(chatId, state.staleUids);
+        // Ring “already here” — only fresh in_room uids.
+        resolve(state.freshUids || []);
       });
     });
   }
@@ -462,6 +542,7 @@
   async function ensureMehfilParticipant(chatId) {
     if (!chatId || !currentUser?.uid) return;
     try {
+      await ensureMehfilMemberMirror(chatId);
       const ref = rtdbRef(`mehfil/${chatId}/participants/${currentUser.uid}`);
       if (!ref) return;
       await ref.set({
@@ -479,7 +560,7 @@
       window.__mehfilPresenceBeat = setInterval(() => {
         if (!activeChatId || activeChatId !== chatId) return;
         ref.update({ at: Date.now(), state: 'in_room' }).catch(() => {});
-      }, 10000);
+      }, PRESENCE_HEARTBEAT_MS);
     } catch (e) {}
   }
 
@@ -844,6 +925,7 @@
         ensureYtPlayer(m.id, !!m.playing, Number(m.t) || 0);
         layoutCinema();
       } else if (m.type === 'music' && m.previewUrl) {
+        // M3 owns music publish UI — remote-apply plumbing kept so peers can hear when M3 ships.
         if (typeof quietMode !== 'undefined' && quietMode) return;
         if (typeof pauseAllMusic === 'function') pauseAllMusic();
         try {
@@ -1486,7 +1568,10 @@
 
   async function ackMehfilRing(chatId, status) {
     if (!chatId || !currentUser?.uid) return;
+    const allowed = status === 'accepted' || status === 'declined' || status === 'timeout';
+    if (!allowed) return;
     try {
+      await ensureMehfilMemberMirror(chatId);
       await rtdbRef(`mehfil/${chatId}/ringAck/${currentUser.uid}`)?.set({ status, at: Date.now() });
     } catch (e) {}
     try {
@@ -1530,7 +1615,17 @@
   async function writeMehfilRing(chat, targetUids, mode) {
     const chatId = chat?.firestoreId || chat?.id;
     if (!chatId || !currentUser?.uid) return false;
-    const filtered = await filterRingTargets(chatId, targetUids);
+    if (isMehfilBlockedChat(chat)) {
+      if (typeof showToast === 'function') showToast(tt('mehfil_blocked', 'Mehfil isn’t available in this chat'));
+      return false;
+    }
+    const mirrored = await ensureMehfilMemberMirror(chatId);
+    if (!mirrored) {
+      if (typeof showToast === 'function') showToast(tt('mehfil_ring_fail', 'Could not ring'));
+      return false;
+    }
+    let filtered = await filterRingTargets(chatId, targetUids);
+    filtered = filtered.slice(0, RING_FANOUT_MAX);
     if (!filtered.length) {
       if (typeof showToast === 'function') showToast(tt('mehfil_already_here', 'Everyone you selected is already here'));
       return false;
@@ -1848,7 +1943,7 @@
         apiFetch('/api/media-config', {
           method: 'POST',
           needAuth: true,
-          body: { action: 'agora_token', channel: channelForChat(chatId) },
+          body: { action: 'agora_token', channel: channelForChat(chatId), chatId },
         }),
         10000,
         'TOKEN_TIMEOUT'
@@ -2016,6 +2111,13 @@
     }
     const chatId = chat.firestoreId || chat.id;
     if (!chatId) return;
+
+    // Membership mirror before any RTDB mehfil/* write (rules require mehfilMembers).
+    const allowed = await ensureMehfilMemberMirror(chatId);
+    if (!allowed) {
+      if (typeof showToast === 'function') showToast(tt('mehfil_blocked', 'Mehfil isn’t available in this chat'));
+      return;
+    }
 
     let flagAllows = true;
     try {
@@ -2230,6 +2332,7 @@
     });
     el.querySelector('[data-mehfil-react-quick]')?.addEventListener('click', () => toggleCallSheet('reacts'));
     el.querySelector('[data-mehfil-fs]')?.addEventListener('click', requestStageFullscreen);
+    // Host / controlUid plumbing kept for M3 media ownership — no half-UI delegate picker in M0.
     el.querySelector('[data-mehfil-control-host]')?.addEventListener('click', async () => {
       if (!activeChatId || !currentUser?.uid) return;
       await rtdbRef(`mehfil/${activeChatId}/media`)?.update({
@@ -2355,7 +2458,7 @@
     await joinAgora(chatId, gen);
   }
 
-  /** Live presence for chat list / header badges — Live only if ≥1 other in_room & fresh. */
+  /** Live presence — Live only if ≥2 fresh in_room participants (incl. viewer when present). */
   function watchMehfilPresence(chatId, cb) {
     if (!chatId || typeof cb !== 'function') return () => {};
     if (!presenceWatchers.has(chatId)) presenceWatchers.set(chatId, new Set());
@@ -2363,7 +2466,18 @@
 
     const emitOff = () => {
       try {
-        cb({ count: 0, othersCount: 0, totalCount: 0, uids: [], allUids: [], participants: {}, live: false });
+        cb({
+          count: 0,
+          othersCount: 0,
+          totalCount: 0,
+          uids: [],
+          allUids: [],
+          participants: {},
+          live: false,
+          isLive: false,
+          waiting: false,
+          label: '',
+        });
       } catch (e) {}
     };
     emitOff();
@@ -2371,36 +2485,16 @@
     if (!presenceUnsubs.has(chatId)) {
       const ref = rtdbRef(`mehfil/${chatId}/participants`);
       if (ref) {
-        const FRESH_MS = 20_000;
         const handler = (snap) => {
           const val = snap.val() || {};
-          const now = Date.now();
-          const me = currentUser?.uid || '';
-          const liveOthers = Object.entries(val).filter(([uid, meta]) => {
-            if (!uid || uid === me) return false;
-            if (String(meta?.state || '') !== 'in_room') return false;
-            const at = Number(meta?.at || 0);
-            if (!at || now - at >= FRESH_MS) return false;
-            return true;
-          });
-          const freshAll = Object.entries(val).filter(([, meta]) => {
-            if (String(meta?.state || '') !== 'in_room') return false;
-            const at = Number(meta?.at || 0);
-            return at > 0 && now - at < FRESH_MS;
-          });
-          const isLive = liveOthers.length >= 1;
+          const state = mehfilLiveState(val);
+          if (state.staleUids && state.staleUids.length) {
+            pruneStaleParticipants(chatId, state.staleUids);
+          }
           const set = presenceWatchers.get(chatId);
           set?.forEach((fn) => {
             try {
-              fn({
-                count: freshAll.length,
-                othersCount: liveOthers.length,
-                totalCount: freshAll.length,
-                uids: liveOthers.map(([u]) => u),
-                allUids: Object.keys(val),
-                participants: val,
-                live: isLive,
-              });
+              fn(state);
             } catch (e) {}
           });
         };
@@ -2431,17 +2525,27 @@
     return mehfilMarkHtml(size);
   }
 
+  function consumeMehfilAutoJoin() {
+    const id = mehfilAutoJoinPending;
+    mehfilAutoJoinPending = null;
+    return id || null;
+  }
+
   const guardMehfil = typeof safeFeature === 'function' ? safeFeature : (n, f) => f;
   window.openMehfil = guardMehfil('mehfil_open', openMehfil);
   window.leaveMehfil = guardMehfil('mehfil_leave', leaveMehfil);
   window.watchMehfilPresence = watchMehfilPresence;
+  window.mehfilLiveState = mehfilLiveState;
   window.mehfilEligible = mehfilEligible;
   window.mehfilMarkHtml = renderMehfilMark;
   window.isMehfilOpen = () => !!overlayEl;
   window.startMehfilRing = guardMehfil('mehfil_ring', startMehfilRing);
   window.requestMehfilAutoJoin = (chatId) => {
-    mehfilAutoJoinPending = chatId;
+    mehfilAutoJoinPending = chatId ? String(chatId) : null;
   };
+  window.consumeMehfilAutoJoin = consumeMehfilAutoJoin;
+  window.MEHFIL_WAITING_LABEL = MEHFIL_WAITING_LABEL;
+  window.MEHFIL_PRESENCE_FRESH_MS = PRESENCE_FRESH_MS;
 
   try {
     bindMehfilRingInbox();

@@ -472,17 +472,56 @@ async function handlePost(req, res) {
   }
 
   if (action === 'agora_token') {
+    const adminNs = initAdmin();
+    if (!adminNs) {
+      return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    }
+    const { assertMehfilAgoraAccess } = require('../server-lib/mehfil-access');
+    const access = await assertMehfilAgoraAccess(adminNs, {
+      uid: user.uid,
+      chatId: body.chatId,
+      channel: body.channel,
+    });
+    if (!access.ok) {
+      // Generic denial — no chat/membership enumeration details.
+      return sendError(res, access.status || 403, access.code || 'FORBIDDEN', 'Not allowed');
+    }
     const { mintAgoraToken } = require('../server-lib/agora-token');
     // Always mint for the VERIFIED uid — accepting body.uid let a caller mint
     // publisher tokens for arbitrary Agora identities.
     const result = mintAgoraToken({
-      channel: body.channel,
+      channel: access.channel,
       uid: user.uid,
     });
     if (result.error === 'channel_required') {
       return sendError(res, 400, 'VALIDATION_ERROR', 'channel required');
     }
     return sendSuccess(res, result);
+  }
+
+  // Mirror Firestore chat membership → RTDB mehfilMembers (required before RTDB mehfil/* writes).
+  if (action === 'mehfil_ensure_member') {
+    const adminNs = initAdmin();
+    if (!adminNs) {
+      return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    }
+    const { assertChatMember, mirrorMehfilMembers, sanitizeChatId } = require('../server-lib/mehfil-access');
+    const chatId = sanitizeChatId(body.chatId);
+    if (!chatId) return sendError(res, 400, 'VALIDATION_ERROR', 'chatId required');
+    const check = await assertChatMember(adminNs, chatId, user.uid);
+    if (!check.ok) {
+      const status = check.code === 'NOT_FOUND' ? 404 : 403;
+      return sendError(res, status, 'FORBIDDEN', 'Not allowed');
+    }
+    // Seed caller + a slice of co-members so ring/peers can join without extra hops.
+    const seed = [user.uid, ...[...check.members].filter((u) => u !== user.uid)].slice(0, 40);
+    try {
+      await mirrorMehfilMembers(adminNs, chatId, seed);
+    } catch (e) {
+      console.warn('[media-config] mehfil_ensure_member', e?.message || e);
+      return sendError(res, 500, 'MEHFIL_MEMBER_SYNC', 'Could not sync membership');
+    }
+    return sendSuccess(res, { ok: true, chatId, seeded: seed.length });
   }
 
   if (action === 'policy_consume') {
@@ -675,17 +714,20 @@ async function handlePost(req, res) {
         return sendSuccess(res, result || { skipped: 'none' });
       }
       if (action === 'notif_mehfil_ring') {
-        const chatId = String(body.chatId || '').slice(0, 120);
+        const { sanitizeChatId, assertChatMember, isBlockedMehfilChatId, mirrorMehfilMembers } = require('../server-lib/mehfil-access');
+        const chatId = sanitizeChatId(body.chatId);
         const targets = Array.isArray(body.targetUids) ? body.targetUids.map(String).filter(Boolean) : [];
         if (!chatId || !targets.length) {
           return sendError(res, 400, 'VALIDATION_ERROR', 'chatId and targetUids required');
         }
-        const db = adminApp.firestore();
-        const chatSnap = await db.collection('chats').doc(chatId).get();
-        if (!chatSnap.exists) return sendError(res, 404, 'NOT_FOUND', 'Chat not found');
-        const members = chatSnap.data()?.participants || chatSnap.data()?.members || [];
-        const memberSet = new Set(Array.isArray(members) ? members.map(String) : Object.keys(members || {}));
-        if (!memberSet.has(user.uid)) return sendError(res, 403, 'FORBIDDEN', 'Not a chat member');
+        const check = await assertChatMember(adminApp, chatId, user.uid);
+        if (!check.ok || isBlockedMehfilChatId(chatId, check.chatData)) {
+          return sendError(res, 403, 'FORBIDDEN', 'Not allowed');
+        }
+        const memberSet = check.members || new Set();
+        try {
+          await mirrorMehfilMembers(adminApp, chatId, [user.uid]);
+        } catch (e) {}
         const actor =
           (await notif.resolveActor(adminApp, user.uid)) ||
           notif.normalizeActor({
@@ -693,7 +735,8 @@ async function handlePost(req, res) {
             name: body.fromName || 'Someone',
             avatar: body.fromAvatar || '🏠',
           });
-        const unique = [...new Set(targets.filter((uid) => uid !== user.uid && memberSet.has(uid)))].slice(0, 40);
+        // Cap fanout; only notify chat members (never self).
+        const unique = [...new Set(targets.filter((uid) => uid !== user.uid && memberSet.has(uid)))].slice(0, 20);
         await Promise.all(
           unique.map((recipientUid) =>
             notif.upsertNotification(adminApp, recipientUid, {
@@ -1005,6 +1048,7 @@ async function handlePost(req, res) {
       'live_location_stop',
       'check_url',
       'agora_token',
+      'mehfil_ensure_member',
       'policy_consume',
       'username_check',
       'resolve_identifier',

@@ -72,12 +72,19 @@
     }
     if (typeof apiFetch !== 'function') return false;
     if (typeof pauseAllMusic === 'function') pauseAllMusic();
+    try {
+      await apiFetch('/api/media-config', {
+        method: 'POST',
+        needAuth: true,
+        body: { action: 'mehfil_ensure_member', chatId },
+      });
+    } catch (e) {}
     let tokenPayload = null;
     try {
       const envelope = await apiFetch('/api/media-config', {
         method: 'POST',
         needAuth: true,
-        body: { action: 'agora_token', channel: channelForChat(chatId) },
+        body: { action: 'agora_token', channel: channelForChat(chatId), chatId },
       });
       tokenPayload = envelope?.data;
     } catch (e) {

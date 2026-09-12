@@ -200,19 +200,24 @@ function renderChatList(chats, opts){
       const liveEl=item.querySelector('[data-mehfil-live-row]');
       const presenceDot=item.querySelector('[data-mehfil-presence-dot]');
       if(cid&&liveEl){
-        const paintLive=(isLive,total)=>{
-          if(!liveEl.isConnected) return;
-          liveEl.hidden=!isLive;
-          if(presenceDot) presenceDot.hidden=!isLive;
-          const span=liveEl.querySelector('span');
-          if(span) span.textContent=total>2?`Live · ${total}`:'Live';
+        const paintLive = (state) => {
+          if (!liveEl.isConnected) return;
+          const isLive = !!(state && (state.isLive === true || state.live === true));
+          const waiting = !!(state && state.waiting);
+          const total = state && (state.totalCount != null ? state.totalCount : state.count);
+          liveEl.hidden = !(isLive || waiting);
+          if (presenceDot) presenceDot.hidden = !isLive;
+          const span = liveEl.querySelector('span');
+          if (span) {
+            if (isLive) span.textContent = total > 2 ? `Live · ${total}` : 'Live';
+            else if (waiting)
+              span.textContent =
+                typeof MEHFIL_WAITING_LABEL !== 'undefined' ? MEHFIL_WAITING_LABEL : 'Waiting in Mehfil';
+          }
+          liveEl.classList.toggle('is-waiting', waiting && !isLive);
         };
-        paintLive(false,0);
-        const unsub=watchMehfilPresence(cid,({count,live,totalCount})=>{
-          const total=totalCount!=null?totalCount:count;
-          const isLive=live===true;
-          paintLive(isLive,total||0);
-        });
+        paintLive({ isLive: false, waiting: false, totalCount: 0 });
+        const unsub = watchMehfilPresence(cid, (st) => paintLive(st));
         list._mehfilPresenceUnsubs.push(unsub);
       }
     }
