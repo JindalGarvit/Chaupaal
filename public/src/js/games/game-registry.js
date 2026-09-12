@@ -1060,24 +1060,29 @@
               } catch (e) {}
             }
           }
+          // Practice fallback (non-Live / non-persistable): never seat the friend as AI.
+          if (!(persistable && liveOk)) {
+            launchPracticeVsAi(gameId, 'manch');
+            return;
+          }
           game.launch(
             Object.assign(
               {
                 chat: {
                   name: friend.name,
-                  id: persistable ? uid : 'friend_' + (friend.name || 'x'),
-                  uid: persistable ? uid : undefined,
-                  peerUid: persistable ? uid : undefined,
+                  id: uid,
+                  uid,
+                  peerUid: uid,
                   dangalMatchId: mid || undefined,
                 },
-                source: persistable && liveOk ? 'challenge_host' : 'manch',
-                mode: persistable && liveOk ? 'live' : 'practice',
-                opponentUid: persistable ? uid : '',
-                stake: persistable && liveOk ? stake : 0,
+                source: 'challenge_host',
+                mode: 'live',
+                opponentUid: uid,
+                stake,
                 matchId: mid || '',
                 chatId,
               },
-              persistable && liveOk ? tcPayload : {}
+              tcPayload
             )
           );
         }

@@ -100,15 +100,21 @@
     if (arg && arg.chat) return resolveChat(arg.chat);
     if (arg && (arg.name || arg.dangalMatchId || arg.uid || arg.opponentUid || arg.peerUid)) return arg;
     const ctx = window.__dangalLaunchCtx || {};
+    const practiceSeat =
+      ctx.mode === 'practice' ||
+      ctx.opponentUid === 'ai' ||
+      ctx.practiceKind === 'vsAi' ||
+      ctx.practiceKind === 'solo';
     return Object.assign(
-      { name: 'Opponent' },
+      { name: practiceSeat ? 'Practice AI' : 'Opponent' },
       ctx.chat || {},
       {
         dangalMatchId: ctx.matchId || undefined,
         opponentUid: ctx.opponentUid || undefined,
         uid: ctx.opponentUid || undefined,
         dangalSource: ctx.source || undefined,
-      }
+      },
+      practiceSeat ? { name: 'Practice AI', id: 'ai' } : {}
     );
   }
 
@@ -2448,7 +2454,11 @@
       }
       if (strokeSeat === 'you') {
         myTurn = false;
-        hint.textContent = (msg ? msg + ' ' : '') + 'Opponent’s turn…';
+        hint.textContent =
+          (msg ? msg + ' ' : '') +
+          (typeof practiceTurnStatus === 'function'
+            ? practiceTurnStatus({ myTurn: false, sport: 'aiming' }).label
+            : 'Practice AI thinking…');
         if (isPool) schedulePoolAiTurn();
         else if (shell.gs && shell.gs.schedule) shell.gs.schedule(aiTurn, 650);
         else setTimeout(aiTurn, 650);
@@ -3196,7 +3206,7 @@
       oppPocketed += 1;
       updateHud();
       buzz('place');
-      hint.textContent = 'Opponent pocketed one.';
+      hint.textContent = liveOn ? 'Opponent pocketed one.' : 'Practice AI pocketed one.';
       myTurn = true;
       if (!remaining()) finish(youPocketed >= oppPocketed);
     }
@@ -3206,8 +3216,14 @@
       if (isPool) {
         nextBreak = breakerPick === 'you' ? 'opp' : breakerPick === 'opp' ? 'you' : Math.random() < 0.5 ? 'you' : 'opp';
       }
+      const practiceChat =
+        !liveOn && typeof practiceAiChat === 'function'
+          ? practiceAiChat()
+          : !liveOn
+            ? { name: 'Practice AI', id: 'ai' }
+            : chat;
       return {
-        chat,
+        chat: practiceChat,
         youColor,
         difficulty,
         breakerPick: nextBreak,
@@ -4163,7 +4179,10 @@
         pushSettle();
         return;
       }
-      hint.textContent = 'Opponent’s turn…';
+      hint.textContent =
+        typeof practiceTurnStatus === 'function'
+          ? practiceTurnStatus({ myTurn: false, sport: 'aiming' }).label
+          : 'Practice AI thinking…';
       if (shell.gs && shell.gs.schedule) shell.gs.schedule(aiTurn, 700);
       else setTimeout(aiTurn, 700);
     }

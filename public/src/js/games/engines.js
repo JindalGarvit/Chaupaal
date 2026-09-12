@@ -439,7 +439,7 @@ function openChessGame(chat){
   }
 
   const practiceChat={
-    name:(raw.name&&!/^(ai|practice)$/i.test(String(raw.id||'')))?String(raw.name):'Practice AI',
+    name:'Practice AI',
     id:'ai',
     uid:'',
     peerUid:'',
@@ -1589,6 +1589,13 @@ function render(){
       again:async()=>{
         try{window.__dangalLaunchCtx=liveOn?Object.assign({},window.__dangalLaunchCtx||{},{matchId:''}):null;}catch(e){}
         if(!liveOn){
+          try{
+            window.__dangalLaunchCtx={
+              gameId:'chess',gameType:'chess',mode:'practice',matchId:'',
+              opponentUid:'ai',stake:0,chatId:'',source:'manch',practiceKind:'vsAi',
+              skipPracticeSetup:true,startedAt:Date.now(),
+            };
+          }catch(e){}
           gs.close();
           openChessGame({name:'Practice AI',id:'ai'});
           return;
@@ -2722,7 +2729,11 @@ function openSnakesVersion(chat, version, opts){
     if(!recipeReady)return{mode:'waiting',label:'Waiting for host…',sub:message||'Board unlocks when host picks a version'};
     if(gameOver)return{mode:'over',label:'Game over',sub:message||''};
     if(myTurn)return{mode:'yours',label:doubleRoll?'Your turn — roll again':'Your turn — roll',sub:message||'Tap Roll to move'};
-    return{mode:'theirs',label:(chat.name||'Opponent').split(' ')[0]+'’s turn',sub:message||(liveOn?'Board stays live — wait for their hop':'Opponent rolling…')};
+    const oppBit=liveOn
+      ?((chat.name||'Friend').split(' ')[0]+'’s turn')
+      :((typeof practiceOppLabel==='function'?practiceOppLabel(chat):'Practice AI')+'’s turn');
+    const oppSub=liveOn?'Board stays live — wait for their hop':(typeof practiceTurnStatus==='function'?practiceTurnStatus({myTurn:false,sport:'rolling'}).label:'Practice AI rolling…');
+    return{mode:'theirs',label:oppBit,sub:message||oppSub};
   }
   function updateHud(){
     const msgEl=overlay.querySelector('#slMsg');
@@ -3908,7 +3919,12 @@ function openLudoGame(chat, playerCount, opts){
             await startLudoLiveRematch(nextStake);
             return;
           }
-          gs.close('restart');openLudoGame(chat, playerCount, sessionOpts);
+          gs.close('restart');
+        openLudoGame(
+          typeof practiceAiChat==='function'?practiceAiChat():{name:'Practice AI',id:'ai'},
+          playerCount,
+          sessionOpts
+        );
         },
         share:()=>{if(typeof shareGameResult==='function')shareGameResult('ludo',shareStats);},
         challenge:async()=>{
@@ -3954,7 +3970,12 @@ function openLudoGame(chat, playerCount, opts){
           await startLudoLiveRematch(nextStake);
           return;
         }
-        gs.close('restart');openLudoGame(chat, playerCount, sessionOpts);
+        gs.close('restart');
+        openLudoGame(
+          typeof practiceAiChat==='function'?practiceAiChat():{name:'Practice AI',id:'ai'},
+          playerCount,
+          sessionOpts
+        );
       });
     }
   }
@@ -4092,11 +4113,14 @@ function openLudoGame(chat, playerCount, opts){
     }
     const msgEl=overlay.querySelector('#ludoMsg');
     if(msgEl){msgEl.style.display=message?'block':'none';msgEl.textContent=message;}
+    const aiSeatName=NAMES[currentPlayer]||(typeof practiceOppLabel==='function'?practiceOppLabel(chat):'Practice AI');
+    const theirsLabel=liveOn?((chat.name||'Friend')+' to move'):(aiSeatName+(phase==='roll'?' rolling…':'’s turn'));
+    const theirsBtn=liveOn?((chat.name||'Friend')+' playing…'):(aiSeatName+' playing…');
     const turnEl=overlay.querySelector('#ludoTurnBanner');
     if(turnEl&&typeof setGameTurnBanner==='function'){
       setGameTurnBanner(turnEl,{
         mode: gameOver?'over':isMyControl()?'yours':'theirs',
-        label: gameOver?'Game over':isMyControl()?(phase==='roll'?'Your turn — roll':phase==='move'?'Your turn — tap a token':'Your turn'):(liveOn?((chat.name||'Friend')+' to move'):'Waiting for opponents…'),
+        label: gameOver?'Game over':isMyControl()?(phase==='roll'?'Your turn — roll':phase==='move'?'Your turn — tap a token':'Your turn'):theirsLabel,
         sub: message||undefined,
         pulse: !gameOver && isMyControl(),
       });
@@ -4107,7 +4131,7 @@ function openLudoGame(chat, playerCount, opts){
       const can=phase==='roll'&&isMyControl()&&!gameOver&&!rolling&&!animating;
       rollBtn.disabled=!can;
       rollBtn.style.background=can?COLOR_STYLES[color]:'rgba(255,255,255,0.1)';
-      rollBtn.textContent=gameOver?'Game Over!':phase==='roll'&&isMyControl()?'🎲 Roll Dice':phase==='move'&&isMyControl()?'Tap a glowing token':(liveOn?((chat.name||'Friend')+' playing…'):'Opponents playing…');
+      rollBtn.textContent=gameOver?'Game Over!':phase==='roll'&&isMyControl()?'🎲 Roll Dice':phase==='move'&&isMyControl()?'Tap a glowing token':theirsBtn;
       rollBtn.setAttribute('aria-label',can?'Roll dice':'Dice unavailable');
     }
     players.forEach((c,i)=>{
@@ -4181,14 +4205,14 @@ function openLudoGame(chat, playerCount, opts){
       ${typeof gameTurnBannerHtml==='function'
         ? gameTurnBannerHtml({
             mode: gameOver?'over':isMyControl()?'yours':'theirs',
-            label: gameOver?'Game over':isMyControl()?(phase==='roll'?'Your turn — roll':phase==='move'?'Your turn — tap a token':'Your turn'):(liveOn?((chat.name||'Friend')+' to move'):'Waiting for opponents…'),
+            label: gameOver?'Game over':isMyControl()?(phase==='roll'?'Your turn — roll':phase==='move'?'Your turn — tap a token':'Your turn'):(liveOn?((chat.name||'Friend')+' to move'):((NAMES[currentPlayer]||'Practice AI')+(phase==='roll'?' rolling…':'’s turn'))),
             sub: message||undefined,
             pulse: !gameOver && isMyControl(),
           }).replace('<div class="game-turn','<div id="ludoTurnBanner" class="game-turn')
         : ''}
       <div style="padding:10px 12px;padding-bottom:max(10px,env(safe-area-inset-bottom));flex-shrink:0;">
         <button id="ludoRoll" type="button" class="game-tap-target" aria-label="Roll dice" style="width:100%;min-height:48px;padding:13px;background:${phase==='roll'&&isMyControl()&&!gameOver?COLOR_STYLES[color]:'rgba(255,255,255,0.1)'};color:#fff;border:none;border-radius:var(--game-btn-radius,14px);font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;">
-          ${gameOver?'Game Over!':phase==='roll'&&isMyControl()?'🎲 Roll Dice':phase==='move'&&isMyControl()?'Tap a glowing token':(liveOn?((chat.name||'Friend')+' playing…'):'Opponents playing…')}
+          ${gameOver?'Game Over!':phase==='roll'&&isMyControl()?'🎲 Roll Dice':phase==='move'&&isMyControl()?'Tap a glowing token':(liveOn?((chat.name||'Friend')+' playing…'):((NAMES[currentPlayer]||'Practice AI')+' playing…'))}
         </button>
       </div>
     `;
@@ -4970,7 +4994,11 @@ function openUnoGame(chat, variant='normal', opts){
               return;
             }
             gs.close();
-            openUnoGame(chat,variant,{house:isClassicRules?Object.assign({},house):undefined,difficulty:diffKey});
+            openUnoGame(
+              typeof practiceAiChat==='function'?practiceAiChat():{name:'Practice AI',id:'ai'},
+              variant,
+              {house:isClassicRules?Object.assign({},house):undefined,difficulty:diffKey}
+            );
           },
           share:()=>{
             if(typeof shareGameResult==='function')shareGameResult('uno',shareStats);

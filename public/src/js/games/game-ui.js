@@ -366,14 +366,20 @@
       chatOrName && typeof chatOrName === 'object'
         ? chatOrName.name || chatOrName.displayName || ''
         : chatOrName;
+    const id =
+      chatOrName && typeof chatOrName === 'object'
+        ? String(chatOrName.id || chatOrName.uid || '')
+        : '';
+    // Canonical AI seat ids always map to Practice AI — never a friend display name.
+    if (!id || id === 'ai' || /^ai(_|$)/i.test(id) || id === 'practice') return 'Practice AI';
     const s = String(raw || '').trim();
     if (!s || /^(ai|practice|friend|opponent)$/i.test(s) || /^ai\s*\d*$/i.test(s)) {
       return 'Practice AI';
     }
     if (/practice\s*ai/i.test(s)) return 'Practice AI';
-    // Bare "AI" / human-looking leftovers from old launches → honest Practice AI
     if (/^ai(\s|$)/i.test(s)) return 'Practice AI';
-    return s;
+    // Prefer honesty: human-looking leftover names on Practice launches → Practice AI
+    return 'Practice AI';
   }
 
   /**

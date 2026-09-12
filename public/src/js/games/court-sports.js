@@ -845,7 +845,7 @@
       serving = true;
       windowMs = spec.windowMs || 720;
       const line =
-        (msg || (who === 'me' ? 'Your point.' : 'Opponent point.')) +
+        (msg || (who === 'me' ? 'Your point.' : liveOn ? 'Opponent point.' : 'Practice AI point.')) +
         (res.note ? ' · ' + res.note : '');
       if (res.ended) {
         ended = true;
@@ -856,7 +856,7 @@
       // Practice: AI serve window when they own the scorebook serve (never Live).
       if (!liveOn && !book.serverIsMe) {
         practiceAiTurn = true;
-        renderPlay(line + ' · Opponent serves');
+        renderPlay(line + ' · Practice AI serves');
         return;
       }
       practiceAiTurn = false;

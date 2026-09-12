@@ -3340,8 +3340,8 @@ function openScribbleGame(chat,playerList,opts){
   const players=seatPlayers;
 
   let round=1;
-  /** Match end: 3 rounds — each active seat draws once per round. Practice: 1 solo draw. */
-  const maxRounds=practiceMode?1:3;
+  /** Match end: 3 rounds Live/party. Practice Solo: 1 draw. Practice vs AI: 1 user-draw (AI guesses only). */
+  const maxRounds=practiceMode||(!liveOn&&!party)?1:3;
   let currentDrawerIdx=0;let currentWord='';
   let liveWordKey='';let liveWordLen=0;let blankMask='';let revealWord='';
   let phase='pick'; // pick | draw | reveal
@@ -3735,19 +3735,9 @@ function openScribbleGame(chat,playerList,opts){
       return;
     }
 
-    // Practice AI draw seat: honest blank — secret word for AI “draw”, no doodle.
+    // Practice AI draw seat should never happen on vs-AI (human sole drawer) — safety skip.
     if(!liveOn&&!practiceMode&&!iAmDrawer()){
-      setRoundWord(samplePick3()[0]);
-      phase='draw';
-      roundTimer=DRAW_SECS;
-      render();
-      clearInterval(roundInterval);
-      roundInterval=setInterval(()=>{
-        if(!alive()){clearInterval(roundInterval);return;}
-        roundTimer--;
-        const el=document.getElementById('scribbleTimer');if(el)el.textContent=roundTimer+'s';
-        if(roundTimer<=0){clearInterval(roundInterval);finishRound({reason:'timeout'});}
-      },1000);
+      endScribbleGame({reason:'complete'});
       return;
     }
 
@@ -3858,6 +3848,11 @@ function openScribbleGame(chat,playerList,opts){
     stopPickTimer();
     stopInkStream();
     if(aiGuessIv){clearInterval(aiGuessIv);aiGuessIv=null;}
+    // Practice vs AI: human is sole drawer; AI only guesses — never blank AI-draw rounds.
+    if(!liveOn&&!party&&!practiceMode){
+      endScribbleGame({reason:'complete'});
+      return;
+    }
     revealWord='';
     currentWord='';liveWordKey='';liveWordLen=0;blankMask='';
     phase='pick';
