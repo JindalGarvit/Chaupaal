@@ -37,6 +37,9 @@ const checks = [
   ['DM ring chrome + traces', mehfilJs.includes('RING_TRACE_NO_ANSWER') && mehfilJs.includes('setRingingChrome')],
   ['mic truth + speaking hysteresis', mehfilJs.includes('SPEAK_ON_LEVEL') && mehfilJs.includes('setMicUi') && mehfilJs.includes('You’re muted')],
   ['token renew + connection UX', mehfilJs.includes('renewAgoraToken') && mehfilJs.includes('token-privilege-will-expire')],
+  ['watch party search pick list', mehfilJs.includes('paintMediaResults') && mehfilJs.includes('Play for the room')],
+  ['shared music path', mehfilJs.includes('playSharedMusicTrack') && mehfilJs.includes("type: 'music'")],
+  ['host everyone delegate', mehfilJs.includes('openDelegatePicker') && mehfilJs.includes('controlMode')],
   ['mehfil_ensure_member action', mediaConfig.includes('mehfil_ensure_member')],
   ['agora_token membership gate', mediaConfig.includes('assertMehfilAgoraAccess')],
   ['youtube-search.js', exists('server-lib/youtube-search.js')],
@@ -58,24 +61,22 @@ console.log(`${agoraConfigured ? '✓' : '○'} AGORA_APP_ID + CERTIFICATE (opti
 console.log(`○ api/*.js count: ${apiCount} (Hobby max 12)`);
 
 console.log(`
-Manual QA checklist (M2)
+Manual QA checklist (M3)
 ------------------------
-Mic / speaking
-  [ ] Dock + own tile mic badge always match; toggle instant
-  [ ] Deny mic → listen-only + honest copy; muted-while-talking hint once
-  [ ] Speaking glow on right person; muted never lights; reduced-motion static
+Watch / Listen
+  [ ] Search → pick from list (not auto first) → all sync to same position
+  [ ] Second pick stops first (no double audio)
+  [ ] Music path works; Quiet skips local music; video replaces music
 
-Video / share
-  [ ] Cam on/off, flip, share start/stop; share replaces cam; Stop chip works
-  [ ] Leave all M1 exits → OS mic/cam indicators off
+Control
+  [ ] Host: non-host controls disabled with reason
+  [ ] Everyone: all can control; delegate grants/revokes; clears on leave
+  [ ] Host leaves → playback continues for others
 
-Connection
-  [ ] Brief offline → Reconnecting → recovers or “left” + rejoin
-  [ ] Long session → token renew keeps voice
-  [ ] Mehfil ↔ Dangal → no dual capture
-
-Ops
-  [ ] Quiet mode → no join chimes; npm run health:mehfil
+Reliability
+  [ ] Background 60s → return resyncs; leave stops only your playback
+  [ ] Last person leaves → media cleared
+  [ ] npm run health:mehfil; api/*.js ≤12
 `);
 
 process.exit(ok ? 0 : 1);

@@ -20,6 +20,9 @@
   const TOKEN_RENEW_LEAD_MS = 5 * 60 * 1000;
   const CHROME_DIM_MS = 4000;
   const YT_RESYNC_MS = 5000;
+  const MEDIA_DRIFT_SEC = 2.5;
+  const MEDIA_SEEK_THROTTLE_MS = 900;
+  const MUSIC_VOLUME = 0.55; // duck under voice — keep room talk audible
   const PREF_KEY = 'chaupaal_mehfil_prefs';
 
   let client = null;
@@ -75,6 +78,11 @@
   const mutedByUid = new Map();
   let deviceListenerBound = false;
   let musicPausedForMehfil = false;
+  let mediaSearchMode = 'youtube'; // youtube | music
+  let lastMediaPublishAt = 0;
+  let lastAppliedMediaSeq = 0;
+  let lastSeekPublishAt = 0;
+  let musicSyncTimer = null;
 
   /** Solo waiter label — never “Live” with one person. */
   const MEHFIL_WAITING_LABEL = 'Waiting in Mehfil';
@@ -357,7 +365,9 @@
   function hasYoutubeOnStage() {
     return !!(
       overlayEl?.classList.contains('mehfil-has-youtube') ||
+      overlayEl?.classList.contains('mehfil-has-music') ||
       cachedMediaState?.type === 'youtube' ||
+      cachedMediaState?.type === 'music' ||
       ytPlayer
     );
   }
@@ -456,6 +466,7 @@
     const media = m || cachedMediaState || {};
     const me = currentUser?.uid;
     if (!me) return false;
+    if (!media.type && !media.hostUid) return true; // anyone may start first media
     if (media.controlMode === 'all') return true;
     if (media.controlUid && media.controlUid === me) return true;
     if (media.hostUid && media.hostUid === me) return true;
@@ -463,23 +474,93 @@
     return false;
   }
 
+  function mediaControlReason(m) {
+    const media = m || cachedMediaState;
+    if (canControlMedia(media)) return '';
+    if (media?.controlUid) return tt('mehfil_delegate_controls', 'Someone else controls playback');
+    return tt('mehfil_host_controls', 'Host controls playback');
+  }
+
   function updateHostControlUi(m) {
     const media = m || cachedMediaState;
     const chip = overlayEl?.querySelector('[data-mehfil-host-chip]');
-    if (!chip) return;
+    const ctrlRow = overlayEl?.querySelector('[data-mehfil-media-control]');
+    const reasonEl = overlayEl?.querySelector('[data-mehfil-control-reason]');
     const me = currentUser?.uid;
-    if (!media?.hostUid) {
-      chip.hidden = true;
-      return;
+    const hasMedia = !!(media && media.type);
+    const iAmHost = !!(me && media?.hostUid === me);
+    const iControl = canControlMedia(media);
+    const reason = mediaControlReason(media);
+
+    if (chip) {
+      if (!media?.hostUid && !hasMedia) {
+        chip.hidden = true;
+      } else {
+        chip.hidden = false;
+        if (iControl && iAmHost) chip.textContent = tt('mehfil_you_are_host', 'You control playback');
+        else if (iControl && media?.controlUid === me) chip.textContent = tt('mehfil_you_delegate', 'You have control');
+        else if (media?.controlMode === 'all') chip.textContent = tt('mehfil_control_everyone', 'Everyone can control');
+        else chip.textContent = tt('mehfil_host_controls', 'Host controls playback');
+        chip.classList.toggle('is-host', iAmHost);
+      }
     }
-    chip.hidden = false;
-    const iAmHost = media.hostUid === me;
-    const iControl =
-      media.controlMode === 'all' || media.controlUid === me || (iAmHost && media.controlMode !== 'all');
-    if (iControl) chip.textContent = tt('mehfil_you_are_host', 'You control playback');
-    else if (media.controlMode === 'all') chip.textContent = tt('mehfil_control_everyone', 'Everyone can control');
-    else chip.textContent = tt('mehfil_host_controls', 'Host controls playback');
-    chip.classList.toggle('is-host', iAmHost);
+
+    if (ctrlRow) {
+      // Host-only toggles when there is media (or after first play claim).
+      ctrlRow.hidden = !(hasMedia && iAmHost);
+      ctrlRow.querySelectorAll('[data-mehfil-control-host], [data-mehfil-control-all]').forEach((btn) => {
+        const isHostMode = btn.hasAttribute('data-mehfil-control-host');
+        const active =
+          isHostMode
+            ? media?.controlMode !== 'all'
+            : media?.controlMode === 'all';
+        btn.classList.toggle('is-active', !!active);
+        btn.disabled = !iAmHost;
+      });
+      const del = ctrlRow.querySelector('[data-mehfil-control-delegate]');
+      if (del) {
+        del.hidden = !iAmHost || media?.controlMode === 'all';
+        del.textContent = media?.controlUid
+          ? tt('mehfil_revoke_control', 'Revoke control')
+          : tt('mehfil_control_delegate', 'Let someone control');
+      }
+    }
+
+    if (reasonEl) {
+      reasonEl.hidden = !hasMedia || iControl || !reason;
+      reasonEl.textContent = reason || '';
+    }
+
+    updateMediaPlaybackUi(media);
+  }
+
+  function updateMediaPlaybackUi(m) {
+    const media = m || cachedMediaState;
+    const bar = overlayEl?.querySelector('[data-mehfil-playback]');
+    if (!bar) return;
+    const has = !!(media && media.type);
+    bar.hidden = !has;
+    if (!has) return;
+    const can = canControlMedia(media);
+    const reason = mediaControlReason(media);
+    bar.querySelectorAll('button').forEach((btn) => {
+      btn.disabled = !can;
+      btn.title = can ? btn.getAttribute('data-label') || '' : reason;
+      btn.classList.toggle('is-disabled', !can);
+    });
+    const playBtn = bar.querySelector('[data-mehfil-play-toggle]');
+    if (playBtn) {
+      const playing = media.playing !== false;
+      playBtn.textContent = playing ? '⏸' : '▶';
+      playBtn.setAttribute('aria-label', playing ? tt('mehfil_pause', 'Pause') : tt('mehfil_play', 'Play'));
+    }
+    const typeLabel = bar.querySelector('[data-mehfil-playback-type]');
+    if (typeLabel) {
+      typeLabel.textContent =
+        media.type === 'music'
+          ? tt('mehfil_playing_music', 'Music')
+          : tt('mehfil_playing_video', 'Watching');
+    }
   }
 
   async function fetchParticipantUids(chatId) {
@@ -536,15 +617,37 @@
       if (!ref) return;
       const snap = await ref.once('value');
       const m = snap.val() || {};
-      if (m.hostUid !== currentUser.uid) return;
+      const me = currentUser.uid;
+      // Clear my delegate if I leave
+      if (m.controlUid === me && m.hostUid !== me) {
+        await ref.update({ controlUid: null });
+      }
+      if (m.hostUid !== me) return;
       const ps = await rtdbRef(`mehfil/${activeChatId}/participants`)?.once('value');
       const val = ps?.val() || {};
       const state = mehfilLiveState(val);
-      const others = (state.freshUids || []).filter((uid) => uid !== currentUser.uid);
+      const others = (state.freshUids || []).filter((uid) => uid !== me);
       if (others.length) {
-        await ref.update({ hostUid: others[0], controlUid: null, controlMode: 'host' });
+        const nextHost = others[0];
+        await ref.update({
+          hostUid: nextHost,
+          controlUid: m.controlUid === me ? null : m.controlUid || null,
+          controlMode: m.controlMode === 'all' ? 'all' : 'host',
+        });
+      } else {
+        // Last person — clear media so next join starts clean
+        await ref.remove();
       }
     } catch (e) {}
+  }
+
+  function clearDelegateIfGone(freshUids) {
+    const m = cachedMediaState;
+    if (!m?.controlUid || !activeChatId) return;
+    const set = new Set((freshUids || []).map(String));
+    if (!set.has(String(m.controlUid))) {
+      rtdbRef(`mehfil/${activeChatId}/media`)?.update({ controlUid: null }).catch(() => {});
+    }
   }
 
   function clearRtdb() {
@@ -637,6 +740,7 @@
       updateWaitingState(state);
       updateAloneHint(state.count);
       updateWhoHereStrip(state);
+      clearDelegateIfGone(state.freshUids);
     };
     ref.on('value', paint);
     rtdbUnsubs.push(() => ref.off('value', paint));
@@ -1027,21 +1131,108 @@
     }
   }
 
-  async function publishMediaState(patch) {
-    if (!activeChatId || !currentUser?.uid) return;
+  async function publishMediaState(patch, opts) {
+    if (!activeChatId || !currentUser?.uid) return false;
     const p = patch || {};
-    if ((p.playing != null || p.t != null) && !p.hostUid && !p.controlMode) {
-      if (cachedMediaState?.hostUid && !canControlMedia(cachedMediaState)) return;
+    const o = opts || {};
+    if (!o.force && !canControlMedia(cachedMediaState) && (p.playing != null || p.t != null || p.type)) {
+      // Allow first start when room has no media
+      if (cachedMediaState?.type) return false;
+    }
+    if ((p.playing != null || p.t != null) && !p.hostUid && !p.controlMode && !p.type) {
+      if (cachedMediaState?.hostUid && !canControlMedia(cachedMediaState)) return false;
+    }
+    if (o.throttleSeek) {
+      const now = Date.now();
+      if (now - lastSeekPublishAt < MEDIA_SEEK_THROTTLE_MS) return false;
+      lastSeekPublishAt = now;
     }
     await ensureMehfilParticipant(activeChatId);
     const ref = rtdbRef(`mehfil/${activeChatId}/media`);
-    if (!ref) return;
-    await ref.update({
-      ...patch,
+    if (!ref) return false;
+    const nextSeq = (Number(cachedMediaState?.seq) || 0) + 1;
+    const wall = Date.now();
+    const payload = {
+      ...p,
       by: currentUser.uid,
-      at: Date.now(),
-      wall: Date.now(),
-    });
+      at: wall,
+      wall,
+      seq: p.seq != null ? p.seq : nextSeq,
+    };
+    await ref.update(payload);
+    cachedMediaState = { ...(cachedMediaState || {}), ...payload };
+    lastAppliedMediaSeq = payload.seq;
+    lastMediaPublishAt = wall;
+    return true;
+  }
+
+  function mediaTargetTime(m) {
+    const base = Number(m?.t) || 0;
+    if (m?.playing === false) return base;
+    const wall = Number(m?.wall) || Number(m?.at) || 0;
+    if (!wall) return base;
+    const drift = Math.max(0, (Date.now() - wall) / 1000);
+    return base + Math.min(drift, 3600);
+  }
+
+  function stopLocalMediaPlayers() {
+    clearInterval(musicSyncTimer);
+    musicSyncTimer = null;
+    try {
+      ytPlayer?.stopVideo?.();
+    } catch (e) {}
+    try {
+      ytPlayer?.destroy?.();
+    } catch (e) {}
+    ytPlayer = null;
+    try {
+      window.__mehfilSharedAudio?.pause?.();
+      if (window.__mehfilSharedAudio) {
+        window.__mehfilSharedAudio.src = '';
+        window.__mehfilSharedAudio.load?.();
+      }
+      window.__mehfilSharedAudio = null;
+    } catch (e) {}
+    overlayEl?.classList.remove('mehfil-has-youtube', 'mehfil-has-music');
+    // YT.Player replaces the host with an iframe — restore a clean stage node.
+    let stageHost =
+      overlayEl?.querySelector('[data-mehfil-stage-yt]') ||
+      overlayEl?.querySelector('#mehfilYtHost') ||
+      overlayEl?.querySelector('[data-mehfil-yt]');
+    if (stageHost) {
+      const parent = stageHost.parentElement;
+      const next = document.createElement('div');
+      next.id = 'mehfilYtHost';
+      next.className = 'mehfil-yt mehfil-stage-yt';
+      next.setAttribute('data-mehfil-stage-yt', '');
+      next.setAttribute('data-mehfil-yt', '');
+      next.hidden = true;
+      if (parent) parent.replaceChild(next, stageHost);
+    }
+    const musicEl = overlayEl?.querySelector('[data-mehfil-music-now]');
+    if (musicEl) musicEl.hidden = true;
+    layoutCinema();
+  }
+
+  async function stopCurrentMedia() {
+    stopLocalMediaPlayers();
+  }
+
+  async function clearRoomMedia() {
+    if (!canControlMedia(cachedMediaState) && cachedMediaState?.type) {
+      if (typeof showToast === 'function') showToast(mediaControlReason() || tt('mehfil_host_controls', 'Host controls playback'));
+      return;
+    }
+    await stopCurrentMedia();
+    if (activeChatId) {
+      try {
+        await rtdbRef(`mehfil/${activeChatId}/media`)?.remove();
+      } catch (e) {}
+    }
+    cachedMediaState = null;
+    updateHostControlUi(null);
+    const nowEl = overlayEl?.querySelector('[data-mehfil-now]');
+    if (nowEl) nowEl.textContent = tt('mehfil_media_hint', 'Search to watch or listen together');
   }
 
   function bindMediaSync() {
@@ -1051,14 +1242,28 @@
       const m = snap.val();
       cachedMediaState = m || null;
       updateHostControlUi(m);
-      if (!m) {
-        overlayEl?.classList.remove('mehfil-has-youtube');
+      if (!m || !m.type) {
+        stopLocalMediaPlayers();
+        overlayEl?.classList.remove('mehfil-has-youtube', 'mehfil-has-music');
         layoutCinema();
         return;
       }
-      if (m.by === currentUser?.uid && !applyingRemoteMedia) {
-        const nowEl = overlayEl?.querySelector('[data-mehfil-now]');
-        if (nowEl && m.title) nowEl.textContent = tt('mehfil_now_playing', 'Now playing: {{title}}', { title: m.title });
+      const seq = Number(m.seq) || 0;
+      if (seq && lastAppliedMediaSeq && seq < lastAppliedMediaSeq) return;
+      lastAppliedMediaSeq = Math.max(lastAppliedMediaSeq, seq);
+
+      const nowEl = overlayEl?.querySelector('[data-mehfil-now]');
+      if (nowEl && m.title) {
+        nowEl.textContent = tt('mehfil_now_playing', 'Now playing: {{title}}', { title: m.title });
+      }
+
+      // Publisher already applied locally for same seq — skip re-apply flicker
+      if (
+        m.by === currentUser?.uid &&
+        !applyingRemoteMedia &&
+        Date.now() - lastMediaPublishAt < 1200 &&
+        seq === lastAppliedMediaSeq
+      ) {
         layoutCinema();
         return;
       }
@@ -1067,31 +1272,10 @@
     ref.on('value', handler);
     rtdbUnsubs.push(() => ref.off('value', handler));
 
-    // Periodic local clock skew check only — do not re-publish (avoids feedback loops).
+    // Periodic drift check for YouTube + music (never re-publish from followers).
     ytResyncTimer = setInterval(() => {
-      if (!ytPlayer || !activeChatId || applyingRemoteMedia) return;
-      try {
-        const refMedia = rtdbRef(`mehfil/${activeChatId}/media`);
-        refMedia?.once('value', (snap) => {
-          const m = snap.val();
-          if (!m || m.type !== 'youtube' || !m.id || m.by === currentUser?.uid) return;
-          const curId = ytPlayer.getVideoData?.()?.video_id;
-          if (curId !== m.id) return;
-          const curT = ytPlayer.getCurrentTime?.() || 0;
-          const target = Number(m.t) || 0;
-          if (Math.abs(curT - target) > 2.5) {
-            applyingRemoteMedia = true;
-            try {
-              ytPlayer.seekTo(target, true);
-              if (m.playing) ytPlayer.playVideo();
-              else ytPlayer.pauseVideo();
-            } catch (e) {}
-            setTimeout(() => {
-              applyingRemoteMedia = false;
-            }, 400);
-          }
-        });
-      } catch (e) {}
+      if (!activeChatId || applyingRemoteMedia || document.visibilityState === 'hidden') return;
+      resyncMediaFromCache();
     }, YT_RESYNC_MS);
 
     const reactRef = rtdbRef(`mehfil/${activeChatId}/reactions`);
@@ -1116,6 +1300,59 @@
     }
   }
 
+  function resyncMediaFromCache() {
+    const m = cachedMediaState;
+    if (!m?.type) return;
+    if (m.type === 'youtube' && m.id && ytPlayer) {
+      try {
+        const curId = ytPlayer.getVideoData?.()?.video_id;
+        if (curId !== m.id) {
+          applyRemoteMedia(m);
+          return;
+        }
+        const curT = ytPlayer.getCurrentTime?.() || 0;
+        const target = mediaTargetTime(m);
+        if (Math.abs(curT - target) > MEDIA_DRIFT_SEC) {
+          applyingRemoteMedia = true;
+          try {
+            ytPlayer.seekTo(target, true);
+            if (m.playing !== false) ytPlayer.playVideo();
+            else ytPlayer.pauseVideo();
+          } catch (e) {}
+          setTimeout(() => {
+            applyingRemoteMedia = false;
+          }, 400);
+        }
+      } catch (e) {}
+    } else if (m.type === 'music' && window.__mehfilSharedAudio) {
+      try {
+        const a = window.__mehfilSharedAudio;
+        const target = mediaTargetTime(m);
+        if (Math.abs((a.currentTime || 0) - target) > MEDIA_DRIFT_SEC) {
+          a.currentTime = Math.max(0, target);
+        }
+        if (m.playing === false && !a.paused) a.pause();
+        else if (m.playing !== false && a.paused && !(typeof quietMode !== 'undefined' && quietMode)) {
+          a.play().catch(() => {});
+        }
+      } catch (e) {}
+    } else if (m.type) {
+      applyRemoteMedia(m);
+    }
+  }
+
+  async function resyncMediaFromRtdb() {
+    if (!activeChatId) return;
+    try {
+      const snap = await rtdbRef(`mehfil/${activeChatId}/media`)?.once('value');
+      const m = snap?.val();
+      cachedMediaState = m || null;
+      updateHostControlUi(m);
+      if (m?.type) applyRemoteMedia(m);
+      else stopLocalMediaPlayers();
+    } catch (e) {}
+  }
+
   function applyRemoteMedia(m) {
     applyingRemoteMedia = true;
     try {
@@ -1128,25 +1365,19 @@
             : tt('mehfil_shared_media', 'Shared media');
       }
       if (m.type === 'youtube' && m.id) {
-        overlayEl?.classList.add('mehfil-has-youtube');
-        ensureYtPlayer(m.id, !!m.playing, Number(m.t) || 0);
-        layoutCinema();
-      } else if (m.type === 'music' && m.previewUrl) {
-        // M3 owns music publish UI — remote-apply plumbing kept so peers can hear when M3 ships.
-        if (typeof quietMode !== 'undefined' && quietMode) return;
-        if (typeof pauseAllMusic === 'function') pauseAllMusic();
+        // Replace music if any
         try {
           window.__mehfilSharedAudio?.pause?.();
-          const a = new Audio(m.previewUrl);
-          a.dataset.mehfilShared = '1';
-          if (m.playing !== false) a.play().catch(() => {});
-          window.__mehfilSharedAudio = a;
+          window.__mehfilSharedAudio = null;
         } catch (e) {}
-      }
-      if (overlayEl && m.type && !overlayEl.querySelector('[data-mehfil-media]')?.classList.contains('is-open')) {
-        closeCallSheets('media');
-        overlayEl.querySelector('[data-mehfil-media]')?.classList.add('is-open');
-        syncSheetOpenClass();
+        overlayEl?.classList.add('mehfil-has-youtube');
+        overlayEl?.classList.remove('mehfil-has-music');
+        const musicEl = overlayEl?.querySelector('[data-mehfil-music-now]');
+        if (musicEl) musicEl.hidden = true;
+        ensureYtPlayer(m.id, m.playing !== false, mediaTargetTime(m));
+        layoutCinema();
+      } else if (m.type === 'music' && (m.previewUrl || m.url)) {
+        applySharedMusic(m);
       }
     } finally {
       setTimeout(() => {
@@ -1155,12 +1386,99 @@
     }
   }
 
+  function applySharedMusic(m) {
+    if (typeof quietMode !== 'undefined' && quietMode) {
+      const musicEl = overlayEl?.querySelector('[data-mehfil-music-now]');
+      if (musicEl) {
+        musicEl.hidden = false;
+        musicEl.textContent = tt('mehfil_music_quiet', 'Music playing for others (Quiet mode)');
+      }
+      return;
+    }
+    // Stop YouTube — single active media
+    try {
+      ytPlayer?.stopVideo?.();
+    } catch (e) {}
+    try {
+      ytPlayer?.destroy?.();
+    } catch (e) {}
+    ytPlayer = null;
+    overlayEl?.classList.remove('mehfil-has-youtube');
+    overlayEl?.classList.add('mehfil-has-music');
+    let stageHost =
+      overlayEl?.querySelector('[data-mehfil-stage-yt]') ||
+      overlayEl?.querySelector('#mehfilYtHost');
+    if (stageHost && stageHost.tagName === 'IFRAME') {
+      const next = document.createElement('div');
+      next.id = 'mehfilYtHost';
+      next.className = 'mehfil-yt mehfil-stage-yt';
+      next.setAttribute('data-mehfil-stage-yt', '');
+      next.setAttribute('data-mehfil-yt', '');
+      next.hidden = true;
+      stageHost.parentElement?.replaceChild(next, stageHost);
+      stageHost = next;
+    } else if (stageHost) {
+      stageHost.hidden = true;
+    }
+
+    if (typeof pauseAllMusic === 'function') pauseAllMusic();
+    const url = m.previewUrl || m.url;
+    let a = window.__mehfilSharedAudio;
+    const needNew = !a || a.dataset?.mehfilUrl !== url;
+    if (needNew) {
+      try {
+        a?.pause?.();
+      } catch (e) {}
+      a = new Audio(url);
+      a.dataset.mehfilShared = '1';
+      a.dataset.mehfilUrl = url;
+      a.volume = MUSIC_VOLUME;
+      window.__mehfilSharedAudio = a;
+      a.addEventListener('timeupdate', () => {
+        if (applyingRemoteMedia || !canControlMedia(cachedMediaState)) return;
+        publishMediaState(
+          {
+            type: 'music',
+            previewUrl: url,
+            title: m.title || 'Music',
+            artist: m.artist || '',
+            playing: !a.paused,
+            t: a.currentTime || 0,
+          },
+          { throttleSeek: true }
+        );
+      });
+      a.addEventListener('ended', () => {
+        if (canControlMedia(cachedMediaState)) {
+          publishMediaState({ type: 'music', previewUrl: url, playing: false, t: a.duration || 0, title: m.title });
+        }
+      });
+    }
+    const target = mediaTargetTime(m);
+    try {
+      if (Math.abs((a.currentTime || 0) - target) > 1) a.currentTime = Math.max(0, target);
+    } catch (e) {}
+    if (m.playing !== false) a.play().catch(() => {});
+    else a.pause();
+
+    const musicEl = overlayEl?.querySelector('[data-mehfil-music-now]');
+    if (musicEl) {
+      musicEl.hidden = false;
+      musicEl.innerHTML = `<strong>${esc(m.title || 'Music')}</strong>${
+        m.artist ? `<span>${esc(m.artist)}</span>` : ''
+      }`;
+    }
+    layoutCinema();
+  }
+
   function ensureYtPlayer(videoId, play, startAt) {
     const host = overlayEl?.querySelector('[data-mehfil-stage-yt]') || overlayEl?.querySelector('[data-mehfil-yt]');
     if (!host) return;
     const empty = overlayEl?.querySelector('[data-mehfil-yt-empty]');
     if (empty) empty.hidden = true;
     host.hidden = false;
+    // YT.Player needs a dedicated element id
+    if (!host.id) host.id = 'mehfilYtHost';
     overlayEl?.classList.add('mehfil-has-youtube');
     layoutCinema();
 
@@ -1172,7 +1490,7 @@
           if (cur !== videoId) ytPlayer.loadVideoById({ videoId, startSeconds: startAt || 0 });
           else {
             const curT = ytPlayer.getCurrentTime?.() || 0;
-            if (Math.abs(curT - (startAt || 0)) > 1.5) ytPlayer.seekTo(startAt || 0, true);
+            if (Math.abs(curT - (startAt || 0)) > MEDIA_DRIFT_SEC) ytPlayer.seekTo(startAt || 0, true);
           }
           if (play) ytPlayer.playVideo();
           else ytPlayer.pauseVideo();
@@ -1180,7 +1498,7 @@
         return;
       }
       try {
-        ytPlayer = new window.YT.Player(host, {
+        ytPlayer = new window.YT.Player(host.id, {
           videoId,
           playerVars: { playsinline: 1, rel: 0, modestbranding: 1 },
           events: {
@@ -1194,10 +1512,11 @@
                 const st = e.data;
                 const tSec = e.target.getCurrentTime?.() || 0;
                 const id = e.target.getVideoData?.()?.video_id || videoId;
+                const title = cachedMediaState?.title || 'YouTube';
                 if (st === window.YT.PlayerState.PLAYING) {
-                  publishMediaState({ type: 'youtube', id, playing: true, t: tSec, title: 'YouTube' });
+                  publishMediaState({ type: 'youtube', id, playing: true, t: tSec, title }, { throttleSeek: true });
                 } else if (st === window.YT.PlayerState.PAUSED) {
-                  publishMediaState({ type: 'youtube', id, playing: false, t: tSec, title: 'YouTube' });
+                  publishMediaState({ type: 'youtube', id, playing: false, t: tSec, title }, { throttleSeek: true });
                 }
               } catch (err) {}
             },
@@ -1242,27 +1561,7 @@
     }
   }
 
-  async function stopCurrentMedia() {
-    try {
-      ytPlayer?.stopVideo?.();
-    } catch (e) {}
-    try {
-      ytPlayer?.destroy?.();
-    } catch (e) {}
-    ytPlayer = null;
-    overlayEl?.classList.remove('mehfil-has-youtube');
-    layoutCinema();
-    try {
-      window.__mehfilSharedAudio?.pause?.();
-      window.__mehfilSharedAudio = null;
-    } catch (e) {}
-    const stageHost = overlayEl?.querySelector('[data-mehfil-yt]');
-    if (stageHost) stageHost.innerHTML = '';
-  }
-
-  async function playYoutubeId(id, title) {
-    await stopCurrentMedia();
-    ensureYtPlayer(id, true, 0);
+  async function claimHostIfNeeded() {
     const ref = rtdbRef(`mehfil/${activeChatId}/media`);
     let hostPatch = {};
     try {
@@ -1272,52 +1571,139 @@
         hostPatch = { hostUid: currentUser.uid, controlMode: 'host', controlUid: null };
       }
     } catch (e) {}
-    await publishMediaState({
+    return hostPatch;
+  }
+
+  async function playYoutubeId(id, title) {
+    if (!id || !activeChatId) return;
+    if (cachedMediaState?.type && !canControlMedia(cachedMediaState)) {
+      if (typeof showToast === 'function') {
+        showToast(mediaControlReason() || tt('mehfil_host_controls', 'Host controls playback'));
+      }
+      return;
+    }
+    await stopCurrentMedia();
+    if (typeof pauseAllMusic === 'function') pauseAllMusic();
+    const hostPatch = await claimHostIfNeeded();
+    const payload = {
       type: 'youtube',
       id,
       playing: true,
       t: 0,
       title: title || 'YouTube',
+      previewUrl: null,
+      artist: '',
       ...hostPatch,
-    });
-    cachedMediaState = { ...(cachedMediaState || {}), type: 'youtube', id, ...hostPatch };
+    };
+    ensureYtPlayer(id, true, 0);
+    await publishMediaState(payload, { force: true });
     updateHostControlUi(cachedMediaState);
     layoutCinema();
     const nowEl = overlayEl?.querySelector('[data-mehfil-now]');
     if (nowEl) nowEl.textContent = tt('mehfil_now_playing', 'Now playing: {{title}}', { title: title || 'YouTube' });
   }
 
-  function paintYtResults(results, { configured, emptyHint } = {}) {
+  async function playSharedMusicTrack(track) {
+    if (!activeChatId || !track) return;
+    if (cachedMediaState?.type && !canControlMedia(cachedMediaState)) {
+      if (typeof showToast === 'function') {
+        showToast(mediaControlReason() || tt('mehfil_host_controls', 'Host controls playback'));
+      }
+      return;
+    }
+    let resolved = track;
+    if (typeof resolvePlayableUrl === 'function') {
+      resolved = await resolvePlayableUrl(track);
+    }
+    const url = resolved?.previewUrl || resolved?.url;
+    if (!url) {
+      if (typeof showToast === 'function') {
+        showToast(tt('mehfil_music_no_preview', 'No playable preview for that track — try another.'));
+      }
+      return;
+    }
+    await stopCurrentMedia();
+    if (typeof pauseAllMusic === 'function') pauseAllMusic();
+    const hostPatch = await claimHostIfNeeded();
+    const payload = {
+      type: 'music',
+      previewUrl: url,
+      url,
+      title: resolved.title || track.title || 'Music',
+      artist: resolved.artist || track.artist || '',
+      thumbnail: resolved.thumbnail || track.thumbnail || '',
+      playing: true,
+      t: 0,
+      id: null,
+      ...hostPatch,
+    };
+    await publishMediaState(payload, { force: true });
+    applySharedMusic(payload);
+    updateHostControlUi(cachedMediaState);
+  }
+
+  function setMediaSearchMode(mode) {
+    mediaSearchMode = mode === 'music' ? 'music' : 'youtube';
+    const sheet = overlayEl?.querySelector('[data-mehfil-media]');
+    if (!sheet) return;
+    sheet.querySelectorAll('[data-mehfil-search-mode]').forEach((btn) => {
+      btn.classList.toggle('is-active', btn.dataset.mehfilSearchMode === mediaSearchMode);
+    });
+    const input = sheet.querySelector('[data-mehfil-q]');
+    if (input) {
+      input.placeholder =
+        mediaSearchMode === 'music'
+          ? tt('mehfil_music_search_ph', 'Search a song to play for the room')
+          : tt('mehfil_yt_search_ph', 'Search YouTube or paste a link');
+    }
+    const results = sheet.querySelector('[data-mehfil-yt-results]');
+    if (results) {
+      results.innerHTML = '';
+      results.hidden = true;
+    }
+  }
+
+  function paintMediaResults(results, { kind, configured, emptyHint } = {}) {
     const host = overlayEl?.querySelector('[data-mehfil-yt-results]');
     if (!host) return;
     const list = results || [];
+    const isMusic = kind === 'music';
     if (!list.length) {
       host.innerHTML = `<div class="cp-empty mehfil-yt-empty-copy">${esc(
         emptyHint ||
           (configured === false
-            ? tt('mehfil_yt_needs_key', 'Search needs YOUTUBE_API_KEY on the host. Paste a YouTube link to play.')
-            : tt('mehfil_yt_no_videos', 'No videos — try another search or paste a link.'))
+            ? isMusic
+              ? tt('mehfil_music_unavailable', 'Music search isn’t available right now.')
+              : tt('mehfil_yt_needs_key', 'Search needs YOUTUBE_API_KEY on the host. Paste a YouTube link to play.')
+            : isMusic
+              ? tt('mehfil_music_no_results', 'No songs — try another search.')
+              : tt('mehfil_yt_no_videos', 'No videos — try another search or paste a link.'))
       )}</div>`;
       host.hidden = false;
       return;
     }
     host.hidden = false;
     host.innerHTML = list
-      .map(
-        (r, i) =>
-          `<button type="button" class="mehfil-yt-pick" data-yt-i="${i}">
-            ${r.thumb ? `<img src="${esc(r.thumb)}" alt="">` : '<span class="mehfil-yt-pick-ph">▶</span>'}
+      .map((r, i) => {
+        const sub = isMusic
+          ? esc(r.artist || '')
+          : esc([r.channel, r.duration].filter(Boolean).join(' · '));
+        return `<button type="button" class="mehfil-yt-pick" data-media-i="${i}">
+            ${r.thumb || r.thumbnail ? `<img src="${esc(r.thumb || r.thumbnail)}" alt="">` : `<span class="mehfil-yt-pick-ph">${isMusic ? '♪' : '▶'}</span>`}
             <span class="mehfil-yt-pick-meta">
-              <strong>${esc(r.title || 'Video')}</strong>
-              <small>${esc(r.channel || '')}</small>
+              <strong>${esc(r.title || (isMusic ? 'Song' : 'Video'))}</strong>
+              <small>${sub}</small>
             </span>
-          </button>`
-      )
+            <span class="mehfil-yt-pick-cta">${esc(tt('mehfil_play_for_room', 'Play for the room'))}</span>
+          </button>`;
+      })
       .join('');
-    host.querySelectorAll('[data-yt-i]').forEach((btn) => {
+    host.querySelectorAll('[data-media-i]').forEach((btn) => {
       btn.addEventListener('click', async () => {
-        const r = list[Number(btn.dataset.ytI)];
-        if (r?.id) await playYoutubeId(r.id, r.title);
+        const r = list[Number(btn.dataset.mediaI)];
+        if (!r) return;
+        if (isMusic) await playSharedMusicTrack(r);
+        else if (r.id) await playYoutubeId(r.id, r.title);
       });
     });
   }
@@ -1325,9 +1711,10 @@
   async function searchAndPlay(query) {
     const q = String(query || '').trim();
     if (!q) {
-      await loadMehfilYtRecs(overlayEl, { openPicker: true });
+      if (mediaSearchMode === 'youtube') await loadMehfilYtRecs(overlayEl, { openPicker: true });
       return;
     }
+    // Paste YouTube link always plays video (even from music tab)
     const ytMatch =
       q.match(/(?:v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{6,})/) ||
       (q.length === 11 && /^[a-zA-Z0-9_-]+$/.test(q) ? [0, q] : null);
@@ -1341,6 +1728,31 @@
       resultsHost.hidden = false;
       resultsHost.innerHTML = `<div class="cp-empty">${esc(tt('mehfil_searching', 'Searching…'))}</div>`;
     }
+
+    if (mediaSearchMode === 'music') {
+      try {
+        const env = await apiFetch('/api/media-config', {
+          method: 'POST',
+          needAuth: true,
+          body: { action: 'music_search', query: q, limit: 8 },
+        });
+        const results = (env?.data?.results || [])
+          .map((r) => ({
+            title: r.title,
+            artist: r.artist,
+            thumbnail: r.thumbnail || r.thumb,
+            previewUrl: r.previewUrl || null,
+            source: r.source,
+          }))
+          .filter((r) => r.title);
+        paintMediaResults(results, { kind: 'music', configured: true });
+      } catch (e) {
+        if (typeof showToast === 'function') showToast(tt('mehfil_media_fail', 'Media search failed'));
+        paintMediaResults([], { kind: 'music', configured: true });
+      }
+      return;
+    }
+
     try {
       const ytEnv = await apiFetch('/api/media-config', {
         method: 'POST',
@@ -1352,7 +1764,6 @@
         if (resultsHost) resultsHost.innerHTML = '';
         return;
       }
-      const configured = ytEnv?.data?.configured !== false && !!ytEnv?.data?.provider;
       const configuredFlag = ytEnv?.data?.configured;
       const results = (ytEnv?.data?.results || [])
         .map((r) => ({
@@ -1360,6 +1771,7 @@
           title: r.title,
           channel: r.channelTitle || r.channel,
           thumb: r.thumb || r.thumbnail,
+          duration: r.duration || r.durationText || '',
         }))
         .filter((r) => r.id);
       if (ytEnv?.data?.error && typeof showToast === 'function') {
@@ -1370,19 +1782,113 @@
         );
       }
       if (configuredFlag === false) {
-        paintYtResults([], { configured: false });
+        paintMediaResults([], { kind: 'youtube', configured: false });
         if (typeof showToast === 'function') {
           showToast(tt('mehfil_yt_needs_key', 'Search needs YOUTUBE_API_KEY on the host. Paste a YouTube link to play.'));
         }
         return;
       }
-      paintYtResults(results, { configured: true });
+      paintMediaResults(results, { kind: 'youtube', configured: true });
     } catch (e) {
       if (typeof reportClientError === 'function') {
         reportClientError({ feature: 'mehfil_yt_search', message: e?.message || String(e) });
       }
       if (typeof showToast === 'function') showToast(tt('mehfil_media_fail', 'Media search failed'));
     }
+  }
+
+  async function toggleRoomPlayback() {
+    const m = cachedMediaState;
+    if (!m?.type || !canControlMedia(m)) {
+      if (typeof showToast === 'function') showToast(mediaControlReason() || tt('mehfil_host_controls', 'Host controls playback'));
+      return;
+    }
+    const nextPlay = m.playing === false;
+    if (m.type === 'youtube' && ytPlayer) {
+      try {
+        if (nextPlay) ytPlayer.playVideo();
+        else ytPlayer.pauseVideo();
+      } catch (e) {}
+      await publishMediaState({
+        type: 'youtube',
+        id: m.id,
+        playing: nextPlay,
+        t: ytPlayer.getCurrentTime?.() || m.t || 0,
+        title: m.title,
+      });
+    } else if (m.type === 'music') {
+      const a = window.__mehfilSharedAudio;
+      try {
+        if (nextPlay) await a?.play?.();
+        else a?.pause?.();
+      } catch (e) {}
+      await publishMediaState({
+        type: 'music',
+        previewUrl: m.previewUrl || m.url,
+        playing: nextPlay,
+        t: a?.currentTime || m.t || 0,
+        title: m.title,
+        artist: m.artist || '',
+      });
+    }
+  }
+
+  async function openDelegatePicker() {
+    if (!activeChatId || cachedMediaState?.hostUid !== currentUser?.uid) return;
+    if (cachedMediaState?.controlUid) {
+      await rtdbRef(`mehfil/${activeChatId}/media`)?.update({ controlUid: null });
+      if (typeof showToast === 'function') showToast(tt('mehfil_control_revoked', 'Control returned to host'));
+      return;
+    }
+    const uids = await fetchParticipantUids(activeChatId);
+    const others = uids.filter((u) => u !== currentUser?.uid);
+    if (!others.length) {
+      if (typeof showToast === 'function') showToast(tt('mehfil_delegate_nobody', 'No one else in the room yet'));
+      return;
+    }
+    const sheet = document.createElement('div');
+    sheet.className = 'mehfil-ring-pick';
+    sheet.setAttribute('role', 'dialog');
+    sheet.innerHTML = `
+      <div class="mehfil-ring-pick-card">
+        <h3>${esc(tt('mehfil_control_delegate', 'Let someone control'))}</h3>
+        <div class="mehfil-ring-pick-list">
+          ${others
+            .map((uid) => {
+              const name = displayNameForUid(uid);
+              return `<button type="button" class="mehfil-ring-pick-row" data-delegate-uid="${esc(uid)}">${esc(name)}</button>`;
+            })
+            .join('')}
+        </div>
+        <div class="mehfil-ring-pick-actions">
+          <button type="button" data-delegate-cancel>${esc(tt('cancel', 'Cancel'))}</button>
+        </div>
+      </div>`;
+    let handle;
+    const onDismiss = () => sheet.remove();
+    if (typeof openLayer === 'function') {
+      handle = openLayer(sheet, onDismiss, { host: shellHost(), role: 'dialog', label: tt('mehfil_control_delegate', 'Let someone control') });
+    } else {
+      shellHost().appendChild(sheet);
+    }
+    const close = () => {
+      if (handle?.close) handle.close();
+      else sheet.remove();
+    };
+    sheet.querySelector('[data-delegate-cancel]')?.addEventListener('click', close);
+    sheet.querySelectorAll('[data-delegate-uid]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const uid = btn.dataset.delegateUid;
+        close();
+        await rtdbRef(`mehfil/${activeChatId}/media`)?.update({
+          controlUid: uid,
+          controlMode: 'host',
+        });
+        if (typeof showToast === 'function') {
+          showToast(tt('mehfil_delegate_set', 'Control handed to {{name}}', { name: displayNameForUid(uid) }));
+        }
+      });
+    });
   }
 
   async function loadMehfilYtRecs(root, { openPicker = false } = {}) {
@@ -1418,7 +1924,7 @@
         wrap.hidden = true;
         wrap.dataset.loaded = '1';
         wrap.dataset.hide = '1';
-        if (openPicker) paintYtResults([], { configured: true });
+        if (openPicker) paintMediaResults([], { kind: 'youtube', configured: true });
         return;
       }
       wrap.dataset.loaded = '1';
@@ -1439,7 +1945,7 @@
           if (r?.id) await playYoutubeId(r.id, r.title);
         });
       });
-      if (openPicker) paintYtResults(results, { configured: true });
+      if (openPicker) paintMediaResults(results, { kind: 'youtube', configured: true });
     } catch (e) {
       wrap.hidden = true;
     }
@@ -1489,6 +1995,12 @@
     clearTimeout(tokenRenewTimer);
     tokenRenewTimer = null;
     stopMutedNudgeWatch();
+    clearInterval(musicSyncTimer);
+    musicSyncTimer = null;
+    lastAppliedMediaSeq = 0;
+    lastMediaPublishAt = 0;
+    lastSeekPublishAt = 0;
+    mediaSearchMode = 'youtube';
     lastKnownFreshCount = 0;
     dmAutoRingDone = false;
     reconnectFailCount = 0;
@@ -2738,6 +3250,9 @@
     leaving = false;
     lastKnownFreshCount = 0;
     dmAutoRingDone = false;
+    lastAppliedMediaSeq = 0;
+    lastMediaPublishAt = 0;
+    mediaSearchMode = 'youtube';
     const gen = ++joinGeneration;
     const prefs = readPrefs();
     micWanted = prefs.mic !== false;
@@ -2806,11 +3321,23 @@
       <div class="mehfil-effects-layer" data-mehfil-effects-layer aria-hidden="true"></div>
       <div class="mehfil-sheets">
         <div class="mehfil-sheet mehfil-media-sheet" data-mehfil-media>
-          <div class="mehfil-now" data-mehfil-now>${esc(tt('mehfil_media_hint', 'Search YouTube or paste a link'))}</div>
+          <div class="mehfil-now" data-mehfil-now>${esc(tt('mehfil_media_hint', 'Search to watch or listen together'))}</div>
+          <div class="mehfil-search-modes" data-mehfil-search-modes>
+            <button type="button" class="is-active" data-mehfil-search-mode="youtube">${esc(tt('mehfil_watch_together', 'Watch together'))}</button>
+            <button type="button" data-mehfil-search-mode="music">${esc(tt('mehfil_listen_together', 'Listen together'))}</button>
+          </div>
           <div class="mehfil-media-control" data-mehfil-media-control hidden>
             <button type="button" data-mehfil-control-host>${esc(tt('mehfil_host_controls', 'Only me'))}</button>
             <button type="button" data-mehfil-control-all>${esc(tt('mehfil_control_everyone', 'Everyone'))}</button>
+            <button type="button" data-mehfil-control-delegate>${esc(tt('mehfil_control_delegate', 'Let someone control'))}</button>
           </div>
+          <p class="mehfil-control-reason" data-mehfil-control-reason hidden></p>
+          <div class="mehfil-playback" data-mehfil-playback hidden>
+            <span data-mehfil-playback-type>${esc(tt('mehfil_playing_video', 'Watching'))}</span>
+            <button type="button" data-mehfil-play-toggle data-label="${esc(tt('mehfil_play', 'Play'))}">▶</button>
+            <button type="button" data-mehfil-stop-media data-label="${esc(tt('mehfil_stop_media', 'Stop'))}">⏹</button>
+          </div>
+          <div class="mehfil-music-now" data-mehfil-music-now hidden></div>
           <form class="mehfil-media-search search-field" data-mehfil-search-form>
             <input type="search" class="search-field-input search-field-hide-native-clear" placeholder="${esc(tt('mehfil_yt_search_ph', 'Search YouTube or paste a link'))}" data-mehfil-q enterkeyhint="search" autocomplete="off">
             <button type="button" class="search-field-clear" data-mehfil-clear aria-label="${esc(tt('search_clear', 'Clear search'))}" hidden>✕</button>
@@ -2841,7 +3368,7 @@
           </button>
           <button type="button" class="mehfil-more-item" data-mehfil-media-btn>
             <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('music',{size:18}):''}</span>
-            ${esc(tt('mehfil_media', 'Music / YouTube'))}
+            ${esc(tt('mehfil_media', 'Watch / Listen'))}
           </button>
           <button type="button" class="mehfil-more-item" data-mehfil-nudge-more>
             <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('bell',{size:18}):''}</span>
@@ -2966,9 +3493,10 @@
     });
     el.querySelector('[data-mehfil-react-quick]')?.addEventListener('click', () => toggleCallSheet('reacts'));
     el.querySelector('[data-mehfil-fs]')?.addEventListener('click', requestStageFullscreen);
-    // Host / controlUid plumbing kept for M3 media ownership — no half-UI delegate picker in M0.
+    // Host / Everyone / delegate — honest control model
     el.querySelector('[data-mehfil-control-host]')?.addEventListener('click', async () => {
       if (!activeChatId || !currentUser?.uid) return;
+      if (cachedMediaState?.hostUid && cachedMediaState.hostUid !== currentUser.uid) return;
       await rtdbRef(`mehfil/${activeChatId}/media`)?.update({
         hostUid: currentUser.uid,
         controlMode: 'host',
@@ -2979,6 +3507,12 @@
       if (!activeChatId || cachedMediaState?.hostUid !== currentUser?.uid) return;
       await rtdbRef(`mehfil/${activeChatId}/media`)?.update({ controlMode: 'all', controlUid: null });
     });
+    el.querySelector('[data-mehfil-control-delegate]')?.addEventListener('click', () => openDelegatePicker());
+    el.querySelectorAll('[data-mehfil-search-mode]').forEach((btn) => {
+      btn.addEventListener('click', () => setMediaSearchMode(btn.dataset.mehfilSearchMode));
+    });
+    el.querySelector('[data-mehfil-play-toggle]')?.addEventListener('click', () => toggleRoomPlayback());
+    el.querySelector('[data-mehfil-stop-media]')?.addEventListener('click', () => clearRoomMedia());
     el.querySelector('[data-mehfil-chat-form]')?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const input = el.querySelector('[data-mehfil-chat-input]');
@@ -3018,10 +3552,10 @@
     el.querySelector('[data-mehfil-media-btn]')?.addEventListener('click', () => {
       toggleCallSheet('media');
       loadMehfilYtRecs(el);
+      setMediaSearchMode(mediaSearchMode);
       const fsBtn = el.querySelector('[data-mehfil-fs]');
       if (fsBtn) fsBtn.hidden = !hasYoutubeOnStage();
-      const ctrl = el.querySelector('[data-mehfil-media-control]');
-      if (ctrl && cachedMediaState?.hostUid === currentUser?.uid) ctrl.hidden = false;
+      updateHostControlUi(cachedMediaState);
     });
     el.querySelector('[data-mehfil-ring]')?.addEventListener('click', () => startMehfilRing(activeChat));
     el.querySelector('[data-mehfil-waiting-ring]')?.addEventListener('click', () => startMehfilRing(activeChat));
@@ -3250,9 +3784,11 @@
     window.addEventListener('pagehide', () => {
       if (overlayEl) abandonMehfil('pagehide');
     });
+    // Background tab: keep room alive; resync media on return (M3). pagehide still tears down.
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden' && overlayEl) {
-        abandonMehfil('background');
+      if (!overlayEl) return;
+      if (document.visibilityState === 'visible') {
+        resyncMediaFromRtdb().catch(() => {});
       }
     });
   } catch (e) {}
