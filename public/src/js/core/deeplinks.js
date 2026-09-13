@@ -18,7 +18,10 @@
     { name: 'post', re: /^\/(?:post|p)\/([^/?#]+)\/?$/i },
     { name: 'chat', re: /^\/(?:chat|c)\/([^/?#]+)\/?$/i },
     { name: 'story', re: /^\/story\/([^/?#]+)\/?$/i },
+    { name: 'join', re: /^\/join(?:\/g)?\/([^/?#]+)\/?$/i },
   ];
+
+  const PENDING_GROUP_INVITE_KEY = 'chaupaal_pending_group_invite';
 
   function parseDeepLink(pathname = location.pathname) {
     const path = pathname.replace(/\/+$/, '') || '/';
@@ -26,12 +29,13 @@
       const m = path.match(r.re);
       if (m) return { name: r.name, id: decodeURIComponent(m[1]) };
     }
-    // Query fallbacks (legacy /?post= /?user=)
+    // Query fallbacks (legacy /?post= /?user= /?join=)
     const params = new URLSearchParams(location.search);
     if (params.get('post')) return { name: 'post', id: params.get('post') };
     if (params.get('user') || params.get('profile')) {
       return { name: 'profile', id: params.get('user') || params.get('profile') };
     }
+    if (params.get('uid')) return { name: 'user', id: params.get('uid') };
     if (params.get('chat')) return { name: 'chat', id: params.get('chat') };
     if (params.get('join') || params.get('groupInvite')) {
       return { name: 'join', id: params.get('join') || params.get('groupInvite') };
@@ -583,6 +587,10 @@
     const localP =
       typeof peepalQuestions !== 'undefined' ? peepalQuestions.find((q) => q.id === id || q.firestoreId === id) : null;
     if (localP) {
+      if (localP.deleted && localP.uid !== currentUser?.uid) {
+        if (typeof showToast === 'function') showToast('This post was removed');
+        return;
+      }
       switchTab('peepal');
       setTimeout(() => {
         if (typeof openPeepalDetail === 'function') openPeepalDetail(localP);
@@ -592,6 +600,12 @@
     const localD =
       typeof duniyaPosts !== 'undefined' ? duniyaPosts.find((p) => p.id === id || p.firestoreId === id) : null;
     if (localD) {
+      if ((localD.deleted || localD.archived) && localD.uid !== currentUser?.uid) {
+        if (typeof showToast === 'function') {
+          showToast(localD.archived ? 'This post is no longer public' : 'This post was removed');
+        }
+        return;
+      }
       switchTab('duniya');
       setTimeout(() => {
         if (typeof initDuniya === 'function') initDuniya();
@@ -603,15 +617,27 @@
       try {
         let snap = await db.collection('peepal').doc(id).get();
         if (snap.exists) {
+          const data = snap.data() || {};
+          if (data.deleted && data.uid !== currentUser?.uid) {
+            if (typeof showToast === 'function') showToast('This post was removed');
+            return;
+          }
           switchTab('peepal');
-          const q = { id: snap.id, firestoreId: snap.id, ...snap.data() };
+          const q = { id: snap.id, firestoreId: snap.id, ...data };
           setTimeout(() => openPeepalDetail?.(q), 200);
           return;
         }
         snap = await db.collection('duniya').doc(id).get();
         if (snap.exists) {
+          const data = snap.data() || {};
+          if ((data.deleted || data.archived) && data.uid !== currentUser?.uid) {
+            if (typeof showToast === 'function') {
+              showToast(data.archived ? 'This post is no longer public' : 'This post was removed');
+            }
+            return;
+          }
           switchTab('duniya');
-          const raw = { id: snap.id, firestoreId: snap.id, ...snap.data() };
+          const raw = { id: snap.id, firestoreId: snap.id, ...data };
           const p = typeof mapDuniyaDoc === 'function' ? mapDuniyaDoc(raw) : raw;
           setTimeout(() => {
             initDuniya?.();
@@ -619,9 +645,14 @@
           }, 200);
           return;
         }
-      } catch (e) {}
+      } catch (e) {
+        if (typeof showToast === 'function') {
+          showToast('Could not open this post — you may not have access');
+        }
+        return;
+      }
     }
-    if (typeof showToast === 'function') showToast('Post not found');
+    if (typeof showToast === 'function') showToast('Post not found or no longer available');
   }
 
   async function openChatById(id, opts) {
@@ -651,9 +682,11 @@
     let local =
       typeof baithakChats !== 'undefined'
         ? baithakChats.find((c) => c.id === id || c.firestoreId === id)
-        : typeof SAMPLE_CHATS !== 'undefined'
-          ? SAMPLE_CHATS.find((c) => c.id === id)
-          : null;
+        : null;
+    // Never use SAMPLE_CHATS for signed-in sessions (demo names)
+    if (!local && !currentUser && typeof SAMPLE_CHATS !== 'undefined') {
+      local = SAMPLE_CHATS.find((c) => c.id === id) || null;
+    }
 
     if (!local && typeof db !== 'undefined' && db) {
       try {
@@ -662,6 +695,14 @@
           const raw = { id: snap.id, ...snap.data() };
           if (raw.mergedInto) {
             return openChatById(raw.mergedInto, opts);
+          }
+          const me = typeof currentUser !== 'undefined' ? currentUser?.uid : '';
+          const parts = Array.isArray(raw.participants) ? raw.participants : [];
+          if (me && parts.length && !parts.includes(me)) {
+            if (typeof showToast === 'function') {
+              showToast('You’re not a member of this chat');
+            }
+            return;
           }
           local = typeof mapChatDoc === 'function' ? mapChatDoc(raw) : raw;
         } else {
@@ -674,13 +715,20 @@
             }
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        if (typeof showToast === 'function') {
+          showToast('Could not open this chat — you may not have access');
+        }
+        return;
+      }
     }
 
     setTimeout(() => {
       if (typeof initBaithak === 'function') initBaithak();
       if (!local) {
-        if (typeof showToast === 'function') showToast('Chat unavailable');
+        if (typeof showToast === 'function') {
+          showToast(currentUser ? 'Chat not found or you’re not a member' : 'Sign in to open this chat');
+        }
         return;
       }
       const still = document.getElementById('activeChatScreen');
@@ -709,36 +757,113 @@
   }
 
   async function openGroupInvite(token) {
-    if (!token || typeof joinGroupByInviteToken !== 'function') return;
+    if (!token) return;
     switchTab('baithak');
+    if (!currentUser) {
+      try {
+        sessionStorage.setItem(PENDING_GROUP_INVITE_KEY, String(token));
+      } catch (e) {}
+      if (typeof showToast === 'function') showToast('Sign in to join this group');
+      if (typeof openAuthSheet === 'function') openAuthSheet('login');
+      else if (typeof showAuth === 'function') showAuth();
+      return;
+    }
+    if (typeof joinGroupByInviteToken !== 'function') {
+      if (typeof showToast === 'function') showToast('Group invites unavailable right now');
+      return;
+    }
     setTimeout(async () => {
       if (typeof initBaithak === 'function') initBaithak();
       const result = await joinGroupByInviteToken(token);
+      try {
+        sessionStorage.removeItem(PENDING_GROUP_INVITE_KEY);
+      } catch (e) {}
       if (result?.pending && typeof showToast === 'function') {
         showToast('Join request sent — waiting for admin approval');
       } else if (result?.ok && result.chat && typeof openChatScreen === 'function') {
         openChatScreen(result.chat);
         if (typeof showToast === 'function') showToast(result.already ? 'Already in this group' : 'Joined group');
       } else if (typeof showToast === 'function') {
-        showToast('Invite link invalid or expired');
+        const reason = result?.reason || '';
+        if (reason === 'disabled' || reason === 'expired') {
+          showToast('This invite link was revoked or expired');
+        } else if (reason === 'not_found') {
+          showToast('Invite link not found — ask for a new one');
+        } else if (reason === 'auth') {
+          showToast('Sign in to join this group');
+        } else {
+          showToast('Could not join — invite may be invalid');
+        }
       }
     }, 200);
   }
 
+  /** After login: resume stashed /join/g/{token} (guest → auth). */
+  async function resumePendingGroupInvite() {
+    let token = '';
+    try {
+      token = sessionStorage.getItem(PENDING_GROUP_INVITE_KEY) || '';
+    } catch (e) {}
+    if (!token || !currentUser) return false;
+    await openGroupInvite(token);
+    return true;
+  }
+
+  async function openProfileByUid(uid) {
+    if (!uid) return;
+    if (!db) {
+      if (typeof showToast === 'function') showToast('Profile unavailable');
+      return;
+    }
+    try {
+      const u =
+        (typeof UsersPublic?.getPublicProfile === 'function'
+          ? await UsersPublic.getPublicProfile(uid)
+          : null) || {};
+      if (!u || (!u.uid && !Object.keys(u).length)) {
+        if (typeof showToast === 'function') showToast('Profile not found');
+        return;
+      }
+      await openPublicProfile({ ...u, uid }, { uid, username: u.username, context: 'deeplink' });
+    } catch (e) {
+      if (typeof showToast === 'function') showToast('Could not open profile');
+    }
+  }
+
   async function handleDeepLink(route) {
     if (!route) return false;
+    try {
+      if (typeof isFeatureEnabled === 'function') {
+        const on = await isFeatureEnabled('deeplinks_v1', {
+          uid: typeof currentUser !== 'undefined' ? currentUser?.uid : null,
+          defaultValue: true,
+        });
+        if (!on) {
+          if (typeof showToast === 'function') showToast('Links are temporarily unavailable');
+          return false;
+        }
+      }
+    } catch (e) {}
     try {
       if (typeof TabHabits !== 'undefined' && TabHabits.markOverride) {
         TabHabits.markOverride('deeplink:' + route.name);
       }
     } catch (e) {}
     if (route.name === 'profile') await openProfileByUsername(route.id);
+    else if (route.name === 'user') await openProfileByUid(route.id);
     else if (route.name === 'post') await openPostById(route.id);
     else if (route.name === 'chat') await openChatById(route.id);
     else if (route.name === 'join') await openGroupInvite(route.id);
     else if (route.name === 'story') {
       switchTab('duniya');
-      if (typeof DuniyaStory !== 'undefined' && DuniyaStory.openById) await DuniyaStory.openById(route.id);
+      if (typeof DuniyaStory !== 'undefined' && DuniyaStory.openById) {
+        const ok = await DuniyaStory.openById(route.id);
+        if (ok === false && typeof showToast === 'function') {
+          showToast('Story not found or expired');
+        }
+      } else if (typeof showToast === 'function') {
+        showToast('Stories unavailable');
+      }
     }
     return true;
   }
@@ -795,7 +920,9 @@
   window.buildDeepLink = buildDeepLink;
   window.shareUrl = shareUrl;
   window.navigateToDeepLink = navigateToDeepLink;
-  window.openPublicProfile = openPublicProfile;
   window.handleDeepLink = handleDeepLink;
+  window.openChatById = openChatById;
+  window.openPublicProfile = openPublicProfile;
+  window.resumePendingGroupInvite = resumePendingGroupInvite;
   window.initDeepLinks = initDeepLinks;
 })();

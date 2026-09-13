@@ -128,12 +128,14 @@ async function buildAkhbaar(QUESTIONS_IN,BONUS_QUESTIONS_IN){
 
   if(typeof applyAkhbaarBeatBanner==='function') applyAkhbaarBeatBanner();
 
-  // Breaking tags only when Akhbaar is visible — avoid toast work on Peepal boot
+  // Breaking tags only when Akhbaar is visible — toast only if a real breaking card exists
   setTimeout(()=>{
     const onAkhbaar=document.getElementById('panel-akhbaar')?.classList.contains('active');
     if(!onAkhbaar) return;
-    stage.querySelectorAll('[data-breaking]').forEach(tag=>{tag.classList.remove('hidden');});
-    showToast('🔴 A Taaza Khabar just dropped!');
+    const tags=stage.querySelectorAll('[data-breaking]');
+    if(!tags.length) return;
+    tags.forEach(tag=>{tag.classList.remove('hidden');});
+    if(typeof showToast==='function') showToast('🔴 A Taaza Khabar just dropped!');
   },6000);
 
   _akhbaarBuilt=true;

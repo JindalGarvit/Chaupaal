@@ -1,42 +1,17 @@
 /**
- * Tab nudge engine — injects a soft local notification for each tab
- * if the tab has been silent that day. Purely client-side; no Firestore writes.
+ * Tab nudge engine — soft local notifications only when backed by real state.
+ * Never invents social activity ("someone nearby", "attracting looks").
+ *
+ * Eligibility (per tab, once/day, quiet hours + guest skip):
+ *   akhbaar — reading streak ≥ 2 at risk (no play today) OR real unread on tab
+ *   duniya  — real unread (likes/comments/etc.) only
+ *   peepal  — real unread OR pending friend requests count > 0
+ *   baithak — real unread (DMs / requests)
+ *   dangal  — real unread OR GOTD / daily challenge not yet played today
+ * Otherwise: silence (no aspirational copy).
  */
 (function () {
   'use strict';
-
-  const NUDGE_COPY = {
-    akhbaar: [
-      "Today's quiz is live — how well do you know the news?",
-      'A new story just broke — check Akhbaar.',
-      'Your reading streak is still going — keep it up.',
-      'Catch up on what the world is talking about today.',
-    ],
-    duniya: [
-      'Someone might have posted something worth seeing — check Duniya.',
-      "Stories disappear in 24h — don't miss them.",
-      'Anything you want to share today?',
-      'Your Duniya feed has fresh posts waiting.',
-    ],
-    peepal: [
-      'New people are joining Chaupaal — you might click with someone.',
-      'Someone nearby is looking for a travel companion.',
-      'Your profile is attracting looks — see who.',
-      'Someone new matched your interests today.',
-    ],
-    baithak: [
-      'Your friends might be wondering where you are — drop a Split.',
-      "A group you're in had some activity.",
-      'Send a Split to friends today.',
-      'Baithak is quiet — be the one to break the silence.',
-    ],
-    dangal: [
-      "Today's Akhbaar game is waiting — 2 minutes to play.",
-      "You haven't challenged anyone today — pick a duel.",
-      'Your Dangal streak is intact — play to keep it.',
-      'A new Dangal round is open — jump in.',
-    ],
-  };
 
   const TAB_ICONS = {
     akhbaar: '📰',
@@ -68,8 +43,89 @@
     return false;
   }
 
+  function unreadOn(tab) {
+    try {
+      if (typeof window.unreadNotifCount === 'function') return Number(window.unreadNotifCount(tab)) || 0;
+    } catch (e) {}
+    return 0;
+  }
+
+  function pendingFriendRequests() {
+    try {
+      if (typeof window.pendingIncomingFriendCount === 'function') {
+        return Number(window.pendingIncomingFriendCount()) || 0;
+      }
+      if (typeof window.getPendingFriendRequestCount === 'function') {
+        return Number(window.getPendingFriendRequestCount()) || 0;
+      }
+    } catch (e) {}
+    return 0;
+  }
+
+  function streakAtRisk() {
+    try {
+      const streak = Number(typeof window.streakCount === 'number' ? window.streakCount : window.userStreak) || 0;
+      if (streak < 2) return false;
+      const played = localStorage.getItem('chaupaal_akhbaar_played_' + todayKey());
+      return !played;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function dangalPendingToday() {
+    try {
+      if (localStorage.getItem('chaupaal_gotd_played_' + todayKey()) === '1') return false;
+      if (localStorage.getItem('chaupaal_dangal_played_' + todayKey()) === '1') return false;
+      // Only nudge if we know GOTD exists / user has played before (real engagement history)
+      const ever = localStorage.getItem('chaupaal_dangal_ever_played') || localStorage.getItem('chaupaal_gotd_ever');
+      return !!ever;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /**
+   * @returns {{ text: string }|null}
+   */
+  function resolveHonestNudge(tab) {
+    const unread = unreadOn(tab);
+    if (unread > 0) {
+      const n = unread === 1 ? '1 new notification' : `${unread} new notifications`;
+      return { text: `You have ${n} in ${tabLabel(tab)}.` };
+    }
+    if (tab === 'akhbaar' && streakAtRisk()) {
+      const streak = Number(window.streakCount || window.userStreak) || 0;
+      return { text: `Your ${streak}-day Akhbaar streak needs a play today to stay alive.` };
+    }
+    if (tab === 'peepal') {
+      const reqs = pendingFriendRequests();
+      if (reqs > 0) {
+        return {
+          text: reqs === 1 ? 'You have a friend request waiting.' : `You have ${reqs} friend requests waiting.`,
+        };
+      }
+    }
+    if (tab === 'dangal' && dangalPendingToday()) {
+      return { text: 'Today’s Dangal challenge is still open — jump in when you’re ready.' };
+    }
+    return null;
+  }
+
+  function tabLabel(tab) {
+    return (
+      {
+        akhbaar: 'Akhbaar',
+        duniya: 'Duniya',
+        peepal: 'Peepal',
+        baithak: 'Baithak',
+        dangal: 'Dangal',
+      }[tab] || tab
+    );
+  }
+
   function scheduleTabNudge(tab) {
-    if (!NUDGE_COPY[tab]) return;
+    if (!TAB_ICONS[tab]) return;
     if (sessionScheduled.has(tab)) return;
 
     const uid = (typeof currentUser !== 'undefined' && currentUser?.uid) || null;
@@ -86,20 +142,16 @@
     setTimeout(() => {
       try {
         if (isQuiet()) return;
-        const count = typeof window.unreadNotifCount === 'function' ? window.unreadNotifCount(tab) : 0;
-        if (count > 0) return;
         if (localStorage.getItem(storageKey)) return;
 
-        const copies = NUDGE_COPY[tab] || [];
-        if (!copies.length) return;
-        const text = copies[Math.floor(Math.random() * copies.length)];
-        if (!text) return;
+        const nudge = resolveHonestNudge(tab);
+        if (!nudge?.text) return;
 
         if (typeof window.addLocalNotification === 'function') {
           window.addLocalNotification({
             type: tab + '_nudge',
             icon: TAB_ICONS[tab] || '🔔',
-            text,
+            text: nudge.text,
             section: tab,
           });
         }
@@ -109,4 +161,5 @@
   }
 
   window.scheduleTabNudge = scheduleTabNudge;
+  window.resolveHonestTabNudge = resolveHonestNudge;
 })();

@@ -66,11 +66,7 @@ function generateChallengeLink(score,category,gameId){
 }
 
 // ===================== FRIEND DISCOVERY =====================
-const SAMPLE_NEARBY=[
-  {name:'Kavya Reddy',avatar:'👩‍💼',meta:'Mumbai · Loves Tech & Cricket',uid:'u1',profileType:'professional'},
-  {name:'Rohan Kapoor',avatar:'👨‍💻',meta:'Mumbai · Sports enthusiast',uid:'u2',profileType:'professional'},
-  {name:'Sneha Joshi',avatar:'👩',meta:'Mumbai · World news follower',uid:'u3',profileType:'personal'},
-];
+// (SAMPLE_NEARBY removed — never invent people for signed-in discovery)
 
 function renderFriendDiscovery(container){
   const section=document.createElement('div');section.className='friend-discover-section';
@@ -168,20 +164,17 @@ function broadcastDuelResult(friendName,myScore,theirScore,groupIds=[]){
 }
 
 // ===================== TAAZA KHABAR — BREAKING NEWS FEED =====================
-const SAMPLE_BREAKING=[
-  {id:'tk1',headline:'🔴 Budget session begins in Parliament',summary:'Finance Minister to present Union Budget today. Markets await key announcements on infrastructure and tax slabs.',source:'DD News',link:'https://ddnews.gov.in',ts:Date.now()-1800000},
-  {id:'tk2',headline:'🔴 ISRO successfully launches new satellite',summary:'India\'s space agency achieves another milestone with the successful launch of the communication satellite from Sriharikota.',source:'The Hindu',link:'https://www.thehindu.com',ts:Date.now()-3600000},
-];
+// No sample headlines — empty means silence (honest growth).
 
 async function loadTaazaKhabar(){
-  if(!db) return SAMPLE_BREAKING;
+  if(!db) return [];
   try{
     const snap=await db.collection('taaza_khabar')
       .where('ts','>',new Date(Date.now()-86400000))
       .orderBy('ts','desc').limit(5).get();
-    if(snap.empty) return SAMPLE_BREAKING;
+    if(snap.empty) return [];
     return snap.docs.map(d=>d.data());
-  }catch(e){ return SAMPLE_BREAKING; }
+  }catch(e){ return []; }
 }
 
 async function checkBreakingNews(){

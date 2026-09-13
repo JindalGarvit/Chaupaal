@@ -208,6 +208,19 @@ function showAuth() {
   }
 }
 
+/** Thin alias for legacy callers (Duniya banner, Baithak empty). */
+function openAuthSheet(mode) {
+  showAuth();
+  const m = String(mode || '').toLowerCase();
+  if (m === 'login' || m === 'signin') {
+    enterAuthCanvasLoginReveal();
+  } else if (m === 'register' || m === 'signup' || m === 'create') {
+    enterAuthCanvasCreate();
+  }
+}
+
+window.openAuthSheet = openAuthSheet;
+
 function paintWelcomeBack(last) {
   const title = document.getElementById('welcomeBackTitle');
   const sub = document.getElementById('welcomeBackSub');
@@ -760,6 +773,7 @@ window.syncEmailVerifyBanner = syncEmailVerifyBanner;
 window.hasVerifiedContact = hasVerifiedContact;
 window.showAuthScreen = showAuthScreen;
 window.showAuth = showAuth;
+window.openAuthSheet = openAuthSheet;
 window.hideAuth = hideAuth;
 window.enterAuthCanvasCreate = enterAuthCanvasCreate;
 window.enterAuthCanvasWelcome = enterAuthCanvasWelcome;
@@ -1004,6 +1018,11 @@ function wireAuthEvents() {
       persistProfileCompletion(calcProfileCompletion());
     }
     showToast(welcomeMsg || t('auth_welcome'));
+    try {
+      if (typeof resumePendingGroupInvite === 'function') {
+        setTimeout(() => resumePendingGroupInvite(), 400);
+      }
+    } catch (e) {}
   }
 
   function showPasswordNudge(thenContinue) {

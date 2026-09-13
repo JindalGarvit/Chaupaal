@@ -453,6 +453,26 @@
         };
       }
 
+      // Instant join — already a member?
+      try {
+        const existing = await db.collection('chats').doc(chatId).get();
+        const parts = existing.exists ? existing.data()?.participants || [] : [];
+        if (parts.includes(uid)) {
+          const data = await fetchGroupDoc(chatId);
+          return {
+            ok: true,
+            already: true,
+            chat: data || {
+              id: chatId,
+              firestoreId: chatId,
+              type: 'group',
+              name: inviteMeta.name || 'Group',
+              participants: parts,
+            },
+          };
+        }
+      } catch (e) {}
+
       await db
         .collection('chats')
         .doc(chatId)

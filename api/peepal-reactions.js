@@ -763,7 +763,7 @@ module.exports = async function handler(req, res) {
           refId: postId,
           actor,
           preview: 'reacted to your Peepal',
-          deepLink: { section: 'peepal', postId },
+          deepLink: { section: 'peepal', postId, path: `/post/${postId}` },
         });
       } catch (e) {
         console.warn('[peepal-reactions] notif', e?.message || e);

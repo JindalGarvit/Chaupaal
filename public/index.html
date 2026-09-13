@@ -87,16 +87,8 @@
         </div>
       </div>
 
-      <!-- ===== WELCOME BACK (recognized device) ===== -->
-      <div class="auth-form-screen hidden" id="authWelcomeBackScreen">
-        <div class="auth-form-body" style="text-align:center;padding-top:48px;">
-          <div id="welcomeBackAvatar" style="width:72px;height:72px;border-radius:50%;margin:0 auto 16px;background:var(--cream);display:flex;align-items:center;justify-content:center;font-size:28px;overflow:hidden;"></div>
-          <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:22px;margin-bottom:8px;" id="welcomeBackTitle">Welcome back</div>
-          <div style="font-size:14px;color:var(--muted);margin-bottom:28px;" id="welcomeBackSub">Continue where you left off</div>
-          <button class="btn btn--primary btn--block btn--lg auth-btn" id="welcomeBackContinue" style="width:100%;max-width:280px;margin:0 auto 12px;">Continue</button>
-          <button type="button" class="auth-guest-btn" id="welcomeBackNotYou">Not you? Sign in as someone else</button>
-        </div>
-      </div>
+      <!-- welcome-back + legacy step shells removed — canvas welcome/login on authRegStep1 -->
+      <div class="auth-form-screen hidden" id="authWelcomeBackScreen" aria-hidden="true" hidden></div>
 
       <!-- ===== PARENTAL CONSENT (13–17) ===== -->
       <div class="auth-form-screen hidden" id="authParentalConsentScreen">
@@ -356,7 +348,7 @@
           <div class="auth-reg-scroll-spacer" aria-hidden="true"></div>
         </div>
         <div class="auth-form-footer auth-sticky-cta">
-          <button class="btn btn--primary btn--block btn--lg auth-btn" id="registerBtn" type="button">Create my Profile</button>
+          <button class="btn btn--primary btn--block btn--lg auth-btn" id="registerBtn" type="button">Create my account</button>
         </div>
       </div>
 

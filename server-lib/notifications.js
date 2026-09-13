@@ -71,8 +71,44 @@ function sectionForType(type) {
   if (['peepal', 'reaction', 'reply', 'mention', 'match'].some((x) => t.includes(x))) return 'peepal';
   if (['like', 'comment', 'follow', 'duniya', 'post', 'lehar', 'tag'].some((x) => t.includes(x))) return 'duniya';
   if (['duel', 'challenge', 'dangal', 'muqabala', 'game'].some((x) => t.includes(x))) return 'dangal';
-  if (['streak', 'akhbaar', 'breaking', 'quiz'].some((x) => t.includes(x))) return 'akhbaar';
+  if (['streak', 'akhbaar', 'breaking', 'quiz', 'journal', 'recommendation'].some((x) => t.includes(x))) return 'akhbaar';
   return 'all';
+}
+
+/**
+ * Convert stored deepLink object → absolute path for FCM webpush link.
+ * Missing/unsafe → '/' and log (so we can spot gaps).
+ */
+function hrefFromDeepLink(deepLink, { type, refId } = {}) {
+  const link = deepLink && typeof deepLink === 'object' ? deepLink : null;
+  if (!link) {
+    console.warn('[notif] missing deepLink → home', type || '', refId || '');
+    return '/';
+  }
+  if (link.path && typeof link.path === 'string' && link.path.startsWith('/')) {
+    return String(link.path).slice(0, 240);
+  }
+  if (link.chatId) {
+    const id = encodeURIComponent(String(link.chatId).slice(0, 180));
+    return link.mehfil ? `/chat/${id}?mehfil=1` : `/chat/${id}`;
+  }
+  if (link.postId) {
+    return `/post/${encodeURIComponent(String(link.postId).slice(0, 180))}`;
+  }
+  if (link.storyId) {
+    return `/story/${encodeURIComponent(String(link.storyId).slice(0, 180))}`;
+  }
+  if (link.username) {
+    return `/profile/${encodeURIComponent(String(link.username).replace(/^@/, '').slice(0, 80))}`;
+  }
+  if (link.uid) {
+    return `/?uid=${encodeURIComponent(String(link.uid).slice(0, 128))}`;
+  }
+  if (link.section === 'akhbaar' || String(type || '').includes('journal') || String(type || '').includes('recommendation')) {
+    return '/';
+  }
+  console.warn('[notif] unresolved deepLink → home', type || '', refId || '', Object.keys(link));
+  return '/';
 }
 
 function itemsRef(db, uid) {
@@ -171,12 +207,13 @@ async function upsertNotification(adminApp, recipientUid, { type, refId, actor, 
       try {
         const fcm = require('./fcm');
         const actorName = a.name || 'Someone';
+        const path = hrefFromDeepLink(link, { type: t, refId: rid });
         fcm
           .sendToUser(adminApp, recipientUid, {
             title: actorName,
             body: previewText || 'New activity on Chaupaal',
-            link: '/',
-            data: { type: t, refId: rid, section },
+            link: path,
+            data: { type: t, refId: rid, section, url: path },
           })
           .catch(() => {});
       } catch (e) {}
@@ -351,4 +388,5 @@ module.exports = {
   pruneOldReadNotifications,
   maybeNotifyDm,
   resolveActor,
+  hrefFromDeepLink,
 };

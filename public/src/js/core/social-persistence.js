@@ -98,6 +98,7 @@
             postId: id,
             collection,
             section: collection === 'peepal' ? 'peepal' : 'duniya',
+            path: `/post/${id}`,
           },
         },
       }).catch(() => {});
