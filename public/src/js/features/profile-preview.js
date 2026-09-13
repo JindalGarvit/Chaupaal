@@ -16,24 +16,32 @@
   /**
    * Build the field set a stranger/match would see.
    * Respects profileVisibility + showAge / showLocation / showRelationship / showIncome / showReligion.
+   * Friends only unlocks for actual friends (same isFriend as Digital friend_projection).
+   * @param {object} dp
+   * @param {object} userMeta
+   * @param {{ isFriend?: boolean, viewerIsOwner?: boolean }} [opts]
    */
-  function getPublicVisibleProfile(dp, userMeta) {
+  function getPublicVisibleProfile(dp, userMeta, opts) {
     const p = dp || {};
     const meta = userMeta || {};
-    const visibility = String(p.profileVisibility || 'public').toLowerCase();
-    const isLocked = visibility === 'private' || visibility === 'friends only';
+    const o = opts || {};
+    const visibility = String(p.profileVisibility || meta.profileVisibility || 'public').toLowerCase();
+    const isPrivate = visibility === 'private';
+    const isFriendsOnly = visibility === 'friends only' || visibility === 'friends' || visibility === 'friends-only';
+    // Locked for strangers; friends unlock Friends only. Private stays locked for everyone else.
+    const isLocked = isPrivate || (isFriendsOnly && !o.isFriend);
 
     const base = {
       displayName: p.displayName || meta.name || 'Member',
       username: meta.username || p.username || 'username',
       photoURL: meta.photoURL || null,
-      bio: p.bio || '',
+      bio: isLocked ? '' : p.bio || '',
       locked: isLocked,
-      visibilityLabel: isLocked
-        ? visibility === 'private'
-          ? 'Private profile'
-          : 'Friends only'
-        : 'Public',
+      visibilityLabel: isPrivate
+        ? 'Private profile'
+        : isFriendsOnly
+          ? 'Friends only'
+          : 'Public',
       profileType: p.profileType || meta.profileType || 'personal',
     };
 
@@ -48,7 +56,7 @@
     };
 
     if (p.showLocation !== false) {
-      push('City', p.currentCity);
+      push('City', p.currentCity || p.city);
       push('Hometown', p.hometown);
     }
     push('Occupation', p.occupation);
@@ -67,8 +75,6 @@
     push('Sports', p.sports);
     push('Instagram', p.instagram);
     push('Website', p.website);
-
-    // Icebreakers are chat/discovery openers — not Digital profile sections (Q7C)
 
     return { ...base, fields };
   }

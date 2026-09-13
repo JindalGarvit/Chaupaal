@@ -512,7 +512,7 @@
     run: () => {
       if (needSignIn()) return;
       if (typeof openUserProfile === 'function') {
-        openUserProfile({ uid: currentUser.uid }, { context: 'chaupaal_cmd', initialMode: 'owner' });
+        openUserProfile({ uid: currentUser.uid }, { context: 'chaupaal_cmd', initialMode: 'preview' });
       } else if (typeof openOwnProfilePreview === 'function') openOwnProfilePreview({ owner: true });
       else if (typeof openChaupaalProfileHub === 'function') openChaupaalProfileHub();
     },

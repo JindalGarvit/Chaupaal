@@ -1716,8 +1716,8 @@ function wireAuthEvents() {
           photoURL,
           photoThumb: photoThumb || null,
           profileType,
-          industry: '',
-          purpose: '',
+          industry: profileType === 'professional' ? String(regData.industry || '').trim().slice(0, 80) : '',
+          purpose: profileType === 'professional' ? String(regData.purpose || '').trim().slice(0, 80) : '',
           needsEmailForPasswordLogin,
           openToMeet: true,
           strangerDailyLimit: 10,
@@ -1747,8 +1747,8 @@ function wireAuthEvents() {
             age: regData.age,
             currentCity: regData.city || '',
             lookingFor: '',
-            industry: '',
-            purpose: '',
+            industry: profileType === 'professional' ? String(regData.industry || '').trim().slice(0, 80) : '',
+            purpose: profileType === 'professional' ? String(regData.purpose || '').trim().slice(0, 80) : '',
           },
         };
 
@@ -1800,7 +1800,10 @@ function wireAuthEvents() {
           digitalProfile.age = regData.age;
           digitalProfile.profileType = profileType;
           digitalProfile.lookingFor = '';
-          digitalProfile.purpose = '';
+          digitalProfile.industry =
+            profileType === 'professional' ? String(regData.industry || '').trim().slice(0, 80) : '';
+          digitalProfile.purpose =
+            profileType === 'professional' ? String(regData.purpose || '').trim().slice(0, 80) : '';
           if (typeof DigitalLayout?.getDigitalLayout === 'function' && !digitalProfile.digitalLayout) {
             digitalProfile.digitalLayout = DigitalLayout.getDigitalLayout({
               ...digitalProfile,
@@ -1811,7 +1814,11 @@ function wireAuthEvents() {
             localStorage.setItem('chaupaal_digital_profile', JSON.stringify(digitalProfile));
           } catch (e) {}
         }
-        if (typeof saveProfileType === 'function') saveProfileType(profileType);
+        if (typeof saveProfileType === 'function') saveProfileType(profileType, { fromSignup: true });
+        if (profileType === 'professional') {
+          if (profile.industry) await bumpStat('industryStats', profile.industry);
+          if (profile.purpose) await bumpStat('purposeStats', profile.purpose);
+        }
         if (typeof trackSignup === 'function') trackSignup({ has_photo: !!photoURL, profile_type: profileType });
         if (typeof persistProfileCompletion === 'function' && typeof calcProfileCompletion === 'function') {
           persistProfileCompletion(calcProfileCompletion());

@@ -2,64 +2,40 @@
  * One-shot / incremental denorm backfills (Admin SDK).
  * - groups: isPublic, nameLower, memberCount for type=='group'
  * - users_public: project private users → public docs (never clears hiddenFromDiscovery)
+ *   Visibility-aware via server-lib/users-public-projection.js (P0).
  */
 const BATCH = 40;
+const { buildPublicProjection, normalizeVisibility } = require('./users-public-projection');
+
+const PUBLIC_WIPE_KEYS = [
+  'bio',
+  'prompts',
+  'interests',
+  'hobbies',
+  'profileMedia',
+  'lookingFor',
+  'occupation',
+  'city',
+  'age',
+  'gender',
+  'icebreakers',
+  'topCat',
+  'matchIntent',
+  'intents',
+  'personality',
+  'industry',
+  'purpose',
+  'sectionOrder',
+  'customSections',
+  'digitalLayout',
+  'profileTheme',
+];
 
 function groupNameLower(name) {
   return String(name || '')
     .toLowerCase()
     .trim()
     .slice(0, 80);
-}
-
-function buildPublicProjection(uid, raw) {
-  const u = raw && typeof raw === 'object' ? raw : {};
-  const proj = { uid: uid || u.uid || null };
-  const fields = [
-    'name',
-    'nameLower',
-    'username',
-    'usernameLower',
-    'photoURL',
-    'photoThumb',
-    'avatar',
-    'profileType',
-    'city',
-    'bio',
-    'age',
-    'interests',
-    'hobbies',
-    'topCat',
-    'prompts',
-    'icebreakers',
-    'profileMedia',
-    'sectionOrder',
-    'customSections',
-    'openToMeet',
-    'createdAt',
-    'lookingFor',
-    'matchIntent',
-    'intents',
-    'occupation',
-    'personality',
-    'relationshipCounts',
-  ];
-  fields.forEach((k) => {
-    if (u[k] !== undefined) proj[k] = u[k];
-  });
-  if (u.profile && typeof u.profile === 'object') {
-    const nested = {};
-    ['displayName', 'username', 'bio', 'interests', 'prompts', 'profileType', 'currentCity', 'occupation', 'lookingFor', 'age', 'profileMedia', 'sectionOrder', 'customSections'].forEach((k) => {
-      if (u.profile[k] != null) nested[k] = u.profile[k];
-    });
-    if (Object.keys(nested).length) proj.profile = nested;
-  }
-  if (!proj.city && u.profile?.currentCity) proj.city = u.profile.currentCity;
-  if (!proj.bio && u.profile?.bio) proj.bio = u.profile.bio;
-  if (!proj.nameLower && proj.name) proj.nameLower = String(proj.name).toLowerCase().trim();
-  if (!proj.usernameLower && proj.username) proj.usernameLower = String(proj.username).toLowerCase().trim();
-  if (!proj.profileType) proj.profileType = u.profile?.profileType || 'personal';
-  return proj;
 }
 
 /**
@@ -119,9 +95,22 @@ async function backfillUsersPublic(db, { limit = BATCH, startAfterId = null } = 
   let ops = 0;
 
   snap.docs.forEach((doc) => {
-    const proj = buildPublicProjection(doc.id, doc.data() || {});
+    const raw = doc.data() || {};
+    const proj = buildPublicProjection(doc.id, raw);
     // Never write hiddenFromDiscovery from private user projection
     delete proj.hiddenFromDiscovery;
+    const visibility = normalizeVisibility(raw);
+    // merge cannot remove keys — delete gated fields when Private / Friends only
+    if (visibility === 'private' || visibility === 'friends only') {
+      try {
+        const FieldValue = require('firebase-admin').firestore.FieldValue;
+        PUBLIC_WIPE_KEYS.forEach((k) => {
+          if (proj[k] === undefined) proj[k] = FieldValue.delete();
+        });
+      } catch (e) {
+        /* best-effort wipe */
+      }
+    }
     batch.set(db.collection('users_public').doc(doc.id), proj, { merge: true });
     ops += 1;
     patched += 1;

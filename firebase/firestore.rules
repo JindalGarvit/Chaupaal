@@ -315,6 +315,8 @@ service cloud.firestore {
 
     // ===================== USERS_PUBLIC (cross-user reads) =====================
     // Owner may sync public fields, but cannot clear server-set discovery bans.
+    // P0: clients must only write visibility-stripped projections (UsersPublic.syncPublicProfile).
+    // Private / Friends only → identity + profileVisibility; gated PII lives in friend_projection.
     match /users_public/{userId} {
       allow read: if isAuth();
       allow create: if isOwner(userId)
@@ -332,7 +334,8 @@ service cloud.firestore {
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['relationshipCounts']);
       allow delete: if isOwner(userId);
 
-      // Friends-only Digital blocks (public+friends, never private). Strangers cannot read.
+      // Friends-only Digital blocks + Friends-only profile card (public+friends, never private).
+      // Strangers cannot read. Cleared when profileVisibility is Private.
       match /friend_projection/{docId} {
         allow read: if isOwner(userId) || isFriend(userId);
         allow create, update, delete: if isOwner(userId);

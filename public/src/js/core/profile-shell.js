@@ -145,12 +145,15 @@
       if (val == null || val === '' || (Array.isArray(val) && !val.length)) return;
       rows.push(`<div class="cp-about-row"><dt>${esc(label)}</dt><dd>${esc(Array.isArray(val) ? val.join(', ') : val)}</dd></div>`);
     };
+    // Locked / empty view.fields must not fall through to raw dp (preview honesty).
+    if (view?.locked) return '';
     if (view?.fields?.length) {
       return view.fields
         .slice(0, 10)
         .map((f) => `<div class="cp-about-row"><dt>${esc(f.label)}</dt><dd>${esc(f.value)}</dd></div>`)
         .join('');
     }
+    if (view && Array.isArray(view.fields) && view.fields.length === 0) return '';
     push('City', dp.currentCity);
     push('Occupation', dp.occupation);
     push('Looking for', dp.lookingFor);
@@ -1074,7 +1077,20 @@
       } catch (e) {}
     }
     // Friends get public+friends Digital blocks (+ field slice) via friend_projection.
-    if (!isOwner && isFriend && typeof DigitalLayout?.fetchFriendDigitalProjection === 'function') {
+    // Locked profileVisibility (Private / Friends-only for strangers): no Digital content.
+    if (view?.locked && !isOwner) {
+      profile = {
+        ...profile,
+        bio: '',
+        digitalLayout: { version: 1, blocks: [] },
+        customSections: [],
+        interests: [],
+        hobbies: [],
+        icebreakers: [],
+        prompts: [],
+        profileMedia: [],
+      };
+    } else if (!isOwner && isFriend && typeof DigitalLayout?.fetchFriendDigitalProjection === 'function') {
       try {
         const friendProj = await DigitalLayout.fetchFriendDigitalProjection(profileUid);
         if (friendProj?.digitalLayout?.blocks?.length) {

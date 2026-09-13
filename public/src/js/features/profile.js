@@ -39,18 +39,38 @@ function renderProfileModal(){
         wirePreviewToggle(el, ()=>renderProfileModal());
       }
       if(typeof mountProfileShell==='function'){
+        // Preview = stranger view (not owner, not friend) so Friends only / Private / block privacy hold.
+        const previewView =
+          typeof getPublicVisibleProfile === 'function'
+            ? getPublicVisibleProfile(dp, p, { isFriend: false })
+            : null;
+        const previewProfile = previewView?.locked
+          ? {
+              ...dp,
+              bio: '',
+              digitalLayout: { version: 1, blocks: [] },
+              customSections: [],
+              interests: [],
+              hobbies: [],
+              icebreakers: [],
+              prompts: [],
+              profileMedia: [],
+            }
+          : dp;
         mountProfileShell(el.querySelector('[data-own-preview-sections]'), {
-          editable:false,
-          isOwner:true,
-          includeArchived:true,
-          profile:dp,
-          view: typeof getPublicVisibleProfile==='function'?getPublicVisibleProfile(dp,p):null,
+          uid: currentUser?.uid,
+          editable: false,
+          isOwner: false,
+          isFriend: false,
+          includeArchived: false,
+          profile: previewProfile,
+          view: previewView,
         });
       } else if(typeof mountOwnProfileSections==='function'){
         mountOwnProfileSections(el.querySelector('[data-own-preview-sections]'), {
           editable:false,
-          isOwner:true,
-          includeArchived:true,
+          isOwner:false,
+          includeArchived:false,
         });
       }
       if(typeof wireTabNotificationButtons==='function') wireTabNotificationButtons();

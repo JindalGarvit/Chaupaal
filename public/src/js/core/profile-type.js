@@ -33,8 +33,29 @@
     return 'personal';
   }
 
-  function saveProfileType(next) {
+  function saveProfileType(next, opts) {
     const type = normalizeProfileType(next);
+    const fromSignup = !!(opts && opts.fromSignup);
+    // Type is chosen at signup and is not a same-login flip afterward.
+    if (!fromSignup && typeof currentUser !== 'undefined' && currentUser) {
+      const existing =
+        (typeof userProfile !== 'undefined' &&
+          userProfile &&
+          normalizeProfileType(userProfile.profileType || userProfile.profile?.profileType)) ||
+        (typeof digitalProfile !== 'undefined' &&
+          digitalProfile?.profileType &&
+          normalizeProfileType(digitalProfile.profileType)) ||
+        null;
+      if (existing && existing !== type) {
+        console.warn('[profile-type] account type is fixed at signup — use Switch / add account');
+        return existing;
+      }
+      if (existing) {
+        // Idempotent same-type write OK for hydrate paths; skip Firestore churn
+        if (typeof digitalProfile !== 'undefined') digitalProfile.profileType = existing;
+        return existing;
+      }
+    }
     if (typeof digitalProfile !== 'undefined') digitalProfile.profileType = type;
     try {
       if (typeof digitalProfile !== 'undefined') {

@@ -361,22 +361,101 @@
 
   async function syncFriendDigitalProjection(uid, profile) {
     if (!db || !uid) return null;
-    const layout = friendsDigitalLayoutProjection(profile);
-    const profileSlice = buildAudienceProfileSlice(
-      { ...(profile || {}), ...(profile?.profile || {}) },
-      'friends'
-    );
+    const p = { ...(profile || {}), ...(profile?.profile || {}) };
+    const vis =
+      typeof UsersPublic?.normalizeVisibility === 'function'
+        ? UsersPublic.normalizeVisibility(p)
+        : String(p.profileVisibility || 'public').toLowerCase();
+
+    // Private: friends must not read gated content either — clear projection.
+    if (vis === 'private') {
+      try {
+        await db
+          .collection('users_public')
+          .doc(uid)
+          .collection('friend_projection')
+          .doc('digital')
+          .set(
+            {
+              digitalLayout: { version: LAYOUT_VERSION, blocks: [] },
+              profileSlice: {},
+              card: {},
+              profileVisibility: 'Private',
+              updatedAt: Date.now(),
+            },
+            { merge: true }
+          );
+      } catch (e) {
+        console.warn('[digital-layout] friend projection clear', e?.message || e);
+      }
+      return { digitalLayout: { version: LAYOUT_VERSION, blocks: [] }, profileSlice: {}, card: {} };
+    }
+
+    const layout = friendsDigitalLayoutProjection(p);
+    let profileSlice = buildAudienceProfileSlice(p, 'friends');
+    // Card fields friends may see when profileVisibility is Friends only (or public + friends blocks).
+    let card = {
+      bio: p.bio || '',
+      age: p.age,
+      city: p.currentCity || p.city || '',
+      gender: p.gender || '',
+      occupation: p.occupation || '',
+      lookingFor: p.lookingFor || '',
+      relationshipStatus: p.relationshipStatus || '',
+      interests: p.interests,
+      hobbies: p.hobbies,
+      icebreakers: p.icebreakers,
+      prompts: p.prompts,
+      profileMedia: p.profileMedia,
+      industry: p.industry || '',
+      purpose: p.purpose || '',
+    };
+    if (typeof UsersPublic?.applyShowFlags === 'function') {
+      const flagged = UsersPublic.applyShowFlags(
+        { ...card, profile: { currentCity: card.city, lookingFor: card.lookingFor, relationshipStatus: card.relationshipStatus, age: card.age } },
+        p
+      );
+      card = {
+        bio: flagged.bio || '',
+        age: flagged.age,
+        city: flagged.city || '',
+        gender: flagged.gender || card.gender || '',
+        occupation: flagged.occupation || '',
+        lookingFor: flagged.lookingFor || '',
+        relationshipStatus: flagged.profile?.relationshipStatus || '',
+        interests: flagged.interests,
+        hobbies: flagged.hobbies,
+        icebreakers: flagged.icebreakers,
+        prompts: flagged.prompts,
+        profileMedia: flagged.profileMedia,
+        industry: flagged.industry || '',
+        purpose: flagged.purpose || '',
+      };
+      // Mirror show* onto profileSlice city/lookingFor
+      if (!flagged.city) delete profileSlice.currentCity;
+      if (!flagged.lookingFor) delete profileSlice.lookingFor;
+      if (flagged.age === undefined) delete profileSlice.age;
+    }
     try {
       await db
         .collection('users_public')
         .doc(uid)
         .collection('friend_projection')
         .doc('digital')
-        .set({ digitalLayout: layout, profileSlice, updatedAt: Date.now() }, { merge: true });
+        .set(
+          {
+            digitalLayout: layout,
+            profileSlice,
+            card,
+            profileVisibility: vis === 'friends only' ? 'Friends only' : 'public',
+            updatedAt: Date.now(),
+          },
+          { merge: true }
+        );
     } catch (e) {
       console.warn('[digital-layout] friend projection', e?.message || e);
     }
-    return { digitalLayout: layout, profileSlice };
+    return { digitalLayout: layout, profileSlice, card };
   }
 
   async function fetchFriendDigitalProjection(uid) {

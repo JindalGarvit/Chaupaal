@@ -108,7 +108,10 @@
   }
 
   async function createProfile(uid, fields) {
-    const pid = fields.id || profileId();
+    // One Chaupaal profile per account. `primary` is the canonical doc for login /
+    // username resolution — do not productize additional profiles under the same uid
+    // (multi-ACCOUNT switcher is the product model; see auth-identity.mdc).
+    const pid = fields.id || 'primary';
     const username = await claimUsername(fields.username, uid, pid);
     const doc = {
       id: pid,

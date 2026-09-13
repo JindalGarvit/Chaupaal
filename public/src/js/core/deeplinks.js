@@ -67,10 +67,10 @@
     });
   }
 
-  function openPublicProfile(user, { uid, username, context = 'profile' } = {}) {
-    const u = user || {};
-    const profileUid = uid || u.uid || '';
-    const uname = String(username || u.username || '').replace(/^@/, '');
+  async function openPublicProfile(user, { uid, username, context = 'profile' } = {}) {
+    const uIn = user || {};
+    const profileUid = uid || uIn.uid || '';
+    const uname = String(username || uIn.username || '').replace(/^@/, '');
     // Self → openUserProfile mode matrix (never public Message chrome for self)
     if (
       profileUid &&
@@ -79,7 +79,7 @@
       profileUid === currentUser.uid
     ) {
       if (typeof openUserProfile === 'function') {
-        openUserProfile(u, {
+        openUserProfile(uIn, {
           uid: profileUid,
           username: uname,
           context: context === 'profile' ? 'third_person' : context,
@@ -88,6 +88,70 @@
         return;
       }
     }
+
+    // Friendship + friend_projection before visibility decision (Friends only unlock).
+    let isFriend = false;
+    if (profileUid && typeof currentUser !== 'undefined' && currentUser?.uid) {
+      try {
+        if (typeof hydrateRelationships === 'function') {
+          const st = await hydrateRelationships([profileUid]);
+          isFriend = !!(
+            st?.[profileUid]?.friend ||
+            (typeof relationshipState === 'function' && relationshipState(profileUid)?.friend)
+          );
+        } else if (typeof relationshipState === 'function') {
+          isFriend = !!relationshipState(profileUid)?.friend;
+        }
+      } catch (e) {}
+    }
+
+    let u = { ...uIn };
+    let friendProj = null;
+    const visHint = String(u.profileVisibility || u.profile?.profileVisibility || '').toLowerCase();
+    if (
+      profileUid &&
+      isFriend &&
+      (visHint.includes('friend') || !u.bio) &&
+      typeof DigitalLayout?.fetchFriendDigitalProjection === 'function'
+    ) {
+      try {
+        friendProj = await DigitalLayout.fetchFriendDigitalProjection(profileUid);
+        const card = friendProj?.card || {};
+        const slice = friendProj?.profileSlice || {};
+        u = {
+          ...u,
+          bio: u.bio || card.bio || '',
+          age: u.age ?? card.age,
+          city: u.city || card.city || '',
+          gender: u.gender || card.gender || '',
+          occupation: u.occupation || card.occupation || slice.occupation || '',
+          lookingFor: u.lookingFor || card.lookingFor || slice.lookingFor || '',
+          interests: u.interests || card.interests,
+          hobbies: u.hobbies || card.hobbies,
+          icebreakers: u.icebreakers || card.icebreakers,
+          prompts: u.prompts || card.prompts,
+          profileMedia: u.profileMedia || card.profileMedia,
+          digitalLayout: friendProj?.digitalLayout || u.digitalLayout,
+          profile: {
+            ...(u.profile || {}),
+            bio: (u.profile && u.profile.bio) || card.bio || '',
+            currentCity: (u.profile && u.profile.currentCity) || card.city || '',
+            age: (u.profile && u.profile.age) ?? card.age,
+            occupation: (u.profile && u.profile.occupation) || card.occupation || '',
+            lookingFor: (u.profile && u.profile.lookingFor) || card.lookingFor || '',
+            relationshipStatus: (u.profile && u.profile.relationshipStatus) || card.relationshipStatus || '',
+            interests: (u.profile && u.profile.interests) || card.interests,
+            hobbies: (u.profile && u.profile.hobbies) || card.hobbies,
+            icebreakers: (u.profile && u.profile.icebreakers) || card.icebreakers,
+            prompts: (u.profile && u.profile.prompts) || card.prompts,
+            profileMedia: (u.profile && u.profile.profileMedia) || card.profileMedia,
+            digitalLayout: friendProj?.digitalLayout || u.profile?.digitalLayout,
+            ...slice,
+          },
+        };
+      } catch (e) {}
+    }
+
     const sheet = document.createElement('div');
     sheet.className = 'archive-overlay public-profile-sheet';
     sheet.dataset.navManaged = '1';
@@ -98,20 +162,35 @@
       displayName: u.profile?.displayName || u.name || u.displayName,
       username: uname,
       bio: u.profile?.bio || u.bio || '',
+      age: u.profile?.age ?? u.age,
+      currentCity: u.profile?.currentCity || u.city || '',
+      occupation: u.profile?.occupation || u.occupation || '',
+      lookingFor: u.profile?.lookingFor || u.lookingFor || '',
+      relationshipStatus: u.profile?.relationshipStatus || '',
       profileType: u.profileType || u.profile?.profileType,
       profileVisibility: u.profile?.profileVisibility || u.profileVisibility,
       icebreakers: u.profile?.icebreakers || u.icebreakers,
       interests: u.profile?.interests || u.interests,
       hobbies: u.profile?.hobbies || u.hobbies,
+      showAge: u.showAge ?? u.profile?.showAge,
+      showLocation: u.showLocation ?? u.profile?.showLocation,
+      showRelationship: u.showRelationship ?? u.profile?.showRelationship,
+      showIncome: u.showIncome ?? u.profile?.showIncome,
+      showReligion: u.showReligion ?? u.profile?.showReligion,
     };
     const view =
       typeof getPublicVisibleProfile === 'function'
-        ? getPublicVisibleProfile(dp, {
-            name: u.name || dp.displayName,
-            username: uname,
-            photoURL: u.photoURL || null,
-            profileType: dp.profileType,
-          })
+        ? getPublicVisibleProfile(
+            dp,
+            {
+              name: u.name || dp.displayName,
+              username: uname,
+              photoURL: u.photoURL || null,
+              profileType: dp.profileType,
+              profileVisibility: dp.profileVisibility,
+            },
+            { isFriend }
+          )
         : {
             displayName: u.name || dp.displayName || (uname ? `@${uname}` : 'Someone'),
             username: uname,
@@ -227,7 +306,7 @@
         ...(u.profile || {}),
         sectionOrder: u.profile?.sectionOrder || u.sectionOrder,
         customSections: u.profile?.customSections || u.customSections,
-        digitalLayout: u.profile?.digitalLayout || u.digitalLayout,
+        digitalLayout: friendProj?.digitalLayout || u.profile?.digitalLayout || u.digitalLayout,
         profileTheme: u.profile?.profileTheme || u.profileTheme,
         tabOrder: u.profile?.tabOrder || u.tabOrder,
         profileMedia: media,
@@ -238,8 +317,8 @@
         hobbies: dp.hobbies,
         currentCity: u.profile?.currentCity || dp.currentCity,
         occupation: u.profile?.occupation || dp.occupation,
-        lookingFor: u.profile?.lookingFor,
-        relationshipStatus: u.profile?.relationshipStatus,
+        lookingFor: u.profile?.lookingFor || dp.lookingFor,
+        relationshipStatus: u.profile?.relationshipStatus || dp.relationshipStatus,
         languages: u.profile?.languages,
         diet: u.profile?.diet,
         drinking: u.profile?.drinking,
@@ -248,6 +327,7 @@
         website: u.profile?.website || dp.website,
         instagram: u.profile?.instagram || dp.instagram,
         profileLinks: u.profile?.profileLinks,
+        ...(friendProj?.profileSlice || {}),
       };
       const shellHost = sheet.querySelector('[data-public-profile-shell]');
       if (typeof mountProfileShell === 'function' && shellHost) {
@@ -257,17 +337,11 @@
           view,
           editable: false,
           isOwner: !!(currentUser && currentUser.uid === profileUid),
-          includeArchived: !!(currentUser && currentUser.uid === profileUid),
-        });
-      } else if (typeof mountOwnProfileSections === 'function') {
-        mountOwnProfileSections(sheet.querySelector('[data-public-ordered-sections]'), {
-          uid: profileUid,
-          profile: sectionProfile,
-          editable: false,
-          isOwner: !!(currentUser && currentUser.uid === profileUid),
+          isFriend,
           includeArchived: !!(currentUser && currentUser.uid === profileUid),
         });
       }
+      // Legacy sectionOrder path intentionally not mounted when shell exists (canonical = digitalLayout).
     } else if (view.locked) {
       const host = sheet.querySelector('[data-public-profile-shell]') || sheet.querySelector('[data-public-ordered-sections]');
       if (host) host.innerHTML = '';
@@ -288,7 +362,7 @@
           ? buildShareStats({
               scoreLine: `@${uname}`,
               caption: display,
-              meta: view.bio ? String(view.bio).slice(0, 60) : 'on Chaupaal',
+              meta: view.locked ? 'on Chaupaal' : view.bio ? String(view.bio).slice(0, 60) : 'on Chaupaal',
               text: `Check out @${uname} on Chaupaal`,
               url,
             })
@@ -359,7 +433,7 @@
         });
       }
     });
-    if (profileUid && typeof storyCall === 'function') {
+    if (profileUid && !view.locked && typeof storyCall === 'function') {
       storyCall('profile', { targetUid: profileUid })
         .then((data) => {
           const count = (data.stories?.duniya?.length || 0) + (data.stories?.baithak?.length || 0);
@@ -405,7 +479,7 @@
           if (row) row.innerHTML = '<span class="public-profile-highlights-empty">Highlights unavailable</span>';
         });
     }
-    if (profileUid && db) {
+    if (profileUid && !view.locked && db) {
       const duniyaEl = sheet.querySelector('[data-public-duniya-posts]');
       const peepalEl = sheet.querySelector('[data-public-peepal-posts]');
       db.collection('duniya')
@@ -526,82 +600,7 @@
         (typeof UsersPublic?.getPublicProfile === 'function'
           ? await UsersPublic.getPublicProfile(uid)
           : null) || {};
-      openPublicProfile({ ...u, uid }, { uid, username: uname });
-      return;
-      // Lightweight profile sheet (full public profile UI can expand later)
-      const sheet = document.createElement('div');
-      sheet.className = 'archive-overlay';
-      sheet.innerHTML = `
-        <div class="archive-header">
-          ${typeof backButtonHtml==='function'?backButtonHtml({ id: 'dlProfBack' }):'<button id="dlProfBack" class="cp-back-btn" aria-label="Back"></button>'}
-          <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">Profile</div>
-          <button id="dlProfShare" style="background:none;border:none;font-size:18px;cursor:pointer;">↗</button>
-        </div>
-        <div style="padding:24px 16px;text-align:center;">
-          <div style="width:88px;height:88px;border-radius:50%;margin:0 auto 12px;background:var(--line);overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:40px;">
-            ${typeof renderUserAvatarHtml==='function'?renderUserAvatarHtml(u,{decorative:true}):(u.photoURL?`<img src="${u.photoURL}" style="width:100%;height:100%;object-fit:cover;">`:'👤')}
-          </div>
-          <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:20px;">${u.name || uname}</div>
-          <div style="color:var(--muted);font-size:13px;margin-bottom:8px;">@${uname}</div>
-          <div style="font-size:13px;color:var(--muted);">${u.city || u.profile?.currentCity || ''}</div>
-          <div style="font-size:14px;margin-top:14px;line-height:1.5;">${u.profile?.bio || u.bio || ''}</div>
-          <button class="btn btn--primary ui-state-btn ui-state-btn-primary" id="dlSayHi" style="margin-top:20px;">💬 Say hi</button>
-        </div>`;
-      document.querySelector('.device')?.appendChild(sheet);
-      sheet.querySelector('#dlProfBack')?.addEventListener('click', () => {
-        sheet.remove();
-        history.pushState({}, '', '/');
-      });
-      sheet.querySelector('#dlProfShare')?.addEventListener('click', () => {
-        const url = shareUrl('profile', uname);
-        const display = u.name || uname;
-        const stats =
-          typeof buildShareStats === 'function'
-            ? buildShareStats({
-                scoreLine: `@${uname}`,
-                caption: display,
-                meta: (u.profile?.bio || u.bio || 'on Chaupaal').toString().slice(0, 60),
-                text: `Check out @${uname} on Chaupaal`,
-                url,
-              })
-            : {
-                scoreLine: `@${uname}`,
-                caption: display,
-                meta: 'on Chaupaal',
-                text: `Check out @${uname} on Chaupaal`,
-                url,
-              };
-        if (typeof openUnifiedShareSheet === 'function') {
-          openUnifiedShareSheet({
-            gameId: 'profile',
-            title: 'Share profile',
-            subtitle: `@${uname}`,
-            stats,
-          });
-        } else if (navigator.share) {
-          navigator.share({ title: `@${uname} on Chaupaal`, url });
-        } else {
-          navigator.clipboard.writeText(url).then(() => showToast('Link copied'));
-        }
-      });
-      sheet.querySelector('#dlSayHi')?.addEventListener('click', async () => {
-        sheet.remove();
-        const display = u.name || u.displayName || '';
-        const openFn = typeof openPeerDm === 'function' ? openPeerDm : typeof openDmWithSharedHello === 'function' ? openDmWithSharedHello : null;
-        if (openFn) {
-          await openFn({
-            uid,
-            name: display || uname,
-            username: uname,
-            photoURL: u.photoURL || '',
-            avatar: u.photoURL || '👤',
-            origin: 'deeplink_profile',
-            seedHello: true,
-          });
-          return;
-        }
-        if (typeof showToast === 'function') showToast('Sign in to message');
-      });
+      await openPublicProfile({ ...u, uid }, { uid, username: uname, context: 'deeplink' });
     } catch (e) {
       if (typeof showToast === 'function') {
         showToast(typeof friendlyError === 'function' ? friendlyError(e) : 'Could not open profile');

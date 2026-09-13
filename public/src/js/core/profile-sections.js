@@ -1,7 +1,8 @@
 /**
- * Profile section order + custom sections (grid / flexible).
- * Persist on users/{uid}.profile.sectionOrder + profile.customSections.
- * Reorder via long-press drag — Edit mode only.
+ * Profile section order + custom sections (LEGACY).
+ * Canonical layout = profile.digitalLayout (+ tabOrder) via profile-shell / DigitalLayout.
+ * sectionOrder / customSections remain for one-way migration into tabOrder (P2 may finish wipe).
+ * Do not mount this path alongside mountProfileShell — mutually exclusive fallback only.
  */
 (function () {
   'use strict';

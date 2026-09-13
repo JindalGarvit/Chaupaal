@@ -128,7 +128,8 @@ Policy numbers live in `public/src/js/config/policy-limits.js` (anon posts, AI D
 
 See `.cursor/rules/auth-identity.mdc`.
 
-- One Firebase Auth user (email **or** phone, verified) → many profiles, no hard create cap; switcher uses `activeProfileId`.
+- One Firebase Auth user (email **or** phone, verified) = **one Chaupaal account** with **one profile**. Device switcher = multi-**account** (separate logins), not many profiles under one uid.
+- Keep `profiles/primary` + `activeProfileId` + username → `{ uid, profileId }` for login resolution; do not productize extra profiles per login.
 - Verify email/phone with OTP (or Firebase email/phone verification) before treating them as registered.
 - Persist login on device until explicit logout.
 - Username unique; rename frees the old name immediately.
@@ -153,9 +154,14 @@ Enforcement is **ON** for Firestore / RTDB (and Storage if enabled). Client uses
 
 ## 11. Public vs private user profiles
 
-- Full `users/{uid}` — **owner read/write** (plus Admin SDK). Contains email, phone, DOB, prefs, etc.
-- `users_public/{uid}` — what other signed-in clients may read. Owner syncs via `UsersPublic.syncPublicProfile` on profile save / login.
-- Cross-user UI must use `users_public` (or denormalized blobs / server projections), never the private user doc.
+- Full `users/{uid}` — **owner read/write** (plus Admin SDK). Contains email, phone, DOB, prefs, visibility flags, etc.
+- `users_public/{uid}` — **visibility-aware** projection other signed-in clients may read. Owner syncs via `UsersPublic.syncPublicProfile` on profile save / login.
+  - Always safe: name, username, photo, profileType, `profileVisibility`.
+  - **Private / Friends only:** strip age, city, bio, gender, layout, and other PII from `users_public` (strangers must not read gated fields).
+  - **Friends only:** richer fields + Digital friends blocks live in `users_public/{uid}/friend_projection/*` (rules: owner or `isFriend`).
+  - **Public:** respect `showAge` / `showLocation` / `showRelationship` / `showIncome` / `showReligion` when projecting.
+- Canonical Digital layout: `profile.digitalLayout` (+ `tabOrder`). Legacy `sectionOrder` / `customSections` are migration-only — do not double-render.
+- Cross-user UI must use `users_public` / friend_projection (or denormalized blobs), never the private user doc.
 
 ## 12. Globals & module surface
 

@@ -1,16 +1,16 @@
 ---
-description: Auth identity, multi-profile, session persistence, and contact verification
+description: Auth identity, multi-account switcher, session persistence, and contact verification
 alwaysApply: true
 ---
 
 # Auth & identity (Chaupaal)
 
-## Model (Instagram-style)
+## Model (multi-ACCOUNT — Instagram-style device switcher)
 
-- **One Firebase Auth identity** per email **or** phone signup (password and/or Google).
-- **Many Chaupaal profiles** under that identity — **no hard profile-create cap** (Instagram: unlimited owned; their “5” is simultaneous device logins of separate credentials, not our profile model).
-- App uses **active profile** (`activeProfileId`) for posts, chats, display name, username.
-- Account switcher lists all profiles under the signed-in identity.
+- **One Firebase Auth identity** per email **or** phone signup (password and/or Google) = **one Chaupaal account**.
+- **One Chaupaal profile per account** (Personal or Professional chosen at signup). Want both? Add a **separate account** on the device switcher — not another profile under the same login.
+- Device **account switcher** (`openAccountSwitcher`) lists Firebase identities stored on this device (`chaupaal_device_accounts`). Copy = “Switch / add account”, never “add profile under this login”.
+- Schema keep: `users/{uid}/profiles/primary` + `activeProfileId` + `usernames/{handle} → { uid, profileId }` remain load-bearing for login/handle resolution. Do **not** productize “many profiles per uid”; keep the single `primary` record working. (P0: multi-account is the truth.)
 
 ## Signup / contact
 
@@ -35,12 +35,13 @@ alwaysApply: true
 
 ## Username
 
-- Globally unique handle; **one profile per username**.
+- Globally unique handle; **one account/profile per username**.
 - Rename allowed; **old username freed immediately** (Rename A).
 
 ## Profile type (signup)
 
-- Default **Personal**. UI is a small Personal / Professional **toggle**, not a forked flow.
+- Default **Personal**. UI is a small Personal / Professional **choice at signup**, not a same-login flip later.
+- Type is **fixed after signup** (`saveProfileType` must not silently rewrite it post-register). Want the other type → add another account.
 - Professional optionally collects **Industry** and **Purpose** (top-N from `industryStats` / `purposeStats` + “Other — type your own”). Both optional; counters increment on register (`FieldValue.increment`).
 - Gender remains **mandatory for Personal** (optional for Professional). Include **Prefer to self-describe** + required free-text when selected.
 

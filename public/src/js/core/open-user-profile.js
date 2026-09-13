@@ -1,14 +1,18 @@
 /**
  * Unified profile open + self labels + guest Message resume.
- * Mode matrix: tab_self / baithak_self → owner; list_self / comment / third_person → preview.
+ * Mode matrix: own profile defaults to Preview (View as others); Edit is one tap away.
+ * Explicit initialMode: 'owner' still opens edit when a surface asks for it.
  */
 (function () {
   'use strict';
 
   const PENDING_MSG_KEY = 'chaupaal_pending_profile_message';
 
-  const OWNER_CONTEXTS = new Set(['tab_self', 'baithak_self', 'owner', 'edit']);
+  // Prefer preview for self entry points (tab, Baithak avatar, etc.).
+  const OWNER_CONTEXTS = new Set(['owner', 'edit']);
   const PREVIEW_CONTEXTS = new Set([
+    'tab_self',
+    'baithak_self',
     'list_self',
     'list_other',
     'comment',
@@ -22,6 +26,7 @@
     'duniya',
     'baithak_search',
     'preview',
+    'chaupaal_cmd',
   ]);
 
   function isSelfUid(uid) {
