@@ -204,6 +204,14 @@
       return { persisted: true, liked: !wasLiked, likes: nextLikes };
     });
     await upsertActivityLike(collection, content, { liked: result.liked });
+    if (typeof trackSignal === 'function') {
+      trackSignal('like', {
+        surface: collection,
+        objType: 'post',
+        objId: contentId(content),
+        ctx: { action: result.liked ? 'like' : 'unlike' },
+      });
+    }
     if (result.liked) {
       emitSocialNotif(collection, content, 'like', 'liked your post');
     }
@@ -430,6 +438,14 @@
       if (result.created) {
         emitSocialNotif(collection, content, 'comment', String(text).slice(0, 120));
         upsertActivityComment(collection, content, { id, text }, { remove: false });
+        if (typeof trackSignal === 'function') {
+          trackSignal('comment', {
+            surface: collection,
+            objType: 'post',
+            objId: contentId(content),
+            ctx: { commentId: id },
+          });
+        }
       }
       return result;
     });
@@ -590,6 +606,9 @@
     const snap = await ref.get();
     if (snap.exists) {
       await ref.delete();
+      if (typeof trackSignal === 'function') {
+        trackSignal('save', { surface: collection, objType: 'post', objId: id, ctx: { saved: false } });
+      }
       return { persisted: true, saved: false };
     }
     await ref.set({
@@ -599,6 +618,9 @@
       preview: String(content.caption || content.question || '').slice(0, 160),
       ownerUid: content.uid || content.user?.uid || null,
     });
+    if (typeof trackSignal === 'function') {
+      trackSignal('save', { surface: collection, objType: 'post', objId: id, ctx: { saved: true } });
+    }
     return { persisted: true, saved: true };
   }
 

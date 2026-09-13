@@ -45,6 +45,8 @@ const LIMITS = {
   // Account export / deletion (P3) — expensive + sensitive
   account_export: { minute: 1, hour: 3 },
   account_delete: { minute: 1, hour: 5 },
+  // Signal spine batches (P4)
+  signal_ingest: { minute: 30, hour: 400 },
 };
 
 let redis = null;

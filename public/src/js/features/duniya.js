@@ -246,6 +246,16 @@ function renderDuniyaFeed(){
   if(typeof enhanceMediaIn==='function') enhanceMediaIn(feed);
   if(typeof mountMusicCards==='function') mountMusicCards(feed);
   if(typeof mountLocationCards==='function') mountLocationCards(feed);
+  try{
+    if(typeof observeFeedImpressions==='function'){
+      if(window.__duniyaImpressionStop) window.__duniyaImpressionStop();
+      feed.querySelectorAll('.duniya-post, [data-post-id]').forEach((el,i)=>{
+        const id=el.dataset.postId||el.dataset.id;
+        if(id){ el.setAttribute('data-id', id); el.dataset.pos=String(i); }
+      });
+      window.__duniyaImpressionStop=observeFeedImpressions(feed,{ surface:'duniya', idAttr:'data-id', objType:'post' });
+    }
+  }catch(e){}
   if(duniyaLiveMode&&duniyaHasMore&&typeof ensureLoadMoreButton==='function'){
     ensureLoadMoreButton(feed,{
       label:'Load more posts',
@@ -1287,6 +1297,15 @@ function openShareSheet(post){
   const afterShare=async()=>{
     if(isPeepal) await recordPeepalShare(post);
     else await recordDuniyaShare(post);
+    try{
+      if(typeof trackSignal==='function'){
+        trackSignal('share',{
+          surface:isPeepal?'peepal':'duniya',
+          objType:'post',
+          objId:String(id||'').slice(0,128),
+        });
+      }
+    }catch(e){}
   };
 
   const onFriend=async(_stats,friend)=>{

@@ -448,7 +448,17 @@ module.exports = async function handler(req, res) {
       console.warn('[scheduler] feedback digest', e?.message || e);
     }
 
-    return sendSuccess(res, { ...results, summary, intentWeights, discoveryBatch, liveLoc, peepalSegments, denormBackfill, feedbackDigest });
+    // P4 signal raw retention prune
+    let signalPrune = { skipped: true };
+    try {
+      const { pruneSignalEvents } = require('../server-lib/signal-spine');
+      signalPrune = await pruneSignalEvents(db, { maxDays: 4, olderThanDays: 14 });
+    } catch (e) {
+      signalPrune = { error: e?.message || String(e) };
+      console.warn('[scheduler] signal prune', e?.message || e);
+    }
+
+    return sendSuccess(res, { ...results, summary, intentWeights, discoveryBatch, liveLoc, peepalSegments, denormBackfill, feedbackDigest, signalPrune });
   } catch (e) {
     console.error('[chaupaal-scheduler]', e?.message || e);
     return sendError(res, 500, 'SCHEDULER_FAILED', e?.message || 'Scheduler failed');

@@ -60,6 +60,14 @@
         new CustomEvent('chaupaal:pagerchange', { detail: { index, id, page: pages[index] } })
       );
       if (typeof onChange === 'function') onChange({ index, id, page: pages[index] });
+      try {
+        if (typeof trackSignal === 'function') {
+          clearTimeout(paint._sigT);
+          paint._sigT = setTimeout(() => {
+            trackSignal('open', { surface: 'pager', objType: 'page', objId: id, pos: index });
+          }, 600);
+        }
+      } catch (e) {}
     }
 
     function goTo(i, { animate = true } = {}) {

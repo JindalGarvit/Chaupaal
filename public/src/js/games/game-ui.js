@@ -2098,6 +2098,34 @@
     try {
       if (typeof tickKhelDailies === 'function') tickKhelDailies(id, { won: o.won === true, drew: !!o.drew });
     } catch (e) {}
+    // P4 spine — promote local session into consented event log (cross-device learnable)
+    try {
+      if (typeof trackSignal === 'function') {
+        const result = o.drew ? 'draw' : o.won === true ? 'win' : o.won === false ? 'loss' : 'complete';
+        trackSignal('game_end', {
+          surface: 'dangal',
+          objType: 'game',
+          objId: id,
+          dur: Number.isFinite(o.durationMs) ? o.durationMs : null,
+          ctx: {
+            gameId: id,
+            mode: o.mode || (o.gotd ? 'gotd' : 'solo'),
+            result,
+            rated: !!o.rated,
+            eloDelta: Number.isFinite(o.eloDelta) ? o.eloDelta : null,
+            genre: o.genre || null,
+          },
+        });
+      }
+      if (typeof trackGameEvent === 'function') {
+        trackGameEvent('game_completed', {
+          game_type: id,
+          mode: o.mode || 'solo',
+          result: o.drew ? 'draw' : o.won === true ? 'win' : o.won === false ? 'loss' : 'complete',
+          time_spent_ms: o.durationMs,
+        });
+      }
+    } catch (e) {}
     return data;
   }
 
@@ -2327,6 +2355,14 @@
         body: { action: 'record_game_play', gameId },
       }).catch(() => {});
     }
+    try {
+      if (typeof trackSignal === 'function') {
+        trackSignal('game_start', { surface: 'dangal', objType: 'game', objId: normalizeDangalGameId(gameId) || gameId });
+      }
+      if (typeof trackGameEvent === 'function') {
+        trackGameEvent('game_started', { game_type: gameId });
+      }
+    } catch (e) {}
   }
 
   function getLastPlayedGame() {

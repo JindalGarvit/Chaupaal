@@ -169,6 +169,13 @@ Enforcement is **ON** for Firestore / RTDB (and Storage if enabled). Client uses
 - Do not write `chaupaal_archive` localStorage or `daily_checkins` for new check-ins.
 - Recovery bin is **device-local** (30 days / 50 items). Export / delete-account via `api/media-config` actions `export_account_data` / `request_account_deletion`.
 
+## 11c. Signal spine (P4)
+
+- Client: `trackSignal` / `signal-spine.js` — batched POST `ingest_signals` to `api/chaupaal-events`. Consent default **on**; Settings → “Personalization & activity” opt-out stops collection (`activitySignalsOptOut`).
+- Never put raw search/message/journal text or precise lat/lng in events. Hash queries client-side; server sanitizes `ctx`.
+- Storage: `users/{uid}/signalRollups/{yyyy-MM-dd}` (primary), `signalEvents/{yyyyMMdd}/items/{id}` (high-value raw, ~14d prune via scheduler).
+- Existing stores still valid for P5: `recommendationSignals`, `matchEngagementEvents`, `discoveryQueryLogs`, `chaupaalUserState.hourBuckets`.
+
 ## 12. Globals & module surface
 
 The client still loads classic non-module scripts (`<script src>`), so top-level `function` / `let` and many `window.X =` exports are intentional for cross-file calls.

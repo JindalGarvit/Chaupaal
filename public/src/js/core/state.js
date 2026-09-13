@@ -261,8 +261,18 @@ function openSettingsModal(){
             if(snap.exists && snap.data()?.akhbaarAppearInFriendsPrompts===false) appear.checked=false;
             else appear.checked=true;
           }
+          const sig=document.getElementById('toggleActivitySignals');
+          if(sig){
+            try{ sig.checked=localStorage.getItem('chaupaal_activity_signals_opt_out')!=='1'; }catch(e){ sig.checked=true; }
+            if(snap.exists && snap.data()?.activitySignalsOptOut===true) sig.checked=false;
+            else if(snap.exists && snap.data()?.activitySignalsOptOut===false) sig.checked=true;
+          }
         }).catch(()=>{});
       }
+    }
+    const sigEl=document.getElementById('toggleActivitySignals');
+    if(sigEl && !db){
+      try{ sigEl.checked=localStorage.getItem('chaupaal_activity_signals_opt_out')!=='1'; }catch(e){ sigEl.checked=true; }
     }
   }catch(e){}
   if(typeof refreshSettingsSafetyLists==='function'){
@@ -315,6 +325,17 @@ document.getElementById('saveSettings').addEventListener('click',()=>{
     localStorage.setItem('chaupaal_companion_opt_out', companionOn?'0':'1');
     if(db&&currentUser){
       db.collection('users').doc(currentUser.uid).set({ companionOptOut: !companionOn }, { merge:true }).catch(()=>{});
+    }
+  }catch(e){}
+  // P4 personalization & activity signals (default ON; opt-out stops collection)
+  try{
+    const signalsOn=!!document.getElementById('toggleActivitySignals')?.checked;
+    if(typeof setActivitySignalsOptOut==='function') setActivitySignalsOptOut(!signalsOn);
+    else {
+      localStorage.setItem('chaupaal_activity_signals_opt_out', signalsOn?'0':'1');
+      if(db&&currentUser){
+        db.collection('users').doc(currentUser.uid).set({ activitySignalsOptOut: !signalsOn }, { merge:true }).catch(()=>{});
+      }
     }
   }catch(e){}
   // Appear in friends' personalized Akhbaar prompts (default on)

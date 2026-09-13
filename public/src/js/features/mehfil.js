@@ -2647,8 +2647,29 @@
                 const title = cachedMediaState?.title || 'YouTube';
                 if (st === window.YT.PlayerState.PLAYING) {
                   publishMediaState({ type: 'youtube', id, playing: true, t: tSec, title }, { throttleSeek: true });
+                  try {
+                    if (typeof trackSignal === 'function') {
+                      trackSignal('media_start', {
+                        surface: 'mehfil',
+                        objType: 'youtube',
+                        objId: String(id || '').slice(0, 64),
+                        ctx: { mediaKind: 'youtube' },
+                      });
+                    }
+                  } catch (sigE) {}
                 } else if (st === window.YT.PlayerState.PAUSED) {
                   publishMediaState({ type: 'youtube', id, playing: false, t: tSec, title }, { throttleSeek: true });
+                } else if (st === window.YT.PlayerState.ENDED) {
+                  try {
+                    if (typeof trackSignal === 'function') {
+                      trackSignal('media_complete', {
+                        surface: 'mehfil',
+                        objType: 'youtube',
+                        objId: String(id || '').slice(0, 64),
+                        ctx: { mediaKind: 'youtube' },
+                      });
+                    }
+                  } catch (sigE) {}
                 }
               } catch (err) {}
             },
@@ -3300,6 +3321,9 @@
     if (leaving) return;
     leaving = true;
     joinGeneration += 1;
+    try {
+      if (typeof markMehfilLeave === 'function') markMehfilLeave();
+    } catch (e) {}
     try {
       const handle = layerHandle;
       const el = overlayEl;
@@ -4473,6 +4497,9 @@
     }
     const chatId = chat.firestoreId || chat.id;
     if (!chatId) return;
+    try {
+      if (typeof markMehfilJoin === 'function') markMehfilJoin(chatId);
+    } catch (e) {}
 
     // Membership mirror before any RTDB mehfil/* write (rules require mehfilMembers).
     const allowed = await ensureMehfilMemberMirror(chatId);

@@ -147,15 +147,55 @@ function scheduleOutcomeCheck(matchUid, matchName){
   const key = `chaupaal_outcome_${matchUid}`;
   if(localStorage.getItem(key)) return; // already scheduled
   localStorage.setItem(key, JSON.stringify({matchUid, matchName, scheduledAt: Date.now()}));
-  setTimeout(()=>{
-    const data = JSON.parse(localStorage.getItem(key)||'{}');
-    if(!data.matchUid) return;
-    localStorage.removeItem(key);
-    // Silently check if a conversation happened (chat in SAMPLE_CHATS?)
-    const chatted = SAMPLE_CHATS.some(c=>c.id?.includes(data.matchUid)&&c.lastMessage);
-    recordMatchOutcome(data.matchUid, chatted ? 'connected' : 'ghosted');
-  }, 48*3600000); // 48h
+  // Durable check on next load (tab may not stay open 48h)
+  setTimeout(()=>maybeResolveOutcomeCheck(matchUid), Math.min(48*3600000, 60000));
 }
+
+async function maybeResolveOutcomeCheck(matchUid){
+  const key = `chaupaal_outcome_${matchUid}`;
+  let data={};
+  try{ data=JSON.parse(localStorage.getItem(key)||'{}'); }catch(e){ return; }
+  if(!data.matchUid) return;
+  const age=Date.now()-(Number(data.scheduledAt)||0);
+  if(age < 48*3600000){
+    // Re-arm until 48h elapsed (survives reloads via localStorage)
+    setTimeout(()=>maybeResolveOutcomeCheck(matchUid), Math.min(48*3600000-age, 6*3600000));
+    return;
+  }
+  localStorage.removeItem(key);
+  let chatted=false;
+  try{
+    if(db&&currentUser&&matchUid){
+      const pair=[currentUser.uid, matchUid].sort().join('_');
+      const chatId=`dm_${pair}`;
+      const snap=await db.collection('chats').doc(chatId).get();
+      if(snap.exists){
+        const d=snap.data()||{};
+        const msgs=Number(d.messageCount||d.msgCount||0);
+        chatted=msgs>=2 || !!(d.lastMessage||d.preview);
+      }
+    }
+  }catch(e){}
+  recordMatchOutcome(data.matchUid, chatted ? 'connected' : 'ghosted');
+  if(typeof trackSignal==='function'){
+    trackSignal(chatted?'reply':'skip',{
+      surface:'khoj',
+      objType:'profile',
+      objId:data.matchUid,
+      ctx:{ outcome: chatted?'connected':'ghosted' },
+    });
+  }
+}
+
+// Resolve any pending outcome checks on load
+try{
+  Object.keys(localStorage).filter(k=>k.startsWith('chaupaal_outcome_')).forEach(k=>{
+    try{
+      const d=JSON.parse(localStorage.getItem(k)||'{}');
+      if(d.matchUid) setTimeout(()=>maybeResolveOutcomeCheck(d.matchUid), 4000);
+    }catch(e){}
+  });
+}catch(e){}
 
 function recordMatchOutcome(matchUid, outcome){
   if(db&&currentUser) db.collection('match_outcomes').add({
@@ -234,6 +274,22 @@ window.runPeepalAiSearch = async function(opts){
       : document.getElementById('peepalAiSearchResults'));
   const count = resultsEl?.querySelectorAll('.peepal-ai-result-card').length || 0;
   if(count > 0) addSearchFeedback(resultsEl, query, count);
+  try{
+    if(typeof trackSearchHashed==='function' && query){
+      const qHash=typeof hashQueryClient==='function'?hashQueryClient(query):'';
+      trackSearchHashed(query, o.surface==='khoj'?'khoj':'peepal', { intent:o.intent||null, chips:o.chips||null });
+      resultsEl?.querySelectorAll?.('.peepal-ai-result-card, [data-uid]')?.forEach(card=>{
+        if(card.dataset.signalClickWired==='1') return;
+        card.dataset.signalClickWired='1';
+        card.addEventListener('click',()=>{
+          const uid=card.dataset.uid||card.querySelector('[data-uid]')?.dataset?.uid;
+          if(uid && typeof trackResultClick==='function'){
+            trackResultClick(o.surface==='khoj'?'khoj':'peepal', uid, { qHash });
+          }
+        }, { once:false });
+      });
+    }
+  }catch(e){}
 };
 // AI-integration boundary (CONVENTIONS 4c)
 if (typeof safeFeature === 'function') window.runPeepalAiSearch = safeFeature('peepal_ai_search', window.runPeepalAiSearch);

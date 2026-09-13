@@ -272,6 +272,14 @@ service cloud.firestore {
       match /comment_activity/{commentId} {
         allow read, write: if isOwner(userId);
       }
+      // P4 signal rollups — Admin SDK writes; owner can read own daily rollups (no dashboard UI).
+      match /signalRollups/{dayId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+      match /signalCaps/{dayId} {
+        allow read, write: if false;
+      }
       // Private recommendation inputs written by trusted server endpoints.
       match /recommendationSignals/{signalId} {
         allow read: if isOwner(userId);
@@ -842,6 +850,13 @@ service cloud.firestore {
     match /chaupaalUserState/{uid} {
       allow read: if isOwner(uid);
       allow write: if false;
+    }
+    // P4 raw signal stream — Admin SDK only (never cross-user readable)
+    match /signalEvents/{dayId} {
+      allow read, write: if false;
+      match /items/{eventId} {
+        allow read, write: if false;
+      }
     }
     match /chaupaalFeedback/{docId} {
       allow read: if false;

@@ -1363,6 +1363,8 @@ function renderPeepalFeed(){
   sorted.forEach(q=>{
    try{
     const card=document.createElement('div');card.className='peepal-card';
+    const peepalId=q.firestoreId||q.id;
+    if(peepalId){ card.setAttribute('data-id',String(peepalId)); card.dataset.postId=String(peepalId); }
     const mediaHtml = typeof renderPeepalAttachmentsHtml==='function'?renderPeepalAttachmentsHtml(q):'';
     const canDelete=currentUser&&(q.user?.uid===currentUser.uid||q.uid===currentUser.uid)&&!q.anonymous;
     const collab = Array.isArray(q.attachments) ? q.attachments.find((a) => a.type === 'collab') : null;
@@ -1523,6 +1525,13 @@ function renderPeepalFeed(){
     });
   }
   if(typeof mountMusicCards==='function') mountMusicCards(feed);
+  try{
+    if(typeof observeFeedImpressions==='function'){
+      if(window.__peepalImpressionStop) window.__peepalImpressionStop();
+      feed.querySelectorAll('.peepal-card[data-id]').forEach((el,i)=>{ el.dataset.pos=String(i); });
+      window.__peepalImpressionStop=observeFeedImpressions(feed,{ surface:'peepal', idAttr:'data-id', objType:'post' });
+    }
+  }catch(e){}
 }
 
 function renderPeepalAttachmentsHtml(q){

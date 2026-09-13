@@ -407,6 +407,17 @@ function openChatScreen(chat){
   }
   screen.dataset.chatId = chat.firestoreId || chat.id || '';
   screen.dataset.chatReady = isSelf || isChaupaal || isGroup ? '1' : '0';
+  try {
+    if (!isSelf && !isChaupaal && typeof trackSignal === 'function') {
+      const peer =
+        chat.uid || chat.peerUid || (chat.participants || []).find((u) => u && u !== currentUser?.uid);
+      trackSignal('dm_open', {
+        surface: 'baithak',
+        objType: isGroup ? 'group' : 'dm',
+        objId: String(peer || chat.firestoreId || chat.id || '').slice(0, 128),
+      });
+    }
+  } catch (e) {}
   if (isChaupaal) screen.dataset.chaupaal = '1';
   window.currentOpenChat = chat;
   // Remember only after canonical remap (prepareChatThread also remembers post-bootstrap)
@@ -1568,6 +1579,25 @@ async function sendMsg(chat){
           }
           scheduleChatInboxRefresh();
           if(typeof trackMessageSent==='function') trackMessageSent({ chat_type: chat.type||'dm' });
+          try {
+            if (!isChaupaal && typeof trackSignal === 'function') {
+              const peer =
+                chat.uid || chat.peerUid || (chat.participants || []).find((u) => u && u !== currentUser?.uid);
+              trackSignal('dm_send', {
+                surface: 'baithak',
+                objType: isGroup ? 'group' : 'dm',
+                objId: String(peer || chat.firestoreId || chat.id || '').slice(0, 128),
+              });
+              if (chat.discoveryOrigin || chat.origin === 'ai_discovery' || chat.origin === 'match') {
+                trackSignal('reply', {
+                  surface: 'baithak',
+                  objType: 'dm',
+                  objId: String(peer || chat.firestoreId || chat.id || '').slice(0, 128),
+                  ctx: { role: 'reply' },
+                });
+              }
+            }
+          } catch (e) {}
           if(typeof publishChatTyping==='function') publishChatTyping(chat.firestoreId||chat.id,false);
           if(typeof demoMarkSeenSoon==='function') demoMarkSeenSoon();
           if(!isChaupaal && (!db||!currentUser)) setTimeout(()=>{

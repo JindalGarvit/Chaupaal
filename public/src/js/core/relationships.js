@@ -205,6 +205,16 @@
     });
     emitRelationshipChanged(targetUid, data);
     if (enabled && typeof haptic === 'function') haptic('success');
+    try {
+      if (typeof trackSignal === 'function') {
+        trackSignal(enabled ? 'follow' : 'unfollow', {
+          surface: 'profile',
+          objType: 'user',
+          objId: targetUid,
+          ctx: { source: source || 'profile' },
+        });
+      }
+    } catch (e) {}
     return relationshipState(targetUid);
   }
 
@@ -213,6 +223,15 @@
     const data = await callRelationship('request_friend', { targetUid });
     emitRelationshipChanged(targetUid, data);
     refreshFriendRequestSurfaces();
+    try {
+      if (typeof trackSignal === 'function') {
+        trackSignal(data.accepted || data.autoAccepted ? 'friend_accept' : 'friend_request', {
+          surface: 'profile',
+          objType: 'user',
+          objId: targetUid,
+        });
+      }
+    } catch (e) {}
     return { state: relationshipState(targetUid), accepted: !!data.accepted, autoAccepted: !!data.autoAccepted };
   }
 

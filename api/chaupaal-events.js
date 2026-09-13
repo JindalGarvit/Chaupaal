@@ -298,6 +298,40 @@ module.exports = async function handler(req, res) {
       return sendSuccess(res, out || { ok: true, period });
     }
 
+    if (action === 'ingest_signals') {
+      try {
+        const { checkActionRateLimit } = require('../server-lib/rate-limit');
+        const rate = await checkActionRateLimit(user.uid, 'signal_ingest');
+        if (!rate.ok) {
+          return sendError(res, 429, 'RATE_LIMITED', 'Too many signal batches');
+        }
+      } catch (e) {
+        console.warn('[chaupaal-events] signal rate', e?.message || e);
+      }
+      const { ingestSignalBatch, loadConsent } = require('../server-lib/signal-spine');
+      const consent = await loadConsent(db, user.uid);
+      if (!consent.collect) {
+        return sendSuccess(res, { accepted: 0, raw: 0, skipped: (body.events || []).length || 0, reason: 'opt_out' });
+      }
+      const FieldValue = admin.firestore.FieldValue;
+      const result = await ingestSignalBatch(db, FieldValue, user.uid, body.events, { consent });
+      return sendSuccess(res, result);
+    }
+
+    if (action === 'signal_debug_summary') {
+      // Dev-facing only — gated; not a user dashboard.
+      const allow =
+        process.env.SIGNAL_DEBUG === 'true' ||
+        String(process.env.FEEDBACK_FOUNDER_UIDS || '')
+          .split(',')
+          .map((s) => s.trim())
+          .includes(user.uid);
+      if (!allow) return sendError(res, 403, 'FORBIDDEN', 'Debug only');
+      const dayIso = new Date().toISOString().slice(0, 10);
+      const snap = await db.collection('users').doc(user.uid).collection('signalRollups').doc(dayIso).get();
+      return sendSuccess(res, { day: dayIso, rollup: snap.exists ? snap.data() : null });
+    }
+
     return sendError(res, 400, 'UNKNOWN_ACTION', `Unknown action: ${action}`);
   } catch (e) {
     console.error('[chaupaal-events]', e?.message || e);
