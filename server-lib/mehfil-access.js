@@ -6,6 +6,9 @@
 'use strict';
 
 const CHANNEL_PREFIX = 'mh_';
+/** Group soft caps (M7) — publishers ≈ speakers with Agora publisher tokens. */
+const MEHFIL_MAX_PUBLISHERS = 10;
+const MEHFIL_MAX_PARTICIPANTS = 40;
 
 function sanitizeChatId(chatId) {
   return String(chatId || '')
@@ -116,13 +119,26 @@ async function assertMehfilAgoraAccess(adminNs, opts) {
   } catch (e) {
     console.warn('[mehfil-access] mirror', e?.message || e);
   }
-  const voiceRole = await resolveMehfilVoiceRole(adminNs, {
+  const voice = await resolveMehfilVoiceRole(adminNs, {
     chatId,
     uid,
     chatData: check.chatData,
   });
+  const voiceRole = typeof voice === 'string' ? voice : voice?.voiceRole || 'publisher';
+  const voiceReason = typeof voice === 'object' ? voice.reason || '' : '';
   const chatType = String(check.chatData?.type || 'dm');
-  return { ok: true, chatId, channel: expected || channel, chatType, voiceRole };
+  return {
+    ok: true,
+    chatId,
+    channel: expected || channel,
+    chatType,
+    voiceRole,
+    voiceReason,
+    caps: {
+      maxPublishers: MEHFIL_MAX_PUBLISHERS,
+      maxParticipants: MEHFIL_MAX_PARTICIPANTS,
+    },
+  };
 }
 
 /** Removal cooldown still active? */
@@ -148,28 +164,80 @@ async function assertNotRemovedFromMehfil(adminNs, chatId, uid) {
 }
 
 /**
- * DM → always publisher. Group listener → subscriber. Host/speaker → publisher.
+ * Count RTDB roles that may publish (speaker/host; not listener).
+ * Host without a roles entry still counts as a publisher.
+ */
+async function countMehfilPublishers(adminNs, chatId, excludeUid) {
+  const id = sanitizeChatId(chatId);
+  if (!id) return 0;
+  const rtdb = adminNs.database();
+  const [rolesSnap, hostSnap] = await Promise.all([
+    rtdb.ref(`mehfil/${id}/roles`).once('value'),
+    rtdb.ref(`mehfil/${id}/roomHost/uid`).once('value'),
+  ]);
+  const roles = rolesSnap.val() || {};
+  const hostUid = hostSnap.val() ? String(hostSnap.val()) : '';
+  const skip = excludeUid ? String(excludeUid) : '';
+  let n = 0;
+  Object.entries(roles).forEach(([uid, meta]) => {
+    if (skip && String(uid) === skip) return;
+    if (String(meta?.role || 'speaker') === 'listener') return;
+    n += 1;
+  });
+  if (hostUid && hostUid !== skip && !roles[hostUid]) n += 1;
+  return n;
+}
+
+/**
+ * DM → always publisher. Group listener → subscriber.
+ * M7: new joiners beyond MEHFIL_MAX_PUBLISHERS become listeners (subscriber token).
  */
 async function resolveMehfilVoiceRole(adminNs, opts) {
   const o = opts || {};
   const chatData = o.chatData || {};
   const isGroup = chatData.type === 'group';
-  if (!isGroup) return 'publisher';
+  if (!isGroup) return { voiceRole: 'publisher', reason: 'dm' };
   const chatId = sanitizeChatId(o.chatId);
   const uid = String(o.uid || '');
-  if (!chatId || !uid) return 'publisher';
+  if (!chatId || !uid) return { voiceRole: 'publisher', reason: 'fallback' };
   try {
-    const roleSnap = await adminNs.database().ref(`mehfil/${chatId}/roles/${uid}/role`).once('value');
-    const role = String(roleSnap.val() || 'speaker');
-    if (role === 'listener') return 'subscriber';
-    return 'publisher';
+    const rtdb = adminNs.database();
+    const roleSnap = await rtdb.ref(`mehfil/${chatId}/roles/${uid}/role`).once('value');
+    const existing = roleSnap.val() != null ? String(roleSnap.val()) : '';
+    if (existing === 'listener') {
+      return { voiceRole: 'subscriber', reason: 'listener' };
+    }
+
+    const hostSnap = await rtdb.ref(`mehfil/${chatId}/roomHost/uid`).once('value');
+    const hostUid = hostSnap.val() ? String(hostSnap.val()) : '';
+    if (hostUid === uid || existing === 'speaker') {
+      return { voiceRole: 'publisher', reason: existing === 'speaker' ? 'speaker' : 'host' };
+    }
+
+    // No explicit role yet — apply publisher cap for first-time joiners.
+    const publishers = await countMehfilPublishers(adminNs, chatId, uid);
+    if (publishers >= MEHFIL_MAX_PUBLISHERS) {
+      try {
+        await rtdb.ref(`mehfil/${chatId}/roles/${uid}`).set({
+          role: 'listener',
+          at: Date.now(),
+          reason: 'publisher_cap',
+        });
+      } catch (e) {
+        console.warn('[mehfil-access] cap write', e?.message || e);
+      }
+      return { voiceRole: 'subscriber', reason: 'publisher_cap' };
+    }
+    return { voiceRole: 'publisher', reason: 'open_slot' };
   } catch (e) {
-    return 'publisher';
+    return { voiceRole: 'publisher', reason: 'error' };
   }
 }
 
 module.exports = {
   CHANNEL_PREFIX,
+  MEHFIL_MAX_PUBLISHERS,
+  MEHFIL_MAX_PARTICIPANTS,
   sanitizeChatId,
   channelForChatId,
   chatIdFromChannel,
@@ -180,4 +248,5 @@ module.exports = {
   assertMehfilAgoraAccess,
   assertNotRemovedFromMehfil,
   resolveMehfilVoiceRole,
+  countMehfilPublishers,
 };

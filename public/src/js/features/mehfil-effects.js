@@ -7,6 +7,7 @@
 
   const LANES = 5;
   const MAX_ACTIVE = 12;
+  let MAX_ACTIVE_RUNTIME = MAX_ACTIVE;
   const active = [];
   let queue = [];
   let draining = false;
@@ -50,7 +51,9 @@
     const layer = layerEl(opts.root);
     if (!layer) return;
     pruneActive();
-    if (active.length >= MAX_ACTIVE) {
+    if (active.length >= MAX_ACTIVE_RUNTIME) {
+      // At scale: drop rather than unbounded queue.
+      if (queue.length >= MAX_ACTIVE_RUNTIME) return;
       queue.push(opts);
       drainQueue();
       return;
@@ -84,7 +87,7 @@
     draining = true;
     const tick = () => {
       pruneActive();
-      if (!queue.length || active.length >= MAX_ACTIVE) {
+      if (!queue.length || active.length >= MAX_ACTIVE_RUNTIME) {
         draining = false;
         return;
       }
@@ -104,6 +107,19 @@
       if (emoji === '✨') spawn({ kind: 'confetti', emoji: '✨', ...(opts || {}) });
     },
     spawn,
+    setParticipantScale(n) {
+      const count = Number(n) || 0;
+      // Drop queue / tighten caps as the room grows — prefer silence over backlog.
+      if (count >= 10) {
+        queue.length = 0;
+        MAX_ACTIVE_RUNTIME = 4;
+      } else if (count >= 6) {
+        if (queue.length > 4) queue.length = 4;
+        MAX_ACTIVE_RUNTIME = 8;
+      } else {
+        MAX_ACTIVE_RUNTIME = MAX_ACTIVE;
+      }
+    },
     clear() {
       queue = [];
       draining = false;

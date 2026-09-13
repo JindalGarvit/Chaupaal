@@ -26,6 +26,7 @@ const effectsJs = read('public/src/js/features/mehfil-effects.js');
 const cinemaCss = read('public/src/styles/mehfil-cinema.css');
 const mehfilCss = read('public/src/styles/mehfil.css');
 const mediaConfig = read('api/media-config.js');
+const access = read('server-lib/mehfil-access.js');
 const i18n = read('public/src/js/core/i18n.js');
 
 const checks = [
@@ -56,6 +57,9 @@ const checks = [
   ['cinema: three-layer chrome', mehfilJs.includes('mehfil-glance') && mehfilJs.includes('mehfil-immersive-exit') && !mehfilJs.includes('mehfil-ring-btn')],
   ['cinema: token themes + stage rest', cinemaCss.includes('mehfil-theme--light') && cinemaCss.includes('#F5F5F5') && cinemaCss.includes('mehfil-stage-rest')],
   ['cinema: warm voice tiles', mehfilJs.includes('mehfil-tile--voice') && mehfilCss.includes('mehfil-tile-avatar')],
+  ['scale: publisher/participant caps', mehfilJs.includes('MAX_PUBLISHERS = 10') && mehfilJs.includes('MAX_PARTICIPANTS = 40') && access.includes('MEHFIL_MAX_PUBLISHERS')],
+  ['scale: video reconcile + pin', mehfilJs.includes('reconcileVideoSubscriptions') && mehfilJs.includes('setPinnedUid')],
+  ['scale: volume/presence throttle', mehfilJs.includes('VOLUME_PAINT_MS') && mehfilJs.includes('PRESENCE_PAINT_MS')],
   ['youtube-search.js', exists('server-lib/youtube-search.js')],
   ['YOUTUBE_API_KEY documented', read('.env.example').includes('YOUTUBE_API_KEY')],
   ['teen-mode assertCanMessage', read('public/src/js/core/teen-mode.js').includes('assertCanMessage')],
@@ -75,20 +79,20 @@ console.log(`${agoraConfigured ? '✓' : '○'} AGORA_APP_ID + CERTIFICATE (opti
 console.log(`○ api/*.js count: ${apiCount} (Hobby max 12)`);
 
 console.log(`
-Manual QA checklist (M6)
+Manual QA checklist (M7)
 ------------------------
-Glance / Act / Power
-  [ ] Top: title, honest Live/Waiting, chips, now-playing; dock = mic/cam/clap/More/Leave only
-  [ ] More still wires: Watch, Invite, Reactions, Stickers, Flip, Share, Immersive, Theme
-  [ ] Immersive exit chip visible; tap exits
+Caps
+  [ ] >10 speakers → new joiner is listener + honest toast; host promote needs a free slot
+  [ ] Room ≥40 → calm full message, not silent fail
+  [ ] Cap hint shows n/10 speakers; tap for detail
 
-Look & states
-  [ ] Light = neutral Gathered (#F5F5F5), dark = token cinema — no cream Discord clone
-  [ ] Voice tiles show warm avatars; waiting / rest / voice-off calm
-  [ ] Media: stage dominates, rail compact, chat doesn’t cover video
+Video / audio
+  [ ] Only budgeted remote videos play; others avatar + “tap to view”; pin works
+  [ ] Media on stage → tighter video budget; weak net → status only
+  [ ] Speaking rings without per-tick layout thrash
 
 Ops
-  [ ] Reduced motion / Quiet calm; safe areas; no spill outside .device
+  [ ] 20m join/leave → no listener growth; leave tears down
   [ ] npm run health:mehfil; api/*.js ≤12
 `);
 

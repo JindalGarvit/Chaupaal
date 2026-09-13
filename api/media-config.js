@@ -489,7 +489,7 @@ async function handlePost(req, res) {
     const { mintAgoraToken } = require('../server-lib/agora-token');
     // Always mint for the VERIFIED uid — accepting body.uid let a caller mint
     // publisher tokens for arbitrary Agora identities.
-    // M4: listeners get subscriber tokens (cannot publish even if client tampers).
+    // M4/M7: listeners + publisher-cap overflow get subscriber tokens.
     const result = mintAgoraToken({
       channel: access.channel,
       uid: user.uid,
@@ -498,7 +498,12 @@ async function handlePost(req, res) {
     if (result.error === 'channel_required') {
       return sendError(res, 400, 'VALIDATION_ERROR', 'channel required');
     }
-    return sendSuccess(res, result);
+    return sendSuccess(res, {
+      ...result,
+      voiceRole: access.voiceRole === 'subscriber' ? 'subscriber' : 'publisher',
+      voiceReason: access.voiceReason || '',
+      caps: access.caps || null,
+    });
   }
 
   // Mirror Firestore chat membership → RTDB mehfilMembers (required before RTDB mehfil/* writes).

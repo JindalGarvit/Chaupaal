@@ -24,6 +24,15 @@
   const MEDIA_SEEK_THROTTLE_MS = 900;
   const MUSIC_VOLUME = 0.55; // duck under voice — keep room talk audible
   const PREF_KEY = 'chaupaal_mehfil_prefs';
+  /** M7 capacity — keep in sync with server-lib/mehfil-access.js */
+  const MAX_PUBLISHERS = 10;
+  const MAX_PARTICIPANTS = 40;
+  const MAX_CAM_ON = 4;
+  const MAX_REMOTE_VIDEO_SUBS = 4;
+  const MAX_REMOTE_VIDEO_WITH_MEDIA = 2;
+  const VOLUME_PAINT_MS = 200;
+  const PRESENCE_PAINT_MS = 350;
+  const VIDEO_RECONCILE_MS = 400;
 
   let client = null;
   let localAudio = null;
@@ -109,6 +118,18 @@
   let agoraVoiceRole = 'publisher';
   let rejoiningForRole = false;
   const REMOVAL_COOLDOWN_MS = 15 * 60 * 1000;
+  /** M7 scale state */
+  const remoteUsers = new Map(); // uid → { user, hasVideo, hasAudio }
+  const videoSubUids = new Set();
+  let pinnedUid = null;
+  let pendingVolumes = null;
+  let volumePaintTimer = null;
+  let lastVolumePaintAt = 0;
+  let presencePaintTimer = null;
+  let presencePaintPending = null;
+  let videoReconcileTimer = null;
+  let lastJoinedAsListenerToast = false;
+  let videoPausedNoticeAt = 0;
 
   /** Solo waiter label — never “Live” with one person. */
   const MEHFIL_WAITING_LABEL = 'Waiting in Mehfil';
@@ -1012,6 +1033,192 @@
     return rolesByUid.get(String(uid)) || 'speaker';
   }
 
+  function countLocalPublishers(excludeUid) {
+    const skip = excludeUid ? String(excludeUid) : '';
+    let n = 0;
+    rolesByUid.forEach((role, uid) => {
+      if (skip && uid === skip) return;
+      if (role !== 'listener') n += 1;
+    });
+    if (roomHostUid && roomHostUid !== skip && !rolesByUid.has(String(roomHostUid))) n += 1;
+    return n;
+  }
+
+  function videoSubBudget() {
+    if (hasYoutubeOnStage()) return MAX_REMOTE_VIDEO_WITH_MEDIA;
+    if (lastKnownFreshCount >= 8) return Math.min(3, MAX_REMOTE_VIDEO_SUBS);
+    return MAX_REMOTE_VIDEO_SUBS;
+  }
+
+  function scheduleVideoReconcile() {
+    clearTimeout(videoReconcileTimer);
+    videoReconcileTimer = setTimeout(() => {
+      videoReconcileTimer = null;
+      reconcileVideoSubscriptions().catch(() => {});
+    }, VIDEO_RECONCILE_MS);
+  }
+
+  function markTileVideoPaused(tile, uid) {
+    if (!tile) return;
+    tile.classList.add('mehfil-tile--voice', 'is-video-paused');
+    tile.querySelector('video')?.remove();
+    tile.querySelector('.mehfil-tile-placeholder')?.remove();
+    if (!tile.querySelector('.mehfil-tile-avatar')) {
+      const name = tile.querySelector('.mehfil-tile-label')?.textContent || '?';
+      const av = document.createElement('div');
+      av.className = 'mehfil-tile-avatar';
+      av.setAttribute('aria-hidden', 'true');
+      av.innerHTML = `<span>${esc(name.slice(0, 1))}</span>`;
+      tile.prepend(av);
+    }
+    const ph = document.createElement('button');
+    ph.type = 'button';
+    ph.className = 'mehfil-tile-placeholder mehfil-tile-video-paused';
+    ph.dataset.uid = String(uid);
+    ph.textContent = tt('mehfil_video_paused', 'Video paused to save data — tap to view');
+    tile.appendChild(ph);
+  }
+
+  async function playRemoteVideoOnTile(uid, user) {
+    const tile = ensureRemoteTile(uid, remoteTileLabel({ uid }));
+    if (!tile || !user?.videoTrack) return;
+    tile.classList.remove('mehfil-tile--voice', 'is-video-paused');
+    tile.querySelector('.mehfil-tile-placeholder')?.remove();
+    tile.querySelector('.mehfil-tile-avatar')?.remove();
+    tile.querySelector('.mehfil-tile-video-paused')?.remove();
+    try {
+      user.videoTrack.play(tile);
+    } catch (e) {}
+  }
+
+  async function reconcileVideoSubscriptions() {
+    if (!client || !overlayEl) return;
+    const budget = videoSubBudget();
+    const ranked = [];
+    if (pinnedUid && remoteUsers.get(String(pinnedUid))?.hasVideo) {
+      ranked.push(String(pinnedUid));
+    }
+    speakingSticky.forEach((speaking, uid) => {
+      if (!speaking) return;
+      const id = String(uid);
+      if (id === String(localUid || '')) return;
+      if (remoteUsers.get(id)?.hasVideo && !ranked.includes(id)) ranked.push(id);
+    });
+    remoteUsers.forEach((info, uid) => {
+      if (info?.hasVideo && !ranked.includes(uid)) ranked.push(uid);
+    });
+    const keep = new Set(ranked.slice(0, Math.max(0, budget)));
+
+    for (const [uid, info] of remoteUsers) {
+      if (!info?.hasVideo || !info.user) continue;
+      const tile = overlayEl.querySelector(`.mehfil-tile[data-uid="${uid}"]`);
+      if (keep.has(uid)) {
+        if (!videoSubUids.has(uid)) {
+          try {
+            await client.subscribe(info.user, 'video');
+            videoSubUids.add(uid);
+            await playRemoteVideoOnTile(uid, info.user);
+          } catch (e) {
+            console.warn('[mehfil] video sub', e);
+          }
+        }
+      } else if (videoSubUids.has(uid) || tile?.querySelector('video')) {
+        try {
+          await client.unsubscribe(info.user, 'video');
+        } catch (e) {}
+        videoSubUids.delete(uid);
+        markTileVideoPaused(tile, uid);
+        if (Date.now() - videoPausedNoticeAt > 20000) {
+          videoPausedNoticeAt = Date.now();
+          setMehfilStatus(tt('mehfil_video_saving', 'Showing fewer videos to stay smooth'), 'warn');
+        }
+      }
+    }
+    applyAdaptiveStreamQuality();
+    syncEffectsScale();
+    paintCapHint();
+  }
+
+  function applyAdaptiveStreamQuality() {
+    if (!client) return;
+    const n = lastKnownFreshCount;
+    const preferLow = n >= 6 || hasYoutubeOnStage();
+    try {
+      if (typeof client.setRemoteDefaultVideoStreamType === 'function') {
+        client.setRemoteDefaultVideoStreamType(preferLow ? 1 : 0);
+      }
+    } catch (e) {}
+    remoteUsers.forEach((info, uid) => {
+      if (!info?.user) return;
+      const hi = String(uid) === String(pinnedUid) || speakingSticky.get(uid) === true;
+      try {
+        if (typeof client.setRemoteVideoStreamType === 'function') {
+          client.setRemoteVideoStreamType(info.user.uid, hi && !preferLow ? 0 : 1);
+        }
+      } catch (e) {}
+    });
+  }
+
+  function syncEffectsScale() {
+    try {
+      if (typeof MehfilEffects?.setParticipantScale === 'function') {
+        MehfilEffects.setParticipantScale(lastKnownFreshCount);
+      }
+    } catch (e) {}
+  }
+
+  function paintCapHint() {
+    const el = overlayEl?.querySelector('[data-mehfil-cap-hint]');
+    if (!el) return;
+    if (!isGroupMehfil() || lastKnownFreshCount < 4) {
+      el.hidden = true;
+      return;
+    }
+    const pubs = countLocalPublishers();
+    el.hidden = false;
+    el.textContent = tt('mehfil_cap_hint', '{{n}}/{{max}} speakers', {
+      n: String(pubs),
+      max: String(MAX_PUBLISHERS),
+    });
+    el.title = tt(
+      'mehfil_cap_detail',
+      'Up to {{pub}} speakers and {{room}} in the room. Extra joiners listen until the host promotes them.',
+      { pub: String(MAX_PUBLISHERS), room: String(MAX_PARTICIPANTS) }
+    );
+  }
+
+  function setPinnedUid(uid) {
+    const id = uid ? String(uid) : null;
+    if (pinnedUid === id) pinnedUid = null;
+    else pinnedUid = id;
+    overlayEl?.querySelectorAll('.mehfil-tile[data-uid]').forEach((tile) => {
+      tile.classList.toggle('is-pinned', pinnedUid && tile.dataset.uid === pinnedUid);
+    });
+    scheduleVideoReconcile();
+    if (typeof showToast === 'function') {
+      showToast(
+        pinnedUid
+          ? tt('mehfil_pinned', 'Pinned {{name}}', { name: displayNameForUid(pinnedUid) })
+          : tt('mehfil_unpinned', 'Pin cleared')
+      );
+    }
+  }
+
+  function queueVolumePaint(volumes) {
+    pendingVolumes = volumes;
+    const now = Date.now();
+    const wait = Math.max(0, VOLUME_PAINT_MS - (now - lastVolumePaintAt));
+    if (volumePaintTimer) return;
+    volumePaintTimer = setTimeout(() => {
+      volumePaintTimer = null;
+      lastVolumePaintAt = Date.now();
+      const v = pendingVolumes;
+      pendingVolumes = null;
+      applyVolumeIndicators(v);
+      scheduleVideoReconcile();
+    }, wait);
+  }
+
   async function ensureRoomRoles(chatId) {
     if (!chatId || !currentUser?.uid || !isGroupMehfil()) {
       myRoomRole = 'speaker';
@@ -1047,10 +1254,26 @@
         const myRoleRef = rtdbRef(`mehfil/${chatId}/roles/${currentUser.uid}`);
         const mySnap = await myRoleRef?.once('value');
         if (!mySnap?.val()) {
-          await myRoleRef.set({ role: 'speaker', at: Date.now() });
-          myRoomRole = 'speaker';
+          // Seed roles map from RTDB for accurate publisher count before write.
+          try {
+            const all = await rtdbRef(`mehfil/${chatId}/roles`)?.once('value');
+            rolesByUid.clear();
+            Object.entries(all?.val() || {}).forEach(([uid, meta]) => {
+              rolesByUid.set(String(uid), String(meta?.role || 'speaker'));
+            });
+          } catch (e) {}
+          const pubs = countLocalPublishers(currentUser.uid);
+          if (pubs >= MAX_PUBLISHERS) {
+            await myRoleRef.set({ role: 'listener', at: Date.now(), reason: 'publisher_cap' });
+            myRoomRole = 'listener';
+            lastJoinedAsListenerToast = true;
+          } else {
+            await myRoleRef.set({ role: 'speaker', at: Date.now() });
+            myRoomRole = 'speaker';
+          }
         } else {
           myRoomRole = String(mySnap.val().role || 'speaker');
+          if (mySnap.val()?.reason === 'publisher_cap') lastJoinedAsListenerToast = true;
         }
         if (roomHostUid === currentUser.uid) myRoomRole = 'host';
       }
@@ -1087,6 +1310,7 @@
         if (roomHostUid === currentUser?.uid) myRoomRole = 'host';
         else myRoomRole = rolesByUid.get(String(currentUser?.uid)) || 'speaker';
         paintRoleBadges();
+        paintCapHint();
         if (prev !== myRoomRole && (prev === 'listener' || myRoomRole === 'listener')) {
           applyLocalRoleEnforcement(chatId).catch(() => {});
         }
@@ -1242,6 +1466,12 @@
     if (!iAmRoomHost() || !activeChatId || !targetUid) return;
     if (String(targetUid) === String(currentUser?.uid)) return;
     const r = role === 'listener' ? 'listener' : 'speaker';
+    if (r === 'speaker' && countLocalPublishers(targetUid) >= MAX_PUBLISHERS) {
+      if (typeof showToast === 'function') {
+        showToast(tt('mehfil_speakers_full', 'Speaker spots are full — demote someone first'));
+      }
+      return;
+    }
     try {
       await rtdbRef(`mehfil/${activeChatId}/roles/${targetUid}`)?.set({ role: r, at: Date.now() });
       if (typeof showToast === 'function') {
@@ -1350,6 +1580,12 @@
             : tt('mehfil_you_are_speaker', 'You can speak')
         )}</p>`
       );
+    } else {
+      actions.push(
+        `<button type="button" class="mehfil-ring-pick-row" data-mod-pin>${esc(
+          pinnedUid === String(uid) ? tt('mehfil_unpin', 'Unpin video') : tt('mehfil_pin', 'Pin video')
+        )}</button>`
+      );
     }
     sheet.innerHTML = `
       <div class="mehfil-ring-pick-card">
@@ -1403,6 +1639,10 @@
       close();
       await hostRemoveUser(uid);
     });
+    sheet.querySelector('[data-mod-pin]')?.addEventListener('click', () => {
+      close();
+      setPinnedUid(uid);
+    });
   }
 
   function clearDelegateIfGone(freshUids) {
@@ -1428,11 +1668,23 @@
   }
 
   async function ensureMehfilParticipant(chatId) {
-    if (!chatId || !currentUser?.uid) return;
+    if (!chatId || !currentUser?.uid) return false;
     try {
+      if (isGroupMehfil()) {
+        const ps = await rtdbRef(`mehfil/${chatId}/participants`)?.once('value');
+        const state = mehfilLiveState(ps?.val() || {});
+        const me = String(currentUser.uid);
+        if (state.count >= MAX_PARTICIPANTS && !(state.freshUids || []).map(String).includes(me)) {
+          if (typeof showToast === 'function') {
+            showToast(tt('mehfil_room_full', 'This Mehfil is full right now — try again in a bit'));
+          }
+          setMehfilStatus(tt('mehfil_room_full', 'This Mehfil is full right now — try again in a bit'), 'warn');
+          return false;
+        }
+      }
       await ensureMehfilMemberMirror(chatId);
       const ref = rtdbRef(`mehfil/${chatId}/participants/${currentUser.uid}`);
-      if (!ref) return;
+      if (!ref) return false;
       await ref.set({
         at: Date.now(),
         state: 'in_room',
@@ -1449,14 +1701,18 @@
         if (!activeChatId || activeChatId !== chatId) return;
         ref.update({ at: Date.now(), state: 'in_room' }).catch(() => {});
       }, PRESENCE_HEARTBEAT_MS);
-    } catch (e) {}
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 
   function bindMembersList(chatId) {
     const chipsHost = overlayEl?.querySelector('[data-mehfil-member-chips]');
     const ref = rtdbRef(`mehfil/${chatId}/participants`);
     if (!chipsHost || !ref) return;
-    const paint = (snap) => {
+
+    const paintPresenceUi = (snap) => {
       const val = snap.val() || {};
       const state = mehfilLiveState(val);
       if (state.staleUids && state.staleUids.length) pruneStaleParticipants(chatId, state.staleUids);
@@ -1464,7 +1720,6 @@
         .map((uid) => [uid, val[uid]])
         .filter(([, meta]) => meta);
       const freshUidSet = new Set(freshEntries.map(([uid]) => String(uid)));
-      // Calm join/leave cues (coalesced) — skip first paint.
       if (lastKnownFreshUids.size > 0) {
         freshEntries.forEach(([uid, meta]) => {
           const id = String(uid);
@@ -1515,10 +1770,33 @@
       updateWaitingState(state);
       updateAloneHint(state.count);
       updateWhoHereStrip(state);
+      paintCapHint();
+      syncEffectsScale();
       clearDelegateIfGone(state.freshUids);
+      scheduleVideoReconcile();
     };
-    ref.on('value', paint);
-    rtdbUnsubs.push(() => ref.off('value', paint));
+
+    const onPresence = (snap) => {
+      // Counts stay accurate immediately; chip DOM is debounced (M7).
+      const val = snap.val() || {};
+      const state = mehfilLiveState(val);
+      lastKnownFreshCount = state.count;
+      updateWhoHereStrip(state);
+      paintCapHint();
+      presencePaintPending = snap;
+      clearTimeout(presencePaintTimer);
+      presencePaintTimer = setTimeout(() => {
+        presencePaintTimer = null;
+        if (presencePaintPending) paintPresenceUi(presencePaintPending);
+        presencePaintPending = null;
+      }, PRESENCE_PAINT_MS);
+    };
+    ref.on('value', onPresence);
+    rtdbUnsubs.push(() => {
+      ref.off('value', onPresence);
+      clearTimeout(presencePaintTimer);
+      presencePaintTimer = null;
+    });
   }
 
   function updateWhoHereStrip(state) {
@@ -1834,8 +2112,14 @@
       else if (level < SPEAK_OFF_LEVEL) speaking = false;
       if (uid) speakingSticky.set(uid, speaking);
 
-      tile.classList.toggle('is-speaking', speaking && !reduced);
-      tile.classList.toggle('is-speaking-static', speaking && reduced);
+      const speakAnim = speaking && !reduced;
+      const speakStatic = speaking && reduced;
+      if (tile.classList.contains('is-speaking') !== speakAnim) {
+        tile.classList.toggle('is-speaking', speakAnim);
+      }
+      if (tile.classList.contains('is-speaking-static') !== speakStatic) {
+        tile.classList.toggle('is-speaking-static', speakStatic);
+      }
 
       if (speaking && level > topLevel) {
         topLevel = level;
@@ -1890,9 +2174,24 @@
 
   async function publishCamera() {
     if (!client || !window.AgoraRTC) return;
+    if (agoraVoiceRole === 'subscriber' || myRoomRole === 'listener') return;
+    let remoteCams = 0;
+    overlayEl?.querySelectorAll('.mehfil-tile:not(.mehfil-tile--self) video').forEach(() => {
+      remoteCams += 1;
+    });
+    if (remoteCams >= MAX_CAM_ON) {
+      if (typeof showToast === 'function') {
+        showToast(tt('mehfil_cam_cap', 'Too many cameras on — pin someone or try later'));
+      }
+      return;
+    }
     await closeScreenTrack();
     if (!localVideo) {
-      localVideo = await window.AgoraRTC.createCameraVideoTrack();
+      localVideo = await window.AgoraRTC.createCameraVideoTrack(
+        lastKnownFreshCount >= 6
+          ? { encoderConfig: '180p_1' }
+          : { encoderConfig: '360p_1' }
+      );
       await client.publish([localVideo]);
     }
     playLocalOnTile(localVideo, tt('mehfil_you_label', 'You'));
@@ -2838,6 +3137,19 @@
     reconnectFailCount = 0;
     tokenExpiresAtSec = 0;
     avMode = 'none';
+    remoteUsers.clear();
+    videoSubUids.clear();
+    pinnedUid = null;
+    pendingVolumes = null;
+    clearTimeout(volumePaintTimer);
+    volumePaintTimer = null;
+    clearTimeout(presencePaintTimer);
+    presencePaintTimer = null;
+    presencePaintPending = null;
+    clearTimeout(videoReconcileTimer);
+    videoReconcileTimer = null;
+    lastJoinedAsListenerToast = false;
+    videoPausedNoticeAt = 0;
     speakingSticky.clear();
     mutedByUid.clear();
     lastSpeakingLabel = '';
@@ -3698,16 +4010,25 @@
     if (tile) {
       if (tile.parentElement !== parent) parent.appendChild(tile);
       tile.classList.toggle('mehfil-tile--rail', parent === rail);
+      tile.classList.toggle('is-pinned', pinnedUid && String(uid) === pinnedUid);
       return tile;
     }
     tile = document.createElement('div');
     tile.className = 'mehfil-tile mehfil-tile--voice' + (parent === rail ? ' mehfil-tile--rail' : '');
     tile.dataset.uid = String(uid);
+    if (pinnedUid && String(uid) === pinnedUid) tile.classList.add('is-pinned');
     const name = label || remoteTileLabel({ uid });
     const initial = esc((name || '?').slice(0, 1));
     tile.innerHTML = `<div class="mehfil-tile-avatar" aria-hidden="true"><span>${initial}</span></div>
       <span class="mehfil-tile-placeholder">${esc(tt('mehfil_in_room', 'In the room'))}</span>
       <div class="mehfil-tile-label">${esc(name)}</div>`;
+    tile.addEventListener('click', (e) => {
+      if (e.target.closest('.mehfil-tile-video-paused')) {
+        setPinnedUid(uid);
+        return;
+      }
+      openParticipantModSheet(uid);
+    });
     parent.appendChild(tile);
     updateWaitingState();
     return tile;
@@ -3914,61 +4235,87 @@
       });
 
       client.on('user-joined', (user) => {
+        const uid = String(user.uid);
+        if (!remoteUsers.has(uid)) remoteUsers.set(uid, { user, hasVideo: false, hasAudio: false });
+        else remoteUsers.get(uid).user = user;
         ensureRemoteTile(user.uid, remoteTileLabel(user));
         setMehfilStatus(tt('mehfil_in_call', 'In the room'), 'live');
       });
 
       client.on('user-published', async (user, mediaType) => {
         try {
-          await client.subscribe(user, mediaType);
-          const tile = ensureRemoteTile(user.uid, remoteTileLabel(user));
+          const uid = String(user.uid);
+          const info = remoteUsers.get(uid) || { user, hasVideo: false, hasAudio: false };
+          info.user = user;
+          ensureRemoteTile(user.uid, remoteTileLabel(user));
+          if (mediaType === 'audio') {
+            await client.subscribe(user, 'audio');
+            info.hasAudio = true;
+            user.audioTrack?.play();
+          }
           if (mediaType === 'video') {
-            tile?.querySelector('.mehfil-tile-placeholder')?.remove();
-            tile?.querySelector('.mehfil-tile-avatar')?.remove();
-            tile?.classList.remove('mehfil-tile--voice', 'is-cam-off');
-            user.videoTrack?.play(tile);
+            info.hasVideo = true;
+            remoteUsers.set(uid, info);
+            scheduleVideoReconcile();
             updateWaitingState();
             setMehfilStatus(tt('mehfil_in_call', 'In the room'), 'live');
+            return;
           }
-          if (mediaType === 'audio') user.audioTrack?.play();
+          remoteUsers.set(uid, info);
         } catch (e) {
           console.warn('[mehfil] subscribe', e);
         }
       });
 
       client.on('user-unpublished', (user, mediaType) => {
-        if (mediaType !== 'video') return;
-        const tile = overlayEl?.querySelector(`[data-uid="${user.uid}"]`);
-        if (!tile) return;
-        if (!user.hasAudio) tile.remove();
-        else {
-          tile.querySelector('video')?.remove();
-          tile.classList.add('mehfil-tile--voice', 'is-cam-off');
-          if (!tile.querySelector('.mehfil-tile-avatar')) {
-            const name = tile.querySelector('.mehfil-tile-label')?.textContent || '?';
-            const av = document.createElement('div');
-            av.className = 'mehfil-tile-avatar';
-            av.setAttribute('aria-hidden', 'true');
-            av.innerHTML = `<span>${esc(name.slice(0, 1))}</span>`;
-            tile.prepend(av);
+        const uid = String(user.uid);
+        const info = remoteUsers.get(uid);
+        if (mediaType === 'video') {
+          if (info) info.hasVideo = false;
+          videoSubUids.delete(uid);
+          const tile = overlayEl?.querySelector(`[data-uid="${user.uid}"]`);
+          if (!tile) return;
+          if (!user.hasAudio) {
+            tile.remove();
+            remoteUsers.delete(uid);
+          } else {
+            tile.querySelector('video')?.remove();
+            tile.classList.add('mehfil-tile--voice', 'is-cam-off');
+            tile.classList.remove('is-video-paused');
+            if (!tile.querySelector('.mehfil-tile-avatar')) {
+              const name = tile.querySelector('.mehfil-tile-label')?.textContent || '?';
+              const av = document.createElement('div');
+              av.className = 'mehfil-tile-avatar';
+              av.setAttribute('aria-hidden', 'true');
+              av.innerHTML = `<span>${esc(name.slice(0, 1))}</span>`;
+              tile.prepend(av);
+            }
+            if (!tile.querySelector('.mehfil-tile-placeholder')) {
+              const ph = document.createElement('span');
+              ph.className = 'mehfil-tile-placeholder';
+              ph.textContent = tt('mehfil_cam_off', 'Camera off');
+              tile.prepend(ph);
+            }
           }
-          if (!tile.querySelector('.mehfil-tile-placeholder')) {
-            const ph = document.createElement('span');
-            ph.className = 'mehfil-tile-placeholder';
-            ph.textContent = tt('mehfil_cam_off', 'Camera off');
-            tile.prepend(ph);
-          }
+          updateWaitingState();
+          scheduleVideoReconcile();
+          return;
         }
-        updateWaitingState();
+        if (mediaType === 'audio' && info) info.hasAudio = false;
       });
 
       client.on('user-left', (user) => {
+        const uid = String(user.uid);
         overlayEl?.querySelector(`[data-uid="${user.uid}"]`)?.remove();
-        speakingSticky.delete(String(user.uid));
+        speakingSticky.delete(uid);
+        remoteUsers.delete(uid);
+        videoSubUids.delete(uid);
+        if (pinnedUid === uid) pinnedUid = null;
         updateWaitingState();
+        scheduleVideoReconcile();
       });
 
-      client.on('volume-indicator', (volumes) => applyVolumeIndicators(volumes));
+      client.on('volume-indicator', (volumes) => queueVolumePaint(volumes));
 
       setMehfilStatus(tt('mehfil_connecting', 'Connecting…'));
       await withTimeout(
@@ -3985,10 +4332,35 @@
       }
       if (localUid == null) localUid = client.uid;
       scheduleTokenRenewal(chatId, tokenPayload.expiresAt);
-      agoraVoiceRole = tokenPayload.role === 'subscriber' ? 'subscriber' : 'publisher';
+      agoraVoiceRole =
+        tokenPayload.voiceRole === 'subscriber' || tokenPayload.role === 'subscriber'
+          ? 'subscriber'
+          : 'publisher';
+      try {
+        if (typeof client.enableDualStream === 'function') {
+          await client.enableDualStream();
+        }
+      } catch (e) {}
       try {
         client.enableAudioVolumeIndicator();
       } catch (e) {}
+      applyAdaptiveStreamQuality();
+
+      if (
+        lastJoinedAsListenerToast ||
+        tokenPayload.voiceReason === 'publisher_cap' ||
+        (agoraVoiceRole === 'subscriber' && myRoomRole === 'listener')
+      ) {
+        lastJoinedAsListenerToast = false;
+        if (typeof showToast === 'function') {
+          showToast(
+            tt(
+              'mehfil_joined_listener',
+              'Room is full for speakers — you joined as a listener'
+            )
+          );
+        }
+      }
 
       const prefs = readPrefs();
       micWanted = prefs.mic !== false && agoraVoiceRole === 'publisher' && myRoomRole !== 'listener';
@@ -4001,9 +4373,16 @@
         setCamUi(false);
         setShareUi(false);
         renderLocalPlaceholder(tt('mehfil_cam_off', 'Camera off'));
-        setMehfilStatus(tt('mehfil_listener_mode', 'Listening only — host can let you speak'), 'warn');
+        setMehfilStatus(
+          tt('mehfil_listener_mode', 'Listening only — host can let you speak'),
+          'warn'
+        );
         updateWaitingState();
-        await ensureMehfilParticipant(chatId);
+        paintCapHint();
+        const okPresence = await ensureMehfilParticipant(chatId);
+        if (!okPresence) {
+          await abandonMehfil('room_full');
+        }
         return;
       }
 
@@ -4154,6 +4533,7 @@
         </div>
         <div class="mehfil-glance">
           <div class="mehfil-who-here" data-mehfil-who-here hidden></div>
+          <button type="button" class="mehfil-cap-hint" data-mehfil-cap-hint hidden aria-label="${esc(tt('mehfil_cap_detail', 'Speaker capacity'))}"></button>
           <div class="mehfil-member-chips-scroll"><div class="mehfil-member-chips" data-mehfil-member-chips></div></div>
           <div class="mehfil-now-glance" data-mehfil-now-glance hidden></div>
         </div>
@@ -4354,6 +4734,17 @@
 
     applyMehfilTheme(el);
     syncImmersiveChrome();
+    el.querySelector('[data-mehfil-cap-hint]')?.addEventListener('click', () => {
+      if (typeof showToast === 'function') {
+        showToast(
+          tt(
+            'mehfil_cap_detail',
+            'Up to {{pub}} speakers and {{room}} in the room. Extra joiners listen until the host promotes them.',
+            { pub: String(MAX_PUBLISHERS), room: String(MAX_PARTICIPANTS) }
+          )
+        );
+      }
+    });
 
     el.addEventListener('pointerdown', (e) => {
       if (
@@ -4497,7 +4888,11 @@
       await abandonMehfil('removed_blocked');
       return;
     }
-    await ensureMehfilParticipant(chatId);
+    const presenceOk = await ensureMehfilParticipant(chatId);
+    if (!presenceOk) {
+      await abandonMehfil('room_full');
+      return;
+    }
     bindMembersList(chatId);
     bindMediaSync();
     bindRolesAndModeration(chatId);
