@@ -947,18 +947,19 @@
     const me = currentUser.uid;
     const isGroup = activeChat?.type === 'group';
     try {
+      const psEarly = await rtdbRef(`mehfil/${activeChatId}/participants`)?.once('value');
+      const valEarly = psEarly?.val() || {};
+      const stateEarly = mehfilLiveState(valEarly);
+      const othersEarly = (stateEarly.freshUids || []).filter((uid) => uid !== me);
+
       // --- Room host transfer (groups) ---
       if (isGroup) {
         const hostRef = rtdbRef(`mehfil/${activeChatId}/roomHost`);
         const hostSnap = await hostRef?.once('value');
         const hostVal = hostSnap?.val() || {};
         if (hostVal.uid === me) {
-          const ps = await rtdbRef(`mehfil/${activeChatId}/participants`)?.once('value');
-          const val = ps?.val() || {};
-          const state = mehfilLiveState(val);
-          const others = (state.freshUids || [])
-            .filter((uid) => uid !== me)
-            .map((uid) => ({ uid, at: Number(val[uid]?.at) || 0 }))
+          const others = othersEarly
+            .map((uid) => ({ uid, at: Number(valEarly[uid]?.at) || 0 }))
             .sort((a, b) => a.at - b.at); // longest-present first
           if (others.length) {
             await hostRef.set({ uid: others[0].uid, at: Date.now() });
@@ -966,8 +967,6 @@
               role: 'speaker',
               at: Date.now(),
             });
-          } else {
-            await cleanupEmptyRoomMeta(activeChatId);
           }
         }
         try {
@@ -977,26 +976,30 @@
 
       // --- Media host transfer (M3) ---
       const ref = rtdbRef(`mehfil/${activeChatId}/media`);
-      if (!ref) return;
-      const snap = await ref.once('value');
-      const m = snap.val() || {};
-      if (m.controlUid === me && m.hostUid !== me) {
-        await ref.update({ controlUid: null });
+      if (ref) {
+        const snap = await ref.once('value');
+        const m = snap.val() || {};
+        if (m.controlUid === me && m.hostUid !== me) {
+          await ref.update({ controlUid: null });
+        }
+        if (m.hostUid === me) {
+          if (othersEarly.length) {
+            const nextHost =
+              roomHostUid && othersEarly.includes(roomHostUid) ? roomHostUid : othersEarly[0];
+            await ref.update({
+              hostUid: nextHost,
+              controlUid: m.controlUid === me ? null : m.controlUid || null,
+              controlMode: m.controlMode === 'all' ? 'all' : 'host',
+            });
+          } else {
+            await ref.remove();
+          }
+        }
       }
-      if (m.hostUid !== me) return;
-      const ps = await rtdbRef(`mehfil/${activeChatId}/participants`)?.once('value');
-      const val = ps?.val() || {};
-      const state = mehfilLiveState(val);
-      const others = (state.freshUids || []).filter((uid) => uid !== me);
-      if (others.length) {
-        const nextHost = roomHostUid && others.includes(roomHostUid) ? roomHostUid : others[0];
-        await ref.update({
-          hostUid: nextHost,
-          controlUid: m.controlUid === me ? null : m.controlUid || null,
-          controlMode: m.controlMode === 'all' ? 'all' : 'host',
-        });
-      } else {
-        await ref.remove();
+
+      // Last person out (any role) — clear ephemeral room chat/reactions/meta (honest retention).
+      if (!othersEarly.length) {
+        await cleanupEmptyRoomMeta(activeChatId);
       }
     } catch (e) {}
   }
@@ -2511,15 +2514,7 @@
   }
 
   function applySharedMusic(m) {
-    if (typeof quietMode !== 'undefined' && quietMode) {
-      const musicEl = overlayEl?.querySelector('[data-mehfil-music-now]');
-      if (musicEl) {
-        musicEl.hidden = false;
-        musicEl.textContent = tt('mehfil_music_quiet', 'Music playing for others (Quiet mode)');
-      }
-      return;
-    }
-    // Stop YouTube — single active media
+    // One active media: always tear down local YouTube before music (incl. Quiet — no local playback).
     try {
       ytPlayer?.stopVideo?.();
     } catch (e) {}
@@ -2529,6 +2524,19 @@
     ytPlayer = null;
     overlayEl?.classList.remove('mehfil-has-youtube');
     overlayEl?.classList.add('mehfil-has-music');
+
+    if (typeof quietMode !== 'undefined' && quietMode) {
+      try {
+        window.__mehfilSharedAudio?.pause?.();
+      } catch (e) {}
+      const musicEl = overlayEl?.querySelector('[data-mehfil-music-now]');
+      if (musicEl) {
+        musicEl.hidden = false;
+        musicEl.textContent = tt('mehfil_music_quiet', 'Music playing for others (Quiet mode)');
+      }
+      layoutCinema();
+      return;
+    }
     let stageHost =
       overlayEl?.querySelector('[data-mehfil-stage-yt]') ||
       overlayEl?.querySelector('#mehfilYtHost');
@@ -4079,6 +4087,7 @@
 
   async function recoverMicrophone(chatId) {
     if (!client || !window.AgoraRTC || avMode === 'none') return;
+    if (avMode !== 'full' || agoraVoiceRole === 'subscriber' || myRoomRole === 'listener') return;
     try {
       if (localAudio) {
         try {
@@ -4346,11 +4355,7 @@
       } catch (e) {}
       applyAdaptiveStreamQuality();
 
-      if (
-        lastJoinedAsListenerToast ||
-        tokenPayload.voiceReason === 'publisher_cap' ||
-        (agoraVoiceRole === 'subscriber' && myRoomRole === 'listener')
-      ) {
+      if (lastJoinedAsListenerToast || tokenPayload.voiceReason === 'publisher_cap') {
         lastJoinedAsListenerToast = false;
         if (typeof showToast === 'function') {
           showToast(
@@ -4429,7 +4434,11 @@
         setMehfilStatus(tt('mehfil_in_call', 'In the room'), 'live');
       }
       updateWaitingState();
-      await ensureMehfilParticipant(chatId);
+      const presenceOk = await ensureMehfilParticipant(chatId);
+      if (!presenceOk) {
+        await abandonMehfil('room_full');
+        return;
+      }
       if (!(typeof quietMode !== 'undefined' && quietMode) && typeof showToast === 'function') {
         showToast(
           avMode === 'full' && micWanted
