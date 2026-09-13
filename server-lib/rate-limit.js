@@ -42,6 +42,9 @@ const LIMITS = {
   youtube_search: { minute: 8, hour: 40 },
   // Pre-auth signup username availability (per IP)
   username_check: { minute: 30, hour: 300 },
+  // Account export / deletion (P3) — expensive + sensitive
+  account_export: { minute: 1, hour: 3 },
+  account_delete: { minute: 1, hour: 5 },
 };
 
 let redis = null;

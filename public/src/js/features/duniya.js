@@ -16,9 +16,8 @@ let duniyaHasMore=true;
 let duniyaFeedLoading=false;
 let duniyaLiveMode=false; // true once we've successfully read at least one Firestore page
 
-function saveToArchive(item){
-  archiveItems.unshift({...item,archivedAt:new Date().toISOString()});
-  try{localStorage.setItem('chaupaal_archive',JSON.stringify(archiveItems.slice(0,200)));}catch(e){}
+function saveToArchive(_item){
+  // P3: Hub Archive is Firestore-backed. Legacy chaupaal_archive local writes retired.
 }
 
 function loadArchive(){

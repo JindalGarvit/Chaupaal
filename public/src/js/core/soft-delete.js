@@ -207,7 +207,7 @@
     if (!items.length) {
       return `<div class="archive-empty">
         <p class="archive-empty-title">Nothing here</p>
-        <p class="archive-empty-msg">Deleted posts will appear here for a limited time.</p>
+        <p class="archive-empty-msg">Posts you soft-delete appear here on this device for ${RECOVERY_DAYS} days (max 50). Not synced across phones.</p>
       </div>`;
     }
     return `<div class="archive-deleted-list">${items
@@ -221,7 +221,10 @@
         <div class="recovery-meta">${it.kind} · ${
           typeof formatRelativeTime === 'function' ? formatRelativeTime(it.deletedAtMs) : 'recently'
         }</div>
-        <button type="button" class="btn btn--primary recovery-restore" data-i="${i}">Restore</button>
+        <div class="recovery-actions">
+          <button type="button" class="btn btn--primary recovery-restore" data-i="${i}">Restore</button>
+          <button type="button" class="btn recovery-purge" data-i="${i}">Delete forever</button>
+        </div>
       </div>`
       )
       .join('')}</div>`;
@@ -237,16 +240,27 @@
         if (typeof onRefresh === 'function') onRefresh();
       });
     });
+    host.querySelectorAll('.recovery-purge').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const entry = items[parseInt(btn.dataset.i, 10)];
+        if (!entry) return;
+        const ok =
+          typeof confirm === 'function'
+            ? confirm('Delete forever on this device? You won’t be able to restore it from Deleted. Cloud soft-delete stays (hidden from feeds).')
+            : true;
+        if (!ok) return;
+        forgetDeleted(entry.kind, entry.id);
+        if (typeof showToast === 'function') showToast('Removed from Deleted');
+        if (typeof onRefresh === 'function') onRefresh();
+      });
+    });
   }
 
   /** Render recovery bin into an Archive Hub tab host (no separate overlay). */
   function renderRecoveryBinInto(host, opts) {
     if (!host) return;
     const items = readRecoveryBin();
-    const retention =
-      typeof t === 'function' && t('archive_deleted_retention') !== 'archive_deleted_retention'
-        ? t('archive_deleted_retention', { days: RECOVERY_DAYS })
-        : `Items stay here for ${RECOVERY_DAYS} days, then they’re gone for good.`;
+    const retention = `Recovery is on this device only — up to ${RECOVERY_DAYS} days or 50 items. Soft-deleted posts stay hidden in the cloud; this list is not synced to other devices.`;
     host.innerHTML = `<p class="archive-hub-copy">${retention}</p>${recoveryBinRowsHtml(items)}`;
     wireRecoveryBinRows(host, opts?.onRefresh);
   }

@@ -106,6 +106,77 @@
     }
   }
 
+  function activityLikeDocId(collection, postId) {
+    return `${collection}_${String(postId || '').slice(0, 160)}`.slice(0, 200);
+  }
+
+  function activityCommentDocId(collection, postId, commentId) {
+    return `${collection}_${String(postId || '').slice(0, 80)}_${String(commentId || '').slice(0, 80)}`.slice(0, 200);
+  }
+
+  /**
+   * Private Activity index (Archive → Activity). Canonical likes/comments stay
+   * on the post; this mirror exists so we can list “my likes/comments” without
+   * collection-group scans. Owner-only writes via existing client rules.
+   */
+  async function upsertActivityLike(collection, content, { liked }) {
+    if (!db || !currentUser || !validCollection(collection)) return;
+    const postId = contentId(content);
+    if (!postId) return;
+    const ref = db.collection('users').doc(currentUser.uid).collection('likes').doc(activityLikeDocId(collection, postId));
+    try {
+      if (!liked) {
+        await ref.delete().catch(() => {});
+        return;
+      }
+      await ref.set(
+        {
+          collection,
+          postId,
+          likedAt: Date.now(),
+          createdAt: Date.now(),
+          preview: String(content.caption || content.question || content.text || '').slice(0, 160),
+          ownerUid: content.uid || content.user?.uid || null,
+        },
+        { merge: true }
+      );
+    } catch (e) {
+      /* best-effort index — like itself already committed */
+    }
+  }
+
+  async function upsertActivityComment(collection, content, comment, { remove }) {
+    if (!db || !currentUser || !validCollection(collection) || !comment?.id) return;
+    const postId = contentId(content);
+    if (!postId) return;
+    const ref = db
+      .collection('users')
+      .doc(currentUser.uid)
+      .collection('comment_activity')
+      .doc(activityCommentDocId(collection, postId, comment.id));
+    try {
+      if (remove) {
+        await ref.delete().catch(() => {});
+        return;
+      }
+      await ref.set(
+        {
+          collection,
+          postId,
+          commentId: comment.id,
+          text: String(comment.text || '').slice(0, 280),
+          preview: String(content.caption || content.question || '').slice(0, 120),
+          commentedAt: Date.now(),
+          createdAt: Date.now(),
+          ownerUid: content.uid || content.user?.uid || null,
+        },
+        { merge: true }
+      );
+    } catch (e) {
+      /* best-effort */
+    }
+  }
+
   async function toggleContentLike(collection, content) {
     if (!canPersist(collection, content)) {
       return { persisted: false, liked: !!content.likedByMe, likes: Number(content.likes) || 0 };
@@ -132,6 +203,7 @@
 
       return { persisted: true, liked: !wasLiked, likes: nextLikes };
     });
+    await upsertActivityLike(collection, content, { liked: result.liked });
     if (result.liked) {
       emitSocialNotif(collection, content, 'like', 'liked your post');
     }
@@ -357,6 +429,7 @@
     }).then((result) => {
       if (result.created) {
         emitSocialNotif(collection, content, 'comment', String(text).slice(0, 120));
+        upsertActivityComment(collection, content, { id, text }, { remove: false });
       }
       return result;
     });
@@ -374,6 +447,7 @@
       .collection('comments')
       .doc(comment.id)
       .update({ text, editedAt: serverTimestamp() });
+    await upsertActivityComment(collection, content, { ...comment, text }, { remove: false });
     return { persisted: true, text };
   }
 
@@ -385,22 +459,28 @@
 
     if (preserveThread) {
       await commentRef.update({ text: '', deleted: true, editedAt: serverTimestamp() });
+      await upsertActivityComment(collection, content, comment, { remove: true });
       return { persisted: true, tombstoned: true, comments: Number(content.comments) || 0 };
     }
 
-    return db.runTransaction(async (tx) => {
-      const parentSnap = await tx.get(parentRef);
-      if (!parentSnap.exists) throw new Error('This post is no longer available');
-      const commentSnap = await tx.get(commentRef);
-      if (!commentSnap.exists) {
-        return { persisted: true, tombstoned: false, comments: Math.max(0, Number(parentSnap.data()?.comments) || 0) };
-      }
-      const currentCount = Math.max(0, Number(parentSnap.data()?.comments) || 0);
-      const nextCount = Math.max(0, currentCount - 1);
-      tx.delete(commentRef);
-      tx.update(parentRef, { comments: nextCount, commentMutationId: comment.id });
-      return { persisted: true, tombstoned: false, comments: nextCount };
-    });
+    return db
+      .runTransaction(async (tx) => {
+        const parentSnap = await tx.get(parentRef);
+        if (!parentSnap.exists) throw new Error('This post is no longer available');
+        const commentSnap = await tx.get(commentRef);
+        if (!commentSnap.exists) {
+          return { persisted: true, tombstoned: false, comments: Math.max(0, Number(parentSnap.data()?.comments) || 0) };
+        }
+        const currentCount = Math.max(0, Number(parentSnap.data()?.comments) || 0);
+        const nextCount = Math.max(0, currentCount - 1);
+        tx.delete(commentRef);
+        tx.update(parentRef, { comments: nextCount, commentMutationId: comment.id });
+        return { persisted: true, tombstoned: false, comments: nextCount };
+      })
+      .then(async (result) => {
+        await upsertActivityComment(collection, content, comment, { remove: true });
+        return result;
+      });
   }
 
   function createCommentActionHandlers({ collection, content, comments, refresh }) {

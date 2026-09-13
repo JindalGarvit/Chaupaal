@@ -1042,6 +1042,54 @@ async function handlePost(req, res) {
     }
   }
 
+  if (action === 'export_account_data') {
+    try {
+      const { checkActionRateLimit } = require('../server-lib/rate-limit');
+      const rate = await checkActionRateLimit(user.uid, 'account_export');
+      if (!rate.ok) {
+        return sendError(res, 429, 'RATE_LIMITED', 'Export is limited. Try again in a little while.');
+      }
+    } catch (e) {
+      console.warn('[media-config] export rate-limit', e?.message || e);
+    }
+    const adminApp = initAdmin();
+    if (!adminApp) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    try {
+      const { buildAccountExport } = require('../server-lib/account-data');
+      const payload = await buildAccountExport(adminApp.firestore(), user.uid);
+      return sendSuccess(res, { export: payload });
+    } catch (e) {
+      console.warn('[media-config] export_account_data', e?.message || e);
+      return sendError(res, 500, 'EXPORT_ERROR', e?.message || 'Could not build export');
+    }
+  }
+
+  if (action === 'request_account_deletion') {
+    try {
+      const { checkActionRateLimit } = require('../server-lib/rate-limit');
+      const rate = await checkActionRateLimit(user.uid, 'account_delete');
+      if (!rate.ok) {
+        return sendError(res, 429, 'RATE_LIMITED', 'Deletion request already noted. Try again later if needed.');
+      }
+    } catch (e) {
+      console.warn('[media-config] delete rate-limit', e?.message || e);
+    }
+    const confirm = String(body.confirm || '').trim().toLowerCase();
+    if (confirm !== 'delete') {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'Confirm deletion by sending confirm: "delete".');
+    }
+    const adminApp = initAdmin();
+    if (!adminApp) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    try {
+      const { requestAccountDeletion } = require('../server-lib/account-data');
+      const result = await requestAccountDeletion(adminApp.firestore(), adminApp.auth(), user.uid);
+      return sendSuccess(res, result);
+    } catch (e) {
+      console.warn('[media-config] request_account_deletion', e?.message || e);
+      return sendError(res, 500, 'DELETE_REQUEST_ERROR', e?.message || 'Could not record deletion request');
+    }
+  }
+
   return sendError(res, 400, 'VALIDATION_ERROR', 'Unknown media action', {
     allowed: [
       'music_search',
@@ -1078,6 +1126,8 @@ async function handlePost(req, res) {
       'parental_consent_start',
       'parental_consent_verify',
       'match_contact_hashes',
+      'export_account_data',
+      'request_account_deletion',
       'dangal_wallet_get',
       'dangal_game_resolve',
       'chaupaal_money_get',

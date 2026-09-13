@@ -715,12 +715,25 @@ dayCheckModal.querySelector('.day-check-send').addEventListener('click',async()=
   dayCheckModal.classList.remove('open');
   if(typeof removeNavLayer==='function') removeNavLayer(dayCheckModal);
   if(typeof markJournalDoneToday==='function') markJournalDoneToday();
-  saveToArchive({type:'journal_entry',content:text,ts:new Date().toISOString()});
+  // Canonical Journal (P3) — no local archive / daily_checkins orphan writes
+  try{
+    if(typeof JournalCheckIn!=='undefined' && JournalCheckIn.saveJournalEntry){
+      await JournalCheckIn.saveJournalEntry({ text, allowAnalysis:false, window:'evening' });
+    } else if(db&&currentUser){
+      await db.collection('users').doc(currentUser.uid).collection('journal').add({
+        text,
+        date:new Date().toISOString().slice(0,10),
+        allowAnalysis:false,
+        checkInWindow:'evening',
+        createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+  }catch(e){
+    if(typeof showToast==='function') showToast(e?.message==='CAP'?'Journal is full (1000 entries).':'Could not save journal');
+  }
   // Internal analysis may still run when AI is on — do not show mood/topics UI from it.
   try{ await analyseEveningCheckIn(text); }catch(e){}
-  if(db&&currentUser){
-    try{await db.collection('daily_checkins').add({uid:currentUser.uid,text,date:new Date().toISOString(),analysed:false,createdAt:firebase.firestore.FieldValue.serverTimestamp()});}catch(e){}
-  }
   try{ if(typeof onChaupaalJournalCompleted==='function') await onChaupaalJournalCompleted(); }catch(e){}
   try{
     const streak=Number(localStorage.getItem('chaupaal_journal_day_streak')||'0')+1;

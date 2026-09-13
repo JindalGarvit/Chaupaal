@@ -171,3 +171,9 @@ html[data-display="night"] .archive-hub-search-wrap,
 html.theme-dark .archive-hub-search-wrap{
   background:var(--surface-elevated,#1a1a1a);
 }
+
+.archive-hub-privacy-btn{flex-shrink:0;min-height:40px;padding:8px 12px;font-size:12px;}
+.archive-post-row--ix.is-tombstone{opacity:.72;}
+.archive-post-row--ix.is-tombstone .archive-post-meta small{color:var(--muted);font-style:italic;}
+.recovery-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+.recovery-actions .btn{min-height:40px;}

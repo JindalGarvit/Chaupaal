@@ -163,6 +163,12 @@ Enforcement is **ON** for Firestore / RTDB (and Storage if enabled). Client uses
 - Canonical Digital layout: `profile.digitalLayout` (+ `tabOrder`). Legacy `sectionOrder` / `customSections` migrate one-way into Digital blocks / tabOrder (P2). Customs already in `digitalLayout.blocks` must not also appear as custom tabs.
 - Cross-user UI must use `users_public` / friend_projection (or denormalized blobs), never the private user doc.
 
+## 11b. Archive (P3)
+
+- Canonical Archive Hub: `archive-hub.js` only. Journal = `users/{uid}/journal`. Activity likes/comments = private mirrors written from `social-persistence.js` (canonical social state stays on the post).
+- Do not write `chaupaal_archive` localStorage or `daily_checkins` for new check-ins.
+- Recovery bin is **device-local** (30 days / 50 items). Export / delete-account via `api/media-config` actions `export_account_data` / `request_account_deletion`.
+
 ## 12. Globals & module surface
 
 The client still loads classic non-module scripts (`<script src>`), so top-level `function` / `let` and many `window.X =` exports are intentional for cross-file calls.

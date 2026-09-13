@@ -231,14 +231,138 @@
 
   function wireInteractionRows(host) {
     host.querySelectorAll('[data-open-interaction]').forEach((row) => {
-      row.addEventListener('click', () => {
+      row.addEventListener('click', async () => {
+        if (row.dataset.tombstone === '1') {
+          if (typeof showToast === 'function') showToast(ahT('archive_tombstone_toast', 'Original content is no longer available'));
+          return;
+        }
         const col = row.dataset.collection;
         const postId = row.dataset.postId;
         if (!col || !postId) return;
         const normalized = col === 'peepal' || col === 'duniya' ? col : 'duniya';
+        try {
+          const doc = await db.collection(normalized).doc(postId).get();
+          if (!doc.exists || doc.data()?.deleted === true) {
+            row.dataset.tombstone = '1';
+            row.classList.add('is-tombstone');
+            const meta = row.querySelector('.archive-post-meta small');
+            if (meta) meta.textContent = ahT('archive_tombstone', 'Content no longer available');
+            if (typeof showToast === 'function') showToast(ahT('archive_tombstone_toast', 'Original content is no longer available'));
+            return;
+          }
+        } catch (e) {}
         openPostFromArchive(normalized, postId);
       });
     });
+  }
+
+  function formatActivityWhen(ms) {
+    if (!ms) return '';
+    if (typeof formatRelativeTime === 'function') return formatRelativeTime(ms);
+    try {
+      return new Date(ms).toLocaleDateString();
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function activityRowHtml(r, kind) {
+    const col = r.collection === 'peepal' ? 'peepal' : 'duniya';
+    const source = col === 'peepal' ? 'Peepal' : 'Duniya';
+    const when = formatActivityWhen(r.likedAt || r.commentedAt || r.savedAt || r.createdAt);
+    const body =
+      kind === 'comments'
+        ? String(r.text || r.preview || '').slice(0, 120)
+        : String(r.preview || r.postId || '').slice(0, 100);
+    const kindLabel =
+      kind === 'saved' ? ahT('archive_ix_saved', 'Saved') : kind === 'likes' ? ahT('archive_ix_likes', 'Liked') : ahT('archive_ix_comments', 'Comment');
+    return `<button type="button" class="archive-post-row archive-post-row--ix" data-open-interaction data-collection="${esc(col)}" data-post-id="${esc(r.postId || r.refId || '')}">
+      <div class="archive-post-meta">
+        <strong>${esc(source)} · ${esc(kindLabel)}</strong>
+        <p>${esc(body) || '—'}</p>
+        <small>${esc(when)}</small>
+      </div>
+    </button>`;
+  }
+
+  async function markTombstones(host, rows) {
+    if (!db || !rows?.length) return;
+    await Promise.all(
+      rows.slice(0, 40).map(async (r) => {
+        const col = r.collection === 'peepal' ? 'peepal' : 'duniya';
+        const postId = r.postId || r.refId;
+        if (!postId) return;
+        try {
+          const doc = await db.collection(col).doc(postId).get();
+          if (!doc.exists || doc.data()?.deleted === true) {
+            const btn = host.querySelector(`[data-post-id="${CSS.escape ? CSS.escape(postId) : postId}"]`);
+            if (btn) {
+              btn.dataset.tombstone = '1';
+              btn.classList.add('is-tombstone');
+              const small = btn.querySelector('small');
+              if (small) small.textContent = ahT('archive_tombstone', 'Content no longer available');
+            }
+          }
+        } catch (e) {}
+      })
+    );
+  }
+
+  async function loadActivityPage(kind, { cursor, pageSize = 40 } = {}) {
+    if (!db || !currentUser) return { rows: [], nextCursor: null };
+    const uid = currentUser.uid;
+    const colName = kind === 'saved' ? 'saved' : kind === 'likes' ? 'likes' : 'comment_activity';
+    const orderField = kind === 'saved' ? 'savedAt' : kind === 'likes' ? 'likedAt' : 'commentedAt';
+    const col = db.collection('users').doc(uid).collection(colName);
+    let snap;
+    try {
+      let query = col.orderBy(orderField, 'desc');
+      if (cursor) query = query.startAfter(cursor);
+      snap = await query.limit(pageSize).get();
+    } catch (e) {
+      try {
+        snap = await col.limit(pageSize).get();
+      } catch (err) {
+        return { rows: [], nextCursor: null };
+      }
+    }
+    const rows = snap.docs.map((d) => ({ id: d.id, ...d.data(), _snap: d }));
+    const nextCursor = snap.docs.length === pageSize ? snap.docs[snap.docs.length - 1] : null;
+    return { rows, nextCursor };
+  }
+
+  /** One-time: fold local chaupaal_archive journal_entry items into Firestore Journal. */
+  async function migrateLegacyLocalJournalOnce() {
+    if (!db || !currentUser) return;
+    try {
+      if (localStorage.getItem('chaupaal_journal_legacy_migrated_v1') === '1') return;
+      const raw = JSON.parse(localStorage.getItem('chaupaal_archive') || '[]');
+      if (!Array.isArray(raw) || !raw.length) {
+        localStorage.setItem('chaupaal_journal_legacy_migrated_v1', '1');
+        return;
+      }
+      const journalish = raw.filter((x) => x && (x.type === 'journal_entry' || x.type === 'daily_checkin') && x.content);
+      const col = db.collection('users').doc(currentUser.uid).collection('journal');
+      for (const item of journalish.slice(0, 40)) {
+        await col.add({
+          text: String(item.content).slice(0, 4000),
+          date: String(item.ts || '').slice(0, 10) || new Date().toISOString().slice(0, 10),
+          allowAnalysis: false,
+          provenance: 'legacy_local_archive',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+      localStorage.setItem('chaupaal_journal_legacy_migrated_v1', '1');
+      // Drop legacy store after import so nothing keeps writing/reading it as truth
+      try {
+        localStorage.removeItem('chaupaal_archive');
+      } catch (e) {}
+    } catch (e) {
+      try {
+        localStorage.setItem('chaupaal_journal_legacy_migrated_v1', '1');
+      } catch (err) {}
+    }
   }
 
   function jc() {
@@ -322,7 +446,10 @@
   }
 
   async function renderJournalTab(body, setTab, getSearch) {
-    body.innerHTML = `<p class="archive-hub-copy">${ahT('archive_journal_copy', 'Private journal — never visible on your public profile.')}</p>
+    body.innerHTML = `<p class="archive-hub-copy">${ahT(
+      'archive_journal_copy',
+      'Private journal — never on your public profile. Cap 1000 entries. Edits allowed within 24 hours. Mehfil room chat is live-only and is not stored here.'
+    )}</p>
       ${renderJournalComposeHtml()}
       <div data-ah-journal></div>`;
     const journalHost = body.querySelector('[data-ah-journal]');
@@ -331,6 +458,7 @@
       renderGuestGate(body);
       return;
     }
+    await migrateLegacyLocalJournalOnce();
 
     const compose = body.querySelector('[data-ah-journal-compose]');
     const ta = compose?.querySelector('[data-ah-journal-input]');
@@ -556,6 +684,7 @@
             <span class="archive-hub-title">${ahT('archive_title', 'Archive')}</span>
             <div class="archive-hub-subtitle">${ahT('archive_subtitle', 'Private to you')}</div>
           </div>
+          <button type="button" class="btn archive-hub-privacy-btn" data-ah-export title="Export my data">Export</button>
         </div>
         <div class="archive-hub-search-wrap">
           <input type="search" class="archive-hub-search" data-ah-search placeholder="${ahT('archive_search_ph', 'Search this tab…')}" autocomplete="off" enterkeyhint="search">
@@ -591,6 +720,10 @@
         pushNavLayer(overlay, close);
       }
       overlay.querySelector('[data-archive-hub-back]')?.addEventListener('click', close);
+      overlay.querySelector('[data-ah-export]')?.addEventListener('click', () => {
+        if (typeof openAccountDataExport === 'function') openAccountDataExport();
+        else if (typeof showToast === 'function') showToast('Export unavailable');
+      });
 
       const getSearch = () => String(searchQuery || searchInput?.value || '').trim().toLowerCase();
 
@@ -617,7 +750,10 @@
         }
 
         if (tab === 'interactions') {
-          body.innerHTML = `<p class="archive-hub-copy">${ahT('archive_activity_copy', 'Likes, comments, and saves — your activity across Chaupaal.')}</p>
+          body.innerHTML = `<p class="archive-hub-copy">${ahT(
+            'archive_activity_copy',
+            'Saved, likes, and your comments — private activity indexes. Tap a row to open the original when it still exists.'
+          )}</p>
             <div class="archive-hub-tabs archive-hub-tabs--sub">
               <button type="button" data-ah-ix="saved" class="active">${ahT('archive_ix_saved', 'Saved')}</button>
               <button type="button" data-ah-ix="likes">${ahT('archive_ix_likes', 'Likes')}</button>
@@ -626,67 +762,51 @@
             <div data-ah-ix-body></div>`;
           const ixBody = body.querySelector('[data-ah-ix-body]');
           showHostLoading(ixBody, 'list', 4);
-          const loadIx = async (kind) => {
+          let ixCursor = null;
+          let ixKind = 'saved';
+          let ixAccum = [];
+          const loadIx = async (kind, { append } = {}) => {
+            if (kind !== ixKind) {
+              ixKind = kind;
+              ixCursor = null;
+              ixAccum = [];
+            }
             body.querySelectorAll('[data-ah-ix]').forEach((b) => b.classList.toggle('active', b.dataset.ahIx === kind));
             if (!db || !currentUser) {
               ixBody.innerHTML = `<div class="archive-empty"><p class="archive-empty-msg">${ahT('archive_sign_in_ix', 'Sign in to see interactions')}</p></div>`;
               return;
             }
-            showHostLoading(ixBody, 'list', 4);
+            if (!append) showHostLoading(ixBody, 'list', 4);
             const q = getSearch();
             try {
-              if (kind === 'saved') {
-                const snap = await db
-                  .collection('users')
-                  .doc(currentUser.uid)
-                  .collection('saved')
-                  .orderBy('savedAt', 'desc')
-                  .limit(50)
-                  .get()
-                  .catch(() => db.collection('users').doc(currentUser.uid).collection('saved').limit(50).get());
-                const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((r) => matchesSearch(q, `${r.preview} ${r.collection} ${r.postId}`));
-                ixBody.innerHTML = rows.length
-                  ? rows
-                      .map(
-                        (r) =>
-                          `<button type="button" class="archive-post-row archive-post-row--ix" data-open-interaction data-collection="${esc(r.collection || 'duniya')}" data-post-id="${esc(r.postId || r.refId || '')}">
-                            <div class="archive-post-meta"><strong>${esc(r.collection || 'post')}</strong><p>${esc(String(r.preview || r.postId || '').slice(0, 100))}</p><small>${ahT('archive_ix_saved', 'Saved')}</small></div>
-                          </button>`
-                      )
-                      .join('')
-                  : `<div class="archive-empty"><p class="archive-empty-title">${ahT('archive_empty_saved_title', 'No saved posts')}</p><p class="archive-empty-msg">${ahT('archive_empty_saved_msg', 'Tap the bookmark on Duniya or Peepal to save posts here.')}</p></div>`;
-                wireInteractionRows(ixBody);
-                return;
-              }
-              if (kind === 'likes') {
-                const snap = await db.collection('users').doc(currentUser.uid).collection('likes').limit(40).get().catch(() => null);
-                const rows = (snap?.docs?.map((d) => ({ id: d.id, ...d.data() })) || []).filter((r) => matchesSearch(q, `${r.preview} ${r.collection} ${r.postId}`));
-                ixBody.innerHTML = rows.length
-                  ? rows
-                      .map(
-                        (r) =>
-                          `<button type="button" class="archive-post-row archive-post-row--ix" data-open-interaction data-collection="${esc(r.collection || 'like')}" data-post-id="${esc(r.postId || r.refId || '')}">
-                            <div class="archive-post-meta"><strong>${esc(r.collection || 'like')}</strong><p>${esc(String(r.preview || r.postId || '').slice(0, 100))}</p></div>
-                          </button>`
-                      )
-                      .join('')
-                  : `<div class="archive-empty"><p class="archive-empty-msg">${ahT('archive_empty_likes', 'Liked posts will show here')}</p></div>`;
-                wireInteractionRows(ixBody);
-                return;
-              }
-              const snap = await db.collection('users').doc(currentUser.uid).collection('comment_activity').limit(40).get().catch(() => null);
-              const rows = (snap?.docs?.map((d) => ({ id: d.id, ...d.data() })) || []).filter((r) => matchesSearch(q, `${r.text} ${r.preview} ${r.postId}`));
+              const page = await loadActivityPage(kind, { cursor: append ? ixCursor : null, pageSize: 40 });
+              ixCursor = page.nextCursor;
+              const mapped = page.rows.map((r) => ({
+                ...r,
+                savedAt: typeof r.savedAt === 'number' ? r.savedAt : r.savedAt?.toMillis?.() || 0,
+                likedAt: typeof r.likedAt === 'number' ? r.likedAt : r.likedAt?.toMillis?.() || r.createdAt || 0,
+                commentedAt:
+                  typeof r.commentedAt === 'number' ? r.commentedAt : r.commentedAt?.toMillis?.() || r.createdAt || 0,
+              }));
+              ixAccum = append ? ixAccum.concat(mapped) : mapped;
+              const rows = ixAccum.filter((r) =>
+                matchesSearch(q, `${r.preview || ''} ${r.text || ''} ${r.collection || ''} ${r.postId || ''}`)
+              );
+              const emptyMsg =
+                kind === 'saved'
+                  ? `<div class="archive-empty"><p class="archive-empty-title">${ahT('archive_empty_saved_title', 'No saved posts')}</p><p class="archive-empty-msg">${ahT('archive_empty_saved_msg', 'Tap the bookmark on Duniya or Peepal to save posts here.')}</p></div>`
+                  : kind === 'likes'
+                    ? `<div class="archive-empty"><p class="archive-empty-title">${ahT('archive_empty_likes_title', 'No likes yet')}</p><p class="archive-empty-msg">${ahT('archive_empty_likes', 'Posts you like will show up here.')}</p></div>`
+                    : `<div class="archive-empty"><p class="archive-empty-title">${ahT('archive_empty_comments_title', 'No comments yet')}</p><p class="archive-empty-msg">${ahT('archive_empty_comments', 'Your comments will gather here.')}</p></div>`;
               ixBody.innerHTML = rows.length
-                ? rows
-                    .map(
-                      (r) =>
-                        `<button type="button" class="archive-post-row archive-post-row--ix" data-open-interaction data-collection="${esc(r.collection || 'comment')}" data-post-id="${esc(r.postId || r.refId || '')}">
-                          <div class="archive-post-meta"><strong>${esc(r.collection || 'comment')}</strong><p>${esc(String(r.text || r.preview || '').slice(0, 120))}</p></div>
-                        </button>`
-                    )
-                    .join('')
-                : `<div class="archive-empty"><p class="archive-empty-msg">${ahT('archive_empty_comments', 'Your comments will gather here')}</p></div>`;
+                ? rows.map((r) => activityRowHtml(r, kind)).join('') +
+                  (ixCursor
+                    ? `<button type="button" class="btn btn--block" data-ah-ix-more style="margin-top:10px">${ahT('archive_load_more', 'Load more')}</button>`
+                    : '')
+                : emptyMsg;
               wireInteractionRows(ixBody);
+              await markTombstones(ixBody, rows);
+              ixBody.querySelector('[data-ah-ix-more]')?.addEventListener('click', () => loadIx(kind, { append: true }));
             } catch (e) {
               showHostError(ixBody, () => loadIx(kind), e);
             }
@@ -699,7 +819,10 @@
         }
 
         if (tab === 'stories') {
-          body.innerHTML = `<p class="archive-hub-copy">${ahT('archive_stories_copy', 'Stories archive after expiry. Highlights stay on your profile until you remove them.')}</p>
+          body.innerHTML = `<p class="archive-hub-copy">${ahT(
+            'archive_stories_copy',
+            'Live stories expire after 24h. “Archived” here means saved for you (Highlights or story archive) — Highlights stay on your profile until you remove them. Story media retention follows story archive rules, not the Deleted tab.'
+          )}</p>
             <div class="archive-hub-actions">
               <button type="button" class="btn" data-ah-new-highlight>${ahT('archive_new_highlight', 'New Highlight')}</button>
               <button type="button" class="btn btn--primary" data-ah-story-archive>${ahT('archive_open_story_archive', 'Open story archive')}</button>
@@ -776,7 +899,7 @@
                         const mark = s.archived || s.saveOnly || !s.active ? ahT('archive_hidden_profile', 'Archived') : ahT('archive_live_profile', 'Live');
                         const thumb = s.thumb || s.media || '';
                         return `<button type="button" class="archive-story-thumb" type="button" aria-label="Story">
-                          ${thumb ? `<img src="${esc(thumb)}" alt="">` : ''}
+                          ${thumb ? `<img src="${esc(thumb)}" alt="" loading="lazy">` : ''}
                           <span class="archive-media-badge">${esc(s.destination || 'story')} · ${esc(mark)}</span>
                         </button>`;
                       })
@@ -802,7 +925,10 @@
         }
 
         if (tab === 'duniya') {
-          body.innerHTML = `<p class="archive-hub-copy">${ahT('archive_posts_copy', 'Duniya and Lehar posts — hide from profile without deleting.')}</p>
+          body.innerHTML = `<p class="archive-hub-copy">${ahT(
+            'archive_posts_copy',
+            'Duniya and Lehar posts — hide from profile without deleting. Hidden posts stay in Archive indefinitely; soft-deleted posts move to Deleted (this device) for 30 days.'
+          )}</p>
             <div class="archive-hub-filters" data-ah-duniya-filter>
               <button type="button" data-filter="all" class="active">${ahT('archive_filter_all', 'All')}</button>
               <button type="button" data-filter="live">${ahT('archive_filter_live', 'On profile')}</button>
@@ -830,7 +956,7 @@
                 (textOnly.length
                   ? `<div class="archive-post-list" style="margin-top:12px">${textOnly.map((p) => postRow(p, 'duniya')).join('')}</div>`
                   : '') ||
-                `<div class="archive-empty"><p class="archive-empty-title">${ahT('archive_empty_posts_title', 'No posts yet')}</p><p class="archive-empty-msg">${ahT('archive_empty_posts_msg', 'Your Duniya posts will appear here.')}</p></div>`;
+                `<div class="archive-empty"><p class="archive-empty-title">${ahT('archive_empty_posts_title', 'Nothing archived yet')}</p><p class="archive-empty-msg">${ahT('archive_empty_posts_msg', 'Posts you share — or hide from your profile — appear here.')}</p></div>`;
               wireDuniyaGrid(postsHost, renderDuniya);
             } catch (e) {
               showHostError(postsHost, renderDuniya, e);
@@ -848,7 +974,10 @@
         }
 
         if (tab === 'peepal') {
-          body.innerHTML = `<p class="archive-hub-copy">${ahT('archive_discuss_copy', 'Peepal questions — hide from profile without deleting.')}</p><div data-ah-posts class="archive-post-list"></div>`;
+          body.innerHTML = `<p class="archive-hub-copy">${ahT(
+            'archive_discuss_copy',
+            'Peepal questions — hide from profile without deleting. Hidden items stay here; soft-deleted ones use the Deleted tab on this device.'
+          )}</p><div data-ah-posts class="archive-post-list"></div>`;
           const postsHost = body.querySelector('[data-ah-posts]');
           showHostLoading(postsHost, 'list', 4);
           try {

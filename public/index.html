@@ -39,7 +39,7 @@
   <link rel="stylesheet" href="/src/styles/duniya-compose.css?v=ig20260827">
   <link rel="stylesheet" href="/src/styles/duniya-story.css?v=ig20260827">
   <link rel="stylesheet" href="/src/styles/components.css?v=polish8">
-  <link rel="stylesheet" href="/src/styles/archive-hub.css?v=ah20260901">
+  <link rel="stylesheet" href="/src/styles/archive-hub.css?v=p3archive">
   <link rel="stylesheet" href="/src/styles/social-comments.css?v=id20260827">
   <link rel="stylesheet" href="/src/styles/mehfil.css?v=mehfilM8">
   <link rel="stylesheet" href="/src/styles/mehfil-cinema.css?v=mehfilM8">
@@ -773,6 +773,9 @@
           <div id="settingsProfileTypeHost" style="margin-bottom:12px;"></div>
           <button type="button" class="btn btn--primary btn--block modal-btn" id="settingsSessionsBtn" style="width:100%;margin-bottom:8px;"><span data-icon="monitor" data-icon-size="16"></span> Devices &amp; sessions</button>
           <button type="button" class="btn btn--primary btn--block modal-btn" id="settingsArchiveBtn" style="width:100%;margin-bottom:4px;"><span data-icon="archive" data-icon-size="16"></span> Open Archive</button>
+          <button type="button" class="btn btn--block modal-btn" id="settingsExportDataBtn" style="width:100%;margin-bottom:4px;">Download my data</button>
+          <button type="button" class="btn btn--block modal-btn" id="settingsDeleteAccountBtn" style="width:100%;margin-bottom:4px;color:var(--red);">Delete account…</button>
+          <p class="toggle-desc" style="margin:4px 0 0;">Export is a JSON file of your profile, journal, posts, and activity. Deletion signs you out and schedules purge (~30 days).</p>
         </div>
       </details>
 
@@ -854,11 +857,12 @@
   <script src="/src/js/core/firestore-page.js?v=3d7e5828"></script>
   <script src="/src/js/core/drafts.js?v=e672a449"></script>
   <script src="/src/js/core/soft-delete.js?v=ah20260901"></script>
+  <script src="/src/js/core/account-privacy.js?v=p3archive"></script>
   <script src="/src/js/core/optimistic.js?v=03f440fa"></script>
   <script src="/src/js/core/comment-ranking.js?v=1"></script>
   <script src="/src/js/core/comment-msg-cache.js?v=1"></script>
   <script src="/src/js/core/comments.js?v=id20260827"></script>
-  <script src="/src/js/core/social-persistence.js?v=a6ed187b"></script>
+  <script src="/src/js/core/social-persistence.js?v=p3archive"></script>
   <script src="/src/js/core/open-user-profile.js?v=profileP0"></script>
   <script src="/src/js/core/relationships.js?v=nav20260909"></script>
   <script src="/src/js/core/chat-presence.js?v=7176596d"></script>
@@ -947,7 +951,7 @@
   <script src="/src/js/features/music-hub.js?v=86b5c5f2"></script>
   <script src="/src/js/features/group-info.js?v=f75d5d74"></script>
   <script src="/src/js/core/stories.js?v=klipyComplete"></script>
-  <script src="/src/js/core/archive-hub.js?v=ah20260901"></script>
+  <script src="/src/js/core/archive-hub.js?v=p3archive"></script>
   <script src="/src/js/core/journal-anim.js?v=f2658ae2"></script>
   <script src="/src/js/features/baithak.js?v=nav20260909"></script>
   <script src="/src/js/features/profile-preview.js?v=profileP0"></script>
