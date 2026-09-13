@@ -47,6 +47,8 @@ const LIMITS = {
   account_delete: { minute: 1, hour: 5 },
   // Signal spine batches (P4)
   signal_ingest: { minute: 30, hour: 400 },
+  // User model on-demand refresh (P5)
+  user_model_refresh: { minute: 6, hour: 40 },
 };
 
 let redis = null;

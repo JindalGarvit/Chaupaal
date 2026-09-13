@@ -858,6 +858,10 @@ service cloud.firestore {
         allow read, write: if false;
       }
     }
+    // P5 derived user model — Admin SDK only (10B: no client dashboard; P6 reads server-side)
+    match /userModels/{uid} {
+      allow read, write: if false;
+    }
     match /chaupaalFeedback/{docId} {
       allow read: if false;
       allow write: if false;

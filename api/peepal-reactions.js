@@ -372,6 +372,20 @@ module.exports = async function handler(req, res) {
       const result = await refreshEmbedding(db, admin, user.uid);
       return sendSuccess(res, result);
     }
+    if (body.action === 'refresh_user_model') {
+      try {
+        const { checkActionRateLimit } = require('../server-lib/rate-limit');
+        const rate = await checkActionRateLimit(user.uid, 'user_model_refresh');
+        if (!rate.ok) {
+          return sendError(res, 429, 'RATE_LIMITED', 'Model refresh rate limited. Try again shortly.');
+        }
+      } catch (e) {
+        console.warn('[refresh_user_model] rate-limit', e?.message || e);
+      }
+      const { refreshUserModel } = require('../server-lib/user-model');
+      const result = await refreshUserModel(db, user.uid, { admin });
+      return sendSuccess(res, result);
+    }
     if (body.action === 'personal_match') {
       const result = await personalMatch(db, admin, user, body || {});
       return sendSuccess(res, result);
@@ -410,6 +424,11 @@ module.exports = async function handler(req, res) {
         intentProfileId: body.intentProfileId || null,
         queryHash: body.queryHash || null,
       });
+      // High-signal moment — soft on-demand model refresh (best-effort)
+      try {
+        const { refreshUserModel } = require('../server-lib/user-model');
+        refreshUserModel(db, user.uid, { admin }).catch(() => {});
+      } catch (e) {}
       return sendSuccess(res, result);
     }
     if (body.action === 'discovery_batch_labels') {
@@ -459,6 +478,11 @@ module.exports = async function handler(req, res) {
           },
           { merge: true }
         );
+      // High-signal: fold not_interested / more_like into model soon
+      try {
+        const { refreshUserModel } = require('../server-lib/user-model');
+        refreshUserModel(db, user.uid, { admin }).catch(() => {});
+      } catch (e) {}
       return sendSuccess(res, { ok: true, signal, value });
     }
 

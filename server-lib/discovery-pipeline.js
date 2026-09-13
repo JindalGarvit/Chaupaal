@@ -472,7 +472,7 @@ async function recordDiscoveryPersonSignal(db, admin, { uid, candidateUid, signa
   return { ok: true, signal, value };
 }
 
-async function processDiscoveryBatchLabels(db, admin, { dayKey } = {}) {
+async function processDiscoveryBatchLabels(db, admin, { dayKey, uids } = {}) {
   const key = dayKey || new Date().toISOString().slice(0, 10);
   const since = admin.firestore.Timestamp.fromDate(new Date(Date.now() - 864e5 * 2));
   let sampleCount = 0;
@@ -486,6 +486,15 @@ async function processDiscoveryBatchLabels(db, admin, { dayKey } = {}) {
   } catch (e) {
     sampleCount = 0;
   }
+  // P5: fold preference deltas into userModels (replaces empty stub)
+  let modelFeed = { skipped: true };
+  try {
+    const { feedPreferenceDeltasIntoModels } = require('./user-model');
+    modelFeed = await feedPreferenceDeltasIntoModels(db, admin, { dayKey: key, uids: uids || [] });
+  } catch (e) {
+    modelFeed = { error: e?.message || String(e) };
+    console.warn('[discovery] user model feed', e?.message || e);
+  }
   await db
     .collection(BATCH_INTERFACE.labelsCollection)
     .doc(key)
@@ -493,14 +502,15 @@ async function processDiscoveryBatchLabels(db, admin, { dayKey } = {}) {
       {
         dayKey: key,
         queryLogSamples: sampleCount,
-        job: BATCH_INTERFACE.jobName,
+        job: 'user_model_preference_feed',
+        modelFeed,
         note:
-          'Stub interface — preference deltas live on users/*/recommendationSignals; nightly job ready for scorer training.',
+          'P5: recommendationSignals remain source of truth; nightly job refreshes userModels from those deltas + rollups.',
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       },
       { merge: true }
     );
-  return { ok: true, dayKey: key, sampleCount };
+  return { ok: true, dayKey: key, sampleCount, modelFeed };
 }
 
 module.exports = {

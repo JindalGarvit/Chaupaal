@@ -532,6 +532,9 @@ Produce exactly 5 questions.`;
 }
 
 // ===================== PERSONALITY ENGINE (Layer 3) =====================
+// Legacy local “personality” hints for Peepal UI copy only.
+// P5 user model authority: declared P1 interests → signal rollups/recommendationSignals.
+// Do NOT treat personalityProfile as a learnable source (not read by server-lib/user-model.js).
 let personalityProfile = JSON.parse(localStorage.getItem('chaupaal_personality')||'{}');
 
 function buildPersonalityContext(){

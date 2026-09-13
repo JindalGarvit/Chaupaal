@@ -458,7 +458,28 @@ module.exports = async function handler(req, res) {
       console.warn('[scheduler] signal prune', e?.message || e);
     }
 
-    return sendSuccess(res, { ...results, summary, intentWeights, discoveryBatch, liveLoc, peepalSegments, denormBackfill, feedbackDigest, signalPrune });
+    // P5 user model — cursor-batched recompute (independent of AI gate)
+    let userModel = { skipped: true };
+    try {
+      const { processUserModelBatch } = require('../server-lib/user-model');
+      userModel = await processUserModelBatch(db, admin, { batchSize: 28 });
+    } catch (e) {
+      userModel = { error: e?.message || String(e) };
+      console.warn('[scheduler] user model', e?.message || e);
+    }
+
+    return sendSuccess(res, {
+      ...results,
+      summary,
+      intentWeights,
+      discoveryBatch,
+      liveLoc,
+      peepalSegments,
+      denormBackfill,
+      feedbackDigest,
+      signalPrune,
+      userModel,
+    });
   } catch (e) {
     console.error('[chaupaal-scheduler]', e?.message || e);
     return sendError(res, 500, 'SCHEDULER_FAILED', e?.message || 'Scheduler failed');

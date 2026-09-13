@@ -176,6 +176,14 @@ Enforcement is **ON** for Firestore / RTDB (and Storage if enabled). Client uses
 - Storage: `users/{uid}/signalRollups/{yyyy-MM-dd}` (primary), `signalEvents/{yyyyMMdd}/items/{id}` (high-value raw, ~14d prune via scheduler).
 - Existing stores still valid for P5: `recommendationSignals`, `matchEngagementEvents`, `discoveryQueryLogs`, `chaupaalUserState.hourBuckets`.
 
+## 11d. User model (P5)
+
+- Derived doc: `userModels/{uid}` via `server-lib/user-model.js` (`getUserModel` / `putUserModel` / `refreshUserModel`). **Admin-only** in rules (no client read — 10B).
+- Built by `api/chaupaal-scheduler` cursor batch + on-demand `refresh_user_model` on `api/peepal-reactions`. Pure scorer: `buildUserModelFromInputs`.
+- Interest authority: declared P1 `interests` (+ hobbies) → behavioral signals/rollups. **`personalityProfile` is legacy client-only — never feeds the model.**
+- Opt-out → declared-only model (`behavioral: false`). Teens: no dating intent, no people map, no watch-together format affinity.
+- P6 must call `getUserModel(db, uid)` — never raw Firestore paths.
+
 ## 12. Globals & module surface
 
 The client still loads classic non-module scripts (`<script src>`), so top-level `function` / `let` and many `window.X =` exports are intentional for cross-file calls.

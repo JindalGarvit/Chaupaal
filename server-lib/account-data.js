@@ -174,6 +174,14 @@ async function requestAccountDeletion(db, auth, uid) {
       .set({ deletionRequested: true, updatedAt: now }, { merge: true });
   } catch (e) {}
 
+  // P5: remove derived user model immediately (behavioral + declared affinity)
+  try {
+    const { deleteUserModel } = require('./user-model');
+    await deleteUserModel(db, uid);
+  } catch (e) {
+    console.warn('[account-data] userModel delete', e?.message || e);
+  }
+
   let tokensRevoked = false;
   try {
     if (auth && typeof auth.revokeRefreshTokens === 'function') {
