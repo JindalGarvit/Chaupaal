@@ -1,12 +1,12 @@
 /**
  * Personal Peepal matchmaking — filters → embeddings cosine → Gale-Shapley mutual.
- * Embeddings: Google Gemini (text-embedding-004). Cached on user doc; not gated by
- * AI_FEATURES_ENABLED (chat kill-switch) — only requires GEMINI_API_KEY.
+ * Embeddings via server-lib/embeddings.js (Gemini default; OpenAI-compatible optional).
+ * Not gated by AI_FEATURES_ENABLED — only requires embed provider keys.
  *
  * Media is display-only (3A). buildSemanticText uses bio/prompts/interests/hobbies.
  */
-const EMBED_MODEL = process.env.GEMINI_EMBED_MODEL || 'text-embedding-004';
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${EMBED_MODEL}:embedContent`;
+const { embedText: embedViaAdapter, textHash, GEMINI_MODEL } = require('./embeddings');
+const EMBED_MODEL = GEMINI_MODEL || process.env.GEMINI_EMBED_MODEL || 'text-embedding-004';
 
 function normalizeProfileType(v) {
   return String(v || 'personal').toLowerCase() === 'professional' ? 'professional' : 'personal';
@@ -57,35 +57,7 @@ function cosineSimilarity(a, b) {
 }
 
 async function embedText(text) {
-  const key = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '';
-  if (!key) {
-    const err = new Error('GEMINI_API_KEY missing');
-    err.code = 'NO_GEMINI';
-    throw err;
-  }
-  const body = {
-    model: `models/${EMBED_MODEL}`,
-    content: { parts: [{ text: text || 'Chaupaal profile' }] },
-  };
-  const res = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(key)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const err = new Error(`Gemini embed failed: ${res.status}`);
-    err.code = 'GEMINI_EMBED_FAIL';
-    err.status = res.status;
-    throw err;
-  }
-  const data = await res.json();
-  const values = data?.embedding?.values || data?.embeddings?.[0]?.values;
-  if (!Array.isArray(values) || !values.length) {
-    const err = new Error('Empty embedding');
-    err.code = 'EMPTY_EMBED';
-    throw err;
-  }
-  return values;
+  return embedViaAdapter(text);
 }
 
 function ageOf(user) {
@@ -484,6 +456,7 @@ module.exports = {
   buildSemanticText,
   cosineSimilarity,
   embedText,
+  textHash,
   passesStructuredFilters,
   rankPersonalMatches,
   galeShapley,

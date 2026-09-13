@@ -197,6 +197,17 @@ Enforcement is **ON** for Firestore / RTDB (and Storage if enabled). Client uses
 - Dangal strangers: `dangal_match_step` / `_cancel` on `api/media-config` — Elo bands widen over wait, then honest **Practice AI**. Friend challenges unchanged.
 - Outcomes → `match_outcomes` + `matchEngagementEvents`; weekly weights move only after ≥50 samples with ±0.15 clamp + rollback; metrics in `matchMetricSnapshots` (Admin-only).
 
+## 11g. AI enrichment (P8)
+
+- **6A:** Ranking/pairing read stored fields only — never `callAI` at request time. Enrichment is batch-only (`api/chaupaal-scheduler` → `runAiEnrichmentBatch`).
+- **7A:** `server-lib/ai.js` registry — `anthropic` + `openai-compatible` (covers Grok / cheap OpenAI-shaped APIs). Swap via `AI_PROVIDER` + keys only.
+- Embeddings: `server-lib/embeddings.js` (`EMBED_PROVIDER=gemini|openai-compatible`); independent of `AI_FEATURES_ENABLED`; `textHash` dedupe.
+- Jobs: content topic labels (duniya/peepal), Akhbaar `category_cache` heuristic seed, profile derived interests (never overwrite declared chips), cold-start internal summary, profile embed sweep. **Content embeddings skipped** (P6 does not consume them).
+- Cache: `topicLabel.contentHash` + `LABEL_VERSION`; budget: `chaupaalMeta/aiBudget` + `AI_DAILY_CALL_CAP` + `AI_JOBS_PAUSED`.
+- Privacy: `redactForPrompt`; no journal/DM/search/contacts; personalization opt-out excluded; teens = heuristic-only profile enrich, no dating-intent inference; prohibited label blocklist.
+- **Category cron verdict:** default **paused** (`CATEGORY_CRON_PAUSED` unset → paused). Unpause with `=false` + budget guard — do not hardcode forever.
+- No user-facing AI dashboard (10B). Env matrix in `.env.example`.
+
 ## 12. Globals & module surface
 
 The client still loads classic non-module scripts (`<script src>`), so top-level `function` / `let` and many `window.X =` exports are intentional for cross-file calls.

@@ -23,10 +23,10 @@ const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../ser
 const { requireCronSecret } = require('../server-lib/auth');
 const { asInt } = require('../server-lib/validate');
 
-// Flip to false when ready to spend Anthropic credits again (also re-add cron in vercel.json).
-// Also gated by master AI_FEATURES_ENABLED (must be "true" in env) via callAI().
-const CATEGORY_CRON_PAUSED = true;
-const { isAiFeaturesEnabled } = require('../server-lib/ai-config');
+// Flip via env CATEGORY_CRON_PAUSED=false when ready (default paused — P8 verdict).
+// Also gated by master AI_FEATURES_ENABLED via callAI(), plus AI_DAILY_CALL_CAP budget.
+const { isAiFeaturesEnabled, isCategoryCronPaused, AI_DAILY_CALL_CAP } = require('../server-lib/ai-config');
+const CATEGORY_CRON_PAUSED = isCategoryCronPaused();
 
 // Align with client CAT_CACHE_TTL_MS / server-lib/cat-cache-keys TTL_MS.
 // Hobby Vercel: daily cron. Pro/external: change schedule to 0 */6 * * * and set to 6h.
@@ -240,6 +240,24 @@ module.exports = async function handler(req, res) {
   }
 
   if (!requireCronSecret(req, res)) return;
+
+  // Shared daily call budget with enrichment jobs (P8)
+  try {
+    const { loadBudget, budgetAllows } = require('../server-lib/ai-enrichment');
+    const dbBudget = initAdmin();
+    const budget = await loadBudget(dbBudget);
+    if (!budgetAllows(budget) || budget.calls >= AI_DAILY_CALL_CAP) {
+      return sendError(
+        res,
+        503,
+        'AI_BUDGET',
+        'Daily AI call cap reached — category cron deferred',
+        { paused: true, calls: budget.calls, cap: AI_DAILY_CALL_CAP }
+      );
+    }
+  } catch (e) {
+    console.warn('[refresh-category-cache] budget check', e?.message || e);
+  }
 
   try {
     let offset = 0;

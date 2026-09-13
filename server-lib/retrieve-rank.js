@@ -613,7 +613,11 @@ function rankContentItems({ surface = 'duniya', items = [], model = null, opts =
   const scored = (items || []).map((item, idx) => {
     const id = String(item.id || item.firestoreId || idx);
     const author = String(item.uid || item.authorUid || item.user?.uid || '');
-    const tag = String(item.tag || item.category || item.topic || '').trim();
+    const tag = String(item.tag || item.category || item.topic || item.topicPrimary || '').trim();
+    // P8: consume offline topics[] when present
+    const itemTopics = Array.isArray(item.topics)
+      ? item.topics.map((t) => (typeof t === 'string' ? t : t?.key)).filter(Boolean)
+      : [];
     const format = String(item.format || item.mediaType || (item.media ? 'photo' : 'text')).toLowerCase();
     const ts = Number(item.ts || item.createdAtMs || item.createdAt || 0);
     const own = opts.viewerUid && author === opts.viewerUid;
@@ -652,6 +656,14 @@ function rankContentItems({ surface = 'duniya', items = [], model = null, opts =
         if (tl.includes(String(t).toLowerCase()) || String(t).toLowerCase().includes(tl)) {
           topic = Math.max(topic, 1 - i * 0.08);
         }
+      });
+    }
+    if (itemTopics.length && topics.length) {
+      itemTopics.forEach((it) => {
+        const il = String(it).toLowerCase();
+        topics.forEach((t, i) => {
+          if (il === String(t).toLowerCase()) topic = Math.max(topic, 1 - i * 0.05);
+        });
       });
     }
     // Surface-level topic from model

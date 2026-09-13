@@ -494,6 +494,16 @@ module.exports = async function handler(req, res) {
       matchMetrics = { error: e?.message || String(e) };
     }
 
+    // P8: offline AI enrichment (labels / profile suggestions / embed sweep)
+    let aiEnrichment = { skipped: true };
+    try {
+      const { runAiEnrichmentBatch } = require('../server-lib/ai-enrichment');
+      aiEnrichment = await runAiEnrichmentBatch(db, admin);
+    } catch (e) {
+      aiEnrichment = { error: e?.message || String(e) };
+      console.warn('[scheduler] ai enrichment', e?.message || e);
+    }
+
     return sendSuccess(res, {
       ...results,
       summary,
@@ -508,6 +518,7 @@ module.exports = async function handler(req, res) {
       candidatePools,
       dangalQueue,
       matchMetrics,
+      aiEnrichment,
     });
   } catch (e) {
     console.error('[chaupaal-scheduler]', e?.message || e);

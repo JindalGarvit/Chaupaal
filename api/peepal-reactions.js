@@ -208,6 +208,8 @@ async function seed(db, admin, user) {
 }
 
 async function refreshEmbedding(db, admin, uid) {
+  const { textHash } = require('../server-lib/matchmaking');
+  const { EMBED_PROVIDER, GEMINI_MODEL } = require('../server-lib/embeddings');
   const ref = db.collection('users').doc(uid);
   const snap = await ref.get();
   if (!snap.exists) throw new Error('USER_NOT_FOUND');
@@ -216,19 +218,29 @@ async function refreshEmbedding(db, admin, uid) {
   if (!text.trim()) {
     return { ok: false, reason: 'empty_profile_text', textLength: 0 };
   }
+  const hash = textHash(text);
+  const prev = data.profileEmbedding || {};
+  if (prev.textHash === hash && Array.isArray(prev.vector) && prev.vector.length) {
+    return { ok: true, cached: true, dims: prev.vector.length, textLength: text.length };
+  }
   const vector = await embedText(text);
-  const payload = {
-    profileEmbedding: {
-      vector,
-      model: process.env.GEMINI_EMBED_MODEL || 'text-embedding-004',
-      textHash: String(text.length) + '_' + text.slice(0, 40),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      // Future 3C: mediaTranscriptsHash — unused while embeddings are text-only
-      mediaExcluded: true,
+  const model =
+    EMBED_PROVIDER === 'openai-compatible' || EMBED_PROVIDER === 'openai'
+      ? process.env.OPENAI_EMBED_MODEL || 'text-embedding-3-small'
+      : GEMINI_MODEL || process.env.GEMINI_EMBED_MODEL || 'text-embedding-004';
+  await ref.set(
+    {
+      profileEmbedding: {
+        vector,
+        model,
+        textHash: hash,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        mediaExcluded: true,
+      },
     },
-  };
-  await ref.set(payload, { merge: true });
-  return { ok: true, dims: vector.length, textLength: text.length };
+    { merge: true }
+  );
+  return { ok: true, dims: vector.length, textLength: text.length, cached: false };
 }
 
 async function personalMatch(db, admin, user, body) {

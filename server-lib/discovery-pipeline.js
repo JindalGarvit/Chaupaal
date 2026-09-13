@@ -63,7 +63,7 @@ async function parseIntentQuery({ query, chipIntent, aiEnabled, callAI }) {
       feature: 'discovery_intent_parse',
       system: `Parse people-discovery intent for Chaupaal. Return ONLY JSON:
 {"interests":[],"ageRange":{"min":null,"max":null},"gender":"male"|"female"|"any","city":null,"college":null,"company":null,"searchIntent":"dating"|"friendship"|"job"|"flatmate"|"travel"|"gaming"|"music"|"cofounder"|"any","vibe":"","conversationStarter":""}
-Never invent profile names. Prefer null over guesses.`,
+Rules: Never invent profile names. Prefer null over guesses. interests must be short canonical chips when possible (Travel, Food, Films, Music, Fitness, Books, Tech, Sports, Gaming, …). Never infer religion, caste, sexuality, health, or income. If the query is underspecified, leave fields null and set searchIntent from chips when provided.`,
       messages: [{ role: 'user', content: String(query || '').slice(0, 500) }],
     });
     const raw = result?.text || result?.content?.[0]?.text || '{}';
