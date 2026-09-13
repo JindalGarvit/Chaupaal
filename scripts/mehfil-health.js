@@ -24,6 +24,7 @@ const rules = read('firebase/database.rules.json');
 const mehfilJs = read('public/src/js/features/mehfil.js');
 const effectsJs = read('public/src/js/features/mehfil-effects.js');
 const cinemaCss = read('public/src/styles/mehfil-cinema.css');
+const mehfilCss = read('public/src/styles/mehfil.css');
 const mediaConfig = read('api/media-config.js');
 const i18n = read('public/src/js/core/i18n.js');
 
@@ -52,6 +53,9 @@ const checks = [
   ['social: invite sheet', mehfilJs.includes('function openInviteSheet') && mehfilJs.includes('sendRoomReaction')],
   ['social: presence coalesce', mehfilJs.includes('PRESENCE_COALESCE_MS') && mehfilJs.includes('queuePresenceEvent')],
   ['social: effects clear', effectsJs.includes('clear()') && cinemaCss.includes('mehfil-chat-retain')],
+  ['cinema: three-layer chrome', mehfilJs.includes('mehfil-glance') && mehfilJs.includes('mehfil-immersive-exit') && !mehfilJs.includes('mehfil-ring-btn')],
+  ['cinema: token themes + stage rest', cinemaCss.includes('mehfil-theme--light') && cinemaCss.includes('#F5F5F5') && cinemaCss.includes('mehfil-stage-rest')],
+  ['cinema: warm voice tiles', mehfilJs.includes('mehfil-tile--voice') && mehfilCss.includes('mehfil-tile-avatar')],
   ['youtube-search.js', exists('server-lib/youtube-search.js')],
   ['YOUTUBE_API_KEY documented', read('.env.example').includes('YOUTUBE_API_KEY')],
   ['teen-mode assertCanMessage', read('public/src/js/core/teen-mode.js').includes('assertCanMessage')],
@@ -71,24 +75,20 @@ console.log(`${agoraConfigured ? '✓' : '○'} AGORA_APP_ID + CERTIFICATE (opti
 console.log(`○ api/*.js count: ${apiCount} (Hobby max 12)`);
 
 console.log(`
-Manual QA checklist (M5)
+Manual QA checklist (M6)
 ------------------------
-Room chat
-  [ ] Send/receive fast; collapsed unread; open clears; keyboard-safe
-  [ ] Retention copy matches reality (empty room → chat cleared)
-  [ ] Removed user cannot post / react
+Glance / Act / Power
+  [ ] Top: title, honest Live/Waiting, chips, now-playing; dock = mic/cam/clap/More/Leave only
+  [ ] More still wires: Watch, Invite, Reactions, Stickers, Flip, Share, Immersive, Theme
+  [ ] Immersive exit chip visible; tap exits
 
-Reactions
-  [ ] Dock clap one-tap; sticker from More; all clients see bursts
-  [ ] Rapid taps throttle; effects never block dock; Quiet / reduced-motion
-
-Presence + invite
-  [ ] Busy join/leave coalesced; media start = one moment
-  [ ] Alone → warm invite + start something; invite sheet: bubble / link / ring
-  [ ] Non-member deep link → honest denial, no leak
+Look & states
+  [ ] Light = neutral Gathered (#F5F5F5), dark = token cinema — no cream Discord clone
+  [ ] Voice tiles show warm avatars; waiting / rest / voice-off calm
+  [ ] Media: stage dominates, rail compact, chat doesn’t cover video
 
 Ops
-  [ ] Leave cleans listeners/timers (several join/leave cycles)
+  [ ] Reduced motion / Quiet calm; safe areas; no spill outside .device
   [ ] npm run health:mehfil; api/*.js ≤12
 `);
 

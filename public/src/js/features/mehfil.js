@@ -353,15 +353,13 @@
     const mode = effectiveMehfilTheme();
     el.classList.remove('mehfil-theme--light', 'mehfil-theme--dark', 'mehfil-theme--match');
     el.classList.add(mode === 'light' ? 'mehfil-theme--light' : 'mehfil-theme--dark');
-    const btn = el.querySelector('[data-mehfil-theme-toggle]');
-    if (btn) {
-      btn.textContent =
-        mode === 'light' ? tt('mehfil_theme_light', 'Light') : tt('mehfil_theme_dark', 'Dark');
-      btn.setAttribute(
-        'aria-label',
-        tt('mehfil_theme_follow_app', 'Room theme') + ': ' + btn.textContent
-      );
-    }
+    const label = mode === 'light' ? tt('mehfil_theme_light', 'Light') : tt('mehfil_theme_dark', 'Dark');
+    el.querySelectorAll('[data-mehfil-theme-toggle]').forEach((btn) => {
+      const textEl = btn.querySelector('[data-mehfil-theme-label]') || btn;
+      if (textEl === btn) btn.textContent = label;
+      else textEl.textContent = label;
+      btn.setAttribute('aria-label', tt('mehfil_theme_follow_app', 'Room theme') + ': ' + label);
+    });
   }
 
   function toggleMehfilTheme() {
@@ -373,6 +371,53 @@
     } catch (e) {}
     applyMehfilTheme(overlayEl);
     pokeChrome();
+  }
+
+  function syncImmersiveChrome() {
+    if (!overlayEl) return;
+    const on = overlayEl.classList.contains('mehfil-immersive');
+    const exitBtn = overlayEl.querySelector('[data-mehfil-immersive-exit]');
+    if (exitBtn) exitBtn.hidden = !on;
+    overlayEl.querySelectorAll('[data-mehfil-immersive]').forEach((btn) => {
+      const label = on
+        ? tt('mehfil_immersive_exit', 'Exit immersive')
+        : tt('mehfil_immersive_enter', 'Immersive');
+      const textEl = btn.querySelector('[data-mehfil-immersive-label]');
+      if (textEl) textEl.textContent = label;
+      btn.setAttribute('aria-label', label);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+
+  function paintNowPlayingGlance(m) {
+    const el = overlayEl?.querySelector('[data-mehfil-now-glance]');
+    if (!el) return;
+    if (!m?.type) {
+      el.hidden = true;
+      el.textContent = '';
+      return;
+    }
+    el.hidden = false;
+    if (m.type === 'youtube') {
+      el.textContent = tt('mehfil_now_playing', 'Now playing: {{title}}', {
+        title: m.title || tt('mehfil_playing_video', 'Watching'),
+      });
+    } else if (m.type === 'music') {
+      el.textContent = tt('mehfil_now_playing', 'Now playing: {{title}}', {
+        title: m.title || tt('mehfil_playing_music', 'Music'),
+      });
+    } else {
+      el.hidden = true;
+    }
+  }
+
+  function syncStageRest() {
+    const rest = overlayEl?.querySelector('[data-mehfil-stage-rest]');
+    if (!rest) return;
+    const mediaOn = hasYoutubeOnStage();
+    const waiting = overlayEl.querySelector('[data-mehfil-waiting]');
+    const waitingVisible = waiting && !waiting.hidden;
+    rest.hidden = !!(mediaOn || waitingVisible);
   }
 
   // --- Layout / Cinema ---
@@ -417,6 +462,7 @@
     });
     const waiting = overlayEl.querySelector('[data-mehfil-waiting]');
     if (waiting && !ytOn && waiting.parentElement !== grid) grid.appendChild(waiting);
+    syncStageRest();
   }
 
   function layoutCinema() {
@@ -858,14 +904,7 @@
   function toggleImmersive() {
     if (!overlayEl) return;
     overlayEl.classList.toggle('mehfil-immersive');
-    const btn = overlayEl.querySelector('[data-mehfil-immersive]');
-    if (btn) {
-      const on = overlayEl.classList.contains('mehfil-immersive');
-      btn.setAttribute(
-        'aria-label',
-        on ? tt('mehfil_immersive_exit', 'Exit immersive') : tt('mehfil_immersive_enter', 'Immersive mode')
-      );
-    }
+    syncImmersiveChrome();
     pokeChrome();
   }
 
@@ -1491,16 +1530,19 @@
       return;
     }
     el.hidden = false;
-    el.textContent =
-      n === 1
-        ? tt('mehfil_who_one', '1 in Mehfil')
-        : tt('mehfil_who_n', '{{n}} in Mehfil', { n: String(n) });
+    // Honest Live vs waiting — same vocabulary as M0 mehfilLiveState.label
+    const label = state?.label || (n === 1 ? MEHFIL_WAITING_LABEL : `Live · ${n}`);
+    el.textContent = label;
+    el.classList.toggle('is-waiting', !!state?.waiting);
+    el.classList.toggle('is-live', !!state?.isLive);
   }
 
   function updateAloneHint(count) {
     const hint = overlayEl?.querySelector('[data-mehfil-alone]');
     if (!hint) return;
-    const alone = !count || count <= 1;
+    const waiting = overlayEl?.querySelector('[data-mehfil-waiting]');
+    // Prefer stage waiting card; float only when waiting is already hidden (e.g. media up, alone).
+    const alone = (!count || count <= 1) && !!(waiting?.hidden);
     hint.hidden = !alone;
     if (alone) {
       const copy = hint.querySelector('[data-mehfil-alone-copy-text]');
@@ -1527,6 +1569,7 @@
     // Hide waiting when peers are present (tiles or fresh presence) or media is up.
     waiting.hidden = blocked || remotes > 0 || fresh > 1 || hasYoutubeOnStage();
     layoutCinema();
+    syncStageRest();
   }
 
   function loadScript(src) {
@@ -1589,6 +1632,7 @@
     clearTimeout(chromeTimer);
     chromeTimer = null;
     if (overlayEl.classList.contains('mehfil-sheet-open')) return;
+    if (overlayEl.classList.contains('mehfil-immersive')) return;
     chromeTimer = setTimeout(() => {
       overlayEl?.classList.add('mehfil-chrome-dim');
     }, CHROME_DIM_MS);
@@ -1625,7 +1669,12 @@
     const willOpen = !panel.classList.contains('is-open');
     closeCallSheets(willOpen ? which : null);
     if (willOpen) panel.classList.add('is-open');
-    overlayEl.querySelector('[data-mehfil-more-btn]')?.classList.toggle('is-open', which === 'more' && willOpen);
+    const moreBtn = overlayEl.querySelector('[data-mehfil-more-btn]');
+    if (moreBtn) {
+      const moreOpen = which === 'more' && willOpen;
+      moreBtn.classList.toggle('is-open', moreOpen);
+      moreBtn.setAttribute('aria-expanded', moreOpen ? 'true' : 'false');
+    }
     syncSheetOpenClass();
     pokeChrome();
   }
@@ -1712,10 +1761,13 @@
     const tile = overlayEl?.querySelector('[data-mehfil-local-video]');
     if (!tile) return;
     tile.classList.remove('is-screen');
+    tile.classList.add('is-cam-off', 'mehfil-tile--voice');
     const micOn = !!micWanted && avMode === 'full';
-    tile.innerHTML = `<span class="mehfil-tile-placeholder">${esc(
-      text || tt('mehfil_cam_off', 'Camera off')
-    )}</span><div class="mehfil-tile-label">${esc(tt('mehfil_you_label', 'You'))}</div>
+    const initial = esc((userProfile?.name || tt('mehfil_you_label', 'You')).slice(0, 1));
+    tile.innerHTML = `<div class="mehfil-tile-avatar" aria-hidden="true"><span>${initial}</span></div>
+      <span class="mehfil-tile-placeholder">${esc(
+        text || tt('mehfil_cam_off', 'Camera off')
+      )}</span><div class="mehfil-tile-label">${esc(tt('mehfil_you_label', 'You'))}</div>
       <span class="mehfil-mic-badge" data-mehfil-mic-badge>${micOn ? '🎤' : '🔇'}</span>`;
     tile.classList.toggle('is-mic-on', micOn);
     tile.classList.toggle('is-mic-muted', !micOn);
@@ -1725,6 +1777,7 @@
     const tile = overlayEl?.querySelector('[data-mehfil-local-video]');
     if (!tile || !track) return;
     const micOn = !!micWanted && avMode === 'full';
+    tile.classList.remove('is-cam-off', 'mehfil-tile--voice');
     tile.innerHTML = `<div class="mehfil-tile-label">${esc(label || tt('mehfil_you_label', 'You'))}</div>
       <span class="mehfil-mic-badge" data-mehfil-mic-badge>${micOn ? '🎤' : '🔇'}</span>`;
     tile.classList.toggle('is-mic-on', micOn);
@@ -1799,14 +1852,6 @@
       if (selfLevel >= MUTED_NUDGE_LEVEL && Date.now() - lastMutedNudgeAt > MUTED_NUDGE_COOLDOWN_MS) {
         lastMutedNudgeAt = Date.now();
         setMehfilStatus(tt('mehfil_you_muted', 'You’re muted'), 'warn');
-        const hint = overlayEl.querySelector('[data-mehfil-muted-hint]');
-        if (hint) {
-          hint.hidden = false;
-          clearTimeout(hint._hide);
-          hint._hide = setTimeout(() => {
-            hint.hidden = true;
-          }, 2400);
-        }
       }
     }
 
@@ -1987,6 +2032,7 @@
       const m = snap.val();
       cachedMediaState = m || null;
       updateHostControlUi(m);
+      paintNowPlayingGlance(m);
       if (!m || !m.type) {
         if (lastMediaMomentKey) {
           lastMediaMomentKey = '';
@@ -1995,6 +2041,7 @@
         stopLocalMediaPlayers();
         overlayEl?.classList.remove('mehfil-has-youtube', 'mehfil-has-music');
         layoutCinema();
+        syncStageRest();
         return;
       }
       const seq = Number(m.seq) || 0;
@@ -3014,14 +3061,6 @@
         if (level >= MUTED_NUDGE_LEVEL && Date.now() - lastMutedNudgeAt > MUTED_NUDGE_COOLDOWN_MS) {
           lastMutedNudgeAt = Date.now();
           setMehfilStatus(tt('mehfil_you_muted', 'You’re muted'), 'warn');
-          const hint = overlayEl.querySelector('[data-mehfil-muted-hint]');
-          if (hint) {
-            hint.hidden = false;
-            clearTimeout(hint._hide);
-            hint._hide = setTimeout(() => {
-              hint.hidden = true;
-            }, 2400);
-          }
         }
       } catch (e) {}
     }, 400);
@@ -3662,11 +3701,13 @@
       return tile;
     }
     tile = document.createElement('div');
-    tile.className = 'mehfil-tile' + (parent === rail ? ' mehfil-tile--rail' : '');
+    tile.className = 'mehfil-tile mehfil-tile--voice' + (parent === rail ? ' mehfil-tile--rail' : '');
     tile.dataset.uid = String(uid);
-    tile.innerHTML = `<span class="mehfil-tile-placeholder">${esc(
-      tt('mehfil_in_room', 'In the room')
-    )}</span><div class="mehfil-tile-label">${esc(label || remoteTileLabel({ uid }))}</div>`;
+    const name = label || remoteTileLabel({ uid });
+    const initial = esc((name || '?').slice(0, 1));
+    tile.innerHTML = `<div class="mehfil-tile-avatar" aria-hidden="true"><span>${initial}</span></div>
+      <span class="mehfil-tile-placeholder">${esc(tt('mehfil_in_room', 'In the room'))}</span>
+      <div class="mehfil-tile-label">${esc(name)}</div>`;
     parent.appendChild(tile);
     updateWaitingState();
     return tile;
@@ -3799,17 +3840,6 @@
         tt('mehfil_weak_net', 'Weak connection — try turning off video'),
         'warn'
       );
-      if (camWanted && localVideo && !localScreen) {
-        // Soft suggestion only once per stretch — don’t force cam off.
-        const hint = overlayEl?.querySelector('[data-mehfil-weak-hint]');
-        if (hint && hint.hidden) {
-          hint.hidden = false;
-          clearTimeout(hint._hide);
-          hint._hide = setTimeout(() => {
-            hint.hidden = true;
-          }, 5000);
-        }
-      }
     }
   }
 
@@ -3845,7 +3875,7 @@
           tt('mehfil_removed_blocked', 'You’ve been removed from this Mehfil for a bit — try later.'),
           { fatal: false }
         );
-        setMehfilStatus(tt('mehfil_removed_notice', 'Removed from Mehfil'), 'warn');
+        setMehfilStatus(tt('mehfil_removed_notice', 'You’ve left this Mehfil for now — you’re still in the chat.'), 'warn');
         setAvControlsEnabled('none');
         return;
       }
@@ -3894,6 +3924,8 @@
           const tile = ensureRemoteTile(user.uid, remoteTileLabel(user));
           if (mediaType === 'video') {
             tile?.querySelector('.mehfil-tile-placeholder')?.remove();
+            tile?.querySelector('.mehfil-tile-avatar')?.remove();
+            tile?.classList.remove('mehfil-tile--voice', 'is-cam-off');
             user.videoTrack?.play(tile);
             updateWaitingState();
             setMehfilStatus(tt('mehfil_in_call', 'In the room'), 'live');
@@ -3911,6 +3943,15 @@
         if (!user.hasAudio) tile.remove();
         else {
           tile.querySelector('video')?.remove();
+          tile.classList.add('mehfil-tile--voice', 'is-cam-off');
+          if (!tile.querySelector('.mehfil-tile-avatar')) {
+            const name = tile.querySelector('.mehfil-tile-label')?.textContent || '?';
+            const av = document.createElement('div');
+            av.className = 'mehfil-tile-avatar';
+            av.setAttribute('aria-hidden', 'true');
+            av.innerHTML = `<span>${esc(name.slice(0, 1))}</span>`;
+            tile.prepend(av);
+          }
           if (!tile.querySelector('.mehfil-tile-placeholder')) {
             const ph = document.createElement('span');
             ph.className = 'mehfil-tile-placeholder';
@@ -4105,19 +4146,19 @@
     el.setAttribute('aria-label', tt('mehfil_title', 'Mehfil') + ' · ' + roomTitle);
     el.innerHTML = `
       <div class="mehfil-top">
-        ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-mehfil-leave-top' }) : ''}
-        <div class="mehfil-title">${mehfilMarkHtml(20)} <span>${esc(tt('mehfil_title', 'Mehfil'))} · ${esc(roomTitle)}</span></div>
-        <div class="mehfil-who-here" data-mehfil-who-here hidden></div>
-        <div class="mehfil-member-chips-scroll"><div class="mehfil-member-chips" data-mehfil-member-chips></div></div>
-        <button type="button" class="mehfil-theme-toggle" data-mehfil-theme-toggle aria-label="${esc(tt('mehfil_theme_follow_app', 'Room theme'))}">${esc(tt('mehfil_theme_dark', 'Dark'))}</button>
-        <button type="button" class="mehfil-immersive-btn" data-mehfil-immersive aria-label="${esc(tt('mehfil_immersive_enter', 'Immersive mode'))}">⛶</button>
-        <button type="button" class="mehfil-ring-btn" data-mehfil-ring title="${esc(tt('mehfil_ring', 'Ring'))}" aria-label="${esc(tt('mehfil_ring', 'Ring'))}">${typeof iconHtml==='function'?iconHtml('phone',{size:18}):'☎'}</button>
-        <div class="mehfil-status" data-mehfil-status>${esc(tt('mehfil_joining', 'Joining…'))}</div>
-        <div class="mehfil-my-role" data-mehfil-my-role hidden></div>
+        <div class="mehfil-top-row">
+          ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-mehfil-leave-top' }) : ''}
+          <div class="mehfil-title">${mehfilMarkHtml(20)} <span>${esc(tt('mehfil_title', 'Mehfil'))} · ${esc(roomTitle)}</span></div>
+          <div class="mehfil-status" data-mehfil-status role="status" aria-live="polite">${esc(tt('mehfil_joining', 'Joining…'))}</div>
+          <div class="mehfil-my-role" data-mehfil-my-role hidden></div>
+        </div>
+        <div class="mehfil-glance">
+          <div class="mehfil-who-here" data-mehfil-who-here hidden></div>
+          <div class="mehfil-member-chips-scroll"><div class="mehfil-member-chips" data-mehfil-member-chips></div></div>
+          <div class="mehfil-now-glance" data-mehfil-now-glance hidden></div>
+        </div>
       </div>
       <div class="mehfil-speaking-cue" data-mehfil-speaking-cue hidden></div>
-      <div class="mehfil-muted-hint" data-mehfil-muted-hint hidden>${esc(tt('mehfil_you_muted', 'You’re muted'))}</div>
-      <div class="mehfil-weak-hint" data-mehfil-weak-hint hidden>${esc(tt('mehfil_weak_net', 'Weak connection — try turning off video'))}</div>
       <div class="mehfil-sharing-chip" data-mehfil-sharing-chip hidden>
         <span>${esc(tt('mehfil_sharing', 'You’re sharing screen'))}</span>
         <button type="button" data-mehfil-stop-share>${esc(tt('mehfil_stop_share', 'Stop'))}</button>
@@ -4126,17 +4167,24 @@
         <span data-mehfil-ringing-label>${esc(tt('mehfil_ringing', 'Ringing…'))}</span>
         <button type="button" data-mehfil-ring-cancel>${esc(tt('cancel', 'Cancel'))}</button>
       </div>
+      <button type="button" class="mehfil-immersive-exit" data-mehfil-immersive-exit hidden>${esc(tt('mehfil_immersive_exit', 'Exit immersive'))}</button>
       <div class="mehfil-cinema">
         <div class="mehfil-stage-main" data-mehfil-stage-main>
           <div class="mehfil-host-chip" data-mehfil-host-chip hidden></div>
+          <div class="mehfil-stage-rest" data-mehfil-stage-rest>
+            <div class="mehfil-stage-rest-mark">${mehfilMarkHtml(36)}</div>
+            <p class="mehfil-stage-rest-copy">${esc(tt('mehfil_stage_rest', 'Gather here — talk, watch, or listen together.'))}</p>
+          </div>
           <div id="mehfilYtHost" class="mehfil-yt mehfil-stage-yt" data-mehfil-stage-yt data-mehfil-yt hidden></div>
           <div class="mehfil-yt-empty" data-mehfil-yt-empty hidden></div>
           <div class="mehfil-stage" data-mehfil-stage>
-            <div class="mehfil-tile mehfil-tile--self is-cam-off" data-mehfil-local-video>
+            <div class="mehfil-tile mehfil-tile--self mehfil-tile--voice is-cam-off" data-mehfil-local-video>
+              <div class="mehfil-tile-avatar" aria-hidden="true"><span>${esc((userProfile?.name || 'Y').slice(0, 1))}</span></div>
               <span class="mehfil-tile-placeholder">${esc(tt('mehfil_cam_off', 'Camera off'))}</span>
               <div class="mehfil-tile-label">${esc(tt('mehfil_you_label', 'You'))}</div>
             </div>
             <div class="mehfil-waiting" data-mehfil-waiting>
+              <div class="mehfil-waiting-mark">${mehfilMarkHtml(28)}</div>
               <div class="mehfil-waiting-title">${esc(
                 isGroup
                   ? tt('mehfil_waiting_group_title', 'You’re here first')
@@ -4190,12 +4238,20 @@
           <button type="button" class="mehfil-fs-btn" data-mehfil-fs hidden>${esc(tt('mehfil_immersive_enter', 'Fullscreen video'))}</button>
         </div>
         <div class="mehfil-sheet mehfil-react-tray" data-mehfil-reacts>
-          ${REACTIONS.map((e) => `<button type="button" data-emoji="${e}">${e}</button>`).join('')}
+          ${REACTIONS.map((e) => `<button type="button" data-emoji="${e}" aria-label="${e}">${e}</button>`).join('')}
         </div>
         <div class="mehfil-sheet mehfil-sticker-tray" data-mehfil-stickers>
-          ${STICKERS.map((e) => `<button type="button" data-emoji="${e}">${e}</button>`).join('')}
+          ${STICKERS.map((e) => `<button type="button" data-emoji="${e}" aria-label="${e}">${e}</button>`).join('')}
         </div>
         <div class="mehfil-more-menu" data-mehfil-more>
+          <button type="button" class="mehfil-more-item" data-mehfil-media-btn>
+            <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('music',{size:18}):''}</span>
+            ${esc(tt('mehfil_media', 'Watch / Listen'))}
+          </button>
+          <button type="button" class="mehfil-more-item" data-mehfil-invite-sheet>
+            <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('bell',{size:18}):''}</span>
+            ${esc(tt('mehfil_invite_title', 'Invite'))}
+          </button>
           <button type="button" class="mehfil-more-item" data-mehfil-react-btn>
             <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('smile',{size:18}):''}</span>
             ${esc(tt('mehfil_reactions', 'Reactions'))}
@@ -4204,14 +4260,6 @@
             <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('sparkles',{size:18}):''}</span>
             ${esc(tt('mehfil_stickers', 'Stickers'))}
           </button>
-          <button type="button" class="mehfil-more-item" data-mehfil-media-btn>
-            <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('music',{size:18}):''}</span>
-            ${esc(tt('mehfil_media', 'Watch / Listen'))}
-          </button>
-          <button type="button" class="mehfil-more-item" data-mehfil-invite-sheet>
-            <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('bell',{size:18}):''}</span>
-            ${esc(tt('mehfil_invite_title', 'Invite to Mehfil'))}
-          </button>
           <button type="button" class="mehfil-more-item" data-mehfil-flip title="${esc(tt('mehfil_flip', 'Flip camera'))}">
             <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('rotate-cw',{size:18}):''}</span>
             ${esc(tt('mehfil_flip', 'Flip'))}
@@ -4219,6 +4267,14 @@
           <button type="button" class="mehfil-more-item" data-mehfil-share title="${esc(tt('mehfil_share', 'Share screen'))}">
             <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('monitor',{size:18}):''}</span>
             <span data-mehfil-share-label>${esc(tt('mehfil_share', 'Share'))}</span>
+          </button>
+          <button type="button" class="mehfil-more-item" data-mehfil-immersive aria-pressed="false">
+            <span class="icon" aria-hidden="true">⛶</span>
+            <span data-mehfil-immersive-label>${esc(tt('mehfil_immersive_enter', 'Immersive'))}</span>
+          </button>
+          <button type="button" class="mehfil-more-item" data-mehfil-theme-toggle>
+            <span class="icon" aria-hidden="true">◐</span>
+            <span data-mehfil-theme-label>${esc(tt('mehfil_theme_dark', 'Dark'))}</span>
           </button>
         </div>
       </div>
@@ -4232,7 +4288,7 @@
       <div class="mehfil-chat-strip is-collapsed" data-mehfil-chat-strip aria-label="${esc(tt('mehfil_chat_expand', 'Room chat'))}">
         <button type="button" class="mehfil-chat-peek" data-mehfil-chat-toggle>
           <span class="mehfil-chat-badge" data-mehfil-chat-badge hidden>0</span>
-          <span>💬</span>
+          <span aria-hidden="true">💬</span>
           <span class="mehfil-chat-preview" data-mehfil-chat-preview>${esc(tt('mehfil_chat_empty', 'Say hello to the room'))}</span>
         </button>
         <div class="mehfil-chat-expanded">
@@ -4244,12 +4300,12 @@
           </form>
         </div>
       </div>
-      <div class="mehfil-dock">
+      <div class="mehfil-dock" role="toolbar" aria-label="${esc(tt('mehfil_title', 'Mehfil'))}">
         <div class="mehfil-dock-primary">
           <button type="button" class="mehfil-ctrl ${micWanted ? 'is-live' : 'is-muted'}" data-mehfil-mic title="${esc(tt('mehfil_mic', 'Microphone'))}" aria-label="${esc(tt('mehfil_mic', 'Toggle microphone'))}" aria-pressed="${micWanted ? 'true' : 'false'}">🎤</button>
           <button type="button" class="mehfil-ctrl is-off" data-mehfil-cam title="${esc(tt('mehfil_cam', 'Camera'))}" aria-label="${esc(tt('mehfil_cam', 'Toggle camera'))}" aria-pressed="false">📷</button>
-          <button type="button" class="mehfil-ctrl" data-mehfil-react-quick title="${esc(tt('mehfil_reactions', 'Reactions'))}">👏</button>
-          <button type="button" class="mehfil-ctrl" data-mehfil-more-btn title="${esc(tt('mehfil_more', 'More'))}" aria-label="${esc(tt('mehfil_more', 'More call actions'))}" aria-haspopup="true">${typeof iconHtml==='function'?iconHtml('more-vertical',{size:20}):'⋮'}</button>
+          <button type="button" class="mehfil-ctrl" data-mehfil-react-quick title="${esc(tt('mehfil_clap', 'Clap'))}" aria-label="${esc(tt('mehfil_clap', 'Clap'))}">👏</button>
+          <button type="button" class="mehfil-ctrl" data-mehfil-more-btn title="${esc(tt('mehfil_more', 'More'))}" aria-label="${esc(tt('mehfil_more', 'More'))}" aria-haspopup="true" aria-expanded="false">${typeof iconHtml==='function'?iconHtml('more-vertical',{size:20}):'⋮'}</button>
         </div>
         <button type="button" class="mehfil-leave" data-mehfil-leave title="${esc(tt('mehfil_leave', 'Leave'))}" aria-label="${esc(tt('mehfil_leave', 'Leave Mehfil'))}">${esc(tt('mehfil_leave', 'Leave'))}</button>
       </div>`;
@@ -4297,11 +4353,12 @@
     }
 
     applyMehfilTheme(el);
+    syncImmersiveChrome();
 
     el.addEventListener('pointerdown', (e) => {
       if (
         e.target.closest(
-          '.mehfil-dock, .mehfil-sheets, .mehfil-sheet, .mehfil-more-menu, .mehfil-top, .mehfil-chat-strip, .mehfil-chat-expanded'
+          '.mehfil-dock, .mehfil-sheets, .mehfil-sheet, .mehfil-more-menu, .mehfil-top, .mehfil-chat-strip, .mehfil-chat-expanded, .mehfil-immersive-exit'
         )
       ) {
         pokeChrome();
@@ -4314,8 +4371,19 @@
     });
     pokeChrome();
 
-    el.querySelector('[data-mehfil-theme-toggle]')?.addEventListener('click', toggleMehfilTheme);
-    el.querySelector('[data-mehfil-immersive]')?.addEventListener('click', toggleImmersive);
+    el.querySelectorAll('[data-mehfil-theme-toggle]').forEach((btn) =>
+      btn.addEventListener('click', () => {
+        toggleMehfilTheme();
+        closeCallSheets(null);
+      })
+    );
+    el.querySelectorAll('[data-mehfil-immersive]').forEach((btn) =>
+      btn.addEventListener('click', () => {
+        toggleImmersive();
+        closeCallSheets(null);
+      })
+    );
+    el.querySelector('[data-mehfil-immersive-exit]')?.addEventListener('click', () => toggleImmersive());
     el.querySelector('[data-mehfil-leave-top]')?.addEventListener('click', () => leaveMehfil());
     el.querySelector('[data-mehfil-chat-toggle]')?.addEventListener('click', () => {
       const strip = chatStripEl();
@@ -4382,7 +4450,6 @@
       if (fsBtn) fsBtn.hidden = !hasYoutubeOnStage();
       updateHostControlUi(cachedMediaState);
     });
-    el.querySelector('[data-mehfil-ring]')?.addEventListener('click', () => openInviteSheet());
     el.querySelector('[data-mehfil-waiting-ring]')?.addEventListener('click', () => startMehfilRing(activeChat));
     el.querySelector('[data-mehfil-waiting-invite]')?.addEventListener('click', () => openInviteSheet());
     el.querySelector('[data-mehfil-alone-invite]')?.addEventListener('click', () => openInviteSheet());

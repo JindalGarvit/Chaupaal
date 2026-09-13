@@ -44,34 +44,53 @@
 }
 .mehfil-member-chips-scroll{
   flex:1;min-width:0;overflow-x:auto;-webkit-overflow-scrolling:touch;
-  max-width:38%;
+  max-width:none;
 }
 .mehfil-member-chips{display:flex;gap:6px;align-items:center;padding:2px 0;}
 .mehfil-member-chip{
-  display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:999px;
-  border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);
-  color:inherit;font-size:10px;font-weight:600;cursor:default;flex-shrink:0;
+  display:inline-flex;align-items:center;gap:4px;padding:6px 10px;border-radius:999px;
+  border:1px solid color-mix(in srgb, var(--call-chrome-fg) 14%, transparent);
+  background:color-mix(in srgb, var(--call-chrome-fg) 8%, transparent);
+  color:inherit;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;
+  min-height:32px;
 }
 .mehfil-member-chip.is-me{border-color:var(--call-speaking);}
+.mehfil-member-chip:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
 .mehfil-member-chip-avatar{
-  width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.15);
-  display:grid;place-items:center;font-size:10px;
+  width:22px;height:22px;border-radius:50%;
+  background:color-mix(in srgb, var(--brand-red) 28%, var(--call-tile));
+  display:grid;place-items:center;font-size:10px;font-weight:700;
 }
-.mehfil-theme-toggle,.mehfil-immersive-btn{
-  border:none;background:rgba(255,255,255,.12);color:inherit;border-radius:999px;
-  font-size:11px;font-weight:700;padding:6px 10px;cursor:pointer;flex-shrink:0;
+.mehfil-stage-rest{
+  position:absolute;inset:12%;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+  text-align:center;pointer-events:none;z-index:0;
+  border-radius:var(--r-card);
+  background:
+    radial-gradient(80% 60% at 50% 40%, color-mix(in srgb, var(--brand-red) 12%, transparent), transparent 70%),
+    color-mix(in srgb, var(--call-tile) 55%, transparent);
 }
+.mehfil-stage-rest[hidden]{display:none !important;}
+.mehfil-stage-rest-copy{
+  margin:0;max-width:240px;
+  font-size:var(--text-sm);
+  color:var(--call-chrome-muted);
+  line-height:1.4;
+}
+.mehfil-overlay.mehfil-has-youtube .mehfil-stage-rest,
+.mehfil-overlay.mehfil-has-music .mehfil-stage-rest{display:none !important;}
 .mehfil-host-chip{
   position:absolute;top:8px;left:12px;z-index:3;font-size:11px;font-weight:600;
-  padding:4px 10px;border-radius:999px;background:rgba(0,0,0,.45);
+  padding:4px 10px;border-radius:999px;
+  background:color-mix(in srgb, #000 45%, transparent);
 }
-.mehfil-host-chip.is-host{background:rgba(42,157,143,.35);}
+.mehfil-host-chip.is-host{background:color-mix(in srgb, var(--green) 35%, transparent);}
 .mehfil-effects-layer{
   position:absolute;inset:0;pointer-events:none;z-index:7;overflow:hidden;
 }
 .mehfil-fx{
   position:absolute;bottom:18%;font-size:28px;transform:translateX(-50%);
-  animation:mehfilFxFloat 2.5s ease forwards;pointer-events:none;
+  animation:mehfilFxFloat 2.5s var(--ease-spring, ease) forwards;pointer-events:none;
 }
 .mehfil-fx--sticker{font-size:36px;}
 .mehfil-fx--reduced{animation:none;opacity:.85;}
@@ -81,32 +100,41 @@
 @keyframes mehfilFxFloat{
   0%{opacity:0;transform:translate(-50%,12px) scale(.8)}
   15%{opacity:1}
-  100%{opacity:0;transform:translate(-50%,-80px) scale(1.1) rotate(8deg)}
+  100%{opacity:0;transform:translate(-50%,-80px) scale(1.05)}
 }
 @media (prefers-reduced-motion: reduce){
   .mehfil-fx{animation:none;}
   .mehfil-chat-shimmer{animation:none !important;}
 }
 .mehfil-chat-strip{
-  position:absolute;left:12px;right:12px;bottom:calc(72px + env(safe-area-inset-bottom,0px));
-  z-index:8;border-radius:16px;
-  background:rgba(12,14,18,.72);backdrop-filter:blur(12px);
-  border:1px solid rgba(255,255,255,.12);
+  position:absolute;left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom,0px));
+  z-index:8;border-radius:var(--r-card);
+  background:color-mix(in srgb, var(--call-surface) 88%, transparent);
+  backdrop-filter:blur(12px);
+  border:1px solid color-mix(in srgb, var(--call-chrome-fg) 12%, transparent);
   max-height:40vh;display:flex;flex-direction:column;
-  transition:max-height .25s ease, opacity .2s ease;
+  transition:max-height var(--duration-panel, .25s) var(--ease-spring, ease),
+              opacity var(--duration-ui, .2s) ease;
+}
+.mehfil-overlay.mehfil-has-youtube .mehfil-chat-strip.is-expanded,
+.mehfil-overlay.mehfil-has-music .mehfil-chat-strip.is-expanded{
+  max-height:min(28vh, 200px);
 }
 .mehfil-chat-strip.is-collapsed{max-height:44px;overflow:hidden;}
 .mehfil-chat-strip.is-expanded{max-height:min(42vh, 300px);}
 .mehfil-chat-peek{
   display:flex;align-items:center;gap:8px;width:100%;padding:10px 12px;
   border:none;background:transparent;color:inherit;cursor:pointer;text-align:left;
+  min-height:44px;
 }
+.mehfil-chat-peek:focus-visible{outline:2px solid var(--gold);outline-offset:-2px;}
 .mehfil-chat-preview{
   flex:1;min-width:0;font-size:12px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 .mehfil-chat-shimmer{
-  background:linear-gradient(90deg, rgba(255,255,255,.85), rgba(255,201,60,.95), rgba(255,255,255,.85));
+  background:linear-gradient(90deg, var(--call-chrome-fg), var(--gold), var(--call-chrome-fg));
   background-size:200% 100%;-webkit-background-clip:text;background-clip:text;
+  color:transparent;
   animation:mehfilShimmer 2.5s ease infinite;
 }
 @keyframes mehfilShimmer{
@@ -114,7 +142,7 @@
   100%{background-position:-100% 0}
 }
 .mehfil-chat-badge{
-  min-width:18px;height:18px;border-radius:999px;background:var(--red,#E63946);
+  min-width:18px;height:18px;border-radius:999px;background:var(--brand-red, var(--red,#E63946));
   color:#fff;font-size:10px;font-weight:700;display:grid;place-items:center;padding:0 4px;
 }
 .mehfil-chat-expanded{display:none;flex:1;min-height:0;flex-direction:column;}
@@ -139,36 +167,51 @@
 .mehfil-chat-av{
   width:22px;height:22px;border-radius:50%;flex-shrink:0;
   display:grid;place-items:center;font-size:10px;font-weight:700;
-  background:rgba(255,255,255,.14);
+  background:color-mix(in srgb, var(--call-chrome-fg) 14%, transparent);
 }
 .mehfil-chat-body{min-width:0;display:flex;flex-direction:column;gap:2px;flex:1;}
 .mehfil-chat-meta{display:flex;align-items:baseline;gap:6px;}
 .mehfil-chat-name{font-weight:700;font-size:10px;opacity:.65;}
 .mehfil-chat-time{font-size:9px;opacity:.45;}
-.mehfil-chat-text{
-  word-break:break-word;overflow-wrap:anywhere;white-space:pre-wrap;
-}
-.mehfil-chat-text a{color:#FFC93C;text-decoration:underline;}
+.mehfil-chat-text{word-break:break-word;overflow-wrap:anywhere;white-space:pre-wrap;}
+.mehfil-chat-text a{color:var(--gold);text-decoration:underline;}
 .mehfil-chat-system{font-style:italic;}
 .mehfil-chat-compose{
-  display:flex;gap:6px;padding:8px;border-top:1px solid rgba(255,255,255,.08);flex-shrink:0;
+  display:flex;gap:6px;padding:8px;border-top:1px solid color-mix(in srgb, var(--call-chrome-fg) 8%, transparent);flex-shrink:0;
 }
 .mehfil-chat-compose input{
-  flex:1;min-width:0;border:none;border-radius:10px;padding:8px 10px;
-  background:rgba(255,255,255,.1);color:#fff;font-size:12px;
+  flex:1;min-width:0;border:none;border-radius:var(--r-control, 10px);padding:10px 12px;
+  background:color-mix(in srgb, var(--call-chrome-fg) 10%, transparent);color:var(--call-chrome-fg);font-size:12px;
+  min-height:44px;
 }
 .mehfil-chat-compose button{
-  width:32px;border:none;border-radius:10px;background:var(--red,#e63946);color:#fff;cursor:pointer;
+  min-width:44px;min-height:44px;border:none;border-radius:var(--r-control, 10px);
+  background:var(--brand-red, var(--red,#e63946));color:#fff;cursor:pointer;
 }
 .mehfil-sheets{position:relative;z-index:5;flex-shrink:0;}
+.mehfil-overlay.mehfil-sheet-open .mehfil-sheets{z-index:14;}
+.mehfil-overlay.mehfil-sheet-open .mehfil-chat-strip{
+  z-index:4;opacity:.35;pointer-events:none;
+}
 .mehfil-alone-float{
-  position:absolute;top:56px;right:12px;z-index:6;max-width:240px;
-  padding:10px;border-radius:12px;background:rgba(0,0,0,.55);font-size:11px;
+  position:absolute;top:calc(88px + env(safe-area-inset-top,0px));right:12px;z-index:6;max-width:240px;
+  padding:12px;border-radius:var(--r-card);
+  background:color-mix(in srgb, var(--call-surface) 92%, transparent);
+  border:1px solid color-mix(in srgb, var(--call-chrome-fg) 12%, transparent);
+  box-shadow:var(--elev-2, var(--shadow-md));
+  font-size:12px;line-height:1.4;
 }
 .mehfil-alone-actions{display:flex;flex-direction:column;gap:6px;margin-top:8px;}
+.mehfil-alone-media,
+.mehfil-nudge-btn{
+  min-height:44px;border-radius:var(--r-control, 10px);font-weight:700;font-size:12px;padding:8px;cursor:pointer;
+}
 .mehfil-alone-media{
-  border:1px solid rgba(255,255,255,.2);border-radius:10px;background:transparent;
-  color:inherit;font-weight:700;font-size:12px;padding:8px;cursor:pointer;
+  border:1px solid color-mix(in srgb, var(--call-chrome-fg) 20%, transparent);
+  background:transparent;color:inherit;
+}
+.mehfil-nudge-btn{
+  border:none;background:var(--brand-red, var(--red,#E63946));color:#fff;
 }
 .mehfil-invite-sheet .mehfil-ring-pick-row{justify-content:center;}
 @supports (height: 100dvh){
@@ -176,38 +219,96 @@
 }
 .mehfil-busy-banner{
   position:absolute;top:calc(12px + env(safe-area-inset-top,0px));left:12px;right:12px;z-index:170;
-  display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:12px;
-  background:rgba(22,24,29,.92);color:#fff;font-size:12px;box-shadow:var(--shadow-lg);
+  display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:var(--r-card);
+  background:color-mix(in srgb, var(--call-surface) 94%, #000);color:var(--call-chrome-fg);
+  font-size:12px;box-shadow:var(--shadow-lg);
 }
 .mehfil-busy-banner button{
-  border:none;border-radius:8px;padding:6px 10px;font-weight:700;cursor:pointer;font-size:11px;
+  border:none;border-radius:var(--r-control, 8px);padding:8px 12px;font-weight:700;cursor:pointer;font-size:11px;
+  min-height:44px;
 }
+.mehfil-immersive-exit{
+  position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:12px;z-index:20;
+  min-height:44px;min-width:44px;padding:0 14px;border-radius:999px;border:none;
+  background:color-mix(in srgb, var(--call-surface) 90%, #000);color:var(--call-chrome-fg);
+  font-weight:700;font-size:12px;cursor:pointer;
+  box-shadow:var(--elev-2, var(--shadow-md));
+}
+.mehfil-immersive-exit:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
 .mehfil-overlay.mehfil-immersive .mehfil-top{
-  opacity:0;pointer-events:none;transform:translateY(-100%);
+  opacity:0;pointer-events:none;transform:translateY(-12px);
 }
 .mehfil-overlay.mehfil-immersive .mehfil-dock{
-  opacity:0;pointer-events:none;transform:translateY(100%);
+  opacity:0;pointer-events:none;transform:translateY(12px);
 }
+.mehfil-overlay.mehfil-immersive .mehfil-alone-float{opacity:0;pointer-events:none;}
 .mehfil-overlay.mehfil-immersive .mehfil-chat-strip{
-  max-height:28px;opacity:.85;
+  max-height:28px;opacity:.75;
 }
 .mehfil-overlay.mehfil-immersive .mehfil-top::after{
-  content:'';position:absolute;left:0;right:0;bottom:-24px;height:24px;pointer-events:auto;
+  content:'';position:absolute;left:0;right:0;bottom:-28px;height:28px;pointer-events:auto;
 }
+/* Chaupaal light — neutral Gathered light, not cream parchment */
 .mehfil-overlay.mehfil-theme--light{
-  --call-bg:#f4f1ec;--call-chrome-fg:#1a1620;--call-chrome-muted:rgba(26,22,32,.65);
-  --call-tile:#e8e4dc;--call-surface:#fff;--call-ctrl-bg:rgba(0,0,0,.08);
+  --call-bg:#F5F5F5;
+  --call-surface:#FFFFFF;
+  --call-tile:#EEEEEE;
+  --call-chrome-fg:#1C1B1F;
+  --call-chrome-muted:#5F6368;
+  --call-ctrl-bg:rgba(28,27,31,.08);
+  --call-ctrl-muted:rgba(28,27,31,.12);
+  --call-ctrl-live:var(--green);
+  --call-speaking:var(--gold);
+  --call-hangup-bg:var(--brand-red);
+  --call-hangup-fg:#fff;
+  --call-chrome-line:var(--line, #E0E0E0);
 }
 .mehfil-overlay.mehfil-theme--dark{
-  --call-bg:#0e1014;--call-chrome-fg:#f5f3ef;--call-chrome-muted:rgba(245,243,239,.65);
+  --call-bg:#12141A;
+  --call-surface:#1A1D26;
+  --call-tile:#222633;
+  --call-chrome-fg:#FFFFFF;
+  --call-chrome-muted:rgba(255,255,255,.62);
+  --call-ctrl-bg:rgba(255,255,255,.10);
+  --call-ctrl-muted:rgba(255,255,255,.14);
+  --call-ctrl-live:var(--green);
+  --call-speaking:var(--gold);
+  --call-hangup-bg:var(--brand-red);
+  --call-hangup-fg:#fff;
 }
-.mehfil-media-control{display:flex;gap:8px;margin:8px 0;}
+.mehfil-overlay.mehfil-theme--light .mehfil-top{
+  background:linear-gradient(180deg, rgba(245,245,245,.96), transparent);
+}
+.mehfil-overlay.mehfil-theme--light .mehfil-dock{
+  background:linear-gradient(0deg, rgba(245,245,245,.96), rgba(245,245,245,.55));
+}
+.mehfil-overlay.mehfil-theme--light .mehfil-chat-compose input{color:#1C1B1F;}
+.mehfil-media-control{display:flex;gap:8px;margin:8px 0;flex-wrap:wrap;}
 .mehfil-media-control button{
-  flex:1;border:none;border-radius:10px;padding:8px;font-size:11px;font-weight:700;cursor:pointer;
-  background:rgba(255,255,255,.1);color:inherit;
+  flex:1;min-height:44px;border:none;border-radius:var(--r-control, 10px);padding:8px;
+  font-size:11px;font-weight:700;cursor:pointer;
+  background:color-mix(in srgb, var(--call-chrome-fg) 10%, transparent);color:inherit;
 }
 .mehfil-fs-btn{
-  width:100%;margin-top:8px;border:none;border-radius:10px;padding:10px;
-  background:rgba(255,255,255,.12);color:inherit;font-weight:700;cursor:pointer;
+  width:100%;margin-top:8px;border:none;border-radius:var(--r-control, 10px);padding:12px;
+  min-height:44px;background:color-mix(in srgb, var(--call-chrome-fg) 12%, transparent);
+  color:inherit;font-weight:700;cursor:pointer;
 }
 .mehfil-ring-pick-row.is-disabled{opacity:.45;}
+.mehfil-more-item:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:var(--r-sm);}
+.mehfil-error,.mehfil-disabled{
+  border-radius:var(--r-card);
+  padding:var(--space-4);
+  background:color-mix(in srgb, var(--call-surface) 90%, transparent);
+  border:1px solid color-mix(in srgb, var(--call-chrome-fg) 10%, transparent);
+  max-width:320px;margin:12px auto;text-align:center;
+}
+.mehfil-error p,.mehfil-disabled p{margin:0 0 12px;line-height:1.45;color:var(--call-chrome-muted);}
+.mehfil-retry{
+  min-height:44px;padding:0 16px;border-radius:var(--r-control);border:none;
+  background:var(--brand-red);color:#fff;font-weight:700;cursor:pointer;margin:4px;
+}
+.mehfil-retry--ghost{
+  background:transparent;color:var(--call-chrome-fg);
+  border:1px solid color-mix(in srgb, var(--call-chrome-fg) 22%, transparent);
+}
