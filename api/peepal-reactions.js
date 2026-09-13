@@ -280,6 +280,16 @@ async function personalMatch(db, admin, user, body) {
 
   // P6: retrieve from candidate pools (fail-open to openToMeet scan inside retrieveCandidates)
   let candidates = [];
+  const mq = require('../server-lib/match-quality');
+  const viewerAge = Number(viewer.age || viewer.profile?.age);
+  const viewerIsTeen = !!(viewer.teenMode || (Number.isFinite(viewerAge) && viewerAge > 0 && viewerAge < 18));
+  const [{ blockedSet, mutedSet }, notInterestedSet, recentMap] = await Promise.all([
+    mq.loadBlockMuteReportSets(db, user.uid),
+    mq.loadNotInterestedSet(db, user.uid),
+    mq.loadRecentShown(db, user.uid),
+  ]);
+  const hardCtx = { blockedSet, mutedSet, reportedSet: new Set(), notInterestedSet, viewerIsTeen, surface: 'personal' };
+
   try {
     const { retrieveCandidates, loadModelSafe, isOptedOutUser } = require('../server-lib/retrieve-rank');
     const optedOut = isOptedOutUser(viewer);
@@ -292,21 +302,20 @@ async function personalMatch(db, admin, user, body) {
       db,
       model: optedOut ? null : model,
       viewer,
-      hardCtx: { blockedSet: new Set(), mutedSet: new Set(), viewerIsTeen: false },
+      hardCtx: { blockedSet, mutedSet, viewerIsTeen },
     });
-    (retrieved.candidates || []).forEach((data) => {
-      if (data.uid === user.uid) return;
-      if (!passesStructuredFilters(viewer, data, filters)) return;
-      candidates.push(data);
+    candidates = mq.filterSafetyFirst(viewer, retrieved.candidates || [], hardCtx);
+    candidates = candidates.filter((data) => {
+      if (data.uid === user.uid) return false;
+      return passesStructuredFilters(viewer, data, filters);
     });
   } catch (e) {
     console.warn('[personal_match] retrieve', e?.message || e);
     const snap = await db.collection('users').where('openToMeet', '==', true).limit(MATCH_POOL).get();
-    snap.docs.forEach((d) => {
-      const data = { uid: d.id, ...d.data() };
-      if (data.uid === user.uid) return;
-      if (!passesStructuredFilters(viewer, data, filters)) return;
-      candidates.push(data);
+    const raw = snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
+    candidates = mq.filterSafetyFirst(viewer, raw, hardCtx).filter((data) => {
+      if (data.uid === user.uid) return false;
+      return passesStructuredFilters(viewer, data, filters);
     });
   }
 
@@ -325,14 +334,30 @@ async function personalMatch(db, admin, user, body) {
     })
   );
 
-  const ranked = rankPersonalMatches({
+  let ranked = rankPersonalMatches({
     viewer,
     candidates,
     edgeMap,
-    limit: Math.min(12, Number(body.limit) || 8),
+    limit: Math.min(16, Number(body.limit) || 8),
     intent: intentText,
     weights,
   });
+  ranked = mq.polishPeopleMatches({
+    viewer,
+    ranked,
+    edgeMap,
+    recentMap,
+    limit: Math.min(12, Number(body.limit) || 8),
+    surface: 'personal',
+  });
+  try {
+    await mq.recordRecentShown(
+      db,
+      admin,
+      user.uid,
+      ranked.map((m) => m.uid)
+    );
+  } catch (e) {}
 
   // Persist impression context for ignored-window tracking (client may later log ignored)
   const matchBatch = ranked.map((m) => ({
@@ -351,6 +376,8 @@ async function personalMatch(db, admin, user, body) {
       mutualStable: !!m.mutualStable,
       signals: m.signals || [],
       signalScores: m.signalScores || {},
+      explain: m.explain || m.signals || [],
+      reciprocity: m.reciprocity != null ? Math.round(m.reciprocity * 1000) / 1000 : null,
       intentProfileId,
       name: m.user?.name || m.user?.profile?.displayName || 'Member',
       username: m.user?.username || '',

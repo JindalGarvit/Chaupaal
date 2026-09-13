@@ -265,16 +265,17 @@ async function logMatchEngagement(db, admin, payload) {
     outcome,
     intentText,
   } = payload || {};
-  if (!uid || !intentProfileId || !['accepted', 'ignored', 'rejected', 'rated_high', 'rated_low'].includes(outcome)) {
+  if (!uid || !['accepted', 'ignored', 'rejected', 'rated_high', 'rated_low'].includes(outcome)) {
     return { ok: false };
   }
   // Map chat ratings into accepted/other buckets for weight refresh.
   const storedOutcome =
     outcome === 'rated_high' ? 'accepted' : outcome === 'rated_low' ? 'rejected' : outcome;
+  const profileId = intentProfileId || 'global_default';
   const ref = db.collection(ENGAGEMENT_COLLECTION).doc();
   await ref.set({
     uid,
-    intentProfileId,
+    intentProfileId: profileId,
     candidateUid: candidateUid || null,
     intentText: String(intentText || '').slice(0, 160),
     signalScores: signalScores || {},
@@ -282,11 +283,13 @@ async function logMatchEngagement(db, admin, payload) {
     rawOutcome: outcome,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
-  // Fire-and-forget sample counter bump
-  db.collection(COLLECTION)
-    .doc(intentProfileId)
-    .set({ sampleCountSinceRefresh: admin.firestore.FieldValue.increment(1) }, { merge: true })
-    .catch(() => {});
+  // Fire-and-forget sample counter bump (skip synthetic global unless doc exists)
+  if (intentProfileId) {
+    db.collection(COLLECTION)
+      .doc(intentProfileId)
+      .set({ sampleCountSinceRefresh: admin.firestore.FieldValue.increment(1) }, { merge: true })
+      .catch(() => {});
+  }
   return { ok: true, id: ref.id };
 }
 
@@ -316,6 +319,34 @@ function aggregateEngagement(events) {
   return summary;
 }
 
+function computeDeterministicWeightUpdate(current, summary) {
+  /** Arithmetic learning (6A): raise signals where accepted avg > other avg. */
+  const next = { ...normalizeWeights(current) };
+  SIGNAL_NAMES.forEach((k) => {
+    const row = summary[k] || {};
+    const a = row.avgAccepted;
+    const o = row.avgIgnoredOrRejected;
+    if (a == null || o == null) return;
+    const gap = a - o;
+    // Small proportional nudge before clamp
+    next[k] = Math.max(0, next[k] + gap * 0.08);
+  });
+  return clampWeightDelta(current, next);
+}
+
+function cohortQualityScore(summary, sampleCount) {
+  if (!sampleCount || sampleCount < 10) return null;
+  let better = 0;
+  let worse = 0;
+  SIGNAL_NAMES.forEach((k) => {
+    const row = summary[k] || {};
+    if (row.avgAccepted == null || row.avgIgnoredOrRejected == null) return;
+    if (row.avgAccepted > row.avgIgnoredOrRejected + 0.02) better += 1;
+    if (row.avgAccepted + 0.02 < row.avgIgnoredOrRejected) worse += 1;
+  });
+  return { better, worse, ratio: better / Math.max(1, better + worse) };
+}
+
 async function refreshIntentProfileWeights(db, admin, profileId, profileData) {
   const last = profileData.lastRefreshedAt?.toDate?.() || profileData.lastRefreshedAt || new Date(0);
   const lastMs = last instanceof Date ? last.getTime() : new Date(last).getTime();
@@ -337,8 +368,12 @@ async function refreshIntentProfileWeights(db, admin, profileId, profileData) {
   const summary = aggregateEngagement(events);
   const current = normalizeWeights(profileData.weights);
 
-  let nextWeights = current;
-  let rationale = profileData.rationale || '';
+  // P7: always compute deterministic update first (6A — no LLM required for learning)
+  let nextWeights = computeDeterministicWeightUpdate(current, summary);
+  let rationale = `Deterministic refresh from ${events.length} outcomes (accepted vs ignored gaps).`;
+  let fromAi = false;
+
+  // Optional AI polish when enabled — still clamped
   if (isAiFeaturesEnabled()) {
     try {
       const result = await callAI({
@@ -355,6 +390,7 @@ Prefer raising weights for signals where avgAccepted > avgIgnoredOrRejected.`,
             content: JSON.stringify({
               intent: profileData.canonicalIntentText,
               currentWeights: current,
+              proposedDeterministic: nextWeights,
               engagementSummary: summary,
               sampleCount: events.length,
             }),
@@ -365,13 +401,25 @@ Prefer raising weights for signals where avgAccepted > avgIgnoredOrRejected.`,
       if (parsed?.weights) {
         nextWeights = clampWeightDelta(current, parsed.weights);
         if (parsed.rationale) rationale = String(parsed.rationale).slice(0, 240);
+        fromAi = true;
       }
     } catch (e) {
-      console.warn('[intent-weights] refresh AI', e?.message || e);
-      return { skipped: true, reason: 'ai_error' };
+      console.warn('[intent-weights] refresh AI polish skipped', e?.message || e);
     }
-  } else {
-    return { skipped: true, reason: 'ai_disabled' };
+  }
+
+  const quality = cohortQualityScore(summary, events.length);
+  // Rollback guard: if previous cycle was worse and we have previousWeights, revert instead
+  let rolledBack = false;
+  if (
+    quality &&
+    quality.ratio < 0.35 &&
+    profileData.previousWeights &&
+    (Number(profileData.version) || 1) > 1
+  ) {
+    nextWeights = normalizeWeights(profileData.previousWeights);
+    rationale = `Rolled back to previous weights — cohort quality ratio ${quality.ratio.toFixed(2)}.`;
+    rolledBack = true;
   }
 
   const now = admin.firestore.FieldValue.serverTimestamp();
@@ -386,10 +434,20 @@ Prefer raising weights for signals where avgAccepted > avgIgnoredOrRejected.`,
         version: (Number(profileData.version) || 1) + 1,
         sampleCountSinceRefresh: 0,
         lastRefreshedAt: now,
+        lastQuality: quality,
+        lastRefreshFromAi: fromAi,
+        lastRolledBack: rolledBack,
       },
       { merge: true }
     );
-  return { refreshed: true, version: (Number(profileData.version) || 1) + 1, samples: events.length };
+  return {
+    refreshed: true,
+    version: (Number(profileData.version) || 1) + 1,
+    samples: events.length,
+    fromAi,
+    rolledBack,
+    quality,
+  };
 }
 
 /** Weekly pass: refresh profiles with enough new engagement samples. */
@@ -432,6 +490,61 @@ async function revertIntentWeights(db, profileId) {
   return { ok: true, version: (Number(data.version) || 1) + 1 };
 }
 
+/**
+ * Private aggregate metrics snapshot for P7 evaluation (10B — no user UI).
+ */
+async function writeMatchMetricSnapshot(db, admin, { label = 'weekly' } = {}) {
+  const since = Date.now() - 7 * 864e5;
+  const sinceTs = admin.firestore.Timestamp.fromDate(new Date(since));
+  let engagement = [];
+  let outcomes = [];
+  try {
+    const snap = await db
+      .collection(ENGAGEMENT_COLLECTION)
+      .where('createdAt', '>=', sinceTs)
+      .limit(500)
+      .get();
+    engagement = snap.docs.map((d) => d.data() || {});
+  } catch (e) {}
+  try {
+    const snap = await db.collection('match_outcomes').where('createdAt', '>=', sinceTs).limit(500).get();
+    outcomes = snap.docs.map((d) => d.data() || {});
+  } catch (e) {
+    try {
+      const snap = await db.collection('match_outcomes').limit(300).get();
+      outcomes = snap.docs.map((d) => d.data() || {});
+    } catch (err) {}
+  }
+
+  const accepted = engagement.filter((e) => e.outcome === 'accepted').length;
+  const rejected = engagement.filter((e) => e.outcome === 'rejected' || e.outcome === 'ignored').length;
+  const connected = outcomes.filter((o) => o.outcome === 'connected' || o.outcome === 'continued').length;
+  const ghosted = outcomes.filter((o) => o.outcome === 'ghosted').length;
+  const reported = outcomes.filter((o) => o.outcome === 'reported').length;
+
+  const snapshot = {
+    v: 1,
+    label,
+    windowDays: 7,
+    engagementN: engagement.length,
+    acceptanceRate: engagement.length ? accepted / engagement.length : null,
+    rejectOrIgnoreRate: engagement.length ? rejected / engagement.length : null,
+    outcomeN: outcomes.length,
+    connectRate: outcomes.length ? connected / outcomes.length : null,
+    ghostRate: outcomes.length ? ghosted / outcomes.length : null,
+    reportRate: outcomes.length ? reported / outcomes.length : null,
+    gameCompletionRate: null,
+    eloMismatchP50: null,
+    repeatSuggestionRate: null,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAtMs: Date.now(),
+  };
+
+  const id = `${label}_${new Date().toISOString().slice(0, 10)}`;
+  await db.collection('matchMetricSnapshots').doc(id).set(snapshot, { merge: true });
+  return { id, snapshot };
+}
+
 module.exports = {
   SIGNAL_NAMES,
   COLLECTION,
@@ -446,4 +559,8 @@ module.exports = {
   runWeeklyIntentWeightRefresh,
   revertIntentWeights,
   intentKey,
+  clampWeightDelta,
+  computeDeterministicWeightUpdate,
+  writeMatchMetricSnapshot,
+  aggregateEngagement,
 };

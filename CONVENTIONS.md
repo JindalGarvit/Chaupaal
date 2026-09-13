@@ -191,6 +191,12 @@ Enforcement is **ON** for Firestore / RTDB (and Storage if enabled). Client uses
 - Content: `rank_content` on `api/peepal-reactions`; Manch: `rank_manch_library` on `api/media-config` (GOTD fairness untouched). Client `requestContentRank` / `_serverScore` must not fight server order.
 - Exploration ~18% (cold-start ~35%). Scheduler refreshes pools via `refreshCandidatePools`.
 
+## 11f. Matchmaking quality (P7)
+
+- People: safety filters **before** rank; Gale-Shapley + reciprocity boost; `matchRecentShown` cooldown ~72h; `not_interested` ~180d; diversity floor; personal vs professional separation.
+- Dangal strangers: `dangal_match_step` / `_cancel` on `api/media-config` — Elo bands widen over wait, then honest **Practice AI**. Friend challenges unchanged.
+- Outcomes → `match_outcomes` + `matchEngagementEvents`; weekly weights move only after ≥50 samples with ±0.15 clamp + rollback; metrics in `matchMetricSnapshots` (Admin-only).
+
 ## 12. Globals & module surface
 
 The client still loads classic non-module scripts (`<script src>`), so top-level `function` / `let` and many `window.X =` exports are intentional for cross-file calls.

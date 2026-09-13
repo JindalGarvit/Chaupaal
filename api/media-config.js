@@ -567,6 +567,52 @@ async function handlePost(req, res) {
     }
   }
 
+  // P7: Elo-aware stranger matchmaking (friends untouched)
+  if (action === 'dangal_match_step' || action === 'dangal_match_cancel') {
+    const adminNs = initAdmin();
+    if (!adminNs) {
+      return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    }
+    try {
+      const { checkActionRateLimit } = require('../server-lib/rate-limit');
+      const rate = await checkActionRateLimit(user.uid, 'dangal');
+      if (!rate.ok) {
+        return sendError(res, 429, 'RATE_LIMITED', 'Too many match attempts. Try again shortly.');
+      }
+    } catch (e) {}
+    try {
+      const {
+        dangalMatchStep,
+        dangalMatchCancel,
+      } = require('../server-lib/dangal-matchmaking');
+      const db = adminNs.firestore();
+      if (action === 'dangal_match_cancel') {
+        const result = await dangalMatchCancel(db, {
+          category: body.category || body.filters?.category || 'GK',
+          waitingId: body.waitingId,
+        });
+        return sendSuccess(res, result);
+      }
+      const result = await dangalMatchStep(db, adminNs, {
+        uid: user.uid,
+        name: body.name || user.name || 'You',
+        category: body.category || body.filters?.category || 'GK',
+        gameId: body.gameId || body.filters?.gameId || null,
+        filters: body.filters || {},
+        waitingId: body.waitingId || null,
+      });
+      return sendSuccess(res, result);
+    } catch (e) {
+      console.warn('[media-config] dangal_match', e?.message || e);
+      return sendSuccess(res, {
+        status: 'practice_ai',
+        simulated: true,
+        label: 'Practice AI',
+        reason: 'error',
+      });
+    }
+  }
+
   // P6: personalize Manch library order — GOTD fairness stays in get_game_of_day
   if (action === 'rank_manch_library') {
     const adminNs = initAdmin();
@@ -1154,6 +1200,8 @@ async function handlePost(req, res) {
       'switch_account',
       'get_game_of_day',
       'rank_manch_library',
+      'dangal_match_step',
+      'dangal_match_cancel',
       'record_game_play',
       'record_game_like',
       'list_games_health',

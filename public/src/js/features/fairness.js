@@ -202,6 +202,25 @@ function recordMatchOutcome(matchUid, outcome){
     uid: currentUser.uid, matchUid, outcome,
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   }).catch(()=>{});
+  // Feed weekly intent-weight learning (P7) — accepted/rejected map
+  try{
+    if(typeof apiFetch==='function' && currentUser){
+      const mapped = outcome==='connected'||outcome==='continued' ? 'accepted'
+        : outcome==='reported' ? 'rejected'
+        : outcome==='ghosted' ? 'ignored'
+        : 'ignored';
+      apiFetch('/api/peepal-reactions',{
+        method:'POST', needAuth:true,
+        body:{
+          action:'log_match_engagement',
+          candidateUid: matchUid,
+          outcome: mapped,
+          signalScores:{},
+          intentText:'',
+        },
+      }).catch(()=>{});
+    }
+  }catch(e){}
   // If ghosted, quietly reduce that profile's response rate signal
   if(outcome === 'ghosted'){
     const key = `chaupaal_msgs_sent_${matchUid}`;

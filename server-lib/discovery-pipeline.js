@@ -340,10 +340,40 @@ async function runIntentDiscover(db, admin, user, body, deps) {
     plan,
     weights,
     prefs,
-    limit,
+    limit: Math.max(limit * 2, 12),
     model: viewer._p6Model,
     optedOut: viewer._p6OptedOut,
   });
+
+  // P7 quality polish
+  let polished = ranked;
+  try {
+    const mq = require('./match-quality');
+    const recentMap = await mq.loadRecentShown(db, user.uid);
+    const notInterestedSet = await mq.loadNotInterestedSet(db, user.uid);
+    polished = ranked.filter((m) => !notInterestedSet.has(m.uid) && !prefs?.notInterestedUids?.has(m.uid));
+    const surface =
+      normalizeProfileType(viewer.profileType || viewer.profile?.profileType) === 'professional'
+        ? 'professional'
+        : 'personal';
+    polished = mq.polishPeopleMatches({
+      viewer,
+      ranked: polished,
+      edgeMap,
+      recentMap,
+      limit,
+      surface,
+    });
+    await mq.recordRecentShown(
+      db,
+      admin,
+      user.uid,
+      polished.map((m) => m.uid)
+    );
+  } catch (e) {
+    console.warn('[intent_discover] match-quality', e?.message || e);
+    polished = ranked.slice(0, limit);
+  }
 
   // Write shared candidate pool (uids+scores) on miss — never viewer-final list
   if (!cacheHit && keyInfo && candidates.length) {
@@ -353,7 +383,7 @@ async function runIntentDiscover(db, admin, user, body, deps) {
     }));
     // Prefer ranked scores when available for better reuse hints
     const rankedMap = {};
-    ranked.forEach((m) => {
+    polished.forEach((m) => {
       rankedMap[m.uid] = m.score;
     });
     const toStore = candidates.map((c) => ({
@@ -371,7 +401,7 @@ async function runIntentDiscover(db, admin, user, body, deps) {
       appliedAssumptionIds: plan.appliedAssumptionIds,
       suppressedAssumptionIds: plan.suppressedAssumptionIds,
       hardFilterKeys: Object.keys(plan.hardFilters || {}),
-      resultCount: ranked.length,
+      resultCount: polished.length,
       usedLlm,
       cacheHit,
       cacheMissReason: cacheHit ? null : cacheMissReason,
@@ -403,7 +433,7 @@ async function runIntentDiscover(db, admin, user, body, deps) {
     },
     intentProfileId,
     refineChips: dedupeChips(refineChips),
-    matches: ranked.map((m) => ({
+    matches: polished.map((m) => ({
       uid: m.uid,
       name: m.user.name || m.user.displayName || '',
       username: m.user.username || '',
@@ -418,12 +448,14 @@ async function runIntentDiscover(db, admin, user, body, deps) {
       score: Math.round(m.score * 1000) / 1000,
       matchPct: Math.min(99, Math.max(28, Math.round(m.score * 100))),
       explain: m.explain,
+      reciprocity: m.reciprocity != null ? Math.round(m.reciprocity * 1000) / 1000 : null,
+      mutualStable: !!m.mutualStable,
       signalScores: m.signalScores,
       assumptionFit: m.assumptionFit,
     })),
-    empty: ranked.length === 0,
+    empty: polished.length === 0,
     emptyMessage:
-      ranked.length === 0
+      polished.length === 0
         ? 'No eligible people matched that search yet. Try broader wording — we never invent profiles.'
         : null,
     retrieval: viewer._p6Retrieve || null,

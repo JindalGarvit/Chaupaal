@@ -478,6 +478,22 @@ module.exports = async function handler(req, res) {
       console.warn('[scheduler] candidate pools', e?.message || e);
     }
 
+    // P7: prune stale Dangal waiting nodes + private match metrics snapshot
+    let dangalQueue = { skipped: true };
+    let matchMetrics = { skipped: true };
+    try {
+      const { pruneStaleDangalQueues } = require('../server-lib/dangal-matchmaking');
+      dangalQueue = await pruneStaleDangalQueues(db, {});
+    } catch (e) {
+      dangalQueue = { error: e?.message || String(e) };
+    }
+    try {
+      const { writeMatchMetricSnapshot } = require('../server-lib/intent-weights');
+      matchMetrics = await writeMatchMetricSnapshot(db, admin, { label: 'cron' });
+    } catch (e) {
+      matchMetrics = { error: e?.message || String(e) };
+    }
+
     return sendSuccess(res, {
       ...results,
       summary,
@@ -490,6 +506,8 @@ module.exports = async function handler(req, res) {
       signalPrune,
       userModel,
       candidatePools,
+      dangalQueue,
+      matchMetrics,
     });
   } catch (e) {
     console.error('[chaupaal-scheduler]', e?.message || e);

@@ -277,6 +277,9 @@ service cloud.firestore {
         allow read: if isOwner(userId);
         allow write: if false;
       }
+      match /matchRecentShown/{otherUid} {
+        allow read, write: if false; // Admin SDK (P7 anti-repetition)
+      }
       match /signalCaps/{dayId} {
         allow read, write: if false;
       }
@@ -864,6 +867,10 @@ service cloud.firestore {
     }
     // P6 candidate pools — Admin SDK only (retrieval shards)
     match /candidatePools/{poolId} {
+      allow read, write: if false;
+    }
+    // P7 match metrics — Admin only
+    match /matchMetricSnapshots/{docId} {
       allow read, write: if false;
     }
     match /chaupaalFeedback/{docId} {

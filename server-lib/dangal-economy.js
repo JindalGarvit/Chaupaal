@@ -306,4 +306,5 @@ module.exports = {
   getWallet,
   resolveGame,
   ACHIEVEMENTS,
+  RATED,
 };

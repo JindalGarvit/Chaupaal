@@ -162,26 +162,26 @@ async function buyStreakFreeze(){
 // Moved to /src/js/core/baithak-transport.js (loadRealtimeMessages / sendRealtimeMessage).
 
 
-// ===================== REAL MATCHMAKING (Firestore waiting room) =====================
-let matchmakingListener=null;
+// ===================== REAL MATCHMAKING (Elo-aware server queue) =====================
 
 /**
- * Find a live opponent via waiting room. Returns { cancel } immediately.
- * onFound({ name, uid?, simulated }) — simulated=true on timeout / error / offline.
+ * Find a live opponent via Elo-aware server queue (P7).
+ * Returns { cancel } immediately.
+ * onFound({ name, uid?, simulated, eloDelta? }) — simulated=true → Practice AI (honest).
  */
 function findRealOpponent(filters, onFound, onCancel){
   let settled=false;
   let timeoutId=null;
-  let myRef=null;
+  let pollId=null;
+  let waitingId=null;
+  const category=filters?.category||'GK';
+  const gameId=filters?.gameId||filters?.category||null;
 
   const finish=(payload)=>{
     if(settled) return;
     settled=true;
     if(timeoutId){ clearTimeout(timeoutId); timeoutId=null; }
-    if(matchmakingListener){
-      try{ matchmakingListener(); }catch(e){}
-      matchmakingListener=null;
-    }
+    if(pollId){ clearInterval(pollId); pollId=null; }
     try{ onFound(payload); }catch(e){}
   };
 
@@ -189,78 +189,93 @@ function findRealOpponent(filters, onFound, onCancel){
     if(settled) return;
     settled=true;
     if(timeoutId){ clearTimeout(timeoutId); timeoutId=null; }
-    if(matchmakingListener){
-      try{ matchmakingListener(); }catch(e){}
-      matchmakingListener=null;
+    if(pollId){ clearInterval(pollId); pollId=null; }
+    if(waitingId && typeof apiFetch==='function'){
+      try{
+        await apiFetch('/api/media-config',{
+          method:'POST', needAuth:true,
+          body:{ action:'dangal_match_cancel', category, waitingId },
+        });
+      }catch(e){}
     }
-    if(myRef){ try{ await myRef.delete(); }catch(e){} }
     try{ if(typeof onCancel==='function') onCancel(); }catch(e){}
   };
 
+  const applyResult=(data)=>{
+    if(!data || settled) return false;
+    if(data.status==='matched'){
+      finish({
+        name:data.name||'Your opponent',
+        uid:data.uid||null,
+        simulated:false,
+        eloDelta:data.eloDelta!=null?data.eloDelta:null,
+        band:data.band||null,
+      });
+      return true;
+    }
+    if(data.status==='practice_ai'){
+      finish({ name:'Practice AI', simulated:true, reason:data.reason||'timeout' });
+      return true;
+    }
+    if(data.status==='waiting' && data.waitingId){
+      waitingId=data.waitingId;
+    }
+    return false;
+  };
+
   (async()=>{
-    if(!db||!currentUser){ finish({name:'Practice AI',simulated:true}); return; }
-    const category=filters.category||'GK';
-    const waitingRef=db.collection('matchmaking').doc(category).collection('waiting');
-    const claimWaitingDoc=async (docSnap)=>{
-      const opponent=docSnap.data()||{};
-      await db.runTransaction(async (tx)=>{
-        const fresh=await tx.get(docSnap.ref);
-        if(!fresh.exists) throw new Error('gone');
-        const d=fresh.data()||{};
-        if(d.claimedBy) throw new Error('claimed');
-        tx.update(docSnap.ref,{
-          claimedBy:currentUser.uid,
-          claimerName:userProfile?.name||currentUser.displayName||'You',
-          claimedAt:firebase.firestore.FieldValue.serverTimestamp(),
-        });
-      });
-      try{ await docSnap.ref.delete(); }catch(e){}
-      finish({name:opponent.name||'Your opponent',uid:opponent.uid,simulated:false});
-    };
+    if(!currentUser || typeof apiFetch!=='function'){
+      finish({ name:'Practice AI', simulated:true });
+      return;
+    }
     try{
-      const snap=await waitingRef.where('uid','!=',currentUser.uid).limit(1).get();
-      if(settled) return;
-      if(!snap.empty){
-        try{
-          await claimWaitingDoc(snap.docs[0]);
-        }catch(e){
-          finish({name:'Practice AI',simulated:true});
-        }
-        return;
-      }
-      myRef=await waitingRef.add({
-        uid:currentUser.uid,
-        name:userProfile?.name||'You',
-        category, filters,
-        ts:firebase.firestore.FieldValue.serverTimestamp()
+      const env=await apiFetch('/api/media-config',{
+        method:'POST', needAuth:true,
+        body:{
+          action:'dangal_match_step',
+          category,
+          gameId,
+          filters,
+          name:(typeof userProfile!=='undefined'&&userProfile?.name)||currentUser.displayName||'You',
+        },
       });
-      if(settled){
-        try{ await myRef.delete(); }catch(e){}
-        return;
-      }
-      matchmakingListener=myRef.onSnapshot(async snap=>{
+      const data=env?.data||env;
+      if(applyResult(data)) return;
+      waitingId=data?.waitingId||waitingId;
+      // Poll while waiting — band widens server-side
+      pollId=setInterval(async()=>{
         if(settled) return;
-        if(!snap.exists){
-          finish({name:'Your opponent',simulated:false});
-          return;
-        }
-        const d=snap.data()||{};
-        if(d.claimedBy && d.claimedBy!==currentUser.uid){
-          finish({name:d.claimerName||'Your opponent',uid:d.claimedBy,simulated:false});
-          try{ await myRef.delete(); }catch(e){}
-        }
-      });
+        try{
+          const env2=await apiFetch('/api/media-config',{
+            method:'POST', needAuth:true,
+            body:{
+              action:'dangal_match_step',
+              category,
+              gameId,
+              filters,
+              waitingId,
+              name:(typeof userProfile!=='undefined'&&userProfile?.name)||'You',
+            },
+          });
+          applyResult(env2?.data||env2);
+        }catch(e){}
+      }, 2000);
+      const timeoutMs=Number(data?.timeoutMs)||20000;
       timeoutId=setTimeout(async()=>{
         if(settled) return;
-        if(matchmakingListener){
-          try{ matchmakingListener(); }catch(e){}
-          matchmakingListener=null;
+        if(pollId){ clearInterval(pollId); pollId=null; }
+        if(waitingId){
+          try{
+            await apiFetch('/api/media-config',{
+              method:'POST', needAuth:true,
+              body:{ action:'dangal_match_cancel', category, waitingId },
+            });
+          }catch(e){}
         }
-        if(myRef){ try{ await myRef.delete(); }catch(e){} }
-        finish({name:'Practice AI',simulated:true});
-      },20000);
+        finish({ name:'Practice AI', simulated:true, reason:'timeout' });
+      }, timeoutMs);
     }catch(e){
-      finish({name:'Practice AI',simulated:true});
+      finish({ name:'Practice AI', simulated:true, reason:'error' });
     }
   })();
 
