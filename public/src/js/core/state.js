@@ -283,7 +283,42 @@ function openSettingsModal(){
   }
 }
 window.openSettingsModal = openSettingsModal;
+
+/** Open Settings → Privacy & account, optionally scroll to a control id. */
+function openSettingsPrivacyFocus(controlId) {
+  openSettingsModal();
+  setTimeout(() => {
+    try {
+      const cats = document.querySelectorAll('#settingsModal details.settings-cat');
+      cats.forEach((d) => {
+        const sum = d.querySelector('summary');
+        if (sum && /privacy/i.test(sum.textContent || '')) d.open = true;
+      });
+      const el = controlId ? document.getElementById(controlId) : null;
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const row = el.closest('.toggle-row, .settings-link-row, #strangerLimitRow');
+        if (row) {
+          row.classList.add('settings-focus-flash');
+          setTimeout(() => row.classList.remove('settings-focus-flash'), 1600);
+        }
+      }
+    } catch (e) {}
+  }, 80);
+}
+window.openSettingsPrivacyFocus = openSettingsPrivacyFocus;
+
 document.getElementById('settingsBtn')?.addEventListener('click', openSettingsModal);
+document.getElementById('openCollectsDisclosureBtn')?.addEventListener('click', () => {
+  document.getElementById('settingsModal')?.classList.add('hidden');
+  if (typeof openLegalSheet === 'function') openLegalSheet('collects');
+});
+document.getElementById('openCollectsFromToggleBtn')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  document.getElementById('settingsModal')?.classList.add('hidden');
+  if (typeof openLegalSheet === 'function') openLegalSheet('collects');
+});
 document.getElementById('openExclusionListBtn')?.addEventListener('click',()=>{
   document.getElementById('settingsModal')?.classList.add('hidden');
   if(typeof openExclusionListManager==='function') openExclusionListManager();

@@ -310,6 +310,11 @@ module.exports = async function handler(req, res) {
   }
   const db = admin.firestore();
 
+  // Soft duration budget under Vercel Hobby maxDuration 120s (vercel.json).
+  const startedAt = Date.now();
+  const SOFT_BUDGET_MS = 95_000;
+  const withinBudget = () => Date.now() - startedAt < SOFT_BUDGET_MS;
+
   try {
     const { ref: cursorRef, data: cursor } = await getCursor(db);
     let lastUid = cursor.lastUid || null;
@@ -327,6 +332,10 @@ module.exports = async function handler(req, res) {
     };
 
     for (const doc of snap.docs) {
+      if (!withinBudget()) {
+        results.skippedBudget = (results.skippedBudget || 0) + 1;
+        break;
+      }
       const uid = doc.id;
       const state = doc.data() || {};
       const stateRef = doc.ref;
@@ -375,18 +384,25 @@ module.exports = async function handler(req, res) {
     }
 
     // Once per run attempt daily summary (idempotent by date doc)
-    const summary = await maybeWriteDailyFeedbackSummary(db);
+    const summary = withinBudget()
+      ? await maybeWriteDailyFeedbackSummary(db)
+      : { skipped: true, reason: 'duration_budget' };
 
     // Weekly intent-weight refresh (Sundays UTC) — only profiles with ≥50 samples
     let intentWeights = { skipped: true, reason: 'not_sunday' };
     let discoveryBatch = { skipped: true };
     try {
-      const wd = new Date().getUTCDay(); // 0 = Sunday
-      if (wd === 0) {
-        intentWeights = await runWeeklyIntentWeightRefresh(db, admin);
+      if (withinBudget()) {
+        const wd = new Date().getUTCDay(); // 0 = Sunday
+        if (wd === 0) {
+          intentWeights = await runWeeklyIntentWeightRefresh(db, admin);
+        }
+        // Thin nightly discovery preference label stub (every run — idempotent by dayKey)
+        discoveryBatch = await processDiscoveryBatchLabels(db, admin, {});
+      } else {
+        intentWeights = { skipped: true, reason: 'duration_budget' };
+        discoveryBatch = { skipped: true, reason: 'duration_budget' };
       }
-      // Thin nightly discovery preference label stub (every run — idempotent by dayKey)
-      discoveryBatch = await processDiscoveryBatchLabels(db, admin, {});
     } catch (e) {
       intentWeights = intentWeights.error ? intentWeights : { error: e?.message || String(e) };
       discoveryBatch = { error: e?.message || String(e) };
@@ -396,7 +412,9 @@ module.exports = async function handler(req, res) {
     // Expire live location shares past duration (independent of sender client)
     let liveLoc = { skipped: true };
     try {
-      liveLoc = await expireLiveLocationShares(db, admin, { limit: 40 });
+      liveLoc = withinBudget()
+        ? await expireLiveLocationShares(db, admin, { limit: 40 })
+        : { skipped: true, reason: 'duration_budget' };
     } catch (e) {
       liveLoc = { error: e?.message || String(e) };
       console.warn('[scheduler] live location expire', e?.message || e);
@@ -405,7 +423,9 @@ module.exports = async function handler(req, res) {
     // Advance stalled Peepal audience segments (cascade to next segment)
     let peepalSegments = { skipped: true };
     try {
-      peepalSegments = await advanceStalledPeepalSegments(db, { limit: 30 });
+      peepalSegments = withinBudget()
+        ? await advanceStalledPeepalSegments(db, { limit: 30 })
+        : { skipped: true, reason: 'duration_budget' };
     } catch (e) {
       peepalSegments = { error: e?.message || String(e) };
       console.warn('[scheduler] peepal segments', e?.message || e);
@@ -414,19 +434,24 @@ module.exports = async function handler(req, res) {
     // Phase 3 denorm backfill (groups isPublic/nameLower + users_public) — idempotent paging
     let denormBackfill = { skipped: true };
     try {
-      const { runDenormBackfillPage } = require('../server-lib/backfill-denorms');
-      const pages = [];
-      // Extra pages when ?denorm=1 so a manual cron hit can finish faster
-      const extra = String(req.query?.denorm || '') === '1' ? 8 : 1;
-      for (let i = 0; i < extra; i++) {
-        const page = await runDenormBackfillPage(db);
-        pages.push(page);
-        const gDone = !!(page.groups?.done || page.groups?.skipped);
-        const uDone = !!(page.usersPublic?.done || page.usersPublic?.skipped);
-        const cDone = !!(page.chatsUpdatedAt?.done || page.chatsUpdatedAt?.skipped);
-        if (gDone && uDone && cDone) break;
+      if (withinBudget()) {
+        const { runDenormBackfillPage } = require('../server-lib/backfill-denorms');
+        const pages = [];
+        // Extra pages when ?denorm=1 so a manual cron hit can finish faster
+        const extra = String(req.query?.denorm || '') === '1' ? 8 : 1;
+        for (let i = 0; i < extra; i++) {
+          if (!withinBudget()) break;
+          const page = await runDenormBackfillPage(db);
+          pages.push(page);
+          const gDone = !!(page.groups?.done || page.groups?.skipped);
+          const uDone = !!(page.usersPublic?.done || page.usersPublic?.skipped);
+          const cDone = !!(page.chatsUpdatedAt?.done || page.chatsUpdatedAt?.skipped);
+          if (gDone && uDone && cDone) break;
+        }
+        denormBackfill = { pages };
+      } else {
+        denormBackfill = { skipped: true, reason: 'duration_budget' };
       }
-      denormBackfill = { pages };
     } catch (e) {
       denormBackfill = { error: e?.message || String(e) };
       console.warn('[scheduler] denorm backfill', e?.message || e);
@@ -435,14 +460,18 @@ module.exports = async function handler(req, res) {
     // Product feedback digests (companionProductFeedback → founders)
     let feedbackDigest = { skipped: true };
     try {
-      const { runFeedbackDigest } = require('../server-lib/feedback-digest');
-      const daily = await runFeedbackDigest(db, admin, { period: 'daily' });
-      let weekly = { skipped: true };
-      const day = new Date().getUTCDay(); // 0 = Sunday
-      if (day === 1 || String(req.query?.weekly || '') === '1') {
-        weekly = await runFeedbackDigest(db, admin, { period: 'weekly' });
+      if (withinBudget()) {
+        const { runFeedbackDigest } = require('../server-lib/feedback-digest');
+        const daily = await runFeedbackDigest(db, admin, { period: 'daily' });
+        let weekly = { skipped: true };
+        const day = new Date().getUTCDay(); // 0 = Sunday
+        if (day === 1 || String(req.query?.weekly || '') === '1') {
+          weekly = await runFeedbackDigest(db, admin, { period: 'weekly' });
+        }
+        feedbackDigest = { daily, weekly };
+      } else {
+        feedbackDigest = { skipped: true, reason: 'duration_budget' };
       }
-      feedbackDigest = { daily, weekly };
     } catch (e) {
       feedbackDigest = { error: e?.message || String(e) };
       console.warn('[scheduler] feedback digest', e?.message || e);
@@ -451,8 +480,12 @@ module.exports = async function handler(req, res) {
     // P4 signal raw retention prune
     let signalPrune = { skipped: true };
     try {
-      const { pruneSignalEvents } = require('../server-lib/signal-spine');
-      signalPrune = await pruneSignalEvents(db, { maxDays: 4, olderThanDays: 14 });
+      if (withinBudget()) {
+        const { pruneSignalEvents } = require('../server-lib/signal-spine');
+        signalPrune = await pruneSignalEvents(db, { maxDays: 4, olderThanDays: 14 });
+      } else {
+        signalPrune = { skipped: true, reason: 'duration_budget' };
+      }
     } catch (e) {
       signalPrune = { error: e?.message || String(e) };
       console.warn('[scheduler] signal prune', e?.message || e);
@@ -461,8 +494,12 @@ module.exports = async function handler(req, res) {
     // P5 user model — cursor-batched recompute (independent of AI gate)
     let userModel = { skipped: true };
     try {
-      const { processUserModelBatch } = require('../server-lib/user-model');
-      userModel = await processUserModelBatch(db, admin, { batchSize: 28 });
+      if (withinBudget()) {
+        const { processUserModelBatch } = require('../server-lib/user-model');
+        userModel = await processUserModelBatch(db, admin, { batchSize: 28 });
+      } else {
+        userModel = { skipped: true, reason: 'duration_budget' };
+      }
     } catch (e) {
       userModel = { error: e?.message || String(e) };
       console.warn('[scheduler] user model', e?.message || e);
@@ -471,8 +508,12 @@ module.exports = async function handler(req, res) {
     // P6 candidate pools — inverted indexes for retrieval
     let candidatePools = { skipped: true };
     try {
-      const { refreshCandidatePools } = require('../server-lib/retrieve-rank');
-      candidatePools = await refreshCandidatePools(db, admin, { batchSize: 40 });
+      if (withinBudget()) {
+        const { refreshCandidatePools } = require('../server-lib/retrieve-rank');
+        candidatePools = await refreshCandidatePools(db, admin, { batchSize: 40 });
+      } else {
+        candidatePools = { skipped: true, reason: 'duration_budget' };
+      }
     } catch (e) {
       candidatePools = { error: e?.message || String(e) };
       console.warn('[scheduler] candidate pools', e?.message || e);
@@ -482,14 +523,22 @@ module.exports = async function handler(req, res) {
     let dangalQueue = { skipped: true };
     let matchMetrics = { skipped: true };
     try {
-      const { pruneStaleDangalQueues } = require('../server-lib/dangal-matchmaking');
-      dangalQueue = await pruneStaleDangalQueues(db, {});
+      if (withinBudget()) {
+        const { pruneStaleDangalQueues } = require('../server-lib/dangal-matchmaking');
+        dangalQueue = await pruneStaleDangalQueues(db, {});
+      } else {
+        dangalQueue = { skipped: true, reason: 'duration_budget' };
+      }
     } catch (e) {
       dangalQueue = { error: e?.message || String(e) };
     }
     try {
-      const { writeMatchMetricSnapshot } = require('../server-lib/intent-weights');
-      matchMetrics = await writeMatchMetricSnapshot(db, admin, { label: 'cron' });
+      if (withinBudget()) {
+        const { writeMatchMetricSnapshot } = require('../server-lib/intent-weights');
+        matchMetrics = await writeMatchMetricSnapshot(db, admin, { label: 'cron' });
+      } else {
+        matchMetrics = { skipped: true, reason: 'duration_budget' };
+      }
     } catch (e) {
       matchMetrics = { error: e?.message || String(e) };
     }
@@ -497,8 +546,12 @@ module.exports = async function handler(req, res) {
     // P8: offline AI enrichment (labels / profile suggestions / embed sweep)
     let aiEnrichment = { skipped: true };
     try {
-      const { runAiEnrichmentBatch } = require('../server-lib/ai-enrichment');
-      aiEnrichment = await runAiEnrichmentBatch(db, admin);
+      if (withinBudget()) {
+        const { runAiEnrichmentBatch } = require('../server-lib/ai-enrichment');
+        aiEnrichment = await runAiEnrichmentBatch(db, admin);
+      } else {
+        aiEnrichment = { skipped: true, reason: 'duration_budget' };
+      }
     } catch (e) {
       aiEnrichment = { error: e?.message || String(e) };
       console.warn('[scheduler] ai enrichment', e?.message || e);
@@ -519,9 +572,16 @@ module.exports = async function handler(req, res) {
       dangalQueue,
       matchMetrics,
       aiEnrichment,
+      timing: {
+        elapsedMs: Date.now() - startedAt,
+        softBudgetMs: SOFT_BUDGET_MS,
+        withinBudget: withinBudget(),
+      },
     });
   } catch (e) {
     console.error('[chaupaal-scheduler]', e?.message || e);
     return sendError(res, 500, 'SCHEDULER_FAILED', e?.message || 'Scheduler failed');
   }
 };
+
+module.exports.config = { maxDuration: 120 };

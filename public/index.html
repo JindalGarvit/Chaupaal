@@ -728,10 +728,18 @@
           <div class="toggle-row">
             <div>
               <div class="toggle-label">Personalization &amp; activity</div>
-              <div class="toggle-desc">On by default. Helps improve feed, games, and discovery. Turn off to stop collecting behavioral activity (not just stop using it). Search text and messages are never stored in this log.</div>
+              <div class="toggle-desc">On by default. Helps improve feed, games, and discovery. Turn off to stop collecting behavioral activity (not just stop using it). Search text and messages are never stored in this log. <button type="button" class="settings-inline-link" id="openCollectsFromToggleBtn">What we collect</button></div>
             </div>
             <label class="switch"><input type="checkbox" id="toggleActivitySignals" checked><span class="slider"></span></label>
           </div>
+          <button type="button" class="settings-link-row" id="openCollectsDisclosureBtn" aria-label="What Chaupaal collects">
+            <span class="settings-link-icon" aria-hidden="true"><span data-icon="shield" data-icon-size="18"></span></span>
+            <span class="settings-link-text">
+              <strong>What Chaupaal collects</strong>
+              <small>Profile, activity signals, hashed search — and your choices</small>
+            </span>
+            <span class="settings-link-chevron" aria-hidden="true">›</span>
+          </button>
           <div class="toggle-row">
             <div>
               <div class="toggle-label" data-i18n="appear_friends_label">Appear in friends’ prompts</div>

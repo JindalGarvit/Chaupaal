@@ -6270,6 +6270,17 @@ html.quiet-mode .dp-arcade-burst,html.quiet-mode .dp-arcade-block{animation:none
 .day0-fork-card span{font-size:12px;color:var(--muted);line-height:1.35;}
 .legal-sheet-v1 .legal-sheet-body{padding:16px;overflow:auto;font:400 13px/1.55 system-ui,sans-serif;color:var(--ink);}
 .legal-sheet-v1 .legal-sheet-body p{margin:0 0 12px;}
+.legal-sheet-v1 .legal-v1-h{margin:18px 0 8px;font:700 14px/1.3 var(--font-display,system-ui,sans-serif);color:var(--ink);}
+.legal-sheet-v1 .legal-v1-lead{opacity:.88;}
+.legal-sheet-v1 .legal-v1-list{margin:0 0 12px;padding-left:1.15em;}
+.legal-sheet-v1 .legal-v1-list li{margin:0 0 8px;}
+.legal-sheet-v1 .legal-v1-actions{display:flex;flex-direction:column;gap:8px;margin:8px 0 14px;}
+.legal-sheet-v1 .legal-v1-note{opacity:.72;font-size:12px;}
+.settings-inline-link{
+  display:inline;padding:0;margin:0;border:0;background:none;color:var(--brand-red,var(--red));
+  font:inherit;font-weight:700;text-decoration:underline;cursor:pointer;
+}
+.settings-focus-flash{outline:2px solid var(--brand-red,var(--red));outline-offset:2px;border-radius:10px;}
 .legal-v1-note{font-size:11px;color:var(--muted)!important;}
 .auth-optional-details{border:1px solid var(--line,#e5e5e5);border-radius:12px;padding:4px 12px 10px;background:rgba(0,0,0,.02);}
 .auth-optional-summary{

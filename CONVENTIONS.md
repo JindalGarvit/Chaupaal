@@ -208,6 +208,13 @@ Enforcement is **ON** for Firestore / RTDB (and Storage if enabled). Client uses
 - **Category cron verdict:** default **paused** (`CATEGORY_CRON_PAUSED` unset → paused). Unpause with `=false` + budget guard — do not hardcode forever.
 - No user-facing AI dashboard (10B). Env matrix in `.env.example`.
 
+## 11h. Disclosure & arc close (P9)
+
+- Static sheet: `openLegalSheet('collects')` — “What Chaupaal collects”. Entry: Settings → Privacy & account (`#openCollectsDisclosureBtn`) + Privacy Policy link + personalization “What we collect”.
+- Deep links: `openSettingsPrivacyFocus(controlId)` scrolls to existing toggles (no interests dashboard / per-signal editor — 10B).
+- Claims must match code: hashed search only, opt-out stops collection, no sensitive inference, ranking has no request-time LLM, friends-only via `friend_projection`.
+- Scheduler soft budget ~95s under Hobby `maxDuration` 120; response includes `timing.elapsedMs`.
+
 ## 12. Globals & module surface
 
 The client still loads classic non-module scripts (`<script src>`), so top-level `function` / `let` and many `window.X =` exports are intentional for cross-file calls.

@@ -314,24 +314,83 @@
   }
 
   function openLegalSheet(kind) {
-    const isPrivacy = kind === 'privacy';
-    const title = isPrivacy ? 'Privacy Policy' : 'Terms of Service';
+    const k = String(kind || 'terms').toLowerCase();
+    const isPrivacy = k === 'privacy';
+    const isCollects = k === 'collects' || k === 'data' || k === 'what-we-collect';
+    const title = isCollects
+      ? 'What Chaupaal collects'
+      : isPrivacy
+        ? 'Privacy Policy'
+        : 'Terms of Service';
     document.getElementById('legalSheetV1')?.remove();
     const sheet = document.createElement('div');
     sheet.id = 'legalSheetV1';
     sheet.className = 'archive-overlay legal-sheet-v1';
     sheet.dataset.navManaged = '1';
-    const body = isPrivacy
-      ? `<p>Chaupaal (“we”) values your privacy. We collect account info you provide (name, username, email or phone), profile content you post, and basic device/usage data to run the app.</p>
+
+    let body;
+    if (isCollects) {
+      body = `
+        <p class="legal-v1-lead">Plain English. No charts. No per-signal editor — just what we collect, why, and how you control it.</p>
+
+        <h3 class="legal-v1-h">What we collect</h3>
+        <ul class="legal-v1-list">
+          <li><strong>Profile you enter</strong> — name, username, bio, interests, photos, and other fields you fill in. Visibility follows your Public / Friends / Private choices and each show* toggle.</li>
+          <li><strong>Activity signals</strong> (on by default) — scrolls, likes, comments, saves, game completes, Mehfil join/leave duration, and similar. Used to improve feed, games, and people discovery.</li>
+          <li><strong>Hashed search</strong> — a fingerprint of search text, never the raw query string.</li>
+          <li><strong>Device &amp; session basics</strong> — signed-in sessions, push tokens, and crash/error reports needed to keep the app running.</li>
+          <li><strong>Journal</strong> — your Archive journal stays yours. Soft analysis only happens when you check consent on that entry.</li>
+        </ul>
+
+        <h3 class="legal-v1-h">What we use it for</h3>
+        <ul class="legal-v1-list">
+          <li>Better people, games, and content recommendations — with short, readable “why” reasons on the server side.</li>
+          <li>Safety (block / mute / report), account recovery, and essential service messages.</li>
+          <li>Optional tips &amp; wishes from Chaupaal (separate toggle).</li>
+        </ul>
+
+        <h3 class="legal-v1-h">What we never collect or infer</h3>
+        <ul class="legal-v1-list">
+          <li>Raw message (DM) text, raw search text, contacts lists, or precise GPS coordinates for personalization.</li>
+          <li>Journal text sent to any AI provider <em>without</em> per-entry consent.</li>
+          <li>Sensitive attributes we never invent: religion, caste, sexuality, health, or income as inferred labels. Declared fields stay yours and respect show* toggles.</li>
+          <li>We do not sell your personal data.</li>
+        </ul>
+
+        <h3 class="legal-v1-h">How long we keep it</h3>
+        <ul class="legal-v1-list">
+          <li><strong>Activity signal stream</strong> — pruned on a short rolling window (about two weeks of raw events; rollups may last longer for the model).</li>
+          <li><strong>Archive / soft-delete</strong> — Deleted tab recovery is on this device (~30 days). Hidden posts stay in Archive until you restore or delete them.</li>
+          <li><strong>Live stories</strong> — expire after 24 hours unless saved as Highlights / story archive.</li>
+          <li><strong>Account deletion</strong> — signs you out and revokes sessions now; full purge completes in about 30 days.</li>
+        </ul>
+
+        <h3 class="legal-v1-h">Your choices</h3>
+        <p>These open Settings to the matching control:</p>
+        <div class="legal-v1-actions">
+          <button type="button" class="btn btn--secondary btn--block" data-collects-focus="toggleActivitySignals">Personalization &amp; activity</button>
+          <button type="button" class="btn btn--secondary btn--block" data-collects-focus="toggleCompanionOutreach">Tips &amp; wishes</button>
+          <button type="button" class="btn btn--secondary btn--block" data-collects-focus="toggleOpenToMeet">Open to meeting people</button>
+          <button type="button" class="btn btn--secondary btn--block" data-collects-go="export">Download my data</button>
+          <button type="button" class="btn btn--secondary btn--block" data-collects-go="archive">Open Archive</button>
+          <button type="button" class="btn btn--ghost btn--block" data-collects-go="privacy">Short Privacy Policy</button>
+        </div>
+        <p class="legal-v1-note">Ranking and matching read stored fields only — they never call an AI model at request time. Enrichment jobs (topic labels, embeddings) run offline and are optional.</p>`;
+    } else if (isPrivacy) {
+      body = `<p>Chaupaal (“we”) values your privacy. We collect account info you provide (name, username, email or phone), profile content you post, consented activity signals, hashed search fingerprints, and basic device/session data to run the app.</p>
          <p><strong>How we use it:</strong> to authenticate you, show your profile and posts to people you choose, improve discovery and safety, and send essential service messages.</p>
-         <p><strong>Sharing:</strong> we don’t sell your personal data. Content you mark public can be seen by other members. We use trusted processors (hosting, analytics, push) under contracts.</p>
-         <p><strong>Your choices:</strong> edit or delete profile content, adjust visibility, sign out, or request account deletion via Settings. Contact us from in-app feedback for privacy requests.</p>
-         <p class="legal-v1-note">This is a short v1 summary for early access. A fuller policy will replace it as we grow.</p>`
-      : `<p>By creating a Chaupaal account you confirm you are 13+ and agree to use the product respectfully.</p>
+         <p><strong>Sharing:</strong> we don’t sell your personal data. Content you mark public can be seen by other members. Friends-only fields stay off the world-readable public doc. We use trusted processors (hosting, push) under contracts.</p>
+         <p><strong>Your choices:</strong> edit visibility and show* toggles, turn off personalization, sign out, export your data, or request account deletion via Settings.</p>
+         <p><button type="button" class="btn btn--secondary btn--sm" data-legal="collects">What Chaupaal collects — full plain list</button></p>
+         <p class="legal-v1-note">This is a short v1 summary for early access. The “What we collect” page is the detailed disclosure.</p>`;
+    } else {
+      body = `<p>By creating a Chaupaal account you confirm you are 13+ and agree to use the product respectfully.</p>
          <p><strong>Your content:</strong> you own what you post. You grant Chaupaal a license to host and display it as needed to operate the service.</p>
          <p><strong>Rules:</strong> no harassment, illegal content, spam, or impersonation. We may remove content or restrict accounts that break these rules.</p>
          <p><strong>The service:</strong> Chaupaal is provided “as is” during early access; features may change. We’re not liable for indirect damages from use of the app.</p>
          <p class="legal-v1-note">This is a short v1 Terms summary. Full Terms will replace it when published.</p>`;
+    }
+
     sheet.innerHTML = `
       <div class="archive-header">
         ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-legal-close' }) : '<button type="button" data-legal-close class="cp-back-btn">←</button>'}
@@ -344,7 +403,31 @@
       sheet.remove();
     };
     if (typeof pushNavLayer === 'function') pushNavLayer(sheet, close);
+    else if (typeof openLayer === 'function') openLayer(sheet, close, { label: title });
     sheet.querySelector('[data-legal-close]')?.addEventListener('click', close);
+    sheet.querySelectorAll('[data-legal="collects"]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        close();
+        openLegalSheet('collects');
+      });
+    });
+    sheet.querySelectorAll('[data-collects-focus]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-collects-focus');
+        close();
+        if (typeof openSettingsPrivacyFocus === 'function') openSettingsPrivacyFocus(id);
+        else if (typeof openSettingsModal === 'function') openSettingsModal();
+      });
+    });
+    sheet.querySelectorAll('[data-collects-go]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const go = btn.getAttribute('data-collects-go');
+        close();
+        if (go === 'export' && typeof openAccountDataExport === 'function') openAccountDataExport();
+        else if (go === 'archive' && typeof openArchiveHub === 'function') openArchiveHub('journal');
+        else if (go === 'privacy') openLegalSheet('privacy');
+      });
+    });
   }
 
   /** After signup success — ONE primary next step. */
