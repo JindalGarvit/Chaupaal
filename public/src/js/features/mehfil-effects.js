@@ -104,5 +104,13 @@
       if (emoji === '✨') spawn({ kind: 'confetti', emoji: '✨', ...(opts || {}) });
     },
     spawn,
+    clear() {
+      queue = [];
+      draining = false;
+      active.length = 0;
+      try {
+        layerEl()?.querySelectorAll('.mehfil-fx').forEach((n) => n.remove());
+      } catch (e) {}
+    },
   };
 })();

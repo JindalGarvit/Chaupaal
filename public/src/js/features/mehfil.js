@@ -52,6 +52,22 @@
   const PRESENCE_FRESH_MS = 25000;
   const THEME_OVERRIDE_KEY = 'chaupaal_mehfil_theme_override';
   const CHAT_IDLE_COLLAPSE_MS = 3000;
+  const CHAT_SEND_MIN_MS = 650;
+  const CHAT_SEND_MAX_PER_MIN = 20;
+  const REACT_SEND_MIN_MS = 400;
+  const REACT_SEND_MAX_BURST = 8;
+  const REACT_BURST_WINDOW_MS = 10000;
+  const PRESENCE_COALESCE_MS = 4000;
+  let lastChatSendAt = 0;
+  let chatSendTimestamps = [];
+  let lastReactSendAt = 0;
+  let reactSendTimestamps = [];
+  let presenceJoinBuffer = [];
+  let presenceLeaveBuffer = [];
+  let presenceCoalesceTimer = null;
+  let lastMediaMomentKey = '';
+  let chatSeenKeys = new Set();
+  let reactSeenKeys = new Set();
   let lastRingAt = new Map();
   let ringInboxUnsub = null;
   let incomingRingEl = null;
@@ -65,6 +81,8 @@
   let mehfilAutoJoinPending = null;
   let ringUiTimer = null;
   let lastKnownFreshCount = 0;
+  let lastKnownFreshUids = new Set();
+  let lastKnownFreshNames = new Map();
   let dmAutoRingDone = false;
   /** full | listen | none — A/V capability after join. */
   let avMode = 'none';
@@ -431,34 +449,109 @@
     strip.classList.add('is-collapsed');
     strip.classList.remove('is-expanded');
     strip.removeAttribute('aria-live');
-    scheduleChatIdleCollapse();
   }
 
   function scheduleChatIdleCollapse() {
-    clearTimeout(chatIdleTimer);
-    chatIdleTimer = setTimeout(() => {
-      if (chatStripEl()?.classList.contains('is-expanded')) return;
-      collapseChatStrip();
-    }, CHAT_IDLE_COLLAPSE_MS);
+    /* keep strip open while typing; no auto-collapse spam */
   }
 
-  function appendChatLine(v) {
+  function linkifyChatHtml(text) {
+    const raw = String(text || '');
+    const parts = [];
+    const re = /(https?:\/\/[^\s<]+)/gi;
+    let last = 0;
+    let m;
+    while ((m = re.exec(raw))) {
+      if (m.index > last) parts.push(esc(raw.slice(last, m.index)));
+      const url = m[1].replace(/[),.]+$/, '');
+      const trail = m[1].slice(url.length);
+      parts.push(
+        `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer" data-nav-ignore="1">${esc(url)}</a>${esc(trail)}`
+      );
+      last = m.index + m[1].length;
+    }
+    if (last < raw.length) parts.push(esc(raw.slice(last)));
+    return parts.join('') || esc(raw);
+  }
+
+  function formatChatTime(at) {
+    const t = Number(at) || Date.now();
+    try {
+      return new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function canPostRoomSocial() {
+    if (!currentUser?.uid || !activeChatId) return false;
+    if (myRoomRole === 'removed') return false;
+    return true;
+  }
+
+  function chatFloodBlocked() {
+    const now = Date.now();
+    if (now - lastChatSendAt < CHAT_SEND_MIN_MS) return true;
+    chatSendTimestamps = chatSendTimestamps.filter((t) => now - t < 60000);
+    return chatSendTimestamps.length >= CHAT_SEND_MAX_PER_MIN;
+  }
+
+  function reactFloodBlocked() {
+    const now = Date.now();
+    if (now - lastReactSendAt < REACT_SEND_MIN_MS) return true;
+    reactSendTimestamps = reactSendTimestamps.filter((t) => now - t < REACT_BURST_WINDOW_MS);
+    return reactSendTimestamps.length >= REACT_SEND_MAX_BURST;
+  }
+
+  function appendChatLine(v, opts) {
+    const o = opts || {};
     const strip = chatStripEl();
     const msgsEl = strip?.querySelector('[data-mehfil-chat-msgs]');
     const preview = strip?.querySelector('[data-mehfil-chat-preview]');
     if (!msgsEl) return;
+    const key = o.key || `${v.by || 'sys'}_${v.at || 0}_${String(v.text || '').slice(0, 40)}`;
+    if (chatSeenKeys.has(key)) return;
+    chatSeenKeys.add(key);
+    if (chatSeenKeys.size > 200) {
+      chatSeenKeys = new Set([...chatSeenKeys].slice(-120));
+    }
+
+    const isSystem = !!(v.system || o.system);
     const row = document.createElement('div');
-    row.className = 'mehfil-chat-line' + (v.by === currentUser?.uid ? ' is-me' : '');
-    const name = v.name && v.name !== v.by ? v.name : displayNameForUid(v.by);
-    row.innerHTML = `<span class="mehfil-chat-name">${esc(name)}</span><span class="mehfil-chat-text">${esc(v.text)}</span>`;
+    row.className =
+      'mehfil-chat-line' +
+      (v.by === currentUser?.uid ? ' is-me' : '') +
+      (isSystem ? ' is-system' : '');
+    const name = isSystem
+      ? ''
+      : v.name && v.name !== v.by
+        ? v.name
+        : displayNameForUid(v.by);
+    const initial = esc((name || '?').slice(0, 1));
+    const time = formatChatTime(v.at);
+    const textHtml = isSystem ? esc(v.text || '') : linkifyChatHtml(v.text);
+    row.innerHTML = isSystem
+      ? `<span class="mehfil-chat-system">${textHtml}</span>${time ? `<span class="mehfil-chat-time">${esc(time)}</span>` : ''}`
+      : `<span class="mehfil-chat-av" aria-hidden="true">${initial}</span>
+         <div class="mehfil-chat-body">
+           <div class="mehfil-chat-meta"><span class="mehfil-chat-name">${esc(name)}</span>${
+             time ? `<span class="mehfil-chat-time">${esc(time)}</span>` : ''
+           }</div>
+           <span class="mehfil-chat-text">${textHtml}</span>
+         </div>`;
     msgsEl.appendChild(row);
-    msgsEl.scrollTop = msgsEl.scrollHeight;
-    if (preview) {
+    while (msgsEl.children.length > 80) msgsEl.firstChild.remove();
+    if (strip?.classList.contains('is-expanded') || o.forceScroll) {
+      msgsEl.scrollTop = msgsEl.scrollHeight;
+    }
+    if (preview && !isSystem) {
       preview.textContent = `${name}: ${v.text}`.slice(0, 120);
       preview.classList.add('mehfil-chat-shimmer');
       setTimeout(() => preview.classList.remove('mehfil-chat-shimmer'), 2600);
+    } else if (preview && isSystem) {
+      preview.textContent = String(v.text || '').slice(0, 120);
     }
-    if (strip?.classList.contains('is-collapsed')) {
+    if (strip?.classList.contains('is-collapsed') && !o.silentUnread) {
       chatUnread += 1;
       const badge = strip.querySelector('[data-mehfil-chat-badge]');
       if (badge) {
@@ -466,7 +559,169 @@
         badge.textContent = String(chatUnread);
       }
     }
-    scheduleChatIdleCollapse();
+  }
+
+  function appendSystemMoment(text) {
+    if (!text) return;
+    appendChatLine({ text, system: true, at: Date.now(), by: null }, { system: true, silentUnread: true });
+  }
+
+  function flushPresenceCoalesce() {
+    presenceCoalesceTimer = null;
+    const joins = presenceJoinBuffer.splice(0);
+    const leaves = presenceLeaveBuffer.splice(0);
+    const fmt = (arr) => {
+      const names = [...new Set(arr.map((p) => (p.name || 'Someone').split(' ')[0]))];
+      if (!names.length) return '';
+      if (names.length === 1) return names[0];
+      if (names.length === 2) return `${names[0]} and ${names[1]}`;
+      return `${names[0]} and ${names.length - 1} others`;
+    };
+    if (joins.length) {
+      const label = fmt(joins);
+      const line =
+        joins.length === 1
+          ? tt('mehfil_someone_joined', '{{name}} joined', { name: label })
+          : tt('mehfil_others_joined', '{{who}} joined', { who: label });
+      appendSystemMoment(line);
+      setMehfilStatus(line, 'live');
+      if (!(typeof quietMode !== 'undefined' && quietMode) && typeof haptic === 'function') {
+        try {
+          haptic('light');
+        } catch (e) {}
+      }
+    }
+    if (leaves.length) {
+      const label = fmt(leaves);
+      const line =
+        leaves.length === 1
+          ? tt('mehfil_someone_left', '{{name}} left', { name: label })
+          : tt('mehfil_others_left', '{{who}} left', { who: label });
+      appendSystemMoment(line);
+    }
+  }
+
+  function queuePresenceEvent(kind, person) {
+    if (!person?.uid || person.uid === currentUser?.uid) return;
+    if (kind === 'join') presenceJoinBuffer.push(person);
+    else presenceLeaveBuffer.push(person);
+    clearTimeout(presenceCoalesceTimer);
+    presenceCoalesceTimer = setTimeout(flushPresenceCoalesce, PRESENCE_COALESCE_MS);
+  }
+
+  async function sendRoomChat(text) {
+    const body = String(text || '').trim().slice(0, 500);
+    if (!body || !activeChatId) return false;
+    if (!canPostRoomSocial()) {
+      if (typeof showToast === 'function') showToast(tt('mehfil_chat_blocked', 'You can’t post in this Mehfil right now'));
+      return false;
+    }
+    if (chatFloodBlocked()) {
+      if (typeof showToast === 'function') showToast(tt('mehfil_chat_slow', 'Slow down a bit'));
+      return false;
+    }
+    const ref = rtdbRef(`mehfil/${activeChatId}/chat`);
+    if (!ref) {
+      if (typeof showToast === 'function') showToast(tt('mehfil_rtdb_missing', 'Room chat needs Realtime Database.'));
+      return false;
+    }
+    try {
+      await ensureMehfilParticipant(activeChatId);
+      const payload = {
+        text: body,
+        by: currentUser?.uid || null,
+        name: userProfile?.name || userProfile?.username || digitalProfile?.displayName || 'You',
+        at: Date.now(),
+      };
+      const pushed = await ref.push(payload);
+      lastChatSendAt = Date.now();
+      chatSendTimestamps.push(lastChatSendAt);
+      appendChatLine(payload, { key: pushed?.key || `local_${payload.at}`, forceScroll: true });
+      return true;
+    } catch (err) {
+      if (typeof reportClientError === 'function') {
+        reportClientError({ feature: 'mehfil_chat', message: err?.message || String(err) });
+      }
+      if (typeof showToast === 'function') showToast(tt('mehfil_send_fail', 'Could not send'));
+      return false;
+    }
+  }
+
+  async function sendRoomReaction(emoji, isSticker) {
+    if (!emoji || !activeChatId) return;
+    if (!canPostRoomSocial()) {
+      if (typeof showToast === 'function') showToast(tt('mehfil_chat_blocked', 'You can’t post in this Mehfil right now'));
+      return;
+    }
+    if (reactFloodBlocked()) return;
+    const label = (userProfile?.name || 'You').split(' ')[0];
+    if (isSticker) showStickerBurst(emoji, { label });
+    else showReactionBurst(emoji, { label });
+    const ref = rtdbRef(`mehfil/${activeChatId}/reactions`);
+    if (!ref) return;
+    try {
+      await ensureMehfilParticipant(activeChatId);
+      const pushed = await ref.push({
+        emoji,
+        by: currentUser?.uid || null,
+        name: userProfile?.name || 'Someone',
+        sticker: !!isSticker,
+        at: Date.now(),
+      });
+      lastReactSendAt = Date.now();
+      reactSendTimestamps.push(lastReactSendAt);
+      if (pushed?.key) reactSeenKeys.add(pushed.key);
+    } catch (e) {
+      if (typeof showToast === 'function') showToast(tt('mehfil_react_fail', 'Could not send reaction'));
+    }
+  }
+
+  function openInviteSheet() {
+    if (!activeChat || !activeChatId) return;
+    const sheet = document.createElement('div');
+    sheet.className = 'mehfil-ring-pick mehfil-invite-sheet';
+    sheet.setAttribute('role', 'dialog');
+    sheet.innerHTML = `
+      <div class="mehfil-ring-pick-card">
+        <h3>${esc(tt('mehfil_invite_title', 'Invite to Mehfil'))}</h3>
+        <p class="mehfil-mod-role">${esc(tt('mehfil_invite_sub', 'Bring friends into this room'))}</p>
+        <div class="mehfil-ring-pick-list">
+          <button type="button" class="mehfil-ring-pick-row" data-inv-bubble>${esc(tt('mehfil_nudge', 'Invite to chat'))}</button>
+          <button type="button" class="mehfil-ring-pick-row" data-inv-link>${esc(tt('mehfil_copy_link', 'Copy link'))}</button>
+          <button type="button" class="mehfil-ring-pick-row" data-inv-ring>${esc(tt('mehfil_ring', 'Ring'))}</button>
+        </div>
+        <div class="mehfil-ring-pick-actions">
+          <button type="button" data-inv-cancel>${esc(tt('cancel', 'Cancel'))}</button>
+        </div>
+      </div>`;
+    let handle;
+    const onDismiss = () => sheet.remove();
+    if (typeof openLayer === 'function') {
+      handle = openLayer(sheet, onDismiss, {
+        host: shellHost(),
+        role: 'dialog',
+        label: tt('mehfil_invite_title', 'Invite to Mehfil'),
+      });
+    } else {
+      shellHost().appendChild(sheet);
+    }
+    const close = () => {
+      if (handle?.close) handle.close();
+      else sheet.remove();
+    };
+    sheet.querySelector('[data-inv-cancel]')?.addEventListener('click', close);
+    sheet.querySelector('[data-inv-bubble]')?.addEventListener('click', async () => {
+      close();
+      await nudgeOthers();
+    });
+    sheet.querySelector('[data-inv-link]')?.addEventListener('click', async () => {
+      close();
+      await copyInviteLink();
+    });
+    sheet.querySelector('[data-inv-ring]')?.addEventListener('click', () => {
+      close();
+      startMehfilRing(activeChat);
+    });
   }
 
   // --- Media host / control ---
@@ -691,12 +946,15 @@
     try {
       const base = rtdbRef(`mehfil/${chatId}`);
       if (!base) return;
+      // Room chat + reactions are live-only — clear when the room empties (honest retention).
       await Promise.all([
         rtdbRef(`mehfil/${chatId}/roomHost`)?.remove(),
         rtdbRef(`mehfil/${chatId}/roles`)?.remove(),
         rtdbRef(`mehfil/${chatId}/removed`)?.remove(),
         rtdbRef(`mehfil/${chatId}/moderation`)?.remove(),
         rtdbRef(`mehfil/${chatId}/media`)?.remove(),
+        rtdbRef(`mehfil/${chatId}/chat`)?.remove(),
+        rtdbRef(`mehfil/${chatId}/reactions`)?.remove(),
       ]);
     } catch (e) {}
   }
@@ -804,6 +1062,7 @@
         const v = snap.val();
         if (!v) return;
         if (Number(v.until) > Date.now()) {
+          myRoomRole = 'removed';
           if (typeof showToast === 'function') {
             showToast(tt('mehfil_removed_notice', 'You’ve been removed from this Mehfil. You’re still in the chat.'));
           }
@@ -1165,25 +1424,29 @@
       const freshEntries = (state.freshUids || [])
         .map((uid) => [uid, val[uid]])
         .filter(([, meta]) => meta);
-      // Arrival feedback when someone new joins (not on first paint).
-      if (lastKnownFreshCount > 0 && state.count > lastKnownFreshCount) {
-        const newcomers = freshEntries
-          .map(([uid, meta]) => ({ uid, name: meta?.name || 'Someone' }))
-          .filter((p) => p.uid !== currentUser?.uid);
-        const joined = newcomers[newcomers.length - 1];
-        if (joined) {
-          setMehfilStatus(
-            tt('mehfil_someone_joined', '{{name}} joined', { name: (joined.name || '').split(' ')[0] || 'Someone' }),
-            'live'
-          );
-          if (!(typeof quietMode !== 'undefined' && quietMode) && typeof haptic === 'function') {
-            try {
-              haptic('light');
-            } catch (e) {}
+      const freshUidSet = new Set(freshEntries.map(([uid]) => String(uid)));
+      // Calm join/leave cues (coalesced) — skip first paint.
+      if (lastKnownFreshUids.size > 0) {
+        freshEntries.forEach(([uid, meta]) => {
+          const id = String(uid);
+          if (!lastKnownFreshUids.has(id)) {
+            queuePresenceEvent('join', { uid: id, name: meta?.name || 'Someone' });
           }
-        }
+        });
+        lastKnownFreshUids.forEach((uid) => {
+          if (!freshUidSet.has(uid) && uid !== String(currentUser?.uid || '')) {
+            queuePresenceEvent('leave', {
+              uid,
+              name: lastKnownFreshNames.get(uid) || displayNameForUid(uid) || 'Someone',
+            });
+          }
+        });
       }
       lastKnownFreshCount = state.count;
+      lastKnownFreshUids = freshUidSet;
+      lastKnownFreshNames = new Map(
+        freshEntries.map(([uid, meta]) => [String(uid), meta?.name || 'Someone'])
+      );
       if (state.count > 1) setRingingChrome(false);
       mutedByUid.clear();
       freshEntries.forEach(([uid, meta]) => {
@@ -1239,6 +1502,15 @@
     if (!hint) return;
     const alone = !count || count <= 1;
     hint.hidden = !alone;
+    if (alone) {
+      const copy = hint.querySelector('[data-mehfil-alone-copy-text]');
+      if (copy) {
+        copy.textContent = tt(
+          'mehfil_alone_warm',
+          'Just you for now — invite someone, or start a watch / listen.'
+        );
+      }
+    }
   }
 
   function updateWaitingState(liveState) {
@@ -1716,6 +1988,10 @@
       cachedMediaState = m || null;
       updateHostControlUi(m);
       if (!m || !m.type) {
+        if (lastMediaMomentKey) {
+          lastMediaMomentKey = '';
+          appendSystemMoment(tt('mehfil_moment_media_stopped', 'Media stopped'));
+        }
         stopLocalMediaPlayers();
         overlayEl?.classList.remove('mehfil-has-youtube', 'mehfil-has-music');
         layoutCinema();
@@ -1728,6 +2004,24 @@
       const nowEl = overlayEl?.querySelector('[data-mehfil-now]');
       if (nowEl && m.title) {
         nowEl.textContent = tt('mehfil_now_playing', 'Now playing: {{title}}', { title: m.title });
+      }
+
+      const momentKey = `${m.type || ''}:${m.id || m.url || m.title || ''}`;
+      if (momentKey && momentKey !== lastMediaMomentKey) {
+        lastMediaMomentKey = momentKey;
+        if (m.type === 'youtube') {
+          appendSystemMoment(
+            tt('mehfil_moment_watch', 'Someone started a watch{{title}}', {
+              title: m.title ? ` · ${m.title}` : '',
+            })
+          );
+        } else if (m.type === 'music') {
+          appendSystemMoment(
+            tt('mehfil_moment_music', 'Music playing{{title}}', {
+              title: m.title ? ` · ${m.title}` : '',
+            })
+          );
+        }
       }
 
       // Publisher already applied locally for same seq — skip re-apply flicker
@@ -1754,10 +2048,21 @@
     const reactRef = rtdbRef(`mehfil/${activeChatId}/reactions`);
     if (reactRef) {
       const onReact = (snap) => {
+        const key = snap.key;
+        if (key && reactSeenKeys.has(key)) return;
+        if (key) {
+          reactSeenKeys.add(key);
+          if (reactSeenKeys.size > 80) reactSeenKeys = new Set([...reactSeenKeys].slice(-50));
+        }
         const v = snap.val();
-        if (v?.emoji) showReactionBurst(v.emoji);
+        if (!v?.emoji) return;
+        // Own sends already burst locally
+        if (v.by && v.by === currentUser?.uid && Date.now() - (Number(v.at) || 0) < 2500) return;
+        const label = (v.name || displayNameForUid(v.by) || '').split(' ')[0] || '';
+        if (v.sticker) showStickerBurst(v.emoji, { label });
+        else showReactionBurst(v.emoji, { label });
       };
-      reactRef.limitToLast(1).on('child_added', onReact);
+      reactRef.limitToLast(8).on('child_added', onReact);
       rtdbUnsubs.push(() => reactRef.off('child_added', onReact));
     }
 
@@ -1766,7 +2071,7 @@
       const onChat = (snap) => {
         const v = snap.val();
         if (!v?.text) return;
-        appendChatLine(v);
+        appendChatLine(v, { key: snap.key });
       };
       chatRef.limitToLast(40).on('child_added', onChat);
       rtdbUnsubs.push(() => chatRef.off('child_added', onChat));
@@ -2480,6 +2785,8 @@
     agoraVoiceRole = 'publisher';
     rejoiningForRole = false;
     lastKnownFreshCount = 0;
+    lastKnownFreshUids = new Set();
+    lastKnownFreshNames = new Map();
     dmAutoRingDone = false;
     reconnectFailCount = 0;
     tokenExpiresAtSec = 0;
@@ -2487,6 +2794,23 @@
     speakingSticky.clear();
     mutedByUid.clear();
     lastSpeakingLabel = '';
+    chatUnread = 0;
+    chatSeenKeys = new Set();
+    reactSeenKeys = new Set();
+    lastMediaMomentKey = '';
+    presenceJoinBuffer = [];
+    presenceLeaveBuffer = [];
+    clearTimeout(presenceCoalesceTimer);
+    presenceCoalesceTimer = null;
+    clearTimeout(chatIdleTimer);
+    chatIdleTimer = null;
+    lastChatSendAt = 0;
+    chatSendTimestamps = [];
+    lastReactSendAt = 0;
+    reactSendTimestamps = [];
+    try {
+      if (typeof MehfilEffects?.clear === 'function') MehfilEffects.clear();
+    } catch (e) {}
     clearRtdb();
     try {
       if (localAudio) {
@@ -2855,12 +3179,12 @@
   async function nudgeOthers() {
     if (!activeChat || !activeChatId) return;
     const name = userProfile?.name || 'Someone';
-    const text = tt('mehfil_nudge_text', '{{name}} invited you to join Mehfil', { name });
+    const text = tt('mehfil_nudge_text', '{{name}} invited you to join the Mehfil', { name });
     try {
       if (typeof sendRealtimeMessage === 'function') {
         await sendRealtimeMessage(activeChatId, text, activeChat.type === 'group', null, {
           type: 'mehfil_invite',
-          label: tt('mehfil_join_cta', 'Join Mehfil'),
+          label: tt('mehfil_join_cta', 'Join the Mehfil'),
         });
       }
       if (typeof showToast === 'function') showToast(tt('mehfil_nudge_sent', 'Invite sent in chat'));
@@ -3724,7 +4048,14 @@
     // Membership mirror before any RTDB mehfil/* write (rules require mehfilMembers).
     const allowed = await ensureMehfilMemberMirror(chatId);
     if (!allowed) {
-      if (typeof showToast === 'function') showToast(tt('mehfil_blocked', 'Mehfil isn’t available in this chat'));
+      if (typeof showToast === 'function') {
+        showToast(
+          tt(
+            'mehfil_not_member',
+            'You need to be in this chat to join the Mehfil. Ask someone to invite you.'
+          )
+        );
+      }
       return;
     }
 
@@ -3818,7 +4149,7 @@
               )}</div>
               <div class="mehfil-waiting-actions">
                 <button type="button" class="mehfil-waiting-ring" data-mehfil-waiting-ring>${esc(tt('mehfil_ring', 'Ring'))}</button>
-                <button type="button" class="mehfil-waiting-invite" data-mehfil-waiting-invite>${esc(tt('mehfil_nudge', 'Invite'))}</button>
+                <button type="button" class="mehfil-waiting-invite" data-mehfil-waiting-invite>${esc(tt('mehfil_invite_title', 'Invite'))}</button>
               </div>
             </div>
           </div>
@@ -3877,13 +4208,9 @@
             <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('music',{size:18}):''}</span>
             ${esc(tt('mehfil_media', 'Watch / Listen'))}
           </button>
-          <button type="button" class="mehfil-more-item" data-mehfil-nudge-more>
+          <button type="button" class="mehfil-more-item" data-mehfil-invite-sheet>
             <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('bell',{size:18}):''}</span>
-            ${esc(tt('mehfil_nudge', 'Invite'))}
-          </button>
-          <button type="button" class="mehfil-more-item" data-mehfil-copy>
-            <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('link',{size:18}):''}</span>
-            ${esc(tt('mehfil_copy_link', 'Copy link'))}
+            ${esc(tt('mehfil_invite_title', 'Invite to Mehfil'))}
           </button>
           <button type="button" class="mehfil-more-item" data-mehfil-flip title="${esc(tt('mehfil_flip', 'Flip camera'))}">
             <span class="icon" aria-hidden="true">${typeof iconHtml==='function'?iconHtml('rotate-cw',{size:18}):''}</span>
@@ -3896,11 +4223,10 @@
         </div>
       </div>
       <div class="mehfil-alone mehfil-alone-float" data-mehfil-alone hidden>
-        <p>${esc(tt('mehfil_alone', 'You’re the only one here — invite friends to join.'))}</p>
+        <p data-mehfil-alone-copy-text>${esc(tt('mehfil_alone_warm', 'Just you for now — invite someone, or start a watch / listen.'))}</p>
         <div class="mehfil-alone-actions">
-          <button type="button" class="mehfil-alone-ring" data-mehfil-alone-ring>${esc(tt('mehfil_ring', 'Ring'))}</button>
-          <button type="button" class="mehfil-nudge-btn" data-mehfil-nudge>${esc(tt('mehfil_nudge', 'Invite to Mehfil'))}</button>
-          <button type="button" class="mehfil-alone-copy" data-mehfil-alone-copy>${esc(tt('mehfil_copy_link', 'Copy link'))}</button>
+          <button type="button" class="mehfil-nudge-btn" data-mehfil-alone-invite>${esc(tt('mehfil_invite_title', 'Invite to Mehfil'))}</button>
+          <button type="button" class="mehfil-alone-media" data-mehfil-alone-media>${esc(tt('mehfil_start_something', 'Start something'))}</button>
         </div>
       </div>
       <div class="mehfil-chat-strip is-collapsed" data-mehfil-chat-strip aria-label="${esc(tt('mehfil_chat_expand', 'Room chat'))}">
@@ -3910,6 +4236,7 @@
           <span class="mehfil-chat-preview" data-mehfil-chat-preview>${esc(tt('mehfil_chat_empty', 'Say hello to the room'))}</span>
         </button>
         <div class="mehfil-chat-expanded">
+          <div class="mehfil-chat-retain" data-mehfil-chat-retain>${esc(tt('mehfil_chat_retain', 'Room chat · live only · not saved to the thread · clears when the room empties'))}</div>
           <div class="mehfil-chat-msgs" data-mehfil-chat-msgs></div>
           <form class="mehfil-chat-compose" data-mehfil-chat-form>
             <input type="text" maxlength="500" placeholder="${esc(tt('mehfil_msg_ph', 'Message the room…'))}" data-mehfil-chat-input enterkeyhint="send" autocomplete="off">
@@ -3998,7 +4325,7 @@
     el.querySelector('[data-mehfil-stage-main]')?.addEventListener('dblclick', (e) => {
       if (!e.target.closest('.mehfil-tile, .mehfil-yt, iframe, button')) collapseChatStrip();
     });
-    el.querySelector('[data-mehfil-react-quick]')?.addEventListener('click', () => toggleCallSheet('reacts'));
+    el.querySelector('[data-mehfil-react-quick]')?.addEventListener('click', () => sendRoomReaction('👏', false));
     el.querySelector('[data-mehfil-fs]')?.addEventListener('click', requestStageFullscreen);
     // Host / Everyone / delegate — honest control model
     el.querySelector('[data-mehfil-control-host]')?.addEventListener('click', async () => {
@@ -4024,27 +4351,18 @@
       e.preventDefault();
       const input = el.querySelector('[data-mehfil-chat-input]');
       const text = String(input?.value || '').trim();
-      if (!text || !activeChatId) return;
-      const ref = rtdbRef(`mehfil/${activeChatId}/chat`);
-      if (!ref) {
-        if (typeof showToast === 'function') showToast(tt('mehfil_rtdb_missing', 'Room chat needs Realtime Database.'));
-        return;
-      }
-      input.value = '';
-      try {
-        await ensureMehfilParticipant(activeChatId);
-        await ref.push({
-          text: text.slice(0, 500),
-          by: currentUser?.uid || null,
-          name: userProfile?.name || userProfile?.username || digitalProfile?.displayName || 'You',
-          at: Date.now(),
-        });
-      } catch (err) {
-        if (typeof reportClientError === 'function') {
-          reportClientError({ feature: 'mehfil_chat', message: err?.message || String(err) });
-        }
-        if (typeof showToast === 'function') showToast(tt('mehfil_send_fail', 'Could not send'));
-      }
+      if (!text) return;
+      const ok = await sendRoomChat(text);
+      if (ok && input) input.value = '';
+      expandChatStrip();
+    });
+    el.querySelector('[data-mehfil-chat-input]')?.addEventListener('focus', () => {
+      expandChatStrip();
+      // Keep strip above keyboard inside .device
+      requestAnimationFrame(() => {
+        const strip = chatStripEl();
+        if (strip) strip.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      });
     });
 
     el.querySelector('[data-mehfil-leave]')?.addEventListener('click', () => {
@@ -4064,48 +4382,30 @@
       if (fsBtn) fsBtn.hidden = !hasYoutubeOnStage();
       updateHostControlUi(cachedMediaState);
     });
-    el.querySelector('[data-mehfil-ring]')?.addEventListener('click', () => startMehfilRing(activeChat));
+    el.querySelector('[data-mehfil-ring]')?.addEventListener('click', () => openInviteSheet());
     el.querySelector('[data-mehfil-waiting-ring]')?.addEventListener('click', () => startMehfilRing(activeChat));
-    el.querySelector('[data-mehfil-alone-ring]')?.addEventListener('click', () => startMehfilRing(activeChat));
-    el.querySelector('[data-mehfil-waiting-invite]')?.addEventListener('click', nudgeOthers);
-    el.querySelector('[data-mehfil-alone-copy]')?.addEventListener('click', copyInviteLink);
+    el.querySelector('[data-mehfil-waiting-invite]')?.addEventListener('click', () => openInviteSheet());
+    el.querySelector('[data-mehfil-alone-invite]')?.addEventListener('click', () => openInviteSheet());
+    el.querySelector('[data-mehfil-alone-media]')?.addEventListener('click', () => {
+      toggleCallSheet('media');
+      loadMehfilYtRecs(el);
+      setMediaSearchMode(mediaSearchMode);
+    });
     el.querySelector('[data-mehfil-ring-cancel]')?.addEventListener('click', cancelOutboundRing);
     el.querySelector('[data-mehfil-stop-share]')?.addEventListener('click', () => {
       if (localScreen) toggleScreenShare();
     });
     el.querySelector('[data-mehfil-flip]')?.addEventListener('click', flipCamera);
     el.querySelector('[data-mehfil-share]')?.addEventListener('click', toggleScreenShare);
-    el.querySelector('[data-mehfil-nudge]')?.addEventListener('click', nudgeOthers);
-    el.querySelector('[data-mehfil-nudge-more]')?.addEventListener('click', () => {
+    el.querySelector('[data-mehfil-invite-sheet]')?.addEventListener('click', () => {
       closeCallSheets(null);
-      nudgeOthers();
-    });
-    el.querySelector('[data-mehfil-copy]')?.addEventListener('click', () => {
-      closeCallSheets(null);
-      copyInviteLink();
+      openInviteSheet();
     });
     el.querySelectorAll('[data-mehfil-reacts] button, [data-mehfil-stickers] button').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const emoji = btn.dataset.emoji;
-        const isSticker = btn.closest('[data-mehfil-stickers]');
-        if (isSticker) showStickerBurst(emoji);
-        else showReactionBurst(emoji);
-        if (!activeChatId) return;
-        const ref = rtdbRef(`mehfil/${activeChatId}/reactions`);
-        if (!ref) {
-          if (typeof showToast === 'function') showToast(tt('mehfil_rtdb_missing', 'Room chat needs Realtime Database.'));
-          return;
-        }
-        try {
-          await ensureMehfilParticipant(activeChatId);
-          await ref.push({
-            emoji,
-            by: currentUser?.uid || null,
-            at: Date.now(),
-          });
-        } catch (e) {
-          if (typeof showToast === 'function') showToast(tt('mehfil_react_fail', 'Could not send reaction'));
-        }
+        const isSticker = !!btn.closest('[data-mehfil-stickers]');
+        await sendRoomReaction(emoji, isSticker);
         pokeChrome();
       });
     });
@@ -4135,6 +4435,11 @@
     bindMediaSync();
     bindRolesAndModeration(chatId);
     paintRoleBadges();
+
+    // Defaults: groups stay collapsed; DMs open chat strip (call-like, few people).
+    if (!isGroup) {
+      expandChatStrip();
+    }
 
     // DM call-like: auto-ring when alone after a short presence settle.
     if (!isGroup) {

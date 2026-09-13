@@ -377,9 +377,8 @@ html.quiet-mode .mehfil-tile.is-speaking{
 }
 .mehfil-alone-actions{
   display:flex;
-  flex-wrap:wrap;
+  flex-direction:column;
   gap:8px;
-  justify-content:center;
   margin-top:8px;
 }
 .mehfil-alone-ring{

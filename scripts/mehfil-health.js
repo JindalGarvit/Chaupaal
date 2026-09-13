@@ -22,7 +22,10 @@ function read(rel) {
 
 const rules = read('firebase/database.rules.json');
 const mehfilJs = read('public/src/js/features/mehfil.js');
+const effectsJs = read('public/src/js/features/mehfil-effects.js');
+const cinemaCss = read('public/src/styles/mehfil-cinema.css');
 const mediaConfig = read('api/media-config.js');
+const i18n = read('public/src/js/core/i18n.js');
 
 const checks = [
   ['mehfil.js', exists('public/src/js/features/mehfil.js')],
@@ -45,6 +48,10 @@ const checks = [
   ['RTDB roles/removed rules', rules.includes('"roomHost"') && rules.includes('"removed"') && rules.includes('"roles"')],
   ['mehfil_ensure_member action', mediaConfig.includes('mehfil_ensure_member')],
   ['agora_token membership gate', mediaConfig.includes('assertMehfilAgoraAccess')],
+  ['social: room chat retain + flood', (mehfilJs.includes('mehfil_chat_retain') || i18n.includes('mehfil_chat_retain')) && mehfilJs.includes('chatFloodBlocked')],
+  ['social: invite sheet', mehfilJs.includes('function openInviteSheet') && mehfilJs.includes('sendRoomReaction')],
+  ['social: presence coalesce', mehfilJs.includes('PRESENCE_COALESCE_MS') && mehfilJs.includes('queuePresenceEvent')],
+  ['social: effects clear', effectsJs.includes('clear()') && cinemaCss.includes('mehfil-chat-retain')],
   ['youtube-search.js', exists('server-lib/youtube-search.js')],
   ['YOUTUBE_API_KEY documented', read('.env.example').includes('YOUTUBE_API_KEY')],
   ['teen-mode assertCanMessage', read('public/src/js/core/teen-mode.js').includes('assertCanMessage')],
@@ -64,21 +71,24 @@ console.log(`${agoraConfigured ? '✓' : '○'} AGORA_APP_ID + CERTIFICATE (opti
 console.log(`○ api/*.js count: ${apiCount} (Hobby max 12)`);
 
 console.log(`
-Manual QA checklist (M4)
+Manual QA checklist (M5)
 ------------------------
-Roles
-  [ ] Group: first joiner is room host; leave → longest-present becomes host
-  [ ] Demote to listener → mic stops; token subscriber (cannot publish)
-  [ ] Promote back → can speak again
-  [ ] DM: no host badge / no moderation
+Room chat
+  [ ] Send/receive fast; collapsed unread; open clears; keyboard-safe
+  [ ] Retention copy matches reality (empty room → chat cleared)
+  [ ] Removed user cannot post / react
 
-Moderation
-  [ ] Host mute → soft mute notice; demote locks it
-  [ ] Remove → calm exit, cooldown ~15m, still in chat, cannot re-ring
-  [ ] Non-host sees no mod actions
+Reactions
+  [ ] Dock clap one-tap; sticker from More; all clients see bursts
+  [ ] Rapid taps throttle; effects never block dock; Quiet / reduced-motion
+
+Presence + invite
+  [ ] Busy join/leave coalesced; media start = one moment
+  [ ] Alone → warm invite + start something; invite sheet: bubble / link / ring
+  [ ] Non-member deep link → honest denial, no leak
 
 Ops
-  [ ] firebase deploy --only database
+  [ ] Leave cleans listeners/timers (several join/leave cycles)
   [ ] npm run health:mehfil; api/*.js ≤12
 `);
 
