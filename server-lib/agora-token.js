@@ -1,7 +1,8 @@
 /**
- * Agora RTC token mint (Part 2 Phase 5 — Mehfil).
+ * Agora RTC token mint (Mehfil).
  * Env: AGORA_APP_ID + AGORA_APP_CERTIFICATE.
  * Returns { configured:false } when secrets missing — no silent provider switch.
+ * M4: role publisher | subscriber (listeners cannot publish).
  */
 const crypto = require('crypto');
 
@@ -24,7 +25,7 @@ function uidToNumber(uid) {
 }
 
 /**
- * @param {{ channel: string, uid: string|number }} opts
+ * @param {{ channel: string, uid: string|number, role?: 'publisher'|'subscriber' }} opts
  */
 function mintAgoraToken(opts = {}) {
   const cfg = getAgoraConfig();
@@ -46,6 +47,8 @@ function mintAgoraToken(opts = {}) {
     return { configured: false, reason: 'AGORA_SDK_MISSING' };
   }
 
+  const wantSub = String(opts.role || 'publisher').toLowerCase() === 'subscriber';
+  const rtcRole = wantSub ? RtcRole.SUBSCRIBER : RtcRole.PUBLISHER;
   const numericUid = uidToNumber(opts.uid);
   const expire = Math.floor(Date.now() / 1000) + 60 * 60 * 6;
   const token = RtcTokenBuilder.buildTokenWithUid(
@@ -53,7 +56,7 @@ function mintAgoraToken(opts = {}) {
     cfg.appCertificate,
     channel,
     numericUid,
-    RtcRole.PUBLISHER,
+    rtcRole,
     expire
   );
   return {
@@ -63,6 +66,7 @@ function mintAgoraToken(opts = {}) {
     uid: numericUid,
     token,
     expiresAt: expire,
+    role: wantSub ? 'subscriber' : 'publisher',
   };
 }
 

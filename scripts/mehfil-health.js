@@ -40,6 +40,9 @@ const checks = [
   ['watch party search pick list', mehfilJs.includes('paintMediaResults') && mehfilJs.includes('Play for the room')],
   ['shared music path', mehfilJs.includes('playSharedMusicTrack') && mehfilJs.includes("type: 'music'")],
   ['host everyone delegate', mehfilJs.includes('openDelegatePicker') && mehfilJs.includes('controlMode')],
+  ['room roles + removal', mehfilJs.includes('ensureRoomRoles') && mehfilJs.includes('hostRemoveUser') && mehfilJs.includes('roomHost')],
+  ['subscriber token mint', read('server-lib/agora-token.js').includes('SUBSCRIBER') && read('server-lib/mehfil-access.js').includes('resolveMehfilVoiceRole')],
+  ['RTDB roles/removed rules', rules.includes('"roomHost"') && rules.includes('"removed"') && rules.includes('"roles"')],
   ['mehfil_ensure_member action', mediaConfig.includes('mehfil_ensure_member')],
   ['agora_token membership gate', mediaConfig.includes('assertMehfilAgoraAccess')],
   ['youtube-search.js', exists('server-lib/youtube-search.js')],
@@ -61,21 +64,21 @@ console.log(`${agoraConfigured ? '✓' : '○'} AGORA_APP_ID + CERTIFICATE (opti
 console.log(`○ api/*.js count: ${apiCount} (Hobby max 12)`);
 
 console.log(`
-Manual QA checklist (M3)
+Manual QA checklist (M4)
 ------------------------
-Watch / Listen
-  [ ] Search → pick from list (not auto first) → all sync to same position
-  [ ] Second pick stops first (no double audio)
-  [ ] Music path works; Quiet skips local music; video replaces music
+Roles
+  [ ] Group: first joiner is room host; leave → longest-present becomes host
+  [ ] Demote to listener → mic stops; token subscriber (cannot publish)
+  [ ] Promote back → can speak again
+  [ ] DM: no host badge / no moderation
 
-Control
-  [ ] Host: non-host controls disabled with reason
-  [ ] Everyone: all can control; delegate grants/revokes; clears on leave
-  [ ] Host leaves → playback continues for others
+Moderation
+  [ ] Host mute → soft mute notice; demote locks it
+  [ ] Remove → calm exit, cooldown ~15m, still in chat, cannot re-ring
+  [ ] Non-host sees no mod actions
 
-Reliability
-  [ ] Background 60s → return resyncs; leave stops only your playback
-  [ ] Last person leaves → media cleared
+Ops
+  [ ] firebase deploy --only database
   [ ] npm run health:mehfil; api/*.js ≤12
 `);
 

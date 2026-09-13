@@ -489,9 +489,11 @@ async function handlePost(req, res) {
     const { mintAgoraToken } = require('../server-lib/agora-token');
     // Always mint for the VERIFIED uid — accepting body.uid let a caller mint
     // publisher tokens for arbitrary Agora identities.
+    // M4: listeners get subscriber tokens (cannot publish even if client tampers).
     const result = mintAgoraToken({
       channel: access.channel,
       uid: user.uid,
+      role: access.voiceRole === 'subscriber' ? 'subscriber' : 'publisher',
     });
     if (result.error === 'channel_required') {
       return sendError(res, 400, 'VALIDATION_ERROR', 'channel required');

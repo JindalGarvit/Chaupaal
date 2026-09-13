@@ -81,8 +81,8 @@ async function mirrorMehfilMembers(adminNs, chatId, uids) {
 }
 
 /**
- * Full gate for Agora mint: membership + channel matches chat.
- * @returns {Promise<{ ok:true, chatId:string, channel:string }|{ ok:false, code:string, status:number }>}
+ * Full gate for Agora mint: membership + channel matches chat + not removed.
+ * @returns {Promise<{ ok:true, chatId:string, channel:string, chatType?:string, voiceRole?:string }|{ ok:false, code:string, status:number }>}
  */
 async function assertMehfilAgoraAccess(adminNs, opts) {
   const o = opts || {};
@@ -107,12 +107,65 @@ async function assertMehfilAgoraAccess(adminNs, opts) {
     const status = check.code === 'NOT_FOUND' ? 404 : check.code === 'VALIDATION_ERROR' ? 400 : 403;
     return { ok: false, code: check.code === 'BLOCKED_CHAT' ? 'FORBIDDEN' : check.code, status };
   }
+  const removed = await assertNotRemovedFromMehfil(adminNs, chatId, uid);
+  if (!removed.ok) {
+    return { ok: false, code: removed.code || 'REMOVED', status: 403 };
+  }
   try {
     await mirrorMehfilMembers(adminNs, chatId, [uid]);
   } catch (e) {
     console.warn('[mehfil-access] mirror', e?.message || e);
   }
-  return { ok: true, chatId, channel: expected || channel };
+  const voiceRole = await resolveMehfilVoiceRole(adminNs, {
+    chatId,
+    uid,
+    chatData: check.chatData,
+  });
+  const chatType = String(check.chatData?.type || 'dm');
+  return { ok: true, chatId, channel: expected || channel, chatType, voiceRole };
+}
+
+/** Removal cooldown still active? */
+async function assertNotRemovedFromMehfil(adminNs, chatId, uid) {
+  const id = sanitizeChatId(chatId);
+  const userUid = String(uid || '');
+  if (!id || !userUid) return { ok: false, code: 'VALIDATION_ERROR' };
+  try {
+    const snap = await adminNs.database().ref(`mehfil/${id}/removed/${userUid}`).once('value');
+    const v = snap.val();
+    if (!v) return { ok: true };
+    const until = Number(v.until) || 0;
+    if (until && until > Date.now()) {
+      return { ok: false, code: 'REMOVED', until };
+    }
+    // Expired — clear stale node
+    await adminNs.database().ref(`mehfil/${id}/removed/${userUid}`).remove();
+    return { ok: true };
+  } catch (e) {
+    console.warn('[mehfil-access] removed check', e?.message || e);
+    return { ok: true };
+  }
+}
+
+/**
+ * DM → always publisher. Group listener → subscriber. Host/speaker → publisher.
+ */
+async function resolveMehfilVoiceRole(adminNs, opts) {
+  const o = opts || {};
+  const chatData = o.chatData || {};
+  const isGroup = chatData.type === 'group';
+  if (!isGroup) return 'publisher';
+  const chatId = sanitizeChatId(o.chatId);
+  const uid = String(o.uid || '');
+  if (!chatId || !uid) return 'publisher';
+  try {
+    const roleSnap = await adminNs.database().ref(`mehfil/${chatId}/roles/${uid}/role`).once('value');
+    const role = String(roleSnap.val() || 'speaker');
+    if (role === 'listener') return 'subscriber';
+    return 'publisher';
+  } catch (e) {
+    return 'publisher';
+  }
 }
 
 module.exports = {
@@ -125,4 +178,6 @@ module.exports = {
   assertChatMember,
   mirrorMehfilMembers,
   assertMehfilAgoraAccess,
+  assertNotRemovedFromMehfil,
+  resolveMehfilVoiceRole,
 };

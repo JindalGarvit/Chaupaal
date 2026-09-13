@@ -813,8 +813,29 @@ html.quiet-mode .mehfil-tile.is-speaking{
 .mehfil-music-now[hidden]{display:none!important;}
 .mehfil-music-now strong{font-size:14px;}
 .mehfil-music-now span{font-size:12px;opacity:.75;}
-.mehfil-ring-pick-row{display:block;width:100%;text-align:left;padding:10px 12px;border:none;background:transparent;color:inherit;cursor:pointer;border-radius:8px;}
-.mehfil-ring-pick-row:hover{background:rgba(255,255,255,.08);}
+.mehfil-member-chip.is-host{
+  border-color:rgba(255,200,80,.75);
+}
+.mehfil-member-chip.is-listener{
+  opacity:.78;
+}
+.mehfil-role-badge{
+  position:absolute;top:2px;right:2px;
+  font-size:9px;font-weight:700;line-height:1;
+  padding:2px 4px;border-radius:6px;
+  background:rgba(0,0,0,.55);color:#fff;
+}
+.mehfil-member-chip{position:relative;}
+.mehfil-my-role{
+  font-size:11px;opacity:.8;padding:0 8px;white-space:nowrap;
+}
+.mehfil-my-role[hidden]{display:none!important;}
+.mehfil-tile.is-host{box-shadow:0 0 0 1px rgba(255,200,80,.55);}
+.mehfil-tile.is-listener .mehfil-tile-label::after{content:' · listen';opacity:.7;}
+.mehfil-mod-role{opacity:.7;font-size:13px;margin:4px 0 12px;}
+.mehfil-mod-self-note{font-size:13px;opacity:.8;padding:8px;}
+.mehfil-ring-pick-row.is-danger{color:#ff8a8a;}
+.mehfil-participant-sheet .mehfil-ring-pick-card{max-width:320px;}
 .mehfil-ring-btn{
   display:inline-flex;align-items:center;gap:6px;
   min-height:44px;padding:0 12px;margin-left:auto;margin-right:8px;

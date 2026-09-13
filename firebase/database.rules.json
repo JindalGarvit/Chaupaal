@@ -32,8 +32,30 @@
         ".read": "auth != null && root.child('mehfilMembers').child($chatId).child(auth.uid).val() == true",
         "participants": {
           "$uid": {
-            ".write": "auth != null && auth.uid == $uid && root.child('mehfilMembers').child($chatId).child(auth.uid).val() == true",
+            ".write": "auth != null && auth.uid == $uid && root.child('mehfilMembers').child($chatId).child(auth.uid).val() == true && (!root.child('mehfil').child($chatId).child('removed').child(auth.uid).exists() || root.child('mehfil').child($chatId).child('removed').child(auth.uid).child('until').val() < now)",
             ".validate": "newData.hasChildren(['at']) || !newData.exists()"
+          }
+        },
+        "roomHost": {
+          ".write": "auth != null && root.child('mehfilMembers').child($chatId).child(auth.uid).val() == true && ((!data.exists() && newData.child('uid').val() == auth.uid) || (data.child('uid').val() == auth.uid) || (!newData.exists() && data.child('uid').val() == auth.uid))",
+          ".validate": "!newData.exists() || (newData.hasChildren(['uid', 'at']) && newData.child('uid').isString())"
+        },
+        "roles": {
+          "$uid": {
+            ".write": "auth != null && root.child('mehfilMembers').child($chatId).child(auth.uid).val() == true && ((auth.uid == $uid && (!newData.exists() || newData.child('role').val() == 'speaker' || newData.child('role').val() == 'listener')) || (root.child('mehfil').child($chatId).child('roomHost').child('uid').val() == auth.uid))",
+            ".validate": "!newData.exists() || (newData.hasChildren(['role', 'at']) && (newData.child('role').val() == 'speaker' || newData.child('role').val() == 'listener'))"
+          }
+        },
+        "removed": {
+          "$uid": {
+            ".write": "auth != null && root.child('mehfilMembers').child($chatId).child(auth.uid).val() == true && root.child('mehfil').child($chatId).child('roomHost').child('uid').val() == auth.uid",
+            ".validate": "!newData.exists() || (newData.hasChildren(['by', 'at', 'until']) && newData.child('by').val() == auth.uid)"
+          }
+        },
+        "moderation": {
+          "$uid": {
+            ".write": "auth != null && root.child('mehfilMembers').child($chatId).child(auth.uid).val() == true && (auth.uid == $uid || root.child('mehfil').child($chatId).child('roomHost').child('uid').val() == auth.uid)",
+            ".validate": "!newData.exists() || newData.hasChildren(['at'])"
           }
         },
         "media": {

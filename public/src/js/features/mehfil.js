@@ -83,6 +83,14 @@
   let lastAppliedMediaSeq = 0;
   let lastSeekPublishAt = 0;
   let musicSyncTimer = null;
+  /** Group room host uid (null in DMs). */
+  let roomHostUid = null;
+  /** uid → host|speaker|listener */
+  const rolesByUid = new Map();
+  let myRoomRole = 'speaker';
+  let agoraVoiceRole = 'publisher';
+  let rejoiningForRole = false;
+  const REMOVAL_COOLDOWN_MS = 15 * 60 * 1000;
 
   /** Solo waiter label — never “Live” with one person. */
   const MEHFIL_WAITING_LABEL = 'Waiting in Mehfil';
@@ -580,7 +588,16 @@
   async function filterRingTargets(chatId, uids) {
     const inRoom = await fetchParticipantUids(chatId);
     const set = new Set(inRoom.map(String));
-    return (uids || []).map(String).filter((u) => u && !set.has(u));
+    let removed = new Set();
+    try {
+      const snap = await rtdbRef(`mehfil/${chatId}/removed`)?.once('value');
+      const val = snap?.val() || {};
+      const now = Date.now();
+      Object.entries(val).forEach(([uid, meta]) => {
+        if (Number(meta?.until) > now) removed.add(String(uid));
+      });
+    } catch (e) {}
+    return (uids || []).map(String).filter((u) => u && !set.has(u) && !removed.has(u));
   }
 
   function toggleImmersive() {
@@ -612,13 +629,42 @@
 
   async function transferHostIfNeeded() {
     if (!activeChatId || !currentUser?.uid) return;
+    const me = currentUser.uid;
+    const isGroup = activeChat?.type === 'group';
     try {
+      // --- Room host transfer (groups) ---
+      if (isGroup) {
+        const hostRef = rtdbRef(`mehfil/${activeChatId}/roomHost`);
+        const hostSnap = await hostRef?.once('value');
+        const hostVal = hostSnap?.val() || {};
+        if (hostVal.uid === me) {
+          const ps = await rtdbRef(`mehfil/${activeChatId}/participants`)?.once('value');
+          const val = ps?.val() || {};
+          const state = mehfilLiveState(val);
+          const others = (state.freshUids || [])
+            .filter((uid) => uid !== me)
+            .map((uid) => ({ uid, at: Number(val[uid]?.at) || 0 }))
+            .sort((a, b) => a.at - b.at); // longest-present first
+          if (others.length) {
+            await hostRef.set({ uid: others[0].uid, at: Date.now() });
+            await rtdbRef(`mehfil/${activeChatId}/roles/${others[0].uid}`)?.update({
+              role: 'speaker',
+              at: Date.now(),
+            });
+          } else {
+            await cleanupEmptyRoomMeta(activeChatId);
+          }
+        }
+        try {
+          await rtdbRef(`mehfil/${activeChatId}/roles/${me}`)?.remove();
+        } catch (e) {}
+      }
+
+      // --- Media host transfer (M3) ---
       const ref = rtdbRef(`mehfil/${activeChatId}/media`);
       if (!ref) return;
       const snap = await ref.once('value');
       const m = snap.val() || {};
-      const me = currentUser.uid;
-      // Clear my delegate if I leave
       if (m.controlUid === me && m.hostUid !== me) {
         await ref.update({ controlUid: null });
       }
@@ -628,17 +674,437 @@
       const state = mehfilLiveState(val);
       const others = (state.freshUids || []).filter((uid) => uid !== me);
       if (others.length) {
-        const nextHost = others[0];
+        const nextHost = roomHostUid && others.includes(roomHostUid) ? roomHostUid : others[0];
         await ref.update({
           hostUid: nextHost,
           controlUid: m.controlUid === me ? null : m.controlUid || null,
           controlMode: m.controlMode === 'all' ? 'all' : 'host',
         });
       } else {
-        // Last person — clear media so next join starts clean
         await ref.remove();
       }
     } catch (e) {}
+  }
+
+  async function cleanupEmptyRoomMeta(chatId) {
+    if (!chatId) return;
+    try {
+      const base = rtdbRef(`mehfil/${chatId}`);
+      if (!base) return;
+      await Promise.all([
+        rtdbRef(`mehfil/${chatId}/roomHost`)?.remove(),
+        rtdbRef(`mehfil/${chatId}/roles`)?.remove(),
+        rtdbRef(`mehfil/${chatId}/removed`)?.remove(),
+        rtdbRef(`mehfil/${chatId}/moderation`)?.remove(),
+        rtdbRef(`mehfil/${chatId}/media`)?.remove(),
+      ]);
+    } catch (e) {}
+  }
+
+  function isGroupMehfil() {
+    return activeChat?.type === 'group';
+  }
+
+  function iAmRoomHost() {
+    return isGroupMehfil() && roomHostUid && roomHostUid === currentUser?.uid;
+  }
+
+  function roleOf(uid) {
+    if (!isGroupMehfil()) return 'speaker';
+    if (uid && roomHostUid && String(uid) === String(roomHostUid)) return 'host';
+    return rolesByUid.get(String(uid)) || 'speaker';
+  }
+
+  async function ensureRoomRoles(chatId) {
+    if (!chatId || !currentUser?.uid || !isGroupMehfil()) {
+      myRoomRole = 'speaker';
+      roomHostUid = null;
+      return true;
+    }
+    // Blocked by removal cooldown?
+    try {
+      const rem = await rtdbRef(`mehfil/${chatId}/removed/${currentUser.uid}`)?.once('value');
+      const v = rem?.val();
+      if (v && Number(v.until) > Date.now()) {
+        if (typeof showToast === 'function') {
+          showToast(tt('mehfil_removed_blocked', 'You’ve been removed from this Mehfil for a bit — try later.'));
+        }
+        return false;
+      }
+    } catch (e) {}
+
+    const hostRef = rtdbRef(`mehfil/${chatId}/roomHost`);
+    try {
+      const snap = await hostRef?.once('value');
+      const cur = snap?.val();
+      if (!cur?.uid) {
+        await hostRef.set({ uid: currentUser.uid, at: Date.now() });
+        roomHostUid = currentUser.uid;
+        myRoomRole = 'host';
+        await rtdbRef(`mehfil/${chatId}/roles/${currentUser.uid}`)?.set({
+          role: 'speaker',
+          at: Date.now(),
+        });
+      } else {
+        roomHostUid = String(cur.uid);
+        const myRoleRef = rtdbRef(`mehfil/${chatId}/roles/${currentUser.uid}`);
+        const mySnap = await myRoleRef?.once('value');
+        if (!mySnap?.val()) {
+          await myRoleRef.set({ role: 'speaker', at: Date.now() });
+          myRoomRole = 'speaker';
+        } else {
+          myRoomRole = String(mySnap.val().role || 'speaker');
+        }
+        if (roomHostUid === currentUser.uid) myRoomRole = 'host';
+      }
+    } catch (e) {
+      console.warn('[mehfil] ensureRoomRoles', e);
+    }
+    return true;
+  }
+
+  function bindRolesAndModeration(chatId) {
+    if (!isGroupMehfil() || !chatId) return;
+
+    const hostRef = rtdbRef(`mehfil/${chatId}/roomHost`);
+    if (hostRef) {
+      const onHost = (snap) => {
+        roomHostUid = snap.val()?.uid ? String(snap.val().uid) : null;
+        if (roomHostUid === currentUser?.uid) myRoomRole = 'host';
+        paintRoleBadges();
+        updateHostControlUi(cachedMediaState);
+      };
+      hostRef.on('value', onHost);
+      rtdbUnsubs.push(() => hostRef.off('value', onHost));
+    }
+
+    const rolesRef = rtdbRef(`mehfil/${chatId}/roles`);
+    if (rolesRef) {
+      const onRoles = (snap) => {
+        rolesByUid.clear();
+        const val = snap.val() || {};
+        Object.entries(val).forEach(([uid, meta]) => {
+          rolesByUid.set(String(uid), String(meta?.role || 'speaker'));
+        });
+        const prev = myRoomRole;
+        if (roomHostUid === currentUser?.uid) myRoomRole = 'host';
+        else myRoomRole = rolesByUid.get(String(currentUser?.uid)) || 'speaker';
+        paintRoleBadges();
+        if (prev !== myRoomRole && (prev === 'listener' || myRoomRole === 'listener')) {
+          applyLocalRoleEnforcement(chatId).catch(() => {});
+        }
+      };
+      rolesRef.on('value', onRoles);
+      rtdbUnsubs.push(() => rolesRef.off('value', onRoles));
+    }
+
+    const remRef = rtdbRef(`mehfil/${chatId}/removed/${currentUser?.uid}`);
+    if (remRef && currentUser?.uid) {
+      const onRem = (snap) => {
+        const v = snap.val();
+        if (!v) return;
+        if (Number(v.until) > Date.now()) {
+          if (typeof showToast === 'function') {
+            showToast(tt('mehfil_removed_notice', 'You’ve been removed from this Mehfil. You’re still in the chat.'));
+          }
+          abandonMehfil('removed').catch(() => {});
+        }
+      };
+      remRef.on('value', onRem);
+      rtdbUnsubs.push(() => remRef.off('value', onRem));
+    }
+
+    const modRef = rtdbRef(`mehfil/${chatId}/moderation/${currentUser?.uid}`);
+    if (modRef && currentUser?.uid) {
+      const onMod = async (snap) => {
+        const v = snap.val();
+        if (!v?.hostMute) return;
+        if (micWanted && localAudio) {
+          try {
+            if (typeof localAudio.setMuted === 'function') await localAudio.setMuted(true);
+            else await localAudio.setEnabled(false);
+            micWanted = false;
+            setMicUi(false);
+            writePrefs({ mic: false });
+            rtdbRef(`mehfil/${chatId}/participants/${currentUser.uid}`)?.update({ muted: true });
+          } catch (e) {}
+          setMehfilStatus(tt('mehfil_host_muted_you', 'Host muted your mic'), 'warn');
+          if (typeof showToast === 'function') {
+            showToast(tt('mehfil_host_muted_you', 'Host muted your mic — you can unmute, or they may make you a listener.'));
+          }
+        }
+        // Soft mute is one-shot; clear so user can unmute. Abuse → host demotes.
+        try {
+          await modRef.remove();
+        } catch (e) {}
+      };
+      modRef.on('value', onMod);
+      rtdbUnsubs.push(() => modRef.off('value', onMod));
+    }
+  }
+
+  function paintRoleBadges() {
+    if (!overlayEl) return;
+    overlayEl.querySelectorAll('.mehfil-member-chip[data-uid]').forEach((chip) => {
+      const uid = chip.dataset.uid;
+      const role = roleOf(uid);
+      chip.classList.toggle('is-host', role === 'host');
+      chip.classList.toggle('is-listener', role === 'listener');
+      let badge = chip.querySelector('[data-mehfil-role-badge]');
+      if (role === 'host' || role === 'listener') {
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = 'mehfil-role-badge';
+          badge.setAttribute('data-mehfil-role-badge', '1');
+          chip.appendChild(badge);
+        }
+        badge.textContent = role === 'host' ? tt('mehfil_role_host', 'Host') : tt('mehfil_role_listener', 'Listening');
+      } else if (badge) {
+        badge.remove();
+      }
+    });
+    overlayEl.querySelectorAll('.mehfil-tile[data-uid], .mehfil-tile--self').forEach((tile) => {
+      const uid = tile.classList.contains('mehfil-tile--self')
+        ? currentUser?.uid
+        : tile.dataset.uid;
+      const role = roleOf(uid);
+      tile.classList.toggle('is-host', role === 'host');
+      tile.classList.toggle('is-listener', role === 'listener');
+    });
+    const selfBadge = overlayEl.querySelector('[data-mehfil-my-role]');
+    if (selfBadge) {
+      if (!isGroupMehfil()) {
+        selfBadge.hidden = true;
+      } else {
+        selfBadge.hidden = false;
+        selfBadge.textContent =
+          myRoomRole === 'host'
+            ? tt('mehfil_you_are_room_host', 'You’re the room host')
+            : myRoomRole === 'listener'
+              ? tt('mehfil_you_are_listener', 'You’re listening')
+              : tt('mehfil_you_are_speaker', 'You can speak');
+      }
+    }
+  }
+
+  async function applyLocalRoleEnforcement(chatId) {
+    if (!chatId || rejoiningForRole) return;
+    const wantSub = myRoomRole === 'listener';
+    const wantRole = wantSub ? 'subscriber' : 'publisher';
+    if (wantRole === agoraVoiceRole && !wantSub) {
+      // Already publisher speaker/host
+      return;
+    }
+    if (wantSub) {
+      // Stop publishing immediately even before token swap
+      try {
+        if (localAudio) {
+          await client?.unpublish?.([localAudio]);
+          localAudio.close?.();
+          localAudio = null;
+        }
+        if (localVideo) await closeCameraTrack();
+        if (localScreen) await closeScreenTrack();
+      } catch (e) {}
+      micWanted = false;
+      setMicUi(false);
+      setAvControlsEnabled('listen');
+      setMehfilStatus(tt('mehfil_listener_mode', 'Listening only — host can let you speak'), 'warn');
+    }
+    if (wantRole !== agoraVoiceRole && client) {
+      await rejoinAgoraForRole(chatId);
+    }
+  }
+
+  async function rejoinAgoraForRole(chatId) {
+    if (!chatId || !client || rejoiningForRole) return;
+    rejoiningForRole = true;
+    const gen = joinGeneration;
+    try {
+      try {
+        if (localAudio) {
+          await client.unpublish([localAudio]).catch(() => {});
+          localAudio.close();
+          localAudio = null;
+        }
+      } catch (e) {}
+      try {
+        await client.leave();
+      } catch (e) {}
+      client.removeAllListeners?.();
+      client = null;
+      if (gen !== joinGeneration) return;
+      await joinAgora(chatId, gen);
+    } finally {
+      rejoiningForRole = false;
+    }
+  }
+
+  async function hostSetRole(targetUid, role) {
+    if (!iAmRoomHost() || !activeChatId || !targetUid) return;
+    if (String(targetUid) === String(currentUser?.uid)) return;
+    const r = role === 'listener' ? 'listener' : 'speaker';
+    try {
+      await rtdbRef(`mehfil/${activeChatId}/roles/${targetUid}`)?.set({ role: r, at: Date.now() });
+      if (typeof showToast === 'function') {
+        showToast(
+          r === 'listener'
+            ? tt('mehfil_made_listener', 'Made {{name}} a listener', { name: displayNameForUid(targetUid) })
+            : tt('mehfil_made_speaker', 'Made {{name}} a speaker', { name: displayNameForUid(targetUid) })
+        );
+      }
+    } catch (e) {
+      if (typeof showToast === 'function') showToast(tt('mehfil_mod_fail', 'Couldn’t update role'));
+    }
+  }
+
+  async function hostMuteUser(targetUid) {
+    if (!iAmRoomHost() || !activeChatId || !targetUid) return;
+    try {
+      await rtdbRef(`mehfil/${activeChatId}/moderation/${targetUid}`)?.set({
+        hostMute: true,
+        at: Date.now(),
+        by: currentUser.uid,
+      });
+      if (typeof showToast === 'function') {
+        showToast(tt('mehfil_mute_sent', 'Mute requested — they can unmute; demote to lock it'));
+      }
+    } catch (e) {
+      if (typeof showToast === 'function') showToast(tt('mehfil_mod_fail', 'Couldn’t mute'));
+    }
+  }
+
+  async function hostRemoveUser(targetUid) {
+    if (!iAmRoomHost() || !activeChatId || !targetUid) return;
+    if (String(targetUid) === String(currentUser?.uid)) return;
+    const name = displayNameForUid(targetUid);
+    const ok =
+      typeof confirm === 'function'
+        ? confirm(tt('mehfil_remove_confirm', 'Remove {{name}} from this Mehfil? They stay in the chat.', { name }))
+        : true;
+    if (!ok) return;
+    const until = Date.now() + REMOVAL_COOLDOWN_MS;
+    try {
+      await rtdbRef(`mehfil/${activeChatId}/removed/${targetUid}`)?.set({
+        by: currentUser.uid,
+        at: Date.now(),
+        until,
+      });
+      try {
+        await rtdbRef(`mehfil/${activeChatId}/participants/${targetUid}`)?.remove();
+      } catch (e) {}
+      try {
+        await rtdbRef(`mehfil/${activeChatId}/roles/${targetUid}`)?.remove();
+      } catch (e) {}
+      if (typeof reportClientError === 'function') {
+        reportClientError({
+          feature: 'mehfil_remove',
+          message: `removed ${String(targetUid).slice(0, 12)} from ${String(activeChatId).slice(0, 24)}`,
+        });
+      }
+      if (typeof showToast === 'function') {
+        showToast(tt('mehfil_removed_ok', 'Removed from Mehfil (not the chat)'));
+      }
+    } catch (e) {
+      if (typeof showToast === 'function') showToast(tt('mehfil_mod_fail', 'Couldn’t remove'));
+    }
+  }
+
+  function openParticipantModSheet(uid) {
+    if (!uid || !overlayEl) return;
+    const me = currentUser?.uid;
+    const isSelf = String(uid) === String(me);
+    const name = displayNameForUid(uid);
+    const role = roleOf(uid);
+    const canMod = iAmRoomHost() && !isSelf;
+
+    const sheet = document.createElement('div');
+    sheet.className = 'mehfil-ring-pick mehfil-participant-sheet';
+    sheet.setAttribute('role', 'dialog');
+    const actions = [];
+    if (typeof openUserProfile === 'function' || typeof openPeerProfile === 'function') {
+      actions.push(
+        `<button type="button" class="mehfil-ring-pick-row" data-mod-profile>${esc(tt('mehfil_view_profile', 'View profile'))}</button>`
+      );
+    }
+    if (canMod) {
+      actions.push(
+        `<button type="button" class="mehfil-ring-pick-row" data-mod-mute>${esc(tt('mehfil_mute', 'Mute'))}</button>`
+      );
+      if (role === 'listener') {
+        actions.push(
+          `<button type="button" class="mehfil-ring-pick-row" data-mod-speaker>${esc(tt('mehfil_make_speaker', 'Make speaker'))}</button>`
+        );
+      } else {
+        actions.push(
+          `<button type="button" class="mehfil-ring-pick-row" data-mod-listener>${esc(tt('mehfil_make_listener', 'Make listener'))}</button>`
+        );
+      }
+      actions.push(
+        `<button type="button" class="mehfil-ring-pick-row is-danger" data-mod-remove>${esc(tt('mehfil_remove', 'Remove from Mehfil'))}</button>`
+      );
+    }
+    if (isSelf) {
+      actions.push(
+        `<p class="mehfil-mod-self-note">${esc(
+          myRoomRole === 'listener'
+            ? tt('mehfil_you_are_listener', 'You’re listening')
+            : tt('mehfil_you_are_speaker', 'You can speak')
+        )}</p>`
+      );
+    }
+    sheet.innerHTML = `
+      <div class="mehfil-ring-pick-card">
+        <h3>${esc(name)}</h3>
+        <p class="mehfil-mod-role">${esc(
+          role === 'host'
+            ? tt('mehfil_role_host', 'Host')
+            : role === 'listener'
+              ? tt('mehfil_role_listener', 'Listening')
+              : tt('mehfil_role_speaker', 'Speaker')
+        )}</p>
+        <div class="mehfil-ring-pick-list">${actions.join('') || `<p class="mehfil-mod-self-note">${esc(tt('mehfil_no_mod_actions', 'No actions'))}</p>`}</div>
+        <div class="mehfil-ring-pick-actions">
+          <button type="button" data-mod-cancel>${esc(tt('cancel', 'Cancel'))}</button>
+        </div>
+      </div>`;
+    let handle;
+    const onDismiss = () => sheet.remove();
+    if (typeof openLayer === 'function') {
+      handle = openLayer(sheet, onDismiss, {
+        host: shellHost(),
+        role: 'dialog',
+        label: name,
+      });
+    } else {
+      shellHost().appendChild(sheet);
+    }
+    const close = () => {
+      if (handle?.close) handle.close();
+      else sheet.remove();
+    };
+    sheet.querySelector('[data-mod-cancel]')?.addEventListener('click', close);
+    sheet.querySelector('[data-mod-profile]')?.addEventListener('click', () => {
+      close();
+      if (typeof openUserProfile === 'function') openUserProfile({ uid }, { context: 'mehfil' });
+      else if (typeof openPeerProfile === 'function') openPeerProfile(uid);
+    });
+    sheet.querySelector('[data-mod-mute]')?.addEventListener('click', async () => {
+      close();
+      await hostMuteUser(uid);
+    });
+    sheet.querySelector('[data-mod-listener]')?.addEventListener('click', async () => {
+      close();
+      await hostSetRole(uid, 'listener');
+    });
+    sheet.querySelector('[data-mod-speaker]')?.addEventListener('click', async () => {
+      close();
+      await hostSetRole(uid, 'speaker');
+    });
+    sheet.querySelector('[data-mod-remove]')?.addEventListener('click', async () => {
+      close();
+      await hostRemoveUser(uid);
+    });
   }
 
   function clearDelegateIfGone(freshUids) {
@@ -737,6 +1203,13 @@
       chipsHost.innerHTML = rows.length
         ? rows.join('')
         : `<span class="mehfil-member-chip is-empty">${esc(tt('mehfil_empty_room', 'No one here yet'))}</span>`;
+      chipsHost.querySelectorAll('.mehfil-member-chip[data-uid]').forEach((chip) => {
+        chip.addEventListener('click', (e) => {
+          e.preventDefault();
+          openParticipantModSheet(chip.dataset.uid);
+        });
+      });
+      paintRoleBadges();
       updateWaitingState(state);
       updateAloneHint(state.count);
       updateWhoHereStrip(state);
@@ -2001,6 +2474,11 @@
     lastMediaPublishAt = 0;
     lastSeekPublishAt = 0;
     mediaSearchMode = 'youtube';
+    roomHostUid = null;
+    rolesByUid.clear();
+    myRoomRole = 'speaker';
+    agoraVoiceRole = 'publisher';
+    rejoiningForRole = false;
     lastKnownFreshCount = 0;
     dmAutoRingDone = false;
     reconnectFailCount = 0;
@@ -2150,6 +2628,12 @@
   }
 
   async function toggleMic() {
+    if (myRoomRole === 'listener' && isGroupMehfil()) {
+      if (typeof showToast === 'function') {
+        showToast(tt('mehfil_listener_no_mic', 'You’re a listener — ask the host to let you speak'));
+      }
+      return;
+    }
     if (avMode !== 'full') {
       if (typeof showToast === 'function') {
         showToast(tt('mehfil_mic_unavailable', 'Mic unavailable — listening only'));
@@ -3032,6 +3516,15 @@
         reason: tokenPayload?.reason,
         error: envelope?.error || tokenPayload?.error,
       });
+      if (envelope?.error?.code === 'REMOVED' || envelope?.code === 'REMOVED') {
+        showStageError(
+          tt('mehfil_removed_blocked', 'You’ve been removed from this Mehfil for a bit — try later.'),
+          { fatal: false }
+        );
+        setMehfilStatus(tt('mehfil_removed_notice', 'Removed from Mehfil'), 'warn');
+        setAvControlsEnabled('none');
+        return;
+      }
       showStageError(
         tt(
           'mehfil_voice_paused',
@@ -3127,14 +3620,27 @@
       }
       if (localUid == null) localUid = client.uid;
       scheduleTokenRenewal(chatId, tokenPayload.expiresAt);
+      agoraVoiceRole = tokenPayload.role === 'subscriber' ? 'subscriber' : 'publisher';
       try {
         client.enableAudioVolumeIndicator();
       } catch (e) {}
 
       const prefs = readPrefs();
-      micWanted = prefs.mic !== false;
+      micWanted = prefs.mic !== false && agoraVoiceRole === 'publisher' && myRoomRole !== 'listener';
       // Never auto-enable cam on join — user must opt in (prefs still store last choice for later).
       camWanted = false;
+
+      if (agoraVoiceRole === 'subscriber' || myRoomRole === 'listener') {
+        setAvControlsEnabled('listen');
+        setMicUi(false);
+        setCamUi(false);
+        setShareUi(false);
+        renderLocalPlaceholder(tt('mehfil_cam_off', 'Camera off'));
+        setMehfilStatus(tt('mehfil_listener_mode', 'Listening only — host can let you speak'), 'warn');
+        updateWaitingState();
+        await ensureMehfilParticipant(chatId);
+        return;
+      }
 
       setMehfilStatus(tt('mehfil_mic_prompt', 'Allow microphone to speak'));
       try {
@@ -3276,6 +3782,7 @@
         <button type="button" class="mehfil-immersive-btn" data-mehfil-immersive aria-label="${esc(tt('mehfil_immersive_enter', 'Immersive mode'))}">⛶</button>
         <button type="button" class="mehfil-ring-btn" data-mehfil-ring title="${esc(tt('mehfil_ring', 'Ring'))}" aria-label="${esc(tt('mehfil_ring', 'Ring'))}">${typeof iconHtml==='function'?iconHtml('phone',{size:18}):'☎'}</button>
         <div class="mehfil-status" data-mehfil-status>${esc(tt('mehfil_joining', 'Joining…'))}</div>
+        <div class="mehfil-my-role" data-mehfil-my-role hidden></div>
       </div>
       <div class="mehfil-speaking-cue" data-mehfil-speaking-cue hidden></div>
       <div class="mehfil-muted-hint" data-mehfil-muted-hint hidden>${esc(tt('mehfil_you_muted', 'You’re muted'))}</div>
@@ -3618,9 +4125,16 @@
       });
     }
 
+    const rolesOk = await ensureRoomRoles(chatId);
+    if (!rolesOk) {
+      await abandonMehfil('removed_blocked');
+      return;
+    }
     await ensureMehfilParticipant(chatId);
     bindMembersList(chatId);
     bindMediaSync();
+    bindRolesAndModeration(chatId);
+    paintRoleBadges();
 
     // DM call-like: auto-ring when alone after a short presence settle.
     if (!isGroup) {
