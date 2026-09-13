@@ -862,6 +862,10 @@ service cloud.firestore {
     match /userModels/{uid} {
       allow read, write: if false;
     }
+    // P6 candidate pools — Admin SDK only (retrieval shards)
+    match /candidatePools/{poolId} {
+      allow read, write: if false;
+    }
     match /chaupaalFeedback/{docId} {
       allow read: if false;
       allow write: if false;

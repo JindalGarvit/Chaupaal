@@ -121,49 +121,20 @@ async function loadPreferenceDeltas(db, uid) {
   return prefs;
 }
 
-function rankDiscoveryCandidates({ viewer, candidates, edgeMap, plan, weights, prefs, limit }) {
-  const w = normalizeWeights(weights || defaultWeights());
-  const scored = [];
-
-  for (const cand of candidates) {
-    if (prefs?.notInterestedUids?.has(cand.uid)) continue;
-
-    const soft = softAssumptionFit(cand, plan);
-    if (soft.exclude) continue;
-
-    const edges = edgeMap[cand.uid] || {};
-    const signals = computeSignalScores(viewer, cand, edges);
-    let base = weightedScore(signals, w);
-    base = base * 0.72 + soft.fit * 0.28;
-
-    if (prefs?.moreLikeUids?.has(cand.uid)) base += 0.12;
-    const interests = [...(cand.interests || []), ...(cand.profile?.interests || [])];
-    for (const i of interests) {
-      const b = prefs?.interestBoost?.[String(i).toLowerCase()];
-      if (b) base += Math.max(-0.08, Math.min(0.08, b * 0.02));
-    }
-
-    if (plan?.softAssumptions?.preferRecentlyActive) {
-      const last =
-        cand.lastActiveAt?.toMillis?.() || cand.lastActiveAt || cand.updatedAt?.toMillis?.() || 0;
-      if (last && Date.now() - Number(last) < 7 * 864e5) base += 0.04;
-    }
-
-    const hf = plan?.hardFilters || {};
-    if (hf.college || hf.city || hf.company) base += 0.18;
-
-    scored.push({
-      uid: cand.uid,
-      user: cand,
-      score: base,
-      signalScores: signals,
-      assumptionFit: soft.fit,
-      explain: explainMatch(cand, plan, signals),
-    });
-  }
-
-  scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, Math.max(1, Math.min(20, limit || DISCOVER_LIMIT_DEFAULT)));
+function rankDiscoveryCandidates({ viewer, candidates, edgeMap, plan, weights, prefs, limit, model, optedOut }) {
+  const { rankCandidates } = require('./retrieve-rank');
+  return rankCandidates({
+    kind: 'people',
+    candidates,
+    plan,
+    model: model || null,
+    weights,
+    prefs,
+    edgeMap: edgeMap || {},
+    viewer,
+    limit,
+    optedOut: !!optedOut,
+  });
 }
 
 async function runIntentDiscover(db, admin, user, body, deps) {
@@ -290,19 +261,46 @@ async function runIntentDiscover(db, admin, user, body, deps) {
   }
 
   if (!cacheHit) {
-    let snap;
+    // P6: pool-based retrieval (no unbounded openToMeet scan when pools warm)
     try {
-      snap = await db.collection('users').where('openToMeet', '==', true).limit(DISCOVER_POOL).get();
+      const { retrieveCandidates, loadModelSafe, isOptedOutUser } = require('./retrieve-rank');
+      const optedOut = isOptedOutUser(viewer);
+      const model = await loadModelSafe(db, user.uid, { optedOut });
+      const retrieved = await retrieveCandidates({
+        kind: 'people',
+        uid: user.uid,
+        plan,
+        limit: DISCOVER_POOL,
+        db,
+        model: optedOut ? null : model,
+        viewer,
+        hardCtx,
+      });
+      candidates = retrieved.candidates || [];
+      viewer._p6Retrieve = {
+        poolReads: retrieved.poolReads,
+        hydrateReads: retrieved.hydrateReads,
+        fallback: retrieved.fallback,
+        backend: retrieved.backend,
+      };
+      viewer._p6Model = model;
+      viewer._p6OptedOut = optedOut;
+      console.info('[intent_discover] retrieve', viewer._p6Retrieve);
     } catch (e) {
-      snap = await db.collection('users').limit(DISCOVER_POOL).get();
+      console.warn('[intent_discover] retrieve fallback', e?.message || e);
+      let snap;
+      try {
+        snap = await db.collection('users').where('openToMeet', '==', true).limit(DISCOVER_POOL).get();
+      } catch (err) {
+        snap = await db.collection('users').limit(DISCOVER_POOL).get();
+      }
+      snap.docs.forEach((d) => {
+        const data = { uid: d.id, ...d.data() };
+        if (!passesHardEligibility(viewer, data, hardCtx)) return;
+        if (!passesQueryHardFilters(data, plan.hardFilters)) return;
+        candidates.push(data);
+      });
     }
-
-    snap.docs.forEach((d) => {
-      const data = { uid: d.id, ...d.data() };
-      if (!passesHardEligibility(viewer, data, hardCtx)) return;
-      if (!passesQueryHardFilters(data, plan.hardFilters)) return;
-      candidates.push(data);
-    });
   }
 
   const edgeMap = {};
@@ -323,6 +321,18 @@ async function runIntentDiscover(db, admin, user, body, deps) {
     })
   );
 
+  // Ensure P5 model available for ranking (even on cache hit)
+  if (viewer._p6Model === undefined) {
+    try {
+      const { loadModelSafe, isOptedOutUser } = require('./retrieve-rank');
+      viewer._p6OptedOut = isOptedOutUser(viewer);
+      viewer._p6Model = await loadModelSafe(db, user.uid, { optedOut: viewer._p6OptedOut });
+    } catch (e) {
+      viewer._p6Model = null;
+      viewer._p6OptedOut = false;
+    }
+  }
+
   const ranked = rankDiscoveryCandidates({
     viewer,
     candidates,
@@ -331,6 +341,8 @@ async function runIntentDiscover(db, admin, user, body, deps) {
     weights,
     prefs,
     limit,
+    model: viewer._p6Model,
+    optedOut: viewer._p6OptedOut,
   });
 
   // Write shared candidate pool (uids+scores) on miss — never viewer-final list
@@ -414,6 +426,8 @@ async function runIntentDiscover(db, admin, user, body, deps) {
       ranked.length === 0
         ? 'No eligible people matched that search yet. Try broader wording — we never invent profiles.'
         : null,
+    retrieval: viewer._p6Retrieve || null,
+    coldStart: !!(viewer._p6Model && viewer._p6Model.coldStart),
     batchInterface: BATCH_INTERFACE,
   };
 }

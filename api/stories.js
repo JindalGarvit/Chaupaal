@@ -558,27 +558,60 @@ async function feedBaithak(db, uid) {
 }
 
 async function feedDuniya(db, uid) {
-  // Decision 2B: prefer people you follow + discovery ranking over pure recency (2C).
-  // Keep collection-separate from Baithak.
+  // Decision 2B + P6: follow graph + model-aware ranking over pure recency.
   const snap = await db.collection('duniya_stories').where('expiresAt', '>', new Date()).limit(100).get();
   const followingSnap = await db.collection('users').doc(uid).collection('following').limit(200).get();
   const following = new Set(followingSnap.docs.map((d) => d.id));
-  const output = [];
+  const raw = [];
   for (const story of snap.docs) {
     if (!isStoryViewable(story)) continue;
     if (await canView(db, story, uid, false)) {
-      const serialized = serializeStory(story, uid);
-      const owner = serialized.uid;
-      let rank = serialized.createdAt || 0;
-      if (owner === uid) rank += 1e13; // own stories first
-      else if (following.has(owner)) rank += 5e12; // followed creators
-      else rank += Math.min(2e11, (serialized.score || 0) * 1e9); // light discovery signal
-      output.push({ ...serialized, _rank: rank });
+      raw.push(serializeStory(story, uid));
     }
   }
-  return output
-    .sort((a, b) => b._rank - a._rank || b.createdAt - a.createdAt)
-    .map(({ _rank, ...rest }) => rest);
+  try {
+    const {
+      rankContentItems,
+      loadModelSafe,
+      isOptedOutUser,
+    } = require('../server-lib/retrieve-rank');
+    const viewerSnap = await db.collection('users').doc(uid).get();
+    const viewer = { uid, ...(viewerSnap.data() || {}) };
+    const optedOut = isOptedOutUser(viewer);
+    const model = await loadModelSafe(db, uid, { optedOut });
+    const ranked = rankContentItems({
+      surface: 'stories',
+      items: raw.map((s) => ({
+        id: s.id,
+        uid: s.uid,
+        ts: s.createdAt,
+        likes: s.score || 0,
+        comments: 0,
+        format: s.type || 'story',
+      })),
+      model: optedOut ? null : model,
+      opts: {
+        viewerUid: uid,
+        friendUids: [...following],
+        friendSlots: 4,
+        limit: raw.length,
+      },
+    });
+    const byId = new Map(raw.map((s) => [s.id, s]));
+    return ranked.map((r) => byId.get(r.id)).filter(Boolean);
+  } catch (e) {
+    const output = raw.map((serialized) => {
+      const owner = serialized.uid;
+      let rank = serialized.createdAt || 0;
+      if (owner === uid) rank += 1e13;
+      else if (following.has(owner)) rank += 5e12;
+      else rank += Math.min(2e11, (serialized.score || 0) * 1e9);
+      return { ...serialized, _rank: rank };
+    });
+    return output
+      .sort((a, b) => b._rank - a._rank || b.createdAt - a.createdAt)
+      .map(({ _rank, ...rest }) => rest);
+  }
 }
 
 async function profileStories(db, uid, targetUid) {

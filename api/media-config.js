@@ -567,6 +567,50 @@ async function handlePost(req, res) {
     }
   }
 
+  // P6: personalize Manch library order — GOTD fairness stays in get_game_of_day
+  if (action === 'rank_manch_library') {
+    const adminNs = initAdmin();
+    if (!adminNs) {
+      return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    }
+    try {
+      const db = adminNs.firestore();
+      const {
+        rankManchLibrary,
+        loadModelSafe,
+        isOptedOutUser,
+      } = require('../server-lib/retrieve-rank');
+      const viewerSnap = await db.collection('users').doc(user.uid).get();
+      const viewer = { uid: user.uid, ...(viewerSnap.data() || {}) };
+      const optedOut = isOptedOutUser(viewer);
+      const model = await loadModelSafe(db, user.uid, { optedOut });
+      let gotdId = body.gotdId ? String(body.gotdId).slice(0, 64) : null;
+      if (!gotdId) {
+        try {
+          const { getOrComputeGameOfDay } = require('../server-lib/game-of-day');
+          const gotd = await getOrComputeGameOfDay(adminNs);
+          gotdId = gotd?.gameId || gotd?.id || null;
+        } catch (e) {}
+      }
+      const games = Array.isArray(body.games) ? body.games.slice(0, 80) : [];
+      const ranked = rankManchLibrary({
+        games,
+        model: optedOut ? null : model,
+        gotdId,
+        limit: Number(body.limit) || games.length || 40,
+      });
+      return sendSuccess(res, {
+        gotdId,
+        optedOut,
+        coldStart: !!(model && model.coldStart),
+        order: ranked.map((r) => ({ id: r.id, score: r.score, explain: r.explain })),
+      });
+    } catch (e) {
+      console.warn('[media-config] rank_manch_library', e?.message || e);
+      return sendError(res, 500, 'RANK_FAILED', 'Could not rank games');
+    }
+  }
+
   if (action === 'record_game_play') {
     const adminNs = initAdmin();
     if (!adminNs) {
@@ -1109,6 +1153,7 @@ async function handlePost(req, res) {
       'resolve_identifier',
       'switch_account',
       'get_game_of_day',
+      'rank_manch_library',
       'record_game_play',
       'record_game_like',
       'list_games_health',

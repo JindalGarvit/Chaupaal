@@ -203,6 +203,11 @@
   }
 
   function rankByVelocity(items, { friendUids = [], windowMs = TREND_WINDOW_MS, friendSlots = TREND_FRIEND_SLOTS } = {}) {
+    // P6: if server already ranked (_serverScore), preserve that order — do not fight it
+    const withServer = (items || []).filter((it) => Number.isFinite(Number(it._serverScore)));
+    if (withServer.length >= Math.min(3, (items || []).length) && withServer.length === (items || []).length) {
+      return [...items].sort((a, b) => Number(b._serverScore) - Number(a._serverScore));
+    }
     const now = Date.now();
     const friendSet = new Set((friendUids || []).map(String));
     const fresh = (items || []).filter((it) => {
@@ -241,7 +246,81 @@
     return out;
   }
 
+  /**
+   * Apply server rank_content order onto local items. Fail-open: returns items unchanged.
+   */
+  function applyServerRankOrder(items, order) {
+    if (!Array.isArray(items) || !Array.isArray(order) || !order.length) return items || [];
+    const byId = new Map();
+    items.forEach((it) => {
+      const id = String(it.firestoreId || it.id || '');
+      if (id) byId.set(id, it);
+    });
+    const out = [];
+    const used = new Set();
+    order.forEach((row) => {
+      const id = String(row.id || row);
+      const it = byId.get(id);
+      if (!it || used.has(id)) return;
+      it._serverScore = Number(row.score) || 0;
+      if (row.explain) it._rankExplain = row.explain;
+      used.add(id);
+      out.push(it);
+    });
+    items.forEach((it) => {
+      const id = String(it.firestoreId || it.id || '');
+      if (id && !used.has(id)) out.push(it);
+    });
+    return out;
+  }
+
+  /**
+   * Request P6 server ranking for a feed page. Never blocks UI — caller awaits optionally.
+   */
+  async function requestContentRank(surface, items, opts = {}) {
+    if (typeof apiFetch !== 'function' || !items?.length) return null;
+    try {
+      const payload = {
+        action: 'rank_content',
+        surface: surface || 'duniya',
+        friendUids: opts.friendUids || [],
+        pinnedIds: opts.pinnedIds || [],
+        friendSlots: opts.friendSlots || 3,
+        limit: opts.limit || Math.min(40, items.length),
+        items: items.slice(0, 80).map((it) => ({
+          id: String(it.firestoreId || it.id || ''),
+          uid: it.uid || it.user?.uid || null,
+          tag: it.tag || it.category || null,
+          format: it.format || (it.media ? 'photo' : 'text'),
+          ts: Number(it.ts || it.createdAtMs || 0) || null,
+          likes: Number(it.likes || 0) || 0,
+          comments: Number(it.comments || 0) || 0,
+          totalResponses: Number(it.totalResponses || 0) || 0,
+        })),
+      };
+      const env = await apiFetch('/api/peepal-reactions', {
+        method: 'POST',
+        needAuth: true,
+        body: payload,
+      });
+      const data = env?.data || env;
+      if (data?.order) {
+        if (typeof window !== 'undefined' && window.__CHAUPAAL_RANK_DEBUG) {
+          console.info('[rank_content]', surface, data);
+        }
+        return data;
+      }
+    } catch (e) {
+      if (typeof window !== 'undefined' && window.__CHAUPAAL_RANK_DEBUG) {
+        console.warn('[rank_content] fail-open', e);
+      }
+    }
+    return null;
+  }
+
   window.createSwipePager = createSwipePager;
   window.rankByVelocity = rankByVelocity;
   window.engagementVelocity = engagementVelocity;
+  window.applyServerRankOrder = applyServerRankOrder;
+  window.requestContentRank = requestContentRank;
 })();

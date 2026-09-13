@@ -1154,6 +1154,8 @@ async function initPeepal(){
 }
 
 function peepalScore(q){
+  // P6: server rank wins when present (do not fight intent_discover / rank_content order)
+  if(Number.isFinite(Number(q._serverScore))) return Number(q._serverScore);
   // Trending: engagement + personality + recency. Own brand-new posts pin to
   // the top so create → feed always shows the post the user just published.
   const own=currentUser?.uid&&(q.uid===currentUser.uid||q.user?.uid===currentUser.uid);
@@ -1535,6 +1537,28 @@ function renderPeepalFeed(){
       window.__peepalImpressionStop=observeFeedImpressions(feed,{ surface:'peepal', idAttr:'data-id', objType:'post' });
     }
   }catch(e){}
+  // P6: async server rank once per load — skip if already applied to this list
+  try{
+    const needRank=sorted.length && sorted.filter((q)=>Number.isFinite(Number(q._serverScore))).length < Math.min(3, sorted.length);
+    if(typeof requestContentRank==='function' && needRank && !window.__peepalRankInflight){
+      window.__peepalRankInflight=true;
+      requestContentRank('peepal', sorted, {
+        friendUids: typeof followingSet!=='undefined' ? [...followingSet] : [],
+        limit: Math.min(40, sorted.length),
+      }).then((data)=>{
+        window.__peepalRankInflight=false;
+        if(!data?.order?.length) return;
+        const scoreMap=new Map(data.order.map((r)=>[String(r.id), r]));
+        let changed=false;
+        peepalQuestions.forEach((q)=>{
+          const id=String(q.firestoreId||q.id||'');
+          const row=scoreMap.get(id);
+          if(row && q._serverScore!==row.score){ q._serverScore=row.score; q._rankExplain=row.explain; changed=true; }
+        });
+        if(changed) renderPeepalFeed();
+      }).catch(()=>{ window.__peepalRankInflight=false; });
+    }
+  }catch(e){ window.__peepalRankInflight=false; }
 }
 
 function renderPeepalAttachmentsHtml(q){

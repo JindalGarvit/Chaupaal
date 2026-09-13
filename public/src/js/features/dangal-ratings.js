@@ -473,7 +473,11 @@ function renderDangalGamesGrid() {
   }
 
   function paintManchGrid() {
-    const list = filteredLibrary();
+    let list = filteredLibrary();
+    // P6: prefer server Manch order when scores exist (GOTD stays in Khel slot — not reordered here)
+    if (list.some((g) => Number.isFinite(Number(g._manchScore)))) {
+      list = [...list].sort((a, b) => Number(b._manchScore || 0) - Number(a._manchScore || 0));
+    }
     if (!list.length) {
       manchGrid.innerHTML = '';
       if (typeof renderEmptyState === 'function') {
@@ -493,6 +497,37 @@ function renderDangalGamesGrid() {
   }
 
   paintManchGrid();
+  // Async personalized library order — fail-open keeps paintManchGrid order
+  try {
+    if (typeof apiFetch === 'function' && library.length && !window.__manchRankInflight) {
+      window.__manchRankInflight = true;
+      apiFetch('/api/media-config', {
+        method: 'POST',
+        needAuth: true,
+        body: {
+          action: 'rank_manch_library',
+          gotdId: window.__dangalGotdId || null,
+          games: library.map((g) => ({ id: g.id, genre: g.genre || null, plays: g.plays || 0 })),
+        },
+      })
+        .then((env) => {
+          window.__manchRankInflight = false;
+          const order = env?.data?.order || env?.order;
+          if (!order?.length) return;
+          const map = new Map(order.map((r) => [String(r.id), r]));
+          library.forEach((g) => {
+            const row = map.get(String(g.id));
+            if (row) g._manchScore = row.score;
+          });
+          if (manchGrid.isConnected) paintManchGrid();
+        })
+        .catch(() => {
+          window.__manchRankInflight = false;
+        });
+    }
+  } catch (e) {
+    window.__manchRankInflight = false;
+  }
   manch.appendChild(manchGrid);
 
   filterBar.addEventListener('click', (e) => {

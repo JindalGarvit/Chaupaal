@@ -468,6 +468,16 @@ module.exports = async function handler(req, res) {
       console.warn('[scheduler] user model', e?.message || e);
     }
 
+    // P6 candidate pools — inverted indexes for retrieval
+    let candidatePools = { skipped: true };
+    try {
+      const { refreshCandidatePools } = require('../server-lib/retrieve-rank');
+      candidatePools = await refreshCandidatePools(db, admin, { batchSize: 40 });
+    } catch (e) {
+      candidatePools = { error: e?.message || String(e) };
+      console.warn('[scheduler] candidate pools', e?.message || e);
+    }
+
     return sendSuccess(res, {
       ...results,
       summary,
@@ -479,6 +489,7 @@ module.exports = async function handler(req, res) {
       feedbackDigest,
       signalPrune,
       userModel,
+      candidatePools,
     });
   } catch (e) {
     console.error('[chaupaal-scheduler]', e?.message || e);

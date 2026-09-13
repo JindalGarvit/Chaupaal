@@ -184,6 +184,13 @@ Enforcement is **ON** for Firestore / RTDB (and Storage if enabled). Client uses
 - Opt-out → declared-only model (`behavioral: false`). Teens: no dating intent, no people map, no watch-together format affinity.
 - P6 must call `getUserModel(db, uid)` — never raw Firestore paths.
 
+## 11e. Retrieval & ranking (P6)
+
+- Interfaces: `retrieveCandidates` / `rankCandidates` / `rankContentItems` in `server-lib/retrieve-rank.js`. Backend default `firestore-shards` (`candidatePools/*`); `CHAUPAAL_RETRIEVAL_BACKEND=vector-index` is a stub for later.
+- Discovery (`intent_discover`) and `personal_match` retrieve from pools; ranking adds P5 model features + per-result `explain`. No LLM in scoring.
+- Content: `rank_content` on `api/peepal-reactions`; Manch: `rank_manch_library` on `api/media-config` (GOTD fairness untouched). Client `requestContentRank` / `_serverScore` must not fight server order.
+- Exploration ~18% (cold-start ~35%). Scheduler refreshes pools via `refreshCandidatePools`.
+
 ## 12. Globals & module surface
 
 The client still loads classic non-module scripts (`<script src>`), so top-level `function` / `let` and many `window.X =` exports are intentional for cross-file calls.

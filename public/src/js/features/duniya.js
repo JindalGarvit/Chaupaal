@@ -1684,12 +1684,16 @@ function toggleOpenToMeet(){
     const host = document.getElementById('prasidhaFeed');
     if (!host) return;
     host.classList.add('room-kit', 'room-kit--water', 'room-kit--prasidha');
-    const ranked =
+    let ranked =
       typeof rankByVelocity === 'function'
         ? rankByVelocity(duniyaPosts || [], {
             friendUids: typeof followingSet !== 'undefined' ? [...followingSet] : [],
           })
         : [...(duniyaPosts || [])];
+    // Prefer server scores when present
+    if ((duniyaPosts || []).some((p) => Number.isFinite(Number(p._serverScore)))) {
+      ranked = [...(duniyaPosts || [])].sort((a, b) => Number(b._serverScore || 0) - Number(a._serverScore || 0));
+    }
     host.innerHTML = '';
     const grid = document.createElement('div');
     grid.className = 'prasidha-masonry';
@@ -1713,6 +1717,37 @@ function toggleOpenToMeet(){
       grid.appendChild(tile);
     });
     host.appendChild(grid);
+    try {
+      const needRank =
+        (duniyaPosts || []).length &&
+        (duniyaPosts || []).filter((p) => Number.isFinite(Number(p._serverScore))).length < 3;
+      if (typeof requestContentRank === 'function' && needRank && !window.__prasidhaRankInflight) {
+        window.__prasidhaRankInflight = true;
+        requestContentRank('duniya', duniyaPosts || [], {
+          friendUids: typeof followingSet !== 'undefined' ? [...followingSet] : [],
+          limit: 40,
+        })
+          .then((data) => {
+            window.__prasidhaRankInflight = false;
+            if (!data?.order?.length) return;
+            const scoreMap = new Map(data.order.map((r) => [String(r.id), r]));
+            (duniyaPosts || []).forEach((p) => {
+              const id = String(p.firestoreId || p.id || '');
+              const row = scoreMap.get(id);
+              if (row) {
+                p._serverScore = row.score;
+                p._rankExplain = row.explain;
+              }
+            });
+            renderPrasidhaFeed();
+          })
+          .catch(() => {
+            window.__prasidhaRankInflight = false;
+          });
+      }
+    } catch (e) {
+      window.__prasidhaRankInflight = false;
+    }
     if (!ranked.length && typeof renderEmptyState === 'function') {
       renderEmptyState(host, {
         icon: '✨',

@@ -278,14 +278,37 @@ async function personalMatch(db, admin, user, body) {
     intent: intentText,
   };
 
-  const snap = await db.collection('users').where('openToMeet', '==', true).limit(MATCH_POOL).get();
-  const candidates = [];
-  snap.docs.forEach((d) => {
-    const data = { uid: d.id, ...d.data() };
-    if (data.uid === user.uid) return;
-    if (!passesStructuredFilters(viewer, data, filters)) return;
-    candidates.push(data);
-  });
+  // P6: retrieve from candidate pools (fail-open to openToMeet scan inside retrieveCandidates)
+  let candidates = [];
+  try {
+    const { retrieveCandidates, loadModelSafe, isOptedOutUser } = require('../server-lib/retrieve-rank');
+    const optedOut = isOptedOutUser(viewer);
+    const model = await loadModelSafe(db, user.uid, { optedOut });
+    const retrieved = await retrieveCandidates({
+      kind: 'people',
+      uid: user.uid,
+      plan: { searchIntent: intentText || 'any', hardFilters: filters.city ? { city: filters.city } : {} },
+      limit: MATCH_POOL,
+      db,
+      model: optedOut ? null : model,
+      viewer,
+      hardCtx: { blockedSet: new Set(), mutedSet: new Set(), viewerIsTeen: false },
+    });
+    (retrieved.candidates || []).forEach((data) => {
+      if (data.uid === user.uid) return;
+      if (!passesStructuredFilters(viewer, data, filters)) return;
+      candidates.push(data);
+    });
+  } catch (e) {
+    console.warn('[personal_match] retrieve', e?.message || e);
+    const snap = await db.collection('users').where('openToMeet', '==', true).limit(MATCH_POOL).get();
+    snap.docs.forEach((d) => {
+      const data = { uid: d.id, ...d.data() };
+      if (data.uid === user.uid) return;
+      if (!passesStructuredFilters(viewer, data, filters)) return;
+      candidates.push(data);
+    });
+  }
 
   // Edge hints for mutual weighting (sample)
   const edgeMap = {};
@@ -385,6 +408,60 @@ module.exports = async function handler(req, res) {
       const { refreshUserModel } = require('../server-lib/user-model');
       const result = await refreshUserModel(db, user.uid, { admin });
       return sendSuccess(res, result);
+    }
+    if (body.action === 'rank_content') {
+      try {
+        const {
+          rankContentItems,
+          rankAkhbaarCategories,
+          loadModelSafe,
+          isOptedOutUser,
+        } = require('../server-lib/retrieve-rank');
+        const viewerSnap = await db.collection('users').doc(user.uid).get();
+        const viewer = { uid: user.uid, ...(viewerSnap.data() || {}) };
+        const optedOut = isOptedOutUser(viewer);
+        const model = await loadModelSafe(db, user.uid, { optedOut });
+        const surface = String(body.surface || 'duniya').slice(0, 24);
+        if (surface === 'akhbaar_categories') {
+          const ranked = rankAkhbaarCategories({
+            categories: Array.isArray(body.categories) ? body.categories.slice(0, 80) : [],
+            pinnedOrder: Array.isArray(body.pinnedOrder) ? body.pinnedOrder.slice(0, 40) : [],
+            model: optedOut ? null : model,
+          });
+          return sendSuccess(res, {
+            surface,
+            coldStart: !!(model && model.coldStart),
+            optedOut,
+            order: ranked.map((r) => ({ id: r.id, score: r.score, explain: r.explain })),
+          });
+        }
+        const items = Array.isArray(body.items) ? body.items.slice(0, 80) : [];
+        const ranked = rankContentItems({
+          surface,
+          items,
+          model: optedOut ? null : model,
+          opts: {
+            viewerUid: user.uid,
+            friendUids: Array.isArray(body.friendUids) ? body.friendUids.slice(0, 200) : [],
+            pinnedIds: Array.isArray(body.pinnedIds) ? body.pinnedIds.slice(0, 20) : [],
+            friendSlots: Number(body.friendSlots) || 3,
+            limit: Number(body.limit) || items.length || 40,
+          },
+        });
+        return sendSuccess(res, {
+          surface,
+          coldStart: !!(model && model.coldStart),
+          optedOut,
+          order: ranked.map((r) => ({
+            id: r.id,
+            score: Math.round(r.score * 1000) / 1000,
+            explain: r.explain,
+          })),
+        });
+      } catch (e) {
+        console.warn('[rank_content]', e?.message || e);
+        return sendError(res, 500, 'RANK_FAILED', 'Could not rank content');
+      }
     }
     if (body.action === 'personal_match') {
       const result = await personalMatch(db, admin, user, body || {});
