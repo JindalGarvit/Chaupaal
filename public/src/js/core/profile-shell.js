@@ -898,156 +898,395 @@
   }
 
   const DIGITAL_DEEPEN_KEY = 'chaupaal_digital_deepen_v1';
+  const DIGITAL_DEEPEN_LATER = 'chaupaal_digital_deepen_later';
 
   function needsDigitalCanvasDeepen(profile) {
     try {
       if (localStorage.getItem(DIGITAL_DEEPEN_KEY) === 'done') return false;
+      const later = Number(localStorage.getItem(DIGITAL_DEEPEN_LATER) || 0);
+      if (later && Date.now() < later) return false;
     } catch (e) {}
     const dp = profile || (typeof digitalProfile !== 'undefined' ? digitalProfile : {}) || {};
-    const bio = String(dp.bio || '').trim();
-    const city = String(dp.currentCity || '').trim();
-    const prompts = Array.isArray(dp.prompts) ? dp.prompts.filter((p) => p?.answer) : [];
-    return !bio || !city || prompts.length < 1;
+    const type =
+      (typeof getProfileType === 'function' && getProfileType()) || dp.profileType || 'personal';
+    const steps =
+      typeof ProfileTaxonomy?.deepenStepsForTemplate === 'function'
+        ? ProfileTaxonomy.deepenStepsForTemplate(type)
+        : [];
+    if (!steps.length) {
+      const bio = String(dp.bio || '').trim();
+      const city = String(dp.currentCity || '').trim();
+      return !bio || !city;
+    }
+    return steps.some((s) => ProfileTaxonomy.needsDeepenStep(dp, s));
   }
 
-  /** Post-signup / first-profile canvas deepen — same digitalProfile + Firestore fields. */
+  /** Post-signup deepen — one ask at a time, payoff + live preview, fully skippable. */
   function openDigitalCanvasDeepen(opts = {}) {
     document.getElementById('digitalCanvasDeepenSheet')?.remove();
     try {
       sessionStorage.setItem('chaupaal_digital_deepen_offered', '1');
     } catch (e) {}
-    const dp = (typeof digitalProfile !== 'undefined' ? digitalProfile : {}) || {};
+    const dp0 = (typeof digitalProfile !== 'undefined' ? digitalProfile : {}) || {};
+    const profileType =
+      (typeof getProfileType === 'function' && getProfileType()) || dp0.profileType || 'personal';
+    const allSteps =
+      typeof ProfileTaxonomy?.deepenStepsForTemplate === 'function'
+        ? ProfileTaxonomy.deepenStepsForTemplate(profileType)
+        : [];
+    const steps = allSteps
+      .filter((s) => ProfileTaxonomy.needsDeepenStep(dp0, s))
+      .slice(0, 5);
+    if (!steps.length) {
+      try {
+        localStorage.setItem(DIGITAL_DEEPEN_KEY, 'done');
+      } catch (e) {}
+      if (typeof opts.onDone === 'function') opts.onDone();
+      return;
+    }
+
     const bank =
       (typeof PROFILE_PROMPT_BANK !== 'undefined' && Array.isArray(PROFILE_PROMPT_BANK)
         ? PROFILE_PROMPT_BANK
         : []) || [];
-    const pick = bank.slice(0, 8);
+    let stepIdx = 0;
     const sheet = document.createElement('div');
     sheet.id = 'digitalCanvasDeepenSheet';
     sheet.className = 'archive-overlay digital-canvas-deepen';
     sheet.setAttribute('data-nav-managed', '1');
     const escAttr = (s) => String(s || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-    sheet.innerHTML = `
-      <div class="archive-header">
-        ${typeof backButtonHtml==='function'?backButtonHtml({ label: 'Skip', attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="Skip">←</button>'}
-        <div style="flex:1"><strong>Build your Base</strong></div>
-        <button type="button" class="btn" data-deepen-skip style="font-size:12px;">Skip</button>
-      </div>
-      <div class="digital-canvas-deepen-body dp-deepen-arcade">
-        <div class="dp-mission-chips" aria-hidden="true">
-          <span>① Place your photo</span><span>② Add a spark</span><span>③ Drop your city</span>
-        </div>
-        <div class="auth-profile-canvas digital-canvas-deepen-preview dp-arcade-block" style="--block-accent:var(--dp-accent,var(--red))">
-          <div class="auth-profile-canvas-hero">
-            <div class="auth-profile-canvas-avatar" aria-hidden="true">🪑</div>
-            <div class="auth-canvas-live-name">${esc(dp.displayName || 'Your name')}</div>
-            <div class="auth-canvas-live-handle">@${esc((dp.username || 'username').replace(/^@/, ''))}</div>
-            <p class="digital-canvas-live-bio" data-live-bio>${esc(dp.bio || 'Your bio will show here')}</p>
-            <p class="digital-canvas-live-city" data-live-city>${esc(dp.currentCity ? `📍 ${dp.currentCity}` : 'City on your Digital tab')}</p>
-          </div>
-          <label class="story-editor-field">Bio · spark
-            <textarea data-deepen-bio maxlength="280" rows="3" placeholder="A line or two about you">${escAttr(dp.bio || '')}</textarea>
-          </label>
-          <label class="story-editor-field">City · mission
-            <input type="text" data-deepen-city maxlength="60" placeholder="e.g. Mumbai" value="${escAttr(dp.currentCity || '')}">
-          </label>
-          <label class="story-editor-field">Prompt · Digital only
-            <select data-deepen-prompt-id>
-              ${pick
-                .map(
-                  (p) =>
-                    `<option value="${escAttr(p.id)}">${esc(p.text)}</option>`
-                )
-                .join('')}
-            </select>
-          </label>
-          <label class="story-editor-field">Your answer
-            <textarea data-deepen-prompt-ans maxlength="500" rows="2" placeholder="Shows on Digital — chat openers are separate">${escAttr(
-              (Array.isArray(dp.prompts) && dp.prompts[0]?.answer) || ''
-            )}</textarea>
-          </label>
-        </div>
-      <p class="digital-canvas-deepen-hint">Same Digital stack you’ll edit later — arcade juice, not a form quiz.</p>
-        <button type="button" class="btn btn--primary btn--block" data-deepen-save>Save to Base</button>
-      </div>`;
-    document.querySelector('.device')?.appendChild(sheet);
-    if (typeof DigitalLayout?.applyProfileThemeToRoot === 'function') {
-      DigitalLayout.applyProfileThemeToRoot(sheet, DigitalLayout.getProfileTheme(dp));
-    }
 
-    const markDone = () => {
-      try {
-        localStorage.setItem(DIGITAL_DEEPEN_KEY, 'done');
-      } catch (e) {}
-    };
     const close = () => {
       if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
       if (sheet.isConnected) sheet.remove();
       if (typeof opts.onDone === 'function') opts.onDone();
     };
+    const markDone = () => {
+      try {
+        localStorage.setItem(DIGITAL_DEEPEN_KEY, 'done');
+        localStorage.removeItem(DIGITAL_DEEPEN_LATER);
+      } catch (e) {}
+    };
+    /** Skip = later this session / 24h — not permanent trap if empty. */
+    const markLater = () => {
+      try {
+        localStorage.setItem(DIGITAL_DEEPEN_LATER, String(Date.now() + 24 * 3600 * 1000));
+      } catch (e) {}
+    };
+
+    function saveKey(key, value) {
+      if (typeof saveProfileField === 'function') saveProfileField(key, value);
+      else if (typeof digitalProfile !== 'undefined') {
+        digitalProfile[key] = value;
+        try {
+          localStorage.setItem('chaupaal_digital_profile', JSON.stringify(digitalProfile));
+        } catch (e) {}
+      }
+      if (key === 'lookingFor' && typeof saveProfileField === 'function') {
+        saveProfileField('matchIntent', value);
+      } else if (key === 'lookingFor' && typeof digitalProfile !== 'undefined') {
+        digitalProfile.matchIntent = value;
+      }
+      if (key === 'interests' && typeof digitalProfile !== 'undefined') {
+        // Prefer interests; keep hobbies readable for legacy
+        digitalProfile.hobbies = Array.isArray(digitalProfile.hobbies) ? digitalProfile.hobbies : [];
+      }
+    }
+
+    function celebrate(el) {
+      if (typeof ProfileTaxonomy?.quietCelebrate === 'function' && ProfileTaxonomy.quietCelebrate()) return;
+      if (typeof DigitalLayout?.arcadeBurst === 'function') DigitalLayout.arcadeBurst(el || sheet);
+    }
+
+    function renderStep() {
+      const step = steps[stepIdx];
+      const dp = (typeof digitalProfile !== 'undefined' ? digitalProfile : {}) || {};
+      const progress = `${stepIdx + 1} / ${steps.length}`;
+      const cities = (typeof ProfileTaxonomy !== 'undefined' && ProfileTaxonomy.CITY_CHIPS) || [];
+      const interests = (typeof ProfileTaxonomy !== 'undefined' && ProfileTaxonomy.INTEREST_CHIPS) || [];
+      const intents =
+        profileType === 'professional'
+          ? (ProfileTaxonomy?.PRO_INTENTS || [])
+          : (ProfileTaxonomy?.MATCH_INTENTS || []);
+      const industries = ProfileTaxonomy?.INDUSTRIES || [];
+      const purposes = ProfileTaxonomy?.PURPOSES || [];
+      const skills = ProfileTaxonomy?.SKILL_CHIPS || [];
+      const pick = bank.slice(0, 8);
+      const selectedInterests = typeof ProfileTaxonomy?.resolvedInterests === 'function'
+        ? ProfileTaxonomy.resolvedInterests(dp)
+        : [];
+
+      let body = '';
+      if (step.kind === 'bio') {
+        body = `<label class="story-editor-field">Your line
+          <textarea data-step-bio maxlength="280" rows="3" placeholder="A line or two about you">${escAttr(dp.bio || '')}</textarea>
+        </label>`;
+      } else if (step.kind === 'city') {
+        body = `<div class="dp-chips" data-step-city-chips style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
+          ${cities.map((c) => `<button type="button" class="dp-chip${dp.currentCity === c ? ' active' : ''}" data-city="${escAttr(c)}">${esc(c)}</button>`).join('')}
+        </div>
+        <label class="story-editor-field">Other city
+          <input type="text" data-step-city-other maxlength="60" placeholder="Type your city" value="${escAttr(
+            cities.includes(dp.currentCity) ? '' : dp.currentCity || ''
+          )}">
+        </label>`;
+      } else if (step.kind === 'interests') {
+        body = `<div class="dp-chips" data-step-interest-chips style="display:flex;flex-wrap:wrap;gap:6px;">
+          ${interests
+            .map(
+              (c) =>
+                `<button type="button" class="dp-chip${selectedInterests.includes(c) ? ' active' : ''}" data-interest="${escAttr(c)}">${esc(c)}</button>`
+            )
+            .join('')}
+        </div>
+        <p class="digital-canvas-deepen-hint" style="margin-top:8px;">Pick a few — or skip and add later.</p>`;
+      } else if (step.kind === 'intent') {
+        body = `<p class="digital-canvas-deepen-hint">Used for matching · friends see this by default — change anytime in Edit.</p>
+        <div class="dp-chips" data-step-intent-chips style="display:flex;flex-wrap:wrap;gap:6px;">
+          ${intents
+            .map(
+              (c) =>
+                `<button type="button" class="dp-chip${(dp.lookingFor || dp.matchIntent) === c ? ' active' : ''}" data-intent="${escAttr(c)}">${esc(c)}</button>`
+            )
+            .join('')}
+        </div>`;
+      } else if (step.kind === 'prompt') {
+        body = `<label class="story-editor-field">Prompt
+          <select data-step-prompt-id>
+            ${pick.map((p) => `<option value="${escAttr(p.id)}">${esc(p.text)}</option>`).join('')}
+          </select>
+        </label>
+        <label class="story-editor-field">Your answer
+          <textarea data-step-prompt-ans maxlength="500" rows="2" placeholder="Shows on your Digital tab">${escAttr(
+            (Array.isArray(dp.prompts) && dp.prompts[0]?.answer) || ''
+          )}</textarea>
+        </label>
+        <button type="button" class="btn" data-step-reroll style="margin-top:8px;font-size:12px;">Shuffle prompts</button>`;
+      } else if (step.kind === 'industry') {
+        body = `<div class="dp-chips" data-step-industry-chips style="display:flex;flex-wrap:wrap;gap:6px;">
+          ${industries
+            .map(
+              (c) =>
+                `<button type="button" class="dp-chip${dp.industry === c ? ' active' : ''}" data-industry="${escAttr(c)}">${esc(c)}</button>`
+            )
+            .join('')}
+        </div>
+        <label class="story-editor-field">Other
+          <input type="text" data-step-industry-other maxlength="80" placeholder="Your industry" value="${escAttr(
+            industries.includes(dp.industry) ? '' : dp.industry || ''
+          )}">
+        </label>`;
+      } else if (step.kind === 'purpose') {
+        body = `<div class="dp-chips" data-step-purpose-chips style="display:flex;flex-wrap:wrap;gap:6px;">
+          ${purposes
+            .map(
+              (c) =>
+                `<button type="button" class="dp-chip${dp.purpose === c ? ' active' : ''}" data-purpose="${escAttr(c)}">${esc(c)}</button>`
+            )
+            .join('')}
+        </div>`;
+      } else if (step.kind === 'skills') {
+        const sel = Array.isArray(dp.skills) ? dp.skills : [];
+        body = `<div class="dp-chips" data-step-skill-chips style="display:flex;flex-wrap:wrap;gap:6px;">
+          ${skills
+            .map(
+              (c) =>
+                `<button type="button" class="dp-chip${sel.includes(c) ? ' active' : ''}" data-skill="${escAttr(c)}">${esc(c)}</button>`
+            )
+            .join('')}
+        </div>`;
+      }
+
+      sheet.innerHTML = `
+        <div class="archive-header">
+          ${typeof backButtonHtml === 'function' ? backButtonHtml({ label: 'Later', attrs: 'data-overlay-dismiss' }) : '<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="Later">←</button>'}
+          <div style="flex:1"><strong>${esc(step.title)}</strong><div style="font-size:11px;color:var(--muted);font-weight:500;">${esc(progress)}</div></div>
+          <button type="button" class="btn" data-deepen-skip style="font-size:12px;">Later</button>
+        </div>
+        <div class="digital-canvas-deepen-body dp-deepen-arcade">
+          <p class="digital-canvas-deepen-hint" style="margin:0 0 10px;font-size:13px;line-height:1.4;">${esc(step.payoff || '')}</p>
+          <div class="auth-profile-canvas digital-canvas-deepen-preview dp-arcade-block" style="--block-accent:var(--dp-accent,var(--red))">
+            <div class="auth-profile-canvas-hero">
+              <div class="auth-profile-canvas-avatar" aria-hidden="true">🪑</div>
+              <div class="auth-canvas-live-name">${esc(dp.displayName || 'Your name')}</div>
+              <div class="auth-canvas-live-handle">@${esc((dp.username || 'username').replace(/^@/, ''))}</div>
+              <p class="digital-canvas-live-bio" data-live-bio>${esc(dp.bio || 'Your bio will show here')}</p>
+              <p class="digital-canvas-live-city" data-live-city>${esc(
+                dp.currentCity ? `📍 ${dp.currentCity}` : 'City on your profile'
+              )}</p>
+              <p class="digital-canvas-live-extra" data-live-extra style="font-size:12px;color:var(--muted);margin-top:6px;"></p>
+            </div>
+            ${body}
+          </div>
+          <div style="display:flex;gap:8px;margin-top:14px;">
+            <button type="button" class="btn btn--primary" data-deepen-next style="flex:1;">${
+              stepIdx >= steps.length - 1 ? 'Save & finish' : 'Save & next'
+            }</button>
+            <button type="button" class="btn" data-deepen-skip-step>Skip</button>
+          </div>
+        </div>`;
+
+      if (typeof DigitalLayout?.applyProfileThemeToRoot === 'function') {
+        DigitalLayout.applyProfileThemeToRoot(sheet, DigitalLayout.getProfileTheme(dp));
+      }
+
+      const liveBio = sheet.querySelector('[data-live-bio]');
+      const liveCity = sheet.querySelector('[data-live-city]');
+      const liveExtra = sheet.querySelector('[data-live-extra]');
+      const syncLive = () => {
+        const b = sheet.querySelector('[data-step-bio]')?.value?.trim() || dp.bio || '';
+        if (liveBio) liveBio.textContent = b || 'Your bio will show here';
+        const cityChip = sheet.querySelector('[data-step-city-chips] .dp-chip.active')?.dataset?.city;
+        const cityOther = sheet.querySelector('[data-step-city-other]')?.value?.trim();
+        const c = cityChip || cityOther || dp.currentCity || '';
+        if (liveCity) liveCity.textContent = c ? `📍 ${c}` : 'City on your profile';
+        if (liveExtra) {
+          if (step.kind === 'interests') {
+            const n = sheet.querySelectorAll('[data-step-interest-chips] .dp-chip.active').length;
+            liveExtra.textContent = n ? `${n} interest${n === 1 ? '' : 's'} selected` : '';
+          } else if (step.kind === 'intent') {
+            const i = sheet.querySelector('[data-step-intent-chips] .dp-chip.active')?.dataset?.intent;
+            liveExtra.textContent = i ? `Open to: ${i}` : '';
+          } else if (step.kind === 'skills') {
+            const n = sheet.querySelectorAll('[data-step-skill-chips] .dp-chip.active').length;
+            liveExtra.textContent = n ? `${n} skill${n === 1 ? '' : 's'}` : '';
+          } else liveExtra.textContent = '';
+        }
+      };
+
+      sheet.querySelector('[data-step-bio]')?.addEventListener('input', syncLive);
+      sheet.querySelector('[data-step-city-other]')?.addEventListener('input', syncLive);
+
+      sheet.querySelectorAll('[data-step-city-chips] .dp-chip').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          sheet.querySelectorAll('[data-step-city-chips] .dp-chip').forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+          const other = sheet.querySelector('[data-step-city-other]');
+          if (other) other.value = '';
+          syncLive();
+        });
+      });
+      sheet.querySelectorAll('[data-step-interest-chips] .dp-chip').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          btn.classList.toggle('active');
+          syncLive();
+        });
+      });
+      sheet.querySelectorAll('[data-step-intent-chips] .dp-chip').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          sheet.querySelectorAll('[data-step-intent-chips] .dp-chip').forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+          syncLive();
+        });
+      });
+      sheet.querySelectorAll('[data-step-industry-chips] .dp-chip').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          sheet.querySelectorAll('[data-step-industry-chips] .dp-chip').forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+          const other = sheet.querySelector('[data-step-industry-other]');
+          if (other) other.value = '';
+        });
+      });
+      sheet.querySelectorAll('[data-step-purpose-chips] .dp-chip').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          sheet.querySelectorAll('[data-step-purpose-chips] .dp-chip').forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+        });
+      });
+      sheet.querySelectorAll('[data-step-skill-chips] .dp-chip').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          btn.classList.toggle('active');
+          syncLive();
+        });
+      });
+      sheet.querySelector('[data-step-reroll]')?.addEventListener('click', () => {
+        const sel = sheet.querySelector('[data-step-prompt-id]');
+        if (!sel || !bank.length) return;
+        const cur = sel.selectedIndex;
+        sel.selectedIndex = (cur + 1 + Math.floor(Math.random() * Math.max(1, bank.length - 1))) % bank.length;
+      });
+
+      const finishLater = () => {
+        markLater();
+        close();
+      };
+      sheet.querySelector('[data-overlay-dismiss]')?.addEventListener('click', finishLater);
+      sheet.querySelector('[data-deepen-skip]')?.addEventListener('click', finishLater);
+      sheet.querySelector('[data-deepen-skip-step]')?.addEventListener('click', () => {
+        stepIdx += 1;
+        if (stepIdx >= steps.length) {
+          markDone();
+          celebrate(sheet);
+          if (typeof showToast === 'function') showToast('Looking good — edit anytime');
+          close();
+          return;
+        }
+        renderStep();
+      });
+      sheet.querySelector('[data-deepen-next]')?.addEventListener('click', () => {
+        if (step.kind === 'bio') {
+          const bio = sheet.querySelector('[data-step-bio]')?.value?.trim() || '';
+          if (bio) saveKey('bio', bio);
+        } else if (step.kind === 'city') {
+          const chip = sheet.querySelector('[data-step-city-chips] .dp-chip.active')?.dataset?.city;
+          const other = sheet.querySelector('[data-step-city-other]')?.value?.trim();
+          const city = chip || other || '';
+          if (city) saveKey('currentCity', city);
+        } else if (step.kind === 'interests') {
+          const picked = [...sheet.querySelectorAll('[data-step-interest-chips] .dp-chip.active')].map(
+            (b) => b.dataset.interest
+          );
+          if (picked.length) saveKey('interests', picked);
+        } else if (step.kind === 'intent') {
+          const intent = sheet.querySelector('[data-step-intent-chips] .dp-chip.active')?.dataset?.intent;
+          if (intent) {
+            saveKey('lookingFor', intent);
+            if (typeof digitalProfile !== 'undefined') digitalProfile.showRelationship = false;
+            if (typeof saveProfileField === 'function') saveProfileField('showRelationship', false);
+          }
+        } else if (step.kind === 'prompt') {
+          const promptId = sheet.querySelector('[data-step-prompt-id]')?.value || '';
+          const answer = sheet.querySelector('[data-step-prompt-ans]')?.value?.trim() || '';
+          if (promptId && answer && typeof savePromptAnswer === 'function') {
+            savePromptAnswer(promptId, answer);
+          } else if (promptId && answer && typeof persistPrompts === 'function') {
+            const bankP = bank.find((p) => p.id === promptId);
+            persistPrompts([{ promptId, answer, answeredAt: Date.now(), prompt: bankP?.text }]);
+          }
+        } else if (step.kind === 'industry') {
+          const chip = sheet.querySelector('[data-step-industry-chips] .dp-chip.active')?.dataset?.industry;
+          const other = sheet.querySelector('[data-step-industry-other]')?.value?.trim();
+          const ind = chip || other || '';
+          if (ind) saveKey('industry', ind);
+        } else if (step.kind === 'purpose') {
+          const purpose = sheet.querySelector('[data-step-purpose-chips] .dp-chip.active')?.dataset?.purpose;
+          if (purpose) saveKey('purpose', purpose);
+        } else if (step.kind === 'skills') {
+          const picked = [...sheet.querySelectorAll('[data-step-skill-chips] .dp-chip.active')].map(
+            (b) => b.dataset.skill
+          );
+          if (picked.length) saveKey('skills', picked);
+        }
+        celebrate(sheet);
+        stepIdx += 1;
+        if (stepIdx >= steps.length) {
+          markDone();
+          if (typeof showToast === 'function') showToast('Base updated — looking like you');
+          close();
+          return;
+        }
+        renderStep();
+      });
+      syncLive();
+    }
+
+    document.querySelector('.device')?.appendChild(sheet);
     if (typeof openLayer === 'function') openLayer(sheet, close, { remove: false });
     else if (typeof pushNavLayer === 'function') {
       sheet.dataset.navManaged = '1';
       pushNavLayer(sheet, close);
     }
-
-    const bioEl = sheet.querySelector('[data-deepen-bio]');
-    const cityEl = sheet.querySelector('[data-deepen-city]');
-    const liveBio = sheet.querySelector('[data-live-bio]');
-    const liveCity = sheet.querySelector('[data-live-city]');
-    const syncLive = () => {
-      const b = bioEl?.value?.trim() || '';
-      const c = cityEl?.value?.trim() || '';
-      if (liveBio) liveBio.textContent = b || 'Your bio will show here';
-      if (liveCity) liveCity.textContent = c ? `📍 ${c}` : 'City on your Profile tab';
-    };
-    bioEl?.addEventListener('input', syncLive);
-    cityEl?.addEventListener('input', syncLive);
-    syncLive();
-
-    const finishSkip = () => {
-      markDone();
-      close();
-    };
-    sheet.querySelector('[data-overlay-dismiss]')?.addEventListener('click', finishSkip);
-    sheet.querySelector('[data-deepen-skip]')?.addEventListener('click', finishSkip);
-    sheet.querySelector('[data-deepen-save]')?.addEventListener('click', () => {
-      const bio = bioEl?.value?.trim() || '';
-      const city = cityEl?.value?.trim() || '';
-      const promptId = sheet.querySelector('[data-deepen-prompt-id]')?.value || '';
-      const answer = sheet.querySelector('[data-deepen-prompt-ans]')?.value?.trim() || '';
-      if (bio && typeof saveProfileField === 'function') saveProfileField('bio', bio);
-      else if (bio && typeof digitalProfile !== 'undefined') {
-        digitalProfile.bio = bio;
-        try {
-          localStorage.setItem('chaupaal_digital_profile', JSON.stringify(digitalProfile));
-        } catch (e) {}
-      }
-      if (city && typeof saveProfileField === 'function') saveProfileField('currentCity', city);
-      else if (city && typeof digitalProfile !== 'undefined') {
-        digitalProfile.currentCity = city;
-        try {
-          localStorage.setItem('chaupaal_digital_profile', JSON.stringify(digitalProfile));
-        } catch (e) {}
-      }
-      if (promptId && answer && typeof savePromptAnswer === 'function') {
-        savePromptAnswer(promptId, answer);
-      } else if (promptId && answer && typeof persistPrompts === 'function') {
-        const bankP = bank.find((p) => p.id === promptId);
-        persistPrompts([
-          {
-            promptId,
-            answer,
-            answeredAt: Date.now(),
-            prompt: bankP?.text,
-          },
-        ]);
-      }
-      markDone();
-      if (typeof DigitalLayout?.arcadeBurst === 'function') DigitalLayout.arcadeBurst(sheet);
-      if (typeof showToast === 'function') showToast('Base updated');
-      close();
-    });
+    renderStep();
   }
 
   function maybeOfferDigitalCanvasDeepen(profile) {

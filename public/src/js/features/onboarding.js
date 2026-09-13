@@ -574,7 +574,8 @@ let digitalProfile = {
   lifeGoals:'', coreValues:[], dreamDestination:'', bucketList:'',
   // Privacy
   profileVisibility:'public', showAge:true, showLocation:true, showRelationship:true,
-  showIncome:false, showReligion:true,
+  // Sensitive defaults: income + religion off public until user opts in (P1 / P0 alignment)
+  showIncome:false, showReligion:false,
   // Foundation only — see profile-type.js (personal | professional); no feature branching yet
   profileType:'personal',
   ...JSON.parse(localStorage.getItem('chaupaal_digital_profile')||'{}')

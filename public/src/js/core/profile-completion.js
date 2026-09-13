@@ -3,6 +3,9 @@
  * Career, Trust). Matching-useful fields weigh more than niche extras.
  * Highlights / custom tabs are never part of %.
  *
+ * P1: Personal vs Professional weights differ; prompts ≠ icebreakers;
+ * purpose/skills matter for Pro; Relationship hidden for Pro + teen.
+ *
  * Persists `profileCompletion: { pct, sections }` on users/{uid}.
  */
 (function () {
@@ -13,38 +16,37 @@
     career: 0.14,
     trust: 0.18,
   };
-  /** When Relationship is hidden (teen), redistribute to Identity / Social / Trust. */
-  const TEEN_WEIGHTS = {
-    identity: 0.34,
+  /** When Relationship is hidden (teen or Professional), redistribute. */
+  const NO_REL_WEIGHTS = {
+    identity: 0.32,
     social: 0.28,
-    career: 0.16,
+    career: 0.18,
     trust: 0.22,
   };
+  /** @deprecated alias — tests / callers */
+  const TEEN_WEIGHTS = NO_REL_WEIGHTS;
 
   const SECTION_META = {
-    identity: { id: 'identity', label: 'Identity', editSec: 'Personal' },
-    social: { id: 'social', label: 'Social', editSec: 'Personal' },
-    relationship: { id: 'relationship', label: 'Relationship', editSec: 'Relationships' },
+    identity: { id: 'identity', label: 'Identity', editSec: 'About' },
+    social: { id: 'social', label: 'Social', editSec: 'About' },
+    relationship: { id: 'relationship', label: 'Looking for', editSec: 'Looking for' },
     career: { id: 'career', label: 'Career', editSec: 'Career' },
-    trust: { id: 'trust', label: 'Trust', editSec: 'Personal' },
+    trust: { id: 'trust', label: 'Trust', editSec: 'About' },
   };
 
-  /** Compat labels for field-save toasts. */
+  /** Compat labels for field-save toasts — aligned with real scorer. */
   const COMPLETION_FIELDS = [
-    { key: 'displayName', weight: 1, label: 'Name' },
-    { key: 'bio', weight: 1.5, label: 'Bio' },
-    { key: 'dateOfBirth', weight: 1, label: 'Birthday' },
-    { key: 'gender', weight: 0.5, label: 'Gender' },
-    { key: 'currentCity', weight: 1.5, label: 'City' },
-    { key: 'occupation', weight: 1, label: 'Occupation' },
-    { key: 'industry', weight: 1, label: 'Industry' },
-    { key: 'relationshipStatus', weight: 1, label: 'Relationship' },
-    { key: 'lookingFor', weight: 1, label: 'Looking for' },
-    { key: 'hobbies', weight: 1.5, label: 'Hobbies' },
-    { key: 'interests', weight: 1.5, label: 'Interests' },
-    { key: 'languages', weight: 1, label: 'Languages' },
+    { key: 'bio', weight: 2, label: 'Bio' },
     { key: 'prompts', weight: 1.5, label: 'Prompts' },
-    { key: 'photos', weight: 1.5, label: 'Photo' },
+    { key: 'currentCity', weight: 2, label: 'City' },
+    { key: 'languages', weight: 1, label: 'Languages' },
+    { key: 'interests', weight: 2, label: 'Interests' },
+    { key: 'lookingFor', weight: 1, label: 'Looking for' },
+    { key: 'occupation', weight: 1.5, label: 'Occupation' },
+    { key: 'industry', weight: 1, label: 'Industry' },
+    { key: 'purpose', weight: 1, label: 'Purpose' },
+    { key: 'skills', weight: 1, label: 'Skills' },
+    { key: 'photos', weight: 2, label: 'Photo' },
     { key: 'username', weight: 1, label: 'Username' },
   ];
 
@@ -55,15 +57,16 @@
     return true;
   }
 
+  /** Digital prompts only — icebreakers are chat openers, not Identity %. */
   function promptsFilled(dp) {
     const p = dp?.prompts;
-    if (Array.isArray(p) && p.some((x) => String(x?.answer || x || '').trim())) return true;
-    const ice = dp?.icebreakers || dp?.icebreakerAnswers;
-    if (Array.isArray(ice) && ice.some((x) => String(x?.answer || x || '').trim())) return true;
-    return false;
+    return Array.isArray(p) && p.some((x) => String(x?.answer || x || '').trim());
   }
 
   function interestsOrHobbies(dp) {
+    if (typeof ProfileTaxonomy !== 'undefined' && typeof ProfileTaxonomy.resolvedInterests === 'function') {
+      return ProfileTaxonomy.resolvedInterests(dp).length > 0;
+    }
     return (
       isFilled(dp?.interests) ||
       isFilled(dp?.hobbies) ||
@@ -85,6 +88,10 @@
     const n =
       Number(ctx.duniyaCount || 0) + Number(ctx.peepalCount || 0) + Number(ctx.postCount || 0);
     return n > 0;
+  }
+
+  function hasProLink(dp) {
+    return isFilled(dp?.linkedin) || isFilled(dp?.website);
   }
 
   function completionContext(dp, override) {
@@ -133,12 +140,19 @@
     const profile = dp || (typeof digitalProfile !== 'undefined' ? digitalProfile : {}) || {};
     const ctx = completionContext(profile, ctxOverride);
     const photo = hasPhoto(profile, ctx);
-    const hideRel = !!ctx.teen;
+    const isPro = String(ctx.profileType || '').toLowerCase() === 'professional';
+    const hideRel = !!ctx.teen || isPro;
 
     const identity = scoreItems([
       { label: 'Photo', weight: 2, filled: photo },
       { label: 'Bio', weight: 2, filled: isFilled(profile.bio) },
-      { label: 'Prompts', weight: 1.5, filled: promptsFilled(profile) },
+      {
+        label: isPro ? 'Headline detail' : 'Prompts',
+        weight: 1.5,
+        filled: isPro
+          ? isFilled(profile.occupation) || isFilled(profile.bio)
+          : promptsFilled(profile),
+      },
     ]);
 
     const socialItems = [
@@ -152,23 +166,34 @@
     }
     const social = scoreItems(socialItems);
 
+    const looking =
+      (typeof ProfileTaxonomy !== 'undefined' &&
+      typeof ProfileTaxonomy.resolvedMatchIntent === 'function'
+        ? ProfileTaxonomy.resolvedMatchIntent(profile)
+        : '') ||
+      profile.lookingFor ||
+      profile.matchIntent ||
+      '';
     const relationship = hideRel
       ? { pct: 100, complete: true, missing: [], hidden: true }
       : scoreItems([
           { label: 'Relationship status', weight: 1, filled: isFilled(profile.relationshipStatus) },
-          { label: 'Looking for', weight: 1, filled: isFilled(profile.lookingFor) },
+          { label: 'Looking for', weight: 1, filled: isFilled(looking) },
         ]);
 
-    const isPro = String(ctx.profileType || '').toLowerCase() === 'professional';
     const careerItems = [
       { label: 'Occupation', weight: 1.5, filled: isFilled(profile.occupation) },
     ];
     if (isPro) {
-      careerItems.push({
-        label: 'Industry',
-        weight: 1,
-        filled: isFilled(profile.industry),
-      });
+      careerItems.push(
+        { label: 'Industry', weight: 1, filled: isFilled(profile.industry) },
+        { label: 'Purpose', weight: 1, filled: isFilled(profile.purpose) },
+        {
+          label: 'Skills or link',
+          weight: 1,
+          filled: isFilled(profile.skills) || hasProLink(profile),
+        }
+      );
     }
     const career = scoreItems(careerItems);
 
@@ -183,7 +208,7 @@
     ]);
 
     const sections = { identity, social, relationship, career, trust };
-    const weights = hideRel ? TEEN_WEIGHTS : SECTION_WEIGHTS;
+    const weights = hideRel ? NO_REL_WEIGHTS : SECTION_WEIGHTS;
     let earned = 0;
     let total = 0;
     Object.keys(weights).forEach((id) => {

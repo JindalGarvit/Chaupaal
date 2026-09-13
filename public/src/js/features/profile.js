@@ -171,7 +171,12 @@ function renderProfileModal(){
     <div class="own-edit-sections" data-own-edit-sections></div>
     <p class="dp-reorder-hint">Highlights sit above tabs · Profile / Duniya / Peepal are fixed · ＋ adds custom tabs · edit section items drag to rearrange</p>
     <div class="dp-field-tabs" id="profileSectionTabs">
-      ${['Personal','Career','Lifestyle','Relationships','Social'].map((s,i)=>`<button type="button" class="profile-section-tab${i===0?' active':''}" data-sec="${s}">${s}</button>`).join('')}
+      ${(typeof ProfileTaxonomy?.isProfessional === 'function' && ProfileTaxonomy.isProfessional()
+        ? ['About', 'Career', 'Links', 'More']
+        : ['About', 'Looking for', 'Lifestyle', 'More']
+      )
+        .map((s, i) => `<button type="button" class="profile-section-tab${i === 0 ? ' active' : ''}" data-sec="${s}">${s}</button>`)
+        .join('')}
     </div>
     <div id="profileSectionContent" class="dp-field-body"></div>
     <div class="dp-account-strip">
@@ -181,108 +186,175 @@ function renderProfileModal(){
     </div>
   `;
 
-  // Section rendering
-  const SECTIONS={
-    Personal:()=>`
-      ${profileField('Name','displayName','text','Your full name')}
-      ${profileField('Bio','bio','textarea','A short bio about yourself...')}
-      ${profileField('Gender','gender','select','',['','Male','Female','Non-binary','Prefer not to say'])}
-      ${profileField('Pronouns','pronouns','select','',['','He/Him','She/Her','They/Them','Any'])}
-      ${profileField('Date of Birth','dateOfBirth','date','')}
-      ${profileField('Birthplace','birthplace','text','City, Country')}
-      ${profileField('Hometown','hometown','text','Where you grew up')}
-      ${profileField('Current City','currentCity','text','Where you live now')}
-      ${profileField('Nationality','nationality','text','Your nationality')}
-      ${profileField('Languages spoken','languages','chips','Add languages',['Hindi','English','Tamil','Telugu','Marathi','Bengali','Gujarati','Kannada','Malayalam','Punjabi','Urdu','Odia','Assamese','Konkani'])}
-      ${profileField('Things that excite me','interests','chips','Add interests',['Travel','Food','Startups','Films','Music','Fitness','Books','Politics','Tech','Fashion','Art','Animals','Nature','Spirituality','Comedy','Sports','Gaming','Photography','Cooking','Volunteer work'])}
-      ${profileField('Interests in your words','interestsFreeText','textarea','Free-text interests — whatever you care about, in your own words')}
-      <div class="dp-ask-chaupaal" data-for="interestsFreeText" style="margin:-6px 0 14px;"></div>
-      ${typeof renderProfilePromptsBlock==='function'?renderProfilePromptsBlock():''}
-      ${typeof renderProfileIcebreakerBlock==='function'?renderProfileIcebreakerBlock():''}
-      ${profileField('Height','height','select','',['','Under 5ft','5ft','5ft 1in','5ft 2in','5ft 3in','5ft 4in','5ft 5in','5ft 6in','5ft 7in','5ft 8in','5ft 9in','5ft 10in','5ft 11in','6ft','6ft 1in','6ft 2in','6ft+'])}
-      ${profileField('Blood Group','bloodGroup','select','',['','A+','A-','B+','B-','AB+','AB-','O+','O-','Don\'t know'])}
-      ${profileField('Religion','religion','select','',['','Hindu','Muslim','Christian','Sikh','Buddhist','Jain','Jewish','Parsi','Atheist','Agnostic','Spiritual but not religious','Prefer not to say'])}
-    `,
-    Career:()=>`
-      ${profileField('Occupation / Job title','occupation','text','What do you do?')}
-      <div class="dp-ask-chaupaal" data-for="occupation" style="margin:-6px 0 14px;"></div>
-      ${profileField('Company / Organisation','company','text','Where do you work?')}
-      ${profileField('Industry','industry','select','',['','Technology','Finance & Banking','Healthcare','Education','Media & Entertainment','Government','Legal','Real Estate','Retail','Manufacturing','Agriculture','Hospitality','Consulting','NGO / Non-profit','Student','Freelancer','Entrepreneur','Other'])}
-      ${profileField('Work mode','workMode','select','',['','In-office','Remote','Hybrid','Freelance','Between jobs'])}
-      ${profileField('Career level','careerLevel','select','',['','Student / Intern','Entry level (0-2 yrs)','Mid level (3-6 yrs)','Senior (7-10 yrs)','Lead / Manager','Director / VP','C-Suite / Founder','Retired'])}
-      ${profileField('Annual income (optional)','annualIncome','select','',['','Prefer not to say','Under ₹3L','₹3L-6L','₹6L-10L','₹10L-20L','₹20L-40L','₹40L-75L','₹75L-1Cr','Above ₹1Cr'])}
-      ${profileField('Highest education','highestEducation','select','',['','High school','Diploma','Bachelor\'s','Master\'s','PhD / Doctorate','Professional degree (CA/CS/MBBS etc)','Other'])}
-      ${profileField('College / University','college','text','Where did you study?')}
-      ${profileField('Degree / Major','degree','text','Your field of study')}
-      ${profileField('Graduation year','graduationYear','text','e.g. 2020')}
-      ${profileField('Skills','skills','chips','Add skills',['Leadership','Public speaking','Writing','Coding','Design','Data analysis','Marketing','Sales','Finance','Research','Teaching','Management','Strategy','Product','Operations'])}
-    `,
-    Lifestyle:()=>`
-      ${profileField('Diet','diet','select','',['','Omnivore','Vegetarian','Eggetarian','Vegan','Jain','Keto','Gluten-free','Other'])}
-      ${profileField('Drinking','drinking','select','',['','Never','Socially','Occasionally','Regularly','Prefer not to say'])}
-      ${profileField('Smoking','smoking','select','',['','Never','Occasionally','Regularly','Trying to quit','Prefer not to say'])}
-      ${profileField('Fitness','fitness','select','',['','Very active (daily workout)','Active (3-4x/week)','Moderately active','Occasionally active','Not into fitness'])}
-      ${profileField('Sleep schedule','sleepSchedule','select','',['','Early bird (before 10pm)','Regular (10pm-12am)','Night owl (12am-2am)','Very late (2am+)','Varies'])}
-      ${profileField('Personality type (MBTI)','mbti','select','',['','INTJ','INTP','ENTJ','ENTP','INFJ','INFP','ENFJ','ENFP','ISTJ','ISFJ','ESTJ','ESFJ','ISTP','ISFP','ESTP','ESFP','Don\'t know'])}
-      ${profileField('Zodiac','zodiac','select','',['','Aries','Taurus','Gemini','Cancer','Leo','Virgo','Libra','Scorpio','Sagittarius','Capricorn','Aquarius','Pisces'])}
-      ${profileField('Political views','politics','select','',['','Progressive','Liberal','Centrist','Conservative','Libertarian','Apolitical','Prefer not to say'])}
-      ${profileField('Spirituality','spirituality','select','',['','Deeply religious','Religious','Somewhat spiritual','Agnostic','Atheist','Exploring'])}
-      ${profileField('Hobbies','hobbies','chips','Add hobbies',['Reading','Writing','Photography','Cooking','Gaming','Gardening','DIY/Crafts','Collecting','Podcasting','Blogging','Volunteering','Meditation','Yoga','Hiking','Cycling','Swimming','Dancing','Painting','Singing','Playing music'])}
-      ${profileField('Hobbies in your words','hobbiesFreeText','textarea','Free-text hobbies — simple sentences are fine')}
-      <div class="dp-ask-chaupaal" data-for="hobbiesFreeText" style="margin:-6px 0 14px;"></div>
-      ${profileField('Sports','sports','chips','Add sports',['Cricket','Football','Badminton','Tennis','Chess','Table Tennis','Basketball','Volleyball','Athletics','Swimming','Cycling','Golf','Boxing','Wrestling','Kabaddi','Kho Kho'])}
-      ${profileField('Music taste','music','chips','Add genres',['Bollywood','Punjabi','Classical','Jazz','Rock','Pop','Hip-hop','Electronic','Folk','Indie','R&B','Metal'])}
-      ${profileField('Movies / Shows','movies','chips','Add genres',['Bollywood','Hollywood','South Indian','Thriller','Comedy','Drama','Sci-fi','Horror','Documentary','Animation','Romance','Action'])}
-      ${profileField('Dream destination','dreamDestination','text','Where do you most want to visit?')}
-      ${profileField('Life goals','lifeGoals','textarea','What are you working towards?')}
-      ${profileField('Core values','coreValues','chips','Add values',['Family','Ambition','Freedom','Creativity','Loyalty','Honesty','Adventure','Security','Faith','Growth','Humour','Independence','Empathy','Justice'])}
-    `,
-    Relationships:()=>{
-      const teen=typeof teenHideDatingIntents==='function'&&teenHideDatingIntents();
+  // Section rendering — Glance/Act first; Power under More. Personal vs Professional templates.
+  const TX = typeof ProfileTaxonomy !== 'undefined' ? ProfileTaxonomy : {};
+  const interestChips = TX.INTEREST_CHIPS || ['Travel', 'Food', 'Films', 'Music', 'Fitness', 'Books', 'Tech', 'Sports', 'Gaming'];
+  const cityChips = TX.CITY_CHIPS || ['Mumbai', 'Delhi', 'Bengaluru', 'Hyderabad', 'Chennai', 'Pune'];
+  const matchIntents = TX.MATCH_INTENTS || ['Friendship', 'Dating', 'Networking / Professional connections'];
+  const proIntents = TX.PRO_INTENTS || matchIntents;
+  const industries = TX.INDUSTRIES || ['Technology', 'Education', 'Media & Entertainment', 'Entrepreneur', 'Other'];
+  const purposes = TX.PURPOSES || ['Grow my network', 'Find collaborators', 'Share my work'];
+  const skillChips = TX.SKILL_CHIPS || ['Leadership', 'Writing', 'Coding', 'Design', 'Marketing'];
+
+  function privacyInline(key, label) {
+    const def = (TX.SENSITIVE_DEFAULTS && TX.SENSITIVE_DEFAULTS[key]) || 'friends';
+    const showKey =
+      key === 'religion'
+        ? 'showReligion'
+        : key === 'annualIncome'
+          ? 'showIncome'
+          : key === 'relationshipStatus' || key === 'lookingFor'
+            ? 'showRelationship'
+            : null;
+    const cur = showKey
+      ? dp[showKey] === true
+        ? 'public'
+        : dp[showKey] === false
+          ? 'private'
+          : def
+      : def;
+    const matching =
+      TX.FIELD_META && TX.FIELD_META[key]?.matching
+        ? `<div style="font-size:11px;color:var(--muted);margin:4px 0 0;line-height:1.35;">Used for matching when visible.</div>`
+        : '';
+    if (!showKey) {
+      return `<div style="font-size:11px;color:var(--muted);margin:-8px 0 12px;">Default: ${def} · change in Privacy under More</div>${matching}`;
+    }
+    return `<div class="dp-privacy-inline" data-privacy-for="${key}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:-6px 0 12px;">
+      <span style="font-size:11px;color:var(--muted);">Who sees ${label || 'this'}?</span>
+      ${['public', 'friends', 'private']
+        .map((a) => {
+          const active =
+            (a === 'public' && dp[showKey] === true) ||
+            (a === 'private' && dp[showKey] === false) ||
+            (a === 'friends' && dp[showKey] !== true && dp[showKey] !== false && def === 'friends') ||
+            (a === 'private' && dp[showKey] !== true && def === 'private' && dp[showKey] !== false);
+          // friends mapped as show* = false for relationship? P0: showRelationship false hides from public.
+          // public = show true; private/friends = show false (friends still get friend_projection when Friends only profile).
+          return `<button type="button" class="dp-chip${active ? ' active' : ''}" data-privacy-key="${showKey}" data-privacy-audience="${a}" style="padding:4px 10px;font-size:11px;border-radius:999px;border:1.5px solid ${active ? 'var(--red)' : 'var(--line)'};background:${active ? 'rgba(230,57,70,0.08)' : 'var(--white)'};color:${active ? 'var(--red)' : 'var(--ink)'};cursor:pointer;">${a}</button>`;
+        })
+        .join('')}
+    </div>${matching}`;
+  }
+
+  function payoffLine(key) {
+    const p = TX.FIELD_META && TX.FIELD_META[key]?.payoff;
+    return p
+      ? `<div style="font-size:11px;color:var(--muted);margin:-4px 0 10px;line-height:1.35;">${p}</div>`
+      : '';
+  }
+
+  const SECTIONS = {
+    About: () => {
+      const pro = typeof TX.isProfessional === 'function' && TX.isProfessional();
       return `
-      ${profileField('Relationship status','relationshipStatus','select','',['','Single','Single — not open to dating','Single — open to friendship only','Single — open to casual dating','Single — open to serious relationship only','Single — only open to marriage','In a relationship','Married','Separated','Divorced','Widowed','In an open relationship','It\'s complicated','Prefer not to say'])}
-      ${teen?'':profileField('Looking for','lookingFor','select','',['','Friendship','Dating','Marriage','Co-founder / Collaborator','Study buddy','Workout buddy','Mentorship','Language exchange','Flatmate / Roommate','Networking / Professional connections','Job hunt','Casual dating','Serious relationship','Activity partner','Travel buddy','Nothing specific','Open to anything'])}
-      ${profileField('Do you have children?','haveChildren','select','',['','No','Yes — live with me','Yes — don\'t live with me','Prefer not to say'])}
-      ${teen?'':profileField('Want children?','wantChildren','select','',['','Yes','No','Open to it','Already have enough','Prefer not to say'])}
-      ${profileField('Living situation','livingSituation','select','',['','Live alone','With family','With roommates','With partner','In hostel/PG','In college dorm','Other'])}
-      ${profileField('Family type (grew up in)','familyType','select','',['','Nuclear family','Joint family','Single parent','Extended family','Foster/adopted','Other'])}
-      ${profileField('Siblings','siblings','select','',['','Only child','1 sibling','2 siblings','3+ siblings','Prefer not to say'])}
-      ${teen?'':profileField('Open to long distance?','longDistance','select','',['','Yes','No','Depends','Prefer not to say'])}
-      ${teen?'':profileField('Marital history','maritalHistory','select','',['','Never married','Divorced','Widowed','Prefer not to say'])}
+      ${typeof renderProfileTypeToggleHtml === 'function' ? renderProfileTypeToggleHtml() : ''}
+      ${profileField('Name', 'displayName', 'text', 'Your full name')}
+      ${profileField('Bio', 'bio', 'textarea', 'A short bio about yourself...')}
+      ${payoffLine('bio')}
+      ${profileField('Gender', 'gender', 'select', '', ['', 'Male', 'Female', 'Non-binary', 'Prefer not to say'])}
+      ${profileField('Pronouns', 'pronouns', 'select', '', ['', 'He/Him', 'She/Her', 'They/Them', 'Any'])}
+      ${profileField('Date of Birth', 'dateOfBirth', 'date', '')}
+      ${profileField('Current City', 'currentCity', 'chips-single', 'City', cityChips)}
+      ${payoffLine('currentCity')}
+      ${profileField('Languages spoken', 'languages', 'chips', 'Add languages', ['Hindi', 'English', 'Tamil', 'Telugu', 'Marathi', 'Bengali', 'Gujarati', 'Kannada', 'Malayalam', 'Punjabi', 'Urdu'])}
+      ${profileField('Things that excite me', 'interests', 'chips', 'Add interests', interestChips)}
+      ${payoffLine('interests')}
+      ${profileField('Interests in your words', 'interestsFreeText', 'textarea', 'Optional — whatever you care about, in your own words')}
+      <div class="dp-ask-chaupaal" data-for="interestsFreeText" style="margin:-6px 0 14px;"></div>
+      ${pro ? '' : typeof renderProfilePromptsBlock === 'function' ? renderProfilePromptsBlock() : ''}
+      ${pro ? `${profileField('Occupation / Role', 'occupation', 'text', 'What do you do?')}${payoffLine('occupation')}` : ''}
     `;
     },
-    Social:()=>`
-      ${typeof renderProfileTypeToggleHtml==='function'?renderProfileTypeToggleHtml():''}
-      ${profileField('Instagram','instagram','text','@username')}
-      ${profileField('Twitter / X','twitter','text','@username')}
-      ${profileField('LinkedIn','linkedin','text','Profile URL or username')}
-      ${profileField('YouTube','youtube','text','Channel name')}
-      ${profileField('Personal website','website','text','https://')}
-      <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:16px;">
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;margin-bottom:12px;">Privacy settings</div>
-        ${profileToggle('Show age publicly','showAge')}
-        ${profileToggle('Show location publicly','showLocation')}
-        ${profileToggle('Show relationship status','showRelationship')}
-        ${profileToggle('Show income range','showIncome')}
-        ${profileToggle('Show religion','showReligion')}
-        ${profileField('Profile visibility','profileVisibility','select','',['public','Friends only','Private'])}
-      </div>
-      <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:16px;">
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;margin-bottom:6px;">Nearby matching</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.4;">Optional GPS for Peepal proximity. Never required — only used when you opt in.</div>
-        <button type="button" class="btn btn--block" id="setMatchLocationBtn">📍 Set my location for matching</button>
-      </div>
-      <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:16px;">
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;margin-bottom:8px;">Chaupaal ratings</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-          ${NEWS_CATEGORIES.map(cat=>`<div style="background:var(--cream);border-radius:10px;padding:10px;text-align:center;"><div style="font-size:11px;color:var(--muted);">${CATEGORY_ICONS[cat]} ${cat}</div><div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;color:var(--red);">${(userProfile?.categoryRatings||{})[cat]||1200}</div></div>`).join('')}
-        </div>
-      </div>
+    'Looking for': () => {
+      const teen = typeof teenHideDatingIntents === 'function' && teenHideDatingIntents();
+      if (teen) {
+        return `<p style="font-size:13px;color:var(--muted);line-height:1.45;padding:8px 0;">Dating asks stay off in Teen Mode. Friendship and study intents can live in Interests.</p>`;
+      }
+      return `
+      ${profileField('Relationship status', 'relationshipStatus', 'select', '', ['', 'Single', 'In a relationship', 'Married', 'Prefer not to say', 'It\'s complicated'])}
+      ${privacyInline('relationshipStatus', 'relationship')}
+      ${profileField('Looking for', 'lookingFor', 'chips-single', '', matchIntents)}
+      ${privacyInline('lookingFor', 'looking for')}
+      ${payoffLine('lookingFor')}
+    `;
+    },
+    Career: () => `
+      ${profileField('Occupation / Job title', 'occupation', 'text', 'What do you do?')}
+      <div class="dp-ask-chaupaal" data-for="occupation" style="margin:-6px 0 14px;"></div>
+      ${profileField('Company / Organisation', 'company', 'text', 'Where do you work?')}
+      ${profileField('Industry', 'industry', 'chips-single', '', industries)}
+      ${payoffLine('industry')}
+      ${profileField('Purpose on Chaupaal', 'purpose', 'chips-single', '', purposes)}
+      ${payoffLine('purpose')}
+      ${profileField('Open to', 'lookingFor', 'chips-single', '', proIntents)}
+      ${profileField('Skills', 'skills', 'chips', 'Add skills', skillChips)}
+      ${payoffLine('skills')}
+      ${profileField('Work mode', 'workMode', 'select', '', ['', 'In-office', 'Remote', 'Hybrid', 'Freelance', 'Between jobs'])}
+      ${profileField('Career level', 'careerLevel', 'select', '', ['', 'Student / Intern', 'Entry level (0-2 yrs)', 'Mid level (3-6 yrs)', 'Senior (7-10 yrs)', 'Lead / Manager', 'Director / VP', 'C-Suite / Founder'])}
+      ${profileField('Annual income (optional)', 'annualIncome', 'select', '', ['', 'Prefer not to say', 'Under ₹3L', '₹3L-6L', '₹6L-10L', '₹10L-20L', '₹20L-40L', 'Above ₹40L'])}
+      ${privacyInline('annualIncome', 'income')}
     `,
+    Links: () => `
+      ${profileField('LinkedIn', 'linkedin', 'text', 'Profile URL or username')}
+      ${payoffLine('linkedin')}
+      ${profileField('Website / portfolio', 'website', 'text', 'https://')}
+      ${payoffLine('website')}
+      ${profileField('Instagram', 'instagram', 'text', '@username')}
+      ${profileField('YouTube', 'youtube', 'text', 'Channel name')}
+    `,
+    Lifestyle: () => `
+      ${profileField('Diet', 'diet', 'select', '', ['', 'Omnivore', 'Vegetarian', 'Eggetarian', 'Vegan', 'Jain', 'Other'])}
+      ${profileField('Drinking', 'drinking', 'select', '', ['', 'Never', 'Socially', 'Occasionally', 'Regularly', 'Prefer not to say'])}
+      ${profileField('Smoking', 'smoking', 'select', '', ['', 'Never', 'Occasionally', 'Regularly', 'Trying to quit', 'Prefer not to say'])}
+      ${profileField('Fitness', 'fitness', 'select', '', ['', 'Very active (daily workout)', 'Active (3-4x/week)', 'Moderately active', 'Occasionally active', 'Not into fitness'])}
+      ${profileField('Core values', 'coreValues', 'chips', 'Add values', ['Family', 'Ambition', 'Freedom', 'Creativity', 'Loyalty', 'Honesty', 'Adventure', 'Growth', 'Humour', 'Empathy'])}
+    `,
+    More: () => {
+      const pro = typeof TX.isProfessional === 'function' && TX.isProfessional();
+      return `
+      <div style="font-size:12px;color:var(--muted);margin:0 0 12px;line-height:1.4;">Power layer — optional details. Nothing here is required.</div>
+      ${profileField('Hometown', 'hometown', 'text', 'Where you grew up')}
+      ${profileField('Height', 'height', 'select', '', ['', 'Under 5ft', '5ft', '5ft 2in', '5ft 4in', '5ft 6in', '5ft 8in', '5ft 10in', '6ft', '6ft+'])}
+      ${profileField('Religion', 'religion', 'select', '', ['', 'Hindu', 'Muslim', 'Christian', 'Sikh', 'Buddhist', 'Jain', 'Atheist', 'Agnostic', 'Spiritual but not religious', 'Prefer not to say'])}
+      ${privacyInline('religion', 'religion')}
+      ${profileField('Politics', 'politics', 'select', '', ['', 'Progressive', 'Liberal', 'Centrist', 'Conservative', 'Apolitical', 'Prefer not to say'])}
+      ${profileField('MBTI', 'mbti', 'select', '', ['', 'INTJ', 'INTP', 'ENTJ', 'ENTP', 'INFJ', 'INFP', 'ENFJ', 'ENFP', 'ISTJ', 'ISFJ', 'ESTJ', 'ESFJ', 'ISTP', 'ISFP', 'ESTP', 'ESFP', 'Don\'t know'])}
+      ${pro ? '' : typeof renderProfileIcebreakerBlock === 'function' ? `<div style="margin:12px 0 8px;font-size:12px;font-weight:700;color:var(--muted);">Chat openers (not on Digital)</div>${renderProfileIcebreakerBlock()}` : ''}
+      ${!pro ? `${profileField('Have children?', 'haveChildren', 'select', '', ['', 'No', 'Yes — live with me', 'Yes — don\'t live with me', 'Prefer not to say'])}${privacyInline('haveChildren', 'this')}` : ''}
+      ${profileField('Instagram', 'instagram', 'text', '@username')}
+      ${profileField('Twitter / X', 'twitter', 'text', '@username')}
+      ${pro ? '' : `${profileField('LinkedIn', 'linkedin', 'text', 'Profile URL')}${profileField('Website', 'website', 'text', 'https://')}`}
+      <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:16px;">
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;margin-bottom:8px;">Privacy</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.4;">Collection stays on so Chaupaal can match you better — turn off anything you don’t want shared.</div>
+        ${profileToggle('Show age publicly', 'showAge')}
+        ${profileToggle('Show location publicly', 'showLocation')}
+        ${profileToggle('Show relationship / looking for', 'showRelationship')}
+        ${profileToggle('Show income range', 'showIncome')}
+        ${profileToggle('Show religion', 'showReligion')}
+        ${profileField('Profile visibility', 'profileVisibility', 'select', '', ['public', 'Friends only', 'Private'])}
+      </div>
+      <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:16px;">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.4;">Optional GPS for Peepal proximity. Never required.</div>
+        <button type="button" class="btn btn--block" id="setMatchLocationBtn">Set my location for matching</button>
+      </div>
+    `;
+    },
+    // Legacy tab names → redirect aliases for completion section taps
+    Personal: () => SECTIONS.About(),
+    Relationships: () => SECTIONS['Looking for'](),
+    Social: () => SECTIONS.More(),
   };
 
   function profileField(label,key,type,placeholder,options){
     const val=dp[key];
+    if(type==='chips-single'){
+      const presets=options||[];
+      const selected=val||'';
+      const isCustom=!!(selected && !presets.includes(selected));
+      return`<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">${label}</div><div class="dp-chips dp-chips-single" data-key="${key}" style="display:flex;flex-wrap:wrap;gap:6px;">${presets.map(o=>`<button type="button" class="dp-chip${selected===o?' active':''}" data-val="${String(o).replace(/"/g,'&quot;')}" style="padding:6px 12px;border-radius:999px;border:2px solid ${selected===o?'var(--red)':'var(--line)'};background:${selected===o?'rgba(230,57,70,0.08)':'var(--white)'};color:${selected===o?'var(--red)':'var(--ink)'};font-size:12px;font-weight:600;cursor:pointer;">${o}</button>`).join('')}${isCustom?`<button type="button" class="dp-chip active" data-val="${String(selected).replace(/"/g,'&quot;')}" style="padding:6px 12px;border-radius:999px;border:2px solid var(--red);background:rgba(230,57,70,0.08);color:var(--red);font-size:12px;font-weight:600;cursor:pointer;">${selected} ✕</button>`:''}</div><div class="dp-chip-custom" data-key="${key}" data-single="1" style="display:flex;gap:8px;margin-top:8px;"><input type="text" maxlength="60" placeholder="${placeholder||'Other — type your own'}" style="flex:1;padding:8px 12px;border:2px solid var(--line);border-radius:10px;font-size:13px;"><button type="button" class="dp-chip-add" style="padding:8px 12px;border:0;border-radius:10px;background:var(--cream);font-weight:700;font-size:12px;cursor:pointer;">Add</button></div></div>`;
+    }
     if(type==='select'){
       const OTHER='__dp_other__';
       const opts=Array.isArray(options)?options.slice():[];
@@ -365,7 +437,8 @@ function renderProfileModal(){
 
   function renderSection(sec){
     const content=document.getElementById('profileSectionContent');
-    if(content) content.innerHTML=`<div style="padding:0;">${(SECTIONS[sec]||SECTIONS.Personal)()}</div>`;
+    const resolved = SECTIONS[sec] ? sec : (SECTIONS.About ? 'About' : 'Personal');
+    if(content) content.innerHTML=`<div style="padding:0;">${(SECTIONS[resolved]||SECTIONS.About||SECTIONS.Personal)()}</div>`;
     const OTHER='__dp_other__';
     content.querySelectorAll('.dp-ask-chaupaal').forEach(host=>{
       const key=host.dataset.for;
@@ -408,7 +481,16 @@ function renderProfileModal(){
     content.querySelectorAll('.dp-toggle').forEach(t=>{
       t.addEventListener('change',()=>saveProfileField(t.dataset.key, t.checked));
     });
-    content.querySelectorAll('.dp-chip').forEach(chip=>{
+    content.querySelectorAll('.dp-privacy-inline [data-privacy-key]').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        const showKey=btn.dataset.privacyKey;
+        const audience=btn.dataset.privacyAudience;
+        // public → show true; friends/private → show false (P0 projection strips from strangers)
+        saveProfileField(showKey, audience === 'public');
+        renderSection(resolved);
+      });
+    });
+    content.querySelectorAll('.dp-chips:not(.dp-chips-single) .dp-chip').forEach(chip=>{
       chip.addEventListener('click',()=>{
         const key=chip.closest('.dp-chips').dataset.key;
         let arr=Array.isArray(dp[key])?[...dp[key]]:[];
@@ -416,20 +498,39 @@ function renderProfileModal(){
         if(arr.includes(val)) arr=arr.filter(x=>x!==val);
         else arr.push(val);
         saveProfileField(key, arr);
-        renderSection(sec);
+        renderSection(resolved);
+      });
+    });
+    content.querySelectorAll('.dp-chips-single .dp-chip').forEach(chip=>{
+      chip.addEventListener('click',()=>{
+        const key=chip.closest('.dp-chips').dataset.key;
+        const val=chip.dataset.val;
+        const next = dp[key] === val ? '' : val;
+        saveProfileField(key, next);
+        if(key==='lookingFor') saveProfileField('matchIntent', next);
+        if(key==='interests' && typeof ProfileTaxonomy?.normalizeInterestList==='function'){
+          /* single interest chip group is multi via other path */
+        }
+        renderSection(resolved);
       });
     });
     content.querySelectorAll('.dp-chip-custom').forEach(row=>{
       const key=row.dataset.key;
+      const single=row.dataset.single==='1';
       const input=row.querySelector('input');
       const add=()=>{
         const typed=(input?.value||'').trim();
         if(!typed) return;
-        let arr=Array.isArray(dp[key])?[...dp[key]]:[];
-        if(!arr.includes(typed)) arr.push(typed);
-        saveProfileField(key, arr);
+        if(single){
+          saveProfileField(key, typed);
+          if(key==='lookingFor') saveProfileField('matchIntent', typed);
+        } else {
+          let arr=Array.isArray(dp[key])?[...dp[key]]:[];
+          if(!arr.includes(typed)) arr.push(typed);
+          saveProfileField(key, arr);
+        }
         input.value='';
-        renderSection(sec);
+        renderSection(resolved);
       };
       row.querySelector('.dp-chip-add')?.addEventListener('click', add);
       input?.addEventListener('keydown',(e)=>{ if(e.key==='Enter'){ e.preventDefault(); add(); }});
@@ -519,13 +620,16 @@ function renderProfileModal(){
         renderSection(tab.dataset.sec);
       });
     });
-    renderSection('Personal');
+    renderSection('About');
     if(typeof refreshProfileCompletionUI==='function') refreshProfileCompletionUI();
     el.querySelectorAll('[data-complete-section]').forEach((btn)=>{
       btn.addEventListener('click',()=>{
         const id=btn.getAttribute('data-complete-section');
-        const map={identity:'Personal',social:'Personal',relationship:'Relationships',career:'Career',trust:'Personal'};
-        const sec=map[id]||'Personal';
+        const pro = typeof ProfileTaxonomy?.isProfessional === 'function' && ProfileTaxonomy.isProfessional();
+        const map = pro
+          ? { identity: 'About', social: 'About', relationship: 'Career', career: 'Career', trust: 'About' }
+          : { identity: 'About', social: 'About', relationship: 'Looking for', career: 'Lifestyle', trust: 'About' };
+        const sec=map[id]||'About';
         const tab=document.querySelector(`#profileSectionTabs .profile-section-tab[data-sec="${sec}"]`);
         if(tab) tab.click();
         else renderSection(sec);
@@ -636,7 +740,16 @@ function renderProfileModal(){
 
 function saveProfileField(key, value){
   const prev=typeof digitalProfile==='object'?JSON.parse(JSON.stringify(digitalProfile)):{};
-  digitalProfile[key]=value;
+  let nextVal = value;
+  if (key === 'interests' && typeof ProfileTaxonomy?.normalizeInterestList === 'function' && Array.isArray(value)) {
+    nextVal = ProfileTaxonomy.normalizeInterestList(value);
+  }
+  if (key === 'lookingFor' || key === 'matchIntent') {
+    digitalProfile.lookingFor = nextVal;
+    digitalProfile.matchIntent = nextVal;
+  } else {
+    digitalProfile[key] = nextVal;
+  }
   try{localStorage.setItem('chaupaal_digital_profile',JSON.stringify(digitalProfile));}catch(e){}
 
   // Retroactive DOB → under-18: require parental consent / teen mode
@@ -672,12 +785,20 @@ function saveProfileField(key, value){
   }
 
   if(db&&currentUser){
-    const patch={[`profile.${key}`]:value};
-    if(key==='lookingFor') patch.matchIntent=String(value||'').trim();
+    const patch={[`profile.${key}`]:nextVal};
+    if(key==='lookingFor' || key==='matchIntent'){
+      patch['profile.lookingFor']=nextVal;
+      patch['profile.matchIntent']=nextVal;
+      patch.matchIntent=String(nextVal||'').trim();
+      patch.lookingFor=String(nextVal||'').trim();
+    }
+    if(key==='interests') patch.interests = nextVal;
+    if(key==='purpose') patch.purpose = nextVal;
+    if(key==='industry') patch.industry = nextVal;
     const after=()=>{
       if(typeof UsersPublic?.syncPublicProfile==='function'){
-        const merged={...(userProfile||{}), profile:{...(userProfile?.profile||{}), ...digitalProfile, [key]:value}};
-        if(key==='lookingFor') merged.matchIntent=String(value||'').trim();
+        const merged={...(userProfile||{}), profile:{...(userProfile?.profile||{}), ...digitalProfile, [key]:nextVal}};
+        if(key==='lookingFor' || key==='matchIntent') merged.matchIntent=String(nextVal||'').trim();
         UsersPublic.syncPublicProfile(currentUser.uid, merged);
       }
     };
@@ -690,7 +811,7 @@ function saveProfileField(key, value){
     });
   }
   if(typeof refreshProfileCompletionUI==='function') refreshProfileCompletionUI();
-  if(typeof onProfileFieldSaved==='function') onProfileFieldSaved(key, value, prev);
+  if(typeof onProfileFieldSaved==='function') onProfileFieldSaved(key, nextVal, prev);
   if(['bio','interests','hobbies','prompts','occupation','currentCity','lookingFor'].includes(key)&&typeof scheduleProfileEmbeddingRefresh==='function'){
     scheduleProfileEmbeddingRefresh(key);
   }

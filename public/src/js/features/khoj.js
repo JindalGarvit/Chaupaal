@@ -115,6 +115,79 @@
     }
   }
 
+  function maybeOfferKhojInterestsAsk(panel) {
+    try {
+      if (sessionStorage.getItem('chaupaal_khoj_interests_ask') === '1') return;
+      const after = Number(localStorage.getItem('chaupaal_nudge_after') || 0);
+      if (after && Date.now() < after) return;
+      if (typeof profileNudgeSkippedThisSession === 'function' && profileNudgeSkippedThisSession()) return;
+    } catch (e) {}
+    const dp = typeof digitalProfile !== 'undefined' ? digitalProfile : {};
+    const has =
+      typeof ProfileTaxonomy?.resolvedInterests === 'function'
+        ? ProfileTaxonomy.resolvedInterests(dp).length > 0
+        : Array.isArray(dp?.interests) && dp.interests.length > 0;
+    if (has) return;
+    const host = panel?.querySelector('#khojIntentCard') || panel;
+    if (!host || host.querySelector('[data-khoj-interests-ask]')) return;
+    try {
+      sessionStorage.setItem('chaupaal_khoj_interests_ask', '1');
+    } catch (e) {}
+    const chips = (typeof ProfileTaxonomy !== 'undefined' && ProfileTaxonomy.INTEREST_CHIPS) || [
+      'Travel',
+      'Music',
+      'Films',
+      'Food',
+      'Fitness',
+      'Tech',
+    ];
+    const banner = document.createElement('div');
+    banner.setAttribute('data-khoj-interests-ask', '1');
+    banner.className = 'khoj-interests-ask';
+    banner.style.cssText =
+      'margin:10px 0 12px;padding:12px;border-radius:14px;border:1.5px solid var(--line);background:var(--cream);';
+    banner.innerHTML = `
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px;">Add interests → better people in Khoj</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.4;">One quick pick — or dismiss. Used for matching when visible.</div>
+      <div class="dp-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+        ${chips
+          .slice(0, 10)
+          .map(
+            (c) =>
+              `<button type="button" class="dp-chip" data-khoj-interest="${String(c).replace(/"/g, '&quot;')}" style="padding:6px 12px;border-radius:999px;border:2px solid var(--line);background:var(--white);font-size:12px;font-weight:600;cursor:pointer;">${c}</button>`
+          )
+          .join('')}
+      </div>
+      <button type="button" class="auth-guest-btn" data-khoj-ask-dismiss style="font-size:12px;">Not now</button>`;
+    host.insertBefore(banner, host.firstChild?.nextSibling || host.firstChild);
+    const picked = new Set();
+    banner.querySelectorAll('[data-khoj-interest]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const v = btn.dataset.khojInterest;
+        if (picked.has(v)) {
+          picked.delete(v);
+          btn.style.borderColor = 'var(--line)';
+          btn.style.color = '';
+        } else {
+          picked.add(v);
+          btn.style.borderColor = 'var(--red)';
+          btn.style.color = 'var(--red)';
+        }
+        if (picked.size && typeof saveProfileField === 'function') {
+          const cur =
+            typeof ProfileTaxonomy?.resolvedInterests === 'function'
+              ? ProfileTaxonomy.resolvedInterests(digitalProfile)
+              : [];
+          saveProfileField('interests', [...new Set([...cur, ...picked])]);
+        }
+      });
+    });
+    banner.querySelector('[data-khoj-ask-dismiss]')?.addEventListener('click', () => {
+      banner.remove();
+      if (typeof skipProfileNudgeThisSession === 'function') skipProfileNudgeThisSession();
+    });
+  }
+
   async function renderKhojSurface(host) {
     if (!host) return;
     let panel = document.getElementById('peepalKhojSurface');
@@ -178,6 +251,9 @@
     const listEl = panel.querySelector('#khojCompatList');
     // On open: ranked compatibility peeks; empty-query path uses broad friendship
     loadKhojPeeks(listEl, { reset: true, limit: 5, emptyFriendship: true, friendshipOnly: false });
+
+    // Contextual ask once: no interests → chip picker (respects 24h nudge + session cadence).
+    maybeOfferKhojInterestsAsk(panel);
 
     const run = () => {
       const inp = panel.querySelector('#khojIntentInput');

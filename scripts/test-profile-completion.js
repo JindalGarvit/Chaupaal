@@ -100,6 +100,28 @@ const empty = {
   );
   assert(personal.sections.career.complete === true, 'personal career = occupation only');
   assert(proNoInd.sections.career.complete === false, 'professional career needs industry');
+  assert(proNoInd.hideRelationship === true, 'professional hides relationship section');
+}
+
+{
+  const proFull = calcProfileCompletion(
+    {
+      occupation: 'Designer',
+      industry: 'Technology',
+      purpose: 'Find collaborators',
+      skills: ['Design'],
+    },
+    { teen: false, profileType: 'professional', username: 'u' }
+  );
+  assert(proFull.sections.career.complete === true, 'pro career complete with industry+purpose+skills');
+}
+
+{
+  const iceOnly = calcProfileCompletion(
+    { bio: 'x', icebreakers: [{ answer: 'hi' }], username: 'u' },
+    { photoURL: 'p', username: 'u', emailVerified: true, teen: false, profileType: 'personal' }
+  );
+  assert(iceOnly.sections.identity.complete === false, 'icebreakers alone do not complete Identity prompts');
 }
 
 {
