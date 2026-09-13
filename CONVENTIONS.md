@@ -214,6 +214,7 @@ Enforcement is **ON** for Firestore / RTDB (and Storage if enabled). Client uses
 - Deep links: `openSettingsPrivacyFocus(controlId)` scrolls to existing toggles (no interests dashboard / per-signal editor — 10B).
 - Claims must match code: hashed search only, opt-out stops collection, no sensitive inference, ranking has no request-time LLM, friends-only via `friend_projection`.
 - Scheduler soft budget ~95s under Hobby `maxDuration` 120; response includes `timing.elapsedMs`.
+- Privacy residual close: `npm run test:rules` (Firestore + RTDB emulator) + `npm run test:privacy` (projection checklist). Friends only / Private `users_public` writes that include gated PII are **denied by rules**, not only by client projection.
 
 ## 12. Globals & module surface
 

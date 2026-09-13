@@ -133,6 +133,45 @@ service cloud.firestore {
         (request.resource.data.parentId == null || request.resource.data.parentId is string);
     }
 
+    // Friends only / Private users_public docs must stay identity-only (P0 + disclosure).
+    // Rich fields live on users/{uid} (owner) and friend_projection (friends).
+    function isRestrictedPublicVisibility(v) {
+      return v == 'Private'
+        || v == 'private'
+        || v == 'Friends only'
+        || v == 'friends only'
+        || v == 'Friends Only'
+        || v == 'friends'
+        || v == 'friends-only';
+    }
+
+    function usersPublicHasGatedPii() {
+      return request.resource.data.keys().hasAny([
+        'bio', 'age', 'city', 'gender', 'interests', 'hobbies', 'lookingFor',
+        'prompts', 'occupation', 'annualIncome', 'religion', 'digitalLayout',
+        'customSections', 'profileMedia', 'icebreakers', 'topCat', 'matchIntent',
+        'intents', 'personality', 'industry', 'purpose', 'sectionOrder', 'profileTheme',
+        'website', 'instagram', 'profileLinks'
+      ]);
+    }
+
+    function usersPublicNestedHasGatedPii() {
+      return 'profile' in request.resource.data
+        && request.resource.data.profile is map
+        && request.resource.data.profile.keys().hasAny([
+          'bio', 'age', 'currentCity', 'gender', 'interests', 'hobbies', 'lookingFor',
+          'relationshipStatus', 'prompts', 'occupation', 'annualIncome', 'religion',
+          'digitalLayout', 'customSections', 'profileMedia', 'website', 'instagram',
+          'profileLinks', 'icebreakers', 'hometown', 'company', 'headline'
+        ]);
+    }
+
+    function usersPublicWriteOkForVisibility() {
+      return !('profileVisibility' in request.resource.data)
+        || !isRestrictedPublicVisibility(request.resource.data.profileVisibility)
+        || (!usersPublicHasGatedPii() && !usersPublicNestedHasGatedPii());
+    }
+
     // ===================== USERS =====================
     match /users/{userId} {
       // Private document — owner only (email/phone/DOB/prefs). Others use users_public.
@@ -333,7 +372,8 @@ service cloud.firestore {
       allow create: if isOwner(userId)
         && !('hiddenFromDiscovery' in request.resource.data
              && request.resource.data.hiddenFromDiscovery == true)
-        && !request.resource.data.keys().hasAny(['email', 'phone', 'phoneNumber', 'dob', 'dateOfBirth', 'relationshipCounts']);
+        && !request.resource.data.keys().hasAny(['email', 'phone', 'phoneNumber', 'dob', 'dateOfBirth', 'relationshipCounts'])
+        && usersPublicWriteOkForVisibility();
       allow update: if isOwner(userId)
         && (
           !('hiddenFromDiscovery' in resource.data)
@@ -342,7 +382,8 @@ service cloud.firestore {
         // PII must never land on the world-readable public doc.
         // relationshipCounts are Admin-only (follow graph); clients must not clobber them.
         && !request.resource.data.keys().hasAny(['email', 'phone', 'phoneNumber', 'dob', 'dateOfBirth'])
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['relationshipCounts']);
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['relationshipCounts'])
+        && usersPublicWriteOkForVisibility();
       allow delete: if isOwner(userId);
 
       // Friends-only Digital blocks + Friends-only profile card (public+friends, never private).

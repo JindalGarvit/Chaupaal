@@ -335,7 +335,7 @@
 
         <h3 class="legal-v1-h">What we collect</h3>
         <ul class="legal-v1-list">
-          <li><strong>Profile you enter</strong> — name, username, bio, interests, photos, and other fields you fill in. Visibility follows your Public / Friends / Private choices and each show* toggle.</li>
+          <li><strong>Profile you enter</strong> — name, username, bio, interests, photos, and other fields you fill in. Visibility follows your Public / Friends / Private choices and each show* toggle. Friends-only and Private profiles keep gated fields off the world-readable public document (client sync + Firestore rules); friends use a separate friend projection.</li>
           <li><strong>Activity signals</strong> (on by default) — scrolls, likes, comments, saves, game completes, Mehfil join/leave duration, and similar. Used to improve feed, games, and people discovery.</li>
           <li><strong>Hashed search</strong> — a fingerprint of search text, never the raw query string.</li>
           <li><strong>Device &amp; session basics</strong> — signed-in sessions, push tokens, and crash/error reports needed to keep the app running.</li>
@@ -377,9 +377,9 @@
         </div>
         <p class="legal-v1-note">Ranking and matching read stored fields only — they never call an AI model at request time. Enrichment jobs (topic labels, embeddings) run offline and are optional.</p>`;
     } else if (isPrivacy) {
-      body = `<p>Chaupaal (“we”) values your privacy. We collect account info you provide (name, username, email or phone), profile content you post, consented activity signals, hashed search fingerprints, and basic device/session data to run the app.</p>
+      body = `         <p>Chaupaal (“we”) values your privacy. We collect account info you provide (name, username, email or phone), profile content you post, consented activity signals, hashed search fingerprints, and basic device/session data to run the app.</p>
          <p><strong>How we use it:</strong> to authenticate you, show your profile and posts to people you choose, improve discovery and safety, and send essential service messages.</p>
-         <p><strong>Sharing:</strong> we don’t sell your personal data. Content you mark public can be seen by other members. Friends-only fields stay off the world-readable public doc. We use trusted processors (hosting, push) under contracts.</p>
+         <p><strong>Sharing:</strong> we don’t sell your personal data. Content you mark public can be seen by other members. Friends-only / Private profiles keep gated fields off the world-readable public document (enforced in sync + Firestore rules); friends read a separate friend projection. We use trusted processors (hosting, push) under contracts.</p>
          <p><strong>Your choices:</strong> edit visibility and show* toggles, turn off personalization, sign out, export your data, or request account deletion via Settings.</p>
          <p><button type="button" class="btn btn--secondary btn--sm" data-legal="collects">What Chaupaal collects — full plain list</button></p>
          <p class="legal-v1-note">This is a short v1 summary for early access. The “What we collect” page is the detailed disclosure.</p>`;
