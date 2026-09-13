@@ -55,6 +55,13 @@
     if (!rows.length) {
       return '<div class="dangal-friends-board"><div class="dangal-section-label">This week</div><p class="dangal-profile__empty">Play a rated game to open the weekly board.</p></div>';
     }
+    const mine = rows.find((e) => e.mine);
+    const shareBtn =
+      mine && typeof openLeaderboardRankShare === 'function'
+        ? `<button type="button" class="btn btn--sm" data-share-rank="1" data-rank="${mine.rank}" data-score="${mine.score || 0}" style="margin-top:8px;width:100%;">Share my rank</button>`
+        : mine
+          ? `<button type="button" class="btn btn--sm" data-share-rank="1" data-rank="${mine.rank}" data-score="${mine.score || 0}" style="margin-top:8px;width:100%;">Share my rank</button>`
+          : '';
     return (
       '<div class="dangal-friends-board"><div class="dangal-section-label">This week</div>' +
       rows
@@ -72,6 +79,7 @@
           );
         })
         .join('') +
+      shareBtn +
       '</div>'
     );
   }

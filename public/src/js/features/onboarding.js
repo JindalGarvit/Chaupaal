@@ -1,17 +1,31 @@
-// ===================== VIRAL GUEST MUQABALA =====================
+// ===================== VIRAL GUEST MUQABALA / BEAT SCORE =====================
+/**
+ * Supports:
+ *   /challenge/{gameId}?name=&score=&cat=   (canonical G1)
+ *   /?challenge=&score=&game=&cat=         (legacy dual-parse)
+ */
 function checkViralLink(){
   const params=new URLSearchParams(window.location.search);
-  const challenger=params.get('challenge');
-  if(!challenger)return;
+  const pathMatch=String(location.pathname||'').match(/^\/challenge\/([^/?#]+)\/?$/i);
+  const gameFromPath=pathMatch?decodeURIComponent(pathMatch[1]):null;
+  const challengerRaw=params.get('name')||params.get('challenge');
+  if(!challengerRaw&&!gameFromPath)return;
+  const challenger=challengerRaw?decodeURIComponent(challengerRaw):'Someone';
   const category=params.get('cat')||'GK';
   const target=params.get('score');
-  const game=params.get('game')||'quiz';
-  const gName=(typeof getGame==='function'&&getGame(game)?.name)||(game==='quiz'?'Muqabala':game==='akhbaar'?'Akhbaar':game);
-  // Show guest banner
-  const banner=document.createElement('div');banner.className='guest-banner';
-  banner.innerHTML=`<div><strong>${decodeURIComponent(challenger)}</strong> challenged you! Beat their score${target!=null?` of ${target}`:''} on ${gName}</div><button class="guest-signup-btn" id="guestSignupBtn">Sign up to keep score!</button>`;
+  const game=gameFromPath||params.get('game')||'quiz';
+  const gName=(typeof getGame==='function'&&getGame(game)?.name)||(game==='quiz'||game==='muqabala'?'Muqabala':game==='akhbaar'?'Akhbaar':game);
+  // Show guest / soft signup banner
+  document.querySelector('.guest-banner[data-viral-challenge]')?.remove();
+  const banner=document.createElement('div');banner.className='guest-banner';banner.dataset.viralChallenge='1';
+  banner.innerHTML=`<div><strong>${String(challenger).replace(/</g,'')}</strong> challenged you! Beat their score${target!=null?` of ${target}`:''} on ${gName}</div><button class="guest-signup-btn" id="guestSignupBtn" type="button">${typeof currentUser!=='undefined'&&currentUser?'Keep playing':'Sign up to keep score!'}</button>`;
   document.getElementById('topbar')?.after(banner);
-  document.getElementById('guestSignupBtn')?.addEventListener('click',()=>{banner.remove();showAuth();});
+  document.getElementById('guestSignupBtn')?.addEventListener('click',()=>{
+    banner.remove();
+    if(typeof currentUser!=='undefined'&&currentUser)return;
+    if(typeof openAuthSheet==='function')openAuthSheet('login');
+    else if(typeof showAuth==='function')showAuth();
+  });
 
   try{
     if(typeof TabHabits!=='undefined'&&TabHabits.markOverride) TabHabits.markOverride('viral_challenge');
@@ -19,7 +33,7 @@ function checkViralLink(){
 
   if(game==='akhbaar'){
     window.__akhbaarBeatChallenge={
-      challenger:decodeURIComponent(challenger),
+      challenger,
       score:target!=null?Number(target):null,
     };
     document.querySelectorAll('.tab-btn').forEach(b=>{if(b.dataset.tab==='akhbaar')b.click();});
@@ -33,11 +47,11 @@ function checkViralLink(){
   document.querySelectorAll('.tab-btn').forEach(b=>{if(b.dataset.tab==='dangal')b.click();});
   setTimeout(()=>{
     if(game==='quiz'||game==='muqabala'){
-      if(typeof startMuqabala==='function') startMuqabala(decodeURIComponent(challenger),category);
+      if(typeof startMuqabala==='function') startMuqabala(challenger,category);
     } else if(typeof getGame==='function'){
       const g=getGame(game);
-      if(g) g.launch({source:'challenge',beatScore:target!=null?Number(target):null,challenger:decodeURIComponent(challenger)});
-      else if(typeof startMuqabala==='function') startMuqabala(decodeURIComponent(challenger),category);
+      if(g) g.launch({source:'challenge',beatScore:target!=null?Number(target):null,challenger});
+      else if(typeof startMuqabala==='function') startMuqabala(challenger,category);
     }
   },500);
 }
@@ -57,10 +71,9 @@ function generateChallengeLink(score,category,gameId){
     shareGameResult(gid, stats);
     return;
   }
-  const name=encodeURIComponent(userProfile?.name||'Someone');
   const url=typeof buildBeatScoreLink==='function'
     ? buildBeatScoreLink(gid, score, {cat: category||'GK'})
-    : `${window.location.origin}${window.location.pathname}?challenge=${name}&cat=${category||'GK'}&score=${score}&game=${gid}`;
+    : `${window.location.origin}/challenge/${encodeURIComponent(gid)}?score=${score}&cat=${encodeURIComponent(category||'GK')}&name=${encodeURIComponent(userProfile?.name||'Someone')}`;
   if(navigator.share){navigator.share({title:'Beat my score on Chaupaal!',text:`Can you beat my score of ${score} on Chaupaal? Play now!`,url});}
   else{navigator.clipboard.writeText(url).then(()=>showToast(t('onboard_challenge_copied')));}
 }

@@ -17,7 +17,9 @@ Implementation lives primarily in:
 
 **`openLayer(el, onDismiss, opts)`** — shared helper in `nav-stack.js`. Appends into `#device` / `.device`, sets `data-nav-managed="1"`, registers one history layer, and returns `{ close }` so Android back, swipe-back, Escape, and the feature’s own close control share one dismiss path. New UI must use this (or an equivalent `pushNavLayer` + `data-nav-managed` pair). Do not call `removeNavLayer` without also removing/hiding the DOM.
 
-**Exceptions (deep routes only):** `deeplinks.js` may push `{ chaupaalDeep: true }` when opening shareable routes (`/chat/…`, `/profile/…`, `/post/…`, `/join/g/…`). Closing a deep route must use `history.back()`, never `pushState('/', …)`. Guest group invites stash `chaupaal_pending_group_invite` and resume after auth. `deeplinks_v1` kill-switches `handleDeepLink`. FCM `link` = `hrefFromDeepLink(deepLink)` (never hard-coded `/`).
+**Exceptions (deep routes only):** `deeplinks.js` may push `{ chaupaalDeep: true }` when opening shareable routes (`/chat/…`, `/profile/…`, `/post/…`, `/join/g/…`, `/challenge/…`). Closing a deep route must use `history.back()`, never `pushState('/', …)`. Guest group invites stash `chaupaal_pending_group_invite` and resume after auth. `deeplinks_v1` kill-switches `handleDeepLink`. FCM `link` = `hrefFromDeepLink(deepLink)` (never hard-coded `/`).
+
+**OG previews (Growth G1):** Bot User-Agents matching WhatsApp/Facebook/Twitter/etc. are rewritten (vercel.json `has`) to `GET /api/stories?og=1&kind=…` → `server-lib/og-preview.js`. Humans still get SPA `index.html`. Friends-only/Private + gated posts → generic card only. Challenge URL: `/challenge/{gameId}?name=&score=&cat=` (legacy `?challenge=` still parsed).
 
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 

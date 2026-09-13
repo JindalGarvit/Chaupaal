@@ -1245,6 +1245,18 @@ async function archive(db, uid) {
 }
 
 module.exports = async function handler(req, res) {
+  // Growth G1: crawler OG HTML (GET) — no auth, no new api/*.js
+  if (req.method === 'GET' && (String(req.query?.og || '') === '1' || String(req.query?.action || '') === 'og_preview')) {
+    try {
+      const { handleOgGet } = require('../server-lib/og-preview');
+      return await handleOgGet(req, res);
+    } catch (e) {
+      console.warn('[stories] og', e?.message || e);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(200).send('<!DOCTYPE html><html><head><title>Chaupaal</title></head><body>Chaupaal</body></html>');
+    }
+  }
+
   if (!requireMethod(req, res, 'POST')) return;
   const user = await requireUser(req, res, { allowWeak: false });
   if (!user) return;

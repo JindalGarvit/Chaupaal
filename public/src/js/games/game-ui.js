@@ -869,16 +869,18 @@
 
   function buildBeatScoreLink(gameId, score, extra) {
     const e = extra || {};
-    const name = encodeURIComponent(
-      (typeof userProfile !== 'undefined' && userProfile?.name) || 'Someone'
-    );
+    const nameRaw =
+      (typeof userProfile !== 'undefined' && (userProfile?.username || userProfile?.name)) ||
+      (typeof currentUser !== 'undefined' && currentUser?.displayName) ||
+      'Someone';
     const params = new URLSearchParams();
-    params.set('challenge', decodeURIComponent(name));
-    params.set('game', gameId || 'quiz');
+    params.set('name', String(nameRaw).slice(0, 60));
     if (score != null) params.set('score', String(score));
-    if (e.cat) params.set('cat', e.cat);
+    if (e.cat) params.set('cat', String(e.cat));
     if (e.extra) Object.entries(e.extra).forEach(([k, v]) => params.set(k, String(v)));
-    return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+    const gid = encodeURIComponent(String(gameId || 'quiz').slice(0, 40));
+    const qs = params.toString();
+    return `${window.location.origin}/challenge/${gid}${qs ? `?${qs}` : ''}`;
   }
 
   async function shareGameResult(gameId, stats) {
@@ -2431,6 +2433,12 @@
 
   function weeklyFriendsBoardHtml(rows) {
     if (!rows || !rows.length) return '';
+    const mine = rows.find((r) => r.you) || null;
+    const shareBtn = mine
+      ? `<button type="button" class="btn btn--sm dangal-share-rank-btn" data-share-rank="1" data-rank="${
+          rows.indexOf(mine) + 1
+        }" data-score="${safe(mine.rating)}" style="margin-top:8px;width:100%;">Share my rank</button>`
+      : '';
     return `<div class="dangal-friends-board">
       <div class="dangal-section-label">Friends this week</div>
       ${rows
@@ -2439,20 +2447,75 @@
             `<div class="dangal-friends-row${r.you ? ' is-you' : ''}"><span class="dangal-friends-rank">${i + 1}</span><span class="dangal-friends-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(r.name,r):safe(r.name)}</span><span class="dangal-friends-rating">${safe(r.rating)}</span></div>`
         )
         .join('')}
+      ${shareBtn}
     </div>`;
   }
+
+  function openLeaderboardRankShare(opts) {
+    const o = opts || {};
+    const rank = o.rank != null ? Number(o.rank) : null;
+    const score = o.score != null ? o.score : '';
+    const uname =
+      (typeof userProfile !== 'undefined' && userProfile?.username) ||
+      (typeof currentUser !== 'undefined' && currentUser?.uid) ||
+      '';
+    const profileUrl =
+      uname && typeof shareUrl === 'function'
+        ? shareUrl('profile', String(uname).replace(/^@/, ''))
+        : location.origin + '/';
+    const rankLine = rank != null ? `#${rank} this week` : 'On the board this week';
+    const scoreLine = score !== '' && score != null ? String(score) : rankLine;
+    const stats =
+      typeof buildShareStats === 'function'
+        ? buildShareStats({
+            scoreLine,
+            meta: 'Dangal · weekly · virtual chips only',
+            caption: rankLine,
+            text: `I'm ${rankLine} on Chaupaal Dangal${score !== '' ? ` (${score})` : ''}. Can you climb higher?`,
+            url: profileUrl,
+          })
+        : {
+            scoreLine,
+            meta: 'Dangal · weekly',
+            text: `I'm ${rankLine} on Chaupaal Dangal.`,
+            url: profileUrl,
+          };
+    if (typeof trackShareEvent === 'function') {
+      trackShareEvent('share_opened', { surface: 'dangal_rank', method: 'sheet' });
+    }
+    if (typeof openUnifiedShareSheet === 'function') {
+      openUnifiedShareSheet({
+        gameId: 'dangal',
+        title: 'Share my rank',
+        subtitle: rankLine,
+        stats,
+      });
+    }
+  }
+
+  document.addEventListener('click', (e) => {
+    const btn = e.target?.closest?.('[data-share-rank]');
+    if (!btn) return;
+    e.preventDefault();
+    openLeaderboardRankShare({
+      rank: btn.dataset.rank,
+      score: btn.dataset.score,
+    });
+  });
 
   /* ── Consume async beat-my-score challenge from URL ── */
   function consumeBeatScoreChallenge() {
     try {
+      const pathMatch = String(location.pathname || '').match(/^\/challenge\/([^/?#]+)\/?$/i);
       const params = new URLSearchParams(window.location.search);
-      const challenger = params.get('challenge');
-      if (!challenger) return null;
-      const game = params.get('game') || 'quiz';
+      const gameFromPath = pathMatch ? decodeURIComponent(pathMatch[1]) : null;
+      const challenger = params.get('name') || params.get('challenge');
+      if (!challenger && !gameFromPath) return null;
+      const game = gameFromPath || params.get('game') || 'quiz';
       const score = params.get('score');
       const cat = params.get('cat') || 'GK';
       return {
-        challenger: decodeURIComponent(challenger),
+        challenger: challenger ? decodeURIComponent(challenger) : 'Someone',
         game,
         score: score != null ? Number(score) : null,
         cat,
@@ -2660,6 +2723,7 @@
   window.getDailySpotlightGameId = getDailySpotlightGameId;
   window.buildWeeklyFriendsBoard = buildWeeklyFriendsBoard;
   window.weeklyFriendsBoardHtml = weeklyFriendsBoardHtml;
+  window.openLeaderboardRankShare = openLeaderboardRankShare;
   window.consumeBeatScoreChallenge = consumeBeatScoreChallenge;
   window.recordDangalSession = recordDangalSession;
   window.getDangalProgress = getDangalProgress;

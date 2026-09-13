@@ -79,6 +79,12 @@ function renderLeaderboardUI(entries,el,{hasMore=false,demo=false}={}){
   const myScore=yourEl?.textContent;
   if(myScore&&myScore!=='—'){
     el.innerHTML+=`<div class="rp-leaderboard-item rp-leaderboard-you"><div class="rp-rank">${youLabel}</div><div class="rp-name">${userProfile?.name?.split(' ')[0]||youLabel}</div><div class="rp-score">${myScore}</div></div>`;
+    const myUid=typeof currentUser!=='undefined'?currentUser?.uid:'';
+    const mineIdx=entries.findIndex((e)=>e.uid&&myUid&&e.uid===myUid);
+    const rank=mineIdx>=0?mineIdx+1:null;
+    if(!demo&&rank!=null){
+      el.innerHTML+=`<button type="button" class="btn btn--sm" data-share-rank="1" data-rank="${rank}" data-score="${String(myScore).replace(/"/g,'')}" style="margin-top:8px;width:100%;">Share my rank</button>`;
+    }
   }
   if(hasMore&&typeof ensureLoadMoreButton==='function'){
     ensureLoadMoreButton(el,{

@@ -19,6 +19,7 @@
     { name: 'chat', re: /^\/(?:chat|c)\/([^/?#]+)\/?$/i },
     { name: 'story', re: /^\/story\/([^/?#]+)\/?$/i },
     { name: 'join', re: /^\/join(?:\/g)?\/([^/?#]+)\/?$/i },
+    { name: 'challenge', re: /^\/challenge\/([^/?#]+)\/?$/i },
   ];
 
   const PENDING_GROUP_INVITE_KEY = 'chaupaal_pending_group_invite';
@@ -50,6 +51,7 @@
     if (name === 'chat') return `/chat/${safe}`;
     if (name === 'join') return `/join/g/${safe}`;
     if (name === 'story') return `/story/${safe}`;
+    if (name === 'challenge') return `/challenge/${safe}`;
     return '/';
   }
 
@@ -854,7 +856,10 @@
     else if (route.name === 'post') await openPostById(route.id);
     else if (route.name === 'chat') await openChatById(route.id);
     else if (route.name === 'join') await openGroupInvite(route.id);
-    else if (route.name === 'story') {
+    else if (route.name === 'challenge') {
+      // Hand off to viral challenge handler (path + query)
+      if (typeof checkViralLink === 'function') checkViralLink();
+    } else if (route.name === 'story') {
       switchTab('duniya');
       if (typeof DuniyaStory !== 'undefined' && DuniyaStory.openById) {
         const ok = await DuniyaStory.openById(route.id);
