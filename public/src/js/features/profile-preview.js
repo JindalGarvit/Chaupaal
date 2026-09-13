@@ -1,9 +1,12 @@
 /**
  * Own-profile preview: "Preview" (visitor view) vs "Edit my profile".
  * Default when opening own profile is Preview.
+ * Audience toggle: as stranger / as friend — same projection path as public sheet.
  */
 (function () {
   let profilePreviewMode = true; // Preview by default for own profile
+  /** @type {'stranger'|'friend'} */
+  let profilePreviewAudience = 'stranger';
 
   function isProfilePreviewMode() {
     return !!profilePreviewMode;
@@ -11,6 +14,14 @@
 
   function setProfilePreviewMode(on) {
     profilePreviewMode = !!on;
+  }
+
+  function getProfilePreviewAudience() {
+    return profilePreviewAudience === 'friend' ? 'friend' : 'stranger';
+  }
+
+  function setProfilePreviewAudience(audience) {
+    profilePreviewAudience = audience === 'friend' ? 'friend' : 'stranger';
   }
 
   /**
@@ -43,6 +54,9 @@
           ? 'Friends only'
           : 'Public',
       profileType: p.profileType || meta.profileType || 'personal',
+      identityLine: isLocked
+        ? ''
+        : [p.currentCity || p.city, p.occupation || p.headline].filter(Boolean).join(' · '),
     };
 
     if (isLocked) {
@@ -88,8 +102,18 @@
       </div>`;
   }
 
-  function renderOwnPreviewChromeHtml(dp, userMeta) {
-    const view = getPublicVisibleProfile(dp, userMeta);
+  function renderAudienceToggleHtml() {
+    const aud = getProfilePreviewAudience();
+    return `
+      <div class="profile-audience-toggle" role="tablist" aria-label="Preview audience">
+        <button type="button" data-preview-audience="stranger" role="tab" aria-selected="${aud === 'stranger' ? 'true' : 'false'}" class="${aud === 'stranger' ? 'is-active' : ''}">As stranger</button>
+        <button type="button" data-preview-audience="friend" role="tab" aria-selected="${aud === 'friend' ? 'true' : 'false'}" class="${aud === 'friend' ? 'is-active' : ''}">As friend</button>
+      </div>`;
+  }
+
+  function renderOwnPreviewChromeHtml(dp, userMeta, opts) {
+    const isFriend = !!(opts && opts.isFriend);
+    const view = getPublicVisibleProfile(dp, userMeta, { isFriend });
     const esc =
       typeof escapeHtmlText === 'function'
         ? escapeHtmlText
@@ -102,44 +126,45 @@
       typeof formatDisplayNameHtml === 'function'
         ? formatDisplayNameHtml(view.displayName, view.profileType)
         : esc(view.displayName);
+    const bioRaw = String(view.bio || '').trim();
+    const bioSnippet = bioRaw.length > 140 ? bioRaw.slice(0, 137) + '…' : bioRaw;
     const bioHtml =
-      view.bio && !view.locked
+      bioSnippet && !view.locked
         ? typeof linkifyText === 'function'
-          ? linkifyText(view.bio)
-          : esc(view.bio)
+          ? linkifyText(bioSnippet)
+          : esc(bioSnippet)
         : '';
+    const identity = view.identityLine ? `<div class="public-profile-identity">${esc(view.identityLine)}</div>` : '';
+    const audienceNote =
+      getProfilePreviewAudience() === 'friend'
+        ? 'Friend view — Friends-only blocks unlock here (same path as a real friend).'
+        : 'Stranger view — exactly what a non-friend sees.';
     return `
       ${renderPreviewToggleHtml()}
-      <div class="own-profile-preview-toolbar">
-        <button type="button" class="btn profile-notif-entry" data-open-notif="all" aria-label="Notifications">
-          <span>Notifications</span>
-          <span class="notif-dot hidden" data-notif-dot="all" aria-hidden="true"></span>
-        </button>
-        <button type="button" class="btn" data-open-archive-from-preview>Archive</button>
-      </div>
+      ${renderAudienceToggleHtml()}
       <div class="public-profile-hero own-preview-hero">
         <div class="public-profile-avatar" data-own-preview-avatar>
           ${typeof renderUserAvatarHtml==='function'?renderUserAvatarHtml({...view,uid:typeof currentUser!=='undefined'?currentUser?.uid:'',profile:dp,avatarDisplay:(userMeta||{}).avatarDisplay},{decorative:false,alt:view.displayName}):(view.photoURL?`<img src="${esc(view.photoURL)}" alt="">`:'👤')}
         </div>
         <div class="public-profile-name" data-pro-badge-self data-pro-badge-name="${esc(view.displayName)}">${nameHtml}</div>
         <div class="public-profile-uname">@${esc(view.username)}</div>
-        <div class="own-preview-chip">${esc(view.visibilityLabel)} · This is how others see you</div>
+        ${identity}
         ${bioHtml ? `<p class="public-profile-bio">${bioHtml}</p>` : ''}
+        <div class="own-preview-chip">${esc(view.visibilityLabel)} · ${esc(audienceNote)}</div>
+      </div>
+      <div class="dp-rel-strip">
+        <div data-profile-relationship-counts class="relationship-counts-loading">Loading relationships…</div>
       </div>
       <div class="own-preview-edit-cta">
         <button type="button" class="btn btn--primary btn--block" data-preview="0">Edit profile</button>
       </div>
-      <div class="dp-rel-strip">
-        <div data-profile-relationship-counts class="relationship-counts-loading">Loading relationships…</div>
-        <div data-friend-requests></div>
-      </div>
       <div class="own-preview-sections" data-own-preview-sections></div>
-      <p class="own-preview-footnote">Highlights · Profile · Duniya · Peepal — switch to Edit to add custom tabs and rearrange.</p>
+      <p class="own-preview-footnote">Same projection as a visitor · Digital · Duniya · Peepal — switch to Edit to build your Base.</p>
     `;
   }
 
   function renderStrangerPreviewHtml(dp, userMeta) {
-    return renderOwnPreviewChromeHtml(dp, userMeta);
+    return renderOwnPreviewChromeHtml(dp, userMeta, { isFriend: false });
   }
 
   function wirePreviewToggle(root, onSwitch) {
@@ -155,10 +180,16 @@
         if (typeof onSwitch === 'function') onSwitch(next);
       });
     });
-    root?.querySelector?.('[data-open-archive-from-preview]')?.addEventListener('click', () => {
-      if (typeof openArchiveHub === 'function') openArchiveHub('duniya');
+    scope.querySelectorAll('[data-preview-audience]').forEach((btn) => {
+      if (btn.dataset.audienceWired === '1') return;
+      btn.dataset.audienceWired = '1';
+      btn.addEventListener('click', () => {
+        const next = btn.dataset.previewAudience === 'friend' ? 'friend' : 'stranger';
+        if (next === profilePreviewAudience) return;
+        setProfilePreviewAudience(next);
+        if (typeof onSwitch === 'function') onSwitch(profilePreviewMode);
+      });
     });
-    if (typeof wireTabNotificationButtons === 'function') wireTabNotificationButtons();
     const ownAvatar = root?.querySelector?.('[data-own-preview-avatar]');
     if (ownAvatar && ownAvatar.dataset.lightboxWired !== '1') {
       ownAvatar.dataset.lightboxWired = '1';
@@ -279,6 +310,8 @@
 
   window.isProfilePreviewMode = isProfilePreviewMode;
   window.setProfilePreviewMode = setProfilePreviewMode;
+  window.getProfilePreviewAudience = getProfilePreviewAudience;
+  window.setProfilePreviewAudience = setProfilePreviewAudience;
   window.getPublicVisibleProfile = getPublicVisibleProfile;
   window.renderPreviewToggleHtml = renderPreviewToggleHtml;
   window.renderStrangerPreviewHtml = renderStrangerPreviewHtml;

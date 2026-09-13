@@ -34,10 +34,30 @@
           .replace(/"/g, '&quot;');
   }
 
+  /** Custom block ids already living in digitalLayout — never also expose as tabs. */
+  function digitalCustomBlockIds(profile) {
+    const layout =
+      profile?.digitalLayout ||
+      (typeof digitalProfile !== 'undefined' ? digitalProfile?.digitalLayout : null);
+    const blocks = layout?.blocks;
+    if (!Array.isArray(blocks) || !blocks.length) return new Set();
+    const builtin = new Set((typeof DigitalLayout !== 'undefined' && DigitalLayout.BUILTIN_BLOCKS || []).map((b) => b.id));
+    return new Set(
+      blocks
+        .filter((b) => b?.id && (b.custom || (b.type && b.type !== 'builtin' && !builtin.has(b.id))))
+        .map((b) => b.id)
+    );
+  }
+
   function getCustoms(profile) {
-    if (typeof getCustomProfileSections === 'function') return getCustomProfileSections(profile);
-    const list = profile?.customSections || digitalProfile?.customSections || [];
-    return Array.isArray(list) ? list.filter((s) => s && s.id) : [];
+    let list;
+    if (typeof getCustomProfileSections === 'function') list = getCustomProfileSections(profile);
+    else list = profile?.customSections || (typeof digitalProfile !== 'undefined' ? digitalProfile?.customSections : null) || [];
+    if (!Array.isArray(list)) return [];
+    const inDigital = digitalCustomBlockIds(profile);
+    // digitalLayout is canonical: customs folded into Digital stay off the tab bar.
+    if (inDigital.size) return list.filter((s) => s && s.id && !inDigital.has(s.id));
+    return list.filter((s) => s && s.id);
   }
 
   /** Map legacy sectionOrder → tabOrder once. */
@@ -366,6 +386,30 @@
     });
   }
 
+  const DIGITAL_COLLAPSE_KEY = 'chaupaal_digital_collapse_v1';
+  const DEFAULT_COLLAPSED_VIEW = new Set(['lifestyle', 'stats', 'dangal', 'links', 'pinned']);
+
+  function readCollapseMap() {
+    try {
+      return JSON.parse(localStorage.getItem(DIGITAL_COLLAPSE_KEY) || '{}') || {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function writeCollapseMap(map) {
+    try {
+      localStorage.setItem(DIGITAL_COLLAPSE_KEY, JSON.stringify(map || {}));
+    } catch (e) {}
+  }
+
+  function blockStartsCollapsed(blockId, editable) {
+    if (editable) return false;
+    const map = readCollapseMap();
+    if (Object.prototype.hasOwnProperty.call(map, blockId)) return !!map[blockId];
+    return DEFAULT_COLLAPSED_VIEW.has(blockId);
+  }
+
   function renderDigitalPane(dp, { isOwner, view, editable, isFriend } = {}) {
     const DL = typeof DigitalLayout !== 'undefined' ? DigitalLayout : null;
     const theme = DL?.getProfileTheme?.(dp) || {};
@@ -415,6 +459,7 @@
             const inner = isBuiltin ? builtinInner(b.id) : customBlockBody(b);
             if (!editable && !inner) return '';
             const hiddenMark = b.visible === false ? ' is-owner-hidden' : '';
+            const collapsed = blockStartsCollapsed(b.id, editable);
             const editChrome = editable
               ? `<div class="dp-block-chrome">
                   <button type="button" class="dp-drag-handle" data-dp-drag="${esc(b.id)}" title="Drag to reorder" aria-label="Reorder">⠿</button>
@@ -427,16 +472,18 @@
                       : `<button type="button" class="dp-chip" data-dp-edit="${esc(b.id)}">Edit</button><button type="button" class="dp-chip dp-chip--danger" data-dp-remove="${esc(b.id)}">Remove</button>`
                   }
                 </div>`
-              : `<h3 class="cp-digital-h">${esc(b.label || b.id)}</h3>`;
-            return `<section class="cp-digital-block dp-arcade-block${hiddenMark}" data-digital-block="${esc(b.id)}" data-block-id="${esc(b.id)}" style="--block-accent:${accent}">
+              : `<button type="button" class="cp-digital-h cp-collapse-btn" data-dp-collapse="${esc(b.id)}" aria-expanded="${collapsed ? 'false' : 'true'}">
+                  <span>${esc(b.label || b.id)}</span>
+                  <span class="cp-collapse-chev" aria-hidden="true">${collapsed ? '▸' : '▾'}</span>
+                </button>`;
+            return `<section class="cp-digital-block dp-arcade-block${hiddenMark}${collapsed && !editable ? ' is-collapsed' : ''}" data-digital-block="${esc(b.id)}" data-block-id="${esc(b.id)}" style="--block-accent:${accent}">
               ${editChrome}
-              <div class="dp-block-body">${inner || `<div class="public-profile-posts-empty">Empty — fill or hide</div>`}</div>
+              <div class="dp-block-body"${collapsed && !editable ? ' hidden' : ''}>${inner || `<div class="public-profile-posts-empty">Empty — fill or hide</div>`}</div>
             </section>`;
           })
           .join('')
       : null;
 
-    // Fallback if DigitalLayout missing
     if (!useLayout) {
       return `
       <div class="cp-digital-pane" data-dp-root>
@@ -454,7 +501,8 @@
             ? `<div class="dp-edit-toolbar">
                 <button type="button" class="btn btn--primary dp-add-block-btn" data-dp-add>＋ Add section</button>
                 <button type="button" class="btn" data-dp-theme>Base palette</button>
-                <span class="dp-edit-hint">Drag ⠿ · Hide · Privacy · Arcade juice on save</span>
+                <button type="button" class="btn" data-dp-undo title="Undo last layout change">Undo</button>
+                <span class="dp-edit-hint">Drag ⠿ · Hide · Privacy · Undo</span>
               </div>`
             : ''
         }
@@ -589,8 +637,33 @@
     });
   }
 
+  function wireDigitalCollapse(pane) {
+    if (!pane) return;
+    pane.querySelectorAll('[data-dp-collapse]').forEach((btn) => {
+      if (btn.dataset.collapseWired === '1') return;
+      btn.dataset.collapseWired = '1';
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.dpCollapse;
+        const section = btn.closest('.cp-digital-block');
+        if (!section) return;
+        const body = section.querySelector('.dp-block-body');
+        const nextCollapsed = !section.classList.contains('is-collapsed');
+        section.classList.toggle('is-collapsed', nextCollapsed);
+        if (body) body.hidden = nextCollapsed;
+        btn.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
+        const chev = btn.querySelector('.cp-collapse-chev');
+        if (chev) chev.textContent = nextCollapsed ? '▸' : '▾';
+        const map = readCollapseMap();
+        map[id] = nextCollapsed;
+        writeCollapseMap(map);
+      });
+    });
+  }
+
   function wireDigitalPaneControls(pane, { profile, editable, reload } = {}) {
-    if (!pane || !editable || typeof DigitalLayout === 'undefined') return;
+    if (!pane) return;
+    wireDigitalCollapse(pane);
+    if (!editable || typeof DigitalLayout === 'undefined') return;
     const root = pane.querySelector('[data-dp-root]') || pane;
     DigitalLayout.applyProfileThemeToRoot(root, DigitalLayout.getProfileTheme(profile));
     const hl = pane.closest('[data-profile-shell]')?.querySelector('[data-profile-highlights]');
@@ -605,6 +678,16 @@
       openBasePalettePicker(() => {
         if (typeof reload === 'function') reload();
       });
+    });
+    pane.querySelector('[data-dp-undo]')?.addEventListener('click', async () => {
+      const ok = await DigitalLayout.undoDigitalLayout?.();
+      if (ok) {
+        DigitalLayout.arcadeBurst?.(pane);
+        if (typeof showToast === 'function') showToast('Layout restored');
+        if (typeof reload === 'function') reload();
+      } else if (typeof showToast === 'function') {
+        showToast('Nothing to undo');
+      }
     });
 
     pane.querySelectorAll('[data-dp-hide]').forEach((btn) => {
@@ -709,9 +792,23 @@
       }
       if (!includeArchived || !isOwner) posts = posts.filter((p) => p.archived !== true);
       if (!posts.length) {
+        const label = col === 'duniya' ? 'Duniya' : 'Peepal';
         bodyEl.innerHTML = `<div class="cp-grid-empty">
-          <strong>No ${col === 'duniya' ? 'Duniya' : 'Peepal'} posts yet</strong>
-          <p>${isOwner ? 'When you post, they show up here.' : 'Nothing public here yet.'}</p>
+          <strong>${isOwner ? `Your ${label} grid is waiting` : `No ${label} yet`}</strong>
+          <p>${
+            isOwner
+              ? col === 'duniya'
+                ? 'Share a moment — it lands here as a photo tile.'
+                : 'Plant a Peepal thought — your grid fills in.'
+              : 'Nothing public on this grid yet.'
+          }</p>
+          ${
+            isOwner && typeof openComposer === 'function'
+              ? ''
+              : isOwner
+                ? `<p class="cp-grid-empty-hint">Open ${label} to post.</p>`
+                : ''
+          }
         </div>`;
         return;
       }
@@ -723,7 +820,7 @@
             const media = p.thumb || p.media || p.image || (Array.isArray(p.slides) && p.slides[0] && (p.slides[0].thumb || p.slides[0].media)) || '';
             const cellCaption = esc((p.caption || 'Post').slice(0, 40));
             return `<button type="button" class="cp-post-cell" data-open-post="duniya" data-post-id="${esc(p.id)}">
-              ${media ? `<img src="${esc(media)}" alt="">` : `<span>${cellCaption}</span>`}
+              ${media ? `<img src="${esc(media)}" alt="" loading="lazy" decoding="async" width="120" height="120">` : `<span>${cellCaption}</span>`}
             </button>`;
           })
           .join('')}</div>`;
@@ -1307,6 +1404,20 @@
     const editable = !!opts.editable && isOwner;
     const includeArchived = !!opts.includeArchived && isOwner;
     let profile = opts.profile || (typeof digitalProfile !== 'undefined' ? digitalProfile : {});
+    // Ensure digitalLayout migration runs for owners (customs → blocks, persist once).
+    if (isOwner && typeof DigitalLayout?.ensureCanonicalDigitalLayout === 'function') {
+      try {
+        const layout = DigitalLayout.ensureCanonicalDigitalLayout(profile);
+        if (layout?.blocks?.length) {
+          profile = { ...profile, digitalLayout: layout };
+        }
+      } catch (e) {}
+    } else if (isOwner && typeof DigitalLayout?.getDigitalLayout === 'function') {
+      try {
+        const layout = DigitalLayout.getDigitalLayout(profile);
+        if (layout?.blocks?.length) profile = { ...profile, digitalLayout: layout };
+      } catch (e) {}
+    }
     const view = opts.view || null;
     let isFriend = !!opts.isFriend;
     if (!isOwner && !isFriend && profileUid && typeof hydrateRelationships === 'function') {

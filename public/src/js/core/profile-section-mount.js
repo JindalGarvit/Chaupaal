@@ -5,6 +5,48 @@
 (function () {
   'use strict';
 
+  /**
+   * Honest display stats from denormalized fields only — never invent totals.
+   * Omits unknown cells; never renders "—".
+   * @returns {{ label: string, value: number|string }[]}
+   */
+  function resolveHonestProfileStats(profile, opts) {
+    const o = opts || {};
+    const p = profile || {};
+    const meta = o.userMeta || {};
+    const rc = meta.relationshipCounts || p.relationshipCounts || {};
+    const n = (v) => {
+      const x = Number(v);
+      return Number.isFinite(x) && x >= 0 ? x : null;
+    };
+    const friends =
+      n(rc.friends) ??
+      n(meta.friendsCount) ??
+      n(p.friendsCount);
+    const posts =
+      n(meta.postsCount) ??
+      n(p.postsCount) ??
+      ((n(meta.duniyaCount) != null || n(p.duniyaCount) != null || n(meta.peepalCount) != null || n(p.peepalCount) != null)
+        ? (n(meta.duniyaCount) || n(p.duniyaCount) || 0) + (n(meta.peepalCount) || n(p.peepalCount) || 0)
+        : null);
+    let streak = null;
+    if (o.isOwner && typeof getStreak === 'function') {
+      const s = n(getStreak());
+      if (s != null && s > 0) streak = s;
+    }
+    if (streak == null) {
+      const s = n(meta.streak) ?? n(p.streak);
+      if (s != null && s > 0) streak = s;
+    }
+    const games = n(meta.gamesPlayed) ?? n(p.gamesPlayed) ?? n(meta.dangalGamesPlayed) ?? n(p.dangalGamesPlayed);
+    const cells = [];
+    if (streak != null) cells.push({ label: 'streak', value: streak });
+    if (friends != null) cells.push({ label: 'friends', value: friends });
+    if (posts != null) cells.push({ label: 'posts', value: posts });
+    if (games != null && games > 0) cells.push({ label: 'games', value: games });
+    return cells;
+  }
+
   function wireProfilePostOpens(bodyEl) {
     if (!bodyEl) return;
     bodyEl.querySelectorAll('[data-open-post]').forEach((btn) => {
@@ -56,17 +98,21 @@
     }
 
     if (sectionId === 'stats') {
-      const streak =
-        (typeof getStreak === 'function' && getStreak()) ||
-        (typeof userProfile !== 'undefined' && userProfile?.streak) ||
-        0;
-      const friends = Number((typeof userProfile !== 'undefined' && userProfile?.friendsCount) || 0);
-      const posts = Number((typeof userProfile !== 'undefined' && userProfile?.postsCount) || 0);
-      bodyEl.innerHTML = `<div class="profile-stats-row">
-        <div><span>${streak || '—'}</span>streak</div>
-        <div><span>${friends || '—'}</span>friends</div>
-        <div><span>${posts || '—'}</span>posts</div>
-      </div>`;
+      const cells =
+        typeof resolveHonestProfileStats === 'function'
+          ? resolveHonestProfileStats(opts.profile || dp, {
+              uid: profileUid,
+              isOwner,
+              userMeta: typeof userProfile !== 'undefined' && profileUid === currentUser?.uid ? userProfile : opts.userMeta,
+            })
+          : null;
+      if (cells && cells.length) {
+        bodyEl.innerHTML = `<div class="profile-stats-row">${cells
+          .map((c) => `<div><span>${c.value}</span>${c.label}</div>`)
+          .join('')}</div>`;
+      } else {
+        bodyEl.innerHTML = `<div class="public-profile-posts-empty">${isOwner ? 'Stats appear when you have real activity.' : 'No public stats yet'}</div>`;
+      }
       return;
     }
 
@@ -318,4 +364,5 @@
 
   window.mountOwnProfileSections = mountOwnProfileSections;
   window.fillProfileSectionBody = fillBuiltinBody;
+  window.resolveHonestProfileStats = resolveHonestProfileStats;
 })();

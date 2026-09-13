@@ -160,7 +160,7 @@ Enforcement is **ON** for Firestore / RTDB (and Storage if enabled). Client uses
   - **Private / Friends only:** strip age, city, bio, gender, layout, and other PII from `users_public` (strangers must not read gated fields).
   - **Friends only:** richer fields + Digital friends blocks live in `users_public/{uid}/friend_projection/*` (rules: owner or `isFriend`).
   - **Public:** respect `showAge` / `showLocation` / `showRelationship` / `showIncome` / `showReligion` when projecting.
-- Canonical Digital layout: `profile.digitalLayout` (+ `tabOrder`). Legacy `sectionOrder` / `customSections` are migration-only — do not double-render.
+- Canonical Digital layout: `profile.digitalLayout` (+ `tabOrder`). Legacy `sectionOrder` / `customSections` migrate one-way into Digital blocks / tabOrder (P2). Customs already in `digitalLayout.blocks` must not also appear as custom tabs.
 - Cross-user UI must use `users_public` / friend_projection (or denormalized blobs), never the private user doc.
 
 ## 12. Globals & module surface

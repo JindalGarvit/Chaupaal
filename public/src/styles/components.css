@@ -5944,8 +5944,23 @@ html.quiet-mode [data-decorative-motion]{animation:none!important;transition:non
 .cp-profile-pane{padding:8px 0 20px;}
 .cp-digital-pane{display:flex;flex-direction:column;gap:14px;}
 .cp-digital-h{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;margin:0 0 8px;}
-.cp-collapse-btn{background:none;border:none;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:space-between;width:100%;color:inherit;font:inherit;}
+.cp-collapse-btn{background:none;border:none;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:space-between;width:100%;color:inherit;font:inherit;min-height:44px;text-align:left;}
+.cp-collapse-btn:focus-visible{outline:2px solid var(--red, #E63946);outline-offset:2px;border-radius:8px;}
+.cp-collapse-chev{opacity:.55;font-size:.85em;margin-left:8px;}
+.cp-digital-block.is-collapsed .dp-block-body[hidden]{display:none!important;}
 .cp-digital-block.is-collapsed .cp-about-dl,.cp-digital-block.is-collapsed .cp-digital-chips{display:none;}
+.profile-audience-toggle{display:flex;gap:6px;margin:8px 0 12px;padding:4px;border-radius:12px;background:var(--surface-2, rgba(0,0,0,.04));}
+.profile-audience-toggle button{flex:1;min-height:40px;border:none;background:transparent;border-radius:10px;font:inherit;font-size:13px;color:var(--muted);cursor:pointer;}
+.profile-audience-toggle button.is-active{background:var(--surface, #fff);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08);font-weight:600;}
+.public-profile-identity,.chaupaal-id-card-preview-identity{font-size:13px;color:var(--muted);margin-top:2px;}
+.cp-grid-empty{padding:28px 16px;text-align:center;color:var(--muted);}
+.cp-grid-empty strong{display:block;color:var(--ink);margin-bottom:6px;font-size:15px;}
+.cp-grid-empty-hint{font-size:12px;margin-top:8px;opacity:.8;}
+.chaupaal-hub-recap-empty,.cai-stats-empty{font-size:12px;color:var(--muted);padding:8px 0;}
+.dp-rel-strip{margin:10px 0 14px;}
+@media (prefers-reduced-motion: reduce){
+  .cp-digital-block,.dp-arcade-block{transition:none!important;}
+}
 .cp-digital-chips{display:flex;flex-wrap:wrap;gap:6px;}
 .cp-digital-chip{font-size:12px;font-weight:600;padding:6px 10px;border-radius:999px;border:1.5px solid var(--line);background:var(--white);}
 .cp-prompt-stack{display:flex;flex-direction:column;gap:10px;}

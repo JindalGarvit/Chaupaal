@@ -213,35 +213,26 @@
       : Array.isArray(u.profileMedia)
         ? u.profileMedia
         : [];
-    const interests = view.locked
-      ? []
-      : [...new Set([...(dp.interests || []), ...(Array.isArray(dp.hobbies) ? dp.hobbies : String(dp.hobbies || '').split(',').map((x) => x.trim())), u.topCat].filter(Boolean))];
-    const ice = view.locked
-      ? []
-      : (Array.isArray(dp.icebreakers) ? dp.icebreakers : []).filter((a) => a?.answer).slice(0, 2);
     const nameHtml =
       typeof formatDisplayNameHtml === 'function'
         ? formatDisplayNameHtml(view.displayName || (uname ? `@${uname}` : 'Someone'), view.profileType)
         : esc(view.displayName || (uname ? `@${uname}` : 'Someone'));
+    const bioRaw = String(view.bio || '').trim();
+    const bioSnippet = bioRaw.length > 140 ? bioRaw.slice(0, 137) + '…' : bioRaw;
     const bioHtml =
-      view.bio && !view.locked
+      bioSnippet && !view.locked
         ? typeof linkifyText === 'function'
-          ? linkifyText(view.bio)
-          : esc(view.bio)
+          ? linkifyText(bioSnippet)
+          : esc(bioSnippet)
         : '';
-    const aboutHtml =
-      !view.locked && view.fields?.length
-        ? `<dl class="public-profile-about">${view.fields
-            .filter((f) => f.label !== 'Icebreaker' && f.label !== 'Conversation starter')
-            .slice(0, 8)
-            .map(
-              (f) =>
-                `<div class="public-profile-about-row"><dt>${esc(f.label)}</dt><dd>${esc(f.value)}</dd></div>`
-            )
-            .join('')}</dl>`
-        : view.locked
-          ? `<p class="public-profile-locked-note">${esc(view.visibilityLabel || 'Private profile')} — limited details</p>`
-          : '';
+    const identityLine =
+      view.identityLine ||
+      (!view.locked
+        ? [dp.currentCity || dp.city || u.city, dp.occupation || dp.headline].filter(Boolean).join(' · ')
+        : '');
+    const lockedNote = view.locked
+      ? `<p class="public-profile-locked-note">${esc(view.visibilityLabel || 'Private profile')} — limited details. Connect to unlock more.</p>`
+      : '';
     sheet.innerHTML = `
       <div class="archive-header">
         ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-public-profile-close' }) : '<button type="button" data-public-profile-close aria-label="Back" class="cp-back-btn">←</button>'}
@@ -255,31 +246,9 @@
           </div>
           <div class="public-profile-name">${nameHtml}</div>
           ${uname ? `<div class="public-profile-uname">@${esc(uname)}</div>` : ''}
+          ${identityLine ? `<div class="public-profile-identity">${esc(identityLine)}</div>` : ''}
           ${bioHtml ? `<p class="public-profile-bio">${bioHtml}</p>` : ''}
-          ${aboutHtml}
-          ${
-            ice.length
-              ? `<div class="public-profile-prompts">${ice
-                  .map((a) => {
-                    const q =
-                      a.customQuestion ||
-                      (typeof getIcebreakerPromptById === 'function'
-                        ? getIcebreakerPromptById(a.promptId)?.text
-                        : null) ||
-                      'Icebreaker';
-                    return `<div class="public-profile-prompt"><span>${esc(q)}</span><p>${esc(a.answer)}</p></div>`;
-                  })
-                  .join('')}</div>`
-              : ''
-          }
-          ${
-            interests.length
-              ? `<div class="public-profile-interests">${interests
-                  .slice(0, 6)
-                  .map((i) => `<span>${esc(i)}</span>`)
-                  .join('')}</div>`
-              : ''
-          }
+          ${lockedNote}
           <div data-public-profile-counts data-rel-counts-uid="${esc(profileUid)}" class="relationship-counts-loading public-profile-chrome-slot">
             <span class="public-profile-chrome-label">Connections</span>
           </div>

@@ -6,6 +6,28 @@
   'use strict';
 
   const LAYOUT_VERSION = 1;
+  /** One-shot undo snapshot for builder ops (hide / remove / reorder / add). */
+  let layoutUndoStack = null;
+
+  function cloneLayout(layout) {
+    try {
+      return JSON.parse(JSON.stringify(layout || { version: LAYOUT_VERSION, blocks: [] }));
+    } catch (e) {
+      return { version: LAYOUT_VERSION, blocks: [] };
+    }
+  }
+
+  function pushLayoutUndo(layout) {
+    layoutUndoStack = cloneLayout(layout || getDigitalLayout());
+  }
+
+  async function undoDigitalLayout() {
+    if (!layoutUndoStack) return false;
+    const restore = layoutUndoStack;
+    layoutUndoStack = null;
+    await persistDigitalLayout(restore);
+    return true;
+  }
 
   const BUILTIN_BLOCKS = [
     { id: 'bio', type: 'builtin', label: 'About', accent: '#E63946' },
@@ -117,6 +139,25 @@
       });
     });
     return { version: LAYOUT_VERSION, blocks };
+  }
+
+  /** Owner-only: persist migrated digitalLayout so customs leave the tab double-path. */
+  function ensureCanonicalDigitalLayout(profile) {
+    const p = profile || (typeof digitalProfile !== 'undefined' ? digitalProfile : {}) || {};
+    if (p.digitalLayout?.blocks?.length) return getDigitalLayout(p);
+    const layout = migrateDigitalLayout(p);
+    if (!layout.blocks?.length) return layout;
+    if (typeof digitalProfile !== 'undefined' && digitalProfile) {
+      digitalProfile.digitalLayout = layout;
+      try {
+        localStorage.setItem('chaupaal_digital_profile', JSON.stringify(digitalProfile));
+      } catch (e) {}
+    }
+    if (db && typeof currentUser !== 'undefined' && currentUser && !p._digitalLayoutMigrated) {
+      if (typeof digitalProfile !== 'undefined' && digitalProfile) digitalProfile._digitalLayoutMigrated = true;
+      persistDigitalLayout(layout).catch(() => {});
+    }
+    return layout;
   }
 
   function getDigitalLayout(profile) {
@@ -516,6 +557,7 @@
 
   async function createCustomDigitalBlock(spec) {
     const layout = getDigitalLayout();
+    pushLayoutUndo(layout);
     const id =
       typeof crypto?.randomUUID === 'function'
         ? `db_${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}`
@@ -542,6 +584,7 @@
 
   async function updateDigitalBlock(id, patch) {
     const layout = getDigitalLayout();
+    pushLayoutUndo(layout);
     const idx = layout.blocks.findIndex((b) => b.id === id);
     if (idx < 0) return null;
     layout.blocks[idx] = { ...layout.blocks[idx], ...patch, id };
@@ -551,6 +594,7 @@
 
   async function reorderDigitalBlocks(orderedIds) {
     const layout = getDigitalLayout();
+    pushLayoutUndo(layout);
     const map = new Map(layout.blocks.map((b) => [b.id, b]));
     const next = [];
     orderedIds.forEach((id, i) => {
@@ -565,10 +609,14 @@
 
   async function removeDigitalBlock(id) {
     const layout = getDigitalLayout();
+    pushLayoutUndo(layout);
     const block = layout.blocks.find((b) => b.id === id);
     if (!block) return;
     if (block.type === 'builtin' || BUILTIN_BLOCKS.some((b) => b.id === id)) {
-      await updateDigitalBlock(id, { visible: false });
+      const idx = layout.blocks.findIndex((b) => b.id === id);
+      if (idx < 0) return;
+      layout.blocks[idx] = { ...layout.blocks[idx], visible: false };
+      await persistDigitalLayout(layout);
       return;
     }
     layout.blocks = layout.blocks.filter((b) => b.id !== id);
@@ -582,6 +630,7 @@
     FRAMES,
     RINGS,
     getDigitalLayout,
+    ensureCanonicalDigitalLayout,
     getProfileTheme,
     persistDigitalLayout,
     persistProfileTheme,
@@ -600,6 +649,7 @@
     updateDigitalBlock,
     reorderDigitalBlocks,
     removeDigitalBlock,
+    undoDigitalLayout,
     arcadeBurst,
     unlockCosmeticIds,
     quietMotion,

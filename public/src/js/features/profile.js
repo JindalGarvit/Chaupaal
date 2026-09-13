@@ -29,8 +29,10 @@ function renderProfileModal(){
 
   // Preview as others see it — visitor chrome, no edit affordances
   if(typeof isProfilePreviewMode==='function' && isProfilePreviewMode()){
+    const previewAsFriend =
+      typeof getProfilePreviewAudience === 'function' && getProfilePreviewAudience() === 'friend';
     el.innerHTML = typeof renderOwnPreviewChromeHtml==='function'
-      ? renderOwnPreviewChromeHtml(dp, p)
+      ? renderOwnPreviewChromeHtml(dp, p, { isFriend: previewAsFriend })
       : (typeof renderStrangerPreviewHtml==='function'
         ? renderStrangerPreviewHtml(dp, p)
         : '<p style="color:var(--muted);">Preview unavailable</p>');
@@ -39,12 +41,12 @@ function renderProfileModal(){
         wirePreviewToggle(el, ()=>renderProfileModal());
       }
       if(typeof mountProfileShell==='function'){
-        // Preview = stranger view (not owner, not friend) so Friends only / Private / block privacy hold.
+        // Same projection as openPublicProfile: stranger or friend audience.
         const previewView =
           typeof getPublicVisibleProfile === 'function'
-            ? getPublicVisibleProfile(dp, p, { isFriend: false })
+            ? getPublicVisibleProfile(dp, p, { isFriend: previewAsFriend })
             : null;
-        const previewProfile = previewView?.locked
+        let previewProfile = previewView?.locked
           ? {
               ...dp,
               bio: '',
@@ -56,12 +58,23 @@ function renderProfileModal(){
               prompts: [],
               profileMedia: [],
             }
-          : dp;
+          : { ...dp };
+        if (previewAsFriend && !previewView?.locked && typeof DigitalLayout?.friendsDigitalLayoutProjection === 'function') {
+          try {
+            const friendLayout = DigitalLayout.friendsDigitalLayoutProjection(dp);
+            if (friendLayout?.blocks?.length) previewProfile = { ...previewProfile, digitalLayout: friendLayout };
+          } catch (e) {}
+        } else if (!previewAsFriend && !previewView?.locked && typeof DigitalLayout?.publicDigitalLayoutProjection === 'function') {
+          try {
+            const pubLayout = DigitalLayout.publicDigitalLayoutProjection(dp);
+            if (pubLayout?.blocks?.length) previewProfile = { ...previewProfile, digitalLayout: pubLayout };
+          } catch (e) {}
+        }
         mountProfileShell(el.querySelector('[data-own-preview-sections]'), {
           uid: currentUser?.uid,
           editable: false,
           isOwner: false,
-          isFriend: false,
+          isFriend: previewAsFriend,
           includeArchived: false,
           profile: previewProfile,
           view: previewView,
@@ -73,8 +86,6 @@ function renderProfileModal(){
           includeArchived:false,
         });
       }
-      if(typeof wireTabNotificationButtons==='function') wireTabNotificationButtons();
-      if(typeof updateSectionNotifDots==='function') updateSectionNotifDots();
       if(typeof mountOwnRelationshipPanel==='function') mountOwnRelationshipPanel(el);
     },0);
     return;
@@ -120,7 +131,7 @@ function renderProfileModal(){
         <div class="dp-hero-name" data-account-switch data-pro-badge-self data-pro-badge-name="${(displayName||'').replace(/"/g,'&quot;')}" style="cursor:pointer;" title="Switch account">${nameHtml}</div>
         <div class="dp-hero-handle" data-account-switch style="cursor:pointer;" title="Switch account">@${p.username||'username'}</div>
         <div class="dp-hero-meta">${[dp.currentCity,dp.occupation].filter(Boolean).join(' · ')||'Add your city & job'}</div>
-        <div class="dp-hero-complete">
+        ${pct < 95 ? `<div class="dp-hero-complete">
           <div class="dp-hero-complete-row">
             <span>Profile</span>
             <span data-ui="profile-completion-pct">${pct}%</span>
@@ -141,14 +152,18 @@ function renderProfileModal(){
             }).join('')}
           </div>
           <div data-ui="profile-completion-hint" class="dp-hero-complete-hint">${stats.missing?.length?`Next: ${stats.missing.slice(0,2).join(', ')}`:'Looking good — this Profile feels like you.'}</div>
-        </div>
+        </div>` : ''}
       </div>
+    </div>
+    <div class="dp-rel-strip">
+      <div data-profile-relationship-counts class="relationship-counts-loading">Loading relationships…</div>
+      <div data-friend-requests></div>
     </div>
     <button type="button" class="chaupaal-id-card" data-open-chaupaal-card aria-label="Chaupaal card">
       <span class="chaupaal-id-card-mark" aria-hidden="true">🪑</span>
       <span class="chaupaal-id-card-copy">
         <strong data-i18n="chaupaal_card_title">Chaupaal card</strong>
-        <small data-i18n="chaupaal_card_sub">Shareable identity · Money · Membership</small>
+        <small data-i18n="chaupaal_card_sub">Shareable identity · Hub · Membership</small>
       </span>
       <span class="chaupaal-id-card-chev" aria-hidden="true">›</span>
     </button>
@@ -163,10 +178,6 @@ function renderProfileModal(){
       <button type="button" class="btn" data-dp-hub="stories">Highlights</button>
       <button type="button" class="btn" data-dp-more-hub>More</button>
       <button type="button" class="btn btn--primary" id="profileAddSectionBtn" title="Add section">＋</button>
-    </div>
-    <div class="dp-rel-strip">
-      <div data-profile-relationship-counts class="relationship-counts-loading">Loading relationships…</div>
-      <div data-friend-requests></div>
     </div>
     <div class="own-edit-sections" data-own-edit-sections></div>
     <p class="dp-reorder-hint">Highlights sit above tabs · Profile / Duniya / Peepal are fixed · ＋ adds custom tabs · edit section items drag to rearrange</p>

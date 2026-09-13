@@ -111,6 +111,7 @@
     const dp = typeof digitalProfile !== 'undefined' ? digitalProfile || {} : {};
     const name = dp.displayName || p.name || 'You';
     const uname = p.username || 'username';
+    const identity = [dp.currentCity || p.city, dp.occupation || dp.headline].filter(Boolean).join(' · ');
     const sheet = document.createElement('div');
     sheet.id = 'chaupaalIdCardSheet';
     sheet.className = 'archive-overlay chaupaal-id-card-sheet';
@@ -125,6 +126,7 @@
           <div class="chaupaal-id-card-preview-avatar">${typeof renderUserAvatarHtml==='function'?renderUserAvatarHtml({...p,profile:typeof digitalProfile!=='undefined'?digitalProfile:{}},{decorative:true}):(p.photoURL?`<img src="${esc(p.photoURL)}" alt="">`:'🪑')}</div>
           <div class="chaupaal-id-card-preview-name">${esc(name)}</div>
           <div class="chaupaal-id-card-preview-handle">@${esc(uname)}</div>
+          ${identity ? `<div class="chaupaal-id-card-preview-identity">${esc(identity)}</div>` : ''}
           <div class="chaupaal-id-card-preview-brand">Chaupaal</div>
         </div>
       </div>
@@ -234,10 +236,11 @@
         <section class="cai-card">
           <h3>${tt('cai_stats_title', 'What Chaupaal notices')}</h3>
           <div class="profile-stats-row">
-            <div><span>${insights.streak || '—'}</span>${tt('cai_stat_streak', 'streak')}</div>
-            <div><span>${insights.friends || '—'}</span>${tt('cai_stat_friends', 'friends')}</div>
-            <div><span>${insights.chatTurns || '—'}</span>${tt('cai_stat_chats', 'chats')}</div>
-            <div><span>${insights.posts || '—'}</span>${tt('cai_stat_posts', 'posts')}</div>
+            <div><span>${insights.streak || 0}</span>${tt('cai_stat_streak', 'streak')}</div>
+            ${insights.friends > 0 ? `<div><span>${insights.friends}</span>${tt('cai_stat_friends', 'friends')}</div>` : ''}
+            ${insights.chatTurns > 0 ? `<div><span>${insights.chatTurns}</span>${tt('cai_stat_chats', 'chats')}</div>` : ''}
+            ${insights.posts > 0 ? `<div><span>${insights.posts}</span>${tt('cai_stat_posts', 'posts')}</div>` : ''}
+            ${!insights.streak && !insights.friends && !insights.chatTurns && !insights.posts ? `<p class="cai-stats-empty">${tt('cai_stats_empty', 'Stats appear as you use the app.')}</p>` : ''}
           </div>
           <p class="cai-privacy-note">${tt('cai_privacy_note', 'Respects your tips & share prefs — never invents numbers.')}</p>
         </section>

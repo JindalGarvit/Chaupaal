@@ -21,11 +21,6 @@
     const p = typeof userProfile !== 'undefined' ? userProfile || {} : {};
     const dp = typeof digitalProfile !== 'undefined' ? digitalProfile || {} : {};
     const name = dp.displayName || p.name || 'You';
-    const streak =
-      (typeof getStreak === 'function' && getStreak()) ||
-      p.streak ||
-      Number(document.getElementById('streakNum')?.textContent) ||
-      0;
     const teen = typeof isTeenModeUser === 'function' && isTeenModeUser();
 
     let balanceStr = '…';
@@ -61,9 +56,16 @@
           </div>
         </div>
         <div class="chaupaal-hub-recap">
-          <div><span>${streak}</span>day streak</div>
-          <div><span>${Number(p.friendsCount) || '—'}</span>friends</div>
-          <div><span>${Number(p.postsCount) || '—'}</span>posts</div>
+          ${(() => {
+            const cells =
+              typeof resolveHonestProfileStats === 'function'
+                ? resolveHonestProfileStats(dp, { isOwner: true, userMeta: p })
+                : [];
+            if (!cells.length) {
+              return `<div class="chaupaal-hub-recap-empty">Activity fills in as you use Chaupaal.</div>`;
+            }
+            return cells.map((c) => `<div><span>${c.value}</span>${c.label === 'streak' ? 'day streak' : c.label}</div>`).join('');
+          })()}
         </div>
         <button type="button" class="chaupaal-hub-glance" data-hub-money aria-label="Chaupaal Money account">
           <span class="chaupaal-hub-glance-icon" aria-hidden="true">💰</span>

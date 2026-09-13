@@ -5,14 +5,14 @@
  *
  * Providers:
  *  - generic (ACTIVE): warm copy + static trivia banks (zero query cost). Never invents live counts.
- *  - realStats (OFF until P2): would use denormalized counters — keep PROFILE_FACTS_USE_REAL_STATS
- *    false so we do not show stub “X people share this” numbers.
+ *  - Display stats (P2): profile UI uses resolveHonestProfileStats from denormalized fields —
+ *    celebrations stay generic so we never invent “X people share this.”
  *
  * Trivia is hardcoded per value/category and randomly rotated. Obscure values
  * fall back to warm-only copy — never invent dull filler "facts."
  */
 (function () {
-  /** P0 honesty: leave false until real denormalized counts ship (P2). */
+  /** Celebrations stay generic; display stats are honest via resolveHonestProfileStats (P2). */
   const PROFILE_FACTS_USE_REAL_STATS = false;
 
   const MATCHING_FIELDS = new Set([
