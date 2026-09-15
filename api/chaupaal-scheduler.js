@@ -18,6 +18,7 @@ const { processDiscoveryBatchLabels } = require('../server-lib/discovery-pipelin
 const { expireLiveLocationShares } = require('../server-lib/live-location');
 const { advanceStalledPeepalSegments } = require('../server-lib/peepal-segments');
 const { processCompanionOutreach } = require('../server-lib/companion-outreach');
+const { processRetentionBatch } = require('../server-lib/retention-d1d7');
 
 const BATCH = 40;
 
@@ -557,6 +558,25 @@ module.exports = async function handler(req, res) {
       console.warn('[scheduler] ai enrichment', e?.message || e);
     }
 
+    // Growth G5 — honest D1–D7 retention (not AI-gated; per-user errors isolated)
+    let retention = { skipped: true };
+    try {
+      if (withinBudget()) {
+        const dryRun =
+          String(req.query?.retentionDryRun || '') === '1' ||
+          String(req.query?.dryRun || '') === 'retention';
+        retention = await processRetentionBatch(db, admin, {
+          batchSize: 28,
+          dryRun,
+        });
+      } else {
+        retention = { skipped: true, reason: 'duration_budget' };
+      }
+    } catch (e) {
+      retention = { error: e?.message || String(e) };
+      console.warn('[scheduler] retention', e?.message || e);
+    }
+
     return sendSuccess(res, {
       ...results,
       summary,
@@ -572,6 +592,7 @@ module.exports = async function handler(req, res) {
       dangalQueue,
       matchMetrics,
       aiEnrichment,
+      retention,
       timing: {
         elapsedMs: Date.now() - startedAt,
         softBudgetMs: SOFT_BUDGET_MS,

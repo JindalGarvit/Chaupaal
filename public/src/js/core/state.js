@@ -267,6 +267,14 @@ function openSettingsModal(){
             if(snap.exists && snap.data()?.activitySignalsOptOut===true) sig.checked=false;
             else if(snap.exists && snap.data()?.activitySignalsOptOut===false) sig.checked=true;
           }
+          // Quiet mode — server mirror for retention (G5)
+          if(snap.exists && typeof snap.data()?.quietMode==='boolean'){
+            quietMode=!!snap.data().quietMode;
+            try{localStorage.setItem('chaupaal_quiet', quietMode?'1':'0');}catch(e){}
+            const quietEl=document.getElementById('toggleQuiet');
+            if(quietEl) quietEl.checked=quietMode;
+            try{ document.documentElement.classList.toggle('quiet-mode', !!quietMode); }catch(e){}
+          }
         }).catch(()=>{});
       }
     }
@@ -415,6 +423,12 @@ document.getElementById('strangerLimitSlider')?.addEventListener('input',e=>{
 document.getElementById('toggleQuiet').addEventListener('change',e=>{
   quietMode=e.target.checked;
   try{localStorage.setItem('chaupaal_quiet', quietMode?'1':'0');}catch(err){}
+  // Persist for server retention (G5) — scheduler skips Quiet users
+  try{
+    if(typeof db!=='undefined'&&db&&typeof currentUser!=='undefined'&&currentUser?.uid){
+      db.collection('users').doc(currentUser.uid).set({ quietMode: !!quietMode }, { merge:true }).catch(()=>{});
+    }
+  }catch(err){}
   // Quiet kills ambient + voice + UI cues (SoundLib/Micro already check quietMode)
   try{ if(window.speechSynthesis) window.speechSynthesis.cancel(); }catch(err){}
   try{ document.documentElement.classList.toggle('quiet-mode', !!quietMode); }catch(err){}

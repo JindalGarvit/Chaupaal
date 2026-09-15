@@ -104,8 +104,15 @@ function hrefFromDeepLink(deepLink, { type, refId } = {}) {
   if (link.uid) {
     return `/?uid=${encodeURIComponent(String(link.uid).slice(0, 128))}`;
   }
-  if (link.section === 'akhbaar' || String(type || '').includes('journal') || String(type || '').includes('recommendation')) {
-    return '/';
+  const section = String(link.section || '').toLowerCase();
+  if (['akhbaar', 'duniya', 'peepal', 'baithak', 'dangal'].includes(section)) {
+    return `/?section=${encodeURIComponent(section)}`;
+  }
+  if (section === 'invite') {
+    return '/invite';
+  }
+  if (String(type || '').includes('journal') || String(type || '').includes('recommendation')) {
+    return '/?section=akhbaar';
   }
   console.warn('[notif] unresolved deepLink → home', type || '', refId || '', Object.keys(link));
   return '/';

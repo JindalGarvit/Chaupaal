@@ -27,6 +27,8 @@ Implementation lives primarily in:
 
 **Auth (Growth G4):** Profile-canvas signup on `authRegStep1`. Professional shows `#regProFields` (industry/purpose picklists + Other); Personal hides them. Type fixed after signup (`saveProfileType` + account switcher for the other type). Login folds onto the same canvas; Quiet / reduced-motion skips slide animations.
 
+**Retention (Growth G5):** Day-0 anchor = `users/{uid}.createdAt` (calendar days, IST/`chaupaalUserState.timezone`). Honest D1–D7 only — event-backed (unread/friend request) or clearly generic; never fake social proof. Caps: ≤1 retention push/day, ≤4 in first 7 days. Skip guests, `quietMode`, `notifPrefs.tips===false`, and “come back” if active in last 6h. Idempotent `users/{uid}/retentionSends/{dayKey}_{templateId}`. Cron: `api/chaupaal-scheduler.js` → `server-lib/retention-d1d7.js` (not AI-gated). FCM `link` = `/?section={tab}` or `/invite/{username}`. Private aggregates: `chaupaalMeta/retentionAggregates`; admin peek `GET /api/admin-feedback?view=retention`. Tab nudges stay event-backed + tips/Quiet/guest gates.
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.

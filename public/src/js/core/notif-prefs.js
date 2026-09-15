@@ -13,6 +13,7 @@
     comments: true,
     duels: true,
     chatPresence: true,
+    tips: true, // Growth G5 — retention + honest tab nudges
   };
 
   const TYPE_TO_CATEGORY = {
@@ -26,6 +27,9 @@
     chat: 'messages',
     streak: 'akhbaar',
     akhbaar: 'akhbaar',
+    retention: 'tips',
+    nudge: 'tips',
+    tips: 'tips',
     system: null, // always allowed
   };
 
@@ -88,6 +92,7 @@
       notifComments: 'comments',
       notifDuels: 'duels',
       notifChatPresence: 'chatPresence',
+      notifTips: 'tips',
     };
     Object.entries(map).forEach(([id, key]) => {
       const el = document.getElementById(id);
@@ -112,6 +117,9 @@
       chatPresence: document.getElementById('notifChatPresence')
         ? !!document.getElementById('notifChatPresence').checked
         : notifPrefs.chatPresence !== false,
+      tips: document.getElementById('notifTips')
+        ? !!document.getElementById('notifTips').checked
+        : notifPrefs.tips !== false,
     };
   }
 

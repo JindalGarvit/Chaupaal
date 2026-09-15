@@ -929,6 +929,14 @@
     setTimeout(() => {
       const route = parseDeepLink();
       if (route) handleDeepLink(route);
+      // Growth G5 / G0 — FCM + retention links use /?section=tab
+      try {
+        const section = new URLSearchParams(location.search).get('section');
+        const tabs = ['akhbaar', 'duniya', 'peepal', 'baithak', 'dangal'];
+        if (section && tabs.includes(section) && typeof showTab === 'function') {
+          showTab(section);
+        }
+      } catch (e) {}
       // Also keep legacy viral challenge query handler
       if (typeof checkViralLink === 'function') checkViralLink();
     }, 900);

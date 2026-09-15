@@ -2,7 +2,7 @@
  * Admin-only feedback log + daily summaries + Peepal intent weight profiles.
  * Requires Firebase ID token with custom claim admin === true.
  *
- * GET  ?view=log|summary|errors|intent_weights|product
+ * GET  ?view=log|summary|errors|intent_weights|product|retention
  * POST { action: 'revert_intent_weights', profileId }  (intent weights only)
  *
  * Product feedback SOT: companionProductFeedback (sheet + companion asks).
@@ -133,6 +133,16 @@ module.exports = async function handler(req, res) {
         };
       });
       return sendSuccess(res, { items, collection: 'companionProductFeedback' });
+    }
+
+    // Growth G5 — private retention aggregate peek (admin claim only)
+    if (view === 'retention') {
+      const snap = await db.collection('chaupaalMeta').doc('retentionAggregates').get();
+      const data = snap.exists ? snap.data() || {} : {};
+      return sendSuccess(res, {
+        aggregates: data,
+        note: 'Private counters only — retention_sent + per-template tpl_* increments. No user PII.',
+      });
     }
 
     if (view === 'errors') {

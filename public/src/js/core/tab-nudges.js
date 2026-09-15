@@ -2,13 +2,13 @@
  * Tab nudge engine — soft local notifications only when backed by real state.
  * Never invents social activity ("someone nearby", "attracting looks").
  *
- * Eligibility (per tab, once/day, quiet hours + guest skip):
+ * Eligibility (per tab, once/day, Quiet + tips-off + guest skip):
  *   akhbaar — reading streak ≥ 2 at risk (no play today) OR real unread on tab
  *   duniya  — real unread (likes/comments/etc.) only
  *   peepal  — real unread OR pending friend requests count > 0
  *   baithak — real unread (DMs / requests)
  *   dangal  — real unread OR GOTD / daily challenge not yet played today
- * Otherwise: silence (no aspirational copy).
+ * Otherwise: silence (no aspirational / fictional copy).
  */
 (function () {
   'use strict';
@@ -39,8 +39,16 @@
     try {
       if (typeof window.quietModeEnabled === 'function') return !!window.quietModeEnabled();
       if (typeof window.quietMode !== 'undefined') return !!window.quietMode;
+      if (localStorage.getItem('chaupaal_quiet') === '1') return true;
     } catch (e) {}
     return false;
+  }
+
+  function tipsAllowed() {
+    try {
+      if (typeof window.isNotifEnabled === 'function') return !!window.isNotifEnabled('tips');
+    } catch (e) {}
+    return true;
   }
 
   function unreadOn(tab) {
@@ -57,6 +65,9 @@
       }
       if (typeof window.getPendingFriendRequestCount === 'function') {
         return Number(window.getPendingFriendRequestCount()) || 0;
+      }
+      if (typeof window.pendingFriendRequestCount === 'number') {
+        return Number(window.pendingFriendRequestCount) || 0;
       }
     } catch (e) {}
     return 0;
@@ -132,6 +143,7 @@
     if (!uid) return;
     if (isGuest()) return;
     if (isQuiet()) return;
+    if (!tipsAllowed()) return;
 
     const storageKey = `chaupaal_tab_nudge_v1_${uid}_${tab}_${todayKey()}`;
     if (localStorage.getItem(storageKey)) return;
@@ -142,6 +154,7 @@
     setTimeout(() => {
       try {
         if (isQuiet()) return;
+        if (!tipsAllowed()) return;
         if (localStorage.getItem(storageKey)) return;
 
         const nudge = resolveHonestNudge(tab);
