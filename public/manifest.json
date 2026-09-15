@@ -18,7 +18,8 @@
   "lang": "en",
   "screenshots": [],
   "shortcuts": [
-    {"name": "Akhbaar", "short_name": "Akhbaar", "description": "Today's news quiz", "url": "/?tab=akhbaar", "icons": [{"src": "icon-192-charpai-v2as.png", "sizes": "192x192"}]},
-    {"name": "Peepal", "short_name": "Peepal", "description": "Community questions", "url": "/?tab=peepal", "icons": [{"src": "icon-192-charpai-v2as.png", "sizes": "192x192"}]}
+    {"name": "Akhbaar", "short_name": "Akhbaar", "description": "Today's news quiz", "url": "/?section=akhbaar", "icons": [{"src": "icon-192-charpai-v2as.png", "sizes": "192x192"}]},
+    {"name": "Peepal", "short_name": "Peepal", "description": "Community questions", "url": "/?section=peepal", "icons": [{"src": "icon-192-charpai-v2as.png", "sizes": "192x192"}]},
+    {"name": "Dangal", "short_name": "Dangal", "description": "Practice games", "url": "/?section=dangal", "icons": [{"src": "icon-192-charpai-v2as.png", "sizes": "192x192"}]}
   ]
 }

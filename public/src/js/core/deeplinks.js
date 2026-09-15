@@ -929,9 +929,10 @@
     setTimeout(() => {
       const route = parseDeepLink();
       if (route) handleDeepLink(route);
-      // Growth G5 / G0 — FCM + retention links use /?section=tab
+      // Growth G5/G6 — FCM + retention + manifest shortcuts (?section= or legacy ?tab=)
       try {
-        const section = new URLSearchParams(location.search).get('section');
+        const params = new URLSearchParams(location.search);
+        const section = params.get('section') || params.get('tab');
         const tabs = ['akhbaar', 'duniya', 'peepal', 'baithak', 'dangal'];
         if (section && tabs.includes(section) && typeof showTab === 'function') {
           showTab(section);

@@ -6312,3 +6312,26 @@ html.quiet-mode .dp-arcade-burst,html.quiet-mode .dp-arcade-block{animation:none
 .auth-optional-summary::-webkit-details-marker{display:none;}
 .auth-optional-summary::after{content:' +';color:var(--muted);font-weight:700;}
 .auth-optional-details[open] .auth-optional-summary::after{content:' ?';}
+
+/* Growth G6 — PWA install sheet + standalone shell */
+.pwa-install-sheet{
+  position:fixed;inset:0;z-index:100050;display:flex;align-items:flex-end;justify-content:center;
+  background:rgba(20,22,30,.42);padding:12px;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));
+}
+.pwa-install-card{
+  width:100%;max-width:420px;background:var(--white,#fff);color:var(--ink,#1a1a1a);
+  border-radius:18px 18px 14px 14px;padding:18px 16px 14px;box-shadow:0 12px 40px rgba(0,0,0,.22);
+  display:flex;flex-direction:column;gap:10px;
+}
+.pwa-install-card strong{font:700 16px 'Space Grotesk',system-ui,sans-serif;}
+.pwa-install-card p,.pwa-install-card li{margin:0;font:400 13px/1.45 system-ui,sans-serif;color:var(--muted,#555);}
+.pwa-install-card ol{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:6px;}
+.pwa-install-note{font-size:12px!important;opacity:.85;}
+html.is-standalone .app-shell,
+html.is-standalone #app{
+  min-height:var(--app-height,100dvh);
+}
+html.is-standalone .bottom-nav,
+html.is-standalone .tab-bar{
+  padding-bottom:max(8px, env(safe-area-inset-bottom, 0px));
+}

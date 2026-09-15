@@ -198,6 +198,11 @@
     try {
       localStorage.setItem(forkKey(), '1');
     } catch (e) {}
+    try {
+      if (window.ChaupaalPwa && typeof window.ChaupaalPwa.noteMeaningfulMoment === 'function') {
+        window.ChaupaalPwa.noteMeaningfulMoment('day0');
+      }
+    } catch (e) {}
   }
 
   /** Deep link / invite / challenge / pending auth resume beats the Play·Meet fork. */

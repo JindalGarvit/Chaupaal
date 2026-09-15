@@ -2147,6 +2147,11 @@
           time_spent_ms: o.durationMs,
         });
       }
+      try {
+        if (window.ChaupaalPwa && typeof window.ChaupaalPwa.noteMeaningfulMoment === 'function') {
+          window.ChaupaalPwa.noteMeaningfulMoment('game');
+        }
+      } catch (e) {}
     } catch (e) {}
     return data;
   }
