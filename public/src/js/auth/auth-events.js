@@ -120,7 +120,7 @@ function enterAuthCanvasWelcome(last) {
   const name = last?.name || last?.username || 'Welcome back';
   if (nEl) nEl.textContent = name;
   if (hEl) hEl.textContent = last?.username ? '@' + String(last.username).replace(/^@/, '') : '';
-  if (mEl) mEl.textContent = 'Unlock your Profile';
+  if (mEl) mEl.textContent = 'Continue as this account — or switch / add another';
   if (last?.photoURL) {
     const av = document.getElementById('authCanvasAvatar');
     if (av) {
@@ -131,7 +131,12 @@ function enterAuthCanvasWelcome(last) {
   const idInp = document.getElementById('loginIdentifier');
   if (idInp && last?.username && !idInp.value) idInp.value = last.username;
   const kicker = document.getElementById('authWelcomeKicker');
-  if (kicker) kicker.textContent = 'Welcome back';
+  if (kicker) {
+    kicker.textContent = 'Welcome back';
+    kicker.classList.remove('hidden');
+  }
+  const notYou = document.getElementById('authCanvasNotYou');
+  if (notYou) notYou.classList.remove('hidden');
 }
 
 function enterAuthCanvasLoginReveal() {
@@ -168,13 +173,20 @@ function showAuthScreen(screenId, direction = 'forward') {
     else enterAuthCanvasLoginReveal();
     screenId = 'authRegStep1';
   }
+  const reduceMotion =
+    document.documentElement.classList.contains('quiet-mode') ||
+    window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
   screens.forEach((id) => {
     const el = document.getElementById(id);
     if (!el) return;
     if (id === screenId) {
       el.classList.remove('hidden');
-      el.style.animation =
-        direction === 'back' ? 'authSlideBack .3s var(--ease-out)' : 'authSlideIn .3s var(--ease-out)';
+      if (reduceMotion) {
+        el.style.animation = 'none';
+      } else {
+        el.style.animation =
+          direction === 'back' ? 'authSlideBack .28s var(--ease-out)' : 'authSlideIn .28s var(--ease-out)';
+      }
     } else {
       el.classList.add('hidden');
     }
@@ -322,6 +334,7 @@ function renderPicklist(hostId, items, field, otherInputId) {
         }
       }
       renderPicklist(hostId, items, field, otherInputId);
+      if (typeof syncSignupProgress === 'function') syncSignupProgress();
     });
   });
 }
@@ -342,6 +355,7 @@ function syncRegProfileTypeUi() {
   document.querySelectorAll('#regProfileTypeRow [data-profile-type]').forEach((btn) => {
     const on = btn.dataset.profileType === type;
     btn.classList.toggle('active', on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
   });
   const genderReq = document.getElementById('regGenderRequired');
   const genderHint = document.getElementById('regGenderHint');
@@ -353,7 +367,26 @@ function syncRegProfileTypeUi() {
         : 'Optional for Professional accounts — you can add it later';
   }
   const pro = document.getElementById('regProFields');
-  if (pro) pro.classList.add('hidden');
+  if (pro) {
+    // Growth G4: show Pro fields for professional; hide for personal (was always hidden — bug).
+    pro.classList.toggle('hidden', type !== 'professional');
+    if (type === 'professional') {
+      ensureProPicklists().catch(() => {});
+    } else {
+      regData.industry = '';
+      regData.purpose = '';
+      const indOther = document.getElementById('regIndustryOther');
+      const purOther = document.getElementById('regPurposeOther');
+      if (indOther) {
+        indOther.value = '';
+        indOther.classList.add('hidden');
+      }
+      if (purOther) {
+        purOther.value = '';
+        purOther.classList.add('hidden');
+      }
+    }
+  }
   const custom = document.getElementById('regGenderCustom');
   if (custom) custom.classList.toggle('hidden', !regData.genderSelfDescribe);
   syncSignupProgress();
@@ -386,13 +419,19 @@ function syncSignupProgress() {
   const phoneHint = document.getElementById('regPhoneVerifiedHint');
   const phone = !!(phoneHint && phoneHint.style.display !== 'none' && phoneHint.style.display !== '');
   const checks = [
-    { on: name, w: 22 },
-    { on: un, w: 22 },
-    { on: dob, w: 16 },
+    { on: name, w: 20 },
+    { on: un, w: 20 },
+    { on: dob, w: 14 },
     { on: genderOk, w: 12 },
-    { on: photo, w: 10 },
-    { on: city, w: 8 },
+    { on: photo, w: 8 },
+    { on: city, w: 6 },
     { on: email || pwd || phone, w: 10 },
+    {
+      on:
+        regData.profileType === 'professional' &&
+        !!(String(regData.industry || '').trim() || String(regData.purpose || '').trim()),
+      w: 10,
+    },
   ];
   let earned = 0;
   let total = 0;
@@ -1413,9 +1452,11 @@ function wireAuthEvents() {
   });
   document.getElementById('regIndustryOther')?.addEventListener('input', (e) => {
     regData.industry = String(e.target.value || '').trim().slice(0, 80);
+    syncSignupProgress();
   });
   document.getElementById('regPurposeOther')?.addEventListener('input', (e) => {
     regData.purpose = String(e.target.value || '').trim().slice(0, 80);
+    syncSignupProgress();
   });
 
   document.getElementById('regUsername')?.addEventListener('input', (e) => {
@@ -1799,6 +1840,8 @@ function wireAuthEvents() {
               dob: regData.dob,
               age: regData.age,
               city: regData.city,
+              industry: profile.industry || '',
+              purpose: profile.purpose || '',
             });
           } else {
             const unameRef = db.collection('usernames').doc(regData.username);

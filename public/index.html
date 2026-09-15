@@ -70,8 +70,8 @@
             </div>
             <span class="auth-hero-wordmark">Chaupaal</span>
           </div>
-          <div class="auth-hero-headline">A place to gather<br><em>under the same light</em></div>
-          <div class="auth-hero-sub">Where real people discuss real things — news, life, games, and each other.</div>
+          <div class="auth-hero-headline">Gather under<br><em>the same light</em></div>
+          <div class="auth-hero-sub">News, discussions, games, and friends — one Profile that feels finished.</div>
           <div class="auth-feature-pills">
             <span class="auth-pill"><span data-icon="newspaper" data-icon-size="14"></span> Daily news quiz</span>
             <span class="auth-pill"><span data-icon="tree" data-icon-size="14"></span> Real discussions</span>
@@ -233,7 +233,7 @@
                   <button type="button" class="auth-type-pill active" data-profile-type="personal" id="regTypePersonal">Personal</button>
                   <button type="button" class="auth-type-pill" data-profile-type="professional" id="regTypeProfessional">Professional</button>
                 </div>
-                <div class="auth-input-hint">Personal or Professional — same Profile slots. Want both? Add another from the switcher later.</div>
+                <div class="auth-input-hint">Personal by default. Want Professional too? Add another account from the switcher later — not another profile under this login.</div>
               </div>
               <div class="auth-input-group">
                 <label class="auth-input-label" for="regName">Full name <span class="auth-required">*</span></label>
@@ -264,6 +264,20 @@
                 </div>
                 <input type="text" class="auth-input hidden" id="regGenderCustom" maxlength="40" placeholder="How do you describe your gender?" style="margin-top:8px;" autocomplete="sex">
                 <div class="auth-input-hint" id="regGenderHint">Required for Personal accounts</div>
+              </div>
+              <!-- Professional optional fields (Growth G4 / 5C) — shown only when type = professional -->
+              <div class="auth-pro-fields hidden" id="regProFields">
+                <p class="auth-pro-payoff">Helps professionals find you — both optional, skip anytime.</p>
+                <div class="auth-input-group">
+                  <label class="auth-input-label">Industry</label>
+                  <div class="auth-picklist" id="regIndustryPicklist" role="group" aria-label="Industry"></div>
+                  <input type="text" class="auth-input hidden" id="regIndustryOther" maxlength="80" placeholder="Your industry" style="margin-top:8px;" autocomplete="organization-title">
+                </div>
+                <div class="auth-input-group">
+                  <label class="auth-input-label">Purpose on Chaupaal</label>
+                  <div class="auth-picklist" id="regPurposePicklist" role="group" aria-label="Purpose"></div>
+                  <input type="text" class="auth-input hidden" id="regPurposeOther" maxlength="80" placeholder="What are you here for?" style="margin-top:8px;">
+                </div>
               </div>
             </section>
 
@@ -297,7 +311,7 @@
             </div><!-- /#authCanvasCreateFields -->
 
             <button type="button" class="auth-switch-btn" id="authAlreadyHaveAccount">I already have an account</button>
-            <button type="button" class="auth-guest-btn hidden" id="authCanvasNotYou">Not you? Switch account</button>
+            <button type="button" class="auth-guest-btn hidden" id="authCanvasNotYou">Not you? Switch / add account</button>
             <button type="button" class="auth-guest-btn" id="authCanvasGuest">Explore as guest →</button>
 
             <section class="auth-canvas-section hidden" id="authCanvasLoginHost" aria-label="Log in"></section>

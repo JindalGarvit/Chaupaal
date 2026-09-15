@@ -1641,6 +1641,29 @@ body.theme-goldenHour,
 .auth-picklist{display:flex;flex-wrap:wrap;gap:7px;}
 .auth-pick-chip{padding:8px 12px;border:2px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;background:var(--cream);color:var(--ink);}
 .auth-pick-chip.active{border-color:var(--red);color:var(--red);background:rgba(230,57,70,0.07);}
+.auth-pro-fields{
+  margin-top:8px;padding:14px 14px 4px;border-radius:16px;
+  background:linear-gradient(165deg,rgba(230,57,70,0.05),rgba(255,255,255,0.9) 50%);
+  border:1.5px solid color-mix(in srgb, var(--red,#E63946) 18%, var(--line));
+}
+.auth-pro-fields.hidden{display:none!important;}
+.auth-pro-payoff{font-size:12px;color:var(--muted);line-height:1.45;margin:0 0 12px;}
+.auth-welcome-kicker{font:700 12px/1.2 'Space Grotesk',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--red);margin:8px 0 0;}
+#authCanvasLoginHost:not(.hidden){
+  margin-top:12px;padding:16px 14px;border-radius:18px;
+  background:var(--white);border:1.5px solid var(--line);
+  box-shadow:0 8px 28px rgba(43,39,48,0.06);
+}
+.auth-success-body .auth-success-emoji{animation:authSuccessPop .55s var(--ease-out);}
+@keyframes authSuccessPop{from{opacity:0;transform:scale(.82);}to{opacity:1;transform:scale(1);}}
+@keyframes authHeroShift{from{background-position:0% 40%;}to{background-position:100% 60%;}}
+html.quiet-mode .auth-hero-bg,
+html.quiet-mode .auth-form-screen,
+html.quiet-mode .auth-success-body .auth-success-emoji{animation:none!important;}
+@media (prefers-reduced-motion: reduce){
+  .auth-hero-bg{animation:none!important;}
+  .auth-form-screen,.auth-success-body .auth-success-emoji{animation:none!important;}
+}
 .auth-input-prefix-wrap{position:relative;}
 .auth-input-prefix{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:16px;pointer-events:none;}
 .auth-input--prefixed{padding-left:32px;}

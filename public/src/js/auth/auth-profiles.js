@@ -128,6 +128,10 @@
       dob: fields.dob || '',
       age: fields.age || 0,
       city: fields.city || '',
+      industry:
+        fields.profileType === 'professional' ? String(fields.industry || '').trim().slice(0, 80) : '',
+      purpose:
+        fields.profileType === 'professional' ? String(fields.purpose || '').trim().slice(0, 80) : '',
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       ownerUid: uid,
     };
