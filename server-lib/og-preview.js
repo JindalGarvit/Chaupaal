@@ -287,6 +287,21 @@ async function handleOgGet(req, res) {
     card = await buildPostOg(db, origin, id);
   } else if (kind === 'challenge' || kind === 'beat') {
     card = buildChallengeOg(origin, id || q.game, q);
+  } else if (kind === 'invite') {
+    // Code is username — reuse profile projection (Friends-only → generic)
+    card = await buildProfileOg(db, origin, id);
+    if (card && card.title === 'Chaupaal') {
+      card = {
+        title: 'Join me on Chaupaal',
+        description: 'A warmer place to chat, play, and catch up. Virtual chips · not real money.',
+        image: DEFAULT_IMAGE_PATH,
+        url: `${origin}/invite/${encodeURIComponent(id || '')}`,
+        cacheControl: CACHE_GENERIC,
+      };
+    } else if (card) {
+      card.url = `${origin}/invite/${encodeURIComponent(String(id || '').toLowerCase())}`;
+      card.description = (card.description || '') + ' · Invite link';
+    }
   } else if (kind === 'story') {
     card = await buildStoryOg(db, origin, id);
   } else {

@@ -69,6 +69,12 @@
       "destination": "/api/stories?og=1&kind=story&id=$1"
     },
 
+    {
+      "source": "/invite/(.*)",
+      "has": [{ "type": "header", "key": "user-agent", "value": { "re": "(?i).*(facebookexternalhit|Facebot|Twitterbot|WhatsApp|LinkedInBot|Slackbot|Discordbot|TelegramBot|Googlebot|bingbot|Applebot|Preview|Embedly).*" } }],
+      "destination": "/api/stories?og=1&kind=invite&id=$1"
+    },
+
     { "source": "/profile/(.*)", "destination": "/index.html" },
     { "source": "/post/(.*)", "destination": "/index.html" },
     { "source": "/chat/(.*)", "destination": "/index.html" },
@@ -77,6 +83,7 @@
     { "source": "/c/(.*)", "destination": "/index.html" },
     { "source": "/story/(.*)", "destination": "/index.html" },
     { "source": "/challenge/(.*)", "destination": "/index.html" },
+    { "source": "/invite/(.*)", "destination": "/index.html" },
     { "source": "/join/g/(.*)", "destination": "/index.html" },
     { "source": "/join/(.*)", "destination": "/index.html" }
   ],

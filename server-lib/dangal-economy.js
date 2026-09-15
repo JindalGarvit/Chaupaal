@@ -304,6 +304,7 @@ module.exports = {
   canonicalGameId,
   computeEloDelta,
   getWallet,
+  ensureWallet,
   resolveGame,
   ACHIEVEMENTS,
   RATED,

@@ -880,7 +880,8 @@
     if (e.extra) Object.entries(e.extra).forEach(([k, v]) => params.set(k, String(v)));
     const gid = encodeURIComponent(String(gameId || 'quiz').slice(0, 40));
     const qs = params.toString();
-    return `${window.location.origin}/challenge/${gid}${qs ? `?${qs}` : ''}`;
+    const base = `${window.location.origin}/challenge/${gid}${qs ? `?${qs}` : ''}`;
+    return typeof withReferralParam === 'function' ? withReferralParam(base) : base;
   }
 
   async function shareGameResult(gameId, stats) {
@@ -891,7 +892,8 @@
       s.text ||
       `Chaupaal ${name}${scoreBit ? `: ${scoreBit}` : ''}${s.meta ? ` · ${s.meta}` : ''}. Can you beat me?`;
     const url = s.url || buildBeatScoreLink(gameId, s.score, { cat: s.cat, extra: s.linkExtra });
-    const payload = { title: `Chaupaal · ${name}`, text, url };
+    const tagged = typeof withReferralParam === 'function' ? withReferralParam(url) : url;
+    const payload = { title: `Chaupaal · ${name}`, text, url: tagged };
 
     // Prefer attaching a canvas PNG when available (no heavy deps)
     let file;
@@ -1667,6 +1669,9 @@
     const o = opts || {};
     const gameId = o.gameId || 'quiz';
     const stats = Object.assign({}, o.stats || {});
+    if (stats.url && typeof withReferralParam === 'function') {
+      stats.url = withReferralParam(stats.url);
+    }
     document.getElementById('chaupaalShareSheet')?.remove();
     try {
       if (typeof restoreAppShell === 'function') restoreAppShell('share_open');
@@ -1698,6 +1703,11 @@
         </div>
         <div class="share-sheet-actions">
           <button type="button" class="share-action-row" data-cs="copy"><span class="share-action-ico">${ico('link', 18)}</span><span>${safe(typeof t === 'function' ? t('share_copy_link', 'Copy link') : 'Copy link')}</span></button>
+          ${
+            typeof currentUser !== 'undefined' && currentUser && gameId !== 'invite'
+              ? `<button type="button" class="share-action-row" data-cs="invite-chaupaal"><span class="share-action-ico">${ico('users', 18)}</span><span>${safe(typeof t === 'function' ? t('contacts_invite_cta', 'Invite to Chaupaal') : 'Invite to Chaupaal')}</span></button>`
+              : ''
+          }
           ${showStory ? `<button type="button" class="share-action-row" data-cs="story"><span class="share-action-ico">${ico('book-open', 18) || ico('image', 18)}</span><span>${safe(typeof t === 'function' ? t('share_to_story', 'Post to story') : 'Post to story')}</span></button>` : ''}
           <button type="button" class="share-action-row share-action-row--external" data-cs="external"><span class="share-action-ico">${ico('share', 18)}</span><span>${safe(typeof t === 'function' ? t('share_external_more', 'External / More') : 'External / More')}</span></button>
         </div>
@@ -1836,7 +1846,8 @@
     });
 
     sheet.querySelector('[data-cs="copy"]')?.addEventListener('click', async () => {
-      const url = stats.url || buildBeatScoreLink(gameId, stats.score, { cat: stats.cat, extra: stats.linkExtra });
+      let url = stats.url || buildBeatScoreLink(gameId, stats.score, { cat: stats.cat, extra: stats.linkExtra });
+      if (typeof withReferralParam === 'function') url = withReferralParam(url);
       const text = `${stats.text || `Chaupaal ${gameDisplayName(gameId)}`}\n${url}`;
       try {
         if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -1849,6 +1860,15 @@
       trackShareEvent('share_method', { surface: gameId, method: 'copy' });
       if (typeof o.onShared === 'function') o.onShared({ method: 'copy' });
       close();
+    });
+
+    sheet.querySelector('[data-cs="invite-chaupaal"]')?.addEventListener('click', () => {
+      close();
+      trackShareEvent('share_method', { surface: gameId, method: 'invite_chaupaal' });
+      if (typeof openInviteToChaupaalShare === 'function') openInviteToChaupaalShare();
+      else if (typeof ChaupaalReferrals?.openInviteToChaupaalShare === 'function') {
+        ChaupaalReferrals.openInviteToChaupaalShare();
+      }
     });
 
     sheet.querySelector('[data-cs="story"]')?.addEventListener('click', async () => {

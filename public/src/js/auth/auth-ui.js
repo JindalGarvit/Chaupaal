@@ -127,5 +127,10 @@ if (auth) {
         resumePendingProfileMessage().catch(() => {});
       }, 400);
     }
+    try {
+      if (typeof ChaupaalReferrals?.activateReferralIfNeeded === 'function') {
+        setTimeout(() => ChaupaalReferrals.activateReferralIfNeeded(), 800);
+      }
+    } catch (e) {}
   });
 }

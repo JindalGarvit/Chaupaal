@@ -176,9 +176,26 @@ service cloud.firestore {
     match /users/{userId} {
       // Private document — owner only (email/phone/DOB/prefs). Others use users_public.
       allow read: if isOwner(userId);
-      allow create: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && !request.resource.data.keys().hasAny([
+          'referredBy',
+          'referralCode',
+          'referredAt',
+          'referralStats',
+          'referralInviterPending',
+          'referralInviterUid'
+        ]);
       allow update: if isOwner(userId)
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['relationshipCounts']);
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'relationshipCounts',
+          'referredBy',
+          'referralCode',
+          'referredAt',
+          'referralStats',
+          'referralInviterPending',
+          'referralInviterUid',
+          'referralFlair'
+        ]);
 
       // Instagram-style multi-profile under one auth identity
       match /profiles/{profileId} {
@@ -342,6 +359,11 @@ service cloud.firestore {
         allow write: if false;
       }
       match /chipTransactions/{txId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+      // Growth G2 — Admin SDK only (referral_claim / referral_activate)
+      match /referralGrants/{grantId} {
         allow read: if isOwner(userId);
         allow write: if false;
       }

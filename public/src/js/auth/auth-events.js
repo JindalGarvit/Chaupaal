@@ -210,6 +210,12 @@ function showAuth() {
 
 /** Thin alias for legacy callers (Duniya banner, Baithak empty). */
 function openAuthSheet(mode) {
+  try {
+    if (typeof stashPendingDeepLink === 'function') stashPendingDeepLink();
+    else if (typeof ChaupaalReferrals?.stashPendingDeepLink === 'function') {
+      ChaupaalReferrals.stashPendingDeepLink();
+    }
+  } catch (e) {}
   showAuth();
   const m = String(mode || '').toLowerCase();
   if (m === 'login' || m === 'signin') {
@@ -1021,6 +1027,11 @@ function wireAuthEvents() {
     try {
       if (typeof resumePendingGroupInvite === 'function') {
         setTimeout(() => resumePendingGroupInvite(), 400);
+      }
+    } catch (e) {}
+    try {
+      if (typeof ChaupaalReferrals?.afterAuthReferralAndResume === 'function') {
+        setTimeout(() => ChaupaalReferrals.afterAuthReferralAndResume(), 500);
       }
     } catch (e) {}
   }
@@ -1914,6 +1925,11 @@ function wireAuthEvents() {
                   },
                 });
               }
+              try {
+                if (typeof ChaupaalReferrals?.afterAuthReferralAndResume === 'function') {
+                  setTimeout(() => ChaupaalReferrals.afterAuthReferralAndResume(), 600);
+                }
+              } catch (e) {}
             };
             await enterApp();
           });

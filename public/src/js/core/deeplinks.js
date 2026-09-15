@@ -20,6 +20,7 @@
     { name: 'story', re: /^\/story\/([^/?#]+)\/?$/i },
     { name: 'join', re: /^\/join(?:\/g)?\/([^/?#]+)\/?$/i },
     { name: 'challenge', re: /^\/challenge\/([^/?#]+)\/?$/i },
+    { name: 'invite', re: /^\/invite\/([^/?#]+)\/?$/i },
   ];
 
   const PENDING_GROUP_INVITE_KEY = 'chaupaal_pending_group_invite';
@@ -56,7 +57,8 @@
   }
 
   function shareUrl(name, id) {
-    return `${location.origin}${buildDeepLink(name, id)}`;
+    const base = `${location.origin}${buildDeepLink(name, id)}`;
+    return typeof withReferralParam === 'function' ? withReferralParam(base) : base;
   }
 
   function navigateToDeepLink(pathOrName, id) {
@@ -859,6 +861,18 @@
     else if (route.name === 'challenge') {
       // Hand off to viral challenge handler (path + query)
       if (typeof checkViralLink === 'function') checkViralLink();
+    } else if (route.name === 'invite') {
+      if (typeof ChaupaalReferrals?.persistPendingRef === 'function') {
+        /* capture via captureReferralFromLocation */
+      }
+      if (typeof captureReferralFromLocation === 'function') captureReferralFromLocation();
+      else if (typeof ChaupaalReferrals?.captureReferralFromLocation === 'function') {
+        ChaupaalReferrals.captureReferralFromLocation();
+      }
+      // Guest-first: land on home; attribution waits for signup
+      if (typeof showToast === 'function' && !currentUser) {
+        showToast('Welcome — explore freely, sign up to keep your spot');
+      }
     } else if (route.name === 'story') {
       switchTab('duniya');
       if (typeof DuniyaStory !== 'undefined' && DuniyaStory.openById) {

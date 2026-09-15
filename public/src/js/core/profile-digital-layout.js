@@ -552,6 +552,11 @@
     RINGS.forEach((r) => {
       if (pct >= r.unlockAt) ids.push(r.id);
     });
+    try {
+      if (typeof userProfile !== 'undefined' && userProfile?.referralFlair) ids.push('invite_spark');
+      const unlocked = (typeof userProfile !== 'undefined' && userProfile?.profileTheme?.unlocked) || [];
+      if (Array.isArray(unlocked) && unlocked.includes('invite_spark')) ids.push('invite_spark');
+    } catch (e) {}
     return [...new Set(ids)];
   }
 

@@ -107,10 +107,16 @@
   }
 
   function inviteShare(contact) {
-    const url = typeof location !== 'undefined' ? location.origin : 'https://chaupaal.app';
+    const base = typeof location !== 'undefined' ? location.origin : 'https://chaupaal.com';
+    const url =
+      typeof withReferralParam === 'function'
+        ? withReferralParam(base + '/')
+        : typeof ChaupaalReferrals?.inviteHomeUrl === 'function'
+          ? ChaupaalReferrals.inviteHomeUrl()
+          : base;
     const text = tt(
       'contacts_invite_text',
-      'Join me on Chaupaal — a warmer place to chat, play, and catch up. {{url}}',
+      'Join me on Chaupaal — a warmer place to chat, play, and catch up. Virtual chips · not real money. {{url}}',
       { url }
     );
     // Prefer two-step Chaupaal share sheet when available

@@ -944,6 +944,41 @@ async function handlePost(req, res) {
     }
   }
 
+  // ─── Growth G2 referrals (virtual chips only; no new api/*.js) ─────────
+  if (
+    action === 'referral_claim' ||
+    action === 'referral_activate' ||
+    action === 'referral_stats'
+  ) {
+    try {
+      const { checkActionRateLimit } = require('../server-lib/rate-limit');
+      const rate = await checkActionRateLimit(user.uid, 'referral');
+      if (rate && rate.ok === false) {
+        return sendError(res, 429, 'RATE_LIMITED', 'Too many referral actions. Try again shortly.');
+      }
+    } catch (e) {}
+    try {
+      const referrals = require('../server-lib/referrals');
+      const adminApp = initAdmin();
+      if (!adminApp) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+      const db = adminApp.firestore();
+      if (action === 'referral_stats') {
+        const stats = await referrals.getReferralStats(db, user.uid);
+        return sendSuccess(res, stats);
+      }
+      if (action === 'referral_activate') {
+        const out = await referrals.activateReferral(db, adminApp, user.uid);
+        return sendSuccess(res, out);
+      }
+      const out = await referrals.claimReferral(db, adminApp, user.uid, body);
+      return sendSuccess(res, out);
+    } catch (e) {
+      console.warn('[media-config] referral', e?.message || e);
+      const code = e?.code === 'VALIDATION_ERROR' ? 400 : 500;
+      return sendError(res, code, e?.code || 'REFERRAL_ERROR', e?.message || 'Referral failed');
+    }
+  }
+
   // ─── Chaupaal Money + Pradhan / Sarpanch (folded; no new api/*.js) ───────
   const CM_ACTIONS = new Set([
     'chaupaal_money_get',
@@ -1223,6 +1258,9 @@ async function handlePost(req, res) {
       'request_account_deletion',
       'dangal_wallet_get',
       'dangal_game_resolve',
+      'referral_claim',
+      'referral_activate',
+      'referral_stats',
       'chaupaal_money_get',
       'chaupaal_money_topup_create',
       'chaupaal_money_topup_confirm',

@@ -21,6 +21,8 @@ Implementation lives primarily in:
 
 **OG previews (Growth G1):** Bot User-Agents matching WhatsApp/Facebook/Twitter/etc. are rewritten (vercel.json `has`) to `GET /api/stories?og=1&kind=…` → `server-lib/og-preview.js`. Humans still get SPA `index.html`. Friends-only/Private + gated posts → generic card only. Challenge URL: `/challenge/{gameId}?name=&score=&cat=` (legacy `?challenge=` still parsed).
 
+**Referrals (Growth G2):** Content URLs keep primary path; signed-in shares append `?ref={username}` (`withReferralParam`). Optional `/invite/{username}` for “Invite to Chaupaal”. Claim via `POST /api/media-config` `{ action: 'referral_claim' }` on **new** Auth accounts (creationTime ≤72h); one `referredBy` per invitee. Inviter chips gated on invitee verified email/phone (`referral_activate`). Virtual chips only (150 invitee / 250 inviter); idempotent `referralGrants`. Pending deep link stashed across auth (`chaupaal_pending_deep`).
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.
