@@ -220,6 +220,34 @@
     }
   }
 
+  function stashPendingAction(action) {
+    try {
+      if (action) sessionStorage.setItem('chaupaal_pending_action', String(action).slice(0, 40));
+    } catch (e) {}
+  }
+
+  function resumePendingAction() {
+    let action = '';
+    try {
+      action = sessionStorage.getItem('chaupaal_pending_action') || '';
+      sessionStorage.removeItem('chaupaal_pending_action');
+    } catch (e) {}
+    if (!action) return false;
+    try {
+      if (action === 'duniya_compose' && typeof openDuniyaPostSheet === 'function') {
+        if (typeof showTab === 'function') showTab('duniya');
+        setTimeout(() => openDuniyaPostSheet(), 300);
+        return true;
+      }
+      if (action === 'peepal_ask' && typeof openPeepalAskSheet === 'function') {
+        if (typeof showTab === 'function') showTab('peepal');
+        setTimeout(() => openPeepalAskSheet(), 300);
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
   async function afterAuthReferralAndResume() {
     try {
       await claimPendingReferral();
@@ -230,7 +258,9 @@
     try {
       await resumePendingDeepLink();
     } catch (e) {}
-    // Group invite resume stays on deeplinks.resumePendingGroupInvite
+    try {
+      resumePendingAction();
+    } catch (e) {}
   }
 
   function openInviteToChaupaalShare() {
@@ -283,13 +313,17 @@
     persistPendingRef,
     stashPendingDeepLink,
     resumePendingDeepLink,
+    stashPendingAction,
+    resumePendingAction,
     claimPendingReferral,
     activateReferralIfNeeded,
     afterAuthReferralAndResume,
     openInviteToChaupaalShare,
     readPendingRef,
+    readPendingDeepLink,
   };
   window.withReferralParam = withReferralParam;
   window.stashPendingDeepLink = stashPendingDeepLink;
+  window.stashPendingAction = stashPendingAction;
   window.openInviteToChaupaalShare = openInviteToChaupaalShare;
 })();

@@ -385,16 +385,18 @@ function renderChatList(chats, opts){
         icon:'💬',
         title: isGuest ? 'Demo chats only' : 'No conversations yet',
         message: isGuest
-          ? 'You’re browsing samples — sign in to chat with real people.'
-          : 'Invite friends or find people from your contacts. Sample people from guest mode won’t appear here.',
+          ? 'These are labeled samples. Sign in to keep progress and chat with real people.'
+          : 'Invite friends or find people from your contacts.',
         actionLabel: isGuest ? 'Sign in' : 'Invite friends',
         onAction:()=>{
           if(isGuest){
-            if(typeof showAuth==='function') showAuth();
-            else if(typeof openAuthSheet==='function') openAuthSheet('login');
+            try{ if(typeof stashPendingDeepLink==='function') stashPendingDeepLink(); }catch(e){}
+            if(typeof openAuthSheet==='function') openAuthSheet('login');
+            else if(typeof showAuth==='function') showAuth();
             return;
           }
-          if(typeof shareInviteToChaupaal==='function') shareInviteToChaupaal();
+          if(typeof openInviteToChaupaalShare==='function') openInviteToChaupaalShare();
+          else if(typeof shareInviteToChaupaal==='function') shareInviteToChaupaal();
           else if(typeof openDay0MeetSheet==='function') openDay0MeetSheet();
         },
         secondaryActions: isGuest ? [] : [
@@ -403,17 +405,6 @@ function renderChatList(chats, opts){
             onAction:()=>{
               if(typeof openPeopleSearchWithContacts==='function') openPeopleSearchWithContacts({surface:'baithak'});
             },
-          },
-          {
-            label:'Find on Peepal',
-            onAction:()=>{
-              if(typeof showTab==='function') showTab('peepal');
-              if(typeof setPeepalMode==='function') setPeepalMode('khoj');
-            },
-          },
-          {
-            label:'New chat',
-            onAction:()=>{ if(typeof showNewChatOptions==='function') showNewChatOptions(); },
           },
         ],
       });

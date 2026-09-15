@@ -217,24 +217,30 @@ function renderDuniyaFeed(){
   feed.innerHTML='';
   if(!visible.length){
     if(typeof renderEmptyState==='function'){
+      const signedIn=typeof currentUser!=='undefined'&&currentUser;
       renderEmptyState(feed, {
         icon: (typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('duniya',40):(typeof iconHtml==='function'?iconHtml('globe',{size:40,className:'cp-icon--empty'}):'🌍'),
         title:'No posts yet',
-        message: (typeof currentUser!=='undefined'&&currentUser)
-          ? 'Guest sample posts don’t carry over after signup. Share something, or play Akhbaar meanwhile.'
-          : 'Be the first to share something with Duniya.',
-        actionLabel:'Create a post',
+        message: signedIn
+          ? 'Share a moment, or explore while the feed fills up.'
+          : 'Browse freely — sign in when you want to post.',
+        actionLabel: signedIn ? 'Create a post' : 'Sign in to post',
         onAction:()=>{
-          if(typeof currentUser==='undefined'||!currentUser){
-            if(typeof showToast==='function') showToast('You’re browsing demos — sign in to post');
-            if(typeof showAuth==='function') showAuth();
+          if(!signedIn){
+            try{
+              if(typeof stashPendingAction==='function') stashPendingAction('duniya_compose');
+              else if(typeof ChaupaalReferrals?.stashPendingAction==='function') ChaupaalReferrals.stashPendingAction('duniya_compose');
+              if(typeof stashPendingDeepLink==='function') stashPendingDeepLink();
+            }catch(e){}
+            if(typeof openAuthSheet==='function') openAuthSheet('login');
+            else if(typeof showAuth==='function') showAuth();
             return;
           }
           if(typeof openDuniyaPostSheet==='function') openDuniyaPostSheet();
         },
-        secondaryActions: (typeof currentUser!=='undefined'&&currentUser) ? [
+        secondaryActions: [
           { label:'Play Akhbaar', onAction:()=>{ if(typeof showTab==='function') showTab('akhbaar'); } },
-        ] : [],
+        ],
       });
     } else {
       feed.innerHTML='<div style="padding:32px;text-align:center;color:var(--muted);">No posts yet</div>';

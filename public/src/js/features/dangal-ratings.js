@@ -387,7 +387,20 @@ function renderDangalGamesGrid() {
       renderEmptyState(gotdHost, {
         icon: '🔥',
         title: 'Khel is warming up',
-        message: 'Today’s featured game will land here.',
+        message: 'Browse Manch for practice, or play a solo quiz on Akhbaar.',
+        actionLabel: 'Browse Manch',
+        onAction: () => {
+          if (typeof setDangalSection === 'function') setDangalSection('manch');
+        },
+        secondaryActions: [
+          {
+            label: 'Practice quiz',
+            onAction: () => {
+              if (typeof startDay0Play === 'function') startDay0Play();
+              else if (typeof showTab === 'function') showTab('akhbaar');
+            },
+          },
+        ],
       });
     }
   })
@@ -490,7 +503,27 @@ function renderDangalGamesGrid() {
         renderEmptyState(manchGrid, {
           icon: '🎮',
           title: 'No games here',
-          message: 'Try another filter — or All to see everything.',
+          message: 'Try All to see the full library, or practice a solo quiz.',
+          actionLabel: 'Show all games',
+          onAction: () => {
+            const allBtn = filterBar.querySelector('[data-filter-kind="all"]');
+            if (allBtn) allBtn.click();
+            else {
+              state.mode = 'all';
+              state.genre = null;
+              state.live = false;
+              paintManchGrid();
+            }
+          },
+          secondaryActions: [
+            {
+              label: 'Practice quiz',
+              onAction: () => {
+                if (typeof startDay0Play === 'function') startDay0Play();
+                else if (typeof showTab === 'function') showTab('akhbaar');
+              },
+            },
+          ],
         });
       } else {
         manchGrid.innerHTML =

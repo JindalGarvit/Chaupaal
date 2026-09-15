@@ -699,13 +699,19 @@ async function getCompatibilityPeeks(opts) {
       discoveryFilters.matchIntent = prevIntent;
     }
     // Pull a wider pool for Khoj scroll when possible
-    if (raw.length < 8 && typeof SAMPLE_DISCOVERY_POOL !== 'undefined') {
+    // Guest-only labeled samples — never pad signed-in discovery with invented people.
+    if (
+      raw.length < 8 &&
+      !(typeof currentUser !== 'undefined' && currentUser) &&
+      typeof SAMPLE_DISCOVERY_POOL !== 'undefined'
+    ) {
       const extra = SAMPLE_DISCOVERY_POOL.filter((u) => isDiscoveryEligibleUser(u)).map((u) => ({
-        user: u,
+        user: { ...u, isSample: true },
         score: 50,
         matchPct: 55,
         reasons: (u.interests || []).slice(0, 2),
-        reason: u.bio || 'Someone you might enjoy talking to',
+        reason: 'Sample · sign in for real people',
+        isSample: true,
       }));
       const seen = new Set(raw.map((p) => p.user?.uid));
       extra.forEach((p) => {

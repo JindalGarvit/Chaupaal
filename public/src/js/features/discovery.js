@@ -328,7 +328,18 @@ async function runPeepalAiSearchLocalFallback(query, resultsEl, opts){
       renderEmptyState(resultsEl, {
         icon:(typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('peepal',40):'🌳',
         title:'No matches yet',
-        message:'No eligible open profiles right now. We never invent people — try again as the community grows.',
+        message:'No eligible open profiles right now. We never invent people — try Khoj or invite a friend.',
+        actionLabel:'Open Khoj',
+        onAction:()=>{
+          if(typeof setPeepalMode==='function') setPeepalMode('khoj');
+          else if(typeof showTab==='function') showTab('peepal');
+        },
+        secondaryActions: (typeof currentUser!=='undefined'&&currentUser) ? [{
+          label:'Invite friends',
+          onAction:()=>{
+            if(typeof openInviteToChaupaalShare==='function') openInviteToChaupaalShare();
+          },
+        }] : [],
       });
     } else {
       resultsEl.innerHTML = `<div style="text-align:center;padding:24px;color:var(--muted);">No eligible open profiles right now.</div>`;

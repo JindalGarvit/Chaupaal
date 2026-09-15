@@ -785,10 +785,10 @@ dayCheckModal.addEventListener('click',(e)=>{
 
 // ===================== PEEPAL =====================
 const SAMPLE_PEEPAL=[
-  {id:'p1',user:{name:'Riya Sharma',avatar:'😊',city:'Mumbai',profileType:'personal'},question:'If you could only read one news category for the rest of your life, what would it be?',format:'mcq',options:['Sports 🏏','Tech 💻','World 🌍','Business 📈'],responses:[42,38,15,5],totalResponses:100,comments:12,timeAgo:'2h',tag:'Lifestyle',answered:false},
-  {id:'p2',user:{name:'Arjun Mehta',avatar:'🏔️',city:'Delhi',profileType:'personal'},question:'Do you think AI-generated news should be labeled differently from human-written news?',format:'binary',options:['Yes, always','No, quality is all that matters'],responses:[68,32],totalResponses:100,comments:28,timeAgo:'4h',tag:'Tech',answered:false},
-  {id:'p3',user:{name:'Priya Nair',avatar:'👩',city:'Bengaluru',profileType:'professional'},question:'What time do you usually read the news?',format:'mcq',options:['Morning with chai ☕','During lunch 🍛','Evening commute 🚇','Before bed 🌙'],responses:[55,18,20,7],totalResponses:100,comments:8,timeAgo:'6h',tag:'Habits',answered:false},
-  {id:'p4',user:{name:'Dev Sharma',avatar:'👨',city:'Pune',profileType:'personal'},question:'Tell us — what news story has affected you the most personally this year?',format:'open',totalResponses:47,comments:15,timeAgo:'1d',tag:'Personal',answered:false},
+  {id:'p1',isSample:true,user:{name:'Riya Sharma',avatar:'😊',city:'Mumbai',profileType:'personal'},question:'If you could only read one news category for the rest of your life, what would it be?',format:'mcq',options:['Sports 🏏','Tech 💻','World 🌍','Business 📈'],responses:[42,38,15,5],totalResponses:100,comments:12,timeAgo:'2h',tag:'Lifestyle',answered:false},
+  {id:'p2',isSample:true,user:{name:'Arjun Mehta',avatar:'🏔️',city:'Delhi',profileType:'personal'},question:'Do you think AI-generated news should be labeled differently from human-written news?',format:'binary',options:['Yes, always','No, quality is all that matters'],responses:[68,32],totalResponses:100,comments:28,timeAgo:'4h',tag:'Tech',answered:false},
+  {id:'p3',isSample:true,user:{name:'Priya Nair',avatar:'👩',city:'Bengaluru',profileType:'professional'},question:'What time do you usually read the news?',format:'mcq',options:['Morning with chai ☕','During lunch 🍛','Evening commute 🚇','Before bed 🌙'],responses:[55,18,20,7],totalResponses:100,comments:8,timeAgo:'6h',tag:'Habits',answered:false},
+  {id:'p4',isSample:true,user:{name:'Dev Sharma',avatar:'👨',city:'Pune',profileType:'personal'},question:'Tell us — what news story has affected you the most personally this year?',format:'open',totalResponses:47,comments:15,timeAgo:'1d',tag:'Personal',answered:false},
 ];
 
 const SAMPLE_COMMENTS=[
@@ -930,8 +930,14 @@ async function loadPeepalPage({reset=false}={}){
       const seen=new Set(peepalQuestions.map(q=>q.firestoreId||q.id));
       mapped.forEach(q=>{ if(!seen.has(q.firestoreId||q.id)) peepalQuestions.push(q); });
     } else if(reset){
-      peepalLiveMode=false;
-      peepalQuestions=[...SAMPLE_PEEPAL];
+      // Empty Firestore: guests keep labeled samples; signed-in → honest empty (never fake graph).
+      if(typeof currentUser!=='undefined'&&currentUser){
+        peepalLiveMode=true;
+        peepalQuestions=[];
+      } else {
+        peepalLiveMode=false;
+        peepalQuestions=SAMPLE_PEEPAL.map((q)=>({...q,isSample:true}));
+      }
     }
     peepalPageCursor=page.lastDoc;
     peepalHasMore=page.hasMore;
@@ -1355,12 +1361,35 @@ function renderPeepalFeed(){
   feed.innerHTML='';
   if(!sorted.length){
     if(typeof renderEmptyState==='function'){
+      const signedIn=typeof currentUser!=='undefined'&&currentUser;
       renderEmptyState(feed, {
         icon: (typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('peepal',40):(typeof iconHtml==='function'?iconHtml('tree',{size:40,className:'cp-icon--empty'}):'🌳'),
-        title:'No questions yet',
-        message:'Be the first to ask the Peepal community something.',
-        actionLabel:'Ask a question',
-        onAction:()=>typeof openPeepalAskSheet==='function'&&openPeepalAskSheet(),
+        title:'No discussions yet',
+        message: signedIn
+          ? 'Explore Khoj to find people, or start a discussion.'
+          : 'Explore freely — sign in when you want to ask something.',
+        actionLabel:'Explore Khoj',
+        onAction:()=>{
+          if(typeof setPeepalMode==='function') setPeepalMode('khoj');
+          else if(typeof showTab==='function') showTab('peepal');
+        },
+        secondaryActions: [
+          {
+            label: signedIn ? 'Ask a question' : 'Sign in to ask',
+            onAction:()=>{
+              if(!signedIn){
+                try{
+                  if(typeof stashPendingAction==='function') stashPendingAction('peepal_ask');
+                  if(typeof stashPendingDeepLink==='function') stashPendingDeepLink();
+                }catch(e){}
+                if(typeof openAuthSheet==='function') openAuthSheet('login');
+                else if(typeof showAuth==='function') showAuth();
+                return;
+              }
+              if(typeof openPeepalAskSheet==='function') openPeepalAskSheet();
+            },
+          },
+        ],
       });
     }
     return;
@@ -1378,7 +1407,7 @@ function renderPeepalFeed(){
         <div class="pc-avatar peepal-user-avatar" style="cursor:pointer;">${typeof renderUserAvatarHtml==='function'?renderUserAvatarHtml(q.user,{decorative:true}):(q.user.photoURL?`<img src="${escPeepalText(q.user.photoURL)}" alt="">`:escPeepalText(q.user.avatar||'👤'))}</div>
         <div class="pc-body">
           <div class="pc-meta">
-            <span class="pc-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(q.user.name,q.user):escPeepalText(q.user.name)}</span>
+            <span class="pc-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(q.user.name,q.user):escPeepalText(q.user.name)}${q.isSample?` <span class="cp-demo-badge">Demo</span>`:''}</span>
             <span class="pc-dot">·</span>
             <span class="pc-time">${typeof formatRelativeTime==='function'?formatRelativeTime(q.timeAgo||q.ts):escPeepalText(q.timeAgo||'')}</span>
             ${q.tag?`<span class="pc-tag">${escPeepalText(q.tag)}</span>`:''}

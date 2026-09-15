@@ -200,8 +200,63 @@
     } catch (e) {}
   }
 
+  /** Deep link / invite / challenge / pending auth resume beats the Play·Meet fork. */
+  function hasPendingDay0Destination() {
+    try {
+      if (typeof ChaupaalReferrals?.readPendingDeepLink === 'function') {
+        const d = String(ChaupaalReferrals.readPendingDeepLink() || '');
+        if (d && d !== '/' && d !== '/index.html' && !/^\/(\?|$)/.test(d)) return true;
+        if (/[?&](ref|inv|challenge|score|join)=/.test(d)) return true;
+      }
+      if (typeof ChaupaalReferrals?.readPendingRef === 'function' && ChaupaalReferrals.readPendingRef()) {
+        return true;
+      }
+      try {
+        if (sessionStorage.getItem('chaupaal_pending_group_invite')) return true;
+        if (sessionStorage.getItem('chaupaal_pending_action')) return true;
+      } catch (e) {}
+      const path = String(location.pathname || '');
+      if (/^\/(profile|u|post|p|chat|c|join|challenge|invite|story)\//i.test(path)) return true;
+      const params = new URLSearchParams(location.search || '');
+      if (params.get('ref') || params.get('inv') || params.get('challenge') || params.get('score') || params.get('join')) {
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  function startDay0Play() {
+    try {
+      if (typeof trackEvent === 'function') trackEvent('day0_play', { surface: 'first_run' });
+    } catch (e) {}
+    if (typeof showTab === 'function') showTab('akhbaar');
+    else document.querySelector('.tab-btn[data-tab="akhbaar"]')?.click();
+    setTimeout(() => {
+      if (typeof startMuqabala === 'function') {
+        startMuqabala(null, 'GK', {
+          skipMatchmaking: true,
+          practice: true,
+          simulated: true,
+          skipCredit: true,
+          source: 'day0',
+        });
+        return;
+      }
+      if (typeof showTab === 'function') showTab('dangal');
+      else document.querySelector('.tab-btn[data-tab="dangal"]')?.click();
+      setTimeout(() => {
+        if (typeof setDangalSection === 'function') setDangalSection('manch');
+      }, 200);
+    }, 350);
+  }
+
   function openDay0ValueFork(opts) {
     if (forkDone()) {
+      if (typeof opts?.onDone === 'function') opts.onDone();
+      return false;
+    }
+    if (hasPendingDay0Destination()) {
+      markForkDone();
       if (typeof opts?.onDone === 'function') opts.onDone();
       return false;
     }
@@ -219,7 +274,7 @@
         <p class="day0-fork-lead">${tt('day0_fork_lead', 'One step — play solo or meet someone. You can do both later.')}</p>
         <button type="button" class="day0-fork-card" data-fork="play">
           <strong>${tt('day0_play', 'Play')}</strong>
-          <span>${tt('day0_play_sub', 'Akhbaar quizzes or a quick Dangal game')}</span>
+          <span>${tt('day0_play_sub', 'A short practice quiz — no account needed')}</span>
         </button>
         <button type="button" class="day0-fork-card" data-fork="meet">
           <strong>${tt('day0_meet', 'Meet')}</strong>
@@ -237,8 +292,7 @@
     sheet.querySelector('[data-fork-skip]')?.addEventListener('click', close);
     sheet.querySelector('[data-fork="play"]')?.addEventListener('click', () => {
       close();
-      if (typeof showTab === 'function') showTab('akhbaar');
-      else document.querySelector('.tab-btn[data-tab="akhbaar"]')?.click();
+      startDay0Play();
     });
     sheet.querySelector('[data-fork="meet"]')?.addEventListener('click', () => {
       close();
@@ -275,9 +329,10 @@
     sheet.querySelector('[data-dismiss]')?.addEventListener('click', close);
     sheet.querySelector('[data-meet="invite"]')?.addEventListener('click', () => {
       close();
-      if (typeof shareInviteToChaupaal === 'function') shareInviteToChaupaal();
-      else if (typeof openInviteShare === 'function') openInviteShare();
-      else shareInviteFallback();
+      if (typeof openInviteToChaupaalShare === 'function') openInviteToChaupaalShare();
+      else if (typeof ChaupaalReferrals?.openInviteToChaupaalShare === 'function') {
+        ChaupaalReferrals.openInviteToChaupaalShare();
+      } else shareInviteFallback();
     });
     sheet.querySelector('[data-meet="contacts"]')?.addEventListener('click', () => {
       close();
@@ -287,11 +342,17 @@
     sheet.querySelector('[data-meet="khoj"]')?.addEventListener('click', () => {
       close();
       if (typeof showTab === 'function') showTab('peepal');
-      if (typeof setPeepalMode === 'function') setPeepalMode('khoj');
+      setTimeout(() => {
+        if (typeof setPeepalMode === 'function') setPeepalMode('khoj');
+      }, 80);
     });
   }
 
   function shareInviteFallback() {
+    if (typeof openInviteToChaupaalShare === 'function') {
+      openInviteToChaupaalShare();
+      return;
+    }
     const uname =
       (typeof digitalProfile !== 'undefined' && digitalProfile?.username) ||
       (typeof userProfile !== 'undefined' && userProfile?.username) ||
@@ -299,8 +360,14 @@
     const url =
       typeof shareUrl === 'function' && uname
         ? shareUrl('profile', uname)
-        : `${location.origin}/`;
-    const text = tt('contacts_invite_text', 'Join me on Chaupaal — {{url}}', { url });
+        : typeof withReferralParam === 'function'
+          ? withReferralParam(`${location.origin}/`)
+          : `${location.origin}/`;
+    const text = tt(
+      'contacts_invite_text',
+      'Join me on Chaupaal — chat, play, and catch up. Virtual chips · not real money. {{url}}',
+      { url }
+    );
     if (navigator.share) {
       navigator.share({ title: 'Chaupaal', text, url }).catch(() => {});
     } else {
@@ -430,8 +497,13 @@
     });
   }
 
-  /** After signup success — ONE primary next step. */
+  /** After signup success — ONE primary next step. Prefer pending deep link over fork. */
   function runPostSignupPrimaryPath() {
+    if (hasPendingDay0Destination()) {
+      markForkDone();
+      markCoachDone();
+      return;
+    }
     const deepenNeeded =
       typeof needsDigitalCanvasDeepen === 'function' && needsDigitalCanvasDeepen();
     if (deepenNeeded && typeof openDigitalCanvasDeepen === 'function') {
@@ -459,6 +531,8 @@
   window.maybeOfferFirstRunCoach = maybeOfferFirstRunCoach;
   window.openDay0ValueFork = openDay0ValueFork;
   window.openDay0MeetSheet = openDay0MeetSheet;
+  window.startDay0Play = startDay0Play;
+  window.hasPendingDay0Destination = hasPendingDay0Destination;
   window.shareInviteToChaupaal = shareInviteFallback;
   window.openLegalSheet = openLegalSheet;
   window.runPostSignupPrimaryPath = runPostSignupPrimaryPath;
@@ -469,6 +543,7 @@
       try {
         if (localStorage.getItem('chaupaal_onboarded') !== 'true') return;
         if (coachDone()) return;
+        if (hasPendingDay0Destination()) return;
         // Don't steal focus from auth overlay
         if (document.getElementById('authOverlay') && !document.getElementById('authOverlay').classList.contains('hidden')) return;
         maybeOfferFirstRunCoach({ delayMs: 0 });

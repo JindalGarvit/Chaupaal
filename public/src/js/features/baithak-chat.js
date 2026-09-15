@@ -1479,6 +1479,21 @@ async function sendMsg(chat){
   const text=input?.value.trim();if(!text)return;
   const isGroup=chat.type==='group';
   const isChaupaal = typeof isChaupaalChat==='function' && isChaupaalChat(chat);
+  // Guest demo threads: never fake a successful send — soft-auth with resume.
+  if (
+    (chat?.isSample || chat?.isDemo || (typeof isLiveSampleChat === 'function' && isLiveSampleChat(chat))) &&
+    (!currentUser || !db)
+  ) {
+    if (typeof showToast === 'function') {
+      showToast('Demo chat — sign in to message real people');
+    }
+    try {
+      if (typeof stashPendingDeepLink === 'function') stashPendingDeepLink();
+    } catch (e) {}
+    if (typeof openAuthSheet === 'function') openAuthSheet('login');
+    else if (typeof showAuth === 'function') showAuth();
+    return;
+  }
   const tempId='local_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
   const bubble={from:'me',text,time:'now',_tempId:tempId,pending:true,name:userProfile?.name||currentUser?.displayName||'You'};
   const prevValue=input.value;
@@ -1600,11 +1615,12 @@ async function sendMsg(chat){
           } catch (e) {}
           if(typeof publishChatTyping==='function') publishChatTyping(chat.firestoreId||chat.id,false);
           if(typeof demoMarkSeenSoon==='function') demoMarkSeenSoon();
-          if(!isChaupaal && (!db||!currentUser)) setTimeout(()=>{
-            const replies=["Haha 😄","Totally agree!","Really?!","Let's talk later 🙏","Muqabala tomorrow? ⚔️","👍","What's the plan?"];
-            addMsgBubble({from:'them',text:replies[Math.floor(Math.random()*replies.length)],time:'now',avatar:chat.avatar},isGroup);
-            if(typeof demoMarkSeenSoon==='function') demoMarkSeenSoon();
-          },1200);
+          // Never invent demo replies that look like a real conversation.
+          if(!isChaupaal && (!db||!currentUser)){
+            if(typeof showToast==='function') showToast('Sign in to keep chatting for real');
+            try{ if(typeof stashPendingDeepLink==='function') stashPendingDeepLink(); }catch(e){}
+            if(typeof openAuthSheet==='function') openAuthSheet('login');
+          }
         },
         onError:(err)=>{
           const area=document.getElementById('chatMsgsArea');

@@ -23,6 +23,8 @@ Implementation lives primarily in:
 
 **Referrals (Growth G2):** Content URLs keep primary path; signed-in shares append `?ref={username}` (`withReferralParam`). Optional `/invite/{username}` for “Invite to Chaupaal”. Claim via `POST /api/media-config` `{ action: 'referral_claim' }` on **new** Auth accounts (creationTime ≤72h); one `referredBy` per invitee. Inviter chips gated on invitee verified email/phone (`referral_activate`). Virtual chips only (150 invitee / 250 inviter); idempotent `referralGrants`. Pending deep link stashed across auth (`chaupaal_pending_deep`).
 
+**Day-0 (Growth G3):** `first-run.js` Play/Meet/Skip — Play starts practice Akhbaar quiz; Meet → Invite (G2) / contacts / Khoj. Pending deep link / `ref` / challenge / group invite **skips** fork+coach (`hasPendingDay0Destination`). Empty states use `renderEmptyState` with one primary CTA. Signed-in never seeds SAMPLE_CHATS / SAMPLE_DISCOVERY as real graph; guest samples stay Demo-labeled; demo send → soft auth (no fake reply).
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.

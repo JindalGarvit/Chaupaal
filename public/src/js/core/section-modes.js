@@ -158,10 +158,18 @@
           icon: '🌿',
           title: tt('mashhoor_empty_title', 'Mashhoor is quiet'),
           message: tt('mashhoor_empty_msg', 'Trending Peepal discussions will gather here.'),
-          actionLabel: tt('peepal_discuss', 'Discuss'),
+          actionLabel: tt('day0_khoj', 'Explore Khoj'),
           onAction: () => {
-            if (typeof openPeepalAskSheet === 'function') openPeepalAskSheet();
+            if (typeof setPeepalMode === 'function') setPeepalMode('khoj');
           },
+          secondaryActions: [
+            {
+              label: tt('peepal_discuss', 'Start a discussion'),
+              onAction: () => {
+                if (typeof openPeepalAskSheet === 'function') openPeepalAskSheet();
+              },
+            },
+          ],
         });
       }
     } else {
@@ -196,8 +204,11 @@
     try {
       if (typeof friends !== 'undefined' && Array.isArray(friends)) pools.push(...friends);
     } catch (e) {}
+    // Never mix SAMPLE_DISCOVERY_POOL into signed-in friend bands (fake graph).
     try {
-      if (typeof SAMPLE_DISCOVERY_POOL !== 'undefined') pools.push(...SAMPLE_DISCOVERY_POOL);
+      if (!(typeof currentUser !== 'undefined' && currentUser) && typeof SAMPLE_DISCOVERY_POOL !== 'undefined') {
+        pools.push(...SAMPLE_DISCOVERY_POOL.map((u) => ({ ...u, isSample: true })));
+      }
     } catch (e) {}
     return pools;
   }
