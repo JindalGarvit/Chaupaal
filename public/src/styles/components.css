@@ -381,7 +381,7 @@ button[style*="background:var(--red)"] {
   color:#7B2CBF!important;stroke:#7B2CBF!important;
 }
 
-/* Akhbaar â minimal Add category screen */
+/* Akhbaar Ã¢ÂÂ minimal Add category screen */
 .akh-add-cat-overlay{
   position:absolute;inset:0;z-index:280;display:flex;flex-direction:column;
   background:linear-gradient(180deg,#F7F0FF 0%,#fff 42%);
@@ -526,7 +526,7 @@ button[style*="background:var(--red)"] {
   height: 58px !important;
 }
 .story-ring.seen { background: var(--line) !important; }
-/* Duniya story ring states live in duniya-story.css (.is-empty / .is-seen / .is-own) â no global override */
+/* Duniya story ring states live in duniya-story.css (.is-empty / .is-seen / .is-own) Ã¢ÂÂ no global override */
 
 /* ============================================================
    PROFILE MODAL ? social-first layout
@@ -2072,6 +2072,13 @@ html.theme-dark .lehar-empty{color:#fff;}
 .prasidha-span-square{aspect-ratio:1;min-height:0;}
 .prasidha-span-std{min-height:140px;}
 .prasidha-tile .duniya-post{margin:0;border:0;border-radius:0;box-shadow:none;height:100%;}
+.prasidha-tile-fallback{
+  width:100%;height:100%;min-height:120px;border:0;padding:12px;text-align:left;cursor:pointer;
+  background:var(--surface,#f3efe6);color:var(--ink,#222);display:flex;flex-direction:column;justify-content:flex-end;gap:6px;
+}
+.prasidha-tile-cap{font-size:13px;font-weight:600;line-height:1.3;}
+.prasidha-tile-meta{font-size:11px;opacity:.7;}
+.prasidha-loading{padding:16px;font-size:12px;color:var(--muted);text-align:center;}
 @media (max-width:360px){
   .prasidha-masonry{grid-template-columns:1fr;}
   .prasidha-span-wide,.prasidha-span-tall{grid-column:span 1;grid-row:span 1;}
@@ -3993,7 +4000,7 @@ select:focus-visible,
 .rw-sports-ball.is-live{opacity:1;left:62%;}
 .rw-sports-batter{position:absolute;right:18px;top:36%;font-size:32px;}
 
-/* Street Cricket delivery cinema (Prompt 1) â ball flight â hit zone */
+/* Street Cricket delivery cinema (Prompt 1) Ã¢ÂÂ ball flight Ã¢ÂÂ hit zone */
 .rw-sc-card h2{margin-top:0;}
 .rw-sc-pitch{
   height:168px;border-radius:16px;margin:0 0 14px;
@@ -6316,7 +6323,7 @@ html.quiet-mode .dp-arcade-burst,html.quiet-mode .dp-arcade-block{animation:none
 .auth-optional-summary::after{content:' +';color:var(--muted);font-weight:700;}
 .auth-optional-details[open] .auth-optional-summary::after{content:' ?';}
 
-/* Growth G6  PWA install sheet + standalone shell */
+/* Growth G6 Â PWA install sheet + standalone shell */
 .pwa-install-sheet{
   position:fixed;inset:0;z-index:100050;display:flex;align-items:flex-end;justify-content:center;
   background:rgba(20,22,30,.42);padding:12px;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));

@@ -2142,104 +2142,230 @@ function toggleOpenToMeet(){
     hints.forEach((h) => h.remove());
     if (typeof cleanupModeHeaders === 'function') cleanupModeHeaders();
     if (mode === 'lehar') renderLeharFeed();
-    if (mode === 'prasidha') renderPrasidhaFeed();
+    if (mode === 'prasidha') renderPrasidhaFeed({ reset: true, force: true });
   }
 
-  function renderPrasidhaFeed() {
+  let _prasidhaCursor = 0;
+  let _prasidhaLoading = false;
+  let _prasidhaHasMore = false;
+
+  function mergePrasidhaIntoPool(posts) {
+    if (!Array.isArray(posts) || !posts.length) return;
+    if (!Array.isArray(duniyaPosts)) duniyaPosts = [];
+    posts.forEach((p) => {
+      if (!p?.id || duniyaIsDemoPost(p)) return;
+      const idx = duniyaPosts.findIndex((x) => x.id === p.id || x.firestoreId === p.id);
+      const shaped = {
+        ...p,
+        firestoreId: p.firestoreId || p.id,
+        isSample: false,
+        isDemo: false,
+        fromPrasidha: true,
+      };
+      if (idx >= 0) {
+        duniyaPosts[idx] = { ...duniyaPosts[idx], ...shaped, likedByMe: duniyaPosts[idx].likedByMe, savedByMe: duniyaPosts[idx].savedByMe };
+      } else {
+        duniyaPosts.push(shaped);
+      }
+    });
+  }
+
+  async function fetchPrasidhaTrending({ reset = true, limit = 36 } = {}) {
+    if (typeof apiFetch !== 'function') return { posts: [], empty: true, error: true };
+    const offset = reset ? 0 : _prasidhaCursor;
+    const envelope = await apiFetch('/api/stories', {
+      method: 'POST',
+      needAuth: !!(typeof currentUser !== 'undefined' && currentUser),
+      body: {
+        action: 'prasidha_trending',
+        windowDays: 7,
+        limit,
+        offset,
+      },
+    });
+    const data = envelope?.ok && envelope.data ? envelope.data : null;
+    if (!data) return { posts: [], empty: true, error: true };
+    return data;
+  }
+
+  async function openDuniyaPostById(postId) {
+    const id = String(postId || '').trim();
+    if (!id) {
+      if (typeof showToast === 'function') showToast('Post unavailable');
+      return;
+    }
+    let post = (duniyaPosts || []).find((x) => x.id === id || x.firestoreId === id) || null;
+    if (!post && typeof apiFetch === 'function' && typeof currentUser !== 'undefined' && currentUser) {
+      try {
+        const env = await apiFetch('/api/stories', {
+          method: 'POST',
+          needAuth: true,
+          body: { action: 'get', postId: id },
+        });
+        if (env?.ok && env.data?.post) {
+          post = env.data.post;
+          mergePrasidhaIntoPool([post]);
+        }
+      } catch (e) {}
+    }
+    if (!post || duniyaIsDemoPost(post) || post.deleted || post.archived || post.saveOnly) {
+      if (typeof showToast === 'function') showToast('Post unavailable');
+      return;
+    }
+    if (typeof openDuniyaDetail === 'function') openDuniyaDetail(post);
+  }
+
+  async function renderPrasidhaFeed(opts) {
+    const o = opts || {};
     const host = document.getElementById('prasidhaFeed');
     if (!host) return;
     host.classList.add('room-kit', 'room-kit--water', 'room-kit--prasidha');
-    // D0: never masonry SAMPLE as "trending" — real posts only until D4 server trending
-    const realPool = (duniyaPosts || [])
-      .filter((p) => !(typeof isSoftDeleted === 'function' ? isSoftDeleted(p) : p.deleted))
-      .filter((p) => p.archived !== true)
-      .filter((p) => !duniyaIsDemoPost(p));
-    if (!realPool.length) {
+
+    const reset = o.reset !== false;
+    if (_prasidhaLoading && !o.force) return;
+    _prasidhaLoading = true;
+
+    if (reset) {
+      host.innerHTML = '';
+      const loading = document.createElement('div');
+      loading.className = 'prasidha-loading';
+      loading.setAttribute('data-prasidha-loading', '1');
+      loading.style.cssText = 'padding:16px;font-size:12px;color:var(--muted);text-align:center;';
+      loading.textContent =
+        typeof t === 'function'
+          ? t('prasidha_sub') || 'Trending this week…'
+          : 'Loading trending this week…';
+      host.appendChild(loading);
+      _prasidhaCursor = 0;
+      _prasidhaHasMore = false;
+    }
+
+    let data;
+    try {
+      data = await fetchPrasidhaTrending({ reset, limit: 36 });
+    } catch (e) {
+      data = { posts: [], empty: true, error: true };
+    }
+    _prasidhaLoading = false;
+    host.querySelector('[data-prasidha-loading]')?.remove();
+
+    // Never present SAMPLE/Demo as trending (D0/D4)
+    const clean = (Array.isArray(data?.posts) ? data.posts : []).filter(
+      (p) => p?.id && !duniyaIsDemoPost(p) && !p.isSample && !p.isDemo && !p.isSeedContent
+    );
+
+    if (data?.error && reset && !clean.length) {
+      host.innerHTML = '';
+      if (typeof renderEmptyState === 'function') {
+        renderEmptyState(host, {
+          icon: '✨',
+          title: typeof t === 'function' ? t('prasidha_empty_title') || 'Prasidha is warming up' : 'Prasidha is warming up',
+          message: 'Couldn’t load trending. Try again — we don’t fill this with sample posts.',
+          actionLabel: 'Retry',
+          onAction: () => renderPrasidhaFeed({ reset: true, force: true }),
+        });
+      } else {
+        host.innerHTML = '<div class="prasidha-empty">Couldn’t load trending</div>';
+      }
+      return;
+    }
+
+    if (reset && !clean.length) {
       host.innerHTML = '';
       if (typeof renderEmptyState === 'function') {
         renderEmptyState(host, {
           icon: '✨',
           title: typeof t === 'function' ? t('prasidha_empty_title') || 'Prasidha is warming up' : 'Prasidha is warming up',
           message:
-            typeof t === 'function'
-              ? t('prasidha_empty_msg') || 'Trending posts from the last week will land here. Pull to refresh when the feed has real posts.'
-              : 'Trending posts from the last week will land here. Pull to refresh when the feed has real posts.',
-          actionLabel: 'Retry',
+            data?.emptyMessage ||
+            (typeof t === 'function'
+              ? t('prasidha_empty_msg') || 'Trending posts from the last week will land here.'
+              : 'Trending posts from the last week will land here.'),
+          actionLabel: 'Create post',
           onAction: () => {
-            loadDuniyaPage({ reset: true }).then(() => {
-              renderDuniyaFeed();
-              renderPrasidhaFeed();
-            });
+            if (typeof openDuniyaPostSheet === 'function') openDuniyaPostSheet('post');
           },
+          secondaryActions: [
+            {
+              label: 'Open Vishwa',
+              onAction: () => setDuniyaMode('vishwa'),
+            },
+          ],
         });
       } else {
         host.innerHTML = '<div class="prasidha-empty">Prasidha is warming up</div>';
       }
       return;
     }
-    let ranked =
-      typeof rankByVelocity === 'function'
-        ? rankByVelocity(realPool, {
-            friendUids: typeof followingSet !== 'undefined' ? [...followingSet] : [],
-          })
-        : [...realPool];
-    // Prefer server scores when present
-    if (realPool.some((p) => Number.isFinite(Number(p._serverScore)))) {
-      ranked = [...realPool].sort((a, b) => Number(b._serverScore || 0) - Number(a._serverScore || 0));
+
+    mergePrasidhaIntoPool(clean);
+
+    let grid = host.querySelector('.prasidha-masonry');
+    if (reset || !grid) {
+      grid = document.createElement('div');
+      grid.className = 'prasidha-masonry';
+      host.querySelector('.prasidha-masonry')?.remove();
+      host.querySelector('.prasidha-load-more')?.remove();
+      host.appendChild(grid);
     }
-    host.innerHTML = '';
-    const grid = document.createElement('div');
-    grid.className = 'prasidha-masonry';
-    ranked.slice(0, 40).forEach((post, i) => {
+
+    clean.forEach((raw, i) => {
+      const post = (duniyaPosts || []).find((x) => x.id === raw.id) || raw;
       const tile = document.createElement('div');
-      const w = Number(post.mediaWidth || post.width || post.media?.width || 0);
-      const h = Number(post.mediaHeight || post.height || post.media?.height || 0);
+      const w = Number(post.mediaWidth || post.width || 0);
+      const h = Number(post.mediaHeight || post.height || 0);
       const ratio = w && h ? w / h : i % 7 === 0 ? 0.7 : i % 5 === 0 ? 1.5 : 1;
       let span = 'prasidha-span-std';
       if (ratio >= 1.35) span = 'prasidha-span-wide';
       else if (ratio <= 0.72) span = 'prasidha-span-tall';
       else if (ratio >= 0.95 && ratio <= 1.05) span = 'prasidha-span-square';
       tile.className = `prasidha-tile ${span}`;
+      tile.dataset.prasidhaId = String(post.id || '');
       try {
         const card = createDuniyaPost(post, { variant: 'tile' });
-        if (card) tile.appendChild(card);
-        else tile.appendChild(createDuniyaPost(post, { variant: 'list' }));
+        if (card) {
+          tile.appendChild(card);
+        } else {
+          throw new Error('no card');
+        }
       } catch (e) {
-        tile.appendChild(createDuniyaPost(post, { variant: 'list' }));
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'prasidha-tile-fallback';
+        const likes = Number(post.likes) || 0;
+        const comments = Number(post.comments) || 0;
+        btn.innerHTML = `<span class="prasidha-tile-cap">${duniyaEsc(String(post.caption || 'Post').slice(0, 100))}</span>
+          <span class="prasidha-tile-meta">${likes} likes · ${comments} comments${post.metaHint ? ` · ${duniyaEsc(post.metaHint)}` : ''}</span>`;
+        btn.addEventListener('click', () => openDuniyaPostById(post.id));
+        tile.appendChild(btn);
       }
       grid.appendChild(tile);
     });
-    host.appendChild(grid);
-    try {
-      const needRank =
-        realPool.length &&
-        realPool.filter((p) => Number.isFinite(Number(p._serverScore))).length < 3;
-      if (typeof requestContentRank === 'function' && needRank && !window.__prasidhaRankInflight) {
-        window.__prasidhaRankInflight = true;
-        requestContentRank('duniya', realPool, {
-          friendUids: typeof followingSet !== 'undefined' ? [...followingSet] : [],
-          limit: 40,
-        })
-          .then((data) => {
-            window.__prasidhaRankInflight = false;
-            if (!data?.order?.length) return;
-            const scoreMap = new Map(data.order.map((r) => [String(r.id), r]));
-            realPool.forEach((p) => {
-              const id = String(p.firestoreId || p.id || '');
-              const row = scoreMap.get(id);
-              if (row) {
-                p._serverScore = row.score;
-                p._rankExplain = row.explain;
-              }
-            });
-            renderPrasidhaFeed();
-          })
-          .catch(() => {
-            window.__prasidhaRankInflight = false;
-          });
+
+    _prasidhaCursor = (reset ? 0 : _prasidhaCursor) + clean.length;
+    _prasidhaHasMore = !!data?.hasMore;
+
+    let moreBtn = host.querySelector('.prasidha-load-more');
+    if (_prasidhaHasMore) {
+      if (!moreBtn) {
+        moreBtn = document.createElement('button');
+        moreBtn.type = 'button';
+        moreBtn.className = 'prasidha-load-more btn btn--ghost';
+        moreBtn.textContent = 'Load more';
+        moreBtn.style.cssText = 'display:block;margin:12px auto 24px;';
+        host.appendChild(moreBtn);
+        moreBtn.addEventListener('click', () => renderPrasidhaFeed({ reset: false }));
       }
-    } catch (e) {
-      window.__prasidhaRankInflight = false;
+      moreBtn.classList.remove('hidden');
+    } else if (moreBtn) {
+      moreBtn.classList.add('hidden');
+    }
+
+    // Best-effort like hydration for signed-in (sticky social)
+    if (typeof hydrateContentLikes === 'function' && typeof currentUser !== 'undefined' && currentUser) {
+      try {
+        await hydrateContentLikes('duniya', clean);
+      } catch (e) {}
     }
   }
 
@@ -2266,6 +2392,7 @@ function toggleOpenToMeet(){
   window.renderLeharFeed =
     typeof safeFeature === 'function' ? safeFeature('lehar_feed', renderLeharFeed) : renderLeharFeed;
   window.renderPrasidhaFeed = renderPrasidhaFeed;
+  window.openDuniyaPostById = openDuniyaPostById;
 })();
 
 // Feed-render boundary (CONVENTIONS 4c) — dynamic list from network content

@@ -21,6 +21,7 @@ const {
   validateCreate,
   serializePost,
 } = require('./duniya-post-payload');
+const { prasidhaTrending } = require('./prasidha-trending');
 
 const COLLECTION = 'duniya';
 const MAX_COLLAB_INVITES = 3;
@@ -42,6 +43,7 @@ function isDuniyaPostRequest(req, body) {
   if (action === 'collab' || action === 'send_post') return true;
   if (action === 'update' && body?.postId) return true;
   if (action === 'get' && body?.postId && !body?.storyId && !body?.destination) return true;
+  if (action === 'prasidha_trending') return true;
   if (
     action === 'create' &&
     !body?.destination &&
@@ -537,6 +539,10 @@ async function dispatchDuniyaPost(res, { db, admin, uid, body }) {
     if (action === 'get') {
       const snap = await getPost(db, body.postId);
       return sendSuccess(res, { post: serializePost(snap, uid) });
+    }
+    if (action === 'prasidha_trending') {
+      // Prefer stories.js pre-auth path for guests; signed-in rewrite still works here.
+      return sendSuccess(res, await prasidhaTrending(db, admin, { uid }, body));
     }
     return sendError(res, 400, 'INVALID_ACTION', 'Unknown action');
   } catch (e) {

@@ -4,7 +4,7 @@
  * exclusion marker is ever exposed to another viewer.
  */
 const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
-const { requireUser, initAdmin } = require('../server-lib/auth');
+const { requireUser, verifyBearer, initAdmin } = require('../server-lib/auth');
 const { checkActionRateLimit } = require('../server-lib/rate-limit');
 const { canViewStory: canViewStoryPolicy, isCloseFriendOptOut } = require('../server-lib/social-model');
 const {
@@ -14,6 +14,7 @@ const {
   excludedIds,
 } = require('../server-lib/close-friends');
 const { isDuniyaPostRequest, dispatchDuniyaPost } = require('../server-lib/duniya-posts');
+const { prasidhaTrending } = require('../server-lib/prasidha-trending');
 const {
   cleanOverlays,
   cleanInteractive,
@@ -1263,16 +1264,35 @@ module.exports = async function handler(req, res) {
   }
 
   if (!requireMethod(req, res, 'POST')) return;
-  const user = await requireUser(req, res, { allowWeak: false });
-  if (!user) return;
-  const admin = initAdmin();
-  if (!admin) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Firebase Admin not configured');
   let body;
   try {
     body = parseJsonBody(req);
   } catch {
     return sendError(res, 400, 'INVALID_JSON', 'Invalid JSON body');
   }
+
+  // D4: Prasidha trending — public list; auth optional (light follow boost when signed in)
+  if (String(body.action || '') === 'prasidha_trending') {
+    const adminEarly = initAdmin();
+    if (!adminEarly) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Firebase Admin not configured');
+    try {
+      let identity = null;
+      try {
+        const verified = await verifyBearer(req);
+        if (verified && !verified.weak) identity = verified;
+      } catch (e) {}
+      const result = await prasidhaTrending(adminEarly.firestore(), adminEarly, identity, body || {});
+      return sendSuccess(res, result);
+    } catch (e) {
+      console.warn('[prasidha_trending]', e?.message || e);
+      return sendError(res, 500, 'PRASIDHA_FAILED', 'Could not load trending posts');
+    }
+  }
+
+  const user = await requireUser(req, res, { allowWeak: false });
+  if (!user) return;
+  const admin = initAdmin();
+  if (!admin) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Firebase Admin not configured');
   const db = admin.firestore();
   const action = String(body.action || '');
   if (isDuniyaPostRequest(req, body)) {
