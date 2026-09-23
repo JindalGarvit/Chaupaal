@@ -45,6 +45,8 @@ Implementation lives primarily in:
 
 **Duniya D1 (create IA):** Vishwa IG-style story rings (gradient unseen / muted seen; self + badge). **Tap** self → story viewer or create; **long-press** self → post compose; **+** → story only. Morph Create post | Create Story + FAB post kept. Guest create soft-auths with `duniya_compose` / `duniya_story` resume. No SAMPLE authors in live tray.
 
+**Duniya D2 (Vishwa social):** Priority authors = **accepted friends OR following** (plus self). Early **5 slots** newest-first from priority, then remaining loaded posts by recency (strangers kept). Guests/demo: chrono only. Like/save hydrated on load; Demo still local-only. Dismissible “Showing people you follow first” hint.
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.

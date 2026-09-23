@@ -14,6 +14,8 @@ const DUNIYA_FEED_CACHE_TTL_MS=7*24*60*60*1000;
 /** Start empty — avoid SAMPLE flash for signed-in before first fetch (D0). */
 let duniyaPosts=[];
 let followingSet=new Set();
+/** Accepted friends + following (for Vishwa priority) — never SAMPLE uids. */
+let duniyaPrioritySet=new Set();
 let archiveItems=[];
 /** Cursor state for Firestore Duniya feed. */
 let duniyaPageCursor=null;
@@ -23,6 +25,8 @@ let duniyaLiveMode=false; // true once a successful Firestore read replaced the 
 let duniyaOfflineFromCache=false; // showing last-good real cache after load failure
 let duniyaDemoFallback=false; // signed-in showing labeled samples (unavailable / preview)
 let duniyaCacheSavedAt=0;
+/** Early slots reserved for friends/following before pure recency fill (D2). */
+const DUNIYA_VISHWA_PRIORITY_SLOTS=5;
 
 function duniyaIsSignedIn(){
   return typeof currentUser!=='undefined'&&!!currentUser;
@@ -93,7 +97,8 @@ function formatDuniyaCacheAge(savedAt){
 }
 function applyDuniyaLabeledSamples({fallback=false}={}){
   duniyaPosts=labeledDuniyaSamples();
-  followingSet=new Set(duniyaPosts.filter((p)=>p.followed).map((p)=>p.user.uid));
+  followingSet=new Set();
+  duniyaPrioritySet=new Set();
   duniyaLiveMode=false;
   duniyaOfflineFromCache=false;
   duniyaDemoFallback=!!fallback;
@@ -101,6 +106,77 @@ function applyDuniyaLabeledSamples({fallback=false}={}){
 function clearDuniyaDemoFlags(){
   duniyaOfflineFromCache=false;
   duniyaDemoFallback=false;
+}
+function duniyaPostTs(p){
+  const n=Number(p?.ts||p?.createdAtMs||0);
+  if(n) return n;
+  return 0;
+}
+/** Priority = accepted friends OR following (or self). Guests/SAMPLE never count. */
+function isDuniyaPriorityAuthor(uid, post){
+  if(!uid||!duniyaIsSignedIn()) return false;
+  if(duniyaIsDemoPost(post)) return false;
+  if(uid===currentUser.uid) return true;
+  if(duniyaPrioritySet.has(uid)||followingSet.has(uid)) return true;
+  if(post?._feedPriority) return true;
+  try{
+    if(typeof relationshipState==='function'){
+      const st=relationshipState(uid);
+      return !!(st&&(st.friend||st.following));
+    }
+  }catch(e){}
+  return false;
+}
+/**
+ * D2 Vishwa order: up to N early slots for friends/following (newest first),
+ * then remaining loaded posts by recency (includes leftover priority + strangers).
+ * Does not hide strangers. Guests/demo: chrono only — no fake friend priority.
+ */
+function rankDuniyaVishwaFeed(posts){
+  const list=(posts||[]).slice();
+  if(!list.length) return list;
+  const byRecency=(a,b)=>duniyaPostTs(b)-duniyaPostTs(a);
+  // Guest or demo-only pool: chronological, never invent friend priority from sample uids
+  if(!duniyaIsSignedIn()||list.every((p)=>duniyaIsDemoPost(p))||duniyaDemoFallback){
+    return list.sort(byRecency);
+  }
+  const priority=[];
+  const rest=[];
+  list.forEach((p)=>{
+    if(duniyaIsDemoPost(p)){
+      rest.push(p);
+      return;
+    }
+    const uid=p.user?.uid||p.uid;
+    if(isDuniyaPriorityAuthor(uid,p)) priority.push(p);
+    else rest.push(p);
+  });
+  priority.sort(byRecency);
+  rest.sort(byRecency);
+  if(!priority.length) return rest;
+  const slots=Math.max(0, Math.min(DUNIYA_VISHWA_PRIORITY_SLOTS, priority.length));
+  const head=priority.slice(0,slots);
+  const leftover=priority.slice(slots);
+  const tail=leftover.concat(rest).sort(byRecency);
+  return head.concat(tail);
+}
+function syncDuniyaPriorityFromStates(states, mapped){
+  (mapped||[]).forEach((p)=>{
+    const uid=p.user?.uid||p.uid;
+    if(!uid||duniyaIsDemoPost(p)) return;
+    const st=(states&&states[uid])||(typeof relationshipState==='function'?relationshipState(uid):{})||{};
+    p.followed=!!st.following;
+    p._isFriend=!!st.friend;
+    p._feedPriority=!!(st.friend||st.following)||uid===currentUser?.uid;
+    if(st.following) followingSet.add(uid);
+    else followingSet.delete(uid);
+    if(st.friend||st.following||uid===currentUser?.uid) duniyaPrioritySet.add(uid);
+    else duniyaPrioritySet.delete(uid);
+  });
+}
+if(typeof window!=='undefined'){
+  window.rankDuniyaVishwaFeed=rankDuniyaVishwaFeed;
+  window.isDuniyaPriorityAuthor=isDuniyaPriorityAuthor;
 }
 
 function saveToArchive(_item){
@@ -180,6 +256,9 @@ async function loadDuniyaPage({reset=false}={}){
       await enrichUsersWithProfileType(mapped.map(p=>p.user).filter(Boolean));
     }
     if(typeof hydrateContentLikes==='function') await hydrateContentLikes('duniya',mapped);
+    if(typeof hydrateContentSaved==='function'){
+      try{ await hydrateContentSaved(mapped,'duniya'); }catch(e){}
+    }
     if(typeof loadContentComments==='function'){
       await Promise.all(mapped.map(async(post)=>{
         try{
@@ -196,11 +275,7 @@ async function loadDuniyaPage({reset=false}={}){
     }
     if(typeof hydrateRelationships==='function'){
       const states=await hydrateRelationships(mapped.map(p=>p.user?.uid).filter(Boolean));
-      mapped.forEach(p=>{
-        p.followed=!!states[p.user?.uid]?.following;
-        if(p.followed) followingSet.add(p.user.uid);
-        else followingSet.delete(p.user.uid);
-      });
+      syncDuniyaPriorityFromStates(states, mapped);
     }
     if(reset&&mapped.length){
       // Live page wins — clear SAMPLE from memory (D0)
@@ -350,6 +425,24 @@ function renderDuniyaDemoBanner(feed){
   feed.insertBefore(banner,feed.firstChild);
 }
 
+function renderDuniyaPriorityHint(feed){
+  if(!feed||!duniyaIsSignedIn()||duniyaDemoFallback||!duniyaLiveMode) return;
+  const hasPriority=[...duniyaPrioritySet].some((uid)=>uid&&uid!==currentUser?.uid);
+  if(!hasPriority) return;
+  try{ if(sessionStorage.getItem('chaupaal_duniya_priority_hint')==='1') return; }catch(e){}
+  if(feed.querySelector('.duniya-priority-hint')) return;
+  const hint=document.createElement('div');
+  hint.className='duniya-priority-hint';
+  hint.setAttribute('role','status');
+  hint.innerHTML=`<span class="duniya-priority-hint-text">Showing people you follow first</span>
+    <button type="button" class="duniya-priority-hint-dismiss" aria-label="Dismiss">×</button>`;
+  hint.querySelector('.duniya-priority-hint-dismiss')?.addEventListener('click',()=>{
+    try{ sessionStorage.setItem('chaupaal_duniya_priority_hint','1'); }catch(e){}
+    hint.remove();
+  });
+  feed.insertBefore(hint, feed.firstChild);
+}
+
 function renderDuniyaFeed(){
   const feed=document.getElementById('duniyaFeed');if(!feed)return;
   const visible=duniyaPosts.filter(p=>!(typeof isSoftDeleted==='function'?isSoftDeleted(p):p.deleted)).filter(p=>p.archived!==true);
@@ -395,8 +488,16 @@ function renderDuniyaFeed(){
     }
     return;
   }
-  visible.forEach(post=>feed.appendChild(createDuniyaPost(post)));
+  // D2: re-rank full loaded set each paint (stable within groups by recency)
+  const ordered=rankDuniyaVishwaFeed(visible);
+  if(duniyaLiveMode&&!duniyaDemoFallback&&!ordered.some((p)=>duniyaIsDemoPost(p))){
+    // Keep in-memory order aligned so load-more appends then re-rank cleanly
+    const archived=(duniyaPosts||[]).filter((p)=>p.archived===true||(typeof isSoftDeleted==='function'?isSoftDeleted(p):p.deleted));
+    duniyaPosts=ordered.concat(archived);
+  }
+  ordered.forEach(post=>feed.appendChild(createDuniyaPost(post)));
   renderDuniyaDemoBanner(feed);
+  renderDuniyaPriorityHint(feed);
   if(typeof enhanceMediaIn==='function') enhanceMediaIn(feed);
   if(typeof mountMusicCards==='function') mountMusicCards(feed);
   if(typeof mountLocationCards==='function') mountLocationCards(feed);
@@ -694,15 +795,33 @@ function createDuniyaPost(post, {variant='list'}={}){
                 btn.classList.toggle('liked', saved.liked);
                 btn.setAttribute('aria-pressed', saved.liked ? 'true' : 'false');
                 el.querySelector('.duniya-post-likes') && (el.querySelector('.duniya-post-likes').textContent = `${formatCount(saved.likes)} likes`);
-              } else if (typeof showToast === 'function') {
-                showToast('Could not save like');
+              } else {
                 revert();
+                if (typeof showToast === 'function') {
+                  showToast('Could not save like — try again');
+                }
               }
             }
           },
+          errorToast: typeof friendlyError === 'function' ? undefined : 'Could not save like',
         });
       } else {
         apply();
+        if (typeof toggleContentLike === 'function') {
+          try {
+            const saved = await toggleContentLike('duniya', p);
+            if (!saved.persisted) revert();
+            else {
+              p.likedByMe = saved.liked;
+              p.likes = saved.likes;
+            }
+          } catch (err) {
+            revert();
+            if (typeof showToast === 'function') {
+              showToast(typeof friendlyError === 'function' ? friendlyError(err) : 'Could not save like');
+            }
+          }
+        }
       }
     } finally {
       delete btn.dataset.busy;
@@ -859,12 +978,14 @@ function createDuniyaPost(post, {variant='list'}={}){
     try {
       if (wasFollowing) {
         followingSet.delete(uid);
+        duniyaPrioritySet.delete(uid);
         btn.textContent = 'Follow';
         btn.classList.remove('following');
         if(typeof setFollowing==='function'){
           try{ await setFollowing(uid,false,'duniya_post'); }
           catch(err){
             followingSet.add(uid);
+            duniyaPrioritySet.add(uid);
             btn.textContent='Following';
             btn.classList.add('following');
             throw err;
@@ -875,6 +996,7 @@ function createDuniyaPost(post, {variant='list'}={}){
             message: `Unfollowed ${name}`,
             onUndo: async () => {
               followingSet.add(uid);
+              duniyaPrioritySet.add(uid);
               btn.textContent = 'Following';
               btn.classList.add('following');
               if(typeof setFollowing==='function'){
@@ -887,6 +1009,7 @@ function createDuniyaPost(post, {variant='list'}={}){
       } else {
         const apply = () => {
           followingSet.add(uid);
+          duniyaPrioritySet.add(uid);
           btn.textContent = 'Following';
           btn.classList.add('following');
           if (typeof SoundLib !== 'undefined' && SoundLib.follow) SoundLib.follow();
@@ -894,6 +1017,7 @@ function createDuniyaPost(post, {variant='list'}={}){
         };
         const revert = () => {
           followingSet.delete(uid);
+          duniyaPrioritySet.delete(uid);
           btn.textContent = 'Follow';
           btn.classList.remove('following');
         };
