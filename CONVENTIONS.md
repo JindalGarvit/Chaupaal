@@ -41,6 +41,8 @@ Implementation lives primarily in:
 
 **Peepal/Khoj K4 (dogfood close):** Arc verified end-to-end. Soft-auth Find stashes `khoj_find` + pending query and resumes on Khoj after login (G2 pattern). Static `scripts/test-peepal-k4.js` locks K0–K3 invariants + resume. Residuals documented in ship notes (cache, embeddings, seed global flip, FoF approx).
 
+**Duniya D0 (truth):** Guests see labeled SAMPLE. Signed-in: live posts clear SAMPLE; load fail → last-good real cache (`chaupaal_duniya_feed_cache_v1_{uid}`, 7d TTL) with Offline banner + Retry (never Sign-in); no cache → labeled demo + Retry. Empty live → honest empty + optional Preview demo. Demo like/comment/save/share = local + “Demo — not saved”. Prasidha excludes samples (warming-up empty until real). Lehar labels Demo clips; null-media sample video fixed. Sample `/post/dN` soft-fails as Demo.
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.

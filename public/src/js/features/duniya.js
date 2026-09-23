@@ -1,20 +1,107 @@
 // ===================== DUNIYA DATA =====================
+// D0 truth: guests may see labeled SAMPLE; signed-in prefer live → offline real cache → honest empty / labeled demo.
 const SAMPLE_DUNIYA=[
   {id:'d1',isSample:true,user:{name:'India Today',avatar:'📺',uid:'it',profileType:'professional'},type:'image',media:'https://picsum.photos/seed/news1/600/400',caption:'Breaking: Major policy announcement from Union Cabinet. #IndiaToday #News',likes:2847,comments:142,shares:389,timestamp:'2h',tags:[],followed:false,likedByMe:false},
   {id:'d2',isSample:true,user:{name:'Priya Krishnan',avatar:'👩‍🎨',uid:'pk',profileType:'personal'},type:'image',media:'https://picsum.photos/seed/art2/600/600',caption:'My latest artwork inspired by the monsoons 🌧️ What do you think? @ArtLovers #Art #Monsoon',likes:934,comments:67,shares:28,timestamp:'4h',tags:['ArtLovers'],followed:false,likedByMe:false},
-  {id:'d3',isSample:true,user:{name:'StartupIndia',avatar:'🚀',uid:'si',profileType:'professional'},type:'video',media:null,caption:'5 Indian startups that are changing the world 🌏 Watch till the end! #Startup #India',likes:5201,comments:321,shares:1204,timestamp:'6h',tags:[],followed:false,likedByMe:false},
+  {id:'d3',isSample:true,user:{name:'StartupIndia',avatar:'🚀',uid:'si',profileType:'professional'},type:'video',media:'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',thumb:'https://picsum.photos/seed/startupvid/600/800',caption:'5 Indian startups that are changing the world 🌏 Watch till the end! #Startup #India',likes:5201,comments:321,shares:1204,timestamp:'6h',tags:[],followed:false,likedByMe:false},
   {id:'d4',isSample:true,user:{name:'Chef Rahul',avatar:'👨‍🍳',uid:'cr',profileType:'professional'},type:'image',media:'https://picsum.photos/seed/food4/600/500',caption:'Dal makhani recipe that took me 10 years to perfect. Recipe in comments! 🍛 #Food #Recipe',likes:3102,comments:892,shares:1567,timestamp:'8h',tags:[],followed:false,likedByMe:false},
   {id:'d5',isSample:true,user:{name:'Riya Sharma',avatar:'😊',uid:'rs',profileType:'personal'},type:'image',media:'https://picsum.photos/seed/travel5/600/700',caption:'Ladakh calling 🏔️ Nothing compares to this. @Dev_travels #Travel #Ladakh',likes:1204,comments:89,shares:45,timestamp:'1d',tags:['Dev_travels'],followed:true,likedByMe:true},
 ];
 
-let duniyaPosts=[...SAMPLE_DUNIYA];
-let followingSet=new Set(SAMPLE_DUNIYA.filter(p=>p.followed).map(p=>p.user.uid));
+const DUNIYA_FEED_CACHE_PREFIX='chaupaal_duniya_feed_cache_v1';
+const DUNIYA_FEED_CACHE_TTL_MS=7*24*60*60*1000;
+
+/** Start empty — avoid SAMPLE flash for signed-in before first fetch (D0). */
+let duniyaPosts=[];
+let followingSet=new Set();
 let archiveItems=[];
-/** Cursor state for Firestore Duniya feed (Phase 2). Samples seed the UI until live pages arrive. */
+/** Cursor state for Firestore Duniya feed. */
 let duniyaPageCursor=null;
 let duniyaHasMore=true;
 let duniyaFeedLoading=false;
-let duniyaLiveMode=false; // true once we've successfully read at least one Firestore page
+let duniyaLiveMode=false; // true once a successful Firestore read replaced the pool with real/empty
+let duniyaOfflineFromCache=false; // showing last-good real cache after load failure
+let duniyaDemoFallback=false; // signed-in showing labeled samples (unavailable / preview)
+let duniyaCacheSavedAt=0;
+
+function duniyaIsSignedIn(){
+  return typeof currentUser!=='undefined'&&!!currentUser;
+}
+function duniyaIsDemoPost(p){
+  return !!(p&&(p.isSample||p.isDemo||p.id&&String(p.id).match(/^d[1-5]$/)));
+}
+function labeledDuniyaSamples(){
+  return SAMPLE_DUNIYA.map((p)=>({...p,isSample:true,isDemo:true}));
+}
+function toastDuniyaDemo(){
+  if(typeof showToast==='function') showToast('Demo — not saved');
+}
+function duniyaFeedCacheKey(){
+  const uid=(typeof currentUser!=='undefined'&&currentUser?.uid)||'guest';
+  return `${DUNIYA_FEED_CACHE_PREFIX}_${uid}`;
+}
+function writeDuniyaFeedCache(posts){
+  const real=(posts||[]).filter((p)=>p&&!duniyaIsDemoPost(p)&&(p.firestoreId||p.id));
+  if(!real.length||!duniyaIsSignedIn()) return;
+  try{
+    const slim=real.slice(0,30).map((p)=>({
+      id:p.id,
+      firestoreId:p.firestoreId||p.id,
+      user:p.user,
+      type:p.type,
+      media:p.media,
+      thumb:p.thumb,
+      mediaWidth:p.mediaWidth,
+      mediaHeight:p.mediaHeight,
+      slides:Array.isArray(p.slides)?p.slides.slice(0,8):[],
+      caption:p.caption,
+      likes:p.likes,
+      comments:p.comments,
+      shares:p.shares,
+      ts:p.ts,
+      timestamp:p.timestamp,
+      tags:p.tags||[],
+      audience:p.audience||'public',
+      archived:!!p.archived,
+      uid:p.uid,
+      likedByMe:!!p.likedByMe,
+    }));
+    const savedAt=Date.now();
+    localStorage.setItem(duniyaFeedCacheKey(),JSON.stringify({savedAt,posts:slim}));
+    duniyaCacheSavedAt=savedAt;
+  }catch(e){}
+}
+function readDuniyaFeedCache(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(duniyaFeedCacheKey())||'null');
+    if(!raw||!Array.isArray(raw.posts)||!raw.posts.length) return null;
+    if(Date.now()-(Number(raw.savedAt)||0)>DUNIYA_FEED_CACHE_TTL_MS) return null;
+    return {
+      savedAt:Number(raw.savedAt)||0,
+      posts:raw.posts.map((p)=>({...p,isSample:false,fromCache:true})),
+    };
+  }catch(e){ return null; }
+}
+function formatDuniyaCacheAge(savedAt){
+  const ms=Math.max(0,Date.now()-(Number(savedAt)||0));
+  const mins=Math.round(ms/60000);
+  if(mins<2) return 'just now';
+  if(mins<60) return `${mins}m ago`;
+  const hrs=Math.round(mins/60);
+  if(hrs<48) return `${hrs}h ago`;
+  return `${Math.round(hrs/24)}d ago`;
+}
+function applyDuniyaLabeledSamples({fallback=false}={}){
+  duniyaPosts=labeledDuniyaSamples();
+  followingSet=new Set(duniyaPosts.filter((p)=>p.followed).map((p)=>p.user.uid));
+  duniyaLiveMode=false;
+  duniyaOfflineFromCache=false;
+  duniyaDemoFallback=!!fallback;
+}
+function clearDuniyaDemoFlags(){
+  duniyaOfflineFromCache=false;
+  duniyaDemoFallback=false;
+}
 
 function saveToArchive(_item){
   // P3: Hub Archive is Firestore-backed. Legacy chaupaal_archive local writes retired.
@@ -116,19 +203,27 @@ async function loadDuniyaPage({reset=false}={}){
       });
     }
     if(reset&&mapped.length){
+      // Live page wins — clear SAMPLE from memory (D0)
       duniyaLiveMode=true;
+      clearDuniyaDemoFlags();
       duniyaPosts=mapped;
+      writeDuniyaFeedCache(mapped);
     } else if(mapped.length){
-      const seen=new Set(duniyaPosts.map(p=>p.firestoreId||p.id));
-      mapped.forEach(p=>{ if(!seen.has(p.firestoreId||p.id)) duniyaPosts.push(p); });
+      const realOnly=(duniyaPosts||[]).filter((p)=>!duniyaIsDemoPost(p));
+      const seen=new Set(realOnly.map(p=>p.firestoreId||p.id));
+      mapped.forEach(p=>{ if(!seen.has(p.firestoreId||p.id)) realOnly.push(p); });
+      duniyaPosts=realOnly;
+      duniyaLiveMode=true;
+      clearDuniyaDemoFlags();
+      writeDuniyaFeedCache(duniyaPosts);
     } else if(reset){
-      // Empty Firestore: guests keep labeled samples; signed-in users get an honest empty feed.
-      if(typeof currentUser!=='undefined'&&currentUser){
+      // Empty Firestore: guests keep labeled samples; signed-in → honest empty (Preview demo optional).
+      if(duniyaIsSignedIn()){
         duniyaLiveMode=true;
+        clearDuniyaDemoFlags();
         duniyaPosts=[];
       } else {
-        duniyaLiveMode=false;
-        duniyaPosts=[...SAMPLE_DUNIYA];
+        applyDuniyaLabeledSamples({fallback:false});
       }
     }
     duniyaPageCursor=page.lastDoc;
@@ -136,7 +231,28 @@ async function loadDuniyaPage({reset=false}={}){
     return {loaded:mapped.length};
   }catch(e){
     console.warn('[duniya] page load failed', e);
-    if(typeof showToast==='function'&&reset) showToast(typeof friendlyError==='function'?friendlyError(e):t('duniya_feed_fail'));
+    if(reset){
+      const cached=duniyaIsSignedIn()?readDuniyaFeedCache():null;
+      if(cached?.posts?.length){
+        duniyaPosts=cached.posts;
+        duniyaCacheSavedAt=cached.savedAt;
+        duniyaLiveMode=false;
+        duniyaOfflineFromCache=true;
+        duniyaDemoFallback=false;
+      } else if(duniyaIsSignedIn()){
+        // No real cache — labeled samples + Retry banner (never Sign-in CTA)
+        applyDuniyaLabeledSamples({fallback:true});
+      } else {
+        applyDuniyaLabeledSamples({fallback:false});
+      }
+      if(typeof showToast==='function'){
+        showToast(
+          duniyaOfflineFromCache
+            ? (typeof t==='function'?t('duniya_offline_cache','Showing last saved posts — offline'):'Showing last saved posts — offline')
+            : (typeof friendlyError==='function'?friendlyError(e):(typeof t==='function'?t('duniya_feed_fail'):'Could not load feed'))
+        );
+      }
+    }
     return {loaded:0,error:e};
   }finally{
     duniyaFeedLoading=false;
@@ -157,17 +273,20 @@ function initDuniya(){
   screen.dataset.loaded='1';
   loadArchive();
   renderDuniyaStories();
-  renderDuniyaFeed();
-  // Hydrate from Firestore with cursor pagination when signed in.
-  if(db&&currentUser){
+  // Hydrate from Firestore when signed in; guests get labeled samples (no SAMPLE flash for signed-in).
+  if(db&&duniyaIsSignedIn()){
     const feed=document.getElementById('duniyaFeed');
     if(typeof renderSkeleton==='function'&&feed) renderSkeleton(feed,{variant:'feed',count:2});
+    else if(feed) feed.innerHTML='<div class="discovery-loading" style="padding:16px;text-align:center;">Loading Duniya…</div>';
     loadDuniyaPage({reset:true}).then(()=>renderDuniyaFeed());
+  } else {
+    applyDuniyaLabeledSamples({fallback:false});
+    renderDuniyaFeed();
   }
   document.getElementById('duniyaPostBtn')?.addEventListener('click',openDuniyaPostSheet);
   const runDuniyaSearch = () => {
     if (typeof openUniversalSearch === 'function') openUniversalSearch({ types: ['users', 'posts', 'groups'] });
-    else if (typeof showToast === 'function') showToast(t('duniya_search_unavailable'));
+    else if (typeof showToast === 'function') showToast(t('duniya_search_unavailable') || 'Search is temporarily unavailable');
   };
   document.getElementById('duniyaSearchBtn')?.addEventListener('click', runDuniyaSearch);
   document.getElementById('duniyaInlineSearch')?.remove();
@@ -187,22 +306,42 @@ function openDuniyaStoryAddSheet(){
 }
 
 function renderDuniyaDemoBanner(feed){
-  if(!feed||duniyaLiveMode)return;
-  const showingSamples=(duniyaPosts||[]).some((p)=>p.isSample);
-  if(!showingSamples)return;
-  try{if(sessionStorage.getItem('chaupaal_duniya_demo_dismissed')==='1')return;}catch(e){}
+  if(!feed)return;
+  const signedIn=duniyaIsSignedIn();
+  const showingSamples=(duniyaPosts||[]).some((p)=>duniyaIsDemoPost(p));
+  const showOffline=duniyaOfflineFromCache&&!showingSamples;
+  const showDemo=showingSamples&&(!duniyaLiveMode||duniyaDemoFallback);
+  if(!showOffline&&!showDemo)return;
+  // Live real feed — no demo banner
+  if(duniyaLiveMode&&!showingSamples&&!duniyaOfflineFromCache)return;
+  try{if(sessionStorage.getItem('chaupaal_duniya_demo_dismissed')==='1'&&showDemo&&!signedIn)return;}catch(e){}
   const existing=feed.querySelector('.duniya-demo-banner');
-  if(existing)return;
+  if(existing) existing.remove();
   const banner=document.createElement('div');
   banner.className='duniya-demo-banner';
   banner.setAttribute('role','status');
-  banner.innerHTML=`<span class="duniya-demo-banner-text">Sample — sign in to see your real feed</span>
-    <button type="button" class="btn btn--primary duniya-demo-banner-cta" data-duniya-demo-signin>Sign in</button>
-    <button type="button" class="duniya-demo-banner-dismiss" data-duniya-demo-dismiss aria-label="Dismiss">×</button>`;
+  if(showOffline){
+    const age=formatDuniyaCacheAge(duniyaCacheSavedAt);
+    banner.innerHTML=`<span class="duniya-demo-banner-text">Offline · last updated ${duniyaEsc(age)}</span>
+      <button type="button" class="btn btn--primary duniya-demo-banner-cta" data-duniya-demo-retry>Retry</button>
+      <button type="button" class="duniya-demo-banner-dismiss" data-duniya-demo-dismiss aria-label="Dismiss">×</button>`;
+  } else if(signedIn){
+    banner.innerHTML=`<span class="duniya-demo-banner-text">Showing demo while feed is unavailable</span>
+      <button type="button" class="btn btn--primary duniya-demo-banner-cta" data-duniya-demo-retry>Retry</button>
+      <button type="button" class="duniya-demo-banner-dismiss" data-duniya-demo-dismiss aria-label="Dismiss">×</button>`;
+  } else {
+    banner.innerHTML=`<span class="duniya-demo-banner-text">Sample — sign in to see your real feed</span>
+      <button type="button" class="btn btn--primary duniya-demo-banner-cta" data-duniya-demo-signin>Sign in</button>
+      <button type="button" class="duniya-demo-banner-dismiss" data-duniya-demo-dismiss aria-label="Dismiss">×</button>`;
+  }
   banner.querySelector('[data-duniya-demo-signin]')?.addEventListener('click',()=>{
     if(typeof openAuthSheet==='function')openAuthSheet('login');
     else if(typeof showAuth==='function')showAuth();
     else if(typeof showToast==='function')showToast('Sign in from the menu');
+  });
+  banner.querySelector('[data-duniya-demo-retry]')?.addEventListener('click',()=>{
+    if(typeof renderSkeleton==='function') renderSkeleton(feed,{variant:'feed',count:2});
+    loadDuniyaPage({reset:true}).then(()=>renderDuniyaFeed());
   });
   banner.querySelector('[data-duniya-demo-dismiss]')?.addEventListener('click',()=>{
     try{sessionStorage.setItem('chaupaal_duniya_demo_dismissed','1');}catch(e){}
@@ -217,7 +356,7 @@ function renderDuniyaFeed(){
   feed.innerHTML='';
   if(!visible.length){
     if(typeof renderEmptyState==='function'){
-      const signedIn=typeof currentUser!=='undefined'&&currentUser;
+      const signedIn=duniyaIsSignedIn();
       renderEmptyState(feed, {
         icon: (typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('duniya',40):(typeof iconHtml==='function'?iconHtml('globe',{size:40,className:'cp-icon--empty'}):'🌍'),
         title:'No posts yet',
@@ -239,6 +378,15 @@ function renderDuniyaFeed(){
           if(typeof openDuniyaPostSheet==='function') openDuniyaPostSheet();
         },
         secondaryActions: [
+          ...(signedIn
+            ? [{
+                label: 'Preview demo',
+                onAction: () => {
+                  applyDuniyaLabeledSamples({ fallback: true });
+                  renderDuniyaFeed();
+                },
+              }]
+            : []),
           { label:'Play Akhbaar', onAction:()=>{ if(typeof showTab==='function') showTab('akhbaar'); } },
         ],
       });
@@ -490,7 +638,7 @@ function createDuniyaPost(post, {variant='list'}={}){
     });
   }
 
-  // Like — optimistic (UI first, rate-limit/persist after)
+  // Like — optimistic (UI first, rate-limit/persist after). Samples = local Demo only (D0).
   const likeBtn=el.querySelector('.like-btn');
   likeBtn?.addEventListener('click', async (e) => {
     const btn = e.currentTarget;
@@ -523,6 +671,12 @@ function createDuniyaPost(post, {variant='list'}={}){
       btn.setAttribute('aria-pressed', prevLiked ? 'true' : 'false');
       el.querySelector('.duniya-post-likes') && (el.querySelector('.duniya-post-likes').textContent = `${formatCount(prevLikes)} likes`);
     };
+    if (duniyaIsDemoPost(p)) {
+      apply();
+      toastDuniyaDemo();
+      delete btn.dataset.busy;
+      return;
+    }
     try {
       if (typeof runOptimistic === 'function') {
         await runOptimistic({
@@ -540,6 +694,9 @@ function createDuniyaPost(post, {variant='list'}={}){
                 btn.classList.toggle('liked', saved.liked);
                 btn.setAttribute('aria-pressed', saved.liked ? 'true' : 'false');
                 el.querySelector('.duniya-post-likes') && (el.querySelector('.duniya-post-likes').textContent = `${formatCount(saved.likes)} likes`);
+              } else if (typeof showToast === 'function') {
+                showToast('Could not save like');
+                revert();
               }
             }
           },
@@ -566,7 +723,7 @@ function createDuniyaPost(post, {variant='list'}={}){
     });
   }
 
-  // Save / unsave
+  // Save / unsave — Demo posts stay local-only (D0)
   const bookmarkBtn = el.querySelector('.duniya-bookmark-btn');
   bookmarkBtn?.addEventListener('click', async (e) => {
     const btn = e.currentTarget;
@@ -578,6 +735,11 @@ function createDuniyaPost(post, {variant='list'}={}){
     btn.setAttribute('aria-pressed', !prev ? 'true' : 'false');
     p.savedByMe = !prev;
     post.savedByMe = !prev;
+    if (duniyaIsDemoPost(p)) {
+      toastDuniyaDemo();
+      delete btn.dataset.busy;
+      return;
+    }
     try {
       if (typeof toggleContentSaved === 'function') {
         const saved = await toggleContentSaved('duniya', p);
@@ -587,6 +749,12 @@ function createDuniyaPost(post, {variant='list'}={}){
           btn.classList.toggle('saved', saved.saved);
           btn.setAttribute('aria-pressed', saved.saved ? 'true' : 'false');
           if (typeof showToast === 'function') showToast(saved.saved ? 'Saved' : 'Removed from saved');
+        } else {
+          p.savedByMe = prev;
+          post.savedByMe = prev;
+          btn.classList.toggle('saved', prev);
+          btn.setAttribute('aria-pressed', prev ? 'true' : 'false');
+          if (typeof showToast === 'function') showToast('Could not save');
         }
       }
     } catch (err) {
@@ -1152,6 +1320,13 @@ function openDuniyaDetail(post,{focusCommentId=null,focusComposer=false}={}){
       post.comments = Math.max(0, (post.comments || 1) - 1);
       refreshComments();
     };
+    if (duniyaIsDemoPost(post)) {
+      apply();
+      c.pending = false;
+      refreshComments();
+      toastDuniyaDemo();
+      return;
+    }
     if (typeof runOptimistic === 'function') {
       await runOptimistic({
         apply,
@@ -1212,6 +1387,12 @@ function openDuniyaPostSheet(mode='post'){
 async function recordDuniyaShare(post){
   const target = duniyaPosts.find((x) => x.id === post.id) || post;
   const previous = Math.max(0, Number(target.shares) || 0);
+  if (duniyaIsDemoPost(target)) {
+    target.shares = previous + 1;
+    post.shares = target.shares;
+    toastDuniyaDemo();
+    return;
+  }
   try{
     if(typeof incrementContentShares==='function'){
       const saved=await incrementContentShares('duniya', target);
@@ -1462,6 +1643,7 @@ function toggleOpenToMeet(){
   let leharIo = null;
   function isVideoPost(p) {
     const media = p.media || p.video || '';
+    if (!media) return false;
     const type = String(p.mediaType || p.type || '').toLowerCase();
     if (type.includes('video')) return true;
     return /\.(mp4|webm|mov)(\?|$)/i.test(media) || /\/video\//i.test(media);
@@ -1476,8 +1658,13 @@ function toggleOpenToMeet(){
     const videos = (duniyaPosts || [])
       .filter((p) => !(typeof isSoftDeleted === 'function' ? isSoftDeleted(p) : p.deleted))
       .filter((p) => p.archived !== true)
-      .filter(isVideoPost);
-    if (!videos.length) {
+      .filter(isVideoPost)
+      .filter((p) => !!(p.media || p.video));
+    const realVideos = videos.filter((p) => !duniyaIsDemoPost(p));
+    // Live signed-in feed: real clips only. Guests / demo-fallback: labeled samples OK.
+    const pool =
+      duniyaLiveMode && duniyaIsSignedIn() && !duniyaDemoFallback ? realVideos : videos;
+    if (!pool.length) {
       feed.innerHTML =
         `<div class="lehar-empty">
           <strong>Lehar</strong>
@@ -1489,7 +1676,7 @@ function toggleOpenToMeet(){
       });
       return;
     }
-    feed.innerHTML = videos
+    feed.innerHTML = pool
       .map((p, i) => {
         const src = p.media || p.video;
         const name = p.user?.name || 'Member';
@@ -1497,9 +1684,10 @@ function toggleOpenToMeet(){
         const likes = Number(p.likes) || 0;
         const comments = Number(p.comments) || 0;
         const liked = !!p.likedByMe;
+        const demo = duniyaIsDemoPost(p);
         const avatar = p.user?.photoURL || (p.user?.avatar && /^https:/.test(p.user.avatar) ? p.user.avatar : '');
-        return `<section class="lehar-slide" data-lehar-i="${i}" data-lehar-id="${duniyaEsc(postId)}">
-          <video src="${duniyaEsc(src)}" playsinline loop muted preload="metadata"></video>
+        return `<section class="lehar-slide${demo ? ' lehar-slide--demo' : ''}" data-lehar-i="${i}" data-lehar-id="${duniyaEsc(postId)}"${demo ? ' data-demo="1"' : ''}>
+          <video src="${duniyaEsc(src)}" playsinline loop muted preload="metadata"${p.thumb ? ` poster="${duniyaEsc(p.thumb)}"` : ''}></video>
           <div class="lehar-progress"><i data-lehar-progress></i></div>
           <button type="button" class="lehar-mute-btn" aria-label="Toggle mute" data-lehar-mute>🔇</button>
           <div class="lehar-double-heart" aria-hidden="true">♥</div>
@@ -1519,9 +1707,9 @@ function toggleOpenToMeet(){
               <button type="button" class="lehar-author-avatar" data-lehar-avatar aria-label="Open profile">
                 ${avatar ? `<img src="${duniyaEsc(avatar)}" alt="">` : `<span class="lehar-author-fallback">${duniyaEsc((name || '?').slice(0, 1))}</span>`}
               </button>
-              <button type="button" class="lehar-author-name" data-lehar-name><strong>${duniyaEsc(name)}</strong></button>
+              <button type="button" class="lehar-author-name" data-lehar-name><strong>${duniyaEsc(name)}</strong>${demo ? ' <span class="cp-demo-badge">Demo</span>' : ''}</button>
             </div>
-            <p>${duniyaEsc((p.caption || '').slice(0, 120))}</p>
+            <p>${demo ? 'Sample · ' : ''}${duniyaEsc((p.caption || '').slice(0, 120))}</p>
           </div>
         </section>`;
       })
@@ -1690,15 +1878,43 @@ function toggleOpenToMeet(){
     const host = document.getElementById('prasidhaFeed');
     if (!host) return;
     host.classList.add('room-kit', 'room-kit--water', 'room-kit--prasidha');
+    // D0: never masonry SAMPLE as "trending" — real posts only until D4 server trending
+    const realPool = (duniyaPosts || [])
+      .filter((p) => !(typeof isSoftDeleted === 'function' ? isSoftDeleted(p) : p.deleted))
+      .filter((p) => p.archived !== true)
+      .filter((p) => !duniyaIsDemoPost(p));
+    if (!realPool.length) {
+      host.innerHTML = '';
+      if (typeof renderEmptyState === 'function') {
+        renderEmptyState(host, {
+          icon: '✨',
+          title: typeof t === 'function' ? t('prasidha_empty_title') || 'Prasidha is warming up' : 'Prasidha is warming up',
+          message:
+            typeof t === 'function'
+              ? t('prasidha_empty_msg') || 'Trending posts from the last week will land here. Pull to refresh when the feed has real posts.'
+              : 'Trending posts from the last week will land here. Pull to refresh when the feed has real posts.',
+          actionLabel: 'Retry',
+          onAction: () => {
+            loadDuniyaPage({ reset: true }).then(() => {
+              renderDuniyaFeed();
+              renderPrasidhaFeed();
+            });
+          },
+        });
+      } else {
+        host.innerHTML = '<div class="prasidha-empty">Prasidha is warming up</div>';
+      }
+      return;
+    }
     let ranked =
       typeof rankByVelocity === 'function'
-        ? rankByVelocity(duniyaPosts || [], {
+        ? rankByVelocity(realPool, {
             friendUids: typeof followingSet !== 'undefined' ? [...followingSet] : [],
           })
-        : [...(duniyaPosts || [])];
+        : [...realPool];
     // Prefer server scores when present
-    if ((duniyaPosts || []).some((p) => Number.isFinite(Number(p._serverScore)))) {
-      ranked = [...(duniyaPosts || [])].sort((a, b) => Number(b._serverScore || 0) - Number(a._serverScore || 0));
+    if (realPool.some((p) => Number.isFinite(Number(p._serverScore)))) {
+      ranked = [...realPool].sort((a, b) => Number(b._serverScore || 0) - Number(a._serverScore || 0));
     }
     host.innerHTML = '';
     const grid = document.createElement('div');
@@ -1725,11 +1941,11 @@ function toggleOpenToMeet(){
     host.appendChild(grid);
     try {
       const needRank =
-        (duniyaPosts || []).length &&
-        (duniyaPosts || []).filter((p) => Number.isFinite(Number(p._serverScore))).length < 3;
+        realPool.length &&
+        realPool.filter((p) => Number.isFinite(Number(p._serverScore))).length < 3;
       if (typeof requestContentRank === 'function' && needRank && !window.__prasidhaRankInflight) {
         window.__prasidhaRankInflight = true;
-        requestContentRank('duniya', duniyaPosts || [], {
+        requestContentRank('duniya', realPool, {
           friendUids: typeof followingSet !== 'undefined' ? [...followingSet] : [],
           limit: 40,
         })
@@ -1737,7 +1953,7 @@ function toggleOpenToMeet(){
             window.__prasidhaRankInflight = false;
             if (!data?.order?.length) return;
             const scoreMap = new Map(data.order.map((r) => [String(r.id), r]));
-            (duniyaPosts || []).forEach((p) => {
+            realPool.forEach((p) => {
               const id = String(p.firestoreId || p.id || '');
               const row = scoreMap.get(id);
               if (row) {
@@ -1753,16 +1969,6 @@ function toggleOpenToMeet(){
       }
     } catch (e) {
       window.__prasidhaRankInflight = false;
-    }
-    if (!ranked.length && typeof renderEmptyState === 'function') {
-      renderEmptyState(host, {
-        icon: '✨',
-        title: typeof t === 'function' ? t('prasidha_empty_title') || 'Prasidha is warming up' : 'Prasidha is warming up',
-        message:
-          typeof t === 'function'
-            ? t('prasidha_empty_msg') || 'Trending posts from the last week will land here.'
-            : 'Trending posts from the last week will land here.',
-      });
     }
   }
 

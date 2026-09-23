@@ -26,6 +26,7 @@
   }
 
   function canPersist(collection, content) {
+    if (content && (content.isSample || content.isDemo)) return false;
     return !!(
       validCollection(collection) &&
       typeof db !== 'undefined' &&

@@ -604,6 +604,15 @@
     const localD =
       typeof duniyaPosts !== 'undefined' ? duniyaPosts.find((p) => p.id === id || p.firestoreId === id) : null;
     if (localD) {
+      if (localD.isSample || localD.isDemo) {
+        if (typeof showToast === 'function') showToast('Demo sample — not a live post');
+        switchTab('duniya');
+        setTimeout(() => {
+          if (typeof initDuniya === 'function') initDuniya();
+          if (typeof openDuniyaDetail === 'function') openDuniyaDetail(localD);
+        }, 200);
+        return;
+      }
       if ((localD.deleted || localD.archived) && localD.uid !== currentUser?.uid) {
         if (typeof showToast === 'function') {
           showToast(localD.archived ? 'This post is no longer public' : 'This post was removed');
@@ -615,6 +624,11 @@
         if (typeof initDuniya === 'function') initDuniya();
         if (typeof openDuniyaDetail === 'function') openDuniyaDetail(localD);
       }, 200);
+      return;
+    }
+    // Sample ids (d1–d5) are never live Firestore docs
+    if (/^d[1-5]$/.test(String(id))) {
+      if (typeof showToast === 'function') showToast('Demo sample — not a live post');
       return;
     }
     if (db) {
