@@ -37,6 +37,8 @@ Implementation lives primarily in:
 
 **Peepal/Khoj K2 (Pro networking):** Professional viewers use `professional_match` (not `skipped_professional`). Peeks prefer Pros + Personal open to network/career. Chips: Networking / Hiring / Job seek / Co-founder / Mentor / Collab (+ Friendship secondary) — no Dating primary. Industry + purpose in filters + ranking reasons. Free-text Find allowed; **dating_opposite_gender suppressed for Pro viewers**. Personal Khoj unchanged (friendship-first + Dating chip).
 
+**Peepal/Khoj K3 (Mashhoor):** `POST /api/peepal-reactions` `{ action: 'mashhoor_trending' }` — live velocity+recency over **~7 days**, public Peepal only; **seeds excluded**; optional friend boost when signed in. No denorm cache. Vriksha intent = Discuss primary + topic chips; Find on Khoj secondary; no people peeks/results on Vriksha.
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.

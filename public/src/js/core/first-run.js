@@ -12,7 +12,7 @@
     peepal: {
       khoj: { brand: 'Khoj', job: 'Find people who match your vibe' },
       vriksha: { brand: 'Vriksha', job: 'Discussions & discovery feed' },
-      mashhoor: { brand: 'Mashhoor', job: 'Popular discussions' },
+      mashhoor: { brand: 'Mashhoor', job: 'Trending discussions this week' },
     },
     duniya: {
       vishwa: { brand: 'Vishwa', job: 'Photos, stories & posts' },

@@ -102,7 +102,30 @@
     return 'span-std';
   }
 
-  function renderMashhoorGrid() {
+  let _mashhoorCursor = 0;
+  let _mashhoorLoading = false;
+  let _mashhoorHasMore = false;
+
+  async function fetchMashhoorTrending({ reset = true, limit = 24 } = {}) {
+    if (typeof apiFetch !== 'function') return { posts: [], empty: true };
+    const offset = reset ? 0 : _mashhoorCursor;
+    const envelope = await apiFetch('/api/peepal-reactions', {
+      method: 'POST',
+      needAuth: !!(typeof currentUser !== 'undefined' && currentUser),
+      body: {
+        action: 'mashhoor_trending',
+        windowDays: 7,
+        limit,
+        offset,
+      },
+    });
+    const data = envelope?.ok && envelope.data ? envelope.data : null;
+    if (!data) return { posts: [], empty: true, error: true };
+    return data;
+  }
+
+  async function renderMashhoorGrid(opts) {
+    const o = opts || {};
     const feed = document.getElementById('peepalFeed');
     const screen = document.getElementById('peepalScreen');
     if (!feed && !screen) return;
@@ -117,48 +140,48 @@
     if (feed) feed.classList.add('hidden');
     ensureRoomHeader(host, 'peepal', 'mashhoor');
 
-    const posts =
-      typeof peepalPosts !== 'undefined' && Array.isArray(peepalPosts)
-        ? peepalPosts
-        : [...(feed?.querySelectorAll('.peepal-card') || [])].map((card) => ({
-            id: card.dataset.id || card.dataset.postId,
-            el: card,
-            totalResponses: Number(card.querySelector('.peepal-footer-stat')?.textContent?.replace(/\D/g, '') || 0),
-          }));
+    const reset = o.reset !== false;
+    if (_mashhoorLoading && !o.force) return;
+    _mashhoorLoading = true;
 
-    const ranked =
-      typeof rankByVelocity === 'function'
-        ? rankByVelocity(posts, {
-            friendUids: typeof followingSet !== 'undefined' ? [...followingSet] : [],
-          })
-        : posts.slice().sort((a, b) => (b.totalResponses || 0) - (a.totalResponses || 0));
+    // Clear previous masonry / empty on reset
+    if (reset) {
+      host.querySelector('.mashhoor-masonry')?.remove();
+      host.querySelector('.mashhoor-load-more')?.remove();
+      host.querySelector('[data-empty-state]')?.remove();
+      const loading = document.createElement('div');
+      loading.className = 'mashhoor-loading';
+      loading.style.cssText = 'padding:16px;font-size:12px;color:var(--muted);';
+      loading.textContent = tt('mashhoor_loading', 'Loading trending discussions…');
+      host.appendChild(loading);
+      _mashhoorCursor = 0;
+    }
 
-    const grid = document.createElement('div');
-    grid.className = 'mashhoor-masonry';
-    ranked.slice(0, 36).forEach((p, i) => {
-      const tile = document.createElement('button');
-      tile.type = 'button';
-      const w = p.mediaWidth || p.width || (i % 5 === 0 ? 3 : i % 3 === 0 ? 2 : 4);
-      const h = p.mediaHeight || p.height || (i % 4 === 0 ? 5 : 4);
-      tile.className = `mashhoor-tile ${mediaAspectClass(w, h)}`;
-      const title = p.question || p.title || p.text || p.el?.querySelector('.peepal-q, .peepal-text')?.textContent || 'Discussion';
-      const count = p.totalResponses || p.responses || p.commentCount || 0;
-      tile.innerHTML = `<span class="mashhoor-tile-title">${escapeLite(String(title).slice(0, 120))}</span>
-        <span class="mashhoor-tile-meta">${count} ${tt('peepal_replies', 'replies')}</span>`;
-      tile.addEventListener('click', () => {
-        if (p.id && typeof openPeepalPost === 'function') openPeepalPost(p.id);
-        else if (p.el) p.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
-      grid.appendChild(tile);
-    });
+    let data;
+    try {
+      data = await fetchMashhoorTrending({ reset, limit: 24 });
+    } catch (e) {
+      data = { posts: [], empty: true, error: true };
+    }
+    _mashhoorLoading = false;
+    host.querySelector('.mashhoor-loading')?.remove();
 
-    host.querySelector('.mashhoor-masonry')?.remove();
-    if (!ranked.length) {
+    const posts = Array.isArray(data?.posts) ? data.posts : [];
+    // Never show seeds as trending
+    const clean = posts.filter((p) => p?.id && !p.isSeedContent);
+
+    if (reset && !clean.length) {
+      host.querySelector('.mashhoor-masonry')?.remove();
       if (typeof renderEmptyState === 'function') {
         renderEmptyState(host, {
           icon: '🌿',
           title: tt('mashhoor_empty_title', 'Mashhoor is quiet'),
-          message: tt('mashhoor_empty_msg', 'Trending Peepal discussions will gather here.'),
+          message:
+            data?.emptyMessage ||
+            tt(
+              'mashhoor_empty_msg',
+              'No public discussions trending this week yet. We never invent popular posts.'
+            ),
           actionLabel: tt('day0_khoj', 'Explore Khoj'),
           onAction: () => {
             if (typeof setPeepalMode === 'function') setPeepalMode('khoj');
@@ -167,14 +190,58 @@
             {
               label: tt('peepal_discuss', 'Start a discussion'),
               onAction: () => {
+                if (typeof setPeepalMode === 'function') setPeepalMode('vriksha');
                 if (typeof openPeepalAskSheet === 'function') openPeepalAskSheet();
               },
             },
           ],
         });
       }
-    } else {
+      return;
+    }
+
+    let grid = host.querySelector('.mashhoor-masonry');
+    if (reset || !grid) {
+      grid = document.createElement('div');
+      grid.className = 'mashhoor-masonry';
+      host.querySelector('.mashhoor-masonry')?.remove();
       host.appendChild(grid);
+    }
+
+    clean.forEach((p, i) => {
+      const tile = document.createElement('button');
+      tile.type = 'button';
+      const w = p.mediaWidth || (i % 5 === 0 ? 3 : i % 3 === 0 ? 2 : 4);
+      const h = p.mediaHeight || (i % 4 === 0 ? 5 : 4);
+      tile.className = `mashhoor-tile ${mediaAspectClass(w, h)}`;
+      const title = p.question || p.title || 'Discussion';
+      const count = Number(p.replyCount ?? p.comments ?? p.totalResponses) || 0;
+      const hint = p.metaHint ? `<span class="mashhoor-tile-hint">${escapeLite(p.metaHint)}</span>` : '';
+      tile.innerHTML = `<span class="mashhoor-tile-title">${escapeLite(String(title).slice(0, 120))}</span>
+        <span class="mashhoor-tile-meta">${count} ${tt('peepal_replies', 'replies')}${hint ? ' · ' : ''}${hint}</span>`;
+      tile.addEventListener('click', () => {
+        if (typeof openPeepalPost === 'function') openPeepalPost(p.id);
+        else if (typeof showToast === 'function') showToast('Couldn’t open discussion');
+      });
+      grid.appendChild(tile);
+    });
+
+    _mashhoorCursor = (reset ? 0 : _mashhoorCursor) + clean.length;
+    _mashhoorHasMore = !!data?.hasMore;
+
+    let moreBtn = host.querySelector('.mashhoor-load-more');
+    if (_mashhoorHasMore) {
+      if (!moreBtn) {
+        moreBtn = document.createElement('button');
+        moreBtn.type = 'button';
+        moreBtn.className = 'mashhoor-load-more khoj-compat-more';
+        moreBtn.textContent = tt('mashhoor_more', 'Load more');
+        host.appendChild(moreBtn);
+        moreBtn.addEventListener('click', () => renderMashhoorGrid({ reset: false }));
+      }
+      moreBtn.classList.remove('hidden');
+    } else if (moreBtn) {
+      moreBtn.classList.add('hidden');
     }
   }
 

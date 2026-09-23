@@ -6,7 +6,7 @@
  * transactions prevent public post documents from leaking either count.
  */
 const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
-const { requireUser, initAdmin } = require('../server-lib/auth');
+const { requireUser, initAdmin, verifyBearer } = require('../server-lib/auth');
 const {
   createPaymentIntent,
   getPaymentStatus,
@@ -32,6 +32,7 @@ const {
   recordDiscoveryPersonSignal,
   processDiscoveryBatchLabels,
 } = require('../server-lib/discovery-pipeline');
+const { mashhoorTrending } = require('../server-lib/mashhoor-trending');
 
 const VALID_REACTIONS = new Set(['up', 'down']);
 const MAX_HYDRATE_IDS = 20;
@@ -605,10 +606,6 @@ async function professionalMatch(db, admin, user, body) {
 
 module.exports = async function handler(req, res) {
   if (!requireMethod(req, res, 'POST')) return;
-  const user = await requireUser(req, res, { allowWeak: false });
-  if (!user) return;
-  const admin = initAdmin();
-  if (!admin) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Firebase Admin not configured');
 
   let body;
   try {
@@ -616,6 +613,28 @@ module.exports = async function handler(req, res) {
   } catch {
     return sendError(res, 400, 'INVALID_JSON', 'Invalid JSON body');
   }
+
+  const admin = initAdmin();
+  if (!admin) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Firebase Admin not configured');
+
+  // K3: Mashhoor trending — public list; auth optional (friend boost when signed in)
+  if (body.action === 'mashhoor_trending') {
+    try {
+      let user = null;
+      try {
+        const identity = await verifyBearer(req);
+        if (identity && !identity.weak) user = identity;
+      } catch (e) {}
+      const result = await mashhoorTrending(admin.firestore(), admin, user, body || {});
+      return sendSuccess(res, result);
+    } catch (e) {
+      console.warn('[mashhoor_trending]', e?.message || e);
+      return sendError(res, 500, 'MASHHOOR_FAILED', 'Could not load trending discussions');
+    }
+  }
+
+  const user = await requireUser(req, res, { allowWeak: false });
+  if (!user) return;
 
   try {
     const db = admin.firestore();

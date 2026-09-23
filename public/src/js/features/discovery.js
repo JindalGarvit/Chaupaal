@@ -1275,6 +1275,14 @@ function openPeepalAskSheet(editPost = null){
   }
   setCapUi('10');
 
+  if (!isEdit) {
+    try {
+      const pending = sessionStorage.getItem('chaupaal_peepal_pending_ask') || '';
+      sessionStorage.removeItem('chaupaal_peepal_pending_ask');
+      if (pending && qText && !qText.value) qText.value = pending;
+    } catch (e) {}
+  }
+
   if (isEdit) {
     const qTextEl = document.getElementById('peepalQText');
     if (qTextEl) qTextEl.value = String(editPost.question || '');

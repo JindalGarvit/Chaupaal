@@ -955,9 +955,8 @@ async function initPeepal(){
   const feed=document.getElementById('peepalFeed');if(!feed)return;
   delete feed.dataset.loaded;
 
-  // Intent card (Vriksha) — compact mini icons + 60/20/20 + compatibility peeks
+  // Intent card (Vriksha) — discussion compose only; people Find → Khoj (K3)
   if(typeof tintPeepalIntentChips==='function') tintPeepalIntentChips(document.getElementById('peepalIntentCard'));
-  if(typeof filterPeepalSearchNudges==='function') filterPeepalSearchNudges(document.getElementById('peepalIntentCard'));
   document.querySelectorAll('#peepalIntentCard .peepal-nudge-chip').forEach(chip=>{
     if(chip.dataset.wired) return;
     chip.dataset.wired='1';
@@ -966,51 +965,52 @@ async function initPeepal(){
       if(inp){inp.value=chip.dataset.hint||'';inp.focus();}
     });
   });
+
+  const openDiscussFromCard=()=>{
+    if(typeof currentUser==='undefined'||!currentUser){
+      if(typeof requireSignIn==='function') return requireSignIn(typeof t==='function'?t('auth_sign_in_short'):'Sign in to continue');
+      return;
+    }
+    const q=document.getElementById('peepalAiSearchInput')?.value?.trim()||'';
+    if(q){
+      try{ sessionStorage.setItem('chaupaal_peepal_pending_ask', q); }catch(e){}
+    }
+    if(typeof openPeepalAskSheet==='function') openPeepalAskSheet();
+  };
+
   const goBtn=document.getElementById('peepalAiSearchGo');
   if(goBtn&&!goBtn.dataset.wired){
     goBtn.dataset.wired='1';
-    const openKhojFind=()=>{
+    goBtn.addEventListener('click',()=>{
       const q=document.getElementById('peepalAiSearchInput')?.value?.trim()||'';
       try{ sessionStorage.setItem('chaupaal_khoj_pending_query', q); }catch(e){}
       if(typeof setPeepalMode==='function') setPeepalMode('khoj');
-      else if(typeof runPeepalAiSearch==='function'){
-        runPeepalAiSearch({
-          surface:'khoj',
-          resultsEl:document.getElementById('khojAiResults')||document.getElementById('peepalAiSearchResults'),
-          limit:8,
-        });
-      }
-    };
-    goBtn.addEventListener('click', openKhojFind);
-    document.getElementById('peepalAiSearchInput')?.addEventListener('keypress',e=>{
-      if(e.key==='Enter'&&!e.shiftKey){
-        e.preventDefault();
-        openKhojFind();
-      }
-    });
-    document.getElementById('peepalAiSearchInput')?.addEventListener('blur',()=>{
-      setTimeout(()=>{
-        const ae=document.activeElement;
-        if(ae?.matches?.('input, textarea, select, [contenteditable="true"]')) return;
-        const vv=window.visualViewport;
-        const inset=vv?Math.max(0,window.innerHeight-vv.height-(vv.offsetTop||0)):0;
-        if(inset>40||document.documentElement.classList.contains('kb-open')) return;
-        try{ if(typeof restoreAppShell==='function') restoreAppShell('peepal_intent_blur'); }catch(e){}
-      },100);
     });
   }
+  document.getElementById('peepalAiSearchInput')?.addEventListener('keypress',e=>{
+    if(e.key==='Enter'&&!e.shiftKey){
+      e.preventDefault();
+      openDiscussFromCard();
+    }
+  });
+  document.getElementById('peepalAiSearchInput')?.addEventListener('blur',()=>{
+    setTimeout(()=>{
+      const ae=document.activeElement;
+      if(ae?.matches?.('input, textarea, select, [contenteditable="true"]')) return;
+      const vv=window.visualViewport;
+      const inset=vv?Math.max(0,window.innerHeight-vv.height-(vv.offsetTop||0)):0;
+      if(inset>40||document.documentElement.classList.contains('kb-open')) return;
+      try{ if(typeof restoreAppShell==='function') restoreAppShell('peepal_intent_blur'); }catch(e){}
+    },100);
+  });
   const peepalSearchInp=document.getElementById('peepalAiSearchInput');
   if(peepalSearchInp&&typeof enhanceSearchField==='function'&&!peepalSearchInp.dataset.searchFieldWired){
     enhanceSearchField(peepalSearchInp,{
       surfaceId:'peepal',
       onClear(){
         const host=document.getElementById('peepalAiSearchResults');
-        if(host) host.innerHTML='';
-        try{
-          if(typeof mountCompatPeeks==='function'){
-            mountCompatPeeks(document.getElementById('peepalCompatPeeks'),{limit:3,reset:true,friendshipMajority:true});
-          }
-        }catch(e){}
+        if(host){ host.innerHTML=''; host.classList.add('hidden'); }
+        document.getElementById('peepalCompatPeeks')?.classList.add('hidden');
       }
     });
   }
@@ -1032,27 +1032,16 @@ async function initPeepal(){
   const discussBtn=document.getElementById('peepalIntentDiscuss');
   if(discussBtn&&!discussBtn.dataset.wired){
     discussBtn.dataset.wired='1';
-    discussBtn.addEventListener('click',()=>{
-      if(typeof currentUser==='undefined'||!currentUser){
-        if(typeof requireSignIn==='function') return requireSignIn(typeof t==='function'?t('auth_sign_in_short'):'Sign in to continue');
-        return;
-      }
-      // Same destination as Peepal morph Discuss
-      if(typeof openPeepalAskSheet==='function') openPeepalAskSheet();
-    });
+    discussBtn.addEventListener('click', openDiscussFromCard);
   }
   if(typeof bindLivingPlaceholder==='function'){
-    bindLivingPlaceholder(document.getElementById('peepalAiSearchInput'),'peepal_intent');
+    bindLivingPlaceholder(document.getElementById('peepalAiSearchInput'),'peepal_discuss');
   }
   document.getElementById('peepalIntentCard')?.classList.remove('hidden');
+  // K3: no people-discovery meter / peeks on Vriksha
+  document.getElementById('peepalCompatPeeks')?.classList.add('hidden');
+  document.getElementById('peepalAiSearchResults')?.classList.add('hidden');
   try{
-    if(typeof AiDiscoveryMeter?.mountOnIntentCardCompact==='function'){
-      AiDiscoveryMeter.mountOnIntentCardCompact(document.getElementById('peepalIntentCard'),{disclosePro:true});
-    }
-  }catch(e){}
-  // 2–3 compatibility peeks — Khoj only (K0: Vriksha is discussions)
-  try{
-    document.getElementById('peepalCompatPeeks')?.classList.add('hidden');
     document.getElementById('peepalCompatPeeks') && (document.getElementById('peepalCompatPeeks').innerHTML = '');
   }catch(e){}
   try{ if(typeof hydrateIcons==='function') hydrateIcons(document.getElementById('peepalIntentCard')); }catch(e){}
@@ -2029,6 +2018,38 @@ function openPeepalCommentsSheet(q,{focusCommentId=null,focusComposer=false}={})
     if(focusCommentId && typeof focusCommentRow==='function') focusCommentRow(listEl,focusCommentId);
   },100);
 }
+
+/** Open a Peepal discussion by id (Mashhoor tiles, deeplinks). */
+async function openPeepalPost(postId, opts) {
+  const id = String(postId || '').trim();
+  if (!id) {
+    if (typeof showToast === 'function') showToast('Discussion unavailable');
+    return;
+  }
+  let q =
+    (typeof peepalQuestions !== 'undefined' && Array.isArray(peepalQuestions)
+      ? peepalQuestions.find((x) => x.id === id || x.firestoreId === id)
+      : null) || null;
+  if (!q && db) {
+    try {
+      const snap = await db.collection('peepal').doc(id).get();
+      if (snap.exists) {
+        q = mapPeepalDoc({ id: snap.id, ...snap.data() });
+        if (typeof enrichUsersWithProfileType === 'function' && q.user) {
+          await enrichUsersWithProfileType([q.user]);
+        }
+      }
+    } catch (e) {
+      console.warn('[peepal] openPeepalPost', e?.message || e);
+    }
+  }
+  if (!q || q.deleted || q.archived || q.saveOnly) {
+    if (typeof showToast === 'function') showToast('Discussion unavailable');
+    return;
+  }
+  openPeepalDetail(q, opts || {});
+}
+window.openPeepalPost = openPeepalPost;
 
 function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
   const detail=document.getElementById('peepalDetail');

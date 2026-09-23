@@ -1631,7 +1631,7 @@ Object.assign(I18N_TOASTS.en, {
   "peepal_mashhoor_sub": "Trending discussions this week",
   "peepal_replies": "replies",
   "mashhoor_empty_title": "Mashhoor is quiet",
-  "mashhoor_empty_msg": "Trending Peepal discussions will gather here.",
+  "mashhoor_empty_msg": "No public discussions trending this week yet. We never invent popular posts.",
   "prasidha_sub": "Trending this week",
   "prasidha_empty_title": "Prasidha is warming up",
   "prasidha_empty_msg": "Trending posts from the last week will land here.",

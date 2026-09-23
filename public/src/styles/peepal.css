@@ -813,3 +813,8 @@
 .akhbaar-cat-chip{padding:7px 14px;border:2px solid var(--line);border-radius:999px;font-size:13px;font-weight:600;cursor:pointer;background:var(--cream);white-space:nowrap;flex-shrink:0;font-family:'Inter',sans-serif;}
 .akhbaar-cat-chip.active{border-color:var(--red);color:var(--red);background:rgba(230,57,70,0.06);}
 
+/* Mashhoor K3 */
+.mashhoor-tile-hint{opacity:.85;font-weight:600;}
+.mashhoor-loading{text-align:center;}
+.mashhoor-load-more{margin:12px 0 8px;}
+
