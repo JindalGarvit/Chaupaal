@@ -934,8 +934,8 @@
         const params = new URLSearchParams(location.search);
         const section = params.get('section') || params.get('tab');
         const tabs = ['akhbaar', 'duniya', 'peepal', 'baithak', 'dangal'];
-        if (section && tabs.includes(section) && typeof showTab === 'function') {
-          showTab(section);
+        if (section && tabs.includes(section)) {
+          switchTab(section);
         }
       } catch (e) {}
       // Also keep legacy viral challenge query handler

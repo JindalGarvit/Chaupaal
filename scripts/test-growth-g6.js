@@ -39,6 +39,7 @@ assert(manifest.shortcuts?.length >= 2, 'shortcuts present');
 
 const deeplink = read('public/src/js/core/deeplinks.js');
 assert(/params\.get\('section'\)\s*\|\|\s*params\.get\('tab'\)/.test(deeplink), 'dual-parse section|tab');
+assert(/switchTab\(section\)/.test(deeplink) && !/showTab\(section\)/.test(deeplink), 'section uses local switchTab');
 
 const env = read('public/src/js/core/environment.js');
 assert(/isStandalone/.test(env) && /is-standalone/.test(env), 'standalone class helper');

@@ -708,79 +708,80 @@ document.addEventListener('click',e=>{
   updatePersonalityFromAurSunao(q,btn.textContent);
 });
 
-// Wire up evening check-in analysis
-dayCheckModal.querySelector('.day-check-send').addEventListener('click',async()=>{
-  const text=dayCheckModal.querySelector('#dayCheckText')?.value?.trim();
-  if(!text)return;
-  // Act-based celebration only (4B) — never surface content-reactive copy about what they wrote.
-  if(typeof playJournalFinishAnimation==='function') playJournalFinishAnimation();
-  else showToast(t('cat_entry_saved'));
-  dayCheckModal.classList.remove('open');
-  if(typeof removeNavLayer==='function') removeNavLayer(dayCheckModal);
-  if(typeof markJournalDoneToday==='function') markJournalDoneToday();
-  // Canonical Journal (P3) — no local archive / daily_checkins orphan writes
-  try{
-    if(typeof JournalCheckIn!=='undefined' && JournalCheckIn.saveJournalEntry){
-      await JournalCheckIn.saveJournalEntry({ text, allowAnalysis:false, window:'evening' });
-    } else if(db&&currentUser){
-      await db.collection('users').doc(currentUser.uid).collection('journal').add({
-        text,
-        date:new Date().toISOString().slice(0,10),
-        allowAnalysis:false,
-        checkInWindow:'evening',
-        createdAt:firebase.firestore.FieldValue.serverTimestamp(),
-        updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
-      });
+// Legacy evening check-in modal (HTML removed — JournalCheckIn owns the sheet).
+// Guard so missing #dayCheckModal does not throw and trip the recovery chip.
+(function wireLegacyDayCheckModal(){
+  const dayCheckModal=document.getElementById('dayCheckModal')||document.querySelector('.day-check-modal');
+  if(!dayCheckModal) return;
+  dayCheckModal.querySelector('.day-check-send')?.addEventListener('click',async()=>{
+    const text=dayCheckModal.querySelector('#dayCheckText')?.value?.trim();
+    if(!text)return;
+    // Act-based celebration only (4B) — never surface content-reactive copy about what they wrote.
+    if(typeof playJournalFinishAnimation==='function') playJournalFinishAnimation();
+    else showToast(t('cat_entry_saved'));
+    dayCheckModal.classList.remove('open');
+    if(typeof removeNavLayer==='function') removeNavLayer(dayCheckModal);
+    if(typeof markJournalDoneToday==='function') markJournalDoneToday();
+    // Canonical Journal (P3) — no local archive / daily_checkins orphan writes
+    try{
+      if(typeof JournalCheckIn!=='undefined' && JournalCheckIn.saveJournalEntry){
+        await JournalCheckIn.saveJournalEntry({ text, allowAnalysis:false, window:'evening' });
+      } else if(db&&currentUser){
+        await db.collection('users').doc(currentUser.uid).collection('journal').add({
+          text,
+          date:new Date().toISOString().slice(0,10),
+          allowAnalysis:false,
+          checkInWindow:'evening',
+          createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+    }catch(e){
+      if(typeof showToast==='function') showToast(e?.message==='CAP'?'Journal is full (1000 entries).':'Could not save journal');
     }
-  }catch(e){
-    if(typeof showToast==='function') showToast(e?.message==='CAP'?'Journal is full (1000 entries).':'Could not save journal');
-  }
-  // Internal analysis may still run when AI is on — do not show mood/topics UI from it.
-  try{ await analyseEveningCheckIn(text); }catch(e){}
-  try{ if(typeof onChaupaalJournalCompleted==='function') await onChaupaalJournalCompleted(); }catch(e){}
-  try{
-    const streak=Number(localStorage.getItem('chaupaal_journal_day_streak')||'0')+1;
-    localStorage.setItem('chaupaal_journal_day_streak',String(streak));
-    if(typeof updateJournalGrowthMotif==='function') updateJournalGrowthMotif(streak);
-  }catch(e){}
-});
-dayCheckModal.querySelector('.day-check-skip').addEventListener('click',()=>{
-  dayCheckModal.classList.remove('open');
-  if(typeof removeNavLayer==='function') removeNavLayer(dayCheckModal);
-  if(typeof markJournalDismissedToday==='function') markJournalDismissedToday();
-  // Dismiss open goodnight event so it won't reappear on reload
-  try{
-    if(typeof dismissOpenJournalEvent==='function') dismissOpenJournalEvent();
-  }catch(e){}
-});
-dayCheckModal.querySelector('#dayCheckSnooze')?.addEventListener('click',()=>{
-  dayCheckModal.classList.remove('open');
-  if(typeof removeNavLayer==='function') removeNavLayer(dayCheckModal);
-  const until=typeof snoozeJournalPrompt==='function'?snoozeJournalPrompt(3):Date.now()+3*3600*1000;
-  try{ if(typeof snoozeOpenJournalEvent==='function') snoozeOpenJournalEvent(until); }catch(e){}
-  if(typeof showToast==='function') showToast(t('cat_nudge_later'));
-});
-
-// Prevent clicks inside panel from dismissing via backdrop
-dayCheckModal.querySelector('.day-check-panel')?.addEventListener('click',(e)=>e.stopPropagation());
-dayCheckModal.addEventListener('click',(e)=>{
-  if(e.target!==dayCheckModal) return;
-  dayCheckModal.classList.remove('open');
-  if(typeof removeNavLayer==='function') removeNavLayer(dayCheckModal);
-});
-
-// Typing-rhythm ambient particles (act-based, ignores content)
-(function wireJournalTypingAmbient(){
-  const ta=dayCheckModal?.querySelector?.('#dayCheckText');
-  if(!ta||ta.dataset.journalAmbient) return;
-  ta.dataset.journalAmbient='1';
-  let last=0;
-  ta.addEventListener('input',()=>{
-    const now=Date.now();
-    if(now-last<90) return;
-    last=now;
-    if(typeof pulseJournalAmbient==='function') pulseJournalAmbient();
+    // Internal analysis may still run when AI is on — do not show mood/topics UI from it.
+    try{ await analyseEveningCheckIn(text); }catch(e){}
+    try{ if(typeof onChaupaalJournalCompleted==='function') await onChaupaalJournalCompleted(); }catch(e){}
+    try{
+      const streak=Number(localStorage.getItem('chaupaal_journal_day_streak')||'0')+1;
+      localStorage.setItem('chaupaal_journal_day_streak',String(streak));
+      if(typeof updateJournalGrowthMotif==='function') updateJournalGrowthMotif(streak);
+    }catch(e){}
   });
+  dayCheckModal.querySelector('.day-check-skip')?.addEventListener('click',()=>{
+    dayCheckModal.classList.remove('open');
+    if(typeof removeNavLayer==='function') removeNavLayer(dayCheckModal);
+    if(typeof markJournalDismissedToday==='function') markJournalDismissedToday();
+    try{
+      if(typeof dismissOpenJournalEvent==='function') dismissOpenJournalEvent();
+    }catch(e){}
+  });
+  dayCheckModal.querySelector('#dayCheckSnooze')?.addEventListener('click',()=>{
+    dayCheckModal.classList.remove('open');
+    if(typeof removeNavLayer==='function') removeNavLayer(dayCheckModal);
+    const until=typeof snoozeJournalPrompt==='function'?snoozeJournalPrompt(3):Date.now()+3*3600*1000;
+    try{ if(typeof snoozeOpenJournalEvent==='function') snoozeOpenJournalEvent(until); }catch(e){}
+    if(typeof showToast==='function') showToast(t('cat_nudge_later'));
+  });
+
+  dayCheckModal.querySelector('.day-check-panel')?.addEventListener('click',(e)=>e.stopPropagation());
+  dayCheckModal.addEventListener('click',(e)=>{
+    if(e.target!==dayCheckModal) return;
+    dayCheckModal.classList.remove('open');
+    if(typeof removeNavLayer==='function') removeNavLayer(dayCheckModal);
+  });
+
+  const ta=dayCheckModal.querySelector('#dayCheckText');
+  if(ta&&!ta.dataset.journalAmbient){
+    ta.dataset.journalAmbient='1';
+    let last=0;
+    ta.addEventListener('input',()=>{
+      const now=Date.now();
+      if(now-last<90) return;
+      last=now;
+      if(typeof pulseJournalAmbient==='function') pulseJournalAmbient();
+    });
+  }
 })();
 
 // ===================== PEEPAL =====================

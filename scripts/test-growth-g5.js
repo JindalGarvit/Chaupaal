@@ -42,7 +42,7 @@ assert(sectionPath('akhbaar') === '/?section=akhbaar', 'sectionPath akhbaar');
 assert(/\/invite\//.test(sectionPath('invite', 'garvit')), 'invite path with username');
 
 const deeplink = fs.readFileSync(path.join(__dirname, '../public/src/js/core/deeplinks.js'), 'utf8');
-assert(/section/.test(deeplink) && /showTab/.test(deeplink), 'client applies ?section=');
+assert(/section/.test(deeplink) && /switchTab\(section\)/.test(deeplink), 'client applies ?section=');
 
 const prefs = fs.readFileSync(path.join(__dirname, '../public/src/js/core/notif-prefs.js'), 'utf8');
 assert(/tips:\s*true/.test(prefs), 'tips default on');

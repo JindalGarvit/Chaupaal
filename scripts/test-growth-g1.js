@@ -35,7 +35,8 @@ assert(gen.title === 'Chaupaal', 'generic title');
 
 const stories = fs.readFileSync(path.join(__dirname, '../api/stories.js'), 'utf8');
 assert(/handleOgGet/.test(stories), 'stories owns OG GET');
-assert(/req\.method === 'GET'/.test(stories), 'GET branch before POST auth');
+assert(/req\.method === 'GET' \|\| req\.method === 'HEAD'/.test(stories) || /\(req\.method === 'GET' \|\| req\.method === 'HEAD'\)/.test(stories), 'GET/HEAD branch before POST auth');
+assert(/HEAD/.test(stories), 'OG accepts HEAD for crawler probes');
 
 const vercel = fs.readFileSync(path.join(__dirname, '../vercel.json'), 'utf8');
 assert(/og=1&kind=profile/.test(vercel), 'bot rewrite profile');

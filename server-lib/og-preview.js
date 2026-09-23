@@ -86,10 +86,16 @@ function renderOgHtml({ origin, title, description, image, url, cacheControl }) 
 </html>`;
 }
 
-function sendHtml(res, html, cacheControl = CACHE_PUBLIC) {
+function sendHtml(res, html, cacheControl = CACHE_PUBLIC, method) {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', cacheControl);
   res.setHeader('X-Robots-Tag', 'noindex'); // previews for unfurl; SPA is the product
+  const verb = method || res.req?.method || '';
+  // HEAD probes (WhatsApp etc.) — same headers, no body
+  if (verb === 'HEAD') {
+    res.setHeader('Content-Length', Buffer.byteLength(html, 'utf8'));
+    return res.status(200).end();
+  }
   return res.status(200).send(html);
 }
 
@@ -309,7 +315,7 @@ async function handleOgGet(req, res) {
   }
 
   const html = renderOgHtml({ origin, ...card });
-  return sendHtml(res, html, card.cacheControl || CACHE_PUBLIC);
+  return sendHtml(res, html, card.cacheControl || CACHE_PUBLIC, req.method);
 }
 
 module.exports = {
