@@ -78,8 +78,8 @@ function scoreMatch(user){
   ].map(i => String(i).toLowerCase()));
   const their = [...(user.interests || []), user.topCat].filter(Boolean).map(i => String(i).toLowerCase());
   const shared = their.filter(i => [...myInterests].some(m => m.includes(i) || i.includes(m)));
-  let score = 40 + Math.random() * 25;
-  if (shared.length) score += shared.length * 12;
+  // Deterministic base — no Math.random fake precision (K0)
+  let score = 48 + shared.length * 12;
   const myCity = (typeof userProfile !== 'undefined' && userProfile?.city) ||
     (typeof digitalProfile !== 'undefined' && digitalProfile?.currentCity) || '';
   if (user.city && String(myCity).toLowerCase().includes(String(user.city).toLowerCase())) score += 15;
@@ -89,7 +89,6 @@ function scoreMatch(user){
   const responsePenalty = responseRate < 0.3 ? 20 : responseRate < 0.6 ? 8 : 0;
   return {
     score: Math.max(0, score - penalty - responsePenalty),
-    matchPct: Math.min(98, Math.max(42, Math.round(score))),
     shared,
     fairnessPenalty: penalty + responsePenalty,
   };

@@ -201,7 +201,6 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
     const ib = typeof craftSpecificIcebreaker==='function'
       ? craftSpecificIcebreaker(user, { shared: user.interests || [], reason })
       : (typeof pickIcebreakerSnippet==='function' ? pickIcebreakerSnippet(theirIb) : null);
-    const matchPct = m.matchPct || 50;
     const starter = (ib && (ib.line || ib.answer))
       || `Hey ${String(user.name||'').split(' ')[0] || 'there'} — found you while looking for ${plan.searchIntent && plan.searchIntent !== 'any' ? plan.searchIntent : 'people'} on Chaupaal`;
 
@@ -219,7 +218,6 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
           <div style="font-size:11px;color:var(--muted);">${[user.city,user.age?user.age+'y':''].filter(Boolean).map(esc).join(' · ')}</div>
           ${user.bio?`<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:2px;">"${esc(user.bio)}"</div>`:''}
         </div>
-        <div style="background:rgba(230,57,70,0.1);color:var(--red);border-radius:var(--r-control,14px);padding:5px 11px;font-size:12px;font-weight:700;flex-shrink:0;">${matchPct}%</div>
       </div>
       ${(user.interests||[]).length?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">${(user.interests||[]).slice(0,4).map(i=>`<span style="background:rgba(230,57,70,0.07);color:var(--red);border-radius:999px;padding:3px 9px;font-size:11px;font-weight:600;">${esc(i)}</span>`).join('')}</div>`:''}
       <div class="ai-match-reason" style="margin-top:8px;font-size:12px;color:var(--ink-secondary,var(--muted));">${esc(reason)}</div>
@@ -357,14 +355,14 @@ async function runPeepalAiSearchLocalFallback(query, resultsEl, opts){
     if(criteria.city && String(u.city||'').toLowerCase().includes(String(criteria.city).toLowerCase())){
       score += 25; reasons.push('city');
     }
-    return {user:u, score, reasons, matchPct: Math.min(99, Math.max(30, Math.round(score*1.8)))};
+    return {user:u, score, reasons };
   }).filter(m => m.score > 1).sort((a,b)=>b.score-a.score).slice(0,limit);
 
   await renderIntentDiscoverResults(resultsEl, query, {
     mode: 'deterministic',
     plan: { searchIntent: criteria.searchIntent, vibe: criteria.vibe, hardFilters: {}, appliedAssumptionIds: [], suppressedAssumptionIds: [] },
     refineChips: [],
-    matches: scored.map(({user, score, reasons, matchPct})=>({
+    matches: scored.map(({user, score, reasons})=>({
       uid: user.uid,
       name: user.name,
       photoURL: user.photoURL,
@@ -375,7 +373,6 @@ async function runPeepalAiSearchLocalFallback(query, resultsEl, opts){
       icebreakers: user.icebreakers || [],
       profileType: user.profileType || 'personal',
       score,
-      matchPct,
       explain: reasons.length ? `Matched on ${reasons.slice(0,3).join(' & ')}` : 'Matched on open profile',
     })),
     empty: !scored.length,

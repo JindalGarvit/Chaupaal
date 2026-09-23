@@ -302,6 +302,15 @@ async function personalMatch(db, admin, user, body) {
   ]);
   const hardCtx = { blockedSet, mutedSet, reportedSet: new Set(), notInterestedSet, viewerIsTeen, surface: 'personal' };
 
+  let strangerExclude = new Set([user.uid]);
+  try {
+    const { loadStrangerExcludeSets } = require('../server-lib/discovery-strangers');
+    const sets = await loadStrangerExcludeSets(db, user.uid);
+    strangerExclude = sets.excludeUids;
+  } catch (e) {
+    console.warn('[personal_match] stranger exclude', e?.message || e);
+  }
+
   try {
     const { retrieveCandidates, loadModelSafe, isOptedOutUser } = require('../server-lib/retrieve-rank');
     const optedOut = isOptedOutUser(viewer);
@@ -319,6 +328,7 @@ async function personalMatch(db, admin, user, body) {
     candidates = mq.filterSafetyFirst(viewer, retrieved.candidates || [], hardCtx);
     candidates = candidates.filter((data) => {
       if (data.uid === user.uid) return false;
+      if (strangerExclude.has(data.uid)) return false;
       return passesStructuredFilters(viewer, data, filters);
     });
   } catch (e) {
@@ -327,6 +337,7 @@ async function personalMatch(db, admin, user, body) {
     const raw = snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
     candidates = mq.filterSafetyFirst(viewer, raw, hardCtx).filter((data) => {
       if (data.uid === user.uid) return false;
+      if (strangerExclude.has(data.uid)) return false;
       return passesStructuredFilters(viewer, data, filters);
     });
   }

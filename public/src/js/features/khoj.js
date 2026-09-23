@@ -218,7 +218,7 @@
     panel.innerHTML = `
       <div class="peepal-card peepal-intent-card peepal-intent-card--khoj" id="khojIntentCard">
         <div class="peepal-intent-card-sub">
-          ${tt('khoj_sub', 'Most compatible first — friendship-leaning, with room for other intents. Scroll for more.')}
+          ${tt('khoj_sub', 'People to meet — strangers first, with short reasons (not scores). Scroll for more.')}
         </div>
         <div class="peepal-intent-chips" data-khoj-chips data-swipe-ignore>${chipsHtml}</div>
         <div class="khoj-search-row">
@@ -249,8 +249,25 @@
     } catch (e) {}
 
     const listEl = panel.querySelector('#khojCompatList');
-    // On open: ranked compatibility peeks; empty-query path uses broad friendship
-    loadKhojPeeks(listEl, { reset: true, limit: 5, emptyFriendship: true, friendshipOnly: false });
+    // Pending query from Vriksha "Find on Khoj"
+    let pendingQ = '';
+    try {
+      pendingQ = sessionStorage.getItem('chaupaal_khoj_pending_query') || '';
+      sessionStorage.removeItem('chaupaal_khoj_pending_query');
+    } catch (e) {}
+    if (pendingQ) {
+      const inp = panel.querySelector('#khojIntentInput');
+      if (inp) inp.value = pendingQ;
+      const dest = panel.querySelector('#khojIntentResults');
+      if (typeof runPeepalAiSearch === 'function') {
+        runPeepalAiSearch({ query: pendingQ, resultsEl: dest, surface: 'khoj', limit: 8 });
+      } else {
+        loadKhojPeeks(listEl, { reset: true, limit: 5, emptyFriendship: true, friendshipOnly: false });
+      }
+    } else {
+      // On open: ranked compatibility peeks; empty-query path uses broad friendship
+      loadKhojPeeks(listEl, { reset: true, limit: 5, emptyFriendship: true, friendshipOnly: false });
+    }
 
     // Contextual ask once: no interests → chip picker (respects 24h nudge + session cadence).
     maybeOfferKhojInterestsAsk(panel);
@@ -344,7 +361,8 @@
         const r = orig.apply(this, arguments);
         syncIntentVisibility(mode);
         if (mode === 'vriksha') {
-          document.getElementById('peepalDiscovery')?.classList.remove('hidden');
+          document.getElementById('peepalDiscovery')?.classList.add('hidden');
+          document.getElementById('peepalCompatPeeks')?.classList.add('hidden');
           document.getElementById('peepalFeed')?.classList.remove('hidden');
         }
         try {

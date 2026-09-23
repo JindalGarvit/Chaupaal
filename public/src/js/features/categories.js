@@ -969,25 +969,23 @@ async function initPeepal(){
   const goBtn=document.getElementById('peepalAiSearchGo');
   if(goBtn&&!goBtn.dataset.wired){
     goBtn.dataset.wired='1';
-    goBtn.addEventListener('click',()=>{
-      if(typeof runPeepalAiSearch==='function'){
+    const openKhojFind=()=>{
+      const q=document.getElementById('peepalAiSearchInput')?.value?.trim()||'';
+      try{ sessionStorage.setItem('chaupaal_khoj_pending_query', q); }catch(e){}
+      if(typeof setPeepalMode==='function') setPeepalMode('khoj');
+      else if(typeof runPeepalAiSearch==='function'){
         runPeepalAiSearch({
-          surface:'vriksha',
-          resultsEl:document.getElementById('peepalAiSearchResults'),
-          limit:5,
+          surface:'khoj',
+          resultsEl:document.getElementById('khojAiResults')||document.getElementById('peepalAiSearchResults'),
+          limit:8,
         });
       }
-    });
+    };
+    goBtn.addEventListener('click', openKhojFind);
     document.getElementById('peepalAiSearchInput')?.addEventListener('keypress',e=>{
       if(e.key==='Enter'&&!e.shiftKey){
         e.preventDefault();
-        if(typeof runPeepalAiSearch==='function'){
-          runPeepalAiSearch({
-            surface:'vriksha',
-            resultsEl:document.getElementById('peepalAiSearchResults'),
-            limit:5,
-          });
-        }
+        openKhojFind();
       }
     });
     document.getElementById('peepalAiSearchInput')?.addEventListener('blur',()=>{
@@ -1052,77 +1050,19 @@ async function initPeepal(){
       AiDiscoveryMeter.mountOnIntentCardCompact(document.getElementById('peepalIntentCard'),{disclosePro:true});
     }
   }catch(e){}
-  // 2–3 compatibility peeks under the action row (specific icebreakers)
+  // 2–3 compatibility peeks — Khoj only (K0: Vriksha is discussions)
   try{
-    if(typeof mountCompatPeeks==='function'){
-      mountCompatPeeks(document.getElementById('peepalCompatPeeks'),{limit:3,reset:true,friendshipMajority:true});
-    }
+    document.getElementById('peepalCompatPeeks')?.classList.add('hidden');
+    document.getElementById('peepalCompatPeeks') && (document.getElementById('peepalCompatPeeks').innerHTML = '');
   }catch(e){}
   try{ if(typeof hydrateIcons==='function') hydrateIcons(document.getElementById('peepalIntentCard')); }catch(e){}
 
-  // Reuse static HTML shell (keeps LCP title/subtitle in place) or create a loading host
-  let loadingEl=document.getElementById('peepalDiscovery');
-  if(loadingEl?.dataset.peepalShell){
-    delete loadingEl.dataset.peepalShell;
-    loadingEl.classList.remove('peepal-discovery--shell');
-    const cards=loadingEl.querySelector('.discovery-cards');
-    if(cards&&typeof renderSkeleton==='function'){
-      cards.innerHTML='';
-      renderSkeleton(cards,{variant:'card',count:2});
-    }
-  } else if(loadingEl){
-    // Tab re-open: keep reserved box, swap to skeleton without removing (less CLS)
-    loadingEl.innerHTML='';
-    if(typeof renderSkeleton==='function') renderSkeleton(loadingEl,{variant:'card',count:2});
-    else loadingEl.innerHTML=`<div class="discovery-loading">Finding people who think like you...</div>`;
-  } else {
-    loadingEl=document.createElement('div');
-    loadingEl.className='peepal-discovery';loadingEl.id='peepalDiscovery';
-    if(typeof renderSkeleton==='function') renderSkeleton(loadingEl,{variant:'card',count:2});
-    else loadingEl.innerHTML=`<div class="discovery-loading">Finding people who think like you...</div>`;
-    feed.parentElement.insertBefore(loadingEl,feed);
-  }
-
-  const withTimeout=(promise,ms)=>{
-    let timer;
-    return Promise.race([
-      promise,
-      new Promise((_,reject)=>{
-        timer=setTimeout(()=>{
-          const err=new Error('Discovery timed out');
-          err.code='DISCOVERY_TIMEOUT';
-          reject(err);
-        },ms);
-      }),
-    ]).finally(()=>clearTimeout(timer));
-  };
-
-  try{
-    const profiles=await withTimeout(
-      typeof getDiscoveryProfiles==='function'?getDiscoveryProfiles():Promise.resolve([]),
-      9000
-    );
-    if(typeof hydrateRelationships==='function'){
-      await hydrateRelationships(profiles.map(p=>p.user?.uid).filter(Boolean)).catch(()=>{});
-    }
-    discoveryPreviousSet=[...discoveryCurrentSet];
-    discoveryCurrentSet=profiles;
-    const next=renderDiscoverySection(profiles);
-    if(loadingEl?.parentNode) loadingEl.replaceWith(next);
-    else feed.parentElement.insertBefore(next,feed);
-  }catch(e){
-    if(typeof reportClientError==='function'){
-      reportClientError({feature:'peepal_discovery',message:e?.message||String(e)});
-    }
-    if(typeof renderErrorState==='function'){
-      renderErrorState(loadingEl, {
-        title:'Couldn’t load suggestions',
-        message: typeof friendlyError==='function'?friendlyError(e):'Please try again.',
-        onRetry:()=>{ loadingEl.remove(); initPeepal(); },
-      });
-    } else {
-      loadingEl.innerHTML=`<div class="discovery-loading">Couldn’t load suggestions — try again later.</div>`;
-    }
+  // K0: do not mount people-discovery grid on Vriksha — Khoj is the sole people surface
+  const legacyDiscovery = document.getElementById('peepalDiscovery');
+  if (legacyDiscovery) {
+    legacyDiscovery.classList.add('hidden');
+    legacyDiscovery.innerHTML = '';
+    legacyDiscovery.setAttribute('aria-hidden', 'true');
   }
 
   // Render questions feed (hydrate from Firestore when available)

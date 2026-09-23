@@ -303,6 +303,15 @@ async function runIntentDiscover(db, admin, user, body, deps) {
     }
   }
 
+  // K0: strangers only — friends, pending requests, mutual friends (FoF approx)
+  try {
+    const { loadStrangerExcludeSets, filterStrangersOnly } = require('./discovery-strangers');
+    const sets = await loadStrangerExcludeSets(db, user.uid);
+    candidates = filterStrangersOnly(candidates, sets.excludeUids);
+  } catch (e) {
+    console.warn('[intent_discover] stranger exclude', e?.message || e);
+  }
+
   const edgeMap = {};
   await Promise.all(
     candidates.slice(0, 40).map(async (c) => {

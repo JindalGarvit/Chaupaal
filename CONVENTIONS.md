@@ -31,6 +31,8 @@ Implementation lives primarily in:
 
 **PWA install (Growth G6):** `public/src/js/core/pwa-install.js` captures `beforeinstallprompt` (preventDefault + stash). Soft bottom sheet only after a meaningful moment (day-0 fork, game complete, or 2+ visit days) — never first-paint jail; 7-day dismiss cooldown; Quiet + auth overlay skip. Settings → Install row always available (Chromium prompt / iOS Share→Add to Home Screen guide / Installed). Manifest shortcuts use `/?section=`; `?tab=` still dual-parsed. Guests may install. Local + `trackEvent` signals: `install_accepted` / `install_dismissed`.
 
+**Peepal/Khoj K0 (truth):** Khoj is the **only** people-discovery surface. Vriksha is discussions — Find CTA opens Khoj; `#peepalDiscovery` / Vriksha peeks hidden. Peeks + `personal_match` / `intent_discover` hard-exclude self, accepted friends (mutual follow), pending friend requests, and mutual friends (FoF approx via friends’ friend sets — see `server-lib/discovery-strangers.js`). Signed-in never pads `SAMPLE_DISCOVERY_POOL`. UI shows short **reasons**, never match **%**. Empty → Invite / Search Chaupaal.
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.

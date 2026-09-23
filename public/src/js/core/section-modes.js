@@ -78,12 +78,13 @@
       return;
     }
 
-    // vriksha — default tree/feed + pinned intent card
+    // vriksha — discussions feed; people discovery lives on Khoj only (K0)
     feed?.querySelector('[data-peepal-mode-banner]')?.remove();
     document.getElementById('peepalMashhoorGrid')?.classList.add('hidden');
     document.getElementById('peepalKhojSurface')?.classList.add('hidden');
     document.getElementById('peepalIntentCard')?.classList.remove('hidden');
-    document.getElementById('peepalDiscovery')?.classList.remove('hidden');
+    document.getElementById('peepalDiscovery')?.classList.add('hidden');
+    document.getElementById('peepalCompatPeeks')?.classList.add('hidden');
     if (feed) feed.classList.remove('hidden');
     ensureRoomHeader(screen || feed, 'peepal', 'vriksha');
     if (typeof renderPeepalFeed === 'function') {

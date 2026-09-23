@@ -134,6 +134,7 @@ async function getDiscoveryProfiles(){
         const out = matches
           .filter((m) => m?.uid && !dismissedUids.has(m.uid))
           .filter((m) => !discoveryFilters.recentlyJoined || isRecentlyJoined(m))
+          .filter((m) => isDiscoveryEligibleUser({ uid: m.uid, ...m }))
           .map((m) => ({
             user: {
               uid: m.uid,
@@ -152,7 +153,6 @@ async function getDiscoveryProfiles(){
               _mutualStable: m.mutualStable,
             },
             score: m.score || 50,
-            matchPct: Math.min(98, Math.max(42, m.score || 50)),
             reasons: (m.signals || []).slice(0, 3),
             reason: (m.signals || []).slice(0, 2).join(' · ') || m.bio || 'Someone you might enjoy talking to on Peepal',
           }));
@@ -166,8 +166,10 @@ async function getDiscoveryProfiles(){
     }
   }
 
-  const pool = [...SAMPLE_DISCOVERY_POOL];
-  if(db && currentUser){
+  // K0: never seed SAMPLE into signed-in discovery. Guests may use labeled samples only.
+  const signedIn = typeof currentUser !== 'undefined' && !!currentUser;
+  const pool = signedIn ? [] : [...SAMPLE_DISCOVERY_POOL].map((u) => ({ ...u, isSample: true }));
+  if (db && currentUser) {
     try{
       const snap = await db.collection('users_public').where('openToMeet','==',true).limit(40).get();
       snap.docs.forEach(d=>{
@@ -210,6 +212,7 @@ async function getDiscoveryProfiles(){
   const myIntents = Array.isArray(userProfile?.intents) ? userProfile.intents.map((i) => String(i).toLowerCase()) : [];
   const out = pool
     .filter(u => {
+      if (!isDiscoveryEligibleUser(u)) return false;
       if(!u||!u.uid||dismissedUids.has(u.uid)||u.openToMeet===false) return false;
       if(discoveryFilters.sameCity&&myCity&&String(u.city||u.profile?.currentCity||'').trim().toLowerCase()!==myCity) return false;
       if(discoveryFilters.recentlyJoined&&!isRecentlyJoined(u)) return false;
@@ -223,8 +226,8 @@ async function getDiscoveryProfiles(){
     .map(u=>{
       const their = [...(u.interests||[]),...(u.profile?.interests||[]), u.topCat].filter(Boolean).map(i=>String(i).toLowerCase());
       const shared = their.filter(i => [...myInterests].some(m => m.includes(i) || i.includes(m)));
-      let score = 40 + Math.random()*25;
-      if(shared.length) score += shared.length * 12;
+      // Deterministic score — no Math.random fake precision (K0)
+      let score = 48 + shared.length * 12;
       if(u.city && (userProfile?.city||digitalProfile?.currentCity||'').toLowerCase().includes(String(u.city).toLowerCase())) score += 15;
       const theirLooking = String(u.lookingFor || u.profile?.lookingFor || '').toLowerCase();
       const reasons = [];
@@ -233,27 +236,31 @@ async function getDiscoveryProfiles(){
         if (u.age && userProfile?.age && Math.abs(Number(u.age) - Number(userProfile.age)) <= 6) { score += 10; reasons.push('Similar age'); }
       } else if (myLooking.includes('friend') || myIntents.some((i) => i.includes('friend'))) {
         if (shared.length) { score += 10; reasons.push(`Shared: ${shared[0]}`); }
-        reasons.push('Friendship overlap');
+        reasons.push('Looking for friendship');
       } else if (myLooking.includes('network') || myLooking.includes('professional') || myIntents.some((i) => i.includes('recruit') || i.includes('career'))) {
         if (u.occupation || u.profile?.occupation) { score += 14; reasons.push('Career / networking'); }
         if (u.city && myCity && String(u.city).toLowerCase() === myCity) { score += 8; reasons.push('Same city'); }
+      } else {
+        // Empty-query friendship-first default
+        if (shared.length) reasons.push(`Shared: ${shared[0]}`);
+        else reasons.push('Open to meet');
       }
       shared.slice(0, 2).forEach((s) => {
         const label = s.charAt(0).toUpperCase() + s.slice(1);
         if (!reasons.includes(label) && !reasons.some((r) => r.includes(label))) reasons.push(label);
       });
       if (!reasons.length && (u.interests || []).length) reasons.push(...(u.interests || []).slice(0, 2));
-      const matchPct = Math.min(98, Math.max(42, Math.round(score)));
+      if (u.isSample) reasons.unshift('Sample');
       return {
-        user:{...u,_isNew:isRecentlyJoined(u)},
+        user:{...u,_isNew:isRecentlyJoined(u), isSample: !!u.isSample},
         score,
-        matchPct,
         reasons: reasons.slice(0, 3),
         reason: reasons[0]
           ? reasons.slice(0, 2).join(' · ')
           : shared.length
             ? `You both care about ${shared.slice(0,2).join(' & ')}`
             : (u.bio || 'Someone you might enjoy talking to on Peepal'),
+        isSample: !!u.isSample,
       };
     })
     .sort((a,b)=>b.score-a.score)
@@ -272,20 +279,38 @@ function renderDiscoverySection(profiles){
     if(typeof renderEmptyState==='function'){
       renderEmptyState(el, {
         icon:'🌳',
-        title:'No suggestions right now',
-        message:'Check back later — discovery gets better as more people join Peepal.',
+        title:'No people to meet right now',
+        message:'Invite a friend or search Chaupaal — we never invent matches.',
+        actionLabel: 'Invite',
+        onAction: () => {
+          if (typeof ChaupaalReferrals?.openInviteToChaupaalShare === 'function') {
+            ChaupaalReferrals.openInviteToChaupaalShare();
+          } else if (typeof shareInviteToChaupaal === 'function') {
+            shareInviteToChaupaal();
+          }
+        },
+        secondaryActions: [
+          {
+            label: 'Search Chaupaal',
+            onClick: () => {
+              if (typeof openGlobalSearch === 'function') openGlobalSearch();
+              else if (typeof openSearch === 'function') openSearch();
+              else document.getElementById('openSearchBtn')?.click();
+            },
+          },
+        ],
       });
     } else {
-      el.innerHTML = `<div class="discovery-loading">No discovery suggestions right now — check back later 🌳</div>`;
+      el.innerHTML = `<div class="discovery-loading">No people suggestions — invite a friend or search Chaupaal.</div>`;
     }
     return el;
   }
   el.innerHTML = `
-    <div class="discovery-ai-label">Compatibility picks</div>
+    <div class="discovery-ai-label">People to meet</div>
     <div class="peepal-discovery-header">
       <div>
         <div class="peepal-discovery-title">You might enjoy talking to</div>
-        <div class="peepal-discovery-subtitle">Filters + profile prompts · weighted for mutual interest</div>
+        <div class="peepal-discovery-subtitle">Based on your profile &amp; what you’re looking for</div>
       </div>
       <button class="peepal-undo-btn" id="discoveryUndoBtn" ${discoveryPreviousSet.length?'':'disabled'}>↩ Undo</button>
     </div>
@@ -303,7 +328,7 @@ function renderDiscoverySection(profiles){
       <label><input type="checkbox" data-discovery-filter="recentlyJoined" ${discoveryFilters.recentlyJoined?'checked':''}> New here</label>
     </div>
     <div class="discovery-cards">
-      ${profiles.map(({user, matchPct, reasons, reason})=>{
+      ${profiles.map(({user, reasons, reason})=>{
         const sharedTags = (reasons||[]).map(r=>String(r).replace(/^📌\s*/,''));
         const ib = typeof craftSpecificIcebreaker==='function'
           ? craftSpecificIcebreaker(user, { shared: sharedTags, reason })
@@ -314,21 +339,20 @@ function renderDiscoverySection(profiles){
           typeof resolveIcebreakersFromUser==='function'?resolveIcebreakersFromUser(user):(user.icebreakers||[])
         ));
         return `
-        <div class="discovery-card${user.profileTheme?.accent ? ' dp-themed cp-author-accent' : ''}" data-uid="${user.uid}"${user.profileTheme?.accent ? ` style="--dp-accent:${user.profileTheme.accent}"` : ''}>
+        <div class="discovery-card${user.profileTheme?.accent ? ' dp-themed cp-author-accent' : ''}${user.isSample ? ' discovery-card--sample' : ''}" data-uid="${user.uid}"${user.profileTheme?.accent ? ` style="--dp-accent:${user.profileTheme.accent}"` : ''}>
           <div class="discovery-card-top">
             <div class="discovery-avatar-wrap">
               <div class="discovery-avatar">${user.photoURL?`<img src="${user.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`:user.avatar||'👤'}</div>
-              <div class="discovery-match-badge">${matchPct||'?'}%</div>
             </div>
             <div class="discovery-info">
-              <div class="discovery-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(user.name,user):user.name}</div>
+              <div class="discovery-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(user.name,user):user.name}${user.isSample?' <span class="cp-demo-badge">Sample</span>':''}</div>
               <div class="discovery-meta">${[user.city,user.age?user.age+'y':'',user.personality||''].filter(Boolean).join(' · ')}${user._isNew?' · <span class="discovery-new-badge">New here</span>':''}</div>
             </div>
             <button class="discovery-dismiss" data-uid="${user.uid}" title="Not interested">✕</button>
           </div>
-          ${(reasons||[]).length?`<div class="discovery-shared">${reasons.slice(0,4).map(r=>`<span class="discovery-shared-tag">${String(r).startsWith('📌')?r:`📌 ${r}`}</span>`).join('')}</div>`:''}
+          ${(reasons||[]).length?`<div class="discovery-shared">${reasons.slice(0,4).map(r=>`<span class="discovery-shared-tag">${String(r).startsWith('📌')||String(r)==='Sample'?r:`📌 ${r}`}</span>`).join('')}</div>`:''}
           <div class="discovery-reason">"${(typeof interestOverlapReason==='function' && interestOverlapReason(user)) || reason||'Shared interests on Chaupaal'}"</div>
-          <div class="discovery-transparency" style="font-size:11px;color:var(--muted);margin:4px 0 8px;">Why this pick: ${(reasons||[]).slice(0,2).join(' · ') || 'compatibility signals'}</div>
+          <div class="discovery-transparency" style="font-size:11px;color:var(--muted);margin:4px 0 8px;">Why this pick: ${(reasons||[]).slice(0,2).join(' · ') || 'profile overlap'}</div>
           ${ib?`<div class="discovery-icebreaker"><div class="discovery-icebreaker-label">Conversation starter</div><div class="discovery-icebreaker-text">"${ib.line || ib.answer}"</div></div>`:''}
           <div class="discovery-actions">
             <button class="discovery-view-btn" data-uid="${user.uid}">View profile</button>
@@ -523,6 +547,13 @@ function isDiscoveryEligibleUser(user) {
     const blocked = JSON.parse(localStorage.getItem('chaupaal_dismissed_uids') || '[]');
     if (Array.isArray(blocked) && blocked.includes(user.uid)) return false;
   } catch (e) {}
+  // K0: strangers only — never surface friends / pending requests as "people to meet"
+  try {
+    if (typeof relationshipState === 'function') {
+      const st = relationshipState(user.uid);
+      if (st?.friend || st?.requestSent || st?.requestReceived) return false;
+    }
+  } catch (e) {}
   if (user.hiddenFromDiscovery || user.openToMeet === false) return false;
   if (typeof isBlockedAge === 'function' && user.age != null && isBlockedAge(Number(user.age))) return false;
   if (typeof isTeenModeUser === 'function' && isTeenModeUser() && detectIntentLean(user) === 'dating') return false;
@@ -651,9 +682,9 @@ function rankCompatibilityPeeks(profiles, opts) {
         user,
         lean,
         score,
-        matchPct: Math.min(98, Math.max(42, Math.round(p.matchPct || score))),
         shared,
         icebreaker: ice,
+        reasons: (p.reasons && p.reasons.length ? p.reasons : shared.slice(0, 2).map((s) => String(s).charAt(0).toUpperCase() + String(s).slice(1))).slice(0, 3),
       };
     })
     .sort((a, b) => b.score - a.score);
@@ -695,6 +726,13 @@ async function getCompatibilityPeeks(opts) {
     } catch (e) {
       raw = [];
     }
+    // Hydrate relationships so stranger filter can drop friends / pending
+    try {
+      if (typeof hydrateRelationships === 'function' && raw.length) {
+        await hydrateRelationships(raw.map((p) => p.user?.uid || p.uid).filter(Boolean));
+        raw = raw.filter((p) => isDiscoveryEligibleUser(p.user || p));
+      }
+    } catch (e) {}
     if (friendshipOnly || o.emptyFriendship) {
       discoveryFilters.matchIntent = prevIntent;
     }
@@ -708,8 +746,7 @@ async function getCompatibilityPeeks(opts) {
       const extra = SAMPLE_DISCOVERY_POOL.filter((u) => isDiscoveryEligibleUser(u)).map((u) => ({
         user: { ...u, isSample: true },
         score: 50,
-        matchPct: 55,
-        reasons: (u.interests || []).slice(0, 2),
+        reasons: ['Sample', ...((u.interests || []).slice(0, 1))],
         reason: 'Sample · sign in for real people',
         isSample: true,
       }));
@@ -764,19 +801,21 @@ function renderCompatPeekCard(peek) {
     typeof formatDisplayNameHtml === 'function'
       ? formatDisplayNameHtml(user.name, user)
       : escCompat(user.name || 'Someone');
+  const why = (peek.reasons || []).slice(0, 2).join(' · ') || peek.reason || '';
   return `
-    <article class="peepal-compat-peek" data-uid="${escCompat(user.uid)}">
+    <article class="peepal-compat-peek${user.isSample || peek.isSample ? ' peepal-compat-peek--sample' : ''}" data-uid="${escCompat(user.uid)}">
       <div class="peepal-compat-peek-avatar">${
         user.photoURL
           ? `<img src="${escCompat(user.photoURL)}" alt="">`
           : escCompat(user.avatar || '👤')
       }</div>
       <div class="peepal-compat-peek-body">
-        <div class="peepal-compat-peek-name">${nameHtml}<span class="peepal-compat-peek-pct">${peek.matchPct || '?'}%</span></div>
+        <div class="peepal-compat-peek-name">${nameHtml}${user.isSample || peek.isSample ? ' <span class="cp-demo-badge">Sample</span>' : ''}</div>
         <div class="peepal-compat-peek-meta">${[user.city, user.age ? user.age + 'y' : '', peek.lean === 'friendship' ? 'Friendship' : '']
           .filter(Boolean)
           .map(escCompat)
           .join(' · ')}</div>
+        ${why ? `<div class="peepal-compat-peek-why">${escCompat(why)}</div>` : ''}
         ${
           ice
             ? `<div class="peepal-compat-peek-ice"><strong>Icebreaker</strong>${escCompat(ice.line || ice.answer)}</div>`
