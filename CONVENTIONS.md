@@ -51,6 +51,8 @@ Implementation lives primarily in:
 
 **Duniya D4 (Prasidha trending):** `POST /api/stories` `{ action: 'prasidha_trending', windowDays: 7 }` — live velocity+recency over **~7 days**, public Duniya only; SAMPLE/demo/seed/archive/saveOnly excluded. Optional light follow boost (`friendSlots: 3`) when signed in; guests get public list (auth optional via `verifyBearer`). Logic in `server-lib/prasidha-trending.js` (mirrors Mashhoor); no denorm cache. Client fetches server list — never masonry local SAMPLE as trending. Empty: Create post / Open Vishwa.
 
+**Duniya D5 (arc dogfood):** Auth success dispatches `chaupaal:auth` → Duniya reloads live feed (clears guest SAMPLE) + story ring. Morph Create post|story soft-auth via `openDuniyaPostSheet` (stash resume). `/story/d1–d5` Demo soft-fail. Boosts/reel pipeline/close-friends audience deferred.
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.

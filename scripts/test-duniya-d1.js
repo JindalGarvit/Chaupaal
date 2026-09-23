@@ -37,6 +37,7 @@ assert(/stashPendingAction.*duniya_compose|duniya_compose/.test(duniya), 'post s
 assert(/stashPendingAction\(['"]duniya_compose['"]\)/.test(compose), 'compose soft-auth stash');
 assert(/shortcut_duniya_post/.test(gest) && /shortcut_duniya_story/.test(gest), 'morph post + story');
 assert(/Create post/.test(gest) && /Create Story/.test(gest), 'morph labels');
+assert(/openDuniyaPostSheet\(['"]post['"]\)/.test(gest) && /openDuniyaPostSheet\(['"]story['"]\)/.test(gest), 'morph soft-auth via post sheet stash');
 assert(/is-unseen|f58529|dd2a7b/.test(css), 'IG-style gradient ring');
 assert(/is-seen .duniya-story-ring/.test(css), 'seen muted ring');
 assert(/duniya-story-add-badge/.test(css) && /22px/.test(css), 'compact + badge');

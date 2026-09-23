@@ -341,7 +341,12 @@ function initDuniya(){
   if(screen.dataset.loaded){
     // Tab revisited after login — pull live pages if we haven't yet.
     if(db&&currentUser&&!duniyaLiveMode){
-      loadDuniyaPage({reset:true}).then(()=>renderDuniyaFeed());
+      loadDuniyaPage({reset:true}).then(()=>{
+        renderDuniyaFeed();
+        renderDuniyaStories();
+      });
+    } else {
+      renderDuniyaStories();
     }
     return;
   }
@@ -367,6 +372,30 @@ function initDuniya(){
   document.getElementById('duniyaInlineSearch')?.remove();
   // Chaupaal search lives under Peepal morph #5 — no Duniya top search bar.
 }
+
+// Guest → signed-in while already on Duniya: clear SAMPLE + refresh ring (D5)
+document.addEventListener('chaupaal:auth', () => {
+  try {
+    if (!duniyaIsSignedIn()) return;
+    const screen = document.getElementById('duniyaScreen');
+    if (!screen) return;
+    if (db && !duniyaLiveMode) {
+      loadDuniyaPage({ reset: true }).then(() => {
+        renderDuniyaFeed();
+        if (typeof setDuniyaMode === 'function') {
+          const mode = document.getElementById('panel-duniya')?.classList.contains('is-lehar')
+            ? 'lehar'
+            : document.getElementById('panel-duniya')?.classList.contains('is-prasidha')
+              ? 'prasidha'
+              : 'vishwa';
+          if (mode === 'lehar' && typeof renderLeharFeed === 'function') renderLeharFeed();
+          if (mode === 'prasidha' && typeof renderPrasidhaFeed === 'function') renderPrasidhaFeed({ reset: true, force: true });
+        }
+      });
+    }
+    renderDuniyaStories();
+  } catch (e) {}
+});
 
 async function renderDuniyaStories(){
   if(typeof DuniyaStory!=='undefined' && typeof DuniyaStory.renderStrip==='function'){

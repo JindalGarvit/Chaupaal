@@ -132,5 +132,8 @@ if (auth) {
         setTimeout(() => ChaupaalReferrals.activateReferralIfNeeded(), 800);
       }
     } catch (e) {}
+    try {
+      document.dispatchEvent(new CustomEvent('chaupaal:auth', { detail: { uid: user.uid } }));
+    } catch (e) {}
   });
 }

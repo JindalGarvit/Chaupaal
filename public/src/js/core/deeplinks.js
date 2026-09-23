@@ -889,6 +889,11 @@
       }
     } else if (route.name === 'story') {
       switchTab('duniya');
+      const sid = String(route.id || '');
+      if (/^d[1-5]$/.test(sid)) {
+        if (typeof showToast === 'function') showToast('Demo sample — not a live post');
+        return true;
+      }
       if (typeof DuniyaStory !== 'undefined' && DuniyaStory.openById) {
         const ok = await DuniyaStory.openById(route.id);
         if (ok === false && typeof showToast === 'function') {

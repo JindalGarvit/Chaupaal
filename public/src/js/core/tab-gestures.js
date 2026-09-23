@@ -413,9 +413,10 @@
           label: tt('shortcut_duniya_post', 'Create post'),
           run: () => {
             if (typeof ChaupaalIntents !== 'undefined' && ChaupaalIntents.run('duniya.post')) return;
-            if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
+            // Soft-auth stashes duniya_compose via openDuniyaPostSheet (D5)
             switchTo('duniya');
             if (typeof openDuniyaPostSheet === 'function') openDuniyaPostSheet('post');
+            else if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
           },
         },
         {
@@ -447,10 +448,13 @@
           label: tt('shortcut_duniya_story', 'Create Story'),
           run: () => {
             if (typeof ChaupaalIntents !== 'undefined' && ChaupaalIntents.run('duniya.story')) return;
-            if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
+            // Soft-auth stashes duniya_story via openDuniyaPostSheet('story') (D5)
             switchTo('duniya');
-            if (typeof DuniyaStory !== 'undefined' && typeof DuniyaStory.startCreate === 'function') DuniyaStory.startCreate();
-            else if (typeof openDuniyaPostSheet === 'function') openDuniyaPostSheet('story');
+            if (typeof openDuniyaPostSheet === 'function') openDuniyaPostSheet('story');
+            else if (typeof DuniyaStory !== 'undefined' && typeof DuniyaStory.startCreate === 'function') {
+              if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
+              DuniyaStory.startCreate();
+            } else if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
           },
         },
       ],
