@@ -244,6 +244,17 @@
         setTimeout(() => openPeepalAskSheet(), 300);
         return true;
       }
+      // K4: gated Khoj Find → resume on Khoj with pending query (if any)
+      if (action === 'khoj_find') {
+        if (typeof showTab === 'function') showTab('peepal');
+        setTimeout(() => {
+          if (typeof setPeepalMode === 'function') setPeepalMode('khoj');
+          else if (typeof renderKhojSurface === 'function') {
+            renderKhojSurface(document.getElementById('peepalScreen'));
+          }
+        }, 350);
+        return true;
+      }
     } catch (e) {}
     return false;
   }

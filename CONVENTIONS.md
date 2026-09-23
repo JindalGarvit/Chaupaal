@@ -39,6 +39,8 @@ Implementation lives primarily in:
 
 **Peepal/Khoj K3 (Mashhoor):** `POST /api/peepal-reactions` `{ action: 'mashhoor_trending' }` — live velocity+recency over **~7 days**, public Peepal only; **seeds excluded**; optional friend boost when signed in. No denorm cache. Vriksha intent = Discuss primary + topic chips; Find on Khoj secondary; no people peeks/results on Vriksha.
 
+**Peepal/Khoj K4 (dogfood close):** Arc verified end-to-end. Soft-auth Find stashes `khoj_find` + pending query and resumes on Khoj after login (G2 pattern). Static `scripts/test-peepal-k4.js` locks K0–K3 invariants + resume. Residuals documented in ship notes (cache, embeddings, seed global flip, FoF approx).
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.

@@ -60,8 +60,20 @@ async function runPeepalAiSearch(opts){
   if (input && o.query != null) input.value = query;
   if (!resultsEl) return;
 
-  // Soft-auth: Find needs an account for real strangers (K1)
+  // Soft-auth: Find needs an account for real strangers (K1); resume after login (K4 / G2)
   if (typeof currentUser === 'undefined' || !currentUser) {
+    try {
+      if (query) sessionStorage.setItem('chaupaal_khoj_pending_query', query.slice(0, 500));
+    } catch (e) {}
+    try {
+      if (typeof ChaupaalReferrals?.stashPendingAction === 'function') {
+        ChaupaalReferrals.stashPendingAction('khoj_find');
+      } else if (typeof stashPendingAction === 'function') {
+        stashPendingAction('khoj_find');
+      } else {
+        sessionStorage.setItem('chaupaal_pending_action', 'khoj_find');
+      }
+    } catch (e) {}
     if (typeof showToast === 'function') {
       showToast(
         typeof t === 'function'

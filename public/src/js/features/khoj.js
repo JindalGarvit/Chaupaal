@@ -240,8 +240,21 @@
     });
   }
 
-  function softAuthForFind() {
+  function softAuthForFind(pendingQuery) {
     if (typeof currentUser !== 'undefined' && currentUser) return false;
+    const q = String(pendingQuery || '').trim().slice(0, 500);
+    try {
+      if (q) sessionStorage.setItem('chaupaal_khoj_pending_query', q);
+    } catch (e) {}
+    try {
+      if (typeof ChaupaalReferrals?.stashPendingAction === 'function') {
+        ChaupaalReferrals.stashPendingAction('khoj_find');
+      } else if (typeof stashPendingAction === 'function') {
+        stashPendingAction('khoj_find');
+      } else {
+        sessionStorage.setItem('chaupaal_pending_action', 'khoj_find');
+      }
+    } catch (e) {}
     if (typeof showToast === 'function') {
       showToast(tt('khoj_find_signin', 'Sign in to find people to meet'));
     }
@@ -376,20 +389,34 @@
       reloadPeeks();
     });
 
-    // Pending query from Vriksha "Find on Khoj"
+    // Pending query from Vriksha "Find on Khoj" or post-auth resume (K4)
     let pendingQ = '';
     try {
       pendingQ = sessionStorage.getItem('chaupaal_khoj_pending_query') || '';
-      sessionStorage.removeItem('chaupaal_khoj_pending_query');
     } catch (e) {}
     if (pendingQ) {
       const inp = panel.querySelector('#khojIntentInput');
       if (inp) inp.value = pendingQ;
       const dest = panel.querySelector('#khojIntentResults');
-      if (typeof runPeepalAiSearch === 'function' && !softAuthForFind()) {
+      const signedIn = typeof currentUser !== 'undefined' && !!currentUser;
+      if (signedIn && typeof runPeepalAiSearch === 'function') {
+        try {
+          sessionStorage.removeItem('chaupaal_khoj_pending_query');
+        } catch (e) {}
         setKhojFindMode(panel, true);
         runPeepalAiSearch({ query: pendingQ, resultsEl: dest, surface: 'khoj', limit: 8 });
+      } else if (!signedIn) {
+        softAuthForFind(pendingQ);
+        loadKhojPeeks(listEl, {
+          reset: true,
+          limit: 5,
+          emptyFriendship: !isProViewer(),
+          friendshipOnly: false,
+        });
       } else {
+        try {
+          sessionStorage.removeItem('chaupaal_khoj_pending_query');
+        } catch (e) {}
         loadKhojPeeks(listEl, {
           reset: true,
           limit: 5,
@@ -418,10 +445,13 @@
         inp?.focus();
         return;
       }
-      if (softAuthForFind()) return;
+      if (softAuthForFind(q)) return;
       const dest = panel.querySelector('#khojIntentResults');
       setKhojFindMode(panel, true);
       if (typeof runPeepalAiSearch === 'function') {
+        try {
+          sessionStorage.removeItem('chaupaal_khoj_pending_query');
+        } catch (e) {}
         runPeepalAiSearch({
           query: q,
           resultsEl: dest,
