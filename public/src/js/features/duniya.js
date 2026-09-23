@@ -1774,11 +1774,141 @@ function toggleOpenToMeet(){
   let mode = 'general';
   let leharIo = null;
   function isVideoPost(p) {
-    const media = p.media || p.video || '';
+    if (!p) return false;
+    const slides = Array.isArray(p.slides) ? p.slides : [];
+    const first = slides[0] || null;
+    const media = String(p.media || p.video || first?.media || '').trim();
     if (!media) return false;
-    const type = String(p.mediaType || p.type || '').toLowerCase();
+    const type = String(p.mediaType || p.type || first?.type || '').toLowerCase();
+    if (type === 'image' || type === 'gif' || type === 'text') return false;
     if (type.includes('video')) return true;
-    return /\.(mp4|webm|mov)(\?|$)/i.test(media) || /\/video\//i.test(media);
+    if (/\.(mp4|webm|mov|m4v)(\?|$)/i.test(media)) return true;
+    if (/\/video\//i.test(media) || /videodelivery|cloudinary.*\/video/i.test(media)) return true;
+    if (/^data:video\//i.test(media)) return true;
+    return false;
+  }
+  function syncVishwaLikeUi(post) {
+    if (!post?.id) return;
+    const id = String(post.id).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const card = document.querySelector(`.duniya-post[data-id="${id}"]`);
+    if (!card) return;
+    const btn = card.querySelector('.like-btn');
+    const likesEl = card.querySelector('.duniya-post-likes');
+    if (btn) {
+      btn.classList.toggle('liked', !!post.likedByMe);
+      btn.setAttribute('aria-pressed', post.likedByMe ? 'true' : 'false');
+    }
+    if (likesEl && typeof formatCount === 'function') {
+      likesEl.textContent = `${formatCount(post.likes || 0)} likes`;
+    }
+  }
+  function syncVishwaSaveUi(post) {
+    if (!post?.id) return;
+    const id = String(post.id).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const card = document.querySelector(`.duniya-post[data-id="${id}"]`);
+    const btn = card?.querySelector('.duniya-bookmark-btn');
+    if (btn) {
+      btn.classList.toggle('saved', !!post.savedByMe);
+      btn.setAttribute('aria-pressed', post.savedByMe ? 'true' : 'false');
+    }
+  }
+  function leharQuietSound() {
+    try {
+      if (typeof quietMode !== 'undefined' && quietMode) return true;
+      if (document.documentElement.classList.contains('quiet-mode')) return true;
+    } catch (e) {}
+    return false;
+  }
+  async function toggleLeharLike(slide, post) {
+    if (!post) return;
+    const likeBtn = slide.querySelector('[data-lehar-like]');
+    const likesEl = slide.querySelector('[data-lehar-likes]');
+    if (likeBtn?.dataset.busy) return;
+    if (likeBtn) likeBtn.dataset.busy = '1';
+    const prevLiked = !!post.likedByMe;
+    const prevLikes = Number(post.likes) || 0;
+    const applyLocal = (liked, likes) => {
+      post.likedByMe = liked;
+      post.likes = likes;
+      likeBtn?.classList.toggle('is-liked', liked);
+      likeBtn?.setAttribute('aria-pressed', liked ? 'true' : 'false');
+      if (likesEl) likesEl.textContent = String(likes);
+      syncVishwaLikeUi(post);
+    };
+    const popHeart = () => {
+      const heart = slide.querySelector('.lehar-double-heart');
+      if (heart) {
+        heart.classList.remove('is-pop');
+        void heart.offsetWidth;
+        heart.classList.add('is-pop');
+      }
+      if (typeof haptic === 'function') haptic('light');
+    };
+    if (duniyaIsDemoPost(post)) {
+      applyLocal(!prevLiked, Math.max(0, prevLikes + (prevLiked ? -1 : 1)));
+      popHeart();
+      toastDuniyaDemo();
+      if (likeBtn) delete likeBtn.dataset.busy;
+      return;
+    }
+    applyLocal(!prevLiked, Math.max(0, prevLikes + (prevLiked ? -1 : 1)));
+    popHeart();
+    try {
+      if (typeof toggleContentLike !== 'function') throw new Error('Like unavailable');
+      if (typeof assertRateLimit === 'function') await assertRateLimit('like');
+      const saved = await toggleContentLike('duniya', post);
+      if (saved.persisted) {
+        applyLocal(!!saved.liked, Number.isFinite(saved.likes) ? saved.likes : post.likes);
+      } else {
+        applyLocal(prevLiked, prevLikes);
+        if (typeof showToast === 'function') showToast('Could not save like — try again');
+      }
+    } catch (err) {
+      applyLocal(prevLiked, prevLikes);
+      if (typeof showToast === 'function') {
+        showToast(typeof friendlyError === 'function' ? friendlyError(err) : 'Could not save like');
+      }
+    } finally {
+      if (likeBtn) delete likeBtn.dataset.busy;
+    }
+  }
+  async function toggleLeharSave(slide, post) {
+    if (!post) return;
+    const saveBtn = slide.querySelector('[data-lehar-save]');
+    if (saveBtn?.dataset.busy) return;
+    if (saveBtn) saveBtn.dataset.busy = '1';
+    const prev = !!post.savedByMe;
+    const paint = (saved) => {
+      post.savedByMe = saved;
+      saveBtn?.classList.toggle('is-saved', saved);
+      saveBtn?.setAttribute('aria-pressed', saved ? 'true' : 'false');
+      syncVishwaSaveUi(post);
+    };
+    if (duniyaIsDemoPost(post)) {
+      paint(!prev);
+      toastDuniyaDemo();
+      if (saveBtn) delete saveBtn.dataset.busy;
+      return;
+    }
+    paint(!prev);
+    try {
+      if (typeof toggleContentSaved !== 'function') throw new Error('Save unavailable');
+      const saved = await toggleContentSaved('duniya', post);
+      if (saved.persisted) {
+        paint(!!saved.saved);
+        if (typeof showToast === 'function') showToast(saved.saved ? 'Saved' : 'Removed from saved');
+      } else {
+        paint(prev);
+        if (typeof showToast === 'function') showToast('Could not save');
+      }
+    } catch (err) {
+      paint(prev);
+      if (typeof showToast === 'function') {
+        showToast(typeof friendlyError === 'function' ? friendlyError(err) : 'Could not save');
+      }
+    } finally {
+      if (saveBtn) delete saveBtn.dataset.busy;
+    }
   }
   function renderLeharFeed() {
     const feed = document.getElementById('leharFeed');
@@ -1787,35 +1917,48 @@ function toggleOpenToMeet(){
       try { leharIo.disconnect(); } catch (e) {}
       leharIo = null;
     }
+    const leharMediaSrc = (p) => {
+      const slides = Array.isArray(p?.slides) ? p.slides : [];
+      return String(p?.media || p?.video || slides[0]?.media || '').trim();
+    };
     const videos = (duniyaPosts || [])
       .filter((p) => !(typeof isSoftDeleted === 'function' ? isSoftDeleted(p) : p.deleted))
       .filter((p) => p.archived !== true)
       .filter(isVideoPost)
-      .filter((p) => !!(p.media || p.video));
+      .filter((p) => !!leharMediaSrc(p));
     const realVideos = videos.filter((p) => !duniyaIsDemoPost(p));
-    // Live signed-in feed: real clips only. Guests / demo-fallback: labeled samples OK.
-    const pool =
+    // Live signed-in: real clips only. Guests / demo-fallback: labeled samples OK.
+    let pool =
       duniyaLiveMode && duniyaIsSignedIn() && !duniyaDemoFallback ? realVideos : videos;
+    // Same friends/followers-first priority as Vishwa (among videos only).
+    pool = typeof rankDuniyaVishwaFeed === 'function' ? rankDuniyaVishwaFeed(pool) : pool;
     if (!pool.length) {
       feed.innerHTML =
         `<div class="lehar-empty">
           <strong>Lehar</strong>
-          <p>Short videos from Duniya wave through here.</p>
-          <button type="button" class="btn btn--primary" data-lehar-create>Post a clip</button>
+          <p>No clips in your Duniya pool yet. Post a video, or browse Vishwa.</p>
+          <div class="lehar-empty-actions">
+            <button type="button" class="btn btn--primary" data-lehar-create>Post a clip</button>
+            <button type="button" class="btn btn--ghost" data-lehar-vishwa>Browse Vishwa</button>
+          </div>
         </div>`;
       feed.querySelector('[data-lehar-create]')?.addEventListener('click', () => {
         if (typeof openDuniyaPostSheet === 'function') openDuniyaPostSheet('post');
+      });
+      feed.querySelector('[data-lehar-vishwa]')?.addEventListener('click', () => {
+        if (typeof setDuniyaMode === 'function') setDuniyaMode('vishwa');
       });
       return;
     }
     feed.innerHTML = pool
       .map((p, i) => {
-        const src = p.media || p.video;
+        const src = leharMediaSrc(p);
         const name = p.user?.name || 'Member';
         const postId = p.id || '';
         const likes = Number(p.likes) || 0;
         const comments = Number(p.comments) || 0;
         const liked = !!p.likedByMe;
+        const saved = !!p.savedByMe;
         const demo = duniyaIsDemoPost(p);
         const avatar = p.user?.photoURL || (p.user?.avatar && /^https:/.test(p.user.avatar) ? p.user.avatar : '');
         return `<section class="lehar-slide${demo ? ' lehar-slide--demo' : ''}" data-lehar-i="${i}" data-lehar-id="${duniyaEsc(postId)}"${demo ? ' data-demo="1"' : ''}>
@@ -1824,11 +1967,14 @@ function toggleOpenToMeet(){
           <button type="button" class="lehar-mute-btn" aria-label="Toggle mute" data-lehar-mute>🔇</button>
           <div class="lehar-double-heart" aria-hidden="true">♥</div>
           <div class="lehar-actions">
-            <button type="button" class="lehar-action ${liked ? 'is-liked' : ''}" data-lehar-like aria-label="Like">
+            <button type="button" class="lehar-action ${liked ? 'is-liked' : ''}" data-lehar-like aria-label="Like" aria-pressed="${liked ? 'true' : 'false'}">
               <span aria-hidden="true">♥</span><em data-lehar-likes>${likes}</em>
             </button>
             <button type="button" class="lehar-action" data-lehar-comment aria-label="Comments">
               <span aria-hidden="true">💬</span><em>${comments}</em>
+            </button>
+            <button type="button" class="lehar-action ${saved ? 'is-saved' : ''}" data-lehar-save aria-label="Save" aria-pressed="${saved ? 'true' : 'false'}">
+              <span aria-hidden="true">🔖</span><em>Save</em>
             </button>
             <button type="button" class="lehar-action" data-lehar-share aria-label="Share">
               <span aria-hidden="true">↗</span><em>Share</em>
@@ -1849,6 +1995,7 @@ function toggleOpenToMeet(){
     if (typeof enhanceMediaIn === 'function') enhanceMediaIn(feed);
     let mutedPref = true;
     try { mutedPref = localStorage.getItem('chaupaal_lehar_muted') !== '0'; } catch (e) {}
+    if (leharQuietSound()) mutedPref = true;
     const slides = [...feed.querySelectorAll('.lehar-slide')];
     const setMuteUi = (slide, muted) => {
       const btn = slide.querySelector('[data-lehar-mute]');
@@ -1875,8 +2022,13 @@ function toggleOpenToMeet(){
 
       s.querySelector('[data-lehar-mute]')?.addEventListener('click', (e) => {
         e.stopPropagation();
-        mutedPref = !mutedPref;
-        try { localStorage.setItem('chaupaal_lehar_muted', mutedPref ? '1' : '0'); } catch (err) {}
+        if (leharQuietSound()) {
+          mutedPref = true;
+          if (typeof showToast === 'function') showToast('Quiet mode — sound stays off');
+        } else {
+          mutedPref = !mutedPref;
+          try { localStorage.setItem('chaupaal_lehar_muted', mutedPref ? '1' : '0'); } catch (err) {}
+        }
         slides.forEach((sl) => {
           const vid = sl.querySelector('video');
           if (vid) vid.muted = mutedPref;
@@ -1884,32 +2036,15 @@ function toggleOpenToMeet(){
         });
       });
 
-      const likeSlide = () => {
-        const p = post();
-        if (p && !p.likedByMe) {
-          const feedCard = document.querySelector(`.duniya-post[data-id="${postId}"] .like-btn`);
-          if (feedCard) feedCard.click();
-          else {
-            p.likedByMe = true;
-            p.likes = (p.likes || 0) + 1;
-            if (typeof haptic === 'function') haptic('light');
-          }
-        } else if (typeof haptic === 'function') haptic('light');
-        const heart = s.querySelector('.lehar-double-heart');
-        if (heart) {
-          heart.classList.remove('is-pop');
-          void heart.offsetWidth;
-          heart.classList.add('is-pop');
-        }
-        const likeBtn = s.querySelector('[data-lehar-like]');
-        const likesEl = s.querySelector('[data-lehar-likes]');
-        likeBtn?.classList.add('is-liked');
-        if (likesEl && p) likesEl.textContent = String(p.likes || 0);
-      };
-
       s.querySelector('[data-lehar-like]')?.addEventListener('click', (e) => {
         e.stopPropagation();
-        likeSlide();
+        const p = post();
+        if (p) toggleLeharLike(s, p);
+      });
+      s.querySelector('[data-lehar-save]')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const p = post();
+        if (p) toggleLeharSave(s, p);
       });
       s.querySelector('[data-lehar-comment]')?.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1922,6 +2057,7 @@ function toggleOpenToMeet(){
         if (p && typeof openShareSheet === 'function') openShareSheet(p);
         else if (p && navigator.share) {
           navigator.share({ title: 'Chaupaal', text: String(p.caption || '').slice(0, 120) }).catch(() => {});
+          if (typeof recordDuniyaShare === 'function') recordDuniyaShare(p);
         }
       });
       s.querySelector('[data-lehar-avatar]')?.addEventListener('click', (e) => {
@@ -1943,11 +2079,12 @@ function toggleOpenToMeet(){
 
       let lastTap = 0;
       s.addEventListener('click', (e) => {
-        if (e.target.closest('[data-lehar-mute],[data-lehar-like],[data-lehar-comment],[data-lehar-share],[data-lehar-avatar],[data-lehar-name]')) return;
+        if (e.target.closest('[data-lehar-mute],[data-lehar-like],[data-lehar-comment],[data-lehar-save],[data-lehar-share],[data-lehar-avatar],[data-lehar-name]')) return;
         const now = Date.now();
         if (now - lastTap < 320) {
           lastTap = 0;
-          likeSlide();
+          const p = post();
+          if (p) toggleLeharLike(s, p);
           return;
         }
         lastTap = now;
@@ -1963,10 +2100,12 @@ function toggleOpenToMeet(){
           const v = en.target.querySelector('video');
           if (!v) return;
           if (en.isIntersecting && en.intersectionRatio > 0.65) {
-            v.muted = mutedPref;
+            const forceMute = mutedPref || leharQuietSound();
+            v.muted = forceMute;
             v.play().catch(() => {
               v.muted = true;
               mutedPref = true;
+              try { localStorage.setItem('chaupaal_lehar_muted', '1'); } catch (err) {}
               setMuteUi(en.target, true);
               v.play().catch(() => {});
             });

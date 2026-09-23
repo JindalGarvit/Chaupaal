@@ -47,6 +47,8 @@ Implementation lives primarily in:
 
 **Duniya D2 (Vishwa social):** Priority authors = **accepted friends OR following** (plus self). Early **5 slots** newest-first from priority, then remaining loaded posts by recency (strangers kept). Guests/demo: chrono only. Like/save hydrated on load; Demo still local-only. Dismissible “Showing people you follow first” hint.
 
+**Duniya D3 (Lehar filter):** Lehar = vertical video **filter of the same Duniya pool** (not a separate reel inventory). `isVideoPost` requires real media URL + video type/extension/mime (no null ghosts). Signed-in order reuses `rankDuniyaVishwaFeed` among videos. Like/unlike/save call `toggleContentLike` / `toggleContentSaved` directly (no Vishwa card DOM click); share uses the same sheet + `incrementContentShares`. Demo = local + Demo toast. Empty: Post a clip / Browse Vishwa. Mute pref `chaupaal_lehar_muted`; Quiet mode forces mute. Dedicated reel pipeline + Prasidha server trending = deferred (D4).
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.

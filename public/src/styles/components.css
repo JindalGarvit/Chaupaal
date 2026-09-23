@@ -381,7 +381,7 @@ button[style*="background:var(--red)"] {
   color:#7B2CBF!important;stroke:#7B2CBF!important;
 }
 
-/* Akhbaar — minimal Add category screen */
+/* Akhbaar â minimal Add category screen */
 .akh-add-cat-overlay{
   position:absolute;inset:0;z-index:280;display:flex;flex-direction:column;
   background:linear-gradient(180deg,#F7F0FF 0%,#fff 42%);
@@ -526,7 +526,7 @@ button[style*="background:var(--red)"] {
   height: 58px !important;
 }
 .story-ring.seen { background: var(--line) !important; }
-/* Duniya story ring states live in duniya-story.css (.is-empty / .is-seen / .is-own) — no global override */
+/* Duniya story ring states live in duniya-story.css (.is-empty / .is-seen / .is-own) â no global override */
 
 /* ============================================================
    PROFILE MODAL ? social-first layout
@@ -2041,11 +2041,14 @@ html.theme-dark .lehar-feed{--lehar-slide-bg:#111318;}
 .lehar-action span{font-size:26px;line-height:1;}
 .lehar-action em{font-style:normal;font-size:11px;}
 .lehar-action.is-liked{color:#ff4d6d;}
+.lehar-action.is-saved{color:#f4c430;}
 .lehar-empty{color:var(--ink,#222);padding:48px 24px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px;min-height:60%;justify-content:center;}
 html[data-display="dark"] .lehar-empty,
 html[data-display="night"] .lehar-empty,
 html.theme-dark .lehar-empty{color:#fff;}
 .lehar-empty .btn{margin-top:8px;}
+.lehar-empty-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:4px;}
+.lehar-empty-actions .btn{margin-top:0;}
 .lehar-mute-btn{position:absolute;top:16px;right:14px;z-index:3;width:40px;height:40px;border:0;border-radius:50%;background:var(--lehar-scrim, rgba(0,0,0,.45));color:#fff;font-size:16px;cursor:pointer;backdrop-filter:blur(6px);}
 .lehar-double-heart{position:absolute;left:50%;top:45%;transform:translate(-50%,-50%) scale(.4);opacity:0;color:#fff;font-size:72px;pointer-events:none;text-shadow:0 4px 20px rgba(0,0,0,.45);z-index:2;}
 .lehar-double-heart.is-pop{animation:leharHeartPop .7s ease forwards;}
@@ -3990,7 +3993,7 @@ select:focus-visible,
 .rw-sports-ball.is-live{opacity:1;left:62%;}
 .rw-sports-batter{position:absolute;right:18px;top:36%;font-size:32px;}
 
-/* Street Cricket delivery cinema (Prompt 1) — ball flight ↔ hit zone */
+/* Street Cricket delivery cinema (Prompt 1) â ball flight â hit zone */
 .rw-sc-card h2{margin-top:0;}
 .rw-sc-pitch{
   height:168px;border-radius:16px;margin:0 0 14px;
@@ -6313,7 +6316,7 @@ html.quiet-mode .dp-arcade-burst,html.quiet-mode .dp-arcade-block{animation:none
 .auth-optional-summary::after{content:' +';color:var(--muted);font-weight:700;}
 .auth-optional-details[open] .auth-optional-summary::after{content:' ?';}
 
-/* Growth G6 � PWA install sheet + standalone shell */
+/* Growth G6  PWA install sheet + standalone shell */
 .pwa-install-sheet{
   position:fixed;inset:0;z-index:100050;display:flex;align-items:flex-end;justify-content:center;
   background:rgba(20,22,30,.42);padding:12px;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));
