@@ -236,7 +236,23 @@
     try {
       if (action === 'duniya_compose' && typeof openDuniyaPostSheet === 'function') {
         if (typeof showTab === 'function') showTab('duniya');
-        setTimeout(() => openDuniyaPostSheet(), 300);
+        setTimeout(() => {
+          try {
+            if (typeof setDuniyaMode === 'function') setDuniyaMode('vishwa');
+          } catch (e) {}
+          openDuniyaPostSheet('post');
+        }, 300);
+        return true;
+      }
+      if (action === 'duniya_story') {
+        if (typeof showTab === 'function') showTab('duniya');
+        setTimeout(() => {
+          try {
+            if (typeof setDuniyaMode === 'function') setDuniyaMode('vishwa');
+          } catch (e) {}
+          if (typeof DuniyaStory?.startCreate === 'function') DuniyaStory.startCreate();
+          else if (typeof openDuniyaPostSheet === 'function') openDuniyaPostSheet('story');
+        }, 350);
         return true;
       }
       if (action === 'peepal_ask' && typeof openPeepalAskSheet === 'function') {

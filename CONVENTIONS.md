@@ -43,6 +43,8 @@ Implementation lives primarily in:
 
 **Duniya D0 (truth):** Guests see labeled SAMPLE. Signed-in: live posts clear SAMPLE; load fail → last-good real cache (`chaupaal_duniya_feed_cache_v1_{uid}`, 7d TTL) with Offline banner + Retry (never Sign-in); no cache → labeled demo + Retry. Empty live → honest empty + optional Preview demo. Demo like/comment/save/share = local + “Demo — not saved”. Prasidha excludes samples (warming-up empty until real). Lehar labels Demo clips; null-media sample video fixed. Sample `/post/dN` soft-fails as Demo.
 
+**Duniya D1 (create IA):** Vishwa IG-style story rings (gradient unseen / muted seen; self + badge). **Tap** self → story viewer or create; **long-press** self → post compose; **+** → story only. Morph Create post | Create Story + FAB post kept. Guest create soft-auths with `duniya_compose` / `duniya_story` resume. No SAMPLE authors in live tray.
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.

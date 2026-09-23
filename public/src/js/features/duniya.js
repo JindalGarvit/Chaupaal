@@ -1368,7 +1368,15 @@ function openDuniyaDetail(post,{focusCommentId=null,focusComposer=false}={}){
 
 function openDuniyaPostSheet(mode='post'){
   if(typeof currentUser==='undefined'||!currentUser){
-    if(typeof showAuth==='function') showAuth();
+    try{
+      const action=mode==='story'?'duniya_story':'duniya_compose';
+      if(typeof ChaupaalReferrals?.stashPendingAction==='function') ChaupaalReferrals.stashPendingAction(action);
+      else if(typeof stashPendingAction==='function') stashPendingAction(action);
+      else sessionStorage.setItem('chaupaal_pending_action',action);
+    }catch(e){}
+    if(typeof showToast==='function') showToast(typeof t==='function'?t('duniya_create_signin','Sign in to create'):'Sign in to create');
+    if(typeof openAuthSheet==='function') openAuthSheet('login');
+    else if(typeof showAuth==='function') showAuth();
     return;
   }
   if(mode==='story'){

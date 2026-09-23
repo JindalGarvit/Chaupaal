@@ -1366,7 +1366,18 @@
 
   async function open(opts = {}) {
     if (typeof currentUser === 'undefined' || !currentUser) {
-      if (typeof showAuth === 'function') showAuth();
+      try {
+        if (typeof ChaupaalReferrals?.stashPendingAction === 'function') {
+          ChaupaalReferrals.stashPendingAction('duniya_compose');
+        } else if (typeof stashPendingAction === 'function') {
+          stashPendingAction('duniya_compose');
+        } else {
+          sessionStorage.setItem('chaupaal_pending_action', 'duniya_compose');
+        }
+      } catch (e) {}
+      if (typeof showToast === 'function') showToast('Sign in to create');
+      if (typeof openAuthSheet === 'function') openAuthSheet('login');
+      else if (typeof showAuth === 'function') showAuth();
       return;
     }
     const mode = opts.mode === 'text' ? 'text' : opts.editPost ? 'edit' : 'media';

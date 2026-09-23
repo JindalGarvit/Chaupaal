@@ -330,11 +330,64 @@
     input.click();
   }
 
+  function softAuthForCreate(action) {
+    try {
+      if (typeof ChaupaalReferrals?.stashPendingAction === 'function') {
+        ChaupaalReferrals.stashPendingAction(action);
+      } else if (typeof stashPendingAction === 'function') {
+        stashPendingAction(action);
+      } else {
+        sessionStorage.setItem('chaupaal_pending_action', String(action).slice(0, 40));
+      }
+    } catch (e) {}
+    if (typeof showToast === 'function') {
+      showToast(tt('duniya_create_signin', 'Sign in to create'));
+    }
+    if (typeof openAuthSheet === 'function') openAuthSheet('login');
+    else if (typeof showAuth === 'function') showAuth();
+  }
+
+  function renderGuestStrip(row) {
+    row.innerHTML = `
+      <div class="duniya-story-item is-empty is-guest" data-self="1" data-guest="1">
+        <div class="duniya-story-ring-wrap">
+          <div class="duniya-story-ring">
+            <div class="duniya-story-avatar" aria-hidden="true"><span class="duniya-story-fallback">＋</span></div>
+          </div>
+          <button type="button" class="duniya-story-add-badge" data-add aria-label="${esc(tt('duniya_add_story', 'Add story'))}">＋</button>
+        </div>
+        <div class="duniya-story-name">${esc(tt('duniya_your_story', 'Your story'))}</div>
+      </div>`;
+    const selfEl = row.querySelector('[data-self]');
+    const goAuth = (intent) => {
+      softAuthForCreate(intent === 'post' ? 'duniya_compose' : 'duniya_story');
+    };
+    selfEl?.querySelector('[data-add]')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      goAuth('story');
+    });
+    if (typeof onLongPress === 'function') {
+      onLongPress(selfEl.querySelector('.duniya-story-ring-wrap') || selfEl, () => {
+        selfEl.dataset.suppressClick = '1';
+        goAuth('post');
+      }, { delayMs: 480 });
+    }
+    selfEl?.addEventListener('click', (e) => {
+      if (selfEl.dataset.suppressClick === '1') {
+        selfEl.dataset.suppressClick = '0';
+        return;
+      }
+      if (e.target?.closest?.('[data-add]')) return;
+      goAuth('story');
+    });
+  }
+
   async function renderStrip() {
     const row = document.getElementById('duniyaStoriesRow');
     if (!row) return;
     if (typeof currentUser === 'undefined' || !currentUser) {
-      row.innerHTML = '';
+      renderGuestStrip(row);
       return;
     }
     let stories = [];
@@ -346,6 +399,8 @@
     }
     const muted = mutedSet();
     stories = (stories || []).filter((s) => isStoryViewable(s));
+    // D0/D1: never invent SAMPLE authors in the live tray
+    stories = stories.filter((s) => !s.isSample && !s.isDemo);
     stories = stories.filter((s) => !muted.has(s.uid) || s.uid === currentUser.uid);
     pruneSeenMap(new Set(stories.map((s) => s.id)));
     if (stories.length && typeof enrichUsersWithProfileType === 'function') {
@@ -365,6 +420,7 @@
     const ordered = unseen.concat(seenFollow, discoveryUnseen, discoverySeen);
 
     const selfHas = own.filter(isStoryViewable).length > 0;
+    const selfAllSeen = selfHas && bundleFullySeen(own);
     const selfName = tt('duniya_your_story', 'Your story');
     const me = typeof userProfile !== 'undefined' ? userProfile : {};
     const myAvatar = me.photoURL || currentUser.photoURL || '';
@@ -383,12 +439,23 @@
             )
           : myAvatar
             ? `<img src="${esc(myAvatar)}" alt="">`
-            : `<span class="duniya-story-fallback">＋</span>`;
+            : `<span class="duniya-story-fallback">${esc((first || 'Y').slice(0, 1))}</span>`;
+
+    const selfClasses = [
+      'duniya-story-item',
+      'is-own',
+      selfHas ? '' : 'is-empty',
+      selfAllSeen ? 'is-seen' : '',
+      selfHas && !selfAllSeen ? 'is-unseen' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+
     const selfHtml = `
-      <div class="duniya-story-item ${selfHas ? 'is-own' : 'is-empty'}" data-self="1">
+      <div class="${selfClasses}" data-self="1" title="${esc(tt('duniya_story_hold_hint', 'Tap for story · hold for post'))}" aria-label="${esc(tt('duniya_story_hold_hint', 'Tap for story · hold for post'))}">
         <div class="duniya-story-ring-wrap">
           <div class="duniya-story-ring">
-            <div class="duniya-story-avatar" style="${selfHas ? '' : 'border:2px dashed var(--muted);'}">${selfThumb}</div>
+            <div class="duniya-story-avatar">${selfThumb}</div>
           </div>
           <button type="button" class="duniya-story-add-badge" data-add aria-label="${esc(tt('duniya_add_story', 'Add story'))}">＋</button>
         </div>
@@ -403,13 +470,18 @@
           (typeof resolvePersonDisplayName === 'function' ? resolvePersonDisplayName(u) : u.name) ||
           u.username ||
           'Story';
-        const av = typeof renderUserAvatarHtml==='function'&&u.uid&&String(u.uid).length>12
-          ? renderUserAvatarHtml(u,{decorative:true})
-          :(u.avatar && /^https:/.test(u.avatar) ? `<img src="${esc(u.avatar)}" alt="">` : `<span>${esc(u.avatar || '👤')}</span>`);
+        const av =
+          typeof renderUserAvatarHtml === 'function' && u.uid && String(u.uid).length > 12
+            ? renderUserAvatarHtml(u, { decorative: true })
+            : u.avatar && /^https:/.test(u.avatar)
+              ? `<img src="${esc(u.avatar)}" alt="">`
+              : `<span>${esc(u.avatar || '👤')}</span>`;
         return `
-        <div class="duniya-story-item${seen ? ' is-seen' : ''}" data-bundle="${i}">
-          <div class="duniya-story-ring">
-            <div class="duniya-story-avatar">${av}</div>
+        <div class="duniya-story-item${seen ? ' is-seen' : ' is-unseen'}" data-bundle="${i}">
+          <div class="duniya-story-ring-wrap">
+            <div class="duniya-story-ring">
+              <div class="duniya-story-avatar">${av}</div>
+            </div>
           </div>
           <div class="duniya-story-name">${esc(String(displayName).split(' ')[0] || 'Story')}</div>
         </div>`;
@@ -421,22 +493,41 @@
 
     const selfEl = row.querySelector('[data-self]');
     if (selfEl) {
+      const armLongPress = () => {
+        if (typeof haptic === 'function' && !reducedMotion()) {
+          try {
+            if (typeof quietMode === 'undefined' || !quietMode) haptic('medium');
+          } catch (e) {}
+        }
+        if (!reducedMotion()) selfEl.classList.add('is-pressing');
+        setTimeout(() => selfEl.classList.remove('is-pressing'), 220);
+      };
+      const openPost = () => {
+        selfEl.dataset.suppressClick = '1';
+        armLongPress();
+        if (typeof setDuniyaMode === 'function') {
+          try {
+            setDuniyaMode('vishwa');
+          } catch (e) {}
+        }
+        if (typeof openDuniyaPostSheet === 'function') openDuniyaPostSheet('post');
+        else if (typeof DuniyaCompose?.open === 'function') DuniyaCompose.open({ mode: 'media' });
+      };
+      // Long-press self ring → create post (not story). Bind wrap so tap/hold share the same hit target.
       if (typeof onLongPress === 'function') {
-        onLongPress(selfEl.querySelector('.duniya-story-avatar') || selfEl, () => {
-          selfEl.dataset.suppressClick = '1';
-          if (typeof openDuniyaPostSheet === 'function') openDuniyaPostSheet('post');
-        });
+        onLongPress(selfEl.querySelector('.duniya-story-ring-wrap') || selfEl, openPost, { delayMs: 480 });
       }
       selfEl.querySelector('[data-add]')?.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
         startCreate();
       });
-      selfEl.addEventListener('click', () => {
+      selfEl.addEventListener('click', (e) => {
         if (selfEl.dataset.suppressClick === '1') {
           selfEl.dataset.suppressClick = '0';
           return;
         }
+        if (e.target?.closest?.('[data-add]')) return;
         if (selfHas) {
           const start = own[firstUnwatchedIndex(own)];
           if (start && isStoryViewable(start)) openViewer(start, own, { tray: NS._tray });
@@ -447,19 +538,25 @@
     row.querySelectorAll('[data-bundle]').forEach((item) => {
       const group = ordered[Number(item.dataset.bundle)];
       if (!group?.[0]) return;
-      if (typeof bindProfileLongPress === 'function') {
-        bindProfileLongPress(item.querySelector('.duniya-story-avatar'), {
+      const avatar = item.querySelector('.duniya-story-avatar');
+      if (typeof bindProfileLongPress === 'function' && avatar) {
+        bindProfileLongPress(avatar, {
           uid: group[0].uid,
           name: group[0].name,
           avatar: group[0].avatar,
           photoURL: /^https:/.test(group[0].avatar || '') ? group[0].avatar : '',
         });
       }
-      item.addEventListener('click', () => {
-        if (item.dataset.suppressClick === '1') {
+      item.addEventListener('click', (e) => {
+        if (
+          item.dataset.suppressClick === '1' ||
+          avatar?.dataset?.suppressClick === '1'
+        ) {
           item.dataset.suppressClick = '0';
+          if (avatar) avatar.dataset.suppressClick = '0';
           return;
         }
+        if (e.target?.closest?.('[data-add]')) return;
         const start = group[firstUnwatchedIndex(group)];
         if (!start || !isStoryViewable(start)) {
           if (typeof showToast === 'function') showToast(tt('story_unavailable', 'Story unavailable'));
@@ -472,7 +569,7 @@
 
   function startCreate(seed) {
     if (typeof currentUser === 'undefined' || !currentUser) {
-      if (typeof showAuth === 'function') showAuth();
+      softAuthForCreate('duniya_story');
       return;
     }
     if (seed?.file && typeof NS.openEditor === 'function') {
@@ -561,5 +658,8 @@
   });
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) renderStrip().catch(() => {});
+  });
+  document.addEventListener('chaupaal:auth', () => {
+    renderStrip().catch(() => {});
   });
 })();
