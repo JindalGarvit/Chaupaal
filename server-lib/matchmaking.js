@@ -36,6 +36,10 @@ function buildSemanticText(user) {
   if (city) parts.push(`City: ${city}`);
   const occ = p.occupation || user.occupation || '';
   if (occ) parts.push(`Occupation: ${occ}`);
+  const industry = p.industry || user.industry || '';
+  if (industry) parts.push(`Industry: ${industry}`);
+  const purpose = p.purpose || user.purpose || '';
+  if (purpose) parts.push(`Purpose: ${purpose}`);
 
   return parts.join('\n').slice(0, 8000);
 }

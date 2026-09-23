@@ -82,6 +82,9 @@ const CAREER_INTENTS = new Set([
   'cofounder',
   'co-founder',
   'professional',
+  'networking',
+  'mentor',
+  'collab',
 ]);
 const SOCIAL_INTENTS = new Set([
   'dating',
@@ -235,8 +238,22 @@ function applySoftAssumptions({ viewer, query, searchIntent, hardFilters, assump
   const applied = [];
   const intent = String(searchIntent || '').toLowerCase();
   const seekerGender = normalizeGender(viewer?.gender || viewer?.profile?.gender);
+  const viewerIsPro =
+    String(viewer?.profileType || viewer?.profile?.profileType || '')
+      .toLowerCase() === 'professional';
 
-  if (isDatingIntent(intent) && !hardFilters?.gender && !suppressed.has('dating_opposite_gender')) {
+  // K2: Professional viewers never get dating_opposite_gender — free-text dating-like
+  // queries still run strangers Find without romance assumptions.
+  if (viewerIsPro) {
+    suppressed.add('dating_opposite_gender');
+  }
+
+  if (
+    !viewerIsPro &&
+    isDatingIntent(intent) &&
+    !hardFilters?.gender &&
+    !suppressed.has('dating_opposite_gender')
+  ) {
     if (seekerGender && OPPOSITE_GENDER[seekerGender]) {
       soft.gender = OPPOSITE_GENDER[seekerGender];
       soft.genderMode = 'opposite_default';
@@ -253,6 +270,7 @@ function applySoftAssumptions({ viewer, query, searchIntent, hardFilters, assump
 
   const age = Number(viewer?.age || viewer?.profile?.age);
   if (
+    !viewerIsPro &&
     !suppressed.has('similar_age_band') &&
     hardFilters?.minAge == null &&
     hardFilters?.maxAge == null &&
@@ -286,12 +304,28 @@ function applySoftAssumptions({ viewer, query, searchIntent, hardFilters, assump
   soft.fofBoost = true;
   applied.push('fof_boost');
 
-  if (CAREER_INTENTS.has(intent) || /job|hir|career|co-?founder|startup/.test(String(query || '').toLowerCase())) {
+  if (
+    viewerIsPro ||
+    CAREER_INTENTS.has(intent) ||
+    /job|hir|career|co-?founder|startup|network|mentor|collab/.test(String(query || '').toLowerCase())
+  ) {
     soft.preferProfileType = 'professional';
     applied.push('profile_type_career');
   } else if (SOCIAL_INTENTS.has(intent) || isDatingIntent(intent)) {
     soft.preferProfileType = 'personal';
     applied.push('profile_type_social');
+  }
+
+  // Soft prefer viewer's industry/purpose when present (K2)
+  const vInd = String(viewer?.industry || viewer?.profile?.industry || '').trim();
+  const vPur = String(viewer?.purpose || viewer?.profile?.purpose || '').trim();
+  if (vInd && !hardFilters?.industry) {
+    soft.preferIndustry = vInd.toLowerCase();
+    applied.push('prefer_industry');
+  }
+  if (vPur && !hardFilters?.purpose) {
+    soft.preferPurpose = vPur.toLowerCase();
+    applied.push('prefer_purpose');
   }
 
   if (hardFilters?.gender) {
@@ -346,12 +380,14 @@ function detectChipIntent(query) {
   const map = [
     ['dating', /dat(e|ing)|romance|romantic|marriage|someone special/],
     ['friendship', /friend|buddy|hang\s*out/],
-    ['job', /job|hiring|hire|recruit|career/],
+    ['job', /job|hiring|hire|recruit|career|looking for work/],
+    ['networking', /network|networking|professional connection/],
+    ['mentor', /mentor|mentorship|coach|advice/],
     ['flatmate', /flatmate|roommate|room\s*mate|housemate/],
     ['travel', /travel|trip|trek/],
     ['gaming', /game|gaming|chess|play with/],
     ['music', /music|song|concert/],
-    ['cofounder', /co-?founder|startup|collaborate/],
+    ['cofounder', /co-?founder|startup|collaborate|collab/],
   ];
   for (const [id, re] of map) {
     if (re.test(ql)) return id;
@@ -450,6 +486,29 @@ function passesQueryHardFilters(cand, hardFilters) {
     if (!(joined > 0 && Date.now() - joined <= 30 * 24 * 60 * 60 * 1000)) return false;
   }
 
+  if (hf.industry) {
+    const want = String(hf.industry).toLowerCase();
+    const ind = String(cand.industry || cand.profile?.industry || '').toLowerCase();
+    if (ind && ind !== want && !ind.includes(want) && !want.includes(ind)) return false;
+  }
+
+  if (hf.purpose) {
+    const want = String(hf.purpose).toLowerCase();
+    const pur = String(cand.purpose || cand.profile?.purpose || '').toLowerCase();
+    const blob = [
+      pur,
+      cand.lookingFor,
+      cand.profile?.lookingFor,
+      ...(cand.intents || []),
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    if (pur && pur !== want && !pur.includes(want) && !want.includes(pur) && !blob.includes(want)) {
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -507,6 +566,22 @@ function softAssumptionFit(cand, plan) {
     }
   }
 
+  if (soft.preferIndustry) {
+    const ind = String(cand.industry || cand.profile?.industry || '').toLowerCase();
+    if (ind && (ind === soft.preferIndustry || ind.includes(soft.preferIndustry) || soft.preferIndustry.includes(ind))) {
+      score += 0.28;
+      parts++;
+    }
+  }
+
+  if (soft.preferPurpose) {
+    const pur = String(cand.purpose || cand.profile?.purpose || '').toLowerCase();
+    if (pur && (pur === soft.preferPurpose || pur.includes(soft.preferPurpose) || soft.preferPurpose.includes(pur))) {
+      score += 0.2;
+      parts++;
+    }
+  }
+
   return {
     fit: Math.max(0, Math.min(1, parts ? score / Math.max(1, 0.5 + parts * 0.2) : 0.5)),
     exclude: false,
@@ -517,6 +592,15 @@ function explainMatch(cand, plan, signalScores) {
   const bits = [];
   const hf = plan?.hardFilters || {};
   const soft = plan?.softAssumptions || {};
+  const ind = String(cand.industry || cand.profile?.industry || '').trim();
+  const pur = String(cand.purpose || cand.profile?.purpose || '').trim();
+  if (hf.industry || soft.preferIndustry) {
+    if (ind) bits.push(`Same industry · ${ind}`);
+  }
+  if (hf.purpose || soft.preferPurpose) {
+    if (pur) bits.push(pur);
+    else if (/hire/i.test(String(soft.preferPurpose || hf.purpose || ''))) bits.push('Also open to hiring');
+  }
   if (hf.city || soft.preferCity) {
     const city = cand.profile?.currentCity || cand.city;
     if (city) bits.push('city');
@@ -525,8 +609,17 @@ function explainMatch(cand, plan, signalScores) {
   if (hf.interests?.length || (signalScores && signalScores.interestOverlap > 0.3)) bits.push('interests');
   if (soft.genderMode === 'opposite_default' || hf.gender) bits.push('preferences');
   if (signalScores && signalScores.followAffinity > 0.4) bits.push('shared connections');
+  if (soft.preferProfileType === 'professional') {
+    const pt = String(cand.profileType || cand.profile?.profileType || '').toLowerCase();
+    if (pt === 'professional' && !bits.some((b) => /industry|purpose|hiring/i.test(b))) {
+      bits.push('Professional');
+    }
+  }
   if (!bits.length && plan?.searchIntent && plan.searchIntent !== 'any') bits.push('intent');
   if (!bits.length) return 'Matched on open profile';
+  // Prefer human industry/purpose phrases when present
+  const human = bits.filter((b) => /industry|purpose|hiring|Professional|Same /i.test(b));
+  if (human.length) return human.slice(0, 2).join(' · ');
   return `Matched on ${bits.slice(0, 3).join(' & ')}`;
 }
 

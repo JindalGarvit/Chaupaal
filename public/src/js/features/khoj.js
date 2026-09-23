@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  const INTENT_CHIPS = [
+  const INTENT_CHIPS_PERSONAL = [
     { icon: 'heart', label: 'Dating', hint: 'someone warm to date near me', tint: '#E63946', intent: 'dating' },
     { icon: 'handshake', label: 'Friendship', hint: 'new friends with similar interests', tint: '#2E7D32', intent: 'friendship' },
     { icon: 'briefcase', label: 'Job', hint: 'someone hiring or looking for work', tint: '#EF6C00', intent: 'job' },
@@ -16,6 +16,27 @@
     { icon: 'music', label: 'Music', hint: 'music lover with similar taste', tint: '#AD1457', intent: 'music' },
     { icon: 'rocket', label: 'Co-founder', hint: 'startup-minded person to collaborate', tint: '#1565C0', intent: 'cofounder' },
   ];
+
+  const INTENT_CHIPS_PRO = [
+    { icon: 'briefcase', label: 'Networking', hint: 'professionals to grow my network with', tint: '#1565C0', intent: 'networking' },
+    { icon: 'briefcase', label: 'Hiring', hint: 'someone I could hire or bring onto a project', tint: '#EF6C00', intent: 'job' },
+    { icon: 'briefcase', label: 'Job seek', hint: 'someone hiring or open to career conversations', tint: '#00838F', intent: 'job' },
+    { icon: 'rocket', label: 'Co-founder', hint: 'startup-minded co-founder or collaborator', tint: '#5E35B1', intent: 'cofounder' },
+    { icon: 'handshake', label: 'Mentor', hint: 'a mentor or peer I can learn from', tint: '#2E7D32', intent: 'mentor' },
+    { icon: 'rocket', label: 'Collab', hint: 'someone to collaborate on a project with', tint: '#AD1457', intent: 'collab' },
+    { icon: 'handshake', label: 'Friendship', hint: 'new friends with similar interests', tint: '#00897B', intent: 'friendship' },
+  ];
+
+  function isProViewer() {
+    try {
+      if (typeof getProfileType === 'function') return getProfileType() === 'professional';
+    } catch (e) {}
+    return false;
+  }
+
+  function intentChipsForViewer() {
+    return isProViewer() ? INTENT_CHIPS_PRO : INTENT_CHIPS_PERSONAL;
+  }
 
   let khojShownPeeks = [];
   let khojHasMore = false;
@@ -79,8 +100,9 @@
         reset,
         offset: reset ? 0 : undefined,
         friendshipOnly: !!o.friendshipOnly,
-        emptyFriendship: !!o.emptyFriendship,
-        friendshipMajority: true,
+        emptyFriendship: !!o.emptyFriendship && !isProViewer(),
+        friendshipMajority: !isProViewer(),
+        networkingDefault: isProViewer(),
       });
       const peeks = page.peeks || [];
       khojHasMore = !!page.hasMore;
@@ -251,13 +273,15 @@
     panel.classList.remove('hidden');
     khojSelectedChipIntent = null;
 
-    const chipsHtml = INTENT_CHIPS.map(
+    const chips = intentChipsForViewer();
+    const chipsHtml = chips.map(
       (c) =>
-        `<button type="button" class="peepal-nudge-chip peepal-nudge-chip--tinted" data-hint="${c.hint}" data-chip-intent="${c.intent}" data-tint="${c.tint}" style="--chip-tint:${c.tint}">${icon(c.icon)} ${tt('khoj_chip_' + c.label.toLowerCase(), c.label)}</button>`
+        `<button type="button" class="peepal-nudge-chip peepal-nudge-chip--tinted" data-hint="${c.hint}" data-chip-intent="${c.intent}" data-tint="${c.tint}" style="--chip-tint:${c.tint}">${icon(c.icon)} ${tt('khoj_chip_' + c.label.toLowerCase().replace(/\s+/g, '_'), c.label)}</button>`
     ).join('');
 
     const filtersHtml =
       typeof renderKhojFiltersMarkup === 'function' ? renderKhojFiltersMarkup() : '';
+    const pro = isProViewer();
 
     panel.innerHTML = `
       <button type="button" class="khoj-global-search" id="khojChaupaalSearch" aria-label="${tt('search_chaupaal', 'Search Chaupaal')}">
@@ -266,13 +290,27 @@
       </button>
       <div class="peepal-card peepal-intent-card peepal-intent-card--khoj" id="khojIntentCard">
         <div class="peepal-intent-card-sub">
-          ${tt('khoj_sub', 'Find people to meet — strangers, with short reasons. Or scroll peeks below.')}
+          ${
+            pro
+              ? tt(
+                  'khoj_sub_pro',
+                  'Find people to work with — networking strangers, with short reasons. Or scroll peeks below.'
+                )
+              : tt(
+                  'khoj_sub',
+                  'Find people to meet — strangers, with short reasons. Or scroll peeks below.'
+                )
+          }
         </div>
         <div class="peepal-intent-chips" data-khoj-chips data-swipe-ignore>${chipsHtml}</div>
         <div class="khoj-search-row">
           <div class="khoj-search-wrap">
             <textarea id="khojIntentInput" class="peepal-ai-search-input khoj-intent-input" rows="2"
-              placeholder="${tt('khoj_ph', 'Who are you hoping to meet? Any description works.')}"
+              placeholder="${
+                pro
+                  ? tt('khoj_ph_pro', 'Who do you want to work with? Hire, mentor, co-founder…')
+                  : tt('khoj_ph', 'Who are you hoping to meet? Any description works.')
+              }"
               data-living-ph="khoj_intent" enterkeyhint="search"></textarea>
           </div>
           <button type="button" class="peepal-ai-search-btn khoj-intent-go" id="khojIntentGo">${icon('search', 16)} ${tt('khoj_go', 'Find')}</button>
@@ -302,7 +340,12 @@
     const listEl = panel.querySelector('#khojCompatList');
     const reloadPeeks = () => {
       setKhojFindMode(panel, false);
-      loadKhojPeeks(listEl, { reset: true, limit: 5, emptyFriendship: true, friendshipOnly: false });
+      loadKhojPeeks(listEl, {
+        reset: true,
+        limit: 5,
+        emptyFriendship: !isProViewer(),
+        friendshipOnly: false,
+      });
     };
 
     if (typeof wireKhojFilters === 'function') {
@@ -347,10 +390,20 @@
         setKhojFindMode(panel, true);
         runPeepalAiSearch({ query: pendingQ, resultsEl: dest, surface: 'khoj', limit: 8 });
       } else {
-        loadKhojPeeks(listEl, { reset: true, limit: 5, emptyFriendship: true, friendshipOnly: false });
+        loadKhojPeeks(listEl, {
+          reset: true,
+          limit: 5,
+          emptyFriendship: !isProViewer(),
+          friendshipOnly: false,
+        });
       }
     } else {
-      loadKhojPeeks(listEl, { reset: true, limit: 5, emptyFriendship: true, friendshipOnly: false });
+      loadKhojPeeks(listEl, {
+        reset: true,
+        limit: 5,
+        emptyFriendship: !isProViewer(),
+        friendshipOnly: false,
+      });
     }
 
     maybeOfferKhojInterestsAsk(panel);

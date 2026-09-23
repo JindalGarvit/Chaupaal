@@ -37,6 +37,7 @@ const {
 
 const DISCOVER_POOL = 120;
 const DISCOVER_LIMIT_DEFAULT = 5;
+const CAREER_INTENT_RE = /job|hir|career|co-?founder|startup|network|mentor|collab|professional|recruit/;
 
 /** Nightly batch interface (thin stub) — cron can call processDiscoveryBatchLabels. */
 const BATCH_INTERFACE = Object.freeze({
@@ -190,6 +191,7 @@ async function runIntentDiscover(db, admin, user, body, deps) {
   });
 
   // K1: client compact filters (same city / interest / new) — merge into hard filters
+  // K2: industry / purpose for networking
   const cf = body.filters && typeof body.filters === 'object' ? body.filters : {};
   plan.hardFilters = plan.hardFilters || {};
   if (cf.sameCity) {
@@ -206,6 +208,12 @@ async function runIntentDiscover(db, admin, user, body, deps) {
   if (cf.recentlyJoined) {
     plan.hardFilters.recentlyJoined = true;
   }
+  if (cf.industry && String(cf.industry).trim()) {
+    plan.hardFilters.industry = String(cf.industry).trim().slice(0, 80);
+  }
+  if (cf.purpose && String(cf.purpose).trim()) {
+    plan.hardFilters.purpose = String(cf.purpose).trim().slice(0, 80);
+  }
   // Optional matchIntent bias when chip not set
   if (!chipIntent && cf.matchIntent && String(cf.matchIntent).trim()) {
     const mi = String(cf.matchIntent).toLowerCase();
@@ -218,8 +226,12 @@ async function runIntentDiscover(db, admin, user, body, deps) {
       else if (/game/.test(mi)) plan.searchIntent = 'gaming';
       else if (/music/.test(mi)) plan.searchIntent = 'music';
       else if (/founder|startup|collab/.test(mi)) plan.searchIntent = 'cofounder';
+      else if (/mentor/.test(mi)) plan.searchIntent = 'mentor';
     }
   }
+
+  // K2: Pro viewers — after stranger filter, prefer networking-eligible candidates
+  // (applied later once candidates loaded; see post-retrieve filter)
 
   let intentProfileId = null;
   let weights = defaultWeights();
@@ -355,6 +367,26 @@ async function runIntentDiscover(db, admin, user, body, deps) {
     candidates = filterStrangersOnly(candidates, sets.excludeUids);
   } catch (e) {
     console.warn('[intent_discover] stranger exclude', e?.message || e);
+  }
+
+  // K2: Pro viewer default / career intents → networking-eligible candidates
+  // Dating-like free text from Pro: allow strangers Find without romance assumptions
+  // (do not force networking-only pool).
+  try {
+    const viewerIsPro =
+      normalizeProfileType(viewer.profileType || viewer.profile?.profileType) === 'professional';
+    const datingLike = /dat(e|ing)|romance|marriage|romantic/.test(
+      String(plan.searchIntent || query || '').toLowerCase()
+    );
+    const careerish =
+      CAREER_INTENT_RE.test(String(plan.searchIntent || '')) ||
+      CAREER_INTENT_RE.test(String(query || ''));
+    if ((viewerIsPro && !datingLike) || (!viewerIsPro && careerish)) {
+      const { isOpenToNetworking } = require('./professional-match');
+      candidates = candidates.filter((c) => isOpenToNetworking(c));
+    }
+  } catch (e) {
+    console.warn('[intent_discover] networking eligibility', e?.message || e);
   }
 
   const edgeMap = {};

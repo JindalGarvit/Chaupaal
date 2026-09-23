@@ -35,6 +35,8 @@ Implementation lives primarily in:
 
 **Peepal/Khoj K1 (core):** Khoj top bar = **Search Chaupaal** → `openUniversalSearch` (users/duniya/peepal/groups/games) — not intent_discover. Intent Find = chips + `#khojIntentInput` + Find → `intent_discover` (AI-on: any free text parsed; AI-off: deterministic + soft refine). Compact **Filters** (intent / interest / same city / new) behind a toggle + Clear; apply to Find + peeks. `more_like` / `not_interested` → `discovery_person_signal` → recommendationSignals + user-model refresh. Morph Search shortcut kept.
 
+**Peepal/Khoj K2 (Pro networking):** Professional viewers use `professional_match` (not `skipped_professional`). Peeks prefer Pros + Personal open to network/career. Chips: Networking / Hiring / Job seek / Co-founder / Mentor / Collab (+ Friendship secondary) — no Dating primary. Industry + purpose in filters + ranking reasons. Free-text Find allowed; **dating_opposite_gender suppressed for Pro viewers**. Personal Khoj unchanged (friendship-first + Dating chip).
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.

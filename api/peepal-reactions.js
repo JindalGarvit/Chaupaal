@@ -417,6 +417,192 @@ async function personalMatch(db, admin, user, body) {
   };
 }
 
+/**
+ * K2: Professional networking peeks — strangers open to network (Pros + Personal career-open).
+ * Not Gale-Shapley dating; industry/purpose bias.
+ */
+async function professionalMatch(db, admin, user, body) {
+  const viewerSnap = await db.collection('users').doc(user.uid).get();
+  if (!viewerSnap.exists) throw new Error('USER_NOT_FOUND');
+  const viewer = { uid: user.uid, ...viewerSnap.data() };
+
+  if (normalizeProfileType(viewer.profileType || viewer.profile?.profileType) !== 'professional') {
+    return {
+      matches: [],
+      mode: 'skipped_personal',
+      note: 'Networking match is for Professional accounts — use personal_match',
+    };
+  }
+
+  if (!viewer.profileEmbedding?.vector?.length) {
+    try {
+      await refreshEmbedding(db, admin, user.uid);
+      const again = await db.collection('users').doc(user.uid).get();
+      Object.assign(viewer, again.data() || {});
+    } catch (e) {}
+  }
+
+  const {
+    passesNetworkingFilters,
+    rankNetworkingMatches,
+  } = require('../server-lib/professional-match');
+
+  const intentText = String(
+    body.intent ||
+      viewer.matchIntent ||
+      viewer.purpose ||
+      viewer.profile?.purpose ||
+      viewer.lookingFor ||
+      'networking'
+  ).trim();
+
+  const filters = {
+    city: body.sameCity ? viewer.profile?.currentCity || viewer.city || '' : body.city || '',
+    industry: body.industry || body.filters?.industry || '',
+    purpose: body.purpose || body.filters?.purpose || '',
+    recentlyJoined: !!(body.recentlyJoined || body.filters?.recentlyJoined),
+  };
+
+  const mq = require('../server-lib/match-quality');
+  const viewerAge = Number(viewer.age || viewer.profile?.age);
+  const viewerIsTeen = !!(
+    viewer.teenMode ||
+    (Number.isFinite(viewerAge) && viewerAge > 0 && viewerAge < 18)
+  );
+  const [{ blockedSet, mutedSet }, notInterestedSet, recentMap] = await Promise.all([
+    mq.loadBlockMuteReportSets(db, user.uid),
+    mq.loadNotInterestedSet(db, user.uid),
+    mq.loadRecentShown(db, user.uid),
+  ]);
+  const hardCtx = {
+    blockedSet,
+    mutedSet,
+    reportedSet: new Set(),
+    notInterestedSet,
+    viewerIsTeen,
+    surface: 'professional',
+  };
+
+  let strangerExclude = new Set([user.uid]);
+  try {
+    const { loadStrangerExcludeSets } = require('../server-lib/discovery-strangers');
+    const sets = await loadStrangerExcludeSets(db, user.uid);
+    strangerExclude = sets.excludeUids;
+  } catch (e) {
+    console.warn('[professional_match] stranger exclude', e?.message || e);
+  }
+
+  let candidates = [];
+  try {
+    const { retrieveCandidates, loadModelSafe, isOptedOutUser } = require('../server-lib/retrieve-rank');
+    const optedOut = isOptedOutUser(viewer);
+    const model = await loadModelSafe(db, user.uid, { optedOut });
+    const hardFilters = {};
+    if (filters.city) hardFilters.city = filters.city;
+    if (filters.industry) hardFilters.industry = filters.industry;
+    if (filters.purpose) hardFilters.purpose = filters.purpose;
+    if (filters.recentlyJoined) hardFilters.recentlyJoined = true;
+    const retrieved = await retrieveCandidates({
+      kind: 'people',
+      uid: user.uid,
+      plan: {
+        searchIntent: intentText || 'networking',
+        hardFilters,
+        softAssumptions: { preferProfileType: 'professional' },
+      },
+      limit: MATCH_POOL,
+      db,
+      model: optedOut ? null : model,
+      viewer,
+      hardCtx: { blockedSet, mutedSet, viewerIsTeen },
+    });
+    candidates = mq.filterSafetyFirst(viewer, retrieved.candidates || [], hardCtx);
+  } catch (e) {
+    console.warn('[professional_match] retrieve', e?.message || e);
+    const snap = await db.collection('users').where('openToMeet', '==', true).limit(MATCH_POOL).get();
+    candidates = mq.filterSafetyFirst(
+      viewer,
+      snap.docs.map((d) => ({ uid: d.id, ...d.data() })),
+      hardCtx
+    );
+  }
+
+  candidates = candidates.filter((data) => {
+    if (data.uid === user.uid) return false;
+    if (strangerExclude.has(data.uid)) return false;
+    return passesNetworkingFilters(viewer, data, filters);
+  });
+
+  const edgeMap = {};
+  await Promise.all(
+    candidates.slice(0, 40).map(async (c) => {
+      try {
+        const [theyFollow, iFollow] = await Promise.all([
+          db.collection('users').doc(c.uid).collection('following').doc(user.uid).get(),
+          db.collection('users').doc(user.uid).collection('following').doc(c.uid).get(),
+        ]);
+        edgeMap[c.uid] = {
+          theyFollowViewer: theyFollow.exists,
+          viewerFollowsThem: iFollow.exists,
+        };
+      } catch (e) {
+        edgeMap[c.uid] = {};
+      }
+    })
+  );
+
+  let ranked = rankNetworkingMatches({
+    viewer,
+    candidates,
+    edgeMap,
+    limit: Math.min(16, Number(body.limit) || 8),
+    intent: intentText,
+  });
+  ranked = mq.polishPeopleMatches({
+    viewer,
+    ranked,
+    edgeMap,
+    recentMap,
+    limit: Math.min(12, Number(body.limit) || 8),
+    surface: 'professional',
+  });
+  try {
+    await mq.recordRecentShown(
+      db,
+      admin,
+      user.uid,
+      ranked.map((m) => m.uid)
+    );
+  } catch (e) {}
+
+  return {
+    mode: 'professional_networking',
+    intentText,
+    intentProfileId: null,
+    note:
+      'Eligibility: Professional profiles, plus Personal open to network/career. Strangers only (K0).',
+    matches: ranked.map((m) => ({
+      uid: m.uid,
+      score: Math.round(m.score * 100),
+      mutualStable: false,
+      signals: m.signals || [],
+      signalScores: m.signalScores || {},
+      explain: m.reason || (m.signals || []).join(' · '),
+      name: m.user?.name || m.user?.profile?.displayName || 'Member',
+      username: m.user?.username || '',
+      photoURL: m.user?.photoURL || m.user?.photoThumb || '',
+      city: m.user?.profile?.currentCity || m.user?.city || '',
+      age: m.user?.age || null,
+      bio: m.user?.profile?.bio || m.user?.bio || '',
+      interests: m.user?.profile?.interests || m.user?.interests || [],
+      industry: m.user?.industry || m.user?.profile?.industry || '',
+      purpose: m.user?.purpose || m.user?.profile?.purpose || '',
+      icebreakers: m.user?.icebreakers || m.user?.profile?.icebreakers || [],
+      profileType: normalizeProfileType(m.user?.profileType || m.user?.profile?.profileType),
+    })),
+  };
+}
+
 module.exports = async function handler(req, res) {
   if (!requireMethod(req, res, 'POST')) return;
   const user = await requireUser(req, res, { allowWeak: false });
@@ -515,6 +701,10 @@ module.exports = async function handler(req, res) {
     }
     if (body.action === 'personal_match') {
       const result = await personalMatch(db, admin, user, body || {});
+      return sendSuccess(res, result);
+    }
+    if (body.action === 'professional_match') {
+      const result = await professionalMatch(db, admin, user, body || {});
       return sendSuccess(res, result);
     }
     // Unified Khoj / Vriksha intent discovery (folded here — Hobby function cap)

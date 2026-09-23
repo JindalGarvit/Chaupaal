@@ -23,10 +23,12 @@ let discoveryFilters = (() => {
       matchIntent: '',
       sameCity: false,
       recentlyJoined: false,
+      industry: '',
+      purpose: '',
       ...JSON.parse(localStorage.getItem(DISCOVERY_FILTER_KEY) || '{}'),
     };
   } catch (e) {
-    return { interest: 'any', matchIntent: '', sameCity: false, recentlyJoined: false };
+    return { interest: 'any', matchIntent: '', sameCity: false, recentlyJoined: false, industry: '', purpose: '' };
   }
 })();
 
@@ -96,6 +98,8 @@ function clearDiscoveryFilters() {
   discoveryFilters.matchIntent = '';
   discoveryFilters.sameCity = false;
   discoveryFilters.recentlyJoined = false;
+  discoveryFilters.industry = '';
+  discoveryFilters.purpose = '';
   saveDiscoveryFilters();
 }
 
@@ -105,6 +109,8 @@ function getDiscoveryFilterPayload() {
     matchIntent: discoveryFilters.matchIntent || '',
     sameCity: !!discoveryFilters.sameCity,
     recentlyJoined: !!discoveryFilters.recentlyJoined,
+    industry: discoveryFilters.industry || '',
+    purpose: discoveryFilters.purpose || '',
   };
 }
 
@@ -114,12 +120,22 @@ function discoveryFiltersActiveCount() {
   if (discoveryFilters.recentlyJoined) n++;
   if (discoveryFilters.interest && discoveryFilters.interest !== 'any') n++;
   if (discoveryFilters.matchIntent) n++;
+  if (discoveryFilters.industry) n++;
+  if (discoveryFilters.purpose) n++;
   return n;
+}
+
+function isViewerProfessional() {
+  try {
+    if (typeof getProfileType === 'function') return getProfileType() === 'professional';
+  } catch (e) {}
+  return false;
 }
 
 /** Compact Khoj filters markup — progressive disclosure (hidden until Filters tapped). */
 function renderKhojFiltersMarkup() {
   const f = discoveryFilters;
+  const isPro = isViewerProfessional();
   const intents = PEEPAL_MATCH_INTENTS.map(
     (i) => `<option value="${i}" ${f.matchIntent === i ? 'selected' : ''}>${i}</option>`
   ).join('');
@@ -128,6 +144,19 @@ function renderKhojFiltersMarkup() {
     .join('');
   const customSel =
     f.matchIntent && !PEEPAL_MATCH_INTENTS.includes(f.matchIntent) ? 'selected' : '';
+  const industries =
+    (typeof ProfileTaxonomy !== 'undefined' && ProfileTaxonomy.INDUSTRIES) ||
+    ['Technology', 'Finance', 'Healthcare', 'Education', 'Media & Entertainment', 'Consulting', 'Startup', 'Other'];
+  const purposes =
+    (typeof ProfileTaxonomy !== 'undefined' && ProfileTaxonomy.PURPOSES) ||
+    ['Grow my network', 'Find collaborators', 'Hire talent', 'Find work', 'Learn from peers'];
+  const indOpts = industries
+    .map((i) => `<option value="${i}" ${f.industry === i ? 'selected' : ''}>${i}</option>`)
+    .join('');
+  const purOpts = purposes
+    .map((i) => `<option value="${i}" ${f.purpose === i ? 'selected' : ''}>${i}</option>`)
+    .join('');
+  const showProFilters = isPro || /job|network|co-founder|mentor|hir|career/i.test(String(f.matchIntent || ''));
   return `
     <div class="khoj-filters-bar">
       <button type="button" class="khoj-filters-toggle" id="khojFiltersToggle" aria-expanded="false">
@@ -151,6 +180,24 @@ function renderKhojFiltersMarkup() {
           ${interestOpts}
         </select>
       </label>
+      ${
+        showProFilters
+          ? `<label class="khoj-filter-field">
+        <span>Industry</span>
+        <select data-discovery-filter="industry" aria-label="Industry">
+          <option value="">Any industry</option>
+          ${indOpts}
+        </select>
+      </label>
+      <label class="khoj-filter-field">
+        <span>Purpose</span>
+        <select data-discovery-filter="purpose" aria-label="Purpose">
+          <option value="">Any purpose</option>
+          ${purOpts}
+        </select>
+      </label>`
+          : ''
+      }
       <label class="khoj-filter-check"><input type="checkbox" data-discovery-filter="sameCity" ${f.sameCity ? 'checked' : ''}> Same city</label>
       <label class="khoj-filter-check"><input type="checkbox" data-discovery-filter="recentlyJoined" ${f.recentlyJoined ? 'checked' : ''}> New here</label>
     </div>`;
@@ -218,26 +265,37 @@ function wireKhojFilters(root, onChange) {
 
 async function getDiscoveryProfiles(){
   // Personal hybrid matchmaking (filters + embeddings + Gale-Shapley) when account is personal
+  const viewerType =
+    typeof getProfileType === 'function' ? getProfileType() : 'personal';
   if (
     typeof currentUser !== 'undefined' &&
     currentUser &&
     typeof apiFetch === 'function' &&
-    typeof getProfileType === 'function' &&
-    getProfileType() === 'personal'
+    (viewerType === 'personal' || viewerType === 'professional')
   ) {
     try {
       const intentText =
         (discoveryFilters.matchIntent && String(discoveryFilters.matchIntent).trim()) ||
-        userProfile?.matchIntent ||
-        userProfile?.lookingFor ||
-        digitalProfile?.lookingFor ||
-        '';
+        (viewerType === 'professional'
+          ? userProfile?.purpose ||
+            digitalProfile?.purpose ||
+            userProfile?.matchIntent ||
+            'networking'
+          : userProfile?.matchIntent ||
+            userProfile?.lookingFor ||
+            digitalProfile?.lookingFor ||
+            '');
+      const action = viewerType === 'professional' ? 'professional_match' : 'personal_match';
       const envelope = await apiFetch('/api/peepal-reactions', {
         method: 'POST',
         needAuth: true,
         body: {
-          action: 'personal_match',
+          action,
           sameCity: !!discoveryFilters.sameCity,
+          recentlyJoined: !!discoveryFilters.recentlyJoined,
+          industry: discoveryFilters.industry || '',
+          purpose: discoveryFilters.purpose || '',
+          filters: typeof getDiscoveryFilterPayload === 'function' ? getDiscoveryFilterPayload() : {},
           intent: intentText,
           limit: 5,
         },
@@ -272,20 +330,33 @@ async function getDiscoveryProfiles(){
               interests: m.interests || [],
               icebreakers: m.icebreakers || [],
               prompts: m.prompts || [],
+              industry: m.industry || '',
+              purpose: m.purpose || '',
               openToMeet: true,
-              profileType: m.profileType || m.profile?.profileType || 'personal',
+              profileType:
+                m.profileType ||
+                m.profile?.profileType ||
+                (viewerType === 'professional' ? 'professional' : 'personal'),
               _isNew: isRecentlyJoined(m),
               _mutualStable: m.mutualStable,
             },
             score: m.score || 50,
             reasons: (m.signals || []).slice(0, 3),
-            reason: (m.signals || []).slice(0, 2).join(' · ') || m.bio || 'Someone you might enjoy talking to on Peepal',
+            reason:
+              (m.signals || []).slice(0, 2).join(' · ') ||
+              m.explain ||
+              m.bio ||
+              (viewerType === 'professional'
+                ? 'Someone you might work with on Chaupaal'
+                : 'Someone you might enjoy talking to on Peepal'),
           }));
         if (typeof enrichUsersWithProfileType === 'function') {
           await enrichUsersWithProfileType(out.map((p) => p.user).filter(Boolean));
         }
         return out;
       }
+      // Signed-in empty from match API — honest empty, no SAMPLE pad
+      return [];
     } catch (e) {
       // Fall back to local heuristics
     }
@@ -843,9 +914,13 @@ async function getCompatibilityPeeks(opts) {
   const limit = Math.max(1, Math.min(20, Number(o.limit) || 3));
   const reset = !!o.reset;
   const friendshipOnly = !!o.friendshipOnly;
+  const networkingDefault = !!o.networkingDefault || isViewerProfessional();
   if (reset || !_compatPeekCache.length) {
     const prevIntent = discoveryFilters.matchIntent;
-    if (friendshipOnly || o.emptyFriendship) {
+    if (networkingDefault && !friendshipOnly) {
+      discoveryFilters.matchIntent =
+        discoveryFilters.matchIntent || 'Networking / Professional connections';
+    } else if (friendshipOnly || o.emptyFriendship) {
       discoveryFilters.matchIntent = 'Friendship';
     }
     let raw = [];
@@ -861,7 +936,9 @@ async function getCompatibilityPeeks(opts) {
         raw = raw.filter((p) => isDiscoveryEligibleUser(p.user || p));
       }
     } catch (e) {}
-    if (friendshipOnly || o.emptyFriendship) {
+    if (networkingDefault && !friendshipOnly) {
+      discoveryFilters.matchIntent = prevIntent;
+    } else if (friendshipOnly || o.emptyFriendship) {
       discoveryFilters.matchIntent = prevIntent;
     }
     // Pull a wider pool for Khoj scroll when possible
@@ -887,9 +964,9 @@ async function getCompatibilityPeeks(opts) {
       });
     }
     _compatPeekCache = rankCompatibilityPeeks(raw, {
-      friendshipMajority: o.friendshipMajority !== false,
+      friendshipMajority: networkingDefault ? false : o.friendshipMajority !== false,
     });
-    if (friendshipOnly || o.emptyFriendship) {
+    if (!networkingDefault && (friendshipOnly || o.emptyFriendship)) {
       const friends = _compatPeekCache.filter((p) => p.lean === 'friendship');
       if (friends.length) _compatPeekCache = friends.concat(_compatPeekCache.filter((p) => p.lean !== 'friendship'));
     }
