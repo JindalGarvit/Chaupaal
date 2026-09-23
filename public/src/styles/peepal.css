@@ -26,7 +26,45 @@
 .khoj-search-wrap .peepal-ai-search-input{width:100%;box-sizing:border-box;margin:0;}
 .khoj-intent-go{flex:0 0 auto;align-self:stretch;padding:10px 14px;white-space:nowrap;min-width:72px;}
 .khoj-search-wrap .search-field-clear{right:8px;top:50%;transform:translateY(-50%);}
-.peepal-intent-mini-icons{display:flex;gap:4px;overflow-x:auto;overflow:hidden;max-width:58%;justify-content:flex-end;touch-action:pan-x;scrollbar-width:none;flex-shrink:1;min-width:0;}
+
+/* K1: always-on Chaupaal search (universal) — distinct from intent Find */
+.khoj-global-search{
+  display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;
+  margin:0 0 12px;padding:11px 14px;border:1.5px solid var(--line);border-radius:14px;
+  background:var(--surface-sunken,var(--cream));color:var(--muted);font:600 13px 'Space Grotesk',sans-serif;
+  cursor:pointer;text-align:left;transition:border-color .15s,background .15s,box-shadow .2s;
+}
+.khoj-global-search:hover,.khoj-global-search:focus-visible{
+  border-color:var(--ink-secondary,var(--muted));outline:none;
+}
+.khoj-global-search--pulse{box-shadow:0 0 0 3px rgba(230,57,70,.25);border-color:var(--red);}
+.khoj-global-search-icon{flex:0 0 auto;opacity:.7;display:inline-flex;}
+.khoj-global-search-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+.khoj-filters-bar{display:flex;align-items:center;gap:8px;margin:8px 0 4px;}
+.khoj-filters-toggle,.khoj-filters-clear,.khoj-back-peeks{
+  font:700 12px 'Space Grotesk',sans-serif;padding:6px 12px;border-radius:999px;
+  border:1.5px solid var(--line);background:var(--white);color:var(--ink);cursor:pointer;
+}
+.khoj-filters-clear{color:var(--muted);font-weight:600;}
+.khoj-back-peeks{margin:8px 0;width:100%;border-style:dashed;}
+.khoj-filters-panel{
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;
+  padding:10px 12px;margin:0 0 10px;border-radius:12px;border:1px solid var(--line);
+  background:var(--surface-sunken,var(--cream));
+}
+.khoj-filters-panel.hidden{display:none;}
+.khoj-filter-field{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--muted);font-weight:600;}
+.khoj-filter-field select{
+  font:600 12px 'Space Grotesk',sans-serif;padding:6px 8px;border-radius:10px;
+  border:1.5px solid var(--line);background:var(--white);color:var(--ink);max-width:160px;
+}
+.khoj-filter-check{display:flex;align-items:center;gap:6px;font:600 12px 'Space Grotesk',sans-serif;cursor:pointer;}
+.khoj-filter-check input{accent-color:var(--red);}
+[data-khoj-chips] .peepal-nudge-chip.is-active{
+  border-color:var(--chip-tint,var(--red));color:var(--chip-tint,var(--red));
+  background:color-mix(in srgb, var(--chip-tint,var(--red)) 10%, transparent);
+}.peepal-intent-mini-icons{display:flex;gap:4px;overflow-x:auto;overflow:hidden;max-width:58%;justify-content:flex-end;touch-action:pan-x;scrollbar-width:none;flex-shrink:1;min-width:0;}
 .peepal-intent-mini-icons::-webkit-scrollbar{display:none;}
 .peepal-intent-chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;touch-action:pan-x;}
 .peepal-intent-chips::-webkit-scrollbar{display:none;}

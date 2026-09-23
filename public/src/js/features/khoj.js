@@ -1,24 +1,25 @@
 /**
- * Khoj — compatibility-first people surface (scroll for more peeks).
- * Shares intent search with Vriksha → runPeepalAiSearch → intent_discover API.
- * Empty query: broad friendship peeks. Mix: friendship-majority; opposite gender + similar age dominate.
+ * Khoj — complete seek surface (K1).
+ * Top: Chaupaal universal search. Below: intent chips + Find (people/strangers).
+ * Compact filters (progressive). Empty query → friendship-first peeks (K0).
  */
 (function () {
   'use strict';
 
   const INTENT_CHIPS = [
-    { icon: 'heart', label: 'Dating', hint: 'someone warm to date near me', tint: '#E63946' },
-    { icon: 'handshake', label: 'Friendship', hint: 'new friends with similar interests', tint: '#2E7D32' },
-    { icon: 'briefcase', label: 'Job', hint: 'someone hiring or looking for work', tint: '#EF6C00' },
-    { icon: 'home', label: 'Flatmate', hint: 'flatmate or roommate nearby', tint: '#00838F' },
-    { icon: 'plane', label: 'Travel', hint: 'travel companion for an upcoming trip', tint: '#00897B' },
-    { icon: 'gamepad', label: 'Gaming', hint: 'someone to play games with', tint: '#5E35B1' },
-    { icon: 'music', label: 'Music', hint: 'music lover with similar taste', tint: '#AD1457' },
-    { icon: 'rocket', label: 'Co-founder', hint: 'startup-minded person to collaborate', tint: '#1565C0' },
+    { icon: 'heart', label: 'Dating', hint: 'someone warm to date near me', tint: '#E63946', intent: 'dating' },
+    { icon: 'handshake', label: 'Friendship', hint: 'new friends with similar interests', tint: '#2E7D32', intent: 'friendship' },
+    { icon: 'briefcase', label: 'Job', hint: 'someone hiring or looking for work', tint: '#EF6C00', intent: 'job' },
+    { icon: 'home', label: 'Flatmate', hint: 'flatmate or roommate nearby', tint: '#00838F', intent: 'flatmate' },
+    { icon: 'plane', label: 'Travel', hint: 'travel companion for an upcoming trip', tint: '#00897B', intent: 'travel' },
+    { icon: 'gamepad', label: 'Gaming', hint: 'someone to play games with', tint: '#5E35B1', intent: 'gaming' },
+    { icon: 'music', label: 'Music', hint: 'music lover with similar taste', tint: '#AD1457', intent: 'music' },
+    { icon: 'rocket', label: 'Co-founder', hint: 'startup-minded person to collaborate', tint: '#1565C0', intent: 'cofounder' },
   ];
 
   let khojShownPeeks = [];
   let khojHasMore = false;
+  let khojSelectedChipIntent = null;
 
   function tt(key, fallback) {
     try {
@@ -35,11 +36,33 @@
     return '';
   }
 
+  function openKhojChaupaalSearch() {
+    if (typeof openUniversalSearch === 'function') {
+      openUniversalSearch({ types: ['users', 'duniya', 'peepal', 'groups', 'games'] });
+      return;
+    }
+    if (typeof openPeopleSearchWithContacts === 'function') {
+      openPeopleSearchWithContacts({ surface: 'peepal' });
+    }
+  }
+
   function syncIntentVisibility(mode) {
     const card = document.getElementById('peepalIntentCard');
     const panel = document.getElementById('peepalKhojSurface');
     if (card) card.classList.toggle('hidden', mode !== 'vriksha');
     if (panel) panel.classList.toggle('hidden', mode !== 'khoj');
+  }
+
+  function setKhojFindMode(panel, finding) {
+    if (!panel) return;
+    const list = panel.querySelector('#khojCompatList');
+    const more = panel.querySelector('.khoj-compat-more');
+    const back = panel.querySelector('#khojBackToPeeks');
+    const results = panel.querySelector('#khojIntentResults');
+    list?.classList.toggle('hidden', !!finding);
+    more?.classList.toggle('hidden', !!finding || !khojHasMore);
+    back?.classList.toggle('hidden', !finding);
+    if (!finding && results) results.innerHTML = '';
   }
 
   async function loadKhojPeeks(listEl, opts) {
@@ -67,7 +90,7 @@
           listEl.innerHTML = `<div class="khoj-compat-empty">
             <p>${tt(
               'khoj_empty_peeks',
-              'No eligible people yet — we never invent profiles. Try a broader description below.'
+              'No eligible people yet — we never invent profiles. Invite a friend or search Chaupaal.'
             )}</p>
             <div class="khoj-empty-ctas" style="display:flex;flex-direction:column;gap:8px;margin-top:12px;">
               <button type="button" class="btn btn--primary" data-khoj-cta="invite">${tt('contacts_invite_cta', 'Invite friends')}</button>
@@ -80,8 +103,13 @@
             else if (typeof openDay0MeetSheet === 'function') openDay0MeetSheet();
           });
           listEl.querySelector('[data-khoj-cta="search"]')?.addEventListener('click', () => {
-            if (typeof openUniversalSearch === 'function') openUniversalSearch({ types: ['users', 'duniya', 'peepal', 'groups', 'games'] });
-            else if (typeof openPeopleSearchWithContacts === 'function') openPeopleSearchWithContacts({ surface: 'peepal' });
+            const top = document.getElementById('khojChaupaalSearch');
+            if (top) {
+              top.focus();
+              top.classList.add('khoj-global-search--pulse');
+              setTimeout(() => top.classList.remove('khoj-global-search--pulse'), 900);
+            }
+            openKhojChaupaalSearch();
           });
           listEl.querySelector('[data-khoj-cta="akhbaar"]')?.addEventListener('click', () => {
             if (typeof showTab === 'function') showTab('akhbaar');
@@ -159,7 +187,9 @@
           .join('')}
       </div>
       <button type="button" class="auth-guest-btn" data-khoj-ask-dismiss style="font-size:12px;">Not now</button>`;
-    host.insertBefore(banner, host.firstChild?.nextSibling || host.firstChild);
+    const filtersBar = host.querySelector('.khoj-filters-bar');
+    if (filtersBar) filtersBar.after(banner);
+    else host.insertBefore(banner, host.firstChild?.nextSibling || host.firstChild);
     const picked = new Set();
     banner.querySelectorAll('[data-khoj-interest]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -188,6 +218,16 @@
     });
   }
 
+  function softAuthForFind() {
+    if (typeof currentUser !== 'undefined' && currentUser) return false;
+    if (typeof showToast === 'function') {
+      showToast(tt('khoj_find_signin', 'Sign in to find people to meet'));
+    }
+    if (typeof openAuthSheet === 'function') openAuthSheet('login');
+    else if (typeof showAuth === 'function') showAuth();
+    return true;
+  }
+
   async function renderKhojSurface(host) {
     if (!host) return;
     let panel = document.getElementById('peepalKhojSurface');
@@ -209,30 +249,39 @@
       );
     }
     panel.classList.remove('hidden');
+    khojSelectedChipIntent = null;
 
     const chipsHtml = INTENT_CHIPS.map(
       (c) =>
-        `<button type="button" class="peepal-nudge-chip peepal-nudge-chip--tinted" data-hint="${c.hint}" data-chip-intent="${c.label.toLowerCase()}" data-tint="${c.tint}" style="--chip-tint:${c.tint}">${icon(c.icon)} ${tt('khoj_chip_' + c.label.toLowerCase(), c.label)}</button>`
+        `<button type="button" class="peepal-nudge-chip peepal-nudge-chip--tinted" data-hint="${c.hint}" data-chip-intent="${c.intent}" data-tint="${c.tint}" style="--chip-tint:${c.tint}">${icon(c.icon)} ${tt('khoj_chip_' + c.label.toLowerCase(), c.label)}</button>`
     ).join('');
 
+    const filtersHtml =
+      typeof renderKhojFiltersMarkup === 'function' ? renderKhojFiltersMarkup() : '';
+
     panel.innerHTML = `
+      <button type="button" class="khoj-global-search" id="khojChaupaalSearch" aria-label="${tt('search_chaupaal', 'Search Chaupaal')}">
+        <span class="khoj-global-search-icon" aria-hidden="true">${icon('search', 16)}</span>
+        <span class="khoj-global-search-label">${tt('khoj_global_ph', 'Search Chaupaal — posts, people, games…')}</span>
+      </button>
       <div class="peepal-card peepal-intent-card peepal-intent-card--khoj" id="khojIntentCard">
         <div class="peepal-intent-card-sub">
-          ${tt('khoj_sub', 'People to meet — strangers first, with short reasons (not scores). Scroll for more.')}
+          ${tt('khoj_sub', 'Find people to meet — strangers, with short reasons. Or scroll peeks below.')}
         </div>
         <div class="peepal-intent-chips" data-khoj-chips data-swipe-ignore>${chipsHtml}</div>
         <div class="khoj-search-row">
           <div class="khoj-search-wrap">
             <textarea id="khojIntentInput" class="peepal-ai-search-input khoj-intent-input" rows="2"
-              placeholder="${tt('khoj_ph', 'Who are you hoping to meet?')}"
+              placeholder="${tt('khoj_ph', 'Who are you hoping to meet? Any description works.')}"
               data-living-ph="khoj_intent" enterkeyhint="search"></textarea>
           </div>
           <button type="button" class="peepal-ai-search-btn khoj-intent-go" id="khojIntentGo">${icon('search', 16)} ${tt('khoj_go', 'Find')}</button>
         </div>
+        ${filtersHtml}
+        <button type="button" class="khoj-back-peeks hidden" id="khojBackToPeeks">${tt('khoj_back_peeks', '← Back to peeks')}</button>
         <div id="khojCompatList" class="khoj-compat-scroll" aria-live="polite"></div>
         <div id="khojIntentResults" class="khoj-results peepal-intent-results"></div>
-      </div>
-      <div class="khoj-hint">${tt('khoj_vs_global', 'Tip: Search posts, games & everything Chaupaal from Peepal’s Search Chaupaal shortcut.')}</div>`;
+      </div>`;
 
     if (typeof tintPeepalIntentChips === 'function') tintPeepalIntentChips(panel);
     if (typeof filterPeepalSearchNudges === 'function') filterPeepalSearchNudges(panel);
@@ -248,7 +297,42 @@
       }
     } catch (e) {}
 
+    panel.querySelector('#khojChaupaalSearch')?.addEventListener('click', openKhojChaupaalSearch);
+
     const listEl = panel.querySelector('#khojCompatList');
+    const reloadPeeks = () => {
+      setKhojFindMode(panel, false);
+      loadKhojPeeks(listEl, { reset: true, limit: 5, emptyFriendship: true, friendshipOnly: false });
+    };
+
+    if (typeof wireKhojFilters === 'function') {
+      wireKhojFilters(panel, () => {
+        const q = panel.querySelector('#khojIntentInput')?.value?.trim();
+        const resultsVisible =
+          panel.querySelector('#khojIntentResults')?.children?.length > 0 &&
+          !panel.querySelector('#khojBackToPeeks')?.classList.contains('hidden');
+        if (q && resultsVisible && typeof runPeepalAiSearch === 'function') {
+          runPeepalAiSearch({
+            query: q,
+            resultsEl: panel.querySelector('#khojIntentResults'),
+            surface: 'khoj',
+            limit: 8,
+            chipIntent: khojSelectedChipIntent,
+          });
+        } else {
+          reloadPeeks();
+        }
+      });
+    }
+
+    panel.querySelector('#khojBackToPeeks')?.addEventListener('click', () => {
+      const inp = panel.querySelector('#khojIntentInput');
+      if (inp) inp.value = '';
+      khojSelectedChipIntent = null;
+      panel.querySelectorAll('[data-khoj-chips] .peepal-nudge-chip').forEach((c) => c.classList.remove('is-active'));
+      reloadPeeks();
+    });
+
     // Pending query from Vriksha "Find on Khoj"
     let pendingQ = '';
     try {
@@ -259,17 +343,16 @@
       const inp = panel.querySelector('#khojIntentInput');
       if (inp) inp.value = pendingQ;
       const dest = panel.querySelector('#khojIntentResults');
-      if (typeof runPeepalAiSearch === 'function') {
+      if (typeof runPeepalAiSearch === 'function' && !softAuthForFind()) {
+        setKhojFindMode(panel, true);
         runPeepalAiSearch({ query: pendingQ, resultsEl: dest, surface: 'khoj', limit: 8 });
       } else {
         loadKhojPeeks(listEl, { reset: true, limit: 5, emptyFriendship: true, friendshipOnly: false });
       }
     } else {
-      // On open: ranked compatibility peeks; empty-query path uses broad friendship
       loadKhojPeeks(listEl, { reset: true, limit: 5, emptyFriendship: true, friendshipOnly: false });
     }
 
-    // Contextual ask once: no interests → chip picker (respects 24h nudge + session cadence).
     maybeOfferKhojInterestsAsk(panel);
 
     const run = () => {
@@ -282,9 +365,17 @@
         inp?.focus();
         return;
       }
+      if (softAuthForFind()) return;
       const dest = panel.querySelector('#khojIntentResults');
+      setKhojFindMode(panel, true);
       if (typeof runPeepalAiSearch === 'function') {
-        runPeepalAiSearch({ query: q, resultsEl: dest, surface: 'khoj', limit: 5 });
+        runPeepalAiSearch({
+          query: q,
+          resultsEl: dest,
+          surface: 'khoj',
+          limit: 5,
+          chipIntent: khojSelectedChipIntent,
+        });
         return;
       }
       if (typeof openPeopleSearchWithContacts === 'function') {
@@ -299,6 +390,10 @@
           inp.value = chip.dataset.hint || '';
           inp.focus();
         }
+        khojSelectedChipIntent = chip.dataset.chipIntent || null;
+        panel.querySelectorAll('[data-khoj-chips] .peepal-nudge-chip').forEach((c) => {
+          c.classList.toggle('is-active', c === chip);
+        });
         // Fill only — user must tap Find
       });
     });
@@ -330,19 +425,18 @@
       enhanceSearchField(khojInp, {
         surfaceId: 'khoj',
         onClear() {
-          const host = panel.querySelector('#khojIntentResults');
-          if (host) host.innerHTML = '';
-          const list = panel.querySelector('#khojCompatList');
-          if (list) loadKhojPeeks(list, { reset: true, limit: 5, emptyFriendship: true, friendshipOnly: false });
+          khojSelectedChipIntent = null;
+          panel.querySelectorAll('[data-khoj-chips] .peepal-nudge-chip').forEach((c) => c.classList.remove('is-active'));
+          reloadPeeks();
         },
       });
     }
 
-    // Infinite scroll inside Khoj surface
     panel.addEventListener(
       'scroll',
       () => {
         if (!khojHasMore) return;
+        if (panel.querySelector('#khojCompatList')?.classList.contains('hidden')) return;
         if (panel.scrollTop + panel.clientHeight >= panel.scrollHeight - 80) {
           loadKhojPeeks(listEl, { reset: false, limit: 5 });
         }
@@ -353,6 +447,7 @@
 
   window.renderKhojSurface = renderKhojSurface;
   window.syncPeepalIntentVisibility = syncIntentVisibility;
+  window.openKhojChaupaalSearch = openKhojChaupaalSearch;
 
   document.addEventListener('DOMContentLoaded', () => {
     const orig = window.setPeepalMode;

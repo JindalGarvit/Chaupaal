@@ -91,6 +91,131 @@ function saveDiscoveryFilters() {
   try { localStorage.setItem(DISCOVERY_FILTER_KEY, JSON.stringify(discoveryFilters)); } catch (e) {}
 }
 
+function clearDiscoveryFilters() {
+  discoveryFilters.interest = 'any';
+  discoveryFilters.matchIntent = '';
+  discoveryFilters.sameCity = false;
+  discoveryFilters.recentlyJoined = false;
+  saveDiscoveryFilters();
+}
+
+function getDiscoveryFilterPayload() {
+  return {
+    interest: discoveryFilters.interest || 'any',
+    matchIntent: discoveryFilters.matchIntent || '',
+    sameCity: !!discoveryFilters.sameCity,
+    recentlyJoined: !!discoveryFilters.recentlyJoined,
+  };
+}
+
+function discoveryFiltersActiveCount() {
+  let n = 0;
+  if (discoveryFilters.sameCity) n++;
+  if (discoveryFilters.recentlyJoined) n++;
+  if (discoveryFilters.interest && discoveryFilters.interest !== 'any') n++;
+  if (discoveryFilters.matchIntent) n++;
+  return n;
+}
+
+/** Compact Khoj filters markup — progressive disclosure (hidden until Filters tapped). */
+function renderKhojFiltersMarkup() {
+  const f = discoveryFilters;
+  const intents = PEEPAL_MATCH_INTENTS.map(
+    (i) => `<option value="${i}" ${f.matchIntent === i ? 'selected' : ''}>${i}</option>`
+  ).join('');
+  const interestOpts = ['Sports', 'Tech', 'Business', 'Music', 'Food', 'Travel', 'Movies', 'GK', 'India', 'World']
+    .map((i) => `<option value="${i}" ${f.interest === i ? 'selected' : ''}>${i}</option>`)
+    .join('');
+  const customSel =
+    f.matchIntent && !PEEPAL_MATCH_INTENTS.includes(f.matchIntent) ? 'selected' : '';
+  return `
+    <div class="khoj-filters-bar">
+      <button type="button" class="khoj-filters-toggle" id="khojFiltersToggle" aria-expanded="false">
+        Filters${discoveryFiltersActiveCount() ? ` · ${discoveryFiltersActiveCount()}` : ''}
+      </button>
+      <button type="button" class="khoj-filters-clear${discoveryFiltersActiveCount() ? '' : ' hidden'}" id="khojFiltersClear" title="Clear filters">Clear</button>
+    </div>
+    <div class="khoj-filters-panel hidden" id="khojFiltersPanel" hidden>
+      <label class="khoj-filter-field">
+        <span>Intent</span>
+        <select data-discovery-filter="matchIntent" aria-label="Match intent">
+          <option value="">Profile default</option>
+          ${intents}
+          <option value="__custom__" ${customSel}>Something else…</option>
+        </select>
+      </label>
+      <label class="khoj-filter-field">
+        <span>Interest</span>
+        <select data-discovery-filter="interest" aria-label="Filter by interest">
+          <option value="any">All interests</option>
+          ${interestOpts}
+        </select>
+      </label>
+      <label class="khoj-filter-check"><input type="checkbox" data-discovery-filter="sameCity" ${f.sameCity ? 'checked' : ''}> Same city</label>
+      <label class="khoj-filter-check"><input type="checkbox" data-discovery-filter="recentlyJoined" ${f.recentlyJoined ? 'checked' : ''}> New here</label>
+    </div>`;
+}
+
+/**
+ * Wire Khoj filter controls. onChange(payload) after save — reload peeks / re-run Find.
+ */
+function wireKhojFilters(root, onChange) {
+  const scope = root || document;
+  const panel = scope.querySelector('#khojFiltersPanel');
+  const toggle = scope.querySelector('#khojFiltersToggle');
+  const clearBtn = scope.querySelector('#khojFiltersClear');
+  const syncChrome = () => {
+    const n = discoveryFiltersActiveCount();
+    if (toggle) toggle.textContent = n ? `Filters · ${n}` : 'Filters';
+    clearBtn?.classList.toggle('hidden', !n);
+  };
+  toggle?.addEventListener('click', () => {
+    const open = panel && !panel.classList.contains('hidden');
+    if (panel) {
+      panel.classList.toggle('hidden', open);
+      panel.hidden = open;
+    }
+    toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+  });
+  clearBtn?.addEventListener('click', () => {
+    clearDiscoveryFilters();
+    scope.querySelectorAll('[data-discovery-filter]').forEach((el) => {
+      const key = el.dataset.discoveryFilter;
+      if (el.type === 'checkbox') el.checked = false;
+      else if (key === 'interest') el.value = 'any';
+      else el.value = '';
+    });
+    syncChrome();
+    if (typeof onChange === 'function') onChange(getDiscoveryFilterPayload());
+  });
+  scope.querySelectorAll('[data-discovery-filter]').forEach((control) => {
+    control.addEventListener('change', async () => {
+      const key = control.dataset.discoveryFilter;
+      if (key === 'matchIntent' && control.value === '__custom__') {
+        const typed =
+          typeof promptNameSheet === 'function'
+            ? await promptNameSheet({
+                title: 'Match intent',
+                placeholder: 'What are you looking for?',
+                confirmLabel: 'Use',
+              })
+            : window.prompt('What are you looking for?');
+        if (!typed) {
+          control.value = discoveryFilters.matchIntent || '';
+          return;
+        }
+        discoveryFilters.matchIntent = String(typed).trim().slice(0, 80);
+      } else {
+        discoveryFilters[key] = control.type === 'checkbox' ? control.checked : control.value;
+      }
+      saveDiscoveryFilters();
+      syncChrome();
+      if (typeof onChange === 'function') onChange(getDiscoveryFilterPayload());
+    });
+  });
+  syncChrome();
+}
+
 async function getDiscoveryProfiles(){
   // Personal hybrid matchmaking (filters + embeddings + Gale-Shapley) when account is personal
   if (
@@ -293,7 +418,10 @@ function renderDiscoverySection(profiles){
           {
             label: 'Search Chaupaal',
             onClick: () => {
-              if (typeof openGlobalSearch === 'function') openGlobalSearch();
+              if (typeof openKhojChaupaalSearch === 'function') openKhojChaupaalSearch();
+              else if (typeof openUniversalSearch === 'function') {
+                openUniversalSearch({ types: ['users', 'duniya', 'peepal', 'groups', 'games'] });
+              } else if (typeof openGlobalSearch === 'function') openGlobalSearch();
               else if (typeof openSearch === 'function') openSearch();
               else document.getElementById('openSearchBtn')?.click();
             },
@@ -932,4 +1060,10 @@ window.wireCompatPeekHost = wireCompatPeekHost;
 window.tintPeepalIntentChips = tintPeepalIntentChips;
 window.isDiscoveryEligibleUser = isDiscoveryEligibleUser;
 window.detectIntentLean = detectIntentLean;
+window.saveDiscoveryFilters = saveDiscoveryFilters;
+window.clearDiscoveryFilters = clearDiscoveryFilters;
+window.getDiscoveryFilterPayload = getDiscoveryFilterPayload;
+window.discoveryFiltersActiveCount = discoveryFiltersActiveCount;
+window.renderKhojFiltersMarkup = renderKhojFiltersMarkup;
+window.wireKhojFilters = wireKhojFilters;
 

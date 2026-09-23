@@ -441,6 +441,15 @@ function passesQueryHardFilters(cand, hardFilters) {
     if (!hit && !hf.college && !hf.city && !hf.company) return false;
   }
 
+  if (hf.recentlyJoined) {
+    const joined =
+      cand.createdAt?.toMillis?.() ||
+      cand.createdAt?.toDate?.()?.getTime?.() ||
+      Number(cand.createdAt || cand.joinedAt || 0) ||
+      0;
+    if (!(joined > 0 && Date.now() - joined <= 30 * 24 * 60 * 60 * 1000)) return false;
+  }
+
   return true;
 }
 

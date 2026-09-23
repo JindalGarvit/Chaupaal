@@ -60,7 +60,33 @@ async function runPeepalAiSearch(opts){
   if (input && o.query != null) input.value = query;
   if (!resultsEl) return;
 
+  // Soft-auth: Find needs an account for real strangers (K1)
+  if (typeof currentUser === 'undefined' || !currentUser) {
+    if (typeof showToast === 'function') {
+      showToast(
+        typeof t === 'function'
+          ? t('khoj_find_signin', 'Sign in to find people to meet')
+          : 'Sign in to find people to meet'
+      );
+    }
+    if (typeof openAuthSheet === 'function') openAuthSheet('login');
+    else if (typeof showAuth === 'function') showAuth();
+    resultsEl.innerHTML = '';
+    return;
+  }
+
   const limit = Math.max(1, Math.min(20, Number(o.limit) || DISCOVER_LIMIT_DEFAULT));
+  const filters =
+    o.filters ||
+    (typeof getDiscoveryFilterPayload === 'function' ? getDiscoveryFilterPayload() : null);
+  const chipIntent = o.chipIntent || null;
+
+  // Hide peeks while showing Find results on Khoj
+  if (o.surface === 'khoj' || resultsEl.id === 'khojIntentResults') {
+    document.getElementById('khojCompatList')?.classList.add('hidden');
+    document.querySelector('#peepalKhojSurface .khoj-compat-more')?.classList.add('hidden');
+    document.getElementById('khojBackToPeeks')?.classList.remove('hidden');
+  }
 
   if(typeof renderSkeleton==='function') renderSkeleton(resultsEl, {variant:'card', count:2});
   else resultsEl.innerHTML = `<div class="peepal-ai-thinking">Finding the right people for you...</div>`;
@@ -76,7 +102,8 @@ async function runPeepalAiSearch(opts){
           body: {
             action: 'intent_discover',
             query,
-            chipIntent: o.chipIntent || null,
+            chipIntent,
+            filters,
             limit,
             ai: o.ai,
           },
@@ -90,13 +117,14 @@ async function runPeepalAiSearch(opts){
     if(data && Array.isArray(data.matches)){
       data.matches = data.matches
         .filter((m) => m?.uid && m.uid !== currentUser?.uid)
+        .filter((m) => typeof isDiscoveryEligibleUser !== 'function' || isDiscoveryEligibleUser(m))
         .slice(0, limit);
       await renderIntentDiscoverResults(resultsEl, query, data);
       return;
     }
 
     // Fallback: deterministic local INTENT_MAP + public pool (AI-off / offline)
-    await runPeepalAiSearchLocalFallback(query, resultsEl, { limit });
+    await runPeepalAiSearchLocalFallback(query, resultsEl, { limit, filters, chipIntent });
   }catch(err){
     console.error(err);
     if(typeof renderErrorState==='function'){
@@ -132,14 +160,36 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
   } catch (e) {}
 
   if(!matches.length){
+    const refineHint =
+      !data.aiEnabled && Array.isArray(refineChips) && refineChips.some((c) => c.id === 'add_detail')
+        ? ' Try a chip or add an interest / city — AI-off Find works best with a clearer description.'
+        : '';
     if(typeof renderEmptyState==='function'){
       renderEmptyState(resultsEl, {
         icon:(typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('peepal',40):'🌳',
         title:'No matches yet',
-        message: data.emptyMessage || 'No eligible people matched that search. We never invent profiles — try broader wording.',
+        message: (data.emptyMessage || 'No eligible people matched that search. We never invent profiles — try broader wording.') + refineHint,
+        actionLabel: 'Invite',
+        onAction: () => {
+          if (typeof shareInviteToChaupaal === 'function') shareInviteToChaupaal();
+          else if (typeof ChaupaalReferrals?.openInviteToChaupaalShare === 'function') {
+            ChaupaalReferrals.openInviteToChaupaalShare();
+          }
+        },
+        secondaryActions: [
+          {
+            label: 'Search Chaupaal',
+            onClick: () => {
+              if (typeof openKhojChaupaalSearch === 'function') openKhojChaupaalSearch();
+              else if (typeof openUniversalSearch === 'function') {
+                openUniversalSearch({ types: ['users', 'duniya', 'peepal', 'groups', 'games'] });
+              }
+            },
+          },
+        ],
       });
     } else {
-      resultsEl.innerHTML = `<div style="text-align:center;padding:24px;color:var(--muted);">${data.emptyMessage || 'No matches found.'}</div>`;
+      resultsEl.innerHTML = `<div style="text-align:center;padding:24px;color:var(--muted);">${data.emptyMessage || 'No matches found.'}${refineHint}</div>`;
     }
     return;
   }
@@ -249,10 +299,23 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
               },
             });
           }
-          if (typeof showToast === 'function') {
-            showToast(signal === 'more_like' ? "Noted â€” we'll show more like this" : 'Got it â€” less of this');
+          if (signal === 'not_interested') {
+            try {
+              const key = 'chaupaal_dismissed_uids';
+              const arr = JSON.parse(localStorage.getItem(key) || '[]');
+              if (user.uid && !arr.includes(user.uid)) arr.push(user.uid);
+              localStorage.setItem(key, JSON.stringify(arr));
+              if (typeof dismissedUids !== 'undefined' && dismissedUids?.add) {
+                dismissedUids.add(user.uid);
+              }
+            } catch (err) {}
+            card.remove();
+            if (typeof showToast === 'function') {
+              showToast('Thanks — we’ll show fewer like this');
+            }
+          } else if (typeof showToast === 'function') {
+            showToast("Noted — we'll show more like this");
           }
-          if (signal === 'not_interested') card.remove();
         } catch (err) {
           if (typeof showToast === 'function') showToast('Could not save preference');
         }
@@ -296,14 +359,23 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
 /** Local fallback when server discover is unavailable — never invents users. */
 async function runPeepalAiSearchLocalFallback(query, resultsEl, opts){
   const limit = Math.max(1, Math.min(20, Number(opts?.limit) || DISCOVER_LIMIT_DEFAULT));
+  const filters = opts?.filters || (typeof getDiscoveryFilterPayload === 'function' ? getDiscoveryFilterPayload() : {});
   const queryLower = query.toLowerCase();
   let quickCriteria = null;
   for(const [intent, criteria] of Object.entries(INTENT_MAP)){
     if(queryLower.includes(intent)){quickCriteria = {...criteria, detectedIntent: intent};break;}
   }
+  if (!quickCriteria && opts?.chipIntent) {
+    const chipKey = String(opts.chipIntent).toLowerCase();
+    const mapped = INTENT_MAP[chipKey] || INTENT_MAP[chipKey.replace(/_/g, ' ')];
+    if (mapped) quickCriteria = { ...mapped, detectedIntent: chipKey };
+  }
   let criteria = {interests:[],ageRange:{min:null,max:null},gender:'any',city:null,personality:null,searchIntent:'any',vibe:'',conversationStarter:''};
   if(quickCriteria){
     criteria = {...criteria, ...quickCriteria, searchIntent: quickCriteria.detectedIntent || 'any'};
+  }
+  if (filters?.interest && filters.interest !== 'any') {
+    criteria.interests = [...new Set([...(criteria.interests || []), filters.interest])];
   }
 
   const pool = [];
@@ -326,18 +398,20 @@ async function runPeepalAiSearchLocalFallback(query, resultsEl, opts){
       renderEmptyState(resultsEl, {
         icon:(typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('peepal',40):'🌳',
         title:'No matches yet',
-        message:'No eligible open profiles right now. We never invent people — try Khoj or invite a friend.',
-        actionLabel:'Open Khoj',
+        message:'No eligible open profiles right now. We never invent people — try inviting a friend or Search Chaupaal.',
+        actionLabel:'Invite',
         onAction:()=>{
-          if(typeof setPeepalMode==='function') setPeepalMode('khoj');
-          else if(typeof showTab==='function') showTab('peepal');
+          if(typeof shareInviteToChaupaal==='function') shareInviteToChaupaal();
         },
-        secondaryActions: (typeof currentUser!=='undefined'&&currentUser) ? [{
-          label:'Invite friends',
+        secondaryActions: [{
+          label:'Search Chaupaal',
           onAction:()=>{
-            if(typeof openInviteToChaupaalShare==='function') openInviteToChaupaalShare();
+            if (typeof openKhojChaupaalSearch === 'function') openKhojChaupaalSearch();
+            else if (typeof openUniversalSearch === 'function') {
+              openUniversalSearch({ types: ['users', 'duniya', 'peepal', 'groups', 'games'] });
+            }
           },
-        }] : [],
+        }],
       });
     } else {
       resultsEl.innerHTML = `<div style="text-align:center;padding:24px;color:var(--muted);">No eligible open profiles right now.</div>`;
@@ -345,7 +419,36 @@ async function runPeepalAiSearchLocalFallback(query, resultsEl, opts){
     return;
   }
 
-  const scored = pool.map(u=>{
+  const myCity = String(
+    (typeof userProfile !== 'undefined' && userProfile?.city) ||
+      (typeof digitalProfile !== 'undefined' && digitalProfile?.currentCity) ||
+      ''
+  )
+    .trim()
+    .toLowerCase();
+
+  let filteredPool = pool.filter((u) => {
+    if (typeof isDiscoveryEligibleUser === 'function' && !isDiscoveryEligibleUser(u)) return false;
+    if (filters?.sameCity && myCity) {
+      const city = String(u.city || u.profile?.currentCity || '')
+        .trim()
+        .toLowerCase();
+      if (city !== myCity) return false;
+    }
+    if (filters?.recentlyJoined && typeof isRecentlyJoined === 'function' && !isRecentlyJoined(u)) {
+      return false;
+    }
+    if (filters?.interest && filters.interest !== 'any') {
+      const wanted = String(filters.interest).toLowerCase();
+      const theirs = [...(u.interests || []), ...(u.profile?.interests || []), u.topCat]
+        .filter(Boolean)
+        .map((i) => String(i).toLowerCase());
+      if (!theirs.some((i) => i === wanted || i.includes(wanted) || wanted.includes(i))) return false;
+    }
+    return true;
+  });
+
+  const scored = filteredPool.map(u=>{
     let score = 1;
     const reasons = [];
     const interests = (u.interests||[]).map(i=>String(i).toLowerCase());
@@ -355,13 +458,22 @@ async function runPeepalAiSearchLocalFallback(query, resultsEl, opts){
     if(criteria.city && String(u.city||'').toLowerCase().includes(String(criteria.city).toLowerCase())){
       score += 25; reasons.push('city');
     }
+    // AI-off vague: still allow open profiles with a soft score when no structured hit
+    if (score <= 1 && criteria.searchIntent && criteria.searchIntent !== 'any') score += 5;
+    else if (score <= 1) score += 2;
     return {user:u, score, reasons };
   }).filter(m => m.score > 1).sort((a,b)=>b.score-a.score).slice(0,limit);
 
+  const vague =
+    criteria.searchIntent === 'any' &&
+    !quickCriteria &&
+    query.split(/\s+/).filter((w) => w.length > 2).length < 3;
+
   await renderIntentDiscoverResults(resultsEl, query, {
     mode: 'deterministic',
+    aiEnabled: false,
     plan: { searchIntent: criteria.searchIntent, vibe: criteria.vibe, hardFilters: {}, appliedAssumptionIds: [], suppressedAssumptionIds: [] },
-    refineChips: [],
+    refineChips: vague ? [{ id: 'add_detail', label: 'Add interests or city' }] : [],
     matches: scored.map(({user, score, reasons})=>({
       uid: user.uid,
       name: user.name,
@@ -376,7 +488,9 @@ async function runPeepalAiSearchLocalFallback(query, resultsEl, opts){
       explain: reasons.length ? `Matched on ${reasons.slice(0,3).join(' & ')}` : 'Matched on open profile',
     })),
     empty: !scored.length,
-    emptyMessage: 'No matches found yet. Try broader terms.',
+    emptyMessage: vague
+      ? 'Try a chip or add more detail — we never invent profiles.'
+      : 'No matches found yet. Try broader terms.',
   });
 }
 

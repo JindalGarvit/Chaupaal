@@ -53,9 +53,18 @@ async function parseIntentQuery({ query, chipIntent, aiEnabled, callAI }) {
     city: null,
     college: null,
   };
+  // AI-off: deterministic — never reject free text; chip / detectChipIntent bias only
   if (!aiEnabled || typeof callAI !== 'function') {
-    return { parsed: { ...base, searchIntent: chipIntent || undefined }, usedLlm: false };
+    return {
+      parsed: {
+        ...base,
+        searchIntent: chipIntent || undefined,
+        vibe: String(query || '').slice(0, 120),
+      },
+      usedLlm: false,
+    };
   }
+  // AI-on: any non-empty free text is a first-class query (K1)
   try {
     const result = await callAI({
       tier: 'fast',
@@ -63,7 +72,7 @@ async function parseIntentQuery({ query, chipIntent, aiEnabled, callAI }) {
       feature: 'discovery_intent_parse',
       system: `Parse people-discovery intent for Chaupaal. Return ONLY JSON:
 {"interests":[],"ageRange":{"min":null,"max":null},"gender":"male"|"female"|"any","city":null,"college":null,"company":null,"searchIntent":"dating"|"friendship"|"job"|"flatmate"|"travel"|"gaming"|"music"|"cofounder"|"any","vibe":"","conversationStarter":""}
-Rules: Never invent profile names. Prefer null over guesses. interests must be short canonical chips when possible (Travel, Food, Films, Music, Fitness, Books, Tech, Sports, Gaming, …). Never infer religion, caste, sexuality, health, or income. If the query is underspecified, leave fields null and set searchIntent from chips when provided.`,
+Rules: Accept any natural-language query — never refuse or ask the user to pick a chip first. Never invent profile names. Prefer null over guesses. interests must be short canonical chips when possible (Travel, Food, Films, Music, Fitness, Books, Tech, Sports, Gaming, …). Never infer religion, caste, sexuality, health, or income. If the query is underspecified, leave fields null and set searchIntent from chips when provided; otherwise use "any" and put a short vibe summary.`,
       messages: [{ role: 'user', content: String(query || '').slice(0, 500) }],
     });
     const raw = result?.text || result?.content?.[0]?.text || '{}';
@@ -71,7 +80,11 @@ Rules: Never invent profile names. Prefer null over guesses. interests must be s
     return { parsed: { ...base, ...parsed }, usedLlm: true };
   } catch (e) {
     return {
-      parsed: { ...base, searchIntent: chipIntent || undefined },
+      parsed: {
+        ...base,
+        searchIntent: chipIntent || undefined,
+        vibe: String(query || '').slice(0, 120),
+      },
       usedLlm: false,
       parseError: e?.message,
     };
@@ -175,6 +188,38 @@ async function runIntentDiscover(db, admin, user, body, deps) {
     viewer,
     aiEnabled,
   });
+
+  // K1: client compact filters (same city / interest / new) — merge into hard filters
+  const cf = body.filters && typeof body.filters === 'object' ? body.filters : {};
+  plan.hardFilters = plan.hardFilters || {};
+  if (cf.sameCity) {
+    const city = String(viewer.profile?.currentCity || viewer.city || '').trim();
+    if (city) plan.hardFilters.city = city;
+  }
+  if (cf.interest && String(cf.interest) !== 'any') {
+    const interest = String(cf.interest).trim().slice(0, 40);
+    if (interest) {
+      const existing = Array.isArray(plan.hardFilters.interests) ? plan.hardFilters.interests : [];
+      plan.hardFilters.interests = [...new Set([...existing, interest])];
+    }
+  }
+  if (cf.recentlyJoined) {
+    plan.hardFilters.recentlyJoined = true;
+  }
+  // Optional matchIntent bias when chip not set
+  if (!chipIntent && cf.matchIntent && String(cf.matchIntent).trim()) {
+    const mi = String(cf.matchIntent).toLowerCase();
+    if (plan.searchIntent === 'any') {
+      if (/dat/.test(mi)) plan.searchIntent = 'dating';
+      else if (/friend/.test(mi)) plan.searchIntent = 'friendship';
+      else if (/job|hir|career|network/.test(mi)) plan.searchIntent = 'job';
+      else if (/flat|room/.test(mi)) plan.searchIntent = 'flatmate';
+      else if (/travel/.test(mi)) plan.searchIntent = 'travel';
+      else if (/game/.test(mi)) plan.searchIntent = 'gaming';
+      else if (/music/.test(mi)) plan.searchIntent = 'music';
+      else if (/founder|startup|collab/.test(mi)) plan.searchIntent = 'cofounder';
+    }
+  }
 
   let intentProfileId = null;
   let weights = defaultWeights();
@@ -426,6 +471,11 @@ async function runIntentDiscover(db, admin, user, body, deps) {
   if (plan.appliedAssumptionIds.includes('dating_opposite_gender')) {
     refineChips.push({ id: 'include_everyone', label: 'Include everyone' });
   }
+  // AI-off vague free text: soft refine hint — never hard-reject (K1)
+  const tokenCount = query.split(/\s+/).filter((w) => w.length > 2).length;
+  if (!usedLlm && plan.searchIntent === 'any' && tokenCount < 3) {
+    refineChips.push({ id: 'add_detail', label: 'Add interests or city' });
+  }
 
   return {
     mode: usedLlm ? 'ai_parse' : 'deterministic',
@@ -455,7 +505,6 @@ async function runIntentDiscover(db, admin, user, body, deps) {
       profileType:
         normalizeProfileType(m.user.profileType || m.user.profile?.profileType) || 'personal',
       score: Math.round(m.score * 1000) / 1000,
-      matchPct: Math.min(99, Math.max(28, Math.round(m.score * 100))),
       explain: m.explain,
       reciprocity: m.reciprocity != null ? Math.round(m.reciprocity * 1000) / 1000 : null,
       mutualStable: !!m.mutualStable,
@@ -465,7 +514,9 @@ async function runIntentDiscover(db, admin, user, body, deps) {
     empty: polished.length === 0,
     emptyMessage:
       polished.length === 0
-        ? 'No eligible people matched that search yet. Try broader wording — we never invent profiles.'
+        ? !usedLlm && plan.searchIntent === 'any' && tokenCount < 3
+          ? 'Try a chip or add more detail — we never invent profiles.'
+          : 'No eligible people matched that search yet. Try broader wording — we never invent profiles.'
         : null,
     retrieval: viewer._p6Retrieve || null,
     coldStart: !!(viewer._p6Model && viewer._p6Model.coldStart),

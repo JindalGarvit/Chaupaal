@@ -33,6 +33,8 @@ Implementation lives primarily in:
 
 **Peepal/Khoj K0 (truth):** Khoj is the **only** people-discovery surface. Vriksha is discussions — Find CTA opens Khoj; `#peepalDiscovery` / Vriksha peeks hidden. Peeks + `personal_match` / `intent_discover` hard-exclude self, accepted friends (mutual follow), pending friend requests, and mutual friends (FoF approx via friends’ friend sets — see `server-lib/discovery-strangers.js`). Signed-in never pads `SAMPLE_DISCOVERY_POOL`. UI shows short **reasons**, never match **%**. Empty → Invite / Search Chaupaal.
 
+**Peepal/Khoj K1 (core):** Khoj top bar = **Search Chaupaal** → `openUniversalSearch` (users/duniya/peepal/groups/games) — not intent_discover. Intent Find = chips + `#khojIntentInput` + Find → `intent_discover` (AI-on: any free text parsed; AI-off: deterministic + soft refine). Compact **Filters** (intent / interest / same city / new) behind a toggle + Clear; apply to Find + peeks. `more_like` / `not_interested` → `discovery_person_signal` → recommendationSignals + user-model refresh. Morph Search shortcut kept.
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.
