@@ -815,10 +815,13 @@ module.exports = async function handler(req, res) {
       if (!targetUid) return sendError(res, 400, 'VALIDATION_ERROR', 'targetUid required');
       const flagId = body.flagId ? String(body.flagId).slice(0, 80) : null;
       const withdrawReason = String(body.withdrawReason || body.reason || 'changed_mind').slice(0, 80);
+      let mirrorDocId = targetUid;
+      let flagPostId = null;
       if (flagId) {
         const flagRef = db.collection('user_flags').doc(flagId);
         const snap = await flagRef.get();
         if (snap.exists && snap.data()?.reporterUid === user.uid) {
+          const fd = snap.data() || {};
           await flagRef.set(
             {
               status: 'withdrawn',
@@ -827,6 +830,11 @@ module.exports = async function handler(req, res) {
             },
             { merge: true }
           );
+          // Content reports (Akhbaar) mirror under reported/akhbaar_{postId}, not sentinel uid
+          if (fd.targetType === 'akhbaar_question' && fd.postId) {
+            flagPostId = String(fd.postId).slice(0, 80);
+            mirrorDocId = `akhbaar_${flagPostId}`.slice(0, 80);
+          }
         }
       } else {
         // Best-effort: mark newest active flag from this reporter on target
@@ -848,6 +856,11 @@ module.exports = async function handler(req, res) {
             },
             { merge: true }
           );
+          const fd = d.data() || {};
+          if (fd.targetType === 'akhbaar_question' && fd.postId && !flagPostId) {
+            flagPostId = String(fd.postId).slice(0, 80);
+            mirrorDocId = `akhbaar_${flagPostId}`.slice(0, 80);
+          }
         });
         await batch.commit().catch(() => {});
       }
@@ -855,7 +868,7 @@ module.exports = async function handler(req, res) {
         .collection('users')
         .doc(user.uid)
         .collection('reported')
-        .doc(targetUid)
+        .doc(mirrorDocId)
         .set(
           {
             status: 'withdrawn',
@@ -865,7 +878,25 @@ module.exports = async function handler(req, res) {
           },
           { merge: true }
         );
-      return sendSuccess(res, { withdrawn: true, targetUid });
+      // Also clear sentinel doc if a prior path wrote there
+      if (mirrorDocId !== targetUid) {
+        await db
+          .collection('users')
+          .doc(user.uid)
+          .collection('reported')
+          .doc(targetUid)
+          .set(
+            {
+              status: 'withdrawn',
+              withdrawnAt: admin.firestore.FieldValue.serverTimestamp(),
+              withdrawReason,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          )
+          .catch(() => {});
+      }
+      return sendSuccess(res, { withdrawn: true, targetUid, mirrorDocId });
     }
     if (action === 'list_my_reports') {
       const snap = await db

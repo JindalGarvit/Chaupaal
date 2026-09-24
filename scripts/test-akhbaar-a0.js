@@ -28,6 +28,7 @@ assert(/Sample practice|Offline practice/.test(akhbaar), 'results/badge not live
 assert(!/% of players got this right/.test(akhbaar), 'no invented player % UI');
 assert(!/social-proof/.test(akhbaar) || /A0:.*no invented/.test(akhbaar), 'social-proof reveal removed');
 assert(!/fb\.classList\.toggle\('flagged'\)/.test(akhbaar), 'no fake flag success toggle');
+assert(/data-akhbaar-flag|openAkhbaarFlagSheet/.test(akhbaar), 'A1 flag entry (real sheet)');
 assert(/Streak Kept/.test(akhbaar) === false, 'no Streak Kept lie');
 assert(/never pre-bump streak|saveStreak/.test(akhbaar), 'streak save without pre-bump');
 assert(/akhbaarIsLiveSet\(\)/.test(akhbaar) && /data-breaking/.test(akhbaar), 'breaking toast gated on live');

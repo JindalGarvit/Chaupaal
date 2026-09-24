@@ -229,7 +229,7 @@ async function refreshAkhbaar(){
 }
 window.refreshAkhbaar=refreshAkhbaar;
 
-/** Beat-my-score banner for `?game=akhbaar&challenge=…&score=…` deep links. */
+/** Beat-my-score banner for `/challenge/akhbaar?name=&score=` — score challenge, not a live Muqabala room. */
 function applyAkhbaarBeatBanner(){
   const pending=window.__akhbaarBeatChallenge;
   if(!pending||!pending.challenger) return;
@@ -239,10 +239,11 @@ function applyAkhbaarBeatBanner(){
   const banner=document.createElement('div');
   banner.id='akhbaarBeatBanner';
   banner.className='akhbaar-beat-banner';
+  const scoreBit=pending.score!=null?String(pending.score):'their score';
   banner.innerHTML=`
     <div class="akhbaar-beat-copy">
-      <strong>${pending.challenger} challenged you</strong>
-      <span>Beat ${pending.score!=null?pending.score:'their score'} on today's Akhbaar</span>
+      <strong>${String(pending.challenger).replace(/</g,'')} shared a score</strong>
+      <span>Try to beat ${scoreBit} on today’s Akhbaar — finish the reel to compare</span>
     </div>
     <button type="button" class="akhbaar-beat-dismiss" aria-label="Dismiss">✕</button>`;
   const reel=document.getElementById('reelStage');
@@ -313,7 +314,7 @@ function renderQuestion(inner,data,idx,updateProgress){
     if(isCorrect){score++;categoryScores[data.category].correct++;}
 
     // A0: no invented “X% of players” — reveal is correct + explain only (real proof = A3)
-    // Flag/report wire = A1 — hide until then (no fake “reported” thanks)
+    // A1: Flag lives on news summary (survives reveal replace), not CSS-only
 
     maxUnlocked=Math.max(maxUnlocked,idx+1);
     updateProgress();
@@ -357,13 +358,16 @@ function showNewsSummary(inner,data,idx){
     :sample
       ?`${data.category||'News'} · Sample`
       :(data.category||'News');
+  const flagHtml=!data.personal
+    ?`<div class="flag-row"><button type="button" class="flag-btn" data-akhbaar-flag>⚑ Flag this question</button></div>`
+    :'';
   inner.innerHTML=`
     <div class="q-tag ${data.personal?'personal':'news'}">${tagLabel}</div>
     <div class="news-summary">
       <div class="news-headline">${data.headline||'About this question'}</div>
       ${explainHtml}
       <div class="news-body">${data.news||'This question is based on recent news.'}</div>
-      ${linkHtml}${sourceLine}${wishHtml}
+      ${linkHtml}${sourceLine}${wishHtml}${flagHtml}
       <div class="hint show">${hintText}</div>
     </div>
   `;
@@ -381,6 +385,11 @@ function showNewsSummary(inner,data,idx){
         type:data.eventType||'friend_update',
       });
     }
+  });
+  inner.querySelector('[data-akhbaar-flag]')?.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    if(typeof openAkhbaarFlagSheet==='function') openAkhbaarFlagSheet(data,{idx});
+    else if(typeof showToast==='function') showToast('Reporting unavailable');
   });
   // populate results if last question
   if(idx===QUESTIONS.length-1)setTimeout(()=>populateResults(),200);
@@ -417,7 +426,7 @@ function populateResults(){
       else if(score===target) beatLine=`Tied with ${beat.challenger} at ${score}`;
       else beatLine=`${beat.challenger} leads ${target}–${score} — try again tomorrow`;
     } else {
-      beatLine=`Challenge from ${beat.challenger} complete`;
+      beatLine=`Score challenge from ${beat.challenger} complete`;
     }
     const mount=document.getElementById('akhbaarShareMount');
     if(mount){
@@ -461,6 +470,12 @@ function getAkhbaarShareStats(){
   const dateLabel=new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short'});
   const live=akhbaarIsLiveSet();
   const brand=live?'Aaj ka Akhbaar':'Sample practice';
+  const practiceUrl=`${location.origin}/?tab=akhbaar`;
+  const beatUrl=typeof buildBeatScoreLink==='function'
+    ? buildBeatScoreLink('akhbaar', score, {cat:'Akhbaar'})
+    : `${location.origin}/challenge/akhbaar?score=${score}&cat=Akhbaar&name=${encodeURIComponent(userProfile?.name||'Someone')}`;
+  // Sample: Demo-framed share OK; URL is home tab — never a live beat/challenge link
+  const shareUrl=live?beatUrl:practiceUrl;
   return typeof buildShareStats==='function'
     ? buildShareStats({
         scoreLine:`${score}/${total}`,
@@ -472,9 +487,7 @@ function getAkhbaarShareStats(){
         text: live
           ? `Aaj ke Akhbaar mein maine ${score}/${total} sahi jawab diye! Chaupaal pe milte hain.`
           : `I practiced Akhbaar (${score}/${total}). Sample set — try the live quiz when it’s up.`,
-        url: typeof buildBeatScoreLink==='function'
-          ? buildBeatScoreLink('akhbaar', score, {cat:'Akhbaar'})
-          : `${location.origin}${location.pathname}?challenge=${encodeURIComponent(userProfile?.name||'Someone')}&game=akhbaar&score=${score}`,
+        url: shareUrl,
       })
     : {
         scoreLine:`${score}/${total}`,
@@ -485,49 +498,82 @@ function getAkhbaarShareStats(){
         text: live
           ? `Aaj ke Akhbaar mein maine ${score}/${total} sahi jawab diye! Chaupaal pe milte hain.`
           : `I practiced Akhbaar (${score}/${total}).`,
+        url: shareUrl,
       };
 }
 
 function wireAkhbaarShare(){
   const mount=document.getElementById('akhbaarShareMount');
   if(!mount) return;
+  const live=akhbaarIsLiveSet();
+  const signedIn=typeof currentUser!=='undefined'&&!!currentUser;
   const shareStats=getAkhbaarShareStats();
   const cardHtml=typeof buildGameShareCard==='function'
     ? buildGameShareCard('akhbaar', shareStats)
     : '';
+  // Sample share policy: practice share OK with Demo framing; beat/challenge friends = live-only
   mount.innerHTML=`
     ${cardHtml}
+    ${!live?`<p class="akhbaar-share-note" style="font-size:12px;color:var(--muted);margin:8px 0 0;">Sample practice — sharing won’t claim a live leaderboard score.</p>`:''}
     <div class="game-result-actions akhbaar-share-actions" id="akhbaarShareActions">
-      <button type="button" class="game-result-btn game-result-btn--primary" data-akh-share="share">Share</button>
-      <button type="button" class="game-result-btn" data-akh-share="friend">Share with friend</button>
-      <button type="button" class="game-result-btn" data-akh-share="story">Post to story</button>
+      <button type="button" class="game-result-btn game-result-btn--primary" data-akh-share="share">${live?'Share score':'Share practice score'}</button>
+      <button type="button" class="game-result-btn" data-akh-share="challenge" ${live?'':'disabled'} title="${live?'':'Live Akhbaar set needed to challenge friends'}">Challenge a friend</button>
+      <button type="button" class="game-result-btn" data-akh-share="story">${live?'Post to story':'Post practice (story)'}</button>
     </div>`;
 
   const actions=mount.querySelector('#akhbaarShareActions');
   if(!actions) return;
 
-  actions.querySelector('[data-akh-share="share"]')?.addEventListener('click',()=>{
+  const needAuthForShare=(kind)=>{
+    if(signedIn) return false;
+    try{
+      sessionStorage.setItem('chaupaal_akhbaar_pending_share', kind||'share');
+    }catch(e){}
+    if(typeof ChaupaalReferrals?.stashPendingAction==='function') ChaupaalReferrals.stashPendingAction('akhbaar_share');
+    else if(typeof stashPendingAction==='function') stashPendingAction('akhbaar_share');
+    else try{sessionStorage.setItem('chaupaal_pending_action','akhbaar_share');}catch(e){}
+    if(typeof showToast==='function') showToast('Sign in to share your score');
+    if(typeof openAuthSheet==='function') openAuthSheet('login');
+    else if(typeof showAuth==='function') showAuth();
+    return true;
+  };
+
+  const runShare=()=>{
     try{if(typeof haptic==='function')haptic('light');}catch(e){}
     const card=mount.querySelector('.game-share-card');
     if(card&&typeof pulseGameEl==='function') pulseGameEl(card);
     if(typeof shareGameResult==='function') shareGameResult('akhbaar', shareStats);
-    else if(typeof openUnifiedShareSheet==='function') openUnifiedShareSheet({gameId:'akhbaar',title:'Share Akhbaar score',stats:shareStats});
+    else if(typeof openUnifiedShareSheet==='function') openUnifiedShareSheet({gameId:'akhbaar',title:live?'Share Akhbaar score':'Share practice score',stats:shareStats});
+  };
+
+  actions.querySelector('[data-akh-share="share"]')?.addEventListener('click',()=>{
+    if(needAuthForShare('share')) return;
+    runShare();
   });
 
-  actions.querySelector('[data-akh-share="friend"]')?.addEventListener('click',async()=>{
+  actions.querySelector('[data-akh-share="challenge"]')?.addEventListener('click',async()=>{
+    if(!live){
+      if(typeof showToast==='function') showToast('Live Akhbaar set needed to challenge friends');
+      return;
+    }
+    if(needAuthForShare('challenge')) return;
     if(typeof openFriendPickerSheet!=='function'){
-      if(typeof shareGameResult==='function') shareGameResult('akhbaar', shareStats);
+      runShare();
       return;
     }
     const friend=await openFriendPickerSheet({
-      title:'Share with a friend',
-      subtitle:'Send your Akhbaar score',
+      title:'Challenge a friend',
+      subtitle:'Send a beat-my-score link — not a live duel room',
     });
     if(!friend) return;
+    const beatUrl=typeof buildBeatScoreLink==='function'
+      ? buildBeatScoreLink('akhbaar', shareStats.score, {cat:'Akhbaar'})
+      : shareStats.url;
     const personalized={
       ...shareStats,
-      friendText:`Hey ${friend.name} — aaj ke Akhbaar mein maine ${shareStats.scoreLine} sahi kiye. Beat me on Chaupaal!`,
-      text:`Hey ${friend.name} — aaj ke Akhbaar mein maine ${shareStats.scoreLine} sahi kiye. Beat me on Chaupaal!`,
+      url:beatUrl,
+      friendText:`Hey ${friend.name} — I scored ${shareStats.scoreLine} on Aaj ka Akhbaar. Beat my score on Chaupaal!`,
+      text:`Hey ${friend.name} — I scored ${shareStats.scoreLine} on Aaj ka Akhbaar. Beat my score on Chaupaal!`,
     };
     if(typeof openFriendShareFollowup==='function'){
       await openFriendShareFollowup(friend,'akhbaar',personalized);
@@ -537,6 +583,7 @@ function wireAkhbaarShare(){
   });
 
   actions.querySelector('[data-akh-share="story"]')?.addEventListener('click',()=>{
+    if(needAuthForShare('story')) return;
     if(typeof postGameScoreStory==='function'){
       postGameScoreStory('akhbaar',{
         ...shareStats,
@@ -548,6 +595,12 @@ function wireAkhbaarShare(){
     }
   });
 }
+
+window.applyAkhbaarBeatBanner=applyAkhbaarBeatBanner;
+window.consumeAkhbaarBeatChallenge=consumeAkhbaarBeatChallenge;
+window.wireAkhbaarShare=wireAkhbaarShare;
+window.akhbaarIsLiveSet=akhbaarIsLiveSet;
+
 
 // Reel-build boundary (CONVENTIONS 4c) — question set comes from the network
 if (typeof safeFeature === 'function') buildAkhbaar = safeFeature('akhbaar_build', buildAkhbaar);

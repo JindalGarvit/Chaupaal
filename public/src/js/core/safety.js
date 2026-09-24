@@ -392,10 +392,14 @@
           const data = d.data() || {};
           return {
             uid: data.targetUid || d.id,
-            name: data.name || 'User',
+            name:
+              data.targetType === 'akhbaar_question'
+                ? data.name || 'Akhbaar question'
+                : data.name || 'User',
             username: data.username || '',
             reason: data.reason || data.reasonCode || '',
             flagId: data.flagId || null,
+            targetType: data.targetType || 'user',
             status: data.status || 'active',
           };
         })
@@ -940,6 +944,282 @@
     }
   }
 
+  /**
+   * Akhbaar A1 — report a quiz question (not a person).
+   * Writes user_flags (client create allowed) + private reported mirror.
+   * reportedUid sentinel `__akhbaar_question__` so withdraw_flag API can undo by flagId.
+   */
+  const AKHBAAR_FLAG_SENTINEL = '__akhbaar_question__';
+  const _akhbaarFlaggedSession = new Set();
+
+  function akhbaarQuestionKey(data, idx) {
+    const raw =
+      data?.id ||
+      data?.qid ||
+      data?.firestoreId ||
+      `${String(data?.category || 'q').slice(0, 24)}_${String(data?.q || '').slice(0, 48)}_${idx}`;
+    return String(raw)
+      .replace(/[^\w.-]+/g, '_')
+      .slice(0, 80);
+  }
+
+  async function reportAkhbaarQuestion(data, reasonOrCode, opts = {}) {
+    const idx = opts.idx != null ? opts.idx : 0;
+    const questionKey = akhbaarQuestionKey(data, idx);
+    if (_akhbaarFlaggedSession.has(questionKey)) {
+      if (typeof showToast === 'function') showToast('Already reported this question');
+      return { flagId: null, duplicate: true };
+    }
+
+    let reasonCode = 'custom';
+    let reasonLabel = String(reasonOrCode || 'Other');
+    let customText = opts.customText || '';
+    const match = REPORT_REASONS.find((r) => r.code === reasonOrCode || r.label === reasonOrCode);
+    if (match) {
+      reasonCode = match.code;
+      reasonLabel = match.label;
+    }
+    if (reasonCode === 'custom' && !customText) customText = reasonLabel;
+
+    if (!currentUser || !db) {
+      try {
+        sessionStorage.setItem(
+          'chaupaal_akhbaar_pending_flag',
+          JSON.stringify({
+            questionKey,
+            q: String(data?.q || '').slice(0, 280),
+            category: data?.category || '',
+            idx,
+            reasonCode,
+            customText: customText || null,
+            isSample: !!(data?.isSample || data?.isDemo || (typeof window !== 'undefined' && window.akhbaarLiveSet !== true)),
+          })
+        );
+      } catch (e) {}
+      if (typeof ChaupaalReferrals?.stashPendingAction === 'function') {
+        ChaupaalReferrals.stashPendingAction('akhbaar_flag');
+      } else if (typeof stashPendingAction === 'function') {
+        stashPendingAction('akhbaar_flag');
+      } else {
+        try {
+          sessionStorage.setItem('chaupaal_pending_action', 'akhbaar_flag');
+        } catch (e) {}
+      }
+      if (typeof showToast === 'function') showToast('Sign in to submit a report');
+      if (typeof openAuthSheet === 'function') openAuthSheet('login');
+      else if (typeof showAuth === 'function') showAuth();
+      return { flagId: null, needAuth: true };
+    }
+
+    const snippet = String(data?.q || opts.snippet || '').slice(0, 280);
+    const setDate = new Date().toISOString().slice(0, 10);
+    let flagId = null;
+    try {
+      const ref = await db.collection('user_flags').add({
+        reportedUid: AKHBAAR_FLAG_SENTINEL,
+        reporterUid: currentUser.uid,
+        reason: reasonLabel,
+        reasonCode,
+        customText: customText || null,
+        targetType: 'akhbaar_question',
+        postId: questionKey,
+        questionSnippet: snippet,
+        category: data?.category ? String(data.category).slice(0, 40) : null,
+        setDate,
+        isSample: !!(data?.isSample || data?.isDemo || window.akhbaarLiveSet !== true),
+        status: 'active',
+        ts: Date.now(),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      flagId = ref.id;
+      await db
+        .collection('users')
+        .doc(currentUser.uid)
+        .collection('reported')
+        .doc(`akhbaar_${questionKey}`.slice(0, 80))
+        .set(
+          {
+            targetUid: AKHBAAR_FLAG_SENTINEL,
+            name: 'Akhbaar question',
+            username: '',
+            reasonCode,
+            reason: reasonLabel,
+            customText: customText || null,
+            flagId,
+            targetType: 'akhbaar_question',
+            postId: questionKey,
+            status: 'active',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+    } catch (e) {
+      if (typeof showToast === 'function') showToast('Couldn’t submit report — try again');
+      return { flagId: null, error: true };
+    }
+
+    _akhbaarFlaggedSession.add(questionKey);
+    if (typeof addNotification === 'function') addNotification('system', '⚑', 'Report submitted for review.');
+
+    if (!opts.silent) {
+      const mirrorDocId = `akhbaar_${questionKey}`.slice(0, 80);
+      showSafetyUndo('Report submitted for review', async () => {
+        await withdrawReport(AKHBAAR_FLAG_SENTINEL, {
+          flagId,
+          name: 'Akhbaar question',
+          reason: 'mistake',
+          silent: true,
+          skipReason: true,
+        });
+        // Client mirror path (API also clears when flagId present)
+        if (db && currentUser) {
+          await db
+            .collection('users')
+            .doc(currentUser.uid)
+            .collection('reported')
+            .doc(mirrorDocId)
+            .set(
+              {
+                status: 'withdrawn',
+                withdrawReason: 'mistake',
+                withdrawnAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+              },
+              { merge: true }
+            )
+            .catch(() => {});
+        }
+        _akhbaarFlaggedSession.delete(questionKey);
+        if (typeof showToast === 'function') showToast('Report withdrawn');
+        if (typeof refreshSettingsSafetyLists === 'function') refreshSettingsSafetyLists();
+      });
+    }
+    return { flagId };
+  }
+
+  function openAkhbaarFlagSheet(data, opts = {}) {
+    const prevSheet = document.querySelector('.flag-sheet');
+    if (prevSheet) {
+      try {
+        if (typeof removeNavLayer === 'function') removeNavLayer(prevSheet);
+      } catch (e) {}
+      try {
+        prevSheet.remove();
+      } catch (e) {}
+    }
+    try {
+      document.querySelector('.flag-sheet-scrim')?.remove();
+    } catch (e) {}
+
+    const scrim = document.createElement('div');
+    scrim.className = 'flag-sheet-scrim';
+    scrim.dataset.navIgnore = '1';
+    const sheet = document.createElement('div');
+    sheet.className = 'flag-sheet';
+    sheet.dataset.navManaged = '1';
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-label', 'Report question');
+    const preview = String(data?.q || 'this question').slice(0, 100);
+    sheet.innerHTML = `
+      <div class="flag-sheet-handle" aria-hidden="true"></div>
+      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;margin-bottom:4px;">Report question</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">“${preview.replace(/</g, '')}${preview.length >= 100 ? '…' : ''}”</div>
+      ${REPORT_REASONS.map((r) => `<div class="flag-option" data-code="${r.code}">${r.label}</div>`).join('')}
+      <div id="flagCustomWrap" class="hidden" style="margin:8px 0 12px;">
+        <textarea id="flagCustomText" placeholder="Tell us what’s wrong…" style="width:100%;min-height:72px;border:2px solid var(--line);border-radius:12px;padding:10px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+        <button type="button" class="btn btn--primary btn--block" id="flagCustomSubmit" style="width:100%;margin-top:8px;">Submit report</button>
+      </div>
+      <button type="button" id="closeFlagSheet" data-overlay-dismiss style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;margin-top:8px;">Not now</button>
+    `;
+
+    const device = document.querySelector('.device');
+    if (!device) return;
+    device.appendChild(scrim);
+    device.appendChild(sheet);
+    requestAnimationFrame(() => {
+      scrim.classList.add('is-open');
+      sheet.classList.add('is-open');
+    });
+
+    let closed = false;
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      try {
+        if (typeof removeNavLayer === 'function') removeNavLayer(sheet);
+      } catch (e) {}
+      sheet.classList.remove('is-open');
+      scrim.classList.remove('is-open');
+      setTimeout(() => {
+        try {
+          sheet.remove();
+        } catch (e) {}
+        try {
+          scrim.remove();
+        } catch (e) {}
+      }, 200);
+    };
+
+    if (typeof pushNavLayer === 'function') pushNavLayer(sheet, close);
+    if (typeof enableSwipeDismiss === 'function') enableSwipeDismiss(sheet, close);
+    scrim.addEventListener('click', close);
+    sheet.querySelector('#closeFlagSheet')?.addEventListener('click', close);
+
+    sheet.querySelectorAll('[data-code]').forEach((el) => {
+      el.addEventListener('click', async () => {
+        const code = el.dataset.code;
+        if (code === 'custom') {
+          sheet.querySelector('#flagCustomWrap')?.classList.remove('hidden');
+          sheet.querySelector('#flagCustomText')?.focus();
+          return;
+        }
+        try {
+          await reportAkhbaarQuestion(data, code, opts);
+          close();
+        } catch (e) {
+          if (typeof showToast === 'function') showToast('Couldn’t submit report — try again');
+        }
+      });
+    });
+
+    sheet.querySelector('#flagCustomSubmit')?.addEventListener('click', async () => {
+      const text = sheet.querySelector('#flagCustomText')?.value?.trim();
+      if (!text) {
+        if (typeof showToast === 'function') showToast('Please enter a reason');
+        return;
+      }
+      try {
+        await reportAkhbaarQuestion(data, 'custom', { ...opts, customText: text });
+        close();
+      } catch (e) {
+        if (typeof showToast === 'function') showToast('Couldn’t submit report — try again');
+      }
+    });
+  }
+
+  async function resumeAkhbaarPendingFlag() {
+    let raw = '';
+    try {
+      raw = sessionStorage.getItem('chaupaal_akhbaar_pending_flag') || '';
+      sessionStorage.removeItem('chaupaal_akhbaar_pending_flag');
+    } catch (e) {}
+    if (!raw || !currentUser) return false;
+    let pending = null;
+    try {
+      pending = JSON.parse(raw);
+    } catch (e) {
+      return false;
+    }
+    if (!pending?.q) return false;
+    await reportAkhbaarQuestion(
+      { q: pending.q, category: pending.category, id: pending.questionKey, isSample: pending.isSample },
+      pending.reasonCode || 'custom',
+      { idx: pending.idx, customText: pending.customText || null }
+    );
+    return true;
+  }
+
   window.REPORT_REASONS = REPORT_REASONS;
   window.FLAG_REASONS = FLAG_REASONS;
   window.SAFETY_UNDO_REASONS = SAFETY_UNDO_REASONS;
@@ -948,6 +1228,9 @@
   window.flagUser = flagUser;
   window.withdrawReport = withdrawReport;
   window.openFlagSheet = openFlagSheet;
+  window.openAkhbaarFlagSheet = openAkhbaarFlagSheet;
+  window.reportAkhbaarQuestion = reportAkhbaarQuestion;
+  window.resumeAkhbaarPendingFlag = resumeAkhbaarPendingFlag;
   window.openContentMenu = openContentMenu;
   window.openBlockedUsersSheet = openBlockedUsersSheet;
   window.loadBlockedFromFirestore = loadBlockedFromFirestore;

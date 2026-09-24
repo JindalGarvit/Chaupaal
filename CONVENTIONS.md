@@ -55,7 +55,9 @@ Implementation lives primarily in:
 
 **Duniya soak:** Auth also fires when `db` not ready; signed-in without Firestore never paints guest SAMPLE; auth eagerly clears SAMPLE before reload; long-press binds full self tile (ring+name); `canPersist` uses `contentId` (not firestoreId-only).
 
-**Akhbaar A0 (truth):** `window.akhbaarLiveSet` from Firestore `daily_sets` (else Sample/Offline badge + “Sample practice” chrome). No authored “X% of players” proof UI (real aggregates = A3). Signed-in strips SAMPLE personal (Riya). No streak pre-bump / “Streak Kept” without save. Category filter empty + Clear/Back. SAMPLE bonus never fires live Taaza toast; flag hidden until A1. Surkhiya band labels softened (Highlights / Also worth a look).
+**Akhbaar A0 (truth):** `window.akhbaarLiveSet` from Firestore `daily_sets` (else Sample/Offline badge + “Sample practice” chrome). No authored “X% of players” proof UI (real aggregates = A3). Signed-in strips SAMPLE personal (Riya). No streak pre-bump / “Streak Kept” without save. Category filter empty + Clear/Back. SAMPLE bonus never fires live Taaza toast. Surkhiya band labels softened (Highlights / Also worth a look).
+
+**Akhbaar A1 (Khabar core):** Play loop solid (answer → reveal → summary → results). Flag → `openAkhbaarFlagSheet` / `reportAkhbaarQuestion` writes `user_flags` with `targetType:'akhbaar_question'`, sentinel `reportedUid:'__akhbaar_question__'`, + `users/{uid}/reported/akhbaar_*` mirror; Undo via `withdrawReport`+flagId. Soft-auth resume: `akhbaar_flag` / `akhbaar_share`. Share/beat: live uses `buildBeatScoreLink('akhbaar')` → `/challenge/akhbaar`; Sample allows Demo-framed share (home `?tab=akhbaar`) but disables Challenge-a-friend. Beat banner/copy = score challenge, not Muqabala room. Settings Reported lists content flags lightly as “Akhbaar question”.
 
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 

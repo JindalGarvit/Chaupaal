@@ -15,10 +15,14 @@ function checkViralLink(){
   const target=params.get('score');
   const game=gameFromPath||params.get('game')||'quiz';
   const gName=(typeof getGame==='function'&&getGame(game)?.name)||(game==='quiz'||game==='muqabala'?'Muqabala':game==='akhbaar'?'Akhbaar':game);
-  // Show guest / soft signup banner
+  const isAkhbaarBeat=game==='akhbaar';
+  // Show guest / soft signup banner — Akhbaar = score challenge (not a live Muqabala room)
   document.querySelector('.guest-banner[data-viral-challenge]')?.remove();
   const banner=document.createElement('div');banner.className='guest-banner';banner.dataset.viralChallenge='1';
-  banner.innerHTML=`<div><strong>${String(challenger).replace(/</g,'')}</strong> challenged you! Beat their score${target!=null?` of ${target}`:''} on ${gName}</div><button class="guest-signup-btn" id="guestSignupBtn" type="button">${typeof currentUser!=='undefined'&&currentUser?'Keep playing':'Sign up to keep score!'}</button>`;
+  const viralCopy=isAkhbaarBeat
+    ?`<strong>${String(challenger).replace(/</g,'')}</strong> shared a score${target!=null?` of ${target}`:''} on Akhbaar — try to beat it`
+    :`<strong>${String(challenger).replace(/</g,'')}</strong> challenged you! Beat their score${target!=null?` of ${target}`:''} on ${gName}`;
+  banner.innerHTML=`<div>${viralCopy}</div><button class="guest-signup-btn" id="guestSignupBtn" type="button">${typeof currentUser!=='undefined'&&currentUser?'Keep playing':'Sign up to keep score!'}</button>`;
   document.getElementById('topbar')?.after(banner);
   document.getElementById('guestSignupBtn')?.addEventListener('click',()=>{
     banner.remove();

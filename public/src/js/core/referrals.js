@@ -271,6 +271,30 @@
         }, 350);
         return true;
       }
+      // A1: Akhbaar flag → submit pending question report
+      if (action === 'akhbaar_flag') {
+        if (typeof showTab === 'function') showTab('akhbaar');
+        setTimeout(() => {
+          if (typeof resumeAkhbaarPendingFlag === 'function') resumeAkhbaarPendingFlag();
+        }, 350);
+        return true;
+      }
+      // A1: Akhbaar share → results share sheet (pending kind in session)
+      if (action === 'akhbaar_share') {
+        if (typeof showTab === 'function') showTab('akhbaar');
+        setTimeout(() => {
+          if (typeof wireAkhbaarShare === 'function') wireAkhbaarShare();
+          let kind = 'share';
+          try {
+            kind = sessionStorage.getItem('chaupaal_akhbaar_pending_share') || 'share';
+            sessionStorage.removeItem('chaupaal_akhbaar_pending_share');
+          } catch (e) {}
+          const btn = document.querySelector(`#akhbaarShareActions [data-akh-share="${kind}"]`);
+          if (btn && !btn.disabled) btn.click();
+          else if (typeof showToast === 'function') showToast('You’re signed in — share from results when ready');
+        }, 400);
+        return true;
+      }
     } catch (e) {}
     return false;
   }
