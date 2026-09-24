@@ -111,21 +111,25 @@ function hasUsableCatCache(doc, field){
 }
 
 function renderCatPausedEmpty(body, catName, kind){
+  const kindLabel = kind==='mcq'?'Sawaal':'Khabar';
+  const message =
+    'Offline — no scheduled cache for this category yet. Not live AI news.';
   if(typeof renderEmptyState==='function'){
     renderEmptyState(body, {
       icon:'📰',
-      title:`${kind==='mcq'?'Sawaal':'Khabar'} for ${catName}`,
-      message:'Check back later — fresh content isn’t generating right now.',
+      title:`${kindLabel} for ${catName}`,
+      message,
     });
     return;
   }
   body.innerHTML=`
-    <div style="padding:28px 20px;text-align:center;color:var(--muted);line-height:1.5;">
+    <div style="padding:28px 20px;text-align:center;color:var(--muted);line-height:1.5;" data-cat-offline="1">
       <div style="font-size:28px;margin-bottom:10px;">📰</div>
       <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;color:var(--ink);margin-bottom:6px;">
-        ${kind==='mcq'?'Sawaal':'Khabar'} for ${catName}
+        ${kindLabel} for ${catName}
       </div>
-      <div style="font-size:13px;">Check back later — fresh content isn't generating right now.</div>
+      <div style="font-size:13px;">${message}</div>
+      <div style="font-size:11px;margin-top:8px;opacity:.85;">Offline</div>
     </div>`;
 }
 

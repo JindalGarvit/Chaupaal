@@ -71,6 +71,12 @@ assert(/maxDuration:\s*120/.test(sched), 'scheduler maxDuration 120');
 const enrich = read('server-lib/ai-enrichment.js');
 assert(/P6_does_not_consume_content_vectors/.test(enrich), 'content embeddings skipped documented');
 assert(/isCategoryCronPaused/.test(read('server-lib/ai-config.js')), 'category cron env gate');
+const vercelJson = JSON.parse(read('vercel.json'));
+assert(
+  (vercelJson.crons || []).some((c) => c.path === '/api/refresh-category-cache'),
+  'vercel.json category cache cron'
+);
+assert(/skipPayload\('CATEGORY_CRON_PAUSED'\)/.test(read('api/refresh-category-cache.js')), 'paused cron 200 no-op');
 
 console.log('\nP9 dogfood static checks passed.');
 console.log('api/*.js =', apiFiles.length, apiFiles.join(', '));

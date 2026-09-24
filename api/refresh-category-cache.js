@@ -1,13 +1,19 @@
 /**
- * Vercel Cron: pre-generate Khabar (news) + Sawaal (mcq) for all seeded categories.
- * Schedule: every 6 hours (see vercel.json). Auth: Bearer CRON_SECRET.
+ * Vercel Cron: pre-generate Khabar (news) + Sawaal (mcq) for seeded categories.
+ * Schedule: daily Hobby-safe `0 2 * * *` (~07:30 IST ±59m) — see vercel.json.
+ * Auth: Bearer CRON_SECRET (Vercel Cron / manual).
  *
- * Env:
- *   ANTHROPIC_API_KEY
+ * Env (no invented keys — see .env.example):
  *   CRON_SECRET
- *   FIREBASE_SERVICE_ACCOUNT_JSON  — stringified service-account JSON
- *   CAT_CACHE_CITIES — optional comma-separated cities (max 8) for geo-scoped shareable docs
- *   CAT_CACHE_INDUSTRIES — optional comma-separated industries (max 6)
+ *   FIREBASE_SERVICE_ACCOUNT_JSON
+ *   AI_FEATURES_ENABLED=true          master LLM gate
+ *   CATEGORY_CRON_PAUSED=false        unpause (default paused)
+ *   AI_DAILY_CALL_CAP                 shared with enrichment
+ *   AI_PROVIDER + provider keys       anthropic | openai-compatible | …
+ *   CAT_CACHE_CITIES / CAT_CACHE_INDUSTRIES  optional (max 8 / 6)
+ *
+ * Pause / AI-off / budget → 200 no-op (no spend, prior caches kept).
+ * Do not raise maxDuration unless inspect proves duration failure.
  */
 const admin = require('firebase-admin');
 const {
@@ -23,13 +29,11 @@ const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../ser
 const { requireCronSecret } = require('../server-lib/auth');
 const { asInt } = require('../server-lib/validate');
 
-// Flip via env CATEGORY_CRON_PAUSED=false when ready (default paused — P8 verdict).
+// Flip via env CATEGORY_CRON_PAUSED=false when ready (default paused — P8 / I0).
 // Also gated by master AI_FEATURES_ENABLED via callAI(), plus AI_DAILY_CALL_CAP budget.
 const { isAiFeaturesEnabled, isCategoryCronPaused, AI_DAILY_CALL_CAP } = require('../server-lib/ai-config');
-const CATEGORY_CRON_PAUSED = isCategoryCronPaused();
 
-// Align with client CAT_CACHE_TTL_MS / server-lib/cat-cache-keys TTL_MS.
-// Hobby Vercel: daily cron. Pro/external: change schedule to 0 */6 * * * and set to 6h.
+// Align with client CAT_CACHE_TTL_MS / server-lib/cat-cache-keys TTL_MS (24h Hobby).
 const REFRESH_MS = TTL_MS || 24 * 60 * 60 * 1000;
 const FRESH_SKEW_MS = 30 * 60 * 1000; // skip if newer than interval - 30m
 
@@ -85,16 +89,25 @@ function initAdmin() {
   return admin.firestore();
 }
 
-function authorize(req) {
-  // kept for clarity — prefer requireCronSecret in handler
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  const header = req.headers.authorization || '';
-  return header === `Bearer ${secret}`;
-}
-
 function isFresh(data) {
   return isCatCacheFresh(data, { ttlMs: REFRESH_MS, skewMs: FRESH_SKEW_MS });
+}
+
+function skipPayload(reason, extra) {
+  return Object.assign(
+    {
+      ok: true,
+      skipped: true,
+      reason,
+      paused: true,
+      cacheVersion: CACHE_VERSION,
+      istDay: istDayKey(),
+      refreshedAt: new Date().toISOString(),
+      results: [],
+      stats: { updated: 0, failed: 0, deferred: 0, skipped: 0 },
+    },
+    extra || {}
+  );
 }
 
 /**
@@ -178,13 +191,23 @@ function buildRefreshJobs(categories) {
   return jobs;
 }
 
-async function runRefresh({ offset = 0, limit = SCHEDULED_CATEGORIES.length } = {}) {
-  const db = initAdmin();
+async function runRefresh({ offset = 0, limit = SCHEDULED_CATEGORIES.length, db: dbIn } = {}) {
+  const db = dbIn || initAdmin();
   const jobs = buildRefreshJobs(SCHEDULED_CATEGORIES);
   const slice = jobs.slice(offset, offset + limit);
   const results = [];
-  // Leave buffer before Vercel kills the function (~300s max)
+  // Leave buffer before Vercel kills the function (~300s max — do not raise without evidence)
   const deadline = Date.now() + 270000;
+
+  let loadBudget = null;
+  let budgetAllows = null;
+  try {
+    const enrich = require('../server-lib/ai-enrichment');
+    loadBudget = enrich.loadBudget;
+    budgetAllows = enrich.budgetAllows;
+  } catch (e) {
+    console.warn('[refresh-category-cache] budget helpers unavailable', e?.message || e);
+  }
 
   for (const job of slice) {
     if (Date.now() > deadline) {
@@ -195,9 +218,28 @@ async function runRefresh({ offset = 0, limit = SCHEDULED_CATEGORIES.length } = 
       });
       break;
     }
+    // Mid-run budget stop — prior successful writes stay intact
+    if (loadBudget && budgetAllows) {
+      try {
+        const budget = await loadBudget(db);
+        if (!budgetAllows(budget) || budget.calls >= AI_DAILY_CALL_CAP) {
+          results.push({
+            category: job.catName,
+            status: 'deferred',
+            error: 'AI_DAILY_CALL_CAP — stopping mid-run; prior caches kept',
+            calls: budget.calls,
+            cap: AI_DAILY_CALL_CAP,
+          });
+          break;
+        }
+      } catch (e) {
+        console.warn('[refresh-category-cache] mid-run budget', e?.message || e);
+      }
+    }
     try {
       results.push(await refreshOne(db, job.catName, job.scope));
     } catch (err) {
+      // Partial failure: continue other categories; never wipe good docs
       results.push({ category: job.catName, status: 'error', error: err.message });
     }
   }
@@ -219,40 +261,35 @@ module.exports = async function handler(req, res) {
   // Vercel Cron uses GET; allow POST for manual trigger
   if (!requireMethod(req, res, ['GET', 'POST'])) return;
 
-  if (CATEGORY_CRON_PAUSED) {
-    return sendError(
-      res,
-      503,
-      'CRON_PAUSED',
-      'Category cache refresh is paused — no Anthropic spend until explicitly re-enabled',
-      { paused: true }
-    );
+  if (!requireCronSecret(req, res)) return;
+
+  // Clean no-ops (200) so cron does not error-loop / retry-spam
+  if (isCategoryCronPaused()) {
+    console.log('[refresh-category-cache] no-op: CATEGORY_CRON_PAUSED (default)');
+    return sendSuccess(res, skipPayload('CATEGORY_CRON_PAUSED'));
   }
 
   if (!isAiFeaturesEnabled()) {
-    return sendError(
-      res,
-      503,
-      'AI_DISABLED',
-      'Master AI kill-switch is off (set AI_FEATURES_ENABLED=true)',
-      { paused: true }
-    );
+    console.log('[refresh-category-cache] no-op: AI_FEATURES_ENABLED off');
+    return sendSuccess(res, skipPayload('AI_DISABLED'));
   }
 
-  if (!requireCronSecret(req, res)) return;
+  let db;
+  try {
+    db = initAdmin();
+  } catch (err) {
+    return sendError(res, 500, 'FIREBASE_CONFIG', err.message || 'Firebase init failed');
+  }
 
   // Shared daily call budget with enrichment jobs (P8)
   try {
     const { loadBudget, budgetAllows } = require('../server-lib/ai-enrichment');
-    const dbBudget = initAdmin();
-    const budget = await loadBudget(dbBudget);
+    const budget = await loadBudget(db);
     if (!budgetAllows(budget) || budget.calls >= AI_DAILY_CALL_CAP) {
-      return sendError(
+      console.log('[refresh-category-cache] no-op: AI_DAILY_CALL_CAP', budget.calls, '/', AI_DAILY_CALL_CAP);
+      return sendSuccess(
         res,
-        503,
-        'AI_BUDGET',
-        'Daily AI call cap reached — category cron deferred',
-        { paused: true, calls: budget.calls, cap: AI_DAILY_CALL_CAP }
+        skipPayload('AI_BUDGET', { calls: budget.calls, cap: AI_DAILY_CALL_CAP })
       );
     }
   } catch (e) {
@@ -280,11 +317,13 @@ module.exports = async function handler(req, res) {
         SCHEDULED_CATEGORIES.length;
     }
 
-    const summary = await runRefresh({ offset, limit });
+    const summary = await runRefresh({ offset, limit, db });
     const failed = (summary.results || []).filter((r) => r.status === 'error').length;
     const updated = (summary.results || []).filter((r) => r.status === 'updated').length;
     const deferred = (summary.results || []).filter((r) => r.status === 'deferred').length;
     const data = {
+      ok: true,
+      skipped: false,
       cacheVersion: summary.cacheVersion,
       istDay: summary.istDay,
       refreshedAt: summary.refreshedAt,
@@ -298,14 +337,20 @@ module.exports = async function handler(req, res) {
         failed,
         deferred,
         skipped: (summary.results || []).filter((r) => r.status === 'skipped_fresh').length,
+        empty: (summary.results || []).filter((r) => r.status === 'empty').length,
       },
     };
-    const ok = updated > 0 || (failed === 0 && deferred === 0);
-    return sendSuccess(res, data, { status: failed && !updated ? 502 : 200, meta: { ok } });
+    // Partial failures still 200 when anything updated or only skips — prior caches intact
+    const status = failed && !updated && deferred === 0 ? 502 : 200;
+    return sendSuccess(res, data, { status, meta: { ok: status === 200 } });
   } catch (err) {
     return sendError(res, 500, 'REFRESH_FAILED', err.message || 'Refresh failed');
   }
 };
 
-// Pro/Fluid: batch can take several minutes on a cold cache
+module.exports.runRefresh = runRefresh;
+module.exports.SCHEDULED_CATEGORIES = SCHEDULED_CATEGORIES;
+module.exports.skipPayload = skipPayload;
+
+// Pro/Fluid: batch can take several minutes on a cold cache — leave as configured in vercel.json
 module.exports.config = { maxDuration: 300 };

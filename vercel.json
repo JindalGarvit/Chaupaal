@@ -99,6 +99,10 @@
     {
       "path": "/api/chaupaal-scheduler",
       "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/refresh-category-cache",
+      "schedule": "0 2 * * *"
     }
   ]
 }
