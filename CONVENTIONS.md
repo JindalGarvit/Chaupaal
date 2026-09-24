@@ -91,7 +91,11 @@ Implementation lives primarily in:
 
 **Infra I2 (content embeddings):** Public `duniya`/`peepal` `contentEmbedding` via enrichment; `rankContentItems` / Mashhoor / Prasidha / `rank_content` consume cosine when present.
 
-**Infra I3 (budget + env matrix):** Embed sweeps share `AI_DAILY_CALL_CAP` + `AI_JOBS_PAUSED`; soft `deadlineMs` mid-job stop; operator env matrix in `.env.example`. Residual: dogfood+soak (I4).
+**Infra I3 (budget + env matrix):** Embed sweeps share `AI_DAILY_CALL_CAP` + `AI_JOBS_PAUSED`; soft `deadlineMs` mid-job stop; operator env matrix in `.env.example`.
+
+**Infra I4 (dogfood + soak):** Close verified — category cron, vector people, content embeds + rank, budgeted jobs/env. api=12. External residuals only: paid ANN at massive scale; continuous legacy content backfill; Pro sub-daily cron / maxDuration raise without inspect evidence.
+
+**Infra complete (I0–I4).** Next arc = planning MCQs.
 
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
@@ -283,7 +287,7 @@ Enforcement is **ON** for Firestore / RTDB (and Storage if enabled). Client uses
 - Cache: `topicLabel.contentHash` + `LABEL_VERSION`; budget: `chaupaalMeta/aiBudget` + `AI_DAILY_CALL_CAP` + `AI_JOBS_PAUSED`. Profile + content embeds **share the same daily cap** (bump per embed); mid-cap / soft duration stop holds cursors (partial progress kept). Skip when `AI_JOBS_PAUSED` or `embed_keys_missing`.
 - Privacy: `redactForPrompt`; no journal/DM/search/contacts; personalization opt-out excluded; teens = heuristic-only profile enrich, no dating-intent inference; prohibited label blocklist.
 - **Env matrix (Infra I3):** `.env.example` operator unpause block + `server-lib/ai-config.js` header. Keys: `AI_*`, `EMBED_*` / `GEMINI_API_KEY`, `CATEGORY_CRON_PAUSED`, `CHAUPAAL_RETRIEVAL_BACKEND`, `CRON_SECRET`. Crons staggered: category `0 2 * * *`, scheduler `0 15 * * *`. Scheduler passes `deadlineMs` into `runAiEnrichmentBatch`; response includes `aiEnrichment.ops` + `timing` (ops-only counts).
-- **Category cron (Infra I0–I1 cron):** `vercel.json` schedules `/api/refresh-category-cache` daily `0 2 * * *` (~07:30 IST ±59m Hobby). Default **paused**. Unpause: `CATEGORY_CRON_PAUSED=false` + `AI_FEATURES_ENABLED=true` + `AI_JOBS_PAUSED` off + provider key + `CRON_SECRET` + Firebase SA. Pause / AI-off / budget → **200 no-op**; cron **bumps** `aiBudget` per generate; mid-run cap stops; partial field writes never wipe the other side; default limit = all jobs (scopes included). Client: cold → Offline (not live AI); paused path only serves `webGrounded` v2 docs. Residuals: dogfood+soak (I4), sub-daily cron (Pro), maxDuration raise.
+- **Category cron (Infra I0–I1 cron):** `vercel.json` schedules `/api/refresh-category-cache` daily `0 2 * * *` (~07:30 IST ±59m Hobby). Default **paused**. Unpause: `CATEGORY_CRON_PAUSED=false` + `AI_FEATURES_ENABLED=true` + `AI_JOBS_PAUSED` off + provider key + `CRON_SECRET` + Firebase SA. Pause / AI-off / budget → **200 no-op**; cron **bumps** `aiBudget` per generate; mid-run cap stops; partial field writes never wipe the other side; default limit = all jobs (scopes included). Client: cold → Offline (not live AI); paused path only serves `webGrounded` v2 docs. External residuals: sub-daily cron (Pro), maxDuration raise (inspect-only), paid ANN at scale, full legacy embed backfill.
 - **People vector retrieval (Infra I1 vector):** `CHAUPAAL_RETRIEVAL_BACKEND=vector-index` → pool-prefilter cosine on `profileEmbedding` (see 11e). Default remains `firestore-shards`.
 - **Content embeddings (Infra I2):** see 11e / jobs above — no longer permanently skipped.
 - No user-facing AI dashboard (10B). Env matrix in `.env.example`.
