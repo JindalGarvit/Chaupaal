@@ -368,7 +368,7 @@
       goAuth('story');
     });
     if (typeof onLongPress === 'function') {
-      onLongPress(selfEl.querySelector('.duniya-story-ring-wrap') || selfEl, () => {
+      onLongPress(selfEl, () => {
         selfEl.dataset.suppressClick = '1';
         goAuth('post');
       }, { delayMs: 480 });
@@ -502,20 +502,21 @@
         if (!reducedMotion()) selfEl.classList.add('is-pressing');
         setTimeout(() => selfEl.classList.remove('is-pressing'), 220);
       };
-      const openPost = () => {
+      const openPost = (e) => {
+        if (e?.target?.closest?.('[data-add]')) return;
         selfEl.dataset.suppressClick = '1';
         armLongPress();
         if (typeof setDuniyaMode === 'function') {
           try {
             setDuniyaMode('vishwa');
-          } catch (e) {}
+          } catch (err) {}
         }
         if (typeof openDuniyaPostSheet === 'function') openDuniyaPostSheet('post');
         else if (typeof DuniyaCompose?.open === 'function') DuniyaCompose.open({ mode: 'media' });
       };
-      // Long-press self ring → create post (not story). Bind wrap so tap/hold share the same hit target.
+      // Long-press entire self tile (ring + name) → create post — not story (soak)
       if (typeof onLongPress === 'function') {
-        onLongPress(selfEl.querySelector('.duniya-story-ring-wrap') || selfEl, openPost, { delayMs: 480 });
+        onLongPress(selfEl, openPost, { delayMs: 480 });
       }
       selfEl.querySelector('[data-add]')?.addEventListener('click', (e) => {
         e.preventDefault();

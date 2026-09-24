@@ -359,6 +359,11 @@ function initDuniya(){
     if(typeof renderSkeleton==='function'&&feed) renderSkeleton(feed,{variant:'feed',count:2});
     else if(feed) feed.innerHTML='<div class="discovery-loading" style="padding:16px;text-align:center;">Loading Duniya…</div>';
     loadDuniyaPage({reset:true}).then(()=>renderDuniyaFeed());
+  } else if(duniyaIsSignedIn()){
+    // Signed-in but Firestore client not ready — never paint guest SAMPLE as “live”
+    const feed=document.getElementById('duniyaFeed');
+    if(typeof renderSkeleton==='function'&&feed) renderSkeleton(feed,{variant:'feed',count:2});
+    else if(feed) feed.innerHTML='<div class="discovery-loading" style="padding:16px;text-align:center;">Loading Duniya…</div>';
   } else {
     applyDuniyaLabeledSamples({fallback:false});
     renderDuniyaFeed();
@@ -373,25 +378,40 @@ function initDuniya(){
   // Chaupaal search lives under Peepal morph #5 — no Duniya top search bar.
 }
 
-// Guest → signed-in while already on Duniya: clear SAMPLE + refresh ring (D5)
+// Guest → signed-in while already on Duniya: clear SAMPLE + refresh ring (D5/soak)
 document.addEventListener('chaupaal:auth', () => {
   try {
     if (!duniyaIsSignedIn()) return;
     const screen = document.getElementById('duniyaScreen');
     if (!screen) return;
-    if (db && !duniyaLiveMode) {
+    // Eagerly drop guest SAMPLE so slow mobile never looks “still demo after login”
+    if ((duniyaPosts || []).some((p) => duniyaIsDemoPost(p)) || !duniyaLiveMode) {
+      duniyaPosts = [];
+      clearDuniyaDemoFlags();
+      duniyaOfflineFromCache = false;
+      const feed = document.getElementById('duniyaFeed');
+      if (feed && !feed.classList.contains('hidden')) {
+        if (typeof renderSkeleton === 'function') renderSkeleton(feed, { variant: 'feed', count: 2 });
+        else feed.innerHTML = '<div class="discovery-loading" style="padding:16px;text-align:center;">Loading Duniya…</div>';
+      }
+    }
+    const reload = () => {
+      if (!db) return;
       loadDuniyaPage({ reset: true }).then(() => {
         renderDuniyaFeed();
-        if (typeof setDuniyaMode === 'function') {
-          const mode = document.getElementById('panel-duniya')?.classList.contains('is-lehar')
-            ? 'lehar'
-            : document.getElementById('panel-duniya')?.classList.contains('is-prasidha')
-              ? 'prasidha'
-              : 'vishwa';
-          if (mode === 'lehar' && typeof renderLeharFeed === 'function') renderLeharFeed();
-          if (mode === 'prasidha' && typeof renderPrasidhaFeed === 'function') renderPrasidhaFeed({ reset: true, force: true });
+        const panel = document.getElementById('panel-duniya') || document.getElementById('duniyaScreen');
+        if (panel?.classList.contains('is-lehar') && typeof renderLeharFeed === 'function') renderLeharFeed();
+        if (panel?.classList.contains('is-prasidha') && typeof renderPrasidhaFeed === 'function') {
+          renderPrasidhaFeed({ reset: true, force: true });
         }
       });
+    };
+    if (db) reload();
+    else {
+      // db may arrive moments later — retry once
+      setTimeout(() => {
+        if (db && duniyaIsSignedIn() && !duniyaLiveMode) reload();
+      }, 600);
     }
     renderDuniyaStories();
   } catch (e) {}

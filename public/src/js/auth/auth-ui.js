@@ -65,6 +65,10 @@ if (auth) {
     currentUser = user;
     if (!db) {
       updateProfileBtn();
+      // Still notify surfaces (Duniya clears SAMPLE) — reload when db arrives
+      try {
+        document.dispatchEvent(new CustomEvent('chaupaal:auth', { detail: { uid: user.uid, dbReady: false } }));
+      } catch (e) {}
       return;
     }
     const s = await db.collection('users').doc(user.uid).get();

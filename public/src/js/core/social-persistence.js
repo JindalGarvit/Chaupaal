@@ -27,6 +27,7 @@
 
   function canPersist(collection, content) {
     if (content && (content.isSample || content.isDemo)) return false;
+    const id = contentId(content);
     return !!(
       validCollection(collection) &&
       typeof db !== 'undefined' &&
@@ -34,7 +35,8 @@
       typeof currentUser !== 'undefined' &&
       currentUser &&
       content &&
-      content.firestoreId
+      id &&
+      !/^d[1-5]$/.test(String(id))
     );
   }
 

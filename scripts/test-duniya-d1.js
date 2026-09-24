@@ -26,6 +26,7 @@ assert(/renderGuestStrip/.test(story), 'guest self ring');
 assert(/data-self="1"/.test(story), 'self always first');
 assert(/!s\.isSample && !s\.isDemo/.test(story), 'no SAMPLE authors in live tray');
 assert(/openDuniyaPostSheet\(['"]post['"]\)/.test(story), 'long-press → post');
+assert(/onLongPress\(selfEl/.test(story), 'long-press binds full self tile');
 assert(/delayMs:\s*480/.test(story), 'long-press delay');
 assert(/suppressClick/.test(story), 'suppress click after long-press');
 assert(/data-add/.test(story) && /startCreate\(\)/.test(story), '+ badge → story create');

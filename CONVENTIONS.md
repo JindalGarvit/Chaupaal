@@ -53,6 +53,8 @@ Implementation lives primarily in:
 
 **Duniya D5 (arc dogfood):** Auth success dispatches `chaupaal:auth` → Duniya reloads live feed (clears guest SAMPLE) + story ring. Morph Create post|story soft-auth via `openDuniyaPostSheet` (stash resume). `/story/d1–d5` Demo soft-fail. Boosts/reel pipeline/close-friends audience deferred.
 
+**Duniya soak:** Auth also fires when `db` not ready; signed-in without Firestore never paints guest SAMPLE; auth eagerly clears SAMPLE before reload; long-press binds full self tile (ring+name); `canPersist` uses `contentId` (not firestoreId-only).
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.
