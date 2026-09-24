@@ -126,18 +126,19 @@
       console.warn('[baithak-wish]', e?.message || e);
     }
 
-    // Fallback: locate existing chat or stub
+    // Fallback: locate existing live chat only — never SAMPLE_CHATS for signed-in (Trust T1)
     try {
       const chats =
-        (typeof baithakChats !== 'undefined' && Array.isArray(baithakChats) && baithakChats) ||
-        (typeof SAMPLE_CHATS !== 'undefined' && SAMPLE_CHATS) ||
-        [];
+        typeof baithakChats !== 'undefined' && Array.isArray(baithakChats) ? baithakChats : [];
       let chat = chats.find(
         (c) =>
-          c.uid === uid ||
-          c.peerUid === uid ||
-          c.otherUid === uid ||
-          (Array.isArray(c.participants) && c.participants.includes(uid))
+          c &&
+          !c.isSample &&
+          !c.isDemo &&
+          (c.uid === uid ||
+            c.peerUid === uid ||
+            c.otherUid === uid ||
+            (Array.isArray(c.participants) && c.participants.includes(uid)))
       );
       if (!chat) {
         const chatId =

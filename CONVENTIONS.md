@@ -77,6 +77,8 @@ Implementation lives primarily in:
 
 **Trust T0 (honesty sweep):** `PEEPAL_SEED_CONTENT_ENABLED=false` — signed-in Peepal never seeds/shows `isSeedContent`; guest SAMPLE_PEEPAL labeled Demo. `toastSoon` → honest “isn’t available” (no Coming soon spam). Challenge AI chip disabled when AI off. Onboarding duel no longer writes SAMPLE_STORIES/CHATS while signed-in.
 
+**Trust T1 (dogfood + soak):** Verified T0 holds across Peepal/Duniya/Baithak/Akhbaar/Khoj. Soak fixes: universal search offline path guest-only SAMPLE; Baithak wish never falls back to `SAMPLE_CHATS` when signed-in. Arc complete — residuals below.
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.

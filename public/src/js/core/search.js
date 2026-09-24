@@ -144,6 +144,8 @@
     }
 
     if (!db) {
+      // Offline / no Firestore: guest Demo search only — never pad signed-in with SAMPLE people
+      if (typeof currentUser !== 'undefined' && currentUser) return [];
       const pool = typeof SAMPLE_DISCOVERY_POOL !== 'undefined' ? SAMPLE_DISCOVERY_POOL : [];
       return pool
         .filter((u) => {
@@ -156,7 +158,9 @@
           return un.includes(q) || nm.includes(q);
         })
         .map((u) => {
-          const row = mapUserResult(u.uid, u);
+          const row = mapUserResult(u.uid, { ...u, isSample: true, isDemo: true });
+          row.isSample = true;
+          row.isDemo = true;
           const uname = String(row.username || '').toLowerCase();
           const dname = String(row.name || '').toLowerCase();
           let score = 0;
