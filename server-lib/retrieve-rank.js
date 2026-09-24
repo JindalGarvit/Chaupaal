@@ -7,16 +7,21 @@
  *   rankContentItems({ surface, items, model, opts })
  *   refreshCandidatePools(db, admin, opts)
  *
- * Backends:
- *   firestore-shards — shipped (candidatePools/*)
- *   vector-index — stub only (documented for later swap)
+ * Backends (CHAUPAAL_RETRIEVAL_BACKEND):
+ *   firestore-shards — default; candidatePools/* merge + hydrate
+ *   vector-index — people only: pool prefilter (bounded) → cosine on
+ *     users.profileEmbedding → top-K. No full collection scan.
+ *     Miss / error / empty → fall through to firestore-shards.
+ *     Content embeddings = Infra I2 (not this backend).
+ * External vector SaaS (Pinecone/etc.) only if env already configured —
+ * v1 is in-process cosine; swap stays behind the same env flag.
  *
  * No LLM in scoring (6A). P5 model via getUserModel only.
  */
 'use strict';
 
 const { getUserModel } = require('./user-model');
-const { computeSignalScores } = require('./matchmaking');
+const { computeSignalScores, cosineSimilarity } = require('./matchmaking');
 const {
   defaultWeights,
   normalizeWeights,
@@ -39,6 +44,11 @@ const PEOPLE_RETRIEVE_DEFAULT = 120;
 const EXPLORATION_RATIO = 0.18; // ~18% exploration / fresh / new-author
 const NEW_AUTHOR_FLOOR = 0.08; // visibility floor boost
 const COLD_START_EXPLORATION = 0.35;
+
+/** Hobby caps for vector-index (pool prefilter → hydrate → cosine). */
+const VECTOR_POOL_IDS_MAX = 12;
+const VECTOR_PREFILTER_CAP = 96;
+const VECTOR_HYDRATE_CAP = 80;
 
 /** Extra model feature weights on top of the 8 discovery signals (sum ~0.35). */
 const MODEL_FEATURE_WEIGHTS = {
@@ -216,16 +226,215 @@ async function writePoolShard(db, id, payload, FieldValue) {
 }
 
 /**
- * Vector-index stub — swap CHAUPAAL_RETRIEVAL_BACKEND=vector-index later.
- * Returns null so callers fall through to firestore-shards / legacy.
+ * Normalize profileEmbedding to a numeric vector (array or { vector }).
  */
-async function retrieveViaVectorIndex(_args) {
-  return {
-    backend: 'vector-index',
-    implemented: false,
-    candidates: [],
-    note: 'Stub only. Wire Pinecone/Vertex/Firestore Vector later; same retrieveCandidates contract.',
-  };
+function profileEmbeddingVector(userOrEmb) {
+  if (!userOrEmb) return null;
+  if (Array.isArray(userOrEmb)) return userOrEmb.length ? userOrEmb : null;
+  if (Array.isArray(userOrEmb.vector)) return userOrEmb.vector.length ? userOrEmb.vector : null;
+  const pe = userOrEmb.profileEmbedding;
+  if (Array.isArray(pe)) return pe.length ? pe : null;
+  if (Array.isArray(pe?.vector)) return pe.vector.length ? pe.vector : null;
+  return null;
+}
+
+function peoplePoolIdsForViewer({ model, plan, viewer }) {
+  const poolIds = [];
+  const topics = topTopicKeys(model, 4);
+  const city = slug(plan?.hardFilters?.city || cityOf(viewer) || '');
+  const intent = slug(plan?.searchIntent || intentBucketOf(viewer) || 'other');
+  const pType = normalizeType(viewer);
+
+  poolIds.push(poolDocId(['people', 'active', '0']));
+  poolIds.push(poolDocId(['people', 'active', '1']));
+  if (city) poolIds.push(poolDocId(['people', 'city', city, String(shardForKey(city))]));
+  if (intent) poolIds.push(poolDocId(['people', 'intent', intent, '0']));
+  topics.forEach((t) => {
+    const s = slug(t);
+    if (s) poolIds.push(poolDocId(['people', 'topic', s, String(shardForKey(s))]));
+  });
+  if (pType) poolIds.push(poolDocId(['people', 'type', pType, '0']));
+  const band = ageBand(viewer?.age || viewer?.profile?.age);
+  if (band !== 'unknown') poolIds.push(poolDocId(['people', 'age', band, '0']));
+  return [...new Set(poolIds)].slice(0, VECTOR_POOL_IDS_MAX);
+}
+
+/**
+ * Score hydrated people by cosine vs viewer embedding; apply hard filters.
+ * Pure helper — used by retrieveViaVectorIndex and unit tests.
+ */
+function scorePeopleByEmbedding(viewerVec, candidates, { uid, viewer, hardCtx, plan, limit } = {}) {
+  const scored = [];
+  const max = Math.max(1, Number(limit) || PEOPLE_RETRIEVE_DEFAULT);
+  for (const c of candidates || []) {
+    const cid = c?.uid || c?.id;
+    if (!cid || cid === uid || (viewer?.uid && cid === viewer.uid)) continue;
+    if (viewer && hardCtx && !passesHardEligibility(viewer, c, hardCtx)) continue;
+    if (viewer && !hardCtx && !passesHardEligibility(viewer, c, {})) continue;
+    if (!viewer && (c.openToMeet === false || c.hiddenFromDiscovery === true ||
+        c.discoveryOptOut === true || c.optOutDiscovery === true ||
+        c.shadowbanned === true || c.deleted === true || c.banned === true)) {
+      continue;
+    }
+    if (plan?.hardFilters && !passesQueryHardFilters(c, plan.hardFilters)) continue;
+    const cv = profileEmbeddingVector(c);
+    if (!cv?.length) continue;
+    if (cv.length !== viewerVec.length) continue;
+    const sim = cosineSimilarity(viewerVec, cv);
+    if (!Number.isFinite(sim)) continue;
+    scored.push({
+      ...c,
+      uid: cid,
+      _vectorScore: sim,
+      scoreHint: sim,
+    });
+  }
+  scored.sort((a, b) => (b._vectorScore || 0) - (a._vectorScore || 0));
+  return scored.slice(0, max);
+}
+
+/**
+ * Vector-index people retrieval (CHAUPAAL_RETRIEVAL_BACKEND=vector-index).
+ *
+ * Path: query embedding → bounded pool prefilter → hydrate → cosine top-K.
+ * Caps: VECTOR_POOL_IDS_MAX pool docs, VECTOR_PREFILTER_CAP entries,
+ * VECTOR_HYDRATE_CAP user reads. Never unbounded full-scan.
+ *
+ * Fallthrough (retrieveCandidates continues to shards): no viewer embedding,
+ * empty after filter, or backend error. Content kind → not implemented (I2).
+ *
+ * Test inject: args.vectorCandidates = hydrated users with profileEmbedding
+ * (skips Firestore). Optional args.queryEmbedding = vector | { vector }.
+ */
+async function retrieveViaVectorIndex(args = {}) {
+  const {
+    kind = 'people',
+    uid,
+    plan = null,
+    limit = PEOPLE_RETRIEVE_DEFAULT,
+    db,
+    model = null,
+    viewer = null,
+    hardCtx = null,
+  } = args;
+
+  if (kind !== 'people') {
+    return {
+      backend: 'vector-index',
+      implemented: false,
+      candidates: [],
+      fallthrough: true,
+      note: 'vector-index is people-only; content embeddings = Infra I2',
+    };
+  }
+
+  try {
+    let viewerVec =
+      profileEmbeddingVector(args.queryEmbedding) ||
+      profileEmbeddingVector(viewer);
+
+    if (!viewerVec?.length && uid && db) {
+      try {
+        const snap = await db.collection('users').doc(uid).get();
+        if (snap.exists) {
+          viewerVec = profileEmbeddingVector({ uid: snap.id, ...snap.data() });
+        }
+      } catch (e) {
+        /* fall through below */
+      }
+    }
+
+    if (!viewerVec?.length) {
+      return {
+        backend: 'vector-index',
+        implemented: true,
+        candidates: [],
+        fallthrough: true,
+        method: 'pool-prefilter-cosine',
+        note: 'no viewer profileEmbedding — fall through to firestore-shards',
+      };
+    }
+
+    let poolCandidates = Array.isArray(args.vectorCandidates) ? args.vectorCandidates : null;
+    let poolReads = 0;
+    let hydrateReads = 0;
+    let poolIds = [];
+
+    if (!poolCandidates) {
+      if (!db) {
+        return {
+          backend: 'vector-index',
+          implemented: true,
+          candidates: [],
+          fallthrough: true,
+          note: 'vector-index requires db or vectorCandidates fixtures',
+        };
+      }
+      poolIds = peoplePoolIdsForViewer({ model, plan, viewer });
+      const { entries, reads } = await mergePoolEntries(
+        db,
+        poolIds,
+        Math.min(VECTOR_PREFILTER_CAP, Math.max(limit, 40))
+      );
+      poolReads = reads;
+      const hydrateLimit = Math.min(VECTOR_HYDRATE_CAP, Math.max(limit, 40));
+      poolCandidates = await hydratePeople(db, entries, {
+        viewer,
+        hardCtx,
+        plan,
+        limit: hydrateLimit,
+      });
+      hydrateReads = Math.min(entries.length, hydrateLimit);
+    }
+
+    const top = scorePeopleByEmbedding(viewerVec, poolCandidates, {
+      uid,
+      viewer,
+      hardCtx,
+      plan,
+      limit: Math.min(limit, PEOPLE_RETRIEVE_DEFAULT),
+    });
+
+    if (!top.length) {
+      return {
+        backend: 'vector-index',
+        implemented: true,
+        candidates: [],
+        fallthrough: true,
+        poolIds,
+        poolReads,
+        hydrateReads,
+        totalReadsEstimate: poolReads + hydrateReads,
+        method: 'pool-prefilter-cosine',
+        note: 'no embedded eligible candidates — fall through to firestore-shards',
+      };
+    }
+
+    return {
+      backend: 'vector-index',
+      implemented: true,
+      candidates: top,
+      fallthrough: false,
+      poolIds,
+      poolReads,
+      hydrateReads,
+      totalReadsEstimate: poolReads + hydrateReads,
+      method: 'pool-prefilter-cosine',
+      caps: {
+        poolIdsMax: VECTOR_POOL_IDS_MAX,
+        prefilter: VECTOR_PREFILTER_CAP,
+        hydrate: VECTOR_HYDRATE_CAP,
+      },
+    };
+  } catch (e) {
+    return {
+      backend: 'vector-index',
+      implemented: true,
+      candidates: [],
+      fallthrough: true,
+      note: `vector-index error — fall through: ${e?.message || e}`,
+    };
+  }
 }
 
 async function loadModelSafe(db, uid, { optedOut } = {}) {
@@ -302,31 +511,17 @@ async function retrieveCandidates(args = {}) {
   if (!db) throw new Error('retrieveCandidates requires db');
 
   if (RETRIEVAL_BACKEND === 'vector-index') {
-    const stub = await retrieveViaVectorIndex(args);
-    if (stub.implemented && stub.candidates?.length) {
-      return { ...stub, kind, limit };
+    const vec = await retrieveViaVectorIndex(args);
+    if (vec.implemented && vec.candidates?.length && !vec.fallthrough) {
+      return { ...vec, kind, limit };
     }
+    // Missing embeddings / empty / error → shards (never hard-fail empty product)
   }
 
   const poolIds = [];
   const topics = topTopicKeys(model, 4);
-  const city = slug(plan?.hardFilters?.city || cityOf(viewer) || '');
-  const intent = slug(plan?.searchIntent || intentBucketOf(viewer) || 'other');
-  const pType = normalizeType(viewer);
-
   if (kind === 'people') {
-    poolIds.push(poolDocId(['people', 'active', '0']));
-    poolIds.push(poolDocId(['people', 'active', '1']));
-    if (city) poolIds.push(poolDocId(['people', 'city', city, String(shardForKey(city))]));
-    if (intent) poolIds.push(poolDocId(['people', 'intent', intent, '0']));
-    topics.forEach((t) => {
-      const s = slug(t);
-      if (s) poolIds.push(poolDocId(['people', 'topic', s, String(shardForKey(s))]));
-    });
-    if (pType) poolIds.push(poolDocId(['people', 'type', pType, '0']));
-    // age band
-    const band = ageBand(viewer?.age || viewer?.profile?.age);
-    if (band !== 'unknown') poolIds.push(poolDocId(['people', 'age', band, '0']));
+    poolIds.push(...peoplePoolIdsForViewer({ model, plan, viewer }));
   } else if (kind === 'content') {
     const surface = slug(args.surface || 'duniya');
     poolIds.push(poolDocId(['content', surface, 'active', '0']));
@@ -342,7 +537,8 @@ async function retrieveCandidates(args = {}) {
     });
   }
 
-  const uniquePoolIds = [...new Set(poolIds)].slice(0, 12);
+  const uniquePoolIds =
+    kind === 'people' ? poolIds : [...new Set(poolIds)].slice(0, VECTOR_POOL_IDS_MAX);
   const { entries, reads } = await mergePoolEntries(db, uniquePoolIds, Math.max(limit, 40));
 
   let candidates = [];
@@ -965,6 +1161,7 @@ async function retrieveAndRankPeople(db, {
 module.exports = {
   SCHEMA_V,
   POOL_COLLECTION,
+  RETRIEVAL_BACKEND,
   EXPLORATION_RATIO,
   COLD_START_EXPLORATION,
   NEW_AUTHOR_FLOOR,
@@ -972,6 +1169,9 @@ module.exports = {
   CONTENT_WEIGHTS,
   MANCH_WEIGHTS,
   PEOPLE_RETRIEVE_DEFAULT,
+  VECTOR_POOL_IDS_MAX,
+  VECTOR_PREFILTER_CAP,
+  VECTOR_HYDRATE_CAP,
   retrieveCandidates,
   rankCandidates,
   rankContentItems,
@@ -983,4 +1183,7 @@ module.exports = {
   isOptedOutUser,
   applyExplorationSlice,
   retrieveViaVectorIndex,
+  profileEmbeddingVector,
+  scorePeopleByEmbedding,
+  peoplePoolIdsForViewer,
 };

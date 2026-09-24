@@ -10,6 +10,11 @@ const {
   EXPLORATION_RATIO,
   CONTENT_WEIGHTS,
   MODEL_FEATURE_WEIGHTS,
+  retrieveViaVectorIndex,
+  profileEmbeddingVector,
+  scorePeopleByEmbedding,
+  VECTOR_PREFILTER_CAP,
+  VECTOR_HYDRATE_CAP,
 } = require('../server-lib/retrieve-rank');
 
 function assert(cond, msg) {
@@ -158,4 +163,94 @@ const sliced = applyExplorationSlice(
 );
 assert(sliced.length === 5, 'exploration preserves length');
 
-console.log('\nRetrieve-rank unit tests passed.');
+// ——— Vector-index (Infra I1): fixtures, no Firestore ———
+assert(VECTOR_PREFILTER_CAP > 0 && VECTOR_HYDRATE_CAP > 0, 'vector Hobby caps documented');
+assert(
+  Array.isArray(profileEmbeddingVector(viewer)) && profileEmbeddingVector(viewer).length === 3,
+  'profileEmbeddingVector reads { vector }'
+);
+
+const vectorFixtures = [
+  {
+    uid: 'c-travel',
+    openToMeet: true,
+    profile: { interests: ['Travel'], currentCity: 'Mumbai' },
+    profileEmbedding: { vector: [0.95, 0.05, 0] },
+  },
+  {
+    uid: 'c-far',
+    openToMeet: true,
+    profile: { interests: ['Politics'], currentCity: 'Delhi' },
+    profileEmbedding: { vector: [0, 1, 0] },
+  },
+  {
+    uid: 'c-optout',
+    openToMeet: true,
+    discoveryOptOut: true,
+    profile: { interests: ['Travel'], currentCity: 'Mumbai' },
+    profileEmbedding: { vector: [1, 0, 0] },
+  },
+  {
+    uid: 'c-private',
+    openToMeet: false,
+    profile: { interests: ['Travel'], currentCity: 'Mumbai' },
+    profileEmbedding: { vector: [0.99, 0.01, 0] },
+  },
+  {
+    uid: 'c-no-embed',
+    openToMeet: true,
+    profile: { interests: ['Travel'], currentCity: 'Mumbai' },
+  },
+];
+
+const scored = scorePeopleByEmbedding(profileEmbeddingVector(viewer), vectorFixtures, {
+  uid: viewer.uid,
+  viewer,
+  hardCtx: {},
+  plan: { hardFilters: {} },
+  limit: 10,
+});
+assert(scored.length >= 1, 'vector scorer returns candidates with embeddings');
+assert(scored[0].uid === 'c-travel', 'highest cosine first');
+assert(!scored.some((c) => c.uid === 'c-optout'), 'discoveryOptOut excluded');
+assert(!scored.some((c) => c.uid === 'c-private'), 'openToMeet=false excluded');
+assert(!scored.some((c) => c.uid === 'c-no-embed'), 'missing embedding skipped');
+
+(async () => {
+  const hit = await retrieveViaVectorIndex({
+    kind: 'people',
+    uid: viewer.uid,
+    viewer,
+    hardCtx: {},
+    plan: { hardFilters: {} },
+    limit: 5,
+    vectorCandidates: vectorFixtures,
+  });
+  assert(hit.implemented === true, 'vector-index implemented');
+  assert(hit.fallthrough === false, 'fixtures yield non-fallthrough');
+  assert(hit.candidates.length >= 1, 'vector-index non-empty when embeddings exist');
+  assert(hit.candidates[0].uid === 'c-travel', 'vector top match is travel neighbor');
+  assert(hit.method === 'pool-prefilter-cosine', 'method documented');
+  assert(!hit.candidates.some((c) => c.uid === 'c-optout' || c.uid === 'c-private'), 'privacy filters on vector path');
+
+  const miss = await retrieveViaVectorIndex({
+    kind: 'people',
+    uid: 'no-emb',
+    viewer: { uid: 'no-emb', age: 28, profile: {} },
+    vectorCandidates: vectorFixtures,
+  });
+  assert(miss.fallthrough === true && miss.candidates.length === 0, 'no viewer embedding → fallthrough');
+
+  const contentStub = await retrieveViaVectorIndex({
+    kind: 'content',
+    uid: viewer.uid,
+    viewer,
+    vectorCandidates: vectorFixtures,
+  });
+  assert(contentStub.implemented === false, 'content vector deferred to I2');
+
+  console.log('\nRetrieve-rank unit tests passed.');
+})().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

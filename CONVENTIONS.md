@@ -256,11 +256,13 @@ Enforcement is **ON** for Firestore / RTDB (and Storage if enabled). Client uses
 
 ## 11e. Retrieval & ranking (P6)
 
-- Interfaces: `retrieveCandidates` / `rankCandidates` / `rankContentItems` in `server-lib/retrieve-rank.js`. Backend default `firestore-shards` (`candidatePools/*`); `CHAUPAAL_RETRIEVAL_BACKEND=vector-index` is a stub for later.
+- Interfaces: `retrieveCandidates` / `rankCandidates` / `rankContentItems` in `server-lib/retrieve-rank.js`.
+- **Backends** (`CHAUPAAL_RETRIEVAL_BACKEND`, default `firestore-shards`):
+  - `firestore-shards` — `candidatePools/*` merge + hydrate (unchanged).
+  - `vector-index` — **people only**: pool prefilter (≤12 shards, ≤96 entries) → hydrate (≤80 reads) → in-process cosine on `users.profileEmbedding` → top-K. No unbounded full-scan. Missing viewer/candidate embeddings or errors → **fall through** to shards (never hard-fail empty). Content embeddings = Infra I2. External SaaS only if already in env; v1 is cosine in-process.
 - Discovery (`intent_discover`) and `personal_match` retrieve from pools; ranking adds P5 model features + per-result `explain`. No LLM in scoring.
 - Content: `rank_content` on `api/peepal-reactions`; Manch: `rank_manch_library` on `api/media-config` (GOTD fairness untouched). Client `requestContentRank` / `_serverScore` must not fight server order.
 - Exploration ~18% (cold-start ~35%). Scheduler refreshes pools via `refreshCandidatePools`.
-
 ## 11f. Matchmaking quality (P7)
 
 - People: safety filters **before** rank; Gale-Shapley + reciprocity boost; `matchRecentShown` cooldown ~72h; `not_interested` ~180d; diversity floor; personal vs professional separation.
@@ -275,8 +277,8 @@ Enforcement is **ON** for Firestore / RTDB (and Storage if enabled). Client uses
 - Jobs: content topic labels (duniya/peepal), Akhbaar `category_cache` heuristic seed, profile derived interests (never overwrite declared chips), cold-start internal summary, profile embed sweep. **Content embeddings skipped** (P6 does not consume them).
 - Cache: `topicLabel.contentHash` + `LABEL_VERSION`; budget: `chaupaalMeta/aiBudget` + `AI_DAILY_CALL_CAP` + `AI_JOBS_PAUSED`.
 - Privacy: `redactForPrompt`; no journal/DM/search/contacts; personalization opt-out excluded; teens = heuristic-only profile enrich, no dating-intent inference; prohibited label blocklist.
-- **Category cron (Infra I0–I1):** `vercel.json` schedules `/api/refresh-category-cache` daily `0 2 * * *` (~07:30 IST ±59m Hobby). Default **paused**. Unpause: `CATEGORY_CRON_PAUSED=false` + `AI_FEATURES_ENABLED=true` + `AI_JOBS_PAUSED` off + provider key + `CRON_SECRET` + Firebase SA. Pause / AI-off / budget → **200 no-op**; cron **bumps** `aiBudget` per generate; mid-run cap stops; partial field writes never wipe the other side; default limit = all jobs (scopes included). Client: cold → Offline (not live AI); paused path only serves `webGrounded` v2 docs. Residuals: vector index, content embeddings, sub-daily cron (Pro), maxDuration raise. Env matrix in `.env.example`.
-- No user-facing AI dashboard (10B). Env matrix in `.env.example`.
+- **Category cron (Infra I0–I1 cron):** `vercel.json` schedules `/api/refresh-category-cache` daily `0 2 * * *` (~07:30 IST ±59m Hobby). Default **paused**. Unpause: `CATEGORY_CRON_PAUSED=false` + `AI_FEATURES_ENABLED=true` + `AI_JOBS_PAUSED` off + provider key + `CRON_SECRET` + Firebase SA. Pause / AI-off / budget → **200 no-op**; cron **bumps** `aiBudget` per generate; mid-run cap stops; partial field writes never wipe the other side; default limit = all jobs (scopes included). Client: cold → Offline (not live AI); paused path only serves `webGrounded` v2 docs. Residuals: content embeddings (I2), jobs/env polish (I3), dogfood+soak (I4), sub-daily cron (Pro), maxDuration raise. Env matrix in `.env.example`.
+- **People vector retrieval (Infra I1 vector):** `CHAUPAAL_RETRIEVAL_BACKEND=vector-index` → pool-prefilter cosine on `profileEmbedding` (see 11e). Default remains `firestore-shards`.- No user-facing AI dashboard (10B). Env matrix in `.env.example`.
 
 ## 11h. Disclosure & arc close (P9)
 
