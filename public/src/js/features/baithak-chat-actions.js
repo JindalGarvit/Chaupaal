@@ -195,6 +195,7 @@
     if (!chat) return;
     if (typeof isSelfChatRow === 'function' && isSelfChatRow(chat)) return;
     if (typeof isChaupaalChatRow === 'function' && isChaupaalChatRow(chat)) return;
+    if (chat.undeletable || chat.isSelf || chat.isChaupaal) return;
     if (!viewerUid()) {
       if (typeof requireSignIn === 'function') requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));
       return;

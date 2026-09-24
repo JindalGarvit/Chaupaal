@@ -250,7 +250,8 @@
 
   try {
     if (typeof baithakChats !== 'undefined') {
-      baithakChats = ensureChaupaalPinned(baithakChats);
+      baithakChats =
+        typeof pinSelfChat === 'function' ? pinSelfChat(baithakChats) : ensureChaupaalPinned(baithakChats);
     }
     if (typeof SAMPLE_MESSAGES !== 'undefined' && !SAMPLE_MESSAGES[chaupaalChatId()]) {
       SAMPLE_MESSAGES[chaupaalChatId()] = [

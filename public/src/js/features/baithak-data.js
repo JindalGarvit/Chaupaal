@@ -87,9 +87,9 @@ function buildSelfChatRow(){
 }
 
 /**
- * Pin order: Chaupaal (system) → Me (self) → rest.
- * Note: an earlier local-only fix never reached production (live baithak-data had no
- * pinSelfChat; /src/js/features/self-chat.js 404'd) — which is why the row stayed missing.
+ * Pin order (Sabha): Chaupaal (system) → Me (self) → rest.
+ * Always re-builds pin rows for the active uid so SAMPLE wipe / hydrate / account
+ * switch cannot leave a pin-less or Self-first-only inbox.
  */
 function isChaupaalChatRow(chat){
   if(!chat) return false;
@@ -99,31 +99,50 @@ function isChaupaalChatRow(chat){
 
 function pinSelfChat(chats){
   const input = Array.isArray(chats) ? chats : [];
-  let out;
-  if(typeof ensureChaupaalPinned==='function'){
-    out = ensureChaupaalPinned(input);
-  } else if(typeof ensureSelfChatPinned==='function'){
-    out = ensureSelfChatPinned(input);
-  } else {
-    out = [buildSelfChatRow(), ...input.filter(c => !isSelfChatRow(c))];
-  }
-  if(typeof getChaupaalChat==='function'){
-    if(!out.length || !isChaupaalChatRow(out[0])){
-      out = [getChaupaalChat(), ...out.filter(c => !isChaupaalChatRow(c))];
-    }
-    if(out.length < 2 || !isSelfChatRow(out[1])){
-      const rest = out.filter(c => !isChaupaalChatRow(c) && !isSelfChatRow(c));
-      out = [out[0] || getChaupaalChat(), buildSelfChatRow(), ...rest];
-    }
-  } else if(!out.length || !isSelfChatRow(out[0])){
-    console.warn('[self-chat] pinSelfChat: first row was not self — force-inserting', {
-      uid: (typeof currentUser!=='undefined' && currentUser) ? currentUser.uid : null,
-      inCount: input.length,
-      outNames: out.slice(0,5).map(c=>c&&c.name),
+  const rest = input.filter((c) => c && !isSelfChatRow(c) && !isChaupaalChatRow(c));
+  let self = null;
+  try {
+    if (typeof getSelfChat === 'function') self = getSelfChat();
+  } catch (e) {}
+  if (!self) self = input.find((c) => isSelfChatRow(c)) || buildSelfChatRow();
+  self = Object.assign({}, self, {
+    pinned: true,
+    undeletable: true,
+    isSelf: true,
+    type: self.type || 'self',
+  });
+
+  let chaupaal = null;
+  try {
+    if (typeof getChaupaalChat === 'function') chaupaal = getChaupaalChat();
+  } catch (e) {}
+  if (!chaupaal) chaupaal = input.find((c) => isChaupaalChatRow(c)) || null;
+  if (chaupaal) {
+    chaupaal = Object.assign({}, chaupaal, {
+      pinned: true,
+      undeletable: true,
+      isChaupaal: true,
+      type: chaupaal.type || 'chaupaal',
     });
-    out = [buildSelfChatRow(), ...out.filter(c => !isSelfChatRow(c))];
+    return [chaupaal, self, ...rest];
   }
-  return out;
+  // Module not loaded yet — Self still always present
+  if (!input.length || !isSelfChatRow(input[0])) {
+    console.warn('[self-chat] pinSelfChat: Chaupaal helper missing — pinning Me only', {
+      uid: typeof currentUser !== 'undefined' && currentUser ? currentUser.uid : null,
+      inCount: input.length,
+    });
+  }
+  return [self, ...rest];
+}
+
+/** True when list starts with Chaupaal → Me (or Me alone if Chaupaal module absent). */
+function assertBaithakPinOrder(list){
+  if(!Array.isArray(list)||!list.length) return false;
+  if(typeof getChaupaalChat==='function'){
+    return isChaupaalChatRow(list[0]) && list.length>=2 && isSelfChatRow(list[1]);
+  }
+  return isSelfChatRow(list[0]);
 }
 
 function renderChatList(chats, opts){
@@ -437,17 +456,42 @@ function renderChatList(chats, opts){
     }
   }
   const selfEl = list.querySelector('[data-self-chat="1"]');
-  if(!selfEl && pinPins){
-    console.warn('[self-chat] Message Yourself missing from DOM after render — injecting fallback row');
-    const fallback = buildSelfChatRow();
-    const item = document.createElement('div');
-    item.className = 'chat-item chat-item-self';
-    item.dataset.chatId = fallback.id;
-    item.dataset.selfChat = '1';
-    item.style.background='rgba(230,57,70,0.04)';
-    item.innerHTML = `<div class="chat-avatar">📝</div><div class="chat-info"><div class="chat-name">Message Yourself <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;">· you</span></div><div class="chat-preview">${fallback.preview}</div></div><div class="chat-meta"><div class="chat-time">Pinned</div></div>`;
-    item.addEventListener('click', () => openChatScreen(fallback));
-    list.insertBefore(item, list.firstChild);
+  const caiEl = list.querySelector('[data-chaupaal-chat="1"]');
+  if (pinPins && (!selfEl || (typeof getChaupaalChat === 'function' && !caiEl))) {
+    console.warn('[baithak] pin rows missing from DOM after render — re-asserting Chaupaal → Me');
+    const pinsOnly = pinSelfChat([]);
+    // Prepend any missing pin rows at the top (before social / empty)
+    const firstSocial = list.querySelector('.chat-item:not([data-self-chat]):not([data-chaupaal-chat])');
+    const emptyBand = list.querySelector('.baithak-inbox-empty');
+    const insertBeforeEl = firstSocial || emptyBand || null;
+    pinsOnly.forEach((chat) => {
+      const self = isSelfChatRow(chat);
+      const chaupaal = isChaupaalChatRow(chat);
+      if (self && selfEl) return;
+      if (chaupaal && caiEl) return;
+      if (!self && !chaupaal) return;
+      const item = document.createElement('div');
+      item.className =
+        'chat-item' + (self ? ' chat-item-self' : '') + (chaupaal ? ' chat-item-chaupaal' : '');
+      item.dataset.chatId = chat.firestoreId || chat.id || '';
+      if (self) item.dataset.selfChat = '1';
+      if (chaupaal) item.dataset.chaupaalChat = '1';
+      if (self) item.style.background = 'rgba(230,57,70,0.04)';
+      item.innerHTML = `
+        <div class="chat-avatar">${chat.avatar || (self ? '📝' : '🏠')}</div>
+        <div class="chat-info">
+          <div class="chat-name">${chat.name || (self ? 'Me (You)' : 'Chaupaal')}${
+            self
+              ? ' <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;">· you</span>'
+              : ' <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;">· companion</span>'
+          }</div>
+          <div class="chat-preview">${chat.preview || ''}</div>
+        </div>
+        <div class="chat-meta"><div class="chat-time">Pinned</div></div>`;
+      item.addEventListener('click', () => openChatScreen(chat));
+      if (insertBeforeEl) list.insertBefore(item, insertBeforeEl);
+      else list.appendChild(item);
+    });
   }
   if(baithakChatLiveMode&&baithakChatHasMore&&typeof ensureLoadMoreButton==='function'){
     ensureLoadMoreButton(list,{
@@ -1385,6 +1429,11 @@ async function setBaithakSection(section) {
 
   renderChatList(filtered, { sectionEmpty: baithakSection });
 }
+window.pinSelfChat = pinSelfChat;
+window.assertBaithakPinOrder = assertBaithakPinOrder;
+window.isSelfChatRow = isSelfChatRow;
+window.isChaupaalChatRow = isChaupaalChatRow;
+window.buildSelfChatRow = buildSelfChatRow;
 window.setBaithakSection = setBaithakSection;
 window.baithakSection = () => baithakSection;
 window.hydrateInboxPeers = hydrateInboxPeers;

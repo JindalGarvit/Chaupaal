@@ -67,6 +67,8 @@ Implementation lives primarily in:
 
 **Baithak B0 (truth):** Guests see labeled Demo SAMPLE chats (badge + preview) with Sign-in CTA; guest render does not pollute `baithakChats`. Signed-in: `clearBaithakSampleInbox` on init/auth/load fail — never re-seed Riya; empty → Invite / Find; load fail → retry + last real cache. Mehfil live row opens chat only (no surprise auto-join; Join CTA = B4). Pins Self/Chaupaal restored via `pinSelfChat`.
 
+**Baithak B1 (pins):** Sabha pin order always **Chaupaal → Me → rest** via hardened `pinSelfChat` (rebuilds for active uid). DOM re-asserts missing pin rows. Auth/account-switch: clear Demo → `pinSelfChat([])` → paint → ensure docs. Empty Sabha keeps pins + Invite/Find (never “Demo” for signed-in). Self/Chaupaal undeletable (actions gated).
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.

@@ -148,7 +148,8 @@
 
   try {
     if (typeof baithakChats !== 'undefined') {
-      baithakChats = ensureSelfChatPinned(baithakChats);
+      baithakChats =
+        typeof pinSelfChat === 'function' ? pinSelfChat(baithakChats) : ensureSelfChatPinned(baithakChats);
     }
     if (typeof SAMPLE_MESSAGES !== 'undefined') {
       const seed = [

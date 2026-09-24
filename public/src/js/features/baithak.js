@@ -48,8 +48,15 @@ function initBaithak(){
   else if(currentUser&&typeof renderLiveBaithakStories==='function') renderLiveBaithakStories();
   else if(typeof renderStories==='function') renderStories();
 
-  // B0: signed-in never keeps guest SAMPLE peers in memory
-  if(currentUser&&typeof clearBaithakSampleInbox==='function') clearBaithakSampleInbox();
+  // B0/B1: signed-in never keeps guest SAMPLE peers; always re-assert pins for active uid
+  if(currentUser){
+    if(typeof clearBaithakSampleInbox==='function') clearBaithakSampleInbox();
+    if(typeof baithakChats!=='undefined'){
+      baithakChats=typeof pinSelfChat==='function'?pinSelfChat([]):[];
+    }
+    if(typeof ensureSelfChatDoc==='function') ensureSelfChatDoc().catch(()=>{});
+    if(typeof ensureChaupaalChatDoc==='function') ensureChaupaalChatDoc().catch(()=>{});
+  }
 
   if(typeof baithakChats!=='undefined') baithakChats = typeof pinSelfChat==='function' ? pinSelfChat(baithakChats) : baithakChats;
   if(typeof BaithakSearch!=='undefined'&&typeof BaithakSearch.wireChrome==='function') BaithakSearch.wireChrome();
@@ -111,10 +118,15 @@ function initBaithak(){
   }
 }
 
-/** B0: guest→auth — wipe Demo list immediately (main also re-inits Baithak). */
+/** B0/B1: guest→auth / account switch — wipe Demo, rebuild pins for active uid. */
 document.addEventListener('chaupaal:auth', () => {
   try {
     if (typeof clearBaithakSampleInbox === 'function') clearBaithakSampleInbox();
+  } catch (e) {}
+  try {
+    if (typeof baithakChats !== 'undefined') {
+      baithakChats = typeof pinSelfChat === 'function' ? pinSelfChat([]) : [];
+    }
   } catch (e) {}
   try {
     if (typeof renderChatList === 'function') {
@@ -128,6 +140,10 @@ document.addEventListener('chaupaal:auth', () => {
             : [];
       renderChatList(next);
     }
+  } catch (e) {}
+  try {
+    if (typeof ensureSelfChatDoc === 'function') ensureSelfChatDoc().catch(() => {});
+    if (typeof ensureChaupaalChatDoc === 'function') ensureChaupaalChatDoc().catch(() => {});
   } catch (e) {}
 });
 
