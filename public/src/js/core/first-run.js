@@ -447,7 +447,7 @@
           <button type="button" class="btn btn--secondary btn--block" data-collects-go="archive">Open Archive</button>
           <button type="button" class="btn btn--ghost btn--block" data-collects-go="privacy">Short Privacy Policy</button>
         </div>
-        <p class="legal-v1-note">Ranking and matching read stored fields only — they never call an AI model at request time. Enrichment jobs (topic labels, embeddings) run offline and are optional.</p>`;
+        <p class="legal-v1-note">Ranking and matching read stored fields only — they never call an AI model at request time. Offline enrichment may store topic labels and embeddings (profiles and public posts) for ranking when present; those jobs are optional and pauseable.</p>`;
     } else if (isPrivacy) {
       body = `         <p>Chaupaal (“we”) values your privacy. We collect account info you provide (name, username, email or phone), profile content you post, consented activity signals, hashed search fingerprints, and basic device/session data to run the app.</p>
          <p><strong>How we use it:</strong> to authenticate you, show your profile and posts to people you choose, improve discovery and safety, and send essential service messages.</p>

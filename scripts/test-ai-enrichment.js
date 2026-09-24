@@ -12,13 +12,17 @@ const {
   PROHIBITED_TOPIC_KEYS,
   LABEL_VERSION,
   budgetAllows,
+  embedBudgetAllows,
   isPublicContentForEmbed,
   buildContentEmbedText,
   BATCH_CONTENT_EMBEDS,
+  AI_DAILY_CALL_CAP,
 } = require('../server-lib/ai-enrichment');
 const { resolveProviderId, resolveModel, PROVIDER_ALIASES, isCategoryCronPaused } = require('../server-lib/ai-config');
 const { PROVIDERS, AiDisabledError } = require('../server-lib/ai');
 const { textHash, embeddingsConfigured } = require('../server-lib/embeddings');
+const fs = require('fs');
+const path = require('path');
 
 function assert(cond, msg) {
   if (!cond) throw new Error(msg || 'assert failed');
@@ -97,5 +101,30 @@ const embText = buildContentEmbedText({
 });
 assert(!embText.includes('@secret') && !embText.includes('me@x.com'), 'embed text redacts PII');
 assert(typeof embeddingsConfigured === 'function', 'embeddingsConfigured exported');
+
+// --- Infra I3: shared embed budget (pause + cap; no AI_FEATURES required) ---
+assert(typeof embedBudgetAllows === 'function', 'embedBudgetAllows exported');
+assert(AI_DAILY_CALL_CAP > 0, 'daily call cap positive');
+assert(embedBudgetAllows({ paused: true, calls: 0 }) === false, 'paused blocks embeds');
+assert(embedBudgetAllows({ paused: false, calls: AI_DAILY_CALL_CAP }) === false, 'cap blocks embeds');
+assert(embedBudgetAllows({ paused: false, calls: 0 }) === true || process.env.AI_JOBS_PAUSED === 'true', 'embed allows under cap when jobs not paused');
+
+const envEx = fs.readFileSync(path.join(__dirname, '..', '.env.example'), 'utf8');
+assert(/Unpause checklist/.test(envEx), 'env matrix unpause checklist');
+assert(/CHAUPAAL_RETRIEVAL_BACKEND/.test(envEx), 'env lists retrieval backend');
+assert(/AI_DAILY_CALL_CAP/.test(envEx) && /GEMINI_API_KEY/.test(envEx), 'env lists cap + embed key');
+assert(/0 15 \* \* \*/.test(envEx) && /0 2 \* \* \*/.test(envEx), 'env documents staggered crons');
+
+const sched = fs.readFileSync(path.join(__dirname, '..', 'api/chaupaal-scheduler.js'), 'utf8');
+assert(/deadlineMs:\s*startedAt\s*\+\s*SOFT_BUDGET_MS/.test(sched), 'scheduler passes soft deadline to enrichment');
+
+const enrichSrc = fs.readFileSync(path.join(__dirname, '..', 'server-lib/ai-enrichment.js'), 'utf8');
+assert(/embedBudgetAllows/.test(enrichSrc) && /cursorHeld/.test(enrichSrc), 'embed jobs mid-cap hold cursor');
+assert(/out\.ops\s*=/.test(enrichSrc), 'enrichment ops tally for scheduler');
+
+const disclosure = fs.readFileSync(path.join(__dirname, '..', 'public/src/js/core/first-run.js'), 'utf8');
+assert(/never call an AI model at request time/.test(disclosure), 'disclosure: no request-time LLM');
+assert(/public posts|content embeddings|embeddings \(profiles/.test(disclosure), 'disclosure mentions offline embeddings honestly');
+assert(!/embeddings never exist|never store embeddings/i.test(disclosure), 'disclosure does not deny embeddings');
 
 console.log('\nAll P8 ai-enrichment tests passed.');

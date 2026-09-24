@@ -544,12 +544,14 @@ module.exports = async function handler(req, res) {
       matchMetrics = { error: e?.message || String(e) };
     }
 
-    // P8: offline AI enrichment (labels / profile suggestions / embed sweep)
+    // P8/I3: offline AI enrichment (labels / embeds) — soft deadline + shared daily cap
     let aiEnrichment = { skipped: true };
     try {
       if (withinBudget()) {
         const { runAiEnrichmentBatch } = require('../server-lib/ai-enrichment');
-        aiEnrichment = await runAiEnrichmentBatch(db, admin);
+        aiEnrichment = await runAiEnrichmentBatch(db, admin, {
+          deadlineMs: startedAt + SOFT_BUDGET_MS,
+        });
       } else {
         aiEnrichment = { skipped: true, reason: 'duration_budget' };
       }

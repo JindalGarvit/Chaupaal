@@ -1,17 +1,20 @@
 /**
  * AI config — provider-agnostic kill switch + per-provider model tiers.
  *
- * Env matrix (no real keys):
- *   AI_FEATURES_ENABLED=true|false     master LLM kill switch
+ * Env matrix (no real keys in repo) — see also .env.example “operator unpause”:
+ *   AI_FEATURES_ENABLED=true|false     master LLM kill switch (callAI / category cron)
  *   AI_PROVIDER=anthropic|openai-compatible|openai|grok
  *   AI_MODEL_FAST / AI_MODEL_BALANCED  tier overrides
  *   ANTHROPIC_API_KEY                  anthropic
  *   OPENAI_API_KEY / AI_API_KEY / GROK_API_KEY + OPENAI_BASE_URL
  *   EMBED_PROVIDER=gemini|openai-compatible
- *   GEMINI_API_KEY / OPENAI_EMBED_MODEL
- *   AI_JOBS_PAUSED=true                pause enrichment jobs
- *   AI_DAILY_CALL_CAP=200              enrichment call budget / UTC day
+ *   GEMINI_API_KEY / GOOGLE_API_KEY / OPENAI_EMBED_MODEL
+ *   AI_JOBS_PAUSED=true                pause enrichment + embed sweeps (scheduler)
+ *   AI_DAILY_CALL_CAP=200              UTC-day budget shared by LLM labels, embeds,
+ *                                      and category cron (each spend bumps aiBudget)
  *   CATEGORY_CRON_PAUSED=true|false    Akhbaar cache cron (default paused)
+ *   CHAUPAAL_RETRIEVAL_BACKEND=firestore-shards|vector-index
+ *   CRON_SECRET                        Bearer for scheduler + category cron
  */
 'use strict';
 

@@ -73,7 +73,11 @@ assert(/runContentEmbeddingJob/.test(enrich), 'content embedding job present');
 assert(/embed_keys_missing/.test(enrich), 'content embeds conditional skip when keys missing');
 assert(!/P6_does_not_consume_content_vectors/.test(enrich), 'no permanent content-embed skip');
 assert(/contentEmbedding/.test(read('server-lib/retrieve-rank.js')), 'rank_content consumes contentEmbedding');
+assert(/embedBudgetAllows/.test(enrich), 'I3 embed budget gate');
+assert(/deadlineMs/.test(read('api/chaupaal-scheduler.js')), 'scheduler soft deadline for enrichment');
+assert(/Unpause checklist/.test(read('.env.example')), 'env operator unpause matrix');
 assert(/isCategoryCronPaused/.test(read('server-lib/ai-config.js')), 'category cron env gate');
+assert(/public posts|embeddings \(profiles/.test(read('public/src/js/core/first-run.js')), 'disclosure mentions profile+content embeddings');
 const vercelJson = JSON.parse(read('vercel.json'));
 assert(
   (vercelJson.crons || []).some((c) => c.path === '/api/refresh-category-cache'),
