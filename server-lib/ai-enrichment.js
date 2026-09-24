@@ -631,6 +631,7 @@ module.exports = {
   runEmbeddingSweepJob,
   runAiEnrichmentBatch,
   loadBudget,
+  bumpBudget,
   budgetAllows,
   AI_DAILY_CALL_CAP,
 };

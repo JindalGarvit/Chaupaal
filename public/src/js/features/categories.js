@@ -107,7 +107,9 @@ function isScheduledCatCacheFresh(doc, field){
 }
 
 function hasUsableCatCache(doc, field){
-  return !!(doc && Array.isArray(doc[field]) && doc[field].length);
+  // Paused path: only serve cron/grounded v2 docs — never unlabeled legacy fiction
+  if(!doc || !doc.webGrounded || doc.cacheVersion!==CAT_CACHE_VERSION) return false;
+  return !!(Array.isArray(doc[field]) && doc[field].length);
 }
 
 function renderCatPausedEmpty(body, catName, kind){

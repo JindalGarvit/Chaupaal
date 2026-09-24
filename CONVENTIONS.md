@@ -85,7 +85,9 @@ Implementation lives primarily in:
 
 **Dangal R4 done (R4-2 dogfood + soak):** Marks + lite honesty verified. Soak fix: court `openShell` now passes `gameId` into `gameChromeHtml` and runs `prepareGameOverlay` after chrome DOM (in-game header mark matches Manch). Leave/cleanup RAF OK. Residuals: full federation timers/sets, user-uploaded logos, Scribble party, bowling physics beyond lite oil, Quiet overlay enter motion (marks themselves static). Arc complete — next is a planning choice.
 
-**Infra I0 (category cache cron):** Hobby-safe daily cron `/api/refresh-category-cache` `0 2 * * *` in `vercel.json` (alongside scheduler). Pause/AI-off/budget → 200 no-op; partial failures keep prior caches; cold client Offline empty. Next: I1 dogfood + soak. Residuals: vector index, content embeddings.
+**Infra I0 (category cache cron):** Hobby-safe daily cron `/api/refresh-category-cache` `0 2 * * *` in `vercel.json` (alongside scheduler). Pause/AI-off/budget → 200 no-op; partial failures keep prior caches; cold client Offline empty. Residuals: vector index, content embeddings.
+
+**Infra I1 (dogfood + soak):** Soak fixes — cron `bumpBudget`; merge never empties the other field; default limit = all scoped jobs; paused client only serves `webGrounded` v2; unpause checklist + `AI_JOBS_PAUSED` / client `CAT_LIVE_AI_PAUSED` clarified. Arc complete.
 
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
@@ -273,7 +275,7 @@ Enforcement is **ON** for Firestore / RTDB (and Storage if enabled). Client uses
 - Jobs: content topic labels (duniya/peepal), Akhbaar `category_cache` heuristic seed, profile derived interests (never overwrite declared chips), cold-start internal summary, profile embed sweep. **Content embeddings skipped** (P6 does not consume them).
 - Cache: `topicLabel.contentHash` + `LABEL_VERSION`; budget: `chaupaalMeta/aiBudget` + `AI_DAILY_CALL_CAP` + `AI_JOBS_PAUSED`.
 - Privacy: `redactForPrompt`; no journal/DM/search/contacts; personalization opt-out excluded; teens = heuristic-only profile enrich, no dating-intent inference; prohibited label blocklist.
-- **Category cron (Infra I0):** `vercel.json` schedules `/api/refresh-category-cache` daily `0 2 * * *` (~07:30 IST ±59m Hobby). Default **paused** (`CATEGORY_CRON_PAUSED` unset → paused). Unpause: `CATEGORY_CRON_PAUSED=false` + `AI_FEATURES_ENABLED=true` + provider key + `CRON_SECRET` + Firebase SA. Pause / AI-off / `AI_DAILY_CALL_CAP` → **200 no-op** (no LLM spend; prior `category_cache` docs kept). Partial job errors continue; mid-run budget stops cleanly. Client cold cache → Offline empty (not fake live AI). Residuals: vector index, content embeddings (P8 skipped). Env matrix in `.env.example`.
+- **Category cron (Infra I0–I1):** `vercel.json` schedules `/api/refresh-category-cache` daily `0 2 * * *` (~07:30 IST ±59m Hobby). Default **paused**. Unpause: `CATEGORY_CRON_PAUSED=false` + `AI_FEATURES_ENABLED=true` + `AI_JOBS_PAUSED` off + provider key + `CRON_SECRET` + Firebase SA. Pause / AI-off / budget → **200 no-op**; cron **bumps** `aiBudget` per generate; mid-run cap stops; partial field writes never wipe the other side; default limit = all jobs (scopes included). Client: cold → Offline (not live AI); paused path only serves `webGrounded` v2 docs. Residuals: vector index, content embeddings, sub-daily cron (Pro), maxDuration raise. Env matrix in `.env.example`.
 - No user-facing AI dashboard (10B). Env matrix in `.env.example`.
 
 ## 11h. Disclosure & arc close (P9)

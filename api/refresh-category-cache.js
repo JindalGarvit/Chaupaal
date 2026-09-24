@@ -135,21 +135,33 @@ async function refreshOne(db, catName, scope = {}) {
     };
   }
 
-  const news = await generateCatNewsGrounded(catName, scope);
-  const mcq = await generateCatMCQGrounded(catName, scope);
+  const { bumpBudget } = require('../server-lib/ai-enrichment');
 
-  if (!news?.length && !mcq?.length) {
+  const news = await generateCatNewsGrounded(catName, scope);
+  try {
+    await bumpBudget(db, admin, { calls: 1, tokensEst: 800 });
+  } catch (e) {
+    console.warn('[refresh-category-cache] bumpBudget news', e?.message || e);
+  }
+
+  const mcq = await generateCatMCQGrounded(catName, scope);
+  try {
+    await bumpBudget(db, admin, { calls: 1, tokensEst: 800 });
+  } catch (e) {
+    console.warn('[refresh-category-cache] bumpBudget mcq', e?.message || e);
+  }
+
+  const newsOk = Array.isArray(news) && news.length > 0;
+  const mcqOk = Array.isArray(mcq) && mcq.length > 0;
+  if (!newsOk && !mcqOk) {
     return { category: catName, cacheId: id, status: 'empty' };
   }
 
   const now = Date.now();
+  // Only write sides that succeeded — never merge empty arrays over prior good fields
   const payload = {
     name: catName,
-    news: news || [],
-    mcq: mcq || [],
     ts: now,
-    newsTs: now,
-    mcqTs: now,
     webGrounded: true,
     cacheVersion: CACHE_VERSION,
     generatedBy: 'cron',
@@ -158,6 +170,14 @@ async function refreshOne(db, catName, scope = {}) {
     industry: scope.industry || null,
     cacheKey: id,
   };
+  if (newsOk) {
+    payload.news = news;
+    payload.newsTs = now;
+  }
+  if (mcqOk) {
+    payload.mcq = mcq;
+    payload.mcqTs = now;
+  }
   await ref.set(payload, { merge: true });
   // Also mirror to legacy bare-category id for older clients (base scope only)
   if (!scope.city && !scope.industry) {
@@ -170,8 +190,8 @@ async function refreshOne(db, catName, scope = {}) {
     category: catName,
     cacheId: id,
     status: 'updated',
-    newsCount: (news || []).length,
-    mcqCount: (mcq || []).length,
+    newsCount: newsOk ? news.length : 0,
+    mcqCount: mcqOk ? mcq.length : 0,
     city: scope.city || null,
     industry: scope.industry || null,
   };
@@ -191,10 +211,11 @@ function buildRefreshJobs(categories) {
   return jobs;
 }
 
-async function runRefresh({ offset = 0, limit = SCHEDULED_CATEGORIES.length, db: dbIn } = {}) {
+async function runRefresh({ offset = 0, limit = null, db: dbIn } = {}) {
   const db = dbIn || initAdmin();
   const jobs = buildRefreshJobs(SCHEDULED_CATEGORIES);
-  const slice = jobs.slice(offset, offset + limit);
+  const effectiveLimit = limit == null ? jobs.length : limit;
+  const slice = jobs.slice(offset, offset + effectiveLimit);
   const results = [];
   // Leave buffer before Vercel kills the function (~300s max — do not raise without evidence)
   const deadline = Date.now() + 270000;
@@ -250,7 +271,7 @@ async function runRefresh({ offset = 0, limit = SCHEDULED_CATEGORIES.length, db:
     istDay: istDayKey(),
     refreshedAt: new Date().toISOString(),
     offset,
-    limit,
+    limit: effectiveLimit,
     totalJobs: jobs.length,
     totalCategories: SCHEDULED_CATEGORIES.length,
     results,
@@ -298,23 +319,23 @@ module.exports = async function handler(req, res) {
 
   try {
     let offset = 0;
-    let limit = SCHEDULED_CATEGORIES.length;
+    let limit = null; // null → all jobs (base + geo/industry scopes)
     if (req.method === 'POST') {
       try {
         const body = parseJsonBody(req);
         offset = asInt(body.offset, { min: 0, max: 10_000 }) ?? 0;
-        limit =
-          asInt(body.limit, { min: 1, max: 500 }) ??
-          SCHEDULED_CATEGORIES.length;
+        if (body.limit != null) {
+          limit = asInt(body.limit, { min: 1, max: 500 }) ?? null;
+        }
       } catch {
         return sendError(res, 400, 'INVALID_JSON', 'Invalid JSON body');
       }
     } else {
       const q = req.query || {};
       offset = asInt(q.offset, { min: 0, max: 10_000 }) ?? 0;
-      limit =
-        asInt(q.limit, { min: 1, max: 500 }) ??
-        SCHEDULED_CATEGORIES.length;
+      if (q.limit != null && q.limit !== '') {
+        limit = asInt(q.limit, { min: 1, max: 500 }) ?? null;
+      }
     }
 
     const summary = await runRefresh({ offset, limit, db });
