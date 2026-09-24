@@ -295,9 +295,10 @@ function renderQuestion(inner,data,idx,updateProgress){
 
     if(!quietMode){SoundLib.playFeedback(isCorrect,data.sound||'default');SoundLib.speak(isCorrect?t('correct'):t('wrong'));}
 
-    // Floating emojis
+    // Floating emojis — skip Quiet + reduced-motion
     const layer=inner.querySelector(`#floatLayer-${idx}`);
-    if(!quietMode){
+    const reduceMotion=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if(!quietMode&&!reduceMotion){
       let pool=[isCorrect?'😄':'😢'];
       if(data.sound==='cheer'&&isCorrect)pool=['🎉','🇮🇳','🙌','🔥'];
       if(isPersonal&&isCorrect)pool=['🎉','🎂','🎈','✨'];

@@ -505,7 +505,7 @@
         ${
           hasAny
             ? `${highlightsHtml}${moreHtml}${notableHtml}`
-            : `<div class="cp-empty surkhiya-empty">${tt('surkhiya_empty', 'Digest warming up — open Khabar to start today’s quiz.')}</div>`
+            : `<div class="cp-empty surkhiya-empty">${tt('surkhiya_empty', 'Digest warming up — open Khabar to play.')}</div>`
         }
         <div class="akhbaar-surkhiya-chips">
           <button type="button" class="btn btn--primary" data-surkhiya-jump="all">${tt('surkhiya_jump_khabar', 'Jump to Khabar')}</button>
