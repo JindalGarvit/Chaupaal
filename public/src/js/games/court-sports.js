@@ -322,9 +322,10 @@
 
   function rallyMatchSubtitle(spec) {
     const m = rallyScoreModel(spec);
-    if (m === 'bwf21') return 'Game to 21';
-    if (m === 'ittf11' || m === 'pickle11') return 'Game to 11';
-    if (m === 'tennisGames') return 'First to 2 games';
+    if (m === 'bwf21') return 'BWF-lite · Game to 21';
+    if (m === 'ittf11') return 'ITTF-lite · Game to 11';
+    if (m === 'pickle11') return 'Pickle-lite · Game to 11';
+    if (m === 'tennisGames') return 'Games-lite · First to 2 games';
     return 'Rally';
   }
 
@@ -608,7 +609,10 @@
       id: spec.id,
       title: spec.name,
       subtitle: liveOn
-        ? liveSub() + (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly')
+        ? liveSub() +
+          ' · ' +
+          matchSub +
+          (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly')
         : practiceSub(matchSub + ' · ' + (aiDiff === 'easy' ? 'Easy' : aiDiff === 'sharp' ? 'Sharp' : 'Normal')),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
@@ -627,6 +631,23 @@
       },
     });
     if (!shell) return;
+
+    if (typeof GameUI !== 'undefined' && GameUI.attachHowTo) {
+      const howBodies = {
+        badminton:
+          'BWF-lite · one game to 21, win by 2 after 20-all, 29-all → 30. Rally point; winner serves. Arcade timing — not full BWF court physics or best-of-3.',
+        tabletennis:
+          'ITTF-lite · to 11 win by 2, hard cap 20. Serve every 2 (every 1 at deuce). Arcade timing — not full ITTF match sets.',
+        pickleball:
+          'Pickle-lite · rally to 11 win by 2 (cap 20); winner serves. Kitchen line is visual only — no zone foul yet.',
+        tennis:
+          'Games-lite · 0–15–30–40–Ad; match = first to 2 games. No sets or tiebreak. Arcade timing contact.',
+      };
+      GameUI.attachHowTo(shell.overlay, {
+        title: spec.name || 'Rally',
+        body: howBodies[spec.id] || matchSub + ' · arcade timing',
+      });
+    }
 
     function isFrozen() {
       return !!(rallyPaused || peerPaused);
@@ -699,10 +720,10 @@
         if (typeof localStorage !== 'undefined') localStorage.setItem('chaupaal_rally_coach_' + (spec.id || ''), '1');
       } catch (e) {}
       const tips = {
-        badminton: 'Sweet hits tighten the rally — AI will push back. Game to 21.',
-        tabletennis: 'Sweet hits tighten the rally — AI will push back. Game to 11.',
-        pickleball: 'Sweet hits tighten the rally — AI will push back. Kitchen is visual only.',
-        tennis: 'Sweet hits tighten the rally — AI will push back. First to 2 games.',
+        badminton: 'BWF-lite · sweet hits tighten the rally. Game to 21 (win by 2).',
+        tabletennis: 'ITTF-lite · sweet hits tighten the rally. Game to 11 (win by 2).',
+        pickleball: 'Pickle-lite · sweet hits tighten the rally. Kitchen is visual only.',
+        tennis: 'Games-lite · sweet hits tighten the rally. First to 2 games.',
       };
       const tip = tips[spec.id] || 'Sweet hits tighten the rally — AI will push back.';
       if (typeof showToast === 'function') showToast(tip);
@@ -1534,11 +1555,12 @@
       id: 'kabaddi',
       title: 'Kabaddi',
       subtitle: liveOn
-        ? liveSub() +
+        ? 'PKL-lite · ' +
+          liveSub() +
           (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') +
           ' · Raid & defend'
         : practiceSub(
-            'PKL-lite · ' +
+            'PKL-lite · first to 5 · ' +
               (aiDiff === 'easy' ? 'Easy' : aiDiff === 'hard' ? 'Hard' : 'Medium') +
               ' AI'
           ),
@@ -1561,6 +1583,13 @@
       },
     });
     if (!shell) return;
+    if (typeof GameUI !== 'undefined' && GameUI.attachHowTo) {
+      GameUI.attachHowTo(shell.overlay, {
+        title: 'Kabaddi',
+        body:
+          'PKL-lite · first to 5 — arcade raid court (not full PKL clock/law). Touch +1/tag on Home · empty = defense +1 · bonus line + tag = +1. All-out +2 · 2 empties → DO OR DIE. Live: both seats raid & defend · leave = forfeit · virtual stakes.',
+      });
+    }
     if (typeof createGamePauseController === 'function') {
       shellPauseCtrl = createGamePauseController({
         host: shell.host || shell.overlay,
@@ -2901,10 +2930,11 @@
       id: 'khokho',
       title: 'Kho Kho',
       subtitle: liveOn
-        ? liveSub() +
+        ? 'Arcade chase · ' +
+          liveSub() +
           (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') +
-          ' · Chase & run'
-        : practiceSub('Batches · 75s turns · AI'),
+          ' · not full federation'
+        : practiceSub('Arcade chase · batches · 75s · not full federation'),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
@@ -4158,8 +4188,8 @@
         GameUI.attachHowTo(shell.overlay, {
           title: 'Kho Kho',
           body: liveOn
-            ? 'Arcade Kho Kho Live · batches of 3 · 75s turns · each side chases once. Chase seat moves active + Kho; defend seat moves runners. Leave = forfeit · rematch new match · virtual stakes.'
-            : 'Batches of 3 · 75s chase turn · each side chases once. Give Kho to switch chasers. When running, tap a runner then drag. Wipe a batch, then Kho before tagging the next.',
+            ? 'Arcade chase (not full federation) · batches of 3 · 75s turns · each side chases once. Chase seat moves active + Kho; defend seat moves runners. Leave = forfeit · rematch new match · virtual stakes.'
+            : 'Arcade chase (not full federation) · batches of 3 · 75s chase turn · each side chases once. Give Kho to switch chasers. When running, tap a runner then drag. Wipe a batch, then Kho before tagging the next.',
         });
       }
     }
@@ -4440,7 +4470,8 @@
     }
   }
   /**
-   * Pure USBC-style bowling scorer (testable).
+   * USBC-lite bowling scorer (testable) — strike/spare/open marks + 10th fill.
+   * Not full USBC oil or federation lane patterns (see BOWLING_LANES arcade oil).
    * frames[i].balls = pin counts that ball (0–10). Frames 1–9: 1–2 balls; 10th: up to 3.
    * Returns new array with mark ('X'|'/'|'open'|null), score (frame pts), cumulative.
    * Pending strike/spare totals stay null until bonus rolls exist.
@@ -4752,12 +4783,13 @@
       id: 'bowling',
       title: 'Bowling',
       subtitle: liveOn
-        ? liveSub() +
-          ' · Lane ' +
+        ? 'Arcade lanes · ' +
+          liveSub() +
+          ' · ' +
           bowlingLaneSpec(laneId).label +
           (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly')
         : practiceSub(
-            'vs AI · ' +
+            'Arcade lanes · USBC-lite · ' +
               bowlingLaneSpec(laneId).label +
               ' · ' +
               (aiDiff === 'easy' ? 'Easy' : 'Normal')
@@ -5855,7 +5887,7 @@
         GameUI.attachHowTo(shell.overlay, {
           title: 'Bowling',
           body:
-            'Lane: House / Dry / Heavy changes how hook bites. Aim, power, Hook into the pocket. Alternate frames · X/／ USBC · Practice AI · Live host locks lane · virtual stakes once.',
+            'Arcade lanes · House / Dry / Heavy change how hook bites (not USBC oil patterns). Aim, power, Hook into the pocket. Alternate frames · USBC-lite X/／ scorebook · Practice AI · Live host locks lane · virtual stakes once.',
         });
       }
     }
@@ -7788,7 +7820,7 @@
       registerGame({
         id: g.id,
         name: g.name,
-        desc: rallyMatchSubtitle(g) + ' · Live 1v1 timing duel',
+        desc: rallyMatchSubtitle(g) + ' · arcade timing · Live 1v1',
         icon: g.icon,
         ratingKey: g.id,
         gameType: 'dual',
@@ -7806,7 +7838,7 @@
     registerGame({
       id: 'kabaddi',
       name: 'Kabaddi',
-      desc: 'Raid, tackle, home · PKL-lite Live',
+      desc: 'PKL-lite · raid, tackle, home · first to 5',
       icon: '🤼',
       gameType: 'dual',
       liveDuel: true,
@@ -7820,7 +7852,7 @@
     registerGame({
       id: 'khokho',
       name: 'Kho Kho',
-      desc: 'Live chase↔run · batches · 75s · stakes',
+      desc: 'Arcade chase · batches · 75s · not full federation',
       icon: '🏃',
       gameType: 'dual',
       liveDuel: true,
@@ -7842,7 +7874,7 @@
     registerGame({
       id: 'bowling',
       name: 'Bowling',
-      desc: 'Alternate frames · Practice AI · Live stakes',
+      desc: 'Arcade lanes · USBC-lite frames · Live stakes',
       icon: '🎳',
       gameType: 'dual',
       liveDuel: true,
@@ -7854,7 +7886,7 @@
       meta: {
         phaseA: 'Lane & throw — aim / power / gutter',
         phaseB: 'Arcade pin deck — knock, leave, reset',
-        phaseC: '10-frame USBC scorebook + 10th fill',
+        phaseC: 'USBC-lite 10-frame scorebook + 10th fill',
         phaseD: 'Practice AI + Live 1v1 + virtual stakes',
         complete: true,
       },

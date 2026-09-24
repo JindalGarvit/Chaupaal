@@ -2243,7 +2243,14 @@ html.theme-dark .lehar-empty{color:#fff;}
 .game-chrome-heading{flex:1;min-width:0;text-align:center;}
 .game-chrome-subtitle{display:block;margin-top:2px;font-size:10px;font-weight:600;color:var(--muted);}
 .game-overlay--dark .game-chrome-subtitle{color:rgba(255,255,255,.52);}
-.game-chrome-right,.game-chrome-spacer{width:44px;min-width:44px;display:flex;justify-content:flex-end;align-items:center;}
+.game-chrome-right,.game-chrome-spacer{width:44px;min-width:44px;display:flex;justify-content:flex-end;align-items:center;gap:4px;}
+.game-howto-btn{
+  flex-shrink:0;border:0;background:rgba(255,255,255,.12);color:inherit;
+  font:700 10px var(--font-display,'Space Grotesk',sans-serif);letter-spacing:.02em;
+  padding:6px 8px;border-radius:999px;cursor:pointer;opacity:.9;
+}
+.game-howto-btn:active{opacity:1;transform:scale(0.97);}
+.dangal-federation-honesty{font-size:11px;}
 .game-chrome-action{min-height:36px;border:0;border-radius:10px;padding:7px 10px;background:rgba(255,255,255,.1);color:inherit;font:700 11px 'Space Grotesk',sans-serif;cursor:pointer}.game-chrome-action.is-active{background:var(--game-accent);color:#fff}.game-chrome-metric{font:700 13px 'Space Grotesk',sans-serif;color:var(--game-accent);}
 .game-chrome-metric.is-warn{color:#E74C3C;animation:firPulse .7s ease infinite;}
 .bus-last-event{margin:0 14px 6px;padding:6px 10px;border-radius:10px;background:rgba(255,201,60,.1);border:1px solid rgba(255,201,60,.25);color:var(--gold,#FFC93C);font:600 12px Inter,sans-serif;text-align:center;flex-shrink:0;}

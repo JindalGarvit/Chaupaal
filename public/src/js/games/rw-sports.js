@@ -4514,7 +4514,7 @@
     registerGame({
       id: 'streetcricket',
       name: 'Street Cricket',
-      desc: 'Live · Over, Nets & Chase',
+      desc: 'Street formats · Over, Nets & Chase',
       icon: '🏏',
       ratingKey: 'streetcricket',
       gameType: 'dual',
@@ -4537,7 +4537,7 @@
     registerGame({
       id: 'gullykick',
       name: 'Gully Kick',
-      desc: 'Live · Classic, SD & Pressure',
+      desc: 'Street formats · Classic, SD & Pressure',
       icon: '⚽',
       ratingKey: 'gullykick',
       gameType: 'dual',

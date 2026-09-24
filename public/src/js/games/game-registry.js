@@ -985,8 +985,11 @@
       'position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:22px;z-index:100;';
     const prepMark =
       typeof gameMarkHtml === 'function' ? gameMarkHtml(gameId, { size: 28 }) : game.icon || '';
+    const honestyChip =
+      typeof federationHonestyHtml === 'function' ? federationHonestyHtml(gameId) : '';
     sheet.innerHTML = `
     <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;margin-bottom:4px;display:flex;align-items:center;gap:10px;">${prepMark}<span>${game.name}</span></div>
+    ${honestyChip}
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">${
       liveOk
         ? 'Practice vs AI anytime — or challenge a real friend for Live 1v1.'

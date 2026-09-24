@@ -172,48 +172,48 @@
       'Continue mid-puzzle · best times per difficulty · Daily is one seeded board',
     ],
     streetcricket: [
+      'Street formats — Over, Nets, Chase (not full cricket law)',
       'Live: one friend bowls, the other bats — then swap innings for a fair duel',
-      'Formats: Gully Over, Nets, Chase — Chase target = 1st innings runs + 1',
       'Leave = forfeit · Rematch = new match · virtual stakes (not real money)',
     ],
     gullykick: [
+      'Street formats — Classic / Sudden Death / Pressure (not full football law)',
       'Live: one friend shoots, the other dives — then swap halves for a fair duel',
-      'Formats: Classic (5 each · tie=draw), Sudden Death (streak until miss), Pressure (need 4/5)',
       'Leave = forfeit · Rematch = new match · virtual stakes (not real money)',
     ],
     badminton: [
-      'Live 1v1 or Practice AI · rally point to 21 (win by 2; 29-all → 30)',
+      'BWF-lite · one game to 21 (win by 2; 29-all → 30) — not best-of-3',
       'Arcade timing contact — not full BWF court physics',
       'Sweet hits tighten the rally · Easy / Normal / Sharp in Practice',
     ],
     tabletennis: [
-      'Live 1v1 or Practice · game to 11 win by 2 (cap 20)',
-      'Arcade timing duel — serve every 2 (every 1 at deuce)',
+      'ITTF-lite · game to 11 win by 2 (hard cap 20) — arcade timing',
+      'Serve every 2 points (every 1 at deuce) — not full ITTF match sets',
       'Sweet hits tighten the rally — AI pushes back in Practice',
     ],
     pickleball: [
-      'Live 1v1 or Practice · rally point to 11 win by 2',
-      'Arcade timing · kitchen line is visual only',
+      'Pickle-lite · rally point to 11 win by 2 (cap 20) — not side-out',
+      'Arcade timing · kitchen line is visual only (no zone foul yet)',
       'Sweet hits tighten the rally — AI pushes back in Practice',
     ],
     tennis: [
-      'Live 1v1 or Practice · 0–15–30–40 · first to 2 games',
+      'Games-lite · 0–15–30–40 · first to 2 games — not sets or tiebreak',
       'Arcade timing contact — not full-court tennis physics',
       'Sweet hits tighten the rally — AI pushes back in Practice',
     ],
     kabaddi: [
-      'Touch +1/tag on Home · empty = defense +1 · bonus line + tag = +1 · first to 5',
-      'All-out +2 · 2 empties → DO OR DIE · ≤2 alive tackle = super (+2) · mat revives',
-      'Live: both seats raid & defend · leave = forfeit · rematch is a fresh court · virtual stakes',
+      'PKL-lite · first to 5 — arcade raid court (not full PKL clock/law)',
+      'Touch +1/tag on Home · empty = defense +1 · bonus line + tag = +1',
+      'All-out +2 · 2 empties → DO OR DIE · Live both seats raid & defend · virtual stakes',
     ],
     khokho: [
-      'Batches of 3 · 75s chase turn · each side chases once (arcade — not 9-minute federation)',
+      'Arcade chase — batches of 3 · 75s turn · each side once (not 9-minute federation)',
       'Give Kho to switch chasers · after a wipe, Kho before tagging the next batch',
       'Live: one seat chases (active+Kho), the other runs the batch — then swap · leave=forfeit · virtual stakes',
     ],
     bowling: [
-      'Lane House / Dry / Heavy — Dry grabs early, Heavy needs patience',
-      'Aim · power · Hook into the pocket · alternate frames · X/／ USBC',
+      'Arcade lanes · House / Dry / Heavy oil (not USBC oil patterns)',
+      'Aim · power · Hook · alternate frames · USBC-lite X/／ scorebook',
       'Live host locks lane · syncs throw + laneId · leave = forfeit · virtual stakes once',
     ],
     tambola: [
@@ -1220,6 +1220,57 @@
     try {
       localStorage.removeItem(coachStorageKey(gameId));
     } catch (e) {}
+  }
+
+  /**
+   * Progressive How to — compact control; detail behind tap (not on Manch tile).
+   * @param {HTMLElement} overlay
+   * @param {{ title?: string, body?: string, tips?: string[] }} opts
+   */
+  function attachHowTo(overlay, opts) {
+    const o = opts || {};
+    if (!overlay || !overlay.appendChild) return;
+    if (overlay.querySelector('.game-howto-btn')) return;
+    const title = o.title || 'How to play';
+    let body = o.body || '';
+    if (!body && Array.isArray(o.tips) && o.tips.length) body = o.tips.join(' · ');
+    if (!body && o.gameId) {
+      const tips = COACH_TIPS[o.gameId];
+      if (tips && tips.length) body = tips.join(' · ');
+      const honesty =
+        typeof federationHonestyLine === 'function' ? federationHonestyLine(o.gameId) : '';
+      if (honesty) body = honesty + (body ? ' · ' + body : '');
+    }
+    if (!body) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'game-howto-btn';
+    btn.setAttribute('aria-label', 'How to play');
+    btn.textContent = 'How to';
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof openHalfSheet === 'function') {
+        openHalfSheet({
+          id: 'gameHowToSheet',
+          title: title,
+          accent: 'dangal',
+          snap: 'mid',
+          bodyHtml:
+            '<div class="game-howto-body" style="font-size:13px;line-height:1.5;color:var(--ink);padding:4px 2px 12px;">' +
+            String(body)
+              .split(/\s*·\s*/)
+              .map((p) => '<p style="margin:0 0 10px;">' + safe(p) + '</p>')
+              .join('') +
+            '</div>',
+        });
+        return;
+      }
+      if (typeof showToast === 'function') showToast(String(body).slice(0, 160));
+    });
+    const chrome = overlay.querySelector('.game-chrome-right') || overlay.querySelector('.game-chrome');
+    if (chrome) chrome.appendChild(btn);
+    else overlay.appendChild(btn);
   }
 
   /* ── Contextual HUD helper ── */
@@ -2758,6 +2809,8 @@
   window.uploadShareCardMedia = uploadShareCardMedia;
   window.maybeShowGameCoach = maybeShowGameCoach;
   window.resetGameCoach = resetGameCoach;
+  window.attachHowTo = attachHowTo;
+  window.GameUI = Object.assign(window.GameUI || {}, { attachHowTo: attachHowTo });
   window.gameHudHtml = gameHudHtml;
   window.gameBrandMarkHtml = gameBrandMarkHtml;
   window.recordDuelStreak = recordDuelStreak;

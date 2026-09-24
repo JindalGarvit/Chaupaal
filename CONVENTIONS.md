@@ -81,6 +81,8 @@ Implementation lives primarily in:
 
 **Dangal R4-0 (custom marks):** `GAME_IDENTITY` carries curated inline SVG `mark` per Manch id; `gameMarkHtml(id, { size })` prefers SVG (emoji `icon` fallback). Wired on Manch tiles, GOTD, chat pickers, prepare overlay, challenge cards/pick sheet, Khel dailies, profile stats, share/results chrome (`prepareGameOverlay` injects chrome mark). Aliases (`muqabala`→quiz, `tictactoe`→ttt, …) share canonical marks. No logo settings UI; client-only (Hobby `api/*.js` = 12). Next: R4-1 federation honesty.
 
+**Dangal R4-1 (federation honesty):** Sports that are lite/arcade declare it — `GAME_IDENTITY.law` / `lawHint` + `federationHonestyLine` / `Html` on Manch prepare. Registry + chrome + How to use BWF-lite / ITTF-lite / Pickle-lite / Games-lite / PKL-lite / Arcade chase / USBC-lite / Street formats. Scorebooks already matched advertised lite constants (win-by-2 kept); copy softened where USBC/PKL overclaimed. `GameUI.attachHowTo` ships detail behind How to. Deferrals: full sets, federation timers, Scribble party depth. Next: R4-2 dogfood + soak.
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.

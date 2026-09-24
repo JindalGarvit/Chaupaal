@@ -88,15 +88,15 @@
     business: { primary: '#F9A825', secondary: '#1B5E20', surface: '#1A1500', label: 'Business', icon: '🏙️', mark: M.business, orientation: 'portrait' },
     tambola: { primary: '#E91E8C', secondary: '#FFD600', surface: '#1A0010', label: 'Tambola', icon: '🎫', mark: M.tambola, orientation: 'portrait' },
     carrom: { primary: '#8D6E63', secondary: '#FFF8E1', surface: '#1A0F00', label: 'Carrom', icon: '🪙', mark: M.carrom, orientation: 'portrait' },
-    streetcricket: { primary: '#2E7D32', secondary: '#FFCC02', surface: '#0A1A0A', label: 'Street Cricket', icon: '🏏', mark: M.streetcricket, orientation: 'landscape' },
-    gullykick: { primary: '#1B5E20', secondary: '#FFFFFF', surface: '#0A120A', label: 'Gully Kick', icon: '⚽', mark: M.gullykick, orientation: 'landscape' },
-    badminton: { primary: '#01579B', secondary: '#E1F5FE', surface: '#000D1A', label: 'Badminton', icon: '🏸', mark: M.badminton, orientation: 'landscape' },
-    tabletennis: { primary: '#0D47A1', secondary: '#FF6F00', surface: '#000A1A', label: 'Table Tennis', icon: '🏓', mark: M.tabletennis, orientation: 'landscape' },
-    pickleball: { primary: '#33691E', secondary: '#FFEA00', surface: '#0A1200', label: 'Pickleball', icon: '🟡', mark: M.pickleball, orientation: 'landscape' },
-    kabaddi: { primary: '#BF360C', secondary: '#FFB300', surface: '#1A0800', label: 'Kabaddi', icon: '🤼', mark: M.kabaddi, orientation: 'landscape' },
-    khokho: { primary: '#00695C', secondary: '#FFE082', surface: '#021A16', label: 'Kho Kho', icon: '🏃', mark: M.khokho, orientation: 'portrait' },
-    bowling: { primary: '#FF8F00', secondary: '#FFE082', surface: '#120A02', label: 'Bowling', icon: '🎳', mark: M.bowling, orientation: 'portrait' },
-    tennis: { primary: '#2E7D32', secondary: '#FFFFFF', surface: '#0A1A0A', label: 'Tennis', icon: '🎾', mark: M.tennis, orientation: 'landscape' },
+    streetcricket: { primary: '#2E7D32', secondary: '#FFCC02', surface: '#0A1A0A', label: 'Street Cricket', icon: '🏏', mark: M.streetcricket, orientation: 'landscape', law: 'Street formats', lawHint: 'Over · Nets · Chase — not full cricket law' },
+    gullykick: { primary: '#1B5E20', secondary: '#FFFFFF', surface: '#0A120A', label: 'Gully Kick', icon: '⚽', mark: M.gullykick, orientation: 'landscape', law: 'Street formats', lawHint: 'Classic · SD · Pressure — not full football law' },
+    badminton: { primary: '#01579B', secondary: '#E1F5FE', surface: '#000D1A', label: 'Badminton', icon: '🏸', mark: M.badminton, orientation: 'landscape', law: 'BWF-lite', lawHint: 'One game to 21 (win by 2) · arcade timing' },
+    tabletennis: { primary: '#0D47A1', secondary: '#FF6F00', surface: '#000A1A', label: 'Table Tennis', icon: '🏓', mark: M.tabletennis, orientation: 'landscape', law: 'ITTF-lite', lawHint: 'To 11 (win by 2, cap 20) · arcade timing' },
+    pickleball: { primary: '#33691E', secondary: '#FFEA00', surface: '#0A1200', label: 'Pickleball', icon: '🟡', mark: M.pickleball, orientation: 'landscape', law: 'Pickle-lite', lawHint: 'Rally to 11 (win by 2) · kitchen visual only' },
+    kabaddi: { primary: '#BF360C', secondary: '#FFB300', surface: '#1A0800', label: 'Kabaddi', icon: '🤼', mark: M.kabaddi, orientation: 'landscape', law: 'PKL-lite', lawHint: 'First to 5 · arcade raid court' },
+    khokho: { primary: '#00695C', secondary: '#FFE082', surface: '#021A16', label: 'Kho Kho', icon: '🏃', mark: M.khokho, orientation: 'portrait', law: 'Arcade chase', lawHint: 'Batches of 3 · 75s turns — not full federation' },
+    bowling: { primary: '#FF8F00', secondary: '#FFE082', surface: '#120A02', label: 'Bowling', icon: '🎳', mark: M.bowling, orientation: 'portrait', law: 'Arcade lanes', lawHint: 'USBC-lite 10-frame scorebook · House/Dry/Heavy oil' },
+    tennis: { primary: '#2E7D32', secondary: '#FFFFFF', surface: '#0A1A0A', label: 'Tennis', icon: '🎾', mark: M.tennis, orientation: 'landscape', law: 'Games-lite', lawHint: 'First to 2 games · not sets or tiebreak' },
     rummy: { primary: '#6A1B9A', secondary: '#FFD54F', surface: '#100018', label: 'Rummy', icon: '🃏', mark: M.rummy, orientation: 'portrait' },
     teenpatti: { primary: '#4A148C', secondary: '#FFD700', surface: '#0D0018', label: 'Teen Patti', icon: '♠', mark: M.teenpatti, orientation: 'portrait' },
     bluff: { primary: '#37474F', secondary: '#FF1744', surface: '#0A0E10', label: 'Bluff', icon: '🎭', mark: M.bluff, orientation: 'portrait' },
@@ -121,9 +121,37 @@
       .replace(/</g, '&lt;');
   }
 
+  function escHtmlText(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
   function getGameIdentity(id) {
     const key = typeof canonicalGameId === 'function' ? canonicalGameId(id) : String(id || '');
     return GAME_IDENTITY[key] || null;
+  }
+
+  /**
+   * Short honesty line for Manch prepare / chrome — empty when no lite law.
+   * e.g. "BWF-lite · One game to 21 (win by 2) · arcade timing"
+   */
+  function federationHonestyLine(gameId) {
+    const ident = getGameIdentity(gameId);
+    if (!ident || !ident.law) return '';
+    return ident.lawHint ? ident.law + ' · ' + ident.lawHint : ident.law;
+  }
+
+  /** Compact chip HTML for prepare sheets (progressive — one line). */
+  function federationHonestyHtml(gameId) {
+    const line = federationHonestyLine(gameId);
+    if (!line) return '';
+    return (
+      '<div class="dangal-federation-honesty" style="font-size:11px;color:var(--muted);line-height:1.4;margin:0 0 12px;padding:8px 10px;border-radius:10px;background:var(--cream,#f5f0e8);border:1px solid var(--line,#e5e0d8);">' +
+      escHtmlText(line) +
+      '</div>'
+    );
   }
 
   /**
@@ -219,6 +247,8 @@
   window.DANGAL_RATED_GAMES = RATED_GAMES;
   window.getGameIdentity = getGameIdentity;
   window.gameMarkHtml = gameMarkHtml;
+  window.federationHonestyLine = federationHonestyLine;
+  window.federationHonestyHtml = federationHonestyHtml;
   window.applyGameIdentity = applyGameIdentity;
   window.isRatedGame = isRatedGame;
   window.syncIdentityIntoAccentMaps = syncIdentityIntoAccentMaps;
