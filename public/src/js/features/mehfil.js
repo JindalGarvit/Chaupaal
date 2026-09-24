@@ -5080,6 +5080,11 @@
   window.mehfilMarkHtml = renderMehfilMark;
   window.isMehfilOpen = () => !!overlayEl;
   window.startMehfilRing = guardMehfil('mehfil_ring', startMehfilRing);
+  /**
+   * Queue Mehfil join for the next openChatScreen of this chatId.
+   * Allowed callers: /mehfil deep links, ?mehfil=1, ring Accept, mehfil notif.
+   * Forbidden: inbox list row click / plain openChatScreen (B4 — Join CTA only).
+   */
   window.requestMehfilAutoJoin = (chatId) => {
     mehfilAutoJoinPending = chatId ? String(chatId) : null;
   };

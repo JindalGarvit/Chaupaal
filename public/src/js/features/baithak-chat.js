@@ -1105,7 +1105,9 @@ function openChatScreen(chat){
     screen._mehfilPresenceUnsub = unsub;
   }
 
-  // Finish deep-link / ring auto-join (requestMehfilAutoJoin → open room once chat is open).
+  // B4: Finish pending auto-join only when explicitly requested earlier
+  // (deeplink /mehfil/…, ?mehfil=1, ring Accept, mehfil notification).
+  // Inbox list / openChatScreen alone must NOT set requestMehfilAutoJoin.
   try {
     const pending =
       typeof consumeMehfilAutoJoin === 'function' ? consumeMehfilAutoJoin() : null;

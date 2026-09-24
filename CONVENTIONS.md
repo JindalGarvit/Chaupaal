@@ -73,6 +73,8 @@ Implementation lives primarily in:
 
 **Baithak B3 (Splits):** User-facing name is **Split** (legacy `instant*` i18n keys / `renderBaithakInstants` / `openBaithakInstantComposer` stay as aliases). Guest tray = Leave a Split soft-auth only — **never** `SAMPLE_STORIES` friend rings (`renderStories` redirects to Split tray). Signed-in loads real Baithak-destination splits; SAMPLE/Demo filtered out; publish via `shareBaithakSplit` refreshes tray. Soft-auth resume: `baithak_split` / `baithak_split_camera` pending actions.
 
+**Baithak B4 (Mehfil entry + arc dogfood):** Inbox live-row tap → **open chat only**; Join is explicit (`#mehfilLiveJoin` / header Mehfil). `requestMehfilAutoJoin` only for `/mehfil` deeplink, `?mehfil=1`, ring Accept, mehfil notification — never list click. Live badge: ≥2 fresh = Live; solo = Waiting. Arc B0–B4 static tests in `scripts/test-baithak-b*.js`.
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.

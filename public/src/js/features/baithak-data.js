@@ -318,7 +318,9 @@ function renderChatList(chats, opts){
         e.stopPropagation();
         return;
       }
-      // B0: Live Mehfil row opens chat only — no surprise auto-join (explicit Join = B4)
+      // B4: Live Mehfil badge is informational — row tap opens chat only.
+      // Join is explicit (banner CTA / header Mehfil). Auto-join only via
+      // requestMehfilAutoJoin for /mehfil deep links, ring Accept, or ?mehfil=1.
       openChatScreen(chat);
     });
     list.appendChild(item);
