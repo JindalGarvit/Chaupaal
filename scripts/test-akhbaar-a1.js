@@ -36,7 +36,10 @@ assert(/data-akh-share="challenge"[\s\S]*disabled/.test(akhbaar) || /Live Akhbaa
 assert(/tab=akhbaar/.test(akhbaar), 'Sample share URL is practice home, not beat link');
 assert(/shared a score/.test(akhbaar) && /shared a score/.test(onboarding), 'beat/viral copy not Muqabala duel');
 assert(!/duel started/i.test(akhbaar), 'no fake duel-started copy');
-assert(!/% of players got this right/.test(akhbaar), 'no fake player %');
+assert(
+  !/% of players got this right/.test(akhbaar) || /formatAkhbaarProofLine|AKHBAAR_PROOF_MIN_N/.test(akhbaar),
+  'player % only via real A3 path'
+);
 assert(/akhbaarIsLiveSet/.test(akhbaar), 'Live vs Sample chrome helpers');
 assert(/allow create: if isAuth\(\) && request\.resource\.data\.reporterUid == request\.auth\.uid/.test(rules), 'user_flags client create for reporter');
 assert(/targetType === 'akhbaar_question'|akhbaar_\$\{/.test(relationships), 'withdraw_flag clears akhbaar mirror');

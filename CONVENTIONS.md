@@ -61,6 +61,8 @@ Implementation lives primarily in:
 
 **Akhbaar A2 (rooms):** Surkhiya = digest-only (expand brief + **Open in Khabar** / prominent **Jump to Khabar**). News bands are priority/index → labels **Highlights / Also worth a look / More picks** (not fake calendar “Today”). Personal wish rows stay time-windowed + `openBaithakWithWish`. Saathi primary actions: `wish` → Baithak wish; `play` → `jumpToAkhbaarKhabar({idx})`. Sources: real friendPools events + friend-uid MCQs in QUESTIONS — no SAMPLE pad; empty → Find friends. Thin friend-MCQ feed is honest empty until real friend personal lands in the set.
 
+**Akhbaar A3 (streaks + proof):** Streak advances once per calendar day when signed-in user **finishes today’s live set** (any score) via `saveStreak({requireLive:true})` — UI updates only after server success; second finish → “Already counted today”. Guests / Sample: no account streak bump (practice note once). `daily_scores/{day}/scores` write live-only. Proof: `POST /api/media-config` `akhbaar_record_answer` / `akhbaar_get_proof` → `daily_scores/{day}/answers` + `tallies` (Admin); show i18n `social_proof` only when **N ≥ 10**; never authored `data.proof`. Milestone copy = “N days in a row” (no fake top players).
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.

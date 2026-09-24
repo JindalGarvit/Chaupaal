@@ -83,30 +83,43 @@ function scheduleStreakNudge(streak){
   }
 }
 
-async function saveStreak(){
-  if(!db||!currentUser) return;
+async function saveStreak(opts){
+  const o=opts||{};
+  if(!db||!currentUser) return {ok:false,reason:'guest'};
+  // A3: live Aaj ka set only — Sample/Offline never bumps account streak
+  if(o.requireLive!==false && typeof window!=='undefined' && window.akhbaarLiveSet!==true){
+    return {ok:false,reason:'sample'};
+  }
   const today=new Date().toISOString().split('T')[0];
   const yesterday=new Date(Date.now()-86400000).toISOString().split('T')[0];
   try{
     const snap=await db.collection('users').doc(currentUser.uid).get();
     const d=snap.data()||{};
-    if(d.lastPlayed===today) return; // already played today
-    const streak=(d.lastPlayed===yesterday||d.lastPlayed===today)?((d.streak||0)+1):1;
+    const freezes=d.streakFreezes||0;
+    if(d.lastPlayed===today){
+      const streak=d.streak||0;
+      setStreakUI(streak, freezes);
+      const big=document.getElementById('streakBig');
+      if(big) big.textContent=String(streak);
+      return {ok:true,alreadyCounted:true,streak};
+    }
+    const streak=(d.lastPlayed===yesterday)?((d.streak||0)+1):1;
     await db.collection('users').doc(currentUser.uid).update({streak,lastPlayed:today});
-    setStreakUI(streak, d.streakFreezes||0);
-    document.getElementById('streakBig').textContent=streak;
-    // Remove risk banner
+    setStreakUI(streak, freezes);
+    const big=document.getElementById('streakBig');
+    if(big) big.textContent=String(streak);
     document.getElementById('streakRiskBanner')?.remove();
-    // Milestone celebration
     if(STREAK_MILESTONES.includes(streak)){
       showStreakMilestone(streak);
-      // Award a freeze at milestones
-      if([7,30,100].includes(streak) && (d.streakFreezes||0)<STREAK_FREEZE_MAX){
+      if([7,30,100].includes(streak) && freezes<STREAK_FREEZE_MAX){
         await db.collection('users').doc(currentUser.uid).update({streakFreezes: firebase.firestore.FieldValue.increment(1)});
-        showToast(`❄️ Streak Freeze earned! You now have ${(d.streakFreezes||0)+1}.`);
+        showToast(`❄️ Streak Freeze earned! You now have ${freezes+1}.`);
       }
     }
-  }catch(e){}
+    return {ok:true,alreadyCounted:false,streak};
+  }catch(e){
+    return {ok:false,reason:'error',error:e};
+  }
 }
 
 function showStreakMilestone(streak){
@@ -115,7 +128,7 @@ function showStreakMilestone(streak){
   overlay.innerHTML=`
     <div style="background:linear-gradient(160deg,var(--red),#8134AF);border-radius:24px;padding:36px 28px;text-align:center;max-width:320px;margin:24px;color:#fff;">
       <div style="font-size:64px;margin-bottom:12px;">🔥</div>
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:28px;">${streak} Day Streak!</div>
+      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:28px;">${streak} days in a row</div>
       <div style="font-size:14px;opacity:0.85;margin-top:8px;line-height:1.5;">Nice consistency — keep showing up.</div>
       <div style="margin-top:20px;display:flex;gap:10px;">
         <button id="shareMilestone" style="flex:1;padding:12px;background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;cursor:pointer;">📤 Share</button>

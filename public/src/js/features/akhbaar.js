@@ -313,8 +313,12 @@ function renderQuestion(inner,data,idx,updateProgress){
     categoryScores[data.category].total++;
     if(isCorrect){score++;categoryScores[data.category].correct++;}
 
-    // A0: no invented “X% of players” — reveal is correct + explain only (real proof = A3)
-    // A1: Flag lives on news summary (survives reveal replace), not CSS-only
+    // A3: kick off real proof tally (live signed-in only) — display after N in summary
+    if(akhbaarIsLiveSet()&&!isPersonal&&!sample&&typeof currentUser!=='undefined'&&currentUser){
+      recordAkhbaarAnswerProof(data,idx,isCorrect).then((proof)=>{
+        try{inner._akhbaarProof=proof;}catch(e){}
+      }).catch(()=>{});
+    }
 
     maxUnlocked=Math.max(maxUnlocked,idx+1);
     updateProgress();
@@ -361,16 +365,21 @@ function showNewsSummary(inner,data,idx){
   const flagHtml=!data.personal
     ?`<div class="flag-row"><button type="button" class="flag-btn" data-akhbaar-flag>⚑ Flag this question</button></div>`
     :'';
+  const proofHtml=!data.personal
+    ?`<div class="social-proof hidden" data-akhbaar-proof aria-live="polite"></div>`
+    :'';
   inner.innerHTML=`
     <div class="q-tag ${data.personal?'personal':'news'}">${tagLabel}</div>
     <div class="news-summary">
       <div class="news-headline">${data.headline||'About this question'}</div>
       ${explainHtml}
+      ${proofHtml}
       <div class="news-body">${data.news||'This question is based on recent news.'}</div>
       ${linkHtml}${sourceLine}${wishHtml}${flagHtml}
       <div class="hint show">${hintText}</div>
     </div>
   `;
+  fillAkhbaarProofSlot(inner,data,idx,wasCorrect);
   inner.querySelector('[data-akhbaar-wish]')?.addEventListener('click',()=>{
     if(typeof openBaithakWithWish==='function'){
       openBaithakWithWish({
@@ -410,9 +419,10 @@ function populateResults(){
   });
   const bp=document.getElementById('badgePill');
   const signedIn=typeof currentUser!=='undefined'&&!!currentUser&&!!db;
+  const live=akhbaarIsLiveSet();
   if(score===QUESTIONS.length)bp.textContent='🏅 Perfect Score!';
   else if(score>=QUESTIONS.length*.7)bp.textContent='⭐ Kaafi Tez!';
-  else bp.textContent=signedIn?'Set finished':'Practice complete';
+  else bp.textContent=signedIn&&live?'Set finished':'Practice complete';
 
   // Play-to-beat challenge outcome
   const beat=typeof consumeAkhbaarBeatChallenge==='function'
@@ -438,17 +448,37 @@ function populateResults(){
     if(typeof showToast==='function') showToast(beatLine);
   }
 
-  // A0: never pre-bump streak UI before save — guests have no streak product
-  if(signedIn&&typeof saveStreak==='function'){
-    Promise.resolve(saveStreak()).catch(()=>{});
-  } else {
-    const big=document.getElementById('streakBig');
-    if(big&&!signedIn) big.textContent='—';
+  // A3: streak only after full live set + server success — never Sample / guest theater
+  const big=document.getElementById('streakBig');
+  if(!signedIn){
+    if(big) big.textContent='—';
+  } else if(!live){
+    if(big) big.textContent='—';
+    try{
+      if(!sessionStorage.getItem('akhbaar_practice_streak_note')){
+        sessionStorage.setItem('akhbaar_practice_streak_note','1');
+        if(typeof showToast==='function') showToast('Practice complete — streak counts on live Aaj ka Akhbaar');
+      }
+    }catch(e){}
+  } else if(typeof saveStreak==='function'){
+    Promise.resolve(saveStreak({requireLive:true})).then((res)=>{
+      if(!res||!res.ok){
+        if(big&&res?.reason==='sample') big.textContent='—';
+        return;
+      }
+      if(big) big.textContent=String(res.streak!=null?res.streak:'—');
+      if(res.alreadyCounted&&typeof showToast==='function'){
+        showToast('Already counted today');
+      }
+    }).catch(()=>{
+      if(big) big.textContent='—';
+    });
   }
+
   const topCat=Object.entries(categoryScores).sort((a,b)=>(b[1].correct/b[1].total)-(a[1].correct/a[1].total))[0]?.[0]||'GK';
   recordPlaySession(score,QUESTIONS.length,topCat);
-  // Save to leaderboard
-  if(db&&currentUser){
+  // Leaderboard: live signed-in only
+  if(db&&currentUser&&live){
     const today=new Date().toISOString().split('T')[0];
     db.collection('daily_scores').doc(today).collection('scores').doc(currentUser.uid).set({
       name:userProfile?.name||currentUser.displayName||'Anonymous',
@@ -456,11 +486,107 @@ function populateResults(){
       profileType:typeof ownProfileType==='function'?ownProfileType():(typeof getProfileType==='function'?getProfileType():'personal'),
       ts:firebase.firestore.FieldValue.serverTimestamp()
     }).catch((e)=>{
-      // Score missing from the leaderboard is user-visible — report, don't hide
       if(typeof reportClientError==='function') reportClientError({feature:'akhbaar_score',message:e?.message||String(e)});
     });
   }
   wireAkhbaarShare();
+}
+
+/** A3 — real crowd proof (N≥10). Never use authored data.proof. */
+const AKHBAAR_PROOF_MIN_N=10;
+const _akhbaarProofCache=new Map();
+
+function akhbaarQuestionProofKey(data,idx){
+  const raw=data?.id||data?.qid||data?.firestoreId||
+    `${String(data?.category||'q').slice(0,24)}_${String(data?.q||'').slice(0,48)}_${idx}`;
+  return String(raw).replace(/[^\w.-]+/g,'_').slice(0,80);
+}
+
+function formatAkhbaarProofLine(proof){
+  if(!proof||proof.pct==null) return '';
+  const minN=proof.minN!=null?proof.minN:AKHBAAR_PROOF_MIN_N;
+  if((proof.n||0)<minN) return '';
+  try{
+    if(typeof t==='function'){
+      const line=t('social_proof',{n:proof.pct});
+      if(line&&line!=='social_proof') return line;
+    }
+  }catch(e){}
+  return `${proof.pct}% of players got this right`;
+}
+
+async function recordAkhbaarAnswerProof(data,idx,isCorrect){
+  if(!akhbaarIsLiveSet()) return null;
+  if(!data||data.personal||data.isSample||data.isDemo) return null;
+  if(typeof currentUser==='undefined'||!currentUser) return null;
+  const key=akhbaarQuestionProofKey(data,idx);
+  if(typeof apiFetch!=='function') return _akhbaarProofCache.get(key)||null;
+  try{
+    const envelope=await apiFetch('/api/media-config',{
+      method:'POST',
+      needAuth:true,
+      body:{
+        action:'akhbaar_record_answer',
+        questionKey:key,
+        correct:!!isCorrect,
+      },
+    });
+    const proof=envelope?.data||envelope;
+    if(proof&&typeof proof.n==='number'){
+      _akhbaarProofCache.set(key,proof);
+      return proof;
+    }
+  }catch(e){}
+  return _akhbaarProofCache.get(key)||null;
+}
+
+async function fetchAkhbaarProof(data,idx){
+  if(!akhbaarIsLiveSet()) return null;
+  if(!data||data.personal||akhbaarIsSampleContent(data)) return null;
+  const key=akhbaarQuestionProofKey(data,idx);
+  if(_akhbaarProofCache.has(key)) return _akhbaarProofCache.get(key);
+  if(typeof apiFetch!=='function'||typeof currentUser==='undefined'||!currentUser) return null;
+  try{
+    const envelope=await apiFetch('/api/media-config',{
+      method:'POST',
+      needAuth:true,
+      body:{action:'akhbaar_get_proof',questionKey:key},
+    });
+    const proof=envelope?.data||envelope;
+    if(proof&&typeof proof.n==='number'){
+      _akhbaarProofCache.set(key,proof);
+      return proof;
+    }
+  }catch(e){}
+  return null;
+}
+
+function fillAkhbaarProofSlot(inner,data,idx,wasCorrect){
+  const el=inner?.querySelector?.('[data-akhbaar-proof]');
+  if(!el) return;
+  // Never show authored data.proof — Sample / offline / personal omit
+  if(!akhbaarIsLiveSet()||akhbaarIsSampleContent(data)||data.personal){
+    el.classList.add('hidden');
+    el.textContent='';
+    return;
+  }
+  const apply=(proof)=>{
+    const line=formatAkhbaarProofLine(proof);
+    if(!line){
+      el.classList.add('hidden');
+      el.textContent='';
+      return;
+    }
+    el.classList.remove('hidden');
+    el.textContent=line;
+  };
+  const cached=inner._akhbaarProof||_akhbaarProofCache.get(akhbaarQuestionProofKey(data,idx));
+  if(cached){apply(cached);return;}
+  Promise.resolve(
+    typeof currentUser!=='undefined'&&currentUser
+      ? recordAkhbaarAnswerProof(data,idx,wasCorrect)
+      : fetchAkhbaarProof(data,idx)
+  ).then(apply).catch(()=>apply(null));
 }
 
 /** Dangal-style share shell on Akhbaar results (card + Share / friend / story). */

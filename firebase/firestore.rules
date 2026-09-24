@@ -510,6 +510,16 @@ service cloud.firestore {
       allow delete: if isOwner(userId);
     }
 
+    // A3: answer tallies — Admin SDK via media-config; clients may read aggregates only
+    match /daily_scores/{date}/tallies/{qid} {
+      allow read: if isAuth();
+      allow write: if false;
+    }
+    match /daily_scores/{date}/answers/{answerId} {
+      allow read: if isAuth() && resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+
     // ===================== CATEGORY CACHE =====================
     // Written by Vercel Cron (Admin SDK) every ~6h; clients read only.
     match /category_cache/{catId} {

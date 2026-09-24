@@ -1215,6 +1215,40 @@ async function handlePost(req, res) {
     }
   }
 
+  // A3: Akhbaar answer tallies + proof % (fold — no new serverless file)
+  if (action === 'akhbaar_record_answer' || action === 'akhbaar_get_proof') {
+    const adminApp = initAdmin();
+    if (!adminApp) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    const questionKey = String(body.questionKey || body.qid || '').trim();
+    if (!questionKey) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'questionKey required');
+    }
+    try {
+      const {
+        recordAkhbaarAnswer,
+        getAkhbaarProof,
+      } = require('../server-lib/akhbaar-proof');
+      const db = adminApp.firestore();
+      if (action === 'akhbaar_get_proof') {
+        const proof = await getAkhbaarProof(db, {
+          questionKey,
+          setDate: body.setDate || body.day || null,
+        });
+        return sendSuccess(res, proof);
+      }
+      const proof = await recordAkhbaarAnswer(db, adminApp, {
+        uid: user.uid,
+        questionKey,
+        correct: body.correct === true || body.correct === 1 || body.correct === '1',
+        setDate: body.setDate || body.day || null,
+      });
+      return sendSuccess(res, proof);
+    } catch (e) {
+      console.warn('[media-config] akhbaar proof', e?.message || e);
+      return sendError(res, 500, 'AKHBAAR_PROOF_ERROR', e?.message || 'Could not update proof');
+    }
+  }
+
   return sendError(res, 400, 'VALIDATION_ERROR', 'Unknown media action', {
     allowed: [
       'music_search',
@@ -1268,6 +1302,8 @@ async function handlePost(req, res) {
       'subscription_get',
       'subscription_purchase',
       'pricing_get',
+      'akhbaar_record_answer',
+      'akhbaar_get_proof',
     ],
   });
 }
