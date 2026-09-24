@@ -1944,7 +1944,20 @@ function openInAppCamera({onCapture,facingMode='environment',hint}={}){
 
 function openBaithakInstantCamera(){
   const signInMsg = typeof t==='function' ? t('baithak_sign_in_instant') : 'Sign in to share a Split';
-  if(!currentUser){showToast(signInMsg);return;}
+  if(!currentUser){
+    try {
+      if (typeof stashPendingAction === 'function') stashPendingAction('baithak_split_camera');
+      else if (typeof ChaupaalReferrals?.stashPendingAction === 'function') {
+        ChaupaalReferrals.stashPendingAction('baithak_split_camera');
+      } else {
+        sessionStorage.setItem('chaupaal_pending_action', 'baithak_split_camera');
+      }
+    } catch (e) {}
+    if (typeof openAuthSheet === 'function') openAuthSheet('login');
+    else if (typeof showAuth === 'function') showAuth();
+    else if (typeof showToast === 'function') showToast(signInMsg);
+    return;
+  }
   const hint = typeof t==='function' && t('instants_camera_hint')!=='instants_camera_hint'
     ? t('instants_camera_hint')
     : 'Split · Friends';

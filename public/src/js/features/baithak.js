@@ -44,9 +44,9 @@ function initBaithak(){
       bindLivingPlaceholder(document.getElementById('baithakSearch'),'baithak_search');
     }
   }
-  if(currentUser&&typeof renderBaithakInstants==='function') renderBaithakInstants();
-  else if(currentUser&&typeof renderLiveBaithakStories==='function') renderLiveBaithakStories();
-  else if(typeof renderStories==='function') renderStories();
+  if(typeof renderBaithakInstants==='function') renderBaithakInstants();
+  else if(typeof renderLiveBaithakStories==='function') renderLiveBaithakStories();
+  // B3: never fall through to SAMPLE_STORIES friend rings
 
   // B0/B1: signed-in never keeps guest SAMPLE peers; always re-assert pins for active uid
   if(currentUser){
@@ -144,6 +144,9 @@ document.addEventListener('chaupaal:auth', () => {
   try {
     if (typeof ensureSelfChatDoc === 'function') ensureSelfChatDoc().catch(() => {});
     if (typeof ensureChaupaalChatDoc === 'function') ensureChaupaalChatDoc().catch(() => {});
+  } catch (e) {}
+  try {
+    if (typeof renderBaithakInstants === 'function') renderBaithakInstants();
   } catch (e) {}
 });
 

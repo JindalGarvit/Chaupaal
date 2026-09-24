@@ -71,6 +71,8 @@ Implementation lives primarily in:
 
 **Baithak B2 (sections):** Sabha = full inbox + pins. Sambhavanayein = non-friend / non-follow DMs only (no groups, no pins). Mitra = friend **or** following DMs **+ all groups** (lock 2A; pins stay on Sabha). `filterBaithakSectionChats` shared by list + unread; blocked peers hidden; `chaupaal:relationship-changed` re-filters without reload. Guest Demo only on Sabha; Sambhav/Mitra empty → Sign in. Empties: Mitra “friends and groups land here”; Sambhav points to Mitra for friends/groups. Swipe `sambhavanayein ↔ sabha ↔ mitra`; morph jobs Sabha all / Sambhav new / Mitra friends & groups.
 
+**Baithak B3 (Splits):** User-facing name is **Split** (legacy `instant*` i18n keys / `renderBaithakInstants` / `openBaithakInstantComposer` stay as aliases). Guest tray = Leave a Split soft-auth only — **never** `SAMPLE_STORIES` friend rings (`renderStories` redirects to Split tray). Signed-in loads real Baithak-destination splits; SAMPLE/Demo filtered out; publish via `shareBaithakSplit` refreshes tray. Soft-auth resume: `baithak_split` / `baithak_split_camera` pending actions.
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.

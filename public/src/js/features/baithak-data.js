@@ -36,33 +36,22 @@ const SAMPLE_MESSAGES = {
 };
 
 const SAMPLE_STORIES = [
-  {id:'s1',name:'Riya',avatar:'😊',type:'score',score:14,total:20,streak:24,seen:false,auto:false,deletable:false,visibility:'friends',uid:'u1'},
-  {id:'s2',name:'Arjun',avatar:'🏔️',type:'birthday',seen:false,auto:true,deletable:false,visibility:'friends',uid:'u6'},
-  {id:'s3',name:'Priya',avatar:'👩',type:'score',score:18,total:20,streak:7,seen:true,auto:false,deletable:false,visibility:'friends',uid:'u2'},
+  // Offline fixtures only — NEVER paint as live friend Splits (B3). Tray uses renderBaithakInstants.
+  {id:'s1',name:'Riya',avatar:'😊',type:'score',score:14,total:20,streak:24,seen:false,auto:false,deletable:false,visibility:'friends',uid:'u1',isSample:true,isDemo:true},
+  {id:'s2',name:'Arjun',avatar:'🏔️',type:'birthday',seen:false,auto:true,deletable:false,visibility:'friends',uid:'u6',isSample:true,isDemo:true},
+  {id:'s3',name:'Priya',avatar:'👩',type:'score',score:18,total:20,streak:7,seen:true,auto:false,deletable:false,visibility:'friends',uid:'u2',isSample:true,isDemo:true},
 ];
 
+/** @deprecated B3 — SAMPLE friend rings are forbidden. Always use Split tray. */
 function renderStories(){
-  const row=document.getElementById('storiesRow');if(!row)return;
-  Array.from(row.querySelectorAll('.story-item')).forEach(s=>s.remove());
-
-  // Guest samples model already-authorized stories only. Audience metadata is
-  // intentionally not exposed in rings or labels.
-  const myFriendUids=new Set(['u1','u2','u6']); // in prod: load from Firestore
-
-  const visibleStories=SAMPLE_STORIES.filter(s=>myFriendUids.has(s.uid));
-
-  visibleStories.forEach(s=>{
-    const item=document.createElement('div');item.className='story-item';
-    item.innerHTML=`
-      <div class="story-ring ${s.seen?'seen':''} ${s.auto?'auto':''}">
-        <div class="story-avatar">${s.avatar}</div>
-      </div>
-      <div class="story-label">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(s.name,s):s.name}</div>
-    `;
-    item.addEventListener('click',()=>openStoryViewer(s));
-    if(typeof bindProfileLongPress==='function') bindProfileLongPress(item.querySelector('.story-avatar'),s);
-    row.appendChild(item);
-  });
+  if (typeof renderBaithakInstants === 'function') {
+    renderBaithakInstants();
+    return;
+  }
+  // Legacy #storiesRow path: never inject SAMPLE_STORIES as live friends
+  const row = document.getElementById('storiesRow');
+  if (!row) return;
+  Array.from(row.querySelectorAll('.story-item')).forEach((s) => s.remove());
 }
 
 function isSelfChatRow(chat){

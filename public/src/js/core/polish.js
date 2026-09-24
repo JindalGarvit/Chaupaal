@@ -394,8 +394,8 @@ window.initPeepal=async function(){
     ],
     instant_note: [
       { hours: [5, 12], text: 'Morning Split for friends…' },
-      { hours: [17, 23], text: 'Leave an evening split…' },
-      { text: 'Leave a split…' },
+      { hours: [17, 23], text: 'Leave an evening Split…' },
+      { text: 'Leave a Split…' },
     ],
   };
 

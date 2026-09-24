@@ -461,7 +461,7 @@
       baithak: [
         {
           id: 'instant',
-          label: tt('shortcut_baithak_instant', 'New split'),
+          label: tt('shortcut_baithak_instant', 'New Split'),
           run: () => {
             if (typeof ChaupaalIntents !== 'undefined' && ChaupaalIntents.run('baithak.split')) return;
             if (isGuest()) return requireSignIn(tt('auth_sign_in_short', 'Sign in to continue'));

@@ -295,6 +295,23 @@
         }, 400);
         return true;
       }
+      // B3: Baithak Split compose / camera after soft-auth
+      if (action === 'baithak_split' || action === 'baithak_split_camera') {
+        if (typeof showTab === 'function') showTab('baithak');
+        setTimeout(() => {
+          if (typeof renderBaithakInstants === 'function') renderBaithakInstants();
+          if (action === 'baithak_split_camera') {
+            if (typeof openBaithakInstantCamera === 'function') openBaithakInstantCamera();
+            else if (typeof openBaithakInstantComposer === 'function') openBaithakInstantComposer('camera');
+            else if (typeof expandBaithakSplitComposer === 'function') expandBaithakSplitComposer();
+          } else if (typeof expandBaithakSplitComposer === 'function') {
+            expandBaithakSplitComposer();
+          } else if (typeof openBaithakInstantComposer === 'function') {
+            openBaithakInstantComposer();
+          }
+        }, 350);
+        return true;
+      }
     } catch (e) {}
     return false;
   }

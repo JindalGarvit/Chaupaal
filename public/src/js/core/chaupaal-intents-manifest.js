@@ -337,17 +337,18 @@
   reg({
     id: 'baithak.split',
     category: 'create',
-    label: 'New Split story',
+    label: 'New Split',
     icon: 'zap',
     keywords: ['split', 'baithak story', 'status'],
-    phrases: [/new split/i, /baithak story/i],
+    phrases: [/new split/i, /baithak story/i, /leave a split/i],
     priority: 78,
     requiresAuth: true,
     run: () => {
-      if (needSignIn()) return;
+      // Soft-auth + resume via expandBaithakSplitComposer (B3)
       switchTab('baithak');
       if (typeof expandBaithakSplitComposer === 'function') expandBaithakSplitComposer();
       else if (typeof openBaithakInstantComposer === 'function') openBaithakInstantComposer();
+      else if (needSignIn()) return;
     },
   });
   reg({

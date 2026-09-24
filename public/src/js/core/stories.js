@@ -496,10 +496,10 @@
       const ico = (name) => (typeof iconHtml === 'function' ? iconHtml(name, { size: 16 }) : '');
       bar.innerHTML = `
         <textarea id="splitNoteText" class="instant-compose-text baithak-split-text" rows="2" maxlength="280"
-          placeholder="${splitTt('instants_ph', 'Leave a split…')}" data-living-ph="instant_note"
-          aria-label="${splitTt('instants_compose_title', 'Leave a split')}"></textarea>
+          placeholder="${splitTt('instants_ph', 'Leave a Split…')}" data-living-ph="instant_note"
+          aria-label="${splitTt('instants_compose_title', 'Leave a Split')}"></textarea>
         <div class="baithak-split-actions">
-          <button type="button" class="btn btn--primary baithak-split-send" data-split-send>${splitTt('instants_share', 'Share split')}</button>
+          <button type="button" class="btn btn--primary baithak-split-send" data-split-send>${splitTt('instants_share', 'Share Split')}</button>
         </div>
         <div class="instant-compose-tools baithak-split-tools">
           <button type="button" class="btn" data-split-tool="gif" aria-label="GIF">${ico('gif') || 'GIF'}</button>
@@ -516,10 +516,29 @@
     return bar;
   }
 
+  function requireSplitAuth(resumeAction) {
+    const action = resumeAction || 'baithak_split';
+    try {
+      if (typeof stashPendingAction === 'function') stashPendingAction(action);
+      else if (typeof ChaupaalReferrals?.stashPendingAction === 'function') {
+        ChaupaalReferrals.stashPendingAction(action);
+      } else {
+        sessionStorage.setItem('chaupaal_pending_action', action);
+      }
+    } catch (e) {}
+    try {
+      if (typeof stashPendingDeepLink === 'function') stashPendingDeepLink();
+    } catch (e) {}
+    if (typeof openAuthSheet === 'function') openAuthSheet('login');
+    else if (typeof showAuth === 'function') showAuth();
+    else if (typeof showToast === 'function') {
+      showToast(splitTt('baithak_sign_in_instant', 'Sign in to share a Split'));
+    }
+  }
+
   function expandBaithakSplitComposer() {
     if (!currentUser) {
-      if (typeof showAuth === 'function') showAuth();
-      else if (typeof showToast === 'function') showToast(splitTt('baithak_sign_in_instant', 'Sign in to share a Split'));
+      requireSplitAuth('baithak_split');
       return;
     }
     const strip = document.getElementById('baithakInstants');
@@ -535,14 +554,55 @@
     });
   }
 
-  /** Deprecated alias — Split tile / morph "New split" expand the inline bar, never a half-sheet. */
+  /** Deprecated alias — Split tile / morph "New Split" expand the inline bar, never a half-sheet. */
   function openBaithakInstantComposer(seedMode) {
     if (seedMode === 'camera') {
+      if (!currentUser) {
+        requireSplitAuth('baithak_split_camera');
+        return;
+      }
       if (typeof openBaithakInstantCamera === 'function') openBaithakInstantCamera();
       else expandBaithakSplitComposer();
       return;
     }
     expandBaithakSplitComposer();
+  }
+
+  /** Guest tray: Add Split only — never SAMPLE friend rings (B3). */
+  function renderGuestSplitTray(strip) {
+    strip.setAttribute('aria-label', splitTt('instants_tray', 'Splits'));
+    collapseBaithakSplitComposer();
+    let row = strip.querySelector('.baithak-instants-row');
+    if (!row) {
+      row = document.createElement('div');
+      row.className = 'baithak-instants-row';
+      row.setAttribute('role', 'list');
+      strip.insertBefore(row, strip.firstChild);
+    }
+    row.innerHTML = `
+      <button type="button" class="baithak-instant baithak-instant--prompt" data-instant-compose role="listitem">
+        <span class="baithak-instant-stub">✎</span>
+        <small>${splitTt('instants_leave_note', 'Leave a Split')}</small>
+      </button>`;
+    const composeBtn = row.querySelector('[data-instant-compose]');
+    composeBtn?.addEventListener('click', () => expandBaithakSplitComposer());
+    if (composeBtn && typeof onLongPress === 'function') {
+      onLongPress(composeBtn, () => {
+        composeBtn.dataset.suppressClick = '1';
+        requireSplitAuth('baithak_split_camera');
+      });
+      composeBtn.addEventListener(
+        'click',
+        (e) => {
+          if (composeBtn.dataset.suppressClick === '1') {
+            composeBtn.dataset.suppressClick = '0';
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        },
+        true
+      );
+    }
   }
 
   async function renderBaithakInstants() {
@@ -557,8 +617,7 @@
     }
     strip.setAttribute('aria-label', splitTt('instants_tray', 'Splits'));
     if (!currentUser) {
-      strip.querySelector('.baithak-instants-row')?.remove();
-      collapseBaithakSplitComposer();
+      renderGuestSplitTray(strip);
       return;
     }
     let stories = [];
@@ -567,8 +626,13 @@
     } catch (error) {
       console.warn('[splits] Baithak feed', error);
     }
+    // Signed-in: never admit SAMPLE / Demo leftovers into the live tray
     const pool = stories.filter(
-      (s) => isSplitKind(s) && (!s.expiresAt || Number(s.expiresAt) > Date.now())
+      (s) =>
+        isSplitKind(s) &&
+        !s.isSample &&
+        !s.isDemo &&
+        (!s.expiresAt || Number(s.expiresAt) > Date.now())
     );
     if (typeof enrichUsersWithProfileType === 'function') {
       await enrichUsersWithProfileType(pool, { names: true });
@@ -592,7 +656,7 @@
     row.innerHTML = `
         <button type="button" class="baithak-instant baithak-instant--prompt" data-instant-compose role="listitem">
           <span class="baithak-instant-stub">${own ? '＋' : '✎'}</span>
-          <small>${splitTt('instants_leave_note', 'Leave a split')}</small>
+          <small>${splitTt('instants_leave_note', 'Leave a Split')}</small>
         </button>
         ${
           own
