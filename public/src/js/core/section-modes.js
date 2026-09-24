@@ -478,9 +478,9 @@
     const weekItems = [...weekPersonal, ...weekNews];
     const monthItems = [...monthPersonal, ...monthNews];
 
-    const todayHtml = buildBandHtml('today', tt('surkhiya_band_today', 'Today'), todayItems);
-    const weekHtml = buildBandHtml('week', tt('surkhiya_band_week', 'This week'), weekItems);
-    const monthHtml = buildBandHtml('month', tt('surkhiya_band_month', 'This month'), monthItems);
+    const todayHtml = buildBandHtml('today', tt('surkhiya_band_today', 'Highlights'), todayItems);
+    const weekHtml = buildBandHtml('week', tt('surkhiya_band_week', 'Also worth a look'), weekItems);
+    const monthHtml = buildBandHtml('month', tt('surkhiya_band_month', 'More picks'), monthItems);
 
     const hasAny = todayHtml || weekHtml || monthHtml;
     return `

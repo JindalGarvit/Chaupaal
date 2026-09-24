@@ -37,6 +37,20 @@
 .q-tag.personal{background:rgba(255,201,60,0.15);color:#A8780E;}
 .q-tag.breaking{background:rgba(230,57,70,0.1);color:var(--red);}
 
+.akhbaar-truth-badge{
+  flex-shrink:0;margin:0 18px 8px;align-self:flex-start;
+  display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;
+  font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:11px;letter-spacing:0.04em;
+  text-transform:uppercase;background:rgba(43,39,48,0.08);color:var(--ink,#2B2730);
+}
+#panel-akhbaar.akhbaar--sample .akhbaar-truth-badge{background:rgba(230,57,70,0.1);color:var(--red,#E63946);}
+.akhbaar-cat-empty{
+  padding:28px 20px;text-align:center;color:var(--ink);display:flex;flex-direction:column;align-items:center;gap:10px;
+  min-height:40vh;justify-content:center;
+}
+.akhbaar-cat-empty p{margin:0;font-size:13px;color:var(--muted);}
+.akhbaar-cat-empty-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:6px;}
+
 .q-text{font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;line-height:1.35;margin-bottom:20px;color:var(--ink);}
 .options{display:flex;flex-direction:column;gap:10px;margin-top:auto;}
 .opt{background:var(--cream);border:2px solid var(--line);color:var(--ink);text-align:left;padding:14px 16px;border-radius:13px;font-size:14px;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer;transition:all .18s ease;display:flex;justify-content:space-between;align-items:center;}

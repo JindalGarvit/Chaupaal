@@ -168,14 +168,58 @@ function filterReelByCategory(cat) {
   const stage = document.getElementById('reelStage');
   if (!stage) return;
   if (cat === 'saathi') return;
+  document.getElementById('akhbaarCatEmpty')?.remove();
+  let visibleQs = 0;
   stage.querySelectorAll('.reel-card').forEach((card) => {
+    const tag = card.querySelector('.q-tag');
+    const isMeta =
+      !!card.querySelector('.results-card') ||
+      !!card.querySelector('.aur-sunao-card') ||
+      (card.querySelector('.q-text') && !tag && card.textContent.includes('Aur Khabar'));
     if (cat === 'all') {
       card.style.display = '';
+      if (tag) visibleQs += 1;
+      return;
+    }
+    if (isMeta) {
+      card.style.display = 'none';
+      return;
+    }
+    if (tag && tag.textContent.includes(cat)) {
+      card.style.display = '';
+      visibleQs += 1;
     } else {
-      const tag = card.querySelector('.q-tag');
-      card.style.display = tag && tag.textContent.includes(cat) ? '' : 'none';
+      card.style.display = 'none';
     }
   });
+  if (cat !== 'all' && visibleQs === 0) {
+    const empty = document.createElement('div');
+    empty.id = 'akhbaarCatEmpty';
+    empty.className = 'akhbaar-cat-empty';
+    empty.innerHTML = `
+      <strong>No questions in this category</strong>
+      <p>Try another chip, or clear the filter.</p>
+      <div class="akhbaar-cat-empty-actions">
+        <button type="button" class="btn btn--primary" data-akhbaar-clear-cat>Clear filter</button>
+        <button type="button" class="btn btn--ghost" data-akhbaar-back-khabar>Back to Khabar</button>
+      </div>`;
+    stage.prepend(empty);
+    empty.querySelector('[data-akhbaar-clear-cat]')?.addEventListener('click', () => {
+      akhbaarActiveCat = 'all';
+      document.querySelectorAll('.akhbaar-cat-chip').forEach((c) => {
+        c.classList.toggle('active', c.dataset.cat === 'all');
+      });
+      filterReelByCategory('all');
+    });
+    empty.querySelector('[data-akhbaar-back-khabar]')?.addEventListener('click', () => {
+      akhbaarActiveCat = 'all';
+      document.querySelectorAll('.akhbaar-cat-chip').forEach((c) => {
+        c.classList.toggle('active', c.dataset.cat === 'all');
+      });
+      if (typeof setAkhbaarMode === 'function') setAkhbaarMode('all');
+      filterReelByCategory('all');
+    });
+  }
 }
 
 function openAkhbaarCatAdd() {

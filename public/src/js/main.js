@@ -40,9 +40,18 @@
         ...(typeof SAMPLE_QUESTIONS!=='undefined'?SAMPLE_QUESTIONS:[]),
         ...(typeof AKHBAAR_BANK!=='undefined'?AKHBAAR_BANK:[]),
       ];
-      QUESTIONS=(live?.questions?.length)?live.questions:offlineBank;
+      const hasLive=!!(live?.questions?.length);
+      window.akhbaarLiveSet=hasLive;
+      window.akhbaarBonusLive=!!(live?.bonus?.length);
+      QUESTIONS=hasLive?live.questions:offlineBank;
       BONUS_QUESTIONS=(live?.bonus?.length)?live.bonus:(typeof SAMPLE_BONUS!=='undefined'?SAMPLE_BONUS:[]);
       QUESTIONS=QUESTIONS.sort(()=>Math.random()-0.5);
+      if(!hasLive){
+        QUESTIONS=QUESTIONS.map((q)=>({...q,isSample:true,isDemo:true}));
+      }
+      if(!window.akhbaarBonusLive&&BONUS_QUESTIONS.length){
+        BONUS_QUESTIONS=BONUS_QUESTIONS.map((q)=>({...q,isSample:true,isDemo:true}));
+      }
       if(typeof window.__resolveAkhbaarContent==='function'){
         try{window.__resolveAkhbaarContent();}catch(e){}
       }

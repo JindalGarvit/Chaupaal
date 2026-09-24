@@ -8,6 +8,38 @@ let _akhbaarBuilding=null;
 let _akhbaarScrollWired=false;
 let _akhbaarUpdateProgress=null;
 
+function akhbaarIsLiveSet(){
+  return window.akhbaarLiveSet===true;
+}
+function akhbaarIsSampleContent(data){
+  return !!(data&&(data.isSample||data.isDemo||!akhbaarIsLiveSet()));
+}
+function applyAkhbaarTruthBadge(){
+  const panel=document.getElementById('panel-akhbaar');
+  if(!panel) return;
+  let badge=document.getElementById('akhbaarTruthBadge');
+  if(akhbaarIsLiveSet()){
+    badge?.remove();
+    panel.classList.remove('akhbaar--sample');
+    return;
+  }
+  panel.classList.add('akhbaar--sample');
+  if(!badge){
+    badge=document.createElement('div');
+    badge.id='akhbaarTruthBadge';
+    badge.className='akhbaar-truth-badge';
+    badge.setAttribute('role','status');
+    const progress=document.getElementById('progressBar');
+    if(progress?.parentElement) progress.parentElement.insertBefore(badge, progress.nextSibling);
+    else panel.prepend(badge);
+  }
+  const offline=typeof navigator!=='undefined'&&navigator.onLine===false;
+  badge.textContent=offline?'Offline practice':'Sample';
+  badge.title=offline
+    ?'Practice bank — not today’s live Akhbaar set'
+    :'Sample / practice questions — not today’s live Akhbaar set';
+}
+
 function _akhbaarYield(){
   return new Promise(resolve=>{
     if(typeof requestIdleCallback==='function'){
@@ -19,19 +51,34 @@ function _akhbaarYield(){
 }
 
 function _resolveAkhbaarQuestionSet(qs,bonus){
-  let questions=Array.isArray(qs)?qs:[];
-  let bonusQs=Array.isArray(bonus)?bonus:[];
+  let questions=Array.isArray(qs)?qs.slice():[];
+  let bonusQs=Array.isArray(bonus)?bonus.slice():[];
+  let usedSampleBank=false;
   if(!questions.length){
     const offline=[
       ...(typeof SAMPLE_QUESTIONS!=='undefined'?SAMPLE_QUESTIONS:[]),
       ...(typeof AKHBAAR_BANK!=='undefined'?AKHBAAR_BANK:[]),
     ];
-    questions=offline.slice().sort(()=>Math.random()-0.5);
+    questions=offline.slice().sort(()=>Math.random()-0.5).map((q)=>({...q,isSample:true,isDemo:true}));
+    usedSampleBank=true;
+    window.akhbaarLiveSet=false;
     if(typeof QUESTIONS!=='undefined') QUESTIONS=questions;
+  } else if(window.akhbaarLiveSet!==true){
+    // Boot assigned offline bank — keep Sample flags
+    questions=questions.map((q)=>(q.isSample||q.isDemo)?q:{...q,isSample:true,isDemo:true});
+    usedSampleBank=true;
+  }
+  // Signed-in: never present SAMPLE personal (Riya / fake streak) as live news
+  const signedIn=typeof currentUser!=='undefined'&&!!currentUser;
+  if(signedIn&&(usedSampleBank||!akhbaarIsLiveSet())){
+    questions=questions.filter((q)=>!q.personal);
   }
   if(!bonusQs.length&&typeof SAMPLE_BONUS!=='undefined'){
-    bonusQs=SAMPLE_BONUS;
+    bonusQs=SAMPLE_BONUS.map((q)=>({...q,isSample:true,isDemo:true}));
+    window.akhbaarBonusLive=false;
     if(typeof BONUS_QUESTIONS!=='undefined') BONUS_QUESTIONS=bonusQs;
+  } else if(bonusQs.length&&window.akhbaarBonusLive!==true){
+    bonusQs=bonusQs.map((q)=>(q.isSample||q.isDemo)?q:{...q,isSample:true,isDemo:true});
   }
   return {questions,bonusQs};
 }
@@ -42,6 +89,7 @@ async function buildAkhbaar(QUESTIONS_IN,BONUS_QUESTIONS_IN){
   const stage=document.getElementById('reelStage');
   if(!stage||!QUESTIONS.length) return;
   stage.innerHTML='';score=0;maxUnlocked=0;categoryScores={};
+  applyAkhbaarTruthBadge();
 
   const pb=document.getElementById('progressBar');
   if(pb){
@@ -58,6 +106,7 @@ async function buildAkhbaar(QUESTIONS_IN,BONUS_QUESTIONS_IN){
 
   const appendQuestionCard=(data,idx,onProgress)=>{
     const card=document.createElement('div');card.className='reel-card';
+    if(akhbaarIsSampleContent(data)) card.dataset.sample='1';
     const inner=document.createElement('div');inner.className='card-inner';inner.id=`inner-${idx}`;
     card.appendChild(inner);stage.appendChild(card);
     renderQuestion(inner,data,idx,onProgress);
@@ -69,14 +118,17 @@ async function buildAkhbaar(QUESTIONS_IN,BONUS_QUESTIONS_IN){
     if(idx%2===1) await _akhbaarYield();
   }
 
+  const resultsBrand=akhbaarIsLiveSet()
+    ?'Chaupaal — Aaj ka Akhbaar'
+    :'Chaupaal — Sample practice';
   const resultsCard=document.createElement('div');resultsCard.className='reel-card';
   const rc=document.createElement('div');rc.className='results-card';rc.id='resultsCard';
   rc.innerHTML=`
-    <div class="results-brand"><span class="cp-mark cp-mark--sm" aria-hidden="true"><img src="/brand/chaupaal-mark-charpai-v2as.png" alt="" width="20" height="20"></span> Chaupaal — Aaj ka Akhbaar<span class="results-date" id="resultsDate"></span></div>
+    <div class="results-brand"><span class="cp-mark cp-mark--sm" aria-hidden="true"><img src="/brand/chaupaal-mark-charpai-v2as.png" alt="" width="20" height="20"></span> ${resultsBrand}<span class="results-date" id="resultsDate"></span></div>
     <div class="score-big" id="scoreBig">0<span>/${QUESTIONS.length}</span></div>
     <div class="score-label">Questions answered correctly</div>
     <div class="breakdown" id="breakdown"></div>
-    <div class="streak-row"><div class="streak-pill-big">🔥 <span id="streakBig">1</span> day streak</div><div class="badge-pill" id="badgePill">🏅 Badge</div></div>
+    <div class="streak-row"><div class="streak-pill-big">🔥 <span id="streakBig">—</span>${akhbaarIsLiveSet()&&typeof currentUser!=='undefined'&&currentUser?' day streak':' · practice'}</div><div class="badge-pill" id="badgePill">🏅 Badge</div></div>
     <div class="akhbaar-share-mount" id="akhbaarShareMount"></div>
   `;
   resultsCard.appendChild(rc);stage.appendChild(resultsCard);
@@ -90,20 +142,21 @@ async function buildAkhbaar(QUESTIONS_IN,BONUS_QUESTIONS_IN){
     <div class="aur-sunao-label">✨ Aur Sunao</div>
     <div class="aur-sunao-q">${asQ.q}</div>
     <div class="aur-sunao-opts">${asQ.options.map((o,i)=>`<button class="as-opt" data-i="${i}">${o}</button>`).join('')}</div>
-    <div class="hint show" style="color:rgba(255,255,255,0.4);margin-top:14px;">This just helps us understand your preferences 🙂</div>
+    <div class="hint show" style="color:rgba(255,255,255,0.4);margin-top:14px;">Optional — helps personalize later 🙂</div>
   `;
   asCard.appendChild(asInner);stage.appendChild(asCard);
   asInner.querySelectorAll('.as-opt').forEach(btn=>btn.addEventListener('click',()=>{
     asInner.querySelectorAll('.as-opt').forEach(b=>b.classList.remove('selected'));
     btn.classList.add('selected');
-    showToast('Shukriya! Yeh aapko better matches dhundhne mein help karega 🎯');
+    showToast('Thanks — noted.');
   }));
   observer.observe(asInner);
 
   if(BONUS_QUESTIONS.length){
     const bonusIntro=document.createElement('div');bonusIntro.className='reel-card';
     const bi=document.createElement('div');bi.className='card-inner';bi.style.cssText='align-items:center;justify-content:center;text-align:center;gap:10px;';
-    bi.innerHTML=`<div style="font-size:36px;">🎁</div><div class="q-text" style="margin:0;">Aur Khabar</div><div style="font-size:13px;color:var(--muted);">Bonus questions — streak par asar nahi padega</div>`;
+    const bonusLabel=window.akhbaarBonusLive===true?'Aur Khabar':'Aur Khabar · Sample';
+    bi.innerHTML=`<div style="font-size:36px;">🎁</div><div class="q-text" style="margin:0;">${bonusLabel}</div><div style="font-size:13px;color:var(--muted);">Bonus questions — streak par asar nahi padega</div>`;
     bonusIntro.appendChild(bi);stage.appendChild(bonusIntro);observer.observe(bi);
     for(let i=0;i<BONUS_QUESTIONS.length;i++){
       const idx=QUESTIONS.length+1+i;
@@ -128,11 +181,11 @@ async function buildAkhbaar(QUESTIONS_IN,BONUS_QUESTIONS_IN){
 
   if(typeof applyAkhbaarBeatBanner==='function') applyAkhbaarBeatBanner();
 
-  // Breaking tags only when Akhbaar is visible — toast only if a real breaking card exists
+  // Breaking toast only for live set cards — never SAMPLE bonus `breaking:true`
   setTimeout(()=>{
     const onAkhbaar=document.getElementById('panel-akhbaar')?.classList.contains('active');
-    if(!onAkhbaar) return;
-    const tags=stage.querySelectorAll('[data-breaking]');
+    if(!onAkhbaar||!akhbaarIsLiveSet()) return;
+    const tags=stage.querySelectorAll('[data-breaking="1"]');
     if(!tags.length) return;
     tags.forEach(tag=>{tag.classList.remove('hidden');});
     if(typeof showToast==='function') showToast('🔴 A Taaza Khabar just dropped!');
@@ -207,12 +260,19 @@ function consumeAkhbaarBeatChallenge(){
 
 function renderQuestion(inner,data,idx,updateProgress){
   const isPersonal=data.personal||false;
+  const sample=akhbaarIsSampleContent(data);
+  const liveBreaking=!!(data.breaking&&akhbaarIsLiveSet()&&!sample);
+  const tagLabel=isPersonal
+    ?'👥 Personal'
+    :liveBreaking
+      ?'🔴 Breaking'
+      :sample
+        ?`${data.category||'News'} · Sample`
+        :(data.category||'News');
   inner.innerHTML=`
-    <div class="q-tag ${isPersonal?'personal':'news'}">${isPersonal?'👥 Personal':data.category}</div>
+    <div class="q-tag ${isPersonal?'personal':liveBreaking?'breaking':'news'}"${liveBreaking?' data-breaking="1"':''}>${tagLabel}</div>
     <div class="q-text">${data.q}</div>
     <div class="options">${data.options.map((o,i)=>`<button class="opt" data-i="${i}"><span>${o}</span><span class="mark"></span></button>`).join('')}</div>
-    ${data.proof!==null?`<div class="social-proof hidden" id="proof-${idx}"></div>`:''}
-    ${!isPersonal?`<div class="flag-row hidden" id="flagRow-${idx}"><button class="flag-btn" id="flagBtn-${idx}">⚑ Flag this question</button></div>`:''}
     <div class="hint" id="hint-${idx}">${t('scroll_next')}</div>
     <div class="float-layer" id="floatLayer-${idx}"></div>
   `;
@@ -252,15 +312,8 @@ function renderQuestion(inner,data,idx,updateProgress){
     categoryScores[data.category].total++;
     if(isCorrect){score++;categoryScores[data.category].correct++;}
 
-    // Social proof
-    if(data.proof!==null){const p=inner.querySelector(`#proof-${idx}`);if(p){p.textContent=`${data.proof}% of players got this right`;p.classList.remove('hidden');}}
-
-    // Flag row
-    if(!isPersonal){
-      const fr=inner.querySelector(`#flagRow-${idx}`);if(fr)fr.classList.remove('hidden');
-      const fb=inner.querySelector(`#flagBtn-${idx}`);
-      if(fb)fb.addEventListener('click',()=>{fb.classList.toggle('flagged');fb.textContent=fb.classList.contains('flagged')?t('flagged'):t('flag');});
-    }
+    // A0: no invented “X% of players” — reveal is correct + explain only (real proof = A3)
+    // Flag/report wire = A1 — hide until then (no fake “reported” thanks)
 
     maxUnlocked=Math.max(maxUnlocked,idx+1);
     updateProgress();
@@ -298,8 +351,14 @@ function showNewsSummary(inner,data,idx){
   const wishHtml=(isEvent&&friendUid)
     ?`<button type="button" class="btn btn--primary" data-akhbaar-wish style="margin-top:10px;width:100%;">${data.eventType === 'birthday' ? '🎂' : data.eventType === 'anniversary' ? '💍' : '✈️'} Wish ${friendName||'them'} on Baithak</button>`
     :'';
+  const sample=akhbaarIsSampleContent(data);
+  const tagLabel=data.personal
+    ?'👥 Personal'
+    :sample
+      ?`${data.category||'News'} · Sample`
+      :(data.category||'News');
   inner.innerHTML=`
-    <div class="q-tag ${data.personal?'personal':'news'}">${data.personal?'👥 Personal':data.category}</div>
+    <div class="q-tag ${data.personal?'personal':'news'}">${tagLabel}</div>
     <div class="news-summary">
       <div class="news-headline">${data.headline||'About this question'}</div>
       ${explainHtml}
@@ -341,9 +400,10 @@ function populateResults(){
     bd.appendChild(row);
   });
   const bp=document.getElementById('badgePill');
+  const signedIn=typeof currentUser!=='undefined'&&!!currentUser&&!!db;
   if(score===QUESTIONS.length)bp.textContent='🏅 Perfect Score!';
   else if(score>=QUESTIONS.length*.7)bp.textContent='⭐ Kaafi Tez!';
-  else bp.textContent='🔥 Streak Kept';
+  else bp.textContent=signedIn?'Set finished':'Practice complete';
 
   // Play-to-beat challenge outcome
   const beat=typeof consumeAkhbaarBeatChallenge==='function'
@@ -369,12 +429,13 @@ function populateResults(){
     if(typeof showToast==='function') showToast(beatLine);
   }
 
-  const newStreak=parseInt(document.getElementById('streakNum').textContent)+1;
-  document.getElementById('streakBig').textContent=newStreak;
-  document.getElementById('streakNum').textContent=newStreak;
-  updateSidebarStreak(newStreak);
-  // Persist streak and record session
-  saveStreak();
+  // A0: never pre-bump streak UI before save — guests have no streak product
+  if(signedIn&&typeof saveStreak==='function'){
+    Promise.resolve(saveStreak()).catch(()=>{});
+  } else {
+    const big=document.getElementById('streakBig');
+    if(big&&!signedIn) big.textContent='—';
+  }
   const topCat=Object.entries(categoryScores).sort((a,b)=>(b[1].correct/b[1].total)-(a[1].correct/a[1].total))[0]?.[0]||'GK';
   recordPlaySession(score,QUESTIONS.length,topCat);
   // Save to leaderboard
@@ -398,15 +459,19 @@ function getAkhbaarShareStats(){
   const total=typeof QUESTIONS!=='undefined'?QUESTIONS.length:0;
   const streak=parseInt(document.getElementById('streakNum')?.textContent,10)||0;
   const dateLabel=new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+  const live=akhbaarIsLiveSet();
+  const brand=live?'Aaj ka Akhbaar':'Sample practice';
   return typeof buildShareStats==='function'
     ? buildShareStats({
         scoreLine:`${score}/${total}`,
         score,
         total,
-        streak,
-        meta:`Aaj ka Akhbaar · ${dateLabel}${streak?` · ${streak}-day streak`:''}`,
+        streak: live?streak:0,
+        meta:`${brand} · ${dateLabel}${live&&streak?` · ${streak}-day streak`:''}`,
         cat:'Akhbaar',
-        text:`Aaj ke Akhbaar mein maine ${score}/${total} sahi jawab diye! Chaupaal pe milte hain.`,
+        text: live
+          ? `Aaj ke Akhbaar mein maine ${score}/${total} sahi jawab diye! Chaupaal pe milte hain.`
+          : `I practiced Akhbaar (${score}/${total}). Sample set — try the live quiz when it’s up.`,
         url: typeof buildBeatScoreLink==='function'
           ? buildBeatScoreLink('akhbaar', score, {cat:'Akhbaar'})
           : `${location.origin}${location.pathname}?challenge=${encodeURIComponent(userProfile?.name||'Someone')}&game=akhbaar&score=${score}`,
@@ -415,9 +480,11 @@ function getAkhbaarShareStats(){
         scoreLine:`${score}/${total}`,
         score,
         total,
-        streak,
-        meta:`Aaj ka Akhbaar · ${dateLabel}`,
-        text:`Aaj ke Akhbaar mein maine ${score}/${total} sahi jawab diye! Chaupaal pe milte hain.`,
+        streak: live?streak:0,
+        meta:`${brand} · ${dateLabel}`,
+        text: live
+          ? `Aaj ke Akhbaar mein maine ${score}/${total} sahi jawab diye! Chaupaal pe milte hain.`
+          : `I practiced Akhbaar (${score}/${total}).`,
       };
 }
 

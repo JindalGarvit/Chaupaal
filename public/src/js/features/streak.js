@@ -116,7 +116,7 @@ function showStreakMilestone(streak){
     <div style="background:linear-gradient(160deg,var(--red),#8134AF);border-radius:24px;padding:36px 28px;text-align:center;max-width:320px;margin:24px;color:#fff;">
       <div style="font-size:64px;margin-bottom:12px;">🔥</div>
       <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:28px;">${streak} Day Streak!</div>
-      <div style="font-size:14px;opacity:0.85;margin-top:8px;line-height:1.5;">Incredible consistency. You're in the top players on Chaupaal!</div>
+      <div style="font-size:14px;opacity:0.85;margin-top:8px;line-height:1.5;">Nice consistency — keep showing up.</div>
       <div style="margin-top:20px;display:flex;gap:10px;">
         <button id="shareMilestone" style="flex:1;padding:12px;background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;cursor:pointer;">📤 Share</button>
         <button id="closeMilestone" style="flex:1;padding:12px;background:#fff;color:var(--red);border:none;border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;cursor:pointer;">Continue →</button>

@@ -55,6 +55,8 @@ Implementation lives primarily in:
 
 **Duniya soak:** Auth also fires when `db` not ready; signed-in without Firestore never paints guest SAMPLE; auth eagerly clears SAMPLE before reload; long-press binds full self tile (ring+name); `canPersist` uses `contentId` (not firestoreId-only).
 
+**Akhbaar A0 (truth):** `window.akhbaarLiveSet` from Firestore `daily_sets` (else Sample/Offline badge + “Sample practice” chrome). No authored “X% of players” proof UI (real aggregates = A3). Signed-in strips SAMPLE personal (Riya). No streak pre-bump / “Streak Kept” without save. Category filter empty + Clear/Back. SAMPLE bonus never fires live Taaza toast; flag hidden until A1. Surkhiya band labels softened (Highlights / Also worth a look).
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.
