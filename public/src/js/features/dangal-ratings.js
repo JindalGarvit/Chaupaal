@@ -172,7 +172,9 @@ function dangalTileHtml(g) {
     (typeof GAME_ACCENTS !== 'undefined' && GAME_ACCENTS[g.id]) ||
     'var(--red)';
   const icon =
-    (typeof getGameIdentity === 'function' && getGameIdentity(g.id)?.icon) || g.icon || '🎮';
+    typeof gameMarkHtml === 'function'
+      ? gameMarkHtml(g.id, { size: 28 })
+      : (typeof getGameIdentity === 'function' && getGameIdentity(g.id)?.icon) || g.icon || '🎮';
   const progressPill =
     typeof tileProgressPillHtml === 'function' ? tileProgressPillHtml(g.id) : '';
   return `<div class="dangal-game-tile" data-game="${g.id}" style="--tile-accent:${accent}">
@@ -225,8 +227,10 @@ function renderDangalContinueAndChips(host) {
   if (last && last.id && typeof getGame === 'function') {
     const g = getGame(last.id === 'muqabala' ? 'quiz' : last.id);
     if (g) {
+      const contMark =
+        typeof gameMarkHtml === 'function' ? gameMarkHtml(g.id, { size: 18 }) : g.icon || '';
       continueChip = `<button type="button" class="dangal-continue-chip" id="dangalContinueChip" data-game="${g.id}">
-        <div><strong>Continue · ${g.icon} ${g.name}</strong><span>Pick up where you left off</span></div>
+        <div><strong>Continue · <span class="dangal-continue-mark">${contMark}</span> ${g.name}</strong><span>Pick up where you left off</span></div>
         <span>→</span>
       </button>`;
     }
@@ -277,8 +281,10 @@ function renderDangalGotdSlot(host, gotd) {
     (gotd.genre || g.genre) && typeof genreLabel === 'function'
       ? `<div class="dangal-gotd-desc">${genreLabel(gotd.genre || g.genre)}</div>`
       : '';
+  const gotdMark =
+    typeof gameMarkHtml === 'function' ? gameMarkHtml(g.id, { size: 40, color: '#fff' }) : g.icon || '🎮';
   card.innerHTML = `
-    <div class="dangal-gotd-icon">${g.icon}</div>
+    <div class="dangal-gotd-icon">${gotdMark}</div>
     <div>
       <div class="dangal-gotd-badge">Game of the Day</div>
       <div class="dangal-gotd-name">${g.name}${honesty}</div>

@@ -455,6 +455,10 @@
     const title = safe(o.title || 'Game');
     const subtitle = o.subtitle ? `<span class="game-chrome-subtitle">${safe(o.subtitle)}</span>` : '';
     const brand = o.hideBrand ? '' : `<div class="game-chrome-brand">${gameBrandMarkHtml(true)}</div>`;
+    const gameMark =
+      o.gameId && typeof gameMarkHtml === 'function' && o.hideGameMark !== true
+        ? `<span class="game-chrome-mark">${gameMarkHtml(o.gameId, { size: 22 })}</span>`
+        : '';
     const pauseId = o.pauseId ? safe(o.pauseId) : '';
     const pauseBtn = pauseId
       ? `<button type="button" id="${pauseId}" class="game-chrome-action game-tap-target" aria-label="Pause">⏸</button>`
@@ -463,7 +467,7 @@
     const right = pauseBtn + rightInner;
     return `<div class="game-chrome">
       ${typeof backButtonHtml==='function'?backButtonHtml({ className: 'game-back-btn game-tap-target', id: backId }):`<button type="button" id="${backId}" class="game-back-btn game-tap-target cp-back-btn" aria-label="Back">${typeof iconHtml==='function'?iconHtml('arrow-left',{size:22}):''}</button>`}
-      <div class="game-chrome-heading">${brand}<div class="game-chrome-title">${title}</div>${subtitle}</div>
+      <div class="game-chrome-heading">${brand}${gameMark}<div class="game-chrome-title">${title}</div>${subtitle}</div>
       <div class="game-chrome-right">${right}</div>
     </div>`;
   }
@@ -496,7 +500,12 @@
     const title = safe(o.title || 'Game over');
     const pbLine = o.pbHtml || (o.vsBest ? `<p class="game-result-pb">${safe(o.vsBest)}</p>` : '');
     const subtitle = o.subtitle ? `<p class="game-result-sub">${safe(o.subtitle)}</p>` : '';
-    const glyph = o.glyph ? `<div class="game-result-glyph" aria-hidden="true">${safe(o.glyph)}</div>` : '';
+    let glyph = '';
+    if (o.glyph) {
+      glyph = `<div class="game-result-glyph" aria-hidden="true">${safe(o.glyph)}</div>`;
+    } else if (o.gameId && typeof gameMarkHtml === 'function' && o.hideMark !== true) {
+      glyph = `<div class="game-result-glyph game-result-glyph--mark" aria-hidden="true">${gameMarkHtml(o.gameId, { size: 28 })}</div>`;
+    }
     const brand = o.hideBrand ? '' : `<div class="game-result-brand">${gameBrandMarkHtml(true)}</div>`;
     const shareCard = o.shareCardHtml || '';
     const score =
@@ -608,6 +617,20 @@
       overlay.style.setProperty('--game-accent', accent);
       if (typeof applyGameIdentity === 'function') applyGameIdentity(gameId, overlay);
       if (o.accent) overlay.style.setProperty('--game-accent', o.accent);
+      // Prefer SVG mark in chrome when callers only passed a title string
+      if (typeof gameMarkHtml === 'function' && o.hideGameMark !== true) {
+        try {
+          const heading = overlay.querySelector('.game-chrome-heading');
+          if (heading && !heading.querySelector('.game-chrome-mark')) {
+            const wrap = document.createElement('span');
+            wrap.className = 'game-chrome-mark';
+            wrap.innerHTML = gameMarkHtml(gameId, { size: 22 });
+            const titleEl = heading.querySelector('.game-chrome-title');
+            if (titleEl) heading.insertBefore(wrap, titleEl);
+            else heading.appendChild(wrap);
+          }
+        } catch (e) {}
+      }
     }
     unlockGameOrientation();
     requestAnimationFrame(() => {
@@ -859,8 +882,12 @@
     const meta = safe(s.meta || '');
     const vs = s.vs ? safe(s.vs) : '';
     const accent = resolveGameAccent(gameId, GAME_ACCENTS.quiz);
+    const mark =
+      typeof gameMarkHtml === 'function'
+        ? `<span class="game-share-mark">${gameMarkHtml(gameId, { size: 22 })}</span>`
+        : '';
     return `<div class="game-share-card" data-game-share="${safe(gameId)}" style="--share-accent:${accent}">
-      <div class="game-share-brand">${gameBrandMarkHtml(false)} · ${name}</div>
+      <div class="game-share-brand">${mark}${gameBrandMarkHtml(false)} · ${name}</div>
       <div class="game-share-score${String(rawScore).length > 40 ? ' game-share-score--caption' : ''}">${scoreLine}</div>
       ${meta ? `<div class="game-share-meta">${meta}</div>` : ''}
       ${vs ? `<div class="game-share-vs">${vs}</div>` : ''}

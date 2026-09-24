@@ -25,6 +25,7 @@
       id,
       name: g?.name || (typeof GAME_LABELS !== 'undefined' && GAME_LABELS[id]) || id,
       icon: g?.icon || '🎮',
+      markHtml: typeof gameMarkHtml === 'function' ? gameMarkHtml(id, { size: 22 }) : null,
     };
   }
 
@@ -173,7 +174,11 @@
         ${list
           .map(
             (c) => `<button type="button" class="khel-daily${c.done ? ' is-done' : ''}" data-khel-game="${esc(c.gameId)}">
-            <span class="khel-daily-ico">${esc(c.icon || '🎮')}</span>
+            <span class="khel-daily-ico">${
+              typeof gameMarkHtml === 'function'
+                ? gameMarkHtml(c.gameId, { size: 22 })
+                : esc(c.icon || '🎮')
+            }</span>
             <span class="khel-daily-label">${esc(c.label)}</span>
             <span class="khel-daily-mark">${c.done ? '✓' : '→'}</span>
           </button>`

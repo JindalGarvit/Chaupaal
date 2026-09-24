@@ -29,8 +29,10 @@
           return (
             '<div class="dangal-profile__game-card" style="--game-primary:' +
             (id.primary || '#888') +
-            '"><span>' +
-            (id.icon || '🎮') +
+            '"><span class="dangal-profile__game-mark">' +
+            (typeof gameMarkHtml === 'function'
+              ? gameMarkHtml(stats.gameType, { size: 22 })
+              : id.icon || '🎮') +
             '</span><span>' +
             (id.label || stats.gameType) +
             '</span>' +

@@ -409,7 +409,8 @@ textarea.auth-input,
   text-align: center;
   padding: 8px 4px 4px;
 }
-.cp-challenge-pick .cp-challenge-icon { font-size: 40px; line-height: 1; margin-bottom: 8px; }
+.cp-challenge-pick .cp-challenge-icon { font-size: 40px; line-height: 1; margin-bottom: 8px; display: grid; place-items: center; }
+.cp-challenge-pick .cp-challenge-icon .dangal-game-mark-wrap { margin: 0 auto; }
 .cp-challenge-pick h3 {
   margin: 0 0 4px;
   font-family: var(--font-display, 'Space Grotesk', sans-serif);

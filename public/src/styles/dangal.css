@@ -188,7 +188,8 @@
   border:1px solid color-mix(in srgb, var(--challenge-color,#E63946) 45%, var(--line,#ddd));
 }
 .baithak-challenge-card__header{display:flex;gap:10px;align-items:center;}
-.baithak-challenge-card__header span{font-size:22px;line-height:1;}
+.baithak-challenge-card__header > span{font-size:22px;line-height:1;}
+.baithak-challenge-card__mark{line-height:0;}
 .baithak-challenge-card__header strong{display:block;font:700 14px var(--font-display,'Space Grotesk',sans-serif);}
 .baithak-challenge-card__from{display:block;font-size:11px;color:var(--muted);}
 .baithak-challenge-card__detail{font-size:12px;color:var(--muted);margin-top:8px;}

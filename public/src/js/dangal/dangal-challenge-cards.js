@@ -113,8 +113,10 @@
       '" data-challenge-match="' +
       esc(att.matchId || '') +
       '">' +
-      '<div class="baithak-challenge-card__header"><span>' +
-      esc(att.gameIcon || '🎮') +
+      '<div class="baithak-challenge-card__header"><span class="baithak-challenge-card__mark">' +
+      (typeof gameMarkHtml === 'function'
+        ? gameMarkHtml(att.gameType, { size: 28, color: color })
+        : esc(att.gameIcon || '🎮')) +
       '</span><div><strong>' +
       esc(att.gameName || 'Game') +
       '</strong><span class="baithak-challenge-card__from">' +

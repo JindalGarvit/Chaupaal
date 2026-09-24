@@ -79,6 +79,8 @@ Implementation lives primarily in:
 
 **Trust T1 (dogfood + soak):** Verified T0 holds across Peepal/Duniya/Baithak/Akhbaar/Khoj. Soak fixes: universal search offline path guest-only SAMPLE; Baithak wish never falls back to `SAMPLE_CHATS` when signed-in. Arc complete — residuals below.
 
+**Dangal R4-0 (custom marks):** `GAME_IDENTITY` carries curated inline SVG `mark` per Manch id; `gameMarkHtml(id, { size })` prefers SVG (emoji `icon` fallback). Wired on Manch tiles, GOTD, chat pickers, prepare overlay, challenge cards/pick sheet, Khel dailies, profile stats, share/results chrome (`prepareGameOverlay` injects chrome mark). Aliases (`muqabala`→quiz, `tictactoe`→ttt, …) share canonical marks. No logo settings UI; client-only (Hobby `api/*.js` = 12). Next: R4-1 federation honesty.
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.

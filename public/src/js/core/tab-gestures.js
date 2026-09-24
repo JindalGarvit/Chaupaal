@@ -1054,14 +1054,20 @@
         return;
       }
 
-      const renderBody = (game) => `
+      const renderBody = (game) => {
+        const mark =
+          typeof gameMarkHtml === 'function'
+            ? gameMarkHtml(game.id, { size: 48 })
+            : escHtml(game.icon || '🎮');
+        return `
         <div class="cp-challenge-pick">
-          <div class="cp-challenge-icon" aria-hidden="true">${escHtml(game.icon || '🎮')}</div>
+          <div class="cp-challenge-icon" aria-hidden="true">${mark}</div>
           <h3>${escHtml(game.name || game.id)}</h3>
           <p>${tt('dangal_challenge_sub', 'Random from Manch — not today’s Game of the Day.')}</p>
           <button type="button" class="btn btn--primary btn--block" data-challenge-start>${tt('dangal_challenge_start', 'Challenge')}</button>
           <button type="button" class="btn btn--ghost btn--block" data-challenge-reroll style="margin-top:8px;">${tt('dangal_challenge_reroll', 'Pick another')}</button>
         </div>`;
+      };
 
       if (typeof openHalfSheet !== 'function') {
         startChallenge(pick.id);

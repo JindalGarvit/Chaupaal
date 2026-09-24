@@ -710,8 +710,8 @@
             '<button data-i="' +
             i +
             '" type="button" style="flex:1;padding:13px 14px;background:var(--cream);border:2px solid var(--line);border-radius:14px;text-align:left;display:flex;align-items:center;gap:12px;cursor:pointer;">' +
-            '<span style="font-size:26px;flex-shrink:0;">' +
-            g.emoji +
+            '<span class="dangal-picker-mark" style="flex-shrink:0;">' +
+            (typeof gameMarkHtml === 'function' ? gameMarkHtml(g.id, { size: 28 }) : g.emoji || '🎮') +
             '</span>' +
             '<div><div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;">' +
             g.name +
@@ -736,8 +736,8 @@
             '<button data-i="' +
             i +
             '" type="button" style="flex:1;padding:13px 14px;background:var(--cream);border:2px solid var(--line);border-radius:14px;text-align:left;display:flex;align-items:center;gap:12px;cursor:pointer;">' +
-            '<span style="font-size:26px;flex-shrink:0;">' +
-            g.emoji +
+            '<span class="dangal-picker-mark" style="flex-shrink:0;">' +
+            (typeof gameMarkHtml === 'function' ? gameMarkHtml(g.id, { size: 28 }) : g.emoji || '🎮') +
             '</span>' +
             '<div><div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;">' +
             g.name +
@@ -983,8 +983,10 @@
     const sheet = document.createElement('div');
     sheet.style.cssText =
       'position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:22px;z-index:100;';
+    const prepMark =
+      typeof gameMarkHtml === 'function' ? gameMarkHtml(gameId, { size: 28 }) : game.icon || '';
     sheet.innerHTML = `
-    <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;margin-bottom:4px;">${game.icon} ${game.name}</div>
+    <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;margin-bottom:4px;display:flex;align-items:center;gap:10px;">${prepMark}<span>${game.name}</span></div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">${
       liveOk
         ? 'Practice vs AI anytime — or challenge a real friend for Live 1v1.'

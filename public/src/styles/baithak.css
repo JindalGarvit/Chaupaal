@@ -762,7 +762,24 @@ html.kb-open .cp-mini-player.cp-mini-fab:not(.is-expanded){bottom:12px;}
   gap:var(--space-2);
 }
 .dangal-game-tile:active{transform:scale(0.97);box-shadow:var(--shadow-sm);}
-.dangal-game-icon{font-size:32px;margin-bottom:0;}
+.dangal-game-icon{font-size:32px;margin-bottom:0;display:grid;place-items:center;}
+.dangal-game-mark-wrap{
+  display:inline-grid;place-items:center;line-height:0;flex-shrink:0;
+  vertical-align:middle;
+}
+.dangal-game-mark-wrap--emoji{line-height:1;}
+.dangal-game-mark{display:block;width:100%;height:100%;}
+.dangal-game-icon .dangal-game-mark-wrap{width:28px;height:28px;}
+.dangal-gotd-icon .dangal-game-mark-wrap{width:40px;height:40px;}
+.dangal-continue-mark{display:inline-flex;vertical-align:middle;margin-right:2px;}
+.dangal-continue-mark .dangal-game-mark-wrap{width:18px;height:18px;}
+.khel-daily-ico .dangal-game-mark-wrap{width:22px;height:22px;}
+.cp-challenge-icon .dangal-game-mark-wrap{margin:0 auto 8px;}
+.baithak-challenge-card__mark{display:inline-grid;place-items:center;line-height:0;}
+.baithak-challenge-card__mark .dangal-game-mark-wrap{width:28px;height:28px;}
+.game-chrome-mark{display:inline-flex;margin-right:6px;vertical-align:middle;}
+.game-share-mark{display:inline-flex;margin-right:6px;vertical-align:middle;}
+.game-result-glyph--mark{background:color-mix(in srgb,var(--game-accent,#E63946) 12%,transparent);}
 .dangal-game-name{font-family:var(--font-display);font-weight:700;font-size:var(--text-base);}
 .dangal-game-desc{font-size:var(--text-xs);color:var(--muted);margin-top:3px;line-height:1.4;}
 .dangal-game-rating-pill{display:inline-flex;align-items:center;gap:4px;background:rgba(230,57,70,0.08);color:var(--red);border-radius:var(--r-full);padding:3px 9px;font-size:11px;font-weight:700;margin-top:var(--space-2);}

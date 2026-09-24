@@ -4444,6 +4444,13 @@ select:focus-visible,
   background:color-mix(in srgb,var(--tile-accent,var(--red)) 12%,transparent);
   font-size:22px !important;margin-bottom:10px !important;
 }
+.dangal-game-tile .dangal-game-icon .dangal-game-mark-wrap{
+  width:28px;height:28px;
+}
+.dangal-game-mark-wrap{
+  display:inline-grid;place-items:center;line-height:0;flex-shrink:0;
+}
+.dangal-game-mark{display:block;max-width:100%;max-height:100%;}
 .dangal-game-rating-pill{
   display:inline-flex;align-items:center;gap:4px;border-radius:var(--r-full);
   background:rgba(0,0,0,.04);color:var(--ink);font-weight:700;
