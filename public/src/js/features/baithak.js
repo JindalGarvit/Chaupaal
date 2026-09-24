@@ -70,14 +70,14 @@ function initBaithak(){
     if(typeof clearBaithakSampleInbox==='function') clearBaithakSampleInbox();
   }
   if(!currentUser){
-    const samples=typeof SAMPLE_CHATS!=='undefined'
-      ? SAMPLE_CHATS.filter((c)=>c.isSample||c.isDemo||c.type==='self').map((c)=>(c.isSample||c.isDemo?{...c,isDemo:true,isSample:true}:c))
-      : [];
-    const guest=typeof pinSelfChat==='function'?pinSelfChat(samples):samples;
-    // Guest list is render-only — do not pollute live baithakChats with SAMPLE
+    // Guest list is render-only — Demo only on Sabha (B0/B2); never pollute baithakChats
     if(typeof clearBaithakSampleInbox==='function') clearBaithakSampleInbox();
     else if(typeof baithakChats!=='undefined') baithakChats=typeof pinSelfChat==='function'?pinSelfChat([]):[];
-    renderChatList(guest);
+    if(typeof setBaithakSection==='function') setBaithakSection('sabha');
+    else {
+      const guest=typeof baithakGuestSabhaList==='function'?baithakGuestSabhaList():[];
+      renderChatList(guest);
+    }
     if(typeof mountBaithakFriendRequests==='function') mountBaithakFriendRequests();
     return;
   }

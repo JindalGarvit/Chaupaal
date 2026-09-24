@@ -22,7 +22,7 @@
     baithak: {
       sabha: { brand: 'Sabha', job: 'All your chats' },
       sambhavanayein: { brand: 'Sambhavanayein', job: 'New connections' },
-      mitra: { brand: 'Mitra', job: 'Friends' },
+      mitra: { brand: 'Mitra', job: 'Friends & groups' },
     },
     akhbaar: {
       surkhiya: { brand: 'Surkhiya', job: 'Digest · Jump to play' },

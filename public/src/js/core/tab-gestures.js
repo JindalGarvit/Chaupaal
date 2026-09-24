@@ -488,7 +488,7 @@
         },
         {
           id: 'mitra',
-          label: typeof morphLabel === 'function' ? morphLabel('baithak', 'mitra', 'Mitra') : 'Mitra · Friends',
+          label: typeof morphLabel === 'function' ? morphLabel('baithak', 'mitra', 'Mitra') : 'Mitra · Friends & groups',
           run: () => {
             switchTo('baithak');
             if (typeof setBaithakSection === 'function') setBaithakSection('mitra');

@@ -69,6 +69,8 @@ Implementation lives primarily in:
 
 **Baithak B1 (pins):** Sabha pin order always **Chaupaal → Me → rest** via hardened `pinSelfChat` (rebuilds for active uid). DOM re-asserts missing pin rows. Auth/account-switch: clear Demo → `pinSelfChat([])` → paint → ensure docs. Empty Sabha keeps pins + Invite/Find (never “Demo” for signed-in). Self/Chaupaal undeletable (actions gated).
 
+**Baithak B2 (sections):** Sabha = full inbox + pins. Sambhavanayein = non-friend / non-follow DMs only (no groups, no pins). Mitra = friend **or** following DMs **+ all groups** (lock 2A; pins stay on Sabha). `filterBaithakSectionChats` shared by list + unread; blocked peers hidden; `chaupaal:relationship-changed` re-filters without reload. Guest Demo only on Sabha; Sambhav/Mitra empty → Sign in. Empties: Mitra “friends and groups land here”; Sambhav points to Mitra for friends/groups. Swipe `sambhavanayein ↔ sabha ↔ mitra`; morph jobs Sabha all / Sambhav new / Mitra friends & groups.
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.
