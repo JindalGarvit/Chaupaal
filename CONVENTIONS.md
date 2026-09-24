@@ -85,9 +85,11 @@ Implementation lives primarily in:
 
 **Dangal R4 done (R4-2 dogfood + soak):** Marks + lite honesty verified. Soak fix: court `openShell` now passes `gameId` into `gameChromeHtml` and runs `prepareGameOverlay` after chrome DOM (in-game header mark matches Manch). Leave/cleanup RAF OK. Residuals: full federation timers/sets, user-uploaded logos, Scribble party, bowling physics beyond lite oil, Quiet overlay enter motion (marks themselves static). Arc complete — next is a planning choice.
 
-**Infra I0 (category cache cron):** Hobby-safe daily cron `/api/refresh-category-cache` `0 2 * * *` in `vercel.json` (alongside scheduler). Pause/AI-off/budget → 200 no-op; partial failures keep prior caches; cold client Offline empty. Residuals: vector index, content embeddings.
+**Infra I0 (category cache cron):** Hobby-safe daily cron `/api/refresh-category-cache` `0 2 * * *` in `vercel.json` (alongside scheduler). Pause/AI-off/budget → 200 no-op; partial failures keep prior caches; cold client Offline empty. 
 
 **Infra I1 (dogfood + soak):** Soak fixes — cron `bumpBudget`; merge never empties the other field; default limit = all scoped jobs; paused client only serves `webGrounded` v2; unpause checklist + `AI_JOBS_PAUSED` / client `CAT_LIVE_AI_PAUSED` clarified. Arc complete.
+
+**Infra I2 (content embeddings):** Public `duniya`/`peepal` `contentEmbedding` via enrichment; `rankContentItems` / Mashhoor / Prasidha / `rank_content` consume cosine when present. Residuals: jobs/env polish (I3), dogfood+soak (I4).
 
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
@@ -259,7 +261,8 @@ Enforcement is **ON** for Firestore / RTDB (and Storage if enabled). Client uses
 - Interfaces: `retrieveCandidates` / `rankCandidates` / `rankContentItems` in `server-lib/retrieve-rank.js`.
 - **Backends** (`CHAUPAAL_RETRIEVAL_BACKEND`, default `firestore-shards`):
   - `firestore-shards` — `candidatePools/*` merge + hydrate (unchanged).
-  - `vector-index` — **people only**: pool prefilter (≤12 shards, ≤96 entries) → hydrate (≤80 reads) → in-process cosine on `users.profileEmbedding` → top-K. No unbounded full-scan. Missing viewer/candidate embeddings or errors → **fall through** to shards (never hard-fail empty). Content embeddings = Infra I2. External SaaS only if already in env; v1 is cosine in-process.
+  - `vector-index` — **people only**: pool prefilter (≤12 shards, ≤96 entries) → hydrate (≤80 reads) → in-process cosine on `users.profileEmbedding` → top-K. No unbounded full-scan. Missing viewer/candidate embeddings or errors → **fall through** to shards (never hard-fail empty). External SaaS only if already in env; v1 is cosine in-process.
+- **Content embeddings (Infra I2):** offline `runContentEmbeddingJob` writes `contentEmbedding: { vector, textHash, model, provider, updatedAt }` on public `duniya`/`peepal` only (caption/question/title/tag; redacted). `rankContentItems` / Mashhoor / Prasidha / `rank_content` blend cosine vs viewer `profileEmbedding` when present; missing vectors → velocity/recency.
 - Discovery (`intent_discover`) and `personal_match` retrieve from pools; ranking adds P5 model features + per-result `explain`. No LLM in scoring.
 - Content: `rank_content` on `api/peepal-reactions`; Manch: `rank_manch_library` on `api/media-config` (GOTD fairness untouched). Client `requestContentRank` / `_serverScore` must not fight server order.
 - Exploration ~18% (cold-start ~35%). Scheduler refreshes pools via `refreshCandidatePools`.
@@ -274,11 +277,13 @@ Enforcement is **ON** for Firestore / RTDB (and Storage if enabled). Client uses
 - **6A:** Ranking/pairing read stored fields only — never `callAI` at request time. Enrichment is batch-only (`api/chaupaal-scheduler` → `runAiEnrichmentBatch`).
 - **7A:** `server-lib/ai.js` registry — `anthropic` + `openai-compatible` (covers Grok / cheap OpenAI-shaped APIs). Swap via `AI_PROVIDER` + keys only.
 - Embeddings: `server-lib/embeddings.js` (`EMBED_PROVIDER=gemini|openai-compatible`); independent of `AI_FEATURES_ENABLED`; `textHash` dedupe.
-- Jobs: content topic labels (duniya/peepal), Akhbaar `category_cache` heuristic seed, profile derived interests (never overwrite declared chips), cold-start internal summary, profile embed sweep. **Content embeddings skipped** (P6 does not consume them).
-- Cache: `topicLabel.contentHash` + `LABEL_VERSION`; budget: `chaupaalMeta/aiBudget` + `AI_DAILY_CALL_CAP` + `AI_JOBS_PAUSED`.
+- Jobs: content topic labels (duniya/peepal), Akhbaar `category_cache` heuristic seed, profile derived interests (never overwrite declared chips), cold-start internal summary, profile embed sweep, **content embeddings** (`contentEmbedding` on public `duniya`/`peepal`; hash-idempotent; ≤6/collection/scheduler tick). Rank consume: `rankContentItems` cosine vs viewer `profileEmbedding` when both present; else velocity/recency.
+- Cache: `topicLabel.contentHash` + `LABEL_VERSION`; budget: `chaupaalMeta/aiBudget` + `AI_DAILY_CALL_CAP` + `AI_JOBS_PAUSED`. Content embeds skip only when `AI_JOBS_PAUSED` or embed keys missing (`embed_keys_missing`) — not permanently.
 - Privacy: `redactForPrompt`; no journal/DM/search/contacts; personalization opt-out excluded; teens = heuristic-only profile enrich, no dating-intent inference; prohibited label blocklist.
-- **Category cron (Infra I0–I1 cron):** `vercel.json` schedules `/api/refresh-category-cache` daily `0 2 * * *` (~07:30 IST ±59m Hobby). Default **paused**. Unpause: `CATEGORY_CRON_PAUSED=false` + `AI_FEATURES_ENABLED=true` + `AI_JOBS_PAUSED` off + provider key + `CRON_SECRET` + Firebase SA. Pause / AI-off / budget → **200 no-op**; cron **bumps** `aiBudget` per generate; mid-run cap stops; partial field writes never wipe the other side; default limit = all jobs (scopes included). Client: cold → Offline (not live AI); paused path only serves `webGrounded` v2 docs. Residuals: content embeddings (I2), jobs/env polish (I3), dogfood+soak (I4), sub-daily cron (Pro), maxDuration raise. Env matrix in `.env.example`.
-- **People vector retrieval (Infra I1 vector):** `CHAUPAAL_RETRIEVAL_BACKEND=vector-index` → pool-prefilter cosine on `profileEmbedding` (see 11e). Default remains `firestore-shards`.- No user-facing AI dashboard (10B). Env matrix in `.env.example`.
+- **Category cron (Infra I0–I1 cron):** `vercel.json` schedules `/api/refresh-category-cache` daily `0 2 * * *` (~07:30 IST ±59m Hobby). Default **paused**. Unpause: `CATEGORY_CRON_PAUSED=false` + `AI_FEATURES_ENABLED=true` + `AI_JOBS_PAUSED` off + provider key + `CRON_SECRET` + Firebase SA. Pause / AI-off / budget → **200 no-op**; cron **bumps** `aiBudget` per generate; mid-run cap stops; partial field writes never wipe the other side; default limit = all jobs (scopes included). Client: cold → Offline (not live AI); paused path only serves `webGrounded` v2 docs. Residuals: jobs/env polish (I3), dogfood+soak (I4), sub-daily cron (Pro), maxDuration raise. Env matrix in `.env.example`.
+- **People vector retrieval (Infra I1 vector):** `CHAUPAAL_RETRIEVAL_BACKEND=vector-index` → pool-prefilter cosine on `profileEmbedding` (see 11e). Default remains `firestore-shards`.
+- **Content embeddings (Infra I2):** see 11e / jobs above — no longer permanently skipped.
+- No user-facing AI dashboard (10B). Env matrix in `.env.example`.
 
 ## 11h. Disclosure & arc close (P9)
 

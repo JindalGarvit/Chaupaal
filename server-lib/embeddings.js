@@ -117,10 +117,38 @@ async function embedTextDetailed(text) {
   return embedGemini(text);
 }
 
+/** True when the configured embed provider has a key (independent of AI_FEATURES_ENABLED). */
+function embeddingsConfigured() {
+  const provider =
+    EMBED_PROVIDER === 'openai' || EMBED_PROVIDER === 'openai-compatible'
+      ? 'openai-compatible'
+      : 'gemini';
+  if (provider === 'openai-compatible') {
+    return !!(process.env.OPENAI_API_KEY || process.env.AI_API_KEY);
+  }
+  return !!(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY);
+}
+
+function embedProviderModel() {
+  const provider =
+    EMBED_PROVIDER === 'openai' || EMBED_PROVIDER === 'openai-compatible'
+      ? 'openai-compatible'
+      : 'gemini';
+  if (provider === 'openai-compatible') {
+    return {
+      provider,
+      model: process.env.OPENAI_EMBED_MODEL || 'text-embedding-3-small',
+    };
+  }
+  return { provider: 'gemini', model: GEMINI_MODEL };
+}
+
 module.exports = {
   EMBED_PROVIDER,
   GEMINI_MODEL,
   textHash,
   embedText,
   embedTextDetailed,
+  embeddingsConfigured,
+  embedProviderModel,
 };

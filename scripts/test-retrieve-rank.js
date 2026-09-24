@@ -130,6 +130,48 @@ const noModel = rankContentItems({
 });
 assert(noModel.length === 2, 'non-personalized path works');
 
+// Infra I2: contentEmbedding cosine prefers semantic neighbor when vectors exist
+const semanticPosts = [
+  {
+    id: 'sem-match',
+    uid: 'a1',
+    tag: 'x',
+    ts: Date.now() - 3600e3,
+    likes: 0,
+    comments: 0,
+    contentEmbedding: { vector: [1, 0, 0] },
+  },
+  {
+    id: 'sem-hot',
+    uid: 'a2',
+    tag: 'y',
+    ts: Date.now() - 3600e3,
+    likes: 80,
+    comments: 20,
+    contentEmbedding: { vector: [0, 1, 0] },
+  },
+];
+const withEmb = rankContentItems({
+  surface: 'duniya',
+  items: semanticPosts,
+  model: null,
+  opts: {
+    viewerUid: 'viewer',
+    viewerEmbedding: { vector: [1, 0, 0] },
+    limit: 5,
+  },
+});
+assert(withEmb[0].id === 'sem-match', 'contentEmbedding neighbor ranks above velocity when vectors exist');
+assert((withEmb[0].components?.emb || 0) > 0.5, 'embedding component set');
+
+const noEmb = rankContentItems({
+  surface: 'duniya',
+  items: semanticPosts.map(({ contentEmbedding, ...rest }) => rest),
+  model: null,
+  opts: { viewerUid: 'viewer', viewerEmbedding: { vector: [1, 0, 0] }, limit: 5 },
+});
+assert(noEmb[0].id === 'sem-hot', 'without content vectors velocity/recency wins');
+
 const games = [
   { id: 'chess', plays: 10 },
   { id: 'wordguess', plays: 2 },
@@ -247,7 +289,7 @@ assert(!scored.some((c) => c.uid === 'c-no-embed'), 'missing embedding skipped')
     viewer,
     vectorCandidates: vectorFixtures,
   });
-  assert(contentStub.implemented === false, 'content vector deferred to I2');
+  assert(contentStub.implemented === false, 'vector-index people-only (content ranked via contentEmbedding)');
 
   console.log('\nRetrieve-rank unit tests passed.');
 })().catch((e) => {

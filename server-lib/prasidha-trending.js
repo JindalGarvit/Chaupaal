@@ -5,7 +5,7 @@
  * Window: last 7 days (matches i18n “trending this week”).
  * Pool: public Duniya posts only.
  * Excludes: SAMPLE/demo/seed, deleted, archived, saveOnly, non-public audiences.
- * Ranking: retrieve-rank rankContentItems (velocity + recency; light follow boost).
+ * Ranking: retrieve-rank rankContentItems (velocity + recency + contentEmbedding when present).
  * Live query — no denormalized cache (Hobby-friendly; ~120 doc scan).
  */
 'use strict';
@@ -61,6 +61,9 @@ function toItem(id, data) {
     shares: Number(data.shares) || 0,
     tags: Array.isArray(data.tags) ? data.tags : [],
     hashtags: Array.isArray(data.hashtags) ? data.hashtags : [],
+    topics: Array.isArray(data.topics) ? data.topics : [],
+    tag: data.tag || data.topicPrimary || '',
+    contentEmbedding: data.contentEmbedding || null,
     ts,
     createdAtMs: ts,
     audience: data.audience || 'public',
@@ -133,11 +136,13 @@ async function prasidhaTrending(db, admin, user, body = {}) {
   let friendUids = [];
   let model = null;
   let optedOut = false;
+  let viewerEmbedding = null;
   if (user?.uid) {
     try {
       const viewerSnap = await db.collection('users').doc(user.uid).get();
       const viewer = { uid: user.uid, ...(viewerSnap.data() || {}) };
       optedOut = isOptedOutUser(viewer);
+      viewerEmbedding = viewer.profileEmbedding || null;
       model = await loadModelSafe(db, user.uid, { optedOut });
       const fol = await db.collection('users').doc(user.uid).collection('following').limit(80).get();
       friendUids = fol.docs.map((doc) => doc.id);
@@ -155,6 +160,7 @@ async function prasidhaTrending(db, admin, user, body = {}) {
       friendUids,
       friendSlots: 3, // light follow boost — strangers still fill the rest
       limit: offset + limit,
+      viewerEmbedding: optedOut ? null : viewerEmbedding,
     },
   });
 

@@ -12,7 +12,8 @@
  *   vector-index — people only: pool prefilter (bounded) → cosine on
  *     users.profileEmbedding → top-K. No full collection scan.
  *     Miss / error / empty → fall through to firestore-shards.
- *     Content embeddings = Infra I2 (not this backend).
+ *     Content item ranking uses contentEmbedding cosine (Infra I2) inside
+ *     rankContentItems — separate from this people retrieval backend.
  * External vector SaaS (Pinecone/etc.) only if env already configured —
  * v1 is in-process cosine; swap stays behind the same env flag.
  *
@@ -59,14 +60,15 @@ const MODEL_FEATURE_WEIGHTS = {
   formatAffinity: 0.05,
 };
 
-/** Content blend (normalized later). */
+/** Content blend (normalized later). embedding used when both viewer + item vectors exist. */
 const CONTENT_WEIGHTS = {
-  velocity: 0.28,
-  topic: 0.22,
-  author: 0.14,
-  recency: 0.16,
-  format: 0.1,
-  exploration: 0.1,
+  velocity: 0.22,
+  topic: 0.18,
+  author: 0.12,
+  recency: 0.14,
+  format: 0.08,
+  exploration: 0.08,
+  embedding: 0.18,
 };
 
 const MANCH_WEIGHTS = {
@@ -795,6 +797,8 @@ function rankCandidates(args = {}) {
 
 /**
  * Rank feed/content items (already fetched). Pure.
+ * When viewer + item contentEmbedding vectors exist, cosine similarity blends in;
+ * otherwise velocity/recency/topic path unchanged (graceful AI/embed-off fallback).
  */
 function rankContentItems({ surface = 'duniya', items = [], model = null, opts = {} } = {}) {
   const now = Date.now();
@@ -805,6 +809,10 @@ function rankContentItems({ surface = 'duniya', items = [], model = null, opts =
   const topics = useModel ? topTopicKeys(model, 10) : [];
   const formats = useModel ? model.formats || {} : {};
   const people = useModel ? model.people || {} : {};
+  const viewerVec =
+    profileEmbeddingVector(opts.viewerEmbedding) ||
+    profileEmbeddingVector(opts.viewer) ||
+    null;
 
   const scored = (items || []).map((item, idx) => {
     const id = String(item.id || item.firestoreId || idx);
@@ -888,21 +896,42 @@ function rankContentItems({ surface = 'duniya', items = [], model = null, opts =
     const isNewAuthor = !!(item.authorIsNew || (item.authorCreatedAt && now - Number(item.authorCreatedAt) < 14 * 864e5));
     const exploreBoost = isNewAuthor || (!friendSet.has(author) && vel < 0.2) ? NEW_AUTHOR_FLOOR + 0.05 : 0;
 
+    // Infra I2: contentEmbedding cosine vs viewer profileEmbedding (when both present)
+    let emb = 0;
+    const itemVec =
+      profileEmbeddingVector(item.contentEmbedding) ||
+      profileEmbeddingVector(item.embedding) ||
+      null;
+    if (viewerVec?.length && itemVec?.length && viewerVec.length === itemVec.length) {
+      emb = clamp01(Math.max(0, cosineSimilarity(viewerVec, itemVec)));
+    }
+
     let score =
       vel * CONTENT_WEIGHTS.velocity +
       topic * CONTENT_WEIGHTS.topic +
       authorAff * CONTENT_WEIGHTS.author +
       rec * CONTENT_WEIGHTS.recency +
       formatAff * CONTENT_WEIGHTS.format +
+      emb * CONTENT_WEIGHTS.embedding +
       exploreBoost;
 
     if (!useModel || cold) {
-      // Non-personalized / cold: recency + velocity + friend slots
-      score = vel * 0.45 + rec * 0.35 + (friendSet.has(author) ? 0.2 : 0) + exploreBoost;
+      // Non-personalized / cold: velocity + recency; blend embed when viewer vector present
+      if (viewerVec?.length) {
+        score =
+          vel * 0.28 +
+          rec * 0.22 +
+          emb * 0.35 +
+          (friendSet.has(author) ? 0.15 : 0) +
+          exploreBoost;
+      } else {
+        score = vel * 0.45 + rec * 0.35 + (friendSet.has(author) ? 0.2 : 0) + exploreBoost;
+      }
     }
 
     const explain = [];
     if (friendSet.has(author)) explain.push('From someone you follow');
+    if (emb > 0.55) explain.push('Similar to your interests');
     if (topic > 0.45 && tag) explain.push(`Matches your interest in ${tag}`);
     else if (topic > 0.45) explain.push('Fits your interests');
     if (vel > 0.5) explain.push('Trending now');
@@ -914,8 +943,8 @@ function rankContentItems({ surface = 'duniya', items = [], model = null, opts =
       item,
       score,
       explain: explain.slice(0, 3),
-      components: { vel, topic, authorAff, rec, formatAff, exploreBoost },
-      explore: !!(isNewAuthor || exploreBoost > 0 || (!friendSet.has(author) && topic < 0.2)),
+      components: { vel, topic, authorAff, rec, formatAff, emb, exploreBoost },
+      explore: !!(isNewAuthor || exploreBoost > 0 || (!friendSet.has(author) && topic < 0.2 && emb < 0.35)),
       friend: friendSet.has(author),
     };
   });

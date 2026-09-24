@@ -4,7 +4,7 @@
  * Window: last 7 days (matches i18n “this week”).
  * Pool: public Peepal posts only (audience everyone/public).
  * Excludes: seeds (isSeedContent), deleted, archived, saveOnly, friends/followers-only.
- * Ranking: retrieve-rank rankContentItems (velocity + recency; optional friend boost).
+ * Ranking: retrieve-rank rankContentItems (velocity + recency + contentEmbedding when present).
  * Live query — no denormalized cache (Hobby-friendly; ~120 doc scan).
  */
 'use strict';
@@ -42,6 +42,7 @@ function toItem(id, data) {
     format: data.format || 'open',
     tag: data.tag || '',
     topics: Array.isArray(data.topics) ? data.topics : [],
+    contentEmbedding: data.contentEmbedding || null,
     totalResponses: Number(data.totalResponses) || 0,
     comments: Number(data.comments) || 0,
     likes: Number(data.likes || data.likeCount) || 0,
@@ -128,11 +129,13 @@ async function mashhoorTrending(db, admin, user, body = {}) {
   let friendUids = [];
   let model = null;
   let optedOut = false;
+  let viewerEmbedding = null;
   if (user?.uid) {
     try {
       const viewerSnap = await db.collection('users').doc(user.uid).get();
       const viewer = { uid: user.uid, ...(viewerSnap.data() || {}) };
       optedOut = isOptedOutUser(viewer);
+      viewerEmbedding = viewer.profileEmbedding || null;
       model = await loadModelSafe(db, user.uid, { optedOut });
       const fol = await db.collection('users').doc(user.uid).collection('following').limit(80).get();
       friendUids = fol.docs.map((d) => d.id);
@@ -150,6 +153,7 @@ async function mashhoorTrending(db, admin, user, body = {}) {
       friendUids,
       friendSlots: 3,
       limit: offset + limit,
+      viewerEmbedding: optedOut ? null : viewerEmbedding,
     },
   });
 

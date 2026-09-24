@@ -1,8 +1,11 @@
 /**
  * Offline AI enrichment (P8) — batch topic labels, profile enrichment, cold-start
- * summaries, embedding sweep. Ranking/pairing never call this at request time.
+ * summaries, profile + content embedding sweeps. Ranking/pairing never call this
+ * at request time (6A).
  *
- * Content embeddings: SKIPPED — P6 retrieval does not consume content vectors yet.
+ * Content embeddings (Infra I2): public peepal/duniya docs only → contentEmbedding
+ * { vector, textHash, model, provider, updatedAt }. Hash-idempotent via embedText.
+ * Skipped only when AI_JOBS_PAUSED or embed keys missing — not permanently.
  */
 'use strict';
 
@@ -13,7 +16,12 @@ const {
   AI_JOBS_PAUSED,
   AI_DAILY_CALL_CAP,
 } = require('./ai-config');
-const { textHash } = require('./embeddings');
+const {
+  textHash,
+  embedText,
+  embeddingsConfigured,
+  embedProviderModel,
+} = require('./embeddings');
 const { INTEREST_CHIPS } = require('./user-model');
 const { buildSemanticText } = require('./matchmaking');
 
@@ -21,6 +29,7 @@ const LABEL_VERSION = 'p8.1';
 const BATCH_CONTENT = 12;
 const BATCH_PROFILES = 10;
 const BATCH_EMBEDS = 8;
+const BATCH_CONTENT_EMBEDS = 6;
 
 const PROHIBITED_TOPIC_KEYS = new Set(
   [
@@ -206,6 +215,46 @@ Return JSON only: {"topics":[{"key":"Travel","confidence":0.0}]}`,
 function extractContentText(doc) {
   const d = doc || {};
   return [d.caption, d.question, d.text, d.title, d.tag, d.summary].filter(Boolean).join('\n');
+}
+
+/**
+ * Public-projection text for content embeddings (title/caption/question/tag only).
+ * Never journals, DMs, or friends-only body fields.
+ */
+function buildContentEmbedText(doc) {
+  const d = doc || {};
+  const raw = [d.title, d.question, d.caption, d.tag, d.topicPrimary]
+    .map((x) => String(x || '').trim())
+    .filter(Boolean)
+    .join('\n');
+  return redactForPrompt(raw).slice(0, 2000);
+}
+
+/** Eligible for global contentEmbedding — public audience only. */
+function isPublicContentForEmbed(collection, data) {
+  if (!data || typeof data !== 'object') return false;
+  if (data.deleted === true || data.archived === true || data.saveOnly === true) return false;
+  if (data.hidden === true || data.shadowbanned === true) return false;
+  if (data.isSeedContent === true || data.isSample === true || data.isDemo === true) return false;
+  const col = String(collection || '').toLowerCase();
+  if (col === 'duniya') {
+    const a = String(data.audience || 'public').toLowerCase();
+    return a === 'public' || a === 'everyone' || a === '';
+  }
+  // peepal (and peepalPosts alias)
+  const a = String(data.audience || 'everyone').toLowerCase();
+  if (!(a === 'everyone' || a === 'public' || a === '')) return false;
+  const segs = data.audienceSegments;
+  if (Array.isArray(segs) && segs.length) {
+    const hasPublic = segs.some((s) => {
+      const k = String(s?.key || s?.audience || s?.id || s || '')
+        .toLowerCase()
+        .trim();
+      return !k || k === 'everyone' || k === 'public' || k === 'open' || k === 'all';
+    });
+    if (!hasPublic) return false;
+  }
+  return true;
 }
 
 /**
@@ -572,6 +621,94 @@ async function runAkhbaarTopicSeedJob(db, admin, { batchSize = 12 } = {}) {
 }
 
 /**
+ * Offline content embedding sweep (Infra I2) — public peepal/duniya only.
+ * Caps: BATCH_CONTENT_EMBEDS reads/writes per call; hash skip when unchanged.
+ * Collections: `duniya`, `peepal` (ranked feeds). No full historical crawl.
+ */
+async function runContentEmbeddingJob(db, admin, { collection = 'duniya', batchSize = BATCH_CONTENT_EMBEDS } = {}) {
+  if (!embeddingsConfigured()) {
+    return { skipped: true, reason: 'embed_keys_missing', collection };
+  }
+
+  const cursorRef = db.collection('chaupaalMeta').doc(`contentEmbedCursor_${collection}`);
+  const cursorSnap = await cursorRef.get();
+  const cursor = cursorSnap.exists ? cursorSnap.data() || {} : {};
+  let lastId = cursor.lastId || null;
+
+  let q = db.collection(collection).orderBy('__name__').limit(batchSize);
+  if (lastId) q = q.startAfter(lastId);
+  const snap = await q.get();
+  const meta = embedProviderModel();
+
+  const results = {
+    collection,
+    scanned: snap.size,
+    embedded: 0,
+    cached: 0,
+    skipped: 0,
+    skippedPrivate: 0,
+    errors: 0,
+  };
+
+  for (const doc of snap.docs) {
+    const data = doc.data() || {};
+    if (!isPublicContentForEmbed(collection, data)) {
+      results.skippedPrivate += 1;
+      continue;
+    }
+    const text = buildContentEmbedText(data);
+    if (!text.trim()) {
+      results.skipped += 1;
+      continue;
+    }
+    const hash = textHash(text);
+    const prev = data.contentEmbedding || {};
+    if (prev.textHash === hash && Array.isArray(prev.vector) && prev.vector.length) {
+      results.cached += 1;
+      continue;
+    }
+    try {
+      const vector = await embedText(text);
+      if (!Array.isArray(vector) || !vector.length) {
+        results.errors += 1;
+        continue;
+      }
+      await doc.ref.set(
+        {
+          contentEmbedding: {
+            vector,
+            textHash: hash,
+            model: meta.model,
+            provider: meta.provider,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+        },
+        { merge: true }
+      );
+      results.embedded += 1;
+    } catch (e) {
+      results.errors += 1;
+      // Missing keys mid-run → stop further embeds this slice
+      if (e?.code === 'NO_GEMINI' || e?.code === 'NO_OPENAI_EMBED') {
+        results.reason = e.code;
+        break;
+      }
+    }
+  }
+
+  if (snap.empty || snap.size < batchSize) {
+    await cursorRef.set({ lastId: null, updatedAt: new Date(), wrapped: true }, { merge: true });
+    results.wrapped = true;
+  } else {
+    await cursorRef.set(
+      { lastId: snap.docs[snap.docs.length - 1].id, updatedAt: new Date(), wrapped: false },
+      { merge: true }
+    );
+  }
+  return results;
+}
+
+/**
  * Scheduler entry: run enrichment slice within duration budget.
  */
 async function runAiEnrichmentBatch(db, admin) {
@@ -584,9 +721,9 @@ async function runAiEnrichmentBatch(db, admin) {
     akhbaar: null,
     profiles: null,
     embeds: null,
-    contentEmbeddings: { skipped: true, reason: 'P6_does_not_consume_content_vectors' },
+    contentEmbeddings: null,
     teenPolicy:
-      'Teens: heuristic-only profile enrichment; no dating-intent labels; stricter redaction if AI ever used for content.',
+      'Teens: heuristic-only profile enrichment; no dating-intent labels; content embeds use redacted public caption/question only.',
   };
   try {
     out.duniya = await runContentTopicLabelJob(db, admin, { collection: 'duniya', batchSize: 10 });
@@ -613,22 +750,50 @@ async function runAiEnrichmentBatch(db, admin) {
   } catch (e) {
     out.embeds = { error: e?.message || String(e) };
   }
+
+  // Infra I2: content embeddings for ranked feeds (conditional skip only)
+  if (!embeddingsConfigured()) {
+    out.contentEmbeddings = { skipped: true, reason: 'embed_keys_missing' };
+  } else {
+    out.contentEmbeddings = { skipped: false, reason: null, duniya: null, peepal: null };
+    try {
+      out.contentEmbeddings.duniya = await runContentEmbeddingJob(db, admin, {
+        collection: 'duniya',
+        batchSize: BATCH_CONTENT_EMBEDS,
+      });
+    } catch (e) {
+      out.contentEmbeddings.duniya = { error: e?.message || String(e) };
+    }
+    try {
+      out.contentEmbeddings.peepal = await runContentEmbeddingJob(db, admin, {
+        collection: 'peepal',
+        batchSize: BATCH_CONTENT_EMBEDS,
+      });
+    } catch (e) {
+      out.contentEmbeddings.peepal = { error: e?.message || String(e) };
+    }
+  }
   return out;
 }
 
 module.exports = {
   LABEL_VERSION,
   PROHIBITED_TOPIC_KEYS,
+  BATCH_CONTENT_EMBEDS,
   redactForPrompt,
   normalizeTopicKey,
   validateTopics,
   heuristicLabel,
   contentHash,
+  extractContentText,
+  buildContentEmbedText,
+  isPublicContentForEmbed,
   labelTextWithAI,
   runContentTopicLabelJob,
   runAkhbaarTopicSeedJob,
   runProfileEnrichmentJob,
   runEmbeddingSweepJob,
+  runContentEmbeddingJob,
   runAiEnrichmentBatch,
   loadBudget,
   bumpBudget,

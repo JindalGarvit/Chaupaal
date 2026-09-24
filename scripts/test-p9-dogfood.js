@@ -67,9 +67,12 @@ assert(/SOFT_BUDGET_MS/.test(sched), 'scheduler soft budget');
 assert(/timing:/.test(sched), 'scheduler timing in response');
 assert(/maxDuration:\s*120/.test(sched), 'scheduler maxDuration 120');
 
-// --- P8 residuals honesty ---
+// --- P8 / I2 residuals honesty ---
 const enrich = read('server-lib/ai-enrichment.js');
-assert(/P6_does_not_consume_content_vectors/.test(enrich), 'content embeddings skipped documented');
+assert(/runContentEmbeddingJob/.test(enrich), 'content embedding job present');
+assert(/embed_keys_missing/.test(enrich), 'content embeds conditional skip when keys missing');
+assert(!/P6_does_not_consume_content_vectors/.test(enrich), 'no permanent content-embed skip');
+assert(/contentEmbedding/.test(read('server-lib/retrieve-rank.js')), 'rank_content consumes contentEmbedding');
 assert(/isCategoryCronPaused/.test(read('server-lib/ai-config.js')), 'category cron env gate');
 const vercelJson = JSON.parse(read('vercel.json'));
 assert(

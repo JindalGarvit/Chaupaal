@@ -701,6 +701,7 @@ module.exports = async function handler(req, res) {
             pinnedIds: Array.isArray(body.pinnedIds) ? body.pinnedIds.slice(0, 20) : [],
             friendSlots: Number(body.friendSlots) || 3,
             limit: Number(body.limit) || items.length || 40,
+            viewerEmbedding: optedOut ? null : viewer.profileEmbedding || null,
           },
         });
         return sendSuccess(res, {

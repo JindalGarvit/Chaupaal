@@ -12,10 +12,13 @@ const {
   PROHIBITED_TOPIC_KEYS,
   LABEL_VERSION,
   budgetAllows,
+  isPublicContentForEmbed,
+  buildContentEmbedText,
+  BATCH_CONTENT_EMBEDS,
 } = require('../server-lib/ai-enrichment');
 const { resolveProviderId, resolveModel, PROVIDER_ALIASES, isCategoryCronPaused } = require('../server-lib/ai-config');
 const { PROVIDERS, AiDisabledError } = require('../server-lib/ai');
-const { textHash } = require('../server-lib/embeddings');
+const { textHash, embeddingsConfigured } = require('../server-lib/embeddings');
 
 function assert(cond, msg) {
   if (!cond) throw new Error(msg || 'assert failed');
@@ -79,5 +82,20 @@ else process.env.CATEGORY_CRON_PAUSED = prev;
 // --- Budget gate shape ---
 assert(budgetAllows({ paused: true, calls: 0 }) === false, 'paused budget blocks');
 assert(budgetAllows({ paused: false, calls: 999999 }) === false, 'over-cap or AI-off blocks');
+
+// --- Content embeddings (I2) public gate + text ---
+assert(BATCH_CONTENT_EMBEDS > 0 && BATCH_CONTENT_EMBEDS <= 12, 'content embed batch capped');
+assert(isPublicContentForEmbed('duniya', { audience: 'public', caption: 'hi' }), 'public duniya embeddable');
+assert(!isPublicContentForEmbed('duniya', { audience: 'private', caption: 'hi' }), 'private duniya skipped');
+assert(!isPublicContentForEmbed('peepal', { audience: 'friends', question: 'q' }), 'friends peepal skipped');
+assert(isPublicContentForEmbed('peepal', { audience: 'everyone', question: 'q' }), 'everyone peepal embeddable');
+assert(!isPublicContentForEmbed('peepal', { audience: 'everyone', saveOnly: true, question: 'q' }), 'saveOnly skipped');
+const embText = buildContentEmbedText({
+  question: 'Best trek near @secret?',
+  caption: 'email me@x.com',
+  tag: 'Travel',
+});
+assert(!embText.includes('@secret') && !embText.includes('me@x.com'), 'embed text redacts PII');
+assert(typeof embeddingsConfigured === 'function', 'embeddingsConfigured exported');
 
 console.log('\nAll P8 ai-enrichment tests passed.');
