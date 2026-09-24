@@ -601,6 +601,40 @@ window.consumeAkhbaarBeatChallenge=consumeAkhbaarBeatChallenge;
 window.wireAkhbaarShare=wireAkhbaarShare;
 window.akhbaarIsLiveSet=akhbaarIsLiveSet;
 
+/** A2: Surkhiya/Saathi → jump into Khabar reel (optionally focused on a card). */
+function focusAkhbaarQuestionAt(idx){
+  const stage=document.getElementById('reelStage');
+  const i=Number(idx);
+  if(!stage||!Number.isFinite(i)||i<0) return false;
+  try{maxUnlocked=Math.max(maxUnlocked,i);}catch(e){}
+  if(typeof _akhbaarUpdateProgress==='function') _akhbaarUpdateProgress();
+  stage.scrollTo({top:i*stage.clientHeight,behavior:'smooth'});
+  return true;
+}
+
+function jumpToAkhbaarKhabar(opts){
+  const o=opts||{};
+  const pendingIdx=o.idx!=null?Number(o.idx):null;
+  window.__akhbaarPendingFocusIdx=Number.isFinite(pendingIdx)?pendingIdx:null;
+  if(typeof setAkhbaarMode==='function') setAkhbaarMode('all');
+  const apply=()=>{
+    const pending=window.__akhbaarPendingFocusIdx;
+    window.__akhbaarPendingFocusIdx=null;
+    if(pending==null) return;
+    if(!focusAkhbaarQuestionAt(pending)&&typeof showToast==='function'){
+      showToast('Playing today’s Khabar');
+    }
+  };
+  setTimeout(apply,350);
+  if(typeof window.ensureAkhbaarBuilt==='function'){
+    try{
+      Promise.resolve(window.ensureAkhbaarBuilt()).then(()=>setTimeout(apply,200)).catch(()=>{});
+    }catch(e){}
+  }
+}
+window.focusAkhbaarQuestionAt=focusAkhbaarQuestionAt;
+window.jumpToAkhbaarKhabar=jumpToAkhbaarKhabar;
+
 
 // Reel-build boundary (CONVENTIONS 4c) — question set comes from the network
 if (typeof safeFeature === 'function') buildAkhbaar = safeFeature('akhbaar_build', buildAkhbaar);

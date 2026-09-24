@@ -381,7 +381,7 @@ button[style*="background:var(--red)"] {
   color:#7B2CBF!important;stroke:#7B2CBF!important;
 }
 
-/* Akhbaar Ã¢ÂÂ minimal Add category screen */
+/* Akhbaar ÃÂ¢ÃÂÃÂ minimal Add category screen */
 .akh-add-cat-overlay{
   position:absolute;inset:0;z-index:280;display:flex;flex-direction:column;
   background:linear-gradient(180deg,#F7F0FF 0%,#fff 42%);
@@ -526,7 +526,7 @@ button[style*="background:var(--red)"] {
   height: 58px !important;
 }
 .story-ring.seen { background: var(--line) !important; }
-/* Duniya story ring states live in duniya-story.css (.is-empty / .is-seen / .is-own) Ã¢ÂÂ no global override */
+/* Duniya story ring states live in duniya-story.css (.is-empty / .is-seen / .is-own) ÃÂ¢ÃÂÃÂ no global override */
 
 /* ============================================================
    PROFILE MODAL ? social-first layout
@@ -3784,8 +3784,10 @@ select:focus-visible,
 .akhbaar-mode-hint,.dangal-mode-hint,.duniya-mode-hint{display:none!important;}
 .surkhiya-chip{display:block;width:100%;text-align:left;padding:12px 14px;margin-bottom:8px;border:0;border-radius:14px;background:var(--white);border:1px solid var(--line);cursor:pointer;}
 .surkhiya-chip.is-expanded{background:var(--cream);}
+.surkhiya-chip-toggle{display:block;width:100%;text-align:left;padding:0;margin:0;border:0;background:transparent;cursor:pointer;color:inherit;font:inherit;}
 .surkhiya-chip-brief{display:block;margin-top:8px;font-size:13px;line-height:1.45;color:var(--ink);}
 .surkhiya-chip-brief.hidden{display:none;}
+.surkhiya-chip-brief-text{margin:0;}
 .surkhiya-personal{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
 .surkhiya-event{display:flex;gap:10px;align-items:center;padding:12px;border:0;border-radius:14px;background:rgba(230,57,70,.06);cursor:pointer;text-align:left;width:100%;}
 .surkhiya-event-copy{display:flex;flex-direction:column;gap:2px;}
@@ -4000,7 +4002,7 @@ select:focus-visible,
 .rw-sports-ball.is-live{opacity:1;left:62%;}
 .rw-sports-batter{position:absolute;right:18px;top:36%;font-size:32px;}
 
-/* Street Cricket delivery cinema (Prompt 1) Ã¢ÂÂ ball flight Ã¢ÂÂ hit zone */
+/* Street Cricket delivery cinema (Prompt 1) ÃÂ¢ÃÂÃÂ ball flight ÃÂ¢ÃÂÃÂ hit zone */
 .rw-sc-card h2{margin-top:0;}
 .rw-sc-pitch{
   height:168px;border-radius:16px;margin:0 0 14px;
@@ -6323,7 +6325,7 @@ html.quiet-mode .dp-arcade-burst,html.quiet-mode .dp-arcade-block{animation:none
 .auth-optional-summary::after{content:' +';color:var(--muted);font-weight:700;}
 .auth-optional-details[open] .auth-optional-summary::after{content:' ?';}
 
-/* Growth G6 Â PWA install sheet + standalone shell */
+/* Growth G6 ÃÂ PWA install sheet + standalone shell */
 .pwa-install-sheet{
   position:fixed;inset:0;z-index:100050;display:flex;align-items:flex-end;justify-content:center;
   background:rgba(20,22,30,.42);padding:12px;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));

@@ -382,6 +382,7 @@
     const city = String(viewerCity() || '').toLowerCase();
     const { industry, job } = viewerJobBits();
     const ind = String(industry || job || '').toLowerCase();
+    const signedIn = typeof currentUser !== 'undefined' && !!currentUser;
     try {
       const qs =
         typeof QUESTIONS !== 'undefined' && QUESTIONS?.length
@@ -392,8 +393,11 @@
               ? SAMPLE_QUESTIONS
               : [];
       qs.forEach((q, i) => {
+        // A0/A2: signed-in never surfaces SAMPLE personal (Riya) in Surkhiya
+        if (signedIn && q.personal && (q.isSample || q.isDemo)) return;
+        if (signedIn && q.personal && !(q.friendUid || q.uid || q.authorUid)) return;
         const title = q.headline || q.news || q.q || 'Headline';
-        const brief = String(q.news || q.explain || q.proof || q.synopsis || q.q || '')
+        const brief = String(q.news || q.explain || q.synopsis || q.q || '')
           .replace(/\s+/g, ' ')
           .trim()
           .slice(0, 220);
@@ -403,9 +407,8 @@
         if (city && blob.includes(city)) priority += 3;
         if (ind && (blob.includes(ind) || String(cat).toLowerCase().includes(ind.slice(0, 4)))) priority += 2;
         if (q.personal || q.friendUid || q.visibility === 'friends') priority += 4;
-        // Band by index / freshness hint
-        const band =
-          priority >= 3 || i < 4 ? 'today' : i < 8 ? 'week' : 'month';
+        // Priority / index bands — NOT calendar days (labels stay honest: Highlights / More)
+        const band = priority >= 3 || i < 4 ? 'highlights' : i < 8 ? 'more' : 'notable';
         out.push({
           kind: 'news',
           title,
@@ -418,10 +421,10 @@
           personal: !!(q.personal || q.friendUid || q.visibility === 'friends'),
           q,
           idx: i,
+          isSample: !!(q.isSample || q.isDemo),
         });
       });
     } catch (e) {}
-    // Prefer city/job/personal
     out.sort((a, b) => b.priority - a.priority || a.idx - b.idx);
     return out;
   }
@@ -442,13 +445,21 @@
     }
     const friendAttr =
       item.personal && item.friendUid
-        ? ` data-surkhiya-wish="1" data-event-type="friend_update" data-uid="${escapeLite(item.friendUid)}" data-name="${escapeLite(item.friendName || '')}"`
+        ? ` data-friend-uid="${escapeLite(item.friendUid)}" data-friend-name="${escapeLite(item.friendName || '')}"`
         : '';
-    return `<button type="button" class="surkhiya-chip" data-surkhiya-i="${i}" aria-expanded="false"${friendAttr}>
-      <span class="surkhiya-chip-kicker">${escapeLite(item.cat || 'News')}</span>
-      <span class="surkhiya-chip-title">${escapeLite(item.title)}</span>
-      <span class="surkhiya-chip-brief hidden" data-surkhiya-brief>${escapeLite(item.brief || '')}</span>
-    </button>`;
+    const sampleKicker = item.isSample ? ' · Sample' : '';
+    return `<div class="surkhiya-chip" data-surkhiya-i="${escapeLite(String(i))}"${friendAttr}>
+      <button type="button" class="surkhiya-chip-toggle" aria-expanded="false">
+        <span class="surkhiya-chip-kicker">${escapeLite(item.cat || 'News')}${sampleKicker}</span>
+        <span class="surkhiya-chip-title">${escapeLite(item.title)}</span>
+      </button>
+      <div class="surkhiya-chip-brief hidden" data-surkhiya-brief>
+        <p class="surkhiya-chip-brief-text">${escapeLite(item.brief || '')}</p>
+        <button type="button" class="btn btn--secondary" data-surkhiya-open-khabar data-q-idx="${item.idx != null ? item.idx : ''}" style="margin-top:10px;width:100%;">
+          ${tt('surkhiya_open_khabar', 'Open in Khabar')}
+        </button>
+      </div>
+    </div>`;
   }
 
   function buildBandHtml(id, label, items) {
@@ -469,29 +480,35 @@
     const weekPersonal = personalAll.filter((p) => p.bandHint === 'week');
     const monthPersonal = personalAll.filter((p) => p.bandHint === 'month');
 
-    const todayNews = newsAll.filter((n) => n.band === 'today').slice(0, 6);
-    const weekNews = newsAll.filter((n) => n.band === 'week').slice(0, 6);
-    const monthNews = newsAll.filter((n) => n.band === 'month').slice(0, 6);
+    // News bands are priority/index — honest labels (not “Today / This week”)
+    const highlightsNews = newsAll.filter((n) => n.band === 'highlights').slice(0, 6);
+    const moreNews = newsAll.filter((n) => n.band === 'more').slice(0, 6);
+    const notableNews = newsAll.filter((n) => n.band === 'notable').slice(0, 6);
 
-    // Today: personal first, then city/job/interest news
-    const todayItems = [...todayPersonal, ...todayNews];
-    const weekItems = [...weekPersonal, ...weekNews];
-    const monthItems = [...monthPersonal, ...monthNews];
+    // Personal events ARE time-windowed — nest under honest news bands by proximity
+    const highlightsItems = [...todayPersonal, ...highlightsNews];
+    const moreItems = [...weekPersonal, ...moreNews];
+    const notableItems = [...monthPersonal, ...notableNews];
 
-    const todayHtml = buildBandHtml('today', tt('surkhiya_band_today', 'Highlights'), todayItems);
-    const weekHtml = buildBandHtml('week', tt('surkhiya_band_week', 'Also worth a look'), weekItems);
-    const monthHtml = buildBandHtml('month', tt('surkhiya_band_month', 'More picks'), monthItems);
+    const highlightsHtml = buildBandHtml(
+      'highlights',
+      tt('surkhiya_band_today', 'Highlights'),
+      highlightsItems
+    );
+    const moreHtml = buildBandHtml('more', tt('surkhiya_band_week', 'Also worth a look'), moreItems);
+    const notableHtml = buildBandHtml('notable', tt('surkhiya_band_month', 'More picks'), notableItems);
 
-    const hasAny = todayHtml || weekHtml || monthHtml;
+    const hasAny = highlightsHtml || moreHtml || notableHtml;
     return `
       <div class="akhbaar-surkhiya room-kit room-kit--air room-kit--surkhiya">
+        <p class="akhbaar-surkhiya-sub">${tt('surkhiya_digest_sub', 'Read the digest — play happens in Khabar.')}</p>
         ${
           hasAny
-            ? `${todayHtml}${weekHtml}${monthHtml}`
+            ? `${highlightsHtml}${moreHtml}${notableHtml}`
             : `<div class="cp-empty surkhiya-empty">${tt('surkhiya_empty', 'Digest warming up — open Khabar to start today’s quiz.')}</div>`
         }
         <div class="akhbaar-surkhiya-chips">
-          <button type="button" class="btn" data-surkhiya-jump="all">${tt('akhbaar_all_headlines', 'All headlines')}</button>
+          <button type="button" class="btn btn--primary" data-surkhiya-jump="all">${tt('surkhiya_jump_khabar', 'Jump to Khabar')}</button>
         </div>
       </div>`;
   }
@@ -511,10 +528,93 @@
       </div>`;
   }
 
+  /** In-memory Saathi rows for click → primary action (A2). */
+  let _saathiItemsById = new Map();
+
+  function friendUidSet() {
+    try {
+      if (typeof followingSet !== 'undefined' && followingSet?.has) return followingSet;
+    } catch (e) {}
+    try {
+      if (typeof friendUids !== 'undefined' && friendUids) {
+        return friendUids instanceof Set ? friendUids : new Set(friendUids);
+      }
+    } catch (e) {}
+    const s = new Set();
+    try {
+      friendPools().forEach((p) => {
+        if (p?.uid && !p.isSample && !p.isDemo) s.add(p.uid);
+      });
+    } catch (e) {}
+    return s;
+  }
+
+  /**
+   * Saathi sources (honest, thin OK):
+   * 1) Friend calendar / updates from real friendPools (wish / note)
+   * 2) Friend-authored MCQ still in QUESTIONS with uid in friend graph (play in Khabar)
+   * Never pads SAMPLE friends for signed-in; never invents events.
+   */
+  function collectFriendAkhbaarItems() {
+    const out = [];
+    const seen = new Set();
+    const signedIn = typeof currentUser !== 'undefined' && !!currentUser;
+    const friendSet = friendUidSet();
+
+    try {
+      if (sharesPersonalEvents()) {
+        collectPersonalBand(31).forEach((ev) => {
+          if (signedIn && (ev.isSample || ev.isDemo)) return;
+          if (!ev.uid && signedIn) return;
+          const id = `wish-${ev.eventType || 'ev'}-${ev.uid || ev.name || ''}`.slice(0, 80);
+          if (seen.has(id)) return;
+          seen.add(id);
+          out.push({
+            id,
+            action: 'wish',
+            title: ev.title,
+            who: ev.name || 'Friend',
+            meta: ev.sub || tt('saathi_wish_meta', 'Wish on Baithak'),
+            uid: ev.uid,
+            name: ev.name,
+            avatar: ev.avatar,
+            eventType: ev.eventType || 'generic',
+          });
+        });
+      }
+    } catch (e) {}
+
+    try {
+      const qs = typeof QUESTIONS !== 'undefined' ? QUESTIONS : [];
+      qs.forEach((q, i) => {
+        if (q.isSample || q.isDemo) return;
+        const uid = q.uid || q.authorUid || q.fromUid || q.friendUid;
+        const inGraph = !!(uid && friendSet.has?.(uid));
+        if (!inGraph) return;
+        const id = String(q.id || `fq-${uid}-${i}`).slice(0, 80);
+        if (seen.has(id)) return;
+        seen.add(id);
+        out.push({
+          id,
+          action: 'play',
+          title: q.q || q.headline || 'Quiz',
+          who: q.authorName || q.user?.name || q.friendName || 'Friend',
+          meta: tt('saathi_play_meta', 'Play in Khabar'),
+          idx: i,
+          q,
+          uid,
+        });
+      });
+    } catch (e) {}
+
+    return out;
+  }
+
   function renderSaathiFeed(host) {
     const feed = host?.querySelector('[data-saathi-feed]') || host;
     if (!feed) return;
     const friendQs = collectFriendAkhbaarItems();
+    _saathiItemsById = new Map(friendQs.map((it) => [String(it.id), it]));
     if (!friendQs.length) {
       if (typeof renderEmptyState === 'function') {
         renderEmptyState(feed, {
@@ -540,53 +640,82 @@
     }
     feed.innerHTML = friendQs
       .slice(0, 20)
-      .map(
-        (it) =>
-          `<button type="button" class="saathi-card" data-saathi-id="${escapeLite(it.id || '')}">
+      .map((it) => {
+        const cta =
+          it.action === 'wish'
+            ? tt('saathi_cta_wish', 'Wish')
+            : tt('saathi_cta_play', 'Play');
+        return `<button type="button" class="saathi-card" data-saathi-id="${escapeLite(it.id || '')}" data-saathi-action="${escapeLite(it.action || 'play')}">
             <div class="saathi-card-who">${escapeLite(it.who || 'Friend')}</div>
             <div class="saathi-card-q">${escapeLite(it.title)}</div>
-            <div class="saathi-card-meta">${escapeLite(it.meta || '')}</div>
-          </button>`
-      )
+            <div class="saathi-card-meta">${escapeLite(it.meta || '')} · ${escapeLite(cta)}</div>
+          </button>`;
+      })
       .join('');
+    wireSaathiFeed(feed);
   }
 
-  function collectFriendAkhbaarItems() {
-    const out = [];
-    try {
-      const friendSet =
-        typeof followingSet !== 'undefined'
-          ? followingSet
-          : typeof friendUids !== 'undefined'
-            ? new Set(friendUids)
-            : new Set();
-      const qs = typeof QUESTIONS !== 'undefined' ? QUESTIONS : [];
-      qs.forEach((q, i) => {
-        const uid = q.uid || q.authorUid || q.fromUid;
-        const personal = q.personal === true || q.visibility === 'friends' || q.source === 'friend';
-        if (personal || (uid && friendSet.has?.(uid))) {
-          out.push({
-            id: q.id || `fq-${i}`,
-            title: q.q || q.headline || 'Quiz',
-            who: q.authorName || q.user?.name || tt('akhbaar_saathi', 'Saathi'),
-            meta: q.category || 'MCQ',
-            q,
-          });
+  function activateSaathiItem(item) {
+    if (!item) return;
+    if (item.action === 'wish') {
+      const payload = {
+        uid: item.uid,
+        name: item.name || item.who || 'Friend',
+        avatar: item.avatar || '',
+        type: item.eventType || 'generic',
+      };
+      if (typeof openBaithakWithWish === 'function') openBaithakWithWish(payload);
+      else if (typeof openBaithakWithPrefill === 'function') openBaithakWithPrefill(payload);
+      else if (item.uid && typeof openUserProfile === 'function') {
+        openUserProfile({ uid: item.uid, name: payload.name }, { context: 'akhbaar_saathi' });
+      } else if (typeof showToast === 'function') showToast('Couldn’t open wish');
+      return;
+    }
+    // play → Khabar focused on that question when possible
+    if (typeof jumpToAkhbaarKhabar === 'function') {
+      jumpToAkhbaarKhabar({ idx: item.idx });
+    } else if (typeof setAkhbaarMode === 'function') {
+      setAkhbaarMode('all');
+      if (typeof focusAkhbaarQuestionAt === 'function' && item.idx != null) {
+        setTimeout(() => focusAkhbaarQuestionAt(item.idx), 400);
+      }
+    }
+  }
+
+  function wireSaathiFeed(feed) {
+    if (!feed || feed.dataset.saathiWired === '1') {
+      // Re-bind after re-render: clear flag when innerHTML replaced
+    }
+    feed.dataset.saathiWired = '1';
+    feed.querySelectorAll('[data-saathi-id]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = btn.dataset.saathiId || '';
+        const item = _saathiItemsById.get(id);
+        if (!item) {
+          if (typeof showToast === 'function') showToast('That update is no longer available');
+          return;
         }
+        activateSaathiItem(item);
       });
-    } catch (e) {}
-    return out;
+    });
   }
 
   function wireSurkhiya(host) {
-    host.querySelector('[data-surkhiya-jump="all"]')?.addEventListener('click', () => setAkhbaarMode('all'));
+    host.querySelector('[data-surkhiya-jump="all"]')?.addEventListener('click', () => {
+      if (typeof jumpToAkhbaarKhabar === 'function') jumpToAkhbaarKhabar({});
+      else setAkhbaarMode('all');
+    });
 
     const openWish = (btn) => {
       const uid = btn.dataset.uid;
       const name = btn.dataset.name;
       const type = btn.dataset.eventType || 'generic';
       const avatar = btn.dataset.avatar || '';
-      if (typeof openBaithakWithPrefill === 'function') {
+      if (typeof openBaithakWithWish === 'function') {
+        openBaithakWithWish({ uid, name, avatar, type });
+      } else if (typeof openBaithakWithPrefill === 'function') {
         openBaithakWithPrefill({ uid, name, avatar, type });
       } else {
         document.querySelector('.bottom-tabs .tab-btn[data-tab="baithak"]')?.click();
@@ -601,24 +730,35 @@
       });
     });
 
-    host.querySelectorAll('[data-surkhiya-i]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        if (btn.dataset.surkhiyaWish === '1' && btn.dataset.uid) {
-          openWish(btn);
-          return;
-        }
-        const brief = btn.querySelector('[data-surkhiya-brief]');
-        const open = btn.getAttribute('aria-expanded') === 'true';
+    host.querySelectorAll('[data-surkhiya-i]').forEach((chip) => {
+      const toggle = chip.querySelector('.surkhiya-chip-toggle') || chip;
+      toggle.addEventListener('click', (e) => {
+        e.preventDefault();
+        const brief = chip.querySelector('[data-surkhiya-brief]');
+        const open = toggle.getAttribute('aria-expanded') === 'true';
         host.querySelectorAll('[data-surkhiya-i]').forEach((other) => {
-          other.setAttribute('aria-expanded', 'false');
+          const ot = other.querySelector('.surkhiya-chip-toggle') || other;
+          ot.setAttribute('aria-expanded', 'false');
           other.classList.remove('is-expanded');
           other.querySelector('[data-surkhiya-brief]')?.classList.add('hidden');
         });
         if (!open && brief) {
-          btn.setAttribute('aria-expanded', 'true');
-          btn.classList.add('is-expanded');
+          toggle.setAttribute('aria-expanded', 'true');
+          chip.classList.add('is-expanded');
           brief.classList.remove('hidden');
         }
+      });
+    });
+
+    host.querySelectorAll('[data-surkhiya-open-khabar]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const idxRaw = btn.dataset.qIdx;
+        const idx = idxRaw !== '' && idxRaw != null ? Number(idxRaw) : null;
+        if (typeof jumpToAkhbaarKhabar === 'function') {
+          jumpToAkhbaarKhabar({ idx: Number.isFinite(idx) ? idx : null });
+        } else setAkhbaarMode('all');
       });
     });
   }

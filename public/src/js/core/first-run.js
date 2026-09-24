@@ -25,7 +25,7 @@
       mitra: { brand: 'Mitra', job: 'Friends' },
     },
     akhbaar: {
-      surkhiya: { brand: 'Surkhiya', job: 'Headlines near you' },
+      surkhiya: { brand: 'Surkhiya', job: 'Digest · Jump to play' },
       all: { brand: 'Khabar', job: 'News & quizzes' },
       saathi: { brand: 'Saathi', job: 'Friends’ updates' },
     },
