@@ -65,6 +65,8 @@ Implementation lives primarily in:
 
 **Akhbaar A4 (arc dogfood):** Closed loop verified. Surkhiya i18n bands fixed to Highlights / Also worth a look / More picks (was calendar Today). Reduced-motion skips float emojis. Residuals: per-cat AI packs, richer Saathi inventory, admin tally dash, in-reel Muqabala, true time-filter Surkhiya — deferred.
 
+**Baithak B0 (truth):** Guests see labeled Demo SAMPLE chats (badge + preview) with Sign-in CTA; guest render does not pollute `baithakChats`. Signed-in: `clearBaithakSampleInbox` on init/auth/load fail — never re-seed Riya; empty → Invite / Find; load fail → retry + last real cache. Mehfil live row opens chat only (no surprise auto-join; Join CTA = B4). Pins Self/Chaupaal restored via `pinSelfChat`.
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.

@@ -47,6 +47,10 @@ function initBaithak(){
   if(currentUser&&typeof renderBaithakInstants==='function') renderBaithakInstants();
   else if(currentUser&&typeof renderLiveBaithakStories==='function') renderLiveBaithakStories();
   else if(typeof renderStories==='function') renderStories();
+
+  // B0: signed-in never keeps guest SAMPLE peers in memory
+  if(currentUser&&typeof clearBaithakSampleInbox==='function') clearBaithakSampleInbox();
+
   if(typeof baithakChats!=='undefined') baithakChats = typeof pinSelfChat==='function' ? pinSelfChat(baithakChats) : baithakChats;
   if(typeof BaithakSearch!=='undefined'&&typeof BaithakSearch.wireChrome==='function') BaithakSearch.wireChrome();
   if(currentUser&&typeof loadBaithakPrefs==='function'){
@@ -56,10 +60,16 @@ function initBaithak(){
   }
   if(currentUser&&typeof hydrateInboxFromDeviceCache==='function'){
     hydrateInboxFromDeviceCache();
+    if(typeof clearBaithakSampleInbox==='function') clearBaithakSampleInbox();
   }
   if(!currentUser){
-    const samples=typeof SAMPLE_CHATS!=='undefined'?SAMPLE_CHATS.filter((c)=>c.isSample||c.type==='self'):[];
+    const samples=typeof SAMPLE_CHATS!=='undefined'
+      ? SAMPLE_CHATS.filter((c)=>c.isSample||c.isDemo||c.type==='self').map((c)=>(c.isSample||c.isDemo?{...c,isDemo:true,isSample:true}:c))
+      : [];
     const guest=typeof pinSelfChat==='function'?pinSelfChat(samples):samples;
+    // Guest list is render-only — do not pollute live baithakChats with SAMPLE
+    if(typeof clearBaithakSampleInbox==='function') clearBaithakSampleInbox();
+    else if(typeof baithakChats!=='undefined') baithakChats=typeof pinSelfChat==='function'?pinSelfChat([]):[];
     renderChatList(guest);
     if(typeof mountBaithakFriendRequests==='function') mountBaithakFriendRequests();
     return;
@@ -75,6 +85,7 @@ function initBaithak(){
     if(typeof loadBaithakNicknames==='function') loadBaithakNicknames().catch(()=>{});
     loadBaithakChatsPage({reset:true})
       .then(async ()=>{
+        if(typeof clearBaithakSampleInbox==='function') clearBaithakSampleInbox();
         if(typeof migrateDuplicateDmInbox==='function'){
           try{ await migrateDuplicateDmInbox(currentUser.uid); }catch(e){}
         }
@@ -93,10 +104,32 @@ function initBaithak(){
       })
       .catch(()=>{
         if(typeof baithakChatLoadError!=='undefined') baithakChatLoadError=true;
+        if(typeof clearBaithakSampleInbox==='function') clearBaithakSampleInbox();
+        // Keep last real cache / pins — never inject SAMPLE for signed-in
         renderChatList(typeof baithakChats!=='undefined'?pinSelfChat(baithakChats):(typeof pinSelfChat==='function'?pinSelfChat([]):[]));
       });
   }
 }
+
+/** B0: guest→auth — wipe Demo list immediately (main also re-inits Baithak). */
+document.addEventListener('chaupaal:auth', () => {
+  try {
+    if (typeof clearBaithakSampleInbox === 'function') clearBaithakSampleInbox();
+  } catch (e) {}
+  try {
+    if (typeof renderChatList === 'function') {
+      const next =
+        typeof baithakChats !== 'undefined'
+          ? typeof pinSelfChat === 'function'
+            ? pinSelfChat(baithakChats)
+            : baithakChats
+          : typeof pinSelfChat === 'function'
+            ? pinSelfChat([])
+            : [];
+      renderChatList(next);
+    }
+  } catch (e) {}
+});
 
 /** Vertical ⋮ — New chat · New group · Find people · Settings (icons on each row). */
 function openBaithakOverflowMenu(anchor){

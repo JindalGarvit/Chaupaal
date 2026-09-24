@@ -1,12 +1,13 @@
 // ===================== SAMPLE BAITHAK DATA =====================
+// Guest-only Demo rows. Signed-in must never seed these into baithakChats.
 const SAMPLE_CHATS = [
   // Pinned locally too — ensureSelfChatPinned / pinSelfChat always re-assert this at render time
   {id:'chat_self',type:'self',isSelf:true,pinned:true,undeletable:true,name:'Me (You)',avatar:'📝',preview:'Notes to self · try games & features here',time:'Pinned',unread:0,duelStreak:0},
   // Demo rows (offline only) — unread 0 so they never look like real notifications
-  {id:'chat_riya',type:'dm',name:'Riya Sharma',avatar:'😊',preview:'Ready for tomorrow\'s Muqabala? 😤',time:'2m',unread:0,streak:7,duelStreak:12,isSample:true,profileType:'personal',theirIcebreakers:[{promptId:'ib14',answer:'Cutting chai, extra adrak — non-negotiable after the local.'}],icebreakers:[{promptId:'ib14',answer:'Cutting chai, extra adrak — non-negotiable after the local.'}]},
-  {id:'chat_arjun',type:'dm',name:'Arjun Mehta',avatar:'🏔️',preview:'That Sports question was wrong though',time:'18m',unread:0,streak:3,duelStreak:5,isSample:true,profileType:'personal',theirIcebreakers:[{promptId:'ib18',answer:'Road trip — windows down, random dhabas, no timetable.'}],icebreakers:[{promptId:'ib18',answer:'Road trip — windows down, random dhabas, no timetable.'}]},
-  {id:'grp_tech',type:'group',name:'Tech Geeks 💻',avatar:'💻',preview:'Someone: Did you read the AirTrunk news?',time:'1h',unread:0,members:12,isSample:true},
-  {id:'grp_news',type:'group',name:'Daily Akhbaar Club',avatar:'📰',preview:'Today\'s score 13/20 😮‍💨',time:'3h',unread:0,members:8,isSample:true},
+  {id:'chat_riya',type:'dm',name:'Riya Sharma',avatar:'😊',preview:'Ready for tomorrow\'s Muqabala? 😤',time:'2m',unread:0,streak:7,duelStreak:12,isSample:true,isDemo:true,profileType:'personal',theirIcebreakers:[{promptId:'ib14',answer:'Cutting chai, extra adrak — non-negotiable after the local.'}],icebreakers:[{promptId:'ib14',answer:'Cutting chai, extra adrak — non-negotiable after the local.'}]},
+  {id:'chat_arjun',type:'dm',name:'Arjun Mehta',avatar:'🏔️',preview:'That Sports question was wrong though',time:'18m',unread:0,streak:3,duelStreak:5,isSample:true,isDemo:true,profileType:'personal',theirIcebreakers:[{promptId:'ib18',answer:'Road trip — windows down, random dhabas, no timetable.'}],icebreakers:[{promptId:'ib18',answer:'Road trip — windows down, random dhabas, no timetable.'}]},
+  {id:'grp_tech',type:'group',name:'Tech Geeks 💻',avatar:'💻',preview:'Someone: Did you read the AirTrunk news?',time:'1h',unread:0,members:12,isSample:true,isDemo:true},
+  {id:'grp_news',type:'group',name:'Daily Akhbaar Club',avatar:'📰',preview:'Today\'s score 13/20 😮‍💨',time:'3h',unread:0,members:8,isSample:true,isDemo:true},
 ];
 
 const SAMPLE_MESSAGES = {
@@ -309,15 +310,40 @@ function renderChatList(chats, opts){
         e.stopPropagation();
         return;
       }
-      const liveEl = item.querySelector('[data-mehfil-live-row]');
-      if (liveEl && !liveEl.hidden) {
-        const cid = chat.firestoreId || chat.id;
-        if (typeof requestMehfilAutoJoin === 'function') requestMehfilAutoJoin(cid);
-      }
+      // B0: Live Mehfil row opens chat only — no surprise auto-join (explicit Join = B4)
       openChatScreen(chat);
     });
     list.appendChild(item);
   });
+  const isGuestViewer = typeof currentUser === 'undefined' || !currentUser;
+  const hasDemoSocial = socialOnly.some((c) => c && (c.isSample || c.isDemo || isLiveSampleChat(c)));
+  if (isGuestViewer && hasDemoSocial && !list.querySelector('[data-baithak-guest-signin]')) {
+    const strip = document.createElement('div');
+    strip.className = 'baithak-inbox-empty baithak-guest-signin';
+    strip.dataset.baithakGuestSignin = '1';
+    if (typeof renderEmptyState === 'function') {
+      renderEmptyState(strip, {
+        icon: '💬',
+        title: 'Demo chats',
+        message: 'Labeled samples only — sign in to invite friends and keep real conversations.',
+        actionLabel: 'Sign in',
+        onAction: () => {
+          try {
+            if (typeof stashPendingDeepLink === 'function') stashPendingDeepLink();
+          } catch (e) {}
+          if (typeof openAuthSheet === 'function') openAuthSheet('login');
+          else if (typeof showAuth === 'function') showAuth();
+        },
+      });
+    } else {
+      strip.innerHTML =
+        '<button type="button" class="btn btn--primary" data-baithak-guest-auth>Sign in for real chats</button>';
+      strip.querySelector('[data-baithak-guest-auth]')?.addEventListener('click', () => {
+        if (typeof openAuthSheet === 'function') openAuthSheet('login');
+      });
+    }
+    list.appendChild(strip);
+  }
   if(showSectionEmpty){
     const emptyHost=document.createElement('div');
     emptyHost.className='baithak-inbox-empty';
@@ -383,9 +409,9 @@ function renderChatList(chats, opts){
       const isGuest=typeof currentUser==='undefined'||!currentUser;
       renderEmptyState(emptyHost, {
         icon:'💬',
-        title: isGuest ? 'Demo chats only' : 'No conversations yet',
+        title: isGuest ? 'Sign in for real chats' : 'No conversations yet',
         message: isGuest
-          ? 'These are labeled samples. Sign in to keep progress and chat with real people.'
+          ? 'Demo samples are labeled when you browse as a guest. Sign in to invite friends and keep chats.'
           : 'Invite friends or find people from your contacts.',
         actionLabel: isGuest ? 'Sign in' : 'Invite friends',
         onAction:()=>{
@@ -673,9 +699,24 @@ function chatInboxId(c){
 
 function isLiveSampleChat(c){
   if(!c) return false;
-  if(c.isSample) return true;
+  if(c.isSample||c.isDemo) return true;
   const id=String(c.id||c.firestoreId||'');
   return id==='chat_riya'||id==='chat_arjun'||id==='grp_tech'||id==='grp_news';
+}
+
+/** B0: strip SAMPLE/Demo peers from memory (signed-in + guest→auth). Keeps Self/Chaupaal pins via pinSelfChat. */
+function clearBaithakSampleInbox(){
+  if(typeof baithakChats==='undefined'||!Array.isArray(baithakChats)){
+    try{
+      baithakChats=typeof pinSelfChat==='function'?pinSelfChat([]):[];
+    }catch(e){
+      baithakChats=[];
+    }
+    return baithakChats;
+  }
+  baithakChats=(baithakChats||[]).filter((c)=>c&&!isLiveSampleChat(c));
+  if(typeof pinSelfChat==='function') baithakChats=pinSelfChat(baithakChats);
+  return baithakChats;
 }
 
 /**
@@ -1367,6 +1408,8 @@ window.mapChatDoc = mapChatDoc;
 window.chatRecencyMs = chatRecencyMs;
 window.hydrateInboxFromDeviceCache = hydrateInboxFromDeviceCache;
 window.recoverCachedChatsById = recoverCachedChatsById;
+window.clearBaithakSampleInbox = clearBaithakSampleInbox;
+window.isLiveSampleChat = isLiveSampleChat;
 window.peerUidOfChat = peerUidOfChat;
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
@@ -1374,6 +1417,7 @@ if (typeof module !== 'undefined' && module.exports) {
     chatRecencyMs,
     chatInboxId,
     isLiveSampleChat,
+    clearBaithakSampleInbox,
     mergeBaithakInbox,
     mapChatDoc,
     hydrateInboxFromDeviceCache,
