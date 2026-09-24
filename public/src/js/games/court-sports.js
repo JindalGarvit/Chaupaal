@@ -210,9 +210,6 @@
       device.appendChild(overlay);
     }
     overlay.dataset.gameId = o.id || '';
-    if (typeof prepareGameOverlay === 'function') {
-      prepareGameOverlay(overlay, { theme: 'dark', gameId: o.id, accent: o.accent });
-    }
     if (typeof applyGameIdentity === 'function') applyGameIdentity(o.id, overlay);
     const sub =
       o.subtitle ||
@@ -224,8 +221,13 @@
             subtitle: sub,
             backId: o.backId || 'csBack',
             pauseId: o.pauseId || '',
+            gameId: o.id || '',
           })
         : '') + `<div class="dangal-fullgame-body" data-cs-body></div>`;
+    // After chrome DOM exists — accent CSS + mark inject if chrome omitted gameId
+    if (typeof prepareGameOverlay === 'function') {
+      prepareGameOverlay(overlay, { theme: 'dark', gameId: o.id, accent: o.accent });
+    }
     const body = overlay.querySelector('[data-cs-body]');
     const close = (reason) => {
       gameOver = true;

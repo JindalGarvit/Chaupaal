@@ -83,6 +83,8 @@ Implementation lives primarily in:
 
 **Dangal R4-1 (federation honesty):** Sports that are lite/arcade declare it — `GAME_IDENTITY.law` / `lawHint` + `federationHonestyLine` / `Html` on Manch prepare. Registry + chrome + How to use BWF-lite / ITTF-lite / Pickle-lite / Games-lite / PKL-lite / Arcade chase / USBC-lite / Street formats. Scorebooks already matched advertised lite constants (win-by-2 kept); copy softened where USBC/PKL overclaimed. `GameUI.attachHowTo` ships detail behind How to. Deferrals: full sets, federation timers, Scribble party depth. Next: R4-2 dogfood + soak.
 
+**Dangal R4 done (R4-2 dogfood + soak):** Marks + lite honesty verified. Soak fix: court `openShell` now passes `gameId` into `gameChromeHtml` and runs `prepareGameOverlay` after chrome DOM (in-game header mark matches Manch). Leave/cleanup RAF OK. Residuals: full federation timers/sets, user-uploaded logos, Scribble party, bowling physics beyond lite oil, Quiet overlay enter motion (marks themselves static). Arc complete — next is a planning choice.
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.
